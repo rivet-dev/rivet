@@ -18,7 +18,7 @@ export { RunnerActor, type ActorConfig };
 export { idToStr } from "./utils";
 
 const KV_EXPIRE: number = 30_000;
-const PROTOCOL_VERSION: number = 5;
+const PROTOCOL_VERSION: number = 6;
 
 /** Warn once the backlog significantly exceeds the server's ack batch size. */
 const EVENT_BACKLOG_WARN_THRESHOLD = 10_000;
@@ -814,70 +814,101 @@ export class Runner {
 		});
 
 		ws.addEventListener("message", async (ev) => {
-			let buf: Uint8Array;
-			if (ev.data instanceof Blob) {
-				buf = new Uint8Array(await ev.data.arrayBuffer());
-			} else if (Buffer.isBuffer(ev.data)) {
-				buf = new Uint8Array(ev.data);
-			} else {
-				throw new Error(`expected binary data, got ${typeof ev.data}`);
-			}
-
-			// Parse message
-			const message = protocol.decodeToClient(buf);
-			this.log?.debug({
-				msg: "received runner message",
-				data: stringifyToClient(message),
-			});
-
-			// Handle message
-			if (message.tag === "ToClientInit") {
-				const init = message.val;
-
-				if (this.runnerId !== init.runnerId) {
-					this.runnerId = init.runnerId;
-
-					// Clear actors if runner id changed
-					this.#stopAllActors();
+			try {
+				if (ws !== this.#pegboardWebSocket) {
+					this.log?.debug({
+						msg: "ignoring runner message from stale websocket",
+					});
+					return;
 				}
 
-				this.#protocolMetadata = init.metadata;
+				let buf: Uint8Array;
+				if (ev.data instanceof Blob) {
+					buf = new Uint8Array(await ev.data.arrayBuffer());
+				} else if (Buffer.isBuffer(ev.data)) {
+					buf = new Uint8Array(ev.data);
+				} else {
+					throw new Error(`expected binary data, got ${typeof ev.data}`);
+				}
 
-				this.log?.info({
-					msg: "received init",
-					protocolMetadata: this.#protocolMetadata,
+				// Parse message
+				const message = protocol.decodeToClient(buf);
+				this.log?.debug({
+					msg: "received runner message",
+					data: stringifyToClient(message),
 				});
 
-				// Resend pending events
-				this.#processUnsentKvRequests();
-				this.#resendUnacknowledgedEvents();
-				this.#tunnel?.resendBufferedEvents();
+				// Handle message
+				if (message.tag === "ToClientInit") {
+					const init = message.val;
 
-				this.#config.onConnected();
-			} else if (message.tag === "ToClientCommands") {
-				const commands = message.val;
-				this.#handleCommands(commands);
-			} else if (message.tag === "ToClientAckEvents") {
-				this.#handleAckEvents(message.val);
-			} else if (message.tag === "ToClientKvResponse") {
-				const kvResponse = message.val;
-				this.#handleKvResponse(kvResponse);
-			} else if (message.tag === "ToClientTunnelMessage") {
-				this.#tunnel?.handleTunnelMessage(message.val).catch((err) => {
-					this.log?.error({
-						msg: "error handling tunnel message",
-						error: stringifyError(err),
+					if (this.runnerId !== init.runnerId) {
+						this.runnerId = init.runnerId;
+
+						// Clear actors if runner id changed
+						this.#stopAllActors();
+					}
+
+					this.#protocolMetadata = init.metadata;
+
+					this.log?.info({
+						msg: "received init",
+						protocolMetadata: this.#protocolMetadata,
 					});
+
+					// Resend pending events
+					this.#processUnsentKvRequests();
+					this.#resendUnacknowledgedEvents();
+					this.#tunnel?.resendBufferedEvents();
+
+					this.#config.onConnected();
+				} else if (message.tag === "ToClientCommands") {
+					const commands = message.val;
+					this.#handleCommands(commands);
+				} else if (message.tag === "ToClientAckEvents") {
+					this.#handleAckEvents(message.val);
+				} else if (message.tag === "ToClientKvResponse") {
+					const kvResponse = message.val;
+					this.#handleKvResponse(kvResponse);
+				} else if (message.tag === "ToClientTunnelMessage") {
+					this.#tunnel?.handleTunnelMessage(message.val).catch((err) => {
+						this.log?.error({
+							msg: "error handling tunnel message",
+							error: stringifyError(err),
+						});
+					});
+				} else if (message.tag === "ToClientPing") {
+					this.__sendToServer({
+						tag: "ToServerPong",
+						val: {
+							ts: message.val.ts,
+						},
+					});
+				} else {
+					unreachable(message);
+				}
+			} catch (error) {
+				if (this.#shutdown || ws.readyState !== ws.OPEN) {
+					this.log?.debug({
+						msg: "ignoring runner websocket message during shutdown",
+						error: stringifyError(error),
+						readyState: ws.readyState,
+					});
+					return;
+				}
+
+				this.log?.error({
+					msg: "failed to decode runner websocket message",
+					error: stringifyError(error),
 				});
-			} else if (message.tag === "ToClientPing") {
-				this.__sendToServer({
-					tag: "ToServerPong",
-					val: {
-						ts: message.val.ts,
-					},
-				});
-			} else {
-				unreachable(message);
+				try {
+					ws.close(1011, "runner.invalid_frame");
+				} catch (closeError) {
+					this.log?.debug({
+						msg: "failed closing runner websocket after decode error",
+						error: stringifyError(closeError),
+					});
+				}
 			}
 		});
 
@@ -895,6 +926,9 @@ export class Runner {
 		});
 
 		ws.addEventListener("close", async (ev) => {
+			if (this.#pegboardWebSocket === ws) {
+				this.#pegboardWebSocket = undefined;
+			}
 			if (!this.#shutdown) {
 				const closeError = parseWebSocketCloseReason(ev.reason);
 				if (

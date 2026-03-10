@@ -53,6 +53,8 @@ export const DYNAMIC_ISOLATE_EXPORT_GLOBAL_KEYS = {
 	dynamicWebSocketCloseEnvelope: "__rivetkitDynamicWebSocketCloseEnvelope",
 	dynamicGetHibernatingWebSocketsEnvelope:
 		"__rivetkitDynamicGetHibernatingWebSocketsEnvelope",
+	dynamicCleanupPersistedConnectionsEnvelope:
+		"__rivetkitDynamicCleanupPersistedConnectionsEnvelope",
 	dynamicEnsureStartedEnvelope: "__rivetkitDynamicEnsureStartedEnvelope",
 	dynamicDisposeEnvelope: "__rivetkitDynamicDisposeEnvelope",
 } as const;

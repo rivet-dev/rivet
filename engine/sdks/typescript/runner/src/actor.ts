@@ -101,6 +101,23 @@ export class RunnerActor {
 		});
 	}
 
+	resetPendingRequestMessageIndex(
+		gatewayId: protocol.GatewayId,
+		requestId: protocol.RequestId,
+		clientMessageIndex: number,
+	) {
+		const existing = this.getPendingRequest(gatewayId, requestId);
+		if (!existing) {
+			this.createPendingRequest(gatewayId, requestId, clientMessageIndex);
+			return;
+		}
+
+		existing.clientMessageIndex = clientMessageIndex;
+		existing.actorId = this.actorId;
+		existing.gatewayId = gatewayId;
+		existing.requestId = requestId;
+	}
+
 	createPendingRequestWithStreamController(
 		gatewayId: protocol.GatewayId,
 		requestId: protocol.RequestId,

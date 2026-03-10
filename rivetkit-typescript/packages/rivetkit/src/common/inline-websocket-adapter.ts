@@ -21,12 +21,23 @@ export class InlineWebSocketAdapter {
 	#handler: UpgradeWebSocketArgs;
 	#wsContext: WSContext;
 	#readyState: 0 | 1 | 2 | 3 = 0;
+	#restoring: boolean;
+	#pendingClientMessages: Array<{
+		data: string | ArrayBufferLike | Blob | ArrayBufferView;
+		rivetMessageIndex?: number;
+	}> = [];
 
 	#clientWs: VirtualWebSocket;
 	#actorWs: VirtualWebSocket;
 
-	constructor(handler: UpgradeWebSocketArgs) {
+	constructor(
+		handler: UpgradeWebSocketArgs,
+		options: {
+			restoring?: boolean;
+		} = {},
+	) {
 		this.#handler = handler;
+		this.#restoring = options.restoring ?? false;
 
 		// Create linked WebSocket pair
 		// Client's send() -> handler.onMessage (for RPC) + Actor's message event (for raw WS)
@@ -83,8 +94,28 @@ export class InlineWebSocketAdapter {
 		data: string | ArrayBufferLike | Blob | ArrayBufferView,
 		rivetMessageIndex?: number,
 	): void {
+		if (this.#readyState === this.#clientWs.CONNECTING) {
+			this.#pendingClientMessages.push({ data, rivetMessageIndex });
+			return;
+		}
+		if (
+			this.#readyState === this.#clientWs.CLOSING ||
+			this.#readyState === this.#clientWs.CLOSED
+		) {
+			return;
+		}
+		this.#dispatchClientMessage(data, rivetMessageIndex);
+	}
+
+	#dispatchClientMessage(
+		data: string | ArrayBufferLike | Blob | ArrayBufferView,
+		rivetMessageIndex?: number,
+	): void {
 		try {
-			this.#handler.onMessage({ data, rivetMessageIndex }, this.#wsContext);
+			this.#handler.onMessage(
+				{ data, rivetMessageIndex },
+				this.#wsContext,
+			);
 			(this.#actorWs as any).triggerMessage(data, rivetMessageIndex);
 		} catch (err) {
 			this.#handleError(err);
@@ -98,12 +129,31 @@ export class InlineWebSocketAdapter {
 
 			this.#readyState = 1; // OPEN
 
-			logger().debug({ msg: "calling handler.onOpen with WSContext" });
-			this.#handler.onOpen(undefined, this.#wsContext);
+			if (this.#restoring && this.#handler.onRestore) {
+				logger().debug({
+					msg: "calling handler.onRestore with WSContext",
+				});
+				this.#handler.onRestore(this.#wsContext);
+			} else {
+				logger().debug({
+					msg: "calling handler.onOpen with WSContext",
+				});
+				this.#handler.onOpen(undefined, this.#wsContext);
+			}
 
 			// Fire open event to both sides
 			this.#clientWs.triggerOpen();
 			this.#actorWs.triggerOpen();
+			while (this.#pendingClientMessages.length > 0) {
+				const next = this.#pendingClientMessages.shift();
+				if (!next) {
+					continue;
+				}
+				this.#dispatchClientMessage(
+					next.data,
+					next.rivetMessageIndex,
+				);
+			}
 		} catch (err) {
 			this.#handleError(err);
 			this.#close(1011, "Internal error during initialization");
@@ -111,6 +161,7 @@ export class InlineWebSocketAdapter {
 	}
 
 	#handleError(err: unknown): void {
+		console.error("INLINE_WEBSOCKET_ADAPTER_ERROR", err);
 		logger().error({
 			msg: "error in websocket",
 			error: err,
@@ -122,7 +173,10 @@ export class InlineWebSocketAdapter {
 		try {
 			this.#handler.onError(err, this.#wsContext);
 		} catch (handlerErr) {
-			logger().error({ msg: "error in onError handler", error: handlerErr });
+			logger().error({
+				msg: "error in onError handler",
+				error: handlerErr,
+			});
 		}
 
 		// Fire error event to both sides
@@ -140,7 +194,10 @@ export class InlineWebSocketAdapter {
 		this.#readyState = 2; // CLOSING
 
 		try {
-			this.#handler.onClose({ code, reason, wasClean: true }, this.#wsContext);
+			this.#handler.onClose(
+				{ code, reason, wasClean: true },
+				this.#wsContext,
+			);
 		} catch (err) {
 			logger().error({ msg: "error closing websocket", error: err });
 		} finally {

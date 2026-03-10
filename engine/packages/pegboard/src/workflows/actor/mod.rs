@@ -580,6 +580,15 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							)).await?;
 						}
 						Main::Wake(sig) => {
+							// Wake requests can be retried externally, so log the current state before deciding whether it is actionable.
+							tracing::debug!(
+								actor_id = ?input.actor_id,
+								sleeping = state.sleeping,
+								runner_id = ?state.runner_id,
+								will_wake = state.will_wake,
+								"received wake signal"
+							);
+
 							// Clear alarm
 							if let Some(alarm_ts) = state.alarm_ts {
 								let now = ctx.v(3).activity(GetTsInput {}).await?;
@@ -627,7 +636,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 									);
 								}
 							} else {
-								tracing::debug!(
+								// Repeated wake probes are expected while gateway-side retries settle, so keep this low-noise.
+								tracing::trace!(
 									actor_id=?input.actor_id,
 									"cannot wake actor that is not sleeping",
 								);

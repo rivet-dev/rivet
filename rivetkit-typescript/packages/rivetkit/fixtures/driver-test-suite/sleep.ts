@@ -1,5 +1,6 @@
 import { actor, type UniversalWebSocket } from "rivetkit";
 import { promiseWithResolvers } from "rivetkit/utils";
+import { scheduleActorSleep } from "./schedule-sleep";
 
 export const SLEEP_TIMEOUT = 1000;
 
@@ -13,7 +14,7 @@ export const sleep = actor({
 	},
 	actions: {
 		triggerSleep: (c) => {
-			c.sleep();
+			scheduleActorSleep(c);
 		},
 		getCounts: (c) => {
 			return {
@@ -52,7 +53,12 @@ export const sleepWithLongRpc = actor({
 		},
 		longRunningRpc: async (c) => {
 			c.log.info("starting long running rpc");
-			c.vars.longRunningResolve = promiseWithResolvers((reason) => c.log.warn({ msg: "unhandled long running rpc rejection", reason }));
+			c.vars.longRunningResolve = promiseWithResolvers((reason) =>
+				c.log.warn({
+					msg: "unhandled long running rpc rejection",
+					reason,
+				}),
+			);
 			c.broadcast("waiting");
 			await c.vars.longRunningResolve.promise;
 			c.log.info("finished long running rpc");

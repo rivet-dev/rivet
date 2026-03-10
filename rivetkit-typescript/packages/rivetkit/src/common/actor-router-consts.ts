@@ -31,6 +31,7 @@ export const WS_PROTOCOL_ACTOR = "rivet_actor.";
 export const WS_PROTOCOL_ENCODING = "rivet_encoding.";
 export const WS_PROTOCOL_CONN_PARAMS = "rivet_conn_params.";
 export const WS_PROTOCOL_TOKEN = "rivet_token.";
+export const WS_PROTOCOL_TEST_ACK_HOOK = "rivet_test_ack_hook.";
 /**
  * Used to pass an inspector token for connecting to the inspector.
  * Only used internally by Rivet.

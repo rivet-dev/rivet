@@ -1,8 +1,5 @@
 import invariant from "invariant";
-import {
-	isStaticActorDefinition,
-	lookupInRegistry,
-} from "@/actor/definition";
+import { isStaticActorDefinition, lookupInRegistry } from "@/actor/definition";
 import { ActorDuplicateKey } from "@/actor/errors";
 import type { Encoding } from "@/actor/protocol/serde";
 import type {
@@ -98,6 +95,10 @@ interface ActorEntry {
 	generation: string;
 }
 
+interface HibernatableWebSocketAckObserver {
+	onAck: (serverMessageIndex: number) => void;
+}
+
 export interface FileSystemDriverOptions {
 	/** Whether to persist data to disk */
 	persist?: boolean;
@@ -121,6 +122,11 @@ export class FileSystemGlobalState {
 	#actorKvDatabases = new Map<string, SqliteRuntimeDatabase>();
 	#dynamicRuntimes = new Map<string, DynamicActorIsolateRuntime>();
 	#actorInitialInputs = new Map<string, unknown>();
+	#hibernatableWebSocketAckObservers = new Map<
+		string,
+		HibernatableWebSocketAckObserver
+	>();
+	#hibernatableWebSocketRestoreIntents = new Map<string, number>();
 
 	// IMPORTANT: Never delete from this map. Doing so will result in race
 	// conditions since the actor generation will cease to be tracked
@@ -220,6 +226,28 @@ export class FileSystemGlobalState {
 
 	getActorAlarmPath(actorId: string): string {
 		return getNodePath().join(this.#alarmsDir, actorId);
+	}
+
+	beginHibernatableWebSocketRestore(actorId: string): void {
+		const count =
+			this.#hibernatableWebSocketRestoreIntents.get(actorId) ?? 0;
+		this.#hibernatableWebSocketRestoreIntents.set(actorId, count + 1);
+	}
+
+	endHibernatableWebSocketRestore(actorId: string): void {
+		const count =
+			this.#hibernatableWebSocketRestoreIntents.get(actorId) ?? 0;
+		if (count <= 1) {
+			this.#hibernatableWebSocketRestoreIntents.delete(actorId);
+			return;
+		}
+		this.#hibernatableWebSocketRestoreIntents.set(actorId, count - 1);
+	}
+
+	isRestoringHibernatableWebSocket(actorId: string): boolean {
+		return (
+			(this.#hibernatableWebSocketRestoreIntents.get(actorId) ?? 0) > 0
+		);
 	}
 
 	#getActorKvDatabasePath(actorId: string): string {
@@ -581,37 +609,37 @@ export class FileSystemGlobalState {
 				entry.generation = crypto.randomUUID();
 			}
 
-				// Initialize storage (runtime KV is stored in SQLite; state.kvStorage is legacy-only)
-				const initialKvState = getInitialActorKvState(input);
-				this.#actorInitialInputs.set(actorId, input);
+			// Initialize storage (runtime KV is stored in SQLite; state.kvStorage is legacy-only)
+			const initialKvState = getInitialActorKvState(input);
+			this.#actorInitialInputs.set(actorId, input);
 
-				await this.#withActorWrite(actorId, async (lockedEntry) => {
-					lockedEntry.state = {
+			await this.#withActorWrite(actorId, async (lockedEntry) => {
+				lockedEntry.state = {
+					actorId,
+					name,
+					key: key as readonly string[],
+					createdAt: BigInt(Date.now()),
+					kvStorage: [],
+					startTs: null,
+					connectableTs: null,
+					sleepTs: null,
+					destroyTs: null,
+				};
+				if (this.#persist) {
+					await this.#performWrite(
 						actorId,
-						name,
-						key: key as readonly string[],
-						createdAt: BigInt(Date.now()),
-						kvStorage: [],
-						startTs: null,
-						connectableTs: null,
-						sleepTs: null,
-						destroyTs: null,
-					};
-					if (this.#persist) {
-						await this.#performWrite(
-							actorId,
-							lockedEntry.generation,
-							lockedEntry.state,
-						);
-					}
-					if (initialKvState.length > 0) {
-						const db = this.#getOrCreateActorKvDatabase(actorId);
-						this.#putKvEntriesInDb(db, initialKvState);
-					}
-				});
-			}
-			return entry;
+						lockedEntry.generation,
+						lockedEntry.state,
+					);
+				}
+				if (initialKvState.length > 0) {
+					const db = this.#getOrCreateActorKvDatabase(actorId);
+					this.#putKvEntriesInDb(db, initialKvState);
+				}
+			});
 		}
+		return entry;
+	}
 
 	async sleepActor(actorId: string) {
 		invariant(
@@ -628,7 +656,12 @@ export class FileSystemGlobalState {
 			return;
 		}
 		actor.lifecycleState = ActorLifecycleState.STARTING_SLEEP;
-		actor.stopPromise = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled actor sleep stop promise rejection", reason }));
+		actor.stopPromise = promiseWithResolvers((reason) =>
+			logger().warn({
+				msg: "unhandled actor sleep stop promise rejection",
+				reason,
+			}),
+		);
 
 		// Wait for actor to fully start before stopping it to avoid race conditions
 		if (actor.loadPromise) await actor.loadPromise.catch();
@@ -659,13 +692,13 @@ export class FileSystemGlobalState {
 			// Stop actor
 			invariant(actor.actor, "actor should be loaded");
 			await actor.actor.onStop("sleep");
-			} finally {
-				// Ensure any pending KV writes finish before removing the entry.
-				await this.#withActorWrite(actorId, async () => {});
-				this.#closeActorKvDatabase(actorId);
-				this.#dynamicRuntimes.delete(actorId);
-				actor.stopPromise?.resolve();
-				actor.stopPromise = undefined;
+		} finally {
+			// Ensure any pending KV writes finish before removing the entry.
+			await this.#withActorWrite(actorId, async () => {});
+			this.#closeActorKvDatabase(actorId);
+			this.#dynamicRuntimes.delete(actorId);
+			actor.stopPromise?.resolve();
+			actor.stopPromise = undefined;
 
 			// Remove from map after stop is complete
 			this.#actors.delete(actorId);
@@ -682,7 +715,12 @@ export class FileSystemGlobalState {
 			return;
 		}
 		actor.lifecycleState = ActorLifecycleState.STARTING_DESTROY;
-		actor.stopPromise = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled actor destroy stop promise rejection", reason }));
+		actor.stopPromise = promiseWithResolvers((reason) =>
+			logger().warn({
+				msg: "unhandled actor destroy stop promise rejection",
+				reason,
+			}),
+		);
 
 		// Wait for actor to fully start before stopping it to avoid race conditions
 		if (actor.loadPromise) await actor.loadPromise.catch();
@@ -717,9 +755,9 @@ export class FileSystemGlobalState {
 			this.#dynamicRuntimes.delete(actorId);
 			this.#actorInitialInputs.delete(actorId);
 
-				// Ensure any pending KV writes finish before deleting files.
-				await this.#withActorWrite(actorId, async () => {});
-				this.#closeActorKvDatabase(actorId);
+			// Ensure any pending KV writes finish before deleting files.
+			await this.#withActorWrite(actorId, async () => {});
+			this.#closeActorKvDatabase(actorId);
 
 			// Clear alarm timeout if exists
 			if (actor.alarmTimeout) {
@@ -857,7 +895,12 @@ export class FileSystemGlobalState {
 		invariant(entry, "actor entry does not exist");
 
 		const previousWrite = entry.pendingWriteResolver;
-		const currentWrite = promiseWithResolvers<void>((reason) => logger().warn({ msg: "unhandled kv write promise rejection", reason }));
+		const currentWrite = promiseWithResolvers<void>((reason) =>
+			logger().warn({
+				msg: "unhandled kv write promise rejection",
+				reason,
+			}),
+		);
 		entry.pendingWriteResolver = currentWrite;
 
 		if (previousWrite) {
@@ -938,21 +981,21 @@ export class FileSystemGlobalState {
 				}
 
 				await fs.rename(tempPath, alarmPath);
-				} catch (error) {
-					try {
-						const fs = getNodeFs();
-						await fs.unlink(tempPath);
-					} catch (cleanupError) {
-						logger().debug({
-							msg: "failed to cleanup temp alarm file after write failure",
-							actorId,
-							tempPath,
-							error: stringifyError(cleanupError),
-						});
-					}
-					logger().error({
-						msg: "failed to write alarm",
+			} catch (error) {
+				try {
+					const fs = getNodeFs();
+					await fs.unlink(tempPath);
+				} catch (cleanupError) {
+					logger().debug({
+						msg: "failed to cleanup temp alarm file after write failure",
 						actorId,
+						tempPath,
+						error: stringifyError(cleanupError),
+					});
+				}
+				logger().error({
+					msg: "failed to write alarm",
+					actorId,
 					error,
 				});
 				throw new Error(`Failed to write alarm: ${error}`);
@@ -1101,7 +1144,12 @@ export class FileSystemGlobalState {
 		}
 
 		// Create start promise
-		entry.startPromise = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled actor start promise rejection", reason }));
+		entry.startPromise = promiseWithResolvers((reason) =>
+			logger().warn({
+				msg: "unhandled actor start promise rejection",
+				reason,
+			}),
+		);
 
 		try {
 			// Create actor
@@ -1127,10 +1175,7 @@ export class FileSystemGlobalState {
 				await runtime.start();
 				this.#dynamicRuntimes.set(actorId, runtime);
 				await runtime.ensureStarted();
-				entry.actor = new DynamicActorInstance(
-					actorId,
-					runtime,
-				);
+				entry.actor = new DynamicActorInstance(actorId, runtime);
 				entry.lifecycleState = ActorLifecycleState.AWAKE;
 			} else if (isStaticActorDefinition(definition)) {
 				const staticActor =
@@ -1178,32 +1223,40 @@ export class FileSystemGlobalState {
 			});
 
 			// Finish
+			if (!this.isRestoringHibernatableWebSocket(actorId)) {
+				await entry.actor.cleanupPersistedConnections?.(
+					"file-system-driver.start",
+				);
+			}
+
 			entry.startPromise.resolve();
 			entry.startPromise = undefined;
 
 			return entry.actor;
-			} catch (innerError) {
-				const dynamicRuntime = this.#dynamicRuntimes.get(actorId);
-				if (dynamicRuntime) {
-					try {
-						await dynamicRuntime.dispose();
-					} catch (disposeError) {
-						logger().debug({
-							msg: "failed to dispose dynamic runtime after actor start failure",
-							actorId,
-							error: stringifyError(disposeError),
-						});
-					}
-					this.#dynamicRuntimes.delete(actorId);
+		} catch (innerError) {
+			const dynamicRuntime = this.#dynamicRuntimes.get(actorId);
+			if (dynamicRuntime) {
+				try {
+					await dynamicRuntime.dispose();
+				} catch (disposeError) {
+					logger().debug({
+						msg: "failed to dispose dynamic runtime after actor start failure",
+						actorId,
+						error: stringifyError(disposeError),
+					});
 				}
+				this.#dynamicRuntimes.delete(actorId);
+			}
 
 			const error =
 				innerError instanceof Error
 					? new Error(
-						`Failed to start actor ${actorId}: ${innerError.message}`,
-						{ cause: innerError },
-					)
-					: new Error(`Failed to start actor ${actorId}: ${String(innerError)}`);
+							`Failed to start actor ${actorId}: ${innerError.message}`,
+							{ cause: innerError },
+						)
+					: new Error(
+							`Failed to start actor ${actorId}: ${String(innerError)}`,
+						);
 			entry.startPromise?.reject(error);
 			entry.startPromise = undefined;
 			throw error;
@@ -1225,7 +1278,9 @@ export class FileSystemGlobalState {
 	#getDynamicRuntime(actorId: string): DynamicActorIsolateRuntime {
 		const runtime = this.#dynamicRuntimes.get(actorId);
 		if (!runtime) {
-			throw new Error(`dynamic runtime is not loaded for actor ${actorId}`);
+			throw new Error(
+				`dynamic runtime is not loaded for actor ${actorId}`,
+			);
 		}
 		return runtime;
 	}
@@ -1255,8 +1310,47 @@ export class FileSystemGlobalState {
 		return await runtime.openWebSocket(path, encoding, params, options);
 	}
 
+	registerHibernatableWebSocketAckObserver(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		observer: HibernatableWebSocketAckObserver,
+	): void {
+		this.#hibernatableWebSocketAckObservers.set(
+			this.#hibernatableWebSocketAckKey(gatewayId, requestId),
+			observer,
+		);
+	}
+
+	unregisterHibernatableWebSocketAckObserver(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+	): void {
+		this.#hibernatableWebSocketAckObservers.delete(
+			this.#hibernatableWebSocketAckKey(gatewayId, requestId),
+		);
+	}
+
+	ackHibernatableWebSocketMessage(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		serverMessageIndex: number,
+	): void {
+		this.#hibernatableWebSocketAckObservers
+			.get(this.#hibernatableWebSocketAckKey(gatewayId, requestId))
+			?.onAck(serverMessageIndex);
+	}
+
 	async createDatabase(actorId: string): Promise<string | undefined> {
 		return this.getActorDbPath(actorId);
+	}
+
+	#hibernatableWebSocketAckKey(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+	): string {
+		const gateway = Buffer.from(gatewayId).toString("base64");
+		const request = Buffer.from(requestId).toString("base64");
+		return `${gateway}:${request}`;
 	}
 
 	/**
@@ -1541,11 +1635,17 @@ export class FileSystemGlobalState {
 		const db = this.#getOrCreateActorKvDatabase(actorId);
 		const upperBound = computePrefixUpperBound(prefix);
 		const rows = upperBound
-			? db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+			? db.all<{
+					key: Uint8Array | ArrayBuffer;
+					value: Uint8Array | ArrayBuffer;
+				}>(
 					"SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ASC",
 					[prefix, upperBound],
 				)
-			: db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+			: db.all<{
+					key: Uint8Array | ArrayBuffer;
+					value: Uint8Array | ArrayBuffer;
+				}>(
 					"SELECT key, value FROM kv WHERE key >= ? ORDER BY key ASC",
 					[prefix],
 				);

@@ -52,7 +52,10 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			test(
 				"bootstraps schema on startup",
 				async (c) => {
-					const { client } = await setupDriverTest(c, driverTestConfig);
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 					const actor = getDbActor(client, variant).getOrCreate([
 						`db-${variant}-bootstrap-${crypto.randomUUID()}`,
 					]);
@@ -66,7 +69,10 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			test(
 				"supports CRUD, raw SQL, and multi-statement exec",
 				async (c) => {
-					const { client } = await setupDriverTest(c, driverTestConfig);
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 					const actor = getDbActor(client, variant).getOrCreate([
 						`db-${variant}-crud-${crypto.randomUUID()}`,
 					]);
@@ -78,8 +84,16 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 
 					const values = await actor.getValues();
 					expect(values.length).toBeGreaterThanOrEqual(2);
-					expect(values.some((row) => row.value === "alpha")).toBeTruthy();
-					expect(values.some((row) => row.value === "beta")).toBeTruthy();
+					expect(
+						values.some(
+							(row: { value: string }) => row.value === "alpha",
+						),
+					).toBeTruthy();
+					expect(
+						values.some(
+							(row: { value: string }) => row.value === "beta",
+						),
+					).toBeTruthy();
 
 					await actor.updateValue(first.id, "alpha-updated");
 					const updated = await actor.getValue(first.id);
@@ -100,7 +114,8 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 						expect(rawCount).toBe(1);
 					}
 
-					const multiValue = await actor.multiStatementInsert("gamma");
+					const multiValue =
+						await actor.multiStatementInsert("gamma");
 					expect(multiValue).toBe("gamma-updated");
 				},
 				dbTestTimeout,
@@ -109,7 +124,10 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			test(
 				"handles transactions",
 				async (c) => {
-					const { client } = await setupDriverTest(c, driverTestConfig);
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 					const actor = getDbActor(client, variant).getOrCreate([
 						`db-${variant}-tx-${crypto.randomUUID()}`,
 					]);
@@ -127,7 +145,10 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			test(
 				"persists across sleep and wake cycles",
 				async (c) => {
-					const { client } = await setupDriverTest(c, driverTestConfig);
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 					const actor = getDbActor(client, variant).getOrCreate([
 						`db-${variant}-sleep-${crypto.randomUUID()}`,
 					]);
@@ -149,10 +170,15 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			test(
 				"completes onDisconnect DB writes before sleeping",
 				async (c) => {
-					const { client } = await setupDriverTest(c, driverTestConfig);
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 					const key = `db-${variant}-disconnect-${crypto.randomUUID()}`;
 
-					const actor = getDbActor(client, variant).getOrCreate([key]);
+					const actor = getDbActor(client, variant).getOrCreate([
+						key,
+					]);
 					await actor.reset();
 					await actor.configureDisconnectInsert(true, 250);
 
@@ -167,7 +193,10 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			test(
 				"handles high-volume inserts",
 				async (c) => {
-					const { client } = await setupDriverTest(c, driverTestConfig);
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 					const actor = getDbActor(client, variant).getOrCreate([
 						`db-${variant}-high-volume-${crypto.randomUUID()}`,
 					]);
@@ -187,7 +216,10 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			test(
 				"handles payloads across chunk boundaries",
 				async (c) => {
-					const { client } = await setupDriverTest(c, driverTestConfig);
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 					const actor = getDbActor(client, variant).getOrCreate([
 						`db-${variant}-chunk-${crypto.randomUUID()}`,
 					]);
@@ -205,13 +237,17 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			test(
 				"handles large payloads",
 				async (c) => {
-					const { client } = await setupDriverTest(c, driverTestConfig);
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 					const actor = getDbActor(client, variant).getOrCreate([
 						`db-${variant}-large-${crypto.randomUUID()}`,
 					]);
 
 					await actor.reset();
-					const { id } = await actor.insertPayloadOfSize(LARGE_PAYLOAD_SIZE);
+					const { id } =
+						await actor.insertPayloadOfSize(LARGE_PAYLOAD_SIZE);
 					const storedSize = await actor.getPayloadSize(id);
 					expect(storedSize).toBe(LARGE_PAYLOAD_SIZE);
 				},
@@ -221,7 +257,10 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			test(
 				"supports shrink and regrow workloads with vacuum",
 				async (c) => {
-					const { client } = await setupDriverTest(c, driverTestConfig);
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 					const actor = getDbActor(client, variant).getOrCreate([
 						`db-${variant}-shrink-regrow-${crypto.randomUUID()}`,
 					]);
@@ -256,7 +295,10 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			test(
 				"handles repeated updates to the same row",
 				async (c) => {
-					const { client } = await setupDriverTest(c, driverTestConfig);
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 					const actor = getDbActor(client, variant).getOrCreate([
 						`db-${variant}-updates-${crypto.randomUUID()}`,
 					]);
@@ -289,7 +331,10 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			test(
 				"passes integrity checks after mixed workload and sleep",
 				async (c) => {
-					const { client } = await setupDriverTest(c, driverTestConfig);
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 					const actor = getDbActor(client, variant).getOrCreate([
 						`db-${variant}-integrity-${crypto.randomUUID()}`,
 					]);
@@ -299,11 +344,15 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 						INTEGRITY_SEED_COUNT,
 						INTEGRITY_CHURN_COUNT,
 					);
-					expect((await actor.integrityCheck()).toLowerCase()).toBe("ok");
+					expect((await actor.integrityCheck()).toLowerCase()).toBe(
+						"ok",
+					);
 
 					await actor.triggerSleep();
 					await waitFor(driverTestConfig, SLEEP_WAIT_MS + 100);
-					expect((await actor.integrityCheck()).toLowerCase()).toBe("ok");
+					expect((await actor.integrityCheck()).toLowerCase()).toBe(
+						"ok",
+					);
 				},
 				dbTestTimeout,
 			);
@@ -315,7 +364,9 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			"runs db provider cleanup on sleep",
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
-				const observer = client.dbLifecycleObserver.getOrCreate(["observer"]);
+				const observer = client.dbLifecycleObserver.getOrCreate([
+					"observer",
+				]);
 
 				const lifecycle = client.dbLifecycle.getOrCreate([
 					`db-lifecycle-sleep-${crypto.randomUUID()}`,
@@ -340,7 +391,9 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 
 				expect(after.create).toBeGreaterThanOrEqual(before.create);
 				expect(after.migrate).toBeGreaterThanOrEqual(before.migrate);
-				expect(after.cleanup).toBeGreaterThanOrEqual(before.cleanup + 1);
+				expect(after.cleanup).toBeGreaterThanOrEqual(
+					before.cleanup + 1,
+				);
 			},
 			lifecycleTestTimeout,
 		);
@@ -349,7 +402,9 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			"runs db provider cleanup on destroy",
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
-				const observer = client.dbLifecycleObserver.getOrCreate(["observer"]);
+				const observer = client.dbLifecycleObserver.getOrCreate([
+					"observer",
+				]);
 
 				const lifecycle = client.dbLifecycle.getOrCreate([
 					`db-lifecycle-destroy-${crypto.randomUUID()}`,
@@ -380,8 +435,11 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			"runs db provider cleanup when migration fails",
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
-				const observer = client.dbLifecycleObserver.getOrCreate(["observer"]);
-				const beforeTotalCleanup = await observer.getTotalCleanupCount();
+				const observer = client.dbLifecycleObserver.getOrCreate([
+					"observer",
+				]);
+				const beforeTotalCleanup =
+					await observer.getTotalCleanupCount();
 				const key = `db-lifecycle-migrate-failure-${crypto.randomUUID()}`;
 				const lifecycle = client.dbLifecycleFailing.getOrCreate([key]);
 
@@ -402,7 +460,9 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 					await waitFor(driverTestConfig, LIFECYCLE_POLL_INTERVAL_MS);
 				}
 
-				expect(cleanupCount).toBeGreaterThanOrEqual(beforeTotalCleanup + 1);
+				expect(cleanupCount).toBeGreaterThanOrEqual(
+					beforeTotalCleanup + 1,
+				);
 			},
 			lifecycleTestTimeout,
 		);
@@ -411,7 +471,9 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			"handles parallel actor lifecycle churn",
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
-				const observer = client.dbLifecycleObserver.getOrCreate(["observer"]);
+				const observer = client.dbLifecycleObserver.getOrCreate([
+					"observer",
+				]);
 
 				const actorHandles = Array.from({ length: 12 }, (_, i) =>
 					client.dbLifecycle.getOrCreate([
@@ -423,19 +485,29 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 				);
 
 				await Promise.all(
-					actorHandles.map((handle, i) => handle.insertValue(`phase-1-${i}`)),
+					actorHandles.map((handle, i) =>
+						handle.insertValue(`phase-1-${i}`),
+					),
 				);
-				await Promise.all(actorHandles.map((handle) => handle.triggerSleep()));
+				await Promise.all(
+					actorHandles.map((handle) => handle.triggerSleep()),
+				);
 				await waitFor(driverTestConfig, SLEEP_WAIT_MS + 100);
 				await Promise.all(
-					actorHandles.map((handle, i) => handle.insertValue(`phase-2-${i}`)),
+					actorHandles.map((handle, i) =>
+						handle.insertValue(`phase-2-${i}`),
+					),
 				);
 
 				const survivors = actorHandles.slice(0, 6);
 				const destroyed = actorHandles.slice(6);
 
-				await Promise.all(destroyed.map((handle) => handle.triggerDestroy()));
-				await Promise.all(survivors.map((handle) => handle.triggerSleep()));
+				await Promise.all(
+					destroyed.map((handle) => handle.triggerDestroy()),
+				);
+				await Promise.all(
+					survivors.map((handle) => handle.triggerSleep()),
+				);
 				await waitFor(driverTestConfig, SLEEP_WAIT_MS + 100);
 				await Promise.all(survivors.map((handle) => handle.ping()));
 
@@ -468,7 +540,9 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 				}
 
 				for (const actorId of actorIds) {
-					expect(lifecycleCleanup.get(actorId) ?? 0).toBeGreaterThanOrEqual(1);
+					expect(
+						lifecycleCleanup.get(actorId) ?? 0,
+					).toBeGreaterThanOrEqual(1);
 				}
 			},
 			lifecycleTestTimeout,

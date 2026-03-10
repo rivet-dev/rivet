@@ -783,6 +783,14 @@ async fn handle_tunnel_message_mk2(
 	ctx: &StandaloneCtx,
 	msg: protocol::mk2::ToServerTunnelMessage,
 ) -> Result<()> {
+	// Log the gateway-issued message id so gateway and runner traces can be matched during WS races.
+	tracing::trace!(
+		request_id = %protocol::util::id_to_string(&msg.message_id.request_id),
+		message_index = msg.message_id.message_index,
+		kind = ?msg.message_kind,
+		"pegboard-runner received tunnel message from runner"
+	);
+
 	// Extract inner data length before consuming msg
 	let inner_data_len = tunnel_message_inner_data_len_mk2(&msg.message_kind);
 

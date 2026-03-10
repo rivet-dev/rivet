@@ -15,6 +15,7 @@ import {
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
 	WS_PROTOCOL_INSPECTOR_TOKEN,
+	WS_PROTOCOL_TEST_ACK_HOOK,
 } from "@/common/actor-router-consts";
 import { deconstructError } from "@/common/utils";
 import type {
@@ -23,7 +24,7 @@ import type {
 } from "@/common/websocket-interface";
 import { handleWebSocketInspectorConnect } from "@/inspector/handler";
 import type { RegistryConfig } from "@/registry/config";
-import { promiseWithResolvers } from "@/utils";
+import { promiseWithResolvers, stringifyError } from "@/utils";
 import { timingSafeEqual } from "@/utils/crypto";
 import type { ConnDriver } from "./conn/driver";
 import { createRawWebSocketDriver } from "./conn/drivers/raw-websocket";
@@ -102,7 +103,12 @@ export async function routeWebSocket(
 		});
 
 		// Promise used to wait for the websocket close in `disconnect`
-		const closePromiseResolvers = promiseWithResolvers<void>((reason) => loggerWithoutContext().warn({ msg: "unhandled websocket close promise rejection", reason }));
+		const closePromiseResolvers = promiseWithResolvers<void>((reason) =>
+			loggerWithoutContext().warn({
+				msg: "unhandled websocket close promise rejection",
+				reason,
+			}),
+		);
 
 		// Strip query parameters from requestPath for routing purposes.
 		// This handles paths like "/websocket?query=value" which should route
@@ -209,8 +215,8 @@ export async function routeWebSocket(
 			onMessage: (_evt: { data: any }, ws: WSContext) => {
 				ws.close(1011, "actor.not_loaded");
 			},
-			onClose: (_event: any, _ws: WSContext) => { },
-			onError: (_error: unknown) => { },
+			onClose: (_event: any, _ws: WSContext) => {},
+			onError: (_error: unknown) => {},
 		};
 	}
 }
@@ -256,7 +262,8 @@ export async function handleWebSocketConnect(
 				.then(async () => {
 					const message = await parseMessage(value, {
 						encoding: encoding,
-						maxIncomingMessageSize: runConfig.maxIncomingMessageSize,
+						maxIncomingMessageSize:
+							runConfig.maxIncomingMessageSize,
 					});
 					await actor.processMessage(message, conn);
 				})
@@ -333,6 +340,24 @@ export async function handleRawWebSocket(
 			invariant(ws, "missing wsContext.raw");
 
 			setWebSocket(ws);
+
+			// Restored raw websockets need their actor-side event listeners
+			// rebound because the actor instance was recreated on wake.
+			//
+			// Defer the rebind until after the websocket open event has been
+			// emitted so user onWebSocket handlers see a fully opened socket.
+			queueMicrotask(() => {
+				try {
+					actor.handleRawWebSocket(conn, ws, request);
+				} catch (error) {
+					console.error("RAW_WEBSOCKET_RESTORE_ERROR", error);
+					actor.rLog.error({
+						msg: "failed to restore raw websocket handlers",
+						error: stringifyError(error),
+					});
+					ws.close(1011, "rivetkit.internal_error");
+				}
+			});
 		},
 		// NOTE: onOpen cannot be async since this will cause the client's open
 		// event to be called before this completes. Do all async work in
@@ -355,7 +380,7 @@ export async function handleRawWebSocket(
 		},
 		// Raw websocket messages are handled directly by the actor's event
 		// listeners on the WebSocket object, not through this callback
-		onMessage: (_evt: any, _ws: any) => { },
+		onMessage: (_evt: any, _ws: any) => {},
 		onClose: (evt: any, ws: any) => {
 			// Resolve the close promise
 			closePromiseResolvers.resolve();
@@ -363,13 +388,14 @@ export async function handleRawWebSocket(
 			// Clean up the connection
 			conn.disconnect(evt?.reason);
 		},
-		onError: (error: any, ws: any) => { },
+		onError: (error: any, ws: any) => {},
 	};
 }
 
 export interface WebSocketCustomProtocols {
 	encoding: Encoding;
 	connParams: unknown;
+	ackHookToken?: string;
 }
 
 /**
@@ -380,6 +406,7 @@ export function parseWebSocketProtocols(
 ): WebSocketCustomProtocols {
 	let encodingRaw: string | undefined;
 	let connParamsRaw: string | undefined;
+	let ackHookTokenRaw: string | undefined;
 
 	if (protocols) {
 		const protocolList = protocols.split(",").map((p) => p.trim());
@@ -390,6 +417,10 @@ export function parseWebSocketProtocols(
 				connParamsRaw = decodeURIComponent(
 					protocol.substring(WS_PROTOCOL_CONN_PARAMS.length),
 				);
+			} else if (protocol.startsWith(WS_PROTOCOL_TEST_ACK_HOOK)) {
+				ackHookTokenRaw = decodeURIComponent(
+					protocol.substring(WS_PROTOCOL_TEST_ACK_HOOK.length),
+				);
 			}
 		}
 	}
@@ -398,7 +429,7 @@ export function parseWebSocketProtocols(
 	const encoding = EncodingSchema.parse(encodingRaw ?? "json");
 	const connParams = connParamsRaw ? JSON.parse(connParamsRaw) : undefined;
 
-	return { encoding, connParams };
+	return { encoding, connParams, ackHookToken: ackHookTokenRaw };
 }
 
 /**

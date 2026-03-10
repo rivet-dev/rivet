@@ -1,5 +1,6 @@
 import { actor } from "rivetkit";
 import { db } from "rivetkit/db";
+import { scheduleActorSleep } from "./schedule-sleep";
 
 function firstRowValue(row: Record<string, unknown> | undefined): unknown {
 	if (!row) {
@@ -71,10 +72,7 @@ export const dbActorRaw = actor({
 	actions: {
 		configureDisconnectInsert: (c, enabled: boolean, delayMs: number) => {
 			c.state.disconnectInsertEnabled = enabled;
-			c.state.disconnectInsertDelayMs = Math.max(
-				0,
-				Math.floor(delayMs),
-			);
+			c.state.disconnectInsertDelayMs = Math.max(0, Math.floor(delayMs));
 		},
 		getDisconnectInsertCount: async (c) => {
 			const results = await c.db.execute<{ count: number }>(
@@ -100,9 +98,7 @@ export const dbActorRaw = actor({
 				value: string;
 				payload: string;
 				created_at: number;
-			}>(
-				`SELECT * FROM test_data ORDER BY id`,
-			);
+			}>(`SELECT * FROM test_data ORDER BY id`);
 			return results;
 		},
 		getValue: async (c, id: number) => {
@@ -201,7 +197,8 @@ export const dbActorRaw = actor({
 			}
 
 			for (let i = 0; i < normalizedIterations; i++) {
-				const rowId = normalizedRowIds[i % normalizedRowIds.length] ?? 0;
+				const rowId =
+					normalizedRowIds[i % normalizedRowIds.length] ?? 0;
 				await c.db.execute(
 					`UPDATE test_data SET value = 'v-${i}' WHERE id = ${rowId}`,
 				);
@@ -212,9 +209,10 @@ export const dbActorRaw = actor({
 			);
 		},
 		getPageCount: async (c) => {
-			const rows = await c.db.execute<Record<string, unknown>>(
-				"PRAGMA page_count",
-			);
+			const rows =
+				await c.db.execute<Record<string, unknown>>(
+					"PRAGMA page_count",
+				);
 			return toSafeInteger(firstRowValue(rows[0]));
 		},
 		vacuum: async (c) => {
@@ -242,7 +240,9 @@ export const dbActorRaw = actor({
 			for (let i = 0; i < normalizedChurnCount; i++) {
 				const id = (i % normalizedSeedCount) + 1;
 				if (i % 9 === 0) {
-					await c.db.execute(`DELETE FROM test_data WHERE id = ${id}`);
+					await c.db.execute(
+						`DELETE FROM test_data WHERE id = ${id}`,
+					);
 				} else {
 					const payload = makePayload(768 + (i % 7) * 96);
 					await c.db.execute(
@@ -277,7 +277,7 @@ export const dbActorRaw = actor({
 			return results[0]?.value ?? null;
 		},
 		triggerSleep: (c) => {
-			c.sleep();
+			scheduleActorSleep(c);
 		},
 	},
 	options: {
