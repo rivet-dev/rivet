@@ -87,6 +87,10 @@ pub async fn router(
 				axum::routing::delete(actors::delete::delete),
 			)
 			.route(
+				"/actors/{actor_id}/reschedule",
+				axum::routing::post(actors::reschedule::reschedule),
+			)
+			.route(
 				"/actors/names",
 				axum::routing::get(actors::list_names::list_names),
 			)

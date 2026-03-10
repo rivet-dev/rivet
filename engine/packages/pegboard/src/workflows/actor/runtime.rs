@@ -19,7 +19,7 @@ use vbare::OwnedVersionedData;
 
 use crate::{keys, metrics};
 
-use super::{Allocate, Destroy, Input, PendingAllocation, State, destroy};
+use super::{Allocate, Input, PendingAllocationWait, RescheduleBackoff, State, destroy};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LifecycleRunnerState {
@@ -57,6 +57,8 @@ pub struct LifecycleState {
 	/// If a wake was received in between an actor's intent to sleep and actor stop.
 	#[serde(default)]
 	pub will_wake: bool,
+	#[serde(default)]
+	pub force_reschedule: bool,
 	pub alarm_ts: Option<i64>,
 	/// Handles cleaning up the actor if it does not receive a certain state before the timeout (ex.
 	/// created -> running event, stop intent -> stop event). If the timeout is reached, the actor is
@@ -83,6 +85,7 @@ impl LifecycleState {
 			stopping: false,
 			going_away: false,
 			will_wake: false,
+			force_reschedule: false,
 			alarm_ts: None,
 			gc_timeout_ts: Some(util::timestamp::now() + actor_start_threshold),
 			reschedule_state: RescheduleState::default(),
@@ -100,6 +103,7 @@ impl LifecycleState {
 			stopping: false,
 			going_away: false,
 			will_wake: false,
+			force_reschedule: false,
 			alarm_ts: None,
 			gc_timeout_ts: None,
 			reschedule_state: RescheduleState::default(),
@@ -775,158 +779,24 @@ pub async fn spawn_actor(
 				}
 			}
 
-			let signal = match allocation_override {
-				AllocationOverride::DontSleep {
-					pending_timeout: Some(timeout),
-				}
-				| AllocationOverride::PendingTimeout {
-					pending_timeout: timeout,
-				} => {
-					ctx.listen_with_timeout::<PendingAllocation>(timeout)
-						.await?
-				}
-				_ => Some(ctx.listen::<PendingAllocation>().await?),
-			};
-
-			// If allocation fails, the allocate txn already inserted this actor into the queue. Now we wait for
-			// an `Allocate` signal
-			match signal {
-				Some(PendingAllocation::Allocate(sig)) => {
-					let runner_protocol_version =
-						sig.runner_protocol_version.unwrap_or(PROTOCOL_MK1_VERSION);
-
-					ctx.activity(UpdateRunnerInput {
-						actor_id: input.actor_id,
-						runner_id: sig.runner_id,
-						runner_workflow_id: sig.runner_workflow_id,
-					})
-					.await?;
-
-					if protocol::is_mk2(runner_protocol_version) {
-						ctx.activity(InsertAndSendCommandsInput {
-							actor_id: input.actor_id,
-							generation,
-							runner_id: sig.runner_id,
-							commands: vec![protocol::mk2::Command::CommandStartActor(
-								protocol::mk2::CommandStartActor {
-									config: protocol::mk2::ActorConfig {
-										name: input.name.clone(),
-										key: input.key.clone(),
-										create_ts: util::timestamp::now(),
-										input: input
-											.input
-											.as_ref()
-											.map(|x| BASE64_STANDARD.decode(x))
-											.transpose()?,
-									},
-									// Empty because request ids are ephemeral. This is intercepted by guard and
-									// populated before it reaches the runner
-									hibernating_requests: Vec::new(),
-								},
-							)],
-						})
-						.await?;
-					} else {
-						ctx.signal(crate::workflows::runner::Command {
-							inner: protocol::Command::CommandStartActor(
-								protocol::CommandStartActor {
-									actor_id: input.actor_id.to_string(),
-									generation,
-									config: protocol::ActorConfig {
-										name: input.name.clone(),
-										key: input.key.clone(),
-										create_ts: util::timestamp::now(),
-										input: input
-											.input
-											.as_ref()
-											.map(|x| BASE64_STANDARD.decode(x))
-											.transpose()?,
-									},
-									// Empty because request ids are ephemeral. This is intercepted by guard and
-									// populated before it reaches the runner
-									hibernating_requests: Vec::new(),
-								},
-							),
-						})
-						.to_workflow_id(sig.runner_workflow_id)
-						.send()
-						.await?;
+			let spawn_output = loop {
+				let signal = match allocation_override {
+					AllocationOverride::DontSleep {
+						pending_timeout: Some(timeout),
 					}
-
-					Ok(SpawnActorOutput::Allocated {
-						runner_id: sig.runner_id,
-						runner_workflow_id: sig.runner_workflow_id,
-						runner_protocol_version,
-					})
-				}
-				Some(PendingAllocation::Destroy(_)) => {
-					tracing::debug!(actor_id=?input.actor_id, "destroying before actor allocated");
-
-					let cleared = ctx
-						.activity(ClearPendingAllocationInput {
-							actor_id: input.actor_id,
-							namespace_id: input.namespace_id,
-							runner_name_selector: input.runner_name_selector.clone(),
-							pending_allocation_ts,
-						})
-						.await?;
-
-					// If this actor was no longer present in the queue it means it was allocated. We must now
-					// wait for the allocated signal to prevent a race condition.
-					if !cleared {
-						let sig = ctx.listen::<Allocate>().await?;
-
-						ctx.activity(UpdateRunnerInput {
-							actor_id: input.actor_id,
-							runner_id: sig.runner_id,
-							runner_workflow_id: sig.runner_workflow_id,
-						})
-						.await?;
+					| AllocationOverride::PendingTimeout {
+						pending_timeout: timeout,
+					} => {
+						ctx.listen_with_timeout::<PendingAllocationWait>(timeout)
+							.await?
 					}
-					// Bump the pool so it can scale down
-					else if allocate_res.serverless {
-						let res = ctx
-							.v(2)
-							.signal(crate::workflows::runner_pool::Bump::default())
-							.to_workflow::<crate::workflows::runner_pool::Workflow>()
-							.tag("namespace_id", input.namespace_id)
-							.tag("runner_name", input.runner_name_selector.clone())
-							.send()
-							.await;
+					_ => Some(ctx.listen::<PendingAllocationWait>().await?),
+				};
 
-						if let Some(WorkflowError::WorkflowNotFound) = res
-							.as_ref()
-							.err()
-							.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
-						{
-							tracing::warn!(
-								namespace_id=%input.namespace_id,
-								runner_name=%input.runner_name_selector,
-								"serverless pool workflow not found, respective runner config likely deleted"
-							);
-						} else {
-							res?;
-						}
-					}
-
-					Ok(SpawnActorOutput::Destroy)
-				}
-				None => {
-					tracing::debug!(actor_id=?input.actor_id, "timed out before actor allocated");
-
-					let cleared = ctx
-						.activity(ClearPendingAllocationInput {
-							actor_id: input.actor_id,
-							namespace_id: input.namespace_id,
-							runner_name_selector: input.runner_name_selector.clone(),
-							pending_allocation_ts,
-						})
-						.await?;
-
-					// If this actor was no longer present in the queue it means it was allocated. We must now
-					// wait for the allocated signal to prevent a race condition.
-					if !cleared {
-						let sig = ctx.listen::<Allocate>().await?;
+				// If allocation fails, the allocate txn already inserted this actor into the queue. Now we wait
+				// for an `Allocate` signal.
+				match signal {
+					Some(PendingAllocationWait::Allocate(sig)) => {
 						let runner_protocol_version =
 							sig.runner_protocol_version.unwrap_or(PROTOCOL_MK1_VERSION);
 
@@ -988,14 +858,38 @@ pub async fn spawn_actor(
 							.await?;
 						}
 
-						Ok(SpawnActorOutput::Allocated {
+						break SpawnActorOutput::Allocated {
 							runner_id: sig.runner_id,
 							runner_workflow_id: sig.runner_workflow_id,
 							runner_protocol_version,
-						})
-					} else {
+						};
+					}
+					Some(PendingAllocationWait::Destroy(_)) => {
+						tracing::debug!(actor_id=?input.actor_id, "destroying before actor allocated");
+
+						let cleared = ctx
+							.activity(ClearPendingAllocationInput {
+								actor_id: input.actor_id,
+								namespace_id: input.namespace_id,
+								runner_name_selector: input.runner_name_selector.clone(),
+								pending_allocation_ts,
+							})
+							.await?;
+
+						// If this actor was no longer present in the queue it means it was allocated. We must now
+						// wait for the allocated signal to prevent a race condition.
+						if !cleared {
+							let sig = ctx.listen::<Allocate>().await?;
+
+							ctx.activity(UpdateRunnerInput {
+								actor_id: input.actor_id,
+								runner_id: sig.runner_id,
+								runner_workflow_id: sig.runner_workflow_id,
+							})
+							.await?;
+						}
 						// Bump the pool so it can scale down
-						if allocate_res.serverless {
+						else if allocate_res.serverless {
 							let res = ctx
 								.v(2)
 								.signal(crate::workflows::runner_pool::Bump::default())
@@ -1019,10 +913,130 @@ pub async fn spawn_actor(
 							}
 						}
 
-						Ok(SpawnActorOutput::Sleep)
+						break SpawnActorOutput::Destroy;
+					}
+					Some(PendingAllocationWait::Reschedule(_)) => {
+						tracing::debug!(
+							actor_id=?input.actor_id,
+							"actor is already pending allocation, ignoring manual reschedule",
+						);
+						continue;
+					}
+					None => {
+						tracing::debug!(actor_id=?input.actor_id, "timed out before actor allocated");
+
+						let cleared = ctx
+							.activity(ClearPendingAllocationInput {
+								actor_id: input.actor_id,
+								namespace_id: input.namespace_id,
+								runner_name_selector: input.runner_name_selector.clone(),
+								pending_allocation_ts,
+							})
+							.await?;
+
+						// If this actor was no longer present in the queue it means it was allocated. We must now
+						// wait for the allocated signal to prevent a race condition.
+						if !cleared {
+							let sig = ctx.listen::<Allocate>().await?;
+							let runner_protocol_version =
+								sig.runner_protocol_version.unwrap_or(PROTOCOL_MK1_VERSION);
+
+							ctx.activity(UpdateRunnerInput {
+								actor_id: input.actor_id,
+								runner_id: sig.runner_id,
+								runner_workflow_id: sig.runner_workflow_id,
+							})
+							.await?;
+
+							if protocol::is_mk2(runner_protocol_version) {
+								ctx.activity(InsertAndSendCommandsInput {
+									actor_id: input.actor_id,
+									generation,
+									runner_id: sig.runner_id,
+									commands: vec![protocol::mk2::Command::CommandStartActor(
+										protocol::mk2::CommandStartActor {
+											config: protocol::mk2::ActorConfig {
+												name: input.name.clone(),
+												key: input.key.clone(),
+												create_ts: util::timestamp::now(),
+												input: input
+													.input
+													.as_ref()
+													.map(|x| BASE64_STANDARD.decode(x))
+													.transpose()?,
+											},
+											// Empty because request ids are ephemeral. This is intercepted by guard and
+											// populated before it reaches the runner
+											hibernating_requests: Vec::new(),
+										},
+									)],
+								})
+								.await?;
+							} else {
+								ctx.signal(crate::workflows::runner::Command {
+									inner: protocol::Command::CommandStartActor(
+										protocol::CommandStartActor {
+											actor_id: input.actor_id.to_string(),
+											generation,
+											config: protocol::ActorConfig {
+												name: input.name.clone(),
+												key: input.key.clone(),
+												create_ts: util::timestamp::now(),
+												input: input
+													.input
+													.as_ref()
+													.map(|x| BASE64_STANDARD.decode(x))
+													.transpose()?,
+											},
+											// Empty because request ids are ephemeral. This is intercepted by guard and
+											// populated before it reaches the runner
+											hibernating_requests: Vec::new(),
+										},
+									),
+								})
+								.to_workflow_id(sig.runner_workflow_id)
+								.send()
+								.await?;
+							}
+
+							break SpawnActorOutput::Allocated {
+								runner_id: sig.runner_id,
+								runner_workflow_id: sig.runner_workflow_id,
+								runner_protocol_version,
+							};
+						} else {
+							// Bump the pool so it can scale down
+							if allocate_res.serverless {
+								let res = ctx
+									.v(2)
+									.signal(crate::workflows::runner_pool::Bump::default())
+									.to_workflow::<crate::workflows::runner_pool::Workflow>()
+									.tag("namespace_id", input.namespace_id)
+									.tag("runner_name", input.runner_name_selector.clone())
+									.send()
+									.await;
+
+								if let Some(WorkflowError::WorkflowNotFound) =
+									res.as_ref().err().and_then(|x| {
+										x.chain().find_map(|x| x.downcast_ref::<WorkflowError>())
+									}) {
+									tracing::warn!(
+										namespace_id=%input.namespace_id,
+										runner_name=%input.runner_name_selector,
+										"serverless pool workflow not found, respective runner config likely deleted"
+									);
+								} else {
+									res?;
+								}
+							}
+
+							break SpawnActorOutput::Sleep;
+						}
 					}
 				}
-			}
+			};
+
+			Ok(spawn_output)
 		}
 		AllocateActorStatus::Sleep => Ok(SpawnActorOutput::Sleep),
 	}
@@ -1066,13 +1080,24 @@ pub async fn reschedule_actor(
 		let next = backoff.step().expect("should not have max retry");
 
 		// Sleep for backoff or destroy early
-		if let Some(_sig) = ctx
-			.listen_with_timeout::<Destroy>(Instant::from(next) - Instant::now())
+		if let Some(sig) = ctx
+			.listen_with_timeout::<RescheduleBackoff>(Instant::from(next) - Instant::now())
 			.await?
 		{
-			tracing::debug!("destroying before actor start");
+			match sig {
+				RescheduleBackoff::Destroy(_) => {
+					tracing::debug!("destroying before actor start");
 
-			return Ok(SpawnActorOutput::Destroy);
+					return Ok(SpawnActorOutput::Destroy);
+				}
+				RescheduleBackoff::Reschedule(sig) => {
+					tracing::debug!(actor_id=?input.actor_id, "interrupting actor reschedule backoff");
+
+					if sig.reset_rescheduling {
+						state.reschedule_state = Default::default();
+					}
+				}
+			}
 		}
 	}
 

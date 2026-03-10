@@ -26,6 +26,10 @@ pub async fn router(
 			.route("/actors", post(actors::create::create))
 			.route("/actors", put(actors::get_or_create::get_or_create))
 			.route("/actors/{actor_id}", delete(actors::delete::delete))
+			.route(
+				"/actors/{actor_id}/reschedule",
+				post(actors::reschedule::reschedule),
+			)
 			.route("/actors/names", get(actors::list_names::list_names))
 			.route(
 				"/actors/{actor_id}/kv/keys/{key}",

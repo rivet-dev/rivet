@@ -626,13 +626,116 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										"cannot wake an actor that intends to sleep but has not stopped yet, deferring wake until after stop",
 									);
 								}
-							} else {
-								tracing::debug!(
-									actor_id=?input.actor_id,
-									"cannot wake actor that is not sleeping",
-								);
-							}
+						} else {
+							tracing::debug!(
+								actor_id=?input.actor_id,
+								"cannot wake actor that is not sleeping",
+							);
 						}
+					},
+						Main::Reschedule(sig) => {
+							if sig.reset_rescheduling {
+								state.reschedule_state = Default::default();
+							}
+
+							if state.sleeping && state.runner_id.is_none() {
+								state.sleeping = false;
+								state.will_wake = false;
+								state.force_reschedule = false;
+
+								match runtime::reschedule_actor(
+									ctx,
+									&input,
+									state,
+									metrics_workflow_id,
+									AllocationOverride::DontSleep {
+										pending_timeout: None,
+									},
+								)
+								.await?
+								{
+									runtime::SpawnActorOutput::Allocated { .. } => {}
+									runtime::SpawnActorOutput::Sleep => {
+										state.sleeping = true;
+									}
+									runtime::SpawnActorOutput::Destroy => {
+										return Ok(Loop::Break(runtime::LifecycleResult {
+											generation: state.generation,
+										}));
+									}
+								}
+							} else if let (
+								Some(runner_id),
+								Some(runner_workflow_id),
+								Some(runner_protocol_version),
+							) = (
+								state.runner_id,
+								state.runner_workflow_id,
+								state.runner_protocol_version,
+							) {
+								state.force_reschedule = true;
+
+								if !state.stopping {
+									state.gc_timeout_ts = Some(
+										util::timestamp::now()
+											+ ctx.config().pegboard().actor_stop_threshold(),
+									);
+									state.going_away = true;
+									state.stopping = true;
+
+									ctx.activity(runtime::SetNotConnectableInput {
+										actor_id: input.actor_id,
+									})
+									.await?;
+
+									if protocol::is_mk2(runner_protocol_version) {
+										ctx.activity(runtime::InsertAndSendCommandsInput {
+											actor_id: input.actor_id,
+											generation: state.generation,
+											runner_id,
+											commands: vec![protocol::mk2::Command::CommandStopActor],
+										})
+										.await?;
+									} else {
+										ctx.signal(crate::workflows::runner::Command {
+											inner: protocol::Command::CommandStopActor(
+												protocol::CommandStopActor {
+													actor_id: input.actor_id.to_string(),
+													generation: state.generation,
+												},
+											),
+										})
+										.to_workflow_id(runner_workflow_id)
+										.send()
+										.await?;
+									}
+								}
+							} else {
+								state.force_reschedule = false;
+
+								match runtime::reschedule_actor(
+									ctx,
+									&input,
+									state,
+									metrics_workflow_id,
+									AllocationOverride::DontSleep {
+										pending_timeout: None,
+									},
+								)
+								.await?
+								{
+									runtime::SpawnActorOutput::Allocated { .. } => {}
+									runtime::SpawnActorOutput::Sleep => {
+										state.sleeping = true;
+									}
+									runtime::SpawnActorOutput::Destroy => {
+										return Ok(Loop::Break(runtime::LifecycleResult {
+											generation: state.generation,
+										}));
+									}
+								}
+							}
+						},
 						Main::Lost(sig) => {
 							// Ignore signals for previous generations
 							if sig.generation != state.generation {
@@ -955,47 +1058,48 @@ async fn handle_stopped(
 ) -> Result<StoppedResult> {
 	tracing::debug!(?variant, "actor stopped");
 
-	let force_reschedule = match &variant {
-		StoppedVariant::Normal {
-			code: protocol::mk2::StopCode::Ok,
-			..
-		} => {
-			// Reset retry count on successful exit
-			state.reschedule_state = Default::default();
+	let force_reschedule = state.force_reschedule
+		|| match &variant {
+			StoppedVariant::Normal {
+				code: protocol::mk2::StopCode::Ok,
+				..
+			} => {
+				// Reset retry count on successful exit
+				state.reschedule_state = Default::default();
 
-			false
-		}
-		StoppedVariant::Normal {
-			code: protocol::mk2::StopCode::Error,
-			message,
-		} => {
-			ctx.v(3)
-				.activity(runtime::SetFailureReasonInput {
-					failure_reason: FailureReason::Crashed {
-						message: message.clone(),
-					},
-				})
-				.await?;
-
-			false
-		}
-		StoppedVariant::Lost {
-			force_reschedule,
-			failure_reason,
-		} => {
-			// Set runner failure reason if actor was lost unexpectedly.
-			// This is set early (before crash policy handling) because it applies to all crash policies.
-			if let Some(failure_reason) = &failure_reason {
+				false
+			}
+			StoppedVariant::Normal {
+				code: protocol::mk2::StopCode::Error,
+				message,
+			} => {
 				ctx.v(3)
 					.activity(runtime::SetFailureReasonInput {
-						failure_reason: failure_reason.clone(),
+						failure_reason: FailureReason::Crashed {
+							message: message.clone(),
+						},
 					})
 					.await?;
-			}
 
-			*force_reschedule
-		}
-	};
+				false
+			}
+			StoppedVariant::Lost {
+				force_reschedule,
+				failure_reason,
+			} => {
+				// Set runner failure reason if actor was lost unexpectedly.
+				// This is set early (before crash policy handling) because it applies to all crash policies.
+				if let Some(failure_reason) = &failure_reason {
+					ctx.v(3)
+						.activity(runtime::SetFailureReasonInput {
+							failure_reason: failure_reason.clone(),
+						})
+						.await?;
+				}
+
+				*force_reschedule
+			}
+		};
 
 	// Clear stop gc timeout to prevent being marked as lost in the lifecycle loop
 	state.gc_timeout_ts = None;
@@ -1214,6 +1318,7 @@ async fn handle_stopped(
 
 	state.will_wake = false;
 	state.going_away = false;
+	state.force_reschedule = false;
 
 	ctx.msg(Stopped {})
 		.topic(("actor_id", input.actor_id))
@@ -1275,6 +1380,14 @@ pub struct Wake {
 	pub allocation_override: AllocationOverride,
 }
 
+#[derive(Debug)]
+#[signal("pegboard_actor_reschedule")]
+pub struct Reschedule {
+	/// Resets the rescheduling retry count to 0.
+	#[serde(default)]
+	pub reset_rescheduling: bool,
+}
+
 /// Reason why an actor was lost.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1328,10 +1441,24 @@ join_signal!(PendingAllocation {
 	// Comment to prevent invalid formatting
 });
 
+join_signal!(PendingAllocationWait {
+	Allocate,
+	Destroy,
+	Reschedule,
+	// Comment to prevent invalid formatting
+});
+
+join_signal!(RescheduleBackoff {
+	Destroy,
+	Reschedule,
+	// Comment to prevent invalid formatting
+});
+
 join_signal!(Main {
 	Event,
 	Events,
 	Wake,
+	Reschedule,
 	Lost,
 	GoingAway,
 	Destroy,

@@ -206,6 +206,30 @@ pub async fn actors_delete(
 	parse_response(response).await
 }
 
+pub async fn build_actors_reschedule_request(
+	port: u16,
+	path: actors::reschedule::ReschedulePath,
+	query: actors::reschedule::RescheduleQuery,
+) -> Result<reqwest::RequestBuilder> {
+	let client = rivet_pools::reqwest::client().await?;
+	Ok(client.post(format!(
+		"{}/actors/{}/reschedule?{}",
+		get_endpoint(port),
+		path.actor_id,
+		&serde_html_form::to_string(&query)?
+	)))
+}
+
+pub async fn actors_reschedule(
+	port: u16,
+	path: actors::reschedule::ReschedulePath,
+	query: actors::reschedule::RescheduleQuery,
+) -> Result<actors::reschedule::RescheduleResponse> {
+	let request = build_actors_reschedule_request(port, path, query).await?;
+	let response = request.send().await?;
+	parse_response(response).await
+}
+
 pub async fn build_actors_list_names_request(
 	port: u16,
 	query: actors::list_names::ListNamesQuery,
