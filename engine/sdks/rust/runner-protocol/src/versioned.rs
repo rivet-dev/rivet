@@ -3224,7 +3224,7 @@ fn convert_to_server_tunnel_message_kind_v4_to_v3(
 
 // Used specifically for the gateway because there were no changes between mk2 and mk1 for the tunnel messages
 pub fn to_client_tunnel_message_mk2_to_mk1(
-	msg: v6::ToClientTunnelMessage,
+	msg: v7::ToClientTunnelMessage,
 ) -> v3::ToClientTunnelMessage {
 	v3::ToClientTunnelMessage {
 		message_id: v3::MessageId {
@@ -3237,10 +3237,10 @@ pub fn to_client_tunnel_message_mk2_to_mk1(
 }
 
 fn convert_to_client_tunnel_message_kind_mk2_to_mk1(
-	kind: v6::ToClientTunnelMessageKind,
+	kind: v7::ToClientTunnelMessageKind,
 ) -> v3::ToClientTunnelMessageKind {
 	match kind {
-		v6::ToClientTunnelMessageKind::ToClientRequestStart(req) => {
+		v7::ToClientTunnelMessageKind::ToClientRequestStart(req) => {
 			v3::ToClientTunnelMessageKind::ToClientRequestStart(v3::ToClientRequestStart {
 				actor_id: req.actor_id,
 				method: req.method,
@@ -3250,29 +3250,29 @@ fn convert_to_client_tunnel_message_kind_mk2_to_mk1(
 				stream: req.stream,
 			})
 		}
-		v6::ToClientTunnelMessageKind::ToClientRequestChunk(chunk) => {
+		v7::ToClientTunnelMessageKind::ToClientRequestChunk(chunk) => {
 			v3::ToClientTunnelMessageKind::ToClientRequestChunk(v3::ToClientRequestChunk {
 				body: chunk.body,
 				finish: chunk.finish,
 			})
 		}
-		v6::ToClientTunnelMessageKind::ToClientRequestAbort => {
+		v7::ToClientTunnelMessageKind::ToClientRequestAbort => {
 			v3::ToClientTunnelMessageKind::ToClientRequestAbort
 		}
-		v6::ToClientTunnelMessageKind::ToClientWebSocketOpen(ws) => {
+		v7::ToClientTunnelMessageKind::ToClientWebSocketOpen(ws) => {
 			v3::ToClientTunnelMessageKind::ToClientWebSocketOpen(v3::ToClientWebSocketOpen {
 				actor_id: ws.actor_id,
 				path: ws.path,
 				headers: ws.headers,
 			})
 		}
-		v6::ToClientTunnelMessageKind::ToClientWebSocketMessage(msg) => {
+		v7::ToClientTunnelMessageKind::ToClientWebSocketMessage(msg) => {
 			v3::ToClientTunnelMessageKind::ToClientWebSocketMessage(v3::ToClientWebSocketMessage {
 				data: msg.data,
 				binary: msg.binary,
 			})
 		}
-		v6::ToClientTunnelMessageKind::ToClientWebSocketClose(close) => {
+		v7::ToClientTunnelMessageKind::ToClientWebSocketClose(close) => {
 			v3::ToClientTunnelMessageKind::ToClientWebSocketClose(v3::ToClientWebSocketClose {
 				code: close.code,
 				reason: close.reason,

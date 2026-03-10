@@ -1,10 +1,7 @@
 use std::{
 	future::Future,
 	pin::Pin,
-	sync::{
-		Arc,
-		atomic::{AtomicBool, Ordering},
-	},
+	sync::atomic::{AtomicBool, Ordering},
 };
 
 use anyhow::{Context, Result};
@@ -24,14 +21,14 @@ use crate::{
 use super::transaction_task::{TransactionCommand, TransactionTask};
 
 pub struct PostgresTransactionDriver {
-	pool: Arc<Pool>,
+	pool: Pool,
 	operations: TransactionOperations,
 	committed: AtomicBool,
 	tx_sender: OnceCell<mpsc::Sender<TransactionCommand>>,
 }
 
 impl PostgresTransactionDriver {
-	pub fn with_config(pool: Arc<Pool>) -> Self {
+	pub fn with_config(pool: Pool) -> Self {
 		PostgresTransactionDriver {
 			pool,
 			operations: TransactionOperations::default(),
@@ -47,7 +44,7 @@ impl PostgresTransactionDriver {
 				let (sender, receiver) = mpsc::channel(100);
 
 				// Spawn the transaction task with serializable isolation
-				let task = TransactionTask::new(self.pool.as_ref().clone(), receiver);
+				let task = TransactionTask::new(self.pool.clone(), receiver);
 				tokio::spawn(task.run());
 
 				anyhow::Ok(sender)
