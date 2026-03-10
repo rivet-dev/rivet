@@ -11,7 +11,7 @@
     @apply border-border;
   }
   body {
-    @apply min-h-screen bg-background text-foreground;
+    @apply min-h-screen bg-background font-sans text-foreground;
   }
   #root {
     @apply min-h-screen;
