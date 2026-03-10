@@ -21,12 +21,14 @@ interface ImagesTableProps {
 	isError?: boolean;
 	hasNextPage?: boolean;
 	fetchNextPage?: () => void;
-	repositories: Repository[];
+	images: Image[];
 	deployments: Deployment[];
 }
 
-interface Repository {
+interface Image {
 	repository: string;
+	tag: string;
+	createdAt: string;
 }
 
 interface Deployment {
@@ -40,7 +42,7 @@ export function ImagesTable({
 	isError,
 	hasNextPage,
 	fetchNextPage,
-	repositories,
+	images,
 	deployments,
 }: ImagesTableProps) {
 	return (
@@ -54,7 +56,7 @@ export function ImagesTable({
 				</TableRow>
 			</TableHeader>
 			<TableBody>
-				{!isLoading && !isError && repositories?.length === 0 ? (
+				{!isLoading && !isError && images?.length === 0 ? (
 					<TableRow>
 						<TableCell colSpan={5}>
 							<Text className="text-center">
@@ -84,14 +86,15 @@ export function ImagesTable({
 						<RowSkeleton />
 					</>
 				) : null}
-				{repositories?.map((repository) => (
-					<RepositoryRow
-						{...repository}
+				{images?.map((image) => (
+					<ImageRow
+						{...image}
 						deployments={deployments.filter(
 							(deployment) =>
-								deployment.repository === repository.repository,
+								deployment.repository === image.repository &&
+								deployment.tag === image.tag,
 						)}
-						key={repository.repository}
+						key={`${image.repository}:${image.tag}`}
 					/>
 				))}
 
@@ -139,49 +142,22 @@ function RowSkeleton() {
 	);
 }
 
-export function RepositoryRow({
+export function ImageRow({
 	repository,
+	tag,
+	createdAt,
 	deployments,
-}: Repository & {
+}: Image & {
 	deployments: Deployment[];
 }) {
-	const dataProvider = useCloudNamespaceDataProvider();
-	const {
-		data: tags,
-		isFetchingNextPage,
-		fetchNextPage,
-		hasNextPage,
-	} = useSuspenseInfiniteQuery(
-		dataProvider.currentProjectTagsQueryOptions({
-			repository,
-		}),
-	);
-
 	return (
-		<>
-			{tags.map((tag) => (
-				<TagRow
-					key={tag.tag}
-					{...tag}
-					repository={repository}
-					deployments={deployments.filter(
-						(deployment) => deployment.tag === tag.tag,
-					)}
-					createTs={Date.now()}
-				/>
-			))}
-
-			{hasNextPage ? (
-				<VisibilitySensor onChange={() => fetchNextPage()} />
-			) : null}
-			{isFetchingNextPage ? (
-				<>
-					<RowSkeleton />
-					<RowSkeleton />
-					<RowSkeleton />
-				</>
-			) : null}
-		</>
+		<TagRow
+			key={tag}
+			repository={repository}
+			tag={tag}
+			createTs={createdAt}
+			deployments={deployments}
+		/>
 	);
 }
 
@@ -193,7 +169,7 @@ function TagRow({
 }: {
 	repository: string;
 	tag: string;
-	createTs: number;
+	createTs: string;
 	deployments: Deployment[];
 }) {
 	return (
@@ -222,7 +198,7 @@ function TagRow({
 	);
 }
 
-function CreateTs({ createTs }: { createTs: number }) {
+function CreateTs({ createTs }: { createTs: string }) {
 	return (
 		<WithTooltip
 			content={new Date(createTs).toLocaleString()}

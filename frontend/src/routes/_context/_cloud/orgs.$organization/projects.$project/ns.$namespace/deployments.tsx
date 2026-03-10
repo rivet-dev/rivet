@@ -70,8 +70,8 @@ function RouteComponent() {
 
 function Deployments() {
 	const dataProvider = useCloudNamespaceDataProvider();
-	const { data: repositories } = useSuspenseInfiniteQuery(
-		dataProvider.currentProjectImageRepositoriesQueryOptions(),
+	const { data: images } = useSuspenseInfiniteQuery(
+		dataProvider.currentProjectImagesQueryOptions(),
 	);
 
 	const { data: namespaces } = useSuspenseInfiniteQuery(
@@ -105,10 +105,7 @@ function Deployments() {
 	return (
 		<div className="max-w-5xl mx-auto">
 			<div className="border rounded-md">
-				<ImagesTable
-					repositories={repositories}
-					deployments={deployments ?? []}
-				/>
+				<ImagesTable images={images} deployments={deployments ?? []} />
 			</div>
 		</div>
 	);

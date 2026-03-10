@@ -17,7 +17,7 @@ overrides:
   '@clerk/shared': 3.27.1
   react: 19.1.0
   react-dom: 19.1.0
-  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@713aed4
+  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f3fd6ed
   '@codemirror/state': 6.5.2
   '@codemirror/view': 6.38.2
   '@codemirror/autocomplete': 6.18.7
@@ -464,8 +464,8 @@ importers:
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@713aed4
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@713aed4
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f3fd6ed
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f3fd6ed
       '@rivetkit/engine-api-full':
         specifier: workspace:*
         version: link:../../engine/sdks/typescript/api-full
@@ -3493,8 +3493,8 @@ importers:
         specifier: ^1.2.3
         version: 1.2.3(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@713aed4
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@713aed4
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f3fd6ed
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f3fd6ed
       '@rivet-gg/icons':
         specifier: workspace:*
         version: link:packages/icons
@@ -4617,8 +4617,8 @@ importers:
         specifier: 25.5.3
         version: 25.5.3
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@713aed4
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@713aed4
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f3fd6ed
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f3fd6ed
       '@rivet-gg/components':
         specifier: workspace:*
         version: link:../frontend/packages/components
@@ -5671,7 +5671,6 @@ packages:
   '@clerk/clerk-react@5.49.1':
     resolution: {integrity: sha512-0yphUDJztg95eAARovx9NbgC5dWNVWhfBQ3klRKupA1hSB8+5VtkE4AugcUU7GMF9XK1jl0yrqMuOGp0U1BTqw==}
     engines: {node: '>=18.17.0'}
-    deprecated: 'This package is no longer supported. Please use @clerk/react instead. See the upgrade guide for more info: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/core-3'
     peerDependencies:
       react: 19.1.0
       react-dom: 19.1.0
@@ -5679,7 +5678,6 @@ packages:
   '@clerk/elements@0.23.63':
     resolution: {integrity: sha512-dJ2Fcn0QDaK1INlMsIRb2z6JMlI5l5hHP2V8a/uwHOXjuRRisVMg2S13FJxuGD9AEZcm/2HQBDLcmo+DJ1/LMA==}
     engines: {node: '>=18.17.0'}
-    deprecated: 'This package is no longer supported. Please see the Core 3 release for more information: https://clerk.com/changelog/2026-03-03-core-3'
     peerDependencies:
       next: ^13.5.4 || ^14.0.3 || ^15
       react: 19.1.0
@@ -8901,8 +8899,8 @@ packages:
   '@rivet-gg/api@25.5.3':
     resolution: {integrity: sha512-pj8xYQ+I/aQDbThmicPxvR+TWAzGoLSE53mbJi4QZHF8VH2oMvU7CMWqy7OTFH30DIRyVzsnHHRJZKGwtmQL3g==}
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@713aed4':
-    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@713aed4}
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f3fd6ed':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f3fd6ed}
     version: 0.0.0
 
   '@rivetkit/bare-ts@0.6.2':
@@ -22027,7 +22025,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@713aed4':
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f3fd6ed':
     dependencies:
       cross-fetch: 4.1.0
       form-data: 4.0.5
