@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { AnyActorDefinition } from "@/actor/definition";
 import { dynamicActor } from "rivetkit/dynamic";
+import { registry as staticRegistry } from "./registry";
 
 const FIXTURE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = path.resolve(FIXTURE_DIR, "..", "..");
@@ -43,7 +44,9 @@ function actorNameFromFilePath(filePath: string): string {
 	return path.basename(filePath, ".ts");
 }
 
-async function importActorDefinition(filePath: string): Promise<AnyActorDefinition> {
+async function importActorDefinition(
+	filePath: string,
+): Promise<AnyActorDefinition> {
 	const moduleSpecifier = pathToFileURL(filePath).href;
 	const module = (await import(moduleSpecifier)) as {
 		default?: AnyActorDefinition;
@@ -74,7 +77,7 @@ async function loadEsbuildModule(): Promise<EsbuildModule> {
 				typeof esbuildModule.build === "function"
 					? esbuildModule
 					: esbuildModule.default;
-			if (typeof esbuild.build !== "function") {
+			if (!esbuild || typeof esbuild.build !== "function") {
 				throw new Error("failed to load esbuild build function");
 			}
 			return esbuild;
@@ -110,7 +113,9 @@ async function bundleActorFixture(filePath: string): Promise<string> {
 			file.path.endsWith(".js"),
 		);
 		if (!outputFile) {
-			throw new Error(`failed to bundle dynamic actor source for ${filePath}`);
+			throw new Error(
+				`failed to bundle dynamic actor source for ${filePath}`,
+			);
 		}
 
 		return outputFile.text;
@@ -133,8 +138,20 @@ export async function loadStaticActors(): Promise<
 
 export function loadDynamicActors(): Record<string, DynamicActorDefinition> {
 	const actors: Record<string, DynamicActorDefinition> = {};
+	const staticDefinitions = staticRegistry.config.use as Record<
+		string,
+		AnyActorDefinition
+	>;
 	for (const actorFixturePath of listActorFixtureFiles()) {
-		actors[actorNameFromFilePath(actorFixturePath)] = dynamicActor({
+		const actorName = actorNameFromFilePath(actorFixturePath);
+		const staticDefinition = staticDefinitions[actorName];
+		if (!staticDefinition) {
+			throw new Error(
+				`missing static actor definition for dynamic fixture ${actorName}`,
+			);
+		}
+		actors[actorName] = dynamicActor({
+			options: staticDefinition.config.options,
 			load: async () => {
 				return {
 					source: await bundleActorFixture(actorFixturePath),

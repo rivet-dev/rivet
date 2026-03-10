@@ -1,4 +1,3 @@
-import { idToStr } from "@rivetkit/engine-runner";
 import onChange from "@rivetkit/on-change";
 import { isCborSerializable, stringifyError } from "@/common/utils";
 import {
@@ -348,10 +347,6 @@ export class StateManager<
 			}
 		}
 
-		this.#actor.rLog.debug({
-			msg: "onChange triggered, setting persistChanged=true",
-			path,
-		});
 		this.#persistChanged = true;
 
 		// Inform inspector about state changes
@@ -397,16 +392,6 @@ export class StateManager<
 	}
 
 	async #savePersistInner() {
-		this.#actor.rLog.info({
-			msg: "savePersistInner called",
-			persistChanged: this.#persistChanged,
-			connsWithPersistChangedSize:
-				this.#actor.connectionManager.connsWithPersistChanged.size,
-			connsWithPersistChangedIds: Array.from(
-				this.#actor.connectionManager.connsWithPersistChanged,
-			),
-		});
-
 		try {
 			this.#lastSaveTime = Date.now();
 
@@ -467,18 +452,6 @@ export class StateManager<
 							continue;
 						}
 
-						this.#actor.rLog.info({
-							msg: "persisting connection",
-							connId,
-							gatewayId: idToStr(hibernatableDataRaw.gatewayId),
-							requestId: idToStr(hibernatableDataRaw.requestId),
-							serverMessageIndex:
-								hibernatableDataRaw.serverMessageIndex,
-							clientMessageIndex:
-								hibernatableDataRaw.clientMessageIndex,
-							hasState: hibernatableDataRaw.state !== undefined,
-						});
-
 						const bareData = convertConnToBarePersistedConn<CP, CS>(
 							hibernatableDataRaw,
 						);
@@ -492,46 +465,21 @@ export class StateManager<
 						connections.push(conn);
 					}
 
-					this.#actor.rLog.info({
-						msg: "prepared entries for kvBatchPut",
-						totalEntries: entries.length,
-						connectionEntries: connections.length,
-						connectionIds: connections.map((c) => c.id),
-					});
-
-					// Notify driver before persisting connections
-					if (this.#actorDriver.onBeforePersistConn) {
-						for (const conn of connections) {
-							this.#actorDriver.onBeforePersistConn(conn);
-						}
+					// Snapshot any pending hibernatable websocket ack state for
+					// the exact conn data this persist is about to make durable.
+					for (const conn of connections) {
+						this.#actor.onBeforePersistHibernatableConn(conn);
 					}
 
 					// Clear changed connections
 					this.#actor.connectionManager.clearConnWithPersistChanged();
 
 					// Write data
-					this.#actor.rLog.info({
-						msg: "calling kvBatchPut",
-						actorId: this.#actor.id,
-						entriesCount: entries.length,
-					});
 					await this.#actorDriver.kvBatchPut(this.#actor.id, entries);
-					this.#actor.rLog.info({
-						msg: "kvBatchPut completed successfully",
-					});
 
-					// Notify driver after persisting connections
-					if (this.#actorDriver.onAfterPersistConn) {
-						for (const conn of connections) {
-							this.#actorDriver.onAfterPersistConn(conn);
-						}
+					for (const conn of connections) {
+						this.#actor.onAfterPersistHibernatableConn(conn);
 					}
-
-					this.#actor.rLog.debug({ msg: "persist saved" });
-				});
-			} else {
-				this.#actor.rLog.info({
-					msg: "savePersistInner skipped - no changes",
 				});
 			}
 

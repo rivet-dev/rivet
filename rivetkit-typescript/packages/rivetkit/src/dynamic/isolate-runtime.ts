@@ -1,9 +1,5 @@
 import { createRequire } from "node:module";
-import {
-	mkdir,
-	readFile,
-	stat,
-} from "node:fs/promises";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import * as cbor from "cbor-x";
@@ -165,14 +161,18 @@ function normalizeRequestUrl(pathValue: string): string {
 }
 
 interface SecureExecModule {
-	NodeProcess: new (options: Record<string, unknown>) => NodeProcessLike;
+	NodeProcess?: new (options: Record<string, unknown>) => NodeProcessLike;
+	NodeRuntime?: new (options: Record<string, unknown>) => NodeProcessLike;
 	createInMemoryFileSystem: () => InMemoryFileSystemLike;
 	createNodeDriver?: (options: Record<string, unknown>) => unknown;
+	createNodeRuntimeDriverFactory?: () => unknown;
 }
 
 interface IsolatedVmModule {
 	Reference: new <T>(value: T) => ReferenceLike<T>;
-	ExternalCopy: new <T>(value: T) => {
+	ExternalCopy: new <T>(
+		value: T,
+	) => {
 		copy(): T;
 	};
 }
@@ -214,12 +214,47 @@ interface NodeProcessLike {
 			options?: Record<string, unknown>,
 		): Promise<{ run(context: unknown): Promise<void> }>;
 	};
-	__unsafeCreateContext(options?: Record<string, unknown>): Promise<ContextLike>;
+	__unsafeCreateContext(
+		options?: Record<string, unknown>,
+	): Promise<ContextLike>;
 	dispose(): void;
 }
 
 interface InMemoryFileSystemLike {
 	writeFile(path: string, content: string | Uint8Array): Promise<void>;
+}
+
+function createSecureExecNodeProcess(
+	secureExec: SecureExecModule,
+	options: Record<string, unknown>,
+): NodeProcessLike {
+	if (secureExec.NodeProcess) {
+		return new secureExec.NodeProcess(options);
+	}
+
+	if (
+		secureExec.NodeRuntime &&
+		secureExec.createNodeDriver &&
+		secureExec.createNodeRuntimeDriverFactory
+	) {
+		return new secureExec.NodeRuntime({
+			systemDriver: secureExec.createNodeDriver({
+				filesystem: options.filesystem,
+				moduleAccess: options.moduleAccess,
+				permissions: options.permissions,
+				processConfig: options.processConfig,
+				osConfig: options.osConfig,
+			}),
+			runtimeDriverFactory: secureExec.createNodeRuntimeDriverFactory(),
+			memoryLimit: options.memoryLimit,
+			cpuTimeLimitMs: options.cpuTimeLimitMs,
+			timingMitigation: options.timingMitigation,
+		});
+	}
+
+	throw new Error(
+		"secure-exec runtime is missing both NodeProcess and NodeRuntime support",
+	);
 }
 
 interface ContextLike {
@@ -241,6 +276,7 @@ interface HostWebSocketSession {
 	id: number;
 	readyState: 0 | 1 | 2 | 3;
 	websocket: VirtualWebSocket;
+	isHibernatable: boolean;
 	dispatchReady: boolean;
 	pendingDispatches: IsolateDispatchPayload[];
 	pendingMessages: Array<
@@ -278,6 +314,10 @@ interface DynamicRuntimeRefs {
 	getHibernatingWebSockets: ReferenceLike<
 		() => Promise<Array<DynamicHibernatingWebSocketMetadata>>
 	>;
+	cleanupPersistedConnections: ReferenceLike<
+		(reason?: string) => Promise<number>
+	>;
+	ensureStarted: ReferenceLike<() => Promise<boolean>>;
 	dispose: ReferenceLike<() => Promise<boolean>>;
 }
 
@@ -320,6 +360,7 @@ export class DynamicActorIsolateRuntime {
 	#nextWebSocketSessionId = 1;
 	#started = false;
 	#disposed = false;
+	#stopMode: "sleep" | "destroy" | undefined;
 
 	constructor(config: DynamicActorIsolateRuntimeConfig) {
 		this.#config = config;
@@ -365,9 +406,8 @@ export class DynamicActorIsolateRuntime {
 			actorId: this.#config.actorId,
 		});
 
-		const materializedSource = await materializeDynamicSource(
-			normalizedLoadResult,
-		);
+		const materializedSource =
+			await materializeDynamicSource(normalizedLoadResult);
 		logger().debug({
 			msg: "dynamic runtime source written",
 			actorId: this.#config.actorId,
@@ -376,7 +416,8 @@ export class DynamicActorIsolateRuntime {
 			sourceFormat: materializedSource.sourceFormat,
 		});
 
-		const bootstrapSourcePath = await resolveDynamicIsolateRuntimeBootstrapEntryPath();
+		const bootstrapSourcePath =
+			await resolveDynamicIsolateRuntimeBootstrapEntryPath();
 		const bootstrapSource = await readFile(bootstrapSourcePath, "utf8");
 		logger().debug({
 			msg: "dynamic runtime bootstrap written",
@@ -389,7 +430,10 @@ export class DynamicActorIsolateRuntime {
 		const ivm = await loadIsolatedVmModule();
 		const sandboxFileSystem = secureExec.createInMemoryFileSystem();
 		await sandboxFileSystem.writeFile(
-			path.posix.join(DYNAMIC_SANDBOX_APP_ROOT, materializedSource.sourceEntry),
+			path.posix.join(
+				DYNAMIC_SANDBOX_APP_ROOT,
+				materializedSource.sourceEntry,
+			),
 			materializedSource.sourceCode,
 		);
 		await sandboxFileSystem.writeFile(
@@ -399,11 +443,14 @@ export class DynamicActorIsolateRuntime {
 
 		const permissions = buildLockedDownPermissions();
 
-		this.#nodeProcess = new secureExec.NodeProcess({
+		this.#nodeProcess = createSecureExecNodeProcess(secureExec, {
 			filesystem: sandboxFileSystem,
 			moduleAccess: {
 				cwd: moduleAccessCwd,
 			},
+			// Dynamic actors rely on wall-clock time for schedule.after(),
+			// sleep timers, and other persisted actor semantics.
+			timingMitigation: "off",
 			permissions,
 			processConfig: {
 				cwd: DYNAMIC_SANDBOX_APP_ROOT,
@@ -457,7 +504,10 @@ export class DynamicActorIsolateRuntime {
 
 	async fetch(request: Request): Promise<Response> {
 		try {
-			await this.#authorizeRequest(request, getRequestConnParams(request));
+			await this.#authorizeRequest(
+				request,
+				getRequestConnParams(request),
+			);
 		} catch (error) {
 			return buildErrorResponse(request, error);
 		}
@@ -503,13 +553,26 @@ export class DynamicActorIsolateRuntime {
 				},
 				onClose: (code, reason) => {
 					session.readyState = 2;
+					// Runtime disposal can synchronously close host sockets after the
+					// isolate bridge has already been torn down. This close callback is
+					// cleanup-only in that state, so skip the isolate round trip.
+					if (this.#disposed || !this.#refs) {
+						return;
+					}
 					void this.#closeWebSocketMessage(session.id, code, reason);
 				},
 			}),
+			isHibernatable: Boolean(options.isHibernatable),
 			dispatchReady: false,
 			pendingDispatches: [],
 			pendingMessages: [],
 		};
+		setIndexedWebSocketTestSender(
+			session.websocket,
+			(data, rivetMessageIndex) =>
+				this.#sendWebSocketMessage(session.id, data, rivetMessageIndex),
+			this.#config.runtimeConfig.testEnabled,
+		);
 		this.#webSocketSessions.set(session.id, session);
 		this.#sessionIdsByWebSocket.set(session.websocket, session.id);
 
@@ -526,7 +589,8 @@ export class DynamicActorIsolateRuntime {
 						gatewayId: options.gatewayId,
 						requestId: options.requestId,
 						isHibernatable: options.isHibernatable,
-						isRestoringHibernatable: options.isRestoringHibernatable,
+						isRestoringHibernatable:
+							options.isRestoringHibernatable,
 					} satisfies WebSocketOpenEnvelopeInput,
 				],
 				{
@@ -543,7 +607,11 @@ export class DynamicActorIsolateRuntime {
 			this.#webSocketSessions.delete(session.id);
 			session.readyState = 3;
 			session.websocket.triggerError(error);
-			session.websocket.triggerClose(1011, "dynamic.websocket.open_failed", false);
+			session.websocket.triggerClose(
+				1011,
+				"dynamic.websocket.open_failed",
+				false,
+			);
 			throw error;
 		}
 
@@ -582,6 +650,24 @@ export class DynamicActorIsolateRuntime {
 		return entries as Array<DynamicHibernatingWebSocketMetadata>;
 	}
 
+	async cleanupPersistedConnections(reason?: string): Promise<number> {
+		const refs = this.#runtimeRefs;
+		const count = await refs.cleanupPersistedConnections.apply(
+			undefined,
+			[reason],
+			{
+				arguments: {
+					copy: true,
+				},
+				result: {
+					copy: true,
+					promise: true,
+				},
+			},
+		);
+		return count as number;
+	}
+
 	async forwardIncomingWebSocketMessage(
 		websocket: UniversalWebSocket,
 		data: string | ArrayBufferLike | Blob | ArrayBufferView,
@@ -595,6 +681,7 @@ export class DynamicActorIsolateRuntime {
 	}
 
 	async stop(mode: "sleep" | "destroy"): Promise<void> {
+		this.#stopMode = mode;
 		const refs = this.#runtimeRefs;
 		await refs.stop.apply(undefined, [mode], {
 			arguments: {
@@ -612,12 +699,20 @@ export class DynamicActorIsolateRuntime {
 		this.#disposed = true;
 
 		for (const session of this.#webSocketSessions.values()) {
+			if (this.#stopMode === "sleep" && session.isHibernatable) {
+				continue;
+			}
 			session.readyState = 3;
-			session.websocket.triggerClose(1001, "dynamic.runtime.disposed", false);
+			session.websocket.triggerClose(
+				1001,
+				"dynamic.runtime.disposed",
+				false,
+			);
 		}
 		this.#webSocketSessions.clear();
+		this.#sessionIdsByWebSocket = new WeakMap<UniversalWebSocket, number>();
 
-		if (this.#refs) {
+		if (this.#refs && this.#stopMode !== "sleep") {
 			try {
 				await this.#refs.dispose.apply(undefined, [], {
 					result: {
@@ -653,6 +748,7 @@ export class DynamicActorIsolateRuntime {
 
 		this.#refs = undefined;
 		this.#started = false;
+		this.#stopMode = undefined;
 	}
 
 	async #sendWebSocketMessage(
@@ -770,12 +866,15 @@ export class DynamicActorIsolateRuntime {
 			): Promise<void> => {
 				const decodedEntries = entries.map(
 					([key, value]) =>
-						[
-							new Uint8Array(key),
-							new Uint8Array(value),
-						] as [Uint8Array, Uint8Array],
+						[new Uint8Array(key), new Uint8Array(value)] as [
+							Uint8Array,
+							Uint8Array,
+						],
 				);
-				await this.#config.actorDriver.kvBatchPut(actorId, decodedEntries);
+				await this.#config.actorDriver.kvBatchPut(
+					actorId,
+					decodedEntries,
+				);
 			},
 		);
 		const kvBatchGetRef = makeRef(
@@ -790,7 +889,7 @@ export class DynamicActorIsolateRuntime {
 				);
 				return makeExternalCopy(
 					values.map((value) =>
-					value ? copyUint8ArrayToArrayBuffer(value) : null
+						value ? copyUint8ArrayToArrayBuffer(value) : null,
 					),
 				);
 			},
@@ -798,7 +897,10 @@ export class DynamicActorIsolateRuntime {
 		const kvBatchDeleteRef = makeRef(
 			async (actorId: string, keys: ArrayBuffer[]): Promise<void> => {
 				const decodedKeys = keys.map((key) => new Uint8Array(key));
-				await this.#config.actorDriver.kvBatchDelete(actorId, decodedKeys);
+				await this.#config.actorDriver.kvBatchDelete(
+					actorId,
+					decodedKeys,
+				);
 			},
 		);
 		const kvListPrefixRef = makeRef(
@@ -831,9 +933,9 @@ export class DynamicActorIsolateRuntime {
 			async (
 				input: DynamicClientCallInput,
 			): Promise<{ copy(): unknown }> => {
-				const accessor = (this.#config.inlineClient as Record<string, any>)[
-					input.actorName
-				];
+				const accessor = (
+					this.#config.inlineClient as Record<string, any>
+				)[input.actorName];
 				if (!accessor) {
 					throw new Error(
 						`dynamic client actor accessor not found: ${input.actorName}`,
@@ -876,8 +978,8 @@ export class DynamicActorIsolateRuntime {
 				serverMessageIndex: number,
 			): void => {
 				if (
-					typeof this.#config.actorDriver.ackHibernatableWebSocketMessage !==
-					"function"
+					typeof this.#config.actorDriver
+						.ackHibernatableWebSocketMessage !== "function"
 				) {
 					throw new Error(
 						"driver does not implement ackHibernatableWebSocketMessage",
@@ -902,21 +1004,23 @@ export class DynamicActorIsolateRuntime {
 		const dispatchRef = makeRef((payload: IsolateDispatchPayload): void => {
 			this.#handleIsolateDispatch(payload);
 		});
-		const logRef = makeRef((level: "debug" | "warn", message: string): void => {
-			if (level === "debug") {
-				logger().debug({
+		const logRef = makeRef(
+			(level: "debug" | "warn", message: string): void => {
+				if (level === "debug") {
+					logger().debug({
+						msg: "dynamic isolate",
+						actorId: this.#config.actorId,
+						message,
+					});
+					return;
+				}
+				logger().warn({
 					msg: "dynamic isolate",
 					actorId: this.#config.actorId,
 					message,
 				});
-				return;
-			}
-			logger().warn({
-				msg: "dynamic isolate",
-				actorId: this.#config.actorId,
-				message,
-			});
-		});
+			},
+		);
 
 		await context.global.set(
 			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvBatchPut,
@@ -990,8 +1094,9 @@ export class DynamicActorIsolateRuntime {
 			actorId: this.#config.actorId,
 			bootstrapPath,
 		});
-		const bootstrapScript = await this.#nodeProcess.__unsafeIsoalte.compileScript(
-			`
+		const bootstrapScript =
+			await this.#nodeProcess.__unsafeIsoalte.compileScript(
+				`
 				const bootstrap = require(${JSON.stringify(bootstrapPath)});
 				const isolateExportGlobalKeys = ${isolateExportGlobalKeys};
 				for (const [exportName, globalKey] of Object.entries(isolateExportGlobalKeys)) {
@@ -1002,10 +1107,10 @@ export class DynamicActorIsolateRuntime {
 					globalThis[globalKey] = value;
 				}
 				`,
-			{
-				filename: DYNAMIC_SANDBOX_BOOTSTRAP_ENTRY_FILE,
-			},
-		);
+				{
+					filename: DYNAMIC_SANDBOX_BOOTSTRAP_ENTRY_FILE,
+				},
+			);
 		logger().debug({
 			msg: "dynamic runtime bootstrap compile complete",
 			actorId: this.#config.actorId,
@@ -1039,7 +1144,9 @@ export class DynamicActorIsolateRuntime {
 		const getExportRef = async <T>(
 			exportName: DynamicBootstrapExportName,
 		): Promise<ReferenceLike<T>> => {
-			return await getRef<T>(DYNAMIC_ISOLATE_EXPORT_GLOBAL_KEYS[exportName]);
+			return await getRef<T>(
+				DYNAMIC_ISOLATE_EXPORT_GLOBAL_KEYS[exportName],
+			);
 		};
 
 		this.#refs = {
@@ -1052,17 +1159,15 @@ export class DynamicActorIsolateRuntime {
 			getHibernatingWebSockets: await getExportRef(
 				"dynamicGetHibernatingWebSocketsEnvelope",
 			),
+			cleanupPersistedConnections: await getExportRef(
+				"dynamicCleanupPersistedConnectionsEnvelope",
+			),
+			ensureStarted: await getExportRef("dynamicEnsureStartedEnvelope"),
 			dispose: await getExportRef("dynamicDisposeEnvelope"),
 		};
 	}
 
 	#handleIsolateDispatch(payload: IsolateDispatchPayload): void {
-		logger().debug({
-			msg: "dynamic websocket dispatch",
-			actorId: this.#config.actorId,
-			payloadType: payload.type,
-			sessionId: payload.sessionId,
-		});
 		const session = this.#webSocketSessions.get(payload.sessionId);
 		if (!session) {
 			return;
@@ -1173,10 +1278,7 @@ function normalizeLoadResult(
 	}
 
 	const sourceFormat = loadResult.sourceFormat ?? "esm-js";
-	if (
-		sourceFormat !== "commonjs-js" &&
-		sourceFormat !== "esm-js"
-	) {
+	if (sourceFormat !== "commonjs-js" && sourceFormat !== "esm-js") {
 		throw new Error(
 			"dynamic actor loader returned unsupported `sourceFormat`. Expected `commonjs-js` or `esm-js`.",
 		);
@@ -1188,7 +1290,9 @@ function normalizeLoadResult(
 	};
 }
 
-async function requestToEnvelope(request: Request): Promise<FetchEnvelopeInput> {
+async function requestToEnvelope(
+	request: Request,
+): Promise<FetchEnvelopeInput> {
 	const headers: Record<string, string> = {};
 	request.headers.forEach((value, key) => {
 		headers[key] = value;
@@ -1223,14 +1327,14 @@ function resolveRivetkitPackageRoot(): string {
 	let current = path.dirname(entryPath);
 
 	while (true) {
-			const candidate = path.join(current, "package.json");
-			try {
-				const packageJsonRaw = requireJsonSync(candidate) as {
-					name?: string;
-				};
-				if (packageJsonRaw?.name === "rivetkit") {
-					return current;
-				}
+		const candidate = path.join(current, "package.json");
+		try {
+			const packageJsonRaw = requireJsonSync(candidate) as {
+				name?: string;
+			};
+			if (packageJsonRaw?.name === "rivetkit") {
+				return current;
+			}
 		} catch {
 			// Continue walking up until package root is found.
 		}
@@ -1267,7 +1371,12 @@ async function resolveDynamicRuntimeModuleAccessCwd(): Promise<string> {
 	if (!dynamicRuntimeModuleAccessCwdPromise) {
 		dynamicRuntimeModuleAccessCwdPromise = (async () => {
 			const packageRoot = resolveRivetkitPackageRoot();
-			const sourceDistEntry = path.join(packageRoot, "dist", "tsup", "mod.js");
+			const sourceDistEntry = path.join(
+				packageRoot,
+				"dist",
+				"tsup",
+				"mod.js",
+			);
 			try {
 				await stat(sourceDistEntry);
 			} catch {
@@ -1319,7 +1428,9 @@ async function resolveDynamicRuntimeModuleAccessCwd(): Promise<string> {
 }
 
 function createRuntimeRequire(): NodeJS.Require {
-	return createRequire(path.join(process.cwd(), "__rivetkit_dynamic_require__.cjs"));
+	return createRequire(
+		path.join(process.cwd(), "__rivetkit_dynamic_require__.cjs"),
+	);
 }
 
 function requireJsonSync(filePath: string): unknown {
@@ -1343,7 +1454,9 @@ async function loadIsolatedVmModule(): Promise<IsolatedVmModule> {
 		isolatedVmModulePromise = (async () => {
 			const entryPath = resolveSecureExecEntryPath();
 			const packageDir = resolveSecureExecPackageDir(entryPath);
-			const secureExecRequire = createRequire(path.join(packageDir, "package.json"));
+			const secureExecRequire = createRequire(
+				path.join(packageDir, "package.json"),
+			);
 			// Mirror the sqlite dynamic import pattern by constructing the specifier
 			// from parts to avoid static analyzer constant folding.
 			const isolatedVmSpecifier = ["isolated", "vm"].join("-");
@@ -1354,7 +1467,8 @@ async function loadIsolatedVmModule(): Promise<IsolatedVmModule> {
 }
 
 function resolveSecureExecEntryPath(): string {
-	const explicitSpecifier = process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER;
+	const explicitSpecifier =
+		process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER;
 	const resolver = createRuntimeRequire();
 	if (explicitSpecifier) {
 		if (explicitSpecifier.startsWith("file://")) {
@@ -1451,7 +1565,9 @@ function buildLockedDownPermissions(): {
 			resolvedCandidate.startsWith(`${resolvedParent}${path.sep}`)
 		);
 	};
-	const isReadOnlyFsOp = (operation: SecureExecFsAccessRequest["op"]): boolean => {
+	const isReadOnlyFsOp = (
+		operation: SecureExecFsAccessRequest["op"],
+	): boolean => {
 		return (
 			operation === "read" ||
 			operation === "readdir" ||
@@ -1474,7 +1590,9 @@ function buildLockedDownPermissions(): {
 					isPathWithin(request.path, sandboxTmpRoot),
 			};
 		},
-		network: (_request: SecureExecNetworkAccessRequest) => ({ allow: false }),
+		network: (_request: SecureExecNetworkAccessRequest) => ({
+			allow: false,
+		}),
 		childProcess: () => ({ allow: false }),
 		// Dynamic actors only receive explicitly injected env vars from
 		// processConfig.env, so this does not expose host environment values.
@@ -1507,7 +1625,10 @@ async function materializeDynamicSource(
 	switch (loadResult.sourceFormat) {
 		case "esm-js": {
 			const sourceEntry = "dynamic-source.mjs";
-			const sourcePath = path.posix.join(DYNAMIC_SANDBOX_APP_ROOT, sourceEntry);
+			const sourcePath = path.posix.join(
+				DYNAMIC_SANDBOX_APP_ROOT,
+				sourceEntry,
+			);
 			return {
 				sourcePath,
 				sourceCode: loadResult.source,
@@ -1517,7 +1638,10 @@ async function materializeDynamicSource(
 		}
 		case "commonjs-js": {
 			const sourceEntry = "dynamic-source.cjs";
-			const sourcePath = path.posix.join(DYNAMIC_SANDBOX_APP_ROOT, sourceEntry);
+			const sourcePath = path.posix.join(
+				DYNAMIC_SANDBOX_APP_ROOT,
+				sourceEntry,
+			);
 			return {
 				sourcePath,
 				sourceCode: loadResult.source,

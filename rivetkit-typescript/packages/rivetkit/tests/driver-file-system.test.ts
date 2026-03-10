@@ -18,7 +18,9 @@ import type { registry as staticRegistry } from "../fixtures/driver-test-suite/r
 import { getDriverRegistryVariants } from "./driver-registry-variants";
 
 for (const registryVariant of getDriverRegistryVariants(__dirname)) {
-	const describeVariant = registryVariant.skip ? describe.skip : describe.sequential;
+	const describeVariant = registryVariant.skip
+		? describe.skip
+		: describe.sequential;
 	const variantName = registryVariant.skipReason
 		? `${registryVariant.name} (${registryVariant.skipReason})`
 		: registryVariant.name;
@@ -29,6 +31,9 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 				// Does not support full connection hibernation semantics.
 				hibernation: true,
 			},
+			features: {
+				hibernatableWebSocketProtocol: true,
+			},
 			// TODO: Remove this once timer issues are fixed in actor-sleep.ts
 			useRealTimers: true,
 			async start() {
@@ -36,10 +41,9 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 					registryVariant.registryPath,
 					async () => {
 						return {
-							driver: createFileSystemOrMemoryDriver(
-								true,
-								{ path: `/tmp/test-${crypto.randomUUID()}` },
-							),
+							driver: createFileSystemOrMemoryDriver(true, {
+								path: `/tmp/test-${crypto.randomUUID()}`,
+							}),
 						};
 					},
 				);
@@ -77,9 +81,10 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 					// cycle completed before validating disconnect cleanup.
 					await vi.waitFor(
 						async () => {
-							const counts = await client.fileSystemHibernationCleanupActor
-								.getOrCreate()
-								.getCounts();
+							const counts =
+								await client.fileSystemHibernationCleanupActor
+									.getOrCreate()
+									.getCounts();
 							expect(counts.sleepCount).toBeGreaterThanOrEqual(1);
 							expect(counts.wakeCount).toBeGreaterThanOrEqual(2);
 						},
@@ -111,8 +116,7 @@ const SECURE_EXEC_DIST_PATH = join(
 	"secure-exec-rivet/packages/secure-exec/dist/index.js",
 );
 const hasSecureExecDist = existsSync(SECURE_EXEC_DIST_PATH);
-const initialDynamicSourceUrlEnv =
-	process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL;
+const initialDynamicSourceUrlEnv = process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL;
 const initialSecureExecSpecifierEnv =
 	process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER;
 
@@ -127,14 +131,19 @@ type DynamicHandle = {
 	}>;
 	putText: (key: string, value: string) => Promise<boolean>;
 	getText: (key: string) => Promise<string | null>;
-	listText: (prefix: string) => Promise<Array<{ key: string; value: string }>>;
+	listText: (
+		prefix: string,
+	) => Promise<Array<{ key: string; value: string }>>;
 	triggerSleep: () => Promise<boolean>;
 	scheduleAlarm: (duration: number) => Promise<boolean>;
 	webSocket: (path?: string) => Promise<WebSocket>;
 };
 
 type DynamicAuthHandle = DynamicHandle & {
-	fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+	fetch: (
+		input: string | URL | Request,
+		init?: RequestInit,
+	) => Promise<Response>;
 };
 
 describe.skipIf(!hasSecureExecDist)("file-system dynamic actor runtime", () => {
@@ -419,10 +428,9 @@ async function createDynamicRuntime() {
 		join(__dirname, "../fixtures/driver-test-suite/dynamic-registry.ts"),
 		async () => {
 			return {
-				driver: createFileSystemOrMemoryDriver(
-					true,
-					{ path: `/tmp/test-dynamic-${crypto.randomUUID()}` },
-				),
+				driver: createFileSystemOrMemoryDriver(true, {
+					path: `/tmp/test-dynamic-${crypto.randomUUID()}`,
+				}),
 			};
 		},
 	);
@@ -445,7 +453,9 @@ async function startSourceServer(source: string): Promise<{
 		res.end(source);
 	});
 
-	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	await new Promise<void>((resolve) =>
+		server.listen(0, "127.0.0.1", resolve),
+	);
 	const address = server.address();
 	if (!address || typeof address === "string") {
 		throw new Error("failed to get dynamic source server address");

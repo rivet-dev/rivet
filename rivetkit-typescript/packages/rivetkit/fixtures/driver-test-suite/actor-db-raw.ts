@@ -1,5 +1,6 @@
 import { actor } from "rivetkit";
 import { db } from "rivetkit/db";
+import { scheduleActorSleep } from "./schedule-sleep";
 
 function firstRowValue(row: Record<string, unknown> | undefined): unknown {
 	if (!row) {
@@ -276,7 +277,7 @@ export const dbActorRaw = actor({
 			return results[0]?.value ?? null;
 		},
 		triggerSleep: (c) => {
-			c.sleep();
+			scheduleActorSleep(c);
 		},
 	},
 	options: {

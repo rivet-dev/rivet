@@ -4,7 +4,9 @@ import { describe } from "vitest";
 import { getDriverRegistryVariants } from "./driver-registry-variants";
 
 for (const registryVariant of getDriverRegistryVariants(__dirname)) {
-	const describeVariant = registryVariant.skip ? describe.skip : describe.sequential;
+	const describeVariant = registryVariant.skip
+		? describe.skip
+		: describe.sequential;
 	const variantName = registryVariant.skipReason
 		? `${registryVariant.name} (${registryVariant.skipReason})`
 		: registryVariant.name;
@@ -13,6 +15,9 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 		runDriverTests({
 			// TODO: Remove this once timer issues are fixed in actor-sleep.ts
 			useRealTimers: true,
+			features: {
+				hibernatableWebSocketProtocol: false,
+			},
 			skip: {
 				// Sleeping not enabled in memory
 				sleep: true,

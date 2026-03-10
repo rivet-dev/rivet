@@ -1,5 +1,6 @@
 import { actor, type UniversalWebSocket } from "rivetkit";
 import { promiseWithResolvers } from "rivetkit/utils";
+import { scheduleActorSleep } from "./schedule-sleep";
 
 export const SLEEP_TIMEOUT = 1000;
 
@@ -13,7 +14,7 @@ export const sleep = actor({
 	},
 	actions: {
 		triggerSleep: (c) => {
-			c.sleep();
+			scheduleActorSleep(c);
 		},
 		getCounts: (c) => {
 			return {

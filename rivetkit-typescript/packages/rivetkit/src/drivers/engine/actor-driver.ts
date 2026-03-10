@@ -10,12 +10,8 @@ import type { Context as HonoContext } from "hono";
 import { streamSSE } from "hono/streaming";
 import { WSContext, type WSContextInit } from "hono/ws";
 import invariant from "invariant";
-import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
-import { HibernatableWebSocketAckState } from "@/actor/conn/hibernatable-websocket-ack-state";
-import {
-	isStaticActorDefinition,
-	lookupInRegistry,
-} from "@/actor/definition";
+import { CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
+import { isStaticActorDefinition, lookupInRegistry } from "@/actor/definition";
 import {
 	isStaticActorInstance,
 	type AnyStaticActorInstance,
@@ -23,7 +19,6 @@ import {
 import { KEYS } from "@/actor/instance/keys";
 import { deserializeActorKey } from "@/actor/keys";
 import type { Encoding } from "@/actor/protocol/serde";
-import { getValueLength } from "@/actor/protocol/old";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import {
 	parseWebSocketProtocols,
@@ -40,6 +35,14 @@ import {
 } from "@/common/actor-router-consts";
 import { getLogger } from "@/common/log";
 import { deconstructError } from "@/common/utils";
+import {
+	buildHibernatableWebSocketAckStateTestResponse,
+	type IndexedWebSocketPayload,
+	parseHibernatableWebSocketAckStateTestRequest,
+	registerRemoteHibernatableWebSocketAckHooks,
+	setHibernatableWebSocketAckTestHooks,
+	unregisterRemoteHibernatableWebSocketAckHooks,
+} from "@/common/websocket-test-hooks";
 import type {
 	RivetMessageEvent,
 	UniversalWebSocket,
@@ -66,26 +69,22 @@ import { logger } from "./log";
 
 const RUNNER_SSE_PING_INTERVAL = 1000;
 const RUNNER_STOP_WAIT_MS = 15_000;
-
-// Message ack deadline is 30s on the gateway, but we will ack more frequently
-// in order to minimize the message buffer size on the gateway and to give
-// generous breathing room for the timeout.
-//
-// See engine/packages/pegboard-gateway/src/shared_state.rs
-// (HWS_MESSAGE_ACK_TIMEOUT)
-const CONN_MESSAGE_ACK_DEADLINE = 5_000;
-
-// Force saveState when cumulative message size reaches this threshold (0.5 MB)
-//
-// See engine/packages/pegboard-gateway/src/shared_state.rs
-// (HWS_MAX_PENDING_MSGS_SIZE_PER_REQ)
-const CONN_BUFFERED_MESSAGE_SIZE_THRESHOLD = 500_000;
+const REMOTE_ACK_HOOK_QUERY_PARAM = "__rivetkitAckHook";
 
 interface ActorHandler {
 	actor?: AnyActorInstance;
+	actorName?: string;
 	actorStartPromise?: ReturnType<typeof promiseWithResolvers<void>>;
 	actorStartError?: Error;
 	alarmTimeout?: LongTimeoutHandle;
+	alarmTimestamp?: number;
+}
+
+interface HibernatableWebSocketAckState {
+	lastSentIndex: number;
+	lastAckedIndex: number;
+	pendingIndexes: number[];
+	ackWaiters: Map<number, Array<() => void>>;
 }
 
 export type DriverContext = {};
@@ -97,6 +96,10 @@ export class EngineActorDriver implements ActorDriver {
 	#runner: Runner;
 	#actors: Map<string, ActorHandler> = new Map();
 	#dynamicRuntimes = new Map<string, DynamicActorIsolateRuntime>();
+	#hibernatableWebSocketAcks = new Map<
+		string,
+		HibernatableWebSocketAckState
+	>();
 	#actorRouter: ActorRouter;
 
 	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers(
@@ -119,9 +122,6 @@ export class EngineActorDriver implements ActorDriver {
 	// pass the stop reason to onActorStop. This will be fixed when the runner
 	// protocol is updated to send the intent directly (see RVT-5284)
 	#actorStopIntent: Map<string, "sleep" | "destroy"> = new Map();
-
-	// Tracks per-connection hibernatable websocket ack state.
-	#hwsAckState = new HibernatableWebSocketAckState();
 
 	constructor(
 		config: RegistryConfig,
@@ -192,6 +192,187 @@ export class EngineActorDriver implements ActorDriver {
 		return { runnerId: this.#runner.runnerId ?? "-" };
 	}
 
+	#hibernatableWebSocketAckKey(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+	): string {
+		return `${idToStr(gatewayId)}:${idToStr(requestId)}`;
+	}
+
+	#ensureHibernatableWebSocketAckState(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+	): HibernatableWebSocketAckState {
+		const key = this.#hibernatableWebSocketAckKey(gatewayId, requestId);
+		let state = this.#hibernatableWebSocketAcks.get(key);
+		if (!state) {
+			state = {
+				lastSentIndex: 0,
+				lastAckedIndex: 0,
+				pendingIndexes: [],
+				ackWaiters: new Map(),
+			};
+			this.#hibernatableWebSocketAcks.set(key, state);
+		}
+		return state;
+	}
+
+	#deleteHibernatableWebSocketAckState(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+	): void {
+		this.#hibernatableWebSocketAcks.delete(
+			this.#hibernatableWebSocketAckKey(gatewayId, requestId),
+		);
+	}
+
+	#recordInboundHibernatableWebSocketMessage(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		rivetMessageIndex: number,
+	): void {
+		const state = this.#ensureHibernatableWebSocketAckState(
+			gatewayId,
+			requestId,
+		);
+		state.lastSentIndex = Math.max(state.lastSentIndex, rivetMessageIndex);
+		if (!state.pendingIndexes.includes(rivetMessageIndex)) {
+			state.pendingIndexes.push(rivetMessageIndex);
+			state.pendingIndexes.sort((a, b) => a - b);
+		}
+	}
+
+	#recordAckedHibernatableWebSocketMessage(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		serverMessageIndex: number,
+	): void {
+		const state = this.#ensureHibernatableWebSocketAckState(
+			gatewayId,
+			requestId,
+		);
+		state.lastAckedIndex = Math.max(
+			state.lastAckedIndex,
+			serverMessageIndex,
+		);
+		state.pendingIndexes = state.pendingIndexes.filter(
+			(index) => index > serverMessageIndex,
+		);
+		for (const [index, waiters] of state.ackWaiters) {
+			if (index > serverMessageIndex) {
+				continue;
+			}
+			state.ackWaiters.delete(index);
+			for (const resolve of waiters) {
+				resolve();
+			}
+		}
+	}
+
+	#registerHibernatableWebSocketAckTestHooks(
+		websocket: UniversalWebSocket,
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		remoteHookToken?: string,
+	): void {
+		setHibernatableWebSocketAckTestHooks(
+			websocket,
+			{
+				getState: () => {
+					const state = this.#ensureHibernatableWebSocketAckState(
+						gatewayId,
+						requestId,
+					);
+					return {
+						lastSentIndex: state.lastSentIndex,
+						lastAckedIndex: state.lastAckedIndex,
+						pendingIndexes: [...state.pendingIndexes],
+					};
+				},
+				waitForAck: async (serverMessageIndex) => {
+					const state = this.#ensureHibernatableWebSocketAckState(
+						gatewayId,
+						requestId,
+					);
+					if (state.lastAckedIndex >= serverMessageIndex) {
+						return;
+					}
+					await new Promise<void>((resolve) => {
+						const waiters =
+							state.ackWaiters.get(serverMessageIndex) ?? [];
+						waiters.push(resolve);
+						state.ackWaiters.set(serverMessageIndex, waiters);
+					});
+				},
+			},
+			this.#config.test.enabled,
+		);
+		registerRemoteHibernatableWebSocketAckHooks(
+			remoteHookToken ?? "",
+			{
+				getState: () => {
+					const state = this.#ensureHibernatableWebSocketAckState(
+						gatewayId,
+						requestId,
+					);
+					return {
+						lastSentIndex: state.lastSentIndex,
+						lastAckedIndex: state.lastAckedIndex,
+						pendingIndexes: [...state.pendingIndexes],
+					};
+				},
+				waitForAck: async (serverMessageIndex) => {
+					const state = this.#ensureHibernatableWebSocketAckState(
+						gatewayId,
+						requestId,
+					);
+					if (state.lastAckedIndex >= serverMessageIndex) {
+						return;
+					}
+					await new Promise<void>((resolve) => {
+						const waiters =
+							state.ackWaiters.get(serverMessageIndex) ?? [];
+						waiters.push(resolve);
+						state.ackWaiters.set(serverMessageIndex, waiters);
+					});
+				},
+			},
+			this.#config.test.enabled && Boolean(remoteHookToken),
+		);
+	}
+
+	#maybeRespondToHibernatableAckStateProbe(
+		websocket: UniversalWebSocket,
+		data: IndexedWebSocketPayload,
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+	): boolean {
+		if (
+			!parseHibernatableWebSocketAckStateTestRequest(
+				data,
+				this.#config.test.enabled,
+			)
+		) {
+			return false;
+		}
+
+		const state = this.#ensureHibernatableWebSocketAckState(
+			gatewayId,
+			requestId,
+		);
+		const response = buildHibernatableWebSocketAckStateTestResponse(
+			{
+				lastSentIndex: state.lastSentIndex,
+				lastAckedIndex: state.lastAckedIndex,
+				pendingIndexes: [...state.pendingIndexes],
+			},
+			this.#config.test.enabled,
+		);
+		invariant(response, "missing hibernatable websocket ack test response");
+		websocket.send(response);
+		return true;
+	}
+
 	async #loadActorHandler(actorId: string): Promise<ActorHandler> {
 		// Check if actor is already loaded
 		const handler = this.#actors.get(actorId);
@@ -214,7 +395,9 @@ export class EngineActorDriver implements ActorDriver {
 	#requireDynamicRuntime(actorId: string): DynamicActorIsolateRuntime {
 		const runtime = this.#dynamicRuntimes.get(actorId);
 		if (!runtime) {
-			throw new Error(`dynamic runtime missing for actor ${actorId}`);
+			throw new Error(
+				`dynamic runtime is not loaded for actor ${actorId}`,
+			);
 		}
 		return runtime;
 	}
@@ -230,6 +413,10 @@ export class EngineActorDriver implements ActorDriver {
 		}
 
 		// Clear prev timeout
+		if (handler.alarmTimeout && handler.alarmTimestamp === timestamp) {
+			return;
+		}
+
 		if (handler.alarmTimeout) {
 			handler.alarmTimeout.abort();
 			handler.alarmTimeout = undefined;
@@ -237,9 +424,50 @@ export class EngineActorDriver implements ActorDriver {
 
 		// Set alarm
 		const delay = Math.max(0, timestamp - Date.now());
+		handler.alarmTimestamp = timestamp;
 		handler.alarmTimeout = setLongTimeout(() => {
-			actor.onAlarm();
+			void (async () => {
+				const currentHandler = this.#actors.get(actor.id);
+				if (!currentHandler) {
+					logger().debug({
+						msg: "alarm fired without loaded actor",
+						actorId: actor.id,
+					});
+					return;
+				}
+
+				if (currentHandler.actorStartPromise) {
+					try {
+						await currentHandler.actorStartPromise.promise;
+					} catch (error) {
+						logger().debug({
+							msg: "alarm skipped after actor failed to start",
+							actorId: actor.id,
+							error: stringifyError(error),
+						});
+						return;
+					}
+				}
+
+				const alarmActor = this.#actors.get(actor.id)?.actor;
+				if (!alarmActor || alarmActor.isStopping) {
+					logger().debug({
+						msg: "alarm fired without ready actor",
+						actorId: actor.id,
+					});
+					return;
+				}
+
+				await alarmActor.onAlarm();
+			})().catch((error) => {
+				logger().error({
+					msg: "actor alarm failed",
+					actorId: actor.id,
+					error: stringifyError(error),
+				});
+			});
 			handler.alarmTimeout = undefined;
+			handler.alarmTimestamp = undefined;
 		}, delay);
 
 		// TODO: This call may not be needed on ActorInstance.start, but it does help ensure that the local state is synced with the alarm state
@@ -289,12 +517,6 @@ export class EngineActorDriver implements ActorDriver {
 			new Uint8Array(),
 		);
 		const keys = entries.map(([key]) => key);
-		logger().info({
-			msg: "kvList called",
-			actorId,
-			keysCount: keys.length,
-			keys: keys.map((k) => new TextDecoder().decode(k)),
-		});
 		return keys;
 	}
 
@@ -344,6 +566,11 @@ export class EngineActorDriver implements ActorDriver {
 		requestId: ArrayBuffer,
 		serverMessageIndex: number,
 	): void {
+		this.#recordAckedHibernatableWebSocketMessage(
+			gatewayId,
+			requestId,
+			serverMessageIndex,
+		);
 		this.#runner.sendHibernatableWebSocketMessageAck(
 			gatewayId,
 			requestId,
@@ -382,53 +609,35 @@ export class EngineActorDriver implements ActorDriver {
 
 	async shutdownRunner(immediate: boolean): Promise<void> {
 		logger().info({ msg: "stopping engine actor driver", immediate });
+		if (!immediate) {
+			// Put actors through the normal sleep intent path before draining the
+			// runner. This ensures Pegboard marks the actor workflow as sleeping
+			// and preserves wakeability across runner handoff.
+			logger().debug({
+				msg: "sending sleep intent to actors before runner drain",
+				actorCount: this.#actors.size,
+			});
+			for (const actorId of this.#actors.keys()) {
+				this.startSleep(actorId);
+			}
 
-		// TODO: We need to update the runner to have a draining state so:
-		// 1. Send ToServerDraining
-		//		- This causes Pegboard to stop allocating actors to this runner
-		// 2. Pegboard sends ToClientStopActor for all actors on this runner which handles the graceful migration of each actor independently
-		// 3. Send ToServerStopping once all actors have successfully stopped
-		//
-		// What's happening right now is:
-		// 1. All actors enter stopped state
-		// 2. Actors still respond to requests because only RivetKit knows it's
-		//    stopping, this causes all requests to issue errors that the actor is
-		//    stopping. (This will NOT return a 503 bc the runner has no idea the
-		//    actors are stopping.)
-		// 3. Once the last actor stops, then the runner finally stops + actors
-		//    reschedule
-		//
-		// This means that:
-		// - All actors on this runner are bricked until the slowest onStop finishes
-		// - Guard will not gracefully handle requests bc it's not receiving a 503
-		// - Actors can still be scheduled to this runner while the other
-		//   actors are stopping, meaning that those actors will NOT get onStop
-		//   and will potentiall corrupt their state
-		//
-		// HACK: Stop all actors to allow state to be saved
-		// NOTE: onStop is only supposed to be called by the runner, we're
-		// abusing it here
-		logger().debug({
-			msg: "stopping all actors before shutdown",
-			actorCount: this.#actors.size,
-		});
-		const stopPromises: Promise<void>[] = [];
-		for (const [_actorId, handler] of this.#actors.entries()) {
-				if (handler.actor) {
-					stopPromises.push(
-						handler.actor.onStop("sleep").catch((err) => {
-							logger().error({
-								msg: "onStop errored",
-								actorId: _actorId,
-								error: stringifyError(err),
-							});
-						}),
-					);
-				}
+			const actorSleepDeadline = Date.now() + RUNNER_STOP_WAIT_MS;
+			while (this.#actors.size > 0 && Date.now() < actorSleepDeadline) {
+				await new Promise((resolve) => setTimeout(resolve, 50));
+			}
+
+			if (this.#actors.size > 0) {
+				logger().warn({
+					msg: "timed out waiting for actors to stop before runner drain",
+					remainingActors: this.#actors.size,
+					waitMs: RUNNER_STOP_WAIT_MS,
+				});
+			} else {
+				logger().debug({
+					msg: "all actors stopped before runner drain",
+				});
+			}
 		}
-		await Promise.all(stopPromises);
-		this.#dynamicRuntimes.clear();
-		logger().debug({ msg: "all actors stopped" });
 
 		try {
 			await this.#runner.shutdown(immediate);
@@ -459,6 +668,8 @@ export class EngineActorDriver implements ActorDriver {
 				waitMs: RUNNER_STOP_WAIT_MS,
 			});
 		}
+
+		this.#dynamicRuntimes.clear();
 	}
 
 	async serverlessHandleStart(c: HonoContext): Promise<Response> {
@@ -548,6 +759,7 @@ export class EngineActorDriver implements ActorDriver {
 		const name = actorConfig.name as string;
 		invariant(actorConfig.key, "actor should have a key");
 		const key = deserializeActorKey(actorConfig.key);
+		handler.actorName = name;
 
 		try {
 			// Initialize storage
@@ -557,16 +769,6 @@ export class EngineActorDriver implements ActorDriver {
 			if (persistDataBuffer === null) {
 				const initialKvState = getInitialActorKvState(input);
 				await this.#runner.kvPut(actorId, initialKvState);
-				logger().debug({
-					msg: "initialized persist data for new actor",
-					actorId,
-				});
-			} else {
-				logger().debug({
-					msg: "found existing persist data for actor",
-					actorId,
-					dataSize: persistDataBuffer.byteLength,
-				});
 			}
 
 			// Create actor instance
@@ -595,8 +797,12 @@ export class EngineActorDriver implements ActorDriver {
 				handler.actorStartPromise?.resolve();
 				handler.actorStartPromise = undefined;
 
-				const metaEntries = await dynamicActor.getHibernatingWebSockets();
-				await this.#runner.restoreHibernatingRequests(actorId, metaEntries);
+				const metaEntries =
+					await dynamicActor.getHibernatingWebSockets();
+				await this.#runner.restoreHibernatingRequests(
+					actorId,
+					metaEntries,
+				);
 			} else if (isStaticActorDefinition(definition)) {
 				const staticActor =
 					(await definition.instantiate()) as AnyStaticActorInstance;
@@ -605,11 +811,6 @@ export class EngineActorDriver implements ActorDriver {
 				// Apply protocol limits as per-instance overrides without mutating the shared definition
 				const protocolMetadata = this.#runner.getProtocolMetadata();
 				if (protocolMetadata) {
-					logger().debug({
-						msg: "applying config limits from protocol",
-						protocolMetadata,
-					});
-
 					const stopThresholdMax = Math.max(
 						Number(protocolMetadata.actorStopThreshold) - 1000,
 						0,
@@ -619,7 +820,9 @@ export class EngineActorDriver implements ActorDriver {
 
 					if (protocolMetadata.serverlessDrainGracePeriod) {
 						const drainMax = Math.max(
-							Number(protocolMetadata.serverlessDrainGracePeriod) - 1000,
+							Number(
+								protocolMetadata.serverlessDrainGracePeriod,
+							) - 1000,
 							0,
 						);
 						staticActor.overrides.runStopTimeout = drainMax;
@@ -648,7 +851,13 @@ export class EngineActorDriver implements ActorDriver {
 			if (dynamicRuntime) {
 				try {
 					await dynamicRuntime.dispose();
-				} catch {}
+				} catch (disposeError) {
+					logger().debug({
+						msg: "failed to dispose dynamic runtime after actor start failure",
+						actorId,
+						err: stringifyError(disposeError),
+					});
+				}
 				this.#dynamicRuntimes.delete(actorId);
 			}
 			const error =
@@ -779,28 +988,16 @@ export class EngineActorDriver implements ActorDriver {
 	): Promise<void> {
 		const websocket = websocketRaw as UniversalWebSocket;
 
-		// Add a unique ID to track this WebSocket object
-		const wsUniqueId = `ws_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-		(websocket as any).__rivet_ws_id = wsUniqueId;
-
-		logger().debug({
-			msg: "runner websocket",
-			actorId,
-			url: request.url,
-			isRestoringHibernatable,
-			websocketObjectId: websocketRaw
-				? Object.prototype.toString.call(websocketRaw)
-				: "null",
-			websocketType: websocketRaw?.constructor?.name,
-			wsUniqueId,
-			websocketProps: websocketRaw
-				? Object.keys(websocketRaw).join(", ")
-				: "null",
-		});
-
 		// Parse configuration from Sec-WebSocket-Protocol header (optional for path-based routing)
 		const protocols = request.headers.get("sec-websocket-protocol");
-		const { encoding, connParams } = parseWebSocketProtocols(protocols);
+		const { encoding, connParams, ackHookToken } =
+			parseWebSocketProtocols(protocols);
+		const remoteAckHookToken =
+			ackHookToken ??
+			new URL(request.url).searchParams.get(
+				REMOTE_ACK_HOOK_QUERY_PARAM,
+			) ??
+			undefined;
 
 		if (this.#isDynamicActor(actorId)) {
 			await this.#runnerDynamicWebSocket(
@@ -861,15 +1058,14 @@ export class EngineActorDriver implements ActorDriver {
 		// that the handler ran successfully. By doing this, we ensure at least
 		// once delivery of events to the event handlers.
 
-		// Log when attaching event listeners
-		logger().debug({
-			msg: "attaching websocket event listeners",
-			actorId,
-			connId: conn?.id,
-			wsUniqueId: (websocket as any).__rivet_ws_id,
-			isRestoringHibernatable,
-			websocketType: websocket?.constructor?.name,
-		});
+		if (isHibernatable) {
+			this.#registerHibernatableWebSocketAckTestHooks(
+				websocket,
+				gatewayIdBuf,
+				requestIdBuf,
+				remoteAckHookToken,
+			);
+		}
 
 		if (isRestoringHibernatable) {
 			wsHandler.onRestore?.(wsContext);
@@ -880,18 +1076,17 @@ export class EngineActorDriver implements ActorDriver {
 		});
 
 		websocket.addEventListener("message", (event: RivetMessageEvent) => {
-			logger().debug({
-				msg: "websocket message event listener triggered",
-				connId: conn?.id,
-				actorId: actor?.id,
-				messageIndex: event.rivetMessageIndex,
-				hasWsHandler: !!wsHandler,
-				hasOnMessage: !!wsHandler?.onMessage,
-				actorIsStopping: actor?.isStopping,
-				websocketType: websocket?.constructor?.name,
-				wsUniqueId: (websocket as any).__rivet_ws_id,
-				eventTargetWsId: (event.target as any)?.__rivet_ws_id,
-			});
+			if (
+				isHibernatable &&
+				this.#maybeRespondToHibernatableAckStateProbe(
+					websocket,
+					event.data,
+					gatewayIdBuf,
+					requestIdBuf,
+				)
+			) {
+				return;
+			}
 
 			// Check if actor is stopping - if so, don't process new messages.
 			// These messages will be reprocessed when the actor wakes up from hibernation.
@@ -907,60 +1102,38 @@ export class EngineActorDriver implements ActorDriver {
 			}
 
 			// Process message
-			logger().debug({
-				msg: "calling wsHandler.onMessage",
-				connId: conn?.id,
-				messageIndex: event.rivetMessageIndex,
-			});
+			if (isHibernatable && typeof event.rivetMessageIndex === "number") {
+				this.#recordInboundHibernatableWebSocketMessage(
+					gatewayIdBuf,
+					requestIdBuf,
+					event.rivetMessageIndex,
+				);
+			}
 			wsHandler.onMessage(event, wsContext);
 
-			// Persist message index for hibernatable connections
-			const hibernate = connStateManager?.hibernatableData;
-
-			if (hibernate && conn && actor) {
-				invariant(
-					typeof event.rivetMessageIndex === "number",
-					"missing event.rivetMessageIndex",
+			// Runtime-owned hibernatable websocket bookkeeping lives on the
+			// actor instance so static and dynamic paths share the same logic.
+			if (conn && actor && isStaticActorInstance(actor)) {
+				actor.handleInboundHibernatableWebSocketMessage(
+					conn,
+					event.data,
+					event.rivetMessageIndex,
 				);
-
-				// Persist message index
-				const previousMsgIndex = hibernate.serverMessageIndex;
-				hibernate.serverMessageIndex = event.rivetMessageIndex;
-				logger().info({
-					msg: "persisting message index",
-					connId: conn.id,
-					previousMsgIndex,
-					newMsgIndex: event.rivetMessageIndex,
-				});
-
-				if (this.#hwsAckState.hasConnEntry(conn.id)) {
-					const messageLength = getValueLength(event.data);
-					const shouldPersistImmediately =
-						this.#hwsAckState.recordBufferedMessage(
-							conn.id,
-							messageLength,
-							CONN_BUFFERED_MESSAGE_SIZE_THRESHOLD,
-						);
-					if (shouldPersistImmediately) {
-						actor.stateManager.saveState({
-							immediate: true,
-						});
-					} else {
-						actor.stateManager.saveState({
-							maxWait: CONN_MESSAGE_ACK_DEADLINE,
-						});
-					}
-				} else {
-					// Fallback if entry missing
-					actor.stateManager.saveState({
-						maxWait: CONN_MESSAGE_ACK_DEADLINE,
-					});
-				}
 			}
 		});
 
 		websocket.addEventListener("close", (event) => {
 			wsHandler.onClose(event, wsContext);
+			if (isHibernatable) {
+				this.#deleteHibernatableWebSocketAckState(
+					gatewayIdBuf,
+					requestIdBuf,
+				);
+				unregisterRemoteHibernatableWebSocketAckHooks(
+					remoteAckHookToken,
+					this.#config.test.enabled,
+				);
+			}
 
 			// NOTE: Persisted connection is removed when `conn.disconnect`
 			// is called by the WebSocket route
@@ -969,19 +1142,6 @@ export class EngineActorDriver implements ActorDriver {
 		websocket.addEventListener("error", (event) => {
 			wsHandler.onError(event, wsContext);
 		});
-
-		// Log event listener attachment for restored connections
-		if (isRestoringHibernatable) {
-			logger().info({
-				msg: "event listeners attached to restored websocket",
-				actorId,
-				connId: conn?.id,
-				gatewayId: idToStr(gatewayIdBuf),
-				requestId: idToStr(requestIdBuf),
-				websocketType: websocket?.constructor?.name,
-				hasMessageListener: !!websocket.addEventListener,
-			});
-		}
 	}
 
 	async #runnerDynamicWebSocket(
@@ -997,6 +1157,14 @@ export class EngineActorDriver implements ActorDriver {
 		isRestoringHibernatable: boolean,
 	): Promise<void> {
 		let runtime: DynamicActorIsolateRuntime;
+		const remoteAckHookToken =
+			parseWebSocketProtocols(
+				requestHeaders["sec-websocket-protocol"] ?? undefined,
+			).ackHookToken ??
+			new URL(`http://actor${requestPath}`).searchParams.get(
+				REMOTE_ACK_HOOK_QUERY_PARAM,
+			) ??
+			undefined;
 		try {
 			runtime = this.#requireDynamicRuntime(actorId);
 		} catch (error) {
@@ -1024,7 +1192,12 @@ export class EngineActorDriver implements ActorDriver {
 				},
 			);
 		} catch (error) {
-			const { group, code } = deconstructError(error, logger(), {}, false);
+			const { group, code } = deconstructError(
+				error,
+				logger(),
+				{},
+				false,
+			);
 			logger().error({
 				msg: "failed to open dynamic websocket",
 				actorId,
@@ -1034,42 +1207,35 @@ export class EngineActorDriver implements ActorDriver {
 			return;
 		}
 
-		let actorWebSocketReady = proxyToActorWs.readyState === proxyToActorWs.OPEN;
-		const pendingMessages: Array<{
-			data: string | ArrayBufferLike | Blob | ArrayBufferView;
-			rivetMessageIndex?: number;
-		}> = [];
+		if (isHibernatable) {
+			this.#registerHibernatableWebSocketAckTestHooks(
+				websocket,
+				gatewayIdBuf,
+				requestIdBuf,
+				remoteAckHookToken,
+			);
+		}
 
-		const flushPendingMessages = async (): Promise<void> => {
-			if (!actorWebSocketReady || pendingMessages.length === 0) {
-				return;
-			}
-			while (pendingMessages.length > 0) {
-				const next = pendingMessages.shift();
-				if (!next) {
-					continue;
+		proxyToActorWs.addEventListener(
+			"message",
+			(event: RivetMessageEvent) => {
+				if (websocket.readyState !== websocket.OPEN) {
+					return;
 				}
-				await runtime.forwardIncomingWebSocketMessage(
-					proxyToActorWs,
-					next.data,
-					next.rivetMessageIndex,
-				);
-			}
-		};
-
-		proxyToActorWs.addEventListener("open", () => {
-			actorWebSocketReady = true;
-			void flushPendingMessages();
-		});
-
-		proxyToActorWs.addEventListener("message", (event: RivetMessageEvent) => {
-			if (websocket.readyState !== websocket.OPEN) {
-				return;
-			}
-			websocket.send(event.data as any);
-		});
+				websocket.send(event.data as any);
+			},
+		);
 
 		proxyToActorWs.addEventListener("close", (event) => {
+			if (isHibernatable && event.reason === "dynamic.runtime.disposed") {
+				logger().debug({
+					msg: "ignoring dynamic runtime dispose close for hibernatable websocket",
+					actorId,
+					code: event.code,
+					reason: event.reason,
+				});
+				return;
+			}
 			if (websocket.readyState !== websocket.CLOSED) {
 				websocket.close(event.code, event.reason);
 			}
@@ -1082,16 +1248,28 @@ export class EngineActorDriver implements ActorDriver {
 		});
 
 		websocket.addEventListener("message", (event: RivetMessageEvent) => {
+			if (
+				isHibernatable &&
+				this.#maybeRespondToHibernatableAckStateProbe(
+					websocket,
+					event.data,
+					gatewayIdBuf,
+					requestIdBuf,
+				)
+			) {
+				return;
+			}
+
 			const actorHandler = this.#actors.get(actorId);
 			if (actorHandler?.actor?.isStopping) {
 				return;
 			}
-			if (!actorWebSocketReady) {
-				pendingMessages.push({
-					data: event.data as any,
-					rivetMessageIndex: event.rivetMessageIndex,
-				});
-				return;
+			if (isHibernatable && typeof event.rivetMessageIndex === "number") {
+				this.#recordInboundHibernatableWebSocketMessage(
+					gatewayIdBuf,
+					requestIdBuf,
+					event.rivetMessageIndex,
+				);
 			}
 			void runtime
 				.forwardIncomingWebSocketMessage(
@@ -1110,6 +1288,16 @@ export class EngineActorDriver implements ActorDriver {
 		});
 
 		websocket.addEventListener("close", (event) => {
+			if (isHibernatable) {
+				this.#deleteHibernatableWebSocketAckState(
+					gatewayIdBuf,
+					requestIdBuf,
+				);
+				unregisterRemoteHibernatableWebSocketAckHooks(
+					remoteAckHookToken,
+					this.#config.test.enabled,
+				);
+			}
 			if (proxyToActorWs.readyState !== proxyToActorWs.CLOSED) {
 				proxyToActorWs.close(event.code, event.reason);
 			}
@@ -1142,22 +1330,7 @@ export class EngineActorDriver implements ActorDriver {
 			return false;
 		}
 
-		// Load actor handler to access persisted data
 		const handler = this.#actors.get(actorId);
-		if (!handler) {
-			logger().warn({
-				msg: "actor handler not found in #hwsCanHibernate",
-				actorId,
-			});
-			return false;
-		}
-		if (!handler.actor) {
-			logger().warn({
-				msg: "actor not found in #hwsCanHibernate",
-				actorId,
-			});
-			return false;
-		}
 
 		// Determine configuration for new WS
 		logger().debug({
@@ -1172,10 +1345,21 @@ export class EngineActorDriver implements ActorDriver {
 			path.startsWith(PATH_WEBSOCKET_PREFIX)
 		) {
 			// Find actor config
-			const definition = lookupInRegistry(
-				this.#config,
-				actorInstance.config.name,
+			// Hibernation capability is a definition-level property, so the
+			// runner can decide it before the actor has fully started.
+			const actorName =
+				"config" in actorInstance &&
+				actorInstance.config &&
+				typeof actorInstance.config === "object" &&
+				"name" in actorInstance.config &&
+				typeof actorInstance.config.name === "string"
+					? actorInstance.config.name
+					: this.#actors.get(actorId)?.actorName;
+			invariant(
+				actorName,
+				`missing actor name for hibernatable websocket actor ${actorId}`,
 			);
+			const definition = lookupInRegistry(this.#config, actorName);
 
 			// Check if can hibernate
 			const canHibernateWebSocket =
@@ -1236,27 +1420,21 @@ export class EngineActorDriver implements ActorDriver {
 				headers: entry.headers,
 			}));
 		}
-		return actor.conns
-			.values()
-			.map((conn) => {
-				const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
-				const hibernatable = connStateManager.hibernatableData;
-				if (!hibernatable) return undefined;
-				return {
-					gatewayId: hibernatable.gatewayId,
-					requestId: hibernatable.requestId,
-					serverMessageIndex: hibernatable.serverMessageIndex,
-					clientMessageIndex: hibernatable.clientMessageIndex,
-					path: hibernatable.requestPath,
-					headers: hibernatable.requestHeaders,
-				} satisfies HibernatingWebSocketMetadata;
-			})
-			.filter((x) => x !== undefined)
-			.toArray();
+		return actor.getHibernatingWebSocketMetadata().map((entry) => ({
+			gatewayId: entry.gatewayId,
+			requestId: entry.requestId,
+			serverMessageIndex: entry.serverMessageIndex,
+			clientMessageIndex: entry.clientMessageIndex,
+			path: entry.path,
+			headers: entry.headers,
+		}));
 	}
 
 	async onBeforeActorStart(actor: AnyStaticActorInstance): Promise<void> {
-		// Resolve promise if waiting
+		// Resolve promise if waiting.
+		//
+		// The websocket restore path needs to be able to load the actor while
+		// rebinding persisted sockets, so this promise cannot wait on restore.
 		const handler = this.#actors.get(actor.id);
 		invariant(handler, "missing actor handler in onBeforeActorReady");
 		handler.actorStartError = undefined;

@@ -1,7 +1,6 @@
 import type { Context as HonoContext } from "hono";
 import type { AnyClient } from "@/client/client";
 import type { ManagerDriver } from "@/manager/driver";
-import { type AnyConn } from "./conn/mod";
 import type { AnyActorInstance, AnyStaticActorInstance } from "./instance/mod";
 import type { RegistryConfig } from "@/registry/config";
 import type { RawDatabaseClient } from "@/db/config";
@@ -108,10 +107,13 @@ export interface ActorDriver {
 	startSleep?(actorId: string): void;
 
 	/**
-	 * Acknowledges persisted hibernatable websocket message indexes to the host.
+	 * Acknowledges a persisted hibernatable websocket message index to the
+	 * transport host.
 	 *
-	 * Runtime implementations call this after state persistence so message acks
-	 * are sent only after the index is durable.
+	 * Actor runtime code owns the per-message hibernatable websocket bookkeeping
+	 * and decides when an index is durable. Drivers only implement how to
+	 * forward that durable ack to the underlying transport, such as the engine
+	 * gateway.
 	 */
 	ackHibernatableWebSocketMessage?(
 		gatewayId: ArrayBuffer,
@@ -139,8 +141,4 @@ export interface ActorDriver {
 	getExtraActorLogParams?(): Record<string, string>;
 
 	onBeforeActorStart?(actor: AnyStaticActorInstance): Promise<void>;
-	onCreateConn?(conn: AnyConn): void;
-	onDestroyConn?(conn: AnyConn): void;
-	onBeforePersistConn?(conn: AnyConn): void;
-	onAfterPersistConn?(conn: AnyConn): void;
 }

@@ -2,10 +2,24 @@ import type { Context as HonoContext } from "hono";
 import invariant from "invariant";
 import { ActorStopping } from "@/actor/errors";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
-import { routeWebSocket } from "@/actor/router-websocket-endpoints";
+import {
+	parseWebSocketProtocols,
+	routeWebSocket,
+} from "@/actor/router-websocket-endpoints";
+import { isStaticActorInstance } from "@/actor/instance/mod";
 import { createClientWithDriver } from "@/client/client";
 import { ClientConfigSchema } from "@/client/config";
-import { createInlineWebSocket } from "@/common/inline-websocket-adapter";
+import { InlineWebSocketAdapter } from "@/common/inline-websocket-adapter";
+import {
+	buildHibernatableWebSocketAckStateTestResponse,
+	getIndexedWebSocketTestSender,
+	parseHibernatableWebSocketAckStateTestRequest,
+	registerRemoteHibernatableWebSocketAckHooks,
+	setHibernatableWebSocketAckTestHooks,
+	setIndexedWebSocketTestSender,
+	unregisterRemoteHibernatableWebSocketAckHooks,
+	type IndexedWebSocketPayload,
+} from "@/common/websocket-test-hooks";
 import { noopNext } from "@/common/utils";
 import type {
 	ActorDriver,
@@ -22,10 +36,13 @@ import type { Encoding, UniversalWebSocket } from "@/mod";
 import type { DriverConfig, RegistryConfig } from "@/registry/config";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import type { GetUpgradeWebSocket } from "@/utils";
+import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import { createTestWebSocketProxy } from "@/manager/gateway";
 import type { FileSystemGlobalState } from "./global-state";
 import { logger } from "./log";
 import { generateActorId } from "./utils";
+
+const REMOTE_ACK_HOOK_QUERY_PARAM = "__rivetkitAckHook";
 
 export class FileSystemManagerDriver implements ManagerDriver {
 	#config: RegistryConfig;
@@ -81,51 +98,12 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		encoding: Encoding,
 		params: unknown,
 	): Promise<UniversalWebSocket> {
-		if (await this.#state.isDynamicActor(this.#config, actorId)) {
-			await this.#actorDriver.loadActor(actorId);
-			const { gatewayId, requestId } = createHibernatableRequestMetadata();
-			return await this.#state.dynamicOpenWebSocket(
-				actorId,
-				path,
-				encoding,
-				params,
-				{
-					gatewayId,
-					requestId,
-					isHibernatable: true,
-					isRestoringHibernatable: false,
-				},
-			);
-		}
-
-		// Normalize the path (add leading slash if needed) but preserve query params
-		const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-
-		// Create a fake request with the full URL including query parameters
-		const fakeUrl = `http://inline-actor${normalizedPath}`;
-		const fakeRequest = new Request(fakeUrl, {
-			method: "GET",
-		});
-
-		// Extract just the pathname for routing (without query params)
-		const pathOnly = normalizedPath.split("?")[0];
-		const { gatewayId, requestId } = createHibernatableRequestMetadata();
-
-		const wsHandler = await routeWebSocket(
-			fakeRequest,
-			pathOnly,
-			{},
-			this.#config,
-			this.#actorDriver,
+		return await this.#openHibernatableWebSocket(
 			actorId,
+			path,
 			encoding,
 			params,
-			gatewayId,
-			requestId,
-			true,
-			false,
 		);
-		return createInlineWebSocket(wsHandler);
 	}
 
 	async proxyRequest(
@@ -152,49 +130,22 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	): Promise<Response> {
 		const upgradeWebSocket = this.#getUpgradeWebSocket?.();
 		invariant(upgradeWebSocket, "missing getUpgradeWebSocket");
-
-		if (await this.#state.isDynamicActor(this.#config, actorId)) {
-			await this.#actorDriver.loadActor(actorId);
-			const { gatewayId, requestId } = createHibernatableRequestMetadata();
-			const proxyToActorWsPromise = this.#state.dynamicOpenWebSocket(
+		const wsHandler = await createTestWebSocketProxy(
+			this.#openHibernatableWebSocket(
 				actorId,
 				path,
 				encoding,
 				params,
-				{
-					headers: c.req.header(),
-					gatewayId,
-					requestId,
-					isHibernatable: true,
-					isRestoringHibernatable: false,
-				},
-			);
-			const wsHandler = await createTestWebSocketProxy(
-				proxyToActorWsPromise,
-			);
-			return upgradeWebSocket(() => wsHandler)(c, noopNext());
-		}
-
-		// Handle raw WebSocket paths
-		const pathOnly = path.split("?")[0];
-		const normalizedPath = pathOnly.startsWith("/")
-			? pathOnly
-			: `/${pathOnly}`;
-		const { gatewayId, requestId } = createHibernatableRequestMetadata();
-		const wsHandler = await routeWebSocket(
-			// TODO: Create new request with new path
-			c.req.raw,
-			normalizedPath,
-			c.req.header(),
-			this.#config,
-			this.#actorDriver,
-			actorId,
-			encoding,
-			params,
-			gatewayId,
-			requestId,
-			true,
-			false,
+				c.req.raw,
+				c.req.header(),
+				parseWebSocketProtocols(
+					c.req.header("sec-websocket-protocol") ?? undefined,
+				).ackHookToken ??
+					new URL(c.req.raw.url).searchParams.get(
+						REMOTE_ACK_HOOK_QUERY_PARAM,
+					) ??
+					undefined,
+			),
 		);
 		return upgradeWebSocket(() => wsHandler)(c, noopNext());
 	}
@@ -319,6 +270,193 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void {
 		this.#getUpgradeWebSocket = getUpgradeWebSocket;
 	}
+
+	async #openHibernatableWebSocket(
+		actorId: string,
+		path: string,
+		encoding: Encoding,
+		params: unknown,
+		requestOverride?: Request,
+		headersOverride?: Record<string, string>,
+		remoteAckHookToken?: string,
+	): Promise<UniversalWebSocket> {
+		const { gatewayId, requestId } = createHibernatableRequestMetadata();
+		if (await this.#state.isDynamicActor(this.#config, actorId)) {
+			return createMockHibernatableWebSocket({
+				config: this.#config,
+				state: this.#state,
+				gatewayId,
+				requestId,
+				remoteAckHookToken,
+				shouldReopenActorWebSocket: () =>
+					this.#shouldReopenHibernatableWebSocket(actorId),
+				openActorWebSocket: async (
+					isRestoringHibernatable,
+					_context,
+				) => {
+					if (isRestoringHibernatable) {
+						this.#state.beginHibernatableWebSocketRestore(actorId);
+					}
+					try {
+						await this.#actorDriver.loadActor(actorId);
+						const actorWebSocket =
+							await this.#state.dynamicOpenWebSocket(
+								actorId,
+								path,
+								encoding,
+								params,
+								{
+									headers: headersOverride,
+									gatewayId,
+									requestId,
+									isHibernatable: true,
+									isRestoringHibernatable,
+								},
+							);
+						const sender =
+							getIndexedWebSocketTestSender(actorWebSocket);
+						invariant(
+							sender,
+							"dynamic file-system websocket is missing indexed message dispatch support",
+						);
+						return {
+							actorWebSocket,
+							sendToActor: sender,
+						};
+					} finally {
+						if (isRestoringHibernatable) {
+							this.#state.endHibernatableWebSocketRestore(
+								actorId,
+							);
+						}
+					}
+				},
+			});
+		}
+		return createMockHibernatableWebSocket({
+			config: this.#config,
+			state: this.#state,
+			gatewayId,
+			requestId,
+			remoteAckHookToken,
+			shouldReopenActorWebSocket: () =>
+				this.#shouldReopenHibernatableWebSocket(actorId),
+			openActorWebSocket: async (isRestoringHibernatable, context) => {
+				if (isRestoringHibernatable) {
+					this.#state.beginHibernatableWebSocketRestore(actorId);
+				}
+				try {
+					const normalizedPath = path.startsWith("/")
+						? path
+						: `/${path}`;
+					const request =
+						requestOverride ??
+						new Request(`http://inline-actor${normalizedPath}`, {
+							method: "GET",
+						});
+					const pathOnly = normalizedPath.split("?")[0];
+					const handler = await routeWebSocket(
+						request,
+						pathOnly,
+						headersOverride ?? {},
+						this.#config,
+						this.#actorDriver,
+						actorId,
+						encoding,
+						params,
+						gatewayId,
+						requestId,
+						true,
+						isRestoringHibernatable,
+					);
+					const shouldPreserveHibernatableConn =
+						Boolean(handler.onRestore) &&
+						Boolean(handler.conn?.isHibernatable);
+					const wrappedHandler = shouldPreserveHibernatableConn
+						? {
+								...handler,
+								onClose: (event: any, wsContext: any) => {
+									if (!context.isClientCloseInitiated()) {
+										return;
+									}
+									handler.onClose(event, wsContext);
+								},
+							}
+						: handler;
+					const adapter = new InlineWebSocketAdapter(wrappedHandler, {
+						restoring: isRestoringHibernatable,
+					});
+					return {
+						actorWebSocket: adapter.clientWebSocket,
+						sendToActor: (
+							data: IndexedWebSocketPayload,
+							rivetMessageIndex?: number,
+						) => {
+							adapter.dispatchClientMessageWithMetadata(
+								data,
+								rivetMessageIndex,
+							);
+							if (
+								handler.conn &&
+								handler.actor &&
+								isStaticActorInstance(handler.actor)
+							) {
+								handler.actor.handleInboundHibernatableWebSocketMessage(
+									handler.conn,
+									data as any,
+									rivetMessageIndex,
+								);
+							}
+						},
+						disconnectActorConn:
+							shouldPreserveHibernatableConn && handler.conn
+								? async (reason?: string) => {
+										await handler.conn?.disconnect(reason);
+									}
+								: undefined,
+						markActorConnStale:
+							shouldPreserveHibernatableConn && handler.conn
+								? () => {
+										invariant(
+											handler.actor &&
+												isStaticActorInstance(
+													handler.actor,
+												),
+											"missing static actor for stale hibernatable websocket cleanup",
+										);
+										invariant(
+											handler.conn,
+											"missing hibernatable connection for stale websocket cleanup",
+										);
+										handler.actor.connectionManager.detachPersistedHibernatableConnDriver(
+											handler.conn,
+											"file-system-driver.stale-client-close",
+										);
+									}
+								: undefined,
+					};
+				} finally {
+					if (isRestoringHibernatable) {
+						this.#state.endHibernatableWebSocketRestore(actorId);
+					}
+				}
+			},
+		});
+	}
+
+	#shouldReopenHibernatableWebSocket(actorId: string): boolean {
+		if (this.#state.isActorStopping(actorId)) {
+			return true;
+		}
+
+		try {
+			return (
+				this.#state.getActorOrError(actorId).actor?.isStopping ?? true
+			);
+		} catch {
+			return true;
+		}
+	}
 }
 
 function actorStateToOutput(state: schema.ActorState): ActorOutput {
@@ -347,4 +485,404 @@ function createHibernatableRequestMetadata(): {
 		gatewayId: gatewayId.buffer.slice(0),
 		requestId: requestId.buffer.slice(0),
 	};
+}
+
+function createMockHibernatableWebSocket(input: {
+	config: RegistryConfig;
+	state: FileSystemGlobalState;
+	gatewayId: ArrayBuffer;
+	requestId: ArrayBuffer;
+	remoteAckHookToken?: string;
+	shouldReopenActorWebSocket: () => boolean;
+	openActorWebSocket: (
+		isRestoringHibernatable: boolean,
+		context: {
+			isClientCloseInitiated: () => boolean;
+		},
+	) => Promise<{
+		actorWebSocket: UniversalWebSocket;
+		sendToActor: (
+			data: IndexedWebSocketPayload,
+			rivetMessageIndex?: number,
+		) => void | Promise<void>;
+		disconnectActorConn?: (reason?: string) => Promise<void>;
+		markActorConnStale?: () => void;
+	}>;
+}): UniversalWebSocket {
+	const {
+		config,
+		state,
+		gatewayId,
+		requestId,
+		remoteAckHookToken,
+		shouldReopenActorWebSocket,
+		openActorWebSocket,
+	} = input;
+	let readyState: 0 | 1 | 2 | 3 = 0;
+	let nextServerMessageIndex = 1;
+	let lastSentIndex = 0;
+	let lastAckedIndex = 0;
+	let hasOpened = false;
+	let closeInitiatedByClient = false;
+	let openingActorWebSocket:
+		| Promise<{
+				actorWebSocket: UniversalWebSocket;
+				sendToActor: (
+					data: IndexedWebSocketPayload,
+					rivetMessageIndex?: number,
+				) => void | Promise<void>;
+				disconnectActorConn?: (reason?: string) => Promise<void>;
+				markActorConnStale?: () => void;
+		  }>
+		| undefined;
+	let currentActorWebSocket: UniversalWebSocket | undefined;
+	let currentDisconnectActorConn:
+		| ((reason?: string) => Promise<void>)
+		| undefined;
+	let currentMarkActorConnStale: (() => void) | undefined;
+	let currentSendToActor:
+		| ((
+				data: IndexedWebSocketPayload,
+				rivetMessageIndex?: number,
+		  ) => void | Promise<void>)
+		| undefined;
+	let flushPendingMessagesPromise: Promise<void> | undefined;
+	const pendingIndexes: number[] = [];
+	const pendingMessages: Array<{
+		data: IndexedWebSocketPayload;
+		rivetMessageIndex: number;
+	}> = [];
+	const ackWaiters = new Map<number, Array<() => void>>();
+	let observerRegistered = true;
+
+	const unregisterObserver = () => {
+		if (!observerRegistered) {
+			return;
+		}
+		observerRegistered = false;
+		state.unregisterHibernatableWebSocketAckObserver(gatewayId, requestId);
+		unregisterRemoteHibernatableWebSocketAckHooks(
+			remoteAckHookToken,
+			config.test.enabled,
+		);
+	};
+
+	const bindActorWebSocket = (actorWebSocket: UniversalWebSocket) => {
+		currentActorWebSocket = actorWebSocket;
+		const schedulePendingFlush = () => {
+			queueMicrotask(() => {
+				void flushPendingMessages().catch((error) => {
+					logger().debug({
+						msg: "mock hibernatable websocket flush failed",
+						error,
+					});
+				});
+			});
+		};
+
+		actorWebSocket.addEventListener("open", () => {
+			if (readyState >= 2) {
+				return;
+			}
+			if (!hasOpened) {
+				hasOpened = true;
+				readyState = 1;
+				clientWebSocket.triggerOpen();
+			}
+			schedulePendingFlush();
+		});
+		actorWebSocket.addEventListener("message", (event: any) => {
+			clientWebSocket.triggerMessage(event.data);
+		});
+		actorWebSocket.addEventListener("close", (event: any) => {
+			if (currentActorWebSocket === actorWebSocket) {
+				currentActorWebSocket = undefined;
+				currentDisconnectActorConn = undefined;
+				currentMarkActorConnStale = undefined;
+				currentSendToActor = undefined;
+			}
+			if (!closeInitiatedByClient && readyState < 2) {
+				return;
+			}
+			readyState = 3;
+			unregisterObserver();
+			clientWebSocket.triggerClose(event.code, event.reason);
+		});
+		actorWebSocket.addEventListener("error", (error: unknown) => {
+			clientWebSocket.triggerError(error);
+		});
+
+		if (actorWebSocket.readyState === 1) {
+			if (!hasOpened) {
+				hasOpened = true;
+				readyState = 1;
+				clientWebSocket.triggerOpen();
+			}
+			schedulePendingFlush();
+		}
+	};
+
+	const ensureActorWebSocket = async (): Promise<void> => {
+		if (readyState >= 2) {
+			return;
+		}
+		const shouldRestoreActorWebSocket =
+			hasOpened && shouldReopenActorWebSocket();
+		if (
+			currentActorWebSocket?.readyState === 1 &&
+			currentSendToActor &&
+			!shouldRestoreActorWebSocket
+		) {
+			return;
+		}
+		if (shouldRestoreActorWebSocket) {
+			currentActorWebSocket = undefined;
+			currentSendToActor = undefined;
+		}
+		if (!openingActorWebSocket) {
+			logger().debug({
+				msg: "mock hibernatable websocket opening actor websocket",
+				shouldRestoreActorWebSocket,
+			});
+			openingActorWebSocket = openActorWebSocket(
+				shouldRestoreActorWebSocket,
+				{
+					isClientCloseInitiated: () => closeInitiatedByClient,
+				},
+			)
+				.then((binding) => {
+					logger().debug({
+						msg: "mock hibernatable websocket actor websocket ready",
+						shouldRestoreActorWebSocket,
+						actorReadyState: binding.actorWebSocket.readyState,
+					});
+					currentDisconnectActorConn = binding.disconnectActorConn;
+					currentMarkActorConnStale = binding.markActorConnStale;
+					currentSendToActor = binding.sendToActor;
+					bindActorWebSocket(binding.actorWebSocket);
+					return binding;
+				})
+				.finally(() => {
+					openingActorWebSocket = undefined;
+				});
+		}
+		await openingActorWebSocket;
+	};
+
+	const flushPendingMessages = async () => {
+		if (flushPendingMessagesPromise) {
+			await flushPendingMessagesPromise;
+			return;
+		}
+
+		flushPendingMessagesPromise = (async () => {
+			await ensureActorWebSocket();
+			logger().debug({
+				msg: "mock hibernatable websocket flush state",
+				pendingMessageCount: pendingMessages.length,
+				hasSender: Boolean(currentSendToActor),
+				currentActorReadyState: currentActorWebSocket?.readyState,
+			});
+			while (
+				pendingMessages.length > 0 &&
+				currentSendToActor &&
+				currentActorWebSocket &&
+				currentActorWebSocket.readyState === currentActorWebSocket.OPEN
+			) {
+				const next = pendingMessages.shift();
+				if (!next) {
+					return;
+				}
+				logger().debug({
+					msg: "mock hibernatable websocket delivering pending message",
+					rivetMessageIndex: next.rivetMessageIndex,
+				});
+				const sendResult = currentSendToActor(
+					next.data,
+					next.rivetMessageIndex,
+				);
+				if (sendResult && typeof sendResult.then === "function") {
+					void sendResult.catch((error: unknown) => {
+						logger().debug({
+							msg: "mock hibernatable websocket pending send failed",
+							error,
+						});
+					});
+				}
+			}
+		})().finally(() => {
+			flushPendingMessagesPromise = undefined;
+		});
+
+		await flushPendingMessagesPromise;
+	};
+
+	const resolveAckWaiters = (serverMessageIndex: number) => {
+		for (const [index, waiters] of ackWaiters) {
+			if (index > serverMessageIndex) {
+				continue;
+			}
+			ackWaiters.delete(index);
+			for (const resolve of waiters) {
+				resolve();
+			}
+		}
+	};
+
+	const enqueueMessage = (
+		data: IndexedWebSocketPayload,
+		rivetMessageIndex: number,
+	) => {
+		lastSentIndex = rivetMessageIndex;
+		pendingIndexes.push(rivetMessageIndex);
+		pendingMessages.push({ data, rivetMessageIndex });
+		void flushPendingMessages();
+	};
+
+	const clientWebSocket = new VirtualWebSocket({
+		getReadyState: () => readyState,
+		onSend: (data) => {
+			const ackStateRequest =
+				parseHibernatableWebSocketAckStateTestRequest(
+					data,
+					config.test.enabled,
+				);
+			if (ackStateRequest) {
+				const response = buildHibernatableWebSocketAckStateTestResponse(
+					{
+						lastSentIndex,
+						lastAckedIndex,
+						pendingIndexes: [...pendingIndexes],
+					},
+					config.test.enabled,
+				);
+				invariant(
+					response,
+					"missing hibernatable websocket ack test response",
+				);
+				clientWebSocket.triggerMessage(response);
+				return;
+			}
+			const rivetMessageIndex = nextServerMessageIndex;
+			nextServerMessageIndex += 1;
+			enqueueMessage(data, rivetMessageIndex);
+		},
+		onClose: (code, reason) => {
+			readyState = 2;
+			closeInitiatedByClient = true;
+			unregisterObserver();
+			void (async () => {
+				if (shouldReopenActorWebSocket() && currentMarkActorConnStale) {
+					// Keep the persisted conn metadata in place when the client
+					// disappears during sleep so the next wake can reconcile it as
+					// a stale hibernatable request.
+					currentMarkActorConnStale();
+					currentActorWebSocket = undefined;
+					currentDisconnectActorConn = undefined;
+					currentMarkActorConnStale = undefined;
+					currentSendToActor = undefined;
+					readyState = 3;
+					return;
+				}
+				if (currentDisconnectActorConn) {
+					await currentDisconnectActorConn(reason);
+				}
+				if (
+					currentActorWebSocket &&
+					currentActorWebSocket.readyState !==
+						currentActorWebSocket.CLOSED &&
+					currentActorWebSocket.readyState !==
+						currentActorWebSocket.CLOSING
+				) {
+					currentActorWebSocket.close(code, reason);
+					return;
+				}
+				readyState = 3;
+			})().catch((error) => {
+				logger().debug({
+					msg: "failed to close mock hibernatable websocket actor connection",
+					error,
+				});
+				readyState = 3;
+			});
+		},
+	});
+
+	state.registerHibernatableWebSocketAckObserver(gatewayId, requestId, {
+		onAck: (serverMessageIndex) => {
+			lastAckedIndex = Math.max(lastAckedIndex, serverMessageIndex);
+			while (
+				pendingIndexes.length > 0 &&
+				pendingIndexes[0] <= serverMessageIndex
+			) {
+				pendingIndexes.shift();
+			}
+			resolveAckWaiters(serverMessageIndex);
+		},
+	});
+
+	setIndexedWebSocketTestSender(
+		clientWebSocket,
+		(data, rivetMessageIndex) => {
+			const indexedMessage =
+				typeof rivetMessageIndex === "number"
+					? rivetMessageIndex
+					: nextServerMessageIndex;
+			nextServerMessageIndex = Math.max(
+				nextServerMessageIndex,
+				indexedMessage + 1,
+			);
+			enqueueMessage(data, indexedMessage);
+		},
+		config.test.enabled,
+	);
+	setHibernatableWebSocketAckTestHooks(
+		clientWebSocket,
+		{
+			getState: () => ({
+				lastSentIndex,
+				lastAckedIndex,
+				pendingIndexes: [...pendingIndexes],
+			}),
+			waitForAck: async (serverMessageIndex) => {
+				if (lastAckedIndex >= serverMessageIndex) {
+					return;
+				}
+				await new Promise<void>((resolve) => {
+					const existing = ackWaiters.get(serverMessageIndex) ?? [];
+					existing.push(resolve);
+					ackWaiters.set(serverMessageIndex, existing);
+				});
+			},
+		},
+		config.test.enabled,
+	);
+	if (remoteAckHookToken) {
+		registerRemoteHibernatableWebSocketAckHooks(
+			remoteAckHookToken,
+			{
+				getState: () => ({
+					lastSentIndex,
+					lastAckedIndex,
+					pendingIndexes: [...pendingIndexes],
+				}),
+				waitForAck: async (serverMessageIndex) => {
+					if (lastAckedIndex >= serverMessageIndex) {
+						return;
+					}
+					await new Promise<void>((resolve) => {
+						const existing =
+							ackWaiters.get(serverMessageIndex) ?? [];
+						existing.push(resolve);
+						ackWaiters.set(serverMessageIndex, existing);
+					});
+				},
+			},
+			config.test.enabled,
+		);
+	}
+
+	void ensureActorWebSocket();
+
+	return clientWebSocket;
 }

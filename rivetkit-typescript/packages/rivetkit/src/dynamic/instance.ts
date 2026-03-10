@@ -48,11 +48,20 @@ export class DynamicActorInstance implements BaseActorInstance {
 		params: unknown,
 		options?: DynamicWebSocketOpenOptions,
 	): Promise<UniversalWebSocket> {
-		return await this.#runtime.openWebSocket(path, encoding, params, options);
+		return await this.#runtime.openWebSocket(
+			path,
+			encoding,
+			params,
+			options,
+		);
 	}
 
 	async getHibernatingWebSockets() {
 		return await this.#runtime.getHibernatingWebSockets();
+	}
+
+	async cleanupPersistedConnections(reason?: string): Promise<number> {
+		return await this.#runtime.cleanupPersistedConnections(reason);
 	}
 
 	async forwardIncomingWebSocketMessage(

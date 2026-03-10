@@ -11,9 +11,6 @@
  * - Isolate to host: this file calls host bridge references for KV, alarms,
  *   inline client calls, websocket dispatch, and lifecycle requests.
  */
-import {
-	HibernatableWebSocketAckState,
-} from "../../src/actor/conn/hibernatable-websocket-ack-state";
 import { CONN_STATE_MANAGER_SYMBOL } from "../../src/actor/conn/mod";
 import { createActorRouter } from "../../src/actor/router";
 import { routeWebSocket } from "../../src/actor/router-websocket-endpoints";
@@ -94,11 +91,12 @@ interface DynamicActorDriver {
 	): Promise<Array<[Uint8Array, Uint8Array]>>;
 	setAlarm(actor: { id: string }, timestamp: number): Promise<void>;
 	startSleep(actorId: string): void;
+	ackHibernatableWebSocketMessage(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		serverMessageIndex: number,
+	): void;
 	startDestroy(actorId: string): void;
-	onCreateConn?(conn: DynamicConnLike): void;
-	onBeforePersistConn?(conn: DynamicConnLike): void;
-	onAfterPersistConn?(conn: DynamicConnLike): void;
-	onDestroyConn?(conn: DynamicConnLike): void;
 }
 
 interface DynamicActorDefinitionLike {
@@ -119,7 +117,21 @@ interface DynamicActorInstanceLike {
 	) => Promise<void>;
 	onAlarm: () => Promise<void>;
 	onStop: (mode: "sleep" | "destroy") => Promise<void>;
+	cleanupPersistedConnections?: (reason?: string) => Promise<number>;
+	getHibernatingWebSocketMetadata?: () => Array<{
+		gatewayId: ArrayBuffer;
+		requestId: ArrayBuffer;
+		serverMessageIndex: number;
+		clientMessageIndex: number;
+		path: string;
+		headers: Record<string, string>;
+	}>;
 	conns: Map<string, DynamicConnLike>;
+	handleInboundHibernatableWebSocketMessage?: (
+		conn: DynamicConnLike | undefined,
+		payload: unknown,
+		rivetMessageIndex: number | undefined,
+	) => void;
 }
 
 interface ResponseLike {
@@ -167,10 +179,15 @@ const hostBridge = readHostBridge();
 let loadedActor: DynamicActorInstanceLike | undefined;
 let loadingActorPromise: Promise<void> | undefined;
 let runtimeStatePromise: Promise<DynamicRuntimeState> | undefined;
+let runtimeStopMode: "sleep" | "destroy" | undefined;
 const webSocketSessions = new Map<
 	number,
 	{
 		ws: WebSocket;
+		isHibernatable: boolean;
+		conn?: DynamicConnLike;
+		actor?: DynamicActorInstanceLike;
+		clientCloseInitiated: boolean;
 		adapter: {
 			dispatchClientMessageWithMetadata?: (
 				payload: string | Buffer,
@@ -179,7 +196,6 @@ const webSocketSessions = new Map<
 		};
 	}
 >();
-const hibernatableWebSocketAckState = new HibernatableWebSocketAckState();
 const CLIENT_ACCESSOR_METHODS = new Set(["get", "getOrCreate", "getForId", "create"]);
 
 type DynamicActorRouter = ReturnType<typeof createActorRouter>;
@@ -693,98 +709,19 @@ const actorDriver: DynamicActorDriver = {
 	startSleep(requestActorId: string): void {
 		bridgeCallSync(hostBridge.startSleep, [requestActorId]);
 	},
+	ackHibernatableWebSocketMessage(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		serverMessageIndex: number,
+	): void {
+		bridgeCallSync(hostBridge.ackHibernatableWebSocketMessage, [
+			gatewayId,
+			requestId,
+			serverMessageIndex,
+		]);
+	},
 	startDestroy(requestActorId: string): void {
 		bridgeCallSync(hostBridge.startDestroy, [requestActorId]);
-	},
-	onCreateConn(conn: DynamicConnLike): void {
-		const connStateManager = readConnStateManager(
-			conn,
-			CONN_STATE_MANAGER_SYMBOL,
-		);
-		const hibernatable = connStateManager?.hibernatableData;
-		if (!hibernatable || typeof conn?.id !== "string") {
-			return;
-		}
-
-		const serverMessageIndex = Number(hibernatable.serverMessageIndex);
-		if (!Number.isFinite(serverMessageIndex)) {
-			return;
-		}
-
-		hibernatableWebSocketAckState.createConnEntry(
-			conn.id,
-			serverMessageIndex,
-		);
-	},
-	onBeforePersistConn(conn: DynamicConnLike): void {
-		const connStateManager = readConnStateManager(
-			conn,
-			CONN_STATE_MANAGER_SYMBOL,
-		);
-		const hibernatable = connStateManager?.hibernatableData;
-		if (!hibernatable || typeof conn?.id !== "string") {
-			return;
-		}
-
-		const serverMessageIndex = Number(hibernatable.serverMessageIndex);
-		if (!Number.isFinite(serverMessageIndex)) {
-			return;
-		}
-
-		if (!hibernatableWebSocketAckState.hasConnEntry(conn.id)) {
-			hibernatableWebSocketAckState.createConnEntry(
-				conn.id,
-				serverMessageIndex - 1,
-			);
-		}
-
-		hibernatableWebSocketAckState.onBeforePersist(conn.id, serverMessageIndex);
-	},
-	onAfterPersistConn(conn: DynamicConnLike): void {
-		try {
-			const connStateManager = readConnStateManager(
-				conn,
-				CONN_STATE_MANAGER_SYMBOL,
-			);
-			const hibernatable = connStateManager?.hibernatableData;
-			if (!hibernatable) {
-				return;
-			}
-
-			const connId = conn?.id;
-			if (typeof connId !== "string") {
-				return;
-			}
-
-			if (!hibernatableWebSocketAckState.hasConnEntry(connId)) {
-				return;
-			}
-
-			const serverMessageIndex = hibernatableWebSocketAckState.consumeAck(connId);
-			if (serverMessageIndex === undefined) {
-				return;
-			}
-
-			bridgeCallSync(hostBridge.ackHibernatableWebSocketMessage, [
-				toArrayBuffer(hibernatable.gatewayId),
-				toArrayBuffer(hibernatable.requestId),
-				serverMessageIndex,
-			]);
-		} catch (error) {
-			const details = error instanceof Error && error.stack
-				? error.stack
-				: String(error);
-			dynamicHostLog(
-				"warn",
-				"failed to ack hibernatable websocket message: " + details,
-			);
-			throw error;
-		}
-	},
-	onDestroyConn(conn: DynamicConnLike): void {
-		if (typeof conn?.id === "string") {
-			hibernatableWebSocketAckState.deleteConnEntry(conn.id);
-		}
 	},
 };
 
@@ -844,6 +781,8 @@ async function dynamicDispatchAlarmEnvelope(): Promise<boolean> {
 }
 
 async function dynamicStopEnvelope(mode: "sleep" | "destroy"): Promise<boolean> {
+	dynamicHostLog("debug", `dynamic stop mode=${mode}`);
+	runtimeStopMode = mode;
 	if (!loadedActor) return true;
 	await loadedActor.onStop(mode);
 	loadedActor = undefined;
@@ -877,9 +816,35 @@ async function dynamicOpenWebSocketEnvelope(
 		Boolean(input.isHibernatable),
 		Boolean(input.isRestoringHibernatable),
 	);
-	const adapter = new InlineWebSocketAdapter(handler);
+	const shouldPreserveRawHibernatableConn =
+		Boolean(handler.onRestore) && Boolean(handler.conn?.isHibernatable);
+	const wrappedHandler = shouldPreserveRawHibernatableConn
+		? {
+				...handler,
+				onClose: (event: any, wsContext: any) => {
+					const session = webSocketSessions.get(input.sessionId);
+					if (!session?.clientCloseInitiated) {
+						return;
+					}
+					handler.onClose(event, wsContext);
+				},
+		  }
+		: handler;
+	// Restored hibernatable sockets must go through the router's onRestore
+	// path so the existing persisted connection is rebound instead of being
+	// treated like a brand new websocket.
+	const adapter = new InlineWebSocketAdapter(wrappedHandler, {
+		restoring: Boolean(input.isRestoringHibernatable),
+	});
 	const ws = adapter.clientWebSocket;
-	webSocketSessions.set(input.sessionId, { ws, adapter });
+	webSocketSessions.set(input.sessionId, {
+		ws,
+		isHibernatable: Boolean(input.isHibernatable),
+		conn: handler.conn,
+		actor: handler.actor as DynamicActorInstanceLike | undefined,
+		clientCloseInitiated: false,
+		adapter,
+	});
 
 	ws.addEventListener("open", () => {
 		bridgeCallSync<void>(hostBridge.dispatch, [
@@ -984,6 +949,10 @@ async function dynamicWebSocketSendEnvelope(
 ): Promise<boolean> {
 	const session = webSocketSessions.get(input.sessionId);
 	if (!session) {
+		dynamicHostLog(
+			"warn",
+			`dynamic websocket send missing session=${input.sessionId} known=${Array.from(webSocketSessions.keys()).join(",")}`,
+		);
 		throw new Error(
 			`dynamic websocket session not found for send: ${input.sessionId}`,
 		);
@@ -1001,6 +970,14 @@ async function dynamicWebSocketSendEnvelope(
 	}
 	if (typeof session.adapter.dispatchClientMessageWithMetadata === "function") {
 		session.adapter.dispatchClientMessageWithMetadata(
+			payload,
+			input.rivetMessageIndex,
+		);
+		// Dynamic actors share the same runtime-owned hibernatable websocket
+		// bookkeeping as static actors, but execute it inside the isolate because
+		// that is where the actor instance and state manager live.
+		session.actor?.handleInboundHibernatableWebSocketMessage?.(
+			session.conn,
 			payload,
 			input.rivetMessageIndex,
 		);
@@ -1024,6 +1001,7 @@ async function dynamicWebSocketCloseEnvelope(
 ): Promise<boolean> {
 	const session = webSocketSessions.get(input.sessionId);
 	if (!session) return false;
+	session.clientCloseInitiated = true;
 	session.ws.close(input.code, input.reason);
 	return true;
 }
@@ -1032,6 +1010,16 @@ async function dynamicGetHibernatingWebSocketsEnvelope(): Promise<
 	Array<DynamicHibernatingWebSocketMetadata>
 > {
 	const actor = await loadActor(bootstrapConfig.actorId);
+	if (typeof actor.getHibernatingWebSocketMetadata === "function") {
+		return actor.getHibernatingWebSocketMetadata().map((entry) => ({
+			gatewayId: toArrayBuffer(entry.gatewayId.slice(0)),
+			requestId: toArrayBuffer(entry.requestId.slice(0)),
+			serverMessageIndex: entry.serverMessageIndex,
+			clientMessageIndex: entry.clientMessageIndex,
+			path: entry.path,
+			headers: { ...entry.headers },
+		}));
+	}
 	const conns = actor.conns ?? new Map();
 	return Array.from(conns.values())
 		.map((conn) => {
@@ -1042,12 +1030,12 @@ async function dynamicGetHibernatingWebSocketsEnvelope(): Promise<
 			const hibernatable = connStateManager?.hibernatableData;
 			if (!hibernatable) return undefined;
 			return {
-				gatewayId: toArrayBuffer(hibernatable.gatewayId),
-				requestId: toArrayBuffer(hibernatable.requestId),
+				gatewayId: toArrayBuffer(hibernatable.gatewayId.slice(0)),
+				requestId: toArrayBuffer(hibernatable.requestId.slice(0)),
 				serverMessageIndex: hibernatable.serverMessageIndex,
 				clientMessageIndex: hibernatable.clientMessageIndex,
 				path: hibernatable.requestPath,
-				headers: hibernatable.requestHeaders,
+				headers: { ...hibernatable.requestHeaders },
 			};
 		})
 		.filter((entry): entry is DynamicHibernatingWebSocketMetadata => {
@@ -1055,8 +1043,23 @@ async function dynamicGetHibernatingWebSocketsEnvelope(): Promise<
 		});
 }
 
+async function dynamicCleanupPersistedConnectionsEnvelope(
+	reason?: string,
+): Promise<number> {
+	const actor = await loadActor(bootstrapConfig.actorId);
+	return await actor.cleanupPersistedConnections(reason);
+}
+
+async function dynamicEnsureStartedEnvelope(): Promise<boolean> {
+	await loadActor(bootstrapConfig.actorId);
+	return true;
+}
+
 async function dynamicDisposeEnvelope(): Promise<boolean> {
 	for (const session of webSocketSessions.values()) {
+		if (runtimeStopMode === "sleep" && session.isHibernatable) {
+			continue;
+		}
 		try {
 			session.ws.close(1001, "dynamic.runtime.disposed");
 		} catch {
@@ -1064,6 +1067,7 @@ async function dynamicDisposeEnvelope(): Promise<boolean> {
 		}
 	}
 	webSocketSessions.clear();
+	runtimeStopMode = undefined;
 	return true;
 }
 
@@ -1075,6 +1079,8 @@ const bootstrapExports: DynamicBootstrapExports = {
 	dynamicWebSocketSendEnvelope,
 	dynamicWebSocketCloseEnvelope,
 	dynamicGetHibernatingWebSocketsEnvelope,
+	dynamicCleanupPersistedConnectionsEnvelope,
+	dynamicEnsureStartedEnvelope,
 	dynamicDisposeEnvelope,
 };
 
