@@ -903,6 +903,9 @@ impl Database for DatabaseKv {
 									keys::workflow::HasWakeConditionKey::new(workflow_id);
 
 								// Read input and output
+								// Snapshot is sufficient here because this is a read-only
+								// status check with no correctness requirement for
+								// serializable consistency.
 								let (
 									input_chunks,
 									state_chunks,
@@ -914,7 +917,7 @@ impl Database for DatabaseKv {
 											mode: StreamingMode::WantAll,
 											..(&input_subspace).into()
 										},
-										Serializable,
+										Snapshot,
 									)
 									.try_collect::<Vec<_>>(),
 									tx.get_ranges_keyvalues(
@@ -922,7 +925,7 @@ impl Database for DatabaseKv {
 											mode: StreamingMode::WantAll,
 											..(&state_subspace).into()
 										},
-										Serializable,
+										Snapshot,
 									)
 									.try_collect::<Vec<_>>(),
 									tx.get_ranges_keyvalues(
@@ -930,12 +933,12 @@ impl Database for DatabaseKv {
 											mode: StreamingMode::WantAll,
 											..(&output_subspace).into()
 										},
-										Serializable,
+										Snapshot,
 									)
 									.try_collect::<Vec<_>>(),
 									tx.get(
 										&self.subspace.pack(&has_wake_condition_key),
-										Serializable
+										Snapshot
 									),
 								)?;
 
@@ -1048,7 +1051,9 @@ impl Database for DatabaseKv {
 			.map(|x| x.to_string())
 			.collect::<Vec<_>>();
 
-		let leased_workflows = self
+		// Phase 1: Lightweight scan for candidate workflows. Uses only
+		// Snapshot reads so it creates no conflict ranges in Postgres.
+		let (candidates, wake_keys) = self
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
@@ -1093,13 +1098,11 @@ impl Database for DatabaseKv {
 
 					// Pull all available wake conditions from all registered wf names
 					let (mut active_worker_ids, wake_keys) = tokio::try_join!(
-						// Check
 						tx.get_ranges_keyvalues(
 							universaldb::RangeOption {
 								mode: StreamingMode::WantAll,
 								..(active_worker_subspace_start, active_worker_subspace_end).into()
 							},
-							// This is Snapshot to reduce contention and exact timestamps are not important
 							Snapshot,
 						)
 						.map(|res| {
@@ -1128,8 +1131,6 @@ impl Database for DatabaseKv {
 											mode: StreamingMode::WantAll,
 											..(wake_subspace_start, wake_subspace_end).into()
 										},
-										// This is Snapshot to reduce contention with any new wake conditions
-										// being inserted. Conflicts are handled by workflow leases.
 										Snapshot,
 									)
 								})
@@ -1178,16 +1179,12 @@ impl Database for DatabaseKv {
 
 					// Collect name and deadline ts for each wf id
 					let mut dedup_workflows = HashMap::<Id, MinimalPulledWorkflow>::new();
-					let now = rivet_util::timestamp::now(); // More up to date now than prev var
+					let now = rivet_util::timestamp::now();
 					for wake_key in &wake_keys {
-						// Record time difference between when the wake condition was created and when it was
-						// pulled (here). We ignore deadline wake conditions because their ts value is not
-						// representative of when it was created, but rather when it should wake.
 						if !matches!(
 							wake_key.condition,
 							keys::wake::WakeCondition::Deadline { .. }
 						) {
-							// TODO: This will record metrics even if the txn fails, which is wrong
 							metrics::WORKFLOW_WAKE_DELTA_DURATION
 								.with_label_values(&[&wake_key.workflow_name])
 								.observe(now.saturating_sub(wake_key.ts).max(0) as f64 / 1000.0);
@@ -1204,8 +1201,6 @@ impl Database for DatabaseKv {
 								},
 							);
 
-							// Hard limit of 10k deduped workflows, this gets further limited to 1000 at
-							// `assigned_workflows`
 							if dedup_workflows.len() >= 10000 {
 								break;
 							}
@@ -1215,12 +1210,10 @@ impl Database for DatabaseKv {
 
 						let key_wake_deadline_ts = wake_key.condition.deadline_ts();
 
-						// Update wake condition ts if earlier
 						if wake_key.ts < wf.earliest_wake_condition_ts {
 							wf.earliest_wake_condition_ts = wake_key.ts;
 						}
 
-						// Update wake deadline ts if earlier
 						if wf.wake_deadline_ts.is_none()
 							|| key_wake_deadline_ts < wf.wake_deadline_ts
 						{
@@ -1228,23 +1221,18 @@ impl Database for DatabaseKv {
 						}
 					}
 
-					// Filter workflows in a way that spreads all current pending workflows across all active
-					// workers evenly
-					let assigned_workflows = dedup_workflows
+					// Filter workflows by worker partition assignment
+					let assigned_workflows: Vec<_> = dedup_workflows
 						.into_values()
 						.filter(|wf| {
 							let mut hasher = DefaultHasher::new();
 
-							// Earliest wake condition ts is consistent for hashing purposes because when it
-							// changes it means a worker has leased it
 							wf.earliest_wake_condition_ts.hash(&mut hasher);
 							let wf_hash = hasher.finish();
 
 							let pseudorandom_value_x1000 = {
-								// Add a little pizazz to the hash so its a different number than wf_hash but
-								// still consistent
 								1234i32.hash(&mut hasher);
-								hasher.finish() % 1000 // 0-1000
+								hasher.finish() % 1000
 							};
 
 							if pseudorandom_value_x1000 > load_shed_ratio_x1000 {
@@ -1253,118 +1241,137 @@ impl Database for DatabaseKv {
 
 							let wf_worker_idx = wf_hash % active_worker_count;
 
-							// Every worker pulls workflows that match the current worker idx as well as the next
-							// worker for redundancy. this results in increased txn conflicts but less chance of
-							// orphaned workflows
-							let next_worker_idx = (current_worker_idx + 1) % active_worker_count;
+							// With FoundationDB, every worker also pulls the next
+							// worker's partition for redundancy. FDB's native conflict
+							// detection handles this cheaply. With Postgres, the GiST
+							// exclusion constraint makes overlapping partitions
+							// expensive under load because each worker's
+							// pull_workflows transaction conflicts with the
+							// neighbor's, causing retry storms that can exceed the
+							// pull timeout. We disable the overlap for Postgres and
+							// rely on the 30-second worker lost threshold to recover
+							// orphaned workflows if a worker dies.
+							let is_postgres = matches!(
+								self.config.database(),
+								rivet_config::config::Database::Postgres(_)
+							);
 
-							wf_worker_idx == current_worker_idx || wf_worker_idx == next_worker_idx
+							if is_postgres {
+								wf_worker_idx == current_worker_idx
+							} else {
+								let next_worker_idx =
+									(current_worker_idx + 1) % active_worker_count;
+								wf_worker_idx == current_worker_idx
+									|| wf_worker_idx == next_worker_idx
+							}
 						})
-						// Hard limit of 1000 workflows per pull
-						.take(1000);
+						.take(1000)
+						.collect();
 
-					// Check leases
-					let leased_workflows = futures_util::stream::iter(assigned_workflows)
-						.map(|wf| {
-							let tx = tx.clone();
+					Ok((assigned_workflows, wake_keys))
+				}
+			})
+			.custom_instrument(tracing::info_span!("pull_workflows_scan_tx"))
+			.await
+			.context("failed to scan workflows")
+			.map_err(WorkflowError::Udb)?;
+
+		// Phase 2: Lease each candidate workflow in its own small
+		// transaction. This keeps conflict ranges narrow so a conflict on
+		// one workflow doesn't retry the entire batch.
+		let udb = self
+			.pools
+			.udb()
+			.map_err(WorkflowError::PoolsGeneric)?;
+
+		let leased_workflows: Vec<MinimalPulledWorkflow> = futures_util::stream::iter(candidates)
+			.map(|wf| {
+				let udb = udb.clone();
+				let wake_keys = &wake_keys;
+				async move {
+					let result: Result<Option<MinimalPulledWorkflow>> = udb
+						.run(|tx| {
+							let wf = wf.clone();
 							async move {
+								let tx = tx.with_subspace(self.subspace.clone());
 								let lease_key = keys::workflow::LeaseKey::new(wf.workflow_id);
 
 								// Check lease
 								if tx.exists(&lease_key, Serializable).await? {
-									Result::<_>::Ok(None)
-								} else {
-									tx.write(&lease_key, (wf.workflow_name.clone(), worker_id))?;
-
-									tx.write(
-										&keys::workflow::WorkerIdKey::new(wf.workflow_id),
-										worker_id,
-									)?;
-
-									update_metric(
-										&tx,
-										Some(keys::metric::Metric::WorkflowSleeping(
-											wf.workflow_name.clone(),
-										)),
-										Some(keys::metric::Metric::WorkflowActive(
-											wf.workflow_name.clone(),
-										)),
-									);
-
-									Ok(Some(wf))
+									return Ok(None);
 								}
-							}
-						})
-						// TODO: How to get rid of this buffer?
-						.buffer_unordered(1024)
-						.try_filter_map(|x| std::future::ready(Ok(x)))
-						.try_collect::<Vec<_>>()
-						.instrument(tracing::trace_span!("map_to_leased_workflows"))
-						.await?;
 
-					// Clear all wake conditions from workflows that we have leased
-					for wake_key in &wake_keys {
-						if !leased_workflows
-							.iter()
-							.any(|wf| wf.workflow_id == wake_key.workflow_id)
-						{
-							continue;
-						}
+								// Write lease
+								tx.write(&lease_key, (wf.workflow_name.clone(), worker_id))?;
+								tx.write(
+									&keys::workflow::WorkerIdKey::new(wf.workflow_id),
+									worker_id,
+								)?;
 
-						tx.delete(wake_key);
-					}
+								update_metric(
+									&tx,
+									Some(keys::metric::Metric::WorkflowSleeping(
+										wf.workflow_name.clone(),
+									)),
+									Some(keys::metric::Metric::WorkflowActive(
+										wf.workflow_name.clone(),
+									)),
+								);
 
-					let leased_workflow_ids = leased_workflows
-						.iter()
-						.map(|wf| wf.workflow_id)
-						.collect::<Vec<_>>();
+								// Clear wake conditions for this workflow
+								for wake_key in wake_keys.iter() {
+									if wake_key.workflow_id == wf.workflow_id {
+										tx.delete(wake_key);
+									}
+								}
 
-					// Clear secondary indexes so that we don't get any new wake conditions inserted while
-					// the workflow is running
-					futures_util::stream::iter(leased_workflow_ids)
-						.map(|workflow_id| {
-							let tx = tx.clone();
-							async move {
 								// Clear sub workflow secondary idx
 								let wake_sub_workflow_key =
-									keys::workflow::WakeSubWorkflowKey::new(workflow_id);
+									keys::workflow::WakeSubWorkflowKey::new(wf.workflow_id);
 								if let Some(entry) = tx
-									.get(&self.subspace.pack(&wake_sub_workflow_key), Serializable)
+									.get(
+										&self.subspace.pack(&wake_sub_workflow_key),
+										Serializable,
+									)
 									.await?
 								{
 									let sub_workflow_id =
 										wake_sub_workflow_key.deserialize(&entry)?;
-
-									let sub_workflow_wake_key = keys::wake::SubWorkflowWakeKey::new(
-										sub_workflow_id,
-										workflow_id,
-									);
-
+									let sub_workflow_wake_key =
+										keys::wake::SubWorkflowWakeKey::new(
+											sub_workflow_id,
+											wf.workflow_id,
+										);
 									tx.clear(&self.subspace.pack(&sub_workflow_wake_key));
 								}
 
 								// Clear signals secondary index
 								let wake_signals_subspace = self.subspace.subspace(
-									&keys::workflow::WakeSignalKey::subspace(workflow_id),
+									&keys::workflow::WakeSignalKey::subspace(wf.workflow_id),
 								);
 								tx.clear_subspace_range(&wake_signals_subspace);
 
-								anyhow::Ok(())
+								Ok(Some(wf))
 							}
 						})
-						// TODO: How to get rid of this buffer?
-						.buffer_unordered(1024)
-						.try_collect::<()>()
-						.await?;
+						.custom_instrument(tracing::info_span!("lease_workflow_tx"))
+						.await
+						.context("failed to lease workflow");
 
-					// NOTE: We don't read any workflow data in this txn since its only for acquiring leases.
-					// The less operations we do in this txn the less contention there is with other workers.
-					Ok(leased_workflows)
+					match result {
+						Ok(wf) => Ok(wf),
+						Err(err) => {
+							tracing::warn!(?err, "failed to lease individual workflow, skipping");
+							Ok(None)
+						}
+					}
 				}
 			})
-			.custom_instrument(tracing::info_span!("pull_workflows_tx"))
+			.buffer_unordered(64)
+			.try_filter_map(|x| std::future::ready(Ok(x)))
+			.try_collect::<Vec<_>>()
+			.instrument(tracing::info_span!("lease_workflows"))
 			.await
-			.context("failed to lease workflows")
 			.map_err(WorkflowError::Udb)?;
 
 		let worker_id_str = worker_id.to_string();
@@ -1432,15 +1439,18 @@ impl Database for DatabaseKv {
 									state_chunks,
 									has_output,
 									events,
+								// Snapshot is sufficient here because the workflow is
+								// already leased by this worker. No other worker should
+								// be writing to this workflow's data.
 								) = tokio::try_join!(
-									tx.get(&self.subspace.pack(&create_ts_key), Serializable),
-									tx.get(&self.subspace.pack(&ray_id_key), Serializable),
+									tx.get(&self.subspace.pack(&create_ts_key), Snapshot),
+									tx.get(&self.subspace.pack(&ray_id_key), Snapshot),
 									tx.get_ranges_keyvalues(
 										universaldb::RangeOption {
 											mode: StreamingMode::WantAll,
 											..(&input_subspace).into()
 										},
-										Serializable,
+										Snapshot,
 									)
 									.try_collect::<Vec<_>>(),
 									tx.get_ranges_keyvalues(
@@ -1448,7 +1458,7 @@ impl Database for DatabaseKv {
 											mode: StreamingMode::WantAll,
 											..(&state_subspace).into()
 										},
-										Serializable,
+										Snapshot,
 									)
 									.try_collect::<Vec<_>>(),
 									async {
@@ -1458,7 +1468,7 @@ impl Database for DatabaseKv {
 												limit: Some(1),
 												..(&output_subspace).into()
 											},
-											Serializable,
+											Snapshot,
 										)
 										.try_next()
 										.await
@@ -1475,7 +1485,7 @@ impl Database for DatabaseKv {
 												mode: StreamingMode::WantAll,
 												..(&active_history_subspace).into()
 											},
-											Serializable,
+											Snapshot,
 										);
 
 										loop {
@@ -2068,6 +2078,23 @@ impl Database for DatabaseKv {
 
 					self.write_signal_wake_idxs(workflow_id, wake_signals, &tx)?;
 
+					// If there are wake signals, also write an Immediate wake condition.
+					// This prevents a race where signals published while the workflow
+					// was running (and WakeSignalKeys were cleared) wrote signal data
+					// but no WorkflowWakeConditionKey. Without this, the workflow would
+					// be invisible to the worker forever.
+					if !wake_signals.is_empty() {
+						let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+							workflow_name.to_string(),
+							workflow_id,
+							keys::wake::WakeCondition::Immediate,
+						);
+						tx.set(
+							&self.subspace.pack(&wake_condition_key),
+							&wake_condition_key.serialize(())?,
+						);
+					}
+
 					// Write sub workflow wake index
 					if let Some(sub_workflow_id) = wake_sub_workflow_id {
 						self.write_sub_workflow_wake_idx(
@@ -2201,9 +2228,12 @@ impl Database for DatabaseKv {
 									limit: Some(limit),
 									..(&pending_signal_subspace).into()
 								},
-								// NOTE: This is Serializable because any insert into this subspace
-								// should cause a conflict and retry of this txn
-								Serializable,
+								// Snapshot is sufficient here because the workflow's
+								// polling retry loop (4 retries at 500ms) and the
+								// Immediate wake condition written in commit_workflow
+								// handle the case where a signal is published
+								// concurrently with this read.
+								Snapshot,
 							)
 						})
 						.flatten()
@@ -2286,7 +2316,7 @@ impl Database for DatabaseKv {
 													mode: StreamingMode::WantAll,
 													..(&body_subspace).into()
 												},
-												Serializable,
+												Snapshot,
 											)
 											.try_collect::<Vec<_>>()
 											.await?;

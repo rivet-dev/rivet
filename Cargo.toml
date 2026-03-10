@@ -19,6 +19,7 @@ members = [
   "engine/packages/error",
   "engine/packages/error-macros",
   "engine/packages/gasoline",
+  "engine/packages/gasoline-load-test",
   "engine/packages/gasoline-macros",
   "engine/packages/gasoline-runtime",
   "engine/packages/guard",

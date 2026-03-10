@@ -1,0 +1,30 @@
+[package]
+name = "gasoline-load-test"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "gasoline-load-test"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+futures-util.workspace = true
+gas.workspace = true
+rand.workspace = true
+rivet-cache.workspace = true
+rivet-config.workspace = true
+rivet-env.workspace = true
+rivet-pools.workspace = true
+rivet-runtime.workspace = true
+rivet-test-deps.workspace = true
+rivet-test-deps-docker.workspace = true
+rivet-util.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+uuid.workspace = true
