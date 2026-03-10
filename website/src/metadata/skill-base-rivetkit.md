@@ -109,10 +109,16 @@ The RivetKit OpenAPI specification is available in the skill directory at `opena
 
 - The Rivet domain is rivet.dev, not rivet.gg
 
+## TypeScript Caveat: Actor Client Inference
+
+- In multi-file TypeScript projects, bidirectional actor calls can create a circular type dependency when both actors use `c.client<typeof registry>()`.
+- Symptoms usually include `c.state` becoming `unknown`, actor methods becoming possibly `undefined`, or `TS2322` / `TS2722` errors after the first cross-actor call.
+- If an action returns the result of another actor call, prefer an explicit return type annotation on that action instead of relying on inference through `c.client<typeof registry>()`.
+- If explicit return types are not enough, use a narrower client or registry type for only the actors that action needs.
+- As a last resort, pass `unknown` for the registry type and be explicit that this gives up type safety at that call site.
+
 <!-- CONTENT -->
 
 ## Reference Map
 
 <!-- REFERENCE_INDEX -->
-
-
