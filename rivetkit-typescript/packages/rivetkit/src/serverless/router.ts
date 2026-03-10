@@ -68,34 +68,43 @@ export function buildServerlessRouter(
 				}
 			}
 
-			// Convert config to runner config
-			const newConfig: RegistryConfig = {
+			const sharedConfig: RegistryConfig = {
 				...config,
-				endpoint: endpoint,
-				namespace: namespace,
-				token: token,
+				endpoint,
+				namespace,
 				runner: {
 					...config.runner,
-					totalSlots: totalSlots,
-					runnerName: runnerName,
+					totalSlots,
+					runnerName,
 					// Not supported on serverless
 					runnerKey: undefined,
 				},
+			};
+			const runnerConfig: RegistryConfig = {
+				...sharedConfig,
+				token,
+			};
+			const clientConfig: RegistryConfig = {
+				...sharedConfig,
+				// Preserve the configured application token for actor-to-actor
+				// calls. The start token is only needed for the runner
+				// connection and may not have gateway permissions.
+				token: config.token ?? token,
 			};
 
 			// Create manager driver on demand based on the properties provided
 			// by headers
 			//
-			// NOTE: This relies on the `newConfig.runner.runnerName` to
+			// NOTE: This relies on the `runnerConfig.runner.runnerName` to
 			// configure which runner to create actors on.
 			const managerDriver = new RemoteManagerDriver(
-				convertRegistryConfigToClientConfig(newConfig),
+				convertRegistryConfigToClientConfig(clientConfig),
 			);
 			const client = createClientWithDriver(managerDriver);
 
 			// Create new actor driver with updated config
 			const actorDriver = driverConfig.actor(
-				newConfig,
+				runnerConfig,
 				managerDriver,
 				client,
 			);
