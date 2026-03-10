@@ -1,4 +1,6 @@
 import { createRivetKit } from "@rivetkit/react";
+import { createClient } from "rivetkit/client";
+import Editor from "@monaco-editor/react";
 import { useEffect, useRef, useState } from "react";
 import type {
 	ChatMessage,
@@ -6,21 +8,45 @@ import type {
 	CodeUpdateEvent,
 	ResponseEvent,
 	registry,
-} from "../src/actors.ts";
+} from "../src/actors/index.ts";
 
-const { useActor } = createRivetKit<typeof registry>(
-	`${location.origin}/api/rivet`,
-);
+const rivetEndpoint = `${location.origin}/api/rivet`;
+
+const { useActor } = createRivetKit<typeof registry>(rivetEndpoint);
+
+// Raw client for dynamicRunner (actions are unknown at compile time)
+const client = createClient<typeof registry>(rivetEndpoint, {
+	encoding: "json",
+});
+
+const REASONING_OPTIONS = [
+	{ value: "none", label: "None" },
+	{ value: "medium", label: "Medium" },
+	{ value: "high", label: "High" },
+	{ value: "extra_high", label: "Extra High" },
+] as const;
 
 // Chat column: interacts with the codeAgent actor
-function ChatColumn({ actorKey }: { actorKey: string }) {
+function ChatColumn({
+	actorKey,
+	code,
+	onApiKeyStatus,
+	onCodeUpdate,
+}: {
+	actorKey: string;
+	code: string;
+	onApiKeyStatus: (missing: boolean) => void;
+	onCodeUpdate: (code: string, revision: number) => void;
+}) {
 	const agent = useActor({
 		name: "codeAgent",
 		key: [actorKey],
 	});
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [status, setStatus] = useState<string>("idle");
+	const [error, setError] = useState<string | null>(null);
 	const [input, setInput] = useState("");
+	const [reasoning, setReasoning] = useState("none");
 	const timelineRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -28,6 +54,8 @@ function ChatColumn({ actorKey }: { actorKey: string }) {
 		agent.connection.getState().then((state: CodeAgentState) => {
 			setMessages(state.messages);
 			setStatus(state.status);
+			onApiKeyStatus(!state.hasApiKey);
+			onCodeUpdate(state.code, state.codeRevision);
 		});
 	}, [agent.connection]);
 
@@ -39,13 +67,35 @@ function ChatColumn({ actorKey }: { actorKey: string }) {
 	}, [messages]);
 
 	agent.useEvent("response", (payload: ResponseEvent) => {
-		setMessages((prev) =>
-			prev.map((msg) =>
+		if (payload.error) {
+			setError(payload.error);
+		} else if (payload.done) {
+			setError(null);
+		}
+		setMessages((prev) => {
+			const exists = prev.some((msg) => msg.id === payload.messageId);
+			if (!exists) {
+				// Assistant message placeholder from backend; add it.
+				return [
+					...prev,
+					{
+						id: payload.messageId,
+						role: "assistant" as const,
+						content: payload.content,
+						createdAt: Date.now(),
+					},
+				];
+			}
+			return prev.map((msg) =>
 				msg.id === payload.messageId
 					? { ...msg, content: payload.content }
 					: msg,
-			),
-		);
+			);
+		});
+	});
+
+	agent.useEvent("codeUpdated", (payload: CodeUpdateEvent) => {
+		onCodeUpdate(payload.code, payload.revision);
 	});
 
 	agent.useEvent("statusChanged", (nextStatus: string) => {
@@ -57,6 +107,7 @@ function ChatColumn({ actorKey }: { actorKey: string }) {
 		const trimmed = input.trim();
 		if (!trimmed) return;
 
+		setError(null);
 		// Optimistic add
 		const userMsg: ChatMessage = {
 			id: `pending-${Date.now()}`,
@@ -67,7 +118,13 @@ function ChatColumn({ actorKey }: { actorKey: string }) {
 		setMessages((prev) => [...prev, userMsg]);
 		setInput("");
 
-		await agent.connection.send("chat", { text: trimmed });
+		// Send the current editor code along with the message so the AI can
+		// modify existing code rather than generating from scratch.
+		await agent.connection.send("chat", {
+			text: trimmed,
+			currentCode: code,
+			reasoning,
+		});
 	};
 
 	const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -81,11 +138,31 @@ function ChatColumn({ actorKey }: { actorKey: string }) {
 		<div className="column">
 			<div className="column-header">
 				<span className="column-title">Chat</span>
-				<span
-					className={`status-dot status-dot--${status}`}
-					title={status}
-				/>
+				<div className="chat-header__right">
+					<span className="model-label">GPT-5</span>
+					<select
+						value={reasoning}
+						onChange={(e) => setReasoning(e.target.value)}
+						className="model-select"
+						title="Reasoning level"
+					>
+						{REASONING_OPTIONS.map((opt) => (
+							<option key={opt.value} value={opt.value}>
+								{opt.label}
+							</option>
+						))}
+					</select>
+					<span
+						className={`status-dot status-dot--${status}`}
+						title={status}
+					/>
+				</div>
 			</div>
+			{error && (
+				<div className="error-banner" onClick={() => setError(null)}>
+					{error}
+				</div>
+			)}
 			<div className="column-body" ref={timelineRef}>
 				{messages.length === 0 ? (
 					<p className="empty-state">
@@ -131,38 +208,36 @@ function ChatColumn({ actorKey }: { actorKey: string }) {
 	);
 }
 
-// Code column: shows the current generated code
-function CodeColumn({ actorKey }: { actorKey: string }) {
-	const agent = useActor({
-		name: "codeAgent",
-		key: [actorKey],
-	});
-	const [code, setCode] = useState("");
-	const [revision, setRevision] = useState(0);
-
-	useEffect(() => {
-		if (!agent.connection) return;
-		agent.connection.getState().then((state: CodeAgentState) => {
-			setCode(state.code);
-			setRevision(state.codeRevision);
-		});
-	}, [agent.connection]);
-
-	agent.useEvent("codeUpdated", (payload: CodeUpdateEvent) => {
-		setCode(payload.code);
-		setRevision(payload.revision);
-	});
-
+// Code column: Monaco editor for viewing and editing generated code
+function CodeColumn({
+	code,
+	onCodeChange,
+}: {
+	code: string;
+	onCodeChange: (code: string) => void;
+}) {
 	return (
 		<div className="column">
 			<div className="column-header">
-				<span className="column-title">Generated Code</span>
-				<span className="revision-badge">v{revision}</span>
-			</div>
+				<span className="column-title">Code Editor</span>
+				</div>
 			<div className="column-body code-body">
-				<pre className="code-block">
-					<code>{code}</code>
-				</pre>
+				<Editor
+					height="100%"
+					defaultLanguage="javascript"
+					theme="vs-dark"
+					value={code}
+					onChange={(value) => onCodeChange(value || "")}
+					options={{
+						minimap: { enabled: false },
+						fontSize: 13,
+						lineNumbers: "on",
+						tabSize: 2,
+						scrollBeyondLastLine: false,
+						wordWrap: "on",
+						padding: { top: 12 },
+					}}
+				/>
 			</div>
 		</div>
 	);
@@ -188,8 +263,8 @@ function ActorInterfaceColumn({
 	deployVersion: number;
 	onDeploy: () => void;
 }) {
-	const [actionName, setActionName] = useState("getCount");
-	const [actionArgs, setActionArgs] = useState("[]");
+	const [actionName, setActionName] = useState("increment");
+	const [actionArgs, setActionArgs] = useState("[1]");
 	const [log, setLog] = useState<ActionLogEntry[]>([]);
 	const [calling, setCalling] = useState(false);
 	const logRef = useRef<HTMLDivElement>(null);
@@ -238,23 +313,15 @@ function ActorInterfaceColumn({
 		};
 
 		try {
-			const response = await fetch(
-				`/api/dynamic/${encodeURIComponent(actorKey)}/${deployVersion}/action`,
-				{
-					method: "POST",
-					headers: { "content-type": "application/json" },
-					body: JSON.stringify({ name: actionName, args: parsedArgs }),
-				},
-			);
-			const data = await response.json();
-			if (data.error) {
-				entry.error = data.error;
-			} else {
-				entry.result = JSON.stringify(data.result, null, 2);
-			}
+			const handle = client.dynamicRunner.getOrCreate([
+				actorKey,
+				String(deployVersion),
+			]);
+			const result = await (handle as any)[actionName](...parsedArgs);
+			entry.result = JSON.stringify(result, null, 2);
 		} catch (error) {
 			entry.error =
-				error instanceof Error ? error.message : "Request failed";
+				error instanceof Error ? error.message : "Action call failed";
 		}
 
 		setLog((prev) => [...prev, entry]);
@@ -272,7 +339,7 @@ function ActorInterfaceColumn({
 			<div className="column-header">
 				<span className="column-title">Actor Interface</span>
 				<button className="deploy-button" onClick={onDeploy}>
-					Deploy v{deployVersion}
+					Deploy
 				</button>
 			</div>
 			<div className="column-body">
@@ -348,13 +415,31 @@ function ActorInterfaceColumn({
 export function App() {
 	const [actorKey, setActorKey] = useState("my-actor");
 	const [deployVersion, setDeployVersion] = useState(1);
+	const [apiKeyMissing, setApiKeyMissing] = useState(false);
+	const [code, setCode] = useState("");
+	const [codeRevision, setCodeRevision] = useState(0);
 
-	const handleDeploy = () => {
+	const handleDeploy = async () => {
+		// Save the current editor code to the codeAgent before deploying so the
+		// dynamic runner picks up any manual edits.
+		const handle = client.codeAgent.getOrCreate([actorKey]);
+		await (handle as any).setCode(code);
 		setDeployVersion((v) => v + 1);
+	};
+
+	const handleCodeUpdate = (newCode: string, revision: number) => {
+		setCode(newCode);
+		setCodeRevision(revision);
 	};
 
 	return (
 		<div className="app">
+			{apiKeyMissing && (
+				<div className="error-banner">
+					Missing OPENAI_API_KEY environment variable. Set it and
+					restart the server to enable AI code generation.
+				</div>
+			)}
 			<header className="top-bar">
 				<span className="top-bar__title">AI-Generated Actor</span>
 				<div className="top-bar__key">
@@ -368,8 +453,16 @@ export function App() {
 				</div>
 			</header>
 			<div className="columns">
-				<ChatColumn actorKey={actorKey} />
-				<CodeColumn actorKey={actorKey} />
+				<ChatColumn
+					actorKey={actorKey}
+					code={code}
+					onApiKeyStatus={setApiKeyMissing}
+					onCodeUpdate={handleCodeUpdate}
+				/>
+				<CodeColumn
+					code={code}
+					onCodeChange={setCode}
+				/>
 				<ActorInterfaceColumn
 					actorKey={actorKey}
 					deployVersion={deployVersion}

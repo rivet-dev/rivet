@@ -83,6 +83,7 @@
 		.columns {
 			display: flex;
 			flex: 1;
+			min-height: 0;
 			overflow: hidden;
 		}
 
@@ -90,6 +91,8 @@
 			flex: 1;
 			display: flex;
 			flex-direction: column;
+			min-height: 0;
+			height: 100%;
 			border-right: 1px solid #2c2c2e;
 			overflow: hidden;
 		}
@@ -102,7 +105,8 @@
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			padding: 12px 16px;
+			padding: 0 16px;
+			height: 48px;
 			background: #1c1c1e;
 			border-bottom: 1px solid #2c2c2e;
 			flex-shrink: 0;
@@ -192,6 +196,36 @@
 			50% { opacity: 0.4; }
 		}
 
+		/* Chat header controls */
+		.chat-header__right {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+
+		.model-label {
+			font-size: 12px;
+			font-weight: 600;
+			color: #8e8e93;
+		}
+
+		.model-select {
+			background: #2c2c2e;
+			border: 1px solid #3a3a3c;
+			border-radius: 6px;
+			color: #ffffff;
+			padding: 4px 8px;
+			font-size: 12px;
+			outline: none;
+			cursor: pointer;
+			transition: border-color 200ms ease;
+		}
+
+		.model-select:focus {
+			border-color: #ff4f00;
+			box-shadow: 0 0 0 3px rgba(255, 79, 0, 0.2);
+		}
+
 		/* Chat messages */
 		.chat-message {
 			margin-bottom: 16px;
@@ -229,18 +263,7 @@
 		/* Code display */
 		.code-body {
 			padding: 0;
-		}
-
-		.code-block {
-			margin: 0;
-			padding: 16px;
-			font-family: ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace;
-			font-size: 13px;
-			line-height: 1.5;
-			white-space: pre;
-			overflow-x: auto;
-			color: #e0e0e0;
-			tab-size: 2;
+			overflow: hidden;
 		}
 
 		.revision-badge {
@@ -396,6 +419,18 @@
 
 		::-webkit-scrollbar-thumb:hover {
 			background: #4a4a4c;
+		}
+
+		/* Error banner */
+		.error-banner {
+			background: rgba(255, 59, 48, 0.1);
+			border-bottom: 2px solid #ff3b30;
+			color: #ff3b30;
+			padding: 10px 20px;
+			font-size: 14px;
+			font-weight: 500;
+			text-align: center;
+			flex-shrink: 0;
 		}
 	</style>
 </head>
