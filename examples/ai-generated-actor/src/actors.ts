@@ -228,7 +228,7 @@ export const codeAgent = actor({
 	},
 
 	// The run hook processes chat messages from the queue.
-	run: async (c) => {
+	run: async (c: any) => {
 		for await (const queued of c.queue.iter()) {
 			const { body } = queued;
 			if (!body?.text || typeof body.text !== "string") {
@@ -259,8 +259,8 @@ export const codeAgent = actor({
 			const promptMessages: CoreMessage[] = [
 				{ role: "system", content: SYSTEM_PROMPT },
 				...c.state.messages
-					.filter((m) => m.content)
-					.map((m) => ({
+					.filter((m: ChatMessage) => m.content)
+					.map((m: ChatMessage) => ({
 						role: m.role as "user" | "assistant",
 						content: m.content,
 					})),
@@ -336,7 +336,7 @@ export const codeAgent = actor({
 
 	actions: {
 		// Callable functions from clients: https://rivet.dev/docs/actors/actions
-		getState: (c): CodeAgentState => ({
+		getState: (c: any): CodeAgentState => ({
 			messages: c.state.messages,
 			code: c.state.code,
 			codeRevision: c.state.codeRevision,
