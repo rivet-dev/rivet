@@ -183,6 +183,15 @@ export class Tunnel {
 					meta.headers,
 				);
 
+				// Restored websocket handlers can synchronously send messages
+				// during onRestore, so the pending request tracking must exist
+				// before the websocket is handed to user code.
+				actor.resetPendingRequestMessageIndex(
+					meta.gatewayId,
+					meta.requestId,
+					meta.clientMessageIndex,
+				);
+
 				// This will call `runner.config.websocket` under the hood to
 				// attach the event listeners to the WebSocket.
 				// Track this operation to ensure it completes
@@ -200,16 +209,6 @@ export class Tunnel {
 					false,
 				)
 					.then(() => {
-						// Create a PendingRequest entry to track the message index
-						const actor = this.#runner.getActor(actorId);
-						if (actor) {
-							actor.createPendingRequest(
-								gatewayId,
-								requestId,
-								meta.clientMessageIndex,
-							);
-						}
-
 						this.log?.info({
 							msg: "connection successfully restored",
 							actorId,
@@ -642,13 +641,14 @@ export class Tunnel {
 			case "ToClientRequestAbort":
 				await this.#handleRequestAbort(gatewayId, requestId);
 				break;
-			case "ToClientWebSocketOpen":
-				await this.#handleWebSocketOpen(
-					gatewayId,
-					requestId,
-					message.messageKind.val,
-				);
-				break;
+				case "ToClientWebSocketOpen":
+					await this.#handleWebSocketOpen(
+						gatewayId,
+						requestId,
+						message.messageId.messageIndex,
+						message.messageKind.val,
+					);
+					break;
 			case "ToClientWebSocketMessage": {
 				await this.#handleWebSocketMessage(
 					gatewayId,
@@ -917,6 +917,7 @@ export class Tunnel {
 	async #handleWebSocketOpen(
 		gatewayId: GatewayId,
 		requestId: RequestId,
+		serverMessageIndex: number,
 		open: protocol.ToClientWebSocketOpen,
 	) {
 		// NOTE: This method is safe to be async since we will not receive any
@@ -956,13 +957,18 @@ export class Tunnel {
 		// WebSockets from retransmits.
 		const existingAdapter = actor.getWebSocket(gatewayId, requestId);
 		if (existingAdapter) {
-			this.log?.warn({
-				msg: "closing existing websocket for duplicate open event for the same request id",
-				requestId: requestIdStr,
+			const replayAction =
+				existingAdapter._handleOpenReplay(serverMessageIndex);
+			if (replayAction === "reset") {
+				actor.resetPendingRequestMessageIndex(gatewayId, requestId, 0);
+			}
+			this.#sendMessage(gatewayId, requestId, {
+				tag: "ToServerWebSocketOpen",
+				val: {
+					canHibernate: existingAdapter[HIBERNATABLE_SYMBOL],
+				},
 			});
-			// Close without sending a message through the tunnel since the server
-			// already knows about the new connection
-			existingAdapter._closeWithoutCallback(1000, "ws.duplicate_open");
+			return;
 		}
 
 		// Create WebSocket
@@ -984,15 +990,15 @@ export class Tunnel {
 			// hood to add the event listeners for open, etc. If this handler
 			// throws, then the WebSocket will be closed before sending the
 			// open event.
-			const adapter = await this.#createWebSocket(
-				actor.actorId,
-				gatewayId,
-				requestId,
-				requestIdStr,
-				0,
-				canHibernate,
-				false,
-				request,
+				const adapter = await this.#createWebSocket(
+					actor.actorId,
+					gatewayId,
+					requestId,
+					requestIdStr,
+					serverMessageIndex,
+					canHibernate,
+					false,
+					request,
 				open.path,
 				Object.fromEntries(open.headers),
 				false,

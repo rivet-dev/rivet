@@ -85,12 +85,6 @@ export class ConnectionManager<
 			"cannot mark non-hibernatable conn for persist",
 		);
 
-		this.#actor.rLog.debug({
-			msg: "marked connection as changed",
-			connId: conn.id,
-			totalChanged: this.#connsWithPersistChanged.size,
-		});
-
 		this.#connsWithPersistChanged.add(conn.id);
 
 		this.#actor.stateManager.savePersistThrottled();
@@ -196,15 +190,10 @@ export class ConnectionManager<
 
 		this.#connections.set(conn.id, conn);
 
-		// Notify driver about new connection BEFORE marking as changed
-		//
-		// This ensures the driver can set up any necessary state (like #hwsMessageIndex)
-		// before saveState is triggered by markConnWithPersistChanged
-		if (this.#actor.driver.onCreateConn) {
-			this.#actor.driver.onCreateConn(conn);
-		}
-
 		if (conn.isHibernatable) {
+			// Initialize ack tracking before the initial conn persist is
+			// scheduled so the first inbound indexed message is tracked.
+			this.#actor.onCreateHibernatableConn(conn);
 			this.markConnWithPersistChanged(conn);
 		}
 
@@ -292,6 +281,30 @@ export class ConnectionManager<
 		}
 	}
 
+	detachPersistedHibernatableConnDriver(
+		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
+		reason?: string,
+	) {
+		invariant(
+			conn.isHibernatable,
+			"cannot detach a non-hibernatable connection driver",
+		);
+		if (!conn[CONN_DRIVER_SYMBOL]) {
+			return;
+		}
+
+		this.#actor.rLog.debug({
+			msg: "detaching stale hibernatable connection driver",
+			connId: conn.id,
+			reason: reason ?? "unknown",
+		});
+
+		conn[CONN_CONNECTED_SYMBOL] = false;
+		conn[CONN_DRIVER_SYMBOL] = undefined;
+		this.#actor.inspector.emitter.emit("connectionsUpdated");
+		this.#actor.resetSleepTimer();
+	}
+
 	/**
 	 * Handle connection disconnection.
 	 *
@@ -303,9 +316,8 @@ export class ConnectionManager<
 
 		this.#actor.rLog.debug({ msg: "removed conn", connId: conn.id });
 
-		// Notify driver about connection removal
-		if (this.#actor.driver.onDestroyConn) {
-			this.#actor.driver.onDestroyConn(conn);
+		if (conn.isHibernatable) {
+			this.#actor.onDestroyHibernatableConn(conn);
 		}
 
 		for (const eventName of [...conn.subscriptions.values()]) {
@@ -378,10 +390,24 @@ export class ConnectionManager<
 						connId: conn.id,
 					});
 				} catch (err) {
-					this.#actor.rLog.error({
-						msg: "kvBatchDelete failed for conn",
-						err: stringifyError(err),
-					});
+					const message =
+						err instanceof Error ? err.message : String(err);
+					if (
+						message.includes(
+							"WebSocket connection closed during shutdown",
+						)
+					) {
+						this.#actor.rLog.debug({
+							msg: "ignoring conn delete during driver shutdown",
+							connId: conn.id,
+							err: message,
+						});
+					} else {
+						this.#actor.rLog.error({
+							msg: "kvBatchDelete failed for conn",
+							err: stringifyError(err),
+						});
+					}
 				}
 			}
 
@@ -453,10 +479,7 @@ export class ConnectionManager<
 			});
 			this.#connections.set(conn.id, conn);
 
-			// Notify driver about restored connection
-			if (this.#actor.driver.onCreateConn) {
-				this.#actor.driver.onCreateConn(conn);
-			}
+			this.#actor.onCreateHibernatableConn(conn);
 
 			// Restore subscriptions
 			for (const sub of connPersist.subscriptions) {

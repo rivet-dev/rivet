@@ -36,6 +36,7 @@ import { runManagerDriverTests } from "./tests/manager-driver";
 import { runRawHttpTests } from "./tests/raw-http";
 import { runRawHttpRequestPropertiesTests } from "./tests/raw-http-request-properties";
 import { runRawWebSocketTests } from "./tests/raw-websocket";
+import { runHibernatableWebSocketProtocolTests } from "./tests/hibernatable-websocket-protocol";
 import { runRequestAccessTests } from "./tests/request-access";
 
 export interface SkipTests {
@@ -43,6 +44,10 @@ export interface SkipTests {
 	sleep?: boolean;
 	hibernation?: boolean;
 	inline?: boolean;
+}
+
+export interface DriverTestFeatures {
+	hibernatableWebSocketProtocol?: boolean;
 }
 
 export interface DriverTestConfig {
@@ -59,6 +64,8 @@ export interface DriverTestConfig {
 	HACK_skipCleanupNet?: boolean;
 
 	skip?: SkipTests;
+
+	features?: DriverTestFeatures;
 
 	encoding?: Encoding;
 
@@ -151,6 +158,7 @@ export function runDriverTests(
 						runRawHttpRequestPropertiesTests(driverTestConfig);
 
 						runRawWebSocketTests(driverTestConfig);
+						runHibernatableWebSocketProtocolTests(driverTestConfig);
 
 						// TODO: re-expose this once we can have actor queries on the gateway
 						// runRawHttpDirectRegistryTests(driverTestConfig);

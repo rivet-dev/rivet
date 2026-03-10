@@ -194,10 +194,11 @@ export class VirtualWebSocket implements UniversalWebSocket {
 		this.#dispatch("open", event);
 	}
 
-	triggerMessage(data: any): void {
+	triggerMessage(data: any, rivetMessageIndex?: number): void {
 		const event = {
 			type: "message",
 			data,
+			rivetMessageIndex,
 			target: this,
 			currentTarget: this,
 		} as unknown as RivetMessageEvent;

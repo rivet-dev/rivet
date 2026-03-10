@@ -1,6 +1,6 @@
 import type { WSContext } from "hono/ws";
 import type { AnyConn } from "@/actor/conn/mod";
-import type { AnyActorInstance } from "@/actor/instance/mod";
+import type { AnyStaticActorInstance } from "@/actor/instance/mod";
 import type { CachedSerializer, Encoding } from "@/actor/protocol/serde";
 import * as errors from "@/actor/errors";
 import { loggerWithoutContext } from "../../log";
@@ -27,7 +27,7 @@ export function createWebSocketDriver(
 		hibernatable,
 		rivetKitProtocol: {
 			sendMessage: (
-				actor: AnyActorInstance,
+				actor: AnyStaticActorInstance,
 				conn: AnyConn,
 				message: CachedSerializer<any, any, any>,
 			) => {
@@ -106,7 +106,7 @@ export function createWebSocketDriver(
 		},
 
 		disconnect: async (
-			_actor: AnyActorInstance,
+			_actor: AnyStaticActorInstance,
 			_conn: AnyConn,
 			reason?: string,
 		) => {
@@ -129,7 +129,7 @@ export function createWebSocketDriver(
 		},
 
 		getConnectionReadyState: (
-			_actor: AnyActorInstance,
+			_actor: AnyStaticActorInstance,
 			_conn: AnyConn,
 		): DriverReadyState | undefined => {
 			return websocket?.readyState ?? DriverReadyState.CONNECTING;
