@@ -88,7 +88,7 @@ impl Worker {
 
 		// Update ping at least once before doing anything else
 		self.db
-			.update_worker_ping(self.worker_id)
+			.update_worker_ping(self.worker_id, true)
 			.await
 			.context("failed updating worker ping")?;
 
@@ -140,17 +140,13 @@ impl Worker {
 			}
 
 			if let Err(err) = self.tick(&cache).await {
-				// Cancel background tasks. We abort because these are not critical tasks.
-				gc_handle.abort();
-				metrics_handle.abort();
-
 				break Err(err);
 			}
 		};
 
 		// Cancel background tasks
-		gc_handle.abort();
 		metrics_handle.abort();
+		gc_handle.abort();
 
 		if let Err(err) = &res {
 			tracing::error!(?err, "worker errored, attempting graceful shutdown");
@@ -253,7 +249,7 @@ impl Worker {
 				loop {
 					ping_interval.tick().await;
 
-					if let Err(err) = db.update_worker_ping(worker_id).await {
+					if let Err(err) = db.update_worker_ping(worker_id, true).await {
 						tracing::error!(?err, "unhandled update ping error");
 					}
 
@@ -287,9 +283,33 @@ impl Worker {
 		)
 	}
 
+	fn shutdown_ping(&self) -> JoinHandle<()> {
+		let db = self.db.clone();
+		let worker_id = self.worker_id;
+
+		tokio::spawn(
+			async move {
+				let mut ping_interval = tokio::time::interval(PING_INTERVAL);
+				ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+				loop {
+					ping_interval.tick().await;
+
+					if let Err(err) = db.update_worker_ping(worker_id, false).await {
+						tracing::error!(?err, "unhandled update ping error");
+					}
+				}
+			}
+			.instrument(tracing::info_span!("worker_shutdown_ping_task")),
+		)
+	}
+
 	#[tracing::instrument(skip_all)]
 	async fn shutdown(mut self, mut term_signal: TermSignal) {
 		let shutdown_duration = self.config.runtime.worker_shutdown_duration();
+
+		// Spawn a special ping task to continue updating ping but not the active worker idx
+		let ping_handle = self.shutdown_ping();
 
 		tracing::info!(
 			duration=?shutdown_duration,
@@ -345,6 +365,9 @@ impl Worker {
 				}
 			}
 		}
+
+		// Stop updating ping
+		ping_handle.abort();
 
 		metrics::WORKER_WORKFLOW_ACTIVE.reset();
 

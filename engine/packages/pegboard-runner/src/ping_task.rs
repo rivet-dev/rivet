@@ -22,16 +22,14 @@ pub async fn task(
 	let ping_timeout_ms = ctx.config().pegboard().runner_ping_timeout_ms();
 
 	loop {
+		// Jitter sleep to prevent stampeding herds
+		let jitter = Duration::from_millis(rand::thread_rng().gen_range(0..128));
 		tokio::select! {
-			_ = tokio::time::sleep(update_ping_interval) => {}
+			_ = tokio::time::sleep(update_ping_interval + jitter) => {}
 			_ = ping_abort_rx.changed() => {
 				return Ok(LifecycleResult::Aborted);
 			}
 		}
-
-		// Jitter sleep to prevent stampeding herds
-		let jitter = { rand::thread_rng().gen_range(0..128) };
-		tokio::time::sleep(Duration::from_millis(jitter)).await;
 
 		// Check if the last pong is past the timeout threshold (mk2 only)
 		if protocol::is_mk2(conn.protocol_version) {

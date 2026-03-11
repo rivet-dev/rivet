@@ -65,7 +65,11 @@ pub trait Database: Send {
 	) -> WorkflowResult<BoxStream<'b, ()>>;
 
 	/// Updates the last ping ts for this worker.
-	async fn update_worker_ping(&self, worker_id: Id) -> WorkflowResult<()>;
+	async fn update_worker_ping(
+		&self,
+		worker_id: Id,
+		update_active_idx: bool,
+	) -> WorkflowResult<()>;
 
 	/// Removes the worker from consideration for `pull_workflows` delegation.
 	async fn mark_worker_inactive(&self, worker_id: Id) -> WorkflowResult<()>;

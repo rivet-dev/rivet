@@ -781,7 +781,11 @@ impl Database for DatabaseKv {
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn update_worker_ping(&self, worker_id: Id) -> WorkflowResult<()> {
+	async fn update_worker_ping(
+		&self,
+		worker_id: Id,
+		update_active_idx: bool,
+	) -> WorkflowResult<()> {
 		metrics::WORKER_LAST_PING
 			.with_label_values(&[&worker_id.to_string()])
 			.set(rivet_util::timestamp::now());
@@ -795,19 +799,21 @@ impl Database for DatabaseKv {
 				let last_ping_ts = rivet_util::timestamp::now();
 				let last_ping_ts_key = keys::worker::LastPingTsKey::new(worker_id);
 
-				if let Some(last_last_ping_ts) =
-					tx.read_opt(&last_ping_ts_key, Serializable).await?
-				{
-					let active_worker_idx_key =
-						keys::worker::ActiveWorkerIdxKey::new(last_last_ping_ts, worker_id);
-					tx.delete(&active_worker_idx_key);
-				}
-
 				tx.write(&last_ping_ts_key, last_ping_ts)?;
 
-				let active_worker_idx_key =
-					keys::worker::ActiveWorkerIdxKey::new(last_ping_ts, worker_id);
-				tx.write(&active_worker_idx_key, ())?;
+				if update_active_idx {
+					if let Some(last_last_ping_ts) =
+						tx.read_opt(&last_ping_ts_key, Serializable).await?
+					{
+						let active_worker_idx_key =
+							keys::worker::ActiveWorkerIdxKey::new(last_last_ping_ts, worker_id);
+						tx.delete(&active_worker_idx_key);
+					}
+
+					let active_worker_idx_key =
+						keys::worker::ActiveWorkerIdxKey::new(last_ping_ts, worker_id);
+					tx.write(&active_worker_idx_key, ())?;
+				}
 
 				Ok(())
 			})
