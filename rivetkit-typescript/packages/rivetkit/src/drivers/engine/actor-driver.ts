@@ -40,7 +40,6 @@ import {
 	getInitialActorKvState,
 	type ManagerDriver,
 } from "@/driver-helpers/mod";
-import type { ActorDestroyOptions } from "@/actor/driver";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import { getEndpoint } from "@/remote-manager-driver/api-utils";
 import {
@@ -105,10 +104,7 @@ export class EngineActorDriver implements ActorDriver {
 	// HACK: Track actor stop intent locally since the runner protocol doesn't
 	// pass the stop reason to onActorStop. This will be fixed when the runner
 	// protocol is updated to send the intent directly (see RVT-5284)
-	#actorStopIntent: Map<
-		string,
-		{ reason: "sleep" | "destroy"; errorMessage?: string }
-	> = new Map();
+	#actorStopIntent: Map<string, "sleep" | "destroy"> = new Map();
 
 	// Map of conn IDs to message index waiting to be persisted before sending
 	// an ack
@@ -356,17 +352,14 @@ export class EngineActorDriver implements ActorDriver {
 
 	startSleep(actorId: string) {
 		// HACK: Track intent for onActorStop (see RVT-5284)
-		this.#actorStopIntent.set(actorId, { reason: "sleep" });
+		this.#actorStopIntent.set(actorId, "sleep");
 		this.#runner.sleepActor(actorId);
 	}
 
-	startDestroy(actorId: string, options?: ActorDestroyOptions) {
+	startDestroy(actorId: string) {
 		// HACK: Track intent for onActorStop (see RVT-5284)
-		this.#actorStopIntent.set(actorId, {
-			reason: "destroy",
-			errorMessage: options?.errorMessage,
-		});
-		this.#runner.stopActor(actorId, undefined, options?.errorMessage);
+		this.#actorStopIntent.set(actorId, "destroy");
+		this.#runner.stopActor(actorId);
 	}
 
 	async shutdownRunner(immediate: boolean): Promise<void> {
@@ -645,9 +638,7 @@ export class EngineActorDriver implements ActorDriver {
 		// TODO: This will not work if the actor is destroyed from the API
 		// correctly. Currently, it will use the sleep intent, but it's
 		// actually a destroy intent.
-		const stopIntent = this.#actorStopIntent.get(actorId) ?? {
-			reason: "sleep" as const,
-		};
+		const reason = this.#actorStopIntent.get(actorId) ?? "sleep";
 		this.#actorStopIntent.delete(actorId);
 
 		const handler = this.#actors.get(actorId);
@@ -655,7 +646,7 @@ export class EngineActorDriver implements ActorDriver {
 			logger().debug({
 				msg: "no runner actor handler to stop",
 				actorId,
-				reason: stopIntent.reason,
+				reason,
 			});
 			return;
 		}
@@ -680,7 +671,7 @@ export class EngineActorDriver implements ActorDriver {
 
 		if (handler.actor) {
 			try {
-				await handler.actor.onStop(stopIntent.reason);
+				await handler.actor.onStop(reason);
 			} catch (err) {
 				logger().error({
 					msg: "error in onStop, proceeding with removing actor",
@@ -691,12 +682,7 @@ export class EngineActorDriver implements ActorDriver {
 
 		this.#actors.delete(actorId);
 
-		logger().debug({
-			msg: "runner actor stopped",
-			actorId,
-			reason: stopIntent.reason,
-			errorMessage: stopIntent.errorMessage,
-		});
+		logger().debug({ msg: "runner actor stopped", actorId, reason });
 	}
 
 	// MARK: - Runner Networking

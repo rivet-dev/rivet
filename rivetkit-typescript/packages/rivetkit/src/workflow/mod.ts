@@ -5,7 +5,17 @@ import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
 import { RUN_FUNCTION_CONFIG_SYMBOL } from "@/actor/config";
 import { stringifyError } from "@/utils";
-import { runWorkflow } from "@rivetkit/workflow-engine";
+import {
+	CriticalError,
+	EntryInProgressError,
+	HistoryDivergedError,
+	JoinError,
+	RaceError,
+	RollbackCheckpointError,
+	RollbackError,
+	runWorkflow,
+	StepExhaustedError,
+} from "@rivetkit/workflow-engine";
 import invariant from "invariant";
 import { ActorWorkflowContext } from "./context";
 import { ActorWorkflowDriver } from "./driver";
@@ -19,6 +29,28 @@ export {
 	type WorkflowLoopContextOf,
 	type WorkflowStepContextOf,
 } from "./context";
+
+function shouldRethrowWorkflowError(error: unknown): boolean {
+	if (
+		error instanceof CriticalError ||
+		error instanceof JoinError ||
+		error instanceof RaceError ||
+		error instanceof RollbackError ||
+		error instanceof StepExhaustedError
+	) {
+		return false;
+	}
+
+	if (
+		error instanceof EntryInProgressError ||
+		error instanceof HistoryDivergedError ||
+		error instanceof RollbackCheckpointError
+	) {
+		return true;
+	}
+
+	return true;
+}
 
 export function workflow<
 	TState,
@@ -107,11 +139,18 @@ export function workflow<
 				return;
 			}
 
-			runCtx.log.error({
-				msg: "workflow run failed",
+			if (shouldRethrowWorkflowError(error)) {
+				runCtx.log.error({
+					msg: "workflow run failed",
+					error: stringifyError(error),
+				});
+				throw error;
+			}
+
+			runCtx.log.warn({
+				msg: "workflow failed and will sleep until woken",
 				error: stringifyError(error),
 			});
-			throw error;
 		} finally {
 			runCtx.abortSignal.removeEventListener("abort", onAbort);
 		}

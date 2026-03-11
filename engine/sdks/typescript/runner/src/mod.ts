@@ -281,23 +281,9 @@ export class Runner {
 		// The server will send a StopActor command if it wants to fully stop
 	}
 
-	async stopActor(
-		actorId: string,
-		generation?: number,
-		errorMessage?: string,
-	) {
+	async stopActor(actorId: string, generation?: number) {
 		const actor = this.getActor(actorId, generation);
 		if (!actor) return;
-
-		actor.stoppedState = errorMessage
-			? {
-					code: protocol.StopCode.Error,
-					message: errorMessage,
-				}
-			: {
-					code: protocol.StopCode.Ok,
-					message: null,
-				};
 
 		this.#sendActorIntent(actorId, actor.generation, "stop");
 
@@ -328,14 +314,7 @@ export class Runner {
 		// Close requests after onActorStop so you can send messages over the tunnel
 		this.#tunnel?.closeActiveRequests(actor);
 
-		const stoppedState = actor.stoppedState;
-		actor.stoppedState = undefined;
-		this.#sendActorStateUpdate(
-			actorId,
-			actor.generation,
-			"stopped",
-			stoppedState,
-		);
+		this.#sendActorStateUpdate(actorId, actor.generation, "stopped");
 
 		// Remove actor after stopping in order to ensure that we can still
 		// call actions on the runner
@@ -1228,10 +1207,6 @@ export class Runner {
 		actorId: string,
 		generation: number,
 		stateType: "running" | "stopped",
-		stoppedState?: {
-			code: protocol.StopCode;
-			message: string | null;
-		},
 	) {
 		const actor = this.getActor(actorId, generation);
 		if (!actor) return;
@@ -1243,7 +1218,7 @@ export class Runner {
 		} else if (stateType === "stopped") {
 			actorState = {
 				tag: "ActorStateStopped",
-				val: stoppedState ?? {
+				val: {
 					code: protocol.StopCode.Ok,
 					message: null,
 				},

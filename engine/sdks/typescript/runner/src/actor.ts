@@ -30,10 +30,6 @@ export class RunnerActor {
 	lastCommandIdx: bigint = -1n;
 	nextEventIdx: bigint = 0n;
 	eventHistory: protocol.EventWrapper[] = [];
-	stoppedState?: {
-		code: protocol.StopCode;
-		message: string | null;
-	};
 
 	/**
 	 * If restoreHibernatingRequests has been called. This is used to assert

@@ -76,6 +76,7 @@ import {
 	workflowAccessActor,
 	workflowCompleteActor,
 	workflowCounterActor,
+	workflowFailedStepActor,
 	workflowQueueActor,
 	workflowSleepActor,
 	workflowStopTeardownActor,
@@ -170,6 +171,7 @@ export const registry = setup({
 		workflowQueueActor,
 		workflowAccessActor,
 		workflowCompleteActor,
+		workflowFailedStepActor,
 		workflowSleepActor,
 		workflowStopTeardownActor,
 		// From actor-db-raw.ts

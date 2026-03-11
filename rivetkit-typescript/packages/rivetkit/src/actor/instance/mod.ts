@@ -42,7 +42,7 @@ import {
 } from "../contexts";
 
 import type { AnyDatabaseProvider, InferDatabaseClient } from "../database";
-import type { ActorDestroyOptions, ActorDriver } from "../driver";
+import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
 import { serializeActorKey } from "../keys";
 import { processMessage } from "../protocol/old";
@@ -584,7 +584,7 @@ export class ActorInstance<
 	}
 
 	// MARK: - Destroy
-	startDestroy(options?: ActorDestroyOptions) {
+	startDestroy() {
 		if (this.#stopCalled || this.#sleepCalled) {
 			this.#rLog.debug({
 				msg: "cannot call startDestroy if actor already stopping or sleeping",
@@ -611,7 +611,6 @@ export class ActorInstance<
 		const destroy = this.driver.startDestroy.bind(
 			this.driver,
 			this.#actorId,
-			options,
 		);
 
 		this.#rLog.info({ msg: "actor destroying" });
@@ -1401,25 +1400,15 @@ export class ActorInstance<
 						return;
 					}
 
-					// Run handler threw an error - stop the actor with an error
-					this.emitTraceEvent(
-						"actor.crash",
-						{
-							"rivet.actor.reason": "run_error",
-							"error.message": stringifyError(error),
-						},
-						runSpan,
-					);
+					// Run handler threw an error. Log it and sleep the actor when idle.
 					this.endTraceSpan(runSpan, {
 						code: "ERROR",
 						message: stringifyError(error),
 					});
+					this.#sleepOnIdle = true;
 					this.#rLog.error({
-						msg: "run handler threw error, stopping actor with error",
+						msg: "run handler threw error, actor will sleep when idle",
 						error: stringifyError(error),
-					});
-					this.startDestroy({
-						errorMessage: stringifyError(error),
 					});
 				})
 				.finally(() => {

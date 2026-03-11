@@ -155,7 +155,7 @@ export function runActorRunTests(driverTestConfig: DriverTestConfig) {
 			}
 		});
 
-		test("run handler that throws error triggers destroy", async (c) => {
+		test("run handler that throws error sleeps instead of destroying", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
 			const actor = client.runWithError.getOrCreate(["run-error"]);
@@ -166,15 +166,20 @@ export function runActorRunTests(driverTestConfig: DriverTestConfig) {
 			const state1 = await actor.getState();
 			expect(state1.runStarted).toBe(true);
 
-			// Wait for the actor to be destroyed
+			// Wait for the run handler to throw and the actor to settle
 			await waitFor(driverTestConfig, 300);
 
-			// After the run handler throws, the actor should be destroyed.
-			// Similar to the early exit test, the driver may not automatically reschedule.
-			// A new getOrCreate should create a fresh actor.
-			const actor2 = client.runWithError.getOrCreate(["run-error-fresh"]);
-			const state2 = await actor2.getState();
+			const state2 = await actor.getState();
 			expect(state2.runStarted).toBe(true);
+			expect(state2.destroyCalled).toBe(false);
+
+			if (driverTestConfig.skip?.sleep) {
+				expect(state2.sleepCount).toBe(0);
+				expect(state2.wakeCount).toBe(1);
+			} else {
+				expect(state2.sleepCount).toBeGreaterThan(0);
+				expect(state2.wakeCount).toBeGreaterThan(1);
+			}
 		});
 	});
 }
