@@ -350,7 +350,7 @@ function ProviderSetup() {
 				solution. We manage the actor orchestration, state, and scaling
 				for you.
 			</p>
-			<div className="flex items-center justify-center gap-4">
+			<div className="flex items-center justify-start gap-4">
 				<Button
 					variant="secondary"
 					onClick={() => {
