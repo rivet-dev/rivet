@@ -1320,49 +1320,6 @@ impl Database for DatabaseKv {
 						tx.delete(wake_key);
 					}
 
-					let leased_workflow_ids = leased_workflows
-						.iter()
-						.map(|wf| wf.workflow_id)
-						.collect::<Vec<_>>();
-
-					// Clear secondary indexes so that we don't get any new wake conditions inserted while
-					// the workflow is running
-					futures_util::stream::iter(leased_workflow_ids)
-						.map(|workflow_id| {
-							let tx = tx.clone();
-							async move {
-								// Clear sub workflow secondary idx
-								let wake_sub_workflow_key =
-									keys::workflow::WakeSubWorkflowKey::new(workflow_id);
-								if let Some(entry) = tx
-									.get(&self.subspace.pack(&wake_sub_workflow_key), Serializable)
-									.await?
-								{
-									let sub_workflow_id =
-										wake_sub_workflow_key.deserialize(&entry)?;
-
-									let sub_workflow_wake_key = keys::wake::SubWorkflowWakeKey::new(
-										sub_workflow_id,
-										workflow_id,
-									);
-
-									tx.clear(&self.subspace.pack(&sub_workflow_wake_key));
-								}
-
-								// Clear signals secondary index
-								let wake_signals_subspace = self.subspace.subspace(
-									&keys::workflow::WakeSignalKey::subspace(workflow_id),
-								);
-								tx.clear_subspace_range(&wake_signals_subspace);
-
-								anyhow::Ok(())
-							}
-						})
-						// TODO: How to get rid of this buffer?
-						.buffer_unordered(1024)
-						.try_collect::<()>()
-						.await?;
-
 					// NOTE: We don't read any workflow data in this txn since its only for acquiring leases.
 					// The less operations we do in this txn the less contention there is with other workers.
 					Ok(leased_workflows)
@@ -1402,7 +1359,67 @@ impl Database for DatabaseKv {
 				.observe(*count as f64);
 		}
 
-		let pulled_workflows = self
+		let leased_workflow_ids = leased_workflows
+			.iter()
+			.map(|wf| wf.workflow_id)
+			.collect::<Vec<_>>();
+		let clear_secondary_idx_fut = async move {
+			self.pools
+				.udb()
+				.map_err(WorkflowError::PoolsGeneric)?
+				.run(|tx| {
+					let leased_workflow_ids = leased_workflow_ids.clone();
+
+					async move {
+						// Clear secondary indexes so that we don't get any new wake conditions inserted while
+						// the workflow is running
+						futures_util::stream::iter(leased_workflow_ids)
+							.map(|workflow_id| {
+								let tx = tx.clone();
+								async move {
+									// Clear sub workflow secondary idx
+									let wake_sub_workflow_key =
+										keys::workflow::WakeSubWorkflowKey::new(workflow_id);
+									// NOTE: Snapshot read because we prefer having this txn not conflict rather
+									// than unnecessarily insert wake conditions
+									if let Some(entry) = tx
+										.get(&self.subspace.pack(&wake_sub_workflow_key), Snapshot)
+										.await?
+									{
+										let sub_workflow_id =
+											wake_sub_workflow_key.deserialize(&entry)?;
+
+										let sub_workflow_wake_key =
+											keys::wake::SubWorkflowWakeKey::new(
+												sub_workflow_id,
+												workflow_id,
+											);
+
+										tx.clear(&self.subspace.pack(&sub_workflow_wake_key));
+									}
+
+									// Clear signals secondary index
+									let wake_signals_subspace = self.subspace.subspace(
+										&keys::workflow::WakeSignalKey::subspace(workflow_id),
+									);
+									tx.clear_subspace_range(&wake_signals_subspace);
+
+									anyhow::Ok(())
+								}
+							})
+							// TODO: How to get rid of this buffer?
+							.buffer_unordered(1024)
+							.try_collect::<()>()
+							.await
+					}
+				})
+				.custom_instrument(tracing::info_span!("clear_workflow_secondary_idx_tx"))
+				.await
+				.context("failed to clear workflow secondary indexes")
+		};
+
+		let pulled_workflows_fut = async move {
+			self
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
@@ -1760,7 +1777,11 @@ impl Database for DatabaseKv {
 			.custom_instrument(tracing::info_span!("pull_workflow_history_tx"))
 			.await
 			.context("failed to pull workflow history")
-			.map_err(WorkflowError::Udb)?;
+		};
+
+		let (_, pulled_workflows) =
+			tokio::try_join!(clear_secondary_idx_fut, pulled_workflows_fut,)
+				.map_err(WorkflowError::Udb)?;
 
 		let dt2 = start_instant2.elapsed().as_secs_f64();
 		let dt = start_instant.elapsed().as_secs_f64();
