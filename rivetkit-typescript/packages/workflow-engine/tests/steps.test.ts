@@ -7,6 +7,7 @@ import {
 	RollbackError,
 	runWorkflow,
 	StepExhaustedError,
+	type WorkflowErrorEvent,
 	type WorkflowContextInterface,
 } from "../src/testing.js";
 import { buildHistoryPrefixAll, keyStartsWith } from "../src/keys.js";
@@ -180,6 +181,73 @@ for (const mode of modes) {
 			expect(attempts).toBe(3);
 		});
 
+		it("should report retryable step failures to onError", async () => {
+			let attempts = 0;
+			const events: WorkflowErrorEvent[] = [];
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.step({
+					name: "flaky-step",
+					maxRetries: 3,
+					retryBackoffBase: 5,
+					retryBackoffMax: 5,
+					run: async () => {
+						attempts++;
+						if (attempts === 1) {
+							throw new Error("Transient failure");
+						}
+						return "ok";
+					},
+				});
+			};
+
+			const firstResult = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{
+					mode,
+					onError: (event) => {
+						events.push(event);
+					},
+				},
+			).result;
+
+			if (mode === "yield") {
+				expect(firstResult.state).toBe("sleeping");
+				await new Promise((resolve) => setTimeout(resolve, 10));
+				const secondResult = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode, onError: (event) => events.push(event) },
+				).result;
+				expect(secondResult.state).toBe("completed");
+				expect(secondResult.output).toBe("ok");
+			} else {
+				expect(firstResult.state).toBe("completed");
+				expect(firstResult.output).toBe("ok");
+			}
+
+			expect(events).toHaveLength(1);
+			expect(events[0]).toMatchObject({
+				type: "step",
+				stepName: "flaky-step",
+				attempt: 1,
+				maxRetries: 3,
+				remainingRetries: 2,
+				willRetry: true,
+				retryDelay: 5,
+				error: {
+					name: "Error",
+					message: "Transient failure",
+				},
+			});
+			expect(events[0].retryAt).toBeTypeOf("number");
+		});
+
 		it("should yield during backoff retries", async () => {
 			let attempts = 0;
 
@@ -247,6 +315,65 @@ for (const mode of modes) {
 			expect(attempts).toBe(1);
 		});
 
+		it("should report terminal step failures to onError", async () => {
+			const events: WorkflowErrorEvent[] = [];
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.step("critical-step", async () => {
+					throw new CriticalError("Unrecoverable");
+				});
+			};
+
+			await expect(
+				runWorkflow("wf-1", workflow, undefined, driver, {
+					mode,
+					onError: (event) => {
+						events.push(event);
+					},
+				}).result,
+			).rejects.toThrow(CriticalError);
+
+			expect(events).toEqual([
+				expect.objectContaining({
+					type: "step",
+					stepName: "critical-step",
+					attempt: 1,
+					willRetry: false,
+					error: expect.objectContaining({
+						name: "CriticalError",
+						message: "Unrecoverable",
+					}),
+				}),
+			]);
+		});
+
+		it("should report workflow-level failures to onError", async () => {
+			const events: WorkflowErrorEvent[] = [];
+
+			const workflow = async (_ctx: WorkflowContextInterface) => {
+				throw new Error("workflow failed");
+			};
+
+			await expect(
+				runWorkflow("wf-1", workflow, undefined, driver, {
+					mode,
+					onError: (event) => {
+						events.push(event);
+					},
+				}).result,
+			).rejects.toThrow("workflow failed");
+
+			expect(events).toEqual([
+				expect.objectContaining({
+					type: "workflow",
+					error: expect.objectContaining({
+						name: "Error",
+						message: "workflow failed",
+					}),
+				}),
+			]);
+		});
+
 		it("should not retry RollbackError", async () => {
 			let attempts = 0;
 
@@ -281,19 +408,15 @@ for (const mode of modes) {
 			};
 
 			if (mode === "yield") {
-				for (let i = 0; i < 3; i++) {
-					try {
-						await runWorkflow("wf-1", workflow, undefined, driver, {
-							mode,
-						}).result;
-					} catch {}
-				}
-
-				await expect(
-					runWorkflow("wf-1", workflow, undefined, driver, { mode })
-						.result,
-				).rejects.toThrow(StepExhaustedError);
-				return;
+				const firstResult = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+				expect(firstResult.state).toBe("sleeping");
+				await new Promise((resolve) => setTimeout(resolve, 10));
 			}
 
 			await expect(
@@ -317,27 +440,6 @@ for (const mode of modes) {
 					},
 				});
 			};
-
-			if (mode === "yield") {
-				const res1 = await runWorkflow(
-					"wf-1",
-					workflow,
-					undefined,
-					driver,
-					{ mode },
-				).result;
-				expect(res1.state).toBe("sleeping");
-
-				await expect(
-					runWorkflow("wf-1", workflow, undefined, driver, { mode })
-						.result,
-				).rejects.toThrow(StepExhaustedError);
-				await expect(
-					runWorkflow("wf-1", workflow, undefined, driver, { mode })
-						.result,
-				).rejects.toThrow(/Always fails/);
-				return;
-			}
 
 			await expect(
 				runWorkflow("wf-1", workflow, undefined, driver, { mode })
@@ -367,10 +469,6 @@ for (const mode of modes) {
 			const runOnce = () =>
 				runWorkflow("wf-1", workflow, undefined, driver, { mode });
 
-			if (mode === "yield") {
-				await runOnce().result;
-			}
-
 			const exhaustedHandle = runOnce();
 			await expect(exhaustedHandle.result).rejects.toThrow(
 				StepExhaustedError,
@@ -379,13 +477,9 @@ for (const mode of modes) {
 			const attemptsAfterExhaust = attempts;
 			await exhaustedHandle.recover();
 
-			if (mode === "yield") {
-				await runOnce().result;
-			} else {
-				await expect(runOnce().result).rejects.toThrow(
-					StepExhaustedError,
-				);
-			}
+			await expect(runOnce().result).rejects.toThrow(
+				StepExhaustedError,
+			);
 
 			expect(attempts).toBeGreaterThan(attemptsAfterExhaust);
 		});

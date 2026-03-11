@@ -297,6 +297,50 @@ export interface WorkflowError {
 }
 
 /**
+ * Error event emitted while a workflow is running.
+ */
+export interface WorkflowStepErrorEvent {
+	type: "step";
+	workflowId: string;
+	stepName: string;
+	attempt: number;
+	maxRetries: number;
+	remainingRetries: number;
+	willRetry: boolean;
+	retryDelay?: number;
+	retryAt?: number;
+	error: WorkflowError;
+}
+
+/**
+ * Error event emitted when a rollback handler fails.
+ */
+export interface WorkflowRollbackErrorEvent {
+	type: "rollback";
+	workflowId: string;
+	stepName: string;
+	error: WorkflowError;
+}
+
+/**
+ * Error event emitted for workflow-level failures outside individual steps.
+ */
+export interface WorkflowRunErrorEvent {
+	type: "workflow";
+	workflowId: string;
+	error: WorkflowError;
+}
+
+export type WorkflowErrorEvent =
+	| WorkflowStepErrorEvent
+	| WorkflowRollbackErrorEvent
+	| WorkflowRunErrorEvent;
+
+export type WorkflowErrorHandler = (
+	event: WorkflowErrorEvent,
+) => void | Promise<void>;
+
+/**
  * Complete storage state for a workflow.
  */
 export interface Storage {
@@ -453,6 +497,7 @@ export interface RunWorkflowOptions {
 	mode?: WorkflowRunMode;
 	logger?: Logger;
 	onHistoryUpdated?: (history: WorkflowHistorySnapshot) => void;
+	onError?: WorkflowErrorHandler;
 }
 
 export type WorkflowFunction<TInput = unknown, TOutput = unknown> = (

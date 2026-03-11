@@ -91,6 +91,36 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 			expect(next.ticks).toBeGreaterThan(initial.ticks);
 		});
 
+		test("workflow onError reports retry metadata", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.workflowErrorHookActor.getOrCreate([
+				"workflow-error-hook",
+			]);
+
+			let state = await actor.getErrorState();
+			for (
+				let i = 0;
+				i < 20 && (state.attempts < 2 || state.events.length === 0);
+				i++
+			) {
+				await waitFor(driverTestConfig, 50);
+				state = await actor.getErrorState();
+			}
+
+			expect(state.attempts).toBe(2);
+			expect(state.events).toEqual([
+				{
+					type: "step",
+					stepName: "flaky",
+					attempt: 1,
+					willRetry: true,
+					retryDelay: 1,
+					errorName: "Error",
+					errorMessage: "workflow hook failed",
+				},
+			]);
+		});
+
 		test.skipIf(driverTestConfig.skip?.sleep)(
 			"completed workflows sleep instead of destroying the actor",
 			async (c) => {

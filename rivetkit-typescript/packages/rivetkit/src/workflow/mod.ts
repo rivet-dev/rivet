@@ -15,6 +15,7 @@ import {
 	RollbackError,
 	runWorkflow,
 	StepExhaustedError,
+	type WorkflowErrorEvent,
 } from "@rivetkit/workflow-engine";
 import invariant from "invariant";
 import { ActorWorkflowContext } from "./context";
@@ -22,6 +23,10 @@ import { ActorWorkflowDriver } from "./driver";
 import { createWorkflowInspectorAdapter } from "./inspector";
 
 export { Loop } from "@rivetkit/workflow-engine";
+export type {
+	WorkflowError,
+	WorkflowErrorEvent,
+} from "@rivetkit/workflow-engine";
 export {
 	ActorWorkflowContext,
 	type WorkflowBranchContextOf,
@@ -52,6 +57,31 @@ function shouldRethrowWorkflowError(error: unknown): boolean {
 	return true;
 }
 
+export interface WorkflowOptions<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> {
+	onError?: (
+		ctx: RunContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
+		event: WorkflowErrorEvent,
+	) => void | Promise<void>;
+}
+
 export function workflow<
 	TState,
 	TConnParams,
@@ -74,6 +104,16 @@ export function workflow<
 			TQueues
 		>,
 	) => Promise<unknown>,
+	options: WorkflowOptions<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	> = {},
 ): (
 	c: RunContext<
 		TState,
@@ -87,6 +127,7 @@ export function workflow<
 	>,
 ) => Promise<void> {
 	const workflowInspector = createWorkflowInspectorAdapter();
+	const onError = options.onError;
 
 	async function run(
 		runCtx: RunContext<
@@ -118,6 +159,9 @@ export function workflow<
 				mode: "live",
 				logger: runCtx.log,
 				onHistoryUpdated: workflowInspector.update,
+				onError: onError
+					? async (event) => await onError(runCtx, event)
+					: undefined,
 			},
 		);
 

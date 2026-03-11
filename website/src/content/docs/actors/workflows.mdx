@@ -637,6 +637,71 @@ export const timeoutActor = actor({
 export const registry = setup({ use: { timeoutActor } });
 ```
 
+### Error hooks
+
+Use `onError` when you want a best-effort notification for workflow failures.
+
+- Step failures include the attempt number, retry counts, whether the step will retry, and the next retry delay.
+- Workflow failures also include terminal errors outside steps, such as rollback failures or code/history mismatches.
+- The hook is observational. It is not part of workflow replay, so use it for logging, metrics, or updating non-critical actor state.
+
+```ts
+import { actor, setup } from "rivetkit";
+import { workflow, type WorkflowErrorEvent } from "rivetkit/workflow";
+
+type WorkflowErrorState = {
+  lastError: {
+    type: WorkflowErrorEvent["type"];
+    stepName: string | null;
+    attempt: number | null;
+    willRetry: boolean | null;
+    retryDelay: number | null;
+    errorName: string;
+    errorMessage: string;
+  } | null;
+};
+
+export const errorHookActor = actor({
+  state: {
+    lastError: null as WorkflowErrorState["lastError"],
+  },
+  run: workflow(
+    async (ctx) => {
+      await ctx.step({
+        name: "sync-ledger",
+        maxRetries: 3,
+        retryBackoffBase: 250,
+        retryBackoffMax: 1_000,
+        run: async () => {
+          throw new Error("ledger unavailable");
+        },
+      });
+    },
+    {
+      onError: (c, event) => {
+        c.state.lastError = {
+          type: event.type,
+          stepName:
+            event.type === "step" || event.type === "rollback"
+              ? event.stepName
+              : null,
+          attempt: event.type === "step" ? event.attempt : null,
+          willRetry: event.type === "step" ? event.willRetry : null,
+          retryDelay: event.type === "step" ? event.retryDelay ?? null : null,
+          errorName: event.error.name,
+          errorMessage: event.error.message,
+        };
+      },
+    },
+  ),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+
+export const registry = setup({ use: { errorHookActor } });
+```
+
 ### Rollback
 
 Use rollback checkpoints before steps that have compensating actions.
