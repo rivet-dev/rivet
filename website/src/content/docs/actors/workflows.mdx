@@ -649,21 +649,19 @@ Use `onError` when you want a best-effort notification for workflow failures.
 import { actor, setup } from "rivetkit";
 import { workflow, type WorkflowErrorEvent } from "rivetkit/workflow";
 
-type WorkflowErrorState = {
-  lastError: {
-    type: WorkflowErrorEvent["type"];
-    stepName: string | null;
-    attempt: number | null;
-    willRetry: boolean | null;
-    retryDelay: number | null;
-    errorName: string;
-    errorMessage: string;
-  } | null;
-};
+interface LastError {
+  type: WorkflowErrorEvent["type"];
+  stepName: string | null;
+  attempt: number | null;
+  willRetry: boolean | null;
+  retryDelay: number | null;
+  errorName: string;
+  errorMessage: string;
+}
 
 export const errorHookActor = actor({
   state: {
-    lastError: null as WorkflowErrorState["lastError"],
+    lastError: null as LastError | null,
   },
   run: workflow(
     async (ctx) => {
