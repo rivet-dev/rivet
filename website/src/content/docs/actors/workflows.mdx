@@ -646,22 +646,15 @@ Use `onError` when you want a best-effort notification for workflow failures.
 - The hook is observational. It is not part of workflow replay, so use it for logging, metrics, or updating non-critical actor state.
 
 ```ts
-import { actor, setup } from "rivetkit";
+import { actor, event, setup } from "rivetkit";
 import { workflow, type WorkflowErrorEvent } from "rivetkit/workflow";
-
-interface LastError {
-  type: WorkflowErrorEvent["type"];
-  stepName: string | null;
-  attempt: number | null;
-  willRetry: boolean | null;
-  retryDelay: number | null;
-  errorName: string;
-  errorMessage: string;
-}
 
 export const errorHookActor = actor({
   state: {
-    lastError: null as LastError | null,
+    lastError: null as WorkflowErrorEvent | null,
+  },
+  events: {
+    workflowError: event<WorkflowErrorEvent>(),
   },
   run: workflow(
     async (ctx) => {
@@ -677,18 +670,8 @@ export const errorHookActor = actor({
     },
     {
       onError: (c, event) => {
-        c.state.lastError = {
-          type: event.type,
-          stepName:
-            event.type === "step" || event.type === "rollback"
-              ? event.stepName
-              : null,
-          attempt: event.type === "step" ? event.attempt : null,
-          willRetry: event.type === "step" ? event.willRetry : null,
-          retryDelay: event.type === "step" ? event.retryDelay ?? null : null,
-          errorName: event.error.name,
-          errorMessage: event.error.message,
-        };
+        c.state.lastError = event;
+        c.broadcast("workflowError", event);
       },
     },
   ),

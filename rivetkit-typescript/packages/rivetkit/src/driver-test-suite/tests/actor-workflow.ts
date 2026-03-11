@@ -108,17 +108,20 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 			}
 
 			expect(state.attempts).toBe(2);
-			expect(state.events).toEqual([
-				{
+			expect(state.events).toHaveLength(1);
+			expect(state.events[0]).toEqual(
+				expect.objectContaining({
 					type: "step",
 					stepName: "flaky",
 					attempt: 1,
 					willRetry: true,
 					retryDelay: 1,
-					errorName: "Error",
-					errorMessage: "workflow hook failed",
-				},
-			]);
+					error: expect.objectContaining({
+						name: "Error",
+						message: "workflow hook failed",
+					}),
+				}),
+			);
 		});
 
 		test.skipIf(driverTestConfig.skip?.sleep)(
