@@ -698,6 +698,14 @@
           "format": "uint",
           "minimum": 0.0
         },
+        "runner_ping_timeout_ms": {
+          "description": "Max time since last pong before the runner connection is terminated. Unit is in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
         "runner_pool_consecutive_successes_to_clear_error": {
           "description": "Number of consecutive successes required to clear an active runner pool error.\n\nThis prevents a single success from clearing an error during flapping conditions. Higher values provide more stability but slower recovery from transient errors.",
           "type": [
