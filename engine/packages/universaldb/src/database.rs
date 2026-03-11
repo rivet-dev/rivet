@@ -1,5 +1,8 @@
-use std::future::Future;
 use std::time::Instant;
+use std::{
+	future::Future,
+	sync::atomic::{AtomicUsize, Ordering},
+};
 
 use anyhow::{Context, Result, anyhow};
 use futures_util::FutureExt;
@@ -43,6 +46,7 @@ impl Database {
 		T: Send + 'a + 'static,
 	{
 		let start = Instant::now();
+		let attempts = AtomicUsize::new(0);
 		metrics::TRANSACTION_TOTAL.with_label_values(&[name]).inc();
 		metrics::TRANSACTION_PENDING
 			.with_label_values(&[name])
@@ -52,6 +56,8 @@ impl Database {
 		let res = self
 			.driver
 			.run(Box::new(|tx| {
+				attempts.fetch_add(1, Ordering::AcqRel);
+
 				async move { closure(tx).await.map(|value| Box::new(value) as Erased) }
 					.custom_instrument(tracing::info_span!("txn_attempt"))
 					.boxed()
@@ -64,6 +70,9 @@ impl Database {
 			})
 			.context("transaction failed");
 
+		metrics::TRANSACTION_ATTEMPTS
+			.with_label_values(&[name])
+			.observe(attempts.load(Ordering::Acquire) as f64);
 		metrics::TRANSACTION_PENDING
 			.with_label_values(&[name])
 			.dec();

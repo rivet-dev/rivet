@@ -33,4 +33,11 @@ lazy_static::lazy_static! {
 		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
+	pub static ref TRANSACTION_ATTEMPTS: HistogramVec = register_histogram_vec_with_registry!(
+		"udb_transaction_attempts",
+		"Amount of attempts (1 + retries) taken for a transaction.",
+		&["name"],
+		vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0, 12.0, 14.0, 16.0],
+		*REGISTRY
+	).unwrap();
 }
