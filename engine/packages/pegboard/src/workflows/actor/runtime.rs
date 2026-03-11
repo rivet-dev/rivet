@@ -478,6 +478,7 @@ async fn allocate_actor_v2(
 
 	state.for_serverless = res.serverless;
 	state.allocated_serverless_slot = res.serverless;
+	state.reschedule_ts = None;
 
 	match &res.status {
 		AllocateActorStatus::Allocated {
