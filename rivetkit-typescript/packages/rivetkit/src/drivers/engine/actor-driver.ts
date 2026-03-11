@@ -160,7 +160,6 @@ export class EngineActorDriver implements ActorDriver {
 			namespace: config.namespace,
 			totalSlots: config.runner.totalSlots,
 			runnerName: config.runner.runnerName,
-			runnerKey: config.runner.runnerKey ?? crypto.randomUUID(),
 			metadata: {
 				rivetkit: { version: VERSION },
 			},
