@@ -20,8 +20,6 @@ export const getRivetTotalSlots = (): number | undefined => {
 	const value = getEnvUniversal("RIVET_TOTAL_SLOTS");
 	return value !== undefined ? parseInt(value, 10) : undefined;
 };
-export const getRivetRunnerKey = (): string | undefined =>
-	getEnvUniversal("RIVET_RUNNER_KEY");
 export const getRivetRunEngine = (): boolean =>
 	getEnvUniversal("RIVET_RUN_ENGINE") === "1";
 export const getRivetRunEngineVersion = (): string | undefined =>

@@ -12,6 +12,9 @@ import {
 	unreachable,
 } from "./utils";
 import { importWebSocket } from "./websocket.js";
+import {
+	v4 as uuidv4,
+} from "uuid";
 
 export type { HibernatingWebSocketMetadata };
 export { RunnerActor, type ActorConfig };
@@ -40,7 +43,6 @@ export interface RunnerConfig {
 	namespace: string;
 	totalSlots: number;
 	runnerName: string;
-	runnerKey: string;
 	prepopulateActorNames: Record<string, { metadata: Record<string, any> }>;
 	metadata?: Record<string, any>;
 	onConnected: () => void;
@@ -193,6 +195,7 @@ interface KvRequestEntry {
 
 export class Runner {
 	#config: RunnerConfig;
+	#runnerKey: string = uuidv4();
 
 	get config(): RunnerConfig {
 		return this.#config;
@@ -710,7 +713,7 @@ export class Runner {
 		const baseUrl = wsEndpoint.endsWith("/")
 			? wsEndpoint.slice(0, -1)
 			: wsEndpoint;
-		return `${baseUrl}/runners/connect?protocol_version=${PROTOCOL_VERSION}&namespace=${encodeURIComponent(this.#config.namespace)}&runner_key=${encodeURIComponent(this.#config.runnerKey)}`;
+		return `${baseUrl}/runners/connect?protocol_version=${PROTOCOL_VERSION}&namespace=${encodeURIComponent(this.#config.namespace)}&runner_key=${encodeURIComponent(this.#runnerKey)}`;
 	}
 
 	// MARK: Runner protocol
@@ -740,7 +743,7 @@ export class Runner {
 			msg: "connecting",
 			endpoint: this.pegboardEndpoint,
 			namespace: this.#config.namespace,
-			runnerKey: this.#config.runnerKey,
+			runnerKey: this.#runnerKey,
 			hasToken: !!this.config.token,
 		});
 

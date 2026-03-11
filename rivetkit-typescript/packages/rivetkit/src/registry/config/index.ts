@@ -163,11 +163,11 @@ export const RegistryConfigSchema = z
 		// Parse endpoint string (env var fallback is applied via transform above)
 		const parsedEndpoint = config.endpoint
 			? tryParseEndpoint(ctx, {
-					endpoint: config.endpoint,
-					path: ["endpoint"],
-					namespace: config.namespace,
-					token: config.token,
-				})
+				endpoint: config.endpoint,
+				path: ["endpoint"],
+				namespace: config.namespace,
+				token: config.token,
+			})
 			: undefined;
 
 		if (parsedEndpoint && config.serveManager) {
@@ -212,9 +212,9 @@ export const RegistryConfigSchema = z
 		// Parse publicEndpoint string (env var fallback is applied via transform in serverless schema)
 		const parsedPublicEndpoint = config.serverless.publicEndpoint
 			? tryParseEndpoint(ctx, {
-					endpoint: config.serverless.publicEndpoint,
-					path: ["serverless", "publicEndpoint"],
-				})
+				endpoint: config.serverless.publicEndpoint,
+				path: ["serverless", "publicEndpoint"],
+			})
 			: undefined;
 
 		// Validate that publicEndpoint namespace matches backend namespace if specified
@@ -248,9 +248,9 @@ export const RegistryConfigSchema = z
 		const willUseEngine = !!endpoint || config.serverless.spawnEngine;
 		const inspector = willUseEngine
 			? {
-					...config.inspector,
-					enabled: { manager: false, actor: true },
-				}
+				...config.inspector,
+				enabled: { manager: false, actor: true },
+			}
 			: config.inspector;
 
 		return {
@@ -420,7 +420,7 @@ export const DocRunnerConfigSchema = z
 		runnerKey: z
 			.string()
 			.optional()
-			.describe("Authentication key for the runner."),
+			.describe("Deprecated. Authentication key for the runner."),
 		version: z
 			.number()
 			.optional()

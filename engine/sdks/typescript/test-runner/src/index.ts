@@ -12,7 +12,6 @@ const INTERNAL_SERVER_PORT = process.env.INTERNAL_SERVER_PORT
 	: 5051;
 const RIVET_NAMESPACE = process.env.RIVET_NAMESPACE ?? "default";
 const RIVET_RUNNER_NAME = process.env.RIVET_RUNNER_NAME ?? "test-runner";
-const RIVET_RUNNER_KEY = process.env.RIVET_RUNNER_KEY;
 const RIVET_RUNNER_VERSION = process.env.RIVET_RUNNER_VERSION
 	? Number(process.env.RIVET_RUNNER_VERSION)
 	: 1;
@@ -183,8 +182,6 @@ async function startRunner(
 		token: RIVET_TOKEN,
 		namespace: RIVET_NAMESPACE,
 		runnerName: RIVET_RUNNER_NAME,
-		runnerKey:
-			RIVET_RUNNER_KEY ?? `key-${Math.floor(Math.random() * 10000)}`,
 		totalSlots: RIVET_RUNNER_TOTAL_SLOTS,
 		prepopulateActorNames: {},
 		onConnected: () => {

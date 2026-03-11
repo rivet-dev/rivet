@@ -3,7 +3,6 @@ import {
 	isDev,
 	getRivetTotalSlots,
 	getRivetRunner,
-	getRivetRunnerKey,
 	getRivetRunnerVersion,
 } from "@/utils/env-vars";
 
@@ -11,10 +10,10 @@ export const RunnerConfigSchema = z.object({
 	// MARK: Runner
 	totalSlots: z.number().default(() => getRivetTotalSlots() ?? 100000),
 	runnerName: z.string().default(() => getRivetRunner() ?? "default"),
+	// Deprecated.
 	runnerKey: z
 		.string()
-		.optional()
-		.transform((x) => x ?? getRivetRunnerKey()),
+		.optional(),
 	version: z.number().default(() => getRivetRunnerVersion() ?? 1),
 });
 export type RunnerConfigInput = z.input<typeof RunnerConfigSchema>;

@@ -5,7 +5,7 @@ const ConfigSchemaBase = z.object({
 	/** Path that the Rivet manager API will be mounted. */
 	managerPath: z.string().optional().default("/api/rivet"),
 
-	/** Runner key for authentication. */
+	/** Deprecated. Runner key for authentication. */
 	runnerKey: z.string().optional(),
 
 	/** Disable the welcome message. */
