@@ -45,6 +45,7 @@
 			"outputs": ["dist/inspector.tar.gz"]
 		},
 		"build:dynamic-isolate-runtime": {
+			"dependsOn": ["^build", "build:schema"],
 			"inputs": [
 				"dynamic-isolate-runtime/src/**",
 				"dynamic-isolate-runtime/tsconfig.json",
