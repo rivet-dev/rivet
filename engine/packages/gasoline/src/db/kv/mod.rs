@@ -1068,9 +1068,9 @@ impl Database for DatabaseKv {
 						self.system
 							.lock()
 							.await
-							.cpu_usage_ratio(self.config.runtime.worker.cpu_max)
+							.cpu_usage_ratio(self.config.runtime.worker_cpu_max)
 					};
-					let load_shed_curve = self.config.runtime.worker.load_shedding_curve();
+					let load_shed_curve = self.config.runtime.worker_load_shedding_curve();
 					let load_shed_ratio_x1000 = calc_pull_ratio(
 						(cpu_usage_ratio * 1000.0) as u64,
 						load_shed_curve[0].0,
