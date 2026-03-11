@@ -10,7 +10,7 @@ import type { Context as HonoContext } from "hono";
 import { streamSSE } from "hono/streaming";
 import { WSContext, type WSContextInit } from "hono/ws";
 import invariant from "invariant";
-import { CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
+import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
 import { isStaticActorDefinition, lookupInRegistry } from "@/actor/definition";
 import {
 	isStaticActorInstance,
@@ -99,6 +99,15 @@ export class EngineActorDriver implements ActorDriver {
 	#hibernatableWebSocketAcks = new Map<
 		string,
 		HibernatableWebSocketAckState
+	>();
+	#hwsMessageIndex = new Map<
+		string,
+		{
+			serverMessageIndex: number;
+			bufferedMessageSize: number;
+			pendingAckFromMessageIndex: boolean;
+			pendingAckFromBufferSize: boolean;
+		}
 	>();
 	#actorRouter: ActorRouter;
 
