@@ -143,7 +143,8 @@ function buildErrorResponse(request: Request, error: unknown): Response {
 		}),
 	);
 
-	return new Response(output as BodyInit, {
+	// biome-ignore lint/suspicious/noExplicitAny: serializeWithEncoding returns string | Uint8Array, both valid for Response
+	return new Response(output as any, {
 		status: statusCode,
 		headers: {
 			"Content-Type": contentTypeForEncoding(encoding),
