@@ -1,5 +1,6 @@
 use anyhow::Result;
 use axum::response::{IntoResponse, Response};
+use indexmap::IndexSet;
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
@@ -90,25 +91,26 @@ async fn list_names_inner(ctx: ApiCtx, query: ListNamesQuery) -> Result<ListName
 	let limit = query.limit.unwrap_or(100);
 
 	// Fanout to all datacenters
-	let mut all_names = fanout_to_datacenters::<ListNamesResponse, _, _, _, _, Vec<String>>(
+	let mut all_names = fanout_to_datacenters::<ListNamesResponse, _, _, _, _, IndexSet<String>>(
 		ctx.into(),
 		"/runners/names",
 		query,
 		|ctx, query| async move { rivet_api_peer::runners::list_names(ctx, (), query).await },
 		|_, res, agg| agg.extend(res.names),
 	)
-	.await?;
+	.await?
+	.into_iter()
+	// Apply limit
+	.take(limit)
+	.collect::<IndexSet<_>>();
 
 	// Sort by name for consistency
 	all_names.sort();
 
-	// Truncate to the requested limit
-	all_names.truncate(limit);
-
 	let cursor = all_names.last().map(|x: &String| x.to_string());
 
 	Ok(ListNamesResponse {
-		names: all_names,
+		names: all_names.into_iter().collect(),
 		pagination: Pagination { cursor },
 	})
 }

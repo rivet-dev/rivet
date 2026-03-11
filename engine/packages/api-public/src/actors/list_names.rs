@@ -1,5 +1,6 @@
 use anyhow::Result;
 use axum::response::{IntoResponse, Response};
+use indexmap::IndexMap;
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
@@ -49,7 +50,7 @@ async fn list_names_inner(ctx: ApiCtx, query: ListNamesQuery) -> Result<ListName
 
 	// Fanout to all datacenters
 	let mut all_names =
-		fanout_to_datacenters::<ListNamesResponse, _, _, _, _, Vec<(String, ActorName)>>(
+		fanout_to_datacenters::<ListNamesResponse, _, _, _, _, IndexMap<String, ActorName>>(
 			ctx.into(),
 			"/actors/names",
 			peer_query,
@@ -58,18 +59,18 @@ async fn list_names_inner(ctx: ApiCtx, query: ListNamesQuery) -> Result<ListName
 			},
 			|_, res, agg| agg.extend(res.names),
 		)
-		.await?;
+		.await?
+		.into_iter()
+		// Apply limit
+		.take(query.limit.unwrap_or(100))
+		.collect::<IndexMap<_, _>>();
 
-	// Sort by name for consistency
-	all_names.sort_by(|a, b| a.0.cmp(&b.0));
-
-	// Truncate to the requested limit
-	all_names.truncate(query.limit.unwrap_or(100));
+	// Sort for consistency
+	all_names.sort_keys();
 
 	let cursor = all_names.last().map(|(name, _)| name.to_string());
 
 	Ok(ListNamesResponse {
-		// TODO: Implement ComposeSchema for FakeMap so we don't have to reallocate
 		names: all_names.into_iter().collect(),
 		pagination: Pagination { cursor },
 	})

@@ -107,24 +107,18 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 		.await?
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
+		let limit = query.limit.unwrap_or(100);
+
 		// Fetch actors
 		let mut actors = fetch_actors_by_ids(
 			&ctx,
 			actor_ids,
 			query.namespace.clone(),
 			query.include_destroyed,
-			None, // Don't apply limit in fetch, we'll apply it after cursor filtering
+			Some(limit),
 		)
 		.await?;
 
-		// Apply cursor filtering if provided
-		if let Some(cursor_str) = &query.cursor {
-			let cursor_ts: i64 = cursor_str.parse().context("invalid cursor format")?;
-			actors.retain(|actor| actor.create_ts < cursor_ts);
-		}
-
-		// Apply limit after cursor filtering
-		let limit = query.limit.unwrap_or(100);
 		actors.truncate(limit);
 
 		let cursor = actors.last().map(|x| x.create_ts.to_string());
@@ -208,8 +202,6 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 		// Sort by create ts desc
 		actors.sort_by_cached_key(|x| std::cmp::Reverse(x.create_ts));
 
-		// Shorten array since returning all actors from all regions could end up returning `regions *
-		// limit` results, which is a lot.
 		actors.truncate(limit);
 
 		let cursor = actors.last().map(|x| x.create_ts.to_string());

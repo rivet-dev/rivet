@@ -12,6 +12,7 @@ epoxy.workspace = true
 futures-util.workspace = true
 gas.workspace = true
 include_dir.workspace = true
+indexmap.workspace = true
 namespace.workspace = true
 pegboard.workspace = true
 reqwest.workspace = true

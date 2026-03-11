@@ -4180,6 +4180,7 @@ dependencies = [
  "futures-util",
  "gasoline",
  "include_dir",
+ "indexmap 2.10.0",
  "namespace",
  "pegboard",
  "reqwest",
@@ -4217,6 +4218,7 @@ version = "2.1.6"
 dependencies = [
  "anyhow",
  "gasoline",
+ "indexmap 2.10.0",
  "rivet-api-builder",
  "rivet-runner-protocol",
  "rivet-types",
