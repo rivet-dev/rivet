@@ -1303,6 +1303,8 @@ pub async fn insert_and_send_commands(
 	let last_command_idx = runner_state.last_command_idx;
 	ctx.udb()?
 		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
+
 			tx.write(
 				&keys::runner::ActorLastCommandIdxKey::new(
 					input.runner_id,

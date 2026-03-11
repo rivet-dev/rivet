@@ -50,7 +50,7 @@ impl PostgresConfig {
 }
 
 pub struct PostgresDatabaseDriver {
-	pool: Arc<Pool>,
+	pool: Pool,
 	max_retries: AtomicI32,
 	gc_handle: JoinHandle<()>,
 }
@@ -183,12 +183,15 @@ impl PostgresDatabaseDriver {
 		.await
 		.context("failed to create index on conflict_ranges ts column")?;
 
+		let pool2 = pool.clone();
 		let gc_handle = tokio::spawn(async move {
 			let mut interval = tokio::time::interval(GC_INTERVAL);
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 			loop {
 				interval.tick().await;
+
+				tracing::debug!(status=?pool2.status(), "postgres pool status");
 
 				// NOTE: Transactions have a max limit of 5 seconds, we delete after 10 seconds for extra padding
 				// Delete old conflict ranges
@@ -205,7 +208,7 @@ impl PostgresDatabaseDriver {
 		});
 
 		Ok(PostgresDatabaseDriver {
-			pool: Arc::new(pool),
+			pool,
 			max_retries: AtomicI32::new(100),
 			gc_handle,
 		})

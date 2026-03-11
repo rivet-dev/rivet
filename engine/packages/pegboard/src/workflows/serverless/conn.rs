@@ -378,24 +378,43 @@ async fn outbound_req_inner(
 					bail!("invalid status code ({code}):\n{}", body_slice);
 				}
 				Err(err) => {
-					let wrapped_err = anyhow::Error::from(err);
+					match &err {
+						reqwest_eventsource::Error::InvalidContentType(value, _) => {
+							report_error(
+								ctx,
+								input.namespace_id,
+								&input.runner_name,
+								RunnerPoolError::ServerlessConnectionError {
+									message: format!(
+										"expected Content-Type header to be text/event-stream, received {value:?}"
+									),
+								},
+							)
+							.await;
 
-					report_error(
-						ctx,
-						input.namespace_id,
-						&input.runner_name,
-						RunnerPoolError::ServerlessConnectionError {
-							// Print entire error chain
-							message: wrapped_err
-								.chain()
-								.map(|err| err.to_string())
-								.collect::<Vec<_>>()
-								.join("\n"),
-						},
-					)
-					.await;
+							return Err(anyhow::Error::from(err));
+						}
+						_ => {
+							let wrapped_err = anyhow::Error::from(err);
 
-					return Err(wrapped_err);
+							report_error(
+								ctx,
+								input.namespace_id,
+								&input.runner_name,
+								RunnerPoolError::ServerlessConnectionError {
+									// Print entire error chain
+									message: wrapped_err
+										.chain()
+										.map(|err| err.to_string())
+										.collect::<Vec<_>>()
+										.join("\n"),
+								},
+							)
+							.await;
+
+							return Err(wrapped_err);
+						}
+					}
 				}
 			}
 		}
