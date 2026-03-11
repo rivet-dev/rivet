@@ -15,7 +15,8 @@ const rivetEndpoint = `${location.origin}/api/rivet`;
 const { useActor } = createRivetKit<typeof registry>(rivetEndpoint);
 
 // Raw client for dynamicRunner (actions are unknown at compile time)
-const client = createClient<typeof registry>(rivetEndpoint, {
+const client = createClient<typeof registry>({
+	endpoint: rivetEndpoint,
 	encoding: "json",
 });
 
@@ -139,7 +140,7 @@ function ChatColumn({
 			<div className="column-header">
 				<span className="column-title">Chat</span>
 				<div className="chat-header__right">
-					<span className="model-label">GPT-5</span>
+					<span className="model-label">GPT-4o</span>
 					<select
 						value={reasoning}
 						onChange={(e) => setReasoning(e.target.value)}
@@ -275,10 +276,10 @@ function ActorInterfaceColumn({
 		}
 	}, [log]);
 
-	// Reset log when deploy version changes
+	// Reset the action log when the actor key or deploy version changes.
 	useEffect(() => {
 		setLog([]);
-	}, [deployVersion]);
+	}, [actorKey, deployVersion]);
 
 	const callAction = async () => {
 		if (!actionName.trim()) return;
@@ -431,6 +432,10 @@ export function App() {
 		setCode(newCode);
 		setCodeRevision(revision);
 	};
+
+	useEffect(() => {
+		setDeployVersion(1);
+	}, [actorKey]);
 
 	return (
 		<div className="app">

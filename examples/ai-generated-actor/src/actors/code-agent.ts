@@ -74,6 +74,8 @@ Always provide the FULL actor code via the updateCode tool, not partial changes.
 
 You have access to the official RivetKit documentation via MCP tools (docs.search, docs.get, docs.list). When generating or modifying actor code, ALWAYS search the docs first to ensure you use the correct APIs. For example, search for "actor state", "actor events", "actor actions", "schedule", "kv", "db", or whatever features the user is asking about. Use docs.get to fetch the full content of a specific doc page when you need more detail.`;
 
+const MODEL_ID = "gpt-4o";
+
 const buildId = (prefix: string) =>
 	`${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -82,10 +84,10 @@ async function getConfig(
 	key: string,
 	defaultValue: string,
 ): Promise<string> {
-	const rows = await database.execute<{ value: string }>(
+	const rows = (await database.execute(
 		"SELECT value FROM config WHERE key = ?",
 		key,
-	);
+	)) as Array<{ value: string }>;
 	return rows[0]?.value ?? defaultValue;
 }
 
@@ -166,12 +168,9 @@ export const codeAgent = actor({
 			await setConfig(c.db, "status", "thinking");
 			c.broadcast("statusChanged", "thinking");
 
-			const history = await c.db.execute<{
-				role: string;
-				content: string;
-			}>(
+			const history = (await c.db.execute(
 				"SELECT role, content FROM messages WHERE content != '' ORDER BY created_at",
-			);
+			)) as Array<{ role: string; content: string }>;
 
 			const promptMessages: CoreMessage[] = [
 				{ role: "system", content: SYSTEM_PROMPT },
@@ -185,7 +184,7 @@ export const codeAgent = actor({
 			}
 
 			promptMessages.push(
-				...history.map((m) => ({
+				...history.map((m: { role: string; content: string }) => ({
 					role: m.role as "user" | "assistant",
 					content: m.content,
 				})),
@@ -220,9 +219,12 @@ export const codeAgent = actor({
 						? { openai: { reasoningEffort: reasoningLevel === "extra_high" ? "high" : reasoningLevel as "medium" | "high" } }
 						: undefined;
 
-				console.log("[codeAgent] calling streamText with gpt-4o, reasoning:", reasoningLevel);
+				console.log(
+					`[codeAgent] calling streamText with ${MODEL_ID}, reasoning:`,
+					reasoningLevel,
+				);
 				const result = streamText({
-					model: openai("gpt-4o"),
+					model: openai(MODEL_ID),
 					messages: promptMessages,
 					providerOptions,
 					tools: {
@@ -336,9 +338,9 @@ export const codeAgent = actor({
 			return { revision: newRev };
 		},
 		getState: async (c: any): Promise<CodeAgentState> => {
-			const messages = await c.db.execute<ChatMessage>(
+			const messages = (await c.db.execute(
 				"SELECT id, role, content, created_at as createdAt FROM messages ORDER BY created_at",
-			);
+			)) as ChatMessage[];
 			const code = await getConfig(c.db, "code", DEFAULT_ACTOR_CODE);
 			const codeRevision = Number(
 				await getConfig(c.db, "code_revision", "1"),

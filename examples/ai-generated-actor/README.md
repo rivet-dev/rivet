@@ -7,18 +7,19 @@ Use an AI chat to generate and iterate on Rivet Actor code, then deploy and test
 ```sh
 git clone https://github.com/rivet-dev/rivet.git
 cd rivet/examples/ai-generated-actor
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ## Prerequisites
 
 - OpenAI API key set as `OPENAI_API_KEY`
-- Build `sandboxed-node` and make it resolvable (or set `RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER`)
+- Install dependencies so the `secure-exec` package is present. This example uses the `secure-exec` package from `pkg.pr.new`.
+- If you need to override the runtime package location, set `RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER` to a resolvable `secure-exec` entry file URL.
 
 ## Features
 
-- AI-driven code generation using GPT-5 via the Vercel AI SDK with streaming responses
+- AI-driven code generation using GPT-4o via the Vercel AI SDK with streaming responses
 - Dynamic actor loading via `dynamicActor` from `rivetkit/dynamic`
 - Per-key isolation where each actor key has its own AI agent, generated code, and dynamic actor instance
 - Generic actor interface to call arbitrary actions on the generated actor

@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -1467,6 +1468,62 @@ async function loadIsolatedVmModule(): Promise<IsolatedVmModule> {
 	return isolatedVmModulePromise;
 }
 
+/**
+ * Resolve an ESM-only package entry by walking up from cwd to find it in
+ * node_modules. This handles packages that have "type": "module" and only
+ * define "import" in exports (no "require"), which createRequire().resolve()
+ * cannot handle.
+ */
+function resolveEsmPackageEntry(packageName: string): string | undefined {
+	let current = process.cwd();
+	while (true) {
+		const pkgJsonPath = path.join(
+			current,
+			"node_modules",
+			packageName,
+			"package.json",
+		);
+		try {
+			const content = readFileSync(pkgJsonPath, "utf-8");
+			const pkgJson = JSON.parse(content) as {
+				main?: string;
+				exports?: Record<string, unknown>;
+			};
+			const entryRelative =
+				(pkgJson.exports?.["."] as { import?: string } | undefined)
+					?.import ?? pkgJson.main;
+			if (entryRelative) {
+				const resolved = path.resolve(
+					path.dirname(pkgJsonPath),
+					entryRelative,
+				);
+				// Resolve pnpm symlinks so Node's ESM loader can find the
+				// actual file and its co-located dependencies. Use
+				// createRequire to dynamically load realpathSync instead of
+				// a top-level import, because this module is also loaded
+				// inside the sandbox where the fs polyfill lacks it.
+				try {
+					const runtimeRequire = createRuntimeRequire();
+					const nodeFs = runtimeRequire(
+						["node", "fs"].join(":"),
+					) as {
+						realpathSync: (p: string) => string;
+					};
+					return nodeFs.realpathSync(resolved);
+				} catch {
+					return resolved;
+				}
+			}
+		} catch {
+			// package.json not found at this level, keep walking up
+		}
+		const parent = path.dirname(current);
+		if (parent === current) break;
+		current = parent;
+	}
+	return undefined;
+}
+
 function resolveSecureExecEntryPath(): string {
 	const explicitSpecifier =
 		process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER;
@@ -1492,7 +1549,13 @@ function resolveSecureExecEntryPath(): string {
 	for (const packageSpecifier of packageSpecifiers) {
 		try {
 			return resolver.resolve(packageSpecifier);
-		} catch {}
+		} catch {
+			// createRequire().resolve() cannot resolve ESM-only packages (packages
+			// with "type": "module" and only "import" in exports). Fall back to
+			// manually finding the package in node_modules and reading its entry.
+			const resolved = resolveEsmPackageEntry(packageSpecifier);
+			if (resolved) return resolved;
+		}
 	}
 
 	const localDistCandidates = [
