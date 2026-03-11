@@ -41,6 +41,10 @@ Start the services:
 docker-compose up -d
 ```
 
+<Warning>
+Self-hosted PostgreSQL support is experimental. If you're deploying production on-prem for Enterprise, contact [enterprise support](https://rivet.dev/sales).
+</Warning>
+
 ## Configuration
 
 ### Environment Variables
@@ -109,9 +113,9 @@ Create the config file (`rivet-config.json`):
 }
 ```
 
-## Production Setup
+## PostgreSQL Setup
 
-#### With PostgreSQL
+#### With Experimental PostgreSQL
 
 ```yaml
 services:

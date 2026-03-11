@@ -12,6 +12,10 @@ import EngineConfigSchema from "@/components/docs/EngineConfigSchemaClient.astro
 The full JSON Schema for the configuration is available at [/docs/engine-config-schema.json](/docs/engine-config-schema.json).
 </Info>
 
+<Warning>
+Self-hosted PostgreSQL support is experimental. If you're deploying production on-prem for Enterprise, contact [enterprise support](https://rivet.dev/sales).
+</Warning>
+
 ## Configuration Sources
 
 Rivet supports JSON, JSON5, JSONC, YAML, YML, and environment variable configurations.
@@ -54,6 +58,5 @@ rivet-engine --config /etc/rivet/base.json --config /etc/rivet/override.json
 
 ## Related
 
-- [PostgreSQL](/docs/self-hosting/postgres): Configure PostgreSQL for production
+- [PostgreSQL](/docs/self-hosting/postgres): Configure the experimental PostgreSQL backend
 - [File System](/docs/self-hosting/filesystem): Configure file system storage for development
-
