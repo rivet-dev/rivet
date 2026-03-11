@@ -1,3 +1,4 @@
+use anyhow::ensure;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::ops::runner::update_alloc_idx::{Action, RunnerEligibility};
@@ -18,6 +19,8 @@ pub async fn task(
 	mut ping_abort_rx: watch::Receiver<()>,
 	update_ping_interval: Duration,
 ) -> Result<LifecycleResult> {
+	let ping_timeout_ms = ctx.config().pegboard().runner_ping_timeout_ms();
+
 	loop {
 		tokio::select! {
 			_ = tokio::time::sleep(update_ping_interval) => {}
@@ -29,6 +32,16 @@ pub async fn task(
 		// Jitter sleep to prevent stampeding herds
 		let jitter = { rand::thread_rng().gen_range(0..128) };
 		tokio::time::sleep(Duration::from_millis(jitter)).await;
+
+		// Check if the last pong is past the timeout threshold (mk2 only)
+		if protocol::is_mk2(conn.protocol_version) {
+			let last_ping_ts = conn.last_ping_ts.load(Ordering::Relaxed);
+			let now = util::timestamp::now();
+			ensure!(
+				now - last_ping_ts <= ping_timeout_ms,
+				"runner ws ping timed out"
+			);
+		}
 
 		update_runner_ping(&ctx, &conn).await?;
 
