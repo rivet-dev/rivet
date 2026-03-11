@@ -143,7 +143,7 @@ function buildErrorResponse(request: Request, error: unknown): Response {
 		}),
 	);
 
-	return new Response(output, {
+	return new Response(output as BodyInit, {
 		status: statusCode,
 		headers: {
 			"Content-Type": contentTypeForEncoding(encoding),
