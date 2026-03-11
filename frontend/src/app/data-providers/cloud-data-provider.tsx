@@ -283,7 +283,7 @@ export const createOrganizationContext = ({
 		namespace: string;
 		organization: string;
 		project: string;
-	}): UseQueryOptions<Rivet.NamespacesGetResponse.Namespace> => {
+	}) => {
 		return queryOptions({
 			queryKey: [opts, "namespace"] as QueryKey,
 			queryFn: async () => {
@@ -296,7 +296,7 @@ export const createOrganizationContext = ({
 				);
 				return data.namespace;
 			},
-			...(no404Retry() as any),
+			...no404Retry(),
 		});
 	};
 
