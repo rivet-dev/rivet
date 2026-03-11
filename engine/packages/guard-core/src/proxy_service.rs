@@ -309,15 +309,19 @@ pub struct ProxyService {
 	remote_addr: SocketAddr,
 	// Note: Using the hyper legacy client is the only option currently.
 	// This is what reqwest uses under the hood. Eventually we'll migrate to h3 once it's ready.
-	client: Client<hyper_util::client::legacy::connect::HttpConnector, Full<Bytes>>,
+	client: Client<
+		hyper_tls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+		Full<Bytes>,
+	>,
 }
 
 impl ProxyService {
 	pub fn new(state: Arc<ProxyState>, remote_addr: SocketAddr) -> Self {
 		// Create a client with the hyper-util legacy client
+		let https_connector = hyper_tls::HttpsConnector::new();
 		let client = Client::builder(TokioExecutor::new())
 			.pool_idle_timeout(Duration::from_secs(30))
-			.build_http();
+			.build(https_connector);
 
 		Self {
 			state,

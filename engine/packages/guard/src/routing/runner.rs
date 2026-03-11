@@ -31,7 +31,7 @@ pub async fn route_request_path_based(
 ) -> Result<Option<RoutingOutput>> {
 	// Check if path matches /runners/connect
 	let path_without_query = req_ctx.path().split('?').next().unwrap_or(req_ctx.path());
-	if path_without_query != "/runners/connect" {
+	if path_without_query != "/runners/connect" && path_without_query != "/runners/connect/" {
 		return Ok(None);
 	}
 

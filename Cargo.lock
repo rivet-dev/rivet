@@ -4537,6 +4537,7 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.6.0",
+ "hyper-tls",
  "hyper-tungstenite",
  "hyper-util",
  "indoc",
