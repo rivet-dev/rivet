@@ -43,6 +43,8 @@ export interface RunnerConfig {
 	namespace: string;
 	totalSlots: number;
 	runnerName: string;
+	/** Optional stable key for this runner. Defaults to a random UUID. */
+	runnerKey?: string;
 	prepopulateActorNames: Record<string, { metadata: Record<string, any> }>;
 	metadata?: Record<string, any>;
 	onConnected: () => void;
@@ -257,6 +259,7 @@ export class Runner {
 
 	constructor(config: RunnerConfig) {
 		this.#config = config;
+		if (config.runnerKey) this.#runnerKey = config.runnerKey;
 		if (this.#config.logger) setLogger(this.#config.logger);
 
 		// Start cleaning up old unsent KV requests every 15 seconds
