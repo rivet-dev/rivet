@@ -192,25 +192,33 @@ export const codeAgent = actor({
 			);
 
 			let content = "";
-			const mcpClient = await createMCPClient({
-				transport: {
-					type: "http",
-					url: "https://mcp.rivet.dev/mcp",
-				},
-			});
+			let mcpClient: Awaited<ReturnType<typeof createMCPClient>> | null = null;
 
 			try {
+				// Connect to MCP docs server. If it fails, proceed without docs tools.
+				let docsTools: Record<string, any> = {};
+				try {
+					mcpClient = await createMCPClient({
+						transport: {
+							type: "sse",
+							url: "https://mcp.rivet.dev/mcp",
+						},
+					});
+					docsTools = await mcpClient.tools();
+					console.log("[codeAgent] MCP docs tools loaded:", Object.keys(docsTools));
+				} catch (mcpError) {
+					console.warn("[codeAgent] MCP docs unavailable, proceeding without:", mcpError);
+				}
+
 				const reasoningLevel = body.reasoning || "none";
 				const providerOptions =
 					reasoningLevel !== "none"
 						? { openai: { reasoningEffort: reasoningLevel === "extra_high" ? "high" : reasoningLevel as "medium" | "high" } }
 						: undefined;
 
-				const docsTools = await mcpClient.tools();
-
-				console.log("[codeAgent] calling streamText with gpt-5, reasoning:", reasoningLevel);
+				console.log("[codeAgent] calling streamText with gpt-4o, reasoning:", reasoningLevel);
 				const result = streamText({
-					model: openai("gpt-5"),
+					model: openai("gpt-4o"),
 					messages: promptMessages,
 					providerOptions,
 					tools: {
@@ -309,7 +317,7 @@ export const codeAgent = actor({
 				});
 				c.broadcast("statusChanged", "error");
 			} finally {
-				await mcpClient.close();
+				await mcpClient?.close();
 			}
 		}
 	},
