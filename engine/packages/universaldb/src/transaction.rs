@@ -263,6 +263,11 @@ impl Transaction {
 	) -> Pin<Box<dyn Future<Output = Result<i64>> + Send + 'a>> {
 		self.driver.get_estimated_range_size_bytes(begin, end)
 	}
+
+	/// Adds a tag to the current transaction
+	pub fn tag(&self, tag: &str) -> Result<()> {
+		self.driver.tag(tag)
+	}
 }
 
 pub struct InformalTransaction<'t> {

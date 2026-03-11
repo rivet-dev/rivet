@@ -78,6 +78,11 @@ pub trait TransactionDriver: Send + Sync {
 		end: &'a [u8],
 	) -> Pin<Box<dyn Future<Output = Result<i64>> + Send + 'a>>;
 
+	fn tag(&self, _tag: &str) -> Result<()> {
+		// No-op unless implemented
+		Ok(())
+	}
+
 	// Helper for committing without consuming self (for database drivers that need it)
 	fn commit_ref(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
 		Box::pin(async move {
