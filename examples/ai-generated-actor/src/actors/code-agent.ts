@@ -195,15 +195,19 @@ export const codeAgent = actor({
 			let mcpClient: Awaited<ReturnType<typeof createMCPClient>> | null = null;
 
 			try {
-				// Connect to MCP docs server. If it fails, proceed without docs tools.
+				// Connect to MCP docs server with a timeout. If it fails, proceed without docs tools.
 				let docsTools: Record<string, any> = {};
 				try {
-					mcpClient = await createMCPClient({
+					const mcpPromise = createMCPClient({
 						transport: {
 							type: "sse",
 							url: "https://mcp.rivet.dev/mcp",
 						},
 					});
+					const timeoutPromise = new Promise<never>((_, reject) =>
+						setTimeout(() => reject(new Error("MCP connection timeout")), 5000),
+					);
+					mcpClient = await Promise.race([mcpPromise, timeoutPromise]);
 					docsTools = await mcpClient.tools();
 					console.log("[codeAgent] MCP docs tools loaded:", Object.keys(docsTools));
 				} catch (mcpError) {
