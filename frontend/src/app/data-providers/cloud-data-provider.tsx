@@ -760,6 +760,19 @@ export const createProjectContext = ({
 			});
 		},
 		// API Token methods
+		createApiTokenQueryOptions({ name }: { name: string }) {
+			return queryOptions({
+				staleTime: Number.POSITIVE_INFINITY,
+				queryKey: [{ organization, project }, "api-tokens", name],
+				queryFn: async () => {
+					const response = await client.apiTokens.create(project, {
+						name: name,
+						org: organization,
+					});
+					return response.apiToken;
+				},
+			});
+		},
 		apiTokensQueryOptions() {
 			return queryOptions({
 				queryKey: [{ organization, project }, "api-tokens"],
@@ -1099,7 +1112,25 @@ export const createNamespaceContext = ({
 		},
 
 		upsertCurrentNamespaceManagedPoolMutationOptions() {
-			return parent.upsertCurrentProjectManagedPoolMutationOptions();
+			return mutationOptions({
+				mutationKey:
+					parent.upsertCurrentProjectManagedPoolMutationOptions()
+						.mutationKey,
+				mutationFn: async ({
+					pool,
+					...request
+				}: Omit<
+					Rivet.ManagedPoolsUpsertRequest,
+					"project" | "namespace" | "org"
+				> & { pool: string }) => {
+					return await parent.client.managedPools.upsert(
+						parent.project,
+						namespace,
+						pool,
+						{ ...request, org: parent.organization },
+					);
+				},
+			});
 		},
 	};
 };

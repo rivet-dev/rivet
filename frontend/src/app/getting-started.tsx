@@ -15,6 +15,7 @@ import {
 	useMutation,
 	useQuery,
 	useSuspenseInfiniteQuery,
+	useSuspenseQuery,
 } from "@tanstack/react-query";
 import {
 	Link,
@@ -42,21 +43,22 @@ import {
 	useInterval,
 } from "@/components";
 import {
+	useCloudNamespaceDataProvider,
 	useDataProvider,
-	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
 import { TEST_IDS } from "@/utils/test-ids";
 import { Button } from "../components/ui/button";
+import { DeploymentCheck } from "./deployment-check";
 import { useEndpoint } from "./dialogs/connect-manual-serverfull-frame";
 import {
 	buildServerlessConfig,
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
 import { useRivetDsn } from "./env-variables";
-import { StepperForm, useStepperFormSubmit } from "./forms/stepper-form";
+import { StepperForm } from "./forms/stepper-form";
 import { Content } from "./layout";
 
 const stepper = defineStepper(
@@ -92,6 +94,16 @@ const stepper = defineStepper(
 		group: "deploy",
 	},
 	{
+		id: "external-provider",
+		title: "Deploy to external cloud",
+		schema: z.object({ provider: z.string() }),
+		showNext: false,
+		group: "external-provider",
+		isVisible: (values: Record<string, unknown>) => {
+			return values.provider !== "rivet";
+		},
+	},
+	{
 		id: "backend",
 		title: "Connect your Backend",
 		assist: true,
@@ -113,7 +125,6 @@ const stepper = defineStepper(
 );
 
 export function GettingStarted({
-	displayOnboarding,
 	displayBackendOnboarding,
 	provider,
 }: {
@@ -121,10 +132,14 @@ export function GettingStarted({
 	displayOnboarding?: boolean;
 	displayBackendOnboarding?: boolean;
 }) {
-	const dataProvider = useEngineCompatDataProvider();
+	const dataProvider = useCloudNamespaceDataProvider();
 	const { data: datacenters } = useSuspenseInfiniteQuery(
 		dataProvider.datacentersQueryOptions(),
 	);
+
+	const { mutateAsync: mutateAsyncManagedPool } = useMutation({
+		...dataProvider.upsertCurrentNamespaceManagedPoolMutationOptions(),
+	});
 
 	const { mutateAsync } = useMutation({
 		...dataProvider.upsertRunnerConfigMutationOptions(),
@@ -198,6 +213,11 @@ export function GettingStarted({
 										<ProviderSetup />
 									</StepContent>
 								),
+								"external-provider": () => (
+									<StepContent>
+										<ExternalProviderSetup />
+									</StepContent>
+								),
 								backend: () => (
 									<StepContent>
 										<Suspense
@@ -222,8 +242,21 @@ export function GettingStarted({
 							onSubmit={() => {}}
 							onPartialSubmit={async ({ stepper, values }) => {
 								if (
+									stepper.current.id === "provider" &&
+									values.provider === "rivet"
+								) {
+									await mutateAsyncManagedPool({
+										displayName: "default",
+										pool: "default",
+										minCount: 0,
+										maxCount: 10000,
+									});
+									return;
+								}
+								if (
 									stepper.current.id === "backend" &&
 									values.endpoint &&
+									values.provider !== "rivet" &&
 									values.success
 								) {
 									const config = await buildServerlessConfig(
@@ -308,11 +341,42 @@ function StepperFooter() {
 }
 
 function ProviderSetup() {
+	const { setValue, formState } = useFormContext();
+
+	return (
+		<div>
+			<p className="text-sm text-muted-foreground mb-4">
+				Deploy your application to Rivet Cloud, our serverless hosting
+				solution. We manage the actor orchestration, state, and scaling
+				for you.
+			</p>
+			<div className="flex items-center justify-center gap-4">
+				<Button
+					variant="secondary"
+					onClick={() => {
+						setValue("provider", "");
+					}}
+				>
+					Deploy to external cloud
+				</Button>
+				<Button
+					isLoading={formState.isSubmitting}
+					onClick={() => {
+						setValue("provider", "rivet");
+					}}
+				>
+					Continue with Rivet
+				</Button>
+			</div>
+		</div>
+	);
+}
+
+function ExternalProviderSetup() {
 	const navigate = useNavigate();
 	const showAll = useSearch({ strict: false, select: (s) => s?.showAll });
 
 	const { control } = useFormContext();
-	const s = stepper.useStepper();
 
 	return (
 		<div data-testid={TEST_IDS.Onboarding.IntegrationProviderSelection}>
@@ -338,10 +402,8 @@ function ProviderSetup() {
 									data-testid={TEST_IDS.Onboarding.IntegrationProviderOption(
 										option.name,
 									)}
-									type="button"
 									onClick={() => {
 										field.onChange(option.name);
-										s.next();
 									}}
 								/>
 							))}
@@ -640,6 +702,16 @@ function AgentInstructions({
 		? `${providerDetails.displayName}`
 		: provider || "your chosen provider";
 
+	if (provider === "rivet") {
+		return (
+			<AgentInstructionsRivetToken
+				publishableToken={publishableToken}
+				secretToken={secretToken}
+				runnerName={runnerName}
+			/>
+		);
+	}
+
 	const code = `Load the Rivet skill and then:
 1. Integrate Rivet in to the project
 2. Verify it works on the local machine
@@ -654,16 +726,56 @@ function AgentInstructions({
 			: ""
   }
 
-4. Tell the user the URL to past in 
+4. Tell the user the URL to past in
    to the Rivet dashboard`;
 
 	return (
-		<CodeFrame
-			key="yarn"
-			language="markdown"
-			code={() => code}
-			className="m-0"
-		>
+		<CodeFrame language="markdown" code={() => code} className="m-0">
+			<CodePreview
+				language="markdown"
+				className="text-left"
+				code={code}
+			/>
+		</CodeFrame>
+	);
+}
+
+function AgentInstructionsRivetToken({
+	publishableToken,
+	secretToken,
+	runnerName,
+}: {
+	publishableToken: string;
+	secretToken: string;
+	runnerName: string;
+}) {
+	const dataProvider = useCloudNamespaceDataProvider();
+	const { data: cloudToken } = useSuspenseQuery(
+		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
+	);
+
+	const code = `Load the Rivet skill and then:
+1. Integrate Rivet into the project
+2. Set up a GitHub Actions workflow using
+   the repository secret RIVET_TOKEN
+   for automated deployment
+3. Deploy to Rivet and configure
+   the following environment variables:
+
+  RIVET_PUBLIC_ENDPOINT=${publishableToken}
+  RIVET_ENDPOINT=${secretToken}${
+		runnerName !== "default"
+			? `
+  RIVET_RUNNER_NAME=${runnerName}`
+			: ""
+  }
+  RIVET_TOKEN=${cloudToken}
+
+4. Verify the deployment works end-to-end;
+   fix any issues and repeat until it succeeds`;
+
+	return (
+		<CodeFrame language="markdown" code={() => code} className="m-0">
 			<CodePreview
 				language="markdown"
 				className="text-left"
@@ -697,33 +809,53 @@ function BackendSetup() {
 			</div>
 			<div className="flex gap-3">
 				<StepNumber n={2} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">
-						Paste your deployment endpoint
-					</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						Your coding agent will provide a URL after deployment.
-					</p>
-					<div className="space-y-2">
-						<ConnectServerlessForm.Endpoint
-							placeholder={match(provider)
-								.with(
-									"vercel",
-									() =>
-										"https://your-vercel-deployment.vercel.app",
-								)
-								.with(
-									"railway",
-									() => "https://your-app.up.railway.app",
-								)
-								.otherwise(() => "https://your-deployment.com")}
-						/>
-						<ConfigurationAccordion />
-						<ConnectServerlessForm.ConnectionCheck
-							provider={provider}
-						/>
+				{provider === "rivet" ? (
+					<div className="flex-1 min-w-0">
+						<p className="font-medium mb-2">Deploy</p>
+						<p className="text-sm text-muted-foreground mb-3">
+							<DeploymentCheck
+								validate={(data) =>
+									!!data?.find(([, value]) =>
+										Object.values(value.datacenters).some(
+											(dc) => dc.serverless,
+										),
+									)
+								}
+							/>
+						</p>
 					</div>
-				</div>
+				) : (
+					<div className="flex-1 min-w-0">
+						<p className="font-medium mb-2">
+							Paste your deployment endpoint
+						</p>
+						<p className="text-sm text-muted-foreground mb-3">
+							Your coding agent will provide a URL after
+							deployment.
+						</p>
+						<div className="space-y-2">
+							<ConnectServerlessForm.Endpoint
+								placeholder={match(provider)
+									.with(
+										"vercel",
+										() =>
+											"https://your-vercel-deployment.vercel.app",
+									)
+									.with(
+										"railway",
+										() => "https://your-app.up.railway.app",
+									)
+									.otherwise(
+										() => "https://your-deployment.com",
+									)}
+							/>
+							<ConfigurationAccordion />
+							<ConnectServerlessForm.ConnectionCheck
+								provider={provider}
+							/>
+						</div>
+					</div>
+				)}
 			</div>
 		</div>
 	);

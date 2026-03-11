@@ -2,7 +2,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type * as Stepperize from "@stepperize/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { posthog } from "posthog-js";
-import { createContext, type ReactNode, useContext, useRef } from "react";
+import {
+	createContext,
+	type MutableRefObject,
+	type ReactNode,
+	useContext,
+	useRef,
+} from "react";
 import {
 	FormProvider,
 	type UseFormProps,
@@ -20,8 +26,22 @@ type Step = Stepperize.Step & {
 	schema: z.ZodSchema;
 	next?: string;
 	showNext?: boolean;
+	showPrevious?: boolean;
 	group?: string;
+	isVisible?: (values: Record<string, unknown>) => boolean;
 };
+
+type StepVisibilityContextType = {
+	isStepVisible: (stepId: string) => boolean;
+	visibleStepIndex: (stepId: string) => number;
+	visibleStepCount: number;
+};
+
+export const StepVisibilityContext = createContext<StepVisibilityContextType>({
+	isStepVisible: () => true,
+	visibleStepIndex: () => 0,
+	visibleStepCount: 1,
+});
 
 type StepperProps<Steps extends Step[]> = ReturnType<
 	typeof defineStepper<Steps>
@@ -51,12 +71,16 @@ export type JoinStepSchemas<T extends Step[]> = T extends [
 						First["schema"],
 						JoinStepSchemas<Rest> extends z.ZodTypeAny
 							? JoinStepSchemas<Rest>
-							: z.ZodObject<{}>
+							// biome-ignore lint/complexity/noBannedTypes: required for zod generic
+			: z.ZodObject<{}>
 					>
 				: First["schema"]
+			// biome-ignore lint/complexity/noBannedTypes: required for zod generic
 			: z.ZodObject<{}>
-		: z.ZodObject<{}>
-	: z.ZodObject<{}>;
+		// biome-ignore lint/complexity/noBannedTypes: required for zod generic
+			: z.ZodObject<{}>
+	// biome-ignore lint/complexity/noBannedTypes: required for zod generic
+			: z.ZodObject<{}>;
 
 type StepperFormProps<Steps extends Step[]> = StepperProps<Steps> &
 	UseFormProps<z.infer<JoinStepSchemas<Steps>>> & {
@@ -120,10 +144,37 @@ function useStepperDirection(stepper: {
 	return directionRef.current;
 }
 
+function getNextVisibleStepId(
+	steps: Step[],
+	currentId: string,
+	values: Record<string, unknown>,
+): string | null {
+	const currentIndex = steps.findIndex((s) => s.id === currentId);
+	for (let i = currentIndex + 1; i < steps.length; i++) {
+		const step = steps[i];
+		if (!step.isVisible || step.isVisible(values)) return step.id;
+	}
+	return null;
+}
+
+function getPrevVisibleStepId(
+	steps: Step[],
+	currentId: string,
+	values: Record<string, unknown>,
+): string | null {
+	const currentIndex = steps.findIndex((s) => s.id === currentId);
+	for (let i = currentIndex - 1; i >= 0; i--) {
+		const step = steps[i];
+		if (!step.isVisible || step.isVisible(values)) return step.id;
+	}
+	return null;
+}
+
 function Content<const Steps extends Step[]>({
 	defaultValues,
 	Stepper,
 	useStepper,
+	steps: allSteps,
 	content,
 	showAllSteps,
 	singlePage,
@@ -157,6 +208,19 @@ function Content<const Steps extends Step[]>({
 	const direction = useStepperDirection(stepper);
 	const formRef = useRef<HTMLFormElement>(null);
 
+	const getValues = () => {
+		const allLive = form.getValues() as Record<string, unknown>;
+		const dirtyFields = form.formState.dirtyFields as Record<string, unknown>;
+		const live = Object.fromEntries(
+			Object.entries(allLive).filter(([k]) => k in dirtyFields),
+		);
+		return { ...ref.current, ...live } as Record<string, unknown>;
+	};
+
+	const isLastVisible = (currentId: string) =>
+		getNextVisibleStepId(allSteps as Step[], currentId, getValues()) ===
+		null;
+
 	const handleSubmit = async (values: z.infer<JoinStepSchemas<Steps>>) => {
 		ref.current = { ...ref.current, ...values };
 
@@ -167,11 +231,16 @@ function Content<const Steps extends Step[]>({
 				values: ref.current,
 			});
 		}
-		if (stepper.isLast) {
+		if (isLastVisible(stepper.current.id)) {
 			return onSubmit?.({ values: ref.current, form, stepper });
 		}
 		await onPartialSubmit?.({ values: ref.current, form, stepper });
-		stepper.next();
+		const nextId = getNextVisibleStepId(
+			allSteps as Step[],
+			stepper.current.id,
+			getValues(),
+		);
+		if (nextId) stepper.goTo(nextId as Parameters<typeof stepper.goTo>[0]);
 		form.reset(undefined, {
 			keepErrors: false,
 			keepValues: true,
@@ -180,148 +249,237 @@ function Content<const Steps extends Step[]>({
 		form.clearErrors();
 	};
 
+	const visibleSteps = (allSteps as Step[]).filter(
+		(s) => !s.isVisible || s.isVisible(getValues()),
+	);
+	const visibilityContext: StepVisibilityContextType = {
+		isStepVisible: (stepId) => {
+			const step = (allSteps as Step[]).find((s) => s.id === stepId);
+			return !step?.isVisible || step.isVisible(getValues());
+		},
+		visibleStepIndex: (stepId) =>
+			visibleSteps.findIndex((s) => s.id === stepId),
+		visibleStepCount: visibleSteps.length,
+	};
+
 	if (singlePage) {
 		const step = stepper.current;
+		const isLast = isLastVisible(step.id);
+		const hasPrev =
+			getPrevVisibleStepId(
+				allSteps as Step[],
+				step.id,
+				getValues(),
+			) !== null;
 		return (
-			<StepperFormContext.Provider
-				value={{ submitForm: () => formRef.current?.requestSubmit() }}
-			>
-				<FormProvider {...form}>
-					<form
-						ref={formRef}
-						onSubmit={(event) => {
-							event.stopPropagation();
-							return form.handleSubmit(handleSubmit)(event);
-						}}
-						className="space-y-6"
-					>
-						<AnimatePresence mode="wait" custom={direction}>
-							<motion.div
-								key={step.id}
-								custom={direction}
-								initial={{ opacity: 0, x: direction * 30 }}
-								animate={{ opacity: 1, x: 0 }}
-								exit={{ opacity: 0, x: direction * -30 }}
-								transition={{
-									duration: 0.25,
-									ease: [0.4, 0, 0.2, 1],
-								}}
-							>
-								<div className="flex items-center justify-between">
-									<h2 className="text-xl font-semibold">
-										{step.title}
-									</h2>
-								</div>
-								{step.assist ? (
-									<div className="flex justify-end mt-6">
-										<NeedHelpButton />
+			<StepVisibilityContext.Provider value={visibilityContext}>
+				<StepperFormContext.Provider
+					value={{
+						submitForm: () => formRef.current?.requestSubmit(),
+					}}
+				>
+					<FormProvider {...form}>
+						<form
+							ref={formRef}
+							onSubmit={(event) => {
+								event.stopPropagation();
+								return form.handleSubmit(handleSubmit)(event);
+							}}
+							className="space-y-6"
+						>
+							<AnimatePresence mode="wait" custom={direction}>
+								<motion.div
+									key={step.id}
+									custom={direction}
+									initial={{ opacity: 0, x: direction * 30 }}
+									animate={{ opacity: 1, x: 0 }}
+									exit={{ opacity: 0, x: direction * -30 }}
+									transition={{
+										duration: 0.25,
+										ease: [0.4, 0, 0.2, 1],
+									}}
+								>
+									<div className="flex items-center justify-between">
+										<h2 className="text-xl font-semibold">
+											{step.title}
+										</h2>
 									</div>
-								) : null}
-								<div className="mt-6">
-									<StepPanel<Steps>
-										Stepper={Stepper}
-										stepper={stepper}
-										step={step}
-										content={content}
-										footer={footer}
-										showNext={step.showNext ?? true}
-										showPrevious={step.showPrevious ?? true}
-									/>
-								</div>
-								{extraChildren}
-							</motion.div>
-						</AnimatePresence>
-					</form>
-				</FormProvider>
-			</StepperFormContext.Provider>
+									{step.assist ? (
+										<div className="flex justify-end mt-6">
+											<NeedHelpButton />
+										</div>
+									) : null}
+									<div className="mt-6">
+										<StepPanel<Steps>
+											Stepper={Stepper}
+											stepper={stepper}
+											allSteps={allSteps as Step[]}
+											valuesRef={
+												ref as MutableRefObject<Record<
+													string,
+													unknown
+												> | null>
+											}
+											step={step}
+											content={content}
+											footer={footer}
+											showNext={step.showNext ?? true}
+											showPrevious={
+												(step.showPrevious ?? true) &&
+												hasPrev
+											}
+											isLastVisible={isLast}
+										/>
+									</div>
+									{extraChildren}
+								</motion.div>
+							</AnimatePresence>
+						</form>
+					</FormProvider>
+				</StepperFormContext.Provider>
+			</StepVisibilityContext.Provider>
 		);
 	}
 
 	return (
-		<Stepper.Navigation>
-			<StepperFormContext.Provider
-				value={{ submitForm: () => formRef.current?.requestSubmit() }}
-			>
-				<FormProvider {...form}>
-					<form
-						ref={formRef}
-						onSubmit={(event) => {
-							event.stopPropagation();
-							return form.handleSubmit(handleSubmit)(event);
-						}}
-					>
-						{stepper.all.map((step, index, steps) => (
-							<Stepper.Step
-								key={step.id}
-								className="min-w-0 w-full"
-								of={step.id}
-							>
-								<Stepper.Title>{step.title}</Stepper.Title>
-								{step.assist &&
-								stepper.current.id === step.id ? (
-									<Stepper.Helper>
-										<NeedHelpButton />
-									</Stepper.Helper>
-								) : null}
+		<StepVisibilityContext.Provider value={visibilityContext}>
+			<Stepper.Navigation>
+				<StepperFormContext.Provider
+					value={{
+						submitForm: () => formRef.current?.requestSubmit(),
+					}}
+				>
+					<FormProvider {...form}>
+						<form
+							ref={formRef}
+							onSubmit={(event) => {
+								event.stopPropagation();
+								return form.handleSubmit(handleSubmit)(event);
+							}}
+						>
+							{stepper.all.map((step, index, steps) => (
+								<Stepper.Step
+									key={step.id}
+									className="min-w-0 w-full"
+									of={step.id}
+								>
+									<Stepper.Title>
+										{step.title}
+									</Stepper.Title>
+									{step.assist &&
+									stepper.current.id === step.id ? (
+										<Stepper.Helper>
+											<NeedHelpButton />
+										</Stepper.Helper>
+									) : null}
 
-								{showAllSteps ? (
-									<StepPanel<Steps>
-										key={step.id}
-										Stepper={Stepper}
-										stepper={stepper}
-										step={step}
-										content={content}
-										showNext={false}
-										showPrevious={false}
-										showControls={
-											steps.length - 1 === index
-										}
-										footer={footer}
-									/>
-								) : (
-									stepper.when(step.id, (step) => {
-										return (
-											<StepPanel<Steps>
-												Stepper={Stepper}
-												stepper={stepper}
-												step={step}
-												content={content}
-												footer={footer}
-												showNext={step.showNext ?? true}
-												showPrevious={
-													step.showPrevious ?? true
-												}
-											/>
-										);
-									})
-								)}
-							</Stepper.Step>
-						))}
-					</form>
-				</FormProvider>
-			</StepperFormContext.Provider>
-		</Stepper.Navigation>
+									{showAllSteps ? (
+										<StepPanel<Steps>
+											key={step.id}
+											Stepper={Stepper}
+											stepper={stepper}
+											allSteps={allSteps as Step[]}
+											valuesRef={
+												ref as MutableRefObject<Record<
+													string,
+													unknown
+												> | null>
+											}
+											step={step}
+											content={content}
+											showNext={false}
+											showPrevious={false}
+											showControls={
+												steps.length - 1 === index
+											}
+											footer={footer}
+											isLastVisible={isLastVisible(
+												step.id,
+											)}
+										/>
+									) : (
+										stepper.when(step.id, (step) => {
+											return (
+												<StepPanel<Steps>
+													Stepper={Stepper}
+													stepper={stepper}
+													allSteps={
+														allSteps as Step[]
+													}
+													valuesRef={
+														ref as MutableRefObject<Record<
+															string,
+															unknown
+														> | null>
+													}
+													step={step}
+													content={content}
+													footer={footer}
+													showNext={
+														step.showNext ?? true
+													}
+													showPrevious={
+														step.showPrevious ??
+														true
+													}
+													isLastVisible={isLastVisible(
+														step.id,
+													)}
+												/>
+											);
+										})
+									)}
+								</Stepper.Step>
+							))}
+						</form>
+					</FormProvider>
+				</StepperFormContext.Provider>
+			</Stepper.Navigation>
+		</StepVisibilityContext.Provider>
 	);
 }
 
 function StepPanel<const Steps extends Step[]>({
 	Stepper,
 	stepper,
+	allSteps,
+	valuesRef,
 	step,
 	content,
 	showNext = true,
 	showPrevious = true,
 	showControls = true,
+	isLastVisible = false,
 	footer,
 }: Pick<StepperFormProps<Steps>, "Stepper" | "content"> & {
 	stepper: Stepperize.Stepper<Steps>;
+	allSteps: Step[];
+	valuesRef: MutableRefObject<Record<string, unknown> | null>;
 	step: Steps[number];
 	showControls?: boolean;
 	showNext?: boolean;
 	showPrevious?: boolean;
+	isLastVisible?: boolean;
 	footer?: ReactNode;
 }) {
 	const form = useFormContext();
+
+	const goToPrev = () => {
+		const allLive = form.getValues() as Record<string, unknown>;
+		const dirtyFields = form.formState.dirtyFields as Record<string, unknown>;
+		const live = Object.fromEntries(
+			Object.entries(allLive).filter(([k]) => k in dirtyFields),
+		);
+		const mergedValues = {
+			...(valuesRef.current ?? {}),
+			...live,
+		} as Record<string, unknown>;
+		form.reset(undefined, { keepErrors: false, keepValues: true });
+		const prevId = getPrevVisibleStepId(allSteps, step.id, mergedValues);
+		if (prevId) {
+			stepper.goTo(prevId as Parameters<typeof stepper.goTo>[0]);
+		}
+	};
 
 	return (
 		<Stepper.Panel className="space-y-6">
@@ -329,18 +487,11 @@ function StepPanel<const Steps extends Step[]>({
 			{showControls ? (
 				<Stepper.Controls>
 					{footer}
-					{showPrevious && !stepper.isFirst ? (
+					{showPrevious ? (
 						<Button
 							type="button"
 							variant="outline"
-							onClick={() => {
-								form.reset(undefined, {
-									keepErrors: false,
-									keepValues: true,
-								});
-								stepper.prev();
-							}}
-							disabled={stepper.isFirst}
+							onClick={goToPrev}
 						>
 							Previous
 						</Button>
@@ -351,7 +502,7 @@ function StepPanel<const Steps extends Step[]>({
 							disabled={!form.formState.isValid}
 							isLoading={form.formState.isSubmitting}
 						>
-							{step.next || (stepper.isLast ? "Finish" : "Next")}
+							{step.next || (isLastVisible ? "Finish" : "Next")}
 						</Button>
 					) : null}
 				</Stepper.Controls>

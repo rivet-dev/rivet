@@ -7,6 +7,7 @@ import {
 	faNextjs,
 	faPencil,
 	faRailway,
+	faRivet,
 	faTrash,
 	faTriangleExclamation,
 	faVercel,
@@ -15,6 +16,7 @@ import {
 import type { Rivet } from "@rivetkit/engine-api-full";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { config } from "process";
 import { useMemo } from "react";
 import {
 	Button,
@@ -154,6 +156,12 @@ function Row({
 
 	const datacenters = Object.entries(value.datacenters);
 
+	const isManaged = datacenters.some(
+		([, config]) =>
+			getProviderName(config.metadata) === "rivet" ||
+			"X-Rivet-Pool" in (config.serverless?.headers ?? {}),
+	);
+
 	return (
 		<TableRow className="hover:bg-muted/50">
 			<StatusCell datacenters={value.datacenters} />
@@ -177,20 +185,22 @@ function Row({
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
-						<DropdownMenuItem
-							indicator={<Icon icon={faPencil} />}
-							onSelect={() =>
-								navigate({
-									to: ".",
-									search: {
-										modal: "edit-provider-config",
-										config: name,
-									},
-								})
-							}
-						>
-							Edit
-						</DropdownMenuItem>
+						{isManaged ? null : (
+							<DropdownMenuItem
+								indicator={<Icon icon={faPencil} />}
+								onSelect={() =>
+									navigate({
+										to: ".",
+										search: {
+											modal: "edit-provider-config",
+											config: name,
+										},
+									})
+								}
+							>
+								Edit
+							</DropdownMenuItem>
+						)}
 						<DropdownMenuItem
 							indicator={<Icon icon={faTrash} />}
 							onSelect={() =>
@@ -424,6 +434,13 @@ function Provider({ metadata }: { metadata: unknown }) {
 				<div className="whitespace-nowrap">
 					<Icon icon={faGoogleCloud} className="mr-1" /> Google Cloud
 					Run
+				</div>
+			);
+		}
+		if (metadata.provider === "rivet") {
+			return (
+				<div className="whitespace-nowrap">
+					<Icon icon={faRivet} className="mr-1" /> Rivet Compute
 				</div>
 			);
 		}

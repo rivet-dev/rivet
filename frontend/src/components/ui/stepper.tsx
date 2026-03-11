@@ -2,6 +2,7 @@ import { Slot } from "@radix-ui/react-slot";
 import * as Stepperize from "@stepperize/react";
 import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";
+import { StepVisibilityContext } from "@/app/forms/stepper-form";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
 
@@ -100,6 +101,8 @@ const defineStepper = <const Steps extends Stepperize.Step[]>(
 			Step: ({ children, className, icon, ...props }) => {
 				const { variant, labelOrientation } = useStepperProvider();
 				const { current } = useStepper();
+				const { isStepVisible, visibleStepIndex, visibleStepCount } =
+					React.useContext(StepVisibilityContext);
 
 				const utils = rest.utils;
 				const steps = rest.steps;
@@ -114,10 +117,14 @@ const defineStepper = <const Steps extends Stepperize.Step[]>(
 				const dataState = getStepState(currentIndex, stepIndex);
 				const childMap = useStepChildren(children);
 
+				if (!isStepVisible(props.of)) return null;
+
 				const title = childMap.get("title");
 				const description = childMap.get("description");
 				const panel = childMap.get("panel");
 				const helper = childMap.get("helper");
+
+				const visibleIdx = visibleStepIndex(props.of);
 
 				if (variant === "circle") {
 					return (
@@ -129,8 +136,8 @@ const defineStepper = <const Steps extends Stepperize.Step[]>(
 							)}
 						>
 							<CircleStepIndicator
-								currentStep={stepIndex + 1}
-								totalSteps={steps.length}
+								currentStep={visibleIdx + 1}
+								totalSteps={visibleStepCount}
 							/>
 							<div
 								data-component="stepper-step-content"
@@ -549,7 +556,7 @@ namespace Stepper {
 					of: Stepperize.Get.Id<Steps>;
 					icon?: React.ReactNode;
 				},
-			) => React.ReactElement;
+			) => React.ReactElement | null;
 			Title: (props: AsChildProps<"h4">) => React.ReactElement;
 			Description: (props: AsChildProps<"p">) => React.ReactElement;
 			Panel: (props: AsChildProps<"div">) => React.ReactElement;
