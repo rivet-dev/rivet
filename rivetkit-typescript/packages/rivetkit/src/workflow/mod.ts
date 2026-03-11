@@ -103,6 +103,10 @@ export function workflow<
 		try {
 			await handle.result;
 		} catch (error) {
+			if (runCtx.abortSignal.aborted) {
+				return;
+			}
+
 			runCtx.log.error({
 				msg: "workflow run failed",
 				error: stringifyError(error),

@@ -504,13 +504,17 @@ interface BaseActorConfig<
 	 * The handler receives an abort signal via `c.abortSignal` and a
 	 * `c.aborted` alias for loop checks. Use these to gracefully exit.
 	 *
-	 * If this handler exits or throws, the actor will crash and reschedule.
+	 * If this handler exits, the actor will sleep once it becomes idle.
+	 * If this handler throws, the actor will stop with an error.
+	 * Call `c.destroy()` explicitly if a finite run handler should destroy the
+	 * actor after completing its work.
+	 *
 	 * On shutdown, the actor waits for this handler to complete with a
 	 * configurable timeout (options.runStopTimeout, default 15s).
 	 *
 	 * Can be either a function or a RunConfig object with optional name/icon metadata.
 	 *
-	 * @returns Void or a Promise. If the promise exits, the actor crashes.
+	 * @returns Void or a Promise.
 	 */
 	run?:
 		| ((
@@ -1160,7 +1164,7 @@ export const DocActorConfigSchema = z
 			.unknown()
 			.optional()
 			.describe(
-				"Called after actor starts. Does not block startup. Use for background tasks like queue processing or tick loops. If it exits or throws, the actor crashes.",
+				"Called after actor starts. Does not block startup. Use for background tasks like queue processing or tick loops. If it exits, the actor sleeps when idle. If it throws, the actor stops with an error.",
 			),
 		onStateChange: z
 			.unknown()

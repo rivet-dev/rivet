@@ -42,7 +42,7 @@ import {
 } from "../contexts";
 
 import type { AnyDatabaseProvider, InferDatabaseClient } from "../database";
-import type { ActorDriver } from "../driver";
+import type { ActorDestroyOptions, ActorDriver } from "../driver";
 import * as errors from "../errors";
 import { serializeActorKey } from "../keys";
 import { processMessage } from "../protocol/old";
@@ -176,6 +176,7 @@ export class ActorInstance<
 	#backgroundPromises: Promise<void>[] = [];
 	#runPromise?: Promise<void>;
 	#runHandlerActive = false;
+	#sleepOnIdle = false;
 	#activeQueueWaitCount = 0;
 
 	// MARK: - HTTP/WebSocket Tracking
@@ -583,7 +584,7 @@ export class ActorInstance<
 	}
 
 	// MARK: - Destroy
-	startDestroy() {
+	startDestroy(options?: ActorDestroyOptions) {
 		if (this.#stopCalled || this.#sleepCalled) {
 			this.#rLog.debug({
 				msg: "cannot call startDestroy if actor already stopping or sleeping",
@@ -610,6 +611,7 @@ export class ActorInstance<
 		const destroy = this.driver.startDestroy.bind(
 			this.driver,
 			this.#actorId,
+			options,
 		);
 
 		this.#rLog.info({ msg: "actor destroying" });
@@ -1358,6 +1360,7 @@ export class ActorInstance<
 
 		this.#rLog.debug({ msg: "starting run handler" });
 		this.#runHandlerActive = true;
+		this.#sleepOnIdle = false;
 		this.resetSleepTimer();
 
 		const runSpan = this.startTraceSpan("actor.run");
@@ -1378,20 +1381,13 @@ export class ActorInstance<
 						return;
 					}
 
-					// Run handler exited normally - this should crash the actor
-					this.emitTraceEvent(
-						"actor.crash",
-						{ "rivet.actor.reason": "run_exited" },
-						runSpan,
-					);
-					this.endTraceSpan(runSpan, {
-						code: "ERROR",
-						message: "run exited unexpectedly",
+					if (runSpan.isActive()) {
+						this.endTraceSpan(runSpan, { code: "OK" });
+					}
+					this.#sleepOnIdle = true;
+					this.#rLog.info({
+						msg: "run handler exited, actor will sleep when idle",
 					});
-					this.#rLog.warn({
-						msg: "run handler exited unexpectedly, crashing actor to reschedule",
-					});
-					this.startDestroy();
 				})
 				.catch((error) => {
 					if (this.#stopCalled) {
@@ -1405,7 +1401,7 @@ export class ActorInstance<
 						return;
 					}
 
-					// Run handler threw an error - crash the actor
+					// Run handler threw an error - stop the actor with an error
 					this.emitTraceEvent(
 						"actor.crash",
 						{
@@ -1419,10 +1415,12 @@ export class ActorInstance<
 						message: stringifyError(error),
 					});
 					this.#rLog.error({
-						msg: "run handler threw error, crashing actor to reschedule",
+						msg: "run handler threw error, stopping actor with error",
 						error: stringifyError(error),
 					});
-					this.startDestroy();
+					this.startDestroy({
+						errorMessage: stringifyError(error),
+					});
 				})
 				.finally(() => {
 					this.#runHandlerActive = false;
@@ -1430,6 +1428,10 @@ export class ActorInstance<
 				});
 		} else if (runSpan.isActive()) {
 			this.endTraceSpan(runSpan, { code: "OK" });
+			this.#sleepOnIdle = true;
+			this.#rLog.info({
+				msg: "run handler exited, actor will sleep when idle",
+			});
 			this.#runHandlerActive = false;
 			this.resetSleepTimer();
 		}
@@ -1660,6 +1662,11 @@ export class ActorInstance<
 		if (this.#sleepCalled) return;
 
 		if (canSleep === CanSleep.Yes) {
+			if (this.#sleepOnIdle) {
+				this.startSleep();
+				return;
+			}
+
 			this.#sleepTimeout = setTimeout(() => {
 				this.startSleep();
 			}, this.#config.options.sleepTimeout);

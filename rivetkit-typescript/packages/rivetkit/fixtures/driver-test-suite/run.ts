@@ -102,6 +102,14 @@ export const runWithEarlyExit = actor({
 	state: {
 		runStarted: false,
 		destroyCalled: false,
+		sleepCount: 0,
+		wakeCount: 0,
+	},
+	onWake: (c) => {
+		c.state.wakeCount += 1;
+	},
+	onSleep: (c) => {
+		c.state.sleepCount += 1;
 	},
 	run: async (c) => {
 		c.state.runStarted = true;
@@ -118,6 +126,8 @@ export const runWithEarlyExit = actor({
 		getState: (c) => ({
 			runStarted: c.state.runStarted,
 			destroyCalled: c.state.destroyCalled,
+			sleepCount: c.state.sleepCount,
+			wakeCount: c.state.wakeCount,
 		}),
 	},
 	options: {

@@ -14,6 +14,8 @@ A workflow is a durable, replayable run handler for a Rivet Actor.
 - Re-runs safely: replay follows the same recorded steps.
 - Event-driven: workflows can pause for queue messages, then continue.
 
+When a workflow finishes normally, the actor sleeps until the next wake event. If a workflow throws, the actor stops with an error just like any other `run` handler.
+
 ## Getting started
 
 ### Simple workflow

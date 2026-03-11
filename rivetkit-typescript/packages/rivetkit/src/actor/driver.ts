@@ -14,6 +14,10 @@ export type ActorDriverBuilder = (
 	inlineClient: AnyClient,
 ) => ActorDriver;
 
+export interface ActorDestroyOptions {
+	errorMessage?: string;
+}
+
 export interface ActorDriver {
 	//load(): Promise<LoadOutput>;
 
@@ -112,7 +116,7 @@ export interface ActorDriver {
 	 *
 	 * This will call `ActorInstance.onStop` independently.
 	 */
-	startDestroy(actorId: string): void;
+	startDestroy(actorId: string, options?: ActorDestroyOptions): void;
 
 	/**
 	 * Shuts down the actor runner.
