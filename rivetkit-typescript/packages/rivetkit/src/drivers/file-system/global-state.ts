@@ -659,7 +659,7 @@ export class FileSystemGlobalState {
 			await actor.actor.onStop("sleep");
 		} finally {
 			// Ensure any pending KV writes finish before removing the entry.
-			await this.#withActorWrite(actorId, async () => {});
+			await this.#withActorWrite(actorId, async () => { });
 			this.#closeActorKvDatabase(actorId);
 			actor.stopPromise?.resolve();
 			actor.stopPromise = undefined;
@@ -718,7 +718,7 @@ export class FileSystemGlobalState {
 			}
 
 			// Ensure any pending KV writes finish before deleting files.
-			await this.#withActorWrite(actorId, async () => {});
+			await this.#withActorWrite(actorId, async () => { });
 			this.#closeActorKvDatabase(actorId);
 
 			// Clear alarm timeout if exists
@@ -778,7 +778,7 @@ export class FileSystemGlobalState {
 			}
 		} finally {
 			// Ensure any pending KV writes finish before clearing the entry.
-			await this.#withActorWrite(actorId, async () => {});
+			await this.#withActorWrite(actorId, async () => { });
 			actor.stopPromise?.resolve();
 			actor.stopPromise = undefined;
 
@@ -947,7 +947,7 @@ export class FileSystemGlobalState {
 				try {
 					const fs = getNodeFs();
 					await fs.unlink(tempPath);
-				} catch {}
+				} catch { }
 				logger().error({
 					msg: "failed to write alarm",
 					actorId,
@@ -1495,19 +1495,19 @@ export class FileSystemGlobalState {
 		const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
 		const rows = upperBound
 			? db.all<{
-					key: Uint8Array | ArrayBuffer;
-					value: Uint8Array | ArrayBuffer;
-				}>(
-					`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
-					[prefix, upperBound, limit],
-				)
+				key: Uint8Array | ArrayBuffer;
+				value: Uint8Array | ArrayBuffer;
+			}>(
+				`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
+				[prefix, upperBound, limit],
+			)
 			: db.all<{
-					key: Uint8Array | ArrayBuffer;
-					value: Uint8Array | ArrayBuffer;
-				}>(
-					`SELECT key, value FROM kv WHERE key >= ? ORDER BY key ${direction} LIMIT ?`,
-					[prefix, limit],
-				);
+				key: Uint8Array | ArrayBuffer;
+				value: Uint8Array | ArrayBuffer;
+			}>(
+				`SELECT key, value FROM kv WHERE key >= ? ORDER BY key ${direction} LIMIT ?`,
+				[prefix, limit],
+			);
 
 		return rows.map((row) => [
 			ensureUint8Array(row.key, "key"),

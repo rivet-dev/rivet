@@ -53,7 +53,8 @@ pub async fn setup(config: &Config, client_name: &str) -> Result<UpsPool> {
 									tracing::warn!(?server_addrs, "nats draining");
 								}
 								async_nats::Event::Closed => {
-									tracing::error!(?server_addrs, "nats closed");
+									// Engine is shutting down, not an error
+									tracing::info!(?server_addrs, "nats closed");
 								}
 								async_nats::Event::SlowConsumer(sid) => {
 									tracing::warn!(?server_addrs, ?sid, "nats slow consumer");

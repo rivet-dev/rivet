@@ -168,7 +168,7 @@ export class EngineActorDriver implements ActorDriver {
 			onConnected: () => {
 				this.#runnerStarted.resolve(undefined);
 			},
-			onDisconnected: (_code, _reason) => {},
+			onDisconnected: (_code, _reason) => { },
 			onShutdown: () => {
 				this.#runnerStopped.resolve(undefined);
 				this.#isRunnerStopped = true;
@@ -444,7 +444,7 @@ export class EngineActorDriver implements ActorDriver {
 	async serverlessHandleStart(c: HonoContext): Promise<Response> {
 		return streamSSE(c, async (stream) => {
 			// NOTE: onAbort does not work reliably
-			stream.onAbort(() => {});
+			stream.onAbort(() => { });
 			c.req.raw.signal.addEventListener("abort", () => {
 				logger().debug("SSE aborted, shutting down runner");
 
@@ -572,7 +572,7 @@ export class EngineActorDriver implements ActorDriver {
 				if (protocolMetadata.serverlessDrainGracePeriod) {
 					const drainMax = Math.max(
 						Number(protocolMetadata.serverlessDrainGracePeriod) -
-							1000,
+						1000,
 						0,
 					);
 					handler.actor.overrides.runStopTimeout = drainMax;
@@ -595,12 +595,12 @@ export class EngineActorDriver implements ActorDriver {
 			const error =
 				innerError instanceof Error
 					? new Error(
-							`Failed to start actor ${actorId}: ${innerError.message}`,
-							{ cause: innerError },
-						)
+						`Failed to start actor ${actorId}: ${innerError.message}`,
+						{ cause: innerError },
+					)
 					: new Error(
-							`Failed to start actor ${actorId}: ${String(innerError)}`,
-						);
+						`Failed to start actor ${actorId}: ${String(innerError)}`,
+					);
 			handler.actor = undefined;
 			handler.actorStartError = error;
 			handler.actorStartPromise?.reject(error);
