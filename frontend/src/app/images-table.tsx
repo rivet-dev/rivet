@@ -1,4 +1,5 @@
-import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { formatDistance } from "date-fns";
 import {
 	Button,
@@ -14,7 +15,6 @@ import {
 	WithTooltip,
 } from "@/components";
 import { useCloudNamespaceDataProvider } from "@/components/actors";
-import { VisibilitySensor } from "@/components/visibility-sensor";
 
 interface ImagesTableProps {
 	isLoading?: boolean;
@@ -23,6 +23,7 @@ interface ImagesTableProps {
 	fetchNextPage?: () => void;
 	images: Image[];
 	deployments: Deployment[];
+	namespace: string;
 }
 
 interface Image {
@@ -33,7 +34,7 @@ interface Image {
 
 interface Deployment {
 	repository?: string;
-	namespace?: string;
+	namespace: string;
 	tag?: string;
 }
 
@@ -44,13 +45,14 @@ export function ImagesTable({
 	fetchNextPage,
 	images,
 	deployments,
+	namespace,
 }: ImagesTableProps) {
 	return (
 		<Table>
 			<TableHeader>
 				<TableRow>
 					<TableHead className="pl-8">Tag</TableHead>
-					<TableHead className="pl-8">Deployed To</TableHead>
+					<TableHead>Deployed To</TableHead>
 					<TableHead>Date</TableHead>
 					<TableHead />
 				</TableRow>
@@ -94,6 +96,7 @@ export function ImagesTable({
 								deployment.repository === image.repository &&
 								deployment.tag === image.tag,
 						)}
+						namespace={namespace}
 						key={`${image.repository}:${image.tag}`}
 					/>
 				))}
@@ -121,15 +124,6 @@ function RowSkeleton() {
 	return (
 		<TableRow>
 			<TableCell>
-				<Skeleton className="w-full size-4" />
-			</TableCell>
-			<TableCell>
-				<Skeleton className="w-full h-4" />
-			</TableCell>
-			<TableCell>
-				<Skeleton className="w-full h-4" />
-			</TableCell>
-			<TableCell>
 				<Skeleton className="w-full h-4" />
 			</TableCell>
 			<TableCell>
@@ -147,8 +141,10 @@ export function ImageRow({
 	tag,
 	createdAt,
 	deployments,
+	namespace,
 }: Image & {
 	deployments: Deployment[];
+	namespace: string;
 }) {
 	return (
 		<TagRow
@@ -157,6 +153,7 @@ export function ImageRow({
 			tag={tag}
 			createTs={createdAt}
 			deployments={deployments}
+			namespace={namespace}
 		/>
 	);
 }
@@ -166,12 +163,19 @@ function TagRow({
 	tag,
 	createTs,
 	deployments,
+	namespace,
 }: {
 	repository: string;
 	tag: string;
 	createTs: string;
 	deployments: Deployment[];
+	namespace: string;
 }) {
+	const navigate = useNavigate();
+	const isDeployedToCurrentNamespace = deployments.some(
+		(d) => d.namespace === namespace,
+	);
+
 	return (
 		<TableRow>
 			<TableCell className="size-8">
@@ -182,9 +186,10 @@ function TagRow({
 			<TableCell>
 				{deployments.length > 0 ? (
 					deployments.map((deployment) => (
-						<div key={deployment.namespace}>
-							{deployment.namespace}
-						</div>
+						<DeploymentNamespace
+							key={deployment.namespace}
+							namespace={deployment.namespace}
+						/>
 					))
 				) : (
 					<Text className="text-muted-foreground">-</Text>
@@ -193,7 +198,28 @@ function TagRow({
 			<TableCell>
 				<CreateTs createTs={createTs} />
 			</TableCell>
-			<TableCell></TableCell>
+			<TableCell>
+				{!isDeployedToCurrentNamespace ? (
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() =>
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: "upsert-deployment",
+									namespace,
+									repository,
+									tag,
+								}),
+							})
+						}
+					>
+						Deploy
+					</Button>
+				) : null}
+			</TableCell>
 		</TableRow>
 	);
 }
@@ -211,4 +237,12 @@ function CreateTs({ createTs }: { createTs: string }) {
 			}
 		/>
 	);
+}
+
+function DeploymentNamespace({ namespace }: { namespace: string }) {
+	const provider = useCloudNamespaceDataProvider();
+	const { data } = useQuery(
+		provider.currentProjectNamespaceQueryOptions({ namespace }),
+	);
+	return <div>{data?.displayName || <Skeleton className="w-6 h-4" />}</div>;
 }

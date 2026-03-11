@@ -108,6 +108,7 @@ export const createGlobalContext = ({ clerk }: { clerk: Clerk }) => {
 					);
 					return response.managedPools;
 				},
+				...no404Retry(),
 			});
 		},
 		managedPoolQueryOptions(opts: {
@@ -130,6 +131,7 @@ export const createGlobalContext = ({ clerk }: { clerk: Clerk }) => {
 
 					return response.managedPool;
 				},
+				...no404Retry(),
 			});
 		},
 
@@ -918,6 +920,26 @@ export const createProjectContext = ({
 				project,
 			});
 		},
+		upsertCurrentProjectManagedPoolMutationOptions() {
+			return mutationOptions({
+				mutationKey: [organization, project, "managed-pool", "upsert"],
+				mutationFn: async ({
+					namespace,
+					pool,
+					...request
+				}: Rivet.ManagedPoolsUpsertRequest & {
+					namespace: string;
+					pool: string;
+				}) => {
+					return await client.managedPools.upsert(
+						project,
+						namespace,
+						pool,
+						{ ...request, org: organization },
+					);
+				},
+			});
+		},
 	};
 };
 
@@ -1074,6 +1096,10 @@ export const createNamespaceContext = ({
 				namespace,
 				pool: opts.pool,
 			});
+		},
+
+		upsertCurrentNamespaceManagedPoolMutationOptions() {
+			return parent.upsertCurrentProjectManagedPoolMutationOptions();
 		},
 	};
 };

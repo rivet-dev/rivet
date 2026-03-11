@@ -16,7 +16,7 @@ export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments",
 )({
 	component: RouteComponent,
-	loader: async ({ params, context }) => {
+	loader: async ({ context }) => {
 		const dataProvider = context.dataProvider;
 		await Promise.all([
 			context.queryClient.prefetchInfiniteQuery({
@@ -29,7 +29,7 @@ export const Route = createFileRoute(
 			}),
 		]);
 	},
-	loaderDeps(opts) {
+	loaderDeps() {
 		return [];
 	},
 });
@@ -69,8 +69,15 @@ function RouteComponent() {
 }
 
 function Deployments() {
+	const { namespace } = Route.useParams();
 	const dataProvider = useCloudNamespaceDataProvider();
-	const { data: images } = useSuspenseInfiniteQuery(
+	const {
+		data: images,
+		isError,
+		isLoading: isLoadingImages,
+		fetchNextPage,
+		hasNextPage,
+	} = useSuspenseInfiniteQuery(
 		dataProvider.currentProjectImagesQueryOptions(),
 	);
 
@@ -80,15 +87,15 @@ function Deployments() {
 
 	const managedPoolQueries = useQueries({
 		queries:
-			namespaces.map((namespace) =>
+			namespaces.map((ns) =>
 				queryOptions({
 					...dataProvider.currentProjectManagedPoolQueryOptions({
-						namespace: namespace.name,
+						namespace: ns.name,
 						pool: "default",
 					}),
 					select: (data) => ({
 						...data,
-						namespace: namespace.name,
+						namespace: ns.name,
 						...data.config.image,
 					}),
 				}),
@@ -102,10 +109,21 @@ function Deployments() {
 				data !== undefined,
 		);
 
+	const isLoading =
+		managedPoolQueries.some((query) => query.isLoading) || isLoadingImages;
+
 	return (
 		<div className="max-w-5xl mx-auto">
 			<div className="border rounded-md">
-				<ImagesTable images={images} deployments={deployments ?? []} />
+				<ImagesTable
+					images={isLoading ? [] : images}
+					deployments={isLoading ? [] : deployments}
+					namespace={namespace}
+					isLoading={isLoading}
+					isError={isError}
+					fetchNextPage={fetchNextPage}
+					hasNextPage={hasNextPage}
+				/>
 			</div>
 		</div>
 	);

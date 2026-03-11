@@ -63,9 +63,9 @@ export function RunnerConfigsTable({
 				<TableRow>
 					<TableHead className="w-8"></TableHead>
 					<TableHead className="pl-8">Name</TableHead>
-					<TableHead className="text-center">Provider</TableHead>
-					<TableHead className="text-center">Endpoint</TableHead>
-					<TableHead className="text-center">Datacenter</TableHead>
+					<TableHead>Provider</TableHead>
+					<TableHead>Endpoint</TableHead>
+					<TableHead>Datacenter</TableHead>
 					<TableHead></TableHead>
 				</TableRow>
 			</TableHeader>
@@ -160,13 +160,13 @@ function Row({
 			<TableCell>
 				<DiscreteCopyButton value={name}>{name}</DiscreteCopyButton>
 			</TableCell>
-			<TableCell className="text-center">
+			<TableCell>
 				<Providers datacenters={datacenters} />
 			</TableCell>
-			<TableCell className="text-center">
+			<TableCell>
 				<Endpoints datacenters={datacenters} />
 			</TableCell>
-			<TableCell className="text-center">
+			<TableCell>
 				<Regions regions={Object.keys(value.datacenters)} />
 			</TableCell>
 			<TableCell className="text-right">

@@ -149,7 +149,11 @@ export function Row(runner: Rivet.Runner) {
 				</DiscreteCopyButton>
 			</TableCell>
 			<TableCell>
-				<ActorRegion regionId={runner.datacenter} showLabel />
+				<ActorRegion
+					regionId={runner.datacenter}
+					showLabel
+					className="justify-start"
+				/>
 			</TableCell>
 
 			<TableCell>
