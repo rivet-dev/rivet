@@ -7,7 +7,7 @@ Step retries provide fault tolerance for transient failures. The workflow engine
 - Errors thrown from a step callback are treated as retryable by default.
 - Each failure increments the step’s attempt counter.
 - The engine computes deterministic exponential backoff and yields until the retry time.
-- Once attempts exceed `maxRetries`, a `StepExhaustedError` is thrown.
+- Once the step uses all `maxRetries` retry attempts, a `StepExhaustedError` is thrown.
 
 ## Configuring Retries
 

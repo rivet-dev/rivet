@@ -459,7 +459,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			// Check if we should retry
 			const maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
 
-			if (metadata.attempts >= maxRetries) {
+			if (metadata.attempts > maxRetries) {
 				// Prefer step history error, but fall back to metadata since
 				// driver implementations may persist metadata without the history
 				// entry error (e.g. partial writes/crashes between attempts).
@@ -467,12 +467,17 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				const exhaustedError = markErrorReported(
 					new StepExhaustedError(config.name, lastError),
 				);
-				await this.notifyStepError(
-					config,
-					metadata.attempts,
-					exhaustedError,
-					{ willRetry: false },
-				);
+				if (metadata.status !== "exhausted") {
+					metadata.status = "exhausted";
+					metadata.dirty = true;
+					await this.flushStorage();
+					await this.notifyStepError(
+						config,
+						metadata.attempts,
+						exhaustedError,
+						{ willRetry: false },
+					);
+				}
 				throw exhaustedError;
 			}
 
@@ -597,7 +602,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				entry.kind.data.error = String(error);
 			}
 			entry.dirty = true;
-			const willRetry = metadata.attempts < maxRetries;
+			const willRetry = metadata.attempts <= maxRetries;
 			metadata.status = willRetry ? "failed" : "exhausted";
 			metadata.error = String(error);
 

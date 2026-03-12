@@ -302,8 +302,8 @@ Regular errors thrown from step callbacks trigger retry logic:
 1. Error caught, saved to entry
 2. `StepFailedError` thrown
 3. On next run, metadata.attempts checked
-4. If attempts < maxRetries, apply backoff and retry
-5. If attempts >= maxRetries, throw `StepExhaustedError`
+4. If attempts <= maxRetries, apply backoff and retry
+5. If attempts > maxRetries, throw `StepExhaustedError`
 
 ### Critical Errors
 
