@@ -17,7 +17,10 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			});
 			expect(response.status).toBe(200);
 			const data = await response.json();
-			expect(data).toEqual({ state: { count: 5 } });
+			expect(data).toEqual({
+				state: { count: 5 },
+				isStateEnabled: true,
+			});
 		});
 
 		test("PATCH /inspector/state updates actor state", async (c) => {
@@ -195,6 +198,105 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			// Counter actor has no workflow, so it should be disabled
 			expect(data.isWorkflowEnabled).toBe(false);
 			expect(data.history).toBeNull();
+		});
+
+		test("POST /inspector/database/execute runs read-only queries", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.dbActorRaw.getOrCreate([
+				"inspector-database-select",
+			]);
+
+			await handle.reset();
+			await handle.insertValue("alpha");
+			await handle.insertValue("beta");
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(
+				`${gatewayUrl}/inspector/database/execute`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: "Bearer token",
+					},
+					body: JSON.stringify({
+						sql: "SELECT value FROM test_data ORDER BY id",
+					}),
+				},
+			);
+			expect(response.status).toBe(200);
+			const data = (await response.json()) as {
+				rows: Array<{ value: string }>;
+			};
+			expect(data.rows).toEqual([
+				{ value: "alpha" },
+				{ value: "beta" },
+			]);
+		});
+
+		test("POST /inspector/database/execute supports named properties", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.dbActorRaw.getOrCreate([
+				"inspector-database-properties",
+			]);
+
+			await handle.reset();
+			await handle.insertValue("alpha");
+			await handle.insertValue("beta");
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(
+				`${gatewayUrl}/inspector/database/execute`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: "Bearer token",
+					},
+					body: JSON.stringify({
+						sql: "SELECT value FROM test_data WHERE value = :value",
+						properties: { value: "beta" },
+					}),
+				},
+			);
+			expect(response.status).toBe(200);
+			const data = (await response.json()) as {
+				rows: Array<{ value: string }>;
+			};
+			expect(data.rows).toEqual([{ value: "beta" }]);
+		});
+
+		test("POST /inspector/database/execute runs mutations", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.dbActorRaw.getOrCreate([
+				"inspector-database-mutation",
+			]);
+
+			await handle.reset();
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(
+				`${gatewayUrl}/inspector/database/execute`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: "Bearer token",
+					},
+					body: JSON.stringify({
+						sql: "INSERT INTO test_data (value, payload, created_at) VALUES (?, '', ?)",
+						args: ["from-inspector", Date.now()],
+					}),
+				},
+			);
+			expect(response.status).toBe(200);
+			const data = (await response.json()) as {
+				rows: unknown[];
+			};
+			expect(data.rows).toEqual([]);
+			expect(await handle.getCount()).toBe(1);
+			const values = await handle.getValues();
+			expect(values.at(-1)?.value).toBe("from-inspector");
 		});
 
 		test("GET /inspector/summary returns full actor snapshot", async (c) => {

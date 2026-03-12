@@ -463,6 +463,53 @@ Returns:
 }
 ```
 
+#### Execute SQLite
+
+Run manual SQL against an actor's SQLite database. This supports both read-only queries and mutations.
+
+```bash
+curl -X POST http://localhost:6420/gateway/{actor_id}/inspector/database/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "sql": "SELECT id, value FROM test_data WHERE value = ? ORDER BY id DESC",
+    "args": ["alpha"]
+  }'
+```
+
+Returns:
+
+```json
+{
+  "rows": [
+    { "id": 2, "value": "alpha" }
+  ]
+}
+```
+
+You can also use named SQLite bindings through a `properties` object:
+
+```bash
+curl -X POST http://localhost:6420/gateway/{actor_id}/inspector/database/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "sql": "SELECT id, value FROM test_data WHERE value = :value ORDER BY id DESC",
+    "properties": {
+      "value": "alpha"
+    }
+  }'
+```
+
+For mutations, use `RETURNING` if you want rows back. Otherwise the statement still runs and `rows` is empty:
+
+```bash
+curl -X POST http://localhost:6420/gateway/{actor_id}/inspector/database/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "sql": "INSERT INTO test_data (value, created_at) VALUES (?, ?) RETURNING id, value",
+    "args": ["beta", 1706000000000]
+  }'
+```
+
 #### Summary
 
 Get a full snapshot of the actor in a single request:

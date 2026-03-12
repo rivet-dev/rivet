@@ -1,5 +1,10 @@
 import type { DatabaseProvider, RawAccess } from "./config";
-import { AsyncMutex, createActorKvStore, toSqliteBindings } from "./shared";
+import {
+	AsyncMutex,
+	createActorKvStore,
+	isSqliteBindingObject,
+	toSqliteBindings,
+} from "./shared";
 
 export type { RawAccess } from "./config";
 
@@ -73,7 +78,11 @@ export function db({
 						// Keep using `db.exec` for non-parameterized SQL because it
 						// supports multi-statement migrations.
 						if (args.length > 0) {
-							const bindings = toSqliteBindings(args);
+							const bindings =
+								args.length === 1 &&
+								isSqliteBindingObject(args[0])
+									? toSqliteBindings(args[0])
+									: toSqliteBindings(args);
 							const token = query
 								.trimStart()
 								.slice(0, 16)
