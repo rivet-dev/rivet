@@ -801,6 +801,7 @@ export async function replayWorkflowFromStep(
 		);
 	}
 
+
 	await Promise.all(
 		entriesToDelete.flatMap(({ entry }) => [
 			driver.delete(buildHistoryKey(entry.location)),
@@ -857,6 +858,7 @@ function findReplayBoundaryEntry(
 
 	return boundary;
 }
+
 
 /**
  * Internal: Execute the workflow and return the result.

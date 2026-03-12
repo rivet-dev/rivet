@@ -177,6 +177,8 @@ export interface WorkflowNodeData {
 	/** Raw entry data for the object inspector. */
 	rawData?: unknown;
 	entryId?: string;
+	canReplay?: boolean;
+	isReplaying?: boolean;
 	onReplayStep?: (entryId: string) => void;
 }
 
