@@ -139,8 +139,8 @@ export function runActorRunTests(driverTestConfig: DriverTestConfig) {
 			const state1 = await actor.getState();
 			expect(state1.runStarted).toBe(true);
 
-			// Wait for the run handler to exit and the actor to settle
-			await waitFor(driverTestConfig, 300);
+			// Wait for the run handler to exit and the normal idle sleep timeout.
+			await waitFor(driverTestConfig, RUN_SLEEP_TIMEOUT + 400);
 
 			const state2 = await actor.getState();
 			expect(state2.runStarted).toBe(true);
@@ -166,8 +166,8 @@ export function runActorRunTests(driverTestConfig: DriverTestConfig) {
 			const state1 = await actor.getState();
 			expect(state1.runStarted).toBe(true);
 
-			// Wait for the run handler to throw and the actor to settle
-			await waitFor(driverTestConfig, 300);
+			// Wait for the run handler to throw and the normal idle sleep timeout.
+			await waitFor(driverTestConfig, RUN_SLEEP_TIMEOUT + 400);
 
 			const state2 = await actor.getState();
 			expect(state2.runStarted).toBe(true);

@@ -14,7 +14,7 @@ A workflow is a durable, replayable run handler for a Rivet Actor.
 - Re-runs safely: replay follows the same recorded steps.
 - Event-driven: workflows can pause for queue messages, then continue.
 
-When a workflow finishes normally, the actor sleeps until the next wake event. Workflow failures like exhausted step retries leave the workflow in a failed state and let the actor sleep. Only unhandled workflow errors surface as `run` errors.
+When a workflow finishes normally, the actor stays awake until its normal idle sleep timeout elapses, then sleeps until the next wake event. Workflow failures like exhausted step retries leave the workflow in a failed state and follow the same idle sleep path. Only unhandled workflow errors surface as `run` errors.
 
 ## Getting started
 

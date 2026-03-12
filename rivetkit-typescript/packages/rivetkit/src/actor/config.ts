@@ -504,7 +504,8 @@ interface BaseActorConfig<
 	 * The handler receives an abort signal via `c.abortSignal` and a
 	 * `c.aborted` alias for loop checks. Use these to gracefully exit.
 	 *
-	 * If this handler exits, the actor will sleep once it becomes idle.
+	 * If this handler exits, the actor will follow the normal idle sleep timeout
+	 * once it becomes idle.
 	 * If this handler throws, the actor logs the error and then sleeps once it
 	 * becomes idle.
 	 * Call `c.destroy()` explicitly if a run handler should destroy the actor.
@@ -1164,7 +1165,7 @@ export const DocActorConfigSchema = z
 			.unknown()
 			.optional()
 			.describe(
-				"Called after actor starts. Does not block startup. Use for background tasks like queue processing or tick loops. If it exits, the actor sleeps when idle. If it throws, the actor logs the error and then sleeps when idle.",
+				"Called after actor starts. Does not block startup. Use for background tasks like queue processing or tick loops. If it exits, the actor follows the normal idle sleep timeout once idle. If it throws, the actor logs the error and then follows the normal idle sleep timeout once idle.",
 			),
 		onStateChange: z
 			.unknown()

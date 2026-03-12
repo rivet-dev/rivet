@@ -101,7 +101,7 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 
 				let state = await actor.getState();
 				for (let i = 0; i < 10 && state.sleepCount === 0; i++) {
-					await waitFor(driverTestConfig, 50);
+					await waitFor(driverTestConfig, 100);
 					state = await actor.getState();
 				}
 				expect(state.runCount).toBeGreaterThan(0);
@@ -120,7 +120,7 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 
 				let state = await actor.getState();
 				for (let i = 0; i < 10 && state.sleepCount === 0; i++) {
-					await waitFor(driverTestConfig, 50);
+					await waitFor(driverTestConfig, 100);
 					state = await actor.getState();
 				}
 				expect(state.runCount).toBeGreaterThan(0);

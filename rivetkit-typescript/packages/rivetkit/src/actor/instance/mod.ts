@@ -176,7 +176,6 @@ export class ActorInstance<
 	#backgroundPromises: Promise<void>[] = [];
 	#runPromise?: Promise<void>;
 	#runHandlerActive = false;
-	#sleepOnIdle = false;
 	#activeQueueWaitCount = 0;
 
 	// MARK: - HTTP/WebSocket Tracking
@@ -1359,7 +1358,6 @@ export class ActorInstance<
 
 		this.#rLog.debug({ msg: "starting run handler" });
 		this.#runHandlerActive = true;
-		this.#sleepOnIdle = false;
 		this.resetSleepTimer();
 
 		const runSpan = this.startTraceSpan("actor.run");
@@ -1383,7 +1381,6 @@ export class ActorInstance<
 					if (runSpan.isActive()) {
 						this.endTraceSpan(runSpan, { code: "OK" });
 					}
-					this.#sleepOnIdle = true;
 					this.#rLog.info({
 						msg: "run handler exited, actor will sleep when idle",
 					});
@@ -1405,7 +1402,6 @@ export class ActorInstance<
 						code: "ERROR",
 						message: stringifyError(error),
 					});
-					this.#sleepOnIdle = true;
 					this.#rLog.error({
 						msg: "run handler threw error, actor will sleep when idle",
 						error: stringifyError(error),
@@ -1417,7 +1413,6 @@ export class ActorInstance<
 				});
 		} else if (runSpan.isActive()) {
 			this.endTraceSpan(runSpan, { code: "OK" });
-			this.#sleepOnIdle = true;
 			this.#rLog.info({
 				msg: "run handler exited, actor will sleep when idle",
 			});
@@ -1651,11 +1646,8 @@ export class ActorInstance<
 		if (this.#sleepCalled) return;
 
 		if (canSleep === CanSleep.Yes) {
-			if (this.#sleepOnIdle) {
-				this.startSleep();
-				return;
-			}
-
+			// Keep the normal idle timeout even after a finite run exits so the
+			// actor remains available briefly for follow-up actions or other work.
 			this.#sleepTimeout = setTimeout(() => {
 				this.startSleep();
 			}, this.#config.options.sleepTimeout);
