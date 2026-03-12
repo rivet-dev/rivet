@@ -1,10 +1,7 @@
 import { actor, setup } from "rivetkit";
 
 export const myActor = actor({
-	options: {
-		name: "My Durable Object",
-		icon: "hand-wave",
-	},
+	state: {},
 	actions: {
 		sayHello: (c) => {
 			const result = c.db

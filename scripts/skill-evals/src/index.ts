@@ -41,6 +41,7 @@ const {
 	RESULTS_DIR,
 	JUDGE_SYSTEM_PATH,
 	SKILLS_DIR,
+	EVAL_PROJECTS_DIR,
 	FRICTION_LOG_FILENAME,
 } = (() => {
 	const ROOT = dirname(new URL(import.meta.url).pathname);
@@ -50,6 +51,7 @@ const {
 	const RESULTS_DIR = join(PACKAGE_ROOT, "results");
 	const JUDGE_SYSTEM_PATH = join(ROOT, "judge-system.md");
 	const SKILLS_DIR = join(REPO_ROOT, "website/dist/metadata/skills");
+	const EVAL_PROJECTS_DIR = join(REPO_ROOT, ".context", "skill-eval-projects");
 	const FRICTION_LOG_FILENAME = "FRICTION.md";
 
 	return {
@@ -60,6 +62,7 @@ const {
 		RESULTS_DIR,
 		JUDGE_SYSTEM_PATH,
 		SKILLS_DIR,
+		EVAL_PROJECTS_DIR,
 		FRICTION_LOG_FILENAME,
 	};
 })();
@@ -157,6 +160,97 @@ Options:
 	};
 })();
 
+const SANDBOX_DEBUG = process.env.SKILL_EVAL_SANDBOX_DEBUG === "1";
+
+function buildClaudeToolEnv(): Record<string, string> {
+	const env: Record<string, string> = {
+		PATH: process.env.PATH ?? "",
+		HOME: process.env.HOME ?? "",
+		SHELL: process.env.SHELL ?? "/bin/zsh",
+	};
+
+	if (process.env.TERM) {
+		env.TERM = process.env.TERM;
+	}
+
+	return env;
+}
+
+function buildSessionInit(
+	agent: string,
+	cwd: string,
+	purpose: "agent" | "judge",
+): Record<string, unknown> {
+	const sessionInit: Record<string, unknown> = {
+		cwd,
+		mcpServers: [],
+	};
+
+	if (agent === "claude") {
+		sessionInit._meta = {
+			claudeCode: {
+				options: {
+					env: buildClaudeToolEnv(),
+					...(purpose === "judge"
+						? {
+							disallowedTools: ["Write", "Edit", "NotebookEdit", "TodoWrite"],
+						}
+						: {}),
+				},
+			},
+		};
+	}
+
+	return sessionInit;
+}
+
+function buildSandboxSpawnOptions(): { log: "silent" | "inherit"; env?: Record<string, string> } {
+	const env: Record<string, string> = {
+		SANDBOX_AGENT_ACP_REQUEST_TIMEOUT_MS: "600000",
+	};
+
+	if (!SANDBOX_DEBUG) {
+		return { log: "silent", env };
+	}
+
+	return {
+		log: "inherit",
+		env: {
+			...env,
+			RUST_LOG: "info,sandbox_agent=debug,acp_http_adapter=debug,agent_management=debug",
+			SANDBOX_AGENT_LOG_HTTP: "1",
+			SANDBOX_AGENT_LOG_HTTP_HEADERS: "1",
+		},
+	};
+}
+
+function createLogSink(
+	stream: ReturnType<typeof createWriteStream>,
+	mirrorStdout: boolean,
+): {
+	writeDelta: (delta: string) => void;
+	writeLine: (line: string) => void;
+} {
+	let atLineStart = true;
+
+	return {
+		writeDelta: (delta: string) => {
+			stream.write(delta);
+			if (mirrorStdout) process.stdout.write(delta);
+			atLineStart = delta.endsWith("\n");
+		},
+		writeLine: (line: string) => {
+			if (!atLineStart) {
+				stream.write("\n");
+				if (mirrorStdout) process.stdout.write("\n");
+			}
+			stream.write(line + "\n");
+			if (mirrorStdout) process.stdout.write(line + "\n");
+			atLineStart = true;
+		},
+	};
+}
+
 // --- Prompt helpers ---
 
 const { buildProjectAgentSystemPrompt } = (() => {
@@ -185,8 +279,8 @@ const { buildProjectAgentSystemPrompt } = (() => {
 		}).trim();
 
 		const friction = `Keep a friction log as you work: append bullet points to ${frictionLogPath} whenever you hit errors, confusing docs/APIs, or need workarounds.`;
-		const handoff = "Do not start the dev server yourself, do not run browser-style verification, and do not spend time on exhaustive validation loops. Finish once the project files and any required dependencies are ready. The harness will run `pnpm run dev` and judge the result after you stop.";
-		const scope = "Work only inside the current working directory unless the task explicitly tells you to fetch a reference into a named subdirectory. Do not inspect `~/.claude`, `~/.config`, `/Users/nathan`, other repositories, or search for more skills. Any skill documentation you need is already included below.";
+		const handoff = "Do not start the dev server yourself, do not run browser-style verification, and do not spend time on exhaustive validation loops. Finish once the project files and any required dependencies are ready. The harness and judge will validate the result after you stop.";
+		const scope = "Work only inside the current working directory unless the task explicitly tells you to fetch a reference into a named subdirectory. Create and modify the migrated project only under `{{TMP_DIR}}`. Do not inspect `~/.claude`, `~/.config`, `/Users/nathan`, other repositories, sibling eval projects, or search for more skills. Any skill documentation you need is already included below.";
 		const packageManager = "Package manager: this repository uses a pnpm workspace. Use `pnpm`, not `npm`, for installs and scripts so local workspace package resolution works correctly.";
 		const dependencyVersions = "Dependency versions: prefer versions already used by nearby local examples or workspace packages. Do not invent older package versions when a current local example exists.";
 
@@ -200,7 +294,7 @@ const { buildProjectAgentSystemPrompt } = (() => {
 
 		const shellBootstrap = AGENT === "claude" ? CLAUDE_SHELL_BOOTSTRAP : "";
 
-		return ["# System", baseInterpolated, friction, handoff, scope, packageManager, dependencyVersions, rivetkitLinking, shellBootstrap].filter(Boolean).join("\n\n");
+		return ["# System", baseInterpolated, friction, handoff, interpolate(scope, { TMP_DIR: tmpDir }), packageManager, dependencyVersions, rivetkitLinking, shellBootstrap].filter(Boolean).join("\n\n");
 	}
 
 	return { buildProjectAgentSystemPrompt };
@@ -366,12 +460,12 @@ const { assertSkillsBuilt, assertRivetkitBuilt, cleanupOldEvalProjects, loadSkil
 	}
 
 	async function cleanupOldEvalProjects(): Promise<void> {
-		const examplesDir = join(REPO_ROOT, "examples");
-		const entries = await readdir(examplesDir, { withFileTypes: true });
+		await mkdir(EVAL_PROJECTS_DIR, { recursive: true });
+		const entries = await readdir(EVAL_PROJECTS_DIR, { withFileTypes: true });
 		for (const entry of entries) {
 			if (!entry.isDirectory()) continue;
 			if (!entry.name.startsWith("skill-eval-")) continue;
-			await rm(join(examplesDir, entry.name), { recursive: true, force: true });
+			await rm(join(EVAL_PROJECTS_DIR, entry.name), { recursive: true, force: true });
 		}
 	}
 
@@ -590,11 +684,40 @@ async function waitForProjectReady(tmpDir: string, timeoutMs = 180_000): Promise
 	return false;
 }
 
+async function waitForProjectScaffold(tmpDir: string, timeoutMs = 120_000): Promise<boolean> {
+	const start = Date.now();
+	while (Date.now() - start < timeoutMs) {
+		const hasPackageJson = await pathExists(join(tmpDir, "package.json"));
+		const hasSrc = await pathExists(join(tmpDir, "src"));
+		const hasIndexHtml = await pathExists(join(tmpDir, "index.html"));
+		if (hasPackageJson || hasSrc || hasIndexHtml) {
+			return true;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+	}
+	return false;
+}
+
 async function readTextIfExists(path: string): Promise<string> {
 	try {
 		return await readFile(path, "utf-8");
 	} catch {
 		return "";
+	}
+}
+
+async function destroySessionBestEffort(
+	client: SandboxAgent,
+	sessionId: string,
+	timeoutMs = 5000,
+): Promise<void> {
+	try {
+		await Promise.race([
+			client.destroySession(sessionId),
+			new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+		]);
+	} catch {
+		// Best effort.
 	}
 }
 
@@ -722,7 +845,7 @@ async function main() {
 	console.log(`${fmt.bold("judge:")} ${JUDGE} (${fmtModel(JUDGE_MODEL, JUDGE_VARIANT)})`);
 	console.log("");
 	console.log("Starting sandbox-agent daemon...");
-	const client = await SandboxAgent.start({ spawn: { log: "silent" } });
+	const client = await SandboxAgent.start({ spawn: buildSandboxSpawnOptions() });
 	console.log("Daemon ready.\n");
 
 	try {
@@ -735,8 +858,9 @@ async function main() {
 
 		const start = Date.now();
 
-		// Create temp project directory
-		const tmpDir = join(REPO_ROOT, "examples", `skill-eval-${EVAL_NAME}-${Date.now()}`);
+		// Create temp project directory inside a gitignored pnpm workspace path.
+		await mkdir(EVAL_PROJECTS_DIR, { recursive: true });
+		const tmpDir = join(EVAL_PROJECTS_DIR, `skill-eval-${EVAL_NAME}-${Date.now()}`);
 		await mkdir(tmpDir, { recursive: true });
 		console.log(`${fmt.bold("tmp:")} ${tmpDir}`);
 
@@ -769,65 +893,46 @@ async function main() {
 				agent: AGENT,
 				model: MODEL,
 				...(getSessionMode(AGENT) ? { mode: getSessionMode(AGENT) } : {}),
-				sessionInit: { cwd: tmpDir, mcpServers: [] },
+				sessionInit: buildSessionInit(AGENT, tmpDir, "agent") as any,
 			});
 
 			const agentLogPath = join(resultDir, "agent.log");
-			const agentLogStream = createWriteStream(agentLogPath, { flags: "w" });
-			let atLineStart = true;
-			const sink = {
-				writeDelta: (delta: string) => {
-					agentLogStream.write(delta);
-					process.stdout.write(delta);
-					atLineStart = delta.endsWith("\n");
-				},
-				writeLine: (line: string) => {
-					if (!atLineStart) {
-						agentLogStream.write("\n");
-						process.stdout.write("\n");
-					}
-					agentLogStream.write(line + "\n");
-					process.stdout.write(line + "\n");
-					atLineStart = true;
-				},
-			};
+				const agentLogStream = createWriteStream(agentLogPath, { flags: "w" });
+				const sink = createLogSink(agentLogStream, true);
 
-			const promptPromise = collectTurnText(agentSession, agentMessage, sink);
-			const readyPromise = waitForProjectReady(tmpDir);
-			const winner = await Promise.race([
-				promptPromise.then((value) => ({ kind: "prompt" as const, value })),
-				readyPromise.then((ready) => ({ kind: "ready" as const, ready })),
-			]);
+				const promptPromise = collectTurnText(agentSession, agentMessage, sink);
+				const readyPromise = waitForProjectReady(tmpDir);
+				const scaffoldPromise = waitForProjectScaffold(tmpDir);
+				const winner = await Promise.race([
+					promptPromise.then((value) => ({ kind: "prompt" as const, value })),
+					readyPromise.then((ready) => ({ kind: "ready" as const, ready })),
+					scaffoldPromise.then((hasScaffold) => ({ kind: "scaffold" as const, hasScaffold })),
+				]);
 
-			if (winner.kind === "prompt") {
-				response = winner.value;
-			} else if (winner.ready) {
-				response = "Project appears ready; stopping agent and proceeding to judge.";
-				agentStoppedEarly = true;
-				try {
-					await Promise.race([
-						client.destroySession(agentSessionId),
-						new Promise((resolve) => setTimeout(resolve, 5000)),
-					]);
-				} catch {
-					// Non-fatal. We still have enough project state to continue.
+				if (winner.kind === "prompt") {
+					response = winner.value;
+				} else if (winner.kind === "ready" && winner.ready) {
+					response = "Project appears ready; stopping agent and proceeding to judge.";
+					agentStoppedEarly = true;
+					await destroySessionBestEffort(client, agentSessionId);
+					await new Promise((resolve) => setTimeout(resolve, 500));
+				} else if (winner.kind === "scaffold" && !winner.hasScaffold) {
+					throw new Error("Agent made no project scaffold progress after 120s");
+				} else {
+					response = await promptPromise;
 				}
-				await new Promise((resolve) => setTimeout(resolve, 500));
-			} else {
-				response = await promptPromise;
-			}
-			try { agentLogStream.end(); } catch {}
-		} catch (err) {
+				try { agentLogStream.end(); } catch {}
+			} catch (err) {
 			const duration = Math.round((Date.now() - start) / 1000);
 			console.log(`\n${fmt.red("ERROR")} (agent, ${duration}s)  ${(err as Error).message.slice(0, 200)}`);
-			try { await client.destroySession(agentSessionId); } catch {}
-			console.log(`${fmt.bold("results:")} ${RESULTS_DIR}`);
-			process.exit(1);
-		}
+				await destroySessionBestEffort(client, agentSessionId);
+				console.log(`${fmt.bold("results:")} ${RESULTS_DIR}`);
+				process.exit(1);
+			}
 
-		if (!agentStoppedEarly) {
-			try { await client.destroySession(agentSessionId); } catch {}
-		}
+			if (!agentStoppedEarly) {
+				await destroySessionBestEffort(client, agentSessionId);
+			}
 		await writeFile(join(resultDir, "response.md"), response);
 
 		// Read friction log if it exists
@@ -896,17 +1001,24 @@ async function main() {
 					agent: JUDGE,
 					model: JUDGE_MODEL,
 					...(getSessionMode(JUDGE) ? { mode: getSessionMode(JUDGE) } : {}),
-					sessionInit: { cwd: tmpDir, mcpServers: [] },
+					sessionInit: buildSessionInit(JUDGE, tmpDir, "judge") as any,
 				});
 
-				verdictRaw = await collectTurnText(judgeSession, retryInput);
-			} catch (err) {
-				judgeError = err as Error;
-				try { await client.destroySession(judgeSessionId); } catch {}
-				break;
-			}
+				const judgeLogPath = join(resultDir, "judge.log");
+				const judgeLogStream = createWriteStream(judgeLogPath, {
+					flags: attempt === 1 ? "w" : "a",
+				});
+				const judgeSink = createLogSink(judgeLogStream, false);
+				judgeSink.writeLine(`[attempt] ${attempt}`);
+				verdictRaw = await collectTurnText(judgeSession, retryInput, judgeSink);
+				try { judgeLogStream.end(); } catch {}
+				} catch (err) {
+					judgeError = err as Error;
+					await destroySessionBestEffort(client, judgeSessionId);
+					break;
+				}
 
-			try { await client.destroySession(judgeSessionId); } catch {}
+				await destroySessionBestEffort(client, judgeSessionId);
 
 			const parsed = parseVerdict(verdictRaw);
 			if (parsed.verdict) {

@@ -2,7 +2,7 @@ Use shell commands only. Do not use browser tools, browser skills, repo-wide exp
 
 Verify the migrated Durable Objects hello world template works at `{{URL}}`.
 
-From the current working directory, start the app yourself if it is not already running. Prefer the declared project script instead of inventing a different startup path. If startup fails, inspect the startup output and explain the concrete root cause in the verdict. Do not inspect or modify sibling `skill-eval-*` directories.
+From the current working directory, start the app yourself if it is not already running. Prefer the declared project script instead of inventing a different startup path. If startup fails, inspect the startup output and explain the concrete root cause in the verdict. Do not inspect or modify sibling `skill-eval-*` directories. Treat the project as read-only: do not edit any project files or use shell commands that mutate them.
 
 Run exactly these checks:
 

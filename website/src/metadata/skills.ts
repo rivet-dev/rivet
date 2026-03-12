@@ -10,6 +10,7 @@ import skillBaseClientJavascript from "./skill-base-rivetkit-client-javascript.m
 import skillBaseClientReact from "./skill-base-rivetkit-client-react.md?raw";
 import skillBaseClientSwift from "./skill-base-rivetkit-client-swift.md?raw";
 import skillBaseClientSwiftUI from "./skill-base-rivetkit-client-swiftui.md?raw";
+import skillAppendCloudflareMigration from "./skill-append-cloudflare-migration.md?raw";
 
 export type BaseSkillId =
 	| "rivetkit"
@@ -180,12 +181,20 @@ async function getCookbookSkillConfigs(): Promise<Map<string, SkillConfig>> {
 			);
 		}
 
+		const isCfMigration = id.startsWith("migrate-cloudflare-") || id.startsWith("migrate-partykit");
+		const template = isCfMigration
+			? skillBaseRivetkitCookbook.replace(
+				"<!-- CONTENT -->",
+				skillAppendCloudflareMigration + "\n\n<!-- CONTENT -->",
+			)
+			: skillBaseRivetkitCookbook;
+
 		map.set(id, {
 			id,
 			name: id,
 			directory: id,
 			description,
-			baseTemplate: skillBaseRivetkitCookbook,
+			baseTemplate: template,
 			content: {
 				collection: "cookbook",
 				docId: entry.id,
