@@ -116,20 +116,28 @@ export const createGlobalContext = ({ clerk }: { clerk: Clerk }) => {
 			project: string;
 			namespace: string;
 			pool: string;
+			safe?: boolean;
 		}) {
 			return queryOptions({
 				queryKey: [opts, "managed-pool"],
 				queryFn: async () => {
-					const response = await client.managedPools.get(
-						opts.project,
-						opts.namespace,
-						opts.pool,
-						{
-							org: opts.organization,
-						},
-					);
+					try {
+						const response = await client.managedPools.get(
+							opts.project,
+							opts.namespace,
+							opts.pool,
+							{
+								org: opts.organization,
+							},
+						);
 
-					return response.managedPool;
+						return response.managedPool;
+					} catch (err) {
+						if (opts.safe) {
+							return null;
+						}
+						throw err;
+					}
 				},
 				...no404Retry(),
 			});
@@ -906,12 +914,14 @@ export const createProjectContext = ({
 		currentProjectManagedPoolQueryOptions(opts: {
 			namespace: string;
 			pool: string;
+			safe?: boolean;
 		}) {
 			return parent.managedPoolQueryOptions({
 				organization,
 				project,
 				namespace: opts.namespace,
 				pool: opts.pool,
+				safe: opts.safe,
 			});
 		},
 		currentProjectImageRepositoriesQueryOptions() {
@@ -1104,10 +1114,14 @@ export const createNamespaceContext = ({
 			});
 		},
 
-		currentNamespaceManagedPoolQueryOptions(opts: { pool: string }) {
+		currentNamespaceManagedPoolQueryOptions(opts: {
+			pool: string;
+			safe?: boolean;
+		}) {
 			return parent.currentProjectManagedPoolQueryOptions({
 				namespace,
 				pool: opts.pool,
+				safe: opts.safe,
 			});
 		},
 

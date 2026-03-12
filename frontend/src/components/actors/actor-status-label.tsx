@@ -224,7 +224,13 @@ export function RunnerPoolError({ error }: { error: RivetActorError }) {
 		});
 }
 
-export function ErrorDetails({ error }: { error: unknown }) {
+export function ErrorDetails({
+	error,
+	defaultOpen,
+}: {
+	error: unknown;
+	defaultOpen?: boolean;
+}) {
 	const json =
 		typeof error === "string"
 			? tryJsonParse(error)
@@ -235,6 +241,7 @@ export function ErrorDetails({ error }: { error: unknown }) {
 		<Accordion
 			type="single"
 			collapsible
+			defaultValue={defaultOpen ? "error-details" : undefined}
 			className="mt-4 max-w-full min-w-0 pb-0"
 		>
 			<AccordionItem value="error-details">

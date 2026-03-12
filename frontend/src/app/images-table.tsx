@@ -1,3 +1,9 @@
+import {
+	faCheck,
+	faSpinnerThird,
+	faTriangleExclamation,
+	Icon,
+} from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { formatDistance } from "date-fns";
@@ -14,7 +20,11 @@ import {
 	Text,
 	WithTooltip,
 } from "@/components";
-import { useCloudNamespaceDataProvider } from "@/components/actors";
+import {
+	ErrorDetails,
+	useCloudNamespaceDataProvider,
+	useCloudProjectDataProvider,
+} from "@/components/actors";
 
 interface ImagesTableProps {
 	isLoading?: boolean;
@@ -172,8 +182,11 @@ function TagRow({
 	namespace: string;
 }) {
 	const navigate = useNavigate();
-	const isDeployedToCurrentNamespace = deployments.some(
-		(d) => d.namespace === namespace,
+	const isDeployedToCurrentNamespace = deployments.find(
+		(d) =>
+			d.namespace === namespace &&
+			d.repository === repository &&
+			d.tag === tag,
 	);
 
 	return (
@@ -198,10 +211,11 @@ function TagRow({
 			<TableCell>
 				<CreateTs createTs={createTs} />
 			</TableCell>
-			<TableCell>
+			<TableCell className="text-right">
 				{!isDeployedToCurrentNamespace ? (
 					<Button
 						variant="outline"
+						className="w-full"
 						size="sm"
 						onClick={() =>
 							navigate({
@@ -218,9 +232,65 @@ function TagRow({
 					>
 						Deploy
 					</Button>
-				) : null}
+				) : (
+					<ManagedPoolStatus
+						namespace={isDeployedToCurrentNamespace.namespace}
+					/>
+				)}
 			</TableCell>
 		</TableRow>
+	);
+}
+
+function ManagedPoolStatus({ namespace }: { namespace: string }) {
+	const provider = useCloudProjectDataProvider();
+
+	const { data } = useQuery({
+		...provider.currentProjectManagedPoolQueryOptions({
+			namespace,
+			pool: "default",
+			safe: true,
+		}),
+		refetchInterval: 5_000,
+	});
+
+	if (!data) {
+		return null;
+	}
+
+	if (data.status === "ready") {
+		return (
+			<p className="text-center">
+				<Icon className="text-green-500 mr-1.5" icon={faCheck} />
+				Currently deployed
+			</p>
+		);
+	}
+
+	if (data.status === "error") {
+		return (
+			<WithTooltip
+				content={
+					<ErrorDetails error={data.error?.message} defaultOpen />
+				}
+				trigger={
+					<p className="text-center">
+						<Icon
+							className="text-red-500 mr-1.5"
+							icon={faTriangleExclamation}
+						/>
+						Error
+					</p>
+				}
+			/>
+		);
+	}
+
+	return (
+		<p className="text-center">
+			<Icon className="mr-1.5 animate-spin" icon={faSpinnerThird} />
+			Deploying...
+		</p>
 	);
 }
 

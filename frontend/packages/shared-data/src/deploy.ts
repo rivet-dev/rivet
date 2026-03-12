@@ -25,13 +25,12 @@ export interface DeployOption {
 
 export const deployOptions = [
 	{
-		displayName: "Rivet Compute",
+		displayName: "Rivet Cloud",
 		name: "rivet" as const,
 		href: "/docs/connect/rivet-compute",
 		description:
 			"Deploy to Rivet's managed compute platform",
 		icon: faRivet as any,
-		specializedPlatform: true,
 	},
 	{
 		displayName: "Vercel",

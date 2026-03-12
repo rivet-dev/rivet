@@ -16,7 +16,6 @@ import {
 import type { Rivet } from "@rivetkit/engine-api-full";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { config } from "process";
 import { useMemo } from "react";
 import {
 	Button,
@@ -42,6 +41,7 @@ import {
 	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { REGION_LABEL } from "@/components/matchmaker/lobby-region";
+import { deriveProviderFromMetadata } from "@/lib/data";
 import type { RivetActorError } from "@/queries/types";
 
 interface RunnerConfigsTableProps {
@@ -158,7 +158,7 @@ function Row({
 
 	const isManaged = datacenters.some(
 		([, config]) =>
-			getProviderName(config.metadata) === "rivet" ||
+			deriveProviderFromMetadata(config.metadata) === "rivet" ||
 			"X-Rivet-Pool" in (config.serverless?.headers ?? {}),
 	);
 
@@ -298,7 +298,8 @@ function Providers({
 	const providers = useMemo(() => {
 		const providerSet = new Set<string>();
 		for (const [, config] of datacenters) {
-			const providerName = getProviderName(config.metadata);
+			const providerName =
+				deriveProviderFromMetadata(config.metadata) || "unknown";
 			providerSet.add(providerName);
 		}
 		return Array.from(providerSet);
@@ -371,82 +372,66 @@ function Endpoints({
 	);
 }
 
-function getProviderName(metadata: unknown): string {
-	if (!metadata || typeof metadata !== "object") {
-		return "unknown";
-	}
-	if ("provider" in metadata && typeof metadata.provider === "string") {
-		return metadata.provider;
-	}
-	return "unknown";
-}
-
 function Provider({ metadata }: { metadata: unknown }) {
-	if (!metadata || typeof metadata !== "object") {
-		return <span>Unknown</span>;
+	const provider = deriveProviderFromMetadata(metadata);
+
+	if (provider === "cloudflare-workers") {
+		return (
+			<div>
+				<Icon icon={faCloudflare} className="mr-1" /> Cloudflare Workers
+			</div>
+		);
 	}
-	if ("provider" in metadata && typeof metadata.provider === "string") {
-		if (metadata.provider === "cloudflare-workers") {
-			return (
-				<div>
-					<Icon icon={faCloudflare} className="mr-1" /> Cloudflare
-					Workers
-				</div>
-			);
-		}
-		if (metadata.provider === "vercel") {
-			return (
-				<div className="whitespace-nowrap">
-					<Icon icon={faVercel} className="mr-1" /> Vercel
-				</div>
-			);
-		}
-		if (metadata.provider === "next-js") {
-			return (
-				<div className="whitespace-nowrap">
-					<Icon icon={faNextjs} className="mr-1" /> Next.js
-				</div>
-			);
-		}
-		if (metadata.provider === "railway") {
-			return (
-				<div className="whitespace-nowrap">
-					<Icon icon={faRailway} className="mr-1" /> Railway
-				</div>
-			);
-		}
-		if (metadata.provider === "hetzner") {
-			return (
-				<div className="whitespace-nowrap">
-					<Icon icon={faHetznerH} className="mr-1" /> Hetzner
-				</div>
-			);
-		}
-		if (metadata.provider === "aws") {
-			return (
-				<div className="whitespace-nowrap">
-					<Icon icon={faAws} className="mr-1" /> AWS ECS
-				</div>
-			);
-		}
-		if (metadata.provider === "gcp") {
-			return (
-				<div className="whitespace-nowrap">
-					<Icon icon={faGoogleCloud} className="mr-1" /> Google Cloud
-					Run
-				</div>
-			);
-		}
-		if (metadata.provider === "rivet") {
-			return (
-				<div className="whitespace-nowrap">
-					<Icon icon={faRivet} className="mr-1" /> Rivet Compute
-				</div>
-			);
-		}
-		return <span>{metadata.provider || "-"}</span>;
+	if (provider === "vercel") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faVercel} className="mr-1" /> Vercel
+			</div>
+		);
 	}
-	return <span>Unknown</span>;
+	if (provider === "next-js") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faNextjs} className="mr-1" /> Next.js
+			</div>
+		);
+	}
+	if (provider === "railway") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faRailway} className="mr-1" /> Railway
+			</div>
+		);
+	}
+	if (provider === "hetzner") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faHetznerH} className="mr-1" /> Hetzner
+			</div>
+		);
+	}
+	if (provider === "aws") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faAws} className="mr-1" /> AWS ECS
+			</div>
+		);
+	}
+	if (provider === "gcp") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faGoogleCloud} className="mr-1" /> Google Cloud Run
+			</div>
+		);
+	}
+	if (provider === "rivet") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faRivet} className="mr-1" /> Rivet
+			</div>
+		);
+	}
+	return <span>{provider || "Unknown"}</span>;
 }
 
 function Regions({ regions }: { regions: string[] }) {

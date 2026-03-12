@@ -17,12 +17,7 @@ import {
 	useSuspenseInfiniteQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import {
-	Link,
-	useNavigate,
-	useRouter,
-	useSearch,
-} from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
@@ -31,12 +26,12 @@ import { match } from "ts-pattern";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
-	ButtonCard,
 	CodeFrame,
 	type CodeFrameLikeElement,
 	CodeGroup,
 	CodeGroupSyncProvider,
 	CodePreview,
+	Combobox,
 	FormField,
 	Ping,
 	Skeleton,
@@ -47,9 +42,9 @@ import {
 	useDataProvider,
 } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
+import { deriveProviderFromMetadata } from "@/lib/data";
 import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
-import { TEST_IDS } from "@/utils/test-ids";
 import { Button } from "../components/ui/button";
 import { DeploymentCheck } from "./deployment-check";
 import { useEndpoint } from "./dialogs/connect-manual-serverfull-frame";
@@ -90,28 +85,23 @@ const stepper = defineStepper(
 		id: "provider",
 		title: "Ready to deploy?",
 		schema: z.object({ provider: z.string() }),
-		showNext: false,
 		group: "deploy",
-	},
-	{
-		id: "external-provider",
-		title: "Deploy to external cloud",
-		schema: z.object({ provider: z.string() }),
-		showNext: false,
-		group: "external-provider",
-		isVisible: (values: Record<string, unknown>) => {
-			return values.provider !== "rivet";
-		},
 	},
 	{
 		id: "backend",
 		title: "Connect your Backend",
 		assist: true,
 		group: "deploy",
-		schema: z.object({
-			...ConnectServerlessForm.configurationSchema.shape,
-			...ConnectServerlessForm.deploymentSchema.shape,
-		}),
+		schema: ConnectServerlessForm.deploymentSchema
+			.pick({
+				success: true,
+			})
+			.or(
+				z.object({
+					...ConnectServerlessForm.configurationSchema.shape,
+					...ConnectServerlessForm.deploymentSchema.shape,
+				}),
+			),
 	},
 	{
 		id: "frontend",
@@ -160,7 +150,7 @@ export function GettingStarted({
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3 }}
 			>
-				<div className="mt-8 w-full flex items-center justify-center [&_[data-component='stepper']]:w-auto px-4">
+				<div className="mt-8 w-full flex items-center justify-safe-center [&_[data-component='stepper']]:w-auto px-4 h-full overflow-auto pt-8">
 					<CodeGroupSyncProvider>
 						<StepperForm
 							{...stepper}
@@ -174,7 +164,7 @@ export function GettingStarted({
 										: "frontend"
 							}
 							defaultValues={{
-								provider,
+								provider: provider || "rivet",
 								runnerName: "default",
 								slotsPerRunner: 1,
 								maxRunners: 10000,
@@ -213,11 +203,6 @@ export function GettingStarted({
 										<ProviderSetup />
 									</StepContent>
 								),
-								"external-provider": () => (
-									<StepContent>
-										<ExternalProviderSetup />
-									</StepContent>
-								),
 								backend: () => (
 									<StepContent>
 										<Suspense
@@ -249,12 +234,13 @@ export function GettingStarted({
 										displayName: "default",
 										pool: "default",
 										minCount: 0,
-										maxCount: 10000,
+										maxCount: 1000,
 									});
 									return;
 								}
 								if (
 									stepper.current.id === "backend" &&
+									"endpoint" in values &&
 									values.endpoint &&
 									values.provider !== "rivet" &&
 									values.success
@@ -341,7 +327,7 @@ function StepperFooter() {
 }
 
 function ProviderSetup() {
-	const { setValue, formState } = useFormContext();
+	const { setValue, control } = useFormContext();
 
 	return (
 		<div>
@@ -351,101 +337,33 @@ function ProviderSetup() {
 				for you.
 			</p>
 			<div className="flex items-center justify-start gap-4">
-				<Button
-					variant="secondary"
-					onClick={() => {
-						setValue("provider", "");
-					}}
-				>
-					Deploy to external cloud
-				</Button>
-				<Button
-					isLoading={formState.isSubmitting}
-					onClick={() => {
-						setValue("provider", "rivet");
-					}}
-				>
-					Continue with Rivet
-				</Button>
-			</div>
-		</div>
-	);
-}
-
-function ExternalProviderSetup() {
-	const navigate = useNavigate();
-	const showAll = useSearch({ strict: false, select: (s) => s?.showAll });
-
-	const { control } = useFormContext();
-
-	return (
-		<div data-testid={TEST_IDS.Onboarding.IntegrationProviderSelection}>
-			<p className="text-sm text-muted-foreground mb-4">
-				Deploy your application to any provider. Rivet Cloud manages the
-				actor orchestration, state, and scaling for you.
-			</p>
-			<FormField
-				control={control}
-				name="provider"
-				render={({ field }) => (
-					<>
-						{deployOptions
-							.filter((option) => !option.specializedPlatform)
-							.slice(0, showAll ? deployOptions.length : 3)
-							.map((option) => (
-								<ButtonCard
-									key={option.name}
-									icon={option.icon}
-									title={option.displayName}
-									description={option.description}
-									className="text-left mb-4 w-full min-w-0"
-									data-testid={TEST_IDS.Onboarding.IntegrationProviderOption(
-										option.name,
-									)}
-									onClick={() => {
-										field.onChange(option.name);
-									}}
-								/>
-							))}
-					</>
-				)}
-			/>
-
-			<div className="text-center mt-2 mb-4">
-				{showAll ? (
-					<Button
-						variant="ghost"
-						size="sm"
-						type="button"
-						onClick={() => {
-							return navigate({
-								to: ".",
-								search: (s) => ({
-									...s,
-									showAll: undefined,
-								}),
-								replace: true,
-							});
-						}}
-					>
-						Show fewer options
-					</Button>
-				) : (
-					<Button
-						variant="ghost"
-						size="sm"
-						type="button"
-						onClick={() => {
-							return navigate({
-								to: ".",
-								search: (s) => ({ ...s, showAll: true }),
-								replace: true,
-							});
-						}}
-					>
-						Show {deployOptions.length - 3} more options
-					</Button>
-				)}
+				<FormField
+					control={control}
+					name="provider"
+					render={({ field }) => (
+						<Combobox
+							className="w-full"
+							onValueChange={(value) =>
+								setValue("provider", value)
+							}
+							value={field.value}
+							options={deployOptions
+								.filter((option) => !option.specializedPlatform)
+								.map((option) => ({
+									value: option.name,
+									label: (
+										<div className="flex items-center">
+											<Icon
+												icon={option.icon}
+												className="me-2 !w-4 h-auto"
+											/>
+											{option.displayName}
+										</div>
+									),
+								}))}
+						/>
+					)}
+				/>
 			</div>
 		</div>
 	);
@@ -814,13 +732,18 @@ function BackendSetup() {
 						<p className="font-medium mb-2">Deploy</p>
 						<p className="text-sm text-muted-foreground mb-3">
 							<DeploymentCheck
-								validate={(data) =>
+								validateConfig={(data) =>
 									!!data?.find(([, value]) =>
 										Object.values(value.datacenters).some(
-											(dc) => dc.serverless,
+											(dc) =>
+												dc.serverless &&
+												deriveProviderFromMetadata(
+													dc.metadata,
+												) === "rivet",
 										),
 									)
 								}
+								validatePool={(data) => !!data?.config.image}
 							/>
 						</p>
 					</div>

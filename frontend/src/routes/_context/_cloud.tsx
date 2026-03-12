@@ -37,6 +37,7 @@ function CloudModals() {
 
 	const CreateProjectDialog = useDialog.CreateProject.Dialog;
 	const CreateNamespaceDialog = useDialog.CreateNamespace.Dialog;
+	const ConnectRivetDialog = useDialog.ConnectRivet.Dialog;
 	const ConnectVercelDialog = useDialog.ConnectVercel.Dialog;
 	const ConnectQuickVercelDialog = useDialog.ConnectQuickVercel.Dialog;
 	const ConnectRailwayDialog = useDialog.ConnectRailway.Dialog;
@@ -74,6 +75,25 @@ function CloudModals() {
 			<CreateNamespaceDialog
 				dialogProps={{
 					open: search?.modal === "create-ns",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectRivetDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search?.modal === "connect-rivet",
 					onOpenChange: (value) => {
 						if (!value) {
 							return navigate({

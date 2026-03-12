@@ -7,6 +7,7 @@ import {
 	faPlus,
 	faQuestionCircle,
 	faRailway,
+	faRivet,
 	faServer,
 	faVercel,
 	Icon,
@@ -32,7 +33,12 @@ import {
 	Code,
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuGroup,
 	DropdownMenuItem,
+	DropdownMenuPortal,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 	H1,
 	H2,
@@ -48,6 +54,7 @@ import {
 	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { docsLinks } from "@/content/data";
+import { deriveProviderFromMetadata } from "@/lib/data";
 import { CloudApiTokens, PublishableToken, SecretToken } from "./tokens";
 
 export const Route = createFileRoute(
@@ -245,79 +252,126 @@ function Runners() {
 	);
 }
 
+function RivetCloudDropdownMenuItem() {
+	const navigate = useNavigate();
+
+	const { data: config } = useInfiniteQuery({
+		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
+		refetchInterval: 5000,
+		maxPages: Infinity,
+		select: (data) =>
+			data.pages.flatMap((page) =>
+				Object.values(page.runnerConfigs).filter(
+					(config) =>
+						Object.values(config.datacenters).find(
+							(dc) =>
+								deriveProviderFromMetadata(dc.metadata) ===
+								"rivet",
+						) !== undefined,
+				),
+			).length > 0,
+	});
+
+	return (
+		<DropdownMenuItem
+			className="relative"
+			indicator={<Icon icon={faRivet} />}
+			disabled={!!config}
+			onSelect={() =>
+				navigate({
+					to: ".",
+					search: { modal: "connect-rivet" },
+				})
+			}
+		>
+			Rivet Cloud {config ? "(Connected)" : ""}
+		</DropdownMenuItem>
+	);
+}
+
 function ProviderDropdown({ children }: { children: React.ReactNode }) {
 	const navigate = useNavigate();
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
 			<DropdownMenuContent className="w-[--radix-popper-anchor-width]">
-				<DropdownMenuItem
-					className="relative"
-					indicator={<Icon icon={faVercel} />}
-					onSelect={() =>
-						navigate({
-							to: ".",
-							search: { modal: "connect-vercel" },
-						})
-					}
-				>
-					Vercel
-				</DropdownMenuItem>
-				<DropdownMenuItem
-					indicator={<Icon icon={faRailway} />}
-					onSelect={() =>
-						navigate({
-							to: ".",
-							search: { modal: "connect-railway" },
-						})
-					}
-				>
-					Railway
-				</DropdownMenuItem>
-				<DropdownMenuItem
-					indicator={<Icon icon={faAws} />}
-					onSelect={() =>
-						navigate({
-							to: ".",
-							search: { modal: "connect-aws" },
-						})
-					}
-				>
-					AWS ECS
-				</DropdownMenuItem>
-				<DropdownMenuItem
-					indicator={<Icon icon={faGoogleCloud} />}
-					onSelect={() =>
-						navigate({
-							to: ".",
-							search: { modal: "connect-gcp" },
-						})
-					}
-				>
-					Google Cloud Run
-				</DropdownMenuItem>
-				<DropdownMenuItem
-					indicator={<Icon icon={faHetznerH} />}
-					onSelect={() =>
-						navigate({
-							to: ".",
-							search: { modal: "connect-hetzner" },
-						})
-					}
-				>
-					Hetzner
-				</DropdownMenuItem>
-				<DropdownMenuItem
-					indicator={<Icon icon={faServer} />}
-					onSelect={() =>
-						navigate({
-							to: ".",
-							search: { modal: "connect-custom" },
-						})
-					}
-				>
-					Custom
-				</DropdownMenuItem>
+				<RivetCloudDropdownMenuItem />
+				<DropdownMenuSub>
+					<DropdownMenuSubTrigger>
+						External cloud
+					</DropdownMenuSubTrigger>
+					<DropdownMenuPortal>
+						<DropdownMenuSubContent>
+							<DropdownMenuItem
+								className="relative"
+								indicator={<Icon icon={faVercel} />}
+								onSelect={() =>
+									navigate({
+										to: ".",
+										search: { modal: "connect-vercel" },
+									})
+								}
+							>
+								Vercel
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								indicator={<Icon icon={faRailway} />}
+								onSelect={() =>
+									navigate({
+										to: ".",
+										search: { modal: "connect-railway" },
+									})
+								}
+							>
+								Railway
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								indicator={<Icon icon={faAws} />}
+								onSelect={() =>
+									navigate({
+										to: ".",
+										search: { modal: "connect-aws" },
+									})
+								}
+							>
+								AWS ECS
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								indicator={<Icon icon={faGoogleCloud} />}
+								onSelect={() =>
+									navigate({
+										to: ".",
+										search: { modal: "connect-gcp" },
+									})
+								}
+							>
+								Google Cloud Run
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								indicator={<Icon icon={faHetznerH} />}
+								onSelect={() =>
+									navigate({
+										to: ".",
+										search: { modal: "connect-hetzner" },
+									})
+								}
+							>
+								Hetzner
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								indicator={<Icon icon={faServer} />}
+								onSelect={() =>
+									navigate({
+										to: ".",
+										search: { modal: "connect-custom" },
+									})
+								}
+							>
+								Custom
+							</DropdownMenuItem>
+						</DropdownMenuSubContent>
+					</DropdownMenuPortal>
+				</DropdownMenuSub>
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);

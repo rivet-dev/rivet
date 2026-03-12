@@ -23,7 +23,7 @@ import { HelpDropdown } from "../help-dropdown";
 
 type Step = Stepperize.Step & {
 	assist?: boolean;
-	schema: z.ZodSchema;
+	schema: z.ZodSchema | ((values: Record<string, unknown>) => z.ZodSchema);
 	next?: string;
 	showNext?: boolean;
 	showPrevious?: boolean;
@@ -188,6 +188,11 @@ function Content<const Steps extends Step[]>({
 }: StepperFormProps<Steps> & { extraChildren?: ReactNode }) {
 	const stepper = useStepper({ initialStep });
 
+	const resolveSchema = (step: Step, values: Record<string, unknown>) => {
+		if (typeof step.schema === "function") return step.schema(values);
+		return step.schema;
+	};
+
 	const form = useForm<z.infer<JoinStepSchemas<Steps>>>({
 		defaultValues,
 		mode: "onChange",
@@ -196,10 +201,18 @@ function Content<const Steps extends Step[]>({
 		...formProps,
 		...(stepper.current.schema
 			? {
-					resolver: zodResolver(
+					resolver: (values, context, options) => {
+						const accumulated = {
+							...(ref.current ?? {}),
+							...values,
+						} as Record<string, unknown>;
+						const schema = resolveSchema(
+							stepper.current as unknown as Step,
+							accumulated,
+						);
 						// @ts-expect-error - we know this is correct based on the definition of Step
-						stepper.current.schema,
-					),
+						return zodResolver(schema)(values, context, options);
+					},
 				}
 			: {}),
 	});

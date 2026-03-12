@@ -129,7 +129,7 @@ export function ServerlessConnectionCheck({
 								.with("hetzner", () => "Hetzner")
 								.with("kubernetes", () => "Kubernetes")
 								.with("custom", () => "VM & Bare Metal")
-								.with("rivet", () => "Rivet Compute")
+								.with("rivet", () => "Rivet")
 								.with(
 									"custom-platform",
 									() => "Custom Platform",
