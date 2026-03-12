@@ -41,10 +41,6 @@ Start the services:
 docker-compose up -d
 ```
 
-<Warning>
-Self-hosted PostgreSQL support is experimental. If you need a production deployment today, use the file system backend (RocksDB-based) for smaller single-node deployments. If you need distributed Rivet, contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the best scalability and performance.
-</Warning>
-
 ## Configuration
 
 ### Environment Variables
@@ -113,9 +109,11 @@ Create the config file (`rivet-config.json`):
 }
 ```
 
-## PostgreSQL Setup
+## With Experimental PostgreSQL
 
-#### With Experimental PostgreSQL
+<Warning>
+PostgreSQL is the recommended backend for multi-node self-hosted deployments today, but it remains experimental as we continue evaluating the best fit for scalability and performance. For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based). Enterprise teams can contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the most scalable production-ready deployment.
+</Warning>
 
 ```yaml
 services:

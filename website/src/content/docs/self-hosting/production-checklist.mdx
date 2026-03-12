@@ -9,7 +9,7 @@ We recommend passing this page to your coding agent to verify your configuration
 </Tip>
 
 <Warning>
-Self-hosted PostgreSQL support is experimental. If you need a production deployment today, use the file system backend (RocksDB-based) for smaller single-node deployments. If you need distributed Rivet, contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the best scalability and performance.
+PostgreSQL is the recommended backend for multi-node self-hosted deployments today, but it remains experimental as we continue evaluating the best fit for scalability and performance. For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based). Enterprise teams can contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the most scalable production-ready deployment.
 </Warning>
 
 Also review the [general production checklist](/docs/general/production-checklist).
@@ -29,14 +29,14 @@ Also review the [general production checklist](/docs/general/production-checklis
 
 - **Configure autoscaling for the Rivet Engine.** Set target CPU utilization to 70% and memory to 80% to ensure headroom for traffic spikes. In Kubernetes, this is configured via a Horizontal Pod Autoscaler (HPA).
 - **Use 2+ engine nodes for redundancy.** Running a single engine node is a single point of failure. Deploy at least two engine instances behind a load balancer.
-- **RocksDB only supports a single node.** Do not run multiple RocksDB nodes. Use the file system backend (RocksDB-based) for smaller single-node production deployments today. If you need distributed Rivet, contact [enterprise support](https://rivet.dev/sales) about FoundationDB.
+- **RocksDB only supports a single node.** Do not run multiple RocksDB nodes. For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based). For multi-node deployments, PostgreSQL is the recommended backend today, though it remains experimental as we evaluate the best fit for scalability and performance.
 
 ## PostgreSQL
 
-- **Treat PostgreSQL as experimental.** Validate the deployment carefully before rollout. If you need a production deployment today, use the file system backend (RocksDB-based) for smaller single-node deployments. If you need distributed Rivet, contact [enterprise support](https://rivet.dev/sales) about FoundationDB.
+- **PostgreSQL is recommended for multi-node deployments, but remains experimental.** Validate the deployment carefully before rollout as we continue evaluating the best fit for scalability and performance.
 - **Configure automated backups.** Set up regular backups for your PostgreSQL database to prevent data loss.
 - **Configure failover.** Set up a standby replica with automatic failover to ensure high availability.
-- **Use FoundationDB for distributed production deployments.** FoundationDB provides the best performance, scalability, and uptime for distributed Rivet. Contact [enterprise support](https://rivet.dev/sales) for FoundationDB guidance.
+- **Use FoundationDB for the most scalable production-ready deployments.** FoundationDB provides the best performance, scalability, and uptime for Rivet. Contact [enterprise support](https://rivet.dev/sales) for FoundationDB guidance.
 
 ## NATS
 
@@ -50,4 +50,4 @@ Also review the [general production checklist](/docs/general/production-checklis
 
 ## Enterprise
 
-- **Contact [enterprise support](https://rivet.dev/sales) for distributed production deployments.** We can help with architecture review, scaling guidance, and FoundationDB support.
+- **Contact [enterprise support](https://rivet.dev/sales) for production-ready deployments.** We can help with architecture review, scaling guidance, and FoundationDB support.

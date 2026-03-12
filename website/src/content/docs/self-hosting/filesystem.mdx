@@ -5,7 +5,7 @@ skill: true
 ---
 
 <Warning>
-The file system backend does not support multi-node deployments. Self-hosted PostgreSQL support is experimental. If you need a production deployment today, use the file system backend (RocksDB-based) for smaller single-node deployments. If you need distributed Rivet, contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the best scalability and performance.
+For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based); for multi-node deployments, PostgreSQL is the recommended backend today but remains experimental as we evaluate the best fit for scalability and performance, and Enterprise teams can contact [enterprise support](https://rivet.dev/sales) about FoundationDB.
 </Warning>
 
 ## Configuration
@@ -47,4 +47,4 @@ The file system backend is ideal for:
 - Testing and prototyping
 - Air-gapped environments without database infrastructure
 
-If you need a production deployment today, use this file system backend for smaller single-node deployments. If you need distributed Rivet, contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the best scalability and performance.
+If you need a production-ready Rivet deployment today, use this backend for smaller single-node setups; for multi-node deployments, PostgreSQL is the recommended backend today though still experimental, and Enterprise teams can contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the most scalable production-ready deployment.

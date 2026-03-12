@@ -1,11 +1,11 @@
 ---
 title: "Kubernetes"
-description: "Deploy Rivet Engine to Kubernetes with the experimental PostgreSQL backend."
+description: "Deploy production-ready Rivet Engine to Kubernetes with PostgreSQL storage."
 skill: true
 ---
 
 <Warning>
-Self-hosted PostgreSQL support is experimental. If you need a production deployment today, use the file system backend (RocksDB-based) for smaller single-node deployments. If you need distributed Rivet, contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the best scalability and performance.
+PostgreSQL is the recommended backend for multi-node self-hosted deployments today, but it remains experimental as we continue evaluating the best fit for scalability and performance. For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based). Enterprise teams can contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the most scalable production-ready deployment.
 </Warning>
 
 ## Prerequisites
