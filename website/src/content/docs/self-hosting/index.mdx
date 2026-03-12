@@ -16,7 +16,7 @@ import imgByocVsSelfHost from "./images/byoc-vs-self-host.png";
 Rivet supports both BYOC (Bring Your Own Cloud) and self-hosting to fit your deployment needs.
 
 <Warning>
-Self-hosted PostgreSQL support is experimental. If you're deploying production on-prem for Enterprise, contact [enterprise support](https://rivet.dev/sales).
+Self-hosted PostgreSQL support is experimental. If you need a production deployment today, use the file system backend (RocksDB-based) for smaller single-node deployments. If you need distributed Rivet, contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the best scalability and performance.
 </Warning>
 
 | | Self-Hosting | BYOC with Rivet Cloud |
@@ -45,9 +45,9 @@ Rivet has 3 core components:
 
 Rivet supports multiple storage backends:
 
-- **File System**: Suitable for single-node deployments
+- **File System**: Recommended for smaller single-node deployments today
 - **PostgreSQL**: Experimental multi-node backend
-- **FoundationDB**: For massive scale ([requires enterprise](/sales))
+- **FoundationDB**: Best scalability and performance for distributed deployments ([requires enterprise](/sales))
 
 ## Deployment Platforms
 
