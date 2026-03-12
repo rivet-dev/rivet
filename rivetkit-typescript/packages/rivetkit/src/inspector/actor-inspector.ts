@@ -37,7 +37,7 @@ export class ActorInspector {
 
 	constructor(private readonly actor: AnyActorInstance) {
 		this.#lastQueueSize = actor.queueManager?.size ?? 0;
-		const runInspector = getRunInspectorConfig(actor.config.run);
+		const runInspector = getRunInspectorConfig(actor.config.run, actor);
 		this.#workflowInspector = runInspector?.workflow;
 		if (this.#workflowInspector?.onHistoryUpdated) {
 			this.#workflowInspector.onHistoryUpdated((history) => {
@@ -88,6 +88,16 @@ export class ActorInspector {
 			return null;
 		}
 		const history = this.#workflowInspector.getHistory();
+		return (history ?? null) as schema.WorkflowHistory | null;
+	}
+
+	async rerunWorkflowFromStep(
+		entryId?: string,
+	): Promise<schema.WorkflowHistory | null> {
+		if (!this.#workflowInspector?.rerunFromStep) {
+			throw new actorErrors.WorkflowNotEnabled();
+		}
+		const history = await this.#workflowInspector.rerunFromStep(entryId);
 		return (history ?? null) as schema.WorkflowHistory | null;
 	}
 
@@ -331,13 +341,24 @@ export class ActorInspector {
 	}
 
 	getWorkflowHistoryJson(): {
-		history: unknown | null;
+		history: number[] | null;
 		isWorkflowEnabled: boolean;
 	} {
 		return {
 			history: serializeWorkflowHistoryForJson(
 				this.getWorkflowHistory(),
 			),
+			isWorkflowEnabled: this.isWorkflowEnabled(),
+		};
+	}
+
+	async rerunWorkflowFromStepJson(entryId?: string): Promise<{
+		history: ReturnType<typeof serializeWorkflowHistoryForJson>;
+		isWorkflowEnabled: boolean;
+	}> {
+		const history = await this.rerunWorkflowFromStep(entryId);
+		return {
+			history: serializeWorkflowHistoryForJson(history),
 			isWorkflowEnabled: this.isWorkflowEnabled(),
 		};
 	}

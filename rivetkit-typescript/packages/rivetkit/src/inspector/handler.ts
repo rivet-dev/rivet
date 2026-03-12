@@ -176,6 +176,21 @@ export async function handleWebSocketInspectorConnect({
 							},
 						},
 					});
+				} else if (message.body.tag === "WorkflowRerunRequest") {
+					const history = await inspector.rerunWorkflowFromStep(
+						message.body.val.entryId ?? undefined,
+					);
+					sendMessage(ws, {
+						body: {
+							tag: "WorkflowRerunResponse",
+							val: {
+								rid: message.body.val.id,
+								history,
+								isWorkflowEnabled:
+									inspector.isWorkflowEnabled(),
+							},
+						},
+					});
 				} else if (message.body.tag === "DatabaseSchemaRequest") {
 					const { id } = message.body.val;
 					try {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
@@ -283,6 +283,52 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			expect(
 				Object.keys(data.history?.entryMetadata ?? {}).length,
 			).toBeGreaterThan(0);
+		});
+
+		test("POST /inspector/workflow/rerun reruns a workflow from the beginning", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.workflowRerunActor.getOrCreate([
+				"inspector-workflow-rerun",
+				crypto.randomUUID(),
+			]);
+
+			await vi.waitFor(async () => {
+				expect(await handle.getTimeline()).toEqual(["one", "two"]);
+			});
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(
+				`${gatewayUrl}/inspector/workflow/rerun`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: "Bearer token",
+					},
+					body: JSON.stringify({}),
+				},
+			);
+
+			expect(response.status).toBe(200);
+			const data = (await response.json()) as {
+				history: {
+					nameRegistry: string[];
+					entries: unknown[];
+					entryMetadata: Record<string, unknown>;
+				} | null;
+				isWorkflowEnabled: boolean;
+			};
+			expect(data.isWorkflowEnabled).toBe(true);
+			expect(data.history).not.toBeNull();
+
+			await vi.waitFor(async () => {
+				expect(await handle.getTimeline()).toEqual([
+					"one",
+					"two",
+					"one",
+					"two",
+				]);
+			});
 		});
 
 		test("GET /inspector/database/rows returns SQLite rows", async (c) => {

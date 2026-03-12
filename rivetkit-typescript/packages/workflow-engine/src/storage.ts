@@ -15,6 +15,7 @@ import {
 import type { EngineDriver, KVWrite } from "./driver.js";
 import {
 	buildEntryMetadataKey,
+	buildEntryMetadataPrefix,
 	buildHistoryKey,
 	buildHistoryPrefix,
 	buildHistoryPrefixAll,
@@ -24,6 +25,7 @@ import {
 	buildWorkflowOutputKey,
 	buildWorkflowStateKey,
 	compareKeys,
+	parseEntryMetadataKey,
 	parseNameKey,
 } from "./keys.js";
 import { isLocationPrefix, locationToKey } from "./location.js";
@@ -151,6 +153,16 @@ export async function loadStorage(driver: EngineDriver): Promise<Storage> {
 		// Use locationToKey to match how context.ts looks up entries
 		const key = locationToKey(storage, parsed.location);
 		storage.history.entries.set(key, parsed);
+	}
+
+	// Load entry metadata so observers can reconstruct workflow state after
+	// the actor wakes and rebuilds storage from persisted history.
+	const metadataEntries = await driver.list(buildEntryMetadataPrefix());
+	for (const entry of metadataEntries) {
+		const entryId = parseEntryMetadataKey(entry.key);
+		const metadata = deserializeEntryMetadata(entry.value);
+		metadata.dirty = false;
+		storage.entryMetadata.set(entryId, metadata);
 	}
 
 	// Load workflow state

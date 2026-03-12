@@ -615,6 +615,18 @@ export class ActorInstance<
 		);
 	}
 
+	async restartRunHandler(): Promise<void> {
+		this.assertReady();
+		if (this.#runHandlerActive && this.#runPromise) {
+			await this.#runPromise;
+		}
+		if (this.#runHandlerActive) {
+			return;
+		}
+
+		this.#startRunHandler();
+	}
+
 	// MARK: - Stop
 	async onStop(mode: "sleep" | "destroy") {
 		if (this.#stopCalled) {

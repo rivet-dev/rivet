@@ -10,9 +10,9 @@ import {
 	ReactFlow,
 	ReactFlowProvider,
 } from "@xyflow/react";
-import { useCallback, useMemo, useState } from "react";
+import { faRefresh, faXmark, Icon } from "@rivet-gg/icons";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "@xyflow/react/dist/style.css";
-import { faXmark, Icon } from "@rivet-gg/icons";
 import { cn, DiscreteCopyButton } from "@/components";
 import { ActorObjectInspector } from "../console/actor-inspector";
 import { workflowHistoryToXYFlow } from "./workflow-to-xyflow";
@@ -47,27 +47,107 @@ function miniMapNodeColor(node: Node): string {
 
 export function WorkflowVisualizer({
 	workflow,
+	currentStepId,
+	rerunningEntryId,
+	onRerunStep,
 }: {
 	workflow: WorkflowHistory;
+	currentStepId?: string;
+	rerunningEntryId?: string;
+	onRerunStep?: (entryId: string) => void;
 }) {
 	const { nodes, edges } = useMemo(
-		() => workflowHistoryToXYFlow(workflow),
-		[workflow],
+		() =>
+			workflowHistoryToXYFlow(workflow, {
+				currentStepId,
+				rerunningEntryId,
+				onRerunStep,
+			}),
+		[workflow, currentStepId, rerunningEntryId, onRerunStep],
 	);
 
 	const [selectedNode, setSelectedNode] = useState<WorkflowNodeData | null>(
 		null,
 	);
+	const [contextMenu, setContextMenu] = useState<{
+		x: number;
+		y: number;
+		entryId: string;
+		isRerunning: boolean;
+		onRerunStep: (entryId: string) => void;
+	} | null>(null);
+	const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
 	const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
 		if (node.type === "workflow" && node.data) {
 			setSelectedNode(node.data as WorkflowNodeData);
+			setContextMenu(null);
 		}
 	}, []);
 
 	const onPaneClick = useCallback(() => {
 		setSelectedNode(null);
+		setContextMenu(null);
 	}, []);
+
+	const onNodeContextMenu: NodeMouseHandler = useCallback((event, node) => {
+		if (node.type !== "workflow" || !node.data) {
+			setContextMenu(null);
+			return;
+		}
+
+		const data = node.data as WorkflowNodeData;
+		if (
+			!data.canRerun ||
+			!data.entryId ||
+			typeof data.onRerunStep !== "function"
+		) {
+			setContextMenu(null);
+			return;
+		}
+
+		event.preventDefault();
+		event.stopPropagation();
+		setSelectedNode(data);
+		setContextMenu({
+			x: event.clientX,
+			y: event.clientY,
+			entryId: data.entryId,
+			isRerunning: Boolean(data.isRerunning),
+			onRerunStep: data.onRerunStep,
+		});
+	}, []);
+
+	useEffect(() => {
+		if (!contextMenu) {
+			return;
+		}
+
+		const onPointerDown = (event: PointerEvent) => {
+			if (
+				contextMenuRef.current &&
+				event.target instanceof globalThis.Node &&
+				contextMenuRef.current.contains(event.target)
+			) {
+				return;
+			}
+			setContextMenu(null);
+		};
+
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				setContextMenu(null);
+			}
+		};
+
+		window.addEventListener("pointerdown", onPointerDown);
+		window.addEventListener("keydown", onKeyDown);
+
+		return () => {
+			window.removeEventListener("pointerdown", onPointerDown);
+			window.removeEventListener("keydown", onKeyDown);
+		};
+	}, [contextMenu]);
 
 	return (
 		<div className="flex h-full w-full flex-col bg-background">
@@ -83,6 +163,7 @@ export function WorkflowVisualizer({
 						edgesFocusable={false}
 						panActivationKeyCode={null}
 						onNodeClick={onNodeClick}
+						onNodeContextMenu={onNodeContextMenu}
 						onPaneClick={onPaneClick}
 						nodesDraggable={false}
 						nodesConnectable={false}
@@ -102,6 +183,34 @@ export function WorkflowVisualizer({
 							maskColor="hsl(20 14.3% 4.1% / 0.7)"
 						/>
 					</ReactFlow>
+					{contextMenu && (
+						<div
+							ref={contextMenuRef}
+							className="fixed z-50 min-w-[12rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+							style={{ left: contextMenu.x, top: contextMenu.y }}
+							onContextMenu={(event) => event.preventDefault()}
+						>
+							<button
+								type="button"
+								disabled={contextMenu.isRerunning}
+								className={cn(
+									"relative flex w-full select-none items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors",
+									contextMenu.isRerunning
+										? "cursor-not-allowed opacity-50"
+										: "cursor-default hover:bg-accent hover:text-accent-foreground",
+								)}
+								onClick={() => {
+									contextMenu.onRerunStep(contextMenu.entryId);
+									setContextMenu(null);
+								}}
+							>
+								<Icon icon={faRefresh} />
+								{contextMenu.isRerunning
+									? "Rerunning from step..."
+									: "Rerun from this step"}
+							</button>
+						</div>
+					)}
 				</ReactFlowProvider>
 			</div>
 

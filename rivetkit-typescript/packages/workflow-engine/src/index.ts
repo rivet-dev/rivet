@@ -154,7 +154,9 @@ import {
 	StepFailedError,
 } from "./errors.js";
 import {
+	buildEntryMetadataKey,
 	buildEntryMetadataPrefix,
+	buildHistoryKey,
 	buildWorkflowErrorKey,
 	buildWorkflowInputKey,
 	buildWorkflowOutputKey,
@@ -726,6 +728,92 @@ export function runWorkflow<TInput, TOutput>(
 			return deserializeWorkflowState(value);
 		},
 	};
+}
+
+/**
+ * Remove a step and every later workflow entry, then schedule the workflow to
+ * start again immediately. Omitting `entryId` reruns the workflow from the
+ * beginning.
+ */
+export async function rerunWorkflowFromStep(
+	workflowId: string,
+	driver: EngineDriver,
+	entryId?: string,
+	options?: {
+		scheduleAlarm?: boolean;
+	},
+): Promise<WorkflowHistorySnapshot> {
+	const storage = await loadStorage(driver);
+	const entries = await Promise.all(
+		Array.from(storage.history.entries.entries()).map(
+			async ([key, entry]) => ({
+				key,
+				entry,
+				metadata: await loadMetadata(storage, driver, entry.id),
+			}),
+		),
+	);
+
+	if (entries.some(({ metadata }) => metadata.status === "running")) {
+		throw new Error(
+			"Cannot rerun a workflow while a step is currently running",
+		);
+	}
+
+	let entriesToDelete = entries;
+	if (entryId !== undefined) {
+		const target = entries.find(({ entry }) => entry.id === entryId);
+		if (!target) {
+			throw new Error(`Workflow step not found: ${entryId}`);
+		}
+		if (target.entry.kind.type !== "step") {
+			throw new Error("Workflow rerun target must be a step");
+		}
+
+		const ordered = [...entries].sort((a, b) => {
+			if (a.metadata.createdAt !== b.metadata.createdAt) {
+				return a.metadata.createdAt - b.metadata.createdAt;
+			}
+			return a.key.localeCompare(b.key);
+		});
+		const targetIndex = ordered.findIndex(
+			({ entry }) => entry.id === entryId,
+		);
+		entriesToDelete = ordered.slice(targetIndex);
+	}
+
+	await Promise.all(
+		entriesToDelete.flatMap(({ entry }) => [
+			driver.delete(buildHistoryKey(entry.location)),
+			driver.delete(buildEntryMetadataKey(entry.id)),
+		]),
+	);
+
+	for (const { key, entry } of entriesToDelete) {
+		storage.history.entries.delete(key);
+		storage.entryMetadata.delete(entry.id);
+	}
+
+	storage.output = undefined;
+	storage.flushedOutput = undefined;
+	storage.error = undefined;
+	storage.flushedError = undefined;
+	storage.state = "sleeping";
+	storage.flushedState = "sleeping";
+
+	await Promise.all([
+		driver.delete(buildWorkflowOutputKey()),
+		driver.delete(buildWorkflowErrorKey()),
+		driver.set(
+			buildWorkflowStateKey(),
+			serializeWorkflowState("sleeping"),
+		),
+	]);
+	if (options?.scheduleAlarm ?? true) {
+		await driver.setAlarm(workflowId, Date.now());
+	}
+
+	return createHistorySnapshot(storage);
 }
 
 /**

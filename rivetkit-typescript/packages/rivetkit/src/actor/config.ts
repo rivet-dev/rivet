@@ -50,6 +50,7 @@ export interface WorkflowInspectorConfig<THistory = unknown> {
 	onHistoryUpdated?: (
 		listener: (history: THistory) => void,
 	) => InspectorUnsubscribe;
+	rerunFromStep?: (entryId?: string) => Promise<THistory | null>;
 }
 
 export interface RunInspectorConfig<THistory = unknown> {
@@ -61,6 +62,10 @@ const WorkflowInspectorConfigSchema = z.object({
 	onHistoryUpdated:
 		zFunction<
 			NonNullable<WorkflowInspectorConfig<unknown>["onHistoryUpdated"]>
+		>().optional(),
+	rerunFromStep:
+		zFunction<
+			NonNullable<WorkflowInspectorConfig<unknown>["rerunFromStep"]>
 		>().optional(),
 });
 
@@ -125,6 +130,7 @@ interface RunFunctionConfig {
 	name?: string;
 	icon?: string;
 	inspector?: RunInspectorConfig;
+	inspectorFactory?: (actor: unknown) => RunInspectorConfig | undefined;
 }
 
 type RunFunctionWithConfig = ((...args: any[]) => any) & {
@@ -161,11 +167,15 @@ export function getRunMetadata(
 /** Extract run inspector configuration if provided. */
 export function getRunInspectorConfig(
 	run: ((...args: any[]) => any) | AnyRunConfig | undefined,
+	actor?: unknown,
 ): RunInspectorConfig | undefined {
 	if (!run) return undefined;
 	if (typeof run === "function") {
-		return (run as RunFunctionWithConfig)[RUN_FUNCTION_CONFIG_SYMBOL]
-			?.inspector;
+		const config =
+			(run as RunFunctionWithConfig)[RUN_FUNCTION_CONFIG_SYMBOL];
+		return config?.inspectorFactory
+			? config.inspectorFactory(actor)
+			: config?.inspector;
 	}
 	return run.inspector;
 }

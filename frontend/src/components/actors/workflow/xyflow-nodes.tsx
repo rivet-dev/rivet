@@ -176,6 +176,10 @@ export interface WorkflowNodeData {
 	completedAt?: number;
 	/** Raw entry data for the object inspector. */
 	rawData?: unknown;
+	entryId?: string;
+	canRerun?: boolean;
+	isRerunning?: boolean;
+	onRerunStep?: (entryId: string) => void;
 }
 
 export type WorkflowNodeType = Node<WorkflowNodeData, "workflow">;

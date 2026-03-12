@@ -503,6 +503,7 @@ export const workflowFailedStepActor = actor({
 	state: {
 		startCount: 0,
 		sleepCount: 0,
+		timeline: [] as string[],
 		runCount: 0,
 	},
 	onWake: (c) => {
@@ -512,11 +513,15 @@ export const workflowFailedStepActor = actor({
 		c.state.sleepCount += 1;
 	},
 	run: workflow(async (ctx) => {
+		await ctx.step("prepare", async () => {
+			ctx.state.timeline.push("prepare");
+		});
 		await ctx.step({
 			name: "fail",
-			maxRetries: 1,
+			maxRetries: 2,
 			run: async () => {
 				ctx.state.runCount += 1;
+				ctx.state.timeline.push("fail");
 				throw new Error("workflow step failed");
 			},
 		});
@@ -663,6 +668,27 @@ export const workflowErrorHookEffectsActor = actor({
 		},
 	},
 });
+
+export const workflowRerunActor = actor({
+	state: {
+		timeline: [] as string[],
+	},
+	run: workflow(async (ctx) => {
+		await ctx.step("one", async () => {
+			ctx.state.timeline.push("one");
+		});
+		await ctx.step("two", async () => {
+			ctx.state.timeline.push("two");
+		});
+	}),
+	actions: {
+		getTimeline: (c) => [...c.state.timeline],
+	},
+	options: {
+		sleepTimeout: 50,
+	},
+});
+
 function incrementWorkflowCounter(
 	ctx: WorkflowLoopContextOf<typeof workflowCounterActor>,
 ): void {
