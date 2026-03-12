@@ -237,7 +237,7 @@ for (const mode of modes) {
 					stepName: "flaky-step",
 					attempt: 1,
 					maxRetries: 3,
-					remainingRetries: 2,
+					remainingRetries: 3,
 					willRetry: true,
 					retryDelay: 5,
 					error: {

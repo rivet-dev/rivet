@@ -251,7 +251,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				stepName: config.name,
 				attempt,
 				maxRetries,
-				remainingRetries: Math.max(0, maxRetries - attempt),
+				remainingRetries: Math.max(0, maxRetries - (attempt - 1)),
 				willRetry: opts.willRetry,
 				retryDelay: opts.retryDelay,
 				retryAt: opts.retryAt,
