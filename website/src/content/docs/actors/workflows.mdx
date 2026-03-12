@@ -644,6 +644,7 @@ Use `onError` when you want a best-effort notification for workflow failures.
 - Step failures include the attempt number, retry counts, whether the step will retry, and the next retry delay.
 - Workflow failures also include terminal errors outside steps, such as rollback failures or code/history mismatches.
 - The hook is observational. It is not part of workflow replay, so use it for logging, metrics, or updating non-critical actor state.
+- This is also a good place to forward workflow failures to Sentry or another error reporting pipeline.
 
 ```ts
 import { actor, event, setup } from "rivetkit";
@@ -654,7 +655,7 @@ export const errorHookActor = actor({
     lastError: null as WorkflowErrorEvent | null,
   },
   events: {
-    workflowError: event<WorkflowErrorEvent>(),
+    workflowError: event<[WorkflowErrorEvent]>(),
   },
   run: workflow(
     async (ctx) => {

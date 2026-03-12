@@ -233,8 +233,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		}
 	}
 
-	private async notifyStepError(
-		config: StepConfig<unknown>,
+	private async notifyStepError<T>(
+		config: StepConfig<T>,
 		attempt: number,
 		error: unknown,
 		opts: {
