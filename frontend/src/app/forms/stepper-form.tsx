@@ -71,16 +71,16 @@ export type JoinStepSchemas<T extends Step[]> = T extends [
 						First["schema"],
 						JoinStepSchemas<Rest> extends z.ZodTypeAny
 							? JoinStepSchemas<Rest>
-							// biome-ignore lint/complexity/noBannedTypes: required for zod generic
-			: z.ZodObject<{}>
+							: // biome-ignore lint/complexity/noBannedTypes: required for zod generic
+								z.ZodObject<{}>
 					>
 				: First["schema"]
-			// biome-ignore lint/complexity/noBannedTypes: required for zod generic
-			: z.ZodObject<{}>
-		// biome-ignore lint/complexity/noBannedTypes: required for zod generic
-			: z.ZodObject<{}>
-	// biome-ignore lint/complexity/noBannedTypes: required for zod generic
-			: z.ZodObject<{}>;
+			: // biome-ignore lint/complexity/noBannedTypes: required for zod generic
+				z.ZodObject<{}>
+		: // biome-ignore lint/complexity/noBannedTypes: required for zod generic
+			z.ZodObject<{}>
+	: // biome-ignore lint/complexity/noBannedTypes: required for zod generic
+		z.ZodObject<{}>;
 
 type StepperFormProps<Steps extends Step[]> = StepperProps<Steps> &
 	UseFormProps<z.infer<JoinStepSchemas<Steps>>> & {
@@ -223,7 +223,10 @@ function Content<const Steps extends Step[]>({
 
 	const getValues = () => {
 		const allLive = form.getValues() as Record<string, unknown>;
-		const dirtyFields = form.formState.dirtyFields as Record<string, unknown>;
+		const dirtyFields = form.formState.dirtyFields as Record<
+			string,
+			unknown
+		>;
 		const live = Object.fromEntries(
 			Object.entries(allLive).filter(([k]) => k in dirtyFields),
 		);
@@ -279,11 +282,8 @@ function Content<const Steps extends Step[]>({
 		const step = stepper.current;
 		const isLast = isLastVisible(step.id);
 		const hasPrev =
-			getPrevVisibleStepId(
-				allSteps as Step[],
-				step.id,
-				getValues(),
-			) !== null;
+			getPrevVisibleStepId(allSteps as Step[], step.id, getValues()) !==
+			null;
 		return (
 			<StepVisibilityContext.Provider value={visibilityContext}>
 				<StepperFormContext.Provider
@@ -376,9 +376,7 @@ function Content<const Steps extends Step[]>({
 									className="min-w-0 w-full"
 									of={step.id}
 								>
-									<Stepper.Title>
-										{step.title}
-									</Stepper.Title>
+									<Stepper.Title>{step.title}</Stepper.Title>
 									{step.assist &&
 									stepper.current.id === step.id ? (
 										<Stepper.Helper>
@@ -479,7 +477,10 @@ function StepPanel<const Steps extends Step[]>({
 
 	const goToPrev = () => {
 		const allLive = form.getValues() as Record<string, unknown>;
-		const dirtyFields = form.formState.dirtyFields as Record<string, unknown>;
+		const dirtyFields = form.formState.dirtyFields as Record<
+			string,
+			unknown
+		>;
 		const live = Object.fromEntries(
 			Object.entries(allLive).filter(([k]) => k in dirtyFields),
 		);
