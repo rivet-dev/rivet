@@ -92,6 +92,44 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 		});
 
 		test.skipIf(driverTestConfig.skip?.sleep)(
+			"completed workflows sleep instead of destroying the actor",
+			async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor = client.workflowCompleteActor.getOrCreate([
+					"workflow-complete",
+				]);
+
+				let state = await actor.getState();
+				for (let i = 0; i < 10 && state.sleepCount === 0; i++) {
+					await waitFor(driverTestConfig, 100);
+					state = await actor.getState();
+				}
+				expect(state.runCount).toBeGreaterThan(0);
+				expect(state.sleepCount).toBeGreaterThan(0);
+				expect(state.startCount).toBeGreaterThan(1);
+			},
+		);
+
+		test.skipIf(driverTestConfig.skip?.sleep)(
+			"failed workflow steps sleep instead of surfacing as run errors",
+			async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor = client.workflowFailedStepActor.getOrCreate([
+					"workflow-failed-step",
+				]);
+
+				let state = await actor.getState();
+				for (let i = 0; i < 10 && state.sleepCount === 0; i++) {
+					await waitFor(driverTestConfig, 100);
+					state = await actor.getState();
+				}
+				expect(state.runCount).toBeGreaterThan(0);
+				expect(state.sleepCount).toBeGreaterThan(0);
+				expect(state.startCount).toBeGreaterThan(1);
+			},
+		);
+
+		test.skipIf(driverTestConfig.skip?.sleep)(
 			"workflow run teardown does not wait for runStopTimeout",
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);

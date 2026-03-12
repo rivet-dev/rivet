@@ -193,6 +193,63 @@ export const workflowStopTeardownActor = actor({
 	},
 });
 
+export const workflowCompleteActor = actor({
+	state: {
+		startCount: 0,
+		sleepCount: 0,
+		runCount: 0,
+	},
+	onWake: (c) => {
+		c.state.startCount += 1;
+	},
+	onSleep: (c) => {
+		c.state.sleepCount += 1;
+	},
+	run: workflow(async (ctx) => {
+		await ctx.step("complete", async () => {
+			ctx.state.runCount += 1;
+		});
+	}),
+	actions: {
+		getState: (c) => c.state,
+	},
+	options: {
+		sleepTimeout: 50,
+	},
+});
+
+export const workflowFailedStepActor = actor({
+	state: {
+		startCount: 0,
+		sleepCount: 0,
+		runCount: 0,
+	},
+	onWake: (c) => {
+		c.state.startCount += 1;
+	},
+	onSleep: (c) => {
+		c.state.sleepCount += 1;
+	},
+	run: workflow(async (ctx) => {
+		await ctx.step(
+			{
+				name: "fail",
+				maxRetries: 1,
+				run: async () => {
+					ctx.state.runCount += 1;
+					throw new Error("workflow step failed");
+				},
+			},
+		);
+	}),
+	actions: {
+		getState: (c) => c.state,
+	},
+	options: {
+		sleepTimeout: 50,
+	},
+});
+
 function incrementWorkflowCounter(
 	ctx: WorkflowLoopContextOf<typeof workflowCounterActor>,
 ): void {

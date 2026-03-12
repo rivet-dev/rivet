@@ -1365,6 +1365,9 @@ export class ActorInstance<
 			runFn(this.actorContext),
 		);
 
+		// Do not destroy or immediately sleep the actor when run exits. Finished
+		// workflows must stay inspectable when something goes wrong, and callers
+		// may still need to invoke actions after the run handler has completed.
 		if (runResult instanceof Promise) {
 			this.#runPromise = runResult
 				.then(() => {
@@ -1378,20 +1381,12 @@ export class ActorInstance<
 						return;
 					}
 
-					// Run handler exited normally - this should crash the actor
-					this.emitTraceEvent(
-						"actor.crash",
-						{ "rivet.actor.reason": "run_exited" },
-						runSpan,
-					);
-					this.endTraceSpan(runSpan, {
-						code: "ERROR",
-						message: "run exited unexpectedly",
+					if (runSpan.isActive()) {
+						this.endTraceSpan(runSpan, { code: "OK" });
+					}
+					this.#rLog.info({
+						msg: "run handler exited",
 					});
-					this.#rLog.warn({
-						msg: "run handler exited unexpectedly, crashing actor to reschedule",
-					});
-					this.startDestroy();
 				})
 				.catch((error) => {
 					if (this.#stopCalled) {
@@ -1405,24 +1400,14 @@ export class ActorInstance<
 						return;
 					}
 
-					// Run handler threw an error - crash the actor
-					this.emitTraceEvent(
-						"actor.crash",
-						{
-							"rivet.actor.reason": "run_error",
-							"error.message": stringifyError(error),
-						},
-						runSpan,
-					);
 					this.endTraceSpan(runSpan, {
 						code: "ERROR",
 						message: stringifyError(error),
 					});
 					this.#rLog.error({
-						msg: "run handler threw error, crashing actor to reschedule",
+						msg: "run handler threw error",
 						error: stringifyError(error),
 					});
-					this.startDestroy();
 				})
 				.finally(() => {
 					this.#runHandlerActive = false;
@@ -1430,6 +1415,9 @@ export class ActorInstance<
 				});
 		} else if (runSpan.isActive()) {
 			this.endTraceSpan(runSpan, { code: "OK" });
+			this.#rLog.info({
+				msg: "run handler exited",
+			});
 			this.#runHandlerActive = false;
 			this.resetSleepTimer();
 		}

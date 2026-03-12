@@ -20,6 +20,7 @@ export class FileSystemActorDriver implements ActorDriver {
 	#managerDriver: ManagerDriver;
 	#inlineClient: AnyClient;
 	#state: FileSystemGlobalState;
+	startSleep?: (actorId: string) => void;
 
 	constructor(
 		config: RegistryConfig,
@@ -31,6 +32,15 @@ export class FileSystemActorDriver implements ActorDriver {
 		this.#managerDriver = managerDriver;
 		this.#inlineClient = inlineClient;
 		this.#state = state;
+
+		if (this.#state.persist) {
+			// Only define startSleep when persistence is enabled. The actor runtime
+			// checks for this property to determine whether the driver supports sleep.
+			this.startSleep = (actorId: string) => {
+				// Spawns the sleepActor promise.
+				this.#state.sleepActor(actorId);
+			};
+		}
 	}
 
 	async loadActor(actorId: string): Promise<AnyActorInstance> {
@@ -109,11 +119,6 @@ export class FileSystemActorDriver implements ActorDriver {
 	/** Creates a SQLite VFS instance for creating KV-backed databases */
 	async createSqliteVfs(): Promise<SqliteVfs> {
 		return await importSqliteVfs();
-	}
-
-	startSleep(actorId: string): void {
-		// Spawns the sleepActor promise
-		this.#state.sleepActor(actorId);
 	}
 
 	async startDestroy(actorId: string): Promise<void> {

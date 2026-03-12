@@ -267,8 +267,8 @@ The handler exposes `c.aborted` for loop checks and `c.abortSignal` for cancelin
 
 **Important behavior:**
 - The actor may go to sleep at any time during the `run` handler. Use `c.keepAwake(promise)` to wrap async operations that should not be interrupted.
-- If the `run` handler exits (returns), the actor will crash and reschedule
-- If the `run` handler throws an error, the actor will crash and reschedule
+- If the `run` handler exits (returns), the actor follows its normal idle sleep timeout once it becomes idle
+- If the `run` handler throws an error, the actor logs the error and then follows its normal idle sleep timeout once it becomes idle
 - On shutdown, the actor waits for the `run` handler to complete (with configurable timeout via `options.runStopTimeout`)
 
 ```typescript
@@ -332,6 +332,22 @@ const queueConsumer = actor({
     getProcessedCount: (c) => c.state.processedCount
   }
 });
+```
+
+Finite `run` handlers leave the actor alive after they finish. If you want a one shot task to clean itself up when it is done, call `c.destroy()` before returning.
+
+```typescript
+import { actor } from "rivetkit";
+
+// Example: Finite task that destroys the actor when done
+const oneShotJob = actor({
+  run: async (c) => {
+    await processJob();
+    c.destroy();
+  },
+});
+
+async function processJob(): Promise<void> {}
 ```
 
 ### `onStateChange`
