@@ -222,7 +222,12 @@ for (const mode of modes) {
 					workflow,
 					undefined,
 					driver,
-					{ mode, onError: (event) => events.push(event) },
+					{
+						mode,
+						onError: (event) => {
+							events.push(event);
+						},
+					},
 				).result;
 				expect(secondResult.state).toBe("completed");
 				expect(secondResult.output).toBe("ok");
