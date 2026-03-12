@@ -1,4 +1,4 @@
-import type { WorkflowError } from "./types.js";
+import type { WorkflowError, WorkflowErrorEvent } from "./types.js";
 
 const WORKFLOW_ERROR_REPORTED_SYMBOL = Symbol("workflow.error.reported");
 
@@ -69,4 +69,19 @@ export function isErrorReported(error: unknown): boolean {
 			}
 		)[WORKFLOW_ERROR_REPORTED_SYMBOL],
 	);
+}
+
+/**
+ * Return the outer tag name for a workflow error event.
+ */
+export function getErrorEventTag(
+	event: WorkflowErrorEvent,
+): "step" | "rollback" | "workflow" {
+	if ("step" in event) {
+		return "step";
+	}
+	if ("rollback" in event) {
+		return "rollback";
+	}
+	return "workflow";
 }

@@ -138,6 +138,7 @@ import { type RollbackAction, WorkflowContextImpl } from "./context.js";
 import type { EngineDriver } from "./driver.js";
 import {
 	extractErrorInfo,
+	getErrorEventTag,
 	isErrorReported,
 	markErrorReported,
 } from "./error-utils.js";
@@ -330,13 +331,14 @@ async function executeRollback<TInput, TOutput>(
 			metadata.rollbackError =
 				error instanceof Error ? error.message : String(error);
 			if (onError) {
-				rollbackEvent = {
-					type: "rollback",
-					workflowId,
-					stepName: action.name,
-					error: extractErrorInfo(error),
-				};
-			}
+					rollbackEvent = {
+						rollback: {
+							workflowId,
+							stepName: action.name,
+							error: extractErrorInfo(error),
+						},
+					};
+				}
 			if (error instanceof Error) {
 				markErrorReported(error);
 			}
@@ -361,7 +363,7 @@ async function notifyError(
 	} catch (error) {
 		logger?.warn({
 			msg: "workflow error hook failed",
-			hookEventType: event.type,
+			hookEventType: getErrorEventTag(event),
 			error: extractErrorInfo(error),
 		});
 	}
@@ -878,9 +880,10 @@ async function executeWorkflow<TInput, TOutput>(
 			await setFailedState(storage, driver, error, historyNotifier);
 			if (onError && !isErrorReported(error)) {
 				await notifyError(onError, logger, {
-					type: "workflow",
-					workflowId,
-					error: extractErrorInfo(error),
+					workflow: {
+						workflowId,
+						error: extractErrorInfo(error),
+					},
 				});
 			}
 			throw error;
@@ -915,9 +918,10 @@ async function executeWorkflow<TInput, TOutput>(
 		await flush(storage, driver, historyNotifier);
 		if (onError && !isErrorReported(error)) {
 			await notifyError(onError, logger, {
-				type: "workflow",
-				workflowId,
-				error: extractErrorInfo(error),
+				workflow: {
+					workflowId,
+					error: extractErrorInfo(error),
+				},
 			});
 			if (
 				error instanceof CriticalError ||

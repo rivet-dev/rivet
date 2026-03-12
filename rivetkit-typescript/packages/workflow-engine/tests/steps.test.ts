@@ -233,19 +233,22 @@ for (const mode of modes) {
 
 			expect(events).toHaveLength(1);
 			expect(events[0]).toMatchObject({
-				type: "step",
-				stepName: "flaky-step",
-				attempt: 1,
-				maxRetries: 3,
-				remainingRetries: 2,
-				willRetry: true,
-				retryDelay: 5,
-				error: {
-					name: "Error",
-					message: "Transient failure",
+				step: {
+					stepName: "flaky-step",
+					attempt: 1,
+					maxRetries: 3,
+					remainingRetries: 2,
+					willRetry: true,
+					retryDelay: 5,
+					error: {
+						name: "Error",
+						message: "Transient failure",
+					},
 				},
 			});
-			expect(events[0].retryAt).toBeTypeOf("number");
+			expect("step" in events[0] && events[0].step.retryAt).toBeTypeOf(
+				"number",
+			);
 		});
 
 		it("should yield during backoff retries", async () => {
@@ -335,13 +338,14 @@ for (const mode of modes) {
 
 			expect(events).toEqual([
 				expect.objectContaining({
-					type: "step",
-					stepName: "critical-step",
-					attempt: 1,
-					willRetry: false,
-					error: expect.objectContaining({
-						name: "CriticalError",
-						message: "Unrecoverable",
+					step: expect.objectContaining({
+						stepName: "critical-step",
+						attempt: 1,
+						willRetry: false,
+						error: expect.objectContaining({
+							name: "CriticalError",
+							message: "Unrecoverable",
+						}),
 					}),
 				}),
 			]);
@@ -365,10 +369,11 @@ for (const mode of modes) {
 
 			expect(events).toEqual([
 				expect.objectContaining({
-					type: "workflow",
-					error: expect.objectContaining({
-						name: "Error",
-						message: "workflow failed",
+					workflow: expect.objectContaining({
+						error: expect.objectContaining({
+							name: "Error",
+							message: "workflow failed",
+						}),
 					}),
 				}),
 			]);

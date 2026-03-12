@@ -300,7 +300,6 @@ export interface WorkflowError {
  * Error event emitted while a workflow is running.
  */
 export interface WorkflowStepErrorEvent {
-	type: "step";
 	workflowId: string;
 	stepName: string;
 	attempt: number;
@@ -316,7 +315,6 @@ export interface WorkflowStepErrorEvent {
  * Error event emitted when a rollback handler fails.
  */
 export interface WorkflowRollbackErrorEvent {
-	type: "rollback";
 	workflowId: string;
 	stepName: string;
 	error: WorkflowError;
@@ -326,15 +324,14 @@ export interface WorkflowRollbackErrorEvent {
  * Error event emitted for workflow-level failures outside individual steps.
  */
 export interface WorkflowRunErrorEvent {
-	type: "workflow";
 	workflowId: string;
 	error: WorkflowError;
 }
 
 export type WorkflowErrorEvent =
-	| WorkflowStepErrorEvent
-	| WorkflowRollbackErrorEvent
-	| WorkflowRunErrorEvent;
+	| { step: WorkflowStepErrorEvent }
+	| { rollback: WorkflowRollbackErrorEvent }
+	| { workflow: WorkflowRunErrorEvent };
 
 export type WorkflowErrorHandler = (
 	event: WorkflowErrorEvent,

@@ -2,6 +2,7 @@ import type { Logger } from "pino";
 import type { EngineDriver } from "./driver.js";
 import {
 	extractErrorInfo,
+	getErrorEventTag,
 	markErrorReported,
 } from "./error-utils.js";
 import {
@@ -227,7 +228,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		} catch (error) {
 			this.log("warn", {
 				msg: "workflow error hook failed",
-				hookEventType: event.type,
+				hookEventType: getErrorEventTag(event),
 				error: extractErrorInfo(error),
 			});
 		}
@@ -245,16 +246,17 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	): Promise<void> {
 		const maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
 		await this.notifyError({
-			type: "step",
-			workflowId: this.workflowId,
-			stepName: config.name,
-			attempt,
-			maxRetries,
-			remainingRetries: Math.max(0, maxRetries - attempt),
-			willRetry: opts.willRetry,
-			retryDelay: opts.retryDelay,
-			retryAt: opts.retryAt,
-			error: extractErrorInfo(error),
+			step: {
+				workflowId: this.workflowId,
+				stepName: config.name,
+				attempt,
+				maxRetries,
+				remainingRetries: Math.max(0, maxRetries - attempt),
+				willRetry: opts.willRetry,
+				retryDelay: opts.retryDelay,
+				retryAt: opts.retryAt,
+				error: extractErrorInfo(error),
+			},
 		});
 	}
 
