@@ -1,1 +1,0 @@
-# Friction Log

@@ -12,6 +12,8 @@ Before verification, you are responsible for making the app available locally fr
 - Start the app yourself if it is not already running.
 - If startup fails, inspect stdout/stderr and diagnose the root cause.
 - Stop any background processes you started before finishing, when practical.
+- Treat the generated project as read-only. Never edit source files, package manifests, configs, or lockfiles. Never use write/edit tools to "fix" the project.
+- Shell commands must also be read-only, except for starting/stopping the app and installing dependencies if verification requires a missing `node_modules`. Do not run shell redirections or mutating commands against project files.
 - Do not inspect, edit, or rely on sibling eval directories or neighboring generated projects such as `../skill-eval-*`. Judge only the current working directory unless the instructions explicitly require an external reference fetch.
 
 If you receive a working URL, use the requested verification method and follow the verification steps exactly.
