@@ -100,7 +100,7 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 			let state = await actor.getErrorState();
 			for (
 				let i = 0;
-				i < 20 && (state.attempts < 2 || state.events.length === 0);
+				i < 80 && (state.attempts < 2 || state.events.length === 0);
 				i++
 			) {
 				await waitFor(driverTestConfig, 50);
@@ -160,6 +160,50 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 				expect(state.runCount).toBeGreaterThan(0);
 				expect(state.sleepCount).toBeGreaterThan(0);
 				expect(state.startCount).toBeGreaterThan(1);
+			},
+		);
+
+		test.skipIf(driverTestConfig.skip?.sleep)(
+			"workflow onError is not reported again after sleep and wake",
+			async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor = client.workflowErrorHookSleepActor.getOrCreate([
+					"workflow-error-hook-sleep",
+				]);
+
+				let state = await actor.getErrorState();
+				for (
+					let i = 0;
+					i < 80 &&
+					(state.attempts < 2 || state.events.length === 0);
+					i++
+				) {
+					await waitFor(driverTestConfig, 50);
+					state = await actor.getErrorState();
+				}
+
+				expect(state.attempts).toBe(2);
+				expect(state.events).toHaveLength(1);
+				expect(state.wakeCount).toBe(1);
+
+				await actor.triggerSleep();
+				await waitFor(driverTestConfig, 250);
+
+				let resumedState = await actor.getErrorState();
+				for (
+					let i = 0;
+					i < 40 &&
+					(resumedState.wakeCount < 2 || resumedState.sleepCount < 1);
+					i++
+				) {
+					await waitFor(driverTestConfig, 50);
+					resumedState = await actor.getErrorState();
+				}
+
+				expect(resumedState.sleepCount).toBeGreaterThanOrEqual(1);
+				expect(resumedState.wakeCount).toBeGreaterThanOrEqual(2);
+				expect(resumedState.attempts).toBe(2);
+				expect(resumedState.events).toHaveLength(1);
 			},
 		);
 

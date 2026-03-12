@@ -386,7 +386,6 @@ export const workflowErrorHookEffectsActor = actor({
 		},
 	},
 });
-
 function incrementWorkflowCounter(
 	ctx: WorkflowLoopContextOf<typeof workflowCounterActor>,
 ): void {
