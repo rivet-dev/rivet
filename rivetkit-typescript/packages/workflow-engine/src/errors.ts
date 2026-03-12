@@ -115,6 +115,7 @@ export class StepFailedError extends Error {
 		public readonly stepName: string,
 		public readonly originalError: unknown,
 		public readonly attempts: number,
+		public readonly retryAt: number,
 	) {
 		super(`Step "${stepName}" failed (attempt ${attempts})`);
 		this.name = "StepFailedError";

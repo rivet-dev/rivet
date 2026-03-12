@@ -77,6 +77,9 @@ import {
 	workflowCompleteActor,
 	workflowCounterActor,
 	workflowFailedStepActor,
+	workflowErrorHookActor,
+	workflowErrorHookEffectsActor,
+	workflowErrorHookSleepActor,
 	workflowQueueActor,
 	workflowSleepActor,
 	workflowStopTeardownActor,
@@ -174,6 +177,9 @@ export const registry = setup({
 		workflowFailedStepActor,
 		workflowSleepActor,
 		workflowStopTeardownActor,
+		workflowErrorHookActor,
+		workflowErrorHookEffectsActor,
+		workflowErrorHookSleepActor,
 		// From actor-db-raw.ts
 		dbActorRaw,
 		// From actor-db-drizzle.ts

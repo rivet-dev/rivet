@@ -637,6 +637,53 @@ export const timeoutActor = actor({
 export const registry = setup({ use: { timeoutActor } });
 ```
 
+### Error hooks
+
+Use `onError` when you want a best-effort notification for workflow failures.
+
+- Step failures include the attempt number, retry counts, whether the step will retry, and the next retry delay.
+- Workflow failures also include terminal errors outside steps, such as rollback failures or code/history mismatches.
+- The hook is observational. It is not part of workflow replay, so use it for logging, metrics, or updating non-critical actor state.
+- This is also a good place to forward workflow failures to Sentry or another error reporting pipeline.
+
+```ts
+import { actor, event, setup } from "rivetkit";
+import { workflow, type WorkflowErrorEvent } from "rivetkit/workflow";
+
+export const errorHookActor = actor({
+  state: {
+    lastError: null as WorkflowErrorEvent | null,
+  },
+  events: {
+    workflowError: event<[WorkflowErrorEvent]>(),
+  },
+  run: workflow(
+    async (ctx) => {
+      await ctx.step({
+        name: "sync-ledger",
+        maxRetries: 3,
+        retryBackoffBase: 250,
+        retryBackoffMax: 1_000,
+        run: async () => {
+          throw new Error("ledger unavailable");
+        },
+      });
+    },
+    {
+      onError: (c, event) => {
+        c.state.lastError = event;
+        c.broadcast("workflowError", event);
+      },
+    },
+  ),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+
+export const registry = setup({ use: { errorHookActor } });
+```
+
 ### Rollback
 
 Use rollback checkpoints before steps that have compensating actions.

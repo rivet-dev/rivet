@@ -1,8 +1,12 @@
 import { Loop } from "@rivetkit/workflow-engine";
-import { actor, queue } from "@/actor/mod";
+import { actor, event, queue } from "@/actor/mod";
 import { db } from "@/db/mod";
 import { WORKFLOW_GUARD_KV_KEY } from "@/workflow/constants";
-import { type WorkflowLoopContextOf, workflow } from "@/workflow/mod";
+import {
+	type WorkflowErrorEvent,
+	type WorkflowLoopContextOf,
+	workflow,
+} from "@/workflow/mod";
 import type { registry } from "./registry";
 
 const WORKFLOW_QUEUE_NAME = "workflow-default";
@@ -231,16 +235,14 @@ export const workflowFailedStepActor = actor({
 		c.state.sleepCount += 1;
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step(
-			{
-				name: "fail",
-				maxRetries: 1,
-				run: async () => {
-					ctx.state.runCount += 1;
-					throw new Error("workflow step failed");
-				},
+		await ctx.step({
+			name: "fail",
+			maxRetries: 1,
+			run: async () => {
+				ctx.state.runCount += 1;
+				throw new Error("workflow step failed");
 			},
-		);
+		});
 	}),
 	actions: {
 		getState: (c) => c.state,
@@ -250,6 +252,140 @@ export const workflowFailedStepActor = actor({
 	},
 });
 
+export const workflowErrorHookActor = actor({
+	state: {
+		attempts: 0,
+		events: [] as WorkflowErrorEvent[],
+	},
+	run: workflow(
+		async (ctx) => {
+			await ctx.step({
+				name: "flaky",
+				maxRetries: 2,
+				retryBackoffBase: 1,
+				retryBackoffMax: 1,
+				run: async () => {
+					ctx.state.attempts += 1;
+					if (ctx.state.attempts === 1) {
+						throw new Error("workflow hook failed");
+					}
+				},
+			});
+			await ctx.sleep("idle", 60_000);
+		},
+		{
+			onError: (c, event) => {
+				c.state.events.push(event);
+			},
+		},
+	),
+	actions: {
+		getErrorState: (c) => c.state,
+	},
+});
+
+export const workflowErrorHookSleepActor = actor({
+	state: {
+		attempts: 0,
+		wakeCount: 0,
+		sleepCount: 0,
+		events: [] as WorkflowErrorEvent[],
+	},
+	onWake: (c) => {
+		c.state.wakeCount += 1;
+	},
+	onSleep: (c) => {
+		c.state.sleepCount += 1;
+	},
+	run: workflow(
+		async (ctx) => {
+			await ctx.step({
+				name: "flaky",
+				maxRetries: 2,
+				retryBackoffBase: 1,
+				retryBackoffMax: 1,
+				run: async () => {
+					ctx.state.attempts += 1;
+					if (ctx.state.attempts === 1) {
+						throw new Error("workflow hook failed");
+					}
+				},
+			});
+			await ctx.sleep("idle", 60_000);
+		},
+		{
+			onError: (c, event) => {
+				c.state.events.push(event);
+			},
+		},
+	),
+	actions: {
+		getErrorState: (c) => c.state,
+		triggerSleep: (c) => {
+			c.sleep();
+		},
+	},
+});
+
+export const workflowErrorHookEffectsActor = actor({
+	state: {
+		attempts: 0,
+		lastError: null as WorkflowErrorEvent | null,
+		errorCount: 0,
+	},
+	events: {
+		workflowError: event<[WorkflowErrorEvent]>(),
+	},
+	queues: {
+		start: queue<null>(),
+		errors: queue<WorkflowErrorEvent>(),
+	},
+	run: workflow(
+		async (ctx) => {
+			await ctx.queue.next("start", {
+				names: ["start"],
+			});
+			await ctx.step({
+				name: "flaky",
+				maxRetries: 2,
+				retryBackoffBase: 1,
+				retryBackoffMax: 1,
+				run: async () => {
+					ctx.state.attempts += 1;
+					if (ctx.state.attempts === 1) {
+						throw new Error("workflow hook failed");
+					}
+				},
+			});
+			await ctx.sleep("idle", 60_000);
+		},
+		{
+			onError: async (c, event) => {
+				c.state.lastError = event;
+				c.state.errorCount += 1;
+				c.broadcast("workflowError", event);
+				await c.queue.send("errors", event);
+			},
+		},
+	),
+	actions: {
+		getErrorState: (c) => c.state,
+		startWorkflow: async (c) => {
+			const client = c.client<typeof registry>();
+			const handle = client.workflowErrorHookEffectsActor.getForId(
+				c.actorId,
+			);
+			await handle.send("start", null);
+		},
+		receiveQueuedError: async (c) => {
+			const message = await c.queue.next({
+				names: ["errors"],
+				timeout: 1_000,
+			});
+			return message?.body ?? null;
+		},
+	},
+});
 function incrementWorkflowCounter(
 	ctx: WorkflowLoopContextOf<typeof workflowCounterActor>,
 ): void {

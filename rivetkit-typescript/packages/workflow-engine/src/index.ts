@@ -29,6 +29,7 @@ export {
 	StepExhaustedError,
 	StepFailedError,
 } from "./errors.js";
+export { extractErrorInfo } from "./error-utils.js";
 
 // Location utilities
 export {
@@ -93,8 +94,12 @@ export type {
 	StepEntry,
 	Storage,
 	WorkflowContextInterface,
+	WorkflowError,
+	WorkflowErrorEvent,
+	WorkflowErrorHandler,
 	WorkflowFunction,
 	WorkflowHandle,
+	WorkflowRollbackErrorEvent,
 	WorkflowQueue,
 	WorkflowQueueMessage,
 	WorkflowQueueNextBatchOptions,
@@ -102,7 +107,9 @@ export type {
 	WorkflowMessageDriver,
 	WorkflowResult,
 	WorkflowRunMode,
+	WorkflowRunErrorEvent,
 	WorkflowState,
+	WorkflowStepErrorEvent,
 } from "./types.js";
 
 // Loop result helpers
@@ -130,11 +137,20 @@ import { type RollbackAction, WorkflowContextImpl } from "./context.js";
 // Main workflow runner
 import type { EngineDriver } from "./driver.js";
 import {
+	extractErrorInfo,
+	getErrorEventTag,
+	isErrorReported,
+	markErrorReported,
+} from "./error-utils.js";
+import {
+	CriticalError,
 	EvictedError,
 	MessageWaitError,
 	RollbackCheckpointError,
+	RollbackError,
 	RollbackStopError,
 	SleepError,
+	StepExhaustedError,
 	StepFailedError,
 } from "./errors.js";
 import {
@@ -155,6 +171,7 @@ import type {
 	RollbackContextInterface,
 	RunWorkflowOptions,
 	Storage,
+	WorkflowErrorEvent,
 	WorkflowHistorySnapshot,
 	WorkflowFunction,
 	WorkflowHandle,
@@ -250,6 +267,7 @@ async function executeRollback<TInput, TOutput>(
 	abortController: AbortController,
 	storage: Storage,
 	historyNotifier?: HistoryNotifier,
+	onError?: RunWorkflowOptions["onError"],
 	logger?: Logger,
 ): Promise<void> {
 	const rollbackActions: RollbackAction[] = [];
@@ -264,6 +282,7 @@ async function executeRollback<TInput, TOutput>(
 		rollbackActions,
 		false,
 		historyNotifier,
+		onError,
 		logger,
 	);
 
@@ -297,6 +316,7 @@ async function executeRollback<TInput, TOutput>(
 			continue;
 		}
 
+		let rollbackEvent: WorkflowErrorEvent | undefined;
 		try {
 			await awaitWithEviction(
 				action.rollback(rollbackContext, action.output),
@@ -310,11 +330,42 @@ async function executeRollback<TInput, TOutput>(
 			}
 			metadata.rollbackError =
 				error instanceof Error ? error.message : String(error);
+			if (onError) {
+					rollbackEvent = {
+						rollback: {
+							workflowId,
+							stepName: action.name,
+							error: extractErrorInfo(error),
+						},
+					};
+				}
+			if (error instanceof Error) {
+				markErrorReported(error);
+			}
 			throw error;
 		} finally {
 			metadata.dirty = true;
 			await flush(storage, driver, historyNotifier);
+			if (rollbackEvent && onError) {
+				await notifyError(onError, logger, rollbackEvent);
+			}
 		}
+	}
+}
+
+async function notifyError(
+	onError: NonNullable<RunWorkflowOptions["onError"]>,
+	logger: Logger | undefined,
+	event: WorkflowErrorEvent,
+): Promise<void> {
+	try {
+		await onError(event);
+	} catch (error) {
+		logger?.warn({
+			msg: "workflow error hook failed",
+			hookEventType: getErrorEventTag(event),
+			error: extractErrorInfo(error),
+		});
 	}
 }
 
@@ -362,12 +413,12 @@ async function setRetryState<TOutput>(
 	storage: Storage,
 	driver: EngineDriver,
 	workflowId: string,
+	retryAt: number,
 	historyNotifier?: HistoryNotifier,
 ): Promise<WorkflowResult<TOutput>> {
 	storage.state = "sleeping";
 	await flush(storage, driver, historyNotifier);
 
-	const retryAt = Date.now() + 100;
 	await driver.setAlarm(workflowId, retryAt);
 
 	return { state: "sleeping", sleepUntil: retryAt };
@@ -435,6 +486,7 @@ async function executeLiveWorkflow<TInput, TOutput>(
 	abortController: AbortController,
 	runtime: LiveRuntime,
 	onHistoryUpdated?: (history: WorkflowHistorySnapshot) => void,
+	onError?: RunWorkflowOptions["onError"],
 	logger?: Logger,
 ): Promise<WorkflowResult<TOutput>> {
 	let lastResult: WorkflowResult<TOutput> | undefined;
@@ -448,6 +500,7 @@ async function executeLiveWorkflow<TInput, TOutput>(
 			messageDriver,
 			abortController,
 			onHistoryUpdated,
+			onError,
 			logger,
 		);
 		lastResult = result;
@@ -547,6 +600,7 @@ export function runWorkflow<TInput, TOutput>(
 					abortController,
 					liveRuntime,
 					options.onHistoryUpdated,
+					options.onError,
 					logger,
 				)
 			: executeWorkflow(
@@ -557,6 +611,7 @@ export function runWorkflow<TInput, TOutput>(
 					messageDriver,
 					abortController,
 					options.onHistoryUpdated,
+					options.onError,
 					logger,
 				);
 
@@ -684,6 +739,7 @@ async function executeWorkflow<TInput, TOutput>(
 	messageDriver: WorkflowMessageDriver,
 	abortController: AbortController,
 	onHistoryUpdated?: (history: WorkflowHistorySnapshot) => void,
+	onError?: RunWorkflowOptions["onError"],
 	logger?: Logger,
 ): Promise<WorkflowResult<TOutput>> {
 	const storage = await loadStorage(driver);
@@ -737,6 +793,7 @@ async function executeWorkflow<TInput, TOutput>(
 				abortController,
 				storage,
 				historyNotifier,
+				onError,
 				logger,
 			);
 		} catch (error) {
@@ -769,6 +826,7 @@ async function executeWorkflow<TInput, TOutput>(
 		undefined,
 		false,
 		historyNotifier,
+		onError,
 		logger,
 	);
 
@@ -813,12 +871,21 @@ async function executeWorkflow<TInput, TOutput>(
 				storage,
 				driver,
 				workflowId,
+				error.retryAt,
 				historyNotifier,
 			);
 		}
 
 		if (error instanceof RollbackCheckpointError) {
 			await setFailedState(storage, driver, error, historyNotifier);
+			if (onError && !isErrorReported(error)) {
+				await notifyError(onError, logger, {
+					workflow: {
+						workflowId,
+						error: extractErrorInfo(error),
+					},
+				});
+			}
 			throw error;
 		}
 
@@ -837,6 +904,7 @@ async function executeWorkflow<TInput, TOutput>(
 				abortController,
 				storage,
 				historyNotifier,
+				onError,
 				logger,
 			);
 		} catch (rollbackError) {
@@ -848,59 +916,22 @@ async function executeWorkflow<TInput, TOutput>(
 
 		storage.state = "failed";
 		await flush(storage, driver, historyNotifier);
+		if (onError && !isErrorReported(error)) {
+			await notifyError(onError, logger, {
+				workflow: {
+					workflowId,
+					error: extractErrorInfo(error),
+				},
+			});
+			if (
+				error instanceof CriticalError ||
+				error instanceof RollbackError ||
+				error instanceof StepExhaustedError
+			) {
+				markErrorReported(error);
+			}
+		}
 
 		throw error;
 	}
-}
-
-/**
- * Extract structured error information from an error.
- */
-function extractErrorInfo(error: unknown): {
-	name: string;
-	message: string;
-	stack?: string;
-	metadata?: Record<string, unknown>;
-} {
-	if (error instanceof Error) {
-		const result: {
-			name: string;
-			message: string;
-			stack?: string;
-			metadata?: Record<string, unknown>;
-		} = {
-			name: error.name,
-			message: error.message,
-			stack: error.stack,
-		};
-
-		// Extract custom properties from error
-		const metadata: Record<string, unknown> = {};
-		for (const key of Object.keys(error)) {
-			if (key !== "name" && key !== "message" && key !== "stack") {
-				const value = (error as unknown as Record<string, unknown>)[
-					key
-				];
-				// Only include serializable values
-				if (
-					typeof value === "string" ||
-					typeof value === "number" ||
-					typeof value === "boolean" ||
-					value === null
-				) {
-					metadata[key] = value;
-				}
-			}
-		}
-		if (Object.keys(metadata).length > 0) {
-			result.metadata = metadata;
-		}
-
-		return result;
-	}
-
-	return {
-		name: "Error",
-		message: String(error),
-	};
 }

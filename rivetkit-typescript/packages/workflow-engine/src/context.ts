@@ -1,6 +1,11 @@
 import type { Logger } from "pino";
 import type { EngineDriver } from "./driver.js";
 import {
+	extractErrorInfo,
+	getErrorEventTag,
+	markErrorReported,
+} from "./error-utils.js";
+import {
 	CancelledError,
 	CriticalError,
 	EntryInProgressError,
@@ -50,6 +55,8 @@ import type {
 	StepConfig,
 	Storage,
 	WorkflowContextInterface,
+	WorkflowErrorEvent,
+	WorkflowErrorHandler,
 	WorkflowQueue,
 	WorkflowQueueMessage,
 	WorkflowQueueNextBatchOptions,
@@ -117,6 +124,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	private usedNamesInExecution = new Set<string>();
 	private pendingCompletableMessageIds = new Set<string>();
 	private historyNotifier?: () => void;
+	private onError?: WorkflowErrorHandler;
 	private logger?: Logger;
 
 	constructor(
@@ -130,6 +138,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		rollbackActions?: RollbackAction[],
 		rollbackCheckpointSet = false,
 		historyNotifier?: () => void,
+		onError?: WorkflowErrorHandler,
 		logger?: Logger,
 	) {
 		this.currentLocation = location;
@@ -138,6 +147,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		this.rollbackActions = rollbackActions;
 		this.rollbackCheckpointSet = rollbackCheckpointSet;
 		this.historyNotifier = historyNotifier;
+		this.onError = onError;
 		this.logger = logger;
 	}
 
@@ -192,6 +202,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			this.rollbackActions,
 			this.rollbackCheckpointSet,
 			this.historyNotifier,
+			this.onError,
 			this.logger,
 		);
 	}
@@ -205,6 +216,48 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	): void {
 		if (!this.logger) return;
 		this.logger[level](data);
+	}
+
+	private async notifyError(event: WorkflowErrorEvent): Promise<void> {
+		if (!this.onError) {
+			return;
+		}
+
+		try {
+			await this.onError(event);
+		} catch (error) {
+			this.log("warn", {
+				msg: "workflow error hook failed",
+				hookEventType: getErrorEventTag(event),
+				error: extractErrorInfo(error),
+			});
+		}
+	}
+
+	private async notifyStepError<T>(
+		config: StepConfig<T>,
+		attempt: number,
+		error: unknown,
+		opts: {
+			willRetry: boolean;
+			retryDelay?: number;
+			retryAt?: number;
+		},
+	): Promise<void> {
+		const maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
+		await this.notifyError({
+			step: {
+				workflowId: this.workflowId,
+				stepName: config.name,
+				attempt,
+				maxRetries,
+				remainingRetries: Math.max(0, maxRetries - (attempt - 1)),
+				willRetry: opts.willRetry,
+				retryDelay: opts.retryDelay,
+				retryAt: opts.retryAt,
+				error: extractErrorInfo(error),
+			},
+		});
 	}
 
 	/**
@@ -406,12 +459,26 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			// Check if we should retry
 			const maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
 
-			if (metadata.attempts >= maxRetries) {
+			if (metadata.attempts > maxRetries) {
 				// Prefer step history error, but fall back to metadata since
 				// driver implementations may persist metadata without the history
 				// entry error (e.g. partial writes/crashes between attempts).
 				const lastError = stepData.error ?? metadata.error;
-				throw new StepExhaustedError(config.name, lastError);
+				const exhaustedError = markErrorReported(
+					new StepExhaustedError(config.name, lastError),
+				);
+				if (metadata.status !== "exhausted") {
+					metadata.status = "exhausted";
+					metadata.dirty = true;
+					await this.flushStorage();
+					await this.notifyStepError(
+						config,
+						metadata.attempts,
+						exhaustedError,
+						{ willRetry: false },
+					);
+				}
+				throw exhaustedError;
 			}
 
 			// Calculate backoff and yield to scheduler
@@ -449,6 +516,11 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		}
 
 		const metadata = getOrCreateMetadata(this.storage, entry.id);
+		const maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
+		const retryBackoffBase =
+			config.retryBackoffBase ?? DEFAULT_RETRY_BACKOFF_BASE;
+		const retryBackoffMax =
+			config.retryBackoffMax ?? DEFAULT_RETRY_BACKOFF_MAX;
 		metadata.status = "running";
 		metadata.attempts++;
 		metadata.lastAttemptAt = Date.now();
@@ -503,7 +575,10 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				metadata.status = "exhausted";
 				metadata.error = String(error);
 				await this.flushStorage();
-				throw new CriticalError(error.message);
+				await this.notifyStepError(config, metadata.attempts, error, {
+					willRetry: false,
+				});
+				throw markErrorReported(new CriticalError(error.message));
 			}
 
 			if (
@@ -517,19 +592,56 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				metadata.status = "exhausted";
 				metadata.error = String(error);
 				await this.flushStorage();
-				throw error;
+				await this.notifyStepError(config, metadata.attempts, error, {
+					willRetry: false,
+				});
+				throw markErrorReported(error);
 			}
 
 			if (entry.kind.type === "step") {
 				entry.kind.data.error = String(error);
 			}
 			entry.dirty = true;
-			metadata.status = "failed";
+			const willRetry = metadata.attempts <= maxRetries;
+			metadata.status = willRetry ? "failed" : "exhausted";
 			metadata.error = String(error);
 
 			await this.flushStorage();
+			if (willRetry) {
+				const retryDelay = calculateBackoff(
+					metadata.attempts,
+					retryBackoffBase,
+					retryBackoffMax,
+				);
+				const retryAt = metadata.lastAttemptAt + retryDelay;
+				await this.notifyStepError(
+					config,
+					metadata.attempts,
+					error,
+					{
+						willRetry: true,
+						retryDelay,
+						retryAt,
+					},
+				);
+				throw new StepFailedError(
+					config.name,
+					error,
+					metadata.attempts,
+					retryAt,
+				);
+			}
 
-			throw new StepFailedError(config.name, error, metadata.attempts);
+			const exhaustedError = markErrorReported(
+				new StepExhaustedError(config.name, String(error)),
+			);
+			await this.notifyStepError(
+				config,
+				metadata.attempts,
+				error,
+				{ willRetry: false },
+			);
+			throw exhaustedError;
 		}
 	}
 

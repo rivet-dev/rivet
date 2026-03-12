@@ -91,6 +91,137 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 			expect(next.ticks).toBeGreaterThan(initial.ticks);
 		});
 
+		test("workflow onError reports retry metadata", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.workflowErrorHookActor.getOrCreate([
+				"workflow-error-hook",
+			]);
+
+			let state = await actor.getErrorState();
+			for (
+				let i = 0;
+				i < 80 && (state.attempts < 2 || state.events.length === 0);
+				i++
+			) {
+				await waitFor(driverTestConfig, 50);
+				state = await actor.getErrorState();
+			}
+
+			expect(state.attempts).toBe(2);
+			expect(state.events).toHaveLength(1);
+			expect(state.events[0]).toEqual(
+				expect.objectContaining({
+					step: expect.objectContaining({
+						stepName: "flaky",
+						attempt: 1,
+						willRetry: true,
+						retryDelay: 1,
+						error: expect.objectContaining({
+							name: "Error",
+							message: "workflow hook failed",
+						}),
+					}),
+				}),
+			);
+		});
+
+		test("workflow onError can update actor state", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.workflowErrorHookEffectsActor.getOrCreate([
+				"workflow-error-state",
+			]);
+
+			await actor.startWorkflow();
+
+			let state = await actor.getErrorState();
+			for (
+				let i = 0;
+				i < 80 &&
+				(state.attempts < 2 ||
+					state.lastError === null ||
+					state.errorCount === 0);
+				i++
+			) {
+				await waitFor(driverTestConfig, 50);
+				state = await actor.getErrorState();
+			}
+
+			expect(state.attempts).toBe(2);
+			expect(state.errorCount).toBe(1);
+			expect(state.lastError).toEqual(
+				expect.objectContaining({
+					step: expect.objectContaining({
+						stepName: "flaky",
+						attempt: 1,
+						willRetry: true,
+						retryDelay: 1,
+						error: expect.objectContaining({
+							name: "Error",
+							message: "workflow hook failed",
+						}),
+					}),
+				}),
+			);
+		});
+
+		test("workflow onError can broadcast actor events", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.workflowErrorHookEffectsActor
+				.getOrCreate(["workflow-error-broadcast"])
+				.connect();
+
+			try {
+				const eventPromise = new Promise((resolve) => {
+					actor.once("workflowError", resolve);
+				});
+
+				await actor.startWorkflow();
+
+				const event = await eventPromise;
+				expect(event).toEqual(
+					expect.objectContaining({
+						step: expect.objectContaining({
+							stepName: "flaky",
+							attempt: 1,
+							willRetry: true,
+							retryDelay: 1,
+							error: expect.objectContaining({
+								name: "Error",
+								message: "workflow hook failed",
+							}),
+						}),
+					}),
+				);
+			} finally {
+				await actor.dispose();
+			}
+		});
+
+		test("workflow onError can enqueue actor messages", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.workflowErrorHookEffectsActor.getOrCreate([
+				"workflow-error-queue",
+			]);
+
+			await actor.startWorkflow();
+
+			const queuedError = await actor.receiveQueuedError();
+			expect(queuedError).toEqual(
+				expect.objectContaining({
+					step: expect.objectContaining({
+						stepName: "flaky",
+						attempt: 1,
+						willRetry: true,
+						retryDelay: 1,
+						error: expect.objectContaining({
+							name: "Error",
+							message: "workflow hook failed",
+						}),
+					}),
+				}),
+			);
+		});
+
 		test.skipIf(driverTestConfig.skip?.sleep)(
 			"completed workflows sleep instead of destroying the actor",
 			async (c) => {
@@ -126,6 +257,50 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 				expect(state.runCount).toBeGreaterThan(0);
 				expect(state.sleepCount).toBeGreaterThan(0);
 				expect(state.startCount).toBeGreaterThan(1);
+			},
+		);
+
+		test.skipIf(driverTestConfig.skip?.sleep)(
+			"workflow onError is not reported again after sleep and wake",
+			async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor = client.workflowErrorHookSleepActor.getOrCreate([
+					"workflow-error-hook-sleep",
+				]);
+
+				let state = await actor.getErrorState();
+				for (
+					let i = 0;
+					i < 80 &&
+					(state.attempts < 2 || state.events.length === 0);
+					i++
+				) {
+					await waitFor(driverTestConfig, 50);
+					state = await actor.getErrorState();
+				}
+
+				expect(state.attempts).toBe(2);
+				expect(state.events).toHaveLength(1);
+				expect(state.wakeCount).toBe(1);
+
+				await actor.triggerSleep();
+				await waitFor(driverTestConfig, 250);
+
+				let resumedState = await actor.getErrorState();
+				for (
+					let i = 0;
+					i < 40 &&
+					(resumedState.wakeCount < 2 || resumedState.sleepCount < 1);
+					i++
+				) {
+					await waitFor(driverTestConfig, 50);
+					resumedState = await actor.getErrorState();
+				}
+
+				expect(resumedState.sleepCount).toBeGreaterThanOrEqual(1);
+				expect(resumedState.wakeCount).toBeGreaterThanOrEqual(2);
+				expect(resumedState.attempts).toBe(2);
+				expect(resumedState.events).toHaveLength(1);
 			},
 		);
 
