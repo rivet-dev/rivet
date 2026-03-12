@@ -1365,6 +1365,9 @@ export class ActorInstance<
 			runFn(this.actorContext),
 		);
 
+		// Do not destroy or immediately sleep the actor when run exits. Finished
+		// workflows must stay inspectable when something goes wrong, and callers
+		// may still need to invoke actions after the run handler has completed.
 		if (runResult instanceof Promise) {
 			this.#runPromise = runResult
 				.then(() => {
@@ -1382,7 +1385,7 @@ export class ActorInstance<
 						this.endTraceSpan(runSpan, { code: "OK" });
 					}
 					this.#rLog.info({
-						msg: "run handler exited, actor will sleep when idle",
+						msg: "run handler exited",
 					});
 				})
 				.catch((error) => {
@@ -1397,13 +1400,12 @@ export class ActorInstance<
 						return;
 					}
 
-					// Run handler threw an error. Log it and sleep the actor when idle.
 					this.endTraceSpan(runSpan, {
 						code: "ERROR",
 						message: stringifyError(error),
 					});
 					this.#rLog.error({
-						msg: "run handler threw error, actor will sleep when idle",
+						msg: "run handler threw error",
 						error: stringifyError(error),
 					});
 				})
@@ -1414,7 +1416,7 @@ export class ActorInstance<
 		} else if (runSpan.isActive()) {
 			this.endTraceSpan(runSpan, { code: "OK" });
 			this.#rLog.info({
-				msg: "run handler exited, actor will sleep when idle",
+				msg: "run handler exited",
 			});
 			this.#runHandlerActive = false;
 			this.resetSleepTimer();
@@ -1646,8 +1648,6 @@ export class ActorInstance<
 		if (this.#sleepCalled) return;
 
 		if (canSleep === CanSleep.Yes) {
-			// Keep the normal idle timeout even after a finite run exits so the
-			// actor remains available briefly for follow-up actions or other work.
 			this.#sleepTimeout = setTimeout(() => {
 				this.startSleep();
 			}, this.#config.options.sleepTimeout);

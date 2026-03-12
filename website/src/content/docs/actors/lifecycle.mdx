@@ -271,10 +271,6 @@ The handler exposes `c.aborted` for loop checks and `c.abortSignal` for cancelin
 - If the `run` handler throws an error, the actor logs the error and then follows its normal idle sleep timeout once it becomes idle
 - On shutdown, the actor waits for the `run` handler to complete (with configurable timeout via `options.runStopTimeout`)
 
-Actors are only destroyed when you call `c.destroy()` explicitly.
-
-If you have a finite `run` handler and want the actor to be destroyed after it finishes its work, call `c.destroy()` before returning.
-
 ```typescript
 import { actor } from "rivetkit";
 
@@ -337,6 +333,8 @@ const queueConsumer = actor({
   }
 });
 ```
+
+Finite `run` handlers leave the actor alive after they finish. If you want a one shot task to clean itself up when it is done, call `c.destroy()` before returning.
 
 ```typescript
 import { actor } from "rivetkit";

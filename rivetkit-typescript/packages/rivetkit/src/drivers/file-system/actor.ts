@@ -34,6 +34,8 @@ export class FileSystemActorDriver implements ActorDriver {
 		this.#state = state;
 
 		if (this.#state.persist) {
+			// Only define startSleep when persistence is enabled. The actor runtime
+			// checks for this property to determine whether the driver supports sleep.
 			this.startSleep = (actorId: string) => {
 				// Spawns the sleepActor promise.
 				this.#state.sleepActor(actorId);
