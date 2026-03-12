@@ -9,6 +9,7 @@ import {
 
 type ActorKvOperations = DatabaseProviderContext["kv"];
 type SqliteBindings = NonNullable<Parameters<IDatabase["run"]>[1]>;
+type SqliteBindingObject = Record<string, unknown>;
 
 function isSqliteBindingValue(value: unknown): boolean {
 	if (
@@ -28,14 +29,49 @@ function isSqliteBindingValue(value: unknown): boolean {
 	return false;
 }
 
-export function toSqliteBindings(args: unknown[]): SqliteBindings {
-	for (const value of args) {
-		if (!isSqliteBindingValue(value)) {
-			throw new Error(`unsupported sqlite binding type: ${typeof value}`);
-		}
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return false;
+	}
+	return Object.getPrototypeOf(value) === Object.prototype;
+}
+
+export function isSqliteBindingObject(
+	value: unknown,
+): value is SqliteBindingObject {
+	if (!isPlainObject(value)) {
+		return false;
 	}
 
-	return args as SqliteBindings;
+	return Object.values(value).every((entry) => isSqliteBindingValue(entry));
+}
+
+export function isSqliteBindingArray(value: unknown): value is unknown[] {
+	return (
+		Array.isArray(value) &&
+		value.every((entry) => isSqliteBindingValue(entry))
+	);
+}
+
+export function toSqliteBindings(
+	input: unknown[] | SqliteBindingObject,
+): SqliteBindings {
+	if (Array.isArray(input)) {
+		for (const value of input) {
+			if (!isSqliteBindingValue(value)) {
+				throw new Error(
+					`unsupported sqlite binding type: ${typeof value}`,
+				);
+			}
+		}
+		return input as SqliteBindings;
+	}
+
+	if (isSqliteBindingObject(input)) {
+		return input as SqliteBindings;
+	}
+
+	throw new Error("unsupported sqlite binding collection");
 }
 
 /**

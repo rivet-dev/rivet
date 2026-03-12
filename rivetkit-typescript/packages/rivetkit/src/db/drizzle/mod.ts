@@ -5,7 +5,12 @@ import {
 	type SqliteRemoteDatabase,
 } from "drizzle-orm/sqlite-proxy";
 import type { DatabaseProvider, RawAccess } from "../config";
-import { AsyncMutex, createActorKvStore, toSqliteBindings } from "../shared";
+import {
+	AsyncMutex,
+	createActorKvStore,
+	isSqliteBindingObject,
+	toSqliteBindings,
+} from "../shared";
 
 export * from "./sqlite-core";
 
@@ -268,9 +273,14 @@ export function db<
 						let rows: TRow[];
 
 						if (args.length > 0) {
+							const bindings =
+								args.length === 1 &&
+								isSqliteBindingObject(args[0])
+									? toSqliteBindings(args[0])
+									: toSqliteBindings(args);
 							const result = await waDb.query(
 								query,
-								toSqliteBindings(args),
+								bindings,
 							);
 							rows = result.rows.map((row: unknown[]) => {
 								const obj: Record<string, unknown> = {};

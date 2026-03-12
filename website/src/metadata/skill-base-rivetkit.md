@@ -28,6 +28,7 @@ Use the inspector HTTP API to examine running actors. These endpoints are access
 - `GET /inspector/connections` - active connections
 - `GET /inspector/rpcs` - available actions
 - `POST /inspector/action/{name}` - execute an action with `{"args": [...]}`
+- `POST /inspector/database/execute` - run SQL with `{"sql": "...", "args": [...]}` or `{"sql": "...", "properties": {...}}` for reads or mutations
 - `GET /inspector/queue?limit=50` - queue status
 - `GET /inspector/traces?startMs=0&endMs=...&limit=1000` - trace spans (OTLP JSON)
 - `GET /inspector/workflow-history` - workflow history and status as JSON (`nameRegistry`, `entries`, `entryMetadata`)
