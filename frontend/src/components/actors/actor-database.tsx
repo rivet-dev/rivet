@@ -373,13 +373,13 @@ function ActorDatabaseBrowser({ actorId }: ActorDatabaseProps) {
 			}
 			const editId = createStagedEditId(rowKey, context.column.name);
 			if (stagedEdits[editId]) {
-				return "bg-amber-50/80 ring-1 ring-inset ring-amber-200";
+				return "bg-muted/40";
 			}
 			if (
 				editingCell?.rowKey === rowKey &&
 				editingCell.columnName === context.column.name
 			) {
-				return "bg-primary/5 ring-1 ring-inset ring-primary/20";
+				return "bg-muted/55";
 			}
 			if (canEditRows && !isBlobColumn(context.column, context.value)) {
 				return "cursor-text";
