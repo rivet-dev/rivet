@@ -33,7 +33,7 @@ pub struct Output {
 	pub runtime: String,
 	pub version: String,
 	pub actor_names: Vec<ActorNameMetadata>,
-	pub runner_version: Option<u32>,
+	pub runner_version: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
@@ -44,7 +44,7 @@ pub struct ActorNameMetadata {
 
 #[derive(Deserialize)]
 struct ServerlessMetadataRunner {
-	version: Option<u32>,
+	version: Option<u64>,
 }
 
 #[derive(Deserialize)]

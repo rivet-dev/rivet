@@ -14,7 +14,7 @@ pub struct ServerlessMetadata {
 	pub runtime: String,
 	pub version: String,
 	pub actor_names: HashMap<String, serde_json::Value>,
-	pub runner_version: Option<u32>,
+	pub runner_version: Option<u64>,
 }
 
 impl From<pegboard::ops::serverless_metadata::fetch::Output> for ServerlessMetadata {
