@@ -126,7 +126,7 @@ An actor stays in "pending" status when Rivet is waiting for a server to accept 
 
 **Serverless**:
 
-- Your provider configuration may not have the region enabled that the actor needs. Verify your provider config includes the correct regions.
+- A region may have been removed from your provider configuration while an existing actor still lives in that region. The actor has no available server to start on because no provider serves that region anymore. Re-add the region to your provider config or destroy the affected actors.
 - Check your backend logs for errors on the `/api/rivet/start` endpoint.
 
 **Runners**:
