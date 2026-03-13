@@ -95,13 +95,11 @@ export function WorkflowVisualizer({
 	const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
 		if (node.type === "workflow" && node.data) {
 			setSelectedNode(node.data as WorkflowNodeData);
-			setContextMenu(null);
 		}
 	}, []);
 
 	const onPaneClick = useCallback(() => {
 		setSelectedNode(null);
-		setContextMenu(null);
 	}, []);
 
 	const replayState = selectedNode
