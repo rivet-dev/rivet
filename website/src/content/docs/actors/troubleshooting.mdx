@@ -86,6 +86,17 @@ Rivet received an unexpected response from your serverless endpoint. This typica
 
 An unexpected error occurred within Rivet. If this persists, please [contact support](https://rivet.dev/docs).
 
+## Actors not upgrading to new code
+
+If your actors are still running old code after deploying a new version, your [versioning](/docs/actors/versions) is likely not configured correctly.
+
+Without versioning, Rivet has no way to distinguish old deployments from new ones. The behavior depends on your [runtime mode](/docs/general/runtime-modes):
+
+- **Serverless**: Old requests may still be open from the previous deployment, so actors continue running on the old version's connection until those requests close.
+- **Runners**: The old runner container is still running and will continue accepting new actors. New actors may be scheduled on the old runner instead of the new one.
+
+To fix this, configure a version number in your [registry configuration](/docs/connect/registry-configuration). When a new version is deployed, Rivet will allocate new actors to the latest version and optionally drain old actors to migrate them.
+
 ## Actor status is pending
 
 See [Actor Statuses](/docs/actors/statuses) for more about this status.

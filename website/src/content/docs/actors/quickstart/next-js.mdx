@@ -143,3 +143,7 @@ See the [Vercel deployment guide](/docs/connect/vercel) for detailed instruction
 
 </Steps>
 
+<Warning>
+It's very important to [configure versioning](/docs/actors/versions) for your actors before deploying to production. Without versioning, actors can regress by running on older runner versions, and existing actors will never be forced to migrate to new runners — they'll continue running indefinitely on the old runners until they exit.
+</Warning>
+
