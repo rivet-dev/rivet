@@ -340,8 +340,8 @@ function ActorDatabaseSqlShell({ actorId }: ActorDatabaseProps) {
 			return;
 		}
 
-		setBindingChangeToken(0);
 		const timer = window.setTimeout(() => {
+			setBindingChangeToken(0);
 			void runSql();
 		}, 250);
 		return () => window.clearTimeout(timer);
