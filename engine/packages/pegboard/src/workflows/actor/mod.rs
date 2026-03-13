@@ -28,7 +28,7 @@ pub struct Input {
 	pub runner_name_selector: String,
 	pub crash_policy: CrashPolicy,
 
-	/// Arbitrary user string.
+	/// Arbitrary user-provided binary encoded in base64. We assume this is valid base64.
 	pub input: Option<String>,
 }
 
