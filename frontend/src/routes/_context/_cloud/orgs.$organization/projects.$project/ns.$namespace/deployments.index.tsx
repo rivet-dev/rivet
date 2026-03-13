@@ -75,9 +75,8 @@ function RouteComponent() {
 						</HelpDropdown>
 					</div>
 					<p className="max-w-5xl mb-6 px-6 @6xl:px-0 text-muted-foreground">
-						Deployments are live instances of your application
-						running in the cloud. Create, monitor, and manage your
-						deployments here.
+						Deployments are Docker images that can be deployed as
+						your Runners.
 					</p>
 				</div>
 
@@ -135,7 +134,6 @@ function Deployments() {
 				data !== undefined,
 		);
 
-	// sort images based on the createdAt timestamp, with the most recent first
 	const sorted = images.toSorted((a, b) => {
 		const aTimestamp = new Date(a.createdAt).getTime();
 		const bTimestamp = new Date(b.createdAt).getTime();

@@ -947,10 +947,10 @@ function FrontendSetup() {
 						Troubleshooting
 					</AccordionTrigger>
 					<AccordionContent className="px-4 py-2  rounded-md border">
-						<p className="text-sm text-muted-foreground">
+						<p className="mt-2">
 							If your actor isn't showing up, check the following:
 						</p>
-						<ul className="list-disc list-inside mt-2 text-sm text-muted-foreground">
+						<ul className="list-disc list-inside mt-2">
 							<li>
 								<p className="inline-block">
 									The actor file is in the correct location
