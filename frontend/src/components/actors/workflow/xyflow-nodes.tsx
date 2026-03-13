@@ -368,7 +368,10 @@ export function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeType>) {
 					data.status !== "retrying" && (
 						<span
 							className="absolute bottom-1.5 right-3 text-[10px]"
-							style={{ color: "#71717a" }}
+							style={{
+								color: "#71717a",
+								right: isFailed ? 36 : 12,
+							}}
 						>
 							{formatDuration(data.duration)}
 						</span>
@@ -514,19 +517,11 @@ export function TryGroupNode({ data }: NodeProps<TryGroupNodeType>) {
 					<TypeIcon type="try" size={11} />
 				</div>
 				<div className="min-w-0">
-					<div className="flex items-center gap-2">
-						<span
-							className="text-[9px] font-semibold uppercase tracking-[0.2em]"
-							style={{ color: accentColor }}
-						>
-							Try
-						</span>
-						<span
-							className="truncate text-xs font-medium"
-							style={{ color: "hsl(var(--foreground))" }}
-						>
-							{data.label}
-						</span>
+					<div
+						className="truncate text-xs font-medium"
+						style={{ color: "hsl(var(--foreground))" }}
+					>
+						{data.label}
 					</div>
 					<div
 						className="truncate text-[10px]"
