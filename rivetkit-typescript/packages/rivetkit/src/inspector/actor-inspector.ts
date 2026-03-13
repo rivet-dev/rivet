@@ -122,26 +122,44 @@ export class ActorInspector {
 			const tableInfos = [];
 			for (const table of tables) {
 				const quoted = `"${escapeDoubleQuotes(table.name)}"`;
-				const sample = (await db.execute(
-					`SELECT * FROM ${quoted} LIMIT 1`,
-				)) as Record<string, unknown>[];
+				const columns = (await db.execute(
+					`PRAGMA table_info(${quoted})`,
+				)) as Array<{
+					cid: number;
+					name: string;
+					type: string;
+					notnull: number;
+					dflt_value: string | null;
+					pk: number;
+				}>;
+				const foreignKeys = (await db.execute(
+					`PRAGMA foreign_key_list(${quoted})`,
+				)) as Array<{
+					id: number;
+					table: string;
+					from: string;
+					to: string;
+				}>;
 				const countResult = (await db.execute(
 					`SELECT COUNT(*) as count FROM ${quoted}`,
 				)) as { count: number }[];
 
-				const columnNames = sample?.[0] ? Object.keys(sample[0]) : [];
-
 				tableInfos.push({
 					table: { schema: "main", name: table.name, type: table.type },
-					columns: columnNames.map((name, cid) => ({
-						cid,
-						name,
-						type: "",
-						notnull: 0,
-						dflt_value: null,
-						pk: 0,
+					columns: columns.map((column) => ({
+						cid: column.cid,
+						name: column.name,
+						type: column.type,
+						notnull: column.notnull,
+						dflt_value: column.dflt_value,
+						pk: column.pk,
 					})),
-					foreignKeys: [],
+					foreignKeys: foreignKeys.map((foreignKey) => ({
+						id: foreignKey.id,
+						table: foreignKey.table,
+						from: foreignKey.from,
+						to: foreignKey.to,
+					})),
 					records: countResult?.[0]?.count ?? 0,
 				});
 			}

@@ -15,7 +15,7 @@ import {
 	type SortingState,
 	useReactTable as useTable,
 } from "@tanstack/react-table";
-import { Fragment, useCallback, useMemo, useState } from "react";
+import { Fragment, type ReactNode, useCallback, useMemo, useState } from "react";
 import {
 	Badge,
 	Button,
@@ -33,6 +33,13 @@ import type {
 	DatabaseForeignKey,
 } from "../actor-inspector-context";
 
+export interface DatabaseTableCellContext {
+	column: DatabaseColumn;
+	row: Record<string, unknown>;
+	value: unknown;
+	rowIndex: number;
+}
+
 interface DatabaseTableProps {
 	columns: DatabaseColumn[];
 	data: unknown[];
@@ -41,6 +48,9 @@ interface DatabaseTableProps {
 	enableRowSelection?: boolean;
 	enableSorting?: boolean;
 	enableColumnResizing?: boolean;
+	renderCell?: (context: DatabaseTableCellContext) => ReactNode;
+	getCellClassName?: (context: DatabaseTableCellContext) => string | undefined;
+	onCellDoubleClick?: (context: DatabaseTableCellContext) => void;
 }
 
 export function DatabaseTable({
@@ -51,10 +61,22 @@ export function DatabaseTable({
 	enableRowSelection = true,
 	enableSorting = true,
 	enableColumnResizing = true,
+	renderCell,
+	getCellClassName,
+	onCellDoubleClick,
 }: DatabaseTableProps) {
 	const columns = useMemo(() => {
 		return createColumns(dbCols, references, { enableRowSelection });
 	}, [dbCols, references, enableRowSelection]);
+	const dataColumnsByName = useMemo(
+		() =>
+			new Map(
+				dbCols.map((column) => {
+					return [column.name, column] as const;
+				}),
+			),
+		[dbCols],
+	);
 
 	const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 	const [sorting, setSorting] = useState<SortingState>([]);
@@ -188,24 +210,56 @@ export function DatabaseTable({
 					<Fragment key={row.id}>
 						<TableRow>
 							{row.getVisibleCells().map((cell) => (
-								<TableCell
-									key={cell.id}
-									className={cn(
-										"p-2 border-r font-mono-console",
-									)}
-									style={{
-										width: `calc(var(--col-${cell.column.id}-size) * 1px)`,
-									}}
-								>
-									<div className="flex items-center gap-2">
-										<div className="flex-1">
-											{flexRender(
-												cell.column.columnDef.cell,
-												cell.getContext(),
+								(() => {
+									const column = dataColumnsByName.get(
+										cell.column.id,
+									);
+									const cellContext = column
+										? {
+												column,
+												row: row.original,
+												value: row.original[column.name],
+												rowIndex: row.index,
+											}
+										: null;
+									return (
+										<TableCell
+											key={cell.id}
+											className={cn(
+												"p-2 border-r font-mono-console",
+												cellContext
+													? getCellClassName?.(
+															cellContext,
+													  )
+													: undefined,
 											)}
-										</div>
-									</div>
-								</TableCell>
+											style={{
+												width: `calc(var(--col-${cell.column.id}-size) * 1px)`,
+											}}
+											onDoubleClick={
+												cellContext && onCellDoubleClick
+													? () =>
+															onCellDoubleClick(
+																cellContext,
+															)
+													: undefined
+											}
+										>
+											<div className="flex items-center gap-2">
+												<div className="flex-1">
+													{cellContext && renderCell
+														? renderCell(cellContext)
+														: flexRender(
+																cell.column
+																	.columnDef
+																	.cell,
+																cell.getContext(),
+														  )}
+												</div>
+											</div>
+										</TableCell>
+									);
+								})()
 							))}
 						</TableRow>
 					</Fragment>
@@ -277,27 +331,41 @@ function createColumns(
 					</span>
 				),
 				cell: (info) => {
-					if (col.type === "blob") {
-						return (
-							<span className="text-xs text-muted-foreground font-mono-console">
-								BINARY
-							</span>
-						);
-					}
-					const value = info.getValue();
-					if (value === null) {
-						return (
-							<span className="text-xs text-muted-foreground font-mono-console">
-								NULL
-							</span>
-						);
-					}
-
-					return <>{String(info.getValue())}</>;
+					return renderDatabaseCellValue(col, info.getValue());
 				},
 			}),
 		),
 	];
+}
+
+export function renderDatabaseCellValue(
+	column: DatabaseColumn,
+	value: unknown,
+): ReactNode {
+	if (isBlobColumn(column, value)) {
+		return (
+			<span className="text-xs text-muted-foreground font-mono-console">
+				BINARY
+			</span>
+		);
+	}
+	if (value === null) {
+		return (
+			<span className="text-xs text-muted-foreground font-mono-console">
+				NULL
+			</span>
+		);
+	}
+
+	return <>{String(value)}</>;
+}
+
+export function isBlobColumn(column: DatabaseColumn, value?: unknown): boolean {
+	return (
+		column.type.toLowerCase() === "blob" ||
+		value instanceof Uint8Array ||
+		value instanceof ArrayBuffer
+	);
 }
 
 function ForeignKey({
