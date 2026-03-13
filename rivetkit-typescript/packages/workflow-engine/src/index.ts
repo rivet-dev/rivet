@@ -162,6 +162,7 @@ import {
 	buildWorkflowOutputKey,
 	buildWorkflowStateKey,
 } from "./keys.js";
+import { isLocationPrefix } from "./location.js";
 import {
 	createHistorySnapshot,
 	flush,
@@ -170,6 +171,8 @@ import {
 	loadStorage,
 } from "./storage.js";
 import type {
+	Entry,
+	EntryMetadata,
 	RollbackContextInterface,
 	RunWorkflowOptions,
 	Storage,
@@ -200,6 +203,12 @@ interface LiveRuntime {
 }
 
 type HistoryNotifier = (() => void) | undefined;
+
+type ReplayEntryRecord = {
+	key: string;
+	entry: Entry;
+	metadata: EntryMetadata;
+};
 
 function createLiveRuntime(): LiveRuntime {
 	return {
@@ -753,14 +762,14 @@ export async function replayWorkflowFromStep(
 			}),
 		),
 	);
+	const ordered = [...entries].sort((a, b) => {
+		if (a.metadata.createdAt !== b.metadata.createdAt) {
+			return a.metadata.createdAt - b.metadata.createdAt;
+		}
+		return a.key.localeCompare(b.key);
+	});
 
-	if (entries.some(({ metadata }) => metadata.status === "running")) {
-		throw new Error(
-			"Cannot replay a workflow while a step is currently running",
-		);
-	}
-
-	let entriesToDelete = entries;
+	let entriesToDelete = ordered;
 	if (entryId !== undefined) {
 		const target = entries.find(({ entry }) => entry.id === entryId);
 		if (!target) {
@@ -770,16 +779,25 @@ export async function replayWorkflowFromStep(
 			throw new Error("Workflow replay target must be a step");
 		}
 
-		const ordered = [...entries].sort((a, b) => {
-			if (a.metadata.createdAt !== b.metadata.createdAt) {
-				return a.metadata.createdAt - b.metadata.createdAt;
-			}
-			return a.key.localeCompare(b.key);
-		});
+		const replayBoundary = findReplayBoundaryEntry(entries, target);
 		const targetIndex = ordered.findIndex(
-			({ entry }) => entry.id === entryId,
+			({ entry }) => entry.id === replayBoundary.entry.id,
 		);
 		entriesToDelete = ordered.slice(targetIndex);
+	}
+
+	const entryIdsToDelete = new Set(
+		entriesToDelete.map(({ entry }) => entry.id),
+	);
+	if (
+		entries.some(
+			({ entry, metadata }) =>
+				metadata.status === "running" && !entryIdsToDelete.has(entry.id),
+		)
+	) {
+		throw new Error(
+			"Cannot replay a workflow while a step is currently running",
+		);
 	}
 
 	await Promise.all(
@@ -814,6 +832,32 @@ export async function replayWorkflowFromStep(
 	}
 
 	return createHistorySnapshot(storage);
+}
+
+function findReplayBoundaryEntry(
+	entries: ReplayEntryRecord[],
+	target: ReplayEntryRecord,
+): ReplayEntryRecord {
+	let boundary = target;
+	let boundaryDepth = -1;
+
+	for (const candidate of entries) {
+		if (candidate.entry.kind.type !== "loop") {
+			continue;
+		}
+		if (
+			candidate.entry.location.length >= target.entry.location.length ||
+			!isLocationPrefix(candidate.entry.location, target.entry.location)
+		) {
+			continue;
+		}
+		if (candidate.entry.location.length > boundaryDepth) {
+			boundary = candidate;
+			boundaryDepth = candidate.entry.location.length;
+		}
+	}
+
+	return boundary;
 }
 
 /**

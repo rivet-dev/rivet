@@ -234,12 +234,12 @@ export function workflow<
 	const runWithConfig = run as typeof run & {
 		[RUN_FUNCTION_CONFIG_SYMBOL]?: {
 			icon?: string;
-			inspector?: { workflow: typeof workflowInspector.adapter };
+			inspectorFactory?: (actor: unknown) => { workflow: ReturnType<typeof createWorkflowInspectorAdapter>["adapter"] } | undefined;
 		};
 	};
 	runWithConfig[RUN_FUNCTION_CONFIG_SYMBOL] = {
 		icon: "diagram-project",
-		inspectorFactory: (actor) => {
+		inspectorFactory: (actor: unknown) => {
 			if (!actor) {
 				return undefined;
 			}

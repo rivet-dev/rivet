@@ -341,7 +341,7 @@ export class ActorInspector {
 	}
 
 	getWorkflowHistoryJson(): {
-		history: number[] | null;
+		history: ReturnType<typeof serializeWorkflowHistoryForJson>;
 		isWorkflowEnabled: boolean;
 	} {
 		return {
