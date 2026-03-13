@@ -1178,6 +1178,133 @@ export const inProgressWorkflow: WorkflowHistory = {
 	],
 };
 
+// Workflow with tryStep and try block recovery
+export const tryWorkflow: WorkflowHistory = {
+	workflowId: "try-workflow-001",
+	state: "completed",
+	nameRegistry: [
+		"prepare",
+		"charge-card",
+		"payment-flow",
+		"parallel-verification",
+		"fraud",
+		"score-order",
+		"inventory",
+		"reserve-stock",
+		"finalize",
+	],
+	input: { orderId: "ord_123", amount: 4200 },
+	output: { status: "manual-review", recovered: true },
+	history: [
+		{
+			key: "prepare",
+			entry: {
+				id: "1",
+				location: [0],
+				kind: {
+					type: "step",
+					data: { output: { ready: true } },
+				},
+				dirty: false,
+				status: "completed",
+				startedAt: 1700000450000,
+				completedAt: 1700000450045,
+			},
+		},
+		{
+			key: "charge-card",
+			entry: {
+				id: "2",
+				location: [1],
+				kind: {
+					type: "step",
+					data: { error: "card declined" },
+				},
+				dirty: false,
+				status: "failed",
+				startedAt: 1700000450100,
+				completedAt: 1700000450280,
+				retryCount: 0,
+				error: "card declined",
+			},
+		},
+		{
+			key: "payment-flow/parallel-verification",
+			entry: {
+				id: "3",
+				location: [2, 3],
+				kind: {
+					type: "join",
+					data: {
+						branches: {
+							fraud: {
+								status: "completed",
+								output: { risk: "low" },
+							},
+							inventory: {
+								status: "failed",
+								error: "inventory mismatch",
+							},
+						},
+					},
+				},
+				dirty: false,
+				status: "failed",
+				startedAt: 1700000450400,
+				completedAt: 1700000450850,
+				error: "join failed",
+			},
+		},
+		{
+			key: "payment-flow/parallel-verification/fraud/score-order",
+			entry: {
+				id: "4",
+				location: [2, 3, 4, 5],
+				kind: {
+					type: "step",
+					data: { output: { score: 0.08 } },
+				},
+				dirty: false,
+				status: "completed",
+				startedAt: 1700000450410,
+				completedAt: 1700000450620,
+			},
+		},
+		{
+			key: "payment-flow/parallel-verification/inventory/reserve-stock",
+			entry: {
+				id: "5",
+				location: [2, 3, 6, 7],
+				kind: {
+					type: "step",
+					data: { error: "inventory mismatch" },
+				},
+				dirty: false,
+				status: "failed",
+				startedAt: 1700000450415,
+				completedAt: 1700000450790,
+				retryCount: 1,
+				error: "inventory mismatch",
+			},
+		},
+		{
+			key: "finalize",
+			entry: {
+				id: "6",
+				location: [8],
+				kind: {
+					type: "step",
+					data: { output: { queuedManualReview: true } },
+				},
+				dirty: false,
+				status: "completed",
+				startedAt: 1700000450960,
+				completedAt: 1700000451010,
+			},
+		},
+	],
+};
+
 // Workflow with retrying step
 export const retryWorkflow: WorkflowHistory = {
 	workflowId: "retry-workflow-001",

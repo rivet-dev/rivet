@@ -70,6 +70,39 @@ const { winner, value } = await ctx.race("timeout", [
 - Losing branches receive `ctx.abortSignal` and typically throw `CancelledError`.
 - If all branches fail, `RaceError` is thrown.
 
+## Handling Terminal Failures as Data
+
+Use `ctx.tryStep()` when a single step failure should become a value instead of failing the workflow:
+
+```ts
+const charge = await ctx.tryStep({
+  name: "charge-card",
+  maxRetries: 3,
+  run: async () => chargeCard(orderId),
+});
+
+if (!charge.ok) {
+  return {
+    status: "manual-review",
+    reason: charge.failure.error.message,
+  };
+}
+```
+
+Use `ctx.try()` when you want a named scope that can recover from terminal `step`, `join`, or `race` failures:
+
+```ts
+const payment = await ctx.try("payment-flow", async (blockCtx) => {
+  const auth = await blockCtx.step("authorize", () => authorize(orderId));
+  const capture = await blockCtx.step("capture", () => captureFunds(orderId));
+  return { auth, capture };
+});
+```
+
+- `ctx.tryStep()` and `ctx.try()` only catch terminal failures. Retry backoff, sleeps, queue waits, eviction, and history divergence still rethrow.
+- `RollbackError` is not caught by default. Opt in with `catch: ["rollback"]` when you want rollback failures returned as data.
+- `ctx.try()` still needs a stable name because the enclosed control-flow history is nested under that block.
+
 ## Messages in Control Flow
 
 `ctx.queue.next()` pauses for one required message. `ctx.queue.nextBatch()` supports optional / batch waits. Queue wait names are part of history, so keep them stable and unique.

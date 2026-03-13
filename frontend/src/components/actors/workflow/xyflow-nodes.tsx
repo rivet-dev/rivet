@@ -9,6 +9,7 @@ import {
 	faCodeMerge,
 	faEnvelope,
 	faFlag,
+	faLayerGroup,
 	faPlay,
 	faRefresh,
 	faSpinnerThird,
@@ -23,11 +24,11 @@ import {
 	Position,
 } from "@xyflow/react";
 import { useState } from "react";
-import { cn } from "@/components";
+import { cn } from "../../lib/utils";
 import type { EntryKindType, EntryStatus } from "./workflow-types";
 
 // Extended type for meta nodes
-type MetaExtendedEntryType = EntryKindType | "input" | "output";
+type MetaExtendedEntryType = EntryKindType | "input" | "output" | "try";
 
 // Type colors - matching the SVG workflow visualizer design
 export const TYPE_COLORS: Record<
@@ -76,6 +77,12 @@ export const TYPE_COLORS: Record<
 		icon: "#ec4899",
 		iconBg: "#ec489915",
 	},
+	try: {
+		bg: "hsl(var(--card))",
+		border: "hsl(var(--border))",
+		icon: "#14b8a6",
+		iconBg: "#14b8a615",
+	},
 	removed: {
 		bg: "hsl(var(--card))",
 		border: "hsl(var(--border))",
@@ -122,6 +129,10 @@ export function TypeIcon({
 			);
 		case "race":
 			return <Icon icon={faBolt} style={{ color, fontSize: size }} />;
+		case "try":
+			return (
+				<Icon icon={faLayerGroup} style={{ color, fontSize: size }} />
+			);
 		case "removed":
 			return <Icon icon={faTrash} style={{ color, fontSize: size }} />;
 		case "input":
@@ -165,6 +176,7 @@ export interface WorkflowNodeData {
 	summary: string;
 	entryType: MetaExtendedEntryType;
 	status: EntryStatus;
+	handledFailure?: boolean;
 	duration?: number;
 	retryCount?: number;
 	error?: string;
@@ -191,6 +203,7 @@ export const LOOP_PADDING_BOTTOM = 16;
 export function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeType>) {
 	const colors = TYPE_COLORS[data.entryType];
 	const isFailed = data.status === "failed";
+	const isHandledFailure = Boolean(data.handledFailure);
 	const [hovered, setHovered] = useState(false);
 
 	return (
@@ -211,9 +224,11 @@ export function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeType>) {
 					backgroundColor: colors.bg,
 					borderColor: selected
 						? "#52525b"
-						: isFailed
-							? "#ef4444"
-							: colors.border,
+						: isHandledFailure
+							? "#f59e0b"
+							: isFailed
+								? "#ef4444"
+								: colors.border,
 				}}
 			>
 				<NodeToolbar
@@ -241,6 +256,11 @@ export function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeType>) {
 								{data.status}
 							</span>
 						</div>
+						{isHandledFailure && (
+							<div style={{ color: "#f59e0b" }}>
+								Handled failure
+							</div>
+						)}
 						{data.duration !== undefined && (
 							<div
 								style={{
@@ -270,14 +290,44 @@ export function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeType>) {
 						style={{
 							height: 16,
 							background: "#18181b",
-							border: `1px solid ${isFailed ? "#ef4444" : "#f59e0b"}`,
+							border: `1px solid ${
+								isHandledFailure
+									? "#f59e0b"
+									: isFailed
+										? "#ef4444"
+										: "#f59e0b"
+							}`,
 						}}
 					>
 						<span
 							className="text-[9px] font-medium"
-							style={{ color: isFailed ? "#ef4444" : "#f59e0b" }}
+							style={{
+								color: isHandledFailure
+									? "#f59e0b"
+									: isFailed
+										? "#ef4444"
+										: "#f59e0b",
+							}}
 						>
 							x{data.retryCount + 1}
+						</span>
+					</div>
+				)}
+
+				{isHandledFailure && (
+					<div
+						className="absolute -top-2 left-1 rounded px-1.5"
+						style={{
+							height: 16,
+							background: "#18181b",
+							border: "1px solid #f59e0b",
+						}}
+					>
+						<span
+							className="text-[9px] font-medium uppercase"
+							style={{ color: "#f59e0b" }}
+						>
+							handled
 						</span>
 					</div>
 				)}
@@ -424,6 +474,83 @@ export function LoopGroupNode({ data }: NodeProps<LoopGroupNodeType>) {
 	);
 }
 
+export interface TryGroupNodeData {
+	[key: string]: unknown;
+	label: string;
+	summary: string;
+	handledFailureCount?: number;
+}
+
+export type TryGroupNodeType = Node<TryGroupNodeData, "tryGroup">;
+
+export function TryGroupNode({ data }: NodeProps<TryGroupNodeType>) {
+	const colors = TYPE_COLORS.try;
+	const accentColor =
+		data.handledFailureCount && data.handledFailureCount > 0
+			? "#f59e0b"
+			: colors.icon;
+
+	return (
+		<div
+			className="relative rounded-xl"
+			style={{
+				width: "100%",
+				height: "100%",
+				border: `1px dashed ${accentColor}66`,
+				backgroundColor: `${accentColor}08`,
+			}}
+		>
+			<div
+				className="flex items-center gap-2 px-3"
+				style={{ height: LOOP_HEADER_HEIGHT }}
+			>
+				<div
+					className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
+					style={{
+						backgroundColor: `${accentColor}15`,
+						border: `1px solid ${accentColor}4d`,
+					}}
+				>
+					<TypeIcon type="try" size={11} />
+				</div>
+				<div className="min-w-0">
+					<div className="flex items-center gap-2">
+						<span
+							className="text-[9px] font-semibold uppercase tracking-[0.2em]"
+							style={{ color: accentColor }}
+						>
+							Try
+						</span>
+						<span
+							className="truncate text-xs font-medium"
+							style={{ color: "hsl(var(--foreground))" }}
+						>
+							{data.label}
+						</span>
+					</div>
+					<div
+						className="truncate text-[10px]"
+						style={{ color: "hsl(var(--muted-foreground))" }}
+					>
+						{data.summary}
+					</div>
+				</div>
+			</div>
+
+			<Handle
+				type="target"
+				position={Position.Top}
+				className="!bg-transparent !border-0 !w-0 !h-0"
+			/>
+			<Handle
+				type="source"
+				position={Position.Bottom}
+				className="!bg-transparent !border-0 !w-0 !h-0"
+			/>
+		</div>
+	);
+}
+
 export interface BranchGroupNodeData {
 	[key: string]: unknown;
 	label: string;
@@ -530,6 +657,7 @@ export function TerminationNode(_props: NodeProps<TerminationNodeType>) {
 export const workflowNodeTypes = {
 	workflow: WorkflowNode,
 	loopGroup: LoopGroupNode,
+	tryGroup: TryGroupNode,
 	branchGroup: BranchGroupNode,
 	termination: TerminationNode,
 };

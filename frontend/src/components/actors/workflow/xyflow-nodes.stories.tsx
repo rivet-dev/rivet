@@ -20,6 +20,7 @@ import {
 	retryWorkflow,
 	sampleWorkflowHistory,
 	simpleLinearWorkflow,
+	tryWorkflow,
 } from "./workflow-example-data";
 import { workflowHistoryToXYFlow } from "./workflow-to-xyflow";
 import {
@@ -134,6 +135,20 @@ export const StepFailed: Story = () => (
 	/>
 );
 StepFailed.storyName = "Nodes / Step Failed";
+
+export const StepHandled: Story = () => (
+	<StoryCanvas
+		nodes={singleNode({
+			label: "charge-card",
+			summary: "handled error",
+			entryType: "step",
+			status: "failed",
+			handledFailure: true,
+			error: "card declined",
+		})}
+	/>
+);
+StepHandled.storyName = "Nodes / Step Handled";
 
 export const StepRetrying: Story = () => (
 	<StoryCanvas
@@ -432,3 +447,9 @@ export const Failed: Story = () => {
 	return <StoryCanvas nodes={nodes} edges={edges} />;
 };
 Failed.storyName = "Examples / Failed";
+
+export const TryControlFlow: Story = () => {
+	const { nodes, edges } = workflowHistoryToXYFlow(tryWorkflow);
+	return <StoryCanvas nodes={nodes} edges={edges} />;
+};
+TryControlFlow.storyName = "Examples / Try Control Flow";

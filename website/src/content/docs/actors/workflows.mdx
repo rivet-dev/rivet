@@ -637,6 +637,76 @@ export const timeoutActor = actor({
 export const registry = setup({ use: { timeoutActor } });
 ```
 
+### Handling terminal failures as data
+
+Use `tryStep` when a step failure should produce data instead of failing the whole workflow.
+
+```ts
+import { actor, setup } from "rivetkit";
+import { workflow } from "rivetkit/workflow";
+
+export const paymentActor = actor({
+  state: {
+    status: "pending" as "pending" | "manual-review" | "paid",
+    reason: null as string | null,
+  },
+  run: workflow(async (ctx) => {
+    const charge = await ctx.tryStep({
+      name: "charge-card",
+      maxRetries: 3,
+      run: async () => await chargeCard("order-123"),
+    });
+
+    await ctx.step("store-charge-result", async () => {
+      if (!charge.ok) {
+        ctx.state.status = "manual-review";
+        ctx.state.reason = charge.failure.error.message;
+        return;
+      }
+
+      ctx.state.status = "paid";
+      ctx.state.reason = null;
+    });
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+
+async function chargeCard(orderId: string): Promise<string> {
+  return `charge-${orderId}`;
+}
+
+export const registry = setup({ use: { paymentActor } });
+```
+
+Use `try` when you want to recover from terminal `step`, `join`, or `race` failures inside a named block.
+
+```ts
+async function runPaymentFlow(ctx: any) {
+  return await ctx.try("payment-flow", async (blockCtx: any) => {
+    const auth = await blockCtx.step("authorize", async () =>
+      authorizeOrder("order-123"),
+    );
+    const capture = await blockCtx.step("capture", async () =>
+      captureOrder("order-123"),
+    );
+    return { auth, capture };
+  });
+}
+
+async function authorizeOrder(orderId: string): Promise<string> {
+  return `auth-${orderId}`;
+}
+
+async function captureOrder(orderId: string): Promise<string> {
+  return `capture-${orderId}`;
+}
+```
+
+- `tryStep` and `try` only catch terminal failures. Retry backoff, sleeps, queue waits, eviction, and history divergence still rethrow.
+- `RollbackError` is not caught by default. Pass `catch: ["rollback"]` when you want rollback failures returned as data.
+
 ### Error hooks
 
 Use `onError` when you want a best-effort notification for workflow failures.

@@ -401,6 +401,50 @@ export interface StepConfig<T> {
 	timeout?: number;
 }
 
+export type TryStepCatchKind =
+	| "critical"
+	| "timeout"
+	| "exhausted"
+	| "rollback";
+
+export interface TryStepFailure {
+	kind: TryStepCatchKind;
+	stepName: string;
+	attempts: number;
+	error: WorkflowError;
+}
+
+export type TryStepResult<T> =
+	| { ok: true; value: T }
+	| { ok: false; failure: TryStepFailure };
+
+export interface TryStepConfig<T> extends StepConfig<T> {
+	catch?: readonly TryStepCatchKind[];
+}
+
+export type TryBlockCatchKind =
+	| "step"
+	| "join"
+	| "race"
+	| "rollback";
+
+export interface TryBlockFailure {
+	source: "step" | "join" | "race" | "block";
+	name: string;
+	error: WorkflowError;
+	step?: TryStepFailure;
+}
+
+export type TryBlockResult<T> =
+	| { ok: true; value: T }
+	| { ok: false; failure: TryBlockFailure };
+
+export interface TryBlockConfig<T> {
+	name: string;
+	run: (ctx: WorkflowContextInterface) => Promise<T>;
+	catch?: readonly TryBlockCatchKind[];
+}
+
 /**
  * Result from a loop iteration.
  */
@@ -453,6 +497,15 @@ export interface WorkflowContextInterface {
 
 	step<T>(name: string, run: () => Promise<T>): Promise<T>;
 	step<T>(config: StepConfig<T>): Promise<T>;
+
+	tryStep<T>(name: string, run: () => Promise<T>): Promise<TryStepResult<T>>;
+	tryStep<T>(config: TryStepConfig<T>): Promise<TryStepResult<T>>;
+
+	try<T>(
+		name: string,
+		run: (ctx: WorkflowContextInterface) => Promise<T>,
+	): Promise<TryBlockResult<T>>;
+	try<T>(config: TryBlockConfig<T>): Promise<TryBlockResult<T>>;
 
 	loop<T>(
 		name: string,

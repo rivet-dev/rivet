@@ -100,8 +100,8 @@ export type EntryStatus =
 	| "failed"
 	| "retrying";
 
-// Extended type for visualization (includes meta nodes)
-export type ExtendedEntryType = EntryKindType | "input" | "output";
+// Extended type for visualization (includes meta nodes and synthetic groups)
+export type ExtendedEntryType = EntryKindType | "input" | "output" | "try";
 
 export interface Entry {
 	id: string;

@@ -203,6 +203,30 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 			expect(state.insideClientAvailable).toBe(true);
 		});
 
+		test("tryStep and try recover terminal workflow failures", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.workflowTryActor.getOrCreate(["workflow-try"]);
+
+			let state = await actor.getState();
+			for (
+				let i = 0;
+				i < 40 &&
+				(state.tryStepFailure === null || state.tryJoinFailure === null);
+				i++
+			) {
+				await waitFor(driverTestConfig, 50);
+				state = await actor.getState();
+			}
+
+			expect(state.innerWrites).toBe(1);
+			expect(state.tryStepFailure).toEqual({
+				kind: "exhausted",
+				message: "card declined",
+				attempts: 1,
+			});
+			expect(state.tryJoinFailure).toBe("join:parallel");
+		});
+
 		test("sleeps and resumes between ticks", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.workflowSleepActor.getOrCreate([

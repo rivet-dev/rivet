@@ -54,7 +54,16 @@ import type {
 	RollbackContextInterface,
 	StepConfig,
 	Storage,
+	TryBlockCatchKind,
+	TryBlockConfig,
+	TryBlockFailure,
+	TryBlockResult,
+	TryStepCatchKind,
+	TryStepConfig,
+	TryStepFailure,
+	TryStepResult,
 	WorkflowContextInterface,
+	WorkflowError,
 	WorkflowErrorEvent,
 	WorkflowErrorHandler,
 	WorkflowQueue,
@@ -74,8 +83,20 @@ export const DEFAULT_RETRY_BACKOFF_BASE = 100;
 export const DEFAULT_RETRY_BACKOFF_MAX = 30000;
 export const DEFAULT_LOOP_HISTORY_PRUNE_INTERVAL = 20;
 export const DEFAULT_STEP_TIMEOUT = 30000; // 30 seconds
+const DEFAULT_TRY_STEP_CATCH: readonly TryStepCatchKind[] = [
+	"critical",
+	"timeout",
+	"exhausted",
+];
+const DEFAULT_TRY_BLOCK_CATCH: readonly TryBlockCatchKind[] = [
+	"step",
+	"join",
+	"race",
+];
 
 const QUEUE_HISTORY_MESSAGE_MARKER = "__rivetWorkflowQueueMessage";
+const TRY_STEP_FAILURE_SYMBOL = Symbol("workflow.try-step.failure");
+const TRY_BLOCK_FAILURE_SYMBOL = Symbol("workflow.try-block.failure");
 
 /**
  * Calculate backoff delay with exponential backoff.
@@ -97,6 +118,215 @@ export class StepTimeoutError extends Error {
 		super(`Step "${stepName}" timed out after ${timeoutMs}ms`);
 		this.name = "StepTimeoutError";
 	}
+}
+
+type SchedulerYieldState = {
+	deadline?: number;
+	messageNames: Set<string>;
+};
+
+type TryBlockFailureInfo = Pick<TryBlockFailure, "source" | "name">;
+
+function attachTryStepFailure<T extends Error>(
+	error: T,
+	failure: TryStepFailure,
+): T {
+	(
+		error as T & {
+			[TRY_STEP_FAILURE_SYMBOL]?: TryStepFailure;
+		}
+	)[TRY_STEP_FAILURE_SYMBOL] = failure;
+	return error;
+}
+
+function readTryStepFailure(error: unknown): TryStepFailure | undefined {
+	if (!(error instanceof Error)) {
+		return undefined;
+	}
+
+	return (
+		error as Error & {
+			[TRY_STEP_FAILURE_SYMBOL]?: TryStepFailure;
+		}
+	)[TRY_STEP_FAILURE_SYMBOL];
+}
+
+function attachTryBlockFailure<T extends Error>(
+	error: T,
+	failure: TryBlockFailureInfo,
+): T {
+	(
+		error as T & {
+			[TRY_BLOCK_FAILURE_SYMBOL]?: TryBlockFailureInfo;
+		}
+	)[TRY_BLOCK_FAILURE_SYMBOL] = failure;
+	return error;
+}
+
+function readTryBlockFailure(error: unknown): TryBlockFailureInfo | undefined {
+	if (!(error instanceof Error)) {
+		return undefined;
+	}
+
+	return (
+		error as Error & {
+			[TRY_BLOCK_FAILURE_SYMBOL]?: TryBlockFailureInfo;
+		}
+	)[TRY_BLOCK_FAILURE_SYMBOL];
+}
+
+function shouldRethrowTryError(error: unknown): boolean {
+	return (
+		error instanceof StepFailedError ||
+		error instanceof SleepError ||
+		error instanceof MessageWaitError ||
+		error instanceof EvictedError ||
+		error instanceof HistoryDivergedError ||
+		error instanceof EntryInProgressError ||
+		error instanceof RollbackCheckpointError ||
+		error instanceof RollbackStopError
+	);
+}
+
+function shouldCatchTryStepFailure(
+	failure: TryStepFailure,
+	catchKinds?: readonly TryStepCatchKind[],
+): boolean {
+	const effectiveCatch = catchKinds ?? DEFAULT_TRY_STEP_CATCH;
+	return effectiveCatch.includes(failure.kind);
+}
+
+function shouldCatchTryBlockFailure(
+	failure: TryBlockFailure,
+	catchKinds?: readonly TryBlockCatchKind[],
+): boolean {
+	const effectiveCatch = catchKinds ?? DEFAULT_TRY_BLOCK_CATCH;
+
+	if (failure.source === "step") {
+		return failure.step?.kind === "rollback"
+			? effectiveCatch.includes("rollback")
+			: effectiveCatch.includes("step");
+	}
+	if (failure.source === "join") {
+		return effectiveCatch.includes("join");
+	}
+	if (failure.source === "race") {
+		return effectiveCatch.includes("race");
+	}
+	return effectiveCatch.includes("rollback");
+}
+
+function parseStoredWorkflowError(message: string | undefined): WorkflowError {
+	if (!message) {
+		return {
+			name: "Error",
+			message: "unknown error",
+		};
+	}
+
+	const match = /^([^:]+):\s*(.*)$/s.exec(message);
+	if (!match) {
+		return {
+			name: "Error",
+			message,
+		};
+	}
+
+	return {
+		name: match[1],
+		message: match[2],
+	};
+}
+
+function getTryStepFailureFromExhaustedError(
+	stepName: string,
+	attempts: number,
+	error: StepExhaustedError,
+): TryStepFailure {
+	return {
+		kind: "exhausted",
+		stepName,
+		attempts,
+		error: parseStoredWorkflowError(error.lastError),
+	};
+}
+
+function mergeSchedulerYield(
+	state: SchedulerYieldState | undefined,
+	error: SleepError | MessageWaitError | StepFailedError,
+): SchedulerYieldState {
+	const nextState: SchedulerYieldState = state ?? {
+		messageNames: new Set<string>(),
+	};
+
+	if (error instanceof SleepError) {
+		nextState.deadline =
+			nextState.deadline === undefined
+				? error.deadline
+				: Math.min(nextState.deadline, error.deadline);
+		for (const messageName of error.messageNames ?? []) {
+			nextState.messageNames.add(messageName);
+		}
+		return nextState;
+	}
+
+	if (error instanceof MessageWaitError) {
+		for (const messageName of error.messageNames) {
+			nextState.messageNames.add(messageName);
+		}
+		return nextState;
+	}
+
+	nextState.deadline =
+		nextState.deadline === undefined
+			? error.retryAt
+			: Math.min(nextState.deadline, error.retryAt);
+	return nextState;
+}
+
+function buildSchedulerYieldError(
+	state: SchedulerYieldState,
+): SleepError | MessageWaitError {
+	const messageNames = [...state.messageNames];
+	if (state.deadline !== undefined) {
+		return new SleepError(
+			state.deadline,
+			messageNames.length > 0 ? messageNames : undefined,
+		);
+	}
+	return new MessageWaitError(messageNames);
+}
+
+function controlFlowErrorPriority(error: Error): number {
+	if (error instanceof EvictedError) {
+		return 0;
+	}
+	if (error instanceof HistoryDivergedError) {
+		return 1;
+	}
+	if (error instanceof EntryInProgressError) {
+		return 2;
+	}
+	if (error instanceof RollbackCheckpointError) {
+		return 3;
+	}
+	if (error instanceof RollbackStopError) {
+		return 4;
+	}
+	return 5;
+}
+
+function selectControlFlowError(
+	current: Error | undefined,
+	candidate: Error,
+): Error {
+	if (!current) {
+		return candidate;
+	}
+	return controlFlowErrorPriority(candidate) <
+		controlFlowErrorPriority(current)
+		? candidate
+		: current;
 }
 
 /**
@@ -416,6 +646,138 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		}
 	}
 
+	async tryStep<T>(
+		nameOrConfig: string | TryStepConfig<T>,
+		run?: () => Promise<T>,
+	): Promise<TryStepResult<T>> {
+		const config =
+			typeof nameOrConfig === "string"
+				? ({
+						name: nameOrConfig,
+						run: run!,
+					} satisfies TryStepConfig<T>)
+				: nameOrConfig;
+
+		try {
+			return {
+				ok: true,
+				value: await this.step(config),
+			};
+		} catch (error) {
+			if (shouldRethrowTryError(error)) {
+				throw error;
+			}
+
+			const failure = readTryStepFailure(error);
+			if (!failure || !shouldCatchTryStepFailure(failure, config.catch)) {
+				throw error;
+			}
+
+			return {
+				ok: false,
+				failure,
+			};
+		}
+	}
+
+	async try<T>(
+		nameOrConfig: string | TryBlockConfig<T>,
+		run?: (ctx: WorkflowContextInterface) => Promise<T>,
+	): Promise<TryBlockResult<T>> {
+		this.assertNotInProgress();
+		this.checkEvicted();
+
+		const config =
+			typeof nameOrConfig === "string"
+				? ({
+						name: nameOrConfig,
+						run: run!,
+					} satisfies TryBlockConfig<T>)
+				: nameOrConfig;
+
+		this.entryInProgress = true;
+		try {
+			return await this.executeTry(config);
+		} finally {
+			this.entryInProgress = false;
+		}
+	}
+
+	private async executeTry<T>(
+		config: TryBlockConfig<T>,
+	): Promise<TryBlockResult<T>> {
+		this.checkDuplicateName(config.name);
+
+		const location = appendName(
+			this.storage,
+			this.currentLocation,
+			config.name,
+		);
+		const blockCtx = this.createBranch(location);
+
+		try {
+			const value = await config.run(blockCtx);
+			blockCtx.validateComplete();
+			return {
+				ok: true,
+				value,
+			};
+		} catch (error) {
+			if (shouldRethrowTryError(error)) {
+				throw error;
+			}
+
+			const stepFailure = readTryStepFailure(error);
+			if (stepFailure) {
+				const failure: TryBlockFailure = {
+					source: "step",
+					name: stepFailure.stepName,
+					error: stepFailure.error,
+					step: stepFailure,
+				};
+				if (!shouldCatchTryBlockFailure(failure, config.catch)) {
+					throw error;
+				}
+				return {
+					ok: false,
+					failure,
+				};
+			}
+
+			const operationFailure = readTryBlockFailure(error);
+			if (operationFailure) {
+				const failure: TryBlockFailure = {
+					...operationFailure,
+					error: extractErrorInfo(error),
+				};
+				if (!shouldCatchTryBlockFailure(failure, config.catch)) {
+					throw error;
+				}
+				return {
+					ok: false,
+					failure,
+				};
+			}
+
+			if (error instanceof RollbackError) {
+				const failure: TryBlockFailure = {
+					source: "block",
+					name: config.name,
+					error: extractErrorInfo(error),
+				};
+				if (!shouldCatchTryBlockFailure(failure, config.catch)) {
+					throw error;
+				}
+				return {
+					ok: false,
+					failure,
+				};
+			}
+
+			throw error;
+		}
+	}
+
 	private async executeStep<T>(config: StepConfig<T>): Promise<T> {
 		this.ensureRollbackCheckpoint(config);
 		if (this.mode === "rollback") {
@@ -467,9 +829,19 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				// driver implementations may persist metadata without the history
 				// entry error (e.g. partial writes/crashes between attempts).
 				const lastError = stepData.error ?? metadata.error;
-				const exhaustedError = markErrorReported(
-					new StepExhaustedError(config.name, lastError),
+				const exhaustedError = new StepExhaustedError(
+					config.name,
+					lastError,
 				);
+				attachTryStepFailure(
+					exhaustedError,
+					getTryStepFailureFromExhaustedError(
+						config.name,
+						metadata.attempts,
+						exhaustedError,
+					),
+				);
+				markErrorReported(exhaustedError);
 				if (metadata.status !== "exhausted") {
 					metadata.status = "exhausted";
 					metadata.dirty = true;
@@ -581,7 +953,17 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				await this.notifyStepError(config, metadata.attempts, error, {
 					willRetry: false,
 				});
-				throw markErrorReported(new CriticalError(error.message));
+				throw markErrorReported(
+					attachTryStepFailure(
+						new CriticalError(error.message),
+						{
+							kind: "timeout",
+							stepName: config.name,
+							attempts: metadata.attempts,
+							error: extractErrorInfo(error),
+						},
+					),
+				);
 			}
 
 			if (
@@ -598,7 +980,17 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				await this.notifyStepError(config, metadata.attempts, error, {
 					willRetry: false,
 				});
-				throw markErrorReported(error);
+				throw markErrorReported(
+					attachTryStepFailure(error, {
+						kind:
+							error instanceof RollbackError
+								? "rollback"
+								: "critical",
+						stepName: config.name,
+						attempts: metadata.attempts,
+						error: extractErrorInfo(error),
+					}),
+				);
 			}
 
 			if (entry.kind.type === "step") {
@@ -631,7 +1023,15 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			}
 
 			const exhaustedError = markErrorReported(
-				new StepExhaustedError(config.name, String(error)),
+				attachTryStepFailure(
+					new StepExhaustedError(config.name, String(error)),
+					{
+						kind: "exhausted",
+						stepName: config.name,
+						attempts: metadata.attempts,
+						error: extractErrorInfo(error),
+					},
+				),
 			);
 			await this.notifyStepError(config, metadata.attempts, error, {
 				willRetry: false,
@@ -1657,11 +2057,33 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		const joinData = entry.kind.data;
 		const results: Record<string, unknown> = {};
 		const errors: Record<string, Error> = {};
+		let schedulerYieldState: SchedulerYieldState | undefined;
+		let propagatedError: Error | undefined;
+
+		for (const [branchName, branchStatus] of Object.entries(
+			joinData.branches,
+		)) {
+			if (branchStatus.status === "completed") {
+				results[branchName] = branchStatus.output;
+				continue;
+			}
+
+			if (branchStatus.status === "failed") {
+				errors[branchName] = new Error(
+					branchStatus.error ?? "branch failed",
+				);
+			}
+		}
 
 		// Execute all branches in parallel
 		const branchPromises = Object.entries(branches).map(
 			async ([branchName, config]) => {
 				const branchStatus = joinData.branches[branchName];
+				if (!branchStatus) {
+					throw new HistoryDivergedError(
+						`Expected join branch "${branchName}" in "${name}"`,
+					);
+				}
 
 				// Already completed
 				if (branchStatus.status === "completed") {
@@ -1684,6 +2106,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				const branchCtx = this.createBranch(branchLocation);
 
 				branchStatus.status = "running";
+				branchStatus.error = undefined;
 				entry.dirty = true;
 
 				try {
@@ -1692,9 +2115,43 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 					branchStatus.status = "completed";
 					branchStatus.output = output;
+					branchStatus.error = undefined;
 					results[branchName] = output;
 				} catch (error) {
+					if (
+						error instanceof SleepError ||
+						error instanceof MessageWaitError ||
+						error instanceof StepFailedError
+					) {
+						schedulerYieldState = mergeSchedulerYield(
+							schedulerYieldState,
+							error,
+						);
+						branchStatus.status = "running";
+						branchStatus.error = undefined;
+						entry.dirty = true;
+						return;
+					}
+
+					if (
+						error instanceof EvictedError ||
+						error instanceof HistoryDivergedError ||
+						error instanceof EntryInProgressError ||
+						error instanceof RollbackCheckpointError ||
+						error instanceof RollbackStopError
+					) {
+						propagatedError = selectControlFlowError(
+							propagatedError,
+							error,
+						);
+						branchStatus.status = "running";
+						branchStatus.error = undefined;
+						entry.dirty = true;
+						return;
+					}
+
 					branchStatus.status = "failed";
+					branchStatus.output = undefined;
 					branchStatus.error = String(error);
 					errors[branchName] = error as Error;
 				}
@@ -1707,9 +2164,30 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		await Promise.allSettled(branchPromises);
 		await this.flushStorage();
 
+		if (propagatedError) {
+			throw propagatedError;
+		}
+
+		if (
+			Object.values(joinData.branches).some(
+				(branch) =>
+					branch.status === "pending" || branch.status === "running",
+			)
+		) {
+			if (!schedulerYieldState) {
+				throw new Error(
+					`Join "${name}" has pending branches without a scheduler yield`,
+				);
+			}
+			throw buildSchedulerYieldError(schedulerYieldState);
+		}
+
 		// Throw if any branches failed
 		if (Object.keys(errors).length > 0) {
-			throw new JoinError(errors);
+			throw attachTryBlockFailure(new JoinError(errors), {
+				source: "join",
+				name,
+			});
 		}
 
 		return results as { [K in keyof T]: BranchOutput<T[K]> };
@@ -1809,24 +2287,32 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 		// Track winner info
 		let winnerName: string | null = null;
-		let winnerValue: T | null = null;
-		let settled = false;
-		let pendingCount = branches.length;
+		let winnerValue: T | undefined;
+		let hasWinner = false;
 		const errors: Record<string, Error> = {};
 		const lateErrors: Array<{ name: string; error: string }> = [];
-		// Track scheduler yield errors - we need to propagate these after allSettled
-		let yieldError: SleepError | MessageWaitError | null = null;
+		let schedulerYieldState: SchedulerYieldState | undefined;
+		let propagatedError: Error | undefined;
 
 		// Check for replay winners first
 		for (const branch of branches) {
 			const branchStatus = raceData.branches[branch.name];
+			if (!branchStatus) {
+				throw new HistoryDivergedError(
+					`Expected race branch "${branch.name}" in "${name}"`,
+				);
+			}
 			if (
 				branchStatus.status !== "pending" &&
 				branchStatus.status !== "running"
 			) {
-				pendingCount--;
-				if (branchStatus.status === "completed" && !settled) {
-					settled = true;
+				if (branchStatus.status === "failed") {
+					errors[branch.name] = new Error(
+						branchStatus.error ?? "branch failed",
+					);
+				}
+				if (branchStatus.status === "completed" && !hasWinner) {
+					hasWinner = true;
 					winnerName = branch.name;
 					winnerValue = branchStatus.output as T;
 				}
@@ -1834,13 +2320,18 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		}
 
 		// If we found a replay winner, return immediately
-		if (settled && winnerName !== null && winnerValue !== null) {
-			return { winner: winnerName, value: winnerValue };
+		if (hasWinner && winnerName !== null) {
+			return { winner: winnerName, value: winnerValue as T };
 		}
 
 		// Execute branches that need to run
 		for (const branch of branches) {
 			const branchStatus = raceData.branches[branch.name];
+			if (!branchStatus) {
+				throw new HistoryDivergedError(
+					`Expected race branch "${branch.name}" in "${name}"`,
+				);
+			}
 
 			// Skip already completed/cancelled
 			if (
@@ -1861,19 +2352,30 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			);
 
 			branchStatus.status = "running";
+			branchStatus.error = undefined;
 			entry.dirty = true;
 
 			const branchPromise = branch.run(branchCtx).then(
 				async (output) => {
-					if (settled) {
+					if (hasWinner) {
 						// This branch completed after a winner was determined
 						// Still record the completion for observability
 						branchStatus.status = "completed";
 						branchStatus.output = output;
+						branchStatus.error = undefined;
 						entry.dirty = true;
 						return;
 					}
-					settled = true;
+
+					if (propagatedError) {
+						branchStatus.status = "completed";
+						branchStatus.output = output;
+						branchStatus.error = undefined;
+						entry.dirty = true;
+						return;
+					}
+
+					hasWinner = true;
 					winnerName = branch.name;
 					winnerValue = output;
 
@@ -1881,6 +2383,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 					branchStatus.status = "completed";
 					branchStatus.output = output;
+					branchStatus.error = undefined;
 					raceData.winner = branch.name;
 					entry.dirty = true;
 
@@ -1888,69 +2391,63 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					raceAbortController.abort();
 				},
 				(error) => {
-					pendingCount--;
-
-					// Track sleep/message errors - they need to bubble up to the scheduler
-					// We'll re-throw after allSettled to allow cleanup
-					if (error instanceof SleepError) {
-						// Track the earliest deadline
+					if (hasWinner) {
 						if (
-							!yieldError ||
-							!(yieldError instanceof SleepError) ||
-							error.deadline < yieldError.deadline
+							error instanceof CancelledError ||
+							error instanceof EvictedError
 						) {
-							yieldError = error;
+							branchStatus.status = "cancelled";
+						} else {
+							lateErrors.push({
+								name: branch.name,
+								error: String(error),
+							});
 						}
-						branchStatus.status = "running"; // Keep as running since we'll resume
-						entry.dirty = true;
-						return;
-					}
-					if (error instanceof MessageWaitError) {
-						// Track message wait errors, prefer sleep errors with deadlines
-						if (
-							!yieldError ||
-							!(yieldError instanceof SleepError)
-						) {
-							if (!yieldError) {
-								yieldError = error;
-							} else if (yieldError instanceof MessageWaitError) {
-								// Merge message names
-								yieldError = new MessageWaitError([
-									...yieldError.messageNames,
-									...error.messageNames,
-								]);
-							}
-						}
-						branchStatus.status = "running"; // Keep as running since we'll resume
 						entry.dirty = true;
 						return;
 					}
 
 					if (
-						error instanceof CancelledError ||
-						error instanceof EvictedError
+						error instanceof SleepError ||
+						error instanceof MessageWaitError ||
+						error instanceof StepFailedError
 					) {
+						schedulerYieldState = mergeSchedulerYield(
+							schedulerYieldState,
+							error,
+						);
+						branchStatus.status = "running";
+						branchStatus.error = undefined;
+						entry.dirty = true;
+						return;
+					}
+
+					if (
+						error instanceof EvictedError ||
+						error instanceof HistoryDivergedError ||
+						error instanceof EntryInProgressError ||
+						error instanceof RollbackCheckpointError ||
+						error instanceof RollbackStopError
+					) {
+						propagatedError = selectControlFlowError(
+							propagatedError,
+							error,
+						);
+						branchStatus.status = "running";
+						branchStatus.error = undefined;
+						entry.dirty = true;
+						return;
+					}
+
+					if (error instanceof CancelledError) {
 						branchStatus.status = "cancelled";
 					} else {
 						branchStatus.status = "failed";
+						branchStatus.output = undefined;
 						branchStatus.error = String(error);
-
-						if (settled) {
-							// Track late errors for observability
-							lateErrors.push({
-								name: branch.name,
-								error: String(error),
-							});
-						} else {
-							errors[branch.name] = error;
-						}
+						errors[branch.name] = error as Error;
 					}
 					entry.dirty = true;
-
-					// All branches failed (only if no winner yet)
-					if (pendingCount === 0 && !settled) {
-						settled = true;
-					}
 				},
 			);
 
@@ -1960,15 +2457,29 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		// Wait for all branches to complete or be cancelled
 		await Promise.allSettled(branchPromises);
 
-		// If any branch needs to yield to the scheduler (sleep/message wait),
-		// save state and re-throw the error to exit the workflow execution
-		if (yieldError && !settled) {
+		if (propagatedError) {
 			await this.flushStorage();
-			throw yieldError;
+			throw propagatedError;
+		}
+
+		if (
+			!hasWinner &&
+			Object.values(raceData.branches).some(
+				(branch) =>
+					branch.status === "pending" || branch.status === "running",
+			)
+		) {
+			await this.flushStorage();
+			if (!schedulerYieldState) {
+				throw new Error(
+					`Race "${name}" has pending branches without a scheduler yield`,
+				);
+			}
+			throw buildSchedulerYieldError(schedulerYieldState);
 		}
 
 		// Clean up entries from non-winning branches
-		if (winnerName !== null) {
+		if (hasWinner && winnerName !== null) {
 			for (const branch of branches) {
 				if (branch.name !== winnerName) {
 					const branchLocation = appendName(
@@ -1998,17 +2509,23 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		}
 
 		// Return result or throw error
-		if (winnerName !== null && winnerValue !== null) {
-			return { winner: winnerName, value: winnerValue };
+		if (hasWinner && winnerName !== null) {
+			return { winner: winnerName, value: winnerValue as T };
 		}
 
 		// All branches failed
-		throw new RaceError(
-			"All branches failed",
-			Object.entries(errors).map(([name, error]) => ({
+		throw attachTryBlockFailure(
+			new RaceError(
+				"All branches failed",
+				Object.entries(errors).map(([branchName, error]) => ({
+					name: branchName,
+					error: String(error),
+				})),
+			),
+			{
+				source: "race",
 				name,
-				error: String(error),
-			})),
+			},
 		);
 	}
 

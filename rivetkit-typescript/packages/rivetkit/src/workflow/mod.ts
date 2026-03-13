@@ -25,6 +25,14 @@ import { createWorkflowInspectorAdapter } from "./inspector";
 
 export { Loop } from "@rivetkit/workflow-engine";
 export type {
+	TryBlockCatchKind,
+	TryBlockConfig,
+	TryBlockFailure,
+	TryBlockResult,
+	TryStepCatchKind,
+	TryStepConfig,
+	TryStepFailure,
+	TryStepResult,
 	WorkflowError,
 	WorkflowErrorEvent,
 } from "@rivetkit/workflow-engine";
