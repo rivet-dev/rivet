@@ -285,10 +285,10 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			).toBeGreaterThan(0);
 		});
 
-		test("POST /inspector/workflow/rerun reruns a workflow from the beginning", async (c) => {
+		test("POST /inspector/workflow/replay replays a workflow from the beginning", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.workflowRerunActor.getOrCreate([
-				"inspector-workflow-rerun",
+			const handle = client.workflowReplayActor.getOrCreate([
+				"inspector-workflow-replay",
 				crypto.randomUUID(),
 			]);
 
@@ -298,7 +298,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/workflow/rerun`,
+				`${gatewayUrl}/inspector/workflow/replay`,
 				{
 					method: "POST",
 					headers: {

@@ -50,7 +50,7 @@ export interface WorkflowInspectorConfig<THistory = unknown> {
 	onHistoryUpdated?: (
 		listener: (history: THistory) => void,
 	) => InspectorUnsubscribe;
-	rerunFromStep?: (entryId?: string) => Promise<THistory | null>;
+	replayFromStep?: (entryId?: string) => Promise<THistory | null>;
 }
 
 export interface RunInspectorConfig<THistory = unknown> {
@@ -63,9 +63,9 @@ const WorkflowInspectorConfigSchema = z.object({
 		zFunction<
 			NonNullable<WorkflowInspectorConfig<unknown>["onHistoryUpdated"]>
 		>().optional(),
-	rerunFromStep:
+	replayFromStep:
 		zFunction<
-			NonNullable<WorkflowInspectorConfig<unknown>["rerunFromStep"]>
+			NonNullable<WorkflowInspectorConfig<unknown>["replayFromStep"]>
 		>().optional(),
 });
 

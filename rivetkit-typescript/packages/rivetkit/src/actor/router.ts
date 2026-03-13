@@ -296,14 +296,13 @@ export function createActorRouter(
 			return c.json(result);
 		});
 
-
-		router.post("/inspector/workflow/rerun", async (c) => {
+		router.post("/inspector/workflow/replay", async (c) => {
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
 			const actor = await actorDriver.loadActor(c.env.actorId);
 			const body = await c.req.json<{ entryId?: string }>();
-			const result = await actor.inspector.rerunWorkflowFromStepJson(
+			const result = await actor.inspector.replayWorkflowFromStepJson(
 				body.entryId,
 			);
 			return c.json(result);

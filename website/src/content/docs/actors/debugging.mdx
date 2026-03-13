@@ -546,12 +546,12 @@ Returns paged rows for a specific SQLite table or view:
 
 For workflow-enabled actors, `history` is a JSON object with `nameRegistry`, `entries`, and `entryMetadata`. Step outputs, loop state, and message payloads are decoded from CBOR into normal JSON values.
 
-#### Rerun Workflow From Step
+#### Replay Workflow From Step
 
-Reset a workflow to a specific step and restart execution immediately. Omitting `entryId` reruns the workflow from the beginning.
+Reset a workflow to a specific step and restart execution immediately. Omitting `entryId` replays the workflow from the beginning.
 
 ```bash
-curl -X POST http://localhost:6420/gateway/{actor_id}/inspector/workflow/rerun \
+curl -X POST http://localhost:6420/gateway/{actor_id}/inspector/workflow/replay \
   -H 'Content-Type: application/json' \
   -d '{"entryId":"workflow-step-id"}'
 ```

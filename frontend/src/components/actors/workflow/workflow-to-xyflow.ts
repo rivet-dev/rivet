@@ -53,8 +53,8 @@ export interface LayoutResult {
 
 interface WorkflowLayoutOptions {
 	currentStepId?: string;
-	rerunningEntryId?: string;
-	onRerunStep?: (entryId: string) => void;
+	replayingEntryId?: string;
+	onReplayStep?: (entryId: string) => void;
 }
 
 type WorkflowNodeInput = {
@@ -71,9 +71,9 @@ type WorkflowNodeInput = {
 	rawData?: unknown;
 	name?: string;
 	entryId?: string;
-	canRerun?: boolean;
-	isRerunning?: boolean;
-	onRerunStep?: (entryId: string) => void;
+	canReplay?: boolean;
+	isReplaying?: boolean;
+	onReplayStep?: (entryId: string) => void;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -159,12 +159,12 @@ function itemToNodeData(
 		rawData: kind.data,
 		nodeKey: item.key,
 		entryId: id,
-		canRerun:
+		canReplay:
 			kind.type === "step" &&
 			status !== "running" &&
 			id !== options.currentStepId,
-		isRerunning: id === options.rerunningEntryId,
-		onRerunStep: options.onRerunStep,
+		isReplaying: id === options.replayingEntryId,
+		onReplayStep: options.onReplayStep,
 	};
 }
 
@@ -213,9 +213,9 @@ function makeNode(
 			completedAt: data.completedAt,
 			rawData: data.rawData,
 			entryId: data.entryId,
-			canRerun: data.canRerun,
-			isRerunning: data.isRerunning,
-			onRerunStep: data.onRerunStep,
+			canReplay: data.canReplay,
+			isReplaying: data.isReplaying,
+			onReplayStep: data.onReplayStep,
 		},
 	};
 }

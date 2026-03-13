@@ -91,13 +91,13 @@ export class ActorInspector {
 		return (history ?? null) as schema.WorkflowHistory | null;
 	}
 
-	async rerunWorkflowFromStep(
+	async replayWorkflowFromStep(
 		entryId?: string,
 	): Promise<schema.WorkflowHistory | null> {
-		if (!this.#workflowInspector?.rerunFromStep) {
+		if (!this.#workflowInspector?.replayFromStep) {
 			throw new actorErrors.WorkflowNotEnabled();
 		}
-		const history = await this.#workflowInspector.rerunFromStep(entryId);
+		const history = await this.#workflowInspector.replayFromStep(entryId);
 		return (history ?? null) as schema.WorkflowHistory | null;
 	}
 
@@ -352,11 +352,11 @@ export class ActorInspector {
 		};
 	}
 
-	async rerunWorkflowFromStepJson(entryId?: string): Promise<{
+	async replayWorkflowFromStepJson(entryId?: string): Promise<{
 		history: ReturnType<typeof serializeWorkflowHistoryForJson>;
 		isWorkflowEnabled: boolean;
 	}> {
-		const history = await this.rerunWorkflowFromStep(entryId);
+		const history = await this.replayWorkflowFromStep(entryId);
 		return {
 			history: serializeWorkflowHistoryForJson(history),
 			isWorkflowEnabled: this.isWorkflowEnabled(),

@@ -669,7 +669,7 @@ export const workflowErrorHookEffectsActor = actor({
 	},
 });
 
-export const workflowRerunActor = actor({
+export const workflowReplayActor = actor({
 	state: {
 		timeline: [] as string[],
 	},
@@ -683,6 +683,34 @@ export const workflowRerunActor = actor({
 	}),
 	actions: {
 		getTimeline: (c) => [...c.state.timeline],
+	},
+	options: {
+		sleepTimeout: 50,
+	},
+});
+
+export const workflowRunningStepActor = actor({
+	state: {
+		preparedAt: null as number | null,
+		startedAt: null as number | null,
+	},
+	run: workflow(async (ctx) => {
+		await ctx.step("prepare", async () => {
+			ctx.state.preparedAt = Date.now();
+		});
+		await ctx.step(
+			{
+				name: "block",
+				timeout: 0,
+				run: async () => {
+					ctx.state.startedAt = Date.now();
+					await new Promise(() => {});
+				},
+			},
+		);
+	}),
+	actions: {
+		getState: (c) => ({ ...c.state }),
 	},
 	options: {
 		sleepTimeout: 50,

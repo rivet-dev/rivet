@@ -273,6 +273,7 @@ Data structures often include:
 - When running tests, always pipe the test to a file in /tmp/ then grep it in a second step. You can grep test logs multiple times to search for different log lines.
 - For RivetKit TypeScript tests, run from `rivetkit-typescript/packages/rivetkit` and use `pnpm test <filter>` with `-t` to narrow to specific suites. For example: `pnpm test driver-file-system -t ".*Actor KV.*"`.
 - For frontend testing, use the `agent-browser` skill to interact with and test web UIs in examples. This allows automated browser-based testing of frontend applications.
+- If you modify frontend UI, automatically use the Agent Browser CLI to take updated screenshots and post them to the PR with a short comment before wrapping up the task.
 
 ## Optimizations
 

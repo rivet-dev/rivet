@@ -38,7 +38,7 @@ type WorkflowHistoryRequest struct {
 	id: uint
 }
 
-type WorkflowRerunRequest struct {
+type WorkflowReplayRequest struct {
 	id: uint
 	entryId: optional<str>
 }
@@ -64,7 +64,7 @@ type ToServerBody union {
 	TraceQueryRequest |
 	QueueRequest |
 	WorkflowHistoryRequest |
-	WorkflowRerunRequest |
+	WorkflowReplayRequest |
 	DatabaseSchemaRequest |
 	DatabaseTableRowsRequest
 }
@@ -141,7 +141,7 @@ type WorkflowHistoryResponse struct {
 	isWorkflowEnabled: bool
 }
 
-type WorkflowRerunResponse struct {
+type WorkflowReplayResponse struct {
 	rid: uint
 	history: optional<WorkflowHistory>
 	isWorkflowEnabled: bool
@@ -196,7 +196,7 @@ type ToClientBody union {
 	TraceQueryResponse |
 	QueueResponse |
 	WorkflowHistoryResponse |
-	WorkflowRerunResponse |
+	WorkflowReplayResponse |
 	Error |
 	Init |
 	DatabaseSchemaResponse |

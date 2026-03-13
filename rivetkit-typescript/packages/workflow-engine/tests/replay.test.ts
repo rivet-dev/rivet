@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
 	loadStorage,
-	rerunWorkflowFromStep,
+	replayWorkflowFromStep,
 	runWorkflow,
 	type WorkflowContextInterface,
 } from "../src/index.js";
 import { InMemoryDriver } from "../src/testing.js";
 
-describe("rerunWorkflowFromStep", () => {
-	it("reruns from the requested step", async () => {
+describe("replayWorkflowFromStep", () => {
+	it("replays from the requested step", async () => {
 		const driver = new InMemoryDriver();
 		driver.latency = 0;
 
@@ -37,7 +37,7 @@ describe("rerunWorkflowFromStep", () => {
 		);
 		expect(stepTwo).toBeDefined();
 
-		const snapshot = await rerunWorkflowFromStep(
+		const snapshot = await replayWorkflowFromStep(
 			"wf-1",
 			driver,
 			stepTwo?.id,
@@ -49,7 +49,7 @@ describe("rerunWorkflowFromStep", () => {
 		expect(timeline).toEqual(["two", "three"]);
 	});
 
-	it("reruns from the beginning when the target step is omitted", async () => {
+	it("replays from the beginning when the target step is omitted", async () => {
 		const driver = new InMemoryDriver();
 		driver.latency = 0;
 
@@ -66,7 +66,7 @@ describe("rerunWorkflowFromStep", () => {
 		await runWorkflow("wf-1", workflow, undefined, driver).result;
 		timeline.length = 0;
 
-		await rerunWorkflowFromStep("wf-1", driver);
+		await replayWorkflowFromStep("wf-1", driver);
 		await runWorkflow("wf-1", workflow, undefined, driver).result;
 
 		expect(timeline).toEqual(["one", "two"]);

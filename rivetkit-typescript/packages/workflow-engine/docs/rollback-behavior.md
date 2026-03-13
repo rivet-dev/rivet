@@ -35,7 +35,7 @@ await ctx.step({
 
 ## Failure Behavior
 
-If a rollback handler throws, the workflow fails and preserves the rollback error in metadata. Subsequent retries or reruns will attempt remaining rollback steps again. If a rollback handler is configured without a checkpoint, the workflow fails with `RollbackCheckpointError`.
+If a rollback handler throws, the workflow fails and preserves the rollback error in metadata. Subsequent retries or replays will attempt remaining rollback steps again. If a rollback handler is configured without a checkpoint, the workflow fails with `RollbackCheckpointError`.
 
 ```ts
 await ctx.step({

@@ -11,7 +11,7 @@ import {
 	HistoryDivergedError,
 	JoinError,
 	RaceError,
-	rerunWorkflowFromStep,
+	replayWorkflowFromStep,
 	RollbackCheckpointError,
 	RollbackError,
 	runWorkflow,
@@ -164,8 +164,8 @@ export function workflow<
 		const workflowInspector = getWorkflowInspector(actor);
 
 		const driver = new ActorWorkflowDriver(actor, runCtx);
-		workflowInspector.setRerunFromStep(async (entryId) => {
-			const snapshot = await rerunWorkflowFromStep(
+		workflowInspector.setReplayFromStep(async (entryId) => {
+			const snapshot = await replayWorkflowFromStep(
 				actor.id,
 				new ActorWorkflowControlDriver(actor),
 				entryId,

@@ -177,9 +177,9 @@ export interface WorkflowNodeData {
 	/** Raw entry data for the object inspector. */
 	rawData?: unknown;
 	entryId?: string;
-	canRerun?: boolean;
-	isRerunning?: boolean;
-	onRerunStep?: (entryId: string) => void;
+	canReplay?: boolean;
+	isReplaying?: boolean;
+	onReplayStep?: (entryId: string) => void;
 }
 
 export type WorkflowNodeType = Node<WorkflowNodeData, "workflow">;

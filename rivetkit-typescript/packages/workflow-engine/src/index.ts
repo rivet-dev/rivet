@@ -732,10 +732,10 @@ export function runWorkflow<TInput, TOutput>(
 
 /**
  * Remove a step and every later workflow entry, then schedule the workflow to
- * start again immediately. Omitting `entryId` reruns the workflow from the
+ * start again immediately. Omitting `entryId` replays the workflow from the
  * beginning.
  */
-export async function rerunWorkflowFromStep(
+export async function replayWorkflowFromStep(
 	workflowId: string,
 	driver: EngineDriver,
 	entryId?: string,
@@ -756,7 +756,7 @@ export async function rerunWorkflowFromStep(
 
 	if (entries.some(({ metadata }) => metadata.status === "running")) {
 		throw new Error(
-			"Cannot rerun a workflow while a step is currently running",
+			"Cannot replay a workflow while a step is currently running",
 		);
 	}
 
@@ -767,7 +767,7 @@ export async function rerunWorkflowFromStep(
 			throw new Error(`Workflow step not found: ${entryId}`);
 		}
 		if (target.entry.kind.type !== "step") {
-			throw new Error("Workflow rerun target must be a step");
+			throw new Error("Workflow replay target must be a step");
 		}
 
 		const ordered = [...entries].sort((a, b) => {

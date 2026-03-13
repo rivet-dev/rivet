@@ -99,7 +99,7 @@ interface ActorInspectorApi {
 		history: WorkflowHistory | null;
 		isEnabled: boolean;
 	}>;
-	rerunWorkflowFromStep: (
+	replayWorkflowFromStep: (
 		entryId?: string,
 	) => Promise<{
 		history: WorkflowHistory | null;
@@ -129,7 +129,7 @@ type WorkflowHistoryHttpResponse = {
 const MIN_RIVETKIT_VERSION_TRACES = "2.0.40";
 const MIN_RIVETKIT_VERSION_QUEUE = "2.0.40";
 const MIN_RIVETKIT_VERSION_DATABASE = "2.0.42";
-const MIN_RIVETKIT_VERSION_WORKFLOW_RERUN = "2.1.6";
+const MIN_RIVETKIT_VERSION_WORKFLOW_REPLAY = "2.1.6";
 const INSPECTOR_ERROR_EVENTS_DROPPED = "inspector.events_dropped";
 
 function parseSemver(version?: string) {
@@ -199,7 +199,7 @@ function getInspectorProtocolVersion(version: string | undefined) {
 		return 2;
 	}
 	if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_DATABASE)) {
-		if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_WORKFLOW_RERUN)) {
+		if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_WORKFLOW_REPLAY)) {
 			return 4;
 		}
 		return 3;
@@ -380,11 +380,11 @@ export const createDefaultActorInspectorContext = ({
 		});
 	},
 
-	actorWorkflowRerunMutation(actorId: ActorId) {
+	actorWorkflowReplayMutation(actorId: ActorId) {
 		return mutationOptions({
-			mutationKey: ["actor", actorId, "workflow", "rerun"],
+			mutationKey: ["actor", actorId, "workflow", "replay"],
 			mutationFn: async (entryId?: string) => {
-				return api.rerunWorkflowFromStep(entryId);
+				return api.replayWorkflowFromStep(entryId);
 			},
 		});
 	},
@@ -444,7 +444,7 @@ function transformWorkflowHistoryFromJson(
 	);
 }
 
-const rerunWorkflowFromStepHttp = async ({
+const replayWorkflowFromStepHttp = async ({
 	actorId,
 	credentials,
 	entryId,
@@ -455,7 +455,7 @@ const rerunWorkflowFromStepHttp = async ({
 }) => {
 	const response = await fetch(
 		new URL(
-			`${computeActorUrl({ url: credentials.url, actorId })}/inspector/workflow/rerun`,
+			`${computeActorUrl({ url: credentials.url, actorId })}/inspector/workflow/replay`,
 		).href,
 		{
 			method: "POST",
@@ -468,7 +468,7 @@ const rerunWorkflowFromStepHttp = async ({
 	);
 
 	if (!response.ok) {
-		throw new Error(`Failed to rerun workflow: ${response.statusText}`);
+		throw new Error(`Failed to replay workflow: ${response.statusText}`);
 	}
 
 	const data = z
@@ -850,8 +850,8 @@ export const ActorInspectorProvider = ({
 				return promise;
 			},
 
-			rerunWorkflowFromStep: async (entryId) => {
-				return rerunWorkflowFromStepHttp({
+			replayWorkflowFromStep: async (entryId) => {
+				return replayWorkflowFromStepHttp({
 					actorId,
 					credentials: {
 						url: credentials.url,
@@ -1092,7 +1092,7 @@ const createMessageHandler =
 					isEnabled: body.val.isWorkflowEnabled,
 				});
 			})
-			.with({ tag: "WorkflowRerunResponse" }, (body) => {
+			.with({ tag: "WorkflowReplayResponse" }, (body) => {
 				const { rid } = body.val;
 				const transformed = body.val.history
 					? transformWorkflowHistoryFromInspector(body.val.history)

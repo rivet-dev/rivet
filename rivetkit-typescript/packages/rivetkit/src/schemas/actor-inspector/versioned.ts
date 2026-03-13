@@ -141,7 +141,7 @@ const v3ToClientToV4 = (v3Data: v3.ToClient): v4.ToClient => {
 };
 
 const v4ToClientToV3 = (v4Data: v4.ToClient): v3.ToClient => {
-	if (v4Data.body.tag === "WorkflowRerunResponse") {
+	if (v4Data.body.tag === "WorkflowReplayResponse") {
 		return {
 			body: {
 				tag: "Error",
@@ -198,8 +198,8 @@ const v3ToServerToV4 = (v3Data: v3.ToServer): v4.ToServer => {
 };
 
 const v4ToServerToV3 = (v4Data: v4.ToServer): v3.ToServer => {
-	if (v4Data.body.tag === "WorkflowRerunRequest") {
-		throw new Error("Cannot convert v4-only workflow rerun requests to v3");
+	if (v4Data.body.tag === "WorkflowReplayRequest") {
+		throw new Error("Cannot convert v4-only workflow replay requests to v3");
 	}
 	return v4Data as unknown as v3.ToServer;
 };

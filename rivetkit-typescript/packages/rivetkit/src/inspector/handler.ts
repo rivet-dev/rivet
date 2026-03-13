@@ -176,13 +176,13 @@ export async function handleWebSocketInspectorConnect({
 							},
 						},
 					});
-				} else if (message.body.tag === "WorkflowRerunRequest") {
-					const history = await inspector.rerunWorkflowFromStep(
+				} else if (message.body.tag === "WorkflowReplayRequest") {
+					const history = await inspector.replayWorkflowFromStep(
 						message.body.val.entryId ?? undefined,
 					);
 					sendMessage(ws, {
 						body: {
-							tag: "WorkflowRerunResponse",
+							tag: "WorkflowReplayResponse",
 							val: {
 								rid: message.body.val.id,
 								history,

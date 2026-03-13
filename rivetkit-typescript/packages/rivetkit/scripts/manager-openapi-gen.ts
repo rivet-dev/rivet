@@ -499,8 +499,8 @@ function injectActorRouter(openApiDoc: any) {
 		},
 	};
 
-	// POST /gateway/{actorId}/inspector/workflow/rerun
-	openApiDoc.paths["/gateway/{actorId}/inspector/workflow/rerun"] = {
+	// POST /gateway/{actorId}/inspector/workflow/replay
+	openApiDoc.paths["/gateway/{actorId}/inspector/workflow/replay"] = {
 		post: {
 			parameters: [actorIdParam, inspectorAuthHeader],
 			requestBody: {
@@ -518,7 +518,7 @@ function injectActorRouter(openApiDoc: any) {
 			},
 			responses: {
 				200: {
-					description: "Workflow history after scheduling a rerun",
+					description: "Workflow history after scheduling a replay",
 					content: {
 						"application/json": {
 							schema: {
