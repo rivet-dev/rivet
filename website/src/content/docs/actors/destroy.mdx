@@ -65,7 +65,7 @@ curl -X DELETE "https://api.rivet.dev/actors/{actorId}?namespace={namespace}" \
 </CodeGroup>
 
 <Note>
-	Creating admin tokens is currently not supported on Rivet Cloud. See the [tracking issue](https://github.com/rivet-dev/rivet/issues/3530).
+	On Rivet Cloud, create an API token from Settings > Advanced > Cloud API Tokens > Create API Token, then use it as the bearer token above.
 </Note>
 
 ### Destroy via Dashboard
@@ -115,4 +115,3 @@ Once an actor is destroyed, any subsequent requests to it will return an `actor_
 
 - [`ActorHandle`](/typedoc/types/rivetkit.client_mod.ActorHandle.html) - Has destroy methods
 - [`ActorContext`](/typedoc/interfaces/rivetkit.mod.ActorContext.html) - Context during destruction
-
