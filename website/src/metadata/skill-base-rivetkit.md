@@ -66,11 +66,21 @@ Use that canonical URL when citing, not the reference file path.
    npm install rivetkit@{{RIVETKIT_VERSION}}
    ```
 2. Define a registry with `setup({ use: { /* actors */ } })`.
-3. Expose `registry.serve()` or `registry.handler()` (serverless) or `registry.startRunner()` (runner mode). Prefer serverless mode unless the user has a specific reason to use runner mode.
-4. Verify `/api/rivet/metadata` returns 200 before deploying.
-5. Configure Rivet Cloud or self-hosted engine
-6. Integrate clients (see client guides below for JavaScript, React, or Swift)
-7. Prompt the user if they want to deploy. If so, go to Deploying Rivet Backends.
+3. Configure versioning in the registry. This is critical for production — without it, actors can regress to older code and will never be forced to migrate to new runners. A sane default is `Math.floor(Date.now() / 1000)`:
+   ```typescript
+   const registry = setup({
+     use: { /* actors */ },
+     runner: {
+       version: Math.floor(Date.now() / 1000),
+     },
+   });
+   ```
+   Alternatively, set the `RIVET_RUNNER_VERSION` environment variable. See [Versions & Upgrades](https://rivet.dev/docs/actors/versions) for more options like git commit count or CI build number.
+4. Expose `registry.serve()` or `registry.handler()` (serverless) or `registry.startRunner()` (runner mode). Prefer serverless mode unless the user has a specific reason to use runner mode.
+5. Verify `/api/rivet/metadata` returns 200 before deploying.
+6. Configure Rivet Cloud or self-hosted engine
+7. Integrate clients (see client guides below for JavaScript, React, or Swift)
+8. Prompt the user if they want to deploy. If so, go to Deploying Rivet Backends.
 
 For more information, read the quickstart guide relevant to the user's project.
 
