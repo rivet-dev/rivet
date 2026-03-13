@@ -69,7 +69,7 @@ export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 					onClick={() => setView("sql")}
 				>
 					<Icon icon={faCode} />
-					SQL
+					Query
 				</Button>
 			</div>
 			{view === "tables" ? (
@@ -221,7 +221,6 @@ function ActorDatabaseSqlShell({ actorId }: ActorDatabaseProps) {
 	const actorInspector = useActorInspector();
 	const queryClient = useQueryClient();
 	const [sql, setSql] = useState(DEFAULT_SQL);
-	const [argsText, setArgsText] = useState("[]");
 	const [propertyDrafts, setPropertyDrafts] = useState<
 		Record<string, string>
 	>({});
@@ -246,28 +245,6 @@ function ActorDatabaseSqlShell({ actorId }: ActorDatabaseProps) {
 		});
 	}, [namedBindings]);
 
-	const parsedArgs = useMemo(() => {
-		if (argsText.trim() === "") {
-			return { value: [] as unknown[], error: null };
-		}
-
-		try {
-			const value = JSON.parse(argsText);
-			if (!Array.isArray(value)) {
-				return {
-					value: [] as unknown[],
-					error: "Args must be a JSON array.",
-				};
-			}
-
-			return { value, error: null };
-		} catch {
-			return {
-				value: [] as unknown[],
-				error: "Args must be valid JSON.",
-			};
-		}
-	}, [argsText]);
 	const parsedProperties = useMemo(() => {
 		const next: Record<string, unknown> = {};
 		for (const name of namedBindings) {
@@ -296,7 +273,11 @@ function ActorDatabaseSqlShell({ actorId }: ActorDatabaseProps) {
 	const { mutateAsync, isPending, error } = useMutation(
 		actorInspector.actorDatabaseExecuteMutation(actorId),
 	);
-	const argsError = hasNamedBindings ? null : parsedArgs.error;
+	const bindingError = hasMixedBindings
+		? "Mixing positional `?` bindings and named properties is not supported in Inspector. Use one binding style."
+		: hasPositionalBindings
+			? "Positional `?` bindings are only supported in the Inspector HTTP API. Use named properties in the UI."
+			: null;
 	const propertiesError = hasNamedBindings ? parsedProperties.error : null;
 	const runSql = useCallback(async () => {
 		const request: DatabaseExecuteRequest = {
@@ -305,8 +286,6 @@ function ActorDatabaseSqlShell({ actorId }: ActorDatabaseProps) {
 
 		if (hasNamedBindings) {
 			request.properties = parsedProperties.value;
-		} else {
-			request.args = parsedArgs.value;
 		}
 
 		const nextResult = await mutateAsync(request);
@@ -318,15 +297,13 @@ function ActorDatabaseSqlShell({ actorId }: ActorDatabaseProps) {
 		actorId,
 		hasNamedBindings,
 		mutateAsync,
-		parsedArgs.value,
 		parsedProperties.value,
 		queryClient,
 		sql,
 	]);
 	const canRun =
 		sql.trim() !== "" &&
-		!hasMixedBindings &&
-		argsError === null &&
+		bindingError === null &&
 		propertiesError === null;
 
 	useEffect(() => {
@@ -394,7 +371,6 @@ function ActorDatabaseSqlShell({ actorId }: ActorDatabaseProps) {
 							}
 						}}
 						className="min-h-36 font-mono-console text-xs"
-						placeholder="SELECT * FROM sqlite_master;"
 					/>
 				</div>
 				{hasNamedBindings ? (
@@ -436,42 +412,10 @@ function ActorDatabaseSqlShell({ actorId }: ActorDatabaseProps) {
 							))}
 						</div>
 					</div>
-				) : (
-					<>
-						<div className="mt-3 flex items-center gap-2">
-							<Input
-								value={argsText}
-								onChange={(event) =>
-									setArgsText(event.target.value)
-								}
-								className="font-mono-console text-xs"
-								placeholder='["value", 123]'
-							/>
-							<Button
-								variant="ghost"
-								size="sm"
-								onClick={() => setArgsText("[]")}
-							>
-								Reset args
-							</Button>
-						</div>
-						<div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-							<Badge variant="outline">
-								Positional args
-							</Badge>
-							<span>Press Cmd/Ctrl+Enter to run.</span>
-						</div>
-					</>
-				)}
-				{hasMixedBindings ? (
-					<div className="mt-2 text-xs text-destructive">
-						Mixing positional `?` bindings and named properties is
-						not supported in Inspector. Use one binding style.
-					</div>
 				) : null}
-				{argsError ? (
+				{bindingError ? (
 					<div className="mt-2 text-xs text-destructive">
-						{argsError}
+						{bindingError}
 					</div>
 				) : null}
 				{propertiesError ? (
@@ -499,9 +443,7 @@ function ActorDatabaseSqlShell({ actorId }: ActorDatabaseProps) {
 								</span>{" "}
 								row{result.rows.length === 1 ? "" : "s"}
 							</>
-						) : (
-							"Run a statement to inspect the result."
-						)}
+						) : null}
 					</div>
 					{result ? (
 						<Button
@@ -514,12 +456,7 @@ function ActorDatabaseSqlShell({ actorId }: ActorDatabaseProps) {
 					) : null}
 				</div>
 				<ScrollArea className="h-full w-full">
-					{result === null ? (
-						<div className="px-3 py-4 text-sm text-muted-foreground">
-							Use `SELECT` for read-only queries and `INSERT`,
-							`UPDATE`, or `DELETE` for mutations.
-						</div>
-					) : result.rows.length === 0 ? (
+					{result === null ? null : result.rows.length === 0 ? (
 						<div className="px-3 py-4 text-sm text-muted-foreground">
 							Statement executed successfully. No rows were
 							returned.
