@@ -5,6 +5,7 @@ import { SidebarlessHeader } from "@/app/layout";
 import { NotFoundCard } from "@/app/not-found-card";
 import { RouteLayout } from "@/app/route-layout";
 import { FullscreenLoading, ls } from "@/components";
+import { deriveProviderFromMetadata } from "@/lib/data";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
@@ -73,6 +74,17 @@ export const Route = createFileRoute(
 			),
 		]);
 
+		const runnerProvider = runnerConfigs.pages
+			.flatMap((page) =>
+				Object.values(page.runnerConfigs).flatMap((config) =>
+					Object.values(config.datacenters).map((dc) =>
+						deriveProviderFromMetadata(dc.metadata),
+					),
+				),
+			)
+			.find((provider) => provider !== undefined);
+
+		const hasManagedPoolRunner = runnerProvider === "rivet";
 		const actors = await context.queryClient.fetchQuery(
 			context.dataProvider.actorsCountQueryOptions(),
 		);
@@ -82,12 +94,31 @@ export const Route = createFileRoute(
 			Object.entries(runnerConfigs.pages[0].runnerConfigs).length > 0;
 		const hasActors = actors > 0;
 
-		const displayOnboarding =
+		let displayOnboarding =
 			(!hasRunnerNames && !hasRunnerConfigs) || !hasActors;
 
-		const displayBackendOnboarding = !hasRunnerNames && !hasRunnerConfigs;
+		let displayBackendOnboarding = !hasRunnerNames && !hasRunnerConfigs;
 
-		return { displayOnboarding, displayBackendOnboarding };
+		if (hasManagedPoolRunner) {
+			const managedPool = await context.queryClient.fetchQuery(
+				context.dataProvider.currentNamespaceManagedPoolQueryOptions({
+					pool: "default",
+					safe: true,
+				}),
+			);
+
+			const hasImage = !!managedPool?.config.image;
+			const isReady = managedPool?.status === "ready";
+
+			displayOnboarding = (!hasImage && !isReady) || !hasActors;
+			displayBackendOnboarding = hasImage && isReady;
+		}
+
+		return {
+			displayOnboarding,
+			displayBackendOnboarding,
+			provider: runnerProvider,
+		};
 	},
 	notFoundComponent: () => <NotFoundCard />,
 	pendingMinMs: 0,
@@ -96,8 +127,11 @@ export const Route = createFileRoute(
 });
 
 function RouteComponent() {
-	const { displayOnboarding, displayBackendOnboarding } =
-		Route.useLoaderData();
+	const {
+		displayOnboarding,
+		displayBackendOnboarding,
+		provider: runnerProvider,
+	} = Route.useLoaderData();
 	const { provider } = Route.useSearch();
 
 	if (displayOnboarding || displayBackendOnboarding) {
@@ -107,7 +141,7 @@ function RouteComponent() {
 				<GettingStarted
 					displayOnboarding={displayOnboarding}
 					displayBackendOnboarding={displayBackendOnboarding}
-					provider={provider}
+					provider={provider || runnerProvider}
 				/>
 
 				<CloudNamespaceModals />

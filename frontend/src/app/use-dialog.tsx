@@ -8,6 +8,9 @@ export const useDialog = {
 	CreateProject: createDialogHook(
 		() => import("@/app/dialogs/create-project-frame"),
 	),
+	ConnectRivet: createDialogHook(
+		() => import("@/app/dialogs/connect-rivet-frame"),
+	),
 	ConnectVercel: createDialogHook(
 		() => import("@/app/dialogs/connect-vercel-frame"),
 	),
@@ -58,5 +61,8 @@ export const useDialog = {
 	),
 	CreateOrganization: createDialogHook(
 		() => import("@/app/dialogs/create-organization-frame"),
+	),
+	UpsertDeployment: createDialogHook(
+		() => import("@/app/dialogs/upsert-deployment-frame"),
 	),
 };
