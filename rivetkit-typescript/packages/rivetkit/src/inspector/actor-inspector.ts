@@ -324,12 +324,15 @@ export class ActorInspector {
 	): Promise<{ rows: unknown[] }> {
 		const rows = await this.#withDatabase(async (db) => {
 			if (properties && Object.keys(properties).length > 0) {
-				return await db.execute<Record<string, unknown>>(
+				return (await db.execute(
 					sql,
 					normalizeSqlitePropertyBindings(properties),
-				);
+				)) as Record<string, unknown>[];
 			}
-			return await db.execute<Record<string, unknown>>(sql, ...args);
+			return (await db.execute(sql, ...args)) as Record<
+				string,
+				unknown
+			>[];
 		});
 		return {
 			rows: jsonSafe(rows),
