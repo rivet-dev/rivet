@@ -119,15 +119,14 @@ Use your local manager URL in development (`http://localhost:6420`) or `https://
 
 If auth is enabled, pass a bearer token:
 
+- **Rivet Cloud**: Use the service key (`sk_*`) from your `RIVET_ENDPOINT` URL. Find this in the dashboard under **Settings > Advanced > Backend Configuration** (e.g. the `sk_...` portion of `https://default:sk_abc123@api.rivet.dev`).
+- **Self-hosted**: Use an admin token.
+
 ```bash
 export RIVET_API="https://api.rivet.dev"
 export RIVET_NAMESPACE="default"
-export RIVET_TOKEN="YOUR_API_TOKEN"
+export RIVET_TOKEN="your-token"
 ```
-
-<Note>
-	On Rivet Cloud, create a Cloud API token in the dashboard and use it as `RIVET_TOKEN` here.
-</Note>
 
 ### List Runner Names
 
