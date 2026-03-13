@@ -18,16 +18,15 @@ Use `provider` when every actor instance should use the same sandbox backend.
 <CodeGroup workspace>
 ```ts actors.ts
 import { setup } from "rivetkit";
-import { db } from "rivetkit/db";
+import { sandboxDatabase } from "rivetkit/db";
 import { docker, sandboxActor } from "rivetkit/sandbox";
 
 export const codingSandbox = sandboxActor({
   provider: docker({
     image: "node:22-bookworm-slim",
   }),
-  database: db({
-    onMigrate: async () => {},
-  }),
+  database: sandboxDatabase(),
+  preventSleepWhileTurnsActive: true,
   onSessionEvent: async (_c, sessionId, event) => {
     console.log("session event", sessionId, event.payload);
   },
@@ -79,7 +78,7 @@ Use `createProvider` when provider selection depends on the actor input.
 <CodeGroup workspace>
 ```ts actors.ts
 import { setup } from "rivetkit";
-import { db } from "rivetkit/db";
+import { sandboxDatabase } from "rivetkit/db";
 import { daytona, docker, e2b, sandboxActor } from "rivetkit/sandbox";
 
 type SandboxInput = {
@@ -97,9 +96,7 @@ export const codingSandbox = sandboxActor<undefined, SandboxInput>({
         return docker();
     }
   },
-  database: db({
-    onMigrate: async () => {},
-  }),
+  database: sandboxDatabase(),
 });
 
 export const registry = setup({
@@ -124,6 +121,27 @@ await sandbox.listAgents();
 </CodeGroup>
 
 The sandbox actor pins the resolved provider name in actor state. If a later wake or reconnect resolves a different provider for the same actor, the actor throws instead of silently switching backends.
+
+## Preventing sleep during active turns
+
+Set `preventSleepWhileTurnsActive` when the actor must stay awake while a
+session turn is still producing events.
+
+```ts
+const codingSandbox = sandboxActor({
+  provider: docker(),
+  database: sandboxDatabase(),
+  preventSleepWhileTurnsActive: {
+    warningAfterMs: 30_000,
+    staleAfterMs: 5 * 60_000,
+  },
+});
+```
+
+This tracks active sessions from observed `session/prompt` envelopes and
+permission requests. RivetKit sets `preventSleep` while any session still looks
+active, logs if the stream goes quiet, and eventually clears stale state if no
+terminal response arrives.
 
 ## Providers
 
@@ -155,3 +173,4 @@ This is enforced by a parity test in RivetKit so SDK upgrades fail fast if the s
 - Use [input parameters](/docs/actors/input) when you need per-actor provider selection.
 - Use [actions](/docs/actors/actions) to call sandbox-agent methods from clients or other actors.
 - The transcript store is internal to the sandbox actor. You do not need to configure a transcript adapter yourself.
+- Use `sandboxDatabase()` from `rivetkit/db` so the sandbox transcript tables are migrated automatically.

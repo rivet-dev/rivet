@@ -10,6 +10,7 @@ export {
 	type SandboxActorCreateProviderContext,
 	type SandboxActorHookContext,
 	type SandboxActorOnBeforeConnect,
+	type SandboxActorPreventSleepOptions,
 	type SandboxActorProvider,
 	type SandboxActorProviderConnectOptions,
 	type SandboxActorProviderCreateContext,

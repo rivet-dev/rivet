@@ -13,9 +13,11 @@ import {
 	type SandboxActorActions,
 	type SandboxActorConfig,
 	type SandboxActorCreateProviderContext,
+	type SandboxActorPreventSleepOptions,
 	type SandboxActorProvider,
 	type SandboxActorRuntime,
 	type SandboxActorState,
+	type SandboxSessionEvent,
 	SANDBOX_AGENT_ACTION_METHODS,
 } from "./types";
 
@@ -36,6 +38,14 @@ type SandboxActionDefinitions<TConnParams, TInput> = {
 		...args: Parameters<SandboxActorActions[K]>
 	) => ReturnType<SandboxActorActions[K]>;
 };
+
+type ResolvedPreventSleepOptions = {
+	warningAfterMs: number;
+	staleAfterMs: number;
+};
+
+const DEFAULT_PREVENT_SLEEP_WARNING_AFTER_MS = 30_000;
+const DEFAULT_PREVENT_SLEEP_STALE_AFTER_MS = 5 * 60_000;
 
 function hasStaticProvider<TConnParams, TInput>(
 	config: SandboxActorConfig<TConnParams, TInput>,
@@ -58,20 +68,392 @@ function isSessionArray(value: unknown): value is Session[] {
 	return Array.isArray(value) && value.every(isSession);
 }
 
+function getPreventSleepOptions<TConnParams, TInput>(
+	config: SandboxActorConfig<TConnParams, TInput>,
+): ResolvedPreventSleepOptions | null {
+	const raw = config.preventSleepWhileTurnsActive;
+	if (!raw) {
+		return null;
+	}
+
+	const options =
+		raw === true
+			? ({} satisfies SandboxActorPreventSleepOptions)
+			: raw;
+	const staleAfterMs = Math.max(
+		1,
+		Math.floor(
+			options.staleAfterMs ?? DEFAULT_PREVENT_SLEEP_STALE_AFTER_MS,
+		),
+	);
+	const warningAfterMs = Math.min(
+		staleAfterMs,
+		Math.max(
+			0,
+			Math.floor(
+				options.warningAfterMs ??
+					DEFAULT_PREVENT_SLEEP_WARNING_AFTER_MS,
+			),
+		),
+	);
+
+	return {
+		warningAfterMs,
+		staleAfterMs,
+	};
+}
+
+function ensureTurnTrackingState(state: SandboxActorState): void {
+	if (!Array.isArray(state.activeSessionIds)) {
+		state.activeSessionIds = [];
+	}
+	if (!state.activePromptRequestIdsBySessionId) {
+		state.activePromptRequestIdsBySessionId = {};
+	}
+	if (!state.activeSessionLastEventAtById) {
+		state.activeSessionLastEventAtById = {};
+	}
+}
+
+function removeString(list: string[], value: string): void {
+	const index = list.indexOf(value);
+	if (index >= 0) {
+		list.splice(index, 1);
+	}
+}
+
 function removeSessionId(
 	state: SandboxActorState,
 	sessionId: string,
 ): void {
-	const index = state.sessionIds.indexOf(sessionId);
-	if (index >= 0) {
-		state.sessionIds.splice(index, 1);
-	}
+	removeString(state.sessionIds, sessionId);
 }
 
 function addSessionId(state: SandboxActorState, sessionId: string): void {
 	if (!state.sessionIds.includes(sessionId)) {
 		state.sessionIds.push(sessionId);
 	}
+}
+
+function clearSessionTimers(
+	runtime: SandboxActorRuntime,
+	sessionId: string,
+): void {
+	const warningTimeout = runtime.warningTimeoutBySessionId.get(sessionId);
+	if (warningTimeout) {
+		clearTimeout(warningTimeout);
+		runtime.warningTimeoutBySessionId.delete(sessionId);
+	}
+
+	const staleTimeout = runtime.staleTimeoutBySessionId.get(sessionId);
+	if (staleTimeout) {
+		clearTimeout(staleTimeout);
+		runtime.staleTimeoutBySessionId.delete(sessionId);
+	}
+}
+
+function clearAllSessionTimers(runtime: SandboxActorRuntime): void {
+	for (const sessionId of runtime.warningTimeoutBySessionId.keys()) {
+		clearSessionTimers(runtime, sessionId);
+	}
+	for (const sessionId of runtime.staleTimeoutBySessionId.keys()) {
+		clearSessionTimers(runtime, sessionId);
+	}
+}
+
+function hasActiveSessions(state: SandboxActorState): boolean {
+	ensureTurnTrackingState(state);
+	return state.activeSessionIds.length > 0;
+}
+
+function syncPreventSleep<TConnParams, TInput>(
+	c: SandboxActionContext<TConnParams, TInput>,
+	options: ResolvedPreventSleepOptions | null,
+): void {
+	if (!options) {
+		return;
+	}
+
+	c.setPreventSleep(c.vars.activeHookCount > 0 || hasActiveSessions(c.state));
+}
+
+function getPromptRequestIds(
+	state: SandboxActorState,
+	sessionId: string,
+): string[] {
+	ensureTurnTrackingState(state);
+	return state.activePromptRequestIdsBySessionId[sessionId] ?? [];
+}
+
+function setPromptRequestIds(
+	state: SandboxActorState,
+	sessionId: string,
+	requestIds: string[],
+): void {
+	ensureTurnTrackingState(state);
+	if (requestIds.length === 0) {
+		delete state.activePromptRequestIdsBySessionId[sessionId];
+		return;
+	}
+
+	state.activePromptRequestIdsBySessionId[sessionId] = requestIds;
+}
+
+function markSessionActive<TConnParams, TInput>(
+	c: SandboxActionContext<TConnParams, TInput>,
+	options: ResolvedPreventSleepOptions | null,
+	sessionId: string,
+	requestId?: string,
+): void {
+	if (!options) {
+		return;
+	}
+
+	ensureTurnTrackingState(c.state);
+
+	if (!c.state.activeSessionIds.includes(sessionId)) {
+		c.state.activeSessionIds.push(sessionId);
+	}
+
+	if (requestId) {
+		const requestIds = getPromptRequestIds(c.state, sessionId);
+		if (!requestIds.includes(requestId)) {
+			requestIds.push(requestId);
+			setPromptRequestIds(c.state, sessionId, requestIds);
+		}
+	}
+
+	c.state.activeSessionLastEventAtById[sessionId] = Date.now();
+	scheduleSessionTimers(c, options, sessionId);
+	syncPreventSleep(c, options);
+}
+
+function touchSessionActive<TConnParams, TInput>(
+	c: SandboxActionContext<TConnParams, TInput>,
+	options: ResolvedPreventSleepOptions | null,
+	sessionId: string,
+): void {
+	if (!options || !hasActiveSessions(c.state)) {
+		return;
+	}
+	if (!c.state.activeSessionIds.includes(sessionId)) {
+		return;
+	}
+
+	c.state.activeSessionLastEventAtById[sessionId] = Date.now();
+	scheduleSessionTimers(c, options, sessionId);
+}
+
+function clearSessionActive<TConnParams, TInput>(
+	c: SandboxActionContext<TConnParams, TInput>,
+	options: ResolvedPreventSleepOptions | null,
+	sessionId: string,
+	requestId?: string,
+): void {
+	if (!options) {
+		return;
+	}
+
+	ensureTurnTrackingState(c.state);
+
+	if (requestId) {
+		const remaining = getPromptRequestIds(c.state, sessionId).filter(
+			(activeRequestId) => activeRequestId !== requestId,
+		);
+		setPromptRequestIds(c.state, sessionId, remaining);
+		if (remaining.length > 0) {
+			touchSessionActive(c, options, sessionId);
+			syncPreventSleep(c, options);
+			return;
+		}
+	}
+
+	removeString(c.state.activeSessionIds, sessionId);
+	delete c.state.activePromptRequestIdsBySessionId[sessionId];
+	delete c.state.activeSessionLastEventAtById[sessionId];
+	clearSessionTimers(c.vars, sessionId);
+	syncPreventSleep(c, options);
+}
+
+function clearAllActiveSessions<TConnParams, TInput>(
+	c: SandboxActionContext<TConnParams, TInput>,
+	options: ResolvedPreventSleepOptions | null,
+): void {
+	if (!options) {
+		return;
+	}
+
+	ensureTurnTrackingState(c.state);
+	c.state.activeSessionIds = [];
+	c.state.activePromptRequestIdsBySessionId = {};
+	c.state.activeSessionLastEventAtById = {};
+	clearAllSessionTimers(c.vars);
+	syncPreventSleep(c, options);
+}
+
+function scheduleSessionTimers<TConnParams, TInput>(
+	c: SandboxActionContext<TConnParams, TInput>,
+	options: ResolvedPreventSleepOptions,
+	sessionId: string,
+): void {
+	clearSessionTimers(c.vars, sessionId);
+
+	const lastEventAt = c.state.activeSessionLastEventAtById[sessionId];
+	if (!lastEventAt) {
+		return;
+	}
+
+	// Sandbox session subscriptions are outbound SDK streams, not actor
+	// connections. We keep the actor awake ourselves while a session appears to
+	// be in the middle of a turn, then warn and eventually clear the state if the
+	// stream goes quiet and we never observe a terminal response.
+	const warningDelay = Math.max(
+		0,
+		options.warningAfterMs - (Date.now() - lastEventAt),
+	);
+	c.vars.warningTimeoutBySessionId.set(
+		sessionId,
+		setTimeout(() => {
+			if (!c.state.activeSessionIds.includes(sessionId)) {
+				return;
+			}
+			c.log.warn({
+				msg: "sandbox actor turn is still active without new session events",
+				sessionId,
+				idleMs: Date.now() - lastEventAt,
+			});
+		}, warningDelay),
+	);
+
+	const staleDelay = Math.max(
+		0,
+		options.staleAfterMs - (Date.now() - lastEventAt),
+	);
+	c.vars.staleTimeoutBySessionId.set(
+		sessionId,
+		setTimeout(() => {
+			if (!c.state.activeSessionIds.includes(sessionId)) {
+				return;
+			}
+
+			c.log.warn({
+				msg: "sandbox actor cleared stale active turn state after inactivity timeout",
+				sessionId,
+				idleMs: Date.now() - lastEventAt,
+			});
+			clearSessionActive(c, options, sessionId);
+		}, staleDelay),
+	);
+}
+
+function payloadMethod(payload: unknown): string | null {
+	if (
+		typeof payload !== "object" ||
+		payload === null ||
+		!("method" in payload)
+	) {
+		return null;
+	}
+
+	return typeof (payload as { method?: unknown }).method === "string"
+		? (payload as { method: string }).method
+		: null;
+}
+
+function payloadId(payload: unknown): string | null {
+	if (
+		typeof payload !== "object" ||
+		payload === null ||
+		!("id" in payload)
+	) {
+		return null;
+	}
+
+	const id = (payload as { id?: unknown }).id;
+	if (typeof id === "string" || typeof id === "number") {
+		return String(id);
+	}
+	return null;
+}
+
+function trackSessionTurnFromEvent<TConnParams, TInput>(
+	c: SandboxActionContext<TConnParams, TInput>,
+	options: ResolvedPreventSleepOptions | null,
+	sessionId: string,
+	event: SandboxSessionEvent,
+): void {
+	if (!options) {
+		return;
+	}
+
+	const method = payloadMethod(event.payload);
+	const id = payloadId(event.payload);
+
+	if (event.sender === "client" && method === "session/prompt") {
+		// The sandbox-agent stream gives us the raw JSON-RPC envelopes for the
+		// session. We treat an observed prompt request as the start of an active
+		// turn and keep the actor awake until we see the matching response or the
+		// stale timeout clears the session.
+		markSessionActive(
+			c,
+			options,
+			sessionId,
+			id ?? `session-prompt:${event.id}`,
+		);
+		return;
+	}
+
+	if (!c.state.activeSessionIds.includes(sessionId)) {
+		return;
+	}
+
+	if (event.sender === "agent" && id) {
+		const requestIds = getPromptRequestIds(c.state, sessionId);
+		if (requestIds.length === 0 || requestIds.includes(id)) {
+			clearSessionActive(c, options, sessionId, id);
+			return;
+		}
+	}
+
+	touchSessionActive(c, options, sessionId);
+}
+
+function runHook<TConnParams, TInput>(
+	c: SandboxActionContext<TConnParams, TInput>,
+	options: ResolvedPreventSleepOptions | null,
+	sessionId: string,
+	name: "onSessionEvent" | "onPermissionRequest",
+	callback: () => void | Promise<void>,
+): void {
+	if (options) {
+		c.vars.activeHookCount++;
+		syncPreventSleep(c, options);
+	}
+
+	const promise = Promise.resolve(callback())
+		.catch((error) => {
+			c.log.error({
+				msg: `sandbox actor ${name} hook failed`,
+				sessionId,
+				error,
+			});
+		})
+		.finally(() => {
+			if (!options) {
+				return;
+			}
+
+			c.vars.activeHookCount--;
+			if (c.vars.activeHookCount < 0) {
+				c.vars.activeHookCount = 0;
+				c.log.warn({
+					msg: "sandbox actor active hook count went below 0",
+				});
+			}
+			syncPreventSleep(c, options);
+		});
+
+	c.waitUntil(promise);
 }
 
 function getActorInput<TInput>(
@@ -98,6 +480,8 @@ async function teardownAgentRuntime(
 		subscription.permission?.();
 	}
 	runtime.unsubscribeBySessionId.clear();
+	clearAllSessionTimers(runtime);
+	runtime.activeHookCount = 0;
 
 	if (runtime.agent) {
 		try {
@@ -198,41 +582,40 @@ function subscribeToSession<TConnParams, TInput>(
 		return;
 	}
 
+	const preventSleepOptions = getPreventSleepOptions(config);
+
 	const event = agent.onSessionEvent(sessionId, (sessionEvent) => {
+		trackSessionTurnFromEvent(
+			c,
+			preventSleepOptions,
+			sessionId,
+			sessionEvent,
+		);
+
 		if (!config.onSessionEvent) {
 			return;
 		}
 
-		c.waitUntil(
-			Promise.resolve(config.onSessionEvent(c, sessionId, sessionEvent)).catch(
-				(error) => {
-					c.log.error({
-						msg: "sandbox actor onSessionEvent hook failed",
-						sessionId,
-						error,
-					});
-				},
-			),
+		runHook(c, preventSleepOptions, sessionId, "onSessionEvent", () =>
+			config.onSessionEvent!(c, sessionId, sessionEvent),
 		);
 	});
 
 	const permission = agent.onPermissionRequest(
 		sessionId,
 		(request: SessionPermissionRequest) => {
+			markSessionActive(c, preventSleepOptions, sessionId);
+
 			if (!config.onPermissionRequest) {
 				return;
 			}
 
-			c.waitUntil(
-				Promise.resolve(
-					config.onPermissionRequest(c, sessionId, request),
-				).catch((error) => {
-					c.log.error({
-						msg: "sandbox actor onPermissionRequest hook failed",
-						sessionId,
-						error,
-					});
-				}),
+			runHook(
+				c,
+				preventSleepOptions,
+				sessionId,
+				"onPermissionRequest",
+				() => config.onPermissionRequest!(c, sessionId, request),
 			);
 		},
 	);
@@ -247,8 +630,12 @@ async function afterAction<TConnParams, TInput>(
 	actionName: keyof SandboxActorActions,
 	result: unknown,
 ): Promise<void> {
+	const preventSleepOptions = getPreventSleepOptions(config);
+
 	if (actionName === "dispose") {
 		await teardownAgentRuntime(c.vars);
+		clearAllActiveSessions(c, preventSleepOptions);
+		c.setPreventSleep(false);
 		return;
 	}
 
@@ -257,6 +644,7 @@ async function afterAction<TConnParams, TInput>(
 		c.vars.unsubscribeBySessionId.get(result.id)?.permission?.();
 		c.vars.unsubscribeBySessionId.delete(result.id);
 		removeSessionId(c.state, result.id);
+		clearSessionActive(c, preventSleepOptions, result.id);
 		return;
 	}
 
@@ -349,14 +737,36 @@ export function sandboxActor<TConnParams = undefined, TInput = undefined>(
 							c as SandboxActorCreateProviderContext<TInput>,
 							input,
 						)).name,
+			activeSessionIds: [],
+			activePromptRequestIdsBySessionId: {},
+			activeSessionLastEventAtById: {},
 		}),
 		createVars: () => ({
 			agent: null,
 			provider: null,
 			unsubscribeBySessionId: new Map(),
+			activeHookCount: 0,
+			warningTimeoutBySessionId: new Map(),
+			staleTimeoutBySessionId: new Map(),
 		}),
 		db: config.database,
 		onWake: async (c) => {
+			const preventSleepOptions = getPreventSleepOptions(config);
+			ensureTurnTrackingState(c.state);
+			if (preventSleepOptions) {
+				for (const sessionId of c.state.activeSessionIds) {
+					scheduleSessionTimers(
+						c as SandboxActionContext<TConnParams, TInput>,
+						preventSleepOptions,
+						sessionId,
+					);
+				}
+			}
+			syncPreventSleep(
+				c as SandboxActionContext<TConnParams, TInput>,
+				preventSleepOptions,
+			);
+
 			if (!c.state.sandboxId) {
 				return;
 			}
@@ -382,9 +792,16 @@ export function sandboxActor<TConnParams = undefined, TInput = undefined>(
 		},
 		onSleep: async (c) => {
 			await teardownAgentRuntime(c.vars);
+			c.setPreventSleep(false);
 		},
 		onDestroy: async (c) => {
+			const preventSleepOptions = getPreventSleepOptions(config);
+			clearAllActiveSessions(
+				c as SandboxActionContext<TConnParams, TInput>,
+				preventSleepOptions,
+			);
 			await teardownAgentRuntime(c.vars);
+			c.setPreventSleep(false);
 			if (!c.state.sandboxId) {
 				return;
 			}
@@ -399,6 +816,9 @@ export function sandboxActor<TConnParams = undefined, TInput = undefined>(
 				c.state.sandboxId = null;
 				c.state.sessionIds = [];
 				c.state.providerName = null;
+				c.state.activeSessionIds = [];
+				c.state.activePromptRequestIdsBySessionId = {};
+				c.state.activeSessionLastEventAtById = {};
 			}
 		},
 		onBeforeConnect: config.onBeforeConnect,
