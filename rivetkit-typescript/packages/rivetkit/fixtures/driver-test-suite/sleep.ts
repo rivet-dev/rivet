@@ -199,3 +199,42 @@ export const sleepWithNoSleepOption = actor({
 		noSleep: true,
 	},
 });
+
+export const sleepWithPreventSleep = actor({
+	state: {
+		startCount: 0,
+		sleepCount: 0,
+		preventSleepOnWake: false,
+	},
+	onWake: (c) => {
+		c.state.startCount += 1;
+		c.setPreventSleep(c.state.preventSleepOnWake);
+	},
+	onSleep: (c) => {
+		c.state.sleepCount += 1;
+	},
+	actions: {
+		triggerSleep: (c) => {
+			c.sleep();
+		},
+		getStatus: (c) => {
+			return {
+				startCount: c.state.startCount,
+				sleepCount: c.state.sleepCount,
+				preventSleep: c.preventSleep,
+				preventSleepOnWake: c.state.preventSleepOnWake,
+			};
+		},
+		setPreventSleep: (c, prevent: boolean) => {
+			c.setPreventSleep(prevent);
+			return c.preventSleep;
+		},
+		setPreventSleepOnWake: (c, prevent: boolean) => {
+			c.state.preventSleepOnWake = prevent;
+			return c.state.preventSleepOnWake;
+		},
+	},
+	options: {
+		sleepTimeout: SLEEP_TIMEOUT,
+	},
+});

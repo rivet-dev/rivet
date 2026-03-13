@@ -77,6 +77,7 @@ enum CanSleep {
 	Yes,
 	NotReady,
 	NotStarted,
+	PreventSleep,
 	ActiveConns,
 	ActiveDisconnectCallbacks,
 	ActiveHonoHttpRequests,
@@ -181,6 +182,7 @@ export class ActorInstance<
 	// MARK: - HTTP/WebSocket Tracking
 	#activeHonoHttpRequests = 0;
 	#activeKeepAwakeCount = 0;
+	#preventSleep = false;
 
 	// MARK: - Deprecated (kept for compatibility)
 	#schedule!: Schedule;
@@ -327,6 +329,10 @@ export class ActorInstance<
 
 	get abortSignal(): AbortSignal {
 		return this.#abortController.signal;
+	}
+
+	get preventSleep(): boolean {
+		return this.#preventSleep;
 	}
 
 	get actions(): string[] {
@@ -1014,6 +1020,17 @@ export class ActorInstance<
 		}
 	}
 
+	setPreventSleep(prevent: boolean) {
+		if (this.#preventSleep === prevent) return;
+
+		this.#preventSleep = prevent;
+		this.#rLog.debug({
+			msg: "updated prevent sleep state",
+			prevent,
+		});
+		this.resetSleepTimer();
+	}
+
 	beginQueueWait() {
 		this.assertReady(true);
 		this.#activeQueueWaitCount++;
@@ -1657,6 +1674,7 @@ export class ActorInstance<
 	#canSleep(): CanSleep {
 		if (!this.#ready) return CanSleep.NotReady;
 		if (!this.#started) return CanSleep.NotReady;
+		if (this.#preventSleep) return CanSleep.PreventSleep;
 		if (this.#activeHonoHttpRequests > 0)
 			return CanSleep.ActiveHonoHttpRequests;
 		if (this.#activeKeepAwakeCount > 0) return CanSleep.ActiveKeepAwake;

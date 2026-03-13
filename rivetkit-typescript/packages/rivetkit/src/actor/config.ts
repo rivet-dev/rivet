@@ -212,7 +212,7 @@ export const ActorConfigSchema = z
 				onDestroyTimeout: z.number().positive().default(5000),
 				stateSaveInterval: z.number().positive().default(10_000),
 				actionTimeout: z.number().positive().default(60_000),
-				// Max time to wait for waitUntil background promises during shutdown
+				// Deprecated timeout for legacy background shutdown tasks
 				waitUntilTimeout: z.number().positive().default(15_000),
 				// Max time to wait for run handler to stop during shutdown
 				runStopTimeout: z.number().positive().default(15_000),
@@ -498,8 +498,8 @@ interface BaseActorConfig<
 	 * - Custom workflow logic
 	 *
 	 * **Important:** The actor may go to sleep at any time during the `run`
-	 * handler. Use `c.keepAwake(promise)` to wrap async operations that should
-	 * not be interrupted by sleep.
+	 * handler. Use `c.setPreventSleep(true)` while work is active, then clear
+	 * it with `c.setPreventSleep(false)` once the actor can sleep again.
 	 *
 	 * The handler receives an abort signal via `c.abortSignal` and a
 	 * `c.aborted` alias for loop checks. Use these to gracefully exit.
@@ -1046,7 +1046,7 @@ export const DocActorOptionsSchema = z
 			.number()
 			.optional()
 			.describe(
-				"Max time in ms to wait for waitUntil background promises during shutdown. Default: 15000",
+				"Deprecated. Max time in ms to wait for legacy background shutdown tasks. Default: 15000",
 			),
 		runStopTimeout: z
 			.number()

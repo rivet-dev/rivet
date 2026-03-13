@@ -61,6 +61,7 @@ import {
 	sleep,
 	sleepWithLongRpc,
 	sleepWithNoSleepOption,
+	sleepWithPreventSleep,
 	sleepWithRawHttp,
 	sleepWithRawWebSocket,
 } from "./sleep";
@@ -104,6 +105,7 @@ export const registry = setup({
 		sleepWithRawHttp,
 		sleepWithRawWebSocket,
 		sleepWithNoSleepOption,
+		sleepWithPreventSleep,
 		// From error-handling.ts
 		errorHandlingActor,
 		customTimeoutActor,
