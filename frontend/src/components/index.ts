@@ -53,7 +53,6 @@ export * from "./ui/chart";
 export * from "./ui/checkbox";
 export * from "./ui/combobox";
 export * from "./ui/command";
-export * from "./ui/context-menu";
 export * from "./ui/dialog";
 export * from "./ui/dialog-activity-indicator";
 export * from "./ui/dropdown-menu";

@@ -704,7 +704,7 @@ export const workflowRunningStepActor = actor({
 				timeout: 0,
 				run: async () => {
 					ctx.state.startedAt = Date.now();
-					await new Promise(() => {});
+					await new Promise((resolve) => setTimeout(resolve, 250));
 				},
 			},
 		);

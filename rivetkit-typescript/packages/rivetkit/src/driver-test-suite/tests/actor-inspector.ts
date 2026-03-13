@@ -364,6 +364,35 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			expect(typeof data.rows[0]?.created_at).toBe("number");
 		});
 
+		test("POST /inspector/workflow/replay rejects workflows that are already in flight", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.workflowRunningStepActor.getOrCreate([
+				"inspector-workflow-replay-in-flight",
+				crypto.randomUUID(),
+			]);
+
+			await vi.waitFor(async () => {
+				const state = await handle.getState();
+				expect(state.startedAt).not.toBeNull();
+			});
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(
+				`${gatewayUrl}/inspector/workflow/replay`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: "Bearer token",
+					},
+					body: JSON.stringify({}),
+				},
+			);
+			expect(response.status).toBe(500);
+			const data = (await response.json()) as { code: string };
+			expect(data.code).toBe("internal_error");
+		});
+
 		test("GET /inspector/summary returns full actor snapshot", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.counter.getOrCreate(["inspector-summary"]);

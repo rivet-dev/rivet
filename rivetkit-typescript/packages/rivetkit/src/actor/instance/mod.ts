@@ -627,6 +627,10 @@ export class ActorInstance<
 		this.#startRunHandler();
 	}
 
+	isRunHandlerActive(): boolean {
+		return this.#runHandlerActive;
+	}
+
 	// MARK: - Stop
 	async onStop(mode: "sleep" | "destroy") {
 		if (this.#stopCalled) {

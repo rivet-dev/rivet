@@ -165,6 +165,11 @@ export function workflow<
 
 		const driver = new ActorWorkflowDriver(actor, runCtx);
 		workflowInspector.setReplayFromStep(async (entryId) => {
+			if (actor.isRunHandlerActive()) {
+				throw new Error(
+					"Cannot replay a workflow while it is currently in flight",
+				);
+			}
 			const snapshot = await replayWorkflowFromStep(
 				actor.id,
 				new ActorWorkflowControlDriver(actor),

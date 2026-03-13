@@ -71,8 +71,6 @@ type WorkflowNodeInput = {
 	rawData?: unknown;
 	name?: string;
 	entryId?: string;
-	canReplay?: boolean;
-	isReplaying?: boolean;
 	onReplayStep?: (entryId: string) => void;
 };
 
@@ -159,11 +157,6 @@ function itemToNodeData(
 		rawData: kind.data,
 		nodeKey: item.key,
 		entryId: id,
-		canReplay:
-			kind.type === "step" &&
-			status !== "running" &&
-			id !== options.currentStepId,
-		isReplaying: id === options.replayingEntryId,
 		onReplayStep: options.onReplayStep,
 	};
 }
@@ -213,8 +206,6 @@ function makeNode(
 			completedAt: data.completedAt,
 			rawData: data.rawData,
 			entryId: data.entryId,
-			canReplay: data.canReplay,
-			isReplaying: data.isReplaying,
 			onReplayStep: data.onReplayStep,
 		},
 	};
