@@ -34,7 +34,12 @@ import {
 	actorInspectorQueriesKeys,
 	useActorInspector,
 } from "./actor-inspector-context";
-import { DatabaseTable } from "./database/database-table";
+import {
+	type DatabaseTableCellContext,
+	DatabaseTable,
+	isBlobColumn,
+	renderDatabaseCellValue,
+} from "./database/database-table";
 import type { ActorId } from "./queries";
 
 const PAGE_SIZE = 100;
@@ -48,6 +53,23 @@ const DEFAULT_SQL = [
 interface ActorDatabaseProps {
 	actorId: ActorId;
 }
+
+type DatabaseBrowserRow = Record<string, unknown>;
+
+type EditingCell = {
+	rowKey: string;
+	columnName: string;
+};
+
+type StagedCellEdit = {
+	id: string;
+	rowKey: string;
+	columnName: string;
+	primaryKeys: Array<{ name: string; value: unknown }>;
+	originalValue: unknown;
+	nextValue: unknown;
+	draft: string;
+};
 
 export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 	const [view, setView] = useState<"tables" | "sql">("tables");
@@ -83,6 +105,7 @@ export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 
 function ActorDatabaseBrowser({ actorId }: ActorDatabaseProps) {
 	const actorInspector = useActorInspector();
+	const queryClient = useQueryClient();
 	const { data, refetch } = useQuery(
 		actorInspector.actorDatabaseQueryOptions(actorId),
 	);
@@ -110,11 +133,261 @@ function ActorDatabaseBrowser({ actorId }: ActorDatabaseProps) {
 	const currentTable = data?.tables?.find(
 		(current) => current.table.name === selectedTable,
 	);
+	const primaryKeyColumns = useMemo(() => {
+		return [...(currentTable?.columns ?? [])]
+			.filter((column) => Boolean(column.pk))
+			.sort(
+				(a, b) => Number(a.pk ?? Number.MAX_SAFE_INTEGER) - Number(b.pk ?? Number.MAX_SAFE_INTEGER),
+			);
+	}, [currentTable]);
+	const canEditRows =
+		currentTable?.table.type === "table" && primaryKeyColumns.length > 0;
+	const visibleRows = useMemo(() => {
+		return (rows ?? []).filter(isDatabaseBrowserRow);
+	}, [rows]);
+	const rowLookup = useMemo(() => {
+		const next = new Map<string, DatabaseBrowserRow>();
+		for (const row of visibleRows) {
+			const rowKey = createRowKey(row, primaryKeyColumns);
+			if (rowKey) {
+				next.set(rowKey, row);
+			}
+		}
+		return next;
+	}, [primaryKeyColumns, visibleRows]);
+	const columnLookup = useMemo(() => {
+		return new Map(
+			(currentTable?.columns ?? []).map((column) => {
+				return [column.name, column] as const;
+			}),
+		);
+	}, [currentTable?.columns]);
+	const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+	const [editingValue, setEditingValue] = useState("");
+	const [stagedEdits, setStagedEdits] = useState<Record<string, StagedCellEdit>>(
+		{},
+	);
+	const [isApplyingEdits, setIsApplyingEdits] = useState(false);
+	const [tableEditError, setTableEditError] = useState<string | null>(null);
+	const { mutateAsync: executeDatabaseSql } = useMutation(
+		actorInspector.actorDatabaseExecuteMutation(actorId),
+	);
+	const stagedEditList = useMemo(() => {
+		return Object.values(stagedEdits);
+	}, [stagedEdits]);
+	const stagedEditCount = stagedEditList.length;
+
+	useEffect(() => {
+		setEditingCell(null);
+		setEditingValue("");
+		setStagedEdits({});
+		setTableEditError(null);
+	}, [selectedTable]);
 
 	const totalRows = currentTable?.records ?? 0;
 	const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
 	const hasNextPage = page < totalPages - 1;
 	const hasPrevPage = page > 0;
+
+	const beginCellEdit = useCallback(
+		({ column, row, value }: DatabaseTableCellContext) => {
+			if (!canEditRows || isBlobColumn(column, value)) {
+				return;
+			}
+
+			const rowKey = createRowKey(row, primaryKeyColumns);
+			if (!rowKey) {
+				return;
+			}
+
+			const editId = createStagedEditId(rowKey, column.name);
+			setEditingCell({ rowKey, columnName: column.name });
+			setEditingValue(
+				stagedEdits[editId]?.draft ?? formatCellDraft(value),
+			);
+			setTableEditError(null);
+		},
+		[canEditRows, primaryKeyColumns, stagedEdits],
+	);
+
+	const commitCellEdit = useCallback(() => {
+		if (!editingCell) {
+			return;
+		}
+
+		const row = rowLookup.get(editingCell.rowKey);
+		const column = columnLookup.get(editingCell.columnName);
+		if (!row || !column) {
+			setEditingCell(null);
+			setEditingValue("");
+			return;
+		}
+
+		const nextValue = parseEditedCellValue(
+			editingValue,
+			row[column.name],
+			column,
+		);
+		const editId = createStagedEditId(editingCell.rowKey, column.name);
+		const primaryKeys = extractPrimaryKeyValues(row, primaryKeyColumns);
+		if (primaryKeys.length !== primaryKeyColumns.length) {
+			setEditingCell(null);
+			setEditingValue("");
+			return;
+		}
+
+		setStagedEdits((current) => {
+			if (areDatabaseValuesEqual(nextValue, row[column.name])) {
+				if (!(editId in current)) {
+					return current;
+				}
+				const next = { ...current };
+				delete next[editId];
+				return next;
+			}
+
+			return {
+				...current,
+				[editId]: {
+					id: editId,
+					rowKey: editingCell.rowKey,
+					columnName: column.name,
+					primaryKeys,
+					originalValue: row[column.name],
+					nextValue,
+					draft: editingValue,
+				},
+			};
+		});
+		setEditingCell(null);
+		setEditingValue("");
+	}, [columnLookup, editingCell, editingValue, primaryKeyColumns, rowLookup]);
+
+	const discardEdits = useCallback(() => {
+		setEditingCell(null);
+		setEditingValue("");
+		setStagedEdits({});
+		setTableEditError(null);
+	}, []);
+
+	const applyEdits = useCallback(async () => {
+		if (!selectedTable || stagedEditList.length === 0) {
+			return;
+		}
+
+		setIsApplyingEdits(true);
+		setTableEditError(null);
+		try {
+			for (const edit of stagedEditList) {
+				const args: unknown[] = [edit.nextValue];
+				const whereClauses = edit.primaryKeys.map((primaryKey) => {
+					const columnName = quoteSqlIdentifier(primaryKey.name);
+					if (primaryKey.value === null) {
+						return `"${columnName}" IS NULL`;
+					}
+					args.push(primaryKey.value);
+					return `"${columnName}" = ?`;
+				});
+				await executeDatabaseSql({
+					sql: `UPDATE "${quoteSqlIdentifier(selectedTable)}" SET "${quoteSqlIdentifier(edit.columnName)}" = ? WHERE ${whereClauses.join(" AND ")}`,
+					args,
+				});
+			}
+
+			setEditingCell(null);
+			setEditingValue("");
+			setStagedEdits({});
+			await Promise.all([
+				refetch(),
+				refetchData(),
+				queryClient.invalidateQueries({
+					queryKey: actorInspectorQueriesKeys.actorDatabase(actorId),
+				}),
+			]);
+		} catch (error) {
+			setTableEditError(
+				error instanceof Error
+					? error.message
+					: "Failed to update edited cells.",
+			);
+		} finally {
+			setIsApplyingEdits(false);
+		}
+	}, [
+		actorId,
+		executeDatabaseSql,
+		queryClient,
+		refetch,
+		refetchData,
+		selectedTable,
+		stagedEditList,
+	]);
+
+	const renderBrowserCell = useCallback(
+		(context: DatabaseTableCellContext) => {
+			const rowKey = createRowKey(context.row, primaryKeyColumns);
+			if (!rowKey) {
+				return renderDatabaseCellValue(context.column, context.value);
+			}
+
+			const editId = createStagedEditId(rowKey, context.column.name);
+			const stagedEdit = stagedEdits[editId];
+			if (
+				editingCell?.rowKey === rowKey &&
+				editingCell.columnName === context.column.name
+			) {
+				return (
+					<Input
+						autoFocus
+						value={editingValue}
+						onChange={(event) => setEditingValue(event.target.value)}
+						onBlur={commitCellEdit}
+						onKeyDown={(event) => {
+							if (event.key === "Enter") {
+								event.preventDefault();
+								commitCellEdit();
+							} else if (event.key === "Escape") {
+								event.preventDefault();
+								setEditingCell(null);
+								setEditingValue("");
+							}
+						}}
+						className="h-8 font-mono-console text-xs"
+					/>
+				);
+			}
+
+			return renderDatabaseCellValue(
+				context.column,
+				stagedEdit ? stagedEdit.nextValue : context.value,
+			);
+		},
+		[commitCellEdit, editingCell, editingValue, primaryKeyColumns, stagedEdits],
+	);
+
+	const getBrowserCellClassName = useCallback(
+		(context: DatabaseTableCellContext) => {
+			const rowKey = createRowKey(context.row, primaryKeyColumns);
+			if (!rowKey) {
+				return undefined;
+			}
+			const editId = createStagedEditId(rowKey, context.column.name);
+			if (stagedEdits[editId]) {
+				return "bg-amber-50/80 ring-1 ring-inset ring-amber-200";
+			}
+			if (
+				editingCell?.rowKey === rowKey &&
+				editingCell.columnName === context.column.name
+			) {
+				return "bg-primary/5 ring-1 ring-inset ring-primary/20";
+			}
+			if (canEditRows && !isBlobColumn(context.column, context.value)) {
+				return "cursor-text";
+			}
+			return undefined;
+		},
+		[canEditRows, editingCell, primaryKeyColumns, stagedEdits],
+	);
 
 	return (
 		<>
@@ -149,6 +422,28 @@ function ActorDatabaseBrowser({ actorId }: ActorDatabaseProps) {
 					</Flex>
 				</div>
 				<div className="border-l h-full flex items-center gap-2 px-2">
+					{stagedEditCount > 0 ? (
+						<>
+							<Button
+								variant="ghost"
+								size="sm"
+								disabled={isApplyingEdits}
+								onClick={discardEdits}
+							>
+								Discard
+							</Button>
+							<Button
+								size="sm"
+								isLoading={isApplyingEdits}
+								onClick={() => {
+									void applyEdits();
+								}}
+							>
+								Update {stagedEditCount} Cell
+								{stagedEditCount === 1 ? "" : "s"}
+							</Button>
+						</>
+					) : null}
 					<div className="flex items-center gap-1">
 						<WithTooltip
 							content="Previous page"
@@ -201,14 +496,22 @@ function ActorDatabaseBrowser({ actorId }: ActorDatabaseProps) {
 			<div className="flex-1 min-h-0 overflow-hidden flex relative">
 				{isLoading ? <ShimmerLine /> : null}
 				<ScrollArea className="w-full h-full min-h-0">
+					{tableEditError ? (
+						<div className="border-b px-3 py-2 text-xs text-destructive">
+							{tableEditError}
+						</div>
+					) : null}
 					{currentTable ? (
 						<DatabaseTable
 							className="overflow-hidden"
 							columns={currentTable.columns}
 							enableColumnResizing={false}
 							enableRowSelection={false}
-							data={rows ?? []}
+							data={visibleRows}
 							references={currentTable.foreignKeys}
+							renderCell={renderBrowserCell}
+							getCellClassName={getBrowserCellClassName}
+							onCellDoubleClick={beginCellEdit}
 						/>
 					) : null}
 				</ScrollArea>
@@ -547,6 +850,91 @@ function createResultColumns(rows: unknown[]): DatabaseColumn[] {
 		dflt_value: null,
 		pk: false,
 	}));
+}
+
+function isDatabaseBrowserRow(value: unknown): value is DatabaseBrowserRow {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function createRowKey(
+	row: DatabaseBrowserRow,
+	primaryKeyColumns: DatabaseColumn[],
+): string | null {
+	if (primaryKeyColumns.length === 0) {
+		return null;
+	}
+
+	const values = primaryKeyColumns.map((column) => {
+		if (!(column.name in row)) {
+			return undefined;
+		}
+		return [column.name, row[column.name]];
+	});
+	if (values.some((value) => value === undefined)) {
+		return null;
+	}
+	return JSON.stringify(values);
+}
+
+function createStagedEditId(rowKey: string, columnName: string): string {
+	return `${rowKey}:${columnName}`;
+}
+
+function extractPrimaryKeyValues(
+	row: DatabaseBrowserRow,
+	primaryKeyColumns: DatabaseColumn[],
+) {
+	return primaryKeyColumns.flatMap((column) => {
+		if (!(column.name in row)) {
+			return [];
+		}
+		return [{ name: column.name, value: row[column.name] }];
+	});
+}
+
+function formatCellDraft(value: unknown): string {
+	if (value === null) {
+		return "";
+	}
+	if (typeof value === "string") {
+		return value;
+	}
+	return String(value);
+}
+
+function parseEditedCellValue(
+	draft: string,
+	originalValue: unknown,
+	column: DatabaseColumn,
+): unknown {
+	const trimmed = draft.trim();
+	if (trimmed.toLowerCase() === "null") {
+		return null;
+	}
+
+	const type = column.type.toLowerCase();
+	if (
+		typeof originalValue === "number" ||
+		/\b(int|real|floa|doub|dec|num|bool)\b/.test(type)
+	) {
+		const numeric = Number(trimmed);
+		if (trimmed !== "" && !Number.isNaN(numeric)) {
+			return numeric;
+		}
+	}
+
+	return draft;
+}
+
+function areDatabaseValuesEqual(a: unknown, b: unknown): boolean {
+	if (Object.is(a, b)) {
+		return true;
+	}
+	return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function quoteSqlIdentifier(value: string): string {
+	return value.replace(/"/g, '""');
 }
 
 function extractNamedBindings(sql: string): string[] {
