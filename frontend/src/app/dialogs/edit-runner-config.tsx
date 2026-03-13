@@ -182,7 +182,7 @@ function SharedSettingsForm({
 				await queryClient.invalidateQueries(
 					provider.runnerConfigsQueryOptions(),
 				);
-				await queryClient.invalidateQueries(
+				await queryClient.refetchQueries(
 					provider.runnerConfigQueryOptions({ name }),
 				);
 				onClose?.();
@@ -299,7 +299,7 @@ function DatacenterSettingsForm({
 				await queryClient.invalidateQueries(
 					provider.runnerConfigsQueryOptions(),
 				);
-				await queryClient.invalidateQueries(
+				await queryClient.refetchQueries(
 					provider.runnerConfigQueryOptions({ name }),
 				);
 				onClose?.();

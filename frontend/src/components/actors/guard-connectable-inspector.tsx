@@ -7,6 +7,7 @@ import {
 	faSpinnerThird,
 	Icon,
 } from "@rivet-gg/icons";
+import * as Sentry from "@sentry/react";
 import {
 	useInfiniteQuery,
 	useMutation,
@@ -40,6 +41,43 @@ import type { ActorId, ActorStatus } from "./queries";
 const InspectorGuardContext = createContext<ReactNode | null>(null);
 
 const RIVET_KIT_MIN_VERSION = "2.0.35";
+
+/**
+ * Compare semantic versions including pre-release versions.
+ * Returns true if version1 < version2.
+ * Handles versions like "2.0.35", "2.1.0-rc.2", "2.1.0-alpha.1"
+ */
+function isVersionOutdated(version1: string, version2: string): boolean {
+	// Extract base version and pre-release info
+	const parseVersion = (v: string) => {
+		const [baseStr, prerelease] = v.split("-");
+		const parts = baseStr.split(".").map(Number);
+		return {
+			major: parts[0] || 0,
+			minor: parts[1] || 0,
+			patch: parts[2] || 0,
+			prerelease,
+		};
+	};
+
+	const v1 = parseVersion(version1);
+	const v2 = parseVersion(version2);
+
+	// Compare major.minor.patch
+	if (v1.major !== v2.major) return v1.major < v2.major;
+	if (v1.minor !== v2.minor) return v1.minor < v2.minor;
+	if (v1.patch !== v2.patch) return v1.patch < v2.patch;
+
+	// Base versions are equal - compare pre-release
+	// Pre-release versions (e.g., rc, alpha) are older than release versions
+	const hasPrerelease1 = !!v1.prerelease;
+	const hasPrerelease2 = !!v2.prerelease;
+
+	if (hasPrerelease1 && !hasPrerelease2) return true; // "2.0.0-rc.1" < "2.0.0"
+	if (!hasPrerelease1 && hasPrerelease2) return false; // "2.0.0" > "2.0.0-rc.1"
+
+	return false; // versions are equal
+}
 
 export const useInspectorGuard = () => useContext(InspectorGuardContext);
 
@@ -161,6 +199,186 @@ function NoRunners() {
 	);
 }
 
+interface InspectorTokenErrorContext {
+	statusCode?: number;
+	metadata?: { version?: string; type?: string };
+	error?: unknown;
+}
+
+function buildInspectorTokenErrorMessage(
+	context: InspectorTokenErrorContext,
+): ReactNode {
+	const { statusCode, metadata, error } = context;
+
+	const isLocal = metadata?.type === "local";
+
+	// Report non-standard errors to Sentry in deployed environments
+	if (
+		!isLocal &&
+		error &&
+		statusCode &&
+		statusCode !== 403 &&
+		statusCode !== 404
+	) {
+		Sentry.captureException(error, {
+			contexts: {
+				inspector: {
+					statusCode,
+					type: metadata?.type,
+					rivetkitVersion: metadata?.version,
+				},
+			},
+			tags: {
+				component: "ActorContextProvider",
+			},
+		});
+	}
+
+	// 403: Token not set in run config (deployed only)
+	if (statusCode === 403 && !isLocal) {
+		return (
+			<Info>
+				<p>
+					Inspector token not configured. To enable the Inspector in
+					your deployed environment, set the token in your run config:
+				</p>
+				<code className="block bg-gray-100 p-3 rounded mt-2 text-sm">
+					RIVET_INSPECTOR_TOKEN=&lt;your-token&gt;
+				</code>
+				<p className="mt-2 text-sm text-gray-600">
+					See{" "}
+					<a
+						href="https://rivet.dev/docs/actors/inspector"
+						className="text-blue-600 hover:underline"
+					>
+						Inspector documentation
+					</a>{" "}
+					for more details.
+				</p>
+			</Info>
+		);
+	}
+
+	// 404: Check version mismatch first
+	if (statusCode === 404) {
+		if (metadata?.version) {
+			const currentVersion = metadata.version;
+			const minVersion = RIVET_KIT_MIN_VERSION;
+			const versionIsOutdated =
+				currentVersion &&
+				minVersion &&
+				isVersionOutdated(currentVersion, minVersion);
+
+			if (versionIsOutdated) {
+				return (
+					<Info>
+						<p>RivetKit version is outdated.</p>
+						<p>
+							Your RivetKit version (
+							<span className="font-mono-console font-bold">
+								{currentVersion}
+							</span>
+							) is older than the required version (
+							<span className="font-mono-console font-bold">
+								{minVersion}
+							</span>
+							).
+						</p>
+						<p className="mt-2">
+							Please upgrade RivetKit to use the Inspector.
+						</p>
+					</Info>
+				);
+			}
+		}
+
+		// 404 in deployed environment but not a version issue
+		if (!isLocal) {
+			return (
+				<Info>
+					<p>
+						Inspector token endpoint returned a 404. Please check
+						your RivetKit version and contact support if the issue
+						persists.
+					</p>
+					<p className="mt-2 text-sm text-gray-600">
+						Current RivetKit version:{" "}
+						<span className="font-mono-console">
+							{metadata?.version || "unknown"}
+						</span>
+					</p>
+				</Info>
+			);
+		}
+
+		// 404 in local environment
+		return (
+			<Info>
+				<p>
+					Inspector token endpoint returned a 404. This might indicate
+					an outdated version of RivetKit.
+				</p>
+				<p className="mt-2 text-sm text-gray-600">
+					Current RivetKit version:{" "}
+					<span className="font-mono-console">
+						{metadata?.version || "unknown"}
+					</span>
+				</p>
+				<p className="mt-2">
+					Please ensure you're running the latest version of RivetKit.
+				</p>
+				<p className="mt-2 text-sm">
+					If the problem persists, please contact support.
+				</p>
+			</Info>
+		);
+	}
+
+	// Unknown error code in deployed environment
+	if (statusCode && statusCode !== 403 && statusCode !== 404 && !isLocal) {
+		return (
+			<Info>
+				<p>
+					An unexpected error occurred while retrieving the Inspector
+					token.
+				</p>
+				<p className="mt-2 text-sm text-gray-600">
+					Error code: {statusCode}
+				</p>
+				<p className="mt-2">
+					Our team has been notified. Please try again later or
+					contact support if the issue persists.
+				</p>
+			</Info>
+		);
+	}
+
+	// Default/generic error
+	return (
+		<Info>
+			<p>Unable to retrieve the Actor's Inspector token.</p>
+			<p>
+				Please ensure the Inspector is enabled for your Actor and that
+				you're using RivetKit version{" "}
+				<b className="font-mono-console">{RIVET_KIT_MIN_VERSION}</b> or
+				newer.
+			</p>
+			<p>
+				Current RivetKit version:{" "}
+				<DiscreteCopyButton
+					value={metadata?.version || "unknown"}
+					className="inline-block p-0 h-auto px-0.5"
+				>
+					<span className="font-mono-console text-lg font-bold">
+						{metadata?.version || "unknown"}
+					</span>
+				</DiscreteCopyButton>
+			</p>
+			<ErrorDetails error={isRivetApiError(error) ? error.body : error} />
+		</Info>
+	);
+}
+
 function ActorContextProvider(props: {
 	actorId: ActorId;
 	children: ReactNode;
@@ -177,36 +395,18 @@ function ActorContextProvider(props: {
 	}
 
 	if (!token || !metadata || isError) {
+		const statusCode = isRivetApiError(error)
+			? (error.statusCode as number)
+			: undefined;
+
+		const errorMessage = buildInspectorTokenErrorMessage({
+			statusCode,
+			metadata,
+			error,
+		});
+
 		return (
-			<InspectorGuardContext.Provider
-				value={
-					<Info>
-						<p>Unable to retrieve the Actor's Inspector token.</p>
-						<p>
-							Please ensure the Inspector is enabled for your
-							Actor and that you're using RivetKit version{" "}
-							<b className="font-mono-console">
-								{RIVET_KIT_MIN_VERSION}
-							</b>{" "}
-							or newer.
-						</p>
-						<p>
-							Current RivetKit version:{" "}
-							<DiscreteCopyButton
-								value={metadata?.version || "unknown"}
-								className="inline-block p-0 h-auto px-0.5"
-							>
-								<span className="font-mono-console text-lg font-bold">
-									{metadata?.version || "unknown"}
-								</span>
-							</DiscreteCopyButton>
-						</p>
-						<ErrorDetails
-							error={isRivetApiError(error) ? error.body : error}
-						/>
-					</Info>
-				}
-			>
+			<InspectorGuardContext.Provider value={errorMessage}>
 				{props.children}
 			</InspectorGuardContext.Provider>
 		);

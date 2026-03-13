@@ -37,6 +37,7 @@ function CloudModals() {
 
 	const CreateProjectDialog = useDialog.CreateProject.Dialog;
 	const CreateNamespaceDialog = useDialog.CreateNamespace.Dialog;
+	const ConnectRivetDialog = useDialog.ConnectRivet.Dialog;
 	const ConnectVercelDialog = useDialog.ConnectVercel.Dialog;
 	const ConnectQuickVercelDialog = useDialog.ConnectQuickVercel.Dialog;
 	const ConnectRailwayDialog = useDialog.ConnectRailway.Dialog;
@@ -50,6 +51,7 @@ function CloudModals() {
 	const DeleteNamespaceDialog = useDialog.DeleteNamespace.Dialog;
 	const DeleteProjectDialog = useDialog.DeleteProject.Dialog;
 	const CreateOrganizationDialog = useDialog.CreateOrganization.Dialog;
+	const UpsertDeploymentDialog = useDialog.UpsertDeployment.Dialog;
 
 	return (
 		<>
@@ -64,7 +66,6 @@ function CloudModals() {
 								search: (old) => ({
 									...old,
 									modal: undefined,
-									organization: undefined,
 								}),
 							});
 						}
@@ -74,8 +75,26 @@ function CloudModals() {
 			<CreateNamespaceDialog
 				dialogProps={{
 					open: search?.modal === "create-ns",
-					// FIXME
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectRivetDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search?.modal === "connect-rivet",
+					onOpenChange: (value) => {
 						if (!value) {
 							return navigate({
 								to: ".",
@@ -94,10 +113,9 @@ function CloudModals() {
 				}}
 				dialogProps={{
 					open: search?.modal === "connect-vercel",
-					// FIXME
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
@@ -114,10 +132,9 @@ function CloudModals() {
 				}}
 				dialogProps={{
 					open: search?.modal === "connect-q-vercel",
-					// FIXME
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
@@ -134,10 +151,9 @@ function CloudModals() {
 				}}
 				dialogProps={{
 					open: search?.modal === "connect-q-railway",
-					// FIXME
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
@@ -154,10 +170,9 @@ function CloudModals() {
 				}}
 				dialogProps={{
 					open: search?.modal === "connect-railway",
-					// FIXME
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
@@ -174,10 +189,9 @@ function CloudModals() {
 				}}
 				dialogProps={{
 					open: search?.modal === "connect-custom",
-					// FIXME
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
@@ -194,10 +208,9 @@ function CloudModals() {
 				}}
 				dialogProps={{
 					open: search?.modal === "connect-aws",
-					// FIXME
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
@@ -214,10 +227,9 @@ function CloudModals() {
 				}}
 				dialogProps={{
 					open: search?.modal === "connect-gcp",
-					// FIXME
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
@@ -234,10 +246,9 @@ function CloudModals() {
 				}}
 				dialogProps={{
 					open: search?.modal === "connect-hetzner",
-					// FIXME
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
@@ -256,16 +267,13 @@ function CloudModals() {
 				dc={search?.dc}
 				dialogProps={{
 					open: search?.modal === "edit-provider-config",
-					// FIXME
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
 									modal: undefined,
-									dc: undefined,
-									config: undefined,
 								}),
 							});
 						}
@@ -276,15 +284,13 @@ function CloudModals() {
 				name={search?.config}
 				dialogProps={{
 					open: search?.modal === "delete-provider-config",
-					// FIXME
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
 									modal: undefined,
-									config: undefined,
 								}),
 							});
 						}
@@ -295,14 +301,13 @@ function CloudModals() {
 				displayName={search?.displayName}
 				dialogProps={{
 					open: search?.modal === "delete-namespace",
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
 									modal: undefined,
-									displayName: undefined,
 								}),
 							});
 						}
@@ -313,14 +318,13 @@ function CloudModals() {
 				displayName={search?.displayName}
 				dialogProps={{
 					open: search?.modal === "delete-project",
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
 									modal: undefined,
-									displayName: undefined,
 								}),
 							});
 						}
@@ -330,6 +334,28 @@ function CloudModals() {
 			<CreateOrganizationDialog
 				dialogProps={{
 					open: search?.modal === "create-organization",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<UpsertDeploymentDialog
+				namespace={search?.namespace}
+				defaultImage={
+					search?.repository && search?.tag
+						? { repository: search.repository, tag: search.tag }
+						: undefined
+				}
+				dialogProps={{
+					open: search?.modal === "upsert-deployment",
 					onOpenChange: (value) => {
 						if (!value) {
 							return navigate({

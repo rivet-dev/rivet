@@ -36,7 +36,10 @@ function createClient({ clerk }: { clerk: Clerk }) {
 			});
 			return await fetcher(
 				// @ts-expect-error
-				args,
+				{
+					...args,
+					maxRetries: 1,
+				},
 			);
 		},
 	});
@@ -86,6 +89,131 @@ export const createGlobalContext = ({ clerk }: { clerk: Clerk }) => {
 					});
 					return response;
 				},
+			});
+		},
+		managedPoolsQueryOptions(opts: {
+			organization: string;
+			project: string;
+			namespace: string;
+		}) {
+			return queryOptions({
+				queryKey: [opts, "managed-pools"],
+				queryFn: async () => {
+					const response = await client.managedPools.list(
+						opts.project,
+						opts.namespace,
+						{
+							org: opts.organization,
+						},
+					);
+					return response.managedPools;
+				},
+				...no404Retry(),
+			});
+		},
+		managedPoolQueryOptions(opts: {
+			organization: string;
+			project: string;
+			namespace: string;
+			pool: string;
+			safe?: boolean;
+		}) {
+			return queryOptions({
+				queryKey: [
+					{
+						organization: opts.organization,
+						project: opts.project,
+						namespace: opts.namespace,
+						pool: opts.pool,
+					},
+					"managed-pool",
+				],
+				queryFn: async () => {
+					try {
+						const response = await client.managedPools.get(
+							opts.project,
+							opts.namespace,
+							opts.pool,
+							{
+								org: opts.organization,
+							},
+						);
+
+						return response.managedPool;
+					} catch (err) {
+						if (opts.safe) {
+							return null;
+						}
+						throw err;
+					}
+				},
+				...no404Retry(),
+			});
+		},
+
+		imageRepositoriesQueryOptions(opts: {
+			organization: string;
+			project: string;
+		}) {
+			return infiniteQueryOptions({
+				queryKey: [opts, "image-repositories"],
+				queryFn: async ({ pageParam }) => {
+					return await client.docker.listRepositories(opts.project, {
+						limit: 10,
+						cursor: pageParam ?? undefined,
+						org: opts.organization,
+					});
+				},
+				getNextPageParam: (lastPage) => {
+					return lastPage.pagination.cursor;
+				},
+				initialPageParam: undefined as string | undefined,
+				select: (data) =>
+					data.pages.flatMap((page) => page.repositories),
+			});
+		},
+
+		tagsQueryOptions(opts: {
+			repository: string;
+			project: string;
+			organization: string;
+		}) {
+			return infiniteQueryOptions({
+				queryKey: [opts, "tags"],
+				queryFn: async ({ pageParam }) => {
+					return await client.docker.listTags(
+						opts.project,
+						opts.repository,
+						{
+							limit: 10,
+							cursor: pageParam ?? undefined,
+							org: opts.organization,
+						},
+					);
+				},
+				getNextPageParam: (lastPage) => {
+					return lastPage.pagination.cursor;
+				},
+				initialPageParam: undefined as string | undefined,
+				select: (data) => data.pages.flatMap((page) => page.tags),
+			});
+		},
+
+		imagesQueryOptions(opts: { organization: string; project: string }) {
+			return infiniteQueryOptions({
+				queryKey: [opts, "images"],
+				queryFn: async ({ pageParam }) => {
+					return await client.docker.listImages(opts.project, {
+						limit: 10,
+						cursor: pageParam ?? undefined,
+						org: opts.organization,
+					});
+				},
+				getNextPageParam: (lastPage) => {
+					return lastPage.pagination.cursor;
+				},
+				initialPageParam: undefined as string | undefined,
+				select: (data) => data.pages.flatMap((page) => page.images),
 			});
 		},
 	};
@@ -171,7 +299,7 @@ export const createOrganizationContext = ({
 		namespace: string;
 		organization: string;
 		project: string;
-	}): UseQueryOptions<Rivet.NamespacesGetResponse.Namespace> => {
+	}) => {
 		return queryOptions({
 			queryKey: [opts, "namespace"] as QueryKey,
 			queryFn: async () => {
@@ -184,7 +312,7 @@ export const createOrganizationContext = ({
 				);
 				return data.namespace;
 			},
-			...(no404Retry() as any),
+			...no404Retry(),
 		});
 	};
 
@@ -498,6 +626,52 @@ export const createOrganizationContext = ({
 		},
 		archiveProjectMutationOptions,
 		archiveNamespaceMutationOptions,
+		currentOrganizationManagedPoolsQueryOptions(opts: {
+			project: string;
+			namespace: string;
+		}) {
+			return parent.managedPoolsQueryOptions({
+				organization,
+				project: opts.project,
+				namespace: opts.namespace,
+			});
+		},
+		currentOrganizationManagedPoolQueryOptions(opts: {
+			project: string;
+			namespace: string;
+			pool: string;
+		}) {
+			return parent.managedPoolQueryOptions({
+				organization,
+				project: opts.project,
+				namespace: opts.namespace,
+				pool: opts.pool,
+			});
+		},
+		currentOrganizationImageRepositoriesQueryOptions(opts: {
+			project: string;
+		}) {
+			return parent.imageRepositoriesQueryOptions({
+				organization,
+				project: opts.project,
+			});
+		},
+		currentOrganizationTagsQueryOptions(opts: {
+			project: string;
+			repository: string;
+		}) {
+			return parent.tagsQueryOptions({
+				organization,
+				project: opts.project,
+				repository: opts.repository,
+			});
+		},
+		currentOrganizationImagesQueryOptions(opts: { project: string }) {
+			return parent.imagesQueryOptions({
+				organization,
+				project: opts.project,
+			});
+		},
 	};
 };
 
@@ -602,6 +776,19 @@ export const createProjectContext = ({
 			});
 		},
 		// API Token methods
+		createApiTokenQueryOptions({ name }: { name: string }) {
+			return queryOptions({
+				staleTime: Number.POSITIVE_INFINITY,
+				queryKey: [{ organization, project }, "api-tokens", name],
+				queryFn: async () => {
+					const response = await client.apiTokens.create(project, {
+						name: name,
+						org: organization,
+					});
+					return response.apiToken;
+				},
+			});
+		},
 		apiTokensQueryOptions() {
 			return queryOptions({
 				queryKey: [{ organization, project }, "api-tokens"],
@@ -722,6 +909,65 @@ export const createProjectContext = ({
 						org: organization,
 					});
 					return response;
+				},
+			});
+		},
+		currentProjectManagedPoolsQueryOptions(opts: { namespace: string }) {
+			return parent.managedPoolsQueryOptions({
+				organization,
+				project,
+				namespace: opts.namespace,
+			});
+		},
+		currentProjectManagedPoolQueryOptions(opts: {
+			namespace: string;
+			pool: string;
+			safe?: boolean;
+		}) {
+			return parent.managedPoolQueryOptions({
+				organization,
+				project,
+				namespace: opts.namespace,
+				pool: opts.pool,
+				safe: opts.safe,
+			});
+		},
+		currentProjectImageRepositoriesQueryOptions() {
+			return parent.imageRepositoriesQueryOptions({
+				organization,
+				project,
+			});
+		},
+		currentProjectTagsQueryOptions(opts: { repository: string }) {
+			return parent.tagsQueryOptions({
+				organization,
+				project,
+				repository: opts.repository,
+			});
+		},
+		currentProjectImagesQueryOptions() {
+			return parent.imagesQueryOptions({
+				organization,
+				project,
+			});
+		},
+		upsertCurrentProjectManagedPoolMutationOptions() {
+			return mutationOptions({
+				mutationKey: [organization, project, "managed-pool", "upsert"],
+				mutationFn: async ({
+					namespace,
+					pool,
+					...request
+				}: Rivet.ManagedPoolsUpsertRequest & {
+					namespace: string;
+					pool: string;
+				}) => {
+					return await client.managedPools.upsert(
+						project,
+						namespace,
+						pool,
+						{ ...request, org: organization },
+					);
 				},
 			});
 		},
@@ -866,6 +1112,45 @@ export const createNamespaceContext = ({
 						{ org: parent.organization },
 					);
 					return response;
+				},
+			});
+		},
+
+		currentNamespaceManagedPoolsQueryOptions() {
+			return parent.currentProjectManagedPoolsQueryOptions({
+				namespace,
+			});
+		},
+
+		currentNamespaceManagedPoolQueryOptions(opts: {
+			pool: string;
+			safe?: boolean;
+		}) {
+			return parent.currentProjectManagedPoolQueryOptions({
+				namespace,
+				pool: opts.pool,
+				safe: opts.safe,
+			});
+		},
+
+		upsertCurrentNamespaceManagedPoolMutationOptions() {
+			return mutationOptions({
+				mutationKey:
+					parent.upsertCurrentProjectManagedPoolMutationOptions()
+						.mutationKey,
+				mutationFn: async ({
+					pool,
+					...request
+				}: Omit<
+					Rivet.ManagedPoolsUpsertRequest,
+					"project" | "namespace" | "org"
+				> & { pool: string }) => {
+					return await parent.client.managedPools.upsert(
+						parent.project,
+						namespace,
+						pool,
+						{ ...request, org: parent.organization },
+					);
 				},
 			});
 		},

@@ -125,7 +125,7 @@ function FormStepper({
 		...provider.upsertRunnerConfigMutationOptions(),
 		onSuccess: async () => {
 			successfulBackendSetupEffect();
-			await queryClient.invalidateQueries(
+			await queryClient.refetchQueries(
 				provider.runnerConfigsQueryOptions(),
 			);
 			onClose?.();

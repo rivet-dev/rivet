@@ -473,7 +473,12 @@ const getActorMetadata = async ({
 			`Failed to fetch actor metadata: ${response.statusText}`,
 		);
 	}
-	return z.object({ version: z.string() }).parse(await response.json());
+	return z
+		.object({
+			version: z.string(),
+			type: z.enum(["local", "deployed"]).optional(),
+		})
+		.parse(await response.json());
 };
 
 export const actorMetadataQueryOptions = ({
