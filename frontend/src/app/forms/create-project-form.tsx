@@ -14,7 +14,6 @@ import {
 export const formSchema = z.object({
 	name: z
 		.string()
-		.max(16, "Name must be at most 16 characters long")
 		.refine((value) => value.trim() !== "" && value.trim() === value, {
 			message: "Name cannot be empty or contain whitespaces",
 		}),
@@ -42,7 +41,6 @@ export const Name = ({ className }: { className?: string }) => {
 					<FormControl className="row-start-2">
 						<Input
 							placeholder="Enter a project name..."
-							maxLength={25}
 							autoFocus
 							autoComplete="off"
 							{...field}

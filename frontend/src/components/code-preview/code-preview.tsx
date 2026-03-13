@@ -14,6 +14,7 @@ const langs = {
 	json: () => import("@shikijs/langs/json"),
 	bash: () => import("@shikijs/langs/bash"),
 	markdown: () => import("@shikijs/langs/markdown"),
+	yaml: () => import("@shikijs/langs/yaml"),
 };
 
 let highlighterPromise: Promise<HighlighterCore> | null = null;
