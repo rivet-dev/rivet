@@ -1,25 +1,24 @@
 {
 	"extends": "../../../tsconfig.base.json",
 	"compilerOptions": {
-		"target": "ES2020",
-		"useDefineForClassFields": true,
-		"lib": ["ES2020", "DOM", "DOM.Iterable"],
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
 		"skipLibCheck": true,
+		"useDefineForClassFields": true,
 		"moduleResolution": "bundler",
 		"allowImportingTsExtensions": true,
-		"resolveJsonModule": true,
-		"isolatedModules": true,
+		"verbatimModuleSyntax": true,
+		"moduleDetection": "force",
 		"noEmit": true,
-		"jsx": "react-jsx",
 		"paths": {
 			"@rivetkit/framework-base": ["../framework-base/src/mod.ts"],
-			"@rivetkit/query-core": ["../query-core/src/mod.ts"],
 			"rivetkit": ["../rivetkit/dist/tsup/mod.d.ts"],
 			"rivetkit/client": ["../rivetkit/dist/tsup/client/mod.d.ts"]
 		},
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
-		"noFallthroughCasesInSwitch": true
+		"erasableSyntaxOnly": true,
+		"noFallthroughCasesInSwitch": true,
+		"noUncheckedSideEffectImports": true
 	},
-	"include": ["src", "lib"]
+	"include": ["src"]
 }

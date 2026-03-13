@@ -12,6 +12,11 @@
 		"verbatimModuleSyntax": true,
 		"moduleDetection": "force",
 		"noEmit": true,
+		"paths": {
+			"rivetkit": ["../rivetkit/src/mod.ts"],
+			"rivetkit/client": ["../rivetkit/src/client/mod.ts"],
+			"@/*": ["../rivetkit/src/*"]
+		},
 
 		/* Linting */
 		"strict": true,

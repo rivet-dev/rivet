@@ -1,15 +1,14 @@
 {
-	"name": "@rivetkit/react",
+	"name": "@rivetkit/query-core",
 	"version": "2.1.6",
-	"description": "React hooks and components for RivetKit client applications",
+	"description": "Query cache integration utilities for RivetKit clients",
 	"license": "Apache-2.0",
 	"keywords": [
 		"rivetkit",
-		"react",
-		"hooks",
-		"components",
-		"frontend",
-		"ui"
+		"query",
+		"cache",
+		"integration",
+		"tanstack"
 	],
 	"sideEffects": [
 		"./dist/chunk-*.js",
@@ -17,6 +16,7 @@
 	],
 	"files": [
 		"dist",
+		"README.md",
 		"package.json"
 	],
 	"exports": {
@@ -36,18 +36,10 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@rivetkit/framework-base": "workspace:*",
-		"@tanstack/react-store": "^0.7.1",
-		"rivetkit": "workspace:^"
-	},
-	"peerDependencies": {
-		"react": "^18 || ^19",
-		"react-dom": "^18 || ^19"
+		"@rivetkit/framework-base": "workspace:*"
 	},
 	"devDependencies": {
 		"@types/node": "^25.4.0",
-		"@types/react": "^19.1.8",
-		"@types/react-dom": "^19.1.6",
 		"tsup": "^8.4.0",
 		"typescript": "^5.5.2"
 	},

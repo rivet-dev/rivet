@@ -2,7 +2,7 @@ import * as cbor from "cbor-x";
 import invariant from "invariant";
 import pRetry from "p-retry";
 import type { CloseEvent } from "ws";
-import type { AnyActorDefinition } from "@/actor/definition";
+import type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
 import { inputDataToBuffer } from "@/actor/protocol/old";
 import { type Encoding, jsonStringifyCompat } from "@/actor/protocol/serde";
 import { PATH_CONNECT } from "@/common/actor-router-consts";
@@ -29,6 +29,7 @@ import type {
 	ActorDefinitionActions,
 	ActorDefinitionEventSubscriptions,
 	ActorDefinitionQueueSend,
+	ActorEventSubscribe,
 } from "./actor-common";
 import { checkForSchedulingError, queryActor } from "./actor-query";
 import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
@@ -1284,3 +1285,6 @@ export type ActorConn<AD extends AnyActorDefinition> = Omit<
 	ActorDefinitionQueueSend<AD> &
 	ActorDefinitionEventSubscriptions<AD> &
 	ActorDefinitionActions<AD>;
+
+// biome-ignore lint/suspicious/noExplicitAny: safe to use any here
+export type ActorConnOn<AD extends AnyActorDefinition> = AD extends ActorDefinition<any, any, any, any, any, any, infer E, any, any> ? ActorEventSubscribe<E> : never;
