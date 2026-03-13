@@ -66,6 +66,29 @@ export const Route = createFileRoute(
 			throw notFound();
 		}),
 	pendingComponent: DataLoadingPlaceholder,
+	loader: async ({ context }) => {
+		const dataProvider = context.dataProvider;
+		await Promise.all([
+			context.queryClient.prefetchInfiniteQuery(
+				dataProvider.runnerConfigsQueryOptions(),
+			),
+			context.queryClient.prefetchInfiniteQuery(
+				dataProvider.runnersQueryOptions(),
+			),
+			context.queryClient.prefetchInfiniteQuery(
+				dataProvider.datacentersQueryOptions(),
+			),
+			context.queryClient.prefetchQuery(
+				dataProvider.currentProjectQueryOptions(),
+			),
+			context.queryClient.prefetchQuery(
+				dataProvider.currentNamespaceQueryOptions(),
+			),
+		]);
+	},
+	loaderDeps() {
+		return [];
+	},
 });
 
 export function RouteComponent() {

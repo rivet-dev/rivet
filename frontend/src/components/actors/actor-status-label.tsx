@@ -4,6 +4,7 @@ import { isObject } from "lodash";
 import { match, P } from "ts-pattern";
 import type { RivetActorError } from "@/queries/types";
 import { CodePreview } from "../code-preview/code-preview";
+import { cn } from "../lib/utils";
 import { RelativeTime } from "../relative-time";
 import {
 	Accordion,
@@ -200,7 +201,9 @@ export function RunnerPoolError({ error }: { error: RivetActorError }) {
 				return (
 					<>
 						<p>Unable to connect to serverless endpoint</p>
-						{message ? <ErrorDetails error={message} /> : null}
+						{message ? (
+							<ErrorDetailsContent error={message} />
+						) : null}
 					</>
 				);
 			},
@@ -214,7 +217,9 @@ export function RunnerPoolError({ error }: { error: RivetActorError }) {
 				return (
 					<>
 						<p>Request payload validation failed</p>
-						{message ? <ErrorDetails error={message} /> : null}
+						{message ? (
+							<ErrorDetailsContent error={message} />
+						) : null}
 					</>
 				);
 			},
@@ -227,50 +232,53 @@ export function RunnerPoolError({ error }: { error: RivetActorError }) {
 export function ErrorDetails({
 	error,
 	defaultOpen,
+	className,
 }: {
 	error: unknown;
 	defaultOpen?: boolean;
+	className?: string;
 }) {
+	return (
+		<Accordion
+			type="single"
+			collapsible
+			defaultValue={defaultOpen ? "error-details" : undefined}
+			className={cn("max-w-full min-w-0 pb-0", className)}
+		>
+			<AccordionItem value="error-details">
+				<AccordionTrigger className="gap-1 p-0 max-w-full min-w-0 mb-1">
+					View Error Details
+				</AccordionTrigger>
+				<AccordionContent className="max-w-full min-w-0 pb-0 ">
+					<ErrorDetailsContent error={error} />
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
+	);
+}
+
+export function ErrorDetailsContent({ error }: { error: unknown }) {
 	const json =
 		typeof error === "string"
 			? tryJsonParse(error)
 			: isObject(error)
 				? error
 				: null;
-	return (
-		<Accordion
-			type="single"
-			collapsible
-			defaultValue={defaultOpen ? "error-details" : undefined}
-			className="mt-4 max-w-full min-w-0 pb-0"
-		>
-			<AccordionItem value="error-details">
-				<AccordionTrigger className="gap-1 p-0 max-w-full min-w-0">
-					View Error Details
-				</AccordionTrigger>
-				<AccordionContent className="max-w-full min-w-0 pb-0 ">
-					{json ? (
-						<div className="not-prose my-4 rounded-lg border p-1 bg-background">
-							<ScrollArea className="w-full">
-								<CodePreview
-									language="json"
-									className="text-left"
-									code={
-										json
-											? JSON.stringify(json, null, 2)
-											: String(error)
-									}
-								/>
-							</ScrollArea>
-						</div>
-					) : (
-						<Code className="block whitespace-pre-wrap text-left">
-							{String(error)}
-						</Code>
-					)}
-				</AccordionContent>
-			</AccordionItem>
-		</Accordion>
+
+	return json ? (
+		<div className="not-prose my-4 rounded-lg border p-1 bg-background">
+			<ScrollArea className="w-full">
+				<CodePreview
+					language="json"
+					className="text-left"
+					code={json ? JSON.stringify(json, null, 2) : String(error)}
+				/>
+			</ScrollArea>
+		</div>
+	) : (
+		<Code className="block whitespace-pre-wrap text-left">
+			{String(error)}
+		</Code>
 	);
 }
 

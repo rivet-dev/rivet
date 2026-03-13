@@ -2,6 +2,7 @@ import { useUser } from "@clerk/clerk-react";
 import {
 	faArrowUpRight,
 	faCog,
+	faFileLines,
 	faGift,
 	faHome,
 	faMessageSmile,
@@ -498,7 +499,9 @@ function HeaderLink({ icon, children, className, ...props }: HeaderLinkProps) {
 				) : undefined
 			}
 		>
-			<Link to={props.to}>{children}</Link>
+			<Link to={props.to} activeOptions={{ exact: true }}>
+				{children}
+			</Link>
 		</HeaderButton>
 	);
 }
@@ -610,13 +613,23 @@ function DeploymentsLink() {
 	}
 
 	return (
-		<HeaderLink
-			to="/orgs/$organization/projects/$project/ns/$namespace/deployments"
-			className="font-normal"
-			icon={faRocket}
-		>
-			Deployments
-		</HeaderLink>
+		<>
+			<HeaderLink
+				to="/orgs/$organization/projects/$project/ns/$namespace/deployments"
+				className="font-normal"
+				exact
+				icon={faRocket}
+			>
+				Deployments
+			</HeaderLink>
+			<HeaderLink
+				to="/orgs/$organization/projects/$project/ns/$namespace/deployments/logs"
+				className="font-normal pl-6"
+				icon={faFileLines}
+			>
+				Logs
+			</HeaderLink>
+		</>
 	);
 }
 

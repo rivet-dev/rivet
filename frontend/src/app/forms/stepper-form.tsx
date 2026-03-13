@@ -101,6 +101,7 @@ type StepperFormProps<Steps extends Step[]> = StepperProps<Steps> &
 		footer?: ReactNode;
 		children?: ReactNode;
 		formId?: string;
+		className?: string;
 	};
 
 export type StepperFormValues<Steps extends Step[]> = z.TypeOf<
@@ -112,11 +113,13 @@ export type ExtractSteps<T> =
 
 export function StepperForm<const Steps extends Step[]>({
 	children,
+	className,
 	...props
 }: StepperFormProps<Steps>) {
 	const Stepper = props.Stepper;
 	return (
 		<Stepper.Provider
+			className={className}
 			variant={props.singlePage ? "circle" : "vertical"}
 			initialStep={props.initialStep}
 		>

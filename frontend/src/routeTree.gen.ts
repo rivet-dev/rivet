@@ -37,9 +37,10 @@ import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRou
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/tokens'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/settings'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/metrics'
-import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/deployments'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/connect'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/billing'
+import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/deployments.index'
+import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsLogsRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/deployments.logs'
 
 const SsoCallbackRoute = SsoCallbackRouteImport.update({
   id: '/sso-callback',
@@ -209,15 +210,6 @@ const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute =
         ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
     } as any,
   )
-const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute =
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRouteImport.update(
-    {
-      id: '/deployments',
-      path: '/deployments',
-      getParentRoute: () =>
-        ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
-    } as any,
-  )
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute =
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport.update(
     {
@@ -232,6 +224,24 @@ const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute =
     {
       id: '/billing',
       path: '/billing',
+      getParentRoute: () =>
+        ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
+    } as any,
+  )
+const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRoute =
+  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRouteImport.update(
+    {
+      id: '/deployments/',
+      path: '/deployments/',
+      getParentRoute: () =>
+        ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
+    } as any,
+  )
+const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsLogsRoute =
+  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsLogsRouteImport.update(
+    {
+      id: '/deployments/logs',
+      path: '/deployments/logs',
       getParentRoute: () =>
         ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
     } as any,
@@ -261,11 +271,12 @@ export interface FileRoutesByFullPath {
   '/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren
   '/orgs/$organization/projects/$project/ns/$namespace/billing': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute
   '/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/deployments': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/metrics': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/settings': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
   '/orgs/$organization/projects/$project/ns/$namespace/': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
+  '/orgs/$organization/projects/$project/ns/$namespace/deployments/logs': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsLogsRoute
+  '/orgs/$organization/projects/$project/ns/$namespace/deployments': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRoute
 }
 export interface FileRoutesByTo {
   '/join': typeof JoinRoute
@@ -287,11 +298,12 @@ export interface FileRoutesByTo {
   '/orgs/$organization/projects/$project': typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute
   '/orgs/$organization/projects/$project/ns/$namespace/billing': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute
   '/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/deployments': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/metrics': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/settings': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
   '/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
+  '/orgs/$organization/projects/$project/ns/$namespace/deployments/logs': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsLogsRoute
+  '/orgs/$organization/projects/$project/ns/$namespace/deployments': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -321,11 +333,12 @@ export interface FileRoutesById {
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/billing': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
-  '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/metrics': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
+  '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments/logs': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsLogsRoute
+  '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments/': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -353,11 +366,12 @@ export interface FileRouteTypes {
     | '/orgs/$organization/projects/$project/ns/$namespace'
     | '/orgs/$organization/projects/$project/ns/$namespace/billing'
     | '/orgs/$organization/projects/$project/ns/$namespace/connect'
-    | '/orgs/$organization/projects/$project/ns/$namespace/deployments'
     | '/orgs/$organization/projects/$project/ns/$namespace/metrics'
     | '/orgs/$organization/projects/$project/ns/$namespace/settings'
     | '/orgs/$organization/projects/$project/ns/$namespace/tokens'
     | '/orgs/$organization/projects/$project/ns/$namespace/'
+    | '/orgs/$organization/projects/$project/ns/$namespace/deployments/logs'
+    | '/orgs/$organization/projects/$project/ns/$namespace/deployments'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/join'
@@ -379,11 +393,12 @@ export interface FileRouteTypes {
     | '/orgs/$organization/projects/$project'
     | '/orgs/$organization/projects/$project/ns/$namespace/billing'
     | '/orgs/$organization/projects/$project/ns/$namespace/connect'
-    | '/orgs/$organization/projects/$project/ns/$namespace/deployments'
     | '/orgs/$organization/projects/$project/ns/$namespace/metrics'
     | '/orgs/$organization/projects/$project/ns/$namespace/settings'
     | '/orgs/$organization/projects/$project/ns/$namespace/tokens'
     | '/orgs/$organization/projects/$project/ns/$namespace'
+    | '/orgs/$organization/projects/$project/ns/$namespace/deployments/logs'
+    | '/orgs/$organization/projects/$project/ns/$namespace/deployments'
   id:
     | '__root__'
     | '/_context'
@@ -412,11 +427,12 @@ export interface FileRouteTypes {
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/billing'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect'
-    | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/metrics'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/'
+    | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments/logs'
+    | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -625,13 +641,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRouteImport
       parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
     }
-    '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments': {
-      id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments'
-      path: '/deployments'
-      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/deployments'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
-    }
     '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect': {
       id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect'
       path: '/connect'
@@ -646,17 +655,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRouteImport
       parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
     }
+    '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments/': {
+      id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments/'
+      path: '/deployments'
+      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/deployments'
+      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRouteImport
+      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
+    }
+    '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments/logs': {
+      id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments/logs'
+      path: '/deployments/logs'
+      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/deployments/logs'
+      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsLogsRouteImport
+      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
+    }
   }
 }
 
 interface ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren {
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
+  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsLogsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsLogsRoute
+  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRoute
 }
 
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren: ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren =
@@ -665,8 +689,6 @@ const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren: Conte
       ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute,
     ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute:
       ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute,
-    ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute:
-      ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute,
     ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute:
       ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute,
     ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute:
@@ -675,6 +697,10 @@ const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren: Conte
       ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute,
     ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute:
       ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute,
+    ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsLogsRoute:
+      ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsLogsRoute,
+    ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRoute:
+      ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRoute,
   }
 
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren =

@@ -13,20 +13,42 @@ import { Button, H1, H2, Skeleton } from "@/components";
 import { useCloudNamespaceDataProvider } from "@/components/actors";
 
 export const Route = createFileRoute(
-	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments",
+	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments/",
 )({
 	component: RouteComponent,
 	loader: async ({ context }) => {
 		const dataProvider = context.dataProvider;
-		await Promise.all([
-			context.queryClient.prefetchInfiniteQuery({
+		const [namespaces, imageRepositories] = await Promise.all([
+			context.queryClient.fetchInfiniteQuery({
 				...dataProvider.currentProjectNamespacesQueryOptions(),
 				pages: Infinity,
 			}),
-			context.queryClient.prefetchInfiniteQuery({
+			context.queryClient.fetchInfiniteQuery({
 				...dataProvider.currentProjectImageRepositoriesQueryOptions(),
 				pages: Infinity,
 			}),
+		]);
+
+		return Promise.all([
+			...namespaces.pages.flatMap((page) =>
+				page.namespaces.map((ns) =>
+					context.queryClient.prefetchQuery({
+						...dataProvider.currentProjectManagedPoolQueryOptions({
+							namespace: ns.name,
+							pool: "default",
+						}),
+					}),
+				),
+			),
+			...imageRepositories.pages.flatMap((page) =>
+				page.repositories.map((repo) =>
+					context.queryClient.prefetchInfiniteQuery({
+						...dataProvider.currentProjectTagsQueryOptions({
+							repository: repo.repository,
+						}),
+					}),
+				),
+			),
 		]);
 	},
 	loaderDeps() {
@@ -78,13 +100,15 @@ function Deployments() {
 		isLoading: isLoadingImages,
 		fetchNextPage,
 		hasNextPage,
-	} = useSuspenseInfiniteQuery(
-		dataProvider.currentProjectImagesQueryOptions(),
-	);
+	} = useSuspenseInfiniteQuery({
+		...dataProvider.currentProjectImagesQueryOptions(),
+		refetchInterval: 5_000,
+	});
 
-	const { data: namespaces } = useSuspenseInfiniteQuery(
-		dataProvider.currentProjectNamespacesQueryOptions(),
-	);
+	const { data: namespaces } = useSuspenseInfiniteQuery({
+		...dataProvider.currentProjectNamespacesQueryOptions(),
+		refetchInterval: 5_000,
+	});
 
 	const managedPoolQueries = useQueries({
 		queries:
@@ -112,7 +136,7 @@ function Deployments() {
 		);
 
 	return (
-		<div className="max-w-5xl mx-auto">
+		<div className="max-w-5xl mx-auto px-6">
 			<div className="border rounded-md">
 				<ImagesTable
 					images={images}

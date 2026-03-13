@@ -22,6 +22,7 @@ import {
 } from "@/components";
 import {
 	ErrorDetails,
+	ErrorDetailsContent,
 	useCloudNamespaceDataProvider,
 	useCloudProjectDataProvider,
 } from "@/components/actors";
@@ -260,7 +261,7 @@ function ManagedPoolStatus({ namespace }: { namespace: string }) {
 
 	if (data.status === "ready") {
 		return (
-			<p className="text-center">
+			<p className="text-center flex items-center justify-center">
 				<Icon className="text-green-500 mr-1.5" icon={faCheck} />
 				Currently deployed
 			</p>
@@ -270,11 +271,9 @@ function ManagedPoolStatus({ namespace }: { namespace: string }) {
 	if (data.status === "error") {
 		return (
 			<WithTooltip
-				content={
-					<ErrorDetails error={data.error?.message} defaultOpen />
-				}
+				content={<ErrorDetailsContent error={data.error?.message} />}
 				trigger={
-					<p className="text-center">
+					<p className="text-center flex items-center justify-center cursor-pointer">
 						<Icon
 							className="text-red-500 mr-1.5"
 							icon={faTriangleExclamation}
@@ -287,7 +286,7 @@ function ManagedPoolStatus({ namespace }: { namespace: string }) {
 	}
 
 	return (
-		<p className="text-center">
+		<p className="text-center flex items-center justify-center">
 			<Icon className="mr-1.5 animate-spin" icon={faSpinnerThird} />
 			Deploying...
 		</p>

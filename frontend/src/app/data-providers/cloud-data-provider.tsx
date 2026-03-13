@@ -119,7 +119,15 @@ export const createGlobalContext = ({ clerk }: { clerk: Clerk }) => {
 			safe?: boolean;
 		}) {
 			return queryOptions({
-				queryKey: [opts, "managed-pool"],
+				queryKey: [
+					{
+						organization: opts.organization,
+						project: opts.project,
+						namespace: opts.namespace,
+						pool: opts.pool,
+					},
+					"managed-pool",
+				],
 				queryFn: async () => {
 					try {
 						const response = await client.managedPools.get(
