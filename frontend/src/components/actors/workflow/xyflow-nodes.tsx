@@ -316,7 +316,7 @@ export function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeType>) {
 
 				{isHandledFailure && (
 					<div
-						className="absolute -top-2 left-1 rounded px-1.5"
+						className="absolute -top-2 left-1 flex items-center justify-center rounded px-1.5"
 						style={{
 							height: 16,
 							background: "#18181b",
@@ -324,7 +324,7 @@ export function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeType>) {
 						}}
 					>
 						<span
-							className="text-[9px] font-medium uppercase"
+							className="text-[9px] font-medium uppercase leading-none"
 							style={{ color: "#f59e0b" }}
 						>
 							handled
