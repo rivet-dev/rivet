@@ -370,7 +370,7 @@ export function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeType>) {
 							className="absolute bottom-1.5 right-3 text-[10px]"
 							style={{
 								color: "#71717a",
-								right: isFailed ? 36 : 12,
+								right: isFailed ? 44 : 12,
 							}}
 						>
 							{formatDuration(data.duration)}
@@ -504,11 +504,11 @@ export function TryGroupNode({ data }: NodeProps<TryGroupNodeType>) {
 			}}
 		>
 			<div
-				className="flex items-center gap-2 px-3"
+				className="flex items-start gap-2 px-3 pt-2"
 				style={{ height: LOOP_HEADER_HEIGHT }}
 			>
 				<div
-					className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
+					className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
 					style={{
 						backgroundColor: `${accentColor}15`,
 						border: `1px solid ${accentColor}4d`,
@@ -516,7 +516,7 @@ export function TryGroupNode({ data }: NodeProps<TryGroupNodeType>) {
 				>
 					<TypeIcon type="try" size={11} />
 				</div>
-				<div className="min-w-0">
+				<div className="min-w-0 space-y-0.5">
 					<div
 						className="truncate text-xs font-medium"
 						style={{ color: "hsl(var(--foreground))" }}
