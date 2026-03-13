@@ -9,7 +9,7 @@ import {
 } from "@rivet-gg/icons";
 import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { startTransition, useCallback, useState } from "react";
+import { startTransition, useCallback, useMemo, useRef, useState } from "react";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { Content } from "@/app/layout";
 import { SidebarToggle } from "@/app/sidebar-toggle";
@@ -18,6 +18,7 @@ import {
 	useCloudNamespaceDataProvider,
 	useDataProvider,
 } from "@/components/actors";
+import { RegionSelect } from "@/components/actors/region-select";
 import { DeploymentLogs } from "@/components/deployment-logs";
 import {
 	DropdownMenu,
@@ -67,29 +68,29 @@ function RouteComponent() {
 	const [search, setSearch] = useState("");
 	const [isPaused, setIsPaused] = useState(false);
 	const [region, setRegion] = useState<string>("all");
-	const [logs, setLogs] = useState<RivetSse.LogEntry[]>([]);
+	const logsRef = useRef<RivetSse.LogEntry[]>([]);
 
-	const logsText = useCallback(
+	const getLogsText = useCallback(
 		() =>
-			logs
+			logsRef.current
 				.map((e) => `${e.timestamp}\t${e.region}\t${e.message}`)
 				.join("\n"),
-		[logs],
+		[],
 	);
 
 	const handleDownload = useCallback(() => {
-		const blob = new Blob([logsText()], { type: "text/plain" });
+		const blob = new Blob([getLogsText()], { type: "text/plain" });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement("a");
 		a.href = url;
 		a.download = `deployment-logs-${namespace}.txt`;
 		a.click();
 		URL.revokeObjectURL(url);
-	}, [logsText, namespace]);
+	}, [getLogsText, namespace]);
 
 	const handleCopy = useCallback(() => {
-		navigator.clipboard.writeText(logsText());
-	}, [logsText]);
+		navigator.clipboard.writeText(getLogsText());
+	}, [getLogsText]);
 
 	return (
 		<Content>
@@ -114,7 +115,7 @@ function RouteComponent() {
 					</p>
 				</div>
 
-				<div className="w-full border-t flex-1 flex flex-col">
+				<div className="w-full border-t flex-1 flex flex-col min-h-0">
 					<div className="flex items-stretch border-b	px-6 shrink-0">
 						<div className="border-r flex flex-1">
 							<input
@@ -129,23 +130,18 @@ function RouteComponent() {
 								}
 							/>
 						</div>
-						<Select value={region} onValueChange={setRegion}>
-							<SelectTrigger className="border-0 border-r bg-transparent rounded-none text-xs h-auto max-w-32 py-0 gap-1.5 px-2">
-								<SelectValue placeholder="All regions" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All regions</SelectItem>
-								{datacenters.map((dc) => (
-									<SelectItem key={dc.name} value={dc.name}>
-										{dc.name}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+						<RegionSelect
+							onValueChange={setRegion}
+							value={region}
+							showAuto={false}
+							showAllRegions={true}
+							className="bg-transparent max-w-64 border-0 rounded-none"
+						/>
+						<div className="border-l flex items-center pl-4" />
 						<Button
 							variant="ghost"
 							size="icon-sm"
-							className="m-1"
+							className="h-full rounded-none"
 							onClick={() => setIsPaused((p) => !p)}
 						>
 							<Icon icon={isPaused ? faPlay : faPause} />
@@ -155,19 +151,22 @@ function RouteComponent() {
 								<Button
 									variant="ghost"
 									size="sm"
-									className="m-1 px-0"
-									disabled={logs.length === 0}
+									className="mx-1 h-full rounded-none"
 								>
 									Export
 								</Button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end">
-								<DropdownMenuItem onClick={handleDownload}>
-									<Icon icon={faDownload} />
+								<DropdownMenuItem
+									indicator={<Icon icon={faDownload} />}
+									onClick={handleDownload}
+								>
 									Download
 								</DropdownMenuItem>
-								<DropdownMenuItem onClick={handleCopy}>
-									<Icon icon={faCopy} />
+								<DropdownMenuItem
+									indicator={<Icon icon={faCopy} />}
+									onClick={handleCopy}
+								>
 									Copy
 								</DropdownMenuItem>
 							</DropdownMenuContent>
@@ -182,7 +181,7 @@ function RouteComponent() {
 								filter={search || undefined}
 								region={region === "all" ? undefined : region}
 								paused={isPaused}
-								onLogsChange={setLogs}
+								logsRef={logsRef}
 							/>
 						</div>
 					) : (

@@ -135,11 +135,18 @@ function Deployments() {
 				data !== undefined,
 		);
 
+	// sort images based on the createdAt timestamp, with the most recent first
+	const sorted = images.toSorted((a, b) => {
+		const aTimestamp = new Date(a.createdAt).getTime();
+		const bTimestamp = new Date(b.createdAt).getTime();
+		return bTimestamp - aTimestamp;
+	});
+
 	return (
 		<div className="max-w-5xl mx-auto px-6">
 			<div className="border rounded-md">
 				<ImagesTable
-					images={images}
+					images={sorted}
 					deployments={deployments}
 					isLoading={isLoadingImages}
 					namespace={namespace}

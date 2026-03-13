@@ -1,13 +1,14 @@
 import type { RivetSse } from "@rivet-gg/cloud";
 import { faTriangleExclamation, Icon } from "@rivet-gg/icons";
 import type { Virtualizer } from "@tanstack/react-virtual";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import {
 	ErrorDetails,
 	useCloudNamespaceDataProvider,
 } from "@/components/actors";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { VirtualScrollArea } from "@/components/virtual-scroll-area";
+import { cn } from "./lib/utils";
 import { ScrollArea } from "./ui/scroll-area";
 import { Skeleton } from "./ui/skeleton";
 import { useDeploymentLogsStream } from "./use-deployment-logs-stream";
@@ -18,30 +19,29 @@ interface DeploymentLogsProps {
 	filter?: string;
 	region?: string;
 	paused?: boolean;
-	onLogsChange?: (logs: RivetSse.LogEntry[]) => void;
+	logsRef?: React.MutableRefObject<RivetSse.LogEntry[]>;
 }
 
 interface LogRowProps {
 	"data-index": number;
 	className?: string;
 	entry: RivetSse.LogEntry;
-	isNew: boolean;
 }
 
-function LogRow({ entry, isNew }: LogRowProps) {
+function LogRow({ entry, ...props }: LogRowProps) {
 	return (
 		<div
-			className={`animate-in fade-in duration-300 ${isNew ? "" : "opacity-100"} font-mono`}
-			style={{
-				animationDelay: isNew ? "0ms" : undefined,
-			}}
+			{...props}
+			className={cn("font-mono grid grid-cols-subgrid", props.className)}
 		>
 			<div
-				className={`flex gap-3 whitespace-pre-wrap break-words px-4 py-1 ${
-					entry.stream === "stderr"
-						? "text-red-400"
-						: "text-green-400"
-				}`}
+				className={cn(
+					"grid grid-cols-subgrid gap-3 whitespace-pre-wrap break-words px-4 py-1",
+					{
+						"text-red-400": entry.stream === "stderr",
+						"text-muted-foreground": entry.stream !== "stderr",
+					},
+				)}
 			>
 				<span className="text-neutral-500 shrink-0">
 					{entry.timestamp}
@@ -63,7 +63,7 @@ export function DeploymentLogs({
 	filter,
 	region,
 	paused,
-	onLogsChange,
+	logsRef,
 }: DeploymentLogsProps) {
 	const { project } = useCloudNamespaceDataProvider();
 	const { logs, isLoading, error } = useDeploymentLogsStream({
@@ -77,12 +77,7 @@ export function DeploymentLogs({
 
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element>>(null);
-	const prevLengthRef = useRef(logs.length);
 	const [follow, setFollow] = useState(true);
-
-	useEffect(() => {
-		onLogsChange?.(logs);
-	}, [logs, onLogsChange]);
 
 	useEffect(() => {
 		if (follow && !isLoading && virtualizerRef.current && logs.length > 0) {
@@ -94,8 +89,13 @@ export function DeploymentLogs({
 			});
 			return () => cancelAnimationFrame(rafId);
 		}
-		prevLengthRef.current = logs.length;
 	}, [logs.length, follow, isLoading]);
+
+	useEffect(() => {
+		if (logsRef) {
+			logsRef.current = logs;
+		}
+	}, [logs, logsRef]);
 
 	const handleScrollChange = useCallback(
 		(instance: Virtualizer<HTMLDivElement, Element>) => {
@@ -111,14 +111,13 @@ export function DeploymentLogs({
 		[logs.length],
 	);
 
-	const isNewLog = useCallback((index: number) => {
-		return index >= prevLengthRef.current;
-	}, []);
-
 	if (isLoading) {
 		return (
-			<div className="h-full flex flex-col p-2 ">
-				<ScrollArea className="w-full h-full">
+			<div className="h-full flex flex-col ">
+				<ScrollArea
+					className="w-full h-full"
+					viewportProps={{ className: "p-2" }}
+				>
 					{Array.from({ length: 40 }).map((_, i) => (
 						<Skeleton
 							key={i}
@@ -164,17 +163,17 @@ export function DeploymentLogs({
 				viewportRef={viewportRef}
 				onChange={handleScrollChange}
 				count={logs.length}
-				estimateSize={() => 28}
+				estimateSize={() => 24}
 				className="w-full h-full"
 				scrollerProps={{
 					className: "w-full",
 				}}
+				viewportProps={{
+					className:
+						"[&>div]:!grid [&>div]:grid-cols-[minmax(0,1fr)] ",
+				}}
 				row={(props: LogRowProps) => (
-					<LogRow
-						{...props}
-						entry={logs[props["data-index"]]}
-						isNew={isNewLog(props["data-index"])}
-					/>
+					<LogRow {...props} entry={logs[props["data-index"]]} />
 				)}
 				getRowData={(index) => ({
 					"data-index": index,
