@@ -109,6 +109,23 @@ describe("ActorDefinition", () => {
 				>
 			>();
 		});
+
+		it("exposes preventSleep controls on actor contexts", () => {
+			const dummyActor = actor({
+				state: {},
+				actions: {},
+			});
+
+			type DummyContext = ActorContextOf<typeof dummyActor>;
+
+			expectTypeOf<DummyContext["preventSleep"]>().toEqualTypeOf<boolean>();
+			expectTypeOf<
+				Parameters<DummyContext["setPreventSleep"]>
+			>().toEqualTypeOf<[prevent: boolean]>();
+			expectTypeOf<
+				ReturnType<DummyContext["setPreventSleep"]>
+			>().toEqualTypeOf<void>();
+		});
 	});
 
 	describe("queue type inference", () => {
@@ -502,6 +519,24 @@ describe("ActorDefinition", () => {
 			expectTypeOf<
 				WorkflowContextOfFromRoot<typeof workflowHelperActor>
 			>().toEqualTypeOf<WorkflowContextOf<typeof workflowHelperActor>>();
+		});
+
+		it("exposes preventSleep controls on workflow contexts", () => {
+			const workflowHelperActor = actor({
+				state: {},
+				run: workflow(async () => {}),
+				actions: {},
+			});
+
+			type WorkflowCtx = WorkflowContextOf<typeof workflowHelperActor>;
+
+			expectTypeOf<WorkflowCtx["preventSleep"]>().toEqualTypeOf<boolean>();
+			expectTypeOf<
+				Parameters<WorkflowCtx["setPreventSleep"]>
+			>().toEqualTypeOf<[prevent: boolean]>();
+			expectTypeOf<
+				ReturnType<WorkflowCtx["setPreventSleep"]>
+			>().toEqualTypeOf<void>();
 		});
 	});
 

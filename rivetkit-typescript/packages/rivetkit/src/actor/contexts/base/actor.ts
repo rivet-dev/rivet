@@ -274,19 +274,42 @@ export class ActorContext<
 
 	/**
 	 * Prevents the actor from sleeping until promise is complete.
+	 *
+	 * @deprecated Use `onSleep` for shutdown or flush work, or
+	 * `c.setPreventSleep(true)` while work is active if the actor must stay
+	 * awake until it finishes.
 	 */
 	waitUntil(promise: Promise<void>): void {
 		this.#actor.waitUntil(promise);
 	}
 
 	/**
-	 * Prevents the actor from sleeping while the given promise is running.
+	 * Prevents the actor from automatically sleeping until cleared.
 	 *
-	 * Use this when performing async operations in the `run` handler or other
-	 * background contexts where you need to ensure the actor stays awake.
+	 * @experimental
+	 */
+	setPreventSleep(prevent: boolean): void {
+		this.#actor.setPreventSleep(prevent);
+	}
+
+	/**
+	 * True when the actor is explicitly blocking automatic sleep.
+	 *
+	 * @experimental
+	 */
+	get preventSleep(): boolean {
+		return this.#actor.preventSleep;
+	}
+
+	/**
+	 * Prevents the actor from sleeping while the given promise is running.
 	 *
 	 * Returns the resolved value and resets the sleep timer on completion.
 	 * Errors are propagated to the caller.
+	 *
+	 * @deprecated Use `c.setPreventSleep(true)` while work is active, or move
+	 * shutdown and flush work to `onSleep` if it can wait until the actor is
+	 * sleeping.
 	 */
 	keepAwake<T>(promise: Promise<T>): Promise<T> {
 		return this.#actor.keepAwake(promise);

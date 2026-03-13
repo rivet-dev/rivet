@@ -453,11 +453,31 @@ export class ActorWorkflowContext<
 		return this.#runCtx.log;
 	}
 
+	setPreventSleep(prevent: boolean): void {
+		this.#ensureActorAccess("setPreventSleep");
+		this.#runCtx.setPreventSleep(prevent);
+	}
+
+	get preventSleep(): boolean {
+		this.#ensureActorAccess("preventSleep");
+		return this.#runCtx.preventSleep;
+	}
+
+	/**
+	 * @deprecated Use `c.setPreventSleep(true)` while work is active, or move
+	 * shutdown and flush work to `onSleep` if it can wait until the actor is
+	 * sleeping.
+	 */
 	keepAwake<T>(promise: Promise<T>): Promise<T> {
 		this.#ensureActorAccess("keepAwake");
 		return this.#runCtx.keepAwake(promise);
 	}
 
+	/**
+	 * @deprecated Use `onSleep` for shutdown or flush work, or
+	 * `c.setPreventSleep(true)` while work is active if the actor must stay
+	 * awake until it finishes.
+	 */
 	waitUntil(promise: Promise<void>): void {
 		this.#ensureActorAccess("waitUntil");
 		this.#runCtx.waitUntil(promise);
