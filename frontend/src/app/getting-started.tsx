@@ -1,3 +1,4 @@
+import { Accordion, AccordionContent } from "@radix-ui/react-accordion";
 import {
 	faArrowRight,
 	faBroadcastTower,
@@ -15,13 +16,9 @@ import {
 	useMutation,
 	useQuery,
 	useSuspenseInfiniteQuery,
+	useSuspenseQuery,
 } from "@tanstack/react-query";
-import {
-	Link,
-	useNavigate,
-	useRouter,
-	useSearch,
-} from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
@@ -30,45 +27,42 @@ import { match } from "ts-pattern";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
-	ButtonCard,
+	AccordionItem,
+	AccordionTrigger,
 	CodeFrame,
 	type CodeFrameLikeElement,
 	CodeGroup,
 	CodeGroupSyncProvider,
 	CodePreview,
+	Combobox,
 	FormField,
 	Ping,
 	Skeleton,
 	useInterval,
 } from "@/components";
 import {
+	useCloudNamespaceDataProvider,
 	useDataProvider,
-	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
+import { deriveProviderFromMetadata } from "@/lib/data";
 import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
-import { TEST_IDS } from "@/utils/test-ids";
 import { Button } from "../components/ui/button";
+import { DeploymentCheck } from "./deployment-check";
 import { useEndpoint } from "./dialogs/connect-manual-serverfull-frame";
 import {
 	buildServerlessConfig,
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
-import { useRivetDsn } from "./env-variables";
-import { StepperForm, useStepperFormSubmit } from "./forms/stepper-form";
+import { EnvVariables, useRivetDsn } from "./env-variables";
+import { StepperForm } from "./forms/stepper-form";
 import { Content } from "./layout";
 
 const stepper = defineStepper(
 	{
 		id: "install",
 		title: "Install RivetKit",
-		schema: z.object({}),
-		group: "local",
-	},
-	{
-		id: "skills",
-		title: "Install Rivet skills",
 		schema: z.object({}),
 		group: "local",
 	},
@@ -88,7 +82,6 @@ const stepper = defineStepper(
 		id: "provider",
 		title: "Ready to deploy?",
 		schema: z.object({ provider: z.string() }),
-		showNext: false,
 		group: "deploy",
 	},
 	{
@@ -96,10 +89,16 @@ const stepper = defineStepper(
 		title: "Connect your Backend",
 		assist: true,
 		group: "deploy",
-		schema: z.object({
-			...ConnectServerlessForm.configurationSchema.shape,
-			...ConnectServerlessForm.deploymentSchema.shape,
-		}),
+		schema: ConnectServerlessForm.deploymentSchema
+			.pick({
+				success: true,
+			})
+			.or(
+				z.object({
+					...ConnectServerlessForm.configurationSchema.shape,
+					...ConnectServerlessForm.deploymentSchema.shape,
+				}),
+			),
 	},
 	{
 		id: "frontend",
@@ -113,7 +112,6 @@ const stepper = defineStepper(
 );
 
 export function GettingStarted({
-	displayOnboarding,
 	displayBackendOnboarding,
 	provider,
 }: {
@@ -121,10 +119,14 @@ export function GettingStarted({
 	displayOnboarding?: boolean;
 	displayBackendOnboarding?: boolean;
 }) {
-	const dataProvider = useEngineCompatDataProvider();
+	const dataProvider = useCloudNamespaceDataProvider();
 	const { data: datacenters } = useSuspenseInfiniteQuery(
 		dataProvider.datacentersQueryOptions(),
 	);
+
+	const { mutateAsync: mutateAsyncManagedPool } = useMutation({
+		...dataProvider.upsertCurrentNamespaceManagedPoolMutationOptions(),
+	});
 
 	const { mutateAsync } = useMutation({
 		...dataProvider.upsertRunnerConfigMutationOptions(),
@@ -140,17 +142,18 @@ export function GettingStarted({
 	return (
 		<Content className="flex flex-col items-center justify-safe-center">
 			<motion.div
-				className="relative mb-8 min-w-0 overflow-hidden w-full"
+				className="relative min-w-0 overflow-hidden w-full"
 				initial={{ opacity: 0, y: 20 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3 }}
 			>
-				<div className="mt-8 w-full flex items-center justify-center [&_[data-component='stepper']]:w-auto px-4">
+				<div className="-full flex items-safe-center justify-center [&_[data-component='stepper']]:w-auto px-4 h-full overflow-auto pt-8">
 					<CodeGroupSyncProvider>
 						<StepperForm
 							{...stepper}
 							singlePage
 							formId="onboarding"
+							className="mb-8 mt-12"
 							initialStep={
 								provider
 									? "backend"
@@ -159,7 +162,7 @@ export function GettingStarted({
 										: "frontend"
 							}
 							defaultValues={{
-								provider,
+								provider: provider || "rivet",
 								runnerName: "default",
 								slotsPerRunner: 1,
 								maxRunners: 10000,
@@ -176,11 +179,6 @@ export function GettingStarted({
 								install: () => (
 									<StepContent>
 										<InstallStep />
-									</StepContent>
-								),
-								skills: () => (
-									<StepContent>
-										<SkillsStep />
 									</StepContent>
 								),
 								run: () => (
@@ -222,8 +220,22 @@ export function GettingStarted({
 							onSubmit={() => {}}
 							onPartialSubmit={async ({ stepper, values }) => {
 								if (
+									stepper.current.id === "provider" &&
+									values.provider === "rivet"
+								) {
+									mutateAsyncManagedPool({
+										displayName: "default",
+										pool: "default",
+										minCount: 0,
+										maxCount: 1000,
+									});
+									return;
+								}
+								if (
 									stepper.current.id === "backend" &&
+									"endpoint" in values &&
 									values.endpoint &&
+									values.provider !== "rivet" &&
 									values.success
 								) {
 									const config = await buildServerlessConfig(
@@ -308,82 +320,43 @@ function StepperFooter() {
 }
 
 function ProviderSetup() {
-	const navigate = useNavigate();
-	const showAll = useSearch({ strict: false, select: (s) => s?.showAll });
-
-	const { control } = useFormContext();
-	const s = stepper.useStepper();
+	const { setValue, control } = useFormContext();
 
 	return (
-		<div data-testid={TEST_IDS.Onboarding.IntegrationProviderSelection}>
+		<div>
 			<p className="text-sm text-muted-foreground mb-4">
-				Deploy your application to any provider. Rivet Cloud manages the
-				actor orchestration, state, and scaling for you.
+				Deploy your application to Rivet Cloud, our serverless hosting
+				solution. We manage the actor orchestration, state, and scaling
+				for you.
 			</p>
-			<FormField
-				control={control}
-				name="provider"
-				render={({ field }) => (
-					<>
-						{deployOptions
-							.filter((option) => !option.specializedPlatform)
-							.slice(0, showAll ? deployOptions.length : 3)
-							.map((option) => (
-								<ButtonCard
-									key={option.name}
-									icon={option.icon}
-									title={option.displayName}
-									description={option.description}
-									className="text-left mb-4 w-full min-w-0"
-									data-testid={TEST_IDS.Onboarding.IntegrationProviderOption(
-										option.name,
-									)}
-									type="button"
-									onClick={() => {
-										field.onChange(option.name);
-										s.next();
-									}}
-								/>
-							))}
-					</>
-				)}
-			/>
-
-			<div className="text-center mt-2 mb-4">
-				{showAll ? (
-					<Button
-						variant="ghost"
-						size="sm"
-						type="button"
-						onClick={() => {
-							return navigate({
-								to: ".",
-								search: (s) => ({
-									...s,
-									showAll: undefined,
-								}),
-								replace: true,
-							});
-						}}
-					>
-						Show fewer options
-					</Button>
-				) : (
-					<Button
-						variant="ghost"
-						size="sm"
-						type="button"
-						onClick={() => {
-							return navigate({
-								to: ".",
-								search: (s) => ({ ...s, showAll: true }),
-								replace: true,
-							});
-						}}
-					>
-						Show {deployOptions.length - 3} more options
-					</Button>
-				)}
+			<div className="flex items-center justify-start gap-4">
+				<FormField
+					control={control}
+					name="provider"
+					render={({ field }) => (
+						<Combobox
+							className="w-full"
+							onValueChange={(value) =>
+								setValue("provider", value)
+							}
+							value={field.value}
+							options={deployOptions
+								.filter((option) => !option.specializedPlatform)
+								.map((option) => ({
+									value: option.name,
+									label: (
+										<div className="flex items-center">
+											<Icon
+												icon={option.icon}
+												className="me-2 !w-4 h-auto"
+											/>
+											{option.displayName}
+										</div>
+									),
+								}))}
+						/>
+					)}
+				/>
 			</div>
 		</div>
 	);
@@ -406,54 +379,11 @@ function InstallStep() {
 	);
 }
 
-function SkillsStep() {
-	return (
-		<div className="flex flex-col gap-4">
-			<p className="text-sm text-muted-foreground">
-				Install the Rivet skill so your coding agent knows how to work
-				with RivetKit.
-			</p>
-			<PackageManagerCode
-				npx={`npx skills add ${skillsPath}`}
-				yarn={`yarn dlx skills add ${skillsPath}`}
-				bun={`bunx skills add ${skillsPath}`}
-				deno={`deno run -A npm:skills add ${skillsPath}`}
-				pnpm={`pnpx skills add ${skillsPath}`}
-				git={`git clone https://github.com/${skillsPath}.git .skills`}
-			/>
-		</div>
-	);
-}
-
 const agentPrompt = `Read through the existing project to understand the codebase. I want to add Rivet Actors to this project. Ask me what I'd like to build with actors, then set it up using RivetKit and run it locally. Use the RivetKit skill for guidance.`;
 
 function RunLocallyStep() {
 	return (
 		<div className="flex flex-col gap-5">
-			<div>
-				<p className="font-medium mb-1.5">Use your coding agent</p>
-				<p className="text-sm text-muted-foreground mb-2">
-					Copy this prompt into your coding agent:
-				</p>
-				<div className="relative group rounded-md bg-muted/50 p-3 pr-10 text-sm font-mono leading-relaxed">
-					{agentPrompt}
-					<button
-						type="button"
-						className="absolute top-2 right-2 p-1.5 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-muted transition-all"
-						onClick={() => {
-							navigator.clipboard.writeText(agentPrompt);
-							toast.success("Copied to clipboard");
-						}}
-					>
-						<Icon icon={faCopy} className="w-3.5 h-3.5" />
-					</button>
-				</div>
-			</div>
-			<div className="relative flex items-center gap-3">
-				<div className="flex-1 border-t border-dashed" />
-				<span className="text-xs text-muted-foreground">or</span>
-				<div className="flex-1 border-t border-dashed" />
-			</div>
 			<div>
 				<p className="font-medium mb-1.5">
 					Follow the quickstart guide
@@ -471,6 +401,44 @@ function RunLocallyStep() {
 						<Icon icon={faArrowRight} className="ms-2" />
 					</a>
 				</Button>
+			</div>
+			<div className="relative flex items-center gap-3">
+				<div className="flex-1 border-t border-dashed" />
+				<span className="text-xs text-muted-foreground">or</span>
+				<div className="flex-1 border-t border-dashed" />
+			</div>
+			<div>
+				<p className="font-medium mb-1.5">Use your coding agent</p>
+
+				<p className="text-sm text-muted-foreground mb-2">
+					Install the Rivet skill so your coding agent knows how to
+					work with RivetKit.
+				</p>
+				<PackageManagerCode
+					npx={`npx skills add ${skillsPath}`}
+					yarn={`yarn dlx skills add ${skillsPath}`}
+					bun={`bunx skills add ${skillsPath}`}
+					deno={`deno run -A npm:skills add ${skillsPath}`}
+					pnpm={`pnpx skills add ${skillsPath}`}
+					git={`git clone https://github.com/${skillsPath}.git .skills`}
+				/>
+
+				<p className="text-sm text-muted-foreground mb-2 mt-4">
+					Copy this prompt into your coding agent:
+				</p>
+				<div className="relative group rounded-md bg-muted/50 p-3 pr-10 text-sm font-mono leading-relaxed">
+					{agentPrompt}
+					<button
+						type="button"
+						className="absolute top-2 right-2 p-1.5 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-muted transition-all"
+						onClick={() => {
+							navigator.clipboard.writeText(agentPrompt);
+							toast.success("Copied to clipboard");
+						}}
+					>
+						<Icon icon={faCopy} className="w-3.5 h-3.5" />
+					</button>
+				</div>
 			</div>
 		</div>
 	);
@@ -622,25 +590,27 @@ function ExploreRivet() {
 	);
 }
 
-function AgentInstructions({
-	title: _,
-	provider,
-}: {
-	title?: string;
-	provider?: Provider;
-}) {
+const rivetAgentInstructionsCode = `Load the Rivet skill and then:
+1. Create a Dockerfile for the RivetKit deployment
+2. Add the secret RIVET_CLOUD_TOKEN to your GitHub repository
+3. Create .github/workflows/rivet-deploy.yml using rivet-dev/deploy-action@v1
+4. Push and verify the GitHub Action succeeded
+5. Once deployed, confirm actors appear in the Rivet dashboard`;
+
+function useAgentInstructionsCode(provider?: Provider) {
 	const providerDetails = deployOptions.find((p) => p.name === provider);
 	const endpoint = useEndpoint();
 	const runnerName = useWatch({ name: "runnerName" }) as string;
-
 	const publishableToken = useRivetDsn({ kind: "publishable", endpoint });
 	const secretToken = useRivetDsn({ kind: "secret", endpoint });
 
-	const providerStr = providerDetails
-		? `${providerDetails.displayName}`
-		: provider || "your chosen provider";
+	if (provider === "rivet") {
+		return rivetAgentInstructionsCode;
+	}
 
-	const code = `Load the Rivet skill and then:
+	const providerStr =
+		providerDetails?.displayName ?? provider ?? "your chosen provider";
+	return `Load the Rivet skill and then:
 1. Integrate Rivet in to the project
 2. Verify it works on the local machine
 3. Deploy to ${providerStr} and configure
@@ -654,27 +624,62 @@ function AgentInstructions({
 			: ""
   }
 
-4. Tell the user the URL to past in 
+4. Tell the user the URL to past in
    to the Rivet dashboard`;
+}
+
+function CopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
+	const code = useAgentInstructionsCode(provider);
 
 	return (
-		<CodeFrame
-			key="yarn"
-			language="markdown"
-			code={() => code}
-			className="m-0"
+		<Button
+			type="button"
+			variant="outline"
+			size="sm"
+			startIcon={<Icon icon={faCopy} />}
+			onClick={() => {
+				navigator.clipboard.writeText(code);
+				toast.success("Copied to clipboard");
+			}}
 		>
-			<CodePreview
-				language="markdown"
-				className="text-left"
-				code={code}
-			/>
-		</CodeFrame>
+			Using a Coding Agent? Copy Agent prompt
+		</Button>
 	);
 }
 
-function BackendSetup() {
-	const provider = useWatch({ name: "provider" });
+const githubActionYaml = `name: Rivet Deploy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  push:
+    branches: [main]
+
+concurrency:
+  group: rivet-deploy-\${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rivet-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rivet-dev/deploy-action@v1
+        with:
+          rivet-token: \${{ secrets.RIVET_CLOUD_TOKEN }}`;
+
+function BackendSetupRivet() {
+	const dataProvider = useCloudNamespaceDataProvider();
+	const { data: cloudToken } = useSuspenseQuery(
+		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
+	);
+
+	const ghSecretCmd = cloudToken
+		? `gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"`
+		: "gh secret set RIVET_CLOUD_TOKEN";
 
 	return (
 		<div className="flex flex-col gap-6">
@@ -682,51 +687,165 @@ function BackendSetup() {
 				<StepNumber n={1} />
 				<div className="flex-1 min-w-0">
 					<p className="font-medium mb-2">
-						Copy this prompt into your coding agent
+						Create a Dockerfile for your RivetKit deployment
 					</p>
-					<CodeGroup className="my-0">
-						{[
-							<AgentInstructions
-								key="agent-instructions"
-								provider={provider}
-								title="Prompt"
-							/>,
-						]}
-					</CodeGroup>
+					<p className="text-sm text-muted-foreground mb-3">
+						Add a{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							Dockerfile
+						</code>{" "}
+						to the root of your project that builds and runs your
+						RivetKit server.
+					</p>
+					<CopyAgentInstructionsButton provider="rivet" />
 				</div>
 			</div>
 			<div className="flex gap-3">
 				<StepNumber n={2} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">
-						Paste your deployment endpoint
-					</p>
+					<p className="font-medium mb-2">Add GitHub secret</p>
 					<p className="text-sm text-muted-foreground mb-3">
-						Your coding agent will provide a URL after deployment.
+						Add your Rivet token as a repository secret named{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							RIVET_CLOUD_TOKEN
+						</code>
+						.
 					</p>
-					<div className="space-y-2">
-						<ConnectServerlessForm.Endpoint
-							placeholder={match(provider)
-								.with(
-									"vercel",
-									() =>
-										"https://your-vercel-deployment.vercel.app",
+					<CodeGroup className="my-0">
+						{[
+							<CodeFrame
+								key="gh-secret"
+								language="bash"
+								title="bash"
+								code={() => ghSecretCmd}
+								className="m-0"
+							>
+								<CodePreview
+									language="bash"
+									className="text-left"
+									code={ghSecretCmd}
+								/>
+							</CodeFrame>,
+						]}
+					</CodeGroup>
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={3} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Add GitHub Action</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Create{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							.github/workflows/rivet-deploy.yml
+						</code>{" "}
+						to automatically deploy on every push and pull request.
+					</p>
+					<CodeGroup className="my-0">
+						{[
+							<CodeFrame
+								key="gh-action"
+								language="yaml"
+								title=".github/workflows/rivet-deploy.yml"
+								code={() => githubActionYaml}
+								className="m-0"
+							>
+								<CodePreview
+									language="yaml"
+									className="text-left"
+									code={githubActionYaml}
+								/>
+							</CodeFrame>,
+						]}
+					</CodeGroup>
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={4} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">
+						Verify GitHub Action succeeded
+					</p>
+					<p className="text-sm text-muted-foreground">
+						Push your changes and confirm the{" "}
+						<strong>Rivet Deploy</strong> workflow completes
+						successfully in your repository's Actions tab.
+					</p>
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={5} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Waiting for deploy</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						<DeploymentCheck
+							validateConfig={(data) =>
+								!!data?.find(([, value]) =>
+									Object.values(value.datacenters).some(
+										(dc) =>
+											dc.serverless &&
+											deriveProviderFromMetadata(
+												dc.metadata,
+											) === "rivet",
+									),
 								)
-								.with(
-									"railway",
-									() => "https://your-app.up.railway.app",
-								)
-								.otherwise(() => "https://your-deployment.com")}
+							}
+							validatePool={(data) => !!data?.config.image}
 						/>
-						<ConfigurationAccordion />
-						<ConnectServerlessForm.ConnectionCheck
-							provider={provider}
-						/>
-					</div>
+					</p>
 				</div>
 			</div>
 		</div>
 	);
+}
+
+function BackendSetup() {
+	const provider = useWatch({ name: "provider" });
+
+	if (provider !== "rivet") {
+		return (
+			<div className="flex flex-col gap-6">
+				<div className="flex gap-3">
+					<StepNumber n={1} />
+					<div className="flex-1 min-w-0">
+						<p className="font-medium mb-2">
+							Paste your deployment endpoint
+						</p>
+						<p className="text-sm text-muted-foreground mb-3">
+							Your coding agent will provide a URL after
+							deployment.
+						</p>
+						<div className="space-y-2">
+							<ConnectServerlessForm.Endpoint
+								placeholder={match(provider)
+									.with(
+										"vercel",
+										() =>
+											"https://your-vercel-deployment.vercel.app",
+									)
+									.with(
+										"railway",
+										() => "https://your-app.up.railway.app",
+									)
+									.otherwise(
+										() => "https://your-deployment.com",
+									)}
+							/>
+							<ConfigurationAccordion />
+							<ConnectServerlessForm.ConnectionCheck
+								provider={provider}
+							/>
+						</div>
+						<div className="mt-4">
+							<CopyAgentInstructionsButton provider={provider} />
+						</div>
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	return <BackendSetupRivet />;
 }
 
 const skillsPath = "rivet-dev/skills";
@@ -790,6 +909,8 @@ function FrontendSetup() {
 		}
 	}, [hasActors, navigate, router]);
 
+	const endpoint = useEndpoint();
+
 	return (
 		<div className="space-y-2">
 			<div className="border rounded-md py-10">
@@ -820,6 +941,49 @@ function FrontendSetup() {
 					)}
 				</div>
 			</div>
+			<Accordion type="single" collapsible className="mt-10">
+				<AccordionItem value="troubleshooting">
+					<AccordionTrigger className="w-full flex items-center justify-between px-4 py-2">
+						Troubleshooting
+					</AccordionTrigger>
+					<AccordionContent className="px-4 py-2  rounded-md border">
+						<p className="mt-2">
+							If your actor isn't showing up, check the following:
+						</p>
+						<ul className="list-disc list-inside mt-2">
+							<li>
+								<p className="inline-block">
+									The actor file is in the correct location
+									and has the correct name.
+								</p>
+							</li>
+							<li>
+								<p className="inline-block">
+									The actor is being exported properly.
+								</p>
+							</li>
+							<li>
+								<p className="inline-block">
+									Check the terminal output for any errors
+									during the build or runtime.
+								</p>
+							</li>
+							<li>
+								<p className="inline-block">
+									Make sure your coding agent has completed
+									the setup steps correctly.
+								</p>
+							</li>
+							<li>
+								<p className="inline-block mb-1">
+									You're using correct environment variables:
+								</p>
+								<EnvVariables endpoint={endpoint} />
+							</li>
+						</ul>
+					</AccordionContent>
+				</AccordionItem>
+			</Accordion>
 		</div>
 	);
 }

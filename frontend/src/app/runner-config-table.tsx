@@ -7,6 +7,7 @@ import {
 	faNextjs,
 	faPencil,
 	faRailway,
+	faRivet,
 	faTrash,
 	faTriangleExclamation,
 	faVercel,
@@ -40,6 +41,7 @@ import {
 	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { REGION_LABEL } from "@/components/matchmaker/lobby-region";
+import { deriveProviderFromMetadata } from "@/lib/data";
 import type { RivetActorError } from "@/queries/types";
 
 interface RunnerConfigsTableProps {
@@ -63,9 +65,9 @@ export function RunnerConfigsTable({
 				<TableRow>
 					<TableHead className="w-8"></TableHead>
 					<TableHead className="pl-8">Name</TableHead>
-					<TableHead className="text-center">Provider</TableHead>
-					<TableHead className="text-center">Endpoint</TableHead>
-					<TableHead className="text-center">Datacenter</TableHead>
+					<TableHead>Provider</TableHead>
+					<TableHead>Endpoint</TableHead>
+					<TableHead>Datacenter</TableHead>
 					<TableHead></TableHead>
 				</TableRow>
 			</TableHeader>
@@ -154,19 +156,25 @@ function Row({
 
 	const datacenters = Object.entries(value.datacenters);
 
+	const isManaged = datacenters.some(
+		([, config]) =>
+			deriveProviderFromMetadata(config.metadata) === "rivet" ||
+			"X-Rivet-Pool" in (config.serverless?.headers ?? {}),
+	);
+
 	return (
 		<TableRow className="hover:bg-muted/50">
 			<StatusCell datacenters={value.datacenters} />
 			<TableCell>
 				<DiscreteCopyButton value={name}>{name}</DiscreteCopyButton>
 			</TableCell>
-			<TableCell className="text-center">
+			<TableCell>
 				<Providers datacenters={datacenters} />
 			</TableCell>
-			<TableCell className="text-center">
+			<TableCell>
 				<Endpoints datacenters={datacenters} />
 			</TableCell>
-			<TableCell className="text-center">
+			<TableCell>
 				<Regions regions={Object.keys(value.datacenters)} />
 			</TableCell>
 			<TableCell className="text-right">
@@ -177,20 +185,22 @@ function Row({
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
-						<DropdownMenuItem
-							indicator={<Icon icon={faPencil} />}
-							onSelect={() =>
-								navigate({
-									to: ".",
-									search: {
-										modal: "edit-provider-config",
-										config: name,
-									},
-								})
-							}
-						>
-							Edit
-						</DropdownMenuItem>
+						{isManaged ? null : (
+							<DropdownMenuItem
+								indicator={<Icon icon={faPencil} />}
+								onSelect={() =>
+									navigate({
+										to: ".",
+										search: {
+											modal: "edit-provider-config",
+											config: name,
+										},
+									})
+								}
+							>
+								Edit
+							</DropdownMenuItem>
+						)}
 						<DropdownMenuItem
 							indicator={<Icon icon={faTrash} />}
 							onSelect={() =>
@@ -288,7 +298,8 @@ function Providers({
 	const providers = useMemo(() => {
 		const providerSet = new Set<string>();
 		for (const [, config] of datacenters) {
-			const providerName = getProviderName(config.metadata);
+			const providerName =
+				deriveProviderFromMetadata(config.metadata) || "unknown";
 			providerSet.add(providerName);
 		}
 		return Array.from(providerSet);
@@ -361,75 +372,66 @@ function Endpoints({
 	);
 }
 
-function getProviderName(metadata: unknown): string {
-	if (!metadata || typeof metadata !== "object") {
-		return "unknown";
-	}
-	if ("provider" in metadata && typeof metadata.provider === "string") {
-		return metadata.provider;
-	}
-	return "unknown";
-}
-
 function Provider({ metadata }: { metadata: unknown }) {
-	if (!metadata || typeof metadata !== "object") {
-		return <span>Unknown</span>;
+	const provider = deriveProviderFromMetadata(metadata);
+
+	if (provider === "cloudflare-workers") {
+		return (
+			<div>
+				<Icon icon={faCloudflare} className="mr-1" /> Cloudflare Workers
+			</div>
+		);
 	}
-	if ("provider" in metadata && typeof metadata.provider === "string") {
-		if (metadata.provider === "cloudflare-workers") {
-			return (
-				<div>
-					<Icon icon={faCloudflare} className="mr-1" /> Cloudflare
-					Workers
-				</div>
-			);
-		}
-		if (metadata.provider === "vercel") {
-			return (
-				<div className="whitespace-nowrap">
-					<Icon icon={faVercel} className="mr-1" /> Vercel
-				</div>
-			);
-		}
-		if (metadata.provider === "next-js") {
-			return (
-				<div className="whitespace-nowrap">
-					<Icon icon={faNextjs} className="mr-1" /> Next.js
-				</div>
-			);
-		}
-		if (metadata.provider === "railway") {
-			return (
-				<div className="whitespace-nowrap">
-					<Icon icon={faRailway} className="mr-1" /> Railway
-				</div>
-			);
-		}
-		if (metadata.provider === "hetzner") {
-			return (
-				<div className="whitespace-nowrap">
-					<Icon icon={faHetznerH} className="mr-1" /> Hetzner
-				</div>
-			);
-		}
-		if (metadata.provider === "aws") {
-			return (
-				<div className="whitespace-nowrap">
-					<Icon icon={faAws} className="mr-1" /> AWS ECS
-				</div>
-			);
-		}
-		if (metadata.provider === "gcp") {
-			return (
-				<div className="whitespace-nowrap">
-					<Icon icon={faGoogleCloud} className="mr-1" /> Google Cloud
-					Run
-				</div>
-			);
-		}
-		return <span>{metadata.provider || "-"}</span>;
+	if (provider === "vercel") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faVercel} className="mr-1" /> Vercel
+			</div>
+		);
 	}
-	return <span>Unknown</span>;
+	if (provider === "next-js") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faNextjs} className="mr-1" /> Next.js
+			</div>
+		);
+	}
+	if (provider === "railway") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faRailway} className="mr-1" /> Railway
+			</div>
+		);
+	}
+	if (provider === "hetzner") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faHetznerH} className="mr-1" /> Hetzner
+			</div>
+		);
+	}
+	if (provider === "aws") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faAws} className="mr-1" /> AWS ECS
+			</div>
+		);
+	}
+	if (provider === "gcp") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faGoogleCloud} className="mr-1" /> Google Cloud Run
+			</div>
+		);
+	}
+	if (provider === "rivet") {
+		return (
+			<div className="whitespace-nowrap">
+				<Icon icon={faRivet} className="mr-1" /> Rivet
+			</div>
+		);
+	}
+	return <span>{provider || "Unknown"}</span>;
 }
 
 function Regions({ regions }: { regions: string[] }) {

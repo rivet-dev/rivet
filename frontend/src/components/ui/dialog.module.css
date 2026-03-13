@@ -1,0 +1,55 @@
+@keyframes dialogOverlayFadeIn {
+	0% {
+		opacity: 0;
+	}
+	100% {
+		opacity: 1;
+	}
+}
+
+@keyframes dialogOverlayFadeOut {
+	0% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0;
+	}
+}
+
+@keyframes dialogContentZoomIn {
+	0% {
+		opacity: 0;
+		transform: scale(0.95);
+	}
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+@keyframes dialogContentZoomOut {
+	0% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	100% {
+		opacity: 0;
+		transform: scale(0.95);
+	}
+}
+
+.overlay {
+	animation: dialogOverlayFadeIn 0.2s ease-out both;
+
+	&[data-state="closed"] {
+		animation: dialogOverlayFadeOut 0.2s ease-out both;
+	}
+}
+
+.content {
+	animation: dialogContentZoomIn 0.2s ease-out both;
+
+	&[data-state="closed"] {
+		animation: dialogContentZoomOut 0.2s ease-out both;
+	}
+}

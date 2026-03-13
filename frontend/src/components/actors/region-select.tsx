@@ -5,12 +5,14 @@ import {
 	Combobox,
 	type ComboboxMultipleProps,
 	type ComboboxSingleProps,
+	cn,
 } from "@/components";
 import { ActorRegion } from "./actor-region";
 import { useDataProvider } from "./data-provider";
 
 type RegionSelectProps = {
 	showAuto?: boolean;
+	showAllRegions?: boolean;
 } & Omit<
 	BaseComboboxProps<{
 		region: { id: string; name: string } | Rivet.Datacenter;
@@ -20,7 +22,11 @@ type RegionSelectProps = {
 	"options" | "filter"
 > &
 	(ComboboxSingleProps | ComboboxMultipleProps);
-export function RegionSelect({ showAuto = true, ...props }: RegionSelectProps) {
+export function RegionSelect({
+	showAuto = true,
+	showAllRegions = false,
+	...props
+}: RegionSelectProps) {
 	const {
 		data = [],
 		fetchNextPage,
@@ -35,6 +41,15 @@ export function RegionSelect({ showAuto = true, ...props }: RegionSelectProps) {
 						label: <span>Automatic</span>,
 						value: "auto",
 						region: { id: "auto", name: "Automatic" },
+					},
+				]
+			: []),
+		...(showAllRegions
+			? [
+					{
+						label: <span>All Regions</span>,
+						value: "all",
+						region: { id: "all", name: "All Regions" },
 					},
 				]
 			: []),
@@ -58,7 +73,7 @@ export function RegionSelect({ showAuto = true, ...props }: RegionSelectProps) {
 				const search = searchMixed.toLowerCase();
 				return option.region.name.toLowerCase().includes(search);
 			}}
-			className="w-full"
+			className={cn("w-full", props.className)}
 		/>
 	);
 }

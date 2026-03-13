@@ -2,12 +2,15 @@ import { useUser } from "@clerk/clerk-react";
 import {
 	faArrowUpRight,
 	faCog,
+	faFileLines,
 	faGift,
 	faHome,
 	faMessageSmile,
+	faRocket,
 	faWallet,
 	Icon,
 } from "@rivet-gg/icons";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router";
 import {
 	type ComponentProps,
@@ -34,9 +37,12 @@ import {
 	ResizablePanelGroup,
 	ScrollArea,
 	Skeleton,
-	WithTooltip,
 } from "@/components";
-import { useDataProvider, useDataProviderCheck } from "@/components/actors";
+import {
+	useCloudNamespaceDataProvider,
+	useDataProvider,
+	useDataProviderCheck,
+} from "@/components/actors";
 import { useRootLayoutOptional } from "@/components/actors/root-layout-context";
 import type { HeaderLinkProps } from "@/components/header/header-link";
 import { ensureTrailingSlash } from "@/lib/utils";
@@ -189,29 +195,6 @@ const Sidebar = ({
 								return (
 									<>
 										<div className="flex gap-0.5 my-2 px-2.5 flex-col">
-											{matchRoute({
-												to: "/orgs/$organization/projects/$project/ns/$namespace",
-												fuzzy: true,
-											}) ? (
-												<HeaderLink
-													to="/orgs/$organization/projects/$project/ns/$namespace/settings"
-													className="font-normal"
-													icon={faCog}
-												>
-													Settings
-												</HeaderLink>
-											) : matchRoute({
-													to: "/orgs/$organization/projects/$project",
-													fuzzy: true,
-												}) ? (
-												<HeaderLink
-													to="/orgs/$organization/projects/$project/settings"
-													className="font-normal"
-													icon={faCog}
-												>
-													Settings
-												</HeaderLink>
-											) : null}
 											{matchRoute({
 												to: "/orgs/$organization/projects/$project/ns/$namespace",
 												fuzzy: true,
@@ -516,7 +499,9 @@ function HeaderLink({ icon, children, className, ...props }: HeaderLinkProps) {
 				) : undefined
 			}
 		>
-			<Link to={props.to}>{children}</Link>
+			<Link to={props.to} activeOptions={{ exact: true }}>
+				{children}
+			</Link>
 		</HeaderButton>
 	);
 }
@@ -566,11 +551,43 @@ function CloudSidebarContent() {
 function CloudSidebarContentInner() {
 	const hasDataProvider = useDataProviderCheck();
 	const hasQuery = !!useDataProvider().buildsQueryOptions;
+	const matchRoute = useMatchRoute();
+
 	return (
 		<div className="flex gap-0.5 flex-col">
 			{hasDataProvider && hasQuery ? (
 				<div className="w-full pt-1.5">
 					<BillingLimitAlert />
+					<div className="flex gap-0.5 mb-2 flex-col">
+						{matchRoute({
+							to: "/orgs/$organization/projects/$project/ns/$namespace",
+							fuzzy: true,
+						}) ? (
+							<>
+								<DeploymentsLink />
+								<HeaderLink
+									to="/orgs/$organization/projects/$project/ns/$namespace/settings"
+									className="font-normal"
+									icon={faCog}
+								>
+									Settings
+								</HeaderLink>
+							</>
+						) : matchRoute({
+								to: "/orgs/$organization/projects/$project",
+								fuzzy: true,
+							}) ? (
+							<HeaderLink
+								to="/orgs/$organization/projects/$project/settings"
+								className="font-normal"
+								icon={faCog}
+							>
+								Settings
+							</HeaderLink>
+						) : null}
+					</div>
+
+					<div className="border-t my-2" />
 					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
 						Actors
 					</span>
@@ -578,6 +595,41 @@ function CloudSidebarContentInner() {
 				</div>
 			) : null}
 		</div>
+	);
+}
+
+function DeploymentsLink() {
+	const provider = useCloudNamespaceDataProvider();
+
+	const { data } = useSuspenseQuery({
+		...provider.currentNamespaceManagedPoolQueryOptions({
+			pool: "default",
+			safe: true,
+		}),
+	});
+
+	if (!data) {
+		return null;
+	}
+
+	return (
+		<>
+			<HeaderLink
+				to="/orgs/$organization/projects/$project/ns/$namespace/deployments"
+				className="font-normal"
+				exact
+				icon={faRocket}
+			>
+				Deployments
+			</HeaderLink>
+			<HeaderLink
+				to="/orgs/$organization/projects/$project/ns/$namespace/deployments/logs"
+				className="font-normal pl-6"
+				icon={faFileLines}
+			>
+				Logs
+			</HeaderLink>
+		</>
 	);
 }
 
