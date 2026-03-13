@@ -85,8 +85,10 @@ const registry = setup({
 </CodeGroup>
 
 <Warning>
-The version **must** be set at build time, not at runtime. Do not use `Date.now()` or similar runtime values in your registry setup code — this would assign a different version every time the server starts, causing actors to be drained and rescheduled on every restart instead of only on new deployments.
+The version **must** be set at build time, not at runtime. Do not use `Date.now()` or similar runtime values in your registry setup code. This would assign a different version every time the server starts, causing actors to be drained and rescheduled on every restart instead of only on new deployments.
 </Warning>
+
+### Example Configurations
 
 We recommend injecting a build-time value that increments with every deployment. Here are concrete examples for common setups:
 

@@ -295,6 +295,7 @@ When making changes to the engine or RivetKit, ensure the corresponding document
 ### Comments
 
 - Write comments as normal, complete sentences. Avoid fragmented structures with parentheticals and dashes like `// Spawn engine (if configured) - regardless of start kind`. Instead, write `// Spawn the engine if configured`. Especially avoid dashes (hyphens are OK).
+- Do not use em dashes (—). Use periods to separate sentences instead.
 - Documenting deltas is not important or useful. A developer who has never worked on the project will not gain extra information if you add a comment stating that something was removed or changed because they don't know what was there before. The only time you would be adding a comment for something NOT being there is if its unintuitive for why its not there in the first place.
 
 ### Examples

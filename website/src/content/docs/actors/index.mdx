@@ -865,11 +865,7 @@ const registry = setup({ use: { worker } });
 
 ### Versions & Upgrades
 
-When deploying new code, set a version number so Rivet can route new actors to the latest runner and optionally drain old ones. Use a build timestamp, git commit count, or CI build number as the version.
-
-<Warning>
-It's very important to [configure versioning](/docs/actors/versions) before deploying to production. Without versioning, actors can regress by running on older runner versions, and existing actors will never be forced to migrate to new runners — they'll continue running indefinitely on the old runners until they exit.
-</Warning>
+When deploying new code, set a version number so Rivet can route new actors to the latest runner and optionally drain old ones. Use a build timestamp, git commit count, or CI build number as the version. It is very important to [configure versioning](/docs/actors/versions) before deploying to production. Without versioning, actors can regress by running on older runner versions, and existing actors will never be forced to migrate to new runners. They will continue running indefinitely on the old runners until they exit.
 
 [Documentation](/docs/actors/versions)
 
