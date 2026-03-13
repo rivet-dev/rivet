@@ -86,6 +86,17 @@ Rivet received an unexpected response from your serverless endpoint. This typica
 
 An unexpected error occurred within Rivet. If this persists, please [contact support](https://rivet.dev/docs).
 
+## Actors crashing immediately on startup
+
+If your actors are being created and then immediately destroyed or crashing, there is likely an error being thrown in your `createState` or `onCreate` lifecycle hooks. These hooks run during actor initialization before the actor is marked as ready.
+
+Check your server logs for the error message and stack trace. Common causes include:
+
+- An exception thrown in `createState` (e.g. invalid input, failed validation, or a runtime error when computing initial state)
+- An exception thrown in `onCreate` (e.g. a failing external API call, missing configuration, or invalid setup logic)
+
+Fix the error in the relevant lifecycle hook and redeploy.
+
 ## Actors not upgrading to new code
 
 If your actors are still running old code after deploying a new version, your [versioning](/docs/actors/versions) is likely not configured correctly.
