@@ -1,0 +1,157 @@
+---
+title: "Sandbox Actor"
+description: "Run sandbox-agent sessions behind a Rivet Actor with provider-backed sandbox creation."
+skill: true
+---
+
+The Sandbox Actor wraps the `sandbox-agent` TypeScript SDK in a Rivet Actor.
+
+- One sandbox actor key maps to one backing sandbox.
+- All non-hook `sandbox-agent` instance methods are exposed as actor actions.
+- The hook surface matches the SDK callback methods: `onSessionEvent` and `onPermissionRequest`.
+- Transcript data is persisted automatically in the actor's built-in SQLite database.
+
+## Basic setup
+
+Use `provider` when every actor instance should use the same sandbox backend.
+
+<CodeGroup workspace>
+```ts actors.ts
+import { setup } from "rivetkit";
+import { db } from "rivetkit/db";
+import { docker, sandboxActor } from "rivetkit/sandbox";
+
+export const codingSandbox = sandboxActor({
+  provider: docker({
+    image: "node:22-bookworm-slim",
+  }),
+  database: db({
+    onMigrate: async () => {},
+  }),
+  onSessionEvent: async (_c, sessionId, event) => {
+    console.log("session event", sessionId, event.payload);
+  },
+  onPermissionRequest: async (_c, sessionId, request) => {
+    console.log("permission request", sessionId, request.id);
+  },
+});
+
+export const registry = setup({
+  use: { codingSandbox },
+});
+```
+
+```ts client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./actors";
+
+const client = createClient<typeof registry>();
+const sandbox = client.codingSandbox.getOrCreate(["task-123"]);
+
+const session = await sandbox.resumeOrCreateSession({
+  id: "main",
+  agent: "codex",
+  sessionInit: {
+    cwd: "/root",
+  },
+});
+
+await sandbox.rawSendSessionMethod(session.id, "session/prompt", {
+  sessionId: session.id,
+  prompt: [{ type: "text", text: "Explain the current project structure." }],
+});
+
+const events = await sandbox.getEvents({
+  sessionId: session.id,
+  limit: 50,
+});
+
+console.log(events.items);
+```
+</CodeGroup>
+
+## Dynamic providers
+
+Use `createProvider` when provider selection depends on the actor input.
+
+`createProvider` receives the same actor creation `input` shape as `createState`.
+
+<CodeGroup workspace>
+```ts actors.ts
+import { setup } from "rivetkit";
+import { db } from "rivetkit/db";
+import { daytona, docker, e2b, sandboxActor } from "rivetkit/sandbox";
+
+type SandboxInput = {
+  provider: "docker" | "daytona" | "e2b";
+};
+
+export const codingSandbox = sandboxActor<undefined, SandboxInput>({
+  createProvider: async (_c, input) => {
+    switch (input.provider) {
+      case "daytona":
+        return daytona();
+      case "e2b":
+        return e2b();
+      default:
+        return docker();
+    }
+  },
+  database: db({
+    onMigrate: async () => {},
+  }),
+});
+
+export const registry = setup({
+  use: { codingSandbox },
+});
+```
+
+```ts client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./actors";
+
+const client = createClient<typeof registry>();
+
+const sandbox = client.codingSandbox.getOrCreate(["task-456"], {
+  createWithInput: {
+    provider: "daytona",
+  },
+});
+
+await sandbox.listAgents();
+```
+</CodeGroup>
+
+The sandbox actor pins the resolved provider name in actor state. If a later wake or reconnect resolves a different provider for the same actor, the actor throws instead of silently switching backends.
+
+## Providers
+
+`rivetkit/sandbox` ships three provider helpers:
+
+- `docker()`
+- `daytona()`
+- `e2b()`
+
+These provider SDKs are optional peer dependencies:
+
+- `docker()` requires `dockerode`
+- `daytona()` requires `@daytonaio/sdk`
+- `e2b()` requires `@e2b/code-interpreter`
+
+If a provider dependency is missing, the sandbox actor throws an error telling you which package to install.
+
+## SDK parity
+
+The public action surface intentionally mirrors `sandbox-agent`.
+
+- Hooks: `onSessionEvent`, `onPermissionRequest`
+- Actions: every other public `SandboxAgent` instance method
+
+This is enforced by a parity test in RivetKit so SDK upgrades fail fast if the sandbox actor falls out of sync.
+
+## Notes
+
+- Use [input parameters](/docs/actors/input) when you need per-actor provider selection.
+- Use [actions](/docs/actors/actions) to call sandbox-agent methods from clients or other actors.
+- The transcript store is internal to the sandbox actor. You do not need to configure a transcript adapter yourself.

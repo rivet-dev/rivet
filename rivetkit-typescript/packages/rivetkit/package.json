@@ -192,6 +192,16 @@
 				"types": "./dist/tsup/db/drizzle/mod.d.cts",
 				"default": "./dist/tsup/db/drizzle/mod.cjs"
 			}
+		},
+		"./sandbox": {
+			"import": {
+				"types": "./dist/tsup/sandbox/mod.d.ts",
+				"default": "./dist/tsup/sandbox/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/sandbox/mod.d.cts",
+				"default": "./dist/tsup/sandbox/mod.cjs"
+			}
 		}
 	},
 	"engines": {
@@ -202,7 +212,7 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
- 		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/serve-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts src/db/mod.ts src/db/drizzle/mod.ts",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/serve-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts src/db/mod.ts src/db/drizzle/mod.ts src/sandbox/mod.ts",
 		"build:browser": "tsup --config tsup.browser.config.ts",
 		"build:schema": "./scripts/compile-bare.ts compile schemas/client-protocol/v1.bare -o dist/schemas/client-protocol/v1.ts && ./scripts/compile-bare.ts compile schemas/client-protocol/v2.bare -o dist/schemas/client-protocol/v2.ts && ./scripts/compile-bare.ts compile schemas/client-protocol/v3.bare -o dist/schemas/client-protocol/v3.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v1.bare -o dist/schemas/file-system-driver/v1.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v2.bare -o dist/schemas/file-system-driver/v2.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v3.bare -o dist/schemas/file-system-driver/v3.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v1.bare -o dist/schemas/actor-persist/v1.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v2.bare -o dist/schemas/actor-persist/v2.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v3.bare -o dist/schemas/actor-persist/v3.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v4.bare -o dist/schemas/actor-persist/v4.ts && ./scripts/compile-bare.ts compile schemas/persist/v1.bare -o dist/schemas/persist/v1.ts && ./scripts/compile-bare.ts compile schemas/transport/v1.bare -o dist/schemas/transport/v1.ts && ./scripts/compile-bare.ts compile schemas/actor-inspector/v1.bare -o dist/schemas/actor-inspector/v1.ts && ./scripts/compile-bare.ts compile schemas/actor-inspector/v2.bare -o dist/schemas/actor-inspector/v2.ts && ./scripts/compile-bare.ts compile schemas/actor-inspector/v3.bare -o dist/schemas/actor-inspector/v3.ts",
 		"check-types": "tsc --noEmit",
@@ -225,6 +235,7 @@
 		"@rivetkit/engine-runner": "workspace:*",
 		"@rivetkit/fast-json-patch": "^3.1.2",
 		"@rivetkit/on-change": "^6.0.2-rc.1",
+		"@rivetkit/sqlite": "^0.1.1",
 		"@rivetkit/sqlite-vfs": "workspace:*",
 		"@rivetkit/traces": "workspace:*",
 		"@rivetkit/virtual-websocket": "workspace:*",
@@ -236,24 +247,28 @@
 		"nanoevents": "^9.1.0",
 		"p-retry": "^6.2.1",
 		"pino": "^9.5.0",
+		"sandbox-agent": "^0.3.1",
 		"tar": "^7.5.0",
 		"uuid": "^12.0.0",
 		"vbare": "^0.0.4",
-		"@rivetkit/sqlite": "^0.1.1",
 		"zod": "^4.1.0"
 	},
 	"devDependencies": {
 		"@bare-ts/tools": "^0.13.0",
 		"@biomejs/biome": "^2.3",
+		"@daytonaio/sdk": "^0.150.0",
+		"@e2b/code-interpreter": "^2.3.3",
 		"@hono/node-server": "^1.18.2",
 		"@hono/node-ws": "^1.1.1",
 		"@standard-schema/spec": "^1.0.0",
+		"@types/dockerode": "^3.3.39",
 		"@types/invariant": "^2",
 		"@types/node": "^22.13.1",
 		"@types/ws": "^8",
 		"@vitest/ui": "3.1.1",
 		"cli-table3": "^0.6.5",
 		"commander": "^12.1.0",
+		"dockerode": "^4.0.9",
 		"eventsource": "^4.0.0",
 		"local-pkg": "^0.5.1",
 		"tsup": "^8.4.0",
@@ -265,18 +280,30 @@
 		"zod-to-json-schema": "^3.25.0"
 	},
 	"peerDependencies": {
+		"@daytonaio/sdk": "^0.150.0",
+		"@e2b/code-interpreter": "^2.3.3",
 		"@hono/node-server": "^1.14.0",
 		"@hono/node-ws": "^1.1.1",
+		"dockerode": "^4.0.9",
 		"drizzle-kit": "^0.31.2",
 		"drizzle-orm": "^0.44.2",
 		"eventsource": "^4.0.0",
 		"ws": "^8.0.0"
 	},
 	"peerDependenciesMeta": {
+		"@daytonaio/sdk": {
+			"optional": true
+		},
+		"@e2b/code-interpreter": {
+			"optional": true
+		},
 		"@hono/node-server": {
 			"optional": true
 		},
 		"@hono/node-ws": {
+			"optional": true
+		},
+		"dockerode": {
 			"optional": true
 		},
 		"drizzle-kit": {
