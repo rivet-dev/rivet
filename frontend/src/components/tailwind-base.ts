@@ -45,7 +45,7 @@ const config = {
 		},
 		extend: {
 			fontFamily: {
-				sans: ["Manrope", "ui-sans-serif", "system-ui", "sans-serif"],
+				sans: ["Open Sans", "ui-sans-serif", "system-ui", "sans-serif"],
 				"mono-console": [
 					"Consolas",
 					"Lucida Console",
@@ -203,6 +203,9 @@ const config = {
 				},
 				".justify-safe-center": {
 					"justify-content": "safe center",
+				},
+				".items-safe-center": {
+					"align-items": "safe center",
 				},
 			});
 		}),
