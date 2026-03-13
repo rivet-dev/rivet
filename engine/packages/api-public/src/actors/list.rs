@@ -186,6 +186,8 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 			.build());
 		}
 
+		pegboard::actor_metadata::validate_projection_keys(&query.metadata_key)?;
+
 		let limit = query.limit.unwrap_or(100);
 
 		// Fanout to all datacenters

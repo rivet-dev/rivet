@@ -247,6 +247,13 @@ export class EngineActorDriver implements ActorDriver {
 		this.#runner.setAlarm(actor.id, timestamp);
 	}
 
+	async patchMetadata(
+		actor: AnyActorInstance,
+		patch: Record<string, string | null>,
+	): Promise<void> {
+		await this.#runner.patchMetadata(actor.id, patch);
+	}
+
 	// No database overrides - will use KV-backed implementation from rivetkit/db
 
 	// MARK: - Batch KV operations

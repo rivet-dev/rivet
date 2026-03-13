@@ -9,6 +9,7 @@ use crate::keys;
 pub struct Input {
 	pub actor_ids: Vec<Id>,
 	pub fetch_error: bool,
+	pub metadata: crate::actor_metadata::Projection,
 }
 
 #[derive(Debug)]
@@ -59,7 +60,7 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> Result<Out
 
 	let dc_name = ctx.config().dc_name()?.to_string();
 
-	let actors = super::util::build_actors_from_workflows(
+	let mut actors = super::util::build_actors_from_workflows(
 		ctx,
 		actors_with_wf_ids,
 		wfs,
@@ -67,6 +68,8 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> Result<Out
 		input.fetch_error,
 	)
 	.await?;
+
+	crate::actor_metadata::attach_to_actors(&*ctx.udb()?, &mut actors, &input.metadata).await?;
 
 	Ok(Output { actors })
 }

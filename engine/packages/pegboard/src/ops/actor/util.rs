@@ -76,6 +76,7 @@ pub async fn build_actors_from_workflows(
 			destroy_ts: actor_state.destroy_ts,
 
 			error,
+			metadata: None,
 		});
 	}
 

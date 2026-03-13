@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest";
+import { serializeActorKey } from "@/actor/keys";
+import type { ActorsListResponse } from "@/manager-api/actors";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";
 
@@ -112,5 +114,212 @@ export function runActorMetadataTests(driverTestConfig: DriverTestConfig) {
 				expect(region).toBe("eu-central-1");
 			});
 		});
+
+		describe("Metadata Patching", () => {
+			test("should patch metadata from inside the actor and return full metadata for actor_id lookups", async (c) => {
+				const { client, endpoint, namespace } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
+
+				const handle = client.metadataActor.getOrCreate([
+					`metadata-${crypto.randomUUID()}`,
+				]);
+				const actorId = await handle.resolve();
+
+				await handle.patchMetadata({
+					workflow_state: "failed",
+					workflow_reason: "generate_report_failed",
+				});
+
+				const response = await fetchActors(
+					endpoint,
+					buildQueryParams({
+						namespace,
+						actor_ids: actorId,
+					}),
+				);
+				const actor = response.actors.find(
+					(candidate) => candidate.actor_id === actorId,
+				);
+
+				expect(actor?.metadata).toEqual({
+					workflow_state: "failed",
+					workflow_reason: "generate_report_failed",
+				});
+			});
+
+			test("should patch metadata over rest and support overwrite and delete", async (c) => {
+				const { client, endpoint, namespace } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
+
+				const key = [`metadata-${crypto.randomUUID()}`];
+				const handle = client.metadataActor.getOrCreate(key);
+				const actorId = await handle.resolve();
+
+				await sendMetadataPatch(endpoint, namespace, actorId, {
+					workflow_state: "running",
+					old_key: "stale",
+				});
+				await sendMetadataPatch(endpoint, namespace, actorId, {
+					workflow_state: "failed",
+					last_error: "timeout",
+					old_key: null,
+				});
+
+				const response = await fetchActors(
+					endpoint,
+					buildQueryParams({
+						namespace,
+						name: "metadataActor",
+						key: serializeActorKey(key),
+					}),
+				);
+
+				expect(response.actors[0]?.metadata).toEqual({
+					workflow_state: "failed",
+					last_error: "timeout",
+				});
+			});
+
+			test("should omit metadata by default and project only requested keys for list queries", async (c) => {
+				const { client, endpoint, namespace } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
+
+				const handle = client.metadataActor.getOrCreate([
+					`metadata-${crypto.randomUUID()}`,
+				]);
+				const actorId = await handle.resolve();
+
+				await sendMetadataPatch(endpoint, namespace, actorId, {
+					workflow_state: "failed",
+					last_error: "timeout",
+				});
+
+				const unprojected = await fetchActors(
+					endpoint,
+					buildQueryParams({
+						namespace,
+						name: "metadataActor",
+					}),
+				);
+				expect(findActor(unprojected, actorId)?.metadata).toBeUndefined();
+
+				const projected = await fetchActors(
+					endpoint,
+					buildQueryParams(
+						{
+							namespace,
+							name: "metadataActor",
+						},
+						["workflow_state", "missing_key"],
+					),
+				);
+				expect(findActor(projected, actorId)?.metadata).toEqual({
+					workflow_state: "failed",
+				});
+
+				const emptyProjection = await fetchActors(
+					endpoint,
+					buildQueryParams(
+						{
+							namespace,
+							name: "metadataActor",
+						},
+						["missing_key"],
+					),
+				);
+				expect(findActor(emptyProjection, actorId)?.metadata).toEqual({});
+			});
+
+			test("should reject list queries with too many metadata keys", async (c) => {
+				const { endpoint, namespace } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
+
+				const response = await fetch(
+					buildManagerUrl(
+						endpoint,
+						"/actors",
+						buildQueryParams(
+							{
+								namespace,
+								name: "metadataActor",
+							},
+							Array.from({ length: 17 }, (_, i) => `k${i}`),
+						),
+					),
+				);
+
+				expect(response.status).toBe(400);
+			});
+		});
 	});
+}
+
+function buildQueryParams(
+	values: Record<string, string>,
+	metadataKeys: string[] = [],
+): URLSearchParams {
+	const query = new URLSearchParams(values);
+	for (const metadataKey of metadataKeys) {
+		query.append("metadata_key", metadataKey);
+	}
+	return query;
+}
+
+function buildManagerUrl(
+	endpoint: string,
+	path: string,
+	query?: URLSearchParams,
+): string {
+	const normalizedEndpoint = endpoint.endsWith("/")
+		? endpoint.slice(0, -1)
+		: endpoint;
+	return `${normalizedEndpoint}${path}${query ? `?${query.toString()}` : ""}`;
+}
+
+async function fetchActors(
+	endpoint: string,
+	query: URLSearchParams,
+): Promise<ActorsListResponse> {
+	const response = await fetch(buildManagerUrl(endpoint, "/actors", query));
+	expect(response.ok).toBe(true);
+	return (await response.json()) as ActorsListResponse;
+}
+
+async function sendMetadataPatch(
+	endpoint: string,
+	namespace: string,
+	actorId: string,
+	metadata: Record<string, string | null>,
+): Promise<void> {
+	const response = await fetch(
+		buildManagerUrl(
+			endpoint,
+			`/actors/${encodeURIComponent(actorId)}/metadata`,
+			buildQueryParams({ namespace }),
+		),
+		{
+			method: "PATCH",
+			headers: {
+				"content-type": "application/json",
+			},
+			body: JSON.stringify({ metadata }),
+		},
+	);
+
+	expect(response.ok).toBe(true);
+}
+
+function findActor(
+	response: ActorsListResponse,
+	actorId: string,
+) {
+	return response.actors.find((actor) => actor.actor_id === actorId);
 }

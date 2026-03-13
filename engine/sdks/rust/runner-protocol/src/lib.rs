@@ -6,10 +6,10 @@ pub mod versioned;
 
 // Re-export latest
 pub use generated::v3::*;
-pub use generated::v7 as mk2;
+pub use generated::v8 as mk2;
 
 pub const PROTOCOL_MK1_VERSION: u16 = 3;
-pub const PROTOCOL_MK2_VERSION: u16 = 7;
+pub const PROTOCOL_MK2_VERSION: u16 = 8;
 
 pub fn is_mk2(protocol_version: u16) -> bool {
 	protocol_version > PROTOCOL_MK1_VERSION

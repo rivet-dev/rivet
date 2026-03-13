@@ -116,6 +116,13 @@ export class FileSystemActorDriver implements ActorDriver {
 		await this.#state.setActorAlarm(actor.id, timestamp);
 	}
 
+	async patchMetadata(
+		actor: AnyActorInstance,
+		patch: Record<string, string | null>,
+	): Promise<void> {
+		await this.#state.patchActorMetadata(actor.id, patch);
+	}
+
 	/** Creates a SQLite VFS instance for creating KV-backed databases */
 	async createSqliteVfs(): Promise<SqliteVfs> {
 		return await importSqliteVfs();

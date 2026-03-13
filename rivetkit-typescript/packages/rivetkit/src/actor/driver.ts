@@ -68,6 +68,10 @@ export interface ActorDriver {
 	// Schedule
 	/** ActorInstance ensure that only one instance of setAlarm is called in parallel at a time. */
 	setAlarm(actor: AnyActorInstance, timestamp: number): Promise<void>;
+	patchMetadata(
+		actor: AnyActorInstance,
+		patch: Record<string, string | null>,
+	): Promise<void>;
 
 	// Database
 	/**

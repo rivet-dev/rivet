@@ -33,6 +33,7 @@ import {
 	getOrCreateActor,
 	kvGet,
 	listActorsByName,
+	patchActorMetadata,
 } from "./api-endpoints";
 import { EngineApiError, getEndpoint } from "./api-utils";
 import { logger } from "./log";
@@ -248,7 +249,11 @@ export class RemoteManagerDriver implements ManagerDriver {
 		return apiActorToOutput(result.actor);
 	}
 
-	async listActors({ c, name }: ListActorsInput): Promise<ActorOutput[]> {
+	async listActors({
+		c,
+		name,
+		metadataKeys,
+	}: ListActorsInput): Promise<ActorOutput[]> {
 		// Wait for metadata check to complete if in progress
 		if (this.#metadataPromise) {
 			await this.#metadataPromise;
@@ -256,9 +261,26 @@ export class RemoteManagerDriver implements ManagerDriver {
 
 		logger().debug({ msg: "listing actors via engine api", name });
 
-		const response = await listActorsByName(this.#config, name);
+		const response = await listActorsByName(
+			this.#config,
+			name,
+			metadataKeys,
+		);
 
 		return response.actors.map(apiActorToOutput);
+	}
+
+	async patchMetadata(
+		actorId: string,
+		patch: Record<string, string | null>,
+	): Promise<void> {
+		if (this.#metadataPromise) {
+			await this.#metadataPromise;
+		}
+
+		await patchActorMetadata(this.#config, actorId, {
+			metadata: patch,
+		});
 	}
 
 	async destroyActor(actorId: string): Promise<void> {
@@ -410,5 +432,6 @@ function apiActorToOutput(actor: ApiActor): ActorOutput {
 		sleepTs: actor.sleep_ts ?? null,
 		destroyTs: actor.destroy_ts ?? null,
 		error: actor.error ?? undefined,
+		metadata: actor.metadata ?? undefined,
 	};
 }

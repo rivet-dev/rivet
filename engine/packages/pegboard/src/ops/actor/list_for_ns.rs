@@ -15,6 +15,7 @@ pub struct Input {
 	pub created_before: Option<i64>,
 	pub limit: usize,
 	pub fetch_error: bool,
+	pub metadata: crate::actor_metadata::Projection,
 }
 
 #[derive(Debug)]
@@ -166,7 +167,7 @@ pub async fn pegboard_actor_list_for_ns(ctx: &OperationCtx, input: &Input) -> Re
 
 	let dc_name = ctx.config().dc_name()?.to_string();
 
-	let actors = super::util::build_actors_from_workflows(
+	let mut actors = super::util::build_actors_from_workflows(
 		ctx,
 		actors_with_wf_ids,
 		wfs,
@@ -174,6 +175,8 @@ pub async fn pegboard_actor_list_for_ns(ctx: &OperationCtx, input: &Input) -> Re
 		input.fetch_error,
 	)
 	.await?;
+
+	crate::actor_metadata::attach_to_actors(&*ctx.udb()?, &mut actors, &input.metadata).await?;
 
 	Ok(Output { actors })
 }

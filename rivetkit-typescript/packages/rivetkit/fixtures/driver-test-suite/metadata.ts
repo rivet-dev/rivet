@@ -67,6 +67,13 @@ export const metadataActor = actor({
 			return c.state.actorName;
 		},
 
+		patchMetadata: async (
+			c,
+			patch: Record<string, string | null>,
+		) => {
+			await c.patchMetadata(patch);
+		},
+
 		// Get last retrieved metadata
 		getLastMetadata: (c) => {
 			return c.state.lastMetadata;

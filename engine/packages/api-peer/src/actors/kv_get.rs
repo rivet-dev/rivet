@@ -47,6 +47,7 @@ pub async fn kv_get(ctx: ApiCtx, path: KvGetPath, query: KvGetQuery) -> Result<K
 		.op(pegboard::ops::actor::get::Input {
 			actor_ids: vec![path.actor_id],
 			fetch_error: false,
+			metadata: pegboard::actor_metadata::Projection::None,
 		})
 		.await?;
 

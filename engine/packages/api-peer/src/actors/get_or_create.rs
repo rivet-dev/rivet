@@ -76,6 +76,7 @@ pub async fn get_or_create(
 					.op(pegboard::ops::actor::get::Input {
 						actor_ids: vec![existing_actor_id],
 						fetch_error: true,
+						metadata: pegboard::actor_metadata::Projection::Full,
 					})
 					.await?;
 

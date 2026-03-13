@@ -13,6 +13,7 @@ export const ActorSchema = z.object({
 	sleep_ts: z.number().nullable().optional(),
 	start_ts: z.number().nullable().optional(),
 	error: z.unknown().nullable().optional(),
+	metadata: z.record(z.string(), z.string()).optional(),
 });
 export type Actor = z.infer<typeof ActorSchema>;
 
@@ -81,3 +82,16 @@ export const ActorsKvGetResponseSchema = z.object({
 	value: z.string().nullable(),
 });
 export type ActorsKvGetResponse = z.infer<typeof ActorsKvGetResponseSchema>;
+
+// MARK: PATCH /actors/{actor_id}/metadata
+export const ActorsPatchMetadataRequestSchema = z.object({
+	metadata: z.record(z.string(), z.string().nullable()),
+});
+export type ActorsPatchMetadataRequest = z.infer<
+	typeof ActorsPatchMetadataRequestSchema
+>;
+
+export const ActorsPatchMetadataResponseSchema = z.object({});
+export type ActorsPatchMetadataResponse = z.infer<
+	typeof ActorsPatchMetadataResponseSchema
+>;

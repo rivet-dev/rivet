@@ -806,10 +806,61 @@ export function writeEventActorSetAlarm(bc: bare.ByteCursor, x: EventActorSetAla
     write7(bc, x.alarmTs)
 }
 
+export type MetadataPatchEntry = {
+    readonly key: string
+    readonly value: string | null
+}
+
+export function readMetadataPatchEntry(bc: bare.ByteCursor): MetadataPatchEntry {
+    return {
+        key: bare.readString(bc),
+        value: read5(bc),
+    }
+}
+
+export function writeMetadataPatchEntry(bc: bare.ByteCursor, x: MetadataPatchEntry): void {
+    bare.writeString(bc, x.key)
+    write5(bc, x.value)
+}
+
+function readMetadataPatchEntryList(bc: bare.ByteCursor): readonly MetadataPatchEntry[] {
+    const len = bare.readUintSafe(bc)
+    if (len === 0) {
+        return []
+    }
+    const result = [readMetadataPatchEntry(bc)]
+    for (let i = 1; i < len; i++) {
+        result[i] = readMetadataPatchEntry(bc)
+    }
+    return result
+}
+
+function writeMetadataPatchEntryList(bc: bare.ByteCursor, x: readonly MetadataPatchEntry[]): void {
+    bare.writeUintSafe(bc, x.length)
+    for (let i = 0; i < x.length; i++) {
+        writeMetadataPatchEntry(bc, x[i])
+    }
+}
+
+export type EventActorPatchMetadata = {
+    readonly patch: readonly MetadataPatchEntry[]
+}
+
+export function readEventActorPatchMetadata(bc: bare.ByteCursor): EventActorPatchMetadata {
+    return {
+        patch: readMetadataPatchEntryList(bc),
+    }
+}
+
+export function writeEventActorPatchMetadata(bc: bare.ByteCursor, x: EventActorPatchMetadata): void {
+    writeMetadataPatchEntryList(bc, x.patch)
+}
+
 export type Event =
     | { readonly tag: "EventActorIntent"; readonly val: EventActorIntent }
     | { readonly tag: "EventActorStateUpdate"; readonly val: EventActorStateUpdate }
     | { readonly tag: "EventActorSetAlarm"; readonly val: EventActorSetAlarm }
+    | { readonly tag: "EventActorPatchMetadata"; readonly val: EventActorPatchMetadata }
 
 export function readEvent(bc: bare.ByteCursor): Event {
     const offset = bc.offset
@@ -821,6 +872,8 @@ export function readEvent(bc: bare.ByteCursor): Event {
             return { tag: "EventActorStateUpdate", val: readEventActorStateUpdate(bc) }
         case 2:
             return { tag: "EventActorSetAlarm", val: readEventActorSetAlarm(bc) }
+        case 3:
+            return { tag: "EventActorPatchMetadata", val: readEventActorPatchMetadata(bc) }
         default: {
             bc.offset = offset
             throw new bare.BareError(offset, "invalid tag")
@@ -843,6 +896,11 @@ export function writeEvent(bc: bare.ByteCursor, x: Event): void {
         case "EventActorSetAlarm": {
             bare.writeU8(bc, 2)
             writeEventActorSetAlarm(bc, x.val)
+            break
+        }
+        case "EventActorPatchMetadata": {
+            bare.writeU8(bc, 3)
+            writeEventActorPatchMetadata(bc, x.val)
             break
         }
     }

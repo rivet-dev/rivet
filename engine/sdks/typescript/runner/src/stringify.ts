@@ -179,6 +179,15 @@ export function stringifyEvent(event: protocol.Event): string {
 				alarmTs === null ? "null" : stringifyBigInt(alarmTs);
 			return `EventActorSetAlarm{alarmTs: ${alarmTsStr}}`;
 		}
+		case "EventActorPatchMetadata": {
+			const patch = event.val.patch
+				.map(
+					(entry) =>
+						`{key: "${entry.key}", value: ${entry.value === null ? "null" : `"${entry.value}"`}}`,
+				)
+				.join(", ");
+			return `EventActorPatchMetadata{patch: [${patch}]}`;
+		}
 	}
 }
 

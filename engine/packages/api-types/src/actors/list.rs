@@ -11,6 +11,8 @@ pub struct ListQuery {
 	pub namespace: String,
 	pub name: Option<String>,
 	pub key: Option<String>,
+	#[serde(default)]
+	pub metadata_key: Vec<String>,
 	/// Deprecated.
 	#[serde(default)]
 	pub actor_ids: Option<String>,

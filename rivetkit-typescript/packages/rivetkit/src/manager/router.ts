@@ -34,6 +34,9 @@ import {
 	ActorsListNamesResponseSchema,
 	type ActorsListResponse,
 	ActorsListResponseSchema,
+	type ActorsPatchMetadataResponse,
+	ActorsPatchMetadataRequestSchema,
+	ActorsPatchMetadataResponseSchema,
 	type Actor as ApiActor,
 } from "@/manager-api/actors";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
@@ -92,6 +95,9 @@ export function buildManagerRouter(
 
 			router.openapi(route, async (c) => {
 				const { name, actor_ids, key } = c.req.valid("query");
+				const metadataKeys = new URL(c.req.url).searchParams.getAll(
+					"metadata_key",
+				);
 
 				const actorIdsParsed = actor_ids
 					? actor_ids
@@ -192,6 +198,7 @@ export function buildManagerRouter(
 						name,
 						key,
 						includeDestroyed: false,
+						metadataKeys,
 					});
 					actors.push(...actorOutputs);
 				}
@@ -302,6 +309,32 @@ export function buildManagerRouter(
 				const actor = createApiActor(actorOutput);
 
 				return c.json<ActorsCreateResponse>({ actor });
+			});
+		}
+
+		// PATCH /actors/{actor_id}/metadata
+		{
+			const route = createRoute({
+				method: "patch",
+				path: "/actors/{actor_id}/metadata",
+				request: {
+					params: z.object({
+						actor_id: z.string(),
+					}),
+					body: buildOpenApiRequestBody(ActorsPatchMetadataRequestSchema),
+				},
+				responses: buildOpenApiResponses(
+					ActorsPatchMetadataResponseSchema,
+				),
+			});
+
+			router.openapi(route, async (c) => {
+				const { actor_id: actorId } = c.req.valid("param");
+				const body = c.req.valid("json");
+
+				await managerDriver.patchMetadata(actorId, body.metadata);
+
+				return c.json<ActorsPatchMetadataResponse>({});
 			});
 		}
 
@@ -656,5 +689,6 @@ function createApiActor(actor: ActorOutput): ApiActor {
 		destroy_ts: actor.destroyTs ?? null,
 		sleep_ts: actor.sleepTs ?? null,
 		start_ts: actor.startTs ?? null,
+		metadata: actor.metadata ?? undefined,
 	};
 }

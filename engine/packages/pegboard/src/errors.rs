@@ -41,6 +41,50 @@ pub enum Actor {
 	#[error("destroyed_during_creation", "Actor was destroyed during creation.")]
 	DestroyedDuringCreation,
 
+	#[error("metadata_patch_empty", "Metadata patch cannot be empty.")]
+	MetadataPatchEmpty,
+
+	#[error(
+		"metadata_key_invalid",
+		"Metadata key is invalid.",
+		"Metadata key is invalid: {key_preview}"
+	)]
+	MetadataKeyInvalid { key_preview: String },
+
+	#[error(
+		"metadata_key_too_large",
+		"Metadata key is too large.",
+		"Metadata key is too large (max {max_size} bytes): {key_preview}"
+	)]
+	MetadataKeyTooLarge {
+		max_size: usize,
+		key_preview: String,
+	},
+
+	#[error(
+		"metadata_value_too_large",
+		"Metadata value is too large.",
+		"Metadata value is too large (max {max_size} bytes) for key '{key_preview}'"
+	)]
+	MetadataValueTooLarge {
+		max_size: usize,
+		key_preview: String,
+	},
+
+	#[error(
+		"metadata_too_large",
+		"Actor metadata is too large.",
+		"Actor metadata is too large (max {max_size} bytes)."
+	)]
+	MetadataTooLarge { max_size: usize },
+
+	#[error(
+		"metadata_too_many_keys",
+		"Too many metadata keys requested.",
+		"Too many metadata keys requested. Maximum is {max}, got {count}."
+	)]
+	MetadataTooManyKeys { max: usize, count: usize },
+
 	#[error(
 		"destroyed_while_waiting_for_ready",
 		"Actor was destroyed while waiting for ready state."

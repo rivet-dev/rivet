@@ -19,6 +19,7 @@ use crate::{actors, ctx, datacenters, health, metadata, namespaces, runner_confi
 		actors::list_names::list_names,
 		actors::get_or_create::get_or_create,
 		actors::kv_get::kv_get,
+		actors::patch_metadata::patch_metadata,
 		runners::list,
 		runners::list_names,
 		namespaces::list,
@@ -85,6 +86,10 @@ pub async fn router(
 			.route(
 				"/actors/{actor_id}",
 				axum::routing::delete(actors::delete::delete),
+			)
+			.route(
+				"/actors/{actor_id}/metadata",
+				axum::routing::patch(actors::patch_metadata::patch_metadata),
 			)
 			.route(
 				"/actors/names",

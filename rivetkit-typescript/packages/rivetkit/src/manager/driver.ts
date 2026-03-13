@@ -11,6 +11,10 @@ export interface ManagerDriver {
 	getOrCreateWithKey(input: GetOrCreateWithKeyInput): Promise<ActorOutput>;
 	createActor(input: CreateInput): Promise<ActorOutput>;
 	listActors(input: ListActorsInput): Promise<ActorOutput[]>;
+	patchMetadata(
+		actorId: string,
+		patch: Record<string, string | null>,
+	): Promise<void>;
 
 	sendRequest(actorId: string, actorRequest: Request): Promise<Response>;
 	openWebSocket(
@@ -91,6 +95,7 @@ export interface ListActorsInput<E extends Env = any> {
 	name: string;
 	key?: string;
 	includeDestroyed?: boolean;
+	metadataKeys?: string[];
 }
 
 export interface ActorOutput {
@@ -103,4 +108,5 @@ export interface ActorOutput {
 	sleepTs?: number | null;
 	destroyTs?: number | null;
 	error?: unknown;
+	metadata?: Record<string, string>;
 }

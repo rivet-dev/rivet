@@ -7,6 +7,7 @@ use crate::{errors, workflows::runner2::AllocatePendingActorsInput};
 
 mod destroy;
 mod keys;
+mod metadata;
 pub mod metrics;
 mod runtime;
 mod setup;
@@ -534,6 +535,21 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										state.alarm_ts = *alarm_ts;
 										alarms_set += 1;
 									}
+									protocol::mk2::Event::EventActorPatchMetadata(
+										protocol::mk2::EventActorPatchMetadata { patch },
+									) => {
+										handle_metadata_patch(
+											ctx,
+											input.actor_id,
+											patch
+												.iter()
+												.cloned()
+												.map(metadata::protocol_patch_entry_to_storage)
+												.collect(),
+											None,
+										)
+										.await?;
+									}
 								}
 							}
 
@@ -579,7 +595,16 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								}))
 							)).await?;
 						}
-						Main::Wake(sig) => {
+							Main::PatchMetadata(sig) => {
+								handle_metadata_patch(
+									ctx,
+									input.actor_id,
+									sig.patch,
+									sig.request_id,
+								)
+								.await?;
+							}
+							Main::Wake(sig) => {
 							// Clear alarm
 							if let Some(alarm_ts) = state.alarm_ts {
 								let now = ctx.v(3).activity(GetTsInput {}).await?;
@@ -1225,6 +1250,61 @@ async fn handle_stopped(
 	Ok(StoppedResult::Continue)
 }
 
+async fn handle_metadata_patch(
+	ctx: &mut WorkflowCtx,
+	actor_id: Id,
+	patch: Vec<crate::actor_metadata::PatchEntry>,
+	request_id: Option<String>,
+) -> Result<()> {
+	let result = ctx
+		.activity(metadata::ApplyPatchInput { actor_id, patch })
+		.await;
+
+	match result {
+		Ok(_) => {
+			if let Some(request_id) = request_id {
+				ctx.msg(MetadataPatched {
+					request_id: request_id.clone(),
+					error: None,
+				})
+				.topic(("request_id", request_id))
+				.send()
+				.await?;
+			}
+		}
+		Err(err) => {
+			let actor_error = rivet_error::RivetError::extract(&err);
+			if actor_error.group() == "actor" {
+				tracing::warn!(
+					?actor_id,
+					group = actor_error.group(),
+					code = actor_error.code(),
+					"failed to patch actor metadata"
+				);
+			} else {
+				tracing::error!(?actor_id, ?err, "internal actor metadata patch failure");
+			}
+
+			if let Some(request_id) = request_id {
+				ctx.msg(MetadataPatched {
+					request_id: request_id.clone(),
+					error: Some(SerializedError {
+						group: actor_error.group().to_string(),
+						code: actor_error.code().to_string(),
+						message: actor_error.message().to_string(),
+						meta: actor_error.metadata(),
+					}),
+				})
+				.topic(("request_id", request_id))
+				.send()
+				.await?;
+			}
+		}
+	}
+
+	Ok(())
+}
+
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct GetTsInput {}
 
@@ -1249,6 +1329,12 @@ pub struct Ready {
 #[message("pegboard_actor_stopped")]
 pub struct Stopped {}
 
+#[message("pegboard_actor_metadata_patched")]
+pub struct MetadataPatched {
+	pub request_id: String,
+	pub error: Option<SerializedError>,
+}
+
 #[signal("pegboard_actor_allocate")]
 #[derive(Debug)]
 pub struct Allocate {
@@ -1269,6 +1355,23 @@ pub struct Event {
 pub struct Events {
 	pub runner_id: Id,
 	pub events: Vec<protocol::mk2::EventWrapper>,
+}
+
+#[derive(Debug)]
+#[signal("pegboard_actor_patch_metadata")]
+pub struct PatchMetadata {
+	pub patch: Vec<crate::actor_metadata::PatchEntry>,
+	#[serde(default)]
+	pub request_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SerializedError {
+	pub group: String,
+	pub code: String,
+	pub message: String,
+	#[serde(default)]
+	pub meta: Option<serde_json::Value>,
 }
 
 #[signal("pegboard_actor_wake")]
@@ -1333,6 +1436,7 @@ join_signal!(PendingAllocation {
 join_signal!(Main {
 	Event,
 	Events,
+	PatchMetadata,
 	Wake,
 	Lost,
 	GoingAway,

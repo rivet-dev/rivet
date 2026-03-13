@@ -8,6 +8,8 @@ import type {
 	ActorsGetOrCreateRequest,
 	ActorsGetOrCreateResponse,
 	ActorsListResponse,
+	ActorsPatchMetadataRequest,
+	ActorsPatchMetadataResponse,
 } from "@/manager-api/actors";
 import type { RivetId } from "@/manager-api/common";
 import { apiCall } from "./api-utils";
@@ -43,11 +45,15 @@ export async function getActorByKey(
 export async function listActorsByName(
 	config: ClientConfig,
 	name: string,
+	metadataKeys: string[] = [],
 ): Promise<ActorsListResponse> {
+	const metadataKeyQuery = metadataKeys
+		.map((key) => `metadata_key=${encodeURIComponent(key)}`)
+		.join("&");
 	return apiCall<never, ActorsListResponse>(
 		config,
 		"GET",
-		`/actors?name=${encodeURIComponent(name)}`,
+		`/actors?name=${encodeURIComponent(name)}${metadataKeyQuery ? `&${metadataKeyQuery}` : ""}`,
 	);
 }
 
@@ -86,6 +92,19 @@ export async function destroyActor(
 		config,
 		"DELETE",
 		`/actors/${encodeURIComponent(actorId)}`,
+	);
+}
+
+export async function patchActorMetadata(
+	config: ClientConfig,
+	actorId: RivetId,
+	request: ActorsPatchMetadataRequest,
+): Promise<ActorsPatchMetadataResponse> {
+	return apiCall<ActorsPatchMetadataRequest, ActorsPatchMetadataResponse>(
+		config,
+		"PATCH",
+		`/actors/${encodeURIComponent(actorId)}/metadata`,
+		request,
 	);
 }
 
