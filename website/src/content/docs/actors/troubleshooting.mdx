@@ -41,7 +41,17 @@ The actor's `run` handler threw an unhandled exception or exited unexpectedly. C
 
 ### `no_capacity`
 
-No server was available to run your actor. See [Actor status is pending](#actor-status-is-pending) for details on how to resolve this based on your runtime mode.
+No server was available to run your actor. The cause depends on your [runtime mode](/docs/general/runtime-modes):
+
+**Serverless**:
+
+- Your provider configuration does not have the region enabled that the actor is trying to run in. This is uncommon and usually only happens if an actor was created and then the provider config was updated to remove the region.
+- There is an issue connecting to your backend. If the engine is hitting `/api/rivet/start` and failing, check your backend logs for errors.
+
+**Runners**:
+
+- You don't have enough runners online. Check your runner list in the dashboard to verify runners are visible and connected.
+- Your runners are full. Each runner has a limited number of actor slots (configured via `RIVET_TOTAL_SLOTS`, default: 100,000). Check the dashboard to see if your runners have available capacity and scale up if needed.
 
 ### `runner_no_response`
 
@@ -112,7 +122,15 @@ To fix this, configure a version number in your [registry configuration](/docs/c
 
 See [Actor Statuses](/docs/actors/statuses) for more about this status.
 
-The cause depends on your [runtime mode](/docs/general/runtime-modes):
+An actor stays in "pending" status when Rivet is waiting for a server to accept it. The cause depends on your [runtime mode](/docs/general/runtime-modes):
 
-- **Serverless**: Your serverless endpoint may not be responding. Check that your backend is deployed and the endpoint is reachable.
-- **Runners**: Your runners may be at capacity. Scale up your infrastructure or add more runner instances.
+**Serverless**:
+
+- Your serverless endpoint may not be responding. Check that your backend is deployed and the endpoint is reachable.
+- Your provider configuration may not have the region enabled that the actor needs. Verify your provider config includes the correct regions.
+- Check your backend logs for errors on the `/api/rivet/start` endpoint.
+
+**Runners**:
+
+- You don't have enough runners online. Check the dashboard to verify your runners are connected.
+- Your runners may be at capacity. Check the dashboard to see if runners have available actor slots and scale up if needed.
