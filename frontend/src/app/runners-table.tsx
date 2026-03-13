@@ -26,6 +26,10 @@ import {
 	WithTooltip,
 } from "@/components";
 import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
+import {
+	deriveProviderFromMetadata,
+	deriveRivetkitVersionFromMetadata,
+} from "@/lib/data";
 
 interface RunnersTableProps {
 	isLoading?: boolean;
@@ -51,6 +55,7 @@ export function RunnersTable({
 					<TableHead className="pl-8">Name</TableHead>
 					<TableHead>Datacenter</TableHead>
 					<TableHead>Slots</TableHead>
+					<TableHead>Version</TableHead>
 					<TableHead>Created</TableHead>
 				</TableRow>
 			</TableHeader>
@@ -60,7 +65,7 @@ export function RunnersTable({
 				) : null}
 				{isError ? (
 					<TableRow>
-						<TableCell colSpan={7}>
+						<TableCell colSpan={8}>
 							<Text className="text-center">
 								An error occurred while fetching runners.
 							</Text>
@@ -85,7 +90,7 @@ export function RunnersTable({
 
 				{!isLoading && hasNextPage ? (
 					<TableRow>
-						<TableCell colSpan={7}>
+						<TableCell colSpan={8}>
 							<Button
 								variant="outline"
 								isLoading={isLoading}
@@ -107,6 +112,9 @@ function RowSkeleton() {
 		<TableRow>
 			<TableCell>
 				<Skeleton className="w-full size-4" />
+			</TableCell>
+			<TableCell>
+				<Skeleton className="w-full h-4" />
 			</TableCell>
 			<TableCell>
 				<Skeleton className="w-full h-4" />
@@ -149,11 +157,21 @@ export function Row(runner: Rivet.Runner) {
 				</DiscreteCopyButton>
 			</TableCell>
 			<TableCell>
-				<ActorRegion regionId={runner.datacenter} showLabel />
+				<ActorRegion
+					regionId={runner.datacenter}
+					showLabel
+					className="justify-start"
+				/>
 			</TableCell>
 
 			<TableCell>
 				{runner.remainingSlots}/{runner.totalSlots}
+			</TableCell>
+
+			<TableCell>
+				{deriveRivetkitVersionFromMetadata(runner.metadata) ?? (
+					<span className="text-muted-foreground">-</span>
+				)}
 			</TableCell>
 
 			<TableCell>

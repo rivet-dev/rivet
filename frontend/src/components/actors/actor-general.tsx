@@ -31,7 +31,11 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 	return (
 		<div className="px-4 mt-4 mb-8">
 			<h3 className="mb-2 font-semibold">General</h3>
-			<Flex gap="2" direction="col" className="text-xs">
+			<Flex
+				gap="2"
+				direction="col"
+				className="text-xs [&_dt]:min-h-5 [&_dd]:min-h-5"
+			>
 				<Dl>
 					<Dt>Region</Dt>
 					<Dd>
@@ -46,7 +50,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 						<DiscreteCopyButton
 							size="xs"
 							value={actorId}
-							className="-mx-2"
+							className="-mx-2 h-auto"
 						>
 							{actorId}
 						</DiscreteCopyButton>
@@ -95,7 +99,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 						<DiscreteCopyButton
 							size="xs"
 							value={createTs ? formatISO(createTs) : "n/a"}
-							className="-mx-2"
+							className="-mx-2 h-auto"
 						>
 							{createTs ? formatISO(createTs) : "n/a"}
 						</DiscreteCopyButton>
@@ -113,7 +117,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 									? formatISO(pendingAllocationTs)
 									: "n/a"
 							}
-							className="-mx-2"
+							className="-mx-2 h-auto"
 						>
 							{pendingAllocationTs
 								? formatISO(pendingAllocationTs)
@@ -128,7 +132,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 					>
 						<DiscreteCopyButton
 							size="xs"
-							className="-mx-2"
+							className="-mx-2 h-auto"
 							value={
 								connectableTs ? formatISO(connectableTs) : "n/a"
 							}
@@ -140,7 +144,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 					<Dd className={cn({ "text-muted-foreground": !sleepTs })}>
 						<DiscreteCopyButton
 							size="xs"
-							className="-mx-2"
+							className="-mx-2 h-auto"
 							value={sleepTs ? formatISO(sleepTs) : "n/a"}
 						>
 							{sleepTs ? formatISO(sleepTs) : "n/a"}
@@ -154,7 +158,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 					>
 						<DiscreteCopyButton
 							size="xs"
-							className="-mx-2"
+							className="-mx-2 h-auto"
 							value={destroyTs ? formatISO(destroyTs) : "n/a"}
 						>
 							{destroyTs ? formatISO(destroyTs) : "n/a"}

@@ -43,6 +43,8 @@ export type ActorRouter = Hono<{ Bindings: ActorRouterBindings }>;
 export interface MetadataResponse {
 	runtime: string;
 	version: string;
+	/** "local" for development, "deployed" for production */
+	type: "local" | "deployed";
 }
 
 /**
@@ -90,6 +92,7 @@ export function createActorRouter(
 		return c.json({
 			runtime: "rivetkit",
 			version: VERSION,
+			type: isDev() ? "local" : "deployed",
 		} satisfies MetadataResponse);
 	});
 

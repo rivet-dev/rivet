@@ -1,4 +1,4 @@
-import { faCheck, faChevronDown, Icon } from "@rivet-gg/icons";
+import { faCheck, faChevronDown, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import * as React from "react";
 import { Fragment } from "react";
 import { cn } from "../lib/utils";
@@ -178,10 +178,19 @@ export const Combobox = <Option extends ComboboxOption>({
 							: placeholder}
 					</div>
 
-					<Icon
-						className="ml-2 h-4 w-4 shrink-0 text-foreground opacity-50"
-						icon={faChevronDown}
-					/>
+					<div className="flex items-center gap-1">
+						{isLoading && (
+							<Icon
+								className="ml-2 h-4 w-4 shrink-0 text-foreground opacity-50 animate-spin"
+								icon={faSpinnerThird}
+							/>
+						)}
+
+						<Icon
+							className="ml-2 h-4 w-4 shrink-0 text-foreground opacity-50"
+							icon={faChevronDown}
+						/>
+					</div>
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent

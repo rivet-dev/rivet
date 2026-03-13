@@ -11,7 +11,7 @@ const thumbClass =
 const Slider = React.forwardRef<
 	React.ElementRef<typeof SliderPrimitive.Root>,
 	React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root>
->(({ className, defaultValue, ...props }, ref) => (
+>(({ className, defaultValue, value, ...props }, ref) => (
 	<SliderPrimitive.Root
 		ref={ref}
 		className={cn(
@@ -19,13 +19,15 @@ const Slider = React.forwardRef<
 			className,
 		)}
 		defaultValue={defaultValue}
+		value={value}
 		{...props}
 	>
 		<SliderPrimitive.Track className="relative h-2 w-full grow overflow-hidden rounded-full bg-secondary">
 			<SliderPrimitive.Range className="absolute h-full bg-primary" />
 		</SliderPrimitive.Track>
 		<SliderPrimitive.Thumb className={thumbClass} />
-		{defaultValue && defaultValue?.length > 1 ? (
+		{(defaultValue && defaultValue.length > 1) ||
+		(value && value.length > 1) ? (
 			<SliderPrimitive.Thumb className={thumbClass} />
 		) : null}
 	</SliderPrimitive.Root>

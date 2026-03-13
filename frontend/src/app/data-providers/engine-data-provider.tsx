@@ -49,7 +49,7 @@ export function createClient(
 					delete args.headers?.[key];
 				}
 			});
-			return await fetcher({ ...args, ...fetcherArgs });
+			return await fetcher({ ...args, ...fetcherArgs, maxRetries: 1 });
 		},
 	});
 }
@@ -331,7 +331,6 @@ export const createNamespaceContext = ({
 				},
 				onSuccess: () => {},
 				throwOnError: noThrow,
-				retry: shouldRetryAllExpect403,
 				meta: {
 					mightRequireAuth,
 				},
@@ -341,7 +340,6 @@ export const createNamespaceContext = ({
 			return mutationOptions({
 				...def.actorDestroyMutationOptions(actorId),
 				throwOnError: noThrow,
-				retry: shouldRetryAllExpect403,
 				meta: {
 					mightRequireAuth,
 				},
@@ -546,7 +544,6 @@ export const createNamespaceContext = ({
 					});
 					return response;
 				},
-				retry: shouldRetryAllExpect403,
 				meta: {
 					mightRequireAuth,
 				},
@@ -561,7 +558,6 @@ export const createNamespaceContext = ({
 				mutationFn: async (name: string) => {
 					await client.runnerConfigsDelete(name, { namespace });
 				},
-				retry: shouldRetryAllExpect403,
 				meta: {
 					mightRequireAuth,
 				},

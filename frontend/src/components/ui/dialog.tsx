@@ -4,6 +4,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { faXmark, Icon } from "@rivet-gg/icons";
 import * as React from "react";
 import { cn } from "../lib/utils";
+import styles from "./dialog.module.css";
 
 export type DialogProps = React.ComponentProps<typeof DialogPrimitive.Root>;
 const Dialog = DialogPrimitive.Root;
@@ -21,7 +22,8 @@ const DialogOverlay = React.forwardRef<
 	<DialogPrimitive.Overlay
 		ref={ref}
 		className={cn(
-			"fixed grid place-items-center inset-0 z-50 bg-black/80 fill-mode-forwards data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 overflow-y-auto",
+			"fixed grid place-items-center inset-0 z-50 bg-black/80 overflow-y-auto",
+			styles.overlay,
 			className,
 		)}
 		{...props}
@@ -40,7 +42,8 @@ const DialogContent = React.forwardRef<
 			<DialogPrimitive.Content
 				ref={ref}
 				className={cn(
-					"z-50 max-h-[80vh] overflow-auto grid w-full max-w-lg gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out fill-mode-forwards data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95  sm:rounded-lg",
+					"z-50 max-h-[80vh] overflow-auto grid w-full max-w-lg gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg",
+					styles.content,
 					className,
 				)}
 				{...props}

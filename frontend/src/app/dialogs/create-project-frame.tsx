@@ -1,7 +1,7 @@
 import { useOrganization } from "@clerk/clerk-react";
 import type { Rivet } from "@rivet-gg/cloud";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import * as CreateProjectForm from "@/app/forms/create-project-form";
 import { Flex, Frame } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
@@ -32,8 +32,6 @@ export default function CreateProjectFrameContent({
 }) {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
-	const params = useParams({ strict: false });
-
 	const provider = useCloudDataProvider();
 
 	const defaultOrg = useDefaultOrg();
@@ -41,11 +39,7 @@ export default function CreateProjectFrameContent({
 	const { mutateAsync } = useMutation({
 		...provider.createProjectMutationOptions(),
 		onSuccess: async (data, vars) => {
-			if (!params.organization) {
-				return;
-			}
-
-			await queryClient.invalidateQueries(
+			await queryClient.refetchQueries(
 				provider.currentOrgProjectsQueryOptions(),
 			);
 
@@ -54,7 +48,7 @@ export default function CreateProjectFrameContent({
 				: navigate({
 						to: "/orgs/$organization/projects/$project",
 						params: {
-							organization: params.organization,
+							organization: vars.organization,
 							project: data.project.name,
 						},
 					});
