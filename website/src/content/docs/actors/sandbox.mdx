@@ -18,15 +18,12 @@ Use `provider` when every actor instance should use the same sandbox backend.
 <CodeGroup workspace>
 ```ts actors.ts
 import { setup } from "rivetkit";
-import { sandboxDatabase } from "rivetkit/db";
 import { docker, sandboxActor } from "rivetkit/sandbox";
 
 export const codingSandbox = sandboxActor({
   provider: docker({
     image: "node:22-bookworm-slim",
   }),
-  database: sandboxDatabase(),
-  preventSleepWhileTurnsActive: true,
   onSessionEvent: async (_c, sessionId, event) => {
     console.log("session event", sessionId, event.payload);
   },
@@ -78,7 +75,6 @@ Use `createProvider` when provider selection depends on the actor input.
 <CodeGroup workspace>
 ```ts actors.ts
 import { setup } from "rivetkit";
-import { sandboxDatabase } from "rivetkit/db";
 import { daytona, docker, e2b, sandboxActor } from "rivetkit/sandbox";
 
 type SandboxInput = {
@@ -96,7 +92,6 @@ export const codingSandbox = sandboxActor<undefined, SandboxInput>({
         return docker();
     }
   },
-  database: sandboxDatabase(),
 });
 
 export const registry = setup({
@@ -122,16 +117,17 @@ await sandbox.listAgents();
 
 The sandbox actor pins the resolved provider name in actor state. If a later wake or reconnect resolves a different provider for the same actor, the actor throws instead of silently switching backends.
 
-## Preventing sleep during active turns
+## Active turn sleep behavior
 
-Set `preventSleepWhileTurnsActive` when the actor must stay awake while a
-session turn is still producing events.
+The sandbox actor always keeps itself awake while a subscribed session still
+looks like it is in the middle of a turn.
 
 ```ts
+import { docker, sandboxActor } from "rivetkit/sandbox";
+
 const codingSandbox = sandboxActor({
   provider: docker(),
-  database: sandboxDatabase(),
-  preventSleepWhileTurnsActive: {
+  options: {
     warningAfterMs: 30_000,
     staleAfterMs: 5 * 60_000,
   },
@@ -145,19 +141,144 @@ terminal response arrives.
 
 ## Providers
 
-`rivetkit/sandbox` ships three provider helpers:
+`rivetkit/sandbox` ships three provider helpers. Each wraps a third-party sandbox SDK and handles sandbox creation, agent connection, and teardown.
 
-- `docker()`
-- `daytona()`
-- `e2b()`
+All providers share a set of common options:
 
-These provider SDKs are optional peer dependencies:
+| Option | Default | Description |
+|---|---|---|
+| `installAgents` | `["claude", "codex"]` | Agents to install in the sandbox on creation. |
+| `agentPort` | `3000` | Port the sandbox-agent server listens on. |
+| `installCommand` | Fetches from `releases.rivet.dev` | Shell command to install the sandbox-agent binary. |
+| `startCommand` | `sandbox-agent server --no-token --host 0.0.0.0 --port <agentPort>` | Shell command to start the sandbox-agent server. |
 
-- `docker()` requires `dockerode`
-- `daytona()` requires `@daytonaio/sdk`
-- `e2b()` requires `@e2b/code-interpreter`
+### Docker
 
-If a provider dependency is missing, the sandbox actor throws an error telling you which package to install.
+Requires the `dockerode` package.
+
+```sh
+pnpm add dockerode
+```
+
+```ts
+import { docker } from "rivetkit/sandbox";
+
+const provider = docker({
+  image: "node:22-bookworm-slim",
+  host: "127.0.0.1",
+  env: ["MY_VAR=value"],
+  binds: ["/host/path:/container/path"],
+  createContainerOptions: { User: "node" },
+});
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `client` | Auto-created via `/var/run/docker.sock` | A `dockerode` client instance. |
+| `image` | `node:22-bookworm-slim` | Docker image to use. |
+| `host` | `127.0.0.1` | Host address for connecting to the container. |
+| `env` | `[]` | Environment variables. Can be a static array or an async function receiving the create context. |
+| `binds` | `[]` | Volume binds. Can be a static array or an async function receiving the create context. |
+| `createContainerOptions` | `{}` | Additional options passed to `dockerode`'s `createContainer`. |
+
+### Daytona
+
+Requires the `@daytonaio/sdk` package.
+
+```sh
+pnpm add @daytonaio/sdk
+```
+
+```ts
+import { daytona } from "rivetkit/sandbox";
+
+const provider = daytona({
+  create: { image: "node:22" },
+  previewTtlSeconds: 4 * 60 * 60,
+  deleteTimeoutSeconds: 10,
+});
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `client` | Auto-created via `new Daytona()` | A Daytona SDK client instance. |
+| `create` | `{}` | Options passed to `client.create()`. Can be a static object or an async function receiving the create context. |
+| `previewTtlSeconds` | `14400` (4 hours) | TTL for the signed preview URL used to connect. |
+| `deleteTimeoutSeconds` | `undefined` | Timeout passed to `sandbox.delete()` on destroy. |
+
+### E2B
+
+Requires the `@e2b/code-interpreter` package.
+
+```sh
+pnpm add @e2b/code-interpreter
+```
+
+```ts
+import { e2b } from "rivetkit/sandbox";
+
+const provider = e2b({
+  create: { template: "base" },
+  connect: async (sandboxId) => ({ sandboxId }),
+});
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `create` | `{}` | Options passed to `Sandbox.create()`. Can be a static object or an async function receiving the create context. |
+| `connect` | `{}` | Options passed to `Sandbox.connect()` when reconnecting. Can be a static object or an async function receiving the sandbox ID. |
+
+## Custom providers
+
+Implement the `SandboxActorProvider` interface to use any sandbox backend.
+
+```ts
+import type { SandboxActorProvider } from "rivetkit/sandbox";
+import { SandboxAgent } from "sandbox-agent";
+
+const myProvider: SandboxActorProvider = {
+  name: "my-provider",
+
+  async create(context) {
+    // Provision a sandbox. `context` has `actorId` and `actorKey`.
+    // Return a string ID that identifies the sandbox.
+    const sandboxId = await provisionSandbox(context.actorId);
+    return sandboxId;
+  },
+
+  async destroy(sandboxId) {
+    // Tear down the sandbox identified by `sandboxId`.
+    await teardownSandbox(sandboxId);
+  },
+
+  async connectAgent(sandboxId, options) {
+    // Connect to the sandbox-agent running inside the sandbox.
+    // `options.persist` is a `SessionPersistDriver` for transcript storage.
+    // `options.waitForHealth` indicates whether to wait for the agent to be ready.
+    const baseUrl = await getSandboxUrl(sandboxId);
+    return await SandboxAgent.connect({
+      baseUrl,
+      ...options,
+    });
+  },
+};
+```
+
+Use it like any built-in provider:
+
+```ts
+import { sandboxActor } from "rivetkit/sandbox";
+
+const mySandbox = sandboxActor({
+  provider: myProvider,
+});
+```
+
+The three methods map to the sandbox lifecycle:
+
+1. **`create`** is called once when the actor first needs a sandbox. Return a stable string ID.
+2. **`connectAgent`** is called to establish a `SandboxAgent` connection. This may be called multiple times across sleep/wake cycles. Always spread `options` into `SandboxAgent.connect()` so persistence and health checks work correctly.
+3. **`destroy`** is called when the actor is destroyed. Clean up all external resources.
 
 ## SDK parity
 
@@ -173,4 +294,4 @@ This is enforced by a parity test in RivetKit so SDK upgrades fail fast if the s
 - Use [input parameters](/docs/actors/input) when you need per-actor provider selection.
 - Use [actions](/docs/actors/actions) to call sandbox-agent methods from clients or other actors.
 - The transcript store is internal to the sandbox actor. You do not need to configure a transcript adapter yourself.
-- Use `sandboxDatabase()` from `rivetkit/db` so the sandbox transcript tables are migrated automatically.
+- The sandbox actor automatically provisions and migrates its SQLite tables. You do not need to pass a database config.

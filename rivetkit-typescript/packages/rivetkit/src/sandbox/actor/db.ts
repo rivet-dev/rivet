@@ -1,8 +1,13 @@
 import type { RawAccess } from "@/db/config";
 
-export async function migrateSandboxTranscriptTables(
-	db: RawAccess,
-): Promise<void> {
+export async function migrateSandboxTables(db: RawAccess): Promise<void> {
+	// Legacy tables from an earlier naming convention. Safe to drop because
+	// they were never shipped in a release and contain no user data.
+	await db.execute(`
+		DROP TABLE IF EXISTS sandbox_actor_meta;
+		DROP TABLE IF EXISTS sandbox_actor_sessions;
+	`);
+
 	await db.execute(`
 		CREATE TABLE IF NOT EXISTS sandbox_agent_sessions (
 			id TEXT PRIMARY KEY,

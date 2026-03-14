@@ -76,8 +76,18 @@ function buildContainerCommand(
 	].join(" && ");
 }
 
-function extractMappedPort(containerInfo: any, containerPort: number): number {
-	const ports = containerInfo?.NetworkSettings?.Ports;
+interface ContainerPortBindings {
+	[portAndProtocol: string]: Array<{ HostPort: string }> | undefined;
+}
+
+interface ContainerInspectPorts {
+	NetworkSettings?: {
+		Ports?: ContainerPortBindings;
+	};
+}
+
+function extractMappedPort(containerInfo: ContainerInspectPorts, containerPort: number): number {
+	const ports = containerInfo.NetworkSettings?.Ports;
 	const binding = ports?.[`${containerPort}/tcp`];
 	const hostPort = binding?.[0]?.HostPort;
 	if (!hostPort) {
@@ -87,7 +97,7 @@ function extractMappedPort(containerInfo: any, containerPort: number): number {
 	return Number(hostPort);
 }
 
-async function createDefaultClient(): Promise<DockerClientLike> {
+async function importDockerClient(): Promise<DockerClientLike> {
 	const module = await importOptionalDependency<typeof import("dockerode")>(
 		"dockerode",
 		"docker",
@@ -106,10 +116,19 @@ export function docker(
 	const agentPort = options.agentPort ?? DEFAULT_AGENT_PORT;
 	const installAgents = options.installAgents ?? ["claude", "codex"];
 
+	let cachedClient: DockerClientLike | undefined = options.client;
+
+	async function getDockerClient(): Promise<DockerClientLike> {
+		if (!cachedClient) {
+			cachedClient = await importDockerClient();
+		}
+		return cachedClient;
+	}
+
 	return {
 		name: "docker",
 		async create(context) {
-			const client = options.client ?? (await createDefaultClient());
+			const client = await getDockerClient();
 			const env = await resolveValue(options.env, context, []);
 			const binds = await resolveValue(options.binds, context, []);
 			const hostPort = await getPort();
@@ -126,12 +145,12 @@ export function docker(
 					},
 				},
 				...(options.createContainerOptions ?? {}),
-			} as any);
+			} as Docker.ContainerCreateOptions);
 			await container.start();
 			return container.id;
 		},
 		async destroy(sandboxId) {
-			const client = options.client ?? (await createDefaultClient());
+			const client = await getDockerClient();
 			const container = client.getContainer(sandboxId);
 			try {
 				await container.stop({ t: 5 });
@@ -144,7 +163,7 @@ export function docker(
 			sandboxId,
 			connectOptions: SandboxActorProviderConnectOptions,
 		) {
-			const client = options.client ?? (await createDefaultClient());
+			const client = await getDockerClient();
 			const container = client.getContainer(sandboxId);
 			const info = await container.inspect();
 			const hostPort = extractMappedPort(info, agentPort);

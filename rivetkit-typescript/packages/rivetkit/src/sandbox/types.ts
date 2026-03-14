@@ -1,51 +1,11 @@
-import type { ActorConfigInput } from "@/actor/config";
-import type {
-	ActorContext,
-	BeforeConnectContext,
-	CreateContext,
-} from "@/actor/contexts";
+import type { ActionContext } from "@/actor/contexts";
 import type { DatabaseProvider } from "@/actor/database";
-import type { AnyDatabaseProvider } from "@/actor/database";
 import type { RawAccess } from "@/db/config";
 import type {
-	PermissionRequestListener,
 	SandboxAgent,
 	SandboxAgentConnectOptions,
-	SessionEventListener,
 	SessionPersistDriver,
 } from "sandbox-agent";
-
-export interface SandboxActorState {
-	sandboxId: string | null;
-	sessionIds: string[];
-	providerName: string | null;
-	// A session stays active while we have seen a prompt or permission flow that
-	// has not been matched by a terminal response yet. This lets the sandbox
-	// actor re-assert preventSleep after wakeups instead of forgetting about an
-	// in-flight turn.
-	activeSessionIds: string[];
-	activePromptRequestIdsBySessionId: Record<string, string[]>;
-	activeSessionLastEventAtById: Record<string, number>;
-}
-
-export interface SandboxActorRuntime {
-	agent: SandboxAgent | null;
-	provider: SandboxActorProvider | null;
-	unsubscribeBySessionId: Map<
-		string,
-		{
-			event?: () => void;
-			permission?: () => void;
-		}
-	>;
-	activeHookCount: number;
-	warningTimeoutBySessionId: Map<string, ReturnType<typeof setTimeout>>;
-	staleTimeoutBySessionId: Map<string, ReturnType<typeof setTimeout>>;
-}
-
-export type SandboxActorHookMethodName =
-	| "onSessionEvent"
-	| "onPermissionRequest";
 
 // Keep this split in lockstep with the sandbox-agent SDK. Hooks should match the
 // SDK callback methods, and actions should match every other SDK instance
@@ -54,7 +14,10 @@ export type SandboxActorHookMethodName =
 export const SANDBOX_AGENT_HOOK_METHODS = [
 	"onSessionEvent",
 	"onPermissionRequest",
-] as const satisfies readonly SandboxActorHookMethodName[];
+] as const;
+
+export type SandboxActorHookMethodName =
+	(typeof SANDBOX_AGENT_HOOK_METHODS)[number];
 
 export const SANDBOX_AGENT_ACTION_METHODS = [
 	"dispose",
@@ -123,9 +86,15 @@ export type SandboxSessionEvent = Parameters<
 	Parameters<SandboxAgent["onSessionEvent"]>[1]
 >[0];
 
-export type SandboxSessionPermissionRequest = Parameters<
-	Parameters<SandboxAgent["onPermissionRequest"]>[1]
->[0];
+export interface SandboxActorState {
+	sandboxId: string | null;
+	providerName: string | null;
+	/** Persisted so that on wake, the actor knows which sessions to
+	 * re-subscribe to when reconnecting to the sandbox agent. Without
+	 * this, event listeners would be lost after a sleep/wake cycle. */
+	subscribedSessionIds: string[];
+	sandboxDestroyed: boolean;
+}
 
 export interface SandboxActorProviderCreateContext {
 	actorId: string;
@@ -148,94 +117,46 @@ export interface SandboxActorProvider {
 		sandboxId: string,
 		options: SandboxActorProviderConnectOptions,
 	): Promise<SandboxAgent>;
+	/**
+	 * Optional hook called before `connectAgent` to ensure the sandbox
+	 * environment is running. Providers like Daytona use this to restart
+	 * the sandbox-agent process after the sandbox sleeps or restarts.
+	 */
+	wake?(sandboxId: string): Promise<void>;
 }
 
-export type SandboxActorHookContext<
-	TConnParams = undefined,
-	TInput = undefined,
-> = ActorContext<
+export interface SandboxActorVars {
+	sandboxAgentClient: SandboxAgent | null;
+	provider: SandboxActorProvider | null;
+	activeSessionIds: Set<string>;
+	activePromptRequestIdsBySessionId: Map<string, string[]>;
+	lastEventAtBySessionId: Map<string, number>;
+	unsubscribeBySessionId: Map<
+		string,
+		{
+			event?: () => void;
+			permission?: () => void;
+		}
+	>;
+	/** Tracks in-flight hook promises. Size is used instead of a counter
+	 * to avoid increment/decrement mismatch bugs. */
+	activeHooks: Set<Promise<void>>;
+	warningTimeoutBySessionId: Map<string, ReturnType<typeof setTimeout>>;
+	staleTimeoutBySessionId: Map<string, ReturnType<typeof setTimeout>>;
+}
+
+/** @deprecated Use `SandboxActorVars` instead. */
+export type SandboxActorRuntime = SandboxActorVars;
+
+/**
+ * Action context type used by the sandbox actor implementation for session
+ * management, proxy actions, and lifecycle hooks.
+ */
+export type SandboxActionContext<TConnParams = undefined> = ActionContext<
 	SandboxActorState,
 	TConnParams,
 	undefined,
-	SandboxActorRuntime,
-	TInput,
-	AnyDatabaseProvider
+	SandboxActorVars,
+	undefined,
+	DatabaseProvider<RawAccess>
 >;
-
-export type SandboxActorCreateProviderContext<TInput = undefined> =
-	CreateContext<SandboxActorState, TInput, AnyDatabaseProvider>;
-
-export type SandboxActorOnBeforeConnect<
-	TConnParams = undefined,
-	TInput = undefined,
-> =
-	ActorConfigInput<
-		SandboxActorState,
-		TConnParams,
-		undefined,
-		SandboxActorRuntime,
-		TInput,
-		AnyDatabaseProvider
-	>["onBeforeConnect"];
-
-export type SandboxActorCreateProvider<TInput = undefined> = (
-	c: SandboxActorCreateProviderContext<TInput>,
-	input: TInput,
-) => SandboxActorProvider | Promise<SandboxActorProvider>;
-
-export interface SandboxActorPreventSleepOptions {
-	// Log if the actor still thinks a turn is active but no new session event has
-	// arrived for this long.
-	warningAfterMs?: number;
-	// Clear active-turn state after this timeout so a missing terminal event
-	// cannot keep the actor awake forever.
-	staleAfterMs?: number;
-}
-
-type SandboxActorConfigBase<TConnParams, TInput> = {
-	database: DatabaseProvider<RawAccess>;
-	persistRawEvents?: boolean;
-	// Keep the actor awake while a subscribed session appears to be in the
-	// middle of a turn. This is useful when session events arrive over the
-	// sandbox-agent live stream after the triggering action has already returned.
-	preventSleepWhileTurnsActive?:
-		| boolean
-		| SandboxActorPreventSleepOptions;
-	onBeforeConnect?: SandboxActorOnBeforeConnect<TConnParams, TInput>;
-	onSessionEvent?: (
-		c: SandboxActorHookContext<TConnParams, TInput>,
-		sessionId: string,
-		event: Parameters<SessionEventListener>[0],
-	) => void | Promise<void>;
-	onPermissionRequest?: (
-		c: SandboxActorHookContext<TConnParams, TInput>,
-		sessionId: string,
-		request: Parameters<PermissionRequestListener>[0],
-	) => void | Promise<void>;
-};
-
-export type SandboxActorConfig<
-	TConnParams = undefined,
-	TInput = undefined,
-> = SandboxActorConfigBase<TConnParams, TInput> &
-	(
-		| {
-				provider: SandboxActorProvider;
-				createProvider?: never;
-		  }
-		| {
-				provider?: never;
-				createProvider: SandboxActorCreateProvider<TInput>;
-		  }
-	);
-
-export type SandboxActorBeforeConnectContext<
-	TConnParams = undefined,
-	TInput = undefined,
-> =
-	BeforeConnectContext<
-		SandboxActorState,
-		SandboxActorRuntime,
-		TInput,
-		AnyDatabaseProvider
-	>;

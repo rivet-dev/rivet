@@ -22,7 +22,7 @@ type DaytonaSandboxLike = {
 };
 
 type DaytonaClientLike = Pick<Daytona, "create"> & {
-	get?(sandboxId: string): Promise<DaytonaSandboxLike | undefined>;
+	get(sandboxId: string): Promise<DaytonaSandboxLike | undefined>;
 };
 
 export interface DaytonaProviderOptions {
@@ -83,10 +83,19 @@ export function daytona(
 	const previewTtlSeconds =
 		options.previewTtlSeconds ?? DEFAULT_PREVIEW_TTL_SECONDS;
 
+	let cachedClient: DaytonaClientLike | undefined = options.client;
+
+	async function getDaytonaClient(): Promise<DaytonaClientLike> {
+		if (!cachedClient) {
+			cachedClient = await createDefaultClient();
+		}
+		return cachedClient;
+	}
+
 	return {
 		name: "daytona",
 		async create(context) {
-			const client = options.client ?? (await createDefaultClient());
+			const client = await getDaytonaClient();
 			const createOptions = await resolveCreateOptions(options, context);
 			const sandbox = (await client.create({
 				autoStopInterval: 0,
@@ -106,8 +115,8 @@ export function daytona(
 			return sandbox.id;
 		},
 		async destroy(sandboxId) {
-			const client = options.client ?? (await createDefaultClient());
-			const sandbox = await client.get?.(sandboxId);
+			const client = await getDaytonaClient();
+			const sandbox = await client.get(sandboxId);
 			if (!sandbox) {
 				return;
 			}
@@ -117,8 +126,8 @@ export function daytona(
 			sandboxId,
 			connectOptions: SandboxActorProviderConnectOptions,
 		) {
-			const client = options.client ?? (await createDefaultClient());
-			const sandbox = await client.get?.(sandboxId);
+			const client = await getDaytonaClient();
+			const sandbox = await client.get(sandboxId);
 			if (!sandbox) {
 				throw new Error(`daytona sandbox not found: ${sandboxId}`);
 			}
@@ -132,6 +141,21 @@ export function daytona(
 				baseUrl: url,
 				...connectOptions,
 			});
+		},
+		async wake(sandboxId) {
+			// The sandbox-agent process does not survive Daytona sandbox
+			// sleep/restart. Re-run the start command to ensure it is
+			// running before we attempt to connect. If the process is
+			// already running, the backgrounded command exits silently
+			// because the port is already bound.
+			const client = await getDaytonaClient();
+			const sandbox = await client.get(sandboxId);
+			if (!sandbox) {
+				throw new Error(`daytona sandbox not found: ${sandboxId}`);
+			}
+			await sandbox.process.executeCommand(
+				buildStartCommand(agentPort, options.startCommand),
+			);
 		},
 	};
 }

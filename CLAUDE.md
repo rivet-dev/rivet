@@ -291,6 +291,7 @@ When making changes to the engine or RivetKit, ensure the corresponding document
 - **Actor status changes**: When modifying status derivation logic in `frontend/src/components/actors/queries/index.ts` or adding new statuses, update `website/src/content/docs/actors/statuses.mdx` and the corresponding tests in `frontend/src/components/actors/queries/index.test.ts`.
 - **Kubernetes manifest changes**: When modifying k8s manifests in `self-host/k8s/engine/`, update `website/src/content/docs/self-hosting/kubernetes.mdx`, `self-host/k8s/README.md`, and `scripts/run/k8s/engine.sh` if file names or deployment steps change.
 - **Landing page changes**: When updating the landing page (`website/src/pages/index.astro` and its section components in `website/src/components/marketing/sections/`), update `README.md` to reflect the same headlines, features, benchmarks, and talking points where applicable.
+- **Sandbox provider changes**: When adding, removing, or modifying sandbox providers in `rivetkit-typescript/packages/rivetkit/src/sandbox/providers/`, update `website/src/content/docs/actors/sandbox.mdx` to keep provider documentation, option tables, and custom provider guidance in sync.
 
 ### Comments
 

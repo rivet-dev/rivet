@@ -48,13 +48,18 @@ export interface E2BProviderOptions {
 	startCommand?: string;
 }
 
+let cachedE2BModule: E2BSandboxStatic | undefined;
+
 async function loadE2B(): Promise<E2BSandboxStatic> {
-	const module =
-		await importOptionalDependency<typeof import("@e2b/code-interpreter")>(
-			"@e2b/code-interpreter",
-			"e2b",
-		);
-	return module.Sandbox;
+	if (!cachedE2BModule) {
+		const module =
+			await importOptionalDependency<typeof import("@e2b/code-interpreter")>(
+				"@e2b/code-interpreter",
+				"e2b",
+			);
+		cachedE2BModule = module.Sandbox;
+	}
+	return cachedE2BModule;
 }
 
 async function resolveCreateOptions(

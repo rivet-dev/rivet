@@ -29,6 +29,7 @@ import { runActorMetadataTests } from "./tests/actor-metadata";
 import { runActorOnStateChangeTests } from "./tests/actor-onstatechange";
 import { runActorQueueTests } from "./tests/actor-queue";
 import { runActorRunTests } from "./tests/actor-run";
+import { runActorSandboxTests } from "./tests/actor-sandbox";
 import { runActorStatelessTests } from "./tests/actor-stateless";
 import { runActorVarsTests } from "./tests/actor-vars";
 import { runActorWorkflowTests } from "./tests/actor-workflow";
@@ -43,6 +44,7 @@ export interface SkipTests {
 	sleep?: boolean;
 	hibernation?: boolean;
 	inline?: boolean;
+	sandbox?: boolean;
 }
 
 export interface DriverTestConfig {
@@ -137,6 +139,8 @@ export function runDriverTests(
 						runActorQueueTests(driverTestConfig);
 
 						runActorRunTests(driverTestConfig);
+
+						runActorSandboxTests(driverTestConfig);
 
 						runActorInlineClientTests(driverTestConfig);
 

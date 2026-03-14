@@ -1,4 +1,3 @@
-import { migrateSandboxTranscriptTables } from "@/sandbox/schema";
 import type { DatabaseProvider, RawAccess } from "./config";
 import { AsyncMutex, createActorKvStore, toSqliteBindings } from "./shared";
 
@@ -140,10 +139,4 @@ export function db({
 			await client.close();
 		},
 	};
-}
-
-export function sandboxDatabase(): DatabaseProvider<RawAccess> {
-	return db({
-		onMigrate: migrateSandboxTranscriptTables,
-	});
 }
