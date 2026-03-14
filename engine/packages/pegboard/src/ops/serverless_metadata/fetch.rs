@@ -176,8 +176,7 @@ pub async fn pegboard_serverless_metadata_fetch(
 		}));
 	}
 
-	// RivetKit metadata responses return ActorName objects with a `metadata`
-	// field.
+	// Convert actor names, filtering out non-object metadata
 	let actor_names: Vec<ActorNameMetadata> = actor_names
 		.into_iter()
 		.filter_map(|(name, value)| {
