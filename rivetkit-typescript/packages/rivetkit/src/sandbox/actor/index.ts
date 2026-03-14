@@ -180,13 +180,6 @@ async function ensureAgent<TConnParams>(
 		await provider.wake(c.state.sandboxId);
 	}
 
-	// Restart idle timers for any sessions that were active before sleep.
-	const options = config.options as SandboxActorOptionsRuntime;
-	for (const sessionId of c.vars.activeSessionIds) {
-		markSessionActiveInMemory(c, options, sessionId);
-		syncPreventSleep(c);
-	}
-
 	// Connect to the sandbox-agent with SQLite-backed persistence.
 	c.vars.sandboxAgentClient = await provider.connectAgent(c.state.sandboxId, {
 		persist: new SqliteSessionPersistDriver(c.db, persistRawEvents),
