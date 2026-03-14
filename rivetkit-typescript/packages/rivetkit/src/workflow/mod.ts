@@ -80,6 +80,7 @@ export interface WorkflowOptions<
 		>,
 		event: WorkflowErrorEvent,
 	) => void | Promise<void>;
+	destroyOnCompletion?: boolean;
 }
 
 export function workflow<
@@ -176,8 +177,10 @@ export function workflow<
 			});
 		}
 
+		let completed = false;
 		try {
 			await handle.result;
+			completed = true;
 		} catch (error) {
 			if (runCtx.abortSignal.aborted) {
 				return;
@@ -197,6 +200,14 @@ export function workflow<
 			});
 		} finally {
 			runCtx.abortSignal.removeEventListener("abort", onAbort);
+		}
+
+		if (
+			completed &&
+			options.destroyOnCompletion &&
+			!runCtx.abortSignal.aborted
+		) {
+			runCtx.destroy();
 		}
 	}
 

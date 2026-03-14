@@ -252,6 +252,34 @@ export const workflowFailedStepActor = actor({
 	},
 });
 
+export const workflowDestroyOnCompletionActor = actor({
+	state: {
+		key: "",
+		runCount: 0,
+	},
+	onWake: (c) => {
+		c.state.key = c.key.join("/");
+	},
+	onDestroy: async (c) => {
+		const client = c.client<typeof registry>();
+		const observer = client.destroyObserver.getOrCreate(["observer"]);
+		await observer.notifyDestroyed(c.state.key);
+	},
+	run: workflow(
+		async (ctx) => {
+			await ctx.step("complete", async () => {
+				ctx.state.runCount += 1;
+			});
+		},
+		{
+			destroyOnCompletion: true,
+		},
+	),
+	actions: {
+		getRunCount: (c) => c.state.runCount,
+	},
+});
+
 export const workflowErrorHookActor = actor({
 	state: {
 		attempts: 0,
