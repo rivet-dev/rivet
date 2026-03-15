@@ -1,43 +1,12 @@
-import { createRivetKit } from "@rivetkit/react";
 import { useLiveQuery } from "@tanstack/react-db";
-import { useEffect, useRef, useState } from "react";
-import type { registry } from "../src/actors.ts";
-import {
-	applyChange,
-	initCollection,
-	todoCollection,
-	type ActorConnection,
-	type Todo,
-} from "./collection.ts";
-
-const { useActor } = createRivetKit<typeof registry>(
-	`${window.location.origin}/api/rivet`,
-);
+import { useState } from "react";
+import { todoCollection, type Todo } from "./collection.ts";
 
 type FilterMode = "all" | "active" | "completed";
 
 export default function App() {
-	const actor = useActor({ name: "todoList", key: ["default"] });
 	const [filter, setFilter] = useState<FilterMode>("all");
 	const [input, setInput] = useState("");
-	const [initialized, setInitialized] = useState(false);
-	const initStarted = useRef(false);
-
-	// When the actor connection becomes available, seed the TanStack DB
-	// collection with the persisted todos from the actor's SQLite database.
-	useEffect(() => {
-		if (!actor.connection || initStarted.current) return;
-		initStarted.current = true;
-		initCollection(actor.connection as unknown as ActorConnection).then(() =>
-			setInitialized(true),
-		);
-	}, [actor.connection]);
-
-	// Subscribe to real-time change events broadcast by the actor.
-	// Any client's mutation flows here, updating the local collection immediately.
-	actor.useEvent("change", (change) => {
-		applyChange(change as Parameters<typeof applyChange>[0]);
-	});
 
 	// Live query with filtering.
 	// TanStack DB's differential dataflow re-evaluates only affected rows —
@@ -62,8 +31,12 @@ export default function App() {
 	const { data: allTodos } = useLiveQuery((q) =>
 		q.from({ todo: todoCollection }),
 	);
-	const activeCount = allTodos?.filter((t) => (t.completed as number) === 0).length ?? 0;
-	const completedCount = allTodos?.filter((t) => (t.completed as number) === 1).length ?? 0;
+	const activeCount =
+		allTodos?.filter((t) => (t.completed as number) === 0).length ?? 0;
+	const completedCount =
+		allTodos?.filter((t) => (t.completed as number) === 1).length ?? 0;
+
+	const isReady = todoCollection.status === "ready";
 
 	function handleAdd(e: React.FormEvent) {
 		e.preventDefault();
@@ -93,16 +66,16 @@ export default function App() {
 		todoCollection.delete(id);
 	}
 
-	const isConnected = actor.connStatus === "connected";
-
 	return (
 		<div style={s.page}>
 			<div style={s.container}>
 				<header style={s.header}>
 					<div style={s.headerTop}>
 						<h1 style={s.title}>RivetKit × TanStack DB</h1>
-						<span style={{ ...s.badge, ...(isConnected ? s.badgeOn : s.badgeOff) }}>
-							{isConnected ? "● live" : "○ connecting…"}
+						<span
+							style={{ ...s.badge, ...(isReady ? s.badgeOn : s.badgeOff) }}
+						>
+							{isReady ? "● live" : "○ connecting…"}
 						</span>
 					</div>
 					<p style={s.subtitle}>
@@ -118,15 +91,15 @@ export default function App() {
 						value={input}
 						onChange={(e) => setInput(e.target.value)}
 						placeholder="Add a todo…"
-						disabled={!initialized}
+						disabled={!isReady}
 					/>
 					<button
 						style={{
 							...s.addBtn,
-							...((!initialized || !input.trim()) ? s.btnDisabled : {}),
+							...(!isReady || !input.trim() ? s.btnDisabled : {}),
 						}}
 						type="submit"
-						disabled={!initialized || !input.trim()}
+						disabled={!isReady || !input.trim()}
 					>
 						Add
 					</button>
@@ -151,7 +124,7 @@ export default function App() {
 					))}
 				</div>
 
-				{!initialized ? (
+				{!isReady ? (
 					<div style={s.empty}>
 						<div style={s.spinner} />
 						<p>Connecting to actor…</p>
@@ -173,9 +146,7 @@ export default function App() {
 									}}
 									onClick={() => handleToggle(todo)}
 									title={
-										(todo.completed as number)
-											? "Mark incomplete"
-											: "Mark complete"
+										(todo.completed as number) ? "Mark incomplete" : "Mark complete"
 									}
 								>
 									{(todo.completed as number) ? "✓" : ""}
@@ -202,7 +173,7 @@ export default function App() {
 
 				<footer style={s.footer}>
 					Actor: <code>todoList/default</code> · Storage: SQLite (rivetkit/db) ·
-					Sync: TanStack DB
+					Sync: TanStack DB · Collection: @rivetkit/tanstack-db-collection
 				</footer>
 			</div>
 		</div>

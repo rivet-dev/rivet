@@ -1,0 +1,45 @@
+{
+	"name": "@rivetkit/tanstack-db-collection",
+	"version": "2.1.6",
+	"description": "TanStack DB collection adapter for Rivet Actors — real-time sync with optimistic mutations",
+	"license": "Apache-2.0",
+	"keywords": [
+		"rivetkit",
+		"tanstack",
+		"tanstack-db",
+		"collection",
+		"real-time",
+		"sync"
+	],
+	"files": [
+		"dist",
+		"package.json"
+	],
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/mod.d.mts",
+				"default": "./dist/mod.mjs"
+			},
+			"require": {
+				"types": "./dist/mod.d.ts",
+				"default": "./dist/mod.js"
+			}
+		}
+	},
+	"scripts": {
+		"build": "tsup src/mod.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"rivetkit": "workspace:^"
+	},
+	"peerDependencies": {
+		"@tanstack/db": ">=0.5.0"
+	},
+	"devDependencies": {
+		"tsup": "^8.4.0",
+		"typescript": "^5.5.2"
+	},
+	"stableVersion": "0.8.0"
+}
