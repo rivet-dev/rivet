@@ -57,6 +57,7 @@ import {
 	runWithTicks,
 } from "./run";
 import { scheduled } from "./scheduled";
+import { dockerSandboxActor } from "./sandbox";
 import {
 	sleep,
 	sleepWithLongRpc,
@@ -99,6 +100,8 @@ export const registry = setup({
 		counterWithLifecycle,
 		// From scheduled.ts
 		scheduled,
+		// From sandbox.ts
+		dockerSandboxActor,
 		// From sleep.ts
 		sleep,
 		sleepWithLongRpc,
