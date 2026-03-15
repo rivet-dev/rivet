@@ -15,6 +15,7 @@ export const Route = createFileRoute(
 		if (context.__type !== "cloud") {
 			throw new Error("Invalid context type for this route");
 		}
+
 		const ns = await context.queryClient.ensureQueryData(
 			context.dataProvider.currentProjectNamespaceQueryOptions({
 				namespace: params.namespace,
@@ -55,7 +56,9 @@ export const Route = createFileRoute(
 			deps.skipOnboarding;
 
 		const namespace = await context.queryClient.fetchQuery(
-			context.dataProvider.currentNamespaceQueryOptions(),
+			context.dataProvider.currentProjectNamespaceQueryOptions({
+				namespace: params.namespace,
+			}),
 		);
 
 		if (namespace.displayName !== "Production" || isSkipped === true) {
@@ -101,7 +104,8 @@ export const Route = createFileRoute(
 
 		if (hasManagedPoolRunner) {
 			const managedPool = await context.queryClient.fetchQuery(
-				context.dataProvider.currentNamespaceManagedPoolQueryOptions({
+				context.dataProvider.currentProjectManagedPoolQueryOptions({
+					namespace: params.namespace,
 					pool: "default",
 					safe: true,
 				}),
@@ -110,8 +114,8 @@ export const Route = createFileRoute(
 			const hasImage = !!managedPool?.config.image;
 			const isReady = managedPool?.status === "ready";
 
-			displayOnboarding = (!hasImage && !isReady) || !hasActors;
-			displayBackendOnboarding = hasImage && isReady;
+			displayOnboarding = (!hasImage || !isReady) && !hasActors;
+			displayBackendOnboarding = hasImage && isReady && !hasActors;
 		}
 
 		return {
