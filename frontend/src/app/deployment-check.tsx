@@ -9,6 +9,7 @@ import type { Rivet } from "@rivetkit/engine-api-full";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useController } from "react-hook-form";
+import { Ping } from "@/components";
 import {
 	ErrorDetails,
 	useCloudNamespaceDataProvider,
@@ -62,10 +63,10 @@ export function DeploymentCheck({
 
 	if (isSuccess) {
 		return (
-			<>
+			<span>
 				<Icon icon={faCheck} className="mr-1.5 text-primary" />
 				Deployment successful!
-			</>
+			</span>
 		);
 	}
 
@@ -155,5 +156,12 @@ function PoolStatus({
 			</span>
 		);
 	}
-	return <span>Waiting for deployment...</span>;
+	return (
+		<>
+			<div className="relative mr-4">
+				<Ping variant="pending" className="relative" />
+			</div>
+			<p>Waiting for deployment...</p>
+		</>
+	);
 }

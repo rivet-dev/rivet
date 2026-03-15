@@ -1,12 +1,11 @@
 import type { RivetSse } from "@rivet-gg/cloud";
 import { faTriangleExclamation, Icon } from "@rivet-gg/icons";
 import type { Virtualizer } from "@tanstack/react-virtual";
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	ErrorDetails,
 	useCloudNamespaceDataProvider,
 } from "@/components/actors";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { VirtualScrollArea } from "@/components/virtual-scroll-area";
 import { cn } from "./lib/utils";
 import { ScrollArea } from "./ui/scroll-area";
@@ -36,7 +35,7 @@ function LogRow({ entry, ...props }: LogRowProps) {
 		>
 			<div
 				className={cn(
-					"grid grid-cols-subgrid gap-3 whitespace-pre-wrap break-words px-4 py-1",
+					"grid grid-cols-[max-content,16ch,3fr] gap-3 whitespace-pre-wrap break-words px-4 py-1 border-b",
 					{
 						"text-red-400": entry.stream === "stderr",
 						"text-muted-foreground": entry.stream !== "stderr",
@@ -168,10 +167,7 @@ export function DeploymentLogs({
 				scrollerProps={{
 					className: "w-full",
 				}}
-				viewportProps={{
-					className:
-						"[&>div]:!grid [&>div]:grid-cols-[minmax(0,1fr)] ",
-				}}
+				viewportProps={{}}
 				row={(props: LogRowProps) => (
 					<LogRow {...props} entry={logs[props["data-index"]]} />
 				)}

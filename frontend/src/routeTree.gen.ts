@@ -248,22 +248,22 @@ const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsLogsRoute
   )
 
 export interface FileRoutesByFullPath {
+  '/': typeof ContextIndexRoute
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRouteWithChildren
   '/sso-callback': typeof SsoCallbackRoute
   '/onboarding/accept-invitation': typeof OnboardingAcceptInvitationRoute
   '/onboarding/choose-organization': typeof OnboardingChooseOrganizationRoute
-  '/': typeof ContextIndexRoute
   '/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
   '/ns/$namespace': typeof ContextEngineNsNamespaceRouteWithChildren
-  '/new': typeof ContextCloudNewIndexRoute
+  '/new/': typeof ContextCloudNewIndexRoute
   '/ns/$namespace/connect': typeof ContextEngineNsNamespaceConnectRoute
   '/orgs/$organization/': typeof ContextCloudOrgsOrganizationIndexRoute
   '/ns/$namespace/': typeof ContextEngineNsNamespaceIndexRoute
   '/orgs/$organization/projects/$project': typeof ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren
-  '/orgs/$organization/new': typeof ContextCloudOrgsOrganizationNewIndexRoute
-  '/orgs/$organization/projects': typeof ContextCloudOrgsOrganizationProjectsIndexRoute
+  '/orgs/$organization/new/': typeof ContextCloudOrgsOrganizationNewIndexRoute
+  '/orgs/$organization/projects/': typeof ContextCloudOrgsOrganizationProjectsIndexRoute
   '/orgs/$organization/projects/$project/billing': typeof ContextCloudOrgsOrganizationProjectsProjectBillingRoute
   '/orgs/$organization/projects/$project/metrics': typeof ContextCloudOrgsOrganizationProjectsProjectMetricsRoute
   '/orgs/$organization/projects/$project/settings': typeof ContextCloudOrgsOrganizationProjectsProjectSettingsRoute
@@ -276,16 +276,16 @@ export interface FileRoutesByFullPath {
   '/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
   '/orgs/$organization/projects/$project/ns/$namespace/': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
   '/orgs/$organization/projects/$project/ns/$namespace/deployments/logs': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsLogsRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/deployments': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRoute
+  '/orgs/$organization/projects/$project/ns/$namespace/deployments/': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRoute
 }
 export interface FileRoutesByTo {
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRouteWithChildren
   '/sso-callback': typeof SsoCallbackRoute
+  '/': typeof ContextIndexRoute
   '/onboarding/accept-invitation': typeof OnboardingAcceptInvitationRoute
   '/onboarding/choose-organization': typeof OnboardingChooseOrganizationRoute
-  '/': typeof ContextIndexRoute
   '/new': typeof ContextCloudNewIndexRoute
   '/ns/$namespace/connect': typeof ContextEngineNsNamespaceConnectRoute
   '/orgs/$organization': typeof ContextCloudOrgsOrganizationIndexRoute
@@ -343,22 +343,22 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/'
     | '/join'
     | '/login'
     | '/onboarding'
     | '/sso-callback'
     | '/onboarding/accept-invitation'
     | '/onboarding/choose-organization'
-    | '/'
     | '/orgs/$organization'
     | '/ns/$namespace'
-    | '/new'
+    | '/new/'
     | '/ns/$namespace/connect'
     | '/orgs/$organization/'
     | '/ns/$namespace/'
     | '/orgs/$organization/projects/$project'
-    | '/orgs/$organization/new'
-    | '/orgs/$organization/projects'
+    | '/orgs/$organization/new/'
+    | '/orgs/$organization/projects/'
     | '/orgs/$organization/projects/$project/billing'
     | '/orgs/$organization/projects/$project/metrics'
     | '/orgs/$organization/projects/$project/settings'
@@ -371,16 +371,16 @@ export interface FileRouteTypes {
     | '/orgs/$organization/projects/$project/ns/$namespace/tokens'
     | '/orgs/$organization/projects/$project/ns/$namespace/'
     | '/orgs/$organization/projects/$project/ns/$namespace/deployments/logs'
-    | '/orgs/$organization/projects/$project/ns/$namespace/deployments'
+    | '/orgs/$organization/projects/$project/ns/$namespace/deployments/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/join'
     | '/login'
     | '/onboarding'
     | '/sso-callback'
+    | '/'
     | '/onboarding/accept-invitation'
     | '/onboarding/choose-organization'
-    | '/'
     | '/new'
     | '/ns/$namespace/connect'
     | '/orgs/$organization'
@@ -476,7 +476,7 @@ declare module '@tanstack/react-router' {
     '/_context': {
       id: '/_context'
       path: ''
-      fullPath: ''
+      fullPath: '/'
       preLoaderRoute: typeof ContextRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -504,21 +504,21 @@ declare module '@tanstack/react-router' {
     '/_context/_engine': {
       id: '/_context/_engine'
       path: ''
-      fullPath: ''
+      fullPath: '/'
       preLoaderRoute: typeof ContextEngineRouteImport
       parentRoute: typeof ContextRoute
     }
     '/_context/_cloud': {
       id: '/_context/_cloud'
       path: ''
-      fullPath: ''
+      fullPath: '/'
       preLoaderRoute: typeof ContextCloudRouteImport
       parentRoute: typeof ContextRoute
     }
     '/_context/_cloud/new/': {
       id: '/_context/_cloud/new/'
       path: '/new'
-      fullPath: '/new'
+      fullPath: '/new/'
       preLoaderRoute: typeof ContextCloudNewIndexRouteImport
       parentRoute: typeof ContextCloudRoute
     }
@@ -560,14 +560,14 @@ declare module '@tanstack/react-router' {
     '/_context/_cloud/orgs/$organization/projects/': {
       id: '/_context/_cloud/orgs/$organization/projects/'
       path: '/projects'
-      fullPath: '/orgs/$organization/projects'
+      fullPath: '/orgs/$organization/projects/'
       preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsIndexRouteImport
       parentRoute: typeof ContextCloudOrgsOrganizationRoute
     }
     '/_context/_cloud/orgs/$organization/new/': {
       id: '/_context/_cloud/orgs/$organization/new/'
       path: '/new'
-      fullPath: '/orgs/$organization/new'
+      fullPath: '/orgs/$organization/new/'
       preLoaderRoute: typeof ContextCloudOrgsOrganizationNewIndexRouteImport
       parentRoute: typeof ContextCloudOrgsOrganizationRoute
     }
@@ -658,7 +658,7 @@ declare module '@tanstack/react-router' {
     '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments/': {
       id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments/'
       path: '/deployments'
-      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/deployments'
+      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/deployments/'
       preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsIndexRouteImport
       parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
     }

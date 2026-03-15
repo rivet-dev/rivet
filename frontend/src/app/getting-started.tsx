@@ -47,6 +47,7 @@ import {
 import { defineStepper } from "@/components/ui/stepper";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { successfulBackendSetupEffect } from "@/lib/effects";
+import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
 import { Button } from "../components/ui/button";
 import { DeploymentCheck } from "./deployment-check";
@@ -56,7 +57,6 @@ import {
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
 import { EnvVariables, useRivetDsn } from "./env-variables";
-import { usePublishableToken } from "@/queries/accessors";
 import { StepperForm } from "./forms/stepper-form";
 import { Content } from "./layout";
 
@@ -148,7 +148,7 @@ export function GettingStarted({
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3 }}
 			>
-				<div className="-full flex items-safe-center justify-center [&_[data-component='stepper']]:w-auto px-4 h-full overflow-auto pt-8">
+				<div className="-full flex items-safe-center justify-center [&_[data-component='stepper']]:w-full [&:has([data-wide='true'])_[data-component='stepper']]:max-w-[64rem] has-[[data-wide='true']]:w-auto [&_[data-component='stepper']]:max-w-[32rem] px-4 h-full overflow-auto pt-8">
 					<CodeGroupSyncProvider>
 						<StepperForm
 							{...stepper}
@@ -202,9 +202,9 @@ export function GettingStarted({
 										<Suspense
 											fallback={
 												<div className="space-y-6">
-													<Skeleton className="w-96 h-[180px]" />
-													<Skeleton className="w-96 h-[250px]" />
-													<Skeleton className="w-96 h-[200px]" />
+													<Skeleton className="w-full h-[180px]" />
+													<Skeleton className="w-full h-[250px]" />
+													<Skeleton className="w-full h-[200px]" />
 												</div>
 											}
 										>
@@ -279,6 +279,8 @@ function StepContent({
 	return (
 		<motion.div
 			className="mx-auto"
+			data-component="step-content"
+			data-wide={wide ? "true" : "false"}
 			animate={{ maxWidth: wide ? "56rem" : "32rem", width: "100%" }}
 			transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
 			style={{ maxWidth: wide ? "56rem" : "32rem" }}
@@ -781,7 +783,11 @@ function RivetCopyAgentInstructionsButton() {
 	);
 }
 
-function OtherCopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
+function OtherCopyAgentInstructionsButton({
+	provider,
+}: {
+	provider?: Provider;
+}) {
 	const code = useOtherAgentInstructionsCode(provider);
 
 	return (
@@ -916,36 +922,31 @@ function BackendSetupRivet() {
 			<div className="flex gap-3">
 				<StepNumber n={4} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">
-						Verify GitHub Action succeeded
+					<p className="font-medium mb-2">Deploy to Rivet Cloud</p>
+					<p className="text-sm text-muted-foreground mb-2">
+						Push your changes to trigger the{" "}
+						<strong>Rivet Deploy</strong> workflow. The status check
+						below will update automatically once your backend is
+						deployed.
 					</p>
-					<p className="text-sm text-muted-foreground">
-						Push your changes and confirm the{" "}
-						<strong>Rivet Deploy</strong> workflow completes
-						successfully in your repository's Actions tab.
-					</p>
-				</div>
-			</div>
-			<div className="flex gap-3">
-				<StepNumber n={5} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Waiting for deploy</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						<DeploymentCheck
-							validateConfig={(data) =>
-								!!data?.find(([, value]) =>
-									Object.values(value.datacenters).some(
-										(dc) =>
-											dc.serverless &&
-											deriveProviderFromMetadata(
-												dc.metadata,
-											) === "rivet",
-									),
-								)
-							}
-							validatePool={(data) => !!data?.config.image}
-						/>
-					</p>
+					<div className="border rounded-md py-8">
+						<div className="flex gap-2 justify-center items-center flex-col py-2 px-8">
+							<DeploymentCheck
+								validateConfig={(data) =>
+									!!data?.find(([, value]) =>
+										Object.values(value.datacenters).some(
+											(dc) =>
+												dc.serverless &&
+												deriveProviderFromMetadata(
+													dc.metadata,
+												) === "rivet",
+										),
+									)
+								}
+								validatePool={(data) => !!data?.config.image}
+							/>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -1105,33 +1106,39 @@ function FrontendSetup() {
 						</p>
 						<ul className="list-disc list-inside mt-2">
 							<li>
-								<p className="inline-block">
+								<span>
 									The actor file is in the correct location
 									and has the correct name.
-								</p>
+								</span>
 							</li>
 							<li>
-								<p className="inline-block">
+								<span>
 									The actor is being exported properly.
-								</p>
+								</span>
 							</li>
 							<li>
-								<p className="inline-block">
+								<span>
 									Check the terminal output for any errors
 									during the build or runtime.
-								</p>
+								</span>
 							</li>
 							<li>
-								<p className="inline-block">
+								<span>
 									Make sure your coding agent has completed
 									the setup steps correctly.
-								</p>
+								</span>
 							</li>
 							<li>
-								<p className="inline-block mb-1">
+								<span className="inline-block mb-1">
 									You're using correct environment variables:
-								</p>
-								<EnvVariables endpoint={endpoint} />
+								</span>
+								<Suspense
+									fallback={
+										<Skeleton className="w-full h-20" />
+									}
+								>
+									<EnvVariables endpoint={endpoint} />
+								</Suspense>
 							</li>
 						</ul>
 					</AccordionContent>

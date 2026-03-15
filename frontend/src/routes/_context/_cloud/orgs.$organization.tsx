@@ -6,9 +6,11 @@ export const Route = createFileRoute("/_context/_cloud/orgs/$organization")({
 	beforeLoad: async ({ context, params }) => {
 		return await match(context)
 			.with({ __type: "cloud" }, async (context) => {
-				context.clerk.setActive({
-					organization: params.organization,
-				});
+				if (context.clerk.organization.id !== params.organization) {
+					await context.clerk.setActive({
+						organization: params.organization,
+					});
+				}
 
 				return {
 					dataProvider: context.getOrCreateOrganizationContext(

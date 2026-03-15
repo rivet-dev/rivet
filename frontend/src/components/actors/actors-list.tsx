@@ -8,7 +8,6 @@ import {
 	faReact,
 	faSidebar,
 	faSidebarFlip,
-	faTriangleExclamation,
 	faTs,
 	Icon,
 } from "@rivet-gg/icons";
@@ -16,7 +15,7 @@ import {
 	useInfiniteQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
-import { Link, Navigate, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Suspense, useCallback } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { RECORDS_PER_PAGE } from "@/app/data-providers/default-data-provider";
@@ -48,7 +47,6 @@ export function ActorsList() {
 			<TopBar />
 			<div className="grid grid-cols-[2rem_4fr_1fr] @lg/main:grid-cols-[2rem_4fr_1fr] items-center justify-center gap-x-4 w-full @container/table">
 				<Suspense fallback={<ListSkeleton />}>
-					<ActorIdPrefiller />
 					<List />
 					<Pagination />
 				</Suspense>
@@ -145,34 +143,6 @@ function List() {
 	);
 }
 
-function ActorIdPrefiller() {
-	const { n, actorId } = useSearch({
-		from: "/_context",
-		select: (state) => ({
-			n: state.n,
-			actorId: state.actorId,
-		}),
-	});
-	const filters = useFiltersValue({ onlyStatic: true });
-	const { data } = useSuspenseInfiniteQuery(
-		useDataProvider().actorsListQueryOptions({
-			n,
-			filters,
-		}),
-	);
-
-	if (!actorId && data?.[0]) {
-		return (
-			<Navigate
-				to="."
-				search={(search) => ({ ...search, actorId: data?.[0] })}
-				replace
-			/>
-		);
-	}
-
-	return null;
-}
 
 function Pagination() {
 	const n = useSearch({
