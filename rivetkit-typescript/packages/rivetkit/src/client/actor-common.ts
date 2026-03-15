@@ -66,7 +66,7 @@ type ActorQueueSend<TQueues extends QueueSchemaConfig> = {
 	): Promise<void>;
 };
 
-type ActorEventSubscribe<TEvents extends EventSchemaConfig> = {
+export type ActorEventSubscribe<TEvents extends EventSchemaConfig> = {
 	<K extends keyof TEvents & string>(
 		eventName: K,
 		callback: (...args: InferEventArgs<InferSchemaMap<TEvents>[K]>) => void,
