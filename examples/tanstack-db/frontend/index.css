@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-rivet: #ff4f00;
+  --color-surface: #1c1c1e;
+  --color-border: #2c2c2e;
+  --color-input: #3a3a3c;
+  --color-muted: #8e8e93;
+  --color-faint: #6e6e73;
+  --color-success: #30d158;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

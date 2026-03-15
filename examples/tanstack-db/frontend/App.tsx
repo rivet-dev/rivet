@@ -67,26 +67,34 @@ export default function App() {
 	}
 
 	return (
-		<div style={s.page}>
-			<div style={s.container}>
-				<header style={s.header}>
-					<div style={s.headerTop}>
-						<h1 style={s.title}>RivetKit × TanStack DB</h1>
+		<div className="min-h-screen bg-black text-white font-sans">
+			<div className="max-w-[560px] mx-auto px-4 py-12">
+				{/* Header */}
+				<header className="mb-7">
+					<div className="flex items-center gap-3 mb-2">
+						<h1 className="text-2xl font-bold m-0">RivetKit × TanStack DB</h1>
 						<span
-							style={{ ...s.badge, ...(isReady ? s.badgeOn : s.badgeOff) }}
+							className={[
+								"text-xs px-2.5 py-0.5 rounded-full font-medium",
+								isReady
+									? "bg-success/15 text-success"
+									: "bg-rivet/15 text-rivet",
+							].join(" ")}
 						>
 							{isReady ? "● live" : "○ connecting…"}
 						</span>
 					</div>
-					<p style={s.subtitle}>
-						Real-time collaborative todos. SQLite-backed via Rivet Actor, reactive
-						queries via TanStack DB. Open multiple tabs to see live sync.
+					<p className="text-muted text-sm leading-relaxed m-0">
+						Real-time collaborative todos. SQLite-backed via Rivet Actor,
+						reactive queries via TanStack DB. Open multiple tabs to see live
+						sync.
 					</p>
 				</header>
 
-				<form onSubmit={handleAdd} style={s.form}>
+				{/* Add form */}
+				<form onSubmit={handleAdd} className="flex gap-2 mb-4">
 					<input
-						style={s.input}
+						className="flex-1 px-4 py-3 bg-border border border-input rounded-lg text-white text-[15px] outline-none placeholder:text-faint focus:border-rivet"
 						type="text"
 						value={input}
 						onChange={(e) => setInput(e.target.value)}
@@ -94,10 +102,10 @@ export default function App() {
 						disabled={!isReady}
 					/>
 					<button
-						style={{
-							...s.addBtn,
-							...(!isReady || !input.trim() ? s.btnDisabled : {}),
-						}}
+						className={[
+							"px-5 py-3 bg-rivet text-white border-none rounded-lg text-sm font-semibold cursor-pointer",
+							!isReady || !input.trim() ? "opacity-50 cursor-not-allowed" : "",
+						].join(" ")}
 						type="submit"
 						disabled={!isReady || !input.trim()}
 					>
@@ -105,14 +113,17 @@ export default function App() {
 					</button>
 				</form>
 
-				<div style={s.filters}>
+				{/* Filter tabs */}
+				<div className="flex gap-1.5 mb-5">
 					{(["all", "active", "completed"] as FilterMode[]).map((mode) => (
 						<button
 							key={mode}
-							style={{
-								...s.filterBtn,
-								...(filter === mode ? s.filterBtnActive : {}),
-							}}
+							className={[
+								"px-3.5 py-1 border rounded-full text-[13px] cursor-pointer font-medium",
+								filter === mode
+									? "bg-rivet text-white border-rivet"
+									: "bg-transparent text-muted border-border",
+							].join(" ")}
 							onClick={() => setFilter(mode)}
 						>
 							{mode === "all"
@@ -124,43 +135,59 @@ export default function App() {
 					))}
 				</div>
 
+				{/* Content */}
 				{!isReady ? (
-					<div style={s.empty}>
-						<div style={s.spinner} />
-						<p>Connecting to actor…</p>
+					<div className="flex flex-col items-center gap-3 py-10 text-muted text-[15px]">
+						<div
+							className="w-6 h-6 border-2 border-border border-t-rivet rounded-full"
+							style={{ animation: "spin 0.8s linear infinite" }}
+						/>
+						<p className="m-0">Connecting to actor…</p>
 					</div>
 				) : todos?.length === 0 ? (
-					<p style={s.emptyText}>
+					<p className="text-center text-faint py-10 text-[15px] m-0">
 						{filter === "all"
 							? "No todos yet. Add one above!"
 							: `No ${filter} todos.`}
 					</p>
 				) : (
-					<ul style={s.list}>
-						{todos?.map((todo) => (
-							<li key={todo.id} style={s.item}>
+					<ul className="list-none p-0 m-0 bg-surface rounded-lg border border-border">
+						{todos?.map((todo, i) => (
+							<li
+								key={todo.id}
+								className={[
+									"flex items-center gap-3 px-4 py-3",
+									i < (todos?.length ?? 0) - 1 ? "border-b border-border" : "",
+								].join(" ")}
+							>
 								<button
-									style={{
-										...s.checkbox,
-										...((todo.completed as number) ? s.checkboxDone : {}),
-									}}
+									className={[
+										"w-[22px] h-[22px] border-2 rounded-[6px] text-[13px] font-bold text-white flex items-center justify-center shrink-0 cursor-pointer",
+										(todo.completed as number)
+											? "bg-rivet border-rivet"
+											: "bg-transparent border-input",
+									].join(" ")}
 									onClick={() => handleToggle(todo)}
 									title={
-										(todo.completed as number) ? "Mark incomplete" : "Mark complete"
+										(todo.completed as number)
+											? "Mark incomplete"
+											: "Mark complete"
 									}
 								>
 									{(todo.completed as number) ? "✓" : ""}
 								</button>
 								<span
-									style={{
-										...s.todoText,
-										...((todo.completed as number) ? s.todoTextDone : {}),
-									}}
+									className={[
+										"flex-1 text-[15px]",
+										(todo.completed as number)
+											? "line-through text-faint"
+											: "text-white",
+									].join(" ")}
 								>
 									{todo.title}
 								</span>
 								<button
-									style={s.deleteBtn}
+									className="bg-transparent border-none text-faint cursor-pointer text-sm px-1 py-0.5 rounded hover:text-white"
 									onClick={() => handleDelete(todo.id)}
 									title="Delete"
 								>
@@ -171,7 +198,8 @@ export default function App() {
 					</ul>
 				)}
 
-				<footer style={s.footer}>
+				{/* Footer */}
+				<footer className="mt-6 text-xs text-faint border-t border-border pt-4">
 					Actor: <code>todoList/default</code> · Storage: SQLite (rivetkit/db) ·
 					Sync: TanStack DB · Collection: @rivetkit/tanstack-db-collection
 				</footer>
@@ -179,178 +207,3 @@ export default function App() {
 		</div>
 	);
 }
-
-const s: Record<string, React.CSSProperties> = {
-	page: {
-		minHeight: "100vh",
-		background: "#000",
-		color: "#fff",
-		fontFamily:
-			"-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif",
-	},
-	container: {
-		maxWidth: 560,
-		margin: "0 auto",
-		padding: "48px 16px",
-	},
-	header: {
-		marginBottom: 28,
-	},
-	headerTop: {
-		display: "flex",
-		alignItems: "center",
-		gap: 12,
-		marginBottom: 8,
-	},
-	title: {
-		margin: 0,
-		fontSize: 24,
-		fontWeight: 700,
-	},
-	badge: {
-		fontSize: 12,
-		padding: "3px 10px",
-		borderRadius: 99,
-		fontWeight: 500,
-	},
-	badgeOn: { background: "rgba(48,209,88,0.15)", color: "#30d158" },
-	badgeOff: { background: "rgba(255,79,0,0.15)", color: "#ff4f00" },
-	subtitle: {
-		margin: 0,
-		color: "#8e8e93",
-		fontSize: 14,
-		lineHeight: 1.6,
-	},
-	form: {
-		display: "flex",
-		gap: 8,
-		marginBottom: 16,
-	},
-	input: {
-		flex: 1,
-		padding: "12px 16px",
-		background: "#2c2c2e",
-		border: "1px solid #3a3a3c",
-		borderRadius: 8,
-		color: "#fff",
-		fontSize: 15,
-		outline: "none",
-	},
-	addBtn: {
-		padding: "12px 20px",
-		background: "#ff4f00",
-		color: "#fff",
-		border: "none",
-		borderRadius: 8,
-		fontSize: 14,
-		fontWeight: 600,
-		cursor: "pointer",
-	},
-	btnDisabled: {
-		opacity: 0.5,
-		cursor: "not-allowed",
-	},
-	filters: {
-		display: "flex",
-		gap: 6,
-		marginBottom: 20,
-	},
-	filterBtn: {
-		padding: "5px 14px",
-		border: "1px solid #2c2c2e",
-		borderRadius: 99,
-		background: "transparent",
-		fontSize: 13,
-		cursor: "pointer",
-		color: "#8e8e93",
-		fontWeight: 500,
-	},
-	filterBtnActive: {
-		background: "#ff4f00",
-		color: "#fff",
-		borderColor: "#ff4f00",
-	},
-	list: {
-		listStyle: "none",
-		padding: 0,
-		margin: 0,
-		background: "#1c1c1e",
-		borderRadius: 8,
-		border: "1px solid #2c2c2e",
-	},
-	item: {
-		display: "flex",
-		alignItems: "center",
-		gap: 12,
-		padding: "12px 16px",
-		borderBottom: "1px solid #2c2c2e",
-	},
-	checkbox: {
-		width: 22,
-		height: 22,
-		border: "2px solid #3a3a3c",
-		borderRadius: 6,
-		background: "transparent",
-		cursor: "pointer",
-		fontSize: 13,
-		fontWeight: 700,
-		color: "#fff",
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		flexShrink: 0,
-	},
-	checkboxDone: {
-		background: "#ff4f00",
-		borderColor: "#ff4f00",
-	},
-	todoText: {
-		flex: 1,
-		fontSize: 15,
-		color: "#fff",
-	},
-	todoTextDone: {
-		textDecoration: "line-through",
-		color: "#6e6e73",
-	},
-	deleteBtn: {
-		background: "transparent",
-		border: "none",
-		color: "#6e6e73",
-		cursor: "pointer",
-		fontSize: 14,
-		padding: "2px 4px",
-		borderRadius: 4,
-	},
-	empty: {
-		display: "flex",
-		flexDirection: "column",
-		alignItems: "center",
-		gap: 12,
-		padding: "40px 0",
-		color: "#8e8e93",
-		fontSize: 15,
-	},
-	spinner: {
-		width: 24,
-		height: 24,
-		border: "2px solid #2c2c2e",
-		borderTop: "2px solid #ff4f00",
-		borderRadius: "50%",
-		animation: "spin 0.8s linear infinite",
-	},
-	emptyText: {
-		textAlign: "center",
-		color: "#6e6e73",
-		padding: "40px 0",
-		fontSize: 15,
-		margin: 0,
-	},
-	footer: {
-		marginTop: 24,
-		fontSize: 12,
-		color: "#6e6e73",
-		borderTop: "1px solid #2c2c2e",
-		paddingTop: 16,
-	},
-};
