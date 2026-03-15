@@ -56,6 +56,7 @@ import {
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
 import { EnvVariables, useRivetDsn } from "./env-variables";
+import { usePublishableToken } from "@/queries/accessors";
 import { StepperForm } from "./forms/stepper-form";
 import { Content } from "./layout";
 
@@ -590,23 +591,149 @@ function ExploreRivet() {
 	);
 }
 
-const rivetAgentInstructionsCode = `Load the Rivet skill and then:
-1. Create a Dockerfile for the RivetKit deployment
-2. Add the secret RIVET_CLOUD_TOKEN to your GitHub repository
-3. Create .github/workflows/rivet-deploy.yml using rivet-dev/deploy-action@v1
-4. Push and verify the GitHub Action succeeded
-5. Once deployed, confirm actors appear in the Rivet dashboard`;
+function buildRivetAgentInstructionsCode({
+	cloudToken,
+	publishableToken,
+	namespace,
+}: {
+	cloudToken: string;
+	publishableToken: string;
+	namespace: string;
+}) {
+	return `## Step 1: Load Rivet Skill
 
-function useAgentInstructionsCode(provider?: Provider) {
+Load the Rivet skill. If the skill is not installed, tell the user to run this and restart the agent:
+
+\`\`\`
+npx skills add rivet-dev/skills -s rivetkit
+\`\`\`
+
+## Step 2: Create Dockerfile
+
+If the project does not already have a \`Dockerfile\`, create one. Use this as a starting point and adjust the package manager (npm/pnpm/yarn), file paths, and entrypoint to match the project:
+
+\`\`\`dockerfile
+FROM node:24-alpine
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build --if-present
+
+CMD ["node", "dist/index.js"]
+\`\`\`
+
+If the project does not already have a \`.dockerignore\`, create one:
+
+\`\`\`
+node_modules/
+dist/
+.env
+.git/
+\`\`\`
+
+If Docker is installed, build and run the image to verify it works before proceeding:
+
+\`\`\`bash
+docker build -t rivet-test . && docker run --rm -p 3000:3000 rivet-test
+\`\`\`
+
+Verify the container starts and is connectable (e.g. \`curl http://localhost:3000/health\`). If Docker is not installed, skip this and proceed.
+
+## Step 3: Add GitHub Secret
+
+Add the secret RIVET_CLOUD_TOKEN to your GitHub repository:
+
+\`\`\`
+gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"
+\`\`\`
+
+## Step 4: Create GitHub Action
+
+Create .github/workflows/rivet-deploy.yml using rivet-dev/deploy-action@v1:
+
+\`\`\`
+name: Rivet Deploy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  push:
+    branches: [main]
+
+concurrency:
+  group: rivet-deploy-\${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rivet-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rivet-dev/deploy-action@v1
+        with:
+          rivet-token: \${{ secrets.RIVET_CLOUD_TOKEN }}
+\`\`\`
+
+## Step 5: Push and Verify
+
+Push the changes and monitor the GitHub Action until it completes:
+
+1. Push to the repository.
+2. Use \`gh run list\` and \`gh run watch\` to poll the action status. Do not move on until the run finishes.
+3. If the action succeeds, proceed to Step 6.
+4. If the action fails, inspect the logs with \`gh run view --log-failed\`, fix the issue, push again, and repeat from step 2.
+
+## Step 6: Verify Deployment
+
+Once deployed, verify the deployment works:
+
+1. Create an actor:
+   \`\`\`bash
+   curl -X POST "https://api.rivet.dev/actors?namespace=${namespace}" \\
+     -H "Authorization: Bearer ${cloudToken}" \\
+     -H "Content-Type: application/json" \\
+     -d '{"name": "<ACTOR_NAME>", "runner_name_selector": "default", "crash_policy": "restart"}'
+   \`\`\`
+   Replace \`<ACTOR_NAME>\` with a valid actor name from the registry. Note the \`actor_id\` from the response.
+
+2. Wait for the actor to become connectable (\`connectable_ts\` is non-null in the create response), then hit its health endpoint through the gateway using the public token in the \`x-rivet-token\` header:
+   \`\`\`bash
+   curl "https://api.rivet.dev/gateway/<ACTOR_ID>/health" \\
+     -H "x-rivet-token: ${publishableToken}"
+   \`\`\`
+   This should return \`ok\` with a 200 status.
+
+If actor creation fails due to validation (e.g. the actor requires specific input or a key), let the user know the deployment succeeded but they'll need to test it manually with the correct actor parameters. This is uncommon for fresh projects.`;
+}
+
+function useRivetAgentInstructionsCode() {
+	const dataProvider = useCloudNamespaceDataProvider();
+	const { data: cloudToken } = useSuspenseQuery(
+		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
+	);
+	const publishableRawToken = usePublishableToken();
+	const namespace = dataProvider.engineNamespace;
+
+	return buildRivetAgentInstructionsCode({
+		cloudToken,
+		publishableToken: publishableRawToken,
+		namespace,
+	});
+}
+
+function useOtherAgentInstructionsCode(provider?: Provider) {
 	const providerDetails = deployOptions.find((p) => p.name === provider);
 	const endpoint = useEndpoint();
 	const runnerName = useWatch({ name: "runnerName" }) as string;
 	const publishableToken = useRivetDsn({ kind: "publishable", endpoint });
 	const secretToken = useRivetDsn({ kind: "secret", endpoint });
-
-	if (provider === "rivet") {
-		return rivetAgentInstructionsCode;
-	}
 
 	const providerStr =
 		providerDetails?.displayName ?? provider ?? "your chosen provider";
@@ -629,7 +756,33 @@ function useAgentInstructionsCode(provider?: Provider) {
 }
 
 function CopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
-	const code = useAgentInstructionsCode(provider);
+	if (provider === "rivet") {
+		return <RivetCopyAgentInstructionsButton />;
+	}
+	return <OtherCopyAgentInstructionsButton provider={provider} />;
+}
+
+function RivetCopyAgentInstructionsButton() {
+	const code = useRivetAgentInstructionsCode();
+
+	return (
+		<Button
+			type="button"
+			variant="outline"
+			size="sm"
+			startIcon={<Icon icon={faCopy} />}
+			onClick={() => {
+				navigator.clipboard.writeText(code);
+				toast.success("Copied to clipboard");
+			}}
+		>
+			Using a Coding Agent? Copy Agent prompt
+		</Button>
+	);
+}
+
+function OtherCopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
+	const code = useOtherAgentInstructionsCode(provider);
 
 	return (
 		<Button
