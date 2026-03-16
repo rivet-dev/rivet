@@ -781,6 +781,12 @@ Push the changes and monitor the GitHub Action until it completes:
 
 ## Step 6: Verify Deployment
 
+**Token types used in this step:**
+- \`cloud_api_*\` (the \`RIVET_CLOUD_TOKEN\` secret) — a management token scoped to the Cloud API (cloud-api.rivet.dev). Use this for admin operations like checking deployment status and fetching logs.
+- \`pk_*\` (the publishable token below) — a public key scoped to the Rivet Engine API (api.rivet.dev). Use this for creating actors and calling gateway endpoints.
+
+These are different tokens with different scopes. Do not mix them up.
+
 Once deployed, verify the deployment works:
 
 1. Poll the deployment status every 5 seconds until status is "ready". Stop and investigate if status is "error".
