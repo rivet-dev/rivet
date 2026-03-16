@@ -8,19 +8,20 @@
  * sandbox-agent SDK method as an actor action.
  *
  * **Creation:** On the first action call, `ensureAgent` lazily provisions
- * the sandbox via `provider.create()` and connects to it via
- * `provider.connectAgent()`. The sandbox ID and provider name are persisted
- * in state so subsequent wake cycles reconnect to the same sandbox.
+ * the sandbox via `SandboxAgent.start()`, which calls `provider.create()`
+ * and connects to the running sandbox-agent server. The sandbox ID and
+ * provider name are persisted in state so subsequent wake cycles reconnect
+ * to the same sandbox.
  *
  * **Sleep/Wake:** When the actor sleeps, `onSleep` tears down the live
  * agent WebSocket connection and clears all in-memory subscriptions and
  * timers. Vars are ephemeral and recreated fresh on each wake cycle via
  * `createVars`. On the next action call after wake, `ensureAgent` reconnects
- * to the existing sandbox (identified by `state.sandboxId`) and re-subscribes
- * to all sessions listed in `state.subscribedSessionIds`. If the provider
- * supports `wake()`, it is called before connecting to ensure the sandbox
- * process is running (e.g. Daytona sandboxes may sleep and stop the
- * sandbox-agent process).
+ * to the existing sandbox (identified by `state.sandboxId`) via
+ * `SandboxAgent.start()` with the persisted sandbox ID and re-subscribes
+ * to all sessions listed in `state.subscribedSessionIds`. The upstream
+ * provider's `ensureServer()` hook (if implemented) is called automatically
+ * by `SandboxAgent.start()` to ensure the sandbox-agent process is running.
  *
  * **Destroy:** `onDestroy` tears down the connection, then calls
  * `provider.destroy()` to delete the sandbox environment. The custom
@@ -54,7 +55,7 @@ import type { DatabaseProvider } from "@/actor/database";
 import { actor } from "@/actor/mod";
 import type { RawAccess } from "@/db/config";
 import { db } from "@/db/mod";
-import type { SandboxAgent } from "sandbox-agent";
+import { SandboxAgent, type SandboxProvider } from "sandbox-agent";
 import {
 	type SandboxActorConfig,
 	type SandboxActorConfigInput,
@@ -65,7 +66,6 @@ import { SqliteSessionPersistDriver } from "../session-persist-driver";
 import {
 	type SandboxActionContext,
 	type SandboxActorActions,
-	type SandboxActorProvider,
 	type SandboxActorState,
 	type SandboxActorVars,
 	SANDBOX_AGENT_ACTION_METHODS,
@@ -119,6 +119,33 @@ async function teardownAgentRuntime(
 	vars.provider = null;
 }
 
+async function resolveProvider<TConnParams>(
+	c: SandboxActionContext<TConnParams>,
+	config: SandboxActorConfig<TConnParams>,
+): Promise<SandboxProvider> {
+	if (c.vars.provider) {
+		return c.vars.provider;
+	}
+
+	const provider =
+		config.provider !== undefined
+			? config.provider
+			: await config.createProvider(c);
+
+	if (c.state.providerName && c.state.providerName !== provider.name) {
+		throw new Error(
+			`sandbox actor provider mismatch: expected ${c.state.providerName}, received ${provider.name}`,
+		);
+	}
+
+	if (!c.state.providerName) {
+		c.state.providerName = provider.name;
+	}
+
+	c.vars.provider = provider;
+	return provider;
+}
+
 /**
  * Lazily provisions and connects to the sandbox. On the first call, this
  * creates the sandbox via the provider. On subsequent calls (e.g. after
@@ -127,11 +154,12 @@ async function teardownAgentRuntime(
  *
  * Steps:
  * 1. Resolve the provider (static or via createProvider callback)
- * 2. Create the sandbox if no sandboxId exists yet
- * 3. If the provider supports `wake()`, call it to ensure the sandbox
- *    process is running
- * 4. Connect the sandbox-agent client with SQLite persistence
- * 5. Re-subscribe to all persisted session IDs
+ * 2. Call `SandboxAgent.start()` which handles:
+ *    - Creating the sandbox if no sandboxId is provided
+ *    - Calling `ensureServer()` if the provider implements it
+ *    - Connecting to the sandbox-agent server
+ * 3. Persist the sandbox ID from the started client
+ * 4. Re-subscribe to all persisted session IDs
  */
 async function ensureAgent<TConnParams>(
 	c: SandboxActionContext<TConnParams>,
@@ -142,49 +170,18 @@ async function ensureAgent<TConnParams>(
 		return c.vars.sandboxAgentClient;
 	}
 
-	// Resolve the provider, either from the static config or by calling
-	// the factory function. Cache it in vars for the rest of this wake cycle.
-	let provider: SandboxActorProvider;
-	if (c.vars.provider) {
-		provider = c.vars.provider;
-	} else {
-		provider =
-			config.provider !== undefined
-				? config.provider
-				: await config.createProvider(c);
+	const provider = await resolveProvider(c, config);
 
-		if (c.state.providerName && c.state.providerName !== provider.name) {
-			throw new Error(
-				`sandbox actor provider mismatch: expected ${c.state.providerName}, received ${provider.name}`,
-			);
-		}
-
-		if (!c.state.providerName) {
-			c.state.providerName = provider.name;
-		}
-
-		c.vars.provider = provider;
-	}
-
-	// Create the sandbox if this is the first time.
-	if (!c.state.sandboxId) {
-		c.state.sandboxId = await provider.create({
-			actorId: c.actorId,
-			actorKey: [...c.key],
-		});
-	}
-
-	// Some providers (e.g. Daytona) need to restart the sandbox-agent
-	// process after the sandbox sleeps or restarts.
-	if (provider.wake) {
-		await provider.wake(c.state.sandboxId);
-	}
-
-	// Connect to the sandbox-agent with SQLite-backed persistence.
-	c.vars.sandboxAgentClient = await provider.connectAgent(c.state.sandboxId, {
+	c.vars.sandboxAgentClient = await SandboxAgent.start({
+		sandbox: provider,
+		sandboxId: c.state.sandboxId ?? undefined,
 		persist: new SqliteSessionPersistDriver(c.db, persistRawEvents),
-		waitForHealth: true,
 	});
+
+	// Persist the sandbox ID so future wake cycles reconnect to the same sandbox.
+	if (!c.state.sandboxId && c.vars.sandboxAgentClient.sandboxId) {
+		c.state.sandboxId = c.vars.sandboxAgentClient.sandboxId;
+	}
 
 	// Re-subscribe to all sessions that were active before sleep.
 	for (const sessionId of c.state.subscribedSessionIds) {
@@ -403,17 +400,10 @@ export function sandboxActor<TConnParams = undefined>(
 
 			if (sandboxContext.state.sandboxId) {
 				try {
-					// Resolve the provider to call destroy on the sandbox.
-					let provider: SandboxActorProvider | null =
-						sandboxContext.vars.provider;
-					if (!provider) {
-						provider =
-							parsedConfig.provider !== undefined
-								? parsedConfig.provider
-								: await parsedConfig.createProvider(
-										sandboxContext,
-									);
-					}
+					const provider = await resolveProvider(
+						sandboxContext,
+						parsedConfig,
+					);
 					await provider.destroy(sandboxContext.state.sandboxId);
 				} finally {
 					sandboxContext.state.sandboxId = null;
@@ -438,14 +428,7 @@ export function sandboxActor<TConnParams = undefined>(
 				await teardownAgentRuntime(c.vars);
 
 				if (c.state.sandboxId) {
-					let provider: SandboxActorProvider | null =
-						c.vars.provider;
-					if (!provider) {
-						provider =
-							parsedConfig.provider !== undefined
-								? parsedConfig.provider
-								: await parsedConfig.createProvider(c);
-					}
+					const provider = await resolveProvider(c, parsedConfig);
 					await provider.destroy(c.state.sandboxId);
 					c.state.sandboxId = null;
 				}
@@ -455,6 +438,37 @@ export function sandboxActor<TConnParams = undefined>(
 				if (parsedConfig.destroyActor) {
 					c.destroy();
 				}
+			},
+			getSandboxUrl: async (c: SandboxActionContext<TConnParams>) => {
+				if (c.state.sandboxDestroyed) {
+					throw new Error("sandbox has been destroyed");
+				}
+
+				const provider = await resolveProvider(c, parsedConfig);
+
+				// Ensure the sandbox exists so we have a sandbox ID.
+				if (!c.state.sandboxId) {
+					const agent = await ensureAgent(
+						c,
+						parsedConfig,
+						parsedConfig.persistRawEvents ?? false,
+					);
+					if (!c.state.sandboxId && agent.sandboxId) {
+						c.state.sandboxId = agent.sandboxId;
+					}
+				}
+
+				if (!c.state.sandboxId) {
+					throw new Error("sandbox ID is not available");
+				}
+
+				if (!provider.getUrl) {
+					throw new Error(
+						`provider "${provider.name}" does not support getUrl; direct sandbox URL access is not available for this provider`,
+					);
+				}
+
+				return { url: await provider.getUrl(c.state.sandboxId) };
 			},
 			...buildProxyActions(parsedConfig),
 		},

@@ -7,9 +7,9 @@ import type { AnyDatabaseProvider } from "@/actor/database";
 import type {
 	PermissionRequestListener,
 	SessionEventListener,
+	SandboxProvider,
 } from "sandbox-agent";
 import type {
-	SandboxActorProvider,
 	SandboxActorVars,
 	SandboxActorState,
 } from "./types";
@@ -18,12 +18,13 @@ const zFunction = <
 	T extends (...args: any[]) => any = (...args: unknown[]) => unknown,
 >() => z.custom<T>((val) => typeof val === "function");
 
-const SandboxActorProviderSchema = z.object({
+const SandboxProviderSchema = z.object({
 	name: z.string(),
-	create: zFunction<SandboxActorProvider["create"]>(),
-	destroy: zFunction<SandboxActorProvider["destroy"]>(),
-	connectAgent: zFunction<SandboxActorProvider["connectAgent"]>(),
-	wake: zFunction<NonNullable<SandboxActorProvider["wake"]>>().optional(),
+	create: zFunction<SandboxProvider["create"]>(),
+	destroy: zFunction<SandboxProvider["destroy"]>(),
+	getUrl: zFunction<NonNullable<SandboxProvider["getUrl"]>>().optional(),
+	getFetch: zFunction<NonNullable<SandboxProvider["getFetch"]>>().optional(),
+	ensureServer: zFunction<NonNullable<SandboxProvider["ensureServer"]>>().optional(),
 });
 
 export const SandboxActorOptionsSchema = z
@@ -52,7 +53,7 @@ export type SandboxActorOptionsRuntime = z.infer<
 // infer from the schema, omit function keys, then intersect typed callbacks.
 export const SandboxActorConfigSchema = z
 	.object({
-		provider: SandboxActorProviderSchema.optional(),
+		provider: SandboxProviderSchema.optional(),
 		createProvider: zFunction().optional(),
 		persistRawEvents: z.boolean().optional(),
 		destroyActor: z.boolean().default(false),
@@ -107,14 +108,14 @@ interface SandboxActorConfigCallbacks<TConnParams> {
 
 type SandboxActorProviderConfig<TConnParams> =
 	| {
-			provider: SandboxActorProvider;
+			provider: SandboxProvider;
 			createProvider?: never;
 	  }
 	| {
 			provider?: never;
 			createProvider: (
 				c: SandboxActorContext<TConnParams>,
-			) => SandboxActorProvider | Promise<SandboxActorProvider>;
+			) => SandboxProvider | Promise<SandboxProvider>;
 	  };
 
 // Parsed config (after Zod defaults/transforms applied).

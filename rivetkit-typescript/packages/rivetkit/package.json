@@ -202,6 +202,86 @@
 				"types": "./dist/tsup/sandbox/index.d.cts",
 				"default": "./dist/tsup/sandbox/index.cjs"
 			}
+		},
+		"./sandbox/client": {
+			"import": {
+				"types": "./dist/tsup/sandbox/client.d.ts",
+				"default": "./dist/tsup/sandbox/client.js"
+			},
+			"require": {
+				"types": "./dist/tsup/sandbox/client.d.cts",
+				"default": "./dist/tsup/sandbox/client.cjs"
+			}
+		},
+		"./sandbox/docker": {
+			"import": {
+				"types": "./dist/tsup/sandbox/providers/docker.d.ts",
+				"default": "./dist/tsup/sandbox/providers/docker.js"
+			},
+			"require": {
+				"types": "./dist/tsup/sandbox/providers/docker.d.cts",
+				"default": "./dist/tsup/sandbox/providers/docker.cjs"
+			}
+		},
+		"./sandbox/e2b": {
+			"import": {
+				"types": "./dist/tsup/sandbox/providers/e2b.d.ts",
+				"default": "./dist/tsup/sandbox/providers/e2b.js"
+			},
+			"require": {
+				"types": "./dist/tsup/sandbox/providers/e2b.d.cts",
+				"default": "./dist/tsup/sandbox/providers/e2b.cjs"
+			}
+		},
+		"./sandbox/daytona": {
+			"import": {
+				"types": "./dist/tsup/sandbox/providers/daytona.d.ts",
+				"default": "./dist/tsup/sandbox/providers/daytona.js"
+			},
+			"require": {
+				"types": "./dist/tsup/sandbox/providers/daytona.d.cts",
+				"default": "./dist/tsup/sandbox/providers/daytona.cjs"
+			}
+		},
+		"./sandbox/local": {
+			"import": {
+				"types": "./dist/tsup/sandbox/providers/local.d.ts",
+				"default": "./dist/tsup/sandbox/providers/local.js"
+			},
+			"require": {
+				"types": "./dist/tsup/sandbox/providers/local.d.cts",
+				"default": "./dist/tsup/sandbox/providers/local.cjs"
+			}
+		},
+		"./sandbox/vercel": {
+			"import": {
+				"types": "./dist/tsup/sandbox/providers/vercel.d.ts",
+				"default": "./dist/tsup/sandbox/providers/vercel.js"
+			},
+			"require": {
+				"types": "./dist/tsup/sandbox/providers/vercel.d.cts",
+				"default": "./dist/tsup/sandbox/providers/vercel.cjs"
+			}
+		},
+		"./sandbox/modal": {
+			"import": {
+				"types": "./dist/tsup/sandbox/providers/modal.d.ts",
+				"default": "./dist/tsup/sandbox/providers/modal.js"
+			},
+			"require": {
+				"types": "./dist/tsup/sandbox/providers/modal.d.cts",
+				"default": "./dist/tsup/sandbox/providers/modal.cjs"
+			}
+		},
+		"./sandbox/computesdk": {
+			"import": {
+				"types": "./dist/tsup/sandbox/providers/computesdk.d.ts",
+				"default": "./dist/tsup/sandbox/providers/computesdk.js"
+			},
+			"require": {
+				"types": "./dist/tsup/sandbox/providers/computesdk.d.cts",
+				"default": "./dist/tsup/sandbox/providers/computesdk.cjs"
+			}
 		}
 	},
 	"engines": {
@@ -212,7 +292,7 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/serve-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts src/db/mod.ts src/db/drizzle/mod.ts src/sandbox/index.ts",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/serve-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts src/db/mod.ts src/db/drizzle/mod.ts src/sandbox/index.ts src/sandbox/client.ts src/sandbox/providers/docker.ts src/sandbox/providers/e2b.ts src/sandbox/providers/daytona.ts src/sandbox/providers/local.ts src/sandbox/providers/vercel.ts src/sandbox/providers/modal.ts src/sandbox/providers/computesdk.ts",
 		"build:browser": "tsup --config tsup.browser.config.ts",
 		"build:schema": "./scripts/compile-bare.ts compile schemas/client-protocol/v1.bare -o dist/schemas/client-protocol/v1.ts && ./scripts/compile-bare.ts compile schemas/client-protocol/v2.bare -o dist/schemas/client-protocol/v2.ts && ./scripts/compile-bare.ts compile schemas/client-protocol/v3.bare -o dist/schemas/client-protocol/v3.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v1.bare -o dist/schemas/file-system-driver/v1.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v2.bare -o dist/schemas/file-system-driver/v2.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v3.bare -o dist/schemas/file-system-driver/v3.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v1.bare -o dist/schemas/actor-persist/v1.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v2.bare -o dist/schemas/actor-persist/v2.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v3.bare -o dist/schemas/actor-persist/v3.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v4.bare -o dist/schemas/actor-persist/v4.ts && ./scripts/compile-bare.ts compile schemas/persist/v1.bare -o dist/schemas/persist/v1.ts && ./scripts/compile-bare.ts compile schemas/transport/v1.bare -o dist/schemas/transport/v1.ts && ./scripts/compile-bare.ts compile schemas/actor-inspector/v1.bare -o dist/schemas/actor-inspector/v1.ts && ./scripts/compile-bare.ts compile schemas/actor-inspector/v2.bare -o dist/schemas/actor-inspector/v2.ts && ./scripts/compile-bare.ts compile schemas/actor-inspector/v3.bare -o dist/schemas/actor-inspector/v3.ts",
 		"check-types": "tsc --noEmit",
@@ -247,7 +327,7 @@
 		"nanoevents": "^9.1.0",
 		"p-retry": "^6.2.1",
 		"pino": "^9.5.0",
-		"sandbox-agent": "^0.3.1",
+		"sandbox-agent": "^0.4.0-rc.1",
 		"tar": "^7.5.0",
 		"uuid": "^12.0.0",
 		"vbare": "^0.0.4",

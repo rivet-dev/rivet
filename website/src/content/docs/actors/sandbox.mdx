@@ -18,7 +18,8 @@ Use `provider` when every actor instance should use the same sandbox backend.
 <CodeGroup workspace>
 ```ts actors.ts
 import { setup } from "rivetkit";
-import { docker, sandboxActor } from "rivetkit/sandbox";
+import { sandboxActor } from "rivetkit/sandbox";
+import { docker } from "rivetkit/sandbox/docker";
 
 export const codingSandbox = sandboxActor({
   provider: docker({
@@ -75,7 +76,10 @@ Use `createProvider` when provider selection depends on the actor input.
 <CodeGroup workspace>
 ```ts actors.ts
 import { setup } from "rivetkit";
-import { daytona, docker, e2b, sandboxActor } from "rivetkit/sandbox";
+import { sandboxActor } from "rivetkit/sandbox";
+import { daytona } from "rivetkit/sandbox/daytona";
+import { docker } from "rivetkit/sandbox/docker";
+import { e2b } from "rivetkit/sandbox/e2b";
 
 type SandboxInput = {
   provider: "docker" | "daytona" | "e2b";
@@ -123,7 +127,8 @@ The sandbox actor always keeps itself awake while a subscribed session still
 looks like it is in the middle of a turn.
 
 ```ts
-import { docker, sandboxActor } from "rivetkit/sandbox";
+import { sandboxActor } from "rivetkit/sandbox";
+import { docker } from "rivetkit/sandbox/docker";
 
 const codingSandbox = sandboxActor({
   provider: docker(),
@@ -141,27 +146,18 @@ terminal response arrives.
 
 ## Providers
 
-`rivetkit/sandbox` ships three provider helpers. Each wraps a third-party sandbox SDK and handles sandbox creation, agent connection, and teardown.
-
-All providers share a set of common options:
-
-| Option | Default | Description |
-|---|---|---|
-| `installAgents` | `["claude", "codex"]` | Agents to install in the sandbox on creation. |
-| `agentPort` | `3000` | Port the sandbox-agent server listens on. |
-| `installCommand` | Fetches from `releases.rivet.dev` | Shell command to install the sandbox-agent binary. |
-| `startCommand` | `sandbox-agent server --no-token --host 0.0.0.0 --port <agentPort>` | Shell command to start the sandbox-agent server. |
+Providers are re-exported from the `sandbox-agent` package. Each provider is available as a separate subpackage import to keep your bundle lean. Install the provider's peer dependency to use it.
 
 ### Docker
 
-Requires the `dockerode` package.
+Requires the `dockerode` and `get-port` packages.
 
 ```sh
-pnpm add dockerode
+pnpm add dockerode get-port
 ```
 
 ```ts
-import { docker } from "rivetkit/sandbox";
+import { docker } from "rivetkit/sandbox/docker";
 
 const provider = docker({
   image: "node:22-bookworm-slim",
@@ -174,11 +170,11 @@ const provider = docker({
 
 | Option | Default | Description |
 |---|---|---|
-| `client` | Auto-created via `/var/run/docker.sock` | A `dockerode` client instance. |
 | `image` | `node:22-bookworm-slim` | Docker image to use. |
 | `host` | `127.0.0.1` | Host address for connecting to the container. |
-| `env` | `[]` | Environment variables. Can be a static array or an async function receiving the create context. |
-| `binds` | `[]` | Volume binds. Can be a static array or an async function receiving the create context. |
+| `agentPort` | Provider default | Port the sandbox-agent server listens on. |
+| `env` | `[]` | Environment variables. Can be a static array or an async function. |
+| `binds` | `[]` | Volume binds. Can be a static array or an async function. |
 | `createContainerOptions` | `{}` | Additional options passed to `dockerode`'s `createContainer`. |
 
 ### Daytona
@@ -190,7 +186,7 @@ pnpm add @daytonaio/sdk
 ```
 
 ```ts
-import { daytona } from "rivetkit/sandbox";
+import { daytona } from "rivetkit/sandbox/daytona";
 
 const provider = daytona({
   create: { image: "node:22" },
@@ -201,8 +197,9 @@ const provider = daytona({
 
 | Option | Default | Description |
 |---|---|---|
-| `client` | Auto-created via `new Daytona()` | A Daytona SDK client instance. |
-| `create` | `{}` | Options passed to `client.create()`. Can be a static object or an async function receiving the create context. |
+| `create` | `{}` | Options passed to `client.create()`. Can be a static object or an async function. |
+| `image` | Provider default | Docker image for the Daytona workspace. |
+| `agentPort` | Provider default | Port the sandbox-agent server listens on. |
 | `previewTtlSeconds` | `14400` (4 hours) | TTL for the signed preview URL used to connect. |
 | `deleteTimeoutSeconds` | `undefined` | Timeout passed to `sandbox.delete()` on destroy. |
 
@@ -215,7 +212,7 @@ pnpm add @e2b/code-interpreter
 ```
 
 ```ts
-import { e2b } from "rivetkit/sandbox";
+import { e2b } from "rivetkit/sandbox/e2b";
 
 const provider = e2b({
   create: { template: "base" },
@@ -225,24 +222,71 @@ const provider = e2b({
 
 | Option | Default | Description |
 |---|---|---|
-| `create` | `{}` | Options passed to `Sandbox.create()`. Can be a static object or an async function receiving the create context. |
+| `create` | `{}` | Options passed to `Sandbox.create()`. Can be a static object or an async function. |
 | `connect` | `{}` | Options passed to `Sandbox.connect()` when reconnecting. Can be a static object or an async function receiving the sandbox ID. |
+| `agentPort` | Provider default | Port the sandbox-agent server listens on. |
+
+### Vercel
+
+Requires the `@vercel/sandbox` package.
+
+```sh
+pnpm add @vercel/sandbox
+```
+
+```ts
+import { vercel } from "rivetkit/sandbox/vercel";
+
+const provider = vercel({
+  create: { template: "nextjs" },
+});
+```
+
+### Modal
+
+Requires the `modal` package.
+
+```sh
+pnpm add modal
+```
+
+```ts
+import { modal } from "rivetkit/sandbox/modal";
+
+const provider = modal({
+  create: { secrets: { MY_SECRET: "value" } },
+});
+```
+
+### Local
+
+Runs sandbox-agent locally on the host machine. No additional dependencies required.
+
+```ts
+import { local } from "rivetkit/sandbox/local";
+
+const provider = local({
+  port: 2468,
+});
+```
+
+### Unsupported providers
+
+**Cloudflare Sandbox** is available in `sandbox-agent` but is not re-exported from RivetKit. Cloudflare sandboxes do not expose a URL, instead routing requests through a custom `fetch` implementation. This architecture is incompatible with Rivet's direct sandbox access helpers (`rivetkit/sandbox/client`) and the `getSandboxUrl` action, which both require a publicly reachable URL. If you need Cloudflare sandboxes, use `sandbox-agent/cloudflare` directly without the sandbox actor wrapper.
 
 ## Custom providers
 
-Implement the `SandboxActorProvider` interface to use any sandbox backend.
+Implement the `SandboxProvider` interface from `sandbox-agent` to use any sandbox backend.
 
 ```ts
-import type { SandboxActorProvider } from "rivetkit/sandbox";
-import { SandboxAgent } from "sandbox-agent";
+import type { SandboxProvider } from "sandbox-agent";
 
-const myProvider: SandboxActorProvider = {
+const myProvider: SandboxProvider = {
   name: "my-provider",
 
-  async create(context) {
-    // Provision a sandbox. `context` has `actorId` and `actorKey`.
-    // Return a string ID that identifies the sandbox.
-    const sandboxId = await provisionSandbox(context.actorId);
+  async create() {
+    // Provision a sandbox and return a string ID.
+    const sandboxId = await provisionSandbox();
     return sandboxId;
   },
 
@@ -251,15 +295,15 @@ const myProvider: SandboxActorProvider = {
     await teardownSandbox(sandboxId);
   },
 
-  async connectAgent(sandboxId, options) {
-    // Connect to the sandbox-agent running inside the sandbox.
-    // `options.persist` is a `SessionPersistDriver` for transcript storage.
-    // `options.waitForHealth` indicates whether to wait for the agent to be ready.
-    const baseUrl = await getSandboxUrl(sandboxId);
-    return await SandboxAgent.connect({
-      baseUrl,
-      ...options,
-    });
+  async getUrl(sandboxId) {
+    // Return the sandbox-agent base URL.
+    return await lookupSandboxUrl(sandboxId);
+  },
+
+  async ensureServer(sandboxId) {
+    // Restart the sandbox-agent process if it stopped.
+    // Called automatically before connecting. Must be idempotent.
+    await restartAgentIfNeeded(sandboxId);
   },
 };
 ```
@@ -274,11 +318,103 @@ const mySandbox = sandboxActor({
 });
 ```
 
-The three methods map to the sandbox lifecycle:
+The provider methods map to the sandbox lifecycle:
 
 1. **`create`** is called once when the actor first needs a sandbox. Return a stable string ID.
-2. **`connectAgent`** is called to establish a `SandboxAgent` connection. This may be called multiple times across sleep/wake cycles. Always spread `options` into `SandboxAgent.connect()` so persistence and health checks work correctly.
-3. **`destroy`** is called when the actor is destroyed. Clean up all external resources.
+2. **`getUrl`** returns the sandbox-agent base URL for direct filesystem, terminal, and log-stream helpers. Alternatively, implement `getFetch` for providers that cannot expose a URL.
+3. **`ensureServer`** (optional) is called before connecting to ensure the sandbox-agent server process is running. Must be idempotent.
+4. **`destroy`** is called when the actor is destroyed. Clean up all external resources.
+
+## Direct sandbox access
+
+Some `sandbox-agent` operations involve raw binary data, WebSocket streams, or SSE
+event streams that cannot be efficiently proxied through JSON-based actor actions.
+For these, `rivetkit/sandbox/client` provides helper functions that talk directly
+to the sandbox-agent HTTP API, bypassing the actor.
+
+Use the `getSandboxUrl` action to obtain the sandbox's base URL, then pass it to
+the helpers.
+
+### Filesystem helpers
+
+```ts
+import { createClient } from "rivetkit/client";
+import {
+  uploadFile,
+  downloadFile,
+  uploadBatch,
+  listFiles,
+  statFile,
+  deleteFile,
+  mkdirFs,
+  moveFile,
+} from "rivetkit/sandbox/client";
+import type { registry } from "./actors";
+
+const client = createClient<typeof registry>();
+const sandbox = client.codingSandbox.getOrCreate(["task-789"]);
+
+// Get the direct URL to the sandbox-agent server.
+const { url } = await sandbox.getSandboxUrl();
+
+// Upload a file (raw binary, no base64 encoding).
+const csvFile = new Blob(["id,name\n1,Alice"], { type: "text/csv" });
+await uploadFile(url, "/workspace/data.csv", csvFile);
+
+// Download a file.
+const contents = await downloadFile(url, "/workspace/data.csv");
+
+// Batch upload a tar archive.
+await uploadBatch(url, "/workspace", tarBuffer);
+
+// List, stat, delete, mkdir, move.
+const entries = await listFiles(url, "/workspace");
+const info = await statFile(url, "/workspace/data.csv");
+await mkdirFs(url, "/workspace/output");
+await moveFile(url, "/workspace/data.csv", "/workspace/output/data.csv");
+await deleteFile(url, "/workspace/output/data.csv");
+```
+
+### Process terminal
+
+```ts
+import { connectTerminal, buildTerminalWebSocketUrl } from "rivetkit/sandbox/client";
+
+// Connect to a process terminal via WebSocket.
+const terminal = await connectTerminal(url, processId);
+terminal.onData((data) => console.log("output:", data));
+terminal.sendInput("ls\n");
+terminal.close();
+
+// Or get the raw WebSocket URL for use with xterm.js or another client.
+const wsUrl = buildTerminalWebSocketUrl(url, processId);
+```
+
+### Log streaming
+
+```ts
+import { followProcessLogs } from "rivetkit/sandbox/client";
+
+// Stream process logs via SSE.
+const subscription = await followProcessLogs(url, processId, (entry) => {
+  console.log(`[${entry.stream}] ${entry.data}`);
+});
+
+// Stop streaming.
+subscription.close();
+```
+
+### Why direct access?
+
+The sandbox actor proxies all structured `sandbox-agent` methods as actor
+actions. However, three categories of operations do not fit JSON-based RPC:
+
+- **Binary filesystem I/O** (`readFsFile`, `writeFsFile`, `uploadFsBatch`): base64 encoding adds ~33% overhead.
+- **WebSocket terminals** (`connectProcessTerminal`): bidirectional binary streams.
+- **SSE log streaming** (`followProcessLogs`): continuous event streams with callbacks.
+
+These helpers bypass the actor for the data plane while the actor remains the
+control plane for sessions, permissions, and lifecycle management.
 
 ## SDK parity
 
@@ -286,6 +422,7 @@ The public action surface intentionally mirrors `sandbox-agent`.
 
 - Hooks: `onSessionEvent`, `onPermissionRequest`
 - Actions: every other public `SandboxAgent` instance method
+- Direct access: filesystem, terminal, and log streaming helpers in `rivetkit/sandbox/client`
 
 This is enforced by a parity test in RivetKit so SDK upgrades fail fast if the sandbox actor falls out of sync.
 

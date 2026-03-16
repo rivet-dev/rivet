@@ -1,4 +1,5 @@
 export { sandboxActor } from "./actor/index";
+export * from "./client";
 export {
 	type SandboxActorBeforeConnectContext,
 	type SandboxActorConfig,
@@ -8,15 +9,10 @@ export {
 	SandboxActorConfigSchema,
 	SandboxActorOptionsSchema,
 } from "./config";
-export { docker, type DockerProviderOptions } from "./providers/docker";
-export { daytona, type DaytonaProviderOptions } from "./providers/daytona";
-export { e2b, type E2BProviderOptions } from "./providers/e2b";
 export {
 	type SandboxActionContext,
 	type SandboxActorActions,
 	type SandboxActorProvider,
-	type SandboxActorProviderConnectOptions,
-	type SandboxActorProviderCreateContext,
 	type SandboxActorVars,
 	type SandboxActorRuntime,
 	type SandboxActorState,
@@ -33,6 +29,8 @@ export type {
 	ProcessTerminalSession,
 	ProcessTerminalSessionOptions,
 	ProcessTerminalWebSocketUrlOptions,
+	SandboxAgent,
+	SandboxProvider,
 	Session,
 	SessionCreateRequest,
 	SessionEvent,
@@ -40,5 +38,4 @@ export type {
 	SessionRecord,
 	SessionResumeOrCreateRequest,
 	SessionSendOptions,
-	SandboxAgent,
 } from "sandbox-agent";

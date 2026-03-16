@@ -21,6 +21,8 @@ export function runActorSandboxTests(driverTestConfig: DriverTestConfig) {
 				},
 			);
 			expect(typeof health.status).toBe("string");
+			const { url } = await sandbox.getSandboxUrl();
+			expect(url).toMatch(/^https?:\/\//);
 
 			await sandbox.mkdirFs({ path: "/root/tmp" });
 			await sandbox.writeFsFile(
@@ -36,15 +38,15 @@ export function runActorSandboxTests(driverTestConfig: DriverTestConfig) {
 			const stat = await sandbox.statFs({ path: "/root/tmp/hello.txt" });
 			expect(stat.entryType).toBe("file");
 
-			await sandbox.moveFs({
-				from: "/root/tmp/hello.txt",
-				to: "/root/tmp/renamed.txt",
-			});
-			expect(
-				(await sandbox.listFsEntries({ path: "/root/tmp" })).map(
-					(entry) => entry.name,
-				),
-			).toContain("renamed.txt");
+				await sandbox.moveFs({
+					from: "/root/tmp/hello.txt",
+					to: "/root/tmp/renamed.txt",
+				});
+				expect(
+					(await sandbox.listFsEntries({ path: "/root/tmp" })).map(
+						(entry: { name: string }) => entry.name,
+					),
+				).toContain("renamed.txt");
 
 			await sandbox.dispose();
 

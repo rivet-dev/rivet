@@ -3,9 +3,13 @@ import type { DatabaseProvider } from "@/actor/database";
 import type { RawAccess } from "@/db/config";
 import type {
 	SandboxAgent,
-	SandboxAgentConnectOptions,
-	SessionPersistDriver,
+	SandboxProvider,
 } from "sandbox-agent";
+
+export type { SandboxProvider };
+
+/** @deprecated Use `SandboxProvider` from `sandbox-agent` instead. */
+export type SandboxActorProvider = SandboxProvider;
 
 // Keep this split in lockstep with the sandbox-agent SDK. Hooks should match the
 // SDK callback methods, and actions should match every other SDK instance
@@ -27,6 +31,7 @@ export const SANDBOX_AGENT_ACTION_METHODS = [
 	"createSession",
 	"resumeSession",
 	"resumeOrCreateSession",
+	"destroySandbox",
 	"destroySession",
 	"setSessionMode",
 	"setSessionConfigOption",
@@ -96,38 +101,9 @@ export interface SandboxActorState {
 	sandboxDestroyed: boolean;
 }
 
-export interface SandboxActorProviderCreateContext {
-	actorId: string;
-	actorKey: readonly string[];
-}
-
-export interface SandboxActorProviderConnectOptions
-	extends Pick<
-		SandboxAgentConnectOptions,
-		"headers" | "replayMaxEvents" | "replayMaxChars" | "waitForHealth"
-	> {
-	persist: SessionPersistDriver;
-}
-
-export interface SandboxActorProvider {
-	name: string;
-	create(context: SandboxActorProviderCreateContext): Promise<string>;
-	destroy(sandboxId: string): Promise<void>;
-	connectAgent(
-		sandboxId: string,
-		options: SandboxActorProviderConnectOptions,
-	): Promise<SandboxAgent>;
-	/**
-	 * Optional hook called before `connectAgent` to ensure the sandbox
-	 * environment is running. Providers like Daytona use this to restart
-	 * the sandbox-agent process after the sandbox sleeps or restarts.
-	 */
-	wake?(sandboxId: string): Promise<void>;
-}
-
 export interface SandboxActorVars {
 	sandboxAgentClient: SandboxAgent | null;
-	provider: SandboxActorProvider | null;
+	provider: SandboxProvider | null;
 	activeSessionIds: Set<string>;
 	activePromptRequestIdsBySessionId: Map<string, string[]>;
 	lastEventAtBySessionId: Map<string, number>;

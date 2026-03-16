@@ -56,14 +56,14 @@ export class SqliteSessionPersistDriver implements SessionPersistDriver {
 		this.#persistRawEvents = persistRawEvents;
 	}
 
-	async getSession(id: string): Promise<SessionRecord | null> {
+	async getSession(id: string): Promise<SessionRecord | undefined> {
 		const rows = await this.#db.execute<PersistSessionRow>(
 			"SELECT record_json FROM sandbox_agent_sessions WHERE id = ? LIMIT 1",
 			id,
 		);
 		const row = rows[0];
 		if (!row) {
-			return null;
+			return undefined;
 		}
 		return JSON.parse(row.record_json) as SessionRecord;
 	}
@@ -144,7 +144,7 @@ export class SqliteSessionPersistDriver implements SessionPersistDriver {
 		};
 	}
 
-	async insertEvent(event: SessionEvent): Promise<void> {
+	async insertEvent(_sessionId: string, event: SessionEvent): Promise<void> {
 		const payload = JSON.stringify(event.payload);
 		await this.#db.execute(
 			`
