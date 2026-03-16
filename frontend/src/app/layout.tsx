@@ -617,13 +617,12 @@ function DeploymentsLink() {
 			<HeaderLink
 				to="/orgs/$organization/projects/$project/ns/$namespace/deployments"
 				className="font-normal"
-				exact
 				icon={faRocket}
 			>
 				Deployments
 			</HeaderLink>
 			<HeaderLink
-				to="/orgs/$organization/projects/$project/ns/$namespace/deployments/logs"
+				to="/orgs/$organization/projects/$project/ns/$namespace/logs"
 				className="font-normal pl-6"
 				icon={faFileLines}
 			>
