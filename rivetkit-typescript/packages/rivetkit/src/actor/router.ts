@@ -19,6 +19,10 @@ import {
 	loggerMiddleware,
 } from "@/common/router";
 import { noopNext } from "@/common/utils";
+import {
+	isSqliteBindingArray,
+	isSqliteBindingObject,
+} from "@/db/shared";
 import { inspectorLogger } from "@/inspector/log";
 import type { RegistryConfig } from "@/registry/config";
 import { type GetUpgradeWebSocket, VERSION } from "@/utils";
@@ -286,6 +290,67 @@ export function createActorRouter(
 
 			const actor = await actorDriver.loadActor(c.env.actorId);
 			const result = actor.inspector.getWorkflowHistoryJson();
+			return c.json(result);
+		});
+
+		router.post("/inspector/database/execute", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			const body = await c.req.json<{
+				sql?: unknown;
+				args?: unknown;
+				properties?: unknown;
+			}>();
+
+			if (typeof body.sql !== "string" || body.sql.trim() === "") {
+				return c.json({ error: "sql is required" }, 400);
+			}
+
+			if (
+				Array.isArray(body.args) &&
+				body.properties &&
+				typeof body.properties === "object"
+			) {
+				return c.json(
+					{
+						error: "use either args or properties, not both",
+					},
+					400,
+				);
+			}
+
+			if (body.args !== undefined && !isSqliteBindingArray(body.args)) {
+				return c.json(
+					{
+						error: "args must be a SQLite binding array",
+					},
+					400,
+				);
+			}
+
+			if (
+				body.properties !== undefined &&
+				!isSqliteBindingObject(body.properties)
+			) {
+				return c.json(
+					{
+						error: "properties must be a SQLite binding object",
+					},
+					400,
+				);
+			}
+
+			const args = isSqliteBindingArray(body.args) ? body.args : [];
+			const properties = isSqliteBindingObject(body.properties)
+				? body.properties
+				: undefined;
+			const result = await actor.inspector.executeDatabaseSqlJson(
+				body.sql,
+				args,
+				properties,
+			);
 			return c.json(result);
 		});
 

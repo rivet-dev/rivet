@@ -1,6 +1,7 @@
 import * as cbor from "cbor-x";
 import { createNanoEvents } from "nanoevents";
 import { createHttpDriver } from "@/actor/conn/drivers/http";
+import { Lock } from "@/actor/utils";
 import {
 	CONN_DRIVER_SYMBOL,
 	CONN_STATE_MANAGER_SYMBOL,
@@ -30,6 +31,7 @@ export class ActorInspector {
 	public readonly emitter = createNanoEvents<ActorInspectorEmitterEvents>();
 
 	#lastQueueSize = 0;
+	#databaseLock = new Lock<void>(undefined);
 	#workflowInspector?: NonNullable<
 		ReturnType<typeof getRunInspectorConfig>
 	>["workflow"];
@@ -101,47 +103,58 @@ export class ActorInspector {
 	}
 
 	async getDatabaseSchema(): Promise<ArrayBuffer> {
-		if (!this.isDatabaseEnabled()) {
-			throw new actorErrors.DatabaseNotEnabled();
-		}
+		return this.#withDatabase(async (db) => {
+			const tables = (await db.execute(
+				"SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle_%'",
+			)) as { name: string; type: string }[];
 
-		const db = this.actor.db;
+			const tableInfos = [];
+			for (const table of tables) {
+				const quoted = `"${escapeDoubleQuotes(table.name)}"`;
+				const columns = (await db.execute(
+					`PRAGMA table_info(${quoted})`,
+				)) as Array<{
+					cid: number;
+					name: string;
+					type: string;
+					notnull: number;
+					dflt_value: string | null;
+					pk: number;
+				}>;
+				const foreignKeys = (await db.execute(
+					`PRAGMA foreign_key_list(${quoted})`,
+				)) as Array<{
+					id: number;
+					table: string;
+					from: string;
+					to: string;
+				}>;
+				const countResult = (await db.execute(
+					`SELECT COUNT(*) as count FROM ${quoted}`,
+				)) as { count: number }[];
 
-		// Get table list from sqlite_master, excluding internal tables.
-		const tables = (await db.execute(
-			"SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle_%'",
-		)) as { name: string; type: string }[];
+				tableInfos.push({
+					table: { schema: "main", name: table.name, type: table.type },
+					columns: columns.map((column) => ({
+						cid: column.cid,
+						name: column.name,
+						type: column.type,
+						notnull: column.notnull,
+						dflt_value: column.dflt_value,
+						pk: column.pk,
+					})),
+					foreignKeys: foreignKeys.map((foreignKey) => ({
+						id: foreignKey.id,
+						table: foreignKey.table,
+						from: foreignKey.from,
+						to: foreignKey.to,
+					})),
+					records: countResult?.[0]?.count ?? 0,
+				});
+			}
 
-		// Serialize all queries to avoid concurrent @rivetkit/sqlite access
-		// which can cause "file is not a database" errors.
-		const tableInfos = [];
-		for (const table of tables) {
-			const quoted = `"${escapeDoubleQuotes(table.name)}"`;
-			const sample = (await db.execute(
-				`SELECT * FROM ${quoted} LIMIT 1`,
-			)) as Record<string, unknown>[];
-			const countResult = (await db.execute(
-				`SELECT COUNT(*) as count FROM ${quoted}`,
-			)) as { count: number }[];
-
-			const columnNames = sample?.[0] ? Object.keys(sample[0]) : [];
-
-			tableInfos.push({
-				table: { schema: "main", name: table.name, type: table.type },
-				columns: columnNames.map((name, cid) => ({
-					cid,
-					name,
-					type: "",
-					notnull: 0,
-					dflt_value: null,
-					pk: 0,
-				})),
-				foreignKeys: [],
-				records: countResult?.[0]?.count ?? 0,
-			});
-		}
-
-		return bufferToArrayBuffer(cbor.encode({ tables: tableInfos }));
+			return bufferToArrayBuffer(cbor.encode({ tables: tableInfos }));
+		});
 	}
 
 	async getDatabaseTableRows(
@@ -149,20 +162,17 @@ export class ActorInspector {
 		limit: number,
 		offset: number,
 	): Promise<ArrayBuffer> {
-		if (!this.isDatabaseEnabled()) {
-			throw new actorErrors.DatabaseNotEnabled();
-		}
-
-		const db = this.actor.db;
-		const safeLimit = Math.max(0, Math.min(Math.floor(limit), 500));
-		const safeOffset = Math.max(0, Math.floor(offset));
-		const quoted = `"${escapeDoubleQuotes(table)}"`;
-		const result = await db.execute(
-			`SELECT * FROM ${quoted} LIMIT ? OFFSET ?`,
-			safeLimit,
-			safeOffset,
-		);
-		return bufferToArrayBuffer(cbor.encode(result));
+		return this.#withDatabase(async (db) => {
+			const safeLimit = Math.max(0, Math.min(Math.floor(limit), 500));
+			const safeOffset = Math.max(0, Math.floor(offset));
+			const quoted = `"${escapeDoubleQuotes(table)}"`;
+			const result = await db.execute(
+				`SELECT * FROM ${quoted} LIMIT ? OFFSET ?`,
+				safeLimit,
+				safeOffset,
+			);
+			return bufferToArrayBuffer(cbor.encode(result));
+		});
 	}
 
 	isStateEnabled() {
@@ -325,6 +335,28 @@ export class ActorInspector {
 		};
 	}
 
+	async executeDatabaseSqlJson(
+		sql: string,
+		args: unknown[],
+		properties?: Record<string, unknown>,
+	): Promise<{ rows: unknown[] }> {
+		const rows = await this.#withDatabase(async (db) => {
+			if (properties && Object.keys(properties).length > 0) {
+				return (await db.execute(
+					sql,
+					normalizeSqlitePropertyBindings(properties),
+				)) as Record<string, unknown>[];
+			}
+			return (await db.execute(sql, ...args)) as Record<
+				string,
+				unknown
+			>[];
+		});
+		return {
+			rows: jsonSafe(rows),
+		};
+	}
+
 	getQueueStatusJson(limit: number): Promise<{
 		size: number;
 		maxSize: number;
@@ -342,8 +374,50 @@ export class ActorInspector {
 			})),
 		}));
 	}
+
+	async #withDatabase<T>(
+		fn: (db: NonNullable<AnyActorInstance["db"]>) => Promise<T>,
+	): Promise<T> {
+		if (!this.isDatabaseEnabled()) {
+			throw new actorErrors.DatabaseNotEnabled();
+		}
+
+		const db = this.actor.db;
+		let result: T | undefined;
+		await this.#databaseLock.lock(async () => {
+			result = await fn(db);
+		});
+		return result as T;
+	}
 }
 
 function escapeDoubleQuotes(value: string): string {
 	return value.replace(/"/g, '""');
+}
+
+function jsonSafe<T>(value: T): T {
+	return JSON.parse(
+		JSON.stringify(value, (_key: string, currentValue: unknown) =>
+			typeof currentValue === "bigint"
+				? Number(currentValue)
+				: currentValue,
+		),
+	) as T;
+}
+
+function normalizeSqlitePropertyBindings(
+	properties: Record<string, unknown>,
+): Record<string, unknown> {
+	const normalized: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(properties)) {
+		if (/^[:@$]/.test(key)) {
+			normalized[key] = value;
+			continue;
+		}
+
+		normalized[`:${key}`] = value;
+		normalized[`@${key}`] = value;
+		normalized[`$${key}`] = value;
+	}
+	return normalized;
 }

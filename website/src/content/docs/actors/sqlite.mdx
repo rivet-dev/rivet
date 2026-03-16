@@ -129,6 +129,15 @@ Use `?` placeholders for dynamic values and pass parameters in order after the S
 await c.db.execute("INSERT INTO todos (title) VALUES (?)", title);
 ```
 
+You can also use named SQLite bindings by passing a single properties object.
+
+```ts @nocheck
+const rows = await c.db.execute(
+  "SELECT id, title FROM todos WHERE title = :title",
+  { title: "Write SQLite docs" },
+);
+```
+
 ### Transactions
 
 Use transactions when multiple writes must succeed or fail together.
@@ -233,6 +242,7 @@ console.log(todos);
 ## Debugging
 
 - `GET /inspector/summary` includes `isDatabaseEnabled` so you can confirm SQLite is configured.
+- `POST /inspector/database/execute` lets you run ad-hoc SQL for debugging and data fixes with positional `args` or named `properties`.
 - `GET /inspector/traces` helps inspect slow query paths and SQL-heavy actions.
 - Keep a small read-only action for quick query verification while debugging.
 - In non-dev mode, inspector endpoints require authorization.
