@@ -18,7 +18,7 @@ import {
 	useSuspenseInfiniteQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
@@ -1057,6 +1057,7 @@ function FrontendSetup() {
 	const hasActors = (actors || 0) > 0;
 
 	const navigate = useNavigate();
+	const router = useRouter();
 
 	const { data: config } = useInfiniteQuery({
 		...dataProvider.runnerConfigsQueryOptions(),
@@ -1080,8 +1081,8 @@ function FrontendSetup() {
 	useEffect(() => {
 		const success = async () => {
 			successfulBackendSetupEffect();
-
-			await navigate({
+			router.invalidate();
+			return navigate({
 				to: ".",
 				search: (s) => ({
 					...s,
@@ -1094,7 +1095,7 @@ function FrontendSetup() {
 				console.error(error);
 			});
 		}
-	}, [hasActors, navigate]);
+	}, [hasActors, navigate, router]);
 
 	const endpoint = useEndpoint();
 
