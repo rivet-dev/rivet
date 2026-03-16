@@ -995,6 +995,7 @@ export const createNamespaceContext = ({
 	};
 	return {
 		...parent,
+		cloudNamespace: namespace,
 		...createEngineNamespaceContext({
 			...parent,
 			namespace: engineNamespaceName,

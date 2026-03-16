@@ -46,6 +46,7 @@ import {
 } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { deriveProviderFromMetadata } from "@/lib/data";
+import { cloudEnv } from "@/lib/env";
 import { successfulBackendSetupEffect } from "@/lib/effects";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
@@ -597,10 +598,20 @@ function buildRivetAgentInstructionsCode({
 	cloudToken,
 	publishableToken,
 	namespace,
+	project,
+	organization,
+	cloudNamespace,
+	apiUrl,
+	cloudApiUrl,
 }: {
 	cloudToken: string;
 	publishableToken: string;
 	namespace: string;
+	project: string;
+	organization: string;
+	cloudNamespace: string;
+	apiUrl: string;
+	cloudApiUrl: string;
 }) {
 	return `## Step 1: Load Rivet Skill
 
@@ -696,23 +707,43 @@ Push the changes and monitor the GitHub Action until it completes:
 
 Once deployed, verify the deployment works:
 
-1. Create an actor:
+1. Poll the deployment status every 5 seconds until status is "ready". Stop and investigate if status is "error".
    \`\`\`bash
-   curl -X POST "https://api.rivet.dev/actors?namespace=${namespace}" \\
-     -H "Authorization: Bearer ${cloudToken}" \\
-     -H "Content-Type: application/json" \\
-     -d '{"name": "<ACTOR_NAME>", "runner_name_selector": "default", "crash_policy": "restart"}'
+   curl -s "${cloudApiUrl}/projects/${project}/namespaces/${cloudNamespace}/managed-pools/default?org=${organization}" \\
+     -H "Authorization: Bearer ${cloudToken}"
    \`\`\`
-   Replace \`<ACTOR_NAME>\` with a valid actor name from the registry. Note the \`actor_id\` from the response.
 
-2. Wait for the actor to become connectable (\`connectable_ts\` is non-null in the create response), then hit its health endpoint through the gateway using the public token in the \`x-rivet-token\` header:
+2. Create an actor. Actors require a key field (string, not array):
    \`\`\`bash
-   curl "https://api.rivet.dev/gateway/<ACTOR_ID>/health" \\
+   curl -X POST "${apiUrl}/actors?namespace=${namespace}" \\
+     -H "Authorization: Bearer ${publishableToken}" \\
+     -H "Content-Type: application/json" \\
+     -d '{"name": "<ACTOR_NAME>", "key": "<KEY>", "runner_name_selector": "default", "crash_policy": "restart"}'
+   \`\`\`
+   Replace \`<ACTOR_NAME>\` with a valid actor name from the registry and \`<KEY>\` with an appropriate key string (e.g. "general"). Note the \`actor_id\` from the response.
+
+3. Wait ~10 seconds for the actor to start, then hit its health endpoint through the gateway using the public token:
+   \`\`\`bash
+   curl "${apiUrl}/gateway/<ACTOR_ID>/health" \\
      -H "x-rivet-token: ${publishableToken}"
    \`\`\`
-   This should return \`ok\` with a 200 status.
+   This should return ok with a 200 status.
 
-If actor creation fails due to validation (e.g. the actor requires specific input or a key), let the user know the deployment succeeded but they'll need to test it manually with the correct actor parameters. This is uncommon for fresh projects.`;
+4. If the health check returns actor_runner_failed, check the runner logs via SSE to diagnose:
+   \`\`\`bash
+   curl --max-time 15 "${cloudApiUrl}/projects/${project}/namespaces/${cloudNamespace}/managed-pools/default/logs?org=${organization}" \\
+     -H "Authorization: Bearer ${cloudToken}"
+   \`\`\`
+
+5. Common issues:
+   - "actor should have a key": The key field was missing from the create request.
+   - Token 401: Make sure you're using the correct API URLs (${apiUrl}, ${cloudApiUrl}).
+
+## Troubleshooting
+
+- There is no Rivet CLI. Do not attempt to use or install one. All deployment is done via the GitHub Action and all interaction is done via HTTP APIs (curl).
+- Architecture: The GitHub Action builds your Docker image and pushes it to Rivet. Rivet runs the container serverlessly. When you create an actor, Rivet communicates with the \`/api/rivet/*\` endpoint inside the container to manage its lifecycle.
+- For more troubleshooting help, see: https://rivet.dev/docs/actors/troubleshooting/`;
 }
 
 function useRivetAgentInstructionsCode() {
@@ -727,6 +758,11 @@ function useRivetAgentInstructionsCode() {
 		cloudToken,
 		publishableToken: publishableRawToken,
 		namespace,
+		project: dataProvider.project,
+		organization: dataProvider.organization,
+		cloudNamespace: dataProvider.cloudNamespace,
+		apiUrl: cloudEnv().VITE_APP_API_URL,
+		cloudApiUrl: cloudEnv().VITE_APP_CLOUD_API_URL,
 	});
 }
 
@@ -1046,7 +1082,6 @@ function FrontendSetup() {
 	useEffect(() => {
 		const success = async () => {
 			successfulBackendSetupEffect();
-
 			router.invalidate();
 			return navigate({
 				to: ".",
