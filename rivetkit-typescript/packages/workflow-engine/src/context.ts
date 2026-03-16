@@ -116,7 +116,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	private entryInProgress = false;
 	private abortController: AbortController;
 	private currentLocation: Location;
-	private visitedKeys = new Set<string>();
+	private visitedKeys: Set<string>;
 	private mode: "forward" | "rollback";
 	private rollbackActions?: RollbackAction[];
 	private rollbackCheckpointSet: boolean;
@@ -140,6 +140,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		historyNotifier?: () => void,
 		onError?: WorkflowErrorHandler,
 		logger?: Logger,
+		visitedKeys?: Set<string>,
 	) {
 		this.currentLocation = location;
 		this.abortController = abortController ?? new AbortController();
@@ -149,6 +150,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		this.historyNotifier = historyNotifier;
 		this.onError = onError;
 		this.logger = logger;
+		this.visitedKeys = visitedKeys ?? new Set();
 	}
 
 	get abortSignal(): AbortSignal {
@@ -204,6 +206,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			this.historyNotifier,
 			this.onError,
 			this.logger,
+			this.visitedKeys,
 		);
 	}
 
