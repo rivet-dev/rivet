@@ -1,41 +1,42 @@
 # Sandbox Coding Agent
 
-Example project demonstrating queue-driven Rivet Actor sessions that control a Sandbox Agent coding runtime.
+Example project demonstrating a queue-free Rivet Actor chat UI backed by the new `rivetkit/sandbox` actor.
 
 ## Getting Started
 
 ```sh
 git clone https://github.com/rivet-dev/rivet.git
 cd rivet/examples/sandbox-coding-agent
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
-
 
 ## Features
 
-- Actor-per-agent pattern with a coordinating manager Rivet Actor
-- Queue-based intake using `for await` over `c.queue.iter(...)` inside the run loop
-- Sandbox Agent SDK sessions per agent with streamed output
-- Persistent history stored in Rivet Actor state
-- Live status updates via events and polling
+- Uses `rivetkit/sandbox` instead of constructing `SandboxAgent` clients directly
+- One sandbox actor per agent key
+- Built-in transcript persistence through the sandbox actor
+- Provider selection with `SANDBOX_PROVIDER=docker|daytona|e2b`
+- Live UI updates via Rivet Actor events
 
 ## Prerequisites
 
-- Sandbox Agent endpoint configured with `SANDBOX_AGENT_URL` and `SANDBOX_AGENT_TOKEN` if you are not running locally
-- API key for the coding agent you choose inside the Sandbox Agent environment, such as `OPENAI_API_KEY` for `codex`
+- For local Docker usage, install Docker and leave `SANDBOX_PROVIDER` unset
+- For Daytona, set `SANDBOX_PROVIDER=daytona` and `DAYTONA_API_KEY`
+- For E2B, set `SANDBOX_PROVIDER=e2b` and `E2B_API_KEY`
+- Set the model provider credentials needed inside the sandbox, such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `CODEX_API_KEY`
 
 ## Implementation
 
-Each AI agent Rivet Actor creates or reuses a Sandbox Agent session, streams turn events, and broadcasts deltas back to the UI.
+The example keeps a thin UI-facing agent actor, but the sandbox lifecycle and sandbox-agent API now live behind `sandboxActor(...)`.
 
-- **Sandbox agent integration** ([`src/actors.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/sandbox-coding-agent/src/actors.ts))
+- **Sandbox actor integration** ([`src/actors.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/sandbox-coding-agent/src/actors.ts))
 - **Frontend orchestration** ([`frontend/App.tsx`](https://github.com/rivet-dev/rivet/tree/main/examples/sandbox-coding-agent/frontend/App.tsx))
 - **Server entry point** ([`src/server.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/sandbox-coding-agent/src/server.ts))
 
 ## Resources
 
-Read more about [queues](https://rivet.dev/docs/actors/queues), [run handlers](https://rivet.dev/docs/actors/run), [state](https://rivet.dev/docs/actors/state), and [events](https://rivet.dev/docs/actors/events).
+Read more about [Rivet Actors](https://rivet.dev/docs/actors), [actions](https://rivet.dev/docs/actors/actions), [events](https://rivet.dev/docs/actors/events), and [queues](https://rivet.dev/docs/actors/queues).
 
 ## License
 
