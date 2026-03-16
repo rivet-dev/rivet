@@ -10,6 +10,7 @@ import {
 import type { registry } from "./registry";
 
 const WORKFLOW_QUEUE_NAME = "workflow-default";
+const WORKFLOW_NESTED_QUEUE_NAME = "workflow-nested";
 
 export const workflowCounterActor = actor({
 	state: {
@@ -84,6 +85,268 @@ export const workflowQueueActor = actor({
 				timeout: 1_000,
 			});
 		},
+	},
+});
+
+export const workflowNestedLoopActor = actor({
+	state: {
+		processed: [] as string[],
+	},
+	queues: {
+		[WORKFLOW_NESTED_QUEUE_NAME]: queue<
+			{ items: string[] },
+			{ processed: number }
+		>(),
+	},
+	run: workflow(async (ctx) => {
+		await ctx.loop("command-loop", async (loopCtx) => {
+			const message = await loopCtx.queue.next<{
+				items: string[];
+			}>("wait", {
+				names: [WORKFLOW_NESTED_QUEUE_NAME],
+				completable: true,
+			});
+			let itemIndex = 0;
+			await loopCtx.loop("process-items", async (subLoopCtx) => {
+				const item = message.body.items[itemIndex];
+				if (item === undefined) {
+					return Loop.break(undefined);
+				}
+
+				await subLoopCtx.step(`process-item-${itemIndex}`, async () => {
+					subLoopCtx.state.processed.push(item);
+				});
+				itemIndex += 1;
+				return Loop.continue(undefined);
+			});
+
+			await message.complete?.({ processed: message.body.items.length });
+			return Loop.continue(undefined);
+		});
+	}),
+	actions: {
+		getState: (c) => c.state,
+	},
+	options: {
+		sleepTimeout: 50,
+	},
+});
+
+export const workflowNestedJoinActor = actor({
+	state: {
+		processed: [] as string[],
+	},
+	queues: {
+		[WORKFLOW_NESTED_QUEUE_NAME]: queue<
+			{ items: string[] },
+			{ processed: number }
+		>(),
+	},
+	run: workflow(async (ctx) => {
+		await ctx.loop("command-loop", async (loopCtx) => {
+			const message = await loopCtx.queue.next<{
+				items: string[];
+			}>("wait", {
+				names: [WORKFLOW_NESTED_QUEUE_NAME],
+				completable: true,
+			});
+
+			await loopCtx.join(
+				"process-items",
+				Object.fromEntries(
+					message.body.items.map((item, index) => [
+						`item-${index}`,
+						{
+							run: async (branchCtx) =>
+								await branchCtx.step(
+									`process-item-${index}`,
+									async () => {
+										branchCtx.state.processed.push(item);
+										return item;
+									},
+								),
+						},
+					]),
+				),
+			);
+
+			await message.complete?.({ processed: message.body.items.length });
+			return Loop.continue(undefined);
+		});
+	}),
+	actions: {
+		getState: (c) => c.state,
+	},
+	options: {
+		sleepTimeout: 50,
+	},
+});
+
+export const workflowNestedRaceActor = actor({
+	state: {
+		processed: [] as string[],
+	},
+	queues: {
+		[WORKFLOW_NESTED_QUEUE_NAME]: queue<
+			{ items: string[] },
+			{ processed: number }
+		>(),
+	},
+	run: workflow(async (ctx) => {
+		await ctx.loop("command-loop", async (loopCtx) => {
+			const message = await loopCtx.queue.next<{
+				items: string[];
+			}>("wait", {
+				names: [WORKFLOW_NESTED_QUEUE_NAME],
+				completable: true,
+			});
+			const item = message.body.items[0];
+
+			if (item !== undefined) {
+				await loopCtx.race("process-item", [
+					{
+						name: "fast",
+						run: async (raceCtx) =>
+							await raceCtx.step("process-fast", async () => {
+								raceCtx.state.processed.push(item);
+								return item;
+							}),
+					},
+					{
+						name: "slow",
+						run: async (raceCtx) => {
+							await new Promise<void>((resolve) => {
+								if (raceCtx.abortSignal.aborted) {
+									resolve();
+									return;
+								}
+								raceCtx.abortSignal.addEventListener(
+									"abort",
+									() => resolve(),
+									{ once: true },
+								);
+							});
+							return "slow";
+						},
+					},
+				]);
+			}
+
+			await message.complete?.({ processed: message.body.items.length });
+			return Loop.continue(undefined);
+		});
+	}),
+	actions: {
+		getState: (c) => c.state,
+	},
+	options: {
+		sleepTimeout: 50,
+	},
+});
+
+export const workflowSpawnChildActor = actor({
+	createState: (_c, input?: string) => ({
+		label: input ?? "",
+		started: false,
+		processed: [] as string[],
+	}),
+	queues: {
+		work: queue<{ task: string }, { ok: true }>(),
+	},
+	run: workflow(async (ctx) => {
+		await ctx.step("mark-started", async () => {
+			ctx.state.started = true;
+		});
+
+		await ctx.loop("cmd-loop", async (loopCtx) => {
+			const message = await loopCtx.queue.next<{ task: string }>(
+				"wait-cmd",
+				{
+					names: ["work"],
+					completable: true,
+				},
+			);
+			await loopCtx.step("process-cmd", async () => {
+				loopCtx.state.processed.push(message.body.task);
+			});
+			await message.complete?.({ ok: true });
+			return Loop.continue(undefined);
+		});
+	}),
+	actions: {
+		getState: (c) => c.state,
+	},
+	options: {
+		sleepTimeout: 50,
+	},
+});
+
+export const workflowSpawnParentActor = actor({
+	state: {
+		results: [] as Array<{
+			key: string;
+			result: unknown | null;
+			error: string | null;
+		}>,
+	},
+	queues: {
+		spawn: queue<{ key: string }>(),
+	},
+	run: workflow(async (ctx) => {
+		await ctx.loop("parent-loop", async (loopCtx) => {
+			const message = await loopCtx.queue.next<{ key: string }>(
+				"wait-parent",
+				{
+					names: ["spawn"],
+					completable: true,
+				},
+			);
+
+			await loopCtx.step("spawn-child", async () => {
+				try {
+					const client = loopCtx.client<typeof registry>();
+					const handle = client.workflowSpawnChildActor.getOrCreate(
+						[message.body.key],
+						{
+							createWithInput: message.body.key,
+						},
+					);
+					const result = await handle.send(
+						"work",
+						{ task: "hello" },
+						{
+							wait: true,
+							timeout: 500,
+						},
+					);
+					loopCtx.state.results.push({
+						key: message.body.key,
+						result,
+						error: null,
+					});
+				} catch (error) {
+					loopCtx.state.results.push({
+						key: message.body.key,
+						result: null,
+						error:
+							error instanceof Error ? error.message : String(error),
+					});
+				}
+			});
+
+			await message.complete?.({ ok: true });
+			return Loop.continue(undefined);
+		});
+	}),
+	actions: {
+		triggerSpawn: async (c, key: string) => {
+			await c.queue.send("spawn", { key });
+			return { queued: true };
+		},
+		getState: (c) => c.state,
+	},
+	options: {
+		sleepTimeout: 50,
 	},
 });
 
@@ -428,4 +691,4 @@ function incrementWorkflowSleepTick(
 	ctx.state.ticks += 1;
 }
 
-export { WORKFLOW_QUEUE_NAME };
+export { WORKFLOW_NESTED_QUEUE_NAME, WORKFLOW_QUEUE_NAME };

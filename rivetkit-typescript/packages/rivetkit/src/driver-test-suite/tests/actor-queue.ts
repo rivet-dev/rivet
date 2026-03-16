@@ -1,10 +1,66 @@
 import { describe, expect, test } from "vitest";
 import type { ActorError } from "@/client/mod";
+import { MANY_QUEUE_NAMES } from "../../../fixtures/driver-test-suite/queue";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
 export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 	describe("Actor Queue Tests", () => {
+		async function expectManyQueueChildToDrain(
+			handle: Awaited<ReturnType<typeof setupDriverTest>>["client"]["manyQueueChildActor"],
+			key: string,
+		) {
+			const child = handle.getOrCreate([key]);
+			const conn = child.connect();
+			const messageCount = MANY_QUEUE_NAMES.length * 4;
+
+			try {
+				expect(await conn.ping()).toEqual(
+					expect.objectContaining({
+						pong: true,
+					}),
+				);
+
+				await Promise.all(
+					Array.from({ length: messageCount }, (_, index) =>
+						child.send(
+							MANY_QUEUE_NAMES[index % MANY_QUEUE_NAMES.length],
+							{ index },
+						),
+					),
+				);
+
+				let snapshot = await child.getSnapshot();
+				for (
+					let i = 0;
+					i < 60 && snapshot.processed.length < messageCount;
+					i++
+				) {
+					await waitFor(driverTestConfig, 100);
+					snapshot = await child.getSnapshot();
+				}
+
+				expect(snapshot.started).toBe(true);
+				expect(snapshot.processed).toHaveLength(messageCount);
+				expect(new Set(snapshot.processed)).toEqual(
+					new Set(MANY_QUEUE_NAMES),
+				);
+
+				expect(
+					await child.send(
+						MANY_QUEUE_NAMES[0],
+						{ index: messageCount },
+						{ wait: true, timeout: 1_000 },
+					),
+				).toEqual({
+					status: "completed",
+					response: { ok: true, index: messageCount },
+				});
+			} finally {
+				await conn.dispose().catch(() => undefined);
+			}
+		}
+
 		test("client can send to actor queue", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate(["client-send"]);
@@ -216,6 +272,56 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 
 			expect(result.status).toBe("timedOut");
 		});
+
+		test(
+			"drains many-queue child actors created from actions while connected",
+			async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const parent = client.manyQueueActionParentActor.getOrCreate([
+					"many-action-parent",
+				]);
+
+				expect(await parent.spawnChild("many-action-child")).toEqual({
+					key: "many-action-child",
+				});
+
+				await expectManyQueueChildToDrain(
+					client.manyQueueChildActor,
+					"many-action-child",
+				);
+			},
+		);
+
+		test(
+			"drains many-queue child actors created from run handlers while connected",
+			async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const parent = client.manyQueueRunParentActor.getOrCreate([
+					"many-run-parent",
+				]);
+
+				expect(await parent.queueSpawn("many-run-child")).toEqual({
+					queued: true,
+				});
+
+				let spawned = await parent.getSpawned();
+				for (
+					let i = 0;
+					i < 30 && !spawned.includes("many-run-child");
+					i++
+				) {
+					await waitFor(driverTestConfig, 100);
+					spawned = await parent.getSpawned();
+				}
+
+				expect(spawned).toContain("many-run-child");
+
+				await expectManyQueueChildToDrain(
+					client.manyQueueChildActor,
+					"many-run-child",
+				);
+			},
+		);
 
 		test("manual receive retries message when not completed", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);

@@ -141,6 +141,297 @@ for (const mode of modes) {
 			expect(callCount).toBe(1);
 		});
 
+		it("should resume nested sub-loops across parent loop iterations", async () => {
+			const processed: string[] = [];
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.loop("command-loop", async (loopCtx) => {
+					const message = await loopCtx.queue.next<{
+						items: string[];
+					}>("next", {
+						names: ["work"],
+						completable: true,
+					});
+
+					let itemIndex = 0;
+					await loopCtx.loop("process-items", async (subLoopCtx) => {
+						const item = message.body.items[itemIndex];
+						if (item === undefined) {
+							return Loop.break(undefined);
+						}
+
+						await subLoopCtx.step(
+							`process-item-${itemIndex}`,
+							async () => {
+								processed.push(item);
+							},
+						);
+						itemIndex += 1;
+						return Loop.continue(undefined);
+					});
+
+					await message.complete?.({ ok: true });
+
+					if (processed.length >= 3) {
+						return Loop.break([...processed]);
+					}
+
+					return Loop.continue(undefined);
+				});
+			};
+
+			await driver.messageDriver.addMessage({
+				id: "msg-1",
+				name: "work",
+				data: { items: ["a", "b"] },
+				sentAt: Date.now(),
+			});
+
+			if (mode === "yield") {
+				const firstRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+
+				expect(firstRun.state).toBe("sleeping");
+				expect(processed).toEqual(["a", "b"]);
+
+				await driver.messageDriver.addMessage({
+					id: "msg-2",
+					name: "work",
+					data: { items: ["c"] },
+					sentAt: Date.now(),
+				});
+
+				const secondRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+
+				expect(secondRun.state).toBe("completed");
+				expect(secondRun.output).toEqual(["a", "b", "c"]);
+				return;
+			}
+
+			const handle = runWorkflow("wf-1", workflow, undefined, driver, {
+				mode,
+			});
+
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			await handle.message("work", { items: ["c"] });
+
+			const result = await handle.result;
+			expect(result.state).toBe("completed");
+			expect(result.output).toEqual(["a", "b", "c"]);
+		});
+
+		it("should resume nested joins across parent loop iterations", async () => {
+			const processed: string[] = [];
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.loop("command-loop", async (loopCtx) => {
+					const message = await loopCtx.queue.next<{
+						items: string[];
+					}>("next", {
+						names: ["work"],
+						completable: true,
+					});
+
+					const branches = Object.fromEntries(
+						message.body.items.map((item, index) => [
+							`item-${index}`,
+							{
+								run: async (
+									branchCtx: WorkflowContextInterface,
+								) =>
+									await branchCtx.step(
+										`process-item-${index}`,
+										async () => {
+											processed.push(item);
+											return item;
+										},
+									),
+							},
+						]),
+					);
+
+					await loopCtx.join("process-items", branches);
+					await message.complete?.({ ok: true });
+
+					if (processed.length >= 3) {
+						return Loop.break([...processed]);
+					}
+
+					return Loop.continue(undefined);
+				});
+			};
+
+			await driver.messageDriver.addMessage({
+				id: "msg-1",
+				name: "work",
+				data: { items: ["a", "b"] },
+				sentAt: Date.now(),
+			});
+
+			if (mode === "yield") {
+				const firstRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+
+				expect(firstRun.state).toBe("sleeping");
+				expect(processed).toEqual(["a", "b"]);
+
+				await driver.messageDriver.addMessage({
+					id: "msg-2",
+					name: "work",
+					data: { items: ["c"] },
+					sentAt: Date.now(),
+				});
+
+				const secondRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+
+				expect(secondRun.state).toBe("completed");
+				expect(secondRun.output).toEqual(["a", "b", "c"]);
+				return;
+			}
+
+			const handle = runWorkflow("wf-1", workflow, undefined, driver, {
+				mode,
+			});
+
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			await handle.message("work", { items: ["c"] });
+
+			const result = await handle.result;
+			expect(result.state).toBe("completed");
+			expect(result.output).toEqual(["a", "b", "c"]);
+		});
+
+		it("should resume nested races across parent loop iterations", async () => {
+			const processed: string[] = [];
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.loop("command-loop", async (loopCtx) => {
+					const message = await loopCtx.queue.next<{
+						items: string[];
+					}>("next", {
+						names: ["work"],
+						completable: true,
+					});
+
+					const nested = await loopCtx.race("process-item", [
+						{
+							name: "fast",
+							run: async (raceCtx) =>
+								await raceCtx.step(
+									"process-fast",
+									async () => {
+										const item = message.body.items[0]!;
+										processed.push(item);
+										return item;
+									},
+								),
+						},
+						{
+							name: "slow",
+							run: async (raceCtx) => {
+								await new Promise<void>((resolve) => {
+									if (raceCtx.abortSignal.aborted) {
+										resolve();
+										return;
+									}
+									raceCtx.abortSignal.addEventListener(
+										"abort",
+										() => resolve(),
+										{ once: true },
+									);
+								});
+								return "slow";
+							},
+						},
+					]);
+
+					expect(nested.value).toBe(message.body.items[0]);
+					await message.complete?.({ ok: true });
+
+					if (processed.length >= 2) {
+						return Loop.break([...processed]);
+					}
+
+					return Loop.continue(undefined);
+				});
+			};
+
+			await driver.messageDriver.addMessage({
+				id: "msg-1",
+				name: "work",
+				data: { items: ["a"] },
+				sentAt: Date.now(),
+			});
+
+			if (mode === "yield") {
+				const firstRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+
+				expect(firstRun.state).toBe("sleeping");
+				expect(processed).toEqual(["a"]);
+
+				await driver.messageDriver.addMessage({
+					id: "msg-2",
+					name: "work",
+					data: { items: ["b"] },
+					sentAt: Date.now(),
+				});
+
+				const secondRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+
+				expect(secondRun.state).toBe("completed");
+				expect(secondRun.output).toEqual(["a", "b"]);
+				return;
+			}
+
+			const handle = runWorkflow("wf-1", workflow, undefined, driver, {
+				mode,
+			});
+
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			await handle.message("work", { items: ["b"] });
+
+			const result = await handle.result;
+			expect(result.state).toBe("completed");
+			expect(result.output).toEqual(["a", "b"]);
+		});
+
 		it("should resume loop from saved state", async () => {
 			let iteration = 0;
 

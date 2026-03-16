@@ -11,6 +11,7 @@ import * as actorErrors from "@/actor/errors";
 import type { AnyActorInstance } from "@/mod";
 import type * as schema from "@/schemas/actor-inspector/mod";
 import { bufferToArrayBuffer } from "@/utils";
+import { serializeWorkflowHistoryForJson } from "./workflow-history-json";
 
 interface ActorInspectorEmitterEvents {
 	stateUpdated: (state: unknown) => void;
@@ -313,14 +314,10 @@ export class ActorInspector {
 		history: unknown | null;
 		isWorkflowEnabled: boolean;
 	} {
-		const bigIntReplacer = (_key: string, value: unknown) =>
-			typeof value === "bigint" ? Number(value) : value;
-		const history = this.getWorkflowHistory();
-		const safeHistory = history
-			? JSON.parse(JSON.stringify(history, bigIntReplacer))
-			: null;
 		return {
-			history: safeHistory,
+			history: serializeWorkflowHistoryForJson(
+				this.getWorkflowHistory(),
+			),
 			isWorkflowEnabled: this.isWorkflowEnabled(),
 		};
 	}
