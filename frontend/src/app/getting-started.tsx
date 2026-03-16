@@ -46,8 +46,8 @@ import {
 } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { deriveProviderFromMetadata } from "@/lib/data";
-import { cloudEnv } from "@/lib/env";
 import { successfulBackendSetupEffect } from "@/lib/effects";
+import { cloudEnv } from "@/lib/env";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
 import { Button } from "../components/ui/button";
@@ -800,23 +800,32 @@ function CopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
 	return <OtherCopyAgentInstructionsButton provider={provider} />;
 }
 
-function RivetCopyAgentInstructionsButton() {
-	const code = useRivetAgentInstructionsCode();
-
+function AgentPromptBanner({ code }: { code: string }) {
 	return (
-		<Button
+		<button
 			type="button"
-			variant="outline"
-			size="sm"
-			startIcon={<Icon icon={faCopy} />}
 			onClick={() => {
 				navigator.clipboard.writeText(code);
 				toast.success("Copied to clipboard");
 			}}
+			className="relative w-full flex items-center justify-between rounded-lg px-4 py-3 bg-gradient-to-r from-primary via-orange-400 to-primary overflow-hidden group cursor-pointer"
 		>
-			Using a Coding Agent? Copy Agent prompt
-		</Button>
+			<div className="absolute inset-px rounded-[7px] bg-background" />
+	<span className="relative z-10 text-sm font-medium bg-gradient-to-r text-left from-primary via-orange-400 to-primary bg-clip-text text-transparent">
+				Using a Coding Agent? Use this pre-built prompt to get started
+				faster.
+			</span>
+			<span className="relative z-10 flex items-center gap-1.5 text-xs font-semibold shrink-0 ml-4">
+				<Icon icon={faCopy} className="w-3.5 h-3.5 text-primary" />
+				Copy prompt
+			</span>
+		</button>
 	);
+}
+
+function RivetCopyAgentInstructionsButton() {
+	const code = useRivetAgentInstructionsCode();
+	return <AgentPromptBanner code={code} />;
 }
 
 function OtherCopyAgentInstructionsButton({
@@ -825,21 +834,7 @@ function OtherCopyAgentInstructionsButton({
 	provider?: Provider;
 }) {
 	const code = useOtherAgentInstructionsCode(provider);
-
-	return (
-		<Button
-			type="button"
-			variant="outline"
-			size="sm"
-			startIcon={<Icon icon={faCopy} />}
-			onClick={() => {
-				navigator.clipboard.writeText(code);
-				toast.success("Copied to clipboard");
-			}}
-		>
-			Using a Coding Agent? Copy Agent prompt
-		</Button>
-	);
+	return <AgentPromptBanner code={code} />;
 }
 
 const githubActionYaml = `name: Rivet Deploy
@@ -878,6 +873,7 @@ function BackendSetupRivet() {
 
 	return (
 		<div className="flex flex-col gap-6">
+			<CopyAgentInstructionsButton provider="rivet" />
 			<div className="flex gap-3">
 				<StepNumber n={1} />
 				<div className="flex-1 min-w-0">
@@ -892,7 +888,6 @@ function BackendSetupRivet() {
 						to the root of your project that builds and runs your
 						RivetKit server.
 					</p>
-					<CopyAgentInstructionsButton provider="rivet" />
 				</div>
 			</div>
 			<div className="flex gap-3">
@@ -995,6 +990,8 @@ function BackendSetup() {
 	if (provider !== "rivet") {
 		return (
 			<div className="flex flex-col gap-6">
+				<CopyAgentInstructionsButton provider={provider} />
+
 				<div className="flex gap-3">
 					<StepNumber n={1} />
 					<div className="flex-1 min-w-0">
@@ -1025,9 +1022,6 @@ function BackendSetup() {
 							<ConnectServerlessForm.ConnectionCheck
 								provider={provider}
 							/>
-						</div>
-						<div className="mt-4">
-							<CopyAgentInstructionsButton provider={provider} />
 						</div>
 					</div>
 				</div>
