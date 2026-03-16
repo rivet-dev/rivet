@@ -356,19 +356,21 @@ function UnexpectedInspectorError({
 	error: unknown;
 	metadata?: { version?: string; type?: string };
 }) {
+	// biome-ignore lint/correctness/useExhaustiveDependencies: we only want to log on initial error, not on metadata changes
 	useEffect(() => {
 		Sentry.captureException(error, {
 			contexts: {
 				inspector: {
 					error,
-					metadata,
+					type: metadata?.type,
+					version: metadata?.version,
 				},
 			},
 			tags: {
 				component: "ActorContextProvider",
 			},
 		});
-	});
+	}, []);
 	return (
 		<Info>
 			<p>

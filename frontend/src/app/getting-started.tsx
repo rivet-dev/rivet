@@ -434,7 +434,7 @@ export const registry = setup({
 
 ### Step 4: Expose the server
 
-If the project already has a server (Hono, Express, etc), integrate with `registry.handler()`:
+If the project already has a server (Hono, Express, etc), integrate with \`registry.handler()\`:
 
 \`\`\`ts
 app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
