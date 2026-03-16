@@ -1,3 +1,4 @@
+import type { Rivet } from "@rivet-gg/cloud";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { posthog } from "posthog-js";
 import { GettingStarted } from "@/app/getting-started";
@@ -6,6 +7,7 @@ import { NotFoundCard } from "@/app/not-found-card";
 import { RouteLayout } from "@/app/route-layout";
 import { FullscreenLoading, ls } from "@/components";
 import { deriveProviderFromMetadata } from "@/lib/data";
+import { isRivetApiError } from "@/lib/errors";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
@@ -16,11 +18,22 @@ export const Route = createFileRoute(
 			throw new Error("Invalid context type for this route");
 		}
 
-		const ns = await context.queryClient.ensureQueryData(
-			context.dataProvider.currentProjectNamespaceQueryOptions({
-				namespace: params.namespace,
-			}),
-		);
+		let ns: Rivet.NamespacesGetResponse.Namespace;
+		try {
+			ns = await context.queryClient.ensureQueryData(
+				context.dataProvider.currentProjectNamespaceQueryOptions({
+					namespace: params.namespace,
+				}),
+			);
+		} catch (error) {
+			if (isRivetApiError(error) && error.statusCode === 404) {
+				throw redirect({
+					to: "/orgs/$organization/projects/$project",
+					params,
+				});
+			}
+			throw error;
+		}
 
 		if (search.skipOnboarding) {
 			ls.onboarding.skipWelcome(params.project, params.namespace);
