@@ -2,6 +2,8 @@ use gas::prelude::*;
 use rivet_error::*;
 use serde::{Deserialize, Serialize};
 
+use crate::ops::serverless_metadata::fetch::ServerlessMetadataError;
+
 #[derive(RivetError, Debug, Clone, Deserialize, Serialize)]
 #[error("actor")]
 pub enum Actor {
@@ -90,4 +92,9 @@ pub enum RunnerConfig {
 pub enum ServerlessRunnerPool {
 	#[error("not_found", "No serverless pool for this runner exists.")]
 	NotFound,
+	#[error(
+		"failed_to_fetch_metadata",
+		"Failed to fetch serverless metadata: {reason:?}"
+	)]
+	FailedToFetchMetadata { reason: ServerlessMetadataError },
 }

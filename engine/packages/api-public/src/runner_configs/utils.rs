@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use anyhow::anyhow;
 use gas::prelude::*;
 
 use crate::ctx::ApiCtx;
@@ -65,12 +64,12 @@ pub async fn refresh_runner_config_metadata(
 	);
 
 	// Fetch metadata using the op
-	let result = ctx
+	let metadata = ctx
 		.op(pegboard::ops::serverless_metadata::fetch::Input { url, headers })
-		.await?;
-
-	let metadata =
-		result.map_err(|e| anyhow!("failed to fetch serverless runner metadata: {:?}", e))?;
+		.await?
+		.map_err(|e| {
+			pegboard::errors::ServerlessRunnerPool::FailedToFetchMetadata { reason: e }.build()
+		})?;
 
 	if !metadata.actor_names.is_empty() {
 		tracing::debug!(
