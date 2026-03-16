@@ -1,6 +1,7 @@
 use gas::prelude::*;
 use rivet_util::Id;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::ops::Deref;
 use utoipa::ToSchema;
 
@@ -35,6 +36,10 @@ pub struct Actor {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[schema(value_type = Option<Object>, additional_properties = true)]
 	pub error: Option<crate::actor::ActorError>,
+
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[schema(value_type = Option<Object>, additional_properties = true)]
+	pub metadata: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Copy, Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, ToSchema)]

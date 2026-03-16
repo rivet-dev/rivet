@@ -1,5 +1,6 @@
 pub mod actor;
 pub mod actor_kv;
+pub mod actor_metadata;
 pub mod backfill;
 pub mod epoxy;
 pub mod hibernating_request;

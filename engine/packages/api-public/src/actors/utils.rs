@@ -83,6 +83,7 @@ pub async fn fetch_actors_by_ids(
 				namespace: namespace.clone(),
 				name: None,
 				key: None,
+				metadata_key: Vec::new(),
 				actor_ids: None,
 				actor_id: dc_actor_ids,
 				include_destroyed,

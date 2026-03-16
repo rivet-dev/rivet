@@ -882,11 +882,10 @@ async fn handle_tunnel_message_mk1(
 
 	// Publish message to UPS
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
-	let msg_serialized = versioned::ToGateway::v3_to_v6(versioned::ToGateway::V3(
-		protocol::ToGateway::ToServerTunnelMessage(msg),
-	))?
-	.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)
-	.context("failed to serialize tunnel message for gateway")?;
+	let msg_serialized = versioned::ToGateway::V3(protocol::ToGateway::ToServerTunnelMessage(msg))
+		.v3_to_v8()?
+		.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)
+		.context("failed to serialize tunnel message for gateway")?;
 	ctx.ups()
 		.context("failed to get UPS instance for tunnel message")?
 		.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())

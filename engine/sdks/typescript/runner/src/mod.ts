@@ -21,7 +21,11 @@ export { RunnerActor, type ActorConfig };
 export { idToStr } from "./utils";
 
 const KV_EXPIRE: number = 30_000;
-const PROTOCOL_VERSION: number = 7;
+const PROTOCOL_VERSION: number = 8;
+const METADATA_KEY_REGEX = /^[a-z0-9._-]+$/;
+const METADATA_KEY_MAX_BYTES = 128;
+const METADATA_VALUE_MAX_BYTES = 4096;
+const UTF8_ENCODER = new TextEncoder();
 
 /** Warn once the backlog significantly exceeds the server's ack batch size. */
 const EVENT_BACKLOG_WARN_THRESHOLD = 10_000;
@@ -1624,6 +1628,69 @@ export class Runner {
 
 	clearAlarm(actorId: string, generation?: number) {
 		this.setAlarm(actorId, null, generation);
+	}
+
+	async patchMetadata(
+		actorId: string,
+		patch: Record<string, string | null>,
+		generation?: number,
+	): Promise<void> {
+		const actor = this.getActor(actorId, generation);
+		if (!actor) return;
+
+		const entries = Object.entries(patch);
+		if (entries.length === 0) {
+			throw new Error("Metadata patch cannot be empty");
+		}
+
+		const metadataPatch: protocol.MetadataPatchEntry[] = entries.map(
+			([key, value]) => {
+				const keyBytes = UTF8_ENCODER.encode(key).length;
+				if (keyBytes === 0) {
+					throw new Error("Metadata key cannot be empty");
+				}
+				if (keyBytes > METADATA_KEY_MAX_BYTES) {
+					throw new Error("Metadata key is too large");
+				}
+				if (!METADATA_KEY_REGEX.test(key)) {
+					throw new Error(`Invalid metadata key: ${key}`);
+				}
+				if (
+					value !== null &&
+					UTF8_ENCODER.encode(value).length > METADATA_VALUE_MAX_BYTES
+				) {
+					throw new Error(`Metadata value is too large for key: ${key}`);
+				}
+
+				return {
+					key,
+					value,
+				};
+			},
+		);
+
+		const metadataPatchEvent: protocol.EventActorPatchMetadata = {
+			patch: metadataPatch,
+		};
+
+		const eventWrapper: protocol.EventWrapper = {
+			checkpoint: {
+				actorId,
+				generation: actor.generation,
+				index: actor.nextEventIdx++,
+			},
+			inner: {
+				tag: "EventActorPatchMetadata",
+				val: metadataPatchEvent,
+			},
+		};
+
+		this.#recordEvent(eventWrapper);
+
+		this.__sendToServer({
+			tag: "ToServerEvents",
+			val: [eventWrapper],
+		});
 	}
 
 	#sendKvRequest(

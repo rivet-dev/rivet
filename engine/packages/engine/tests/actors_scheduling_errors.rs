@@ -209,6 +209,7 @@ async fn get_actor(
 			namespace: namespace.to_string(),
 			name: None,
 			key: None,
+			metadata_key: Vec::new(),
 			include_destroyed: Some(true),
 			limit: None,
 			cursor: None,

@@ -80,6 +80,15 @@ export function createTestInlineClientDriver(
 		listActors(input: ListActorsInput): Promise<ActorOutput[]> {
 			return makeInlineRequest(endpoint, encoding, "listActors", [input]);
 		},
+		patchMetadata(
+			actorId: string,
+			patch: Record<string, string | null>,
+		): Promise<void> {
+			return makeInlineRequest(endpoint, encoding, "patchMetadata", [
+				actorId,
+				patch,
+			]);
+		},
 		async sendRequest(
 			actorId: string,
 			actorRequest: Request,

@@ -44,6 +44,7 @@ pub async fn pegboard_actor_get_for_key(ctx: &OperationCtx, input: &Input) -> Re
 				created_before: None,
 				limit: 1,
 				fetch_error: input.fetch_error,
+				metadata: crate::actor_metadata::Projection::Full,
 			})
 			.await?;
 
@@ -81,6 +82,7 @@ pub async fn pegboard_actor_get_for_key(ctx: &OperationCtx, input: &Input) -> Re
 				key: Some(input.key.clone()),
 				actor_ids: None,
 				actor_id: Vec::new(),
+				metadata_key: Vec::new(),
 				include_destroyed: Some(false),
 				limit: Some(1),
 				cursor: None,

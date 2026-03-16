@@ -24,6 +24,10 @@ import type * as schema from "@/schemas/file-system-driver/mod";
 import type { GetUpgradeWebSocket } from "@/utils";
 import type { FileSystemGlobalState } from "./global-state";
 import { logger } from "./log";
+import {
+	projectMetadata,
+	validateMetadataProjectionKeys,
+} from "./metadata-limits";
 import { generateActorId } from "./utils";
 
 export class FileSystemManagerDriver implements ManagerDriver {
@@ -166,7 +170,10 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			throw new ActorStopping(actorId);
 		}
 
-		return actorStateToOutput(actor.state);
+		return actorStateToOutput(
+			actor.state,
+			await this.#state.readActorMetadata(actorId),
+		);
 	}
 
 	async getWithKey({
@@ -179,7 +186,10 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		// Check if actor exists
 		const actor = await this.#state.loadActor(actorId);
 		if (actor.state) {
-			return actorStateToOutput(actor.state);
+			return actorStateToOutput(
+				actor.state,
+				await this.#state.readActorMetadata(actorId),
+			);
 		}
 
 		return undefined;
@@ -221,13 +231,27 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		return actorStateToOutput(state);
 	}
 
-	async listActors({ name }: ListActorsInput): Promise<ActorOutput[]> {
+	async listActors({
+		name,
+		metadataKeys,
+	}: ListActorsInput): Promise<ActorOutput[]> {
+		if (metadataKeys && metadataKeys.length > 0) {
+			validateMetadataProjectionKeys(metadataKeys);
+		}
+
 		const actors: ActorOutput[] = [];
 		const itr = this.#state.getActorsIterator({});
+		const includeMetadata = (metadataKeys?.length ?? 0) > 0;
 
 		for await (const actor of itr) {
 			if (actor.name === name) {
-				actors.push(actorStateToOutput(actor));
+				const metadata = includeMetadata
+					? projectMetadata(
+							await this.#state.readActorMetadata(actor.actorId),
+							metadataKeys ?? [],
+						)
+					: undefined;
+				actors.push(actorStateToOutput(actor, metadata));
 			}
 		}
 
@@ -239,6 +263,13 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		});
 
 		return actors;
+	}
+
+	async patchMetadata(
+		actorId: string,
+		patch: Record<string, string | null>,
+	): Promise<void> {
+		await this.#state.patchActorMetadata(actorId, patch);
 	}
 
 	async kvGet(actorId: string, key: Uint8Array): Promise<string | null> {
@@ -271,7 +302,10 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	}
 }
 
-function actorStateToOutput(state: schema.ActorState): ActorOutput {
+function actorStateToOutput(
+	state: schema.ActorState,
+	metadata?: Record<string, string>,
+): ActorOutput {
 	return {
 		actorId: state.actorId,
 		name: state.name,
@@ -282,6 +316,7 @@ function actorStateToOutput(state: schema.ActorState): ActorOutput {
 			state.connectableTs !== null ? Number(state.connectableTs) : null,
 		sleepTs: state.sleepTs !== null ? Number(state.sleepTs) : null,
 		destroyTs: state.destroyTs !== null ? Number(state.destroyTs) : null,
+		metadata,
 	};
 }
 

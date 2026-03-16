@@ -223,6 +223,12 @@ export class ActorContext<
 		return this.#actor.schedule;
 	}
 
+	async patchMetadata(
+		patch: Record<string, string | null>,
+	): Promise<void> {
+		await this.#actor.driver.patchMetadata(this.#actor, patch);
+	}
+
 	/**
 	 * Gets the map of connections.
 	 */

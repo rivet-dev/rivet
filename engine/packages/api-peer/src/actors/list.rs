@@ -13,11 +13,12 @@ use rivet_api_types::{actors::list::*, pagination::Pagination};
 )]
 #[tracing::instrument(skip_all)]
 pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListResponse> {
-	let key = query.key;
+	let key = query.key.clone();
 	let actor_ids = [
-		query.actor_id,
+		query.actor_id.clone(),
 		query
 			.actor_ids
+			.clone()
 			.map(|x| {
 				x.split(',')
 					.map(|s| {
@@ -35,6 +36,15 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 	]
 	.concat();
 	let include_destroyed = query.include_destroyed.unwrap_or(false);
+	let metadata =
+		if !actor_ids.is_empty() || (query.name.is_some() && key.is_some() && !include_destroyed) {
+			pegboard::actor_metadata::Projection::Full
+		} else if query.metadata_key.is_empty() {
+			pegboard::actor_metadata::Projection::None
+		} else {
+			pegboard::actor_metadata::validate_projection_keys(&query.metadata_key)?;
+			pegboard::actor_metadata::Projection::Selected(query.metadata_key.clone())
+		};
 
 	// TODO: Update api-peer to require including the reservation ID in the query if querying with
 	// key in order to assert the request was sent to the correct datacenter
@@ -54,6 +64,7 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 			.op(pegboard::ops::actor::get::Input {
 				actor_ids,
 				fetch_error: true,
+				metadata,
 			})
 			.await?;
 
@@ -102,6 +113,7 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 					.transpose()?,
 				limit: query.limit.unwrap_or(100),
 				fetch_error: true,
+				metadata,
 			})
 			.await?;
 

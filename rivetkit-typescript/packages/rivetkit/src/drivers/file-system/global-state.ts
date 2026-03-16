@@ -1,6 +1,9 @@
 import invariant from "invariant";
 import { lookupInRegistry } from "@/actor/definition";
-import { ActorDuplicateKey } from "@/actor/errors";
+import {
+	ActorDuplicateKey,
+	ActorNotFound,
+} from "@/actor/errors";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { ActorKey } from "@/actor/mod";
 import type { AnyClient } from "@/client/client";
@@ -43,6 +46,10 @@ import {
 	validateKvKey,
 	validateKvKeys,
 } from "./kv-limits";
+import {
+	validateMetadataMap,
+	validateMetadataPatchEntries,
+} from "./metadata-limits";
 
 const DEFAULT_LIST_LIMIT = 16_384;
 
@@ -70,6 +77,8 @@ interface ActorEntry {
 	id: string;
 
 	state?: schema.ActorState;
+	metadata?: Record<string, string>;
+	metadataLoaded?: boolean;
 
 	/** Promise for loading the actor state. */
 	loadPromise?: Promise<ActorEntry>;
@@ -112,6 +121,7 @@ export class FileSystemGlobalState {
 	#stateDir: string;
 	#dbsDir: string;
 	#alarmsDir: string;
+	#metadataDir: string;
 
 	#persist: boolean;
 	#sqliteRuntime: SqliteRuntime;
@@ -156,12 +166,14 @@ export class FileSystemGlobalState {
 		this.#stateDir = path.join(this.#storagePath, "state");
 		this.#dbsDir = path.join(this.#storagePath, "databases");
 		this.#alarmsDir = path.join(this.#storagePath, "alarms");
+		this.#metadataDir = path.join(this.#storagePath, "metadata");
 
 		if (this.#persist) {
 			// Ensure storage directories exist synchronously during initialization
 			ensureDirectoryExistsSync(this.#stateDir);
 			ensureDirectoryExistsSync(this.#dbsDir);
 			ensureDirectoryExistsSync(this.#alarmsDir);
+			ensureDirectoryExistsSync(this.#metadataDir);
 
 			try {
 				const fsSync = getNodeFsSync();
@@ -215,6 +227,10 @@ export class FileSystemGlobalState {
 
 	getActorAlarmPath(actorId: string): string {
 		return getNodePath().join(this.#alarmsDir, actorId);
+	}
+
+	getActorMetadataPath(actorId: string): string {
+		return getNodePath().join(this.#metadataDir, `${actorId}.json`);
 	}
 
 	#getActorKvDatabasePath(actorId: string): string {
@@ -415,6 +431,8 @@ export class FileSystemGlobalState {
 
 		entry = {
 			id: actorId,
+			metadata: this.#persist ? undefined : {},
+			metadataLoaded: !this.#persist,
 			lifecycleState: ActorLifecycleState.NONEXISTENT,
 			generation: crypto.randomUUID(),
 		};
@@ -467,6 +485,8 @@ export class FileSystemGlobalState {
 				sleepTs: null,
 				destroyTs: null,
 			};
+			lockedEntry.metadata = {};
+			lockedEntry.metadataLoaded = true;
 			lockedEntry.lifecycleState = ActorLifecycleState.AWAKE;
 			if (this.#persist) {
 				await this.#performWrite(
@@ -590,6 +610,8 @@ export class FileSystemGlobalState {
 					sleepTs: null,
 					destroyTs: null,
 				};
+				lockedEntry.metadata = {};
+				lockedEntry.metadataLoaded = true;
 				if (this.#persist) {
 					await this.#performWrite(
 						actorId,
@@ -760,6 +782,20 @@ export class FileSystemGlobalState {
 							}
 						}
 					})(),
+					// Delete actor metadata file
+					(async () => {
+						try {
+							await fs.unlink(this.getActorMetadataPath(actorId));
+						} catch (err: any) {
+							if (err?.code !== "ENOENT") {
+								logger().error({
+									msg: "failed to delete actor metadata file",
+									actorId,
+									error: stringifyError(err),
+								});
+							}
+						}
+					})(),
 					// Delete actor alarm file
 					(async () => {
 						try {
@@ -792,6 +828,8 @@ export class FileSystemGlobalState {
 			actor.startPromise = undefined;
 			actor.alarmTimeout = undefined;
 			actor.alarmTimeout = undefined;
+			actor.metadata = undefined;
+			actor.metadataLoaded = false;
 			actor.pendingWriteResolver = undefined;
 			actor.lifecycleState = ActorLifecycleState.DESTROYED;
 		}
@@ -1168,6 +1206,56 @@ export class FileSystemGlobalState {
 		return state;
 	}
 
+	async readActorMetadata(actorId: string): Promise<Record<string, string>> {
+		await this.#waitForActorStop(actorId);
+		await this.loadActor(actorId);
+
+		return await this.#withActorWrite(actorId, async (entry) => {
+			if (!entry.state) {
+				throw new ActorNotFound(actorId);
+			}
+
+			return { ...(await this.#loadActorMetadata(entry)) };
+		});
+	}
+
+	async patchActorMetadata(
+		actorId: string,
+		patch: Record<string, string | null>,
+	): Promise<void> {
+		const entries = Object.entries(patch);
+		validateMetadataPatchEntries(entries);
+
+		await this.#waitForActorStop(actorId);
+		await this.loadActor(actorId);
+
+		await this.#withActorWrite(actorId, async (entry) => {
+			if (!entry.state) {
+				throw new ActorNotFound(actorId);
+			}
+
+			const nextMetadata = {
+				...(await this.#loadActorMetadata(entry)),
+			};
+			for (const [key, value] of entries) {
+				if (value === null) {
+					delete nextMetadata[key];
+				} else {
+					nextMetadata[key] = value;
+				}
+			}
+
+			validateMetadataMap(nextMetadata);
+			await this.#writeActorMetadata(
+				entry.id,
+				entry.generation,
+				nextMetadata,
+			);
+			entry.metadata = nextMetadata;
+			entry.metadataLoaded = true;
+		});
+	}
+
 	getActorOrError(actorId: string): ActorEntry {
 		const entry = this.#actors.get(actorId);
 		if (!entry) throw new Error(`No entry for actor: ${actorId}`);
@@ -1176,6 +1264,106 @@ export class FileSystemGlobalState {
 
 	async createDatabase(actorId: string): Promise<string | undefined> {
 		return this.getActorDbPath(actorId);
+	}
+
+	async #loadActorMetadata(entry: ActorEntry): Promise<Record<string, string>> {
+		if (entry.metadataLoaded) {
+			return entry.metadata ?? {};
+		}
+
+		entry.metadata = await this.#readPersistedActorMetadata(entry.id);
+		entry.metadataLoaded = true;
+		return entry.metadata;
+	}
+
+	async #readPersistedActorMetadata(
+		actorId: string,
+	): Promise<Record<string, string>> {
+		if (!this.#persist) {
+			return {};
+		}
+
+		try {
+			const raw = await getNodeFs().readFile(
+				this.getActorMetadataPath(actorId),
+				"utf8",
+			);
+			const parsed = JSON.parse(raw) as unknown;
+			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+				throw new Error("metadata file must contain an object");
+			}
+
+			const metadata = Object.fromEntries(
+				Object.entries(parsed).map(([key, value]) => {
+					if (typeof value !== "string") {
+						throw new Error(
+							`metadata value for key '${key}' must be a string`,
+						);
+					}
+
+					return [key, value];
+				}),
+			) as Record<string, string>;
+			validateMetadataMap(metadata);
+			return metadata;
+		} catch (error: any) {
+			if (error?.code === "ENOENT") {
+				return {};
+			}
+
+			throw error;
+		}
+	}
+
+	async #writeActorMetadata(
+		actorId: string,
+		generation: string,
+		metadata: Record<string, string>,
+	): Promise<void> {
+		if (!this.#persist) {
+			return;
+		}
+
+		const metadataPath = this.getActorMetadataPath(actorId);
+		const crypto = getNodeCrypto();
+		const tempPath = `${metadataPath}.tmp.${crypto.randomUUID()}`;
+
+		try {
+			await ensureDirectoryExists(getNodePath().dirname(metadataPath));
+
+			if (Object.keys(metadata).length === 0) {
+				if (!this.isGenerationCurrentAndNotDestroyed(actorId, generation)) {
+					return;
+				}
+
+				try {
+					await getNodeFs().unlink(metadataPath);
+				} catch (error: any) {
+					if (error?.code !== "ENOENT") {
+						throw error;
+					}
+				}
+
+				return;
+			}
+
+			await getNodeFs().writeFile(tempPath, JSON.stringify(metadata));
+
+			if (!this.isGenerationCurrentAndNotDestroyed(actorId, generation)) {
+				try {
+					await getNodeFs().unlink(tempPath);
+				} catch { }
+				return;
+			}
+
+			await getNodeFs().rename(tempPath, metadataPath);
+		} catch (error) {
+			try {
+				await getNodeFs().unlink(tempPath);
+			} catch { }
+
+			throw error;
+		}
 	}
 
 	/**
@@ -1308,40 +1496,45 @@ export class FileSystemGlobalState {
 	 * Cleanup stale temp files on startup (synchronous)
 	 */
 	#cleanupTempFilesSync(): void {
-		try {
-			const fsSync = getNodeFsSync();
-			const files = fsSync.readdirSync(this.#stateDir);
-			const tempFiles = files.filter((f) => f.includes(".tmp."));
+		const directories = [this.#stateDir, this.#metadataDir, this.#alarmsDir];
+		const fsSync = getNodeFsSync();
+		const path = getNodePath();
+		const oneHourAgo = Date.now() - 3600000; // 1 hour in ms
 
-			const oneHourAgo = Date.now() - 3600000; // 1 hour in ms
+		for (const directory of directories) {
+			try {
+				const files = fsSync.existsSync(directory)
+					? fsSync.readdirSync(directory)
+					: [];
+				const tempFiles = files.filter((f) => f.includes(".tmp."));
 
-			for (const tempFile of tempFiles) {
-				try {
-					const path = getNodePath();
-					const fullPath = path.join(this.#stateDir, tempFile);
-					const stat = fsSync.statSync(fullPath);
+				for (const tempFile of tempFiles) {
+					try {
+						const fullPath = path.join(directory, tempFile);
+						const stat = fsSync.statSync(fullPath);
 
-					// Remove if older than 1 hour
-					if (stat.mtimeMs < oneHourAgo) {
-						fsSync.unlinkSync(fullPath);
-						logger().info({
-							msg: "cleaned up stale temp file",
+						if (stat.mtimeMs < oneHourAgo) {
+							fsSync.unlinkSync(fullPath);
+							logger().info({
+								msg: "cleaned up stale temp file",
+								file: tempFile,
+							});
+						}
+					} catch (err) {
+						logger().debug({
+							msg: "failed to cleanup temp file",
 							file: tempFile,
+							error: err,
 						});
 					}
-				} catch (err) {
-					logger().debug({
-						msg: "failed to cleanup temp file",
-						file: tempFile,
-						error: err,
-					});
 				}
+			} catch (err) {
+				logger().error({
+					msg: "failed to read actors directory for cleanup",
+					directory,
+					error: err,
+				});
 			}
-		} catch (err) {
-			logger().error({
-				msg: "failed to read actors directory for cleanup",
-				error: err,
-			});
 		}
 	}
 

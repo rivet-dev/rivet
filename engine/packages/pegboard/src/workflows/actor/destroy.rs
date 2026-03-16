@@ -141,6 +141,8 @@ async fn update_state_and_db(
 					)?;
 				}
 
+				tx.clear_subspace_range(&keys::actor_metadata::subspace(input.actor_id));
+
 				// Update metrics
 				namespace::keys::metric::inc(
 					&tx.with_subspace(namespace::keys::subspace()),

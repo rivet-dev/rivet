@@ -28,6 +28,7 @@ pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result
 		ctx.op(pegboard::ops::actor::get::Input {
 			actor_ids: vec![path.actor_id],
 			fetch_error: false,
+			metadata: pegboard::actor_metadata::Projection::None,
 		}),
 		ctx.op(namespace::ops::resolve_for_name_global::Input {
 			name: query.namespace,
