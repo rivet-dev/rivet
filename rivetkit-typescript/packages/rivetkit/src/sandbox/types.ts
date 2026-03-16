@@ -32,6 +32,8 @@ export const SANDBOX_AGENT_ACTION_METHODS = [
 	"resumeSession",
 	"resumeOrCreateSession",
 	"destroySandbox",
+	"pauseSandbox",
+	"killSandbox",
 	"destroySession",
 	"setSessionMode",
 	"setSessionConfigOption",
@@ -119,6 +121,8 @@ export interface SandboxActorVars {
 	activeHooks: Set<Promise<void>>;
 	warningTimeoutBySessionId: Map<string, ReturnType<typeof setTimeout>>;
 	staleTimeoutBySessionId: Map<string, ReturnType<typeof setTimeout>>;
+	/** Interval handle for periodic sandbox keep-alive while sessions are active. */
+	keepAliveInterval: ReturnType<typeof setInterval> | null;
 }
 
 /** @deprecated Use `SandboxActorVars` instead. */

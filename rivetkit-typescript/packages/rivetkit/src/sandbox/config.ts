@@ -22,6 +22,9 @@ const SandboxProviderSchema = z.object({
 	name: z.string(),
 	create: zFunction<SandboxProvider["create"]>(),
 	destroy: zFunction<SandboxProvider["destroy"]>(),
+	reconnect: zFunction<NonNullable<SandboxProvider["reconnect"]>>().optional(),
+	pause: zFunction<NonNullable<SandboxProvider["pause"]>>().optional(),
+	kill: zFunction<NonNullable<SandboxProvider["kill"]>>().optional(),
 	getUrl: zFunction<NonNullable<SandboxProvider["getUrl"]>>().optional(),
 	getFetch: zFunction<NonNullable<SandboxProvider["getFetch"]>>().optional(),
 	ensureServer: zFunction<NonNullable<SandboxProvider["ensureServer"]>>().optional(),
@@ -35,6 +38,16 @@ export const SandboxActorOptionsSchema = z
 		// Clear active-turn state after this timeout so a missing terminal event
 		// cannot keep the actor awake forever.
 		staleAfterMs: z.number().positive().default(5 * 60_000),
+		// What to do when the provider reports the sandbox has been destroyed or
+		// expired (e.g. E2B sandbox timeout). "destroy" marks the sandbox as
+		// destroyed and rejects subsequent calls. "recreate" provisions a new
+		// sandbox transparently.
+		onSandboxExpired: z.enum(["destroy", "recreate"]).default("destroy"),
+		// Interval at which the actor extends the sandbox timeout while clients
+		// are connected. Set to 0 to disable keep-alive. The extension duration
+		// is equal to the interval so the sandbox stays alive as long as sessions
+		// are active.
+		keepAliveIntervalMs: z.number().nonnegative().default(0),
 	})
 	.strict()
 	.prefault(() => ({}))
@@ -61,6 +74,7 @@ export const SandboxActorConfigSchema = z
 		onBeforeConnect: zFunction().optional(),
 		onSessionEvent: zFunction().optional(),
 		onPermissionRequest: zFunction().optional(),
+		onSandboxExpired: zFunction().optional(),
 	})
 	.strict()
 	.refine(
@@ -104,6 +118,10 @@ interface SandboxActorConfigCallbacks<TConnParams> {
 		sessionId: string,
 		request: Parameters<PermissionRequestListener>[0],
 	) => void | Promise<void>;
+	onSandboxExpired?: (
+		c: SandboxActorContext<TConnParams>,
+		error: Error,
+	) => void | Promise<void>;
 }
 
 type SandboxActorProviderConfig<TConnParams> =
@@ -126,6 +144,7 @@ export type SandboxActorConfig<TConnParams = undefined> = Omit<
 	| "onBeforeConnect"
 	| "onSessionEvent"
 	| "onPermissionRequest"
+	| "onSandboxExpired"
 > &
 	SandboxActorConfigCallbacks<TConnParams> &
 	SandboxActorProviderConfig<TConnParams>;
@@ -138,6 +157,7 @@ export type SandboxActorConfigInput<TConnParams = undefined> = Omit<
 	| "onBeforeConnect"
 	| "onSessionEvent"
 	| "onPermissionRequest"
+	| "onSandboxExpired"
 > &
 	SandboxActorConfigCallbacks<TConnParams> &
 	SandboxActorProviderConfig<TConnParams>;

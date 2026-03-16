@@ -20,6 +20,9 @@ export {
 	SANDBOX_AGENT_ACTION_METHODS,
 	SANDBOX_AGENT_HOOK_METHODS,
 } from "./types";
+export {
+	SandboxDestroyedError,
+} from "sandbox-agent";
 export type {
 	PermissionReply,
 	ProcessLogFollowQuery,
