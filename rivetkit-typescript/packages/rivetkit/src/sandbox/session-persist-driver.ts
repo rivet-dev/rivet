@@ -159,9 +159,8 @@ export class SqliteSessionPersistDriver implements SessionPersistDriver {
 					raw_payload_json
 				)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-				ON CONFLICT(id) DO UPDATE SET
-					session_id = excluded.session_id,
-					event_index = excluded.event_index,
+				ON CONFLICT(session_id, event_index) DO UPDATE SET
+					id = excluded.id,
 					created_at = excluded.created_at,
 					connection_id = excluded.connection_id,
 					sender = excluded.sender,
