@@ -46,8 +46,8 @@ import {
 } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { deriveProviderFromMetadata } from "@/lib/data";
-import { cloudEnv } from "@/lib/env";
 import { successfulBackendSetupEffect } from "@/lib/effects";
+import { cloudEnv } from "@/lib/env";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
 import { Button } from "../components/ui/button";
@@ -149,7 +149,7 @@ export function GettingStarted({
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3 }}
 			>
-				<div className="-full flex items-safe-center justify-center [&_[data-component='stepper']]:w-full [&:has([data-wide='true'])_[data-component='stepper']]:max-w-[64rem] has-[[data-wide='true']]:w-auto [&_[data-component='stepper']]:max-w-[32rem] px-4 h-full overflow-auto pt-8">
+				<div className="-full flex items-safe-center justify-center [&_[data-component='stepper']>form]:mx-auto [&_[data-component='stepper']]:overflow-x-hidden [&_[data-component='stepper']]:w-full [&:has([data-wide='true'])_[data-component='stepper']>form]:max-w-[64rem] has-[[data-wide='true']]:w-auto [&_[data-component='stepper']>form]:max-w-[32rem] px-4 h-full overflow-auto pt-8">
 					<CodeGroupSyncProvider>
 						<StepperForm
 							{...stepper}
@@ -383,11 +383,125 @@ function InstallStep() {
 	);
 }
 
-const agentPrompt = `Read through the existing project to understand the codebase. I want to add Rivet Actors to this project. Ask me what I'd like to build with actors, then set it up using RivetKit and run it locally. Use the RivetKit skill for guidance.`;
+const agentPrompt = `# RivetKit Local Dev Setup
+
+Read through the existing project to understand the codebase. I want to add Rivet Actors to this project.
+
+Before making any changes, read the Rivet Actors documentation at https://rivet.dev/docs/actors to understand how RivetKit works, including the actor API, state management, events, actions, connections, and client setup.
+
+Add a note to the project's CLAUDE.md, AGENTS.md, or similar AI agent instructions file linking to https://rivet.dev/llms.txt as a reference for working with RivetKit in future conversations. Create the file if one doesn't exist.
+
+## Walk me through the following steps
+
+### Step 1: Ask what to build
+
+Ask me what I'd like to build with actors before writing any code. Suggest ideas based on the project, such as:
+
+- AI agents
+- Coding agent & sandbox orchestration
+- Realtime collaboration (shared docs, cursors, chat)
+- Workflow automation (background jobs, queues, scheduling)
+- Per-user or per-tenant data backends
+- Multiplayer games
+- WebSocket servers and custom protocols
+- Local-first sync (offline-first apps that sync state when reconnected)
+- Rate limiters & session management (per-user stateful middleware)
+
+### Step 2: Install RivetKit
+
+Install RivetKit: \`npm install rivetkit\`
+
+If the project needs a frontend (recommended for realtime features), also install the React client: \`npm install @rivetkit/react\`
+
+### Step 3: Define actors and registry
+
+Create an actors file with a registry:
+
+\`\`\`ts
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({
+  state: { /* initial state */ },
+  actions: {
+    myAction: (c, arg: string) => { /* ... */ },
+  },
+});
+
+export const registry = setup({
+  use: { myActor },
+});
+\`\`\`
+
+### Step 4: Expose the server
+
+If the project already has a server (Hono, Express, etc), integrate with \`registry.handler()\`:
+
+\`\`\`ts
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+\`\`\`
+
+Otherwise, use \`registry.serve()\` for a standalone server.
+
+### Step 5: Connect a client
+
+\`createClient\` from \`rivetkit/client\` works on both frontend and backend. It automatically detects the environment:
+- **Browser**: defaults to \`window.location.origin + "/api/rivet"\`
+- **Server**: defaults to \`http://127.0.0.1:6420\`
+
+\`\`\`ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./actors";
+
+const client = createClient<typeof registry>();
+const handle = client.myActor.getOrCreate(["my-key"]);
+
+// Stateless call
+await handle.myAction("hello");
+
+// Stateful connection (for realtime events)
+const conn = handle.connect();
+conn.on("eventName", (data) => console.log(data));
+\`\`\`
+
+For React frontends, use \`@rivetkit/react\` for hooks-based integration (see https://rivet.dev/docs/clients/react):
+
+\`\`\`tsx
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./actors";
+
+const { useActor } = createRivetKit<typeof registry>();
+
+function MyComponent() {
+  const actor = useActor({ name: "myActor", key: ["my-key"] });
+  actor.useEvent("eventName", (data) => console.log(data));
+  return <button onClick={() => actor.connection?.myAction("hello")}>Go</button>;
+}
+\`\`\`
+
+### Step 6: Verify setup
+
+- Verify \`/api/rivet/metadata\` returns 200.
+- Test actors programmatically using the inspector HTTP API to verify they work (see https://rivet.dev/docs/actors/debugging). Key endpoints are available at \`/api/rivet/actor/{actor_id}/inspector/*\`:
+  - \`GET /inspector/summary\` - full actor snapshot
+  - \`POST /inspector/action/{name}\` - execute an action with \`{"args": [...]}\`
+  - \`GET /inspector/state\` - read actor state
+- If a frontend was implemented, use browser MCP to verify it works end-to-end.
+
+For detailed setup instructions, see the quickstart guides:
+
+- Node.js & Bun: https://rivet.dev/docs/actors/quickstart/backend
+- React: https://rivet.dev/docs/actors/quickstart/react
+- Next.js: https://rivet.dev/docs/actors/quickstart/next-js
+- Cloudflare Workers: https://rivet.dev/docs/actors/quickstart/cloudflare-workers
+
+## If You Get Stuck
+
+Check the troubleshooting guide at https://rivet.dev/docs/actors/troubleshooting. If that doesn't help, prompt the user to join the Rivet Discord (https://rivet.dev/discord) or file an issue on GitHub (https://github.com/rivet-dev/rivet). Generate a report with: symptoms (error, local vs deployed), what you've tried, and environment (RivetKit version, runtime, provider, HTTP router).`;
 
 function RunLocallyStep() {
 	return (
 		<div className="flex flex-col gap-5">
+			<AgentPromptBanner code={agentPrompt} />
 			<div>
 				<p className="font-medium mb-1.5">
 					Follow the quickstart guide
@@ -405,44 +519,6 @@ function RunLocallyStep() {
 						<Icon icon={faArrowRight} className="ms-2" />
 					</a>
 				</Button>
-			</div>
-			<div className="relative flex items-center gap-3">
-				<div className="flex-1 border-t border-dashed" />
-				<span className="text-xs text-muted-foreground">or</span>
-				<div className="flex-1 border-t border-dashed" />
-			</div>
-			<div>
-				<p className="font-medium mb-1.5">Use your coding agent</p>
-
-				<p className="text-sm text-muted-foreground mb-2">
-					Install the Rivet skill so your coding agent knows how to
-					work with RivetKit.
-				</p>
-				<PackageManagerCode
-					npx={`npx skills add ${skillsPath}`}
-					yarn={`yarn dlx skills add ${skillsPath}`}
-					bun={`bunx skills add ${skillsPath}`}
-					deno={`deno run -A npm:skills add ${skillsPath}`}
-					pnpm={`pnpx skills add ${skillsPath}`}
-					git={`git clone https://github.com/${skillsPath}.git .skills`}
-				/>
-
-				<p className="text-sm text-muted-foreground mb-2 mt-4">
-					Copy this prompt into your coding agent:
-				</p>
-				<div className="relative group rounded-md bg-muted/50 p-3 pr-10 text-sm font-mono leading-relaxed">
-					{agentPrompt}
-					<button
-						type="button"
-						className="absolute top-2 right-2 p-1.5 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-muted transition-all"
-						onClick={() => {
-							navigator.clipboard.writeText(agentPrompt);
-							toast.success("Copied to clipboard");
-						}}
-					>
-						<Icon icon={faCopy} className="w-3.5 h-3.5" />
-					</button>
-				</div>
 			</div>
 		</div>
 	);
@@ -800,23 +876,39 @@ function CopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
 	return <OtherCopyAgentInstructionsButton provider={provider} />;
 }
 
-function RivetCopyAgentInstructionsButton() {
-	const code = useRivetAgentInstructionsCode();
-
+function AgentPromptBanner({ code }: { code: string }) {
 	return (
-		<Button
+		<button
 			type="button"
-			variant="outline"
-			size="sm"
-			startIcon={<Icon icon={faCopy} />}
 			onClick={() => {
 				navigator.clipboard.writeText(code);
 				toast.success("Copied to clipboard");
 			}}
+			className="relative w-full flex items-center justify-between rounded-lg px-4 py-3 bg-gradient-to-r from-primary via-orange-400 to-primary overflow-hidden group cursor-pointer"
 		>
-			Using a Coding Agent? Copy Agent prompt
-		</Button>
+			<div className="absolute inset-px rounded-[7px] bg-background" />
+			<span className="relative z-10 text-sm font-medium bg-gradient-to-r text-left from-primary via-orange-400 to-primary bg-clip-text text-transparent">
+				Using a Coding Agent? Use this pre-built prompt to get started
+				faster.
+			</span>
+			<Button
+				asChild
+				variant="ghost"
+				size="sm"
+				className="relative z-10 flex items-center gap-1.5 text-xs font-semibold shrink-0 ml-4"
+			>
+				<div>
+					<Icon icon={faCopy} className="w-3.5 h-3.5 text-primary" />
+					Copy prompt
+				</div>
+			</Button>
+		</button>
 	);
+}
+
+function RivetCopyAgentInstructionsButton() {
+	const code = useRivetAgentInstructionsCode();
+	return <AgentPromptBanner code={code} />;
 }
 
 function OtherCopyAgentInstructionsButton({
@@ -825,21 +917,7 @@ function OtherCopyAgentInstructionsButton({
 	provider?: Provider;
 }) {
 	const code = useOtherAgentInstructionsCode(provider);
-
-	return (
-		<Button
-			type="button"
-			variant="outline"
-			size="sm"
-			startIcon={<Icon icon={faCopy} />}
-			onClick={() => {
-				navigator.clipboard.writeText(code);
-				toast.success("Copied to clipboard");
-			}}
-		>
-			Using a Coding Agent? Copy Agent prompt
-		</Button>
-	);
+	return <AgentPromptBanner code={code} />;
 }
 
 const githubActionYaml = `name: Rivet Deploy
@@ -878,6 +956,7 @@ function BackendSetupRivet() {
 
 	return (
 		<div className="flex flex-col gap-6">
+			<CopyAgentInstructionsButton provider="rivet" />
 			<div className="flex gap-3">
 				<StepNumber n={1} />
 				<div className="flex-1 min-w-0">
@@ -892,7 +971,6 @@ function BackendSetupRivet() {
 						to the root of your project that builds and runs your
 						RivetKit server.
 					</p>
-					<CopyAgentInstructionsButton provider="rivet" />
 				</div>
 			</div>
 			<div className="flex gap-3">
@@ -995,6 +1073,8 @@ function BackendSetup() {
 	if (provider !== "rivet") {
 		return (
 			<div className="flex flex-col gap-6">
+				<CopyAgentInstructionsButton provider={provider} />
+
 				<div className="flex gap-3">
 					<StepNumber n={1} />
 					<div className="flex-1 min-w-0">
@@ -1025,9 +1105,6 @@ function BackendSetup() {
 							<ConnectServerlessForm.ConnectionCheck
 								provider={provider}
 							/>
-						</div>
-						<div className="mt-4">
-							<CopyAgentInstructionsButton provider={provider} />
 						</div>
 					</div>
 				</div>
