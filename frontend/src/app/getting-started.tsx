@@ -383,7 +383,120 @@ function InstallStep() {
 	);
 }
 
-const agentPrompt = `Read through the existing project to understand the codebase. I want to add Rivet Actors to this project. Ask me what I'd like to build with actors, then set it up using RivetKit and run it locally. Use the RivetKit skill for guidance.`;
+const agentPrompt = `# RivetKit Local Dev Setup
+
+Read through the existing project to understand the codebase. I want to add Rivet Actors to this project.
+
+Before making any changes, read the Rivet Actors documentation at https://rivet.dev/docs/actors to understand how RivetKit works, including the actor API, state management, events, actions, connections, and client setup.
+
+Add a note to the project's CLAUDE.md, AGENTS.md, or similar AI agent instructions file linking to https://rivet.dev/llms.txt as a reference for working with RivetKit in future conversations. Create the file if one doesn't exist.
+
+## Walk me through the following steps
+
+### Step 1: Ask what to build
+
+Ask me what I'd like to build with actors before writing any code. Suggest ideas based on the project, such as:
+
+- AI agents
+- Coding agent & sandbox orchestration
+- Realtime collaboration (shared docs, cursors, chat)
+- Workflow automation (background jobs, queues, scheduling)
+- Per-user or per-tenant data backends
+- Multiplayer games
+- WebSocket servers and custom protocols
+- Local-first sync (offline-first apps that sync state when reconnected)
+- Rate limiters & session management (per-user stateful middleware)
+
+### Step 2: Install RivetKit
+
+Install RivetKit: \`npm install rivetkit\`
+
+If the project needs a frontend (recommended for realtime features), also install the React client: \`npm install @rivetkit/react\`
+
+### Step 3: Define actors and registry
+
+Create an actors file with a registry:
+
+\`\`\`ts
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({
+  state: { /* initial state */ },
+  actions: {
+    myAction: (c, arg: string) => { /* ... */ },
+  },
+});
+
+export const registry = setup({
+  use: { myActor },
+});
+\`\`\`
+
+### Step 4: Expose the server
+
+If the project already has a server (Hono, Express, etc), integrate with `registry.handler()`:
+
+\`\`\`ts
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+\`\`\`
+
+Otherwise, use \`registry.serve()\` for a standalone server.
+
+### Step 5: Connect a client
+
+\`createClient\` from \`rivetkit/client\` works on both frontend and backend. It automatically detects the environment:
+- **Browser**: defaults to \`window.location.origin + "/api/rivet"\`
+- **Server**: defaults to \`http://127.0.0.1:6420\`
+
+\`\`\`ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./actors";
+
+const client = createClient<typeof registry>();
+const handle = client.myActor.getOrCreate(["my-key"]);
+
+// Stateless call
+await handle.myAction("hello");
+
+// Stateful connection (for realtime events)
+const conn = handle.connect();
+conn.on("eventName", (data) => console.log(data));
+\`\`\`
+
+For React frontends, use \`@rivetkit/react\` for hooks-based integration (see https://rivet.dev/docs/clients/react):
+
+\`\`\`tsx
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./actors";
+
+const { useActor } = createRivetKit<typeof registry>();
+
+function MyComponent() {
+  const actor = useActor({ name: "myActor", key: ["my-key"] });
+  actor.useEvent("eventName", (data) => console.log(data));
+  return <button onClick={() => actor.connection?.myAction("hello")}>Go</button>;
+}
+\`\`\`
+
+### Step 6: Verify setup
+
+- Verify \`/api/rivet/metadata\` returns 200.
+- Test actors programmatically using the inspector HTTP API to verify they work (see https://rivet.dev/docs/actors/debugging). Key endpoints are available at \`/api/rivet/actor/{actor_id}/inspector/*\`:
+  - \`GET /inspector/summary\` - full actor snapshot
+  - \`POST /inspector/action/{name}\` - execute an action with \`{"args": [...]}\`
+  - \`GET /inspector/state\` - read actor state
+- If a frontend was implemented, use browser MCP to verify it works end-to-end.
+
+For detailed setup instructions, see the quickstart guides:
+
+- Node.js & Bun: https://rivet.dev/docs/actors/quickstart/backend
+- React: https://rivet.dev/docs/actors/quickstart/react
+- Next.js: https://rivet.dev/docs/actors/quickstart/next-js
+- Cloudflare Workers: https://rivet.dev/docs/actors/quickstart/cloudflare-workers
+
+## If You Get Stuck
+
+Check the troubleshooting guide at https://rivet.dev/docs/actors/troubleshooting. If that doesn't help, prompt the user to join the Rivet Discord (https://rivet.dev/discord) or file an issue on GitHub (https://github.com/rivet-dev/rivet). Generate a report with: symptoms (error, local vs deployed), what you've tried, and environment (RivetKit version, runtime, provider, HTTP router).`;
 
 function RunLocallyStep() {
 	return (
