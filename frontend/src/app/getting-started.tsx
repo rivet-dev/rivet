@@ -149,7 +149,7 @@ export function GettingStarted({
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3 }}
 			>
-				<div className="-full flex items-safe-center justify-center [&_[data-component='stepper']]:w-full [&:has([data-wide='true'])_[data-component='stepper']]:max-w-[64rem] has-[[data-wide='true']]:w-auto [&_[data-component='stepper']]:max-w-[32rem] px-4 h-full overflow-auto pt-8">
+				<div className="-full flex items-safe-center justify-center [&_[data-component='stepper']>form]:mx-auto [&_[data-component='stepper']]:overflow-x-hidden [&_[data-component='stepper']]:w-full [&:has([data-wide='true'])_[data-component='stepper']>form]:max-w-[64rem] has-[[data-wide='true']]:w-auto [&_[data-component='stepper']>form]:max-w-[32rem] px-4 h-full overflow-auto pt-8">
 					<CodeGroupSyncProvider>
 						<StepperForm
 							{...stepper}
@@ -388,6 +388,7 @@ const agentPrompt = `Read through the existing project to understand the codebas
 function RunLocallyStep() {
 	return (
 		<div className="flex flex-col gap-5">
+			<AgentPromptBanner code={agentPrompt} />
 			<div>
 				<p className="font-medium mb-1.5">
 					Follow the quickstart guide
@@ -405,44 +406,6 @@ function RunLocallyStep() {
 						<Icon icon={faArrowRight} className="ms-2" />
 					</a>
 				</Button>
-			</div>
-			<div className="relative flex items-center gap-3">
-				<div className="flex-1 border-t border-dashed" />
-				<span className="text-xs text-muted-foreground">or</span>
-				<div className="flex-1 border-t border-dashed" />
-			</div>
-			<div>
-				<p className="font-medium mb-1.5">Use your coding agent</p>
-
-				<p className="text-sm text-muted-foreground mb-2">
-					Install the Rivet skill so your coding agent knows how to
-					work with RivetKit.
-				</p>
-				<PackageManagerCode
-					npx={`npx skills add ${skillsPath}`}
-					yarn={`yarn dlx skills add ${skillsPath}`}
-					bun={`bunx skills add ${skillsPath}`}
-					deno={`deno run -A npm:skills add ${skillsPath}`}
-					pnpm={`pnpx skills add ${skillsPath}`}
-					git={`git clone https://github.com/${skillsPath}.git .skills`}
-				/>
-
-				<p className="text-sm text-muted-foreground mb-2 mt-4">
-					Copy this prompt into your coding agent:
-				</p>
-				<div className="relative group rounded-md bg-muted/50 p-3 pr-10 text-sm font-mono leading-relaxed">
-					{agentPrompt}
-					<button
-						type="button"
-						className="absolute top-2 right-2 p-1.5 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-muted transition-all"
-						onClick={() => {
-							navigator.clipboard.writeText(agentPrompt);
-							toast.success("Copied to clipboard");
-						}}
-					>
-						<Icon icon={faCopy} className="w-3.5 h-3.5" />
-					</button>
-				</div>
 			</div>
 		</div>
 	);
@@ -811,14 +774,21 @@ function AgentPromptBanner({ code }: { code: string }) {
 			className="relative w-full flex items-center justify-between rounded-lg px-4 py-3 bg-gradient-to-r from-primary via-orange-400 to-primary overflow-hidden group cursor-pointer"
 		>
 			<div className="absolute inset-px rounded-[7px] bg-background" />
-	<span className="relative z-10 text-sm font-medium bg-gradient-to-r text-left from-primary via-orange-400 to-primary bg-clip-text text-transparent">
+			<span className="relative z-10 text-sm font-medium bg-gradient-to-r text-left from-primary via-orange-400 to-primary bg-clip-text text-transparent">
 				Using a Coding Agent? Use this pre-built prompt to get started
 				faster.
 			</span>
-			<span className="relative z-10 flex items-center gap-1.5 text-xs font-semibold shrink-0 ml-4">
-				<Icon icon={faCopy} className="w-3.5 h-3.5 text-primary" />
-				Copy prompt
-			</span>
+			<Button
+				asChild
+				variant="ghost"
+				size="sm"
+				className="relative z-10 flex items-center gap-1.5 text-xs font-semibold shrink-0 ml-4"
+			>
+				<div>
+					<Icon icon={faCopy} className="w-3.5 h-3.5 text-primary" />
+					Copy prompt
+				</div>
+			</Button>
 		</button>
 	);
 }

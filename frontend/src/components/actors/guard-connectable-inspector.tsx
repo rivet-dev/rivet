@@ -15,7 +15,13 @@ import {
 	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useRouteContext, useSearch } from "@tanstack/react-router";
-import { createContext, type ReactNode, useContext, useMemo } from "react";
+import {
+	createContext,
+	type ReactNode,
+	useContext,
+	useEffect,
+	useMemo,
+} from "react";
 import { match, P } from "ts-pattern";
 import { useLocalStorage } from "usehooks-ts";
 import { HelpDropdown } from "@/app/help-dropdown";
@@ -350,16 +356,18 @@ function UnexpectedInspectorError({
 	error: unknown;
 	metadata?: { version?: string; type?: string };
 }) {
-	Sentry.captureException(error, {
-		contexts: {
-			inspector: {
-				error,
-				metadata,
+	useEffect(() => {
+		Sentry.captureException(error, {
+			contexts: {
+				inspector: {
+					error,
+					metadata,
+				},
 			},
-		},
-		tags: {
-			component: "ActorContextProvider",
-		},
+			tags: {
+				component: "ActorContextProvider",
+			},
+		});
 	});
 	return (
 		<Info>
