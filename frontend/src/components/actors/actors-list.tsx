@@ -272,7 +272,7 @@ function EmptyState({ count }: { count: number }) {
 
 							<div className="flex-col flex gap-4">
 								{__APP_TYPE__ === "cloud" ? (
-									<Button asChild variant="outline">
+									<Button asChild variant="ghost">
 										<Link
 											to="/orgs/$organization/projects/$project/ns/$namespace/settings"
 											from="/orgs/$organization/projects/$project/ns/$namespace"
@@ -282,10 +282,10 @@ function EmptyState({ count }: { count: number }) {
 									</Button>
 								) : null}
 								{__APP_TYPE__ === "engine" ? (
-									<Button asChild variant="secondary">
+									<Button asChild variant="ghost">
 										<Link
 											to="/ns/$namespace"
-											from="/ns/$namespace/connect"
+											from="/ns/$namespace/settings"
 										>
 											Go to Settings
 										</Link>

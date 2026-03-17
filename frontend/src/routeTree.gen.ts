@@ -24,7 +24,7 @@ import { Route as ContextEngineNsNamespaceRouteImport } from './routes/_context/
 import { Route as ContextCloudOrgsOrganizationRouteImport } from './routes/_context/_cloud/orgs.$organization'
 import { Route as ContextEngineNsNamespaceIndexRouteImport } from './routes/_context/_engine/ns.$namespace/index'
 import { Route as ContextCloudOrgsOrganizationIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/index'
-import { Route as ContextEngineNsNamespaceConnectRouteImport } from './routes/_context/_engine/ns.$namespace/connect'
+import { Route as ContextEngineNsNamespaceSettingsRouteImport } from './routes/_context/_engine/ns.$namespace/settings'
 import { Route as ContextCloudOrgsOrganizationProjectsIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.index'
 import { Route as ContextCloudOrgsOrganizationNewIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/new/index'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project'
@@ -120,10 +120,10 @@ const ContextCloudOrgsOrganizationIndexRoute =
     path: '/',
     getParentRoute: () => ContextCloudOrgsOrganizationRoute,
   } as any)
-const ContextEngineNsNamespaceConnectRoute =
-  ContextEngineNsNamespaceConnectRouteImport.update({
-    id: '/connect',
-    path: '/connect',
+const ContextEngineNsNamespaceSettingsRoute =
+  ContextEngineNsNamespaceSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
     getParentRoute: () => ContextEngineNsNamespaceRoute,
   } as any)
 const ContextCloudOrgsOrganizationProjectsIndexRoute =
@@ -256,7 +256,7 @@ export interface FileRoutesByFullPath {
   '/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
   '/ns/$namespace': typeof ContextEngineNsNamespaceRouteWithChildren
   '/new/': typeof ContextCloudNewIndexRoute
-  '/ns/$namespace/connect': typeof ContextEngineNsNamespaceConnectRoute
+  '/ns/$namespace/settings': typeof ContextEngineNsNamespaceSettingsRoute
   '/orgs/$organization/': typeof ContextCloudOrgsOrganizationIndexRoute
   '/ns/$namespace/': typeof ContextEngineNsNamespaceIndexRoute
   '/orgs/$organization/projects/$project': typeof ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren
@@ -285,7 +285,7 @@ export interface FileRoutesByTo {
   '/onboarding/accept-invitation': typeof OnboardingAcceptInvitationRoute
   '/onboarding/choose-organization': typeof OnboardingChooseOrganizationRoute
   '/new': typeof ContextCloudNewIndexRoute
-  '/ns/$namespace/connect': typeof ContextEngineNsNamespaceConnectRoute
+  '/ns/$namespace/settings': typeof ContextEngineNsNamespaceSettingsRoute
   '/orgs/$organization': typeof ContextCloudOrgsOrganizationIndexRoute
   '/ns/$namespace': typeof ContextEngineNsNamespaceIndexRoute
   '/orgs/$organization/new': typeof ContextCloudOrgsOrganizationNewIndexRoute
@@ -318,7 +318,7 @@ export interface FileRoutesById {
   '/_context/_cloud/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
   '/_context/_engine/ns/$namespace': typeof ContextEngineNsNamespaceRouteWithChildren
   '/_context/_cloud/new/': typeof ContextCloudNewIndexRoute
-  '/_context/_engine/ns/$namespace/connect': typeof ContextEngineNsNamespaceConnectRoute
+  '/_context/_engine/ns/$namespace/settings': typeof ContextEngineNsNamespaceSettingsRoute
   '/_context/_cloud/orgs/$organization/': typeof ContextCloudOrgsOrganizationIndexRoute
   '/_context/_engine/ns/$namespace/': typeof ContextEngineNsNamespaceIndexRoute
   '/_context/_cloud/orgs/$organization/projects/$project': typeof ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren
@@ -351,7 +351,7 @@ export interface FileRouteTypes {
     | '/orgs/$organization'
     | '/ns/$namespace'
     | '/new/'
-    | '/ns/$namespace/connect'
+    | '/ns/$namespace/settings'
     | '/orgs/$organization/'
     | '/ns/$namespace/'
     | '/orgs/$organization/projects/$project'
@@ -380,7 +380,7 @@ export interface FileRouteTypes {
     | '/onboarding/accept-invitation'
     | '/onboarding/choose-organization'
     | '/new'
-    | '/ns/$namespace/connect'
+    | '/ns/$namespace/settings'
     | '/orgs/$organization'
     | '/ns/$namespace'
     | '/orgs/$organization/new'
@@ -412,7 +412,7 @@ export interface FileRouteTypes {
     | '/_context/_cloud/orgs/$organization'
     | '/_context/_engine/ns/$namespace'
     | '/_context/_cloud/new/'
-    | '/_context/_engine/ns/$namespace/connect'
+    | '/_context/_engine/ns/$namespace/settings'
     | '/_context/_cloud/orgs/$organization/'
     | '/_context/_engine/ns/$namespace/'
     | '/_context/_cloud/orgs/$organization/projects/$project'
@@ -548,11 +548,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContextCloudOrgsOrganizationIndexRouteImport
       parentRoute: typeof ContextCloudOrgsOrganizationRoute
     }
-    '/_context/_engine/ns/$namespace/connect': {
-      id: '/_context/_engine/ns/$namespace/connect'
-      path: '/connect'
-      fullPath: '/ns/$namespace/connect'
-      preLoaderRoute: typeof ContextEngineNsNamespaceConnectRouteImport
+    '/_context/_engine/ns/$namespace/settings': {
+      id: '/_context/_engine/ns/$namespace/settings'
+      path: '/settings'
+      fullPath: '/ns/$namespace/settings'
+      preLoaderRoute: typeof ContextEngineNsNamespaceSettingsRouteImport
       parentRoute: typeof ContextEngineNsNamespaceRoute
     }
     '/_context/_cloud/orgs/$organization/projects/': {
@@ -773,13 +773,14 @@ const ContextCloudRouteWithChildren = ContextCloudRoute._addFileChildren(
 )
 
 interface ContextEngineNsNamespaceRouteChildren {
-  ContextEngineNsNamespaceConnectRoute: typeof ContextEngineNsNamespaceConnectRoute
+  ContextEngineNsNamespaceSettingsRoute: typeof ContextEngineNsNamespaceSettingsRoute
   ContextEngineNsNamespaceIndexRoute: typeof ContextEngineNsNamespaceIndexRoute
 }
 
 const ContextEngineNsNamespaceRouteChildren: ContextEngineNsNamespaceRouteChildren =
   {
-    ContextEngineNsNamespaceConnectRoute: ContextEngineNsNamespaceConnectRoute,
+    ContextEngineNsNamespaceSettingsRoute:
+      ContextEngineNsNamespaceSettingsRoute,
     ContextEngineNsNamespaceIndexRoute: ContextEngineNsNamespaceIndexRoute,
   }
 

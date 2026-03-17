@@ -1,9 +1,12 @@
 import { useUser } from "@clerk/clerk-react";
 import {
 	faArrowUpRight,
+	faBook,
 	faCog,
+	faDiscord,
 	faFileLines,
 	faGift,
+	faGithub,
 	faHome,
 	faMessageSmile,
 	faRocket,
@@ -180,7 +183,7 @@ const Sidebar = ({
 								<>
 									<Breadcrumbs />
 									<ScrollArea>
-										<Subnav />
+										<EngineSubnav />
 									</ScrollArea>
 								</>
 							))
@@ -292,7 +295,14 @@ const Sidebar = ({
 								<>
 									<div className="flex gap-0.5 my-2 px-2.5 flex-col">
 										<Changelog>
-											<HeaderButton asChild>
+											<HeaderButton
+												startIcon={
+													<Icon
+														icon={faGift}
+														className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+													/>
+												}
+											>
 												<a
 													href="https://www.rivet.dev/changelog"
 													target="_blank"
@@ -306,7 +316,15 @@ const Sidebar = ({
 												</a>
 											</HeaderButton>
 										</Changelog>
-										<HeaderButton asChild>
+										<HeaderButton
+											asChild
+											startIcon={
+												<Icon
+													icon={faMessageSmile}
+													className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+												/>
+											}
+										>
 											<Link
 												to="."
 												search={(old) => ({
@@ -319,6 +337,12 @@ const Sidebar = ({
 										</HeaderButton>
 										<HeaderButton
 											asChild
+											startIcon={
+												<Icon
+													icon={faBook}
+													className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+												/>
+											}
 											endIcon={
 												<Icon
 													icon={faArrowUpRight}
@@ -336,6 +360,12 @@ const Sidebar = ({
 										</HeaderButton>
 										<HeaderButton
 											asChild
+											startIcon={
+												<Icon
+													icon={faDiscord}
+													className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+												/>
+											}
 											endIcon={
 												<Icon
 													icon={faArrowUpRight}
@@ -353,6 +383,12 @@ const Sidebar = ({
 										</HeaderButton>
 										<HeaderButton
 											asChild
+											startIcon={
+												<Icon
+													icon={faGithub}
+													className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+												/>
+											}
 											endIcon={
 												<Icon
 													icon={faArrowUpRight}
@@ -448,7 +484,7 @@ const NamespaceBreadcrumbs = ({
 	);
 };
 
-const Subnav = () => {
+const EngineSubnav = () => {
 	const matchRoute = useMatchRoute();
 	const nsMatch = matchRoute({
 		to: "/ns/$namespace",
@@ -460,20 +496,22 @@ const Subnav = () => {
 	}
 
 	return (
-		<div className="flex gap-1.5 flex-col">
-			{__APP_TYPE__ === "engine" ? (
-				<HeaderLink
-					to="/ns/$namespace/connect"
-					className="font-normal"
-					params={nsMatch}
-					icon={faHome}
-				>
-					Overview
-				</HeaderLink>
-			) : null}
-			<div className="w-full">
+		<div className="flex gap-0.5 flex-col w-full">
+			<div className="w-full pt-1.5">
+				<div className="flex gap-0.5 mb-2 flex-col">
+					<HeaderLink
+						to="/ns/$namespace/settings"
+						className="font-normal"
+						params={nsMatch}
+						icon={faCog}
+					>
+						Settings
+					</HeaderLink>
+				</div>
+
+				<div className="border-t my-2" />
 				<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
-					Instances
+					Actors
 				</span>
 				<ActorBuildsList />
 			</div>
