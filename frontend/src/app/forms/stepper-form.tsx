@@ -105,7 +105,9 @@ type StepperFormProps<Steps extends Step[]> = StepperProps<Steps> &
 	};
 
 export type StepperFormValues<Steps extends Step[]> = z.TypeOf<
-	Steps[number]["schema"]
+	Steps[number]["schema"] extends z.ZodSchema
+		? Steps[number]["schema"]
+		: never
 >;
 
 export type ExtractSteps<T> =
