@@ -266,35 +266,42 @@ function generateTypeScriptFile(iconExports) {
 // ============================================================================
 
 async function bundleWithEsbuild() {
-	log("📦", "Bundling with esbuild...");
+	log("📦", "Bundling with esbuild (splitting enabled)...");
 
-	const externals = [
+	// Externalize free FA packages — they ship individual subpath files and are
+	// peer deps, so Vite can tree-shake them. Pro/custom icons have no runtime
+	// equivalent and must be inlined.
+	const freePackages = [
+		"@fortawesome/free-solid-svg-icons",
+		"@fortawesome/free-brands-svg-icons",
+		"@fortawesome/free-regular-svg-icons",
 		"react",
 		"react-dom",
 		"@fortawesome/react-fontawesome",
 		"@fortawesome/fontawesome-svg-core",
 	];
 
+	const distDir = resolve(PATHS.dist);
+	if (!fs.existsSync(distDir)) {
+		fs.mkdirSync(distDir, { recursive: true });
+	}
+
 	try {
-		const result = await esbuild.build({
+		await esbuild.build({
 			entryPoints: [resolve(PATHS.src, "index.gen.js")],
-			outfile: resolve(PATHS.dist, "index.js"),
-			external: externals,
+			outdir: distDir,
+			external: freePackages.flatMap((pkg) => [pkg, `${pkg}/*`]),
 			bundle: true,
+			splitting: true,
 			platform: "neutral",
 			format: "esm",
 			treeShaking: true,
 			metafile: true,
 		});
 
-		// Calculate bundle size
-		const bundlePath = resolve(PATHS.dist, "index.js");
-		const stats = fs.statSync(bundlePath);
+		const stats = fs.statSync(resolve(distDir, "index.js"));
 		const sizeKB = (stats.size / 1024).toFixed(2);
-
-		log("✅", `Generated dist/index.js (${sizeKB} KB)`);
-
-		return result;
+		log("✅", `Generated dist/ (entry: ${sizeKB} KB)`);
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		exitWithError(`Build failed: ${message}`);
@@ -327,7 +334,7 @@ async function main() {
 
 		console.log();
 
-		// Bundle phase
+		// Bundle phase: produce individual icon chunks + barrel index
 		await bundleWithEsbuild();
 
 		// Success!
