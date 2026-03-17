@@ -689,20 +689,20 @@ function InspectorGuard({
 		actorMetadataQueryOptions,
 	} = useActorInspector();
 
-	const { data, isLoading, error } = useQuery(
+	const { data, isPending, error } = useQuery(
 		actorMetadataQueryOptions(actorId),
 	);
 
-	if (!data || error || !isInspectorAvailable) {
-		return <OutdatedInspector>{children}</OutdatedInspector>;
-	}
-
-	if (isLoading) {
+	if (isPending) {
 		return (
 			<InspectorGuardContext.Provider value={<ConnectingInspector />}>
 				{children}
 			</InspectorGuardContext.Provider>
 		);
+	}
+
+	if (!data || error || !isInspectorAvailable) {
+		return <OutdatedInspector>{children}</OutdatedInspector>;
 	}
 
 	if (connectionStatus === "error") {
