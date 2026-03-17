@@ -16,6 +16,7 @@ pub struct CreateRequest {
 	pub datacenter: Option<String>,
 	pub name: String,
 	pub key: Option<String>,
+	/// Arbitrary base64 encoded binary data.
 	pub input: Option<String>,
 	pub runner_name_selector: String,
 	pub crash_policy: rivet_types::actors::CrashPolicy,
