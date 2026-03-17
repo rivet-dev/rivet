@@ -17,7 +17,7 @@ overrides:
   '@clerk/shared': 3.27.1
   react: 19.1.0
   react-dom: 19.1.0
-  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@066afd1
+  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@6d356d2
   '@codemirror/state': 6.5.2
   '@codemirror/view': 6.38.2
   '@codemirror/autocomplete': 6.18.7
@@ -464,8 +464,8 @@ importers:
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@066afd1
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@066afd1
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@6d356d2
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@6d356d2
       '@rivetkit/engine-api-full':
         specifier: workspace:*
         version: link:../../engine/sdks/typescript/api-full
@@ -3487,8 +3487,8 @@ importers:
         specifier: ^1.2.3
         version: 1.2.3(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@066afd1
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@066afd1
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@6d356d2
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@6d356d2
       '@rivet-gg/icons':
         specifier: workspace:*
         version: link:packages/icons
@@ -4626,8 +4626,8 @@ importers:
         specifier: 25.5.3
         version: 25.5.3
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@066afd1
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@066afd1
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@6d356d2
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@6d356d2
       '@rivet-gg/components':
         specifier: workspace:*
         version: link:../frontend/packages/components
@@ -9307,8 +9307,8 @@ packages:
   '@rivet-gg/api@25.5.3':
     resolution: {integrity: sha512-pj8xYQ+I/aQDbThmicPxvR+TWAzGoLSE53mbJi4QZHF8VH2oMvU7CMWqy7OTFH30DIRyVzsnHHRJZKGwtmQL3g==}
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@066afd1':
-    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@066afd1}
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@6d356d2':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@6d356d2}
     version: 0.0.0
 
   '@rivetkit/bare-ts@0.6.2':
@@ -15844,9 +15844,6 @@ packages:
 
   prr@1.0.1:
     resolution: {integrity: sha512-yPw4Sng1gWghHQWj0B3ZggWUm4qVbPwPFcRG8KyxiU7J2OHFSoEHKS+EZ3fv5l1t9CyCiop6l/ZYeWbrgoQejw==}
-
-  pump@3.0.3:
-    resolution: {integrity: sha512-todwxLMY7/heScKmntwQG8CXVkWUOdYxIvY2s0VWAAMh/nd8SoYiRaKjlr7+iCs984f2P8zvrfWcDDYVb73NfA==}
 
   pump@3.0.4:
     resolution: {integrity: sha512-VS7sjc6KR7e1ukRFhQSY5LM2uBWAUPiOPa/A3mkKmiMwSmRFUITt0xuj+/lesgnCv+dPIEYlkzrcyXgquIHMcA==}
@@ -23621,7 +23618,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@066afd1':
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@6d356d2':
     dependencies:
       cross-fetch: 4.1.0
       form-data: 4.0.5
@@ -31305,7 +31302,7 @@ snapshots:
       minimist: 1.2.8
       on-exit-leak-free: 2.1.2
       pino-abstract-transport: 2.0.0
-      pump: 3.0.3
+      pump: 3.0.4
       secure-json-parse: 4.1.0
       sonic-boom: 4.2.0
       strip-json-comments: 5.0.3
@@ -31598,11 +31595,6 @@ snapshots:
 
   prr@1.0.1:
     optional: true
-
-  pump@3.0.3:
-    dependencies:
-      end-of-stream: 1.4.5
-      once: 1.4.0
 
   pump@3.0.4:
     dependencies:

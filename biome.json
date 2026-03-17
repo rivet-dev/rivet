@@ -32,7 +32,11 @@
 				"noUnusedImports": "warn"
 			},
 			"suspicious": {
-				"noExplicitAny": "off"
+				"noExplicitAny": "off",
+				"noControlCharactersInRegex": "off"
+			},
+			"performance": {
+				"useTopLevelRegex": "off"
 			},
 			"nursery": {
 				"noFloatingPromises": "error",

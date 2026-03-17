@@ -1,4 +1,10 @@
-import { faComputer, faServer, Icon, type IconProp } from "@rivet-gg/icons";
+import {
+	faCloud,
+	faComputer,
+	faServer,
+	Icon,
+	type IconProp,
+} from "@rivet-gg/icons";
 import { AssetImage } from "../asset-image";
 import { convertEmojiToUriFriendlyString } from "../lib/emoji";
 
@@ -52,6 +58,7 @@ export const REGION_ICON: Record<string, string | IconProp> = {
 	"us-east-1": "🇺🇸", // Northern Virginia
 	"us-west-1": "🇺🇸", // Oregon
 	"ap-southeast-1": "🇸🇬", // Singapore
+	cloud: faCloud,
 };
 
 export const REGION_LABEL: Record<string, string> = {
@@ -104,6 +111,7 @@ export const REGION_LABEL: Record<string, string> = {
 	"us-east-1": "Northern Virginia, USA",
 	"us-west-1": "Oregon, USA",
 	"ap-southeast-1": "Singapore",
+	cloud: "Rivet Cloud",
 };
 
 export function getRegionLabel(regionId: string | undefined) {
