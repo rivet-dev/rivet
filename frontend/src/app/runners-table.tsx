@@ -1,10 +1,12 @@
 import {
+	faHourglassClock,
 	faHourglassEnd,
 	faPlus,
 	faSignalAlt,
 	faSignalAlt2,
 	faSignalAlt3,
 	faSignalAlt4,
+	faTriangleExclamation,
 	Icon,
 } from "@rivet-gg/icons";
 
@@ -26,10 +28,7 @@ import {
 	WithTooltip,
 } from "@/components";
 import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
-import {
-	deriveProviderFromMetadata,
-	deriveRivetkitVersionFromMetadata,
-} from "@/lib/data";
+import { deriveRivetkitVersionFromMetadata } from "@/lib/data";
 
 interface RunnersTableProps {
 	isLoading?: boolean;
@@ -46,6 +45,10 @@ export function RunnersTable({
 	fetchNextPage,
 	runners,
 }: RunnersTableProps) {
+	const latestVersion = runners?.length
+		? Math.max(...runners.map((r) => r.version))
+		: undefined;
+
 	return (
 		<Table>
 			<TableHeader>
@@ -85,7 +88,11 @@ export function RunnersTable({
 					</>
 				) : null}
 				{runners?.map((runner) => (
-					<Row {...runner} key={runner.runnerId} />
+					<Row
+						{...runner}
+						key={runner.runnerId}
+						latestVersion={latestVersion}
+					/>
 				))}
 
 				{!isLoading && hasNextPage ? (
@@ -135,7 +142,7 @@ function RowSkeleton() {
 	);
 }
 
-export function Row(runner: Rivet.Runner) {
+export function Row(runner: Rivet.Runner & { latestVersion?: number }) {
 	return (
 		<TableRow key={runner.runnerId}>
 			<TableCell className="size-8">
@@ -196,10 +203,27 @@ function CreateTs({ createTs }: { createTs: number }) {
 	);
 }
 
-function RunnerStatusBadge(runner: Rivet.Runner) {
-	// check if the last ping ts was higher than 15 seconds ago
+function RunnerStatusBadge(runner: Rivet.Runner & { latestVersion?: number }) {
 	const now = Date.now();
-	if (now - runner.lastPingTs > 15000) {
+	const isOutdated =
+		runner.latestVersion !== undefined &&
+		runner.version < runner.latestVersion;
+
+	if (isOutdated) {
+		return (
+			<WithTooltip
+				content={`Runner is outdated: version ${runner.version} vs latest version ${runner.latestVersion}`}
+				trigger={
+					<div className="text-center relative size-8 flex items-center justify-center">
+						<Icon
+							icon={faHourglassClock}
+							className="text-red-500"
+						/>
+					</div>
+				}
+			/>
+		);
+	} else if (now - runner.lastPingTs > 15000) {
 		return (
 			<WithTooltip
 				content={`Offline (last seen ${formatDistance(
@@ -217,8 +241,7 @@ function RunnerStatusBadge(runner: Rivet.Runner) {
 				}
 			/>
 		);
-	}
-	if (runner.lastRtt <= 50) {
+	} else if (runner.lastRtt <= 50) {
 		return (
 			<WithTooltip
 				content={`${runner.lastRtt}ms`}
@@ -232,8 +255,7 @@ function RunnerStatusBadge(runner: Rivet.Runner) {
 				}
 			/>
 		);
-	}
-	if (runner.lastRtt > 50 && runner.lastRtt <= 200) {
+	} else if (runner.lastRtt <= 200) {
 		return (
 			<WithTooltip
 				content={`${runner.lastRtt}ms`}
@@ -251,25 +273,25 @@ function RunnerStatusBadge(runner: Rivet.Runner) {
 				}
 			/>
 		);
+	} else {
+		return (
+			<WithTooltip
+				content={`${runner.lastRtt}ms`}
+				trigger={
+					<div className="text-center relative size-8">
+						<Icon
+							icon={faSignalAlt}
+							className="text-muted-foreground/20 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
+						/>
+						<Icon
+							icon={faSignalAlt2}
+							className="text-red-500 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
+						/>
+					</div>
+				}
+			/>
+		);
 	}
-
-	return (
-		<WithTooltip
-			content={`${runner.lastRtt}ms`}
-			trigger={
-				<div className="text-center relative size-8">
-					<Icon
-						icon={faSignalAlt}
-						className="text-muted-foreground/20 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
-					/>
-					<Icon
-						icon={faSignalAlt2}
-						className="text-red-500 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
-					/>
-				</div>
-			}
-		/>
-	);
 }
 
 function EmptyState() {
@@ -278,7 +300,9 @@ function EmptyState() {
 		select(data) {
 			for (const page of data.pages) {
 				for (const rc of Object.values(page.runnerConfigs)) {
-					for (const [dc, config] of Object.entries(rc.datacenters)) {
+					for (const [_dc, config] of Object.entries(
+						rc.datacenters,
+					)) {
 						if (config.serverless) {
 							return config;
 						}
