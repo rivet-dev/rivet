@@ -93,7 +93,7 @@
 		"@rivetkit/react": "workspace:*",
 		"@types/escape-html": "^1.0.4",
 		"@types/lodash": "^4.17.21",
-		"axios": "^1.13.2",
+		"axios": "^1.13.5",
 		"eslint": "9.39.1",
 		"playwright": "^1.57.0",
 		"prettier": "^3.6.2",

@@ -14,7 +14,7 @@
 		"typescript": "^5.5.2"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.18.2",
+		"@hono/node-server": "^1.19.10",
 		"@hono/node-ws": "^1.1.1",
 		"drizzle-kit": "^0.31.2",
 		"drizzle-orm": "^0.44.2"
