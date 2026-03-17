@@ -112,6 +112,7 @@ export function useDeploymentLogsStream({
 		const controller = new AbortController();
 
 		function onEntry(entry: RivetSse.LogStreamEvent.Log) {
+			setIsLoading(false);
 			pendingRef.current.push(entry);
 			if (!pausedRef.current) {
 				const toFlush = pendingRef.current;
