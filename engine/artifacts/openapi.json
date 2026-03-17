@@ -1064,7 +1064,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Arbitrary base64 encoded binary data."
           },
           "key": {
             "type": [

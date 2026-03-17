@@ -69,6 +69,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 					let protocol_version_key =
 						keys::runner::ProtocolVersionKey::new(runner.runner_id);
 					let last_ping_ts_key = keys::runner::LastPingTsKey::new(runner.runner_id);
+					let drain_ts_key = keys::runner::DrainTsKey::new(runner.runner_id);
 					let expired_ts_key = keys::runner::ExpiredTsKey::new(runner.runner_id);
 
 					let (
@@ -80,7 +81,8 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 						total_slots_entry,
 						protocol_version_entry,
 						last_ping_ts_entry,
-						expired_ts_entry,
+						draining,
+						expired,
 					) = tokio::try_join!(
 						tx.read_opt(&workflow_id_key, Serializable),
 						tx.read_opt(&namespace_id_key, Serializable),
@@ -90,7 +92,8 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 						tx.read_opt(&total_slots_key, Serializable),
 						tx.read_opt(&protocol_version_key, Serializable),
 						tx.read_opt(&last_ping_ts_key, Serializable),
-						tx.read_opt(&expired_ts_key, Serializable),
+						tx.exists(&drain_ts_key, Serializable),
+						tx.exists(&expired_ts_key, Serializable),
 					)?;
 
 					let (
@@ -118,7 +121,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 					let protocol_version = protocol_version_entry.unwrap_or(PROTOCOL_MK1_VERSION);
 
 					// Runner is expired, AddIdx is invalid and UpdatePing will do nothing
-					if expired_ts_entry.is_some() {
+					if expired {
 						match runner.action {
 							Action::ClearIdx => {}
 							Action::AddIdx | Action::UpdatePing { .. } => {
@@ -171,8 +174,8 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 							let last_rtt_key = keys::runner::LastRttKey::new(runner.runner_id);
 							tx.write(&last_rtt_key, rtt)?;
 
-							// Only update allocation idx if it existed before
-							if tx.exists(&old_alloc_key, Serializable).await? {
+							// Only update allocation idx if not draining
+							if !draining {
 								// Clear old key
 								tx.delete(&old_alloc_key);
 

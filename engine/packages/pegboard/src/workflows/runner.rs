@@ -691,7 +691,6 @@ async fn clear_db(ctx: &ActivityCtx, input: &ClearDbInput) -> Result<()> {
 			match input.update_state {
 				RunnerState::Draining => {
 					tx.write(&keys::runner::DrainTsKey::new(input.runner_id), now)?;
-					tx.write(&keys::runner::ExpiredTsKey::new(input.runner_id), now)?;
 				}
 				RunnerState::Stopped => {
 					tx.write(&keys::runner::StopTsKey::new(input.runner_id), now)?;
