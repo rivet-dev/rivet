@@ -7,6 +7,7 @@ import {
 	useCloudNamespaceDataProvider,
 } from "@/components/actors";
 import { VirtualScrollArea } from "@/components/virtual-scroll-area";
+import { AnsiText } from "./lib/ansi";
 import { cn } from "./lib/utils";
 import { ScrollArea } from "./ui/scroll-area";
 import { Skeleton } from "./ui/skeleton";
@@ -18,13 +19,13 @@ interface DeploymentLogsProps {
 	filter?: string;
 	region?: string;
 	paused?: boolean;
-	logsRef?: React.MutableRefObject<RivetSse.LogEntry[]>;
+	logsRef?: React.MutableRefObject<RivetSse.LogStreamEvent[]>;
 }
 
 interface LogRowProps {
 	"data-index": number;
 	className?: string;
-	entry: RivetSse.LogEntry;
+	entry: RivetSse.LogStreamEvent.Log;
 }
 
 function LogRow({ entry, ...props }: LogRowProps) {
@@ -37,20 +38,22 @@ function LogRow({ entry, ...props }: LogRowProps) {
 				className={cn(
 					"grid grid-cols-[max-content,16ch,3fr] gap-3 whitespace-pre-wrap break-words px-4 py-1 border-b",
 					{
-						"text-red-400": entry.stream === "stderr",
-						"text-muted-foreground": entry.stream !== "stderr",
+						"text-red-400": entry.data.stream === "stderr",
+						"text-muted-foreground": entry.data.stream !== "stderr",
 					},
 				)}
 			>
 				<span className="text-neutral-500 shrink-0">
-					{entry.timestamp}
+					{entry.data.timestamp}
 				</span>
-				{entry.region ? (
+				{entry.data.region ? (
 					<span className="text-neutral-600 shrink-0">
-						[{entry.region}]
+						[{entry.data.region}]
 					</span>
 				) : null}
-				<span className="flex-1">{entry.message}</span>
+				<span className="flex-1">
+					<AnsiText text={entry.data.message} />
+				</span>
 			</div>
 		</div>
 	);

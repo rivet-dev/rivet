@@ -9,10 +9,14 @@ const BASE_DELAY_MS = 1_000;
 async function sleep(ms: number, signal: AbortSignal) {
 	return new Promise<void>((resolve) => {
 		const timeout = setTimeout(resolve, ms);
-		signal.addEventListener("abort", () => {
-			clearTimeout(timeout);
-			resolve();
-		}, { once: true });
+		signal.addEventListener(
+			"abort",
+			() => {
+				clearTimeout(timeout);
+				resolve();
+			},
+			{ once: true },
+		);
 	});
 }
 
@@ -23,7 +27,8 @@ async function streamWithRetry(
 	filter: string | undefined,
 	region: string | undefined,
 	signal: AbortSignal,
-	onEntry: (entry: RivetSse.LogEntry) => void,
+	onConnected: () => void,
+	onEntry: (entry: RivetSse.LogStreamEvent.Log) => void,
 ): Promise<"exhausted" | "ended" | "aborted" | { error: string }> {
 	const options = {
 		baseUrl: cloudEnv().VITE_APP_CLOUD_API_URL,
@@ -35,19 +40,27 @@ async function streamWithRetry(
 		if (signal.aborted) return "aborted";
 
 		try {
-			const stream = RivetSse.streamLogs(options, project, namespace, pool, {
-				contains: filter || undefined,
-				region: region || undefined,
-				abortSignal: signal,
-			});
+			const stream = RivetSse.streamLogs(
+				options,
+				project,
+				namespace,
+				pool,
+				{
+					contains: filter || undefined,
+					region: region || undefined,
+					abortSignal: signal,
+				},
+			);
 
 			for await (const event of stream) {
-				if (event.event === "end") return "ended";
-				if (event.event === "error") {
+				if (event.event === "connected") {
+					onConnected();
+				} else if (event.event === "end") {
+					return "ended";
+				} else if (event.event === "error") {
 					return { error: event.data.message };
-				}
-				if (event.event === "log") {
-					onEntry(event.data);
+				} else if (event.event === "log") {
+					onEntry(event);
 				}
 			}
 		} catch (err) {
@@ -80,10 +93,10 @@ export function useDeploymentLogsStream({
 	region,
 	paused = false,
 }: UseDeploymentLogsStreamOptions) {
-	const [logs, setLogs] = useState<RivetSse.LogEntry[]>([]);
+	const [logs, setLogs] = useState<RivetSse.LogStreamEvent.Log[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const pendingRef = useRef<RivetSse.LogEntry[]>([]);
+	const pendingRef = useRef<RivetSse.LogStreamEvent.Log[]>([]);
 	const pausedRef = useRef(paused);
 
 	useEffect(() => {
@@ -98,8 +111,7 @@ export function useDeploymentLogsStream({
 
 		const controller = new AbortController();
 
-		function onEntry(entry: RivetSse.LogEntry) {
-			setIsLoading(false);
+		function onEntry(entry: RivetSse.LogStreamEvent.Log) {
 			pendingRef.current.push(entry);
 			if (!pausedRef.current) {
 				const toFlush = pendingRef.current;
@@ -110,11 +122,22 @@ export function useDeploymentLogsStream({
 			}
 		}
 
-		streamWithRetry(project, namespace, pool, filter, region, controller.signal, onEntry)
+		streamWithRetry(
+			project,
+			namespace,
+			pool,
+			filter,
+			region,
+			controller.signal,
+			() => setIsLoading(false),
+			onEntry,
+		)
 			.then((result) => {
 				setIsLoading(false);
 				if (result === "exhausted") {
-					setError("Failed to connect to log stream after multiple attempts.");
+					setError(
+						"Failed to connect to log stream after multiple attempts.",
+					);
 				} else if (typeof result === "object") {
 					setError(result.error);
 				}
@@ -123,7 +146,9 @@ export function useDeploymentLogsStream({
 				if ((err as Error).name !== "AbortError") {
 					console.error("Log stream fatal error:", err);
 					setIsLoading(false);
-					setError("An unexpected error occurred while streaming logs.");
+					setError(
+						"An unexpected error occurred while streaming logs.",
+					);
 				}
 			});
 

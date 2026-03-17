@@ -88,6 +88,15 @@ export function getOrCreateProjectContext(
 	return context;
 }
 
+export function deleteCloudNamespaceContext(
+	organization: string,
+	project: string,
+	namespace: string,
+): void {
+	const key = `${organization}:${project}:${namespace}`;
+	cloudNamespaceContextCache.delete(key);
+}
+
 export function getOrCreateCloudNamespaceContext(
 	parent: CloudContext & OrganizationContext & ProjectContext,
 	namespace: string,
