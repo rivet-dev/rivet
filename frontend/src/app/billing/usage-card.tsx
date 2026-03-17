@@ -43,22 +43,22 @@ function formatMetricValue(value: bigint, type: MetricType): string {
 			return `${stripTrailingZeros(hours, 1)} hrs`;
 		}
 		case "bytes": {
-			const KB = 1000;
-			const MB = 1000 * 1000;
-			const GB = 1000 * 1000 * 1000;
-			const TB = 1000 * 1000 * 1000 * 1000;
+			const KiB = 1024;
+			const MiB = 1024 * 1024;
+			const GiB = 1024 * 1024 * 1024;
+			const TiB = 1024 * 1024 * 1024 * 1024;
 
-			if (num >= TB) {
-				return `${stripTrailingZeros(num / TB, 2)} TB`;
+			if (num >= TiB) {
+				return `${stripTrailingZeros(num / TiB, 2)} TiB`;
 			}
-			if (num >= GB) {
-				return `${stripTrailingZeros(num / GB, 2)} GB`;
+			if (num >= GiB) {
+				return `${stripTrailingZeros(num / GiB, 2)} GiB`;
 			}
-			if (num >= MB) {
-				return `${stripTrailingZeros(num / MB, 2)} MB`;
+			if (num >= MiB) {
+				return `${stripTrailingZeros(num / MiB, 2)} MiB`;
 			}
-			if (num >= KB) {
-				return `${stripTrailingZeros(num / KB, 2)} KB`;
+			if (num >= KiB) {
+				return `${stripTrailingZeros(num / KiB, 2)} KiB`;
 			}
 			return `${num} B`;
 		}

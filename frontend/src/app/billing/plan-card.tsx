@@ -79,8 +79,8 @@ export const CommunityPlan = (props: Partial<PlanCardProps>) => {
 			features={[
 				{ icon: faCheck, label: "5 Million Writes /mo Limit" },
 				{ icon: faCheck, label: "200 Million Reads /mo Limit" },
-				{ icon: faCheck, label: "5GB Storage Limit" },
-				{ icon: faCheck, label: "100GB Egress Limit" },
+				{ icon: faCheck, label: "5GiB Storage Limit" },
+				{ icon: faCheck, label: "100GiB Egress Limit" },
 				{ icon: faCheck, label: "100,000 Awake Actors Hours Limit" },
 				{ icon: faCheck, label: "Community Support" },
 			]}
@@ -106,9 +106,9 @@ export const ProPlan = (props: Partial<PlanCardProps>) => {
 				},
 				{
 					icon: faPlus,
-					label: "5GB Storage included",
+					label: "5GiB Storage included",
 				},
-				{ icon: faPlus, label: "1TB Egress included" },
+				{ icon: faPlus, label: "1TiB Egress included" },
 				{ icon: faPlus, label: "400,000 Awake Actors Hours included" },
 				{ icon: faCheck, label: "Email Support" },
 			]}
@@ -126,8 +126,8 @@ export const TeamPlan = (props: Partial<PlanCardProps>) => {
 			features={[
 				{ icon: faPlus, label: "25 Billion Reads /mo included" },
 				{ icon: faPlus, label: "50 Million Writes /mo included" },
-				{ icon: faPlus, label: "5GB Storage included" },
-				{ icon: faPlus, label: "1TB Egress included" },
+				{ icon: faPlus, label: "5GiB Storage included" },
+				{ icon: faPlus, label: "1TiB Egress included" },
 				{ icon: faPlus, label: "400,000 Awake Actors Hours included" },
 				{ icon: faCheck, label: "MFA" },
 				{ icon: faCheck, label: "Slack Support" },

@@ -30,7 +30,7 @@ function formatCount(value: number): string {
 }
 
 function formatOperations(value: number): string {
-	const units = value / bytes.KiB(4); // 4KB operation units
+	const units = value / bytes.KiB(4); // 4KiB operation units
 	if (units >= 1_000_000_000)
 		return `${(units / 1_000_000_000).toFixed(2)}B ops`;
 	if (units >= 1_000_000) return `${(units / 1_000_000).toFixed(2)}M ops`;
