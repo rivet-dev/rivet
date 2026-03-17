@@ -64,6 +64,7 @@ import {
 } from "./run";
 import { scheduled } from "./scheduled";
 import { dockerSandboxActor } from "./sandbox";
+import { e2bSandboxActor } from "./sandbox-e2b";
 import {
 	sleep,
 	sleepWithLongRpc,
@@ -113,6 +114,8 @@ export const registry = setup({
 		scheduled,
 		// From sandbox.ts
 		dockerSandboxActor,
+		// From sandbox-e2b.ts
+		e2bSandboxActor,
 		// From sleep.ts
 		sleep,
 		sleepWithLongRpc,
