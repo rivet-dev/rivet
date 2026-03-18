@@ -22,7 +22,7 @@ use rivet_guard_core::{
 	ResponseBody, WebSocketHandle, custom_serve::CustomServeTrait,
 	request_context::RequestContext,
 };
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{Mutex, mpsc, watch};
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 
 pub mod protocol;
@@ -250,7 +250,7 @@ async fn ping_task(
 
 async fn message_loop(
 	ctx: &StandaloneCtx,
-	state: &KvChannelState,
+	state: &Arc<KvChannelState>,
 	ws_handle: &WebSocketHandle,
 	conn_id: u64,
 	namespace_id: Id,
@@ -261,58 +261,83 @@ async fn message_loop(
 	let mut ws_rx = ws_rx.lock().await;
 	let mut term_signal = rivet_runtime::TermSignal::new().await;
 
-	loop {
-		let msg = tokio::select! {
-			res = ws_rx.try_next() => {
-				match res? {
-					Some(msg) => msg,
-					None => {
-						tracing::debug!("websocket closed");
-						return Ok(());
+	// Per-actor channel routing for concurrent cross-actor request processing.
+	// Each actor gets its own mpsc channel and a spawned task that drains it
+	// sequentially, preserving intra-actor ordering while allowing inter-actor
+	// parallelism. Do not use tokio::spawn per request as that would break
+	// optimistic pipelining and journal write ordering.
+	// See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 2.
+	let mut actor_channels: HashMap<String, mpsc::UnboundedSender<protocol::ToServerRequest>> =
+		HashMap::new();
+	let mut actor_tasks = tokio::task::JoinSet::new();
+
+	// Use an async block so that early returns (via ?) still run cleanup below.
+	let result = async {
+		loop {
+			let msg = tokio::select! {
+				res = ws_rx.try_next() => {
+					match res? {
+						Some(msg) => msg,
+						None => {
+							tracing::debug!("websocket closed");
+							return Ok(());
+						}
 					}
 				}
-			}
-			_ = term_signal.recv() => {
-				// Send ToClientClose before shutting down.
-				let close_msg = protocol::ToClient::ToClientClose;
-				let data = protocol::encode_to_client(&close_msg)?;
-				let _ = ws_handle.send(Message::Binary(data.into())).await;
-				return Ok(());
-			}
-		};
+				_ = term_signal.recv() => {
+					// Send ToClientClose before shutting down.
+					let close_msg = protocol::ToClient::ToClientClose;
+					let data = protocol::encode_to_client(&close_msg)?;
+					let _ = ws_handle.send(Message::Binary(data.into())).await;
+					return Ok(());
+				}
+			};
 
-		match msg {
-			Message::Binary(data) => {
-				handle_binary_message(
-					ctx,
-					state,
-					ws_handle,
-					conn_id,
-					namespace_id,
-					open_actors,
-					last_pong_ts,
-					&data,
-				)
-				.await?;
+			match msg {
+				Message::Binary(data) => {
+					handle_binary_message(
+						ctx,
+						state,
+						ws_handle,
+						conn_id,
+						namespace_id,
+						open_actors,
+						last_pong_ts,
+						&data,
+						&mut actor_channels,
+						&mut actor_tasks,
+					)
+					.await?;
+				}
+				Message::Close(_) => {
+					tracing::debug!("websocket close frame received");
+					return Ok(());
+				}
+				_ => {}
 			}
-			Message::Close(_) => {
-				tracing::debug!("websocket close frame received");
-				return Ok(());
-			}
-			_ => {}
 		}
 	}
+	.await;
+
+	// Drop all senders to signal per-actor tasks to stop, then wait for them
+	// to finish draining any in-flight requests.
+	actor_channels.clear();
+	while actor_tasks.join_next().await.is_some() {}
+
+	result
 }
 
 async fn handle_binary_message(
 	ctx: &StandaloneCtx,
-	state: &KvChannelState,
+	state: &Arc<KvChannelState>,
 	ws_handle: &WebSocketHandle,
 	conn_id: u64,
 	namespace_id: Id,
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	last_pong_ts: &AtomicI64,
 	data: &[u8],
+	actor_channels: &mut HashMap<String, mpsc::UnboundedSender<protocol::ToServerRequest>>,
+	actor_tasks: &mut tokio::task::JoinSet<()>,
 ) -> Result<()> {
 	let msg = match protocol::decode_to_server(data) {
 		Ok(msg) => msg,
@@ -332,23 +357,84 @@ async fn handle_binary_message(
 			tracing::trace!(ts = pong.ts, "received pong");
 		}
 		protocol::ToServer::ToServerRequest(req) => {
-			let response_data =
-				handle_request(ctx, state, conn_id, namespace_id, open_actors, &req).await;
+			let is_close = matches!(req.data, protocol::RequestData::ActorCloseRequest);
+			let actor_id = req.actor_id.clone();
 
-			let response = protocol::ToClient::ToClientResponse(protocol::ToClientResponse {
-				request_id: req.request_id,
-				data: response_data,
-			});
+			// Create a per-actor channel and task on first request for this actor.
+			if !actor_channels.contains_key(&actor_id) {
+				let (tx, rx) = mpsc::unbounded_channel();
+				actor_tasks.spawn(actor_request_task(
+					Clone::clone(ctx),
+					Clone::clone(state),
+					Clone::clone(ws_handle),
+					conn_id,
+					namespace_id,
+					Clone::clone(open_actors),
+					rx,
+				));
+				actor_channels.insert(actor_id.clone(), tx);
+			}
 
-			let encoded = protocol::encode_to_client(&response)?;
-			ws_handle
-				.send(Message::Binary(encoded.into()))
-				.await
-				.context("failed to send kv channel response")?;
+			// Route request to the actor's channel for sequential processing.
+			if let Some(tx) = actor_channels.get(&actor_id) {
+				if tx.send(req).is_err() {
+					tracing::warn!(%actor_id, "per-actor task channel closed unexpectedly");
+				}
+			}
+
+			// Remove the channel entry on close so the task exits after draining
+			// remaining requests and resources are freed.
+			if is_close {
+				actor_channels.remove(&actor_id);
+			}
 		}
 	}
 
 	Ok(())
+}
+
+/// Processes requests for a single actor sequentially, preserving intra-actor
+/// ordering. Spawned once per actor per connection. Exits when the sender is
+/// dropped (connection end) or after processing an ActorCloseRequest.
+async fn actor_request_task(
+	ctx: StandaloneCtx,
+	state: Arc<KvChannelState>,
+	ws_handle: WebSocketHandle,
+	conn_id: u64,
+	namespace_id: Id,
+	open_actors: Arc<Mutex<HashSet<String>>>,
+	mut rx: mpsc::UnboundedReceiver<protocol::ToServerRequest>,
+) {
+	while let Some(req) = rx.recv().await {
+		let is_close = matches!(req.data, protocol::RequestData::ActorCloseRequest);
+
+		let response_data =
+			handle_request(&ctx, &state, conn_id, namespace_id, &open_actors, &req).await;
+
+		let response = protocol::ToClient::ToClientResponse(protocol::ToClientResponse {
+			request_id: req.request_id,
+			data: response_data,
+		});
+
+		match protocol::encode_to_client(&response) {
+			Ok(encoded) => {
+				if let Err(err) = ws_handle.send(Message::Binary(encoded.into())).await {
+					tracing::warn!(?err, "failed to send kv channel response from actor task");
+					break;
+				}
+			}
+			Err(err) => {
+				tracing::warn!(?err, "failed to encode kv channel response");
+				break;
+			}
+		}
+
+		// Stop processing after a close request. The sender is also removed
+		// from actor_channels by the message loop so no new requests arrive.
+		if is_close {
+			break;
+		}
+	}
 }
 
 // MARK: Request handling
