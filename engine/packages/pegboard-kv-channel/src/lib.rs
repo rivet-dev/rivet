@@ -1,0 +1,688 @@
+//! KV channel WebSocket handler for the engine.
+//!
+//! Serves the KV channel protocol at /kv/connect for native SQLite to route
+//! page-level KV operations over WebSocket. See
+//! docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md for the full spec.
+
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+
+use anyhow::{Context, Result};
+use async_trait::async_trait;
+use bytes::Bytes;
+use futures_util::TryStreamExt;
+use gas::prelude::*;
+use http_body_util::Full;
+use hyper::{Response, StatusCode};
+use hyper_tungstenite::tungstenite::Message;
+use pegboard::actor_kv;
+use rivet_guard_core::{
+	ResponseBody, WebSocketHandle, custom_serve::CustomServeTrait,
+	request_context::RequestContext,
+};
+use tokio::sync::{Mutex, watch};
+use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
+
+pub mod protocol;
+
+// KV validation limits. Must stay in sync with:
+// - engine/packages/pegboard/src/actor_kv/mod.rs
+// - rivetkit-typescript/packages/rivetkit/src/drivers/file-system/kv-limits.ts
+const MAX_KEY_SIZE: usize = 2 * 1024;
+const MAX_VALUE_SIZE: usize = 128 * 1024;
+const MAX_KEYS: usize = 128;
+const MAX_PUT_PAYLOAD_SIZE: usize = 976 * 1024;
+
+/// Shared state across all KV channel connections.
+pub struct KvChannelState {
+	/// Maps actor_id string to the connection_id holding the single-writer lock.
+	actor_locks: Mutex<HashMap<String, u64>>,
+	/// Counter for assigning unique connection IDs.
+	next_conn_id: AtomicU64,
+}
+
+pub struct PegboardKvChannelCustomServe {
+	ctx: StandaloneCtx,
+	state: Arc<KvChannelState>,
+}
+
+impl PegboardKvChannelCustomServe {
+	pub fn new(ctx: StandaloneCtx) -> Self {
+		Self {
+			ctx,
+			state: Arc::new(KvChannelState {
+				actor_locks: Mutex::new(HashMap::new()),
+				next_conn_id: AtomicU64::new(1),
+			}),
+		}
+	}
+}
+
+#[async_trait]
+impl CustomServeTrait for PegboardKvChannelCustomServe {
+	#[tracing::instrument(skip_all)]
+	async fn handle_request(
+		&self,
+		_req: hyper::Request<Full<Bytes>>,
+		_req_ctx: &mut RequestContext,
+	) -> Result<Response<ResponseBody>> {
+		let response = Response::builder()
+			.status(StatusCode::OK)
+			.header("Content-Type", "text/plain")
+			.body(ResponseBody::Full(Full::new(Bytes::from(
+				"kv-channel WebSocket endpoint",
+			))))?;
+		Ok(response)
+	}
+
+	#[tracing::instrument(skip_all)]
+	async fn handle_websocket(
+		&self,
+		req_ctx: &mut RequestContext,
+		ws_handle: WebSocketHandle,
+		_after_hibernation: bool,
+	) -> Result<Option<CloseFrame>> {
+		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
+		let state = self.state.clone();
+
+		// Parse URL params.
+		let url = url::Url::parse(&format!("ws://placeholder{}", req_ctx.path()))
+			.context("failed to parse WebSocket URL")?;
+		let params: HashMap<String, String> = url
+			.query_pairs()
+			.map(|(k, v)| (k.to_string(), v.to_string()))
+			.collect();
+
+		// Validate protocol version.
+		let protocol_version: u32 = params
+			.get("protocol_version")
+			.context("missing protocol_version query param")?
+			.parse()
+			.context("invalid protocol_version")?;
+		anyhow::ensure!(
+			protocol_version == protocol::PROTOCOL_VERSION,
+			"unsupported protocol version: {protocol_version}, expected {}",
+			protocol::PROTOCOL_VERSION
+		);
+
+		// Resolve namespace.
+		let namespace_name = params
+			.get("namespace")
+			.context("missing namespace query param")?
+			.clone();
+		let namespace = ctx
+			.op(namespace::ops::resolve_for_name_global::Input {
+				name: namespace_name.clone(),
+			})
+			.await
+			.with_context(|| format!("failed to resolve namespace: {namespace_name}"))?
+			.ok_or_else(|| namespace::errors::Namespace::NotFound.build())
+			.with_context(|| format!("namespace not found: {namespace_name}"))?;
+
+		// Assign connection ID.
+		let conn_id = state.next_conn_id.fetch_add(1, Ordering::Relaxed);
+		let namespace_id = namespace.namespace_id;
+
+		tracing::info!(%conn_id, %namespace_id, "kv channel connection established");
+
+		// Track actors opened by this connection for cleanup on disconnect.
+		let open_actors: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
+		let last_pong_ts = Arc::new(AtomicI64::new(util::timestamp::now()));
+
+		// Run the connection loop. Any error triggers cleanup below.
+		let result = run_connection(
+			ctx.clone(),
+			state.clone(),
+			ws_handle,
+			conn_id,
+			namespace_id,
+			open_actors.clone(),
+			last_pong_ts,
+		)
+		.await;
+
+		// Release all locks held by this connection.
+		{
+			let open = open_actors.lock().await;
+			let mut locks = state.actor_locks.lock().await;
+			for actor_id in open.iter() {
+				if locks.get(actor_id) == Some(&conn_id) {
+					locks.remove(actor_id);
+					tracing::debug!(%conn_id, %actor_id, "released actor lock on disconnect");
+				}
+			}
+		}
+
+		tracing::info!(%conn_id, "kv channel connection closed");
+
+		result.map(|_| None)
+	}
+}
+
+// MARK: Connection lifecycle
+
+async fn run_connection(
+	ctx: StandaloneCtx,
+	state: Arc<KvChannelState>,
+	ws_handle: WebSocketHandle,
+	conn_id: u64,
+	namespace_id: Id,
+	open_actors: Arc<Mutex<HashSet<String>>>,
+	last_pong_ts: Arc<AtomicI64>,
+) -> Result<()> {
+	let ping_interval =
+		Duration::from_millis(ctx.config().pegboard().runner_update_ping_interval_ms());
+	let ping_timeout_ms = ctx.config().pegboard().runner_ping_timeout_ms();
+
+	let (ping_abort_tx, ping_abort_rx) = watch::channel(());
+
+	// Spawn ping task.
+	let ping_ws = ws_handle.clone();
+	let ping_last_pong = last_pong_ts.clone();
+	let ping = tokio::spawn(async move {
+		ping_task(
+			ping_ws,
+			ping_last_pong,
+			ping_abort_rx,
+			ping_interval,
+			ping_timeout_ms,
+		)
+		.await
+	});
+
+	// Run message loop.
+	let msg_result = message_loop(
+		&ctx,
+		&state,
+		&ws_handle,
+		conn_id,
+		namespace_id,
+		&open_actors,
+		&last_pong_ts,
+	)
+	.await;
+
+	// Signal ping task to stop and wait for it.
+	let _ = ping_abort_tx.send(());
+	let _ = ping.await;
+
+	msg_result
+}
+
+// MARK: Ping task
+
+async fn ping_task(
+	ws_handle: WebSocketHandle,
+	last_pong_ts: Arc<AtomicI64>,
+	mut abort_rx: watch::Receiver<()>,
+	interval: Duration,
+	timeout_ms: i64,
+) -> Result<()> {
+	loop {
+		tokio::select! {
+			_ = tokio::time::sleep(interval) => {}
+			_ = abort_rx.changed() => return Ok(()),
+		}
+
+		// Check pong timeout.
+		let last = last_pong_ts.load(Ordering::Relaxed);
+		let now = util::timestamp::now();
+		if now - last > timeout_ms {
+			tracing::warn!("kv channel ping timed out, closing connection");
+			return Err(anyhow::anyhow!("ping timed out"));
+		}
+
+		// Send ping.
+		let ping = protocol::ToClient::ToClientPing(protocol::ToClientPing { ts: now });
+		let data = protocol::encode_to_client(&ping)?;
+		ws_handle.send(Message::Binary(data.into())).await?;
+	}
+}
+
+// MARK: Message loop
+
+async fn message_loop(
+	ctx: &StandaloneCtx,
+	state: &KvChannelState,
+	ws_handle: &WebSocketHandle,
+	conn_id: u64,
+	namespace_id: Id,
+	open_actors: &Mutex<HashSet<String>>,
+	last_pong_ts: &AtomicI64,
+) -> Result<()> {
+	let ws_rx = ws_handle.recv();
+	let mut ws_rx = ws_rx.lock().await;
+	let mut term_signal = rivet_runtime::TermSignal::new().await;
+
+	loop {
+		let msg = tokio::select! {
+			res = ws_rx.try_next() => {
+				match res? {
+					Some(msg) => msg,
+					None => {
+						tracing::debug!("websocket closed");
+						return Ok(());
+					}
+				}
+			}
+			_ = term_signal.recv() => {
+				// Send ToClientClose before shutting down.
+				let close_msg = protocol::ToClient::ToClientClose;
+				let data = protocol::encode_to_client(&close_msg)?;
+				let _ = ws_handle.send(Message::Binary(data.into())).await;
+				return Ok(());
+			}
+		};
+
+		match msg {
+			Message::Binary(data) => {
+				handle_binary_message(
+					ctx,
+					state,
+					ws_handle,
+					conn_id,
+					namespace_id,
+					open_actors,
+					last_pong_ts,
+					&data,
+				)
+				.await?;
+			}
+			Message::Close(_) => {
+				tracing::debug!("websocket close frame received");
+				return Ok(());
+			}
+			_ => {}
+		}
+	}
+}
+
+async fn handle_binary_message(
+	ctx: &StandaloneCtx,
+	state: &KvChannelState,
+	ws_handle: &WebSocketHandle,
+	conn_id: u64,
+	namespace_id: Id,
+	open_actors: &Mutex<HashSet<String>>,
+	last_pong_ts: &AtomicI64,
+	data: &[u8],
+) -> Result<()> {
+	let msg = match protocol::decode_to_server(data) {
+		Ok(msg) => msg,
+		Err(err) => {
+			tracing::warn!(
+				?err,
+				data_len = data.len(),
+				"failed to deserialize kv channel message"
+			);
+			return Ok(());
+		}
+	};
+
+	match msg {
+		protocol::ToServer::ToServerPong(pong) => {
+			last_pong_ts.store(util::timestamp::now(), Ordering::Relaxed);
+			tracing::trace!(ts = pong.ts, "received pong");
+		}
+		protocol::ToServer::ToServerRequest(req) => {
+			let response_data =
+				handle_request(ctx, state, conn_id, namespace_id, open_actors, &req).await;
+
+			let response = protocol::ToClient::ToClientResponse(protocol::ToClientResponse {
+				request_id: req.request_id,
+				data: response_data,
+			});
+
+			let encoded = protocol::encode_to_client(&response)?;
+			ws_handle
+				.send(Message::Binary(encoded.into()))
+				.await
+				.context("failed to send kv channel response")?;
+		}
+	}
+
+	Ok(())
+}
+
+// MARK: Request handling
+
+async fn handle_request(
+	ctx: &StandaloneCtx,
+	state: &KvChannelState,
+	conn_id: u64,
+	namespace_id: Id,
+	open_actors: &Mutex<HashSet<String>>,
+	req: &protocol::ToServerRequest,
+) -> protocol::ResponseData {
+	match &req.data {
+		protocol::RequestData::ActorOpenRequest => {
+			handle_actor_open(state, conn_id, open_actors, &req.actor_id).await
+		}
+		protocol::RequestData::ActorCloseRequest => {
+			handle_actor_close(state, conn_id, open_actors, &req.actor_id).await
+		}
+		_ => {
+			// All KV operations require the actor to be opened by this connection.
+			let is_open = open_actors.lock().await.contains(&req.actor_id);
+			if !is_open {
+				let locks = state.actor_locks.lock().await;
+				if locks.contains_key(&req.actor_id) {
+					return error_response(
+						"actor_locked",
+						"actor is locked by another connection",
+					);
+				}
+				return error_response(
+					"actor_not_open",
+					"actor is not opened on this connection",
+				);
+			}
+
+			match &req.data {
+				protocol::RequestData::KvGetRequest(body) => {
+					handle_kv_get(ctx, namespace_id, &req.actor_id, body).await
+				}
+				protocol::RequestData::KvPutRequest(body) => {
+					handle_kv_put(ctx, namespace_id, &req.actor_id, body).await
+				}
+				protocol::RequestData::KvDeleteRequest(body) => {
+					handle_kv_delete(ctx, namespace_id, &req.actor_id, body).await
+				}
+				protocol::RequestData::KvDeleteRangeRequest(body) => {
+					handle_kv_delete_range(ctx, namespace_id, &req.actor_id, body).await
+				}
+				protocol::RequestData::ActorOpenRequest
+				| protocol::RequestData::ActorCloseRequest => unreachable!(),
+			}
+		}
+	}
+}
+
+// MARK: Actor open/close
+
+async fn handle_actor_open(
+	state: &KvChannelState,
+	conn_id: u64,
+	open_actors: &Mutex<HashSet<String>>,
+	actor_id: &str,
+) -> protocol::ResponseData {
+	let mut locks = state.actor_locks.lock().await;
+
+	match locks.get(actor_id) {
+		Some(&existing_conn) if existing_conn != conn_id => {
+			error_response("actor_locked", "actor is locked by another connection")
+		}
+		_ => {
+			locks.insert(actor_id.to_string(), conn_id);
+			open_actors.lock().await.insert(actor_id.to_string());
+			tracing::debug!(%conn_id, %actor_id, "actor lock acquired");
+			protocol::ResponseData::ActorOpenResponse
+		}
+	}
+}
+
+async fn handle_actor_close(
+	state: &KvChannelState,
+	conn_id: u64,
+	open_actors: &Mutex<HashSet<String>>,
+	actor_id: &str,
+) -> protocol::ResponseData {
+	let mut locks = state.actor_locks.lock().await;
+
+	if locks.get(actor_id) == Some(&conn_id) {
+		locks.remove(actor_id);
+		open_actors.lock().await.remove(actor_id);
+		tracing::debug!(%conn_id, %actor_id, "actor lock released");
+	}
+
+	protocol::ResponseData::ActorCloseResponse
+}
+
+// MARK: KV operations
+
+async fn handle_kv_get(
+	ctx: &StandaloneCtx,
+	namespace_id: Id,
+	actor_id: &str,
+	body: &protocol::KvGetRequest,
+) -> protocol::ResponseData {
+	if let Err(resp) = validate_keys(&body.keys) {
+		return resp;
+	}
+
+	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id).await {
+		Ok(v) => v,
+		Err(resp) => return resp,
+	};
+
+	let recipient = actor_kv::Recipient {
+		actor_id: parsed_actor_id,
+		namespace_id,
+		name,
+	};
+
+	let udb = match ctx.udb() {
+		Ok(udb) => udb,
+		Err(err) => return error_response("internal_error", &err.to_string()),
+	};
+
+	match actor_kv::get(&*udb, &recipient, body.keys.clone()).await {
+		Ok((keys, values, _metadata)) => {
+			protocol::ResponseData::KvGetResponse(protocol::KvGetResponse { keys, values })
+		}
+		Err(err) => error_response("internal_error", &err.to_string()),
+	}
+}
+
+async fn handle_kv_put(
+	ctx: &StandaloneCtx,
+	namespace_id: Id,
+	actor_id: &str,
+	body: &protocol::KvPutRequest,
+) -> protocol::ResponseData {
+	// Validate keys/values length match.
+	if body.keys.len() != body.values.len() {
+		return error_response(
+			"keys_values_length_mismatch",
+			"keys and values must have the same length",
+		);
+	}
+
+	// Validate batch size.
+	if body.keys.len() > MAX_KEYS {
+		return error_response(
+			"batch_too_large",
+			&format!("a maximum of {MAX_KEYS} entries is allowed"),
+		);
+	}
+
+	// Validate individual keys and values.
+	for key in &body.keys {
+		if key.len() > MAX_KEY_SIZE {
+			return error_response(
+				"key_too_large",
+				&format!("key is too long (max {MAX_KEY_SIZE} bytes)"),
+			);
+		}
+	}
+	for value in &body.values {
+		if value.len() > MAX_VALUE_SIZE {
+			return error_response(
+				"value_too_large",
+				&format!("value is too large (max {} KiB)", MAX_VALUE_SIZE / 1024),
+			);
+		}
+	}
+
+	// Validate total payload size.
+	let payload_size: usize = body.keys.iter().map(|k| k.len()).sum::<usize>()
+		+ body.values.iter().map(|v| v.len()).sum::<usize>();
+	if payload_size > MAX_PUT_PAYLOAD_SIZE {
+		return error_response(
+			"payload_too_large",
+			&format!(
+				"total payload is too large (max {} KiB)",
+				MAX_PUT_PAYLOAD_SIZE / 1024
+			),
+		);
+	}
+
+	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id).await {
+		Ok(v) => v,
+		Err(resp) => return resp,
+	};
+
+	let recipient = actor_kv::Recipient {
+		actor_id: parsed_actor_id,
+		namespace_id,
+		name,
+	};
+
+	let udb = match ctx.udb() {
+		Ok(udb) => udb,
+		Err(err) => return error_response("internal_error", &err.to_string()),
+	};
+
+	match actor_kv::put(&*udb, &recipient, body.keys.clone(), body.values.clone()).await {
+		Ok(()) => protocol::ResponseData::KvPutResponse,
+		Err(err) => {
+			let msg = err.to_string();
+			if msg.contains("not enough space left in storage") {
+				error_response("storage_quota_exceeded", &msg)
+			} else {
+				error_response("internal_error", &msg)
+			}
+		}
+	}
+}
+
+async fn handle_kv_delete(
+	ctx: &StandaloneCtx,
+	namespace_id: Id,
+	actor_id: &str,
+	body: &protocol::KvDeleteRequest,
+) -> protocol::ResponseData {
+	if let Err(resp) = validate_keys(&body.keys) {
+		return resp;
+	}
+
+	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id).await {
+		Ok(v) => v,
+		Err(resp) => return resp,
+	};
+
+	let recipient = actor_kv::Recipient {
+		actor_id: parsed_actor_id,
+		namespace_id,
+		name,
+	};
+
+	let udb = match ctx.udb() {
+		Ok(udb) => udb,
+		Err(err) => return error_response("internal_error", &err.to_string()),
+	};
+
+	match actor_kv::delete(&*udb, &recipient, body.keys.clone()).await {
+		Ok(()) => protocol::ResponseData::KvDeleteResponse,
+		Err(err) => error_response("internal_error", &err.to_string()),
+	}
+}
+
+async fn handle_kv_delete_range(
+	ctx: &StandaloneCtx,
+	namespace_id: Id,
+	actor_id: &str,
+	body: &protocol::KvDeleteRangeRequest,
+) -> protocol::ResponseData {
+	if body.start.len() > MAX_KEY_SIZE {
+		return error_response(
+			"key_too_large",
+			&format!("start key is too long (max {MAX_KEY_SIZE} bytes)"),
+		);
+	}
+	if body.end.len() > MAX_KEY_SIZE {
+		return error_response(
+			"key_too_large",
+			&format!("end key is too long (max {MAX_KEY_SIZE} bytes)"),
+		);
+	}
+
+	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id).await {
+		Ok(v) => v,
+		Err(resp) => return resp,
+	};
+
+	let recipient = actor_kv::Recipient {
+		actor_id: parsed_actor_id,
+		namespace_id,
+		name,
+	};
+
+	let udb = match ctx.udb() {
+		Ok(udb) => udb,
+		Err(err) => return error_response("internal_error", &err.to_string()),
+	};
+
+	match actor_kv::delete_range(&*udb, &recipient, body.start.clone(), body.end.clone()).await {
+		Ok(()) => protocol::ResponseData::KvDeleteResponse,
+		Err(err) => error_response("internal_error", &err.to_string()),
+	}
+}
+
+// MARK: Helpers
+
+/// Look up an actor by ID and return the parsed ID and actor name.
+async fn resolve_actor(
+	ctx: &StandaloneCtx,
+	actor_id: &str,
+) -> std::result::Result<(Id, String), protocol::ResponseData> {
+	let parsed_id = Id::parse(actor_id).map_err(|err| {
+		error_response(
+			"actor_not_found",
+			&format!("invalid actor id: {err}"),
+		)
+	})?;
+
+	let actor = ctx
+		.op(pegboard::ops::actor::get_for_runner::Input {
+			actor_id: parsed_id,
+		})
+		.await
+		.map_err(|err| error_response("internal_error", &err.to_string()))?;
+
+	match actor {
+		Some(actor) => Ok((parsed_id, actor.name)),
+		None => Err(error_response(
+			"actor_not_found",
+			"actor does not exist or is not running",
+		)),
+	}
+}
+
+/// Validate a list of KV keys against size and count limits.
+fn validate_keys(keys: &[protocol::KvKey]) -> std::result::Result<(), protocol::ResponseData> {
+	if keys.len() > MAX_KEYS {
+		return Err(error_response(
+			"batch_too_large",
+			&format!("a maximum of {MAX_KEYS} keys is allowed"),
+		));
+	}
+	for key in keys {
+		if key.len() > MAX_KEY_SIZE {
+			return Err(error_response(
+				"key_too_large",
+				&format!("key is too long (max {MAX_KEY_SIZE} bytes)"),
+			));
+		}
+	}
+	Ok(())
+}
+
+fn error_response(code: &str, message: &str) -> protocol::ResponseData {
+	protocol::ResponseData::ErrorResponse(protocol::ErrorResponse {
+		code: code.to_string(),
+		message: message.to_string(),
+	})
+}

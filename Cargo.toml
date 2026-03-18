@@ -28,6 +28,7 @@ members = [
   "engine/packages/namespace",
   "engine/packages/pegboard",
   "engine/packages/pegboard-gateway",
+  "engine/packages/pegboard-kv-channel",
   "engine/packages/pegboard-runner",
   "engine/packages/pools",
   "engine/packages/postgres-util",
@@ -419,6 +420,9 @@ members = [
 
     [workspace.dependencies.pegboard-gateway]
     path = "engine/packages/pegboard-gateway"
+
+    [workspace.dependencies.pegboard-kv-channel]
+    path = "engine/packages/pegboard-kv-channel"
 
     [workspace.dependencies.pegboard-runner]
     path = "engine/packages/pegboard-runner"
