@@ -121,6 +121,15 @@ struct Inner {
 	/// Actor IDs that are currently open. Re-opened on reconnect.
 	open_actors: Mutex<HashSet<String>>,
 
+	/// Actors pending re-open on reconnect. KV requests for these actors
+	/// wait until the watch value becomes true (ActorOpenResponse received).
+	/// Empty during initial connection (optimistic open).
+	reconnect_ready: Mutex<HashMap<String, watch::Sender<bool>>>,
+
+	/// Request IDs of reconnect ActorOpenRequests. Maps request_id -> actor_id
+	/// so the response handler can mark actors as ready.
+	reconnect_request_ids: Mutex<HashMap<u32, String>>,
+
 	/// Signal to shut down background tasks.
 	shutdown_tx: watch::Sender<bool>,
 }
@@ -139,6 +148,8 @@ impl KvChannel {
 			in_flight: Mutex::new(HashMap::new()),
 			next_request_id: Mutex::new(0),
 			open_actors: Mutex::new(HashSet::new()),
+			reconnect_ready: Mutex::new(HashMap::new()),
+			reconnect_request_ids: Mutex::new(HashMap::new()),
 			shutdown_tx,
 		});
 
@@ -160,6 +171,21 @@ impl KvChannel {
 	) -> Result<ResponseData, ChannelError> {
 		if *self.inner.shutdown_tx.borrow() {
 			return Err(ChannelError::Shutdown);
+		}
+
+		// On reconnect, wait for ActorOpenResponse before sending KV requests.
+		// The initial open (first connection) has no reconnect_ready entries,
+		// so this is a no-op. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md
+		// Finding 4 'Client-side change' section.
+		let pending_rx = {
+			let ready = self.inner.reconnect_ready.lock().await;
+			ready.get(actor_id).map(|tx| tx.subscribe())
+		};
+		if let Some(mut rx) = pending_rx {
+			match rx.wait_for(|v| *v).await {
+				Ok(_) => {}
+				Err(_) => return Err(ChannelError::ConnectionClosed),
+			}
 		}
 
 		let (resp_tx, resp_rx) = oneshot::channel();
@@ -265,26 +291,37 @@ async fn connection_loop(inner: Arc<Inner>, mut shutdown_rx: watch::Receiver<boo
 				let (ws_write, ws_read) = ws_stream.split();
 				let (outgoing_tx, outgoing_rx) = mpsc::unbounded_channel::<Vec<u8>>();
 
-				// Reset request ID counter on reconnect.
+				// Reset request ID counter and reconnect state.
 				*inner.next_request_id.lock().await = 0;
+				inner.reconnect_ready.lock().await.clear();
+				inner.reconnect_request_ids.lock().await.clear();
 
-				// Re-open all previously open actors directly through the outgoing
-				// channel. Open is optimistic so we do not wait for responses. The
-				// responses will be dispatched by the read loop; unknown request IDs
-				// (from the re-open) are silently ignored.
+				// Re-open all previously open actors. On reconnect, KV requests
+				// wait for each ActorOpenResponse before proceeding. On initial
+				// connection (actors empty), this is a no-op and open_actor
+				// proceeds optimistically.
+				// See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 4.
 				let actors: Vec<String> =
 					inner.open_actors.lock().await.iter().cloned().collect();
 				let mut next_id = 0u32;
-				for actor_id in &actors {
-					let msg = ToServer::ToServerRequest(ToServerRequest {
-						request_id: next_id,
-						actor_id: actor_id.clone(),
-						data: RequestData::ActorOpenRequest,
-					});
-					if let Ok(bytes) = encode_to_server(&msg) {
-						let _ = outgoing_tx.send(bytes);
+				{
+					let mut ready = inner.reconnect_ready.lock().await;
+					let mut req_ids = inner.reconnect_request_ids.lock().await;
+					for actor_id in &actors {
+						let (tx, _rx) = watch::channel(false);
+						ready.insert(actor_id.clone(), tx);
+						req_ids.insert(next_id, actor_id.clone());
+
+						let msg = ToServer::ToServerRequest(ToServerRequest {
+							request_id: next_id,
+							actor_id: actor_id.clone(),
+							data: RequestData::ActorOpenRequest,
+						});
+						if let Ok(bytes) = encode_to_server(&msg) {
+							let _ = outgoing_tx.send(bytes);
+						}
+						next_id = next_id.wrapping_add(1);
 					}
-					next_id = next_id.wrapping_add(1);
 				}
 				*inner.next_request_id.lock().await = next_id;
 
@@ -371,18 +408,74 @@ async fn run_connection<S, W>(
 					Some(Ok(Message::Binary(data))) => {
 						match decode_to_client(&data) {
 							Ok(ToClient::ToClientResponse(response)) => {
-								let mut in_flight = inner.in_flight.lock().await;
-								if let Some(tx) = in_flight.remove(&response.request_id) {
-									let result = match response.data {
-										ResponseData::ErrorResponse(err) => {
-											Err(ChannelError::ServerError(err))
+								// Check if this is a reconnect ActorOpenResponse.
+								let reconnect_actor = {
+									inner
+										.reconnect_request_ids
+										.lock()
+										.await
+										.remove(&response.request_id)
+								};
+
+								if let Some(actor_id) = reconnect_actor {
+									match response.data {
+										ResponseData::ActorOpenResponse => {
+											// Mark actor as ready for KV requests.
+											if let Some(tx) = inner
+												.reconnect_ready
+												.lock()
+												.await
+												.remove(&actor_id)
+											{
+												let _ = tx.send(true);
+											}
 										}
-										data => Ok(data),
-									};
-									let _ = tx.send(result);
+										ResponseData::ErrorResponse(err) => {
+											// Re-open failed. Remove actor and drop
+											// the watch sender so waiters get
+											// RecvError -> ConnectionClosed.
+											inner
+												.open_actors
+												.lock()
+												.await
+												.remove(&actor_id);
+											inner
+												.reconnect_ready
+												.lock()
+												.await
+												.remove(&actor_id);
+											eprintln!(
+												"kv channel reconnect open failed \
+												 for {actor_id}: {} - {}",
+												err.code, err.message
+											);
+										}
+										_ => {
+											inner
+												.reconnect_ready
+												.lock()
+												.await
+												.remove(&actor_id);
+										}
+									}
+								} else {
+									let mut in_flight =
+										inner.in_flight.lock().await;
+									if let Some(tx) =
+										in_flight.remove(&response.request_id)
+									{
+										let result = match response.data {
+											ResponseData::ErrorResponse(err) => {
+												Err(ChannelError::ServerError(
+													err,
+												))
+											}
+											data => Ok(data),
+										};
+										let _ = tx.send(result);
+									}
+									// Ignore responses for unknown request IDs.
 								}
-								// Ignore responses for unknown request IDs
-								// (e.g., optimistic re-open after reconnect).
 							}
 							Ok(ToClient::ToClientPing(ping)) => {
 								// Respond with pong echoing the timestamp.
@@ -465,6 +558,10 @@ async fn fail_all_in_flight(inner: &Inner) {
 	for (_, tx) in in_flight.drain() {
 		let _ = tx.send(Err(ChannelError::ConnectionClosed));
 	}
+	// Clear reconnect state. Dropping watch senders wakes waiters with
+	// RecvError, which send_request maps to ConnectionClosed.
+	inner.reconnect_ready.lock().await.clear();
+	inner.reconnect_request_ids.lock().await.clear();
 }
 
 #[cfg(test)]

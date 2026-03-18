@@ -19,7 +19,7 @@ use futures_util::{SinkExt, StreamExt};
 use libsqlite3_sys::*;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::channel::{ChannelError, KvChannel, KvChannelConfig};
@@ -62,6 +62,9 @@ struct MockState {
 	next_conn_id: AtomicU64,
 	/// Broadcast to force-close all connections (for reconnection testing).
 	kill_tx: broadcast::Sender<()>,
+	/// Semaphore gate for ActorOpenResponse. When set with 0 permits,
+	/// open responses block until permits are added.
+	open_gate: Mutex<Option<Arc<Semaphore>>>,
 }
 
 struct MockKvServer {
@@ -80,6 +83,7 @@ impl MockKvServer {
 			ops: Mutex::new(Vec::new()),
 			next_conn_id: AtomicU64::new(1),
 			kill_tx,
+			open_gate: Mutex::new(None),
 		});
 
 		let state_clone = state.clone();
@@ -125,8 +129,24 @@ async fn mock_accept_loop(listener: TcpListener, state: Arc<MockState>) {
 						Ok(ws) => ws,
 						Err(_) => return,
 					};
-					let (mut write, mut read) = ws.split();
-					let mut open_actors: Vec<String> = Vec::new();
+					let (write, mut read) = ws.split();
+					let open_actors: Arc<Mutex<Vec<String>>> =
+						Arc::new(Mutex::new(Vec::new()));
+
+					// Write responses via mpsc channel so spawned tasks can send.
+					let (resp_tx, mut resp_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+					let write_handle = tokio::spawn(async move {
+						let mut write = write;
+						while let Some(bytes) = resp_rx.recv().await {
+							if write
+								.send(Message::Binary(bytes.into()))
+								.await
+								.is_err()
+							{
+								break;
+							}
+						}
+					});
 
 					loop {
 						tokio::select! {
@@ -134,16 +154,24 @@ async fn mock_accept_loop(listener: TcpListener, state: Arc<MockState>) {
 								match msg {
 									Some(Ok(Message::Binary(data))) => {
 										if let Ok(ToServer::ToServerRequest(req)) = decode_to_server(&data) {
-											let resp_data = mock_handle_request(
-												&state, conn_id, &req.actor_id, req.data, &mut open_actors,
-											).await;
-											let resp = ToClient::ToClientResponse(ToClientResponse {
-												request_id: req.request_id,
-												data: resp_data,
+											let state = state.clone();
+											let resp_tx = resp_tx.clone();
+											let open_actors = open_actors.clone();
+											let actor_id = req.actor_id.clone();
+											let request_id = req.request_id;
+											let data = req.data;
+											tokio::spawn(async move {
+												let resp_data = mock_handle_request(
+													&state, conn_id, &actor_id, data, &open_actors,
+												).await;
+												let resp = ToClient::ToClientResponse(ToClientResponse {
+													request_id,
+													data: resp_data,
+												});
+												if let Ok(bytes) = encode_to_client(&resp) {
+													let _ = resp_tx.send(bytes);
+												}
 											});
-											if let Ok(bytes) = encode_to_client(&resp) {
-												let _ = write.send(Message::Binary(bytes.into())).await;
-											}
 										}
 									}
 									Some(Ok(_)) => {}
@@ -155,12 +183,17 @@ async fn mock_accept_loop(listener: TcpListener, state: Arc<MockState>) {
 					}
 
 					// Release all locks held by this connection.
+					let oa = open_actors.lock().await;
 					let mut locks = state.locks.lock().await;
-					for actor_id in &open_actors {
+					for actor_id in oa.iter() {
 						if locks.get(actor_id) == Some(&conn_id) {
 							locks.remove(actor_id);
 						}
 					}
+
+					// Clean up writer task.
+					drop(resp_tx);
+					write_handle.abort();
 				});
 			}
 			Err(_) => break,
@@ -173,10 +206,19 @@ async fn mock_handle_request(
 	conn_id: u64,
 	actor_id: &str,
 	data: RequestData,
-	open_actors: &mut Vec<String>,
+	open_actors: &Mutex<Vec<String>>,
 ) -> ResponseData {
 	match data {
 		RequestData::ActorOpenRequest => {
+			// Wait for gate if set (for testing reconnect waiting).
+			{
+				let gate = state.open_gate.lock().await;
+				if let Some(sem) = gate.as_ref() {
+					let sem = sem.clone();
+					drop(gate);
+					let _permit = sem.acquire().await.unwrap();
+				}
+			}
 			let mut locks = state.locks.lock().await;
 			if let Some(&holder) = locks.get(actor_id) {
 				if holder != conn_id {
@@ -187,7 +229,7 @@ async fn mock_handle_request(
 				}
 			}
 			locks.insert(actor_id.to_string(), conn_id);
-			open_actors.push(actor_id.to_string());
+			open_actors.lock().await.push(actor_id.to_string());
 			state.stores.lock().await.entry(actor_id.to_string()).or_default();
 			state.ops.lock().await.push(MockOp::Open { actor_id: actor_id.to_string() });
 			ResponseData::ActorOpenResponse
@@ -197,7 +239,7 @@ async fn mock_handle_request(
 			if locks.get(actor_id) == Some(&conn_id) {
 				locks.remove(actor_id);
 			}
-			open_actors.retain(|a| a != actor_id);
+			open_actors.lock().await.retain(|a| a != actor_id);
 			state.ops.lock().await.push(MockOp::Close { actor_id: actor_id.to_string() });
 			ResponseData::ActorCloseResponse
 		}
@@ -914,4 +956,95 @@ fn test_reconnection_reopens_actors() {
 		open_count >= 2,
 		"actor should have been opened at least twice (initial + reconnect), got {open_count}"
 	);
+}
+
+#[test]
+fn test_reconnect_kv_waits_for_open_response() {
+	// Verify that on reconnect, KV requests block until ActorOpenResponse is
+	// received. Uses a semaphore gate on the mock server to hold the open
+	// response, then checks that a KV request hasn't completed (client is
+	// waiting), and finally releases the gate to confirm the request succeeds.
+	//
+	// The mock server processes messages concurrently (spawned tasks), so
+	// without client-side waiting, a KV request sent during the gate hold
+	// would hit actor_not_open (lock not yet acquired). With client-side
+	// waiting, the KV request is held on the client until the open completes.
+	let rt = create_runtime();
+	let (server, channel) = rt.block_on(setup_server_and_channel("actor-rwait"));
+
+	// Write initial data.
+	rt.block_on(
+		channel.send_request(
+			"actor-rwait",
+			RequestData::KvPutRequest(KvPutRequest {
+				keys: vec![vec![0x01]],
+				values: vec![vec![0xEE]],
+			}),
+		),
+	)
+	.unwrap();
+
+	// Set up gate (0 permits = blocks open responses).
+	let gate = Arc::new(Semaphore::new(0));
+	rt.block_on(async {
+		*server.state.open_gate.lock().await = Some(gate.clone());
+	});
+
+	// Force disconnect.
+	rt.block_on(async {
+		server.close_all_connections().await;
+		tokio::time::sleep(Duration::from_millis(200)).await;
+	});
+
+	// Wait for WebSocket to reconnect (backoff ~1s + connection time).
+	// The reconnect ActorOpenRequest is sent and received by the mock server,
+	// but the response is held by the gate.
+	rt.block_on(async {
+		tokio::time::sleep(Duration::from_secs(2)).await;
+	});
+
+	// Spawn a task that sends a KV request. With reconnect waiting, this
+	// should block until the ActorOpenResponse arrives.
+	let ch = channel.clone();
+	let kv_handle = rt.spawn(async move {
+		ch.send_request(
+			"actor-rwait",
+			RequestData::KvGetRequest(KvGetRequest {
+				keys: vec![vec![0x01]],
+			}),
+		)
+		.await
+	});
+
+	// Give the KV task time to reach the wait point.
+	rt.block_on(async {
+		tokio::time::sleep(Duration::from_millis(500)).await;
+	});
+
+	// Verify the KV task is still pending (blocked by reconnect readiness).
+	// Without client-side waiting, the concurrent mock server would have
+	// already returned actor_not_open and the task would be finished.
+	assert!(
+		!kv_handle.is_finished(),
+		"KV request should be waiting for ActorOpenResponse"
+	);
+
+	// Release the gate so the mock server sends ActorOpenResponse.
+	gate.add_permits(1);
+
+	// KV request should now complete successfully.
+	let result = rt.block_on(kv_handle).unwrap();
+	match &result {
+		Ok(ResponseData::KvGetResponse(resp)) => {
+			assert_eq!(resp.keys, vec![vec![0x01u8]]);
+			assert_eq!(resp.values, vec![vec![0xEEu8]]);
+		}
+		other => panic!("KV get after gated reconnect failed: {other:?}"),
+	}
+
+	// Clean up gate.
+	rt.block_on(async {
+		*server.state.open_gate.lock().await = None;
+	});
+	rt.block_on(channel.disconnect());
 }
