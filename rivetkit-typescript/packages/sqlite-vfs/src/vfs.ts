@@ -33,6 +33,7 @@ import {
 	FILE_TAG_SHM,
 	FILE_TAG_WAL,
 	getChunkKey,
+	getChunkKeyRangeEnd,
 	getMetaKey,
 	type SqliteFileTag,
 } from "./kv";
@@ -432,6 +433,10 @@ export class SqliteVfs {
 					sqliteSystem.name,
 				),
 			);
+			// PRAGMA settings for KV-backed SQLite. Keep in sync with
+			// rivetkit-typescript/packages/sqlite-native/src/vfs.rs and
+			// docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md.
+			//
 			// TODO: Benchmark PRAGMA tuning for KV-backed SQLite after open.
 			// Start with journal_mode=PERSIST and journal_size_limit to reduce
 			// journal churn on high-latency KV without introducing WAL.
@@ -931,25 +936,26 @@ class SqliteSystem implements SqliteVfsRegistration {
 			return VFS.SQLITE_OK;
 		}
 
-		// Calculate which chunks to delete
-		// Note: When size=0, lastChunkToKeep = floor(-1/4096) = -1, which means
-		// all chunks (starting from index 0) will be deleted in the loop below.
-		const lastChunkToKeep = Math.floor((size - 1) / CHUNK_SIZE);
-		const lastExistingChunk = Math.floor((file.size - 1) / CHUNK_SIZE);
-
-		// Delete chunks beyond the new size
-		const keysToDelete: Uint8Array[] = [];
-		for (let i = lastChunkToKeep + 1; i <= lastExistingChunk; i++) {
-			keysToDelete.push(this.#chunkKey(file, i));
-		}
-
-		if (keysToDelete.length > 0) {
-			await options.deleteBatch(keysToDelete);
+		// Delete chunks beyond the new size using an O(1) range delete.
+		// Chunk keys are lexicographically contiguous per file tag due to the
+		// fixed prefix + big-endian chunk index layout.
+		const firstChunkToDelete = Math.floor((size - 1) / CHUNK_SIZE) + 1;
+		if (size === 0) {
+			// All chunks must go. Range: [chunk 0, past last possible chunk).
+			await options.deleteRange(
+				getChunkKey(file.fileTag, 0),
+				getChunkKeyRangeEnd(file.fileTag),
+			);
+		} else {
+			await options.deleteRange(
+				getChunkKey(file.fileTag, firstChunkToDelete),
+				getChunkKeyRangeEnd(file.fileTag),
+			);
 		}
 
 		// Truncate the last kept chunk if needed
 		if (size > 0 && size % CHUNK_SIZE !== 0) {
-			const lastChunkKey = this.#chunkKey(file, lastChunkToKeep);
+			const lastChunkKey = this.#chunkKey(file, firstChunkToDelete - 1);
 			const lastChunkData = await options.get(lastChunkKey);
 
 			if (lastChunkData && lastChunkData.length > size % CHUNK_SIZE) {
@@ -1002,13 +1008,16 @@ class SqliteSystem implements SqliteVfsRegistration {
 	}
 
 	/**
-	 * Internal delete implementation
+	 * Internal delete implementation.
+	 * Uses deleteRange for O(1) chunk deletion instead of enumerating
+	 * individual chunk keys. The chunk keys for a file tag are
+	 * lexicographically contiguous, so range deletion is always safe.
 	 */
 	async #delete(path: string): Promise<void> {
 		const { options, fileTag } = this.#resolveFileOrThrow(path);
 		const metaKey = getMetaKey(fileTag);
 
-		// Get file size to find out how many chunks to delete
+		// Get file size to check if the file exists
 		const sizeData = await options.get(metaKey);
 
 		if (!sizeData) {
@@ -1016,16 +1025,14 @@ class SqliteSystem implements SqliteVfsRegistration {
 			return;
 		}
 
-		const size = decodeFileMeta(sizeData);
+		// Delete all chunks via range delete
+		await options.deleteRange(
+			getChunkKey(fileTag, 0),
+			getChunkKeyRangeEnd(fileTag),
+		);
 
-		// Delete all chunks
-		const keysToDelete: Uint8Array[] = [metaKey];
-		const numChunks = Math.ceil(size / CHUNK_SIZE);
-		for (let i = 0; i < numChunks; i++) {
-			keysToDelete.push(getChunkKey(fileTag, i));
-		}
-
-		await options.deleteBatch(keysToDelete);
+		// Delete the metadata key
+		await options.deleteBatch([metaKey]);
 	}
 
 	async xAccess(

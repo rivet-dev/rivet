@@ -3,6 +3,9 @@
  *
  * This module contains constants and utilities for building keys used in the
  * key-value store for SQLite file storage.
+ *
+ * Keep in sync with rivetkit-typescript/packages/sqlite-native/src/kv.rs
+ * (native VFS). Both must produce byte-identical keys.
  */
 
 /**
@@ -59,7 +62,7 @@ export function getMetaKey(fileTag: SqliteFileTag): Uint8Array {
 
 /**
  * Gets the key for one chunk of file data.
- * Format: [SQLITE_PREFIX, CHUNK_PREFIX, file tag, chunk index (u32 big-endian)]
+ * Format: [SQLITE_PREFIX, SCHEMA_VERSION, CHUNK_PREFIX, file tag, chunk index (u32 big-endian)]
  *
  * The chunk index is derived from byte offset as floor(offset / CHUNK_SIZE),
  * which is how SQLite byte ranges map onto KV keys.
@@ -77,5 +80,22 @@ export function getChunkKey(
 	key[5] = (chunkIndex >>> 16) & 0xff;
 	key[6] = (chunkIndex >>> 8) & 0xff;
 	key[7] = chunkIndex & 0xff;
+	return key;
+}
+
+/**
+ * Returns a key that is lexicographically just past all chunk keys for the
+ * given file tag. Useful as the exclusive end bound for deleteRange.
+ *
+ * The key is [SQLITE_PREFIX, SCHEMA_VERSION, CHUNK_PREFIX, fileTag + 1],
+ * which is shorter than a chunk key but lexicographically greater than any
+ * 8-byte chunk key with the same fileTag prefix.
+ */
+export function getChunkKeyRangeEnd(fileTag: SqliteFileTag): Uint8Array {
+	const key = new Uint8Array(4);
+	key[0] = SQLITE_PREFIX;
+	key[1] = SQLITE_SCHEMA_VERSION;
+	key[2] = CHUNK_PREFIX;
+	key[3] = fileTag + 1;
 	return key;
 }

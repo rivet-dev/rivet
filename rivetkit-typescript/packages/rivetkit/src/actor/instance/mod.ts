@@ -1500,6 +1500,8 @@ export class ActorInstance<
 						this.driver.kvBatchGet(this.#actorId, keys),
 					batchDelete: (keys) =>
 						this.driver.kvBatchDelete(this.#actorId, keys),
+					deleteRange: (start, end) =>
+						this.driver.kvDeleteRange(this.#actorId, start, end),
 				},
 				sqliteVfs: this.#sqliteVfs,
 			});
