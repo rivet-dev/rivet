@@ -436,10 +436,13 @@ export class SqliteVfs {
 			// PRAGMA settings for KV-backed SQLite. Keep in sync with
 			// rivetkit-typescript/packages/sqlite-native/src/vfs.rs and
 			// docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md.
-			//
-			// TODO: Benchmark PRAGMA tuning for KV-backed SQLite after open.
-			// Start with journal_mode=PERSIST and journal_size_limit to reduce
-			// journal churn on high-latency KV without introducing WAL.
+			// page_size must match CHUNK_SIZE (4096). busy_timeout matches
+			// the file-system driver default. WAL mode is not enabled for
+			// KV-backed SQLite.
+			await this.#sqliteMutex.run(async () => {
+				await sqlite3.exec(db, "PRAGMA page_size = 4096");
+				await sqlite3.exec(db, "PRAGMA busy_timeout = 5000");
+			});
 
 			// Create cleanup callback
 			const onClose = () => {
