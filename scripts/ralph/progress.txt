@@ -290,3 +290,20 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - Pre-existing typecheck errors in fixtures/driver-test-suite, engine driver, and sandbox module are not related to db changes.
   - The fallback warning uses `console.warn` rather than pino logger since the db module doesn't have access to a logger instance at the module level.
 ---
+
+## 2026-03-17 - US-014
+- Updated `scripts/release/update_version.ts` with 3 new entries:
+  - `rivetkit-typescript/packages/sqlite-native/npm/*/package.json` for platform package versions
+  - `rivetkit-typescript/packages/sqlite-native/package.json` optionalDependencies versions (regex matches `@rivetkit/sqlite-native-*` dep entries)
+  - `rivetkit-typescript/packages/sqlite-native/Cargo.toml` version field (not in root workspace, needs explicit bump)
+- Updated `scripts/release/sdk.ts`:
+  - Added `BUILD_EXCLUDED_RIVETKIT_PACKAGES` array for packages excluded from turbo build but still published
+  - `@rivetkit/sqlite-native` excluded from build step (requires Rust/napi-rs, not buildable by turbo)
+  - Added explicit publish loop for platform packages under `npm/` (not in pnpm workspace, need `npm publish` from their directory)
+- Files changed: scripts/release/update_version.ts, scripts/release/sdk.ts
+- **Learnings for future iterations:**
+  - The main `@rivetkit/sqlite-native` package.json is already covered by the existing `rivetkit-typescript/packages/*/package.json` glob in update_version.ts. Only the nested npm/ packages and Cargo.toml need explicit entries.
+  - `EXCLUDED_RIVETKIT_PACKAGES` excludes from both build AND publish. For native addons that need separate builds but still need publishing, use a separate exclusion list for the build step only.
+  - Platform npm packages under `npm/` are NOT in the pnpm workspace. They must be published via `npm publish` directly from their directory, not via `pnpm --filter`.
+  - The optionalDependencies in the main package.json pin exact versions of platform packages. These must be bumped alongside the platform package versions.
+---

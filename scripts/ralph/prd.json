@@ -257,7 +257,7 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Release Script Updates' (lines 668-706). The existing rivetkit-typescript/packages/*/package.json glob may cover the main package but npm/ subdirectories need explicit handling."
     },
     {
