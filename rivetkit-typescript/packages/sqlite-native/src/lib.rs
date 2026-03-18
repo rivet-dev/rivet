@@ -42,6 +42,9 @@ pub mod channel;
 /// Custom SQLite VFS that maps VFS callbacks to KV operations via the channel.
 pub mod vfs;
 
+#[cfg(test)]
+mod integration_tests;
+
 use channel::{KvChannel, KvChannelConfig};
 
 // MARK: Runtime
