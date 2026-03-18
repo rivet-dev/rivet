@@ -201,7 +201,7 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Connection' (lines 70-74), 'Authentication' (lines 462-477), 'Single-Writer Lock Semantics' (lines 285-303), and 'Error Codes' (lines 248-264). The manager already has KV read endpoints at GET /actors/{actor_id}/kv/keys/{key} - reuse existing KV access patterns. KV limits from rivetkit-typescript/packages/rivetkit/src/drivers/file-system/kv-limits.ts must be enforced."
     },
     {

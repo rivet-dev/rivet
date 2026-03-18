@@ -26,6 +26,8 @@
 - For napi-rs global tokio runtime: use `std::sync::OnceLock<Runtime>` with `get_or_init`. Use `rt.enter()` for `tokio::spawn`, `rt.block_on()` for sync waits.
 - `sqlite3_column_type` returns `c_int` values. Define `SQLITE_TYPE_TEXT = 3` locally to avoid relying on inconsistent libsqlite3-sys export names (`SQLITE3_TEXT` vs `SQLITE_TEXT`).
 - Use `std::mem::transmute(-1isize)` to create the SQLITE_TRANSIENT destructor function pointer for `sqlite3_bind_text`/`sqlite3_bind_blob`.
+- ManagerDriver interface has 3 real implementations (FileSystem, Remote, Cloudflare) plus 2 stubs (test-inline-client-driver, manager-openapi-gen). All must be updated when changing the interface.
+- The actor gateway middleware in `gateway.ts` intercepts WebSocket upgrades. New non-actor WebSocket endpoints need an explicit skip (`c.req.path.endsWith(...)`).
 
 # Ralph Progress Log
 Started: Tue Mar 17 05:27:07 PM PDT 2026
@@ -205,4 +207,30 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - `sqlite3_prepare_v2` with `nByte = -1` reads SQL up to NUL terminator, simplifying CString usage
   - SQLITE_TRANSIENT = `transmute(-1isize)` as a function pointer, tells SQLite to copy bound data immediately
   - The TEXT column type constant (3) varies in name between libsqlite3-sys versions (SQLITE3_TEXT vs SQLITE_TEXT). Safest to define locally.
+---
+
+## 2026-03-17 - US-011
+- Added KV channel WebSocket endpoint at GET /kv/connect in manager router
+- Created kv-channel.ts handler with full BARE protocol deserialization/serialization
+- Authentication: validates token against config.token (RIVET_TOKEN), skips with warning in dev mode if not set
+- Protocol version validation (protocol_version=1)
+- Single-writer lock per actor (Map-based, per connection)
+- Full KV operation handling: ActorOpen/Close, KvGet, KvPut, KvDelete, KvDeleteRange
+- All error codes from spec: actor_locked, actor_not_open, key_too_large, value_too_large, payload_too_large, batch_too_large, storage_quota_exceeded, keys_values_length_mismatch, unauthorized, internal_error
+- KV limits enforcement matching kv-limits.ts constants (2048 byte keys, 128 KiB values, 128 batch entries, 976 KiB payload)
+- Ping every 3 seconds, close connection if no pong within 15 seconds
+- On disconnect, releases all actor locks held by the connection
+- Extended ManagerDriver interface with kvBatchGet, kvBatchPut, kvBatchDelete, kvDeleteRange
+- Implemented batch KV methods in FileSystemManagerDriver, stub implementations in RemoteManagerDriver and CloudflareActorsManagerDriver
+- Updated gateway.ts to skip /kv/connect path (prevents actor gateway from intercepting the WebSocket upgrade)
+- Added @rivetkit/engine-kv-channel-protocol dependency to rivetkit package
+- Updated manager-openapi-gen.ts and test-inline-client-driver.ts stubs for new ManagerDriver methods
+- Files changed: rivetkit/src/manager/{kv-channel.ts (new), router.ts, gateway.ts, driver.ts}, rivetkit/package.json, pnpm-lock.yaml, rivetkit/scripts/manager-openapi-gen.ts, rivetkit/src/driver-test-suite/test-inline-client-driver.ts, rivetkit/src/remote-manager-driver/mod.ts, rivetkit/src/drivers/file-system/manager.ts, cloudflare-workers/src/manager-driver.ts
+- **Learnings for future iterations:**
+  - The ManagerDriver interface is implemented in 3 places: FileSystemManagerDriver, RemoteManagerDriver, CloudflareActorsManagerDriver. All must be updated when adding methods.
+  - There's also a test mock in test-inline-client-driver.ts and a stub in manager-openapi-gen.ts that must satisfy the interface.
+  - The Hono `WSContext.send()` expects `string | ArrayBuffer | Uint8Array<ArrayBuffer>`. Passing `Uint8Array` from `encodeToClient` may fail due to `ArrayBufferLike` vs `ArrayBuffer` mismatch. Copy to a fresh `ArrayBuffer` to be safe.
+  - The actor gateway middleware (`gateway.ts`) intercepts all WebSocket upgrades and tries to route them to actors. New WebSocket endpoints must be skipped in the gateway (see `c.req.path.endsWith("/kv/connect")`).
+  - KvGetResponse returns only found keys and values (not null entries). The client must match by key, not by positional index.
+  - `Extract<UnionType, { readonly tag: "Variant" }>` is useful for narrowing discriminated union types in helper functions.
 ---
