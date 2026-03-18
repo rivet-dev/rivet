@@ -1,7 +1,7 @@
 {
   "project": "Native SQLite via KV Channel Protocol",
   "branchName": "ralph/native-sqlite-kv-channel",
-  "description": "Replace WASM-based SQLite with a native Rust SQLite binary (napi-rs addon) that routes page-level KV operations over a new WebSocket KV channel protocol. Includes WASM VFS improvements, protocol schema, native addon, server-side endpoints, and integration.",
+  "description": "Replace WASM-based SQLite with a native Rust SQLite binary (napi-rs addon) that routes page-level KV operations over a new WebSocket KV channel protocol. Includes WASM VFS improvements, protocol schema, native addon, server-side endpoints, integration, and concurrency/eviction hardening from adversarial review.",
   "userStories": [
     {
       "id": "US-001",
@@ -281,6 +281,123 @@
       "priority": 15,
       "passes": true,
       "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Testing' section (lines 548-579). Layer 1 tests only. Layer 2 (driver test suite) already exists and will test native SQLite transparently when the addon is available."
+    },
+    {
+      "id": "US-016",
+      "title": "Use spawn_blocking for napi SQLite exports",
+      "description": "As a developer, I need all napi SQLite exports (query, execute, exec) to use tokio spawn_blocking so they don't block the Node.js event loop.",
+      "acceptanceCriteria": [
+        "Change query, execute, and exec functions in rivetkit-typescript/packages/sqlite-native/src/lib.rs from sync napi functions to async napi functions (#[napi] pub async fn)",
+        "Wrap all SQLite work (prepare, bind, step, column reads) inside get_runtime().spawn_blocking(move || { ... }).await",
+        "VFS callbacks call Handle::block_on() from spawn_blocking threads (not tokio worker threads), which is safe",
+        "The Node.js main thread returns a Promise and is never blocked",
+        "Add a code comment above the spawn_blocking call documenting the 3 threading approaches considered (spawn_blocking, dedicated thread per actor, channel+block-in-place) and why spawn_blocking was chosen. Reference docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 1 for details.",
+        "Existing integration tests still pass (tests use #[test] not #[tokio::test], VFS callbacks use Handle::block_on from non-async context)",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 1. SQLite's C API is synchronous (xRead must return bytes, not a future). spawn_blocking dispatches to tokio's blocking thread pool (default cap 512, separate from async worker pool). One blocking thread per concurrent actor, not per request. The WASM VFS avoids this via Asyncify (WASM-specific, not available for native code)."
+    },
+    {
+      "id": "US-017",
+      "title": "Unconditional lock eviction on ActorOpenRequest (engine)",
+      "description": "As a developer, I need the engine KV channel server to unconditionally transfer actor locks to the new connection on re-open, so reconnection doesn't fail with actor_locked.",
+      "acceptanceCriteria": [
+        "In engine/packages/pegboard-kv-channel/src/lib.rs, change actor_locks type from HashMap<String, u64> to HashMap<String, (u64, Arc<Mutex<HashSet<String>>>)> where the HashSet is the connection's open_actors set",
+        "In handle_actor_open: if actor is locked by a different conn_id, remove the actor from the old connection's open_actors set via the stored Arc reference, then grant the lock to the new connection",
+        "The eviction must happen under the actor_locks mutex so there is no window where both connections pass the auth check",
+        "After eviction, the old connection's next KV request fails the fast-path check (open_actors.contains) immediately, then hits the slow path which returns actor_not_open",
+        "The global actor_locks mutex is never acquired on the KV hot path (only during open/close)",
+        "On disconnect cleanup, iterate the connection's open_actors and remove entries from actor_locks only if the lock is still held by this conn_id (another connection may have evicted it)",
+        "cargo check passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 4. This is safe because: locks are in-memory only (no FDB state), old connection is dead or stale, old connection's in-flight FDB transactions complete normally, single-writer safety maintained by mutex atomicity. In multi-server deployments, locks are per-pod. Cross-process single-writer is enforced by actor scheduling, not KV channel locks."
+    },
+    {
+      "id": "US-018",
+      "title": "Unconditional lock eviction on ActorOpenRequest (manager)",
+      "description": "As a developer, I need the manager KV channel handler to unconditionally transfer actor locks to the new connection on re-open.",
+      "acceptanceCriteria": [
+        "In rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts, update the lock acquisition logic in ActorOpenRequest handling",
+        "If the actor is locked by a different connection, transfer the lock to the new connection instead of returning actor_locked error",
+        "Remove the actor from the old connection's openActors set so the old connection's next KV request fails with actor_not_open",
+        "The old connection's openActors must be accessible from the lock map. Store a reference to the connection's openActors Set in the lock entry (e.g., Map<string, { connId: number, openActors: Set<string> }>)",
+        "On disconnect cleanup, only release locks still held by this connection (check connId matches before deleting)",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 4. Mirror the same eviction logic as US-017 but in TypeScript for the manager. The manager runs single-process so no multi-server concerns."
+    },
+    {
+      "id": "US-019",
+      "title": "Wait for ActorOpenResponse on reconnect (client)",
+      "description": "As a developer, I need the native SQLite client to wait for ActorOpenResponse before sending KV requests on reconnect, to avoid racing with lock eviction.",
+      "acceptanceCriteria": [
+        "In rivetkit-typescript/packages/sqlite-native/src/channel.rs, update the reconnect logic to wait for each ActorOpenResponse before marking the actor as ready for KV requests",
+        "The initial open (first connection, not a reconnect) can remain optimistic (send ActorOpenRequest + KV requests without waiting)",
+        "Add a per-actor ready flag or barrier that KV requests check. On reconnect, KV requests for an actor block until its ActorOpenResponse is received",
+        "If ActorOpenResponse returns an error, fail all pending KV requests for that actor",
+        "Existing optimistic pipelining test still passes for the initial connection case",
+        "Add a test verifying that on reconnect, KV requests wait for the re-open response",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 4 'Client-side change' section. This prevents a race where the client sends KV requests before the server has processed the re-open and transferred the lock. The initial open remains optimistic because there's no stale lock to evict on first connection."
+    },
+    {
+      "id": "US-020",
+      "title": "Per-actor channel routing in engine KV channel server",
+      "description": "As a developer, I need the engine KV channel to process requests for different actors concurrently instead of sequentially.",
+      "acceptanceCriteria": [
+        "In engine/packages/pegboard-kv-channel/src/lib.rs, add a HashMap<String, mpsc::Sender<Request>> that routes incoming requests to per-actor channels",
+        "Each actor gets a spawned tokio task that drains its channel sequentially (preserving intra-actor ordering)",
+        "When a request arrives, route it to the actor's channel (create the channel and task on first request for that actor)",
+        "Cross-actor requests execute concurrently. Actor A's slow KvPutRequest no longer blocks Actor B's KvGetRequest",
+        "Do NOT use tokio::spawn per request (breaks optimistic pipelining ordering guarantee and journal write ordering)",
+        "Clean up per-actor tasks and channels when the connection disconnects or the actor is closed",
+        "cargo check passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 2. A single actor never has multiple concurrent KV requests (VFS callbacks are sequential within SQLite, and connections are single-threaded). Per-actor sequential processing matches the client's behavior exactly. Tokio tasks are lightweight (few hundred bytes each). This only matters after US-016 is implemented (with sync napi exports, only one actor does VFS operations at a time)."
+    },
+    {
+      "id": "US-021",
+      "title": "Per-actor channel routing in runner KV handling",
+      "description": "As a developer, I need the runner protocol's KV handling to process requests for different actors concurrently.",
+      "acceptanceCriteria": [
+        "In engine/packages/pegboard-runner/src/ws_to_tunnel_task.rs, apply the same per-actor channel routing pattern as US-020",
+        "Add HashMap<String, mpsc::Sender<Request>> for routing KV requests to per-actor tasks",
+        "Each actor's task drains its channel sequentially (preserving intra-actor ordering)",
+        "Cross-actor KV requests execute concurrently",
+        "Do NOT use tokio::spawn per request (breaks ordering guarantees)",
+        "Clean up per-actor tasks on connection disconnect",
+        "cargo check passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 2 TODO section. The runner protocol (ws_to_tunnel_task.rs lines 68-77) has the same sequential message processing pattern as the KV channel. Same fix, same rationale."
+    },
+    {
+      "id": "US-022",
+      "title": "Update spec with review findings",
+      "description": "As a developer, I need the main spec document updated with the threading model, lock eviction semantics, and multi-server notes from the adversarial review.",
+      "acceptanceCriteria": [
+        "In docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md 'JavaScript Bindings' section, change TypeScript signatures to return Promise<...> instead of sync values",
+        "Add note in JavaScript Bindings: 'SQLite operations run on tokio's blocking thread pool via spawn_blocking. VFS callbacks call Handle::block_on() from blocking threads (not tokio worker threads). The Node.js main thread is never blocked.'",
+        "In 'Single-Writer Lock Semantics' section, add paragraph about unconditional lock eviction on ActorOpenRequest from a different connection",
+        "Add paragraph about multi-server deployments: locks are per-server-instance, cross-process single-writer enforced by actor scheduling",
+        "In 'Reconnect Behavior' section, add: 'On reconnect, the client must wait for ActorOpenResponse before sending KV requests for each actor. The initial open (first connection) can remain optimistic.'",
+        "No typecheck needed (markdown file)"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md for the exact wording of all spec updates needed. Finding 1 requires async API signatures. Finding 4 requires eviction semantics, multi-server notes, and reconnect wait requirement."
     }
   ]
 }

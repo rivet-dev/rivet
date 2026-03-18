@@ -35,6 +35,8 @@
 - KV channel WebSocket URL: replace `http://`→`ws://`, `https://`→`wss://` in RIVET_ENDPOINT and append `/kv/connect`.
 - VFS integration tests must use `#[test]` not `#[tokio::test]` because VFS callbacks use `Handle::block_on()` which panics inside async contexts.
 - SQLite VACUUM fails with the KV VFS (temp file paths don't match file tag resolution). Use `PRAGMA journal_mode=truncate` to test xTruncate instead.
+- Rust 2021 captures struct fields individually in closures. A `Wrapper(*mut T)` with `unsafe impl Send` doesn't work if the closure accesses `.0`. Use `ptr as usize` / `usize as *mut T` instead.
+- napi async fn requires `JsNativeDatabase: Sync` because the future captures `&JsNativeDatabase` which must be `Send`.
 
 # Ralph Progress Log
 Started: Tue Mar 17 05:27:07 PM PDT 2026
@@ -336,4 +338,21 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - SQLite VACUUM fails with the KV VFS because it creates temporary files with paths that don't match the VFS's file tag resolution (main, -journal, -wal, -shm). Use PRAGMA journal_mode=truncate to test xTruncate instead.
   - `tokio_tungstenite::accept_async` accepts any WebSocket upgrade regardless of URL path, so mock servers don't need HTTP routing.
   - Each test uses a unique VFS name via AtomicU64 counter to avoid SQLite global VFS registry conflicts in parallel test runs.
+---
+
+## 2026-03-17 - US-016
+- Changed `execute`, `query`, and `exec` napi functions from sync to async (`#[napi] pub async fn`)
+- Wrapped all SQLite work (prepare, bind, step, column reads) inside `get_runtime().spawn_blocking(move || { ... }).await`
+- Added `unsafe impl Sync for JsNativeDatabase` to satisfy napi async fn `Send` requirement on the future
+- Used `usize` casting for `*mut sqlite3` pointer to cross thread boundaries (Rust 2021 captures individual struct fields, so a `SendableDbPtr` wrapper doesn't work)
+- Added detailed code comment documenting 3 threading approaches (spawn_blocking, dedicated thread, channel+block-in-place) with reference to NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 1
+- Updated TypeScript `NativeSqliteModule` interface: `execute`, `query`, `exec` now return `Promise<...>`
+- Added `await` to all native addon call sites in `native-sqlite.ts`
+- All 74 Rust tests pass, TypeScript typecheck passes
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/lib.rs, rivetkit-typescript/packages/rivetkit/src/db/native-sqlite.ts
+- **Learnings for future iterations:**
+  - Rust 2021 edition closures capture individual struct fields, not the whole struct. A `SendableDbPtr(*mut T)` wrapper with `unsafe impl Send` does NOT work because `move || { db_ptr.0 }` captures the inner `*mut T` field directly, bypassing the Send impl. Use `ptr as usize` before the closure and `usize as *mut T` inside instead.
+  - napi async fn requires the future to be `Send + 'static`. `&JsNativeDatabase` is `!Send` if the struct contains `*mut T` (which is `!Sync`), because `&T: Send` requires `T: Sync`. Fix with `unsafe impl Sync for JsNativeDatabase`.
+  - `tokio::spawn_blocking` uses a separate thread pool (default cap 512) from the async worker pool, so VFS `Handle::block_on()` calls never starve the WebSocket read/write tasks.
+  - When making napi functions async, the TypeScript callers must add `await`. In this codebase, the calls were already inside `async` arrow functions, so adding `await` was straightforward.
 ---
