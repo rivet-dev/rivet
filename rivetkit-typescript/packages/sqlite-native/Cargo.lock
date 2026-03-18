@@ -404,6 +404,7 @@ checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 name = "rivetkit-sqlite-native"
 version = "2.1.6"
 dependencies = [
+ "futures-util",
  "libsqlite3-sys",
  "napi",
  "napi-build",
