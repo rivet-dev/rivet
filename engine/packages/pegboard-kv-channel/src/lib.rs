@@ -37,8 +37,10 @@ const MAX_PUT_PAYLOAD_SIZE: usize = 976 * 1024;
 
 /// Shared state across all KV channel connections.
 pub struct KvChannelState {
-	/// Maps actor_id string to the connection_id holding the single-writer lock.
-	actor_locks: Mutex<HashMap<String, u64>>,
+	/// Maps actor_id string to the connection_id holding the single-writer lock and a reference
+	/// to that connection's open_actors set. The Arc reference allows lock eviction to remove the
+	/// actor from the old connection's set without acquiring the global lock on the KV hot path.
+	actor_locks: Mutex<HashMap<String, (u64, Arc<Mutex<HashSet<String>>>)>>,
 	/// Counter for assigning unique connection IDs.
 	next_conn_id: AtomicU64,
 }
@@ -143,14 +145,17 @@ impl CustomServeTrait for PegboardKvChannelCustomServe {
 		)
 		.await;
 
-		// Release all locks held by this connection.
+		// Release all locks held by this connection. Only remove entries where the lock is still
+		// held by this conn_id, since another connection may have evicted it via ActorOpenRequest.
 		{
 			let open = open_actors.lock().await;
 			let mut locks = state.actor_locks.lock().await;
 			for actor_id in open.iter() {
-				if locks.get(actor_id) == Some(&conn_id) {
-					locks.remove(actor_id);
-					tracing::debug!(%conn_id, %actor_id, "released actor lock on disconnect");
+				if let Some((lock_conn, _)) = locks.get(actor_id) {
+					if *lock_conn == conn_id {
+						locks.remove(actor_id);
+						tracing::debug!(%conn_id, %actor_id, "released actor lock on disconnect");
+					}
 				}
 			}
 		}
@@ -249,7 +254,7 @@ async fn message_loop(
 	ws_handle: &WebSocketHandle,
 	conn_id: u64,
 	namespace_id: Id,
-	open_actors: &Mutex<HashSet<String>>,
+	open_actors: &Arc<Mutex<HashSet<String>>>,
 	last_pong_ts: &AtomicI64,
 ) -> Result<()> {
 	let ws_rx = ws_handle.recv();
@@ -305,7 +310,7 @@ async fn handle_binary_message(
 	ws_handle: &WebSocketHandle,
 	conn_id: u64,
 	namespace_id: Id,
-	open_actors: &Mutex<HashSet<String>>,
+	open_actors: &Arc<Mutex<HashSet<String>>>,
 	last_pong_ts: &AtomicI64,
 	data: &[u8],
 ) -> Result<()> {
@@ -353,7 +358,7 @@ async fn handle_request(
 	state: &KvChannelState,
 	conn_id: u64,
 	namespace_id: Id,
-	open_actors: &Mutex<HashSet<String>>,
+	open_actors: &Arc<Mutex<HashSet<String>>>,
 	req: &protocol::ToServerRequest,
 ) -> protocol::ResponseData {
 	match &req.data {
@@ -405,36 +410,48 @@ async fn handle_request(
 async fn handle_actor_open(
 	state: &KvChannelState,
 	conn_id: u64,
-	open_actors: &Mutex<HashSet<String>>,
+	open_actors: &Arc<Mutex<HashSet<String>>>,
 	actor_id: &str,
 ) -> protocol::ResponseData {
 	let mut locks = state.actor_locks.lock().await;
 
-	match locks.get(actor_id) {
-		Some(&existing_conn) if existing_conn != conn_id => {
-			error_response("actor_locked", "actor is locked by another connection")
-		}
-		_ => {
-			locks.insert(actor_id.to_string(), conn_id);
-			open_actors.lock().await.insert(actor_id.to_string());
-			tracing::debug!(%conn_id, %actor_id, "actor lock acquired");
-			protocol::ResponseData::ActorOpenResponse
+	// If the actor is locked by a different connection, unconditionally evict the old lock.
+	// This handles reconnection scenarios where the server hasn't detected the old connection's
+	// disconnect yet. The old connection's next KV request will fail the fast-path check
+	// (open_actors.contains) and return actor_not_open.
+	// See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 4.
+	if let Some((existing_conn, old_open_actors)) = locks.get(actor_id) {
+		if *existing_conn != conn_id {
+			old_open_actors.lock().await.remove(actor_id);
+			tracing::info!(
+				%conn_id,
+				old_conn_id = %existing_conn,
+				%actor_id,
+				"evicted stale actor lock from old connection"
+			);
 		}
 	}
+
+	locks.insert(actor_id.to_string(), (conn_id, open_actors.clone()));
+	open_actors.lock().await.insert(actor_id.to_string());
+	tracing::debug!(%conn_id, %actor_id, "actor lock acquired");
+	protocol::ResponseData::ActorOpenResponse
 }
 
 async fn handle_actor_close(
 	state: &KvChannelState,
 	conn_id: u64,
-	open_actors: &Mutex<HashSet<String>>,
+	open_actors: &Arc<Mutex<HashSet<String>>>,
 	actor_id: &str,
 ) -> protocol::ResponseData {
 	let mut locks = state.actor_locks.lock().await;
 
-	if locks.get(actor_id) == Some(&conn_id) {
-		locks.remove(actor_id);
-		open_actors.lock().await.remove(actor_id);
-		tracing::debug!(%conn_id, %actor_id, "actor lock released");
+	if let Some((lock_conn, _)) = locks.get(actor_id) {
+		if *lock_conn == conn_id {
+			locks.remove(actor_id);
+			open_actors.lock().await.remove(actor_id);
+			tracing::debug!(%conn_id, %actor_id, "actor lock released");
+		}
 	}
 
 	protocol::ResponseData::ActorCloseResponse
