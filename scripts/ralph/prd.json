@@ -242,7 +242,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Integration with RivetKit' (lines 363-381). The KV channel is independent of the runner protocol and can be connected during process initialization. nativeSqliteAvailable() must try-catch the require() call, not just check file existence."
     },
     {

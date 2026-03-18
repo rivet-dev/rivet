@@ -30,6 +30,9 @@
 - The actor gateway middleware in `gateway.ts` intercepts WebSocket upgrades. New non-actor WebSocket endpoints need an explicit skip (`c.req.path.endsWith(...)`).
 - Engine crates: directory `engine/packages/{name}/`, add to both `[workspace.members]` and `[workspace.dependencies.{name}]` in root Cargo.toml.
 - For shared state across WebSocket connections in the guard, create the handler once in `create_routing_function` and clone the Arc per routing call.
+- Native addon detection: use try-catch around `require('@rivetkit/sqlite-native')`, cache the result. The `getRequireFn()` from `@/utils/node` provides a require function that works in both CJS and ESM.
+- `sqlite3_prepare_v2` with non-null tail pointer iterates through multi-statement SQL. Loop until stmt is null or tail reaches end.
+- KV channel WebSocket URL: replace `http://`→`ws://`, `https://`→`wss://` in RIVET_ENDPOINT and append `/kv/connect`.
 
 # Ralph Progress Log
 Started: Tue Mar 17 05:27:07 PM PDT 2026
@@ -267,4 +270,23 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The `gas::prelude::*` import provides `Id`, `Result`, `StandaloneCtx`, `Context`, tracing macros, etc.
   - `CustomServeTrait` requires `Send + Sync` (via Arc<dyn CustomServeTrait>), which is satisfied by Mutex<HashMap> + AtomicU64
   - KV channel protocol uses the same `Vec<u8>` types as runner protocol for KvKey/KvValue, so data passes directly to actor_kv without conversion
+---
+
+## 2026-03-17 - US-013
+- Added `nativeSqliteAvailable()` detection function in `db/native-sqlite.ts` that try-catches require('@rivetkit/sqlite-native')
+- Added process-level singleton KV channel connection via `getOrCreateKvChannel()`, deriving WebSocket URL from RIVET_ENDPOINT env var
+- Added `createNativeRawAccess(actorId)` that wraps the native addon's query/execute/exec into the `RawAccess` interface
+- Updated `db/mod.ts` with conditional path: native SQLite first, then WASM fallback with console.warn
+- Added `exec` function to native addon's lib.rs for multi-statement SQL support (loops sqlite3_prepare_v2 with tail pointer)
+- Added `toNativeBindings` helper to convert bigint and Uint8Array to JSON-compatible types for the native addon
+- Warning message logged at most once per process via `nativeFallbackWarned` flag
+- Database interface (RawAccess.execute/close) is identical regardless of backend
+- Files changed: rivetkit/src/db/{native-sqlite.ts (new), mod.ts}, sqlite-native/src/lib.rs
+- **Learnings for future iterations:**
+  - The native addon's napi functions accept `serde_json::Value` via the `serde-json` napi feature. BigInt and Uint8Array must be converted to number/number[] before passing.
+  - `toSqliteBindings` returns a `SqliteBindings` type from the WASM VFS, not `unknown[]`. For the native path, validate/convert independently.
+  - `sqlite3_prepare_v2` with a tail pointer (`*const c_char`) enables multi-statement SQL iteration. The tail points to the start of the next unprepared statement.
+  - The KV channel WebSocket URL is derived from RIVET_ENDPOINT by replacing http(s) with ws(s) and appending `/kv/connect`.
+  - Pre-existing typecheck errors in fixtures/driver-test-suite, engine driver, and sandbox module are not related to db changes.
+  - The fallback warning uses `console.warn` rather than pino logger since the db module doesn't have access to a logger instance at the module level.
 ---
