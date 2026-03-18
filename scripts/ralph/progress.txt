@@ -28,6 +28,8 @@
 - Use `std::mem::transmute(-1isize)` to create the SQLITE_TRANSIENT destructor function pointer for `sqlite3_bind_text`/`sqlite3_bind_blob`.
 - ManagerDriver interface has 3 real implementations (FileSystem, Remote, Cloudflare) plus 2 stubs (test-inline-client-driver, manager-openapi-gen). All must be updated when changing the interface.
 - The actor gateway middleware in `gateway.ts` intercepts WebSocket upgrades. New non-actor WebSocket endpoints need an explicit skip (`c.req.path.endsWith(...)`).
+- Engine crates: directory `engine/packages/{name}/`, add to both `[workspace.members]` and `[workspace.dependencies.{name}]` in root Cargo.toml.
+- For shared state across WebSocket connections in the guard, create the handler once in `create_routing_function` and clone the Arc per routing call.
 
 # Ralph Progress Log
 Started: Tue Mar 17 05:27:07 PM PDT 2026
@@ -233,4 +235,36 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The actor gateway middleware (`gateway.ts`) intercepts all WebSocket upgrades and tries to route them to actors. New WebSocket endpoints must be skipped in the gateway (see `c.req.path.endsWith("/kv/connect")`).
   - KvGetResponse returns only found keys and values (not null entries). The client must match by key, not by positional index.
   - `Extract<UnionType, { readonly tag: "Variant" }>` is useful for narrowing discriminated union types in helper functions.
+---
+
+## 2026-03-17 - US-012
+- Created engine/packages/pegboard-kv-channel/ crate with full WebSocket handler for the KV channel protocol
+- protocol.rs: BARE serialization types matching v1.bare schema exactly using serde_bare derive macros, with 5 round-trip tests
+- lib.rs: CustomServeTrait implementation with full WebSocket lifecycle management
+  - Single-writer lock per actor via shared HashMap<String, u64> (actor_id -> conn_id)
+  - ActorOpenRequest/ActorCloseRequest for lock acquire/release
+  - KvGet/KvPut/KvDelete/KvDeleteRange routed to pegboard::actor_kv module
+  - All error codes from spec: actor_locked, actor_not_open, actor_not_found, key_too_large, value_too_large, payload_too_large, batch_too_large, storage_quota_exceeded, keys_values_length_mismatch, internal_error
+  - KV limits enforced (2048 byte keys, 128 KiB values, 128 batch entries, 976 KiB payload)
+  - Ping every 3s (runner_update_ping_interval_ms), close if no pong within 15s (runner_ping_timeout_ms)
+  - On disconnect, releases all locks held by the connection
+  - On SIGTERM, sends ToClientClose before closing WebSocket
+  - Namespace resolution via namespace::ops::resolve_for_name_global
+  - Actor lookup via pegboard::ops::actor::get_for_runner for name/existence validation
+- Added pegboard-kv-channel to root Cargo.toml workspace members and dependencies
+- Created guard routing module (kv_channel.rs) for path-based routing at /kv/connect
+  - Auth: validates token query param against auth.admin_token
+  - Regional host validation matching runner routing pattern
+  - Shared handler instance across all connections for lock table sharing
+- Updated guard Cargo.toml and routing/mod.rs to wire in KV channel routing
+- Files changed: Cargo.toml, Cargo.lock, engine/packages/pegboard-kv-channel/{Cargo.toml, src/lib.rs, src/protocol.rs} (new), engine/packages/guard/{Cargo.toml, src/routing/mod.rs, src/routing/kv_channel.rs}
+- **Learnings for future iterations:**
+  - Engine crates follow naming convention: directory `engine/packages/{name}/`, Cargo package name matches directory name
+  - New workspace members need both `[workspace.members]` and `[workspace.dependencies.{name}]` entries in root Cargo.toml
+  - The guard routing function creates handlers per-request by default (like pegboard-runner), but for shared state (like lock tables), create the handler once in `create_routing_function` and clone the Arc
+  - `auth.admin_token.read()` returns a borrow; use `*auth.admin_token.read()` when comparing against an owned String
+  - Pre-existing build errors exist in the codebase (proxy.rs, websocket.rs, etc.) but don't affect compilation of targeted crate checks
+  - The `gas::prelude::*` import provides `Id`, `Result`, `StandaloneCtx`, `Context`, tracing macros, etc.
+  - `CustomServeTrait` requires `Send + Sync` (via Arc<dyn CustomServeTrait>), which is satisfied by Mutex<HashMap> + AtomicU64
+  - KV channel protocol uses the same `Vec<u8>` types as runner protocol for KvKey/KvValue, so data passes directly to actor_kv without conversion
 ---

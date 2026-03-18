@@ -226,7 +226,7 @@
         "cargo check passes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Authentication' (lines 462-477), 'Edge Cases' (lines 305-318), and 'KV Limits' (lines 266-281). Ping/pong intervals match runner_update_ping_interval_ms=3000 and runner_ping_timeout_ms=15000 from engine/packages/config/src/config/pegboard.rs."
     },
     {
