@@ -363,7 +363,7 @@
         "cargo check passes"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 2. A single actor never has multiple concurrent KV requests (VFS callbacks are sequential within SQLite, and connections are single-threaded). Per-actor sequential processing matches the client's behavior exactly. Tokio tasks are lightweight (few hundred bytes each). This only matters after US-016 is implemented (with sync napi exports, only one actor does VFS operations at a time)."
     },
     {

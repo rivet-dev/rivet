@@ -39,6 +39,8 @@
 - napi async fn requires `JsNativeDatabase: Sync` because the future captures `&JsNativeDatabase` which must be `Send`.
 - `watch::Sender::subscribe()` creates a receiver starting at the current value. Use watch channels (not Notify) when the signal may arrive before the waiter registers.
 - For test gating, use `Semaphore::new(0)` + `add_permits(N)`. Avoids Notify race conditions and works regardless of waiter/signaler ordering.
+- To clone an owned `T` from a `&T` reference, use UFCS `Clone::clone(ref)`. The method syntax `ref.clone()` returns `&T` due to `<&T as Clone>` taking priority in method resolution.
+- For spawning tasks from functions that take reference parameters, use `Clone::clone(param)` to produce owned values for the spawned future.
 
 # Ralph Progress Log
 Started: Tue Mar 17 05:27:07 PM PDT 2026
@@ -403,4 +405,24 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - Concurrent mock server (spawned tasks per message) is needed to properly test client-side waiting. Sequential processing masks the behavior because the server blocks on the open regardless.
   - `tokio::sync::Semaphore::new(0)` with `add_permits(N)` is a clean gate mechanism for tests. The semaphore blocks `acquire()` until permits are added, and the order of operations doesn't matter (unlike Notify).
   - The `!kv_handle.is_finished()` assertion distinguishes client-side waiting from server-side blocking only when the mock server processes messages concurrently.
+---
+
+## 2026-03-17 - US-020
+- Implemented per-actor channel routing in engine KV channel server (pegboard-kv-channel)
+- Added `HashMap<String, mpsc::UnboundedSender<ToServerRequest>>` for routing incoming requests to per-actor channels
+- Each actor gets a spawned tokio task (`actor_request_task`) that drains its channel sequentially, preserving intra-actor ordering
+- Cross-actor requests now execute concurrently (Actor A's slow KvPutRequest no longer blocks Actor B's KvGetRequest)
+- Message loop wrapped in async block to ensure cleanup runs on all exit paths (? errors, normal close, term signal)
+- On disconnect: drop all senders then join all tasks via JoinSet to drain in-flight requests
+- On actor close: remove sender from HashMap so per-actor task exits after processing remaining requests
+- Used `Clone::clone(ref)` UFCS syntax to clone owned values from reference parameters for spawned tasks (avoids `&T.clone()` returning `&T` instead of `T`)
+- Changed `message_loop` and `handle_binary_message` state parameter from `&KvChannelState` to `&Arc<KvChannelState>` to enable cloning the Arc for spawned tasks
+- cargo check passes cleanly for pegboard-kv-channel
+- Files changed: engine/packages/pegboard-kv-channel/src/lib.rs
+- **Learnings for future iterations:**
+  - `ref.clone()` where `ref: &T` calls `<&T as Clone>::clone()` returning `&T`, not `T`. Use UFCS `Clone::clone(ref)` or `T::clone(ref)` to get an owned `T` from a reference.
+  - Async blocks (`async { ... }.await`) are useful for ensuring cleanup runs after early returns. `return` inside an async block returns from the block, not the enclosing function.
+  - `tokio::task::JoinSet` aborts all tasks on drop, so explicitly drain with `join_next()` if you want tasks to finish cleanly.
+  - Deref coercion makes `&Arc<T>` auto-coerce to `&T` in function call arguments, so changing a parameter from `&T` to `&Arc<T>` doesn't require call-site changes.
+  - Per-actor channels use unbounded mpsc to avoid backpressure issues. A single actor never has concurrent KV requests (VFS callbacks are sequential within SQLite), so the channel depth is effectively 1.
 ---
