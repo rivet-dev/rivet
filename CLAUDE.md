@@ -18,6 +18,10 @@ The `rivet.gg` domain is deprecated and should never be used in this codebase.
 - Add a new versioned schema instead, then migrate `versioned.rs` and related compatibility code to bridge old versions forward.
 - When bumping the protocol version, update `PROTOCOL_MK2_VERSION` in `engine/sdks/rust/runner-protocol/src/lib.rs` and `PROTOCOL_VERSION` in `engine/sdks/typescript/runner/src/mod.ts` together. Both must match the latest schema version.
 
+**Keep the KV API in sync between the runner protocol and the KV channel protocol.**
+
+- The runner protocol (`engine/sdks/schemas/runner-protocol/`) and KV channel protocol (`engine/sdks/schemas/kv-channel-protocol/`) both expose KV operations. When adding, removing, or changing KV request/response types in one protocol, update the other to match.
+
 ## Commands
 
 ### Build Commands
@@ -83,6 +87,7 @@ git commit -m "chore(my-pkg): foo bar"
 ### SQLite Package
 - Use `@rivetkit/sqlite` for SQLite WebAssembly support.
 - Do not use the legacy upstream package directly. `@rivetkit/sqlite` is the maintained fork used in this repository and is sourced from `rivet-dev/wa-sqlite`.
+- The native SQLite addon (`@rivetkit/sqlite-native`) statically links SQLite via `libsqlite3-sys` with the `bundled` feature. The bundled SQLite version must match the version used by `@rivetkit/sqlite` (WASM). When upgrading either, upgrade both.
 
 ### RivetKit Package Resolutions
 The root `/package.json` contains `resolutions` that map RivetKit packages to their local workspace versions:
@@ -218,6 +223,16 @@ Key points:
 - When adding a dependency, check for a workspace dependency in Cargo.toml
 - If available, use the workspace dependency (e.g., `anyhow.workspace = true`)
 - If you need to add a dependency and can't find it in the Cargo.toml of the workspace, add it to the workspace dependencies in Cargo.toml (`[workspace.dependencies]`) and then add it to the package you need with `{dependency}.workspace = true`
+
+**Native SQLite & KV Channel**
+- Native SQLite (`rivetkit-typescript/packages/sqlite-native/`) is a napi-rs addon that statically links SQLite and uses a custom VFS backed by KV over a WebSocket KV channel. The WASM implementation (`@rivetkit/sqlite-vfs`) is the fallback.
+- The KV channel (`engine/sdks/schemas/kv-channel-protocol/`) is independent of the runner protocol. It authenticates with `admin_token` (engine) or `config.token` (manager), not the runner key.
+- The KV channel enforces single-writer locks per actor. Open/close are optimistic (no round-trip wait).
+- The native VFS uses the same 4 KiB chunk layout and KV key encoding as the WASM VFS. Data is compatible between backends.
+- **The native Rust VFS and the WASM TypeScript VFS must match 1:1.** This includes: KV key layout and encoding, chunk size, PRAGMA settings, VFS callback-to-KV-operation mapping, delete/truncate strategy (both must use `deleteRange`), and journal mode. When changing any VFS behavior in one implementation, update the other. The relevant files are:
+  - Native: `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `kv.rs`
+  - WASM: `rivetkit-typescript/packages/sqlite-vfs/src/vfs.ts`, `kv.ts`
+- Full spec: `docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md`
 
 **Inspector HTTP API**
 - When updating the WebSocket inspector (`rivetkit-typescript/packages/rivetkit/src/inspector/`), also update the HTTP inspector endpoints in `rivetkit-typescript/packages/rivetkit/src/actor/router.ts`. The HTTP API mirrors the WebSocket inspector for agent-based debugging.

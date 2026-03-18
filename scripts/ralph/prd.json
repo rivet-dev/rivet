@@ -398,6 +398,22 @@
       "priority": 22,
       "passes": true,
       "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md for the exact wording of all spec updates needed. Finding 1 requires async API signatures. Finding 4 requires eviction semantics, multi-server notes, and reconnect wait requirement."
+    },
+    {
+      "id": "US-023",
+      "title": "Fix native SQLite onDisconnect DB writes test flake",
+      "description": "As a developer, I need the native SQLite driver's 'completes onDisconnect DB writes before sleeping' test to pass reliably.",
+      "acceptanceCriteria": [
+        "The test 'Actor Database (raw) Tests > completes onDisconnect DB writes before sleeping' passes for driver-file-system-native-sqlite",
+        "The test configures a disconnect insert with 250ms delay, waits SLEEP_WAIT_MS + 250ms, then expects getDisconnectInsertCount() == 1. Currently returns 0 on native SQLite.",
+        "Investigate whether the native SQLite addon's async lifecycle (spawn_blocking, VFS block_on) introduces a timing gap that causes the disconnect write to be lost or delayed",
+        "Fix the root cause. Possible causes: native SQLite close/flush not completing before sleep, race between onDisconnect callback and actor sleep, or the native db provider cleanup not awaiting pending writes",
+        "All other driver-file-system-native-sqlite database tests continue to pass",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/ (if Rust changes needed)"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": "The same test passes on the WASM VFS (driver-file-system). The failure is native-sqlite-specific. The test fixture actor (actor-db.ts) calls configureDisconnectInsert(true, 250) which sets up an onDisconnect handler that does a DB write after 250ms delay. The native SQLite path may not be flushing or awaiting writes correctly during actor sleep/disconnect lifecycle."
     }
   ]
 }
