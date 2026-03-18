@@ -8,14 +8,22 @@ use pegboard::actor_kv;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK2_VERSION, versioned};
+use std::collections::HashMap;
 use std::sync::{Arc, atomic::Ordering};
-use tokio::sync::{Mutex, MutexGuard, watch};
+use tokio::sync::{Mutex, MutexGuard, mpsc, watch};
 use universaldb::utils::end_of_key_range;
 use universalpubsub::PublishOpts;
 use universalpubsub::Subscriber;
 use vbare::OwnedVersionedData;
 
 use crate::{LifecycleResult, actor_event_demuxer::ActorEventDemuxer, conn::Conn, errors, metrics};
+
+/// A KV request to be processed by a per-actor task. Contains all information
+/// needed to run the KV operation and send the response.
+enum RunnerKvRequest {
+	Mk1(protocol::ToServerKvRequest),
+	Mk2(protocol::mk2::ToServerKvRequest),
+}
 
 #[tracing::instrument(name="ws_to_tunnel_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
 pub async fn task(
@@ -55,27 +63,63 @@ pub async fn task_inner(
 	let mut ws_rx = ws_rx.lock().await;
 	let mut term_signal = rivet_runtime::TermSignal::new().await;
 
-	loop {
-		match recv_msg(
-			&conn,
-			&mut ws_rx,
-			&mut eviction_sub2,
-			&mut ws_to_tunnel_abort_rx,
-			&mut term_signal,
-		)
-		.await?
-		{
-			Ok(Some(msg)) => {
-				if protocol::is_mk2(conn.protocol_version) {
-					handle_message_mk2(&ctx, &conn, event_demuxer, msg).await?;
-				} else {
-					handle_message_mk1(&ctx, &conn, msg).await?;
+	// Per-actor channel routing for concurrent cross-actor KV request processing.
+	// Each actor gets its own mpsc channel and a spawned task that drains it
+	// sequentially, preserving intra-actor ordering while allowing inter-actor
+	// parallelism. Do not use tokio::spawn per request as that would break
+	// pipelining and journal write ordering.
+	// See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 2.
+	let mut actor_kv_channels: HashMap<String, mpsc::UnboundedSender<RunnerKvRequest>> =
+		HashMap::new();
+	let mut actor_kv_tasks = tokio::task::JoinSet::new();
+
+	// Use an async block so that early returns (via ?) still run cleanup below.
+	let result = async {
+		loop {
+			match recv_msg(
+				&conn,
+				&mut ws_rx,
+				&mut eviction_sub2,
+				&mut ws_to_tunnel_abort_rx,
+				&mut term_signal,
+			)
+			.await?
+			{
+				Ok(Some(msg)) => {
+					if protocol::is_mk2(conn.protocol_version) {
+						handle_message_mk2(
+							&ctx,
+							&conn,
+							event_demuxer,
+							msg,
+							&mut actor_kv_channels,
+							&mut actor_kv_tasks,
+						)
+						.await?;
+					} else {
+						handle_message_mk1(
+							&ctx,
+							&conn,
+							msg,
+							&mut actor_kv_channels,
+							&mut actor_kv_tasks,
+						)
+						.await?;
+					}
 				}
+				Ok(None) => {}
+				Err(lifecycle_res) => return Ok(lifecycle_res),
 			}
-			Ok(None) => {}
-			Err(lifecycle_res) => return Ok(lifecycle_res),
 		}
 	}
+	.await;
+
+	// Drop all senders to signal per-actor tasks to stop, then wait for them
+	// to finish draining any in-flight requests.
+	actor_kv_channels.clear();
+	while actor_kv_tasks.join_next().await.is_some() {}
+
+	result
 }
 
 async fn recv_msg(
@@ -139,9 +183,11 @@ async fn recv_msg(
 #[tracing::instrument(skip_all)]
 async fn handle_message_mk2(
 	ctx: &StandaloneCtx,
-	conn: &Conn,
+	conn: &Arc<Conn>,
 	event_demuxer: &mut ActorEventDemuxer,
 	msg: Bytes,
+	actor_kv_channels: &mut HashMap<String, mpsc::UnboundedSender<RunnerKvRequest>>,
+	actor_kv_tasks: &mut tokio::task::JoinSet<()>,
 ) -> Result<()> {
 	// Parse message
 	let msg = match versioned::ToServerMk2::deserialize(&msg, conn.protocol_version) {
@@ -170,258 +216,24 @@ async fn handle_message_mk2(
 			conn.last_ping_ts
 				.store(util::timestamp::now(), Ordering::Relaxed);
 		}
-		// Process KV request
+		// Route KV request to per-actor channel for sequential processing.
 		protocol::mk2::ToServer::ToServerKvRequest(req) => {
-			let actor_id = match Id::parse(&req.actor_id) {
-				Ok(actor_id) => actor_id,
-				Err(err) => {
-					let res_msg = versioned::ToClientMk2::wrap_latest(
-						protocol::mk2::ToClient::ToClientKvResponse(
-							protocol::mk2::ToClientKvResponse {
-								request_id: req.request_id,
-								data: protocol::mk2::KvResponseData::KvErrorResponse(
-									protocol::mk2::KvErrorResponse {
-										message: err.to_string(),
-									},
-								),
-							},
-						),
-					);
+			let actor_id = req.actor_id.clone();
 
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV error response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV error response to client")?;
-
-					return Ok(());
-				}
-			};
-
-			let actor_res = ctx
-				.op(pegboard::ops::actor::get_for_runner::Input { actor_id })
-				.await
-				.with_context(|| format!("failed to get runner for actor: {}", actor_id))?;
-
-			let Some(actor) = actor_res else {
-				send_actor_kv_error(&conn, req.request_id, "actor does not exist").await?;
-				return Ok(());
-			};
-
-			// Verify actor belongs to this runner
-			if actor.runner_id != conn.runner_id {
-				send_actor_kv_error(&conn, req.request_id, "actor does not belong to runner")
-					.await?;
-				return Ok(());
+			// Create per-actor channel and task on first request for this actor.
+			if !actor_kv_channels.contains_key(&actor_id) {
+				let (tx, rx) = mpsc::unbounded_channel();
+				actor_kv_tasks.spawn(actor_kv_task(
+					Clone::clone(ctx),
+					Clone::clone(conn),
+					rx,
+				));
+				actor_kv_channels.insert(actor_id.clone(), tx);
 			}
 
-			let recipient = actor_kv::Recipient {
-				actor_id,
-				namespace_id: conn.namespace_id,
-				name: actor.name,
-			};
-
-			// TODO: Add queue and bg thread for processing kv ops
-			// Run kv operation
-			match req.data {
-				protocol::mk2::KvRequestData::KvGetRequest(body) => {
-					let res = actor_kv::get(&*ctx.udb()?, &recipient, body.keys).await;
-
-					let res_msg = versioned::ToClientMk2::wrap_latest(
-						protocol::mk2::ToClient::ToClientKvResponse(
-							protocol::mk2::ToClientKvResponse {
-								request_id: req.request_id,
-								data: match res {
-									Ok((keys, values, metadata)) => {
-										protocol::mk2::KvResponseData::KvGetResponse(
-											protocol::mk2::KvGetResponse {
-												keys,
-												values,
-												metadata,
-											},
-										)
-									}
-									Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
-										protocol::mk2::KvErrorResponse {
-											// TODO: Don't return actual error?
-											message: err.to_string(),
-										},
-									),
-								},
-							},
-						),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV get response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV get response to client")?;
-				}
-				protocol::mk2::KvRequestData::KvListRequest(body) => {
-					let res = actor_kv::list(
-						&*ctx.udb()?,
-						&recipient,
-						body.query,
-						body.reverse.unwrap_or_default(),
-						body.limit
-							.map(TryInto::try_into)
-							.transpose()
-							.context("KV list limit value overflow")?,
-					)
-					.await;
-
-					let res_msg = versioned::ToClientMk2::wrap_latest(
-						protocol::mk2::ToClient::ToClientKvResponse(
-							protocol::mk2::ToClientKvResponse {
-								request_id: req.request_id,
-								data: match res {
-									Ok((keys, values, metadata)) => {
-										protocol::mk2::KvResponseData::KvListResponse(
-											protocol::mk2::KvListResponse {
-												keys,
-												values,
-												metadata,
-											},
-										)
-									}
-									Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
-										protocol::mk2::KvErrorResponse {
-											// TODO: Don't return actual error?
-											message: err.to_string(),
-										},
-									),
-								},
-							},
-						),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV list response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV list response to client")?;
-				}
-				protocol::mk2::KvRequestData::KvPutRequest(body) => {
-					let res = actor_kv::put(&*ctx.udb()?, &recipient, body.keys, body.values).await;
-
-					let res_msg = versioned::ToClientMk2::wrap_latest(
-						protocol::mk2::ToClient::ToClientKvResponse(
-							protocol::mk2::ToClientKvResponse {
-								request_id: req.request_id,
-								data: match res {
-									Ok(()) => protocol::mk2::KvResponseData::KvPutResponse,
-									Err(err) => {
-										protocol::mk2::KvResponseData::KvErrorResponse(
-											protocol::mk2::KvErrorResponse {
-												// TODO: Don't return actual error?
-												message: err.to_string(),
-											},
-										)
-									}
-								},
-							},
-						),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV put response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV put response to client")?;
-				}
-				protocol::mk2::KvRequestData::KvDeleteRequest(body) => {
-					let res = actor_kv::delete(&*ctx.udb()?, &recipient, body.keys).await;
-
-					let res_msg = versioned::ToClientMk2::wrap_latest(
-						protocol::mk2::ToClient::ToClientKvResponse(
-							protocol::mk2::ToClientKvResponse {
-								request_id: req.request_id,
-								data: match res {
-									Ok(()) => protocol::mk2::KvResponseData::KvDeleteResponse,
-									Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
-										protocol::mk2::KvErrorResponse {
-											// TODO: Don't return actual error?
-											message: err.to_string(),
-										},
-									),
-								},
-							},
-						),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV delete response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV delete response to client")?;
-				}
-				protocol::mk2::KvRequestData::KvDeleteRangeRequest(body) => {
-					let res =
-						actor_kv::delete_range(&*ctx.udb()?, &recipient, body.start, body.end)
-							.await;
-
-					let res_msg = versioned::ToClientMk2::wrap_latest(
-						protocol::mk2::ToClient::ToClientKvResponse(
-							protocol::mk2::ToClientKvResponse {
-								request_id: req.request_id,
-								data: match res {
-									Ok(()) => protocol::mk2::KvResponseData::KvDeleteResponse,
-									Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
-										protocol::mk2::KvErrorResponse {
-											message: err.to_string(),
-										},
-									),
-								},
-							},
-						),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV delete range response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV delete range response to client")?;
-				}
-				protocol::mk2::KvRequestData::KvDropRequest => {
-					let res = actor_kv::delete_all(&*ctx.udb()?, &recipient).await;
-
-					let res_msg = versioned::ToClientMk2::wrap_latest(
-						protocol::mk2::ToClient::ToClientKvResponse(
-							protocol::mk2::ToClientKvResponse {
-								request_id: req.request_id,
-								data: match res {
-									Ok(()) => protocol::mk2::KvResponseData::KvDropResponse,
-									Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
-										protocol::mk2::KvErrorResponse {
-											// TODO: Don't return actual error?
-											message: err.to_string(),
-										},
-									),
-								},
-							},
-						),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV drop response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV drop response to client")?;
+			if let Some(tx) = actor_kv_channels.get(&actor_id) {
+				if tx.send(RunnerKvRequest::Mk2(req)).is_err() {
+					tracing::warn!(%actor_id, "per-actor kv task channel closed unexpectedly");
 				}
 			}
 		}
@@ -460,7 +272,13 @@ async fn handle_message_mk2(
 }
 
 #[tracing::instrument(skip_all)]
-async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Result<()> {
+async fn handle_message_mk1(
+	ctx: &StandaloneCtx,
+	conn: &Arc<Conn>,
+	msg: Bytes,
+	actor_kv_channels: &mut HashMap<String, mpsc::UnboundedSender<RunnerKvRequest>>,
+	actor_kv_tasks: &mut tokio::task::JoinSet<()>,
+) -> Result<()> {
 	// HACK: Decode v2 to handle tunnel ack
 	if rivet_runner_protocol::compat::version_needs_tunnel_ack(conn.protocol_version) {
 		match compat_ack_tunnel_message(&conn, &msg[..]).await {
@@ -503,247 +321,24 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 
 			conn.last_rtt.store(rtt, Ordering::Relaxed);
 		}
-		// Process KV request
+		// Route KV request to per-actor channel for sequential processing.
 		protocol::ToServer::ToServerKvRequest(req) => {
-			let actor_id = match Id::parse(&req.actor_id) {
-				Ok(actor_id) => actor_id,
-				Err(err) => {
-					let res_msg = versioned::ToClient::wrap_latest(
-						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
-							request_id: req.request_id,
-							data: protocol::KvResponseData::KvErrorResponse(
-								protocol::KvErrorResponse {
-									message: err.to_string(),
-								},
-							),
-						}),
-					);
+			let actor_id = req.actor_id.clone();
 
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV error response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV error response to client")?;
-
-					return Ok(());
-				}
-			};
-
-			let actor_res = ctx
-				.op(pegboard::ops::actor::get_for_runner::Input { actor_id })
-				.await
-				.with_context(|| format!("failed to get runner for actor: {}", actor_id))?;
-
-			let Some(actor) = actor_res else {
-				send_actor_kv_error_mk1(&conn, req.request_id, "actor does not exist").await?;
-				return Ok(());
-			};
-
-			// Verify actor belongs to this runner
-			if actor.runner_id != conn.runner_id {
-				send_actor_kv_error_mk1(&conn, req.request_id, "actor does not belong to runner")
-					.await?;
-				return Ok(());
+			// Create per-actor channel and task on first request for this actor.
+			if !actor_kv_channels.contains_key(&actor_id) {
+				let (tx, rx) = mpsc::unbounded_channel();
+				actor_kv_tasks.spawn(actor_kv_task(
+					Clone::clone(ctx),
+					Clone::clone(conn),
+					rx,
+				));
+				actor_kv_channels.insert(actor_id.clone(), tx);
 			}
 
-			let recipient = actor_kv::Recipient {
-				actor_id,
-				namespace_id: conn.namespace_id,
-				name: actor.name,
-			};
-
-			// TODO: Add queue and bg thread for processing kv ops
-			// Run kv operation
-			match req.data {
-				protocol::KvRequestData::KvGetRequest(body) => {
-					let res = actor_kv::get(&*ctx.udb()?, &recipient, body.keys).await;
-
-					let res_msg = versioned::ToClient::wrap_latest(
-						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok((keys, values, metadata)) => {
-									protocol::KvResponseData::KvGetResponse(
-										protocol::KvGetResponse {
-											keys,
-											values,
-											metadata: metadata
-												.into_iter()
-												.map(|x| protocol::KvMetadata {
-													version: x.version,
-													create_ts: x.update_ts,
-												})
-												.collect(),
-										},
-									)
-								}
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										// TODO: Don't return actual error?
-										message: err.to_string(),
-									},
-								),
-							},
-						}),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV get response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV get response to client")?;
-				}
-				protocol::KvRequestData::KvListRequest(body) => {
-					let res = actor_kv::list(
-						&*ctx.udb()?,
-						&recipient,
-						match body.query {
-							protocol::KvListQuery::KvListAllQuery => {
-								protocol::mk2::KvListQuery::KvListAllQuery
-							}
-							protocol::KvListQuery::KvListRangeQuery(q) => {
-								protocol::mk2::KvListQuery::KvListRangeQuery(
-									protocol::mk2::KvListRangeQuery {
-										start: q.start,
-										end: q.end,
-										exclusive: q.exclusive,
-									},
-								)
-							}
-							protocol::KvListQuery::KvListPrefixQuery(q) => {
-								protocol::mk2::KvListQuery::KvListPrefixQuery(
-									protocol::mk2::KvListPrefixQuery { key: q.key },
-								)
-							}
-						},
-						body.reverse.unwrap_or_default(),
-						body.limit
-							.map(TryInto::try_into)
-							.transpose()
-							.context("KV list limit value overflow")?,
-					)
-					.await;
-
-					let res_msg = versioned::ToClient::wrap_latest(
-						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok((keys, values, metadata)) => {
-									protocol::KvResponseData::KvListResponse(
-										protocol::KvListResponse {
-											keys,
-											values,
-											metadata: metadata
-												.into_iter()
-												.map(|x| protocol::KvMetadata {
-													version: x.version,
-													create_ts: x.update_ts,
-												})
-												.collect(),
-										},
-									)
-								}
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										// TODO: Don't return actual error?
-										message: err.to_string(),
-									},
-								),
-							},
-						}),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV list response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV list response to client")?;
-				}
-				protocol::KvRequestData::KvPutRequest(body) => {
-					let res = actor_kv::put(&*ctx.udb()?, &recipient, body.keys, body.values).await;
-
-					let res_msg = versioned::ToClient::wrap_latest(
-						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok(()) => protocol::KvResponseData::KvPutResponse,
-								Err(err) => {
-									protocol::KvResponseData::KvErrorResponse(
-										protocol::KvErrorResponse {
-											// TODO: Don't return actual error?
-											message: err.to_string(),
-										},
-									)
-								}
-							},
-						}),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV put response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV put response to client")?;
-				}
-				protocol::KvRequestData::KvDeleteRequest(body) => {
-					let res = actor_kv::delete(&*ctx.udb()?, &recipient, body.keys).await;
-
-					let res_msg = versioned::ToClient::wrap_latest(
-						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok(()) => protocol::KvResponseData::KvDeleteResponse,
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										// TODO: Don't return actual error?
-										message: err.to_string(),
-									},
-								),
-							},
-						}),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV delete response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV delete response to client")?;
-				}
-				protocol::KvRequestData::KvDropRequest => {
-					let res = actor_kv::delete_all(&*ctx.udb()?, &recipient).await;
-
-					let res_msg = versioned::ToClient::wrap_latest(
-						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok(()) => protocol::KvResponseData::KvDropResponse,
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										// TODO: Don't return actual error?
-										message: err.to_string(),
-									},
-								),
-							},
-						}),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV drop response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV drop response to client")?;
+			if let Some(tx) = actor_kv_channels.get(&actor_id) {
+				if tx.send(RunnerKvRequest::Mk1(req)).is_err() {
+					tracing::warn!(%actor_id, "per-actor kv task channel closed unexpectedly");
 				}
 			}
 		}
@@ -767,6 +362,499 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 			.with_context(|| {
 				format!("failed to forward signal to workflow: {}", conn.workflow_id)
 			})?;
+		}
+	}
+
+	Ok(())
+}
+
+/// Processes KV requests for a single actor sequentially, preserving intra-actor
+/// ordering. Spawned once per actor per connection. Exits when the sender is
+/// dropped (connection disconnect or cleanup).
+async fn actor_kv_task(
+	ctx: StandaloneCtx,
+	conn: Arc<Conn>,
+	mut rx: mpsc::UnboundedReceiver<RunnerKvRequest>,
+) {
+	while let Some(req) = rx.recv().await {
+		let result = match req {
+			RunnerKvRequest::Mk2(kv_req) => process_kv_request_mk2(&ctx, &conn, kv_req).await,
+			RunnerKvRequest::Mk1(kv_req) => process_kv_request_mk1(&ctx, &conn, kv_req).await,
+		};
+		if let Err(err) = result {
+			tracing::warn!(?err, "error processing kv request in actor task");
+			break;
+		}
+	}
+}
+
+/// Processes a single mk2 KV request: validates the actor, runs the KV
+/// operation, serializes the response, and sends it over the WebSocket.
+async fn process_kv_request_mk2(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	req: protocol::mk2::ToServerKvRequest,
+) -> Result<()> {
+	let actor_id = match Id::parse(&req.actor_id) {
+		Ok(actor_id) => actor_id,
+		Err(err) => {
+			send_actor_kv_error(conn, req.request_id, &err.to_string()).await?;
+			return Ok(());
+		}
+	};
+
+	let actor_res = ctx
+		.op(pegboard::ops::actor::get_for_runner::Input { actor_id })
+		.await
+		.with_context(|| format!("failed to get runner for actor: {}", actor_id))?;
+
+	let Some(actor) = actor_res else {
+		send_actor_kv_error(conn, req.request_id, "actor does not exist").await?;
+		return Ok(());
+	};
+
+	// Verify actor belongs to this runner.
+	if actor.runner_id != conn.runner_id {
+		send_actor_kv_error(conn, req.request_id, "actor does not belong to runner")
+			.await?;
+		return Ok(());
+	}
+
+	let recipient = actor_kv::Recipient {
+		actor_id,
+		namespace_id: conn.namespace_id,
+		name: actor.name,
+	};
+
+	match req.data {
+		protocol::mk2::KvRequestData::KvGetRequest(body) => {
+			let res = actor_kv::get(&*ctx.udb()?, &recipient, body.keys).await;
+
+			let res_msg = versioned::ToClientMk2::wrap_latest(
+				protocol::mk2::ToClient::ToClientKvResponse(
+					protocol::mk2::ToClientKvResponse {
+						request_id: req.request_id,
+						data: match res {
+							Ok((keys, values, metadata)) => {
+								protocol::mk2::KvResponseData::KvGetResponse(
+									protocol::mk2::KvGetResponse {
+										keys,
+										values,
+										metadata,
+									},
+								)
+							}
+							Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
+								protocol::mk2::KvErrorResponse {
+									// TODO: Don't return actual error?
+									message: err.to_string(),
+								},
+							),
+						},
+					},
+				),
+			);
+
+			let res_msg_serialized = res_msg
+				.serialize(conn.protocol_version)
+				.context("failed to serialize KV get response")?;
+			conn.ws_handle
+				.send(Message::Binary(res_msg_serialized.into()))
+				.await
+				.context("failed to send KV get response to client")?;
+		}
+		protocol::mk2::KvRequestData::KvListRequest(body) => {
+			let res = actor_kv::list(
+				&*ctx.udb()?,
+				&recipient,
+				body.query,
+				body.reverse.unwrap_or_default(),
+				body.limit
+					.map(TryInto::try_into)
+					.transpose()
+					.context("KV list limit value overflow")?,
+			)
+			.await;
+
+			let res_msg = versioned::ToClientMk2::wrap_latest(
+				protocol::mk2::ToClient::ToClientKvResponse(
+					protocol::mk2::ToClientKvResponse {
+						request_id: req.request_id,
+						data: match res {
+							Ok((keys, values, metadata)) => {
+								protocol::mk2::KvResponseData::KvListResponse(
+									protocol::mk2::KvListResponse {
+										keys,
+										values,
+										metadata,
+									},
+								)
+							}
+							Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
+								protocol::mk2::KvErrorResponse {
+									// TODO: Don't return actual error?
+									message: err.to_string(),
+								},
+							),
+						},
+					},
+				),
+			);
+
+			let res_msg_serialized = res_msg
+				.serialize(conn.protocol_version)
+				.context("failed to serialize KV list response")?;
+			conn.ws_handle
+				.send(Message::Binary(res_msg_serialized.into()))
+				.await
+				.context("failed to send KV list response to client")?;
+		}
+		protocol::mk2::KvRequestData::KvPutRequest(body) => {
+			let res = actor_kv::put(&*ctx.udb()?, &recipient, body.keys, body.values).await;
+
+			let res_msg = versioned::ToClientMk2::wrap_latest(
+				protocol::mk2::ToClient::ToClientKvResponse(
+					protocol::mk2::ToClientKvResponse {
+						request_id: req.request_id,
+						data: match res {
+							Ok(()) => protocol::mk2::KvResponseData::KvPutResponse,
+							Err(err) => {
+								protocol::mk2::KvResponseData::KvErrorResponse(
+									protocol::mk2::KvErrorResponse {
+										// TODO: Don't return actual error?
+										message: err.to_string(),
+									},
+								)
+							}
+						},
+					},
+				),
+			);
+
+			let res_msg_serialized = res_msg
+				.serialize(conn.protocol_version)
+				.context("failed to serialize KV put response")?;
+			conn.ws_handle
+				.send(Message::Binary(res_msg_serialized.into()))
+				.await
+				.context("failed to send KV put response to client")?;
+		}
+		protocol::mk2::KvRequestData::KvDeleteRequest(body) => {
+			let res = actor_kv::delete(&*ctx.udb()?, &recipient, body.keys).await;
+
+			let res_msg = versioned::ToClientMk2::wrap_latest(
+				protocol::mk2::ToClient::ToClientKvResponse(
+					protocol::mk2::ToClientKvResponse {
+						request_id: req.request_id,
+						data: match res {
+							Ok(()) => protocol::mk2::KvResponseData::KvDeleteResponse,
+							Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
+								protocol::mk2::KvErrorResponse {
+									// TODO: Don't return actual error?
+									message: err.to_string(),
+								},
+							),
+						},
+					},
+				),
+			);
+
+			let res_msg_serialized = res_msg
+				.serialize(conn.protocol_version)
+				.context("failed to serialize KV delete response")?;
+			conn.ws_handle
+				.send(Message::Binary(res_msg_serialized.into()))
+				.await
+				.context("failed to send KV delete response to client")?;
+		}
+		protocol::mk2::KvRequestData::KvDeleteRangeRequest(body) => {
+			let res =
+				actor_kv::delete_range(&*ctx.udb()?, &recipient, body.start, body.end)
+					.await;
+
+			let res_msg = versioned::ToClientMk2::wrap_latest(
+				protocol::mk2::ToClient::ToClientKvResponse(
+					protocol::mk2::ToClientKvResponse {
+						request_id: req.request_id,
+						data: match res {
+							Ok(()) => protocol::mk2::KvResponseData::KvDeleteResponse,
+							Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
+								protocol::mk2::KvErrorResponse {
+									message: err.to_string(),
+								},
+							),
+						},
+					},
+				),
+			);
+
+			let res_msg_serialized = res_msg
+				.serialize(conn.protocol_version)
+				.context("failed to serialize KV delete range response")?;
+			conn.ws_handle
+				.send(Message::Binary(res_msg_serialized.into()))
+				.await
+				.context("failed to send KV delete range response to client")?;
+		}
+		protocol::mk2::KvRequestData::KvDropRequest => {
+			let res = actor_kv::delete_all(&*ctx.udb()?, &recipient).await;
+
+			let res_msg = versioned::ToClientMk2::wrap_latest(
+				protocol::mk2::ToClient::ToClientKvResponse(
+					protocol::mk2::ToClientKvResponse {
+						request_id: req.request_id,
+						data: match res {
+							Ok(()) => protocol::mk2::KvResponseData::KvDropResponse,
+							Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
+								protocol::mk2::KvErrorResponse {
+									// TODO: Don't return actual error?
+									message: err.to_string(),
+								},
+							),
+						},
+					},
+				),
+			);
+
+			let res_msg_serialized = res_msg
+				.serialize(conn.protocol_version)
+				.context("failed to serialize KV drop response")?;
+			conn.ws_handle
+				.send(Message::Binary(res_msg_serialized.into()))
+				.await
+				.context("failed to send KV drop response to client")?;
+		}
+	}
+
+	Ok(())
+}
+
+/// Processes a single mk1 KV request: validates the actor, runs the KV
+/// operation, serializes the response, and sends it over the WebSocket.
+async fn process_kv_request_mk1(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	req: protocol::ToServerKvRequest,
+) -> Result<()> {
+	let actor_id = match Id::parse(&req.actor_id) {
+		Ok(actor_id) => actor_id,
+		Err(err) => {
+			send_actor_kv_error_mk1(conn, req.request_id, &err.to_string()).await?;
+			return Ok(());
+		}
+	};
+
+	let actor_res = ctx
+		.op(pegboard::ops::actor::get_for_runner::Input { actor_id })
+		.await
+		.with_context(|| format!("failed to get runner for actor: {}", actor_id))?;
+
+	let Some(actor) = actor_res else {
+		send_actor_kv_error_mk1(conn, req.request_id, "actor does not exist").await?;
+		return Ok(());
+	};
+
+	// Verify actor belongs to this runner.
+	if actor.runner_id != conn.runner_id {
+		send_actor_kv_error_mk1(conn, req.request_id, "actor does not belong to runner")
+			.await?;
+		return Ok(());
+	}
+
+	let recipient = actor_kv::Recipient {
+		actor_id,
+		namespace_id: conn.namespace_id,
+		name: actor.name,
+	};
+
+	match req.data {
+		protocol::KvRequestData::KvGetRequest(body) => {
+			let res = actor_kv::get(&*ctx.udb()?, &recipient, body.keys).await;
+
+			let res_msg = versioned::ToClient::wrap_latest(
+				protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
+					request_id: req.request_id,
+					data: match res {
+						Ok((keys, values, metadata)) => {
+							protocol::KvResponseData::KvGetResponse(
+								protocol::KvGetResponse {
+									keys,
+									values,
+									metadata: metadata
+										.into_iter()
+										.map(|x| protocol::KvMetadata {
+											version: x.version,
+											create_ts: x.update_ts,
+										})
+										.collect(),
+								},
+							)
+						}
+						Err(err) => protocol::KvResponseData::KvErrorResponse(
+							protocol::KvErrorResponse {
+								// TODO: Don't return actual error?
+								message: err.to_string(),
+							},
+						),
+					},
+				}),
+			);
+
+			let res_msg_serialized = res_msg
+				.serialize(conn.protocol_version)
+				.context("failed to serialize KV get response")?;
+			conn.ws_handle
+				.send(Message::Binary(res_msg_serialized.into()))
+				.await
+				.context("failed to send KV get response to client")?;
+		}
+		protocol::KvRequestData::KvListRequest(body) => {
+			let res = actor_kv::list(
+				&*ctx.udb()?,
+				&recipient,
+				match body.query {
+					protocol::KvListQuery::KvListAllQuery => {
+						protocol::mk2::KvListQuery::KvListAllQuery
+					}
+					protocol::KvListQuery::KvListRangeQuery(q) => {
+						protocol::mk2::KvListQuery::KvListRangeQuery(
+							protocol::mk2::KvListRangeQuery {
+								start: q.start,
+								end: q.end,
+								exclusive: q.exclusive,
+							},
+						)
+					}
+					protocol::KvListQuery::KvListPrefixQuery(q) => {
+						protocol::mk2::KvListQuery::KvListPrefixQuery(
+							protocol::mk2::KvListPrefixQuery { key: q.key },
+						)
+					}
+				},
+				body.reverse.unwrap_or_default(),
+				body.limit
+					.map(TryInto::try_into)
+					.transpose()
+					.context("KV list limit value overflow")?,
+			)
+			.await;
+
+			let res_msg = versioned::ToClient::wrap_latest(
+				protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
+					request_id: req.request_id,
+					data: match res {
+						Ok((keys, values, metadata)) => {
+							protocol::KvResponseData::KvListResponse(
+								protocol::KvListResponse {
+									keys,
+									values,
+									metadata: metadata
+										.into_iter()
+										.map(|x| protocol::KvMetadata {
+											version: x.version,
+											create_ts: x.update_ts,
+										})
+										.collect(),
+								},
+							)
+						}
+						Err(err) => protocol::KvResponseData::KvErrorResponse(
+							protocol::KvErrorResponse {
+								// TODO: Don't return actual error?
+								message: err.to_string(),
+							},
+						),
+					},
+				}),
+			);
+
+			let res_msg_serialized = res_msg
+				.serialize(conn.protocol_version)
+				.context("failed to serialize KV list response")?;
+			conn.ws_handle
+				.send(Message::Binary(res_msg_serialized.into()))
+				.await
+				.context("failed to send KV list response to client")?;
+		}
+		protocol::KvRequestData::KvPutRequest(body) => {
+			let res = actor_kv::put(&*ctx.udb()?, &recipient, body.keys, body.values).await;
+
+			let res_msg = versioned::ToClient::wrap_latest(
+				protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
+					request_id: req.request_id,
+					data: match res {
+						Ok(()) => protocol::KvResponseData::KvPutResponse,
+						Err(err) => {
+							protocol::KvResponseData::KvErrorResponse(
+								protocol::KvErrorResponse {
+									// TODO: Don't return actual error?
+									message: err.to_string(),
+								},
+							)
+						}
+					},
+				}),
+			);
+
+			let res_msg_serialized = res_msg
+				.serialize(conn.protocol_version)
+				.context("failed to serialize KV put response")?;
+			conn.ws_handle
+				.send(Message::Binary(res_msg_serialized.into()))
+				.await
+				.context("failed to send KV put response to client")?;
+		}
+		protocol::KvRequestData::KvDeleteRequest(body) => {
+			let res = actor_kv::delete(&*ctx.udb()?, &recipient, body.keys).await;
+
+			let res_msg = versioned::ToClient::wrap_latest(
+				protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
+					request_id: req.request_id,
+					data: match res {
+						Ok(()) => protocol::KvResponseData::KvDeleteResponse,
+						Err(err) => protocol::KvResponseData::KvErrorResponse(
+							protocol::KvErrorResponse {
+								// TODO: Don't return actual error?
+								message: err.to_string(),
+							},
+						),
+					},
+				}),
+			);
+
+			let res_msg_serialized = res_msg
+				.serialize(conn.protocol_version)
+				.context("failed to serialize KV delete response")?;
+			conn.ws_handle
+				.send(Message::Binary(res_msg_serialized.into()))
+				.await
+				.context("failed to send KV delete response to client")?;
+		}
+		protocol::KvRequestData::KvDropRequest => {
+			let res = actor_kv::delete_all(&*ctx.udb()?, &recipient).await;
+
+			let res_msg = versioned::ToClient::wrap_latest(
+				protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
+					request_id: req.request_id,
+					data: match res {
+						Ok(()) => protocol::KvResponseData::KvDropResponse,
+						Err(err) => protocol::KvResponseData::KvErrorResponse(
+							protocol::KvErrorResponse {
+								// TODO: Don't return actual error?
+								message: err.to_string(),
+							},
+						),
+					},
+				}),
+			);
+
+			let res_msg_serialized = res_msg
+				.serialize(conn.protocol_version)
+				.context("failed to serialize KV drop response")?;
+			conn.ws_handle
+				.send(Message::Binary(res_msg_serialized.into()))
+				.await
+				.context("failed to send KV drop response to client")?;
 		}
 	}
 
