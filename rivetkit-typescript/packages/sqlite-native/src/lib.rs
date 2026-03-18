@@ -93,6 +93,20 @@ pub struct JsNativeDatabase {
 	actor_id: String,
 }
 
+/// Safety: JsNativeDatabase is only accessed from napi async functions that
+/// extract the raw pointer before dispatching to spawn_blocking. The &self
+/// reference never crosses thread boundaries (it is used on the napi main
+/// thread to read the pointer value). Required because napi async fn futures
+/// must be Send, which requires &JsNativeDatabase to be Send, which requires
+/// JsNativeDatabase to be Sync.
+unsafe impl Sync for JsNativeDatabase {}
+
+/// To send a `*mut sqlite3` across thread boundaries into `spawn_blocking`,
+/// cast it to `usize` before the closure and back to `*mut sqlite3` inside.
+/// `usize` is `Send`. This is safe because SQLite is compiled in SERIALIZED
+/// mode (SQLITE_THREADSAFE=1, per-connection mutex) and only one blocking
+/// thread accesses a given database at a time.
+
 // MARK: Exported Functions
 
 /// Open the shared KV channel WebSocket connection.
@@ -147,8 +161,29 @@ pub fn open_database(channel: &JsKvChannel, actor_id: String) -> Result<JsNative
 }
 
 /// Execute a statement (INSERT, UPDATE, DELETE, CREATE, etc.).
+///
+/// SQLite operations run on tokio's blocking thread pool via `spawn_blocking`.
+/// VFS callbacks call `Handle::block_on()` from blocking threads (not tokio
+/// worker threads), which is safe. The Node.js main thread is never blocked.
+///
+/// Three threading approaches were considered:
+///
+/// 1. **spawn_blocking** (chosen): napi `async fn` dispatches to tokio's
+///    blocking thread pool (default cap 512). Simplest, idiomatic, tokio
+///    manages the pool. Minor downside: thread may change between queries
+///    (slightly worse cache locality).
+///
+/// 2. **Dedicated thread per actor**: One `std::thread` per actor, receives
+///    SQL via mpsc, sends results via oneshot. Best cache locality, but
+///    requires manual lifecycle management and one idle thread per open actor.
+///
+/// 3. **Channel + block-in-place**: Sync napi function, VFS callbacks send
+///    requests via `std::sync::mpsc` and block on `recv()`. Does NOT solve
+///    the core problem because the Node.js main thread is still blocked.
+///
+/// See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 1.
 #[napi]
-pub fn execute(
+pub async fn execute(
 	db: &JsNativeDatabase,
 	sql: String,
 	params: Option<Vec<JsonValue>>,
@@ -157,41 +192,51 @@ pub fn execute(
 		.db
 		.as_ref()
 		.ok_or_else(|| Error::from_reason("database is closed"))?;
-	let db_ptr = native_db.as_ptr();
+	let db_ptr = native_db.as_ptr() as usize;
 
-	let c_sql = CString::new(sql.as_str()).map_err(|e| Error::from_reason(e.to_string()))?;
-	let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
+	get_runtime()
+		.spawn_blocking(move || {
+			let db_ptr = db_ptr as *mut sqlite3;
 
-	let rc = unsafe {
-		sqlite3_prepare_v2(db_ptr, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut())
-	};
-	if rc != SQLITE_OK {
-		return Err(Error::from_reason(unsafe { sqlite_errmsg(db_ptr) }));
-	}
+			let c_sql =
+				CString::new(sql.as_str()).map_err(|e| Error::from_reason(e.to_string()))?;
+			let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
 
-	if let Some(ref p) = params {
-		if let Err(e) = bind_params(db_ptr, stmt, p) {
+			let rc = unsafe {
+				sqlite3_prepare_v2(db_ptr, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut())
+			};
+			if rc != SQLITE_OK {
+				return Err(Error::from_reason(unsafe { sqlite_errmsg(db_ptr) }));
+			}
+
+			if let Some(ref p) = params {
+				if let Err(e) = bind_params(db_ptr, stmt, p) {
+					unsafe { sqlite3_finalize(stmt) };
+					return Err(e);
+				}
+			}
+
+			let rc = unsafe { sqlite3_step(stmt) };
+			if rc != SQLITE_DONE && rc != SQLITE_ROW {
+				let msg = unsafe { sqlite_errmsg(db_ptr) };
+				unsafe { sqlite3_finalize(stmt) };
+				return Err(Error::from_reason(msg));
+			}
+
+			let changes = unsafe { sqlite3_changes(db_ptr) } as i64;
 			unsafe { sqlite3_finalize(stmt) };
-			return Err(e);
-		}
-	}
 
-	let rc = unsafe { sqlite3_step(stmt) };
-	if rc != SQLITE_DONE && rc != SQLITE_ROW {
-		let msg = unsafe { sqlite_errmsg(db_ptr) };
-		unsafe { sqlite3_finalize(stmt) };
-		return Err(Error::from_reason(msg));
-	}
-
-	let changes = unsafe { sqlite3_changes(db_ptr) } as i64;
-	unsafe { sqlite3_finalize(stmt) };
-
-	Ok(ExecuteResult { changes })
+			Ok(ExecuteResult { changes })
+		})
+		.await
+		.map_err(|e| Error::from_reason(e.to_string()))?
 }
 
 /// Run a query (SELECT, PRAGMA, etc.).
+///
+/// See `execute` for threading model documentation.
 #[napi]
-pub fn query(
+pub async fn query(
 	db: &JsNativeDatabase,
 	sql: String,
 	params: Option<Vec<JsonValue>>,
@@ -200,103 +245,33 @@ pub fn query(
 		.db
 		.as_ref()
 		.ok_or_else(|| Error::from_reason("database is closed"))?;
-	let db_ptr = native_db.as_ptr();
+	let db_ptr = native_db.as_ptr() as usize;
 
-	let c_sql = CString::new(sql.as_str()).map_err(|e| Error::from_reason(e.to_string()))?;
-	let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
+	get_runtime()
+		.spawn_blocking(move || {
+			let db_ptr = db_ptr as *mut sqlite3;
 
-	let rc = unsafe {
-		sqlite3_prepare_v2(db_ptr, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut())
-	};
-	if rc != SQLITE_OK {
-		return Err(Error::from_reason(unsafe { sqlite_errmsg(db_ptr) }));
-	}
+			let c_sql =
+				CString::new(sql.as_str()).map_err(|e| Error::from_reason(e.to_string()))?;
+			let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
 
-	if let Some(ref p) = params {
-		if let Err(e) = bind_params(db_ptr, stmt, p) {
-			unsafe { sqlite3_finalize(stmt) };
-			return Err(e);
-		}
-	}
-
-	// Read column names.
-	let col_count = unsafe { sqlite3_column_count(stmt) };
-	let columns: Vec<String> = (0..col_count)
-		.map(|i| unsafe {
-			let name = sqlite3_column_name(stmt, i);
-			if name.is_null() {
-				String::new()
-			} else {
-				CStr::from_ptr(name).to_string_lossy().into_owned()
+			let rc = unsafe {
+				sqlite3_prepare_v2(db_ptr, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut())
+			};
+			if rc != SQLITE_OK {
+				return Err(Error::from_reason(unsafe { sqlite_errmsg(db_ptr) }));
 			}
-		})
-		.collect();
 
-	// Read rows.
-	let mut rows: Vec<Vec<JsonValue>> = Vec::new();
-	loop {
-		let rc = unsafe { sqlite3_step(stmt) };
-		if rc == SQLITE_DONE {
-			break;
-		}
-		if rc != SQLITE_ROW {
-			let msg = unsafe { sqlite_errmsg(db_ptr) };
-			unsafe { sqlite3_finalize(stmt) };
-			return Err(Error::from_reason(msg));
-		}
+			if let Some(ref p) = params {
+				if let Err(e) = bind_params(db_ptr, stmt, p) {
+					unsafe { sqlite3_finalize(stmt) };
+					return Err(e);
+				}
+			}
 
-		let row: Vec<JsonValue> = (0..col_count)
-			.map(|i| unsafe { extract_column_value(stmt, i) })
-			.collect();
-		rows.push(row);
-	}
-
-	unsafe { sqlite3_finalize(stmt) };
-
-	Ok(QueryResult { columns, rows })
-}
-
-/// Execute multi-statement SQL without parameters.
-/// Uses sqlite3_prepare_v2 in a loop with tail pointer tracking to handle
-/// multiple statements (e.g., migrations). Returns columns and rows from
-/// the last statement that produced results.
-#[napi]
-pub fn exec(db: &JsNativeDatabase, sql: String) -> Result<QueryResult> {
-	let native_db = db
-		.db
-		.as_ref()
-		.ok_or_else(|| Error::from_reason("database is closed"))?;
-	let db_ptr = native_db.as_ptr();
-
-	let c_sql = CString::new(sql.as_str()).map_err(|e| Error::from_reason(e.to_string()))?;
-	let sql_bytes = c_sql.to_bytes();
-	let sql_ptr = c_sql.as_ptr();
-	let sql_end = unsafe { sql_ptr.add(sql_bytes.len()) };
-
-	let mut tail: *const c_char = sql_ptr;
-	let mut all_rows: Vec<Vec<JsonValue>> = Vec::new();
-	let mut last_columns: Vec<String> = Vec::new();
-
-	while tail < sql_end && !tail.is_null() {
-		let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
-		let mut next_tail: *const c_char = ptr::null();
-		let remaining = (sql_end as usize - tail as usize) as c_int;
-
-		let rc = unsafe {
-			sqlite3_prepare_v2(db_ptr, tail, remaining, &mut stmt, &mut next_tail)
-		};
-		if rc != SQLITE_OK {
-			return Err(Error::from_reason(unsafe { sqlite_errmsg(db_ptr) }));
-		}
-
-		// No more statements.
-		if stmt.is_null() {
-			break;
-		}
-
-		let col_count = unsafe { sqlite3_column_count(stmt) };
-		if col_count > 0 {
-			last_columns = (0..col_count)
+			// Read column names.
+			let col_count = unsafe { sqlite3_column_count(stmt) };
+			let columns: Vec<String> = (0..col_count)
 				.map(|i| unsafe {
 					let name = sqlite3_column_name(stmt, i);
 					if name.is_null() {
@@ -306,32 +281,120 @@ pub fn exec(db: &JsNativeDatabase, sql: String) -> Result<QueryResult> {
 					}
 				})
 				.collect();
-		}
 
-		loop {
-			let rc = unsafe { sqlite3_step(stmt) };
-			if rc == SQLITE_DONE {
-				break;
+			// Read rows.
+			let mut rows: Vec<Vec<JsonValue>> = Vec::new();
+			loop {
+				let rc = unsafe { sqlite3_step(stmt) };
+				if rc == SQLITE_DONE {
+					break;
+				}
+				if rc != SQLITE_ROW {
+					let msg = unsafe { sqlite_errmsg(db_ptr) };
+					unsafe { sqlite3_finalize(stmt) };
+					return Err(Error::from_reason(msg));
+				}
+
+				let row: Vec<JsonValue> = (0..col_count)
+					.map(|i| unsafe { extract_column_value(stmt, i) })
+					.collect();
+				rows.push(row);
 			}
-			if rc != SQLITE_ROW {
-				let msg = unsafe { sqlite_errmsg(db_ptr) };
+
+			unsafe { sqlite3_finalize(stmt) };
+
+			Ok(QueryResult { columns, rows })
+		})
+		.await
+		.map_err(|e| Error::from_reason(e.to_string()))?
+}
+
+/// Execute multi-statement SQL without parameters.
+/// Uses sqlite3_prepare_v2 in a loop with tail pointer tracking to handle
+/// multiple statements (e.g., migrations). Returns columns and rows from
+/// the last statement that produced results.
+///
+/// See `execute` for threading model documentation.
+#[napi]
+pub async fn exec(db: &JsNativeDatabase, sql: String) -> Result<QueryResult> {
+	let native_db = db
+		.db
+		.as_ref()
+		.ok_or_else(|| Error::from_reason("database is closed"))?;
+	let db_ptr = native_db.as_ptr() as usize;
+
+	get_runtime()
+		.spawn_blocking(move || {
+			let db_ptr = db_ptr as *mut sqlite3;
+
+			let c_sql =
+				CString::new(sql.as_str()).map_err(|e| Error::from_reason(e.to_string()))?;
+			let sql_bytes = c_sql.to_bytes();
+			let sql_ptr = c_sql.as_ptr();
+			let sql_end = unsafe { sql_ptr.add(sql_bytes.len()) };
+
+			let mut tail: *const c_char = sql_ptr;
+			let mut all_rows: Vec<Vec<JsonValue>> = Vec::new();
+			let mut last_columns: Vec<String> = Vec::new();
+
+			while tail < sql_end && !tail.is_null() {
+				let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
+				let mut next_tail: *const c_char = ptr::null();
+				let remaining = (sql_end as usize - tail as usize) as c_int;
+
+				let rc = unsafe {
+					sqlite3_prepare_v2(db_ptr, tail, remaining, &mut stmt, &mut next_tail)
+				};
+				if rc != SQLITE_OK {
+					return Err(Error::from_reason(unsafe { sqlite_errmsg(db_ptr) }));
+				}
+
+				// No more statements.
+				if stmt.is_null() {
+					break;
+				}
+
+				let col_count = unsafe { sqlite3_column_count(stmt) };
+				if col_count > 0 {
+					last_columns = (0..col_count)
+						.map(|i| unsafe {
+							let name = sqlite3_column_name(stmt, i);
+							if name.is_null() {
+								String::new()
+							} else {
+								CStr::from_ptr(name).to_string_lossy().into_owned()
+							}
+						})
+						.collect();
+				}
+
+				loop {
+					let rc = unsafe { sqlite3_step(stmt) };
+					if rc == SQLITE_DONE {
+						break;
+					}
+					if rc != SQLITE_ROW {
+						let msg = unsafe { sqlite_errmsg(db_ptr) };
+						unsafe { sqlite3_finalize(stmt) };
+						return Err(Error::from_reason(msg));
+					}
+					let row: Vec<JsonValue> = (0..col_count)
+						.map(|i| unsafe { extract_column_value(stmt, i) })
+						.collect();
+					all_rows.push(row);
+				}
+
 				unsafe { sqlite3_finalize(stmt) };
-				return Err(Error::from_reason(msg));
+				tail = next_tail;
 			}
-			let row: Vec<JsonValue> = (0..col_count)
-				.map(|i| unsafe { extract_column_value(stmt, i) })
-				.collect();
-			all_rows.push(row);
-		}
 
-		unsafe { sqlite3_finalize(stmt) };
-		tail = next_tail;
-	}
-
-	Ok(QueryResult {
-		columns: last_columns,
-		rows: all_rows,
-	})
+			Ok(QueryResult {
+				columns: last_columns,
+				rows: all_rows,
+			})
+		})
+		.await
+		.map_err(|e| Error::from_reason(e.to_string()))?
 }
 
 /// Close the database connection and release the actor lock.

@@ -36,16 +36,16 @@ interface NativeSqliteModule {
 		db: NativeDatabase,
 		sql: string,
 		params?: unknown[],
-	): { changes: number };
+	): Promise<{ changes: number }>;
 	query(
 		db: NativeDatabase,
 		sql: string,
 		params?: unknown[],
-	): { columns: string[]; rows: unknown[][] };
+	): Promise<{ columns: string[]; rows: unknown[][] }>;
 	exec(
 		db: NativeDatabase,
 		sql: string,
-	): { columns: string[]; rows: unknown[][] };
+	): Promise<{ columns: string[]; rows: unknown[][] }>;
 	closeDatabase(db: NativeDatabase): void;
 	disconnect(channel: NativeKvChannel): void;
 }
@@ -184,7 +184,7 @@ export function createNativeRawAccess(actorId: string): RawAccess {
 						token.startsWith("WITH");
 
 					if (returnsRows) {
-						const { rows, columns } = mod.query(
+						const { rows, columns } = await mod.query(
 							nativeDb,
 							query,
 							bindings,
@@ -198,14 +198,14 @@ export function createNativeRawAccess(actorId: string): RawAccess {
 						}) as TRow[];
 					}
 
-					mod.execute(nativeDb, query, bindings);
+					await mod.execute(nativeDb, query, bindings);
 					return [] as TRow[];
 				}
 
 				// Multi-statement SQL (e.g., migrations) without parameters.
 				// Uses the native exec which loops sqlite3_prepare_v2 with
 				// tail pointer tracking.
-				const { rows, columns } = mod.exec(nativeDb, query);
+				const { rows, columns } = await mod.exec(nativeDb, query);
 				return rows.map((row: unknown[]) => {
 					const rowObj: Record<string, unknown> = {};
 					for (let i = 0; i < columns.length; i++) {
