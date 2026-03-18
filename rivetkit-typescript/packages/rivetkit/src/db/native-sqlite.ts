@@ -1,0 +1,226 @@
+/**
+ * Native SQLite integration via @rivetkit/sqlite-native.
+ *
+ * Attempts to load the native addon at runtime and provides a fallback-aware
+ * API for the database provider. The KV channel connection is initialized once
+ * per process and shared across all actors.
+ *
+ * The native VFS and WASM VFS are byte-compatible. See
+ * rivetkit-typescript/packages/sqlite-native/src/vfs.rs and
+ * rivetkit-typescript/packages/sqlite-vfs/src/vfs.ts.
+ */
+
+import { getRequireFn } from "@/utils/node";
+import {
+	getRivetEndpoint,
+	getRivetToken,
+	getRivetNamespace,
+} from "@/utils/env-vars";
+import type { RawAccess } from "./config";
+import { AsyncMutex } from "./shared";
+
+// Type declarations for @rivetkit/sqlite-native.
+// Declared inline to avoid a build-time dependency on the native addon,
+// which may not be installed or compiled.
+interface NativeSqliteModule {
+	connect(config: {
+		url: string;
+		token?: string;
+		namespace: string;
+	}): NativeKvChannel;
+	openDatabase(
+		channel: NativeKvChannel,
+		actorId: string,
+	): NativeDatabase;
+	execute(
+		db: NativeDatabase,
+		sql: string,
+		params?: unknown[],
+	): { changes: number };
+	query(
+		db: NativeDatabase,
+		sql: string,
+		params?: unknown[],
+	): { columns: string[]; rows: unknown[][] };
+	exec(
+		db: NativeDatabase,
+		sql: string,
+	): { columns: string[]; rows: unknown[][] };
+	closeDatabase(db: NativeDatabase): void;
+	disconnect(channel: NativeKvChannel): void;
+}
+
+// Opaque handles from the native addon.
+type NativeKvChannel = object;
+type NativeDatabase = object;
+
+// Cached detection result.
+let nativeModule: NativeSqliteModule | null = null;
+let detectionDone = false;
+
+// Singleton KV channel connection, shared across all actors in this process.
+let kvChannel: NativeKvChannel | null = null;
+
+/**
+ * Attempts to load the @rivetkit/sqlite-native .node addon.
+ * Catches all failure modes: missing file, glibc mismatch,
+ * N-API version mismatch, corrupted binary.
+ */
+export function nativeSqliteAvailable(): boolean {
+	if (detectionDone) return nativeModule !== null;
+	detectionDone = true;
+
+	try {
+		const requireFn = getRequireFn();
+		nativeModule = requireFn(
+			/* webpackIgnore: true */ "@rivetkit/sqlite-native",
+		) as NativeSqliteModule;
+		return true;
+	} catch {
+		nativeModule = null;
+		return false;
+	}
+}
+
+/**
+ * Returns the loaded native module. Only valid after nativeSqliteAvailable()
+ * returns true.
+ */
+function getNativeModule(): NativeSqliteModule {
+	if (!nativeModule) {
+		throw new Error("native SQLite module not loaded");
+	}
+	return nativeModule;
+}
+
+/**
+ * Get or create the process-level KV channel connection.
+ *
+ * Derives the WebSocket URL from RIVET_ENDPOINT (defaults to
+ * http://127.0.0.1:6420 for local dev). Authenticates with RIVET_TOKEN.
+ */
+function getOrCreateKvChannel(): NativeKvChannel {
+	if (kvChannel) return kvChannel;
+
+	const mod = getNativeModule();
+	const endpoint = getRivetEndpoint() ?? "http://127.0.0.1:6420";
+	const token = getRivetToken();
+	const namespace = getRivetNamespace() ?? "default";
+
+	// Convert HTTP(S) endpoint to WebSocket URL for the KV channel.
+	const wsUrl = endpoint
+		.replace(/^https:\/\//, "wss://")
+		.replace(/^http:\/\//, "ws://")
+		.replace(/\/$/, "");
+
+	kvChannel = mod.connect({
+		url: `${wsUrl}/kv/connect`,
+		token: token ?? undefined,
+		namespace,
+	});
+
+	return kvChannel;
+}
+
+/**
+ * Convert binding values to JSON-compatible types for the native addon.
+ * The native addon accepts serde_json::Value via napi, so bigint and
+ * Uint8Array need conversion.
+ */
+function toNativeBindings(args: unknown[]): unknown[] {
+	return args.map((arg) => {
+		if (typeof arg === "bigint") {
+			return Number(arg);
+		}
+		if (arg instanceof Uint8Array) {
+			return Array.from(arg);
+		}
+		return arg;
+	});
+}
+
+/**
+ * Create a RawAccess database client backed by the native SQLite addon.
+ * The KV channel is shared per process; a new database is opened per actor.
+ */
+export function createNativeRawAccess(actorId: string): RawAccess {
+	const mod = getNativeModule();
+	const channel = getOrCreateKvChannel();
+	const nativeDb = mod.openDatabase(channel, actorId);
+	let closed = false;
+	const mutex = new AsyncMutex();
+
+	const ensureOpen = () => {
+		if (closed) {
+			throw new Error("database is closed");
+		}
+	};
+
+	return {
+		execute: async <
+			TRow extends Record<string, unknown> = Record<
+				string,
+				unknown
+			>,
+		>(
+			query: string,
+			...args: unknown[]
+		): Promise<TRow[]> => {
+			return await mutex.run(async () => {
+				ensureOpen();
+
+				if (args.length > 0) {
+					// The native addon validates binding types in Rust
+					// (bind_params). Convert bigint/Uint8Array to
+					// JSON-compatible representations.
+					const bindings = toNativeBindings(args);
+					const token = query
+						.trimStart()
+						.slice(0, 16)
+						.toUpperCase();
+					const returnsRows =
+						token.startsWith("SELECT") ||
+						token.startsWith("PRAGMA") ||
+						token.startsWith("WITH");
+
+					if (returnsRows) {
+						const { rows, columns } = mod.query(
+							nativeDb,
+							query,
+							bindings,
+						);
+						return rows.map((row: unknown[]) => {
+							const rowObj: Record<string, unknown> = {};
+							for (let i = 0; i < columns.length; i++) {
+								rowObj[columns[i]] = row[i];
+							}
+							return rowObj;
+						}) as TRow[];
+					}
+
+					mod.execute(nativeDb, query, bindings);
+					return [] as TRow[];
+				}
+
+				// Multi-statement SQL (e.g., migrations) without parameters.
+				// Uses the native exec which loops sqlite3_prepare_v2 with
+				// tail pointer tracking.
+				const { rows, columns } = mod.exec(nativeDb, query);
+				return rows.map((row: unknown[]) => {
+					const rowObj: Record<string, unknown> = {};
+					for (let i = 0; i < columns.length; i++) {
+						rowObj[columns[i]] = row[i];
+					}
+					return rowObj;
+				}) as TRow[];
+			});
+		},
+		close: async () => {
+			await mutex.run(async () => {
+				if (closed) return;
+				closed = true;
+				mod.closeDatabase(nativeDb);
+			});
+		},
+	};
+}

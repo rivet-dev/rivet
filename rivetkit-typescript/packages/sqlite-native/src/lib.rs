@@ -253,6 +253,84 @@ pub fn query(
 	Ok(QueryResult { columns, rows })
 }
 
+/// Execute multi-statement SQL without parameters.
+/// Uses sqlite3_prepare_v2 in a loop with tail pointer tracking to handle
+/// multiple statements (e.g., migrations). Returns columns and rows from
+/// the last statement that produced results.
+#[napi]
+pub fn exec(db: &JsNativeDatabase, sql: String) -> Result<QueryResult> {
+	let native_db = db
+		.db
+		.as_ref()
+		.ok_or_else(|| Error::from_reason("database is closed"))?;
+	let db_ptr = native_db.as_ptr();
+
+	let c_sql = CString::new(sql.as_str()).map_err(|e| Error::from_reason(e.to_string()))?;
+	let sql_bytes = c_sql.to_bytes();
+	let sql_ptr = c_sql.as_ptr();
+	let sql_end = unsafe { sql_ptr.add(sql_bytes.len()) };
+
+	let mut tail: *const c_char = sql_ptr;
+	let mut all_rows: Vec<Vec<JsonValue>> = Vec::new();
+	let mut last_columns: Vec<String> = Vec::new();
+
+	while tail < sql_end && !tail.is_null() {
+		let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
+		let mut next_tail: *const c_char = ptr::null();
+		let remaining = (sql_end as usize - tail as usize) as c_int;
+
+		let rc = unsafe {
+			sqlite3_prepare_v2(db_ptr, tail, remaining, &mut stmt, &mut next_tail)
+		};
+		if rc != SQLITE_OK {
+			return Err(Error::from_reason(unsafe { sqlite_errmsg(db_ptr) }));
+		}
+
+		// No more statements.
+		if stmt.is_null() {
+			break;
+		}
+
+		let col_count = unsafe { sqlite3_column_count(stmt) };
+		if col_count > 0 {
+			last_columns = (0..col_count)
+				.map(|i| unsafe {
+					let name = sqlite3_column_name(stmt, i);
+					if name.is_null() {
+						String::new()
+					} else {
+						CStr::from_ptr(name).to_string_lossy().into_owned()
+					}
+				})
+				.collect();
+		}
+
+		loop {
+			let rc = unsafe { sqlite3_step(stmt) };
+			if rc == SQLITE_DONE {
+				break;
+			}
+			if rc != SQLITE_ROW {
+				let msg = unsafe { sqlite_errmsg(db_ptr) };
+				unsafe { sqlite3_finalize(stmt) };
+				return Err(Error::from_reason(msg));
+			}
+			let row: Vec<JsonValue> = (0..col_count)
+				.map(|i| unsafe { extract_column_value(stmt, i) })
+				.collect();
+			all_rows.push(row);
+		}
+
+		unsafe { sqlite3_finalize(stmt) };
+		tail = next_tail;
+	}
+
+	Ok(QueryResult {
+		columns: last_columns,
+		rows: all_rows,
+	})
+}
+
 /// Close the database connection and release the actor lock.
 /// Sends ActorCloseRequest to the server.
 #[napi(js_name = "closeDatabase")]
