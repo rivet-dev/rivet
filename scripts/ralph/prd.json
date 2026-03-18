@@ -412,8 +412,227 @@
         "cargo check passes from within rivetkit-typescript/packages/sqlite-native/ (if Rust changes needed)"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": "The same test passes on the WASM VFS (driver-file-system). The failure is native-sqlite-specific. The test fixture actor (actor-db.ts) calls configureDisconnectInsert(true, 250) which sets up an onDisconnect handler that does a DB write after 250ms delay. The native SQLite path may not be flushing or awaiting writes correctly during actor sleep/disconnect lifecycle."
+    },
+    {
+      "id": "US-024",
+      "title": "Fix metadata encoding mismatch between WASM and native VFS",
+      "description": "As a developer, I need the WASM and native VFS file metadata encoding to be byte-identical so actors can switch backends without data corruption.",
+      "acceptanceCriteria": [
+        "WASM VFS (sqlite-vfs/src/vfs.ts) and native VFS (sqlite-native/src/vfs.rs) produce identical metadata byte layouts",
+        "Currently WASM uses FILE_META_VERSIONED.serializeWithEmbeddedVersion() producing 10 bytes (2-byte u16 LE version + 8-byte u64 LE size), while native uses 9 bytes (1-byte u8 version + 8-byte u64 LE size). One must be updated to match the other.",
+        "Align the native VFS to match the WASM VFS encoding (2-byte u16 LE version prefix from vbare), since the WASM VFS is the existing production format",
+        "Update native VFS encode_file_meta and decode_file_meta to use 2-byte u16 LE version prefix",
+        "Update native VFS unit tests to reflect the correct byte layout",
+        "cargo test passes from within rivetkit-typescript/packages/sqlite-native/",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "CRITICAL data compatibility issue. The vbare library's serializeWithEmbeddedVersion prepends a 2-byte u16 LE version. The native VFS uses a 1-byte u8 version. If an actor is created with WASM VFS and later accessed via native VFS (or vice versa), metadata deserialization will fail silently or produce wrong file sizes. The WASM encoding is the production format, so native must align to it."
+    },
+    {
+      "id": "US-025",
+      "title": "Add cross-backend VFS compatibility driver tests",
+      "description": "As a developer, I need driver tests that verify data written by one VFS backend can be read by the other.",
+      "acceptanceCriteria": [
+        "Add a new test file in rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/ for cross-backend VFS compatibility",
+        "Test 1 (WASM-to-native): Create actor with WASM VFS, write data to DB, sleep the actor, recreate with native SQLite VFS, read and verify data matches",
+        "Test 2 (native-to-WASM): Create actor with native SQLite VFS, write data to DB, sleep the actor, recreate with WASM VFS, read and verify data matches",
+        "Tests should use the driver-file-system and driver-file-system-native-sqlite test configurations",
+        "Both tests pass when native SQLite addon is available",
+        "Tests are skipped gracefully when native SQLite addon is not available",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "These tests validate US-024 (metadata encoding fix) end-to-end. The tests need two different driver configurations: one forcing WASM VFS and one forcing native SQLite. The actor should write structured data (multiple rows, various types) to exercise chunk boundaries. Sleep/recreate cycle ensures data is flushed through KV and re-read from scratch."
+    },
+    {
+      "id": "US-026",
+      "title": "Wrap VFS callbacks in catch_unwind to prevent UB on panic",
+      "description": "As a developer, I need VFS callbacks to never unwind through C code, which is undefined behavior.",
+      "acceptanceCriteria": [
+        "All extern 'C' VFS callback functions in sqlite-native/src/vfs.rs are wrapped in std::panic::catch_unwind",
+        "On panic, callbacks return SQLITE_IOERR (or appropriate SQLite error code) instead of unwinding",
+        "Add a helper macro or function like vfs_callback_guard that wraps the callback body, catches panics, and returns the error code",
+        "Log caught panics via tracing::error with the panic message",
+        "Existing tests still pass",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "There are ~20 VFS callbacks that are extern C functions. Panics from slice::from_raw_parts, HashMap operations, or arithmetic can unwind through SQLite's C stack frames, which is UB. catch_unwind converts panics to a Result, then we return SQLITE_IOERR. Use AssertUnwindSafe wrapper since the callback closures capture mutable state."
+    },
+    {
+      "id": "US-027",
+      "title": "Use constant-time token comparison in guard KV channel routing",
+      "description": "As a developer, I need the KV channel auth token comparison to use constant-time comparison to prevent timing attacks.",
+      "acceptanceCriteria": [
+        "In engine/packages/guard/src/routing/kv_channel.rs, replace the != token comparison with a constant-time comparison",
+        "Use the subtle crate's ConstantTimeEq trait or equivalent",
+        "Add subtle as a workspace dependency if not already present",
+        "Also fix the same issue in engine/packages/guard/src/routing/runner.rs for consistency",
+        "cargo check passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "Both kv_channel.rs and runner.rs use regular != for token comparison. The TypeScript side already uses timingSafeEqual. The subtle crate is the standard Rust crate for constant-time operations."
+    },
+    {
+      "id": "US-028",
+      "title": "Stop leaking internal error details to KV channel clients",
+      "description": "As a developer, I need the KV channel server to return generic error messages instead of exposing internal error details.",
+      "acceptanceCriteria": [
+        "In engine/packages/pegboard-kv-channel/src/lib.rs, all error_response calls that pass internal error messages (err.to_string()) are changed to pass generic messages",
+        "Internal errors should log the full error via tracing::error with structured fields, then return a generic message like 'internal error' to the client",
+        "Specific, known error codes (actor_not_open, actor_locked, etc.) continue to return descriptive messages",
+        "Only internal_error responses get the generic treatment",
+        "cargo check passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "Lines 571, 578, 648, 687, 692, 728, 733, 756 in lib.rs currently pass err.to_string() which can expose stack traces, database error messages, and internal state. Log full errors server-side, return sanitized messages to clients."
+    },
+    {
+      "id": "US-029",
+      "title": "Replace string matching with concrete KV error types",
+      "description": "As a developer, I need typed KV error variants instead of string matching on error messages for error classification.",
+      "acceptanceCriteria": [
+        "Create a KV error enum in engine/packages/pegboard/src/ using the existing RivetError derive macro pattern",
+        "Add variants for: StorageQuotaExceeded (with remaining/payload size metadata), and any other classifiable KV errors",
+        "Update actor_kv::put() and related functions in engine/packages/pegboard/src/actor_kv/ to return the concrete error type instead of anyhow strings",
+        "Update engine/packages/pegboard-kv-channel/src/lib.rs to match on error variants instead of msg.contains('not enough space left in storage')",
+        "Update the TypeScript manager kv-channel.ts to use the same pattern (match on error type/code, not string contents)",
+        "cargo check passes",
+        "Typecheck passes"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "Currently only one location does string matching (storage quota in handle_kv_put). The codebase already has #[derive(RivetError)] infrastructure in engine/packages/error/. The existing pegboard errors at engine/packages/pegboard/src/errors.rs show the pattern. actor_kv/utils.rs line 79 defines the storage error as a format! string."
+    },
+    {
+      "id": "US-030",
+      "title": "Fix KV channel singleton lifecycle and disconnect cleanup",
+      "description": "As a developer, I need the native SQLite KV channel to be properly disconnected on process shutdown and recover from dead connections.",
+      "acceptanceCriteria": [
+        "In rivetkit-typescript/packages/rivetkit/src/db/native-sqlite.ts, ensure disconnect() is called during actor instance cleanup or process shutdown",
+        "Register a process shutdown handler (or hook into existing RivetKit shutdown) that calls kvChannel.disconnect()",
+        "Add health check: if the singleton kvChannel becomes unhealthy (WebSocket dies permanently), new database instances should recreate the channel instead of using the dead handle",
+        "Typecheck passes"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "Currently the singleton kvChannel at native-sqlite.ts:62 is created once and never cleaned up. The disconnect() function is exported but never called anywhere. On process shutdown, the WebSocket connection leaks without graceful close."
+    },
+    {
+      "id": "US-031",
+      "title": "Fix race condition in KV channel ping/pong and connection cleanup",
+      "description": "As a developer, I need the manager KV channel to handle concurrent connection state changes safely.",
+      "acceptanceCriteria": [
+        "In rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts, fix the ping/pong race condition where conn.ws could become null between the check and the send",
+        "In cleanupConnection, set conn.ws = null after cleanup to prevent use-after-close",
+        "Add null checks before all conn.ws.send() and conn.ws.close() calls",
+        "Typecheck passes"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": "In startPingPong (lines 84-105), between checking conn.closed and sending on conn.ws, the connection could be closed by onClose/onError handlers. cleanupConnection sets conn.closed = true but does NOT set conn.ws = null, leaving a stale reference."
+    },
+    {
+      "id": "US-032",
+      "title": "Add bounded capacity and TTL cleanup for KV channel lock tables",
+      "description": "As a developer, I need the KV channel lock tables to not grow unbounded when clients disconnect without cleanup.",
+      "acceptanceCriteria": [
+        "In engine/packages/pegboard-kv-channel/src/lib.rs, add a maximum actor limit per connection (e.g., 1000 actors) and reject ActorOpenRequest with an error if exceeded",
+        "In rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts, add periodic cleanup of stale lock entries where the owning connection is no longer alive",
+        "Add a sweep interval (e.g., every 60s) that iterates actorLocks and removes entries for dead connections",
+        "cargo check passes",
+        "Typecheck passes"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": "Engine side: actor_channels HashMap is unbounded, malicious client could exhaust memory. Manager side: if client disconnects without ActorCloseRequest, lock entries persist in actorLocks indefinitely until another connection opens the same actor."
+    },
+    {
+      "id": "US-033",
+      "title": "Propagate metadata write failures in native VFS",
+      "description": "As a developer, I need metadata write failures in the native VFS to be reported to SQLite instead of silently ignored.",
+      "acceptanceCriteria": [
+        "In sqlite-native/src/vfs.rs, all metadata kv_put calls that currently ignore errors should propagate failures as SQLITE_IOERR",
+        "Affected locations: xClose (meta flush), xSync (meta flush), xTruncate (meta update), xWrite (meta update)",
+        "If metadata write fails during xClose, log the error via tracing::error and return SQLITE_IOERR",
+        "If metadata write fails during xSync, return SQLITE_IOERR so SQLite knows the sync failed",
+        "Existing tests still pass",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": "Currently in vfs.rs lines 185-195, 384-395, 415-424, 472-481, metadata writes can fail but errors are silently ignored. The meta_dirty flag may be left in an inconsistent state. On close, if metadata wasn't persisted, the file size is lost."
+    },
+    {
+      "id": "US-034",
+      "title": "Replace eprintln with tracing in native SQLite addon",
+      "description": "As a developer, I need all logging in the native SQLite addon to use the tracing crate for structured logging.",
+      "acceptanceCriteria": [
+        "In rivetkit-typescript/packages/sqlite-native/src/channel.rs, replace all eprintln! calls with tracing::warn! or tracing::error! with structured fields",
+        "In rivetkit-typescript/packages/sqlite-native/src/lib.rs, replace any eprintln! calls with tracing equivalents",
+        "Add tracing as a dependency in rivetkit-typescript/packages/sqlite-native/Cargo.toml if not already present",
+        "Initialize a tracing subscriber in the native addon's runtime initialization (or document that the host process must initialize tracing)",
+        "Log messages are lowercase per CLAUDE.md conventions",
+        "Update CLAUDE.md to add guidance that all Rust code must use tracing for logging, never eprintln/println",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": "Multiple eprintln! calls in channel.rs (line 346, 447-450, 496) and potentially lib.rs violate CLAUDE.md structured logging requirements. CLAUDE.md should be updated to explicitly state: never use eprintln/println for logging in Rust code, always use tracing."
+    },
+    {
+      "id": "US-035",
+      "title": "Add prepared statement caching in native SQLite addon",
+      "description": "As a developer, I need the native SQLite addon to cache prepared statements to avoid re-parsing the same SQL on every call.",
+      "acceptanceCriteria": [
+        "In rivetkit-typescript/packages/sqlite-native/src/lib.rs, add an LRU cache for prepared statements keyed by SQL string",
+        "Cache size should be configurable with a reasonable default (e.g., 64 or 128 entries)",
+        "query() and execute() check the cache before calling sqlite3_prepare_v2",
+        "Cached statements are reset (sqlite3_reset + sqlite3_clear_bindings) before reuse",
+        "Statements are finalized when evicted from cache or when database is closed",
+        "Add a test verifying that repeated queries reuse cached statements",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": "Currently every query/execute call in lib.rs re-parses SQL via sqlite3_prepare_v2. For actors with repeated queries (common pattern), this adds unnecessary overhead. The cache should be on the Rust side since that's where sqlite3_prepare_v2 is called. Use an LRU cache (lru crate) to bound memory."
+    },
+    {
+      "id": "US-036",
+      "title": "URL-encode token in native SQLite WebSocket connection URL",
+      "description": "As a developer, I need the WebSocket connection URL to properly encode the auth token to prevent URL parsing issues.",
+      "acceptanceCriteria": [
+        "In rivetkit-typescript/packages/sqlite-native/src/channel.rs, URL-encode the token parameter when constructing the WebSocket URL",
+        "Use the urlencoding crate or percent-encode the token value",
+        "Add urlencoding as a dependency if needed",
+        "Tokens containing special characters (& = ? #) are properly escaped",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": "channel.rs lines 530-531 construct the WebSocket URL by string interpolation without encoding. If the token contains URL-special characters, the URL breaks."
+    },
+    {
+      "id": "US-037",
+      "title": "Fix connection ID overflow in engine KV channel",
+      "description": "As a developer, I need the connection ID counter to handle overflow safely instead of wrapping around.",
+      "acceptanceCriteria": [
+        "In engine/packages/pegboard-kv-channel/src/lib.rs, change the AtomicU64 connection ID counter to use checked_add or wrapping_add with explicit handling",
+        "If the counter wraps (extremely unlikely but technically possible), log a warning and continue with the wrapped value",
+        "Alternatively, use a UUID for connection IDs instead of a sequential counter to eliminate the overflow concern entirely",
+        "cargo check passes"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": "next_conn_id uses AtomicU64::fetch_add(1, Relaxed) which wraps on overflow after ~18 billion connections. If it wraps, two connections could have the same ID, causing lock table corruption. Using UUID eliminates this entirely."
     }
   ]
 }

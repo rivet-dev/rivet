@@ -28,6 +28,7 @@
 - Use `std::mem::transmute(-1isize)` to create the SQLITE_TRANSIENT destructor function pointer for `sqlite3_bind_text`/`sqlite3_bind_blob`.
 - ManagerDriver interface has 3 real implementations (FileSystem, Remote, Cloudflare) plus 2 stubs (test-inline-client-driver, manager-openapi-gen). All must be updated when changing the interface.
 - The actor gateway middleware in `gateway.ts` intercepts WebSocket upgrades. New non-actor WebSocket endpoints need an explicit skip (`c.req.path.endsWith(...)`).
+- `conn.disconnect()` in `handleAction`'s finally block is fire-and-forget (not awaited). The `pendingDisconnectCount` prevents the sleep timer from starting, but does NOT prevent `onStop` from running if sleep was already scheduled via `setImmediate`. Always wait for `pendingDisconnectCount === 0` before `#cleanupDatabase()` in the stop flow.
 - Engine crates: directory `engine/packages/{name}/`, add to both `[workspace.members]` and `[workspace.dependencies.{name}]` in root Cargo.toml.
 - For shared state across WebSocket connections in the guard, create the handler once in `create_routing_function` and clone the Arc per routing call.
 - Native addon detection: use try-catch around `require('@rivetkit/sqlite-native')`, cache the result. The `getRequireFn()` from `@/utils/node` provides a require function that works in both CJS and ESM.
@@ -459,4 +460,19 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - Review findings doc (NATIVE_SQLITE_REVIEW_FINDINGS.md) has a "Spec update needed" subsection in each finding that provides the exact wording to add.
   - Finding 2 (per-actor concurrency) explicitly says "No spec change needed" - it's implementation guidance only.
   - Finding 3 (thread pool exhaustion) is resolved by Finding 1, no separate spec change needed.
+---
+
+## 2026-03-18 - US-023
+- Fixed race condition where `onDisconnect` DB writes fail with "Database not enabled" when actor sleep races with pending disconnect handlers
+- Root cause: `startSleep()` uses `setImmediate(() => sleep())`. If an action arrives between `startSleep()` being called and the `setImmediate` callback firing, the action's `conn.disconnect()` starts an async `onDisconnect` handler. When the `setImmediate` fires, `sleepActor()` calls `onStop("sleep")` which runs `#cleanupDatabase()` (setting `#db = undefined`) without waiting for the pending disconnect handler. 250ms later, the handler tries `c.db.execute()` and gets "Database not enabled".
+- Fix: Added `#waitForPendingDisconnects()` in the `onStop` flow after `#disconnectConnections()`. This polls `connectionManager.pendingDisconnectCount` until it reaches 0 (with a 5 second timeout), ensuring all fire-and-forget disconnect handlers complete before the database is cleaned up.
+- Also added polling in the test assertion as a safety net for timing variance under load.
+- Files changed:
+  - `rivetkit-typescript/packages/rivetkit/src/actor/instance/mod.ts` - Added `#waitForPendingDisconnects()` method and call in `onStop`
+  - `rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts` - Added polling loop in disconnect test
+- **Learnings for future iterations:**
+  - `handleAction`'s finally block calls `conn.disconnect()` WITHOUT awaiting it. The returned Promise is fire-and-forget. This creates a window where disconnect handlers run outside the stop flow's awareness.
+  - `pendingDisconnectCount` prevents the sleep TIMER from starting, but does NOT prevent `onStop` from running if sleep was already deferred via `setImmediate`.
+  - To diagnose flaky tests, grep test logs for "error in `onDisconnect`" to find swallowed errors in disconnect handlers.
+  - The native SQLite KV channel is a process-level singleton connecting to `RIVET_ENDPOINT` (or `localhost:6420`). In tests, this connects to the dev server, not the test server.
 ---
