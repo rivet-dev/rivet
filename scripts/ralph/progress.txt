@@ -37,6 +37,8 @@
 - SQLite VACUUM fails with the KV VFS (temp file paths don't match file tag resolution). Use `PRAGMA journal_mode=truncate` to test xTruncate instead.
 - Rust 2021 captures struct fields individually in closures. A `Wrapper(*mut T)` with `unsafe impl Send` doesn't work if the closure accesses `.0`. Use `ptr as usize` / `usize as *mut T` instead.
 - napi async fn requires `JsNativeDatabase: Sync` because the future captures `&JsNativeDatabase` which must be `Send`.
+- `watch::Sender::subscribe()` creates a receiver starting at the current value. Use watch channels (not Notify) when the signal may arrive before the waiter registers.
+- For test gating, use `Semaphore::new(0)` + `add_permits(N)`. Avoids Notify race conditions and works regardless of waiter/signaler ordering.
 
 # Ralph Progress Log
 Started: Tue Mar 17 05:27:07 PM PDT 2026
@@ -382,4 +384,23 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The TypeScript manager is single-threaded (JS event loop), so lock eviction is inherently atomic. No mutex needed unlike the Rust engine implementation.
   - The existing `Map<string, KvChannelConnection>` already stores the full connection object including `openActors`, making it simpler than the engine's `HashMap<String, (u64, Arc<Mutex<HashSet<String>>>)>` approach.
   - Object identity comparison (`lockHolder !== conn`) in JS is equivalent to comparing connection IDs.
+---
+
+## 2026-03-17 - US-019
+- Implemented client-side reconnect waiting: KV requests block until ActorOpenResponse is received on reconnect
+- Added `reconnect_ready: HashMap<String, watch::Sender<bool>>` and `reconnect_request_ids: HashMap<u32, String>` to channel Inner struct
+- On reconnect, watch channels are created per actor. `send_request` subscribes and waits for `true` before sending KV requests.
+- Response handler routes reconnect ActorOpenResponses to mark actors ready. On error, removes actor from open_actors and drops sender (waiters get RecvError -> ConnectionClosed).
+- Initial open (first connection) remains optimistic: no reconnect_ready entries, so send_request proceeds immediately.
+- `fail_all_in_flight` also clears reconnect state on disconnect.
+- Refactored mock server to concurrent message processing (spawned tasks per message, mpsc channel for response writing) to properly test client-side waiting.
+- Added semaphore-based gate to mock server's ActorOpenRequest handler for testing.
+- Added `test_reconnect_kv_waits_for_open_response` test that verifies KV requests are blocked while reconnect open is gated, then succeed after gate release.
+- All 75 tests pass (62 unit + 13 integration), cargo check clean.
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/{channel.rs, integration_tests.rs}
+- **Learnings for future iterations:**
+  - `watch::Sender::subscribe()` creates a new receiver starting with the current value. If `true` was already sent, the new receiver sees it immediately. This avoids the Notify race where notification can be missed if the waiter registers after the signal.
+  - Concurrent mock server (spawned tasks per message) is needed to properly test client-side waiting. Sequential processing masks the behavior because the server blocks on the open regardless.
+  - `tokio::sync::Semaphore::new(0)` with `add_permits(N)` is a clean gate mechanism for tests. The semaphore blocks `acquire()` until permits are added, and the order of operations doesn't matter (unlike Notify).
+  - The `!kv_handle.is_finished()` assertion distinguishes client-side waiting from server-side blocking only when the mock server processes messages concurrently.
 ---

@@ -346,7 +346,7 @@
         "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 4 'Client-side change' section. This prevents a race where the client sends KV requests before the server has processed the re-open and transferred the lock. The initial open remains optimistic because there's no stale lock to evict on first connection."
     },
     {
