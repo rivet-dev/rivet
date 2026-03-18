@@ -33,6 +33,8 @@
 - Native addon detection: use try-catch around `require('@rivetkit/sqlite-native')`, cache the result. The `getRequireFn()` from `@/utils/node` provides a require function that works in both CJS and ESM.
 - `sqlite3_prepare_v2` with non-null tail pointer iterates through multi-statement SQL. Loop until stmt is null or tail reaches end.
 - KV channel WebSocket URL: replace `http://`→`ws://`, `https://`→`wss://` in RIVET_ENDPOINT and append `/kv/connect`.
+- VFS integration tests must use `#[test]` not `#[tokio::test]` because VFS callbacks use `Handle::block_on()` which panics inside async contexts.
+- SQLite VACUUM fails with the KV VFS (temp file paths don't match file tag resolution). Use `PRAGMA journal_mode=truncate` to test xTruncate instead.
 
 # Ralph Progress Log
 Started: Tue Mar 17 05:27:07 PM PDT 2026
@@ -306,4 +308,32 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - `EXCLUDED_RIVETKIT_PACKAGES` excludes from both build AND publish. For native addons that need separate builds but still need publishing, use a separate exclusion list for the build step only.
   - Platform npm packages under `npm/` are NOT in the pnpm workspace. They must be published via `npm publish` directly from their directory, not via `pnpm --filter`.
   - The optionalDependencies in the main package.json pin exact versions of platform packages. These must be bumped alongside the platform package versions.
+---
+
+## 2026-03-17 - US-015
+- Implemented integration test module with mock WebSocket KV server (12 tests, 920 lines)
+- Mock server: in-process WebSocket server with BTreeMap-backed KV store per actor, single-writer locks, BARE protocol handling, operation logging, and broadcast-based connection killing for reconnection tests
+- Tests cover all acceptance criteria:
+  - test_basic_sql_through_vfs: xRead/xWrite through SQLite CREATE TABLE/INSERT/SELECT, verifies chunk 0 and metadata keys in KV store
+  - test_multi_chunk_data: inserts enough data to span 2+ chunks, verifies sequential chunk indices and file size
+  - test_chunk_boundary_data_integrity: 50 rows with 500-char payloads, verifies data reads back identically across chunk boundaries
+  - test_truncate_produces_delete_range: PRAGMA journal_mode=truncate, verifies DeleteRange ops with correct SQLITE_PREFIX/CHUNK_PREFIX format
+  - test_delete_journal_produces_correct_ranges: default journal_mode=delete, verifies DeleteRange bounds match chunk_key(JOURNAL, 0)..chunk_key_range_end(JOURNAL)
+  - test_metadata_tracks_file_size: verifies decoded metadata shows page-aligned file size >= 4096
+  - test_close_flushes_and_reopen_preserves_data: write, close, reopen actor, verify data persists (metadata flushed on xClose)
+  - test_file_tags_encoding: verifies main and journal file tags appear in correct byte positions in KV keys
+  - test_error_actor_not_open: KV request without opening actor returns actor_not_open error
+  - test_error_actor_locked: second channel opening same actor returns actor_locked error
+  - test_optimistic_open_pipelining: 5 concurrent KV requests succeed with correct request correlation
+  - test_reconnection_reopens_actors: force-close connection, wait for reconnect, verify data persists and actor reopened >= 2 times
+- All 74 tests pass (62 existing + 12 new), cargo test completes in ~3.5s
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/{integration_tests.rs (new), lib.rs}
+- **Learnings for future iterations:**
+  - VFS callbacks use `Handle::block_on()` which panics inside async contexts. Integration tests must use `#[test]` (not `#[tokio::test]`) with manual `Runtime::new()` and call VFS operations from the test thread (outside `rt.block_on`).
+  - Drop order matters: NativeDatabase must be dropped before Runtime, since xClose calls Handle::block_on. Rust's reverse-declaration-order drop ensures this when db is declared after rt.
+  - `tokio::sync::broadcast` is useful for signaling connection kills in mock servers. Each connection handler subscribes and breaks from its read loop when the signal fires.
+  - BTreeMap's `range(start..end)` implements the same half-open `[start, end)` semantics as the KV channel's deleteRange, making mock server implementation straightforward.
+  - SQLite VACUUM fails with the KV VFS because it creates temporary files with paths that don't match the VFS's file tag resolution (main, -journal, -wal, -shm). Use PRAGMA journal_mode=truncate to test xTruncate instead.
+  - `tokio_tungstenite::accept_async` accepts any WebSocket upgrade regardless of URL path, so mock servers don't need HTTP routing.
+  - Each test uses a unique VFS name via AtomicU64 counter to avoid SQLite global VFS registry conflicts in parallel test runs.
 ---

@@ -279,7 +279,7 @@
         "cargo test passes from within rivetkit-typescript/packages/sqlite-native/"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Testing' section (lines 548-579). Layer 1 tests only. Layer 2 (driver test suite) already exists and will test native SQLite transparently when the addon is available."
     }
   ]
