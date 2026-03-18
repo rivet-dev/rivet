@@ -532,6 +532,14 @@ export class ActorInstance<
 			// Disconnect non-hibernatable connections
 			await this.#disconnectConnections();
 
+			// Wait for any fire-and-forget disconnect handlers to complete.
+			// handleAction calls conn.disconnect() without awaiting it, so the
+			// onDisconnect callback may still be running when the stop flow
+			// begins (e.g. when setImmediate-deferred sleep races with an
+			// incoming action). Without this wait, #cleanupDatabase could set
+			// #db to undefined while an onDisconnect handler still needs it.
+			await this.#waitForPendingDisconnects();
+
 			// Wait for background tasks
 			await this.#waitBackgroundPromises(
 				this.overrides.waitUntilTimeout !== undefined
@@ -1617,6 +1625,48 @@ export class ActorInstance<
 		if (res) {
 			this.#rLog.warn({
 				msg: "timed out waiting for connections to close, shutting down anyway",
+			});
+		}
+	}
+
+	async #waitForPendingDisconnects() {
+		const count = this.connectionManager.pendingDisconnectCount;
+		if (count === 0) {
+			return;
+		}
+
+		this.#rLog.debug({
+			msg: "waiting for pending disconnect callbacks",
+			count,
+		});
+
+		const timedOut = await Promise.race([
+			new Promise<false>((resolve) => {
+				const check = () => {
+					if (
+						this.connectionManager.pendingDisconnectCount === 0
+					) {
+						resolve(false);
+					} else {
+						setTimeout(check, 10);
+					}
+				};
+				check();
+			}),
+			new Promise<true>((resolve) =>
+				setTimeout(() => resolve(true), 5_000),
+			),
+		]);
+
+		if (timedOut) {
+			this.#rLog.warn({
+				msg: "timed out waiting for pending disconnect callbacks",
+				remaining:
+					this.connectionManager.pendingDisconnectCount,
+			});
+		} else {
+			this.#rLog.debug({
+				msg: "all pending disconnect callbacks completed",
 			});
 		}
 	}
