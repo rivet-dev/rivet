@@ -329,7 +329,7 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 4. Mirror the same eviction logic as US-017 but in TypeScript for the manager. The manager runs single-process so no multi-server concerns."
     },
     {

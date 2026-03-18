@@ -370,3 +370,16 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - Eviction under the `actor_locks` mutex is atomic. The old connection's fast-path check (`open_actors.contains`) fails immediately after eviction. No global lock check on the KV hot path.
   - Pre-existing build errors in guard crate (proxy.rs, websocket.rs, custom_serve.rs) are unrelated to pegboard-kv-channel changes. Use `cargo check -p pegboard-kv-channel` for targeted verification.
 ---
+
+## 2026-03-17 - US-018
+- Updated `handleActorOpen` in manager kv-channel.ts to unconditionally evict old connection locks on re-open
+- When a different connection opens the same actor, the old connection's `openActors` set has the actor removed, causing its next KV request to fail with `actor_not_open`
+- The lock is transferred to the new connection atomically (JS single-threaded, no race window)
+- `cleanupConnection` already correctly checks `actorLocks.get(actorId) === conn` before deleting, so evicted locks are not double-freed
+- No structural change to the lock map needed since `Map<string, KvChannelConnection>` already stores the connection reference (which includes `openActors`)
+- Files changed: rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts
+- **Learnings for future iterations:**
+  - The TypeScript manager is single-threaded (JS event loop), so lock eviction is inherently atomic. No mutex needed unlike the Rust engine implementation.
+  - The existing `Map<string, KvChannelConnection>` already stores the full connection object including `openActors`, making it simpler than the engine's `HashMap<String, (u64, Arc<Mutex<HashSet<String>>>)>` approach.
+  - Object identity comparison (`lockHolder !== conn`) in JS is equivalent to comparing connection IDs.
+---
