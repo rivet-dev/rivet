@@ -396,7 +396,7 @@
         "No typecheck needed (markdown file)"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md for the exact wording of all spec updates needed. Finding 1 requires async API signatures. Finding 4 requires eviction semantics, multi-server notes, and reconnect wait requirement."
     }
   ]

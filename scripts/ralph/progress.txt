@@ -447,3 +447,16 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - `send_actor_kv_error` and `send_actor_kv_error_mk1` take `&Conn` which works with `&Arc<Conn>` via auto-deref. No changes needed to these helper functions.
   - The mk1 KV error response for actor_id parse failure was previously inline-constructed. Simplified to use `send_actor_kv_error_mk1` in the extracted function since it produces identical output.
 ---
+
+## 2026-03-17 - US-022
+- Updated docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md with all review findings from NATIVE_SQLITE_REVIEW_FINDINGS.md
+- JavaScript Bindings section: changed `execute`, `query` signatures to return `Promise<...>`, added `exec` function, added threading note about `spawn_blocking` and `Handle::block_on()`
+- Single-Writer Lock Semantics section: added "Unconditional lock eviction on reconnect" paragraph covering same-server eviction and multi-server deployment behavior
+- Reconnect Behavior section: added note that client must wait for `ActorOpenResponse` before sending KV requests on reconnect (initial open remains optimistic)
+- Files changed: docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md
+- **Learnings for future iterations:**
+  - The spec doc is a markdown file with no typecheck or build step. Changes are purely textual.
+  - Review findings doc (NATIVE_SQLITE_REVIEW_FINDINGS.md) has a "Spec update needed" subsection in each finding that provides the exact wording to add.
+  - Finding 2 (per-actor concurrency) explicitly says "No spec change needed" - it's implementation guidance only.
+  - Finding 3 (thread pool exhaustion) is resolved by Finding 1, no separate spec change needed.
+---
