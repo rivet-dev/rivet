@@ -1,0 +1,179 @@
+## Codebase Patterns
+- BARE schema files live in engine/sdks/schemas/{protocol-name}/v{N}.bare with no build step. They are plain text schemas.
+- Use MARK comments (# MARK: Section) to organize sections in BARE schemas, matching runner-protocol conventions.
+- The runner-protocol directory only has .bare files (no .ts or codegen in the same dir). TypeScript versioned handlers are separate.
+- KV types in kv-channel-protocol mirror runner-protocol KV types but omit KvListRequest, KvDropRequest, and KvMetadata.
+- TypeScript protocol packages live in engine/sdks/typescript/{protocol-name}/ with package.json, tsconfig.json, tsup.config.ts, and src/index.ts.
+- The runner-protocol TS is auto-generated from BARE via build.rs; kv-channel-protocol is hand-written following the same read/write/encode/decode pattern.
+- BARE void types in unions are represented as `null` values (no read/write call needed, just the tag byte).
+- New pnpm workspace packages must be added to pnpm-workspace.yaml.
+- The driver already has `kvDeleteRange(actorId, start, end)` on the actor driver interface. Wire it through `DatabaseProviderContext.kv` when adding KV range operations.
+- `deleteRange` uses half-open `[start, end)` semantics everywhere (driver, file-system global-state, KV instance).
+- For chunk key range bounds, use `getChunkKeyRangeEnd(fileTag)` which returns a 4-byte key `[PREFIX, VERSION, CHUNK_PREFIX, fileTag+1]` that is lexicographically past all 8-byte chunk keys for that fileTag.
+- The sqlite-native crate is NOT in the root Cargo workspace. It has its own `[workspace]` table in Cargo.toml to prevent auto-discovery. Run `cargo check` from within `rivetkit-typescript/packages/sqlite-native/`.
+- napi-rs v2 is used for the native addon. `crate-type = ["cdylib"]`, `napi-build` in build-dependencies, `napi`+`napi-derive` in dependencies.
+- Platform npm packages under `npm/` follow naming: `@rivetkit/sqlite-native-{platform}` with `os`/`cpu` constraints.
+- serde_bare `#[derive(Serialize, Deserialize)]` on enums produces byte-compatible BARE unions. Variant order must match schema tag order. Unit variants = void types, newtype variants = struct types.
+- `tokio::spawn` requires `Send + 'static` on captured types. When using generic stream/sink types with `tokio::spawn`, add those bounds explicitly.
+- `futures-util` is needed for `SinkExt`/`StreamExt` traits when working with `tokio-tungstenite` WebSocket streams (split, next, send).
+- Reconnect backoff constants: initial=1000ms, max=30000ms, multiplier=2, jitter=0-25%. Matches `engine/sdks/typescript/runner/src/utils.ts`.
+- libsqlite3-sys (bundled) exports `sqlite3_close` not `sqlite3_close_v2`. Use `sqlite3_close` for closing databases.
+- Use `std::mem::zeroed()` to initialize `sqlite3_vfs` and `sqlite3_io_methods` structs, then set individual fields. This avoids needing to know the exact types of optional v2+/v3+ fields.
+- File metadata encoding: 1 byte version (0x01) + 8 bytes u64 LE size = 9 bytes total. Must be byte-identical to WASM VFS vbare serialization.
+- VFS callbacks are sync C functions. Bridge to async KV channel via `rt_handle.block_on()`. Must not be called from within a tokio async context.
+
+# Ralph Progress Log
+Started: Tue Mar 17 05:27:07 PM PDT 2026
+---
+
+## 2026-03-17 17:28 - US-001
+- Created engine/sdks/schemas/kv-channel-protocol/v1.bare with all 23 required types
+- Schema matches the spec doc (docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md lines 86-233) exactly
+- Files changed: engine/sdks/schemas/kv-channel-protocol/v1.bare (new)
+- **Learnings for future iterations:**
+  - BARE schemas in this repo are plain text files with no build/typecheck step
+  - runner-protocol uses hard tabs for indentation inside struct/union bodies
+  - The kv-channel-protocol is a simpler subset of runner-protocol KV types (no list, drop, metadata)
+  - Schema sections are organized with # MARK: comments
+---
+
+## 2026-03-17 - US-002
+- Created @rivetkit/engine-kv-channel-protocol TypeScript package at engine/sdks/typescript/kv-channel-protocol/
+- Hand-wrote all BARE types and read/write/encode/decode functions matching v1.bare schema exactly
+- Exports: PROTOCOL_VERSION, all types (Id, KvKey, KvValue, RequestData, ResponseData, ToServer, ToClient, etc.), encodeToServer, decodeToServer, encodeToClient, decodeToClient, plus read/write functions for ToServer and ToClient
+- Added package to pnpm-workspace.yaml
+- Files changed: engine/sdks/typescript/kv-channel-protocol/{package.json, tsconfig.json, tsup.config.ts, src/index.ts} (new), pnpm-workspace.yaml (modified)
+- **Learnings for future iterations:**
+  - Runner-protocol TS is auto-generated via build.rs calling bare-ts compiler, but hand-writing is fine for simpler protocols
+  - The bare-ts API: readU8/writeU8 for union tags, readU32/writeU32 for u32, readI64/writeI64 for i64, readString/writeString for str, readData/writeData for data, readUintSafe/writeUintSafe for list lengths
+  - Package version should match other @rivetkit packages (2.1.6 currently)
+  - tsup.config.ts extends ../../../../tsup.base and tsconfig.json extends ../../../../tsconfig.base.json
+---
+
+## 2026-03-17 17:40 - US-003
+- Added `deleteRange(start, end)` to `KvVfsOptions` interface in `types.ts`
+- Added `getChunkKeyRangeEnd(fileTag)` helper to `kv.ts` for constructing exclusive end bounds
+- Migrated `xTruncate` from enumerating chunks + `deleteBatch` to O(1) `deleteRange`
+- Migrated `#delete` from enumerating chunks + `deleteBatch` to O(1) `deleteRange` + single `deleteBatch([metaKey])`
+- Added `deleteRange` to `DatabaseProviderContext.kv` in `config.ts` and wired through `mod.ts`
+- Updated `createActorKvStore` in `shared.ts` to delegate to `kv.deleteRange`
+- Updated test `createKvStore` in `sqlite-vfs.test.ts` with in-memory range delete implementation
+- All 8 sqlite-vfs tests pass
+- Files changed: sqlite-vfs/src/{types.ts, kv.ts, vfs.ts}, rivetkit/src/db/{config.ts, shared.ts}, rivetkit/src/actor/instance/mod.ts, sqlite-vfs-test/tests/sqlite-vfs.test.ts
+- **Learnings for future iterations:**
+  - The actor driver already exposes `kvDeleteRange` - no need to add it to the driver interface
+  - `DatabaseProviderContext.kv` is the bridge between the driver and the VFS. New KV operations must be added here and in `mod.ts` where the context is constructed
+  - Pre-existing typecheck errors in rivetkit (vitest imports, sandbox module, fixture types) are not blockers
+  - The `getChunkKeyRangeEnd` helper uses a shorter key (4 bytes vs 8) that is still lexicographically greater than any chunk key for the same fileTag due to byte comparison semantics
+---
+
+## 2026-03-17 - US-004
+- Added PRAGMA page_size = 4096 and PRAGMA busy_timeout = 5000 after sqlite3.open_v2() in SqliteVfs.open()
+- Updated comment to reference native VFS and spec doc, removed stale TODO about PRAGMA benchmarking
+- PRAGMAs run inside sqliteMutex to stay consistent with other sqlite3 calls
+- Files changed: rivetkit-typescript/packages/sqlite-vfs/src/vfs.ts
+- **Learnings for future iterations:**
+  - sqlite3.exec(handle, sql) is the way to run PRAGMA statements on the raw WASM SQLite handle
+  - All sqlite3 operations must be wrapped in the sqliteMutex to avoid concurrent access issues
+  - page_size=4096 matches CHUNK_SIZE, busy_timeout=5000 matches the file-system driver default
+  - WAL mode is intentionally not enabled for KV-backed SQLite
+---
+
+## 2026-03-17 - US-005
+- Created rivetkit-typescript/packages/sqlite-native/ package scaffold
+- Cargo.toml with napi-rs v2, libsqlite3-sys (bundled), tokio, tokio-tungstenite, serde, serde_bare
+- package.json for @rivetkit/sqlite-native with napi-rs config for 5 platform targets
+- build.rs with napi_build::setup()
+- src/lib.rs with mod declarations for kv, protocol, channel, vfs
+- src/kv.rs, src/protocol.rs, src/channel.rs, src/vfs.rs as empty modules with doc comments
+- npm/ directory with 5 platform packages: linux-x64-gnu, linux-arm64-gnu, darwin-x64, darwin-arm64, win32-x64-msvc
+- Crate excluded from root Cargo workspace via empty [workspace] table
+- cargo check passes cleanly from within rivetkit-typescript/packages/sqlite-native/
+- Files changed: rivetkit-typescript/packages/sqlite-native/{Cargo.toml, Cargo.lock, build.rs, package.json, src/lib.rs, src/kv.rs, src/protocol.rs, src/channel.rs, src/vfs.rs, npm/*/package.json} (all new)
+- **Learnings for future iterations:**
+  - Rust crates outside the Cargo workspace need `[workspace]` in their own Cargo.toml to prevent cargo from trying to find the root workspace
+  - napi-rs v2 uses `napi-build = "2"` in build-dependencies with `extern crate napi_build; fn main() { napi_build::setup(); }` in build.rs
+  - The `#[macro_use] extern crate napi_derive;` pattern is not needed if no `#[napi]` attributes are used yet in stubs
+  - libsqlite3-sys v0.30 with `bundled` feature compiles and links SQLite statically
+  - serde_bare v0.5 provides BARE serialization for Rust structs
+  - edition 2021 is used for compatibility with napi-rs v2
+---
+
+## 2026-03-17 - US-006
+- Implemented kv.rs with all constants, key functions, and 14 unit tests
+- Constants: CHUNK_SIZE, SQLITE_PREFIX, SQLITE_SCHEMA_VERSION, META_PREFIX, CHUNK_PREFIX, FILE_TAG_MAIN/JOURNAL/WAL/SHM
+- Functions: get_meta_key, get_chunk_key, get_chunk_key_range_end
+- All tests verify byte-identical output to TypeScript kv.ts implementation
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/kv.rs
+- **Learnings for future iterations:**
+  - The Rust kv.rs uses fixed-size arrays ([u8; 4] and [u8; 8]) instead of Vec, which is more efficient and matches the known key sizes
+  - get_chunk_key_range_end returns [u8; 4] not [u8; 8], and lexicographic comparison of [8,1,1,1] > [8,1,1,0,FF,FF,FF,FF] works because byte 3 differs (1 > 0)
+  - u32::to_be_bytes() gives the same encoding as TypeScript's manual bit shifting (>>> 24, >>> 16, etc.)
+---
+
+## 2026-03-17 - US-007
+- Implemented protocol.rs with all BARE types from v1.bare schema using serde_bare derive macros
+- Defined: Id, KvKey, KvValue, KvGetRequest, KvPutRequest, KvDeleteRequest, KvDeleteRangeRequest, ErrorResponse, KvGetResponse, RequestData (enum), ResponseData (enum), ToServerRequest, ToServerPong, ToServer (enum), ToClientResponse, ToClientPing, ToClient (enum)
+- Added encode/decode functions: encode_to_server, decode_to_server, encode_to_client, decode_to_client
+- 28 tests: 18 round-trip tests for every message variant, 7 cross-language byte compatibility tests verifying exact output matches TypeScript, 3 decode error tests
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/protocol.rs
+- **Learnings for future iterations:**
+  - serde_bare with `#[derive(Serialize, Deserialize)]` produces byte-identical output to the hand-written TypeScript BARE encoder for this protocol
+  - BARE union tags are encoded as varints by serde_bare, which for values 0-127 are single bytes identical to the TypeScript u8 tags
+  - Enum variant ORDER must match the BARE schema union tag order exactly. serde_bare uses positional variant indices, not names
+  - The runner-protocol generated code (vbare_compiler) uses the same pattern: unit variants for void types, newtype variants for struct types
+  - Void BARE types in unions become unit enum variants with no data (just the tag byte on wire)
+  - Vec<u8> in serde_bare encodes identically to BARE `data` (varint length + raw bytes)
+---
+
+## 2026-03-17 - US-008
+- Implemented channel.rs with full WebSocket KV channel client
+- KvChannel struct with connect(), send_request(), open_actor(), close_actor(), disconnect()
+- Request correlation via requestId -> oneshot channel map
+- requestId counter (u32, wrapping, resets to 0 on reconnect)
+- Exponential backoff reconnect: initial=1000ms, max=30000ms, multiplier=2, jitter=0-25%
+- On reconnect, re-sends ActorOpenRequest for all open actors (optimistic, no wait)
+- On disconnect, fails all in-flight requests with ConnectionClosed error
+- Handles ToClientPing by responding with ToServerPong (echoes timestamp)
+- Handles ToClientClose by breaking read loop to trigger reconnect
+- 30-second timeout per KV operation (KV_EXPIRE = 30_000ms)
+- Background connection loop via tokio::spawn with watch channel for shutdown
+- Read/write split: read loop in main task, write forwarding in spawned task
+- Added futures-util dependency to Cargo.toml for SinkExt/StreamExt traits
+- 12 unit tests covering URL building, backoff calculation, error display, and constants
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/channel.rs, Cargo.toml, Cargo.lock
+- **Learnings for future iterations:**
+  - Generic stream/sink types moved into `tokio::spawn` need `Send + 'static` bounds
+  - `futures-util` is required for `SinkExt`/`StreamExt` on tokio-tungstenite streams
+  - `watch::Sender::subscribe()` creates a new receiver that can be moved into spawned tasks (avoids lifetime issues with `&mut` borrows)
+  - For pseudo-random jitter without adding `rand` dependency, nanosecond component of system time works well enough for backoff purposes
+  - Optimistic re-open after reconnect: send ActorOpenRequest messages before storing outgoing_tx, so they get buffered in the mpsc channel and forwarded first by the write task
+  - `Message::Binary(bytes.into())` works regardless of whether tungstenite expects `Vec<u8>` or `Bytes`
+---
+
+## 2026-03-17 - US-009
+- Implemented complete custom SQLite VFS in vfs.rs (~1000 lines) backed by KV operations via the channel
+- VFS callbacks: xOpen, xClose, xRead, xWrite, xTruncate, xDelete, xSync, xFileSize, xAccess, xLock/xUnlock (no-op), xFullPathname, xRandomness, xSleep, xCurrentTime, xGetLastError, xCheckReservedLock, xFileControl, xSectorSize, xDeviceCharacteristics
+- xRead: batch-fetch chunk keys via KvGetRequest, HashMap-based lookup for robust key matching, handles partial chunks and short reads
+- xWrite: prefetch partial chunks if needed, batch-write via KvPutRequest, includes metadata in write batch when dirty
+- xTruncate: KvDeleteRangeRequest for chunks beyond truncation point, optional partial chunk rewrite, metadata update
+- xDelete: KvDeleteRangeRequest for all chunks + KvDeleteRequest for metadata key
+- xSync: flush dirty metadata via KvPutRequest
+- xOpen: resolve file path to file tag (main/journal/wal/shm), load existing metadata or create new file
+- xClose: flush dirty metadata, handle SQLITE_OPEN_DELETEONCLOSE
+- Metadata encoding: [version_u8, size_u64_le] = 9 bytes, byte-identical to WASM VFS vbare format
+- VfsContext struct with sync KV helper methods (kv_get, kv_put, kv_delete, kv_delete_range)
+- KvVfs public struct with register/drop lifecycle, auto-unregisters on drop
+- NativeDatabase struct that owns both the database handle and VFS registration
+- open_database helper that applies PRAGMA page_size=4096 and busy_timeout=5000
+- 7 unit tests for metadata encoding/decoding and struct sizing
+- All 62 tests pass, cargo check clean
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/vfs.rs
+- **Learnings for future iterations:**
+  - libsqlite3-sys (bundled) exports `sqlite3_close` not `sqlite3_close_v2`
+  - Use `std::mem::zeroed()` to initialize `sqlite3_vfs` and `sqlite3_io_methods`, then set fields individually to avoid type issues with optional v2+/v3+ fields like xShmMap
+  - VFS context stored in `pAppData` as a leaked Box pointer. IO methods stored in the context as a Box. Both outlive all files.
+  - File path to tag resolution: exact match for main, suffix match for -journal/-wal/-shm using strip_prefix
+  - KvGetResponse may only return found keys. Use HashMap-based lookup (build_value_map) for robust matching instead of positional indexing
+  - The sqlite3_file struct must be extended via `#[repr(C)]` with `base: sqlite3_file` as the first field and `szOsFile` set to the full struct size
+---

@@ -1,0 +1,286 @@
+{
+  "project": "Native SQLite via KV Channel Protocol",
+  "branchName": "ralph/native-sqlite-kv-channel",
+  "description": "Replace WASM-based SQLite with a native Rust SQLite binary (napi-rs addon) that routes page-level KV operations over a new WebSocket KV channel protocol. Includes WASM VFS improvements, protocol schema, native addon, server-side endpoints, and integration.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create KV channel protocol BARE schema (v1.bare)",
+      "description": "As a developer, I need the KV channel protocol schema defined so that both client and server can serialize/deserialize messages.",
+      "acceptanceCriteria": [
+        "Create directory engine/sdks/schemas/kv-channel-protocol/",
+        "Create v1.bare with all types from docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md 'Schema' section (lines 86-233)",
+        "Types include: Id, ActorOpenRequest, ActorCloseRequest, ActorOpenResponse, ActorCloseResponse, KvKey, KvValue, KvGetRequest, KvPutRequest, KvDeleteRequest, KvDeleteRangeRequest, RequestData union, ErrorResponse, KvGetResponse, KvPutResponse, KvDeleteResponse, ResponseData union, ToServerRequest, ToServerPong, ToServer union, ToClientResponse, ToClientPing, ToClientClose, ToClient union",
+        "Schema follows same file structure as runner-protocol/v7.bare (with MARK comments for sections)",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reference engine/sdks/schemas/runner-protocol/v7.bare for BARE schema conventions. The KV types mirror runner protocol KV types but omit KvListRequest, KvDropRequest, and KvMetadata."
+    },
+    {
+      "id": "US-002",
+      "title": "Create KV channel protocol TypeScript versioned handler",
+      "description": "As a developer, I need TypeScript code to handle versioned BARE serialization/deserialization of KV channel protocol messages.",
+      "acceptanceCriteria": [
+        "Create engine/sdks/schemas/kv-channel-protocol/versioned.ts following the same pattern as runner-protocol's versioned TypeScript",
+        "Generate or hand-write TypeScript types from v1.bare schema",
+        "Export serialize/deserialize functions for ToServer and ToClient message types",
+        "Include protocol version constant (PROTOCOL_VERSION = 1)",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Follow the VBARE versioning pattern from engine/sdks/schemas/runner-protocol/. Check how runner-protocol/versioned.ts handles version embedding."
+    },
+    {
+      "id": "US-003",
+      "title": "Add deleteRange to WASM VFS KvVfsOptions and migrate xTruncate/xDelete",
+      "description": "As a developer, I need the WASM VFS to use deleteRange for efficient O(1) chunk deletion instead of enumerating individual chunk keys.",
+      "acceptanceCriteria": [
+        "Add deleteRange(start: Uint8Array, end: Uint8Array): Promise<void> to KvVfsOptions interface in rivetkit-typescript/packages/sqlite-vfs/src/types.ts",
+        "Update xTruncate in vfs.ts to use deleteRange instead of deleteBatch for chunks beyond truncation point",
+        "Update #delete in vfs.ts to use deleteRange instead of enumerating chunk keys",
+        "The range for deleteRange should cover all chunk keys for the file tag being deleted (chunk keys are lexicographically contiguous due to fixed prefix + big-endian chunk index)",
+        "Update all implementations of KvVfsOptions to include deleteRange (check rivetkit-typescript/packages/rivetkit/src/db/shared.ts createActorKvStore function)",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md lines 436-446 for migration plan. The runner protocol already has KvDeleteRangeRequest. The VFS chunk keys use [SQLITE_PREFIX, SCHEMA_VERSION, CHUNK_PREFIX, FILE_TAG, chunk_index_u32_be] layout, so a range from chunk 0 to chunk MAX covers all chunks for a file tag."
+    },
+    {
+      "id": "US-004",
+      "title": "Add PRAGMA settings to WASM VFS open method",
+      "description": "As a developer, I need the WASM VFS to set PRAGMA busy_timeout and page_size after opening a database for KV-backed SQLite consistency.",
+      "acceptanceCriteria": [
+        "After sqlite3.open_v2() in SqliteVfs.open() method in vfs.ts, execute PRAGMA busy_timeout = 5000 and PRAGMA page_size = 4096",
+        "Add comment referencing native VFS (rivetkit-typescript/packages/sqlite-native/src/vfs.rs) and spec doc for sync requirement",
+        "Remove or update the existing TODO comment about PRAGMA tuning",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md lines 414-429. busy_timeout=5000 matches the file-system driver. page_size=4096 matches CHUNK_SIZE. WAL mode is NOT enabled for KV-backed SQLite."
+    },
+    {
+      "id": "US-005",
+      "title": "Create sqlite-native package scaffold",
+      "description": "As a developer, I need the @rivetkit/sqlite-native package structure set up with Cargo.toml, package.json, build.rs, and platform-specific npm packages.",
+      "acceptanceCriteria": [
+        "Create rivetkit-typescript/packages/sqlite-native/ directory",
+        "Create Cargo.toml with napi-rs, libsqlite3-sys (bundled feature), tokio, tungstenite, serde, and bare-ts or serde-bare dependencies",
+        "Create package.json for @rivetkit/sqlite-native with napi-rs build scripts and optional dependencies on platform packages",
+        "Create build.rs for napi-rs",
+        "Create src/lib.rs with mod declarations for kv, protocol, channel, vfs (empty stub modules that compile)",
+        "Create src/kv.rs, src/protocol.rs, src/channel.rs, src/vfs.rs as empty modules with placeholder comments",
+        "Create npm/ directory with platform package.json files for: linux-x64-gnu, linux-arm64-gnu, darwin-x64, darwin-arm64, win32-x64-msvc",
+        "The crate must NOT be added to the root Cargo workspace (it has its own Cargo.toml with napi-rs deps)",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Rust Project Structure' section (lines 585-619). Follow napi-rs conventions. The crate statically links libsqlite3-sys with bundled feature. Platform packages follow @napi-rs/cli naming conventions."
+    },
+    {
+      "id": "US-006",
+      "title": "Implement sqlite-native kv.rs (KV key layout)",
+      "description": "As a developer, I need the Rust KV key layout module that produces byte-identical keys to the TypeScript implementation.",
+      "acceptanceCriteria": [
+        "Implement constants in kv.rs: CHUNK_SIZE=4096, SQLITE_PREFIX=0x08, SQLITE_SCHEMA_VERSION=0x01, META_PREFIX=0x00, CHUNK_PREFIX=0x01",
+        "Implement file tag constants: FILE_TAG_MAIN=0x00, FILE_TAG_JOURNAL=0x01, FILE_TAG_WAL=0x02, FILE_TAG_SHM=0x03",
+        "Implement get_meta_key(file_tag) -> [u8; 4] producing [SQLITE_PREFIX, SCHEMA_VERSION, META_PREFIX, file_tag]",
+        "Implement get_chunk_key(file_tag, chunk_index: u32) -> [u8; 8] producing [SQLITE_PREFIX, SCHEMA_VERSION, CHUNK_PREFIX, file_tag, chunk_index_bytes (big-endian)]",
+        "Add comments cross-referencing rivetkit-typescript/packages/sqlite-vfs/src/kv.ts",
+        "Add #[cfg(test)] unit tests verifying byte-identical output to TypeScript implementation",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Key Layout' section (lines 388-406). Must produce byte-identical keys to kv.ts. Test with known inputs and compare against expected byte arrays from the TypeScript constants."
+    },
+    {
+      "id": "US-007",
+      "title": "Implement sqlite-native protocol.rs (BARE serialization)",
+      "description": "As a developer, I need Rust types and BARE ser/de for all KV channel protocol messages.",
+      "acceptanceCriteria": [
+        "Define Rust structs/enums for all v1.bare types: ToServer, ToClient, ToServerRequest, ToServerPong, ToClientResponse, ToClientPing, ToClientClose, RequestData, ResponseData, ErrorResponse, ActorOpenRequest, ActorCloseRequest, ActorOpenResponse, ActorCloseResponse, KvGetRequest, KvPutRequest, KvDeleteRequest, KvDeleteRangeRequest, KvGetResponse, KvPutResponse, KvDeleteResponse",
+        "Implement BARE serialization/deserialization for ToServer and ToClient unions",
+        "Use serde_bare or hand-written BARE encoding following the v1.bare schema exactly",
+        "Add round-trip tests for each message type",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "See engine/sdks/schemas/kv-channel-protocol/v1.bare for the schema. BARE is a simple binary format. Consider using the bare-io or serde_bare crate, or hand-write the encoding if no suitable crate exists. Union types in BARE use a varint tag prefix."
+    },
+    {
+      "id": "US-008",
+      "title": "Implement sqlite-native channel.rs (WebSocket KV channel client)",
+      "description": "As a developer, I need a Rust WebSocket client that connects to the KV channel endpoint, sends requests, correlates responses by requestId, and reconnects on failure.",
+      "acceptanceCriteria": [
+        "Implement KvChannel struct with connect() that opens WebSocket to ws://{endpoint}/kv/connect?token={token}&namespace={ns}&protocol_version=1",
+        "Implement send_request(actor_id, request_data) -> ResponseData that serializes ToServerRequest, sends it, and waits for ToClientResponse with matching requestId",
+        "Implement requestId counter (u32, incrementing per request, resets to 0 on reconnect)",
+        "Implement reconnect with exponential backoff: initial=1000ms, max=30000ms, multiplier=2, jitter=0-25%",
+        "On reconnect, re-send ActorOpenRequest for all actors that were open before disconnect",
+        "On disconnect, fail all in-flight requests with connection error (do not retry automatically)",
+        "Handle ToClientPing by responding with ToServerPong",
+        "Handle ToClientClose by triggering reconnect",
+        "Use tokio for async WebSocket I/O with tungstenite",
+        "30-second timeout per KV operation (KV_EXPIRE = 30_000ms)",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Reconnect Behavior' (lines 487-508) and 'In-Flight Requests on Reconnect' (lines 500-508). The reconnect strategy matches the runner protocol (engine/sdks/typescript/runner/src/utils.ts). One WebSocket per process, shared across all actors."
+    },
+    {
+      "id": "US-009",
+      "title": "Implement sqlite-native vfs.rs (custom SQLite VFS)",
+      "description": "As a developer, I need a custom SQLite VFS in Rust that maps VFS callbacks to KV operations via the channel.",
+      "acceptanceCriteria": [
+        "Implement SQLite VFS using libsqlite3-sys raw C API (sqlite3_vfs, sqlite3_io_methods, sqlite3_file)",
+        "xRead: batch-fetch chunk keys via KvGetRequest, copy data to output buffer, handle partial chunks and short reads",
+        "xWrite: prefetch partial chunks if needed, batch-write via KvPutRequest, update metadata if size changed",
+        "xTruncate: KvDeleteRangeRequest for chunks beyond truncation point, optional partial chunk rewrite, update metadata",
+        "xDelete: KvDeleteRangeRequest for all chunks of file tag, KvDeleteRequest for metadata key",
+        "xSync: flush dirty metadata via KvPutRequest",
+        "xFileSize: read metadata key via KvGetRequest",
+        "xAccess: check metadata key existence via KvGetRequest",
+        "xLock/xUnlock: no-op (single-writer enforced by channel lock)",
+        "xOpen: register VFS scoped to actor, load existing metadata or create new file",
+        "xClose: flush dirty metadata, cleanup",
+        "Apply PRAGMA busy_timeout=5000 and page_size=4096 after opening a database",
+        "Use same 4 KiB chunk layout and key encoding as kv.rs",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'VFS Callbacks' table (lines 433-443) and 'Custom VFS' section (lines 385-458). Each actor gets its own VFS instance parameterized by actor ID. Must use KvDeleteRangeRequest (not enumerate chunks) for xTruncate and xDelete. Add comment noting end-to-end tests are in driver-test-suite."
+    },
+    {
+      "id": "US-010",
+      "title": "Implement sqlite-native lib.rs (napi-rs entry point)",
+      "description": "As a developer, I need the napi-rs bindings that expose connect, openDatabase, query, execute, closeDatabase, and disconnect to JavaScript.",
+      "acceptanceCriteria": [
+        "Export connect(config: {url, token?, namespace}) -> KvChannel via napi-rs",
+        "Export openDatabase(channel, actorId) -> NativeDatabase that sends ActorOpenRequest optimistically",
+        "Export execute(db, sql, params?) -> {changes} for write statements",
+        "Export query(db, sql, params?) -> {rows, columns} for read statements",
+        "Export closeDatabase(db) that sends ActorCloseRequest and releases resources",
+        "Export disconnect(channel) that closes the WebSocket connection",
+        "Use #[napi] attribute macros for all exported functions and types",
+        "Tokio runtime is initialized once per process for async WebSocket I/O",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'JavaScript Bindings' section (lines 326-361). The API is minimal and synchronous from JS perspective (except connect/disconnect). SQLite operations block the N-API thread while waiting for KV responses via tokio."
+    },
+    {
+      "id": "US-011",
+      "title": "Add KV channel WebSocket endpoint to manager router",
+      "description": "As a developer, I need the local dev manager to serve the KV channel WebSocket endpoint so native SQLite can connect during development.",
+      "acceptanceCriteria": [
+        "Add WebSocket upgrade route at GET /kv/connect in rivetkit-typescript/packages/rivetkit/src/manager/router.ts",
+        "Accept query params: token, namespace, protocol_version",
+        "Validate token against config.token (RIVET_TOKEN). Skip auth with warning if not set in dev mode",
+        "Validate protocol_version=1, reject with HTTP error if unsupported",
+        "Deserialize incoming WebSocket binary messages as ToServer using BARE",
+        "Handle ActorOpenRequest: acquire single-writer lock per actorId, reject with actor_locked if held by another connection",
+        "Handle ActorCloseRequest: release lock for actorId",
+        "Handle KvGetRequest: read from actor KV storage, return KvGetResponse",
+        "Handle KvPutRequest: write to actor KV storage, return KvPutResponse",
+        "Handle KvDeleteRequest: delete from actor KV storage, return KvDeleteResponse",
+        "Handle KvDeleteRangeRequest: range-delete from actor KV storage, return KvDeleteResponse",
+        "Return ErrorResponse with appropriate error codes (actor_not_open, actor_locked, actor_not_found, key_too_large, etc.)",
+        "Send ToClientPing every 3 seconds, close connection if no ToServerPong within 15 seconds",
+        "On WebSocket disconnect, release all locks held by the connection",
+        "Serialize responses as ToClient using BARE",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Connection' (lines 70-74), 'Authentication' (lines 462-477), 'Single-Writer Lock Semantics' (lines 285-303), and 'Error Codes' (lines 248-264). The manager already has KV read endpoints at GET /actors/{actor_id}/kv/keys/{key} - reuse existing KV access patterns. KV limits from rivetkit-typescript/packages/rivetkit/src/drivers/file-system/kv-limits.ts must be enforced."
+    },
+    {
+      "id": "US-012",
+      "title": "Create engine KV channel crate with WebSocket handler",
+      "description": "As a developer, I need the production engine to serve the KV channel WebSocket endpoint for native SQLite in deployed environments.",
+      "acceptanceCriteria": [
+        "Create new crate at engine/packages/kv-channel/ (or add to engine/packages/pegboard-runner/)",
+        "Add to workspace members in root Cargo.toml",
+        "Implement WebSocket handler at /kv/connect route",
+        "Accept query params: token, namespace, protocol_version",
+        "Validate token against auth.admin_token (RIVET__AUTH__ADMIN_TOKEN)",
+        "Validate protocol_version=1",
+        "Deserialize BARE messages (ToServer), serialize responses (ToClient)",
+        "Implement single-writer lock per actor (HashMap<ActorId, ConnectionId>)",
+        "Route KV operations to actor KV storage (reuse existing actor_kv module patterns from engine/packages/pegboard/src/actor_kv/mod.rs)",
+        "Enforce KV limits from engine/packages/pegboard/src/actor_kv/mod.rs",
+        "Handle all error codes from spec (actor_locked, actor_not_open, actor_not_found, key_too_large, value_too_large, payload_too_large, batch_too_large, storage_quota_exceeded, keys_values_length_mismatch, unauthorized, internal_error)",
+        "Ping every 3s, timeout if no pong within 15s (matching runner protocol defaults)",
+        "Send ToClientClose on graceful shutdown, finish in-flight responses before closing",
+        "Release all locks on WebSocket disconnect",
+        "cargo check passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Authentication' (lines 462-477), 'Edge Cases' (lines 305-318), and 'KV Limits' (lines 266-281). Ping/pong intervals match runner_update_ping_interval_ms=3000 and runner_ping_timeout_ms=15000 from engine/packages/config/src/config/pegboard.rs."
+    },
+    {
+      "id": "US-013",
+      "title": "Integrate native SQLite in database provider",
+      "description": "As a developer, I need the database provider to automatically use native SQLite when available and fall back to WASM.",
+      "acceptanceCriteria": [
+        "Add nativeSqliteAvailable() function that attempts to load the @rivetkit/sqlite-native .node addon and catches all failure modes (missing file, glibc mismatch, N-API version mismatch, corrupted binary)",
+        "In rivetkit-typescript/packages/rivetkit/src/db/mod.ts, add conditional path: if native available, use nativeSqlite.openDatabase(); else log warning via pino and fall back to WASM",
+        "The Database interface exposed to actors (c.db.query(), c.db.execute()) must be identical regardless of backend",
+        "Warning message: 'native SQLite not available, falling back to WebAssembly. run npm rebuild to install native bindings.'",
+        "The KV channel connection (nativeSqlite.connect()) should be initialized once per process during startup, not per actor",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Integration with RivetKit' (lines 363-381). The KV channel is independent of the runner protocol and can be connected during process initialization. nativeSqliteAvailable() must try-catch the require() call, not just check file existence."
+    },
+    {
+      "id": "US-014",
+      "title": "Update release scripts and version management for sqlite-native",
+      "description": "As a developer, I need the release pipeline to correctly version and publish @rivetkit/sqlite-native and its platform packages.",
+      "acceptanceCriteria": [
+        "Add entry to scripts/release/update_version.ts for rivetkit-typescript/packages/sqlite-native/package.json",
+        "Add entry for rivetkit-typescript/packages/sqlite-native/npm/*/package.json (platform packages)",
+        "Add entry for rivetkit-typescript/packages/sqlite-native/Cargo.toml version field",
+        "Verify getRivetkitPackages() in scripts/release/sdk.ts picks up sqlite-native and platform packages, or add them explicitly",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Release Script Updates' (lines 668-706). The existing rivetkit-typescript/packages/*/package.json glob may cover the main package but npm/ subdirectories need explicit handling."
+    },
+    {
+      "id": "US-015",
+      "title": "Add Rust VFS unit tests with mock WebSocket server",
+      "description": "As a developer, I need unit tests for the native VFS to validate chunk mapping, key encoding, error handling, and reconnection without requiring a real server.",
+      "acceptanceCriteria": [
+        "Add #[cfg(test)] module in rivetkit-typescript/packages/sqlite-native/src/ (can be in vfs.rs or a dedicated test module)",
+        "Implement mock WebSocket server that runs in-process with in-memory KV store",
+        "Test xRead/xWrite correctly map byte ranges to 4 KiB KV chunks",
+        "Test chunk boundary handling (partial reads/writes spanning chunks)",
+        "Test xTruncate and xDelete produce correct KV delete ranges",
+        "Test metadata (file size) persistence via xSync/xClose",
+        "Test file tags (main, journal) key encoding",
+        "Test error handling (actor not open, actor locked)",
+        "Test optimistic open pipelining (open + immediate KV requests)",
+        "Test reconnection (mock server drops connection, client reconnects and re-opens actors)",
+        "Add comment noting end-to-end tests are in driver-test-suite (rivetkit-typescript/packages/rivetkit/src/driver-test-suite/)",
+        "cargo test passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "See NATIVE_SQLITE_DATA_CHANNEL.md 'Testing' section (lines 548-579). Layer 1 tests only. Layer 2 (driver test suite) already exists and will test native SQLite transparently when the addon is available."
+    }
+  ]
+}
