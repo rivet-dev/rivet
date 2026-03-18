@@ -380,7 +380,7 @@
         "cargo check passes"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 2 TODO section. The runner protocol (ws_to_tunnel_task.rs lines 68-77) has the same sequential message processing pattern as the KV channel. Same fix, same rationale."
     },
     {

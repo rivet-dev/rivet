@@ -426,3 +426,24 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - Deref coercion makes `&Arc<T>` auto-coerce to `&T` in function call arguments, so changing a parameter from `&T` to `&Arc<T>` doesn't require call-site changes.
   - Per-actor channels use unbounded mpsc to avoid backpressure issues. A single actor never has concurrent KV requests (VFS callbacks are sequential within SQLite), so the channel depth is effectively 1.
 ---
+
+## 2026-03-17 - US-021
+- Applied per-actor channel routing pattern from US-020 (pegboard-kv-channel) to the runner protocol's KV handling in ws_to_tunnel_task.rs
+- Added `RunnerKvRequest` enum with `Mk1`/`Mk2` variants to hold both protocol versions
+- Added `HashMap<String, mpsc::UnboundedSender<RunnerKvRequest>>` in `task_inner` for routing KV requests to per-actor channels
+- Added `JoinSet` for managing per-actor tasks with proper cleanup on disconnect
+- Modified `handle_message_mk2` and `handle_message_mk1` to route KV requests to per-actor channels instead of processing inline
+- Extracted `process_kv_request_mk2` and `process_kv_request_mk1` standalone functions containing the original KV handling logic
+- Added `actor_kv_task` function that drains per-actor channel sequentially and dispatches to the appropriate process function
+- Wrapped `task_inner` loop in async block for cleanup on all exit paths (errors, lifecycle events)
+- Removed `// TODO: Add queue and bg thread for processing kv ops` comments (now implemented)
+- Cross-actor KV requests execute concurrently while preserving intra-actor ordering
+- cargo check passes cleanly for pegboard-runner
+- Files changed: engine/packages/pegboard-runner/src/ws_to_tunnel_task.rs
+- **Learnings for future iterations:**
+  - The runner protocol has both mk1 and mk2 message handling with different types and serialization. Per-actor routing needs an enum (`RunnerKvRequest`) to unify both variants under one channel.
+  - `Clone::clone(ctx)` UFCS syntax is needed when cloning `&StandaloneCtx` for spawned tasks. Method syntax `ctx.clone()` would return `&StandaloneCtx` due to `<&T as Clone>` priority.
+  - The `handle_message_mk1` function has a `compat_ack_tunnel_message` call before message parsing that applies to ALL messages, not just KV. This stays in the main handler, not the per-actor task.
+  - `send_actor_kv_error` and `send_actor_kv_error_mk1` take `&Conn` which works with `&Arc<Conn>` via auto-deref. No changes needed to these helper functions.
+  - The mk1 KV error response for actor_id parse failure was previously inline-constructed. Simplified to use `send_actor_kv_error_mk1` in the extracted function since it produces identical output.
+---
