@@ -85,6 +85,13 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 			description: "SDK for coding agents",
 			external: true,
 		},
+		{
+			label: "Secure Exec SDK",
+			href: "https://secureexec.dev/",
+			logo: sandboxAgentLogoUrl,
+			description: "Secure Node.js Execution Without a Sandbox",
+			external: true,
+		},
 	];
 
 	const cancelClose = () => {
@@ -163,32 +170,34 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 					side="bottom"
 				>
 					<div className="flex flex-col gap-1">
-						{products.map((product) => (
-							<a
-								key={product.href}
-								href={product.href}
-								target={product.external ? "_blank" : undefined}
-								rel={product.external ? "noopener noreferrer" : undefined}
-								className="group flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
-							>
-								<img
-									src={product.logo.src}
-									alt={product.label}
-									width={24}
-									height={24}
-									className="h-6 w-6"
-									loading="lazy"
-									decoding="async"
-								/>
-								<div className="flex flex-col">
-									<div className="font-medium text-white text-sm group-hover:text-white transition-colors">
-										{product.label}
+						{products.map((product, i) => (
+							<React.Fragment key={product.href}>
+								{i === 1 && <div className="border-t border-white/10 my-1" />}
+								<a
+									href={product.href}
+									target={product.external ? "_blank" : undefined}
+									rel={product.external ? "noopener noreferrer" : undefined}
+									className="group flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+								>
+									<img
+										src={product.logo.src}
+										alt={product.label}
+										width={24}
+										height={24}
+										className="h-6 w-6"
+										loading="lazy"
+										decoding="async"
+									/>
+									<div className="flex flex-col">
+										<div className="font-medium text-white text-sm group-hover:text-white transition-colors">
+											{product.label}
+										</div>
+										<div className="text-xs text-zinc-400 group-hover:text-zinc-300 transition-colors leading-relaxed">
+											{product.description}
+										</div>
 									</div>
-									<div className="text-xs text-zinc-400 group-hover:text-zinc-300 transition-colors leading-relaxed">
-										{product.description}
-									</div>
-								</div>
-							</a>
+								</a>
+							</React.Fragment>
 						))}
 					</div>
 				</DropdownMenuContent>
@@ -611,6 +620,12 @@ function DocsMobileNavigation({ tree, sidebarData }: { tree?: ReactNode; sidebar
 		{
 			label: "Sandbox Agent SDK",
 			href: "https://sandboxagent.dev/",
+			logo: sandboxAgentLogoUrl,
+			external: true,
+		},
+		{
+			label: "Secure Exec SDK",
+			href: "https://secureexec.dev/",
 			logo: sandboxAgentLogoUrl,
 			external: true,
 		},
