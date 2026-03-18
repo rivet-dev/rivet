@@ -52,8 +52,13 @@ struct ServerlessMetadataPayload {
 	runtime: String,
 	version: String,
 	#[serde(rename = "actorNames", default)]
-	actor_names: HashMap<String, serde_json::Value>,
+	actor_names: HashMap<String, ActorName>,
 	runner: Option<ServerlessMetadataRunner>,
+}
+
+#[derive(Deserialize)]
+struct ActorName {
+	metadata: Option<serde_json::Value>,
 }
 
 fn truncate_response_body(body: &str) -> String {
@@ -179,8 +184,8 @@ pub async fn pegboard_serverless_metadata_fetch(
 	// Convert actor names, filtering out non-object metadata
 	let actor_names: Vec<ActorNameMetadata> = actor_names
 		.into_iter()
-		.filter_map(|(name, value)| {
-			let metadata = value.get("metadata")?.as_object()?.clone();
+		.filter_map(|(name, data)| {
+			let metadata = data.metadata?.as_object()?.clone();
 			Some(ActorNameMetadata { name, metadata })
 		})
 		.collect();

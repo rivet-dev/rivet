@@ -288,7 +288,6 @@
       "required": [
         "datacenter_label",
         "is_leader",
-        "name",
         "peer_url",
         "public_url"
       ],
@@ -302,6 +301,8 @@
           "type": "boolean"
         },
         "name": {
+          "description": "When configuring `datacenters` via a hashmap this is automatically derived from the key. Required when configuring via list (which is deprecated)",
+          "default": "",
           "type": "string"
         },
         "peer_url": {
@@ -335,6 +336,23 @@
         }
       },
       "additionalProperties": false
+    },
+    "DatacentersRepr": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Datacenter"
+          }
+        },
+        {
+          "description": "Deprecated.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Datacenter"
+          }
+        }
+      ]
     },
     "FileSystem": {
       "type": "object",
@@ -1000,11 +1018,12 @@
           "minimum": 0.0
         },
         "datacenters": {
-          "description": "List of all datacenters, including this datacenter.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/Datacenter"
-          }
+          "description": "Map of all datacenters, including this datacenter.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/DatacentersRepr"
+            }
+          ]
         }
       },
       "additionalProperties": false

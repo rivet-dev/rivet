@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use url::Url;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -8,8 +9,8 @@ use url::Url;
 pub struct Topology {
 	/// Must be included in `datacenters`
 	pub datacenter_label: u16,
-	/// List of all datacenters, including this datacenter.
-	pub datacenters: Vec<Datacenter>,
+	/// Map of all datacenters, including this datacenter.
+	pub datacenters: DatacentersRepr,
 }
 
 impl Topology {
@@ -47,23 +48,78 @@ impl Default for Topology {
 	fn default() -> Self {
 		Topology {
 			datacenter_label: 1,
-			datacenters: vec![Datacenter {
-				name: "default".into(),
-				datacenter_label: 1,
-				is_leader: true,
-				public_url: Url::parse(&format!(
-					"http://127.0.0.1:{}",
-					crate::defaults::ports::GUARD
-				))
-				.unwrap(),
-				peer_url: Url::parse(&format!(
-					"http://127.0.0.1:{}",
-					crate::defaults::ports::API_PEER
-				))
-				.unwrap(),
-				proxy_url: None,
-				valid_hosts: None,
-			}],
+			datacenters: DatacentersRepr::Map(
+				[(
+					"default".to_string(),
+					Datacenter {
+						name: "default".into(),
+						datacenter_label: 1,
+						is_leader: true,
+						public_url: Url::parse(&format!(
+							"http://127.0.0.1:{}",
+							crate::defaults::ports::GUARD
+						))
+						.unwrap(),
+						peer_url: Url::parse(&format!(
+							"http://127.0.0.1:{}",
+							crate::defaults::ports::API_PEER
+						))
+						.unwrap(),
+						proxy_url: None,
+						valid_hosts: None,
+					},
+				)]
+				.into(),
+			),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum DatacentersRepr {
+	Map(HashMap<String, Datacenter>),
+	/// Deprecated.
+	List(Vec<Datacenter>),
+}
+
+impl DatacentersRepr {
+	pub fn iter(&self) -> DatacentersIter<'_> {
+		self.into_iter()
+	}
+
+	pub fn len(&self) -> usize {
+		match self {
+			DatacentersRepr::Map(m) => m.len(),
+			DatacentersRepr::List(l) => l.len(),
+		}
+	}
+}
+
+pub enum DatacentersIter<'a> {
+	Map(std::collections::hash_map::Values<'a, String, Datacenter>),
+	List(std::slice::Iter<'a, Datacenter>),
+}
+
+impl<'a> Iterator for DatacentersIter<'a> {
+	type Item = &'a Datacenter;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		match self {
+			DatacentersIter::Map(iter) => iter.next(),
+			DatacentersIter::List(iter) => iter.next(),
+		}
+	}
+}
+
+impl<'a> IntoIterator for &'a DatacentersRepr {
+	type Item = &'a Datacenter;
+	type IntoIter = DatacentersIter<'a>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		match self {
+			DatacentersRepr::Map(map) => DatacentersIter::Map(map.values()),
+			DatacentersRepr::List(vec) => DatacentersIter::List(vec.iter()),
 		}
 	}
 }
@@ -71,6 +127,9 @@ impl Default for Topology {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Datacenter {
+	/// When configuring `datacenters` via a hashmap this is automatically derived from the key. Required
+	/// when configuring via list (which is deprecated)
+	#[serde(default = "String::new")]
 	pub name: String,
 	pub datacenter_label: u16,
 	pub is_leader: bool,

@@ -12,6 +12,7 @@ use deadpool_postgres::{Config, ManagerConfig, Pool, PoolConfig, RecyclingMethod
 use rivet_postgres_util::build_tls_config;
 use tokio::task::JoinHandle;
 use tokio_postgres_rustls::MakeRustlsConnect;
+use url::Url;
 
 use crate::{
 	RetryableTransaction, Transaction,
@@ -76,19 +77,35 @@ impl PostgresDatabaseDriver {
 
 		tracing::debug!("creating Postgres pool");
 
-		let pool = if let Some(config) = &config.ssl_config {
-			let tls_config = build_tls_config(
-				config.ssl_root_cert_path.as_ref(),
-				config.ssl_client_cert_path.as_ref(),
-				config.ssl_client_key_path.as_ref(),
-			)?;
-			let tls = MakeRustlsConnect::new(tls_config);
+		let ssl_disabled = if let Ok(url) = Url::parse(&config.connection_string) {
+			url.query_pairs()
+				.any(|(k, v)| k == "sslmode" && v == "disable")
+		} else {
+			false
+		};
+
+		let pool = if ssl_disabled {
+			let tls = tokio_postgres::NoTls;
 
 			pool_config
 				.create_pool(Some(Runtime::Tokio1), tls)
 				.context("failed to create postgres connection pool")?
 		} else {
-			let tls = tokio_postgres::NoTls;
+			let tls_config = build_tls_config(
+				config
+					.ssl_config
+					.as_ref()
+					.and_then(|c| c.ssl_root_cert_path.as_ref()),
+				config
+					.ssl_config
+					.as_ref()
+					.and_then(|c| c.ssl_client_cert_path.as_ref()),
+				config
+					.ssl_config
+					.as_ref()
+					.and_then(|c| c.ssl_client_key_path.as_ref()),
+			)?;
+			let tls = MakeRustlsConnect::new(tls_config);
 
 			pool_config
 				.create_pool(Some(Runtime::Tokio1), tls)

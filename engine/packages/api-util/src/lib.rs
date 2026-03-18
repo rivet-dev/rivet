@@ -112,7 +112,13 @@ where
 	A: Fn(u16, I, &mut R),
 	R: Default + Send + 'static,
 {
-	let dcs = ctx.config().topology().datacenters.clone();
+	let dcs = ctx
+		.config()
+		.topology()
+		.datacenters
+		.iter()
+		.cloned()
+		.collect::<Vec<_>>();
 
 	let results = futures_util::stream::iter(dcs)
 		.map(|dc| {
