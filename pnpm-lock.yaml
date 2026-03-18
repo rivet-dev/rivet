@@ -4281,6 +4281,9 @@ importers:
       '@rivetkit/bare-ts':
         specifier: ^0.6.2
         version: 0.6.2
+      '@rivetkit/engine-kv-channel-protocol':
+        specifier: workspace:*
+        version: link:../../../engine/sdks/typescript/kv-channel-protocol
       '@rivetkit/engine-runner':
         specifier: workspace:*
         version: link:../../../engine/sdks/typescript/runner
@@ -4429,6 +4432,12 @@ importers:
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+
+  rivetkit-typescript/packages/sqlite-native:
+    devDependencies:
+      '@napi-rs/cli':
+        specifier: ^2.18.0
+        version: 2.18.4
 
   rivetkit-typescript/packages/sqlite-vfs:
     dependencies:
@@ -7916,6 +7925,11 @@ packages:
   '@mswjs/interceptors@0.41.2':
     resolution: {integrity: sha512-7G0Uf0yK3f2bjElBLGHIQzgRgMESczOMyYVasq1XK8P5HaXtlW4eQhz9MBL+TQILZLaruq+ClGId+hH0w4jvWw==}
     engines: {node: '>=18'}
+
+  '@napi-rs/cli@2.18.4':
+    resolution: {integrity: sha512-SgJeA4df9DE2iAEpr3M2H0OKl/yjtg1BnRI5/JyowS71tUWhrfSu2LT0V3vlHET+g1hBVlrO60PmEXwUEKp8Mg==}
+    engines: {node: '>= 10'}
+    hasBin: true
 
   '@neophi/sieve-cache@1.5.0':
     resolution: {integrity: sha512-9T3nD5q51X1d4QYW6vouKW9hBSb2Tb/wB/2XoTr4oP5SCGtp3a7aTHHewQFylred1B21/Bhev6gy4x01FPBcbQ==}
@@ -22036,6 +22050,8 @@ snapshots:
       is-node-process: 1.2.0
       outvariant: 1.4.3
       strict-event-emitter: 0.5.1
+
+  '@napi-rs/cli@2.18.4': {}
 
   '@neophi/sieve-cache@1.5.0': {}
 

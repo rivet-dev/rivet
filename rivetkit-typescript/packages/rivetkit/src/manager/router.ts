@@ -48,6 +48,10 @@ import {
 } from "@/utils/router";
 import type { ActorOutput, ManagerDriver } from "./driver";
 import { actorGateway, createTestWebSocketProxy } from "./gateway";
+import {
+	createKvChannelWebSocketHandler,
+	validateProtocolVersion,
+} from "./kv-channel";
 import { logger } from "./log";
 
 export function buildManagerRouter(
@@ -354,6 +358,53 @@ export function buildManagerRouter(
 				});
 			});
 		}
+
+		// GET /kv/connect - KV channel WebSocket endpoint for native SQLite
+		router.get("/kv/connect", async (c) => {
+			// Validate authentication.
+			if (isDev() && !config.token) {
+				logger().warn({
+					msg: "RIVET_TOKEN is not set, skipping KV channel auth in development mode",
+				});
+			} else {
+				const token = c.req.query("token");
+				if (!config.token) {
+					return c.text("KV channel requires RIVET_TOKEN to be set", 403);
+				}
+				if (
+					!token ||
+					timingSafeEqual(config.token, token) === false
+				) {
+					return c.json(
+						{
+							error: {
+								code: "unauthorized",
+								message: "invalid or missing authentication token",
+							},
+						},
+						401,
+					);
+				}
+			}
+
+			// Validate protocol version.
+			const versionError = validateProtocolVersion(
+				c.req.query("protocol_version"),
+			);
+			if (versionError) {
+				return c.text(versionError, 400);
+			}
+
+			// Upgrade to WebSocket.
+			const upgradeWebSocket = getUpgradeWebSocket?.();
+			if (!upgradeWebSocket) {
+				return c.text("WebSocket upgrades not supported on this platform", 500);
+			}
+
+			return upgradeWebSocket(() =>
+				createKvChannelWebSocketHandler(managerDriver),
+			)(c, noopNext());
+		});
 
 		// TODO:
 		// // DELETE /actors/{actor_id}

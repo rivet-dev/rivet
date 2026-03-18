@@ -441,4 +441,41 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 		const value = await stub.managerKvGet(key);
 		return value !== null ? new TextDecoder().decode(value) : null;
 	}
+
+	async kvBatchGet(
+		_actorId: string,
+		_keys: Uint8Array[],
+	): Promise<(Uint8Array | null)[]> {
+		throw new Error(
+			"kvBatchGet not supported on Cloudflare Workers manager driver",
+		);
+	}
+
+	async kvBatchPut(
+		_actorId: string,
+		_entries: [Uint8Array, Uint8Array][],
+	): Promise<void> {
+		throw new Error(
+			"kvBatchPut not supported on Cloudflare Workers manager driver",
+		);
+	}
+
+	async kvBatchDelete(
+		_actorId: string,
+		_keys: Uint8Array[],
+	): Promise<void> {
+		throw new Error(
+			"kvBatchDelete not supported on Cloudflare Workers manager driver",
+		);
+	}
+
+	async kvDeleteRange(
+		_actorId: string,
+		_start: Uint8Array,
+		_end: Uint8Array,
+	): Promise<void> {
+		throw new Error(
+			"kvDeleteRange not supported on Cloudflare Workers manager driver",
+		);
+	}
 }

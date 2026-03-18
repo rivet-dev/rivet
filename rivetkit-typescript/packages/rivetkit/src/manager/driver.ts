@@ -52,6 +52,28 @@ export interface ManagerDriver {
 
 	/** Read a key. Returns null if the key doesn't exist. */
 	kvGet(actorId: string, key: Uint8Array): Promise<string | null>;
+
+	/** Batch get KV entries. Returns null for keys that don't exist. */
+	kvBatchGet(
+		actorId: string,
+		keys: Uint8Array[],
+	): Promise<(Uint8Array | null)[]>;
+
+	/** Batch put KV entries. */
+	kvBatchPut(
+		actorId: string,
+		entries: [Uint8Array, Uint8Array][],
+	): Promise<void>;
+
+	/** Batch delete KV entries. */
+	kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void>;
+
+	/** Delete KV entries in the half-open range [start, end). */
+	kvDeleteRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+	): Promise<void>;
 }
 
 export interface ManagerDisplayInformation {
