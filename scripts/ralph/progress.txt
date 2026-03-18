@@ -356,3 +356,17 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - `tokio::spawn_blocking` uses a separate thread pool (default cap 512) from the async worker pool, so VFS `Handle::block_on()` calls never starve the WebSocket read/write tasks.
   - When making napi functions async, the TypeScript callers must add `await`. In this codebase, the calls were already inside `async` arrow functions, so adding `await` was straightforward.
 ---
+
+## 2026-03-17 - US-017
+- Changed `actor_locks` type from `HashMap<String, u64>` to `HashMap<String, (u64, Arc<Mutex<HashSet<String>>>)>` to store a reference to each connection's open_actors set
+- Updated `handle_actor_open` to unconditionally evict old locks when a different connection opens the same actor. On eviction, removes the actor from the old connection's open_actors set via the stored Arc reference.
+- Updated `handle_actor_close` to use `if let Some((lock_conn, _))` pattern for the new tuple type
+- Updated disconnect cleanup to only release locks still held by this conn_id (another connection may have evicted it)
+- Threaded `&Arc<Mutex<HashSet<String>>>` through `message_loop`, `handle_binary_message`, `handle_request`, `handle_actor_open`, and `handle_actor_close` function signatures (previously `&Mutex<HashSet<String>>`)
+- cargo check passes cleanly for pegboard-kv-channel
+- Files changed: engine/packages/pegboard-kv-channel/src/lib.rs
+- **Learnings for future iterations:**
+  - The `open_actors` parameter was already `Arc<Mutex<HashSet<String>>>` at the `handle_websocket` level. Changing function signatures from `&Mutex<...>` to `&Arc<Mutex<...>>` required no call-site changes because Rust auto-deref works in reverse (passing `&arc_val` matches `&Arc<T>` directly).
+  - Eviction under the `actor_locks` mutex is atomic. The old connection's fast-path check (`open_actors.contains`) fails immediately after eviction. No global lock check on the KV hot path.
+  - Pre-existing build errors in guard crate (proxy.rs, websocket.rs, custom_serve.rs) are unrelated to pegboard-kv-channel changes. Use `cargo check -p pegboard-kv-channel` for targeted verification.
+---

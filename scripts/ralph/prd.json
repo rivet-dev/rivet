@@ -313,7 +313,7 @@
         "cargo check passes"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 4. This is safe because: locks are in-memory only (no FDB state), old connection is dead or stale, old connection's in-flight FDB transactions complete normally, single-writer safety maintained by mutex atomicity. In multi-server deployments, locks are per-pod. Cross-process single-writer is enforced by actor scheduling, not KV channel locks."
     },
     {
