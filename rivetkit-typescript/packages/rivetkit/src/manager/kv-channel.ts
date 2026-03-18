@@ -205,13 +205,15 @@ function handleActorOpen(
 ): ResponseData {
 	const existingLock = actorLocks.get(actorId);
 	if (existingLock && existingLock !== conn) {
-		return {
-			tag: "ErrorResponse",
-			val: {
-				code: "actor_locked",
-				message: `actor ${actorId} is locked by another connection`,
-			},
-		};
+		// Unconditionally evict the old connection's lock. The old connection
+		// is either dead (network issue) or stale (same process reconnecting).
+		// Remove the actor from the old connection's openActors so its next KV
+		// request fails the fast-path check immediately with actor_not_open.
+		existingLock.openActors.delete(actorId);
+		logger().info({
+			msg: "kv channel evicting actor lock from old connection",
+			actorId,
+		});
 	}
 
 	actorLocks.set(actorId, conn);
