@@ -1038,112 +1038,147 @@ function BackendSetupRivet() {
 		? `gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"`
 		: "gh secret set RIVET_CLOUD_TOKEN";
 
+	const [currentStep, setCurrentStep] = useState(0);
+
+	const steps = [
+		{
+			title: "Create a Dockerfile for your RivetKit deployment",
+			description: (
+				<p className="text-sm text-muted-foreground">
+					Add a{" "}
+					<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+						Dockerfile
+					</code>{" "}
+					to the root of your project that builds and runs your
+					RivetKit server.
+				</p>
+			),
+			content: null,
+		},
+		{
+			title: "Add GitHub secret",
+			description: (
+				<p className="text-sm text-muted-foreground">
+					Add your Rivet token as a repository secret named{" "}
+					<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+						RIVET_CLOUD_TOKEN
+					</code>
+					.
+				</p>
+			),
+			content: (
+				<CodeGroup className="my-0">
+					{[
+						<CodeFrame
+							key="gh-secret"
+							language="bash"
+							title="bash"
+							code={() => ghSecretCmd}
+							className="m-0"
+						>
+							<CodePreview
+								language="bash"
+								className="text-left"
+								code={ghSecretCmd}
+							/>
+						</CodeFrame>,
+					]}
+				</CodeGroup>
+			),
+		},
+		{
+			title: "Add GitHub Action",
+			description: (
+				<p className="text-sm text-muted-foreground">
+					Create{" "}
+					<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+						.github/workflows/rivet-deploy.yml
+					</code>{" "}
+					to automatically deploy on every push and pull request.
+				</p>
+			),
+			content: (
+				<CodeGroup className="my-0">
+					{[
+						<CodeFrame
+							key="gh-action"
+							language="yaml"
+							title=".github/workflows/rivet-deploy.yml"
+							code={() => githubActionYaml}
+							className="m-0"
+						>
+							<CodePreview
+								language="yaml"
+								className="text-left"
+								code={githubActionYaml}
+							/>
+						</CodeFrame>,
+					]}
+				</CodeGroup>
+			),
+		},
+	];
+
+	const step = steps[currentStep];
+
 	return (
 		<div className="flex flex-col gap-6">
 			<CopyAgentInstructionsButton provider="rivet" />
-			<div className="flex gap-3">
-				<StepNumber n={1} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">
-						Create a Dockerfile for your RivetKit deployment
-					</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						Add a{" "}
-						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
-							Dockerfile
-						</code>{" "}
-						to the root of your project that builds and runs your
-						RivetKit server.
+			<div className="rounded-lg border p-4">
+				<div className="flex items-center justify-between mb-3">
+					<div className="flex items-center gap-2">
+						<StepNumber n={currentStep + 1} />
+						<p className="font-medium">{step.title}</p>
+					</div>
+					<p className="text-xs text-muted-foreground">
+						Step {currentStep + 1} of {steps.length}
 					</p>
 				</div>
-			</div>
-			<div className="flex gap-3">
-				<StepNumber n={2} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Add GitHub secret</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						Add your Rivet token as a repository secret named{" "}
-						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
-							RIVET_CLOUD_TOKEN
-						</code>
-						.
-					</p>
-					<CodeGroup className="my-0">
-						{[
-							<CodeFrame
-								key="gh-secret"
-								language="bash"
-								title="bash"
-								code={() => ghSecretCmd}
-								className="m-0"
-							>
-								<CodePreview
-									language="bash"
-									className="text-left"
-									code={ghSecretCmd}
-								/>
-							</CodeFrame>,
-						]}
-					</CodeGroup>
+				<div className="mb-3">{step.description}</div>
+				{step.content}
+				<div className="flex items-center justify-between mt-4">
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={currentStep === 0}
+						onClick={() => setCurrentStep((s) => s - 1)}
+					>
+						Previous
+					</Button>
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={currentStep === steps.length - 1}
+						onClick={() => setCurrentStep((s) => s + 1)}
+					>
+						Next
+					</Button>
 				</div>
 			</div>
-			<div className="flex gap-3">
-				<StepNumber n={3} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Add GitHub Action</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						Create{" "}
-						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
-							.github/workflows/rivet-deploy.yml
-						</code>{" "}
-						to automatically deploy on every push and pull request.
-					</p>
-					<CodeGroup className="my-0">
-						{[
-							<CodeFrame
-								key="gh-action"
-								language="yaml"
-								title=".github/workflows/rivet-deploy.yml"
-								code={() => githubActionYaml}
-								className="m-0"
-							>
-								<CodePreview
-									language="yaml"
-									className="text-left"
-									code={githubActionYaml}
-								/>
-							</CodeFrame>,
-						]}
-					</CodeGroup>
-				</div>
-			</div>
-			<div className="flex gap-3">
-				<StepNumber n={4} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Deploy to Rivet Cloud</p>
-					<p className="text-sm text-muted-foreground mb-2">
-						Push your changes to trigger the{" "}
-						<strong>Rivet Deploy</strong> workflow. The status check
-						below will update automatically once your backend is
-						deployed.
-					</p>
-					<div className="border rounded-md py-8">
-						<div className="flex gap-2 justify-center items-center flex-col py-2 px-8">
-							<DeploymentCheck
-								validateConfig={(data) =>
-									!!data?.find(([, value]) =>
-										Object.values(value.datacenters).some(
-											(dc) =>
-												dc.serverless &&
-												deriveProviderFromMetadata(
-													dc.metadata,
-												) === "rivet",
-										),
-									)
-								}
-								validatePool={(data) => !!data?.config.image}
-							/>
-						</div>
+			<div>
+				<p className="font-medium mb-2">Deploy to Rivet Cloud</p>
+				<p className="text-sm text-muted-foreground mb-2">
+					Push your changes to trigger the{" "}
+					<strong>Rivet Deploy</strong> workflow. The status check
+					below will update automatically once your backend is
+					deployed.
+				</p>
+				<div className="border rounded-md py-8">
+					<div className="flex gap-2 justify-center items-center flex-col py-2 px-8">
+						<DeploymentCheck
+							validateConfig={(data) =>
+								!!data?.find(([, value]) =>
+									Object.values(value.datacenters).some(
+										(dc) =>
+											dc.serverless &&
+											deriveProviderFromMetadata(
+												dc.metadata,
+											) === "rivet",
+									),
+								)
+							}
+							validatePool={(data) => !!data?.config.image}
+						/>
 					</div>
 				</div>
 			</div>
