@@ -432,18 +432,38 @@ function ProviderCard({
 
 function InstallStep() {
 	return (
-		<div className="flex flex-col gap-4">
-			<AgentPromptBanner code={agentPrompt} />
-			<p className="text-sm text-muted-foreground">
-				Add RivetKit to your project to get started with Rivet Actors.
-			</p>
-			<PackageManagerCode
-				npx="npm install rivetkit"
-				yarn="yarn add rivetkit"
-				pnpm="pnpm add rivetkit"
-				bun="bun add rivetkit"
-				deno="deno add npm:rivetkit"
-			/>
+		<div className="flex flex-col gap-5">
+			<div>
+				<div className="flex items-center gap-2 mb-1.5">
+					<Badge className="shrink-0">Recommended</Badge>
+					<p className="font-medium">Install Rivet Skills</p>
+				</div>
+				<p className="text-sm text-muted-foreground mb-3">
+					Add Rivet skills to your coding agent for guided setup and
+					development.
+				</p>
+				<PackageManagerCode
+					npx="npx skills add rivet-dev/skills"
+					yarn="npx skills add rivet-dev/skills"
+					pnpm="npx skills add rivet-dev/skills"
+					bun="npx skills add rivet-dev/skills"
+					deno="npx skills add rivet-dev/skills"
+				/>
+			</div>
+			<div>
+				<p className="font-medium mb-1.5">Install RivetKit manually</p>
+				<p className="text-sm text-muted-foreground mb-3">
+					Add RivetKit to your project to get started with Rivet
+					Actors.
+				</p>
+				<PackageManagerCode
+					npx="npm install rivetkit"
+					yarn="yarn add rivetkit"
+					pnpm="pnpm add rivetkit"
+					bun="bun add rivetkit"
+					deno="deno add npm:rivetkit"
+				/>
+			</div>
 		</div>
 	);
 }
