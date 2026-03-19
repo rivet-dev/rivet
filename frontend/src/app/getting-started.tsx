@@ -452,10 +452,13 @@ function InstallStep() {
 				<div className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-3 py-2">
 					<CodePreview code="npx skills add rivet-dev/skills" language="bash" />
 					<Button
+						type="button"
 						variant="ghost"
 						size="sm"
 						className="shrink-0"
-						onClick={() => {
+						onClick={(e) => {
+							e.preventDefault();
+							e.stopPropagation();
 							navigator.clipboard.writeText("npx skills add rivet-dev/skills");
 							toast.success("Copied to clipboard");
 						}}
