@@ -434,7 +434,7 @@ function InstallStep() {
 	return (
 		<div className="flex flex-col gap-5">
 			<div className="relative rounded-lg border border-primary p-4 pt-5">
-				<Badge className="absolute -top-2.5 left-3 z-10 bg-background">Recommended</Badge>
+				<Badge className="absolute -top-2.5 left-4 z-10 bg-background">Recommended</Badge>
 				<p className="font-medium mb-1.5">
 					Install Rivet Skills
 				</p>
@@ -442,7 +442,20 @@ function InstallStep() {
 					Run this command in your coding agent to install Rivet skills
 					for guided setup and development.
 				</p>
-				<CodePreview code="npx skills add rivet-dev/skills" language="bash" />
+				<div className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-3 py-2">
+					<CodePreview code="npx skills add rivet-dev/skills" language="bash" />
+					<Button
+						variant="ghost"
+						size="sm"
+						className="shrink-0"
+						onClick={() => {
+							navigator.clipboard.writeText("npx skills add rivet-dev/skills");
+							toast.success("Copied to clipboard");
+						}}
+					>
+						<Icon icon={faCopy} className="w-3.5 h-3.5" />
+					</Button>
+				</div>
 			</div>
 			<div>
 				<PackageManagerCode
@@ -967,9 +980,9 @@ function AgentPromptBanner({ code }: { code: string }) {
 				navigator.clipboard.writeText(code);
 				toast.success("Copied to clipboard");
 			}}
-			className="relative w-full flex items-center justify-between rounded-lg px-4 py-3 border border-primary group cursor-pointer"
+			className="relative w-full flex items-center justify-between rounded-lg px-4 py-5 border border-primary group cursor-pointer"
 		>
-			<Badge className="absolute -top-2.5 left-3 z-10 bg-background">Recommended</Badge>
+			<Badge className="absolute -top-2.5 left-4 z-10 bg-background">Recommended</Badge>
 			<span className="text-sm font-medium text-white text-left">
 				Using a Coding Agent? Use this pre-built prompt to get started
 				faster.
