@@ -1,13 +1,10 @@
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug};
 
 use super::*;
 
 /// Entry for a single value that is going to be read/written to the cache.
 #[derive(Debug)]
-pub(super) struct GetterCtxKey<K, V> {
-	/// `CacheKey` that will be used to build Redis keys.
-	pub(super) key: K,
-
+pub(super) struct GetterCtxEntry<V> {
 	/// The value that was read from the cache or getter.
 	value: Option<V>,
 
@@ -23,81 +20,68 @@ pub struct GetterCtx<K, V>
 where
 	K: CacheKey,
 {
-	/// The name of the service-specific key to write this cached value to. For
-	/// example, a team get service would use the "team_profile" key to store
-	/// the profile a "team_members" to store a cache of members.
-	///
-	/// This is local to the service & source hash that caches this value.
-	#[allow(unused)]
-	base_key: String,
-
-	/// The keys to get/populate from the cache.
-	keys: Vec<GetterCtxKey<K, V>>,
+	/// The entries to get/populate from the cache.
+	entries: HashMap<K, GetterCtxEntry<V>>,
 }
 
 impl<K, V> GetterCtx<K, V>
 where
 	K: CacheKey,
 {
-	pub(super) fn new(base_key: String, keys: Vec<K>) -> Self {
+	pub(super) fn new(keys: Vec<K>) -> Self {
 		GetterCtx {
-			base_key,
-			keys: {
-				// Create deduplicated ctx keys
-				let mut ctx_keys = Vec::<GetterCtxKey<K, V>>::new();
-				for key in keys {
-					if !ctx_keys.iter().any(|x| x.key == key) {
-						ctx_keys.push(GetterCtxKey {
-							key,
+			entries: keys
+				.into_iter()
+				.map(|k| {
+					(
+						k,
+						GetterCtxEntry {
 							value: None,
 							from_cache: false,
-						});
-					}
-				}
-				ctx_keys
-			},
+						},
+					)
+				})
+				.collect(),
 		}
 	}
 
+	pub(super) fn merge(&mut self, other: GetterCtx<K, V>) {
+		self.entries.extend(other.entries);
+	}
+
 	pub(super) fn into_values(self) -> Vec<(K, V)> {
-		self.keys
+		self.entries
 			.into_iter()
-			.filter_map(|k| {
-				if let Some(v) = k.value {
-					Some((k.key, v))
-				} else {
-					None
-				}
-			})
+			.filter_map(|(k, x)| x.value.map(|v| (k, v)))
 			.collect()
 	}
 
-	/// All keys.
-	pub(super) fn keys(&self) -> &[GetterCtxKey<K, V>] {
-		&self.keys[..]
+	/// All entries.
+	pub(super) fn entries(&self) -> impl Iterator<Item = (&K, &GetterCtxEntry<V>)> {
+		self.entries.iter()
 	}
 
-	/// If all keys have an associated value.
-	pub(super) fn all_keys_have_value(&self) -> bool {
-		self.keys.iter().all(|x| x.value.is_some())
+	/// If all entries have an associated value.
+	pub(super) fn all_entries_have_value(&self) -> bool {
+		self.entries.iter().all(|(_, x)| x.value.is_some())
 	}
 
 	/// Keys that do not have a value yet.
 	pub(super) fn unresolved_keys(&self) -> Vec<K> {
-		self.keys
+		self.entries
 			.iter()
-			.filter(|x| x.value.is_none())
-			.map(|x| x.key.clone())
+			.filter(|(_, x)| x.value.is_none())
+			.map(|(k, _)| k.clone())
 			.collect()
 	}
 
-	/// Keys that have been resolved in a getter and need to be written to the
+	/// Entries that have been resolved in a getter and need to be written to the
 	/// cache.
-	pub(super) fn values_needing_cache_write(&self) -> Vec<(&GetterCtxKey<K, V>, &V)> {
-		self.keys
+	pub(super) fn entries_needing_cache_write(&self) -> Vec<(&K, &V)> {
+		self.entries
 			.iter()
-			.filter(|x| !x.from_cache)
-			.filter_map(|k| k.value.as_ref().map(|v| (k, v)))
+			.filter(|(_, x)| !x.from_cache)
+			.filter_map(|(k, x)| x.value.as_ref().map(|v| (k, v)))
 			.collect()
 	}
 }
@@ -107,32 +91,26 @@ where
 	K: CacheKey,
 	V: Debug,
 {
-	/// Sets a value with the value provided from the cache.
-	pub(super) fn resolve_from_cache(&mut self, idx: usize, value: V) {
-		if let Some(key) = self.keys.get_mut(idx) {
-			key.value = Some(value);
-			key.from_cache = true;
+	/// Sets an entry with the value provided from the cache.
+	pub(super) fn resolve_from_cache(&mut self, key: &K, value: V) {
+		if let Some(entry) = self.entries.get_mut(key) {
+			entry.value = Some(value);
+			entry.from_cache = true;
 		} else {
-			tracing::warn!(?idx, ?value, "resolving cache key index out of range");
-		}
-	}
-
-	/// Calls the callback with a mutable reference to a given key. Validates
-	/// that the key does not already have a value.
-	fn get_key_for_resolve(&mut self, key: &K, cb: impl FnOnce(&mut GetterCtxKey<K, V>)) {
-		if let Some(key) = self.keys.iter_mut().find(|x| x.key == *key) {
-			if key.value.is_some() {
-				tracing::warn!(?key, "cache key already has value");
-			} else {
-				cb(key);
-			}
-		} else {
-			tracing::warn!(?key, "resolved value for nonexistent cache key");
+			tracing::warn!(?key, ?value, "resolving nonexistent cache entry");
 		}
 	}
 
 	/// Sets a value with the value provided from the getter function.
 	pub fn resolve(&mut self, key: &K, value: V) {
-		self.get_key_for_resolve(key, |key| key.value = Some(value));
+		if let Some(entry) = self.entries.get_mut(key) {
+			if entry.value.is_some() {
+				tracing::warn!(?entry, "cache entry already has value");
+			} else {
+				entry.value = Some(value);
+			}
+		} else {
+			tracing::warn!(?key, "resolved value for nonexistent cache entry");
+		}
 	}
 }

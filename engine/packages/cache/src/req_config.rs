@@ -1,11 +1,16 @@
-use std::{fmt::Debug, future::Future, result::Result::Ok};
+use std::{fmt::Debug, future::Future, time::Duration};
 
-use anyhow::*;
+use anyhow::Result;
+use futures_util::StreamExt;
+use itertools::{Either, Itertools};
 use serde::{Serialize, de::DeserializeOwned};
-use tracing::Instrument;
+use tokio::sync::broadcast;
 
 use super::*;
 use crate::{errors::Error, metrics};
+
+/// How long to wait for an in flight cache req before proceeding to execute the same req anyway.
+const IN_FLIGHT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Config specifying how cached values will behave.
 #[derive(Clone)]
@@ -74,22 +79,17 @@ impl RequestConfig {
 			.with_label_values(&[base_key.as_str()])
 			.inc_by(keys.len() as u64);
 
-		// Build context.
-		//
-		// Drop `keys` bc this is not the same as the keys list in `ctx`, so it should not be used
-		// again.
-		let mut ctx = GetterCtx::new(base_key.clone(), keys);
+		let mut ctx = GetterCtx::new(keys);
 
 		// Build driver-specific cache keys
-		let cache_keys = ctx
-			.keys()
-			.iter()
-			.map(|key| self.cache.driver.process_key(&base_key, &key.key))
-			.collect::<Vec<_>>();
+		let (keys, cache_keys): (Vec<_>, Vec<_>) = ctx
+			.entries()
+			.map(|(key, _)| (key.clone(), self.cache.driver.process_key(&base_key, key)))
+			.unzip();
 		let cache_keys_len = cache_keys.len();
 
 		// Attempt to fetch value from cache, fall back to getter
-		match self.cache.driver.get(&base_key, cache_keys).await {
+		match self.cache.driver.get(&base_key, &cache_keys).await {
 			Ok(cached_values) => {
 				debug_assert_eq!(
 					cache_keys_len,
@@ -97,13 +97,13 @@ impl RequestConfig {
 					"cache returned wrong number of values"
 				);
 
-				// Create the getter ctx and resolve the cached values
-				for (i, value) in cached_values.into_iter().enumerate() {
+				// Resolve the cached values
+				for (key, value) in keys.iter().zip(cached_values.into_iter()) {
 					if let Some(value_bytes) = value {
 						// Try to decode the value using the driver
 						match decoder(&value_bytes) {
 							Ok(value) => {
-								ctx.resolve_from_cache(i, value);
+								ctx.resolve_from_cache(key, value);
 							}
 							Err(err) => {
 								tracing::error!(?err, "Failed to decode value");
@@ -113,7 +113,7 @@ impl RequestConfig {
 				}
 
 				// Fetch remaining values and add to the cached list
-				if !ctx.all_keys_have_value() {
+				if !ctx.all_entries_have_value() {
 					// Call the getter
 					let remaining_keys = ctx.unresolved_keys();
 					let unresolved_len = remaining_keys.len();
@@ -122,27 +122,137 @@ impl RequestConfig {
 						.with_label_values(&[base_key.as_str()])
 						.inc_by(unresolved_len as u64);
 
-					ctx = getter(ctx, remaining_keys).await.map_err(Error::Getter)?;
+					let mut waiting_keys = Vec::new();
+					let mut leased_keys = Vec::new();
+					let (broadcast_tx, _) = broadcast::channel::<()>(16);
+
+					// Determine which keys are currently being fetched and not
+					for key in remaining_keys {
+						let cache_key = self.cache.driver.process_key(&base_key, &key);
+						match self.cache.in_flight.entry_async(cache_key).await {
+							scc::hash_map::Entry::Occupied(broadcast) => {
+								waiting_keys.push((key, broadcast.subscribe()));
+							}
+							scc::hash_map::Entry::Vacant(entry) => {
+								entry.insert_entry(broadcast_tx.clone());
+								leased_keys.push(key);
+							}
+						}
+					}
+
+					let getter2 = getter.clone();
+					let cache = self.cache.clone();
+					let ctx2 = GetterCtx::new(leased_keys.clone());
+					let base_key2 = base_key.clone();
+					let leased_keys2 = leased_keys.clone();
+					let (ctx2, ctx3) = tokio::try_join!(
+						async move {
+							if leased_keys2.is_empty() {
+								Ok(ctx2)
+							} else {
+								getter2(ctx2, leased_keys2).await.map_err(Error::Getter)
+							}
+						},
+						async move {
+							let ctx3 = GetterCtx::new(
+								waiting_keys.iter().map(|(key, _)| key.clone()).collect(),
+							);
+
+							// Wait on keys that are being fetched by another cache req
+							let (succeeded_keys, failed_keys): (Vec<_>, Vec<_>) =
+								futures_util::stream::iter(waiting_keys)
+									.map(|(key, mut rx)| async move {
+										(
+											key,
+											tokio::time::timeout(IN_FLIGHT_TIMEOUT, rx.recv())
+												.await
+												.ok()
+												.map(|x| x.ok())
+												.flatten()
+												.is_some(),
+										)
+									})
+									.buffer_unordered(1024)
+									.collect::<Vec<_>>()
+									.await
+									.into_iter()
+									.partition_map(|(key, succeeded)| {
+										if succeeded {
+											let cache_key =
+												cache.driver.process_key(&base_key2, &key);
+											Either::Left((key, cache_key))
+										} else {
+											Either::Right(key)
+										}
+									});
+							let (succeeded_keys, succeeded_cache_keys): (Vec<_>, Vec<_>) =
+								succeeded_keys.into_iter().unzip();
+
+							let (cached_values_res, ctx3_res) = tokio::join!(
+								cache.driver.get(&base_key2, &succeeded_cache_keys),
+								async {
+									if failed_keys.is_empty() {
+										Ok(ctx3)
+									} else {
+										getter(ctx3, failed_keys).await.map_err(Error::Getter)
+									}
+								},
+							);
+							let mut ctx3 = ctx3_res?;
+
+							match cached_values_res {
+								Ok(cached_values) => {
+									for (key, value) in
+										succeeded_keys.iter().zip(cached_values.into_iter())
+									{
+										if let Some(value_bytes) = value {
+											// Try to decode the value using the driver
+											match decoder(&value_bytes) {
+												Ok(value) => {
+													ctx3.resolve_from_cache(key, value);
+												}
+												Err(err) => {
+													tracing::error!(?err, "Failed to decode value");
+												}
+											}
+										}
+									}
+								}
+								Err(err) => {
+									tracing::error!(?err, "failed to read batch keys from cache");
+
+									metrics::CACHE_REQUEST_ERRORS
+										.with_label_values(&[&base_key2])
+										.inc();
+								}
+							}
+
+							Ok(ctx3)
+						}
+					)?;
+
+					ctx.merge(ctx2);
+					ctx.merge(ctx3);
 
 					// Write the values to cache
 					let expire_at = rivet_util::timestamp::now() + self.ttl;
-					let values_needing_cache_write = ctx.values_needing_cache_write();
+					let entries_needing_cache_write = ctx.entries_needing_cache_write();
 
 					tracing::trace!(
 						unresolved_len,
-						fetched_len = values_needing_cache_write.len(),
+						fetched_len = entries_needing_cache_write.len(),
 						"writing new values to cache"
 					);
 
 					// Convert values to cache bytes
-					let keys_values = values_needing_cache_write
+					let entries_values = entries_needing_cache_write
 						.into_iter()
 						.filter_map(|(key, value)| {
 							// Process the key with the appropriate driver
-							let driver_key = self.cache.driver.process_key(&base_key, &key.key);
+							let cache_key = self.cache.driver.process_key(&base_key, key);
 							// Try to decode the value using the driver
 							match encoder(value) {
-								Ok(value_bytes) => Some((driver_key, value_bytes, expire_at)),
+								Ok(value_bytes) => Some((cache_key, value_bytes, expire_at)),
 								Err(err) => {
 									tracing::error!(?err, "Failed to encode value");
 
@@ -152,28 +262,26 @@ impl RequestConfig {
 						})
 						.collect::<Vec<_>>();
 
-					if !keys_values.is_empty() {
+					if !entries_values.is_empty() {
 						let cache = self.cache.clone();
 						let base_key_clone = base_key.clone();
 
-						let spawn_res = tokio::task::Builder::new().name("cache::write").spawn(
-							async move {
-								if let Err(err) =
-									cache.driver.set(&base_key_clone, keys_values).await
-								{
-									tracing::error!(?err, "failed to write to cache");
-								}
-							}
-							.in_current_span(),
-						);
-						if let Err(err) = spawn_res {
-							tracing::error!(?err, "failed to spawn cache::write task");
+						if let Err(err) = cache.driver.set(&base_key_clone, entries_values).await {
+							tracing::error!(?err, "failed to write to cache");
 						}
+
+						let _ = broadcast_tx.send(());
+					}
+
+					// Release leases
+					for key in leased_keys {
+						let cache_key = self.cache.driver.process_key(&base_key, &key);
+						self.cache.in_flight.remove_async(&cache_key).await;
 					}
 				}
 
 				metrics::CACHE_VALUE_EMPTY_TOTAL
-					.with_label_values(&[base_key])
+					.with_label_values(&[&base_key])
 					.inc_by(ctx.unresolved_keys().len() as u64);
 
 				Ok(ctx.into_values())
@@ -185,13 +293,17 @@ impl RequestConfig {
 				);
 
 				metrics::CACHE_REQUEST_ERRORS
-					.with_label_values(&[base_key])
+					.with_label_values(&[&base_key])
 					.inc();
 
 				// Fall back to the getter since we can't fetch the value from
 				// the cache
 				let keys = ctx.unresolved_keys();
 				let ctx = getter(ctx, keys).await.map_err(Error::Getter)?;
+
+				metrics::CACHE_VALUE_EMPTY_TOTAL
+					.with_label_values(&[&base_key])
+					.inc_by(ctx.unresolved_keys().len() as u64);
 
 				Ok(ctx.into_values())
 			}

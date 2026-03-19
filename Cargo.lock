@@ -4274,6 +4274,7 @@ version = "2.2.0"
 dependencies = [
  "anyhow",
  "futures-util",
+ "itertools 0.14.0",
  "lazy_static",
  "moka",
  "rand 0.8.5",
@@ -4283,6 +4284,7 @@ dependencies = [
  "rivet-metrics",
  "rivet-pools",
  "rivet-util",
+ "scc",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
