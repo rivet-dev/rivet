@@ -1147,7 +1147,7 @@ function BackendSetupRivet() {
 	return (
 		<div className="flex flex-col gap-6">
 			<CopyAgentInstructionsButton provider="rivet" />
-			<div className="rounded-lg border p-6 overflow-hidden">
+			<div className="rounded-lg border bg-muted/30 p-8 overflow-hidden">
 				<AnimatePresence mode="wait">
 					<motion.div
 						key={currentStep}
