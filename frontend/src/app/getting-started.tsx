@@ -19,7 +19,7 @@ import {
 	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
@@ -1147,18 +1147,28 @@ function BackendSetupRivet() {
 	return (
 		<div className="flex flex-col gap-6">
 			<CopyAgentInstructionsButton provider="rivet" />
-			<div className="rounded-lg border p-6">
-				<div className="flex items-center justify-between mb-4">
-					<div className="flex items-center gap-2">
-						<StepNumber n={currentStep + 1} />
-						<p className="font-medium">{step.title}</p>
-					</div>
-					<p className="text-xs text-muted-foreground">
-						Step {currentStep + 1} of {steps.length}
-					</p>
-				</div>
-				<div className="mb-4">{step.description}</div>
-				{step.content}
+			<div className="rounded-lg border p-6 overflow-hidden">
+				<AnimatePresence mode="wait">
+					<motion.div
+						key={currentStep}
+						initial={{ opacity: 0, x: 20 }}
+						animate={{ opacity: 1, x: 0 }}
+						exit={{ opacity: 0, x: -20 }}
+						transition={{ duration: 0.2, ease: "easeInOut" }}
+					>
+						<div className="flex items-center justify-between mb-4">
+							<div className="flex items-center gap-2">
+								<StepNumber n={currentStep + 1} />
+								<p className="font-medium">{step.title}</p>
+							</div>
+							<p className="text-xs text-muted-foreground">
+								Step {currentStep + 1} of {steps.length}
+							</p>
+						</div>
+						<div className="mb-4">{step.description}</div>
+						{step.content}
+					</motion.div>
+				</AnimatePresence>
 				<div className="flex items-center justify-between mt-6 pt-4 border-t">
 					<Button
 						variant="secondary"
