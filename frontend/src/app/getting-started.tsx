@@ -974,13 +974,10 @@ function AgentPromptBanner({ code }: { code: string }) {
 			}}
 			className="relative w-full flex items-center justify-between rounded-lg px-4 py-3 border border-primary overflow-hidden group cursor-pointer"
 		>
-			<div className="flex items-center gap-2 text-left">
-				<Badge className="shrink-0">Recommended</Badge>
-				<span className="text-sm font-medium text-white">
-					Using a Coding Agent? Use this pre-built prompt to get started
-					faster.
-				</span>
-			</div>
+			<span className="text-sm font-medium text-white text-left">
+				Using a Coding Agent? Use this pre-built prompt to get started
+				faster.
+			</span>
 			<Button
 				asChild
 				variant="ghost"
