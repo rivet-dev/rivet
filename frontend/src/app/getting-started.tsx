@@ -895,7 +895,7 @@ function AgentPromptBanner({ code }: { code: string }) {
 			}}
 			className="relative w-full flex items-center justify-between rounded-lg px-4 py-3 border border-primary overflow-hidden group cursor-pointer"
 		>
-			<span className="text-sm font-medium text-left text-primary">
+			<span className="text-sm font-medium text-left text-white">
 				Using a Coding Agent? Use this pre-built prompt to get started
 				faster.
 			</span>
