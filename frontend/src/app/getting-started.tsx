@@ -502,14 +502,16 @@ function RunLocallyStep() {
 	return (
 		<div className="flex flex-col gap-5">
 			<AgentPromptBanner code={agentPrompt} />
-			<div>
-				<p className="font-medium mb-1.5">
-					Follow the quickstart guide
-				</p>
-				<p className="text-sm text-muted-foreground mb-2">
-					Set up a Rivet actor project manually step-by-step.
-				</p>
-				<Button variant="outline" asChild>
+			<div className="w-full flex items-center justify-between rounded-lg px-4 py-3 border border-border">
+				<div>
+					<p className="font-medium mb-1.5">
+						Follow the quickstart guide
+					</p>
+					<p className="text-sm text-muted-foreground">
+						Set up a Rivet actor project manually step-by-step.
+					</p>
+				</div>
+				<Button variant="outline" asChild className="shrink-0 ml-4">
 					<a
 						href="https://rivet.dev/docs/actors/quickstart/"
 						target="_blank"
@@ -891,10 +893,9 @@ function AgentPromptBanner({ code }: { code: string }) {
 				navigator.clipboard.writeText(code);
 				toast.success("Copied to clipboard");
 			}}
-			className="relative w-full flex items-center justify-between rounded-lg px-4 py-3 bg-gradient-to-r from-primary via-orange-400 to-primary overflow-hidden group cursor-pointer"
+			className="relative w-full flex items-center justify-between rounded-lg px-4 py-3 border border-primary overflow-hidden group cursor-pointer"
 		>
-			<div className="absolute inset-px rounded-[7px] bg-background" />
-			<span className="relative z-10 text-sm font-medium bg-gradient-to-r text-left from-primary via-orange-400 to-primary bg-clip-text text-transparent">
+			<span className="text-sm font-medium text-left text-primary">
 				Using a Coding Agent? Use this pre-built prompt to get started
 				faster.
 			</span>
