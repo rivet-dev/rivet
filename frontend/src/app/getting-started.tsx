@@ -50,6 +50,7 @@ import { successfulBackendSetupEffect } from "@/lib/effects";
 import { cloudEnv } from "@/lib/env";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
+import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { DeploymentCheck } from "./deployment-check";
 import { useEndpoint } from "./dialogs/connect-manual-serverfull-frame";
@@ -895,10 +896,13 @@ function AgentPromptBanner({ code }: { code: string }) {
 			}}
 			className="relative w-full flex items-center justify-between rounded-lg px-4 py-3 border border-primary overflow-hidden group cursor-pointer"
 		>
-			<span className="text-sm font-medium text-left text-white">
-				Using a Coding Agent? Use this pre-built prompt to get started
-				faster.
-			</span>
+			<div className="flex items-center gap-2 text-left">
+				<Badge className="shrink-0">Recommended</Badge>
+				<span className="text-sm font-medium text-white">
+					Using a Coding Agent? Use this pre-built prompt to get started
+					faster.
+				</span>
+			</div>
 			<Button
 				asChild
 				variant="ghost"
