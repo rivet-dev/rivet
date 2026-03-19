@@ -360,6 +360,8 @@ function ProviderSetup() {
 									onSelect={() =>
 										setValue("provider", rivetCloud.name)
 									}
+									className="py-5"
+									iconClassName="!w-7"
 								/>
 							) : null}
 							<div className="grid grid-cols-2 gap-2">
@@ -388,10 +390,14 @@ function ProviderCard({
 	option,
 	isSelected,
 	onSelect,
+	className,
+	iconClassName,
 }: {
 	option: (typeof deployOptions)[number];
 	isSelected: boolean;
 	onSelect: () => void;
+	className?: string;
+	iconClassName?: string;
 }) {
 	return (
 		<button
@@ -402,11 +408,12 @@ function ProviderCard({
 				isSelected
 					? "border-primary bg-primary/5"
 					: "border-border hover:border-muted-foreground/50",
+				className,
 			)}
 		>
 			<Icon
 				icon={option.icon}
-				className="!w-5 h-auto shrink-0 text-muted-foreground"
+				className={cn("!w-5 h-auto shrink-0 text-muted-foreground", iconClassName)}
 			/>
 			<div className="min-w-0">
 				<div className="flex items-center gap-2">
