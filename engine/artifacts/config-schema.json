@@ -240,7 +240,6 @@
     "CacheDriver": {
       "type": "string",
       "enum": [
-        "redis",
         "in_memory"
       ]
     },
