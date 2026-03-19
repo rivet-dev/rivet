@@ -342,53 +342,91 @@ function ProviderSetup() {
 			<FormField
 				control={control}
 				name="provider"
-				render={({ field }) => (
-					<div className="grid grid-cols-2 gap-2">
-						{filteredOptions.map((option) => {
-							const isSelected = field.value === option.name;
-							return (
-								<button
-									key={option.name}
-									type="button"
-									onClick={() =>
-										setValue("provider", option.name)
+				render={({ field }) => {
+					const rivetCloud = filteredOptions.find(
+						(o) => o.name === "rivet",
+					);
+					const rest = filteredOptions.filter(
+						(o) => o.name !== "rivet",
+					);
+					return (
+						<div className="flex flex-col gap-2">
+							{rivetCloud ? (
+								<ProviderCard
+									option={rivetCloud}
+									isSelected={
+										field.value === rivetCloud.name
 									}
-									className={cn(
-										"flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors cursor-pointer",
-										isSelected
-											? "border-primary bg-primary/5"
-											: "border-border hover:border-muted-foreground/50",
-									)}
-								>
-									<Icon
-										icon={option.icon}
-										className="!w-5 h-auto shrink-0 text-muted-foreground"
+									onSelect={() =>
+										setValue("provider", rivetCloud.name)
+									}
+								/>
+							) : null}
+							<div className="grid grid-cols-2 gap-2">
+								{rest.map((option) => (
+									<ProviderCard
+										key={option.name}
+										option={option}
+										isSelected={
+											field.value === option.name
+										}
+										onSelect={() =>
+											setValue("provider", option.name)
+										}
 									/>
-									<div className="min-w-0">
-										<div className="flex items-center gap-2">
-											<p className="text-sm font-medium truncate">
-												{option.displayName}
-											</p>
-											{option.badge ? (
-												<Badge
-													variant="secondary"
-													className="shrink-0 text-[10px] px-1.5 py-0"
-												>
-													{option.badge}
-												</Badge>
-											) : null}
-										</div>
-										<p className="text-xs text-muted-foreground truncate">
-											{option.description}
-										</p>
-									</div>
-								</button>
-							);
-						})}
-					</div>
-				)}
+								))}
+							</div>
+						</div>
+					);
+				}}
 			/>
 		</div>
+	);
+}
+
+function ProviderCard({
+	option,
+	isSelected,
+	onSelect,
+}: {
+	option: (typeof deployOptions)[number];
+	isSelected: boolean;
+	onSelect: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onSelect}
+			className={cn(
+				"flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors cursor-pointer",
+				isSelected
+					? "border-primary bg-primary/5"
+					: "border-border hover:border-muted-foreground/50",
+			)}
+		>
+			<Icon
+				icon={option.icon}
+				className="!w-5 h-auto shrink-0 text-muted-foreground"
+			/>
+			<div className="min-w-0">
+				<div className="flex items-center gap-2">
+					<p className="text-sm font-medium truncate">
+						{option.displayName}
+					</p>
+					{option.badge ? (
+						<Badge
+							variant="secondary"
+							className="shrink-0 text-[10px] px-1.5 py-0"
+						>
+							{option.badge}
+						</Badge>
+					) : null}
+				</div>
+				<p className="text-xs text-muted-foreground truncate">
+					{option.description}
+				</p>
+			</div>
+		</button>
 	);
 }
 
