@@ -445,11 +445,6 @@ function InstallStep() {
 				<CodePreview code="npx skills add rivet-dev/skills" language="bash" />
 			</div>
 			<div>
-				<p className="font-medium mb-1.5">Install RivetKit manually</p>
-				<p className="text-sm text-muted-foreground mb-3">
-					Or add RivetKit to your project manually to get started with
-					Rivet Actors.
-				</p>
 				<PackageManagerCode
 					npx="npm install rivetkit"
 					yarn="yarn add rivetkit"
