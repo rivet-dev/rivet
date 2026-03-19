@@ -1137,8 +1137,8 @@ function BackendSetupRivet() {
 	return (
 		<div className="flex flex-col gap-6">
 			<CopyAgentInstructionsButton provider="rivet" />
-			<div className="rounded-lg border p-4">
-				<div className="flex items-center justify-between mb-3">
+			<div className="rounded-lg border p-6">
+				<div className="flex items-center justify-between mb-4">
 					<div className="flex items-center gap-2">
 						<StepNumber n={currentStep + 1} />
 						<p className="font-medium">{step.title}</p>
@@ -1147,11 +1147,11 @@ function BackendSetupRivet() {
 						Step {currentStep + 1} of {steps.length}
 					</p>
 				</div>
-				<div className="mb-3">{step.description}</div>
+				<div className="mb-4">{step.description}</div>
 				{step.content}
-				<div className="flex items-center justify-between mt-4">
+				<div className="flex items-center justify-between mt-6 pt-4 border-t">
 					<Button
-						variant="outline"
+						variant="secondary"
 						size="sm"
 						disabled={currentStep === 0}
 						onClick={() => setCurrentStep((s) => s - 1)}
@@ -1159,7 +1159,7 @@ function BackendSetupRivet() {
 						Previous
 					</Button>
 					<Button
-						variant="outline"
+						variant="default"
 						size="sm"
 						disabled={currentStep === steps.length - 1}
 						onClick={() => setCurrentStep((s) => s + 1)}
