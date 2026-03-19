@@ -433,22 +433,22 @@ function ProviderCard({
 function InstallStep() {
 	return (
 		<div className="flex flex-col gap-5">
-			<div>
+			<div className="relative rounded-lg border border-primary p-4 pt-5">
+				<Badge className="absolute -top-2.5 left-3 z-10 bg-background">Recommended</Badge>
 				<p className="font-medium mb-1.5">
-					Install Rivet Skills{" "}
-					<Badge className="ml-1 align-middle">Recommended</Badge>
+					Install Rivet Skills
 				</p>
 				<p className="text-sm text-muted-foreground mb-3">
-					Add Rivet skills to your coding agent for guided setup and
-					development.
+					Run this command in your coding agent to install Rivet skills
+					for guided setup and development.
 				</p>
 				<CodePreview code="npx skills add rivet-dev/skills" />
 			</div>
 			<div>
 				<p className="font-medium mb-1.5">Install RivetKit manually</p>
 				<p className="text-sm text-muted-foreground mb-3">
-					Add RivetKit to your project to get started with Rivet
-					Actors.
+					Or add RivetKit to your project manually to get started with
+					Rivet Actors.
 				</p>
 				<PackageManagerCode
 					npx="npm install rivetkit"
