@@ -416,8 +416,8 @@ function ProviderCard({
 				className={cn("!w-5 h-auto shrink-0 text-muted-foreground", iconClassName)}
 			/>
 			<div className="min-w-0">
-				<div className="flex items-center gap-2">
-					<p className="text-sm font-medium truncate">
+				<div className="flex items-center gap-2 flex-wrap">
+					<p className="text-sm font-medium">
 						{option.displayName}
 					</p>
 					{option.badge ? (
@@ -429,7 +429,7 @@ function ProviderCard({
 						</Badge>
 					) : null}
 				</div>
-				<p className="text-xs text-muted-foreground truncate">
+				<p className="text-xs text-muted-foreground">
 					{option.description}
 				</p>
 			</div>
