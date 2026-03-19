@@ -449,7 +449,7 @@ function InstallStep() {
 					Run this command in your coding agent to install Rivet skills
 					for guided setup and development.
 				</p>
-				<div className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-3 py-2">
+				<div className="flex items-center justify-between gap-2 rounded-md px-3 py-2">
 					<CodePreview code="npx skills add rivet-dev/skills" language="bash" />
 					<Button
 						type="button"
