@@ -434,10 +434,10 @@ function InstallStep() {
 	return (
 		<div className="flex flex-col gap-5">
 			<div>
-				<div className="flex items-center gap-2 mb-1.5">
-					<Badge className="shrink-0">Recommended</Badge>
-					<p className="font-medium">Install Rivet Skills</p>
-				</div>
+				<p className="font-medium mb-1.5">
+					Install Rivet Skills{" "}
+					<Badge className="ml-1 align-middle">Recommended</Badge>
+				</p>
 				<p className="text-sm text-muted-foreground mb-3">
 					Add Rivet skills to your coding agent for guided setup and
 					development.
