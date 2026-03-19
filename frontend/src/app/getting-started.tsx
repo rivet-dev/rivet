@@ -972,8 +972,9 @@ function AgentPromptBanner({ code }: { code: string }) {
 				navigator.clipboard.writeText(code);
 				toast.success("Copied to clipboard");
 			}}
-			className="relative w-full flex items-center justify-between rounded-lg px-4 py-3 border border-primary overflow-hidden group cursor-pointer"
+			className="relative w-full flex items-center justify-between rounded-lg px-4 py-3 border border-primary group cursor-pointer"
 		>
+			<Badge className="absolute -top-2.5 left-3 z-10 bg-background">Recommended</Badge>
 			<span className="text-sm font-medium text-white text-left">
 				Using a Coding Agent? Use this pre-built prompt to get started
 				faster.
