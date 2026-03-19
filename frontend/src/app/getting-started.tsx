@@ -19,7 +19,7 @@ import {
 	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
@@ -50,6 +50,8 @@ import { successfulBackendSetupEffect } from "@/lib/effects";
 import { cloudEnv } from "@/lib/env";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
+import { cn } from "../components/lib/utils";
+import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { DeploymentCheck } from "./deployment-check";
 import { useEndpoint } from "./dialogs/connect-manual-serverfull-frame";
@@ -64,7 +66,7 @@ import { Content } from "./layout";
 const stepper = defineStepper(
 	{
 		id: "install",
-		title: "Install RivetKit",
+		title: "Install RivetKit & Skills",
 		schema: z.object({}),
 		group: "local",
 	},
@@ -326,6 +328,10 @@ function StepperFooter() {
 function ProviderSetup() {
 	const { setValue, control } = useFormContext();
 
+	const filteredOptions = deployOptions.filter(
+		(option) => !option.specializedPlatform,
+	);
+
 	return (
 		<div>
 			<p className="text-sm text-muted-foreground mb-4">
@@ -333,52 +339,143 @@ function ProviderSetup() {
 				solution. We manage the actor orchestration, state, and scaling
 				for you.
 			</p>
-			<div className="flex items-center justify-start gap-4">
-				<FormField
-					control={control}
-					name="provider"
-					render={({ field }) => (
-						<Combobox
-							className="w-full"
-							onValueChange={(value) =>
-								setValue("provider", value)
-							}
-							value={field.value}
-							options={deployOptions
-								.filter((option) => !option.specializedPlatform)
-								.map((option) => ({
-									value: option.name,
-									label: (
-										<div className="flex items-center">
-											<Icon
-												icon={option.icon}
-												className="me-2 !w-4 h-auto"
-											/>
-											{option.displayName}
-										</div>
-									),
-								}))}
-						/>
-					)}
-				/>
-			</div>
+			<FormField
+				control={control}
+				name="provider"
+				render={({ field }) => {
+					const rivetCloud = filteredOptions.find(
+						(o) => o.name === "rivet",
+					);
+					const rest = filteredOptions.filter(
+						(o) => o.name !== "rivet",
+					);
+					return (
+						<div className="flex flex-col gap-2">
+							{rivetCloud ? (
+								<ProviderCard
+									option={rivetCloud}
+									isSelected={
+										field.value === rivetCloud.name
+									}
+									onSelect={() =>
+										setValue("provider", rivetCloud.name)
+									}
+									className="py-5"
+									iconClassName="!w-7"
+								/>
+							) : null}
+							<div className="grid grid-cols-2 gap-2">
+								{rest.map((option) => (
+									<ProviderCard
+										key={option.name}
+										option={option}
+										isSelected={
+											field.value === option.name
+										}
+										onSelect={() =>
+											setValue("provider", option.name)
+										}
+									/>
+								))}
+							</div>
+						</div>
+					);
+				}}
+			/>
 		</div>
+	);
+}
+
+function ProviderCard({
+	option,
+	isSelected,
+	onSelect,
+	className,
+	iconClassName,
+}: {
+	option: (typeof deployOptions)[number];
+	isSelected: boolean;
+	onSelect: () => void;
+	className?: string;
+	iconClassName?: string;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onSelect}
+			className={cn(
+				"flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors cursor-pointer",
+				isSelected
+					? "border-primary bg-primary/5"
+					: "border-border hover:border-muted-foreground/50",
+				className,
+			)}
+		>
+			<Icon
+				icon={option.icon}
+				className={cn("!w-5 h-auto shrink-0 text-muted-foreground", iconClassName)}
+			/>
+			<div className="min-w-0">
+				<div className="flex items-center gap-2 flex-wrap">
+					<p className="text-sm font-medium">
+						{option.displayName}
+					</p>
+					{option.badge ? (
+						<Badge
+							variant="secondary"
+							className="shrink-0 text-[10px] px-1.5 py-0"
+						>
+							{option.badge}
+						</Badge>
+					) : null}
+				</div>
+				<p className="text-xs text-muted-foreground">
+					{option.description}
+				</p>
+			</div>
+		</button>
 	);
 }
 
 function InstallStep() {
 	return (
-		<div className="flex flex-col gap-4">
-			<p className="text-sm text-muted-foreground">
-				Add RivetKit to your project to get started with Rivet Actors.
-			</p>
-			<PackageManagerCode
-				npx="npm install rivetkit"
-				yarn="yarn add rivetkit"
-				pnpm="pnpm add rivetkit"
-				bun="bun add rivetkit"
-				deno="deno add npm:rivetkit"
-			/>
+		<div className="flex flex-col gap-5">
+			<div className="relative rounded-lg border border-primary p-4 pt-5">
+				<Badge className="absolute -top-2.5 left-4 z-10 bg-background">Recommended</Badge>
+				<p className="font-medium mb-1.5">
+					Install Rivet Skills
+				</p>
+				<p className="text-sm text-muted-foreground mb-3">
+					Run this command in your coding agent to install Rivet skills
+					for guided setup and development.
+				</p>
+				<div className="flex items-center justify-between gap-2 rounded-md px-3 py-2">
+					<CodePreview code="npx skills add rivet-dev/skills" language="bash" />
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className="shrink-0"
+						onClick={(e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							navigator.clipboard.writeText("npx skills add rivet-dev/skills");
+							toast.success("Copied to clipboard");
+						}}
+					>
+						<Icon icon={faCopy} className="w-3.5 h-3.5" />
+					</Button>
+				</div>
+			</div>
+			<div>
+				<PackageManagerCode
+					npx="npm install rivetkit"
+					yarn="yarn add rivetkit"
+					pnpm="pnpm add rivetkit"
+					bun="bun add rivetkit"
+					deno="deno add npm:rivetkit"
+				/>
+			</div>
 		</div>
 	);
 }
@@ -502,14 +599,16 @@ function RunLocallyStep() {
 	return (
 		<div className="flex flex-col gap-5">
 			<AgentPromptBanner code={agentPrompt} />
-			<div>
-				<p className="font-medium mb-1.5">
-					Follow the quickstart guide
-				</p>
-				<p className="text-sm text-muted-foreground mb-2">
-					Set up a Rivet actor project manually step-by-step.
-				</p>
-				<Button variant="outline" asChild>
+			<div className="w-full flex items-center justify-between rounded-lg px-4 py-3 border border-border">
+				<div>
+					<p className="font-medium mb-1.5">
+						Follow the quickstart guide
+					</p>
+					<p className="text-sm text-muted-foreground">
+						Set up a Rivet actor project manually step-by-step.
+					</p>
+				</div>
+				<Button variant="outline" asChild className="shrink-0 ml-4">
 					<a
 						href="https://rivet.dev/docs/actors/quickstart/"
 						target="_blank"
@@ -891,10 +990,10 @@ function AgentPromptBanner({ code }: { code: string }) {
 				navigator.clipboard.writeText(code);
 				toast.success("Copied to clipboard");
 			}}
-			className="relative w-full flex items-center justify-between rounded-lg px-4 py-3 bg-gradient-to-r from-primary via-orange-400 to-primary overflow-hidden group cursor-pointer"
+			className="relative w-full flex items-center justify-between rounded-lg px-4 py-5 border border-primary group cursor-pointer"
 		>
-			<div className="absolute inset-px rounded-[7px] bg-background" />
-			<span className="relative z-10 text-sm font-medium bg-gradient-to-r text-left from-primary via-orange-400 to-primary bg-clip-text text-transparent">
+			<Badge className="absolute -top-2.5 left-4 z-10 bg-background">Recommended</Badge>
+			<span className="text-sm font-medium text-white text-left">
 				Using a Coding Agent? Use this pre-built prompt to get started
 				faster.
 			</span>
@@ -962,112 +1061,151 @@ function BackendSetupRivet() {
 		? `gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"`
 		: "gh secret set RIVET_CLOUD_TOKEN";
 
+	const [currentStep, setCurrentStep] = useState(0);
+	const [direction, setDirection] = useState(1);
+
+	const steps = [
+		{
+			title: "Create a Dockerfile for your RivetKit deployment",
+			description: (
+				<p className="text-sm text-muted-foreground">
+					Add a{" "}
+					<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+						Dockerfile
+					</code>{" "}
+					to the root of your project that builds and runs your
+					RivetKit server.
+				</p>
+			),
+			content: null,
+		},
+		{
+			title: "Add GitHub secret",
+			description: (
+				<p className="text-sm text-muted-foreground">
+					Add your Rivet token as a repository secret named{" "}
+					<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+						RIVET_CLOUD_TOKEN
+					</code>
+					.
+				</p>
+			),
+			content: (
+				<CodeGroup className="my-0">
+					{[
+						<CodeFrame
+							key="gh-secret"
+							language="bash"
+							title="bash"
+							code={() => ghSecretCmd}
+							className="m-0"
+						>
+							<CodePreview
+								language="bash"
+								className="text-left"
+								code={ghSecretCmd}
+							/>
+						</CodeFrame>,
+					]}
+				</CodeGroup>
+			),
+		},
+		{
+			title: "Add GitHub Action",
+			description: (
+				<p className="text-sm text-muted-foreground">
+					Create{" "}
+					<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+						.github/workflows/rivet-deploy.yml
+					</code>{" "}
+					to automatically deploy on every push and pull request.
+				</p>
+			),
+			content: (
+				<CodeGroup className="my-0">
+					{[
+						<CodeFrame
+							key="gh-action"
+							language="yaml"
+							title=".github/workflows/rivet-deploy.yml"
+							code={() => githubActionYaml}
+							className="m-0"
+						>
+							<CodePreview
+								language="yaml"
+								className="text-left"
+								code={githubActionYaml}
+							/>
+						</CodeFrame>,
+					]}
+				</CodeGroup>
+			),
+		},
+	];
+
+	const step = steps[currentStep];
+
 	return (
 		<div className="flex flex-col gap-6">
 			<CopyAgentInstructionsButton provider="rivet" />
-			<div className="flex gap-3">
-				<StepNumber n={1} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">
-						Create a Dockerfile for your RivetKit deployment
-					</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						Add a{" "}
-						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
-							Dockerfile
-						</code>{" "}
-						to the root of your project that builds and runs your
-						RivetKit server.
-					</p>
+			<div className="rounded-lg border bg-muted/30 p-8 overflow-hidden">
+				<AnimatePresence mode="wait">
+					<motion.div
+						key={currentStep}
+						initial={{ opacity: 0, x: direction * 20 }}
+						animate={{ opacity: 1, x: 0 }}
+						exit={{ opacity: 0, x: direction * -20 }}
+						transition={{ duration: 0.2, ease: "easeInOut" }}
+					>
+						<p className="font-medium mb-4">{step.title}</p>
+						<div className="mb-4">{step.description}</div>
+						{step.content}
+					</motion.div>
+				</AnimatePresence>
+				<div className="flex items-center justify-between mt-6 pt-4 border-t">
+					{currentStep > 0 ? (
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => { setDirection(-1); setCurrentStep((s) => s - 1); }}
+						>
+							Previous
+						</Button>
+					) : <div />}
+					{currentStep < steps.length - 1 ? (
+						<Button
+							type="button"
+							onClick={() => { setDirection(1); setCurrentStep((s) => s + 1); }}
+						>
+							Next
+						</Button>
+					) : null}
 				</div>
 			</div>
-			<div className="flex gap-3">
-				<StepNumber n={2} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Add GitHub secret</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						Add your Rivet token as a repository secret named{" "}
-						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
-							RIVET_CLOUD_TOKEN
-						</code>
-						.
-					</p>
-					<CodeGroup className="my-0">
-						{[
-							<CodeFrame
-								key="gh-secret"
-								language="bash"
-								title="bash"
-								code={() => ghSecretCmd}
-								className="m-0"
-							>
-								<CodePreview
-									language="bash"
-									className="text-left"
-									code={ghSecretCmd}
-								/>
-							</CodeFrame>,
-						]}
-					</CodeGroup>
-				</div>
-			</div>
-			<div className="flex gap-3">
-				<StepNumber n={3} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Add GitHub Action</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						Create{" "}
-						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
-							.github/workflows/rivet-deploy.yml
-						</code>{" "}
-						to automatically deploy on every push and pull request.
-					</p>
-					<CodeGroup className="my-0">
-						{[
-							<CodeFrame
-								key="gh-action"
-								language="yaml"
-								title=".github/workflows/rivet-deploy.yml"
-								code={() => githubActionYaml}
-								className="m-0"
-							>
-								<CodePreview
-									language="yaml"
-									className="text-left"
-									code={githubActionYaml}
-								/>
-							</CodeFrame>,
-						]}
-					</CodeGroup>
-				</div>
-			</div>
-			<div className="flex gap-3">
-				<StepNumber n={4} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Deploy to Rivet Cloud</p>
-					<p className="text-sm text-muted-foreground mb-2">
-						Push your changes to trigger the{" "}
-						<strong>Rivet Deploy</strong> workflow. The status check
-						below will update automatically once your backend is
-						deployed.
-					</p>
-					<div className="border rounded-md py-8">
-						<div className="flex gap-2 justify-center items-center flex-col py-2 px-8">
-							<DeploymentCheck
-								validateConfig={(data) =>
-									!!data?.find(([, value]) =>
-										Object.values(value.datacenters).some(
-											(dc) =>
-												dc.serverless &&
-												deriveProviderFromMetadata(
-													dc.metadata,
-												) === "rivet",
-										),
-									)
-								}
-								validatePool={(data) => !!data?.config.image}
-							/>
-						</div>
+			<div>
+				<p className="font-medium mb-2">Deploy to Rivet Cloud</p>
+				<p className="text-sm text-muted-foreground mb-2">
+					Push your changes to trigger the{" "}
+					<strong>Rivet Deploy</strong> workflow. The status check
+					below will update automatically once your backend is
+					deployed.
+				</p>
+				<div className="border rounded-md py-8">
+					<div className="flex gap-2 justify-center items-center flex-col py-2 px-8">
+						<DeploymentCheck
+							validateConfig={(data) =>
+								!!data?.find(([, value]) =>
+									Object.values(value.datacenters).some(
+										(dc) =>
+											dc.serverless &&
+											deriveProviderFromMetadata(
+												dc.metadata,
+											) === "rivet",
+									),
+								)
+							}
+							validatePool={(data) => !!data?.config.image}
+						/>
 					</div>
 				</div>
 			</div>
