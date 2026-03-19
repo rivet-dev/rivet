@@ -395,6 +395,7 @@ function ProviderSetup() {
 function InstallStep() {
 	return (
 		<div className="flex flex-col gap-4">
+			<AgentPromptBanner code={agentPrompt} />
 			<p className="text-sm text-muted-foreground">
 				Add RivetKit to your project to get started with Rivet Actors.
 			</p>
