@@ -1171,16 +1171,15 @@ function BackendSetupRivet() {
 				</AnimatePresence>
 				<div className="flex items-center justify-between mt-6 pt-4 border-t">
 					<Button
-						variant="secondary"
-						size="sm"
+						type="button"
+						variant="outline"
 						disabled={currentStep === 0}
 						onClick={() => setCurrentStep((s) => s - 1)}
 					>
 						Previous
 					</Button>
 					<Button
-						variant="default"
-						size="sm"
+						type="button"
 						disabled={currentStep === steps.length - 1}
 						onClick={() => setCurrentStep((s) => s + 1)}
 					>
