@@ -1062,6 +1062,7 @@ function BackendSetupRivet() {
 		: "gh secret set RIVET_CLOUD_TOKEN";
 
 	const [currentStep, setCurrentStep] = useState(0);
+	const [direction, setDirection] = useState(1);
 
 	const steps = [
 		{
@@ -1151,9 +1152,9 @@ function BackendSetupRivet() {
 				<AnimatePresence mode="wait">
 					<motion.div
 						key={currentStep}
-						initial={{ opacity: 0, x: 20 }}
+						initial={{ opacity: 0, x: direction * 20 }}
 						animate={{ opacity: 1, x: 0 }}
-						exit={{ opacity: 0, x: -20 }}
+						exit={{ opacity: 0, x: direction * -20 }}
 						transition={{ duration: 0.2, ease: "easeInOut" }}
 					>
 						<div className="flex items-center justify-between mb-4">
@@ -1174,14 +1175,14 @@ function BackendSetupRivet() {
 						type="button"
 						variant="outline"
 						disabled={currentStep === 0}
-						onClick={() => setCurrentStep((s) => s - 1)}
+						onClick={() => { setDirection(-1); setCurrentStep((s) => s - 1); }}
 					>
 						Previous
 					</Button>
 					<Button
 						type="button"
 						disabled={currentStep === steps.length - 1}
-						onClick={() => setCurrentStep((s) => s + 1)}
+						onClick={() => { setDirection(1); setCurrentStep((s) => s + 1); }}
 					>
 						Next
 					</Button>
