@@ -66,7 +66,7 @@ import { Content } from "./layout";
 const stepper = defineStepper(
 	{
 		id: "install",
-		title: "Install RivetKit",
+		title: "Install RivetKit & Skills",
 		schema: z.object({}),
 		group: "local",
 	},
