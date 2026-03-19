@@ -50,6 +50,7 @@ import { successfulBackendSetupEffect } from "@/lib/effects";
 import { cloudEnv } from "@/lib/env";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
+import { cn } from "../components/lib/utils";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { DeploymentCheck } from "./deployment-check";
@@ -327,6 +328,10 @@ function StepperFooter() {
 function ProviderSetup() {
 	const { setValue, control } = useFormContext();
 
+	const filteredOptions = deployOptions.filter(
+		(option) => !option.specializedPlatform,
+	);
+
 	return (
 		<div>
 			<p className="text-sm text-muted-foreground mb-4">
@@ -334,35 +339,55 @@ function ProviderSetup() {
 				solution. We manage the actor orchestration, state, and scaling
 				for you.
 			</p>
-			<div className="flex items-center justify-start gap-4">
-				<FormField
-					control={control}
-					name="provider"
-					render={({ field }) => (
-						<Combobox
-							className="w-full"
-							onValueChange={(value) =>
-								setValue("provider", value)
-							}
-							value={field.value}
-							options={deployOptions
-								.filter((option) => !option.specializedPlatform)
-								.map((option) => ({
-									value: option.name,
-									label: (
-										<div className="flex items-center">
-											<Icon
-												icon={option.icon}
-												className="me-2 !w-4 h-auto"
-											/>
-											{option.displayName}
+			<FormField
+				control={control}
+				name="provider"
+				render={({ field }) => (
+					<div className="grid grid-cols-2 gap-2">
+						{filteredOptions.map((option) => {
+							const isSelected = field.value === option.name;
+							return (
+								<button
+									key={option.name}
+									type="button"
+									onClick={() =>
+										setValue("provider", option.name)
+									}
+									className={cn(
+										"flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors cursor-pointer",
+										isSelected
+											? "border-primary bg-primary/5"
+											: "border-border hover:border-muted-foreground/50",
+									)}
+								>
+									<Icon
+										icon={option.icon}
+										className="!w-5 h-auto shrink-0 text-muted-foreground"
+									/>
+									<div className="min-w-0">
+										<div className="flex items-center gap-2">
+											<p className="text-sm font-medium truncate">
+												{option.displayName}
+											</p>
+											{option.badge ? (
+												<Badge
+													variant="secondary"
+													className="shrink-0 text-[10px] px-1.5 py-0"
+												>
+													{option.badge}
+												</Badge>
+											) : null}
 										</div>
-									),
-								}))}
-						/>
-					)}
-				/>
-			</div>
+										<p className="text-xs text-muted-foreground truncate">
+											{option.description}
+										</p>
+									</div>
+								</button>
+							);
+						})}
+					</div>
+				)}
+			/>
 		</div>
 	);
 }
