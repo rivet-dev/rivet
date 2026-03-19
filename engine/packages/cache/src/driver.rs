@@ -23,7 +23,7 @@ impl Driver {
 	pub async fn get<'a>(
 		&'a self,
 		base_key: &'a str,
-		keys: Vec<RawCacheKey>,
+		keys: &[RawCacheKey],
 	) -> Result<Vec<Option<CacheValue>>, Error> {
 		match self {
 			Driver::InMemory(d) => d.get(base_key, keys).await,
@@ -156,14 +156,14 @@ impl InMemoryDriver {
 	pub async fn get<'a>(
 		&'a self,
 		_base_key: &'a str,
-		keys: Vec<RawCacheKey>,
+		keys: &[RawCacheKey],
 	) -> Result<Vec<Option<CacheValue>>, Error> {
 		let mut result = Vec::with_capacity(keys.len());
 
 		// Async block for metrics
 		async {
 			for key in keys {
-				result.push(self.cache.get(&*key).await.map(|x| x.value.clone()));
+				result.push(self.cache.get(&**key).await.map(|x| x.value.clone()));
 			}
 		}
 		.instrument(tracing::info_span!("get"))
