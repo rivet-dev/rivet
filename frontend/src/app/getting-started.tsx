@@ -1157,35 +1157,29 @@ function BackendSetupRivet() {
 						exit={{ opacity: 0, x: direction * -20 }}
 						transition={{ duration: 0.2, ease: "easeInOut" }}
 					>
-						<div className="flex items-center justify-between mb-4">
-							<div className="flex items-center gap-2">
-								<StepNumber n={currentStep + 1} />
-								<p className="font-medium">{step.title}</p>
-							</div>
-							<p className="text-xs text-muted-foreground">
-								Step {currentStep + 1} of {steps.length}
-							</p>
-						</div>
+						<p className="font-medium mb-4">{step.title}</p>
 						<div className="mb-4">{step.description}</div>
 						{step.content}
 					</motion.div>
 				</AnimatePresence>
 				<div className="flex items-center justify-between mt-6 pt-4 border-t">
-					<Button
-						type="button"
-						variant="outline"
-						disabled={currentStep === 0}
-						onClick={() => { setDirection(-1); setCurrentStep((s) => s - 1); }}
-					>
-						Previous
-					</Button>
-					<Button
-						type="button"
-						disabled={currentStep === steps.length - 1}
-						onClick={() => { setDirection(1); setCurrentStep((s) => s + 1); }}
-					>
-						Next
-					</Button>
+					{currentStep > 0 ? (
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => { setDirection(-1); setCurrentStep((s) => s - 1); }}
+						>
+							Previous
+						</Button>
+					) : <div />}
+					{currentStep < steps.length - 1 ? (
+						<Button
+							type="button"
+							onClick={() => { setDirection(1); setCurrentStep((s) => s + 1); }}
+						>
+							Next
+						</Button>
+					) : null}
 				</div>
 			</div>
 			<div>
