@@ -442,13 +442,7 @@ function InstallStep() {
 					Add Rivet skills to your coding agent for guided setup and
 					development.
 				</p>
-				<PackageManagerCode
-					npx="npx skills add rivet-dev/skills"
-					yarn="npx skills add rivet-dev/skills"
-					pnpm="npx skills add rivet-dev/skills"
-					bun="npx skills add rivet-dev/skills"
-					deno="npx skills add rivet-dev/skills"
-				/>
+				<CodePreview code="npx skills add rivet-dev/skills" />
 			</div>
 			<div>
 				<p className="font-medium mb-1.5">Install RivetKit manually</p>
