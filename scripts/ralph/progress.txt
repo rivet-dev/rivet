@@ -125,3 +125,19 @@ Started: Thu Mar 19 04:45:11 PM PDT 2026
   - Workflow node TYPE_COLORS (category icons) and statusColor (status indicators) serve different semantic purposes and can use different color palettes.
   - Pre-existing TS errors (8 total) remain unchanged
 ---
+
+## 2026-03-20T00:35:00Z - US-009
+- Took 6 after screenshots of the Rivet frontend dashboard with updated Foundry theme
+- Screenshots saved to `.agent/screenshots/after/`:
+  - 01-actors-dashboard.png (main view with sidebar, zinc background)
+  - 02-overview.png (Settings page with Providers/Runners tables)
+  - 03-actors-list.png (Actor instances with empty state, quick start buttons)
+  - 04-create-actor-dialog.png (Modal with form, orange Create button)
+  - 05-404-page.png (Error card with Go home button)
+  - 06-namespace-dropdown.png (Dropdown with namespace selection)
+- Verified via browser: all screens show updated zinc palette, IBM Plex Sans font, orange accent buttons
+- **Learnings for future iterations:**
+  - Engine and frontend servers from previous iterations persist across agent runs
+  - agent-browser works well for automated screenshot capture with `screenshot <path>` command
+  - The namespace dropdown combobox is the first `combobox` ref in the sidebar snapshot
+---

@@ -173,7 +173,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "Use identical navigation paths and screen names as US-001 so the before/after pairs are easy to compare side-by-side."
     }
   ]
