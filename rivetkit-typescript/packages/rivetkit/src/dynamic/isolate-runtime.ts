@@ -1596,10 +1596,7 @@ function resolveSecureExecEntryPath(): string {
 		}
 	}
 
-	const packageSpecifiers = [
-		["secure", "exec"].join("-"),
-		["sandboxed", "node"].join("-"),
-	];
+	const packageSpecifiers = [["secure", "exec"].join("-")];
 	for (const packageSpecifier of packageSpecifiers) {
 		try {
 			return resolver.resolve(packageSpecifier);
@@ -1616,10 +1613,6 @@ function resolveSecureExecEntryPath(): string {
 		path.join(
 			process.env.HOME ?? "",
 			"secure-exec-rivet/packages/secure-exec/dist/index.js",
-		),
-		path.join(
-			process.env.HOME ?? "",
-			"secure-exec-rivet/packages/sandboxed-node/dist/index.js",
 		),
 	];
 	for (const candidatePath of localDistCandidates) {

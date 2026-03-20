@@ -555,8 +555,8 @@ importers:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
       secure-exec:
-        specifier: https://pkg.pr.new/rivet-dev/secure-exec@7659aba
-        version: https://pkg.pr.new/rivet-dev/secure-exec@7659aba
+        specifier: 0.1.0
+        version: 0.1.0
       srvx:
         specifier: ^0.10.0
         version: 0.10.0
@@ -4417,6 +4417,9 @@ importers:
       '@rivetkit/workflow-engine':
         specifier: workspace:*
         version: link:../workflow-engine
+      '@secure-exec/typescript':
+        specifier: '>=0.1.0'
+        version: 0.1.0
       cbor-x:
         specifier: ^1.6.0
         version: 1.6.0
@@ -4447,6 +4450,9 @@ importers:
       sandbox-agent:
         specifier: ^0.4.0-rc.1
         version: 0.4.0(@daytonaio/sdk@0.150.0(ws@8.19.0))(@e2b/code-interpreter@2.3.3)(dockerode@4.0.9)(get-port@7.1.0)(zod@4.1.13)
+      secure-exec:
+        specifier: '>=0.1.0'
+        version: 0.1.0
       tar:
         specifier: ^7.5.0
         version: 7.5.7
@@ -9697,6 +9703,21 @@ packages:
 
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
+
+  '@secure-exec/browser@0.1.0':
+    resolution: {integrity: sha512-nZRLB+ts0RqI5Rj2DBY8Cy87lrZQatGncjzEgSv5iaQcAVudcdcqy2VKBBB5VGZ87fPe79aAYplEVB4dG27WaQ==}
+
+  '@secure-exec/core@0.1.0':
+    resolution: {integrity: sha512-d6eEiQkGeIgBQyaPxPXpWox3tqZYqRHTyIQVQi7p8Do55OtOAYtfTR8rU00djt16OK+GuWfCOWxSDRRUMGqIIg==}
+
+  '@secure-exec/node@0.1.0':
+    resolution: {integrity: sha512-hAZIB3rOsCBK9MYQ4UTaXoccZGCRpjDYWoTuOWsOx73ehE5SPEKM3GUQy0nzioLHAXo7OxGPkLX/sTcegrEMCg==}
+
+  '@secure-exec/python@0.1.0':
+    resolution: {integrity: sha512-BADZOZz98tRith0tyQNfuwEyc4dD2JWALaLp66X3mRdoID4IZRrEY+BYpDSYu46JFS2EzFsPgxynJ9uzX89gZQ==}
+
+  '@secure-exec/typescript@0.1.0':
+    resolution: {integrity: sha512-680DEgjhGMt9KGk5zqu+kwmWUOuyGiiAY0+WxuiV8QQNGdA6Yw0APoYYpbRWrbtbkSJxWCmoRSrGyz6YgTMM8Q==}
 
   '@sentry-internal/browser-utils@10.43.0':
     resolution: {integrity: sha512-8zYTnzhAPvNkVH1Irs62wl0J/c+0QcJ62TonKnzpSFUUD3V5qz8YDZbjIDGfxy+1EB9fO0sxtddKCzwTHF/MbQ==}
@@ -16793,9 +16814,8 @@ packages:
     resolution: {integrity: sha512-eflK8wEtyOE6+hsaRVPxvUKYCpRgzLqDTb8krvAsRIwOGlHoSgYLgBXoubGgLd2fT41/OUYdb48v4k4WWHQurA==}
     engines: {node: '>= 10.13.0'}
 
-  secure-exec@https://pkg.pr.new/rivet-dev/secure-exec@7659aba:
-    resolution: {tarball: https://pkg.pr.new/rivet-dev/secure-exec@7659aba}
-    version: 0.1.0
+  secure-exec@0.1.0:
+    resolution: {integrity: sha512-NTpdYqSJVmU2MowfZsW1NWrLpZufpvsbMO0rH060GNM9Aa9SqUPJdmpuX38UQiT+1kiop9ewxeP7l09XzsLEZA==}
 
   secure-json-parse@2.7.0:
     resolution: {integrity: sha512-6aU+Rwsezw7VR8/nyvKTx8QpWH9FrcYiXXlqC4z5d5XQBDRqtbfsRjnwGyqbi3gddNtWHuEk9OANUotL26qKUw==}
@@ -24438,6 +24458,45 @@ snapshots:
       '@scure/base': 1.2.6
 
   '@sec-ant/readable-stream@0.4.1': {}
+
+  '@secure-exec/browser@0.1.0':
+    dependencies:
+      '@secure-exec/core': 0.1.0
+      sucrase: 3.35.1
+    optional: true
+
+  '@secure-exec/core@0.1.0':
+    dependencies:
+      buffer: 6.0.3
+      esbuild: 0.27.3
+      node-stdlib-browser: 1.3.1
+      sucrase: 3.35.1
+      text-encoding-utf-8: 1.0.2
+      whatwg-url: 15.1.0
+
+  '@secure-exec/node@0.1.0':
+    dependencies:
+      '@secure-exec/core': 0.1.0
+      esbuild: 0.27.3
+      isolated-vm: 6.0.2
+      node-stdlib-browser: 1.3.1
+
+  '@secure-exec/python@0.1.0':
+    dependencies:
+      '@secure-exec/core': 0.1.0
+      pyodide: 0.28.3
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+    optional: true
+
+  '@secure-exec/typescript@0.1.0':
+    dependencies:
+      secure-exec: 0.1.0
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   '@sentry-internal/browser-utils@10.43.0':
     dependencies:
@@ -32463,6 +32522,7 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+    optional: true
 
   qrcode-terminal@0.11.0: {}
 
@@ -33219,16 +33279,13 @@ snapshots:
       ajv-formats: 2.1.1(ajv@8.17.1)
       ajv-keywords: 5.1.0(ajv@8.17.1)
 
-  secure-exec@https://pkg.pr.new/rivet-dev/secure-exec@7659aba:
+  secure-exec@0.1.0:
     dependencies:
-      buffer: 6.0.3
-      esbuild: 0.27.3
-      isolated-vm: 6.0.2
-      node-stdlib-browser: 1.3.1
-      pyodide: 0.28.3
-      sucrase: 3.35.1
-      text-encoding-utf-8: 1.0.2
-      whatwg-url: 15.1.0
+      '@secure-exec/core': 0.1.0
+      '@secure-exec/node': 0.1.0
+    optionalDependencies:
+      '@secure-exec/browser': 0.1.0
+      '@secure-exec/python': 0.1.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate

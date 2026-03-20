@@ -81,7 +81,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Tests should run in the shared driver-test-suite so both file-system and engine drivers execute them."
     },
     {
@@ -95,7 +95,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "secure-exec@0.1.0 and @secure-exec/typescript@0.1.0 were published 2026-03-18."
     },
     {

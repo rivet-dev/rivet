@@ -12,6 +12,9 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
 - New ActorDriver methods should be optional (?) and delegate to FileSystemGlobalState in FileSystemActorDriver.
 - The isolate-side actorDriver object lives in dynamic-isolate-runtime/src/index.cts (not src/dynamic/host-runtime.ts). Its DynamicActorDriver is a locally-typed subset of ActorDriver.
 - drizzle sqlite-proxy expects positional arrays from the callback; RawDatabaseClient returns objects. Use Object.values() to convert. Override checks go at top of createClient in db/drizzle/mod.ts.
+- Driver test suite is entirely broken by pre-existing esbuild error in engine/actor-driver.ts (#hwsAckState private field). Cannot run any driver-file-system tests. This is NOT caused by dynamic actor changes.
+- Fixture actors in actors/ directory (dbActorRaw.ts, dbActorDrizzle.ts) are already loaded as both static and dynamic actors via registry-loader.ts. No need to create new fixture actors for SQLite proxy testing.
+- Dynamic SQLite proxy tests should use describe.skipIf(!driverTestConfig.isDynamic) to only run when the dynamic registry variant is active.
 
 ## 2026-03-20 - US-001
 - What was implemented:
@@ -80,4 +83,39 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
   - RawDatabaseClient.exec returns Record<string, unknown>[] (objects keyed by column name), but drizzle's sqlite-proxy mapResultRow expects positional arrays. Use Object.values(row) to convert.
   - The drizzle override path currently always returns undefined from the isolate side, so it's a stub path. The raw override is the active path for dynamic actors.
   - runInlineMigrations uses @rivetkit/sqlite Database directly (waDb.exec with callback). For override paths, a separate migration runner using RawDatabaseClient.exec is needed.
+---
+
+## 2026-03-20 - US-005
+- What was implemented:
+  - Created new driver test file src/driver-test-suite/tests/dynamic-sqlite-proxy.ts with tests for raw db() and drizzle db() through the SQLite proxy bridge
+  - Tests cover: CRUD operations, sleep/wake persistence, transactions, drizzle migrations, and multi-statement inserts
+  - All tests are gated with describe.skipIf(!driverTestConfig.isDynamic) so they only run for the dynamic registry variant
+  - Wired the new test runner into src/driver-test-suite/mod.ts
+  - Existing fixture actors (dbActorRaw, dbActorDrizzle) in actors/ directory are reused since registry-loader.ts already loads them as dynamic actors
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/dynamic-sqlite-proxy.ts (new)
+  - rivetkit-typescript/packages/rivetkit/src/driver-test-suite/mod.ts
+- **Learnings for future iterations:**
+  - The entire driver test suite is blocked by a pre-existing esbuild error in engine/actor-driver.ts (#hwsAckState private field referenced before declaration). No driver tests can run until this is fixed.
+  - registry-loader.ts automatically creates dynamic actor wrappers for ALL actors in fixtures/driver-test-suite/actors/. New fixture actors placed in that directory are automatically available as both static and dynamic actors.
+  - The driver-file-system.test.ts runs both "static" and "dynamic" registry variants via getDriverRegistryVariants(). Dynamic variant requires secure-exec dist to be installed.
+  - New driver test functions follow the pattern: export function runXxxTests(driverTestConfig: DriverTestConfig) with describe.skipIf for conditional skipping.
+---
+
+## 2026-03-20 - US-006
+- What was implemented:
+  - Replaced pre-release commit hash URL (pkg.pr.new/rivet-dev/secure-exec@7659aba) with secure-exec@0.1.0 in examples/ai-generated-actor/package.json
+  - Removed stale sandboxed-node references from isolate-runtime.ts (both npm package specifier fallback and local dist path fallback)
+  - Added secure-exec and @secure-exec/typescript as optional peer dependencies of rivetkit
+  - Updated pnpm-lock.yaml with the new resolved version
+- Files changed:
+  - examples/ai-generated-actor/package.json
+  - rivetkit-typescript/packages/rivetkit/package.json
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/isolate-runtime.ts
+  - pnpm-lock.yaml
+- **Learnings for future iterations:**
+  - sandboxed-node was the old package name before secure-exec was published. It does not exist on npm and the monorepo no longer has a sandboxed-node package directory.
+  - The secure-exec monorepo at ~/secure-exec-rivet/packages/ contains: secure-exec, secure-exec-typescript, playground, reserve, website.
+  - The ai-generated-actor example has pre-existing typecheck errors because it depends on built rivetkit types (.d.ts files). Run `pnpm build -F rivetkit` first to resolve.
+  - The resolveSecureExecEntryPath() function in isolate-runtime.ts has three resolution tiers: explicit env var, npm package resolution, local dist fallback.
 ---

@@ -380,7 +380,9 @@
 		"drizzle-kit": "^0.31.2",
 		"drizzle-orm": "^0.44.2",
 		"eventsource": "^4.0.0",
-		"ws": "^8.0.0"
+		"ws": "^8.0.0",
+		"secure-exec": ">=0.1.0",
+		"@secure-exec/typescript": ">=0.1.0"
 	},
 	"peerDependenciesMeta": {
 		"@daytonaio/sdk": {
@@ -408,6 +410,12 @@
 			"optional": true
 		},
 		"ws": {
+			"optional": true
+		},
+		"secure-exec": {
+			"optional": true
+		},
+		"@secure-exec/typescript": {
 			"optional": true
 		}
 	},
