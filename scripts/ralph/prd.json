@@ -141,7 +141,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "React Flow overrides in index.css use hardcoded color values that bypass CSS variables. These need manual updates to match the new zinc palette."
     },
     {

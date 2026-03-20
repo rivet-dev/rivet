@@ -11,6 +11,8 @@ Started: Thu Mar 19 04:45:11 PM PDT 2026
 - Namespace creation API uses snake_case fields: `{"display_name":"...","name":"..."}`
 - Frontend typecheck command is `pnpm check-types` (not `pnpm typecheck`)
 - Both theme.css files now have a Google Fonts @import for IBM Plex Sans/Mono. Font family definitions live in `tailwind-base.ts`.
+- Ladle (`.ladle/ladle.css`) has its own `:root` block that must be updated separately when CSS variables change. It does NOT import from the canonical theme.css `:root` block since it forces dark theme by overriding `:root` directly.
+- React Flow minimap `maskColor` in `workflow-visualizer.tsx` and `xyflow-nodes.stories.tsx` is hardcoded and must be manually updated when background color changes.
 
 ---
 
@@ -92,4 +94,16 @@ Started: Thu Mar 19 04:45:11 PM PDT 2026
 - **Learnings for future iterations:**
   - The canonical theme.css (packages/components/public/) did NOT have a font @import before - it was only in the mirror (src/components/). US-006 added it to both.
   - Pre-existing TS errors remain unchanged (font/CSS changes don't affect TypeScript types)
+---
+
+## 2026-03-20T02:00:00Z - US-007
+- Updated React Flow dark mode overrides to use new zinc palette
+- Files changed: `frontend/.ladle/ladle.css`, `frontend/src/components/actors/workflow/workflow-visualizer.tsx`, `frontend/src/components/actors/workflow/xyflow-nodes.stories.tsx`
+- The React Flow CSS overrides in `index.css` and `src/components/theme.css` already used CSS variables (`hsl(var(--card))`, `hsl(var(--border))`, etc.), so they auto-updated with previous CSS variable changes. No changes needed there.
+- Updated `ladle.css` `:root` block from old warm-tinted CSS variables to new zinc palette (21 variables)
+- Updated hardcoded minimap `maskColor` from `hsl(20 14.3% 4.1% / 0.7)` (old warm background) to `hsl(0 0% 3.5% / 0.7)` (new zinc background) in both `workflow-visualizer.tsx` and `xyflow-nodes.stories.tsx`
+- **Learnings for future iterations:**
+  - Ladle has its own `:root` override block that does NOT inherit from theme.css variable definitions. It must be updated separately.
+  - The React Flow minimap `maskColor` prop is a hardcoded color string, not a CSS variable reference. Must be manually updated when background changes.
+  - Pre-existing TS errors remain unchanged
 ---
