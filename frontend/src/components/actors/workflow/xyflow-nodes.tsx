@@ -147,9 +147,9 @@ export function formatDuration(ms: number): string {
 function statusColor(status: EntryStatus): string {
 	switch (status) {
 		case "completed":
-			return "#22c55e";
+			return "#7ee787";
 		case "failed":
-			return "#ef4444";
+			return "#ffa198";
 		case "running":
 			return "#3b82f6";
 		case "retrying":
@@ -210,7 +210,7 @@ export function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeType>) {
 					borderColor: selected
 						? "#52525b"
 						: isFailed
-							? "#ef4444"
+							? "#ffa198"
 							: colors.border,
 				}}
 			>
@@ -254,7 +254,7 @@ export function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeType>) {
 							</div>
 						)}
 						{data.error && (
-							<div style={{ color: "#ef4444" }}>
+							<div style={{ color: "#ffa198" }}>
 								Error: {data.error}
 							</div>
 						)}
@@ -268,12 +268,12 @@ export function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeType>) {
 						style={{
 							height: 16,
 							background: "#18181b",
-							border: `1px solid ${isFailed ? "#ef4444" : "#f59e0b"}`,
+							border: `1px solid ${isFailed ? "#ffa198" : "#f59e0b"}`,
 						}}
 					>
 						<span
 							className="text-[9px] font-medium"
-							style={{ color: isFailed ? "#ef4444" : "#f59e0b" }}
+							style={{ color: isFailed ? "#ffa198" : "#f59e0b" }}
 						>
 							x{data.retryCount + 1}
 						</span>
@@ -438,9 +438,9 @@ export function BranchGroupNode({ data }: NodeProps<BranchGroupNodeType>) {
 	const isCompleted = data.branchStatus === "completed";
 
 	const accentColor = isFailed
-		? "#ef4444"
+		? "#ffa198"
 		: isCompleted
-			? "#22c55e"
+			? "#7ee787"
 			: colors.icon;
 	const borderColor = `${accentColor}66`;
 	const bgColor = `${accentColor}08`;
@@ -509,12 +509,12 @@ export function TerminationNode(_props: NodeProps<TerminationNodeType>) {
 				width: TERMINATION_NODE_SIZE,
 				height: TERMINATION_NODE_SIZE,
 				backgroundColor: "hsl(var(--card))",
-				border: "1px solid #ef444450",
+				border: "1px solid #ffa19850",
 			}}
 		>
 			<Icon
 				icon={faCircleXmark}
-				style={{ color: "#ef4444", fontSize: 14 }}
+				style={{ color: "#ffa198", fontSize: 14 }}
 			/>
 			<Handle
 				type="target"

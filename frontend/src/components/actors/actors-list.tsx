@@ -250,7 +250,7 @@ function EmptyState({ count }: { count: number }) {
 			) : count === 0 ? (
 				filtersCount === 0 ? (
 					runnerConfigsCount === 0 ? (
-						<div className="bg-amber-950/50 text-warning-foreground rounded-md p-4 mx-4 flex gap-4 border border-amber-900">
+						<div className="bg-warning/10 text-warning-foreground rounded-md p-4 mx-4 flex gap-4 border border-warning/20">
 							<div className="flex-1 flex gap-2">
 								<Icon
 									icon={faExclamationTriangle}

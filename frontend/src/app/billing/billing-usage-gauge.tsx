@@ -12,8 +12,8 @@ const progressColors = {
 	},
 	medium: {
 		stroke: "stroke-amber-500",
-		background: "bg-amber-950/50",
-		border: "border-amber-900/30",
+		background: "bg-warning/10",
+		border: "border-warning/20",
 	},
 	high: {
 		stroke: "stroke-destructive",

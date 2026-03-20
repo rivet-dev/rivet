@@ -149,7 +149,7 @@ function NoRunnersAlert() {
 
 	return (
 		<div className="max-w-5xl mx-auto mb-6 px-6 @6xl:px-0 flex flex-col items-start">
-			<div className="bg-amber-950/50 text-warning-foreground rounded-md p-4 flex gap-4 border border-amber-900 w-full">
+			<div className="bg-warning/10 text-warning-foreground rounded-md p-4 flex gap-4 border border-warning/20 w-full">
 				<div className="flex-1 flex gap-2">
 					<Icon
 						icon={faExclamationTriangle}

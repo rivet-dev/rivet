@@ -16,6 +16,10 @@ lib/**/Cargo.lock
 # Local agent notes
 /.agent/notes/
 
+# Ralph agent state
+scripts/ralph/prd.json
+scripts/ralph/progress.txt
+
 # Cloudflare
 .wrangler/
 

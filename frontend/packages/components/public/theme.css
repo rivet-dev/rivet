@@ -1,62 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
 :root {
 	--background: 0 0% 100%;
-	--foreground: 20 14.3% 4.1%;
-	--card: 0 0% 100%;
-	--card-foreground: 20 14.3% 4.1%;
+	--foreground: 0 0% 3.5%;
+	--card: 240 5% 96%;
+	--card-foreground: 0 0% 3.5%;
 	--popover: 0 0% 100%;
-	--popover-foreground: 20 14.3% 4.1%;
-	--primary: 24.6 95% 53.1%;
-	--primary-foreground: 60 9.1% 97.8%;
-	--secondary: 60 4.8% 95.9%;
-	--secondary-foreground: 24 9.8% 10%;
-	--muted: 60 4.8% 95.9%;
-	--muted-foreground: 25 5.3% 44.7%;
+	--popover-foreground: 0 0% 3.5%;
+	--primary: 18 100% 50%;
+	--primary-foreground: 0 0% 100%;
+	--secondary: 240 5% 96%;
+	--secondary-foreground: 0 0% 3.5%;
+	--muted: 240 5% 96%;
+	--muted-foreground: 240 4% 35%;
 	--muted-destructive: 0 72% 30%;
-	--accent: 60 4.8% 95.9%;
-	--accent-foreground: 24 9.8% 10%;
-	--destructive: 0 84.2% 60.2%;
-	--destructive-foreground: 60 9.1% 97.8%;
-	--border: 20 5.9% 90%;
-	--input: 20 5.9% 90%;
-	--ring: 24.6 95% 53.1%;
+	--accent: 240 5% 96%;
+	--accent-foreground: 0 0% 3.5%;
+	--destructive: 0 84% 60%;
+	--destructive-foreground: 0 0% 100%;
+	--border: 240 6% 90%;
+	--input: 240 6% 90%;
+	--ring: 18 100% 50%;
 	--radius: 0.5rem;
 }
 :root[class~="dark"] {
-	--background: 20 14.3% 4.1%;
-	--foreground: 60 9.1% 97.8%;
-	--card: 0 9.09% 6.47%;
-	--card-foreground: 60 9.1% 97.8%;
-	--popover: 0 9.09% 6.47%;
-	--popover-foreground: 60 9.1% 97.8%;
-	--primary: 18.5 100% 50%;
-	--primary-foreground: 60 9.1% 97.8%;
-	--secondary: 12 6.5% 15.1%;
-	--secondary-foreground: 60 9.1% 97.8%;
-	--muted: 34 10% 10%;
-	--muted-foreground: 24 5.4% 63.9%;
-	--accent: 12 6.5% 15.1%;
-	--accent-foreground: 60 9.1% 97.8%;
-	--destructive: 0 72.2% 50.6%;
-	--destructive-foreground: 60 9.1% 97.8%;
-	--warning: 47.9 95.8% 53.1%;
-	--border: 12 6.5% 15.1%;
-	--input: 12 6.5% 15.1%;
-	--ring: 18.59deg 100% 50%;
-	--background-main: 0 7.14% 5.49%;
+	--background: 0 0% 3.5%;
+	--foreground: 0 0% 100%;
+	--card: 240 6% 6%;
+	--card-foreground: 0 0% 100%;
+	--popover: 240 6% 6%;
+	--popover-foreground: 0 0% 100%;
+	--primary: 18 100% 50%;
+	--primary-foreground: 0 0% 100%;
+	--secondary: 240 4% 10%;
+	--secondary-foreground: 0 0% 100%;
+	--muted: 240 4% 10%;
+	--muted-foreground: 240 5% 65%;
+	--accent: 240 4% 10%;
+	--accent-foreground: 0 0% 100%;
+	--destructive: 0 100% 80%;
+	--destructive-foreground: 0 0% 100%;
+	--warning: 45 96% 64%;
+	--border: 240 5% 11%;
+	--input: 240 5% 11%;
+	--ring: 18 100% 50%;
+	--background-main: 0 0% 4.3%;
 }
 
 :root {
-	--chart-1: 12 76% 61%;
-	--chart-2: 173 58% 39%;
-	--chart-3: 197 37% 24%;
-	--chart-4: 43 74% 66%;
-	--chart-5: 27 87% 67%;
+	--chart-1: 18 100% 50%;
+	--chart-2: 160 60% 40%;
+	--chart-3: 240 4% 35%;
+	--chart-4: 280 65% 55%;
+	--chart-5: 45 96% 50%;
 }
 
 .dark {
-	--chart-1: 18.5 100% 50%;
+	--chart-1: 18 100% 50%;
 	--chart-2: 160 60% 45%;
-	--chart-3: 30 80% 55%;
+	--chart-3: 240 5% 65%;
 	--chart-4: 280 65% 60%;
-	--chart-5: 340 75% 55%;
+	--chart-5: 45 96% 64%;
 }
