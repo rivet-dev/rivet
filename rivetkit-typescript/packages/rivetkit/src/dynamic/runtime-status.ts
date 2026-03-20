@@ -1,4 +1,5 @@
 import { promiseWithResolvers } from "@/utils";
+import { isDev } from "@/utils/env-vars";
 
 /**
  * Possible states for a dynamic actor's host-side runtime lifecycle.
@@ -8,6 +9,21 @@ export type DynamicRuntimeState =
 	| "starting"
 	| "running"
 	| "failed_start";
+
+/**
+ * Response shape for the GET /dynamic/status endpoint.
+ */
+export interface DynamicActorStatusResponse {
+	state: DynamicRuntimeState;
+	generation: number;
+	lastStartErrorCode?: string;
+	lastStartErrorMessage?: string;
+	/** Only included in development mode to avoid leaking internal details. */
+	lastStartErrorDetails?: string;
+	lastFailureAt?: number;
+	retryAt?: number;
+	retryAttempt?: number;
+}
 
 /**
  * Host-side runtime status for a dynamic actor.
@@ -161,4 +177,43 @@ export function transitionToInactive(
 	status.abortController = undefined;
 	// generation is not reset; it only increments.
 	return status;
+}
+
+/**
+ * Build a DynamicActorStatusResponse from a DynamicRuntimeStatus.
+ * In production, lastStartErrorDetails is omitted to avoid leaking internals.
+ */
+export function buildStatusResponse(
+	status: DynamicRuntimeStatus,
+): DynamicActorStatusResponse {
+	const response: DynamicActorStatusResponse = {
+		state: status.state,
+		generation: status.generation,
+	};
+
+	if (status.state === "failed_start") {
+		response.lastStartErrorCode = status.lastStartErrorCode;
+		response.lastStartErrorMessage = status.lastStartErrorMessage;
+		response.lastFailureAt = status.lastFailureAt;
+		response.retryAt = status.retryAt;
+		response.retryAttempt = status.retryAttempt;
+
+		// Only include full error details in development mode.
+		if (isDev() && status.lastStartErrorDetails) {
+			response.lastStartErrorDetails = status.lastStartErrorDetails;
+		}
+	}
+
+	return response;
+}
+
+/**
+ * Build a static actor status response. Static actors are always "running"
+ * with generation 0 since they have no dynamic lifecycle.
+ */
+export function buildStaticStatusResponse(): DynamicActorStatusResponse {
+	return {
+		state: "running",
+		generation: 0,
+	};
 }

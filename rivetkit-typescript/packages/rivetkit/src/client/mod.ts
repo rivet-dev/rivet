@@ -29,6 +29,7 @@ export type {
 	StatusChangeCallback,
 } from "./actor-conn";
 export { ActorConnRaw } from "./actor-conn";
+export type { DynamicActorStatusResponse } from "@/dynamic/runtime-status";
 export type { ActorHandle } from "./actor-handle";
 export { ActorHandleRaw } from "./actor-handle";
 export type {

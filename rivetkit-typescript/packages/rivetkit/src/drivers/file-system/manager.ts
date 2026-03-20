@@ -37,6 +37,11 @@ import {
 	createDynamicActorAuthContext,
 	createDynamicActorReloadContext,
 } from "@/dynamic/internal";
+import {
+	buildStatusResponse,
+	buildStaticStatusResponse,
+} from "@/dynamic/runtime-status";
+import { timingSafeEqual } from "@/utils/crypto";
 import type { ManagerDisplayInformation } from "@/manager/driver";
 import type { Encoding, UniversalWebSocket } from "@/mod";
 import type { DriverConfig, RegistryConfig } from "@/registry/config";
@@ -189,6 +194,8 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		switch (`${request.method} ${url.pathname}`) {
 			case "PUT /dynamic/reload":
 				return await this.#handleDynamicReloadOverlay(actorId, request);
+			case "GET /dynamic/status":
+				return await this.#handleDynamicStatusOverlay(actorId, request);
 			default:
 				return null;
 		}
@@ -277,6 +284,43 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 		await this.#state.reloadDynamicActor(actorId);
 		return new Response(null, { status: 200 });
+	}
+
+	async #handleDynamicStatusOverlay(
+		actorId: string,
+		request: Request,
+	): Promise<Response> {
+		// Inspector-style auth: Bearer token with timing-safe comparison.
+		const inspectorToken = this.#config.inspector.token();
+		if (isDev() && !inspectorToken) {
+			logger().warn({
+				msg: "dynamic status endpoint allowed without inspector token in development mode",
+				actorId,
+			});
+		} else {
+			const userToken = request.headers
+				.get("Authorization")
+				?.replace("Bearer ", "");
+			if (!userToken || !inspectorToken || !timingSafeEqual(userToken, inspectorToken)) {
+				return new Response("Unauthorized", { status: 401 });
+			}
+		}
+
+		const state = await this.#state.loadActorStateOrError(actorId);
+		const definition = lookupInRegistry(this.#config, state.name);
+
+		// Static actors always report as running with generation 0.
+		if (!isDynamicActorDefinition(definition)) {
+			return Response.json(buildStaticStatusResponse());
+		}
+
+		const dynamicStatus = this.#state.getDynamicStatus(actorId);
+		if (!dynamicStatus) {
+			// No status tracked yet means the actor hasn't been started.
+			return Response.json(buildStaticStatusResponse());
+		}
+
+		return Response.json(buildStatusResponse(dynamicStatus));
 	}
 
 	async getForId({

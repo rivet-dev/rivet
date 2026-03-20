@@ -26,8 +26,11 @@ export {
 	transitionToRunning,
 	transitionToFailedStart,
 	transitionToInactive,
+	buildStatusResponse,
+	buildStaticStatusResponse,
 } from "./runtime-status";
 export type {
+	DynamicActorStatusResponse,
 	DynamicRuntimeState,
 	DynamicRuntimeStatus,
 } from "./runtime-status";

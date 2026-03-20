@@ -4,6 +4,7 @@ import type { AnyActorDefinition } from "@/actor/definition";
 import type { Encoding } from "@/actor/protocol/serde";
 import { assertUnreachable } from "@/actor/utils";
 import { deconstructError } from "@/common/utils";
+import type { DynamicActorStatusResponse } from "@/dynamic/runtime-status";
 import {
 	HEADER_CONN_PARAMS,
 	HEADER_ENCODING,
@@ -340,6 +341,37 @@ export class ActorHandleRaw {
 				{},
 			);
 		}
+	}
+
+	/**
+	 * Returns the dynamic runtime status of this actor.
+	 *
+	 * For static actors, returns `{ state: 'running', generation: 0 }`.
+	 * For dynamic actors, returns the current lifecycle state and failure
+	 * metadata when in failed_start.
+	 */
+	async status(): Promise<DynamicActorStatusResponse> {
+		const { actorId } = await queryActor(
+			undefined,
+			this.#actorQuery,
+			this.#driver,
+		);
+		invariant(actorId, "Missing actor ID");
+
+		const request = new Request("http://actor/dynamic/status", {
+			method: "GET",
+		});
+		const response = await this.#driver.sendRequest(actorId, request);
+		if (!response.ok) {
+			const body = await response.text().catch(() => "");
+			throw new ActorError(
+				"actor",
+				"status_failed",
+				`status request failed with status ${response.status}: ${body}`,
+				{},
+			);
+		}
+		return await response.json() as DynamicActorStatusResponse;
 	}
 }
 
