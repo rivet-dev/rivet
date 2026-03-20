@@ -20,6 +20,17 @@ export type {
 	CompileActorSourceResult,
 	TypeScriptDiagnostic,
 } from "./compile";
+export {
+	createDynamicRuntimeStatus,
+	transitionToStarting,
+	transitionToRunning,
+	transitionToFailedStart,
+	transitionToInactive,
+} from "./runtime-status";
+export type {
+	DynamicRuntimeState,
+	DynamicRuntimeStatus,
+} from "./runtime-status";
 
 export function dynamicActor<TInput = unknown, TConnParams = unknown>(
 	config: DynamicActorConfigInput<TInput, TConnParams>,
