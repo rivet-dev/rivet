@@ -28,6 +28,7 @@ import { runActorKvTests } from "./tests/actor-kv";
 import { runActorMetadataTests } from "./tests/actor-metadata";
 import { runActorOnStateChangeTests } from "./tests/actor-onstatechange";
 import { runActorQueueTests } from "./tests/actor-queue";
+import { runDynamicFailedStartTests } from "./tests/dynamic-failed-start";
 import { runDynamicReloadTests } from "./tests/dynamic-reload";
 import { runDynamicSqliteProxyTests } from "./tests/dynamic-sqlite-proxy";
 import { runActorRunTests } from "./tests/actor-run";
@@ -152,6 +153,8 @@ export function runDriverTests(
 						runActorRunTests(driverTestConfig);
 
 						runActorSandboxTests(driverTestConfig);
+
+						runDynamicFailedStartTests(driverTestConfig);
 
 						runDynamicReloadTests(driverTestConfig);
 
