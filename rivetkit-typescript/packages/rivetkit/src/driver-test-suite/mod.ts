@@ -29,6 +29,7 @@ import { runActorMetadataTests } from "./tests/actor-metadata";
 import { runActorOnStateChangeTests } from "./tests/actor-onstatechange";
 import { runActorQueueTests } from "./tests/actor-queue";
 import { runDynamicReloadTests } from "./tests/dynamic-reload";
+import { runDynamicSqliteProxyTests } from "./tests/dynamic-sqlite-proxy";
 import { runActorRunTests } from "./tests/actor-run";
 import { runActorSandboxTests } from "./tests/actor-sandbox";
 import { runActorStatelessTests } from "./tests/actor-stateless";
@@ -153,6 +154,8 @@ export function runDriverTests(
 						runActorSandboxTests(driverTestConfig);
 
 						runDynamicReloadTests(driverTestConfig);
+
+						runDynamicSqliteProxyTests(driverTestConfig);
 
 						runActorInlineClientTests(driverTestConfig);
 
