@@ -173,6 +173,15 @@ export class FileSystemGlobalState {
 		return this.#actorCountOnStartup;
 	}
 
+	getInlineClient(): AnyClient {
+		invariant(this.#runnerParams, "runner params not initialized");
+		return this.#runnerParams.inlineClient;
+	}
+
+	getActorInitialInput(actorId: string): unknown {
+		return this.#actorInitialInputs.get(actorId);
+	}
+
 	constructor(options: FileSystemDriverOptions = {}) {
 		const { persist = true, customPath, useNativeSqlite = true } = options;
 		if (!useNativeSqlite) {

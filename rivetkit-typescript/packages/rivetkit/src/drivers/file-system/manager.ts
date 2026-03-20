@@ -1,5 +1,6 @@
 import type { Context as HonoContext } from "hono";
 import invariant from "invariant";
+import { lookupInRegistry } from "@/actor/definition";
 import { ActorStopping } from "@/actor/errors";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import {
@@ -31,11 +32,17 @@ import type {
 	ListActorsInput,
 	ManagerDriver,
 } from "@/driver-helpers/mod";
+import {
+	isDynamicActorDefinition,
+	createDynamicActorAuthContext,
+	createDynamicActorReloadContext,
+} from "@/dynamic/internal";
 import type { ManagerDisplayInformation } from "@/manager/driver";
 import type { Encoding, UniversalWebSocket } from "@/mod";
 import type { DriverConfig, RegistryConfig } from "@/registry/config";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import type { GetUpgradeWebSocket } from "@/utils";
+import { isDev } from "@/utils/env-vars";
 import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import { createTestWebSocketProxy } from "@/manager/gateway";
 import type { FileSystemGlobalState } from "./global-state";
@@ -43,6 +50,9 @@ import { logger } from "./log";
 import { generateActorId } from "./utils";
 
 const REMOTE_ACK_HOOK_QUERY_PARAM = "__rivetkitAckHook";
+
+const RELOAD_RATE_LIMIT_MAX = 10;
+const RELOAD_RATE_LIMIT_WINDOW_MS = 60_000;
 
 export class FileSystemManagerDriver implements ManagerDriver {
 	#config: RegistryConfig;
@@ -178,16 +188,93 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		const url = new URL(request.url);
 		switch (`${request.method} ${url.pathname}`) {
 			case "PUT /dynamic/reload":
-				return await this.#handleDynamicReloadOverlay(actorId);
+				return await this.#handleDynamicReloadOverlay(actorId, request);
 			default:
 				return null;
 		}
 	}
 
-	async #handleDynamicReloadOverlay(actorId: string): Promise<Response> {
-		if (!(await this.#state.isDynamicActor(this.#config, actorId))) {
+	async #handleDynamicReloadOverlay(
+		actorId: string,
+		request: Request,
+	): Promise<Response> {
+		const state = await this.#state.loadActorStateOrError(actorId);
+		const definition = lookupInRegistry(this.#config, state.name);
+		if (!isDynamicActorDefinition(definition)) {
 			return new Response("not a dynamic actor", { status: 404 });
 		}
+
+		// Authentication check happens before any state changes.
+		const hasAuth = !!definition.auth;
+		const hasCanReload = !!definition.canReload;
+
+		if (hasAuth) {
+			try {
+				const authCtx = createDynamicActorAuthContext(
+					this.#state.getInlineClient(),
+					actorId,
+					state.name,
+					state.key as string[],
+					this.#state.getActorInitialInput(actorId),
+					"unknown",
+					request,
+				);
+				await definition.auth!(authCtx, undefined);
+			} catch {
+				return new Response("Forbidden", { status: 403 });
+			}
+		}
+
+		if (hasCanReload) {
+			try {
+				const reloadCtx = createDynamicActorReloadContext(
+					this.#state.getInlineClient(),
+					actorId,
+					state.name,
+					state.key as string[],
+					this.#state.getActorInitialInput(actorId),
+					"unknown",
+					request,
+				);
+				const allowed = await definition.canReload!(reloadCtx);
+				if (!allowed) {
+					return new Response("Forbidden", { status: 403 });
+				}
+			} catch {
+				return new Response("Forbidden", { status: 403 });
+			}
+		}
+
+		if (!hasAuth && !hasCanReload && isDev()) {
+			logger().warn({
+				msg: "reload allowed without auth or canReload in development mode",
+				actorId,
+			});
+		}
+
+		// Track reload rate for observability (warning-only, not enforcement).
+		const dynamicStatus = this.#state.getDynamicStatus(actorId);
+		if (dynamicStatus) {
+			const now = Date.now();
+			if (
+				!dynamicStatus.reloadWindowStart ||
+				now - dynamicStatus.reloadWindowStart >= RELOAD_RATE_LIMIT_WINDOW_MS
+			) {
+				dynamicStatus.reloadWindowStart = now;
+				dynamicStatus.reloadCount = 1;
+			} else {
+				dynamicStatus.reloadCount += 1;
+			}
+
+			if (dynamicStatus.reloadCount > RELOAD_RATE_LIMIT_MAX) {
+				logger().warn({
+					msg: "reload rate limit exceeded",
+					actorId,
+					reloadCount: dynamicStatus.reloadCount,
+				});
+			}
+		}
+
 		await this.#state.reloadDynamicActor(actorId);
 		return new Response(null, { status: 200 });
 	}
