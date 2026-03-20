@@ -31,6 +31,10 @@ export type {
 	DynamicRuntimeState,
 	DynamicRuntimeStatus,
 } from "./runtime-status";
+export {
+	coalesceDynamicStartup,
+	computeBackoffDelay,
+} from "./startup-coalescing";
 
 export function dynamicActor<TInput = unknown, TConnParams = unknown>(
 	config: DynamicActorConfigInput<TInput, TConnParams>,

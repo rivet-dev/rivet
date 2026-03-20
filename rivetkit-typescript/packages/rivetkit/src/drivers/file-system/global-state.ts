@@ -16,6 +16,12 @@ import {
 	type DynamicWebSocketOpenOptions,
 } from "@/dynamic/isolate-runtime";
 import { isDynamicActorDefinition } from "@/dynamic/internal";
+import {
+	createDynamicRuntimeStatus,
+	transitionToInactive,
+	type DynamicRuntimeStatus,
+} from "@/dynamic/runtime-status";
+import { coalesceDynamicStartup } from "@/dynamic/startup-coalescing";
 import type { RegistryConfig } from "@/registry/config";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import {
@@ -134,6 +140,7 @@ export class FileSystemGlobalState {
 	#actorKvDatabases = new Map<string, SqliteRuntimeDatabase>();
 	#actorAppDatabases = new Map<string, SqliteRuntimeDatabase>();
 	#dynamicRuntimes = new Map<string, DynamicActorIsolateRuntime>();
+	#dynamicStatuses = new Map<string, DynamicRuntimeStatus>();
 	#actorInitialInputs = new Map<string, unknown>();
 	#hibernatableWebSocketAckObservers = new Map<
 		string,
@@ -803,6 +810,11 @@ export class FileSystemGlobalState {
 			this.#closeActorKvDatabase(actorId);
 			this.#closeActorAppDatabase(actorId);
 			this.#dynamicRuntimes.delete(actorId);
+			const sleepDynamicStatus = this.#dynamicStatuses.get(actorId);
+			if (sleepDynamicStatus) {
+				transitionToInactive(sleepDynamicStatus);
+			}
+			this.#dynamicStatuses.delete(actorId);
 			actor.stopPromise?.resolve();
 			actor.stopPromise = undefined;
 
@@ -859,6 +871,11 @@ export class FileSystemGlobalState {
 				await actor.actor.onStop("destroy");
 			}
 			this.#dynamicRuntimes.delete(actorId);
+			const destroyDynamicStatus = this.#dynamicStatuses.get(actorId);
+			if (destroyDynamicStatus) {
+				transitionToInactive(destroyDynamicStatus);
+			}
+			this.#dynamicStatuses.delete(actorId);
 			this.#actorInitialInputs.delete(actorId);
 
 			// Ensure any pending KV writes finish before deleting files.
@@ -1276,21 +1293,32 @@ export class FileSystemGlobalState {
 			// Create actor
 			const definition = lookupInRegistry(config, entry.state.name);
 			if (isDynamicActorDefinition(definition)) {
-				let runtime = this.#dynamicRuntimes.get(actorId);
-				if (!runtime) {
-					runtime = new DynamicActorIsolateRuntime({
-						actorId,
-						actorName: entry.state.name,
-						actorKey: entry.state.key as string[],
-						input: this.#actorInitialInputs.get(actorId),
-						region: "unknown",
-						loader: definition.loader,
-						actorDriver,
-						inlineClient,
-					});
-					await runtime.start();
-					this.#dynamicRuntimes.set(actorId, runtime);
-				}
+				const dynamicStatus = this.#getOrCreateDynamicStatus(actorId);
+				const actorState = entry.state;
+
+				await coalesceDynamicStartup(
+					dynamicStatus,
+					async () => {
+						let runtime = this.#dynamicRuntimes.get(actorId);
+						if (!runtime) {
+							runtime = new DynamicActorIsolateRuntime({
+								actorId,
+								actorName: actorState.name,
+								actorKey: actorState.key as string[],
+								input: this.#actorInitialInputs.get(actorId),
+								region: "unknown",
+								loader: definition.loader,
+								actorDriver,
+								inlineClient,
+							});
+							await runtime.start();
+							this.#dynamicRuntimes.set(actorId, runtime);
+						}
+					},
+					definition.startupOptions,
+				);
+
+				const runtime = this.#getDynamicRuntime(actorId);
 				entry.actor = new DynamicActorInstance(
 					actorId,
 					runtime,
@@ -1402,6 +1430,19 @@ export class FileSystemGlobalState {
 			);
 		}
 		return runtime;
+	}
+
+	#getOrCreateDynamicStatus(actorId: string): DynamicRuntimeStatus {
+		let status = this.#dynamicStatuses.get(actorId);
+		if (!status) {
+			status = createDynamicRuntimeStatus();
+			this.#dynamicStatuses.set(actorId, status);
+		}
+		return status;
+	}
+
+	getDynamicStatus(actorId: string): DynamicRuntimeStatus | undefined {
+		return this.#dynamicStatuses.get(actorId);
 	}
 
 	async isDynamicActor(
