@@ -64,3 +64,19 @@ Started: Thu Mar 19 04:45:11 PM PDT 2026
   - The `@import` for fonts is in the mirror but not the canonical. Font changes are a separate story (US-006).
   - Chart variables were already identical between the two files from prior work.
 ---
+
+## 2026-03-19T00:45:00Z - US-005
+- Updated chart color variables in both theme.css files to Foundry accent palette
+- Files changed: `frontend/packages/components/public/theme.css`, `frontend/src/components/theme.css`
+- Dark mode chart colors updated:
+  - chart-1: `18.5 100% 50%` → `18 100% 50%` (Foundry accent orange)
+  - chart-3: `30 80% 55%` → `240 5% 65%` (zinc-400)
+  - chart-5: `340 75% 55%` → `45 96% 64%` (Foundry amber)
+  - chart-2 and chart-4 were already correct
+- Light mode chart colors updated to complement new palette:
+  - chart-1: `18 100% 50%` (orange), chart-2: `160 60% 40%` (teal), chart-3: `240 4% 35%` (zinc-600), chart-4: `280 65% 55%` (purple), chart-5: `45 96% 50%` (amber)
+- **Learnings for future iterations:**
+  - Chart colors are in separate `:root` and `.dark` blocks (not in the main `:root[class~="dark"]` block)
+  - Light mode chart colors need slightly darker/more saturated values than dark mode for good contrast on white backgrounds
+  - Pre-existing TS errors remain unchanged (CSS-only change)
+---

@@ -111,7 +111,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Chart colors are defined in separate :root and .dark blocks in theme.css. Update both."
     },
     {
