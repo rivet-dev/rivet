@@ -92,7 +92,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "There are two copies of theme.css. The canonical source is packages/components/public/theme.css. The mirror is src/components/theme.css. Both must stay in sync."
     },
     {

@@ -52,3 +52,15 @@ Started: Thu Mar 19 04:45:11 PM PDT 2026
   - The --background was already `0 0% 100%` (white) so no change needed
   - Pre-existing TS errors remain unchanged (CSS-only change)
 ---
+
+## 2026-03-20T00:30:00Z - US-004
+- Mirrored all CSS variable updates from canonical `frontend/packages/components/public/theme.css` to `frontend/src/components/theme.css`
+- Files changed: `frontend/src/components/theme.css`
+- Updated both `:root` (light mode) and `:root[class~="dark"]` (dark mode) variable blocks to match canonical source exactly
+- Chart color variables were already in sync, no changes needed
+- Preserved mirror-specific CSS rules (shiki, react-flow, ladle overrides) that don't exist in canonical
+- **Learnings for future iterations:**
+  - The mirror file has extra CSS rules not in the canonical (shiki highlighting, react-flow overrides, ladle styles). Only sync the CSS variable blocks.
+  - The `@import` for fonts is in the mirror but not the canonical. Font changes are a separate story (US-006).
+  - Chart variables were already identical between the two files from prior work.
+---
