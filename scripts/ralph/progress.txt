@@ -9,6 +9,7 @@ Started: Thu Mar 19 04:45:11 PM PDT 2026
 - The engine requires a config file and `start` subcommand: `rivet-engine --config <config.jsonc> start`
 - Docker infra for dev-multinode does NOT expose ClickHouse/NATS ports to host; use container IPs or dev-host docker-compose instead
 - Namespace creation API uses snake_case fields: `{"display_name":"...","name":"..."}`
+- Frontend typecheck command is `pnpm check-types` (not `pnpm typecheck`)
 
 ---
 
@@ -29,4 +30,14 @@ Started: Thu Mar 19 04:45:11 PM PDT 2026
   - Namespace API uses snake_case (display_name, not displayName)
   - Unset RIVET__RUNTIME__WORKER__SHUTDOWN_DURATION env var to avoid config error
   - Engine mode has limited routes compared to cloud mode
+---
+
+## 2026-03-20T00:00:00Z - US-002
+- Updated dark mode CSS variables in `frontend/packages/components/public/theme.css` to Foundry zinc palette
+- Files changed: `frontend/packages/components/public/theme.css`
+- All 21 dark mode variables updated: background, foreground, card, popover, primary, secondary, muted, accent, destructive, warning, border, input, ring, background-main
+- **Learnings for future iterations:**
+  - CSS-only changes don't affect TypeScript typecheck results
+  - Pre-existing TS errors in frontend are unrelated to theme work (type mismatches in .tsx files)
+  - The `check-types` script (not `typecheck`) is the correct pnpm command for the frontend package
 ---
