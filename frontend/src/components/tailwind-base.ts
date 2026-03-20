@@ -45,11 +45,11 @@ const config = {
 		},
 		extend: {
 			fontFamily: {
-				sans: ["Open Sans", "ui-sans-serif", "system-ui", "sans-serif"],
+				sans: ["IBM Plex Sans", "Segoe UI", "ui-sans-serif", "system-ui", "sans-serif"],
 				"mono-console": [
+					"IBM Plex Mono",
+					"SFMono-Regular",
 					"Consolas",
-					"Lucida Console",
-					"Courier New",
 					"monospace",
 				],
 			},
