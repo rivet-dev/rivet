@@ -255,3 +255,20 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
   - When the abort reason is a DynamicLoadTimeout instance, the catch block uses it as the effective error instead of the raw AbortError. This keeps error codes consistent in the backoff state.
   - DynamicActorLoaderContext.signal is always present. When no signal is provided to the runtime config, a fallback `AbortSignal.timeout(MAX_SAFE_INTEGER)` is used so the loader always has a valid signal.
 ---
+
+## 2026-03-20 - US-013
+- What was implemented:
+  - Added passive backoff comment explaining why no background timers or retry loops are scheduled
+  - Added maxAttempts exhaustion check after transitionToFailedStart in the catch block of coalesceDynamicStartup
+  - When maxAttempts > 0 and retryAttempt >= maxAttempts, logs a warning and transitions to inactive
+  - transitionToInactive resets retryAttempt to 0, so the next request triggers fresh startup from attempt 0
+  - maxAttempts of 0 means unlimited retries (no exhaustion check)
+  - The error still propagates to the caller after exhaustion, which handles runtime teardown (dispose + delete from map)
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/startup-coalescing.ts
+- **Learnings for future iterations:**
+  - The existing coalesceDynamicStartup already implemented the core backoff mechanics (computeBackoffDelay, returning stored error during active backoff, fresh startup after backoff expires). US-013 only needed maxAttempts exhaustion and comments.
+  - transitionToInactive resets retryAttempt to 0 and clears all error metadata but preserves generation (monotonic). This is exactly what's needed for "fresh startup from attempt 0".
+  - The caller (FileSystemGlobalState.startActor) already disposes the runtime in its catch block, so transitioning to inactive inside coalesceDynamicStartup is sufficient for teardown.
+  - maxAttempts check uses >= (not >) because transitionToFailedStart increments retryAttempt before the check.
+---

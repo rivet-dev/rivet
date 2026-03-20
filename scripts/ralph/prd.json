@@ -220,7 +220,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "Passive backoff prevents failed actors from spinning in memory indefinitely. maxAttempts default is 20; set to 0 for unlimited."
     },
     {
