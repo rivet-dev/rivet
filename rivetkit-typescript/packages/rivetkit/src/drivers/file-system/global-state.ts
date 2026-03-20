@@ -147,6 +147,10 @@ export class FileSystemGlobalState {
 		HibernatableWebSocketAckObserver
 	>();
 	#hibernatableWebSocketRestoreIntents = new Map<string, number>();
+	#dynamicReloadCloseCallbacks = new Map<
+		string,
+		Set<(code: number, reason: string) => void>
+	>();
 
 	// IMPORTANT: Never delete from this map. Doing so will result in race
 	// conditions since the actor generation will cease to be tracked
@@ -824,6 +828,7 @@ export class FileSystemGlobalState {
 				transitionToInactive(sleepDynamicStatus);
 			}
 			this.#dynamicStatuses.delete(actorId);
+			this.#dynamicReloadCloseCallbacks.delete(actorId);
 			actor.stopPromise?.resolve();
 			actor.stopPromise = undefined;
 
@@ -885,6 +890,7 @@ export class FileSystemGlobalState {
 				transitionToInactive(destroyDynamicStatus);
 			}
 			this.#dynamicStatuses.delete(actorId);
+			this.#dynamicReloadCloseCallbacks.delete(actorId);
 			this.#actorInitialInputs.delete(actorId);
 
 			// Ensure any pending KV writes finish before deleting files.
@@ -1464,6 +1470,31 @@ export class FileSystemGlobalState {
 		return this.#dynamicStatuses.get(actorId);
 	}
 
+	registerDynamicReloadCloseCallback(
+		actorId: string,
+		callback: (code: number, reason: string) => void,
+	): void {
+		let callbacks = this.#dynamicReloadCloseCallbacks.get(actorId);
+		if (!callbacks) {
+			callbacks = new Set();
+			this.#dynamicReloadCloseCallbacks.set(actorId, callbacks);
+		}
+		callbacks.add(callback);
+	}
+
+	unregisterDynamicReloadCloseCallback(
+		actorId: string,
+		callback: (code: number, reason: string) => void,
+	): void {
+		const callbacks = this.#dynamicReloadCloseCallbacks.get(actorId);
+		if (callbacks) {
+			callbacks.delete(callback);
+			if (callbacks.size === 0) {
+				this.#dynamicReloadCloseCallbacks.delete(actorId);
+			}
+		}
+	}
+
 	/**
 	 * Reload a dynamic actor, handling all lifecycle states appropriately.
 	 *
@@ -1490,6 +1521,15 @@ export class FileSystemGlobalState {
 		}
 
 		if (status.state === "running") {
+			// Close open WebSocket connections with 1012 (Service Restart) before
+			// sleeping the actor. This tells clients the closure is intentional
+			// and reconnection is appropriate.
+			const callbacks = this.#dynamicReloadCloseCallbacks.get(actorId);
+			if (callbacks) {
+				for (const cb of callbacks) {
+					cb(1012, "dynamic.reload");
+				}
+			}
 			await this.sleepActor(actorId);
 			return;
 		}

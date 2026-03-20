@@ -450,6 +450,14 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	): Promise<UniversalWebSocket> {
 		const { gatewayId, requestId } = createHibernatableRequestMetadata();
 		if (await this.#state.isDynamicActor(this.#config, actorId)) {
+			// Pre-load the actor before the WebSocket upgrade. WebSocket
+			// upgrade requests during failed_start must be rejected before the
+			// handshake completes so the client receives an HTTP error response
+			// instead of a WebSocket that immediately closes. During the
+			// starting state, this awaits the startupPromise and rejects if
+			// startup fails.
+			await this.#actorDriver.loadActor(actorId);
+
 			return createMockHibernatableWebSocket({
 				config: this.#config,
 				state: this.#state,
@@ -498,6 +506,18 @@ export class FileSystemManagerDriver implements ManagerDriver {
 							);
 						}
 					}
+				},
+				registerForceClose: (forceClose) => {
+					this.#state.registerDynamicReloadCloseCallback(
+						actorId,
+						forceClose,
+					);
+					return () => {
+						this.#state.unregisterDynamicReloadCloseCallback(
+							actorId,
+							forceClose,
+						);
+					};
 				},
 			});
 		}
@@ -676,6 +696,9 @@ function createMockHibernatableWebSocket(input: {
 		disconnectActorConn?: (reason?: string) => Promise<void>;
 		markActorConnStale?: () => void;
 	}>;
+	registerForceClose?: (
+		forceClose: (code: number, reason: string) => void,
+	) => () => void;
 }): UniversalWebSocket {
 	const {
 		config,
@@ -939,6 +962,8 @@ function createMockHibernatableWebSocket(input: {
 			readyState = 2;
 			closeInitiatedByClient = true;
 			unregisterObserver();
+			forceCloseUnregister?.();
+			forceCloseUnregister = undefined;
 			void (async () => {
 				if (shouldReopenActorWebSocket() && currentMarkActorConnStale) {
 					// Keep the persisted conn metadata in place when the client
@@ -1049,6 +1074,31 @@ function createMockHibernatableWebSocket(input: {
 			config.test.enabled,
 		);
 	}
+
+	// Register a force-close callback so that reload can close the client
+	// WebSocket with 1012 (Service Restart) before sleeping the actor.
+	let forceCloseUnregister: (() => void) | undefined;
+	if (input.registerForceClose) {
+		forceCloseUnregister = input.registerForceClose(
+			(code, reason) => {
+				if (readyState >= 2) return;
+				readyState = 3;
+				unregisterObserver();
+				currentActorWebSocket = undefined;
+				currentDisconnectActorConn = undefined;
+				currentMarkActorConnStale = undefined;
+				currentSendToActor = undefined;
+				forceCloseUnregister = undefined;
+				clientWebSocket.triggerClose(code, reason);
+			},
+		);
+	}
+
+	// Unregister force-close on normal close.
+	clientWebSocket.addEventListener("close", () => {
+		forceCloseUnregister?.();
+		forceCloseUnregister = undefined;
+	});
 
 	void ensureActorWebSocket();
 
