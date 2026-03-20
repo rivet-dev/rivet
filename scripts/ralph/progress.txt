@@ -388,3 +388,23 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
   - Force-close callbacks must be registered AFTER the VirtualWebSocket is created because they need access to internal closure variables (readyState, unregisterObserver, etc.). JavaScript let declarations are in temporal dead zone until executed, but closures called later can safely reference them.
   - The `#dynamicReloadCloseCallbacks` map must be cleaned up in both sleepActor and destroyActor to prevent stale callback references.
 ---
+
+## 2026-03-20 - US-019
+- What was implemented:
+  - Created standalone unit test file src/dynamic/failed-start.test.ts with 13 tests covering all coalesceDynamicStartup lifecycle behaviors
+  - Created driver test suite integration file src/driver-test-suite/tests/dynamic-failed-start.ts with the same tests plus HTTP integration tests
+  - Wired the driver test suite integration into src/driver-test-suite/mod.ts
+  - Tests cover: backoff expiry retry, active backoff error return, no background retry loop, reload bypasses backoff, reload on inactive is no-op, concurrent request coalescing, stale generation rejection, production error sanitization, development error details, dynamic load timeout, maxAttempts exhaustion and teardown, fresh startup after exhaustion, reload-while-starting abort, GET /dynamic/status endpoint, and authentication rejection
+  - All 13 standalone unit tests pass. Driver test suite tests typecheck but cannot run due to pre-existing esbuild error in engine/actor-driver.ts.
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/failed-start.test.ts (new)
+  - rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/dynamic-failed-start.ts (new)
+  - rivetkit-typescript/packages/rivetkit/src/driver-test-suite/mod.ts
+- **Learnings for future iterations:**
+  - coalesceDynamicStartup is fully unit-testable without a running server. Create a DynamicRuntimeStatus with createDynamicRuntimeStatus(), pass a mock startupFn, and assert on status state transitions.
+  - Backoff delay assertions must account for retryMaxDelayMs capping the computed delay. When retryInitialDelayMs is high but retryMaxDelayMs is low, the cap dominates.
+  - Use process.env.NODE_ENV manipulation (save/restore) to test production vs development error sanitization since isDev() checks NODE_ENV directly.
+  - For timeout tests, use a startupFn that listens for signal.abort instead of using a fixed delay, so tests are deterministic regardless of system load.
+  - The driver test suite (driver-file-system.test.ts) cannot run ANY tests due to the pre-existing esbuild error in engine/actor-driver.ts (#hwsAckState). Standalone test files that import directly from the module (not through the driver infrastructure) work fine.
+  - HTTP integration tests for the status endpoint need the inspector token ("token") as a Bearer header. The gateway URL pattern is /gateway/{actor_id}/{...path}.
+---

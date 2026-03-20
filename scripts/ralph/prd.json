@@ -336,7 +336,7 @@
         "Typecheck passes"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "This enforces the parity requirement between file-system and engine drivers."
     },
     {
