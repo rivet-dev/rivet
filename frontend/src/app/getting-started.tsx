@@ -994,8 +994,8 @@ function AgentPromptBanner({ code }: { code: string }) {
 		>
 			<Badge className="absolute -top-2.5 left-4 z-10 bg-background">Recommended</Badge>
 			<span className="text-sm font-medium text-white text-left">
-				Using a Coding Agent? Use this pre-built prompt to get started
-				faster.
+				Have your coding agent complete these steps automatically to
+				deploy to Rivet Cloud.
 			</span>
 			<Button
 				asChild

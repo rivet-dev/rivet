@@ -39,7 +39,6 @@ export const deployOptions = [
 		description:
 			"Deploy Next.js + RivetKit apps to Vercel's edge network",
 		icon: faVercel as any,
-		badge: "1-Click Deploy",
 	},
 	{
 		displayName: "Railway",
@@ -48,7 +47,6 @@ export const deployOptions = [
 		description:
 			"Deploy containers to Railway's managed infrastructure",
 		icon: faRailway as any,
-		badge: "1-Click Deploy",
 	},
 	{
 		displayName: "Cloudflare Workers",
