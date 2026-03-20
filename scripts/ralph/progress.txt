@@ -15,6 +15,7 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
 - Driver test suite is entirely broken by pre-existing esbuild error in engine/actor-driver.ts (#hwsAckState private field). Cannot run any driver-file-system tests. This is NOT caused by dynamic actor changes.
 - Fixture actors in actors/ directory (dbActorRaw.ts, dbActorDrizzle.ts) are already loaded as both static and dynamic actors via registry-loader.ts. No need to create new fixture actors for SQLite proxy testing.
 - Dynamic SQLite proxy tests should use describe.skipIf(!driverTestConfig.isDynamic) to only run when the dynamic registry variant is active.
+- Tests depending on optional peer deps (@secure-exec/typescript, secure-exec) must use describe.skipIf with require.resolve to skip gracefully.
 
 ## 2026-03-20 - US-001
 - What was implemented:
@@ -118,4 +119,46 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
   - The secure-exec monorepo at ~/secure-exec-rivet/packages/ contains: secure-exec, secure-exec-typescript, playground, reserve, website.
   - The ai-generated-actor example has pre-existing typecheck errors because it depends on built rivetkit types (.d.ts files). Run `pnpm build -F rivetkit` first to resolve.
   - The resolveSecureExecEntryPath() function in isolate-runtime.ts has three resolution tiers: explicit env var, npm package resolution, local dist fallback.
+---
+
+## 2026-03-20 - US-007
+- What was implemented:
+  - Created src/dynamic/compile.ts with compileActorSource function
+  - Dynamically loads @secure-exec/typescript and secure-exec using the build-specifier-from-parts pattern (["@secure-exec", "typescript"].join("/") and ["secure", "exec"].join("-"))
+  - Both modules are cached via promise singletons (same pattern as isolate-runtime.ts)
+  - Loads secure-exec's createNodeDriver and createNodeRuntimeDriverFactory for the compiler isolate drivers
+  - Calls createTypeScriptTools() then tools.compileSource() with user source and compiler options
+  - When typecheck is false, sets compilerOptions.noCheck = true for fast type-stripping
+  - Maps SourceCompileResult to CompileActorSourceResult with js, sourceMap, success, and diagnostics fields
+  - Sets default module format to ESM (esnext) with bundler moduleResolution, or commonjs when format is "commonjs"
+  - Exported compileActorSource, CompileActorSourceOptions, CompileActorSourceResult, and TypeScriptDiagnostic from src/dynamic/mod.ts
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/compile.ts (new)
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/mod.ts
+- **Learnings for future iterations:**
+  - @secure-exec/typescript exports createTypeScriptTools which takes { systemDriver, runtimeDriverFactory, memoryLimit?, cpuTimeLimitMs? } and returns CompilerTools with compileSource/typecheckSource methods.
+  - secure-exec exports createNodeDriver and createNodeRuntimeDriverFactory directly (re-exported from @secure-exec/node).
+  - SourceCompileResult has outputText (not js) and sourceMapText (not sourceMap). Must map field names.
+  - The resolveEsmPackageEntry pattern from isolate-runtime.ts is duplicated in compile.ts because compile.ts is a separate module that can be imported independently.
+  - nativeDynamicImport pattern (try direct import, fallback to Function("return import(...)")) is needed to handle Vite SSR and VM-backed test runners.
+---
+
+## 2026-03-20 - US-008
+- What was implemented:
+  - Extended DynamicSourceFormat in runtime-bridge.ts with 'esm-ts' and 'commonjs-ts' variants
+  - Updated normalizeLoadResult in isolate-runtime.ts to accept TS source formats
+  - Updated materializeDynamicSource in isolate-runtime.ts with new 'esm-ts'/'commonjs-ts' cases that call compileActorSource before writing to the sandbox filesystem
+  - TS compilation uses typecheck: false for fast type-stripping (consistent with runtime convenience use case)
+  - If compilation fails, throws an error with diagnostic messages
+  - Exports from dynamic/mod.ts were already set up in US-007 (compileActorSource, types)
+  - Added unit tests in compile.test.ts: valid TS, type errors with typecheck: true, and type-stripping with typecheck: false
+  - Tests use describe.skipIf to gracefully skip when @secure-exec/typescript is not installed
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/runtime-bridge.ts
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/isolate-runtime.ts
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/compile.test.ts (new)
+- **Learnings for future iterations:**
+  - @secure-exec/typescript is an optional peer dependency. Tests that depend on it must skip gracefully using describe.skipIf with a require.resolve check.
+  - TS source formats ('esm-ts', 'commonjs-ts') are compiled to their JS equivalents ('esm-js', 'commonjs-js') during materializeDynamicSource, before the source reaches the sandbox filesystem.
+  - The compiled JS format is passed through to the bootstrap config, so the isolate sees plain JS regardless of the original source format.
 ---

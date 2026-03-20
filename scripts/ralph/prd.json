@@ -113,7 +113,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "The compiler runs inside a secure-exec isolate with memory/CPU limits. User-provided source never touches the host TypeScript installation."
     },
     {
@@ -131,7 +131,7 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "TS formats are a convenience. Loaders can always compile explicitly and return esm-js."
     },
     {

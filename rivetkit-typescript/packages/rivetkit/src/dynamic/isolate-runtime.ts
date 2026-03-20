@@ -51,6 +51,7 @@ import {
 	type DynamicActorLoader,
 	type DynamicActorLoadResult,
 } from "./internal";
+import { compileActorSource } from "./compile";
 
 export type { DynamicHibernatingWebSocketMetadata } from "./runtime-bridge";
 
@@ -1334,9 +1335,14 @@ function normalizeLoadResult(
 	}
 
 	const sourceFormat = loadResult.sourceFormat ?? "esm-js";
-	if (sourceFormat !== "commonjs-js" && sourceFormat !== "esm-js") {
+	if (
+		sourceFormat !== "commonjs-js" &&
+		sourceFormat !== "esm-js" &&
+		sourceFormat !== "commonjs-ts" &&
+		sourceFormat !== "esm-ts"
+	) {
 		throw new Error(
-			"dynamic actor loader returned unsupported `sourceFormat`. Expected `commonjs-js` or `esm-js`.",
+			"dynamic actor loader returned unsupported `sourceFormat`. Expected `commonjs-js`, `esm-js`, `commonjs-ts`, or `esm-ts`.",
 		);
 	}
 
@@ -1758,6 +1764,39 @@ async function materializeDynamicSource(
 				sourceCode: loadResult.source,
 				sourceEntry,
 				sourceFormat: loadResult.sourceFormat,
+			};
+		}
+		case "esm-ts":
+		case "commonjs-ts": {
+			const isEsm = loadResult.sourceFormat === "esm-ts";
+			const compileResult = await compileActorSource({
+				source: loadResult.source,
+				format: isEsm ? "esm" : "commonjs",
+				typecheck: false,
+			});
+			if (!compileResult.success || !compileResult.js) {
+				const messages = compileResult.diagnostics
+					.map((d) => d.message)
+					.join("\n");
+				throw new Error(
+					`TypeScript compilation failed:\n${messages}`,
+				);
+			}
+			const jsFormat: DynamicSourceFormat = isEsm
+				? "esm-js"
+				: "commonjs-js";
+			const sourceEntry = isEsm
+				? "dynamic-source.mjs"
+				: "dynamic-source.cjs";
+			const sourcePath = path.posix.join(
+				DYNAMIC_SANDBOX_APP_ROOT,
+				sourceEntry,
+			);
+			return {
+				sourcePath,
+				sourceCode: compileResult.js,
+				sourceEntry,
+				sourceFormat: jsFormat,
 			};
 		}
 		default: {

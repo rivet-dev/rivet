@@ -1,6 +1,6 @@
 export type ActorKey = string[];
 export type Encoding = "json" | "cbor" | "bare";
-export type DynamicSourceFormat = "commonjs-js" | "esm-js";
+export type DynamicSourceFormat = "commonjs-js" | "esm-js" | "commonjs-ts" | "esm-ts";
 /**
  * Canonical binary transport type for host<->isolate envelopes.
  *
