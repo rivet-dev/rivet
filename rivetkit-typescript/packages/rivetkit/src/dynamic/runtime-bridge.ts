@@ -36,6 +36,8 @@ export const DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS = {
 	startDestroy: "__rivetkitDynamicHostStartDestroy",
 	dispatch: "__rivetkitDynamicHostDispatch",
 	log: "__rivetkitDynamicHostLog",
+	sqliteExec: "__rivetkitDynamicHostSqliteExec",
+	sqliteBatch: "__rivetkitDynamicHostSqliteBatch",
 } as const;
 
 /**

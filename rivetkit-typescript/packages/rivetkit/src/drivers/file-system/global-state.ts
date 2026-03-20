@@ -127,10 +127,12 @@ export class FileSystemGlobalState {
 	#stateDir: string;
 	#dbsDir: string;
 	#alarmsDir: string;
+	#appDbsDir: string;
 
 	#persist: boolean;
 	#sqliteRuntime: SqliteRuntime;
 	#actorKvDatabases = new Map<string, SqliteRuntimeDatabase>();
+	#actorAppDatabases = new Map<string, SqliteRuntimeDatabase>();
 	#dynamicRuntimes = new Map<string, DynamicActorIsolateRuntime>();
 	#actorInitialInputs = new Map<string, unknown>();
 	#hibernatableWebSocketAckObservers = new Map<
@@ -178,12 +180,14 @@ export class FileSystemGlobalState {
 		this.#stateDir = path.join(this.#storagePath, "state");
 		this.#dbsDir = path.join(this.#storagePath, "databases");
 		this.#alarmsDir = path.join(this.#storagePath, "alarms");
+		this.#appDbsDir = path.join(this.#storagePath, "app-databases");
 
 		if (this.#persist) {
 			// Ensure storage directories exist synchronously during initialization
 			ensureDirectoryExistsSync(this.#stateDir);
 			ensureDirectoryExistsSync(this.#dbsDir);
 			ensureDirectoryExistsSync(this.#alarmsDir);
+			ensureDirectoryExistsSync(this.#appDbsDir);
 
 			try {
 				const fsSync = getNodeFsSync();
@@ -314,6 +318,96 @@ export class FileSystemGlobalState {
 		} finally {
 			this.#actorKvDatabases.delete(actorId);
 		}
+	}
+
+	#getActorAppDatabasePath(actorId: string): string {
+		if (this.#persist) {
+			return getNodePath().join(this.#appDbsDir, `${actorId}.db`);
+		}
+		return ":memory:";
+	}
+
+	#getOrCreateActorAppDatabase(actorId: string): SqliteRuntimeDatabase {
+		const existing = this.#actorAppDatabases.get(actorId);
+		if (existing) {
+			return existing;
+		}
+
+		const dbPath = this.#getActorAppDatabasePath(actorId);
+		if (this.#persist) {
+			const path = getNodePath();
+			ensureDirectoryExistsSync(path.dirname(dbPath));
+		}
+
+		let db: SqliteRuntimeDatabase;
+		try {
+			db = this.#sqliteRuntime.open(dbPath);
+		} catch (error) {
+			throw new Error(
+				`failed to open actor app database for actor ${actorId} at ${dbPath}: ${error}`,
+			);
+		}
+
+		db.exec("PRAGMA journal_mode=WAL");
+		this.#actorAppDatabases.set(actorId, db);
+		return db;
+	}
+
+	#closeActorAppDatabase(actorId: string): void {
+		const db = this.#actorAppDatabases.get(actorId);
+		if (!db) {
+			return;
+		}
+
+		try {
+			db.close();
+		} finally {
+			this.#actorAppDatabases.delete(actorId);
+		}
+	}
+
+	sqliteExec(
+		actorId: string,
+		sql: string,
+		params: unknown[],
+	): { rows: unknown[][]; columns: string[] } {
+		const db = this.#getOrCreateActorAppDatabase(actorId);
+		const rawRows = db.all<Record<string, unknown>>(sql, params);
+		const columns =
+			rawRows.length > 0 ? Object.keys(rawRows[0]) : [];
+		const rows = rawRows.map((row) =>
+			columns.map((col) => row[col]),
+		);
+		return { rows, columns };
+	}
+
+	sqliteBatch(
+		actorId: string,
+		statements: { sql: string; params: unknown[] }[],
+	): { rows: unknown[][]; columns: string[] }[] {
+		const db = this.#getOrCreateActorAppDatabase(actorId);
+		const results: { rows: unknown[][]; columns: string[] }[] = [];
+		db.exec("BEGIN");
+		try {
+			for (const { sql, params } of statements) {
+				const rawRows = db.all<Record<string, unknown>>(sql, params);
+				const columns =
+					rawRows.length > 0 ? Object.keys(rawRows[0]) : [];
+				const rows = rawRows.map((row) =>
+					columns.map((col) => row[col]),
+				);
+				results.push({ rows, columns });
+			}
+			db.exec("COMMIT");
+		} catch (error) {
+			try {
+				db.exec("ROLLBACK");
+			} catch {
+				// Ignore rollback errors, original error is more actionable.
+			}
+			throw error;
+		}
+		return results;
 	}
 
 	#putKvEntriesInDb(
@@ -707,6 +801,7 @@ export class FileSystemGlobalState {
 			// Ensure any pending KV writes finish before removing the entry.
 			await this.#withActorWrite(actorId, async () => { });
 			this.#closeActorKvDatabase(actorId);
+			this.#closeActorAppDatabase(actorId);
 			this.#dynamicRuntimes.delete(actorId);
 			actor.stopPromise?.resolve();
 			actor.stopPromise = undefined;
@@ -769,6 +864,7 @@ export class FileSystemGlobalState {
 			// Ensure any pending KV writes finish before deleting files.
 			await this.#withActorWrite(actorId, async () => { });
 			this.#closeActorKvDatabase(actorId);
+			this.#closeActorAppDatabase(actorId);
 
 			// Clear alarm timeout if exists
 			if (actor.alarmTimeout) {
@@ -817,6 +913,20 @@ export class FileSystemGlobalState {
 							if (err?.code !== "ENOENT") {
 								logger().error({
 									msg: "failed to delete actor alarm file",
+									actorId,
+									error: stringifyError(err),
+								});
+							}
+						}
+					})(),
+					// Delete actor app database file
+					(async () => {
+						try {
+							await fs.unlink(this.#getActorAppDatabasePath(actorId));
+						} catch (err: any) {
+							if (err?.code !== "ENOENT") {
+								logger().error({
+									msg: "failed to delete actor app database file",
 									actorId,
 									error: stringifyError(err),
 								});
