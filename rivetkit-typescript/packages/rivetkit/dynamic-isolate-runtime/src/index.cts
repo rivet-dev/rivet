@@ -60,6 +60,8 @@ interface DynamicHostBridge {
 	startDestroy: IsolateReferenceLike;
 	dispatch: IsolateReferenceLike;
 	log?: IsolateReferenceLike;
+	sqliteExec?: IsolateReferenceLike;
+	sqliteBatch?: IsolateReferenceLike;
 }
 
 interface DynamicHibernatableConnData {
@@ -97,6 +99,12 @@ interface DynamicActorDriver {
 		serverMessageIndex: number,
 	): void;
 	startDestroy(actorId: string): void;
+	overrideRawDatabaseClient?(
+		actorId: string,
+	): Promise<{ exec: (query: string, ...args: unknown[]) => Promise<Record<string, unknown>[]> } | undefined>;
+	overrideDrizzleDatabaseClient?(
+		actorId: string,
+	): Promise<undefined>;
 }
 
 interface DynamicActorDefinitionLike {
@@ -285,6 +293,8 @@ function readHostBridge(): DynamicHostBridge {
 		),
 		dispatch: getRequiredHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.dispatch),
 		log: getOptionalHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.log),
+		sqliteExec: getOptionalHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.sqliteExec),
+		sqliteBatch: getOptionalHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.sqliteBatch),
 	};
 }
 
@@ -722,6 +732,37 @@ const actorDriver: DynamicActorDriver = {
 	},
 	startDestroy(requestActorId: string): void {
 		bridgeCallSync(hostBridge.startDestroy, [requestActorId]);
+	},
+	async overrideRawDatabaseClient(
+		actorIdValue: string,
+	): Promise<{ exec: (query: string, ...args: unknown[]) => Promise<Record<string, unknown>[]> } | undefined> {
+		if (!hostBridge.sqliteExec) {
+			return undefined;
+		}
+		const sqliteExecRef = hostBridge.sqliteExec;
+		return {
+			async exec(query: string, ...args: unknown[]): Promise<Record<string, unknown>[]> {
+				const jsonResult = await bridgeCall<string>(sqliteExecRef, [
+					actorIdValue,
+					query,
+					JSON.stringify(args),
+				]);
+				const result = JSON.parse(jsonResult) as {
+					rows: unknown[][];
+					columns: string[];
+				};
+				return result.rows.map((row) =>
+					Object.fromEntries(
+						result.columns.map((col, i) => [col, row[i]]),
+					),
+				);
+			},
+		};
+	},
+	async overrideDrizzleDatabaseClient(
+		_actorIdValue: string,
+	): Promise<undefined> {
+		return undefined;
 	},
 };
 
