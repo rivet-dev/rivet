@@ -34,6 +34,7 @@ export type {
 export {
 	coalesceDynamicStartup,
 	computeBackoffDelay,
+	SANITIZED_STARTUP_MESSAGE,
 } from "./startup-coalescing";
 
 export function dynamicActor<TInput = unknown, TConnParams = unknown>(

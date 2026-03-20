@@ -1,6 +1,6 @@
 import invariant from "invariant";
 import { isStaticActorDefinition, lookupInRegistry } from "@/actor/definition";
-import { ActorDuplicateKey } from "@/actor/errors";
+import { ActorDuplicateKey, ActorError } from "@/actor/errors";
 import type { Encoding } from "@/actor/protocol/serde";
 import type {
 	AnyActorInstance,
@@ -1403,6 +1403,15 @@ export class FileSystemGlobalState {
 					});
 				}
 				this.#dynamicRuntimes.delete(actorId);
+			}
+
+			// Preserve ActorErrors (e.g. from coalesceDynamicStartup
+			// sanitization) so the error code and sanitized message reach
+			// the client through deconstructError.
+			if (ActorError.isActorError(innerError)) {
+				entry.startPromise?.reject(innerError);
+				entry.startPromise = undefined;
+				throw innerError;
 			}
 
 			const error =

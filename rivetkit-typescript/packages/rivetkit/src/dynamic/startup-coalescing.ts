@@ -1,5 +1,6 @@
 import { getLogger } from "@/common/log";
 import { ActorError, DynamicLoadTimeout } from "@/actor/errors";
+import { isDev } from "@/utils/env-vars";
 import type { DynamicRuntimeStatus } from "./runtime-status";
 import {
 	transitionToStarting,
@@ -12,6 +13,47 @@ import { DYNAMIC_STARTUP_DEFAULTS } from "./internal";
 
 function logger() {
 	return getLogger("dynamic-startup");
+}
+
+export const SANITIZED_STARTUP_MESSAGE =
+	"Dynamic actor startup failed. Check server logs for details.";
+
+/**
+ * Create an ActorError for dynamic startup failures with environment-aware
+ * sanitization.
+ *
+ * Production errors are sanitized to prevent leaking internal details
+ * (stack traces, loader output, file paths) to clients. The error code is
+ * always included so clients can programmatically distinguish failure types.
+ * Development errors include the full message and details so developers can
+ * debug without checking server logs.
+ *
+ * Full details are always emitted to server logs regardless of environment.
+ */
+function createSanitizedStartupError(
+	errorCode: string,
+	errorMessage: string,
+	errorDetails?: string,
+): ActorError {
+	// Always log full details to server logs in all environments.
+	logger().error({
+		msg: "dynamic actor startup failed",
+		errorCode,
+		errorMessage,
+		errorDetails,
+	});
+
+	const error = new ActorError(
+		"dynamic",
+		errorCode,
+		isDev() ? errorMessage : SANITIZED_STARTUP_MESSAGE,
+		{
+			public: true,
+			metadata: isDev() && errorDetails ? { details: errorDetails } : undefined,
+		},
+	);
+	error.statusCode = 503;
+	return error;
 }
 
 /**
@@ -86,12 +128,10 @@ export async function coalesceDynamicStartup(
 	// keeps resource usage proportional to actual demand.
 	if (status.state === "failed_start" && status.retryAt !== undefined) {
 		if (Date.now() < status.retryAt) {
-			throw new ActorError(
-				"dynamic",
+			throw createSanitizedStartupError(
 				status.lastStartErrorCode ?? "dynamic_startup_failed",
-				status.lastStartErrorMessage ??
-					"Dynamic actor startup failed",
-				{ public: true },
+				status.lastStartErrorMessage ?? "Dynamic actor startup failed",
+				status.lastStartErrorDetails,
 			);
 		}
 	}
@@ -183,7 +223,7 @@ export async function coalesceDynamicStartup(
 			transitionToInactive(status);
 		}
 
-		throw effectiveError;
+		throw createSanitizedStartupError(errorCode, errorMessage, errorDetails);
 	} finally {
 		clearTimeout(timeoutHandle);
 		status.abortController = undefined;
