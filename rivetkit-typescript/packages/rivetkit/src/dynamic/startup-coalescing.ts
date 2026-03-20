@@ -5,6 +5,7 @@ import {
 	transitionToStarting,
 	transitionToRunning,
 	transitionToFailedStart,
+	transitionToInactive,
 } from "./runtime-status";
 import type { DynamicStartupOptions } from "./internal";
 import { DYNAMIC_STARTUP_DEFAULTS } from "./internal";
@@ -79,8 +80,10 @@ export async function coalesceDynamicStartup(
 		return;
 	}
 
-	// During active backoff, return the stored failure immediately without
-	// attempting startup.
+	// Backoff is passive: no background timers or retry loops are scheduled.
+	// Retries only happen when an incoming request or explicit reload arrives.
+	// This prevents failed actors from spinning in memory indefinitely and
+	// keeps resource usage proportional to actual demand.
 	if (status.state === "failed_start" && status.retryAt !== undefined) {
 		if (Date.now() < status.retryAt) {
 			throw new ActorError(
@@ -166,6 +169,18 @@ export async function coalesceDynamicStartup(
 			errorDetails,
 			retryAt: Date.now() + backoffDelay,
 		});
+
+		// When maxAttempts is exceeded, transition to inactive so the host
+		// wrapper is torn down and the next request starts a fresh attempt
+		// from attempt 0. maxAttempts of 0 means unlimited retries.
+		if (opts.maxAttempts > 0 && status.retryAttempt >= opts.maxAttempts) {
+			logger().warn({
+				msg: "max startup attempts exhausted, transitioning to inactive",
+				retryAttempt: status.retryAttempt,
+				maxAttempts: opts.maxAttempts,
+			});
+			transitionToInactive(status);
+		}
 
 		throw effectiveError;
 	} finally {
