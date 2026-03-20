@@ -233,3 +233,25 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
   - coalesceDynamicStartup re-throws startup errors after recording them in the status model, allowing the caller (startActor) to also handle cleanup like disposing the runtime.
   - DynamicActorDefinition.startupOptions provides resolved Required<DynamicStartupOptions> with defaults already merged.
 ---
+
+## 2026-03-20 - US-012
+- What was implemented:
+  - Added `signal: AbortSignal` to `DynamicActorLoaderContext` so user-provided loaders can check cancellation
+  - Updated `createDynamicActorLoaderContext` to accept and pass through signal
+  - Added `signal?: AbortSignal` to `DynamicActorIsolateRuntimeConfig`
+  - Updated `DynamicActorIsolateRuntime.start()` to create a default signal and pass it to the loader context
+  - Updated `coalesceDynamicStartup` to create an AbortController per startup attempt, set up a setTimeout for `timeoutMs`, and abort with `DynamicLoadTimeout` on expiry
+  - The startupFn signature now accepts `(signal: AbortSignal)` and callers thread it through to the runtime config
+  - Timeout errors are caught and converted to DynamicLoadTimeout, which participates in normal backoff via `transitionToFailedStart`
+  - Updated FileSystemGlobalState startActor closure to accept and pass signal
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/internal.ts
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/isolate-runtime.ts
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/startup-coalescing.ts
+  - rivetkit-typescript/packages/rivetkit/src/drivers/file-system/global-state.ts
+- **Learnings for future iterations:**
+  - coalesceDynamicStartup's startupFn signature is `(signal: AbortSignal) => Promise<void>`. All callers must accept and thread the signal.
+  - The AbortController is created inside coalesceDynamicStartup, not by the caller. This centralizes timeout management.
+  - When the abort reason is a DynamicLoadTimeout instance, the catch block uses it as the effective error instead of the raw AbortError. This keeps error codes consistent in the backoff state.
+  - DynamicActorLoaderContext.signal is always present. When no signal is provided to the runtime config, a fallback `AbortSignal.timeout(MAX_SAFE_INTEGER)` is used so the loader always has a valid signal.
+---

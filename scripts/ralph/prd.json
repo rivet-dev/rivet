@@ -201,7 +201,7 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "Default timeout is 15 seconds to accommodate cold starts. Operations that don't support cancellation (e.g. isolated-vm context creation) run to completion but stale generation check discards their result."
     },
     {
