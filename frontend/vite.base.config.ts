@@ -16,6 +16,10 @@ export function baseViteConfig(): UserConfig {
 		resolve: {
 			alias: {
 				"@": path.resolve(__dirname, "./src"),
+				"zod/v4/core": path.resolve(
+					__dirname,
+					"node_modules/zod/v4/core/index.js",
+				),
 			},
 		},
 		optimizeDeps: {
