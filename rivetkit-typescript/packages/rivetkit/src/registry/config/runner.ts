@@ -14,7 +14,12 @@ export const RunnerConfigSchema = z.object({
 	runnerKey: z
 		.string()
 		.optional(),
-	version: z.number().default(() => getRivetRunnerVersion() ?? 1),
+	version: z
+		.number()
+		.int()
+		.min(0)
+		.max(4294967295, "Runner version must fit in a u32 (max 4294967295). If using Date.now(), divide by 1000 to use seconds instead of milliseconds.")
+		.default(() => getRivetRunnerVersion() ?? 1),
 });
 export type RunnerConfigInput = z.input<typeof RunnerConfigSchema>;
 export type RunnerConfig = z.infer<typeof RunnerConfigSchema>;
