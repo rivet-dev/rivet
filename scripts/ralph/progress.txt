@@ -22,6 +22,8 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
 - When moving code into closures, capture narrowed TypeScript variables into local constants first to avoid losing type narrowing.
 - Global-state.ts catch block wraps errors in plain Error, losing ActorError metadata. Use ActorError.isActorError() to preserve error codes through the error chain.
 - For errors that must include error codes in client responses, set public: true and explicit statusCode on the ActorError. Use isDev() to conditionally include or sanitize details.
+- WebSocket upgrade pre-loading: call loadActor before creating mock WebSocket so failed-start errors propagate as HTTP errors through Hono's onError handler instead of upgrading the WebSocket.
+- Per-actor callback registration for external events (e.g., reload-close) follows the pattern: Map<string, Set<callback>> in GlobalState, register/unregister methods, cleanup in sleepActor and destroyActor.
 
 ## 2026-03-20 - US-001
 - What was implemented:
@@ -364,4 +366,25 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
   - The overlay request pattern in FileSystemManagerDriver intercepts requests BEFORE normal actor routing. Add cases to #routeOverlayRequest switch statement for new dynamic endpoints.
   - ActorHandleRaw.status() follows the same pattern as reload(): queryActor for actorId, build Request, call this.#driver.sendRequest, check response.ok, parse JSON.
   - buildStatusResponse only includes failure metadata fields when state is "failed_start" to keep the response minimal for running/starting/inactive states.
+---
+
+## 2026-03-20 - US-018
+- What was implemented:
+  - Pre-load dynamic actor before WebSocket upgrade in `#openHibernatableWebSocket` so failed_start errors reject with HTTP error before handshake completes
+  - During starting state, the pre-load awaits the startupPromise and rejects if startup fails
+  - Added `registerForceClose` callback to `createMockHibernatableWebSocket` for external force-close support
+  - Added `#dynamicReloadCloseCallbacks` map to FileSystemGlobalState for tracking active dynamic WebSocket connections
+  - Added `registerDynamicReloadCloseCallback` and `unregisterDynamicReloadCloseCallback` methods
+  - In `reloadDynamicActor`, when state is "running", invoke all registered callbacks with code 1012 (Service Restart) and reason "dynamic.reload" before sleeping
+  - Force-close callbacks properly clean up mock WebSocket internal state (readyState, observer, references)
+  - Cleanup callbacks in sleepActor and destroyActor paths
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/drivers/file-system/global-state.ts
+  - rivetkit-typescript/packages/rivetkit/src/drivers/file-system/manager.ts
+- **Learnings for future iterations:**
+  - WebSocket upgrades in Hono propagate errors through onError → handleRouteError → deconstructError, so throwing before upgrade returns a proper HTTP error response instead of a 101 upgrade.
+  - VirtualWebSocket.triggerClose(code, reason) dispatches a close event but does NOT change readyState. The readyState is managed by the getReadyState callback from the mock. Force-close must update the local readyState variable AND call triggerClose.
+  - VirtualWebSocket.close() validates close codes (only allows 1000, 1001-1003, 1007-1011, 3000-4999). Code 1012 is not in the allowed list for client-initiated close, but triggerClose (server-side dispatch) bypasses validation.
+  - Force-close callbacks must be registered AFTER the VirtualWebSocket is created because they need access to internal closure variables (readyState, unregisterObserver, etc.). JavaScript let declarations are in temporal dead zone until executed, but closures called later can safely reference them.
+  - The `#dynamicReloadCloseCallbacks` map must be cleaned up in both sleepActor and destroyActor to prevent stale callback references.
 ---

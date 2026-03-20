@@ -308,7 +308,7 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "Close code 1012 tells clients the closure is intentional and reconnection is appropriate."
     },
     {
