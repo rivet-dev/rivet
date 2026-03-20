@@ -3,7 +3,7 @@ import {
 	drizzle as proxyDrizzle,
 	type SqliteRemoteDatabase,
 } from "drizzle-orm/sqlite-proxy";
-import type { DatabaseProvider, RawAccess } from "../config";
+import type { DatabaseProvider, RawAccess, RawDatabaseClient } from "../config";
 import { AsyncMutex, createActorKvStore, toSqliteBindings } from "../shared";
 
 export * from "./sqlite-core";
@@ -121,6 +121,75 @@ async function runInlineMigrations(
 	}
 }
 
+/**
+ * Create a sqlite-proxy async callback backed by a RawDatabaseClient.
+ * Converts object-style rows from the raw client to positional arrays
+ * for drizzle's mapResultRow.
+ */
+function createRawOverrideProxyCallback(rawClient: RawDatabaseClient) {
+	return async (
+		sql: string,
+		params: any[],
+		method: "run" | "all" | "values" | "get",
+	): Promise<{ rows: any }> => {
+		if (method === "run") {
+			await rawClient.exec(sql, ...params);
+			return { rows: [] };
+		}
+
+		const rows = await rawClient.exec(sql, ...params);
+		// drizzle's mapResultRow expects positional arrays, not objects.
+		const arrayRows = rows.map((row) => Object.values(row));
+
+		if (method === "get") {
+			return { rows: arrayRows[0] };
+		}
+
+		return { rows: arrayRows };
+	};
+}
+
+/**
+ * Run inline migrations using a RawDatabaseClient instead of the
+ * @rivetkit/sqlite Database. Used when the database is provided via
+ * an override (e.g. dynamic actor SQLite proxy bridge).
+ */
+async function runInlineMigrationsViaRawClient(
+	rawClient: RawDatabaseClient,
+	migrations: any,
+): Promise<void> {
+	await rawClient.exec(
+		`CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			hash TEXT NOT NULL,
+			created_at INTEGER
+		)`,
+	);
+
+	const lastRows = await rawClient.exec<{ created_at: number }>(
+		"SELECT id, hash, created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1",
+	);
+	const lastCreatedAt = lastRows[0]?.created_at ?? 0;
+
+	const journal = migrations.journal;
+	if (!journal?.entries) return;
+
+	for (const entry of journal.entries) {
+		if (entry.when <= lastCreatedAt) continue;
+
+		const migrationKey = `m${String(entry.idx).padStart(4, "0")}`;
+		const sqlStr = migrations.migrations[migrationKey];
+		if (!sqlStr) continue;
+
+		await rawClient.exec(sqlStr);
+		await rawClient.exec(
+			"INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+			entry.tag,
+			entry.when,
+		);
+	}
+}
+
 export function db<
 	TSchema extends Record<string, unknown> = Record<string, never>,
 >(
@@ -128,10 +197,66 @@ export function db<
 ): DatabaseProvider<SqliteRemoteDatabase<TSchema> & RawAccess> {
 	// Store the @rivetkit/sqlite Database instance alongside the drizzle client
 	let waDbInstance: Database | null = null;
+	let rawOverrideClient: RawDatabaseClient | null = null;
 	const mutex = new AsyncMutex();
 
 	return {
 		createClient: async (ctx) => {
+			// Check for drizzle override first
+			if (ctx.overrideDrizzleDatabaseClient) {
+				const override = await ctx.overrideDrizzleDatabaseClient();
+				if (override) {
+					const client =
+						override as unknown as SqliteRemoteDatabase<TSchema>;
+					return Object.assign(client, {
+						execute: async <
+							TRow extends Record<
+								string,
+								unknown
+							> = Record<string, unknown>,
+						>(
+							_query: string,
+							..._args: unknown[]
+						): Promise<TRow[]> => {
+							throw new Error(
+								"Raw SQL execute is not supported through the drizzle database override. Use the drizzle query builder instead.",
+							);
+						},
+						close: async () => {},
+					} satisfies RawAccess);
+				}
+			}
+
+			// Check for raw database override second
+			if (ctx.overrideRawDatabaseClient) {
+				const rawClient = await ctx.overrideRawDatabaseClient();
+				if (rawClient) {
+					rawOverrideClient = rawClient;
+
+					const callback =
+						createRawOverrideProxyCallback(rawClient);
+					const client = proxyDrizzle<TSchema>(callback, config);
+
+					return Object.assign(client, {
+						execute: async <
+							TRow extends Record<
+								string,
+								unknown
+							> = Record<string, unknown>,
+						>(
+							query: string,
+							...args: unknown[]
+						): Promise<TRow[]> => {
+							return await rawClient.exec<TRow>(
+								query,
+								...args,
+							);
+						},
+						close: async () => {},
+					} satisfies RawAccess);
+				}
+			}
+
 			// Construct KV-backed client using actor driver's KV operations
 			if (!ctx.sqliteVfs) {
 				throw new Error(
@@ -218,12 +343,19 @@ export function db<
 			} satisfies RawAccess);
 		},
 		onMigrate: async (_client) => {
-			if (config?.migrations && waDbInstance) {
-				await runInlineMigrations(
-					waDbInstance,
-					mutex,
-					config.migrations,
-				);
+			if (config?.migrations) {
+				if (rawOverrideClient) {
+					await runInlineMigrationsViaRawClient(
+						rawOverrideClient,
+						config.migrations,
+					);
+				} else if (waDbInstance) {
+					await runInlineMigrations(
+						waDbInstance,
+						mutex,
+						config.migrations,
+					);
+				}
 			}
 		},
 		onDestroy: async (client) => {

@@ -1,0 +1,83 @@
+# Ralph Progress Log
+Started: Fri Mar 20 12:05:03 AM PDT 2026
+---
+
+## Codebase Patterns
+- SqliteRuntimeDatabase interface only has exec/run/get/all/close methods. No prepare() or columns(). Use all() which returns Record<string, unknown>[] then Object.keys() to get column names.
+- KV databases use #actorKvDatabases map with lazy open via #getOrCreateActorKvDatabase. App databases follow the same pattern with #actorAppDatabases.
+- Actor teardown happens in sleepActor (close db, delete runtime, remove entry) and destroyActor (close db, delete files, reset entry). Both paths must handle app databases.
+- Bridge keys in DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS are string constants prefixed with __rivetkitDynamicHost.
+- Pre-existing typecheck errors exist in fixtures/workflow.ts, engine driver, and test files. These are not related to dynamic actor changes.
+- There is no host-runtime.ts. Both isolated-vm and secure-exec use the same #setIsolateBridge() in isolate-runtime.ts.
+- New ActorDriver methods should be optional (?) and delegate to FileSystemGlobalState in FileSystemActorDriver.
+- The isolate-side actorDriver object lives in dynamic-isolate-runtime/src/index.cts (not src/dynamic/host-runtime.ts). Its DynamicActorDriver is a locally-typed subset of ActorDriver.
+- drizzle sqlite-proxy expects positional arrays from the callback; RawDatabaseClient returns objects. Use Object.values() to convert. Override checks go at top of createClient in db/drizzle/mod.ts.
+
+## 2026-03-20 - US-001
+- What was implemented:
+  - Added sqliteExec and sqliteBatch keys to DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS in runtime-bridge.ts
+  - Added #actorAppDatabases map, #appDbsDir directory, and app-databases directory creation to FileSystemGlobalState
+  - Added #getOrCreateActorAppDatabase(actorId) with WAL mode, #closeActorAppDatabase(actorId)
+  - Added sqliteExec(actorId, sql, params) and sqliteBatch(actorId, statements) methods
+  - Extended sleepActor and destroyActor to close and delete app databases
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/runtime-bridge.ts
+  - rivetkit-typescript/packages/rivetkit/src/drivers/file-system/global-state.ts
+- **Learnings for future iterations:**
+  - SqliteRuntimeDatabase is an abstraction over bun:sqlite, node:sqlite, and better-sqlite3. It normalizes to exec/run/get/all/close. No prepare/columns available.
+  - For column-oriented results, use all() + Object.keys() on first row.
+  - App databases are stored at <storagePath>/app-databases/<actorId>.db, separate from KV databases at <storagePath>/databases/<actorId>.db.
+  - destroyActor deletes files in parallel via Promise.all with individual try/catch blocks ignoring ENOENT.
+---
+
+## 2026-03-20 - US-002
+- What was implemented:
+  - Added sqliteExec and sqliteBatch as optional methods on ActorDriver interface
+  - Added delegation methods in FileSystemActorDriver that call through to FileSystemGlobalState
+  - Added sqliteExecRef and sqliteBatchRef in #setIsolateBridge() using the same makeRef/makeExternalCopy pattern as KV callbacks
+  - SQLite bridge refs JSON-serialize params from the isolate and return JSON-serialized results via makeExternalCopy
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/actor/driver.ts
+  - rivetkit-typescript/packages/rivetkit/src/drivers/file-system/actor.ts
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/isolate-runtime.ts
+- **Learnings for future iterations:**
+  - There is no separate host-runtime.ts file. Both isolated-vm and secure-exec runtimes use the same #setIsolateBridge() in isolate-runtime.ts because secure-exec wraps isolated-vm.
+  - Bridge callbacks for synchronous host operations (like SQLite) use the same makeRef pattern as async KV callbacks.
+  - JSON serialization is used for SQLite params/results crossing the isolate boundary (params as JSON string, results as JSON string via makeExternalCopy).
+  - FileSystemActorDriver delegates to FileSystemGlobalState for all operations (KV, alarms, SQLite). New ActorDriver methods should follow this pattern.
+  - The startSleep duplicate identifier error in file-system/actor.ts is pre-existing (property declaration + method definition conflict).
+---
+
+## 2026-03-20 - US-003
+- What was implemented:
+  - Added sqliteExec and sqliteBatch as optional refs on DynamicHostBridge interface in the isolate bootstrap
+  - Read them via getOptionalHostRef in readHostBridge()
+  - Added overrideRawDatabaseClient and overrideDrizzleDatabaseClient to DynamicActorDriver interface
+  - Implemented overrideRawDatabaseClient on the actorDriver object: returns a RawDatabaseClient whose exec() calls bridgeCall to sqliteExec, JSON-serializes params, parses the column-oriented result, and maps rows to objects
+  - overrideDrizzleDatabaseClient returns undefined to let the raw override handle it
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/dynamic-isolate-runtime/src/index.cts
+- **Learnings for future iterations:**
+  - The isolate-side actorDriver is in dynamic-isolate-runtime/src/index.cts, not in src/dynamic/. The PRD refers to host-runtime.ts but the actual file is index.cts.
+  - The DynamicActorDriver interface in the bootstrap is a locally-defined subset of ActorDriver. It already has pre-existing TS2345 errors (missing kvDeleteRange, kvListRange).
+  - SQLite bridge refs on the isolate side should be optional (getOptionalHostRef) since not all drivers may support SQLite.
+  - bridgeCall handles ExternalCopy.copy() automatically, so JSON.parse on the result works for both sync and async bridge returns.
+---
+
+## 2026-03-20 - US-004
+- What was implemented:
+  - Added drizzle override check at top of createClient() in db/drizzle/mod.ts
+  - Added raw database override check that builds a drizzle sqlite-proxy on top of RawDatabaseClient
+  - sqlite-proxy callback handles 'run' (exec + return empty), 'get' (first row as array), and 'all' (all rows as arrays) methods
+  - Added createRawOverrideProxyCallback helper that converts RawDatabaseClient objects to positional arrays for drizzle's mapResultRow
+  - Added runInlineMigrationsViaRawClient helper for running drizzle migrations through a RawDatabaseClient
+  - Updated onMigrate to use rawOverrideClient when available, falling back to waDbInstance
+  - Existing KV-backed path remains unchanged as fallback
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/db/drizzle/mod.ts
+- **Learnings for future iterations:**
+  - DatabaseProviderContext already has overrideRawDatabaseClient and overrideDrizzleDatabaseClient as optional callbacks (defined in db/config.ts).
+  - RawDatabaseClient.exec returns Record<string, unknown>[] (objects keyed by column name), but drizzle's sqlite-proxy mapResultRow expects positional arrays. Use Object.values(row) to convert.
+  - The drizzle override path currently always returns undefined from the isolate side, so it's a stub path. The raw override is the active path for dynamic actors.
+  - runInlineMigrations uses @rivetkit/sqlite Database directly (waDb.exec with callback). For override paths, a separate migration runner using RawDatabaseClient.exec is needed.
+---

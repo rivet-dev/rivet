@@ -48,7 +48,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Because overrides are set, DatabaseProvider.createClient() uses them instead of trying to construct KV-backed WASM SQLite."
     },
     {
@@ -64,7 +64,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "This lets dynamic actors use db() from rivetkit/db/drizzle with migrations working through the bridge. The host runs the actual SQL; the isolate just sends strings."
     },
     {
