@@ -1,0 +1,133 @@
+---
+title: "Deploying to Rivet Compute"
+description: "Run your backend on Rivet Compute."
+skill: true
+---
+
+<Note>
+Using an AI coding agent? Open **Connect** on the [Rivet dashboard](https://hub.rivet.dev), select **Rivet Cloud**, and paste the one-shot prompt into your agent and have it connect with Rivet Compute for you.
+</Note>
+
+## Steps
+
+<Steps>
+<Step title="Prerequisites">
+
+- Your RivetKit app in a GitHub repository
+  - If you don't have one, see the [Quickstart](/docs/actors/quickstart) page or our [Examples](https://github.com/rivet-dev/rivet/tree/main/examples)
+- A [Rivet Cloud](https://hub.rivet.dev) account and project
+
+</Step>
+<Step title="Configure Runner Mode">
+
+Rivet Compute runs your app as a long-lived container. Make sure your server calls `startRunner()` instead of `serve()`:
+
+```typescript src/server.js @nocheck
+import { registry } from "./actors.js";
+
+registry.startRunner();
+```
+
+See [Runtime Modes](/docs/general/runtime-modes) for details on when to use each mode.
+
+</Step>
+<Step title="Containerize Your App">
+
+Create a `Dockerfile` in your project root:
+
+```dockerfile @nocheck
+FROM node:24-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+CMD ["node", "src/server.js"]
+```
+
+</Step>
+<Step title="Get Your Cloud Token">
+
+1. Open the [Rivet dashboard](https://hub.rivet.dev) and navigate to your project
+2. Click **Connect** and select **Rivet Cloud**
+3. Copy the **`RIVET_CLOUD_TOKEN`** value shown — this is all you need for deployment
+
+</Step>
+<Step title="Set Up GitHub Actions">
+
+Add `RIVET_CLOUD_TOKEN` as a secret in your GitHub repository (**Settings → Secrets and variables → Actions**), then create `.github/workflows/deploy.yml`:
+
+```yaml @nocheck
+name: Rivet Deploy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: rivet-deploy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rivet-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rivet-dev/deploy-action@v1
+        with:
+          rivet-token: ${{ secrets.RIVET_CLOUD_TOKEN }}
+```
+
+The `deploy-action` handles everything automatically:
+
+- Builds your Docker image and pushes it to Rivet's built-in container registry
+- Creates a `production` namespace on pushes to `main`
+- Creates an isolated `pr-{number}` namespace for each pull request
+- Posts a comment on the PR with a link to the Rivet dashboard
+- Cleans up the PR namespace when the pull request is closed
+
+</Step>
+<Step title="Monitor Deployment">
+
+The dashboard shows live status as Rivet Compute provisions your backend:
+
+| Status | Description |
+| --- | --- |
+| Provisioning | Allocating compute resources |
+| Initializing | Starting the runtime environment |
+| Allocating | Assigning the runner to your pool |
+| Deploying | Pulling and launching your container |
+| Binding | Connecting the runner to the network |
+| Ready | Deployment complete |
+
+Once the status reaches **Ready**, your backend is live and actors are available for connections.
+
+</Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+<Accordion title="Deployment stuck in Provisioning">
+
+If the status stays in **Provisioning** for more than a few minutes, verify that:
+
+- The `RIVET_CLOUD_TOKEN` secret is correctly set in your GitHub repository
+- The GitHub Actions workflow completed without errors — check the run logs
+
+</Accordion>
+<Accordion title="Deployment error">
+
+If the status shows **Error**, check that your container starts successfully and does not exit immediately. Common causes:
+
+- The server file is not calling `registry.startRunner()`
+- A runtime crash on startup — test the image locally with `docker run`
+
+</Accordion>
+
+</AccordionGroup>
