@@ -116,6 +116,21 @@ export class FileSystemActorDriver implements ActorDriver {
 		await this.#state.setActorAlarm(actor.id, timestamp);
 	}
 
+	sqliteExec(
+		actorId: string,
+		sql: string,
+		params: unknown[],
+	): { rows: unknown[][]; columns: string[] } {
+		return this.#state.sqliteExec(actorId, sql, params);
+	}
+
+	sqliteBatch(
+		actorId: string,
+		statements: { sql: string; params: unknown[] }[],
+	): { rows: unknown[][]; columns: string[] }[] {
+		return this.#state.sqliteBatch(actorId, statements);
+	}
+
 	/** Creates a SQLite VFS instance for creating KV-backed databases */
 	async createSqliteVfs(): Promise<SqliteVfs> {
 		return await importSqliteVfs();

@@ -1023,6 +1023,52 @@ export class DynamicActorIsolateRuntime {
 				});
 			},
 		);
+		const sqliteExecRef = makeRef(
+			(
+				actorId: string,
+				sql: string,
+				params: string,
+			): { copy(): string } => {
+				if (
+					typeof this.#config.actorDriver.sqliteExec !== "function"
+				) {
+					throw new Error(
+						"driver does not implement sqliteExec",
+					);
+				}
+				const parsedParams = JSON.parse(params) as unknown[];
+				const result = this.#config.actorDriver.sqliteExec(
+					actorId,
+					sql,
+					parsedParams,
+				);
+				return makeExternalCopy(JSON.stringify(result));
+			},
+		);
+		const sqliteBatchRef = makeRef(
+			(
+				actorId: string,
+				statementsJson: string,
+			): { copy(): string } => {
+				if (
+					typeof this.#config.actorDriver.sqliteBatch !==
+					"function"
+				) {
+					throw new Error(
+						"driver does not implement sqliteBatch",
+					);
+				}
+				const statements = JSON.parse(statementsJson) as {
+					sql: string;
+					params: unknown[];
+				}[];
+				const results = this.#config.actorDriver.sqliteBatch(
+					actorId,
+					statements,
+				);
+				return makeExternalCopy(JSON.stringify(results));
+			},
+		);
 
 		await context.global.set(
 			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvBatchPut,
@@ -1065,6 +1111,14 @@ export class DynamicActorIsolateRuntime {
 			dispatchRef,
 		);
 		await context.global.set(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.log, logRef);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.sqliteExec,
+			sqliteExecRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.sqliteBatch,
+			sqliteBatchRef,
+		);
 		await context.global.set(
 			DYNAMIC_BOOTSTRAP_CONFIG_GLOBAL_KEY,
 			{

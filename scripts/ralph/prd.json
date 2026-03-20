@@ -18,7 +18,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "App databases are separate from KV databases. Use the same SqliteRuntime (bun:sqlite / better-sqlite3) already loaded. sqliteExec creates the database lazily on first use."
     },
     {
@@ -33,7 +33,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Follow the exact same pattern used for existing KV bridge callbacks. isolated-vm uses makeExternalCopy; secure-exec returns plain JSON strings."
     },
     {

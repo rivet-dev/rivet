@@ -68,6 +68,26 @@ export interface ActorDriver {
 	/** ActorInstance ensure that only one instance of setAlarm is called in parallel at a time. */
 	setAlarm(actor: AnyActorInstance, timestamp: number): Promise<void>;
 
+	// SQLite app database
+	/**
+	 * Execute a single SQL statement against the actor's host-side app database.
+	 * Returns column-oriented rows.
+	 */
+	sqliteExec?(
+		actorId: string,
+		sql: string,
+		params: unknown[],
+	): { rows: unknown[][]; columns: string[] };
+
+	/**
+	 * Execute multiple SQL statements in a single transaction against the
+	 * actor's host-side app database.
+	 */
+	sqliteBatch?(
+		actorId: string,
+		statements: { sql: string; params: unknown[] }[],
+	): { rows: unknown[][]; columns: string[] }[];
+
 	// Database
 	/**
 	 * Override the default raw database client for the actor.
