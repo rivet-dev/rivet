@@ -148,7 +148,7 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "These types are consumed by subsequent stories. canReload defaults to allowed when auth passes."
     },
     {
@@ -165,7 +165,7 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "This state is host-side and in-memory only. It must not be written into persisted actor storage. Stale async completions are rejected by comparing captured generation against current."
     },
     {
@@ -183,7 +183,7 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "Only one startup attempt may be in flight at a time. The synchronous transition ensures concurrent requests always join the new attempt."
     },
     {

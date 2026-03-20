@@ -16,6 +16,10 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
 - Fixture actors in actors/ directory (dbActorRaw.ts, dbActorDrizzle.ts) are already loaded as both static and dynamic actors via registry-loader.ts. No need to create new fixture actors for SQLite proxy testing.
 - Dynamic SQLite proxy tests should use describe.skipIf(!driverTestConfig.isDynamic) to only run when the dynamic registry variant is active.
 - Tests depending on optional peer deps (@secure-exec/typescript, secure-exec) must use describe.skipIf with require.resolve to skip gracefully.
+- GlobalActorOptionsInput is a z.input<> type. Cannot use `interface extends` with it. Use intersection type instead.
+- Dynamic runtime status lives in src/dynamic/runtime-status.ts. Use standalone transition functions (transitionToStarting, etc.) rather than class methods for cross-driver compatibility.
+- coalesceDynamicStartup in startup-coalescing.ts orchestrates dynamic actor startup with coalescing (concurrent requests join existing promise) and generation tracking (stale completions discarded). Integrate it into driver startActor paths.
+- When moving code into closures, capture narrowed TypeScript variables into local constants first to avoid losing type narrowing.
 
 ## 2026-03-20 - US-001
 - What was implemented:
@@ -161,4 +165,71 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
   - @secure-exec/typescript is an optional peer dependency. Tests that depend on it must skip gracefully using describe.skipIf with a require.resolve check.
   - TS source formats ('esm-ts', 'commonjs-ts') are compiled to their JS equivalents ('esm-js', 'commonjs-js') during materializeDynamicSource, before the source reaches the sandbox filesystem.
   - The compiled JS format is passed through to the bootstrap config, so the isolate sees plain JS regardless of the original source format.
+---
+
+## 2026-03-20 - US-009
+- What was implemented:
+  - Added DynamicStartupFailed error subclass (group: "dynamic", code: "dynamic_startup_failed", statusCode: 503) to actor/errors.ts
+  - Added DynamicLoadTimeout error subclass (group: "dynamic", code: "dynamic_load_timeout", statusCode: 503) to actor/errors.ts
+  - Added DynamicStartupOptions interface with timeoutMs, retryInitialDelayMs, retryMaxDelayMs, retryMultiplier, retryJitter, maxAttempts
+  - Added DYNAMIC_STARTUP_DEFAULTS constant with all default values
+  - Added DynamicActorOptions type (intersection of GlobalActorOptionsInput & { startup? })
+  - Added DynamicActorReloadContext class with request field, following DynamicActorAuthContext pattern
+  - Added DynamicActorCanReload callback type
+  - Updated DynamicActorConfigInput with canReload and options fields
+  - Updated DynamicActorDefinition to store canReload callback and resolved startup options
+  - Exported all new types from dynamic/mod.ts
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/actor/errors.ts
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/internal.ts
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/mod.ts
+- **Learnings for future iterations:**
+  - GlobalActorOptionsInput is a z.input<> Zod type. You cannot use `interface extends` with it (TS2312). Use intersection type (`type X = GlobalActorOptionsInput & { ... }`) instead.
+  - DynamicActorDefinition resolves startup options in the constructor by merging defaults with user-provided values, so consumers always get Required<DynamicStartupOptions>.
+  - DynamicActorReloadContext follows the same pattern as DynamicActorAuthContext (extends DynamicActorContextBase, adds request field).
+  - Error subclasses use statusCode 503 (Service Unavailable) for dynamic startup failures since the actor is temporarily unable to handle requests.
+---
+
+## 2026-03-20 - US-010
+- What was implemented:
+  - Created src/dynamic/runtime-status.ts with the shared host-side dynamic runtime status model
+  - Defined DynamicRuntimeState union type with "inactive", "starting", "running", "failed_start" states
+  - Defined DynamicRuntimeStatus interface with all metadata fields: error tracking (lastStartErrorCode, lastStartErrorMessage, lastStartErrorDetails, lastFailureAt), backoff state (retryAt, retryAttempt), reload rate-limit tracking (reloadCount, reloadWindowStart), generation counter, and startupPromise
+  - Implemented createDynamicRuntimeStatus() factory returning inactive state
+  - Implemented transitionToStarting() that synchronously increments generation and creates startupPromise via promiseWithResolvers
+  - Implemented transitionToRunning() that resolves startupPromise and resets retry state
+  - Implemented transitionToFailedStart() that records error metadata, increments retryAttempt, and rejects startupPromise
+  - Implemented transitionToInactive() that clears all metadata (except generation which only increments)
+  - Exported all types and functions from dynamic/mod.ts
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/runtime-status.ts (new)
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/mod.ts
+- **Learnings for future iterations:**
+  - The status model uses mutation-based transitions (modifying the object in place) rather than creating new objects, matching the pattern used for ActorEntry in global-state.ts.
+  - generation is never reset, even when transitioning to inactive. This ensures monotonicity across the actor's lifetime so stale async completions are always detectable.
+  - startupPromise uses the codebase's promiseWithResolvers utility which requires an onReject callback to handle unhandled rejections.
+  - The transition functions are standalone exports (not methods on a class) so they can be used by both file-system and engine drivers without inheritance.
+---
+
+## 2026-03-20 - US-011
+- What was implemented:
+  - Created src/dynamic/startup-coalescing.ts with coalesceDynamicStartup orchestration function
+  - coalesceDynamicStartup handles: running (no-op), starting (coalesce via existing promise), inactive/expired failed_start (new attempt with generation tracking)
+  - Captures generation synchronously before async work; discards stale completions if generation changed
+  - On success: transitionToRunning. On failure: transitionToFailedStart with exponential backoff metadata
+  - Added computeBackoffDelay helper (min(maxDelay, initialDelay * multiplier^attempt) with optional jitter)
+  - Integrated into FileSystemGlobalState.startActor: dynamic actors now use coalesceDynamicStartup to manage startup lifecycle
+  - Added #dynamicStatuses map to FileSystemGlobalState for per-actor DynamicRuntimeStatus tracking
+  - Added #getOrCreateDynamicStatus and getDynamicStatus helpers
+  - Cleanup: sleepActor and destroyActor now transition status to inactive and delete from map
+  - Exported coalesceDynamicStartup and computeBackoffDelay from dynamic/mod.ts
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/startup-coalescing.ts (new)
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/mod.ts
+  - rivetkit-typescript/packages/rivetkit/src/drivers/file-system/global-state.ts
+- **Learnings for future iterations:**
+  - When moving code into an async closure for coalesceDynamicStartup, TypeScript loses narrowing on outer variables like entry.state. Capture narrowed values into local constants before the closure.
+  - The two coalescing mechanisms (ActorEntry.startPromise and DynamicRuntimeStatus.startupPromise) complement each other: the former handles general actor-start coalescing, the latter handles dynamic-specific failed-start lifecycle.
+  - coalesceDynamicStartup re-throws startup errors after recording them in the status model, allowing the caller (startActor) to also handle cleanup like disposing the runtime.
+  - DynamicActorDefinition.startupOptions provides resolved Required<DynamicStartupOptions> with defaults already merged.
 ---
