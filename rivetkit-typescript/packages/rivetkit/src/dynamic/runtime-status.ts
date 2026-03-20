@@ -49,6 +49,11 @@ export interface DynamicRuntimeStatus {
 		resolve: (value: void | PromiseLike<void>) => void;
 		reject: (reason?: unknown) => void;
 	} | undefined;
+
+	// The AbortController for the current startup attempt. Stored on the
+	// status so that reload can abort an in-flight startup from outside
+	// coalesceDynamicStartup.
+	abortController: AbortController | undefined;
 }
 
 /**
@@ -67,6 +72,7 @@ export function createDynamicRuntimeStatus(): DynamicRuntimeStatus {
 		reloadWindowStart: undefined,
 		generation: 0,
 		startupPromise: undefined,
+		abortController: undefined,
 	};
 }
 
@@ -152,6 +158,7 @@ export function transitionToInactive(
 	status.reloadCount = 0;
 	status.reloadWindowStart = undefined;
 	status.startupPromise = undefined;
+	status.abortController = undefined;
 	// generation is not reset; it only increments.
 	return status;
 }

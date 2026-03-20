@@ -1446,6 +1446,71 @@ export class FileSystemGlobalState {
 		return this.#dynamicStatuses.get(actorId);
 	}
 
+	/**
+	 * Reload a dynamic actor, handling all lifecycle states appropriately.
+	 *
+	 * - running: stop through normal sleep lifecycle (existing behavior).
+	 * - inactive: no-op. The actor will load fresh code on the next request.
+	 *   Waking it here would risk a double-load if a request arrives
+	 *   simultaneously.
+	 * - starting: abort the in-flight startup, increment generation so the
+	 *   old coalesceDynamicStartup discards its result, and transition to
+	 *   inactive. The next request starts a fresh attempt.
+	 * - failed_start: reload bypasses backoff because the caller explicitly
+	 *   requested a refresh. The underlying issue may have been fixed, so
+	 *   respecting backoff would unnecessarily delay the reload.
+	 */
+	async reloadDynamicActor(actorId: string): Promise<void> {
+		const status = this.getDynamicStatus(actorId);
+
+		if (!status || status.state === "inactive") {
+			// Reload while inactive is intercepted as a no-op. The actor will
+			// load fresh code on the next request that wakes it. Starting it
+			// here would cause a double-load if a request arrives at the same
+			// time.
+			return;
+		}
+
+		if (status.state === "running") {
+			await this.sleepActor(actorId);
+			return;
+		}
+
+		if (status.state === "starting") {
+			// Increment generation first so the in-flight coalesceDynamicStartup
+			// detects the mismatch and discards its result.
+			status.generation += 1;
+			status.abortController?.abort();
+			status.startupPromise?.reject(
+				new Error("startup aborted by reload"),
+			);
+			status.startupPromise = undefined;
+			status.abortController = undefined;
+
+			// Clean up a partially created runtime.
+			const runtime = this.#dynamicRuntimes.get(actorId);
+			if (runtime) {
+				try {
+					await runtime.dispose();
+				} catch {
+					// Best-effort cleanup.
+				}
+				this.#dynamicRuntimes.delete(actorId);
+			}
+
+			transitionToInactive(status);
+			return;
+		}
+
+		if (status.state === "failed_start") {
+			// Reload bypasses backoff because the caller explicitly requested
+			// new code. Clearing backoff state and transitioning to inactive
+			// means the next request triggers a fresh startup from attempt 0.
+			transitionToInactive(status);
+			return;
+		}
+	}
+
 	async isDynamicActor(
 		config: RegistryConfig,
 		actorId: string,

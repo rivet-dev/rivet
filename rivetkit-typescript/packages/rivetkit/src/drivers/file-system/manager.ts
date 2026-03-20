@@ -188,7 +188,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		if (!(await this.#state.isDynamicActor(this.#config, actorId))) {
 			return new Response("not a dynamic actor", { status: 404 });
 		}
-		await this.#state.sleepActor(actorId);
+		await this.#state.reloadDynamicActor(actorId);
 		return new Response(null, { status: 200 });
 	}
 

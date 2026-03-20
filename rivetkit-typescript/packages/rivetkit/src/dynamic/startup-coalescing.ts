@@ -107,6 +107,7 @@ export async function coalesceDynamicStartup(
 	// loader and internal async operations can be cancelled on timeout
 	// or reload.
 	const abortController = new AbortController();
+	status.abortController = abortController;
 	const timeoutMs = opts.timeoutMs;
 	const timeoutHandle = setTimeout(() => {
 		abortController.abort(new DynamicLoadTimeout(timeoutMs));
@@ -185,5 +186,6 @@ export async function coalesceDynamicStartup(
 		throw effectiveError;
 	} finally {
 		clearTimeout(timeoutHandle);
+		status.abortController = undefined;
 	}
 }
