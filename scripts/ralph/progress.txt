@@ -41,3 +41,14 @@ Started: Thu Mar 19 04:45:11 PM PDT 2026
   - Pre-existing TS errors in frontend are unrelated to theme work (type mismatches in .tsx files)
   - The `check-types` script (not `typecheck`) is the correct pnpm command for the frontend package
 ---
+
+## 2026-03-20T00:15:00Z - US-003
+- Updated light mode CSS variables in `frontend/packages/components/public/theme.css` to Foundry zinc palette
+- Files changed: `frontend/packages/components/public/theme.css`
+- 17 light mode variables updated: foreground, card, card-foreground, popover-foreground, primary, primary-foreground, secondary, secondary-foreground, muted, muted-foreground, accent, accent-foreground, destructive, destructive-foreground, border, input, ring
+- Preserved --muted-destructive and --radius (not in scope for this story)
+- **Learnings for future iterations:**
+  - Light mode variables follow the same warm-to-zinc migration pattern as dark mode
+  - The --background was already `0 0% 100%` (white) so no change needed
+  - Pre-existing TS errors remain unchanged (CSS-only change)
+---

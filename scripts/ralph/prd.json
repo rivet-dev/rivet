@@ -78,7 +78,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Light mode is defined in the :root block. Even though the dashboard is dark-mode-only (hardcoded class='dark'), keep light mode values aligned for consistency and future light mode support."
     },
     {
