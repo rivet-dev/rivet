@@ -1,0 +1,32 @@
+# Ralph Progress Log
+Started: Thu Mar 19 04:45:11 PM PDT 2026
+---
+
+## Codebase Patterns
+- Frontend theme CSS is defined in TWO files that must stay in sync: `frontend/packages/components/public/theme.css` (canonical) and `frontend/src/components/theme.css` (mirror)
+- Engine mode frontend routes are limited to `ns.$namespace/index.tsx` and `ns.$namespace/connect.tsx` (cloud mode has more routes)
+- Engine admin token for dev is "dev" (set in config.jsonc)
+- The engine requires a config file and `start` subcommand: `rivet-engine --config <config.jsonc> start`
+- Docker infra for dev-multinode does NOT expose ClickHouse/NATS ports to host; use container IPs or dev-host docker-compose instead
+- Namespace creation API uses snake_case fields: `{"display_name":"...","name":"..."}`
+
+---
+
+## 2026-03-19T23:57:00Z - US-001
+- Took 6 before screenshots of the Rivet frontend dashboard
+- Screenshots saved to `.agent/screenshots/before/`:
+  - 01-actors-dashboard.png (main view with sidebar, search bar)
+  - 02-overview.png (Settings page with Providers/Runners tables)
+  - 03-actors-list.png (Actor instances with empty state, quick start)
+  - 04-create-actor-dialog.png (Modal with form, code snippet)
+  - 05-404-page.png (Error card with button)
+  - 06-namespace-dropdown.png (Dropdown with namespace selection)
+- **Learnings for future iterations:**
+  - Engine binary needs to be built first: `cargo build -p rivet-engine`
+  - Engine needs config + start command: `rivet-engine --config <path> start`
+  - Dev-multinode Docker setup does not expose ClickHouse ports to host
+  - Created custom config at /tmp/rivet-engine-config.jsonc using container IPs
+  - Namespace API uses snake_case (display_name, not displayName)
+  - Unset RIVET__RUNTIME__WORKER__SHUTDOWN_DURATION env var to avoid config error
+  - Engine mode has limited routes compared to cloud mode
+---
