@@ -297,3 +297,24 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
   - The engine driver's reload handler (`#handleDynamicReloadOverlay`) has a different implementation using `startSleep()` and may need separate state-aware handling in a future story.
   - When reload aborts a starting actor, the old startActor call continues past coalesceDynamicStartup (which discards via generation mismatch), fails at getDynamicRuntime, and cleans up through its catch block.
 ---
+
+## 2026-03-20 - US-015
+- What was implemented:
+  - Updated `#handleDynamicReloadOverlay` in file-system manager.ts to accept the request and perform auth/canReload checks before state changes
+  - Auth check calls the dynamic actor definition's `auth` callback with a DynamicActorAuthContext; if it throws, returns 403
+  - canReload check calls the definition's `canReload` callback with a DynamicActorReloadContext; if it returns false or throws, returns 403
+  - If neither auth nor canReload is configured and in dev mode (NODE_ENV !== "production"), logs a warning but allows the reload
+  - Implemented reload rate-limit tracking using existing `reloadCount` and `reloadWindowStart` fields on DynamicRuntimeStatus
+  - Rate limit is 10 reloads per 60-second window, warning-only (not enforcement)
+  - Added `getInlineClient()` and `getActorInitialInput(actorId)` accessor methods to FileSystemGlobalState for context creation
+  - Used `lookupInRegistry` + `isDynamicActorDefinition` instead of the previous `isDynamicActor` call to get the definition for auth/canReload access
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/drivers/file-system/manager.ts
+  - rivetkit-typescript/packages/rivetkit/src/drivers/file-system/global-state.ts
+- **Learnings for future iterations:**
+  - FileSystemGlobalState's private fields (#runnerParams, #actorInitialInputs) need public accessors when the manager needs them for context creation. Added getInlineClient() and getActorInitialInput(actorId).
+  - isDev() from utils/env-vars.ts returns true when NODE_ENV !== "production". This is the standard way to check dev mode in rivetkit.
+  - The reload handler does auth before any state changes. This ensures unauthenticated requests never trigger side effects.
+  - Rate-limit tracking reuses the existing reloadCount/reloadWindowStart fields on DynamicRuntimeStatus, which are already reset by transitionToInactive.
+  - The DynamicActorDefinition.auth callback receives (context, params) where params is connection parameters. For reload, pass undefined since there are no connection params.
+---

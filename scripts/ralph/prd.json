@@ -257,7 +257,7 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "Auth flow matches existing inspector auth behavior in dev mode."
     },
     {
