@@ -272,3 +272,28 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
   - The caller (FileSystemGlobalState.startActor) already disposes the runtime in its catch block, so transitioning to inactive inside coalesceDynamicStartup is sufficient for teardown.
   - maxAttempts check uses >= (not >) because transitionToFailedStart increments retryAttempt before the check.
 ---
+
+## 2026-03-20 - US-014
+- What was implemented:
+  - Added `abortController` field to `DynamicRuntimeStatus` so reload can abort in-flight startups from outside `coalesceDynamicStartup`
+  - Updated `coalesceDynamicStartup` to store the AbortController on the status before starting and clear it in the finally block
+  - Added `reloadDynamicActor(actorId)` method to `FileSystemGlobalState` handling all four lifecycle states:
+    - running: delegates to `sleepActor()` (existing behavior preserved)
+    - inactive: no-op with comment explaining double-load prevention
+    - starting: increments generation, aborts AbortController, rejects old startupPromise, cleans up partial runtime, transitions to inactive
+    - failed_start: calls `transitionToInactive()` which clears backoff state, so next request starts fresh
+  - Updated `#handleDynamicReloadOverlay` in file-system manager to call `reloadDynamicActor()` instead of `sleepActor()`
+  - Added comments explaining why reload on inactive is a no-op and why reload bypasses backoff
+  - Updated `transitionToInactive` to also clear `abortController`
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/runtime-status.ts
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/startup-coalescing.ts
+  - rivetkit-typescript/packages/rivetkit/src/drivers/file-system/global-state.ts
+  - rivetkit-typescript/packages/rivetkit/src/drivers/file-system/manager.ts
+- **Learnings for future iterations:**
+  - The AbortController must be stored on DynamicRuntimeStatus (not just local to coalesceDynamicStartup) so external callers like reload can abort in-flight startups.
+  - For reload while starting, generation must be incremented BEFORE aborting. This ensures the in-flight coalesceDynamicStartup catch block detects the mismatch and discards its result instead of corrupting state.
+  - transitionToInactive already resets retryAt, retryAttempt, startupPromise, etc. For reload on failed_start, just calling transitionToInactive is sufficient.
+  - The engine driver's reload handler (`#handleDynamicReloadOverlay`) has a different implementation using `startSleep()` and may need separate state-aware handling in a future story.
+  - When reload aborts a starting actor, the old startActor call continues past coalesceDynamicStartup (which discards via generation mismatch), fails at getDynamicRuntime, and cleans up through its catch block.
+---

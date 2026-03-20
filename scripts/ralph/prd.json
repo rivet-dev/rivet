@@ -238,7 +238,7 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "Reload while running does NOT verify new code loads successfully. Startup failures surface on the next request that wakes the actor."
     },
     {
