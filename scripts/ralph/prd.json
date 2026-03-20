@@ -358,7 +358,7 @@
         "Document maxAttempts limit and behavior when exceeded"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": "The implementation is not complete until the docs-internal update ships in the same change."
     }
   ]
