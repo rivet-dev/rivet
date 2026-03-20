@@ -1,5 +1,5 @@
 import { getLogger } from "@/common/log";
-import { ActorError } from "@/actor/errors";
+import { ActorError, DynamicLoadTimeout } from "@/actor/errors";
 import type { DynamicRuntimeStatus } from "./runtime-status";
 import {
 	transitionToStarting,
@@ -54,10 +54,15 @@ export function computeBackoffDelay(
  * generation while the original attempt is still in flight, the original
  * attempt's completion handler detects the mismatch and discards its result
  * instead of overwriting the newer attempt's state.
+ *
+ * An AbortController is created for each startup attempt and its signal
+ * passed to the startupFn. A timeout (configured via options.timeoutMs)
+ * aborts the controller if startup does not complete in time. The resulting
+ * DynamicLoadTimeout error participates in the normal backoff flow.
  */
 export async function coalesceDynamicStartup(
 	status: DynamicRuntimeStatus,
-	startupFn: () => Promise<void>,
+	startupFn: (signal: AbortSignal) => Promise<void>,
 	options?: Required<DynamicStartupOptions>,
 ): Promise<void> {
 	const opts = options ?? DYNAMIC_STARTUP_DEFAULTS;
@@ -95,8 +100,17 @@ export async function coalesceDynamicStartup(
 	transitionToStarting(status);
 	const capturedGeneration = status.generation;
 
+	// Create an AbortController for this startup attempt so that the
+	// loader and internal async operations can be cancelled on timeout
+	// or reload.
+	const abortController = new AbortController();
+	const timeoutMs = opts.timeoutMs;
+	const timeoutHandle = setTimeout(() => {
+		abortController.abort(new DynamicLoadTimeout(timeoutMs));
+	}, timeoutMs);
+
 	try {
-		await startupFn();
+		await startupFn(abortController.signal);
 
 		// A newer generation (from a reload or retry) has superseded this
 		// attempt. Discard this completion to avoid overwriting the newer
@@ -112,6 +126,15 @@ export async function coalesceDynamicStartup(
 
 		transitionToRunning(status);
 	} catch (error) {
+		// If the AbortController was aborted due to timeout, wrap the
+		// error as a DynamicLoadTimeout so the backoff flow treats it
+		// consistently.
+		const effectiveError =
+			abortController.signal.aborted &&
+			abortController.signal.reason instanceof DynamicLoadTimeout
+				? abortController.signal.reason
+				: error;
+
 		// A newer generation has superseded this attempt. Discard this
 		// failure so it does not corrupt the newer attempt's state.
 		if (status.generation !== capturedGeneration) {
@@ -124,13 +147,17 @@ export async function coalesceDynamicStartup(
 		}
 
 		const errorCode =
-			error instanceof ActorError
-				? error.code
+			effectiveError instanceof ActorError
+				? effectiveError.code
 				: "dynamic_startup_failed";
 		const errorMessage =
-			error instanceof Error ? error.message : String(error);
+			effectiveError instanceof Error
+				? effectiveError.message
+				: String(effectiveError);
 		const errorDetails =
-			error instanceof Error ? error.stack : undefined;
+			effectiveError instanceof Error
+				? effectiveError.stack
+				: undefined;
 		const backoffDelay = computeBackoffDelay(status.retryAttempt, opts);
 
 		transitionToFailedStart(status, {
@@ -140,6 +167,8 @@ export async function coalesceDynamicStartup(
 			retryAt: Date.now() + backoffDelay,
 		});
 
-		throw error;
+		throw effectiveError;
+	} finally {
+		clearTimeout(timeoutHandle);
 	}
 }

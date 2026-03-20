@@ -297,6 +297,7 @@ interface DynamicActorIsolateRuntimeConfig {
 	auth?: DynamicActorAuth;
 	actorDriver: ActorDriver;
 	inlineClient: AnyClient;
+	signal?: AbortSignal;
 }
 
 interface DynamicRuntimeRefs {
@@ -393,6 +394,8 @@ export class DynamicActorIsolateRuntime {
 			moduleAccessCwd,
 		});
 
+		const signal = this.#config.signal ?? AbortSignal.timeout(Number.MAX_SAFE_INTEGER);
+
 		const loadResult = await this.#config.loader(
 			createDynamicActorLoaderContext(
 				this.#config.inlineClient,
@@ -401,6 +404,7 @@ export class DynamicActorIsolateRuntime {
 				this.#config.actorKey,
 				this.#config.input,
 				this.#config.region,
+				signal,
 			),
 		);
 		const normalizedLoadResult = normalizeLoadResult(loadResult);

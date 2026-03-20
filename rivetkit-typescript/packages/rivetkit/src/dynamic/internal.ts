@@ -60,7 +60,22 @@ abstract class DynamicActorContextBase<TInput = unknown> {
 	}
 }
 
-export class DynamicActorLoaderContext<TInput = unknown> extends DynamicActorContextBase<TInput> {}
+export class DynamicActorLoaderContext<TInput = unknown> extends DynamicActorContextBase<TInput> {
+	readonly signal: AbortSignal;
+
+	constructor(
+		inlineClient: AnyClient,
+		actorId: string,
+		name: string,
+		key: ActorKey,
+		input: TInput,
+		region: string,
+		signal: AbortSignal,
+	) {
+		super(inlineClient, actorId, name, key, input, region);
+		this.signal = signal;
+	}
+}
 
 export class DynamicActorAuthContext<TInput = unknown> extends DynamicActorContextBase<TInput> {
 	readonly request: Request | undefined;
@@ -245,6 +260,7 @@ export function createDynamicActorLoaderContext<TInput>(
 	key: ActorKey,
 	input: TInput,
 	region: string,
+	signal: AbortSignal,
 ): DynamicActorLoaderContext<TInput> {
 	return new DynamicActorLoaderContext(
 		inlineClient,
@@ -253,6 +269,7 @@ export function createDynamicActorLoaderContext<TInput>(
 		key,
 		input,
 		region,
+		signal,
 	);
 }
 

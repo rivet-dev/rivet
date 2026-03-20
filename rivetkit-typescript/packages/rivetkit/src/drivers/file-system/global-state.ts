@@ -1298,7 +1298,7 @@ export class FileSystemGlobalState {
 
 				await coalesceDynamicStartup(
 					dynamicStatus,
-					async () => {
+					async (signal) => {
 						let runtime = this.#dynamicRuntimes.get(actorId);
 						if (!runtime) {
 							runtime = new DynamicActorIsolateRuntime({
@@ -1310,6 +1310,7 @@ export class FileSystemGlobalState {
 								loader: definition.loader,
 								actorDriver,
 								inlineClient,
+								signal,
 							});
 							await runtime.start();
 							this.#dynamicRuntimes.set(actorId, runtime);
