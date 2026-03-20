@@ -53,6 +53,11 @@ from auth rejects the request before actor dispatch. HTTP requests return
 standard RivetKit error responses and WebSockets close with the derived
 `group.code` reason.
 
+Dynamic actors also expose an internal `PUT /dynamic/reload` control endpoint.
+Drivers intercept this request before isolate dispatch, mark the actor for
+sleep, and return `200`. The next request wakes the actor through the normal
+start path, which calls the dynamic loader again and picks up fresh source.
+
 Note: isolate bootstrap does not construct `Registry` at runtime. Constructing
 `Registry` would auto-start runtime preparation on next tick in non-test mode
 and pull default drivers that are not needed for dynamic actor execution.

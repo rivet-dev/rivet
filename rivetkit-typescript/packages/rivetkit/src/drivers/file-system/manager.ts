@@ -82,6 +82,14 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		actorId: string,
 		actorRequest: Request,
 	): Promise<Response> {
+		const overlayResponse = await this.#routeOverlayRequest(
+			actorId,
+			actorRequest,
+		);
+		if (overlayResponse) {
+			return overlayResponse;
+		}
+
 		if (await this.#state.isDynamicActor(this.#config, actorId)) {
 			await this.#actorDriver.loadActor(actorId);
 			return await this.#state.dynamicFetch(actorId, actorRequest);
@@ -111,6 +119,14 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		actorRequest: Request,
 		actorId: string,
 	): Promise<Response> {
+		const overlayResponse = await this.#routeOverlayRequest(
+			actorId,
+			actorRequest,
+		);
+		if (overlayResponse) {
+			return overlayResponse;
+		}
+
 		if (await this.#state.isDynamicActor(this.#config, actorId)) {
 			await this.#actorDriver.loadActor(actorId);
 			return await this.#state.dynamicFetch(actorId, actorRequest);
@@ -153,6 +169,27 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	async buildGatewayUrl(actorId: string): Promise<string> {
 		const port = this.#config.managerPort ?? 6420;
 		return `http://127.0.0.1:${port}/gateway/${encodeURIComponent(actorId)}`;
+	}
+
+	async #routeOverlayRequest(
+		actorId: string,
+		request: Request,
+	): Promise<Response | null> {
+		const url = new URL(request.url);
+		switch (`${request.method} ${url.pathname}`) {
+			case "PUT /dynamic/reload":
+				return await this.#handleDynamicReloadOverlay(actorId);
+			default:
+				return null;
+		}
+	}
+
+	async #handleDynamicReloadOverlay(actorId: string): Promise<Response> {
+		if (!(await this.#state.isDynamicActor(this.#config, actorId))) {
+			return new Response("not a dynamic actor", { status: 404 });
+		}
+		await this.#state.sleepActor(actorId);
+		return new Response(null, { status: 200 });
 	}
 
 	async getForId({

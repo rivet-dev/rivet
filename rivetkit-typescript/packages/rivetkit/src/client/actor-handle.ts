@@ -318,6 +318,29 @@ export class ActorHandleRaw {
 		);
 		return await this.#driver.buildGatewayUrl(actorId);
 	}
+
+	async reload(): Promise<void> {
+		const { actorId } = await queryActor(
+			undefined,
+			this.#actorQuery,
+			this.#driver,
+		);
+		invariant(actorId, "Missing actor ID");
+
+		const request = new Request("http://actor/dynamic/reload", {
+			method: "PUT",
+		});
+		const response = await this.#driver.sendRequest(actorId, request);
+		if (!response.ok) {
+			const body = await response.text().catch(() => "");
+			throw new ActorError(
+				"actor",
+				"reload_failed",
+				`reload failed with status ${response.status}: ${body}`,
+				{},
+			);
+		}
+	}
 }
 
 /**

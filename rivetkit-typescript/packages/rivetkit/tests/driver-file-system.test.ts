@@ -31,6 +31,7 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 				// Does not support full connection hibernation semantics.
 				hibernation: true,
 			},
+			isDynamic: registryVariant.name === "dynamic",
 			features: {
 				hibernatableWebSocketProtocol: true,
 			},
@@ -136,6 +137,7 @@ type DynamicHandle = {
 	) => Promise<Array<{ key: string; value: string }>>;
 	triggerSleep: () => Promise<boolean>;
 	scheduleAlarm: (duration: number) => Promise<boolean>;
+	reload: () => Promise<void>;
 	webSocket: (path?: string) => Promise<WebSocket>;
 };
 
@@ -290,6 +292,45 @@ describe.skipIf(!hasSecureExecDist)("file-system dynamic actor runtime", () => {
 			);
 		} finally {
 			ws?.close();
+			await client.dispose();
+			await runtime.cleanup();
+		}
+	}, 180_000);
+
+	test("reload forces dynamic actor to sleep and reload with fresh code", async () => {
+		sourceServer = await startSourceServer(DYNAMIC_SOURCE);
+		process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL = sourceServer.url;
+		process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER = pathToFileURL(
+			SECURE_EXEC_DIST_PATH,
+		).href;
+
+		const runtime = await createDynamicRuntime();
+		const client = createClient<typeof dynamicRegistry>({
+			endpoint: runtime.endpoint,
+			namespace: runtime.namespace,
+			runnerName: runtime.runnerName,
+			encoding: "json",
+			disableMetadataLookup: true,
+		});
+
+		try {
+			const actor = client.dynamicFromUrl.getOrCreate([
+				"reload-test",
+			]) as unknown as DynamicHandle;
+			const initialState = await actor.getState();
+			const initialWake = initialState.wakeCount;
+
+			await actor.reload();
+			await wait(350);
+
+			const afterState = await actor.getState();
+			expect(afterState.wakeCount).toBeGreaterThanOrEqual(
+				initialWake + 1,
+			);
+			expect(afterState.sleepCount).toBeGreaterThanOrEqual(
+				initialState.sleepCount + 1,
+			);
+		} finally {
 			await client.dispose();
 			await runtime.cleanup();
 		}

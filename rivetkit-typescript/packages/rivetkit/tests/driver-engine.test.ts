@@ -18,6 +18,7 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 		runDriverTests({
 			// Use real timers for engine-runner tests
 			useRealTimers: true,
+			isDynamic: registryVariant.name === "dynamic",
 			features: {
 				hibernatableWebSocketProtocol: true,
 			},

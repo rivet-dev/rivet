@@ -977,10 +977,36 @@ export class EngineActorDriver implements ActorDriver {
 			url: request.url,
 			method: request.method,
 		});
+		const overlayResponse = this.#routeOverlayRequest(actorId, request);
+		if (overlayResponse) {
+			return overlayResponse;
+		}
+
 		if (this.#isDynamicActor(actorId)) {
 			return await this.#requireDynamicRuntime(actorId).fetch(request);
 		}
 		return await this.#actorRouter.fetch(request, { actorId });
+	}
+
+	#routeOverlayRequest(
+		actorId: string,
+		request: Request,
+	): Response | null {
+		const url = new URL(request.url);
+		switch (`${request.method} ${url.pathname}`) {
+			case "PUT /dynamic/reload":
+				return this.#handleDynamicReloadOverlay(actorId);
+			default:
+				return null;
+		}
+	}
+
+	#handleDynamicReloadOverlay(actorId: string): Response {
+		if (!this.#isDynamicActor(actorId)) {
+			return new Response("not a dynamic actor", { status: 404 });
+		}
+		this.startSleep(actorId);
+		return new Response(null, { status: 200 });
 	}
 
 	async #runnerWebSocket(

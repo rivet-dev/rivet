@@ -15,6 +15,7 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 		runDriverTests({
 			// TODO: Remove this once timer issues are fixed in actor-sleep.ts
 			useRealTimers: true,
+			isDynamic: registryVariant.name === "dynamic",
 			features: {
 				hibernatableWebSocketProtocol: false,
 			},

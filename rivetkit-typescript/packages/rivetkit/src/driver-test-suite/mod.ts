@@ -28,6 +28,7 @@ import { runActorKvTests } from "./tests/actor-kv";
 import { runActorMetadataTests } from "./tests/actor-metadata";
 import { runActorOnStateChangeTests } from "./tests/actor-onstatechange";
 import { runActorQueueTests } from "./tests/actor-queue";
+import { runDynamicReloadTests } from "./tests/dynamic-reload";
 import { runActorRunTests } from "./tests/actor-run";
 import { runActorSandboxTests } from "./tests/actor-sandbox";
 import { runActorStatelessTests } from "./tests/actor-stateless";
@@ -70,6 +71,8 @@ export interface DriverTestConfig {
 	features?: DriverTestFeatures;
 
 	encoding?: Encoding;
+
+	isDynamic?: boolean;
 
 	clientType: ClientType;
 
@@ -148,6 +151,8 @@ export function runDriverTests(
 						runActorRunTests(driverTestConfig);
 
 						runActorSandboxTests(driverTestConfig);
+
+						runDynamicReloadTests(driverTestConfig);
 
 						runActorInlineClientTests(driverTestConfig);
 
