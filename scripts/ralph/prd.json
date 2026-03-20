@@ -126,7 +126,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "IBM Plex Sans is a more technical, neutral font matching Foundry's design language. IBM Plex Mono replaces Consolas for code/console text."
     },
     {
