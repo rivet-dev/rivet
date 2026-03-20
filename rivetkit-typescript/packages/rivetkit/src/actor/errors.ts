@@ -536,6 +536,28 @@ export class Forbidden extends ActorError {
 	}
 }
 
+export class DynamicStartupFailed extends ActorError {
+	constructor(message: string, opts?: { cause?: unknown }) {
+		super("dynamic", "dynamic_startup_failed", message, {
+			public: true,
+			cause: opts?.cause,
+		});
+		this.statusCode = 503;
+	}
+}
+
+export class DynamicLoadTimeout extends ActorError {
+	constructor(timeoutMs: number) {
+		super(
+			"dynamic",
+			"dynamic_load_timeout",
+			`Dynamic actor load timed out after ${timeoutMs}ms.`,
+			{ public: true },
+		);
+		this.statusCode = 503;
+	}
+}
+
 export class EndpointMismatch extends ActorError {
 	constructor(expected: string, received: string) {
 		super(

@@ -88,8 +88,57 @@ export type DynamicActorAuth<TConnParams = unknown, TInput = unknown> = (
 	params: TConnParams,
 ) => Promise<void> | void;
 
+export interface DynamicStartupOptions {
+	/** Maximum time in milliseconds to wait for actor startup before timing out. */
+	timeoutMs?: number;
+	/** Initial delay in milliseconds before the first retry attempt. */
+	retryInitialDelayMs?: number;
+	/** Maximum delay in milliseconds between retry attempts. */
+	retryMaxDelayMs?: number;
+	/** Multiplier applied to the delay after each retry attempt. */
+	retryMultiplier?: number;
+	/** Whether to add random jitter to retry delays. */
+	retryJitter?: boolean;
+	/** Maximum number of retry attempts before giving up. Set to 0 for unlimited. */
+	maxAttempts?: number;
+}
+
+export const DYNAMIC_STARTUP_DEFAULTS = {
+	timeoutMs: 15_000,
+	retryInitialDelayMs: 1_000,
+	retryMaxDelayMs: 30_000,
+	retryMultiplier: 2,
+	retryJitter: true,
+	maxAttempts: 20,
+} as const satisfies Required<DynamicStartupOptions>;
+
+export type DynamicActorOptions = GlobalActorOptionsInput & {
+	startup?: DynamicStartupOptions;
+};
+
+export class DynamicActorReloadContext<TInput = unknown> extends DynamicActorContextBase<TInput> {
+	readonly request: Request | undefined;
+
+	constructor(
+		inlineClient: AnyClient,
+		actorId: string,
+		name: string,
+		key: ActorKey,
+		input: TInput,
+		region: string,
+		request: Request | undefined,
+	) {
+		super(inlineClient, actorId, name, key, input, region);
+		this.request = request;
+	}
+}
+
+export type DynamicActorCanReload<TInput = unknown> = (
+	context: DynamicActorReloadContext<TInput>,
+) => Promise<boolean> | boolean;
+
 export interface DynamicActorOptionsInput {
-	options?: GlobalActorOptionsInput;
+	options?: DynamicActorOptions;
 }
 
 export interface DynamicActorConfigInput<
@@ -98,6 +147,7 @@ export interface DynamicActorConfigInput<
 > extends DynamicActorOptionsInput {
 	load: DynamicActorLoader<TInput>;
 	auth?: DynamicActorAuth<TConnParams, TInput>;
+	canReload?: DynamicActorCanReload<TInput>;
 }
 
 export class DynamicActorDefinition<TInput = unknown, TConnParams = unknown>
@@ -116,6 +166,8 @@ export class DynamicActorDefinition<TInput = unknown, TConnParams = unknown>
 {
 	#loader: DynamicActorLoader<TInput>;
 	#auth: DynamicActorAuth<TConnParams, TInput> | undefined;
+	#canReload: DynamicActorCanReload<TInput> | undefined;
+	#startupOptions: Required<DynamicStartupOptions>;
 	#config: ActorConfig<
 		any,
 		any,
@@ -130,6 +182,11 @@ export class DynamicActorDefinition<TInput = unknown, TConnParams = unknown>
 	constructor(input: DynamicActorConfigInput<TInput, TConnParams>) {
 		this.#loader = input.load;
 		this.#auth = input.auth;
+		this.#canReload = input.canReload;
+		this.#startupOptions = {
+			...DYNAMIC_STARTUP_DEFAULTS,
+			...input.options?.startup,
+		};
 		this.#config = ActorConfigSchema.parse({
 			actions: {},
 			options: input.options ?? {},
@@ -151,6 +208,14 @@ export class DynamicActorDefinition<TInput = unknown, TConnParams = unknown>
 
 	get auth(): DynamicActorAuth<TConnParams, TInput> | undefined {
 		return this.#auth;
+	}
+
+	get canReload(): DynamicActorCanReload<TInput> | undefined {
+		return this.#canReload;
+	}
+
+	get startupOptions(): Required<DynamicStartupOptions> {
+		return this.#startupOptions;
 	}
 
 	get config(): ActorConfig<
@@ -201,6 +266,26 @@ export function createDynamicActorAuthContext<TInput>(
 	request: Request | undefined,
 ): DynamicActorAuthContext<TInput> {
 	return new DynamicActorAuthContext(
+		inlineClient,
+		actorId,
+		name,
+		key,
+		input,
+		region,
+		request,
+	);
+}
+
+export function createDynamicActorReloadContext<TInput>(
+	inlineClient: AnyClient,
+	actorId: string,
+	name: string,
+	key: ActorKey,
+	input: TInput,
+	region: string,
+	request: Request | undefined,
+): DynamicActorReloadContext<TInput> {
+	return new DynamicActorReloadContext(
 		inlineClient,
 		actorId,
 		name,
