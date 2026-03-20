@@ -157,7 +157,7 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Most components use CSS variables via Tailwind classes, so they auto-update. This story catches any that bypass the variable system. Focus on grep for direct hsl(), #hex values, and Tailwind classes referencing specific warm colors."
     },
     {

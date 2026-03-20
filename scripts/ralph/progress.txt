@@ -107,3 +107,21 @@ Started: Thu Mar 19 04:45:11 PM PDT 2026
   - The React Flow minimap `maskColor` prop is a hardcoded color string, not a CSS variable reference. Must be manually updated when background changes.
   - Pre-existing TS errors remain unchanged
 ---
+
+## 2026-03-20T03:00:00Z - US-008
+- Scanned and updated hardcoded colors in component files
+- Files changed: `frontend/src/components/actors/actors-list.tsx`, `frontend/src/routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/settings.tsx`, `frontend/src/app/billing/billing-usage-gauge.tsx`, `frontend/src/components/actors/workflow/xyflow-nodes.tsx`
+- Warning alert components: Replaced `bg-amber-950/50` + `border-amber-900` with `bg-warning/10` + `border-warning/20` (consistent with existing pattern in `billing-limit-alert.tsx`)
+- Status indicator colors in xyflow-nodes.tsx: Updated to Foundry GitHub-inspired palette:
+  - Completed/success: `#22c55e` (green-500) → `#7ee787` (soft green)
+  - Failed/error: `#ef4444` (red-500) → `#ffa198` (soft salmon)
+- No hardcoded warm HSL values found in `.tsx`/`.ts` files (CSS variables handle everything)
+- Hardcoded hex values in `theme.json` (code editor theme) left untouched as it's a third-party syntax theme
+- Clerk theme in `__root.tsx` uses CSS variables exclusively, auto-updates with theme changes
+- TYPE_COLORS category icons (input/output green, etc.) kept as standard Tailwind palette since they're decorative, not status indicators
+- **Learnings for future iterations:**
+  - The codebase already uses `bg-warning/10` and `border-warning/60` patterns in billing components. Warning alerts should follow the same pattern.
+  - `code-preview/theme.json` is an Ayu Dark editor theme with many warm hex colors (#0c0a09, etc.) - this is a third-party theme definition that should NOT be modified as part of dashboard theme migration.
+  - Workflow node TYPE_COLORS (category icons) and statusColor (status indicators) serve different semantic purposes and can use different color palettes.
+  - Pre-existing TS errors (8 total) remain unchanged
+---
