@@ -72,7 +72,7 @@ function StoryCanvas({ nodes, edges = [] }: { nodes: Node[]; edges?: Edge[] }) {
 							return "#3b82f6";
 						}}
 						nodeStrokeColor="transparent"
-						maskColor="hsl(20 14.3% 4.1% / 0.7)"
+						maskColor="hsl(0 0% 3.5% / 0.7)"
 					/>
 				</ReactFlow>
 			</ReactFlowProvider>

@@ -99,7 +99,7 @@ export function WorkflowVisualizer({
 						<MiniMap
 							nodeColor={miniMapNodeColor}
 							nodeStrokeColor="transparent"
-							maskColor="hsl(20 14.3% 4.1% / 0.7)"
+							maskColor="hsl(0 0% 3.5% / 0.7)"
 						/>
 					</ReactFlow>
 				</ReactFlowProvider>
