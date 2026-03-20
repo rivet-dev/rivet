@@ -343,3 +343,25 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
   - isDev() from utils/env-vars.ts is the standard way to check environment. Production errors should be sanitized to prevent leaking internal details.
   - ActorError.statusCode defaults to 500 for non-public and 400 for public errors. Dynamic startup errors need explicit statusCode = 503.
 ---
+
+## 2026-03-20 - US-017
+- What was implemented:
+  - Added DynamicActorStatusResponse type in runtime-status.ts with state, generation, and failure metadata fields
+  - Added buildStatusResponse() helper that builds the response from DynamicRuntimeStatus, omitting lastStartErrorDetails in production
+  - Added buildStaticStatusResponse() helper returning { state: 'running', generation: 0 } for static actors
+  - Added GET /dynamic/status endpoint via #handleDynamicStatusOverlay in FileSystemManagerDriver
+  - Endpoint uses inspector-style auth: Bearer token with timing-safe comparison, dev mode allows without token with warning
+  - Added status() method to ActorHandleRaw that sends GET /dynamic/status and returns DynamicActorStatusResponse
+  - Exported DynamicActorStatusResponse from dynamic/mod.ts and client/mod.ts
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/runtime-status.ts
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/mod.ts
+  - rivetkit-typescript/packages/rivetkit/src/drivers/file-system/manager.ts
+  - rivetkit-typescript/packages/rivetkit/src/client/actor-handle.ts
+  - rivetkit-typescript/packages/rivetkit/src/client/mod.ts
+- **Learnings for future iterations:**
+  - Inspector-style auth pattern: check isDev() && !config.inspector.token() for dev mode bypass with warning. Otherwise extract Bearer token from Authorization header and use timingSafeEqual comparison. Return 401 on failure.
+  - The overlay request pattern in FileSystemManagerDriver intercepts requests BEFORE normal actor routing. Add cases to #routeOverlayRequest switch statement for new dynamic endpoints.
+  - ActorHandleRaw.status() follows the same pattern as reload(): queryActor for actorId, build Request, call this.#driver.sendRequest, check response.ok, parse JSON.
+  - buildStatusResponse only includes failure metadata fields when state is "failed_start" to keep the response minimal for running/starting/inactive states.
+---
