@@ -20,6 +20,8 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
 - Dynamic runtime status lives in src/dynamic/runtime-status.ts. Use standalone transition functions (transitionToStarting, etc.) rather than class methods for cross-driver compatibility.
 - coalesceDynamicStartup in startup-coalescing.ts orchestrates dynamic actor startup with coalescing (concurrent requests join existing promise) and generation tracking (stale completions discarded). Integrate it into driver startActor paths.
 - When moving code into closures, capture narrowed TypeScript variables into local constants first to avoid losing type narrowing.
+- Global-state.ts catch block wraps errors in plain Error, losing ActorError metadata. Use ActorError.isActorError() to preserve error codes through the error chain.
+- For errors that must include error codes in client responses, set public: true and explicit statusCode on the ActorError. Use isDev() to conditionally include or sanitize details.
 
 ## 2026-03-20 - US-001
 - What was implemented:
@@ -317,4 +319,27 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
   - The reload handler does auth before any state changes. This ensures unauthenticated requests never trigger side effects.
   - Rate-limit tracking reuses the existing reloadCount/reloadWindowStart fields on DynamicRuntimeStatus, which are already reset by transitionToInactive.
   - The DynamicActorDefinition.auth callback receives (context, params) where params is connection parameters. For reload, pass undefined since there are no connection params.
+---
+
+## 2026-03-20 - US-016
+- What was implemented:
+  - Added `createSanitizedStartupError` helper in startup-coalescing.ts that creates environment-aware ActorErrors
+  - In production (NODE_ENV=production): error message is sanitized to "Dynamic actor startup failed. Check server logs for details." and no details are included in the response
+  - In development: full error message and details (stack traces, loader output) are included in the response via metadata
+  - The ActorError code (e.g. 'dynamic_startup_failed', 'dynamic_load_timeout') is always returned to clients in both environments
+  - Full error details are always emitted to server logs via logger().error() in all environments
+  - Updated backoff path to use sanitized error instead of raw ActorError
+  - Updated fresh failure catch block to use sanitized error instead of re-throwing raw error
+  - Updated global-state.ts catch block to preserve ActorErrors (not wrap in generic Error) so error code and sanitized message reach the client through deconstructError
+  - Exported SANITIZED_STARTUP_MESSAGE constant from dynamic/mod.ts for test use
+  - Added JSDoc comment explaining why production errors are sanitized while development errors include details
+- Files changed:
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/startup-coalescing.ts
+  - rivetkit-typescript/packages/rivetkit/src/dynamic/mod.ts
+  - rivetkit-typescript/packages/rivetkit/src/drivers/file-system/global-state.ts
+- **Learnings for future iterations:**
+  - The global-state.ts catch block wraps ALL errors in a plain Error, losing ActorError metadata. When preserving error codes through the error chain, check for ActorError.isActorError() and re-throw without wrapping.
+  - deconstructError in common/utils.ts is the centralized error-to-response converter. For public errors it includes message, group, code, metadata. For non-public errors it returns a generic "Internal error" message.
+  - isDev() from utils/env-vars.ts is the standard way to check environment. Production errors should be sanitized to prevent leaking internal details.
+  - ActorError.statusCode defaults to 500 for non-public and 400 for public errors. Dynamic startup errors need explicit statusCode = 503.
 ---
