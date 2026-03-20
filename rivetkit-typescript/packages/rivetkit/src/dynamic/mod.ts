@@ -10,6 +10,12 @@ import {
 	type DynamicActorOptionsInput,
 } from "./internal";
 import type { DynamicSourceFormat } from "./runtime-bridge";
+export { compileActorSource } from "./compile";
+export type {
+	CompileActorSourceOptions,
+	CompileActorSourceResult,
+	TypeScriptDiagnostic,
+} from "./compile";
 
 export function dynamicActor<TInput = unknown, TConnParams = unknown>(
 	config: DynamicActorConfigInput<TInput, TConnParams>,
