@@ -524,12 +524,13 @@ async fn run_connection<S, W>(
 /// Build the full WebSocket URL with query parameters.
 fn build_ws_url(config: &KvChannelConfig) -> String {
 	let base = config.url.trim_end_matches('/');
+	let ns_encoded = urlencoding::encode(&config.namespace);
 	let mut url = format!(
-		"{base}/kv/connect?namespace={}&protocol_version={PROTOCOL_VERSION}",
-		config.namespace
+		"{base}/kv/connect?namespace={ns_encoded}&protocol_version={PROTOCOL_VERSION}",
 	);
 	if let Some(ref token) = config.token {
-		url.push_str(&format!("&token={token}"));
+		let token_encoded = urlencoding::encode(token);
+		url.push_str(&format!("&token={token_encoded}"));
 	}
 	url
 }
@@ -681,6 +682,20 @@ mod tests {
 			})
 			.to_string(),
 			"kv channel server error: actor_locked - locked by another connection"
+		);
+	}
+
+	#[test]
+	fn build_ws_url_encodes_special_chars() {
+		let config = KvChannelConfig {
+			url: "ws://localhost:6420".into(),
+			token: Some("tok&en=val?ue#frag".into()),
+			namespace: "ns with spaces&special".into(),
+		};
+		let url = build_ws_url(&config);
+		assert_eq!(
+			url,
+			"ws://localhost:6420/kv/connect?namespace=ns%20with%20spaces%26special&protocol_version=1&token=tok%26en%3Dval%3Fue%23frag"
 		);
 	}
 
