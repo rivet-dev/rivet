@@ -22,13 +22,13 @@ use crate::protocol::*;
 
 // MARK: Constants
 
-/// File metadata version byte. Matches CURRENT_VERSION in
+/// File metadata version. Matches CURRENT_VERSION in
 /// `rivetkit-typescript/packages/sqlite-vfs/schemas/file-meta/versioned.ts`.
-/// Encoded as a single byte, compatible with vbare varint encoding for values 0-127.
-const META_VERSION: u8 = 1;
+/// Encoded as u16 LE (2 bytes), matching vbare's `serializeWithEmbeddedVersion` format.
+const META_VERSION: u16 = 1;
 
-/// Encoded metadata size: 1 byte version + 8 bytes u64 LE.
-const META_ENCODED_SIZE: usize = 9;
+/// Encoded metadata size: 2 bytes u16 LE version + 8 bytes u64 LE size.
+const META_ENCODED_SIZE: usize = 10;
 
 /// Maximum pathname length for this VFS.
 const MAX_PATHNAME: c_int = 512;
@@ -37,11 +37,12 @@ const MAX_PATHNAME: c_int = 512;
 
 /// Encode file size as versioned metadata.
 ///
-/// Format: `[META_VERSION, size_u64_le]`. Must be byte-identical to the WASM VFS
-/// encoding in `rivetkit-typescript/packages/sqlite-vfs/schemas/file-meta/`.
+/// Format: `[META_VERSION_u16_le, size_u64_le]`. Must be byte-identical to the WASM VFS
+/// encoding in `rivetkit-typescript/packages/sqlite-vfs/schemas/file-meta/`, which uses
+/// vbare's `serializeWithEmbeddedVersion` (2-byte u16 LE version prefix).
 pub fn encode_file_meta(size: i64) -> Vec<u8> {
 	let mut buf = Vec::with_capacity(META_ENCODED_SIZE);
-	buf.push(META_VERSION);
+	buf.extend_from_slice(&META_VERSION.to_le_bytes());
 	buf.extend_from_slice(&(size as u64).to_le_bytes());
 	buf
 }
@@ -51,10 +52,11 @@ pub fn decode_file_meta(data: &[u8]) -> Option<i64> {
 	if data.len() < META_ENCODED_SIZE {
 		return None;
 	}
-	if data[0] != META_VERSION {
+	let version_bytes: [u8; 2] = data[0..2].try_into().ok()?;
+	if u16::from_le_bytes(version_bytes) != META_VERSION {
 		return None;
 	}
-	let bytes: [u8; 8] = data[1..9].try_into().ok()?;
+	let bytes: [u8; 8] = data[2..10].try_into().ok()?;
 	Some(u64::from_le_bytes(bytes) as i64)
 }
 
@@ -994,7 +996,8 @@ mod tests {
 		for size in [0i64, 1, 4096, 1_000_000, i64::MAX / 2] {
 			let encoded = encode_file_meta(size);
 			assert_eq!(encoded.len(), META_ENCODED_SIZE);
-			assert_eq!(encoded[0], META_VERSION);
+			// First 2 bytes are u16 LE version
+			assert_eq!(&encoded[0..2], &META_VERSION.to_le_bytes());
 			let decoded = decode_file_meta(&encoded).unwrap();
 			assert_eq!(decoded, size);
 		}
@@ -1003,22 +1006,25 @@ mod tests {
 	#[test]
 	fn encode_zero_size() {
 		let encoded = encode_file_meta(0);
-		assert_eq!(encoded, [1, 0, 0, 0, 0, 0, 0, 0, 0]);
+		// 2-byte u16 LE version (1) + 8-byte u64 LE size (0)
+		assert_eq!(encoded, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 	}
 
 	#[test]
 	fn encode_known_size() {
 		// 4096 = 0x1000, LE bytes: [0x00, 0x10, 0x00, ...]
 		let encoded = encode_file_meta(4096);
+		// 2-byte u16 LE version (1) + 8-byte u64 LE size (4096)
 		assert_eq!(
 			encoded,
-			[1, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+			[1, 0, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 		);
 	}
 
 	#[test]
 	fn decode_invalid_version() {
-		let data = [2u8, 0, 0, 0, 0, 0, 0, 0, 0];
+		// Version 2 encoded as u16 LE
+		let data = [2u8, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 		assert!(decode_file_meta(&data).is_none());
 	}
 
@@ -1026,7 +1032,8 @@ mod tests {
 	fn decode_too_short() {
 		assert!(decode_file_meta(&[]).is_none());
 		assert!(decode_file_meta(&[1]).is_none());
-		assert!(decode_file_meta(&[1, 0, 0, 0]).is_none());
+		assert!(decode_file_meta(&[1, 0]).is_none());
+		assert!(decode_file_meta(&[1, 0, 0, 0, 0]).is_none());
 	}
 
 	#[test]
@@ -1038,12 +1045,25 @@ mod tests {
 
 	#[test]
 	fn meta_encoded_size_constant() {
-		assert_eq!(META_ENCODED_SIZE, 9);
+		// 2 bytes u16 LE version + 8 bytes u64 LE size
+		assert_eq!(META_ENCODED_SIZE, 10);
 	}
 
 	#[test]
 	fn meta_version_matches_wasm_vfs() {
 		// Must match CURRENT_VERSION in sqlite-vfs/schemas/file-meta/versioned.ts.
 		assert_eq!(META_VERSION, 1);
+	}
+
+	#[test]
+	fn encode_matches_vbare_format() {
+		// Verify byte layout matches vbare's serializeWithEmbeddedVersion:
+		// 2-byte u16 LE version prefix + BARE-encoded payload
+		let encoded = encode_file_meta(42);
+		// Version 1 as u16 LE = [0x01, 0x00]
+		assert_eq!(encoded[0], 0x01);
+		assert_eq!(encoded[1], 0x00);
+		// Size 42 as u64 LE = [42, 0, 0, 0, 0, 0, 0, 0]
+		assert_eq!(&encoded[2..], &42u64.to_le_bytes());
 	}
 }
