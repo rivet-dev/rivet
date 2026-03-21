@@ -315,87 +315,99 @@ function RivetCloudDropdownMenuItem() {
 
 function ProviderDropdown({ children }: { children: React.ReactNode }) {
 	const navigate = useNavigate();
+
+	const externalClouds = (
+		<>
+			<DropdownMenuItem
+				className="relative"
+				indicator={<Icon icon={faVercel} />}
+				onSelect={() =>
+					navigate({
+						to: ".",
+						search: { modal: "connect-vercel" },
+					})
+				}
+			>
+				Vercel
+			</DropdownMenuItem>
+			<DropdownMenuItem
+				indicator={<Icon icon={faRailway} />}
+				onSelect={() =>
+					navigate({
+						to: ".",
+						search: { modal: "connect-railway" },
+					})
+				}
+			>
+				Railway
+			</DropdownMenuItem>
+			<DropdownMenuItem
+				indicator={<Icon icon={faAws} />}
+				onSelect={() =>
+					navigate({
+						to: ".",
+						search: { modal: "connect-aws" },
+					})
+				}
+			>
+				AWS ECS
+			</DropdownMenuItem>
+			<DropdownMenuItem
+				indicator={<Icon icon={faGoogleCloud} />}
+				onSelect={() =>
+					navigate({
+						to: ".",
+						search: { modal: "connect-gcp" },
+					})
+				}
+			>
+				Google Cloud Run
+			</DropdownMenuItem>
+			<DropdownMenuItem
+				indicator={<Icon icon={faHetznerH} />}
+				onSelect={() =>
+					navigate({
+						to: ".",
+						search: { modal: "connect-hetzner" },
+					})
+				}
+			>
+				Hetzner
+			</DropdownMenuItem>
+			<DropdownMenuItem
+				indicator={<Icon icon={faServer} />}
+				onSelect={() =>
+					navigate({
+						to: ".",
+						search: { modal: "connect-custom" },
+					})
+				}
+			>
+				Custom
+			</DropdownMenuItem>
+		</>
+	);
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
 			<DropdownMenuContent className="w-[--radix-popper-anchor-width]">
-				<RivetCloudDropdownMenuItem />
-				<DropdownMenuSub>
-					<DropdownMenuSubTrigger>
-						External cloud
-					</DropdownMenuSubTrigger>
-					<DropdownMenuPortal>
-						<DropdownMenuSubContent>
-							<DropdownMenuItem
-								className="relative"
-								indicator={<Icon icon={faVercel} />}
-								onSelect={() =>
-									navigate({
-										to: ".",
-										search: { modal: "connect-vercel" },
-									})
-								}
-							>
-								Vercel
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								indicator={<Icon icon={faRailway} />}
-								onSelect={() =>
-									navigate({
-										to: ".",
-										search: { modal: "connect-railway" },
-									})
-								}
-							>
-								Railway
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								indicator={<Icon icon={faAws} />}
-								onSelect={() =>
-									navigate({
-										to: ".",
-										search: { modal: "connect-aws" },
-									})
-								}
-							>
-								AWS ECS
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								indicator={<Icon icon={faGoogleCloud} />}
-								onSelect={() =>
-									navigate({
-										to: ".",
-										search: { modal: "connect-gcp" },
-									})
-								}
-							>
-								Google Cloud Run
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								indicator={<Icon icon={faHetznerH} />}
-								onSelect={() =>
-									navigate({
-										to: ".",
-										search: { modal: "connect-hetzner" },
-									})
-								}
-							>
-								Hetzner
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								indicator={<Icon icon={faServer} />}
-								onSelect={() =>
-									navigate({
-										to: ".",
-										search: { modal: "connect-custom" },
-									})
-								}
-							>
-								Custom
-							</DropdownMenuItem>
-						</DropdownMenuSubContent>
-					</DropdownMenuPortal>
-				</DropdownMenuSub>
+				{__APP_TYPE__ === "cloud" ? (
+					<>
+						<RivetCloudDropdownMenuItem />
+						<DropdownMenuSub>
+							<DropdownMenuSubTrigger>
+								External cloud
+							</DropdownMenuSubTrigger>
+							<DropdownMenuPortal>
+								<DropdownMenuSubContent>
+									{externalClouds}
+								</DropdownMenuSubContent>
+							</DropdownMenuPortal>
+						</DropdownMenuSub>
+					</>
+				) : (
+					externalClouds
+				)}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
