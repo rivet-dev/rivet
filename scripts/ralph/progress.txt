@@ -408,3 +408,28 @@ Started: Fri Mar 20 12:05:03 AM PDT 2026
   - The driver test suite (driver-file-system.test.ts) cannot run ANY tests due to the pre-existing esbuild error in engine/actor-driver.ts (#hwsAckState). Standalone test files that import directly from the module (not through the driver infrastructure) work fine.
   - HTTP integration tests for the status endpoint need the inspector token ("token") as a Bearer header. The gateway URL pattern is /gateway/{actor_id}/{...path}.
 ---
+
+## 2026-03-20 - US-020
+- What was implemented:
+  - Expanded DYNAMIC_ACTORS_ARCHITECTURE.md with a comprehensive failed-start and reload lifecycle section
+  - Documented the four-state startup model (inactive, starting, running, failed_start)
+  - Documented what failed_start means and how normal requests behave during it
+  - Documented passive backoff (no autonomous retry loops) with backoff formula
+  - Documented startup coalescing and generation tracking mechanism
+  - Documented reload behavior for all four states with a table
+  - Documented reload authentication via auth and canReload callbacks
+  - Documented reload rate limiting (warning-only, 10/60s window)
+  - Documented error sanitization in production vs development with a comparison table
+  - Documented the load timeout and retry configuration with defaults table
+  - Documented the GET /dynamic/status endpoint with example response
+  - Documented WebSocket close behavior during reload (code 1012, reason "dynamic.reload")
+  - Documented maxAttempts limit and behavior when exceeded
+  - Updated bridge contract section to include sqliteExec and sqliteBatch callbacks
+  - Updated the reload paragraph in the Lifecycle section to reference the new section
+- Files changed:
+  - docs-internal/rivetkit-typescript/DYNAMIC_ACTORS_ARCHITECTURE.md
+- **Learnings for future iterations:**
+  - The architecture doc is the canonical reference for dynamic actor internals. All lifecycle, bridge, and security changes should be reflected here.
+  - Documentation-only changes do not require typecheck since .md files are not compiled.
+  - The doc uses tables for structured comparisons (state model, reload behavior by state, error sanitization, retry config) which are easier to scan than prose.
+---
