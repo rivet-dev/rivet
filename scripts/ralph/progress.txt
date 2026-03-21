@@ -618,3 +618,17 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The stale lock sweep only needs to check conn.closed since cleanupConnection already sets closed=true on all exit paths (onClose, onError, pong timeout).
   - Use .unref() on setInterval timers to prevent them from keeping the Node.js process alive during shutdown.
 ---
+
+## 2026-03-21 - US-033
+- Propagated metadata write failures in native VFS instead of silently ignoring them
+- xClose delete-on-close: replaced `let _ = ctx.kv_delete_range(...)` and `let _ = ctx.kv_delete(...)` with `if let Err(err)` that logs via `tracing::error` and returns `SQLITE_IOERR`
+- xClose meta flush: replaced `.is_ok()` check with `if let Err(err)` that logs and returns `SQLITE_IOERR` instead of always returning `SQLITE_OK`
+- xTruncate partial chunk: replaced `let _ = ctx.kv_put(...)` with error propagation returning `SQLITE_IOERR_TRUNCATE`, also replaced `if let Ok(resp)` for chunk read with `match` that logs and returns error on failure
+- xWrite and xSync already properly propagated errors (no changes needed)
+- All 76 tests pass, cargo check clean
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/vfs.rs
+- **Learnings for future iterations:**
+  - xWrite already included metadata in the write batch and returned SQLITE_IOERR_WRITE on failure. xSync already returned SQLITE_IOERR on metadata flush failure. Only xClose and xTruncate had silent error paths.
+  - The `tracing` crate was already a dependency (added in US-026 for catch_unwind panic logging).
+  - Use `%err` (Display) rather than `?err` (Debug) in tracing structured fields for KV error strings since they're already human-readable.
+---

@@ -568,7 +568,7 @@
         "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
       ],
       "priority": 33,
-      "passes": false,
+      "passes": true,
       "notes": "Currently in vfs.rs lines 185-195, 384-395, 415-424, 472-481, metadata writes can fail but errors are silently ignored. The meta_dirty flag may be left in an inconsistent state. On close, if metadata wasn't persisted, the file size is lost."
     },
     {
