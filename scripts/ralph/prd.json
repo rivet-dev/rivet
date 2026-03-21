@@ -523,7 +523,7 @@
         "Typecheck passes"
       ],
       "priority": 30,
-      "passes": false,
+      "passes": true,
       "notes": "Currently the singleton kvChannel at native-sqlite.ts:62 is created once and never cleaned up. The disconnect() function is exported but never called anywhere. On process shutdown, the WebSocket connection leaks without graceful close."
     },
     {

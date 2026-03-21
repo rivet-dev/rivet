@@ -575,3 +575,17 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The RivetError derive macro auto-generates an error artifact JSON file in `engine/artifacts/errors/` which must be committed.
   - TypeScript error matching: prefer `instanceof` with a custom Error subclass over string matching on `.message`. This gives type-safe access to error metadata fields.
 ---
+
+## 2026-03-21 - US-030
+- Added `disconnectKvChannel()` public function for explicit singleton cleanup
+- Registered process shutdown handlers (beforeExit, SIGTERM, SIGINT) that disconnect the KV channel on process exit
+- Added `channelDisconnected` flag as a health check: when true, `getOrCreateKvChannel()` recreates the channel instead of returning the dead handle
+- Reset `channelDisconnected` in `_resetNativeDetection()` for test isolation
+- No new dependencies. Single file change.
+- Files changed: rivetkit-typescript/packages/rivetkit/src/db/native-sqlite.ts
+- **Learnings for future iterations:**
+  - The Rust KvChannel has auto-reconnect with exponential backoff, so the only way it becomes permanently dead is after `disconnect()` is called (shutdown flag = true)
+  - `beforeExit` fires when the Node.js event loop drains (graceful exit). SIGTERM/SIGINT handle external termination. Both are needed for complete coverage.
+  - The `shutdownRegistered` flag prevents duplicate handler registration across multiple channel recreations
+  - Pre-existing typecheck errors in fixtures/tests are not blockers (documented in codebase patterns)
+---
