@@ -259,6 +259,26 @@ export class ActorInspector {
 		await this.actor.stateManager.saveState({ immediate: true });
 	}
 
+	async getDatabaseSchemaJson(): Promise<unknown> {
+		return toHttpJsonCompatible(
+			cbor.decode(Buffer.from(await this.getDatabaseSchema())),
+		);
+	}
+
+	async getDatabaseTableRowsJson(
+		table: string,
+		limit: number,
+		offset: number,
+	): Promise<unknown[]> {
+		return toHttpJsonCompatible(
+			cbor.decode(
+				Buffer.from(
+					await this.getDatabaseTableRows(table, limit, offset),
+				),
+			),
+		) as unknown[];
+	}
+
 	getConnectionsJson(): { id: string; details: unknown }[] {
 		return Array.from(
 			this.actor.connectionManager.connections.entries(),
@@ -343,4 +363,16 @@ export class ActorInspector {
 
 function escapeDoubleQuotes(value: string): string {
 	return value.replace(/"/g, '""');
+}
+
+function toHttpJsonCompatible<T>(value: T): T {
+	return JSON.parse(
+		JSON.stringify(value, (_key, nestedValue) =>
+			typeof nestedValue === "bigint"
+				? Number(nestedValue)
+				: nestedValue instanceof Uint8Array
+					? Array.from(nestedValue)
+					: nestedValue,
+		),
+	) as T;
 }

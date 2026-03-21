@@ -467,6 +467,52 @@ Returns:
 }
 ```
 
+#### Get Database Schema
+
+```bash
+curl http://localhost:6420/gateway/{actor_id}/inspector/database/schema
+```
+
+Returns discovered SQLite tables and views when the actor has `c.db` enabled:
+
+```json
+{
+  "schema": {
+    "tables": [
+      {
+        "table": { "schema": "main", "name": "test_data", "type": "table" },
+        "columns": [
+          { "cid": 0, "name": "id", "type": "", "notnull": 0, "dflt_value": null, "pk": 0 }
+        ],
+        "foreignKeys": [],
+        "records": 2
+      }
+    ]
+  }
+}
+```
+
+#### Get Database Rows
+
+```bash
+curl "http://localhost:6420/gateway/{actor_id}/inspector/database/rows?table=test_data&limit=100&offset=0"
+```
+
+Returns paged rows for a specific SQLite table or view:
+
+```json
+{
+  "rows": [
+    {
+      "id": 1,
+      "value": "Alice",
+      "payload": "",
+      "created_at": 1706000000000
+    }
+  ]
+}
+```
+
 For workflow-enabled actors, `history` is a JSON object with `nameRegistry`, `entries`, and `entryMetadata`. Step outputs, loop state, and message payloads are decoded from CBOR into normal JSON values.
 
 #### Summary

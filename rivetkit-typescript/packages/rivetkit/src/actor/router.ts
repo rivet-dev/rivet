@@ -289,6 +289,38 @@ export function createActorRouter(
 			return c.json(result);
 		});
 
+		router.get("/inspector/database/schema", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			const schema = await actor.inspector.getDatabaseSchemaJson();
+			return c.json({ schema });
+		});
+
+		router.get("/inspector/database/rows", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			const table = c.req.query("table");
+			if (!table) {
+				return c.json(
+					{ error: "Missing required table query parameter" },
+					400,
+				);
+			}
+
+			const limit = parseInt(c.req.query("limit") ?? "100", 10);
+			const offset = parseInt(c.req.query("offset") ?? "0", 10);
+			const rows = await actor.inspector.getDatabaseTableRowsJson(
+				table,
+				limit,
+				offset,
+			);
+			return c.json({ rows });
+		});
+
 		router.get("/inspector/summary", async (c) => {
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
