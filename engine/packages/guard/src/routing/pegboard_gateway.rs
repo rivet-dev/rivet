@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use gas::prelude::*;
+use gas::{ctx::message::SubscriptionHandle, prelude::*};
 use hyper::header::HeaderName;
 use rivet_guard_core::{RouteConfig, RouteTarget, RoutingOutput, request_context::RequestContext};
 
@@ -180,18 +180,25 @@ async fn route_request_inner(
 	}
 
 	// Create subs before checking if actor exists/is not destroyed
-	let mut ready_sub = ctx
-		.subscribe::<pegboard::workflows::actor::Ready>(("actor_id", actor_id))
-		.await?;
-	let mut stopped_sub = ctx
-		.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", actor_id))
-		.await?;
-	let mut fail_sub = ctx
-		.subscribe::<pegboard::workflows::actor::Failed>(("actor_id", actor_id))
-		.await?;
-	let mut destroy_sub = ctx
-		.subscribe::<pegboard::workflows::actor::DestroyStarted>(("actor_id", actor_id))
-		.await?;
+	let (
+		ready_sub,
+		stopped_sub,
+		fail_sub,
+		destroy_sub,
+		ready_sub2,
+		stopped_sub2,
+		fail_sub2,
+		destroy_sub2,
+	) = tokio::try_join!(
+		ctx.subscribe::<pegboard::workflows::actor::Ready>(("actor_id", actor_id)),
+		ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", actor_id)),
+		ctx.subscribe::<pegboard::workflows::actor::Failed>(("actor_id", actor_id)),
+		ctx.subscribe::<pegboard::workflows::actor::DestroyStarted>(("actor_id", actor_id)),
+		ctx.subscribe::<pegboard::workflows::actor2::Ready>(("actor_id", actor_id)),
+		ctx.subscribe::<pegboard::workflows::actor2::Stopped>(("actor_id", actor_id)),
+		ctx.subscribe::<pegboard::workflows::actor2::Failed>(("actor_id", actor_id)),
+		ctx.subscribe::<pegboard::workflows::actor2::DestroyStarted>(("actor_id", actor_id)),
+	)?;
 
 	// Fetch actor info
 	let Some(actor) = ctx
@@ -205,6 +212,148 @@ async fn route_request_inner(
 		return Err(pegboard::errors::Actor::NotFound.build());
 	}
 
+	match actor.version {
+		2 => handle_actor_v2(
+			ctx,
+			shared_state,
+			actor_id,
+			actor,
+			stripped_path,
+			ready_sub2,
+			stopped_sub2,
+			fail_sub2,
+			destroy_sub2,
+		)
+		.await
+		.map(Some),
+		1 => handle_actor_v1(
+			ctx,
+			shared_state,
+			actor_id,
+			actor,
+			stripped_path,
+			ready_sub,
+			stopped_sub,
+			fail_sub,
+			destroy_sub,
+		)
+		.await
+		.map(Some),
+		_ => bail!("unknown actor version"),
+	}
+}
+
+async fn handle_actor_v2(
+	ctx: &StandaloneCtx,
+	shared_state: &SharedState,
+	actor_id: Id,
+	actor: pegboard::ops::actor::get_for_gateway::Output,
+	stripped_path: &str,
+	mut ready_sub: SubscriptionHandle<pegboard::workflows::actor2::Ready>,
+	mut stopped_sub: SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
+	mut fail_sub: SubscriptionHandle<pegboard::workflows::actor2::Failed>,
+	mut destroy_sub: SubscriptionHandle<pegboard::workflows::actor2::DestroyStarted>,
+) -> Result<RoutingOutput> {
+	// Wake actor if sleeping
+	if actor.sleeping {
+		tracing::debug!(?actor_id, "actor sleeping, waking");
+
+		ctx.signal(pegboard::workflows::actor2::Wake {})
+			.to_workflow_id(actor.workflow_id)
+			.send()
+			.await?;
+	}
+
+	let envoy_key = if let (Some(envoy_key), true) = (actor.envoy_key, actor.connectable) {
+		envoy_key
+	} else {
+		tracing::debug!(?actor_id, "waiting for actor to become ready");
+
+		let mut wake_retries = 0;
+
+		// Create pool error check future
+		let pool_error_check_fut = check_runner_pool_error_loop(
+			ctx,
+			actor.namespace_id,
+			actor.runner_name_selector.as_deref(),
+		);
+		tokio::pin!(pool_error_check_fut);
+
+		// Wait for ready, fail, or destroy
+		loop {
+			tokio::select! {
+				res = ready_sub.next() => break res?.into_body().envoy_key,
+				res = stopped_sub.next() => {
+					res?;
+
+					if wake_retries < 8 {
+						tracing::debug!(?actor_id, ?wake_retries, "actor stopped while we were waiting for it to become ready, attempting rewake");
+						wake_retries += 1;
+
+						let res = ctx.signal(pegboard::workflows::actor2::Wake {})
+						.to_workflow_id(actor.workflow_id)
+						.graceful_not_found()
+						.send()
+						.await?;
+
+						if res.is_none() {
+							tracing::warn!(
+								?actor_id,
+								"actor workflow not found for rewake"
+							);
+							return Err(pegboard::errors::Actor::NotFound.build());
+						}
+					} else {
+						tracing::warn!("actor retried waking 8 times, has not yet started");
+						return Err(rivet_guard_core::errors::ServiceUnavailable.build());
+					}
+				}
+				res = fail_sub.next() => {
+					let msg = res?;
+					return Err(msg.error.clone().build());
+				}
+				res = destroy_sub.next() => {
+					res?;
+					return Err(pegboard::errors::Actor::DestroyedWhileWaitingForReady.build());
+				}
+				res = &mut pool_error_check_fut => {
+					if res? {
+						return Err(errors::ActorRunnerFailed { actor_id }.build());
+					}
+				}
+				// Ready timeout
+				_ = tokio::time::sleep(ACTOR_READY_TIMEOUT) => {
+					return Err(errors::ActorReadyTimeout { actor_id }.build());
+				}
+			}
+		}
+	};
+
+	tracing::debug!(?actor_id, ?envoy_key, "actor ready");
+
+	// Return pegboard-gateway2 instance with path
+	let gateway = pegboard_gateway2::PegboardGateway2::new(
+		ctx.clone(),
+		shared_state.pegboard_gateway2.clone(),
+		actor.namespace_id,
+		envoy_key,
+		actor_id,
+		stripped_path.to_string(),
+	);
+	Ok(RoutingOutput::CustomServe(std::sync::Arc::new(gateway)))
+}
+
+async fn handle_actor_v1(
+	ctx: &StandaloneCtx,
+	shared_state: &SharedState,
+	actor_id: Id,
+	actor: pegboard::ops::actor::get_for_gateway::Output,
+	stripped_path: &str,
+	mut ready_sub: SubscriptionHandle<pegboard::workflows::actor::Ready>,
+	mut stopped_sub: SubscriptionHandle<pegboard::workflows::actor::Stopped>,
+	mut fail_sub: SubscriptionHandle<pegboard::workflows::actor::Failed>,
+	mut destroy_sub: SubscriptionHandle<pegboard::workflows::actor::DestroyStarted>,
+) -> Result<RoutingOutput> {
 	// Wake actor if sleeping
 	if actor.sleeping {
 		tracing::debug!(?actor_id, "actor sleeping, waking");
@@ -241,7 +390,7 @@ async fn route_request_inner(
 				res = stopped_sub.next() => {
 					res?;
 
-					if wake_retries < 16 {
+					if wake_retries < 8 {
 						tracing::debug!(?actor_id, ?wake_retries, "actor stopped while we were waiting for it to become ready, attempting rewake");
 						wake_retries += 1;
 
@@ -260,9 +409,10 @@ async fn route_request_inner(
 								?actor_id,
 								"actor workflow not found for rewake"
 							);
+							return Err(pegboard::errors::Actor::NotFound.build());
 						}
 					} else {
-						tracing::warn!("actor retried waking 16 times, has not yet started");
+						tracing::warn!("actor retried waking 8 times, has not yet started");
 						return Err(rivet_guard_core::errors::ServiceUnavailable.build());
 					}
 				}
@@ -297,9 +447,7 @@ async fn route_request_inner(
 		actor_id,
 		stripped_path.to_string(),
 	);
-	Ok(Some(RoutingOutput::CustomServe(std::sync::Arc::new(
-		gateway,
-	))))
+	Ok(RoutingOutput::CustomServe(std::sync::Arc::new(gateway)))
 }
 
 /// Waits for initial delay, then periodically checks for runner pool errors.

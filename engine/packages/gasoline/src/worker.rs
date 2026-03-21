@@ -84,7 +84,7 @@ impl Worker {
 		let mut tick_interval = tokio::time::interval(self.db.worker_poll_interval());
 		tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-		let mut term_signal = TermSignal::new().await;
+		let mut term_signal = TermSignal::get();
 
 		// Update ping at least once before doing anything else
 		self.db

@@ -1613,6 +1613,14 @@
                       "type": "string"
                     }
                   },
+                  "max_concurrent_actors": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "format": "int64",
+                    "minimum": 0
+                  },
                   "max_runners": {
                     "type": "integer",
                     "format": "int32",

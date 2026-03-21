@@ -1,0 +1,42 @@
+[package]
+name = "pegboard-envoy"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+futures-util.workspace = true
+gas.workspace = true
+http-body.workspace = true
+http-body-util.workspace = true
+# Idk how to get this working with the workspace version
+hyper = "1.6"
+hyper-tungstenite.workspace = true
+hyper-util = "0.1"
+lazy_static.workspace = true
+rand.workspace = true
+rivet-config.workspace = true
+rivet-data.workspace = true
+rivet-error.workspace = true
+rivet-guard-core.workspace = true
+rivet-metrics.workspace = true
+rivet-envoy-protocol.workspace = true
+rivet-runtime.workspace = true
+rivet-types.workspace = true
+serde_bare.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+tokio-tungstenite.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+universaldb.workspace = true
+universalpubsub.workspace = true
+url.workspace = true
+vbare.workspace = true
+
+pegboard.workspace = true
+namespace.workspace = true

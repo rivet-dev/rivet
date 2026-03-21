@@ -535,7 +535,7 @@ impl SharedState {
 		self.in_flight_requests
 			.iter_mut_async(|mut entry| {
 				let request_id = entry.key().clone();
-			let req = &mut *entry;
+				let req = &mut *entry;
 
 				if req.stopping {
 					return true;

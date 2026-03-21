@@ -27,7 +27,10 @@ members = [
   "engine/packages/metrics",
   "engine/packages/namespace",
   "engine/packages/pegboard",
+  "engine/packages/pegboard-envoy",
   "engine/packages/pegboard-gateway",
+  "engine/packages/pegboard-gateway2",
+  "engine/packages/pegboard-outbound",
   "engine/packages/pegboard-runner",
   "engine/packages/pools",
   "engine/packages/postgres-util",
@@ -47,6 +50,8 @@ members = [
   "engine/sdks/rust/api-full",
   "engine/sdks/rust/data",
   "engine/sdks/rust/engine-runner",
+  "engine/sdks/rust/envoy-client",
+  "engine/sdks/rust/envoy-protocol",
   "engine/sdks/rust/epoxy-protocol",
   "engine/sdks/rust/runner-protocol",
   "engine/sdks/rust/ups-protocol"
@@ -417,8 +422,17 @@ members = [
     [workspace.dependencies.pegboard]
     path = "engine/packages/pegboard"
 
+    [workspace.dependencies.pegboard-envoy]
+    path = "engine/packages/pegboard-envoy"
+
     [workspace.dependencies.pegboard-gateway]
     path = "engine/packages/pegboard-gateway"
+
+    [workspace.dependencies.pegboard-gateway2]
+    path = "engine/packages/pegboard-gateway2"
+
+    [workspace.dependencies.pegboard-outbound]
+    path = "engine/packages/pegboard-outbound"
 
     [workspace.dependencies.pegboard-runner]
     path = "engine/packages/pegboard-runner"
@@ -478,11 +492,17 @@ members = [
     [workspace.dependencies.rivet-data]
     path = "engine/sdks/rust/data"
 
-    [workspace.dependencies.epoxy-protocol]
-    path = "engine/sdks/rust/epoxy-protocol"
-
     [workspace.dependencies.rivet-engine-runner]
     path = "engine/sdks/rust/engine-runner"
+
+    [workspace.dependencies.rivet-envoy-client]
+    path = "engine/sdks/rust/envoy-client"
+
+    [workspace.dependencies.rivet-envoy-protocol]
+    path = "engine/sdks/rust/envoy-protocol"
+
+    [workspace.dependencies.epoxy-protocol]
+    path = "engine/sdks/rust/epoxy-protocol"
 
     [workspace.dependencies.rivet-runner-protocol]
     path = "engine/sdks/rust/runner-protocol"

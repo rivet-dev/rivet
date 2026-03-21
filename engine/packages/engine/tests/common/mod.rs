@@ -3,6 +3,7 @@
 pub mod actors;
 pub mod api;
 pub mod ctx;
+pub mod test_envoy;
 pub mod test_helpers;
 pub mod test_runner;
 

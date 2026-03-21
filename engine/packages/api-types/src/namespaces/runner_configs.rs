@@ -22,6 +22,7 @@ pub enum RunnerConfigKind {
 		headers: Option<HashMap<String, String>>,
 		/// Seconds.
 		request_lifespan: u32,
+		max_concurrent_actors: Option<u64>,
 		slots_per_runner: u32,
 		min_runners: Option<u32>,
 		max_runners: u32,
@@ -48,6 +49,7 @@ impl Into<rivet_types::runner_configs::RunnerConfig> for RunnerConfig {
 				url,
 				headers,
 				request_lifespan,
+				max_concurrent_actors,
 				slots_per_runner,
 				min_runners,
 				max_runners,
@@ -57,6 +59,7 @@ impl Into<rivet_types::runner_configs::RunnerConfig> for RunnerConfig {
 				url,
 				headers: headers.unwrap_or_default(),
 				request_lifespan,
+				max_concurrent_actors: max_concurrent_actors.unwrap_or(max_runners as u64),
 				slots_per_runner,
 				min_runners: min_runners.unwrap_or_default(),
 				max_runners,

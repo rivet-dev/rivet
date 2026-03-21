@@ -25,7 +25,7 @@ lazy_static::lazy_static! {
 	pub static ref ACTOR_ALLOCATE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"pegboard_actor_allocate_duration",
 		"Total duration to allocate an actor.",
-		&["status"],
+		&["kind", "result"],
 		MICRO_BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();

@@ -1,0 +1,1 @@
+TODO: Rewrite this entire piece of garbage without ai

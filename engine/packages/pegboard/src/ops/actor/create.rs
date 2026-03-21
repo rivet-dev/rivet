@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use gas::prelude::*;
 use rivet_api_util::{Method, request_remote_datacenter};
 use rivet_types::actors::{Actor, CrashPolicy};
@@ -31,24 +31,26 @@ pub struct Output {
 pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	// Set up subscriptions before dispatching workflow
 	let mut create_sub = ctx
-		.subscribe::<crate::workflows::actor::CreateComplete>(("actor_id", input.actor_id))
+		.subscribe::<crate::workflows::actor2::CreateComplete>(("actor_id", input.actor_id))
 		.await?;
 	let mut fail_sub = ctx
-		.subscribe::<crate::workflows::actor::Failed>(("actor_id", input.actor_id))
+		.subscribe::<crate::workflows::actor2::Failed>(("actor_id", input.actor_id))
 		.await?;
 	let mut destroy_sub = ctx
-		.subscribe::<crate::workflows::actor::DestroyStarted>(("actor_id", input.actor_id))
+		.subscribe::<crate::workflows::actor2::DestroyStarted>(("actor_id", input.actor_id))
 		.await?;
 
+	// TODO: check rivetkit version before choosing actor version
+
 	// Dispatch actor workflow
-	ctx.workflow(crate::workflows::actor::Input {
+	ctx.workflow(crate::workflows::actor2::Input {
 		actor_id: input.actor_id,
 		name: input.name.clone(),
+		pool_name: input.runner_name_selector.clone(),
 		key: input.key.clone(),
 		namespace_id: input.namespace_id,
-		runner_name_selector: input.runner_name_selector.clone(),
-		input: input.input.clone(),
 		crash_policy: input.crash_policy,
+		input: input.input.clone(),
 	})
 	.tag("actor_id", input.actor_id)
 	.dispatch()
@@ -122,7 +124,7 @@ async fn forward_to_datacenter(
 	let _target_dc = ctx
 		.config()
 		.dc_for_label(datacenter_label)
-		.ok_or_else(|| anyhow::anyhow!("datacenter not found for label {}", datacenter_label))?;
+		.with_context(|| format!("datacenter not found for label {}", datacenter_label))?;
 
 	// Get namespace name for the remote call
 	let namespace = ctx

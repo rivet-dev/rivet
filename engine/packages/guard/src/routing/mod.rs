@@ -7,6 +7,7 @@ use rivet_guard_core::RoutingFn;
 use crate::{errors, metrics, shared_state::SharedState};
 
 mod api_public;
+mod envoy;
 pub mod pegboard_gateway;
 mod runner;
 
@@ -70,6 +71,14 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 					return Ok(routing_output);
 				}
 
+				// Route envoy
+				if let Some(routing_output) = envoy::route_request_path_based(&ctx, req_ctx).await?
+				{
+					metrics::ROUTE_TOTAL.with_label_values(&["envoy"]).inc();
+
+					return Ok(routing_output);
+				}
+
 				// MARK: Header- & protocol-based routing (X-Rivet-Target)
 				// Determine target
 				let target = if req_ctx.is_websocket() {
@@ -96,6 +105,15 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 				// Read target
 				if let Some(target) = target {
 					if let Some(routing_output) =
+						pegboard_gateway::route_request(&ctx, &shared_state, req_ctx, target)
+							.await?
+					{
+						metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
+
+						return Ok(routing_output);
+					}
+
+					if let Some(routing_output) =
 						runner::route_request(&ctx, req_ctx, target).await?
 					{
 						metrics::ROUTE_TOTAL.with_label_values(&["runner"]).inc();
@@ -104,10 +122,9 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 					}
 
 					if let Some(routing_output) =
-						pegboard_gateway::route_request(&ctx, &shared_state, req_ctx, target)
-							.await?
+						envoy::route_request(&ctx, req_ctx, target).await?
 					{
-						metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
+						metrics::ROUTE_TOTAL.with_label_values(&["envoy"]).inc();
 
 						return Ok(routing_output);
 					}

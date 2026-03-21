@@ -483,6 +483,15 @@ pub enum NextOutput {
 	Unsubscribed,
 }
 
+impl From<NextOutput> for Option<Message> {
+	fn from(value: NextOutput) -> Self {
+		match value {
+			NextOutput::Message(msg) => Some(msg),
+			NextOutput::Unsubscribed => None,
+		}
+	}
+}
+
 pub struct Message {
 	pub pubsub: PubSub,
 	pub payload: Vec<u8>,

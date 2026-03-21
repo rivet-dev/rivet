@@ -140,4 +140,9 @@ define_keys! {
 	(112, COMPLETE_TS, "complete_ts"),
 	(113, PRUNE_TS, "prune_ts"),
 	(114, PRUNE_IDX, "prune_idx"),
+	(115, ENVOY, "envoy"),
+	(116, ENVOY_KEY, "envoy_key"),
+	(117, POOL_NAME, "pool_name"),
+	(118, SLOTS, "slots"),
+	(119, ENVOY_LOAD_BALANCER_IDX, "envoy_load_balancer_idx"),
 }
