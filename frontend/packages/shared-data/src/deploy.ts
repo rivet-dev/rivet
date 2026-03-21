@@ -31,6 +31,7 @@ export const deployOptions = [
 		description:
 			"Deploy to Rivet's managed compute platform",
 		icon: faRivet as any,
+		badge: "Beta",
 	},
 	{
 		displayName: "Vercel",
