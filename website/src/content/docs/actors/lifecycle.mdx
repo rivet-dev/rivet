@@ -691,6 +691,152 @@ const loggingActor = actor({
 });
 ```
 
+## Sleeping
+
+Actors automatically sleep after a period of inactivity to free up resources. When a request arrives for a sleeping actor, it wakes up, restores its state, and handles the request.
+
+### When Actors Sleep
+
+An actor is considered idle and eligible to sleep when **all** of the following are true:
+
+- No active HTTP requests
+- No active connections (unless they are hibernatable WebSockets)
+- No pending `keepAwake` calls
+- No active `run` handler (unless it is waiting on a queue)
+- `setPreventSleep` is not enabled
+- No pending disconnect callbacks
+
+Once the actor becomes idle, the sleep timer starts. After `sleepTimeout` (default 30 seconds) of continuous inactivity, the actor begins the sleep process. Any activity resets the timer.
+
+### Controlling Sleep
+
+#### `c.setPreventSleep(true/false)`
+
+If actor state says the actor should stay awake, call `c.setPreventSleep(true)` and clear it once the actor can sleep again. You can read `c.preventSleep` to inspect the current flag.
+
+```typescript
+import { actor } from "rivetkit";
+
+const sessionActor = actor({
+  state: {
+    activeTurns: 0,
+  },
+
+  actions: {
+    beginTurn: async (c) => {
+      c.state.activeTurns += 1;
+      c.setPreventSleep(true);
+
+      try {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 1_000);
+        });
+      } finally {
+        c.state.activeTurns -= 1;
+        c.setPreventSleep(c.state.activeTurns > 0);
+      }
+    },
+    status: (c) => ({
+      activeTurns: c.state.activeTurns,
+      preventSleep: c.preventSleep,
+    }),
+  }
+});
+```
+
+#### `c.keepAwake(promise)` (deprecated)
+
+Prevents the actor from sleeping while the given promise is running. Returns the resolved value and resets the sleep timer on completion. Errors are propagated to the caller.
+
+Prefer `c.setPreventSleep(true)` instead, or move shutdown work to `onSleep`.
+
+```typescript
+import { actor } from "rivetkit";
+
+const myActor = actor({
+  state: {},
+  actions: {
+    processJob: async (c) => {
+      const result = await c.keepAwake(longRunningTask());
+      return result;
+    },
+  },
+});
+
+async function longRunningTask(): Promise<string> {
+  return "done";
+}
+```
+
+#### `options.noSleep`
+
+Set `options.noSleep: true` to prevent the actor from ever sleeping. The actor will stay in memory indefinitely until explicitly destroyed.
+
+### Sleep Shutdown Sequence
+
+When the sleep timer fires, the actor goes through the following shutdown steps in order:
+
+1. **Abort signal fires.** `c.abortSignal` fires and `c.aborted` becomes `true`. The `run` handler should check this to exit.
+2. **Wait for `run` handler** to exit (up to `runStopTimeout`, default 15 seconds).
+3. **`onSleep` hook runs** (up to `onSleepTimeout`, default 5 seconds). Use this for cleanup like clearing intervals or closing external connections.
+4. **Non-hibernatable connections are disconnected.**
+5. **Background promises are awaited** (up to `waitUntilTimeout`, default 15 seconds). These are promises registered with `c.waitUntil()`.
+6. **State is saved** and the database is cleaned up.
+
+<Note>
+In-flight actions are **not** waited on during the sleep shutdown. If an action is executing when sleep begins, its response may be dropped. Actions automatically prevent voluntary sleep (they reset the idle timer), but they are not protected during forced shutdowns like version deploys. See [Forced Shutdown](#forced-shutdown-version-deploys) below.
+</Note>
+
+#### `onSleep`
+
+The `onSleep` lifecycle hook runs during step 3 above. Use it to clean up resources like intervals, external connections, or temporary state. See the [`onSleep` hook reference](#onsleep) for details.
+
+This hook may not always be called in situations like crashes or forced terminations. Do not rely on it for critical cleanup.
+
+#### `c.waitUntil(promise)` (deprecated)
+
+Registers a background promise that will be awaited during shutdown (step 5). The actor will wait up to `waitUntilTimeout` (default 15 seconds) for these promises to resolve before proceeding.
+
+Prefer `onSleep` for shutdown work, or `c.setPreventSleep(true)` if the actor must stay awake while work is in progress.
+
+```typescript
+import { actor } from "rivetkit";
+
+const myActor = actor({
+  state: {},
+  actions: {
+    fireAndForget: (c) => {
+      c.waitUntil(sendAnalyticsEvent());
+      return "ok";
+    },
+  },
+});
+
+async function sendAnalyticsEvent(): Promise<void> {}
+```
+
+### Sleep Timeouts
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `sleepTimeout` | 30 seconds | Time of inactivity before the actor begins sleeping. |
+| `runStopTimeout` | 15 seconds | Max time to wait for the `run` handler to exit during shutdown. |
+| `onSleepTimeout` | 5 seconds | Max time for the `onSleep` hook to run. |
+| `waitUntilTimeout` | 15 seconds | Max time to wait for `waitUntil` background promises during shutdown. |
+
+The engine enforces a hard limit of **30 seconds** (`actor_stop_threshold`) for the entire stop process. If the actor does not finish stopping within this window, the engine marks it as lost and reschedules it. The per-actor timeouts above must fit within this limit.
+
+### Forced Shutdown (Version Deploys)
+
+When you deploy a new version, the engine drains actors on the old version. This sends a forced stop command that bypasses the idle sleep timer and `#canSleep` checks. The actor goes through the same [shutdown sequence](#sleep-shutdown-sequence) above, but it is not voluntary. The same timeouts apply.
+
+During a forced shutdown:
+
+- **New requests** are blocked immediately. The engine marks the actor as not connectable.
+- **In-flight actions** are not waited on. If an action is mid-execution, its response will be dropped. The client receives a Service Unavailable error and Guard may retry against the new version.
+- **The `run` handler** receives the abort signal and has `runStopTimeout` to exit.
+- **The `onSleep` hook** runs normally.
+
 ## Options
 
 The `options` object allows you to configure various timeouts and behaviors for your actor.
@@ -726,6 +872,9 @@ const myActor = actor({
     // Max time to wait for run handler to stop during shutdown (default: 15000ms)
     runStopTimeout: 15_000,
 
+    // Max time to wait for waitUntil background promises during shutdown (default: 15000ms)
+    waitUntilTimeout: 15_000,
+
     // Timeout for connection liveness check (default: 2500ms)
     connectionLivenessTimeout: 2500,
 
@@ -757,6 +906,7 @@ const myActor = actor({
 | `stateSaveInterval` | 10000ms | Interval for persisting state |
 | `actionTimeout` | 60000ms | Timeout for action execution |
 | `runStopTimeout` | 15000ms | Max time to wait for run handler to stop during shutdown |
+| `waitUntilTimeout` | 15000ms | Max time to wait for `waitUntil` background promises during shutdown |
 | `connectionLivenessTimeout` | 2500ms | Timeout for connection liveness check |
 | `connectionLivenessInterval` | 5000ms | Interval for connection liveness check |
 | `noSleep` | false | Prevent actor from sleeping |
@@ -764,42 +914,6 @@ const myActor = actor({
 | `canHibernateWebSocket` | false | Whether WebSockets can hibernate (experimental) |
 
 ## Advanced
-
-### Preventing Sleep with `preventSleep`
-
-If actor state says the actor should stay awake, call `c.setPreventSleep(true)` and clear it once the actor can sleep again.
-
-This is useful when the sleep-blocking lifetime is driven by actor state instead of a single promise. You can read `c.preventSleep` to inspect the current flag.
-
-```typescript
-import { actor } from "rivetkit";
-
-const sessionActor = actor({
-  state: {
-    activeTurns: 0,
-  },
-
-  actions: {
-    beginTurn: async (c) => {
-      c.state.activeTurns += 1;
-      c.setPreventSleep(true);
-
-      try {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 1_000);
-        });
-      } finally {
-        c.state.activeTurns -= 1;
-        c.setPreventSleep(c.state.activeTurns > 0);
-      }
-    },
-    status: (c) => ({
-      activeTurns: c.state.activeTurns,
-      preventSleep: c.preventSleep,
-    }),
-  }
-});
-```
 
 ### Actor Shutdown Abort Signal
 
