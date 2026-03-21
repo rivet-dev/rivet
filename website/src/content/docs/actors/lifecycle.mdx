@@ -743,10 +743,6 @@ const sessionActor = actor({
 });
 ```
 
-#### `options.noSleep` (deprecated)
-
-Prefer calling `c.setPreventSleep(true)` in `onWake` instead. `noSleep` prevents the actor from ever sleeping, keeping it in memory until explicitly destroyed.
-
 ### Sleep Timeouts
 
 | Option | Default | Description |
@@ -765,10 +761,13 @@ When the sleep timer fires, the actor shuts down in order:
 1. `c.abortSignal` fires and `c.aborted` becomes `true`.
 2. Wait for `run` handler to exit (up to `runStopTimeout`).
 3. `onSleep` hook runs (up to `onSleepTimeout`). See the [`onSleep` hook reference](#onsleep).
-4. Non-hibernatable connections are disconnected.
-5. State is saved and the database is cleaned up.
+4. `waitUntil` background promises are awaited (up to `waitUntilTimeout`).
+5. Non-hibernatable connections are disconnected. Hibernatable WebSocket connections are preserved for live migration.
+6. State is saved and the database is cleaned up.
 
-In-flight actions are **not** waited on during shutdown. Actions reset the idle timer so they prevent voluntary sleep, but during forced shutdowns (like version deploys) a mid-execution action's response may be dropped. If an action must complete before the actor stops, wrap the critical work with `c.waitUntil()`. See [Forced Shutdown](#forced-shutdown-version-deploys) below.
+Requests that arrive while the actor is shutting down are held until the actor wakes up again on a new runner. The caller does not need to retry. WebSocket connections are live-migrated to the new actor instance transparently.
+
+In-flight actions are **not** waited on during shutdown. Actions reset the idle timer so they prevent voluntary sleep, but during forced shutdowns (like version deploys) a mid-execution action's response may be dropped. If an action must complete before the actor stops, wrap the critical work with `c.waitUntil()`.
 
 ### Actor Migration
 
@@ -818,9 +817,6 @@ const myActor = actor({
     // Interval for connection liveness check (default: 5000ms)
     connectionLivenessInterval: 5000,
 
-    // Prevent actor from sleeping (default: false)
-    noSleep: false,
-
     // Time before actor sleeps due to inactivity (default: 30000ms)
     sleepTimeout: 30_000,
 
@@ -846,7 +842,6 @@ const myActor = actor({
 | `waitUntilTimeout` | 15000ms | Max time to wait for `waitUntil` background promises during shutdown |
 | `connectionLivenessTimeout` | 2500ms | Timeout for connection liveness check |
 | `connectionLivenessInterval` | 5000ms | Interval for connection liveness check |
-| `noSleep` | false | Prevent actor from sleeping |
 | `sleepTimeout` | 30000ms | Time before actor sleeps due to inactivity |
 | `canHibernateWebSocket` | false | Whether WebSockets can hibernate (experimental) |
 

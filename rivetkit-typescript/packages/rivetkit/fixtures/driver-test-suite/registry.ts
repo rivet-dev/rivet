@@ -71,6 +71,7 @@ import {
 	sleepWithPreventSleep,
 	sleepWithRawHttp,
 	sleepWithRawWebSocket,
+	sleepWithWaitUntilMessage,
 } from "./sleep";
 import { statelessActor } from "./stateless";
 import {
@@ -121,6 +122,7 @@ export const registry = setup({
 		sleepWithRawWebSocket,
 		sleepWithNoSleepOption,
 		sleepWithPreventSleep,
+		sleepWithWaitUntilMessage,
 		// From error-handling.ts
 		errorHandlingActor,
 		customTimeoutActor,

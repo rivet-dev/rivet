@@ -529,9 +529,6 @@ export class ActorInstance<
 				assertUnreachable(mode);
 			}
 
-			// Disconnect non-hibernatable connections
-			await this.#disconnectConnections();
-
 			// Wait for background tasks
 			await this.#waitBackgroundPromises(
 				this.overrides.waitUntilTimeout !== undefined
@@ -541,6 +538,9 @@ export class ActorInstance<
 						)
 					: this.#config.options.waitUntilTimeout,
 			);
+
+			// Disconnect non-hibernatable connections
+			await this.#disconnectConnections();
 
 			// Clear timeouts and save state
 			this.#rLog.info({ msg: "clearing pending save timeouts" });
