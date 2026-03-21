@@ -701,7 +701,6 @@ An actor is considered idle and eligible to sleep when **all** of the following 
 
 - No active HTTP requests
 - No active connections (unless they are hibernatable WebSockets)
-- No pending `keepAwake` calls
 - No active `run` handler (unless it is waiting on a queue)
 - `setPreventSleep` is not enabled
 - No pending disconnect callbacks
@@ -710,7 +709,7 @@ Once the actor becomes idle, the sleep timer starts. After `sleepTimeout` (defau
 
 ### Controlling Sleep
 
-#### `c.setPreventSleep(true/false)`
+#### `c.setPreventSleep`
 
 If actor state says the actor should stay awake, call `c.setPreventSleep(true)` and clear it once the actor can sleep again. You can read `c.preventSleep` to inspect the current flag.
 
@@ -744,76 +743,9 @@ const sessionActor = actor({
 });
 ```
 
-#### `c.keepAwake(promise)` (deprecated)
+#### `options.noSleep` (deprecated)
 
-Prevents the actor from sleeping while the given promise is running. Returns the resolved value and resets the sleep timer on completion. Errors are propagated to the caller.
-
-Prefer `c.setPreventSleep(true)` instead, or move shutdown work to `onSleep`.
-
-```typescript
-import { actor } from "rivetkit";
-
-const myActor = actor({
-  state: {},
-  actions: {
-    processJob: async (c) => {
-      const result = await c.keepAwake(longRunningTask());
-      return result;
-    },
-  },
-});
-
-async function longRunningTask(): Promise<string> {
-  return "done";
-}
-```
-
-#### `options.noSleep`
-
-Set `options.noSleep: true` to prevent the actor from ever sleeping. The actor will stay in memory indefinitely until explicitly destroyed.
-
-### Sleep Shutdown Sequence
-
-When the sleep timer fires, the actor goes through the following shutdown steps in order:
-
-1. **Abort signal fires.** `c.abortSignal` fires and `c.aborted` becomes `true`. The `run` handler should check this to exit.
-2. **Wait for `run` handler** to exit (up to `runStopTimeout`, default 15 seconds).
-3. **`onSleep` hook runs** (up to `onSleepTimeout`, default 5 seconds). Use this for cleanup like clearing intervals or closing external connections.
-4. **Non-hibernatable connections are disconnected.**
-5. **Background promises are awaited** (up to `waitUntilTimeout`, default 15 seconds). These are promises registered with `c.waitUntil()`.
-6. **State is saved** and the database is cleaned up.
-
-<Note>
-In-flight actions are **not** waited on during the sleep shutdown. If an action is executing when sleep begins, its response may be dropped. Actions automatically prevent voluntary sleep (they reset the idle timer), but they are not protected during forced shutdowns like version deploys. See [Forced Shutdown](#forced-shutdown-version-deploys) below.
-</Note>
-
-#### `onSleep`
-
-The `onSleep` lifecycle hook runs during step 3 above. Use it to clean up resources like intervals, external connections, or temporary state. See the [`onSleep` hook reference](#onsleep) for details.
-
-This hook may not always be called in situations like crashes or forced terminations. Do not rely on it for critical cleanup.
-
-#### `c.waitUntil(promise)` (deprecated)
-
-Registers a background promise that will be awaited during shutdown (step 5). The actor will wait up to `waitUntilTimeout` (default 15 seconds) for these promises to resolve before proceeding.
-
-Prefer `onSleep` for shutdown work, or `c.setPreventSleep(true)` if the actor must stay awake while work is in progress.
-
-```typescript
-import { actor } from "rivetkit";
-
-const myActor = actor({
-  state: {},
-  actions: {
-    fireAndForget: (c) => {
-      c.waitUntil(sendAnalyticsEvent());
-      return "ok";
-    },
-  },
-});
-
-async function sendAnalyticsEvent(): Promise<void> {}
-```
+Prefer calling `c.setPreventSleep(true)` in `onWake` instead. `noSleep` prevents the actor from ever sleeping, keeping it in memory until explicitly destroyed.
 
 ### Sleep Timeouts
 
@@ -824,18 +756,23 @@ async function sendAnalyticsEvent(): Promise<void> {}
 | `onSleepTimeout` | 5 seconds | Max time for the `onSleep` hook to run. |
 | `waitUntilTimeout` | 15 seconds | Max time to wait for `waitUntil` background promises during shutdown. |
 
-The engine enforces a hard limit of **30 seconds** (`actor_stop_threshold`) for the entire stop process. If the actor does not finish stopping within this window, the engine marks it as lost and reschedules it. The per-actor timeouts above must fit within this limit.
+Rivet enforces a hard limit of **30 seconds** for the entire stop process. These can be configured in the [options](#options).
 
-### Forced Shutdown (Version Deploys)
+### Sleep Shutdown Sequence
 
-When you deploy a new version, the engine drains actors on the old version. This sends a forced stop command that bypasses the idle sleep timer and `#canSleep` checks. The actor goes through the same [shutdown sequence](#sleep-shutdown-sequence) above, but it is not voluntary. The same timeouts apply.
+When the sleep timer fires, the actor shuts down in order:
 
-During a forced shutdown:
+1. `c.abortSignal` fires and `c.aborted` becomes `true`.
+2. Wait for `run` handler to exit (up to `runStopTimeout`).
+3. `onSleep` hook runs (up to `onSleepTimeout`). See the [`onSleep` hook reference](#onsleep).
+4. Non-hibernatable connections are disconnected.
+5. State is saved and the database is cleaned up.
 
-- **New requests** are blocked immediately. The engine marks the actor as not connectable.
-- **In-flight actions** are not waited on. If an action is mid-execution, its response will be dropped. The client receives a Service Unavailable error and Guard may retry against the new version.
-- **The `run` handler** receives the abort signal and has `runStopTimeout` to exit.
-- **The `onSleep` hook** runs normally.
+In-flight actions are **not** waited on during shutdown. Actions reset the idle timer so they prevent voluntary sleep, but during forced shutdowns (like version deploys) a mid-execution action's response may be dropped. If an action must complete before the actor stops, wrap the critical work with `c.waitUntil()`. See [Forced Shutdown](#forced-shutdown-version-deploys) below.
+
+### Actor Migration
+
+Actors may be forced to sleep and wake on a different runner during version upgrades or serverless timeouts. The same [shutdown sequence](#sleep-shutdown-sequence) and timeouts apply. The next request wakes the actor on a new runner with the updated code. Connected clients are disconnected and can reconnect automatically.
 
 ## Options
 
