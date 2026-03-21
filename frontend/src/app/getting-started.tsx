@@ -165,7 +165,7 @@ export function GettingStarted({
 								provider: provider || "rivet",
 								runnerName: "default",
 								slotsPerRunner: 1,
-								maxRunners: 10000,
+								maxRunners: 100_000,
 								minRunners: 1,
 								runnerMargin: 0,
 								headers: [],
@@ -227,7 +227,7 @@ export function GettingStarted({
 										displayName: "default",
 										pool: "default",
 										minCount: 0,
-										maxCount: 1000,
+										maxCount: 100_000,
 									});
 									return;
 								}

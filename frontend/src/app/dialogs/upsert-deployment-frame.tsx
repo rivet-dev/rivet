@@ -68,7 +68,7 @@ export default function UpsertDeploymentFrameContent({
 							pool: "default",
 							image: defaultImage,
 							minCount: 0,
-							maxCount: 1000,
+							maxCount: 100_000,
 							environment: {},
 							command: undefined,
 							args: [],
