@@ -17,7 +17,10 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			});
 			expect(response.status).toBe(200);
 			const data = await response.json();
-			expect(data).toEqual({ state: { count: 5 } });
+			expect(data).toEqual({
+				state: { count: 5 },
+				isStateEnabled: true,
+			});
 		});
 
 		test("PATCH /inspector/state updates actor state", async (c) => {
@@ -195,6 +198,79 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			// Counter actor has no workflow, so it should be disabled
 			expect(data.isWorkflowEnabled).toBe(false);
 			expect(data.history).toBeNull();
+		});
+
+		test("GET /inspector/database/schema returns SQLite schema", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.dbActorRaw.getOrCreate([
+				`inspector-database-schema-${crypto.randomUUID()}`,
+			]);
+
+			await handle.insertValue("Alice");
+			await handle.insertValue("Bob");
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(
+				`${gatewayUrl}/inspector/database/schema`,
+				{
+					headers: { Authorization: "Bearer token" },
+				},
+			);
+			expect(response.status).toBe(200);
+			const data = (await response.json()) as {
+				schema: {
+					tables: Array<{
+						table: { schema: string; name: string; type: string };
+						columns: Array<{ name: string }>;
+						records: number;
+					}>;
+				};
+			};
+
+			expect(Array.isArray(data.schema.tables)).toBe(true);
+			const testDataTable = data.schema.tables.find(
+				(table) => table.table.name === "test_data",
+			);
+			expect(testDataTable).toBeDefined();
+			expect(testDataTable?.table.schema).toBe("main");
+			expect(testDataTable?.table.type).toBe("table");
+			expect(testDataTable?.records).toBe(2);
+			expect(testDataTable?.columns.map((column) => column.name)).toEqual(
+				["id", "value", "payload", "created_at"],
+			);
+		});
+
+		test("GET /inspector/database/rows returns SQLite rows", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.dbActorRaw.getOrCreate([
+				`inspector-database-rows-${crypto.randomUUID()}`,
+			]);
+
+			await handle.insertValue("Alice");
+			await handle.insertValue("Bob");
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(
+				`${gatewayUrl}/inspector/database/rows?table=test_data&limit=1&offset=1`,
+				{
+					headers: { Authorization: "Bearer token" },
+				},
+			);
+			expect(response.status).toBe(200);
+			const data = (await response.json()) as {
+				rows: Array<{
+					id: number;
+					value: string;
+					payload: string;
+					created_at: number;
+				}>;
+			};
+
+			expect(data.rows).toHaveLength(1);
+			expect(data.rows[0]?.id).toBe(2);
+			expect(data.rows[0]?.value).toBe("Bob");
+			expect(data.rows[0]?.payload).toBe("");
+			expect(typeof data.rows[0]?.created_at).toBe("number");
 		});
 
 		test("GET /inspector/summary returns full actor snapshot", async (c) => {
