@@ -51,7 +51,6 @@ export interface QueueSendResult<TResponse = unknown> {
 interface QueueSenderOptions {
 	encoding: Encoding;
 	params: unknown;
-	getParams?: () => Promise<unknown>;
 	customFetch: (request: Request) => Promise<Response>;
 }
 
@@ -76,10 +75,6 @@ export function createQueueSender(
 		const wait = options?.wait ?? false;
 		const timeout = options?.timeout;
 
-		const params = senderOptions.getParams
-			? await senderOptions.getParams()
-			: senderOptions.params;
-
 		const result = await sendHttpRequest<
 			protocol.HttpQueueSendRequest,
 			protocol.HttpQueueSendResponse,
@@ -92,9 +87,11 @@ export function createQueueSender(
 			method: "POST",
 			headers: {
 				[HEADER_ENCODING]: senderOptions.encoding,
-				...(params !== undefined
+				...(senderOptions.params !== undefined
 					? {
-							[HEADER_CONN_PARAMS]: JSON.stringify(params),
+							[HEADER_CONN_PARAMS]: JSON.stringify(
+								senderOptions.params,
+							),
 						}
 					: {}),
 			},

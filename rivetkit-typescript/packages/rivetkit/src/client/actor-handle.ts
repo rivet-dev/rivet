@@ -81,7 +81,6 @@ export class ActorHandleRaw {
 		this.#queueSender = createQueueSender({
 			encoding: this.#encoding,
 			params: this.#params,
-			getParams: this.#getParams,
 			customFetch: async (request: Request) => {
 				const { actorId } = await queryActor(
 					undefined,
@@ -154,7 +153,6 @@ export class ActorHandleRaw {
 				name: opts.name,
 				encoding: this.#encoding,
 			});
-			const params = await this.#resolveConnectionParams();
 			const responseData = await sendHttpRequest<
 				protocol.HttpActionRequest, // Bare type
 				protocol.HttpActionResponse, // Bare type
@@ -167,8 +165,8 @@ export class ActorHandleRaw {
 				method: "POST",
 				headers: {
 					[HEADER_ENCODING]: this.#encoding,
-					...(params !== undefined
-						? { [HEADER_CONN_PARAMS]: JSON.stringify(params) }
+					...(this.#params !== undefined
+						? { [HEADER_CONN_PARAMS]: JSON.stringify(this.#params) }
 						: {}),
 				},
 				body: opts.args,
@@ -257,12 +255,11 @@ export class ActorHandleRaw {
 	 * Fetches a resource from this actor via the /request endpoint. This is a
 	 * convenience wrapper around the raw HTTP API.
 	 */
-	async fetch(input: string | URL | Request, init?: RequestInit) {
-		const params = await this.#resolveConnectionParams();
+	fetch(input: string | URL | Request, init?: RequestInit) {
 		return rawHttpFetch(
 			this.#driver,
 			this.#actorQuery,
-			params,
+			this.#params,
 			input,
 			init,
 		);

@@ -194,7 +194,6 @@ export class ActorConnRaw {
 		this.#queueSender = createQueueSender({
 			encoding: this.#encoding,
 			params: this.#params,
-			getParams: this.#getParams,
 			customFetch: async (request: Request) => {
 				if (!this.#actorId) {
 					const { actorId } = await queryActor(

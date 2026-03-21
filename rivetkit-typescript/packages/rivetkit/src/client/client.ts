@@ -87,8 +87,8 @@ export interface QueryOptions {
 	/** Parameters to pass to the connection. */
 	params?: unknown;
 	/**
-	 * Lazily resolves connection parameters. This is called each time
-	 * a connection is opened or an action, send, or fetch request is made.
+	 * Lazily resolves connection parameters for `.connect()` and `.webSocket()`.
+	 * This is called each time a new connection is opened.
 	 */
 	getParams?: () => Promise<unknown>;
 	/** Signal to abort the request. */
