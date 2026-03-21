@@ -568,14 +568,14 @@ async fn handle_kv_get(
 
 	let udb = match ctx.udb() {
 		Ok(udb) => udb,
-		Err(err) => return error_response("internal_error", &err.to_string()),
+		Err(err) => return internal_error(&err),
 	};
 
 	match actor_kv::get(&*udb, &recipient, body.keys.clone()).await {
 		Ok((keys, values, _metadata)) => {
 			protocol::ResponseData::KvGetResponse(protocol::KvGetResponse { keys, values })
 		}
-		Err(err) => error_response("internal_error", &err.to_string()),
+		Err(err) => internal_error(&err),
 	}
 }
 
@@ -645,7 +645,7 @@ async fn handle_kv_put(
 
 	let udb = match ctx.udb() {
 		Ok(udb) => udb,
-		Err(err) => return error_response("internal_error", &err.to_string()),
+		Err(err) => return internal_error(&err),
 	};
 
 	match actor_kv::put(&*udb, &recipient, body.keys.clone(), body.values.clone()).await {
@@ -655,7 +655,7 @@ async fn handle_kv_put(
 			if msg.contains("not enough space left in storage") {
 				error_response("storage_quota_exceeded", &msg)
 			} else {
-				error_response("internal_error", &msg)
+				internal_error(&err)
 			}
 		}
 	}
@@ -684,12 +684,12 @@ async fn handle_kv_delete(
 
 	let udb = match ctx.udb() {
 		Ok(udb) => udb,
-		Err(err) => return error_response("internal_error", &err.to_string()),
+		Err(err) => return internal_error(&err),
 	};
 
 	match actor_kv::delete(&*udb, &recipient, body.keys.clone()).await {
 		Ok(()) => protocol::ResponseData::KvDeleteResponse,
-		Err(err) => error_response("internal_error", &err.to_string()),
+		Err(err) => internal_error(&err),
 	}
 }
 
@@ -725,12 +725,12 @@ async fn handle_kv_delete_range(
 
 	let udb = match ctx.udb() {
 		Ok(udb) => udb,
-		Err(err) => return error_response("internal_error", &err.to_string()),
+		Err(err) => return internal_error(&err),
 	};
 
 	match actor_kv::delete_range(&*udb, &recipient, body.start.clone(), body.end.clone()).await {
 		Ok(()) => protocol::ResponseData::KvDeleteResponse,
-		Err(err) => error_response("internal_error", &err.to_string()),
+		Err(err) => internal_error(&err),
 	}
 }
 
@@ -753,7 +753,7 @@ async fn resolve_actor(
 			actor_id: parsed_id,
 		})
 		.await
-		.map_err(|err| error_response("internal_error", &err.to_string()))?;
+		.map_err(|err| internal_error(&err))?;
 
 	match actor {
 		Some(actor) => Ok((parsed_id, actor.name)),
@@ -788,4 +788,12 @@ fn error_response(code: &str, message: &str) -> protocol::ResponseData {
 		code: code.to_string(),
 		message: message.to_string(),
 	})
+}
+
+/// Log an internal error with full details server-side and return a generic
+/// error message to the client. Prevents leaking stack traces, database errors,
+/// or other internal state over the wire.
+fn internal_error(err: &anyhow::Error) -> protocol::ResponseData {
+	tracing::error!(?err, "kv channel internal error");
+	error_response("internal_error", "internal error")
 }
