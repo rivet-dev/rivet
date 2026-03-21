@@ -37,6 +37,7 @@ import { runManagerDriverTests } from "./tests/manager-driver";
 import { runRawHttpTests } from "./tests/raw-http";
 import { runRawHttpRequestPropertiesTests } from "./tests/raw-http-request-properties";
 import { runRawWebSocketTests } from "./tests/raw-websocket";
+import { runCrossBackendVfsTests } from "./tests/cross-backend-vfs";
 import { runRequestAccessTests } from "./tests/request-access";
 
 export interface SkipTests {
@@ -167,6 +168,14 @@ export function runDriverTests(
 				}
 			});
 		}
+
+		// Cross-backend VFS compatibility runs once, independent of
+		// client type and encoding. Skips when native SQLite is unavailable.
+		runCrossBackendVfsTests({
+			...driverTestConfigPartial,
+			clientType: "http",
+			encoding: "bare",
+		});
 	});
 }
 

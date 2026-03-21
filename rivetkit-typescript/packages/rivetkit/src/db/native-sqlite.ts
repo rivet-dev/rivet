@@ -62,6 +62,34 @@ let detectionDone = false;
 let kvChannel: NativeKvChannel | null = null;
 
 /**
+ * Reset the cached native SQLite detection state.
+ * For testing only. Allows tests to switch between native and WASM VFS
+ * backends within the same process.
+ *
+ * @param disable - If true, force detection to report native as unavailable.
+ *                  If false/undefined, reset so the next call re-detects.
+ * @internal
+ */
+export function _resetNativeDetection(disable?: boolean): void {
+	if (kvChannel && nativeModule) {
+		try {
+			nativeModule.disconnect(kvChannel);
+		} catch {
+			// Ignore cleanup errors
+		}
+	}
+	kvChannel = null;
+
+	if (disable) {
+		detectionDone = true;
+		nativeModule = null;
+	} else {
+		detectionDone = false;
+		nativeModule = null;
+	}
+}
+
+/**
  * Attempts to load the @rivetkit/sqlite-native .node addon.
  * Catches all failure modes: missing file, glibc mismatch,
  * N-API version mismatch, corrupted binary.
