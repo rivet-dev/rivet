@@ -18,6 +18,7 @@ futures-util = { version = "0.3", default-features = false, features = ["sink"] 
 serde = { version = "1", features = ["derive"] }
 serde_bare = "0.5"
 serde_json = "1"
+tracing = "0.1"
 
 [build-dependencies]
 napi-build = "2"

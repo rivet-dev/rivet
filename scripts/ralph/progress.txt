@@ -509,3 +509,20 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - Cross-backend tests should be outside the encoding/clientType loops since VFS compatibility is independent of transport encoding.
   - Building BARE schemas is required before running tests: run `pnpm compile:bare` in sqlite-vfs, traces, workflow-engine; run `pnpm build:schema` in rivetkit. Or use `npx turbo build --filter="rivetkit..."` to build all dependencies.
 ---
+
+## 2026-03-21 - US-026
+- Wrapped all 20 `unsafe extern "C"` VFS callbacks in `std::panic::catch_unwind` to prevent undefined behavior from panics unwinding through SQLite's C stack frames
+- Created `vfs_catch_unwind!` macro that catches panics via `AssertUnwindSafe`, logs them via `tracing::error`, and returns a specified error code
+- Added `panic_message` helper function to extract human-readable messages from panic payloads
+- Added `tracing = "0.1"` dependency to Cargo.toml
+- IO callbacks wrapped (12): kv_io_close, kv_io_read, kv_io_write, kv_io_truncate, kv_io_sync, kv_io_file_size, kv_io_lock, kv_io_unlock, kv_io_check_reserved_lock, kv_io_file_control, kv_io_sector_size, kv_io_device_characteristics
+- VFS callbacks wrapped (8): kv_vfs_open, kv_vfs_delete, kv_vfs_access, kv_vfs_full_pathname, kv_vfs_randomness, kv_vfs_sleep, kv_vfs_current_time, kv_vfs_get_last_error
+- Each callback uses an appropriate error code on panic (SQLITE_IOERR_READ for read, SQLITE_IOERR_WRITE for write, SQLITE_CANTOPEN for open, etc.)
+- All 76 tests pass, cargo check clean
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/vfs.rs, Cargo.toml, Cargo.lock
+- **Learnings for future iterations:**
+  - `std::panic::catch_unwind` with `AssertUnwindSafe` is the standard pattern for catching panics at FFI boundaries. The closure must be wrapped in `AssertUnwindSafe` because VFS callbacks capture mutable state through raw pointers.
+  - Panic payloads are `Box<dyn Any + Send>`. Downcast to `&str` or `String` for human-readable messages.
+  - For trivial callbacks (lock/unlock returning SQLITE_OK), the macro still wraps them since even trivial code paths could theoretically panic via compiler-inserted checks.
+  - Non-error-returning callbacks (sector_size, device_characteristics, randomness, sleep) use safe default return values on panic (chunk size, 0, 0, 0 respectively).
+---

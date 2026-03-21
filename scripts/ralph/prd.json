@@ -462,7 +462,7 @@
         "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
       ],
       "priority": 26,
-      "passes": false,
+      "passes": true,
       "notes": "There are ~20 VFS callbacks that are extern C functions. Panics from slice::from_raw_parts, HashMap operations, or arithmetic can unwind through SQLite's C stack frames, which is UB. catch_unwind converts panics to a Result, then we return SQLITE_IOERR. Use AssertUnwindSafe wrapper since the callback closures capture mutable state."
     },
     {

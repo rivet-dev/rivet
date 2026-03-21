@@ -20,6 +20,40 @@ use crate::channel::KvChannel;
 use crate::kv;
 use crate::protocol::*;
 
+// MARK: Panic Guard
+
+/// Extract a human-readable message from a panic payload.
+fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
+	if let Some(s) = payload.downcast_ref::<&str>() {
+		s.to_string()
+	} else if let Some(s) = payload.downcast_ref::<String>() {
+		s.clone()
+	} else {
+		"unknown panic".to_string()
+	}
+}
+
+/// Wrap a VFS callback body in `catch_unwind` to prevent panics from unwinding
+/// through SQLite's C stack frames (which is undefined behavior).
+///
+/// On panic, logs the panic message via `tracing::error` and returns `$err_val`.
+/// Uses `AssertUnwindSafe` because callback closures capture mutable state
+/// (VFS file handles, context pointers).
+macro_rules! vfs_catch_unwind {
+	($err_val:expr, $body:expr) => {
+		match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $body)) {
+			Ok(result) => result,
+			Err(panic) => {
+				tracing::error!(
+					message = panic_message(&panic),
+					"vfs callback panicked"
+				);
+				$err_val
+			}
+		}
+	};
+}
+
 // MARK: Constants
 
 /// File metadata version. Matches CURRENT_VERSION in
@@ -169,32 +203,34 @@ fn build_value_map(resp: &KvGetResponse) -> HashMap<&[u8], &[u8]> {
 // MARK: IO Callbacks
 
 unsafe extern "C" fn kv_io_close(p_file: *mut sqlite3_file) -> c_int {
-	let file = get_file(p_file);
-	let ctx = &*file.ctx;
+	vfs_catch_unwind!(SQLITE_IOERR, {
+		let file = get_file(p_file);
+		let ctx = &*file.ctx;
 
-	// Delete-on-close: remove the file entirely (used for journal files).
-	if file.flags & SQLITE_OPEN_DELETEONCLOSE != 0 {
-		let tag = file.file_tag;
-		let _ = ctx.kv_delete_range(
-			kv::get_chunk_key(tag, 0).to_vec(),
-			kv::get_chunk_key_range_end(tag).to_vec(),
-		);
-		let _ = ctx.kv_delete(vec![kv::get_meta_key(tag).to_vec()]);
-		return SQLITE_OK;
-	}
-
-	// Flush dirty metadata before closing.
-	if file.meta_dirty {
-		let meta = encode_file_meta(file.size);
-		if ctx
-			.kv_put(vec![file.meta_key.to_vec()], vec![meta])
-			.is_ok()
-		{
-			file.meta_dirty = false;
+		// Delete-on-close: remove the file entirely (used for journal files).
+		if file.flags & SQLITE_OPEN_DELETEONCLOSE != 0 {
+			let tag = file.file_tag;
+			let _ = ctx.kv_delete_range(
+				kv::get_chunk_key(tag, 0).to_vec(),
+				kv::get_chunk_key_range_end(tag).to_vec(),
+			);
+			let _ = ctx.kv_delete(vec![kv::get_meta_key(tag).to_vec()]);
+			return SQLITE_OK;
 		}
-	}
 
-	SQLITE_OK
+		// Flush dirty metadata before closing.
+		if file.meta_dirty {
+			let meta = encode_file_meta(file.size);
+			if ctx
+				.kv_put(vec![file.meta_key.to_vec()], vec![meta])
+				.is_ok()
+			{
+				file.meta_dirty = false;
+			}
+		}
+
+		SQLITE_OK
+	})
 }
 
 unsafe extern "C" fn kv_io_read(
@@ -203,72 +239,74 @@ unsafe extern "C" fn kv_io_read(
 	i_amt: c_int,
 	i_offset: sqlite3_int64,
 ) -> c_int {
-	let file = get_file(p_file);
-	let ctx = &*file.ctx;
-	let amt = i_amt as usize;
-	let buf = slice::from_raw_parts_mut(p_buf as *mut u8, amt);
+	vfs_catch_unwind!(SQLITE_IOERR_READ, {
+		let file = get_file(p_file);
+		let ctx = &*file.ctx;
+		let amt = i_amt as usize;
+		let buf = slice::from_raw_parts_mut(p_buf as *mut u8, amt);
 
-	if i_offset < 0 {
-		return SQLITE_IOERR_READ;
-	}
-
-	// Past EOF: zero-fill and return short read.
-	if i_offset >= file.size {
-		buf.fill(0);
-		return SQLITE_IOERR_SHORT_READ;
-	}
-
-	let offset = i_offset as usize;
-	let file_size = file.size as usize;
-	let start_chunk = offset / kv::CHUNK_SIZE;
-	let end_chunk = (offset + amt - 1) / kv::CHUNK_SIZE;
-
-	// Batch-fetch all needed chunk keys.
-	let chunk_keys: Vec<Vec<u8>> = (start_chunk..=end_chunk)
-		.map(|i| kv::get_chunk_key(file.file_tag, i as u32).to_vec())
-		.collect();
-
-	let resp = match ctx.kv_get(chunk_keys) {
-		Ok(r) => r,
-		Err(_) => return SQLITE_IOERR_READ,
-	};
-	let value_map = build_value_map(&resp);
-
-	// Copy chunk data to output buffer.
-	for i in start_chunk..=end_chunk {
-		let chunk_offset = i * kv::CHUNK_SIZE;
-		let read_start = offset.saturating_sub(chunk_offset);
-		let read_end = std::cmp::min(kv::CHUNK_SIZE, offset + amt - chunk_offset);
-		let dest_start = chunk_offset + read_start - offset;
-
-		let key = kv::get_chunk_key(file.file_tag, i as u32);
-		if let Some(chunk) = value_map.get(key.as_slice()) {
-			let src_end = std::cmp::min(read_end, chunk.len());
-			if src_end > read_start {
-				let dest_end = dest_start + (src_end - read_start);
-				buf[dest_start..dest_end].copy_from_slice(&chunk[read_start..src_end]);
-			}
-			// Zero-fill if chunk is shorter than expected.
-			if src_end < read_end {
-				let zero_start = dest_start + src_end.saturating_sub(read_start);
-				let zero_end = dest_start + (read_end - read_start);
-				buf[zero_start..zero_end].fill(0);
-			}
-		} else {
-			// Missing chunk: zero-fill.
-			let dest_end = dest_start + (read_end - read_start);
-			buf[dest_start..dest_end].fill(0);
+		if i_offset < 0 {
+			return SQLITE_IOERR_READ;
 		}
-	}
 
-	// Short read if requested range extends past file size.
-	let actual = std::cmp::min(amt, file_size - offset);
-	if actual < amt {
-		buf[actual..].fill(0);
-		return SQLITE_IOERR_SHORT_READ;
-	}
+		// Past EOF: zero-fill and return short read.
+		if i_offset >= file.size {
+			buf.fill(0);
+			return SQLITE_IOERR_SHORT_READ;
+		}
 
-	SQLITE_OK
+		let offset = i_offset as usize;
+		let file_size = file.size as usize;
+		let start_chunk = offset / kv::CHUNK_SIZE;
+		let end_chunk = (offset + amt - 1) / kv::CHUNK_SIZE;
+
+		// Batch-fetch all needed chunk keys.
+		let chunk_keys: Vec<Vec<u8>> = (start_chunk..=end_chunk)
+			.map(|i| kv::get_chunk_key(file.file_tag, i as u32).to_vec())
+			.collect();
+
+		let resp = match ctx.kv_get(chunk_keys) {
+			Ok(r) => r,
+			Err(_) => return SQLITE_IOERR_READ,
+		};
+		let value_map = build_value_map(&resp);
+
+		// Copy chunk data to output buffer.
+		for i in start_chunk..=end_chunk {
+			let chunk_offset = i * kv::CHUNK_SIZE;
+			let read_start = offset.saturating_sub(chunk_offset);
+			let read_end = std::cmp::min(kv::CHUNK_SIZE, offset + amt - chunk_offset);
+			let dest_start = chunk_offset + read_start - offset;
+
+			let key = kv::get_chunk_key(file.file_tag, i as u32);
+			if let Some(chunk) = value_map.get(key.as_slice()) {
+				let src_end = std::cmp::min(read_end, chunk.len());
+				if src_end > read_start {
+					let dest_end = dest_start + (src_end - read_start);
+					buf[dest_start..dest_end].copy_from_slice(&chunk[read_start..src_end]);
+				}
+				// Zero-fill if chunk is shorter than expected.
+				if src_end < read_end {
+					let zero_start = dest_start + src_end.saturating_sub(read_start);
+					let zero_end = dest_start + (read_end - read_start);
+					buf[zero_start..zero_end].fill(0);
+				}
+			} else {
+				// Missing chunk: zero-fill.
+				let dest_end = dest_start + (read_end - read_start);
+				buf[dest_start..dest_end].fill(0);
+			}
+		}
+
+		// Short read if requested range extends past file size.
+		let actual = std::cmp::min(amt, file_size - offset);
+		if actual < amt {
+			buf[actual..].fill(0);
+			return SQLITE_IOERR_SHORT_READ;
+		}
+
+		SQLITE_OK
+	})
 }
 
 unsafe extern "C" fn kv_io_write(
@@ -277,212 +315,218 @@ unsafe extern "C" fn kv_io_write(
 	i_amt: c_int,
 	i_offset: sqlite3_int64,
 ) -> c_int {
-	let file = get_file(p_file);
-	let ctx = &*file.ctx;
-	let amt = i_amt as usize;
-	let data = slice::from_raw_parts(p_buf as *const u8, amt);
+	vfs_catch_unwind!(SQLITE_IOERR_WRITE, {
+		let file = get_file(p_file);
+		let ctx = &*file.ctx;
+		let amt = i_amt as usize;
+		let data = slice::from_raw_parts(p_buf as *const u8, amt);
 
-	if i_offset < 0 {
-		return SQLITE_IOERR_WRITE;
-	}
-
-	let offset = i_offset as usize;
-	let write_end = offset + amt;
-	let file_size = file.size as usize;
-
-	let start_chunk = offset / kv::CHUNK_SIZE;
-	let end_chunk = (offset + amt - 1) / kv::CHUNK_SIZE;
-
-	// Identify chunks that need existing data prefetched (partial overwrites).
-	struct ChunkPlan {
-		chunk_idx: usize,
-		w_start: usize,
-		w_end: usize,
-		prefetch_idx: Option<usize>,
-	}
-
-	let mut prefetch_keys: Vec<Vec<u8>> = Vec::new();
-	let mut plans: Vec<ChunkPlan> = Vec::new();
-
-	for i in start_chunk..=end_chunk {
-		let chunk_offset = i * kv::CHUNK_SIZE;
-		let w_start = offset.saturating_sub(chunk_offset);
-		let w_end = std::cmp::min(kv::CHUNK_SIZE, write_end - chunk_offset);
-		let existing_in_chunk = if file_size > chunk_offset {
-			std::cmp::min(kv::CHUNK_SIZE, file_size - chunk_offset)
-		} else {
-			0
-		};
-		let needs_existing = w_start > 0 || existing_in_chunk > w_end;
-		let prefetch_idx = if needs_existing {
-			let idx = prefetch_keys.len();
-			prefetch_keys.push(kv::get_chunk_key(file.file_tag, i as u32).to_vec());
-			Some(idx)
-		} else {
-			None
-		};
-		plans.push(ChunkPlan {
-			chunk_idx: i,
-			w_start,
-			w_end,
-			prefetch_idx,
-		});
-	}
-
-	// Prefetch existing chunks that need partial preservation.
-	let prefetched: Vec<Option<Vec<u8>>> = if !prefetch_keys.is_empty() {
-		match ctx.kv_get(prefetch_keys.clone()) {
-			Ok(r) => {
-				let map = build_value_map(&r);
-				prefetch_keys
-					.iter()
-					.map(|k| map.get(k.as_slice()).map(|v| v.to_vec()))
-					.collect()
-			}
-			Err(_) => return SQLITE_IOERR_WRITE,
+		if i_offset < 0 {
+			return SQLITE_IOERR_WRITE;
 		}
-	} else {
-		Vec::new()
-	};
 
-	// Build the write batch.
-	let mut put_keys: Vec<Vec<u8>> = Vec::new();
-	let mut put_values: Vec<Vec<u8>> = Vec::new();
+		let offset = i_offset as usize;
+		let write_end = offset + amt;
+		let file_size = file.size as usize;
 
-	for plan in &plans {
-		let existing = plan
-			.prefetch_idx
-			.and_then(|idx| prefetched.get(idx))
-			.and_then(|v| v.as_ref());
+		let start_chunk = offset / kv::CHUNK_SIZE;
+		let end_chunk = (offset + amt - 1) / kv::CHUNK_SIZE;
 
-		let new_chunk = if let Some(existing_chunk) = existing {
-			let new_len = std::cmp::max(existing_chunk.len(), plan.w_end);
-			let mut chunk = vec![0u8; new_len];
-			chunk[..existing_chunk.len()].copy_from_slice(existing_chunk);
-			let src_start = plan.chunk_idx * kv::CHUNK_SIZE + plan.w_start - offset;
-			let src_len = plan.w_end - plan.w_start;
-			chunk[plan.w_start..plan.w_end].copy_from_slice(&data[src_start..src_start + src_len]);
-			chunk
+		// Identify chunks that need existing data prefetched (partial overwrites).
+		struct ChunkPlan {
+			chunk_idx: usize,
+			w_start: usize,
+			w_end: usize,
+			prefetch_idx: Option<usize>,
+		}
+
+		let mut prefetch_keys: Vec<Vec<u8>> = Vec::new();
+		let mut plans: Vec<ChunkPlan> = Vec::new();
+
+		for i in start_chunk..=end_chunk {
+			let chunk_offset = i * kv::CHUNK_SIZE;
+			let w_start = offset.saturating_sub(chunk_offset);
+			let w_end = std::cmp::min(kv::CHUNK_SIZE, write_end - chunk_offset);
+			let existing_in_chunk = if file_size > chunk_offset {
+				std::cmp::min(kv::CHUNK_SIZE, file_size - chunk_offset)
+			} else {
+				0
+			};
+			let needs_existing = w_start > 0 || existing_in_chunk > w_end;
+			let prefetch_idx = if needs_existing {
+				let idx = prefetch_keys.len();
+				prefetch_keys.push(kv::get_chunk_key(file.file_tag, i as u32).to_vec());
+				Some(idx)
+			} else {
+				None
+			};
+			plans.push(ChunkPlan {
+				chunk_idx: i,
+				w_start,
+				w_end,
+				prefetch_idx,
+			});
+		}
+
+		// Prefetch existing chunks that need partial preservation.
+		let prefetched: Vec<Option<Vec<u8>>> = if !prefetch_keys.is_empty() {
+			match ctx.kv_get(prefetch_keys.clone()) {
+				Ok(r) => {
+					let map = build_value_map(&r);
+					prefetch_keys
+						.iter()
+						.map(|k| map.get(k.as_slice()).map(|v| v.to_vec()))
+						.collect()
+				}
+				Err(_) => return SQLITE_IOERR_WRITE,
+			}
 		} else {
-			let mut chunk = vec![0u8; plan.w_end];
-			let src_start = plan.chunk_idx * kv::CHUNK_SIZE + plan.w_start - offset;
-			let src_len = plan.w_end - plan.w_start;
-			chunk[plan.w_start..plan.w_end].copy_from_slice(&data[src_start..src_start + src_len]);
-			chunk
+			Vec::new()
 		};
 
-		put_keys.push(kv::get_chunk_key(file.file_tag, plan.chunk_idx as u32).to_vec());
-		put_values.push(new_chunk);
-	}
+		// Build the write batch.
+		let mut put_keys: Vec<Vec<u8>> = Vec::new();
+		let mut put_values: Vec<Vec<u8>> = Vec::new();
 
-	// Update file size if we wrote past the end.
-	let new_size = std::cmp::max(file.size, write_end as i64);
-	if new_size != file.size {
-		file.size = new_size;
-		file.meta_dirty = true;
-	}
+		for plan in &plans {
+			let existing = plan
+				.prefetch_idx
+				.and_then(|idx| prefetched.get(idx))
+				.and_then(|v| v.as_ref());
 
-	// Include metadata in the write batch if dirty.
-	if file.meta_dirty {
-		put_keys.push(file.meta_key.to_vec());
-		put_values.push(encode_file_meta(file.size));
-	}
+			let new_chunk = if let Some(existing_chunk) = existing {
+				let new_len = std::cmp::max(existing_chunk.len(), plan.w_end);
+				let mut chunk = vec![0u8; new_len];
+				chunk[..existing_chunk.len()].copy_from_slice(existing_chunk);
+				let src_start = plan.chunk_idx * kv::CHUNK_SIZE + plan.w_start - offset;
+				let src_len = plan.w_end - plan.w_start;
+				chunk[plan.w_start..plan.w_end]
+					.copy_from_slice(&data[src_start..src_start + src_len]);
+				chunk
+			} else {
+				let mut chunk = vec![0u8; plan.w_end];
+				let src_start = plan.chunk_idx * kv::CHUNK_SIZE + plan.w_start - offset;
+				let src_len = plan.w_end - plan.w_start;
+				chunk[plan.w_start..plan.w_end]
+					.copy_from_slice(&data[src_start..src_start + src_len]);
+				chunk
+			};
 
-	if ctx.kv_put(put_keys, put_values).is_err() {
-		return SQLITE_IOERR_WRITE;
-	}
+			put_keys.push(kv::get_chunk_key(file.file_tag, plan.chunk_idx as u32).to_vec());
+			put_values.push(new_chunk);
+		}
 
-	if file.meta_dirty {
-		file.meta_dirty = false;
-	}
+		// Update file size if we wrote past the end.
+		let new_size = std::cmp::max(file.size, write_end as i64);
+		if new_size != file.size {
+			file.size = new_size;
+			file.meta_dirty = true;
+		}
 
-	SQLITE_OK
+		// Include metadata in the write batch if dirty.
+		if file.meta_dirty {
+			put_keys.push(file.meta_key.to_vec());
+			put_values.push(encode_file_meta(file.size));
+		}
+
+		if ctx.kv_put(put_keys, put_values).is_err() {
+			return SQLITE_IOERR_WRITE;
+		}
+
+		if file.meta_dirty {
+			file.meta_dirty = false;
+		}
+
+		SQLITE_OK
+	})
 }
 
 unsafe extern "C" fn kv_io_truncate(
 	p_file: *mut sqlite3_file,
 	size: sqlite3_int64,
 ) -> c_int {
-	let file = get_file(p_file);
-	let ctx = &*file.ctx;
+	vfs_catch_unwind!(SQLITE_IOERR_TRUNCATE, {
+		let file = get_file(p_file);
+		let ctx = &*file.ctx;
 
-	if size < 0 {
-		return SQLITE_IOERR_TRUNCATE;
-	}
+		if size < 0 {
+			return SQLITE_IOERR_TRUNCATE;
+		}
 
-	// Truncating to a larger size: just update metadata.
-	if size >= file.size {
-		if size > file.size {
-			file.size = size;
-			file.meta_dirty = true;
-			let meta = encode_file_meta(file.size);
+		// Truncating to a larger size: just update metadata.
+		if size >= file.size {
+			if size > file.size {
+				file.size = size;
+				file.meta_dirty = true;
+				let meta = encode_file_meta(file.size);
+				if ctx
+					.kv_put(vec![file.meta_key.to_vec()], vec![meta])
+					.is_err()
+				{
+					return SQLITE_IOERR_TRUNCATE;
+				}
+				file.meta_dirty = false;
+			}
+			return SQLITE_OK;
+		}
+
+		// Delete chunks beyond the new size using O(1) range delete.
+		// Chunk keys are lexicographically contiguous per file tag due to the
+		// fixed prefix + big-endian chunk index layout.
+		let new_size = size as usize;
+		if new_size == 0 {
+			// Delete all chunks.
 			if ctx
-				.kv_put(vec![file.meta_key.to_vec()], vec![meta])
+				.kv_delete_range(
+					kv::get_chunk_key(file.file_tag, 0).to_vec(),
+					kv::get_chunk_key_range_end(file.file_tag).to_vec(),
+				)
 				.is_err()
 			{
 				return SQLITE_IOERR_TRUNCATE;
 			}
-			file.meta_dirty = false;
-		}
-		return SQLITE_OK;
-	}
+		} else {
+			let first_delete = ((new_size - 1) / kv::CHUNK_SIZE + 1) as u32;
+			if ctx
+				.kv_delete_range(
+					kv::get_chunk_key(file.file_tag, first_delete).to_vec(),
+					kv::get_chunk_key_range_end(file.file_tag).to_vec(),
+				)
+				.is_err()
+			{
+				return SQLITE_IOERR_TRUNCATE;
+			}
 
-	// Delete chunks beyond the new size using O(1) range delete.
-	// Chunk keys are lexicographically contiguous per file tag due to the
-	// fixed prefix + big-endian chunk index layout.
-	let new_size = size as usize;
-	if new_size == 0 {
-		// Delete all chunks.
-		if ctx
-			.kv_delete_range(
-				kv::get_chunk_key(file.file_tag, 0).to_vec(),
-				kv::get_chunk_key_range_end(file.file_tag).to_vec(),
-			)
-			.is_err()
-		{
-			return SQLITE_IOERR_TRUNCATE;
-		}
-	} else {
-		let first_delete = ((new_size - 1) / kv::CHUNK_SIZE + 1) as u32;
-		if ctx
-			.kv_delete_range(
-				kv::get_chunk_key(file.file_tag, first_delete).to_vec(),
-				kv::get_chunk_key_range_end(file.file_tag).to_vec(),
-			)
-			.is_err()
-		{
-			return SQLITE_IOERR_TRUNCATE;
-		}
-
-		// Truncate the last kept chunk if it has trailing data beyond the new size.
-		if new_size % kv::CHUNK_SIZE != 0 {
-			let last_idx = first_delete - 1;
-			let last_key = kv::get_chunk_key(file.file_tag, last_idx);
-			if let Ok(resp) = ctx.kv_get(vec![last_key.to_vec()]) {
-				let map = build_value_map(&resp);
-				if let Some(chunk) = map.get(last_key.as_slice()) {
-					if chunk.len() > new_size % kv::CHUNK_SIZE {
-						let truncated = chunk[..new_size % kv::CHUNK_SIZE].to_vec();
-						let _ = ctx.kv_put(vec![last_key.to_vec()], vec![truncated]);
+			// Truncate the last kept chunk if it has trailing data beyond the new size.
+			if new_size % kv::CHUNK_SIZE != 0 {
+				let last_idx = first_delete - 1;
+				let last_key = kv::get_chunk_key(file.file_tag, last_idx);
+				if let Ok(resp) = ctx.kv_get(vec![last_key.to_vec()]) {
+					let map = build_value_map(&resp);
+					if let Some(chunk) = map.get(last_key.as_slice()) {
+						if chunk.len() > new_size % kv::CHUNK_SIZE {
+							let truncated = chunk[..new_size % kv::CHUNK_SIZE].to_vec();
+							let _ = ctx.kv_put(vec![last_key.to_vec()], vec![truncated]);
+						}
 					}
 				}
 			}
 		}
-	}
 
-	// Update metadata.
-	file.size = size;
-	file.meta_dirty = true;
-	let meta = encode_file_meta(file.size);
-	if ctx
-		.kv_put(vec![file.meta_key.to_vec()], vec![meta])
-		.is_err()
-	{
-		return SQLITE_IOERR_TRUNCATE;
-	}
-	file.meta_dirty = false;
+		// Update metadata.
+		file.size = size;
+		file.meta_dirty = true;
+		let meta = encode_file_meta(file.size);
+		if ctx
+			.kv_put(vec![file.meta_key.to_vec()], vec![meta])
+			.is_err()
+		{
+			return SQLITE_IOERR_TRUNCATE;
+		}
+		file.meta_dirty = false;
 
-	SQLITE_OK
+		SQLITE_OK
+	})
 }
 
 /// Flush dirty metadata via KvPutRequest.
@@ -490,20 +534,22 @@ unsafe extern "C" fn kv_io_sync(
 	p_file: *mut sqlite3_file,
 	_flags: c_int,
 ) -> c_int {
-	let file = get_file(p_file);
-	if !file.meta_dirty {
-		return SQLITE_OK;
-	}
-	let ctx = &*file.ctx;
-	let meta = encode_file_meta(file.size);
-	if ctx
-		.kv_put(vec![file.meta_key.to_vec()], vec![meta])
-		.is_err()
-	{
-		return SQLITE_IOERR;
-	}
-	file.meta_dirty = false;
-	SQLITE_OK
+	vfs_catch_unwind!(SQLITE_IOERR, {
+		let file = get_file(p_file);
+		if !file.meta_dirty {
+			return SQLITE_OK;
+		}
+		let ctx = &*file.ctx;
+		let meta = encode_file_meta(file.size);
+		if ctx
+			.kv_put(vec![file.meta_key.to_vec()], vec![meta])
+			.is_err()
+		{
+			return SQLITE_IOERR;
+		}
+		file.meta_dirty = false;
+		SQLITE_OK
+	})
 }
 
 /// Return cached file size (read from metadata on xOpen).
@@ -511,9 +557,11 @@ unsafe extern "C" fn kv_io_file_size(
 	p_file: *mut sqlite3_file,
 	p_size: *mut sqlite3_int64,
 ) -> c_int {
-	let file = get_file(p_file);
-	*p_size = file.size;
-	SQLITE_OK
+	vfs_catch_unwind!(SQLITE_IOERR, {
+		let file = get_file(p_file);
+		*p_size = file.size;
+		SQLITE_OK
+	})
 }
 
 /// No-op. Single-writer per actor is enforced by the KV channel lock.
@@ -521,7 +569,7 @@ unsafe extern "C" fn kv_io_lock(
 	_p_file: *mut sqlite3_file,
 	_level: c_int,
 ) -> c_int {
-	SQLITE_OK
+	vfs_catch_unwind!(SQLITE_IOERR_LOCK, SQLITE_OK)
 }
 
 /// No-op. Single-writer per actor is enforced by the KV channel lock.
@@ -529,16 +577,18 @@ unsafe extern "C" fn kv_io_unlock(
 	_p_file: *mut sqlite3_file,
 	_level: c_int,
 ) -> c_int {
-	SQLITE_OK
+	vfs_catch_unwind!(SQLITE_IOERR_UNLOCK, SQLITE_OK)
 }
 
 unsafe extern "C" fn kv_io_check_reserved_lock(
 	_p_file: *mut sqlite3_file,
 	p_res_out: *mut c_int,
 ) -> c_int {
-	// Actor-scoped with one writer, no external reserved lock to report.
-	*p_res_out = 0;
-	SQLITE_OK
+	vfs_catch_unwind!(SQLITE_IOERR, {
+		// Actor-scoped with one writer, no external reserved lock to report.
+		*p_res_out = 0;
+		SQLITE_OK
+	})
 }
 
 unsafe extern "C" fn kv_io_file_control(
@@ -546,15 +596,15 @@ unsafe extern "C" fn kv_io_file_control(
 	_op: c_int,
 	_p_arg: *mut c_void,
 ) -> c_int {
-	SQLITE_NOTFOUND
+	vfs_catch_unwind!(SQLITE_IOERR, SQLITE_NOTFOUND)
 }
 
 unsafe extern "C" fn kv_io_sector_size(_p_file: *mut sqlite3_file) -> c_int {
-	kv::CHUNK_SIZE as c_int
+	vfs_catch_unwind!(kv::CHUNK_SIZE as c_int, kv::CHUNK_SIZE as c_int)
 }
 
 unsafe extern "C" fn kv_io_device_characteristics(_p_file: *mut sqlite3_file) -> c_int {
-	0
+	vfs_catch_unwind!(0, 0)
 }
 
 // MARK: VFS Callbacks
@@ -566,64 +616,66 @@ unsafe extern "C" fn kv_vfs_open(
 	flags: c_int,
 	p_out_flags: *mut c_int,
 ) -> c_int {
-	let ctx = get_vfs_ctx(p_vfs);
+	vfs_catch_unwind!(SQLITE_CANTOPEN, {
+		let ctx = get_vfs_ctx(p_vfs);
 
-	if z_name.is_null() {
-		return SQLITE_CANTOPEN;
-	}
-	let path = match CStr::from_ptr(z_name).to_str() {
-		Ok(s) => s,
-		Err(_) => return SQLITE_CANTOPEN,
-	};
+		if z_name.is_null() {
+			return SQLITE_CANTOPEN;
+		}
+		let path = match CStr::from_ptr(z_name).to_str() {
+			Ok(s) => s,
+			Err(_) => return SQLITE_CANTOPEN,
+		};
 
-	let file_tag = match ctx.resolve_file_tag(path) {
-		Some(tag) => tag,
-		None => return SQLITE_CANTOPEN,
-	};
+		let file_tag = match ctx.resolve_file_tag(path) {
+			Some(tag) => tag,
+			None => return SQLITE_CANTOPEN,
+		};
 
-	let meta_key = kv::get_meta_key(file_tag);
+		let meta_key = kv::get_meta_key(file_tag);
 
-	// Check if the file exists by reading its metadata key.
-	let size = match ctx.kv_get(vec![meta_key.to_vec()]) {
-		Ok(resp) => {
-			let map = build_value_map(&resp);
-			if let Some(data) = map.get(meta_key.as_slice()) {
-				match decode_file_meta(data) {
-					Some(s) if s >= 0 => s,
-					_ => return SQLITE_CANTOPEN,
-				}
-			} else if flags & SQLITE_OPEN_CREATE != 0 {
-				// File does not exist. Create it with size 0.
-				let meta = encode_file_meta(0);
-				if ctx
-					.kv_put(vec![meta_key.to_vec()], vec![meta])
-					.is_err()
-				{
+		// Check if the file exists by reading its metadata key.
+		let size = match ctx.kv_get(vec![meta_key.to_vec()]) {
+			Ok(resp) => {
+				let map = build_value_map(&resp);
+				if let Some(data) = map.get(meta_key.as_slice()) {
+					match decode_file_meta(data) {
+						Some(s) if s >= 0 => s,
+						_ => return SQLITE_CANTOPEN,
+					}
+				} else if flags & SQLITE_OPEN_CREATE != 0 {
+					// File does not exist. Create it with size 0.
+					let meta = encode_file_meta(0);
+					if ctx
+						.kv_put(vec![meta_key.to_vec()], vec![meta])
+						.is_err()
+					{
+						return SQLITE_CANTOPEN;
+					}
+					0i64
+				} else {
 					return SQLITE_CANTOPEN;
 				}
-				0i64
-			} else {
-				return SQLITE_CANTOPEN;
 			}
+			Err(_) => return SQLITE_CANTOPEN,
+		};
+
+		// Initialize our file struct.
+		let file = get_file(p_file);
+		file.base.pMethods = ctx.io_methods.as_ref() as *const sqlite3_io_methods;
+		file.ctx = ctx as *const VfsContext;
+		file.file_tag = file_tag;
+		file.meta_key = meta_key;
+		file.size = size;
+		file.meta_dirty = false;
+		file.flags = flags;
+
+		if !p_out_flags.is_null() {
+			*p_out_flags = flags;
 		}
-		Err(_) => return SQLITE_CANTOPEN,
-	};
 
-	// Initialize our file struct.
-	let file = get_file(p_file);
-	file.base.pMethods = ctx.io_methods.as_ref() as *const sqlite3_io_methods;
-	file.ctx = ctx as *const VfsContext;
-	file.file_tag = file_tag;
-	file.meta_key = meta_key;
-	file.size = size;
-	file.meta_dirty = false;
-	file.flags = flags;
-
-	if !p_out_flags.is_null() {
-		*p_out_flags = flags;
-	}
-
-	SQLITE_OK
+		SQLITE_OK
+	})
 }
 
 /// Delete a file by removing all its chunks and metadata.
@@ -633,53 +685,55 @@ unsafe extern "C" fn kv_vfs_delete(
 	z_name: *const c_char,
 	_sync_dir: c_int,
 ) -> c_int {
-	let ctx = get_vfs_ctx(p_vfs);
+	vfs_catch_unwind!(SQLITE_IOERR, {
+		let ctx = get_vfs_ctx(p_vfs);
 
-	if z_name.is_null() {
-		return SQLITE_OK;
-	}
-	let path = match CStr::from_ptr(z_name).to_str() {
-		Ok(s) => s,
-		Err(_) => return SQLITE_IOERR,
-	};
-
-	let file_tag = match ctx.resolve_file_tag(path) {
-		Some(tag) => tag,
-		None => return SQLITE_OK,
-	};
-
-	let meta_key = kv::get_meta_key(file_tag);
-
-	// Check if the file exists.
-	let exists = match ctx.kv_get(vec![meta_key.to_vec()]) {
-		Ok(resp) => {
-			let map = build_value_map(&resp);
-			map.contains_key(meta_key.as_slice())
+		if z_name.is_null() {
+			return SQLITE_OK;
 		}
-		Err(_) => return SQLITE_IOERR,
-	};
+		let path = match CStr::from_ptr(z_name).to_str() {
+			Ok(s) => s,
+			Err(_) => return SQLITE_IOERR,
+		};
 
-	if !exists {
-		return SQLITE_OK;
-	}
+		let file_tag = match ctx.resolve_file_tag(path) {
+			Some(tag) => tag,
+			None => return SQLITE_OK,
+		};
 
-	// Delete all chunks via range delete.
-	if ctx
-		.kv_delete_range(
-			kv::get_chunk_key(file_tag, 0).to_vec(),
-			kv::get_chunk_key_range_end(file_tag).to_vec(),
-		)
-		.is_err()
-	{
-		return SQLITE_IOERR;
-	}
+		let meta_key = kv::get_meta_key(file_tag);
 
-	// Delete the metadata key.
-	if ctx.kv_delete(vec![meta_key.to_vec()]).is_err() {
-		return SQLITE_IOERR;
-	}
+		// Check if the file exists.
+		let exists = match ctx.kv_get(vec![meta_key.to_vec()]) {
+			Ok(resp) => {
+				let map = build_value_map(&resp);
+				map.contains_key(meta_key.as_slice())
+			}
+			Err(_) => return SQLITE_IOERR,
+		};
 
-	SQLITE_OK
+		if !exists {
+			return SQLITE_OK;
+		}
+
+		// Delete all chunks via range delete.
+		if ctx
+			.kv_delete_range(
+				kv::get_chunk_key(file_tag, 0).to_vec(),
+				kv::get_chunk_key_range_end(file_tag).to_vec(),
+			)
+			.is_err()
+		{
+			return SQLITE_IOERR;
+		}
+
+		// Delete the metadata key.
+		if ctx.kv_delete(vec![meta_key.to_vec()]).is_err() {
+			return SQLITE_IOERR;
+		}
+
+		SQLITE_OK
+	})
 }
 
 /// Check whether a file exists by checking its metadata key via KvGetRequest.
@@ -689,42 +743,44 @@ unsafe extern "C" fn kv_vfs_access(
 	_flags: c_int,
 	p_res_out: *mut c_int,
 ) -> c_int {
-	let ctx = get_vfs_ctx(p_vfs);
+	vfs_catch_unwind!(SQLITE_IOERR, {
+		let ctx = get_vfs_ctx(p_vfs);
 
-	if z_name.is_null() {
-		*p_res_out = 0;
-		return SQLITE_OK;
-	}
-	let path = match CStr::from_ptr(z_name).to_str() {
-		Ok(s) => s,
-		Err(_) => {
+		if z_name.is_null() {
 			*p_res_out = 0;
 			return SQLITE_OK;
 		}
-	};
+		let path = match CStr::from_ptr(z_name).to_str() {
+			Ok(s) => s,
+			Err(_) => {
+				*p_res_out = 0;
+				return SQLITE_OK;
+			}
+		};
 
-	let file_tag = match ctx.resolve_file_tag(path) {
-		Some(tag) => tag,
-		None => {
-			*p_res_out = 0;
-			return SQLITE_OK;
-		}
-	};
+		let file_tag = match ctx.resolve_file_tag(path) {
+			Some(tag) => tag,
+			None => {
+				*p_res_out = 0;
+				return SQLITE_OK;
+			}
+		};
 
-	let meta_key = kv::get_meta_key(file_tag);
-	let exists = match ctx.kv_get(vec![meta_key.to_vec()]) {
-		Ok(resp) => {
-			let map = build_value_map(&resp);
-			map.contains_key(meta_key.as_slice())
-		}
-		Err(_) => {
-			*p_res_out = 0;
-			return SQLITE_OK;
-		}
-	};
+		let meta_key = kv::get_meta_key(file_tag);
+		let exists = match ctx.kv_get(vec![meta_key.to_vec()]) {
+			Ok(resp) => {
+				let map = build_value_map(&resp);
+				map.contains_key(meta_key.as_slice())
+			}
+			Err(_) => {
+				*p_res_out = 0;
+				return SQLITE_OK;
+			}
+		};
 
-	*p_res_out = if exists { 1 } else { 0 };
-	SQLITE_OK
+		*p_res_out = if exists { 1 } else { 0 };
+		SQLITE_OK
+	})
 }
 
 unsafe extern "C" fn kv_vfs_full_pathname(
@@ -733,16 +789,18 @@ unsafe extern "C" fn kv_vfs_full_pathname(
 	n_out: c_int,
 	z_out: *mut c_char,
 ) -> c_int {
-	if z_name.is_null() {
-		return SQLITE_CANTOPEN;
-	}
-	let name = CStr::from_ptr(z_name);
-	let bytes = name.to_bytes_with_nul();
-	if bytes.len() > n_out as usize {
-		return SQLITE_CANTOPEN;
-	}
-	ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, z_out, bytes.len());
-	SQLITE_OK
+	vfs_catch_unwind!(SQLITE_CANTOPEN, {
+		if z_name.is_null() {
+			return SQLITE_CANTOPEN;
+		}
+		let name = CStr::from_ptr(z_name);
+		let bytes = name.to_bytes_with_nul();
+		if bytes.len() > n_out as usize {
+			return SQLITE_CANTOPEN;
+		}
+		ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, z_out, bytes.len());
+		SQLITE_OK
+	})
 }
 
 unsafe extern "C" fn kv_vfs_randomness(
@@ -750,40 +808,46 @@ unsafe extern "C" fn kv_vfs_randomness(
 	n_byte: c_int,
 	z_out: *mut c_char,
 ) -> c_int {
-	let buf = slice::from_raw_parts_mut(z_out as *mut u8, n_byte as usize);
-	let seed = std::time::SystemTime::now()
-		.duration_since(std::time::UNIX_EPOCH)
-		.unwrap_or_default()
-		.as_nanos();
-	// LCG PRNG, adequate for SQLite's randomness needs.
-	let mut state = seed as u64;
-	for byte in buf.iter_mut() {
-		state = state
-			.wrapping_mul(6364136223846793005)
-			.wrapping_add(1442695040888963407);
-		*byte = (state >> 33) as u8;
-	}
-	n_byte
+	vfs_catch_unwind!(0, {
+		let buf = slice::from_raw_parts_mut(z_out as *mut u8, n_byte as usize);
+		let seed = std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap_or_default()
+			.as_nanos();
+		// LCG PRNG, adequate for SQLite's randomness needs.
+		let mut state = seed as u64;
+		for byte in buf.iter_mut() {
+			state = state
+				.wrapping_mul(6364136223846793005)
+				.wrapping_add(1442695040888963407);
+			*byte = (state >> 33) as u8;
+		}
+		n_byte
+	})
 }
 
 unsafe extern "C" fn kv_vfs_sleep(
 	_p_vfs: *mut sqlite3_vfs,
 	microseconds: c_int,
 ) -> c_int {
-	std::thread::sleep(std::time::Duration::from_micros(microseconds as u64));
-	microseconds
+	vfs_catch_unwind!(0, {
+		std::thread::sleep(std::time::Duration::from_micros(microseconds as u64));
+		microseconds
+	})
 }
 
 unsafe extern "C" fn kv_vfs_current_time(
 	_p_vfs: *mut sqlite3_vfs,
 	p_time_out: *mut f64,
 ) -> c_int {
-	// Julian day number. Unix epoch = Julian day 2440587.5.
-	let now = std::time::SystemTime::now()
-		.duration_since(std::time::UNIX_EPOCH)
-		.unwrap_or_default();
-	*p_time_out = 2440587.5 + (now.as_secs_f64() / 86400.0);
-	SQLITE_OK
+	vfs_catch_unwind!(SQLITE_IOERR, {
+		// Julian day number. Unix epoch = Julian day 2440587.5.
+		let now = std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap_or_default();
+		*p_time_out = 2440587.5 + (now.as_secs_f64() / 86400.0);
+		SQLITE_OK
+	})
 }
 
 unsafe extern "C" fn kv_vfs_get_last_error(
@@ -791,7 +855,7 @@ unsafe extern "C" fn kv_vfs_get_last_error(
 	_n_byte: c_int,
 	_z_err_msg: *mut c_char,
 ) -> c_int {
-	SQLITE_OK
+	vfs_catch_unwind!(SQLITE_IOERR, SQLITE_OK)
 }
 
 // MARK: KvVfs
