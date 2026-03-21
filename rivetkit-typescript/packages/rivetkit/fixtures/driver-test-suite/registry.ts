@@ -100,6 +100,7 @@ import {
 } from "./workflow";
 import { startStopRaceActor, lifecycleObserver } from "./start-stop-race";
 import { connErrorSerializationActor } from "./conn-error-serialization";
+import { dbBlockingActor } from "./db-blocking";
 
 // Consolidated setup with all actors
 export const registry = setup({
@@ -224,5 +225,7 @@ export const registry = setup({
 		lifecycleObserver,
 		// From conn-error-serialization.ts
 		connErrorSerializationActor,
+		// From db-blocking.ts
+		dbBlockingActor,
 	},
 });

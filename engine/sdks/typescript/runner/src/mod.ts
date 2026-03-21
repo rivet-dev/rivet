@@ -177,6 +177,15 @@ export interface RunnerConfig {
 
 	onActorStop: (actorId: string, generation: number) => Promise<void>;
 	noAutoShutdown?: boolean;
+
+	/**
+	 * Debug option to inject artificial latency (in ms) into WebSocket
+	 * communication. Messages are queued and delivered in order after the
+	 * configured delay.
+	 *
+	 * @experimental For testing only.
+	 */
+	debugLatencyMs?: number;
 }
 
 export interface KvListOptions {
@@ -830,6 +839,8 @@ export class Runner {
 			} else {
 				throw new Error(`expected binary data, got ${typeof ev.data}`);
 			}
+
+			await this.#injectLatency();
 
 			// Parse message
 			const message = protocol.decodeToClient(buf);
@@ -1695,6 +1706,13 @@ export class Runner {
 		}
 	}
 
+	/** Resolves after the configured debug latency, or immediately if none. */
+	#injectLatency(): Promise<void> {
+		const ms = this.#config.debugLatencyMs;
+		if (!ms) return Promise.resolve();
+		return new Promise((resolve) => setTimeout(resolve, ms));
+	}
+
 	/** Asserts WebSocket exists and is ready. */
 	getPegboardWebSocketIfReady(): WebSocket | undefined {
 		if (
@@ -1714,14 +1732,19 @@ export class Runner {
 		});
 
 		const encoded = protocol.encodeToServer(message);
-		const pegboardWebSocket = this.getPegboardWebSocketIfReady();
-		if (pegboardWebSocket) {
-			pegboardWebSocket.send(encoded);
-		} else {
-			this.log?.error({
-				msg: "WebSocket not available or not open for sending data",
-			});
-		}
+
+		// Normally synchronous. When debugLatencyMs is set, the send is
+		// deferred but message order is preserved.
+		this.#injectLatency().then(() => {
+			const pegboardWebSocket = this.getPegboardWebSocketIfReady();
+			if (pegboardWebSocket) {
+				pegboardWebSocket.send(encoded);
+			} else {
+				this.log?.error({
+					msg: "WebSocket not available or not open for sending data",
+				});
+			}
+		});
 	}
 
 	sendHibernatableWebSocketMessageAck(

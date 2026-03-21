@@ -37,6 +37,7 @@ import { runManagerDriverTests } from "./tests/manager-driver";
 import { runRawHttpTests } from "./tests/raw-http";
 import { runRawHttpRequestPropertiesTests } from "./tests/raw-http-request-properties";
 import { runRawWebSocketTests } from "./tests/raw-websocket";
+import { runActorDbBlockingTests } from "./tests/actor-db-blocking";
 import { runRequestAccessTests } from "./tests/request-access";
 
 export interface SkipTests {
@@ -163,6 +164,8 @@ export function runDriverTests(
 						// runRawWebSocketDirectRegistryTests(driverTestConfig);
 
 						runActorInspectorTests(driverTestConfig);
+
+						runActorDbBlockingTests(driverTestConfig);
 					});
 				}
 			});

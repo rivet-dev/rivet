@@ -180,6 +180,9 @@ export class EngineActorDriver implements ActorDriver {
 			onActorStart: this.#runnerOnActorStart.bind(this),
 			onActorStop: this.#runnerOnActorStop.bind(this),
 			logger: getLogger("engine-runner"),
+			debugLatencyMs: process.env._RIVET_DEBUG_LATENCY_MS
+				? Number.parseInt(process.env._RIVET_DEBUG_LATENCY_MS, 10)
+				: undefined,
 		};
 
 		// Create and start runner
