@@ -552,7 +552,7 @@
         "Typecheck passes"
       ],
       "priority": 32,
-      "passes": false,
+      "passes": true,
       "notes": "Engine side: actor_channels HashMap is unbounded, malicious client could exhaust memory. Manager side: if client disconnects without ActorCloseRequest, lock entries persist in actorLocks indefinitely until another connection opens the same actor."
     },
     {

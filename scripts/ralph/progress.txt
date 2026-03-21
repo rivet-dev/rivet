@@ -602,3 +602,19 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - When cleaning up connection state, always null out the WebSocket reference to prevent stale sends from fire-and-forget handlers
   - In ping/pong timeout handling, capture the ws reference before cleanup, then close after cleanup, to avoid the cleanup nulling the reference
 ---
+
+## 2026-03-21 - US-032
+- Added MAX_ACTORS_PER_CONNECTION (1000) limit in both engine and manager KV channel handlers
+- Engine (lib.rs): check open_actors count in handle_actor_open before granting lock, reject with "too_many_actors" error if exceeded
+- Manager (kv-channel.ts): check conn.openActors.size in handleActorOpen, reject with "too_many_actors" error if exceeded
+- Added periodic stale lock sweep in manager (every 60s) that removes actorLocks entries where the owning connection has closed=true
+- Sweep starts lazily on first actor open and stops automatically when all locks are cleaned up
+- Sweep timer uses .unref() so it doesn't prevent process exit
+- cargo check passes for pegboard-kv-channel, no new TypeScript errors
+- Files changed: engine/packages/pegboard-kv-channel/src/lib.rs, rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts
+- **Learnings for future iterations:**
+  - The engine's open_actors is behind Arc<Mutex<HashSet>>, so the count check must lock before comparing. Release the lock before acquiring actor_locks to avoid holding both simultaneously.
+  - In the manager (TypeScript), conn.openActors is a plain Set so .size is cheap and synchronous.
+  - The stale lock sweep only needs to check conn.closed since cleanupConnection already sets closed=true on all exit paths (onClose, onError, pong timeout).
+  - Use .unref() on setInterval timers to prevent them from keeping the Node.js process alive during shutdown.
+---
