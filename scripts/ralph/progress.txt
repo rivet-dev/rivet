@@ -670,3 +670,16 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - `sqlite3_reset` + `sqlite3_clear_bindings` is the standard pattern for reusing prepared statements. Reset keeps the compiled bytecode but clears results and bindings.
   - The `get_or_prepare_stmt` helper returns `(stmt, cached)` so the caller can defer `cache.put()` until after successful execution, avoiding caching statements that fail during step.
 ---
+
+## 2026-03-21 - US-036
+- URL-encoded token and namespace parameters in the WebSocket connection URL using the `urlencoding` crate
+- Updated `build_ws_url` to call `urlencoding::encode()` on both `config.namespace` and `config.token` before string interpolation
+- Added `urlencoding = "2"` dependency to Cargo.toml
+- Added `build_ws_url_encodes_special_chars` test verifying tokens with `& = ? #` and namespaces with spaces are properly percent-encoded
+- All 79 tests pass (78 existing + 1 new), cargo check clean
+- Files changed: rivetkit-typescript/packages/sqlite-native/{Cargo.toml, Cargo.lock, src/channel.rs}
+- **Learnings for future iterations:**
+  - `urlencoding::encode()` returns a `Cow<str>` which can be used directly in `format!` strings
+  - The `urlencoding` crate is lightweight (no dependencies) and handles all RFC 3986 reserved characters
+  - Existing tests with simple alphanumeric tokens pass unchanged since encoding is a no-op for unreserved characters
+---
