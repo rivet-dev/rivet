@@ -761,6 +761,7 @@ export const createProjectContext = ({
 			return queryOptions({
 				staleTime: 15 * 60 * 1000, // 15 minutes
 				gcTime: 15 * 60 * 1000, // 15 minutes
+				retry: false,
 				queryKey: [
 					{ organization, project, namespace },
 					"access-token",
@@ -995,6 +996,7 @@ export const createNamespaceContext = ({
 	};
 	return {
 		...parent,
+		cloudNamespace: namespace,
 		...createEngineNamespaceContext({
 			...parent,
 			namespace: engineNamespaceName,

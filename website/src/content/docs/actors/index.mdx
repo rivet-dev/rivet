@@ -196,15 +196,19 @@ Don't build keys with string interpolation like `"org:${userId}"` when `userId` 
 
 ### Input
 
-Pass initialization data when creating actors.
+Pass initialization data when creating actors. Input is only available in `createState` and `onCreate`, so store it in state if you need it later.
 
 ```ts
 import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
 const game = actor({
-  createState: (c, input: { mode: string }) => ({ mode: input.mode }),
-  actions: {},
+  createState: (c, input: { mode: string }) => ({
+    mode: input.mode, // Store input in state for later access
+  }),
+  actions: {
+    getMode: (c) => c.state.mode,
+  },
 });
 
 const registry = setup({ use: { game } });

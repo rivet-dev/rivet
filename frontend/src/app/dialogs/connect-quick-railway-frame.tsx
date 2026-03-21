@@ -107,7 +107,7 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 				runnerName: "default",
 				slotsPerRunner: 1,
 				minRunners: 1,
-				maxRunners: 10_000,
+				maxRunners: 100_000,
 				runnerMargin: 0,
 				requestLifespan: 55,
 				headers: [],

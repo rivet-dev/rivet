@@ -15,7 +15,13 @@ import {
 	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useRouteContext, useSearch } from "@tanstack/react-router";
-import { createContext, type ReactNode, useContext, useMemo } from "react";
+import {
+	createContext,
+	type ReactNode,
+	useContext,
+	useEffect,
+	useMemo,
+} from "react";
 import { match, P } from "ts-pattern";
 import { useLocalStorage } from "usehooks-ts";
 import { HelpDropdown } from "@/app/help-dropdown";
@@ -212,28 +218,6 @@ function buildInspectorTokenErrorMessage(
 
 	const isLocal = metadata?.type === "local";
 
-	// Report non-standard errors to Sentry in deployed environments
-	if (
-		!isLocal &&
-		error &&
-		statusCode &&
-		statusCode !== 403 &&
-		statusCode !== 404
-	) {
-		Sentry.captureException(error, {
-			contexts: {
-				inspector: {
-					statusCode,
-					type: metadata?.type,
-					rivetkitVersion: metadata?.version,
-				},
-			},
-			tags: {
-				component: "ActorContextProvider",
-			},
-		});
-	}
-
 	// 403: Token not set in run config (deployed only)
 	if (statusCode === 403 && !isLocal) {
 		return (
@@ -336,21 +320,7 @@ function buildInspectorTokenErrorMessage(
 
 	// Unknown error code in deployed environment
 	if (statusCode && statusCode !== 403 && statusCode !== 404 && !isLocal) {
-		return (
-			<Info>
-				<p>
-					An unexpected error occurred while retrieving the Inspector
-					token.
-				</p>
-				<p className="mt-2 text-sm text-gray-600">
-					Error code: {statusCode}
-				</p>
-				<p className="mt-2">
-					Our team has been notified. Please try again later or
-					contact support if the issue persists.
-				</p>
-			</Info>
-		);
+		return <UnexpectedInspectorError error={error} metadata={metadata} />;
 	}
 
 	// Default/generic error
@@ -375,6 +345,42 @@ function buildInspectorTokenErrorMessage(
 				</DiscreteCopyButton>
 			</p>
 			<ErrorDetails error={isRivetApiError(error) ? error.body : error} />
+		</Info>
+	);
+}
+
+function UnexpectedInspectorError({
+	error,
+	metadata,
+}: {
+	error: unknown;
+	metadata?: { version?: string; type?: string };
+}) {
+	// biome-ignore lint/correctness/useExhaustiveDependencies: we only want to log on initial error, not on metadata changes
+	useEffect(() => {
+		Sentry.captureException(error, {
+			contexts: {
+				inspector: {
+					error,
+					type: metadata?.type,
+					version: metadata?.version,
+				},
+			},
+			tags: {
+				component: "ActorContextProvider",
+			},
+		});
+	}, []);
+	return (
+		<Info>
+			<p>
+				An unexpected error occurred while connecting to the Inspector.
+			</p>
+			<p className="mt-2">
+				Our team has been notified. Please try again later or contact
+				support if the issue persists.
+			</p>
+			<ErrorDetails error={error} />
 		</Info>
 	);
 }

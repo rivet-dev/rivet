@@ -308,6 +308,7 @@ function RivetCloudDropdownMenuItem() {
 			}
 		>
 			Rivet Cloud {config ? "(Connected)" : ""}
+			<span className="ml-1 text-[10px] font-medium px-1.5 py-0 rounded-full bg-primary/10 text-primary">Beta</span>
 		</DropdownMenuItem>
 	);
 }

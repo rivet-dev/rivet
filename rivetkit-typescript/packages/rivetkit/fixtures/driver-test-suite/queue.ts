@@ -226,3 +226,87 @@ export const queueLimitedActor = actor({
 		maxQueueMessageSize: 64,
 	},
 });
+
+export const MANY_QUEUE_NAMES = Array.from(
+	{ length: 32 },
+	(_, i) => `cmd.${i}` as const,
+);
+
+const manyQueueSchemas = Object.fromEntries(
+	MANY_QUEUE_NAMES.map((name) => [
+		name,
+		queue<{ index: number }, { ok: true; index: number }>(),
+	]),
+);
+
+export const manyQueueChildActor = actor({
+	queues: manyQueueSchemas,
+	actions: {
+		ping: (c) => ({ label: c.state.label, pong: true }),
+		getSnapshot: (c) => c.state,
+	},
+	createState: (_c, label: string) => ({
+		label,
+		started: false,
+		processed: [] as string[],
+	}),
+	run: async (c) => {
+		c.state.started = true;
+		for await (const msg of c.queue.iter({
+			names: [...MANY_QUEUE_NAMES],
+			completable: true,
+		})) {
+			c.state.processed.push(msg.name);
+			await msg.complete({
+				ok: true,
+				index: msg.body.index,
+			});
+		}
+	},
+});
+
+export const manyQueueActionParentActor = actor({
+	state: {
+		spawned: [] as string[],
+	},
+	actions: {
+		spawnChild: async (c, key: string) => {
+			const client = c.client<typeof registry>();
+			await client.manyQueueChildActor.getOrCreate([key], {
+				createWithInput: key,
+			});
+			c.state.spawned.push(key);
+			return { key };
+		},
+		getSpawned: (c) => c.state.spawned,
+	},
+});
+
+export const manyQueueRunParentActor = actor({
+	state: {
+		spawned: [] as string[],
+	},
+	queues: {
+		spawn: queue<{ key: string }>(),
+	},
+	actions: {
+		queueSpawn: async (c, key: string) => {
+			await c.queue.send("spawn", { key });
+			return { queued: true };
+		},
+		getSpawned: (c) => c.state.spawned,
+	},
+	run: async (c) => {
+		for await (const msg of c.queue.iter({
+			names: ["spawn"],
+			completable: true,
+		})) {
+			const client = c.client<typeof registry>();
+			await client.manyQueueChildActor.getOrCreate([msg.body.key], {
+				createWithInput: msg.body.key,
+			});
+			c.state.spawned.push(msg.body.key);
+			await msg.complete({ ok: true });
+		}
+	},
+});

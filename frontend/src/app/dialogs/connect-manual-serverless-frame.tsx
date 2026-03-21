@@ -118,7 +118,7 @@ function FormStepper({
 			defaultValues={{
 				runnerName: "default",
 				slotsPerRunner: 1,
-				maxRunners: 10000,
+				maxRunners: 100_000,
 				minRunners: 1,
 				runnerMargin: 0,
 				headers: [],

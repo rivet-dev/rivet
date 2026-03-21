@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { DriverTestConfig } from "../mod";
-import { setupDriverTest } from "../utils";
+import { setupDriverTest, waitFor } from "../utils";
 
 export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 	describe("Actor Inspector HTTP API", () => {
@@ -197,6 +197,51 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			expect(data.history).toBeNull();
 		});
 
+		test("GET /inspector/workflow-history returns populated history for active workflows", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.workflowCounterActor.getOrCreate([
+				"inspector-workflow-active",
+			]);
+
+			let state = await handle.getState();
+			for (
+				let i = 0;
+				i < 40 &&
+				(state.runCount === 0 || state.history.length === 0);
+				i++
+			) {
+				await waitFor(driverTestConfig, 50);
+				state = await handle.getState();
+			}
+
+			expect(state.runCount).toBeGreaterThan(0);
+			expect(state.history.length).toBeGreaterThan(0);
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(
+				`${gatewayUrl}/inspector/workflow-history`,
+				{
+					headers: { Authorization: "Bearer token" },
+				},
+			);
+			expect(response.status).toBe(200);
+			const data = (await response.json()) as {
+				history: {
+					nameRegistry: string[];
+					entries: unknown[];
+					entryMetadata: Record<string, unknown>;
+				} | null;
+				isWorkflowEnabled: boolean;
+			};
+			expect(data.isWorkflowEnabled).toBe(true);
+			expect(data.history).not.toBeNull();
+			expect(data.history?.nameRegistry.length).toBeGreaterThan(0);
+			expect(data.history?.entries.length).toBeGreaterThan(0);
+			expect(
+				Object.keys(data.history?.entryMetadata ?? {}).length,
+			).toBeGreaterThan(0);
+		});
+
 		test("GET /inspector/summary returns full actor snapshot", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.counter.getOrCreate(["inspector-summary"]);
@@ -226,6 +271,45 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			expect(typeof data.isDatabaseEnabled).toBe("boolean");
 			expect(data.isWorkflowEnabled).toBe(false);
 			expect(data.workflowHistory).toBeNull();
+		});
+
+		test("GET /inspector/summary returns populated workflow history for active workflows", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.workflowCounterActor.getOrCreate([
+				"inspector-summary-workflow",
+			]);
+
+			let state = await handle.getState();
+			for (
+				let i = 0;
+				i < 40 &&
+				(state.runCount === 0 || state.history.length === 0);
+				i++
+			) {
+				await waitFor(driverTestConfig, 50);
+				state = await handle.getState();
+			}
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(`${gatewayUrl}/inspector/summary`, {
+				headers: { Authorization: "Bearer token" },
+			});
+			expect(response.status).toBe(200);
+			const data = (await response.json()) as {
+				isWorkflowEnabled: boolean;
+				workflowHistory: {
+					nameRegistry: string[];
+					entries: unknown[];
+					entryMetadata: Record<string, unknown>;
+				} | null;
+			};
+			expect(data.isWorkflowEnabled).toBe(true);
+			expect(data.workflowHistory).not.toBeNull();
+			expect(data.workflowHistory?.nameRegistry.length).toBeGreaterThan(0);
+			expect(data.workflowHistory?.entries.length).toBeGreaterThan(0);
+			expect(
+				Object.keys(data.workflowHistory?.entryMetadata ?? {}).length,
+			).toBeGreaterThan(0);
 		});
 
 		test("inspector endpoints require auth in non-dev mode", async (c) => {

@@ -30,7 +30,7 @@ Use the inspector HTTP API to examine running actors. These endpoints are access
 - `POST /inspector/action/{name}` - execute an action with `{"args": [...]}`
 - `GET /inspector/queue?limit=50` - queue status
 - `GET /inspector/traces?startMs=0&endMs=...&limit=1000` - trace spans (OTLP JSON)
-- `GET /inspector/workflow-history` - workflow history and status
+- `GET /inspector/workflow-history` - workflow history and status as JSON (`nameRegistry`, `entries`, `entryMetadata`)
 
 In local dev, no auth token is needed. In production, pass `Authorization: Bearer <RIVET_INSPECTOR_TOKEN>`. See the [debugging docs](https://rivet.dev/docs/actors/debugging) for details.
 

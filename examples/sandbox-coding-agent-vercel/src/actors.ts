@@ -1,5 +1,13 @@
-import { SandboxAgent } from "sandbox-agent";
-import { actor, event, queue, setup } from "rivetkit";
+import fs from "node:fs";
+import path from "node:path";
+import { actor, event, setup } from "rivetkit";
+import {
+	daytona,
+	docker,
+	e2b,
+	sandboxActor,
+	type SessionEvent,
+} from "rivetkit/sandbox";
 
 export type AgentMessage = {
 	id: string;
@@ -21,11 +29,6 @@ export type AgentInfo = {
 	createdAt: number;
 };
 
-export type AgentQueueMessage = {
-	text: string;
-	sender?: string;
-};
-
 export type AgentResponseEvent = {
 	messageId: string;
 	delta: string;
@@ -34,93 +37,151 @@ export type AgentResponseEvent = {
 	error?: string;
 };
 
-type ItemContentPart = {
-	type?: string;
-	text?: string;
-};
-
-type TranscriptItem = {
-	item_id?: string;
-	role?: string;
-	content?: ItemContentPart[];
-};
-
-type ItemEventData = {
-	item?: TranscriptItem;
-};
-
-type ItemDeltaEventData = {
-	item_id?: string;
-	delta?: string;
-};
-
-type StreamEvent = {
-	type: string;
-	data?: unknown;
+type SessionUpdatePayload = {
+	method?: string;
+	params?: {
+		update?: {
+			sessionUpdate?: string;
+			content?: {
+				type?: string;
+				text?: string;
+			};
+		};
+	};
 };
 
 const buildId = (prefix: string) =>
 	`${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-const createSandboxClient = async () => {
-	const baseUrl = process.env.SANDBOX_AGENT_URL;
-	if (!baseUrl && process.env.VERCEL) {
-		throw new Error("SANDBOX_AGENT_URL is required when running on Vercel.");
+function buildSharedEnvRecord(): Record<string, string> {
+	const env: Record<string, string> = {};
+	if (process.env.ANTHROPIC_API_KEY) {
+		env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 	}
-	if (baseUrl) {
-		return SandboxAgent.connect({
-			baseUrl,
-			token: process.env.SANDBOX_AGENT_TOKEN,
+	if (process.env.OPENAI_API_KEY) {
+		env.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+	}
+	if (process.env.CODEX_API_KEY) {
+		env.CODEX_API_KEY = process.env.CODEX_API_KEY;
+	}
+	return env;
+}
+
+function buildSharedEnvList(): string[] {
+	return Object.entries(buildSharedEnvRecord()).map(
+		([key, value]) => `${key}=${value}`,
+	);
+}
+
+function buildDockerBinds(): string[] {
+	if (!process.env.HOME) {
+		return [];
+	}
+
+	const codexAuthPath = path.join(process.env.HOME, ".codex", "auth.json");
+	if (!fs.existsSync(codexAuthPath)) {
+		return [];
+	}
+
+	return [`${codexAuthPath}:/root/.codex/auth.json:ro`];
+}
+
+function resolveProviderName(): "docker" | "daytona" | "e2b" {
+	const provider = process.env.SANDBOX_PROVIDER?.trim().toLowerCase();
+	if (provider === "daytona" || provider === "e2b") {
+		return provider;
+	}
+	return "docker";
+}
+
+function resolveSessionCwd(): string {
+	switch (resolveProviderName()) {
+		case "daytona":
+			return "/home/daytona";
+		case "e2b":
+			return "/home/user";
+		default:
+			return "/root";
+	}
+}
+
+function createSandboxProvider() {
+	switch (resolveProviderName()) {
+		case "daytona":
+			return daytona({
+				create: {
+					envVars: buildSharedEnvRecord(),
+				},
+			});
+		case "e2b":
+			return e2b({
+				create: {
+					allowInternetAccess: true,
+					envs: buildSharedEnvRecord(),
+				},
+			});
+		default:
+			return docker({
+				env: buildSharedEnvList(),
+				binds: buildDockerBinds(),
+			});
+	}
+}
+
+async function fetchAllSessionEvents(
+	sandbox: {
+		getEvents(input: {
+			sessionId: string;
+			cursor?: string;
+			limit?: number;
+		}): Promise<{ items: SessionEvent[]; nextCursor?: string }>;
+	},
+	sessionId: string,
+): Promise<SessionEvent[]> {
+	const events: SessionEvent[] = [];
+	let cursor: string | undefined;
+
+	while (true) {
+		const page = await sandbox.getEvents({
+			sessionId,
+			cursor,
+			limit: 200,
 		});
+		events.push(...page.items);
+		if (!page.nextCursor) {
+			return events;
+		}
+		cursor = page.nextCursor;
 	}
+}
 
-	return SandboxAgent.start();
-};
-
-let sandboxClientPromise: ReturnType<typeof createSandboxClient> | null = null;
-
-const getSandboxClient = () => {
-	if (!sandboxClientPromise) {
-		sandboxClientPromise = createSandboxClient();
-	}
-
-	return sandboxClientPromise;
-};
-
-const extractItem = (data: unknown): TranscriptItem | null => {
-	if (!data || typeof data !== "object") {
-		return null;
-	}
-
-	const item = (data as ItemEventData).item;
-	if (!item || typeof item !== "object") {
-		return null;
-	}
-
-	return item;
-};
-
-const extractDelta = (data: unknown): ItemDeltaEventData | null => {
-	if (!data || typeof data !== "object") {
-		return null;
-	}
-
-	const delta = data as ItemDeltaEventData;
-	return delta;
-};
-
-const extractText = (item: TranscriptItem): string => {
-	if (!Array.isArray(item.content)) {
-		return "";
-	}
-
-	return item.content
-		.map((part) => (part?.type === "text" ? part.text ?? "" : ""))
+function extractAssistantText(
+	events: SessionEvent[],
+	minEventIndex: number,
+): string {
+	return events
+		.filter((event) => event.eventIndex > minEventIndex)
+		.map((event) => event.payload as SessionUpdatePayload)
+		.filter((payload) => payload.method === "session/update")
+		.map((payload) => {
+			const update = payload.params?.update;
+			if (
+				!update ||
+				update.sessionUpdate !== "agent_message_chunk" ||
+				update.content?.type !== "text"
+			) {
+				return "";
+			}
+			return update.content.text ?? "";
+		})
 		.join("");
-};
+}
+
+const codingSandbox = sandboxActor({
+	provider: createSandboxProvider(),
+});
 
 export const agent = actor({
-	// Persistent state that survives restarts: https://rivet.dev/docs/actors/state
 	state: {
 		messages: [] as AgentMessage[],
 		status: {
@@ -129,43 +190,41 @@ export const agent = actor({
 		} as AgentStatus,
 		sessionId: null as string | null,
 	},
-	queues: {
-		message: queue<AgentQueueMessage>(),
-	},
 	events: {
 		messageAdded: event<AgentMessage>(),
 		status: event<AgentStatus>(),
 		response: event<AgentResponseEvent>(),
 	},
-
-	// The run hook keeps the agent listening for queued messages.
-	run: async (c) => {
-		for await (const queued of c.queue.iter()) {
-			const { body } = queued;
-			if (!body?.text || typeof body.text !== "string") {
-				continue;
+	actions: {
+		getHistory: (c) => c.state.messages,
+		getStatus: (c) => c.state.status,
+		sendMessage: async (
+			c,
+			input: { text: string; sender?: string },
+		) => {
+			const text = input.text.trim();
+			if (!text) {
+				return;
 			}
 
-			const sender = body.sender?.trim() || "Operator";
+			const sender = input.sender?.trim() || "Operator";
 			const userMessage: AgentMessage = {
 				id: buildId("user"),
 				role: "user",
 				sender,
-				content: body.text.trim(),
+				content: text,
 				createdAt: Date.now(),
 			};
-
 			c.state.messages.push(userMessage);
 			c.broadcast("messageAdded", userMessage);
 
 			const assistantMessage: AgentMessage = {
 				id: buildId("assistant"),
 				role: "assistant",
-				sender: "Sandbox Agent",
+				sender: "Sandbox Actor",
 				content: "",
 				createdAt: Date.now(),
 			};
-
 			c.state.messages.push(assistantMessage);
 			c.broadcast("messageAdded", assistantMessage);
 
@@ -176,78 +235,54 @@ export const agent = actor({
 			c.broadcast("status", c.state.status);
 
 			try {
-				const client = await getSandboxClient();
+				const sandbox = c.client<typeof registry>().codingSandbox.getOrCreate([
+					c.key[0],
+				]);
 				const sessionId = c.state.sessionId ?? buildId("session");
+
 				if (!c.state.sessionId) {
-					const agentId = process.env.SANDBOX_AGENT_AGENT ?? "codex";
-					const permissionMode =
-						process.env.SANDBOX_AGENT_PERMISSION_MODE ?? "bypass";
-
-					await client.createSession(sessionId, {
-						agent: agentId,
-						agentMode: "code",
-						permissionMode,
+					await sandbox.resumeOrCreateSession({
+						id: sessionId,
+						agent: process.env.SANDBOX_AGENT_AGENT ?? "codex",
+						mode: process.env.SANDBOX_AGENT_MODE,
+						model: process.env.SANDBOX_AGENT_MODEL,
+						thoughtLevel: process.env.SANDBOX_AGENT_THOUGHT_LEVEL,
+						sessionInit: {
+							cwd: resolveSessionCwd(),
+						},
 					});
-
 					c.state.sessionId = sessionId;
 				}
 
-					const eventStream = await client.streamTurn(sessionId, {
-						message: userMessage.content,
-					});
+				const previousEvents = await fetchAllSessionEvents(sandbox, sessionId);
+				const previousMaxEventIndex =
+					previousEvents.at(-1)?.eventIndex ?? -1;
 
-				let content = "";
-				let assistantItemId: string | null = null;
+				const promptResult = (await sandbox.rawSendSessionMethod(
+					sessionId,
+					"session/prompt",
+					{
+						sessionId,
+						prompt: [{ type: "text", text }],
+					},
+				)) as {
+					response?: {
+						stopReason?: string;
+					};
+				};
 
-				for await (const rawEvent of eventStream) {
-					const event = rawEvent as StreamEvent;
-					if (c.aborted) {
-						break;
-					}
+				const nextEvents = await fetchAllSessionEvents(sandbox, sessionId);
+				const assistantText = extractAssistantText(
+					nextEvents,
+					previousMaxEventIndex,
+				);
+				assistantMessage.content =
+					assistantText ||
+					`Prompt completed with stop reason: ${promptResult.response?.stopReason ?? "unknown"}`;
 
-					if (event.type === "item.started") {
-						const item = extractItem(event.data);
-						if (item?.role === "assistant") {
-							assistantItemId = item.item_id ?? null;
-						}
-					}
-
-					if (event.type === "item.delta") {
-						const deltaData = extractDelta(event.data);
-						if (
-							deltaData?.delta &&
-							(!assistantItemId || deltaData.item_id === assistantItemId)
-						) {
-							content += deltaData.delta;
-							assistantMessage.content = content;
-							c.broadcast("response", {
-								messageId: assistantMessage.id,
-								delta: deltaData.delta,
-								content,
-								done: false,
-							});
-						}
-					}
-
-					if (event.type === "item.completed") {
-						const item = extractItem(event.data);
-						if (
-							item &&
-							item.role === "assistant" &&
-							(!assistantItemId || item.item_id === assistantItemId)
-						) {
-							const finalText = extractText(item);
-							if (finalText) {
-								content = finalText;
-							}
-						}
-					}
-				}
-
-				assistantMessage.content = content || assistantMessage.content;
 				c.broadcast("response", {
 					messageId: assistantMessage.id,
-					delta: "",
+					delta: assistantMessage.content,
 					content: assistantMessage.content,
 					done: true,
 				});
@@ -260,7 +295,6 @@ export const agent = actor({
 			} catch (error) {
 				const errorMessage =
 					error instanceof Error ? error.message : "Unknown error";
-
 				assistantMessage.content =
 					assistantMessage.content ||
 					"I hit a snag while responding. Please try again.";
@@ -270,7 +304,6 @@ export const agent = actor({
 					updatedAt: Date.now(),
 					error: errorMessage,
 				};
-
 				c.broadcast("response", {
 					messageId: assistantMessage.id,
 					delta: "",
@@ -280,24 +313,15 @@ export const agent = actor({
 				});
 				c.broadcast("status", c.state.status);
 			}
-		}
-	},
-
-	actions: {
-		// Callable functions from clients: https://rivet.dev/docs/actors/actions
-		getHistory: (c) => c.state.messages,
-		getStatus: (c) => c.state.status,
+		},
 	},
 });
 
 export const agentManager = actor({
-	// Persistent state that survives restarts: https://rivet.dev/docs/actors/state
 	state: {
 		agents: [] as AgentInfo[],
 	},
-
 	actions: {
-		// Callable functions from clients: https://rivet.dev/docs/actors/actions
 		createAgent: async (c, name?: string) => {
 			const trimmedName = name?.trim();
 			const agentName =
@@ -311,17 +335,14 @@ export const agentManager = actor({
 			c.state.agents.push(info);
 
 			const client = c.client<typeof registry>();
-			const handle = client.agent.getOrCreate([info.id]);
-			await handle.getStatus();
+			await client.agent.getOrCreate([info.id]).getStatus();
 
 			return info;
 		},
-
 		listAgents: (c) => c.state.agents,
 	},
 });
 
-// Register actors for use: https://rivet.dev/docs/setup
 export const registry = setup({
-	use: { agent, agentManager },
+	use: { agent, agentManager, codingSandbox },
 });

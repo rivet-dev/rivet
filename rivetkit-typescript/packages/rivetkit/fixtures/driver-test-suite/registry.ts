@@ -38,7 +38,13 @@ import { kvActor } from "./kv";
 import { largePayloadActor, largePayloadConnActor } from "./large-payloads";
 import { counterWithLifecycle } from "./lifecycle";
 import { metadataActor } from "./metadata";
-import { queueActor, queueLimitedActor } from "./queue";
+import {
+	manyQueueActionParentActor,
+	manyQueueChildActor,
+	manyQueueRunParentActor,
+	queueActor,
+	queueLimitedActor,
+} from "./queue";
 import {
 	rawHttpActor,
 	rawHttpHonoActor,
@@ -57,6 +63,7 @@ import {
 	runWithTicks,
 } from "./run";
 import { scheduled } from "./scheduled";
+import { dockerSandboxActor } from "./sandbox";
 import {
 	sleep,
 	sleepWithLongRpc,
@@ -82,6 +89,11 @@ import {
 	workflowErrorHookActor,
 	workflowErrorHookEffectsActor,
 	workflowErrorHookSleepActor,
+	workflowNestedJoinActor,
+	workflowNestedLoopActor,
+	workflowSpawnChildActor,
+	workflowSpawnParentActor,
+	workflowNestedRaceActor,
 	workflowQueueActor,
 	workflowSleepActor,
 	workflowStopTeardownActor,
@@ -100,6 +112,8 @@ export const registry = setup({
 		counterWithLifecycle,
 		// From scheduled.ts
 		scheduled,
+		// From sandbox.ts
+		dockerSandboxActor,
 		// From sleep.ts
 		sleep,
 		sleepWithLongRpc,
@@ -114,9 +128,12 @@ export const registry = setup({
 		inlineClientActor,
 		// From kv.ts
 		kvActor,
-		// From queue.ts
-		queueActor,
-		queueLimitedActor,
+			// From queue.ts
+			queueActor,
+			queueLimitedActor,
+			manyQueueChildActor,
+			manyQueueActionParentActor,
+			manyQueueRunParentActor,
 		// From action-inputs.ts
 		inputActor,
 		// From action-timeout.ts
@@ -184,6 +201,11 @@ export const registry = setup({
 		workflowErrorHookActor,
 		workflowErrorHookEffectsActor,
 		workflowErrorHookSleepActor,
+		workflowNestedLoopActor,
+		workflowNestedJoinActor,
+		workflowNestedRaceActor,
+		workflowSpawnChildActor,
+		workflowSpawnParentActor,
 		// From actor-db-raw.ts
 		dbActorRaw,
 		// From actor-db-drizzle.ts

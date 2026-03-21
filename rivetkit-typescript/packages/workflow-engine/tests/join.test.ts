@@ -145,5 +145,108 @@ for (const mode of modes) {
 
 			expect(callCount).toBe(1);
 		});
+
+		it("should support nested joins inside branches", async () => {
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				const results = await ctx.join("outer", {
+					nested: {
+						run: async (ctx) => {
+							const inner = await ctx.join("inner", {
+								left: {
+									run: async (ctx) =>
+										await ctx.step(
+											"left-step",
+											async () => 1,
+										),
+								},
+								right: {
+									run: async (ctx) =>
+										await ctx.step(
+											"right-step",
+											async () => 2,
+										),
+								},
+							});
+
+							return inner.left + inner.right;
+						},
+					},
+					plain: {
+						run: async (ctx) =>
+							await ctx.step("plain-step", async () => 3),
+					},
+				});
+
+				return results.nested + results.plain;
+			};
+
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+
+			expect(result.state).toBe("completed");
+			expect(result.output).toBe(6);
+		});
+
+		it("should support nested races inside join branches", async () => {
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				const results = await ctx.join("outer", {
+					raced: {
+						run: async (ctx) => {
+							const nested = await ctx.race("inner-race", [
+								{
+									name: "fast",
+									run: async (ctx) =>
+										await ctx.step(
+											"fast-step",
+											async () => "winner",
+										),
+								},
+								{
+									name: "slow",
+									run: async (ctx) => {
+										await new Promise<void>((resolve) => {
+											if (ctx.abortSignal.aborted) {
+												resolve();
+												return;
+											}
+											ctx.abortSignal.addEventListener(
+												"abort",
+												() => resolve(),
+												{ once: true },
+											);
+										});
+										return "loser";
+									},
+								},
+							]);
+
+							return nested.value;
+						},
+					},
+					plain: {
+						run: async (ctx) =>
+							await ctx.step("plain-step", async () => "plain"),
+					},
+				});
+
+				return `${results.raced}:${results.plain}`;
+			};
+
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+
+			expect(result.state).toBe("completed");
+			expect(result.output).toBe("winner:plain");
+		});
 	});
 }

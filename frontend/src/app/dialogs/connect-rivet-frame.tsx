@@ -45,7 +45,7 @@ export default function ConnectRivetFrameContent({
 			displayName: "default",
 			pool: "default",
 			minCount: 0,
-			maxCount: 1000,
+			maxCount: 100_000,
 		});
 	}, [upsertManagedPool]);
 

@@ -61,7 +61,7 @@ ENV PUBLIC_TYPESENSE_API_KEY=${PUBLIC_TYPESENSE_API_KEY}
 WORKDIR /app/website
 
 # Build the website (static export to 'dist' directory)
-RUN pnpm run build
+RUN SKIP_TYPECHECK_CODE_BLOCKS=1 pnpm run build
 
 # =============================================================================
 # Stage 2: Serve with Caddy

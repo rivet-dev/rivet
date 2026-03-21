@@ -63,8 +63,8 @@ export function ImagesTable({
 			<TableHeader>
 				<TableRow>
 					<TableHead className="pl-8">Tag</TableHead>
-					<TableHead>Deployed To</TableHead>
-					<TableHead>Date</TableHead>
+					<TableHead className="w-full">Deployed To</TableHead>
+					<TableHead className="min-w-40">Date</TableHead>
 					<TableHead />
 				</TableRow>
 			</TableHeader>
@@ -263,7 +263,7 @@ function ManagedPoolStatus({ namespace }: { namespace: string }) {
 		return (
 			<p className="text-center flex items-center justify-center">
 				<Icon className="text-green-500 mr-1.5" icon={faCheck} />
-				Currently deployed
+				Current
 			</p>
 		);
 	}
