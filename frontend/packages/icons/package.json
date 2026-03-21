@@ -35,7 +35,6 @@
 		".": {
 			"types": "./src/index.gen.ts",
 			"import": "./dist/index.js",
-			"require": "./dist/index.js",
 			"default": "./dist/index.js"
 		}
 	},
