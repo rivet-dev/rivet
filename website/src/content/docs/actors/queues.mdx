@@ -432,6 +432,14 @@ This means you can run normal code in `run` without worrying about sleep interru
 - Add `timeout` when callers need bounded wait behavior.
 - Use `wait: true` only when the caller actually needs a response.
 
+## Pitfalls
+
+### Avoid `wait: true` between actors
+
+`wait: true` blocks the sender's run loop until the receiver finishes. Between actors, this adds unnecessary overhead and risks deadlocks, especially if the target actor needs to communicate back. If an actor sends a `wait: true` message to *itself*, it is a guaranteed deadlock because the run loop is already busy processing the current message.
+
+Reserve `wait: true` for external callers (HTTP handlers, CLI tools, client apps). For actor-to-actor communication, send a queue message to the other actor without `wait: true`, then have that actor send a queue message back when the work is done.
+
 ## Tips
 
 ### Message TTL
