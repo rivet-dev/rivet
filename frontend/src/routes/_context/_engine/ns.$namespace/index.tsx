@@ -16,6 +16,7 @@ export const Route = createFileRoute("/_context/_engine/ns/$namespace/")({
 		return {
 			n: opts.search.n,
 			actorId: opts.search.actorId,
+			actorKey: opts.search.actorKey,
 		};
 	},
 	async loader({ context, deps }) {
@@ -32,7 +33,7 @@ export const Route = createFileRoute("/_context/_engine/ns/$namespace/")({
 			),
 		]);
 
-		if (deps.n || deps.actorId) {
+		if (deps.n && (deps.actorId || deps.actorKey)) {
 			await runnerPrefetch;
 			return;
 		}
@@ -55,7 +56,7 @@ export const Route = createFileRoute("/_context/_engine/ns/$namespace/")({
 			),
 			runnerPrefetch,
 		]);
-		const firstActorId = actors.pages[0]?.actors?.[0]?.actorId;
+		const firstActorId = actors.pages[0]?.actors?.[0]?.key;
 
 		if (!firstActorId) return;
 
@@ -64,7 +65,7 @@ export const Route = createFileRoute("/_context/_engine/ns/$namespace/")({
 			search: (old) => ({
 				...old,
 				n,
-				actorId: firstActorId,
+				actorKey: firstActorId,
 			}),
 			replace: true,
 		});
@@ -72,11 +73,13 @@ export const Route = createFileRoute("/_context/_engine/ns/$namespace/")({
 });
 
 export function RouteComponent() {
-	const { actorId } = Route.useSearch();
+	const { actorKey, actorId } = Route.useSearch();
 
 	return (
-		<CatchBoundary getResetKey={() => actorId ?? "no-actor-id"}>
-			<Actors actorId={actorId} />
+		<CatchBoundary
+			getResetKey={() => actorKey ?? actorId ?? "no-actor-key"}
+		>
+			<Actors actorId={actorKey ?? actorId} />
 		</CatchBoundary>
 	);
 }

@@ -1,8 +1,10 @@
+import { faCopy, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { memo, useState } from "react";
 import {
 	Button,
+	CopyTrigger,
 	cn,
 	DiscreteCopyButton,
 	RelativeTime,
@@ -24,11 +26,12 @@ import type { ActorId } from "./queries";
 interface ActorsListRowProps {
 	className?: string;
 	actorId: ActorId;
+	actorKey?: string;
 	isCurrent?: boolean;
 }
 
 export const ActorsListRow = memo(
-	({ className, actorId, isCurrent }: ActorsListRowProps) => {
+	({ className, actorId, actorKey, isCurrent }: ActorsListRowProps) => {
 		const [isVisible, setIsVisible] = useState(false);
 
 		return (
@@ -44,7 +47,7 @@ export const ActorsListRow = memo(
 					to="."
 					search={(search: Record<string, unknown>) => ({
 						...search,
-						actorId,
+						...(actorKey ? { actorKey } : { actorId }),
 					})}
 					className="min-w-0 flex-wrap gap-2 relative"
 				>
@@ -141,9 +144,15 @@ function Tags({ actorId }: { actorId: ActorId }) {
 	);
 
 	return (
-		<SmallText className="text-foreground truncate min-w-0 max-w-full inline-block">
-			{isLoading ? <Skeleton className="h-5 w-10" /> : data || "-"}
-		</SmallText>
+		<CopyTrigger value={data || ""}>
+			<SmallText className="text-foreground truncate min-w-0 max-w-full inline-block group">
+				{isLoading ? <Skeleton className="h-5 w-10" /> : data || "-"}
+				<Icon
+					className="group-hover:opacity-100 opacity-0 transition-opacity ml-1"
+					icon={faCopy}
+				/>
+			</SmallText>
+		</CopyTrigger>
 	);
 }
 

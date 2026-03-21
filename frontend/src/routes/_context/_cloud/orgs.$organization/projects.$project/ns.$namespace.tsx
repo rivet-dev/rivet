@@ -180,8 +180,26 @@ function CloudNamespaceModals() {
 	const DeleteProjectDialog = useDialog.DeleteProject.Dialog;
 	const UpsertDeploymentDialog = useDialog.UpsertDeployment.Dialog;
 
+	const CreateActorDialog = useDialog.CreateActor.Dialog;
+
 	return (
 		<>
+			<CreateActorDialog
+				dialogProps={{
+					open: search?.modal === "create-actor",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
 			<UpsertDeploymentDialog
 				namespace={search?.namespace}
 				defaultImage={

@@ -1232,21 +1232,37 @@ function BackendSetupRivet() {
 
 function BackendSetup() {
 	const provider = useWatch({ name: "provider" });
+	const endpoint = useWatch({ name: "endpoint" });
 
 	if (provider !== "rivet") {
 		return (
 			<div className="flex flex-col gap-6">
 				<CopyAgentInstructionsButton provider={provider} />
-
 				<div className="flex gap-3">
 					<StepNumber n={1} />
+					<div className="flex-1 min-w-0">
+						<p className="font-medium mb-2">
+							Set environment variables
+						</p>
+						<p className="text-sm text-muted-foreground mb-3">
+							Configure the following environment variables in
+							your deployment.
+						</p>
+						<div className="space-y-2">
+							<EnvVariables endpoint={endpoint} />
+						</div>
+					</div>
+				</div>
+				<div className="flex gap-3">
+					<StepNumber n={2} />
 					<div className="flex-1 min-w-0">
 						<p className="font-medium mb-2">
 							Paste your deployment endpoint
 						</p>
 						<p className="text-sm text-muted-foreground mb-3">
-							Your coding agent will provide a URL after
-							deployment.
+							Enter the publicly accessible URL of your deployed
+							backend. Or ask your coding agent to provide it for
+							you.
 						</p>
 						<div className="space-y-2">
 							<ConnectServerlessForm.Endpoint
@@ -1277,8 +1293,6 @@ function BackendSetup() {
 
 	return <BackendSetupRivet />;
 }
-
-const skillsPath = "rivet-dev/skills";
 
 function FrontendSetup() {
 	const dataProvider = useDataProvider();
