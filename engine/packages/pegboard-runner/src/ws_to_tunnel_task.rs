@@ -6,6 +6,7 @@ use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::actor_kv;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
+use rivet_envoy_protocol as ep;
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK2_VERSION, versioned};
 use std::sync::{Arc, atomic::Ordering};
@@ -53,7 +54,7 @@ pub async fn task_inner(
 	event_demuxer: &mut ActorEventDemuxer,
 ) -> Result<LifecycleResult> {
 	let mut ws_rx = ws_rx.lock().await;
-	let mut term_signal = rivet_runtime::TermSignal::new().await;
+	let mut term_signal = rivet_runtime::TermSignal::get();
 
 	loop {
 		match recv_msg(
@@ -239,7 +240,13 @@ async fn handle_message_mk2(
 											protocol::mk2::KvGetResponse {
 												keys,
 												values,
-												metadata,
+												metadata: metadata
+													.into_iter()
+													.map(|m| protocol::mk2::KvMetadata {
+														version: m.version,
+														update_ts: m.update_ts,
+													})
+													.collect(),
 											},
 										)
 									}
@@ -266,7 +273,23 @@ async fn handle_message_mk2(
 					let res = actor_kv::list(
 						&*ctx.udb()?,
 						&recipient,
-						body.query,
+						match body.query {
+							protocol::mk2::KvListQuery::KvListAllQuery => {
+								ep::KvListQuery::KvListAllQuery
+							}
+							protocol::mk2::KvListQuery::KvListRangeQuery(x) => {
+								ep::KvListQuery::KvListRangeQuery(ep::KvListRangeQuery {
+									start: x.start,
+									end: x.end,
+									exclusive: x.exclusive,
+								})
+							}
+							protocol::mk2::KvListQuery::KvListPrefixQuery(x) => {
+								ep::KvListQuery::KvListPrefixQuery(ep::KvListPrefixQuery {
+									key: x.key,
+								})
+							}
+						},
 						body.reverse.unwrap_or_default(),
 						body.limit
 							.map(TryInto::try_into)
@@ -285,7 +308,13 @@ async fn handle_message_mk2(
 											protocol::mk2::KvListResponse {
 												keys,
 												values,
-												metadata,
+												metadata: metadata
+													.into_iter()
+													.map(|m| protocol::mk2::KvMetadata {
+														version: m.version,
+														update_ts: m.update_ts,
+													})
+													.collect(),
 											},
 										)
 									}
@@ -603,21 +632,19 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 						&recipient,
 						match body.query {
 							protocol::KvListQuery::KvListAllQuery => {
-								protocol::mk2::KvListQuery::KvListAllQuery
+								ep::KvListQuery::KvListAllQuery
 							}
 							protocol::KvListQuery::KvListRangeQuery(q) => {
-								protocol::mk2::KvListQuery::KvListRangeQuery(
-									protocol::mk2::KvListRangeQuery {
-										start: q.start,
-										end: q.end,
-										exclusive: q.exclusive,
-									},
-								)
+								ep::KvListQuery::KvListRangeQuery(ep::KvListRangeQuery {
+									start: q.start,
+									end: q.end,
+									exclusive: q.exclusive,
+								})
 							}
 							protocol::KvListQuery::KvListPrefixQuery(q) => {
-								protocol::mk2::KvListQuery::KvListPrefixQuery(
-									protocol::mk2::KvListPrefixQuery { key: q.key },
-								)
+								ep::KvListQuery::KvListPrefixQuery(ep::KvListPrefixQuery {
+									key: q.key,
+								})
 							}
 						},
 						body.reverse.unwrap_or_default(),

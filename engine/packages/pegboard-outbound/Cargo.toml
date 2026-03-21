@@ -1,0 +1,25 @@
+[package]
+name = "pegboard-outbound"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+epoxy.workspace = true
+gas.workspace = true
+lazy_static.workspace = true
+namespace.workspace = true
+pegboard.workspace = true
+reqwest-eventsource.workspace = true
+reqwest.workspace = true
+rivet-config.workspace = true
+rivet-envoy-protocol.workspace = true
+rivet-metrics.workspace = true
+rivet-runtime.workspace = true
+rivet-types.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+universalpubsub.workspace = true
+vbare.workspace = true

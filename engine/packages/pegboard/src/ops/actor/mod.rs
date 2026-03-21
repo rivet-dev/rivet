@@ -1,5 +1,6 @@
 pub mod create;
 pub mod get;
+pub mod get_for_envoy;
 pub mod get_for_gateway;
 pub mod get_for_key;
 pub mod get_for_runner;

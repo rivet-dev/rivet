@@ -73,7 +73,7 @@ pub async fn run_server(
 
 	let server = hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new());
 	let graceful = hyper_util::server::graceful::GracefulShutdown::new();
-	let mut term_signal = TermSignal::new().await;
+	let mut term_signal = TermSignal::get();
 
 	tracing::info!("HTTP server listening on {}", http_addr);
 	if let Some(addr) = &https_addr {

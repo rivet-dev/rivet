@@ -264,4 +264,10 @@ lazy_static::lazy_static! {
 		vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
 		*REGISTRY
 	).unwrap();
+
+	pub static ref DB_INSTANCE: IntGauge = register_int_gauge_with_registry!(
+		"gasoline_db_instance_count",
+		"Amount of DB instances currently active.",
+		*REGISTRY
+	).unwrap();
 }

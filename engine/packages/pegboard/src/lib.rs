@@ -14,8 +14,9 @@ pub fn registry() -> WorkflowResult<Registry> {
 
 	let mut registry = Registry::new();
 	registry.register_workflow::<actor::Workflow>()?;
-	registry.register_workflow::<actor_runner_name_selector_backfill::Workflow>()?;
 	registry.register_workflow::<actor::metrics::Workflow>()?;
+	registry.register_workflow::<actor2::Workflow>()?;
+	registry.register_workflow::<actor2::metrics::Workflow>()?;
 	registry.register_workflow::<runner::Workflow>()?;
 	registry.register_workflow::<runner2::Workflow>()?;
 	registry.register_workflow::<runner_pool::Workflow>()?;
@@ -25,6 +26,7 @@ pub fn registry() -> WorkflowResult<Registry> {
 	registry.register_workflow::<serverless::conn::Workflow>()?;
 	registry.register_workflow::<serverless::backfill::Workflow>()?;
 	registry.register_workflow::<metrics_aggregator::Workflow>()?;
+	registry.register_workflow::<actor_runner_name_selector_backfill::Workflow>()?;
 
 	Ok(registry)
 }

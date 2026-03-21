@@ -3300,6 +3300,7 @@ dependencies = [
  "rivet-api-util",
  "rivet-config",
  "rivet-data",
+ "rivet-envoy-protocol",
  "rivet-error",
  "rivet-metrics",
  "rivet-pools",
@@ -3320,6 +3321,44 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "vbare",
+]
+
+[[package]]
+name = "pegboard-envoy"
+version = "2.1.10"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "futures-util",
+ "gasoline",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.6.0",
+ "hyper-tungstenite",
+ "hyper-util",
+ "lazy_static",
+ "namespace",
+ "pegboard",
+ "rand 0.8.5",
+ "rivet-config",
+ "rivet-data",
+ "rivet-envoy-protocol",
+ "rivet-error",
+ "rivet-guard-core",
+ "rivet-metrics",
+ "rivet-runtime",
+ "rivet-types",
+ "serde",
+ "serde_bare",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "universaldb",
+ "universalpubsub",
+ "url",
  "vbare",
 ]
 
@@ -3358,6 +3397,63 @@ dependencies = [
 ]
 
 [[package]]
+name = "pegboard-gateway2"
+version = "2.1.10"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "futures-util",
+ "gasoline",
+ "http-body-util",
+ "hyper 1.6.0",
+ "hyper-tungstenite",
+ "lazy_static",
+ "namespace",
+ "pegboard",
+ "rand 0.8.5",
+ "rivet-config",
+ "rivet-envoy-protocol",
+ "rivet-error",
+ "rivet-guard-core",
+ "rivet-metrics",
+ "rivet-util",
+ "scc",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "universaldb",
+ "universalpubsub",
+ "vbare",
+]
+
+[[package]]
+name = "pegboard-outbound"
+version = "2.1.10"
+dependencies = [
+ "anyhow",
+ "epoxy",
+ "gasoline",
+ "lazy_static",
+ "namespace",
+ "pegboard",
+ "reqwest",
+ "reqwest-eventsource",
+ "rivet-config",
+ "rivet-envoy-protocol",
+ "rivet-metrics",
+ "rivet-runtime",
+ "rivet-types",
+ "tokio",
+ "tracing",
+ "universalpubsub",
+ "vbare",
+]
+
+[[package]]
 name = "pegboard-runner"
 version = "2.2.0"
 dependencies = [
@@ -3377,6 +3473,7 @@ dependencies = [
  "rand 0.8.5",
  "rivet-config",
  "rivet-data",
+ "rivet-envoy-protocol",
  "rivet-error",
  "rivet-guard-core",
  "rivet-metrics",
@@ -4381,6 +4478,7 @@ dependencies = [
  "namespace",
  "once_cell",
  "pegboard",
+ "pegboard-outbound",
  "pegboard-runner",
  "portpicker",
  "rand 0.8.5",
@@ -4393,6 +4491,8 @@ dependencies = [
  "rivet-cache-purge",
  "rivet-config",
  "rivet-engine-runner",
+ "rivet-envoy-client",
+ "rivet-envoy-protocol",
  "rivet-guard",
  "rivet-logs",
  "rivet-pools",
@@ -4458,6 +4558,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-envoy-client"
+version = "2.1.10"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "futures-util",
+ "rand 0.8.5",
+ "rivet-envoy-protocol",
+ "serde",
+ "serde_bare",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "vbare",
+]
+
+[[package]]
+name = "rivet-envoy-protocol"
+version = "2.1.10"
+dependencies = [
+ "anyhow",
+ "gasoline",
+ "hex",
+ "rand 0.8.5",
+ "rivet-util",
+ "serde",
+ "serde_bare",
+ "utoipa",
+ "uuid",
+ "vbare",
+ "vbare-compiler",
+]
+
+[[package]]
 name = "rivet-error"
 version = "2.2.0"
 dependencies = [
@@ -4497,7 +4635,9 @@ dependencies = [
  "lazy_static",
  "once_cell",
  "pegboard",
+ "pegboard-envoy",
  "pegboard-gateway",
+ "pegboard-gateway2",
  "pegboard-runner",
  "regex",
  "rivet-api-builder",

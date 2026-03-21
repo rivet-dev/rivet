@@ -1,6 +1,7 @@
 pub mod actor;
 pub mod actor_kv;
 pub mod backfill;
+pub mod envoy;
 pub mod epoxy;
 pub mod hibernating_request;
 pub mod ns;
