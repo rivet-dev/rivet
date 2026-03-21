@@ -18,6 +18,7 @@ hyper = "1.6"
 hyper-tungstenite.workspace = true
 rand.workspace = true
 rivet-config.workspace = true
+rivet-error.workspace = true
 rivet-guard-core.workspace = true
 rivet-runtime.workspace = true
 serde.workspace = true

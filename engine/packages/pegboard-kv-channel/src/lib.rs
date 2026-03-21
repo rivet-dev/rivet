@@ -651,9 +651,9 @@ async fn handle_kv_put(
 	match actor_kv::put(&*udb, &recipient, body.keys.clone(), body.values.clone()).await {
 		Ok(()) => protocol::ResponseData::KvPutResponse,
 		Err(err) => {
-			let msg = err.to_string();
-			if msg.contains("not enough space left in storage") {
-				error_response("storage_quota_exceeded", &msg)
+			let rivet_err = rivet_error::RivetError::extract(&err);
+			if rivet_err.code() == "kv_storage_quota_exceeded" {
+				error_response("storage_quota_exceeded", rivet_err.message())
 			} else {
 				internal_error(&err)
 			}

@@ -16,6 +16,7 @@ import {
 	decodeToServer,
 	encodeToClient,
 } from "@rivetkit/engine-kv-channel-protocol";
+import { KvStorageQuotaExceededError } from "@/drivers/file-system/kv-limits";
 import type { ManagerDriver } from "./driver";
 import { logger } from "./log";
 
@@ -369,14 +370,12 @@ async function handleKvOperation(
 			try {
 				await managerDriver.kvBatchPut(actorId, entries);
 			} catch (err: unknown) {
-				const message =
-					err instanceof Error ? err.message : String(err);
-				if (message.includes("not enough space")) {
+				if (err instanceof KvStorageQuotaExceededError) {
 					return {
 						tag: "ErrorResponse",
 						val: {
 							code: "storage_quota_exceeded",
-							message,
+							message: err.message,
 						},
 					};
 				}

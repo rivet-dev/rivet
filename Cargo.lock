@@ -3373,6 +3373,7 @@ dependencies = [
  "pegboard",
  "rand 0.8.5",
  "rivet-config",
+ "rivet-error",
  "rivet-guard-core",
  "rivet-runtime",
  "rivet-util",
