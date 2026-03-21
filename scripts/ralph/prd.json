@@ -585,7 +585,7 @@
         "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
       ],
       "priority": 34,
-      "passes": false,
+      "passes": true,
       "notes": "Multiple eprintln! calls in channel.rs (line 346, 447-450, 496) and potentially lib.rs violate CLAUDE.md structured logging requirements. CLAUDE.md should be updated to explicitly state: never use eprintln/println for logging in Rust code, always use tracing."
     },
     {

@@ -632,3 +632,20 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The `tracing` crate was already a dependency (added in US-026 for catch_unwind panic logging).
   - Use `%err` (Display) rather than `?err` (Debug) in tracing structured fields for KV error strings since they're already human-readable.
 ---
+
+## 2026-03-21 - US-034
+- Replaced all 3 `eprintln!` calls in channel.rs with `tracing::warn!` using structured fields
+  - Line 346: connection failure now logs with `%e` structured field
+  - Lines 447-451: reconnect open failure now logs with `%actor_id`, `code`, `message` structured fields
+  - Line 496: decode failure now logs with `%e` structured field
+- No `eprintln!` or `println!` calls found in lib.rs (clean)
+- `tracing` was already a dependency (added in US-026). Added `tracing-subscriber = "0.3"` with `env-filter` feature for subscriber initialization
+- Initialized `tracing_subscriber::fmt()` with `EnvFilter` (defaults to `warn`) in `get_runtime()` via `try_init()` (no-op if host process already set a subscriber)
+- Updated root CLAUDE.md structured logging section to explicitly prohibit `eprintln!`/`println!` for logging in Rust code
+- All 76 tests pass, cargo check clean
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/channel.rs, rivetkit-typescript/packages/sqlite-native/src/lib.rs, rivetkit-typescript/packages/sqlite-native/Cargo.toml, rivetkit-typescript/packages/sqlite-native/Cargo.lock, CLAUDE.md
+- **Learnings for future iterations:**
+  - `tracing-subscriber` with `env-filter` feature and `try_init()` is the standard pattern for library-like crates. It respects RUST_LOG env var and is a no-op if a subscriber is already registered.
+  - For napi-rs addons, initialize the subscriber in the global runtime init (`get_runtime()`) since there's no other natural initialization point.
+  - `%e` (Display format) is preferred over `?e` (Debug format) for error fields that are already human-readable strings.
+---
