@@ -35,6 +35,10 @@ const MAX_VALUE_SIZE: usize = 128 * 1024;
 const MAX_KEYS: usize = 128;
 const MAX_PUT_PAYLOAD_SIZE: usize = 976 * 1024;
 
+/// Maximum number of actors a single connection can have open simultaneously.
+/// Prevents a malicious client from exhausting memory via unbounded actor_channels.
+const MAX_ACTORS_PER_CONNECTION: usize = 1000;
+
 /// Shared state across all KV channel connections.
 pub struct KvChannelState {
 	/// Maps actor_id string to the connection_id holding the single-writer lock and a reference
@@ -499,6 +503,19 @@ async fn handle_actor_open(
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	actor_id: &str,
 ) -> protocol::ResponseData {
+	// Reject if this connection already has too many actors open.
+	{
+		let current_count = open_actors.lock().await.len();
+		if current_count >= MAX_ACTORS_PER_CONNECTION {
+			return error_response(
+				"too_many_actors",
+				&format!(
+					"connection has too many open actors (max {MAX_ACTORS_PER_CONNECTION})"
+				),
+			);
+		}
+	}
+
 	let mut locks = state.actor_locks.lock().await;
 
 	// If the actor is locked by a different connection, unconditionally evict the old lock.

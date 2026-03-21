@@ -26,6 +26,12 @@ import { logger } from "./log";
 const PING_INTERVAL_MS = 3_000;
 const PONG_TIMEOUT_MS = 15_000;
 
+// Maximum actors a single connection can open. Prevents unbounded memory growth.
+const MAX_ACTORS_PER_CONNECTION = 1_000;
+
+// Sweep interval for removing stale lock entries from dead connections.
+const STALE_LOCK_SWEEP_INTERVAL_MS = 60_000;
+
 /** Per-connection state for the KV channel WebSocket. */
 interface KvChannelConnection {
 	/** Actor IDs locked by this connection. */
@@ -49,6 +55,37 @@ interface KvChannelConnection {
 
 /** Global lock table: actorId -> connectionId. Shared across all connections. */
 const actorLocks = new Map<string, KvChannelConnection>();
+
+/** Sweep timer for removing stale lock entries from dead connections. */
+let staleLockSweepTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Start the stale lock sweep if not already running. */
+function ensureStaleLockSweep(): void {
+	if (staleLockSweepTimer) return;
+	staleLockSweepTimer = setInterval(() => {
+		let removed = 0;
+		for (const [actorId, conn] of actorLocks) {
+			if (conn.closed) {
+				actorLocks.delete(actorId);
+				removed++;
+			}
+		}
+		if (removed > 0) {
+			logger().debug({
+				msg: "kv channel stale lock sweep completed",
+				removedCount: removed,
+				remainingCount: actorLocks.size,
+			});
+		}
+		// Stop the sweep if there are no more lock entries.
+		if (actorLocks.size === 0 && staleLockSweepTimer) {
+			clearInterval(staleLockSweepTimer);
+			staleLockSweepTimer = null;
+		}
+	}, STALE_LOCK_SWEEP_INTERVAL_MS);
+	// Allow the process to exit even if the sweep timer is still running.
+	staleLockSweepTimer.unref?.();
+}
 
 function makeErrorResponse(
 	requestId: number,
@@ -209,6 +246,17 @@ function handleActorOpen(
 	conn: KvChannelConnection,
 	actorId: string,
 ): ResponseData {
+	// Reject if this connection already has too many actors open.
+	if (conn.openActors.size >= MAX_ACTORS_PER_CONNECTION) {
+		return {
+			tag: "ErrorResponse",
+			val: {
+				code: "too_many_actors",
+				message: `connection has too many open actors (max ${MAX_ACTORS_PER_CONNECTION})`,
+			},
+		};
+	}
+
 	const existingLock = actorLocks.get(actorId);
 	if (existingLock && existingLock !== conn) {
 		// Unconditionally evict the old connection's lock. The old connection
@@ -224,6 +272,9 @@ function handleActorOpen(
 
 	actorLocks.set(actorId, conn);
 	conn.openActors.add(actorId);
+
+	// Start the stale lock sweep if not already running.
+	ensureStaleLockSweep();
 
 	return { tag: "ActorOpenResponse", val: null };
 }
