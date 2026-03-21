@@ -210,23 +210,28 @@ unsafe extern "C" fn kv_io_close(p_file: *mut sqlite3_file) -> c_int {
 		// Delete-on-close: remove the file entirely (used for journal files).
 		if file.flags & SQLITE_OPEN_DELETEONCLOSE != 0 {
 			let tag = file.file_tag;
-			let _ = ctx.kv_delete_range(
+			if let Err(err) = ctx.kv_delete_range(
 				kv::get_chunk_key(tag, 0).to_vec(),
 				kv::get_chunk_key_range_end(tag).to_vec(),
-			);
-			let _ = ctx.kv_delete(vec![kv::get_meta_key(tag).to_vec()]);
+			) {
+				tracing::error!(%err, file_tag = tag, "failed to delete chunks on close");
+				return SQLITE_IOERR;
+			}
+			if let Err(err) = ctx.kv_delete(vec![kv::get_meta_key(tag).to_vec()]) {
+				tracing::error!(%err, file_tag = tag, "failed to delete metadata on close");
+				return SQLITE_IOERR;
+			}
 			return SQLITE_OK;
 		}
 
 		// Flush dirty metadata before closing.
 		if file.meta_dirty {
 			let meta = encode_file_meta(file.size);
-			if ctx
-				.kv_put(vec![file.meta_key.to_vec()], vec![meta])
-				.is_ok()
-			{
-				file.meta_dirty = false;
+			if let Err(err) = ctx.kv_put(vec![file.meta_key.to_vec()], vec![meta]) {
+				tracing::error!(%err, file_tag = file.file_tag, "failed to flush metadata on close");
+				return SQLITE_IOERR;
 			}
+			file.meta_dirty = false;
 		}
 
 		SQLITE_OK
@@ -501,13 +506,22 @@ unsafe extern "C" fn kv_io_truncate(
 			if new_size % kv::CHUNK_SIZE != 0 {
 				let last_idx = first_delete - 1;
 				let last_key = kv::get_chunk_key(file.file_tag, last_idx);
-				if let Ok(resp) = ctx.kv_get(vec![last_key.to_vec()]) {
-					let map = build_value_map(&resp);
-					if let Some(chunk) = map.get(last_key.as_slice()) {
-						if chunk.len() > new_size % kv::CHUNK_SIZE {
-							let truncated = chunk[..new_size % kv::CHUNK_SIZE].to_vec();
-							let _ = ctx.kv_put(vec![last_key.to_vec()], vec![truncated]);
+				match ctx.kv_get(vec![last_key.to_vec()]) {
+					Ok(resp) => {
+						let map = build_value_map(&resp);
+						if let Some(chunk) = map.get(last_key.as_slice()) {
+							if chunk.len() > new_size % kv::CHUNK_SIZE {
+								let truncated = chunk[..new_size % kv::CHUNK_SIZE].to_vec();
+								if let Err(err) = ctx.kv_put(vec![last_key.to_vec()], vec![truncated]) {
+									tracing::error!(%err, file_tag = file.file_tag, "failed to write truncated chunk");
+									return SQLITE_IOERR_TRUNCATE;
+								}
+							}
 						}
+					}
+					Err(err) => {
+						tracing::error!(%err, file_tag = file.file_tag, "failed to read chunk for truncation");
+						return SQLITE_IOERR_TRUNCATE;
 					}
 				}
 			}
