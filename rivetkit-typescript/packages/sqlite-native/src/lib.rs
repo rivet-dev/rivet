@@ -52,7 +52,19 @@ use channel::{KvChannel, KvChannelConfig};
 /// Global tokio runtime, initialized once per process for async WebSocket I/O.
 fn get_runtime() -> &'static Runtime {
 	static RT: OnceLock<Runtime> = OnceLock::new();
-	RT.get_or_init(|| Runtime::new().expect("failed to create tokio runtime"))
+	RT.get_or_init(|| {
+		// Initialize a tracing subscriber so log output is emitted to stderr.
+		// Uses RUST_LOG env var for filtering (defaults to warn). try_init()
+		// is a no-op if a subscriber is already set by the host process.
+		let _ = tracing_subscriber::fmt()
+			.with_env_filter(
+				tracing_subscriber::EnvFilter::try_from_default_env()
+					.unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+			)
+			.try_init();
+
+		Runtime::new().expect("failed to create tokio runtime")
+	})
 }
 
 // MARK: JS Types

@@ -343,7 +343,7 @@ async fn connection_loop(inner: Arc<Inner>, mut shutdown_rx: watch::Receiver<boo
 				fail_all_in_flight(&inner).await;
 			}
 			Err(e) => {
-				eprintln!("kv channel connection failed: {e}");
+				tracing::warn!(%e, "kv channel connection failed");
 			}
 		}
 
@@ -444,10 +444,11 @@ async fn run_connection<S, W>(
 												.lock()
 												.await
 												.remove(&actor_id);
-											eprintln!(
-												"kv channel reconnect open failed \
-												 for {actor_id}: {} - {}",
-												err.code, err.message
+											tracing::warn!(
+												%actor_id,
+												code = %err.code,
+												message = %err.message,
+												"kv channel reconnect open failed"
 											);
 										}
 										_ => {
@@ -493,7 +494,7 @@ async fn run_connection<S, W>(
 								break;
 							}
 							Err(e) => {
-								eprintln!("kv channel failed to decode message: {e}");
+								tracing::warn!(%e, "kv channel failed to decode message");
 							}
 						}
 					}

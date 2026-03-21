@@ -270,7 +270,8 @@ Data structures often include:
 ## Logging Patterns
 
 ### Structured Logging
-- Use tracing for logging. Do not format parameters into the main message, instead use tracing's structured logging. 
+- Use tracing for logging. Never use `eprintln!` or `println!` for logging in Rust code. Always use tracing macros (`tracing::info!`, `tracing::warn!`, `tracing::error!`, etc.).
+- Do not format parameters into the main message, instead use tracing's structured logging.
   - For example, instead of `tracing::info!("foo {x}")`, do `tracing::info!(?x, "foo")`
 - Log messages should be lowercase unless mentioning specific code symbols. For example, `tracing::info!("inserted UserRow")` instead of `tracing::info!("Inserted UserRow")`
 
