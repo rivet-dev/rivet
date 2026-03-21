@@ -589,3 +589,16 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The `shutdownRegistered` flag prevents duplicate handler registration across multiple channel recreations
   - Pre-existing typecheck errors in fixtures/tests are not blockers (documented in codebase patterns)
 ---
+
+## 2026-03-21 - US-031
+- Fixed race condition in KV channel ping/pong where conn.ws could be used after cleanup
+- Changed `sendMessage` to take `KvChannelConnection` instead of `WSContext`, with early return if `conn.closed || !conn.ws`
+- Set `conn.ws = null` in `cleanupConnection` to prevent use-after-close
+- In `startPingPong`, capture `conn.ws` before calling `cleanupConnection` so `ws.close()` is called on the right reference
+- Removed separate `ws: WSContext` parameter from `handleRequest` and `handleToServerMessage` since all sends now go through `sendMessage(conn, ...)`
+- Files changed: rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts
+- **Learnings for future iterations:**
+  - All WebSocket sends should go through a central `sendMessage(conn, ...)` that checks connection liveness, rather than passing `ws` separately
+  - When cleaning up connection state, always null out the WebSocket reference to prevent stale sends from fire-and-forget handlers
+  - In ping/pong timeout handling, capture the ws reference before cleanup, then close after cleanup, to avoid the cleanup nulling the reference
+---

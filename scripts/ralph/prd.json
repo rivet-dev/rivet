@@ -537,7 +537,7 @@
         "Typecheck passes"
       ],
       "priority": 31,
-      "passes": false,
+      "passes": true,
       "notes": "In startPingPong (lines 84-105), between checking conn.closed and sending on conn.ws, the connection could be closed by onClose/onError handlers. cleanupConnection sets conn.closed = true but does NOT set conn.ws = null, leaving a stale reference."
     },
     {
