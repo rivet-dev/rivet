@@ -24,6 +24,7 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
+	formatList,
 	Ping,
 	Skeleton,
 	Table,
@@ -417,7 +418,7 @@ function Provider({ metadata }: { metadata: unknown }) {
 			</div>
 		);
 	}
-	if (provider === "gcp") {
+	if (provider === "gcp" || provider === "gcp-cloud-run") {
 		return (
 			<div className="whitespace-nowrap">
 				<Icon icon={faGoogleCloud} className="mr-1" /> Google Cloud Run
@@ -449,7 +450,7 @@ function Regions({ regions }: { regions: string[] }) {
 	if (regions.length === 1) {
 		return (
 			<ActorRegion
-				className="w-full items-center flex-1"
+				className="w-full items-center flex-1 whitespace-nowrap"
 				regionId={regions[0]}
 				showLabel
 			/>
@@ -458,9 +459,11 @@ function Regions({ regions }: { regions: string[] }) {
 
 	return (
 		<WithTooltip
-			content={regions
-				.map((region) => REGION_LABEL[region] ?? REGION_LABEL.unknown)
-				.join(" and ")}
+			content={formatList(
+				regions.map(
+					(region) => REGION_LABEL[region] ?? REGION_LABEL.unknown,
+				),
+			)}
 			trigger={
 				<span className="w-full cursor-pointer">Multiple regions</span>
 			}

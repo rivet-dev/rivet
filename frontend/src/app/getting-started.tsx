@@ -34,7 +34,6 @@ import {
 	CodeGroup,
 	CodeGroupSyncProvider,
 	CodePreview,
-	Combobox,
 	FormField,
 	Ping,
 	Skeleton,
@@ -117,12 +116,11 @@ const stepper = defineStepper(
 );
 
 export function GettingStarted({
-	displayBackendOnboarding,
+	displayFrontendOnboarding,
 	provider,
 }: {
 	provider?: Provider;
-	displayOnboarding?: boolean;
-	displayBackendOnboarding?: boolean;
+	displayFrontendOnboarding?: boolean;
 }) {
 	const dataProvider = useCloudNamespaceDataProvider();
 	const { data: datacenters } = useSuspenseInfiniteQuery(
@@ -160,35 +158,26 @@ export function GettingStarted({
 							formId="onboarding"
 							className="mb-8 mt-12"
 							initialStep={
-								provider
-									? "backend"
-									: displayBackendOnboarding
-										? undefined
-										: "frontend"
+								displayFrontendOnboarding
+									? "frontend"
+									: provider
+										? "backend"
+										: undefined
 							}
 							// eslint-disable-next-line @typescript-eslint/no-explicit-any
-							defaultValues={
-								{
-									provider: provider || "rivet",
-									...(provider && provider !== "rivet"
-										? {
-												runnerName: "default",
-												slotsPerRunner: 1,
-												maxRunners: 100_000,
-												minRunners: 1,
-												runnerMargin: 0,
-												headers: [],
-												requestLifespan: 900,
-												datacenters: Object.fromEntries(
-													datacenters.map((dc) => [
-														dc.name,
-														true,
-													]),
-												),
-											}
-										: {}),
-								} as any
-							}
+							defaultValues={{
+								provider: provider || "rivet",
+								runnerName: "default",
+								slotsPerRunner: 1,
+								maxRunners: 1_000,
+								minRunners: 1,
+								runnerMargin: 0,
+								headers: [],
+								requestLifespan: 900,
+								datacenters: Object.fromEntries(
+									datacenters.map((dc) => [dc.name, true]),
+								),
+							}}
 							content={{
 								install: () => (
 									<StepContent>
@@ -237,7 +226,7 @@ export function GettingStarted({
 									stepper.current.id === "provider" &&
 									values.provider === "rivet"
 								) {
-									mutateAsyncManagedPool({
+									await mutateAsyncManagedPool({
 										displayName: "default",
 										pool: "default",
 										minCount: 0,
@@ -247,11 +236,7 @@ export function GettingStarted({
 								}
 								if (
 									stepper.current.id === "backend" &&
-									"endpoint" in values &&
-									values.endpoint &&
-									values.provider !== "rivet" &&
-									(values as unknown as { success: boolean })
-										.success
+									values.provider !== "rivet"
 								) {
 									const config = await buildServerlessConfig(
 										dataProvider,
@@ -296,6 +281,9 @@ function StepContent({
 	children: ReactNode;
 	wide?: boolean;
 }) {
+	const { formState, watch } = useFormContext();
+
+	console.log(formState.errors, formState.isValid, watch());
 	return (
 		<motion.div
 			className="mx-auto"
