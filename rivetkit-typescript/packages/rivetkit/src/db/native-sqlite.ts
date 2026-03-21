@@ -61,6 +61,14 @@ let detectionDone = false;
 // Singleton KV channel connection, shared across all actors in this process.
 let kvChannel: NativeKvChannel | null = null;
 
+// Tracks whether the singleton channel was explicitly disconnected. When true,
+// getOrCreateKvChannel() will create a fresh channel instead of reusing the dead
+// handle. This covers both process shutdown cleanup and manual disconnect().
+let channelDisconnected = false;
+
+// Whether the process shutdown handler has been registered.
+let shutdownRegistered = false;
+
 /**
  * Reset the cached native SQLite detection state.
  * For testing only. Allows tests to switch between native and WASM VFS
@@ -79,6 +87,7 @@ export function _resetNativeDetection(disable?: boolean): void {
 		}
 	}
 	kvChannel = null;
+	channelDisconnected = false;
 
 	if (disable) {
 		detectionDone = true;
@@ -122,13 +131,52 @@ function getNativeModule(): NativeSqliteModule {
 }
 
 /**
+ * Disconnect the singleton KV channel if it exists. Safe to call multiple times.
+ */
+export function disconnectKvChannel(): void {
+	if (kvChannel && nativeModule) {
+		try {
+			nativeModule.disconnect(kvChannel);
+		} catch {
+			// Ignore cleanup errors during shutdown.
+		}
+	}
+	kvChannel = null;
+	channelDisconnected = true;
+}
+
+/**
+ * Register process shutdown handlers that clean up the singleton KV channel.
+ * Called once per process on first channel creation. Uses `beforeExit` for
+ * graceful exit and signal handlers for SIGTERM/SIGINT.
+ */
+function registerShutdownHandler(): void {
+	if (shutdownRegistered) return;
+	shutdownRegistered = true;
+
+	const onShutdown = () => {
+		disconnectKvChannel();
+	};
+
+	// beforeExit fires when the event loop drains. Signals fire on external
+	// termination. Both paths call disconnectKvChannel which is idempotent.
+	process.on("beforeExit", onShutdown);
+	process.on("SIGTERM", onShutdown);
+	process.on("SIGINT", onShutdown);
+}
+
+/**
  * Get or create the process-level KV channel connection.
  *
  * Derives the WebSocket URL from RIVET_ENDPOINT (defaults to
  * http://127.0.0.1:6420 for local dev). Authenticates with RIVET_TOKEN.
+ *
+ * If the channel was previously disconnected (e.g., during shutdown or due
+ * to a permanent failure), a new channel is created automatically.
  */
 function getOrCreateKvChannel(): NativeKvChannel {
-	if (kvChannel) return kvChannel;
+	// Recreate the channel if it was explicitly disconnected.
+	if (kvChannel && !channelDisconnected) return kvChannel;
 
 	const mod = getNativeModule();
 	const endpoint = getRivetEndpoint() ?? "http://127.0.0.1:6420";
@@ -146,6 +194,9 @@ function getOrCreateKvChannel(): NativeKvChannel {
 		token: token ?? undefined,
 		namespace,
 	});
+	channelDisconnected = false;
+
+	registerShutdownHandler();
 
 	return kvChannel;
 }
