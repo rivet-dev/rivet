@@ -330,6 +330,8 @@ export function createActorRouter(
 			const isStateEnabled = actor.inspector.isStateEnabled();
 			const isDatabaseEnabled = actor.inspector.isDatabaseEnabled();
 			const isWorkflowEnabled = actor.inspector.isWorkflowEnabled();
+			const workflowHistory =
+				actor.inspector.getWorkflowHistoryJson().history;
 
 			const state = isStateEnabled
 				? actor.inspector.getStateJson()
@@ -337,14 +339,6 @@ export function createActorRouter(
 			const connections = actor.inspector.getConnectionsJson();
 			const rpcs = actor.inspector.getRpcs();
 			const queueSize = actor.inspector.getQueueSize();
-			const workflowHistory = actor.inspector.getWorkflowHistory();
-
-			// Convert BigInt values in workflow history to numbers for JSON serialization.
-			const bigIntReplacer = (_key: string, value: unknown) =>
-				typeof value === "bigint" ? Number(value) : value;
-			const safeWorkflowHistory = workflowHistory
-				? JSON.parse(JSON.stringify(workflowHistory, bigIntReplacer))
-				: null;
 
 			return c.json({
 				state,
@@ -354,7 +348,7 @@ export function createActorRouter(
 				isStateEnabled,
 				isDatabaseEnabled,
 				isWorkflowEnabled,
-				workflowHistory: safeWorkflowHistory,
+				workflowHistory,
 			});
 		});
 	}

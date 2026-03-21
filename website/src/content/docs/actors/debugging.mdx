@@ -513,6 +513,8 @@ Returns paged rows for a specific SQLite table or view:
 }
 ```
 
+For workflow-enabled actors, `history` is a JSON object with `nameRegistry`, `entries`, and `entryMetadata`. Step outputs, loop state, and message payloads are decoded from CBOR into normal JSON values.
+
 #### Summary
 
 Get a full snapshot of the actor in a single request:

@@ -157,11 +157,9 @@ function PoolStatus({
 		);
 	}
 	return (
-		<>
-			<div className="relative mr-4">
-				<Ping variant="pending" className="relative" />
-			</div>
+		<div className="relative mr-4 flex items-center justify-center">
+			<Ping variant="pending" className="relative right-0 mr-2" />
 			<p>Waiting for deployment...</p>
-		</>
+		</div>
 	);
 }

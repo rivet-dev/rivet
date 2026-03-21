@@ -19,6 +19,7 @@ import {
 import type * as z from "zod";
 import { Button } from "@/components";
 import type { defineStepper } from "@/components/ui/stepper";
+import { faArrowLeft, faArrowRight, Icon } from "@rivet-gg/icons";
 import { HelpDropdown } from "../help-dropdown";
 
 type Step = Stepperize.Step & {
@@ -105,7 +106,9 @@ type StepperFormProps<Steps extends Step[]> = StepperProps<Steps> &
 	};
 
 export type StepperFormValues<Steps extends Step[]> = z.TypeOf<
-	Steps[number]["schema"]
+	Steps[number]["schema"] extends z.ZodSchema
+		? Steps[number]["schema"]
+		: never
 >;
 
 export type ExtractSteps<T> =
@@ -319,12 +322,10 @@ function Content<const Steps extends Step[]>({
 										<h2 className="text-xl font-semibold">
 											{step.title}
 										</h2>
-									</div>
-									{step.assist ? (
-										<div className="flex justify-end mt-6">
+										{step.assist ? (
 											<NeedHelpButton />
-										</div>
-									) : null}
+										) : null}
+									</div>
 									<div className="mt-6">
 										<StepPanel<Steps>
 											Stepper={Stepper}
@@ -508,18 +509,20 @@ function StepPanel<const Steps extends Step[]>({
 						<Button
 							type="button"
 							variant="outline"
+							size="icon"
 							onClick={goToPrev}
 						>
-							Previous
+							<Icon icon={faArrowLeft} />
 						</Button>
 					) : null}
 					{showNext ? (
 						<Button
 							type="submit"
+							size="icon"
 							disabled={!form.formState.isValid}
 							isLoading={form.formState.isSubmitting}
 						>
-							{step.next || (isLastVisible ? "Finish" : "Next")}
+							<Icon icon={faArrowRight} />
 						</Button>
 					) : null}
 				</Stepper.Controls>

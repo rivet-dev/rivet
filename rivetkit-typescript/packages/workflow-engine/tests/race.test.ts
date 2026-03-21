@@ -151,5 +151,138 @@ for (const mode of modes) {
 
 			expect(runs).toBe(1);
 		});
+
+		it("should support nested joins in the winning branch", async () => {
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.race("outer-race", [
+					{
+						name: "fast",
+						run: async (ctx) => {
+							const nested = await ctx.join("inner-join", {
+								left: {
+									run: async (ctx) =>
+										await ctx.step(
+											"left-step",
+											async () => 1,
+										),
+								},
+								right: {
+									run: async (ctx) =>
+										await ctx.step(
+											"right-step",
+											async () => 2,
+										),
+								},
+							});
+
+							return nested.left + nested.right;
+						},
+					},
+					{
+						name: "slow",
+						run: async (ctx) => {
+							await new Promise<void>((resolve) => {
+								if (ctx.abortSignal.aborted) {
+									resolve();
+									return;
+								}
+								ctx.abortSignal.addEventListener(
+									"abort",
+									() => resolve(),
+									{ once: true },
+								);
+							});
+							return 0;
+						},
+					},
+				]);
+			};
+
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+
+			expect(result.state).toBe("completed");
+			expect(result.output).toEqual({
+				winner: "fast",
+				value: 3,
+			});
+		});
+
+		it("should support nested races in the winning branch", async () => {
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.race("outer-race", [
+					{
+						name: "fast",
+						run: async (ctx) => {
+							const nested = await ctx.race("inner-race", [
+								{
+									name: "nested-fast",
+									run: async (ctx) =>
+										await ctx.step(
+											"nested-fast-step",
+											async () => "nested-fast",
+										),
+								},
+								{
+									name: "nested-slow",
+									run: async (ctx) => {
+										await new Promise<void>((resolve) => {
+											if (ctx.abortSignal.aborted) {
+												resolve();
+												return;
+											}
+											ctx.abortSignal.addEventListener(
+												"abort",
+												() => resolve(),
+												{ once: true },
+											);
+										});
+										return "nested-slow";
+									},
+								},
+							]);
+
+							return nested.value;
+						},
+					},
+					{
+						name: "slow",
+						run: async (ctx) => {
+							await new Promise<void>((resolve) => {
+								if (ctx.abortSignal.aborted) {
+									resolve();
+									return;
+								}
+								ctx.abortSignal.addEventListener(
+									"abort",
+									() => resolve(),
+									{ once: true },
+								);
+							});
+							return "slow";
+						},
+					},
+				]);
+			};
+
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+
+			expect(result.state).toBe("completed");
+			expect(result.output).toEqual({
+				winner: "fast",
+				value: "nested-fast",
+			});
+		});
 	});
 }

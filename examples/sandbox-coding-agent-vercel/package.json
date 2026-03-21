@@ -15,8 +15,7 @@
 		"hono": "^4.11.3",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
-		"rivetkit": "*",
-		"sandbox-agent": "^0.1.5"
+		"rivetkit": "*"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",

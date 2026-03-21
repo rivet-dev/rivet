@@ -187,7 +187,7 @@ export const MinMaxCount = () => {
 			</FormDescription>
 			<Slider
 				min={0}
-				max={100}
+				max={100_000}
 				step={1}
 				value={[minCount, maxCount]}
 				onValueChange={([min, max]) => {
@@ -205,7 +205,7 @@ export const MinMaxCount = () => {
 			/>
 			<div className="flex justify-between text-xs text-muted-foreground">
 				<span>0</span>
-				<span>100</span>
+				<span>100,000</span>
 			</div>
 		</div>
 	);

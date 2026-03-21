@@ -238,7 +238,7 @@ const game = actor({
 
 ### Store Input in State
 
-If you need to access input data in actions, store it in the actor's state:
+Input is only available in `createState` and `onCreate` lifecycle hooks. If you need to access input data later (in actions, timers, or other hooks), store it in the actor's state during creation. This is the recommended pattern because input shapes can evolve over time, and persisting input in state ensures you always have access to the values the actor was created with:
 
 ```typescript
 import { actor } from "rivetkit";

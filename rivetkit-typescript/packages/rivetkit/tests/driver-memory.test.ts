@@ -9,6 +9,7 @@ runDriverTests({
 		// Sleeping not enabled in memory
 		sleep: true,
 		hibernation: true,
+		sandbox: true,
 	},
 	async start() {
 		return await createTestRuntime(

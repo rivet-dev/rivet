@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import posthog from "posthog-js";
 import { useState } from "react";
+import { deleteCloudNamespaceContext } from "@/app/data-providers/cache";
 import { Button, type DialogContentProps, Frame } from "@/components";
 import { useCloudNamespaceDataProvider } from "@/components/actors";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,11 @@ export default function ConfirmDeleteNamespaceContent({
 			posthog.capture("namespace_deleted", {
 				displayName,
 			});
+			deleteCloudNamespaceContext(
+				dataProvider.organization,
+				dataProvider.project,
+				dataProvider.cloudNamespace,
+			);
 			queryClient.invalidateQueries();
 			onClose?.();
 			return navigate({

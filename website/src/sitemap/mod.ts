@@ -158,6 +158,11 @@ export const sitemap = [
 						icon: faDiagramNext,
 					},
 					{
+						title: "Sandbox Actor",
+						href: "/docs/actors/sandbox",
+						icon: faSquareTerminal,
+					},
+					{
 						title: "Queues",
 						href: "/docs/actors/queues",
 						icon: faMailbox,

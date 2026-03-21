@@ -30,7 +30,7 @@ Use the inspector HTTP API to examine running actors. These endpoints are access
 - `POST /inspector/action/{name}` - execute an action with `{"args": [...]}`
 - `GET /inspector/queue?limit=50` - queue status
 - `GET /inspector/traces?startMs=0&endMs=...&limit=1000` - trace spans (OTLP JSON)
-- `GET /inspector/workflow-history` - workflow history and status
+- `GET /inspector/workflow-history` - workflow history and status as JSON (`nameRegistry`, `entries`, `entryMetadata`)
 - `GET /inspector/database/schema` - SQLite tables and views exposed by `c.db`
 - `GET /inspector/database/rows?table=...&limit=100&offset=0` - paged SQLite rows for a table or view
 

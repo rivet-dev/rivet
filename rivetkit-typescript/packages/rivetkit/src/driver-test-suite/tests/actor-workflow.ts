@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { WORKFLOW_QUEUE_NAME } from "../../../fixtures/driver-test-suite/workflow";
+import {
+	WORKFLOW_NESTED_QUEUE_NAME,
+	WORKFLOW_QUEUE_NAME,
+} from "../../../fixtures/driver-test-suite/workflow";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
@@ -55,6 +58,143 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 				response: { echo: { value: 123 } },
 			});
 		});
+
+		for (const testCase of [
+			{
+				name: "nested loops",
+				key: "loop" as const,
+				getActor: (
+					client: Awaited<
+						ReturnType<typeof setupDriverTest>
+					>["client"],
+				) => client.workflowNestedLoopActor,
+				firstItems: ["a", "b"],
+				secondItems: ["c"],
+				expected: ["a", "b", "c"],
+			},
+			{
+				name: "nested joins",
+				key: "join" as const,
+				getActor: (
+					client: Awaited<
+						ReturnType<typeof setupDriverTest>
+					>["client"],
+				) => client.workflowNestedJoinActor,
+				firstItems: ["a", "b"],
+				secondItems: ["c"],
+				expected: ["a", "b", "c"],
+			},
+			{
+				name: "nested races",
+				key: "race" as const,
+				getActor: (
+					client: Awaited<
+						ReturnType<typeof setupDriverTest>
+					>["client"],
+				) => client.workflowNestedRaceActor,
+				firstItems: ["a"],
+				secondItems: ["b"],
+				expected: ["a", "b"],
+			},
+			]) {
+				test(
+					`replays ${testCase.name} across workflow queue iterations`,
+				async (c) => {
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
+					const actor = testCase.getActor(client).getOrCreate([
+						`workflow-nested-${testCase.key}`,
+					]);
+
+					const first = await actor.send(
+						WORKFLOW_NESTED_QUEUE_NAME,
+						{
+							items: testCase.firstItems,
+						},
+						{
+							wait: true,
+							timeout: 1_000,
+						},
+					);
+					expect(first).toEqual({
+						status: "completed",
+						response: {
+							processed: testCase.firstItems.length,
+						},
+					});
+
+					const second = await actor.send(
+						WORKFLOW_NESTED_QUEUE_NAME,
+						{
+							items: testCase.secondItems,
+						},
+						{
+							wait: true,
+							timeout: 1_000,
+						},
+					);
+					expect(second).toEqual({
+						status: "completed",
+						response: {
+							processed: testCase.secondItems.length,
+						},
+					});
+
+					const state = await actor.getState();
+					expect(state.processed).toEqual(testCase.expected);
+				},
+				);
+			}
+
+			test(
+				"starts child workflows created inside workflow steps",
+				async (c) => {
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
+					const parent = client.workflowSpawnParentActor.getOrCreate([
+						"workflow-spawn-parent",
+					]);
+
+					expect(await parent.triggerSpawn("child-1")).toEqual({
+						queued: true,
+					});
+
+					let parentState = await parent.getState();
+					for (
+						let i = 0;
+						i < 30 && parentState.results.length === 0;
+						i++
+					) {
+						await waitFor(driverTestConfig, 100);
+						parentState = await parent.getState();
+					}
+
+					expect(parentState.results).toEqual([
+						{
+							key: "child-1",
+							result: {
+								status: "completed",
+								response: { ok: true },
+							},
+							error: null,
+						},
+					]);
+
+					const child = client.workflowSpawnChildActor.getOrCreate([
+						"child-1",
+					]);
+					const childState = await child.getState();
+					expect(childState).toEqual({
+						label: "child-1",
+						started: true,
+						processed: ["hello"],
+					});
+				},
+			);
 
 		test("db and client are step-only in workflow context", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);

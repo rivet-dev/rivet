@@ -9,6 +9,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { AnsiText } from "./lib/ansi";
 import { cn } from "./lib/utils";
 import { Skeleton } from "./ui/skeleton";
 import { Toggle } from "./ui/toggle";
@@ -82,7 +83,13 @@ function LogRow({ timestamp, line, isFirst }: LogRowProps) {
 							isWarn && "bg-warning/20",
 						)}
 					>
-						{typeof line === "string" ? line : line?.message}
+						<AnsiText
+							text={
+								typeof line === "string"
+									? line
+									: (line?.message ?? "")
+							}
+						/>
 					</pre>
 				</>
 			)}
