@@ -649,3 +649,24 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - For napi-rs addons, initialize the subscriber in the global runtime init (`get_runtime()`) since there's no other natural initialization point.
   - `%e` (Display format) is preferred over `?e` (Debug format) for error fields that are already human-readable strings.
 ---
+
+## 2026-03-21 - US-035
+- Added LRU prepared statement cache (128 entries default) to native SQLite addon
+- Created `CachedStmt` wrapper with `Drop` impl that auto-finalizes evicted statements via `sqlite3_finalize`
+- Added `get_or_prepare_stmt` helper: checks cache first (reset + clear_bindings on hit), prepares fresh on miss
+- Updated `execute()` and `query()` to use cache via cloned `Arc<Mutex<LruCache>>` passed into `spawn_blocking`
+- `exec()` unchanged (multi-statement SQL not suitable for caching)
+- `stmt_cache` field declared before `db` in `JsNativeDatabase` for correct drop order (finalize stmts before closing db)
+- `close_database` explicitly clears cache before dropping the database handle
+- Added `lru = "0.12"` dependency to Cargo.toml
+- Added `sqlite3_reset` and `sqlite3_clear_bindings` imports from libsqlite3-sys
+- 2 new unit tests: `test_stmt_cache_reuse` (cache hit/miss verification) and `test_stmt_cache_eviction` (LRU eviction with tiny cache)
+- All 78 tests pass (76 existing + 2 new), cargo check clean
+- Files changed: rivetkit-typescript/packages/sqlite-native/{Cargo.toml, Cargo.lock, src/lib.rs}
+- **Learnings for future iterations:**
+  - `LruCache::get()` takes `&mut self` (updates LRU ordering). The returned reference borrows the cache, but extracting a `Copy` value (raw pointer) releases the borrow immediately.
+  - `LruCache::put()` silently drops evicted entries. The `CachedStmt` Drop impl handles finalization automatically on eviction.
+  - Field declaration order in Rust structs determines drop order. `stmt_cache` before `db` ensures statements are finalized before `sqlite3_close`.
+  - `sqlite3_reset` + `sqlite3_clear_bindings` is the standard pattern for reusing prepared statements. Reset keeps the compiled bytecode but clears results and bindings.
+  - The `get_or_prepare_stmt` helper returns `(stmt, cached)` so the caller can defer `cache.put()` until after successful execution, avoiding caching statements that fail during step.
+---

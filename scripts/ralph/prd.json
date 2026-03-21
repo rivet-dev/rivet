@@ -602,7 +602,7 @@
         "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
       ],
       "priority": 35,
-      "passes": false,
+      "passes": true,
       "notes": "Currently every query/execute call in lib.rs re-parses SQL via sqlite3_prepare_v2. For actors with repeated queries (common pattern), this adds unnecessary overhead. The cache should be on the Rust side since that's where sqlite3_prepare_v2 is called. Use an LRU cache (lru crate) to bound memory."
     },
     {
