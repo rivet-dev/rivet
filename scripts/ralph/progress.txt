@@ -554,3 +554,24 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The `resolve_actor` function uses `map_err` which required passing `&err` (reference) to `internal_error`.
   - Pre-existing build errors in guard crate files (proxy.rs, websocket.rs, custom_serve.rs) do not affect targeted crate checks.
 ---
+
+## 2026-03-21 - US-029
+- Replaced string matching with concrete KV error types for storage quota exceeded classification
+- Rust side:
+  - Added `KvStorageQuotaExceeded { remaining, payload_size }` variant to `Actor` enum in `engine/packages/pegboard/src/errors.rs` using `#[derive(RivetError)]`
+  - Updated `actor_kv/utils.rs` `validate_entries()` to return `errors::Actor::KvStorageQuotaExceeded.build()` instead of anyhow `ensure!` with format string
+  - Updated `pegboard-kv-channel/src/lib.rs` to use `rivet_error::RivetError::extract(&err).code() == "kv_storage_quota_exceeded"` instead of `msg.contains("not enough space left in storage")`
+  - Added `rivet-error` workspace dependency to `pegboard-kv-channel/Cargo.toml`
+- TypeScript side:
+  - Created `KvStorageQuotaExceededError` class in `kv-limits.ts` with `remaining` and `payloadSize` fields
+  - Updated `validateKvEntries()` in `kv-limits.ts` to throw `KvStorageQuotaExceededError` instead of plain `Error`
+  - Updated `kv-channel.ts` to use `instanceof KvStorageQuotaExceededError` instead of `message.includes("not enough space")`
+- cargo check passes for both pegboard and pegboard-kv-channel
+- No new TypeScript errors introduced
+- Files changed: engine/packages/pegboard/src/errors.rs, engine/packages/pegboard/src/actor_kv/utils.rs, engine/packages/pegboard-kv-channel/Cargo.toml, engine/packages/pegboard-kv-channel/src/lib.rs, rivetkit-typescript/packages/rivetkit/src/drivers/file-system/kv-limits.ts, rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts, Cargo.lock
+- **Learnings for future iterations:**
+  - `RivetError::extract(&err)` walks the anyhow error chain and finds the `RivetError` if one exists. Then `.code()` gives the error code string. For non-RivetError anyhow errors, it returns `internal_error`.
+  - Enum variants with metadata fields use `.build()` which calls `build_with` internally (macro-generated). The variant fields become serialized metadata.
+  - The RivetError derive macro auto-generates an error artifact JSON file in `engine/artifacts/errors/` which must be committed.
+  - TypeScript error matching: prefer `instanceof` with a custom Error subclass over string matching on `.message`. This gives type-safe access to error metadata fields.
+---

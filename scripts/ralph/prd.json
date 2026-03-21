@@ -509,7 +509,7 @@
         "Typecheck passes"
       ],
       "priority": 29,
-      "passes": false,
+      "passes": true,
       "notes": "Currently only one location does string matching (storage quota in handle_kv_put). The codebase already has #[derive(RivetError)] infrastructure in engine/packages/error/. The existing pegboard errors at engine/packages/pegboard/src/errors.rs show the pattern. actor_kv/utils.rs line 79 defines the storage error as a format! string."
     },
     {
