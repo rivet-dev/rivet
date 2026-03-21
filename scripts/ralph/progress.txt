@@ -19,7 +19,7 @@
 - Reconnect backoff constants: initial=1000ms, max=30000ms, multiplier=2, jitter=0-25%. Matches `engine/sdks/typescript/runner/src/utils.ts`.
 - libsqlite3-sys (bundled) exports `sqlite3_close` not `sqlite3_close_v2`. Use `sqlite3_close` for closing databases.
 - Use `std::mem::zeroed()` to initialize `sqlite3_vfs` and `sqlite3_io_methods` structs, then set individual fields. This avoids needing to know the exact types of optional v2+/v3+ fields.
-- File metadata encoding: 1 byte version (0x01) + 8 bytes u64 LE size = 9 bytes total. Must be byte-identical to WASM VFS vbare serialization.
+- File metadata encoding: 2 bytes u16 LE version + 8 bytes u64 LE size = 10 bytes total. Must match vbare's `serializeWithEmbeddedVersion` format (u16 LE prefix, not u8).
 - VFS callbacks are sync C functions. Bridge to async KV channel via `rt_handle.block_on()`. Must not be called from within a tokio async context.
 - Do NOT glob import `libsqlite3_sys::*` in files that also use `napi::bindgen_prelude::*`. Both export `Error` and `Result`, causing ambiguity. Use specific imports from libsqlite3-sys instead.
 - `napi` crate needs `serde-json` feature to convert `serde_json::Value` to/from JS values. Add `serde_json = "1"` as a separate dependency.
@@ -475,4 +475,20 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - `pendingDisconnectCount` prevents the sleep TIMER from starting, but does NOT prevent `onStop` from running if sleep was already deferred via `setImmediate`.
   - To diagnose flaky tests, grep test logs for "error in `onDisconnect`" to find swallowed errors in disconnect handlers.
   - The native SQLite KV channel is a process-level singleton connecting to `RIVET_ENDPOINT` (or `localhost:6420`). In tests, this connects to the dev server, not the test server.
+---
+
+## 2026-03-21 - US-024
+- Fixed metadata encoding mismatch between WASM and native VFS
+- Changed META_VERSION from u8 (1 byte) to u16 (2 bytes LE), matching vbare's `serializeWithEmbeddedVersion` format
+- Updated META_ENCODED_SIZE from 9 to 10 (2 bytes version + 8 bytes size)
+- Updated `encode_file_meta` to use `META_VERSION.to_le_bytes()` (2 bytes) instead of `push(META_VERSION)` (1 byte)
+- Updated `decode_file_meta` to read 2-byte u16 LE version and extract size from bytes [2..10] instead of [1..9]
+- Updated all 7 unit tests to reflect the new 10-byte layout
+- Added `encode_matches_vbare_format` test to explicitly verify byte-level compatibility with vbare
+- All 76 tests pass, cargo check clean
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/vfs.rs
+- **Learnings for future iterations:**
+  - vbare's `serializeWithEmbeddedVersion` prepends a 2-byte u16 LE version, not a varint or single byte. Verified by inspecting the published vbare@0.0.4 package source.
+  - The WASM VFS (production format) produces 10-byte metadata: [version_u16_le, size_u64_le]. The native VFS must match exactly.
+  - `DataView.setUint16(0, version, true)` in JS produces the same bytes as `version.to_le_bytes()` in Rust for u16 values.
 ---

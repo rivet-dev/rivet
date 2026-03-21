@@ -429,7 +429,7 @@
         "Typecheck passes"
       ],
       "priority": 24,
-      "passes": false,
+      "passes": true,
       "notes": "CRITICAL data compatibility issue. The vbare library's serializeWithEmbeddedVersion prepends a 2-byte u16 LE version. The native VFS uses a 1-byte u8 version. If an actor is created with WASM VFS and later accessed via native VFS (or vice versa), metadata deserialization will fail silently or produce wrong file sizes. The WASM encoding is the production format, so native must align to it."
     },
     {
