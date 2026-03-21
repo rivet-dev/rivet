@@ -93,16 +93,17 @@ const stepper = defineStepper(
 		title: "Connect your Backend",
 		assist: true,
 		group: "deploy",
-		schema: ConnectServerlessForm.deploymentSchema
-			.pick({
-				success: true,
-			})
-			.or(
-				z.object({
-					...ConnectServerlessForm.configurationSchema.shape,
-					...ConnectServerlessForm.deploymentSchema.shape,
-				}),
-			),
+		schema: (values: Record<string, unknown>) => {
+			if ((values.provider as string) === "rivet") {
+				return z.object({
+					success: z.boolean(),
+				});
+			}
+			return z.object({
+				...ConnectServerlessForm.configurationSchema.shape,
+				...ConnectServerlessForm.deploymentSchema.shape,
+			});
+		},
 	},
 	{
 		id: "frontend",
@@ -165,20 +166,29 @@ export function GettingStarted({
 										? undefined
 										: "frontend"
 							}
-							defaultValues={{
-								provider: provider || "rivet",
-								runnerName: "default",
-								slotsPerRunner: 1,
-								maxRunners: 100_000,
-								minRunners: 1,
-								runnerMargin: 0,
-								headers: [],
-
-								requestLifespan: 900,
-								datacenters: Object.fromEntries(
-									datacenters.map((dc) => [dc.name, true]),
-								),
-							}}
+							// eslint-disable-next-line @typescript-eslint/no-explicit-any
+							defaultValues={
+								{
+									provider: provider || "rivet",
+									...(provider && provider !== "rivet"
+										? {
+												runnerName: "default",
+												slotsPerRunner: 1,
+												maxRunners: 100_000,
+												minRunners: 1,
+												runnerMargin: 0,
+												headers: [],
+												requestLifespan: 900,
+												datacenters: Object.fromEntries(
+													datacenters.map((dc) => [
+														dc.name,
+														true,
+													]),
+												),
+											}
+										: {}),
+								} as any
+							}
 							content={{
 								install: () => (
 									<StepContent>
@@ -240,16 +250,23 @@ export function GettingStarted({
 									"endpoint" in values &&
 									values.endpoint &&
 									values.provider !== "rivet" &&
-									values.success
+									(values as unknown as { success: boolean })
+										.success
 								) {
 									const config = await buildServerlessConfig(
 										dataProvider,
-										values,
-										{ provider: values.provider },
+										values as unknown as Parameters<
+											typeof buildServerlessConfig
+										>[1],
+										{ provider: values.provider as string },
 									);
 
 									await mutateAsync({
-										name: values.runnerName,
+										name: (
+											values as unknown as {
+												runnerName: string;
+											}
+										).runnerName,
 										config,
 									});
 
@@ -354,9 +371,7 @@ function ProviderSetup() {
 							{rivetCloud ? (
 								<ProviderCard
 									option={rivetCloud}
-									isSelected={
-										field.value === rivetCloud.name
-									}
+									isSelected={field.value === rivetCloud.name}
 									onSelect={() =>
 										setValue("provider", rivetCloud.name)
 									}
@@ -369,9 +384,7 @@ function ProviderSetup() {
 									<ProviderCard
 										key={option.name}
 										option={option}
-										isSelected={
-											field.value === option.name
-										}
+										isSelected={field.value === option.name}
 										onSelect={() =>
 											setValue("provider", option.name)
 										}
@@ -413,13 +426,14 @@ function ProviderCard({
 		>
 			<Icon
 				icon={option.icon}
-				className={cn("!w-5 h-auto shrink-0 text-muted-foreground", iconClassName)}
+				className={cn(
+					"!w-5 h-auto shrink-0 text-muted-foreground",
+					iconClassName,
+				)}
 			/>
 			<div className="min-w-0">
 				<div className="flex items-center gap-2 flex-wrap">
-					<p className="text-sm font-medium">
-						{option.displayName}
-					</p>
+					<p className="text-sm font-medium">{option.displayName}</p>
 					{option.badge ? (
 						<Badge
 							variant="secondary"
@@ -441,16 +455,19 @@ function InstallStep() {
 	return (
 		<div className="flex flex-col gap-5">
 			<div className="relative rounded-lg border border-primary p-4 pt-5">
-				<Badge className="absolute -top-2.5 left-4 z-10 bg-background">Recommended</Badge>
-				<p className="font-medium mb-1.5">
-					Install Rivet Skills
-				</p>
+				<Badge className="absolute -top-2.5 left-4 z-10 bg-background">
+					Recommended
+				</Badge>
+				<p className="font-medium mb-1.5">Install Rivet Skills</p>
 				<p className="text-sm text-muted-foreground mb-3">
-					Run this command in your coding agent to install Rivet skills
-					for guided setup and development.
+					Run this command in your coding agent to install Rivet
+					skills for guided setup and development.
 				</p>
 				<div className="flex items-center justify-between gap-2 rounded-md px-3 py-2">
-					<CodePreview code="npx skills add rivet-dev/skills" language="bash" />
+					<CodePreview
+						code="npx skills add rivet-dev/skills"
+						language="bash"
+					/>
 					<Button
 						type="button"
 						variant="ghost"
@@ -459,7 +476,9 @@ function InstallStep() {
 						onClick={(e) => {
 							e.preventDefault();
 							e.stopPropagation();
-							navigator.clipboard.writeText("npx skills add rivet-dev/skills");
+							navigator.clipboard.writeText(
+								"npx skills add rivet-dev/skills",
+							);
 							toast.success("Copied to clipboard");
 						}}
 					>
@@ -992,7 +1011,9 @@ function AgentPromptBanner({ code }: { code: string }) {
 			}}
 			className="relative w-full flex items-center justify-between rounded-lg px-4 py-5 border border-primary group cursor-pointer"
 		>
-			<Badge className="absolute -top-2.5 left-4 z-10 bg-background">Recommended</Badge>
+			<Badge className="absolute -top-2.5 left-4 z-10 bg-background">
+				Recommended
+			</Badge>
 			<span className="text-sm font-medium text-white text-left">
 				Have your coding agent complete these steps automatically to
 				deploy to Rivet Cloud.
@@ -1167,15 +1188,23 @@ function BackendSetupRivet() {
 						<Button
 							type="button"
 							variant="outline"
-							onClick={() => { setDirection(-1); setCurrentStep((s) => s - 1); }}
+							onClick={() => {
+								setDirection(-1);
+								setCurrentStep((s) => s - 1);
+							}}
 						>
 							Previous
 						</Button>
-					) : <div />}
+					) : (
+						<div />
+					)}
 					{currentStep < steps.length - 1 ? (
 						<Button
 							type="button"
-							onClick={() => { setDirection(1); setCurrentStep((s) => s + 1); }}
+							onClick={() => {
+								setDirection(1);
+								setCurrentStep((s) => s + 1);
+							}}
 						>
 							Next
 						</Button>
