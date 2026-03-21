@@ -28,6 +28,7 @@ tokio-tungstenite.workspace = true
 tracing.workspace = true
 universaldb.workspace = true
 url.workspace = true
+uuid.workspace = true
 
 pegboard.workspace = true
 namespace.workspace = true

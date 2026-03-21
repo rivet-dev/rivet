@@ -3384,6 +3384,7 @@ dependencies = [
  "tracing",
  "universaldb",
  "url",
+ "uuid",
 ]
 
 [[package]]

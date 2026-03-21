@@ -5,7 +5,7 @@
 //! docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md for the full spec.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -24,6 +24,7 @@ use rivet_guard_core::{
 };
 use tokio::sync::{Mutex, mpsc, watch};
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
+use uuid::Uuid;
 
 pub mod protocol;
 
@@ -44,9 +45,7 @@ pub struct KvChannelState {
 	/// Maps actor_id string to the connection_id holding the single-writer lock and a reference
 	/// to that connection's open_actors set. The Arc reference allows lock eviction to remove the
 	/// actor from the old connection's set without acquiring the global lock on the KV hot path.
-	actor_locks: Mutex<HashMap<String, (u64, Arc<Mutex<HashSet<String>>>)>>,
-	/// Counter for assigning unique connection IDs.
-	next_conn_id: AtomicU64,
+	actor_locks: Mutex<HashMap<String, (Uuid, Arc<Mutex<HashSet<String>>>)>>,
 }
 
 pub struct PegboardKvChannelCustomServe {
@@ -60,7 +59,6 @@ impl PegboardKvChannelCustomServe {
 			ctx,
 			state: Arc::new(KvChannelState {
 				actor_locks: Mutex::new(HashMap::new()),
-				next_conn_id: AtomicU64::new(1),
 			}),
 		}
 	}
@@ -127,8 +125,8 @@ impl CustomServeTrait for PegboardKvChannelCustomServe {
 			.ok_or_else(|| namespace::errors::Namespace::NotFound.build())
 			.with_context(|| format!("namespace not found: {namespace_name}"))?;
 
-		// Assign connection ID.
-		let conn_id = state.next_conn_id.fetch_add(1, Ordering::Relaxed);
+		// Assign connection ID. Uses UUID to eliminate any possibility of ID collision.
+		let conn_id = Uuid::new_v4();
 		let namespace_id = namespace.namespace_id;
 
 		tracing::info!(%conn_id, %namespace_id, "kv channel connection established");
@@ -176,7 +174,7 @@ async fn run_connection(
 	ctx: StandaloneCtx,
 	state: Arc<KvChannelState>,
 	ws_handle: WebSocketHandle,
-	conn_id: u64,
+	conn_id: Uuid,
 	namespace_id: Id,
 	open_actors: Arc<Mutex<HashSet<String>>>,
 	last_pong_ts: Arc<AtomicI64>,
@@ -256,7 +254,7 @@ async fn message_loop(
 	ctx: &StandaloneCtx,
 	state: &Arc<KvChannelState>,
 	ws_handle: &WebSocketHandle,
-	conn_id: u64,
+	conn_id: Uuid,
 	namespace_id: Id,
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	last_pong_ts: &AtomicI64,
@@ -335,7 +333,7 @@ async fn handle_binary_message(
 	ctx: &StandaloneCtx,
 	state: &Arc<KvChannelState>,
 	ws_handle: &WebSocketHandle,
-	conn_id: u64,
+	conn_id: Uuid,
 	namespace_id: Id,
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	last_pong_ts: &AtomicI64,
@@ -404,7 +402,7 @@ async fn actor_request_task(
 	ctx: StandaloneCtx,
 	state: Arc<KvChannelState>,
 	ws_handle: WebSocketHandle,
-	conn_id: u64,
+	conn_id: Uuid,
 	namespace_id: Id,
 	open_actors: Arc<Mutex<HashSet<String>>>,
 	mut rx: mpsc::UnboundedReceiver<protocol::ToServerRequest>,
@@ -446,7 +444,7 @@ async fn actor_request_task(
 async fn handle_request(
 	ctx: &StandaloneCtx,
 	state: &KvChannelState,
-	conn_id: u64,
+	conn_id: Uuid,
 	namespace_id: Id,
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	req: &protocol::ToServerRequest,
@@ -499,7 +497,7 @@ async fn handle_request(
 
 async fn handle_actor_open(
 	state: &KvChannelState,
-	conn_id: u64,
+	conn_id: Uuid,
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	actor_id: &str,
 ) -> protocol::ResponseData {
@@ -543,7 +541,7 @@ async fn handle_actor_open(
 
 async fn handle_actor_close(
 	state: &KvChannelState,
-	conn_id: u64,
+	conn_id: Uuid,
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	actor_id: &str,
 ) -> protocol::ResponseData {
