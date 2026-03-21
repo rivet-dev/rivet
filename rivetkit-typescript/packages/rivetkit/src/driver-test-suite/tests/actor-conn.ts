@@ -243,6 +243,80 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 				await conn1.dispose();
 				await conn2.dispose();
 			});
+
+			test("should call getParams for each connection", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				let connectionCount = 0;
+				const handle = client.counterWithParams.getOrCreate(
+					["test-get-params"],
+					{
+						getParams: async () => ({
+							name: `user${++connectionCount}`,
+						}),
+					},
+				);
+
+				const conn1 = handle.connect();
+				await conn1.getInitializers();
+				await conn1.dispose();
+
+				const conn2 = handle.connect();
+				const initializers = await conn2.getInitializers();
+
+				expect(initializers).toEqual(["user1", "user2"]);
+				expect(connectionCount).toBe(2);
+
+				await conn2.dispose();
+			});
+
+			test("should surface getParams errors and retry connection setup", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				let attempts = 0;
+				const handle = client.counterWithParams.getOrCreate(
+					["test-get-params-retry"],
+					{
+						getParams: async () => {
+							attempts++;
+							if (attempts === 1) {
+								throw new Error("token unavailable");
+							}
+
+							return { name: "user1" };
+						},
+					},
+				);
+
+				const conn = handle.connect();
+				const receivedErrors: Array<{ group: string; code: string }> =
+					[];
+				conn.onError((error) => {
+					receivedErrors.push({
+						group: error.group,
+						code: error.code,
+					});
+				});
+
+				await expect(conn.getInitializers()).rejects.toMatchObject({
+					group: "client",
+					code: "get_params_failed",
+				});
+
+				await vi.waitFor(
+					async () => {
+						expect(await conn.getInitializers()).toEqual(["user1"]);
+					},
+					{ timeout: 10_000 },
+				);
+
+				expect(receivedErrors).toEqual([
+					{ group: "client", code: "get_params_failed" },
+				]);
+				expect(attempts).toBeGreaterThanOrEqual(2);
+
+				await conn.dispose();
+			});
 		});
 
 		describe("Lifecycle Hooks", () => {
