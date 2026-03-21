@@ -23,7 +23,6 @@ interface DeploymentLogsProps {
 }
 
 interface LogRowProps {
-	"data-index": number;
 	className?: string;
 	entry: RivetSse.LogStreamEvent.Log;
 }
@@ -160,7 +159,7 @@ export function DeploymentLogs({
 
 	return (
 		<div className=" h-full font-mono text-xs text-neutral-100 overflow-hidden">
-			<VirtualScrollArea
+			<VirtualScrollArea<{ index: number }>
 				virtualizerRef={virtualizerRef}
 				viewportRef={viewportRef}
 				onChange={handleScrollChange}
@@ -171,12 +170,10 @@ export function DeploymentLogs({
 					className: "w-full",
 				}}
 				viewportProps={{}}
-				row={(props: LogRowProps) => (
-					<LogRow {...props} entry={logs[props["data-index"]]} />
-				)}
 				getRowData={(index) => ({
-					"data-index": index,
+					index: index,
 				})}
+				row={(props) => <LogRow {...props} entry={logs[props.index]} />}
 			/>
 		</div>
 	);

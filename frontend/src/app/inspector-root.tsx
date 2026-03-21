@@ -22,7 +22,7 @@ export function InspectorRoot() {
 	if (isInspectorAvailable) {
 		return (
 			<RouteLayout>
-				<Actors actorId={search.actorId} />
+				<Actors actorId={search.actorId ?? search.actorKey} />
 				<CatchBoundary
 					getResetKey={() => search.n?.join(",") ?? "no-build-name"}
 					errorComponent={() => null}

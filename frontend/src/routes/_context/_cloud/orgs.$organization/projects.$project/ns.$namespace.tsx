@@ -1,10 +1,16 @@
 import type { Rivet } from "@rivet-gg/cloud";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	redirect,
+	useNavigate,
+	useSearch,
+} from "@tanstack/react-router";
 import { posthog } from "posthog-js";
 import { GettingStarted } from "@/app/getting-started";
 import { SidebarlessHeader } from "@/app/layout";
 import { NotFoundCard } from "@/app/not-found-card";
 import { RouteLayout } from "@/app/route-layout";
+import { useDialog } from "@/app/use-dialog";
 import { FullscreenLoading, ls } from "@/components";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { isRivetApiError } from "@/lib/errors";
@@ -77,7 +83,7 @@ export const Route = createFileRoute(
 		if (namespace.displayName !== "Production" || isSkipped === true) {
 			return {
 				displayOnboarding: false,
-				displayBackendOnboarding: false,
+				displayFrontendOnboarding: false,
 			};
 		}
 
@@ -100,7 +106,6 @@ export const Route = createFileRoute(
 			)
 			.find((provider) => provider !== undefined);
 
-		const hasManagedPoolRunner = runnerProvider === "rivet";
 		const actors = await context.queryClient.fetchQuery(
 			context.dataProvider.actorsCountQueryOptions(),
 		);
@@ -110,30 +115,11 @@ export const Route = createFileRoute(
 			Object.entries(runnerConfigs.pages[0].runnerConfigs).length > 0;
 		const hasActors = actors > 0;
 
-		let displayOnboarding =
-			(!hasRunnerNames && !hasRunnerConfigs) || !hasActors;
-
-		let displayBackendOnboarding = !hasRunnerNames && !hasRunnerConfigs;
-
-		if (hasManagedPoolRunner) {
-			const managedPool = await context.queryClient.fetchQuery(
-				context.dataProvider.currentProjectManagedPoolQueryOptions({
-					namespace: params.namespace,
-					pool: "default",
-					safe: true,
-				}),
-			);
-
-			const hasImage = !!managedPool?.config.image;
-			const isReady = managedPool?.status === "ready";
-
-			displayOnboarding = (!hasImage || !isReady) && !hasActors;
-			displayBackendOnboarding = hasImage && isReady && !hasActors;
-		}
+		const hasBackendConfigured = hasRunnerNames || hasRunnerConfigs;
 
 		return {
-			displayOnboarding,
-			displayBackendOnboarding,
+			displayOnboarding: !hasBackendConfigured && !hasActors,
+			displayFrontendOnboarding: hasBackendConfigured && !hasActors,
 			provider: runnerProvider,
 		};
 	},
@@ -146,18 +132,19 @@ export const Route = createFileRoute(
 function RouteComponent() {
 	const {
 		displayOnboarding,
-		displayBackendOnboarding,
+		displayFrontendOnboarding,
 		provider: runnerProvider,
 	} = Route.useLoaderData();
 	const { provider } = Route.useSearch();
+	const { project, namespace } = Route.useParams();
 
-	if (displayOnboarding || displayBackendOnboarding) {
+	if (displayOnboarding || displayFrontendOnboarding) {
 		return (
 			<>
 				<SidebarlessHeader />
 				<GettingStarted
-					displayOnboarding={displayOnboarding}
-					displayBackendOnboarding={displayBackendOnboarding}
+					key={`${project}-${namespace}`}
+					displayFrontendOnboarding={displayFrontendOnboarding}
 					provider={provider || runnerProvider}
 				/>
 
@@ -175,5 +162,325 @@ function RouteComponent() {
 }
 
 function CloudNamespaceModals() {
-	return null;
+	const navigate = useNavigate();
+	const search = useSearch({ strict: false });
+	const CreateNamespaceDialog = useDialog.CreateNamespace.Dialog;
+	const ConnectRivetDialog = useDialog.ConnectRivet.Dialog;
+	const ConnectVercelDialog = useDialog.ConnectVercel.Dialog;
+	const ConnectQuickVercelDialog = useDialog.ConnectQuickVercel.Dialog;
+	const ConnectRailwayDialog = useDialog.ConnectRailway.Dialog;
+	const ConnectQuickRailwayDialog = useDialog.ConnectQuickRailway.Dialog;
+	const ConnectManualDialog = useDialog.ConnectManual.Dialog;
+	const ConnectAwsDialog = useDialog.ConnectAws.Dialog;
+	const ConnectGcpDialog = useDialog.ConnectGcp.Dialog;
+	const ConnectHetznerDialog = useDialog.ConnectHetzner.Dialog;
+	const EditProviderConfigDialog = useDialog.EditProviderConfig.Dialog;
+	const DeleteConfigDialog = useDialog.DeleteConfig.Dialog;
+	const DeleteNamespaceDialog = useDialog.DeleteNamespace.Dialog;
+	const DeleteProjectDialog = useDialog.DeleteProject.Dialog;
+	const UpsertDeploymentDialog = useDialog.UpsertDeployment.Dialog;
+
+	const CreateActorDialog = useDialog.CreateActor.Dialog;
+
+	return (
+		<>
+			<CreateActorDialog
+				dialogProps={{
+					open: search?.modal === "create-actor",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<UpsertDeploymentDialog
+				namespace={search?.namespace}
+				defaultImage={
+					search?.repository && search?.tag
+						? { repository: search.repository, tag: search.tag }
+						: undefined
+				}
+				dialogProps={{
+					open: search?.modal === "upsert-deployment",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<CreateNamespaceDialog
+				dialogProps={{
+					open: search?.modal === "create-ns",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectRivetDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search?.modal === "connect-rivet",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectVercelDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search?.modal === "connect-vercel",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectQuickVercelDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search?.modal === "connect-q-vercel",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectQuickRailwayDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search?.modal === "connect-q-railway",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectRailwayDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search?.modal === "connect-railway",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectManualDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search?.modal === "connect-custom",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectAwsDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search?.modal === "connect-aws",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectGcpDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search?.modal === "connect-gcp",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectHetznerDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search?.modal === "connect-hetzner",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<EditProviderConfigDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				name={search?.config}
+				dc={search?.dc}
+				dialogProps={{
+					open: search?.modal === "edit-provider-config",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<DeleteConfigDialog
+				name={search?.config}
+				dialogProps={{
+					open: search?.modal === "delete-provider-config",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<DeleteNamespaceDialog
+				displayName={search?.displayName}
+				dialogProps={{
+					open: search?.modal === "delete-namespace",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<DeleteProjectDialog
+				displayName={search?.displayName}
+				dialogProps={{
+					open: search?.modal === "delete-project",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+		</>
+	);
 }

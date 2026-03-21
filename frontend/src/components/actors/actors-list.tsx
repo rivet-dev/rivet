@@ -123,26 +123,28 @@ function LoadingIndicator() {
 
 function List() {
 	const filters = useFiltersValue({ onlyStatic: true });
-	const { actorId, n } = useSearch({
+	const { actorId, actorKey, n } = useSearch({
 		from: "/_context",
 	});
-	const { data: actorIds = [] } = useInfiniteQuery(
+	const { data: actors = [] } = useInfiniteQuery(
 		useDataProvider().actorsListQueryOptions({ n, filters }),
 	);
 
 	return (
 		<>
-			{actorIds.map((id) => (
+			{actors.map((actor) => (
 				<ActorsListRow
-					key={id}
-					actorId={id}
-					isCurrent={actorId === id}
+					key={actor.key}
+					actorKey={actor.key}
+					actorId={actor.actorId}
+					isCurrent={
+						actorId === actor.actorId || actorKey === actor.key
+					}
 				/>
 			))}
 		</>
 	);
 }
-
 
 function Pagination() {
 	const n = useSearch({
