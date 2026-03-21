@@ -79,7 +79,9 @@ const resolvedId = await room.resolve();
 
 ## Connection Parameters
 
-```typescript
+<CodeGroup>
+
+```typescript params
 import { createClient } from "rivetkit/client";
 
 const client = createClient();
@@ -89,6 +91,27 @@ const chat = client.chatRoom.getOrCreate(["general"], {
 
 const conn = chat.connect();
 ```
+
+```typescript getParams
+import { createClient } from "rivetkit/client";
+
+async function getAuthToken(): Promise<string> {
+  return "jwt-token-here";
+}
+
+const client = createClient();
+const chat = client.chatRoom.getOrCreate(["general"], {
+  getParams: async () => ({
+    authToken: await getAuthToken(),
+  }),
+});
+
+const conn = chat.connect();
+```
+
+</CodeGroup>
+
+Use `params` for static connection parameters. Use `getParams` when the value can change between connection attempts, such as refreshing a JWT before each `.connect()` or reconnect.
 
 ## Subscribing to Events
 

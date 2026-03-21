@@ -164,6 +164,7 @@ export class ActorConnRaw {
 	#client: ClientRaw;
 	#driver: ManagerDriver;
 	#params: unknown;
+	#getParams?: () => Promise<unknown>;
 	#encoding: Encoding;
 	#actorQuery: ActorQuery;
 
@@ -180,12 +181,14 @@ export class ActorConnRaw {
 		client: ClientRaw,
 		driver: ManagerDriver,
 		params: unknown,
+		getParams: (() => Promise<unknown>) | undefined,
 		encoding: Encoding,
 		actorQuery: ActorQuery,
 	) {
 		this.#client = client;
 		this.#driver = driver;
 		this.#params = params;
+		this.#getParams = getParams;
 		this.#encoding = encoding;
 		this.#actorQuery = actorQuery;
 		this.#queueSender = createQueueSender({
@@ -404,6 +407,40 @@ export class ActorConnRaw {
 		}
 	}
 
+	#clearQueuedMessages() {
+		if (this.#messageQueue.length === 0) return;
+
+		logger().debug({
+			msg: "clearing queued connection messages",
+			queueLength: this.#messageQueue.length,
+		});
+		this.#messageQueue = [];
+	}
+
+	async #resolveConnectionParams(): Promise<unknown> {
+		if (!this.#getParams) {
+			return this.#params;
+		}
+
+		try {
+			return await this.#getParams();
+		} catch (err) {
+			const errorMessage = stringifyError(err);
+			const error = new errors.ActorError(
+				"client",
+				"get_params_failed",
+				`Failed to resolve connection params: ${errorMessage}`,
+				{ error: errorMessage },
+			);
+
+			this.#clearQueuedMessages();
+			this.#rejectPendingPromises(error, false);
+			this.#dispatchActorError(error);
+
+			throw error;
+		}
+	}
+
 	async #connectWebSocket() {
 		const { actorId } = await queryActor(
 			undefined,
@@ -413,12 +450,13 @@ export class ActorConnRaw {
 
 		// Store actorId early so we can use it for error lookups
 		this.#actorId = actorId;
+		const params = await this.#resolveConnectionParams();
 
 		const ws = await this.#driver.openWebSocket(
 			PATH_CONNECT,
 			actorId,
 			this.#encoding,
-			this.#params,
+			params,
 		);
 		logger().debug({
 			msg: "opened websocket",
