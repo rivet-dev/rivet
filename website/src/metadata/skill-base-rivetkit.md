@@ -75,6 +75,58 @@ Use that canonical URL when citing, not the reference file path.
 
 For more information, read the quickstart guide relevant to the user's project.
 
+## Project Setup
+
+### .gitignore
+
+Every RivetKit project should have a `.gitignore`. Include at minimum:
+
+```
+node_modules/
+dist/
+.env
+```
+
+### .dockerignore
+
+Every project with a Dockerfile should have a `.dockerignore` to keep the image small and avoid leaking secrets:
+
+```
+node_modules/
+dist/
+.env
+.git/
+```
+
+### Dockerfile
+
+Use this as a base Dockerfile for deploying a RivetKit project. The `RIVET_RUNNER_VERSION` build arg is only needed when self-hosting or using a custom runner (not needed for Rivet Compute). It lets Rivet track which version of the actor is running and drain old actors on deploy. See https://rivet.dev/docs/actors/versions for details.
+
+```dockerfile
+FROM node:24-alpine
+
+ARG RIVET_RUNNER_VERSION
+ENV RIVET_RUNNER_VERSION=$RIVET_RUNNER_VERSION
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build --if-present
+
+CMD ["node", "dist/index.js"]
+```
+
+Build with:
+
+```bash
+docker build --build-arg RIVET_RUNNER_VERSION=$(date +%s) .
+```
+
+Adjust the `CMD` to match the project's entry point. If the project uses a different output directory or start command, update accordingly.
+
 ## Error Handling Policy
 
 - Prefer fail-fast behavior by default.
