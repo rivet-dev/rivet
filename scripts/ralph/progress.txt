@@ -683,3 +683,19 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The `urlencoding` crate is lightweight (no dependencies) and handles all RFC 3986 reserved characters
   - Existing tests with simple alphanumeric tokens pass unchanged since encoding is a no-op for unreserved characters
 ---
+
+## 2026-03-21 - US-037
+- Replaced AtomicU64 sequential counter with UUID v4 for connection IDs in engine KV channel
+- Changed `conn_id` type from `u64` to `Uuid` across all function signatures (8 functions)
+- Removed `next_conn_id: AtomicU64` field from `KvChannelState` struct
+- Removed `AtomicU64` import, added `uuid::Uuid` import
+- Added `uuid.workspace = true` to pegboard-kv-channel Cargo.toml
+- Connection assignment changed from `state.next_conn_id.fetch_add(1, Ordering::Relaxed)` to `Uuid::new_v4()`
+- Lock table type updated from `HashMap<String, (u64, ...)>` to `HashMap<String, (Uuid, ...)>`
+- cargo check passes cleanly for pegboard-kv-channel
+- Files changed: engine/packages/pegboard-kv-channel/{Cargo.toml, src/lib.rs}, Cargo.lock
+- **Learnings for future iterations:**
+  - `uuid` is already a workspace dependency with `v4` and `serde` features. Just add `uuid.workspace = true` to per-crate Cargo.toml.
+  - `Uuid` implements `Display` (for tracing `%conn_id`), `PartialEq`/`Eq` (for lock comparisons), `Hash`, and `Copy`. Drop-in replacement for `u64` in all usage patterns.
+  - Pre-existing build errors in guard crate (proxy.rs, websocket.rs, custom_serve.rs, mod.rs) are unrelated. Use `cargo check -p pegboard-kv-channel` for targeted verification.
+---

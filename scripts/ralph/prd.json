@@ -631,7 +631,7 @@
         "cargo check passes"
       ],
       "priority": 37,
-      "passes": false,
+      "passes": true,
       "notes": "next_conn_id uses AtomicU64::fetch_add(1, Relaxed) which wraps on overflow after ~18 billion connections. If it wraps, two connections could have the same ID, causing lock table corruption. Using UUID eliminates this entirely."
     }
   ]
