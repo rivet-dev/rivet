@@ -222,6 +222,19 @@ export const workflowCompleteActor = actor({
 	},
 });
 
+export const workflowDestroyActor = actor({
+	onDestroy: async (c) => {
+		const client = c.client<typeof registry>();
+		const observer = client.destroyObserver.getOrCreate(["observer"]);
+		await observer.notifyDestroyed(c.key.join("/"));
+	},
+	run: workflow(async (ctx) => {
+		await ctx.step("destroy", async () => {
+			ctx.destroy();
+		});
+	}),
+});
+
 export const workflowFailedStepActor = actor({
 	state: {
 		startCount: 0,

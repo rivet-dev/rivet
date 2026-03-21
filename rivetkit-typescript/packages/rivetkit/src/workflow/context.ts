@@ -342,6 +342,11 @@ export class ActorWorkflowContext<
 		return this.#inner.sleepUntil(name, timestampMs);
 	}
 
+	destroy(): void {
+		this.#ensureActorAccess("destroy");
+		this.#runCtx.destroy();
+	}
+
 	async rollbackCheckpoint(name: string): Promise<void> {
 		await this.#wrapActive(() => this.#inner.rollbackCheckpoint(name));
 	}

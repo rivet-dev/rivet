@@ -1,4 +1,5 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import type { ActorError } from "@/client/mod";
 import { WORKFLOW_QUEUE_NAME } from "../../../fixtures/driver-test-suite/workflow";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
@@ -240,6 +241,34 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 				expect(state.startCount).toBeGreaterThan(1);
 			},
 		);
+
+		test("workflow steps can destroy the actor", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actorKey = "workflow-destroy";
+			const observer = client.destroyObserver.getOrCreate(["observer"]);
+			await observer.reset();
+
+			const actor = client.workflowDestroyActor.getOrCreate([actorKey]);
+			const actorId = await actor.resolve();
+
+			await vi.waitFor(async () => {
+				const wasDestroyed = await observer.wasDestroyed(actorKey);
+				expect(wasDestroyed, "actor onDestroy not called").toBeTruthy();
+			});
+
+			await vi.waitFor(async () => {
+				let actorRunning = false;
+				try {
+					await client.workflowDestroyActor.getForId(actorId).resolve();
+					actorRunning = true;
+				} catch (err) {
+					expect((err as ActorError).group).toBe("actor");
+					expect((err as ActorError).code).toBe("not_found");
+				}
+
+				expect(actorRunning, "actor still running").toBeFalsy();
+			});
+		});
 
 		test.skipIf(driverTestConfig.skip?.sleep)(
 			"failed workflow steps sleep instead of surfacing as run errors",
