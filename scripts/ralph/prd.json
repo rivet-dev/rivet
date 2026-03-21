@@ -492,7 +492,7 @@
         "cargo check passes"
       ],
       "priority": 28,
-      "passes": false,
+      "passes": true,
       "notes": "Lines 571, 578, 648, 687, 692, 728, 733, 756 in lib.rs currently pass err.to_string() which can expose stack traces, database error messages, and internal state. Log full errors server-side, return sanitized messages to clients."
     },
     {

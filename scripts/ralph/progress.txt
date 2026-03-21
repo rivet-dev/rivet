@@ -541,3 +541,16 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - `auth.admin_token` is `Secret<String>` where `.read()` returns a guard that auto-derefs to `String`, so `.as_bytes()` works via deref coercion.
   - Pre-existing build errors in guard (proxy.rs, websocket.rs, mod.rs imports) are unrelated to the routing files and don't affect `cargo check -p rivet-guard`.
 ---
+
+## 2026-03-21 - US-028
+- Replaced all `error_response("internal_error", &err.to_string())` calls with a new `internal_error()` helper in pegboard-kv-channel lib.rs
+- The `internal_error()` helper logs the full error via `tracing::error!(?err, "kv channel internal error")` server-side, then returns a generic `"internal error"` message to the client
+- 9 locations fixed across 5 functions: handle_kv_get (2), handle_kv_put (2), handle_kv_delete (2), handle_kv_delete_range (2), resolve_actor (1)
+- Specific known error codes (actor_not_open, actor_locked, storage_quota_exceeded, etc.) continue to return descriptive messages
+- cargo check passes cleanly for pegboard-kv-channel
+- Files changed: engine/packages/pegboard-kv-channel/src/lib.rs
+- **Learnings for future iterations:**
+  - The `storage_quota_exceeded` error still passes the internal message ("not enough space left in storage") since it's a specific, known error code, not an internal_error. This matches the PRD requirement that only internal_error gets generic treatment.
+  - The `resolve_actor` function uses `map_err` which required passing `&err` (reference) to `internal_error`.
+  - Pre-existing build errors in guard crate files (proxy.rs, websocket.rs, custom_serve.rs) do not affect targeted crate checks.
+---
