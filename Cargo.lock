@@ -4543,6 +4543,7 @@ dependencies = [
  "rustls-pemfile",
  "serde",
  "serde_json",
+ "subtle",
  "tokio",
  "tokio-tungstenite",
  "tower 0.5.2",

@@ -2,6 +2,7 @@ use anyhow::*;
 use gas::prelude::*;
 use rivet_guard_core::{RoutingOutput, request_context::RequestContext};
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
 
 /// Route requests to the KV channel service using path-based routing.
 /// Matches path: /kv/connect
@@ -65,7 +66,7 @@ pub async fn route_request_path_based(
 				.build()
 			})?;
 
-		if token != *auth.admin_token.read() {
+		if token.as_bytes().ct_ne(auth.admin_token.read().as_bytes()).into() {
 			return Err(rivet_api_builder::ApiForbidden.build());
 		}
 

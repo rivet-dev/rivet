@@ -119,6 +119,7 @@ members = [
   slog-async = "2.8"
   slog-term = "2.9"
   statrs = "0.18"
+  subtle = "2"
   sysinfo = "0.37.2"
   tabled = "0.17.0"
   tempfile = "3.13.0"

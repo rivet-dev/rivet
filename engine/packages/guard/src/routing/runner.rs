@@ -2,6 +2,7 @@ use anyhow::*;
 use gas::prelude::*;
 use rivet_guard_core::{RoutingOutput, request_context::RequestContext};
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
 
 use super::{SEC_WEBSOCKET_PROTOCOL, X_RIVET_TOKEN};
 pub(crate) const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
@@ -106,7 +107,7 @@ async fn route_runner_internal(
 		};
 
 		// Validate token
-		if token != auth.admin_token.read() {
+		if token.as_bytes().ct_ne(auth.admin_token.read().as_bytes()).into() {
 			return Err(rivet_api_builder::ApiForbidden.build());
 		}
 
