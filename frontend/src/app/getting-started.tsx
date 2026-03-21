@@ -84,7 +84,7 @@ const stepper = defineStepper(
 	{
 		id: "provider",
 		title: "Ready to deploy?",
-		schema: z.object({ provider: z.string() }),
+		schema: z.object({ provider: z.string().nonempty() }),
 		group: "deploy",
 	},
 	{
@@ -166,7 +166,7 @@ export function GettingStarted({
 							}
 							// eslint-disable-next-line @typescript-eslint/no-explicit-any
 							defaultValues={{
-								provider: provider || "rivet",
+								provider: provider || "",
 								runnerName: "default",
 								slotsPerRunner: 1,
 								maxRunners: 1_000,
@@ -222,16 +222,29 @@ export function GettingStarted({
 							}}
 							onSubmit={() => {}}
 							onPartialSubmit={async ({ stepper, values }) => {
-								if (
-									stepper.current.id === "provider" &&
-									values.provider === "rivet"
-								) {
-									await mutateAsyncManagedPool({
-										displayName: "default",
-										pool: "default",
-										minCount: 0,
-										maxCount: 100_000,
-									});
+								if (stepper.current.id === "provider") {
+									if (values.provider === "rivet") {
+										await mutateAsyncManagedPool({
+											displayName: "default",
+											pool: "default",
+											minCount: 0,
+											maxCount: 100_000,
+										});
+									}
+
+									await Promise.all([
+										...(__APP_TYPE__ === "cloud"
+											? [
+													queryClient.prefetchQuery(
+														dataProvider.publishableTokenQueryOptions(),
+													),
+													queryClient.prefetchInfiniteQuery(
+														dataProvider.datacentersQueryOptions(),
+													),
+												]
+											: []),
+										dataProvider.engineAdminTokenQueryOptions(),
+									]);
 									return;
 								}
 								if (
@@ -340,7 +353,7 @@ function ProviderSetup() {
 	return (
 		<div>
 			<p className="text-sm text-muted-foreground mb-4">
-				Deploy your application to Rivet Cloud, our serverless hosting
+				Deploy your application to Rivet Compute, our serverless hosting
 				solution. We manage the actor orchestration, state, and scaling
 				for you.
 			</p>
@@ -348,25 +361,31 @@ function ProviderSetup() {
 				control={control}
 				name="provider"
 				render={({ field }) => {
-					const rivetCloud = filteredOptions.find(
-						(o) => o.name === "rivet",
-					);
+					// const rivetCompute = filteredOptions.find(
+					// 	(o) => o.name === "rivet",
+					// );
 					const rest = filteredOptions.filter(
 						(o) => o.name !== "rivet",
 					);
 					return (
 						<div className="flex flex-col gap-2">
-							{rivetCloud ? (
+							{/* {rivetCompute ? (
 								<ProviderCard
-									option={rivetCloud}
-									isSelected={field.value === rivetCloud.name}
+									option={rivetCompute}
+									isSelected={
+										field.value === rivetCompute.name
+									}
 									onSelect={() =>
-										setValue("provider", rivetCloud.name)
+										setValue("provider", rivetCompute.name, {
+											shouldDirty: true,
+											shouldTouch: true,
+											shouldValidate: true,
+										})
 									}
 									className="py-5"
 									iconClassName="!w-7"
 								/>
-							) : null}
+							) : null} */}
 							<div className="grid grid-cols-2 gap-2">
 								{rest.map((option) => (
 									<ProviderCard
@@ -374,7 +393,11 @@ function ProviderSetup() {
 										option={option}
 										isSelected={field.value === option.name}
 										onSelect={() =>
-											setValue("provider", option.name)
+											setValue("provider", option.name, {
+												shouldDirty: true,
+												shouldTouch: true,
+												shouldValidate: true,
+											})
 										}
 									/>
 								))}
@@ -1004,7 +1027,7 @@ function AgentPromptBanner({ code }: { code: string }) {
 			</Badge>
 			<span className="text-sm font-medium text-white text-left">
 				Have your coding agent complete these steps automatically to
-				deploy to Rivet Cloud.
+				deploy to Rivet Compute.
 			</span>
 			<Button
 				asChild
@@ -1200,7 +1223,7 @@ function BackendSetupRivet() {
 				</div>
 			</div>
 			<div>
-				<p className="font-medium mb-2">Deploy to Rivet Cloud</p>
+				<p className="font-medium mb-2">Deploy to Rivet Compute</p>
 				<p className="text-sm text-muted-foreground mb-2">
 					Push your changes to trigger the{" "}
 					<strong>Rivet Deploy</strong> workflow. The status check
