@@ -74,12 +74,13 @@ function makeResponse(requestId: number, data: ResponseData): ToClient {
 	};
 }
 
-function sendMessage(ws: WSContext, msg: ToClient): void {
+function sendMessage(conn: KvChannelConnection, msg: ToClient): void {
+	if (conn.closed || !conn.ws) return;
 	const bytes = encodeToClient(msg);
 	// Copy to a fresh ArrayBuffer to satisfy WSContext.send() parameter type.
 	const copy = new ArrayBuffer(bytes.byteLength);
 	new Uint8Array(copy).set(bytes);
-	ws.send(copy);
+	conn.ws.send(copy);
 }
 
 function startPingPong(conn: KvChannelConnection): void {
@@ -89,7 +90,7 @@ function startPingPong(conn: KvChannelConnection): void {
 		if (conn.closed || !conn.ws) return;
 
 		const ts = BigInt(Date.now());
-		sendMessage(conn.ws, {
+		sendMessage(conn, {
 			tag: "ToClientPing",
 			val: { ts },
 		});
@@ -99,14 +100,19 @@ function startPingPong(conn: KvChannelConnection): void {
 			logger().warn({
 				msg: "kv channel pong timeout, closing connection",
 			});
+			// Capture ws before cleanup nulls it.
+			const ws = conn.ws;
 			cleanupConnection(conn);
-			conn.ws.close(1000, "pong timeout");
+			if (ws) {
+				ws.close(1000, "pong timeout");
+			}
 		}
 	}, PING_INTERVAL_MS);
 }
 
 function cleanupConnection(conn: KvChannelConnection): void {
 	conn.closed = true;
+	conn.ws = null;
 
 	if (conn.pingInterval) {
 		clearInterval(conn.pingInterval);
@@ -128,7 +134,6 @@ function cleanupConnection(conn: KvChannelConnection): void {
 
 async function handleRequest(
 	conn: KvChannelConnection,
-	ws: WSContext,
 	managerDriver: ManagerDriver,
 	request: ToServerRequest,
 ): Promise<void> {
@@ -141,7 +146,7 @@ async function handleRequest(
 			actorId,
 			data,
 		);
-		sendMessage(ws, makeResponse(requestId, responseData));
+		sendMessage(conn, makeResponse(requestId, responseData));
 	} catch (err: unknown) {
 		const message =
 			err instanceof Error ? err.message : "unexpected error";
@@ -152,7 +157,7 @@ async function handleRequest(
 			error: message,
 		});
 		sendMessage(
-			ws,
+			conn,
 			makeErrorResponse(requestId, "internal_error", message),
 		);
 	}
@@ -455,14 +460,13 @@ async function handleKvOperation(
 
 function handleToServerMessage(
 	conn: KvChannelConnection,
-	ws: WSContext,
 	managerDriver: ManagerDriver,
 	msg: ToServer,
 ): void {
 	switch (msg.tag) {
 		case "ToServerRequest":
 			// Fire-and-forget: the handler sends the response itself.
-			handleRequest(conn, ws, managerDriver, msg.val).catch(
+			handleRequest(conn, managerDriver, msg.val).catch(
 				(err) => {
 					logger().error({
 						msg: "unhandled error in kv channel request handler",
@@ -518,7 +522,7 @@ export function createKvChannelWebSocketHandler(
 			startPingPong(conn);
 		},
 
-		onMessage: (event: any, ws: WSContext) => {
+		onMessage: (event: any, _ws: WSContext) => {
 			try {
 				let bytes: Uint8Array;
 				if (event.data instanceof ArrayBuffer) {
@@ -535,7 +539,7 @@ export function createKvChannelWebSocketHandler(
 				}
 
 				const msg = decodeToServer(bytes);
-				handleToServerMessage(conn, ws, managerDriver, msg);
+				handleToServerMessage(conn, managerDriver, msg);
 			} catch (err: unknown) {
 				logger().error({
 					msg: "kv channel failed to decode message",
