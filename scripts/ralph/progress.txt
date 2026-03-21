@@ -526,3 +526,18 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - For trivial callbacks (lock/unlock returning SQLITE_OK), the macro still wraps them since even trivial code paths could theoretically panic via compiler-inserted checks.
   - Non-error-returning callbacks (sector_size, device_characteristics, randomness, sleep) use safe default return values on panic (chunk size, 0, 0, 0 respectively).
 ---
+
+## 2026-03-21 - US-027
+- Replaced `!=` token comparisons with constant-time `ct_ne` from the `subtle` crate in both guard routing files
+- Added `subtle = "2"` as a workspace dependency in root Cargo.toml
+- Added `subtle.workspace = true` to engine/packages/guard/Cargo.toml
+- Updated kv_channel.rs: `token.as_bytes().ct_ne(auth.admin_token.read().as_bytes()).into()`
+- Updated runner.rs: same pattern for consistency
+- cargo check passes cleanly for rivet-guard
+- Files changed: Cargo.toml, Cargo.lock, engine/packages/guard/{Cargo.toml, src/routing/kv_channel.rs, src/routing/runner.rs}
+- **Learnings for future iterations:**
+  - `subtle::ConstantTimeEq` is implemented for `[u8]` slices. Use `.as_bytes()` on both sides to compare string-like types.
+  - `ct_ne` returns a `Choice` which implements `Into<bool>` (via `From<Choice> for bool` in subtle 2.x). The `if` expression context infers the `bool` target type.
+  - `auth.admin_token` is `Secret<String>` where `.read()` returns a guard that auto-derefs to `String`, so `.as_bytes()` works via deref coercion.
+  - Pre-existing build errors in guard (proxy.rs, websocket.rs, mod.rs imports) are unrelated to the routing files and don't affect `cargo check -p rivet-guard`.
+---

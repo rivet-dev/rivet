@@ -477,7 +477,7 @@
         "cargo check passes"
       ],
       "priority": 27,
-      "passes": false,
+      "passes": true,
       "notes": "Both kv_channel.rs and runner.rs use regular != for token comparison. The TypeScript side already uses timingSafeEqual. The subtle crate is the standard Rust crate for constant-time operations."
     },
     {
