@@ -446,7 +446,7 @@
         "Typecheck passes"
       ],
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": "These tests validate US-024 (metadata encoding fix) end-to-end. The tests need two different driver configurations: one forcing WASM VFS and one forcing native SQLite. The actor should write structured data (multiple rows, various types) to exercise chunk boundaries. Sleep/recreate cycle ensures data is flushed through KV and re-read from scratch."
     },
     {

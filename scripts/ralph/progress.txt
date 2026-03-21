@@ -492,3 +492,20 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The WASM VFS (production format) produces 10-byte metadata: [version_u16_le, size_u64_le]. The native VFS must match exactly.
   - `DataView.setUint16(0, version, true)` in JS produces the same bytes as `version.to_le_bytes()` in Rust for u16 values.
 ---
+
+## 2026-03-21 - US-025
+- Added cross-backend VFS compatibility driver tests
+- Created `rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/cross-backend-vfs.ts` with two tests:
+  - WASM-to-native: forces WASM VFS, writes data (13 rows including 8KB payload spanning chunks), sleeps actor, restores native VFS, reads and verifies data matches
+  - native-to-WASM: forces native VFS, writes data, sleeps, forces WASM, reads and verifies
+- Added `_resetNativeDetection(disable?)` internal function to `native-sqlite.ts` that allows tests to control VFS backend by resetting the cached detection state and cleaning up the KV channel singleton
+- Wired test into `mod.ts` outside the encoding/clientType loops (runs once per driver, not 6x)
+- Tests skip gracefully when native SQLite addon is not available (`describe.skipIf(!nativeAvailable)`)
+- Typecheck passes (no new errors), existing driver tests unaffected
+- Files changed: rivetkit-typescript/packages/rivetkit/src/db/native-sqlite.ts, rivetkit-typescript/packages/rivetkit/src/driver-test-suite/mod.ts, rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/cross-backend-vfs.ts (new)
+- **Learnings for future iterations:**
+  - `nativeSqliteAvailable()` is called in `db()`.createClient on each actor creation (not cached per-provider). Resetting the detection state between actor sleeps switches the VFS backend.
+  - The cross-backend test uses the same server for both phases. The file-system driver's manager serves both direct KV operations (WASM) and KV channel WebSocket (native) from the same storage.
+  - Cross-backend tests should be outside the encoding/clientType loops since VFS compatibility is independent of transport encoding.
+  - Building BARE schemas is required before running tests: run `pnpm compile:bare` in sqlite-vfs, traces, workflow-engine; run `pnpm build:schema` in rivetkit. Or use `npx turbo build --filter="rivetkit..."` to build all dependencies.
+---
