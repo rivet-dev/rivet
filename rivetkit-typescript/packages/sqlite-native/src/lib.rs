@@ -12,18 +12,21 @@
 //! - Journal mode
 
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
+use std::num::NonZeroUsize;
 use std::ptr;
 use std::slice;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use libsqlite3_sys::{
 	sqlite3, sqlite3_bind_blob, sqlite3_bind_double, sqlite3_bind_int, sqlite3_bind_int64,
-	sqlite3_bind_null, sqlite3_bind_text, sqlite3_changes, sqlite3_column_blob,
-	sqlite3_column_bytes, sqlite3_column_count, sqlite3_column_double, sqlite3_column_int64,
-	sqlite3_column_name, sqlite3_column_text, sqlite3_column_type, sqlite3_errmsg,
-	sqlite3_finalize, sqlite3_prepare_v2, sqlite3_step, sqlite3_stmt, SQLITE_BLOB, SQLITE_DONE,
-	SQLITE_FLOAT, SQLITE_INTEGER, SQLITE_NULL, SQLITE_OK, SQLITE_ROW,
+	sqlite3_bind_null, sqlite3_bind_text, sqlite3_changes, sqlite3_clear_bindings,
+	sqlite3_column_blob, sqlite3_column_bytes, sqlite3_column_count, sqlite3_column_double,
+	sqlite3_column_int64, sqlite3_column_name, sqlite3_column_text, sqlite3_column_type,
+	sqlite3_errmsg, sqlite3_finalize, sqlite3_prepare_v2, sqlite3_reset, sqlite3_step,
+	sqlite3_stmt, SQLITE_BLOB, SQLITE_DONE, SQLITE_FLOAT, SQLITE_INTEGER, SQLITE_NULL,
+	SQLITE_OK, SQLITE_ROW,
 };
+use lru::LruCache;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use serde_json::Value as JsonValue;
@@ -46,6 +49,28 @@ pub mod vfs;
 mod integration_tests;
 
 use channel::{KvChannel, KvChannelConfig};
+
+// MARK: Statement Cache
+
+/// Default number of prepared statements to cache per database.
+const STMT_CACHE_CAPACITY: usize = 128;
+
+/// Wrapper around a raw `sqlite3_stmt` pointer that finalizes on drop.
+/// Used as the value type in the LRU cache so evicted entries are
+/// automatically cleaned up.
+struct CachedStmt(*mut sqlite3_stmt);
+
+unsafe impl Send for CachedStmt {}
+
+impl Drop for CachedStmt {
+	fn drop(&mut self) {
+		if !self.0.is_null() {
+			unsafe {
+				sqlite3_finalize(self.0);
+			}
+		}
+	}
+}
 
 // MARK: Runtime
 
@@ -98,8 +123,12 @@ pub struct JsKvChannel {
 }
 
 /// An open SQLite database backed by KV storage via the channel.
+///
+/// Field order matters for drop safety: `stmt_cache` is declared before `db`
+/// so cached statements are finalized before the database connection is closed.
 #[napi(js_name = "NativeDatabase")]
 pub struct JsNativeDatabase {
+	stmt_cache: Arc<Mutex<LruCache<String, CachedStmt>>>,
 	db: Option<vfs::NativeDatabase>,
 	channel: Arc<KvChannel>,
 	actor_id: String,
@@ -166,6 +195,9 @@ pub fn open_database(channel: &JsKvChannel, actor_id: String) -> Result<JsNative
 	let native_db = vfs::open_database(kv_vfs, &actor_id).map_err(Error::from_reason)?;
 
 	Ok(JsNativeDatabase {
+		stmt_cache: Arc::new(Mutex::new(LruCache::new(
+			NonZeroUsize::new(STMT_CACHE_CAPACITY).unwrap(),
+		))),
 		db: Some(native_db),
 		channel: channel.channel.clone(),
 		actor_id,
@@ -205,25 +237,20 @@ pub async fn execute(
 		.as_ref()
 		.ok_or_else(|| Error::from_reason("database is closed"))?;
 	let db_ptr = native_db.as_ptr() as usize;
+	let cache = db.stmt_cache.clone();
 
 	get_runtime()
 		.spawn_blocking(move || {
 			let db_ptr = db_ptr as *mut sqlite3;
+			let mut cache = cache.lock().unwrap();
 
-			let c_sql =
-				CString::new(sql.as_str()).map_err(|e| Error::from_reason(e.to_string()))?;
-			let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
-
-			let rc = unsafe {
-				sqlite3_prepare_v2(db_ptr, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut())
-			};
-			if rc != SQLITE_OK {
-				return Err(Error::from_reason(unsafe { sqlite_errmsg(db_ptr) }));
-			}
+			let (stmt, cached) = get_or_prepare_stmt(&mut cache, db_ptr, &sql)?;
 
 			if let Some(ref p) = params {
 				if let Err(e) = bind_params(db_ptr, stmt, p) {
-					unsafe { sqlite3_finalize(stmt) };
+					if !cached {
+						unsafe { sqlite3_finalize(stmt) };
+					}
 					return Err(e);
 				}
 			}
@@ -231,12 +258,18 @@ pub async fn execute(
 			let rc = unsafe { sqlite3_step(stmt) };
 			if rc != SQLITE_DONE && rc != SQLITE_ROW {
 				let msg = unsafe { sqlite_errmsg(db_ptr) };
-				unsafe { sqlite3_finalize(stmt) };
+				if !cached {
+					unsafe { sqlite3_finalize(stmt) };
+				}
 				return Err(Error::from_reason(msg));
 			}
 
 			let changes = unsafe { sqlite3_changes(db_ptr) } as i64;
-			unsafe { sqlite3_finalize(stmt) };
+
+			// If the statement was freshly prepared, store it in the cache.
+			if !cached {
+				cache.put(sql, CachedStmt(stmt));
+			}
 
 			Ok(ExecuteResult { changes })
 		})
@@ -258,25 +291,20 @@ pub async fn query(
 		.as_ref()
 		.ok_or_else(|| Error::from_reason("database is closed"))?;
 	let db_ptr = native_db.as_ptr() as usize;
+	let cache = db.stmt_cache.clone();
 
 	get_runtime()
 		.spawn_blocking(move || {
 			let db_ptr = db_ptr as *mut sqlite3;
+			let mut cache = cache.lock().unwrap();
 
-			let c_sql =
-				CString::new(sql.as_str()).map_err(|e| Error::from_reason(e.to_string()))?;
-			let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
-
-			let rc = unsafe {
-				sqlite3_prepare_v2(db_ptr, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut())
-			};
-			if rc != SQLITE_OK {
-				return Err(Error::from_reason(unsafe { sqlite_errmsg(db_ptr) }));
-			}
+			let (stmt, cached) = get_or_prepare_stmt(&mut cache, db_ptr, &sql)?;
 
 			if let Some(ref p) = params {
 				if let Err(e) = bind_params(db_ptr, stmt, p) {
-					unsafe { sqlite3_finalize(stmt) };
+					if !cached {
+						unsafe { sqlite3_finalize(stmt) };
+					}
 					return Err(e);
 				}
 			}
@@ -303,7 +331,9 @@ pub async fn query(
 				}
 				if rc != SQLITE_ROW {
 					let msg = unsafe { sqlite_errmsg(db_ptr) };
-					unsafe { sqlite3_finalize(stmt) };
+					if !cached {
+						unsafe { sqlite3_finalize(stmt) };
+					}
 					return Err(Error::from_reason(msg));
 				}
 
@@ -313,7 +343,10 @@ pub async fn query(
 				rows.push(row);
 			}
 
-			unsafe { sqlite3_finalize(stmt) };
+			// If the statement was freshly prepared, store it in the cache.
+			if !cached {
+				cache.put(sql, CachedStmt(stmt));
+			}
 
 			Ok(QueryResult { columns, rows })
 		})
@@ -413,6 +446,9 @@ pub async fn exec(db: &JsNativeDatabase, sql: String) -> Result<QueryResult> {
 /// Sends ActorCloseRequest to the server.
 #[napi(js_name = "closeDatabase")]
 pub fn close_database(db: &mut JsNativeDatabase) -> Result<()> {
+	// Finalize all cached statements before closing the database.
+	db.stmt_cache.lock().unwrap().clear();
+
 	// Drop the database to close the SQLite handle and unregister the VFS.
 	let _ = db.db.take();
 
@@ -435,6 +471,38 @@ pub fn disconnect(channel: &JsKvChannel) -> Result<()> {
 }
 
 // MARK: Internal Helpers
+
+/// Look up a prepared statement in the cache, or prepare a new one.
+///
+/// Returns `(stmt, cached)` where `cached` is true if the statement came from
+/// the cache. Cached statements are reset and have bindings cleared before
+/// reuse. On cache miss, the caller is responsible for inserting the statement
+/// into the cache after successful execution (so error paths can finalize
+/// without corrupting the cache).
+fn get_or_prepare_stmt(
+	cache: &mut LruCache<String, CachedStmt>,
+	db_ptr: *mut sqlite3,
+	sql: &str,
+) -> Result<(*mut sqlite3_stmt, bool)> {
+	if let Some(cached) = cache.get(sql) {
+		let stmt = cached.0;
+		unsafe {
+			sqlite3_reset(stmt);
+			sqlite3_clear_bindings(stmt);
+		}
+		return Ok((stmt, true));
+	}
+
+	let c_sql = CString::new(sql).map_err(|e| Error::from_reason(e.to_string()))?;
+	let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
+	let rc =
+		unsafe { sqlite3_prepare_v2(db_ptr, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
+	if rc != SQLITE_OK {
+		return Err(Error::from_reason(unsafe { sqlite_errmsg(db_ptr) }));
+	}
+
+	Ok((stmt, false))
+}
 
 /// Get the last SQLite error message.
 unsafe fn sqlite_errmsg(db: *mut sqlite3) -> String {
@@ -572,5 +640,95 @@ unsafe fn extract_column_value(stmt: *mut sqlite3_stmt, col: c_int) -> JsonValue
 			}
 		}
 		_ => JsonValue::Null,
+	}
+}
+
+#[cfg(test)]
+mod stmt_cache_tests {
+	use super::*;
+
+	use libsqlite3_sys::{sqlite3_close, sqlite3_exec, sqlite3_open};
+
+	fn open_memory_db() -> *mut sqlite3 {
+		let mut db: *mut sqlite3 = ptr::null_mut();
+		let path = CString::new(":memory:").unwrap();
+		let rc = unsafe { sqlite3_open(path.as_ptr(), &mut db) };
+		assert_eq!(rc, SQLITE_OK);
+		db
+	}
+
+	#[test]
+	fn test_stmt_cache_reuse() {
+		let db = open_memory_db();
+		let mut cache = LruCache::new(NonZeroUsize::new(STMT_CACHE_CAPACITY).unwrap());
+
+		// Create a table so SELECT has something to prepare against.
+		unsafe {
+			let sql = CString::new("CREATE TABLE cache_test (id INTEGER, value TEXT)").unwrap();
+			sqlite3_exec(db, sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut());
+		}
+
+		// First SELECT - should be a cache miss.
+		let select_sql = "SELECT id, value FROM cache_test WHERE id = ?";
+		let (stmt1, cached1) = get_or_prepare_stmt(&mut cache, db, select_sql).unwrap();
+		assert!(!cached1, "first call should not be cached");
+		cache.put(select_sql.to_string(), CachedStmt(stmt1));
+
+		// Second SELECT with same SQL - should be a cache hit.
+		let (stmt2, cached2) = get_or_prepare_stmt(&mut cache, db, select_sql).unwrap();
+		assert!(cached2, "second call should be cached");
+		assert_eq!(stmt1, stmt2, "cached statement pointer should match");
+
+		// Third call - still cached.
+		let (stmt3, cached3) = get_or_prepare_stmt(&mut cache, db, select_sql).unwrap();
+		assert!(cached3, "third call should still be cached");
+		assert_eq!(stmt1, stmt3);
+
+		// Different SQL - cache miss.
+		let other_sql = "SELECT id FROM cache_test";
+		let (_, cached4) = get_or_prepare_stmt(&mut cache, db, other_sql).unwrap();
+		assert!(!cached4, "different SQL should not be cached");
+
+		cache.clear();
+		unsafe { sqlite3_close(db) };
+	}
+
+	#[test]
+	fn test_stmt_cache_eviction() {
+		let db = open_memory_db();
+		// Tiny cache of size 2 to force eviction.
+		let mut cache = LruCache::new(NonZeroUsize::new(2).unwrap());
+
+		// Fill cache with 2 statements.
+		let sql1 = "SELECT 1";
+		let (s1, _) = get_or_prepare_stmt(&mut cache, db, sql1).unwrap();
+		cache.put(sql1.to_string(), CachedStmt(s1));
+
+		let sql2 = "SELECT 2";
+		let (s2, _) = get_or_prepare_stmt(&mut cache, db, sql2).unwrap();
+		cache.put(sql2.to_string(), CachedStmt(s2));
+
+		assert_eq!(cache.len(), 2);
+
+		// Third statement evicts LRU (sql1). The evicted CachedStmt's
+		// Drop impl calls sqlite3_finalize automatically.
+		let sql3 = "SELECT 3";
+		let (s3, _) = get_or_prepare_stmt(&mut cache, db, sql3).unwrap();
+		cache.put(sql3.to_string(), CachedStmt(s3));
+
+		assert_eq!(cache.len(), 2);
+
+		// sql1 should be evicted.
+		let (s1_new, cached) = get_or_prepare_stmt(&mut cache, db, sql1).unwrap();
+		assert!(!cached, "evicted statement should not be cached");
+		// sql2 should still be cached.
+		let (_, cached) = get_or_prepare_stmt(&mut cache, db, sql2).unwrap();
+		assert!(cached, "sql2 should still be cached");
+
+		// Clean up the uncached stmt from the re-prepare of sql1.
+		unsafe { sqlite3_finalize(s1_new) };
+
+		cache.clear();
+		unsafe { sqlite3_close(db) };
 	}
 }
