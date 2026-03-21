@@ -24,7 +24,7 @@ import { queryClient } from "@/queries/global";
 
 const defaultServerlessConfig: Rivet.RunnerConfigServerless = {
 	url: "",
-	maxRunners: 10,
+	maxRunners: 100_000,
 	minRunners: 0,
 	requestLifespan: 300,
 	runnersMargin: 2,

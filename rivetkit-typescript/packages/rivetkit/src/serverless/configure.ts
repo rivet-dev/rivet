@@ -49,7 +49,7 @@ export async function configureServerlessRunner(
 			serverless: {
 				url: customConfig.url,
 				headers: customConfig.headers ?? {},
-				max_runners: customConfig.maxRunners ?? 1000,
+				max_runners: customConfig.maxRunners ?? 100_000,
 				min_runners: customConfig.minRunners ?? 0,
 				request_lifespan: customConfig.requestLifespan ?? 15 * 60,
 				runners_margin: customConfig.runnersMargin ?? 0,
