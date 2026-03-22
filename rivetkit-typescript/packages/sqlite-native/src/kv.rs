@@ -60,6 +60,13 @@ pub fn get_chunk_key(file_tag: u8, chunk_index: u32) -> [u8; 8] {
     ]
 }
 
+/// Maximum file size in bytes before chunk index overflow.
+///
+/// Chunk indices are u32, so the maximum addressable byte is
+/// (u32::MAX as u64 + 1) * CHUNK_SIZE. Writes or truncates beyond this would
+/// wrap the chunk index. This matches MAX_FILE_SIZE_BYTES in the WASM VFS.
+pub const MAX_FILE_SIZE: u64 = (u32::MAX as u64 + 1) * CHUNK_SIZE as u64;
+
 /// Returns a 4-byte key that is lexicographically just past all chunk keys for
 /// the given file tag. Useful as the exclusive end bound for deleteRange.
 ///

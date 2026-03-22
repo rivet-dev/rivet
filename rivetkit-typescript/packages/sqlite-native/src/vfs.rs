@@ -344,6 +344,12 @@ unsafe extern "C" fn kv_io_write(
 
 		let offset = i_offset as usize;
 		let write_end = offset + amt;
+
+		// Reject writes that would overflow the u32 chunk index space.
+		if write_end as u64 > kv::MAX_FILE_SIZE {
+			return SQLITE_IOERR_WRITE;
+		}
+
 		let file_size = file.size as usize;
 
 		let start_chunk = offset / kv::CHUNK_SIZE;
@@ -466,7 +472,7 @@ unsafe extern "C" fn kv_io_truncate(
 		let file = get_file(p_file);
 		let ctx = &*file.ctx;
 
-		if size < 0 {
+		if size < 0 || size as u64 > kv::MAX_FILE_SIZE {
 			return SQLITE_IOERR_TRUNCATE;
 		}
 
