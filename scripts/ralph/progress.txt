@@ -714,3 +714,26 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - Removing `unsafe impl Sync` is possible because all !Sync fields are now behind Arc<Mutex<...>> which is Sync. The stmt_cache was already Arc<Mutex<...>>.
   - The close_database scoped block `{ let mut guard = ...; guard.take(); }` ensures the mutex is released before the async close_actor call, avoiding holding the lock longer than necessary.
 ---
+
+## 2026-03-21 - US-039
+- Changed `open_database` from sync `pub fn` with `rt.block_on()` to `pub async fn` napi export
+  - `ch.open_actor().await` runs directly without blocking the main thread
+  - VFS registration and `sqlite3_open_v2` run inside `spawn_blocking` since VFS callbacks use `Handle::block_on()` (safe from blocking threads, not from Node.js main thread)
+- Changed `close_database` from sync `pub fn` with `rt.block_on()` to `pub async fn`
+  - Mutex take remains synchronous (instant), only the `close_actor` WebSocket round-trip is now async
+  - Changed parameter from `&mut JsNativeDatabase` to `&JsNativeDatabase` (napi-rs doesn't allow `&mut` with async fn)
+- Changed `disconnect` from sync `pub fn` with `rt.block_on()` to `pub async fn`
+  - Direct `channel.disconnect().await` with no runtime access needed
+- Updated TypeScript `NativeSqliteModule` interface: `openDatabase` returns `Promise<NativeDatabase>`, `closeDatabase` returns `Promise<void>`, `disconnect` returns `Promise<void>`
+- Updated all TypeScript call sites:
+  - `createNativeRawAccess()` is now async, returns `Promise<RawAccess>`
+  - `mod.ts` adds `await` to `createNativeRawAccess()` call
+  - `_resetNativeDetection()` is now async, all callers in cross-backend-vfs.ts updated with `await`
+  - `disconnectKvChannel()` remains sync (shutdown handlers can't await), uses fire-and-forget `.catch()`
+- All 79 Rust tests pass, 0 TypeScript errors
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/lib.rs, rivetkit-typescript/packages/rivetkit/src/db/{native-sqlite.ts, mod.ts}, rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/cross-backend-vfs.ts
+- **Learnings for future iterations:**
+  - napi-rs async functions cannot take `&mut` references. Use `&` with interior mutability (Arc<Mutex<...>>) instead.
+  - Process shutdown handlers (beforeExit, SIGTERM, SIGINT) are synchronous and cannot await Promises. Use fire-and-forget with `.catch()` for async cleanup in shutdown handlers.
+  - `spawn_blocking` is the correct wrapper for VFS registration since VFS callbacks internally call `Handle::block_on()` which panics if called from within a tokio async context but works fine from blocking threads.
+---
