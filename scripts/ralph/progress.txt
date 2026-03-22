@@ -844,3 +844,21 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - When refactoring request dispatch, move validation checks (is_open, actor_locked) into the task loop rather than the handler functions to keep handlers focused on their specific KV operation
   - The `send_response` helper avoids duplicating encode/send/log-error logic between the main loop path and the early-return path (resolve failure)
 ---
+
+## 2026-03-21 - US-048
+- Replaced JSON blob serialization with typed napi struct for bind parameters
+- Created `BindParam` napi struct in lib.rs with fields: `kind` (String), `int_value` (Option<i64>), `float_value` (Option<f64>), `text_value` (Option<String>), `blob_value` (Option<Buffer>)
+- Updated `execute` and `query` to accept `Vec<BindParam>` instead of `Vec<JsonValue>`
+- Updated `bind_params` helper to match on `param.kind` string instead of JsonValue variants
+- Removed `sqlite3_bind_int` import (no longer needed since all integers use `sqlite3_bind_int64` via i64)
+- Created `NativeBindParam` TypeScript interface matching the Rust struct (with camelCase field names per napi-rs convention)
+- Updated `toNativeBindings` to construct typed `NativeBindParam` objects instead of plain JSON values
+- Blob data now uses `Buffer.from(arg)` instead of `Array.from(arg)`, eliminating 20x serialization overhead
+- All 79 Rust tests pass, cargo check clean, no new TypeScript errors
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/lib.rs, rivetkit-typescript/packages/rivetkit/src/db/native-sqlite.ts
+- **Learnings for future iterations:**
+  - napi-rs `#[napi(object)]` structs auto-convert Rust snake_case fields to JavaScript camelCase (e.g., `int_value` -> `intValue`)
+  - `Buffer` in napi-rs maps to Node.js Buffer/Uint8Array and copies data once (JS heap to Rust), vs JSON arrays which serialize each byte individually
+  - The `exec` function takes no params (multi-statement SQL for migrations), so it doesn't need BindParam changes
+  - `JsonValue` is still needed for query output (`extract_column_value` returns `JsonValue`), only input binding changed to typed struct
+---
