@@ -4,8 +4,9 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "tsx --watch src/server.ts",
-		"check-types": "tsc --noEmit"
+		"dev": "tsx --watch src/index.ts",
+		"check-types": "tsc --noEmit",
+		"start": "tsx src/index.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
@@ -14,8 +15,6 @@
 		"typescript": "^5.5.2"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.18.2",
-		"@hono/node-ws": "^1.1.1",
 		"drizzle-kit": "^0.31.2",
 		"drizzle-orm": "^0.44.2"
 	},

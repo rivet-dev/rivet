@@ -5,8 +5,6 @@ skill: true
 ---
 
 import { Hosting } from "@/components/docs/Hosting";
-import { StepSetupServer } from "@/components/docs/StepSetupServer";
-import { StepRunServer } from "@/components/docs/StepRunServer";
 import { ConfigurationOptions } from "@/components/docs/ConfigurationOptions";
 
 
@@ -32,11 +30,11 @@ npm install rivetkit @rivetkit/react
 
 </Step>
 
-<Step title="Create Backend Actor">
+<Step title="Create Backend Actor and Start Server">
 
-Create your actor registry on the backend:
+Create your actor registry on the backend and start the server:
 
-```ts backend/registry.ts
+```ts backend/index.ts
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -53,13 +51,9 @@ export const counter = actor({
 export const registry = setup({
 	use: { counter },
 });
+
+registry.start();
 ```
-
-</Step>
-
-<Step title="Setup Backend Server">
-
-<StepSetupServer />
 
 </Step>
 
@@ -71,9 +65,9 @@ Set up your React application:
 ```tsx Counter.tsx
 import { createRivetKit } from "@rivetkit/react";
 import { useState } from "react";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const { useActor } = createRivetKit<typeof registry>();
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
 
 function Counter() {
 	const [count, setCount] = useState(0);
@@ -101,7 +95,7 @@ function Counter() {
 }
 ```
 
-```ts actors.ts @hide
+```ts index.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -118,6 +112,8 @@ export const counter = actor({
 export const registry = setup({
 	use: { counter },
 });
+
+registry.start();
 ```
 </CodeGroup>
 
@@ -149,7 +145,29 @@ Start both the backend and frontend:
 
 **Terminal 1**: Start the backend
 
-<StepRunServer file="backend/server.ts" showDescription={false} />
+<CodeGroup>
+<Code title="Node.js" language="bash">
+
+```sh
+npx tsx --watch backend/index.ts
+```
+
+</Code>
+<Code title="Bun" language="bash">
+
+```sh
+bun --watch backend/index.ts
+```
+
+</Code>
+<Code title="Deno" language="bash">
+
+```sh
+deno run --allow-net --allow-read --allow-env --watch backend/index.ts
+```
+
+</Code>
+</CodeGroup>
 
 **Terminal 2**: Start the frontend
 

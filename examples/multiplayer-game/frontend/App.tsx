@@ -1,9 +1,9 @@
 import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GameState, JoinResult, Player } from "../src/types.ts";
-import type { registry } from "../src/actors.ts";
+import type { registry } from "../src/index.ts";
 
-const { useActor } = createRivetKit<typeof registry>(`${window.location.origin}/api/rivet`);
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
 
 const WORLD_SIZE = 1200;
 const INPUT_RATE_MS = 50;

@@ -4,9 +4,9 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "tsx --watch src/server.ts",
+		"dev": "tsx --watch src/index.ts",
 		"check-types": "tsc --noEmit",
-		"build": "tsc",
+		"start": "tsx src/index.ts",
 		"client": "tsx scripts/client.ts"
 	},
 	"devDependencies": {
@@ -15,7 +15,6 @@
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2"
 	},
-	"dependencies": {},
 	"stableVersion": "0.8.0",
 	"license": "MIT"
 }

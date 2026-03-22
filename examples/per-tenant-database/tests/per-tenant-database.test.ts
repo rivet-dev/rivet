@@ -1,6 +1,6 @@
 import { setupTest } from "rivetkit/test";
 import { expect, test } from "vitest";
-import { registry } from "../src/actors.ts";
+import { registry } from "../src/index.ts";
 
 test("Company data is isolated by actor key", async (ctx) => {
 	const { client } = await setupTest(ctx, registry);

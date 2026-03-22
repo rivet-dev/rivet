@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import type { WSContext } from "hono/ws";
 import { createClient } from "rivetkit/client";
-import { registry } from "./actors.ts";
+import { registry } from "./index.ts";
 
 const client = createClient<typeof registry>();
 

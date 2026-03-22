@@ -45,7 +45,7 @@ import { faCloudflare, faNodeJs, faReact, faNextjs } from "@rivet-gg/icons";
 
 ### Backend
 
-**actors.ts**
+**index.ts**
 
 ```ts
 import { actor, event, setup } from "rivetkit";
@@ -67,53 +67,9 @@ const counter = actor({
 export const registry = setup({
   use: { counter },
 });
+
+registry.start();
 ```
-
-**server.ts**
-
-Integrate with the user's existing server if applicable. Otherwise, default to Hono.
-
-<Tabs>
-
-<Tab title="No Framework">
-
-```typescript @nocheck
-import { registry } from "./actors";
-
-export default registry.serve();
-```
-
-</Tab>
-
-<Tab title="Hono">
-
-```typescript @nocheck
-import { Hono } from "hono";
-import { registry } from "./actors";
-
-const app = new Hono();
-app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
-
-export default app;
-```
-
-</Tab>
-
-<Tab title="Elysia">
-
-```typescript @nocheck
-import { Elysia } from "elysia";
-import { registry } from "./actors";
-
-const app = new Elysia()
-	.all("/api/rivet/*", (c) => registry.handler(c.request));
-
-export default app;
-```
-
-</Tab>
-
-</Tabs>
 
 ### Client Docs
 
@@ -182,7 +138,7 @@ const chatRoom = actor({
 });
 
 const registry = setup({ use: { chatRoom } });
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 // Compound key: [org, room]
 client.chatRoom.getOrCreate(["org-acme", "general"]);
@@ -212,7 +168,7 @@ const game = actor({
 });
 
 const registry = setup({ use: { game } });
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 // Client usage
 const gameHandle = client.game.getOrCreate(["game-1"], {
@@ -629,7 +585,7 @@ const user = actor({
 });
 
 const registry = setup({ use: { user } });
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 try {
   await client.user.getOrCreate([]).updateUsername("ab");
@@ -690,9 +646,9 @@ Create one actor per user, document, or room. Use compound keys to scope entitie
 <CodeGroup workspace>
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 // Single key: one actor per user
 client.user.getOrCreate(["user-123"]);
@@ -701,7 +657,7 @@ client.user.getOrCreate(["user-123"]);
 client.document.getOrCreate(["org-acme", "doc-456"]);
 ```
 
-```ts actors.ts
+```ts index.ts
 import { actor, setup } from "rivetkit";
 
 export const user = actor({
@@ -715,6 +671,8 @@ export const document = actor({
 });
 
 export const registry = setup({ use: { user, document } });
+
+registry.start();
 ```
 </CodeGroup>
 
@@ -723,7 +681,7 @@ export const registry = setup({ use: { user, document } });
 **Data actors** handle core logic (chat rooms, game sessions, user data). **Coordinator actors** track and manage collections of data actors—think of them as an index.
 
 <CodeGroup workspace>
-```ts actors.ts
+```ts index.ts
 import { actor, setup } from "rivetkit";
 
 // Coordinator: tracks chat rooms within an organization
@@ -749,13 +707,15 @@ export const chatRoom = actor({
 });
 
 export const registry = setup({ use: { chatRoomList, chatRoom } });
+
+registry.start();
 ```
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 // Coordinator per org
 const coordinator = client.chatRoomList.getOrCreate(["org-acme"]);

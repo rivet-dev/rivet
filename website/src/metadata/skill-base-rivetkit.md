@@ -68,7 +68,7 @@ Use that canonical URL when citing, not the reference file path.
    npm install rivetkit@{{RIVETKIT_VERSION}}
    ```
 2. Define a registry with `setup({ use: { /* actors */ } })`.
-3. Expose `registry.serve()` or `registry.handler()` (serverless) or `registry.startRunner()` (runner mode). Prefer serverless mode unless the user has a specific reason to use runner mode.
+3. Call `registry.start()` to start the server. For custom HTTP server integration, use `registry.handler()` with a router like Hono. For serverless deployments, use `registry.serve()`. For runner-only mode, use `registry.startRunner()`.
 4. Verify `/api/rivet/metadata` returns 200 before deploying.
 5. Configure Rivet Cloud or self-hosted engine
    - You must configure versioning for production builds. This is not needed for local development. See [Versions & Upgrades](https://rivet.dev/docs/actors/versions).

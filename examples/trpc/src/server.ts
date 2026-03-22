@@ -3,7 +3,7 @@ import { initTRPC } from "@trpc/server";
 import { Hono } from "hono";
 import { createClient } from "rivetkit/client";
 import { z } from "zod";
-import { registry } from "./actors.ts";
+import { registry } from "./index.ts";
 
 const client = createClient<typeof registry>();
 

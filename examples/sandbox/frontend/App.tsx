@@ -14,7 +14,7 @@ import {
 	RefreshCw,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { registry } from "../src/actors.ts";
+import type { registry } from "../src/index.ts";
 import {
 	ACTION_TEMPLATES,
 	type ActionTemplate,
@@ -69,9 +69,7 @@ function MermaidDiagram({ chart }: { chart: string }) {
 	return <div ref={ref} className="mermaid-diagram" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
-const { useActor } = createRivetKit<typeof registry>(
-	`${location.origin}/api/rivet`,
-);
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
 
 type ActorPanelActor = {
 	connStatus: string | null;

@@ -4,9 +4,9 @@ import type {
 	CursorPosition,
 	TextLabel,
 	registry,
-} from "../src/actors.ts";
+} from "../src/index.ts";
 
-const { useActor } = createRivetKit<typeof registry>(`${window.location.origin}/api/rivet`);
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
 
 // Generate a random user ID
 const generateUserId = () =>

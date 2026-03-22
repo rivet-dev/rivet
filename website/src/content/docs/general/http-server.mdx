@@ -68,22 +68,18 @@ Then run your server:
 <CodeGroup>
 
 ```bash Node.js
-npx srvx server.ts
+npx tsx --watch server.ts
 ```
 
 ```bash Bun
-bun server.ts
+bun --watch server.ts
 ```
 
 ```bash Deno
-deno run --allow-net --allow-read --allow-env server.ts
+deno run --allow-net --allow-read --allow-env --watch server.ts
 ```
 
 </CodeGroup>
-
-<Tip>
-	[srvx](https://srvx.h3.dev/) is a universal server runner for fetch handlers. It compiles TypeScript on-the-fly for Node.js and can be used in production. Bun and Deno support fetch handlers and TypeScript natively.
-</Tip>
 
 ### Explicit HTTP Server
 

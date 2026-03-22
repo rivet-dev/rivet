@@ -4,10 +4,10 @@ import type {
 	UserSessionPreferences,
 	UserSessionState,
 	registry,
-} from "../src/actors.ts";
+} from "../src/index.ts";
 
 const { useActor } = createRivetKit<typeof registry>(
-	`${window.location.origin}/api/rivet`,
+	"http://localhost:6420",
 );
 
 const REGION_OPTIONS = [

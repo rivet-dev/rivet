@@ -11,19 +11,9 @@ import {
 import type { RegistryConfig } from "@/registry/config";
 import { tryParseEndpoint } from "@/utils/endpoint-parser";
 
-/**
- * Gets the default endpoint for the client.
- *
- * In browser: uses current origin + /api/rivet
- *
- * Server-side: uses 127.0.0.1:6420
- */
-function getDefaultEndpoint(): string {
-	if (typeof window !== "undefined" && window.location?.origin) {
-		return `${window.location.origin}/api/rivet`;
-	}
-	return "http://127.0.0.1:6420";
-}
+const DEFAULT_ENDPOINT = "http://localhost:6420";
+
+let hasWarnedMissingEndpoint = false;
 
 /**
  * Base client config schema without transforms so it can be merged in to other schemas.
@@ -38,18 +28,25 @@ export const ClientConfigSchemaBase = z.object({
 	 *
 	 * Can also be set via RIVET_ENDPOINT environment variables.
 	 *
-	 * Defaults to current origin + /api/rivet in browser, or 127.0.0.1:6420 server-side.
+	 * Defaults to http://localhost:6420.
 	 */
 	endpoint: z
 		.string()
 		.optional()
-		.transform(
-			(val) =>
-				val ??
-				getRivetEngine() ??
-				getRivetEndpoint() ??
-				getDefaultEndpoint(),
-		),
+		.transform((val) => {
+			const resolved =
+				val ?? getRivetEngine() ?? getRivetEndpoint();
+			if (!resolved && !hasWarnedMissingEndpoint) {
+				hasWarnedMissingEndpoint = true;
+				console.warn(
+					`[rivetkit] No endpoint provided to client. Defaulting to ${DEFAULT_ENDPOINT}. ` +
+						`Starting in 2.2.0, an explicit endpoint will be required. ` +
+						`Pass an endpoint to createClient() or createRivetKit(), ` +
+						`or set the RIVET_ENDPOINT environment variable.`,
+				);
+			}
+			return resolved ?? DEFAULT_ENDPOINT;
+		}),
 
 	/** Token to use to authenticate with the API. */
 	token: z

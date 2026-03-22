@@ -1,6 +1,6 @@
 import { setupTest } from "rivetkit/test";
 import { describe, expect, test } from "vitest";
-import { registry } from "../src/actors.ts";
+import { registry } from "../src/index.ts";
 
 // Helper to wait for a delay
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
