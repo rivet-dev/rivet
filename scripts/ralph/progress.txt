@@ -925,3 +925,15 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - When switching from unbounded to bounded channels (US-051), both `Full` and `Closed` error cases should be handled together. US-051 already did this, making US-053 a no-op.
   - Always check if a later story's acceptance criteria were already covered by an earlier story's implementation before writing new code.
 ---
+
+## 2026-03-21 - US-054
+- Replaced hand-rolled LCG PRNG with `getrandom::getrandom()` in `kv_vfs_randomness`
+- Added `getrandom = "0.2"` dependency to sqlite-native Cargo.toml
+- Removed SystemTime seed and LCG state loop
+- On getrandom failure, returns 0 (no bytes filled) per acceptance criteria
+- cargo check passes clean with no warnings
+- Files changed: rivetkit-typescript/packages/sqlite-native/{Cargo.toml, src/vfs.rs}
+- **Learnings for future iterations:**
+  - `getrandom::getrandom(buf)` fills a `&mut [u8]` slice directly, returns `Result<(), Error>`
+  - The sqlite-native crate has its own workspace; cargo check must be run from within its directory
+---
