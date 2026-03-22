@@ -407,29 +407,80 @@ async fn actor_request_task(
 	open_actors: Arc<Mutex<HashSet<String>>>,
 	mut rx: mpsc::UnboundedReceiver<protocol::ToServerRequest>,
 ) {
+	// Cached actor resolution. Populated on first KV request, reused for all
+	// subsequent requests. Actor name is immutable so this never goes stale.
+	let mut cached_actor: Option<(Id, String)> = None;
+
 	while let Some(req) = rx.recv().await {
 		let is_close = matches!(req.data, protocol::RequestData::ActorCloseRequest);
 
-		let response_data =
-			handle_request(&ctx, &state, conn_id, namespace_id, &open_actors, &req).await;
+		let response_data = match &req.data {
+			// Open/close are lifecycle ops that don't need a resolved actor.
+			protocol::RequestData::ActorOpenRequest
+			| protocol::RequestData::ActorCloseRequest => {
+				handle_request(&ctx, &state, conn_id, namespace_id, &open_actors, &req).await
+			}
+			// KV ops: resolve once, cache, reuse.
+			_ => {
+				let is_open = open_actors.lock().await.contains(&req.actor_id);
+				if !is_open {
+					let locks = state.actor_locks.lock().await;
+					if locks.contains_key(&req.actor_id) {
+						error_response(
+							"actor_locked",
+							"actor is locked by another connection",
+						)
+					} else {
+						error_response(
+							"actor_not_open",
+							"actor is not opened on this connection",
+						)
+					}
+				} else {
+					// Lazy-resolve and cache.
+					if cached_actor.is_none() {
+						match resolve_actor(&ctx, &req.actor_id, namespace_id).await {
+							Ok(v) => {
+								cached_actor = Some(v);
+							}
+							Err(resp) => {
+								// Don't cache failures. Next request will retry.
+								send_response(&ws_handle, req.request_id, resp).await;
+								if is_close {
+									break;
+								}
+								continue;
+							}
+						}
+					}
+					let (parsed_id, actor_name) = cached_actor.as_ref().unwrap();
 
-		let response = protocol::ToClient::ToClientResponse(protocol::ToClientResponse {
-			request_id: req.request_id,
-			data: response_data,
-		});
+					let recipient = actor_kv::Recipient {
+						actor_id: *parsed_id,
+						namespace_id,
+						name: actor_name.clone(),
+					};
 
-		match protocol::encode_to_client(&response) {
-			Ok(encoded) => {
-				if let Err(err) = ws_handle.send(Message::Binary(encoded.into())).await {
-					tracing::warn!(?err, "failed to send kv channel response from actor task");
-					break;
+					match &req.data {
+						protocol::RequestData::KvGetRequest(body) => {
+							handle_kv_get(&ctx, &recipient, body).await
+						}
+						protocol::RequestData::KvPutRequest(body) => {
+							handle_kv_put(&ctx, &recipient, body).await
+						}
+						protocol::RequestData::KvDeleteRequest(body) => {
+							handle_kv_delete(&ctx, &recipient, body).await
+						}
+						protocol::RequestData::KvDeleteRangeRequest(body) => {
+							handle_kv_delete_range(&ctx, &recipient, body).await
+						}
+						_ => unreachable!(),
+					}
 				}
 			}
-			Err(err) => {
-				tracing::warn!(?err, "failed to encode kv channel response");
-				break;
-			}
-		}
+		};
+
+		send_response(&ws_handle, req.request_id, response_data).await;
 
 		// Stop processing after a close request. The sender is also removed
 		// from actor_channels by the message loop so no new requests arrive.
@@ -439,13 +490,38 @@ async fn actor_request_task(
 	}
 }
 
+/// Encode and send a response to the client. Logs warnings on failure.
+async fn send_response(
+	ws_handle: &WebSocketHandle,
+	request_id: u32,
+	data: protocol::ResponseData,
+) {
+	let response = protocol::ToClient::ToClientResponse(protocol::ToClientResponse {
+		request_id,
+		data,
+	});
+
+	match protocol::encode_to_client(&response) {
+		Ok(encoded) => {
+			if let Err(err) = ws_handle.send(Message::Binary(encoded.into())).await {
+				tracing::warn!(?err, "failed to send kv channel response from actor task");
+			}
+		}
+		Err(err) => {
+			tracing::warn!(?err, "failed to encode kv channel response");
+		}
+	}
+}
+
 // MARK: Request handling
 
+/// Handles actor lifecycle requests (open/close). KV operations are handled
+/// directly in `actor_request_task` with cached actor resolution.
 async fn handle_request(
-	ctx: &StandaloneCtx,
+	_ctx: &StandaloneCtx,
 	state: &KvChannelState,
 	conn_id: Uuid,
-	namespace_id: Id,
+	_namespace_id: Id,
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	req: &protocol::ToServerRequest,
 ) -> protocol::ResponseData {
@@ -456,40 +532,7 @@ async fn handle_request(
 		protocol::RequestData::ActorCloseRequest => {
 			handle_actor_close(state, conn_id, open_actors, &req.actor_id).await
 		}
-		_ => {
-			// All KV operations require the actor to be opened by this connection.
-			let is_open = open_actors.lock().await.contains(&req.actor_id);
-			if !is_open {
-				let locks = state.actor_locks.lock().await;
-				if locks.contains_key(&req.actor_id) {
-					return error_response(
-						"actor_locked",
-						"actor is locked by another connection",
-					);
-				}
-				return error_response(
-					"actor_not_open",
-					"actor is not opened on this connection",
-				);
-			}
-
-			match &req.data {
-				protocol::RequestData::KvGetRequest(body) => {
-					handle_kv_get(ctx, namespace_id, &req.actor_id, body).await
-				}
-				protocol::RequestData::KvPutRequest(body) => {
-					handle_kv_put(ctx, namespace_id, &req.actor_id, body).await
-				}
-				protocol::RequestData::KvDeleteRequest(body) => {
-					handle_kv_delete(ctx, namespace_id, &req.actor_id, body).await
-				}
-				protocol::RequestData::KvDeleteRangeRequest(body) => {
-					handle_kv_delete_range(ctx, namespace_id, &req.actor_id, body).await
-				}
-				protocol::RequestData::ActorOpenRequest
-				| protocol::RequestData::ActorCloseRequest => unreachable!(),
-			}
-		}
+		_ => unreachable!("KV operations are handled in actor_request_task"),
 	}
 }
 
@@ -562,31 +605,19 @@ async fn handle_actor_close(
 
 async fn handle_kv_get(
 	ctx: &StandaloneCtx,
-	namespace_id: Id,
-	actor_id: &str,
+	recipient: &actor_kv::Recipient,
 	body: &protocol::KvGetRequest,
 ) -> protocol::ResponseData {
 	if let Err(resp) = validate_keys(&body.keys) {
 		return resp;
 	}
 
-	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id, namespace_id).await {
-		Ok(v) => v,
-		Err(resp) => return resp,
-	};
-
-	let recipient = actor_kv::Recipient {
-		actor_id: parsed_actor_id,
-		namespace_id,
-		name,
-	};
-
 	let udb = match ctx.udb() {
 		Ok(udb) => udb,
 		Err(err) => return internal_error(&err),
 	};
 
-	match actor_kv::get(&*udb, &recipient, body.keys.clone()).await {
+	match actor_kv::get(&*udb, recipient, body.keys.clone()).await {
 		Ok((keys, values, _metadata)) => {
 			protocol::ResponseData::KvGetResponse(protocol::KvGetResponse { keys, values })
 		}
@@ -596,8 +627,7 @@ async fn handle_kv_get(
 
 async fn handle_kv_put(
 	ctx: &StandaloneCtx,
-	namespace_id: Id,
-	actor_id: &str,
+	recipient: &actor_kv::Recipient,
 	body: &protocol::KvPutRequest,
 ) -> protocol::ResponseData {
 	// Validate keys/values length match.
@@ -649,23 +679,12 @@ async fn handle_kv_put(
 		);
 	}
 
-	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id, namespace_id).await {
-		Ok(v) => v,
-		Err(resp) => return resp,
-	};
-
-	let recipient = actor_kv::Recipient {
-		actor_id: parsed_actor_id,
-		namespace_id,
-		name,
-	};
-
 	let udb = match ctx.udb() {
 		Ok(udb) => udb,
 		Err(err) => return internal_error(&err),
 	};
 
-	match actor_kv::put(&*udb, &recipient, body.keys.clone(), body.values.clone()).await {
+	match actor_kv::put(&*udb, recipient, body.keys.clone(), body.values.clone()).await {
 		Ok(()) => protocol::ResponseData::KvPutResponse,
 		Err(err) => {
 			let rivet_err = rivet_error::RivetError::extract(&err);
@@ -680,31 +699,19 @@ async fn handle_kv_put(
 
 async fn handle_kv_delete(
 	ctx: &StandaloneCtx,
-	namespace_id: Id,
-	actor_id: &str,
+	recipient: &actor_kv::Recipient,
 	body: &protocol::KvDeleteRequest,
 ) -> protocol::ResponseData {
 	if let Err(resp) = validate_keys(&body.keys) {
 		return resp;
 	}
 
-	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id, namespace_id).await {
-		Ok(v) => v,
-		Err(resp) => return resp,
-	};
-
-	let recipient = actor_kv::Recipient {
-		actor_id: parsed_actor_id,
-		namespace_id,
-		name,
-	};
-
 	let udb = match ctx.udb() {
 		Ok(udb) => udb,
 		Err(err) => return internal_error(&err),
 	};
 
-	match actor_kv::delete(&*udb, &recipient, body.keys.clone()).await {
+	match actor_kv::delete(&*udb, recipient, body.keys.clone()).await {
 		Ok(()) => protocol::ResponseData::KvDeleteResponse,
 		Err(err) => internal_error(&err),
 	}
@@ -712,8 +719,7 @@ async fn handle_kv_delete(
 
 async fn handle_kv_delete_range(
 	ctx: &StandaloneCtx,
-	namespace_id: Id,
-	actor_id: &str,
+	recipient: &actor_kv::Recipient,
 	body: &protocol::KvDeleteRangeRequest,
 ) -> protocol::ResponseData {
 	// The +2 accounts for KeyWrapper tuple packing overhead (NESTED prefix +
@@ -732,23 +738,12 @@ async fn handle_kv_delete_range(
 		);
 	}
 
-	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id, namespace_id).await {
-		Ok(v) => v,
-		Err(resp) => return resp,
-	};
-
-	let recipient = actor_kv::Recipient {
-		actor_id: parsed_actor_id,
-		namespace_id,
-		name,
-	};
-
 	let udb = match ctx.udb() {
 		Ok(udb) => udb,
 		Err(err) => return internal_error(&err),
 	};
 
-	match actor_kv::delete_range(&*udb, &recipient, body.start.clone(), body.end.clone()).await {
+	match actor_kv::delete_range(&*udb, recipient, body.start.clone(), body.end.clone()).await {
 		Ok(()) => protocol::ResponseData::KvDeleteResponse,
 		Err(err) => internal_error(&err),
 	}
