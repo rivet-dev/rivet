@@ -269,33 +269,43 @@ pub async fn execute(
 				.as_ref()
 				.ok_or_else(|| Error::from_reason("database is closed"))?;
 			let db_ptr = native_db.as_ptr();
-			let mut cache = cache.lock().unwrap();
 
-			let (stmt, cached) = get_or_prepare_stmt(&mut cache, db_ptr, &sql)?;
+			// Phase 1: Check cache for existing statement, then drop the lock.
+			// The mutex must not be held during sqlite3_step because VFS
+			// callbacks call block_on(WebSocket I/O).
+			// See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md L3.
+			let cached_stmt = {
+				let mut cache_guard = cache.lock().unwrap();
+				pop_cached_stmt(&mut cache_guard, &sql)
+			};
+
+			let stmt = if let Some(s) = cached_stmt {
+				s
+			} else {
+				prepare_stmt(db_ptr, &sql)?
+			};
 
 			if let Some(ref p) = params {
 				if let Err(e) = bind_params(db_ptr, stmt, p) {
-					if !cached {
-						unsafe { sqlite3_finalize(stmt) };
-					}
+					unsafe { sqlite3_finalize(stmt) };
 					return Err(e);
 				}
 			}
 
+			// Execute with no cache mutex held. VFS I/O happens here.
 			let rc = unsafe { sqlite3_step(stmt) };
 			if rc != SQLITE_DONE && rc != SQLITE_ROW {
 				let msg = unsafe { sqlite_errmsg(db_ptr) };
-				if !cached {
-					unsafe { sqlite3_finalize(stmt) };
-				}
+				unsafe { sqlite3_finalize(stmt) };
 				return Err(Error::from_reason(msg));
 			}
 
 			let changes = unsafe { sqlite3_changes(db_ptr) } as i64;
 
-			// If the statement was freshly prepared, store it in the cache.
-			if !cached {
-				cache.put(sql, CachedStmt(stmt));
+			// Phase 2: Return statement to cache.
+			{
+				let mut cache_guard = cache.lock().unwrap();
+				cache_guard.put(sql, CachedStmt(stmt));
 			}
 
 			Ok(ExecuteResult { changes })
@@ -323,15 +333,25 @@ pub async fn query(
 				.as_ref()
 				.ok_or_else(|| Error::from_reason("database is closed"))?;
 			let db_ptr = native_db.as_ptr();
-			let mut cache = cache.lock().unwrap();
 
-			let (stmt, cached) = get_or_prepare_stmt(&mut cache, db_ptr, &sql)?;
+			// Phase 1: Check cache for existing statement, then drop the lock.
+			// The mutex must not be held during sqlite3_step because VFS
+			// callbacks call block_on(WebSocket I/O).
+			// See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md L3.
+			let cached_stmt = {
+				let mut cache_guard = cache.lock().unwrap();
+				pop_cached_stmt(&mut cache_guard, &sql)
+			};
+
+			let stmt = if let Some(s) = cached_stmt {
+				s
+			} else {
+				prepare_stmt(db_ptr, &sql)?
+			};
 
 			if let Some(ref p) = params {
 				if let Err(e) = bind_params(db_ptr, stmt, p) {
-					if !cached {
-						unsafe { sqlite3_finalize(stmt) };
-					}
+					unsafe { sqlite3_finalize(stmt) };
 					return Err(e);
 				}
 			}
@@ -349,7 +369,7 @@ pub async fn query(
 				})
 				.collect();
 
-			// Read rows.
+			// Read rows. No cache mutex held; VFS I/O happens during step.
 			let mut rows: Vec<Vec<JsonValue>> = Vec::new();
 			loop {
 				let rc = unsafe { sqlite3_step(stmt) };
@@ -358,9 +378,7 @@ pub async fn query(
 				}
 				if rc != SQLITE_ROW {
 					let msg = unsafe { sqlite_errmsg(db_ptr) };
-					if !cached {
-						unsafe { sqlite3_finalize(stmt) };
-					}
+					unsafe { sqlite3_finalize(stmt) };
 					return Err(Error::from_reason(msg));
 				}
 
@@ -370,9 +388,10 @@ pub async fn query(
 				rows.push(row);
 			}
 
-			// If the statement was freshly prepared, store it in the cache.
-			if !cached {
-				cache.put(sql, CachedStmt(stmt));
+			// Phase 2: Return statement to cache.
+			{
+				let mut cache_guard = cache.lock().unwrap();
+				cache_guard.put(sql, CachedStmt(stmt));
 			}
 
 			Ok(QueryResult { columns, rows })
@@ -506,27 +525,28 @@ pub async fn disconnect(channel: &JsKvChannel) -> Result<()> {
 
 // MARK: Internal Helpers
 
-/// Look up a prepared statement in the cache, or prepare a new one.
+/// Pop a prepared statement from the cache if available.
 ///
-/// Returns `(stmt, cached)` where `cached` is true if the statement came from
-/// the cache. Cached statements are reset and have bindings cleared before
-/// reuse. On cache miss, the caller is responsible for inserting the statement
-/// into the cache after successful execution (so error paths can finalize
-/// without corrupting the cache).
-fn get_or_prepare_stmt(
+/// Uses `pop` to remove the statement from the cache during use, so the
+/// mutex can be released before `sqlite3_step` triggers VFS I/O. The
+/// caller must return the statement to the cache via `put` after execution.
+fn pop_cached_stmt(
 	cache: &mut LruCache<String, CachedStmt>,
-	db_ptr: *mut sqlite3,
 	sql: &str,
-) -> Result<(*mut sqlite3_stmt, bool)> {
-	if let Some(cached) = cache.get(sql) {
-		let stmt = cached.0;
+) -> Option<*mut sqlite3_stmt> {
+	cache.pop(sql).map(|cs| {
+		let stmt = cs.0;
+		std::mem::forget(cs); // Prevent Drop from calling sqlite3_finalize.
 		unsafe {
 			sqlite3_reset(stmt);
 			sqlite3_clear_bindings(stmt);
 		}
-		return Ok((stmt, true));
-	}
+		stmt
+	})
+}
 
+/// Prepare a new statement via sqlite3_prepare_v2.
+fn prepare_stmt(db_ptr: *mut sqlite3, sql: &str) -> Result<*mut sqlite3_stmt> {
 	let c_sql = CString::new(sql).map_err(|e| Error::from_reason(e.to_string()))?;
 	let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
 	let rc =
@@ -534,8 +554,7 @@ fn get_or_prepare_stmt(
 	if rc != SQLITE_OK {
 		return Err(Error::from_reason(unsafe { sqlite_errmsg(db_ptr) }));
 	}
-
-	Ok((stmt, false))
+	Ok(stmt)
 }
 
 /// Get the last SQLite error message.
@@ -684,7 +703,7 @@ mod stmt_cache_tests {
 	}
 
 	#[test]
-	fn test_stmt_cache_reuse() {
+	fn test_stmt_cache_pop_and_put() {
 		let db = open_memory_db();
 		let mut cache = LruCache::new(NonZeroUsize::new(STMT_CACHE_CAPACITY).unwrap());
 
@@ -694,26 +713,36 @@ mod stmt_cache_tests {
 			sqlite3_exec(db, sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut());
 		}
 
-		// First SELECT - should be a cache miss.
 		let select_sql = "SELECT id, value FROM cache_test WHERE id = ?";
-		let (stmt1, cached1) = get_or_prepare_stmt(&mut cache, db, select_sql).unwrap();
-		assert!(!cached1, "first call should not be cached");
+
+		// First lookup - cache miss, prepare manually.
+		let popped = pop_cached_stmt(&mut cache, select_sql);
+		assert!(popped.is_none(), "first call should not be cached");
+		let stmt1 = prepare_stmt(db, select_sql).unwrap();
 		cache.put(select_sql.to_string(), CachedStmt(stmt1));
 
-		// Second SELECT with same SQL - should be a cache hit.
-		let (stmt2, cached2) = get_or_prepare_stmt(&mut cache, db, select_sql).unwrap();
-		assert!(cached2, "second call should be cached");
+		// Second lookup - cache hit via pop (removes from cache).
+		let popped = pop_cached_stmt(&mut cache, select_sql);
+		assert!(popped.is_some(), "second call should be cached");
+		let stmt2 = popped.unwrap();
 		assert_eq!(stmt1, stmt2, "cached statement pointer should match");
+		// After pop, cache is empty for this key.
+		assert!(pop_cached_stmt(&mut cache, select_sql).is_none());
+		// Put it back.
+		cache.put(select_sql.to_string(), CachedStmt(stmt2));
 
-		// Third call - still cached.
-		let (stmt3, cached3) = get_or_prepare_stmt(&mut cache, db, select_sql).unwrap();
-		assert!(cached3, "third call should still be cached");
+		// Third lookup - still cached after put.
+		let popped = pop_cached_stmt(&mut cache, select_sql);
+		assert!(popped.is_some(), "third call should still be cached");
+		let stmt3 = popped.unwrap();
 		assert_eq!(stmt1, stmt3);
+		// Return to cache for cleanup.
+		cache.put(select_sql.to_string(), CachedStmt(stmt3));
 
 		// Different SQL - cache miss.
 		let other_sql = "SELECT id FROM cache_test";
-		let (_, cached4) = get_or_prepare_stmt(&mut cache, db, other_sql).unwrap();
-		assert!(!cached4, "different SQL should not be cached");
+		let popped = pop_cached_stmt(&mut cache, other_sql);
+		assert!(popped.is_none(), "different SQL should not be cached");
 
 		cache.clear();
 		unsafe { sqlite3_close(db) };
@@ -727,11 +756,11 @@ mod stmt_cache_tests {
 
 		// Fill cache with 2 statements.
 		let sql1 = "SELECT 1";
-		let (s1, _) = get_or_prepare_stmt(&mut cache, db, sql1).unwrap();
+		let s1 = prepare_stmt(db, sql1).unwrap();
 		cache.put(sql1.to_string(), CachedStmt(s1));
 
 		let sql2 = "SELECT 2";
-		let (s2, _) = get_or_prepare_stmt(&mut cache, db, sql2).unwrap();
+		let s2 = prepare_stmt(db, sql2).unwrap();
 		cache.put(sql2.to_string(), CachedStmt(s2));
 
 		assert_eq!(cache.len(), 2);
@@ -739,20 +768,19 @@ mod stmt_cache_tests {
 		// Third statement evicts LRU (sql1). The evicted CachedStmt's
 		// Drop impl calls sqlite3_finalize automatically.
 		let sql3 = "SELECT 3";
-		let (s3, _) = get_or_prepare_stmt(&mut cache, db, sql3).unwrap();
+		let s3 = prepare_stmt(db, sql3).unwrap();
 		cache.put(sql3.to_string(), CachedStmt(s3));
 
 		assert_eq!(cache.len(), 2);
 
 		// sql1 should be evicted.
-		let (s1_new, cached) = get_or_prepare_stmt(&mut cache, db, sql1).unwrap();
-		assert!(!cached, "evicted statement should not be cached");
+		let popped = pop_cached_stmt(&mut cache, sql1);
+		assert!(popped.is_none(), "evicted statement should not be cached");
 		// sql2 should still be cached.
-		let (_, cached) = get_or_prepare_stmt(&mut cache, db, sql2).unwrap();
-		assert!(cached, "sql2 should still be cached");
-
-		// Clean up the uncached stmt from the re-prepare of sql1.
-		unsafe { sqlite3_finalize(s1_new) };
+		let popped = pop_cached_stmt(&mut cache, sql2);
+		assert!(popped.is_some(), "sql2 should still be cached");
+		// Return sql2 to cache for cleanup.
+		cache.put(sql2.to_string(), CachedStmt(popped.unwrap()));
 
 		cache.clear();
 		unsafe { sqlite3_close(db) };
