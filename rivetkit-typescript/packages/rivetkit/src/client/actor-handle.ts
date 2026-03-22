@@ -133,6 +133,11 @@ export class ActorHandleRaw {
 		args: Args;
 		signal?: AbortSignal;
 	}): Promise<Response> {
+		if (typeof opts === "string" || typeof opts !== "object" || opts === null || !("name" in opts)) {
+			throw new Error(
+				`Invalid action call: expected an options object { name, args }, got ${typeof opts}. Use handle.actionName(...args) for the shorthand API.`,
+			);
+		}
 		// Track actorId for scheduling error lookups
 		let actorId: string | undefined;
 
