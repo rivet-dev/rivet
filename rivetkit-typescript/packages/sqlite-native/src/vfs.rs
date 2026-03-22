@@ -248,6 +248,12 @@ unsafe extern "C" fn kv_io_read(
 		let file = get_file(p_file);
 		let ctx = &*file.ctx;
 		let amt = i_amt as usize;
+
+		// Match WASM VFS guard (sqlite-vfs/src/vfs.ts xRead).
+		if i_amt <= 0 {
+			return SQLITE_OK;
+		}
+
 		let buf = slice::from_raw_parts_mut(p_buf as *mut u8, amt);
 
 		if i_offset < 0 {
@@ -324,6 +330,12 @@ unsafe extern "C" fn kv_io_write(
 		let file = get_file(p_file);
 		let ctx = &*file.ctx;
 		let amt = i_amt as usize;
+
+		// Match WASM VFS guard (sqlite-vfs/src/vfs.ts xWrite).
+		if i_amt <= 0 {
+			return SQLITE_OK;
+		}
+
 		let data = slice::from_raw_parts(p_buf as *const u8, amt);
 
 		if i_offset < 0 {
