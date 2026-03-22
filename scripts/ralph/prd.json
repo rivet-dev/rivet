@@ -681,7 +681,7 @@
         "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
       ],
       "priority": 40,
-      "passes": false,
+      "passes": true,
       "notes": "Review finding H3 (HIGH). Without this guard, (offset + amt - 1) / CHUNK_SIZE wraps to usize::MAX when amt=0, causing a loop over trillions of iterations leading to OOM/hang. SQLite docs say xRead/xWrite always use positive amounts, but the WASM VFS has the guard and the native VFS should match."
     },
     {

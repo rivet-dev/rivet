@@ -737,3 +737,15 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - Process shutdown handlers (beforeExit, SIGTERM, SIGINT) are synchronous and cannot await Promises. Use fire-and-forget with `.catch()` for async cleanup in shutdown handlers.
   - `spawn_blocking` is the correct wrapper for VFS registration since VFS callbacks internally call `Handle::block_on()` which panics if called from within a tokio async context but works fine from blocking threads.
 ---
+
+## 2026-03-21 - US-040
+- Added `if i_amt <= 0 { return SQLITE_OK; }` guard to both `kv_io_read` and `kv_io_write` in native VFS
+- Guard is placed after getting file/ctx but before computing `amt as usize` or calling `slice::from_raw_parts`
+- Matches WASM VFS guards in sqlite-vfs/src/vfs.ts (xRead line 702, xWrite line 796)
+- Prevents integer underflow in `(offset + amt - 1) / CHUNK_SIZE` when amt=0 (would wrap to usize::MAX)
+- All 79 tests pass, cargo check clean
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/vfs.rs
+- **Learnings for future iterations:**
+  - The guard checks `i_amt` (c_int) not `amt` (usize) to avoid the cast-to-usize happening before the check
+  - Both VFS implementations should have identical guards for 1:1 parity
+---
