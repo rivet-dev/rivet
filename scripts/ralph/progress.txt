@@ -862,3 +862,20 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The `exec` function takes no params (multi-statement SQL for migrations), so it doesn't need BindParam changes
   - `JsonValue` is still needed for query output (`extract_column_value` returns `JsonValue`), only input binding changed to typed struct
 ---
+
+## 2026-03-21 - US-049
+- Moved tokio Runtime from global `OnceLock<Runtime>` to `JsKvChannel.rt` field
+- Added `rt_handle: Handle` to `JsNativeDatabase` for `spawn_blocking` calls
+- Removed `get_runtime()` static function, extracted `init_tracing()` helper
+- Updated `connect()` to create `Runtime::new()` and store in JsKvChannel
+- Updated `open_database` to use `channel.rt.handle().clone()` and pass to JsNativeDatabase
+- Updated `execute`, `query`, `exec` to use `db.rt_handle.spawn_blocking()` instead of `get_runtime().spawn_blocking()`
+- Added doc comment explaining runtime ownership lifetime contract
+- All 79 tests pass, cargo check clean
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/lib.rs
+- **Learnings for future iterations:**
+  - `Runtime::new()` in `connect()` + `rt.enter()` provides the tokio context for `KvChannel::connect()` which calls `tokio::spawn`. The runtime must stay alive as long as the channel.
+  - `Handle::clone()` is cheap and can be stored in `JsNativeDatabase` for spawning blocking work. The handle remains valid as long as the runtime (owned by JsKvChannel) is alive.
+  - `init_tracing()` uses `try_init()` which is idempotent. Multiple calls (e.g., if connect is called again after disconnect) are no-ops.
+  - napi-rs async fn internally drives the future on the Node.js event loop. The `spawn_blocking` calls on the handle schedule work on the runtime's blocking thread pool.
+---
