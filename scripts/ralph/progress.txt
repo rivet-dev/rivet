@@ -891,3 +891,16 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The handleRequest catch block is the only place where internal_error responses are generated in the TS manager. All other error paths return specific error codes via structured ResponseData objects.
   - Pre-existing fixture typecheck errors (queue.ts, workflow.ts) are unrelated to kv-channel changes and should not block commits.
 ---
+
+## 2026-03-21 - US-051
+- Replaced `mpsc::unbounded_channel()` with `mpsc::channel(64)` for per-actor request channels in the engine KV channel
+- When the channel is full (`TrySendError::Full`), a backpressure error response is sent to the client with code "backpressure"
+- When the channel is closed (`TrySendError::Closed`), the dead entry is removed from `actor_channels` and an internal_error response is sent
+- Both cases log warnings with structured tracing fields including actor_id
+- Updated `actor_request_task` receiver type from `UnboundedReceiver` to `Receiver`
+- Captured `request_id` from the request before moving it into `try_send` so error responses can reference the correct request
+- Files changed: engine/packages/pegboard-kv-channel/src/lib.rs
+- **Learnings for future iterations:**
+  - When using `try_send` instead of `send`, you need to extract any fields from the message (like `request_id`) before the move, since `try_send` takes ownership even on error (the value is returned in the error variant but using it cleanly requires destructuring)
+  - The bounded channel type uses `mpsc::Sender` and `mpsc::Receiver` (not `UnboundedSender`/`UnboundedReceiver`), so both the channel creation and the task function signature need updating
+---

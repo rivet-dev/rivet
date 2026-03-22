@@ -859,7 +859,7 @@
         "cargo check passes"
       ],
       "priority": 51,
-      "passes": false,
+      "passes": true,
       "notes": "Review finding L2. Per-actor channels use mpsc::unbounded_channel(). WebSocket/TCP transport provides implicit backpressure and per-connection actor limits exist, but bounded channels provide explicit backpressure. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md L2."
     },
     {
