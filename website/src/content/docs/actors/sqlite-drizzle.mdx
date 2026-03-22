@@ -161,18 +161,19 @@ export const todoList = actor({
 });
 ```
 
-```ts actors.ts @nocheck
+```ts index.ts @nocheck
 import { setup } from "rivetkit";
 import { todoList } from "./todo-list/index.ts";
 
 export const registry = setup({ use: { todoList } });
+registry.start();
 ```
 
 ```ts client.ts @nocheck
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors/index";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const todoList = client.todoList.getOrCreate(["main"]);
 
 await todoList.addTodo("Write Drizzle docs");

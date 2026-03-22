@@ -126,6 +126,14 @@ export const RegistryConfigSchema = z
 		 */
 		serveManager: z.boolean().optional(),
 		/**
+		 * Directory to serve static files from.
+		 *
+		 * When set, the manager server will serve static files from this
+		 * directory. This is used by `registry.start()` to serve a frontend
+		 * alongside the actor API.
+		 */
+		publicDir: z.string().optional(),
+		/**
 		 * @experimental
 		 *
 		 * Base path for the manager API. This is used to prefix all routes.
@@ -494,6 +502,12 @@ export const DocRegistryConfigSchema = z
 			.optional()
 			.describe(
 				"Whether to start the local manager server. Auto-determined based on endpoint and NODE_ENV if not specified.",
+			),
+		publicDir: z
+			.string()
+			.optional()
+			.describe(
+				"Directory to serve static files from. When set, the manager server serves static files alongside the actor API. Used by registry.start().",
 			),
 		managerBasePath: z
 			.string()

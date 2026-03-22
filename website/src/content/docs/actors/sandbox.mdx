@@ -16,7 +16,7 @@ The Sandbox Actor wraps the `sandbox-agent` TypeScript SDK in a Rivet Actor.
 Use `provider` when every actor instance should use the same sandbox backend.
 
 <CodeGroup workspace>
-```ts actors.ts
+```ts index.ts
 import { setup } from "rivetkit";
 import { sandboxActor } from "rivetkit/sandbox";
 import { docker } from "rivetkit/sandbox/docker";
@@ -36,13 +36,14 @@ export const codingSandbox = sandboxActor({
 export const registry = setup({
   use: { codingSandbox },
 });
+registry.start();
 ```
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const sandbox = client.codingSandbox.getOrCreate(["task-123"]);
 
 const session = await sandbox.resumeOrCreateSession({
@@ -74,7 +75,7 @@ Use `createProvider` when provider selection depends on the actor input.
 `createProvider` receives the same actor creation `input` shape as `createState`.
 
 <CodeGroup workspace>
-```ts actors.ts
+```ts index.ts
 import { setup } from "rivetkit";
 import { sandboxActor } from "rivetkit/sandbox";
 import { daytona } from "rivetkit/sandbox/daytona";
@@ -101,13 +102,14 @@ export const codingSandbox = sandboxActor<undefined, SandboxInput>({
 export const registry = setup({
   use: { codingSandbox },
 });
+registry.start();
 ```
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 const sandbox = client.codingSandbox.getOrCreate(["task-456"], {
   createWithInput: {
@@ -349,9 +351,9 @@ import {
   mkdirFs,
   moveFile,
 } from "rivetkit/sandbox/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const sandbox = client.codingSandbox.getOrCreate(["task-789"]);
 
 // Get the direct URL to the sandbox-agent server.

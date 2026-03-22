@@ -88,14 +88,14 @@ const example = actor({
 
 <CodeGroup>
 
-```typescript actors.ts
+```typescript index.ts
 import { actor, setup } from "rivetkit";
 
 const chatRoom = actor({
   state: {
     messages: []
   },
-  
+
   actions: {
     // Get actor metadata
     getMetadata: (c) => {
@@ -112,26 +112,15 @@ const chatRoom = actor({
 export const registry = setup({
   use: { chatRoom }
 });
+
+registry.start();
 ```
 
 ```typescript client.ts
-import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
+import type { registry } from "./index";
 
-const chatRoom = actor({
-  state: { messages: [] as string[] },
-  actions: {
-    getMetadata: (c) => ({
-      actorId: c.actorId,
-      name: c.name,
-      key: c.key,
-      region: c.region
-    })
-  }
-});
-
-const registry = setup({ use: { chatRoom } });
-const client = createClient<typeof registry>("http://localhost:8080");
+const client = createClient<typeof registry>("http://localhost:6420");
 
 // Connect to a chat room
 const chatRoomHandle = client.chatRoom.get(["general"]);

@@ -4,11 +4,9 @@ import type {
 	CursorPosition,
 	TextLabel,
 	registry,
-} from "../src/actors.ts";
+} from "../src/index.ts";
 
-// HTTP requests go through Vite proxy
-const rivetUrl = `${location.origin}/api/rivet`;
-// WebSocket connections go directly to RivetKit server (vite-plugin-srvx doesn't proxy WS)
+const rivetUrl = "http://localhost:6420";
 const rivetWsUrl = "ws://localhost:6420";
 
 const client = createClient<typeof registry>(rivetUrl);
@@ -92,7 +90,7 @@ export function App() {
 				const actorId = await client.cursorRoom.getOrCreate(roomId).resolve();
 				console.log("found actor", actorId);
 
-				// Connect directly to RivetKit server for WebSocket (vite-plugin-srvx doesn't proxy WS)
+				// Connect directly to RivetKit server for WebSocket
 				const wsUrl = `${rivetWsUrl}/gateway/${actorId}/websocket?sessionId=${encodeURIComponent(sessionId)}`;
 
 				console.log("ws url:", wsUrl);

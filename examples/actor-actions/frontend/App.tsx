@@ -4,9 +4,9 @@ import type {
 	CompanyProfile,
 	EmployeeProfile,
 	registry,
-} from "../src/actors.ts";
+} from "../src/index.ts";
 
-const client = createClient<typeof registry>(`${window.location.origin}/api/rivet`);
+const client = createClient<typeof registry>("http://localhost:6420");
 
 export function App() {
 	const [companyEin, setCompanyEin] = useState("12-3456789");

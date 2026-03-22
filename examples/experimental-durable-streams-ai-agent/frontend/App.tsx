@@ -1,11 +1,11 @@
 import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { registry } from "../src/actors";
-import { type PromptMessage, type ResponseChunk } from "../src/shared/types";
-import { getStreams, getStreamPaths } from "../src/shared/streams";
+import type { registry } from "../src/index.ts";
+import { type PromptMessage, type ResponseChunk } from "../src/shared/types.ts";
+import { getStreams, getStreamPaths } from "../src/shared/streams.ts";
 import "./App.css";
 
-const { useActor } = createRivetKit<typeof registry>(`${window.location.origin}/api/rivet`);
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
 
 interface Message {
 	id: string;

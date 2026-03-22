@@ -39,7 +39,7 @@
 // }
 //
 // // Import registry after environment is set up
-// const { registry } = await import("../src/actors.ts");
+// const { registry } = await import("../src/index.ts");
 //
 // test("AI Agent initializes with conversation ID", async (ctx) => {
 // 	const { client } = await setupTest(ctx, registry);

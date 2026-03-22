@@ -1,17 +1,17 @@
 import { CodeBlock } from "../CodeBlock";
 import { Code, CodeGroup } from "../mdx";
 
-const noRouterCode = `import { registry } from "./registry";
+const startCode = `import { registry } from "./registry";
 
-// Exposes Rivet API on /api/rivet/ to communicate with actors
-export default registry.serve();`;
+// Starts the server and serves the actor API
+registry.start();`;
 
 const honoCode = `import { Hono } from "hono";
 import { createClient } from "rivetkit/client";
 import { registry } from "./registry";
 
 // Build client to communicate with actors (optional)
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 const app = new Hono();
 
@@ -35,7 +35,7 @@ import { createClient } from "rivetkit/client";
 import { registry } from "./registry";
 
 // Build client to communicate with actors (optional)
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 const app = new Elysia()
 	// Exposes Rivet API to communicate with actors
@@ -55,8 +55,8 @@ export function StepSetupServer() {
 			<p>Integrate with your preferred web framework:</p>
 
 			<CodeGroup>
-				<Code title="No Framework" language="ts">
-					<CodeBlock lang="typescript" code={noRouterCode} />
+				<Code title="registry.start()" language="ts">
+					<CodeBlock lang="typescript" code={startCode} />
 				</Code>
 				<Code title="Hono" language="ts">
 					<CodeBlock lang="typescript" code={honoCode} />

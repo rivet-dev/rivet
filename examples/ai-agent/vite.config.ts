@@ -1,7 +1,19 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import srvx from "vite-plugin-srvx";
 
 export default defineConfig({
-	plugins: [react(), ...srvx({ entry: "src/server.ts" })],
+	plugins: [react()],
+	publicDir: false,
+	build: {
+		outDir: "public",
+		emptyOutDir: true,
+	},
+	server: {
+		clearScreen: false,
+		proxy: {
+			"/actors": { target: "http://localhost:6420", ws: true },
+			"/metadata": { target: "http://localhost:6420" },
+			"/health": { target: "http://localhost:6420" },
+		},
+	},
 });

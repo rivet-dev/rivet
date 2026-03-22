@@ -1,6 +1,3 @@
-import type { Client } from "@/client/client";
-import { createClient } from "@/client/mod";
-import { isDev } from "@/utils/env-vars";
 import { Runtime } from "../../runtime";
 import {
 	type RegistryActors,
@@ -8,11 +5,6 @@ import {
 	type RegistryConfigInput,
 	RegistryConfigSchema,
 } from "./config";
-import {
-	type LegacyRunnerConfig,
-	type LegacyRunnerConfigInput,
-	LegacyRunnerConfigSchema,
-} from "./config/legacy-runner";
 
 export type FetchHandler = (
 	request: Request,
@@ -20,13 +12,6 @@ export type FetchHandler = (
 ) => Response | Promise<Response>;
 
 export interface ServerlessHandler {
-	fetch: FetchHandler;
-}
-
-export interface LegacyStartServerOutput<A extends Registry<any>> {
-	/** Client to communicate with the actors. */
-	client: Client<A>;
-	/** Fetch handler to manually route requests to the Rivet manager API. */
 	fetch: FetchHandler;
 }
 
@@ -109,82 +94,46 @@ export class Registry<A extends RegistryActors> {
 		this.#ensureRuntime().then((runtime) => runtime.startRunner());
 	}
 
-	// MARK: Legacy
 	/**
-	 * Runs the registry for a server.
+	 * Starts the server, serving both the actor API and static files.
 	 *
-	 * @deprecated Use {@link Registry.startRunner} for long-running servers or {@link Registry.handler} for serverless deployments.
+	 * This is the simplest way to run RivetKit. It starts a local manager
+	 * server, serves static files from the configured `publicDir` (default
+	 * `"public"`), and starts the actor runner.
+	 *
+	 * When an endpoint is configured (via config or RIVET_ENDPOINT env var),
+	 * operates in serverless mode connected to the remote engine instead.
+	 *
+	 * @example
+	 * ```ts
+	 * const registry = setup({ use: { counter } });
+	 * registry.start();
+	 * ```
 	 */
-	public start(
-		inputConfig?: LegacyRunnerConfigInput,
-	): LegacyStartServerOutput<this> {
-		const config = LegacyRunnerConfigSchema.parse(inputConfig);
+	public start() {
+		// Default publicDir to "public" if not explicitly set
+		if (this.#config.publicDir === undefined) {
+			this.#config.publicDir = "public";
+		}
 
-		// Validate autoConfigureServerless is only used with serverless runner
-		if (
-			config.autoConfigureServerless &&
-			config.runnerKind !== "serverless"
-		) {
-			throw new Error(
-				"autoConfigureServerless can only be configured when runnerKind is 'serverless'",
+		// Force serveManager when there's no remote endpoint so the
+		// manager server starts and serves the API + static files.
+		// When an endpoint IS configured, the config transform handles
+		// the mode (serveManager defaults to false, spawnEngine may be
+		// true, etc.) and we just start the runner.
+		if (this.#config.serveManager === undefined) {
+			const hasEndpoint = !!(
+				this.#config.endpoint ||
+				(typeof process !== "undefined" &&
+					(process.env.RIVET_ENGINE || process.env.RIVET_ENDPOINT))
 			);
+			if (!hasEndpoint) {
+				this.#config.serveManager = true;
+			}
 		}
 
-		// Auto-configure serverless runner if not in prod
-		const isDevEnv = isDev();
-		if (isDevEnv && config.runnerKind === "serverless") {
-			if (inputConfig?.runEngine === undefined) config.runEngine = true;
-			if (inputConfig?.autoConfigureServerless === undefined)
-				config.autoConfigureServerless = true;
-		}
-
-		// Convert to new config format and call appropriate handler
-		if (config.runnerKind === "serverless") {
-			return this.#legacyStartServerless(config, inputConfig);
-		} else {
-			return this.#legacyStartNormal(config);
-		}
-	}
-
-	#legacyStartServerless(
-		config: LegacyRunnerConfig,
-		_inputConfig: LegacyRunnerConfigInput | undefined,
-	): LegacyStartServerOutput<this> {
-		// Create client for the legacy return value
-		// For serverless, we don't have an endpoint until /start is called,
-		// so we create a placeholder client
-		const client = createClient<this>({
-			endpoint: config.endpoint,
-			token: config.token,
-			namespace: config.namespace,
-			headers: config.headers,
-		});
-
-		return {
-			client,
-			fetch: this.handler.bind(this),
-		};
-	}
-
-	#legacyStartNormal(
-		config: LegacyRunnerConfig,
-	): LegacyStartServerOutput<this> {
-		// Start the runner (fire-and-forget to maintain sync API)
-		// biome-ignore lint/nursery/noFloatingPromises: legacy sync API
+		// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
 		this.#ensureRuntime().then((runtime) => runtime.startRunner());
-
-		// Create client for the legacy return value
-		const client = createClient<this>({
-			endpoint: config.endpoint,
-			token: config.token,
-			namespace: config.namespace,
-			headers: config.headers,
-		});
-
-		return {
-			client,
-			fetch: this.handler.bind(this),
-		};
 	}
 }
 

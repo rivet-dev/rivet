@@ -1,6 +1,6 @@
 import { createClient } from "@rivetkit/react";
 import { useState, useMemo, useEffect } from "react";
-import type { Registry } from "../src/actors.ts";
+import type { Registry } from "../src/index.ts";
 import ConnectionScreen from "./components/ConnectionScreen.tsx";
 import InteractionScreen from "./components/InteractionScreen.tsx";
 
@@ -42,7 +42,7 @@ function App() {
     if (!state) return null;
 
     return createClient<Registry>({
-      endpoint: `${window.location.origin}/api/rivet`,
+      endpoint: "http://localhost:6420",
       encoding: state.encoding,
     });
   }, [state?.encoding]);

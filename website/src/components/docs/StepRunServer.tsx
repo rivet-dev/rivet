@@ -6,18 +6,18 @@ interface StepRunServerProps {
 	showDescription?: boolean;
 }
 
-export function StepRunServer({ file = "server.ts", showDescription = true }: StepRunServerProps) {
+export function StepRunServer({ file = "index.ts", showDescription = true }: StepRunServerProps) {
 	return (
 		<>
 			<CodeGroup>
 				<Code title="Node.js" language="bash">
-					<CodeBlock lang="bash" code={`npx srvx ${file}`} />
+					<CodeBlock lang="bash" code={`npx tsx --watch ${file}`} />
 				</Code>
 				<Code title="Bun" language="bash">
-					<CodeBlock lang="bash" code={`bun ${file}`} />
+					<CodeBlock lang="bash" code={`bun --watch ${file}`} />
 				</Code>
 				<Code title="Deno" language="bash">
-					<CodeBlock lang="bash" code={`deno run --allow-net --allow-read --allow-env ${file}`} />
+					<CodeBlock lang="bash" code={`deno run --allow-net --allow-read --allow-env --watch ${file}`} />
 				</Code>
 			</CodeGroup>
 

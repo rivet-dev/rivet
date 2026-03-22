@@ -16,6 +16,6 @@
 		"rewriteRelativeImportExtensions": true,
 		"types": ["node", "vitest/globals"]
 	},
-	"include": ["src/**/*", "tests/**/*"],
+	"include": ["src/**/*", "tests/**/*", "frontend/**/*", "vite.config.ts"],
 	"exclude": ["node_modules", "dist"]
 }

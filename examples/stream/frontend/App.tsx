@@ -1,8 +1,8 @@
 import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useState } from "react";
-import type { registry } from "../src/actors.ts";
+import type { registry } from "../src/index.ts";
 
-const { useActor } = createRivetKit<typeof registry>(`${window.location.origin}/api/rivet`);
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
 
 export function App() {
 	const [topValues, setTopValues] = useState<number[]>([]);

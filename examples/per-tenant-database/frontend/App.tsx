@@ -6,11 +6,9 @@ import type {
 	Project,
 	ProjectStatus,
 	registry,
-} from "../src/actors.ts";
+} from "../src/index.ts";
 
-const { useActor } = createRivetKit<typeof registry>(
-	`${location.origin}/api/rivet`,
-);
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
 
 const COMPANY_PRESETS = [
 	"Aurora Analytics",

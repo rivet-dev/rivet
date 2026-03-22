@@ -6,11 +6,11 @@ import type {
 	DocumentSummary,
 	SyncEvent,
 	registry,
-} from "../src/actors.ts";
+} from "../src/index.ts";
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from "y-protocols/awareness";
 import * as Y from "yjs";
 
-const { useActor } = createRivetKit<typeof registry>(`${location.origin}/api/rivet`);
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
 
 const CURSOR_COLORS = [
 	"#f97316",
