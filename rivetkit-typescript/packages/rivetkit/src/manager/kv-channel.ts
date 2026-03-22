@@ -51,6 +51,9 @@ interface KvChannelConnection {
 
 	/** Reference to the WebSocket context for sending messages. */
 	ws: WSContext | null;
+
+	/** Per-actor request queues for sequential execution. */
+	actorQueues: Map<string, Promise<void>>;
 }
 
 /** Global lock table: actorId -> connectionId. Shared across all connections. */
@@ -515,18 +518,37 @@ function handleToServerMessage(
 	msg: ToServer,
 ): void {
 	switch (msg.tag) {
-		case "ToServerRequest":
-			// Fire-and-forget: the handler sends the response itself.
-			handleRequest(conn, managerDriver, msg.val).catch(
-				(err) => {
-					logger().error({
-						msg: "unhandled error in kv channel request handler",
-						error:
-							err instanceof Error ? err.message : String(err),
-					});
-				},
+		case "ToServerRequest": {
+			const { actorId } = msg.val;
+
+			// Chain requests per actor so they execute sequentially,
+			// preventing journal write ordering violations. Cross-actor
+			// requests still execute concurrently since each actor has its
+			// own queue. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md H2.
+			const prev = conn.actorQueues.get(actorId) ?? Promise.resolve();
+			const next = prev.then(() =>
+				handleRequest(conn, managerDriver, msg.val).catch(
+					(err) => {
+						logger().error({
+							msg: "unhandled error in kv channel request handler",
+							error:
+								err instanceof Error
+									? err.message
+									: String(err),
+						});
+					},
+				),
 			);
+			conn.actorQueues.set(actorId, next);
+
+			// Clean up the queue entry once it settles to avoid unbounded map growth.
+			next.then(() => {
+				if (conn.actorQueues.get(actorId) === next) {
+					conn.actorQueues.delete(actorId);
+				}
+			});
 			break;
+		}
 
 		case "ToServerPong":
 			conn.lastPongTs = Date.now();
@@ -564,6 +586,7 @@ export function createKvChannelWebSocketHandler(
 		lastPongTs: Date.now(),
 		closed: false,
 		ws: null,
+		actorQueues: new Map(),
 	};
 
 	return {
