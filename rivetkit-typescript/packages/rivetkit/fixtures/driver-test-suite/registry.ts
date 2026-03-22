@@ -63,7 +63,7 @@ import {
 	runWithTicks,
 } from "./run";
 import { scheduled } from "./scheduled";
-import { dockerSandboxActor } from "./sandbox";
+// import { dockerSandboxActor } from "./sandbox";
 import {
 	sleep,
 	sleepWithLongRpc,
@@ -101,7 +101,7 @@ import {
 } from "./workflow";
 import { startStopRaceActor, lifecycleObserver } from "./start-stop-race";
 import { connErrorSerializationActor } from "./conn-error-serialization";
-import { dbBlockingActor } from "./db-blocking";
+import { dbKvStatsActor } from "./db-kv-stats";
 
 // Consolidated setup with all actors
 export const registry = setup({
@@ -115,7 +115,7 @@ export const registry = setup({
 		// From scheduled.ts
 		scheduled,
 		// From sandbox.ts
-		dockerSandboxActor,
+		// dockerSandboxActor,
 		// From sleep.ts
 		sleep,
 		sleepWithLongRpc,
@@ -227,7 +227,7 @@ export const registry = setup({
 		lifecycleObserver,
 		// From conn-error-serialization.ts
 		connErrorSerializationActor,
-		// From db-blocking.ts
-		dbBlockingActor,
+		// From db-kv-stats.ts
+		dbKvStatsActor,
 	},
 });

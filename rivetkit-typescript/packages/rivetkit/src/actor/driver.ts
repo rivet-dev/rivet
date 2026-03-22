@@ -5,7 +5,7 @@ import { type AnyConn } from "./conn/mod";
 import type { AnyActorInstance } from "./instance/mod";
 import type { RegistryConfig } from "@/registry/config";
 import type { RawDatabaseClient } from "@/db/config";
-import type { SqliteVfs } from "@rivetkit/sqlite-vfs";
+import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
 import { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 
 export type ActorDriverBuilder = (
@@ -92,13 +92,12 @@ export interface ActorDriver {
 	 * Creates a SQLite VFS instance for creating KV-backed databases.
 	 * If not provided, the database provider will need an override.
 	 *
-	 * @rivetkit/sqlite's async build is not re-entrant per module instance. Drivers
-	 * should return a new instance per call for actor-level isolation.
+	 * Drivers may use the actorId for pool-based instance assignment.
 	 *
 	 * This is a method (not a property) so drivers can use dynamic imports,
 	 * keeping the core driver tree-shakeable from @rivetkit/sqlite.
 	 */
-	createSqliteVfs?(): SqliteVfs | Promise<SqliteVfs>;
+	createSqliteVfs?(actorId: string): ISqliteVfs | Promise<ISqliteVfs>;
 
 	/**
 	 * Requests the actor to go to sleep.

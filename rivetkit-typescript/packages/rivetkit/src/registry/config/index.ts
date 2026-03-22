@@ -58,6 +58,26 @@ export const RegistryConfigSchema = z
 			.optional()
 			.transform((val) => val ?? getRivetkitStoragePath()),
 
+		// MARK: Database
+		/**
+		 * @experimental
+		 *
+		 * Configuration for the SQLite VFS pool that shares WASM instances across actors.
+		 */
+		sqlitePool: z
+			.object({
+				/**
+				 * Number of actors per WASM SQLite instance.
+				 */
+				actorsPerInstance: z.number().int().min(1).optional().default(50),
+				/**
+				 * Milliseconds before an idle instance (no actors, no in-flight ops) is destroyed.
+				 */
+				idleDestroyMs: z.number().optional().default(30_000),
+			})
+			.optional()
+			.default(() => ({ actorsPerInstance: 50, idleDestroyMs: 30_000 })),
+
 		// MARK: Networking
 		/** @experimental */
 		maxIncomingMessageSize: z.number().optional().default(65_536),
@@ -448,6 +468,25 @@ export const DocRegistryConfigSchema = z
 			.optional()
 			.describe(
 				"Storage path for RivetKit file-system state when using the default driver. Can also be set via RIVETKIT_STORAGE_PATH.",
+			),
+		sqlitePool: z
+			.object({
+				actorsPerInstance: z
+					.number()
+					.optional()
+					.describe(
+						"Number of actors per WASM SQLite instance. Default: 50",
+					),
+				idleDestroyMs: z
+					.number()
+					.optional()
+					.describe(
+						"Milliseconds before an idle WASM instance is destroyed. Default: 30000",
+					),
+			})
+			.optional()
+			.describe(
+				"Configuration for the SQLite VFS pool that shares WASM instances across actors.",
 			),
 		maxIncomingMessageSize: z
 			.number()

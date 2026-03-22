@@ -1,4 +1,4 @@
-import type { Database } from "@rivetkit/sqlite-vfs";
+import type { IDatabase } from "@rivetkit/sqlite-vfs";
 import {
 	drizzle as proxyDrizzle,
 	type SqliteRemoteDatabase,
@@ -31,7 +31,7 @@ interface DatabaseFactoryConfig<
  * Create a sqlite-proxy async callback from a @rivetkit/sqlite Database
  */
 function createProxyCallback(
-	waDb: Database,
+	waDb: IDatabase,
 	mutex: AsyncMutex,
 	isClosed: () => boolean,
 ) {
@@ -40,7 +40,7 @@ function createProxyCallback(
 		params: any[],
 		method: "run" | "all" | "values" | "get",
 	): Promise<{ rows: any }> => {
-		return mutex.run(async () => {
+		return await mutex.run(async () => {
 			if (isClosed()) {
 				throw new Error("database is closed");
 			}
@@ -69,30 +69,25 @@ function createProxyCallback(
  * Migrations use the same embedded format as drizzle-orm's durable-sqlite.
  */
 async function runInlineMigrations(
-	waDb: Database,
-	mutex: AsyncMutex,
+	waDb: IDatabase,
 	migrations: any,
 ): Promise<void> {
 	// Create migrations table
-	await mutex.run(() =>
-		waDb.exec(`
+	await waDb.exec(`
 		CREATE TABLE IF NOT EXISTS __drizzle_migrations (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			hash TEXT NOT NULL,
 			created_at INTEGER
 		)
-	`),
-	);
+	`);
 
 	// Get the last applied migration
 	let lastCreatedAt = 0;
-	await mutex.run(() =>
-		waDb.exec(
-			"SELECT id, hash, created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1",
-			(row) => {
-				lastCreatedAt = Number(row[2]) || 0;
-			},
-		),
+	await waDb.exec(
+		"SELECT id, hash, created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1",
+		(row) => {
+			lastCreatedAt = Number(row[2]) || 0;
+		},
 	);
 
 	// Apply pending migrations from journal entries
@@ -109,14 +104,12 @@ async function runInlineMigrations(
 		if (!sql) continue;
 
 		// Execute migration SQL
-		await mutex.run(() => waDb.exec(sql));
+		await waDb.exec(sql);
 
 		// Record migration
-		await mutex.run(() =>
-			waDb.run(
-				"INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
-				[entry.tag, entry.when],
-			),
+		await waDb.run(
+			"INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+			[entry.tag, entry.when],
 		);
 	}
 }
@@ -126,9 +119,13 @@ export function db<
 >(
 	config?: DatabaseFactoryConfig<TSchema>,
 ): DatabaseProvider<SqliteRemoteDatabase<TSchema> & RawAccess> {
-	// Store the @rivetkit/sqlite Database instance alongside the drizzle client
-	let waDbInstance: Database | null = null;
-	const mutex = new AsyncMutex();
+	// Map from drizzle client to the underlying @rivetkit/sqlite Database.
+	// Uses WeakMap so entries are garbage-collected when the client is.
+	// This replaces the previous shared `waDbInstance` variable which caused
+	// a race when multiple actors of the same type created databases
+	// concurrently: the last writer won, and earlier actors' migrations
+	// ran on the wrong database.
+	const clientToRawDb = new WeakMap<object, IDatabase>();
 
 	return {
 		createClient: async (ctx) => {
@@ -139,9 +136,12 @@ export function db<
 				);
 			}
 
-			const kvStore = createActorKvStore(ctx.kv);
+			const kvStore = createActorKvStore(ctx.kv, ctx.metrics);
 			const waDb = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
-			waDbInstance = waDb;
+			// Per-client mutex so actors of the same type do not serialize
+			// against each other. Each actor has its own database handle and
+			// its own closed flag, so there is no shared state to guard.
+			const mutex = new AsyncMutex();
 			let closed = false;
 			const ensureOpen = () => {
 				if (closed) {
@@ -155,7 +155,7 @@ export function db<
 			// Create the drizzle instance using sqlite-proxy
 			const client = proxyDrizzle<TSchema>(callback, config);
 
-			return Object.assign(client, {
+			const result = Object.assign(client, {
 				execute: async <
 					TRow extends Record<string, unknown> = Record<
 						string,
@@ -165,7 +165,7 @@ export function db<
 					query: string,
 					...args: unknown[]
 				): Promise<TRow[]> => {
-					return mutex.run(async () => {
+					return await mutex.run(async () => {
 						ensureOpen();
 
 						if (args.length > 0) {
@@ -206,22 +206,25 @@ export function db<
 					});
 				},
 				close: async () => {
-					await mutex.run(async () => {
-						if (closed) {
-							return;
-						}
+					const shouldClose = await mutex.run(async () => {
+						if (closed) return false;
 						closed = true;
-						await waDb.close();
-						waDbInstance = null;
+						return true;
 					});
+					if (shouldClose) {
+						await waDb.close();
+					}
 				},
 			} satisfies RawAccess);
+
+			clientToRawDb.set(result, waDb);
+			return result;
 		},
-		onMigrate: async (_client) => {
-			if (config?.migrations && waDbInstance) {
+		onMigrate: async (client) => {
+			const waDb = clientToRawDb.get(client as object);
+			if (config?.migrations && waDb) {
 				await runInlineMigrations(
-					waDbInstance,
-					mutex,
+					waDb,
 					config.migrations,
 				);
 			}

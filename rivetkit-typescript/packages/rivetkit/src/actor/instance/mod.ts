@@ -6,7 +6,8 @@ import {
 	type SpanStatusInput,
 	type Traces,
 } from "@rivetkit/traces";
-import type { SqliteVfs } from "@rivetkit/sqlite-vfs";
+import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
+import { ActorMetrics } from "@/actor/metrics";
 import invariant from "invariant";
 import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
@@ -171,7 +172,8 @@ export class ActorInstance<
 	// MARK: - Variables & Database
 	#vars?: V;
 	#db?: InferDatabaseClient<DB>;
-	#sqliteVfs?: SqliteVfs;
+	#sqliteVfs?: ISqliteVfs;
+	#metrics = new ActorMetrics();
 
 	// MARK: - Background Tasks
 	#backgroundPromises: Promise<void>[] = [];
@@ -259,6 +261,10 @@ export class ActorInstance<
 
 	get inspectorToken(): string | undefined {
 		return this.#inspectorToken;
+	}
+
+	get metrics(): ActorMetrics {
+		return this.#metrics;
 	}
 
 	// MARK: - Tracing
@@ -738,7 +744,9 @@ export class ActorInstance<
 		}
 
 		this.#activeKeepAwakeCount++;
+		this.#metrics.actionCalls++;
 		this.resetSleepTimer();
+		const actionStart = performance.now();
 		const actionSpan = this.startTraceSpan(`actor.action.${actionName}`, {
 			"rivet.action.name": actionName,
 		});
@@ -799,6 +807,7 @@ export class ActorInstance<
 				return output;
 			});
 		} catch (error) {
+			this.#metrics.actionErrors++;
 			const isTimeout = error instanceof DeadlineError;
 			const message = isTimeout
 				? "ActionTimedOut"
@@ -822,6 +831,7 @@ export class ActorInstance<
 			});
 			throw error;
 		} finally {
+			this.#metrics.actionTotalMs += performance.now() - actionStart;
 			if (!spanEnded && actionSpan.isActive()) {
 				this.#traces.endSpan(actionSpan, {
 					status: { code: "OK" },
@@ -1471,11 +1481,10 @@ export class ActorInstance<
 
 		let client: InferDatabaseClient<DB> | undefined;
 		try {
-			// Every actor gets its own SqliteVfs/@rivetkit/sqlite instance. The async
-			// @rivetkit/sqlite build is not re-entrant, and sharing one instance across
-			// actors can cause cross-actor contention and runtime corruption.
+			// Acquire a SQLite VFS handle for this actor. The driver may return a
+			// standalone VFS or a pooled handle that shares a WASM instance.
 			if (!this.#sqliteVfs && this.driver.createSqliteVfs) {
-				this.#sqliteVfs = await this.driver.createSqliteVfs();
+				this.#sqliteVfs = await this.driver.createSqliteVfs(this.#actorId);
 			}
 
 			client = await this.#config.db.createClient({
@@ -1502,6 +1511,7 @@ export class ActorInstance<
 						this.driver.kvBatchDelete(this.#actorId, keys),
 				},
 				sqliteVfs: this.#sqliteVfs,
+				metrics: this.#metrics,
 			});
 			this.#rLog.info({ msg: "database migration starting" });
 			await this.#config.db.onMigrate?.(client);

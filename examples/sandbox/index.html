@@ -407,10 +407,50 @@
 				flex-shrink: 0;
 			}
 
+			.event-name {
+				color: var(--accent);
+				font-size: 11px;
+				flex-shrink: 0;
+			}
+
 			.event-data {
 				color: var(--text);
 				white-space: pre-wrap;
 				word-break: break-word;
+			}
+
+			.event-tags {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 6px;
+				padding: 8px 12px;
+				border-bottom: 1px solid var(--border);
+			}
+
+			.event-tag {
+				display: inline-flex;
+				align-items: center;
+				gap: 4px;
+				padding: 2px 8px;
+				border-radius: 6px;
+				font-size: 12px;
+				font-weight: 500;
+				background: var(--border-strong);
+				color: var(--text);
+			}
+
+			.event-tag-remove {
+				background: none;
+				border: none;
+				color: var(--muted-2);
+				cursor: pointer;
+				padding: 0 2px;
+				font-size: 14px;
+				line-height: 1;
+			}
+
+			.event-tag-remove:hover {
+				color: var(--danger);
 			}
 
 			/* ── Code (Bottom) ────────────────────── */
@@ -493,6 +533,11 @@
 				flex-shrink: 0;
 			}
 
+			.action-latency {
+				font-size: 13px;
+				font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+				color: var(--muted);
+			}
 			.action-result {
 				background: var(--panel-3);
 				border: 1px solid var(--border);

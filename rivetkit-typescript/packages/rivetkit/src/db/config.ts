@@ -1,4 +1,5 @@
-import type { SqliteVfs } from "@rivetkit/sqlite-vfs";
+import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
+import type { ActorMetrics } from "@/actor/metrics";
 
 export type AnyDatabaseProvider = DatabaseProvider<any> | undefined;
 
@@ -35,11 +36,15 @@ export interface DatabaseProviderContext {
 	};
 
 	/**
-	 * SQLite VFS instance for creating KV-backed databases.
-	 * This should be actor-scoped because @rivetkit/sqlite is not re-entrant per
-	 * module instance.
+	 * SQLite VFS handle for creating KV-backed databases.
+	 * May be a standalone VFS or a pooled handle from SqliteVfsPool.
 	 */
-	sqliteVfs?: SqliteVfs;
+	sqliteVfs?: ISqliteVfs;
+
+	/**
+	 * Actor metrics instance. When provided, KV and SQL operations are tracked.
+	 */
+	metrics?: ActorMetrics;
 }
 
 export type DatabaseProvider<DB extends RawAccess> = {
