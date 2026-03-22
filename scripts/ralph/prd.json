@@ -794,7 +794,7 @@
         "cargo check passes"
       ],
       "priority": 47,
-      "passes": false,
+      "passes": true,
       "notes": "Review finding M5. Every KV op calls resolve_actor which hits the database. Actor name is immutable, so caching in the per-actor task is safe. The task is spawned once per actor per connection and naturally invalidates on close. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md M5 for the full actor_request_task rewrite."
     },
     {
@@ -958,6 +958,27 @@
       "priority": 57,
       "passes": false,
       "notes": "Review finding M8. Three independent BARE encode/decode implementations exist with no shared code. Adding a new KV operation requires synchronized changes in three places. Follow the runner-protocol pattern at engine/sdks/rust/runner-protocol/ which uses build.rs + vbare_compiler. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md M8."
+    },
+    {
+      "id": "US-058",
+      "title": "Verify stress tests pass for review fix validation",
+      "description": "As a developer, I need the driver test suite stress tests to pass, validating that the C1 (use-after-free), H1 (event loop blocking), and reconnect resilience fixes are working correctly.",
+      "acceptanceCriteria": [
+        "The dbStressActor fixture at rivetkit-typescript/packages/rivetkit/fixtures/driver-test-suite/db-stress.ts is registered in the registry",
+        "The test file at rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db-stress.ts is registered in mod.ts",
+        "The debug rig endpoint POST /.test/kv-channel/force-disconnect exists in rivetkit-typescript/packages/rivetkit/src/manager/router.ts",
+        "The _testForceCloseAllKvChannels function is exported from rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts",
+        "Test 'destroy during long-running DB operation completes without crash' passes (validates C1 fix)",
+        "Test 'rapid create-insert-destroy cycles handle DB lifecycle correctly' passes (validates C1 fix)",
+        "Test 'DB operations complete without excessive blocking' passes (validates H1 fix)",
+        "KV Channel Resilience tests are correctly skipped when native addon is unavailable",
+        "Run: cd rivetkit-typescript/packages/rivetkit && pnpm test driver-file-system -t '.*Actor Database Stress.*'",
+        "All non-skipped tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 58,
+      "passes": false,
+      "notes": "This story validates the stress test suite added for adversarial review findings C1, H1, and reconnect resilience. The tests, fixture actor, and debug rig are already written. This story ensures they pass against the codebase with all review fixes applied. The KV Channel Resilience tests (recovers from forced WebSocket disconnect, handles disconnect during active write) require the native SQLite addon to be built and are skipped otherwise."
     }
   ]
 }

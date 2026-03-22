@@ -828,3 +828,19 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The previous code conditionally cleared meta_dirty only `if file.meta_dirty` after success. The fix unconditionally clears it since any successful write with metadata in the batch means metadata is synced.
   - Both VFS implementations must stay in lockstep for error handling patterns, not just data layout and key encoding.
 ---
+
+## 2026-03-21 - US-047
+- Cached `resolve_actor` result in `actor_request_task` using `Option<(Id, String)>` local variable
+- Lazy resolution on first KV request (not on ActorOpenRequest), reused for all subsequent requests
+- On resolution failure, sends error response and continues without caching (next request retries)
+- Refactored `handle_kv_get`, `handle_kv_put`, `handle_kv_delete`, `handle_kv_delete_range` to accept `&actor_kv::Recipient` instead of raw `actor_id: &str` + `namespace_id: Id`
+- Removed `resolve_actor` calls from individual KV handlers
+- Moved actor open-check and actor_locked detection from `handle_request` into `actor_request_task`
+- Simplified `handle_request` to only handle lifecycle ops (open/close)
+- Added `send_response` helper to deduplicate response encoding/sending logic
+- Files changed: engine/packages/pegboard-kv-channel/src/lib.rs
+- **Learnings for future iterations:**
+  - The `actor_request_task` is the ideal caching point for per-actor state because it is spawned once per actor per connection and processes requests sequentially
+  - When refactoring request dispatch, move validation checks (is_open, actor_locked) into the task loop rather than the handler functions to keep handlers focused on their specific KV operation
+  - The `send_response` helper avoids duplicating encode/send/log-error logic between the main loop path and the early-return path (resolve failure)
+---
