@@ -36,6 +36,26 @@
 - Do NOT enable `journal_mode=MEMORY`, `journal_mode=OFF`, or `synchronous=OFF`
 - `journal_mode=PERSIST` is safe to switch to later (no migration needed)
 
+## Native SQLite Backend
+
+The WASM VFS described above has a native Rust counterpart (`@rivetkit/sqlite-native`) that statically links SQLite via napi-rs and routes VFS callbacks over a WebSocket-based KV channel protocol. The native backend shares one SQLite library across all actors (vs. one WASM module instance per actor), reducing memory overhead and removing JS from the I/O hot path. Data is fully compatible between backends. An actor can switch between WASM and native without migration.
+
+See the following internal docs for the full architecture:
+
+- `docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md` — full spec (protocol schema, VFS mapping, authentication, connection lifecycle, reconnect, single-writer locks, key layout, threading model)
+- `docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md` — adversarial review findings (threading, per-actor routing, lock eviction, multi-server)
+- `docs-internal/engine/NATIVE_SQLITE_ADVERSARIAL_REVIEW.md` — security and correctness hardening
+- `docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md` — fixes applied from review
+- `scripts/ralph/prd.json` — PRD with all user stories for the implementation
+
+Key implementation files:
+
+- `rivetkit-typescript/packages/sqlite-native/` — napi-rs addon (Rust): `vfs.rs`, `kv.rs`, `channel.rs`, `protocol.rs`, `lib.rs`
+- `engine/sdks/schemas/kv-channel-protocol/` — BARE schema and TypeScript codec
+- `engine/packages/pegboard-kv-channel/` — engine-side KV channel WebSocket server
+- `rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts` — manager-side KV channel handler
+- `rivetkit-typescript/packages/rivetkit/src/db/native-sqlite.ts` — integration and WASM fallback logic
+
 ## Future Work
 - **PITR / fork**: implement at KV layer (immutable chunk versions, manifests, branch heads, GC) with SQLite layer providing snapshot boundary coordination
 - **Remove double mutex** once profiled

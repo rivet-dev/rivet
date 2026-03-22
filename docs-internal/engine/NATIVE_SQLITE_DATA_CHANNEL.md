@@ -1,5 +1,7 @@
 # Native SQLite via KV Channel Protocol
 
+See also: `docs-internal/rivetkit-typescript/SQLITE_VFS.md` for the WASM VFS architecture that this native backend replaces/complements.
+
 ## Overview
 
 Replace the WebAssembly-based SQLite implementation with a native Rust SQLite binary delivered as a napi-rs addon. The native binary statically links SQLite and implements a custom VFS that routes page-level KV operations over a new WebSocket-based "KV channel" protocol. The KV channel runs parallel to the existing runner protocol and connects directly to the engine (production) or manager (local dev), bypassing the JavaScript runtime entirely.

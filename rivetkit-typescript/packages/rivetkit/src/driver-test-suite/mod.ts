@@ -38,6 +38,7 @@ import { runRawHttpTests } from "./tests/raw-http";
 import { runRawHttpRequestPropertiesTests } from "./tests/raw-http-request-properties";
 import { runRawWebSocketTests } from "./tests/raw-websocket";
 import { runCrossBackendVfsTests } from "./tests/cross-backend-vfs";
+import { runActorDbStressTests } from "./tests/actor-db-stress";
 import { runRequestAccessTests } from "./tests/request-access";
 
 export interface SkipTests {
@@ -172,6 +173,14 @@ export function runDriverTests(
 		// Cross-backend VFS compatibility runs once, independent of
 		// client type and encoding. Skips when native SQLite is unavailable.
 		runCrossBackendVfsTests({
+			...driverTestConfigPartial,
+			clientType: "http",
+			encoding: "bare",
+		});
+
+		// Stress tests for DB lifecycle races, event loop blocking, and
+		// KV channel resilience. Run once, not per-encoding.
+		runActorDbStressTests({
 			...driverTestConfigPartial,
 			clientType: "http",
 			encoding: "bare",
