@@ -439,6 +439,10 @@ unsafe extern "C" fn kv_io_write(
 			put_values.push(new_chunk);
 		}
 
+		// Save old state for rollback on write failure.
+		let old_size = file.size;
+		let old_meta_dirty = file.meta_dirty;
+
 		// Update file size if we wrote past the end.
 		let new_size = std::cmp::max(file.size, write_end as i64);
 		if new_size != file.size {
@@ -453,12 +457,13 @@ unsafe extern "C" fn kv_io_write(
 		}
 
 		if ctx.kv_put(put_keys, put_values).is_err() {
+			// Rollback in-memory state since the write did not persist.
+			file.size = old_size;
+			file.meta_dirty = old_meta_dirty;
 			return SQLITE_IOERR_WRITE;
 		}
 
-		if file.meta_dirty {
-			file.meta_dirty = false;
-		}
+		file.meta_dirty = false;
 
 		SQLITE_OK
 	})

@@ -892,10 +892,13 @@ class SqliteSystem implements SqliteVfsRegistration {
 			entriesToWrite.push([plan.chunkKey, newChunk]);
 		}
 
-		// Update file size if we wrote past the end
-		const previousSize = file.size;
+		// Save old state for rollback on write failure.
+		const oldSize = file.size;
+		const oldMetaDirty = file.metaDirty;
+
+		// Update file size if we wrote past the end.
 		const newSize = Math.max(file.size, writeEndOffset);
-		if (newSize !== previousSize) {
+		if (newSize !== oldSize) {
 			file.size = newSize;
 			file.metaDirty = true;
 		}
@@ -903,11 +906,16 @@ class SqliteSystem implements SqliteVfsRegistration {
 			entriesToWrite.push([file.metaKey, encodeFileMeta(file.size)]);
 		}
 
-		// Write all chunks and metadata
-		await options.putBatch(entriesToWrite);
-		if (file.metaDirty) {
-			file.metaDirty = false;
+		// Write all chunks and metadata.
+		try {
+			await options.putBatch(entriesToWrite);
+		} catch {
+			// Rollback in-memory state since the write did not persist.
+			file.size = oldSize;
+			file.metaDirty = oldMetaDirty;
+			return VFS.SQLITE_IOERR_WRITE;
 		}
+		file.metaDirty = false;
 
 		return VFS.SQLITE_OK;
 	}
