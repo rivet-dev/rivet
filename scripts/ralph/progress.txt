@@ -762,3 +762,14 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - Promise chaining (`prev.then(() => next)`) is the idiomatic JS pattern for per-key sequential execution without blocking other keys
   - Clean up map entries by comparing identity (`queue.get(key) === next`) to avoid deleting a newer chain
 ---
+
+## 2026-03-21 - US-042
+- Added `xSectorSize` override to WASM VFS `SqliteSystem` class returning `CHUNK_SIZE` (4096)
+- Previously inherited default 512 from base class, causing mismatch with native VFS which returns 4096
+- Added comment referencing native VFS parity requirement
+- Typecheck passes
+- Files changed: rivetkit-typescript/packages/sqlite-vfs/src/vfs.ts
+- **Learnings for future iterations:**
+  - The WASM VFS base class provides defaults for optional callbacks. If the native VFS overrides a callback, check whether the WASM VFS needs the same override for 1:1 parity.
+  - `xSectorSize` tells SQLite what alignment to use for journal I/O. Mismatched sector sizes between VFS implementations could cause different journal layouts for the same database.
+---

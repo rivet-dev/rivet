@@ -711,7 +711,7 @@
         "Typecheck passes"
       ],
       "priority": 42,
-      "passes": false,
+      "passes": true,
       "notes": "Review finding M3. Native VFS returns 4096, WASM VFS inherits 512 from base class. Using 4096 (matching CHUNK_SIZE) tells SQLite to align I/O to chunk boundaries. Not a breaking change since page size is stored in the DB header, not derived from sector size."
     },
     {
