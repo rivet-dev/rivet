@@ -765,7 +765,7 @@ public actor ActorConnection {
                 } else {
                     errorToThrow = ActorError(group: group, code: code, message: "Connection closed: \(reason)", metadata: nil)
                 }
-            } else {
+            } else if !reason.isEmpty {
                 logger.warning("failed to parse close reason reason=\(reason, privacy: .public)")
             }
         }

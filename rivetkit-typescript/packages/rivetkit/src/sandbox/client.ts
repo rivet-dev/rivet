@@ -382,12 +382,12 @@ class DirectTerminalSession implements TerminalSession {
 				this.closeSignalSent = true;
 				this.sendFrame({ type: "close" });
 			}
-			this.socket.close();
+			this.socket.close(1000, "sandbox.client_closed");
 			return;
 		}
 
 		if (this.socket.readyState !== 3) {
-			this.socket.close();
+			this.socket.close(1000, "sandbox.client_closed");
 		}
 	}
 

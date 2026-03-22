@@ -57,7 +57,9 @@ export function parseWebSocketCloseReason(
 	const [group, error] = mainPart.split(".");
 
 	if (!group || !error) {
-		logger()?.warn({ msg: "failed to parse close reason", reason });
+		if (reason) {
+			logger()?.warn({ msg: "failed to parse close reason", reason });
+		}
 		return undefined;
 	}
 
