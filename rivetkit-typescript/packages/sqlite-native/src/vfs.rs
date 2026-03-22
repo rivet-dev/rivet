@@ -847,19 +847,10 @@ unsafe extern "C" fn kv_vfs_randomness(
 ) -> c_int {
 	vfs_catch_unwind!(0, {
 		let buf = slice::from_raw_parts_mut(z_out as *mut u8, n_byte as usize);
-		let seed = std::time::SystemTime::now()
-			.duration_since(std::time::UNIX_EPOCH)
-			.unwrap_or_default()
-			.as_nanos();
-		// LCG PRNG, adequate for SQLite's randomness needs.
-		let mut state = seed as u64;
-		for byte in buf.iter_mut() {
-			state = state
-				.wrapping_mul(6364136223846793005)
-				.wrapping_add(1442695040888963407);
-			*byte = (state >> 33) as u8;
+		match getrandom::getrandom(buf) {
+			Ok(()) => n_byte,
+			Err(_) => 0,
 		}
-		n_byte
 	})
 }
 
