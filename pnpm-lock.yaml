@@ -234,18 +234,9 @@ importers:
 
   examples/actor-actions:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.2.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -255,9 +246,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -271,6 +259,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -280,9 +271,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -341,21 +329,12 @@ importers:
       '@ai-sdk/openai':
         specifier: ^0.0.66
         version: 0.0.66(zod@4.1.13)
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@4.1.13)
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -365,9 +344,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -381,6 +357,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -390,9 +369,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -454,12 +430,6 @@ importers:
 
   examples/ai-and-user-generated-actors-freestyle:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.1
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -478,58 +448,6 @@ importers:
       freestyle-sandboxes:
         specifier: ^0.0.95
         version: 0.0.95(expo-constants@18.0.13)(expo-linking@7.0.5)(expo@54.0.18)(react-dom@19.1.0(react@19.1.0))(react-native-safe-area-context@5.6.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native-screens@4.17.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(ws@8.19.0)
-      hono:
-        specifier: ^4.6.0
-        version: 4.11.9
-      react:
-        specifier: 19.1.0
-        version: 19.1.0
-      react-dom:
-        specifier: 19.1.0
-        version: 19.1.0(react@19.1.0)
-    devDependencies:
-      '@types/node':
-        specifier: ^22.13.9
-        version: 22.19.10
-      '@types/react':
-        specifier: ^19
-        version: 19.2.13
-      '@types/react-dom':
-        specifier: ^19
-        version: 19.2.3(@types/react@19.2.13)
-      '@vitejs/plugin-react':
-        specifier: ^4.2.0
-        version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
-      tsx:
-        specifier: ^3.12.7
-        version: 3.14.0
-      typescript:
-        specifier: ^5.5.2
-        version: 5.9.3
-      vite:
-        specifier: ^5.0.0
-        version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-
-  examples/chat-room:
-    dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
-      '@rivetkit/react':
-        specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -539,9 +457,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -555,6 +470,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -564,9 +482,49 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
+
+  examples/chat-room:
+    dependencies:
+      '@rivetkit/react':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/react
+      react:
+        specifier: 19.1.0
+        version: 19.1.0
+      react-dom:
+        specifier: 19.1.0
+        version: 19.1.0(react@19.1.0)
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.10
+      '@types/react':
+        specifier: ^19
+        version: 19.2.13
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.2.3(@types/react@19.2.13)
+      '@vitejs/plugin-react':
+        specifier: ^4.2.0
+        version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
+      tsx:
+        specifier: ^3.12.7
+        version: 3.14.0
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+      vite:
+        specifier: ^5.0.0
+        version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -675,18 +633,9 @@ importers:
 
   examples/collaborative-document:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -696,9 +645,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
       y-protocols:
         specifier: ^1.0.6
         version: 1.0.7(yjs@13.6.29)
@@ -718,6 +664,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -727,9 +676,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -791,18 +737,9 @@ importers:
 
   examples/cross-actor-actions:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -812,9 +749,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -828,6 +762,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -837,9 +774,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -895,18 +829,9 @@ importers:
 
   examples/cursors:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -916,9 +841,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -932,6 +854,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -941,27 +866,15 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
   examples/cursors-raw-websocket:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -971,9 +884,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -987,6 +897,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -996,9 +909,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -1103,28 +1013,13 @@ importers:
 
   examples/custom-serverless:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
         version: 22.19.10
-      tsup:
-        specifier: ^8.0.0
-        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@3.14.0)(typescript@5.9.3)(yaml@2.8.2)
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -1137,21 +1032,12 @@ importers:
 
   examples/elysia:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       elysia:
         specifier: ^1.4.0
         version: 1.4.12(@sinclair/typebox@0.34.41)(exact-mirror@0.2.2(@sinclair/typebox@0.34.41))(file-type@21.0.0)(openapi-types@12.1.3)(typescript@5.9.3)
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1177,21 +1063,12 @@ importers:
       '@durable-streams/writer':
         specifier: https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8b
         version: https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8b
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@4.1.13)
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1201,9 +1078,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
       zod:
         specifier: ^4.1.0
         version: 4.1.13
@@ -1220,6 +1094,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -1229,9 +1106,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -1305,18 +1179,9 @@ importers:
 
   examples/geo-distributed-database:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1326,9 +1191,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1342,6 +1204,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -1351,9 +1216,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -1501,21 +1363,12 @@ importers:
 
   examples/hono:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.1
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       hono:
         specifier: ^4.7.0
         version: 4.11.9
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1529,12 +1382,6 @@ importers:
 
   examples/hono-react:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.1
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
@@ -1550,9 +1397,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1566,6 +1410,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -1575,9 +1422,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -1633,18 +1477,9 @@ importers:
 
   examples/kitchen-sink:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.7.4
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1654,9 +1489,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1670,6 +1502,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.1
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^4.7.1
         version: 4.21.0
@@ -1679,9 +1514,6 @@ importers:
       vite:
         specifier: ^5.2.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
 
   examples/kitchen-sink-vercel:
     dependencies:
@@ -1780,18 +1612,9 @@ importers:
 
   examples/multiplayer-game:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1801,9 +1624,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1817,6 +1637,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -1826,9 +1649,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -1841,15 +1661,6 @@ importers:
       '@dimforge/rapier3d-compat':
         specifier: ^0.14.0
         version: 0.14.0
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
-      hono:
-        specifier: ^4
-        version: 4.11.9
       lucide-react:
         specifier: ^0.439.0
         version: 0.439.0(react@19.1.0)
@@ -1862,9 +1673,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
       three:
         specifier: ^0.171.0
         version: 0.171.0
@@ -1884,15 +1692,18 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.0.0
+        version: 9.2.1
+      tsx:
+        specifier: ^3.12.7
+        version: 3.14.0
       typescript:
         specifier: ^5.5.2
         version: 5.9.3
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2006,18 +1817,9 @@ importers:
 
   examples/native-websockets:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2027,9 +1829,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2046,6 +1845,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -2055,9 +1857,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2162,18 +1961,9 @@ importers:
 
   examples/per-tenant-database:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2183,9 +1973,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2199,6 +1986,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -2208,9 +1998,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2266,12 +2053,6 @@ importers:
 
   examples/raw-fetch-handler:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.1
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
@@ -2287,9 +2068,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.10.6
@@ -2303,6 +2081,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^4.20.0
         version: 4.21.0
@@ -2312,9 +2093,6 @@ importers:
       vite:
         specifier: ^5.4.19
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2370,18 +2148,9 @@ importers:
 
   examples/raw-websocket-handler:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.7.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2391,9 +2160,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -2407,6 +2173,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.7.0(vite@6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^4.19.2
         version: 4.21.0
@@ -2416,9 +2185,6 @@ importers:
       vite:
         specifier: ^6.0.5
         version: 6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2446,9 +2212,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
       ws:
         specifier: ^8.18.0
         version: 8.19.0
@@ -2468,6 +2231,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.7.0(vite@6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^4.19.2
         version: 4.21.0
@@ -2477,9 +2243,6 @@ importers:
       vite:
         specifier: ^6.0.5
         version: 6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2590,18 +2353,9 @@ importers:
 
   examples/react:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.7.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2611,9 +2365,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2627,6 +2378,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -2636,9 +2390,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2697,12 +2448,6 @@ importers:
       '@ai-sdk/openai':
         specifier: ^0.0.66
         version: 0.0.66(zod@3.25.76)
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
@@ -2715,9 +2460,6 @@ importers:
       fdb-tuple:
         specifier: ^1.0.0
         version: 1.0.0
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       lucide-react:
         specifier: ^0.439.0
         version: 0.439.0(react@19.1.0)
@@ -2736,9 +2478,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
       zod:
         specifier: ^3.25.69
         version: 3.25.76
@@ -2755,6 +2494,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       drizzle-kit:
         specifier: ^0.31.2
         version: 0.31.5
@@ -2767,24 +2509,12 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
 
   examples/sandbox-coding-agent:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2794,9 +2524,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2810,6 +2537,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -2819,9 +2549,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2950,18 +2677,9 @@ importers:
 
   examples/scheduling:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2971,9 +2689,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2987,6 +2702,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -2996,9 +2714,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -3054,12 +2769,6 @@ importers:
 
   examples/sqlite-drizzle:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.18.2
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.1.1
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       drizzle-kit:
         specifier: ^0.31.2
         version: 0.31.5
@@ -3097,18 +2806,9 @@ importers:
 
   examples/state:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -3118,9 +2818,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -3134,6 +2831,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -3143,9 +2843,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -3201,18 +2898,9 @@ importers:
 
   examples/stream:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -3222,9 +2910,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -3238,6 +2923,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.0.0
         version: 4.7.0(vite@5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
@@ -3247,9 +2935,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@20.19.13)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -3305,12 +2990,6 @@ importers:
 
   examples/trpc:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@hono/trpc-server':
         specifier: ^0.3.0
         version: 0.3.4(@trpc/server@11.6.0(typescript@5.9.3))(hono@4.11.9)
@@ -3326,9 +3005,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -3336,9 +3012,6 @@ importers:
       '@types/node':
         specifier: ^22.13.9
         version: 22.19.10
-      tsup:
-        specifier: ^8.4.0
-        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@3.14.0)(typescript@5.9.3)(yaml@2.8.2)
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -17610,12 +17283,6 @@ packages:
   vite-plugin-favicons-inject@2.2.0:
     resolution: {integrity: sha512-MaqZE3IjwFffIED38yKcI5BKGkV039N6ilhPeOfW4TILzSKMBNd8Q0ehu0mwbl1emWH2tGcuwV3ZIzDKfb0vIQ==}
 
-  vite-plugin-srvx@1.0.2:
-    resolution: {integrity: sha512-y11gH+CBkbQvfbFE14TJcl7HAkjqaZbGEb3CXnEdu0fXlsPzHJST7Khyq021WKOWbDYb8PaCabjzMQ+pS1oDPw==}
-    peerDependencies:
-      srvx: '>=0.9.0'
-      vite: ^5.0.0 || ^6.0.0
-
   vite-tsconfig-paths@5.1.4:
     resolution: {integrity: sha512-cYj0LRuLV2c2sMqhqhGpaO3LretdtMn/BVX4cPLanIZuwwrkVl+lK84E/miEXkCHWXuq65rhNN4rXsBcOB3S4w==}
     peerDependencies:
@@ -31381,15 +31048,6 @@ snapshots:
       postcss: 8.5.6
       ts-node: 10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.17))(@types/node@25.0.7)(typescript@5.9.3)
 
-  postcss-load-config@6.0.1(jiti@1.21.7)(postcss@8.5.6)(tsx@3.14.0)(yaml@2.8.2):
-    dependencies:
-      lilconfig: 3.1.3
-    optionalDependencies:
-      jiti: 1.21.7
-      postcss: 8.5.6
-      tsx: 3.14.0
-      yaml: 2.8.2
-
   postcss-load-config@6.0.1(jiti@1.21.7)(postcss@8.5.6)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       lilconfig: 3.1.3
@@ -33172,36 +32830,6 @@ snapshots:
       - tsx
       - yaml
 
-  tsup@8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@3.14.0)(typescript@5.9.3)(yaml@2.8.2):
-    dependencies:
-      bundle-require: 5.1.0(esbuild@0.27.3)
-      cac: 6.7.14
-      chokidar: 4.0.3
-      consola: 3.4.2
-      debug: 4.4.3
-      esbuild: 0.27.3
-      fix-dts-default-cjs-exports: 1.0.1
-      joycon: 3.1.1
-      picocolors: 1.1.1
-      postcss-load-config: 6.0.1(jiti@1.21.7)(postcss@8.5.6)(tsx@3.14.0)(yaml@2.8.2)
-      resolve-from: 5.0.0
-      rollup: 4.57.1
-      source-map: 0.7.6
-      sucrase: 3.35.1
-      tinyexec: 0.3.2
-      tinyglobby: 0.2.15
-      tree-kill: 1.2.2
-    optionalDependencies:
-      '@microsoft/api-extractor': 7.53.2(@types/node@22.19.10)
-      '@swc/core': 1.15.11(@swc/helpers@0.5.17)
-      postcss: 8.5.6
-      typescript: 5.9.3
-    transitivePeerDependencies:
-      - jiti
-      - supports-color
-      - tsx
-      - yaml
-
   tsup@8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2):
     dependencies:
       bundle-require: 5.1.0(esbuild@0.27.3)
@@ -33894,21 +33522,6 @@ snapshots:
   vite-plugin-favicons-inject@2.2.0:
     dependencies:
       favicons: 7.2.0
-
-  vite-plugin-srvx@1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)):
-    dependencies:
-      srvx: 0.10.0
-      vite: 5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-
-  vite-plugin-srvx@1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)):
-    dependencies:
-      srvx: 0.10.0
-      vite: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-
-  vite-plugin-srvx@1.0.2(srvx@0.10.0)(vite@6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)):
-    dependencies:
-      srvx: 0.10.0
-      vite: 6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
   vite-tsconfig-paths@5.1.4(typescript@5.9.3)(vite@5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)):
     dependencies:
