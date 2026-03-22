@@ -749,3 +749,16 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The guard checks `i_amt` (c_int) not `amt` (usize) to avoid the cast-to-usize happening before the check
   - Both VFS implementations should have identical guards for 1:1 parity
 ---
+
+## 2026-03-21 - US-041
+- Added per-actor request queue to TS dev manager KV channel to prevent journal write ordering violations
+- Added `actorQueues: Map<string, Promise<void>>` field to `KvChannelConnection` interface
+- In `handleToServerMessage`, requests for the same actor are chained via Promise.then() so they execute sequentially
+- Cross-actor requests still execute concurrently (each actor has its own Promise chain)
+- Queue entries are cleaned up after settling to prevent unbounded map growth
+- Typecheck passes (no new errors in kv-channel.ts)
+- Files changed: rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts
+- **Learnings for future iterations:**
+  - Promise chaining (`prev.then(() => next)`) is the idiomatic JS pattern for per-key sequential execution without blocking other keys
+  - Clean up map entries by comparing identity (`queue.get(key) === next`) to avoid deleting a newer chain
+---
