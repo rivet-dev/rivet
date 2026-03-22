@@ -163,29 +163,40 @@ pub fn connect(config: ConnectConfig) -> JsKvChannel {
 }
 
 /// Open a database for an actor. Sends ActorOpenRequest optimistically.
+///
+/// VFS registration and sqlite3_open_v2 run inside `spawn_blocking` because
+/// they trigger synchronous VFS callbacks that call `Handle::block_on()` for
+/// KV I/O. This is safe from a blocking thread but would deadlock or freeze
+/// the Node.js main thread if called via `rt.block_on()`.
 #[napi(js_name = "openDatabase")]
-pub fn open_database(channel: &JsKvChannel, actor_id: String) -> Result<JsNativeDatabase> {
-	let rt = get_runtime();
-
+pub async fn open_database(
+	channel: &JsKvChannel,
+	actor_id: String,
+) -> Result<JsNativeDatabase> {
 	// Send ActorOpenRequest and wait for the response to ensure the
 	// server-side actor lock is acquired before VFS operations begin.
 	let ch = channel.channel.clone();
 	let aid = actor_id.clone();
-	rt.block_on(async { ch.open_actor(&aid).await })
+	ch.open_actor(&aid)
+		.await
 		.map_err(|e| Error::from_reason(e.to_string()))?;
 
-	// Register a unique VFS instance scoped to this actor.
-	let vfs_name = format!("kv-{actor_id}");
-	let kv_vfs = vfs::KvVfs::register(
-		&vfs_name,
-		channel.channel.clone(),
-		actor_id.clone(),
-		rt.handle().clone(),
-	)
-	.map_err(Error::from_reason)?;
-
-	// Open the SQLite database on the registered VFS.
-	let native_db = vfs::open_database(kv_vfs, &actor_id).map_err(Error::from_reason)?;
+	// Register VFS and open database inside spawn_blocking since VFS
+	// callbacks use Handle::block_on() which is safe from blocking threads
+	// but not from the Node.js main thread.
+	let rt_handle = get_runtime().handle().clone();
+	let ch2 = channel.channel.clone();
+	let aid2 = actor_id.clone();
+	let native_db = get_runtime()
+		.spawn_blocking(move || {
+			let vfs_name = format!("kv-{aid2}");
+			let kv_vfs =
+				vfs::KvVfs::register(&vfs_name, ch2, aid2.clone(), rt_handle)?;
+			vfs::open_database(kv_vfs, &aid2)
+		})
+		.await
+		.map_err(|e| Error::from_reason(e.to_string()))?
+		.map_err(Error::from_reason)?;
 
 	Ok(JsNativeDatabase {
 		stmt_cache: Arc::new(Mutex::new(LruCache::new(
@@ -441,7 +452,7 @@ pub async fn exec(db: &JsNativeDatabase, sql: String) -> Result<QueryResult> {
 /// Locks the db mutex and takes the Option, so concurrent/subsequent
 /// execute/query/exec operations see None and return "database is closed".
 #[napi(js_name = "closeDatabase")]
-pub fn close_database(db: &mut JsNativeDatabase) -> Result<()> {
+pub async fn close_database(db: &JsNativeDatabase) -> Result<()> {
 	// Finalize all cached statements before closing the database.
 	db.stmt_cache.lock().unwrap().clear();
 
@@ -454,10 +465,10 @@ pub fn close_database(db: &mut JsNativeDatabase) -> Result<()> {
 	}
 
 	// Send ActorCloseRequest to release the server-side lock.
-	let rt = get_runtime();
 	let ch = db.channel.clone();
 	let aid = db.actor_id.clone();
-	rt.block_on(async { ch.close_actor(&aid).await })
+	ch.close_actor(&aid)
+		.await
 		.map_err(|e| Error::from_reason(e.to_string()))?;
 
 	Ok(())
@@ -465,9 +476,8 @@ pub fn close_database(db: &mut JsNativeDatabase) -> Result<()> {
 
 /// Close the KV channel WebSocket connection.
 #[napi]
-pub fn disconnect(channel: &JsKvChannel) -> Result<()> {
-	let rt = get_runtime();
-	rt.block_on(async { channel.channel.disconnect().await });
+pub async fn disconnect(channel: &JsKvChannel) -> Result<()> {
+	channel.channel.disconnect().await;
 	Ok(())
 }
 

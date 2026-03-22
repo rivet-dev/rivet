@@ -48,7 +48,7 @@ export function db({
 			// routes KV operations over a WebSocket KV channel, bypassing
 			// the WASM VFS entirely.
 			if (nativeSqliteAvailable()) {
-				return createNativeRawAccess(ctx.actorId);
+				return await createNativeRawAccess(ctx.actorId);
 			}
 
 			// Native addon not available. Fall back to WASM SQLite.

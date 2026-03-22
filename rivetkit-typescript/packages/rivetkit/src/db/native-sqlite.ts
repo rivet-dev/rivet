@@ -31,7 +31,7 @@ interface NativeSqliteModule {
 	openDatabase(
 		channel: NativeKvChannel,
 		actorId: string,
-	): NativeDatabase;
+	): Promise<NativeDatabase>;
 	execute(
 		db: NativeDatabase,
 		sql: string,
@@ -46,8 +46,8 @@ interface NativeSqliteModule {
 		db: NativeDatabase,
 		sql: string,
 	): Promise<{ columns: string[]; rows: unknown[][] }>;
-	closeDatabase(db: NativeDatabase): void;
-	disconnect(channel: NativeKvChannel): void;
+	closeDatabase(db: NativeDatabase): Promise<void>;
+	disconnect(channel: NativeKvChannel): Promise<void>;
 }
 
 // Opaque handles from the native addon.
@@ -78,10 +78,10 @@ let shutdownRegistered = false;
  *                  If false/undefined, reset so the next call re-detects.
  * @internal
  */
-export function _resetNativeDetection(disable?: boolean): void {
+export async function _resetNativeDetection(disable?: boolean): Promise<void> {
 	if (kvChannel && nativeModule) {
 		try {
-			nativeModule.disconnect(kvChannel);
+			await nativeModule.disconnect(kvChannel);
 		} catch {
 			// Ignore cleanup errors
 		}
@@ -135,11 +135,12 @@ function getNativeModule(): NativeSqliteModule {
  */
 export function disconnectKvChannel(): void {
 	if (kvChannel && nativeModule) {
-		try {
-			nativeModule.disconnect(kvChannel);
-		} catch {
+		// Fire-and-forget the async disconnect. During process shutdown,
+		// we cannot reliably await Promises (beforeExit/signal handlers
+		// are synchronous). The WebSocket close frame is best-effort.
+		nativeModule.disconnect(kvChannel).catch(() => {
 			// Ignore cleanup errors during shutdown.
-		}
+		});
 	}
 	kvChannel = null;
 	channelDisconnected = true;
@@ -222,10 +223,10 @@ function toNativeBindings(args: unknown[]): unknown[] {
  * Create a RawAccess database client backed by the native SQLite addon.
  * The KV channel is shared per process; a new database is opened per actor.
  */
-export function createNativeRawAccess(actorId: string): RawAccess {
+export async function createNativeRawAccess(actorId: string): Promise<RawAccess> {
 	const mod = getNativeModule();
 	const channel = getOrCreateKvChannel();
-	const nativeDb = mod.openDatabase(channel, actorId);
+	const nativeDb = await mod.openDatabase(channel, actorId);
 	let closed = false;
 	const mutex = new AsyncMutex();
 
@@ -298,7 +299,7 @@ export function createNativeRawAccess(actorId: string): RawAccess {
 			await mutex.run(async () => {
 				if (closed) return;
 				closed = true;
-				mod.closeDatabase(nativeDb);
+				await mod.closeDatabase(nativeDb);
 			});
 		},
 	};

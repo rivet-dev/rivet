@@ -29,12 +29,12 @@ export function runCrossBackendVfsTests(driverTestConfig: DriverTestConfig) {
 				"WASM-to-native: data written with WASM VFS is readable with native VFS",
 				async (c) => {
 					// Restore native detection on cleanup
-					c.onTestFinished(() => {
-						_resetNativeDetection();
+					c.onTestFinished(async () => {
+						await _resetNativeDetection();
 					});
 
 					// Phase 1: Force WASM VFS
-					_resetNativeDetection(true);
+					await _resetNativeDetection(true);
 
 					const { client } = await setupDriverTest(
 						c,
@@ -66,7 +66,7 @@ export function runCrossBackendVfsTests(driverTestConfig: DriverTestConfig) {
 					await waitFor(driverTestConfig, SLEEP_WAIT_MS);
 
 					// Phase 2: Restore native VFS detection
-					_resetNativeDetection();
+					await _resetNativeDetection();
 
 					// Recreate the actor. The db() provider now uses native
 					// SQLite, reading data written by the WASM VFS.
@@ -98,12 +98,12 @@ export function runCrossBackendVfsTests(driverTestConfig: DriverTestConfig) {
 				"native-to-WASM: data written with native VFS is readable with WASM VFS",
 				async (c) => {
 					// Restore native detection on cleanup
-					c.onTestFinished(() => {
-						_resetNativeDetection();
+					c.onTestFinished(async () => {
+						await _resetNativeDetection();
 					});
 
 					// Phase 1: Use native VFS (default when addon is available)
-					_resetNativeDetection();
+					await _resetNativeDetection();
 
 					const { client } = await setupDriverTest(
 						c,
@@ -134,7 +134,7 @@ export function runCrossBackendVfsTests(driverTestConfig: DriverTestConfig) {
 					await waitFor(driverTestConfig, SLEEP_WAIT_MS);
 
 					// Phase 2: Force WASM VFS
-					_resetNativeDetection(true);
+					await _resetNativeDetection(true);
 
 					// Recreate the actor. The db() provider now uses WASM
 					// SQLite, reading data written by the native VFS.
