@@ -5,16 +5,16 @@
  * Flow (mirrors rivet-dev/deploy-action):
  *   1. Inspect the cloud token → get org + project
  *   2. Ensure the target namespace exists (create if absent)
- *   3. Fetch Docker registry credentials from the Cloud API
- *   4. `docker login` to the Rivet registry
- *   5. `docker build` the local context
- *   6. `docker tag` + `docker push` the image
- *   7. `managedPools.upsert` with the new image reference
+ *   3. `docker login` to the Rivet registry using the cloud token
+ *   4. `docker build` the local context
+ *   5. `docker tag` + `docker push` the image
+ *   6. `managedPools.upsert` with the new image reference
  */
 
 import type { Command } from "commander";
 import task from "tasuku";
-import { CloudClient, type DockerCredentials } from "../lib/client.ts";
+import { RivetError } from "@rivet-gg/cloud";
+import { createCloudClient, type DockerCredentials } from "../lib/client.ts";
 import { resolveToken } from "../lib/auth.ts";
 import {
 	assertDockerAvailable,
@@ -22,7 +22,7 @@ import {
 	dockerLogin,
 	dockerTagAndPush,
 } from "../lib/docker.ts";
-import { colors, detail, fatal, header, success } from "../utils/output.ts";
+import { colors, detail, fatal, header } from "../utils/output.ts";
 
 export interface DeployOptions {
 	token?: string;
@@ -70,7 +70,7 @@ export function registerDeployCommand(program: Command): void {
 
 async function runDeploy(opts: DeployOptions): Promise<void> {
 	const token = resolveToken(opts.token);
-	const client = new CloudClient({ token, baseUrl: opts.apiUrl });
+	const client = createCloudClient({ token, baseUrl: opts.apiUrl });
 
 	console.log(`\n${colors.accentBold("▶")} ${colors.label("Rivet Cloud Deploy")}\n`);
 
@@ -79,9 +79,9 @@ async function runDeploy(opts: DeployOptions): Promise<void> {
 	let project: string;
 
 	await task("Authenticating", async ({ setTitle }) => {
-		const identity = await client.inspect().catch((err) => {
+		const identity = await client.apiTokens.inspect().catch((err) => {
 			fatal(
-				`Authentication failed: ${err.message}`,
+				`Authentication failed: ${err instanceof Error ? err.message : String(err)}`,
 				"Check that RIVET_CLOUD_TOKEN is valid and not expired.",
 			);
 		});
@@ -92,9 +92,19 @@ async function runDeploy(opts: DeployOptions): Promise<void> {
 
 	// Step 2: Ensure namespace exists
 	await task(`Namespace: ${opts.namespace}`, async ({ setTitle }) => {
-		let ns = await client.getNamespace(project!, opts.namespace, org!);
-		if (!ns) {
-			ns = await client.createNamespace(project!, opts.namespace, org!);
+		let exists = true;
+		try {
+			await client.namespaces.get(project!, opts.namespace, { org: org! });
+		} catch (err) {
+			if (err instanceof RivetError && err.statusCode === 404) {
+				exists = false;
+			} else {
+				throw err;
+			}
+		}
+
+		if (!exists) {
+			await client.namespaces.create(project!, { displayName: opts.namespace, org: org! });
 			setTitle(`Created namespace "${opts.namespace}"`);
 		} else {
 			setTitle(`Namespace "${opts.namespace}" ready`);
@@ -104,30 +114,20 @@ async function runDeploy(opts: DeployOptions): Promise<void> {
 	// Step 3: Docker availability
 	await assertDockerAvailable();
 
-	// Step 4: Fetch Docker registry credentials
-	let creds: DockerCredentials;
-	await task("Fetching registry credentials", async ({ setTitle }) => {
-		try {
-			creds = await client.getDockerCredentials(project!, org!);
-			setTitle(`Registry: ${creds!.registryUrl}`);
-		} catch (err: unknown) {
-			// Fall back to using the cloud token as registry password if the endpoint
-			// doesn't exist yet — Rivet's registry accepts cloud tokens directly.
-			creds = {
-				registryUrl: "registry.rivet.dev",
-				username: "token",
-				password: token,
-			};
-			setTitle("Registry: registry.rivet.dev (token auth)");
-		}
+	// Use the cloud token directly as Docker registry credentials.
+	// The Rivet registry accepts cloud tokens as the password.
+	const creds: DockerCredentials = {
+		registryUrl: "registry.rivet.dev",
+		username: "token",
+		password: token,
+	};
+
+	// Step 4: Docker login
+	await task(`Logging in to ${creds.registryUrl}`, async () => {
+		await dockerLogin(creds);
 	});
 
-	// Step 5: Docker login
-	await task(`Logging in to ${creds!.registryUrl}`, async () => {
-		await dockerLogin(creds!);
-	});
-
-	// Step 6: Build Docker image
+	// Step 5: Build Docker image
 	let imageId: string;
 	await task("Building Docker image", async ({ setTitle }) => {
 		const result = await dockerBuild({
@@ -142,26 +142,26 @@ async function runDeploy(opts: DeployOptions): Promise<void> {
 	// Derive image tag
 	const imageTag = opts.tag ?? (await resolveImageTag());
 	const repository = `${project!}/${opts.pool}`;
-	const remoteRef = `${creds!.registryUrl}/${org!}/${repository}:${imageTag}`;
+	const remoteRef = `${creds.registryUrl}/${org!}/${repository}:${imageTag}`;
 
-	// Step 7: Tag and push
+	// Step 6: Tag and push
 	await task(`Pushing ${remoteRef}`, async () => {
 		await dockerTagAndPush({ localImageId: imageId!, remoteRef });
 	});
 
-	// Step 8: Parse environment variables
+	// Step 7: Parse environment variables
 	const envVars = parseEnvVars(opts.env);
 
-	// Step 9: Upsert managed pool
+	// Step 8: Upsert managed pool
 	await task(`Updating managed pool "${opts.pool}"`, async ({ setTitle }) => {
-		await client.upsertManagedPool(project!, opts.namespace, opts.pool, {
+		await client.managedPools.upsert(project!, opts.namespace, opts.pool, {
 			org: org!,
 			image: { repository, tag: imageTag },
 			minCount: Number(opts.minCount),
 			maxCount: Number(opts.maxCount),
 			...(Object.keys(envVars).length > 0 ? { environment: envVars } : {}),
 			...(opts.command ? { command: opts.command } : {}),
-			...(opts.args ? { args: opts.args } : {}),
+			...(opts.args ? { args: opts.args.split(" ") } : {}),
 		});
 		setTitle(`Pool "${opts.pool}" updated`);
 	});
@@ -201,3 +201,4 @@ function parseEnvVars(raw: string[] | undefined): Record<string, string> {
 	}
 	return out;
 }
+

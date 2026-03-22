@@ -2,13 +2,14 @@
  * `rivet-cloud logs` — stream real-time logs from a Rivet Cloud managed pool.
  *
  * The implementation mirrors the frontend's use-deployment-logs-stream.ts:
- * it opens an SSE connection to the Cloud API log endpoint, reconnects on
- * failure with exponential back-off (up to 8 retries), and prints every log
- * line to stdout.
+ * it opens an SSE connection to the Cloud API log endpoint via RivetSse from
+ * @rivet-gg/cloud, reconnects on failure with exponential back-off (up to 8
+ * retries), and prints every log line to stdout.
  */
 
 import type { Command } from "commander";
-import { CloudClient } from "../lib/client.ts";
+import { RivetSse, type Rivet } from "@rivet-gg/cloud";
+import { createCloudClient } from "../lib/client.ts";
 import { resolveToken } from "../lib/auth.ts";
 import {
 	colors,
@@ -48,13 +49,14 @@ export function registerLogsCommand(program: Command): void {
 
 async function runLogs(opts: LogsOptions): Promise<void> {
 	const token = resolveToken(opts.token);
-	const client = new CloudClient({ token, baseUrl: opts.apiUrl });
+	const client = createCloudClient({ token, baseUrl: opts.apiUrl });
+	const apiUrl = opts.apiUrl ?? "https://cloud-api.rivet.dev";
 
 	// Resolve org + project from token
 	let identity: { project: string; organization: string };
 
 	try {
-		identity = await client.inspect();
+		identity = await client.apiTokens.inspect();
 	} catch (err: unknown) {
 		fatal(
 			`Authentication failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -83,29 +85,51 @@ async function runLogs(opts: LogsOptions): Promise<void> {
 		process.exit(0);
 	});
 
-	await streamWithRetry(client, project, org, opts, controller.signal);
+	await streamWithRetry(token, apiUrl, project, org, opts, controller.signal);
 }
 
 async function streamWithRetry(
-	client: CloudClient,
+	token: string,
+	apiUrl: string,
 	project: string,
 	org: string,
 	opts: LogsOptions,
 	signal: AbortSignal,
 ): Promise<void> {
+	const streamOptions = {
+		environment: "",
+		baseUrl: apiUrl,
+		token,
+	};
+
 	for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
 		if (signal.aborted) return;
 
 		try {
-			const stream = client.streamLogs(project, opts.namespace, opts.pool, {
-				contains: opts.filter,
-				region: opts.region,
-				signal,
-			});
+			const stream = RivetSse.streamLogs(
+				streamOptions,
+				project,
+				opts.namespace,
+				opts.pool,
+				{
+					contains: opts.filter,
+					region: opts.region,
+					abortSignal: signal,
+				},
+			);
 
-			for await (const entry of stream) {
+			for await (const event of stream) {
 				if (signal.aborted) return;
-				printLogLine(entry);
+
+				if (event.event === "connected") {
+					// Connection established — no action needed.
+				} else if (event.event === "end") {
+					return;
+				} else if (event.event === "error") {
+					throw new Error(event.data.message);
+				} else if (event.event === "log") {
+					printLogLine(event.data);
+				}
 			}
 
 			// Stream ended cleanly
@@ -132,14 +156,10 @@ async function streamWithRetry(
 	}
 }
 
-function printLogLine(entry: {
-	timestamp: string;
-	region: string;
-	message: string;
-}): void {
-	const ts = formatTimestamp(entry.timestamp);
-	const region = formatRegion(entry.region);
-	const msg = entry.message;
+function printLogLine(data: Rivet.LogStreamEvent.Log["data"]): void {
+	const ts = formatTimestamp(data.timestamp);
+	const region = formatRegion(data.region);
+	const msg = data.message;
 	console.log(`${ts} ${region} ${msg}`);
 }
 
@@ -152,3 +172,4 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 		});
 	});
 }
+

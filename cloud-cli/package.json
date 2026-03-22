@@ -12,6 +12,7 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@rivet-gg/cloud": "*",
 		"chalk": "^5.4.1",
 		"commander": "^12.1.0",
 		"es-toolkit": "^1.38.0",
