@@ -1082,6 +1082,12 @@ class SqliteSystem implements SqliteVfsRegistration {
 		return VFS.SQLITE_NOTFOUND;
 	}
 
+	// Return CHUNK_SIZE so SQLite aligns journal I/O to chunk boundaries.
+	// Must match the native VFS (kv_io_sector_size in sqlite-native/src/vfs.rs).
+	xSectorSize(_fileId: number): number {
+		return CHUNK_SIZE;
+	}
+
 	xDeviceCharacteristics(_fileId: number): number {
 		return 0;
 	}
