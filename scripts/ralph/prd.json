@@ -921,7 +921,7 @@
         "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
       ],
       "priority": 55,
-      "passes": false,
+      "passes": true,
       "notes": "Review finding L3. Depends on US-035 (stmt caching). The stmt_cache mutex is currently held across the entire sqlite3_step call, which triggers VFS callbacks doing block_on(WebSocket I/O). The mutex is per-database and SQLite is single-writer, so this is a correctness-of-locking issue rather than a performance issue. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md L3."
     },
     {

@@ -937,3 +937,20 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - `getrandom::getrandom(buf)` fills a `&mut [u8]` slice directly, returns `Result<(), Error>`
   - The sqlite-native crate has its own workspace; cargo check must be run from within its directory
 ---
+
+## 2026-03-21 - US-055
+- Fixed stmt cache mutex scope to not hold during VFS I/O (sqlite3_step)
+- Split `get_or_prepare_stmt` into two focused functions: `pop_cached_stmt` (pops from cache, uses `mem::forget` to prevent Drop finalization) and `prepare_stmt` (prepares new statement)
+- In `execute` and `query`, refactored to two-phase mutex pattern:
+  - Phase 1: Lock cache mutex, pop existing stmt or drop lock and prepare new one
+  - Execute sqlite3_step with NO cache mutex held (VFS callbacks do block_on here)
+  - Phase 2: Lock cache mutex, put statement back into cache
+- On error paths, statements are finalized (not put back in cache)
+- Updated stmt cache tests to use the new `pop_cached_stmt`/`prepare_stmt` API
+- All 79 tests pass, cargo check clean
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/lib.rs
+- **Learnings for future iterations:**
+  - `lru::LruCache::pop()` removes the entry, vs `get()` which borrows it in place. Pop is needed to release the mutex before using the statement.
+  - `std::mem::forget(cached_stmt)` prevents `CachedStmt`'s Drop from calling `sqlite3_finalize` when we want to reuse the statement outside the cache. The caller takes ownership of finalization responsibility.
+  - The mutex is per-database and SQLite is single-writer, so this is a correctness-of-locking issue (holding mutex across I/O) not a performance issue.
+---
