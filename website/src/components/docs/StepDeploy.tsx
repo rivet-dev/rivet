@@ -7,9 +7,9 @@ export default function StepDeploy() {
         <pre className="text-green-400 text-sm"><code>npx rivetkit deploy</code></pre>
       </div>
       
-      <p className="mt-3 text-sm text-gray-600">
+      {/* <p className="mt-3 text-sm text-gray-600">
         This will build and deploy your actors to the Rivet cloud platform. Make sure you're logged in with <code className="bg-gray-100 px-1 rounded">rivetkit login</code>.
-      </p>
+      </p> */}
     </div>
   );
 }

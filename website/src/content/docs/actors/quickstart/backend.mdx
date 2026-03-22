@@ -60,27 +60,19 @@ registry.start();
 <Step title="Run Server">
 
 <CodeGroup>
-<Code title="Node.js" language="bash">
 
-```sh
+```sh Node.js
 npx tsx --watch index.ts
 ```
 
-</Code>
-<Code title="Bun" language="bash">
-
-```sh
+```sh Bun
 bun --watch index.ts
 ```
 
-</Code>
-<Code title="Deno" language="bash">
-
-```sh
+```sh Deno
 deno run --allow-net --allow-read --allow-env --watch index.ts
 ```
 
-</Code>
 </CodeGroup>
 
 Your server is now running on `http://localhost:6420`. To change the port, pass `managerPort` in the setup config:
