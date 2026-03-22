@@ -904,3 +904,14 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - When using `try_send` instead of `send`, you need to extract any fields from the message (like `request_id`) before the move, since `try_send` takes ownership even on error (the value is returned in the error variant but using it cleanly requires destructuring)
   - The bounded channel type uses `mpsc::Sender` and `mpsc::Receiver` (not `UnboundedSender`/`UnboundedReceiver`), so both the channel creation and the task function signature need updating
 ---
+
+## 2026-03-21 - US-052
+- Fixed open_actor to insert into open_actors only after send_request returns successfully (server confirms)
+- Fixed close_actor to remove from open_actors only after send_request returns successfully
+- If open fails (server rejects), actor is NOT added to open_actors, so reconnect won't re-open it
+- All 79 tests pass, cargo check clean
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/channel.rs
+- **Learnings for future iterations:**
+  - The fix uses `?` on send_request to early-return on failure, preventing the insert/remove from executing
+  - The function now returns `Ok(resp)` explicitly instead of the send_request result directly, since the insert/remove happens between send_request and the return
+---
