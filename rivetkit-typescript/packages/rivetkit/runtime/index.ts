@@ -165,6 +165,21 @@ export class Runtime<A extends RegistryActors> {
 				serveRuntime,
 			);
 			upgradeWebSocket = out.upgradeWebSocket;
+
+			// Close the server on SIGTERM/SIGINT so the port is freed quickly
+			// during hot reload. Dev servers like tsx --watch, nodemon, etc.
+			// sometimes start the new process before the old one fully exits,
+			// causing findFreePort to skip the preferred port.
+			//
+			// Only do this for the manager, not the engine. Closing the engine
+			// server on signal would cause running actors to hard fail.
+			if (out.closeServer && process.env.NODE_ENV !== "production") {
+				const shutdown = () => {
+					out.closeServer!();
+				};
+				process.on("SIGTERM", shutdown);
+				process.on("SIGINT", shutdown);
+			}
 		}
 
 		// Create runtime
