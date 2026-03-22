@@ -34,6 +34,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 	#actorDriver: ActorDriver;
 	#actorRouter: ActorRouter;
+	#kvChannelShutdown: (() => void) | null = null;
 
 	constructor(
 		config: RegistryConfig,
@@ -294,6 +295,15 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void {
 		this.#getUpgradeWebSocket = getUpgradeWebSocket;
+	}
+
+	setKvChannelShutdown(fn: () => void): void {
+		this.#kvChannelShutdown = fn;
+	}
+
+	shutdown(): void {
+		this.#kvChannelShutdown?.();
+		this.#kvChannelShutdown = null;
 	}
 }
 

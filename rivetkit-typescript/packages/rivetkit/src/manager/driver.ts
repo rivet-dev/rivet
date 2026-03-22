@@ -50,6 +50,18 @@ export interface ManagerDriver {
 	 **/
 	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void;
 
+	/**
+	 * Clean shutdown of manager resources (timers, lock tables, etc.).
+	 * Called after all actors have stopped.
+	 */
+	shutdown?(): void;
+
+	/**
+	 * Inject the KV channel shutdown callback. Called by the manager
+	 * router so the driver can invoke it during shutdown.
+	 */
+	setKvChannelShutdown?(fn: () => void): void;
+
 	/** Read a key. Returns null if the key doesn't exist. */
 	kvGet(actorId: string, key: Uint8Array): Promise<string | null>;
 

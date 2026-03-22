@@ -56,59 +56,128 @@ interface KvChannelConnection {
 	actorQueues: Map<string, Promise<void>>;
 }
 
-/** Global lock table: actorId -> connectionId. Shared across all connections. */
-const actorLocks = new Map<string, KvChannelConnection>();
-
-/** Active KV channel connections, tracked for test-only force-disconnect. */
-const activeConnections = new Set<KvChannelConnection>();
-
-/**
- * Force-close all active KV channel WebSocket connections.
- * Test-only. Used to simulate network failures during active KV operations.
- * @internal
- */
-export function _testForceCloseAllKvChannels(): number {
-	let closed = 0;
-	for (const conn of activeConnections) {
-		if (!conn.closed && conn.ws) {
-			const ws = conn.ws;
-			cleanupConnection(conn);
-			ws.close(1001, "test force disconnect");
-			closed++;
-		}
-	}
-	return closed;
+/** Instance-scoped state for a KV channel manager. */
+interface KvChannelManagerState {
+	actorLocks: Map<string, KvChannelConnection>;
+	activeConnections: Set<KvChannelConnection>;
+	staleLockSweepTimer: ReturnType<typeof setInterval> | null;
 }
 
-/** Sweep timer for removing stale lock entries from dead connections. */
-let staleLockSweepTimer: ReturnType<typeof setInterval> | null = null;
+/** Return type of createKvChannelManager. */
+export interface KvChannelManager {
+	createHandler: (managerDriver: ManagerDriver) => {
+		onOpen: (event: any, ws: WSContext) => void;
+		onMessage: (event: any, ws: WSContext) => void;
+		onClose: (event: any, ws: WSContext) => void;
+		onError: (error: any, ws: WSContext) => void;
+	};
+	shutdown: () => void;
+	_testForceCloseAllKvChannels: () => number;
+}
 
-/** Start the stale lock sweep if not already running. */
-function ensureStaleLockSweep(): void {
-	if (staleLockSweepTimer) return;
-	staleLockSweepTimer = setInterval(() => {
-		let removed = 0;
-		for (const [actorId, conn] of actorLocks) {
-			if (conn.closed) {
-				actorLocks.delete(actorId);
-				removed++;
+/**
+ * Create an instance-scoped KV channel manager.
+ *
+ * All lock state and timers are scoped to the returned object, so multiple
+ * manager instances in the same process (e.g., tests) do not share state.
+ */
+export function createKvChannelManager(): KvChannelManager {
+	const state: KvChannelManagerState = {
+		actorLocks: new Map(),
+		activeConnections: new Set(),
+		staleLockSweepTimer: null,
+	};
+
+	return {
+		createHandler(managerDriver: ManagerDriver) {
+			const conn: KvChannelConnection = {
+				openActors: new Set(),
+				pingInterval: null,
+				pongTimeout: null,
+				lastPongTs: Date.now(),
+				closed: false,
+				ws: null,
+				actorQueues: new Map(),
+			};
+
+			state.activeConnections.add(conn);
+
+			return {
+				onOpen: (_event: any, ws: WSContext) => {
+					logger().debug({ msg: "kv channel websocket opened" });
+					conn.ws = ws;
+					startPingPong(state, conn);
+				},
+
+				onMessage: (event: any, _ws: WSContext) => {
+					try {
+						let bytes: Uint8Array;
+						if (event.data instanceof ArrayBuffer) {
+							bytes = new Uint8Array(event.data);
+						} else if (event.data instanceof Uint8Array) {
+							bytes = event.data;
+						} else if (Buffer.isBuffer(event.data)) {
+							bytes = new Uint8Array(event.data);
+						} else {
+							logger().warn({
+								msg: "kv channel received non-binary message, ignoring",
+							});
+							return;
+						}
+
+						const msg = decodeToServer(bytes);
+						handleToServerMessage(state, conn, managerDriver, msg);
+					} catch (err: unknown) {
+						logger().error({
+							msg: "kv channel failed to decode message",
+							error:
+								err instanceof Error
+									? err.message
+									: String(err),
+						});
+					}
+				},
+
+				onClose: (_event: any, _ws: WSContext) => {
+					logger().debug({ msg: "kv channel websocket closed" });
+					cleanupConnection(state, conn);
+				},
+
+				onError: (error: any, _ws: WSContext) => {
+					logger().error({
+						msg: "kv channel websocket error",
+						error:
+							error instanceof Error
+								? error.message
+								: String(error),
+					});
+					cleanupConnection(state, conn);
+				},
+			};
+		},
+
+		shutdown() {
+			if (state.staleLockSweepTimer) {
+				clearInterval(state.staleLockSweepTimer);
+				state.staleLockSweepTimer = null;
 			}
-		}
-		if (removed > 0) {
-			logger().debug({
-				msg: "kv channel stale lock sweep completed",
-				removedCount: removed,
-				remainingCount: actorLocks.size,
-			});
-		}
-		// Stop the sweep if there are no more lock entries.
-		if (actorLocks.size === 0 && staleLockSweepTimer) {
-			clearInterval(staleLockSweepTimer);
-			staleLockSweepTimer = null;
-		}
-	}, STALE_LOCK_SWEEP_INTERVAL_MS);
-	// Allow the process to exit even if the sweep timer is still running.
-	staleLockSweepTimer.unref?.();
+			state.actorLocks.clear();
+			state.activeConnections.clear();
+		},
+
+		_testForceCloseAllKvChannels() {
+			let closed = 0;
+			for (const conn of state.activeConnections) {
+				if (!conn.closed && conn.ws) {
+					const ws = conn.ws;
+					cleanupConnection(state, conn);
+					ws.close(1001, "test force disconnect");
+					closed++;
+				}
+			}
+			return closed;
+		},
+	};
 }
 
 function makeErrorResponse(
@@ -144,7 +213,10 @@ function sendMessage(conn: KvChannelConnection, msg: ToClient): void {
 	conn.ws.send(copy);
 }
 
-function startPingPong(conn: KvChannelConnection): void {
+function startPingPong(
+	state: KvChannelManagerState,
+	conn: KvChannelConnection,
+): void {
 	conn.lastPongTs = Date.now();
 
 	conn.pingInterval = setInterval(() => {
@@ -163,7 +235,7 @@ function startPingPong(conn: KvChannelConnection): void {
 			});
 			// Capture ws before cleanup nulls it.
 			const ws = conn.ws;
-			cleanupConnection(conn);
+			cleanupConnection(state, conn);
 			if (ws) {
 				ws.close(1000, "pong timeout");
 			}
@@ -171,10 +243,13 @@ function startPingPong(conn: KvChannelConnection): void {
 	}, PING_INTERVAL_MS);
 }
 
-function cleanupConnection(conn: KvChannelConnection): void {
+function cleanupConnection(
+	state: KvChannelManagerState,
+	conn: KvChannelConnection,
+): void {
 	conn.closed = true;
 	conn.ws = null;
-	activeConnections.delete(conn);
+	state.activeConnections.delete(conn);
 
 	if (conn.pingInterval) {
 		clearInterval(conn.pingInterval);
@@ -187,14 +262,15 @@ function cleanupConnection(conn: KvChannelConnection): void {
 
 	// Release all actor locks held by this connection.
 	for (const actorId of conn.openActors) {
-		if (actorLocks.get(actorId) === conn) {
-			actorLocks.delete(actorId);
+		if (state.actorLocks.get(actorId) === conn) {
+			state.actorLocks.delete(actorId);
 		}
 	}
 	conn.openActors.clear();
 }
 
 async function handleRequest(
+	state: KvChannelManagerState,
 	conn: KvChannelConnection,
 	managerDriver: ManagerDriver,
 	request: ToServerRequest,
@@ -203,6 +279,7 @@ async function handleRequest(
 
 	try {
 		const responseData = await processRequestData(
+			state,
 			conn,
 			managerDriver,
 			actorId,
@@ -233,6 +310,7 @@ async function handleRequest(
 // no cross-namespace access is possible. If a less-privileged auth mechanism is
 // introduced for the dev manager, namespace verification should be added here.
 async function processRequestData(
+	state: KvChannelManagerState,
 	conn: KvChannelConnection,
 	managerDriver: ManagerDriver,
 	actorId: string,
@@ -240,17 +318,17 @@ async function processRequestData(
 ): Promise<ResponseData> {
 	switch (data.tag) {
 		case "ActorOpenRequest":
-			return handleActorOpen(conn, actorId);
+			return handleActorOpen(state, conn, actorId);
 
 		case "ActorCloseRequest":
-			return handleActorClose(conn, actorId);
+			return handleActorClose(state, conn, actorId);
 
 		case "KvGetRequest":
 		case "KvPutRequest":
 		case "KvDeleteRequest":
 		case "KvDeleteRangeRequest": {
 			// All KV operations require the actor to be open on this connection.
-			const lockHolder = actorLocks.get(actorId);
+			const lockHolder = state.actorLocks.get(actorId);
 			if (!lockHolder || lockHolder !== conn) {
 				if (lockHolder && lockHolder !== conn) {
 					return {
@@ -275,6 +353,7 @@ async function processRequestData(
 }
 
 function handleActorOpen(
+	state: KvChannelManagerState,
 	conn: KvChannelConnection,
 	actorId: string,
 ): ResponseData {
@@ -289,7 +368,7 @@ function handleActorOpen(
 		};
 	}
 
-	const existingLock = actorLocks.get(actorId);
+	const existingLock = state.actorLocks.get(actorId);
 	if (existingLock && existingLock !== conn) {
 		// Unconditionally evict the old connection's lock. The old connection
 		// is either dead (network issue) or stale (same process reconnecting).
@@ -302,25 +381,54 @@ function handleActorOpen(
 		});
 	}
 
-	actorLocks.set(actorId, conn);
+	state.actorLocks.set(actorId, conn);
 	conn.openActors.add(actorId);
 
 	// Start the stale lock sweep if not already running.
-	ensureStaleLockSweep();
+	ensureStaleLockSweep(state);
 
 	return { tag: "ActorOpenResponse", val: null };
 }
 
 function handleActorClose(
+	state: KvChannelManagerState,
 	conn: KvChannelConnection,
 	actorId: string,
 ): ResponseData {
-	if (actorLocks.get(actorId) === conn) {
-		actorLocks.delete(actorId);
+	if (state.actorLocks.get(actorId) === conn) {
+		state.actorLocks.delete(actorId);
 	}
 	conn.openActors.delete(actorId);
 
 	return { tag: "ActorCloseResponse", val: null };
+}
+
+/** Start the stale lock sweep if not already running. */
+function ensureStaleLockSweep(state: KvChannelManagerState): void {
+	if (state.staleLockSweepTimer) return;
+	state.staleLockSweepTimer = setInterval(() => {
+		let removed = 0;
+		for (const [actorId, conn] of state.actorLocks) {
+			if (conn.closed) {
+				state.actorLocks.delete(actorId);
+				removed++;
+			}
+		}
+		if (removed > 0) {
+			logger().debug({
+				msg: "kv channel stale lock sweep completed",
+				removedCount: removed,
+				remainingCount: state.actorLocks.size,
+			});
+		}
+		// Stop the sweep if there are no more lock entries.
+		if (state.actorLocks.size === 0 && state.staleLockSweepTimer) {
+			clearInterval(state.staleLockSweepTimer);
+			state.staleLockSweepTimer = null;
+		}
+	}, STALE_LOCK_SWEEP_INTERVAL_MS);
+	// Allow the process to exit even if the sweep timer is still running.
+	state.staleLockSweepTimer.unref?.();
 }
 
 type KvRequestData = Extract<
@@ -542,6 +650,7 @@ async function handleKvOperation(
 }
 
 function handleToServerMessage(
+	state: KvChannelManagerState,
 	conn: KvChannelConnection,
 	managerDriver: ManagerDriver,
 	msg: ToServer,
@@ -556,7 +665,7 @@ function handleToServerMessage(
 			// own queue. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md H2.
 			const prev = conn.actorQueues.get(actorId) ?? Promise.resolve();
 			const next = prev.then(() =>
-				handleRequest(conn, managerDriver, msg.val).catch(
+				handleRequest(state, conn, managerDriver, msg.val).catch(
 					(err) => {
 						logger().error({
 							msg: "unhandled error in kv channel request handler",
@@ -597,73 +706,4 @@ export function validateProtocolVersion(
 		return `unsupported protocol_version: ${protocolVersion} (server supports ${PROTOCOL_VERSION})`;
 	}
 	return null;
-}
-
-/** Build UpgradeWebSocketArgs for the KV channel endpoint. */
-export function createKvChannelWebSocketHandler(
-	managerDriver: ManagerDriver,
-): {
-	onOpen: (event: any, ws: WSContext) => void;
-	onMessage: (event: any, ws: WSContext) => void;
-	onClose: (event: any, ws: WSContext) => void;
-	onError: (error: any, ws: WSContext) => void;
-} {
-	const conn: KvChannelConnection = {
-		openActors: new Set(),
-		pingInterval: null,
-		pongTimeout: null,
-		lastPongTs: Date.now(),
-		closed: false,
-		ws: null,
-		actorQueues: new Map(),
-	};
-
-	activeConnections.add(conn);
-
-	return {
-		onOpen: (_event: any, ws: WSContext) => {
-			logger().debug({ msg: "kv channel websocket opened" });
-			conn.ws = ws;
-			startPingPong(conn);
-		},
-
-		onMessage: (event: any, _ws: WSContext) => {
-			try {
-				let bytes: Uint8Array;
-				if (event.data instanceof ArrayBuffer) {
-					bytes = new Uint8Array(event.data);
-				} else if (event.data instanceof Uint8Array) {
-					bytes = event.data;
-				} else if (Buffer.isBuffer(event.data)) {
-					bytes = new Uint8Array(event.data);
-				} else {
-					logger().warn({
-						msg: "kv channel received non-binary message, ignoring",
-					});
-					return;
-				}
-
-				const msg = decodeToServer(bytes);
-				handleToServerMessage(conn, managerDriver, msg);
-			} catch (err: unknown) {
-				logger().error({
-					msg: "kv channel failed to decode message",
-					error: err instanceof Error ? err.message : String(err),
-				});
-			}
-		},
-
-		onClose: (_event: any, _ws: WSContext) => {
-			logger().debug({ msg: "kv channel websocket closed" });
-			cleanupConnection(conn);
-		},
-
-		onError: (error: any, _ws: WSContext) => {
-			logger().error({
-				msg: "kv channel websocket error",
-				error: error instanceof Error ? error.message : String(error),
-			});
-			cleanupConnection(conn);
-		},
-	};
 }

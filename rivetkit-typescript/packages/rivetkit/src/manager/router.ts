@@ -49,7 +49,7 @@ import {
 import type { ActorOutput, ManagerDriver } from "./driver";
 import { actorGateway, createTestWebSocketProxy } from "./gateway";
 import {
-	createKvChannelWebSocketHandler,
+	createKvChannelManager,
 	validateProtocolVersion,
 } from "./kv-channel";
 import { logger } from "./log";
@@ -60,6 +60,12 @@ export function buildManagerRouter(
 	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 	runtime: Runtime = "node",
 ) {
+	const kvChannelManager = createKvChannelManager();
+
+	// Inject the KV channel shutdown into the driver so it can be
+	// called during the driver's teardown, after all actors have stopped.
+	managerDriver.setKvChannelShutdown?.(kvChannelManager.shutdown);
+
 	return createRouter(config.managerBasePath, (router) => {
 		// Actor gateway
 		router.use(
@@ -402,7 +408,7 @@ export function buildManagerRouter(
 			}
 
 			return upgradeWebSocket(() =>
-				createKvChannelWebSocketHandler(managerDriver),
+				kvChannelManager.createHandler(managerDriver),
 			)(c, noopNext());
 		});
 
@@ -635,6 +641,13 @@ export function buildManagerRouter(
 					});
 					return c.text(`Error: ${error}`, 500);
 				}
+			});
+
+			// Force-close all KV channel WebSocket connections. Used by
+			// stress tests to simulate network failures mid-operation.
+			router.post("/.test/kv-channel/force-disconnect", async (c) => {
+				const closed = kvChannelManager._testForceCloseAllKvChannels();
+				return c.json({ closed });
 			});
 		}
 
