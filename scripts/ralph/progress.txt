@@ -790,3 +790,18 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - KeyWrapper::tuple_len adds +2 (NESTED prefix + NIL suffix) to the raw key length. The engine KV channel must pre-validate with this overhead to avoid rejection at the actor_kv layer.
   - Pre-existing build errors in guard crate (proxy.rs, websocket.rs, custom_serve.rs, etc.) are unrelated to pegboard-kv-channel changes.
 ---
+
+## 2026-03-21 - US-044
+- Added namespace_id to get_for_runner Output struct, reading it via keys::actor::NamespaceIdKey in the database transaction
+- Updated resolve_actor in pegboard-kv-channel to accept expected_namespace_id and verify actor.namespace_id matches, returning generic "actor does not exist or is not running" on mismatch to avoid leaking actor existence across namespaces
+- Updated all 4 call sites of resolve_actor (handle_kv_get, handle_kv_put, handle_kv_delete, handle_kv_delete_range) to pass namespace_id
+- Added defense-in-depth comment to both engine (Rust doc comment on resolve_actor) and TS manager (comment above processRequestData)
+- TS dev manager is single-namespace so namespace verification is implicit. Comment explains that if a less-privileged auth mechanism is introduced, explicit verification should be added.
+- cargo check passes for pegboard, pegboard-kv-channel, pegboard-runner. No new TypeScript errors.
+- Files changed: engine/packages/pegboard/src/ops/actor/get_for_runner.rs, engine/packages/pegboard-kv-channel/src/lib.rs, rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts
+- **Learnings for future iterations:**
+  - keys::actor::NamespaceIdKey already existed and follows the same pattern as NameKey, RunnerIdKey, etc. Just add it to the tokio::try_join! block.
+  - Adding a field to get_for_runner::Output requires updating the destructuring in both the transaction result and the final output construction.
+  - The runner (pegboard-runner) also uses get_for_runner but only accesses .name and .runner_id, so adding namespace_id doesn't break it.
+  - Pre-existing fixture/test TypeScript errors (queue.ts, workflow.ts) are not related to kv-channel changes.
+---
