@@ -269,7 +269,7 @@ async fn message_loop(
 	// parallelism. Do not use tokio::spawn per request as that would break
 	// optimistic pipelining and journal write ordering.
 	// See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 2.
-	let mut actor_channels: HashMap<String, mpsc::UnboundedSender<protocol::ToServerRequest>> =
+	let mut actor_channels: HashMap<String, mpsc::Sender<protocol::ToServerRequest>> =
 		HashMap::new();
 	let mut actor_tasks = tokio::task::JoinSet::new();
 
@@ -338,7 +338,7 @@ async fn handle_binary_message(
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	last_pong_ts: &AtomicI64,
 	data: &[u8],
-	actor_channels: &mut HashMap<String, mpsc::UnboundedSender<protocol::ToServerRequest>>,
+	actor_channels: &mut HashMap<String, mpsc::Sender<protocol::ToServerRequest>>,
 	actor_tasks: &mut tokio::task::JoinSet<()>,
 ) -> Result<()> {
 	let msg = match protocol::decode_to_server(data) {
@@ -361,10 +361,11 @@ async fn handle_binary_message(
 		protocol::ToServer::ToServerRequest(req) => {
 			let is_close = matches!(req.data, protocol::RequestData::ActorCloseRequest);
 			let actor_id = req.actor_id.clone();
+			let request_id = req.request_id;
 
 			// Create a per-actor channel and task on first request for this actor.
 			if !actor_channels.contains_key(&actor_id) {
-				let (tx, rx) = mpsc::unbounded_channel();
+				let (tx, rx) = mpsc::channel(64);
 				actor_tasks.spawn(actor_request_task(
 					Clone::clone(ctx),
 					Clone::clone(state),
@@ -379,8 +380,33 @@ async fn handle_binary_message(
 
 			// Route request to the actor's channel for sequential processing.
 			if let Some(tx) = actor_channels.get(&actor_id) {
-				if tx.send(req).is_err() {
-					tracing::warn!(%actor_id, "per-actor task channel closed unexpectedly");
+				match tx.try_send(req) {
+					Ok(()) => {}
+					Err(mpsc::error::TrySendError::Full(_)) => {
+						tracing::warn!(%actor_id, "per-actor channel full, applying backpressure");
+						send_response(
+							ws_handle,
+							request_id,
+							error_response(
+								"backpressure",
+								"too many in-flight requests for this actor",
+							),
+						)
+						.await;
+					}
+					Err(mpsc::error::TrySendError::Closed(_)) => {
+						tracing::warn!(%actor_id, "per-actor task channel closed, removing dead entry");
+						actor_channels.remove(&actor_id);
+						send_response(
+							ws_handle,
+							request_id,
+							error_response(
+								"internal_error",
+								"internal error",
+							),
+						)
+						.await;
+					}
 				}
 			}
 
@@ -405,7 +431,7 @@ async fn actor_request_task(
 	conn_id: Uuid,
 	namespace_id: Id,
 	open_actors: Arc<Mutex<HashSet<String>>>,
-	mut rx: mpsc::UnboundedReceiver<protocol::ToServerRequest>,
+	mut rx: mpsc::Receiver<protocol::ToServerRequest>,
 ) {
 	// Cached actor resolution. Populated on first KV request, reused for all
 	// subsequent requests. Actor name is immutable so this never goes stale.
