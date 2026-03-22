@@ -954,3 +954,20 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - `std::mem::forget(cached_stmt)` prevents `CachedStmt`'s Drop from calling `sqlite3_finalize` when we want to reuse the statement outside the cache. The caller takes ownership of finalization responsibility.
   - The mutex is per-database and SQLite is single-writer, so this is a correctness-of-locking issue (holding mutex across I/O) not a performance issue.
 ---
+
+## 2026-03-21 - US-056
+- Moved `actorLocks`, `activeConnections`, and `staleLockSweepTimer` from module-level globals into `createKvChannelManager()` factory function
+- Factory returns `{ createHandler, shutdown, _testForceCloseAllKvChannels }` with instance-scoped state via `KvChannelManagerState` interface
+- State-dependent functions (`cleanupConnection`, `startPingPong`, `handleActorOpen`, `handleActorClose`, `processRequestData`, `handleRequest`, `handleToServerMessage`, `ensureStaleLockSweep`) now accept `state: KvChannelManagerState` as first parameter
+- Added optional `shutdown?(): void` and `setKvChannelShutdown?(fn: () => void): void` to `ManagerDriver` interface
+- Implemented both in `FileSystemManagerDriver` with private `#kvChannelShutdown` field
+- `buildManagerRouter` creates the KV channel manager, calls `managerDriver.setKvChannelShutdown?.(kvChannelManager.shutdown)` to inject shutdown into the driver
+- Updated router imports and call sites to use factory pattern instead of old module-level functions
+- No call site changes needed outside the router thanks to the `setKvChannelShutdown` injection pattern
+- Files changed: rivetkit-typescript/packages/rivetkit/src/manager/{kv-channel.ts, driver.ts, router.ts}, rivetkit-typescript/packages/rivetkit/src/drivers/file-system/manager.ts
+- **Learnings for future iterations:**
+  - The "pass state as parameter" approach keeps functions flat (no deep nesting) while eliminating module-level globals. Cleaner than putting all functions inside a factory closure.
+  - Optional interface methods (`shutdown?(): void`) avoid forcing all implementations to add no-op stubs while still allowing type-safe calls.
+  - The `setKvChannelShutdown` injection pattern mirrors `setGetUpgradeWebSocket`, which is already used for lazy initialization of the WebSocket upgrade function.
+  - Pre-existing typecheck errors (workflow/queue fixtures) are not blockers for new code.
+---

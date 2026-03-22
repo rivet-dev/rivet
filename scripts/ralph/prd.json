@@ -936,7 +936,7 @@
         "Typecheck passes"
       ],
       "priority": 56,
-      "passes": false,
+      "passes": true,
       "notes": "Review findings L9 + M9 (TS part). actorLocks is a module-level global that breaks test isolation if two manager instances exist. Moving it to a factory makes it instance-scoped. The FS driver needs a clean shutdown that clears locks and timers. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md L9 and M9."
     },
     {
