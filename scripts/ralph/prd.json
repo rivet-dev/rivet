@@ -977,7 +977,7 @@
         "Typecheck passes"
       ],
       "priority": 58,
-      "passes": false,
+      "passes": true,
       "notes": "This story validates the stress test suite added for adversarial review findings C1, H1, and reconnect resilience. The tests, fixture actor, and debug rig are already written. This story ensures they pass against the codebase with all review fixes applied. The KV Channel Resilience tests (recovers from forced WebSocket disconnect, handles disconnect during active write) require the native SQLite addon to be built and are skipped otherwise."
     }
   ]

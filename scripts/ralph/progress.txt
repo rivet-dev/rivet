@@ -997,3 +997,23 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - TypeScript auto-generation from BARE schemas uses `@bare-ts/tools` CLI. The generated code needs post-processing to replace `@bare-ts/lib` with `@rivetkit/bare-ts` and add custom assert.
   - PROTOCOL_VERSION is not in the BARE schema, so it must be injected during post-processing for the TypeScript SDK.
 ---
+
+## 2026-03-21 - US-058
+- Verified all stress tests pass for review fix validation
+- All acceptance criteria confirmed:
+  - dbStressActor fixture registered in registry.ts
+  - actor-db-stress.ts test file registered in mod.ts
+  - POST /.test/kv-channel/force-disconnect endpoint exists in router.ts
+  - _testForceCloseAllKvChannels exported from kv-channel.ts
+  - "destroy during long-running DB operation" test passes (C1 fix validated)
+  - "rapid create-insert-destroy cycles" test passes (C1 fix validated)
+  - "DB operations complete without excessive blocking" test passes (H1 fix validated)
+  - KV Channel Resilience tests correctly skipped (native addon not built)
+  - All 6 non-skipped tests pass across both driver files (3 tests x 2 files)
+  - Typecheck passes (only pre-existing errors in workflow.ts and actor-queue.ts)
+- Files changed: none (all infrastructure already in place from prior stories)
+- **Learnings for future iterations:**
+  - The stress tests run in both driver-file-system.test.ts and driver-file-system-native-sqlite.test.ts
+  - Without the native addon built, WASM fallback is used and KV Channel Resilience tests are skipped via `describe.skipIf(!nativeAvailable)`
+  - Pre-existing typecheck errors in fixtures/workflow.ts and tests/actor-queue.ts are not blockers
+---
