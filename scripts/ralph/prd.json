@@ -633,6 +633,331 @@
       "priority": 37,
       "passes": true,
       "notes": "next_conn_id uses AtomicU64::fetch_add(1, Relaxed) which wraps on overflow after ~18 billion connections. If it wraps, two connections could have the same ID, causing lock table corruption. Using UUID eliminates this entirely."
+    },
+    {
+      "id": "US-038",
+      "title": "Fix use-after-free race in close_database",
+      "description": "As a developer, I need close_database to be safe against concurrent execute/query operations to prevent use-after-free.",
+      "acceptanceCriteria": [
+        "Change JsNativeDatabase.db field from NativeDatabase to Arc<std::sync::Mutex<Option<NativeDatabase>>>",
+        "Each execute/query/exec spawn_blocking closure clones the Arc and locks it to access the database pointer",
+        "close_database locks the mutex and calls .take() on the Option, so concurrent/subsequent operations see None and return an error",
+        "Remove `unsafe impl Sync for JsNativeDatabase` since Arc<Mutex<...>> makes it naturally Sync",
+        "Existing tests still pass",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 38,
+      "passes": true,
+      "notes": "Review finding C1 (CRITICAL). The current code extracts db_ptr as a plain usize before dispatching to spawn_blocking. If close_database runs between extraction and the blocking task starting, the task uses a dangling pointer. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md C1 for the exact code pattern."
+    },
+    {
+      "id": "US-039",
+      "title": "Make open_database, close_database, and disconnect async napi exports",
+      "description": "As a developer, I need lifecycle functions to not block the Node.js event loop during WebSocket round-trips.",
+      "acceptanceCriteria": [
+        "Change open_database from sync pub fn with rt.block_on() to pub async fn napi export",
+        "Change close_database from sync pub fn with rt.block_on() to pub async fn napi export",
+        "Change disconnect from sync pub fn with rt.block_on() to pub async fn napi export",
+        "For open_database, the VFS registration and sqlite3_open_v2 call should happen inside spawn_blocking (since VFS callbacks do block_on for KV I/O, which is safe from a non-tokio thread)",
+        "Update all TypeScript call sites in rivetkit-typescript/packages/rivetkit/src/db/native-sqlite.ts to await the now-async functions",
+        "The Node.js main thread is never blocked by lifecycle operations",
+        "Existing tests still pass",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/",
+        "Typecheck passes"
+      ],
+      "priority": 39,
+      "passes": false,
+      "notes": "Review finding H1 (HIGH). US-016 already made query/execute/exec async with spawn_blocking, but open_database/close_database/disconnect are still sync with rt.block_on() which parks the Node.js main thread. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md H1 for the exact code pattern."
+    },
+    {
+      "id": "US-040",
+      "title": "Add amt==0 guard to native VFS read/write",
+      "description": "As a developer, I need the native VFS to handle zero-length read/write calls safely to prevent integer underflow.",
+      "acceptanceCriteria": [
+        "Add 'if i_amt <= 0 { return SQLITE_OK; }' at the top of kv_io_read in vfs.rs (after getting file and ctx)",
+        "Add 'if i_amt <= 0 { return SQLITE_OK; }' at the top of kv_io_write in vfs.rs (after getting file and ctx)",
+        "This matches the existing guards in the WASM VFS (vfs.ts lines 702-704 for xRead, 796-798 for xWrite)",
+        "Existing tests still pass",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": "Review finding H3 (HIGH). Without this guard, (offset + amt - 1) / CHUNK_SIZE wraps to usize::MAX when amt=0, causing a loop over trillions of iterations leading to OOM/hang. SQLite docs say xRead/xWrite always use positive amounts, but the WASM VFS has the guard and the native VFS should match."
+    },
+    {
+      "id": "US-041",
+      "title": "Add per-actor request ordering to TS dev manager KV channel",
+      "description": "As a developer, I need the TypeScript dev manager to process KV requests per-actor sequentially to prevent journal write ordering violations.",
+      "acceptanceCriteria": [
+        "Add a per-actor request queue using chained Promises in rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts",
+        "Create actorQueues Map<string, Promise<void>> at module level or on the connection object",
+        "In handleToServerMessage, chain each request onto the actor's queue so requests for the same actor execute sequentially",
+        "Clean up completed queue entries to avoid map growth",
+        "Cross-actor requests still execute concurrently (different actors have different queues)",
+        "Typecheck passes"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": "Review finding H2 (HIGH). Currently handleToServerMessage dispatches as fire-and-forget Promises. After the first await, multiple requests for the same actor interleave, potentially writing journal chunks out of order. The Rust engine server avoids this via per-actor mpsc channels. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md H2 for the exact code pattern and step-by-step interleaving walkthrough."
+    },
+    {
+      "id": "US-042",
+      "title": "Fix sector size mismatch between WASM and native VFS",
+      "description": "As a developer, I need both VFS implementations to return the same sector size so SQLite journal alignment is consistent.",
+      "acceptanceCriteria": [
+        "Override xSectorSize in the WASM VFS SqliteSystem class in rivetkit-typescript/packages/sqlite-vfs/src/vfs.ts to return CHUNK_SIZE (4096)",
+        "This matches the native VFS which already returns 4096 from kv_io_sector_size",
+        "Add a comment referencing the native VFS and the 1:1 parity requirement",
+        "Typecheck passes"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": "Review finding M3. Native VFS returns 4096, WASM VFS inherits 512 from base class. Using 4096 (matching CHUNK_SIZE) tells SQLite to align I/O to chunk boundaries. Not a breaking change since page size is stored in the DB header, not derived from sector size."
+    },
+    {
+      "id": "US-043",
+      "title": "Fix key size validation bug in engine KV channel",
+      "description": "As a developer, I need the engine KV channel to account for KeyWrapper tuple packing overhead in key size validation.",
+      "acceptanceCriteria": [
+        "In engine/packages/pegboard-kv-channel/src/lib.rs validate_keys function, change the key size check from 'key.len() > MAX_KEY_SIZE' to 'key.len() + 2 > MAX_KEY_SIZE'",
+        "Add a comment explaining the +2 accounts for KeyWrapper tuple packing overhead (NESTED prefix + NIL suffix) added by actor_kv, referencing engine/packages/pegboard/src/actor_kv/utils.rs",
+        "Update the error message to show the effective max key size: MAX_KEY_SIZE - 2",
+        "Do NOT change the TypeScript manager's check (it already has the correct +2)",
+        "cargo check passes"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": "Review finding M4. Engine checks key.len() > 2048 but actor_kv wraps keys with a 2-byte prefix. A key of 2047-2048 bytes passes the KV channel check but fails at actor_kv::put. The TS manager's key.byteLength + 2 > 2048 check is correct. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md M4."
+    },
+    {
+      "id": "US-044",
+      "title": "Add namespace verification to resolve_actor in engine KV channel",
+      "description": "As a developer, I need the KV channel to verify actors belong to the authenticated namespace for defense-in-depth.",
+      "acceptanceCriteria": [
+        "Add namespace_id to the get_for_runner output in engine/packages/pegboard/src/ops/actor/get_for_runner.rs",
+        "Pass namespace_id into resolve_actor and verify actor.namespace_id matches expected_namespace_id",
+        "Use the same generic error message ('actor does not exist or is not running') on namespace mismatch to avoid leaking actor existence across namespaces",
+        "Update all call sites of resolve_actor to pass namespace_id",
+        "Add the same namespace verification to the TS dev manager KV channel handler in kv-channel.ts",
+        "Add a comment in both implementations explaining the defense-in-depth rationale",
+        "cargo check passes",
+        "Typecheck passes"
+      ],
+      "priority": 44,
+      "passes": false,
+      "notes": "Review finding M1. Currently resolve_actor never verifies namespace_id. The admin_token is global, so this is defense-in-depth, but becomes real if a less-privileged auth mechanism is introduced. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md M1."
+    },
+    {
+      "id": "US-045",
+      "title": "Add MAX_FILE_SIZE enforcement to native VFS",
+      "description": "As a developer, I need the native VFS to enforce the same max file size as the WASM VFS to prevent chunk index overflow.",
+      "acceptanceCriteria": [
+        "Add MAX_FILE_SIZE constant to kv.rs: (u32::MAX as usize + 1) * CHUNK_SIZE, with a comment explaining the u32 chunk index constraint",
+        "Add check in kv_io_write: if offset + amt > MAX_FILE_SIZE, return SQLITE_IOERR_WRITE",
+        "Add check in kv_io_truncate: if new_size > MAX_FILE_SIZE, return SQLITE_IOERR_TRUNCATE",
+        "This matches the WASM VFS MAX_FILE_SIZE_BYTES check",
+        "Existing tests still pass",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": "Review finding M2. Chunk indices are u32 in the KV key layout. Writes beyond u32::MAX * 4096 wrap silently. The 10 GiB per-actor quota makes this practically unreachable, but the guard should match the WASM VFS. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md M2."
+    },
+    {
+      "id": "US-046",
+      "title": "Fix kv_io_write error path to rollback in-memory state on failure",
+      "description": "As a developer, I need both VFS implementations to rollback file.size and file.meta_dirty if kv_put fails.",
+      "acceptanceCriteria": [
+        "In native VFS vfs.rs kv_io_write: save old_size and old_meta_dirty before updating, rollback on kv_put failure",
+        "In WASM VFS vfs.ts xWrite: save oldSize and oldMetaDirty before updating, rollback on putBatch failure",
+        "After successful kv_put, clear meta_dirty flag",
+        "Both implementations follow the same pattern (save, attempt, rollback on error)",
+        "Existing tests still pass",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/",
+        "Typecheck passes"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": "Review finding M6. Both VFS implementations update file.size before kv_put. If put fails, in-memory size is wrong and metadata is marked dirty with incorrect data. This bug exists in BOTH WASM and native VFS. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md M6 for exact code patterns."
+    },
+    {
+      "id": "US-047",
+      "title": "Cache resolve_actor result in per-actor request task",
+      "description": "As a developer, I need the engine KV channel to cache actor resolution to avoid redundant database lookups on every KV operation.",
+      "acceptanceCriteria": [
+        "In engine/packages/pegboard-kv-channel/src/lib.rs actor_request_task, add a local cached_actor: Option<(Id, String)> variable",
+        "Resolve actor lazily on first KV request (not on ActorOpenRequest), cache the result",
+        "Reuse cached result for all subsequent KV requests in the same actor task",
+        "Refactor handle_kv_get, handle_kv_put, handle_kv_delete, handle_kv_delete_range to accept &Recipient instead of raw actor_id string",
+        "Remove resolve_actor calls from individual KV handlers",
+        "If resolution fails, send error response and continue (don't cache failures, next request retries)",
+        "cargo check passes"
+      ],
+      "priority": 47,
+      "passes": false,
+      "notes": "Review finding M5. Every KV op calls resolve_actor which hits the database. Actor name is immutable, so caching in the per-actor task is safe. The task is spawned once per actor per connection and naturally invalidates on close. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md M5 for the full actor_request_task rewrite."
+    },
+    {
+      "id": "US-048",
+      "title": "Replace JSON blob serialization with typed napi struct",
+      "description": "As a developer, I need blob data to use Buffer instead of JSON arrays to avoid 20x serialization overhead.",
+      "acceptanceCriteria": [
+        "Create a BindParam napi struct in lib.rs with fields: kind (String: 'null'|'int'|'float'|'text'|'blob'), int_value (Option<i64>), float_value (Option<f64>), text_value (Option<String>), blob_value (Option<Buffer>)",
+        "Update execute/query/exec in lib.rs to accept Vec<BindParam> instead of Vec<JsonValue>",
+        "Update bind_params helper to handle the new BindParam type",
+        "Update TypeScript side in native-sqlite.ts to construct BindParam objects instead of JSON values",
+        "Pass Uint8Array blobs as Buffer.from(arg) instead of Array.from(arg)",
+        "Existing tests still pass",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/",
+        "Typecheck passes"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": "Review finding M7. Currently blob data round-trips through JsonValue::Array of individual JsonValue::Number values. A 1 MB blob becomes ~20 MB of JSON. Using #[napi(object)] with Buffer copies data once (JS heap to Rust) instead of twice (JS to JSON to Rust). See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md M7."
+    },
+    {
+      "id": "US-049",
+      "title": "Move tokio runtime ownership from global OnceLock to JsKvChannel",
+      "description": "As a developer, I need the tokio runtime to be owned by JsKvChannel so it is dropped on disconnect, enabling clean process exit.",
+      "acceptanceCriteria": [
+        "Remove the global OnceLock<Runtime> from lib.rs",
+        "Store the tokio Runtime in the JsKvChannel struct instead",
+        "Pass a Handle clone to JsNativeDatabase and VFS instances for spawning async work",
+        "Add a comment explaining: the runtime is owned by JsKvChannel so it is dropped when the channel is dropped, ensuring clean process exit after disconnect. The runtime MUST NOT be dropped before all actors have closed their databases.",
+        "Verify that VFS callbacks can still use Handle::block_on after the change",
+        "Existing tests still pass",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": "Review finding M9 (Rust part). Depends on US-039 (H1) since lifecycle functions need the runtime handle. The global OnceLock<Runtime> spawns worker threads that never shut down, preventing clean process exit if disconnect() is not called. Storing the runtime in JsKvChannel ties its lifetime to the channel. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md M9."
+    },
+    {
+      "id": "US-050",
+      "title": "Fix TS KV channel error leakage in dev manager",
+      "description": "As a developer, I need the TS dev manager to return generic error messages instead of leaking internal error details to clients.",
+      "acceptanceCriteria": [
+        "In rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts handleRequest catch block, replace raw err.message with a generic 'internal error' string",
+        "Log the full error server-side via the existing logger",
+        "Specific known error codes (actor_not_open, actor_locked, etc.) continue to return descriptive messages",
+        "Only internal_error responses get the generic treatment",
+        "Typecheck passes"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": "Review finding L1. The handleRequest catch block sends raw err.message back to the client. The engine-side deliberately redacts internal errors (US-028). Apply the same pattern to the TS manager. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md L1."
+    },
+    {
+      "id": "US-051",
+      "title": "Use bounded per-actor channels in engine KV channel",
+      "description": "As a developer, I need per-actor request channels to have bounded capacity to provide backpressure.",
+      "acceptanceCriteria": [
+        "In engine/packages/pegboard-kv-channel/src/lib.rs, replace mpsc::unbounded_channel() with mpsc::channel(64)",
+        "When the channel is full (try_send returns TrySendError::Full), send a backpressure error response to the client",
+        "When the channel is closed (TrySendError::Closed), remove the dead entry from actor_channels and send an error response",
+        "Log warnings for both cases with structured tracing fields",
+        "cargo check passes"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": "Review finding L2. Per-actor channels use mpsc::unbounded_channel(). WebSocket/TCP transport provides implicit backpressure and per-connection actor limits exist, but bounded channels provide explicit backpressure. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md L2."
+    },
+    {
+      "id": "US-052",
+      "title": "Fix open_actor to add to set only after server confirmation",
+      "description": "As a developer, I need the native client to only track actors as open after the server confirms the open request.",
+      "acceptanceCriteria": [
+        "In rivetkit-typescript/packages/sqlite-native/src/channel.rs open_actor, move the open_actors.insert() after send_request() returns successfully",
+        "In close_actor, move the open_actors.remove() after send_request() returns successfully",
+        "If open fails, the actor is not added to open_actors (so reconnect won't try to re-open it)",
+        "Existing tests still pass",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": "Review finding L4. Currently actor is added to open_actors before send_request completes. If the server rejects, the actor is tracked and re-opened on reconnect. Self-heals on next reconnect but wastes a re-open request. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md L4."
+    },
+    {
+      "id": "US-053",
+      "title": "Clean up dead actor channel entries on send failure",
+      "description": "As a developer, I need dead per-actor channel entries to be removed when the task has exited.",
+      "acceptanceCriteria": [
+        "In engine/packages/pegboard-kv-channel/src/lib.rs, when tx.send(req) returns Err (channel closed), remove the dead entry from actor_channels",
+        "Send an internal_error response to the client for the failed request",
+        "Log a warning with structured tracing fields including actor_id",
+        "cargo check passes"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": "Review finding L6. If a per-actor task exits, its channel entry remains dead. The same WebSocket failure that killed the task typically kills the connection loop too, but a 30s timeout scenario could leave dead entries. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md L6."
+    },
+    {
+      "id": "US-054",
+      "title": "Replace weak PRNG with getrandom in native VFS",
+      "description": "As a developer, I need the VFS randomness callback to use a cryptographically secure RNG instead of a hand-rolled LCG.",
+      "acceptanceCriteria": [
+        "In rivetkit-typescript/packages/sqlite-native/src/vfs.rs kv_vfs_randomness, replace the LCG implementation with getrandom::fill()",
+        "Add getrandom as a dependency in rivetkit-typescript/packages/sqlite-native/Cargo.toml",
+        "Remove the hand-rolled LCG seed and state",
+        "On getrandom failure, return 0 (no bytes filled)",
+        "Existing tests still pass",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": "Review finding L7. The current LCG seeded from SystemTime::now().as_nanos() is predictable. SQLite's xRandomness is not security-sensitive, but getrandom is trivial to use and eliminates the concern. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md L7."
+    },
+    {
+      "id": "US-055",
+      "title": "Fix stmt cache mutex scope to not hold during VFS I/O",
+      "description": "As a developer, I need the prepared statement cache mutex to be released before sqlite3_step so it doesn't block during VFS I/O.",
+      "acceptanceCriteria": [
+        "In rivetkit-typescript/packages/sqlite-native/src/lib.rs, split stmt_cache mutex acquisition into two phases",
+        "Phase 1: Lock mutex for cache lookup (pop), then drop the guard before sqlite3_step",
+        "Execute sqlite3_step with no mutex held (VFS I/O happens here)",
+        "Phase 2: Lock mutex again to return the statement to cache (put)",
+        "The mutex is per-database (not global), so this is a minor optimization but maintains correct locking discipline",
+        "Existing tests still pass",
+        "cargo check passes from within rivetkit-typescript/packages/sqlite-native/"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": "Review finding L3. Depends on US-035 (stmt caching). The stmt_cache mutex is currently held across the entire sqlite3_step call, which triggers VFS callbacks doing block_on(WebSocket I/O). The mutex is per-database and SQLite is single-writer, so this is a correctness-of-locking issue rather than a performance issue. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md L3."
+    },
+    {
+      "id": "US-056",
+      "title": "Move actorLocks to factory pattern and add FS driver shutdown",
+      "description": "As a developer, I need the KV channel lock state to be instance-scoped instead of module-global, and the FS driver to have a clean shutdown path.",
+      "acceptanceCriteria": [
+        "In rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts, move actorLocks and staleLockSweepTimer from module-level globals into a factory function (createKvChannelManager)",
+        "The factory returns { createHandler, shutdown } where shutdown clears the timer and lock map",
+        "Wire shutdown() into the FS driver's teardown path in rivetkit-typescript/packages/rivetkit/src/drivers/file-system/manager.ts, called AFTER all actors have stopped",
+        "Add a shutdown() method to the manager driver interface if not already present",
+        "Typecheck passes"
+      ],
+      "priority": 56,
+      "passes": false,
+      "notes": "Review findings L9 + M9 (TS part). actorLocks is a module-level global that breaks test isolation if two manager instances exist. Moving it to a factory makes it instance-scoped. The FS driver needs a clean shutdown that clears locks and timers. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md L9 and M9."
+    },
+    {
+      "id": "US-057",
+      "title": "Create shared Rust crate for KV channel protocol",
+      "description": "As a developer, I need a shared protocol crate to eliminate the three independent protocol implementations.",
+      "acceptanceCriteria": [
+        "Create engine/sdks/rust/kv-channel-protocol/ following the runner-protocol pattern",
+        "Add Cargo.toml with serde_bare, serde workspace deps",
+        "Add build.rs using vbare_compiler::process_schemas_with_config() to generate Rust types from engine/sdks/schemas/kv-channel-protocol/v1.bare",
+        "Add src/lib.rs re-exporting generated types and PROTOCOL_VERSION constant",
+        "Add rivet-kv-channel-protocol as a workspace dependency in root Cargo.toml",
+        "Update pegboard-kv-channel (engine server) to depend on the shared crate instead of its own protocol.rs",
+        "Update sqlite-native (native addon) to depend on the shared crate instead of its own protocol.rs",
+        "Auto-generate the TypeScript SDK from the BARE schema, replacing the hand-written kv-channel-protocol/src/index.ts",
+        "All three consumers (engine, native addon, TS manager) use the same generated types",
+        "cargo check passes"
+      ],
+      "priority": 57,
+      "passes": false,
+      "notes": "Review finding M8. Three independent BARE encode/decode implementations exist with no shared code. Adding a new KV operation requires synchronized changes in three places. Follow the runner-protocol pattern at engine/sdks/rust/runner-protocol/ which uses build.rs + vbare_compiler. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md M8."
     }
   ]
 }

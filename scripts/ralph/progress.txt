@@ -699,3 +699,18 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - `Uuid` implements `Display` (for tracing `%conn_id`), `PartialEq`/`Eq` (for lock comparisons), `Hash`, and `Copy`. Drop-in replacement for `u64` in all usage patterns.
   - Pre-existing build errors in guard crate (proxy.rs, websocket.rs, custom_serve.rs, mod.rs) are unrelated. Use `cargo check -p pegboard-kv-channel` for targeted verification.
 ---
+
+## 2026-03-21 - US-038
+- Fixed use-after-free race in close_database by wrapping NativeDatabase in Arc<std::sync::Mutex<Option<...>>>
+- Changed `JsNativeDatabase.db` from `Option<vfs::NativeDatabase>` to `Arc<std::sync::Mutex<Option<vfs::NativeDatabase>>>`
+- Updated `execute`, `query`, `exec` spawn_blocking closures to clone Arc, lock mutex, and check for None before accessing db pointer
+- Updated `close_database` to lock mutex and call `.take()` atomically, ensuring concurrent operations see None
+- Removed `unsafe impl Sync for JsNativeDatabase` since Arc<Mutex<...>> makes the struct naturally Sync
+- Updated `open_database` to wrap NativeDatabase in Arc<Mutex<Some(...)>>
+- All 79 tests pass, cargo check clean
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/lib.rs
+- **Learnings for future iterations:**
+  - The db mutex guard is held for the entire duration of each spawn_blocking closure. This serializes all SQLite operations per database, which is correct since SQLite only allows one writer at a time anyway.
+  - Removing `unsafe impl Sync` is possible because all !Sync fields are now behind Arc<Mutex<...>> which is Sync. The stmt_cache was already Arc<Mutex<...>>.
+  - The close_database scoped block `{ let mut guard = ...; guard.take(); }` ensures the mutex is released before the async close_actor call, avoiding holding the lock longer than necessary.
+---
