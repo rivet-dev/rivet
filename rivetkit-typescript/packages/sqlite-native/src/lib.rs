@@ -124,29 +124,22 @@ pub struct JsKvChannel {
 
 /// An open SQLite database backed by KV storage via the channel.
 ///
+/// The `db` field is wrapped in `Arc<Mutex<Option<...>>>` so that
+/// `close_database` can atomically take the handle while concurrent
+/// `execute`/`query`/`exec` closures hold an Arc clone. Any operation
+/// that finds `None` returns a "database is closed" error. This prevents
+/// use-after-free if `close_database` runs between pointer extraction
+/// and `spawn_blocking` task execution.
+///
 /// Field order matters for drop safety: `stmt_cache` is declared before `db`
 /// so cached statements are finalized before the database connection is closed.
 #[napi(js_name = "NativeDatabase")]
 pub struct JsNativeDatabase {
 	stmt_cache: Arc<Mutex<LruCache<String, CachedStmt>>>,
-	db: Option<vfs::NativeDatabase>,
+	db: Arc<std::sync::Mutex<Option<vfs::NativeDatabase>>>,
 	channel: Arc<KvChannel>,
 	actor_id: String,
 }
-
-/// Safety: JsNativeDatabase is only accessed from napi async functions that
-/// extract the raw pointer before dispatching to spawn_blocking. The &self
-/// reference never crosses thread boundaries (it is used on the napi main
-/// thread to read the pointer value). Required because napi async fn futures
-/// must be Send, which requires &JsNativeDatabase to be Send, which requires
-/// JsNativeDatabase to be Sync.
-unsafe impl Sync for JsNativeDatabase {}
-
-/// To send a `*mut sqlite3` across thread boundaries into `spawn_blocking`,
-/// cast it to `usize` before the closure and back to `*mut sqlite3` inside.
-/// `usize` is `Send`. This is safe because SQLite is compiled in SERIALIZED
-/// mode (SQLITE_THREADSAFE=1, per-connection mutex) and only one blocking
-/// thread accesses a given database at a time.
 
 // MARK: Exported Functions
 
@@ -198,7 +191,7 @@ pub fn open_database(channel: &JsKvChannel, actor_id: String) -> Result<JsNative
 		stmt_cache: Arc::new(Mutex::new(LruCache::new(
 			NonZeroUsize::new(STMT_CACHE_CAPACITY).unwrap(),
 		))),
-		db: Some(native_db),
+		db: Arc::new(std::sync::Mutex::new(Some(native_db))),
 		channel: channel.channel.clone(),
 		actor_id,
 	})
@@ -232,16 +225,16 @@ pub async fn execute(
 	sql: String,
 	params: Option<Vec<JsonValue>>,
 ) -> Result<ExecuteResult> {
-	let native_db = db
-		.db
-		.as_ref()
-		.ok_or_else(|| Error::from_reason("database is closed"))?;
-	let db_ptr = native_db.as_ptr() as usize;
+	let db_arc = db.db.clone();
 	let cache = db.stmt_cache.clone();
 
 	get_runtime()
 		.spawn_blocking(move || {
-			let db_ptr = db_ptr as *mut sqlite3;
+			let guard = db_arc.lock().unwrap();
+			let native_db = guard
+				.as_ref()
+				.ok_or_else(|| Error::from_reason("database is closed"))?;
+			let db_ptr = native_db.as_ptr();
 			let mut cache = cache.lock().unwrap();
 
 			let (stmt, cached) = get_or_prepare_stmt(&mut cache, db_ptr, &sql)?;
@@ -286,16 +279,16 @@ pub async fn query(
 	sql: String,
 	params: Option<Vec<JsonValue>>,
 ) -> Result<QueryResult> {
-	let native_db = db
-		.db
-		.as_ref()
-		.ok_or_else(|| Error::from_reason("database is closed"))?;
-	let db_ptr = native_db.as_ptr() as usize;
+	let db_arc = db.db.clone();
 	let cache = db.stmt_cache.clone();
 
 	get_runtime()
 		.spawn_blocking(move || {
-			let db_ptr = db_ptr as *mut sqlite3;
+			let guard = db_arc.lock().unwrap();
+			let native_db = guard
+				.as_ref()
+				.ok_or_else(|| Error::from_reason("database is closed"))?;
+			let db_ptr = native_db.as_ptr();
 			let mut cache = cache.lock().unwrap();
 
 			let (stmt, cached) = get_or_prepare_stmt(&mut cache, db_ptr, &sql)?;
@@ -362,15 +355,15 @@ pub async fn query(
 /// See `execute` for threading model documentation.
 #[napi]
 pub async fn exec(db: &JsNativeDatabase, sql: String) -> Result<QueryResult> {
-	let native_db = db
-		.db
-		.as_ref()
-		.ok_or_else(|| Error::from_reason("database is closed"))?;
-	let db_ptr = native_db.as_ptr() as usize;
+	let db_arc = db.db.clone();
 
 	get_runtime()
 		.spawn_blocking(move || {
-			let db_ptr = db_ptr as *mut sqlite3;
+			let guard = db_arc.lock().unwrap();
+			let native_db = guard
+				.as_ref()
+				.ok_or_else(|| Error::from_reason("database is closed"))?;
+			let db_ptr = native_db.as_ptr();
 
 			let c_sql =
 				CString::new(sql.as_str()).map_err(|e| Error::from_reason(e.to_string()))?;
@@ -444,13 +437,21 @@ pub async fn exec(db: &JsNativeDatabase, sql: String) -> Result<QueryResult> {
 
 /// Close the database connection and release the actor lock.
 /// Sends ActorCloseRequest to the server.
+///
+/// Locks the db mutex and takes the Option, so concurrent/subsequent
+/// execute/query/exec operations see None and return "database is closed".
 #[napi(js_name = "closeDatabase")]
 pub fn close_database(db: &mut JsNativeDatabase) -> Result<()> {
 	// Finalize all cached statements before closing the database.
 	db.stmt_cache.lock().unwrap().clear();
 
-	// Drop the database to close the SQLite handle and unregister the VFS.
-	let _ = db.db.take();
+	// Lock the mutex and take the database handle. Any concurrent
+	// spawn_blocking closures that haven't acquired the lock yet will
+	// find None and return an error instead of using a freed pointer.
+	{
+		let mut guard = db.db.lock().unwrap();
+		let _ = guard.take();
+	}
 
 	// Send ActorCloseRequest to release the server-side lock.
 	let rt = get_runtime();
