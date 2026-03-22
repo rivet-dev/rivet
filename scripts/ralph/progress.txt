@@ -879,3 +879,15 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - `init_tracing()` uses `try_init()` which is idempotent. Multiple calls (e.g., if connect is called again after disconnect) are no-ops.
   - napi-rs async fn internally drives the future on the Node.js event loop. The `spawn_blocking` calls on the handle schedule work on the runtime's blocking thread pool.
 ---
+
+## 2026-03-21 - US-050
+- Fixed error leakage in TS dev manager KV channel handleRequest catch block
+- Replaced raw `err.message` in the error response with a generic `"internal error"` string
+- Full error details are still logged server-side via `logger().error()`
+- Specific known error codes (actor_not_open, actor_locked, storage_quota_exceeded, etc.) are unaffected since they are returned as structured responses before reaching the catch block
+- Matches the engine-side pattern from US-028 (pegboard-kv-channel internal_error helper)
+- Files changed: rivetkit-typescript/packages/rivetkit/src/manager/kv-channel.ts
+- **Learnings for future iterations:**
+  - The handleRequest catch block is the only place where internal_error responses are generated in the TS manager. All other error paths return specific error codes via structured ResponseData objects.
+  - Pre-existing fixture typecheck errors (queue.ts, workflow.ts) are unrelated to kv-channel changes and should not block commits.
+---
