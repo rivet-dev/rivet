@@ -915,3 +915,13 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The fix uses `?` on send_request to early-return on failure, preventing the insert/remove from executing
   - The function now returns `Ok(resp)` explicitly instead of the send_request result directly, since the insert/remove happens between send_request and the return
 ---
+
+## 2026-03-21 - US-053
+- No code changes needed. The dead actor channel entry cleanup was already implemented as part of US-051 (bounded per-actor channels)
+- The `TrySendError::Closed` arm in `handle_binary_message` (lib.rs lines 397-409) already: logs a warning with `%actor_id`, removes the dead entry from `actor_channels`, and sends an `internal_error` response
+- cargo check passes clean
+- Files changed: none (already implemented)
+- **Learnings for future iterations:**
+  - When switching from unbounded to bounded channels (US-051), both `Full` and `Closed` error cases should be handled together. US-051 already did this, making US-053 a no-op.
+  - Always check if a later story's acceptance criteria were already covered by an earlier story's implementation before writing new code.
+---

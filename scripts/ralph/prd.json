@@ -888,7 +888,7 @@
         "cargo check passes"
       ],
       "priority": 53,
-      "passes": false,
+      "passes": true,
       "notes": "Review finding L6. If a per-actor task exits, its channel entry remains dead. The same WebSocket failure that killed the task typically kills the connection loop too, but a 30s timeout scenario could leave dead entries. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md L6."
     },
     {
