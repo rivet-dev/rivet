@@ -816,3 +816,15 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - Both VFS implementations must enforce the same file size limit to prevent u32 chunk index overflow.
   - `cargo check` and `cargo test` for sqlite-native must be run from within `rivetkit-typescript/packages/sqlite-native/`, not from the repo root.
 ---
+
+## 2026-03-21 - US-046
+- Fixed kv_io_write/xWrite error path to rollback in-memory state (file.size, file.meta_dirty) on write failure
+- Native VFS (vfs.rs): save old_size and old_meta_dirty before updating, rollback on kv_put failure, unconditionally clear meta_dirty on success
+- WASM VFS (vfs.ts): save oldSize and oldMetaDirty before updating, wrap putBatch in try/catch with rollback, unconditionally clear metaDirty on success
+- Both implementations now follow the same pattern: save, attempt, rollback on error
+- All 16 sqlite-vfs tests pass (8 WASM + 8 native), cargo check passes, typecheck passes
+- Files changed: rivetkit-typescript/packages/sqlite-native/src/vfs.rs, rivetkit-typescript/packages/sqlite-vfs/src/vfs.ts
+- **Learnings for future iterations:**
+  - The previous code conditionally cleared meta_dirty only `if file.meta_dirty` after success. The fix unconditionally clears it since any successful write with metadata in the batch means metadata is synced.
+  - Both VFS implementations must stay in lockstep for error handling patterns, not just data layout and key encoding.
+---
