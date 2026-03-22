@@ -5,12 +5,10 @@ import {
 	usePrefetchInfiniteQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
-import confetti from "canvas-confetti";
 import type { ComponentProps, ReactNode } from "react";
 import { useWatch } from "react-hook-form";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
-import { endpointSchema } from "@/app/forms/connect-manual-serverless-form";
 import {
 	Accordion,
 	AccordionContent,

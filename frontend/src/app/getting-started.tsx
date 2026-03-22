@@ -56,6 +56,7 @@ import { DeploymentCheck } from "./deployment-check";
 import { useEndpoint } from "./dialogs/connect-manual-serverfull-frame";
 import {
 	buildServerlessConfig,
+	Configuration,
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
 import { EnvVariables, useRivetDsn } from "./env-variables";
@@ -110,8 +111,8 @@ const stepper = defineStepper(
 		assist: true,
 		group: "deploy",
 		schema: z.object({}),
+		previous: "Edit Provider",
 		showNext: false,
-		showPrevious: false,
 	},
 );
 
@@ -131,6 +132,36 @@ export function GettingStarted({
 		...dataProvider.upsertCurrentNamespaceManagedPoolMutationOptions(),
 	});
 
+	const { data: initialRunnerConfig } = useSuspenseQuery({
+		...dataProvider.runnerConfigQueryOptions({
+			name: "default",
+			safe: true,
+		}),
+		select: (data) => {
+			const config = Object.values(data?.datacenters || {}).find(
+				(dc) => dc.serverless,
+			);
+			const serverlessConfig = config?.serverless;
+
+			if (!serverlessConfig) {
+				return null;
+			}
+
+			return {
+				...serverlessConfig,
+				runnerName: "default",
+				endpoint: serverlessConfig.url,
+				headers: Array.from(
+					Object.entries(serverlessConfig.headers || {}),
+				),
+				provider: deriveProviderFromMetadata(config?.metadata || {}),
+				datacenters: Object.fromEntries(
+					Object.keys(data.datacenters).map((name) => [name, true]),
+				),
+			};
+		},
+	});
+
 	const { mutateAsync } = useMutation({
 		...dataProvider.upsertRunnerConfigMutationOptions(),
 		onSuccess: async () => {
@@ -141,6 +172,18 @@ export function GettingStarted({
 	});
 
 	const navigate = useNavigate();
+
+	const defaultValues = {
+		slotsPerRunner: 1,
+		maxRunners: 1_000,
+		minRunners: 1,
+		runnerMargin: 0,
+		headers: [],
+		requestLifespan: 900,
+		provider: provider || "",
+		datacenters: [],
+		...(initialRunnerConfig || {}),
+	};
 
 	return (
 		<Content className="flex flex-col items-center justify-safe-center">
@@ -164,20 +207,7 @@ export function GettingStarted({
 										? "backend"
 										: undefined
 							}
-							// eslint-disable-next-line @typescript-eslint/no-explicit-any
-							defaultValues={{
-								provider: provider || "",
-								runnerName: "default",
-								slotsPerRunner: 1,
-								maxRunners: 1_000,
-								minRunners: 1,
-								runnerMargin: 0,
-								headers: [],
-								requestLifespan: 900,
-								datacenters: Object.fromEntries(
-									datacenters.map((dc) => [dc.name, true]),
-								),
-							}}
+							defaultValues={defaultValues}
 							content={{
 								install: () => (
 									<StepContent>
@@ -294,9 +324,6 @@ function StepContent({
 	children: ReactNode;
 	wide?: boolean;
 }) {
-	const { formState, watch } = useFormContext();
-
-	console.log(formState.errors, formState.isValid, watch());
 	return (
 		<motion.div
 			className="mx-auto"
@@ -313,9 +340,10 @@ function StepContent({
 
 function StepperFooter() {
 	const s = stepper.useStepper();
-	return (
-		<div className="flex flex-col items-center gap-4 mt-6">
-			{s.current.group === "local" && s.current.id !== "explore" ? (
+
+	if (s.current.group === "local" && s.current.id !== "explore") {
+		return (
+			<div className="flex flex-col items-center gap-4 mt-6">
 				<Button
 					type="button"
 					variant="link"
@@ -326,21 +354,10 @@ function StepperFooter() {
 				>
 					Already have a project working locally? Skip to deploy
 				</Button>
-			) : null}
-			{s.isLast ? (
-				<Button
-					asChild
-					variant="link"
-					size="xs"
-					className="text-muted-foreground"
-				>
-					<Link to="." search={{ modal: "create-actor" }}>
-						Manually Create Actor
-					</Link>
-				</Button>
-			) : null}
-		</div>
-	);
+			</div>
+		);
+	}
+	return null;
 }
 
 function ProviderSetup() {
@@ -1261,6 +1278,7 @@ function BackendSetup() {
 		return (
 			<div className="flex flex-col gap-6">
 				<CopyAgentInstructionsButton provider={provider} />
+
 				<div className="flex gap-3">
 					<StepNumber n={1} />
 					<div className="flex-1 min-w-0">
@@ -1279,15 +1297,20 @@ function BackendSetup() {
 				<div className="flex gap-3">
 					<StepNumber n={2} />
 					<div className="flex-1 min-w-0">
-						<p className="font-medium mb-2">
+						<p className="font-medium mb-4">
 							Paste your deployment endpoint
 						</p>
-						<p className="text-sm text-muted-foreground mb-3">
-							Enter the publicly accessible URL of your deployed
-							backend. Or ask your coding agent to provide it for
-							you.
-						</p>
 						<div className="space-y-2">
+							<Configuration
+								runnerName={false}
+								datacenters
+								headers={false}
+								slotsPerRunner={false}
+								minRunners={false}
+								maxRunners={false}
+								runnerMargin={false}
+								requestLifespan={false}
+							/>
 							<ConnectServerlessForm.Endpoint
 								placeholder={match(provider)
 									.with(
@@ -1303,7 +1326,7 @@ function BackendSetup() {
 										() => "https://your-deployment.com",
 									)}
 							/>
-							<ConfigurationAccordion />
+							<ConfigurationAccordion datacenters={false} />
 							<ConnectServerlessForm.ConnectionCheck
 								provider={provider}
 							/>
@@ -1379,7 +1402,7 @@ function FrontendSetup() {
 
 	return (
 		<div className="space-y-2">
-			<div className="border rounded-md py-10">
+			<div className="border rounded-md py-10 flex flex-col gap-6">
 				<div className="flex gap-2 justify-center items-center py-2 px-8">
 					<div className="relative mr-4">
 						<Ping variant="pending" className="relative" />
@@ -1387,7 +1410,7 @@ function FrontendSetup() {
 					<p>Waiting for an Actor to be created...</p>
 				</div>
 
-				<div className="flex items-center justify-center mt-6 gap-4">
+				<div className="flex items-center flex-col justify-center gap-4">
 					{deploymentUrl ? (
 						<Button variant="outline">
 							<a
@@ -1405,6 +1428,16 @@ function FrontendSetup() {
 							</Link>
 						</Button>
 					)}
+					<Button
+						asChild
+						variant="link"
+						size="xs"
+						className="text-muted-foreground mx-auto inline-block"
+					>
+						<Link to="." search={{ modal: "create-actor" }}>
+							or Manually Create Actor
+						</Link>
+					</Button>
 				</div>
 			</div>
 			<Accordion type="single" collapsible className="mt-10">

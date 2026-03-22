@@ -9,6 +9,7 @@ import {
 } from "@/app/serverless-connection-check";
 import {
 	Button,
+	cn,
 	FormControl,
 	FormDescription,
 	FormField,
@@ -90,7 +91,7 @@ export const RunnerName = function RunnerName() {
 };
 
 export const Datacenters = function Datacenter() {
-	const { control } = useFormContext();
+	const { control, watch } = useFormContext();
 	const { data: datacenterCount } = useInfiniteQuery({
 		...useEngineCompatDataProvider().datacentersQueryOptions(),
 		select: (data) =>
@@ -102,16 +103,17 @@ export const Datacenters = function Datacenter() {
 
 	return (
 		<div className="space-y-2">
-			<Label>Datacenters</Label>
-			<FormDescription>
-				Rivet datacenters that actors can be created in.
-			</FormDescription>
-
-			<div className="space-y-4">
-				<FormField
-					control={control}
-					name="datacenters"
-					render={({ field }) => (
+			<FormField
+				control={control}
+				name="datacenters"
+				render={({ field }) => (
+					<>
+						<FormLabel>Datacenters</FormLabel>
+						<FormDescription className="mb-4">
+							{watch("provider") === "rivet"
+								? "Select the region(s) to enable for Rivet. Rivet's edge network handles multi-region routing automatically."
+								: "Select the region(s) that your backend is running in. Rivet's edge network handles multi-region routing automatically."}
+						</FormDescription>
 						<RegionSelect
 							showAuto={false}
 							value={Object.keys(field.value || {}).filter(
@@ -143,9 +145,10 @@ export const Datacenters = function Datacenter() {
 							}}
 							multiple
 						/>
-					)}
-				/>
-			</div>
+						<FormMessage />
+					</>
+				)}
+			/>
 		</div>
 	);
 };
@@ -163,7 +166,7 @@ export const MinRunners = ({ className }: { className?: string }) => {
 						<Input
 							type="number"
 							{...field}
-							value={field.value || ""}
+							value={field.value ?? ""}
 							min={0}
 						/>
 					</FormControl>
@@ -430,6 +433,10 @@ export const Endpoint = ({
 				return (
 					<FormItem className={className}>
 						<FormLabel className="col-span-1">Endpoint</FormLabel>
+						<FormDescription className="col-span-1">
+							Enter the publicly accessible URL of your deployed
+							backend.
+						</FormDescription>
 						<FormControl className="row-start-2">
 							<Input
 								type="text"

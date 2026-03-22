@@ -108,8 +108,8 @@ export const Combobox = <Option extends ComboboxOption>({
 				}
 			} else {
 				onValueChange(newValue);
+				onOpenChange(false);
 			}
-			onOpenChange(false);
 		});
 	};
 
