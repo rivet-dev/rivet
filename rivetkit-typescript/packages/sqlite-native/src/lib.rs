@@ -53,8 +53,8 @@ pub struct BindParam {
 pub mod kv;
 
 /// BARE serialization/deserialization for KV channel protocol messages.
-/// Implements types from `engine/sdks/schemas/kv-channel-protocol/v1.bare`.
-pub mod protocol;
+/// Types generated from `engine/sdks/schemas/kv-channel-protocol/v1.bare`.
+pub use rivet_kv_channel_protocol as protocol;
 
 /// WebSocket KV channel client with reconnection and request correlation.
 pub mod channel;

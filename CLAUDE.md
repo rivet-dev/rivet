@@ -22,6 +22,14 @@ The `rivet.gg` domain is deprecated and should never be used in this codebase.
 
 - The runner protocol (`engine/sdks/schemas/runner-protocol/`) and KV channel protocol (`engine/sdks/schemas/kv-channel-protocol/`) both expose KV operations. When adding, removing, or changing KV request/response types in one protocol, update the other to match.
 
+**Keep KV channel protocol versions in sync.**
+
+- When bumping the KV channel protocol version, update these two locations together:
+  - `engine/sdks/rust/kv-channel-protocol/src/lib.rs` (`PROTOCOL_VERSION`)
+  - `engine/sdks/rust/kv-channel-protocol/build.rs` (TypeScript `PROTOCOL_VERSION` in post-processing)
+- All consumers (pegboard-kv-channel, sqlite-native, TS manager) get the version from the shared crate.
+- The TypeScript SDK at `engine/sdks/typescript/kv-channel-protocol/src/index.ts` is auto-generated from the BARE schema during the Rust build. Do not edit it by hand.
+
 ## Commands
 
 ### Build Commands

@@ -3375,10 +3375,9 @@ dependencies = [
  "rivet-config",
  "rivet-error",
  "rivet-guard-core",
+ "rivet-kv-channel-protocol",
  "rivet-runtime",
  "rivet-util",
- "serde",
- "serde_bare",
  "tokio",
  "tokio-tungstenite",
  "tracing",
@@ -4598,6 +4597,16 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "rivet-kv-channel-protocol"
+version = "2.1.6"
+dependencies = [
+ "serde",
+ "serde_bare",
+ "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]

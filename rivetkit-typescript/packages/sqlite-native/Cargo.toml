@@ -15,6 +15,7 @@ libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "net", "time", "macros"] }
 tokio-tungstenite = "0.24"
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
+rivet-kv-channel-protocol = { path = "../../../engine/sdks/rust/kv-channel-protocol" }
 serde = { version = "1", features = ["derive"] }
 serde_bare = "0.5"
 serde_json = "1"

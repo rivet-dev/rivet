@@ -23,7 +23,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::protocol::{
 	decode_to_client, encode_to_server, ErrorResponse, RequestData, ResponseData, ToClient,
-	ToServer, ToServerPong, ToServerRequest,
+	ToServer, ToServerPong, ToServerRequest, PROTOCOL_VERSION,
 };
 
 // MARK: Constants
@@ -44,8 +44,7 @@ const BACKOFF_MULTIPLIER: f64 = 2.0;
 /// Maximum jitter fraction added to each backoff delay (0-25%).
 const JITTER_MAX: f64 = 0.25;
 
-/// KV channel protocol version sent in the connection URL.
-const PROTOCOL_VERSION: u32 = 1;
+// PROTOCOL_VERSION is imported from crate::protocol (rivet-kv-channel-protocol).
 
 // MARK: Error
 

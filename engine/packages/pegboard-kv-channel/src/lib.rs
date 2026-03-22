@@ -26,7 +26,7 @@ use tokio::sync::{Mutex, mpsc, watch};
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use uuid::Uuid;
 
-pub mod protocol;
+pub use rivet_kv_channel_protocol as protocol;
 
 // KV validation limits. Must stay in sync with:
 // - engine/packages/pegboard/src/actor_kv/mod.rs
