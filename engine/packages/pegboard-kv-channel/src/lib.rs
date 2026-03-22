@@ -616,12 +616,14 @@ async fn handle_kv_put(
 		);
 	}
 
-	// Validate individual keys and values.
+	// Validate individual keys and values. The +2 accounts for KeyWrapper tuple
+	// packing overhead (NESTED prefix + NIL suffix) added by actor_kv. See
+	// engine/packages/pegboard/src/actor_kv/utils.rs and KeyWrapper::tuple_len.
 	for key in &body.keys {
-		if key.len() > MAX_KEY_SIZE {
+		if key.len() + 2 > MAX_KEY_SIZE {
 			return error_response(
 				"key_too_large",
-				&format!("key is too long (max {MAX_KEY_SIZE} bytes)"),
+				&format!("key is too long (max {} bytes)", MAX_KEY_SIZE - 2),
 			);
 		}
 	}
@@ -634,8 +636,8 @@ async fn handle_kv_put(
 		}
 	}
 
-	// Validate total payload size.
-	let payload_size: usize = body.keys.iter().map(|k| k.len()).sum::<usize>()
+	// Validate total payload size. Include the +2 KeyWrapper overhead per key.
+	let payload_size: usize = body.keys.iter().map(|k| k.len() + 2).sum::<usize>()
 		+ body.values.iter().map(|v| v.len()).sum::<usize>();
 	if payload_size > MAX_PUT_PAYLOAD_SIZE {
 		return error_response(
@@ -714,16 +716,19 @@ async fn handle_kv_delete_range(
 	actor_id: &str,
 	body: &protocol::KvDeleteRangeRequest,
 ) -> protocol::ResponseData {
-	if body.start.len() > MAX_KEY_SIZE {
+	// The +2 accounts for KeyWrapper tuple packing overhead (NESTED prefix +
+	// NIL suffix) added by actor_kv. See
+	// engine/packages/pegboard/src/actor_kv/utils.rs and KeyWrapper::tuple_len.
+	if body.start.len() + 2 > MAX_KEY_SIZE {
 		return error_response(
 			"key_too_large",
-			&format!("start key is too long (max {MAX_KEY_SIZE} bytes)"),
+			&format!("start key is too long (max {} bytes)", MAX_KEY_SIZE - 2),
 		);
 	}
-	if body.end.len() > MAX_KEY_SIZE {
+	if body.end.len() + 2 > MAX_KEY_SIZE {
 		return error_response(
 			"key_too_large",
-			&format!("end key is too long (max {MAX_KEY_SIZE} bytes)"),
+			&format!("end key is too long (max {} bytes)", MAX_KEY_SIZE - 2),
 		);
 	}
 
@@ -788,10 +793,13 @@ fn validate_keys(keys: &[protocol::KvKey]) -> std::result::Result<(), protocol::
 		));
 	}
 	for key in keys {
-		if key.len() > MAX_KEY_SIZE {
+		// The +2 accounts for KeyWrapper tuple packing overhead (NESTED prefix +
+		// NIL suffix) added by actor_kv. See
+		// engine/packages/pegboard/src/actor_kv/utils.rs and KeyWrapper::tuple_len.
+		if key.len() + 2 > MAX_KEY_SIZE {
 			return Err(error_response(
 				"key_too_large",
-				&format!("key is too long (max {MAX_KEY_SIZE} bytes)"),
+				&format!("key is too long (max {} bytes)", MAX_KEY_SIZE - 2),
 			));
 		}
 	}
