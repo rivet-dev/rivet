@@ -773,3 +773,20 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The WASM VFS base class provides defaults for optional callbacks. If the native VFS overrides a callback, check whether the WASM VFS needs the same override for 1:1 parity.
   - `xSectorSize` tells SQLite what alignment to use for journal I/O. Mismatched sector sizes between VFS implementations could cause different journal layouts for the same database.
 ---
+
+## 2026-03-21 - US-043
+- Fixed key size validation in engine KV channel to account for KeyWrapper tuple packing overhead (+2 bytes for NESTED prefix + NIL suffix)
+- Changed `key.len() > MAX_KEY_SIZE` to `key.len() + 2 > MAX_KEY_SIZE` in 4 locations:
+  - `validate_keys` function (used by handle_kv_get and handle_kv_delete)
+  - `handle_kv_put` inline key check
+  - `handle_kv_delete_range` start and end key checks
+- Updated payload_size calculation in handle_kv_put to include +2 per key
+- Updated error messages to show effective max key size (MAX_KEY_SIZE - 2)
+- Added comments cross-referencing engine/packages/pegboard/src/actor_kv/utils.rs and KeyWrapper::tuple_len
+- cargo check passes cleanly for pegboard-kv-channel
+- Files changed: engine/packages/pegboard-kv-channel/src/lib.rs
+- **Learnings for future iterations:**
+  - The AC only mentioned validate_keys, but the same bug existed in handle_kv_put and handle_kv_delete_range. Always check for the same pattern in nearby functions.
+  - KeyWrapper::tuple_len adds +2 (NESTED prefix + NIL suffix) to the raw key length. The engine KV channel must pre-validate with this overhead to avoid rejection at the actor_kv layer.
+  - Pre-existing build errors in guard crate (proxy.rs, websocket.rs, custom_serve.rs, etc.) are unrelated to pegboard-kv-channel changes.
+---
