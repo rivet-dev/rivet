@@ -15,7 +15,7 @@ use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::num::NonZeroUsize;
 use std::ptr;
 use std::slice;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 use libsqlite3_sys::{
 	sqlite3, sqlite3_bind_blob, sqlite3_bind_double, sqlite3_bind_int64,
@@ -30,7 +30,7 @@ use lru::LruCache;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use serde_json::Value as JsonValue;
-use tokio::runtime::Runtime;
+use tokio::runtime::{Handle, Runtime};
 
 /// Typed bind parameter passed from JavaScript.
 ///
@@ -91,22 +91,16 @@ impl Drop for CachedStmt {
 
 // MARK: Runtime
 
-/// Global tokio runtime, initialized once per process for async WebSocket I/O.
-fn get_runtime() -> &'static Runtime {
-	static RT: OnceLock<Runtime> = OnceLock::new();
-	RT.get_or_init(|| {
-		// Initialize a tracing subscriber so log output is emitted to stderr.
-		// Uses RUST_LOG env var for filtering (defaults to warn). try_init()
-		// is a no-op if a subscriber is already set by the host process.
-		let _ = tracing_subscriber::fmt()
-			.with_env_filter(
-				tracing_subscriber::EnvFilter::try_from_default_env()
-					.unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
-			)
-			.try_init();
-
-		Runtime::new().expect("failed to create tokio runtime")
-	})
+/// Initialize a tracing subscriber for log output (stderr).
+/// Uses RUST_LOG env var for filtering (defaults to warn). try_init()
+/// is a no-op if a subscriber is already set by the host process.
+fn init_tracing() {
+	let _ = tracing_subscriber::fmt()
+		.with_env_filter(
+			tracing_subscriber::EnvFilter::try_from_default_env()
+				.unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+		)
+		.try_init();
 }
 
 // MARK: JS Types
@@ -134,8 +128,13 @@ pub struct QueryResult {
 
 /// A shared WebSocket connection to the KV channel server.
 /// One per process, shared across all actors.
+///
+/// The tokio runtime is owned here so it is dropped when the channel is dropped,
+/// ensuring clean process exit after disconnect. The runtime MUST NOT be dropped
+/// before all actors have closed their databases.
 #[napi(js_name = "KvChannel")]
 pub struct JsKvChannel {
+	rt: Runtime,
 	channel: Arc<KvChannel>,
 }
 
@@ -154,6 +153,7 @@ pub struct JsKvChannel {
 pub struct JsNativeDatabase {
 	stmt_cache: Arc<Mutex<LruCache<String, CachedStmt>>>,
 	db: Arc<std::sync::Mutex<Option<vfs::NativeDatabase>>>,
+	rt_handle: Handle,
 	channel: Arc<KvChannel>,
 	actor_id: String,
 }
@@ -166,7 +166,9 @@ pub struct JsNativeDatabase {
 /// In local dev, token is config.token (RIVET_TOKEN), optional in dev mode.
 #[napi]
 pub fn connect(config: ConnectConfig) -> JsKvChannel {
-	let rt = get_runtime();
+	init_tracing();
+
+	let rt = Runtime::new().expect("failed to create tokio runtime");
 	// Enter the runtime context so KvChannel::connect can call tokio::spawn.
 	let _guard = rt.enter();
 	let channel = KvChannel::connect(KvChannelConfig {
@@ -175,6 +177,7 @@ pub fn connect(config: ConnectConfig) -> JsKvChannel {
 		namespace: config.namespace,
 	});
 	JsKvChannel {
+		rt,
 		channel: Arc::new(channel),
 	}
 }
@@ -201,14 +204,16 @@ pub async fn open_database(
 	// Register VFS and open database inside spawn_blocking since VFS
 	// callbacks use Handle::block_on() which is safe from blocking threads
 	// but not from the Node.js main thread.
-	let rt_handle = get_runtime().handle().clone();
+	let rt_handle = channel.rt.handle().clone();
 	let ch2 = channel.channel.clone();
 	let aid2 = actor_id.clone();
-	let native_db = get_runtime()
+	let rt_handle2 = rt_handle.clone();
+	let native_db = channel
+		.rt
 		.spawn_blocking(move || {
 			let vfs_name = format!("kv-{aid2}");
 			let kv_vfs =
-				vfs::KvVfs::register(&vfs_name, ch2, aid2.clone(), rt_handle)?;
+				vfs::KvVfs::register(&vfs_name, ch2, aid2.clone(), rt_handle2)?;
 			vfs::open_database(kv_vfs, &aid2)
 		})
 		.await
@@ -220,6 +225,7 @@ pub async fn open_database(
 			NonZeroUsize::new(STMT_CACHE_CAPACITY).unwrap(),
 		))),
 		db: Arc::new(std::sync::Mutex::new(Some(native_db))),
+		rt_handle,
 		channel: channel.channel.clone(),
 		actor_id,
 	})
@@ -256,7 +262,7 @@ pub async fn execute(
 	let db_arc = db.db.clone();
 	let cache = db.stmt_cache.clone();
 
-	get_runtime()
+	db.rt_handle
 		.spawn_blocking(move || {
 			let guard = db_arc.lock().unwrap();
 			let native_db = guard
@@ -310,7 +316,7 @@ pub async fn query(
 	let db_arc = db.db.clone();
 	let cache = db.stmt_cache.clone();
 
-	get_runtime()
+	db.rt_handle
 		.spawn_blocking(move || {
 			let guard = db_arc.lock().unwrap();
 			let native_db = guard
@@ -385,7 +391,7 @@ pub async fn query(
 pub async fn exec(db: &JsNativeDatabase, sql: String) -> Result<QueryResult> {
 	let db_arc = db.db.clone();
 
-	get_runtime()
+	db.rt_handle
 		.spawn_blocking(move || {
 			let guard = db_arc.lock().unwrap();
 			let native_db = guard
