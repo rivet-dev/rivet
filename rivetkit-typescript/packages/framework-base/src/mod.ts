@@ -172,7 +172,11 @@ export function createRivetKit<Registry extends AnyActorRegistry>(
 				string,
 		>(
 			actorOpts: ActorOptions<Registry, ActorName>,
-		) => getOrCreateActor(client, createOpts, store, cache, actorOpts),
+		): {
+			mount: () => () => void;
+			state: ActorsStateDerived<Registry, ActorName>;
+			key: string;
+		} => (getOrCreateActor as any)(client, createOpts, store, cache, actorOpts),
 		store,
 	};
 }
@@ -294,7 +298,7 @@ function getOrCreateActor<
 						currentActor.connStatus === "idle" &&
 						currentActor.opts.enabled
 					) {
-						create<Registry, ActorName>(client, store, key);
+						(create as Function)(client, store, key);
 					}
 				});
 			}
@@ -332,7 +336,7 @@ function getOrCreateActor<
 			// Trigger initial connection if actor is enabled and idle.
 			const actor = store.state.actors[key];
 			if (actor && actor.opts.enabled && actor.connStatus === "idle") {
-				create<Registry, ActorName>(client, store, key);
+				(create as Function)(client, store, key);
 			}
 		}
 
@@ -371,11 +375,13 @@ function getOrCreateActor<
 		};
 	};
 
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const boundCreate: () => void = () => (create as any)(client, store, key);
 	cache.set(key, {
 		state: derived,
 		key,
 		mount,
-		create: create.bind(undefined, client, store, key),
+		create: boundCreate,
 		refCount: 0,
 		cleanupTimeout: null,
 	});

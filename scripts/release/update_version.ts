@@ -59,7 +59,7 @@ export async function updateVersion(opts: ReleaseOpts) {
 
 	// Substitute all files
 	for (const { path: globPath, find, replace, required = true } of findReplace) {
-		const paths = await glob(globPath, { cwd: opts.root });
+		const paths = await glob(globPath, { cwd: opts.root, ignore: ["**/node_modules/**"] });
 		assert(paths.length > 0, `no paths matched: ${globPath}`);
 		for (const fileRelPath of paths) {
 			const filePath = pathModule.join(opts.root, fileRelPath);

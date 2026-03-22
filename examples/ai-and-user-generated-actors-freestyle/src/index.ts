@@ -4,7 +4,7 @@ import { deployWithRivetCloud } from "./deploy-with-rivet-cloud.ts";
 import { deployWithRivetSelfHosted } from "./deploy-with-rivet-self-hosted.ts";
 import type { DeployRequest, LogCallback } from "./utils.ts";
 
-export const registry = setup({});
+export const registry = setup({ use: {} });
 
 registry.start();
 
