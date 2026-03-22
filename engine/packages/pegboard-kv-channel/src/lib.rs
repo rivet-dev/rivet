@@ -570,7 +570,7 @@ async fn handle_kv_get(
 		return resp;
 	}
 
-	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id).await {
+	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id, namespace_id).await {
 		Ok(v) => v,
 		Err(resp) => return resp,
 	};
@@ -649,7 +649,7 @@ async fn handle_kv_put(
 		);
 	}
 
-	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id).await {
+	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id, namespace_id).await {
 		Ok(v) => v,
 		Err(resp) => return resp,
 	};
@@ -688,7 +688,7 @@ async fn handle_kv_delete(
 		return resp;
 	}
 
-	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id).await {
+	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id, namespace_id).await {
 		Ok(v) => v,
 		Err(resp) => return resp,
 	};
@@ -732,7 +732,7 @@ async fn handle_kv_delete_range(
 		);
 	}
 
-	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id).await {
+	let (parsed_actor_id, name) = match resolve_actor(ctx, actor_id, namespace_id).await {
 		Ok(v) => v,
 		Err(resp) => return resp,
 	};
@@ -757,9 +757,15 @@ async fn handle_kv_delete_range(
 // MARK: Helpers
 
 /// Look up an actor by ID and return the parsed ID and actor name.
+///
+/// Defense-in-depth: verifies the actor belongs to the authenticated namespace.
+/// The admin_token is a global credential, so this is not strictly necessary
+/// today, but prevents cross-namespace access if a less-privileged auth
+/// mechanism is introduced in the future.
 async fn resolve_actor(
 	ctx: &StandaloneCtx,
 	actor_id: &str,
+	expected_namespace_id: Id,
 ) -> std::result::Result<(Id, String), protocol::ResponseData> {
 	let parsed_id = Id::parse(actor_id).map_err(|err| {
 		error_response(
@@ -776,7 +782,15 @@ async fn resolve_actor(
 		.map_err(|err| internal_error(&err))?;
 
 	match actor {
-		Some(actor) => Ok((parsed_id, actor.name)),
+		Some(actor) => {
+			if actor.namespace_id != expected_namespace_id {
+				return Err(error_response(
+					"actor_not_found",
+					"actor does not exist or is not running",
+				));
+			}
+			Ok((parsed_id, actor.name))
+		}
 		None => Err(error_response(
 			"actor_not_found",
 			"actor does not exist or is not running",

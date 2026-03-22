@@ -203,6 +203,11 @@ async function handleRequest(
 	}
 }
 
+// Defense-in-depth: in the engine KV channel, resolve_actor verifies the actor
+// belongs to the authenticated namespace. The local dev manager is
+// single-namespace, so all actors implicitly belong to the same namespace and
+// no cross-namespace access is possible. If a less-privileged auth mechanism is
+// introduced for the dev manager, namespace verification should be added here.
 async function processRequestData(
 	conn: KvChannelConnection,
 	managerDriver: ManagerDriver,
