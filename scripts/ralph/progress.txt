@@ -3,6 +3,8 @@
 - Use MARK comments (# MARK: Section) to organize sections in BARE schemas, matching runner-protocol conventions.
 - The runner-protocol directory only has .bare files (no .ts or codegen in the same dir). TypeScript versioned handlers are separate.
 - KV types in kv-channel-protocol mirror runner-protocol KV types but omit KvListRequest, KvDropRequest, and KvMetadata.
+- Shared protocol crates at `engine/sdks/rust/{name}/` use `vbare_compiler::process_schemas_with_config()` in build.rs + `include!(concat!(env!("OUT_DIR"), "/combined_imports.rs"))` in generated.rs. Add both workspace member and dependency in root Cargo.toml.
+- To replace `pub mod X;` with a shared crate without changing consumer code, use `pub use shared_crate as X;`. All `X::Type` references continue working.
 - TypeScript protocol packages live in engine/sdks/typescript/{protocol-name}/ with package.json, tsconfig.json, tsup.config.ts, and src/index.ts.
 - The runner-protocol TS is auto-generated from BARE via build.rs; kv-channel-protocol is hand-written following the same read/write/encode/decode pattern.
 - BARE void types in unions are represented as `null` values (no read/write call needed, just the tag byte).
@@ -970,4 +972,28 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - Optional interface methods (`shutdown?(): void`) avoid forcing all implementations to add no-op stubs while still allowing type-safe calls.
   - The `setKvChannelShutdown` injection pattern mirrors `setGetUpgradeWebSocket`, which is already used for lazy initialization of the WebSocket upgrade function.
   - Pre-existing typecheck errors (workflow/queue fixtures) are not blockers for new code.
+---
+
+## 2026-03-21 - US-057
+- Created shared Rust crate `rivet-kv-channel-protocol` at `engine/sdks/rust/kv-channel-protocol/`
+- Uses `vbare_compiler::process_schemas_with_config()` in build.rs to auto-generate Rust types from `engine/sdks/schemas/kv-channel-protocol/v1.bare`
+- Generated types include `PartialEq, Eq, Debug, Clone, Hash` derives, snake_case field names, and correct union variant ordering
+- Added encode/decode helper functions and PROTOCOL_VERSION constant in `src/lib.rs`
+- Added `rivet-kv-channel-protocol` to root Cargo.toml workspace members and dependencies
+- Updated `pegboard-kv-channel` to re-export shared crate as `protocol` module (`pub use rivet_kv_channel_protocol as protocol;`), removed old `protocol.rs`, removed now-unused `serde`/`serde_bare` deps
+- Updated `sqlite-native` to use shared crate via path dependency, re-export as `protocol` module, removed old `protocol.rs` and local `PROTOCOL_VERSION` constant
+- build.rs also auto-generates TypeScript SDK via `@bare-ts/tools` CLI with post-processing (adds `PROTOCOL_VERSION`, replaces imports, adds custom assert)
+- All 9 shared crate tests pass (round-trip + byte-compatibility)
+- All 51 sqlite-native tests pass
+- pegboard-kv-channel cargo check passes
+- TypeScript SDK type-checks and builds with tsup
+- Updated CLAUDE.md to reflect new sync locations for PROTOCOL_VERSION
+- Files changed: `engine/sdks/rust/kv-channel-protocol/{Cargo.toml, build.rs, src/lib.rs, src/generated.rs}` (new), `Cargo.toml`, `Cargo.lock`, `engine/packages/pegboard-kv-channel/{Cargo.toml, src/lib.rs}`, `engine/packages/pegboard-kv-channel/src/protocol.rs` (deleted), `rivetkit-typescript/packages/sqlite-native/{Cargo.toml, Cargo.lock, src/lib.rs, src/channel.rs}`, `rivetkit-typescript/packages/sqlite-native/src/protocol.rs` (deleted), `engine/sdks/typescript/kv-channel-protocol/src/index.ts` (auto-generated), `CLAUDE.md`
+- **Learnings for future iterations:**
+  - `pub use external_crate as module_name;` is a seamless way to replace a `pub mod` with an external crate without changing any consumer code. All `module_name::Type` references continue to work.
+  - vbare_compiler converts camelCase BARE field names to snake_case Rust field names automatically. Generated types are wire-compatible with hand-written serde_bare types.
+  - vbare_compiler generates `#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Hash)]` for all types. Void BARE types become `pub type X = ();` and unit enum variants.
+  - For crates outside the main workspace (like sqlite-native), use a relative path dependency instead of workspace dependency.
+  - TypeScript auto-generation from BARE schemas uses `@bare-ts/tools` CLI. The generated code needs post-processing to replace `@bare-ts/lib` with `@rivetkit/bare-ts` and add custom assert.
+  - PROTOCOL_VERSION is not in the BARE schema, so it must be injected during post-processing for the TypeScript SDK.
 ---
