@@ -805,3 +805,14 @@ Started: Tue Mar 17 05:27:07 PM PDT 2026
   - The runner (pegboard-runner) also uses get_for_runner but only accesses .name and .runner_id, so adding namespace_id doesn't break it.
   - Pre-existing fixture/test TypeScript errors (queue.ts, workflow.ts) are not related to kv-channel changes.
 ---
+
+## 2026-03-21 - US-045
+- Added `MAX_FILE_SIZE` constant to `kv.rs`: `(u32::MAX as u64 + 1) * CHUNK_SIZE as u64`, matching WASM VFS `MAX_FILE_SIZE_BYTES`
+- Added check in `kv_io_write`: if `write_end as u64 > kv::MAX_FILE_SIZE`, return `SQLITE_IOERR_WRITE`
+- Added check in `kv_io_truncate`: merged with existing `size < 0` guard to also reject `size as u64 > kv::MAX_FILE_SIZE` with `SQLITE_IOERR_TRUNCATE`
+- Files changed: `rivetkit-typescript/packages/sqlite-native/src/kv.rs`, `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`
+- **Learnings for future iterations:**
+  - The WASM VFS uses `(0xFFFFFFFF + 1) * CHUNK_SIZE` as MAX_FILE_SIZE_BYTES. In Rust this is `(u32::MAX as u64 + 1) * CHUNK_SIZE as u64`.
+  - Both VFS implementations must enforce the same file size limit to prevent u32 chunk index overflow.
+  - `cargo check` and `cargo test` for sqlite-native must be run from within `rivetkit-typescript/packages/sqlite-native/`, not from the repo root.
+---
