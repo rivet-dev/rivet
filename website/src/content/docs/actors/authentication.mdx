@@ -226,7 +226,7 @@ const myActor = actor({
 });
 
 const registry = setup({ use: { myActor } });
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const actorHandle = await client.myActor.getOrCreate();
 
 // Helper to show errors
@@ -257,7 +257,7 @@ const myActor = actor({
 });
 
 const registry = setup({ use: { myActor } });
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const actorHandle = await client.myActor.getOrCreate();
 
 // Helper to show errors

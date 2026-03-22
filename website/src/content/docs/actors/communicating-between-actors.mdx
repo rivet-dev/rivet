@@ -317,7 +317,7 @@ const processor = actor({
 });
 
 const registry = setup({ use: { processor } });
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 // Process items in parallel
 const items: Item[] = [

@@ -21,7 +21,7 @@ A workflow is a durable, replayable run handler for a Rivet Actor.
 Use this when you need a short multi-step sequence.
 
 <CodeGroup workspace>
-```ts actors.ts
+```ts index.ts
 import { actor, setup } from "rivetkit";
 import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
@@ -104,9 +104,9 @@ export const registry = setup({ use: { invoiceActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const handle = client.invoiceActor.getOrCreate(["main"]);
 
 const state = await handle.getState();
@@ -123,7 +123,7 @@ This is the recommended workflow shape for most actor workloads.
 - This gives you one durable workflow that manages all actor progress.
 
 <CodeGroup workspace>
-```ts actors.ts
+```ts index.ts
 import { actor, queue, setup } from "rivetkit";
 import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
@@ -179,9 +179,9 @@ export const registry = setup({ use: { workflowCounter } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const handle = client.workflowCounter.getOrCreate(["main"]);
 
 await handle.send("counter", { delta: 1 });
@@ -197,7 +197,7 @@ console.log(state.value, state.processed);
 Use this when the workflow should initialize resources, process queued commands, then clean up.
 
 <CodeGroup workspace>
-```ts actors.ts
+```ts index.ts
 import { actor, queue, setup } from "rivetkit";
 import { Loop, type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
@@ -307,9 +307,9 @@ export const registry = setup({ use: { setupRunTeardownActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const handle = client.setupRunTeardownActor.getOrCreate(["main"]);
 
 await handle.send("work", { amount: 5 });
@@ -334,7 +334,7 @@ Use the `Loops` example above as the baseline pattern.
 Use this when the caller needs a response from queued processing.
 
 <CodeGroup workspace>
-```ts actors.ts
+```ts index.ts
 import { actor, queue, setup } from "rivetkit";
 import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
@@ -368,9 +368,9 @@ export const registry = setup({ use: { requestResponseActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const handle = client.requestResponseActor.getOrCreate(["main"]);
 
 const result = await handle.send(
@@ -391,7 +391,7 @@ if (result.status === "completed") {
 Use queue messages as the trigger source, then sleep durably inside the workflow.
 
 <CodeGroup workspace>
-```ts actors.ts
+```ts index.ts
 import { actor, queue, setup } from "rivetkit";
 import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
@@ -430,9 +430,9 @@ export const registry = setup({ use: { reminderActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const handle = client.reminderActor.getOrCreate(["main"]);
 
 await handle.send("reminders", {
@@ -450,7 +450,7 @@ console.log(await handle.getState());
 Use `join` when several independent tasks can run in parallel.
 
 <CodeGroup workspace>
-```ts actors.ts
+```ts index.ts
 import { actor, queue, setup } from "rivetkit";
 import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
@@ -509,9 +509,9 @@ export const registry = setup({ use: { dashboardActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const handle = client.dashboardActor.getOrCreate(["main"]);
 
 await handle.send("refresh", {});
@@ -524,7 +524,7 @@ console.log(await handle.getState());
 Use `race` when you need first-winner behavior.
 
 <CodeGroup workspace>
-```ts actors.ts
+```ts index.ts
 import { actor, queue, setup } from "rivetkit";
 import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
@@ -584,9 +584,9 @@ export const registry = setup({ use: { auctionActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const handle = client.auctionActor.getOrCreate(["item-123"]);
 
 await handle.send("bids", { amount: 100 });
@@ -771,7 +771,7 @@ export const registry = setup({ use: { checkoutActor } });
 Store progress in `state` so replay and recovery always restore it. Broadcast state changes so clients can render progress in realtime.
 
 <CodeGroup workspace>
-```ts actors.ts
+```ts index.ts
 import { actor, event, queue, setup } from "rivetkit";
 import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
@@ -842,9 +842,9 @@ export const registry = setup({ use: { progressActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const handle = client.progressActor.getOrCreate(["main"]);
 const conn = handle.connect();
 
@@ -1240,7 +1240,7 @@ export const registry = setup({ use: { coordinatorActor, workerActor } });
 Use this when you want decoupled actor-to-actor communication with durable waits and explicit completion.
 
 <CodeGroup workspace>
-```ts actors.ts
+```ts index.ts
 import { actor, queue, setup } from "rivetkit";
 import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
@@ -1276,9 +1276,9 @@ export const registry = setup({ use: { requestResponseActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const handle = client.requestResponseActor.getOrCreate(["main"]);
 
 const result = await handle.send("requests", { value: 21 }, { wait: true });

@@ -89,7 +89,7 @@ The connection to your serverless endpoint was terminated before the actor finis
 
 Rivet received an unexpected response from your serverless endpoint. This typically means something is intercepting or modifying the request before it reaches your RivetKit handler. Check that:
 
-- Your server routes requests to `registry.serve()` or `registry.handler()` correctly.
+- Your server routes requests to `registry.start()`, `registry.serve()`, or `registry.handler()` correctly.
 - No middleware is modifying the request or response body.
 
 ### `internal_error`

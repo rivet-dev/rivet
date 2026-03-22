@@ -141,6 +141,7 @@ const registry = setup({
 
 | Mode | Method | Use Case |
 |------|--------|----------|
-| Serverless | `registry.serve()` | Default, recommended for most deployments |
+| Auto | `registry.start()` | Simplest setup. Starts server, serves static files, and runs actors. |
+| Serverless | `registry.serve()` | Fetch handler for serverless platforms |
 | Serverless | `registry.handler()` | Integrating with existing routers (Hono, Elysia, etc.) |
 | Runner | `registry.startRunner()` | Long-running processes without HTTP endpoints |
