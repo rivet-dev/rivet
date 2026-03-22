@@ -240,23 +240,29 @@ impl KvChannel {
 	}
 
 	/// Open an actor, registering it for re-open on reconnect.
+	/// The actor is only added to `open_actors` after the server confirms the open.
 	pub async fn open_actor(&self, actor_id: &str) -> Result<ResponseData, ChannelError> {
+		let resp = self
+			.send_request(actor_id, RequestData::ActorOpenRequest)
+			.await?;
 		{
 			let mut open = self.inner.open_actors.lock().await;
 			open.insert(actor_id.to_string());
 		}
-		self.send_request(actor_id, RequestData::ActorOpenRequest)
-			.await
+		Ok(resp)
 	}
 
 	/// Close an actor, removing it from the re-open set.
+	/// The actor is only removed from `open_actors` after the server confirms the close.
 	pub async fn close_actor(&self, actor_id: &str) -> Result<ResponseData, ChannelError> {
+		let resp = self
+			.send_request(actor_id, RequestData::ActorCloseRequest)
+			.await?;
 		{
 			let mut open = self.inner.open_actors.lock().await;
 			open.remove(actor_id);
 		}
-		self.send_request(actor_id, RequestData::ActorCloseRequest)
-			.await
+		Ok(resp)
 	}
 
 	/// Shut down the channel, closing the WebSocket and failing in-flight requests.
