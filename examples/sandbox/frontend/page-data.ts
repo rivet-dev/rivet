@@ -21,6 +21,8 @@ export type PageConfig = {
 	snippet: string;
 	demo?: DemoType;
 	diagram?: string;
+	defaultEvents?: string[];
+	noAutoState?: boolean;
 	rawHttpDefaults?: {
 		path: string;
 		method: string;
@@ -149,6 +151,26 @@ export const myActor = actor({
 		},
 		getTodos: async (c) => {
 			return c.db.select().from(todos);
+		},
+	},
+});`,
+	parallelismTest: `import { db } from "rivetkit/db";
+
+export const parallelismTest = actor({
+	state: { stateCount: 0 },
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(\`CREATE TABLE IF NOT EXISTS counter (...)\`);
+		},
+	}),
+	actions: {
+		incrementState: (c) => {
+			c.state.stateCount += 1;
+			c.broadcast("stateCountChanged", { count: c.state.stateCount });
+		},
+		incrementSqlite: async (c) => {
+			await c.db.execute("UPDATE counter SET count = count + 1");
+			c.broadcast("sqliteCountChanged", { count });
 		},
 	},
 });`,
@@ -342,6 +364,12 @@ export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
 		{ label: "Get Todos", action: "getTodos", args: [] },
 		{ label: "Toggle Todo", action: "toggleTodo", args: [1] },
 		{ label: "Delete Todo", action: "deleteTodo", args: [1] },
+	],
+	parallelismTest: [
+		{ label: "Increment State", action: "incrementState", args: [] },
+		{ label: "Get State Count", action: "getStateCount", args: [] },
+		{ label: "Increment SQLite", action: "incrementSqlite", args: [] },
+		{ label: "Get SQLite Count", action: "getSqliteCount", args: [] },
 	],
 };
 
@@ -573,6 +601,22 @@ export const PAGE_GROUPS: PageGroup[] = [
 				],
 				actors: ["sqliteDrizzleActor"],
 				snippet: SNIPPETS.sqliteDrizzle,
+			},
+			{
+				id: "parallelism-test",
+				title: "Parallelism Test",
+				description:
+					"Compare state vs SQLite counter parallelism. Increment each rapidly to observe behavior differences.",
+				docs: [
+					{
+						label: "SQLite",
+						href: "https://rivet.dev/docs/actors/sqlite",
+					},
+				],
+				actors: ["parallelismTest"],
+				snippet: SNIPPETS.parallelismTest,
+				defaultEvents: ["stateCountChanged", "sqliteCountChanged"],
+				noAutoState: true,
 			},
 		],
 	},

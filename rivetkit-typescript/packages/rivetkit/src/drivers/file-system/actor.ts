@@ -1,12 +1,12 @@
 import type { AnyClient } from "@/client/client";
 import type { RawDatabaseClient } from "@/db/config";
-import type { SqliteVfs } from "@rivetkit/sqlite-vfs";
+import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
 import {
-	importSqliteVfs,
 	type ActorDriver,
 	type AnyActorInstance,
 	type ManagerDriver,
 } from "@/driver-helpers/mod";
+import { SqliteVfsPoolManager } from "@/driver-helpers/sqlite-pool";
 import type { FileSystemGlobalState } from "./global-state";
 import { RegistryConfig } from "@/registry/config";
 
@@ -20,6 +20,7 @@ export class FileSystemActorDriver implements ActorDriver {
 	#managerDriver: ManagerDriver;
 	#inlineClient: AnyClient;
 	#state: FileSystemGlobalState;
+	#sqlitePool: SqliteVfsPoolManager;
 	startSleep?: (actorId: string) => void;
 
 	constructor(
@@ -32,6 +33,7 @@ export class FileSystemActorDriver implements ActorDriver {
 		this.#managerDriver = managerDriver;
 		this.#inlineClient = inlineClient;
 		this.#state = state;
+		this.#sqlitePool = new SqliteVfsPoolManager(config);
 
 		if (this.#state.persist) {
 			// Only define startSleep when persistence is enabled. The actor runtime
@@ -117,8 +119,12 @@ export class FileSystemActorDriver implements ActorDriver {
 	}
 
 	/** Creates a SQLite VFS instance for creating KV-backed databases */
-	async createSqliteVfs(): Promise<SqliteVfs> {
-		return await importSqliteVfs();
+	async createSqliteVfs(actorId: string): Promise<ISqliteVfs> {
+		return await this.#sqlitePool.acquire(actorId);
+	}
+
+	async shutdownRunner(_immediate: boolean): Promise<void> {
+		await this.#sqlitePool.shutdown();
 	}
 
 	async startDestroy(actorId: string): Promise<void> {

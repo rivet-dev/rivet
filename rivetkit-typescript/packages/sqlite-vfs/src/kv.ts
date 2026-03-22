@@ -8,9 +8,24 @@
 /**
  * Size of each file chunk stored in KV.
  *
- * SQLite calls the VFS with byte ranges, but KV stores whole values by key.
- * The VFS maps each byte range to one or more fixed-size chunks, then uses
- * chunk keys to read or write those values in KV.
+ * Set to 4096 to match SQLite's default page size so that one SQLite page
+ * maps to exactly one KV value. This avoids partial-chunk reads on page
+ * boundaries.
+ *
+ * Larger chunk sizes (e.g. 32 KiB) would reduce the number of KV keys per
+ * database and fit within FDB's recommended 10 KB value chunks (the engine
+ * splits values >10 KB internally, see VALUE_CHUNK_SIZE in
+ * engine/packages/pegboard/src/actor_kv/mod.rs). However, 4 KiB is kept
+ * because:
+ *
+ * - It matches SQLite's default page_size, avoiding alignment overhead.
+ * - At 128 keys per batch and 4 KiB per chunk, a single putBatch can flush
+ *   up to 512 KiB of dirty pages, which covers most actor databases.
+ * - Changing chunk size is a breaking change for existing persisted databases.
+ * - KV max value size is 128 KiB, so 4 KiB is well within limits.
+ *
+ * If page_size is ever changed via PRAGMA, CHUNK_SIZE must be updated to
+ * match so the 1:1 page-to-chunk mapping is preserved.
  */
 export const CHUNK_SIZE = 4096;
 

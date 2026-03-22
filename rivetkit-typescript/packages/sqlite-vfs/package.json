@@ -26,9 +26,10 @@
 		"node": ">=20.0.0"
 	},
 	"scripts": {
-		"build": "pnpm run compile:bare && tsup src/index.ts",
+		"build": "pnpm run generate:empty-db-page && pnpm run compile:bare && tsup src/index.ts",
+		"generate:empty-db-page": "tsx scripts/generate-empty-db-page.ts",
 		"compile:bare": "tsx scripts/compile-bare.ts compile schemas/file-meta/v1.bare -o dist/schemas/file-meta/v1.ts",
-		"check-types": "pnpm run compile:bare && tsc --noEmit",
+		"check-types": "pnpm run generate:empty-db-page && pnpm run compile:bare && tsc --noEmit",
 		"test": "pnpm --filter @rivetkit/sqlite-vfs-test test"
 	},
 	"dependencies": {
