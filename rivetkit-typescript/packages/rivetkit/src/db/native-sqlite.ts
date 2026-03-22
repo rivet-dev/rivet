@@ -22,6 +22,16 @@ import { AsyncMutex } from "./shared";
 // Type declarations for @rivetkit/sqlite-native.
 // Declared inline to avoid a build-time dependency on the native addon,
 // which may not be installed or compiled.
+
+/** Typed bind parameter matching the Rust BindParam napi struct. */
+interface NativeBindParam {
+	kind: "null" | "int" | "float" | "text" | "blob";
+	intValue?: number;
+	floatValue?: number;
+	textValue?: string;
+	blobValue?: Buffer;
+}
+
 interface NativeSqliteModule {
 	connect(config: {
 		url: string;
@@ -35,12 +45,12 @@ interface NativeSqliteModule {
 	execute(
 		db: NativeDatabase,
 		sql: string,
-		params?: unknown[],
+		params?: NativeBindParam[],
 	): Promise<{ changes: number }>;
 	query(
 		db: NativeDatabase,
 		sql: string,
-		params?: unknown[],
+		params?: NativeBindParam[],
 	): Promise<{ columns: string[]; rows: unknown[][] }>;
 	exec(
 		db: NativeDatabase,
@@ -203,19 +213,34 @@ function getOrCreateKvChannel(): NativeKvChannel {
 }
 
 /**
- * Convert binding values to JSON-compatible types for the native addon.
- * The native addon accepts serde_json::Value via napi, so bigint and
- * Uint8Array need conversion.
+ * Convert binding values to typed BindParam objects for the native addon.
+ * Uses Buffer for blobs instead of JSON arrays to avoid 20x serialization
+ * overhead. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md M7.
  */
-function toNativeBindings(args: unknown[]): unknown[] {
-	return args.map((arg) => {
+function toNativeBindings(args: unknown[]): NativeBindParam[] {
+	return args.map((arg): NativeBindParam => {
+		if (arg === null || arg === undefined) {
+			return { kind: "null" };
+		}
 		if (typeof arg === "bigint") {
-			return Number(arg);
+			return { kind: "int", intValue: Number(arg) };
+		}
+		if (typeof arg === "number") {
+			if (Number.isInteger(arg)) {
+				return { kind: "int", intValue: arg };
+			}
+			return { kind: "float", floatValue: arg };
+		}
+		if (typeof arg === "string") {
+			return { kind: "text", textValue: arg };
+		}
+		if (typeof arg === "boolean") {
+			return { kind: "int", intValue: arg ? 1 : 0 };
 		}
 		if (arg instanceof Uint8Array) {
-			return Array.from(arg);
+			return { kind: "blob", blobValue: Buffer.from(arg) };
 		}
-		return arg;
+		throw new Error(`unsupported bind parameter type: ${typeof arg}`);
 	});
 }
 

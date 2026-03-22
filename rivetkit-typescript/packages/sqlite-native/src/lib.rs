@@ -18,7 +18,7 @@ use std::slice;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use libsqlite3_sys::{
-	sqlite3, sqlite3_bind_blob, sqlite3_bind_double, sqlite3_bind_int, sqlite3_bind_int64,
+	sqlite3, sqlite3_bind_blob, sqlite3_bind_double, sqlite3_bind_int64,
 	sqlite3_bind_null, sqlite3_bind_text, sqlite3_changes, sqlite3_clear_bindings,
 	sqlite3_column_blob, sqlite3_column_bytes, sqlite3_column_count, sqlite3_column_double,
 	sqlite3_column_int64, sqlite3_column_name, sqlite3_column_text, sqlite3_column_type,
@@ -31,6 +31,23 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use serde_json::Value as JsonValue;
 use tokio::runtime::Runtime;
+
+/// Typed bind parameter passed from JavaScript.
+///
+/// Replaces `Vec<JsonValue>` for statement parameters, avoiding 20x
+/// serialization overhead for blob data. Instead of JSON arrays of numbers,
+/// blobs are passed as `Buffer` (a single memcpy from JS heap to Rust).
+///
+/// See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md M7.
+#[napi(object)]
+pub struct BindParam {
+	/// One of: "null", "int", "float", "text", "blob"
+	pub kind: String,
+	pub int_value: Option<i64>,
+	pub float_value: Option<f64>,
+	pub text_value: Option<String>,
+	pub blob_value: Option<Buffer>,
+}
 
 /// KV key layout. Mirrors `rivetkit-typescript/packages/sqlite-vfs/src/kv.ts`.
 pub mod kv;
@@ -234,7 +251,7 @@ pub async fn open_database(
 pub async fn execute(
 	db: &JsNativeDatabase,
 	sql: String,
-	params: Option<Vec<JsonValue>>,
+	params: Option<Vec<BindParam>>,
 ) -> Result<ExecuteResult> {
 	let db_arc = db.db.clone();
 	let cache = db.stmt_cache.clone();
@@ -288,7 +305,7 @@ pub async fn execute(
 pub async fn query(
 	db: &JsNativeDatabase,
 	sql: String,
-	params: Option<Vec<JsonValue>>,
+	params: Option<Vec<BindParam>>,
 ) -> Result<QueryResult> {
 	let db_arc = db.db.clone();
 	let cache = db.stmt_cache.clone();
@@ -534,29 +551,32 @@ fn sqlite_transient() -> Option<unsafe extern "C" fn(*mut c_void)> {
 /// Defined locally because libsqlite3-sys exports vary between SQLITE3_TEXT and SQLITE_TEXT.
 const SQLITE_TYPE_TEXT: c_int = 3;
 
-/// Bind JSON values to a prepared statement's parameters.
+/// Bind typed parameters to a prepared statement.
 fn bind_params(
 	db: *mut sqlite3,
 	stmt: *mut sqlite3_stmt,
-	params: &[JsonValue],
+	params: &[BindParam],
 ) -> Result<()> {
 	for (i, param) in params.iter().enumerate() {
 		let idx = (i + 1) as c_int;
-		let rc = match param {
-			JsonValue::Null => unsafe { sqlite3_bind_null(stmt, idx) },
-			JsonValue::Bool(b) => unsafe { sqlite3_bind_int(stmt, idx, i32::from(*b)) },
-			JsonValue::Number(n) => {
-				if let Some(v) = n.as_i64() {
-					unsafe { sqlite3_bind_int64(stmt, idx, v) }
-				} else if let Some(v) = n.as_f64() {
-					unsafe { sqlite3_bind_double(stmt, idx, v) }
-				} else {
-					return Err(Error::from_reason(format!(
-						"unsupported number at param {idx}"
-					)));
-				}
+		let rc = match param.kind.as_str() {
+			"null" => unsafe { sqlite3_bind_null(stmt, idx) },
+			"int" => {
+				let v = param.int_value.ok_or_else(|| {
+					Error::from_reason(format!("missing int_value at param {idx}"))
+				})?;
+				unsafe { sqlite3_bind_int64(stmt, idx, v) }
 			}
-			JsonValue::String(s) => {
+			"float" => {
+				let v = param.float_value.ok_or_else(|| {
+					Error::from_reason(format!("missing float_value at param {idx}"))
+				})?;
+				unsafe { sqlite3_bind_double(stmt, idx, v) }
+			}
+			"text" => {
+				let s = param.text_value.as_ref().ok_or_else(|| {
+					Error::from_reason(format!("missing text_value at param {idx}"))
+				})?;
 				let c_str = CString::new(s.as_str())
 					.map_err(|e| Error::from_reason(e.to_string()))?;
 				unsafe {
@@ -569,34 +589,23 @@ fn bind_params(
 					)
 				}
 			}
-			JsonValue::Array(arr) => {
-				// Treat number arrays as blob data.
-				let bytes: std::result::Result<Vec<u8>, _> = arr
-					.iter()
-					.map(|v| {
-						v.as_u64()
-							.and_then(|n| u8::try_from(n).ok())
-							.ok_or_else(|| {
-								Error::from_reason(format!(
-									"invalid blob byte at param {idx}"
-								))
-							})
-					})
-					.collect();
-				let bytes = bytes?;
+			"blob" => {
+				let buf = param.blob_value.as_ref().ok_or_else(|| {
+					Error::from_reason(format!("missing blob_value at param {idx}"))
+				})?;
 				unsafe {
 					sqlite3_bind_blob(
 						stmt,
 						idx,
-						bytes.as_ptr() as *const c_void,
-						bytes.len() as c_int,
+						buf.as_ptr() as *const c_void,
+						buf.len() as c_int,
 						sqlite_transient(),
 					)
 				}
 			}
-			JsonValue::Object(_) => {
+			other => {
 				return Err(Error::from_reason(format!(
-					"unsupported object at param {idx}"
+					"unsupported bind param kind '{other}' at param {idx}"
 				)));
 			}
 		};
