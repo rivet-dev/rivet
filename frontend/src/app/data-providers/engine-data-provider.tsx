@@ -617,6 +617,7 @@ export const createNamespaceContext = ({
 		runnerConfigQueryOptions(opts: {
 			name: string | undefined;
 			variant?: Rivet.RunnerConfigVariant;
+			safe?: boolean;
 		}) {
 			return queryOptions({
 				queryKey: [
@@ -635,14 +636,14 @@ export const createNamespaceContext = ({
 
 					const config = response.runnerConfigs[opts.name!];
 
-					if (!config) {
+					if (!config && !opts.safe) {
 						throw new FetchError(
 							"Provider Config not found",
 							"The specified provider configuration could not be found.",
 						);
 					}
 
-					return config;
+					return config || null;
 				},
 				retry: shouldRetryAllExpect403,
 				meta: {
