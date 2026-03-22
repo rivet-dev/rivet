@@ -59,6 +59,27 @@ interface KvChannelConnection {
 /** Global lock table: actorId -> connectionId. Shared across all connections. */
 const actorLocks = new Map<string, KvChannelConnection>();
 
+/** Active KV channel connections, tracked for test-only force-disconnect. */
+const activeConnections = new Set<KvChannelConnection>();
+
+/**
+ * Force-close all active KV channel WebSocket connections.
+ * Test-only. Used to simulate network failures during active KV operations.
+ * @internal
+ */
+export function _testForceCloseAllKvChannels(): number {
+	let closed = 0;
+	for (const conn of activeConnections) {
+		if (!conn.closed && conn.ws) {
+			const ws = conn.ws;
+			cleanupConnection(conn);
+			ws.close(1001, "test force disconnect");
+			closed++;
+		}
+	}
+	return closed;
+}
+
 /** Sweep timer for removing stale lock entries from dead connections. */
 let staleLockSweepTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -153,6 +174,7 @@ function startPingPong(conn: KvChannelConnection): void {
 function cleanupConnection(conn: KvChannelConnection): void {
 	conn.closed = true;
 	conn.ws = null;
+	activeConnections.delete(conn);
 
 	if (conn.pingInterval) {
 		clearInterval(conn.pingInterval);
@@ -188,17 +210,19 @@ async function handleRequest(
 		);
 		sendMessage(conn, makeResponse(requestId, responseData));
 	} catch (err: unknown) {
-		const message =
-			err instanceof Error ? err.message : "unexpected error";
+		// Log the full error server-side but return a generic message to the
+		// client to avoid leaking internal details. Specific known error codes
+		// (actor_not_open, actor_locked, storage_quota_exceeded, etc.) are
+		// returned as structured responses before reaching this catch block.
 		logger().error({
 			msg: "kv channel request error",
 			requestId,
 			actorId,
-			error: message,
+			error: err instanceof Error ? err.message : String(err),
 		});
 		sendMessage(
 			conn,
-			makeErrorResponse(requestId, "internal_error", message),
+			makeErrorResponse(requestId, "internal_error", "internal error"),
 		);
 	}
 }
@@ -593,6 +617,8 @@ export function createKvChannelWebSocketHandler(
 		ws: null,
 		actorQueues: new Map(),
 	};
+
+	activeConnections.add(conn);
 
 	return {
 		onOpen: (_event: any, ws: WSContext) => {
