@@ -124,6 +124,40 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 			}
 		});
 
+		test("waitUntil can broadcast before sleep disconnect", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const sleepActor =
+				client.sleepWithWaitUntilMessage.getOrCreate().connect();
+			const receivedMessages: Array<{
+				sleepCount: number;
+				startCount: number;
+			}> = [];
+
+			sleepActor.once("sleeping", (message) => {
+				receivedMessages.push(message);
+			});
+
+			await sleepActor.triggerSleep();
+			await waitFor(driverTestConfig, 250);
+
+			expect(receivedMessages).toHaveLength(1);
+			expect(receivedMessages[0]?.startCount).toBe(1);
+
+			await sleepActor.dispose();
+
+			await waitFor(driverTestConfig, 250);
+
+			const sleepActor2 = client.sleepWithWaitUntilMessage.getOrCreate();
+			{
+				const { startCount, sleepCount, waitUntilMessageCount } =
+					await sleepActor2.getCounts();
+				expect(waitUntilMessageCount).toBe(1);
+				expect(sleepCount).toBe(1);
+				expect(startCount).toBe(2);
+			}
+		});
+
 		test("rpc calls keep actor awake", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 

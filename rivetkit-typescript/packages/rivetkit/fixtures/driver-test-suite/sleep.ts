@@ -1,4 +1,4 @@
-import { actor, type UniversalWebSocket } from "rivetkit";
+import { actor, event, type UniversalWebSocket } from "rivetkit";
 import { promiseWithResolvers } from "rivetkit/utils";
 
 export const SLEEP_TIMEOUT = 1000;
@@ -63,6 +63,50 @@ export const sleepWithLongRpc = actor({
 			c.log.info("finished long running rpc");
 		},
 		finishLongRunningRpc: (c) => c.vars.longRunningResolve?.resolve(),
+	},
+	options: {
+		sleepTimeout: SLEEP_TIMEOUT,
+	},
+});
+
+export const sleepWithWaitUntilMessage = actor({
+	state: {
+		startCount: 0,
+		sleepCount: 0,
+		waitUntilMessageCount: 0,
+	},
+	events: {
+		sleeping: event<{ sleepCount: number; startCount: number }>(),
+	},
+	onWake: (c) => {
+		c.state.startCount += 1;
+	},
+	onSleep: (c) => {
+		c.state.sleepCount += 1;
+	},
+	actions: {
+		triggerSleep: (c) => {
+			c.waitUntil(
+				new Promise<void>((resolve) => {
+					setTimeout(() => {
+						c.state.waitUntilMessageCount += 1;
+						c.conn.send("sleeping", {
+							sleepCount: c.state.sleepCount,
+							startCount: c.state.startCount,
+						});
+						resolve();
+					}, 10);
+				}),
+			);
+			c.sleep();
+		},
+		getCounts: (c) => {
+			return {
+				startCount: c.state.startCount,
+				sleepCount: c.state.sleepCount,
+				waitUntilMessageCount: c.state.waitUntilMessageCount,
+			};
+		},
 	},
 	options: {
 		sleepTimeout: SLEEP_TIMEOUT,

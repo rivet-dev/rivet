@@ -218,7 +218,8 @@ export const ActorConfigSchema = z
 				runStopTimeout: z.number().positive().default(15_000),
 				connectionLivenessTimeout: z.number().positive().default(2500),
 				connectionLivenessInterval: z.number().positive().default(5000),
-				noSleep: z.boolean().default(false),
+				/** @deprecated Use `c.setPreventSleep(true)` in `onWake` instead. Will be removed in 2.2. */
+			noSleep: z.boolean().default(false),
 				sleepTimeout: z.number().positive().default(30_000),
 				maxQueueSize: z.number().positive().default(1000),
 				maxQueueMessageSize: z
@@ -1069,7 +1070,7 @@ export const DocActorOptionsSchema = z
 		noSleep: z
 			.boolean()
 			.optional()
-			.describe("If true, the actor will never sleep. Default: false"),
+			.describe("Deprecated: use c.setPreventSleep(true) in onWake instead. Will be removed in 2.2. If true, the actor will never sleep. Default: false"),
 		sleepTimeout: z
 			.number()
 			.optional()
