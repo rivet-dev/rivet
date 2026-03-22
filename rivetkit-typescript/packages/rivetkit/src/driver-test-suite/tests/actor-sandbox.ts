@@ -2,11 +2,15 @@ import { describe, expect, test, vi } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";
 
-export function runActorSandboxTests(driverTestConfig: DriverTestConfig) {
-	describe.skipIf(driverTestConfig.skip?.sandbox)("Actor Sandbox Tests", () => {
+function sandboxTestSuite(
+	driverTestConfig: DriverTestConfig,
+	actorName: string,
+	label: string,
+) {
+	describe.skipIf(driverTestConfig.skip?.sandbox)(`Actor Sandbox Tests (${label})`, () => {
 		test("supports sandbox actions through the actor runtime", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const sandbox = client.dockerSandboxActor.getOrCreate([
+			const sandbox = (client as any)[actorName].getOrCreate([
 				`sandbox-${crypto.randomUUID()}`,
 			]);
 			const decoder = new TextDecoder();
@@ -74,4 +78,67 @@ export function runActorSandboxTests(driverTestConfig: DriverTestConfig) {
 			);
 		}, 180_000);
 	});
+}
+
+export function runActorSandboxTests(driverTestConfig: DriverTestConfig) {
+	sandboxTestSuite(driverTestConfig, "dockerSandboxActor", "Docker");
+
+	// E2B tests only run when E2B_API_KEY is available.
+	const hasE2b = !!process.env.E2B_API_KEY;
+	describe.skipIf(!hasE2b || driverTestConfig.skip?.sandbox)(
+		"Actor Sandbox Tests (E2B)",
+		() => {
+			test("creates sandbox and passes health check", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const sandbox = (client as any).e2bSandboxActor.getOrCreate([
+					`sandbox-e2b-${crypto.randomUUID()}`,
+				]);
+
+				const health = await vi.waitFor(
+					async () => {
+						return await sandbox.getHealth();
+					},
+					{
+						timeout: 120_000,
+						interval: 500,
+					},
+				);
+				expect(typeof health.status).toBe("string");
+			}, 180_000);
+
+			test("supports file system operations", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const sandbox = (client as any).e2bSandboxActor.getOrCreate([
+					`sandbox-e2b-${crypto.randomUUID()}`,
+				]);
+				const decoder = new TextDecoder();
+
+				await vi.waitFor(
+					async () => {
+						return await sandbox.getHealth();
+					},
+					{
+						timeout: 120_000,
+						interval: 500,
+					},
+				);
+
+				await sandbox.mkdirFs({ path: "/root/tmp" });
+				await sandbox.writeFsFile(
+					{ path: "/root/tmp/hello.txt" },
+					"e2b sandbox actor driver test",
+				);
+				expect(
+					decoder.decode(
+						await sandbox.readFsFile({ path: "/root/tmp/hello.txt" }),
+					),
+				).toBe("e2b sandbox actor driver test");
+
+				const stat = await sandbox.statFs({ path: "/root/tmp/hello.txt" });
+				expect(stat.entryType).toBe("file");
+
+				await sandbox.deleteFsEntry({ path: "/root/tmp", recursive: true });
+			}, 180_000);
+		},
+	);
 }

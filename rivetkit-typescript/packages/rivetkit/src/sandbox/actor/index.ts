@@ -55,7 +55,7 @@ import type { DatabaseProvider } from "@/actor/database";
 import { actor } from "@/actor/mod";
 import type { RawAccess } from "@/db/config";
 import { db } from "@/db/mod";
-import { SandboxAgent, type SandboxProvider } from "sandbox-agent";
+import { SandboxAgent, SandboxDestroyedError, type SandboxProvider } from "sandbox-agent";
 import {
 	type SandboxActorConfig,
 	type SandboxActorConfigInput,
@@ -100,6 +100,11 @@ type SandboxProxyActionDefinitions<TConnParams> = {
 async function teardownAgentRuntime(
 	vars: SandboxActorVars,
 ): Promise<void> {
+	if (vars.keepAliveInterval) {
+		clearInterval(vars.keepAliveInterval);
+		vars.keepAliveInterval = null;
+	}
+
 	for (const subscription of vars.unsubscribeBySessionId.values()) {
 		subscription.event?.();
 		subscription.permission?.();
@@ -152,14 +157,10 @@ async function resolveProvider<TConnParams>(
  * wake), it reconnects to the existing sandbox. Short-circuits if the
  * agent client is already connected.
  *
- * Steps:
- * 1. Resolve the provider (static or via createProvider callback)
- * 2. Call `SandboxAgent.start()` which handles:
- *    - Creating the sandbox if no sandboxId is provided
- *    - Calling `ensureServer()` if the provider implements it
- *    - Connecting to the sandbox-agent server
- * 3. Persist the sandbox ID from the started client
- * 4. Re-subscribe to all persisted session IDs
+ * If the provider throws `SandboxDestroyedError` (e.g. the E2B sandbox
+ * expired), the behavior depends on `options.onSandboxExpired`:
+ * - "destroy" (default): marks the sandbox as destroyed and rejects.
+ * - "recreate": provisions a fresh sandbox transparently.
  */
 async function ensureAgent<TConnParams>(
 	c: SandboxActionContext<TConnParams>,
@@ -171,12 +172,68 @@ async function ensureAgent<TConnParams>(
 	}
 
 	const provider = await resolveProvider(c, config);
+	const persist = new SqliteSessionPersistDriver(c.db, persistRawEvents);
 
-	c.vars.sandboxAgentClient = await SandboxAgent.start({
-		sandbox: provider,
-		sandboxId: c.state.sandboxId ?? undefined,
-		persist: new SqliteSessionPersistDriver(c.db, persistRawEvents),
-	});
+	try {
+		c.vars.sandboxAgentClient = await SandboxAgent.start({
+			sandbox: provider,
+			sandboxId: c.state.sandboxId ?? undefined,
+			persist,
+		});
+	} catch (error) {
+		if (!(error instanceof SandboxDestroyedError)) {
+			throw error;
+		}
+
+		const options = config.options as SandboxActorOptionsRuntime;
+
+		if (config.onSandboxExpired) {
+			config.onSandboxExpired(c, error);
+		}
+
+		if (options.onSandboxExpired === "recreate") {
+			c.log.warn({
+				msg: "sandbox expired, provisioning a new one",
+				oldSandboxId: c.state.sandboxId,
+			});
+
+			// Clear old sandbox state and provision fresh.
+			c.state.sandboxId = null;
+			c.vars.sandboxAgentClient = await SandboxAgent.start({
+				sandbox: provider,
+				persist,
+			});
+
+			if (c.vars.sandboxAgentClient.sandboxId) {
+				c.state.sandboxId = c.vars.sandboxAgentClient.sandboxId;
+			}
+
+			c.broadcast("sandboxRecreated", {
+				sandboxId: c.state.sandboxId,
+			});
+
+			// Sessions from the old sandbox are gone.
+			c.state.subscribedSessionIds = [];
+			return c.vars.sandboxAgentClient;
+		}
+
+		// Default: "destroy" mode.
+		c.log.warn({
+			msg: "sandbox expired, marking as destroyed",
+			sandboxId: c.state.sandboxId,
+		});
+		c.state.sandboxDestroyed = true;
+		c.state.sandboxId = null;
+		clearAllActiveSessions(c);
+
+		c.broadcast("sandboxDestroyed", {
+			reason: "expired",
+		});
+
+		throw new Error(
+			"sandbox has been destroyed (expired); only read-only actions (listSessions, getSession, getEvents) are available",
+		);
+	}
 
 	// Persist the sandbox ID so future wake cycles reconnect to the same sandbox.
 	if (!c.state.sandboxId && c.vars.sandboxAgentClient.sandboxId) {
@@ -188,7 +245,49 @@ async function ensureAgent<TConnParams>(
 		subscribeToSession(c, config, sessionId);
 	}
 
+	// Start keep-alive if configured and sessions are active.
+	syncKeepAlive(c, config);
+
 	return c.vars.sandboxAgentClient;
+}
+
+// --- Sandbox keep-alive ---
+
+/**
+ * Starts or stops the periodic sandbox keep-alive based on whether any
+ * sessions are subscribed and keepAliveIntervalMs is configured. While
+ * active, calls `provider.reconnect(sandboxId)` on the configured interval
+ * to extend the sandbox timeout.
+ */
+function syncKeepAlive<TConnParams>(
+	c: SandboxActionContext<TConnParams>,
+	config: SandboxActorConfig<TConnParams>,
+): void {
+	const options = config.options as SandboxActorOptionsRuntime;
+	const intervalMs = options.keepAliveIntervalMs;
+	const hasActiveSessions = c.state.subscribedSessionIds.length > 0;
+
+	if (intervalMs > 0 && hasActiveSessions && !c.vars.keepAliveInterval && c.state.sandboxId) {
+		const sandboxId = c.state.sandboxId;
+		c.vars.keepAliveInterval = setInterval(async () => {
+			const provider = c.vars.provider;
+			if (!provider?.reconnect || !c.state.sandboxId) {
+				return;
+			}
+			try {
+				await provider.reconnect(c.state.sandboxId);
+			} catch (error) {
+				c.log.warn({
+					msg: "sandbox keep-alive reconnect failed",
+					sandboxId,
+					error,
+				});
+			}
+		}, intervalMs);
+	} else if ((!hasActiveSessions || intervalMs <= 0) && c.vars.keepAliveInterval) {
+		clearInterval(c.vars.keepAliveInterval);
+		c.vars.keepAliveInterval = null;
+	}
 }
 
 // --- Read-only fallback actions ---
@@ -307,9 +406,14 @@ function buildProxyActions<TConnParams>(
 
 			// Post-action side effects: manage session subscriptions based
 			// on what the action returned.
-			if (actionName === "dispose") {
+			if (actionName === "dispose" || actionName === "pauseSandbox") {
 				await teardownAgentRuntime(c.vars);
 				clearAllActiveSessions(c);
+			} else if (actionName === "killSandbox") {
+				await teardownAgentRuntime(c.vars);
+				clearAllActiveSessions(c);
+				c.state.sandboxDestroyed = true;
+				c.state.sandboxId = null;
 			} else if (
 				actionName === "destroySession" &&
 				isSessionLike(result)
@@ -319,12 +423,14 @@ function buildProxyActions<TConnParams>(
 				sub?.permission?.();
 				c.vars.unsubscribeBySessionId.delete(result.id);
 				removeSubscribedSession(c, result.id);
+				syncKeepAlive(c, config);
 			} else if (
 				SESSION_RETURNING_ACTIONS.has(actionName) &&
 				isSessionLike(result)
 			) {
 				addSubscribedSession(c, result.id);
 				subscribeToSession(c, config, result.id);
+				syncKeepAlive(c, config);
 			} else if (
 				actionName === "listSessions" &&
 				result &&
@@ -339,6 +445,7 @@ function buildProxyActions<TConnParams>(
 						}
 					}
 				}
+				syncKeepAlive(c, config);
 			}
 
 			return result;
@@ -385,6 +492,7 @@ export function sandboxActor<TConnParams = undefined>(
 			activeHooks: new Set<Promise<void>>(),
 			warningTimeoutBySessionId: new Map(),
 			staleTimeoutBySessionId: new Map(),
+			keepAliveInterval: null,
 		}),
 		db: db({
 			onMigrate: migrateSandboxTables,
@@ -438,6 +546,49 @@ export function sandboxActor<TConnParams = undefined>(
 				if (parsedConfig.destroyActor) {
 					c.destroy();
 				}
+			},
+			// Pauses the sandbox environment. Tears down the live connection
+			// but does not mark it as destroyed, so a subsequent action call
+			// will reconnect via the provider's reconnect() hook.
+			pause: async (c: SandboxActionContext<TConnParams>) => {
+				if (c.state.sandboxDestroyed) {
+					throw new Error("sandbox has been destroyed");
+				}
+				clearAllActiveSessions(c);
+				await teardownAgentRuntime(c.vars);
+
+				if (c.state.sandboxId) {
+					const provider = await resolveProvider(c, parsedConfig);
+					if (provider.pause) {
+						await provider.pause(c.state.sandboxId);
+					} else {
+						c.log.warn({
+							msg: "provider does not support pause, connection torn down but sandbox still running",
+						});
+					}
+				}
+			},
+			// Resumes a paused sandbox by reconnecting to it.
+			resume: async (c: SandboxActionContext<TConnParams>) => {
+				if (c.state.sandboxDestroyed) {
+					throw new Error("sandbox has been destroyed");
+				}
+				if (!c.state.sandboxId) {
+					throw new Error("no sandbox to resume");
+				}
+
+				// Reconnect via the provider if supported.
+				const provider = await resolveProvider(c, parsedConfig);
+				if (provider.reconnect) {
+					await provider.reconnect(c.state.sandboxId);
+				}
+
+				// Re-establish the agent connection.
+				await ensureAgent(
+					c,
+					parsedConfig,
+					parsedConfig.persistRawEvents ?? false,
+				);
 			},
 			getSandboxUrl: async (c: SandboxActionContext<TConnParams>) => {
 				if (c.state.sandboxDestroyed) {
