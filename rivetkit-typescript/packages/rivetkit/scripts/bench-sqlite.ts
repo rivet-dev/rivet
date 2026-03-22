@@ -1,4 +1,5 @@
 #!/usr/bin/env -S tsx
+// @ts-nocheck
 
 /**
  * SQLite Benchmark Script

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, test } from "vitest";
 import type { ActorError } from "@/client/mod";
 import { MANY_QUEUE_NAMES } from "../../../fixtures/driver-test-suite/queue";

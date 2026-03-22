@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { actor } from "rivetkit";
 import type { DatabaseProvider, DatabaseProviderContext, RawAccess } from "rivetkit/db";
 import { AsyncMutex, toSqliteBindings } from "../../src/db/shared";

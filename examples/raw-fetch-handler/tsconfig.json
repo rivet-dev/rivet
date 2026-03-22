@@ -12,7 +12,7 @@
 		"resolveJsonModule": true,
 		"allowSyntheticDefaultImports": true,
 		"noEmit": true,
-		"types": ["vitest/globals", "node"],
+		"types": ["vitest/globals", "node", "vite/client"],
 		"allowImportingTsExtensions": true,
 		"rewriteRelativeImportExtensions": true
 	},
