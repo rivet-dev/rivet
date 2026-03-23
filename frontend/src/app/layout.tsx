@@ -644,7 +644,7 @@ function DeploymentsLink() {
 			pool: "default",
 			safe: true,
 		}),
-		select: (data) => data?.config.image !== null,
+		select: (data) => !!data?.config.image,
 	});
 
 	if (!data) {
