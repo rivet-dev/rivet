@@ -10,12 +10,12 @@
 		"build:frontend": "vite build"
 	},
 	"dependencies": {
-		"@rivetkit/react": "^2.1.6-rc.1",
+		"@rivetkit/react": "^2.1.7",
 		"hono": "4.9.8",
 		"on-change": "^5.0.1",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0",
-		"rivetkit": "^2.1.6-rc.1"
+		"rivetkit": "^2.1.7"
 	},
 	"devDependencies": {
 		"@types/react": "^19.0.9",

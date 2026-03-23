@@ -11,10 +11,10 @@
 		"start": "tsx src/index.ts"
 	},
 	"dependencies": {
-		"@rivetkit/react": "^2.1.6-rc.1",
+		"@rivetkit/react": "^2.1.7",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
-		"rivetkit": "^2.1.6-rc.1"
+		"rivetkit": "^2.1.7"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",

@@ -53,7 +53,7 @@ members = [
 ]
 
   [workspace.package]
-  version = "2.1.6-rc.1"
+  version = "2.1.7"
   edition = "2024"
   authors = [ "Rivet Gaming, LLC <developer@rivet.gg>" ]
   license = "Apache-2.0"
