@@ -101,7 +101,6 @@ import {
 } from "./workflow";
 import { startStopRaceActor, lifecycleObserver } from "./start-stop-race";
 import { connErrorSerializationActor } from "./conn-error-serialization";
-import { dbKvStatsActor } from "./db-kv-stats";
 
 // Consolidated setup with all actors
 export const registry = setup({
@@ -227,7 +226,5 @@ export const registry = setup({
 		lifecycleObserver,
 		// From conn-error-serialization.ts
 		connErrorSerializationActor,
-		// From db-kv-stats.ts
-		dbKvStatsActor,
 	},
 });

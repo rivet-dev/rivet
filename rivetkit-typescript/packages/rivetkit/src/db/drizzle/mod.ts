@@ -90,27 +90,34 @@ async function runInlineMigrations(
 		},
 	);
 
-	// Apply pending migrations from journal entries
+	// Apply pending migrations from journal entries.
+	// Each migration is wrapped in a savepoint so the DDL and its
+	// tracking insert commit in a single BATCH_ATOMIC KV write
+	// instead of two separate writes. The savepoint also makes each
+	// migration atomic: if it fails, the tracking row is not written.
 	const journal = migrations.journal;
 	if (!journal?.entries) return;
 
 	for (const entry of journal.entries) {
 		if (entry.when <= lastCreatedAt) continue;
 
-		// Find the migration SQL from the migrations map
-		// The key format is "m" + zero-padded index (e.g. "m0000")
 		const migrationKey = `m${String(entry.idx).padStart(4, "0")}`;
 		const sql = migrations.migrations[migrationKey];
 		if (!sql) continue;
 
-		// Execute migration SQL
-		await waDb.exec(sql);
-
-		// Record migration
-		await waDb.run(
-			"INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
-			[entry.tag, entry.when],
-		);
+		await waDb.exec("SAVEPOINT rivetkit_migrate");
+		try {
+			await waDb.exec(sql);
+			await waDb.run(
+				"INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+				[entry.tag, entry.when],
+			);
+			await waDb.exec("RELEASE rivetkit_migrate");
+		} catch (error) {
+			await waDb.exec("ROLLBACK TO rivetkit_migrate");
+			await waDb.exec("RELEASE rivetkit_migrate");
+			throw error;
+		}
 	}
 }
 

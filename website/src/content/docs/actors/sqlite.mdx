@@ -45,6 +45,8 @@ For Drizzle setup, see [SQLite + Drizzle](/docs/actors/sqlite-drizzle).
 
 Define `db: db({ onMigrate })` on your actor, create your schema in `onMigrate`, and execute SQL with `c.db.execute(...)`.
 
+Rivet automatically wraps your `onMigrate` callback in a transaction, so all schema changes are applied atomically in a single storage write. You do not need to add your own `BEGIN`/`COMMIT`.
+
 <CodeGroup workspace>
 ```ts index.ts
 import { actor, setup } from "rivetkit";

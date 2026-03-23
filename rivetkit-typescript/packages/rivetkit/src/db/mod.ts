@@ -140,7 +140,21 @@ export function db({
 		},
 		onMigrate: async (client) => {
 			if (onMigrate) {
-				await onMigrate(client);
+				// Wrap the user's migration in a savepoint so all DDL
+				// commits in a single BATCH_ATOMIC KV write instead of
+				// one write per statement. This also makes the migration
+				// atomic: if any statement fails, all changes roll back.
+				// Savepoints nest safely, so if the user adds their own
+				// savepoints inside onMigrate they will work correctly.
+				await client.execute("SAVEPOINT rivetkit_migrate");
+				try {
+					await onMigrate(client);
+					await client.execute("RELEASE rivetkit_migrate");
+				} catch (error) {
+					await client.execute("ROLLBACK TO rivetkit_migrate");
+					await client.execute("RELEASE rivetkit_migrate");
+					throw error;
+				}
 			}
 		},
 		onDestroy: async (client) => {

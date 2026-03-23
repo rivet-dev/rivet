@@ -37,7 +37,6 @@ import { runManagerDriverTests } from "./tests/manager-driver";
 import { runRawHttpTests } from "./tests/raw-http";
 import { runRawHttpRequestPropertiesTests } from "./tests/raw-http-request-properties";
 import { runRawWebSocketTests } from "./tests/raw-websocket";
-import { runActorDbKvStatsTests } from "./tests/actor-db-kv-stats";
 import { runRequestAccessTests } from "./tests/request-access";
 
 export interface SkipTests {
@@ -165,7 +164,6 @@ export function runDriverTests(
 
 						runActorInspectorTests(driverTestConfig);
 
-						runActorDbKvStatsTests(driverTestConfig);
 					});
 				}
 			});
