@@ -59,10 +59,20 @@ export function info(text: string): void {
 }
 
 /** Print an error and exit. */
-export function fatal(text: string, hint?: string): never {
+export function fatal(text: string, cause?: unknown): never {
 	console.error(`\n${colors.error("✗ Error:")} ${text}`);
-	if (hint) console.error(`  ${colors.dim(hint)}`);
+	if (cause) {
+		const causeMsg = cause instanceof Error ? cause.message : String(cause);
+		console.error(`  ${colors.dim(causeMsg)}`);
+	}
 	process.exit(1);
+}
+
+/** Create an error with a cause chain. */
+export function error(message: string, cause: unknown): Error {
+	const error = new Error(message);
+	error.cause = cause;
+	return error;
 }
 
 /** Format a log timestamp for display. */

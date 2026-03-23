@@ -3,8 +3,9 @@
  * Uses Bun's built-in shell operator for subprocess execution.
  */
 
+import type { Writable } from "node:stream";
 import { $ } from "bun";
-import { colors } from "../utils/output.ts";
+import { colors, error, fatal } from "../utils/output.ts";
 
 export interface BuildResult {
 	imageId: string;
@@ -18,17 +19,33 @@ export async function dockerBuild(opts: {
 	context: string;
 	dockerfile?: string;
 	platform?: string;
+	stream?: Writable;
 }): Promise<BuildResult> {
 	const iidFile = `/tmp/rivet-cloud-cli-iid-${Date.now()}`;
 
 	const dockerfileArgs = opts.dockerfile ? ["-f", opts.dockerfile] : [];
 	const platformArgs = opts.platform ? ["--platform", opts.platform] : [];
 
-	try {
-		await $`docker build ${dockerfileArgs} ${platformArgs} --iidfile ${iidFile} ${opts.context}`.quiet();
-	} catch (err) {
-		throw new Error(
-			`Docker build failed. Make sure Docker is running and a Dockerfile exists in ${opts.context}.\n${String(err)}`,
+	const proc = Bun.spawn([
+		"docker",
+		"build",
+		...dockerfileArgs,
+		...platformArgs,
+		"--iidfile",
+		iidFile,
+		opts.context,
+	]);
+
+	if (opts.stream) {
+		pipeToWritable(proc.stdout, opts.stream);
+		pipeToWritable(proc.stderr, opts.stream);
+	}
+
+	const exitCode = await proc.exited;
+	if (exitCode !== 0) {
+		throw error(
+			`Docker build failed. Make sure Docker is running and a Dockerfile exists in ${opts.context}.`,
+			`exit code: ${exitCode}`,
 		);
 	}
 
@@ -43,23 +60,38 @@ export async function dockerLogin(opts: {
 	registryUrl: string;
 	username: string;
 	password: string;
+	stream?: Writable;
 }): Promise<void> {
-	try {
-		const proc = Bun.spawn(
-			["docker", "login", opts.registryUrl, "--username", opts.username, "--password-stdin"],
-			{
-				stdin: new TextEncoder().encode(opts.password),
-				stdout: "ignore",
-				stderr: "ignore",
-			},
-		);
-		const exitCode = await proc.exited;
-		if (exitCode !== 0) {
-			throw new Error(`Docker login exited with code ${exitCode}`);
-		}
-	} catch (err) {
-		throw new Error(
-			`Docker login failed for registry ${opts.registryUrl}.\n${String(err)}`,
+	const command = [
+		"docker",
+		"login",
+		opts.registryUrl,
+		"--username",
+		opts.username,
+		"--password-stdin",
+	];
+
+	opts?.stream?.write(`$ ${command.join(" ")}\n`);
+
+	const proc = Bun.spawn(
+		command,
+		{
+			stdin: new TextEncoder().encode(opts.password),
+			stderr: "pipe",
+			stdout: "pipe",
+		},
+	);
+
+	if (opts.stream) {
+		pipeToWritable(proc.stdout, opts.stream);
+		pipeToWritable(proc.stderr, opts.stream);
+	}
+
+	const exitCode = await proc.exited;
+	if (exitCode !== 0) {
+		throw error(
+			`Docker login failed for registry ${opts.registryUrl}.`,
+			`exit code: ${exitCode}`,
 		);
 	}
 }
@@ -71,12 +103,41 @@ export async function dockerLogin(opts: {
 export async function dockerTagAndPush(opts: {
 	localImageId: string;
 	remoteRef: string;
+	stream?: Writable;
 }): Promise<void> {
-	try {
-		await $`docker tag ${opts.localImageId} ${opts.remoteRef}`.quiet();
-		await $`docker push ${opts.remoteRef}`.quiet();
-	} catch (err) {
-		throw new Error(`Docker tag/push failed for ${opts.remoteRef}.\n${String(err)}`);
+	const tagProc = Bun.spawn([
+		"docker",
+		"tag",
+		opts.localImageId,
+		opts.remoteRef,
+	]);
+
+	if (opts.stream) {
+		pipeToWritable(tagProc.stdout, opts.stream);
+		pipeToWritable(tagProc.stderr, opts.stream);
+	}
+
+	const tagExitCode = await tagProc.exited;
+	if (tagExitCode !== 0) {
+		throw error(
+			`Docker tag failed for ${opts.remoteRef}.`,
+			`exit code: ${tagExitCode}`,
+		);
+	}
+
+	const pushProc = Bun.spawn(["docker", "push", opts.remoteRef]);
+
+	if (opts.stream) {
+		pipeToWritable(pushProc.stdout, opts.stream);
+		pipeToWritable(pushProc.stderr, opts.stream);
+	}
+
+	const pushExitCode = await pushProc.exited;
+	if (pushExitCode !== 0) {
+		throw error(
+			`Docker push failed for ${opts.remoteRef}.`,
+			`exit code: ${pushExitCode}`,
+		);
 	}
 }
 
@@ -87,11 +148,22 @@ export async function assertDockerAvailable(): Promise<void> {
 	try {
 		await $`docker info`.quiet();
 	} catch {
-		console.error(
-			colors.error(
-				"Docker is not running or not installed. Please start Docker and try again.",
-			),
+		fatal(
+			"Docker is not available. Please install Docker and make sure it's running.",
 		);
-		process.exit(1);
 	}
+}
+
+function pipeToWritable(
+	source: ReadableStream<Uint8Array> | undefined,
+	dest: Writable,
+): void {
+	if (!source) return;
+	source.pipeTo(
+		new WritableStream({
+			write(chunk) {
+				dest.write(chunk);
+			},
+		}),
+	);
 }

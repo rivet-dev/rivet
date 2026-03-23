@@ -58,10 +58,7 @@ async function runLogs(opts: LogsOptions): Promise<void> {
 	try {
 		identity = await client.apiTokens.inspect();
 	} catch (err: unknown) {
-		fatal(
-			`Authentication failed: ${err instanceof Error ? err.message : String(err)}`,
-			"Check that RIVET_CLOUD_TOKEN is valid.",
-		);
+		fatal("Authentication failed. Check that RIVET_CLOUD_TOKEN is valid.", err);
 	}
 
 	const { project, organization: org } = identity;
@@ -149,7 +146,7 @@ async function streamWithRetry(
 			} else {
 				fatal(
 					`Failed to connect to log stream after ${MAX_RETRIES} retries.`,
-					String(err),
+					err,
 				);
 			}
 		}
