@@ -31,6 +31,12 @@ function formatMetricValue(value: bigint, type: MetricType): string {
 	switch (type) {
 		case "hours": {
 			const hours = num / 3600;
+			if (hours >= 1_000_000_000) {
+				return `${stripTrailingZeros(hours / 1_000_000_000, 1)}B hrs`;
+			}
+			if (hours >= 1_000_000) {
+				return `${stripTrailingZeros(hours / 1_000_000, 1)}M hrs`;
+			}
 			if (hours >= 1000) {
 				return `${stripTrailingZeros(hours / 1000, 1)}k hrs`;
 			}
@@ -57,7 +63,7 @@ function formatMetricValue(value: bigint, type: MetricType): string {
 			return `${num} B`;
 		}
 		case "operations": {
-			const units = num / 4096;
+			const units = num / 4000;
 			if (units >= 1_000_000_000) {
 				return `${stripTrailingZeros(units / 1_000_000_000, 2)}B ops`;
 			}
