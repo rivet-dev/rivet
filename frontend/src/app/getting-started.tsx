@@ -124,9 +124,7 @@ export function GettingStarted({
 	displayFrontendOnboarding?: boolean;
 }) {
 	const dataProvider = useCloudNamespaceDataProvider();
-	const { data: datacenters } = useSuspenseInfiniteQuery(
-		dataProvider.datacentersQueryOptions(),
-	);
+	useSuspenseInfiniteQuery(dataProvider.datacentersQueryOptions());
 
 	const { mutateAsync: mutateAsyncManagedPool } = useMutation({
 		...dataProvider.upsertCurrentNamespaceManagedPoolMutationOptions(),

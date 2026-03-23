@@ -1,17 +1,4 @@
-import {
-	faAws,
-	faBook,
-	faExclamationTriangle,
-	faGoogleCloud,
-	faHetznerH,
-	faPlus,
-	faQuestionCircle,
-	faRailway,
-	faRivet,
-	faServer,
-	faVercel,
-	Icon,
-} from "@rivet-gg/icons";
+import { faPlus, faQuestionCircle, Icon } from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
 	usePrefetchInfiniteQuery,
@@ -21,6 +8,7 @@ import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { Content } from "@/app/layout";
+import { ProviderDropdown } from "@/app/provider-dropdown";
 import { RunnerConfigsTable } from "@/app/runner-config-table";
 import { RunnersTable } from "@/app/runners-table";
 import { SidebarToggle } from "@/app/sidebar-toggle";
@@ -31,15 +19,6 @@ import {
 	AccordionTrigger,
 	Button,
 	Code,
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuGroup,
-	DropdownMenuItem,
-	DropdownMenuPortal,
-	DropdownMenuSub,
-	DropdownMenuSubContent,
-	DropdownMenuSubTrigger,
-	DropdownMenuTrigger,
 	H1,
 	H2,
 	H3,
@@ -53,8 +32,7 @@ import {
 	useDataProvider,
 	useEngineCompatDataProvider,
 } from "@/components/actors";
-import { docsLinks } from "@/content/data";
-import { deriveProviderFromMetadata } from "@/lib/data";
+import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
 import { CloudApiTokens, PublishableToken, SecretToken } from "./tokens";
 
 export const Route = createFileRoute(
@@ -149,46 +127,7 @@ function NoRunnersAlert() {
 
 	return (
 		<div className="max-w-5xl mx-auto mb-6 px-6 @6xl:px-0 flex flex-col items-start">
-			<div className="bg-amber-950/50 text-warning-foreground rounded-md p-4 flex gap-4 border border-amber-900 w-full">
-				<div className="flex-1 flex gap-2">
-					<Icon
-						icon={faExclamationTriangle}
-						className="text-warning-foreground text-xl mt-1"
-					/>
-					<div>
-						<H4 className="mb-2">No Providers Connected</H4>
-						<p>
-							You currently have no Providers connected. Connect a
-							Provider to start deploying and running Rivet
-							Actors.
-						</p>
-					</div>
-				</div>
-
-				<div className="flex-col flex gap-4">
-					<ProviderDropdown>
-						<Button
-							variant="ghost"
-							startIcon={<Icon icon={faPlus} />}
-						>
-							Connect Runner
-						</Button>
-					</ProviderDropdown>
-					<Button
-						startIcon={<Icon icon={faBook} />}
-						asChild
-						variant="ghost"
-					>
-						<a
-							href={docsLinks.runnersSetup}
-							target="_blank"
-							rel="noreferrer"
-						>
-							Read Docs
-						</a>
-					</Button>
-				</div>
-			</div>
+			<NoProvidersAlert variant="connect" />
 		</div>
 	);
 }
@@ -272,144 +211,6 @@ function Runners() {
 				</div>
 			</div>
 		</div>
-	);
-}
-
-function RivetCloudDropdownMenuItem() {
-	const navigate = useNavigate();
-
-	const { data: config } = useInfiniteQuery({
-		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
-		refetchInterval: 5000,
-		maxPages: Infinity,
-		select: (data) =>
-			data.pages.flatMap((page) =>
-				Object.values(page.runnerConfigs).filter(
-					(config) =>
-						Object.values(config.datacenters).find(
-							(dc) =>
-								deriveProviderFromMetadata(dc.metadata) ===
-								"rivet",
-						) !== undefined,
-				),
-			).length > 0,
-	});
-
-	return (
-		<DropdownMenuItem
-			className="relative"
-			indicator={<Icon icon={faRivet} />}
-			disabled={!!config}
-			onSelect={() =>
-				navigate({
-					to: ".",
-					search: { modal: "connect-rivet" },
-				})
-			}
-		>
-			Rivet Cloud {config ? "(Connected)" : ""}
-			<span className="ml-1 text-[10px] font-medium px-1.5 py-0 rounded-full bg-primary/10 text-primary">Beta</span>
-		</DropdownMenuItem>
-	);
-}
-
-function ProviderDropdown({ children }: { children: React.ReactNode }) {
-	const navigate = useNavigate();
-
-	const externalClouds = (
-		<>
-			<DropdownMenuItem
-				className="relative"
-				indicator={<Icon icon={faVercel} />}
-				onSelect={() =>
-					navigate({
-						to: ".",
-						search: { modal: "connect-vercel" },
-					})
-				}
-			>
-				Vercel
-			</DropdownMenuItem>
-			<DropdownMenuItem
-				indicator={<Icon icon={faRailway} />}
-				onSelect={() =>
-					navigate({
-						to: ".",
-						search: { modal: "connect-railway" },
-					})
-				}
-			>
-				Railway
-			</DropdownMenuItem>
-			<DropdownMenuItem
-				indicator={<Icon icon={faAws} />}
-				onSelect={() =>
-					navigate({
-						to: ".",
-						search: { modal: "connect-aws" },
-					})
-				}
-			>
-				AWS ECS
-			</DropdownMenuItem>
-			<DropdownMenuItem
-				indicator={<Icon icon={faGoogleCloud} />}
-				onSelect={() =>
-					navigate({
-						to: ".",
-						search: { modal: "connect-gcp" },
-					})
-				}
-			>
-				Google Cloud Run
-			</DropdownMenuItem>
-			<DropdownMenuItem
-				indicator={<Icon icon={faHetznerH} />}
-				onSelect={() =>
-					navigate({
-						to: ".",
-						search: { modal: "connect-hetzner" },
-					})
-				}
-			>
-				Hetzner
-			</DropdownMenuItem>
-			<DropdownMenuItem
-				indicator={<Icon icon={faServer} />}
-				onSelect={() =>
-					navigate({
-						to: ".",
-						search: { modal: "connect-custom" },
-					})
-				}
-			>
-				Custom
-			</DropdownMenuItem>
-		</>
-	);
-	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-			<DropdownMenuContent className="w-[--radix-popper-anchor-width]">
-				{__APP_TYPE__ === "cloud" ? (
-					<>
-						<RivetCloudDropdownMenuItem />
-						<DropdownMenuSub>
-							<DropdownMenuSubTrigger>
-								External cloud
-							</DropdownMenuSubTrigger>
-							<DropdownMenuPortal>
-								<DropdownMenuSubContent>
-									{externalClouds}
-								</DropdownMenuSubContent>
-							</DropdownMenuPortal>
-						</DropdownMenuSub>
-					</>
-				) : (
-					externalClouds
-				)}
-			</DropdownMenuContent>
-		</DropdownMenu>
 	);
 }
 
