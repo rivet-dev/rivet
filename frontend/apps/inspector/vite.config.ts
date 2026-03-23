@@ -9,6 +9,7 @@ import tsconfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
 	root: path.resolve(__dirname),
 	base: "/",
+	publicDir: path.resolve(__dirname, "../../public"),
 	envDir: path.resolve(__dirname, "../.."),
 	plugins: [
 		tanstackRouter({
