@@ -70,6 +70,11 @@ interface ActorStateReference {
 		 * Defaults to false.
 		 */
 		noCreate?: boolean;
+		/**
+		 * If true, the hook will suspend (throw a Promise) while the actor is connecting.
+		 * Defaults to false.
+		 */
+		suspense?: boolean;
 	};
 }
 
@@ -115,6 +120,12 @@ export interface ActorOptions<
 	 * Defaults to false.
 	 */
 	noCreate?: boolean;
+	/**
+	 * If true, the hook will suspend (throw a Promise) while the actor is connecting.
+	 * Use this with React's <Suspense> boundary to show a fallback while connecting.
+	 * Defaults to false.
+	 */
+	suspense?: boolean;
 }
 
 export type ActorsStateDerived<
@@ -151,8 +162,15 @@ type ActorCache = Map<
 		key: string;
 		mount: () => () => void;
 		create: () => void;
+		getConnectPromise: () => Promise<void>;
 		refCount: number;
 		cleanupTimeout: ReturnType<typeof setTimeout> | null;
+		/** Promise that resolves when the actor connects. Used for Suspense support. */
+		connectPromise: Promise<void> | null;
+		/** Resolves the connectPromise when the actor connects. */
+		resolveConnectPromise: (() => void) | null;
+		/** Rejects the connectPromise when the actor errors. */
+		rejectConnectPromise: ((error: Error) => void) | null;
 	}
 >;
 
@@ -176,6 +194,7 @@ export function createRivetKit<Registry extends AnyActorRegistry>(
 			mount: () => () => void;
 			state: ActorsStateDerived<Registry, ActorName>;
 			key: string;
+			getConnectPromise: () => Promise<void>;
 		} => (getOrCreateActor as any)(client, createOpts, store, cache, actorOpts),
 		store,
 	};
@@ -244,6 +263,22 @@ function getOrCreateActor<
 
 	const cached = cache.get(key);
 	if (cached) {
+		// When suspense is enabled and the actor is still idle (e.g. on a
+		// re-render after suspending), eagerly kick off the connection so the
+		// promise can resolve even if mount() hasn't been called yet.
+		if (
+			normalizedOpts.suspense &&
+			store.state.actors[key]?.connStatus === "idle" &&
+			normalizedOpts.enabled
+		) {
+			queueMicrotask(() => {
+				const actor = store.state.actors[key];
+				if (actor && actor.connStatus === "idle" && actor.opts.enabled) {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					(create as any)(client, store, cache, key);
+				}
+			});
+		}
 		return {
 			...cached,
 			state: cached.state as ActorsStateDerived<Registry, ActorName>,
@@ -298,7 +333,7 @@ function getOrCreateActor<
 						currentActor.connStatus === "idle" &&
 						currentActor.opts.enabled
 					) {
-						(create as Function)(client, store, key);
+						(create as Function)(client, store, cache, key);
 					}
 				});
 			}
@@ -336,7 +371,7 @@ function getOrCreateActor<
 			// Trigger initial connection if actor is enabled and idle.
 			const actor = store.state.actors[key];
 			if (actor && actor.opts.enabled && actor.connStatus === "idle") {
-				(create as Function)(client, store, key);
+				(create as Function)(client, store, cache, key);
 			}
 		}
 
@@ -375,33 +410,79 @@ function getOrCreateActor<
 		};
 	};
 
+	function getConnectPromise(): Promise<void> {
+		const cached = cache.get(key);
+		if (!cached) {
+			return Promise.resolve();
+		}
+		// Already connected
+		if (store.state.actors[key]?.connStatus === "connected") {
+			return Promise.resolve();
+		}
+		// Create a new promise if there isn't one already
+		if (!cached.connectPromise) {
+			cached.connectPromise = new Promise<void>((resolve, reject) => {
+				cached.resolveConnectPromise = resolve;
+				cached.rejectConnectPromise = reject;
+			});
+		}
+		return cached.connectPromise;
+	}
+
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const boundCreate: () => void = () => (create as any)(client, store, key);
+	const boundCreate: () => void = () => (create as any)(client, store, cache, key);
 	cache.set(key, {
 		state: derived,
 		key,
 		mount,
 		create: boundCreate,
+		getConnectPromise,
 		refCount: 0,
 		cleanupTimeout: null,
+		connectPromise: null,
+		resolveConnectPromise: null,
+		rejectConnectPromise: null,
 	});
+
+	// When suspense is enabled, eagerly start the connection during the render
+	// phase so the promise can resolve even before mount() is called via
+	// useEffect (which React never runs for a suspended component).
+	if (normalizedOpts.suspense && normalizedOpts.enabled) {
+		queueMicrotask(() => {
+			const actor = store.state.actors[key];
+			if (actor && actor.connStatus === "idle" && actor.opts.enabled) {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				(create as any)(client, store, cache, key);
+			}
+		});
+	}
 
 	return {
 		mount,
 		state: derived as ActorsStateDerived<Registry, ActorName>,
 		key,
+		getConnectPromise,
 	};
 }
 
 function create<
 	Registry extends AnyActorRegistry,
 	ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
->(client: Client<Registry>, store: Store<InternalRivetKitStore>, key: string) {
+>(client: Client<Registry>, store: Store<InternalRivetKitStore>, cache: ActorCache, key: string) {
 	const actor = store.state.actors[key];
 	if (!actor) {
 		throw new Error(
 			`Actor with key "${key}" not found in store. This indicates a bug in cleanup logic.`,
 		);
+	}
+
+	// Clear any stale rejected connect promise so the next use() call gets a
+	// fresh promise rather than immediately re-throwing the old error.
+	const actorCached = cache.get(key);
+	if (actorCached) {
+		actorCached.connectPromise = null;
+		actorCached.resolveConnectPromise = null;
+		actorCached.rejectConnectPromise = null;
 	}
 
 	// Save actor to map
@@ -454,6 +535,17 @@ function create<
 					},
 				};
 			});
+
+			// Resolve the connect promise when connected
+			if (status === "connected") {
+				const cached = cache.get(key);
+				if (cached?.resolveConnectPromise) {
+					cached.resolveConnectPromise();
+					cached.connectPromise = null;
+					cached.resolveConnectPromise = null;
+					cached.rejectConnectPromise = null;
+				}
+			}
 		});
 
 		// onError is followed by onClose which will set connStatus to Disconnected
@@ -472,6 +564,17 @@ function create<
 					},
 				};
 			});
+
+			// Reject the connect promise on error. Keep the rejected promise
+			// in the cache so that use() sees the same rejected instance on
+			// the next render and can throw to the error boundary.
+			const cached = cache.get(key);
+			if (cached?.rejectConnectPromise) {
+				cached.rejectConnectPromise(error);
+				cached.resolveConnectPromise = null;
+				cached.rejectConnectPromise = null;
+				// connectPromise intentionally kept (rejected) so use() rethrows
+			}
 		});
 	} catch (error) {
 		console.error("Failed to create actor connection", error);
