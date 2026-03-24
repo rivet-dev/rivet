@@ -112,6 +112,9 @@ import {
 } from "./actors/inter-actor/cross-actor-actions.ts";
 // Testing
 import { inlineClientActor } from "./actors/testing/inline-client.ts";
+import { testCounter } from "./actors/testing/test-counter.ts";
+import { testCounterSqlite } from "./actors/testing/test-counter-sqlite.ts";
+import { testSqliteLoad } from "./actors/testing/test-sqlite-load.ts";
 // AI
 import { aiAgent } from "./actors/ai/ai-agent.ts";
 
@@ -204,6 +207,9 @@ export const registry = setup({
 		checkout,
 		// Testing fixtures
 		inlineClientActor,
+		testCounter,
+		testCounterSqlite,
+		testSqliteLoad,
 		// AI
 		aiAgent,
 	},
