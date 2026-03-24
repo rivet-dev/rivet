@@ -328,6 +328,7 @@ async fn restart_phase1(
 		.op(crate::ops::propose::Input {
 			proposal,
 			purge_cache: false,
+			target_replicas: None,
 		})
 		.await?;
 

@@ -16,6 +16,7 @@ pub async fn execute_command(
 				commands: vec![protocol::Command { kind: command }],
 			},
 			purge_cache: false,
+			target_replicas: None,
 		})
 		.await?;
 

@@ -1,3 +1,5 @@
+use gas::prelude::*;
+use rivet_cache::Cache;
 use rivet_runner_protocol as protocol;
 use rivet_types::{
 	keys::namespace::runner_config::RunnerConfigVariant,
@@ -37,4 +39,25 @@ pub fn runner_config_variant(runner_config: &RunnerConfig) -> RunnerConfigVarian
 		RunnerConfigKind::Normal { .. } => RunnerConfigVariant::Normal,
 		RunnerConfigKind::Serverless { .. } => RunnerConfigVariant::Serverless,
 	}
+}
+
+pub async fn purge_runner_config_caches(
+	cache: &Cache,
+	namespace_id: Id,
+	runner_name: &str,
+) -> Result<()> {
+	let key = (namespace_id, runner_name.to_string());
+
+	cache
+		.clone()
+		.request()
+		.purge("namespace.runner_config.get", vec![key.clone()])
+		.await?;
+	cache
+		.clone()
+		.request()
+		.purge("runner.list_runner_config_enabled_dcs", vec![key])
+		.await?;
+
+	Ok(())
 }

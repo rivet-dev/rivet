@@ -593,6 +593,7 @@ pub async fn set_epoxy_kv(
 				}],
 			},
 			purge_cache: true,
+			target_replicas: None,
 		})
 		.await?;
 

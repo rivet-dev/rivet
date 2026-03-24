@@ -98,6 +98,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 			input.name.clone(),
 			key.clone(),
 			input.actor_id,
+			input.runner_name_selector.clone(),
 		)
 		.await?
 		{

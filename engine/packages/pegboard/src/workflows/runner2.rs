@@ -64,6 +64,12 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 		create_ts: ctx.create_ts(),
 	})
 	.await?;
+	ctx.v(2)
+		.activity(EnsureRunnerConfigInput {
+			namespace_id: input.namespace_id,
+			name: input.name.clone(),
+		})
+		.await?;
 
 	// Drain older runner versions if configured
 	let drain_result = ctx
@@ -449,6 +455,23 @@ async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<()> {
 		})
 		.custom_instrument(tracing::info_span!("runner_init_tx"))
 		.await?;
+
+	Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+struct EnsureRunnerConfigInput {
+	namespace_id: Id,
+	name: String,
+}
+
+#[activity(EnsureRunnerConfig)]
+async fn ensure_runner_config(ctx: &ActivityCtx, input: &EnsureRunnerConfigInput) -> Result<()> {
+	ctx.op(crate::ops::runner_config::ensure_normal_if_missing::Input {
+		namespace_id: input.namespace_id,
+		name: input.name.clone(),
+	})
+	.await?;
 
 	Ok(())
 }
