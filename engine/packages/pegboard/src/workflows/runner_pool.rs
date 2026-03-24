@@ -26,6 +26,18 @@ struct RunnerState {
 
 #[workflow]
 pub async fn pegboard_runner_pool(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+	// Exit before starting sidecar workflows if there is no serverless runner config to manage.
+	if matches!(
+		ctx.v(4).activity(ReadDesiredInput {
+			namespace_id: input.namespace_id,
+			runner_name: input.runner_name.clone(),
+		})
+		.await?,
+		ReadDesiredOutput::Stop
+	) {
+		return Ok(());
+	}
+
 	ctx.v(2)
 		.workflow(runner_pool_error_tracker::Input {
 			namespace_id: input.namespace_id,
