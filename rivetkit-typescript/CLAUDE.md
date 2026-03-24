@@ -29,6 +29,18 @@ The total actor KV storage limit (10 GiB) cannot be worked around by chunking. A
 
 When changing KV, queue, workflow persistence, SQLite-over-KV, or any limit-related actor behavior, update `website/src/content/docs/actors/limits.mdx` in the same change so docs stay in sync with effective hard and soft limits.
 
+## Drizzle Compatibility Testing
+
+To test rivetkit's drizzle integration against multiple drizzle-orm versions:
+
+```bash
+cd rivetkit-typescript/packages/rivetkit
+./scripts/test-drizzle-compat.sh                   # test all default versions
+./scripts/test-drizzle-compat.sh 0.44.2 0.45.1     # test specific versions
+```
+
+The script installs each drizzle-orm version, runs the drizzle driver tests, and reports pass/fail per version. It restores the original package.json and lockfile on exit. Update the `DEFAULT_VERSIONS` array in the script and `SUPPORTED_DRIZZLE_RANGE` in `packages/rivetkit/src/db/drizzle/mod.ts` when adding support for new drizzle releases.
+
 ## Workflow Context Actor Access Guards
 
 In `ActorWorkflowContext` (`packages/rivetkit/src/workflow/context.ts`), all side-effectful `#runCtx` access must be guarded by `#ensureActorAccess` so that side effects only run inside workflow steps and are not replayed outside of them. Read-only properties (e.g., `actorId`, `log`) do not need guards. When adding new methods or properties to the workflow context that delegate to `#runCtx`, apply the guard if the operation has side effects.

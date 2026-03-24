@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import type { IDatabase } from "@rivetkit/sqlite-vfs";
 import {
 	drizzle as proxyDrizzle,
@@ -9,6 +10,54 @@ import { AsyncMutex, createActorKvStore, toSqliteBindings } from "../shared";
 export * from "./sqlite-core";
 
 import { type Config, defineConfig as originalDefineConfig } from "drizzle-kit";
+
+/**
+ * Supported drizzle-orm version bounds. Update these when testing confirms
+ * compatibility with new releases. Run scripts/test-drizzle-compat.sh to
+ * validate.
+ */
+const DRIZZLE_MIN = [0, 44, 0];
+const DRIZZLE_MAX = [0, 46, 0]; // exclusive
+
+let drizzleVersionChecked = false;
+
+function compareVersions(a: number[], b: number[]): number {
+	for (let i = 0; i < Math.max(a.length, b.length); i++) {
+		const diff = (a[i] ?? 0) - (b[i] ?? 0);
+		if (diff !== 0) return diff;
+	}
+	return 0;
+}
+
+function isSupported(version: string): boolean {
+	// Strip prerelease suffix (e.g. "0.45.1-a7a15d0" -> "0.45.1")
+	const v = version.replace(/-.*$/, "").split(".").map(Number);
+	return (
+		compareVersions(v, DRIZZLE_MIN) >= 0 &&
+		compareVersions(v, DRIZZLE_MAX) < 0
+	);
+}
+
+function checkDrizzleVersion() {
+	if (drizzleVersionChecked) return;
+	drizzleVersionChecked = true;
+
+	try {
+		const require = createRequire(import.meta.url);
+		const { version } = require("drizzle-orm/package.json") as {
+			version: string;
+		};
+		if (!isSupported(version)) {
+			console.warn(
+				`[rivetkit] drizzle-orm@${version} has not been tested with this version of rivetkit. ` +
+					`Supported: >= ${DRIZZLE_MIN.join(".")} and < ${DRIZZLE_MAX.join(".")}. ` +
+					`Things may still work, but please report issues at https://github.com/rivet-dev/rivet/issues`,
+			);
+		}
+	} catch {
+		// Cannot determine version, skip check.
+	}
+}
 
 export function defineConfig(
 	config: Partial<Config & { driver: "durable-sqlite" }>,
@@ -119,6 +168,8 @@ export function db<
 >(
 	config?: DatabaseFactoryConfig<TSchema>,
 ): DatabaseProvider<SqliteRemoteDatabase<TSchema> & RawAccess> {
+	checkDrizzleVersion();
+
 	// Map from drizzle client to the underlying @rivetkit/sqlite Database.
 	// Uses WeakMap so entries are garbage-collected when the client is.
 	// This replaces the previous shared `waDbInstance` variable which caused
@@ -223,10 +274,7 @@ export function db<
 		onMigrate: async (client) => {
 			const waDb = clientToRawDb.get(client as object);
 			if (config?.migrations && waDb) {
-				await runInlineMigrations(
-					waDb,
-					config.migrations,
-				);
+				await runInlineMigrations(waDb, config.migrations);
 			}
 		},
 		onDestroy: async (client) => {
