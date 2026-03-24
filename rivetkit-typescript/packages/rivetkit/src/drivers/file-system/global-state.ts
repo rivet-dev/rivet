@@ -1,6 +1,6 @@
 import invariant from "invariant";
 import { lookupInRegistry } from "@/actor/definition";
-import { ActorDuplicateKey } from "@/actor/errors";
+import { ActorDuplicateKey, ActorError, ActorNotFound } from "@/actor/errors";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { ActorKey } from "@/actor/mod";
 import type { AnyClient } from "@/client/client";
@@ -659,7 +659,7 @@ export class FileSystemGlobalState {
 			await actor.actor.onStop("sleep");
 		} finally {
 			// Ensure any pending KV writes finish before removing the entry.
-			await this.#withActorWrite(actorId, async () => { });
+			await this.#withActorWrite(actorId, async () => {});
 			this.#closeActorKvDatabase(actorId);
 			actor.stopPromise?.resolve();
 			actor.stopPromise = undefined;
@@ -718,7 +718,7 @@ export class FileSystemGlobalState {
 			}
 
 			// Ensure any pending KV writes finish before deleting files.
-			await this.#withActorWrite(actorId, async () => { });
+			await this.#withActorWrite(actorId, async () => {});
 			this.#closeActorKvDatabase(actorId);
 
 			// Clear alarm timeout if exists
@@ -778,7 +778,7 @@ export class FileSystemGlobalState {
 			}
 		} finally {
 			// Ensure any pending KV writes finish before clearing the entry.
-			await this.#withActorWrite(actorId, async () => { });
+			await this.#withActorWrite(actorId, async () => {});
 			actor.stopPromise?.resolve();
 			actor.stopPromise = undefined;
 
@@ -947,7 +947,7 @@ export class FileSystemGlobalState {
 				try {
 					const fs = getNodeFs();
 					await fs.unlink(tempPath);
-				} catch { }
+				} catch {}
 				logger().error({
 					msg: "failed to write alarm",
 					actorId,
@@ -1071,9 +1071,7 @@ export class FileSystemGlobalState {
 		// Get the actor metadata
 		let entry = await this.loadActor(actorId);
 		if (!entry.state) {
-			throw new Error(
-				`Actor does not exist and cannot be started: "${actorId}"`,
-			);
+			throw new ActorNotFound(actorId);
 		}
 
 		// Actor already starting
@@ -1089,9 +1087,7 @@ export class FileSystemGlobalState {
 				await this.#waitForActorStop(actorId);
 				entry = await this.loadActor(actorId);
 				if (!entry.state) {
-					throw new Error(
-						`Actor does not exist and cannot be started: "${actorId}"`,
-					);
+					throw new ActorNotFound(actorId);
 				}
 			} else {
 				return entry.actor;
@@ -1127,9 +1123,7 @@ export class FileSystemGlobalState {
 			const now = BigInt(Date.now());
 			await this.#withActorWrite(actorId, async (lockedEntry) => {
 				if (!lockedEntry.state) {
-					throw new Error(
-						`Actor does not exist and cannot be started: "${actorId}"`,
-					);
+					throw new ActorNotFound(actorId);
 				}
 				lockedEntry.state = {
 					...lockedEntry.state,
@@ -1152,6 +1146,12 @@ export class FileSystemGlobalState {
 
 			return entry.actor;
 		} catch (innerError) {
+			if (innerError instanceof ActorError) {
+				entry.startPromise?.reject(innerError);
+				entry.startPromise = undefined;
+				throw innerError;
+			}
+
 			const error = new Error(
 				`Failed to start actor ${actorId}: ${innerError}`,
 				{ cause: innerError },
@@ -1495,19 +1495,19 @@ export class FileSystemGlobalState {
 		const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
 		const rows = upperBound
 			? db.all<{
-				key: Uint8Array | ArrayBuffer;
-				value: Uint8Array | ArrayBuffer;
-			}>(
-				`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
-				[prefix, upperBound, limit],
-			)
+					key: Uint8Array | ArrayBuffer;
+					value: Uint8Array | ArrayBuffer;
+				}>(
+					`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
+					[prefix, upperBound, limit],
+				)
 			: db.all<{
-				key: Uint8Array | ArrayBuffer;
-				value: Uint8Array | ArrayBuffer;
-			}>(
-				`SELECT key, value FROM kv WHERE key >= ? ORDER BY key ${direction} LIMIT ?`,
-				[prefix, limit],
-			);
+					key: Uint8Array | ArrayBuffer;
+					value: Uint8Array | ArrayBuffer;
+				}>(
+					`SELECT key, value FROM kv WHERE key >= ? ORDER BY key ${direction} LIMIT ?`,
+					[prefix, limit],
+				);
 
 		return rows.map((row) => [
 			ensureUint8Array(row.key, "key"),
