@@ -61,6 +61,16 @@ Use that canonical URL when citing, not the reference file path.
 - React client → `https://rivet.dev/docs/clients/react`
 - Self-hosting on Kubernetes → `https://rivet.dev/docs/self-hosting/kubernetes`
 
+## Version Check
+
+Before starting any work, check if the user's project is on the latest version of RivetKit (latest: {{RIVETKIT_VERSION}}). Look at the `rivetkit` version in the user's `package.json` (check both `dependencies` and `devDependencies`). If the installed version is older than {{RIVETKIT_VERSION}}, inform the user and suggest upgrading:
+
+```bash
+npm install rivetkit@{{RIVETKIT_VERSION}}
+```
+
+If the user also uses `@rivetkit/react`, `@rivetkit/next-js`, or other `@rivetkit/*` client packages, suggest upgrading those too. Outdated versions may have known bugs or missing features that cause issues.
+
 ## First Steps
 
 1. Install RivetKit (latest: {{RIVETKIT_VERSION}})
