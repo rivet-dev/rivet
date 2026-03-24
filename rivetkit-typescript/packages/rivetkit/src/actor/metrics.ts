@@ -91,6 +91,11 @@ export class ActorMetrics {
 		dbMigrateMs: 0,
 	};
 
+	/** Total number of KV calls made so far. */
+	get totalKvCalls(): number {
+		return this.kvGet.calls + this.kvGetBatch.calls + this.kvPut.calls + this.kvPutBatch.calls + this.kvDeleteBatch.calls;
+	}
+
 	trackSql(query: string, durationMs: number): void {
 		const token = query.trimStart().slice(0, 8).toUpperCase();
 		if (token.startsWith("SELECT") || token.startsWith("PRAGMA") || token.startsWith("WITH")) {

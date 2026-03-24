@@ -34,6 +34,8 @@ function createProxyCallback(
 	waDb: IDatabase,
 	mutex: AsyncMutex,
 	isClosed: () => boolean,
+	metrics?: import("@/actor/metrics").ActorMetrics,
+	log?: { debug(obj: Record<string, unknown>): void },
 ) {
 	return async (
 		sql: string,
@@ -45,21 +47,38 @@ function createProxyCallback(
 				throw new Error("database is closed");
 			}
 
+			const kvCallsBefore = metrics?.totalKvCalls ?? 0;
+			const start = performance.now();
+
+			let result: { rows: any };
 			if (method === "run") {
 				await waDb.run(sql, toSqliteBindings(params));
-				return { rows: [] };
+				result = { rows: [] };
+			} else {
+				// For all/get/values, use parameterized query
+				const queryResult = await waDb.query(sql, toSqliteBindings(params));
+
+				// drizzle's mapResultRow accesses rows by column index (positional arrays)
+				// so we return raw arrays for all methods
+				if (method === "get") {
+					result = { rows: queryResult.rows[0] };
+				} else {
+					result = { rows: queryResult.rows };
+				}
 			}
 
-			// For all/get/values, use parameterized query
-			const result = await waDb.query(sql, toSqliteBindings(params));
-
-			// drizzle's mapResultRow accesses rows by column index (positional arrays)
-			// so we return raw arrays for all methods
-			if (method === "get") {
-				return { rows: result.rows[0] };
+			const durationMs = performance.now() - start;
+			metrics?.trackSql(sql, durationMs);
+			if (metrics && log) {
+				const kvCalls = metrics.totalKvCalls - kvCallsBefore;
+				log.debug({
+					msg: "sql query",
+					query: sql.slice(0, 120),
+					durationMs,
+					kvCalls,
+				});
 			}
-
-			return { rows: result.rows };
+			return result;
 		});
 	};
 }
@@ -152,7 +171,7 @@ export function db<
 			};
 
 			// Create the async proxy callback
-			const callback = createProxyCallback(waDb, mutex, () => closed);
+			const callback = createProxyCallback(waDb, mutex, () => closed, ctx.metrics, ctx.log);
 
 			// Create the drizzle instance using sqlite-proxy
 			const client = proxyDrizzle<TSchema>(callback, config);
@@ -170,12 +189,16 @@ export function db<
 					return await mutex.run(async () => {
 						ensureOpen();
 
+						const kvCallsBefore = ctx.metrics?.totalKvCalls ?? 0;
+						const start = performance.now();
+						let rows: TRow[];
+
 						if (args.length > 0) {
 							const result = await waDb.query(
 								query,
 								toSqliteBindings(args),
 							);
-							return result.rows.map((row: unknown[]) => {
+							rows = result.rows.map((row: unknown[]) => {
 								const obj: Record<string, unknown> = {};
 								for (
 									let i = 0;
@@ -186,25 +209,38 @@ export function db<
 								}
 								return obj;
 							}) as TRow[];
+						} else {
+							// Use exec for non-parameterized queries since
+							// @rivetkit/sqlite's query() can crash on some statements.
+							const results: Record<string, unknown>[] = [];
+							let columnNames: string[] | null = null;
+							await waDb.exec(
+								query,
+								(row: unknown[], columns: string[]) => {
+									if (!columnNames) {
+										columnNames = columns;
+									}
+									const obj: Record<string, unknown> = {};
+									for (let i = 0; i < row.length; i++) {
+										obj[columnNames[i]] = row[i];
+									}
+									results.push(obj);
+								},
+							);
+							rows = results as TRow[];
 						}
-						// Use exec for non-parameterized queries since
-						// @rivetkit/sqlite's query() can crash on some statements.
-						const results: Record<string, unknown>[] = [];
-						let columnNames: string[] | null = null;
-						await waDb.exec(
-							query,
-							(row: unknown[], columns: string[]) => {
-								if (!columnNames) {
-									columnNames = columns;
-								}
-								const obj: Record<string, unknown> = {};
-								for (let i = 0; i < row.length; i++) {
-									obj[columnNames[i]] = row[i];
-								}
-								results.push(obj);
-							},
-						);
-						return results as TRow[];
+
+						const durationMs = performance.now() - start;
+						if (ctx.metrics && ctx.log) {
+							const kvCalls = ctx.metrics.totalKvCalls - kvCallsBefore;
+							ctx.log.debug({
+								msg: "sql query",
+								query: query.slice(0, 120),
+								durationMs,
+								kvCalls,
+							});
+						}
+						return rows;
 					});
 				},
 				close: async () => {

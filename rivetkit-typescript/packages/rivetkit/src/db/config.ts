@@ -52,6 +52,12 @@ export interface DatabaseProviderContext {
 	 * search before falling back to KV.
 	 */
 	preloadedEntries?: [Uint8Array, Uint8Array][];
+
+	/**
+	 * Logger for debug output. When provided, SQL queries are logged with
+	 * duration and KV call count.
+	 */
+	log?: { debug(obj: Record<string, unknown>): void };
 }
 
 export type DatabaseProvider<DB extends RawAccess> = {

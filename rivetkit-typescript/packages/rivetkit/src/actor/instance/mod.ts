@@ -1665,6 +1665,7 @@ export class ActorInstance<
 					sqliteVfs: this.#sqliteVfs,
 					metrics: this.#metrics,
 					preloadedEntries: sqlitePreloadEntries,
+					log: this.#rLog,
 				}),
 			);
 			this.#rLog.info({ msg: "database migration starting" });

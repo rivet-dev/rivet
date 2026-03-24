@@ -416,7 +416,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 				headers: { Authorization: "Bearer token" },
 			});
 			expect(response.status).toBe(200);
-			const data = await response.json();
+			const data: any = await response.json();
 
 			// Verify startup metrics are present and have reasonable values
 			expect(data.startup_total_ms).toBeDefined();

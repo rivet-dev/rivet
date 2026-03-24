@@ -70,6 +70,7 @@ export function db({
 					return await mutex.run(async () => {
 						ensureOpen();
 
+						const kvCallsBefore = ctx.metrics?.totalKvCalls ?? 0;
 						const start = performance.now();
 
 						// `db.exec` does not support binding `?` placeholders.
@@ -125,7 +126,17 @@ export function db({
 							result = results as TRow[];
 						}
 
-						ctx.metrics?.trackSql(query, performance.now() - start);
+						const durationMs = performance.now() - start;
+						ctx.metrics?.trackSql(query, durationMs);
+						if (ctx.metrics) {
+							const kvCalls = ctx.metrics.totalKvCalls - kvCallsBefore;
+							ctx.log?.debug({
+								msg: "sql query",
+								query: query.slice(0, 120),
+								durationMs,
+								kvCalls,
+							});
+						}
 						return result;
 					});
 				},
