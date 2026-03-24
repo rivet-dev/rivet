@@ -5,6 +5,11 @@
  * when the actor sleeps and wakes again.
  */
 
+/** Keys of `ActorMetrics["startup"]` whose values are `number`. */
+export type StartupTimingKey = {
+	[K in keyof ActorMetrics["startup"]]: ActorMetrics["startup"][K] extends number ? K : never;
+}[keyof ActorMetrics["startup"]];
+
 export interface CounterMetric {
 	type: "counter";
 	help: string;
@@ -62,6 +67,45 @@ export class ActorMetrics {
 	connectionsOpened = 0;
 	connectionsClosed = 0;
 
+	// Startup timing
+	startup = {
+		isNew: false,
+		totalMs: 0,
+		kvRoundTrips: 0,
+		// Internal
+		checkPersistDataMs: 0,
+		initNewActorMs: 0,
+		preloadKvMs: 0,
+		preloadKvEntries: 0,
+		instantiateMs: 0,
+		loadStateMs: 0,
+		restoreConnectionsMs: 0,
+		restoreConnectionsCount: 0,
+		initQueueMs: 0,
+		initInspectorTokenMs: 0,
+		flushWritesMs: 0,
+		flushWritesEntries: 0,
+		setupDatabaseClientMs: 0,
+		initAlarmsMs: 0,
+		onBeforeActorStartMs: 0,
+		// User
+		createStateMs: 0,
+		onCreateMs: 0,
+		onWakeMs: 0,
+		createVarsMs: 0,
+		dbMigrateMs: 0,
+	};
+
+	/** Total number of KV read calls made so far. */
+	get totalKvReads(): number {
+		return this.kvGet.calls + this.kvGetBatch.calls;
+	}
+
+	/** Total number of KV write calls made so far. */
+	get totalKvWrites(): number {
+		return this.kvPut.calls + this.kvPutBatch.calls + this.kvDeleteBatch.calls;
+	}
+
 	trackSql(query: string, durationMs: number): void {
 		const token = query.trimStart().slice(0, 8).toUpperCase();
 		if (token.startsWith("SELECT") || token.startsWith("PRAGMA") || token.startsWith("WITH")) {
@@ -79,6 +123,7 @@ export class ActorMetrics {
 	}
 
 	snapshot(): MetricsSnapshot {
+		const s = this.startup;
 		return {
 			kv_operations: {
 				type: "labeled_timing",
@@ -131,6 +176,121 @@ export class ActorMetrics {
 				type: "counter",
 				help: "Total WebSocket connections closed",
 				value: this.connectionsClosed,
+			},
+			startup_total_ms: {
+				type: "gauge",
+				help: "Total actor startup time in milliseconds",
+				value: s.totalMs,
+			},
+			startup_kv_round_trips: {
+				type: "gauge",
+				help: "KV round-trips during startup",
+				value: s.kvRoundTrips,
+			},
+			startup_is_new: {
+				type: "gauge",
+				help: "1 if new actor, 0 if existing",
+				value: s.isNew ? 1 : 0,
+			},
+			startup_internal_check_persist_data_ms: {
+				type: "gauge",
+				help: "Time to check persist data existence",
+				value: s.checkPersistDataMs,
+			},
+			startup_internal_init_new_actor_ms: {
+				type: "gauge",
+				help: "Time to write initial KV state for new actor",
+				value: s.initNewActorMs,
+			},
+			startup_internal_preload_kv_ms: {
+				type: "gauge",
+				help: "Time to preload startup KV data",
+				value: s.preloadKvMs,
+			},
+			startup_internal_preload_kv_entries: {
+				type: "gauge",
+				help: "Number of entries preloaded",
+				value: s.preloadKvEntries,
+			},
+			startup_internal_instantiate_ms: {
+				type: "gauge",
+				help: "Time to instantiate actor class",
+				value: s.instantiateMs,
+			},
+			startup_internal_load_state_ms: {
+				type: "gauge",
+				help: "Time to load and deserialize actor state",
+				value: s.loadStateMs,
+			},
+			startup_internal_restore_connections_ms: {
+				type: "gauge",
+				help: "Time to restore persisted connections",
+				value: s.restoreConnectionsMs,
+			},
+			startup_internal_restore_connections_count: {
+				type: "gauge",
+				help: "Number of connections restored",
+				value: s.restoreConnectionsCount,
+			},
+			startup_internal_init_queue_ms: {
+				type: "gauge",
+				help: "Time to initialize queue metadata",
+				value: s.initQueueMs,
+			},
+			startup_internal_init_inspector_token_ms: {
+				type: "gauge",
+				help: "Time to load or generate inspector token",
+				value: s.initInspectorTokenMs,
+			},
+			startup_internal_flush_writes_ms: {
+				type: "gauge",
+				help: "Time to flush batched init writes",
+				value: s.flushWritesMs,
+			},
+			startup_internal_flush_writes_entries: {
+				type: "gauge",
+				help: "Number of entries in batched init write",
+				value: s.flushWritesEntries,
+			},
+			startup_internal_setup_database_client_ms: {
+				type: "gauge",
+				help: "Time to create database client",
+				value: s.setupDatabaseClientMs,
+			},
+			startup_internal_init_alarms_ms: {
+				type: "gauge",
+				help: "Time to initialize scheduled alarms",
+				value: s.initAlarmsMs,
+			},
+			startup_internal_on_before_actor_start_ms: {
+				type: "gauge",
+				help: "Time for driver onBeforeActorStart hook",
+				value: s.onBeforeActorStartMs,
+			},
+			startup_user_create_state_ms: {
+				type: "gauge",
+				help: "Time in user createState callback",
+				value: s.createStateMs,
+			},
+			startup_user_on_create_ms: {
+				type: "gauge",
+				help: "Time in user onCreate callback",
+				value: s.onCreateMs,
+			},
+			startup_user_on_wake_ms: {
+				type: "gauge",
+				help: "Time in user onWake callback",
+				value: s.onWakeMs,
+			},
+			startup_user_create_vars_ms: {
+				type: "gauge",
+				help: "Time in user createVars callback",
+				value: s.createVarsMs,
+			},
+			startup_user_db_migrate_ms: {
+				type: "gauge",
+				help: "Time in user database migration",
+				value: s.dbMigrateMs,
 			},
 		};
 	}

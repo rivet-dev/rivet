@@ -402,5 +402,48 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			});
 			expect(response.status).toBe(401);
 		});
+
+		test("GET /inspector/metrics returns startup metrics", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.counter.getOrCreate(["inspector-metrics"]);
+
+			// Ensure actor exists
+			await handle.increment(0);
+
+			const gatewayUrl = await handle.getGatewayUrl();
+
+			const response = await fetch(`${gatewayUrl}/inspector/metrics`, {
+				headers: { Authorization: "Bearer token" },
+			});
+			expect(response.status).toBe(200);
+			const data: any = await response.json();
+
+			// Verify startup metrics are present and have reasonable values
+			expect(data.startup_total_ms).toBeDefined();
+			expect(data.startup_total_ms.type).toBe("gauge");
+			expect(data.startup_total_ms.value).toBeGreaterThan(0);
+
+			expect(data.startup_kv_round_trips).toBeDefined();
+			expect(data.startup_kv_round_trips.type).toBe("gauge");
+			expect(data.startup_kv_round_trips.value).toBeGreaterThanOrEqual(0);
+
+			expect(data.startup_is_new).toBeDefined();
+			expect(data.startup_is_new.type).toBe("gauge");
+
+			// Verify internal metrics exist
+			expect(data.startup_internal_load_state_ms).toBeDefined();
+			expect(data.startup_internal_load_state_ms.value).toBeGreaterThanOrEqual(0);
+			expect(data.startup_internal_init_queue_ms).toBeDefined();
+			expect(data.startup_internal_init_inspector_token_ms).toBeDefined();
+
+			// Verify user metrics exist
+			expect(data.startup_user_create_vars_ms).toBeDefined();
+			expect(data.startup_user_on_wake_ms).toBeDefined();
+			expect(data.startup_user_create_state_ms).toBeDefined();
+
+			// Verify existing KV metrics still present
+			expect(data.kv_operations).toBeDefined();
+			expect(data.kv_operations.type).toBe("labeled_timing");
+		});
 	});
 }

@@ -10,6 +10,8 @@ interface DatabaseFactoryConfig {
 export function db({
 	onMigrate,
 }: DatabaseFactoryConfig = {}): DatabaseProvider<RawAccess> {
+	const clientToKvStore = new WeakMap<object, ReturnType<typeof createActorKvStore>>();
+
 	return {
 		createClient: async (ctx) => {
 			// Check if override is provided
@@ -44,7 +46,7 @@ export function db({
 				);
 			}
 
-			const kvStore = createActorKvStore(ctx.kv, ctx.metrics);
+			const kvStore = createActorKvStore(ctx.kv, ctx.metrics, ctx.preloadedEntries);
 			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
 			let closed = false;
 			const mutex = new AsyncMutex();
@@ -54,7 +56,7 @@ export function db({
 				}
 			};
 
-			return {
+			const client = {
 				execute: async <
 					TRow extends Record<string, unknown> = Record<
 						string,
@@ -67,6 +69,8 @@ export function db({
 					return await mutex.run(async () => {
 						ensureOpen();
 
+						const kvReadsBefore = ctx.metrics?.totalKvReads ?? 0;
+						const kvWritesBefore = ctx.metrics?.totalKvWrites ?? 0;
 						const start = performance.now();
 
 						// `db.exec` does not support binding `?` placeholders.
@@ -122,7 +126,19 @@ export function db({
 							result = results as TRow[];
 						}
 
-						ctx.metrics?.trackSql(query, performance.now() - start);
+						const durationMs = performance.now() - start;
+						ctx.metrics?.trackSql(query, durationMs);
+						if (ctx.metrics) {
+							const kvReads = ctx.metrics.totalKvReads - kvReadsBefore;
+							const kvWrites = ctx.metrics.totalKvWrites - kvWritesBefore;
+							ctx.log?.debug({
+								msg: "sql query",
+								query: query.slice(0, 120),
+								durationMs,
+								kvReads,
+								kvWrites,
+							});
+						}
 						return result;
 					});
 				},
@@ -137,8 +153,14 @@ export function db({
 					}
 				},
 			} satisfies RawAccess;
+			clientToKvStore.set(client, kvStore);
+			return client;
 		},
 		onMigrate: async (client) => {
+			// Clear preloaded entries before migrations run. Migrations may
+			// write and re-read pages, and stale preload data would be
+			// served instead of the freshly written values.
+			clientToKvStore.get(client as object)?.clearPreload();
 			if (onMigrate) {
 				await onMigrate(client);
 			}

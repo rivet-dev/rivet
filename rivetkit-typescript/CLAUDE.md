@@ -29,6 +29,19 @@ The total actor KV storage limit (10 GiB) cannot be worked around by chunking. A
 
 When changing KV, queue, workflow persistence, SQLite-over-KV, or any limit-related actor behavior, update `website/src/content/docs/actors/limits.mdx` in the same change so docs stay in sync with effective hard and soft limits.
 
+## Startup Logging
+
+Every discrete phase of actor startup must have a corresponding debug log. Use the prefix `perf internal:` for framework/infrastructure phases and `perf user:` for user-code callbacks. For example:
+
+```
+DEBUG perf internal: loadStateMs          durationMs=...
+DEBUG perf internal: initQueueMs          durationMs=...
+DEBUG perf user: onCreateMs               durationMs=...
+DEBUG perf user: dbMigrateMs              durationMs=...
+```
+
+The log name matches the key in `ActorMetrics.startup`. Internal phases use `perf internal:`, user-code callbacks use `perf user:`. This convention keeps startup logs greppable and makes it easy to separate framework overhead from user-code time. When adding a new startup phase, always add a corresponding log with the appropriate prefix and update the `#userStartupKeys` set in `ActorInstance` if the phase runs user code.
+
 ## Workflow Context Actor Access Guards
 
 In `ActorWorkflowContext` (`packages/rivetkit/src/workflow/context.ts`), all side-effectful `#runCtx` access must be guarded by `#ensureActorAccess` so that side effects only run inside workflow steps and are not replayed outside of them. Read-only properties (e.g., `actorId`, `log`) do not need guards. When adding new methods or properties to the workflow context that delegate to `#runCtx`, apply the guard if the operation has side effects.
