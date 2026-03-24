@@ -14,7 +14,7 @@ import invariant from "invariant";
 import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
 import { lookupInRegistry } from "@/actor/definition";
 import { KEYS, queueMetadataKey, sqliteStoragePrefix, workflowStoragePrefix } from "@/actor/instance/keys";
-import { type PreloadMap, compareBytes, binarySearch } from "@/actor/instance/preload-map";
+import { type PreloadMap, compareBytes, createPreloadMap } from "@/actor/instance/preload-map";
 import { deserializeActorKey } from "@/actor/keys";
 import { getValueLength } from "@/actor/protocol/old";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
@@ -537,34 +537,10 @@ export class EngineActorDriver implements ActorDriver {
 		entries.sort((a, b) => compareBytes(a[0], b[0]));
 		const requestedGetKeys = allExactKeys.slice().sort(compareBytes);
 		const requestedPrefixes = prefixScans.slice().sort(compareBytes);
-		const totalEntries = entries.length;
 
-		const preloadMap: PreloadMap = {
-			get(key: Uint8Array): Uint8Array | null | undefined {
-				const value = binarySearch(entries, key);
-				if (value !== undefined) return value;
-				if (binarySearchExists(requestedGetKeys, key)) return null;
-				return undefined;
-			},
-			listPrefix(prefix: Uint8Array): [Uint8Array, Uint8Array][] | undefined {
-				if (!binarySearchExists(requestedPrefixes, prefix)) return undefined;
-				const result: [Uint8Array, Uint8Array][] = [];
-				let lo = 0;
-				let hi = entries.length - 1;
-				while (lo <= hi) {
-					const mid = (lo + hi) >>> 1;
-					if (compareBytes(entries[mid][0], prefix) < 0) lo = mid + 1;
-					else hi = mid - 1;
-				}
-				for (let i = lo; i < entries.length; i++) {
-					if (!hasPrefix(entries[i][0], prefix)) break;
-					result.push(entries[i]);
-				}
-				return result;
-			},
-		};
+		const preloadMap = createPreloadMap(entries, requestedGetKeys, requestedPrefixes);
 
-		return { preloadMap, entries: totalEntries };
+		return { preloadMap, entries: entries.length };
 	}
 
 	async #runnerOnActorStart(
@@ -1239,28 +1215,4 @@ export class EngineActorDriver implements ActorDriver {
 			entry.bufferedMessageSize = 0;
 		}
 	}
-}
-
-function hasPrefix(key: Uint8Array, prefix: Uint8Array): boolean {
-	if (key.length < prefix.length) return false;
-	for (let i = 0; i < prefix.length; i++) {
-		if (key[i] !== prefix[i]) return false;
-	}
-	return true;
-}
-
-function binarySearchExists(
-	sortedKeys: Uint8Array[],
-	key: Uint8Array,
-): boolean {
-	let lo = 0;
-	let hi = sortedKeys.length - 1;
-	while (lo <= hi) {
-		const mid = (lo + hi) >>> 1;
-		const cmp = compareBytes(sortedKeys[mid], key);
-		if (cmp === 0) return true;
-		if (cmp < 0) lo = mid + 1;
-		else hi = mid - 1;
-	}
-	return false;
 }

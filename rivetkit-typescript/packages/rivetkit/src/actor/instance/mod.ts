@@ -7,7 +7,7 @@ import {
 	type Traces,
 } from "@rivetkit/traces";
 import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
-import { ActorMetrics } from "@/actor/metrics";
+import { ActorMetrics, type StartupTimingKey } from "@/actor/metrics";
 import invariant from "invariant";
 import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
@@ -65,6 +65,7 @@ import { EventManager } from "./event-manager";
 import { KEYS, sqliteStoragePrefix, workflowStoragePrefix } from "./keys";
 import {
 	type PreloadedEntries,
+	type PreloadHit,
 	type PreloadMap,
 } from "./preload-map";
 import {
@@ -359,13 +360,13 @@ export class ActorInstance<
 	 * and records the duration on the startup metrics object.
 	 */
 	async #measureStartup<T>(
-		name: keyof ActorMetrics["startup"],
+		name: StartupTimingKey,
 		fn: () => Promise<T> | T,
 	): Promise<T> {
 		const start = performance.now();
 		const result = await fn();
 		const durationMs = performance.now() - start;
-		(this.#metrics.startup as any)[name] = durationMs;
+		this.#metrics.startup[name] = durationMs;
 		this.#rLog.debug({ msg: `startup: ${name}`, durationMs });
 		return result;
 	}
@@ -512,12 +513,15 @@ export class ActorInstance<
 		{
 			const savedGuard = this.#expectNoKvRoundTrips;
 			this.#expectNoKvRoundTrips = false;
-			await this.#measureStartup("createVarsMs", async () => {
-				if (this.#varsEnabled) {
-					await this.#initializeVars();
-				}
-			});
-			this.#expectNoKvRoundTrips = savedGuard;
+			try {
+				await this.#measureStartup("createVarsMs", async () => {
+					if (this.#varsEnabled) {
+						await this.#initializeVars();
+					}
+				});
+			} finally {
+				this.#expectNoKvRoundTrips = savedGuard;
+			}
 		}
 
 		// Call onStart lifecycle. Pause the KV round-trip guard during
@@ -525,10 +529,13 @@ export class ActorInstance<
 		{
 			const savedGuard = this.#expectNoKvRoundTrips;
 			this.#expectNoKvRoundTrips = false;
-			await this.#measureStartup("onWakeMs", () =>
-				this.#callOnStart(),
-			);
-			this.#expectNoKvRoundTrips = savedGuard;
+			try {
+				await this.#measureStartup("onWakeMs", () =>
+					this.#callOnStart(),
+				);
+			} finally {
+				this.#expectNoKvRoundTrips = savedGuard;
+			}
 		}
 
 		// Setup database.
@@ -1276,8 +1283,8 @@ export class ActorInstance<
 	async #loadState(preload?: PreloadMap, writeCollector?: WriteCollector) {
 		let persistDataBuffer: Uint8Array | null;
 		const preloaded = preload?.get(KEYS.PERSIST_DATA);
-		if (preloaded !== undefined) {
-			persistDataBuffer = preloaded;
+		if (preloaded) {
+			persistDataBuffer = preloaded.value;
 		} else {
 			this[WARN_UNEXPECTED_KV_ROUND_TRIP]("kvBatchGet");
 			this.#metrics.startup.kvRoundTrips++;
@@ -1306,8 +1313,11 @@ export class ActorInstance<
 			// Pause the KV round-trip guard during user code callbacks.
 			const savedGuard = this.#expectNoKvRoundTrips;
 			this.#expectNoKvRoundTrips = false;
-			await this.#createNewActor(persistData, writeCollector);
-			this.#expectNoKvRoundTrips = savedGuard;
+			try {
+				await this.#createNewActor(persistData, writeCollector);
+			} finally {
+				this.#expectNoKvRoundTrips = savedGuard;
+			}
 		}
 
 		// Pass persist reference to schedule manager
@@ -1380,8 +1390,8 @@ export class ActorInstance<
 	async #initializeInspectorToken(preload?: PreloadMap, writeCollector?: WriteCollector) {
 		let tokenBuffer: Uint8Array | null;
 		const preloaded = preload?.get(KEYS.INSPECTOR_TOKEN);
-		if (preloaded !== undefined) {
-			tokenBuffer = preloaded;
+		if (preloaded) {
+			tokenBuffer = preloaded.value;
 		} else {
 			this[WARN_UNEXPECTED_KV_ROUND_TRIP]("kvBatchGet");
 			this.#metrics.startup.kvRoundTrips++;

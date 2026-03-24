@@ -100,8 +100,8 @@ export class QueueManager<
 	async initialize(preload?: PreloadMap, writeCollector?: WriteCollector): Promise<void> {
 		let metadataBuffer: Uint8Array | null;
 		const preloaded = preload?.get(QUEUE_METADATA_KEY);
-		if (preloaded !== undefined) {
-			metadataBuffer = preloaded;
+		if (preloaded) {
+			metadataBuffer = preloaded.value;
 		} else {
 			this.#actor[WARN_UNEXPECTED_KV_ROUND_TRIP]("kvBatchGet");
 			const [buf] = await this.#driver.kvBatchGet(this.#actor.id, [

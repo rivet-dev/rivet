@@ -117,7 +117,7 @@ describe("buildPreloadMap", () => {
 	});
 
 	describe("get()", () => {
-		it("returns Uint8Array when key exists in entries", () => {
+		it("returns PreloadHit with value when key exists in entries", () => {
 			const input: PreloadedKvInput = {
 				entries: [
 					{ key: bytes(1).buffer, value: bytes(10).buffer },
@@ -128,19 +128,19 @@ describe("buildPreloadMap", () => {
 			};
 			const map = buildPreloadMap(input)!;
 			expect(map).toBeDefined();
-			expect(map.get(bytes(1))).toEqual(bytes(10));
-			expect(map.get(bytes(2))).toEqual(bytes(20));
+			expect(map.get(bytes(1))).toEqual({ value: bytes(10) });
+			expect(map.get(bytes(2))).toEqual({ value: bytes(20) });
 		});
 
-		it("returns null when key is in requestedGetKeys but not in entries", () => {
+		it("returns PreloadHit with null when key is in requestedGetKeys but not in entries", () => {
 			const input: PreloadedKvInput = {
 				entries: [],
 				requestedGetKeys: [bytes(1).buffer, bytes(5).buffer],
 				requestedPrefixes: [],
 			};
 			const map = buildPreloadMap(input)!;
-			expect(map.get(bytes(1))).toBeNull();
-			expect(map.get(bytes(5))).toBeNull();
+			expect(map.get(bytes(1))).toEqual({ value: null });
+			expect(map.get(bytes(5))).toEqual({ value: null });
 		});
 
 		it("returns undefined when key is not in requestedGetKeys", () => {
@@ -154,7 +154,7 @@ describe("buildPreloadMap", () => {
 			expect(map.get(bytes(99))).toBeUndefined();
 		});
 
-		it("distinguishes all three return types", () => {
+		it("distinguishes hit, miss, and not-preloaded", () => {
 			const input: PreloadedKvInput = {
 				entries: [{ key: bytes(1).buffer, value: bytes(10).buffer }],
 				requestedGetKeys: [bytes(1).buffer, bytes(2).buffer],
@@ -162,13 +162,15 @@ describe("buildPreloadMap", () => {
 			};
 			const map = buildPreloadMap(input)!;
 
-			// Key exists in entries: returns value.
+			// Key exists in entries: returns hit with value.
 			const found = map.get(bytes(1));
-			expect(found).toBeInstanceOf(Uint8Array);
-			expect(found).toEqual(bytes(10));
+			expect(found).toBeDefined();
+			expect(found!.value).toEqual(bytes(10));
 
-			// Key requested but not found: returns null.
-			expect(map.get(bytes(2))).toBeNull();
+			// Key requested but not found: returns hit with null.
+			const missing = map.get(bytes(2));
+			expect(missing).toBeDefined();
+			expect(missing!.value).toBeNull();
 
 			// Key not requested at all: returns undefined.
 			expect(map.get(bytes(3))).toBeUndefined();
@@ -189,9 +191,9 @@ describe("buildPreloadMap", () => {
 				requestedPrefixes: [],
 			};
 			const map = buildPreloadMap(input)!;
-			expect(map.get(bytes(1))).toEqual(bytes(10));
-			expect(map.get(bytes(2))).toEqual(bytes(20));
-			expect(map.get(bytes(3))).toEqual(bytes(30));
+			expect(map.get(bytes(1))?.value).toEqual(bytes(10));
+			expect(map.get(bytes(2))?.value).toEqual(bytes(20));
+			expect(map.get(bytes(3))?.value).toEqual(bytes(30));
 		});
 	});
 

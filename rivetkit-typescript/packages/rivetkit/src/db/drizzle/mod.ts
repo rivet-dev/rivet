@@ -145,7 +145,7 @@ export function db<
 	// concurrently: the last writer won, and earlier actors' migrations
 	// ran on the wrong database.
 	const clientToRawDb = new WeakMap<object, IDatabase>();
-	let kvStoreRef: ReturnType<typeof createActorKvStore> | null = null;
+	const clientToKvStore = new WeakMap<object, ReturnType<typeof createActorKvStore>>();
 
 	return {
 		createClient: async (ctx) => {
@@ -157,7 +157,6 @@ export function db<
 			}
 
 			const kvStore = createActorKvStore(ctx.kv, ctx.metrics, ctx.preloadedEntries);
-			kvStoreRef = kvStore;
 			const waDb = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
 			// Per-client mutex so actors of the same type do not serialize
 			// against each other. Each actor has its own database handle and
@@ -256,6 +255,7 @@ export function db<
 			} satisfies RawAccess);
 
 			clientToRawDb.set(result, waDb);
+			clientToKvStore.set(result, kvStore);
 			return result;
 		},
 		onMigrate: async (client) => {
@@ -266,8 +266,7 @@ export function db<
 					config.migrations,
 				);
 			}
-			kvStoreRef?.clearPreload();
-			kvStoreRef = null;
+			clientToKvStore.get(client as object)?.clearPreload();
 		},
 		onDestroy: async (client) => {
 			await client.close();

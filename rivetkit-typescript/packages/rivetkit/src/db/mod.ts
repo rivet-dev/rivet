@@ -10,7 +10,7 @@ interface DatabaseFactoryConfig {
 export function db({
 	onMigrate,
 }: DatabaseFactoryConfig = {}): DatabaseProvider<RawAccess> {
-	let kvStoreRef: ReturnType<typeof createActorKvStore> | null = null;
+	const clientToKvStore = new WeakMap<object, ReturnType<typeof createActorKvStore>>();
 
 	return {
 		createClient: async (ctx) => {
@@ -47,7 +47,6 @@ export function db({
 			}
 
 			const kvStore = createActorKvStore(ctx.kv, ctx.metrics, ctx.preloadedEntries);
-			kvStoreRef = kvStore;
 			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
 			let closed = false;
 			const mutex = new AsyncMutex();
@@ -57,7 +56,7 @@ export function db({
 				}
 			};
 
-			return {
+			const client = {
 				execute: async <
 					TRow extends Record<string, unknown> = Record<
 						string,
@@ -151,13 +150,14 @@ export function db({
 					}
 				},
 			} satisfies RawAccess;
+			clientToKvStore.set(client, kvStore);
+			return client;
 		},
 		onMigrate: async (client) => {
 			if (onMigrate) {
 				await onMigrate(client);
 			}
-			kvStoreRef?.clearPreload();
-			kvStoreRef = null;
+			clientToKvStore.get(client as object)?.clearPreload();
 		},
 		onDestroy: async (client) => {
 			await client.close();

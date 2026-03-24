@@ -5,6 +5,11 @@
  * when the actor sleeps and wakes again.
  */
 
+/** Keys of `ActorMetrics["startup"]` whose values are `number`. */
+export type StartupTimingKey = {
+	[K in keyof ActorMetrics["startup"]]: ActorMetrics["startup"][K] extends number ? K : never;
+}[keyof ActorMetrics["startup"]];
+
 export interface CounterMetric {
 	type: "counter";
 	help: string;
