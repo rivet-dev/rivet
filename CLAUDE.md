@@ -224,6 +224,7 @@ Key points:
 - Always return anyhow errors from failable functions
 	- For example: `fn foo() -> Result<i64> { /* ... */ }`
 - Do not glob import (`::*`) from anyhow. Instead, import individual types and traits
+- Prefer anyhow's `.context()` over `anyhow!` macro
 
 **Rust Dependency Management**
 - When adding a dependency, check for a workspace dependency in Cargo.toml

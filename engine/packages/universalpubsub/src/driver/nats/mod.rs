@@ -38,6 +38,14 @@ impl PubSubDriver for NatsDriver {
 		Ok(Box::new(NatsSubscriber { subscriber }))
 	}
 
+	async fn queue_subscribe(&self, subject: &str, queue: &str) -> Result<SubscriberDriverHandle> {
+		let subscriber = self
+			.client
+			.queue_subscribe(subject.to_string(), queue.to_string())
+			.await?;
+		Ok(Box::new(NatsSubscriber { subscriber }))
+	}
+
 	async fn publish(&self, subject: &str, payload: &[u8]) -> Result<()> {
 		self.client
 			.publish(subject.to_string(), payload.to_vec().into())

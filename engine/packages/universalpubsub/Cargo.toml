@@ -13,6 +13,7 @@ base64.workspace = true
 deadpool-postgres.workspace = true
 futures-util.workspace = true
 lazy_static.workspace = true
+rand.workspace = true
 rivet-error.workspace = true
 rivet-metrics.workspace = true
 rivet-postgres-util.workspace = true
