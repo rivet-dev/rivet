@@ -1,41 +1,35 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Content } from "@/app/layout";
 import { SidebarToggle } from "@/app/sidebar-toggle";
 import { H1 } from "@/components";
 import { useCloudNamespaceDataProvider } from "@/components/actors";
 import { ChartSyncProvider } from "./chart-sync-context";
-import { ALL_METRICS, METRICS_CONFIG, TIME_RANGE_OPTIONS } from "./constants";
-import { MetricsTimeRangeSelect } from "./metrics-time-range-select";
+import { ALL_METRICS, METRICS_CONFIG } from "./constants";
+import { OVERVIEW_RANGE_MS, OVERVIEW_RESOLUTION } from "./hooks";
 import { NamespaceMetricsChart } from "./namespace-metrics-chart";
 
 export function NamespaceMetricsPage() {
 	const dataProvider = useCloudNamespaceDataProvider();
 
-	const [timeRange, setTimeRange] = useState("1h");
-
-	const { startAt, endAt, resolution } = useMemo(() => {
-		const option = TIME_RANGE_OPTIONS.find((o) => o.value === timeRange);
+	const { startAt, endAt } = useMemo(() => {
 		const now = new Date();
 		return {
-			startAt: new Date(
-				now.getTime() - (option?.milliseconds ?? 3600000),
-			).toISOString(),
+			startAt: new Date(now.getTime() - OVERVIEW_RANGE_MS).toISOString(),
 			endAt: now.toISOString(),
-			resolution: option?.resolution ?? 60,
 		};
-	}, [timeRange]);
+	}, []);
 
 	const {
-		data: metricsData,
-		isLoading,
-		isError,
+		data: overviewData,
+		isLoading: overviewLoading,
+		isError: overviewError,
 	} = useQuery({
 		...dataProvider.currentNamespaceMetricsQueryOptions({
 			name: ALL_METRICS,
 			startAt,
 			endAt,
-			resolution,
+			resolution: OVERVIEW_RESOLUTION,
 		}),
 		refetchInterval: 30000,
 	});
@@ -46,10 +40,6 @@ export function NamespaceMetricsPage() {
 				<div className="flex justify-between items-center px-6 @6xl:px-0 py-4">
 					<SidebarToggle className="absolute left-4" />
 					<H1>Metrics</H1>
-					<MetricsTimeRangeSelect
-						value={timeRange}
-						onValueChange={setTimeRange}
-					/>
 				</div>
 				<p className="max-w-7xl mb-6 px-6 @6xl:px-0 text-muted-foreground">
 					View real-time metrics for this namespace.
@@ -58,18 +48,17 @@ export function NamespaceMetricsPage() {
 
 			<hr className="mb-6" />
 
-			<ChartSyncProvider key={timeRange}>
+			<ChartSyncProvider>
 				<div className="px-4 max-w-7xl mx-auto @6xl:px-0 pb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
 					{METRICS_CONFIG.map((metric) => (
 						<NamespaceMetricsChart
 							key={metric.name}
 							metric={metric}
-							metricsData={metricsData}
-							isLoading={isLoading}
-							isError={isError}
-							startAt={startAt}
-							endAt={endAt}
-							resolution={resolution}
+							overviewData={overviewData}
+							overviewStartAt={startAt}
+							overviewEndAt={endAt}
+							isOverviewLoading={overviewLoading}
+							isOverviewError={overviewError}
 						/>
 					))}
 				</div>
