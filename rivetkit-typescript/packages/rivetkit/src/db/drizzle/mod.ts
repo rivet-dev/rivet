@@ -47,7 +47,8 @@ function createProxyCallback(
 				throw new Error("database is closed");
 			}
 
-			const kvCallsBefore = metrics?.totalKvCalls ?? 0;
+			const kvReadsBefore = metrics?.totalKvReads ?? 0;
+			const kvWritesBefore = metrics?.totalKvWrites ?? 0;
 			const start = performance.now();
 
 			let result: { rows: any };
@@ -70,12 +71,14 @@ function createProxyCallback(
 			const durationMs = performance.now() - start;
 			metrics?.trackSql(sql, durationMs);
 			if (metrics && log) {
-				const kvCalls = metrics.totalKvCalls - kvCallsBefore;
+				const kvReads = metrics.totalKvReads - kvReadsBefore;
+				const kvWrites = metrics.totalKvWrites - kvWritesBefore;
 				log.debug({
 					msg: "sql query",
 					query: sql.slice(0, 120),
 					durationMs,
-					kvCalls,
+					kvReads,
+					kvWrites,
 				});
 			}
 			return result;
@@ -188,7 +191,8 @@ export function db<
 					return await mutex.run(async () => {
 						ensureOpen();
 
-						const kvCallsBefore = ctx.metrics?.totalKvCalls ?? 0;
+						const kvReadsBefore = ctx.metrics?.totalKvReads ?? 0;
+						const kvWritesBefore = ctx.metrics?.totalKvWrites ?? 0;
 						const start = performance.now();
 						let rows: TRow[];
 
@@ -231,12 +235,14 @@ export function db<
 
 						const durationMs = performance.now() - start;
 						if (ctx.metrics && ctx.log) {
-							const kvCalls = ctx.metrics.totalKvCalls - kvCallsBefore;
+							const kvReads = ctx.metrics.totalKvReads - kvReadsBefore;
+							const kvWrites = ctx.metrics.totalKvWrites - kvWritesBefore;
 							ctx.log.debug({
 								msg: "sql query",
 								query: query.slice(0, 120),
 								durationMs,
-								kvCalls,
+								kvReads,
+								kvWrites,
 							});
 						}
 						return rows;

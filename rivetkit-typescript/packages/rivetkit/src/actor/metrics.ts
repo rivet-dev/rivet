@@ -96,9 +96,14 @@ export class ActorMetrics {
 		dbMigrateMs: 0,
 	};
 
-	/** Total number of KV calls made so far. */
-	get totalKvCalls(): number {
-		return this.kvGet.calls + this.kvGetBatch.calls + this.kvPut.calls + this.kvPutBatch.calls + this.kvDeleteBatch.calls;
+	/** Total number of KV read calls made so far. */
+	get totalKvReads(): number {
+		return this.kvGet.calls + this.kvGetBatch.calls;
+	}
+
+	/** Total number of KV write calls made so far. */
+	get totalKvWrites(): number {
+		return this.kvPut.calls + this.kvPutBatch.calls + this.kvDeleteBatch.calls;
 	}
 
 	trackSql(query: string, durationMs: number): void {
