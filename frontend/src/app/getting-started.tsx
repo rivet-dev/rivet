@@ -379,15 +379,15 @@ function ProviderSetup() {
 				control={control}
 				name="provider"
 				render={({ field }) => {
-					// const rivetCompute = filteredOptions.find(
-					// 	(o) => o.name === "rivet",
-					// );
+					const rivetCompute = filteredOptions.find(
+						(o) => o.name === "rivet",
+					);
 					const rest = filteredOptions.filter(
 						(o) => o.name !== "rivet",
 					);
 					return (
 						<div className="flex flex-col gap-2">
-							{/* {rivetCompute ? (
+							{rivetCompute ? (
 								<ProviderCard
 									option={rivetCompute}
 									isSelected={
@@ -403,7 +403,7 @@ function ProviderSetup() {
 									className="py-5"
 									iconClassName="!w-7"
 								/>
-							) : null} */}
+							) : null}
 							<div className="grid grid-cols-2 gap-2">
 								{rest.map((option) => (
 									<ProviderCard
