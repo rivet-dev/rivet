@@ -366,7 +366,6 @@
 		"@e2b/code-interpreter": "^2.3.3",
 		"dockerode": "^4.0.9",
 		"drizzle-kit": "^0.31.2",
-		"drizzle-orm": "^0.44.2",
 		"eventsource": "^4.0.0",
 		"ws": "^8.0.0"
 	},
@@ -381,9 +380,6 @@
 			"optional": true
 		},
 		"drizzle-kit": {
-			"optional": true
-		},
-		"drizzle-orm": {
 			"optional": true
 		},
 		"eventsource": {
