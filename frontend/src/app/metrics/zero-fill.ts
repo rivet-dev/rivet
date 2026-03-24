@@ -32,9 +32,10 @@ export function zeroFillDataPoints(
 	// Generate all time buckets from start to end.
 	const result: MetricDataPoint[] = [];
 	for (let t = startMs; t <= endMs; t += resolutionMs) {
+		const bucket = Math.round(t / resolutionMs) * resolutionMs;
 		result.push({
 			ts: new Date(t).toISOString(),
-			value: valueMap.get(t) ?? 0,
+			value: valueMap.get(bucket) ?? 0,
 		});
 	}
 
