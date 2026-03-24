@@ -265,6 +265,10 @@ export function db<
 			return result;
 		},
 		onMigrate: async (client) => {
+			// Clear preloaded entries before migrations run. Migrations may
+			// write and re-read pages, and stale preload data would be
+			// served instead of the freshly written values.
+			clientToKvStore.get(client as object)?.clearPreload();
 			const waDb = clientToRawDb.get(client as object);
 			if (config?.migrations && waDb) {
 				await runInlineMigrations(
@@ -272,7 +276,6 @@ export function db<
 					config.migrations,
 				);
 			}
-			clientToKvStore.get(client as object)?.clearPreload();
 		},
 		onDestroy: async (client) => {
 			await client.close();

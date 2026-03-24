@@ -420,11 +420,11 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			// Verify startup metrics are present and have reasonable values
 			expect(data.startup_total_ms).toBeDefined();
-			expect(data.startup_total_ms.type).toBe("counter");
+			expect(data.startup_total_ms.type).toBe("gauge");
 			expect(data.startup_total_ms.value).toBeGreaterThan(0);
 
 			expect(data.startup_kv_round_trips).toBeDefined();
-			expect(data.startup_kv_round_trips.type).toBe("counter");
+			expect(data.startup_kv_round_trips.type).toBe("gauge");
 			expect(data.startup_kv_round_trips.value).toBeGreaterThanOrEqual(0);
 
 			expect(data.startup_is_new).toBeDefined();

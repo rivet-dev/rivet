@@ -355,20 +355,46 @@ export class ActorInstance<
 		}
 	}
 
+	static #userStartupKeys: Set<StartupTimingKey> = new Set([
+		"createStateMs",
+		"onCreateMs",
+		"onWakeMs",
+		"createVarsMs",
+		"dbMigrateMs",
+	]);
+
 	/**
 	 * Measure the duration of an async startup step. Logs at debug level
 	 * and records the duration on the startup metrics object.
+	 *
+	 * When `pauseKvGuard` is true, the unexpected KV round-trip guard is
+	 * suspended for the duration of the callback (used for user code
+	 * callbacks that may legitimately issue KV reads).
 	 */
 	async #measureStartup<T>(
 		name: StartupTimingKey,
 		fn: () => Promise<T> | T,
+		opts?: { pauseKvGuard?: boolean },
 	): Promise<T> {
+		const savedGuard = this.#expectNoKvRoundTrips;
+		if (opts?.pauseKvGuard) {
+			this.#expectNoKvRoundTrips = false;
+		}
 		const start = performance.now();
-		const result = await fn();
-		const durationMs = performance.now() - start;
-		this.#metrics.startup[name] = durationMs;
-		this.#rLog.debug({ msg: `startup: ${name}`, durationMs });
-		return result;
+		try {
+			const result = await fn();
+			return result;
+		} finally {
+			const durationMs = performance.now() - start;
+			this.#metrics.startup[name] = durationMs;
+			const prefix = ActorInstance.#userStartupKeys.has(name)
+				? "perf user"
+				: "perf internal";
+			this.#rLog.debug({ msg: `${prefix}: ${name}`, durationMs });
+			if (opts?.pauseKvGuard) {
+				this.#expectNoKvRoundTrips = savedGuard;
+			}
+		}
 	}
 
 	get conns(): Map<ConnId, Conn<S, CP, CS, V, I, DB, E, Q>> {
@@ -508,35 +534,17 @@ export class ActorInstance<
 			await writeCollector.flush();
 		});
 
-		// Initialize variables. Pause the KV round-trip guard during
-		// user code callbacks.
-		{
-			const savedGuard = this.#expectNoKvRoundTrips;
-			this.#expectNoKvRoundTrips = false;
-			try {
-				await this.#measureStartup("createVarsMs", async () => {
-					if (this.#varsEnabled) {
-						await this.#initializeVars();
-					}
-				});
-			} finally {
-				this.#expectNoKvRoundTrips = savedGuard;
+		// Initialize variables.
+		await this.#measureStartup("createVarsMs", async () => {
+			if (this.#varsEnabled) {
+				await this.#initializeVars();
 			}
-		}
+		}, { pauseKvGuard: true });
 
-		// Call onStart lifecycle. Pause the KV round-trip guard during
-		// user code callbacks.
-		{
-			const savedGuard = this.#expectNoKvRoundTrips;
-			this.#expectNoKvRoundTrips = false;
-			try {
-				await this.#measureStartup("onWakeMs", () =>
-					this.#callOnStart(),
-				);
-			} finally {
-				this.#expectNoKvRoundTrips = savedGuard;
-			}
-		}
+		// Call onStart lifecycle.
+		await this.#measureStartup("onWakeMs", () =>
+			this.#callOnStart(),
+		{ pauseKvGuard: true });
 
 		// Setup database.
 		await this.#setupDatabase(preload);
@@ -1310,14 +1318,7 @@ export class ActorInstance<
 			);
 		} else {
 			this.#metrics.startup.isNew = true;
-			// Pause the KV round-trip guard during user code callbacks.
-			const savedGuard = this.#expectNoKvRoundTrips;
-			this.#expectNoKvRoundTrips = false;
-			try {
-				await this.#createNewActor(persistData, writeCollector);
-			} finally {
-				this.#expectNoKvRoundTrips = savedGuard;
-			}
+			await this.#createNewActor(persistData, writeCollector);
 		}
 
 		// Pass persist reference to schedule manager
@@ -1339,7 +1340,7 @@ export class ActorInstance<
 				this.runInTraceSpan("actor.onCreate", undefined, () =>
 					onCreate(this.actorContext as any, persistData.input!),
 				),
-			);
+			{ pauseKvGuard: true });
 		}
 	}
 

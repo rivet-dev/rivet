@@ -58,6 +58,8 @@ export function createActorKvStore(
 
 	return {
 		get: async (key: Uint8Array) => {
+			// Preload hits bypass KV entirely and are not tracked in
+			// kvGet metrics. Only cache misses are counted below.
 			if (preload) {
 				const value = binarySearch(preload, key);
 				if (value !== undefined) return value;
@@ -83,6 +85,8 @@ export function createActorKvStore(
 				return results;
 			}
 
+			// Preload hits are not tracked in kvGetBatch metrics. Only
+			// actual KV round-trips (cache misses) are counted below.
 			const results: (Uint8Array | null)[] = new Array<Uint8Array | null>(
 				keys.length,
 			).fill(null);

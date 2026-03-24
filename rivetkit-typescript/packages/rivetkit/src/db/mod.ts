@@ -157,10 +157,13 @@ export function db({
 			return client;
 		},
 		onMigrate: async (client) => {
+			// Clear preloaded entries before migrations run. Migrations may
+			// write and re-read pages, and stale preload data would be
+			// served instead of the freshly written values.
+			clientToKvStore.get(client as object)?.clearPreload();
 			if (onMigrate) {
 				await onMigrate(client);
 			}
-			clientToKvStore.get(client as object)?.clearPreload();
 		},
 		onDestroy: async (client) => {
 			await client.close();
