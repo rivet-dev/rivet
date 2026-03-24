@@ -34,6 +34,8 @@ function createProxyCallback(
 	waDb: IDatabase,
 	mutex: AsyncMutex,
 	isClosed: () => boolean,
+	metrics?: import("@/actor/metrics").ActorMetrics,
+	log?: { debug(obj: Record<string, unknown>): void },
 ) {
 	return async (
 		sql: string,
@@ -45,21 +47,41 @@ function createProxyCallback(
 				throw new Error("database is closed");
 			}
 
+			const kvReadsBefore = metrics?.totalKvReads ?? 0;
+			const kvWritesBefore = metrics?.totalKvWrites ?? 0;
+			const start = performance.now();
+
+			let result: { rows: any };
 			if (method === "run") {
 				await waDb.run(sql, toSqliteBindings(params));
-				return { rows: [] };
+				result = { rows: [] };
+			} else {
+				// For all/get/values, use parameterized query
+				const queryResult = await waDb.query(sql, toSqliteBindings(params));
+
+				// drizzle's mapResultRow accesses rows by column index (positional arrays)
+				// so we return raw arrays for all methods
+				if (method === "get") {
+					result = { rows: queryResult.rows[0] };
+				} else {
+					result = { rows: queryResult.rows };
+				}
 			}
 
-			// For all/get/values, use parameterized query
-			const result = await waDb.query(sql, toSqliteBindings(params));
-
-			// drizzle's mapResultRow accesses rows by column index (positional arrays)
-			// so we return raw arrays for all methods
-			if (method === "get") {
-				return { rows: result.rows[0] };
+			const durationMs = performance.now() - start;
+			metrics?.trackSql(sql, durationMs);
+			if (metrics && log) {
+				const kvReads = metrics.totalKvReads - kvReadsBefore;
+				const kvWrites = metrics.totalKvWrites - kvWritesBefore;
+				log.debug({
+					msg: "sql query",
+					query: sql.slice(0, 120),
+					durationMs,
+					kvReads,
+					kvWrites,
+				});
 			}
-
-			return { rows: result.rows };
+			return result;
 		});
 	};
 }
@@ -126,6 +148,7 @@ export function db<
 	// concurrently: the last writer won, and earlier actors' migrations
 	// ran on the wrong database.
 	const clientToRawDb = new WeakMap<object, IDatabase>();
+	const clientToKvStore = new WeakMap<object, ReturnType<typeof createActorKvStore>>();
 
 	return {
 		createClient: async (ctx) => {
@@ -136,7 +159,7 @@ export function db<
 				);
 			}
 
-			const kvStore = createActorKvStore(ctx.kv, ctx.metrics);
+			const kvStore = createActorKvStore(ctx.kv, ctx.metrics, ctx.preloadedEntries);
 			const waDb = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
 			// Per-client mutex so actors of the same type do not serialize
 			// against each other. Each actor has its own database handle and
@@ -150,7 +173,7 @@ export function db<
 			};
 
 			// Create the async proxy callback
-			const callback = createProxyCallback(waDb, mutex, () => closed);
+			const callback = createProxyCallback(waDb, mutex, () => closed, ctx.metrics, ctx.log);
 
 			// Create the drizzle instance using sqlite-proxy
 			const client = proxyDrizzle<TSchema>(callback, config);
@@ -168,12 +191,17 @@ export function db<
 					return await mutex.run(async () => {
 						ensureOpen();
 
+						const kvReadsBefore = ctx.metrics?.totalKvReads ?? 0;
+						const kvWritesBefore = ctx.metrics?.totalKvWrites ?? 0;
+						const start = performance.now();
+						let rows: TRow[];
+
 						if (args.length > 0) {
 							const result = await waDb.query(
 								query,
 								toSqliteBindings(args),
 							);
-							return result.rows.map((row: unknown[]) => {
+							rows = result.rows.map((row: unknown[]) => {
 								const obj: Record<string, unknown> = {};
 								for (
 									let i = 0;
@@ -184,25 +212,40 @@ export function db<
 								}
 								return obj;
 							}) as TRow[];
+						} else {
+							// Use exec for non-parameterized queries since
+							// @rivetkit/sqlite's query() can crash on some statements.
+							const results: Record<string, unknown>[] = [];
+							let columnNames: string[] | null = null;
+							await waDb.exec(
+								query,
+								(row: unknown[], columns: string[]) => {
+									if (!columnNames) {
+										columnNames = columns;
+									}
+									const obj: Record<string, unknown> = {};
+									for (let i = 0; i < row.length; i++) {
+										obj[columnNames[i]] = row[i];
+									}
+									results.push(obj);
+								},
+							);
+							rows = results as TRow[];
 						}
-						// Use exec for non-parameterized queries since
-						// @rivetkit/sqlite's query() can crash on some statements.
-						const results: Record<string, unknown>[] = [];
-						let columnNames: string[] | null = null;
-						await waDb.exec(
-							query,
-							(row: unknown[], columns: string[]) => {
-								if (!columnNames) {
-									columnNames = columns;
-								}
-								const obj: Record<string, unknown> = {};
-								for (let i = 0; i < row.length; i++) {
-									obj[columnNames[i]] = row[i];
-								}
-								results.push(obj);
-							},
-						);
-						return results as TRow[];
+
+						const durationMs = performance.now() - start;
+						if (ctx.metrics && ctx.log) {
+							const kvReads = ctx.metrics.totalKvReads - kvReadsBefore;
+							const kvWrites = ctx.metrics.totalKvWrites - kvWritesBefore;
+							ctx.log.debug({
+								msg: "sql query",
+								query: query.slice(0, 120),
+								durationMs,
+								kvReads,
+								kvWrites,
+							});
+						}
+						return rows;
 					});
 				},
 				close: async () => {
@@ -218,9 +261,14 @@ export function db<
 			} satisfies RawAccess);
 
 			clientToRawDb.set(result, waDb);
+			clientToKvStore.set(result, kvStore);
 			return result;
 		},
 		onMigrate: async (client) => {
+			// Clear preloaded entries before migrations run. Migrations may
+			// write and re-read pages, and stale preload data would be
+			// served instead of the freshly written values.
+			clientToKvStore.get(client as object)?.clearPreload();
 			const waDb = clientToRawDb.get(client as object);
 			if (config?.migrations && waDb) {
 				await runInlineMigrations(

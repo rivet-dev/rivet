@@ -45,6 +45,19 @@ export interface DatabaseProviderContext {
 	 * Actor metrics instance. When provided, KV and SQL operations are tracked.
 	 */
 	metrics?: ActorMetrics;
+
+	/**
+	 * Preloaded SQLite KV entries for VFS read optimization during startup.
+	 * When provided, database reads check these sorted entries via binary
+	 * search before falling back to KV.
+	 */
+	preloadedEntries?: [Uint8Array, Uint8Array][];
+
+	/**
+	 * Logger for debug output. When provided, SQL queries are logged with
+	 * duration and KV call count.
+	 */
+	log?: { debug(obj: Record<string, unknown>): void };
 }
 
 export type DatabaseProvider<DB extends RawAccess> = {

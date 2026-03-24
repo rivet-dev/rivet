@@ -1,6 +1,7 @@
 use anyhow::Result;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
+use pegboard::actor_kv;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK2_VERSION, versioned};
 use std::sync::Arc;
@@ -126,27 +127,39 @@ async fn handle_message_mk2(
 		protocol::mk2::ToRunner::ToRunnerClose => return Err(errors::WsError::Eviction.build()),
 		protocol::mk2::ToRunner::ToClientCommands(mut command_wrappers) => {
 			for command_wrapper in &mut command_wrappers {
-				if let protocol::mk2::Command::CommandStartActor(
-					protocol::mk2::CommandStartActor {
-						hibernating_requests,
-						..
-					},
-				) = &mut command_wrapper.inner
+				if let protocol::mk2::Command::CommandStartActor(ref mut start) =
+					command_wrapper.inner
 				{
+					let actor_id = Id::parse(&command_wrapper.checkpoint.actor_id)?;
+
+					// Dynamically populate hibernating request ids.
 					let ids = ctx
 						.op(pegboard::ops::actor::hibernating_request::list::Input {
-							actor_id: Id::parse(&command_wrapper.checkpoint.actor_id)?,
+							actor_id,
 						})
 						.await?;
-
-					// Dynamically populate hibernating request ids
-					*hibernating_requests = ids
+					start.hibernating_requests = ids
 						.into_iter()
 						.map(|x| protocol::mk2::HibernatingRequest {
 							gateway_id: x.gateway_id,
 							request_id: x.request_id,
 						})
 						.collect();
+
+					// Inject preloaded KV if not already populated by the engine.
+					if start.preloaded_kv.is_none() {
+						let db = ctx.udb()?;
+						let pb = ctx.config().pegboard();
+						start.preloaded_kv = actor_kv::preload::fetch_preloaded_kv(
+							&db,
+							pb,
+							actor_id,
+							conn.namespace_id,
+							&start.config.name,
+						)
+						.await
+						.context("failed to fetch preloaded KV for start command")?;
+					}
 				}
 			}
 
