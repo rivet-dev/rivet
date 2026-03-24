@@ -221,20 +221,25 @@ function getOrCreateActor<
 	// Use queueMicrotask for updates to avoid "Cannot update a component while rendering" React error
 	const existing = store.state.actors[key];
 	if (!existing) {
-		store.setState((prev) => ({
-			...prev,
-			actors: {
-				...prev.actors,
-				[key]: {
-					hash: key,
-					connStatus: "idle",
-					connection: null,
-					handle: null,
-					error: null,
-					opts: normalizedOpts,
-				},
-			},
-		}));
+		// Defer initial creation to avoid "Cannot update a component while rendering" React error
+		queueMicrotask(() => {
+			if (!store.state.actors[key]) {
+				store.setState((prev) => ({
+					...prev,
+					actors: {
+						...prev.actors,
+						[key]: {
+							hash: key,
+							connStatus: "idle",
+							connection: null,
+							handle: null,
+							error: null,
+							opts: normalizedOpts,
+						},
+					},
+				}));
+			}
+		});
 	} else if (!optsEqual(existing.opts, normalizedOpts)) {
 		// Defer opts update to avoid triggering re-render during render
 		queueMicrotask(() => {
@@ -253,6 +258,20 @@ function getOrCreateActor<
 	const derived = new Derived({
 		fn: ({ currDepVals: [store] }) => {
 			const actor = store.actors[key];
+			if (!actor) {
+				// Actor not yet in store (initial creation is deferred via queueMicrotask).
+				// Return a placeholder that will be replaced once the store is updated.
+				return {
+					hash: key,
+					connStatus: "idle" as const,
+					connection: null,
+					handle: null,
+					error: null,
+					opts: normalizedOpts,
+					/** @deprecated Use `connStatus === "connected"` instead */
+					isConnected: false,
+				};
+			}
 			return {
 				...actor,
 				/** @deprecated Use `connStatus === "connected"` instead */
@@ -269,9 +288,8 @@ function getOrCreateActor<
 		fn: () => {
 			const actor = store.state.actors[key];
 			if (!actor) {
-				throw new Error(
-					`Actor with key "${key}" not found in store. This indicates a bug in cleanup logic.`,
-				);
+				// Actor may not be in store yet if initial creation is still deferred.
+				return;
 			}
 
 			// Dispose connection if disabled
