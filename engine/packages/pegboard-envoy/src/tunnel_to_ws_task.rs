@@ -126,25 +126,38 @@ async fn handle_message(
 		protocol::ToEnvoyConn::ToEnvoyCommands(mut command_wrappers) => {
 			// TODO: Parallelize
 			for command_wrapper in &mut command_wrappers {
-				if let protocol::Command::CommandStartActor(protocol::CommandStartActor {
-					hibernating_requests,
-					..
-				}) = &mut command_wrapper.inner
+				if let protocol::Command::CommandStartActor(start) =
+					&mut command_wrapper.inner
 				{
+					let actor_id = Id::parse(&command_wrapper.checkpoint.actor_id)?;
+					let actor_name = start.config.name.clone();
 					let ids = ctx
 						.op(pegboard::ops::actor::hibernating_request::list::Input {
-							actor_id: Id::parse(&command_wrapper.checkpoint.actor_id)?,
+							actor_id,
 						})
 						.await?;
 
 					// Dynamically populate hibernating request ids
-					*hibernating_requests = ids
+					start.hibernating_requests = ids
 						.into_iter()
 						.map(|x| protocol::HibernatingRequest {
 							gateway_id: x.gateway_id,
 							request_id: x.request_id,
 						})
 						.collect();
+
+					if start.preloaded_kv.is_none() {
+						let db = ctx.udb()?;
+						start.preloaded_kv =
+							pegboard::actor_kv::preload::fetch_preloaded_kv(
+								&db,
+								ctx.config().pegboard(),
+								actor_id,
+								conn.namespace_id,
+								&actor_name,
+							)
+							.await?;
+					}
 				}
 			}
 

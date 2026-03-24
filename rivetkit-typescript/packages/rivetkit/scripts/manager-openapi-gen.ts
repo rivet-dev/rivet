@@ -33,6 +33,10 @@ async function main() {
 		setGetUpgradeWebSocket: unimplemented,
 		buildGatewayUrl: unimplemented,
 		kvGet: unimplemented,
+		kvBatchGet: unimplemented,
+		kvBatchPut: unimplemented,
+		kvBatchDelete: unimplemented,
+		kvDeleteRange: unimplemented,
 	};
 
 	// const client = createClientWithDriver(

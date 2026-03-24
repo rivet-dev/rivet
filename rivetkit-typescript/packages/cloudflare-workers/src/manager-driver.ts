@@ -446,4 +446,61 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 		const value = await stub.managerKvGet(key);
 		return value !== null ? new TextDecoder().decode(value) : null;
 	}
+
+	async kvBatchGet(
+		actorId: string,
+		keys: Uint8Array[],
+	): Promise<(Uint8Array | null)[]> {
+		const env = getCloudflareAmbientEnv();
+
+		const [doId] = parseActorId(actorId);
+
+		const id = env.ACTOR_DO.idFromString(doId);
+		const stub = env.ACTOR_DO.get(id);
+
+		return await stub.managerKvBatchGet(keys);
+	}
+
+	async kvBatchPut(
+		actorId: string,
+		entries: [Uint8Array, Uint8Array][],
+	): Promise<void> {
+		const env = getCloudflareAmbientEnv();
+
+		const [doId] = parseActorId(actorId);
+
+		const id = env.ACTOR_DO.idFromString(doId);
+		const stub = env.ACTOR_DO.get(id);
+
+		await stub.managerKvBatchPut(entries);
+	}
+
+	async kvBatchDelete(
+		actorId: string,
+		keys: Uint8Array[],
+	): Promise<void> {
+		const env = getCloudflareAmbientEnv();
+
+		const [doId] = parseActorId(actorId);
+
+		const id = env.ACTOR_DO.idFromString(doId);
+		const stub = env.ACTOR_DO.get(id);
+
+		await stub.managerKvBatchDelete(keys);
+	}
+
+	async kvDeleteRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+	): Promise<void> {
+		const env = getCloudflareAmbientEnv();
+
+		const [doId] = parseActorId(actorId);
+
+		const id = env.ACTOR_DO.idFromString(doId);
+		const stub = env.ACTOR_DO.get(id);
+
+		await stub.managerKvDeleteRange(start, end);
+	}
 }

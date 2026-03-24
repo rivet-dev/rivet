@@ -18,8 +18,8 @@ export interface CreateActorOpts {
 	actorId: string;
 	generation: number;
 	config: protocol.ActorConfig;
-
 	hibernatingRequests: readonly protocol.HibernatingRequest[];
+	preloadedKv: protocol.PreloadedKv | null;
 }
 
 export type ToActor =
@@ -123,7 +123,6 @@ async function actorInner(
 		config: opts.config,
 		commandIdx: 0n,
 		eventIndex: 0n,
-
 		pendingRequests: new BufferMap(),
 		webSockets: new BufferMap(),
 		hibernationRestored: false,
@@ -136,6 +135,7 @@ async function actorInner(
 			opts.actorId,
 			opts.generation,
 			opts.config,
+			opts.preloadedKv,
 		);
 	} catch (error) {
 		log(ctx)?.error({
@@ -408,7 +408,7 @@ async function handleWsOpen(ctx: ActorContext, messageId: protocol.MessageId, pa
 	);
 
 	try {
-		// #createWebSocket will call `runner.config.websocket` under the
+		// #createWebSocket will call `envoy.config.websocket` under the
 		// hood to add the event listeners for open, etc. If this handler
 		// throws, then the WebSocket will be closed before sending the
 		// open event.
@@ -539,7 +539,7 @@ async function handleHwsRestore(ctx: ActorContext, metaEntries: HibernatingWebSo
 		} else {
 			ctx.pendingRequests.set([gatewayId, requestId], { envoyMessageIndex: 0 });
 
-			// This will call `runner.config.websocket` under the hood to
+			// This will call `envoy.config.websocket` under the hood to
 			// attach the event listeners to the WebSocket.
 			// Track this operation to ensure it completes
 			const restoreOperation = createWebSocket(

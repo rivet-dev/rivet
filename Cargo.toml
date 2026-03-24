@@ -30,6 +30,7 @@ members = [
   "engine/packages/pegboard-envoy",
   "engine/packages/pegboard-gateway",
   "engine/packages/pegboard-gateway2",
+  "engine/packages/pegboard-kv-channel",
   "engine/packages/pegboard-outbound",
   "engine/packages/pegboard-runner",
   "engine/packages/pools",
@@ -53,6 +54,7 @@ members = [
   "engine/sdks/rust/envoy-client",
   "engine/sdks/rust/envoy-protocol",
   "engine/sdks/rust/epoxy-protocol",
+  "engine/sdks/rust/kv-channel-protocol",
   "engine/sdks/rust/runner-protocol",
   "engine/sdks/rust/ups-protocol"
 ]
@@ -124,6 +126,7 @@ members = [
   slog-async = "2.8"
   slog-term = "2.9"
   statrs = "0.18"
+  subtle = "2"
   sysinfo = "0.37.2"
   tabled = "0.17.0"
   tempfile = "3.13.0"
@@ -432,6 +435,9 @@ members = [
     [workspace.dependencies.pegboard-gateway2]
     path = "engine/packages/pegboard-gateway2"
 
+    [workspace.dependencies.pegboard-kv-channel]
+    path = "engine/packages/pegboard-kv-channel"
+
     [workspace.dependencies.pegboard-outbound]
     path = "engine/packages/pegboard-outbound"
 
@@ -493,6 +499,12 @@ members = [
     [workspace.dependencies.rivet-data]
     path = "engine/sdks/rust/data"
 
+    [workspace.dependencies.epoxy-protocol]
+    path = "engine/sdks/rust/epoxy-protocol"
+
+    [workspace.dependencies.rivet-kv-channel-protocol]
+    path = "engine/sdks/rust/kv-channel-protocol"
+
     [workspace.dependencies.rivet-engine-runner]
     path = "engine/sdks/rust/engine-runner"
 
@@ -501,9 +513,6 @@ members = [
 
     [workspace.dependencies.rivet-envoy-protocol]
     path = "engine/sdks/rust/envoy-protocol"
-
-    [workspace.dependencies.epoxy-protocol]
-    path = "engine/sdks/rust/epoxy-protocol"
 
     [workspace.dependencies.rivet-runner-protocol]
     path = "engine/sdks/rust/runner-protocol"

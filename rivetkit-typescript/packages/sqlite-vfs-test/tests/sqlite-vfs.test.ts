@@ -35,6 +35,15 @@ function createKvStore(): KvVfsOptions {
 				store.delete(keyToString(key));
 			}
 		},
+		deleteRange: async (start, end) => {
+			const startHex = keyToString(start);
+			const endHex = keyToString(end);
+			for (const key of store.keys()) {
+				if (key >= startHex && key < endHex) {
+					store.delete(key);
+				}
+			}
+		},
 	};
 }
 

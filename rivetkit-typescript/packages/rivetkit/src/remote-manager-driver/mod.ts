@@ -345,6 +345,39 @@ export class RemoteManagerDriver implements ManagerDriver {
 		return response.value;
 	}
 
+	async kvBatchGet(
+		_actorId: string,
+		_keys: Uint8Array[],
+	): Promise<(Uint8Array | null)[]> {
+		throw new Error("kvBatchGet not supported on remote manager driver");
+	}
+
+	async kvBatchPut(
+		_actorId: string,
+		_entries: [Uint8Array, Uint8Array][],
+	): Promise<void> {
+		throw new Error("kvBatchPut not supported on remote manager driver");
+	}
+
+	async kvBatchDelete(
+		_actorId: string,
+		_keys: Uint8Array[],
+	): Promise<void> {
+		throw new Error(
+			"kvBatchDelete not supported on remote manager driver",
+		);
+	}
+
+	async kvDeleteRange(
+		_actorId: string,
+		_start: Uint8Array,
+		_end: Uint8Array,
+	): Promise<void> {
+		throw new Error(
+			"kvDeleteRange not supported on remote manager driver",
+		);
+	}
+
 	displayInformation(): ManagerDisplayInformation {
 		return { properties: {} };
 	}

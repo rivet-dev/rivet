@@ -1,11 +1,14 @@
 import { join } from "node:path";
 import { createClientWithDriver } from "@/client/client";
 import { createTestRuntime, runDriverTests } from "@/driver-test-suite/mod";
+import type { DriverTestConfig } from "@/driver-test-suite/mod";
+import { setupDriverTest } from "@/driver-test-suite/utils";
 import { createEngineDriver } from "@/drivers/engine/mod";
 import invariant from "invariant";
 import { convertRegistryConfigToClientConfig } from "@/client/config";
+import { describe, expect, test, vi } from "vitest";
 
-runDriverTests({
+const driverTestConfig = {
 	// Use real timers for engine-runner tests
 	useRealTimers: true,
 	skip: {
@@ -57,9 +60,9 @@ runDriverTests({
 				registry.config.endpoint = endpoint;
 				registry.config.namespace = namespace;
 				registry.config.token = token;
-				registry.config.runner = {
-					...registry.config.runner,
-					runnerName,
+				registry.config.envoy = {
+					...registry.config.envoy,
+					poolName: runnerName,
 				};
 
 				// Parse config only after mutating registry.config so the manager
@@ -140,6 +143,10 @@ runDriverTests({
 						token,
 					},
 					driver: driverConfig,
+					hardCrashActor: async (actorId: string) => {
+						await actorDriver.hardCrashActor?.(actorId);
+					},
+					hardCrashPreservesData: true,
 					cleanup: async () => {
 						await actorDriver.shutdownRunner?.(true);
 					},
@@ -147,4 +154,40 @@ runDriverTests({
 			},
 		);
 	},
+} satisfies Omit<DriverTestConfig, "clientType" | "encoding">;
+
+runDriverTests(driverTestConfig);
+
+describe("engine startup kv preload", () => {
+	test("wakes actors with envoy-provided preloaded kv", async (c) => {
+		const { client } = await setupDriverTest(c, {
+			...driverTestConfig,
+			clientType: "http",
+			encoding: "bare",
+		});
+		const handle = client.sleep.getOrCreate();
+
+		await handle.getCounts();
+		await handle.triggerSleep();
+
+		await vi.waitFor(
+			async () => {
+				const counts = await handle.getCounts();
+				expect(counts.sleepCount).toBeGreaterThanOrEqual(1);
+				expect(counts.startCount).toBeGreaterThanOrEqual(2);
+			},
+			{ timeout: 5_000, interval: 100 },
+		);
+
+		const gatewayUrl = await handle.getGatewayUrl();
+		const response = await fetch(`${gatewayUrl}/inspector/metrics`, {
+			headers: { Authorization: "Bearer token" },
+		});
+		expect(response.status).toBe(200);
+
+		const metrics: any = await response.json();
+		expect(metrics.startup_is_new.value).toBe(0);
+		expect(metrics.startup_internal_preload_kv_entries.value).toBeGreaterThan(0);
+		expect(metrics.startup_kv_round_trips.value).toBe(0);
+	});
 });

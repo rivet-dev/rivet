@@ -126,7 +126,7 @@ pub async fn handle_init(
 	let envoy_key = &conn.envoy_key;
 	let pool_name = &conn.pool_name;
 	let protocol_version = conn.protocol_version;
-	let (pool_res, missed_commands) = tokio::try_join!(
+	let (pool_res, mut missed_commands) = tokio::try_join!(
 		ctx.op(pegboard::ops::runner_config::get::Input {
 			runners: vec![(namespace_id, pool_name.clone())],
 			bypass_cache: false,
@@ -353,8 +353,37 @@ pub async fn handle_init(
 
 	// Send missed commands
 	if !missed_commands.is_empty() {
+		let db = ctx.udb()?;
 		let msg =
-			versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(missed_commands));
+			{
+				for cmd_wrapper in &mut missed_commands {
+					if let protocol::Command::CommandStartActor(ref mut start) =
+						cmd_wrapper.inner
+					{
+						let actor_id = cmd_wrapper
+							.checkpoint
+							.actor_id
+							.parse::<Id>()
+							.context(
+								"failed to parse actor_id from missed envoy command",
+							)?;
+						let preloaded =
+							pegboard::actor_kv::preload::fetch_preloaded_kv(
+								&db,
+								pb,
+								actor_id,
+								conn.namespace_id,
+								&start.config.name,
+							)
+							.await?;
+						start.preloaded_kv = preloaded;
+					}
+				}
+
+				versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(
+					missed_commands,
+				))
+			};
 		let msg_serialized = msg.serialize(conn.protocol_version)?;
 		conn.ws_handle
 			.send(Message::Binary(msg_serialized.into()))

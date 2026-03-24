@@ -7,4 +7,9 @@ export default defineConfig({
 	...defaultConfig,
 	// Used to resolve "rivetkit" to "src/mod.ts" in the test fixtures
 	plugins: [tsconfigPaths()],
+	resolve: {
+		alias: {
+			"rivetkit/errors": resolve(__dirname, "./src/actor/errors.ts"),
+		},
+	},
 });

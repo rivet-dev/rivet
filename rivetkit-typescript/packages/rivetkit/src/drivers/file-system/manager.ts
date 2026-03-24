@@ -6,6 +6,7 @@ import { routeWebSocket } from "@/actor/router-websocket-endpoints";
 import { createClientWithDriver } from "@/client/client";
 import { createInlineWebSocket } from "@/common/inline-websocket-adapter";
 import { noopNext } from "@/common/utils";
+import type { NativeSqliteConfig } from "@/db/config";
 import {
 	resolveGatewayTarget,
 	type ActorDriver,
@@ -35,6 +36,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 	#actorDriver: ActorDriver;
 	#actorRouter: ActorRouter;
+	#kvChannelShutdown: (() => void) | null = null;
 
 	constructor(
 		config: RegistryConfig,
@@ -187,6 +189,14 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		throw new Error("unreachable: unknown gateway target type");
 	}
 
+	async hardCrashActor(actorId: string): Promise<void> {
+		await this.#actorDriver.hardCrashActor?.(actorId);
+	}
+
+	setNativeSqliteConfig(config: NativeSqliteConfig): void {
+		this.#state.setNativeSqliteConfig(config);
+	}
+
 	async getForId({
 		actorId,
 	}: GetForIdInput): Promise<ActorOutput | undefined> {
@@ -281,6 +291,32 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			: null;
 	}
 
+	async kvBatchGet(
+		actorId: string,
+		keys: Uint8Array[],
+	): Promise<(Uint8Array | null)[]> {
+		return await this.#state.kvBatchGet(actorId, keys);
+	}
+
+	async kvBatchPut(
+		actorId: string,
+		entries: [Uint8Array, Uint8Array][],
+	): Promise<void> {
+		await this.#state.kvBatchPut(actorId, entries);
+	}
+
+	async kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void> {
+		await this.#state.kvBatchDelete(actorId, keys);
+	}
+
+	async kvDeleteRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+	): Promise<void> {
+		await this.#state.kvDeleteRange(actorId, start, end);
+	}
+
 	displayInformation(): ManagerDisplayInformation {
 		return {
 			properties: {
@@ -303,6 +339,14 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		this.#getUpgradeWebSocket = getUpgradeWebSocket;
 	}
 
+	setKvChannelShutdown(fn: () => void): void {
+		this.#kvChannelShutdown = fn;
+	}
+
+	shutdown(): void {
+		this.#kvChannelShutdown?.();
+		this.#kvChannelShutdown = null;
+	}
 }
 
 function actorStateToOutput(state: schema.ActorState): ActorOutput {

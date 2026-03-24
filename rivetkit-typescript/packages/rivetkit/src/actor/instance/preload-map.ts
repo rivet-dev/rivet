@@ -1,6 +1,6 @@
 /**
- * Input types matching the runner protocol PreloadedKv structure.
- * Defined locally to avoid a dependency on the runner-protocol package.
+ * Input types matching the actor start-command PreloadedKv structure.
+ * Defined locally to avoid a direct dependency on a protocol package here.
  */
 export interface PreloadedKvInput {
 	readonly entries: readonly {

@@ -42,7 +42,7 @@ describe("file-system websocket hibernation cleanup", () => {
 		const client = createClient<typeof registry>({
 			endpoint: runtime.endpoint,
 			namespace: runtime.namespace,
-			runnerName: runtime.runnerName,
+			poolName: runtime.runnerName,
 			disableMetadataLookup: true,
 		});
 		const conn = client.fileSystemHibernationCleanupActor

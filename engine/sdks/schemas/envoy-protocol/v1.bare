@@ -174,6 +174,20 @@ type EventWrapper struct {
 	inner: Event
 }
 
+# MARK: Preloaded KV
+
+type PreloadedKvEntry struct {
+	key: KvKey
+	value: KvValue
+	metadata: KvMetadata
+}
+
+type PreloadedKv struct {
+	entries: list<PreloadedKvEntry>
+	requestedGetKeys: list<KvKey>
+	requestedPrefixes: list<KvKey>
+}
+
 # MARK: Commands
 
 type HibernatingRequest struct {
@@ -184,6 +198,7 @@ type HibernatingRequest struct {
 type CommandStartActor struct {
 	config: ActorConfig
 	hibernatingRequests: list<HibernatingRequest>
+	preloadedKv: optional<PreloadedKv>
 }
 
 type StopActorReason enum {

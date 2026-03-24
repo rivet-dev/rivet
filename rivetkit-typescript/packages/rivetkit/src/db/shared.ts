@@ -200,6 +200,9 @@ export function createActorKvStore(
 		poison: () => {
 			poisoned = true;
 		},
+		deleteRange: async (start: Uint8Array, end: Uint8Array) => {
+			await kv.deleteRange(start, end);
+		},
 	};
 }
 

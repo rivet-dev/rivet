@@ -146,6 +146,13 @@ pub struct Pegboard {
 	///
 	/// Unit is in milliseconds.
 	pub serverless_drain_grace_period: Option<u64>,
+
+	// === KV Preload Settings ===
+	/// Maximum total size of all preloaded KV data sent with the actor start command.
+	/// Setting to 0 disables all preloading.
+	///
+	/// Unit is in bytes. Default: 1,048,576 (1 MiB).
+	pub preload_max_total_bytes: Option<u64>,
 }
 
 impl Pegboard {
@@ -305,5 +312,9 @@ impl Pegboard {
 
 	pub fn serverless_drain_grace_period(&self) -> u64 {
 		self.serverless_drain_grace_period.unwrap_or(10_000)
+	}
+
+	pub fn preload_max_total_bytes(&self) -> u64 {
+		self.preload_max_total_bytes.unwrap_or(1_048_576)
 	}
 }

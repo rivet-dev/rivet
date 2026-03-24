@@ -1,5 +1,19 @@
 import type { SqliteRuntimeDatabase } from "./sqlite-runtime";
 
+export class KvStorageQuotaExceededError extends Error {
+	readonly remaining: number;
+	readonly payloadSize: number;
+
+	constructor(remaining: number, payloadSize: number) {
+		super(
+			`not enough space left in storage (${remaining} bytes remaining, current payload is ${payloadSize} bytes)`,
+		);
+		this.name = "KvStorageQuotaExceededError";
+		this.remaining = remaining;
+		this.payloadSize = payloadSize;
+	}
+}
+
 // Keep these limits in sync with engine/packages/pegboard/src/actor_kv/mod.rs.
 const KV_MAX_KEY_SIZE = 2 * 1024;
 const KV_MAX_VALUE_SIZE = 128 * 1024;
@@ -54,9 +68,7 @@ export function validateKvEntries(
 
 	const storageRemaining = Math.max(0, KV_MAX_STORAGE_SIZE - totalSize);
 	if (payloadSize > storageRemaining) {
-		throw new Error(
-			`not enough space left in storage (${storageRemaining} bytes remaining, current payload is ${payloadSize} bytes)`,
-		);
+		throw new KvStorageQuotaExceededError(storageRemaining, payloadSize);
 	}
 
 	for (const [key, value] of entries) {

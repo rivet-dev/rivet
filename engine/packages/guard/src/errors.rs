@@ -16,6 +16,17 @@ pub struct MissingHeader {
 #[derive(RivetError, Serialize)]
 #[error(
 	"guard",
+	"missing_query_parameter",
+	"Missing query parameter required for routing.",
+	"Missing {parameter} query parameter."
+)]
+pub struct MissingQueryParameter {
+	pub parameter: String,
+}
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"guard",
 	"no_route",
 	"No route found.",
 	"No route found for hostname {host}, path {path}."

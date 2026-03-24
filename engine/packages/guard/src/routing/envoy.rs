@@ -3,7 +3,7 @@ use gas::prelude::*;
 use rivet_guard_core::{RoutingOutput, request_context::RequestContext};
 use std::sync::Arc;
 
-use super::{SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_TOKEN, X_RIVET_TOKEN};
+use super::{SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_TOKEN, X_RIVET_TOKEN, validate_regional_host};
 
 /// Route requests to the envoy service using header-based routing
 #[tracing::instrument(skip_all)]
@@ -45,31 +45,7 @@ async fn route_envoy_internal(
 	ctx: &StandaloneCtx,
 	req_ctx: &RequestContext,
 ) -> Result<RoutingOutput> {
-	// Validate that the host is valid for the current datacenter
-	let current_dc = ctx.config().topology().current_dc()?;
-	if !current_dc.is_valid_regional_host(req_ctx.hostname()) {
-		tracing::warn!(hostname=%req_ctx.hostname(), datacenter=?current_dc.name, "invalid host for current datacenter");
-
-		// Determine valid hosts for error message
-		let valid_hosts = if let Some(hosts) = &current_dc.valid_hosts {
-			hosts.join(", ")
-		} else {
-			current_dc
-				.public_url
-				.host_str()
-				.map(|h| h.to_string())
-				.unwrap_or_else(|| "unknown".to_string())
-		};
-
-		return Err(crate::errors::MustUseRegionalHost {
-			host: req_ctx.hostname().to_string(),
-			datacenter: current_dc.name.clone(),
-			valid_hosts,
-		}
-		.build());
-	}
-
-	tracing::debug!(datacenter = ?current_dc.name, "validated host for datacenter");
+	validate_regional_host(ctx, req_ctx)?;
 
 	// Check auth (if enabled)
 	if let Some(auth) = &ctx.config().auth {

@@ -10,16 +10,18 @@ use utils::{validate_entries, validate_keys, validate_range};
 use crate::keys;
 
 mod entry;
+mod metrics;
+pub mod preload;
 mod utils;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Keep the KV validation limits below in sync with
 // rivetkit-typescript/packages/rivetkit/src/drivers/file-system/kv-limits.ts.
-const MAX_KEY_SIZE: usize = 2 * 1024;
-const MAX_VALUE_SIZE: usize = 128 * 1024;
-const MAX_KEYS: usize = 128;
-const MAX_PUT_PAYLOAD_SIZE: usize = 976 * 1024;
+pub const MAX_KEY_SIZE: usize = 2 * 1024;
+pub const MAX_VALUE_SIZE: usize = 128 * 1024;
+pub const MAX_KEYS: usize = 128;
+pub const MAX_PUT_PAYLOAD_SIZE: usize = 976 * 1024;
 const MAX_STORAGE_SIZE: usize = 10 * 1024 * 1024 * 1024; // 10 GiB
 const VALUE_CHUNK_SIZE: usize = 10_000; // 10 KB, not KiB, see https://apple.github.io/foundationdb/blob.html
 
@@ -46,9 +48,11 @@ pub async fn get(
 	recipient: &Recipient,
 	keys: Vec<ep::KvKey>,
 ) -> Result<(Vec<ep::KvKey>, Vec<ep::KvValue>, Vec<ep::KvMetadata>)> {
+	let start = std::time::Instant::now();
+metrics::ACTOR_KV_KEYS_PER_OP.with_label_values(&["get"]).observe(keys.len() as f64);
 	validate_keys(&keys)?;
 
-	db.run(|tx| {
+	let result = db.run(|tx| {
 		let keys = keys.clone();
 		async move {
 			let tx = tx.with_subspace(keys::actor_kv::subspace(recipient.actor_id));
@@ -138,7 +142,9 @@ pub async fn get(
 	})
 	.custom_instrument(tracing::info_span!("kv_get_tx"))
 	.await
-	.map_err(Into::<anyhow::Error>::into)
+	.map_err(Into::<anyhow::Error>::into);
+	metrics::ACTOR_KV_OPERATION_DURATION.with_label_values(&["get"]).observe(start.elapsed().as_secs_f64());
+	result
 }
 
 /// Gets keys from the KV store.
@@ -261,9 +267,11 @@ pub async fn put(
 	keys: Vec<ep::KvKey>,
 	values: Vec<ep::KvValue>,
 ) -> Result<()> {
+	let start = std::time::Instant::now();
+metrics::ACTOR_KV_KEYS_PER_OP.with_label_values(&["put"]).observe(keys.len() as f64);
 	let keys = &keys;
 	let values = &values;
-	db.run(|tx| {
+	let result = db.run(|tx| {
 		async move {
 			let total_size = estimate_kv_size(&tx, recipient.actor_id).await? as usize;
 
@@ -331,7 +339,9 @@ pub async fn put(
 	})
 	.custom_instrument(tracing::info_span!("kv_put_tx"))
 	.await
-	.map_err(Into::into)
+	.map_err(Into::into);
+	metrics::ACTOR_KV_OPERATION_DURATION.with_label_values(&["put"]).observe(start.elapsed().as_secs_f64());
+	result
 }
 
 /// Deletes keys from the KV store. Cannot be undone.
@@ -341,10 +351,12 @@ pub async fn delete(
 	recipient: &Recipient,
 	keys: Vec<ep::KvKey>,
 ) -> Result<()> {
+	let start = std::time::Instant::now();
+metrics::ACTOR_KV_KEYS_PER_OP.with_label_values(&["delete"]).observe(keys.len() as f64);
 	validate_keys(&keys)?;
 
 	let keys = &keys;
-	db.run(|tx| {
+	let result = db.run(|tx| {
 		async move {
 			// Total written bytes (rounded up to nearest chunk)
 			let total_size = keys.iter().fold(0, |s, key| s + key.len());
@@ -370,7 +382,9 @@ pub async fn delete(
 	})
 	.custom_instrument(tracing::info_span!("kv_delete_tx"))
 	.await
-	.map_err(Into::into)
+	.map_err(Into::into);
+	metrics::ACTOR_KV_OPERATION_DURATION.with_label_values(&["delete"]).observe(start.elapsed().as_secs_f64());
+	result
 }
 
 /// Deletes all keys in the half-open range [start, end). Cannot be undone.
@@ -381,12 +395,14 @@ pub async fn delete_range(
 	start: ep::KvKey,
 	end: ep::KvKey,
 ) -> Result<()> {
-	validate_range(&start, &end)?;
+	let timer = std::time::Instant::now();
+validate_range(&start, &end)?;
 	if start >= end {
+		metrics::ACTOR_KV_OPERATION_DURATION.with_label_values(&["delete_range"]).observe(timer.elapsed().as_secs_f64());
 		return Ok(());
 	}
 
-	db.run(|tx| {
+	let result = db.run(|tx| {
 		let start = start.clone();
 		let end = end.clone();
 		async move {
@@ -417,7 +433,9 @@ pub async fn delete_range(
 	})
 	.custom_instrument(tracing::info_span!("kv_delete_range_tx"))
 	.await
-	.map_err(Into::into)
+	.map_err(Into::into);
+	metrics::ACTOR_KV_OPERATION_DURATION.with_label_values(&["delete_range"]).observe(timer.elapsed().as_secs_f64());
+	result
 }
 
 /// Deletes all keys from the KV store. Cannot be undone.

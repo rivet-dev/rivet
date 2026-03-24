@@ -1,4 +1,4 @@
-import type * as protocol from "@rivetkit/engine-runner-protocol";
+import type * as protocol from "@rivetkit/engine-envoy-protocol";
 import type { UnboundedReceiver, UnboundedSender } from "antiox/sync/mpsc";
 import { OnceCell } from "antiox/sync/once_cell";
 import { spawn } from "antiox/task";
