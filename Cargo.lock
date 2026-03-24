@@ -6561,6 +6561,7 @@ dependencies = [
  "deadpool-postgres",
  "futures-util",
  "lazy_static",
+ "rand 0.8.5",
  "rivet-config",
  "rivet-env",
  "rivet-error",
