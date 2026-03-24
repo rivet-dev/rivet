@@ -143,6 +143,12 @@ export class Runtime<A extends RegistryActors> {
 
 			managerPort = await findFreePort(config.managerPort);
 
+			if (managerPort !== configuredManagerPort) {
+				logger().warn({
+					msg: `port ${configuredManagerPort} is in use, using ${managerPort}`,
+				});
+			}
+
 			logger().debug({
 				msg: "serving manager",
 				port: managerPort,
