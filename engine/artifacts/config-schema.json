@@ -638,6 +638,42 @@
           "format": "uint32",
           "minimum": 0.0
         },
+        "preload_max_connections_bytes": {
+          "description": "Maximum size of preloaded connection data sent with the actor start command. Setting to 0 disables connection preloading.\n\nUnit is in bytes. Default: 65,536 (64 KiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "preload_max_sqlite_bytes": {
+          "description": "Maximum size of preloaded SQLite VFS data sent with the actor start command. Setting to 0 disables SQLite preloading.\n\nUnit is in bytes. Default: 786,432 (768 KiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "preload_max_total_bytes": {
+          "description": "Maximum total size of all preloaded KV data sent with the actor start command. Setting to 0 disables all preloading.\n\nUnit is in bytes. Default: 1,048,576 (1 MiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "preload_max_workflow_bytes": {
+          "description": "Maximum size of preloaded workflow data sent with the actor start command. Setting to 0 disables workflow preloading.\n\nUnit is in bytes. Default: 131,072 (128 KiB).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "reschedule_backoff_max_exponent": {
           "description": "Maximum exponent for the reschedule backoff calculation.\n\nThis controls the maximum backoff duration when rescheduling actors.",
           "type": [

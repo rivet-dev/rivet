@@ -16,6 +16,11 @@ lib/**/Cargo.lock
 # Local agent notes
 /.agent/notes/
 
+# Ralph automation (keep ralph.sh, ignore generated artifacts)
+/.ralph/
+/scripts/ralph/CLAUDE.md
+/scripts/ralph/progress.txt
+
 # Cloudflare
 .wrangler/
 

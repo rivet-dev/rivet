@@ -91,6 +91,35 @@ These limits apply to the [SQLite database](/docs/actors/state#sqlite-database) 
 |------|------------|------------|-------------|
 | Max storage size per actor | — | 10 GiB | Maximum total storage size for a single actor. This limit is shared with KV storage. |
 
+### KV Preloading
+
+When an actor starts, the engine pre-fetches commonly needed KV data and delivers it alongside the start command. This eliminates round-trips to the database during actor startup. Preload limits are configurable in the [engine config](/docs/self-hosting/configuration) (`pegboard.preload_max_*` fields) and can be overridden per actor via `options`.
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Max total preload size | 1 MiB | — | Maximum total size of all preloaded KV data sent with the start command. Configurable via engine config `pegboard.preload_max_total_bytes`. Setting to 0 disables all preloading. |
+| Max SQLite preload size | 768 KiB | — | Maximum size of preloaded SQLite VFS data. Configurable via engine config `pegboard.preload_max_sqlite_bytes` or per-actor `options.preloadMaxSqliteBytes`. Setting to 0 disables SQLite preloading. |
+| Max workflow preload size | 128 KiB | — | Maximum size of preloaded workflow data. Configurable via engine config `pegboard.preload_max_workflow_bytes` or per-actor `options.preloadMaxWorkflowBytes`. Setting to 0 disables workflow preloading. |
+| Max connections preload size | 64 KiB | — | Maximum size of preloaded connection data. Configurable via engine config `pegboard.preload_max_connections_bytes` or per-actor `options.preloadMaxConnectionsBytes`. Setting to 0 disables connections preloading. |
+
+Per-actor overrides are set in the actor config:
+
+```typescript
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({
+  state: { count: 0 },
+  actions: { increment: (c) => ++c.state.count },
+  options: {
+    preloadMaxSqliteBytes: 1_048_576,  // 1 MiB
+    preloadMaxWorkflowBytes: 0,        // Disable workflow preloading
+  },
+});
+
+const app = setup({ use: { myActor } });
+export default app;
+```
+
 ### Actor Input
 
 See [Actor Input](/docs/actors/input) for details.

@@ -319,6 +319,16 @@ export function buildActorNames(
 			// Remove undefined values
 			if (!metadata.icon) delete metadata.icon;
 			if (!metadata.name) delete metadata.name;
+			// Include preload config overrides only when explicitly set
+			if (options.preloadMaxSqliteBytes !== undefined) {
+				metadata.preloadMaxSqliteBytes = options.preloadMaxSqliteBytes;
+			}
+			if (options.preloadMaxWorkflowBytes !== undefined) {
+				metadata.preloadMaxWorkflowBytes = options.preloadMaxWorkflowBytes;
+			}
+			if (options.preloadMaxConnectionsBytes !== undefined) {
+				metadata.preloadMaxConnectionsBytes = options.preloadMaxConnectionsBytes;
+			}
 			return [actorName, { metadata }];
 		}),
 	);

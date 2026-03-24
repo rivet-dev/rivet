@@ -14,6 +14,7 @@ import invariant from "invariant";
 import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
 import { lookupInRegistry } from "@/actor/definition";
 import { KEYS } from "@/actor/instance/keys";
+import { buildPreloadMap, type PreloadMap } from "@/actor/instance/preload-map";
 import { deserializeActorKey } from "@/actor/keys";
 import { getValueLength } from "@/actor/protocol/old";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
@@ -532,11 +533,25 @@ export class EngineActorDriver implements ActorDriver {
 		const key = deserializeActorKey(actorConfig.key);
 
 		try {
-			// Initialize storage
-			const [persistDataBuffer] = await this.#runner.kvGet(actorId, [
-				KEYS.PERSIST_DATA,
-			]);
-			if (persistDataBuffer === null) {
+			// Initialize storage. Use preloaded data when available to
+			// avoid a redundant KV round-trip for the persist data check.
+			const preloadMap = buildPreloadMap(actorConfig.preloadedKv);
+			const preloadedPersistData = preloadMap?.get(KEYS.PERSIST_DATA);
+
+			let isNewActor: boolean;
+			if (preloadedPersistData !== undefined) {
+				// Preload was available. null means key not found (new actor),
+				// Uint8Array means existing actor.
+				isNewActor = preloadedPersistData === null;
+			} else {
+				// No preload available, fall back to kvGet.
+				const [persistDataBuffer] = await this.#runner.kvGet(actorId, [
+					KEYS.PERSIST_DATA,
+				]);
+				isNewActor = persistDataBuffer === null;
+			}
+
+			if (isNewActor) {
 				const initialKvState = getInitialActorKvState(input);
 				await this.#runner.kvPut(actorId, initialKvState);
 				logger().debug({
@@ -547,7 +562,6 @@ export class EngineActorDriver implements ActorDriver {
 				logger().debug({
 					msg: "found existing persist data for actor",
 					actorId,
-					dataSize: persistDataBuffer.byteLength,
 				});
 			}
 
@@ -590,6 +604,7 @@ export class EngineActorDriver implements ActorDriver {
 				name,
 				key,
 				"unknown", // TODO: Add regions
+				preloadMap,
 			);
 
 			logger().debug({ msg: "runner actor started", actorId, name, key });

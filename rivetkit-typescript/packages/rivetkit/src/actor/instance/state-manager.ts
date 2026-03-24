@@ -17,6 +17,7 @@ import { isConnStatePath, isStatePath } from "../utils";
 import { KEYS, makeConnKey } from "./keys";
 import type { ActorInstance } from "./mod";
 import { convertActorToBarePersisted, type PersistedActor } from "./persisted";
+import type { WriteCollector } from "./write-collector";
 
 export interface SaveStateOptions {
 	/**
@@ -109,7 +110,7 @@ export class StateManager<
 	/**
 	 * Initializes state from persisted data or creates new state.
 	 */
-	async initializeState(persistData: PersistedActor<S, I>): Promise<void> {
+	async initializeState(persistData: PersistedActor<S, I>, writeCollector?: WriteCollector): Promise<void> {
 		if (!persistData.hasInitialized) {
 			// Create initial state
 			let stateData: unknown;
@@ -141,20 +142,21 @@ export class StateManager<
 			persistData.state = stateData as S;
 			persistData.hasInitialized = true;
 
-			// Save initial state
-			//
-			// We don't use #savePersistInner because the actor is not fully
-			// initialized yet
+			// Save initial state. We don't use #savePersistInner because the
+			// actor is not fully initialized yet.
 			const bareData = convertActorToBarePersisted<S, I>(persistData);
-			await this.#actorDriver.kvBatchPut(this.#actor.id, [
-				[
-					KEYS.PERSIST_DATA,
-					ACTOR_VERSIONED.serializeWithEmbeddedVersion(
-						bareData,
-						ACTOR_PERSIST_CURRENT_VERSION,
-					),
-				],
-			]);
+			const entry: [Uint8Array, Uint8Array] = [
+				KEYS.PERSIST_DATA,
+				ACTOR_VERSIONED.serializeWithEmbeddedVersion(
+					bareData,
+					ACTOR_PERSIST_CURRENT_VERSION,
+				),
+			];
+			if (writeCollector) {
+				writeCollector.add(entry[0], entry[1]);
+			} else {
+				await this.#actorDriver.kvBatchPut(this.#actor.id, [entry]);
+			}
 		}
 
 		// Initialize proxy

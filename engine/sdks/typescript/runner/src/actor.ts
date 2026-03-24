@@ -9,6 +9,7 @@ export interface ActorConfig {
 	key: string | null;
 	createTs: bigint;
 	input: Uint8Array | null;
+	preloadedKv: protocol.PreloadedKv | undefined;
 }
 
 export class RunnerActor {

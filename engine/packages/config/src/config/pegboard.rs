@@ -117,6 +117,31 @@ pub struct Pegboard {
 	///
 	/// Unit is in milliseconds.
 	pub serverless_drain_grace_period: Option<u64>,
+
+	// === KV Preload Settings ===
+	/// Maximum total size of all preloaded KV data sent with the actor start command.
+	/// Setting to 0 disables all preloading.
+	///
+	/// Unit is in bytes. Default: 1,048,576 (1 MiB).
+	pub preload_max_total_bytes: Option<u64>,
+
+	/// Maximum size of preloaded SQLite VFS data sent with the actor start command.
+	/// Setting to 0 disables SQLite preloading.
+	///
+	/// Unit is in bytes. Default: 786,432 (768 KiB).
+	pub preload_max_sqlite_bytes: Option<u64>,
+
+	/// Maximum size of preloaded workflow data sent with the actor start command.
+	/// Setting to 0 disables workflow preloading.
+	///
+	/// Unit is in bytes. Default: 131,072 (128 KiB).
+	pub preload_max_workflow_bytes: Option<u64>,
+
+	/// Maximum size of preloaded connection data sent with the actor start command.
+	/// Setting to 0 disables connection preloading.
+	///
+	/// Unit is in bytes. Default: 65,536 (64 KiB).
+	pub preload_max_connections_bytes: Option<u64>,
 }
 
 impl Pegboard {
@@ -238,5 +263,21 @@ impl Pegboard {
 
 	pub fn serverless_drain_grace_period(&self) -> u64 {
 		self.serverless_drain_grace_period.unwrap_or(10_000)
+	}
+
+	pub fn preload_max_total_bytes(&self) -> u64 {
+		self.preload_max_total_bytes.unwrap_or(1_048_576) // 1 MiB
+	}
+
+	pub fn preload_max_sqlite_bytes(&self) -> u64 {
+		self.preload_max_sqlite_bytes.unwrap_or(786_432) // 768 KiB
+	}
+
+	pub fn preload_max_workflow_bytes(&self) -> u64 {
+		self.preload_max_workflow_bytes.unwrap_or(131_072) // 128 KiB
+	}
+
+	pub fn preload_max_connections_bytes(&self) -> u64 {
+		self.preload_max_connections_bytes.unwrap_or(65_536) // 64 KiB
 	}
 }

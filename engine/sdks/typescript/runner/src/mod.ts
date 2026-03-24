@@ -21,7 +21,7 @@ export { RunnerActor, type ActorConfig };
 export { idToStr } from "./utils";
 
 const KV_EXPIRE: number = 30_000;
-const PROTOCOL_VERSION: number = 7;
+const PROTOCOL_VERSION: number = 8;
 
 /** Warn once the backlog significantly exceeds the server's ack batch size. */
 const EVENT_BACKLOG_WARN_THRESHOLD = 10_000;
@@ -1094,6 +1094,7 @@ export class Runner {
 			key: config.key,
 			createTs: config.createTs,
 			input: config.input ? new Uint8Array(config.input) : null,
+			preloadedKv: startCommand.preloadedKv ?? undefined,
 		};
 
 		const instance = new RunnerActor(
@@ -1132,6 +1133,7 @@ export class Runner {
 			key: config.key,
 			generation,
 			hibernatingRequests: startCommand.hibernatingRequests.length,
+			preloadedKvEntries: startCommand.preloadedKv?.entries.length ?? 0,
 		});
 
 		this.#sendActorStateUpdate(actorId, generation, "running");
