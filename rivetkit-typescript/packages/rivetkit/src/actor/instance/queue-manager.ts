@@ -16,7 +16,9 @@ import {
 	queueMessagesPrefix,
 	queueMetadataKey,
 } from "./keys";
-import type { ActorInstance } from "./mod";
+import { type ActorInstance, WARN_UNEXPECTED_KV_ROUND_TRIP } from "./mod";
+import type { PreloadMap } from "./preload-map";
+import type { WriteCollector } from "./write-collector";
 
 export interface QueueMessage {
 	id: bigint;
@@ -95,14 +97,26 @@ export class QueueManager<
 	}
 
 	/** Loads queue metadata from storage and initializes internal state. */
-	async initialize(): Promise<void> {
-		const [metadataBuffer] = await this.#driver.kvBatchGet(this.#actor.id, [
-			QUEUE_METADATA_KEY,
-		]);
-		if (!metadataBuffer) {
-			await this.#driver.kvBatchPut(this.#actor.id, [
-				[QUEUE_METADATA_KEY, this.#serializeMetadata()],
+	async initialize(preload?: PreloadMap, writeCollector?: WriteCollector): Promise<void> {
+		// Check preload for queue metadata before issuing a KV read.
+		let metadataBuffer: Uint8Array | null;
+		const preloaded = preload?.get(QUEUE_METADATA_KEY);
+		if (preloaded !== undefined) {
+			metadataBuffer = preloaded;
+		} else {
+			this.#actor[WARN_UNEXPECTED_KV_ROUND_TRIP]("kvBatchGet");
+			const [buf] = await this.#driver.kvBatchGet(this.#actor.id, [
+				QUEUE_METADATA_KEY,
 			]);
+			metadataBuffer = buf;
+		}
+		if (!metadataBuffer) {
+			const entry: [Uint8Array, Uint8Array] = [QUEUE_METADATA_KEY, this.#serializeMetadata()];
+			if (writeCollector) {
+				writeCollector.add(entry[0], entry[1]);
+			} else {
+				await this.#driver.kvBatchPut(this.#actor.id, [entry]);
+			}
 			this.#actor.inspector.updateQueueSize(this.#metadata.size);
 			return;
 		}

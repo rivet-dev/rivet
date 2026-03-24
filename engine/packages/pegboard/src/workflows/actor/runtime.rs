@@ -688,6 +688,7 @@ pub async fn spawn_actor(
 			if protocol::is_mk2(runner_protocol_version) {
 				ctx.activity(InsertAndSendCommandsInput {
 					actor_id: input.actor_id,
+					namespace_id: input.namespace_id,
 					generation,
 					runner_id,
 					commands: vec![protocol::mk2::Command::CommandStartActor(
@@ -706,6 +707,8 @@ pub async fn spawn_actor(
 							// Empty because request ids are ephemeral. This is intercepted by guard and
 							// populated before it reaches the runner
 							hibernating_requests: Vec::new(),
+							// Preloaded KV is populated at send time, not at persistence time.
+							preloaded_kv: None,
 						},
 					)],
 				})
@@ -805,6 +808,7 @@ pub async fn spawn_actor(
 					if protocol::is_mk2(runner_protocol_version) {
 						ctx.activity(InsertAndSendCommandsInput {
 							actor_id: input.actor_id,
+							namespace_id: input.namespace_id,
 							generation,
 							runner_id: sig.runner_id,
 							commands: vec![protocol::mk2::Command::CommandStartActor(
@@ -822,6 +826,8 @@ pub async fn spawn_actor(
 									// Empty because request ids are ephemeral. This is intercepted by guard and
 									// populated before it reaches the runner
 									hibernating_requests: Vec::new(),
+									// Preloaded KV is populated at send time, not at persistence time.
+									preloaded_kv: None,
 								},
 							)],
 						})
@@ -940,6 +946,7 @@ pub async fn spawn_actor(
 						if protocol::is_mk2(runner_protocol_version) {
 							ctx.activity(InsertAndSendCommandsInput {
 								actor_id: input.actor_id,
+								namespace_id: input.namespace_id,
 								generation,
 								runner_id: sig.runner_id,
 								commands: vec![protocol::mk2::Command::CommandStartActor(
@@ -957,6 +964,8 @@ pub async fn spawn_actor(
 										// Empty because request ids are ephemeral. This is intercepted by guard and
 										// populated before it reaches the runner
 										hibernating_requests: Vec::new(),
+										// Preloaded KV is populated at send time, not at persistence time.
+										preloaded_kv: None,
 									},
 								)],
 							})
@@ -1282,6 +1291,7 @@ fn reschedule_backoff(
 #[derive(Debug, Serialize, Deserialize, Hash)]
 pub struct InsertAndSendCommandsInput {
 	pub actor_id: Id,
+	pub namespace_id: Id,
 	pub generation: u32,
 	pub runner_id: Id,
 	pub commands: Vec<protocol::mk2::Command>,
@@ -1336,6 +1346,36 @@ pub async fn insert_and_send_commands(
 		})
 		.await?;
 
+	// Fetch preloaded KV at send time for any CommandStartActor commands.
+	// Preloaded KV is never persisted in the command queue or workflow history.
+	let preloaded_kv = {
+		let has_start_cmd = input
+			.commands
+			.iter()
+			.any(|c| matches!(c, protocol::mk2::Command::CommandStartActor(_)));
+		if has_start_cmd {
+			let db = ctx.udb()?;
+			crate::actor_kv::preload::fetch_preloaded_kv(
+				&db,
+				ctx.config().pegboard(),
+				input.actor_id,
+				input.namespace_id,
+				// Extract actor name from the start command.
+				&input
+					.commands
+					.iter()
+					.find_map(|c| match c {
+						protocol::mk2::Command::CommandStartActor(x) => Some(x.config.name.clone()),
+						_ => None,
+					})
+					.unwrap_or_default(),
+			)
+			.await?
+		} else {
+			None
+		}
+	};
+
 	let receiver_subject =
 		crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id).to_string();
 
@@ -1345,13 +1385,20 @@ pub async fn insert_and_send_commands(
 				.commands
 				.iter()
 				.enumerate()
-				.map(|(i, command)| protocol::mk2::CommandWrapper {
-					checkpoint: protocol::mk2::ActorCheckpoint {
-						actor_id: input.actor_id.to_string(),
-						generation: input.generation,
-						index: old_last_command_idx + i as i64 + 1,
-					},
-					inner: command.clone(),
+				.map(|(i, command)| {
+					let mut cmd = command.clone();
+					// Inject preloaded KV into start commands.
+					if let protocol::mk2::Command::CommandStartActor(ref mut start) = cmd {
+						start.preloaded_kv = preloaded_kv.clone();
+					}
+					protocol::mk2::CommandWrapper {
+						checkpoint: protocol::mk2::ActorCheckpoint {
+							actor_id: input.actor_id.to_string(),
+							generation: input.generation,
+							index: old_last_command_idx + i as i64 + 1,
+						},
+						inner: cmd,
+					}
 				})
 				.collect(),
 		))

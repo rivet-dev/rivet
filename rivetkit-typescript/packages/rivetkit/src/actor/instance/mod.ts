@@ -62,7 +62,11 @@ import {
 } from "../utils";
 import { ConnectionManager } from "./connection-manager";
 import { EventManager } from "./event-manager";
-import { KEYS } from "./keys";
+import { KEYS, sqliteStoragePrefix, workflowStoragePrefix } from "./keys";
+import {
+	type PreloadedEntries,
+	type PreloadMap,
+} from "./preload-map";
 import {
 	convertActorFromBarePersisted,
 	type PersistedActor,
@@ -71,8 +75,15 @@ import { QueueManager } from "./queue-manager";
 import { ScheduleManager } from "./schedule-manager";
 import { type SaveStateOptions, StateManager } from "./state-manager";
 import { ActorTracesDriver } from "./traces-driver";
+import { WriteCollector } from "./write-collector";
 
 export type { SaveStateOptions };
+
+/**
+ * Symbol used by subsystems (e.g., queue-manager) to access the
+ * unexpected KV round-trip warning without exposing it as a public method.
+ */
+export const WARN_UNEXPECTED_KV_ROUND_TRIP = Symbol("warnUnexpectedKvRoundTrip");
 
 enum CanSleep {
 	Yes,
@@ -174,6 +185,10 @@ export class ActorInstance<
 	#db?: InferDatabaseClient<DB>;
 	#sqliteVfs?: ISqliteVfs;
 	#metrics = new ActorMetrics();
+
+	// MARK: - Preload
+	#workflowPreloadEntries?: PreloadedEntries;
+	#expectNoKvRoundTrips = false;
 
 	// MARK: - Background Tasks
 	#backgroundPromises: Promise<void>[] = [];
@@ -325,6 +340,28 @@ export class ActorInstance<
 		});
 	}
 
+	get workflowPreloadEntries(): PreloadedEntries | undefined {
+		return this.#workflowPreloadEntries;
+	}
+
+	/**
+	 * Log a structured warning if a KV read happens during startup when
+	 * preloaded data should have covered it. Flips the flag to false after
+	 * the first warning to avoid log spam.
+	 *
+	 * Accessed via symbol to keep it internal. Used by subsystems like
+	 * queue-manager that live in separate files.
+	 */
+	[WARN_UNEXPECTED_KV_ROUND_TRIP](method: string): void {
+		if (this.#expectNoKvRoundTrips) {
+			this.#rLog.warn({
+				msg: "unexpected KV round-trip during startup",
+				method,
+			});
+			this.#expectNoKvRoundTrips = false;
+		}
+	}
+
 	get conns(): Map<ConnId, Conn<S, CP, CS, V, I, DB, E, Q>> {
 		return this.connectionManager.connections;
 	}
@@ -392,6 +429,7 @@ export class ActorInstance<
 		name: string,
 		key: ActorKey,
 		region: string,
+		preload?: PreloadMap,
 	) {
 		// Initialize properties
 		this.driver = actorDriver;
@@ -422,24 +460,59 @@ export class ActorInstance<
 		// Legacy schedule object (for compatibility)
 		this.#schedule = new Schedule(this);
 
-		// Load state
-		await this.#loadState();
-
-		await this.queueManager.initialize();
-
-		// Generate or load inspector token
-		await this.#initializeInspectorToken();
-
-		// Initialize variables
-		if (this.#varsEnabled) {
-			await this.#initializeVars();
+		// Enable unexpected KV round-trip detection when preload data was
+		// provided. Any KV read that bypasses the preload during subsystem
+		// init is a regression.
+		if (preload) {
+			this.#expectNoKvRoundTrips = true;
 		}
 
-		// Call onStart lifecycle
-		await this.#callOnStart();
+		// Extract workflow preload data for lazy consumption by workflow engine.
+		if (preload) {
+			const workflowEntries = preload.listPrefix(workflowStoragePrefix());
+			if (workflowEntries !== undefined) {
+				this.#workflowPreloadEntries = workflowEntries;
+			}
+		}
 
-		// Setup database
-		await this.#setupDatabase();
+		// Create a write collector to batch new-actor init writes (persist
+		// data, queue metadata, inspector token) into a single kvBatchPut.
+		const writeCollector = new WriteCollector(actorDriver, actorId);
+
+		// Load state
+		await this.#loadState(preload, writeCollector);
+
+		await this.queueManager.initialize(preload, writeCollector);
+
+		// Generate or load inspector token
+		await this.#initializeInspectorToken(preload, writeCollector);
+
+		// Flush any batched writes from new actor initialization.
+		await writeCollector.flush();
+
+		// Initialize variables. Pause the KV round-trip guard during
+		// user code callbacks (createVars).
+		{
+			const savedGuard = this.#expectNoKvRoundTrips;
+			this.#expectNoKvRoundTrips = false;
+			if (this.#varsEnabled) {
+				await this.#initializeVars();
+			}
+			this.#expectNoKvRoundTrips = savedGuard;
+		}
+
+		// Call onStart lifecycle. Pause the KV round-trip guard during
+		// user code callbacks (onWake).
+		{
+			const savedGuard = this.#expectNoKvRoundTrips;
+			this.#expectNoKvRoundTrips = false;
+			await this.#callOnStart();
+			this.#expectNoKvRoundTrips = savedGuard;
+		}
+
+		// Setup database. This is the last subsystem to consume preload data
+		// during startup, so the PreloadMap can be released after this returns.
+		await this.#setupDatabase(preload);
 
 		// Initialize alarms
 		await this.#scheduleManager.initializeAlarms();
@@ -458,6 +531,13 @@ export class ActorInstance<
 		// We do this after onBeforeActorStart to prevent the actor from going
 		// to sleep before finishing setup
 		this.#started = true;
+
+		// Clear KV round-trip detection after startup completes.
+		this.#expectNoKvRoundTrips = false;
+
+		// Release workflow preload data after startup completes.
+		this.#workflowPreloadEntries = undefined;
+
 		this.#rLog.info({ msg: "actor started" });
 
 		// Start sleep timer after setting #started since this affects the
@@ -1163,12 +1243,23 @@ export class ActorInstance<
 		this.#patchLoggerForTraces(this.#rLog);
 	}
 
-	async #loadState() {
-		// Read initial state from KV
-		const [persistDataBuffer] = await this.driver.kvBatchGet(
-			this.#actorId,
-			[KEYS.PERSIST_DATA],
-		);
+	async #loadState(preload?: PreloadMap, writeCollector?: WriteCollector) {
+		// Check preload for persist data before issuing a KV read.
+		let persistDataBuffer: Uint8Array | null;
+		const preloaded = preload?.get(KEYS.PERSIST_DATA);
+		if (preloaded !== undefined) {
+			// Preload returned a value or null (not-found).
+			persistDataBuffer = preloaded;
+		} else {
+			// Not preloaded, fall back to KV read.
+			this[WARN_UNEXPECTED_KV_ROUND_TRIP]("kvBatchGet");
+			const [buf] = await this.driver.kvBatchGet(
+				this.#actorId,
+				[KEYS.PERSIST_DATA],
+			);
+			persistDataBuffer = buf;
+		}
+
 		invariant(
 			persistDataBuffer !== null,
 			"persist data has not been set, it should be set when initialized",
@@ -1180,21 +1271,25 @@ export class ActorInstance<
 
 		if (persistData.hasInitialized) {
 			// Restore existing actor
-			await this.#restoreExistingActor(persistData);
+			await this.#restoreExistingActor(persistData, preload);
 		} else {
-			// Create new actor
-			await this.#createNewActor(persistData);
+			// Create new actor. Pause the KV round-trip guard during user
+			// code callbacks (createState, onCreate).
+			const savedGuard = this.#expectNoKvRoundTrips;
+			this.#expectNoKvRoundTrips = false;
+			await this.#createNewActor(persistData, writeCollector);
+			this.#expectNoKvRoundTrips = savedGuard;
 		}
 
 		// Pass persist reference to schedule manager
 		this.#scheduleManager.setPersist(this.stateManager.persist);
 	}
 
-	async #createNewActor(persistData: PersistedActor<S, I>) {
+	async #createNewActor(persistData: PersistedActor<S, I>, writeCollector?: WriteCollector) {
 		this.#rLog.info({ msg: "actor creating" });
 
 		// Initialize state
-		await this.stateManager.initializeState(persistData);
+		await this.stateManager.initializeState(persistData, writeCollector);
 
 		// Call onCreate lifecycle
 		if (this.#config.onCreate) {
@@ -1205,12 +1300,19 @@ export class ActorInstance<
 		}
 	}
 
-	async #restoreExistingActor(persistData: PersistedActor<S, I>) {
-		// List all connection keys
-		const connEntries = await this.driver.kvListPrefix(
-			this.#actorId,
-			KEYS.CONN_PREFIX,
-		);
+	async #restoreExistingActor(persistData: PersistedActor<S, I>, preload?: PreloadMap) {
+		// Check preload for connection entries before issuing a KV list.
+		let connEntries: [Uint8Array, Uint8Array][];
+		const preloadedConns = preload?.listPrefix(KEYS.CONN_PREFIX);
+		if (preloadedConns !== undefined) {
+			connEntries = preloadedConns;
+		} else {
+			this[WARN_UNEXPECTED_KV_ROUND_TRIP]("kvListPrefix");
+			connEntries = await this.driver.kvListPrefix(
+				this.#actorId,
+				KEYS.CONN_PREFIX,
+			);
+		}
 
 		// Decode connections
 		const connections: PersistedConn<CP, CS>[] = [];
@@ -1241,11 +1343,19 @@ export class ActorInstance<
 		this.connectionManager.restoreConnections(connections);
 	}
 
-	async #initializeInspectorToken() {
-		// Try to load existing token
-		const [tokenBuffer] = await this.driver.kvBatchGet(this.#actorId, [
-			KEYS.INSPECTOR_TOKEN,
-		]);
+	async #initializeInspectorToken(preload?: PreloadMap, writeCollector?: WriteCollector) {
+		// Check preload for inspector token before issuing a KV read.
+		let tokenBuffer: Uint8Array | null;
+		const preloaded = preload?.get(KEYS.INSPECTOR_TOKEN);
+		if (preloaded !== undefined) {
+			tokenBuffer = preloaded;
+		} else {
+			this[WARN_UNEXPECTED_KV_ROUND_TRIP]("kvBatchGet");
+			const [buf] = await this.driver.kvBatchGet(this.#actorId, [
+				KEYS.INSPECTOR_TOKEN,
+			]);
+			tokenBuffer = buf;
+		}
 
 		if (tokenBuffer !== null) {
 			// Token exists, decode it
@@ -1256,9 +1366,13 @@ export class ActorInstance<
 			// Generate new token
 			this.#inspectorToken = generateSecureToken();
 			const tokenBytes = new TextEncoder().encode(this.#inspectorToken);
-			await this.driver.kvBatchPut(this.#actorId, [
-				[KEYS.INSPECTOR_TOKEN, tokenBytes],
-			]);
+			if (writeCollector) {
+				writeCollector.add(KEYS.INSPECTOR_TOKEN, tokenBytes);
+			} else {
+				await this.driver.kvBatchPut(this.#actorId, [
+					[KEYS.INSPECTOR_TOKEN, tokenBytes],
+				]);
+			}
 			this.#rLog.debug({ msg: "generated new inspector token" });
 		}
 	}
@@ -1474,10 +1588,13 @@ export class ActorInstance<
 		}
 	}
 
-	async #setupDatabase() {
+	async #setupDatabase(preload?: PreloadMap) {
 		if (!("db" in this.#config) || !this.#config.db) {
 			return;
 		}
+
+		// Extract SQLite preload entries for VFS read optimization.
+		const sqlitePreloadEntries = preload?.listPrefix(sqliteStoragePrefix());
 
 		let client: InferDatabaseClient<DB> | undefined;
 		try {
@@ -1512,6 +1629,7 @@ export class ActorInstance<
 				},
 				sqliteVfs: this.#sqliteVfs,
 				metrics: this.#metrics,
+				preloadedEntries: sqlitePreloadEntries,
 			});
 			this.#rLog.info({ msg: "database migration starting" });
 			await this.#config.db.onMigrate?.(client);

@@ -224,6 +224,14 @@ Key points:
 - When adding or modifying inspector endpoints, also update the driver test at `rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-inspector.ts` to cover all inspector HTTP endpoints.
 - When adding or modifying inspector endpoints, also update the documentation in `website/src/metadata/skill-base-rivetkit.md` and `website/src/content/docs/actors/debugging.mdx` to keep them in sync.
 
+**Actor Startup KV Preloading**
+- Actor startup preloads KV data to avoid round-trips to FoundationDB. When adding new KV reads to the actor startup path (anything awaited in `ActorInstance.start()` or its callees), ensure those keys are included in the automatic preload list. The `#expectNoKvRoundTrips` flag will log warnings for any missed keys during development.
+- Internal KV key prefixes are defined in `rivetkit-typescript/packages/rivetkit/src/actor/instance/keys.ts`. Each subsystem has a reserved prefix (`[1]`-`[8]`). Do not reuse or collide with existing prefixes. The Rust preload function in `engine/packages/pegboard/src/actor_kv/preload.rs` (`build_startup_preload_params`) hardcodes the same byte prefixes. When adding or changing a key prefix in `keys.ts`, update the corresponding bytes in `preload.rs` to match.
+- Each prefix scan has a `partial` flag. SQLite `[8]` uses `partial: true` (return whatever fits, VFS handles misses via KV fallback). Connections `[2]` and workflows `[6]` use `partial: false` (if data exceeds budget, return nothing and subsystem falls back to `kvListPrefix`).
+- Preloaded KV is fetched fresh at send time and NOT persisted in workflow history or the command queue. The engine uses `EntryBuilder`/`KeyWrapper::unpack` to reassemble FDB values and strip tuple encoding before sending raw bytes to TypeScript.
+- Every unbounded prefix must have a `preload_max_*_bytes` limit in the engine config (`engine/packages/config/src/config/pegboard.rs`) with an optional per-actor override in actor options. Do not hard-code constants in the engine. All tunable limits belong in the engine config.
+- Internal developer reference at `rivetkit-typescript/packages/rivetkit/src/actor/instance/KV_PRELOADING.md`. Keep `.agent/notes/actor-startup-kv-preload-status.md` up to date as bugs are fixed or the design changes.
+
 **Database Usage**
 - UniversalDB for distributed state storage
 - ClickHouse for analytics and time-series data
@@ -260,6 +268,9 @@ Data structures often include:
 - Log messages should be lowercase unless mentioning specific code symbols. For example, `tracing::info!("inserted UserRow")` instead of `tracing::info!("Inserted UserRow")`
 
 ## Configuration Management
+
+### Engine Configuration
+- Do not hard-code tunable constants (limits, sizes, timeouts, thresholds) in the engine. All tunable values belong in the Rivet Engine config at `engine/packages/config/src/config/`. When adding a new constant, add it to the appropriate config struct with a sensible default and update `website/src/content/docs/self-hosting/configuration.mdx`.
 
 ### Docker Development Configuration
 - Do not make changes to docker/dev* configs. Instead, edit the template in docker/template/ and rerun (cd docker/template && pnpm start). This will regenerate the docker compose config for you.

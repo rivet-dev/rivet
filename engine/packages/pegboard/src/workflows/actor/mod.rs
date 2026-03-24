@@ -455,6 +455,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 												ctx.activity(runtime::InsertAndSendCommandsInput {
 													actor_id: input.actor_id,
+													namespace_id: input.namespace_id,
 													generation: state.generation,
 													runner_id,
 													commands: vec![protocol::mk2::Command::CommandStopActor],
@@ -480,6 +481,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 												ctx.activity(runtime::InsertAndSendCommandsInput {
 													actor_id: input.actor_id,
+													namespace_id: input.namespace_id,
 													generation: state.generation,
 													runner_id,
 													commands: vec![protocol::mk2::Command::CommandStopActor],
@@ -712,6 +714,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								if protocol::is_mk2(runner_protocol_version) {
 									ctx.activity(runtime::InsertAndSendCommandsInput {
 										actor_id: input.actor_id,
+										namespace_id: input.namespace_id,
 										generation: state.generation,
 										runner_id,
 										commands: vec![protocol::mk2::Command::CommandStopActor],
@@ -740,6 +743,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								if protocol::is_mk2(runner_protocol_version) {
 									ctx.activity(runtime::InsertAndSendCommandsInput {
 										actor_id: input.actor_id,
+										namespace_id: input.namespace_id,
 										generation: state.generation,
 										runner_id,
 										commands: vec![protocol::mk2::Command::CommandStopActor],
@@ -1084,6 +1088,7 @@ async fn handle_stopped(
 		if protocol::is_mk2(old_runner_protocol_version) {
 			ctx.activity(runtime::InsertAndSendCommandsInput {
 				actor_id: input.actor_id,
+				namespace_id: input.namespace_id,
 				generation: state.generation,
 				runner_id: old_runner_id,
 				commands: vec![protocol::mk2::Command::CommandStopActor],

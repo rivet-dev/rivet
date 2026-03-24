@@ -287,7 +287,7 @@ pub async fn handle_init(
 		})?;
 
 	let udb = ctx.udb()?;
-	let (runner_config_res, missed_commands) = tokio::try_join!(
+	let (runner_config_res, mut missed_commands) = tokio::try_join!(
 		ctx.op(pegboard::ops::runner_config::get::Input {
 			runners: vec![(conn.namespace_id, conn.runner_name.clone())],
 			bypass_cache: false,
@@ -402,8 +402,28 @@ pub async fn handle_init(
 		.send(Message::Binary(init_msg_serialized.into()))
 		.await?;
 
-	// Send missed commands
+	// Send missed commands with preloaded KV injected at send time.
 	if !missed_commands.is_empty() {
+		let db = ctx.udb()?;
+		for cmd_wrapper in &mut missed_commands {
+			if let protocol::mk2::Command::CommandStartActor(ref mut start) = cmd_wrapper.inner {
+				let actor_id = cmd_wrapper
+					.checkpoint
+					.actor_id
+					.parse::<Id>()
+					.context("failed to parse actor_id from missed command")?;
+				let preloaded = pegboard::actor_kv::preload::fetch_preloaded_kv(
+					&db,
+					pb,
+					actor_id,
+					conn.namespace_id,
+					&start.config.name,
+				)
+				.await?;
+				start.preloaded_kv = preloaded;
+			}
+		}
+
 		let msg = versioned::ToClientMk2::wrap_latest(protocol::mk2::ToClient::ToClientCommands(
 			missed_commands,
 		));

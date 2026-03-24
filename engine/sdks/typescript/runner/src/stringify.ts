@@ -115,7 +115,7 @@ export function stringifyToClientTunnelMessageKind(
 export function stringifyCommand(command: protocol.Command): string {
 	switch (command.tag) {
 		case "CommandStartActor": {
-			const { config, hibernatingRequests } = command.val;
+			const { config, hibernatingRequests, preloadedKv } = command.val;
 			const keyStr = config.key === null ? "null" : `"${config.key}"`;
 			const inputStr =
 				config.input === null
@@ -125,7 +125,10 @@ export function stringifyCommand(command: protocol.Command): string {
 				hibernatingRequests.length > 0
 					? `[${hibernatingRequests.map((hr) => `{gatewayId: ${idToStr(hr.gatewayId)}, requestId: ${idToStr(hr.requestId)}}`).join(", ")}]`
 					: "[]";
-			return `CommandStartActor{config: {name: "${config.name}", key: ${keyStr}, createTs: ${stringifyBigInt(config.createTs)}, input: ${inputStr}}, hibernatingRequests: ${hibernatingRequestsStr}}`;
+			const preloadedKvStr = preloadedKv === null
+				? "null"
+				: `{entries: ${preloadedKv.entries.length}, getKeys: ${preloadedKv.requestedGetKeys.length}, prefixes: ${preloadedKv.requestedPrefixes.length}}`;
+			return `CommandStartActor{config: {name: "${config.name}", key: ${keyStr}, createTs: ${stringifyBigInt(config.createTs)}, input: ${inputStr}}, hibernatingRequests: ${hibernatingRequestsStr}, preloadedKv: ${preloadedKvStr}}`;
 		}
 		case "CommandStopActor": {
 			return `CommandStopActor`;

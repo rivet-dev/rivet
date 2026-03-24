@@ -10,6 +10,7 @@ use utils::{validate_entries, validate_keys, validate_range};
 use crate::keys;
 
 mod entry;
+pub mod preload;
 mod utils;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
