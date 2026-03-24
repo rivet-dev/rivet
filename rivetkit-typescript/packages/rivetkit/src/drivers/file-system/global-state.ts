@@ -642,6 +642,7 @@ export class FileSystemGlobalState {
 					}
 					lockedEntry.state = {
 						...lockedEntry.state,
+						connectableTs: null,
 						sleepTs: BigInt(Date.now()),
 					};
 					if (this.#persist) {
