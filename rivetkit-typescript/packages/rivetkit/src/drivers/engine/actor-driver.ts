@@ -13,7 +13,8 @@ import { WSContext, type WSContextInit } from "hono/ws";
 import invariant from "invariant";
 import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
 import { lookupInRegistry } from "@/actor/definition";
-import { KEYS } from "@/actor/instance/keys";
+import { KEYS, queueMetadataKey, sqliteStoragePrefix, workflowStoragePrefix } from "@/actor/instance/keys";
+import { type PreloadMap, compareBytes, binarySearch } from "@/actor/instance/preload-map";
 import { deserializeActorKey } from "@/actor/keys";
 import { getValueLength } from "@/actor/protocol/old";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
@@ -490,6 +491,82 @@ export class EngineActorDriver implements ActorDriver {
 		});
 	}
 
+	/**
+	 * Fetch remaining startup KV data in parallel and build a PreloadMap.
+	 * PERSIST_DATA is already known (passed in), so we only fetch the
+	 * remaining exact keys and prefix scans.
+	 */
+	async #preloadStartupKv(
+		actorId: string,
+		persistData: Uint8Array,
+	): Promise<{ preloadMap: PreloadMap; entries: number }> {
+		const remainingExactKeys = [
+			KEYS.INSPECTOR_TOKEN,
+			queueMetadataKey(),
+		];
+
+		const prefixScans = [
+			KEYS.CONN_PREFIX,
+			sqliteStoragePrefix(),
+			workflowStoragePrefix(),
+		];
+
+		const [exactResults, ...prefixResults] = await Promise.all([
+			this.#runner.kvGet(actorId, remainingExactKeys),
+			...prefixScans.map((prefix) =>
+				this.#runner.kvListPrefix(actorId, prefix),
+			),
+		]);
+
+		const allExactKeys = [KEYS.PERSIST_DATA, ...remainingExactKeys];
+		const entries: [Uint8Array, Uint8Array][] = [];
+
+		entries.push([KEYS.PERSIST_DATA, persistData]);
+		for (let i = 0; i < remainingExactKeys.length; i++) {
+			const value = exactResults[i];
+			if (value !== null) {
+				entries.push([remainingExactKeys[i], value]);
+			}
+		}
+		for (const prefixEntries of prefixResults) {
+			for (const entry of prefixEntries) {
+				entries.push(entry);
+			}
+		}
+
+		entries.sort((a, b) => compareBytes(a[0], b[0]));
+		const requestedGetKeys = allExactKeys.slice().sort(compareBytes);
+		const requestedPrefixes = prefixScans.slice().sort(compareBytes);
+		const totalEntries = entries.length;
+
+		const preloadMap: PreloadMap = {
+			get(key: Uint8Array): Uint8Array | null | undefined {
+				const value = binarySearch(entries, key);
+				if (value !== undefined) return value;
+				if (binarySearchExists(requestedGetKeys, key)) return null;
+				return undefined;
+			},
+			listPrefix(prefix: Uint8Array): [Uint8Array, Uint8Array][] | undefined {
+				if (!binarySearchExists(requestedPrefixes, prefix)) return undefined;
+				const result: [Uint8Array, Uint8Array][] = [];
+				let lo = 0;
+				let hi = entries.length - 1;
+				while (lo <= hi) {
+					const mid = (lo + hi) >>> 1;
+					if (compareBytes(entries[mid][0], prefix) < 0) lo = mid + 1;
+					else hi = mid - 1;
+				}
+				for (let i = lo; i < entries.length; i++) {
+					if (!hasPrefix(entries[i][0], prefix)) break;
+					result.push(entries[i]);
+				}
+				return result;
+			},
+		};
+
+		return { preloadMap, entries: totalEntries };
+	}
+
 	async #runnerOnActorStart(
 		actorId: string,
 		generation: number,
@@ -532,29 +609,61 @@ export class EngineActorDriver implements ActorDriver {
 		const key = deserializeActorKey(actorConfig.key);
 
 		try {
-			// Initialize storage
+			// Check if this actor already has persisted state.
+			let checkStart = performance.now();
 			const [persistDataBuffer] = await this.#runner.kvGet(actorId, [
 				KEYS.PERSIST_DATA,
 			]);
+			const checkPersistDataMs = performance.now() - checkStart;
+
+			// For new actors there is no existing KV data to preload.
+			let preloadMap: PreloadMap | undefined;
+			let initNewActorMs = 0;
+			let preloadKvMs = 0;
+			let preloadKvEntries = 0;
+			// 1 round-trip for the persist data check
+			let driverKvRoundTrips = 1;
+
 			if (persistDataBuffer === null) {
+				const initStart = performance.now();
 				const initialKvState = getInitialActorKvState(input);
 				await this.#runner.kvPut(actorId, initialKvState);
+				initNewActorMs = performance.now() - initStart;
+				driverKvRoundTrips++;
 				logger().debug({
 					msg: "initialized persist data for new actor",
 					actorId,
+					durationMs: initNewActorMs,
 				});
 			} else {
+				const preloadStart = performance.now();
+				const result = await this.#preloadStartupKv(actorId, persistDataBuffer);
+				preloadMap = result.preloadMap;
+				preloadKvEntries = result.entries;
+				preloadKvMs = performance.now() - preloadStart;
+				driverKvRoundTrips++;
 				logger().debug({
-					msg: "found existing persist data for actor",
+					msg: "preloaded startup kv for existing actor",
 					actorId,
-					dataSize: persistDataBuffer.byteLength,
+					entries: preloadKvEntries,
+					durationMs: preloadKvMs,
 				});
 			}
 
 			// Create actor instance
 			const definition = lookupInRegistry(this.#config, actorConfig.name);
 
+			const instantiateStart = performance.now();
 			handler.actor = await definition.instantiate();
+			const instantiateMs = performance.now() - instantiateStart;
+
+			// Record driver-level startup metrics on the actor.
+			handler.actor.metrics.startup.checkPersistDataMs = checkPersistDataMs;
+			handler.actor.metrics.startup.initNewActorMs = initNewActorMs;
+			handler.actor.metrics.startup.preloadKvMs = preloadKvMs;
+			handler.actor.metrics.startup.preloadKvEntries = preloadKvEntries;
+			handler.actor.metrics.startup.instantiateMs = instantiateMs;
+			handler.actor.metrics.startup.kvRoundTrips = driverKvRoundTrips;
 
 			// Apply protocol limits as per-instance overrides without mutating the shared definition
 			const protocolMetadata = this.#runner.getProtocolMetadata();
@@ -590,6 +699,7 @@ export class EngineActorDriver implements ActorDriver {
 				name,
 				key,
 				"unknown", // TODO: Add regions
+				preloadMap,
 			);
 
 			logger().debug({ msg: "runner actor started", actorId, name, key });
@@ -1129,4 +1239,28 @@ export class EngineActorDriver implements ActorDriver {
 			entry.bufferedMessageSize = 0;
 		}
 	}
+}
+
+function hasPrefix(key: Uint8Array, prefix: Uint8Array): boolean {
+	if (key.length < prefix.length) return false;
+	for (let i = 0; i < prefix.length; i++) {
+		if (key[i] !== prefix[i]) return false;
+	}
+	return true;
+}
+
+function binarySearchExists(
+	sortedKeys: Uint8Array[],
+	key: Uint8Array,
+): boolean {
+	let lo = 0;
+	let hi = sortedKeys.length - 1;
+	while (lo <= hi) {
+		const mid = (lo + hi) >>> 1;
+		const cmp = compareBytes(sortedKeys[mid], key);
+		if (cmp === 0) return true;
+		if (cmp < 0) lo = mid + 1;
+		else hi = mid - 1;
+	}
+	return false;
 }

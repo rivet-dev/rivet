@@ -10,6 +10,8 @@ interface DatabaseFactoryConfig {
 export function db({
 	onMigrate,
 }: DatabaseFactoryConfig = {}): DatabaseProvider<RawAccess> {
+	let kvStoreRef: ReturnType<typeof createActorKvStore> | null = null;
+
 	return {
 		createClient: async (ctx) => {
 			// Check if override is provided
@@ -44,7 +46,8 @@ export function db({
 				);
 			}
 
-			const kvStore = createActorKvStore(ctx.kv, ctx.metrics);
+			const kvStore = createActorKvStore(ctx.kv, ctx.metrics, ctx.preloadedEntries);
+			kvStoreRef = kvStore;
 			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
 			let closed = false;
 			const mutex = new AsyncMutex();
@@ -142,6 +145,8 @@ export function db({
 			if (onMigrate) {
 				await onMigrate(client);
 			}
+			kvStoreRef?.clearPreload();
+			kvStoreRef = null;
 		},
 		onDestroy: async (client) => {
 			await client.close();

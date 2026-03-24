@@ -2,6 +2,10 @@ import type { DatabaseProviderContext } from "./config";
 import type { IDatabase } from "@rivetkit/sqlite-vfs";
 import type { KvVfsOptions } from "@rivetkit/sqlite-vfs";
 import type { ActorMetrics } from "@/actor/metrics";
+import {
+	binarySearch,
+	type PreloadedEntries,
+} from "../actor/instance/preload-map";
 
 type ActorKvOperations = DatabaseProviderContext["kv"];
 type SqliteBindings = NonNullable<Parameters<IDatabase["run"]>[1]>;
@@ -37,13 +41,27 @@ export function toSqliteBindings(args: unknown[]): SqliteBindings {
 /**
  * Create a KV store wrapper that uses the actor driver's KV operations.
  * Tracks per-operation metrics when an ActorMetrics instance is provided.
+ *
+ * When `preloadedEntries` is provided, `get` and `getBatch` check the
+ * preloaded sorted array via binary search before falling back to KV.
+ * Write operations always pass through to KV unchanged.
+ *
+ * Call `clearPreload()` on the returned object after migrations complete
+ * to release the preloaded data and free memory.
  */
 export function createActorKvStore(
 	kv: ActorKvOperations,
 	metrics?: ActorMetrics,
-): KvVfsOptions {
+	preloadedEntries?: PreloadedEntries,
+): KvVfsOptions & { clearPreload: () => void } {
+	let preload: PreloadedEntries | undefined = preloadedEntries;
+
 	return {
 		get: async (key: Uint8Array) => {
+			if (preload) {
+				const value = binarySearch(preload, key);
+				if (value !== undefined) return value;
+			}
 			const start = performance.now();
 			const results = await kv.batchGet([key]);
 			if (metrics) {
@@ -54,13 +72,46 @@ export function createActorKvStore(
 			return results[0] ?? null;
 		},
 		getBatch: async (keys: Uint8Array[]) => {
-			const start = performance.now();
-			const results = await kv.batchGet(keys);
-			if (metrics) {
-				metrics.kvGetBatch.calls++;
-				metrics.kvGetBatch.keys += keys.length;
-				metrics.kvGetBatch.totalMs += performance.now() - start;
+			if (!preload || keys.length === 0) {
+				const start = performance.now();
+				const results = await kv.batchGet(keys);
+				if (metrics) {
+					metrics.kvGetBatch.calls++;
+					metrics.kvGetBatch.keys += keys.length;
+					metrics.kvGetBatch.totalMs += performance.now() - start;
+				}
+				return results;
 			}
+
+			const results: (Uint8Array | null)[] = new Array<Uint8Array | null>(
+				keys.length,
+			).fill(null);
+			const missIndices: number[] = [];
+			const missKeys: Uint8Array[] = [];
+
+			for (let i = 0; i < keys.length; i++) {
+				const value = binarySearch(preload, keys[i]);
+				if (value !== undefined) {
+					results[i] = value;
+				} else {
+					missIndices.push(i);
+					missKeys.push(keys[i]);
+				}
+			}
+
+			if (missKeys.length > 0) {
+				const start = performance.now();
+				const kvResults = await kv.batchGet(missKeys);
+				if (metrics) {
+					metrics.kvGetBatch.calls++;
+					metrics.kvGetBatch.keys += missKeys.length;
+					metrics.kvGetBatch.totalMs += performance.now() - start;
+				}
+				for (let i = 0; i < missIndices.length; i++) {
+					results[missIndices[i]] = kvResults[i] ?? null;
+				}
+			}
+
 			return results;
 		},
 		put: async (key: Uint8Array, value: Uint8Array) => {
@@ -89,6 +140,9 @@ export function createActorKvStore(
 				metrics.kvDeleteBatch.keys += keys.length;
 				metrics.kvDeleteBatch.totalMs += performance.now() - start;
 			}
+		},
+		clearPreload: () => {
+			preload = undefined;
 		},
 	};
 }
