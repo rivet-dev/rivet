@@ -1,5 +1,5 @@
 import { $ } from "execa";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { ReleaseOpts } from "./main";
 
@@ -10,6 +10,12 @@ export const EXCLUDED_RIVETKIT_PACKAGES = [
 	"@rivetkit/shared-data",
 	"@rivetkit/engine-frontend",
 	"@rivetkit/mcp-hub",
+] as const;
+
+// Packages excluded from the turbo build step but still published.
+// These have native/Rust dependencies that require separate build steps (e.g., napi-rs cross-compilation).
+const BUILD_EXCLUDED_RIVETKIT_PACKAGES = [
+	"@rivetkit/sqlite-native",
 ] as const;
 
 async function npmVersionExists(
@@ -67,7 +73,10 @@ export async function publishSdk(opts: ReleaseOpts) {
 	console.log("==> Building rivetkit packages");
 
 	// Build exclusion filters for packages that shouldn't be built
-	const excludeFilters = EXCLUDED_RIVETKIT_PACKAGES.flatMap((pkg) => [
+	const excludeFilters = [
+		...EXCLUDED_RIVETKIT_PACKAGES,
+		...BUILD_EXCLUDED_RIVETKIT_PACKAGES,
+	].flatMap((pkg) => [
 		"-F",
 		`!${pkg}`,
 	]);
@@ -158,5 +167,53 @@ export async function publishSdk(opts: ReleaseOpts) {
 			stdio: "inherit",
 			cwd: opts.root,
 		})`pnpm --filter ${name} publish --access public --tag ${tag} --no-git-checks`;
+	}
+
+	// Publish sqlite-native platform packages.
+	// These are not in the pnpm workspace (nested under npm/) and need explicit publishing.
+	const sqliteNativeNpmDir = join(
+		opts.root,
+		"rivetkit-typescript/packages/sqlite-native/npm",
+	);
+	let platformDirs: string[];
+	try {
+		platformDirs = await readdir(sqliteNativeNpmDir);
+	} catch {
+		platformDirs = [];
+		console.log(
+			"==> sqlite-native npm/ directory not found, skipping platform packages",
+		);
+	}
+
+	const isRc = opts.version.includes("-rc.");
+	const rcTag = isRc ? "rc" : "latest";
+
+	for (const dir of platformDirs) {
+		const platformPkgPath = join(sqliteNativeNpmDir, dir, "package.json");
+		let platformPkg: { name: string };
+		try {
+			platformPkg = JSON.parse(await readFile(platformPkgPath, "utf-8"));
+		} catch {
+			continue;
+		}
+
+		const versionExists = await npmVersionExists(
+			platformPkg.name,
+			opts.version,
+		);
+		if (versionExists) {
+			console.log(
+				`Version ${opts.version} of ${platformPkg.name} already exists. Skipping...`,
+			);
+			continue;
+		}
+
+		console.log(
+			`==> Publishing to NPM: ${platformPkg.name}@${opts.version}`,
+		);
+		await $({
+			stdio: "inherit",
+			cwd: join(sqliteNativeNpmDir, dir),
+		})`npm publish --access public --tag ${rcTag}`;
 	}
 }

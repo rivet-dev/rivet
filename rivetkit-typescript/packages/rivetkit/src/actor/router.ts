@@ -351,6 +351,14 @@ export function createActorRouter(
 				workflowHistory,
 			});
 		});
+
+		router.get("/inspector/metrics", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			return c.json(actor.metrics.snapshot());
+		});
 	}
 
 	router.post("/action/:action", async (c) => {

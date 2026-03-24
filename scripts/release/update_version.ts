@@ -34,6 +34,21 @@ export async function updateVersion(opts: ReleaseOpts) {
 			replace: `"version": "${opts.version}"`,
 		},
 		{
+			path: "rivetkit-typescript/packages/sqlite-native/npm/*/package.json",
+			find: /"version": ".*"/,
+			replace: `"version": "${opts.version}"`,
+		},
+		{
+			path: "rivetkit-typescript/packages/sqlite-native/package.json",
+			find: /("@rivetkit\/sqlite-native-[^"]+": )"[^"]+"/g,
+			replace: `$1"${opts.version}"`,
+		},
+		{
+			path: "rivetkit-typescript/packages/sqlite-native/Cargo.toml",
+			find: /^version = ".*"/m,
+			replace: `version = "${opts.version}"`,
+		},
+		{
 			path: "examples/**/package.json",
 			find: /"(@rivetkit\/[^"]+|rivetkit)": "\^?[0-9]+\.[0-9]+\.[0-9]+(?:-[^"]+)?"/g,
 			replace: `"$1": "^${opts.version}"`,
@@ -59,7 +74,7 @@ export async function updateVersion(opts: ReleaseOpts) {
 
 	// Substitute all files
 	for (const { path: globPath, find, replace, required = true } of findReplace) {
-		const paths = await glob(globPath, { cwd: opts.root });
+		const paths = await glob(globPath, { cwd: opts.root, ignore: ["**/node_modules/**"] });
 		assert(paths.length > 0, `no paths matched: ${globPath}`);
 		for (const fileRelPath of paths) {
 			const filePath = pathModule.join(opts.root, fileRelPath);

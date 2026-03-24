@@ -1,7 +1,14 @@
 import type { DatabaseProvider, RawAccess } from "./config";
+import {
+	nativeSqliteAvailable,
+	createNativeRawAccess,
+} from "./native-sqlite";
 import { AsyncMutex, createActorKvStore, toSqliteBindings } from "./shared";
 
 export type { RawAccess } from "./config";
+
+// Log the native SQLite fallback warning at most once per process.
+let nativeFallbackWarned = false;
 
 interface DatabaseFactoryConfig {
 	onMigrate?: (db: RawAccess) => Promise<void> | void;
@@ -37,6 +44,21 @@ export function db({
 				} satisfies RawAccess;
 			}
 
+			// Use native SQLite when the addon is available. The native path
+			// routes KV operations over a WebSocket KV channel, bypassing
+			// the WASM VFS entirely.
+			if (nativeSqliteAvailable()) {
+				return await createNativeRawAccess(ctx.actorId);
+			}
+
+			// Native addon not available. Fall back to WASM SQLite.
+			if (!nativeFallbackWarned) {
+				nativeFallbackWarned = true;
+				console.warn(
+					"native SQLite not available, falling back to WebAssembly. run npm rebuild to install native bindings.",
+				);
+			}
+
 			// Construct KV-backed client using actor driver's KV operations
 			if (!ctx.sqliteVfs) {
 				throw new Error(
@@ -44,7 +66,7 @@ export function db({
 				);
 			}
 
-			const kvStore = createActorKvStore(ctx.kv);
+			const kvStore = createActorKvStore(ctx.kv, ctx.metrics);
 			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
 			let closed = false;
 			const mutex = new AsyncMutex();
@@ -67,11 +89,14 @@ export function db({
 					return await mutex.run(async () => {
 						ensureOpen();
 
+						const start = performance.now();
+
 						// `db.exec` does not support binding `?` placeholders.
 						// Use `db.query` for statements that return rows and `db.run` for
 						// statements that mutate data when parameters are provided.
 						// Keep using `db.exec` for non-parameterized SQL because it
 						// supports multi-statement migrations.
+						let result: TRow[];
 						if (args.length > 0) {
 							const bindings = toSqliteBindings(args);
 							const token = query
@@ -81,52 +106,57 @@ export function db({
 							const returnsRows =
 								token.startsWith("SELECT") ||
 								token.startsWith("PRAGMA") ||
-								token.startsWith("WITH");
+								token.startsWith("WITH") ||
+								/\bRETURNING\b/i.test(query);
 
 							if (returnsRows) {
 								const { rows, columns } = await db.query(
 									query,
 									bindings,
 								);
-								return rows.map((row: unknown[]) => {
+								result = rows.map((row: unknown[]) => {
 									const rowObj: Record<string, unknown> = {};
 									for (let i = 0; i < columns.length; i++) {
 										rowObj[columns[i]] = row[i];
 									}
 									return rowObj;
 								}) as TRow[];
+							} else {
+								await db.run(query, bindings);
+								result = [] as TRow[];
 							}
-
-							await db.run(query, bindings);
-							return [] as TRow[];
+						} else {
+							const results: Record<string, unknown>[] = [];
+							let columnNames: string[] | null = null;
+							await db.exec(
+								query,
+								(row: unknown[], columns: string[]) => {
+									if (!columnNames) {
+										columnNames = columns;
+									}
+									const rowObj: Record<string, unknown> = {};
+									for (let i = 0; i < row.length; i++) {
+										rowObj[columnNames[i]] = row[i];
+									}
+									results.push(rowObj);
+								},
+							);
+							result = results as TRow[];
 						}
 
-						const results: Record<string, unknown>[] = [];
-						let columnNames: string[] | null = null;
-						await db.exec(
-							query,
-							(row: unknown[], columns: string[]) => {
-								if (!columnNames) {
-									columnNames = columns;
-								}
-								const rowObj: Record<string, unknown> = {};
-								for (let i = 0; i < row.length; i++) {
-									rowObj[columnNames[i]] = row[i];
-								}
-								results.push(rowObj);
-							},
-						);
-						return results as TRow[];
+						ctx.metrics?.trackSql(query, performance.now() - start);
+						return result;
 					});
 				},
 				close: async () => {
-					await mutex.run(async () => {
-						if (closed) {
-							return;
-						}
+					const shouldClose = await mutex.run(async () => {
+						if (closed) return false;
 						closed = true;
-						await db.close();
+						return true;
 					});
+					if (shouldClose) {
+						await db.close();
+					}
 				},
 			} satisfies RawAccess;
 		},

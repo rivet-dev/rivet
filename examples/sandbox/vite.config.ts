@@ -17,4 +17,7 @@ function sqlRawPlugin(): Plugin {
 
 export default defineConfig({
 	plugins: [react(), sqlRawPlugin(), ...srvx({ entry: "src/server.ts" })],
+	ssr: {
+		noExternal: true,
+	},
 });

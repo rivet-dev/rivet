@@ -6,7 +6,8 @@ import {
 	type SpanStatusInput,
 	type Traces,
 } from "@rivetkit/traces";
-import type { SqliteVfs } from "@rivetkit/sqlite-vfs";
+import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
+import { ActorMetrics } from "@/actor/metrics";
 import invariant from "invariant";
 import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
@@ -171,7 +172,8 @@ export class ActorInstance<
 	// MARK: - Variables & Database
 	#vars?: V;
 	#db?: InferDatabaseClient<DB>;
-	#sqliteVfs?: SqliteVfs;
+	#sqliteVfs?: ISqliteVfs;
+	#metrics = new ActorMetrics();
 
 	// MARK: - Background Tasks
 	#backgroundPromises: Promise<void>[] = [];
@@ -259,6 +261,10 @@ export class ActorInstance<
 
 	get inspectorToken(): string | undefined {
 		return this.#inspectorToken;
+	}
+
+	get metrics(): ActorMetrics {
+		return this.#metrics;
 	}
 
 	// MARK: - Tracing
@@ -529,9 +535,6 @@ export class ActorInstance<
 				assertUnreachable(mode);
 			}
 
-			// Disconnect non-hibernatable connections
-			await this.#disconnectConnections();
-
 			// Wait for background tasks
 			await this.#waitBackgroundPromises(
 				this.overrides.waitUntilTimeout !== undefined
@@ -541,6 +544,9 @@ export class ActorInstance<
 						)
 					: this.#config.options.waitUntilTimeout,
 			);
+
+			// Disconnect non-hibernatable connections
+			await this.#disconnectConnections();
 
 			// Clear timeouts and save state
 			this.#rLog.info({ msg: "clearing pending save timeouts" });
@@ -738,7 +744,9 @@ export class ActorInstance<
 		}
 
 		this.#activeKeepAwakeCount++;
+		this.#metrics.actionCalls++;
 		this.resetSleepTimer();
+		const actionStart = performance.now();
 		const actionSpan = this.startTraceSpan(`actor.action.${actionName}`, {
 			"rivet.action.name": actionName,
 		});
@@ -799,6 +807,7 @@ export class ActorInstance<
 				return output;
 			});
 		} catch (error) {
+			this.#metrics.actionErrors++;
 			const isTimeout = error instanceof DeadlineError;
 			const message = isTimeout
 				? "ActionTimedOut"
@@ -822,6 +831,7 @@ export class ActorInstance<
 			});
 			throw error;
 		} finally {
+			this.#metrics.actionTotalMs += performance.now() - actionStart;
 			if (!spanEnded && actionSpan.isActive()) {
 				this.#traces.endSpan(actionSpan, {
 					status: { code: "OK" },
@@ -1471,11 +1481,10 @@ export class ActorInstance<
 
 		let client: InferDatabaseClient<DB> | undefined;
 		try {
-			// Every actor gets its own SqliteVfs/@rivetkit/sqlite instance. The async
-			// @rivetkit/sqlite build is not re-entrant, and sharing one instance across
-			// actors can cause cross-actor contention and runtime corruption.
+			// Acquire a SQLite VFS handle for this actor. The driver may return a
+			// standalone VFS or a pooled handle that shares a WASM instance.
 			if (!this.#sqliteVfs && this.driver.createSqliteVfs) {
-				this.#sqliteVfs = await this.driver.createSqliteVfs();
+				this.#sqliteVfs = await this.driver.createSqliteVfs(this.#actorId);
 			}
 
 			client = await this.#config.db.createClient({
@@ -1500,8 +1509,11 @@ export class ActorInstance<
 						this.driver.kvBatchGet(this.#actorId, keys),
 					batchDelete: (keys) =>
 						this.driver.kvBatchDelete(this.#actorId, keys),
+					deleteRange: (start, end) =>
+						this.driver.kvDeleteRange(this.#actorId, start, end),
 				},
 				sqliteVfs: this.#sqliteVfs,
+				metrics: this.#metrics,
 			});
 			this.#rLog.info({ msg: "database migration starting" });
 			await this.#config.db.onMigrate?.(client);
@@ -1615,6 +1627,48 @@ export class ActorInstance<
 		if (res) {
 			this.#rLog.warn({
 				msg: "timed out waiting for connections to close, shutting down anyway",
+			});
+		}
+	}
+
+	async #waitForPendingDisconnects() {
+		const count = this.connectionManager.pendingDisconnectCount;
+		if (count === 0) {
+			return;
+		}
+
+		this.#rLog.debug({
+			msg: "waiting for pending disconnect callbacks",
+			count,
+		});
+
+		const timedOut = await Promise.race([
+			new Promise<false>((resolve) => {
+				const check = () => {
+					if (
+						this.connectionManager.pendingDisconnectCount === 0
+					) {
+						resolve(false);
+					} else {
+						setTimeout(check, 10);
+					}
+				};
+				check();
+			}),
+			new Promise<true>((resolve) =>
+				setTimeout(() => resolve(true), 5_000),
+			),
+		]);
+
+		if (timedOut) {
+			this.#rLog.warn({
+				msg: "timed out waiting for pending disconnect callbacks",
+				remaining:
+					this.connectionManager.pendingDisconnectCount,
+			});
+		} else {
+			this.#rLog.debug({
+				msg: "all pending disconnect callbacks completed",
 			});
 		}
 	}

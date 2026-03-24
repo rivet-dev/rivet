@@ -1,44 +1,35 @@
 import type { Rivet } from "@rivet-gg/cloud";
-import { format } from "date-fns";
 import { useMemo } from "react";
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-	type ChartConfig,
-	ChartContainer,
-	ChartTooltip,
-	ChartTooltipContent,
-} from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { MetricConfig } from "./types";
+import { VisxAreaChart, type VisxAreaChartSeries } from "./visx-area-chart";
+import { VisxBrushChart } from "./visx-brush-chart";
+import { zeroFillDataPoints } from "./zero-fill";
 
 interface NamespaceMetricsChartProps {
-	syncId: string;
 	metric: MetricConfig;
 	metricsData: Rivet.namespaces.MetricsGetResponse | undefined;
 	isLoading?: boolean;
 	isError?: boolean;
+	startAt: string;
+	endAt: string;
+	resolution: number;
 }
 
-const chartConfig: ChartConfig = {
-	value: {
-		label: "Value",
-		color: "hsl(var(--chart-1))",
-	},
-};
-
 export function NamespaceMetricsChart({
-	syncId,
 	metric,
 	metricsData,
 	isLoading,
 	isError,
+	startAt,
+	endAt,
+	resolution,
 }: NamespaceMetricsChartProps) {
-	const chartData = useMemo(() => {
+	const series = useMemo<VisxAreaChartSeries[]>(() => {
 		if (!metricsData) return [];
 
 		const dataPoints: { ts: string; value: number }[] = [];
-
 		for (let i = 0; i < metricsData.name.length; i++) {
 			if (metricsData.name[i] === metric.name) {
 				dataPoints.push({
@@ -48,10 +39,23 @@ export function NamespaceMetricsChart({
 			}
 		}
 
-		return dataPoints.sort(
-			(a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime(),
-		);
-	}, [metricsData, metric.name]);
+		const filled = zeroFillDataPoints(dataPoints, {
+			startAt,
+			endAt,
+			resolution,
+		});
+
+		return [
+			{
+				key: "value",
+				color: "hsl(var(--chart-1))",
+				data: filled.map((d) => ({
+					ts: new Date(d.ts),
+					value: d.value,
+				})),
+			},
+		];
+	}, [metricsData, metric.name, startAt, endAt, resolution]);
 
 	if (isLoading) {
 		return (
@@ -85,7 +89,9 @@ export function NamespaceMetricsChart({
 		);
 	}
 
-	if (chartData.length === 0) {
+	const hasData = series.some((s) => s.data.some((d) => d.value > 0));
+
+	if (!hasData) {
 		return (
 			<Card>
 				<CardHeader className="pb-2">
@@ -112,72 +118,11 @@ export function NamespaceMetricsChart({
 				</p>
 			</CardHeader>
 			<CardContent>
-				<ChartContainer
-					config={chartConfig}
-					className="h-[200px] w-full"
-				>
-					<AreaChart data={chartData} syncId={syncId}>
-						<CartesianGrid vertical={false} />
-						<XAxis
-							dataKey="ts"
-							tickFormatter={(value) =>
-								format(new Date(value), "HH:mm")
-							}
-							axisLine={false}
-							tickLine={false}
-							tick={{ fontSize: 12 }}
-						/>
-						<YAxis
-							axisLine={false}
-							tickLine={false}
-							tick={{ fontSize: 12 }}
-							tickFormatter={(value) => metric.formatValue(value)}
-							width={70}
-						/>
-						<ChartTooltip
-							content={
-								<ChartTooltipContent
-									hideIndicator
-									labelFormatter={(label) =>
-										format(new Date(label), "PPp")
-									}
-									valueFormatter={(value) =>
-										metric.formatValue(Number(value))
-									}
-								/>
-							}
-						/>
-						<defs>
-							<linearGradient
-								id={`fill-${metric.name}`}
-								x1="0"
-								y1="0"
-								x2="0"
-								y2="1"
-							>
-								<stop
-									offset="5%"
-									stopColor="var(--color-value)"
-									stopOpacity={0.8}
-								/>
-								<stop
-									offset="95%"
-									stopColor="var(--color-value)"
-									stopOpacity={0.1}
-								/>
-							</linearGradient>
-						</defs>
-						<Area
-							dataKey="value"
-							type="monotone"
-							stroke="var(--color-value)"
-							fill={`url(#fill-${metric.name})`}
-							fillOpacity={0.4}
-							strokeWidth={2}
-							isAnimationActive={false}
-						/>
-					</AreaChart>
-				</ChartContainer>
+				<VisxAreaChart
+					series={series}
+					formatValue={metric.formatValue}
+				/>
+				<VisxBrushChart series={series} />
 			</CardContent>
 		</Card>
 	);

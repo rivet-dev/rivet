@@ -19,7 +19,7 @@ export function baseViteConfig(): UserConfig {
 			},
 		},
 		optimizeDeps: {
-			include: ["@fortawesome/*", "@rivet-gg/icons", "@rivet-gg/cloud"],
+			include: ["@fortawesome/*", "@rivet-gg/cloud"],
 		},
 		worker: {
 			format: "es",

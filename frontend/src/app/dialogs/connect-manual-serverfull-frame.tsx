@@ -115,7 +115,7 @@ function FormStepper({
 	return (
 		<StepperForm
 			{...stepper}
-			footer={footer}
+			controls={footer}
 			onSubmit={async ({ values }) => {
 				let existing: Record<string, Rivet.RunnerConfig> = {};
 				try {

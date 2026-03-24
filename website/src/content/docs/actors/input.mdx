@@ -31,7 +31,7 @@ const game = actor({
 });
 
 const registry = setup({ use: { game } });
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 // Client side - create with input
 const gameHandle = await client.game.create(["game-123"], {
@@ -190,7 +190,7 @@ const chatRoom = actor({
 });
 
 const registry = setup({ use: { chatRoom } });
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 // Actor creation with input
 const room = await client.chatRoom.create(["room-123"], {

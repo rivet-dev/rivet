@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { faArrowLeft, faArrowRight, Icon } from "@rivet-gg/icons";
 import type * as Stepperize from "@stepperize/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { posthog } from "posthog-js";
@@ -17,15 +18,15 @@ import {
 	useFormContext,
 } from "react-hook-form";
 import type * as z from "zod";
-import { Button } from "@/components";
+import { Button, cn } from "@/components";
 import type { defineStepper } from "@/components/ui/stepper";
-import { faArrowLeft, faArrowRight, Icon } from "@rivet-gg/icons";
 import { HelpDropdown } from "../help-dropdown";
 
 type Step = Stepperize.Step & {
 	assist?: boolean;
 	schema: z.ZodSchema | ((values: Record<string, unknown>) => z.ZodSchema);
 	next?: string;
+	previous?: string;
 	showNext?: boolean;
 	showPrevious?: boolean;
 	group?: string;
@@ -76,8 +77,12 @@ export type JoinStepSchemas<T extends Step[]> = T extends [
 								z.ZodObject<{}>
 					>
 				: First["schema"]
-			: // biome-ignore lint/complexity/noBannedTypes: required for zod generic
-				z.ZodObject<{}>
+			: First["schema"] extends (
+						values: Record<string, unknown>,
+					) => z.ZodSchema
+				? ReturnType<First["schema"]>
+				: // biome-ignore lint/complexity/noBannedTypes: required for zod generic
+					z.ZodObject<{}>
 		: // biome-ignore lint/complexity/noBannedTypes: required for zod generic
 			z.ZodObject<{}>
 	: // biome-ignore lint/complexity/noBannedTypes: required for zod generic
@@ -99,7 +104,7 @@ type StepperFormProps<Steps extends Step[]> = StepperProps<Steps> &
 		showAllSteps?: boolean;
 		singlePage?: boolean;
 		initialStep?: Steps[number]["id"];
-		footer?: ReactNode;
+		controls?: ReactNode;
 		children?: ReactNode;
 		formId?: string;
 		className?: string;
@@ -108,7 +113,11 @@ type StepperFormProps<Steps extends Step[]> = StepperProps<Steps> &
 export type StepperFormValues<Steps extends Step[]> = z.TypeOf<
 	Steps[number]["schema"] extends z.ZodSchema
 		? Steps[number]["schema"]
-		: never
+		: Steps[number]["schema"] extends (
+					values: Record<string, unknown>,
+				) => z.ZodSchema
+			? ReturnType<Steps[number]["schema"]>
+			: never
 >;
 
 export type ExtractSteps<T> =
@@ -187,7 +196,7 @@ function Content<const Steps extends Step[]>({
 	onSubmit,
 	onPartialSubmit,
 	initialStep,
-	footer,
+	controls,
 	formId,
 	extraChildren,
 	...formProps
@@ -339,7 +348,7 @@ function Content<const Steps extends Step[]>({
 											}
 											step={step}
 											content={content}
-											footer={footer}
+											controls={controls}
 											showNext={step.showNext ?? true}
 											showPrevious={
 												(step.showPrevious ?? true) &&
@@ -407,7 +416,7 @@ function Content<const Steps extends Step[]>({
 											showControls={
 												steps.length - 1 === index
 											}
-											footer={footer}
+											controls={controls}
 											isLastVisible={isLastVisible(
 												step.id,
 											)}
@@ -429,7 +438,7 @@ function Content<const Steps extends Step[]>({
 													}
 													step={step}
 													content={content}
-													footer={footer}
+													controls={controls}
 													showNext={
 														step.showNext ?? true
 													}
@@ -465,7 +474,7 @@ function StepPanel<const Steps extends Step[]>({
 	showPrevious = true,
 	showControls = true,
 	isLastVisible = false,
-	footer,
+	controls,
 }: Pick<StepperFormProps<Steps>, "Stepper" | "content"> & {
 	stepper: Stepperize.Stepper<Steps>;
 	allSteps: Step[];
@@ -475,7 +484,7 @@ function StepPanel<const Steps extends Step[]>({
 	showNext?: boolean;
 	showPrevious?: boolean;
 	isLastVisible?: boolean;
-	footer?: ReactNode;
+	controls?: ReactNode;
 }) {
 	const form = useFormContext();
 
@@ -503,16 +512,30 @@ function StepPanel<const Steps extends Step[]>({
 		<Stepper.Panel className="space-y-6">
 			{stepper.match(step.id, content)}
 			{showControls ? (
-				<Stepper.Controls>
-					{footer}
+				<Stepper.Controls
+					className={cn(
+						"items-center",
+						stepper.isLast && !showNext && "justify-start",
+					)}
+				>
+					{controls}
 					{showPrevious ? (
 						<Button
 							type="button"
 							variant="outline"
-							size="icon"
+							size={step.previous ? undefined : "icon"}
 							onClick={goToPrev}
+							startIcon={
+								step.previous ? (
+									<Icon icon={faArrowLeft} />
+								) : undefined
+							}
 						>
-							<Icon icon={faArrowLeft} />
+							{step.previous ? (
+								step.previous
+							) : (
+								<Icon icon={faArrowLeft} />
+							)}
 						</Button>
 					) : null}
 					{showNext ? (

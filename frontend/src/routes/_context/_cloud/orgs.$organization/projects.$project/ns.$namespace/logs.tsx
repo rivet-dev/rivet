@@ -26,13 +26,6 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/logs",
@@ -45,7 +38,7 @@ export const Route = createFileRoute(
 				pool: "default",
 				safe: true,
 			}),
-		)
+		);
 	},
 	pendingComponent: DataLoadingPlaceholder,
 });
@@ -59,24 +52,27 @@ function RouteComponent() {
 			pool: "default",
 			safe: true,
 		}),
-	)
+	);
 
 	const { data: datacenters = [] } = useInfiniteQuery(
 		useDataProvider().datacentersQueryOptions(),
-	)
+	);
 
 	const [search, setSearch] = useState("");
 	const [isPaused, setIsPaused] = useState(false);
 	const [region, setRegion] = useState<string>("all");
-	const logsRef = useRef<RivetSse.LogEntry[]>([]);
+	const logsRef = useRef<RivetSse.LogStreamEvent.Log[]>([]);
 
 	const getLogsText = useCallback(
 		() =>
 			logsRef.current
-				.map((e) => `${e.timestamp}\t${e.region}\t${e.message}`)
+				.map(
+					(e) =>
+						`${e.data.timestamp}\t${e.data.region}\t${e.data.message}`,
+				)
 				.join("\n"),
 		[],
-	)
+	);
 
 	const handleDownload = useCallback(() => {
 		const blob = new Blob([getLogsText()], { type: "text/plain" });
@@ -200,7 +196,7 @@ function RouteComponent() {
 				</div>
 			</div>
 		</Content>
-	)
+	);
 }
 
 function DataLoadingPlaceholder() {
@@ -214,5 +210,5 @@ function DataLoadingPlaceholder() {
 				<Skeleton className="w-full h-96 rounded-md" />
 			</div>
 		</div>
-	)
+	);
 }

@@ -138,7 +138,7 @@ export class IncomingMessageTooLong extends ActorError {
 		super(
 			"message",
 			"incoming_too_long",
-			"Incoming message too long. This can be configured with: `registry.start({ maxIncomingMessageSize: ... })`",
+			"Incoming message too long. This can be configured with: `setup({ maxIncomingMessageSize: ... })`",
 			{ public: true },
 		);
 	}
@@ -149,7 +149,7 @@ export class OutgoingMessageTooLong extends ActorError {
 		super(
 			"message",
 			"outgoing_too_long",
-			"Outgoing message too long. This can be configured with: `registry.start({ maxOutgoingMessageSize: ... })`",
+			"Outgoing message too long. This can be configured with: `setup({ maxOutgoingMessageSize: ... })`",
 			{ public: true },
 		);
 	}

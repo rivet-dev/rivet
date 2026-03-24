@@ -99,43 +99,24 @@ function Modals() {
 	const navigate = useNavigate();
 	const search = Route.useSearch();
 
-	const CreateActorDialog = useDialog.CreateActor.Dialog;
 	const FeedbackDialog = useDialog.Feedback.Dialog;
 
 	return (
-		<>
-			<CreateActorDialog
-				dialogProps={{
-					open: search.modal === "create-actor",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
-				}}
-			/>
-			<FeedbackDialog
-				dialogProps={{
-					open: search.modal === "feedback",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
-				}}
-			/>
-		</>
+		<FeedbackDialog
+			dialogProps={{
+				open: search.modal === "feedback",
+				onOpenChange: (value) => {
+					if (!value) {
+						return navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: undefined,
+							}),
+						});
+					}
+				},
+			}}
+		/>
 	);
 }

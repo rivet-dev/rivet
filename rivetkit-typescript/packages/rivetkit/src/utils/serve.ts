@@ -40,7 +40,7 @@ export async function crossPlatformServe(
 	managerPort: number,
 	app: Hono<any>,
 	runtime: Runtime = detectRuntime(),
-): Promise<{ upgradeWebSocket: any }> {
+): Promise<{ upgradeWebSocket: any; closeServer?: () => void }> {
 	logger().debug({ msg: "detected runtime for serve", runtime });
 
 	switch (runtime) {
@@ -89,7 +89,7 @@ async function serveNode(
 	config: RegistryConfig,
 	managerPort: number,
 	app: Hono<any>,
-): Promise<{ upgradeWebSocket: any }> {
+): Promise<{ upgradeWebSocket: any; closeServer: () => void }> {
 	// Import @hono/node-server using string variable to prevent static analysis
 	const nodeServerModule = "@hono/node-server";
 	let serve: any;
@@ -137,7 +137,11 @@ async function serveNode(
 	);
 	injectWebSocket(server);
 
-	return { upgradeWebSocket };
+	const closeServer = () => {
+		server.close();
+	};
+
+	return { upgradeWebSocket, closeServer };
 }
 
 async function serveDeno(

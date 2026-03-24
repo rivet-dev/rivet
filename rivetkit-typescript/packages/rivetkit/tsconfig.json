@@ -16,6 +16,7 @@
 			"rivetkit": ["./src/mod.ts"],
 			"rivetkit/utils": ["./src/utils.ts"],
 			"rivetkit/sandbox": ["./src/sandbox/index.ts"],
+			"rivetkit/sandbox/docker": ["./src/sandbox/providers/docker.ts"],
 			"rivetkit/db": ["./src/db/mod.ts"],
 			"rivetkit/db/drizzle": ["./src/db/drizzle/mod.ts"]
 		}
@@ -25,6 +26,7 @@
 		"tests/**/*",
 		"scripts/**/*",
 		"fixtures/driver-test-suite/**/*",
-		"dist/schemas/**/*"
-, "runtime/index.ts"	]
+		"dist/schemas/**/*",
+		"runtime/index.ts"
+	]
 }

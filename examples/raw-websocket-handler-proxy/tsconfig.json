@@ -14,8 +14,8 @@
 		"noEmit": true,
 		"allowImportingTsExtensions": true,
 		"rewriteRelativeImportExtensions": true,
-		"types": ["node", "vitest/globals"]
+		"types": ["node", "vitest/globals", "vite/client"]
 	},
-	"include": ["src/**/*", "tests/**/*"],
+	"include": ["src/**/*", "tests/**/*", "frontend/**/*", "vite.config.ts"],
 	"exclude": ["node_modules", "dist"]
 }

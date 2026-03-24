@@ -63,7 +63,7 @@ import {
 	runWithTicks,
 } from "./run";
 import { scheduled } from "./scheduled";
-import { dockerSandboxActor } from "./sandbox";
+// import { dockerSandboxActor } from "./sandbox";
 import {
 	sleep,
 	sleepWithLongRpc,
@@ -71,6 +71,7 @@ import {
 	sleepWithPreventSleep,
 	sleepWithRawHttp,
 	sleepWithRawWebSocket,
+	sleepWithWaitUntilMessage,
 } from "./sleep";
 import { statelessActor } from "./stateless";
 import {
@@ -100,6 +101,7 @@ import {
 } from "./workflow";
 import { startStopRaceActor, lifecycleObserver } from "./start-stop-race";
 import { connErrorSerializationActor } from "./conn-error-serialization";
+import { dbKvStatsActor } from "./db-kv-stats";
 
 // Consolidated setup with all actors
 export const registry = setup({
@@ -113,7 +115,7 @@ export const registry = setup({
 		// From scheduled.ts
 		scheduled,
 		// From sandbox.ts
-		dockerSandboxActor,
+		// dockerSandboxActor,
 		// From sleep.ts
 		sleep,
 		sleepWithLongRpc,
@@ -121,6 +123,7 @@ export const registry = setup({
 		sleepWithRawWebSocket,
 		sleepWithNoSleepOption,
 		sleepWithPreventSleep,
+		sleepWithWaitUntilMessage,
 		// From error-handling.ts
 		errorHandlingActor,
 		customTimeoutActor,
@@ -224,5 +227,7 @@ export const registry = setup({
 		lifecycleObserver,
 		// From conn-error-serialization.ts
 		connErrorSerializationActor,
+		// From db-kv-stats.ts
+		dbKvStatsActor,
 	},
 });

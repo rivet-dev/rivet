@@ -14,7 +14,7 @@ import {
 	RefreshCw,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { registry } from "../src/actors.ts";
+import type { registry } from "../src/index.ts";
 import {
 	ACTION_TEMPLATES,
 	type ActionTemplate,
@@ -69,9 +69,7 @@ function MermaidDiagram({ chart }: { chart: string }) {
 	return <div ref={ref} className="mermaid-diagram" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
-const { useActor } = createRivetKit<typeof registry>(
-	`${location.origin}/api/rivet`,
-);
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
 
 type ActorPanelActor = {
 	connStatus: string | null;
@@ -333,7 +331,7 @@ function ActorView({ actorName, page }: { actorName: string; page: PageConfig })
 	});
 
 	const templates = ACTION_TEMPLATES[actorName] ?? [];
-	const stateAction = getStateAction(actorName);
+	const stateAction = page.noAutoState ? undefined : getStateAction(actorName);
 
 	const [stateRefreshCounter, setStateRefreshCounter] = useState(0);
 	const triggerStateRefresh = useCallback(
@@ -407,7 +405,7 @@ function ActorView({ actorName, page }: { actorName: string; page: PageConfig })
 							refreshTrigger={stateRefreshCounter}
 						/>
 					)}
-					<EventsPanel actor={actor} />
+					<EventsPanel actor={actor} defaultEvents={page.defaultEvents} />
 				</div>
 			</div>
 		</div>
@@ -484,26 +482,44 @@ function StatePanel({
 
 // ── Events Panel ──────────────────────────────────
 
-function EventsPanel({ actor }: { actor: ActorPanelActor }) {
-	const [eventName, setEventName] = useState("");
-	const [events, setEvents] = useState<Array<{ time: string; data: string }>>([]);
+function EventsPanel({ actor, defaultEvents }: { actor: ActorPanelActor; defaultEvents?: string[] }) {
+	const [eventInput, setEventInput] = useState("");
+	const [subscribedEvents, setSubscribedEvents] = useState<string[]>(defaultEvents ?? []);
+	const [events, setEvents] = useState<Array<{ time: string; name: string; data: string }>>([]);
+
+	const subscribedKey = subscribedEvents.join(",");
+
+	const addEvent = () => {
+		const name = eventInput.trim();
+		if (name && !subscribedEvents.includes(name)) {
+			setSubscribedEvents(prev => [...prev, name]);
+		}
+		setEventInput("");
+	};
+
+	const removeEvent = (name: string) => {
+		setSubscribedEvents(prev => prev.filter(e => e !== name));
+	};
 
 	useEffect(() => {
-		if (!eventName.trim() || !actor.connection) return;
+		if (!actor.connection || !subscribedKey) return;
 
-		const stop = actor.connection.on(eventName, (...args: unknown[]) => {
-			const now = new Date();
-			const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
-				.map(n => n.toString().padStart(2, "0"))
-				.join(":");
-			setEvents((prev) => [
-				{ time, data: formatJson(args.length === 1 ? args[0] : args) },
-				...prev.slice(0, 49),
-			]);
-		});
+		const names = subscribedKey.split(",");
+		const stops = names.map(name =>
+			actor.connection!.on(name, (...args: unknown[]) => {
+				const now = new Date();
+				const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
+					.map(n => n.toString().padStart(2, "0"))
+					.join(":");
+				setEvents((prev) => [
+					{ time, name, data: formatJson(args.length === 1 ? args[0] : args) },
+					...prev.slice(0, 49),
+				]);
+			})
+		);
 
-		return () => { stop(); };
-	}, [actor.connection, eventName]);
+		return () => { for (const stop of stops) stop(); };
+	}, [actor.connection, subscribedKey]);
 
 	return (
 		<div className="inspector-section">
@@ -511,11 +527,20 @@ function EventsPanel({ actor }: { actor: ActorPanelActor }) {
 				<span className="inspector-label">Events</span>
 				<div className="inspector-controls">
 					<input
-						value={eventName}
-						onChange={(e) => setEventName(e.target.value)}
-						placeholder="event name"
+						value={eventInput}
+						onChange={(e) => setEventInput(e.target.value)}
+						onKeyDown={(e) => { if (e.key === "Enter") addEvent(); }}
+						placeholder="add event name"
 						className="inspector-input"
 					/>
+					<button
+						className="inspector-action-btn"
+						onClick={addEvent}
+						disabled={!eventInput.trim()}
+						type="button"
+					>
+						+
+					</button>
 					{events.length > 0 && (
 						<button
 							className="inspector-action-btn"
@@ -527,17 +552,34 @@ function EventsPanel({ actor }: { actor: ActorPanelActor }) {
 					)}
 				</div>
 			</div>
+			{subscribedEvents.length > 0 && (
+				<div className="event-tags">
+					{subscribedEvents.map(name => (
+						<span key={name} className="event-tag">
+							{name}
+							<button
+								className="event-tag-remove"
+								onClick={() => removeEvent(name)}
+								type="button"
+							>
+								&times;
+							</button>
+						</span>
+					))}
+				</div>
+			)}
 			<div className="events-display">
 				{events.length === 0 ? (
 					<div className="inspector-empty">
-						{eventName
+						{subscribedEvents.length > 0
 							? "Waiting for events\u2026"
-							: "Enter an event name to listen"}
+							: "Add event names to listen"}
 					</div>
 				) : (
 					events.map((entry, i) => (
 						<div className="event-row" key={i}>
 							<span className="event-time">{entry.time}</span>
+							<span className="event-name">{entry.name}</span>
 							<span className="event-data">{entry.data}</span>
 						</div>
 					))
@@ -586,6 +628,8 @@ function ActionRunner({
 	const [result, setResult] = useState<string>("");
 	const [error, setError] = useState<string>("");
 	const [isRunning, setIsRunning] = useState(false);
+	const [lastLatency, setLastLatency] = useState<number | null>(null);
+	const [inflight, setInflight] = useState(0);
 
 	useEffect(() => {
 		setSelectedIdx(0);
@@ -608,9 +652,8 @@ function ActionRunner({
 		[argsInput],
 	);
 
-	const runAction = async () => {
+	const runAction = () => {
 		setError("");
-		setResult("");
 		const actionName = selectedTemplate?.action;
 		if (!actor.handle) {
 			setError("Actor handle is not ready.");
@@ -625,19 +668,20 @@ function ActionRunner({
 			return;
 		}
 
-		setIsRunning(true);
-		try {
-			const response = await actor.handle.action({
-				name: actionName,
-				args: parsedArgs.value,
-			});
+		setInflight((n) => n + 1);
+		const start = performance.now();
+		actor.handle.action({
+			name: actionName,
+			args: parsedArgs.value,
+		}).then((response) => {
+			setLastLatency(performance.now() - start);
 			setResult(formatJson(response));
 			onActionComplete?.();
-		} catch (err) {
+		}).catch((err) => {
 			setError(err instanceof Error ? err.message : String(err));
-		} finally {
-			setIsRunning(false);
-		}
+		}).finally(() => {
+			setInflight((n) => n - 1);
+		});
 	};
 
 	if (templates.length === 0) {
@@ -670,12 +714,15 @@ function ActionRunner({
 					<button
 						className="primary"
 						onClick={runAction}
-						disabled={!actor.handle || isRunning}
+						disabled={!actor.handle}
 						type="button"
 					>
-						{isRunning ? "\u00b7\u00b7\u00b7" : "Run"}
+						Run{inflight > 0 ? ` (${inflight})` : ""}
 					</button>
 				</div>
+				{lastLatency !== null && (
+					<div className="action-latency">{lastLatency.toFixed(0)}ms</div>
+				)}
 				{!parsedArgs.ok && <div className="notice">{parsedArgs.error}</div>}
 				{error && <div className="notice">{error}</div>}
 				{result && <pre className="action-result">{result}</pre>}

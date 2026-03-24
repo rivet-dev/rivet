@@ -52,3 +52,14 @@ export function formatCurrency(amount: number | bigint) {
 export function formatCurrencyToParts(amount: number) {
 	return currencyFormatter.formatToParts(amount);
 }
+
+
+
+const listFormatter = new Intl.ListFormat("en", {
+	style: "long",
+	type: "conjunction",
+});
+
+export function formatList(items: string[]) {
+	return listFormatter.format(items);
+}

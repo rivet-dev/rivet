@@ -110,7 +110,7 @@ const chatRoomList = actor({
 });
 
 const registry = setup({ use: { chatRoom, chatRoomList } });
-const client = createClient<typeof registry>("http://localhost:8080");
+const client = createClient<typeof registry>("http://localhost:6420");
 
 // Create a new chat room via coordinator
 const coordinator = client.chatRoomList.getOrCreate(["main"]);
@@ -187,7 +187,7 @@ const hourlyAnalytics = actor({
 });
 
 const registry = setup({ use: { hourlyAnalytics } });
-const client = createClient<typeof registry>("http://localhost:8080");
+const client = createClient<typeof registry>("http://localhost:6420");
 
 // Shard by hour: hourlyAnalytics:2024-01-15T00, hourlyAnalytics:2024-01-15T01
 const shardKey = new Date().toISOString().slice(0, 13); // "2024-01-15T00"
@@ -243,7 +243,7 @@ const rateLimiter = actor({
 });
 
 const registry = setup({ use: { rateLimiter } });
-const client = createClient<typeof registry>("http://localhost:8080");
+const client = createClient<typeof registry>("http://localhost:6420");
 
 // Shard randomly: rateLimiter:shard-0, rateLimiter:shard-1, rateLimiter:shard-2
 const shardKey = `shard-${Math.floor(Math.random() * 3)}`;
@@ -351,7 +351,7 @@ const worker = actor({
 });
 
 const registry = setup({ use: { coordinator, worker } });
-const client = createClient<typeof registry>("http://localhost:8080");
+const client = createClient<typeof registry>("http://localhost:6420");
 
 const coordinatorHandle = client.coordinator.getOrCreate(["main"]);
 
@@ -458,7 +458,7 @@ const userSession = actor({
 });
 
 const registry = setup({ use: { userSession } });
-const client = createClient<typeof registry>("http://localhost:8080");
+const client = createClient<typeof registry>("http://localhost:6420");
 
 const session = client.userSession.getOrCreate(["user-123"]);
 
@@ -561,7 +561,7 @@ const userActor = actor({
 });
 
 const registry = setup({ use: { userActor } });
-const client = createClient<typeof registry>("http://localhost:8080");
+const client = createClient<typeof registry>("http://localhost:6420");
 
 const user = await client.userActor.create(["user-123"], {
   input: { email: "alice@example.com" },
@@ -621,7 +621,7 @@ const processor = actor({
 });
 
 const registry = setup({ use: { processor } });
-const client = createClient<typeof registry>("http://localhost:8080");
+const client = createClient<typeof registry>("http://localhost:6420");
 const app = new Hono();
 
 // Bad: creating an actor for each API request

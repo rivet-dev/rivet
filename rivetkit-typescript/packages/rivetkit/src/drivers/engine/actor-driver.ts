@@ -3,7 +3,8 @@ import type {
 	RunnerConfig as EngineRunnerConfig,
 	HibernatingWebSocketMetadata,
 } from "@rivetkit/engine-runner";
-import type { SqliteVfs } from "@rivetkit/sqlite-vfs";
+import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
+import { SqliteVfsPoolManager } from "@/driver-helpers/sqlite-pool";
 import { idToStr, Runner } from "@rivetkit/engine-runner";
 import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
@@ -84,6 +85,7 @@ export class EngineActorDriver implements ActorDriver {
 	#runner: Runner;
 	#actors: Map<string, ActorHandler> = new Map();
 	#actorRouter: ActorRouter;
+	#sqlitePool: SqliteVfsPoolManager;
 
 	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers(
 		(reason) =>
@@ -136,6 +138,7 @@ export class EngineActorDriver implements ActorDriver {
 		this.#config = config;
 		this.#managerDriver = managerDriver;
 		this.#inlineClient = inlineClient;
+		this.#sqlitePool = new SqliteVfsPoolManager(config);
 
 		// HACK: Override inspector token (which are likely to be
 		// removed later on) with token from x-rivet-token header
@@ -180,6 +183,9 @@ export class EngineActorDriver implements ActorDriver {
 			onActorStart: this.#runnerOnActorStart.bind(this),
 			onActorStop: this.#runnerOnActorStop.bind(this),
 			logger: getLogger("engine-runner"),
+			debugLatencyMs: process.env._RIVET_DEBUG_LATENCY_MS
+				? Number.parseInt(process.env._RIVET_DEBUG_LATENCY_MS, 10)
+				: undefined,
 		};
 
 		// Create and start runner
@@ -333,13 +339,8 @@ export class EngineActorDriver implements ActorDriver {
 	}
 
 	/** Creates a SQLite VFS instance for creating KV-backed databases */
-	async createSqliteVfs(): Promise<SqliteVfs> {
-		// Dynamic import keeps @rivetkit/sqlite out of the main entrypoint bundle.
-		// Returning a fresh SqliteVfs gives each actor an isolated sqlite module
-		// instance, avoiding async re-entrancy across actors.
-		const specifier = "@rivetkit/" + "sqlite-vfs";
-		const { SqliteVfs } = await import(specifier);
-		return new SqliteVfs();
+	async createSqliteVfs(actorId: string): Promise<ISqliteVfs> {
+		return await this.#sqlitePool.acquire(actorId);
 	}
 
 	// MARK: - Actor Lifecycle
@@ -408,6 +409,8 @@ export class EngineActorDriver implements ActorDriver {
 		}
 		await Promise.all(stopPromises);
 		logger().debug({ msg: "all actors stopped" });
+
+		await this.#sqlitePool.shutdown();
 
 		try {
 			await this.#runner.shutdown(immediate);

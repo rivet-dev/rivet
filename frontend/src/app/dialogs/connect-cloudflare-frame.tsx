@@ -176,7 +176,7 @@ function FormStepper({
 				headers: [],
 				datacenters: {},
 			}}
-			footer={footer}
+			controls={footer}
 		/>
 	);
 }

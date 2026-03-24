@@ -5,6 +5,7 @@ use super::{
 	MAX_KEY_SIZE, MAX_KEYS, MAX_PUT_PAYLOAD_SIZE, MAX_STORAGE_SIZE, MAX_VALUE_SIZE,
 	keys::actor_kv::KeyWrapper,
 };
+use crate::errors;
 
 pub fn validate_list_query(query: &rp::KvListQuery) -> Result<()> {
 	match query {
@@ -74,10 +75,13 @@ pub fn validate_entries(
 	);
 
 	let storage_remaining = MAX_STORAGE_SIZE.saturating_sub(total_size);
-	ensure!(
-		payload_size <= storage_remaining,
-		"not enough space left in storage ({storage_remaining} bytes remaining, current payload is {payload_size} bytes)"
-	);
+	if payload_size > storage_remaining {
+		return Err(errors::Actor::KvStorageQuotaExceeded {
+			remaining: storage_remaining,
+			payload_size,
+		}
+		.build());
+	}
 
 	for key in keys {
 		ensure!(

@@ -691,6 +691,134 @@ const loggingActor = actor({
 });
 ```
 
+## Sleeping
+
+Actors automatically sleep after a period of inactivity to free up resources. When a request arrives for a sleeping actor, it wakes up, restores its state, and handles the request.
+
+### When Actors Sleep
+
+#### Idle Timeout
+
+An actor is considered idle and eligible to sleep when **all** of the following are true:
+
+- No active HTTP requests
+- No active connections (unless they are hibernatable WebSockets)
+- No active `run` handler (unless it is waiting on a queue)
+- `setPreventSleep` is not enabled
+- No pending disconnect callbacks
+
+Once the actor becomes idle, the sleep timer starts. After `sleepTimeout` (default 30 seconds) of continuous inactivity, the actor begins the sleep process. Any activity resets the timer.
+
+#### Upgrades & Eviction
+
+Actors do not need special handling for upgrades or eviction. The platform may force an actor to sleep during version upgrades or when a serverless request is about to timeout. The same [shutdown sequence](#sleep-shutdown-sequence) and timeouts apply, so `onSleep`, `waitUntil`, and abort signals all work as expected.
+
+### Preventing Sleep
+
+If actor state says the actor should stay awake, call `c.setPreventSleep(true)` and clear it once the actor can sleep again. You can read `c.preventSleep` to inspect the current flag.
+
+```typescript
+import { actor } from "rivetkit";
+
+const sessionActor = actor({
+  state: {
+    activeTurns: 0,
+  },
+
+  actions: {
+    beginTurn: (c) => {
+      c.state.activeTurns += 1;
+      c.setPreventSleep(true);
+    },
+    endTurn: (c) => {
+      c.state.activeTurns -= 1;
+      c.setPreventSleep(c.state.activeTurns > 0);
+    },
+  }
+});
+```
+
+### On Sleep Hook
+
+The [`onSleep`](#onsleep) hook runs during shutdown for cleanup like clearing intervals or closing connections. It is best-effort and will not run if the actor crashes.
+
+```typescript
+import { actor } from "rivetkit";
+
+const myActor = actor({
+  state: { count: 0 },
+  vars: { intervalId: null as ReturnType<typeof setInterval> | null },
+
+  onWake: (c) => {
+    c.vars.intervalId = setInterval(() => { c.state.count++; }, 10_000);
+  },
+
+  onSleep: (c) => {
+    if (c.vars.intervalId) clearInterval(c.vars.intervalId);
+  },
+
+  actions: { /* ... */ }
+});
+```
+
+### Wait Before Sleep
+
+`c.waitUntil(promise)` registers a background promise that must resolve before the actor finishes sleeping. Use this to flush data or finish in-flight work during shutdown without blocking the main execution flow.
+
+```typescript
+import { actor } from "rivetkit";
+
+const analyticsActor = actor({
+  state: { events: [] as string[] },
+
+  actions: {
+    track: (c, event: string) => {
+      c.state.events.push(event);
+
+      // The actor will wait for this to complete before sleeping.
+      c.waitUntil(
+        fetch("https://analytics.example.com/ingest", {
+          method: "POST",
+          body: JSON.stringify({ event }),
+        }).then(() => {})
+      );
+    },
+  },
+});
+```
+
+The actor waits up to `waitUntilTimeout` (default 15 seconds) for all registered promises to settle during the [shutdown sequence](#shutdown-sequence). If the timeout is exceeded, the actor proceeds with sleep anyway.
+
+### Sleep Timeouts
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `sleepTimeout` | 30 seconds | Time of inactivity before the actor begins sleeping. |
+| `runStopTimeout` | 15 seconds | Max time to wait for the `run` handler to exit during shutdown. |
+| `onSleepTimeout` | 5 seconds | Max time for the `onSleep` hook to run. |
+| `waitUntilTimeout` | 15 seconds | Max time to wait for `waitUntil` background promises during shutdown. |
+
+Rivet enforces a hard limit of **30 seconds** for the entire stop process. These can be configured in the [options](#options).
+
+### WebSocket Hibernation
+
+WebSocket connections are preserved across sleep cycles by default and transparently migrated to the new actor instance. Client stays connected and sees no interruption. Actor migration is very fast, realtime workloads are not interrupted.
+
+### Shutdown Sequence
+
+When an actor sleeps, it shuts down in order:
+
+1. `c.abortSignal` fires and `c.aborted` becomes `true`.
+2. Wait for `run` handler to exit (up to `runStopTimeout`).
+3. `onSleep` hook runs (up to `onSleepTimeout`). See the [`onSleep` hook reference](#onsleep).
+4. `waitUntil` background promises are awaited (up to `waitUntilTimeout`).
+5. Non-hibernatable connections are disconnected. Hibernatable WebSocket connections are preserved for live migration.
+6. State is saved and the database is cleaned up.
+
+Requests that arrive during shutdown are held until the actor wakes up again. The caller does not need to retry.
+
+In-flight actions are **not** waited on during shutdown. If an action must complete before the actor stops, wrap the critical work with `c.waitUntil()`.
+
 ## Options
 
 The `options` object allows you to configure various timeouts and behaviors for your actor.
@@ -726,14 +854,14 @@ const myActor = actor({
     // Max time to wait for run handler to stop during shutdown (default: 15000ms)
     runStopTimeout: 15_000,
 
+    // Max time to wait for waitUntil background promises during shutdown (default: 15000ms)
+    waitUntilTimeout: 15_000,
+
     // Timeout for connection liveness check (default: 2500ms)
     connectionLivenessTimeout: 2500,
 
     // Interval for connection liveness check (default: 5000ms)
     connectionLivenessInterval: 5000,
-
-    // Prevent actor from sleeping (default: false)
-    noSleep: false,
 
     // Time before actor sleeps due to inactivity (default: 30000ms)
     sleepTimeout: 30_000,
@@ -757,49 +885,13 @@ const myActor = actor({
 | `stateSaveInterval` | 10000ms | Interval for persisting state |
 | `actionTimeout` | 60000ms | Timeout for action execution |
 | `runStopTimeout` | 15000ms | Max time to wait for run handler to stop during shutdown |
+| `waitUntilTimeout` | 15000ms | Max time to wait for `waitUntil` background promises during shutdown |
 | `connectionLivenessTimeout` | 2500ms | Timeout for connection liveness check |
 | `connectionLivenessInterval` | 5000ms | Interval for connection liveness check |
-| `noSleep` | false | Prevent actor from sleeping |
 | `sleepTimeout` | 30000ms | Time before actor sleeps due to inactivity |
 | `canHibernateWebSocket` | false | Whether WebSockets can hibernate (experimental) |
 
 ## Advanced
-
-### Preventing Sleep with `preventSleep`
-
-If actor state says the actor should stay awake, call `c.setPreventSleep(true)` and clear it once the actor can sleep again.
-
-This is useful when the sleep-blocking lifetime is driven by actor state instead of a single promise. You can read `c.preventSleep` to inspect the current flag.
-
-```typescript
-import { actor } from "rivetkit";
-
-const sessionActor = actor({
-  state: {
-    activeTurns: 0,
-  },
-
-  actions: {
-    beginTurn: async (c) => {
-      c.state.activeTurns += 1;
-      c.setPreventSleep(true);
-
-      try {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 1_000);
-        });
-      } finally {
-        c.state.activeTurns -= 1;
-        c.setPreventSleep(c.state.activeTurns > 0);
-      }
-    },
-    status: (c) => ({
-      activeTurns: c.state.activeTurns,
-      preventSleep: c.preventSleep,
-    }),
-  }
-});
-```
 
 ### Actor Shutdown Abort Signal
 

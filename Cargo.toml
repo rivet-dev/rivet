@@ -28,6 +28,7 @@ members = [
   "engine/packages/namespace",
   "engine/packages/pegboard",
   "engine/packages/pegboard-gateway",
+  "engine/packages/pegboard-kv-channel",
   "engine/packages/pegboard-runner",
   "engine/packages/pools",
   "engine/packages/postgres-util",
@@ -48,12 +49,13 @@ members = [
   "engine/sdks/rust/data",
   "engine/sdks/rust/engine-runner",
   "engine/sdks/rust/epoxy-protocol",
+  "engine/sdks/rust/kv-channel-protocol",
   "engine/sdks/rust/runner-protocol",
   "engine/sdks/rust/ups-protocol"
 ]
 
   [workspace.package]
-  version = "2.1.6"
+  version = "2.1.7"
   edition = "2024"
   authors = [ "Rivet Gaming, LLC <developer@rivet.gg>" ]
   license = "Apache-2.0"
@@ -118,6 +120,7 @@ members = [
   slog-async = "2.8"
   slog-term = "2.9"
   statrs = "0.18"
+  subtle = "2"
   sysinfo = "0.37.2"
   tabled = "0.17.0"
   tempfile = "3.13.0"
@@ -420,6 +423,9 @@ members = [
     [workspace.dependencies.pegboard-gateway]
     path = "engine/packages/pegboard-gateway"
 
+    [workspace.dependencies.pegboard-kv-channel]
+    path = "engine/packages/pegboard-kv-channel"
+
     [workspace.dependencies.pegboard-runner]
     path = "engine/packages/pegboard-runner"
 
@@ -480,6 +486,9 @@ members = [
 
     [workspace.dependencies.epoxy-protocol]
     path = "engine/sdks/rust/epoxy-protocol"
+
+    [workspace.dependencies.rivet-kv-channel-protocol]
+    path = "engine/sdks/rust/kv-channel-protocol"
 
     [workspace.dependencies.rivet-engine-runner]
     path = "engine/sdks/rust/engine-runner"

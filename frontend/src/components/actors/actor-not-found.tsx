@@ -9,17 +9,28 @@ import { useActorsView } from "./actors-view-context-provider";
 import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
 
-export function ActorNotFound({ actorId }: { actorId?: ActorId }) {
+export function ActorNotFound({
+	actorId,
+	name,
+	actorKey,
+}: {
+	actorId?: ActorId;
+	name?: string;
+	actorKey?: string;
+}) {
 	const { copy } = useActorsView();
 
 	const navigate = useNavigate();
 
 	const hasDevMode = false;
 
+	const id =
+		actorKey && name ? { key: actorKey ?? "", name: name ?? "" } : actorId;
+
 	const { isLoading } = useQuery({
 		// biome-ignore lint/style/noNonNullAssertion: enabled guarantees actorId is defined
-		...useDataProvider().actorQueryOptions(actorId!),
-		enabled: !!actorId,
+		...useDataProvider().actorQueryOptions(id!),
+		enabled: !!id,
 	});
 
 	return (
@@ -46,7 +57,7 @@ export function ActorNotFound({ actorId }: { actorId?: ActorId }) {
 							className="mt-3"
 							variant="outline"
 							size="sm"
-							onClick={() => {
+							onClick={() =>
 								navigate({
 									to: ".",
 									search: (prev) => ({
@@ -56,8 +67,8 @@ export function ActorNotFound({ actorId }: { actorId?: ActorId }) {
 											operator: FilterOp.EQUAL,
 										},
 									}),
-								});
-							}}
+								})
+							}
 						>
 							{copy.showHiddenActors}
 						</Button>

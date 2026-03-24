@@ -14,38 +14,20 @@ All example READMEs must follow the template defined in `.claude/resources/EXAMP
 
 ### Directory Layout
 
-Examples with frontend (using vite-plugin-srvx):
+Examples with frontend:
 ```
 example-name/
 ├── src/
-│   ├── actors.ts       # Actor definitions and registry setup
-│   └── server.ts       # Server entry point
+│   └── index.ts        # Actor definitions, registry setup, and registry.start()
 ├── frontend/
 │   ├── App.tsx         # Main React component
 │   └── main.tsx        # React entry point
 ├── tests/
 │   └── *.test.ts       # Vitest tests
+├── public/             # Vite build output (gitignored)
 ├── index.html          # HTML entry point (for Vite)
 ├── package.json
 ├── tsconfig.json
-├── vite.config.ts
-├── vitest.config.ts    # Only if tests exist
-├── turbo.json
-└── README.md
-```
-
-Examples with separate frontend/backend dev servers:
-```
-example-name/
-├── src/
-│   ├── actors.ts       # Actor definitions and registry setup
-│   └── server.ts       # Server entry point
-├── frontend/
-│   ├── App.tsx
-│   └── main.tsx
-├── package.json
-├── tsconfig.json
-├── tsup.config.ts      # For backend bundling
 ├── vite.config.ts
 ├── vitest.config.ts    # Only if tests exist
 ├── turbo.json
@@ -56,8 +38,7 @@ Backend-only examples:
 ```
 example-name/
 ├── src/
-│   ├── actors.ts       # Actor definitions and registry setup
-│   └── server.ts       # Server entry point
+│   └── index.ts        # Actor definitions, registry setup, and registry.start()
 ├── package.json
 ├── tsconfig.json
 ├── turbo.json
@@ -66,8 +47,7 @@ example-name/
 
 ### Naming Conventions
 
-- Actor definitions go in `src/actors.ts`
-- Server entry point is always `src/server.ts`
+- Actor definitions and server setup go in `src/index.ts` (single entry point)
 - Frontend entry is `frontend/main.tsx` with main component in `frontend/App.tsx`
 - Test files use `.test.ts` extension in `tests/` directory
 
@@ -75,32 +55,16 @@ example-name/
 
 ### Required Scripts
 
-For examples with frontend (using vite-plugin-srvx):
+For examples with frontend:
 ```json
 {
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -n server,vite \"tsx --watch src/index.ts\" \"vite\"",
+    "dev:server": "tsx --watch src/index.ts",
     "check-types": "tsc --noEmit",
     "test": "vitest run",
-    "build": "vite build && vite build --mode server",
-    "start": "srvx --static=public/ dist/server.js"
-  }
-}
-```
-
-For examples with separate frontend/backend dev servers:
-```json
-{
-  "scripts": {
-    "dev:backend": "srvx --import tsx src/server.ts",
-    "dev:frontend": "vite",
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "check-types": "tsc --noEmit",
-    "test": "vitest run",
-    "build:frontend": "vite build",
-    "build:backend": "tsup",
-    "build": "npm run build:backend && npm run build:frontend",
-    "start": "srvx --static=../frontend/dist dist/server.js"
+    "build": "vite build",
+    "start": "tsx src/index.ts"
   }
 }
 ```
@@ -109,10 +73,9 @@ For backend-only examples:
 ```json
 {
   "scripts": {
-    "dev": "npx srvx --import tsx src/server.ts",
-    "start": "npx srvx --import tsx src/server.ts",
+    "dev": "tsx --watch src/index.ts",
     "check-types": "tsc --noEmit",
-    "build": "tsup"
+    "start": "tsx src/index.ts"
   }
 }
 ```
@@ -141,18 +104,12 @@ For backend-only examples:
 - Use `"rivetkit": "*"` for the main RivetKit package
 - Use `"@rivetkit/react": "*"` for React integration
 - Common dev dependencies:
-  - `tsx` for running TypeScript in development
+  - `tsx` for running TypeScript in development and production
   - `typescript` for type checking
-  - `vite` and `@vitejs/plugin-react` for frontend
-  - `vite-plugin-srvx` for unified dev server (when using vite-plugin-srvx pattern)
+  - `vite` and `@vitejs/plugin-react` for frontend (only for examples with frontend)
+  - `concurrently` for parallel dev servers (only for examples with frontend)
   - `vitest` for testing
-  - `tsup` for bundling (only for separate frontend/backend examples)
-  - `concurrently` for parallel dev servers (only for separate frontend/backend examples)
-- Common production dependencies:
-  - `hono` for the server framework (required for Vercel detection)
-  - `srvx` for serving in production (used by `start` script)
-  - `@hono/node-server` for Node.js HTTP server adapter
-  - `@hono/node-ws` for Node.js WebSocket support
+- `@hono/node-server` and `@hono/node-ws` are bundled in rivetkit and do not need to be added as direct dependencies
 
 ## Configuration Files
 
@@ -183,55 +140,27 @@ Notes:
 - Omit `"frontend/**/*"` and `"tests/**/*"` from include if they don't exist
 - `allowImportingTsExtensions` and `rewriteRelativeImportExtensions` enable ESM-compliant `.ts` imports
 
-### tsup.config.ts
-
-Only needed for examples with separate frontend/backend dev servers (not using vite-plugin-srvx):
-
-```typescript
-import { defineConfig } from "tsup";
-
-export default defineConfig({
-  entry: {
-    server: "src/server.ts",
-  },
-  format: ["esm"],
-  outDir: "dist",
-  bundle: true,
-  splitting: false,
-  shims: true,
-});
-```
-
 ### vite.config.ts
 
-For examples using vite-plugin-srvx (unified dev):
+Only needed for examples with a frontend:
+
 ```typescript
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import srvx from "vite-plugin-srvx";
-
-export default defineConfig({
-  plugins: [react(), ...srvx({ entry: "src/server.ts" })],
-});
-```
-
-For examples with separate dev servers:
-```typescript
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
-  root: "frontend",
+  publicDir: false,
   build: {
-    outDir: "dist",
+    outDir: "public",
     emptyOutDir: true,
   },
   server: {
-    host: "0.0.0.0",
-    port: 5173,
+    clearScreen: false,
     proxy: {
-      "/api/rivet/": "http://localhost:3000",
+      "/actors": { target: "http://localhost:6420", ws: true },
+      "/metadata": { target: "http://localhost:6420" },
+      "/health": { target: "http://localhost:6420" },
     },
   },
 });
@@ -277,6 +206,7 @@ All examples should extend the root turbo config:
 ```
 .actorcore
 node_modules
+public
 ```
 
 ## Source Code Patterns
@@ -305,7 +235,9 @@ export const myActor = actor({...});
 
 Shared types/interfaces used by both the actor definition and helpers (e.g. `State`, `PlayerEntry`) should go above the actor since the actor definition depends on them.
 
-### Actor Definitions (src/actors.ts)
+### Entry Point (src/index.ts)
+
+The entry point defines actors, sets up the registry, and starts the server. The registry must be exported for client type inference.
 
 ```typescript
 import { actor, setup } from "rivetkit";
@@ -334,45 +266,20 @@ export const chatRoom = actor({
 export const registry = setup({
   use: { chatRoom },
 });
-```
 
-### Server Entry Point (src/server.ts)
-
-You must explicitly import from `"hono"` for Vercel to detect the framework.
-
-Minimum required:
-
-```typescript
-import { Hono } from "hono";
-import { registry } from "./actors.ts";
-
-const app = new Hono();
-app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
-export default app;
-```
-
-With additional routes:
-
-```typescript
-import { Hono } from "hono";
-import { registry } from "./actors.ts";
-
-const app = new Hono();
-
-app.get("/api/foo", (c) => c.text("bar"));
-
-app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
-
-export default app;
+// Start the server on port 6420
+registry.start();
 ```
 
 ### React Frontend (frontend/App.tsx)
 
+RivetKit runs on port 6420 by default. Pass the endpoint explicitly to the client.
+
 ```typescript
 import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "../src/actors.ts";
+import type { registry } from "../src/index.ts";
 
-const { useActor } = createRivetKit<typeof registry>(`${location.origin}/api/rivet`);
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
 
 export function App() {
   const actor = useActor({
@@ -407,7 +314,7 @@ createRoot(root).render(
 ```typescript
 import { setupTest } from "rivetkit/test";
 import { expect, test } from "vitest";
-import { registry } from "../src/actors.ts";
+import { registry } from "../src/index.ts";
 
 test("Description of test", async (ctx) => {
   const { client } = await setupTest(ctx, registry);
@@ -590,7 +497,7 @@ The following example types are not converted to Vercel:
 - **Next.js examples** (`*-next-js`): Next.js has its own Vercel integration
 - **Cloudflare examples** (`*-cloudflare*`): Different runtime environment
 - **Deno examples**: Different runtime environment
-- **Examples without `src/server.ts`**: Cannot be converted
+- **Examples without `src/index.ts`**: Cannot be converted
 
 ### Workflow
 

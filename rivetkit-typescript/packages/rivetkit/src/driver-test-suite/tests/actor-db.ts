@@ -181,7 +181,25 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 					await waitFor(driverTestConfig, SLEEP_WAIT_MS + 250);
 					await actor.configureDisconnectInsert(false, 0);
 
-					expect(await actor.getDisconnectInsertCount()).toBe(1);
+					// Poll for the disconnect insert to complete.
+					// Native SQLite routes writes through a WebSocket KV
+					// channel, which adds latency that can push the
+					// onDisconnect DB write past the fixed wait window
+					// under concurrent test load.
+					let count = 0;
+					for (let i = 0; i < LIFECYCLE_POLL_ATTEMPTS; i++) {
+						count =
+							await actor.getDisconnectInsertCount();
+						if (count >= 1) {
+							break;
+						}
+						await waitFor(
+							driverTestConfig,
+							LIFECYCLE_POLL_INTERVAL_MS,
+						);
+					}
+
+					expect(count).toBe(1);
 				},
 				dbTestTimeout,
 			);

@@ -7,6 +7,7 @@ use rivet_guard_core::RoutingFn;
 use crate::{errors, metrics, shared_state::SharedState};
 
 mod api_public;
+mod kv_channel;
 pub mod pegboard_gateway;
 mod runner;
 
@@ -29,9 +30,13 @@ pub struct ActorPathInfo {
 #[tracing::instrument(skip_all)]
 pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -> RoutingFn {
 	let ctx = ctx.clone();
+	let kv_channel_handler = Arc::new(
+		pegboard_kv_channel::PegboardKvChannelCustomServe::new(ctx.clone()),
+	);
 	Arc::new(move |req_ctx| {
 		let ctx = ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id()).unwrap();
 		let shared_state = shared_state.clone();
+		let kv_channel_handler = kv_channel_handler.clone();
 		let hostname = req_ctx.hostname().to_string();
 		let path = req_ctx.path().to_string();
 
@@ -66,6 +71,18 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 					runner::route_request_path_based(&ctx, req_ctx).await?
 				{
 					metrics::ROUTE_TOTAL.with_label_values(&["runner"]).inc();
+
+					return Ok(routing_output);
+				}
+
+				// Route KV channel
+				if let Some(routing_output) =
+					kv_channel::route_request_path_based(&ctx, req_ctx, &kv_channel_handler)
+						.await?
+				{
+					metrics::ROUTE_TOTAL
+						.with_label_values(&["kv_channel"])
+						.inc();
 
 					return Ok(routing_output);
 				}

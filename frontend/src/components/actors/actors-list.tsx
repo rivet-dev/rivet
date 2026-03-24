@@ -39,6 +39,7 @@ import { ActorsListRow, ActorsListRowSkeleton } from "./actors-list-row";
 import { useActorsView } from "./actors-view-context-provider";
 import { CreateActorButton } from "./create-actor-button";
 import { useDataProvider } from "./data-provider";
+import { NoProvidersAlert } from "./no-providers-alert";
 import { useRootLayout } from "./root-layout-context";
 
 export function ActorsList() {
@@ -123,26 +124,28 @@ function LoadingIndicator() {
 
 function List() {
 	const filters = useFiltersValue({ onlyStatic: true });
-	const { actorId, n } = useSearch({
+	const { actorId, actorKey, n } = useSearch({
 		from: "/_context",
 	});
-	const { data: actorIds = [] } = useInfiniteQuery(
+	const { data: actors = [] } = useInfiniteQuery(
 		useDataProvider().actorsListQueryOptions({ n, filters }),
 	);
 
 	return (
 		<>
-			{actorIds.map((id) => (
+			{actors.map((actor) => (
 				<ActorsListRow
-					key={id}
-					actorId={id}
-					isCurrent={actorId === id}
+					key={actor.key}
+					actorKey={actor.key}
+					actorId={actor.actorId}
+					isCurrent={
+						actorId === actor.actorId || actorKey === actor.key
+					}
 				/>
 			))}
 		</>
 	);
 }
-
 
 function Pagination() {
 	const n = useSearch({
@@ -250,60 +253,7 @@ function EmptyState({ count }: { count: number }) {
 			) : count === 0 ? (
 				filtersCount === 0 ? (
 					runnerConfigsCount === 0 ? (
-						<div className="bg-amber-950/50 text-warning-foreground rounded-md p-4 mx-4 flex gap-4 border border-amber-900">
-							<div className="flex-1 flex gap-2">
-								<Icon
-									icon={faExclamationTriangle}
-									className="text-warning-foreground text-xl mt-1"
-								/>
-								<div>
-									<H4 className="mb-2">
-										No Providers Connected
-									</H4>
-									<p>
-										You currently have no Providers
-										connected. Connect a Provider to start
-										deploying and running Rivet Actors.
-									</p>
-								</div>
-							</div>
-
-							<div className="flex-col flex gap-4">
-								{__APP_TYPE__ === "cloud" ? (
-									<Button asChild variant="outline">
-										<Link
-											to="/orgs/$organization/projects/$project/ns/$namespace/settings"
-											from="/orgs/$organization/projects/$project/ns/$namespace"
-										>
-											Go to Settings
-										</Link>
-									</Button>
-								) : null}
-								{__APP_TYPE__ === "engine" ? (
-									<Button asChild variant="secondary">
-										<Link
-											to="/ns/$namespace"
-											from="/ns/$namespace/connect"
-										>
-											Go to Settings
-										</Link>
-									</Button>
-								) : null}
-								<Button
-									startIcon={<Icon icon={faBook} />}
-									asChild
-									variant="ghost"
-								>
-									<a
-										href={docsLinks.runnersSetup}
-										target="_blank"
-										rel="noreferrer"
-									>
-										Read Docs
-									</a>
-								</Button>
-							</div>
-						</div>
+						<NoProvidersAlert />
 					) : (
 						<div className="gap-2 flex flex-col items-center justify-center">
 							<Icon icon={faActors} className="text-4xl mt-8" />

@@ -48,7 +48,7 @@ See also the [raw WebSocket handler example](https://github.com/rivet-dev/rivet/
 Use the `.websocket()` method on an actor handle to open a WebSocket connection to the actor's `onWebSocket` handler. This can be executed from either your frontend or backend.
 
 <CodeGroup workspace>
-```typescript actors.ts @hide @nocheck
+```typescript index.ts @hide @nocheck
 import { actor, setup } from "rivetkit";
 
 export const chat = actor({
@@ -62,13 +62,14 @@ export const chat = actor({
 });
 
 export const registry = setup({ use: { chat } });
+registry.start();
 ```
 
 ```typescript client.ts @nocheck
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 const actor = client.chat.getOrCreate(["my-chat"]);
 
@@ -93,7 +94,7 @@ The `.websocket()` method returns a standard WebSocket.
 Use `.getGatewayUrl()` to get the raw gateway URL for the actor. This is useful when you need to use the URL with external tools or custom WebSocket clients.
 
 <CodeGroup workspace>
-```typescript actors.ts @hide @nocheck
+```typescript index.ts @hide @nocheck
 import { actor, setup } from "rivetkit";
 
 export const chat = actor({
@@ -107,13 +108,14 @@ export const chat = actor({
 });
 
 export const registry = setup({ use: { chat } });
+registry.start();
 ```
 
 ```typescript client.ts @nocheck
 import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
+import type { registry } from "./index";
 
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 const actor = client.chat.getOrCreate(["my-chat"]);
 
@@ -208,7 +210,7 @@ const chatActor = actor({
 });
 
 const registry = setup({ use: { chat: chatActor } });
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 
 const app = new Hono();
 

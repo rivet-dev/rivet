@@ -26,7 +26,7 @@ export function DeploymentOptionsSection() {
         </div>
 
         <div className='mb-12 grid grid-cols-1 gap-6 lg:grid-cols-3'>
-          <DeploymentOption
+          {/* <DeploymentOption
             title='Rivet Cloud'
             description='Build on any cloud while we manage the Actors for you.'
           >
@@ -38,7 +38,7 @@ export function DeploymentOptionsSection() {
                 <span className='transition-transform group-hover:translate-x-1'>→</span>
               </a>
             </div>
-          </DeploymentOption>
+          </DeploymentOption> */}
 
           <DeploymentOption
             title='On-prem/hybrid cloud'

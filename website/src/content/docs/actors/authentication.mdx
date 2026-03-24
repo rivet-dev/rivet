@@ -157,15 +157,21 @@ It's recommended to use `params` instead of `c.request.headers` whenever possibl
 
 ### Passing Credentials
 
-Pass authentication data when connecting:
+Pass authentication data when connecting. Use `getParams` when you need a fresh JWT for every connection or reconnect:
 
 <CodeGroup>
 ```typescript Connection
 import { createClient } from "rivetkit/client";
 
+async function getAuthToken(): Promise<string> {
+  return "jwt-token-here";
+}
+
 const client = createClient();
 const chat = client.chatRoom.getOrCreate(["general"], {
-  params: { authToken: "jwt-token-here" },
+  getParams: async () => ({
+    authToken: await getAuthToken(),
+  }),
 });
 
 // Authentication will happen on connect by reading connection parameters
@@ -220,7 +226,7 @@ const myActor = actor({
 });
 
 const registry = setup({ use: { myActor } });
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const actorHandle = await client.myActor.getOrCreate();
 
 // Helper to show errors
@@ -251,7 +257,7 @@ const myActor = actor({
 });
 
 const registry = setup({ use: { myActor } });
-const client = createClient<typeof registry>();
+const client = createClient<typeof registry>("http://localhost:6420");
 const actorHandle = await client.myActor.getOrCreate();
 
 // Helper to show errors

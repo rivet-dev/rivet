@@ -10,9 +10,9 @@ import {
 	faBolt,
 	faClipboardListCheck,
 	faClock,
-    faCloud,
-    faCloudArrowUp,
-    faCloudflare,
+	faCloud,
+	faCloudArrowUp,
+	faCloudflare,
 	faCode,
 	faCodePullRequest,
 	faCoin,
@@ -34,7 +34,7 @@ import {
 	faKey,
 	faLayerGroup,
 	faLeaf,
-    faLightbulb,
+	faLightbulb,
 	faLink,
 	faListUl,
 	faMaximize,
@@ -45,9 +45,9 @@ import {
 	faNodeJs,
 	faPaintbrush,
 	faPalette,
-    faPuzzlePiece,
-    faRailway,
-    faRender,
+	faPuzzlePiece,
+	faRailway,
+	faRender,
 	faReact,
 	faRecycle,
 	faRocket,
@@ -60,32 +60,32 @@ import {
 	faSliders,
 	faSlidersHSquare,
 	faSquareInfo,
-    faSquareRootVariable,
+	faSquareRootVariable,
 	faSquareSliders,
 	faSquareTerminal,
 	faTag,
 	faTowerBroadcast,
 	faSwift,
-    faUpload,
+	faUpload,
 	faVercel,
 	faVialCircleCheck,
-    faSquareList,
-    faGrid,
-    faGrid2,
-    faMailbox,
+	faSquareList,
+	faGrid,
+	faGrid2,
+	faMailbox,
 } from "@rivet-gg/icons";
 import { deployOptions, type DeployOption } from "@rivetkit/shared-data";
 import nextjs from "@/images/vendors/next-js.svg";
 import type { SidebarItem, Sitemap } from "@/lib/sitemap";
 
-const deploySidebarPages: SidebarItem[] = deployOptions.map(
+const deploySidebarPages: SidebarItem[] = deployOptions.filter((x) => x.name !== "rivet").map(
 	({ displayName: title, href, icon, badge }) => ({
 		title,
 		href,
 		icon,
 		badge,
 	}),
-);
+)
 
 export const sitemap = [
 	{
@@ -157,11 +157,11 @@ export const sitemap = [
 						href: "/docs/actors/workflows",
 						icon: faDiagramNext,
 					},
-					{
-						title: "Sandbox Actor",
-						href: "/docs/actors/sandbox",
-						icon: faSquareTerminal,
-					},
+					// {
+					// 	title: "Sandbox Actor",
+					// 	href: "/docs/actors/sandbox",
+					// 	icon: faSquareTerminal,
+					// },
 					{
 						title: "Queues",
 						href: "/docs/actors/queues",

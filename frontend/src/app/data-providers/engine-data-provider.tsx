@@ -7,7 +7,6 @@ import {
 	type QueryKey,
 	queryOptions,
 } from "@tanstack/react-query";
-import * as cbor from "cbor-x";
 import { KV_KEYS } from "rivetkit/client";
 import z from "zod";
 import { getConfig, ls } from "@/components";
@@ -196,17 +195,23 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
-		actorQueryOptions(actorId: ActorId) {
+		actorQueryOptions(
+			actorId: ActorId | { key?: string; name: string } | undefined,
+		) {
 			return queryOptions({
 				...def.actorQueryOptions(actorId),
 				queryKey: [
 					{ namespace },
 					...def.actorQueryOptions(actorId).queryKey,
 				],
-				enabled: true,
+				enabled: !!actorId,
 				queryFn: async () => {
 					const data = await client.actorsList({
-						actorIds: actorId as string,
+						...(typeof actorId === "string"
+							? { actorIds: actorId }
+							: actorId && "key" in actorId
+								? { key: actorId.key, name: actorId.name }
+								: {}),
 						namespace,
 					});
 
@@ -325,14 +330,8 @@ export const createNamespaceContext = ({
 						datacenter: data.datacenter,
 						crashPolicy: data.crashPolicy,
 						runnerNameSelector: data.runnerNameSelector,
-						// encode input as CBOR then base64
-						input: data.input
-							? btoa(
-									String.fromCharCode(
-										...cbor.encode(data.input),
-									),
-								)
-							: undefined,
+						// convert to base64
+						input: btoa(JSON.stringify(data.input)),
 					});
 
 					return response.actor.actorId;
@@ -618,6 +617,7 @@ export const createNamespaceContext = ({
 		runnerConfigQueryOptions(opts: {
 			name: string | undefined;
 			variant?: Rivet.RunnerConfigVariant;
+			safe?: boolean;
 		}) {
 			return queryOptions({
 				queryKey: [
@@ -636,14 +636,14 @@ export const createNamespaceContext = ({
 
 					const config = response.runnerConfigs[opts.name!];
 
-					if (!config) {
+					if (!config && !opts.safe) {
 						throw new FetchError(
 							"Provider Config not found",
 							"The specified provider configuration could not be found.",
 						);
 					}
 
-					return config;
+					return config || null;
 				},
 				retry: shouldRetryAllExpect403,
 				meta: {
@@ -736,15 +736,4 @@ export function hasProvider(
 				providers.includes(datacenter.metadata.provider),
 		),
 	);
-}
-function toArrayBuffer(value: unknown): ArrayBuffer {
-	if (value instanceof ArrayBuffer) return value;
-	if (ArrayBuffer.isView(value))
-		return value.buffer.slice(
-			value.byteOffset,
-			value.byteOffset + value.byteLength,
-		);
-	if (typeof value === "string")
-		return new TextEncoder().encode(value).buffer;
-	return new TextEncoder().encode(JSON.stringify(value)).buffer;
 }

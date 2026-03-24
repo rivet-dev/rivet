@@ -39,7 +39,11 @@ import {
 	useActorInspector,
 } from "./actor-inspector-context";
 import { Info } from "./actor-state-tab";
-import { ErrorDetails, QueriedActorError } from "./actor-status-label";
+import {
+	ErrorDetails,
+	QueriedActorError,
+	QueriedActorStatusAdditionalInfo,
+} from "./actor-status-label";
 import { useDataProvider, useEngineCompatDataProvider } from "./data-provider";
 import { useActorInspectorData } from "./hooks/use-actor-inspector-data";
 import type { ActorId, ActorStatus } from "./queries";
@@ -134,16 +138,21 @@ function UnavailableInfo({
 
 				<QueriedActorError actorId={actorId} />
 
-				<HelpDropdown>
-					<Button
-						variant="outline"
-						startIcon={<Icon icon={faQuestionCircle} />}
-					>
-						Need help?
-					</Button>
-				</HelpDropdown>
+				<div className="flex gap-4 items-center mt-4">
+					<WakeUpActorButton actorId={actorId} />
+
+					<HelpDropdown>
+						<Button
+							variant="outline"
+							startIcon={<Icon icon={faQuestionCircle} />}
+						>
+							Need help?
+						</Button>
+					</HelpDropdown>
+				</div>
 			</Info>
 		))
+		.with("crash-loop", () => <CrashLoopActor actorId={actorId} />)
 		.with("pending", () => <NoRunners />)
 		.with("stopped", () => (
 			<Info>
@@ -175,7 +184,44 @@ function SleepingActor({ actorId }: { actorId: ActorId }) {
 		return <AutoWakeUpActor actorId={actorId} />;
 	}
 
-	return <WakeUpActorButton actorId={actorId} />;
+	return (
+		<Info>
+			<p>Actor is sleeping.</p>
+			<WakeUpActorButton actorId={actorId} />
+		</Info>
+	);
+}
+
+function CrashLoopActor({ actorId }: { actorId: ActorId }) {
+	const { data: { rescheduleTs } = {} } = useQuery({
+		...useDataProvider().actorStatusAdditionalInfoQueryOptions(actorId),
+		refetchInterval: 5_000,
+	});
+
+	const rescheduleInFuture = rescheduleTs && rescheduleTs > Date.now();
+
+	return (
+		<Info>
+			<Icon
+				icon={faExclamationTriangle}
+				className="text-4xl text-destructive"
+			/>
+			<p>Actor is failing to start and will be retried.</p>
+			<QueriedActorStatusAdditionalInfo actorId={actorId} />
+
+			<div className="flex gap-4 items-center mt-4">
+				{!rescheduleInFuture && <WakeUpActorButton actorId={actorId} />}
+				<HelpDropdown>
+					<Button
+						variant="outline"
+						startIcon={<Icon icon={faQuestionCircle} />}
+					>
+						Need help?
+					</Button>
+				</HelpDropdown>
+			</div>
+		</Info>
+	);
 }
 
 function NoRunners() {
@@ -581,23 +627,20 @@ function WakeUpActorButton({ actorId }: { actorId: ActorId }) {
 	const { mutate, isPending } = useMutation(actorWakeUpMutationOptions());
 
 	return (
-		<Info>
-			<p>Actor is sleeping.</p>
-			<Button
-				variant="outline"
-				size="sm"
-				onClick={() =>
-					mutate({
-						actorId,
-						credentials,
-					})
-				}
-				isLoading={isPending}
-				startIcon={<Icon icon={faPowerOff} />}
-			>
-				Wake up Actor
-			</Button>
-		</Info>
+		<Button
+			variant="outline"
+			size="sm"
+			onClick={() =>
+				mutate({
+					actorId,
+					credentials,
+				})
+			}
+			isLoading={isPending}
+			startIcon={<Icon icon={faPowerOff} />}
+		>
+			Wake up Actor
+		</Button>
 	);
 }
 
@@ -646,20 +689,20 @@ function InspectorGuard({
 		actorMetadataQueryOptions,
 	} = useActorInspector();
 
-	const { data, isLoading, error } = useQuery(
+	const { data, isPending, error } = useQuery(
 		actorMetadataQueryOptions(actorId),
 	);
 
-	if (!data || error || !isInspectorAvailable) {
-		return <OutdatedInspector>{children}</OutdatedInspector>;
-	}
-
-	if (isLoading) {
+	if (isPending) {
 		return (
 			<InspectorGuardContext.Provider value={<ConnectingInspector />}>
 				{children}
 			</InspectorGuardContext.Provider>
 		);
+	}
+
+	if (!data || error || !isInspectorAvailable) {
+		return <OutdatedInspector>{children}</OutdatedInspector>;
 	}
 
 	if (connectionStatus === "error") {

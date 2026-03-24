@@ -14,10 +14,15 @@ import {
 	type RegistryConfig,
 } from "@/registry/config";
 import { logger } from "../src/registry/log";
-import { crossPlatformServe, findFreePort } from "@/utils/serve";
+import {
+	crossPlatformServe,
+	findFreePort,
+	loadRuntimeServeStatic,
+} from "@/utils/serve";
 import { ManagerDriver } from "@/manager/driver";
 import { buildServerlessRouter } from "@/serverless/router";
 import type { Registry } from "@/registry";
+import { getNodeFsSync } from "@/utils/node";
 
 /** Tracks whether the runtime was started as serverless or runner. */
 export type StartKind = "serverless" | "runner";
@@ -158,13 +163,56 @@ export class Runtime<A extends RegistryActors> {
 			}
 			config.managerPort = managerPort;
 
+			// Wrap with static file serving if publicDir is configured
+			// and the directory actually exists on disk.
+			let serverApp = managerRouter;
+			if (config.publicDir) {
+				let dirExists = false;
+				try {
+					const fsSync = getNodeFsSync();
+					dirExists = fsSync.existsSync(config.publicDir);
+				} catch {
+					// Node fs not available
+				}
+
+				if (dirExists) {
+					const { Hono } = await import("hono");
+					const serveStaticFn =
+						await loadRuntimeServeStatic(serveRuntime);
+					const wrapper = new Hono();
+					// Serve static files first. Passes through to API
+					// routes when no file matches.
+					wrapper.use(
+						"*",
+						serveStaticFn({ root: `./${config.publicDir}` }),
+					);
+					wrapper.route("/", managerRouter);
+					serverApp = wrapper;
+				}
+			}
+
 			const out = await crossPlatformServe(
 				config,
 				managerPort,
-				managerRouter,
+				serverApp,
 				serveRuntime,
 			);
 			upgradeWebSocket = out.upgradeWebSocket;
+
+			// Close the server on SIGTERM/SIGINT so the port is freed quickly
+			// during hot reload. Dev servers like tsx --watch, nodemon, etc.
+			// sometimes start the new process before the old one fully exits,
+			// causing findFreePort to skip the preferred port.
+			//
+			// Only do this for the manager, not the engine. Closing the engine
+			// server on signal would cause running actors to hard fail.
+			if (out.closeServer && process.env.NODE_ENV !== "production") {
+				const shutdown = () => {
+					out.closeServer!();
+				};
+				process.on("SIGTERM", shutdown);
+				process.on("SIGINT", shutdown);
+			}
 		}
 
 		// Create runtime
@@ -252,6 +300,18 @@ export class Runtime<A extends RegistryActors> {
 		// Show public endpoint (where clients connect)
 		if (this.#startKind === "serverless" && this.#config.publicEndpoint) {
 			logLine("Client", this.#config.publicEndpoint);
+		}
+
+		// Show static file serving
+		if (this.#config.publicDir) {
+			try {
+				const fsSync = getNodeFsSync();
+				if (fsSync.existsSync(this.#config.publicDir)) {
+					logLine("Static", `./${this.#config.publicDir}`);
+				}
+			} catch {
+				// Node fs not available (e.g. Deno, Bun, or importNodeDependencies not called)
+			}
 		}
 
 		// Show inspector

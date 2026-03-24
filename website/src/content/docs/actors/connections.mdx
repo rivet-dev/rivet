@@ -8,7 +8,7 @@ For documentation on connecting to actors from clients, see the [Clients documen
 
 ## Parameters
 
-When clients connect to an actor, they can pass connection parameters that are handled during the connection process.
+When clients connect to an actor, they can pass connection parameters that are handled during the connection process. Use `params` for static values, or `getParams` when you need fresh connection data each time a connection opens.
 
 For example:
 
@@ -36,10 +36,16 @@ const gameRoom = actor({
 });
 
 const registry = setup({ use: { gameRoom } });
-const client = createClient<typeof registry>("http://localhost:8080");
+const client = createClient<typeof registry>("http://localhost:6420");
+
+async function getAuthToken(): Promise<string> {
+  return "supersekure";
+}
 
 const gameRoomHandle = client.gameRoom.getOrCreate(["room-123"], {
-  params: { authToken: "supersekure" }
+  getParams: async () => ({
+    authToken: await getAuthToken(),
+  })
 });
 ```
 

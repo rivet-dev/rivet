@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { actor, queue } from "rivetkit";
 import type { registry } from "./registry";
 

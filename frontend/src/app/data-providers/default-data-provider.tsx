@@ -125,7 +125,10 @@ const defaultContext = {
 			refetchInterval: 5000,
 			select: (data) => {
 				return data.pages.flatMap((page) =>
-					page.actors.map((actor) => actor.actorId),
+					page.actors.map((actor) => ({
+						actorId: actor.actorId,
+						key: actor.key,
+					})),
 				);
 			},
 		});
@@ -143,7 +146,9 @@ const defaultContext = {
 	},
 
 	// #region Actor Queries
-	actorQueryOptions(actorId: ActorId) {
+	actorQueryOptions(
+		actorId: ActorId | { key?: string; name: string } | undefined,
+	) {
 		return queryOptions({
 			refetchInterval: 5000,
 			queryFn: async () => {

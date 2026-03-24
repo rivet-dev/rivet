@@ -68,6 +68,13 @@ pub enum Actor {
 
 	#[error("kv_key_not_found", "The KV key does not exist for this actor.")]
 	KvKeyNotFound,
+
+	#[error(
+		"kv_storage_quota_exceeded",
+		"Not enough space left in storage.",
+		"Not enough space left in storage ({remaining} bytes remaining, current payload is {payload_size} bytes)."
+	)]
+	KvStorageQuotaExceeded { remaining: usize, payload_size: usize },
 }
 
 #[derive(RivetError, Debug, Clone, Deserialize, Serialize)]

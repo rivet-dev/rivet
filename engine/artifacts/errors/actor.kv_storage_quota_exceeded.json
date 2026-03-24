@@ -1,0 +1,5 @@
+{
+  "code": "kv_storage_quota_exceeded",
+  "group": "actor",
+  "message": "Not enough space left in storage."
+}

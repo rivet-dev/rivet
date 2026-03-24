@@ -86,6 +86,11 @@ export interface ActorAccessor<AD extends AnyActorDefinition> {
 export interface QueryOptions {
 	/** Parameters to pass to the connection. */
 	params?: unknown;
+	/**
+	 * Lazily resolves connection parameters for `.connect()` and `.webSocket()`.
+	 * This is called each time a new connection is opened.
+	 */
+	getParams?: () => Promise<unknown>;
 	/** Signal to abort the request. */
 	signal?: AbortSignal;
 }
@@ -200,7 +205,11 @@ export class ClientRaw {
 			},
 		};
 
-		const handle = this.#createHandle(opts?.params, actorQuery);
+		const handle = this.#createHandle(
+			opts?.params,
+			opts?.getParams,
+			actorQuery,
+		);
 		return createActorProxy(handle) as ActorHandle<AD>;
 	}
 
@@ -235,7 +244,11 @@ export class ClientRaw {
 			},
 		};
 
-		const handle = this.#createHandle(opts?.params, actorQuery);
+		const handle = this.#createHandle(
+			opts?.params,
+			opts?.getParams,
+			actorQuery,
+		);
 		return createActorProxy(handle) as ActorHandle<AD>;
 	}
 
@@ -273,7 +286,11 @@ export class ClientRaw {
 			},
 		};
 
-		const handle = this.#createHandle(opts?.params, actorQuery);
+		const handle = this.#createHandle(
+			opts?.params,
+			opts?.getParams,
+			actorQuery,
+		);
 		return createActorProxy(handle) as ActorHandle<AD>;
 	}
 
@@ -332,18 +349,27 @@ export class ClientRaw {
 				actorId,
 			},
 		} satisfies ActorQuery;
-		const handle = this.#createHandle(opts?.params, getForIdQuery);
+		const handle = this.#createHandle(
+			opts?.params,
+			opts?.getParams,
+			getForIdQuery,
+		);
 
 		const proxy = createActorProxy(handle) as ActorHandle<AD>;
 
 		return proxy;
 	}
 
-	#createHandle(params: unknown, actorQuery: ActorQuery): ActorHandleRaw {
+	#createHandle(
+		params: unknown,
+		getParams: (() => Promise<unknown>) | undefined,
+		actorQuery: ActorQuery,
+	): ActorHandleRaw {
 		return new ActorHandleRaw(
 			this,
 			this.#driver,
 			params,
+			getParams,
 			this.#encodingKind,
 			actorQuery,
 		);

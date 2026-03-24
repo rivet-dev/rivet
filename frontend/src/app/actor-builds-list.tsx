@@ -1,8 +1,7 @@
-import * as allIcons from "@rivet-gg/icons";
 import { faActorsBorderless, Icon, type IconProp } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Fragment } from "react";
+import { Fragment, Suspense, use } from "react";
 import { match } from "ts-pattern";
 import { Button, cn, Skeleton } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
@@ -27,15 +26,13 @@ function toPascalCase(str: string): string {
 		.join("");
 }
 
-function lookupFaIcon(iconName: string): IconProp | null {
-	const pascalName = `fa${toPascalCase(iconName)}`;
-	const iconDef = (allIcons as unknown as Record<string, IconProp>)[
-		pascalName
-	];
-	return iconDef ?? null;
-}
+const allIconsPromise = import("@rivet-gg/icons") as unknown as Promise<
+	Record<string, IconProp>
+>;
 
-function getActorIcon(iconValue: string | null) {
+function ActorIcon({ iconValue }: { iconValue: string | null }) {
+	const allIcons = use(allIconsPromise);
+
 	if (iconValue && isEmoji(iconValue)) {
 		return (
 			<span className="opacity-80 group-hover:opacity-100 group-data-active:opacity-100 text-sm">
@@ -44,7 +41,9 @@ function getActorIcon(iconValue: string | null) {
 		);
 	}
 
-	const faIcon = iconValue ? lookupFaIcon(iconValue) : null;
+	const faIcon = iconValue
+		? (allIcons[`fa${toPascalCase(iconValue)}`] ?? null)
+		: null;
 	return (
 		<Icon
 			icon={faIcon ?? faActorsBorderless}
@@ -68,16 +67,17 @@ export function ActorBuildsList() {
 					</p>
 				) : null}
 				{data?.map((build) => {
+					const actorMeta = build.name.metadata as
+						| Record<string, unknown>
+						| undefined;
 					const iconValue =
-						typeof build.name.metadata.icon === "string"
-							? build.name.metadata.icon
+						typeof actorMeta?.icon === "string"
+							? actorMeta.icon
 							: null;
 					const displayName =
-						typeof build.name.metadata.name === "string"
-							? build.name.metadata.name
+						typeof actorMeta?.name === "string"
+							? actorMeta.name
 							: build.id;
-
-					const iconElement = getActorIcon(iconValue);
 
 					return (
 						<Button
@@ -86,7 +86,18 @@ export function ActorBuildsList() {
 								"text-muted-foreground justify-start font-medium px-1",
 								"data-active:text-foreground data-active:bg-accent",
 							)}
-							startIcon={iconElement}
+							startIcon={
+								<Suspense
+									fallback={
+										<Icon
+											icon={faActorsBorderless}
+											className="opacity-80 animate-pulse"
+										/>
+									}
+								>
+									<ActorIcon iconValue={iconValue} />
+								</Suspense>
+							}
 							variant={"ghost"}
 							size="sm"
 							onClick={() => {

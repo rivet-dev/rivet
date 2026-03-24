@@ -6,11 +6,26 @@ skill: true
 
 ## Methods of Running Your Server
 
+### registry.start()
+
+The simplest way to run your server. Starts a local manager server, serves static files from a `public` directory, and starts the actor runner:
+
+```ts index.ts
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
+
+registry.start();
+```
+
+Run with `npx tsx --watch index.ts` (Node.js), `bun --watch index.ts` (Bun), or `deno run --allow-net --allow-read --allow-env --watch index.ts` (Deno). The server starts on `http://localhost:6420` by default.
+
 ### With Fetch Handlers
 
 A [fetch handler](https://wintercg.org/) is a function that takes a `Request` and returns a `Response`. This is the standard pattern used by Cloudflare Workers, Deno Deploy, Bun, and other modern runtimes.
 
-The simplest setup uses `registry.serve()`:
+Use `registry.serve()` to get a fetch handler:
 
 ```ts server.ts
 import { actor, setup } from "rivetkit";
@@ -68,22 +83,18 @@ Then run your server:
 <CodeGroup>
 
 ```bash Node.js
-npx srvx server.ts
+npx tsx --watch server.ts
 ```
 
 ```bash Bun
-bun server.ts
+bun --watch server.ts
 ```
 
 ```bash Deno
-deno run --allow-net --allow-read --allow-env server.ts
+deno run --allow-net --allow-read --allow-env --watch server.ts
 ```
 
 </CodeGroup>
-
-<Tip>
-	[srvx](https://srvx.h3.dev/) is a universal server runner for fetch handlers. It compiles TypeScript on-the-fly for Node.js and can be used in production. Bun and Deno support fetch handlers and TypeScript natively.
-</Tip>
 
 ### Explicit HTTP Server
 

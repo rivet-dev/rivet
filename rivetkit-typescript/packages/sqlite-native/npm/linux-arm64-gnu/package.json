@@ -1,0 +1,13 @@
+{
+	"name": "@rivetkit/sqlite-native-linux-arm64-gnu",
+	"version": "2.1.6",
+	"description": "Native SQLite addon for RivetKit - Linux arm64 GNU",
+	"license": "Apache-2.0",
+	"os": ["linux"],
+	"cpu": ["arm64"],
+	"main": "sqlite-native.linux-arm64-gnu.node",
+	"files": ["sqlite-native.linux-arm64-gnu.node"],
+	"engines": {
+		"node": ">= 20.0.0"
+	}
+}

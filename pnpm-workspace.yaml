@@ -3,6 +3,7 @@ packages:
   - engine/docker/template
   - engine/sdks/typescript/api-full
   - engine/sdks/typescript/runner
+  - engine/sdks/typescript/kv-channel-protocol
   - engine/sdks/typescript/runner-protocol
   - engine/sdks/typescript/test-runner
   - engine/tests/*

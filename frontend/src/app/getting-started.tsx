@@ -34,7 +34,6 @@ import {
 	CodeGroup,
 	CodeGroupSyncProvider,
 	CodePreview,
-	Combobox,
 	FormField,
 	Ping,
 	Skeleton,
@@ -57,6 +56,7 @@ import { DeploymentCheck } from "./deployment-check";
 import { useEndpoint } from "./dialogs/connect-manual-serverfull-frame";
 import {
 	buildServerlessConfig,
+	Configuration,
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
 import { EnvVariables, useRivetDsn } from "./env-variables";
@@ -85,7 +85,7 @@ const stepper = defineStepper(
 	{
 		id: "provider",
 		title: "Ready to deploy?",
-		schema: z.object({ provider: z.string() }),
+		schema: z.object({ provider: z.string().nonempty() }),
 		group: "deploy",
 	},
 	{
@@ -93,16 +93,17 @@ const stepper = defineStepper(
 		title: "Connect your Backend",
 		assist: true,
 		group: "deploy",
-		schema: ConnectServerlessForm.deploymentSchema
-			.pick({
-				success: true,
-			})
-			.or(
-				z.object({
-					...ConnectServerlessForm.configurationSchema.shape,
-					...ConnectServerlessForm.deploymentSchema.shape,
-				}),
-			),
+		schema: (values: Record<string, unknown>) => {
+			if ((values.provider as string) === "rivet") {
+				return z.object({
+					success: z.boolean(),
+				});
+			}
+			return z.object({
+				...ConnectServerlessForm.configurationSchema.shape,
+				...ConnectServerlessForm.deploymentSchema.shape,
+			});
+		},
 	},
 	{
 		id: "frontend",
@@ -110,26 +111,53 @@ const stepper = defineStepper(
 		assist: true,
 		group: "deploy",
 		schema: z.object({}),
+		previous: "Edit Provider",
 		showNext: false,
-		showPrevious: false,
 	},
 );
 
 export function GettingStarted({
-	displayBackendOnboarding,
+	displayFrontendOnboarding,
 	provider,
 }: {
 	provider?: Provider;
-	displayOnboarding?: boolean;
-	displayBackendOnboarding?: boolean;
+	displayFrontendOnboarding?: boolean;
 }) {
 	const dataProvider = useCloudNamespaceDataProvider();
-	const { data: datacenters } = useSuspenseInfiniteQuery(
-		dataProvider.datacentersQueryOptions(),
-	);
+	useSuspenseInfiniteQuery(dataProvider.datacentersQueryOptions());
 
 	const { mutateAsync: mutateAsyncManagedPool } = useMutation({
 		...dataProvider.upsertCurrentNamespaceManagedPoolMutationOptions(),
+	});
+
+	const { data: initialRunnerConfig } = useSuspenseQuery({
+		...dataProvider.runnerConfigQueryOptions({
+			name: "default",
+			safe: true,
+		}),
+		select: (data) => {
+			const config = Object.values(data?.datacenters || {}).find(
+				(dc) => dc.serverless,
+			);
+			const serverlessConfig = config?.serverless;
+
+			if (!serverlessConfig) {
+				return null;
+			}
+
+			return {
+				...serverlessConfig,
+				runnerName: "default",
+				endpoint: serverlessConfig.url,
+				headers: Array.from(
+					Object.entries(serverlessConfig.headers || {}),
+				),
+				provider: deriveProviderFromMetadata(config?.metadata || {}),
+				datacenters: Object.fromEntries(
+					Object.keys(data.datacenters).map((name) => [name, true]),
+				),
+			};
+		},
 	});
 
 	const { mutateAsync } = useMutation({
@@ -142,6 +170,18 @@ export function GettingStarted({
 	});
 
 	const navigate = useNavigate();
+
+	const defaultValues = {
+		slotsPerRunner: 1,
+		maxRunners: 1_000,
+		minRunners: 1,
+		runnerMargin: 0,
+		headers: [],
+		requestLifespan: 900,
+		provider: provider || "",
+		datacenters: [],
+		...(initialRunnerConfig || {}),
+	};
 
 	return (
 		<Content className="flex flex-col items-center justify-safe-center">
@@ -159,26 +199,13 @@ export function GettingStarted({
 							formId="onboarding"
 							className="mb-8 mt-12"
 							initialStep={
-								provider
-									? "backend"
-									: displayBackendOnboarding
-										? undefined
-										: "frontend"
+								displayFrontendOnboarding
+									? "frontend"
+									: provider
+										? "backend"
+										: undefined
 							}
-							defaultValues={{
-								provider: provider || "rivet",
-								runnerName: "default",
-								slotsPerRunner: 1,
-								maxRunners: 100_000,
-								minRunners: 1,
-								runnerMargin: 0,
-								headers: [],
-
-								requestLifespan: 900,
-								datacenters: Object.fromEntries(
-									datacenters.map((dc) => [dc.name, true]),
-								),
-							}}
+							defaultValues={defaultValues}
 							content={{
 								install: () => (
 									<StepContent>
@@ -223,33 +250,49 @@ export function GettingStarted({
 							}}
 							onSubmit={() => {}}
 							onPartialSubmit={async ({ stepper, values }) => {
-								if (
-									stepper.current.id === "provider" &&
-									values.provider === "rivet"
-								) {
-									mutateAsyncManagedPool({
-										displayName: "default",
-										pool: "default",
-										minCount: 0,
-										maxCount: 100_000,
-									});
+								if (stepper.current.id === "provider") {
+									if (values.provider === "rivet") {
+										await mutateAsyncManagedPool({
+											displayName: "default",
+											pool: "default",
+											minCount: 0,
+											maxCount: 100_000,
+										});
+									}
+
+									await Promise.all([
+										...(__APP_TYPE__ === "cloud"
+											? [
+													queryClient.prefetchQuery(
+														dataProvider.publishableTokenQueryOptions(),
+													),
+													queryClient.prefetchInfiniteQuery(
+														dataProvider.datacentersQueryOptions(),
+													),
+												]
+											: []),
+										dataProvider.engineAdminTokenQueryOptions(),
+									]);
 									return;
 								}
 								if (
 									stepper.current.id === "backend" &&
-									"endpoint" in values &&
-									values.endpoint &&
-									values.provider !== "rivet" &&
-									values.success
+									values.provider !== "rivet"
 								) {
 									const config = await buildServerlessConfig(
 										dataProvider,
-										values,
-										{ provider: values.provider },
+										values as unknown as Parameters<
+											typeof buildServerlessConfig
+										>[1],
+										{ provider: values.provider as string },
 									);
 
 									await mutateAsync({
-										name: values.runnerName,
+										name: (
+											values as unknown as {
+												runnerName: string;
+											}
+										).runnerName,
 										config,
 									});
 
@@ -295,9 +338,10 @@ function StepContent({
 
 function StepperFooter() {
 	const s = stepper.useStepper();
-	return (
-		<div className="flex flex-col items-center gap-4 mt-6">
-			{s.current.group === "local" && s.current.id !== "explore" ? (
+
+	if (s.current.group === "local" && s.current.id !== "explore") {
+		return (
+			<div className="flex flex-col items-center gap-4 mt-6">
 				<Button
 					type="button"
 					variant="link"
@@ -308,21 +352,10 @@ function StepperFooter() {
 				>
 					Already have a project working locally? Skip to deploy
 				</Button>
-			) : null}
-			{s.isLast ? (
-				<Button
-					asChild
-					variant="link"
-					size="xs"
-					className="text-muted-foreground"
-				>
-					<Link to="." search={{ modal: "create-actor" }}>
-						Manually Create Actor
-					</Link>
-				</Button>
-			) : null}
-		</div>
-	);
+			</div>
+		);
+	}
+	return null;
 }
 
 function ProviderSetup() {
@@ -335,7 +368,7 @@ function ProviderSetup() {
 	return (
 		<div>
 			<p className="text-sm text-muted-foreground mb-4">
-				Deploy your application to Rivet Cloud, our serverless hosting
+				Deploy your application to Rivet Compute, our serverless hosting
 				solution. We manage the actor orchestration, state, and scaling
 				for you.
 			</p>
@@ -343,37 +376,43 @@ function ProviderSetup() {
 				control={control}
 				name="provider"
 				render={({ field }) => {
-					const rivetCloud = filteredOptions.find(
-						(o) => o.name === "rivet",
-					);
+					// const rivetCompute = filteredOptions.find(
+					// 	(o) => o.name === "rivet",
+					// );
 					const rest = filteredOptions.filter(
 						(o) => o.name !== "rivet",
 					);
 					return (
 						<div className="flex flex-col gap-2">
-							{rivetCloud ? (
+							{/* {rivetCompute ? (
 								<ProviderCard
-									option={rivetCloud}
+									option={rivetCompute}
 									isSelected={
-										field.value === rivetCloud.name
+										field.value === rivetCompute.name
 									}
 									onSelect={() =>
-										setValue("provider", rivetCloud.name)
+										setValue("provider", rivetCompute.name, {
+											shouldDirty: true,
+											shouldTouch: true,
+											shouldValidate: true,
+										})
 									}
 									className="py-5"
 									iconClassName="!w-7"
 								/>
-							) : null}
+							) : null} */}
 							<div className="grid grid-cols-2 gap-2">
 								{rest.map((option) => (
 									<ProviderCard
 										key={option.name}
 										option={option}
-										isSelected={
-											field.value === option.name
-										}
+										isSelected={field.value === option.name}
 										onSelect={() =>
-											setValue("provider", option.name)
+											setValue("provider", option.name, {
+												shouldDirty: true,
+												shouldTouch: true,
+												shouldValidate: true,
+											})
 										}
 									/>
 								))}
@@ -413,13 +452,14 @@ function ProviderCard({
 		>
 			<Icon
 				icon={option.icon}
-				className={cn("!w-5 h-auto shrink-0 text-muted-foreground", iconClassName)}
+				className={cn(
+					"!w-5 h-auto shrink-0 text-muted-foreground",
+					iconClassName,
+				)}
 			/>
 			<div className="min-w-0">
 				<div className="flex items-center gap-2 flex-wrap">
-					<p className="text-sm font-medium">
-						{option.displayName}
-					</p>
+					<p className="text-sm font-medium">{option.displayName}</p>
 					{option.badge ? (
 						<Badge
 							variant="secondary"
@@ -441,16 +481,19 @@ function InstallStep() {
 	return (
 		<div className="flex flex-col gap-5">
 			<div className="relative rounded-lg border border-primary p-4 pt-5">
-				<Badge className="absolute -top-2.5 left-4 z-10 bg-background">Recommended</Badge>
-				<p className="font-medium mb-1.5">
-					Install Rivet Skills
-				</p>
+				<Badge className="absolute -top-2.5 left-4 z-10 bg-background">
+					Recommended
+				</Badge>
+				<p className="font-medium mb-1.5">Install Rivet Skills</p>
 				<p className="text-sm text-muted-foreground mb-3">
-					Run this command in your coding agent to install Rivet skills
-					for guided setup and development.
+					Run this command in your coding agent to install Rivet
+					skills for guided setup and development.
 				</p>
 				<div className="flex items-center justify-between gap-2 rounded-md px-3 py-2">
-					<CodePreview code="npx skills add rivet-dev/skills" language="bash" />
+					<CodePreview
+						code="npx skills add rivet-dev/skills"
+						language="bash"
+					/>
 					<Button
 						type="button"
 						variant="ghost"
@@ -459,7 +502,9 @@ function InstallStep() {
 						onClick={(e) => {
 							e.preventDefault();
 							e.stopPropagation();
-							navigator.clipboard.writeText("npx skills add rivet-dev/skills");
+							navigator.clipboard.writeText(
+								"npx skills add rivet-dev/skills",
+							);
 							toast.success("Copied to clipboard");
 						}}
 					>
@@ -992,10 +1037,12 @@ function AgentPromptBanner({ code }: { code: string }) {
 			}}
 			className="relative w-full flex items-center justify-between rounded-lg px-4 py-5 border border-primary group cursor-pointer"
 		>
-			<Badge className="absolute -top-2.5 left-4 z-10 bg-background">Recommended</Badge>
+			<Badge className="absolute -top-2.5 left-4 z-10 bg-background">
+				Recommended
+			</Badge>
 			<span className="text-sm font-medium text-white text-left">
 				Have your coding agent complete these steps automatically to
-				deploy to Rivet Cloud.
+				deploy to Rivet Compute.
 			</span>
 			<Button
 				asChild
@@ -1167,15 +1214,23 @@ function BackendSetupRivet() {
 						<Button
 							type="button"
 							variant="outline"
-							onClick={() => { setDirection(-1); setCurrentStep((s) => s - 1); }}
+							onClick={() => {
+								setDirection(-1);
+								setCurrentStep((s) => s - 1);
+							}}
 						>
 							Previous
 						</Button>
-					) : <div />}
+					) : (
+						<div />
+					)}
 					{currentStep < steps.length - 1 ? (
 						<Button
 							type="button"
-							onClick={() => { setDirection(1); setCurrentStep((s) => s + 1); }}
+							onClick={() => {
+								setDirection(1);
+								setCurrentStep((s) => s + 1);
+							}}
 						>
 							Next
 						</Button>
@@ -1183,7 +1238,7 @@ function BackendSetupRivet() {
 				</div>
 			</div>
 			<div>
-				<p className="font-medium mb-2">Deploy to Rivet Cloud</p>
+				<p className="font-medium mb-2">Deploy to Rivet Compute</p>
 				<p className="text-sm text-muted-foreground mb-2">
 					Push your changes to trigger the{" "}
 					<strong>Rivet Deploy</strong> workflow. The status check
@@ -1215,6 +1270,7 @@ function BackendSetupRivet() {
 
 function BackendSetup() {
 	const provider = useWatch({ name: "provider" });
+	const endpoint = useWatch({ name: "endpoint" });
 
 	if (provider !== "rivet") {
 		return (
@@ -1225,13 +1281,34 @@ function BackendSetup() {
 					<StepNumber n={1} />
 					<div className="flex-1 min-w-0">
 						<p className="font-medium mb-2">
-							Paste your deployment endpoint
+							Set environment variables
 						</p>
 						<p className="text-sm text-muted-foreground mb-3">
-							Your coding agent will provide a URL after
-							deployment.
+							Configure the following environment variables in
+							your deployment.
 						</p>
 						<div className="space-y-2">
+							<EnvVariables endpoint={endpoint} />
+						</div>
+					</div>
+				</div>
+				<div className="flex gap-3">
+					<StepNumber n={2} />
+					<div className="flex-1 min-w-0">
+						<p className="font-medium mb-4">
+							Paste your deployment endpoint
+						</p>
+						<div className="space-y-2">
+							<Configuration
+								runnerName={false}
+								datacenters
+								headers={false}
+								slotsPerRunner={false}
+								minRunners={false}
+								maxRunners={false}
+								runnerMargin={false}
+								requestLifespan={false}
+							/>
 							<ConnectServerlessForm.Endpoint
 								placeholder={match(provider)
 									.with(
@@ -1247,7 +1324,7 @@ function BackendSetup() {
 										() => "https://your-deployment.com",
 									)}
 							/>
-							<ConfigurationAccordion />
+							<ConfigurationAccordion datacenters={false} />
 							<ConnectServerlessForm.ConnectionCheck
 								provider={provider}
 							/>
@@ -1260,8 +1337,6 @@ function BackendSetup() {
 
 	return <BackendSetupRivet />;
 }
-
-const skillsPath = "rivet-dev/skills";
 
 function FrontendSetup() {
 	const dataProvider = useDataProvider();
@@ -1325,7 +1400,7 @@ function FrontendSetup() {
 
 	return (
 		<div className="space-y-2">
-			<div className="border rounded-md py-10">
+			<div className="border rounded-md py-10 flex flex-col gap-6">
 				<div className="flex gap-2 justify-center items-center py-2 px-8">
 					<div className="relative mr-4">
 						<Ping variant="pending" className="relative" />
@@ -1333,7 +1408,7 @@ function FrontendSetup() {
 					<p>Waiting for an Actor to be created...</p>
 				</div>
 
-				<div className="flex items-center justify-center mt-6 gap-4">
+				<div className="flex items-center flex-col justify-center gap-4">
 					{deploymentUrl ? (
 						<Button variant="outline">
 							<a
@@ -1351,6 +1426,16 @@ function FrontendSetup() {
 							</Link>
 						</Button>
 					)}
+					<Button
+						asChild
+						variant="link"
+						size="xs"
+						className="text-muted-foreground mx-auto inline-block"
+					>
+						<Link to="." search={{ modal: "create-actor" }}>
+							or Manually Create Actor
+						</Link>
+					</Button>
 				</div>
 			</div>
 			<Accordion type="single" collapsible className="mt-10">

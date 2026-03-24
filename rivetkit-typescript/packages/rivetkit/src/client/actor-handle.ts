@@ -54,6 +54,7 @@ export class ActorHandleRaw {
 	#encoding: Encoding;
 	#actorQuery: ActorQuery;
 	#params: unknown;
+	#getParams?: () => Promise<unknown>;
 	#queueSender: ReturnType<typeof createQueueSender>;
 
 	/**
@@ -67,6 +68,7 @@ export class ActorHandleRaw {
 		client: any,
 		driver: ManagerDriver,
 		params: unknown,
+		getParams: (() => Promise<unknown>) | undefined,
 		encoding: Encoding,
 		actorQuery: ActorQuery,
 	) {
@@ -75,6 +77,7 @@ export class ActorHandleRaw {
 		this.#encoding = encoding;
 		this.#actorQuery = actorQuery;
 		this.#params = params;
+		this.#getParams = getParams;
 		this.#queueSender = createQueueSender({
 			encoding: this.#encoding,
 			params: this.#params,
@@ -87,6 +90,14 @@ export class ActorHandleRaw {
 				return this.#driver.sendRequest(actorId, request);
 			},
 		});
+	}
+
+	async #resolveConnectionParams(): Promise<unknown> {
+		if (this.#getParams) {
+			return await this.#getParams();
+		}
+
+		return this.#params;
 	}
 
 	send(
@@ -122,6 +133,11 @@ export class ActorHandleRaw {
 		args: Args;
 		signal?: AbortSignal;
 	}): Promise<Response> {
+		if (typeof opts === "string" || typeof opts !== "object" || opts === null || !("name" in opts)) {
+			throw new Error(
+				`Invalid action call: expected an options object { name, args }, got ${typeof opts}. Use handle.actionName(...args) for the shorthand API.`,
+			);
+		}
 		// Track actorId for scheduling error lookups
 		let actorId: string | undefined;
 
@@ -230,6 +246,7 @@ export class ActorHandleRaw {
 			this.#client,
 			this.#driver,
 			this.#params,
+			this.#getParams,
 			this.#encoding,
 			this.#actorQuery,
 		);
@@ -256,11 +273,12 @@ export class ActorHandleRaw {
 	/**
 	 * Opens a raw WebSocket connection to this actor.
 	 */
-	webSocket(path?: string, protocols?: string | string[]) {
+	async webSocket(path?: string, protocols?: string | string[]) {
+		const params = await this.#resolveConnectionParams();
 		return rawWebSocket(
 			this.#driver,
 			this.#actorQuery,
-			this.#params,
+			params,
 			path,
 			protocols,
 		);

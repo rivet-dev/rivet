@@ -133,6 +133,22 @@ importers:
         specifier: 5.8.2
         version: 5.8.2
 
+  engine/sdks/typescript/kv-channel-protocol:
+    dependencies:
+      '@rivetkit/bare-ts':
+        specifier: ^0.6.2
+        version: 0.6.2
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.13
+        version: 20.19.13
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@20.19.13))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
   engine/sdks/typescript/runner:
     dependencies:
       '@rivetkit/engine-runner-protocol':
@@ -234,18 +250,9 @@ importers:
 
   examples/actor-actions:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.2.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -255,9 +262,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -271,6 +275,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -280,9 +287,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -341,21 +345,12 @@ importers:
       '@ai-sdk/openai':
         specifier: ^0.0.66
         version: 0.0.66(zod@4.1.13)
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@4.1.13)
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -365,9 +360,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -381,6 +373,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -390,9 +385,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -454,12 +446,6 @@ importers:
 
   examples/ai-and-user-generated-actors-freestyle:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.1
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -478,58 +464,6 @@ importers:
       freestyle-sandboxes:
         specifier: ^0.0.95
         version: 0.0.95(expo-constants@18.0.13)(expo-linking@7.0.5)(expo@54.0.18)(react-dom@19.1.0(react@19.1.0))(react-native-safe-area-context@5.6.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native-screens@4.17.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(ws@8.19.0)
-      hono:
-        specifier: ^4.6.0
-        version: 4.11.9
-      react:
-        specifier: 19.1.0
-        version: 19.1.0
-      react-dom:
-        specifier: 19.1.0
-        version: 19.1.0(react@19.1.0)
-    devDependencies:
-      '@types/node':
-        specifier: ^22.13.9
-        version: 22.19.10
-      '@types/react':
-        specifier: ^19
-        version: 19.2.13
-      '@types/react-dom':
-        specifier: ^19
-        version: 19.2.3(@types/react@19.2.13)
-      '@vitejs/plugin-react':
-        specifier: ^4.2.0
-        version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
-      tsx:
-        specifier: ^3.12.7
-        version: 3.14.0
-      typescript:
-        specifier: ^5.5.2
-        version: 5.9.3
-      vite:
-        specifier: ^5.0.0
-        version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-
-  examples/chat-room:
-    dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
-      '@rivetkit/react':
-        specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -539,9 +473,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -555,6 +486,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -564,9 +498,49 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
+
+  examples/chat-room:
+    dependencies:
+      '@rivetkit/react':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/react
+      react:
+        specifier: 19.1.0
+        version: 19.1.0
+      react-dom:
+        specifier: 19.1.0
+        version: 19.1.0(react@19.1.0)
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.10
+      '@types/react':
+        specifier: ^19
+        version: 19.2.13
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.2.3(@types/react@19.2.13)
+      '@vitejs/plugin-react':
+        specifier: ^4.2.0
+        version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
+      tsx:
+        specifier: ^3.12.7
+        version: 3.14.0
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+      vite:
+        specifier: ^5.0.0
+        version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -675,18 +649,9 @@ importers:
 
   examples/collaborative-document:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -696,9 +661,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
       y-protocols:
         specifier: ^1.0.6
         version: 1.0.7(yjs@13.6.29)
@@ -718,6 +680,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -727,9 +692,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -791,18 +753,9 @@ importers:
 
   examples/cross-actor-actions:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -812,9 +765,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -828,6 +778,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -837,9 +790,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -895,18 +845,9 @@ importers:
 
   examples/cursors:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -916,9 +857,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -932,6 +870,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -941,27 +882,15 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
   examples/cursors-raw-websocket:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -971,9 +900,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -987,6 +913,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -996,9 +925,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -1103,28 +1029,13 @@ importers:
 
   examples/custom-serverless:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
         version: 22.19.10
-      tsup:
-        specifier: ^8.0.0
-        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@3.14.0)(typescript@5.9.3)(yaml@2.8.2)
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -1137,21 +1048,12 @@ importers:
 
   examples/elysia:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       elysia:
         specifier: ^1.4.0
         version: 1.4.12(@sinclair/typebox@0.34.41)(exact-mirror@0.2.2(@sinclair/typebox@0.34.41))(file-type@21.0.0)(openapi-types@12.1.3)(typescript@5.9.3)
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1177,21 +1079,12 @@ importers:
       '@durable-streams/writer':
         specifier: https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8b
         version: https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8b
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@4.1.13)
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1201,9 +1094,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
       zod:
         specifier: ^4.1.0
         version: 4.1.13
@@ -1220,6 +1110,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -1229,9 +1122,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -1305,18 +1195,9 @@ importers:
 
   examples/geo-distributed-database:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1326,9 +1207,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1342,6 +1220,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -1351,9 +1232,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -1409,18 +1287,9 @@ importers:
 
   examples/hello-world:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1430,9 +1299,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1446,6 +1312,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -1455,9 +1324,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -1513,21 +1379,12 @@ importers:
 
   examples/hono:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.1
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       hono:
         specifier: ^4.7.0
         version: 4.11.9
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1541,12 +1398,6 @@ importers:
 
   examples/hono-react:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.1
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
@@ -1562,9 +1413,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1578,6 +1426,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -1587,9 +1438,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -1645,18 +1493,9 @@ importers:
 
   examples/kitchen-sink:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.7.4
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1666,9 +1505,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1682,6 +1518,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.1
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^4.7.1
         version: 4.21.0
@@ -1691,9 +1530,6 @@ importers:
       vite:
         specifier: ^5.2.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
 
   examples/kitchen-sink-vercel:
     dependencies:
@@ -1792,18 +1628,9 @@ importers:
 
   examples/multiplayer-game:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1813,9 +1640,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1829,6 +1653,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -1838,9 +1665,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -1853,15 +1677,6 @@ importers:
       '@dimforge/rapier3d-compat':
         specifier: ^0.14.0
         version: 0.14.0
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
-      hono:
-        specifier: ^4
-        version: 4.11.9
       lucide-react:
         specifier: ^0.439.0
         version: 0.439.0(react@19.1.0)
@@ -1874,9 +1689,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
       three:
         specifier: ^0.171.0
         version: 0.171.0
@@ -1896,15 +1708,18 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.0.0
+        version: 9.2.1
+      tsx:
+        specifier: ^3.12.7
+        version: 3.14.0
       typescript:
         specifier: ^5.5.2
         version: 5.9.3
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2018,18 +1833,9 @@ importers:
 
   examples/native-websockets:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2039,9 +1845,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2058,6 +1861,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -2067,9 +1873,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2174,18 +1977,9 @@ importers:
 
   examples/per-tenant-database:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2195,9 +1989,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2211,6 +2002,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -2220,9 +2014,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2278,12 +2069,6 @@ importers:
 
   examples/raw-fetch-handler:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.1
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
@@ -2299,9 +2084,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.10.6
@@ -2315,6 +2097,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^4.20.0
         version: 4.21.0
@@ -2324,9 +2109,6 @@ importers:
       vite:
         specifier: ^5.4.19
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2382,18 +2164,9 @@ importers:
 
   examples/raw-websocket-handler:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.7.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2403,9 +2176,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -2419,6 +2189,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.7.0(vite@6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^4.19.2
         version: 4.21.0
@@ -2428,9 +2201,6 @@ importers:
       vite:
         specifier: ^6.0.5
         version: 6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2458,9 +2228,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
       ws:
         specifier: ^8.18.0
         version: 8.19.0
@@ -2480,6 +2247,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.7.0(vite@6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^4.19.2
         version: 4.21.0
@@ -2489,9 +2259,6 @@ importers:
       vite:
         specifier: ^6.0.5
         version: 6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2602,18 +2369,9 @@ importers:
 
   examples/react:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.7.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2623,9 +2381,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2639,6 +2394,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -2648,9 +2406,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2785,18 +2540,9 @@ importers:
 
   examples/sandbox-coding-agent:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2806,9 +2552,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2822,6 +2565,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -2831,9 +2577,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -2962,18 +2705,9 @@ importers:
 
   examples/scheduling:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2983,9 +2717,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2999,6 +2730,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -3008,9 +2742,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -3066,12 +2797,6 @@ importers:
 
   examples/sqlite-drizzle:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.18.2
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.1.1
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       drizzle-kit:
         specifier: ^0.31.2
         version: 0.31.5
@@ -3109,18 +2834,9 @@ importers:
 
   examples/state:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -3130,9 +2846,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -3146,6 +2859,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -3155,9 +2871,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -3213,18 +2926,9 @@ importers:
 
   examples/stream:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -3234,9 +2938,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -3250,6 +2951,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.0.0
         version: 4.7.0(vite@5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
@@ -3259,9 +2963,6 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-      vite-plugin-srvx:
-        specifier: ^1.0.2
-        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@20.19.13)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -3317,12 +3018,6 @@ importers:
 
   examples/trpc:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@hono/trpc-server':
         specifier: ^0.3.0
         version: 0.3.4(@trpc/server@11.6.0(typescript@5.9.3))(hono@4.11.9)
@@ -3338,9 +3033,6 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      srvx:
-        specifier: ^0.10.0
-        version: 0.10.0
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -3348,9 +3040,6 @@ importers:
       '@types/node':
         specifier: ^22.13.9
         version: 22.19.10
-      tsup:
-        specifier: ^8.4.0
-        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@3.14.0)(typescript@5.9.3)(yaml@2.8.2)
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -3567,6 +3256,9 @@ importers:
       '@types/canvas-confetti':
         specifier: ^1.9.0
         version: 1.9.0
+      '@types/d3-array':
+        specifier: ^3.2.1
+        version: 3.2.1
       '@types/escape-html':
         specifier: ^1.0.4
         version: 1.0.4
@@ -3600,6 +3292,39 @@ importers:
       '@uiw/react-codemirror':
         specifier: ^4.25.1
         version: 4.25.1(@babel/runtime@7.28.6)(@codemirror/autocomplete@6.18.7)(@codemirror/language@6.11.3)(@codemirror/lint@6.8.5)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/theme-one-dark@6.1.3)(@codemirror/view@6.38.2)(codemirror@6.0.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@visx/axis':
+        specifier: ^3.12.0
+        version: 3.12.0(react@19.1.0)
+      '@visx/brush':
+        specifier: ^3.12.0
+        version: 3.12.0(react@19.1.0)
+      '@visx/curve':
+        specifier: ^3.12.0
+        version: 3.12.0
+      '@visx/event':
+        specifier: ^3.12.0
+        version: 3.12.0
+      '@visx/grid':
+        specifier: ^3.12.0
+        version: 3.12.0(react@19.1.0)
+      '@visx/group':
+        specifier: ^3.12.0
+        version: 3.12.0(react@19.1.0)
+      '@visx/pattern':
+        specifier: ^3.12.0
+        version: 3.12.0(react@19.1.0)
+      '@visx/responsive':
+        specifier: ^3.12.0
+        version: 3.12.0(react@19.1.0)
+      '@visx/scale':
+        specifier: ^3.12.0
+        version: 3.12.0
+      '@visx/shape':
+        specifier: ^3.12.0
+        version: 3.12.0(react@19.1.0)
+      '@visx/tooltip':
+        specifier: ^3.12.0
+        version: 3.12.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@vitejs/plugin-react':
         specifier: ^4.7.0
         version: 4.7.0(vite@5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
@@ -3630,6 +3355,9 @@ importers:
       cmdk:
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      d3-array:
+        specifier: ^3.2.4
+        version: 3.2.4
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
@@ -4256,6 +3984,12 @@ importers:
 
   rivetkit-typescript/packages/rivetkit:
     dependencies:
+      '@hono/node-server':
+        specifier: ^1.18.2
+        version: 1.19.9(hono@4.11.9)
+      '@hono/node-ws':
+        specifier: ^1.1.1
+        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@hono/standard-validator':
         specifier: ^0.1.3
         version: 0.1.5(@standard-schema/spec@1.0.0)(hono@4.11.9)
@@ -4265,6 +3999,9 @@ importers:
       '@rivetkit/bare-ts':
         specifier: ^0.6.2
         version: 0.6.2
+      '@rivetkit/engine-kv-channel-protocol':
+        specifier: workspace:*
+        version: link:../../../engine/sdks/typescript/kv-channel-protocol
       '@rivetkit/engine-runner':
         specifier: workspace:*
         version: link:../../../engine/sdks/typescript/runner
@@ -4344,12 +4081,6 @@ importers:
       '@e2b/code-interpreter':
         specifier: ^2.3.3
         version: 2.3.3
-      '@hono/node-server':
-        specifier: ^1.18.2
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.1.1
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@standard-schema/spec':
         specifier: ^1.0.0
         version: 1.0.0
@@ -4413,6 +4144,12 @@ importers:
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+
+  rivetkit-typescript/packages/sqlite-native:
+    devDependencies:
+      '@napi-rs/cli':
+        specifier: ^2.18.0
+        version: 2.18.4
 
   rivetkit-typescript/packages/sqlite-vfs:
     dependencies:
@@ -7901,6 +7638,11 @@ packages:
     resolution: {integrity: sha512-7G0Uf0yK3f2bjElBLGHIQzgRgMESczOMyYVasq1XK8P5HaXtlW4eQhz9MBL+TQILZLaruq+ClGId+hH0w4jvWw==}
     engines: {node: '>=18'}
 
+  '@napi-rs/cli@2.18.4':
+    resolution: {integrity: sha512-SgJeA4df9DE2iAEpr3M2H0OKl/yjtg1BnRI5/JyowS71tUWhrfSu2LT0V3vlHET+g1hBVlrO60PmEXwUEKp8Mg==}
+    engines: {node: '>= 10'}
+    hasBin: true
+
   '@neophi/sieve-cache@1.5.0':
     resolution: {integrity: sha512-9T3nD5q51X1d4QYW6vouKW9hBSb2Tb/wB/2XoTr4oP5SCGtp3a7aTHHewQFylred1B21/Bhev6gy4x01FPBcbQ==}
     engines: {node: '>=18'}
@@ -10401,6 +10143,9 @@ packages:
   '@types/connect@3.4.38':
     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}
 
+  '@types/d3-array@3.0.3':
+    resolution: {integrity: sha512-Reoy+pKnvsksN0lQUlcH6dOGjRZ/3WRwXR//m+/8lt1BXeI4xyaUZoqULNjyXXRuh0Mj4LNpkCvhUpQlY3X5xQ==}
+
   '@types/d3-array@3.2.1':
     resolution: {integrity: sha512-Y2Jn2idRrLzUfAKV2LyRImR+y4oa2AntrgID95SHJxuMUrkNXmanDSed71sRNZysveJVt1hLLemQZIady0FpEg==}
 
@@ -10413,11 +10158,17 @@ packages:
   '@types/d3-chord@3.0.6':
     resolution: {integrity: sha512-LFYWWd8nwfwEmTZG9PfQxd17HbNPksHBiJHaKuY1XeqscXacsS2tyoo6OdRsjf+NQYeB6XrNL3a25E3gH69lcg==}
 
+  '@types/d3-color@3.1.0':
+    resolution: {integrity: sha512-HKuicPHJuvPgCD+np6Se9MQvS6OCbJmOjGvylzMJRlDwUXjKTTXs6Pwgk79O09Vj/ho3u1ofXnhFOaEWWPrlwA==}
+
   '@types/d3-color@3.1.3':
     resolution: {integrity: sha512-iO90scth9WAbmgv7ogoq57O9YpKmFBbmoEoCHDB2xMBY0+/KVrqAaCDyCE16dUspeOvIxFFRI+0sEtqDqy2b4A==}
 
   '@types/d3-contour@3.0.6':
     resolution: {integrity: sha512-BjzLgXGnCWjUSYGfH1cpdo41/hgdWETu4YxpezoztawmqsvCeep+8QGfiY6YbDvfgHz/DkjeIkkZVJavB4a3rg==}
+
+  '@types/d3-delaunay@6.0.1':
+    resolution: {integrity: sha512-tLxQ2sfT0p6sxdG75c6f/ekqxjyYR0+LwPrsO1mbC9YDBzPJhs2HbJJRrn8Ez1DBoHRo2yx7YEATI+8V1nGMnQ==}
 
   '@types/d3-delaunay@6.0.4':
     resolution: {integrity: sha512-ZMaSKu4THYCU6sV64Lhg6qjf1orxBthaC161plr5KuPHo3CNm8DTHiLw/5Eq2b6TsNP0W0iJrUOFscY6Q450Hw==}
@@ -10440,6 +10191,9 @@ packages:
   '@types/d3-force@3.0.10':
     resolution: {integrity: sha512-ZYeSaCF3p73RdOKcjj+swRlZfnYpK1EbaDiYICEEp5Q6sUiqFaFQ9qgoshp5CzIyyb/yD09kD9o2zEltCexlgw==}
 
+  '@types/d3-format@3.0.1':
+    resolution: {integrity: sha512-5KY70ifCCzorkLuIkDe0Z9YTf9RR2CjBX1iaJG+rgM/cPP+sO+q9YdQ9WdhQcgPj1EQiJ2/0+yUkkziTG6Lubg==}
+
   '@types/d3-format@3.0.4':
     resolution: {integrity: sha512-fALi2aI6shfg7vM5KiR1wNJnZ7r6UuggVqtDA+xiEdPZQwy/trcQaHnwShLuLdta2rTymCNpxYTiMZX/e09F4g==}
 
@@ -10449,8 +10203,14 @@ packages:
   '@types/d3-hierarchy@3.1.7':
     resolution: {integrity: sha512-tJFtNoYBtRtkNysX1Xq4sxtjK8YgoWUNpIiUee0/jHGRwqvzYxkq0hGVbbOGSz+JgFxxRu4K8nb3YpG3CMARtg==}
 
+  '@types/d3-interpolate@3.0.1':
+    resolution: {integrity: sha512-jx5leotSeac3jr0RePOH1KdR9rISG91QIE4Q2PYTu4OymLTZfA3SrnURSLzKH48HmXVUru50b8nje4E79oQSQw==}
+
   '@types/d3-interpolate@3.0.4':
     resolution: {integrity: sha512-mgLPETlrpVV1YRJIglr4Ez47g7Yxjl1lj7YKsiMCb27VJH9W8NVM6Bb9d8kkpG/uAQS5AmbA48q2IAolKKo1MA==}
+
+  '@types/d3-path@1.0.11':
+    resolution: {integrity: sha512-4pQMp8ldf7UaB/gR8Fvvy69psNHkTpD/pVw3vmEi8iZAB9EPMBruB1JvHO4BIq9QkUUd2lV1F5YXpMNj7JPBpw==}
 
   '@types/d3-path@3.1.1':
     resolution: {integrity: sha512-VMZBYyQvbGmWyWVea0EHs/BwLgxc+MKi1zLDCONksozI4YJMcTt8ZEuIR4Sb1MMTE8MMW49v0IwI5+b7RmfWlg==}
@@ -10467,17 +10227,29 @@ packages:
   '@types/d3-scale-chromatic@3.1.0':
     resolution: {integrity: sha512-iWMJgwkK7yTRmWqRB5plb1kadXyQ5Sj8V/zYlFGMUBbIPKQScw+Dku9cAAMgJG+z5GYDoMjWGLVOvjghDEFnKQ==}
 
+  '@types/d3-scale@4.0.2':
+    resolution: {integrity: sha512-Yk4htunhPAwN0XGlIwArRomOjdoBFXC3+kCxK2Ubg7I9shQlVSJy/pG/Ht5ASN+gdMIalpk8TJ5xV74jFsetLA==}
+
   '@types/d3-scale@4.0.9':
     resolution: {integrity: sha512-dLmtwB8zkAeO/juAMfnV+sItKjlsw2lKdZVVy6LRr0cBmegxSABiLEpGVmSJJ8O08i4+sGR6qQtb6WtuwJdvVw==}
 
   '@types/d3-selection@3.0.11':
     resolution: {integrity: sha512-bhAXu23DJWsrI45xafYpkQ4NtcKMwWnAC/vKrd2l+nxMFuvOT3XMYTIj2opv8vq8AO5Yh7Qac/nSeP/3zjTK0w==}
 
+  '@types/d3-shape@1.3.12':
+    resolution: {integrity: sha512-8oMzcd4+poSLGgV0R1Q1rOlx/xdmozS4Xab7np0eamFFUYq71AU9pOCJEFnkXW2aI/oXdVYJzw6pssbSut7Z9Q==}
+
   '@types/d3-shape@3.1.7':
     resolution: {integrity: sha512-VLvUQ33C+3J+8p+Daf+nYSOsjB4GXp19/S/aGo60m9h1v6XaxjiT82lKVWJCfzhtuZ3yD7i/TPeC/fuKLLOSmg==}
 
+  '@types/d3-time-format@2.1.0':
+    resolution: {integrity: sha512-/myT3I7EwlukNOX2xVdMzb8FRgNzRMpsZddwst9Ld/VFe6LyJyRp0s32l/V9XoUzk+Gqu56F/oGk6507+8BxrA==}
+
   '@types/d3-time-format@4.0.3':
     resolution: {integrity: sha512-5xg9rC+wWL8kdDj153qZcsJ0FWiFt0J5RB6LYUNZjwSnesfblqrI/bJ1wBdJ8OQfncgbJG5+2F+qfqnqyzYxyg==}
+
+  '@types/d3-time@3.0.0':
+    resolution: {integrity: sha512-sZLCdHvBUcNby1cB6Fd3ZBrABbjz3v1Vm90nysCQ6Vt7vd6e/h9Lt7SiJUoEX0l4Dzc7P5llKyhqSi1ycSf1Hg==}
 
   '@types/d3-time@3.0.4':
     resolution: {integrity: sha512-yuzZug1nkAAaBlBBikKZTgzCeA+k1uy4ZFwWANOfKw5z5LRhV0gNA7gNkKm7HoK+HRN0wX3EkxGk0fpbWhmB7g==}
@@ -10596,9 +10368,6 @@ packages:
 
   '@types/node@22.19.10':
     resolution: {integrity: sha512-tF5VOugLS/EuDlTBijk0MqABfP8UxgYazTLo3uIn3b4yJgg26QRbVYJYsDtHrjdDUIRfP70+VfhTTc+CE1yskw==}
-
-  '@types/node@22.19.11':
-    resolution: {integrity: sha512-BH7YwL6rA93ReqeQS1c4bsPpcfOmJasG+Fkr6Y59q83f9M1WcBRHR2vM+P9eOisYRcN3ujQoiZY8uk5W+1WL8w==}
 
   '@types/node@22.19.15':
     resolution: {integrity: sha512-F0R/h2+dsy5wJAUe3tAU6oqa2qbWY5TpNfL/RGmo1y38hiyO1w3x2jPtt76wmuaJI4DQnOBu21cNXQ2STIUUWg==}
@@ -10750,6 +10519,78 @@ packages:
   '@vercel/oidc@3.1.0':
     resolution: {integrity: sha512-Fw28YZpRnA3cAHHDlkt7xQHiJ0fcL+NRcIqsocZQUSmbzeIKRpwttJjik5ZGanXP+vlA4SbTg+AbA3bP363l+w==}
     engines: {node: '>= 20'}
+
+  '@visx/axis@3.12.0':
+    resolution: {integrity: sha512-8MoWpfuaJkhm2Yg+HwyytK8nk+zDugCqTT/tRmQX7gW4LYrHYLXFUXOzbDyyBakCVaUbUaAhVFxpMASJiQKf7A==}
+    peerDependencies:
+      react: 19.1.0
+
+  '@visx/bounds@3.12.0':
+    resolution: {integrity: sha512-peAlNCUbYaaZ0IO6c1lDdEAnZv2iGPDiLIM8a6gu7CaMhtXZJkqrTh+AjidNcIqITktrICpGxJE/Qo9D099dvQ==}
+    peerDependencies:
+      react: 19.1.0
+      react-dom: 19.1.0
+
+  '@visx/brush@3.12.0':
+    resolution: {integrity: sha512-ceqQe/IlIi9X9FT/DuiO6b3l5YAGnux/aQMX8M1gvLdz4T8pXIW8nDv1OhqbZ7lmbQEUEEM9IexOkR9ix7pL+Q==}
+    peerDependencies:
+      react: 19.1.0
+
+  '@visx/curve@3.12.0':
+    resolution: {integrity: sha512-Ng1mefXIzoIoAivw7dJ+ZZYYUbfuwXgZCgQynShr6ZIVw7P4q4HeQfJP3W24ON+1uCSrzoycHSXRelhR9SBPcw==}
+
+  '@visx/drag@3.12.0':
+    resolution: {integrity: sha512-LXOoPVw//YPjpYhDJYBsCYDuv1QimsXjDV98duH0aCy4V94ediXMQpe2wHq4pnlDobLEB71FjOZMFrbFmqtERg==}
+    peerDependencies:
+      react: 19.1.0
+
+  '@visx/event@3.12.0':
+    resolution: {integrity: sha512-9Lvw6qJ0Fi+y1vsC1WspfdIKCxHTb7oy59Uql1uBdPGT8zChP0vuxW0jQNQRDbKgoefj4pCXAFi8+MF1mEtVTw==}
+
+  '@visx/grid@3.12.0':
+    resolution: {integrity: sha512-L4ex2ooSYhwNIxJ3XFIKRhoSvEGjPc2Y3YCrtNB4TV5Ofdj4q0UMOsxfrH23Pr8HSHuQhb6VGMgYoK0LuWqDmQ==}
+    peerDependencies:
+      react: 19.1.0
+
+  '@visx/group@3.12.0':
+    resolution: {integrity: sha512-Dye8iS1alVXPv7nj/7M37gJe6sSKqJLH7x6sEWAsRQ9clI0kFvjbKcKgF+U3aAVQr0NCohheFV+DtR8trfK/Ag==}
+    peerDependencies:
+      react: 19.1.0
+
+  '@visx/pattern@3.12.0':
+    resolution: {integrity: sha512-ZkNA/2TkULNiiY4cw2IkuQcQRp9zI3SQ0/JoZMQ+UmUvY5RNBcsdTmic7649egHq0FRYCbY0DDQVJicccW5JUg==}
+    peerDependencies:
+      react: 19.1.0
+
+  '@visx/point@3.12.0':
+    resolution: {integrity: sha512-I6UrHoJAEVbx3RORQNupgTiX5EzjuZpiwLPxn8L2mI5nfERotPKi1Yus12Cq2WtXqEBR/WgqTnoImlqOXBykcA==}
+
+  '@visx/responsive@3.12.0':
+    resolution: {integrity: sha512-GV1BTYwAGlk/K5c9vH8lS2syPnTuIqEacI7L6LRPbsuaLscXMNi+i9fZyzo0BWvAdtRV8v6Urzglo++lvAXT1Q==}
+    peerDependencies:
+      react: 19.1.0
+
+  '@visx/scale@3.12.0':
+    resolution: {integrity: sha512-+ubijrZ2AwWCsNey0HGLJ0YKNeC/XImEFsr9rM+Uef1CM3PNM43NDdNTrdBejSlzRq0lcfQPWYMYQFSlkLcPOg==}
+
+  '@visx/shape@3.12.0':
+    resolution: {integrity: sha512-/1l0lrpX9tPic6SJEalryBKWjP/ilDRnQA+BGJTI1tj7i23mJ/J0t4nJHyA1GrL4QA/bM/qTJ35eyz5dEhJc4g==}
+    peerDependencies:
+      react: 19.1.0
+
+  '@visx/text@3.12.0':
+    resolution: {integrity: sha512-0rbDYQlbuKPhBqXkkGYKFec1gQo05YxV45DORzr6hCyaizdJk1G+n9VkuKSHKBy1vVQhBA0W3u/WXd7tiODQPA==}
+    peerDependencies:
+      react: 19.1.0
+
+  '@visx/tooltip@3.12.0':
+    resolution: {integrity: sha512-pWhsYhgl0Shbeqf80qy4QCB6zpq6tQtMQQxKlh3UiKxzkkfl+Metaf9p0/S0HexNi4vewOPOo89xWx93hBeh3A==}
+    peerDependencies:
+      react: 19.1.0
+      react-dom: 19.1.0
+
+  '@visx/vendor@3.12.0':
+    resolution: {integrity: sha512-SVO+G0xtnL9dsNpGDcjCgoiCnlB3iLSM9KLz1sLbSrV7RaVXwY3/BTm2X9OWN1jH2a9M+eHt6DJ6sE6CXm4cUg==}
 
   '@vitejs/plugin-react-swc@3.11.0':
     resolution: {integrity: sha512-YTJCGFdNMHCMfjODYtxRNVAYmTWQ1Lb8PulP/2/f/oEEtglw8oKxKIZmmRkyXrVrHfsKOaVkAc3NT9/dMutO5w==}
@@ -11363,6 +11204,9 @@ packages:
 
   bail@2.0.2:
     resolution: {integrity: sha512-0xO6mYd7JB2YesxDKplafRpsiOzPt9V02ddPCLbY1xYGPOX24NTyN50qnUxgCPcSoYMhKpAuBTjQoRZCAkUDRw==}
+
+  balanced-match@0.4.2:
+    resolution: {integrity: sha512-STw03mQKnGUYtoNjmowo4F2cRmIIxYEGiMsjjwla/u5P1lxadj/05WkNaFjNiKTgJkj8KiXbgAiRTmcQRwQNtg==}
 
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
@@ -12011,6 +11855,10 @@ packages:
   d3-array@2.12.1:
     resolution: {integrity: sha512-B0ErZK/66mHtEsR1TkPEEkwdy+WDesimkM5gpZr5Dsg54BiTA5RXtYW5qTLIAcekaS9xfZrzBLF/OAkB3Qn1YQ==}
 
+  d3-array@3.2.1:
+    resolution: {integrity: sha512-gUY/qeHq/yNqqoCKNq4vtpFLdoCdvyNpWoC/KNjhGbhDuQpAM9sIQQKkXSNpXa9h5KySs/gzm7R88WkUutgwWQ==}
+    engines: {node: '>=12'}
+
   d3-array@3.2.4:
     resolution: {integrity: sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg==}
     engines: {node: '>=12'}
@@ -12033,6 +11881,10 @@ packages:
 
   d3-contour@4.0.2:
     resolution: {integrity: sha512-4EzFTRIikzs47RGmdxbeUvLWtGedDUNkTcmzoeyg4sP/dvCexO47AaQL7VKy/gul85TOxw+IBgA8US2xwbToNA==}
+    engines: {node: '>=12'}
+
+  d3-delaunay@6.0.2:
+    resolution: {integrity: sha512-IMLNldruDQScrcfT+MWnazhHbDJhcRJyOEBAJfwQnHle1RPh6WDuLvxNArUju2VSMSUuKlY5BGHRJ2cYyoFLQQ==}
     engines: {node: '>=12'}
 
   d3-delaunay@6.0.4:
@@ -12066,6 +11918,10 @@ packages:
 
   d3-format@3.1.0:
     resolution: {integrity: sha512-YyUI6AEuY/Wpt8KWLgZHsIU86atmikuoOmCfommt0LYHiQSPjvX2AcFc38PX0CBpr2RCyZhjex+NS/LPOv6YqA==}
+    engines: {node: '>=12'}
+
+  d3-geo@3.1.0:
+    resolution: {integrity: sha512-JEo5HxXDdDYXCaWdwLRt79y7giK8SbhZJbFWXqbRTolCHFI5jRqteLzCsq51NKbUoX0PjBVSohxrx+NoOUujYA==}
     engines: {node: '>=12'}
 
   d3-geo@3.1.1:
@@ -14418,6 +14274,9 @@ packages:
   marky@1.3.0:
     resolution: {integrity: sha512-ocnPZQLNpvbedwTy9kNrQEsknEfgvcLMvOtz3sFeWApDq1MXH1TqkCIx58xlpESsfwQOnuBO9beyQuNGzVvuhQ==}
 
+  math-expression-evaluator@1.4.0:
+    resolution: {integrity: sha512-4vRUvPyxdO8cWULGTh9dZWL2tZK6LDBvj+OGHBER7poH9Qdt7kXEoj20wiz4lQUbUXQZFjPbe5mVDo9nutizCw==}
+
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
@@ -16085,6 +15944,15 @@ packages:
       react: 19.1.0
       react-dom: 19.1.0
 
+  react-use-measure@2.1.7:
+    resolution: {integrity: sha512-KrvcAo13I/60HpwGO5jpW7E9DfusKyLPLvuHlUyP5zqnmAPhNc6qTRjUQrdTADl0lpPpDVU2/Gg51UlOGHXbdg==}
+    peerDependencies:
+      react: 19.1.0
+      react-dom: 19.1.0
+    peerDependenciesMeta:
+      react-dom:
+        optional: true
+
   react@19.1.0:
     resolution: {integrity: sha512-FS+XFBNvn3GTAWq26joslQgWNoFu08F4kl0J4CgdNKADkdSGXQyTCnKteIAJy96Br6YbpEU1LSzV5dYtjMkMDg==}
     engines: {node: '>=0.10.0'}
@@ -16145,6 +16013,12 @@ packages:
 
   reconnectingwebsocket@1.0.0:
     resolution: {integrity: sha512-r7H/dwkkfBu9x5eMGIt8td5WLqNbqy675x8Xg0+SoXaUS3xzniVlmfO7t7HSYmN/ZGzYjOKa9G2W4xCgCo7Zlg==}
+
+  reduce-css-calc@1.3.0:
+    resolution: {integrity: sha512-0dVfwYVOlf/LBA2ec4OwQ6p3X9mYxn/wOl2xTcLwjnPYrkgEfPx3VI4eGCH3rQLlPISG5v9I9bkZosKsNRTRKA==}
+
+  reduce-function-call@1.0.3:
+    resolution: {integrity: sha512-Hl/tuV2VDgWgCSEeWMLwxLZqX7OK59eU1guxXsRKTAyeYimivsKdtcV4fu3r710tpG5GmDKDhQ0HSZLExnNmyQ==}
 
   regenerate-unicode-properties@10.2.2:
     resolution: {integrity: sha512-m03P+zhBeQd1RGnYxrGyDAPpWX/epKirLrp8e3qevZdVkKtnCrjjWczIbYc8+xd6vcTStVlqfycTx1KR4LOr0g==}
@@ -21523,7 +21397,7 @@ snapshots:
     dependencies:
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 22.19.10
+      '@types/node': 22.19.15
       '@types/yargs': 15.0.19
       chalk: 4.1.2
 
@@ -22023,6 +21897,8 @@ snapshots:
       is-node-process: 1.2.0
       outvariant: 1.4.3
       strict-event-emitter: 0.5.1
+
+  '@napi-rs/cli@2.18.4': {}
 
   '@neophi/sieve-cache@1.5.0': {}
 
@@ -24978,7 +24854,9 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 22.19.11
+      '@types/node': 22.19.15
+
+  '@types/d3-array@3.0.3': {}
 
   '@types/d3-array@3.2.1': {}
 
@@ -24992,12 +24870,16 @@ snapshots:
 
   '@types/d3-chord@3.0.6': {}
 
+  '@types/d3-color@3.1.0': {}
+
   '@types/d3-color@3.1.3': {}
 
   '@types/d3-contour@3.0.6':
     dependencies:
       '@types/d3-array': 3.2.1
       '@types/geojson': 7946.0.16
+
+  '@types/d3-delaunay@6.0.1': {}
 
   '@types/d3-delaunay@6.0.4': {}
 
@@ -25017,6 +24899,8 @@ snapshots:
 
   '@types/d3-force@3.0.10': {}
 
+  '@types/d3-format@3.0.1': {}
+
   '@types/d3-format@3.0.4': {}
 
   '@types/d3-geo@3.1.0':
@@ -25025,9 +24909,15 @@ snapshots:
 
   '@types/d3-hierarchy@3.1.7': {}
 
+  '@types/d3-interpolate@3.0.1':
+    dependencies:
+      '@types/d3-color': 3.1.3
+
   '@types/d3-interpolate@3.0.4':
     dependencies:
       '@types/d3-color': 3.1.3
+
+  '@types/d3-path@1.0.11': {}
 
   '@types/d3-path@3.1.1': {}
 
@@ -25039,17 +24929,29 @@ snapshots:
 
   '@types/d3-scale-chromatic@3.1.0': {}
 
+  '@types/d3-scale@4.0.2':
+    dependencies:
+      '@types/d3-time': 3.0.4
+
   '@types/d3-scale@4.0.9':
     dependencies:
       '@types/d3-time': 3.0.4
 
   '@types/d3-selection@3.0.11': {}
 
+  '@types/d3-shape@1.3.12':
+    dependencies:
+      '@types/d3-path': 1.0.11
+
   '@types/d3-shape@3.1.7':
     dependencies:
       '@types/d3-path': 3.1.1
 
+  '@types/d3-time-format@2.1.0': {}
+
   '@types/d3-time-format@4.0.3': {}
+
+  '@types/d3-time@3.0.0': {}
 
   '@types/d3-time@3.0.4': {}
 
@@ -25107,13 +25009,13 @@ snapshots:
 
   '@types/docker-modem@3.0.6':
     dependencies:
-      '@types/node': 22.19.11
+      '@types/node': 22.19.15
       '@types/ssh2': 1.15.5
 
   '@types/dockerode@3.3.47':
     dependencies:
       '@types/docker-modem': 3.0.6
-      '@types/node': 22.19.11
+      '@types/node': 22.19.15
       '@types/ssh2': 1.15.5
 
   '@types/emscripten@1.41.5':
@@ -25188,7 +25090,7 @@ snapshots:
 
   '@types/mysql@2.15.27':
     dependencies:
-      '@types/node': 22.19.11
+      '@types/node': 22.19.15
 
   '@types/nlcst@2.0.3':
     dependencies:
@@ -25196,7 +25098,7 @@ snapshots:
 
   '@types/node-fetch@2.6.11':
     dependencies:
-      '@types/node': 22.19.10
+      '@types/node': 22.19.15
       form-data: 4.0.5
 
   '@types/node@17.0.33': {}
@@ -25210,10 +25112,6 @@ snapshots:
       undici-types: 6.21.0
 
   '@types/node@22.19.10':
-    dependencies:
-      undici-types: 6.21.0
-
-  '@types/node@22.19.11':
     dependencies:
       undici-types: 6.21.0
 
@@ -25238,13 +25136,13 @@ snapshots:
 
   '@types/pg@8.15.6':
     dependencies:
-      '@types/node': 22.19.11
+      '@types/node': 22.19.15
       pg-protocol: 1.11.0
       pg-types: 2.2.0
 
   '@types/pg@8.16.0':
     dependencies:
-      '@types/node': 22.19.10
+      '@types/node': 22.19.15
       pg-protocol: 1.11.0
       pg-types: 2.2.0
 
@@ -25270,7 +25168,7 @@ snapshots:
 
   '@types/readable-stream@4.0.21':
     dependencies:
-      '@types/node': 22.19.10
+      '@types/node': 22.19.15
 
   '@types/reconnectingwebsocket@1.0.10': {}
 
@@ -25278,7 +25176,7 @@ snapshots:
 
   '@types/sax@1.2.7':
     dependencies:
-      '@types/node': 22.19.10
+      '@types/node': 22.19.15
 
   '@types/semver@7.7.1': {}
 
@@ -25300,7 +25198,7 @@ snapshots:
 
   '@types/tedious@4.0.14':
     dependencies:
-      '@types/node': 22.19.11
+      '@types/node': 22.19.15
 
   '@types/three@0.171.0':
     dependencies:
@@ -25324,7 +25222,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 22.19.10
+      '@types/node': 22.19.15
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -25392,6 +25290,153 @@ snapshots:
       wonka: 6.3.5
 
   '@vercel/oidc@3.1.0': {}
+
+  '@visx/axis@3.12.0(react@19.1.0)':
+    dependencies:
+      '@types/react': 19.2.13
+      '@visx/group': 3.12.0(react@19.1.0)
+      '@visx/point': 3.12.0
+      '@visx/scale': 3.12.0
+      '@visx/shape': 3.12.0(react@19.1.0)
+      '@visx/text': 3.12.0(react@19.1.0)
+      classnames: 2.5.1
+      prop-types: 15.8.1
+      react: 19.1.0
+
+  '@visx/bounds@3.12.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      '@types/react': 19.2.13
+      '@types/react-dom': 19.2.3(@types/react@19.2.13)
+      prop-types: 15.8.1
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+
+  '@visx/brush@3.12.0(react@19.1.0)':
+    dependencies:
+      '@visx/drag': 3.12.0(react@19.1.0)
+      '@visx/event': 3.12.0
+      '@visx/group': 3.12.0(react@19.1.0)
+      '@visx/scale': 3.12.0
+      '@visx/shape': 3.12.0(react@19.1.0)
+      classnames: 2.5.1
+      prop-types: 15.8.1
+      react: 19.1.0
+
+  '@visx/curve@3.12.0':
+    dependencies:
+      '@types/d3-shape': 1.3.12
+      d3-shape: 1.3.7
+
+  '@visx/drag@3.12.0(react@19.1.0)':
+    dependencies:
+      '@types/react': 19.2.13
+      '@visx/event': 3.12.0
+      '@visx/point': 3.12.0
+      prop-types: 15.8.1
+      react: 19.1.0
+
+  '@visx/event@3.12.0':
+    dependencies:
+      '@types/react': 19.2.13
+      '@visx/point': 3.12.0
+
+  '@visx/grid@3.12.0(react@19.1.0)':
+    dependencies:
+      '@types/react': 19.2.13
+      '@visx/curve': 3.12.0
+      '@visx/group': 3.12.0(react@19.1.0)
+      '@visx/point': 3.12.0
+      '@visx/scale': 3.12.0
+      '@visx/shape': 3.12.0(react@19.1.0)
+      classnames: 2.5.1
+      prop-types: 15.8.1
+      react: 19.1.0
+
+  '@visx/group@3.12.0(react@19.1.0)':
+    dependencies:
+      '@types/react': 19.2.13
+      classnames: 2.5.1
+      prop-types: 15.8.1
+      react: 19.1.0
+
+  '@visx/pattern@3.12.0(react@19.1.0)':
+    dependencies:
+      '@types/react': 19.2.13
+      classnames: 2.5.1
+      prop-types: 15.8.1
+      react: 19.1.0
+
+  '@visx/point@3.12.0': {}
+
+  '@visx/responsive@3.12.0(react@19.1.0)':
+    dependencies:
+      '@types/lodash': 4.17.23
+      '@types/react': 19.2.13
+      lodash: 4.17.23
+      prop-types: 15.8.1
+      react: 19.1.0
+
+  '@visx/scale@3.12.0':
+    dependencies:
+      '@visx/vendor': 3.12.0
+
+  '@visx/shape@3.12.0(react@19.1.0)':
+    dependencies:
+      '@types/d3-path': 1.0.11
+      '@types/d3-shape': 1.3.12
+      '@types/lodash': 4.17.23
+      '@types/react': 19.2.13
+      '@visx/curve': 3.12.0
+      '@visx/group': 3.12.0(react@19.1.0)
+      '@visx/scale': 3.12.0
+      classnames: 2.5.1
+      d3-path: 1.0.9
+      d3-shape: 1.3.7
+      lodash: 4.17.23
+      prop-types: 15.8.1
+      react: 19.1.0
+
+  '@visx/text@3.12.0(react@19.1.0)':
+    dependencies:
+      '@types/lodash': 4.17.23
+      '@types/react': 19.2.13
+      classnames: 2.5.1
+      lodash: 4.17.23
+      prop-types: 15.8.1
+      react: 19.1.0
+      reduce-css-calc: 1.3.0
+
+  '@visx/tooltip@3.12.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      '@types/react': 19.2.13
+      '@visx/bounds': 3.12.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      classnames: 2.5.1
+      prop-types: 15.8.1
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+      react-use-measure: 2.1.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+
+  '@visx/vendor@3.12.0':
+    dependencies:
+      '@types/d3-array': 3.0.3
+      '@types/d3-color': 3.1.0
+      '@types/d3-delaunay': 6.0.1
+      '@types/d3-format': 3.0.1
+      '@types/d3-geo': 3.1.0
+      '@types/d3-interpolate': 3.0.1
+      '@types/d3-scale': 4.0.2
+      '@types/d3-time': 3.0.0
+      '@types/d3-time-format': 2.1.0
+      d3-array: 3.2.1
+      d3-color: 3.1.0
+      d3-delaunay: 6.0.2
+      d3-format: 3.1.0
+      d3-geo: 3.1.0
+      d3-interpolate: 3.0.1
+      d3-scale: 4.0.2
+      d3-time: 3.1.0
+      d3-time-format: 4.1.0
+      internmap: 2.0.3
 
   '@vitejs/plugin-react-swc@3.11.0(@swc/helpers@0.5.17)(vite@6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
@@ -26367,6 +26412,8 @@ snapshots:
 
   bail@2.0.2: {}
 
+  balanced-match@0.4.2: {}
+
   balanced-match@1.0.2: {}
 
   balanced-match@4.0.4: {}
@@ -27066,6 +27113,10 @@ snapshots:
     dependencies:
       internmap: 1.0.1
 
+  d3-array@3.2.1:
+    dependencies:
+      internmap: 2.0.3
+
   d3-array@3.2.4:
     dependencies:
       internmap: 2.0.3
@@ -27089,6 +27140,10 @@ snapshots:
   d3-contour@4.0.2:
     dependencies:
       d3-array: 3.2.4
+
+  d3-delaunay@6.0.2:
+    dependencies:
+      delaunator: 5.0.1
 
   d3-delaunay@6.0.4:
     dependencies:
@@ -27120,6 +27175,10 @@ snapshots:
       d3-timer: 3.0.1
 
   d3-format@3.1.0: {}
+
+  d3-geo@3.1.0:
+    dependencies:
+      d3-array: 3.2.4
 
   d3-geo@3.1.1:
     dependencies:
@@ -29643,6 +29702,8 @@ snapshots:
 
   marky@1.3.0: {}
 
+  math-expression-evaluator@1.4.0: {}
+
   math-intrinsics@1.1.0: {}
 
   mdast-util-definitions@6.0.0:
@@ -31393,15 +31454,6 @@ snapshots:
       postcss: 8.5.6
       ts-node: 10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.17))(@types/node@25.0.7)(typescript@5.9.3)
 
-  postcss-load-config@6.0.1(jiti@1.21.7)(postcss@8.5.6)(tsx@3.14.0)(yaml@2.8.2):
-    dependencies:
-      lilconfig: 3.1.3
-    optionalDependencies:
-      jiti: 1.21.7
-      postcss: 8.5.6
-      tsx: 3.14.0
-      yaml: 2.8.2
-
   postcss-load-config@6.0.1(jiti@1.21.7)(postcss@8.5.6)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       lilconfig: 3.1.3
@@ -31583,7 +31635,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 22.19.11
+      '@types/node': 22.19.15
       long: 5.3.2
 
   proxy-addr@2.0.7:
@@ -31879,6 +31931,12 @@ snapshots:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
 
+  react-use-measure@2.1.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+    dependencies:
+      react: 19.1.0
+    optionalDependencies:
+      react-dom: 19.1.0(react@19.1.0)
+
   react@19.1.0: {}
 
   read-cache@1.0.0:
@@ -31972,6 +32030,16 @@ snapshots:
       vfile: 6.0.3
 
   reconnectingwebsocket@1.0.0: {}
+
+  reduce-css-calc@1.3.0:
+    dependencies:
+      balanced-match: 0.4.2
+      math-expression-evaluator: 1.4.0
+      reduce-function-call: 1.0.3
+
+  reduce-function-call@1.0.3:
+    dependencies:
+      balanced-match: 1.0.2
 
   regenerate-unicode-properties@10.2.2:
     dependencies:
@@ -33184,36 +33252,6 @@ snapshots:
       - tsx
       - yaml
 
-  tsup@8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@3.14.0)(typescript@5.9.3)(yaml@2.8.2):
-    dependencies:
-      bundle-require: 5.1.0(esbuild@0.27.3)
-      cac: 6.7.14
-      chokidar: 4.0.3
-      consola: 3.4.2
-      debug: 4.4.3
-      esbuild: 0.27.3
-      fix-dts-default-cjs-exports: 1.0.1
-      joycon: 3.1.1
-      picocolors: 1.1.1
-      postcss-load-config: 6.0.1(jiti@1.21.7)(postcss@8.5.6)(tsx@3.14.0)(yaml@2.8.2)
-      resolve-from: 5.0.0
-      rollup: 4.57.1
-      source-map: 0.7.6
-      sucrase: 3.35.1
-      tinyexec: 0.3.2
-      tinyglobby: 0.2.15
-      tree-kill: 1.2.2
-    optionalDependencies:
-      '@microsoft/api-extractor': 7.53.2(@types/node@22.19.10)
-      '@swc/core': 1.15.11(@swc/helpers@0.5.17)
-      postcss: 8.5.6
-      typescript: 5.9.3
-    transitivePeerDependencies:
-      - jiti
-      - supports-color
-      - tsx
-      - yaml
-
   tsup@8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2):
     dependencies:
       bundle-require: 5.1.0(esbuild@0.27.3)
@@ -33907,20 +33945,10 @@ snapshots:
     dependencies:
       favicons: 7.2.0
 
-  vite-plugin-srvx@1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)):
-    dependencies:
-      srvx: 0.10.0
-      vite: 5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-
   vite-plugin-srvx@1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)):
     dependencies:
       srvx: 0.10.0
       vite: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-
-  vite-plugin-srvx@1.0.2(srvx@0.10.0)(vite@6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)):
-    dependencies:
-      srvx: 0.10.0
-      vite: 6.4.1(@types/node@22.19.10)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
   vite-tsconfig-paths@5.1.4(typescript@5.9.3)(vite@5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)):
     dependencies:
