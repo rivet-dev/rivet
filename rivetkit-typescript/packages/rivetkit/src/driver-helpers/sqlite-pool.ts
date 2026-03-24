@@ -21,8 +21,14 @@ export class SqliteVfsPoolManager {
 	async acquire(actorId: string): Promise<ISqliteVfs> {
 		if (!this.#poolPromise) {
 			const poolConfig = this.#config.sqlitePool;
-			this.#poolPromise = import("@rivetkit/sqlite-vfs").then(
-				({ SqliteVfsPool }) =>
+			// Use Array.join() to prevent Turbopack from tracing into the
+			// @rivetkit/sqlite-vfs module graph at compile time. Without this,
+			// Turbopack resolves the dynamic import statically and follows
+			// transitive imports into @rivetkit/sqlite's WASM loader, which
+			// Turbopack cannot handle.
+			const specifier = ["@rivetkit", "sqlite-vfs"].join("/");
+			this.#poolPromise = import(specifier).then(
+				({ SqliteVfsPool }: { SqliteVfsPool: new (opts: { actorsPerInstance: number; idleDestroyMs: number }) => { acquire(actorId: string): Promise<ISqliteVfs>; shutdown(): Promise<void> } }) =>
 					new SqliteVfsPool({
 						actorsPerInstance: poolConfig.actorsPerInstance,
 						idleDestroyMs: poolConfig.idleDestroyMs,
