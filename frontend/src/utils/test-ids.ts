@@ -6,6 +6,11 @@ export const TEST_IDS = {
 
 		CreateProjectCard: "create-project-card",
 
+		GettingStartedWizard: "onboarding-getting-started-wizard",
+		StepperSkipToDeploy: "onboarding-stepper-skip-to-deploy",
+		VerificationStep: "onboarding-verification-step",
+		WaitingForActor: "onboarding-waiting-for-actor",
+
 		IntegrationProviderSelection:
 			"onboarding-integration-provider-selection",
 

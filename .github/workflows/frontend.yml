@@ -9,6 +9,10 @@ on:
       - rivetkit-typescript/**
       - website/**
 
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   dashboard-quality-check:
     name: Dashboard / Quality Check
@@ -44,14 +48,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           lfs: 'true'
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
       - uses: actions/cache@v4
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-
-      - uses: pnpm/action-setup@v4
-      - run: pnpm install
+      - run: pnpm install --frozen-lockfile
       - run: pnpm build --filter='./frontend'
         env:
           NODE_OPTIONS: '--max-old-space-size=8192'
@@ -62,16 +70,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: 
+        with:
           lfs: 'true'
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
       - uses: actions/cache@v4
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-
-      - uses: pnpm/action-setup@v4
-      - run: pnpm install
+      - run: pnpm install --frozen-lockfile
       - run: pnpm exec turbo run build --filter='./rivetkit-typescript/packages/*'
       - run: pnpm exec turbo run check-types --filter='./rivetkit-typescript/packages/*'
   # website-type-check:
@@ -81,44 +93,92 @@ jobs:
   #     - uses: actions/checkout@v4
   #       with:
   #         lfs: 'true'
+  #     - uses: pnpm/action-setup@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version-file: .node-version
+  #         cache: pnpm
   #     - uses: actions/cache@v4
   #       with:
   #         path: .turbo
   #         key: ${{ runner.os }}-turbo-${{ github.sha }}
   #         restore-keys: |
   #           ${{ runner.os }}-turbo-
-  #     - uses: pnpm/action-setup@v4
-  #     - run: pnpm install
+  #     - run: pnpm install --frozen-lockfile
   #     - run: pnpm build
   #     - run: pnpm check-types
   #       working-directory: ./website
-  dashboard-engine-e2e:
-    name: Dashboard / Engine / E2E Tests
+  dashboard-e2e-cloud:
+    name: Dashboard / E2E Tests / Cloud (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1]
+        shardTotal: [1]
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: 'true'
       - uses: pnpm/action-setup@v4
-      - run: pnpm install
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+      - uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('frontend/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+      - run: pnpm install --frozen-lockfile
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
+        working-directory: ./frontend
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
         working-directory: ./frontend
       - name: Build frontend workspace dependencies
         run: pnpm build --filter='./frontend'
-      - name: Build engine dashboard
-        run: pnpm build:engine
+        env:
+          NODE_OPTIONS: '--max-old-space-size=8192'
+      - name: Build cloud dashboard
+        run: pnpm build:cloud
         working-directory: ./frontend
         env:
           NODE_OPTIONS: '--max-old-space-size=8192'
-      - name: Run Playwright tests
-        run: pnpm exec playwright test --project=engine --reporter=list
+          VITE_APP_CLERK_PUBLISHABLE_KEY: ${{ secrets.E2E_CLERK_PUBLISHABLE_KEY }}
+          VITE_APP_CLOUD_API_URL: ${{ secrets.E2E_CLOUD_API_URL }}
+          VITE_APP_API_URL: https://api.staging.rivet.dev
+      - name: Run cloud E2E tests
+        run: pnpm exec playwright test --project=cloud --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=list,github
         working-directory: ./frontend
-        continue-on-error: true
-      - name: Upload test results
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.E2E_CLERK_SECRET_KEY }}
+          CLERK_PUBLISHABLE_KEY: ${{ secrets.E2E_CLERK_PUBLISHABLE_KEY }}
+          E2E_CLERK_USER_EMAIL: ${{ secrets.E2E_CLERK_USER_EMAIL }}
+          E2E_CLERK_USER_PASSWORD: ${{ secrets.E2E_CLERK_USER_PASSWORD }}
+      - name: Upload HTML report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report
+          name: cloud-e2e-report-${{ matrix.shardIndex }}
           path: frontend/playwright-report/
           retention-days: 7
+      - name: Upload traces
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cloud-e2e-traces-${{ matrix.shardIndex }}
+          path: frontend/test-results/
+          retention-days: 7
+

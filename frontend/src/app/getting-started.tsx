@@ -50,6 +50,7 @@ import { cloudEnv } from "@/lib/env";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
 import { cn } from "../components/lib/utils";
+import { TEST_IDS } from "../utils/test-ids";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { DeploymentCheck } from "./deployment-check";
@@ -191,6 +192,7 @@ export function GettingStarted({
 				initial={{ opacity: 0, y: 20 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3 }}
+				data-testid={TEST_IDS.Onboarding.GettingStartedWizard}
 			>
 				<div className="-full flex items-safe-center justify-center [&_[data-component='stepper']>form]:mx-auto [&_[data-component='stepper']]:overflow-x-hidden [&_[data-component='stepper']]:w-full [&:has([data-wide='true'])_[data-component='stepper']>form]:max-w-[64rem] has-[[data-wide='true']]:w-auto [&_[data-component='stepper']>form]:max-w-[32rem] px-4 h-full overflow-auto pt-8">
 					<CodeGroupSyncProvider>
@@ -350,6 +352,7 @@ function StepperFooter() {
 					className="text-muted-foreground"
 					onClick={() => s.goTo("provider")}
 					endIcon={<Icon icon={faArrowRight} className="ms-1" />}
+					data-testid={TEST_IDS.Onboarding.StepperSkipToDeploy}
 				>
 					Already have a project working locally? Skip to deploy
 				</Button>
@@ -367,7 +370,7 @@ function ProviderSetup() {
 	);
 
 	return (
-		<div>
+		<div data-testid={TEST_IDS.Onboarding.IntegrationProviderSelection}>
 			<p className="text-sm text-muted-foreground mb-4">
 				Deploy your application to Rivet Compute, our serverless hosting
 				solution. We manage the actor orchestration, state, and scaling
@@ -443,6 +446,9 @@ function ProviderCard({
 		<button
 			type="button"
 			onClick={onSelect}
+			data-testid={TEST_IDS.Onboarding.IntegrationProviderOption(
+				option.name,
+			)}
 			className={cn(
 				"flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors cursor-pointer",
 				isSelected
@@ -1400,13 +1406,18 @@ function FrontendSetup() {
 	const endpoint = useEndpoint();
 
 	return (
-		<div className="space-y-2">
+		<div
+			className="space-y-2"
+			data-testid={TEST_IDS.Onboarding.VerificationStep}
+		>
 			<div className="border rounded-md py-10 flex flex-col gap-6">
 				<div className="flex gap-2 justify-center items-center py-2 px-8">
 					<div className="relative mr-4">
 						<Ping variant="pending" className="relative" />
 					</div>
-					<p>Waiting for an Actor to be created...</p>
+					<p data-testid={TEST_IDS.Onboarding.WaitingForActor}>
+						Waiting for an Actor to be created...
+					</p>
 				</div>
 
 				<div className="flex items-center flex-col justify-center gap-4">
