@@ -33,7 +33,8 @@
 	},
 	"scripts": {
 		"build": "tsup src/mod.ts",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"test": "vitest run"
 	},
 	"dependencies": {
 		"@rivetkit/framework-base": "workspace:*",
@@ -45,10 +46,16 @@
 		"react-dom": "^18 || ^19"
 	},
 	"devDependencies": {
+		"@testing-library/react": "^16.3.0",
+		"@testing-library/jest-dom": "^6.6.3",
 		"@types/react": "^19.1.8",
 		"@types/react-dom": "^19.1.6",
+		"jsdom": "^26.1.0",
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0",
 		"tsup": "^8.4.0",
-		"typescript": "^5.5.2"
+		"typescript": "^5.5.2",
+		"vitest": "^3.1.1"
 	},
 	"stableVersion": "0.8.0"
 }
