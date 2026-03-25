@@ -216,6 +216,16 @@ export function ensureUint8Array(
 	fieldName: string,
 ): Uint8Array {
 	if (value instanceof Uint8Array) {
+		// Buffer (from better-sqlite3) extends Uint8Array but overrides
+		// .slice() to return a view instead of a copy. This breaks
+		// downstream libraries (vbare, cbor-x) that rely on
+		// Uint8Array.prototype.slice() semantics. Copy into a plain
+		// Uint8Array so .slice() always copies.
+		if (typeof Buffer !== "undefined" && Buffer.isBuffer(value)) {
+			const copy = new Uint8Array(value.byteLength);
+			copy.set(value);
+			return copy;
+		}
 		return value;
 	}
 	if (value instanceof ArrayBuffer) {
