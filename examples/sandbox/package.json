@@ -3,6 +3,7 @@
 	"version": "2.0.21",
 	"private": true,
 	"type": "module",
+	"packageManager": "pnpm@10.13.1",
 	"scripts": {
 		"dev": "vite",
 		"check-types": "echo 'skipped - workflow history types broken'",
@@ -26,7 +27,7 @@
 		"drizzle-orm": "^0.44.2",
 		"@hono/node-server": "^1.19.7",
 		"@hono/node-ws": "^1.3.0",
-		"@rivetkit/react": "*",
+		"@rivetkit/react": "2.1.7",
 		"ai": "^4.0.38",
 		"fdb-tuple": "^1.0.0",
 		"hono": "^4.11.3",
@@ -35,7 +36,7 @@
 		"prism-react-renderer": "^2.4.1",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
-		"rivetkit": "*",
+		"rivetkit": "2.1.7",
 		"srvx": "^0.10.0",
 		"zod": "^3.25.69"
 	},
