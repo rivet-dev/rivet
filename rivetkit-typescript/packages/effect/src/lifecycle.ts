@@ -100,14 +100,18 @@ export namespace OnStateChange {
 			void runWithContextExit(
 				c,
 				Effect.gen(() => genFn(c, newState)),
-			).then((exit) => {
-				if (Exit.isFailure(exit)) {
-					c.log.error({
-						msg: "onStateChange effect failed",
-						cause: Cause.pretty(exit.cause),
-					});
-				}
-			});
+			)
+				.then((exit) => {
+					if (Exit.isFailure(exit)) {
+						c.log.error({
+							msg: "onStateChange effect failed",
+							cause: Cause.pretty(exit.cause),
+						});
+					}
+				})
+				.catch((error) => {
+					c.log.error({ msg: "onStateChange effect threw unexpectedly", error: String(error) });
+				});
 		};
 	}
 }

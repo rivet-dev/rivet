@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/effect",
-	"version": "2.0.42-rc.1",
+	"version": "2.1.7",
 	"description": "Effect-TS integration for RivetKit actors with typed context, lifecycle wrappers, and managed runtime support",
 	"license": "Apache-2.0",
 	"sideEffects": [
@@ -33,7 +33,7 @@
 		"rivetkit": "workspace:^"
 	},
 	"peerDependencies": {
-		"effect": ">=3.0.0"
+		"effect": ">=3.16.0"
 	},
 	"devDependencies": {
 		"@effect/vitest": "^0.27.0",

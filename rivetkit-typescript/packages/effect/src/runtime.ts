@@ -3,9 +3,6 @@ import { RuntimeExecutionError } from "./errors.ts";
 
 export type AnyManagedRuntime = ManagedRuntime.ManagedRuntime<any, any>;
 
-// Exported for backwards compatibility; no longer used internally.
-export const ActorManagedRuntimeSymbol = Symbol.for("@rivetkit/effect/runtime");
-
 const DefaultRuntime = ManagedRuntime.make(Layer.empty);
 
 const RuntimeContextMap = new WeakMap<object, AnyManagedRuntime>();

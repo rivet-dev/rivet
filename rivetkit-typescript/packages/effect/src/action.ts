@@ -50,10 +50,10 @@ export function effect<
 		c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 		...args: Args
 	) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
-): (c: ActionContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>, ...args: Args) => AEff {
-	return ((c, ...args) => {
+): (c: ActionContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>, ...args: Args) => Promise<AEff> {
+	return (c, ...args) => {
 		const eff = Effect.gen<YieldWrap<Effect.Effect<any, any, any>>, AEff>(() => genFn(c, ...args));
 		const withContext = provideActorContext(eff, c);
 		return runPromise(withContext, c);
-	}) as (c: ActionContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>, ...args: Args) => AEff;
+	};
 }
