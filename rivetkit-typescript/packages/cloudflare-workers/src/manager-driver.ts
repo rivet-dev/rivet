@@ -3,12 +3,14 @@ import type { Encoding, RegistryConfig, UniversalWebSocket } from "rivetkit";
 import {
 	type ActorOutput,
 	type CreateInput,
+	type GatewayTarget,
 	type GetForIdInput,
 	type GetOrCreateWithKeyInput,
 	type GetWithKeyInput,
 	type ListActorsInput,
 	type ManagerDisplayInformation,
 	type ManagerDriver,
+	resolveGatewayTarget,
 	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
@@ -38,9 +40,10 @@ const STANDARD_WEBSOCKET_HEADERS = [
 
 export class CloudflareActorsManagerDriver implements ManagerDriver {
 	async sendRequest(
-		actorId: string,
+		target: GatewayTarget,
 		actorRequest: Request,
 	): Promise<Response> {
+		const actorId = await resolveGatewayTarget(this, target);
 		const env = getCloudflareAmbientEnv();
 
 		// Parse actor ID to get DO ID
@@ -62,10 +65,11 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 
 	async openWebSocket(
 		path: string,
-		actorId: string,
+		target: GatewayTarget,
 		encoding: Encoding,
 		params: unknown,
 	): Promise<UniversalWebSocket> {
+		const actorId = await resolveGatewayTarget(this, target);
 		const env = getCloudflareAmbientEnv();
 
 		// Parse actor ID to get DO ID
@@ -135,7 +139,8 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 		return webSocket as unknown as UniversalWebSocket;
 	}
 
-	async buildGatewayUrl(actorId: string): Promise<string> {
+	async buildGatewayUrl(target: GatewayTarget): Promise<string> {
+		const actorId = await resolveGatewayTarget(this, target);
 		return `http://actor/gateway/${encodeURIComponent(actorId)}`;
 	}
 
@@ -235,7 +240,7 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 		c,
 		name,
 		actorId,
-	}: GetForIdInput<{ Bindings: Bindings }>): Promise<
+	}: GetForIdInput): Promise<
 		ActorOutput | undefined
 	> {
 		const env = getCloudflareAmbientEnv();
@@ -283,7 +288,7 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 		c,
 		name,
 		key,
-	}: GetWithKeyInput<{ Bindings: Bindings }>): Promise<
+	}: GetWithKeyInput): Promise<
 		ActorOutput | undefined
 	> {
 		const env = getCloudflareAmbientEnv();
@@ -329,7 +334,7 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 		name,
 		key,
 		input,
-	}: GetOrCreateWithKeyInput<{ Bindings: Bindings }>): Promise<ActorOutput> {
+	}: GetOrCreateWithKeyInput): Promise<ActorOutput> {
 		const env = getCloudflareAmbientEnv();
 
 		// Create a deterministic ID from the actor name and key
@@ -372,7 +377,7 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 		name,
 		key,
 		input,
-	}: CreateInput<{ Bindings: Bindings }>): Promise<ActorOutput> {
+	}: CreateInput): Promise<ActorOutput> {
 		const env = getCloudflareAmbientEnv();
 
 		// Create a deterministic ID from the actor name and key

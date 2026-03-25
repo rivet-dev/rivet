@@ -1,9 +1,11 @@
-import type { Env, Hono, Context as HonoContext } from "hono";
+import type { Hono, Context as HonoContext } from "hono";
 import type { ActorKey, Encoding, UniversalWebSocket } from "@/actor/mod";
 import type { RegistryConfig } from "@/registry/config";
 import type { GetUpgradeWebSocket } from "@/utils";
+import type { ActorQuery, CrashPolicy } from "./protocol/query";
 
 export type ManagerDriverBuilder = (config: RegistryConfig) => ManagerDriver;
+export type GatewayTarget = { directId: string } | ActorQuery;
 
 export interface ManagerDriver {
 	getForId(input: GetForIdInput): Promise<ActorOutput | undefined>;
@@ -12,10 +14,13 @@ export interface ManagerDriver {
 	createActor(input: CreateInput): Promise<ActorOutput>;
 	listActors(input: ListActorsInput): Promise<ActorOutput[]>;
 
-	sendRequest(actorId: string, actorRequest: Request): Promise<Response>;
+	sendRequest(
+		target: GatewayTarget,
+		actorRequest: Request,
+	): Promise<Response>;
 	openWebSocket(
 		path: string,
-		actorId: string,
+		target: GatewayTarget,
 		encoding: Encoding,
 		params: unknown,
 	): Promise<UniversalWebSocket>;
@@ -33,11 +38,11 @@ export interface ManagerDriver {
 	): Promise<Response>;
 
 	/**
-	 * Build a public gateway URL for a specific actor.
+	 * Build a public gateway URL for a specific actor or query target.
 	 *
 	 * This lives on the driver because the base endpoint varies by runtime.
 	 */
-	buildGatewayUrl(actorId: string): Promise<string>;
+	buildGatewayUrl(target: GatewayTarget): Promise<string>;
 
 	displayInformation(): ManagerDisplayInformation;
 
@@ -58,35 +63,37 @@ export interface ManagerDisplayInformation {
 	properties: Record<string, string>;
 }
 
-export interface GetForIdInput<E extends Env = any> {
+export interface GetForIdInput {
 	c?: HonoContext | undefined;
 	name: string;
 	actorId: string;
 }
 
-export interface GetWithKeyInput<E extends Env = any> {
+export interface GetWithKeyInput {
 	c?: HonoContext | undefined;
 	name: string;
 	key: ActorKey;
 }
 
-export interface GetOrCreateWithKeyInput<E extends Env = any> {
-	c?: HonoContext | undefined;
-	name: string;
-	key: ActorKey;
-	input?: unknown;
-	region?: string;
-}
-
-export interface CreateInput<E extends Env = any> {
+export interface GetOrCreateWithKeyInput {
 	c?: HonoContext | undefined;
 	name: string;
 	key: ActorKey;
 	input?: unknown;
 	region?: string;
+	crashPolicy?: CrashPolicy;
 }
 
-export interface ListActorsInput<E extends Env = any> {
+export interface CreateInput {
+	c?: HonoContext | undefined;
+	name: string;
+	key: ActorKey;
+	input?: unknown;
+	region?: string;
+	crashPolicy?: CrashPolicy;
+}
+
+export interface ListActorsInput {
 	c?: HonoContext | undefined;
 	name: string;
 	key?: string;

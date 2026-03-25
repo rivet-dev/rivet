@@ -70,3 +70,110 @@ pub struct MustUseRegionalHost {
 pub struct ActorRunnerFailed {
 	pub actor_id: Id,
 }
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"guard",
+	"query_invalid_params",
+	"invalid query gateway params",
+	"invalid query gateway params: {detail}"
+)]
+pub struct QueryInvalidParams {
+	pub detail: String,
+}
+
+#[derive(RivetError)]
+#[error(
+	"guard",
+	"query_path_token_syntax",
+	"query gateway paths must not use @token syntax"
+)]
+pub struct QueryPathTokenSyntax;
+
+#[derive(RivetError)]
+#[error(
+	"guard",
+	"query_get_disallowed_params",
+	"query gateway method=get does not allow input, region, crashPolicy, or runnerName params"
+)]
+pub struct QueryGetDisallowedParams;
+
+#[derive(RivetError)]
+#[error(
+	"guard",
+	"query_missing_runner_name",
+	"query gateway method=getOrCreate requires runnerName param"
+)]
+pub struct QueryMissingRunnerName;
+
+#[derive(RivetError)]
+#[error(
+	"guard",
+	"query_empty_actor_name",
+	"query gateway actor name must not be empty"
+)]
+pub struct QueryEmptyActorName;
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"guard",
+	"query_param_missing_equals",
+	"query gateway param is missing '='",
+	"query gateway param is missing '=': {param}"
+)]
+pub struct QueryParamMissingEquals {
+	pub param: String,
+}
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"guard",
+	"query_duplicate_param",
+	"duplicate query gateway param",
+	"duplicate query gateway param: {name}"
+)]
+pub struct QueryDuplicateParam {
+	pub name: String,
+}
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"guard",
+	"query_unknown_param",
+	"unknown query gateway param",
+	"unknown query gateway param: {name}"
+)]
+pub struct QueryUnknownParam {
+	pub name: String,
+}
+
+#[derive(RivetError)]
+#[error(
+	"guard",
+	"query_invalid_base64_input",
+	"invalid base64url in query gateway input"
+)]
+pub struct QueryInvalidBase64Input;
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"guard",
+	"query_invalid_cbor_input",
+	"invalid query gateway input cbor",
+	"invalid query gateway input cbor: {detail}"
+)]
+pub struct QueryInvalidCborInput {
+	pub detail: String,
+}
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"guard",
+	"query_invalid_percent_encoding",
+	"invalid percent-encoding for query gateway param",
+	"invalid percent-encoding for query gateway param '{name}'"
+)]
+pub struct QueryInvalidPercentEncoding {
+	pub name: String,
+}
+

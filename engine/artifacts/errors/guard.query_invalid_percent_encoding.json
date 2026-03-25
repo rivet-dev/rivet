@@ -1,0 +1,5 @@
+{
+  "code": "query_invalid_percent_encoding",
+  "group": "guard",
+  "message": "invalid percent-encoding for query gateway param"
+}

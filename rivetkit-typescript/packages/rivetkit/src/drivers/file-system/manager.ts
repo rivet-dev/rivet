@@ -4,26 +4,27 @@ import { ActorStopping } from "@/actor/errors";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import { routeWebSocket } from "@/actor/router-websocket-endpoints";
 import { createClientWithDriver } from "@/client/client";
-import { ClientConfigSchema } from "@/client/config";
 import { createInlineWebSocket } from "@/common/inline-websocket-adapter";
 import { noopNext } from "@/common/utils";
-import type {
-	ActorDriver,
-	ActorOutput,
-	CreateInput,
-	GetForIdInput,
-	GetOrCreateWithKeyInput,
-	GetWithKeyInput,
-	ListActorsInput,
-	ManagerDriver,
+import {
+	resolveGatewayTarget,
+	type ActorDriver,
+	type ActorOutput,
+	type CreateInput,
+	type GatewayTarget,
+	type GetForIdInput,
+	type GetOrCreateWithKeyInput,
+	type GetWithKeyInput,
+	type ListActorsInput,
+	type ManagerDriver,
 } from "@/driver-helpers/mod";
 import type { ManagerDisplayInformation } from "@/manager/driver";
 import type { Encoding, UniversalWebSocket } from "@/mod";
 import type { DriverConfig, RegistryConfig } from "@/registry/config";
+import { buildActorQueryGatewayUrl } from "@/remote-manager-driver/actor-websocket-client";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import type { GetUpgradeWebSocket } from "@/utils";
 import type { FileSystemGlobalState } from "./global-state";
-import { logger } from "./log";
 import { generateActorId } from "./utils";
 
 export class FileSystemManagerDriver implements ManagerDriver {
@@ -61,9 +62,10 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	}
 
 	async sendRequest(
-		actorId: string,
+		target: GatewayTarget,
 		actorRequest: Request,
 	): Promise<Response> {
+		const actorId = await resolveGatewayTarget(this, target);
 		return await this.#actorRouter.fetch(actorRequest, {
 			actorId,
 		});
@@ -71,10 +73,12 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 	async openWebSocket(
 		path: string,
-		actorId: string,
+		target: GatewayTarget,
 		encoding: Encoding,
 		params: unknown,
 	): Promise<UniversalWebSocket> {
+		const actorId = await resolveGatewayTarget(this, target);
+
 		// Normalize the path (add leading slash if needed) but preserve query params
 		const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
@@ -106,7 +110,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	}
 
 	async proxyRequest(
-		c: HonoContext,
+		_c: HonoContext,
 		actorRequest: Request,
 		actorId: string,
 	): Promise<Response> {
@@ -149,9 +153,38 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		return upgradeWebSocket(() => wsHandler)(c, noopNext());
 	}
 
-	async buildGatewayUrl(actorId: string): Promise<string> {
+	async buildGatewayUrl(target: GatewayTarget): Promise<string> {
 		const port = this.#config.managerPort ?? 6420;
-		return `http://127.0.0.1:${port}/gateway/${encodeURIComponent(actorId)}`;
+		const endpoint = `http://127.0.0.1:${port}`;
+
+		if ("directId" in target) {
+			return `${endpoint}/gateway/${encodeURIComponent(target.directId)}`;
+		}
+
+		if ("getForId" in target) {
+			return `${endpoint}/gateway/${encodeURIComponent(target.getForId.actorId)}`;
+		}
+
+		if ("getForKey" in target || "getOrCreateForKey" in target) {
+			return buildActorQueryGatewayUrl(
+				endpoint,
+				this.#config.namespace,
+				target,
+				undefined,
+				"",
+				undefined,
+				undefined,
+				"getOrCreateForKey" in target ? this.#config.envoy.poolName : undefined,
+			);
+		}
+
+		if ("create" in target) {
+			throw new Error(
+				"Gateway URLs only support direct actor IDs, get, and getOrCreate targets.",
+			);
+		}
+
+		throw new Error("unreachable: unknown gateway target type");
 	}
 
 	async getForId({
@@ -269,6 +302,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void {
 		this.#getUpgradeWebSocket = getUpgradeWebSocket;
 	}
+
 }
 
 function actorStateToOutput(state: schema.ActorState): ActorOutput {

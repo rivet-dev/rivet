@@ -72,6 +72,7 @@ members = [
   axum-test = "17"
   base64 = "0.22"
   bcrypt = "0.13.0"
+  ciborium = "0.2"
   bytes = "1.6.0"
   cjson = "0.1"
   colored_json = "5.0.0"

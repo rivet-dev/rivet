@@ -1,0 +1,5 @@
+{
+  "code": "query_duplicate_param",
+  "group": "guard",
+  "message": "duplicate query gateway param"
+}

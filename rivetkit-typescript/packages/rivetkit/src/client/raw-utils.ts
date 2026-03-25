@@ -1,9 +1,10 @@
-import invariant from "invariant";
 import { PATH_WEBSOCKET_PREFIX } from "@/common/actor-router-consts";
 import { deconstructError } from "@/common/utils";
-import { HEADER_CONN_PARAMS, type ManagerDriver } from "@/driver-helpers/mod";
-import type { ActorQuery } from "@/manager/protocol/query";
-import { queryActor } from "./actor-query";
+import {
+	type GatewayTarget,
+	HEADER_CONN_PARAMS,
+	type ManagerDriver,
+} from "@/driver-helpers/mod";
 import { ActorError } from "./errors";
 import { logger } from "./log";
 
@@ -12,7 +13,7 @@ import { logger } from "./log";
  */
 export async function rawHttpFetch(
 	driver: ManagerDriver,
-	actorQuery: ActorQuery,
+	target: GatewayTarget,
 	params: unknown,
 	input: string | URL | Request,
 	init?: RequestInit,
@@ -62,10 +63,14 @@ export async function rawHttpFetch(
 	}
 
 	try {
-		// Get the actor ID
-		const { actorId } = await queryActor(undefined, actorQuery, driver);
-		logger().debug({ msg: "found actor for raw http", actorId });
-		invariant(actorId, "Missing actor ID");
+		logger().debug(
+			"directId" in target
+				? { msg: "sending raw http request to actor", actorId: target.directId }
+				: {
+						msg: "sending raw http request with actor query",
+						query: target,
+					},
+		);
 
 		// Build the URL with normalized path
 		const normalizedPath = path.startsWith("/") ? path.slice(1) : path;
@@ -83,7 +88,7 @@ export async function rawHttpFetch(
 			headers: proxyRequestHeaders,
 		});
 
-		return driver.sendRequest(actorId, proxyRequest);
+		return driver.sendRequest(target, proxyRequest);
 	} catch (err) {
 		// Standardize to ClientActorError instead of the native backend error
 		const { group, code, message, metadata } = deconstructError(
@@ -101,19 +106,14 @@ export async function rawHttpFetch(
  */
 export async function rawWebSocket(
 	driver: ManagerDriver,
-	actorQuery: ActorQuery,
+	target: GatewayTarget,
 	params: unknown,
 	path?: string,
 	// TODO: Supportp rotocols
-	protocols?: string | string[],
+	_protocols?: string | string[],
 ): Promise<any> {
 	// TODO: Do we need encoding in rawWebSocket?
 	const encoding = "bare";
-
-	// Get the actor ID
-	const { actorId } = await queryActor(undefined, actorQuery, driver);
-	logger().debug({ msg: "found actor for action", actorId });
-	invariant(actorId, "Missing actor ID");
 
 	// Parse path and query parameters
 	let pathPortion = "";
@@ -136,13 +136,13 @@ export async function rawWebSocket(
 
 	logger().debug({
 		msg: "opening websocket",
-		actorId,
+		target,
 		encoding,
 		path: fullPath,
 	});
 
 	// Open WebSocket
-	const ws = await driver.openWebSocket(fullPath, actorId, encoding, params);
+	const ws = await driver.openWebSocket(fullPath, target, encoding, params);
 
 	// Node & browser WebSocket types are incompatible
 	return ws as any;

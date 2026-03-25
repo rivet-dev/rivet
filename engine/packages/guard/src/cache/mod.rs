@@ -10,7 +10,8 @@ use rivet_guard_core::{CacheKeyFn, request_context::RequestContext};
 pub mod pegboard_gateway;
 
 use crate::routing::{
-	SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_TARGET, X_RIVET_TARGET, parse_actor_path,
+	SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_TARGET, X_RIVET_TARGET,
+	actor_path::{self, QueryActorPathInfo},
 };
 
 /// Creates the main cache key function that handles all incoming requests
@@ -21,13 +22,25 @@ pub fn create_cache_key_function() -> CacheKeyFn {
 
 		// MARK: Path-based cache key
 		// Check for path-based actor routing
-		if let Some(actor_path_info) = parse_actor_path(req_ctx.path()) {
-			tracing::debug!("using path-based cache key for actor");
+		if let Some(actor_path_info) = actor_path::parse_actor_path(req_ctx.path())? {
+			match actor_path_info {
+				actor_path::ParsedActorPath::Direct(actor_path_info) => {
+					tracing::debug!("using path-based cache key for actor");
 
-			if let Ok(cache_key) =
-				pegboard_gateway::build_cache_key_path_based(req_ctx, &actor_path_info)
-			{
-				return Ok(cache_key);
+					if let Ok(cache_key) =
+						pegboard_gateway::build_cache_key_path_based(req_ctx, &actor_path_info)
+					{
+						return Ok(cache_key);
+					}
+				}
+				actor_path::ParsedActorPath::Query(query_path_info) => {
+					// Hash only the routing-relevant query fields (namespace,
+					// name, method, key, input, region, crashPolicy). The token
+					// is excluded because it does not affect which actor the
+					// request routes to.
+					tracing::debug!("using query-path cache key for actor");
+					return Ok(query_path_cache_key(&query_path_info, req_ctx));
+				}
 			}
 		}
 
@@ -71,6 +84,48 @@ fn host_path_method_cache_key(req_ctx: &RequestContext) -> u64 {
 	let mut hasher = DefaultHasher::new();
 	req_ctx.hostname().hash(&mut hasher);
 	req_ctx.path().hash(&mut hasher);
+	req_ctx.method().as_str().hash(&mut hasher);
+	hasher.finish()
+}
+
+/// Build a cache key from only the routing-relevant fields of a query gateway
+/// path. Token is intentionally excluded so requests with different tokens but
+/// the same query resolve to the same cached route.
+fn query_path_cache_key(info: &QueryActorPathInfo, req_ctx: &RequestContext) -> u64 {
+	use crate::routing::actor_path::QueryActorQuery;
+
+	let mut hasher = DefaultHasher::new();
+	match &info.query {
+		QueryActorQuery::Get {
+			namespace,
+			name,
+			key,
+		} => {
+			"get".hash(&mut hasher);
+			namespace.hash(&mut hasher);
+			name.hash(&mut hasher);
+			key.hash(&mut hasher);
+		}
+		QueryActorQuery::GetOrCreate {
+			namespace,
+			name,
+			runner_name,
+			key,
+			input,
+			region,
+			crash_policy,
+		} => {
+			"getOrCreate".hash(&mut hasher);
+			namespace.hash(&mut hasher);
+			name.hash(&mut hasher);
+			runner_name.hash(&mut hasher);
+			key.hash(&mut hasher);
+			input.hash(&mut hasher);
+			region.hash(&mut hasher);
+			crash_policy.hash(&mut hasher);
+		}
+	}
+	info.stripped_path.hash(&mut hasher);
 	req_ctx.method().as_str().hash(&mut hasher);
 	hasher.finish()
 }

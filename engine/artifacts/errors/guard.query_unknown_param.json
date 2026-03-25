@@ -1,0 +1,5 @@
+{
+  "code": "query_unknown_param",
+  "group": "guard",
+  "message": "unknown query gateway param"
+}

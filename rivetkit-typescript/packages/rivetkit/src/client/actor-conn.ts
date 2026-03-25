@@ -6,11 +6,7 @@ import type { AnyActorDefinition } from "@/actor/definition";
 import { inputDataToBuffer } from "@/actor/protocol/old";
 import { type Encoding, jsonStringifyCompat } from "@/actor/protocol/serde";
 import { PATH_CONNECT } from "@/common/actor-router-consts";
-import {
-	assertUnreachable,
-	deconstructError,
-	stringifyError,
-} from "@/common/utils";
+import { assertUnreachable, stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { ManagerDriver } from "@/driver-helpers/mod";
 import type * as protocol from "@/schemas/client-protocol/mod";
@@ -36,12 +32,9 @@ import type {
 import {
 	type ActorResolutionState,
 	checkForSchedulingError,
-	invalidateResolvedActorId,
-	invalidateResolvedActorIdFromError,
-	resolveActorId,
-	retryOnInvalidResolvedActor,
-	setResolvedActorId,
-	shouldInvalidateResolvedActorId,
+	getGatewayTarget,
+	isDynamicActorQuery,
+	isStaleResolvedActorError,
 } from "./actor-query";
 import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
 import * as errors from "./errors";
@@ -57,7 +50,6 @@ import {
 	type WebSocketMessage as ConnMessage,
 	messageLength,
 	parseWebSocketCloseReason,
-	sendHttpRequest,
 } from "./utils";
 
 /**
@@ -149,7 +141,6 @@ export class ActorConnRaw {
 	}> = [];
 	#actionsInFlight = new Map<number, ActionInFlight>();
 
-	// biome-ignore lint/suspicious/noExplicitAny: Unknown subscription type
 	#eventSubscriptions = new Map<string, Set<EventSubscriptions<any[]>>>();
 
 	#errorHandlers = new Set<ActorErrorCallback>();
@@ -203,19 +194,16 @@ export class ActorConnRaw {
 		this.#getParams = getParams;
 		this.#encoding = encoding;
 		this.#actorResolutionState = actorResolutionState;
-		// Retry wrapping is handled by #sendQueueMessage, not here.
-		// On retry, #sendQueueMessage re-calls #queueSender.send() which
-		// invokes customFetch again with a freshly resolved actor ID.
+		// Resolve the actor ID for each queue send so key-based connections do
+		// not pin themselves to an earlier resolution.
 		this.#queueSender = createQueueSender({
 			encoding: this.#encoding,
 			params: this.#params,
 			customFetch: async (request: Request) => {
-				const actorId = await resolveActorId(
-					this.#actorResolutionState,
-					this.#driver,
+				return await this.#driver.sendRequest(
+					getGatewayTarget(this.#actorResolutionState),
+					request,
 				);
-				this.#actorId = actorId;
-				return await this.#driver.sendRequest(actorId, request);
 			},
 		});
 
@@ -227,27 +215,29 @@ export class ActorConnRaw {
 		this.#connId = undefined;
 	}
 
-	#invalidateResolvedActorId(group: string, code: string): boolean {
-		if (!shouldInvalidateResolvedActorId(group, code)) {
+	/**
+	 * If the query is dynamic (getForKey or getOrCreateForKey) and the error
+	 * indicates the previously resolved actor is gone (not_found or destroyed),
+	 * clear the cached actor ID and connection ID so the next operation
+	 * re-resolves to a fresh actor. Returns true if the identity was
+	 * invalidated.
+	 */
+	#invalidateActorIfStale(group: string, code: string): boolean {
+		if (
+			!isDynamicActorQuery(this.#actorResolutionState) ||
+			!isStaleResolvedActorError(group, code)
+		) {
 			return false;
 		}
 
-		invalidateResolvedActorId(this.#actorResolutionState);
 		this.#clearResolvedActorIdentity();
 		return true;
 	}
 
-	async #retryOnInvalidResolvedActor<T>(run: () => Promise<T>): Promise<T> {
-		return await retryOnInvalidResolvedActor(
-			this.#actorResolutionState,
-			run,
-			() => this.#clearResolvedActorIdentity(),
-		);
-	}
-
 	#shouldReconnectForStaleActor(group: string, code: string): boolean {
 		return (
-			shouldInvalidateResolvedActorId(group, code) &&
+			isDynamicActorQuery(this.#actorResolutionState) &&
+			isStaleResolvedActorError(group, code) &&
 			this.#onOpenPromise !== undefined &&
 			this.#connStatus !== "connected"
 		);
@@ -276,9 +266,7 @@ export class ActorConnRaw {
 		body: unknown,
 		options?: QueueSendOptions,
 	): Promise<QueueSendResult | void> {
-		return await this.#retryOnInvalidResolvedActor(async () => {
-			return await this.#queueSender.send(name, body, options as any);
-		});
+		return await this.#queueSender.send(name, body, options as any);
 	}
 
 	/**
@@ -505,21 +493,14 @@ export class ActorConnRaw {
 	}
 
 	async #connectWebSocket() {
-		let ws: UniversalWebSocket | undefined;
-		await this.#retryOnInvalidResolvedActor(async () => {
-			const params = await this.#resolveConnectionParams();
-			const actorId = await resolveActorId(
-				this.#actorResolutionState,
-				this.#driver,
-			);
-			this.#actorId = actorId;
-			ws = await this.#driver.openWebSocket(
-				PATH_CONNECT,
-				actorId,
-				this.#encoding,
-				params,
-			);
-		});
+		const params = await this.#resolveConnectionParams();
+		const target = getGatewayTarget(this.#actorResolutionState);
+		const ws = await this.#driver.openWebSocket(
+			PATH_CONNECT,
+			target,
+			this.#encoding,
+			params,
+		);
 		invariant(ws, "websocket should have been created");
 		logger().debug({
 			msg: "opened websocket",
@@ -659,7 +640,6 @@ export class ActorConnRaw {
 			// Store connection info
 			this.#actorId = response.body.val.actorId;
 			this.#connId = response.body.val.connectionId;
-			setResolvedActorId(this.#actorResolutionState, this.#actorId);
 			logger().trace({
 				msg: "received init message",
 				actorId: this.#actorId,
@@ -673,7 +653,7 @@ export class ActorConnRaw {
 
 			if (actionId) {
 				const inFlight = this.#takeActionInFlight(Number(actionId));
-				this.#invalidateResolvedActorId(group, code);
+				this.#invalidateActorIfStale(group, code);
 
 				logger().warn({
 					msg: "action error",
@@ -696,9 +676,9 @@ export class ActorConnRaw {
 					message,
 					metadata,
 				});
-				this.#invalidateResolvedActorId(group, code);
 
 				if (this.#shouldReconnectForStaleActor(group, code)) {
+					this.#clearResolvedActorIdentity();
 					this.#onOpenPromise?.reject(
 						new errors.ActorError(group, code, message, metadata),
 					);
@@ -717,7 +697,7 @@ export class ActorConnRaw {
 						group,
 						code,
 						this.#actorId,
-						this.#actorResolutionState.actorQuery,
+						this.#actorResolutionState,
 						this.#driver,
 					);
 					if (schedulingError) {
@@ -729,6 +709,8 @@ export class ActorConnRaw {
 				if (this.#onOpenPromise) {
 					this.#onOpenPromise.reject(errorToThrow);
 				}
+
+				this.#invalidateActorIfStale(group, code);
 
 				// Reject any in-flight requests
 				for (const [id, inFlight] of this.#actionsInFlight.entries()) {
@@ -797,9 +779,9 @@ export class ActorConnRaw {
 
 			if (parsed) {
 				const { group, code } = parsed;
-				this.#invalidateResolvedActorId(group, code);
 
 				if (this.#shouldReconnectForStaleActor(group, code)) {
+					this.#clearResolvedActorIdentity();
 					this.#onOpenPromise?.reject(
 						new errors.ActorError(
 							group,
@@ -817,7 +799,7 @@ export class ActorConnRaw {
 						group,
 						code,
 						this.#actorId,
-						this.#actorResolutionState.actorQuery,
+						this.#actorResolutionState,
 						this.#driver,
 					);
 					if (schedulingError) {
@@ -838,6 +820,8 @@ export class ActorConnRaw {
 						undefined,
 					);
 				}
+
+				this.#invalidateActorIfStale(group, code);
 			} else {
 				// Default error for non-structured close reasons
 				error = new Error(

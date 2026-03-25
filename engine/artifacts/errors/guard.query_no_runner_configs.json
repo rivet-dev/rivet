@@ -1,0 +1,5 @@
+{
+  "code": "query_no_runner_configs",
+  "group": "guard",
+  "message": "query gateway actor resolution found no runner configs for namespace"
+}

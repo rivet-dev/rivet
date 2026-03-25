@@ -16,6 +16,16 @@ export const ActorKeySchema = z.array(z.string().max(MAX_ACTOR_KEY_SIZE));
 
 export type ActorKey = z.infer<typeof ActorKeySchema>;
 
+/**
+ * Crash policy for actor lifecycle management.
+ *
+ * This schema is only used by the engine driver for actor creation. The manager
+ * driver ignores crash policy and passes it through to the engine unchanged.
+ */
+export const CrashPolicySchema = z.enum(["restart", "sleep", "destroy"]);
+
+export type CrashPolicy = z.infer<typeof CrashPolicySchema>;
+
 export const CreateRequestSchema = z.object({
 	name: z.string(),
 	key: ActorKeySchema,
@@ -76,6 +86,10 @@ export const ResolveRequestSchema = z.object({
 });
 
 export type ActorQuery = z.infer<typeof ActorQuerySchema>;
+export type ActorGatewayQuery = Extract<
+	ActorQuery,
+	{ getForKey: unknown } | { getOrCreateForKey: unknown }
+>;
 export type GetForKeyRequest = z.infer<typeof GetForKeyRequestSchema>;
 export type GetOrCreateRequest = z.infer<typeof GetOrCreateRequestSchema>;
 export type ConnectQuery = z.infer<typeof ConnectRequestSchema>;
