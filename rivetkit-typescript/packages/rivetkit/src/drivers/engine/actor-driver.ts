@@ -369,7 +369,7 @@ export class EngineActorDriver implements ActorDriver {
 	startDestroy(actorId: string) {
 		// HACK: Track intent for onActorStop (see RVT-5284)
 		this.#actorStopIntent.set(actorId, "destroy");
-		this.#runner.stopActor(actorId);
+		this.#runner.destroyActor(actorId);
 	}
 
 	async shutdownRunner(immediate: boolean): Promise<void> {

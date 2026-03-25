@@ -37,6 +37,13 @@ export class RunnerActor {
 	 **/
 	hibernationRestored: boolean = false;
 
+	/**
+	 * Set when the actor has explicitly requested to stop (e.g. c.destroy()).
+	 * Used to send StopCode.Ok (graceful) vs StopCode.Error (ungraceful) so
+	 * the engine crash policy handles sleepable actors correctly.
+	 **/
+	stopIntentSent: boolean = false;
+
 	constructor(
 		actorId: string,
 		generation: number,
