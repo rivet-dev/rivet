@@ -214,5 +214,3 @@ export const registry = setup({
 		aiAgent,
 	},
 });
-
-registry.start();
