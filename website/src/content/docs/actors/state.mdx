@@ -129,6 +129,15 @@ For `onWebSocket` handlers specifically, you'll need to manually save state usin
 
 In other cases where you need to force a state change mid-action, you can use `c.saveState()`. This should only be used if your action makes an important state change that needs to be persisted before the action completes.
 
+### Immediate vs Throttled Saves
+
+`c.saveState()` supports two modes:
+
+- **`c.saveState({ immediate: true })`** saves state to storage right away. `await` resolves once the write completes. Use this when you need to guarantee persistence before continuing (e.g. before a risky async operation).
+- **`c.saveState()`** (without `immediate: true`) schedules a throttled save. `await` will not resolve until the next flush cycle, which can take up to `stateSaveInterval` (default: 10 seconds). This batches rapid state changes to reduce write frequency, but means the caller blocks until the flush fires.
+
+If you want to save state promptly during a WebSocket message handler, use `immediate: true`.
+
 ```typescript
 import { actor } from "rivetkit";
 
