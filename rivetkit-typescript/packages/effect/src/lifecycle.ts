@@ -1,4 +1,5 @@
 import { Cause, Effect, Exit } from "effect";
+import type { AnyDatabaseProvider } from "./rivet-actor.ts";
 import type {
 	BeforeActionResponseContext,
 	BeforeConnectContext,
@@ -40,7 +41,7 @@ const makeAsyncLifecycle = <C, Args extends unknown[], AEff>(
 };
 
 export namespace OnCreate {
-	export const effect = <TState, TInput, TDatabase = any, AEff = void>(
+	export const effect = <TState, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider, AEff = void>(
 		genFn: (
 			c: CreateContext<TState, TInput, TDatabase>,
 			input: TInput,
@@ -50,7 +51,7 @@ export namespace OnCreate {
 }
 
 export namespace OnWake {
-	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase = any, AEff = void>(
+	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider, AEff = void>(
 		genFn: (
 			c: WakeContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
@@ -59,7 +60,7 @@ export namespace OnWake {
 }
 
 export namespace OnRun {
-	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase = any, AEff = void>(
+	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider, AEff = void>(
 		genFn: (
 			c: RunContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
@@ -68,7 +69,7 @@ export namespace OnRun {
 }
 
 export namespace OnDestroy {
-	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase = any, AEff = void>(
+	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider, AEff = void>(
 		genFn: (
 			c: DestroyContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
@@ -77,7 +78,7 @@ export namespace OnDestroy {
 }
 
 export namespace OnSleep {
-	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase = any, AEff = void>(
+	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider, AEff = void>(
 		genFn: (
 			c: SleepContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
@@ -86,7 +87,7 @@ export namespace OnSleep {
 }
 
 export namespace OnStateChange {
-	export function effect<TState, TConnParams, TConnState, TVars, TInput, TDatabase = any>(
+	export function effect<TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider>(
 		genFn: (
 			c: StateChangeContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 			newState: TState,
@@ -112,7 +113,7 @@ export namespace OnStateChange {
 }
 
 export namespace OnBeforeConnect {
-	export const effect = <TState, TConnParams, TVars, TInput, TDatabase = any, AEff = void>(
+	export const effect = <TState, TConnParams, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider, AEff = void>(
 		genFn: (
 			c: BeforeConnectContext<TState, TVars, TInput, TDatabase>,
 			params: TConnParams,
@@ -122,7 +123,7 @@ export namespace OnBeforeConnect {
 }
 
 export namespace OnConnect {
-	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase = any, AEff = void>(
+	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider, AEff = void>(
 		genFn: (
 			c: ConnectContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 			conn: Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
@@ -134,7 +135,7 @@ export namespace OnConnect {
 }
 
 export namespace OnDisconnect {
-	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase = any, AEff = void>(
+	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider, AEff = void>(
 		genFn: (
 			c: DisconnectContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 			conn: Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
@@ -146,7 +147,7 @@ export namespace OnDisconnect {
 }
 
 export namespace CreateConnState {
-	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase = any>(
+	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider>(
 		genFn: (
 			c: CreateConnStateContext<TState, TVars, TInput, TDatabase>,
 			params: TConnParams,
@@ -158,7 +159,7 @@ export namespace CreateConnState {
 }
 
 export namespace OnBeforeActionResponse {
-	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase = any, Out = any>(
+	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider, Out = any>(
 		genFn: (
 			c: BeforeActionResponseContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 			name: string,
@@ -174,7 +175,7 @@ export namespace OnBeforeActionResponse {
 }
 
 export namespace CreateState {
-	export const effect = <TState, TInput, TDatabase = any>(
+	export const effect = <TState, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider>(
 		genFn: (
 			c: CreateContext<TState, TInput, TDatabase>,
 			input: TInput,
@@ -184,7 +185,7 @@ export namespace CreateState {
 }
 
 export namespace CreateVars {
-	export const effect = <TState, TVars, TInput, TDatabase = any>(
+	export const effect = <TState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider>(
 		genFn: (
 			c: CreateVarsContext<TState, TInput, TDatabase>,
 			driverCtx: unknown,
@@ -194,7 +195,7 @@ export namespace CreateVars {
 }
 
 export namespace OnRequest {
-	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase = any>(
+	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider>(
 		genFn: (
 			c: RequestContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 			request: Request,
@@ -206,7 +207,7 @@ export namespace OnRequest {
 }
 
 export namespace OnWebSocket {
-	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase = any, AEff = void>(
+	export const effect = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider, AEff = void>(
 		genFn: (
 			c: WebSocketContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 			websocket: UniversalWebSocket,

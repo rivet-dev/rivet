@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { ActorContext } from "rivetkit";
 import { QueueError } from "./errors.ts";
+import type { AnyDatabaseProvider } from "./rivet-actor.ts";
 
 export interface QueueReceiveOptions {
 	count?: number;
@@ -25,7 +26,7 @@ type AnyQueue = {
  * Receives the next message from a single queue.
  * Returns undefined if no message available or timeout reached.
  */
-export const next = <TState, TConnParams, TConnState, TVars, TInput, TDatabase = any>(
+export const next = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider>(
 	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 	name: string,
 	opts?: QueueReceiveOptions,
@@ -44,7 +45,7 @@ export const next = <TState, TConnParams, TConnState, TVars, TInput, TDatabase =
  * Receives messages from multiple queues.
  * Returns messages matching any of the queue names.
  */
-export const nextMultiple = <TState, TConnParams, TConnState, TVars, TInput, TDatabase = any>(
+export const nextMultiple = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider>(
 	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 	names: string[],
 	opts?: QueueReceiveOptions,

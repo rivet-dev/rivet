@@ -3,6 +3,7 @@ import type { ActorContext, ActionContext } from "rivetkit";
 import type { YieldWrap } from "effect/Utils";
 import { provideActorContext } from "./actor.ts";
 import { runPromise } from "./runtime.ts";
+import type { AnyDatabaseProvider } from "./rivet-actor.ts";
 
 export {
 	state,
@@ -30,7 +31,7 @@ export {
 	RivetActorContext,
 } from "./actor.ts";
 
-export const getConn = <TState, TConnParams, TConnState, TVars, TInput, TDatabase = any>(
+export const getConn = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider>(
 	c: ActionContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 ) => Effect.succeed(c.conn);
 
@@ -41,7 +42,7 @@ export function effect<
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase = any,
+	TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider,
 	AEff = void,
 	Args extends unknown[] = [],
 >(
