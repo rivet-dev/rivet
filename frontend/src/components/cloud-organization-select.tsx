@@ -32,6 +32,7 @@ export function CloudOrganizationSelect({
 		isLoading,
 		hasNextPage,
 		fetchNextPage,
+		isFetchingNextPage,
 	} = useInfiniteQuery(useCloudDataProvider().organizationsQueryOptions());
 
 	const handleValueChange = useCallback(
@@ -93,7 +94,7 @@ export function CloudOrganizationSelect({
 						</span>
 					</SelectItem>
 				))}
-				{hasNextPage ? (
+				{hasNextPage && !isFetchingNextPage ? (
 					<VisibilitySensor onChange={fetchNextPage} />
 				) : null}
 			</SelectContent>

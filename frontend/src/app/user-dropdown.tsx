@@ -162,6 +162,7 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 			data: userMemberships = [],
 			isLoading,
 			hasNextPage,
+			isFetching,
 			fetchNext,
 		},
 	} = useOrganizationList({
@@ -234,7 +235,9 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 			>
 				Create a new organization
 			</DropdownMenuItem>
-			{hasNextPage ? <VisibilitySensor onChange={fetchNext} /> : null}
+			{hasNextPage && !isFetching ? (
+				<VisibilitySensor onChange={fetchNext} />
+			) : null}
 		</>
 	);
 }

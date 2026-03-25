@@ -146,7 +146,9 @@ export function ActorBuildsList() {
 							))
 					: null}
 			</div>
-			{hasNextPage ? <VisibilitySensor onChange={fetchNextPage} /> : null}
+			{hasNextPage && !isFetchingNextPage ? (
+				<VisibilitySensor onChange={fetchNextPage} />
+			) : null}
 		</div>
 	);
 }

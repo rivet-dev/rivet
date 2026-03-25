@@ -37,7 +37,7 @@ export const ActorsListRow = memo(
 		return (
 			<Button
 				className={cn(
-					"h-auto grid grid-cols-subgrid col-span-full py-4 px-0 group border-l-0 border-r-0 border-t first-of-type:border-t-transparent border-b-transparent last-of-type:border-b-border rounded-none pr-4 min-h-[56px]",
+					"h-auto grid grid-cols-subgrid col-span-full py-4 group border-l-0 border-r-0 border-t first-of-type:border-t-transparent border-b-transparent last-of-type:border-b-border rounded-none pl-2 pr-4 min-h-[56px]",
 					className,
 				)}
 				variant={isCurrent ? "secondary" : "outline"}
@@ -56,7 +56,7 @@ export const ActorsListRow = memo(
 							<WithTooltip
 								delayDuration={0}
 								trigger={
-									<div className="w-full flex justify-center">
+									<div className="w-full flex justify-end">
 										<QueriedActorStatusIndicator
 											actorId={actorId}
 										/>
@@ -96,7 +96,7 @@ function Id({ actorId }: { actorId: ActorId }) {
 	const showIds = useFiltersValue().showIds?.value.includes("1");
 
 	if (!showIds) {
-		return <div />;
+		return null;
 	}
 
 	return (
@@ -122,7 +122,7 @@ function Datacenter({ actorId }: { actorId: ActorId }) {
 	});
 
 	if (!showDatacenter) {
-		return <div />;
+		return null;
 	}
 
 	return (
@@ -169,13 +169,13 @@ function Timestamp({ actorId }: { actorId: ActorId }) {
 	const timestamp = ts ? new Date(ts) : null;
 
 	return (
-		<SmallText className="text-right text-muted-foreground flex justify-end">
+		<SmallText className="hidden @xs/main:flex text-right text-muted-foreground justify-end">
 			{isLoading ? (
 				<Skeleton className="h-5 w-10" />
 			) : timestamp ? (
 				<WithTooltip
 					trigger={<RelativeTime time={timestamp} />}
-					content={timestamp.toLocaleString()}
+					content={`Created at ${timestamp.toLocaleString()}`}
 				/>
 			) : (
 				<span>-</span>
@@ -197,7 +197,7 @@ function SkeletonContent() {
 				<Skeleton className="h-5 w-10" />
 				<Skeleton className="h-5 w-10" />
 			</div>
-			<div className="size-full flex justify-end">
+			<div className="hidden @xs/main:flex size-full justify-end">
 				<Skeleton className="h-5 w-10" />
 			</div>
 		</>
@@ -206,7 +206,7 @@ function SkeletonContent() {
 
 export function ActorsListRowSkeleton() {
 	return (
-		<div className="border-b gap-1.5 py-4 pr-4 h-[56px] grid grid-cols-subgrid items-center col-span-full relative">
+		<div className="border-b gap-1.5 py-4 pr-4 h-[56px] grid grid-cols-subgrid col-span-full items-center relative">
 			<SkeletonContent />
 		</div>
 	);

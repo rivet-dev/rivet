@@ -5,6 +5,7 @@ import { useActorInspector } from "./actor-inspector-context";
 import { ActorRegion } from "./actor-region";
 import { QueriedActorStatus } from "./actor-status";
 import { QueriedActorStatusAdditionalInfo } from "./actor-status-label";
+import { ActorStopButton } from "./actor-stop-button";
 import { ActorObjectInspector } from "./console/actor-inspector";
 import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
@@ -29,7 +30,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 	} = useQuery(useDataProvider().actorGeneralQueryOptions(actorId));
 
 	return (
-		<div className="px-4 mt-4 mb-8">
+		<div className="px-4 mt-4 mb-8 flex-1">
 			<h3 className="mb-2 font-semibold">General</h3>
 			<Flex
 				gap="2"
@@ -150,22 +151,31 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 							{sleepTs ? formatISO(sleepTs) : "n/a"}
 						</DiscreteCopyButton>
 					</Dd>
-					<Dt>Destroyed</Dt>
-					<Dd
-						className={cn({
-							"text-muted-foreground": !destroyTs,
-						})}
-					>
-						<DiscreteCopyButton
-							size="xs"
-							className="-mx-2 h-auto"
-							value={destroyTs ? formatISO(destroyTs) : "n/a"}
-						>
-							{destroyTs ? formatISO(destroyTs) : "n/a"}
-						</DiscreteCopyButton>
-					</Dd>
+					{destroyTs ? (
+						<>
+							<Dt>Destroyed</Dt>
+							<Dd
+								className={cn({
+									"text-muted-foreground": !destroyTs,
+								})}
+							>
+								<DiscreteCopyButton
+									size="xs"
+									className="-mx-2 h-auto"
+									value={
+										destroyTs ? formatISO(destroyTs) : "n/a"
+									}
+								>
+									{destroyTs ? formatISO(destroyTs) : "n/a"}
+								</DiscreteCopyButton>
+							</Dd>
+						</>
+					) : null}
 					<Versions actorId={actorId} />
 				</Dl>
+				<div className="border-t mt-2 pt-4">
+					<ActorStopButton actorId={actorId} />
+				</div>
 			</Flex>
 		</div>
 	);

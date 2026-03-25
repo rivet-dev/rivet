@@ -46,7 +46,7 @@ export function ActorsList() {
 	return (
 		<ScrollArea className="w-full @container/main">
 			<TopBar />
-			<div className="grid grid-cols-[2rem_4fr_1fr] @lg/main:grid-cols-[2rem_4fr_1fr] items-center justify-center gap-x-4 w-full @container/table">
+			<div className="grid grid-cols-[1.5rem_4fr] @xs/main:grid-cols-[1.5rem_4fr_1fr] items-center justify-center gap-x-1 w-full @container/table">
 				<Suspense fallback={<ListSkeleton />}>
 					<List />
 					<Pagination />

@@ -83,7 +83,7 @@ export function CloudProjectSelect({
 						<Skeleton className="h-4 w-32" />
 					</SelectItem>
 				) : null}
-				{hasNextPage ? (
+				{hasNextPage && !isFetchingNextPage ? (
 					<VisibilitySensor onChange={fetchNextPage} />
 				) : null}
 			</SelectContent>
