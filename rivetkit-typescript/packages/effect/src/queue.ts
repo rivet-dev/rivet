@@ -26,14 +26,24 @@ type AnyQueue = {
  * Receives the next message from a single queue.
  * Returns undefined if no message available or timeout reached.
  */
-export const next = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider>(
+export const next = <
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider,
+>(
 	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 	name: string,
 	opts?: QueueReceiveOptions,
 ): Effect.Effect<QueueMessage | undefined, QueueError, never> =>
 	Effect.tryPromise({
 		try: () =>
-			(c as unknown as { queue: AnyQueue }).queue.next(name, opts) as Promise<QueueMessage | undefined>,
+			(c as unknown as { queue: AnyQueue }).queue.next(
+				name,
+				opts,
+			) as Promise<QueueMessage | undefined>,
 		catch: (error) =>
 			new QueueError({
 				message: "Failed to receive message from queue",
@@ -45,16 +55,24 @@ export const next = <TState, TConnParams, TConnState, TVars, TInput, TDatabase e
  * Receives messages from multiple queues.
  * Returns messages matching any of the queue names.
  */
-export const nextMultiple = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider>(
+export const nextMultiple = <
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider,
+>(
 	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 	names: string[],
 	opts?: QueueReceiveOptions,
 ): Effect.Effect<QueueMessage[] | undefined, QueueError, never> =>
 	Effect.tryPromise({
 		try: () =>
-			(c as unknown as { queue: AnyQueue }).queue.next(names, opts) as Promise<
-				QueueMessage[] | undefined
-			>,
+			(c as unknown as { queue: AnyQueue }).queue.next(
+				names,
+				opts,
+			) as Promise<QueueMessage[] | undefined>,
 		catch: (error) =>
 			new QueueError({
 				message: "Failed to receive messages from queues",

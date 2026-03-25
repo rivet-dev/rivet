@@ -7,13 +7,18 @@ const DefaultRuntime = ManagedRuntime.make(Layer.empty);
 
 const RuntimeContextMap = new WeakMap<object, AnyManagedRuntime>();
 
-export const setManagedRuntime = (context: unknown, runtime: AnyManagedRuntime): void => {
+export const setManagedRuntime = (
+	context: unknown,
+	runtime: AnyManagedRuntime,
+): void => {
 	if (typeof context === "object" && context !== null) {
 		RuntimeContextMap.set(context, runtime);
 	}
 };
 
-export const getManagedRuntime = (context: unknown): AnyManagedRuntime | undefined => {
+export const getManagedRuntime = (
+	context: unknown,
+): AnyManagedRuntime | undefined => {
 	if (typeof context === "object" && context !== null) {
 		return RuntimeContextMap.get(context);
 	}
@@ -23,7 +28,9 @@ export const getManagedRuntime = (context: unknown): AnyManagedRuntime | undefin
  * Last-resort fallback: runs an effect using the empty DefaultRuntime.
  * Only works when `R = never` (no unsatisfied requirements).
  */
-const runWithCurrentRuntime = <A, E>(effect: Effect.Effect<A, E, never>): Promise<A> =>
+const runWithCurrentRuntime = <A, E>(
+	effect: Effect.Effect<A, E, never>,
+): Promise<A> =>
 	DefaultRuntime.runPromise(effect).catch((error) =>
 		Promise.reject(
 			new RuntimeExecutionError({
@@ -38,7 +45,9 @@ const runWithCurrentRuntime = <A, E>(effect: Effect.Effect<A, E, never>): Promis
  * Last-resort fallback: runs an effect to Exit using the empty DefaultRuntime.
  * Only works when `R = never` (no unsatisfied requirements).
  */
-const runExitWithCurrentRuntime = <A, E>(effect: Effect.Effect<A, E, never>): Promise<Exit.Exit<A, E>> =>
+const runExitWithCurrentRuntime = <A, E>(
+	effect: Effect.Effect<A, E, never>,
+): Promise<Exit.Exit<A, E>> =>
 	DefaultRuntime.runPromiseExit(effect).catch((error) =>
 		Promise.reject(
 			new RuntimeExecutionError({
@@ -57,13 +66,18 @@ const throwFromCause = <E>(cause: Cause.Cause<E>): never => {
 
 	const defect = Cause.dieOption(cause);
 	if (Option.isSome(defect)) {
-		throw defect.value instanceof Error ? defect.value : new Error(String(defect.value));
+		throw defect.value instanceof Error
+			? defect.value
+			: new Error(String(defect.value));
 	}
 
 	throw new Error(Cause.pretty(cause));
 };
 
-export const runPromise = <A, E, R>(effect: Effect.Effect<A, E, R>, context?: unknown): Promise<A> =>
+export const runPromise = <A, E, R>(
+	effect: Effect.Effect<A, E, R>,
+	context?: unknown,
+): Promise<A> =>
 	runPromiseExit(effect, context).then((exit) => {
 		if (Exit.isSuccess(exit)) {
 			return exit.value;

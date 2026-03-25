@@ -17,10 +17,7 @@ export class StatePersistenceError extends Schema.TaggedError<StatePersistenceEr
 	},
 ) {}
 
-export class QueueError extends Schema.TaggedError<QueueError>()(
-	"QueueError",
-	{
-		message: Schema.String,
-		cause: Schema.optional(Schema.Unknown),
-	},
-) {}
+export class QueueError extends Schema.TaggedError<QueueError>()("QueueError", {
+	message: Schema.String,
+	cause: Schema.optional(Schema.Unknown),
+}) {}

@@ -1,10 +1,25 @@
 import type { ManagedRuntime } from "effect";
-import { actor as rivetActor, type Actions, type ActorConfigInput, type ActorDefinition } from "rivetkit";
+import {
+	actor as rivetActor,
+	type Actions,
+	type ActorConfigInput,
+	type ActorDefinition,
+} from "rivetkit";
 import { setManagedRuntime } from "./runtime.ts";
 
 type ActorRuntime = ManagedRuntime.ManagedRuntime<any, any>;
 export type AnyDatabaseProvider =
-	Parameters<typeof rivetActor>[0] extends ActorConfigInput<any, any, any, any, any, infer TDatabase, any, any, any>
+	Parameters<typeof rivetActor>[0] extends ActorConfigInput<
+		any,
+		any,
+		any,
+		any,
+		any,
+		infer TDatabase,
+		any,
+		any,
+		any
+	>
 		? TDatabase
 		: never;
 
@@ -44,7 +59,10 @@ const wrapActorConfigWithRuntime = (
 	for (const hookKey of hookKeys) {
 		const hook = wrapped[hookKey];
 		if (typeof hook === "function") {
-			wrapped[hookKey] = withContextRuntime(hook as (...args: unknown[]) => unknown, runtime);
+			wrapped[hookKey] = withContextRuntime(
+				hook as (...args: unknown[]) => unknown,
+				runtime,
+			);
 		}
 	}
 
@@ -54,7 +72,10 @@ const wrapActorConfigWithRuntime = (
 		for (const [name, action] of Object.entries(actions)) {
 			wrappedActions[name] =
 				typeof action === "function"
-					? withContextRuntime(action as (...args: unknown[]) => unknown, runtime)
+					? withContextRuntime(
+							action as (...args: unknown[]) => unknown,
+							runtime,
+						)
 					: action;
 		}
 		wrapped.actions = wrappedActions;
@@ -70,7 +91,14 @@ export function actor<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-	TActions extends Actions<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	TActions extends Actions<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase
+	>,
 >(
 	input: ActorConfigInput<
 		TState,

@@ -3,7 +3,11 @@ import { RivetActorContext } from "./actor.ts";
 
 type LogLevel = "info" | "warn" | "error" | "debug";
 
-const logWithLevel = (level: LogLevel, message: string, props?: Record<string, unknown>) =>
+const logWithLevel = (
+	level: LogLevel,
+	message: string,
+	props?: Record<string, unknown>,
+) =>
 	Effect.gen(function* () {
 		const ctx = yield* RivetActorContext;
 		ctx.log[level]({ msg: message, ...props });

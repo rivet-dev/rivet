@@ -31,7 +31,14 @@ export {
 	RivetActorContext,
 } from "./actor.ts";
 
-export const getConn = <TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider>(
+export const getConn = <
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider,
+>(
 	c: ActionContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 ) => Effect.succeed(c.conn);
 
@@ -47,12 +54,24 @@ export function effect<
 	Args extends unknown[] = [],
 >(
 	genFn: (
-		c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+		c: ActorContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase
+		>,
 		...args: Args
 	) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
-): (c: ActionContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>, ...args: Args) => Promise<AEff> {
+): (
+	c: ActionContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	...args: Args
+) => Promise<AEff> {
 	return (c, ...args) => {
-		const eff = Effect.gen<YieldWrap<Effect.Effect<any, any, any>>, AEff>(() => genFn(c, ...args));
+		const eff = Effect.gen<YieldWrap<Effect.Effect<any, any, any>>, AEff>(
+			() => genFn(c, ...args),
+		);
 		const withContext = provideActorContext(eff, c);
 		return runPromise(withContext, c);
 	};
