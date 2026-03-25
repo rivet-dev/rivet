@@ -146,12 +146,14 @@ pub async fn find_dc_for_actor_creation(
 	} else {
 		// Find the nearest DC with runners
 		let res = ctx
-			.op(pegboard::ops::runner::find_dc_with_runner::Input {
-				namespace_id,
-				runner_name: runner_name.into(),
-			})
+			.op(
+				pegboard::ops::runner::list_runner_config_enabled_dcs::Input {
+					namespace_id,
+					runner_name: runner_name.into(),
+				},
+			)
 			.await?;
-		if let Some(dc_label) = res.dc_label {
+		if let Some(dc_label) = res.dc_labels.into_iter().next() {
 			dc_label
 		} else {
 			return Err(pegboard::errors::Actor::NoRunnersAvailable {

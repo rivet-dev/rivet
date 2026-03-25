@@ -4,6 +4,7 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use epoxy_protocol::protocol::{self, Path, Payload, ReplicaId};
 use gas::prelude::*;
 use rivet_api_builder::prelude::*;
+use std::collections::{BTreeSet, HashSet};
 use std::time::Instant;
 
 use crate::{http_client, metrics, replica, utils};
@@ -28,6 +29,7 @@ pub struct Input {
 	pub proposal: protocol::Proposal,
 	/// Only works in non-workflow contexts.
 	pub purge_cache: bool,
+	pub target_replicas: Option<Vec<ReplicaId>>,
 }
 
 #[operation]
@@ -54,12 +56,25 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 		.await
 		.context("failed leading consensus")?;
 
-	// Get quorum members (only active replicas for voting)
-	let quorum_members = utils::get_quorum_members(&config);
+	// Get quorum members. Only active replicas can participate in voting.
+	let quorum_members =
+		resolve_quorum_members(&config, replica_id, input.target_replicas.as_deref())?;
+	tracing::debug!(
+		?quorum_members,
+		quorum_size = quorum_members.len(),
+		scoped = input.target_replicas.is_some(),
+		"resolved quorum members for proposal"
+	);
 
 	// EPaxos Step 5
+	let pre_accept_start = Instant::now();
 	let pre_accept_oks =
 		send_pre_accepts(ctx, &config, replica_id, &quorum_members, &payload).await?;
+	tracing::debug!(
+		duration_ms = %pre_accept_start.elapsed().as_millis(),
+		response_count = pre_accept_oks.len(),
+		"pre_accepts completed"
+	);
 
 	// Decide path
 	let path = ctx
@@ -100,6 +115,41 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 		.inc();
 
 	Ok(res)
+}
+
+/// Returns the quorum members to use for this proposal. This supports scoped proposals because
+/// runner configs are often only enabled in a couple of explicitly coupled regions. If
+/// `target_replicas` is provided, it validates that the scope is non-empty, includes the local
+/// replica, and only contains active replicas. Otherwise it falls back to the full active quorum
+/// from the cluster config.
+fn resolve_quorum_members(
+	config: &protocol::ClusterConfig,
+	replica_id: ReplicaId,
+	target_replicas: Option<&[ReplicaId]>,
+) -> Result<Vec<ReplicaId>> {
+	match target_replicas {
+		Some(target_replicas) => {
+			let active = utils::get_quorum_members(config)
+				.into_iter()
+				.collect::<HashSet<_>>();
+			let validated = target_replicas.iter().copied().collect::<BTreeSet<_>>();
+
+			if validated.is_empty() {
+				bail!("target_replicas cannot be empty");
+			}
+
+			if !validated.contains(&replica_id) {
+				bail!("target_replicas must include the local replica");
+			}
+
+			if !validated.iter().all(|replica| active.contains(replica)) {
+				bail!("target_replicas contains an inactive or unknown replica");
+			}
+
+			Ok(validated.into_iter().collect())
+		}
+		None => Ok(utils::get_quorum_members(config)),
+	}
 }
 
 #[tracing::instrument(skip_all)]
@@ -348,6 +398,77 @@ async fn send_commits(
 	.await?;
 
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use epoxy_protocol::protocol::{ClusterConfig, ReplicaConfig, ReplicaStatus};
+
+	fn make_config(replicas: &[(ReplicaId, ReplicaStatus)]) -> ClusterConfig {
+		ClusterConfig {
+			coordinator_replica_id: replicas[0].0,
+			epoch: 1,
+			replicas: replicas
+				.iter()
+				.map(|(replica_id, status)| ReplicaConfig {
+					replica_id: *replica_id,
+					status: status.clone(),
+					api_peer_url: String::new(),
+					guard_url: String::new(),
+				})
+				.collect(),
+		}
+	}
+
+	#[test]
+	fn resolve_quorum_members_none_uses_all_active() {
+		let config = make_config(&[
+			(1, ReplicaStatus::Active),
+			(2, ReplicaStatus::Active),
+			(3, ReplicaStatus::Joining),
+		]);
+		let result = resolve_quorum_members(&config, 1, None).unwrap();
+		assert_eq!(result, vec![1, 2]);
+	}
+
+	#[test]
+	fn resolve_quorum_members_scoped_subset() {
+		let config = make_config(&[
+			(1, ReplicaStatus::Active),
+			(2, ReplicaStatus::Active),
+			(3, ReplicaStatus::Active),
+		]);
+		let result = resolve_quorum_members(&config, 1, Some(&[1, 2])).unwrap();
+		assert_eq!(result, vec![1, 2]);
+	}
+
+	#[test]
+	fn resolve_quorum_members_empty_target_errors() {
+		let config = make_config(&[(1, ReplicaStatus::Active)]);
+		let result = resolve_quorum_members(&config, 1, Some(&[]));
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn resolve_quorum_members_missing_local_errors() {
+		let config = make_config(&[
+			(1, ReplicaStatus::Active),
+			(2, ReplicaStatus::Active),
+		]);
+		let result = resolve_quorum_members(&config, 1, Some(&[2]));
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn resolve_quorum_members_inactive_replica_errors() {
+		let config = make_config(&[
+			(1, ReplicaStatus::Active),
+			(2, ReplicaStatus::Learning),
+		]);
+		let result = resolve_quorum_members(&config, 1, Some(&[1, 2]));
+		assert!(result.is_err());
+	}
 }
 
 async fn purge_optimistic_cache(ctx: OperationCtx, keys: Vec<String>) -> Result<()> {

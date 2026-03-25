@@ -184,15 +184,12 @@ async fn upsert_inner(
 		}
 	}
 
-	// Purge cache
-	ctx.cache()
-		.clone()
-		.request()
-		.purge(
-			"namespace.runner_config.get",
-			vec![(namespace.namespace_id, path.runner_name.clone())],
-		)
-		.await?;
+	pegboard::utils::purge_runner_config_caches(
+		ctx.cache(),
+		namespace.namespace_id,
+		&path.runner_name,
+	)
+	.await?;
 
 	Ok(UpsertResponse {
 		endpoint_config_changed: any_endpoint_config_changed,

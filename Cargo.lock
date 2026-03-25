@@ -3285,6 +3285,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "epoxy",
+ "epoxy-protocol",
  "foundationdb-tuple",
  "futures-util",
  "gasoline",
@@ -5066,9 +5067,9 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
 name = "saa"
-version = "5.1.1"
+version = "5.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f895faf11c46e98547f4de603a113ca76708d4b6832dbbe3c26528b7b81aca3b"
+checksum = "16c7f49c9d5caa3bf4b3106900484b447b9253fe99670ceb81cb6cb5027855e1"
 
 [[package]]
 name = "safe_arch"
@@ -5081,9 +5082,9 @@ dependencies = [
 
 [[package]]
 name = "scc"
-version = "3.3.2"
+version = "3.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd0b9e1890c5b17833a779c68a974f04170dfa36e3789395d17845418cc779ac"
+checksum = "f448f7d881535036452f0cac656a41463807f095eda504890764ca7d11e2a2ea"
 dependencies = [
  "saa",
  "sdd",
@@ -5162,9 +5163,9 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "sdd"
-version = "4.2.4"
+version = "4.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a8729f5224c38cb041e72fa9968dd4e379d3487b85359539d31d75ed95992d8"
+checksum = "e6ca0e33fc1ae39e36b2d1fdfc8ee470b26397b642ff87572a59a36ff4f2340b"
 
 [[package]]
 name = "security-framework"

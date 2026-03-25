@@ -1,6 +1,6 @@
 use epoxy::{
 	ops::propose::{CommandError, ProposalResult},
-	protocol,
+	protocol::{self, ReplicaId},
 };
 use futures_util::TryStreamExt;
 use gas::prelude::*;
@@ -23,6 +23,7 @@ pub async fn reserve_key(
 	name: String,
 	key: String,
 	actor_id: Id,
+	runner_name_selector: String,
 ) -> Result<ReserveKeyOutput> {
 	let optimistic_reservation_id = ctx
 		.activity(LookupKeyOptimisticInput {
@@ -40,6 +41,23 @@ pub async fn reserve_key(
 		// Key not found optimistically
 
 		let new_reservation_id = ctx.activity(GenerateReservationIdInput {}).await?;
+		let target_replicas = ctx
+			.v(2)
+			.activity(ResolveTargetReplicasInput {
+				namespace_id,
+				runner_name: runner_name_selector.clone(),
+			})
+			.await?;
+
+		if !target_replicas.contains(&ctx.config().epoxy_replica_id()) {
+			let replica_id = target_replicas
+				.first()
+				.copied()
+				.ok_or_else(|| anyhow::anyhow!("target_replicas is empty"))?;
+			let dc_label = u16::try_from(replica_id)?;
+
+			return Ok(ReserveKeyOutput::ForwardToDatacenter { dc_label });
+		}
 
 		let proposal_result = ctx
 			.activity(ProposeInput {
@@ -48,6 +66,7 @@ pub async fn reserve_key(
 				key: key.clone(),
 				new_reservation_id,
 				actor_id,
+				target_replicas,
 			})
 			.await?;
 
@@ -175,12 +194,42 @@ pub async fn generate_reservation_id(
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct ResolveTargetReplicasInput {
+	namespace_id: Id,
+	runner_name: String,
+}
+
+#[activity(ResolveTargetReplicas)]
+pub async fn resolve_target_replicas(
+	ctx: &ActivityCtx,
+	input: &ResolveTargetReplicasInput,
+) -> Result<Vec<ReplicaId>> {
+	let start = std::time::Instant::now();
+	let replicas = ctx
+		.op(
+			crate::ops::runner::list_runner_config_epoxy_replica_ids::Input {
+				namespace_id: input.namespace_id,
+				runner_name: input.runner_name.clone(),
+			},
+		)
+		.await?
+		.replicas;
+	tracing::debug!(
+		op_duration_ms = %start.elapsed().as_millis(),
+		?replicas,
+		"resolve_target_replicas op completed"
+	);
+	Ok(replicas)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct ProposeInput {
 	namespace_id: Id,
 	name: String,
 	key: String,
 	new_reservation_id: Id,
 	actor_id: Id,
+	target_replicas: Vec<ReplicaId>,
 }
 
 #[activity(Propose)]
@@ -204,6 +253,7 @@ pub async fn propose(ctx: &ActivityCtx, input: &ProposeInput) -> Result<Proposal
 				}],
 			},
 			purge_cache: false,
+			target_replicas: Some(input.target_replicas.clone()),
 		})
 		.await?;
 

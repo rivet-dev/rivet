@@ -534,7 +534,8 @@ impl SharedState {
 		// message ack
 		self.in_flight_requests
 			.iter_mut_async(|mut entry| {
-				let (request_id, req) = &mut *entry;
+				let request_id = entry.key().clone();
+			let req = &mut *entry;
 
 				if req.stopping {
 					return true;
@@ -569,13 +570,13 @@ impl SharedState {
 
 				if let Some(reason) = reason {
 					tracing::debug!(
-						request_id=%protocol::util::id_to_string(request_id),
+						request_id=%protocol::util::id_to_string(&request_id),
 						?reason,
 						"gc stopping in flight request"
 					);
 
 					if req.drop_tx.send(Some(reason)).is_err() {
-						tracing::debug!(request_id=%protocol::util::id_to_string(request_id), "failed to send timeout msg to tunnel");
+						tracing::debug!(request_id=%protocol::util::id_to_string(&request_id), "failed to send timeout msg to tunnel");
 					}
 
 					// Mark req as stopping to skip this loop next time the gc is run

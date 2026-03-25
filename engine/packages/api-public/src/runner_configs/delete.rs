@@ -85,15 +85,12 @@ async fn delete_inner(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Resu
 		.await?
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
-	// Purge cache
-	ctx.cache()
-		.clone()
-		.request()
-		.purge(
-			"namespace.runner_config.get",
-			vec![(namespace.namespace_id, path.runner_name.clone())],
-		)
-		.await?;
+	pegboard::utils::purge_runner_config_caches(
+		ctx.cache(),
+		namespace.namespace_id,
+		&path.runner_name,
+	)
+	.await?;
 
 	Ok(DeleteResponse {})
 }
