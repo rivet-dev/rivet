@@ -226,10 +226,10 @@ async function measureStep<T>(fn: () => Promise<T>): Promise<StepResult<T>> {
 	};
 }
 
-function createBenchmarkKey(kind: string): string[] {
+function createBenchmarkKey(actorName: string, kind: string): string[] {
 	return [
 		"benchmark",
-		"test-counter",
+		actorName,
 		kind,
 		new Date().toISOString(),
 		crypto.randomUUID(),
@@ -254,11 +254,12 @@ function assertCounterResults(
 }
 
 async function benchmarkWithoutConnection(
+	actorName: string,
 	client: Client<typeof registry>,
 	opts?: SampleProgressOpts,
 ): Promise<NoConnectionBenchmarkResult> {
-	const key = createBenchmarkKey("no-connection");
-	const handle = client.testCounter.getOrCreate(key);
+	const key = createBenchmarkKey(actorName, "no-connection");
+	const handle = (client as any)[actorName].getOrCreate(key);
 	opts?.onLine?.(`      key: ${key.join("/")}`);
 	opts?.onLine?.("      resolve...");
 
@@ -291,11 +292,12 @@ async function benchmarkWithoutConnection(
 }
 
 async function benchmarkWithConnection(
+	actorName: string,
 	client: Client<typeof registry>,
 	opts?: SampleProgressOpts,
 ): Promise<ConnectionBenchmarkResult> {
-	const key = createBenchmarkKey("connection");
-	const handle = client.testCounter.getOrCreate(key);
+	const key = createBenchmarkKey(actorName, "connection");
+	const handle = (client as any)[actorName].getOrCreate(key);
 	opts?.onLine?.(`      key: ${key.join("/")}`);
 	opts?.onLine?.("      resolve...");
 
@@ -418,7 +420,7 @@ async function main(): Promise<void> {
 		args.baselineHost ??
 		deriveRegionalHost(args.endpoint!, DEFAULT_BASELINE_REGION);
 
-	console.log("Test Counter benchmark");
+	console.log("Actor benchmark");
 	console.log(`Endpoint: ${new URL(args.endpoint!).origin}`);
 	console.log(`Baseline host: ${baselineHost}`);
 	console.log("Metadata lookup disabled: true");
@@ -459,24 +461,31 @@ async function main(): Promise<void> {
 		disableMetadataLookup: true,
 	});
 
-	try {
-		console.log("\nActor benchmarks");
-		const noConnectionResults = await runBenchmarkSeries(
-			"Without connection",
-			args.benchmarkSamples,
-			(opts) => benchmarkWithoutConnection(client, opts),
-		);
-		printSummary(
-			"Without connection",
-			summarize(noConnectionResults),
-		);
+	const actors = ["testCounter", "testCounterSqlite", "testSqliteLoad"];
 
-		const withConnectionResults = await runBenchmarkSeries(
-			"With connection",
-			args.benchmarkSamples,
-			(opts) => benchmarkWithConnection(client, opts),
-		);
-		printSummary("With connection", summarize(withConnectionResults));
+	try {
+		for (const actorName of actors) {
+			console.log(`\n${"=".repeat(60)}`);
+			console.log(`Actor: ${actorName}`);
+			console.log("=".repeat(60));
+
+			// const noConnectionResults = await runBenchmarkSeries(
+			// 	"Without connection",
+			// 	args.benchmarkSamples,
+			// 	(opts) => benchmarkWithoutConnection(actorName, client, opts),
+			// );
+			// printSummary(
+			// 	"Without connection",
+			// 	summarize(noConnectionResults),
+			// );
+
+			const withConnectionResults = await runBenchmarkSeries(
+				"With connection",
+				args.benchmarkSamples,
+				(opts) => benchmarkWithConnection(actorName, client, opts),
+			);
+			printSummary("With connection", summarize(withConnectionResults));
+		}
 	} finally {
 		await client.dispose().catch(() => undefined);
 	}
