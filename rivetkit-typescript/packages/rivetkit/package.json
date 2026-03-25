@@ -351,6 +351,7 @@
 		"cli-table3": "^0.6.5",
 		"commander": "^12.1.0",
 		"dockerode": "^4.0.9",
+		"drizzle-orm": "^0.44.2",
 		"eventsource": "^4.0.0",
 		"local-pkg": "^0.5.1",
 		"tsup": "^8.4.0",

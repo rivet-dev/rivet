@@ -451,6 +451,7 @@ export class ActorInstance<
 
 	get db(): InferDatabaseClient<DB> {
 		if (!this.#db) {
+			console.trace("[DEBUG] database not loaded");
 			throw new errors.DatabaseNotEnabled();
 		}
 		return this.#db;
@@ -511,6 +512,10 @@ export class ActorInstance<
 			}
 		}
 
+		// Setup database before lifecycle hooks so c.db is available in
+		// createState, onCreate, createVars, and onWake.
+		await this.#setupDatabase(preload);
+
 		// Create a write collector to batch new-actor init writes into a
 		// single kvBatchPut.
 		const writeCollector = new WriteCollector(actorDriver, actorId);
@@ -545,10 +550,6 @@ export class ActorInstance<
 		await this.#measureStartup("onWakeMs", () =>
 			this.#callOnStart(),
 		{ pauseKvGuard: true });
-
-		// Setup database.
-		await this.#setupDatabase(preload);
-
 		// Initialize alarms
 		await this.#measureStartup("initAlarmsMs", () =>
 			this.#scheduleManager.initializeAlarms(),
