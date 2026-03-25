@@ -271,14 +271,10 @@ async function bundleWithEsbuild() {
 	// Externalize free FA packages — they ship individual subpath files and are
 	// peer deps, so Vite can tree-shake them. Pro/custom icons have no runtime
 	// equivalent and must be inlined.
-	const freePackages = [
-		"@fortawesome/free-solid-svg-icons",
-		"@fortawesome/free-brands-svg-icons",
-		"@fortawesome/free-regular-svg-icons",
+	const extPackages = [
 		"react",
 		"react-dom",
 		"@fortawesome/react-fontawesome",
-		"@fortawesome/fontawesome-svg-core",
 	];
 
 	const distDir = resolve(PATHS.dist);
@@ -290,7 +286,7 @@ async function bundleWithEsbuild() {
 		await esbuild.build({
 			entryPoints: [resolve(PATHS.src, "index.gen.js")],
 			outdir: distDir,
-			external: freePackages.flatMap((pkg) => [pkg, `${pkg}/*`]),
+			external: extPackages.flatMap((pkg) => [pkg, `${pkg}/*`]),
 			bundle: true,
 			splitting: true,
 			platform: "neutral",
@@ -298,6 +294,8 @@ async function bundleWithEsbuild() {
 			treeShaking: true,
 			metafile: true,
 		});
+
+		fs.renameSync(resolve(distDir, "index.gen.js"), resolve(distDir, "index.js"));
 
 		const stats = fs.statSync(resolve(distDir, "index.js"));
 		const sizeKB = (stats.size / 1024).toFixed(2);

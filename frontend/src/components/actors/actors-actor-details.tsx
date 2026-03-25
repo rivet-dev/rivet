@@ -1,5 +1,5 @@
 import { faQuestionSquare, Icon } from "@rivet-gg/icons";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { memo, type ReactNode, Suspense } from "react";
 import {
 	cn,
@@ -9,6 +9,7 @@ import {
 	TabsList,
 	TabsTrigger,
 } from "@/components";
+import { DeploymentLogs } from "@/components/deployment-logs";
 import { ActorConfigTab } from "./actor-config-tab";
 import { ActorConnectionsTab } from "./actor-connections-tab";
 import { ActorDatabaseTab } from "./actor-db-tab";
@@ -20,7 +21,8 @@ import { ActorStateTab } from "./actor-state-tab";
 import { QueriedActorStatus } from "./actor-status";
 import { ActorStopButton } from "./actor-stop-button";
 import { useActorsView } from "./actors-view-context-provider";
-import { ActorConsole } from "./console/actor-console";
+import { ActorConsoleFull } from "./console/actor-console";
+import { useCloudNamespaceDataProvider } from "./data-provider";
 import {
 	GuardConnectableInspector,
 	useInspectorGuard,
@@ -52,8 +54,6 @@ export const ActorsActorDetails = memo(
 							tab={tab}
 							onTabChange={onTabChange}
 						/>
-
-						<Console actorId={actorId} />
 					</div>
 				</ActorDetailsSettingsProvider>
 			</GuardConnectableInspector>
@@ -61,17 +61,6 @@ export const ActorsActorDetails = memo(
 	},
 );
 
-function Console({ actorId }: { actorId: ActorId }) {
-	const guardContent = useInspectorGuard();
-
-	if (guardContent) return null;
-
-	return (
-		<ActorWorkerContextProvider actorId={actorId}>
-			<ActorConsole actorId={actorId} />
-		</ActorWorkerContextProvider>
-	);
-}
 
 export const ActorsActorEmptyDetails = () => {
 	const { copy } = useActorsView();
@@ -94,6 +83,8 @@ const TAB_PRIORITY = [
 	"queue",
 	"connections",
 	"metadata",
+	"deployment-logs",
+	"console",
 ] as const;
 
 type TabId = (typeof TAB_PRIORITY)[number];
@@ -114,11 +105,17 @@ function useActorTabVisibility(actorId: ActorId) {
 	const isStateEnabled = stateData?.isEnabled ?? false;
 	const isQueueEnabled = inspector.features.queue.supported;
 
+	const provider = useCloudNamespaceDataProvider();
+	const { data: hasManagedPool } = useSuspenseQuery(
+		provider.currentNamespaceHasManagedPoolQueryOptions(),
+	);
+
 	const hiddenTabs = new Set<TabId>();
 	if (!isWorkflowEnabled) hiddenTabs.add("workflow");
 	if (!isDatabaseEnabled) hiddenTabs.add("database");
 	if (!isStateEnabled) hiddenTabs.add("state");
 	if (!isQueueEnabled) hiddenTabs.add("queue");
+	if (__APP_TYPE__ !== "cloud" || !hasManagedPool) hiddenTabs.add("deployment-logs");
 
 	const firstAvailableTab =
 		TAB_PRIORITY.find((tab) => !hiddenTabs.has(tab)) ?? "connections";
@@ -232,6 +229,22 @@ function ActorTabsShell({
 						>
 							Metadata
 						</TabsTrigger>
+						{!hiddenTabs.has("deployment-logs") && (
+							<TabsTrigger
+								value="deployment-logs"
+								className="text-xs px-3 py-1 pb-2"
+							>
+								Logs
+							</TabsTrigger>
+						)}
+						{!guardContent && (
+							<TabsTrigger
+								value="console"
+								className="text-xs px-3 py-1 pb-2"
+							>
+								Console
+							</TabsTrigger>
+						)}
 					</TabsList>
 					<Flex
 						gap="2"
@@ -278,6 +291,18 @@ function ActorTabsShell({
 			</TabsContent>
 			<TabsContent value="state" className="min-h-0 flex-1 mt-0 relative">
 				{guardContent || <ActorStateTab actorId={actorId} />}
+			</TabsContent>
+			<TabsContent value="deployment-logs" className="min-h-0 flex-1 mt-0 h-full">
+				<DeploymentLogs pool="default" filter={`actorId=${actorId}`} />
+			</TabsContent>
+			<TabsContent value="console" className="min-h-0 flex-1 mt-0 h-full">
+				{guardContent || (
+					<div className="flex flex-col h-full">
+						<ActorWorkerContextProvider actorId={actorId}>
+							<ActorConsoleFull actorId={actorId} />
+						</ActorWorkerContextProvider>
+					</div>
+				)}
 			</TabsContent>
 			{children}
 		</Tabs>

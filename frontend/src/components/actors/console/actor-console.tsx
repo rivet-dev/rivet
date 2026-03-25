@@ -13,6 +13,15 @@ interface ActorConsoleProps {
 	actorId: ActorId;
 }
 
+export function ActorConsoleFull({ actorId }: ActorConsoleProps) {
+	return (
+		<div className="flex flex-col flex-1 h-full overflow-hidden">
+			<ActorConsoleLogs />
+			<ActorConsoleInput actorId={actorId} />
+		</div>
+	);
+}
+
 export function ActorConsole({ actorId }: ActorConsoleProps) {
 	const [isOpen, setOpen] = useState(false);
 
