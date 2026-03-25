@@ -1,22 +1,20 @@
-# Build context: repository root
-# Usage: docker build -f examples/sandbox/Dockerfile .
-
-FROM node:22-slim AS build
+FROM node:22-slim
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 WORKDIR /app
+ENV NODE_OPTIONS=--max-old-space-size=7168
 
-COPY . .
-RUN --mount=type=cache,id=s/ddf210e7-d60c-433f-b2aa-e0915638c551-pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile
-RUN mkdir -p rivetkit-asyncapi rivetkit-openapi && \
-    pnpm turbo build --filter=sandbox
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json tsup.base.ts ./
+COPY examples/sandbox/ ./examples/sandbox/
+COPY rivetkit-typescript/packages/ ./rivetkit-typescript/packages/
+COPY engine/sdks/typescript/ ./engine/sdks/typescript/
+COPY shared/typescript/ ./shared/typescript/
 
-# Production image.
-FROM node:22-slim
-WORKDIR /app
-COPY --from=build /app/examples/sandbox/dist ./dist
-COPY --from=build /app/examples/sandbox/public ./dist/public
-# These packages use dynamic imports or require.resolve that bypass bundling.
-RUN npm install @hono/node-server @hono/node-ws @rivetkit/sqlite srvx
-EXPOSE 3000
-CMD ["npx", "srvx", "--static", "public/", "dist/server.js"]
+RUN pnpm install --frozen-lockfile
+RUN mkdir -p rivetkit-openapi rivetkit-asyncapi
+RUN pnpm build --filter=sandbox
+COPY examples/sandbox/public ./examples/sandbox/dist/public
+
+WORKDIR /app/examples/sandbox
+
+EXPOSE 8080
+CMD ["pnpm", "start"]

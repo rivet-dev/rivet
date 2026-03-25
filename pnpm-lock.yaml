@@ -2457,6 +2457,9 @@ importers:
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
+      '@rivetkit/sqlite-vfs':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/sqlite-vfs
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@3.25.76)
@@ -2510,8 +2513,8 @@ importers:
         specifier: ^0.31.2
         version: 0.31.5
       tsx:
-        specifier: ^3.12.7
-        version: 3.14.0
+        specifier: ^4.20.6
+        version: 4.21.0
       typescript:
         specifier: ^5.5.2
         version: 5.9.3

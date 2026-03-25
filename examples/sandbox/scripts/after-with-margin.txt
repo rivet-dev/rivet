@@ -1,0 +1,129 @@
+
+> sandbox@2.0.21 benchmark /home/nathan/rivet-9/examples/sandbox
+> tsx scripts/benchmark.ts --endpoint https://kitchen-sink-j1x7-production-yl5l:pk_iZlRErFUNwBNcXKuo1i5dfXP9OWLUcE2uh5tvkMvGf88PAI0xOWXeHa46PKAzvej@api.staging.rivet.dev
+
+Test Counter benchmark
+Endpoint: https://api.staging.rivet.dev
+Baseline host: api-us-east-1.staging.rivet.dev
+Metadata lookup disabled: true
+Benchmark samples per flow: 5
+
+Regional baseline
+  warming baseline connection...
+  sample 1/5: rtt=118.19 ms pretransfer=47.59 ms total=166.00 ms status=308
+  sample 2/5: rtt=193.83 ms pretransfer=43.20 ms total=237.25 ms status=308
+  sample 3/5: rtt=122.38 ms pretransfer=47.76 ms total=170.34 ms status=308
+  sample 4/5: rtt=111.22 ms pretransfer=46.99 ms total=158.43 ms status=308
+  sample 5/5: rtt=109.52 ms pretransfer=43.10 ms total=152.84 ms status=308
+  host: api-us-east-1.staging.rivet.dev (34.96.106.109, IPv4)
+  median request RTT after pretransfer: 118.19 ms
+  average request RTT after pretransfer: 131.03 ms
+  raw samples: 118.19 ms, 193.83 ms, 122.38 ms, 111.22 ms, 109.52 ms
+  sample status codes: 308, 308, 308, 308, 308
+
+Actor benchmarks
+
+  Without connection
+    sample 1/5
+      key: benchmark/test-counter/no-connection/2026-03-25T09:20:44.349Z/5b0e4c51-0f53-4030-bad3-4ea4829b3c18
+      resolve...
+      resolve: 755.82 ms -> actorId=d1li0bjx9f68ld12p1e672pwzncl00
+      first action...
+      first action: 328.61 ms -> 1
+      second action...
+      second action: 263.28 ms -> 2
+    sample 2/5
+      key: benchmark/test-counter/no-connection/2026-03-25T09:20:45.709Z/792e8696-8264-42c7-aa22-3e03fca886e1
+      resolve...
+      resolve: 515.48 ms -> actorId=pqozu0tsqzbhp70l7ye8rdufbkal00
+      first action...
+      first action: 213.02 ms -> 1
+      second action...
+      second action: 195.12 ms -> 2
+    sample 3/5
+      key: benchmark/test-counter/no-connection/2026-03-25T09:20:46.635Z/63028e68-139e-4f10-9c4f-223bcd0f002f
+      resolve...
+      resolve: 509.37 ms -> actorId=xw21mcjdopb3z1afxjfmx8wfkxal00
+      first action...
+      first action: 268.26 ms -> 1
+      second action...
+      second action: 234.33 ms -> 2
+    sample 4/5
+      key: benchmark/test-counter/no-connection/2026-03-25T09:20:47.683Z/0fbc733c-6553-424a-8d85-419f128f65f4
+      resolve...
+      resolve: 491.54 ms -> actorId=tx4gyrg8baxb2joqr2q2en868sbl00
+      first action...
+      first action: 212.72 ms -> 1
+      second action...
+      second action: 201.09 ms -> 2
+    sample 5/5
+      key: benchmark/test-counter/no-connection/2026-03-25T09:20:48.590Z/d3c3078d-27a9-452d-a0a9-5e29781ec792
+      resolve...
+      resolve: 475.07 ms -> actorId=tthfjx5sacjvrkvpb52ldkpabzal00
+      first action...
+      first action: 244.89 ms -> 1
+      second action...
+      second action: 198.24 ms -> 2
+
+  Without connection summary
+    resolve median: 509.37 ms, average: 549.46 ms
+    first action median: 244.89 ms, average: 253.50 ms
+    second action median: 201.09 ms, average: 218.41 ms
+
+  With connection
+    sample 1/5
+      key: benchmark/test-counter/connection/2026-03-25T09:20:49.510Z/07e4d3bc-f66c-4dc9-9f11-241005bef865
+      resolve...
+      resolve: 506.95 ms -> actorId=14v66ixhmwwp8ibqir7rx8f2y8dl00
+      connection handle creation...
+      connection handle created: 1.93 ms
+      first action...
+      first action: 318.36 ms -> 1
+      second action...
+      second action: 79.38 ms -> 2
+    sample 2/5
+      key: benchmark/test-counter/connection/2026-03-25T09:20:50.602Z/063603e6-11f7-482e-85ff-c49c6801b289
+      resolve...
+      resolve: 477.53 ms -> actorId=18ijehojx5o5lsctjewbxjlpaycl00
+      connection handle creation...
+      connection handle created: 1.57 ms
+      first action...
+      first action: 393.21 ms -> 1
+      second action...
+      second action: 79.44 ms -> 2
+    sample 3/5
+      key: benchmark/test-counter/connection/2026-03-25T09:20:51.740Z/66b06a3f-44a4-421c-8e95-7c4bc27822d1
+      resolve...
+      resolve: 794.47 ms -> actorId=x8gjbz746uux5d9qsp90ns8tg6cl00
+      connection handle creation...
+      connection handle created: 0.94 ms
+      first action...
+      first action: 404.78 ms -> 1
+      second action...
+      second action: 101.55 ms -> 2
+    sample 4/5
+      key: benchmark/test-counter/connection/2026-03-25T09:20:53.231Z/263793b1-d010-49f1-a1d2-8775a4f11695
+      resolve...
+      resolve: 703.03 ms -> actorId=xkpmri3wj5q44836uor2nxbtsscl00
+      connection handle creation...
+      connection handle created: 0.97 ms
+      first action...
+      first action: 343.63 ms -> 1
+      second action...
+      second action: 82.16 ms -> 2
+    sample 5/5
+      key: benchmark/test-counter/connection/2026-03-25T09:20:54.551Z/611bd78e-fff8-4e4a-965d-31c459f612db
+      resolve...
+      resolve: 586.70 ms -> actorId=hwnky16hjc74c1eban21h1sm9mbl00
+      connection handle creation...
+      connection handle created: 0.89 ms
+      first action...
+      first action: 363.90 ms -> 1
+      second action...
+      second action: 81.21 ms -> 2
+
+  With connection summary
+    resolve median: 586.70 ms, average: 613.74 ms
+    connect median: 0.97 ms, average: 1.26 ms
+    first action median: 363.90 ms, average: 364.77 ms
+    second action median: 81.21 ms, average: 84.75 ms
