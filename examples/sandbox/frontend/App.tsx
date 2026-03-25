@@ -69,7 +69,11 @@ function MermaidDiagram({ chart }: { chart: string }) {
 	return <div ref={ref} className="mermaid-diagram" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
-const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
+const rivetEndpoint = import.meta.env.DEV
+	? "http://localhost:6420"
+	: window.location.origin;
+
+const { useActor } = createRivetKit<typeof registry>(rivetEndpoint);
 
 type ActorPanelActor = {
 	connStatus: string | null;
