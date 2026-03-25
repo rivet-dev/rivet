@@ -157,11 +157,6 @@ export const sitemap = [
 						href: "/docs/actors/workflows",
 						icon: faDiagramNext,
 					},
-					// {
-					// 	title: "Sandbox Actor",
-					// 	href: "/docs/actors/sandbox",
-					// 	icon: faSquareTerminal,
-					// },
 					{
 						title: "Queues",
 						href: "/docs/actors/queues",
@@ -194,7 +189,13 @@ export const sitemap = [
 								icon: faPostgresql
 							},
 						]
-					}
+					},
+					{
+						title: "Sandbox Actor",
+						href: "/docs/actors/sandbox",
+						icon: faSquareTerminal,
+						badge: "Beta",
+					},
 				]
 			},
 			{

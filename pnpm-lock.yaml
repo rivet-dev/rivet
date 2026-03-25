@@ -4035,8 +4035,8 @@ importers:
         specifier: ^9.5.0
         version: 9.9.5
       sandbox-agent:
-        specifier: ^0.4.0-rc.1
-        version: 0.4.0-rc.1(@daytonaio/sdk@0.150.0(ws@8.19.0))(@e2b/code-interpreter@2.3.3)(dockerode@4.0.9)(get-port@7.1.0)(zod@4.1.13)
+        specifier: ^0.4.0
+        version: 0.4.0(@daytonaio/sdk@0.150.0(ws@8.19.0))(@e2b/code-interpreter@2.3.3)(dockerode@4.0.9)(get-port@7.1.0)(zod@4.1.13)
       tar:
         specifier: ^7.5.0
         version: 7.5.7
@@ -9226,36 +9226,36 @@ packages:
   '@rushstack/ts-command-line@5.1.2':
     resolution: {integrity: sha512-jn0EnSefYrkZDrBGd6KGuecL84LI06DgzL4hVQ46AUijNBt2nRU/ST4HhrfII/w91siCd1J/Okvxq/BS75Me/A==}
 
-  '@sandbox-agent/cli-darwin-arm64@0.4.0-rc.1':
-    resolution: {integrity: sha512-PxY17+HFrtZxRlY/Z0se+K1L55cjSHWkPFueJRLvIiL91WHWvZcTW0gTqOBq0iP9p+YuWJRj6gdHf8KTT8fouw==}
+  '@sandbox-agent/cli-darwin-arm64@0.4.0':
+    resolution: {integrity: sha512-AaMd2h2OPG5k5DFxfc7jNtmYu3S1PS1BZjXGbXZ2NfAScwVCSeBuN0vvmSxP23CqPrEpf1m7PnruFrFh67Khhw==}
     cpu: [arm64]
     os: [darwin]
 
-  '@sandbox-agent/cli-darwin-x64@0.4.0-rc.1':
-    resolution: {integrity: sha512-hbRZatEAJZfc+D2oYxHFEj/unj845VIx+/oc6T/P0wkV/sll7x+YcpWeOkivsHQUmYuIOlGPjKae/aeyy3AjpA==}
+  '@sandbox-agent/cli-darwin-x64@0.4.0':
+    resolution: {integrity: sha512-dnr9xpiVXGbOqolukyLy1NNV+1w97yFh2zJL6TRuXg86eQbHSQRXVm/PqRMlr8KyVYdaLPQJeR8s4ofGvoa6Rg==}
     cpu: [x64]
     os: [darwin]
 
-  '@sandbox-agent/cli-linux-arm64@0.4.0-rc.1':
-    resolution: {integrity: sha512-G760gGU07MMW6fidU+XBhHVx7emFf+VgaMxmuzgI9gNF6ocjvd9oax97E7r8hwombiB4AOs/OZlg28TnehJKdg==}
+  '@sandbox-agent/cli-linux-arm64@0.4.0':
+    resolution: {integrity: sha512-217tEQU/47aNG7BFC27apZ51jEZgLfU7J3i5R52b+w3aI3khDyfJ/UHvkd1tsMztp59UjZTxwuY7xXSRkaTSGQ==}
     cpu: [arm64]
     os: [linux]
 
-  '@sandbox-agent/cli-linux-x64@0.4.0-rc.1':
-    resolution: {integrity: sha512-8ArZtxTd6YX9qxPQSLlzfyf7XLI665UopRM9Oh9htEtpycOWLrJ8XWS0r1XXW8Qr/Pstee39yZ0Riqm9D4Y8Wg==}
+  '@sandbox-agent/cli-linux-x64@0.4.0':
+    resolution: {integrity: sha512-j39uNei4/dnX3Oy3hwqzrndZwPRE2SraahhfCGycymlFqN/p4Xii004QQ0WOP/vibQSGq+lPYR3faSevmjMZig==}
     cpu: [x64]
     os: [linux]
 
-  '@sandbox-agent/cli-shared@0.4.0-rc.1':
-    resolution: {integrity: sha512-DPNXLNX8BYDqGlqxU+Ua1SMZomAy9vCHNxp8QwA1a5lS8YUuLb5RRSTj9R2WEUQ+mpmJMWAiFmhhfzU4O8OJ6A==}
+  '@sandbox-agent/cli-shared@0.4.0':
+    resolution: {integrity: sha512-hSNNIZJlnGlL0yVfp+d1N97qimO0dz6QB24vmfO4pviiBICcoIcoxnOv9l3aj8Z4nT8A3WTy/6cypYHUpoLxkQ==}
 
-  '@sandbox-agent/cli-win32-x64@0.4.0-rc.1':
-    resolution: {integrity: sha512-3nF5R79Q77gtYZuRRnj1k1K99X5QmT2IUqH4qCb7wMk0zdXzgY1aL4H/8I9HcQySgIVV7Y+E9V93ZZJPoasLCA==}
+  '@sandbox-agent/cli-win32-x64@0.4.0':
+    resolution: {integrity: sha512-8OyIgsr/jMzMhAj5Fyz9VHj0ZEkGkaxAAELg4U0y5632Vkae8jcJRZyZ8bv6fBJp3zG2sgj47UJFfmHHh4pfMg==}
     cpu: [x64]
     os: [win32]
 
-  '@sandbox-agent/cli@0.4.0-rc.1':
-    resolution: {integrity: sha512-ei3bbTefxXSFRnDna6ZJU3/FJIoA1TqvyD+v50KfOlylWkOyq4pAjk6PVMISRpVyImpowpxRaBtk1c4s+e+F9g==}
+  '@sandbox-agent/cli@0.4.0':
+    resolution: {integrity: sha512-1xoLnr0ZAEgvGtVpBGkyGuACwI3Th4D2i218K1pr+YlBRclsps7TjRjddkEuTXZgQj4wjQ4uUjlDsvUBhvHMQQ==}
     hasBin: true
 
   '@scure/base@1.2.6':
@@ -10878,8 +10878,8 @@ packages:
     engines: {node: '>=0.4.0'}
     hasBin: true
 
-  acp-http-client@0.4.0-rc.1:
-    resolution: {integrity: sha512-U9n3Vfqko3BQJIH5aSfPaHkiSxG0/i+esYTKHBk0CB0J5Bx7oNMjtboAgxz2U3wb6wO9THM2scZy7KM5syTECA==}
+  acp-http-client@0.4.0:
+    resolution: {integrity: sha512-RxXaX7hLyxYVpOwmzwc6FIud7icdcPfYqTsVoqJFkI/G5qE7feiac4jSB5SC6P6awy4FMHpFogYEp92vzZTKJA==}
 
   actor-core@0.6.3:
     resolution: {integrity: sha512-cdYf0GX3m3jvlubbdujOcnPn93r1fP9F0mEBso72ofMTI0+EeGMS34BNrmaGmk5Pb3iD45KQl3u5ZY5Mzv4DNg==}
@@ -16215,8 +16215,8 @@ packages:
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
 
-  sandbox-agent@0.4.0-rc.1:
-    resolution: {integrity: sha512-FgmDbC6CaX3ax6R6Hv1EnlBQdjA8tDoxsUuqbQQ6u4+6I34VJOH1K40YtLWYRlLC/rTcoboyG2WiWS/qaWUjew==}
+  sandbox-agent@0.4.0:
+    resolution: {integrity: sha512-vm/+LB/3dtGVjZkSI5w3fsCrJwF7mQr8f0FE7vSAy1elp1qgaHtpCRqBeCVeYv7zGAtjuXZzO42/kZbFZX/h+A==}
     peerDependencies:
       '@cloudflare/sandbox': '>=0.1.0'
       '@daytonaio/sdk': '>=0.12.0'
@@ -23761,32 +23761,32 @@ snapshots:
       - '@types/node'
     optional: true
 
-  '@sandbox-agent/cli-darwin-arm64@0.4.0-rc.1':
+  '@sandbox-agent/cli-darwin-arm64@0.4.0':
     optional: true
 
-  '@sandbox-agent/cli-darwin-x64@0.4.0-rc.1':
+  '@sandbox-agent/cli-darwin-x64@0.4.0':
     optional: true
 
-  '@sandbox-agent/cli-linux-arm64@0.4.0-rc.1':
+  '@sandbox-agent/cli-linux-arm64@0.4.0':
     optional: true
 
-  '@sandbox-agent/cli-linux-x64@0.4.0-rc.1':
+  '@sandbox-agent/cli-linux-x64@0.4.0':
     optional: true
 
-  '@sandbox-agent/cli-shared@0.4.0-rc.1': {}
+  '@sandbox-agent/cli-shared@0.4.0': {}
 
-  '@sandbox-agent/cli-win32-x64@0.4.0-rc.1':
+  '@sandbox-agent/cli-win32-x64@0.4.0':
     optional: true
 
-  '@sandbox-agent/cli@0.4.0-rc.1':
+  '@sandbox-agent/cli@0.4.0':
     dependencies:
-      '@sandbox-agent/cli-shared': 0.4.0-rc.1
+      '@sandbox-agent/cli-shared': 0.4.0
     optionalDependencies:
-      '@sandbox-agent/cli-darwin-arm64': 0.4.0-rc.1
-      '@sandbox-agent/cli-darwin-x64': 0.4.0-rc.1
-      '@sandbox-agent/cli-linux-arm64': 0.4.0-rc.1
-      '@sandbox-agent/cli-linux-x64': 0.4.0-rc.1
-      '@sandbox-agent/cli-win32-x64': 0.4.0-rc.1
+      '@sandbox-agent/cli-darwin-arm64': 0.4.0
+      '@sandbox-agent/cli-darwin-x64': 0.4.0
+      '@sandbox-agent/cli-linux-arm64': 0.4.0
+      '@sandbox-agent/cli-linux-x64': 0.4.0
+      '@sandbox-agent/cli-win32-x64': 0.4.0
     optional: true
 
   '@scure/base@1.2.6': {}
@@ -25908,7 +25908,7 @@ snapshots:
 
   acorn@8.16.0: {}
 
-  acp-http-client@0.4.0-rc.1(zod@4.1.13):
+  acp-http-client@0.4.0(zod@4.1.13):
     dependencies:
       '@agentclientprotocol/sdk': 0.16.1(zod@4.1.13)
     transitivePeerDependencies:
@@ -32346,14 +32346,14 @@ snapshots:
 
   safer-buffer@2.1.2: {}
 
-  sandbox-agent@0.4.0-rc.1(@daytonaio/sdk@0.150.0(ws@8.19.0))(@e2b/code-interpreter@2.3.3)(dockerode@4.0.9)(get-port@7.1.0)(zod@4.1.13):
+  sandbox-agent@0.4.0(@daytonaio/sdk@0.150.0(ws@8.19.0))(@e2b/code-interpreter@2.3.3)(dockerode@4.0.9)(get-port@7.1.0)(zod@4.1.13):
     dependencies:
-      '@sandbox-agent/cli-shared': 0.4.0-rc.1
-      acp-http-client: 0.4.0-rc.1(zod@4.1.13)
+      '@sandbox-agent/cli-shared': 0.4.0
+      acp-http-client: 0.4.0(zod@4.1.13)
     optionalDependencies:
       '@daytonaio/sdk': 0.150.0(ws@8.19.0)
       '@e2b/code-interpreter': 2.3.3
-      '@sandbox-agent/cli': 0.4.0-rc.1
+      '@sandbox-agent/cli': 0.4.0
       dockerode: 4.0.9
       get-port: 7.1.0
     transitivePeerDependencies:

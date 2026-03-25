@@ -141,6 +141,9 @@ export const requestAccessActor = actor({
 		});
 	},
 	actions: {
+		ping: () => {
+			return "pong";
+		},
 		getRequestInfo: (c) => {
 			return {
 				onBeforeConnect: c.state.onBeforeConnectRequest,

@@ -1,9 +1,8 @@
-// TODO: re-enable once sandbox-agent/docker export is fixed
-// import { sandboxActor } from "rivetkit/sandbox";
-// import { docker } from "rivetkit/sandbox/docker";
+import { sandboxActor } from "rivetkit/sandbox";
+import { docker } from "rivetkit/sandbox/docker";
 
-// export const dockerSandboxActor = sandboxActor({
-// 	provider: docker({
-// 		image: "node:22-bookworm-slim",
-// 	}),
-// });
+export const dockerSandboxActor = sandboxActor({
+	provider: docker({
+		image: "node:22-bookworm-slim",
+	}),
+});

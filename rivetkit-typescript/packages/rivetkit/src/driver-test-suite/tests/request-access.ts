@@ -124,6 +124,33 @@ export function runRequestAccessTests(driverTestConfig: DriverTestConfig) {
 			await connection.dispose();
 		});
 
+		test("should run onBeforeConnect for stateless action calls", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const viewHandle = client.requestAccessActor.getOrCreate([
+				"test-action-request",
+			]);
+			const trackingHandle = client.requestAccessActor.getOrCreate(
+				["test-action-request"],
+				{
+					params: { trackRequest: true },
+				},
+			);
+
+			expect(await trackingHandle.ping()).toBe("pong");
+
+			const requestInfo = await viewHandle.getRequestInfo();
+
+			if (driverTestConfig.clientType === "http") {
+				expect(requestInfo.onBeforeConnect.hasRequest).toBe(true);
+				expect(requestInfo.onBeforeConnect.requestMethod).toBeTruthy();
+				expect(requestInfo.onBeforeConnect.requestUrl).toBeTruthy();
+				expect(requestInfo.onBeforeConnect.requestHeaders).toBeTruthy();
+			} else {
+				// Inline client may or may not have request object depending on the driver.
+			}
+		});
+
 		// TODO: re-expose this once we can have actor queries on the gateway
 		// test("should have access to request object in onRequest", async (c) => {
 		// 	const { client, endpoint } = await setupDriverTest(c, driverTestConfig);

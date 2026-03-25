@@ -16,19 +16,21 @@ import {
 	promiseActor,
 	syncActionActor,
 } from "./action-types";
-import { dbActorRaw } from "./actor-db-raw";
 import { dbActorDrizzle } from "./actor-db-drizzle";
-import {
-	dbLifecycle,
-	dbLifecycleFailing,
-	dbLifecycleObserver,
-} from "./db-lifecycle";
+import { dbActorRaw } from "./actor-db-raw";
 import { onStateChangeActor } from "./actor-onstatechange";
+import { connErrorSerializationActor } from "./conn-error-serialization";
 import { counterWithParams } from "./conn-params";
 import { connStateActor } from "./conn-state";
 // Import actors from individual files
 import { counter } from "./counter";
 import { counterConn } from "./counter-conn";
+import { dbKvStatsActor } from "./db-kv-stats";
+import {
+	dbLifecycle,
+	dbLifecycleFailing,
+	dbLifecycleObserver,
+} from "./db-lifecycle";
 import { destroyActor, destroyObserver } from "./destroy";
 import { customTimeoutActor, errorHandlingActor } from "./error-handling";
 import { fileSystemHibernationCleanupActor } from "./file-system-hibernation-cleanup";
@@ -53,17 +55,17 @@ import {
 } from "./raw-http";
 import { rawHttpRequestPropertiesActor } from "./raw-http-request-properties";
 import { rawWebSocketActor, rawWebSocketBinaryActor } from "./raw-websocket";
-import { requestAccessActor } from "./request-access";
 import { rejectConnectionActor } from "./reject-connection";
+import { requestAccessActor } from "./request-access";
 import {
-	runWithError,
 	runWithEarlyExit,
+	runWithError,
 	runWithoutHandler,
 	runWithQueueConsumer,
 	runWithTicks,
 } from "./run";
+import { dockerSandboxActor } from "./sandbox";
 import { scheduled } from "./scheduled";
-// import { dockerSandboxActor } from "./sandbox";
 import {
 	sleep,
 	sleepWithLongRpc,
@@ -73,6 +75,7 @@ import {
 	sleepWithRawWebSocket,
 	sleepWithWaitUntilMessage,
 } from "./sleep";
+import { lifecycleObserver, startStopRaceActor } from "./start-stop-race";
 import { statelessActor } from "./stateless";
 import {
 	driverCtxActor,
@@ -86,22 +89,19 @@ import {
 	workflowCompleteActor,
 	workflowCounterActor,
 	workflowDestroyActor,
-	workflowFailedStepActor,
 	workflowErrorHookActor,
 	workflowErrorHookEffectsActor,
 	workflowErrorHookSleepActor,
+	workflowFailedStepActor,
 	workflowNestedJoinActor,
 	workflowNestedLoopActor,
-	workflowSpawnChildActor,
-	workflowSpawnParentActor,
 	workflowNestedRaceActor,
 	workflowQueueActor,
 	workflowSleepActor,
+	workflowSpawnChildActor,
+	workflowSpawnParentActor,
 	workflowStopTeardownActor,
 } from "./workflow";
-import { startStopRaceActor, lifecycleObserver } from "./start-stop-race";
-import { connErrorSerializationActor } from "./conn-error-serialization";
-import { dbKvStatsActor } from "./db-kv-stats";
 
 // Consolidated setup with all actors
 export const registry = setup({
@@ -115,7 +115,7 @@ export const registry = setup({
 		// From scheduled.ts
 		scheduled,
 		// From sandbox.ts
-		// dockerSandboxActor,
+		dockerSandboxActor,
 		// From sleep.ts
 		sleep,
 		sleepWithLongRpc,
@@ -131,12 +131,12 @@ export const registry = setup({
 		inlineClientActor,
 		// From kv.ts
 		kvActor,
-			// From queue.ts
-			queueActor,
-			queueLimitedActor,
-			manyQueueChildActor,
-			manyQueueActionParentActor,
-			manyQueueRunParentActor,
+		// From queue.ts
+		queueActor,
+		queueLimitedActor,
+		manyQueueChildActor,
+		manyQueueActionParentActor,
+		manyQueueRunParentActor,
 		// From action-inputs.ts
 		inputActor,
 		// From action-timeout.ts

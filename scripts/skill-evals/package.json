@@ -10,6 +10,6 @@
     "zod": "^3.23.0"
   },
   "dependencies": {
-    "sandbox-agent": "^0.1.6"
+    "sandbox-agent": "^0.4.0"
   }
 }
