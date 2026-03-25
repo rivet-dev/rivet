@@ -5,6 +5,36 @@ import { setupDriverTest } from "../utils";
 
 export function runActorDestroyTests(driverTestConfig: DriverTestConfig) {
 	describe("Actor Destroy Tests", () => {
+		function expectActorNotFound(error: unknown) {
+			expect((error as ActorError).group).toBe("actor");
+			expect((error as ActorError).code).toBe("not_found");
+		}
+
+		async function waitForActorDestroyed(
+			client: Awaited<ReturnType<typeof setupDriverTest>>["client"],
+			actorKey: string,
+			actorId: string,
+		) {
+			const observer = client.destroyObserver.getOrCreate(["observer"]);
+
+			await vi.waitFor(async () => {
+				const wasDestroyed = await observer.wasDestroyed(actorKey);
+				expect(wasDestroyed, "actor onDestroy not called").toBeTruthy();
+			});
+
+			await vi.waitFor(async () => {
+				let actorRunning = false;
+				try {
+					await client.destroyActor.getForId(actorId).getValue();
+					actorRunning = true;
+				} catch (error) {
+					expectActorNotFound(error);
+				}
+
+				expect(actorRunning, "actor still running").toBeFalsy();
+			});
+		}
+
 		test("actor destroy clears state (without connect)", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
@@ -230,7 +260,7 @@ export function runActorDestroyTests(driverTestConfig: DriverTestConfig) {
 
 			// Recreate using getOrCreate with resolve
 			const newHandle = client.destroyActor.getOrCreate([actorKey]);
-			const newActorId = await newHandle.resolve();
+			await newHandle.resolve();
 
 			// Verify state is fresh (default value, not the old value)
 			const newValue = await newHandle.getValue();
@@ -284,11 +314,146 @@ export function runActorDestroyTests(driverTestConfig: DriverTestConfig) {
 
 			// Recreate using create()
 			const newHandle = await client.destroyActor.create([actorKey]);
-			const newActorId = await newHandle.resolve();
+			await newHandle.resolve();
 
 			// Verify state is fresh (default value, not the old value)
 			const newValue = await newHandle.getValue();
 			expect(newValue).toBe(0);
+		});
+
+		test("stale getOrCreate handle retries action after actor destruction", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actorKey = `test-lazy-handle-action-${crypto.randomUUID()}`;
+
+			const observer = client.destroyObserver.getOrCreate(["observer"]);
+			await observer.reset();
+
+			const handle = client.destroyActor.getOrCreate([actorKey]);
+			await handle.setValue(321);
+
+			const originalActorId = await handle.resolve();
+			await handle.destroy();
+			await waitForActorDestroyed(client, actorKey, originalActorId);
+
+			expect(await handle.getValue()).toBe(0);
+		});
+
+		test("stale getOrCreate handle retries queue send after actor destruction", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actorKey = `test-lazy-handle-queue-${crypto.randomUUID()}`;
+
+			const observer = client.destroyObserver.getOrCreate(["observer"]);
+			await observer.reset();
+
+			const handle = client.destroyActor.getOrCreate([actorKey]);
+			const originalActorId = await handle.resolve();
+
+			await handle.destroy();
+			await waitForActorDestroyed(client, actorKey, originalActorId);
+
+			await handle.send("values", 11);
+			expect(await handle.receiveValue()).toBe(11);
+		});
+
+		test("stale getOrCreate handle retries raw HTTP after actor destruction", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actorKey = `test-lazy-handle-http-${crypto.randomUUID()}`;
+
+			const observer = client.destroyObserver.getOrCreate(["observer"]);
+			await observer.reset();
+
+			const handle = client.destroyActor.getOrCreate([actorKey]);
+			await handle.setValue(55);
+
+			const originalActorId = await handle.resolve();
+			await handle.destroy();
+			await waitForActorDestroyed(client, actorKey, originalActorId);
+
+			const response = await handle.fetch("/state");
+			expect(response.ok).toBe(true);
+			expect(await response.json()).toEqual({
+				key: actorKey,
+				value: 0,
+			});
+		});
+
+		test("stale getOrCreate handle retries raw WebSocket after actor destruction", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actorKey = `test-lazy-handle-websocket-${crypto.randomUUID()}`;
+
+			const observer = client.destroyObserver.getOrCreate(["observer"]);
+			await observer.reset();
+
+			const handle = client.destroyActor.getOrCreate([actorKey]);
+			await handle.setValue(89);
+
+			const originalActorId = await handle.resolve();
+			await handle.destroy();
+			await waitForActorDestroyed(client, actorKey, originalActorId);
+
+			const websocket = await handle.webSocket();
+			const welcome = await new Promise<{
+				type: string;
+				key: string;
+				value: number;
+			}>((resolve, reject) => {
+				websocket.addEventListener(
+					"message",
+					(event: MessageEvent<string>) => {
+						resolve(JSON.parse(event.data));
+					},
+					{ once: true },
+				);
+				websocket.addEventListener("close", reject, { once: true });
+			});
+			expect(welcome).toEqual({
+				type: "welcome",
+				key: actorKey,
+				value: 0,
+			});
+			websocket.close();
+		});
+
+		test("stale getOrCreate connection re-resolves after websocket open failure", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actorKey = `test-lazy-handle-connect-${crypto.randomUUID()}`;
+
+			const observer = client.destroyObserver.getOrCreate(["observer"]);
+			await observer.reset();
+
+			const handle = client.destroyActor.getOrCreate([actorKey]);
+			await handle.setValue(144);
+
+			const originalActorId = await handle.resolve();
+			await handle.destroy();
+			await waitForActorDestroyed(client, actorKey, originalActorId);
+
+			const connection = handle.connect();
+			expect(await connection.getValue()).toBe(0);
+			await connection.dispose();
+		});
+
+		test("stale get handle retries action after actor recreation", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actorKey = `test-lazy-get-handle-action-${crypto.randomUUID()}`;
+
+			const observer = client.destroyObserver.getOrCreate(["observer"]);
+			await observer.reset();
+
+			const creator = client.destroyActor.getOrCreate([actorKey]);
+			await creator.setValue(222);
+
+			const handle = client.destroyActor.get([actorKey]);
+			expect(await handle.getValue()).toBe(222);
+
+			const originalActorId = await creator.resolve();
+			await creator.destroy();
+			await waitForActorDestroyed(client, actorKey, originalActorId);
+
+			const recreated = client.destroyActor.getOrCreate([actorKey]);
+			expect(await recreated.getValue()).toBe(0);
+			expect(await handle.getValue()).toBe(0);
+			expect(await handle.resolve()).toBe(await recreated.resolve());
 		});
 	});
 }

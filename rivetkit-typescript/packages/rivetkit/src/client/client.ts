@@ -10,7 +10,7 @@ import {
 	CONNECT_SYMBOL,
 } from "./actor-conn";
 import { type ActorHandle, ActorHandleRaw } from "./actor-handle";
-import { queryActor } from "./actor-query";
+import { createActorResolutionState, queryActor } from "./actor-query";
 import type { ClientConfig } from "./config";
 import { logger } from "./log";
 
@@ -32,6 +32,9 @@ export interface ActorAccessor<AD extends AnyActorDefinition> {
 	 * Gets a stateless handle to a actor by its key, but does not create the actor if it doesn't exist.
 	 * The actor name is automatically injected from the property accessor.
 	 *
+	 * If the resolved actor is destroyed, operations will automatically re-resolve
+	 * the key and retry once.
+	 *
 	 * @template AD The actor class that this handle is for.
 	 * @param {string | string[]} [key=[]] - The key to identify the actor. Can be a single string or an array of strings.
 	 * @param {GetWithIdOptions} [opts] - Options for getting the actor.
@@ -42,6 +45,9 @@ export interface ActorAccessor<AD extends AnyActorDefinition> {
 	/**
 	 * Gets a stateless handle to a actor by its key, creating it if necessary.
 	 * The actor name is automatically injected from the property accessor.
+	 *
+	 * If the resolved actor is destroyed, operations will automatically re-resolve
+	 * the key (creating a new actor if needed) and retry once.
 	 *
 	 * @template AD The actor class that this handle is for.
 	 * @param {string | string[]} [key=[]] - The key to identify the actor. Can be a single string or an array of strings.
@@ -56,6 +62,9 @@ export interface ActorAccessor<AD extends AnyActorDefinition> {
 	/**
 	 * Gets a stateless handle to a actor by its ID.
 	 *
+	 * If the actor is destroyed, operations will throw without retrying since
+	 * there is no key to re-resolve.
+	 *
 	 * @template AD The actor class that this handle is for.
 	 * @param {string} actorId - The ID of the actor.
 	 * @param {GetWithIdOptions} [opts] - Options for getting the actor.
@@ -66,6 +75,9 @@ export interface ActorAccessor<AD extends AnyActorDefinition> {
 	/**
 	 * Creates a new actor with the name automatically injected from the property accessor,
 	 * and returns a stateless handle to it with the actor ID resolved.
+	 *
+	 * If the actor is destroyed, operations will throw without retrying since
+	 * creation is a one-shot operation.
 	 *
 	 * @template AD The actor class that this handle is for.
 	 * @param {string | string[]} key - The key to identify the actor. Can be a single string or an array of strings.
@@ -371,7 +383,7 @@ export class ClientRaw {
 			params,
 			getParams,
 			this.#encodingKind,
-			actorQuery,
+			createActorResolutionState(actorQuery),
 		);
 	}
 

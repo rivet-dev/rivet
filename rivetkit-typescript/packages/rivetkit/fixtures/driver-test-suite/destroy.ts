@@ -1,4 +1,4 @@
-import { actor } from "rivetkit";
+import { actor, queue } from "rivetkit";
 import type { registry } from "./registry";
 
 export const destroyObserver = actor({
@@ -18,9 +18,32 @@ export const destroyObserver = actor({
 
 export const destroyActor = actor({
 	state: { value: 0, key: "" },
+	queues: {
+		values: queue<number>(),
+	},
 	onWake: (c) => {
 		// Store the actor key so we can reference it in onDestroy
 		c.state.key = c.key.join("/");
+	},
+	onRequest: (c, request) => {
+		const url = new URL(request.url);
+		if (url.pathname === "/state") {
+			return Response.json({
+				key: c.state.key,
+				value: c.state.value,
+			});
+		}
+
+		return new Response("Not Found", { status: 404 });
+	},
+	onWebSocket: (c, websocket) => {
+		websocket.send(
+			JSON.stringify({
+				type: "welcome",
+				key: c.state.key,
+				value: c.state.value,
+			}),
+		);
 	},
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();
@@ -35,6 +58,13 @@ export const destroyActor = actor({
 		},
 		getValue: (c) => {
 			return c.state.value;
+		},
+		receiveValue: async (c) => {
+			const message = await c.queue.next({
+				names: ["values"],
+				timeout: 0,
+			});
+			return message?.body ?? null;
 		},
 		destroy: (c) => {
 			c.destroy();

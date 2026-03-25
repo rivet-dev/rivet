@@ -2,14 +2,12 @@ import * as cbor from "cbor-x";
 import invariant from "invariant";
 import type { AnyActorDefinition } from "@/actor/definition";
 import type { Encoding } from "@/actor/protocol/serde";
-import { assertUnreachable } from "@/actor/utils";
 import { deconstructError } from "@/common/utils";
 import {
 	HEADER_CONN_PARAMS,
 	HEADER_ENCODING,
 	type ManagerDriver,
 } from "@/driver-helpers/mod";
-import type { ActorQuery } from "@/manager/protocol/query";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
@@ -28,7 +26,13 @@ import type {
 	ActorDefinitionQueueSend,
 } from "./actor-common";
 import { type ActorConn, ActorConnRaw } from "./actor-conn";
-import { checkForSchedulingError, queryActor } from "./actor-query";
+import {
+	type ActorResolutionState,
+	checkForSchedulingError,
+	getActorNameFromQuery,
+	resolveActorId,
+	retryOnInvalidResolvedActor,
+} from "./actor-query";
 import { type ClientRaw, CREATE_ACTOR_CONN_PROXY } from "./client";
 import { ActorError, isSchedulingError } from "./errors";
 import { logger } from "./log";
@@ -52,7 +56,7 @@ export class ActorHandleRaw {
 	#client: ClientRaw;
 	#driver: ManagerDriver;
 	#encoding: Encoding;
-	#actorQuery: ActorQuery;
+	#actorResolutionState: ActorResolutionState;
 	#params: unknown;
 	#getParams?: () => Promise<unknown>;
 	#queueSender: ReturnType<typeof createQueueSender>;
@@ -70,24 +74,26 @@ export class ActorHandleRaw {
 		params: unknown,
 		getParams: (() => Promise<unknown>) | undefined,
 		encoding: Encoding,
-		actorQuery: ActorQuery,
+		actorResolutionState: ActorResolutionState,
 	) {
 		this.#client = client;
 		this.#driver = driver;
 		this.#encoding = encoding;
-		this.#actorQuery = actorQuery;
+		this.#actorResolutionState = actorResolutionState;
 		this.#params = params;
 		this.#getParams = getParams;
+		// Retry wrapping is handled by #sendQueueMessage, not here.
+		// On retry, #sendQueueMessage re-calls #queueSender.send() which
+		// invokes customFetch again with a freshly resolved actor ID.
 		this.#queueSender = createQueueSender({
 			encoding: this.#encoding,
 			params: this.#params,
 			customFetch: async (request: Request) => {
-				const { actorId } = await queryActor(
-					undefined,
-					this.#actorQuery,
+				const actorId = await resolveActorId(
+					this.#actorResolutionState,
 					this.#driver,
 				);
-				return this.#driver.sendRequest(actorId, request);
+				return await this.#driver.sendRequest(actorId, request);
 			},
 		});
 	}
@@ -115,7 +121,20 @@ export class ActorHandleRaw {
 		body: unknown,
 		options?: QueueSendOptions,
 	): Promise<QueueSendResult | void> {
-		return this.#queueSender.send(name, body, options as any);
+		return this.#sendQueueMessage(name, body, options as any);
+	}
+
+	async #sendQueueMessage(
+		name: string,
+		body: unknown,
+		options?: QueueSendOptions,
+	): Promise<QueueSendResult | void> {
+		return await retryOnInvalidResolvedActor(
+			this.#actorResolutionState,
+			async () => {
+				return await this.#queueSender.send(name, body, options as any);
+			},
+		);
 	}
 
 	/**
@@ -133,7 +152,12 @@ export class ActorHandleRaw {
 		args: Args;
 		signal?: AbortSignal;
 	}): Promise<Response> {
-		if (typeof opts === "string" || typeof opts !== "object" || opts === null || !("name" in opts)) {
+		if (
+			typeof opts === "string" ||
+			typeof opts !== "object" ||
+			opts === null ||
+			!("name" in opts)
+		) {
 			throw new Error(
 				`Invalid action call: expected an options object { name, args }, got ${typeof opts}. Use handle.actionName(...args) for the shorthand API.`,
 			);
@@ -142,69 +166,72 @@ export class ActorHandleRaw {
 		let actorId: string | undefined;
 
 		try {
-			// Get the actor ID
-			const result = await queryActor(
-				undefined,
-				this.#actorQuery,
-				this.#driver,
-			);
-			actorId = result.actorId;
-			logger().debug({ msg: "found actor for action", actorId });
-			invariant(actorId, "Missing actor ID");
+			return await retryOnInvalidResolvedActor(
+				this.#actorResolutionState,
+				async () => {
+					actorId = await resolveActorId(
+						this.#actorResolutionState,
+						this.#driver,
+					);
+					logger().debug({ msg: "found actor for action", actorId });
+					invariant(actorId, "Missing actor ID");
 
-			// Invoke the action
-			logger().debug({
-				msg: "handling action",
-				name: opts.name,
-				encoding: this.#encoding,
-			});
-			const responseData = await sendHttpRequest<
-				protocol.HttpActionRequest, // Bare type
-				protocol.HttpActionResponse, // Bare type
-				HttpActionRequestJson, // Json type
-				HttpActionResponseJson, // Json type
-				unknown[], // Request type (the args array)
-				Response // Response type (the output value)
-			>({
-				url: `http://actor/action/${encodeURIComponent(opts.name)}`,
-				method: "POST",
-				headers: {
-					[HEADER_ENCODING]: this.#encoding,
-					...(this.#params !== undefined
-						? { [HEADER_CONN_PARAMS]: JSON.stringify(this.#params) }
-						: {}),
+					logger().debug({
+						msg: "handling action",
+						name: opts.name,
+						encoding: this.#encoding,
+					});
+					return await sendHttpRequest<
+						protocol.HttpActionRequest,
+						protocol.HttpActionResponse,
+						HttpActionRequestJson,
+						HttpActionResponseJson,
+						unknown[],
+						Response
+					>({
+						url: `http://actor/action/${encodeURIComponent(opts.name)}`,
+						method: "POST",
+						headers: {
+							[HEADER_ENCODING]: this.#encoding,
+							...(this.#params !== undefined
+								? {
+										[HEADER_CONN_PARAMS]: JSON.stringify(
+											this.#params,
+										),
+									}
+								: {}),
+						},
+						body: opts.args,
+						encoding: this.#encoding,
+						customFetch: this.#driver.sendRequest.bind(
+							this.#driver,
+							actorId,
+						),
+						signal: opts?.signal,
+						requestVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
+						requestVersionedDataHandler:
+							HTTP_ACTION_REQUEST_VERSIONED,
+						responseVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
+						responseVersionedDataHandler:
+							HTTP_ACTION_RESPONSE_VERSIONED,
+						requestZodSchema: HttpActionRequestSchema,
+						responseZodSchema: HttpActionResponseSchema,
+						requestToJson: (args): HttpActionRequestJson => ({
+							args,
+						}),
+						requestToBare: (args): protocol.HttpActionRequest => ({
+							args: bufferToArrayBuffer(cbor.encode(args)),
+						}),
+						responseFromJson: (json): Response =>
+							json.output as Response,
+						responseFromBare: (bare): Response =>
+							cbor.decode(
+								new Uint8Array(bare.output),
+							) as Response,
+					});
 				},
-				body: opts.args,
-				encoding: this.#encoding,
-				customFetch: this.#driver.sendRequest.bind(
-					this.#driver,
-					actorId,
-				),
-				signal: opts?.signal,
-				requestVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
-				requestVersionedDataHandler: HTTP_ACTION_REQUEST_VERSIONED,
-				responseVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
-				responseVersionedDataHandler: HTTP_ACTION_RESPONSE_VERSIONED,
-				requestZodSchema: HttpActionRequestSchema,
-				responseZodSchema: HttpActionResponseSchema,
-				// JSON Request: args is the raw value
-				requestToJson: (args): HttpActionRequestJson => ({
-					args,
-				}),
-				// BARE Request: args needs to be CBOR-encoded
-				requestToBare: (args): protocol.HttpActionRequest => ({
-					args: bufferToArrayBuffer(cbor.encode(args)),
-				}),
-				// JSON Response: output is the raw value
-				responseFromJson: (json): Response => json.output as Response,
-				// BARE Response: output is ArrayBuffer that needs CBOR-decoding
-				responseFromBare: (bare): Response =>
-					cbor.decode(new Uint8Array(bare.output)) as Response,
-			});
-
-			return responseData;
+			);
 		} catch (err) {
-			// Standardize to ClientActorError instead of the native backend error
 			const { group, code, message, metadata } = deconstructError(
 				err,
 				logger(),
@@ -212,13 +239,12 @@ export class ActorHandleRaw {
 				true,
 			);
 
-			// Check if this is a scheduling error and try to get more details
 			if (actorId && isSchedulingError(group, code)) {
 				const schedulingError = await checkForSchedulingError(
 					group,
 					code,
 					actorId,
-					this.#actorQuery,
+					this.#actorResolutionState.actorQuery,
 					this.#driver,
 				);
 				if (schedulingError) {
@@ -239,7 +265,7 @@ export class ActorHandleRaw {
 	connect(): ActorConn<AnyActorDefinition> {
 		logger().debug({
 			msg: "establishing connection from handle",
-			query: this.#actorQuery,
+			query: this.#actorResolutionState.actorQuery,
 		});
 
 		const conn = new ActorConnRaw(
@@ -248,7 +274,7 @@ export class ActorHandleRaw {
 			this.#params,
 			this.#getParams,
 			this.#encoding,
-			this.#actorQuery,
+			this.#actorResolutionState,
 		);
 
 		return this.#client[CREATE_ACTOR_CONN_PROXY](
@@ -261,12 +287,35 @@ export class ActorHandleRaw {
 	 * convenience wrapper around the raw HTTP API.
 	 */
 	fetch(input: string | URL | Request, init?: RequestInit) {
-		return rawHttpFetch(
-			this.#driver,
-			this.#actorQuery,
-			this.#params,
-			input,
-			init,
+		return this.#fetchWithResolvedActor(input, init);
+	}
+
+	async #fetchWithResolvedActor(
+		input: string | URL | Request,
+		init?: RequestInit,
+	) {
+		return await retryOnInvalidResolvedActor(
+			this.#actorResolutionState,
+			async () => {
+				const actorId = await resolveActorId(
+					this.#actorResolutionState,
+					this.#driver,
+				);
+				return await rawHttpFetch(
+					this.#driver,
+					{
+						getForId: {
+							name: getActorNameFromQuery(
+								this.#actorResolutionState.actorQuery,
+							),
+							actorId,
+						},
+					},
+					this.#params,
+					input,
+					init,
+				);
+			},
 		);
 	}
 
@@ -275,12 +324,28 @@ export class ActorHandleRaw {
 	 */
 	async webSocket(path?: string, protocols?: string | string[]) {
 		const params = await this.#resolveConnectionParams();
-		return rawWebSocket(
-			this.#driver,
-			this.#actorQuery,
-			params,
-			path,
-			protocols,
+		return await retryOnInvalidResolvedActor(
+			this.#actorResolutionState,
+			async () => {
+				const actorId = await resolveActorId(
+					this.#actorResolutionState,
+					this.#driver,
+				);
+				return await rawWebSocket(
+					this.#driver,
+					{
+						getForId: {
+							name: getActorNameFromQuery(
+								this.#actorResolutionState.actorQuery,
+							),
+							actorId,
+						},
+					},
+					params,
+					path,
+					protocols,
+				);
+			},
 		);
 	}
 
@@ -288,53 +353,23 @@ export class ActorHandleRaw {
 	 * Resolves the actor to get its unique actor ID.
 	 */
 	async resolve(): Promise<string> {
-		if ("getForKey" in this.#actorQuery) {
-			const name = this.#actorQuery.getForKey.name;
-
-			// Query the actor to get the id
-			const { actorId } = await queryActor(
-				undefined,
-				this.#actorQuery,
-				this.#driver,
-			);
-
-			this.#actorQuery = { getForId: { actorId, name } };
-
-			return actorId;
-		} else if ("getOrCreateForKey" in this.#actorQuery) {
-			const name = this.#actorQuery.getOrCreateForKey.name;
-
-			// Query the actor to get or create and get the id
-			const { actorId } = await queryActor(
-				undefined,
-				this.#actorQuery,
-				this.#driver,
-			);
-
-			this.#actorQuery = { getForId: { actorId, name } };
-
-			return actorId;
-		} else if ("getForId" in this.#actorQuery) {
-			// Skip since it's already resolved
-			return this.#actorQuery.getForId.actorId;
-		} else if ("create" in this.#actorQuery) {
-			// Cannot create a handle with this query
-			invariant(false, "actorQuery cannot be create");
-		} else {
-			assertUnreachable(this.#actorQuery);
-		}
+		return await resolveActorId(this.#actorResolutionState, this.#driver);
 	}
 
 	/**
 	 * Returns the raw URL for routing traffic to the actor.
 	 */
 	async getGatewayUrl(): Promise<string> {
-		const { actorId } = await queryActor(
-			undefined,
-			this.#actorQuery,
-			this.#driver,
+		return await retryOnInvalidResolvedActor(
+			this.#actorResolutionState,
+			async () => {
+				const actorId = await resolveActorId(
+					this.#actorResolutionState,
+					this.#driver,
+				);
+				return await this.#driver.buildGatewayUrl(actorId);
+			},
 		);
-		return await this.#driver.buildGatewayUrl(actorId);
 	}
 }
 
