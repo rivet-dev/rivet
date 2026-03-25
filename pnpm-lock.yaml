@@ -2448,6 +2448,12 @@ importers:
       '@ai-sdk/openai':
         specifier: ^0.0.66
         version: 0.0.66(zod@3.25.76)
+      '@hono/node-server':
+        specifier: ^1.19.7
+        version: 1.19.9(hono@4.11.9)
+      '@hono/node-ws':
+        specifier: ^1.3.0
+        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
@@ -2481,9 +2487,9 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      tsx:
-        specifier: ^3.12.7
-        version: 3.14.0
+      srvx:
+        specifier: ^0.10.0
+        version: 0.10.0
       zod:
         specifier: ^3.25.69
         version: 3.25.76
@@ -2500,18 +2506,21 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.2.0
         version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
-      concurrently:
-        specifier: ^9.1.2
-        version: 9.2.1
       drizzle-kit:
         specifier: ^0.31.2
         version: 0.31.5
+      tsx:
+        specifier: ^4.20.6
+        version: 4.21.0
       typescript:
         specifier: ^5.5.2
         version: 5.9.3
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
+      vite-plugin-srvx:
+        specifier: ^1.0.2
+        version: 1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
 
   examples/sandbox-coding-agent:
     dependencies:
@@ -17466,6 +17475,12 @@ packages:
 
   vite-plugin-favicons-inject@2.2.0:
     resolution: {integrity: sha512-MaqZE3IjwFffIED38yKcI5BKGkV039N6ilhPeOfW4TILzSKMBNd8Q0ehu0mwbl1emWH2tGcuwV3ZIzDKfb0vIQ==}
+
+  vite-plugin-srvx@1.0.2:
+    resolution: {integrity: sha512-y11gH+CBkbQvfbFE14TJcl7HAkjqaZbGEb3CXnEdu0fXlsPzHJST7Khyq021WKOWbDYb8PaCabjzMQ+pS1oDPw==}
+    peerDependencies:
+      srvx: '>=0.9.0'
+      vite: ^5.0.0 || ^6.0.0
 
   vite-tsconfig-paths@5.1.4:
     resolution: {integrity: sha512-cYj0LRuLV2c2sMqhqhGpaO3LretdtMn/BVX4cPLanIZuwwrkVl+lK84E/miEXkCHWXuq65rhNN4rXsBcOB3S4w==}
@@ -33897,6 +33912,11 @@ snapshots:
   vite-plugin-favicons-inject@2.2.0:
     dependencies:
       favicons: 7.2.0
+
+  vite-plugin-srvx@1.0.2(srvx@0.10.0)(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)):
+    dependencies:
+      srvx: 0.10.0
+      vite: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
   vite-tsconfig-paths@5.1.4(typescript@5.9.3)(vite@5.4.21(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)):
     dependencies:

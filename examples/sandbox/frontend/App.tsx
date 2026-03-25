@@ -71,7 +71,7 @@ function MermaidDiagram({ chart }: { chart: string }) {
 
 const rivetEndpoint = import.meta.env.DEV
 	? "http://localhost:6420"
-	: window.location.origin;
+	: `${window.location.origin}/api/rivet`;
 
 const { useActor } = createRivetKit<typeof registry>(rivetEndpoint);
 

@@ -119,8 +119,6 @@ import { testSqliteLoad } from "./actors/testing/test-sqlite-load.ts";
 import { aiAgent } from "./actors/ai/ai-agent.ts";
 
 export const registry = setup({
-	publicDir: "dist",
-	managerPort: process.env.PORT ? Number(process.env.PORT) : 6420,
 	use: {
 		// Overview + state basics
 		counter,
@@ -216,5 +214,3 @@ export const registry = setup({
 		aiAgent,
 	},
 });
-
-registry.start();
