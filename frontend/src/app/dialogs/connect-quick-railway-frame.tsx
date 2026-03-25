@@ -29,14 +29,17 @@ const stepper = defineStepper(
 		title: "Configure",
 		assist: true,
 		next: "Next",
-		schema: configurationSchema,
+		schema: z.object({}),
 	},
 	{
 		id: "deploy",
 		title: "Configure Railway endpoint",
 		assist: true,
 		next: "Done",
-		schema: deploymentSchema,
+		schema: z.object({
+			...configurationSchema.shape,
+			...deploymentSchema.shape,
+		}),
 	},
 );
 

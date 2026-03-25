@@ -172,6 +172,7 @@ export function GettingStarted({
 	const navigate = useNavigate();
 
 	const defaultValues = {
+		runnerName: "default",
 		slotsPerRunner: 1,
 		maxRunners: 1_000,
 		minRunners: 1,
@@ -179,7 +180,7 @@ export function GettingStarted({
 		headers: [],
 		requestLifespan: 900,
 		provider: provider || "",
-		datacenters: [],
+		datacenters: {},
 		...(initialRunnerConfig || {}),
 	};
 

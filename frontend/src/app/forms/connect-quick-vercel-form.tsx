@@ -12,17 +12,18 @@ export const stepper = defineStepper(
 		title: "Configure",
 		assist: false,
 		next: "Next",
-		schema: z.object({
-			...configurationSchema.omit({ requestLifespan: true }).shape,
-			plan: z.string().min(1, "Please select a Vercel plan"),
-		}),
+		schema: z.object({}),
 	},
 	{
 		id: "deploy",
 		title: "Configure Vercel endpoint",
 		assist: true,
 		next: "Done",
-		schema: deploymentSchema,
+		schema: z.object({
+			...configurationSchema.omit({ requestLifespan: true }).shape,
+			...deploymentSchema.shape,
+			plan: z.string().min(1, "Please select a Vercel plan"),
+		}),
 	},
 );
 
