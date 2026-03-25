@@ -5,6 +5,7 @@
 			"frontend/**/*.{tsx,ts,js}",
 			"!frontend/packages",
 			"rivetkit-typescript/**/*.{tsx,ts,css}",
+			"cloud-cli/**/*.{ts,tsx}",
 			"examples/**/*.{ts,tsx}",
 			"!/**/node_modules"
 		],

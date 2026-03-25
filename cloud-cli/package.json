@@ -1,0 +1,28 @@
+{
+	"name": "@rivet-dev/cloud-cli",
+	"version": "0.1.0",
+	"description": "Rivet Cloud CLI \u2014 deploy and stream logs for Rivet Cloud managed pools",
+	"bin": {
+		"rivet-cloud": "./dist/index.js"
+	},
+	"scripts": {
+		"build": "bun build src/index.ts --outdir dist --target bun --packages external",
+		"dev": "bun run src/index.ts",
+		"test": "bun test",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@rivet-gg/cloud": "*",
+		"chalk": "^5.4.1",
+		"commander": "^12.1.0",
+		"es-toolkit": "^1.38.0",
+		"tasuku": "^2.0.0"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"typescript": "^5.9.2"
+	},
+	"engines": {
+		"bun": ">=1.0.0"
+	}
+}
