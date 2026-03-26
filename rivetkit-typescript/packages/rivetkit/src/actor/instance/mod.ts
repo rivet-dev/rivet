@@ -453,9 +453,9 @@ export class ActorInstance<
 
 	get db(): InferDatabaseClient<DB> {
 		if (!this.#db) {
-			if (this.#stopCalled) {
+			if (this.#stopCalled && "db" in this.#config) {
 				throw new errors.ActorStopping(
-					"database accessed after actor started stopping. If you are using setInterval or other background timers, clean them up with c.abortSignal.",
+					"database accessed after actor stopped. If you are using setInterval or other background timers, clean them up with c.abortSignal.",
 				);
 			}
 			throw new errors.DatabaseNotEnabled();

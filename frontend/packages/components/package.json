@@ -1,7 +1,7 @@
 {
 	"name": "@rivet-gg/components",
 	"private": true,
-	"version": "2.1.9",
+	"version": "2.1.10",
 	"type": "module",
 	"files": [
 		"dist",

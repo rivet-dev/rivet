@@ -15,7 +15,7 @@
 	},
 	"dependencies": {
 		"hono": "^4.7.0",
-		"rivetkit": "^2.1.9"
+		"rivetkit": "^2.1.10"
 	},
 	"stableVersion": "0.8.0",
 	"license": "MIT"
