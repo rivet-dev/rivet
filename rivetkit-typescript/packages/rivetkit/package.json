@@ -282,6 +282,16 @@
 				"types": "./dist/tsup/sandbox/providers/computesdk.d.cts",
 				"default": "./dist/tsup/sandbox/providers/computesdk.cjs"
 			}
+		},
+		"./sandbox/sprites": {
+			"import": {
+				"types": "./dist/tsup/sandbox/providers/sprites.d.ts",
+				"default": "./dist/tsup/sandbox/providers/sprites.js"
+			},
+			"require": {
+				"types": "./dist/tsup/sandbox/providers/sprites.d.cts",
+				"default": "./dist/tsup/sandbox/providers/sprites.cjs"
+			}
 		}
 	},
 	"engines": {
@@ -292,7 +302,7 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/serve-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts src/db/mod.ts src/db/drizzle/mod.ts src/sandbox/index.ts src/sandbox/client.ts src/sandbox/providers/docker.ts src/sandbox/providers/e2b.ts src/sandbox/providers/daytona.ts src/sandbox/providers/local.ts src/sandbox/providers/vercel.ts src/sandbox/providers/modal.ts src/sandbox/providers/computesdk.ts",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/serve-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts src/db/mod.ts src/db/drizzle/mod.ts src/sandbox/index.ts src/sandbox/client.ts src/sandbox/providers/docker.ts src/sandbox/providers/e2b.ts src/sandbox/providers/daytona.ts src/sandbox/providers/local.ts src/sandbox/providers/vercel.ts src/sandbox/providers/modal.ts src/sandbox/providers/computesdk.ts src/sandbox/providers/sprites.ts",
 		"build:browser": "tsup --config tsup.browser.config.ts",
 		"build:schema": "./scripts/compile-all-bare.ts",
 		"check-types": "tsc --noEmit",
@@ -363,6 +373,7 @@
 		"zod-to-json-schema": "^3.25.0"
 	},
 	"peerDependencies": {
+		"@fly/sprites": ">=0.0.1",
 		"@vercel/sandbox": ">=0.1.0",
 		"@daytonaio/sdk": "^0.150.0",
 		"@e2b/code-interpreter": "^2.3.3",
@@ -374,6 +385,9 @@
 		"ws": "^8.0.0"
 	},
 	"peerDependenciesMeta": {
+		"@fly/sprites": {
+			"optional": true
+		},
 		"@vercel/sandbox": {
 			"optional": true
 		},

@@ -322,6 +322,20 @@ const provider = computesdk({
 });
 ```
 
+### Sprites
+
+Requires the `@fly/sprites` package.
+
+```sh
+pnpm add @fly/sprites
+```
+
+```ts
+import { sprites } from "rivetkit/sandbox/sprites";
+
+const provider = sprites({});
+```
+
 ### Unsupported providers
 
 **Cloudflare Sandbox** is available in `sandbox-agent` but is not re-exported from RivetKit.
