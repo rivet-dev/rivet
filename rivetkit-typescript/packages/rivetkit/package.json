@@ -309,7 +309,7 @@
 		"build:pack-inspector": "tsx scripts/pack-inspector.ts"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.18.2",
+		"@hono/node-server": "^1.19.10",
 		"@hono/node-ws": "^1.1.1",
 		"@hono/standard-validator": "^0.1.3",
 		"@hono/zod-openapi": "^1.1.5",
@@ -325,13 +325,13 @@
 		"better-sqlite3": "^12.8.0",
 		"cbor-x": "^1.6.0",
 		"get-port": "^7.1.0",
-		"hono": "^4.7.0",
+		"hono": "^4.12.7",
 		"invariant": "^2.2.4",
 		"nanoevents": "^9.1.0",
 		"p-retry": "^6.2.1",
 		"pino": "^9.5.0",
 		"sandbox-agent": "^0.4.0",
-		"tar": "^7.5.0",
+		"tar": "^7.5.11",
 		"uuid": "^12.0.0",
 		"vbare": "^0.0.4",
 		"zod": "^4.1.0"
