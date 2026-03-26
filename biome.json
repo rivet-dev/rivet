@@ -4,6 +4,7 @@
 		"includes": [
 			"frontend/**/*.{tsx,ts,js}",
 			"!frontend/packages",
+			"!**/*.gen.*",
 			"rivetkit-typescript/**/*.{tsx,ts,css}",
 			"examples/**/*.{ts,tsx}",
 			"!/**/node_modules"
