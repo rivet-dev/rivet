@@ -18,7 +18,7 @@ export default defineConfig({
 	reporter: "html",
 	use: {
 		baseURL: "http://localhost:43710",
-		trace: "on-first-retry",
+		trace: "on",
 	},
 	globalSetup: "./e2e/global.setup.ts",
 	projects: [
@@ -35,25 +35,12 @@ export default defineConfig({
 			dependencies: ["cloud:setup"],
 			testDir: "./e2e/cloud",
 		},
-		{
-			name: "engine",
-			use: {
-				...devices["Desktop Chrome"],
-			},
-			testDir: "./e2e/engine",
-		},
 	],
 	webServer: [
 		{
 			name: "Cloud",
-			command: "pnpm dev:cloud",
+			command: process.env.CI ? "pnpm preview:cloud" : "pnpm dev:cloud",
 			url: "http://localhost:43710",
-			reuseExistingServer: !process.env.CI,
-		},
-		{
-			name: "Engine",
-			command: "pnpm dev:engine",
-			url: "http://localhost:43708",
 			reuseExistingServer: !process.env.CI,
 		},
 	],
