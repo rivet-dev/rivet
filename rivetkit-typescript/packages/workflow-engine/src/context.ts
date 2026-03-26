@@ -280,7 +280,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		if (this.usedNamesInExecution.has(fullKey)) {
 			throw new HistoryDivergedError(
 				`Duplicate entry name "${name}" at location "${locationToKey(this.storage, this.currentLocation)}". ` +
-				`Each step/loop/sleep/queue.next/join/race must have a unique name within its scope.`,
+					`Each step/loop/sleep/queue.next/join/race must have a unique name within its scope.`,
 			);
 		}
 		this.usedNamesInExecution.add(fullKey);
@@ -358,7 +358,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					// This means workflow code may have changed
 					throw new HistoryDivergedError(
 						`Entry "${key}" exists in history but was not visited. ` +
-						`Workflow code may have changed. Use ctx.removed() to handle migrations.`,
+							`Workflow code may have changed. Use ctx.removed() to handle migrations.`,
 					);
 				}
 			}
@@ -617,16 +617,11 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					retryBackoffMax,
 				);
 				const retryAt = metadata.lastAttemptAt + retryDelay;
-				await this.notifyStepError(
-					config,
-					metadata.attempts,
-					error,
-					{
-						willRetry: true,
-						retryDelay,
-						retryAt,
-					},
-				);
+				await this.notifyStepError(config, metadata.attempts, error, {
+					willRetry: true,
+					retryDelay,
+					retryAt,
+				});
 				throw new StepFailedError(
 					config.name,
 					error,
@@ -638,12 +633,9 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			const exhaustedError = markErrorReported(
 				new StepExhaustedError(config.name, String(error)),
 			);
-			await this.notifyStepError(
-				config,
-				metadata.attempts,
-				error,
-				{ willRetry: false },
-			);
+			await this.notifyStepError(config, metadata.attempts, error, {
+				willRetry: false,
+			});
 			throw exhaustedError;
 		}
 	}
@@ -1557,7 +1549,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			typeof value === "object" &&
 			value !== null &&
 			(value as Record<string, unknown>)[QUEUE_HISTORY_MESSAGE_MARKER] ===
-			1
+				1
 		) {
 			const serialized = value as Record<string, unknown>;
 			const id = typeof serialized.id === "string" ? serialized.id : "";

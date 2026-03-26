@@ -164,12 +164,8 @@ describe("replayWorkflowFromStep", () => {
 			});
 		};
 
-		const firstRun = await runWorkflow(
-			"wf-1",
-			workflow,
-			undefined,
-			driver,
-		).result;
+		const firstRun = await runWorkflow("wf-1", workflow, undefined, driver)
+			.result;
 		expect(firstRun.state).toBe("sleeping");
 		timeline.length = 0;
 
@@ -181,12 +177,8 @@ describe("replayWorkflowFromStep", () => {
 			replayWorkflowFromStep("wf-1", driver, targetStepId),
 		).resolves.toBeDefined();
 
-		const replayRun = await runWorkflow(
-			"wf-1",
-			workflow,
-			undefined,
-			driver,
-		).result;
+		const replayRun = await runWorkflow("wf-1", workflow, undefined, driver)
+			.result;
 		expect(replayRun.state).toBe("sleeping");
 
 		await new Promise((resolve) => setTimeout(resolve, 30));

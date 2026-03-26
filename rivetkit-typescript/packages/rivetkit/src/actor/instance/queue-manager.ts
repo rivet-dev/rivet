@@ -97,7 +97,10 @@ export class QueueManager<
 	}
 
 	/** Loads queue metadata from storage and initializes internal state. */
-	async initialize(preload?: PreloadMap, writeCollector?: WriteCollector): Promise<void> {
+	async initialize(
+		preload?: PreloadMap,
+		writeCollector?: WriteCollector,
+	): Promise<void> {
 		let metadataBuffer: Uint8Array | null;
 		const preloaded = preload?.get(QUEUE_METADATA_KEY);
 		if (preloaded) {
@@ -110,7 +113,10 @@ export class QueueManager<
 			metadataBuffer = buf;
 		}
 		if (!metadataBuffer) {
-			const entry: [Uint8Array, Uint8Array] = [QUEUE_METADATA_KEY, this.#serializeMetadata()];
+			const entry: [Uint8Array, Uint8Array] = [
+				QUEUE_METADATA_KEY,
+				this.#serializeMetadata(),
+			];
 			if (writeCollector) {
 				writeCollector.add(entry[0], entry[1]);
 			} else {

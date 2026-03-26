@@ -27,7 +27,7 @@ export const Route = createFileRoute(
 				...dataProvider.currentProjectImageRepositoriesQueryOptions(),
 				pages: Infinity,
 			}),
-		])
+		]);
 
 		return Promise.all([
 			...namespaces.pages.flatMap((page) =>
@@ -49,7 +49,7 @@ export const Route = createFileRoute(
 					}),
 				),
 			),
-		])
+		]);
 	},
 	loaderDeps() {
 		return [];
@@ -87,7 +87,7 @@ function RouteComponent() {
 				</div>
 			</div>
 		</Content>
-	)
+	);
 }
 
 function Deployments() {
@@ -102,12 +102,12 @@ function Deployments() {
 	} = useSuspenseInfiniteQuery({
 		...dataProvider.currentProjectImagesQueryOptions(),
 		refetchInterval: 5_000,
-	})
+	});
 
 	const { data: namespaces } = useSuspenseInfiniteQuery({
 		...dataProvider.currentProjectNamespacesQueryOptions(),
 		refetchInterval: 5_000,
-	})
+	});
 
 	const managedPoolQueries = useQueries({
 		queries:
@@ -125,20 +125,20 @@ function Deployments() {
 					refetchInterval: 5_000,
 				}),
 			) ?? [],
-	})
+	});
 
 	const deployments = managedPoolQueries
 		.map((query) => query.data)
 		.filter(
 			(data): data is Exclude<typeof data, undefined> =>
 				data !== undefined,
-		)
+		);
 
 	const sorted = images.toSorted((a, b) => {
 		const aTimestamp = new Date(a.createdAt).getTime();
 		const bTimestamp = new Date(b.createdAt).getTime();
 		return bTimestamp - aTimestamp;
-	})
+	});
 
 	return (
 		<div className="max-w-5xl mx-auto px-6">
@@ -154,7 +154,7 @@ function Deployments() {
 				/>
 			</div>
 		</div>
-	)
+	);
 }
 
 function DataLoadingPlaceholder() {
@@ -188,5 +188,5 @@ function DataLoadingPlaceholder() {
 				</div>
 			</div>
 		</div>
-	)
+	);
 }

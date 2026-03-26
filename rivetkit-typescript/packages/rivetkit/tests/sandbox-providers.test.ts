@@ -83,7 +83,11 @@ describe("sandbox actor sdk parity", () => {
 		// The sandbox actor adds custom actions alongside all proxied
 		// sandbox-agent methods.
 		expect(actionKeys).toEqual(
-			[...SANDBOX_AGENT_ACTION_METHODS, "destroy", "getSandboxUrl"].sort(),
+			[
+				...SANDBOX_AGENT_ACTION_METHODS,
+				"destroy",
+				"getSandboxUrl",
+			].sort(),
 		);
 	});
 });

@@ -171,8 +171,9 @@ export function getRunInspectorConfig(
 ): RunInspectorConfig | undefined {
 	if (!run) return undefined;
 	if (typeof run === "function") {
-		const config =
-			(run as RunFunctionWithConfig)[RUN_FUNCTION_CONFIG_SYMBOL];
+		const config = (run as RunFunctionWithConfig)[
+			RUN_FUNCTION_CONFIG_SYMBOL
+		];
 		return config?.inspectorFactory
 			? config.inspectorFactory(actor)
 			: config?.inspector;
@@ -229,7 +230,7 @@ export const ActorConfigSchema = z
 				connectionLivenessTimeout: z.number().positive().default(2500),
 				connectionLivenessInterval: z.number().positive().default(5000),
 				/** @deprecated Use `c.setPreventSleep(true)` in `onWake` instead. Will be removed in 2.2. */
-			noSleep: z.boolean().default(false),
+				noSleep: z.boolean().default(false),
 				sleepTimeout: z.number().positive().default(30_000),
 				maxQueueSize: z.number().positive().default(1000),
 				maxQueueMessageSize: z
@@ -1080,7 +1081,9 @@ export const DocActorOptionsSchema = z
 		noSleep: z
 			.boolean()
 			.optional()
-			.describe("Deprecated: use c.setPreventSleep(true) in onWake instead. Will be removed in 2.2. If true, the actor will never sleep. Default: false"),
+			.describe(
+				"Deprecated: use c.setPreventSleep(true) in onWake instead. Will be removed in 2.2. If true, the actor will never sleep. Default: false",
+			),
 		sleepTimeout: z
 			.number()
 			.optional()

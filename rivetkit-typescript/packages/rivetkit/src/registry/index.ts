@@ -39,7 +39,10 @@ export class Registry<A extends RegistryActors> {
 		setTimeout(() => {
 			const parsedConfig = this.parseConfig();
 
-			if (parsedConfig.serverless.spawnEngine || parsedConfig.serveManager) {
+			if (
+				parsedConfig.serverless.spawnEngine ||
+				parsedConfig.serveManager
+			) {
 				// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
 				this.#ensureRuntime();
 			}

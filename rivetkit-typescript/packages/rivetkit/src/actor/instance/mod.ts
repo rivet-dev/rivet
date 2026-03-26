@@ -84,7 +84,9 @@ export type { SaveStateOptions };
  * Symbol used by subsystems (e.g., queue-manager) to access the
  * unexpected KV round-trip warning without exposing it as a public method.
  */
-export const WARN_UNEXPECTED_KV_ROUND_TRIP = Symbol("warnUnexpectedKvRoundTrip");
+export const WARN_UNEXPECTED_KV_ROUND_TRIP = Symbol(
+	"warnUnexpectedKvRoundTrip",
+);
 
 enum CanSleep {
 	Yes,
@@ -540,16 +542,20 @@ export class ActorInstance<
 		});
 
 		// Initialize variables.
-		await this.#measureStartup("createVarsMs", async () => {
-			if (this.#varsEnabled) {
-				await this.#initializeVars();
-			}
-		}, { pauseKvGuard: true });
+		await this.#measureStartup(
+			"createVarsMs",
+			async () => {
+				if (this.#varsEnabled) {
+					await this.#initializeVars();
+				}
+			},
+			{ pauseKvGuard: true },
+		);
 
 		// Call onStart lifecycle.
-		await this.#measureStartup("onWakeMs", () =>
-			this.#callOnStart(),
-		{ pauseKvGuard: true });
+		await this.#measureStartup("onWakeMs", () => this.#callOnStart(), {
+			pauseKvGuard: true,
+		});
 		// Initialize alarms
 		await this.#measureStartup("initAlarmsMs", () =>
 			this.#scheduleManager.initializeAlarms(),
@@ -1313,10 +1319,9 @@ export class ActorInstance<
 		} else {
 			this[WARN_UNEXPECTED_KV_ROUND_TRIP]("kvBatchGet");
 			this.#metrics.startup.kvRoundTrips++;
-			const [buf] = await this.driver.kvBatchGet(
-				this.#actorId,
-				[KEYS.PERSIST_DATA],
-			);
+			const [buf] = await this.driver.kvBatchGet(this.#actorId, [
+				KEYS.PERSIST_DATA,
+			]);
 			persistDataBuffer = buf;
 		}
 
@@ -1342,7 +1347,10 @@ export class ActorInstance<
 		this.#scheduleManager.setPersist(this.stateManager.persist);
 	}
 
-	async #createNewActor(persistData: PersistedActor<S, I>, writeCollector?: WriteCollector) {
+	async #createNewActor(
+		persistData: PersistedActor<S, I>,
+		writeCollector?: WriteCollector,
+	) {
 		this.#rLog.info({ msg: "actor creating" });
 
 		// Initialize state
@@ -1353,15 +1361,21 @@ export class ActorInstance<
 		// Call onCreate lifecycle
 		if (this.#config.onCreate) {
 			const onCreate = this.#config.onCreate;
-			await this.#measureStartup("onCreateMs", () =>
-				this.runInTraceSpan("actor.onCreate", undefined, () =>
-					onCreate(this.actorContext as any, persistData.input!),
-				),
-			{ pauseKvGuard: true });
+			await this.#measureStartup(
+				"onCreateMs",
+				() =>
+					this.runInTraceSpan("actor.onCreate", undefined, () =>
+						onCreate(this.actorContext as any, persistData.input!),
+					),
+				{ pauseKvGuard: true },
+			);
 		}
 	}
 
-	async #restoreExistingActor(persistData: PersistedActor<S, I>, preload?: PreloadMap) {
+	async #restoreExistingActor(
+		persistData: PersistedActor<S, I>,
+		preload?: PreloadMap,
+	) {
 		let connEntries: [Uint8Array, Uint8Array][];
 		const preloadedConns = preload?.listPrefix(KEYS.CONN_PREFIX);
 		if (preloadedConns !== undefined) {
@@ -1405,7 +1419,10 @@ export class ActorInstance<
 		this.connectionManager.restoreConnections(connections);
 	}
 
-	async #initializeInspectorToken(preload?: PreloadMap, writeCollector?: WriteCollector) {
+	async #initializeInspectorToken(
+		preload?: PreloadMap,
+		writeCollector?: WriteCollector,
+	) {
 		let tokenBuffer: Uint8Array | null;
 		const preloaded = preload?.get(KEYS.INSPECTOR_TOKEN);
 		if (preloaded) {
@@ -1663,13 +1680,16 @@ export class ActorInstance<
 			// Acquire a SQLite VFS handle for this actor. The driver may return a
 			// standalone VFS or a pooled handle that shares a WASM instance.
 			if (!this.#sqliteVfs && this.driver.createSqliteVfs) {
-				this.#sqliteVfs = await this.driver.createSqliteVfs(this.#actorId);
+				this.#sqliteVfs = await this.driver.createSqliteVfs(
+					this.#actorId,
+				);
 			}
 
 			client = await this.#measureStartup("setupDatabaseClientMs", () =>
 				dbProvider.createClient({
 					actorId: this.#actorId,
-					overrideRawDatabaseClient: this.driver.overrideRawDatabaseClient
+					overrideRawDatabaseClient: this.driver
+						.overrideRawDatabaseClient
 						? () =>
 								this.driver.overrideRawDatabaseClient!(
 									this.#actorId,

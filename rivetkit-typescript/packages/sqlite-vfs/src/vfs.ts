@@ -220,9 +220,11 @@ async function loadSqliteRuntime(
 				imports: WebAssembly.Imports,
 				receiveInstance: (instance: WebAssembly.Instance) => void,
 			) {
-				WebAssembly.instantiate(wasmModule, imports).then((instance) => {
-					receiveInstance(instance);
-				});
+				WebAssembly.instantiate(wasmModule, imports).then(
+					(instance) => {
+						receiveInstance(instance);
+					},
+				);
 				return {} as WebAssembly.Exports;
 			},
 		});
@@ -919,10 +921,7 @@ class SqliteSystem implements SqliteVfsRegistration {
 			if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
 				await this.#delete(file.path);
 			} else if (file.metaDirty) {
-				await file.options.put(
-					file.metaKey,
-					encodeFileMeta(file.size),
-				);
+				await file.options.put(file.metaKey, encodeFileMeta(file.size));
 				file.metaDirty = false;
 			}
 		} catch {
@@ -990,9 +989,7 @@ class SqliteSystem implements SqliteVfsRegistration {
 		let kvChunks: (Uint8Array | null)[];
 		try {
 			kvChunks =
-				chunkKeys.length > 0
-					? await options.getBatch(chunkKeys)
-					: [];
+				chunkKeys.length > 0 ? await options.getBatch(chunkKeys) : [];
 		} catch {
 			return VFS.SQLITE_IOERR_READ;
 		}
@@ -1004,8 +1001,7 @@ class SqliteSystem implements SqliteVfsRegistration {
 		// Copy data from chunks to output buffer
 		let kvIdx = 0;
 		for (let i = startChunk; i <= endChunk; i++) {
-			const chunkData =
-				chunkIndexToBuffered.get(i) ?? kvChunks[kvIdx++];
+			const chunkData = chunkIndexToBuffered.get(i) ?? kvChunks[kvIdx++];
 			const chunkOffset = i * CHUNK_SIZE;
 
 			// Calculate the range within this chunk
@@ -1303,7 +1299,9 @@ class SqliteSystem implements SqliteVfsRegistration {
 			}
 
 			for (let b = 0; b < keysToDelete.length; b += KV_MAX_BATCH_KEYS) {
-				await options.deleteBatch(keysToDelete.slice(b, b + KV_MAX_BATCH_KEYS));
+				await options.deleteBatch(
+					keysToDelete.slice(b, b + KV_MAX_BATCH_KEYS),
+				);
 			}
 		} catch {
 			return VFS.SQLITE_IOERR_TRUNCATE;
@@ -1376,7 +1374,9 @@ class SqliteSystem implements SqliteVfsRegistration {
 		}
 
 		for (let b = 0; b < keysToDelete.length; b += KV_MAX_BATCH_KEYS) {
-			await options.deleteBatch(keysToDelete.slice(b, b + KV_MAX_BATCH_KEYS));
+			await options.deleteBatch(
+				keysToDelete.slice(b, b + KV_MAX_BATCH_KEYS),
+			);
 		}
 	}
 
@@ -1448,7 +1448,9 @@ class SqliteSystem implements SqliteVfsRegistration {
 
 				// Dynamic limit: if metadata is dirty, we need one slot for it.
 				// If metadata is not dirty (file.size unchanged), all slots are available for pages.
-				const maxDirtyPages = file.metaDirty ? KV_MAX_BATCH_KEYS - 1 : KV_MAX_BATCH_KEYS;
+				const maxDirtyPages = file.metaDirty
+					? KV_MAX_BATCH_KEYS - 1
+					: KV_MAX_BATCH_KEYS;
 				if (dirtyBuffer && dirtyBuffer.size > maxDirtyPages) {
 					dirtyBuffer.clear();
 					file.dirtyBuffer = null;

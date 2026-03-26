@@ -249,8 +249,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			let state = await handle.getState();
 			for (
 				let i = 0;
-				i < 40 &&
-				(state.runCount === 0 || state.history.length === 0);
+				i < 40 && (state.runCount === 0 || state.history.length === 0);
 				i++
 			) {
 				await waitFor(driverTestConfig, 50);
@@ -433,8 +432,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			let state = await handle.getState();
 			for (
 				let i = 0;
-				i < 40 &&
-				(state.runCount === 0 || state.history.length === 0);
+				i < 40 && (state.runCount === 0 || state.history.length === 0);
 				i++
 			) {
 				await waitFor(driverTestConfig, 50);
@@ -456,7 +454,9 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			};
 			expect(data.isWorkflowEnabled).toBe(true);
 			expect(data.workflowHistory).not.toBeNull();
-			expect(data.workflowHistory?.nameRegistry.length).toBeGreaterThan(0);
+			expect(data.workflowHistory?.nameRegistry.length).toBeGreaterThan(
+				0,
+			);
 			expect(data.workflowHistory?.entries.length).toBeGreaterThan(0);
 			expect(
 				Object.keys(data.workflowHistory?.entryMetadata ?? {}).length,
@@ -507,7 +507,9 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			// Verify internal metrics exist
 			expect(data.startup_internal_load_state_ms).toBeDefined();
-			expect(data.startup_internal_load_state_ms.value).toBeGreaterThanOrEqual(0);
+			expect(
+				data.startup_internal_load_state_ms.value,
+			).toBeGreaterThanOrEqual(0);
 			expect(data.startup_internal_init_queue_ms).toBeDefined();
 			expect(data.startup_internal_init_inspector_token_ms).toBeDefined();
 

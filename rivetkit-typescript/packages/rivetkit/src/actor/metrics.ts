@@ -7,7 +7,9 @@
 
 /** Keys of `ActorMetrics["startup"]` whose values are `number`. */
 export type StartupTimingKey = {
-	[K in keyof ActorMetrics["startup"]]: ActorMetrics["startup"][K] extends number ? K : never;
+	[K in keyof ActorMetrics["startup"]]: ActorMetrics["startup"][K] extends number
+		? K
+		: never;
 }[keyof ActorMetrics["startup"]];
 
 export interface CounterMetric {
@@ -103,12 +105,18 @@ export class ActorMetrics {
 
 	/** Total number of KV write calls made so far. */
 	get totalKvWrites(): number {
-		return this.kvPut.calls + this.kvPutBatch.calls + this.kvDeleteBatch.calls;
+		return (
+			this.kvPut.calls + this.kvPutBatch.calls + this.kvDeleteBatch.calls
+		);
 	}
 
 	trackSql(query: string, durationMs: number): void {
 		const token = query.trimStart().slice(0, 8).toUpperCase();
-		if (token.startsWith("SELECT") || token.startsWith("PRAGMA") || token.startsWith("WITH")) {
+		if (
+			token.startsWith("SELECT") ||
+			token.startsWith("PRAGMA") ||
+			token.startsWith("WITH")
+		) {
 			this.sqlSelects++;
 		} else if (token.startsWith("INSERT")) {
 			this.sqlInserts++;

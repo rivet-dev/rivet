@@ -184,10 +184,7 @@ export function createActorRouter(
 			}
 
 			const inspectorToken = config.inspector.token();
-			if (
-				inspectorToken &&
-				timingSafeEqual(userToken, inspectorToken)
-			) {
+			if (inspectorToken && timingSafeEqual(userToken, inspectorToken)) {
 				return undefined;
 			}
 

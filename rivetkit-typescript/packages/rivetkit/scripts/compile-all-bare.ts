@@ -35,7 +35,11 @@ await Promise.all(
 	bareFiles.map(async (schemaPath) => {
 		const rel = path.relative(schemasDir, schemaPath);
 		const outputPath = path.join(distDir, rel.replace(/\.bare$/, ".ts"));
-		await compileSchema({ schemaPath, outputPath, config: { pedantic: false } });
+		await compileSchema({
+			schemaPath,
+			outputPath,
+			config: { pedantic: false },
+		});
 		console.log(`Compiled ${rel}`);
 	}),
 );

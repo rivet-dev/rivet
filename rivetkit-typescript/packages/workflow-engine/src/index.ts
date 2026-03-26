@@ -342,14 +342,14 @@ async function executeRollback<TInput, TOutput>(
 			metadata.rollbackError =
 				error instanceof Error ? error.message : String(error);
 			if (onError) {
-					rollbackEvent = {
-						rollback: {
-							workflowId,
-							stepName: action.name,
-							error: extractErrorInfo(error),
-						},
-					};
-				}
+				rollbackEvent = {
+					rollback: {
+						workflowId,
+						stepName: action.name,
+						error: extractErrorInfo(error),
+					},
+				};
+			}
 			if (error instanceof Error) {
 				markErrorReported(error);
 			}
@@ -792,7 +792,8 @@ export async function replayWorkflowFromStep(
 	if (
 		entries.some(
 			({ entry, metadata }) =>
-				metadata.status === "running" && !entryIdsToDelete.has(entry.id),
+				metadata.status === "running" &&
+				!entryIdsToDelete.has(entry.id),
 		)
 	) {
 		throw new Error(
@@ -822,10 +823,7 @@ export async function replayWorkflowFromStep(
 	await Promise.all([
 		driver.delete(buildWorkflowOutputKey()),
 		driver.delete(buildWorkflowErrorKey()),
-		driver.set(
-			buildWorkflowStateKey(),
-			serializeWorkflowState("sleeping"),
-		),
+		driver.set(buildWorkflowStateKey(), serializeWorkflowState("sleeping")),
 	]);
 	if (options?.scheduleAlarm ?? true) {
 		await driver.setAlarm(workflowId, Date.now());

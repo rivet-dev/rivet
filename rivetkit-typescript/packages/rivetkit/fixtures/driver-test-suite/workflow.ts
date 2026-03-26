@@ -330,7 +330,9 @@ export const workflowSpawnParentActor = actor({
 						key: message.body.key,
 						result: null,
 						error:
-							error instanceof Error ? error.message : String(error),
+							error instanceof Error
+								? error.message
+								: String(error),
 					});
 				}
 			});
@@ -698,16 +700,14 @@ export const workflowRunningStepActor = actor({
 		await ctx.step("prepare", async () => {
 			ctx.state.preparedAt = Date.now();
 		});
-		await ctx.step(
-			{
-				name: "block",
-				timeout: 0,
-				run: async () => {
-					ctx.state.startedAt = Date.now();
-					await new Promise((resolve) => setTimeout(resolve, 250));
-				},
+		await ctx.step({
+			name: "block",
+			timeout: 0,
+			run: async () => {
+				ctx.state.startedAt = Date.now();
+				await new Promise((resolve) => setTimeout(resolve, 250));
 			},
-		);
+		});
 	}),
 	actions: {
 		getState: (c) => ({ ...c.state }),

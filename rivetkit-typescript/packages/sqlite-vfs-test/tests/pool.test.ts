@@ -44,9 +44,7 @@ describe("SqliteVfsPool", () => {
 		const kvStore = createKvStore();
 		const db = await handle.open("ignored-filename", kvStore);
 
-		await db.exec(
-			"CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)",
-		);
+		await db.exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)");
 		await db.exec("INSERT INTO test (value) VALUES ('hello')");
 
 		const result = await db.query("SELECT value FROM test");
@@ -120,9 +118,7 @@ describe("SqliteVfsPool", () => {
 
 		// Actor-10's database should still be usable.
 		await db10.exec("INSERT INTO t10 (v) VALUES ('after-release-1')");
-		const result = await db10.query(
-			"SELECT v FROM t10 ORDER BY id",
-		);
+		const result = await db10.query("SELECT v FROM t10 ORDER BY id");
 		expect(result.rows.length).toBe(2);
 		expect(String(result.rows[0]?.[0])).toBe("from-actor-10");
 		expect(String(result.rows[1]?.[0])).toBe("after-release-1");

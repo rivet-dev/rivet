@@ -345,9 +345,7 @@ export class ActorInspector {
 		isWorkflowEnabled: boolean;
 	} {
 		return {
-			history: serializeWorkflowHistoryForJson(
-				this.getWorkflowHistory(),
-			),
+			history: serializeWorkflowHistoryForJson(this.getWorkflowHistory()),
 			isWorkflowEnabled: this.isWorkflowEnabled(),
 		};
 	}

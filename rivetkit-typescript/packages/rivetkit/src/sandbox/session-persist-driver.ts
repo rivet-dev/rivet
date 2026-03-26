@@ -85,7 +85,9 @@ export class SqliteSessionPersistDriver implements SessionPersistDriver {
 		);
 
 		return {
-			items: rows.map((row) => JSON.parse(row.record_json) as SessionRecord),
+			items: rows.map(
+				(row) => JSON.parse(row.record_json) as SessionRecord,
+			),
 			nextCursor: nextCursor(offset, limit, rows.length),
 		};
 	}
@@ -131,15 +133,18 @@ export class SqliteSessionPersistDriver implements SessionPersistDriver {
 		);
 
 		return {
-			items: rows.map((row) => ({
-				id: row.id,
-				eventIndex: row.event_index,
-				sessionId: row.session_id,
-				createdAt: row.created_at,
-				connectionId: row.connection_id,
-				sender: row.sender,
-				payload: JSON.parse(row.payload_json),
-			} satisfies SessionEvent)),
+			items: rows.map(
+				(row) =>
+					({
+						id: row.id,
+						eventIndex: row.event_index,
+						sessionId: row.session_id,
+						createdAt: row.created_at,
+						connectionId: row.connection_id,
+						sender: row.sender,
+						payload: JSON.parse(row.payload_json),
+					}) satisfies SessionEvent,
+			),
 			nextCursor: nextCursor(offset, limit, rows.length),
 		};
 	}

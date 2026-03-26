@@ -30,7 +30,9 @@ export function createWorkflowInspectorAdapter(): {
 	adapter: WorkflowInspectorAdapter;
 	update: (snapshot: WorkflowHistorySnapshot) => void;
 	setReplayFromStep: (
-		fn: (entryId?: string) => Promise<inspectorSchema.WorkflowHistory | null>,
+		fn: (
+			entryId?: string,
+		) => Promise<inspectorSchema.WorkflowHistory | null>,
 	) => void;
 } {
 	const emitter = createNanoEvents<{

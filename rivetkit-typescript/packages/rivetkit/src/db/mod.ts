@@ -10,7 +10,10 @@ interface DatabaseFactoryConfig {
 export function db({
 	onMigrate,
 }: DatabaseFactoryConfig = {}): DatabaseProvider<RawAccess> {
-	const clientToKvStore = new WeakMap<object, ReturnType<typeof createActorKvStore>>();
+	const clientToKvStore = new WeakMap<
+		object,
+		ReturnType<typeof createActorKvStore>
+	>();
 
 	return {
 		createClient: async (ctx) => {
@@ -46,7 +49,11 @@ export function db({
 				);
 			}
 
-			const kvStore = createActorKvStore(ctx.kv, ctx.metrics, ctx.preloadedEntries);
+			const kvStore = createActorKvStore(
+				ctx.kv,
+				ctx.metrics,
+				ctx.preloadedEntries,
+			);
 			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
 			let closed = false;
 			const mutex = new AsyncMutex();
@@ -129,8 +136,10 @@ export function db({
 						const durationMs = performance.now() - start;
 						ctx.metrics?.trackSql(query, durationMs);
 						if (ctx.metrics) {
-							const kvReads = ctx.metrics.totalKvReads - kvReadsBefore;
-							const kvWrites = ctx.metrics.totalKvWrites - kvWritesBefore;
+							const kvReads =
+								ctx.metrics.totalKvReads - kvReadsBefore;
+							const kvWrites =
+								ctx.metrics.totalKvWrites - kvWritesBefore;
 							ctx.log?.debug({
 								msg: "sql query",
 								query: query.slice(0, 120),

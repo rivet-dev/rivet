@@ -8,9 +8,7 @@ import { ClientConfigSchemaBase, transformClientConfig } from "@/client/config";
  */
 export const EngineConfigSchemaBase = ClientConfigSchemaBase.extend({
 	/** Deprecated. Unique key for this runner. Runners connecting a given key will replace any other runner connected with the same key. */
-	runnerKey: z
-		.string()
-		.optional(),
+	runnerKey: z.string().optional(),
 
 	/** How many actors this runner can run. */
 	totalSlots: z.number().default(100_000),

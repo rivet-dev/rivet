@@ -1,18 +1,12 @@
 import { z } from "zod/v4";
-import type {
-	ActorContext,
-	BeforeConnectContext,
-} from "@/actor/contexts";
+import type { ActorContext, BeforeConnectContext } from "@/actor/contexts";
 import type { AnyDatabaseProvider } from "@/actor/database";
 import type {
 	PermissionRequestListener,
 	SessionEventListener,
 	SandboxProvider,
 } from "sandbox-agent";
-import type {
-	SandboxActorVars,
-	SandboxActorState,
-} from "./types";
+import type { SandboxActorVars, SandboxActorState } from "./types";
 
 const zFunction = <
 	T extends (...args: any[]) => any = (...args: unknown[]) => unknown,
@@ -24,7 +18,8 @@ const SandboxProviderSchema = z.object({
 	destroy: zFunction<SandboxProvider["destroy"]>(),
 	getUrl: zFunction<NonNullable<SandboxProvider["getUrl"]>>().optional(),
 	getFetch: zFunction<NonNullable<SandboxProvider["getFetch"]>>().optional(),
-	ensureServer: zFunction<NonNullable<SandboxProvider["ensureServer"]>>().optional(),
+	ensureServer:
+		zFunction<NonNullable<SandboxProvider["ensureServer"]>>().optional(),
 });
 
 export const SandboxActorOptionsSchema = z
@@ -34,7 +29,10 @@ export const SandboxActorOptionsSchema = z
 		warningAfterMs: z.number().nonnegative().default(30_000),
 		// Clear active-turn state after this timeout so a missing terminal event
 		// cannot keep the actor awake forever.
-		staleAfterMs: z.number().positive().default(5 * 60_000),
+		staleAfterMs: z
+			.number()
+			.positive()
+			.default(5 * 60_000),
 	})
 	.strict()
 	.prefault(() => ({}))

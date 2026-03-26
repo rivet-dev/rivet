@@ -110,7 +110,10 @@ export class StateManager<
 	/**
 	 * Initializes state from persisted data or creates new state.
 	 */
-	async initializeState(persistData: PersistedActor<S, I>, writeCollector?: WriteCollector): Promise<void> {
+	async initializeState(
+		persistData: PersistedActor<S, I>,
+		writeCollector?: WriteCollector,
+	): Promise<void> {
 		if (!persistData.hasInitialized) {
 			// Create initial state
 			let stateData: unknown;

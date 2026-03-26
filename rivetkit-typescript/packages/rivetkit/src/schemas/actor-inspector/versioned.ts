@@ -199,7 +199,9 @@ const v3ToServerToV4 = (v3Data: v3.ToServer): v4.ToServer => {
 
 const v4ToServerToV3 = (v4Data: v4.ToServer): v3.ToServer => {
 	if (v4Data.body.tag === "WorkflowReplayRequest") {
-		throw new Error("Cannot convert v4-only workflow replay requests to v3");
+		throw new Error(
+			"Cannot convert v4-only workflow replay requests to v3",
+		);
 	}
 	return v4Data as unknown as v3.ToServer;
 };
@@ -238,11 +240,7 @@ export const TO_SERVER_VERSIONED = createVersionedDataHandler<v4.ToServer>({
 		v2ToServerToV3,
 		v3ToServerToV4,
 	],
-	serializeConverters: () => [
-		v4ToServerToV3,
-		v3ToServerToV2,
-		v2ToServerToV1,
-	],
+	serializeConverters: () => [v4ToServerToV3, v3ToServerToV2, v2ToServerToV1],
 });
 
 export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v4.ToClient>({
@@ -279,9 +277,5 @@ export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v4.ToClient>({
 		v2ToClientToV3,
 		v3ToClientToV4,
 	],
-	serializeConverters: () => [
-		v4ToClientToV3,
-		v3ToClientToV2,
-		v2ToClientToV1,
-	],
+	serializeConverters: () => [v4ToClientToV3, v3ToClientToV2, v2ToClientToV1],
 });

@@ -106,7 +106,10 @@ function createProxyCallback(
 				result = { rows: [] };
 			} else {
 				// For all/get/values, use parameterized query
-				const queryResult = await waDb.query(sql, toSqliteBindings(params));
+				const queryResult = await waDb.query(
+					sql,
+					toSqliteBindings(params),
+				);
 
 				// drizzle's mapResultRow accesses rows by column index (positional arrays)
 				// so we return raw arrays for all methods
@@ -199,7 +202,10 @@ export function db<
 	// concurrently: the last writer won, and earlier actors' migrations
 	// ran on the wrong database.
 	const clientToRawDb = new WeakMap<object, IDatabase>();
-	const clientToKvStore = new WeakMap<object, ReturnType<typeof createActorKvStore>>();
+	const clientToKvStore = new WeakMap<
+		object,
+		ReturnType<typeof createActorKvStore>
+	>();
 
 	return {
 		createClient: async (ctx) => {
@@ -210,7 +216,11 @@ export function db<
 				);
 			}
 
-			const kvStore = createActorKvStore(ctx.kv, ctx.metrics, ctx.preloadedEntries);
+			const kvStore = createActorKvStore(
+				ctx.kv,
+				ctx.metrics,
+				ctx.preloadedEntries,
+			);
 			const waDb = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
 			// Per-client mutex so actors of the same type do not serialize
 			// against each other. Each actor has its own database handle and
@@ -224,7 +234,13 @@ export function db<
 			};
 
 			// Create the async proxy callback
-			const callback = createProxyCallback(waDb, mutex, () => closed, ctx.metrics, ctx.log);
+			const callback = createProxyCallback(
+				waDb,
+				mutex,
+				() => closed,
+				ctx.metrics,
+				ctx.log,
+			);
 
 			// Create the drizzle instance using sqlite-proxy
 			const client = proxyDrizzle<TSchema>(callback, config);
@@ -286,8 +302,10 @@ export function db<
 
 						const durationMs = performance.now() - start;
 						if (ctx.metrics && ctx.log) {
-							const kvReads = ctx.metrics.totalKvReads - kvReadsBefore;
-							const kvWrites = ctx.metrics.totalKvWrites - kvWritesBefore;
+							const kvReads =
+								ctx.metrics.totalKvReads - kvReadsBefore;
+							const kvWrites =
+								ctx.metrics.totalKvWrites - kvWritesBefore;
 							ctx.log.debug({
 								msg: "sql query",
 								query: query.slice(0, 120),

@@ -162,10 +162,10 @@ export function buildPreloadMap(
 	const sorted: PreloadedEntries = preloadedKv.entries
 		.map(
 			(entry) =>
-				[
-					new Uint8Array(entry.key),
-					new Uint8Array(entry.value),
-				] as [Uint8Array, Uint8Array],
+				[new Uint8Array(entry.key), new Uint8Array(entry.value)] as [
+					Uint8Array,
+					Uint8Array,
+				],
 		)
 		.sort((a, b) => compareBytes(a[0], b[0]));
 

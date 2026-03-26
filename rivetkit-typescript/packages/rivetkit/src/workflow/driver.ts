@@ -67,15 +67,15 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 			sentAt: message.createdAt,
 			...(opts.completable
 				? {
-					complete: async (response?: unknown) => {
-						await this.#runCtx.keepAwake(
-							this.#actor.queueManager.completeMessage(
-								message,
-								response,
-							),
-						);
-					},
-				}
+						complete: async (response?: unknown) => {
+							await this.#runCtx.keepAwake(
+								this.#actor.queueManager.completeMessage(
+									message,
+									response,
+								),
+							);
+						},
+					}
 				: {}),
 		}));
 	}

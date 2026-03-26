@@ -23,12 +23,7 @@
 
 const API_PREFIX = "/v1";
 
-type FetchBody =
-	| Blob
-	| ArrayBuffer
-	| Uint8Array
-	| ReadableStream
-	| string;
+type FetchBody = Blob | ArrayBuffer | Uint8Array | ReadableStream | string;
 
 type TerminalInput = string | ArrayBuffer | ArrayBufferView;
 type WebSocketConstructor = typeof WebSocket;
@@ -182,10 +177,7 @@ export async function deleteFile(
 	await assertOk(response, "delete file");
 }
 
-export async function mkdirFs(
-	sandboxUrl: string,
-	path: string,
-): Promise<void> {
+export async function mkdirFs(sandboxUrl: string, path: string): Promise<void> {
 	const response = await fetchSandbox(
 		buildUrl(sandboxUrl, `${API_PREFIX}/fs/mkdir`, { path }),
 		{
@@ -433,17 +425,22 @@ class DirectTerminalSession implements TerminalSession {
 		}
 	}
 
-	private sendFrame(frame: {
-		type: "input";
-		data: string;
-		encoding?: string;
-	} | {
-		type: "resize";
-		cols: number;
-		rows: number;
-	} | {
-		type: "close";
-	}): void {
+	private sendFrame(
+		frame:
+			| {
+					type: "input";
+					data: string;
+					encoding?: string;
+			  }
+			| {
+					type: "resize";
+					cols: number;
+					rows: number;
+			  }
+			| {
+					type: "close";
+			  },
+	): void {
 		if (this.socket.readyState !== 1) {
 			return;
 		}
@@ -529,10 +526,7 @@ function parseTerminalServerFrame(payload: string):
 		if (typeof parsed.type !== "string") {
 			return null;
 		}
-		if (
-			parsed.type === "ready" &&
-			typeof parsed.processId === "string"
-		) {
+		if (parsed.type === "ready" && typeof parsed.processId === "string") {
 			return {
 				type: "ready",
 				processId: parsed.processId,
@@ -546,13 +540,11 @@ function parseTerminalServerFrame(payload: string):
 		) {
 			return {
 				type: "exit",
-				exitCode: (parsed.exitCode as number | null | undefined) ?? null,
+				exitCode:
+					(parsed.exitCode as number | null | undefined) ?? null,
 			};
 		}
-		if (
-			parsed.type === "error" &&
-			typeof parsed.message === "string"
-		) {
+		if (parsed.type === "error" && typeof parsed.message === "string") {
 			return {
 				type: "error",
 				message: parsed.message,
@@ -581,7 +573,11 @@ function encodeTerminalBytes(data: ArrayBuffer | ArrayBufferView): Uint8Array {
 	if (data instanceof ArrayBuffer) {
 		return new Uint8Array(data);
 	}
-	return new Uint8Array(data.buffer, data.byteOffset, data.byteLength).slice();
+	return new Uint8Array(
+		data.buffer,
+		data.byteOffset,
+		data.byteLength,
+	).slice();
 }
 
 async function decodeTerminalBytes(data: unknown): Promise<Uint8Array | null> {
@@ -605,7 +601,9 @@ function bytesToBase64(bytes: Uint8Array): string {
 	const bufferCtor = (
 		globalThis as typeof globalThis & {
 			Buffer?: {
-				from(data: Uint8Array): { toString(encoding: "base64"): string };
+				from(data: Uint8Array): {
+					toString(encoding: "base64"): string;
+				};
 			};
 		}
 	).Buffer;
@@ -701,7 +699,6 @@ function isAbortError(error: unknown): boolean {
 
 function isReadableStream(value: unknown): value is ReadableStream {
 	return (
-		typeof ReadableStream !== "undefined" &&
-		value instanceof ReadableStream
+		typeof ReadableStream !== "undefined" && value instanceof ReadableStream
 	);
 }

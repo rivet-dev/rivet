@@ -28,7 +28,17 @@ export class SqliteVfsPoolManager {
 			// Turbopack cannot handle.
 			const specifier = ["@rivetkit", "sqlite-vfs"].join("/");
 			this.#poolPromise = import(specifier).then(
-				({ SqliteVfsPool }: { SqliteVfsPool: new (opts: { actorsPerInstance: number; idleDestroyMs: number }) => { acquire(actorId: string): Promise<ISqliteVfs>; shutdown(): Promise<void> } }) =>
+				({
+					SqliteVfsPool,
+				}: {
+					SqliteVfsPool: new (opts: {
+						actorsPerInstance: number;
+						idleDestroyMs: number;
+					}) => {
+						acquire(actorId: string): Promise<ISqliteVfs>;
+						shutdown(): Promise<void>;
+					};
+				}) =>
 					new SqliteVfsPool({
 						actorsPerInstance: poolConfig.actorsPerInstance,
 						idleDestroyMs: poolConfig.idleDestroyMs,

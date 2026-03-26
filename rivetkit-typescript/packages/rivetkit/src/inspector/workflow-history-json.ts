@@ -14,9 +14,7 @@ function decodeWorkflowCbor(data: ArrayBuffer | null): unknown | null {
 	}
 }
 
-function serializeWorkflowLocation(
-	location: transport.WorkflowLocation,
-): Array<
+function serializeWorkflowLocation(location: transport.WorkflowLocation): Array<
 	| { tag: "WorkflowNameIndex"; val: number }
 	| {
 			tag: "WorkflowLoopIterationMarker";
@@ -182,95 +180,91 @@ function serializeWorkflowEntryKind(kind: transport.WorkflowEntryKind):
 	}
 }
 
-export function serializeWorkflowHistoryForJson(
-	data: ArrayBuffer | null,
-):
-	| {
-			nameRegistry: string[];
-			entries: Array<{
-				id: string;
-				location: Array<
-					| { tag: "WorkflowNameIndex"; val: number }
-					| {
-							tag: "WorkflowLoopIterationMarker";
-							val: { loop: number; iteration: number };
-					  }
-				>;
-				kind:
-					| {
-							tag: "WorkflowStepEntry";
-							val: { output: unknown | null; error: string | null };
-					  }
-					| {
-							tag: "WorkflowLoopEntry";
-							val: {
-								state: unknown | null;
-								iteration: number;
+export function serializeWorkflowHistoryForJson(data: ArrayBuffer | null): {
+	nameRegistry: string[];
+	entries: Array<{
+		id: string;
+		location: Array<
+			| { tag: "WorkflowNameIndex"; val: number }
+			| {
+					tag: "WorkflowLoopIterationMarker";
+					val: { loop: number; iteration: number };
+			  }
+		>;
+		kind:
+			| {
+					tag: "WorkflowStepEntry";
+					val: { output: unknown | null; error: string | null };
+			  }
+			| {
+					tag: "WorkflowLoopEntry";
+					val: {
+						state: unknown | null;
+						iteration: number;
+						output: unknown | null;
+					};
+			  }
+			| {
+					tag: "WorkflowSleepEntry";
+					val: { deadline: number; state: string };
+			  }
+			| {
+					tag: "WorkflowMessageEntry";
+					val: { name: string; messageData: unknown | null };
+			  }
+			| {
+					tag: "WorkflowRollbackCheckpointEntry";
+					val: { name: string };
+			  }
+			| {
+					tag: "WorkflowJoinEntry";
+					val: {
+						branches: Record<
+							string,
+							{
+								status: string;
 								output: unknown | null;
-							};
-					  }
-					| {
-							tag: "WorkflowSleepEntry";
-							val: { deadline: number; state: string };
-					  }
-					| {
-							tag: "WorkflowMessageEntry";
-							val: { name: string; messageData: unknown | null };
-					  }
-					| {
-							tag: "WorkflowRollbackCheckpointEntry";
-							val: { name: string };
-					  }
-					| {
-							tag: "WorkflowJoinEntry";
-							val: {
-								branches: Record<
-									string,
-									{
-										status: string;
-										output: unknown | null;
-										error: string | null;
-									}
-								>;
-							};
-					  }
-					| {
-							tag: "WorkflowRaceEntry";
-							val: {
-								winner: string | null;
-								branches: Record<
-									string,
-									{
-										status: string;
-										output: unknown | null;
-										error: string | null;
-									}
-								>;
-							};
-					  }
-					| {
-							tag: "WorkflowRemovedEntry";
-							val: {
-								originalType: string;
-								originalName: string | null;
-							};
-					  };
-			}>;
-			entryMetadata: Record<
-				string,
-				{
-					status: string;
-					error: string | null;
-					attempts: number;
-					lastAttemptAt: number;
-					createdAt: number;
-					completedAt: number | null;
-					rollbackCompletedAt: number | null;
-					rollbackError: string | null;
-				}
-			>;
-	  }
-	| null {
+								error: string | null;
+							}
+						>;
+					};
+			  }
+			| {
+					tag: "WorkflowRaceEntry";
+					val: {
+						winner: string | null;
+						branches: Record<
+							string,
+							{
+								status: string;
+								output: unknown | null;
+								error: string | null;
+							}
+						>;
+					};
+			  }
+			| {
+					tag: "WorkflowRemovedEntry";
+					val: {
+						originalType: string;
+						originalName: string | null;
+					};
+			  };
+	}>;
+	entryMetadata: Record<
+		string,
+		{
+			status: string;
+			error: string | null;
+			attempts: number;
+			lastAttemptAt: number;
+			createdAt: number;
+			completedAt: number | null;
+			rollbackCompletedAt: number | null;
+			rollbackError: string | null;
+		}
+	>;
+} | null {
 	if (data === null) {
 		return null;
 	}
@@ -285,25 +279,27 @@ export function serializeWorkflowHistoryForJson(
 			kind: serializeWorkflowEntryKind(entry.kind),
 		})),
 		entryMetadata: Object.fromEntries(
-			Array.from(history.entryMetadata.entries()).map(([entryId, meta]) => [
-				entryId,
-				{
-					status: meta.status,
-					error: meta.error,
-					attempts: meta.attempts,
-					lastAttemptAt: Number(meta.lastAttemptAt),
-					createdAt: Number(meta.createdAt),
-					completedAt:
-						meta.completedAt === null
-							? null
-							: Number(meta.completedAt),
-					rollbackCompletedAt:
-						meta.rollbackCompletedAt === null
-							? null
-							: Number(meta.rollbackCompletedAt),
-					rollbackError: meta.rollbackError,
-				},
-			]),
+			Array.from(history.entryMetadata.entries()).map(
+				([entryId, meta]) => [
+					entryId,
+					{
+						status: meta.status,
+						error: meta.error,
+						attempts: meta.attempts,
+						lastAttemptAt: Number(meta.lastAttemptAt),
+						createdAt: Number(meta.createdAt),
+						completedAt:
+							meta.completedAt === null
+								? null
+								: Number(meta.completedAt),
+						rollbackCompletedAt:
+							meta.rollbackCompletedAt === null
+								? null
+								: Number(meta.rollbackCompletedAt),
+						rollbackError: meta.rollbackError,
+					},
+				],
+			),
 		),
 	};
 }

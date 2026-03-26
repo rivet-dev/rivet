@@ -99,9 +99,7 @@ interface ActorInspectorApi {
 		history: WorkflowHistory | null;
 		isEnabled: boolean;
 	}>;
-	replayWorkflowFromStep: (
-		entryId?: string,
-	) => Promise<{
+	replayWorkflowFromStep: (entryId?: string) => Promise<{
 		history: WorkflowHistory | null;
 		isEnabled: boolean;
 	}>;
@@ -429,9 +427,7 @@ export const createDefaultActorInspectorContext = ({
 const computeActorUrl = ({ url, actorId }: { url: string; actorId: ActorId }) =>
 	new URL(`/gateway/${actorId}`, url).href;
 
-function transformWorkflowHistoryFromJson(
-	raw: number[] | null,
-): {
+function transformWorkflowHistoryFromJson(raw: number[] | null): {
 	history: WorkflowHistory | null;
 	isEnabled: boolean;
 } {

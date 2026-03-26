@@ -68,7 +68,9 @@ if (!file) {
 	throw new Error("Database file not found in MemoryVFS");
 }
 if (file.size < 4096) {
-	throw new Error(`Database file too small: ${file.size} bytes, expected >= 4096`);
+	throw new Error(
+		`Database file too small: ${file.size} bytes, expected >= 4096`,
+	);
 }
 const page1 = new Uint8Array(file.data, 0, 4096);
 
@@ -125,7 +127,9 @@ export const EMPTY_DB_PAGE: Uint8Array = (() => {
 const outPath = join(__dirname, "..", "src", "generated", "empty-db-page.ts");
 writeFileSync(outPath, source);
 console.log(`Wrote ${outPath}`);
-console.log(`Header prefix (${headerBytes.length} bytes): [${headerBytes.slice(0, 20).join(", ")}...]`);
+console.log(
+	`Header prefix (${headerBytes.length} bytes): [${headerBytes.slice(0, 20).join(", ")}...]`,
+);
 console.log(`Page size: ${pageSize}, DB pages: ${dbSizePages}`);
 
 vfs.close();

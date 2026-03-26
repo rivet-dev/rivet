@@ -138,10 +138,7 @@ export function markSessionActiveInMemory<TConnParams>(
 			c.vars.activePromptRequestIdsBySessionId.get(sessionId) ?? [];
 		if (!requestIds.includes(requestId)) {
 			requestIds.push(requestId);
-			c.vars.activePromptRequestIdsBySessionId.set(
-				sessionId,
-				requestIds,
-			);
+			c.vars.activePromptRequestIdsBySessionId.set(sessionId, requestIds);
 		}
 	}
 
@@ -155,15 +152,11 @@ function clearSessionActiveInMemory<TConnParams>(
 	requestId?: string,
 ): void {
 	if (requestId) {
-		const remaining =
-			(c.vars.activePromptRequestIdsBySessionId.get(sessionId) ?? []).filter(
-				(activeRequestId) => activeRequestId !== requestId,
-			);
+		const remaining = (
+			c.vars.activePromptRequestIdsBySessionId.get(sessionId) ?? []
+		).filter((activeRequestId) => activeRequestId !== requestId);
 		if (remaining.length > 0) {
-			c.vars.activePromptRequestIdsBySessionId.set(
-				sessionId,
-				remaining,
-			);
+			c.vars.activePromptRequestIdsBySessionId.set(sessionId, remaining);
 			return;
 		}
 	}
@@ -255,8 +248,7 @@ export function trackSessionTurnFromEvent<TConnParams>(
 	event: SandboxSessionEvent,
 ): void {
 	const payload = event.payload as Record<string, unknown> | null | undefined;
-	const method =
-		typeof payload?.method === "string" ? payload.method : null;
+	const method = typeof payload?.method === "string" ? payload.method : null;
 	const rawId = payload?.id;
 	const id =
 		typeof rawId === "string"

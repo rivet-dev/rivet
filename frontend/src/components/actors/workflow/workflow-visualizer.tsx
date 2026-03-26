@@ -68,9 +68,7 @@ export function WorkflowVisualizer({
 }) {
 	const hasRunningStep =
 		isReplayBlocked ||
-		workflow.history.some(
-		(item) => item.entry.status === "running",
-	);
+		workflow.history.some((item) => item.entry.status === "running");
 	const { nodes, edges } = useMemo(
 		() =>
 			workflowHistoryToXYFlow(workflow, {
@@ -280,46 +278,46 @@ export function WorkflowVisualizer({
 					)}
 
 					{selectedNode.entryId && replayState?.isVisible && (
-							<div className="mt-4 flex justify-end">
-								<MaybeTooltip
-									content={replayState.tooltip}
-									disabled={!replayState.tooltip}
-								>
-									<span className="inline-flex">
-										<Button
-											size="sm"
-											variant="outline"
-											disabled={
-												replayState.isDisabled ||
+						<div className="mt-4 flex justify-end">
+							<MaybeTooltip
+								content={replayState.tooltip}
+								disabled={!replayState.tooltip}
+							>
+								<span className="inline-flex">
+									<Button
+										size="sm"
+										variant="outline"
+										disabled={
+											replayState.isDisabled ||
+											selectedNode.entryId ===
+												replayingEntryId
+										}
+										onClick={() => {
+											selectedNode.onReplayStep?.(
+												selectedNode.entryId!,
+											);
+										}}
+									>
+										<Icon
+											icon={
 												selectedNode.entryId ===
-													replayingEntryId
+												replayingEntryId
+													? faSpinnerThird
+													: faRefresh
 											}
-											onClick={() => {
-												selectedNode.onReplayStep?.(
-													selectedNode.entryId!,
-												);
-											}}
-										>
-											<Icon
-												icon={
-													selectedNode.entryId ===
-													replayingEntryId
-														? faSpinnerThird
-														: faRefresh
-												}
-												className={
-													selectedNode.entryId ===
-													replayingEntryId
-														? "animate-spin"
-														: undefined
-												}
-											/>
-											Replay from this step
-										</Button>
-									</span>
-								</MaybeTooltip>
-							</div>
-						)}
+											className={
+												selectedNode.entryId ===
+												replayingEntryId
+													? "animate-spin"
+													: undefined
+											}
+										/>
+										Replay from this step
+									</Button>
+								</span>
+							</MaybeTooltip>
+						</div>
+					)}
 				</div>
 			)}
 		</div>
