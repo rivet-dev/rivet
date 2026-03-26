@@ -224,6 +224,45 @@ function isSessionLike(value: unknown): value is { id: string } {
 	);
 }
 
+/**
+ * HACK: Convert Session instances to plain SessionRecords for RPC
+ * serialization. The root cause is that sandbox-agent SDK methods return
+ * Session class instances (which hold internal references like the
+ * SandboxAgent) instead of plain SessionRecord objects. The proper fix is
+ * to have sandbox-agent return SessionRecords directly from its public API
+ * so callers don't need to post-process results.
+ */
+function toSerializable(value: unknown): unknown {
+	if (value === null || value === undefined) return value;
+	if (typeof value !== "object") return value;
+
+	// Session instance: convert via toRecord().
+	if (
+		"toRecord" in value &&
+		typeof (value as Record<string, unknown>).toRecord === "function"
+	) {
+		return (value as { toRecord(): unknown }).toRecord();
+	}
+
+	// Array: recurse into elements.
+	if (Array.isArray(value)) {
+		return value.map(toSerializable);
+	}
+
+	// Plain object: recurse into values. Only process POJOs to avoid
+	// serializing class instances with non-data properties.
+	const proto = Object.getPrototypeOf(value);
+	if (proto === Object.prototype || proto === null) {
+		const out: Record<string, unknown> = {};
+		for (const [k, v] of Object.entries(value)) {
+			out[k] = toSerializable(v);
+		}
+		return out;
+	}
+
+	return value;
+}
+
 // --- Proxy action builder ---
 
 /**
@@ -338,7 +377,7 @@ function buildProxyActions<TConnParams>(
 				}
 			}
 
-			return result;
+			return toSerializable(result);
 		};
 	}
 
@@ -366,6 +405,11 @@ export function sandboxActor<TConnParams = undefined>(
 		Record<never, never>,
 		Record<never, never>
 	>({
+		options: {
+			// Sandbox operations (container startup, agent install, session
+			// creation) are inherently slower than normal actor actions.
+			actionTimeout: 120_000,
+		},
 		createState: async () => ({
 			sandboxId: null,
 			providerName: null,
