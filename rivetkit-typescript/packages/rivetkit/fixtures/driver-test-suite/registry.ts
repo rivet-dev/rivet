@@ -20,6 +20,7 @@ import { dbActorDrizzle } from "./actor-db-drizzle";
 import { dbActorRaw } from "./actor-db-raw";
 import { onStateChangeActor } from "./actor-onstatechange";
 import { connErrorSerializationActor } from "./conn-error-serialization";
+import { dbPragmaMigrationActor } from "./db-pragma-migration";
 import { counterWithParams } from "./conn-params";
 import { connStateActor } from "./conn-state";
 // Import actors from individual files
@@ -77,6 +78,7 @@ import {
 } from "./sleep";
 import { lifecycleObserver, startStopRaceActor } from "./start-stop-race";
 import { statelessActor } from "./stateless";
+import { stateZodCoercionActor } from "./state-zod-coercion";
 import {
 	driverCtxActor,
 	dynamicVarActor,
@@ -233,5 +235,9 @@ export const registry = setup({
 		connErrorSerializationActor,
 		// From db-kv-stats.ts
 		dbKvStatsActor,
+		// From db-pragma-migration.ts
+		dbPragmaMigrationActor,
+		// From state-zod-coercion.ts
+		stateZodCoercionActor,
 	},
 });

@@ -9,18 +9,30 @@ import { faCloudflare, faNodeJs, faReact, faNextjs } from "@rivet-gg/icons";
 ## Quickstart
 
 <CardGroup cols={2}>
-<Card title="Node.js & Bun" href="/docs/actors/quickstart/backend" icon={faNodeJs}>
-  Set up actors with Node.js, Bun, and web frameworks
-</Card>
-<Card title="React" href="/docs/actors/quickstart/react" icon={faReact}>
-  Build real-time React applications with actors
-</Card>
-<Card title="Next.js" href="/docs/actors/quickstart/next-js" icon={faNextjs}>
-  Build server-rendered Next.js experiences backed by actors
-</Card>
-<Card title="Cloudflare Workers" href="/docs/actors/quickstart/cloudflare-workers" icon={faCloudflare}>
-  Deploy actors on Cloudflare Workers with zero infrastructure
-</Card>
+	<Card
+		title="Node.js & Bun"
+		href="/docs/actors/quickstart/backend"
+		icon={faNodeJs}
+	>
+		Set up actors with Node.js, Bun, and web frameworks
+	</Card>
+	<Card title="React" href="/docs/actors/quickstart/react" icon={faReact}>
+		Build real-time React applications with actors
+	</Card>
+	<Card
+		title="Next.js"
+		href="/docs/actors/quickstart/next-js"
+		icon={faNextjs}
+	>
+		Build server-rendered Next.js experiences backed by actors
+	</Card>
+	<Card
+		title="Cloudflare Workers"
+		href="/docs/actors/quickstart/cloudflare-workers"
+		icon={faCloudflare}
+	>
+		Deploy actors on Cloudflare Workers with zero infrastructure
+	</Card>
 </CardGroup>
 
 {/* SKILL_OVERVIEW_START */}
@@ -51,21 +63,21 @@ import { faCloudflare, faNodeJs, faReact, faNextjs } from "@rivet-gg/icons";
 import { actor, event, setup } from "rivetkit";
 
 const counter = actor({
-  state: { count: 0 },
-  events: {
-    count: event<number>(),
-  },
-  actions: {
-    increment: (c, amount: number) => {
-      c.state.count += amount;
-      c.broadcast("count", c.state.count);
-      return c.state.count;
-    },
-  },
+	state: { count: 0 },
+	events: {
+		count: event<number>(),
+	},
+	actions: {
+		increment: (c, amount: number) => {
+			c.state.count += amount;
+			c.broadcast("count", c.state.count);
+			return c.state.count;
+		},
+	},
 });
 
 export const registry = setup({
-  use: { counter },
+	use: { counter },
 });
 
 registry.start();
@@ -79,7 +91,6 @@ Use the client SDK that matches your app:
 - [React Client](/docs/clients/react)
 - [Swift Client](/docs/clients/swift)
 
-
 ## Actor Quick Reference
 
 ### In-Memory State
@@ -92,12 +103,13 @@ Persistent data that survives restarts, crashes, and deployments. State is persi
 import { actor } from "rivetkit";
 
 const counter = actor({
-  state: { count: 0 },
-  actions: {
-    increment: (c) => c.state.count += 1,
-  },
+state: { count: 0 },
+actions: {
+increment: (c) => c.state.count += 1,
+},
 });
-```
+
+````
 </Tab>
 <Tab title="Dynamic Initial State">
 ```ts
@@ -116,7 +128,8 @@ const counter = actor({
     increment: (c) => c.state.count += 1,
   },
 });
-```
+````
+
 </Tab>
 </Tabs>
 
@@ -131,10 +144,10 @@ import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
 const chatRoom = actor({
-  state: { messages: [] as string[] },
-  actions: {
-    getRoomInfo: (c) => ({ org: c.key[0], room: c.key[1] }),
-  },
+	state: { messages: [] as string[] },
+	actions: {
+		getRoomInfo: (c) => ({ org: c.key[0], room: c.key[1] }),
+	},
 });
 
 const registry = setup({ use: { chatRoom } });
@@ -159,12 +172,13 @@ import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
 const game = actor({
-  createState: (c, input: { mode: string }) => ({
-    mode: input.mode, // Store input in state for later access
-  }),
-  actions: {
-    getMode: (c) => c.state.mode,
-  },
+	state: { mode: "" },
+	createState: (c, input: { mode: string }) => ({
+		mode: input.mode, // Store input in state for later access
+	}),
+	actions: {
+		getMode: (c) => c.state.mode,
+	},
 });
 
 const registry = setup({ use: { game } });
@@ -172,7 +186,7 @@ const client = createClient<typeof registry>("http://localhost:6420");
 
 // Client usage
 const gameHandle = client.game.getOrCreate(["game-1"], {
-  createWithInput: { mode: "ranked" }
+	createWithInput: { mode: "ranked" },
 });
 ```
 
@@ -188,16 +202,17 @@ Temporary data that doesn't survive restarts. Use for non-serializable objects (
 import { actor } from "rivetkit";
 
 const counter = actor({
-  state: { count: 0 },
-  vars: { lastAccess: 0 },
-  actions: {
-    increment: (c) => {
-      c.vars.lastAccess = Date.now();
-      return c.state.count += 1;
-    },
-  },
+state: { count: 0 },
+vars: { lastAccess: 0 },
+actions: {
+increment: (c) => {
+c.vars.lastAccess = Date.now();
+return c.state.count += 1;
+},
+},
 });
-```
+
+````
 </Tab>
 <Tab title="Dynamic Initial Vars">
 ```ts
@@ -215,7 +230,8 @@ const counter = actor({
     },
   },
 });
-```
+````
+
 </Tab>
 </Tabs>
 
@@ -229,11 +245,11 @@ Actions are the primary way clients and other actors communicate with an actor.
 import { actor } from "rivetkit";
 
 const counter = actor({
-  state: { count: 0 },
-  actions: {
-    increment: (c, amount: number) => (c.state.count += amount),
-    getCount: (c) => c.state.count,
-  },
+	state: { count: 0 },
+	actions: {
+		increment: (c, amount: number) => (c.state.count += amount),
+		getCount: (c) => c.state.count,
+	},
 });
 ```
 
@@ -247,16 +263,16 @@ Events enable real-time communication from actors to connected clients.
 import { actor, event } from "rivetkit";
 
 const chatRoom = actor({
-  state: { messages: [] as string[] },
-  events: {
-    newMessage: event<{ text: string }>(),
-  },
-  actions: {
-    sendMessage: (c, text: string) => {
-      // Broadcast to ALL connected clients
-      c.broadcast("newMessage", { text });
-    },
-  },
+	state: { messages: [] as string[] },
+	events: {
+		newMessage: event<{ text: string }>(),
+	},
+	actions: {
+		sendMessage: (c, text: string) => {
+			// Broadcast to ALL connected clients
+			c.broadcast("newMessage", { text });
+		},
+	},
 });
 ```
 
@@ -272,16 +288,17 @@ Access the current connection via `c.conn` or all connected clients via `c.conns
 import { actor } from "rivetkit";
 
 const chatRoom = actor({
-  state: {},
-  connState: { visitorId: 0 },
-  onConnect: (c, conn) => {
-    conn.state.visitorId = Math.random();
-  },
-  actions: {
-    whoAmI: (c) => c.conn.state.visitorId,
-  },
+state: {},
+connState: { visitorId: 0 },
+onConnect: (c, conn) => {
+conn.state.visitorId = Math.random();
+},
+actions: {
+whoAmI: (c) => c.conn.state.visitorId,
+},
 });
-```
+
+````
 </Tab>
 <Tab title="Dynamic Connection Initial State">
 ```ts
@@ -307,7 +324,8 @@ const chatRoom = actor({
     },
   },
 });
-```
+````
+
 </Tab>
 </Tabs>
 
@@ -321,15 +339,15 @@ Use queues to process durable messages in order inside a `run` loop.
 import { actor, queue } from "rivetkit";
 
 const counter = actor({
-  state: { value: 0 },
-  queues: {
-    increment: queue<{ amount: number }>(),
-  },
-  run: async (c) => {
-    for await (const message of c.queue.iter()) {
-      c.state.value += message.body.amount;
-    }
-  },
+	state: { value: 0 },
+	queues: {
+		increment: queue<{ amount: number }>(),
+	},
+	run: async (c) => {
+		for await (const message of c.queue.iter()) {
+			c.state.value += message.body.amount;
+		}
+	},
 });
 ```
 
@@ -344,26 +362,25 @@ import { actor, queue } from "rivetkit";
 import { workflow } from "rivetkit/workflow";
 
 const worker = actor({
-  state: { processed: 0 },
-  queues: {
-    tasks: queue<{ url: string }>(),
-  },
-  run: workflow(async (ctx) => {
-    await ctx.loop("task-loop", async (loopCtx) => {
-        const message = await loopCtx.queue.next("wait-task");
+	state: { processed: 0 },
+	queues: {
+		tasks: queue<{ url: string }>(),
+	},
+	run: workflow(async (ctx) => {
+		await ctx.loop("task-loop", async (loopCtx) => {
+			const message = await loopCtx.queue.next("wait-task");
 
-        await loopCtx.step("process-task", async () => {
-          await processTask(message.body.url);
-          loopCtx.state.processed += 1;
-        });
-
-      });
-  }),
+			await loopCtx.step("process-task", async () => {
+				await processTask(message.body.url);
+				loopCtx.state.processed += 1;
+			});
+		});
+	}),
 });
 
 async function processTask(url: string): Promise<void> {
-  const res = await fetch(url, { method: "POST" });
-  if (!res.ok) throw new Error(`Task failed: ${res.status}`);
+	const res = await fetch(url, { method: "POST" });
+	if (!res.ok) throw new Error(`Task failed: ${res.status}`);
 }
 ```
 
@@ -377,20 +394,22 @@ Actors can call other actors using `c.client()`.
 import { actor, setup } from "rivetkit";
 
 const inventory = actor({
-  state: { stock: 100 },
-  actions: {
-    reserve: (c, amount: number) => { c.state.stock -= amount; }
-  }
+	state: { stock: 100 },
+	actions: {
+		reserve: (c, amount: number) => {
+			c.state.stock -= amount;
+		},
+	},
 });
 
 const order = actor({
-  state: {},
-  actions: {
-    process: async (c) => {
-      const client = c.client<typeof registry>();
-      await client.inventory.getOrCreate(["main"]).reserve(1);
-    },
-  },
+	state: {},
+	actions: {
+		process: async (c) => {
+			const client = c.client<typeof registry>();
+			await client.inventory.getOrCreate(["main"]).reserve(1);
+		},
+	},
 });
 
 const registry = setup({ use: { inventory, order } });
@@ -406,25 +425,25 @@ Schedule actions to run after a delay or at a specific time. Schedules persist a
 import { actor, event } from "rivetkit";
 
 const reminder = actor({
-  state: { message: "" },
-  events: {
-    reminder: event<{ message: string }>(),
-  },
-  actions: {
-    // Schedule action to run after delay (ms)
-    setReminder: (c, message: string, delayMs: number) => {
-      c.state.message = message;
-      c.schedule.after(delayMs, "sendReminder");
-    },
-    // Schedule action to run at specific timestamp
-    setReminderAt: (c, message: string, timestamp: number) => {
-      c.state.message = message;
-      c.schedule.at(timestamp, "sendReminder");
-    },
-    sendReminder: (c) => {
-      c.broadcast("reminder", { message: c.state.message });
-    },
-  },
+	state: { message: "" },
+	events: {
+		reminder: event<{ message: string }>(),
+	},
+	actions: {
+		// Schedule action to run after delay (ms)
+		setReminder: (c, message: string, delayMs: number) => {
+			c.state.message = message;
+			c.schedule.after(delayMs, "sendReminder");
+		},
+		// Schedule action to run at specific timestamp
+		setReminderAt: (c, message: string, timestamp: number) => {
+			c.state.message = message;
+			c.schedule.at(timestamp, "sendReminder");
+		},
+		sendReminder: (c) => {
+			c.broadcast("reminder", { message: c.state.message });
+		},
+	},
 });
 ```
 
@@ -438,15 +457,15 @@ Permanently delete an actor and its state using `c.destroy()`.
 import { actor } from "rivetkit";
 
 const userAccount = actor({
-  state: { email: "", name: "" },
-  onDestroy: (c) => {
-    console.log(`Account ${c.state.email} deleted`);
-  },
-  actions: {
-    deleteAccount: (c) => {
-      c.destroy();
-    },
-  },
+	state: { email: "", name: "" },
+	onDestroy: (c) => {
+		console.log(`Account ${c.state.email} deleted`);
+	},
+	actions: {
+		deleteAccount: (c) => {
+			c.destroy();
+		},
+	},
 });
 ```
 
@@ -460,60 +479,73 @@ Actors support hooks for initialization, background processing, connections, net
 import { actor, event, queue } from "rivetkit";
 
 interface RoomState {
-  users: Record<string, boolean>;
-  name?: string;
+	users: Record<string, boolean>;
+	name?: string;
 }
 
 interface RoomInput {
-  roomName: string;
+	roomName: string;
 }
 
 interface ConnState {
-  userId: string;
-  joinedAt: number;
+	userId: string;
+	joinedAt: number;
 }
 
 const chatRoom = actor({
-  state: { users: {} } as RoomState,
-  vars: { startTime: 0 },
-  connState: { userId: "", joinedAt: 0 } as ConnState,
-  events: {
-    stateChanged: event<RoomState>(),
-  },
-  queues: {
-    work: queue<{ task: string }>(),
-  },
+	state: { users: {} } as RoomState,
+	vars: { startTime: 0 },
+	connState: { userId: "", joinedAt: 0 } as ConnState,
+	events: {
+		stateChanged: event<RoomState>(),
+	},
+	queues: {
+		work: queue<{ task: string }>(),
+	},
 
-  // State & vars initialization
-  createState: (c, input: RoomInput): RoomState => ({ users: {}, name: input.roomName }),
-  createVars: () => ({ startTime: Date.now() }),
+	// State & vars initialization
+	createState: (c, input: RoomInput): RoomState => ({
+		users: {},
+		name: input.roomName,
+	}),
+	createVars: () => ({ startTime: Date.now() }),
 
-  // Actor lifecycle
-  onCreate: (c) => console.log("created", c.key),
-  onDestroy: (c) => console.log("destroyed"),
-  onWake: (c) => console.log("actor started"),
-  onSleep: (c) => console.log("actor sleeping"),
-  run: async (c) => {
-    for await (const message of c.queue.iter()) {
-      console.log("processing", message.body.task);
-    }
-  },
-  onStateChange: (c, newState) => c.broadcast("stateChanged", newState),
+	// Actor lifecycle
+	onCreate: (c) => console.log("created", c.key),
+	onDestroy: (c) => console.log("destroyed"),
+	onWake: (c) => console.log("actor started"),
+	onSleep: (c) => console.log("actor sleeping"),
+	run: async (c) => {
+		for await (const message of c.queue.iter()) {
+			console.log("processing", message.body.task);
+		}
+	},
+	onStateChange: (c, newState) => c.broadcast("stateChanged", newState),
 
-  // Connection lifecycle
-  createConnState: (c, params): ConnState => ({ userId: (params as { userId: string }).userId, joinedAt: Date.now() }),
-  onBeforeConnect: (c, params) => { /* validate auth */ },
-  onConnect: (c, conn) => console.log("connected:", conn.state.userId),
-  onDisconnect: (c, conn) => console.log("disconnected:", conn.state.userId),
+	// Connection lifecycle
+	createConnState: (c, params): ConnState => ({
+		userId: (params as { userId: string }).userId,
+		joinedAt: Date.now(),
+	}),
+	onBeforeConnect: (c, params) => {
+		/* validate auth */
+	},
+	onConnect: (c, conn) => console.log("connected:", conn.state.userId),
+	onDisconnect: (c, conn) => console.log("disconnected:", conn.state.userId),
 
-  // Networking
-  onRequest: (c, req) => new Response(JSON.stringify(c.state)),
-  onWebSocket: (c, socket) => socket.addEventListener("message", console.log),
+	// Networking
+	onRequest: (c, req) => new Response(JSON.stringify(c.state)),
+	onWebSocket: (c, socket) => socket.addEventListener("message", console.log),
 
-  // Response transformation
-  onBeforeActionResponse: <Out>(c: unknown, name: string, args: unknown[], output: Out): Out => output,
+	// Response transformation
+	onBeforeActionResponse: <Out>(
+		c: unknown,
+		name: string,
+		args: unknown[],
+		output: Out,
+	): Out => output,
 
-  actions: {},
+	actions: {},
 });
 ```
 
@@ -527,20 +559,20 @@ When writing helper functions outside the actor definition, use `*ContextOf<type
 import { actor, ActionContextOf } from "rivetkit";
 
 const gameRoom = actor({
-  state: { players: [] as string[], score: 0 },
-  actions: {
-    addPlayer: (c, playerId: string) => {
-      validatePlayer(c, playerId);
-      c.state.players.push(playerId);
-    },
-  },
+	state: { players: [] as string[], score: 0 },
+	actions: {
+		addPlayer: (c, playerId: string) => {
+			validatePlayer(c, playerId);
+			c.state.players.push(playerId);
+		},
+	},
 });
 
 // Good: derive context type from actor definition
 function validatePlayer(c: ActionContextOf<typeof gameRoom>, playerId: string) {
-  if (c.state.players.includes(playerId)) {
-    throw new Error("Player already in room");
-  }
+	if (c.state.players.includes(playerId)) {
+		throw new Error("Player already in room");
+	}
 }
 
 // Bad: don't manually define context types like this
@@ -559,20 +591,21 @@ Use `UserError` to throw errors that are safely returned to clients. Pass `metad
 import { actor, UserError } from "rivetkit";
 
 const user = actor({
-  state: { username: "" },
-  actions: {
-    updateUsername: (c, username: string) => {
-      if (username.length < 3) {
-        throw new UserError("Username too short", {
-          code: "username_too_short",
-          metadata: { minLength: 3, actual: username.length },
-        });
-      }
-      c.state.username = username;
-    },
-  },
+state: { username: "" },
+actions: {
+updateUsername: (c, username: string) => {
+if (username.length < 3) {
+throw new UserError("Username too short", {
+code: "username_too_short",
+metadata: { minLength: 3, actual: username.length },
 });
-```
+}
+c.state.username = username;
+},
+},
+});
+
+````
 </Tab>
 <Tab title="Client">
 ```ts
@@ -595,7 +628,8 @@ try {
     console.log(error.metadata); // { minLength: 3, actual: 2 }
   }
 }
-```
+````
+
 </Tab>
 </Tabs>
 
@@ -615,11 +649,11 @@ Customize how actors appear in the UI with display names and icons. It's recomme
 import { actor } from "rivetkit";
 
 const chatRoom = actor({
-  options: {
-    name: "Chat Room",
-    icon: "💬",  // or FontAwesome: "comments", "chart-line", etc.
-  },
-  // ...
+	options: {
+		name: "Chat Room",
+		icon: "💬", // or FontAwesome: "comments", "chart-line", etc.
+	},
+	// ...
 });
 ```
 
@@ -655,7 +689,8 @@ client.user.getOrCreate(["user-123"]);
 
 // Compound key: document scoped to an organization
 client.document.getOrCreate(["org-acme", "doc-456"]);
-```
+
+````
 
 ```ts index.ts
 import { actor, setup } from "rivetkit";
@@ -673,7 +708,8 @@ export const document = actor({
 export const registry = setup({ use: { user, document } });
 
 registry.start();
-```
+````
+
 </CodeGroup>
 
 ### Coordinator & Data Actors
@@ -686,30 +722,31 @@ import { actor, setup } from "rivetkit";
 
 // Coordinator: tracks chat rooms within an organization
 export const chatRoomList = actor({
-  state: { rooms: [] as string[] },
-  actions: {
-    addRoom: async (c, name: string) => {
-      // Create the chat room actor
-      const client = c.client<typeof registry>();
-      await client.chatRoom.create([c.key[0], name]);
-      c.state.rooms.push(name);
-    },
-    listRooms: (c) => c.state.rooms,
-  },
+state: { rooms: [] as string[] },
+actions: {
+addRoom: async (c, name: string) => {
+// Create the chat room actor
+const client = c.client<typeof registry>();
+await client.chatRoom.create([c.key[0], name]);
+c.state.rooms.push(name);
+},
+listRooms: (c) => c.state.rooms,
+},
 });
 
 // Data actor: handles a single chat room
 export const chatRoom = actor({
-  state: { messages: [] as string[] },
-  actions: {
-    send: (c, msg: string) => { c.state.messages.push(msg); },
-  },
+state: { messages: [] as string[] },
+actions: {
+send: (c, msg: string) => { c.state.messages.push(msg); },
+},
 });
 
 export const registry = setup({ use: { chatRoomList, chatRoom } });
 
 registry.start();
-```
+
+````
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
@@ -724,7 +761,8 @@ await coordinator.addRoom("random");
 
 // Access chat rooms created by coordinator
 client.chatRoom.get(["org-acme", "general"]);
-```
+````
+
 </CodeGroup>
 
 ### Run Loop
@@ -735,18 +773,18 @@ Use a `run` loop for continuous background work inside an actor. Process queue m
 import { actor, queue, setup } from "rivetkit";
 
 const counterWorker = actor({
-  state: { value: 0 },
-  queues: {
-    mutate: queue<{ delta: number }>(),
-  },
-  run: async (c) => {
-    for await (const message of c.queue.iter()) {
-      c.state.value += message.body.delta;
-    }
-  },
-  actions: {
-    getValue: (c) => c.state.value,
-  },
+	state: { value: 0 },
+	queues: {
+		mutate: queue<{ delta: number }>(),
+	},
+	run: async (c) => {
+		for await (const message of c.queue.iter()) {
+			c.state.value += message.body.delta;
+		}
+	},
+	actions: {
+		getValue: (c) => c.state.value,
+	},
 });
 
 const registry = setup({ use: { counterWorker } });
@@ -764,49 +802,53 @@ type WorkMessage = { amount: number };
 type ControlMessage = { type: "stop"; reason: string };
 
 const worker = actor({
-  state: {
-    phase: "idle" as "idle" | "running" | "stopped",
-    processed: 0,
-    total: 0,
-    stopReason: null as string | null,
-  },
-  queues: {
-    work: queue<WorkMessage>(),
-    control: queue<ControlMessage>(),
-  },
-  run: workflow(async (ctx) => {
-    await ctx.step("setup", async () => {
-      await fetch("https://api.example.com/workers/init", { method: "POST" });
-      ctx.state.phase = "running";
-      ctx.state.stopReason = null;
-    });
+	state: {
+		phase: "idle" as "idle" | "running" | "stopped",
+		processed: 0,
+		total: 0,
+		stopReason: null as string | null,
+	},
+	queues: {
+		work: queue<WorkMessage>(),
+		control: queue<ControlMessage>(),
+	},
+	run: workflow(async (ctx) => {
+		await ctx.step("setup", async () => {
+			await fetch("https://api.example.com/workers/init", {
+				method: "POST",
+			});
+			ctx.state.phase = "running";
+			ctx.state.stopReason = null;
+		});
 
-    const stopReason = await ctx.loop("worker-loop", async (loopCtx) => {
-        const message = await loopCtx.queue.next("wait-command", {
-          names: ["work", "control"],
-        });
+		const stopReason = await ctx.loop("worker-loop", async (loopCtx) => {
+			const message = await loopCtx.queue.next("wait-command", {
+				names: ["work", "control"],
+			});
 
-        if (message.name === "work") {
-          await loopCtx.step("apply-work", async () => {
-            await fetch("https://api.example.com/workers/process", {
-              method: "POST",
-              body: JSON.stringify({ amount: message.body.amount }),
-            });
-            loopCtx.state.processed += 1;
-            loopCtx.state.total += message.body.amount;
-          });
-          return;
-        }
+			if (message.name === "work") {
+				await loopCtx.step("apply-work", async () => {
+					await fetch("https://api.example.com/workers/process", {
+						method: "POST",
+						body: JSON.stringify({ amount: message.body.amount }),
+					});
+					loopCtx.state.processed += 1;
+					loopCtx.state.total += message.body.amount;
+				});
+				return;
+			}
 
-        return Loop.break((message.body as ControlMessage).reason);
-      });
+			return Loop.break((message.body as ControlMessage).reason);
+		});
 
-    await ctx.step("teardown", async () => {
-      await fetch("https://api.example.com/workers/shutdown", { method: "POST" });
-      ctx.state.phase = "stopped";
-      ctx.state.stopReason = stopReason;
-    });
-  }),
+		await ctx.step("teardown", async () => {
+			await fetch("https://api.example.com/workers/shutdown", {
+				method: "POST",
+			});
+			ctx.state.phase = "stopped";
+			ctx.state.stopReason = stopReason;
+		});
+	}),
 });
 
 const registry = setup({ use: { worker } });
@@ -842,6 +884,5 @@ Do not put all your logic in a single actor. A god actor serializes every operat
 #### Never create an actor per request
 
 Actors are long-lived and maintain state across requests. Creating a new actor for every incoming request throws away the core benefit of the model and wastes resources on actor creation and teardown. Use actors for persistent entities and regular functions for stateless work.
-
 
 {/* SKILL_OVERVIEW_END */}

@@ -363,18 +363,27 @@
 		"zod-to-json-schema": "^3.25.0"
 	},
 	"peerDependencies": {
+		"@vercel/sandbox": ">=0.1.0",
 		"@daytonaio/sdk": "^0.150.0",
 		"@e2b/code-interpreter": "^2.3.3",
+		"computesdk": ">=0.1.0",
 		"dockerode": "^4.0.9",
 		"drizzle-kit": "^0.31.2",
 		"eventsource": "^4.0.0",
+		"modal": ">=0.1.0",
 		"ws": "^8.0.0"
 	},
 	"peerDependenciesMeta": {
+		"@vercel/sandbox": {
+			"optional": true
+		},
 		"@daytonaio/sdk": {
 			"optional": true
 		},
 		"@e2b/code-interpreter": {
+			"optional": true
+		},
+		"computesdk": {
 			"optional": true
 		},
 		"dockerode": {
@@ -384,6 +393,9 @@
 			"optional": true
 		},
 		"eventsource": {
+			"optional": true
+		},
+		"modal": {
 			"optional": true
 		},
 		"ws": {

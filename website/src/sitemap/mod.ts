@@ -168,28 +168,38 @@ export const sitemap = [
 						icon: faClock,
 					},
 					{
-						title: "Persistence",
-						collapsible: true,
-						icon: faDatabase,
-						pages: [
-							{
-								title: "Overview",
-								href: "/docs/actors/persistence",
-								icon: faGrid2
-							},
-							{
-								title: "SQLite",
-								badge: "Built-In",
-								href: "/docs/actors/sqlite",
-								icon: faSqlite,
-							},
-							{
-								title: "PostgreSQL",
-								href: "/docs/actors/postgres",
-								icon: faPostgresql
-							},
-						]
+						title: "SQLite",
+						href: "/docs/actors/sqlite",
+						icon: faSqlite,
 					},
+					// {
+					// 	title: "Persistence",
+					// 	collapsible: true,
+					// 	icon: faDatabase,
+					// 	pages: [
+					// 		{
+					// 			title: "Overview",
+					// 			href: "/docs/actors/persistence",
+					// 			icon: faGrid2
+					// 		},
+					// 		{
+					// 			title: "SQLite",
+					// 			badge: "Built-In",
+					// 			href: "/docs/actors/sqlite",
+					// 			icon: faSqlite,
+					// 		},
+					// 		{
+					// 			title: "PostgreSQL",
+					// 			href: "/docs/actors/postgres",
+					// 			icon: faPostgresql
+					// 		},
+					// 	]
+					// },
+				]
+			},
+			{
+				title: "Extensions",
+				pages: [
 					{
 						title: "Sandbox Actor",
 						href: "/docs/actors/sandbox",
@@ -581,12 +591,17 @@ export const sitemap = [
 				title: "Persistence",
 				pages: [
 					{
+						title: "File System",
+						href: "/docs/self-hosting/filesystem",
+					},
+					{
 						title: "PostgreSQL",
 						href: "/docs/self-hosting/postgres",
 					},
 					{
-						title: "File System",
-						href: "/docs/self-hosting/filesystem",
+						title: "FoundationDB",
+						href: "/docs/self-hosting/foundationdb",
+						badge: "Enterprise"
 					},
 				],
 			},

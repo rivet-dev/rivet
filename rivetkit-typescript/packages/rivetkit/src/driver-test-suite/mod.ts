@@ -38,6 +38,8 @@ import { runRawHttpTests } from "./tests/raw-http";
 import { runRawHttpRequestPropertiesTests } from "./tests/raw-http-request-properties";
 import { runRawWebSocketTests } from "./tests/raw-websocket";
 import { runActorDbKvStatsTests } from "./tests/actor-db-kv-stats";
+import { runActorDbPragmaMigrationTests } from "./tests/actor-db-pragma-migration";
+import { runActorStateZodCoercionTests } from "./tests/actor-state-zod-coercion";
 import { runRequestAccessTests } from "./tests/request-access";
 
 export interface SkipTests {
@@ -166,6 +168,10 @@ export function runDriverTests(
 						runActorInspectorTests(driverTestConfig);
 
 						runActorDbKvStatsTests(driverTestConfig);
+
+						runActorDbPragmaMigrationTests(driverTestConfig);
+
+						runActorStateZodCoercionTests(driverTestConfig);
 					});
 				}
 			});

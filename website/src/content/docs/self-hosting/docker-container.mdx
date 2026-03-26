@@ -4,23 +4,101 @@ description: "Run Rivet Engine in a single Docker container."
 skill: true
 ---
 
-Run with ephemeral storage:
-
 ## Quick Start
 
-```bash
-docker run -p 6420:6420 rivetdev/engine
-```
+<Steps>
 
-Run with persistent storage:
+<Step title="Start the engine">
 
 ```bash
-docker run \
+docker run -d \
+  --name rivet-engine \
   -p 6420:6420 \
   -v rivet-data:/data \
   -e RIVET__FILE_SYSTEM__PATH="/data" \
-  rivetdev/engine
+  rivetdev/engine:latest
 ```
+
+</Step>
+
+<Step title="Verify the engine is running">
+
+```bash
+curl http://localhost:6420/health
+```
+
+</Step>
+
+</Steps>
+
+## Connecting Your Project
+
+Once the engine is running, connect your app to it.
+
+<Steps>
+
+<Step title="Create your server">
+
+Follow the [quickstart](/docs/actors/quickstart/backend) to create a working server with actors.
+
+</Step>
+
+<Step title="Start your app with RIVET_ENDPOINT">
+
+Set `RIVET_ENDPOINT` to tell your app to connect to the engine as a runner instead of running standalone:
+
+```bash @nocheck
+RIVET_ENDPOINT="http://default:admin@host.docker.internal:6420" npm start
+```
+
+If running your app outside of Docker, use `localhost` instead of `host.docker.internal`:
+
+```bash @nocheck
+RIVET_ENDPOINT="http://default:admin@localhost:6420" npm start
+```
+
+See [Endpoints](/docs/general/endpoints) for all options.
+
+</Step>
+
+<Step title="Register your runner with the engine">
+
+<Tabs>
+
+<Tab title="Dashboard">
+
+1. Open the Rivet Engine dashboard at `http://localhost:6420`.
+2. Enter your admin token when prompted.
+3. In the namespace sidebar, click **Settings**.
+4. Click **Add Provider**, then choose **Custom**.
+5. Click **Next**.
+6. Go to **Confirm Connection**, enter your app endpoint, then click **Add**.
+
+</Tab>
+
+<Tab title="CLI (curl)">
+
+Register your runner programmatically via the engine API:
+
+```bash @nocheck
+curl -X PUT "http://localhost:6420/runner-configs/default?namespace=default" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "datacenters": {
+      "default": {
+        "normal": {}
+      }
+    }
+  }'
+```
+
+</Tab>
+
+</Tabs>
+
+</Step>
+
+</Steps>
 
 ## Configuration
 
@@ -29,10 +107,13 @@ docker run \
 Configure Rivet using environment variables:
 
 ```bash
-docker run -p 6420:6420 \
+docker run -d \
+  --name rivet-engine \
+  -p 6420:6420 \
   -v rivet-data:/data \
+  -e RIVET__FILE_SYSTEM__PATH="/data" \
   -e RIVET__POSTGRES__URL="postgresql://postgres:password@localhost:5432/db" \
-  rivetdev/engine
+  rivetdev/engine:latest
 ```
 
 ### Config File
@@ -40,23 +121,25 @@ docker run -p 6420:6420 \
 Mount a JSON configuration file:
 
 ```bash
-# Create config file
-cat <<EOF > rivet-config.json
+docker run -d \
+  --name rivet-engine \
+  -p 6420:6420 \
+  -v rivet-data:/data \
+  -v $(pwd)/rivet-config.json:/etc/rivet/config.json:ro \
+  rivetdev/engine:latest
+```
+
+Create `rivet-config.json` in your working directory. See the [Configuration](/docs/self-hosting/configuration) docs for all available options and the full [JSON Schema](/docs/engine-config-schema.json).
+
+```json
 {
   "postgres": {
     "url": "postgresql://postgres:password@localhost:5432/db"
   }
 }
-EOF
-
-# Run with mounted config
-docker run -p 6420:6420 \
-  -v rivet-data:/data \
-  -v $(pwd)/rivet-config.json:/etc/rivet/config.json:ro \
-  rivetdev/engine
 ```
 
-## Postgres Setup
+### Postgres Setup
 
 <Warning>
 PostgreSQL is the recommended backend for multi-node self-hosted deployments today, but it remains experimental. For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based). Enterprise teams can contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the most scalable production-ready deployment.

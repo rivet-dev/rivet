@@ -23,16 +23,16 @@ configuration.
 
 Sandbox actors support these configuration options:
 
-| Option | Description |
-|---|---|
-| `provider` | Use one provider instance for every actor. |
-| `createProvider` | Resolve the provider dynamically from actor context such as `c.key` or environment. |
-| `onBeforeConnect` | Validate or reject client connections before they attach to the actor. |
-| `onSessionEvent` | Observe sandbox-agent session events. |
-| `onPermissionRequest` | Observe permission requests and keep the actor awake while they are pending. |
-| `persistRawEvents` | Store raw event payload JSON in SQLite in addition to the normalized transcript records. |
-| `destroyActor` | Destroy the actor after the custom `destroy()` action tears down the backing sandbox. |
-| `options.warningAfterMs` / `options.staleAfterMs` | Control active-turn warning and stale-session cleanup timers. |
+| Option                                            | Description                                                                              |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `provider`                                        | Use one provider instance for every actor.                                               |
+| `createProvider`                                  | Resolve the provider dynamically from actor context such as `c.key` or environment.      |
+| `onBeforeConnect`                                 | Validate or reject client connections before they attach to the actor.                   |
+| `onSessionEvent`                                  | Observe sandbox-agent session events.                                                    |
+| `onPermissionRequest`                             | Observe permission requests and keep the actor awake while they are pending.             |
+| `persistRawEvents`                                | Store raw event payload JSON in SQLite in addition to the normalized transcript records. |
+| `destroyActor`                                    | Destroy the actor after the custom `destroy()` action tears down the backing sandbox.    |
+| `options.warningAfterMs` / `options.staleAfterMs` | Control active-turn warning and stale-session cleanup timers.                            |
 
 The action surface includes:
 
@@ -51,15 +51,15 @@ import { sandboxActor } from "rivetkit/sandbox";
 import { docker } from "rivetkit/sandbox/docker";
 
 export const codingSandbox = sandboxActor({
-  provider: docker({
-    image: "node:22-bookworm-slim",
-  }),
-  onSessionEvent: async (_c, sessionId, event) => {
-    console.log("session event", sessionId, event.payload);
-  },
-  onPermissionRequest: async (_c, sessionId, request) => {
-    console.log("permission request", sessionId, request.id);
-  },
+	provider: docker({
+		image: "node:22-bookworm-slim",
+	}),
+	onSessionEvent: async (_c, sessionId, event) => {
+		console.log("session event", sessionId, event.payload);
+	},
+	onPermissionRequest: async (_c, sessionId, request) => {
+		console.log("permission request", sessionId, request.id);
+	},
 });
 
 export const registry = setup({
@@ -76,25 +76,26 @@ const client = createClient<typeof registry>("http://localhost:6420");
 const sandbox = client.codingSandbox.getOrCreate(["task-123"]);
 
 const session = await sandbox.resumeOrCreateSession({
-  id: "main",
-  agent: "codex",
-  sessionInit: {
-    cwd: "/root",
-  },
+	id: "main",
+	agent: "codex",
+	sessionInit: {
+		cwd: "/root",
+	},
 });
 
 await sandbox.rawSendSessionMethod(session.id, "session/prompt", {
-  sessionId: session.id,
-  prompt: [{ type: "text", text: "Explain the current project structure." }],
+	sessionId: session.id,
+	prompt: [{ type: "text", text: "Explain the current project structure." }],
 });
 
 const events = await sandbox.getEvents({
-  sessionId: session.id,
-  limit: 50,
+	sessionId: session.id,
+	limit: 50,
 });
 
 console.log(events.items);
 ```
+
 </CodeGroup>
 
 ## Dynamic providers
@@ -114,16 +115,16 @@ import { docker } from "rivetkit/sandbox/docker";
 import { e2b } from "rivetkit/sandbox/e2b";
 
 export const codingSandbox = sandboxActor({
-  createProvider: async (c) => {
-    switch (c.key[0]) {
-      case "daytona":
-        return daytona();
-      case "e2b":
-        return e2b();
-      default:
-        return docker();
-    }
-  },
+	createProvider: async (c) => {
+		switch (c.key[0]) {
+			case "daytona":
+				return daytona();
+			case "e2b":
+				return e2b();
+			default:
+				return docker();
+		}
+	},
 });
 
 export const registry = setup({
@@ -142,6 +143,7 @@ const sandbox = client.codingSandbox.getOrCreate(["daytona", "task-456"]);
 
 await sandbox.listAgents();
 ```
+
 </CodeGroup>
 
 The sandbox actor pins the resolved provider name in actor state. If a later wake or reconnect resolves a different provider for the same actor, the actor throws instead of silently switching backends.
@@ -156,11 +158,11 @@ import { sandboxActor } from "rivetkit/sandbox";
 import { docker } from "rivetkit/sandbox/docker";
 
 const codingSandbox = sandboxActor({
-  provider: docker(),
-  options: {
-    warningAfterMs: 30_000,
-    staleAfterMs: 5 * 60_000,
-  },
+	provider: docker(),
+	options: {
+		warningAfterMs: 30_000,
+		staleAfterMs: 5 * 60_000,
+	},
 });
 ```
 
@@ -194,22 +196,22 @@ pnpm add dockerode get-port
 import { docker } from "rivetkit/sandbox/docker";
 
 const provider = docker({
-  image: "node:22-bookworm-slim",
-  host: "127.0.0.1",
-  env: ["MY_VAR=value"],
-  binds: ["/host/path:/container/path"],
-  createContainerOptions: { User: "node" },
+	image: "node:22-bookworm-slim",
+	host: "127.0.0.1",
+	env: ["MY_VAR=value"],
+	binds: ["/host/path:/container/path"],
+	createContainerOptions: { User: "node" },
 });
 ```
 
-| Option | Default | Description |
-|---|---|---|
-| `image` | `node:22-bookworm-slim` | Docker image to use. |
-| `host` | `127.0.0.1` | Host address for connecting to the container. |
-| `agentPort` | Provider default | Port the sandbox-agent server listens on. |
-| `env` | `[]` | Environment variables. Can be a static array or an async function. |
-| `binds` | `[]` | Volume binds. Can be a static array or an async function. |
-| `createContainerOptions` | `{}` | Additional options passed to `dockerode`'s `createContainer`. |
+| Option                   | Default                 | Description                                                        |
+| ------------------------ | ----------------------- | ------------------------------------------------------------------ |
+| `image`                  | `node:22-bookworm-slim` | Docker image to use.                                               |
+| `host`                   | `127.0.0.1`             | Host address for connecting to the container.                      |
+| `agentPort`              | Provider default        | Port the sandbox-agent server listens on.                          |
+| `env`                    | `[]`                    | Environment variables. Can be a static array or an async function. |
+| `binds`                  | `[]`                    | Volume binds. Can be a static array or an async function.          |
+| `createContainerOptions` | `{}`                    | Additional options passed to `dockerode`'s `createContainer`.      |
 
 ### Daytona
 
@@ -223,19 +225,19 @@ pnpm add @daytonaio/sdk
 import { daytona } from "rivetkit/sandbox/daytona";
 
 const provider = daytona({
-  create: { image: "node:22" },
-  previewTtlSeconds: 4 * 60 * 60,
-  deleteTimeoutSeconds: 10,
+	create: { image: "node:22" },
+	previewTtlSeconds: 4 * 60 * 60,
+	deleteTimeoutSeconds: 10,
 });
 ```
 
-| Option | Default | Description |
-|---|---|---|
-| `create` | `{}` | Options passed to `client.create()`. Can be a static object or an async function. |
-| `image` | Provider default | Docker image for the Daytona workspace. |
-| `agentPort` | Provider default | Port the sandbox-agent server listens on. |
-| `previewTtlSeconds` | `14400` (4 hours) | TTL for the signed preview URL used to connect. |
-| `deleteTimeoutSeconds` | `undefined` | Timeout passed to `sandbox.delete()` on destroy. |
+| Option                 | Default           | Description                                                                       |
+| ---------------------- | ----------------- | --------------------------------------------------------------------------------- |
+| `create`               | `{}`              | Options passed to `client.create()`. Can be a static object or an async function. |
+| `image`                | Provider default  | Docker image for the Daytona workspace.                                           |
+| `agentPort`            | Provider default  | Port the sandbox-agent server listens on.                                         |
+| `previewTtlSeconds`    | `14400` (4 hours) | TTL for the signed preview URL used to connect.                                   |
+| `deleteTimeoutSeconds` | `undefined`       | Timeout passed to `sandbox.delete()` on destroy.                                  |
 
 ### E2B
 
@@ -249,16 +251,16 @@ pnpm add @e2b/code-interpreter
 import { e2b } from "rivetkit/sandbox/e2b";
 
 const provider = e2b({
-  create: { template: "base" },
-  connect: async (sandboxId) => ({ sandboxId }),
+	create: { template: "base" },
+	connect: async (sandboxId) => ({ sandboxId }),
 });
 ```
 
-| Option | Default | Description |
-|---|---|---|
-| `create` | `{}` | Options passed to `Sandbox.create()`. Can be a static object or an async function. |
-| `connect` | `{}` | Options passed to `Sandbox.connect()` when reconnecting. Can be a static object or an async function receiving the sandbox ID. |
-| `agentPort` | Provider default | Port the sandbox-agent server listens on. |
+| Option      | Default          | Description                                                                                                                    |
+| ----------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `create`    | `{}`             | Options passed to `Sandbox.create()`. Can be a static object or an async function.                                             |
+| `connect`   | `{}`             | Options passed to `Sandbox.connect()` when reconnecting. Can be a static object or an async function receiving the sandbox ID. |
+| `agentPort` | Provider default | Port the sandbox-agent server listens on.                                                                                      |
 
 ### Vercel
 
@@ -272,7 +274,7 @@ pnpm add @vercel/sandbox
 import { vercel } from "rivetkit/sandbox/vercel";
 
 const provider = vercel({
-  create: { template: "nextjs" },
+	create: { template: "nextjs" },
 });
 ```
 
@@ -288,7 +290,7 @@ pnpm add modal
 import { modal } from "rivetkit/sandbox/modal";
 
 const provider = modal({
-  create: { secrets: { MY_SECRET: "value" } },
+	create: { secrets: { MY_SECRET: "value" } },
 });
 ```
 
@@ -300,7 +302,7 @@ Runs sandbox-agent locally on the host machine. No additional dependencies requi
 import { local } from "rivetkit/sandbox/local";
 
 const provider = local({
-  port: 2468,
+	port: 2468,
 });
 ```
 
@@ -316,7 +318,7 @@ pnpm add computesdk
 import { computesdk } from "rivetkit/sandbox/computesdk";
 
 const provider = computesdk({
-  create: {},
+	create: {},
 });
 ```
 
@@ -336,42 +338,50 @@ do not rely on the direct URL helper flow.
 Implement the `SandboxProvider` interface from `sandbox-agent` to use any sandbox backend.
 
 ```ts
-import type { SandboxProvider } from "sandbox-agent";
+import { type SandboxProvider } from "rivetkit/sandbox";
+
+const provisionSandbox = async (): Promise<string> => "sandbox-123";
+const teardownSandbox = async (_sandboxId: string): Promise<void> => {};
+const lookupSandboxUrl = async (_sandboxId: string): Promise<string> =>
+	"http://127.0.0.1:3000";
+const restartAgentIfNeeded = async (_sandboxId: string): Promise<void> => {};
 
 const myProvider: SandboxProvider = {
-  name: "my-provider",
+	name: "my-provider",
 
-  async create() {
-    // Provision a sandbox and return a string ID.
-    const sandboxId = await provisionSandbox();
-    return sandboxId;
-  },
+	async create() {
+		// Provision a sandbox and return a string ID.
+		const sandboxId = await provisionSandbox();
+		return sandboxId;
+	},
 
-  async destroy(sandboxId) {
-    // Tear down the sandbox identified by `sandboxId`.
-    await teardownSandbox(sandboxId);
-  },
+	async destroy(sandboxId) {
+		// Tear down the sandbox identified by `sandboxId`.
+		await teardownSandbox(sandboxId);
+	},
 
-  async getUrl(sandboxId) {
-    // Return the sandbox-agent base URL.
-    return await lookupSandboxUrl(sandboxId);
-  },
+	async getUrl(sandboxId) {
+		// Return the sandbox-agent base URL.
+		return await lookupSandboxUrl(sandboxId);
+	},
 
-  async ensureServer(sandboxId) {
-    // Restart the sandbox-agent process if it stopped.
-    // Called automatically before connecting. Must be idempotent.
-    await restartAgentIfNeeded(sandboxId);
-  },
+	async ensureServer(sandboxId) {
+		// Restart the sandbox-agent process if it stopped.
+		// Called automatically before connecting. Must be idempotent.
+		await restartAgentIfNeeded(sandboxId);
+	},
 };
 ```
 
 Use it like any built-in provider:
 
 ```ts
-import { sandboxActor } from "rivetkit/sandbox";
+import { sandboxActor, type SandboxProvider } from "rivetkit/sandbox";
+
+declare const myProvider: SandboxProvider;
 
 const mySandbox = sandboxActor({
-  provider: myProvider,
+	provider: myProvider,
 });
 ```
 
@@ -398,22 +408,38 @@ the helpers.
 
 ### Filesystem helpers
 
-```ts
+<CodeGroup workspace>
+```ts index.ts
+import { setup } from "rivetkit";
+import { sandboxActor } from "rivetkit/sandbox";
+import { docker } from "rivetkit/sandbox/docker";
+
+export const codingSandbox = sandboxActor({
+	provider: docker({ image: "node:22-bookworm-slim" }),
+});
+
+export const registry = setup({
+  use: { codingSandbox },
+});
+```
+
+```ts client.ts
 import { createClient } from "rivetkit/client";
 import {
-  uploadFile,
-  downloadFile,
-  uploadBatch,
-  listFiles,
-  statFile,
-  deleteFile,
-  mkdirFs,
-  moveFile,
+	uploadFile,
+	downloadFile,
+	uploadBatch,
+	listFiles,
+	statFile,
+	deleteFile,
+	mkdirFs,
+	moveFile,
 } from "rivetkit/sandbox/client";
 import type { registry } from "./index";
 
 const client = createClient<typeof registry>("http://localhost:6420");
 const sandbox = client.codingSandbox.getOrCreate(["task-789"]);
+const tarBuffer = new Uint8Array([0x75, 0x73, 0x74, 0x61, 0x72]);
 
 // Get the direct URL to the sandbox-agent server.
 const { url } = await sandbox.getSandboxUrl();
@@ -436,10 +462,18 @@ await moveFile(url, "/workspace/data.csv", "/workspace/output/data.csv");
 await deleteFile(url, "/workspace/output/data.csv");
 ```
 
+</CodeGroup>
+
 ### Process terminal
 
 ```ts
-import { connectTerminal, buildTerminalWebSocketUrl } from "rivetkit/sandbox/client";
+import {
+	connectTerminal,
+	buildTerminalWebSocketUrl,
+} from "rivetkit/sandbox/client";
+
+const url = "http://127.0.0.1:3000";
+const processId = "proc-123";
 
 // Connect to a process terminal via WebSocket.
 const terminal = await connectTerminal(url, processId);
@@ -456,9 +490,12 @@ const wsUrl = buildTerminalWebSocketUrl(url, processId);
 ```ts
 import { followProcessLogs } from "rivetkit/sandbox/client";
 
+const url = "http://127.0.0.1:3000";
+const processId = "proc-123";
+
 // Stream process logs via SSE.
 const subscription = await followProcessLogs(url, processId, (entry) => {
-  console.log(`[${entry.stream}] ${entry.data}`);
+	console.log(`[${entry.stream}] ${entry.data}`);
 });
 
 // Stop streaming.
