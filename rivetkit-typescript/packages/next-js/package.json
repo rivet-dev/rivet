@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/next-js",
-	"version": "2.1.7",
+	"version": "2.1.8",
 	"description": "Next.js integration for RivetKit actors and client",
 	"license": "Apache-2.0",
 	"keywords": [
@@ -61,6 +61,7 @@
 		"react-dom": "^18 || ^19"
 	},
 	"devDependencies": {
+		"@types/node": "^22.0.0",
 		"@types/react": "^19.1.8",
 		"@types/react-dom": "^19.1.6",
 		"tsup": "^8.4.0",

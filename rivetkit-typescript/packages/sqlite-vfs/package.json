@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/sqlite-vfs",
-	"version": "2.1.7",
+	"version": "2.1.8",
 	"description": "SQLite VFS backed by KV storage for RivetKit",
 	"license": "Apache-2.0",
 	"type": "module",

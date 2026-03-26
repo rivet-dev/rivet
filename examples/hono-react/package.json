@@ -23,11 +23,11 @@
 		"vitest": "^3.1.1"
 	},
 	"dependencies": {
-		"@rivetkit/react": "^2.1.7",
+		"@rivetkit/react": "^2.1.8",
 		"hono": "^4.7.0",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
-		"rivetkit": "^2.1.7"
+		"rivetkit": "^2.1.8"
 	},
 	"stableVersion": "0.8.0",
 	"license": "MIT"
