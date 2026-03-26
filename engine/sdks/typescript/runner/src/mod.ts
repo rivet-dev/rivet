@@ -217,6 +217,7 @@ export class Runner {
 	runnerId?: string;
 	#started: boolean = false;
 	#shutdown: boolean = false;
+	#draining: boolean = false;
 	#reconnectAttempt: number = 0;
 	#reconnectTimeout?: NodeJS.Timeout;
 
@@ -301,6 +302,24 @@ export class Runner {
 
 		// NOTE: We do NOT remove the actor from this.#actors here
 		// The server will send a StopActor command if it wants to fully stop
+	}
+
+	/**
+	 * Like stopActor but marks the actor for graceful destruction.
+	 * This ensures the engine destroys the actor instead of sleeping it.
+	 *
+	 * NOTE: If a drain (GoingAway) occurs after this is called but before the
+	 * stop completes, the engine's going_away flag overrides graceful_exit and
+	 * the actor will sleep instead of being destroyed. The destroy intent is
+	 * lost in this race. This is acceptable since the actor will be rescheduled
+	 * elsewhere and can be destroyed on the next wake.
+	 */
+	destroyActor(actorId: string, generation?: number) {
+		const actor = this.getActor(actorId, generation);
+		if (!actor) return;
+
+		actor.stopIntentSent = true;
+		this.#sendActorIntent(actorId, actor.generation, "stop");
 	}
 
 	async forceStopActor(actorId: string, generation?: number) {
@@ -502,6 +521,7 @@ export class Runner {
 			return;
 		}
 		this.#shutdown = true;
+		this.#draining = !immediate;
 
 		this.log?.info({
 			msg: "starting shutdown",
@@ -1233,7 +1253,9 @@ export class Runner {
 			actorState = {
 				tag: "ActorStateStopped",
 				val: {
-					code: protocol.StopCode.Ok,
+					code: actor.stopIntentSent || this.#draining
+						? protocol.StopCode.Ok
+						: protocol.StopCode.Error,
 					message: null,
 				},
 			};

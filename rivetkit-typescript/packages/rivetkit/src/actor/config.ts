@@ -221,7 +221,7 @@ export const ActorConfigSchema = z
 				onConnectTimeout: z.number().positive().default(5000),
 				onSleepTimeout: z.number().positive().default(5000),
 				onDestroyTimeout: z.number().positive().default(5000),
-				stateSaveInterval: z.number().positive().default(10_000),
+				stateSaveInterval: z.number().positive().default(1_000),
 				actionTimeout: z.number().positive().default(60_000),
 				// Deprecated timeout for legacy background shutdown tasks
 				waitUntilTimeout: z.number().positive().default(15_000),
@@ -1048,7 +1048,7 @@ export const DocActorOptionsSchema = z
 			.number()
 			.optional()
 			.describe(
-				"Interval in ms between automatic state saves. Default: 10000",
+				"Interval in ms between automatic state saves. Default: 1000",
 			),
 		actionTimeout: z
 			.number()
