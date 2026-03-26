@@ -176,6 +176,8 @@ export interface WorkflowNodeData {
 	completedAt?: number;
 	/** Raw entry data for the object inspector. */
 	rawData?: unknown;
+	entryId?: string;
+	onReplayStep?: (entryId: string) => void;
 }
 
 export type WorkflowNodeType = Node<WorkflowNodeData, "workflow">;

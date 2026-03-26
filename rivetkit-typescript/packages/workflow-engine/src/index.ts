@@ -154,12 +154,15 @@ import {
 	StepFailedError,
 } from "./errors.js";
 import {
+	buildEntryMetadataKey,
 	buildEntryMetadataPrefix,
+	buildHistoryKey,
 	buildWorkflowErrorKey,
 	buildWorkflowInputKey,
 	buildWorkflowOutputKey,
 	buildWorkflowStateKey,
 } from "./keys.js";
+import { isLocationPrefix } from "./location.js";
 import {
 	createHistorySnapshot,
 	flush,
@@ -168,6 +171,8 @@ import {
 	loadStorage,
 } from "./storage.js";
 import type {
+	Entry,
+	EntryMetadata,
 	RollbackContextInterface,
 	RunWorkflowOptions,
 	Storage,
@@ -198,6 +203,12 @@ interface LiveRuntime {
 }
 
 type HistoryNotifier = (() => void) | undefined;
+
+type ReplayEntryRecord = {
+	key: string;
+	entry: Entry;
+	metadata: EntryMetadata;
+};
 
 function createLiveRuntime(): LiveRuntime {
 	return {
@@ -331,14 +342,14 @@ async function executeRollback<TInput, TOutput>(
 			metadata.rollbackError =
 				error instanceof Error ? error.message : String(error);
 			if (onError) {
-					rollbackEvent = {
-						rollback: {
-							workflowId,
-							stepName: action.name,
-							error: extractErrorInfo(error),
-						},
-					};
-				}
+				rollbackEvent = {
+					rollback: {
+						workflowId,
+						stepName: action.name,
+						error: extractErrorInfo(error),
+					},
+				};
+			}
 			if (error instanceof Error) {
 				markErrorReported(error);
 			}
@@ -726,6 +737,125 @@ export function runWorkflow<TInput, TOutput>(
 			return deserializeWorkflowState(value);
 		},
 	};
+}
+
+/**
+ * Remove a step and every later workflow entry, then schedule the workflow to
+ * start again immediately. Omitting `entryId` replays the workflow from the
+ * beginning.
+ */
+export async function replayWorkflowFromStep(
+	workflowId: string,
+	driver: EngineDriver,
+	entryId?: string,
+	options?: {
+		scheduleAlarm?: boolean;
+	},
+): Promise<WorkflowHistorySnapshot> {
+	const storage = await loadStorage(driver);
+	const entries = await Promise.all(
+		Array.from(storage.history.entries.entries()).map(
+			async ([key, entry]) => ({
+				key,
+				entry,
+				metadata: await loadMetadata(storage, driver, entry.id),
+			}),
+		),
+	);
+	const ordered = [...entries].sort((a, b) => {
+		if (a.metadata.createdAt !== b.metadata.createdAt) {
+			return a.metadata.createdAt - b.metadata.createdAt;
+		}
+		return a.key.localeCompare(b.key);
+	});
+
+	let entriesToDelete = ordered;
+	if (entryId !== undefined) {
+		const target = entries.find(({ entry }) => entry.id === entryId);
+		if (!target) {
+			throw new Error(`Workflow step not found: ${entryId}`);
+		}
+		if (target.entry.kind.type !== "step") {
+			throw new Error("Workflow replay target must be a step");
+		}
+
+		const replayBoundary = findReplayBoundaryEntry(entries, target);
+		const targetIndex = ordered.findIndex(
+			({ entry }) => entry.id === replayBoundary.entry.id,
+		);
+		entriesToDelete = ordered.slice(targetIndex);
+	}
+
+	const entryIdsToDelete = new Set(
+		entriesToDelete.map(({ entry }) => entry.id),
+	);
+	if (
+		entries.some(
+			({ entry, metadata }) =>
+				metadata.status === "running" &&
+				!entryIdsToDelete.has(entry.id),
+		)
+	) {
+		throw new Error(
+			"Cannot replay a workflow while a step is currently running",
+		);
+	}
+
+	await Promise.all(
+		entriesToDelete.flatMap(({ entry }) => [
+			driver.delete(buildHistoryKey(entry.location)),
+			driver.delete(buildEntryMetadataKey(entry.id)),
+		]),
+	);
+
+	for (const { key, entry } of entriesToDelete) {
+		storage.history.entries.delete(key);
+		storage.entryMetadata.delete(entry.id);
+	}
+
+	storage.output = undefined;
+	storage.flushedOutput = undefined;
+	storage.error = undefined;
+	storage.flushedError = undefined;
+	storage.state = "sleeping";
+	storage.flushedState = "sleeping";
+
+	await Promise.all([
+		driver.delete(buildWorkflowOutputKey()),
+		driver.delete(buildWorkflowErrorKey()),
+		driver.set(buildWorkflowStateKey(), serializeWorkflowState("sleeping")),
+	]);
+	if (options?.scheduleAlarm ?? true) {
+		await driver.setAlarm(workflowId, Date.now());
+	}
+
+	return createHistorySnapshot(storage);
+}
+
+function findReplayBoundaryEntry(
+	entries: ReplayEntryRecord[],
+	target: ReplayEntryRecord,
+): ReplayEntryRecord {
+	let boundary = target;
+	let boundaryDepth = -1;
+
+	for (const candidate of entries) {
+		if (candidate.entry.kind.type !== "loop") {
+			continue;
+		}
+		if (
+			candidate.entry.location.length >= target.entry.location.length ||
+			!isLocationPrefix(candidate.entry.location, target.entry.location)
+		) {
+			continue;
+		}
+		if (candidate.entry.location.length > boundaryDepth) {
+			boundary = candidate;
+			boundaryDepth = candidate.entry.location.length;
+		}
+	}
+
+	return boundary;
 }
 
 /**

@@ -155,7 +155,9 @@ export function loadSqliteRuntime(): SqliteRuntime {
 			loadErrors.push(`node:sqlite unavailable: ${String(error)}`);
 		}
 	} else {
-		loadErrors.push("node:sqlite skipped (set RIVETKIT_NODE_SQLITE=1 to enable)");
+		loadErrors.push(
+			"node:sqlite skipped (set RIVETKIT_NODE_SQLITE=1 to enable)",
+		);
 	}
 
 	try {

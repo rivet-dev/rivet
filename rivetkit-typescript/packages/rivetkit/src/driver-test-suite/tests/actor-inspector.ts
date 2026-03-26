@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
@@ -249,8 +249,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			let state = await handle.getState();
 			for (
 				let i = 0;
-				i < 40 &&
-				(state.runCount === 0 || state.history.length === 0);
+				i < 40 && (state.runCount === 0 || state.history.length === 0);
 				i++
 			) {
 				await waitFor(driverTestConfig, 50);
@@ -285,6 +284,52 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			).toBeGreaterThan(0);
 		});
 
+		test("POST /inspector/workflow/replay replays a workflow from the beginning", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.workflowReplayActor.getOrCreate([
+				"inspector-workflow-replay",
+				crypto.randomUUID(),
+			]);
+
+			await vi.waitFor(async () => {
+				expect(await handle.getTimeline()).toEqual(["one", "two"]);
+			});
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(
+				`${gatewayUrl}/inspector/workflow/replay`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: "Bearer token",
+					},
+					body: JSON.stringify({}),
+				},
+			);
+
+			expect(response.status).toBe(200);
+			const data = (await response.json()) as {
+				history: {
+					nameRegistry: string[];
+					entries: unknown[];
+					entryMetadata: Record<string, unknown>;
+				} | null;
+				isWorkflowEnabled: boolean;
+			};
+			expect(data.isWorkflowEnabled).toBe(true);
+			expect(data.history).not.toBeNull();
+
+			await vi.waitFor(async () => {
+				expect(await handle.getTimeline()).toEqual([
+					"one",
+					"two",
+					"one",
+					"two",
+				]);
+			});
+		});
+
 		test("GET /inspector/database/rows returns SQLite rows", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.dbActorRaw.getOrCreate([
@@ -316,6 +361,35 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			expect(data.rows[0]?.value).toBe("Bob");
 			expect(data.rows[0]?.payload).toBe("");
 			expect(typeof data.rows[0]?.created_at).toBe("number");
+		});
+
+		test("POST /inspector/workflow/replay rejects workflows that are already in flight", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.workflowRunningStepActor.getOrCreate([
+				"inspector-workflow-replay-in-flight",
+				crypto.randomUUID(),
+			]);
+
+			await vi.waitFor(async () => {
+				const state = await handle.getState();
+				expect(state.startedAt).not.toBeNull();
+			});
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(
+				`${gatewayUrl}/inspector/workflow/replay`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: "Bearer token",
+					},
+					body: JSON.stringify({}),
+				},
+			);
+			expect(response.status).toBe(500);
+			const data = (await response.json()) as { code: string };
+			expect(data.code).toBe("internal_error");
 		});
 
 		test("GET /inspector/summary returns full actor snapshot", async (c) => {
@@ -358,8 +432,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			let state = await handle.getState();
 			for (
 				let i = 0;
-				i < 40 &&
-				(state.runCount === 0 || state.history.length === 0);
+				i < 40 && (state.runCount === 0 || state.history.length === 0);
 				i++
 			) {
 				await waitFor(driverTestConfig, 50);
@@ -381,7 +454,9 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			};
 			expect(data.isWorkflowEnabled).toBe(true);
 			expect(data.workflowHistory).not.toBeNull();
-			expect(data.workflowHistory?.nameRegistry.length).toBeGreaterThan(0);
+			expect(data.workflowHistory?.nameRegistry.length).toBeGreaterThan(
+				0,
+			);
 			expect(data.workflowHistory?.entries.length).toBeGreaterThan(0);
 			expect(
 				Object.keys(data.workflowHistory?.entryMetadata ?? {}).length,
@@ -432,7 +507,9 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			// Verify internal metrics exist
 			expect(data.startup_internal_load_state_ms).toBeDefined();
-			expect(data.startup_internal_load_state_ms.value).toBeGreaterThanOrEqual(0);
+			expect(
+				data.startup_internal_load_state_ms.value,
+			).toBeGreaterThanOrEqual(0);
 			expect(data.startup_internal_init_queue_ms).toBeDefined();
 			expect(data.startup_internal_init_inspector_token_ms).toBeDefined();
 

@@ -21,20 +21,34 @@ export interface WorkflowInspectorAdapter {
 	onHistoryUpdated: (
 		listener: (history: inspectorSchema.WorkflowHistory) => void,
 	) => () => void;
+	replayFromStep: (
+		entryId?: string,
+	) => Promise<inspectorSchema.WorkflowHistory | null>;
 }
 
 export function createWorkflowInspectorAdapter(): {
 	adapter: WorkflowInspectorAdapter;
 	update: (snapshot: WorkflowHistorySnapshot) => void;
+	setReplayFromStep: (
+		fn: (
+			entryId?: string,
+		) => Promise<inspectorSchema.WorkflowHistory | null>,
+	) => void;
 } {
 	const emitter = createNanoEvents<{
 		updated: (history: inspectorSchema.WorkflowHistory) => void;
 	}>();
 	let history: inspectorSchema.WorkflowHistory | null = null;
+	let replayFromStep: (
+		entryId?: string,
+	) => Promise<inspectorSchema.WorkflowHistory | null> = async () => {
+		throw new Error("Workflow replay controls are not initialized");
+	};
 
 	const adapter: WorkflowInspectorAdapter = {
 		getHistory: () => history,
 		onHistoryUpdated: (listener) => emitter.on("updated", listener),
+		replayFromStep: async (entryId) => await replayFromStep(entryId),
 	};
 
 	const update = (snapshot: WorkflowHistorySnapshot) => {
@@ -44,7 +58,13 @@ export function createWorkflowInspectorAdapter(): {
 		emitter.emit("updated", next);
 	};
 
-	return { adapter, update };
+	return {
+		adapter,
+		update,
+		setReplayFromStep: (fn) => {
+			replayFromStep = fn;
+		},
+	};
 }
 
 function encodeCbor(value: unknown): ArrayBuffer {

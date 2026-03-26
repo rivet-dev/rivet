@@ -11,6 +11,7 @@ import {
 	HistoryDivergedError,
 	JoinError,
 	RaceError,
+	replayWorkflowFromStep,
 	RollbackCheckpointError,
 	RollbackError,
 	runWorkflow,
@@ -19,7 +20,7 @@ import {
 } from "@rivetkit/workflow-engine";
 import invariant from "invariant";
 import { ActorWorkflowContext } from "./context";
-import { ActorWorkflowDriver } from "./driver";
+import { ActorWorkflowControlDriver, ActorWorkflowDriver } from "./driver";
 import { createWorkflowInspectorAdapter } from "./inspector";
 
 export { Loop } from "@rivetkit/workflow-engine";
@@ -126,8 +127,21 @@ export function workflow<
 		TQueues
 	>,
 ) => Promise<void> {
-	const workflowInspector = createWorkflowInspectorAdapter();
 	const onError = options.onError;
+
+	const workflowInspectors = new WeakMap<
+		AnyActorInstance,
+		ReturnType<typeof createWorkflowInspectorAdapter>
+	>();
+
+	function getWorkflowInspector(actor: AnyActorInstance) {
+		let workflowInspector = workflowInspectors.get(actor);
+		if (!workflowInspector) {
+			workflowInspector = createWorkflowInspectorAdapter();
+			workflowInspectors.set(actor, workflowInspector);
+		}
+		return workflowInspector;
+	}
 
 	async function run(
 		runCtx: RunContext<
@@ -147,8 +161,25 @@ export function workflow<
 			}
 		)[ACTOR_CONTEXT_INTERNAL_SYMBOL];
 		invariant(actor, "workflow() requires an actor instance");
+		const workflowInspector = getWorkflowInspector(actor);
 
 		const driver = new ActorWorkflowDriver(actor, runCtx);
+		workflowInspector.setReplayFromStep(async (entryId) => {
+			if (actor.isRunHandlerActive()) {
+				throw new Error(
+					"Cannot replay a workflow while it is currently in flight",
+				);
+			}
+			const snapshot = await replayWorkflowFromStep(
+				actor.id,
+				new ActorWorkflowControlDriver(actor),
+				entryId,
+				{ scheduleAlarm: false },
+			);
+			workflowInspector.update(snapshot);
+			await actor.restartRunHandler();
+			return workflowInspector.adapter.getHistory();
+		});
 
 		const handle = runWorkflow(
 			actor.id,
@@ -203,12 +234,26 @@ export function workflow<
 	const runWithConfig = run as typeof run & {
 		[RUN_FUNCTION_CONFIG_SYMBOL]?: {
 			icon?: string;
-			inspector?: { workflow: typeof workflowInspector.adapter };
+			inspectorFactory?: (actor: unknown) =>
+				| {
+						workflow: ReturnType<
+							typeof createWorkflowInspectorAdapter
+						>["adapter"];
+				  }
+				| undefined;
 		};
 	};
 	runWithConfig[RUN_FUNCTION_CONFIG_SYMBOL] = {
 		icon: "diagram-project",
-		inspector: { workflow: workflowInspector.adapter },
+		inspectorFactory: (actor: unknown) => {
+			if (!actor) {
+				return undefined;
+			}
+			return {
+				workflow: getWorkflowInspector(actor as AnyActorInstance)
+					.adapter,
+			};
+		},
 	};
 
 	return runWithConfig;

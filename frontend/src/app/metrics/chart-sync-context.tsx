@@ -21,7 +21,9 @@ interface ChartSyncContextValue extends ChartSyncState {
 const ChartSyncContext = createContext<ChartSyncContextValue | null>(null);
 
 export function ChartSyncProvider({ children }: { children: ReactNode }) {
-	const [hoveredTimestamp, setHoveredTimestamp] = useState<number | null>(null);
+	const [hoveredTimestamp, setHoveredTimestamp] = useState<number | null>(
+		null,
+	);
 	const [brushDomain, setBrushDomain] = useState<[Date, Date] | null>(null);
 
 	const handleSetHovered = useCallback((ts: number | null) => {

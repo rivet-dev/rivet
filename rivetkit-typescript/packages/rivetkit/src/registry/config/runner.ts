@@ -15,9 +15,7 @@ export const RunnerConfigSchema = z.object({
 	totalSlots: z.number().default(() => getRivetTotalSlots() ?? 100000),
 	runnerName: z.string().default(() => getRivetRunner() ?? "default"),
 	// Deprecated.
-	runnerKey: z
-		.string()
-		.optional(),
+	runnerKey: z.string().optional(),
 	version: z.number().default(() => {
 		const version = getRivetRunnerVersion();
 		if (version !== undefined) return version;

@@ -51,6 +51,12 @@ export interface LayoutResult {
 	edges: Edge[];
 }
 
+interface WorkflowLayoutOptions {
+	currentStepId?: string;
+	replayingEntryId?: string;
+	onReplayStep?: (entryId: string) => void;
+}
+
 type WorkflowNodeInput = {
 	label?: string;
 	summary?: string;
@@ -64,6 +70,8 @@ type WorkflowNodeInput = {
 	completedAt?: number;
 	rawData?: unknown;
 	name?: string;
+	entryId?: string;
+	onReplayStep?: (entryId: string) => void;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -118,8 +126,12 @@ function getEntrySummary(type: ExtendedEntryType, data: unknown): string {
 }
 
 /** Extract common node properties from a HistoryItem. */
-function itemToNodeData(item: HistoryItem) {
+function itemToNodeData(
+	item: HistoryItem,
+	options: WorkflowLayoutOptions = {},
+) {
 	const {
+		id,
 		startedAt,
 		completedAt,
 		kind,
@@ -144,6 +156,8 @@ function itemToNodeData(item: HistoryItem) {
 		error,
 		rawData: kind.data,
 		nodeKey: item.key,
+		entryId: id,
+		onReplayStep: options.onReplayStep,
 	};
 }
 
@@ -191,6 +205,8 @@ function makeNode(
 			startedAt: data.startedAt,
 			completedAt: data.completedAt,
 			rawData: data.rawData,
+			entryId: data.entryId,
+			onReplayStep: data.onReplayStep,
 		},
 	};
 }
@@ -212,6 +228,7 @@ function makeChildNode(
 
 export function workflowHistoryToXYFlow(
 	history: WorkflowHistory,
+	options: WorkflowLayoutOptions = {},
 ): LayoutResult {
 	const nodes: AnyXYNode[] = [];
 	const edges: Edge[] = [];
@@ -300,7 +317,7 @@ export function workflowHistoryToXYFlow(
 		let lastId: string | null = null;
 
 		for (const item of items) {
-			const d = itemToNodeData(item);
+			const d = itemToNodeData(item, options);
 			const id = `child-${item.entry.id}`;
 			nodes.push(makeChildNode(id, parentId, y, { ...d, label: d.name }));
 
@@ -335,7 +352,7 @@ export function workflowHistoryToXYFlow(
 
 	for (const item of topLevel) {
 		const entryType = item.entry.kind.type;
-		const d = itemToNodeData(item);
+		const d = itemToNodeData(item, options);
 
 		if (entryType === "loop") {
 			const loopId = `loop-${item.entry.id}`;

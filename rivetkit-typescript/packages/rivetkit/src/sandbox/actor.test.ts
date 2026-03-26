@@ -10,7 +10,9 @@ describe("sandbox actor direct URL access", () => {
 			name: "test",
 			create: vi.fn(async () => "sandbox-1"),
 			destroy: vi.fn(async () => {}),
-			getUrl: vi.fn(async (sandboxId) => `https://sandbox.example/${sandboxId}`),
+			getUrl: vi.fn(
+				async (sandboxId) => `https://sandbox.example/${sandboxId}`,
+			),
 		};
 
 		const registry = setup({

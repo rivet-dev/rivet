@@ -1,4 +1,8 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+	createServer,
+	type IncomingMessage,
+	type ServerResponse,
+} from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -120,7 +124,9 @@ async function withSandboxServer(
 		const chunks: Uint8Array[] = [];
 		for await (const chunk of req) {
 			chunks.push(
-				typeof chunk === "string" ? new TextEncoder().encode(chunk) : chunk,
+				typeof chunk === "string"
+					? new TextEncoder().encode(chunk)
+					: chunk,
 			);
 		}
 		const body = Buffer.concat(chunks).toString();
@@ -186,7 +192,10 @@ describe("sandbox direct client helpers", () => {
 			},
 			async (baseUrl, requests) => {
 				await uploadFile(baseUrl, "/workspace/a.txt", "hello");
-				const downloaded = await downloadFile(baseUrl, "/workspace/a.txt");
+				const downloaded = await downloadFile(
+					baseUrl,
+					"/workspace/a.txt",
+				);
 
 				expect(new TextDecoder().decode(downloaded)).toBe("hi");
 				expect(requests).toEqual([
@@ -257,19 +266,25 @@ describe("sandbox direct client helpers", () => {
 			},
 			async (baseUrl, requests) => {
 				await expect(
-					uploadBatch(baseUrl, "/workspace", new Uint8Array([1, 2, 3])),
+					uploadBatch(
+						baseUrl,
+						"/workspace",
+						new Uint8Array([1, 2, 3]),
+					),
 				).resolves.toEqual({
 					paths: ["/workspace/a.txt"],
 					truncated: false,
 				});
-				await expect(listFiles(baseUrl, "/workspace")).resolves.toEqual([
-					{
-						entryType: "file",
-						name: "a.txt",
-						path: "/workspace/a.txt",
-						size: 2,
-					},
-				]);
+				await expect(listFiles(baseUrl, "/workspace")).resolves.toEqual(
+					[
+						{
+							entryType: "file",
+							name: "a.txt",
+							path: "/workspace/a.txt",
+							size: 2,
+						},
+					],
+				);
 				await expect(
 					statFile(baseUrl, "/workspace/a.txt"),
 				).resolves.toEqual({
@@ -348,13 +363,8 @@ describe("sandbox direct client helpers", () => {
 		});
 
 		expect(
-			buildTerminalWebSocketUrl(
-				"https://sandbox.example/base",
-				"proc 1",
-			),
-		).toBe(
-			"wss://sandbox.example/base/v1/processes/proc%201/terminal/ws",
-		);
+			buildTerminalWebSocketUrl("https://sandbox.example/base", "proc 1"),
+		).toBe("wss://sandbox.example/base/v1/processes/proc%201/terminal/ws");
 
 		const session = connectTerminal(
 			"https://sandbox.example/base",
@@ -414,8 +424,9 @@ describe("sandbox direct client helpers", () => {
 
 	test("followProcessLogs parses log SSE events and closes cleanly", async () => {
 		const entries: Array<{ stream: string; data: string }> = [];
-		const fetchMock = vi.fn<typeof fetch>().mockImplementation(
-			async (_input, init) => {
+		const fetchMock = vi
+			.fn<typeof fetch>()
+			.mockImplementation(async (_input, init) => {
 				const stream = new ReadableStream<Uint8Array>({
 					start(controller) {
 						controller.enqueue(
@@ -443,8 +454,7 @@ describe("sandbox direct client helpers", () => {
 						"Content-Type": "text/event-stream",
 					},
 				});
-			},
-		);
+			});
 		setGlobalFetch(fetchMock);
 
 		const subscription = await followProcessLogs(

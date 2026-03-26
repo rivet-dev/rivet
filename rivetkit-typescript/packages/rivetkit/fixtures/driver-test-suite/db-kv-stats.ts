@@ -1,6 +1,10 @@
 // @ts-nocheck
 import { actor } from "rivetkit";
-import type { DatabaseProvider, DatabaseProviderContext, RawAccess } from "rivetkit/db";
+import type {
+	DatabaseProvider,
+	DatabaseProviderContext,
+	RawAccess,
+} from "rivetkit/db";
 import { AsyncMutex, toSqliteBindings } from "../../src/db/shared";
 import type { KvVfsOptions } from "@rivetkit/sqlite-vfs";
 
@@ -17,7 +21,12 @@ export interface KvLogEntry {
 	keys: string[];
 }
 
-const FILE_TAGS: Record<number, string> = { 0: "main", 1: "journal", 2: "wal", 3: "shm" };
+const FILE_TAGS: Record<number, string> = {
+	0: "main",
+	1: "journal",
+	2: "wal",
+	3: "shm",
+};
 
 function decodeKey(key: Uint8Array): string {
 	if (key.length < 4 || key[0] !== 8 || key[1] !== 1) {
@@ -29,7 +38,8 @@ function decodeKey(key: Uint8Array): string {
 		return `meta:${fileTag}`;
 	}
 	if (prefix === 1 && key.length === 8) {
-		const chunkIndex = (key[4] << 24) | (key[5] << 16) | (key[6] << 8) | key[7];
+		const chunkIndex =
+			(key[4] << 24) | (key[5] << 16) | (key[6] << 8) | key[7];
 		return `chunk:${fileTag}[${chunkIndex}]`;
 	}
 	return `unknown(${Array.from(key).join(",")})`;
@@ -63,7 +73,10 @@ function instrumentedKvStore(
 		putBatch: async (entries: [Uint8Array, Uint8Array][]) => {
 			stats.putBatchCalls++;
 			stats.putBatchEntries += entries.length;
-			log.push({ op: "putBatch", keys: entries.map(([k]) => decodeKey(k)) });
+			log.push({
+				op: "putBatch",
+				keys: entries.map(([k]) => decodeKey(k)),
+			});
 			await kv.batchPut(entries);
 		},
 		deleteBatch: async (keys: Uint8Array[]) => {
@@ -85,7 +98,13 @@ function getOrCreateData(actorId: string): ActorKvData {
 	let d = perActorData.get(actorId);
 	if (!d) {
 		d = {
-			stats: { getBatchCalls: 0, getBatchKeys: 0, putBatchCalls: 0, putBatchEntries: 0, deleteBatchCalls: 0 },
+			stats: {
+				getBatchCalls: 0,
+				getBatchKeys: 0,
+				putBatchCalls: 0,
+				putBatchEntries: 0,
+				deleteBatchCalls: 0,
+			},
 			log: [],
 		};
 		perActorData.set(actorId, d);
@@ -119,13 +138,19 @@ const provider: DatabaseProvider<RawAccess> = {
 					ensureOpen();
 					if (args.length > 0) {
 						const bindings = toSqliteBindings(args);
-						const token = query.trimStart().slice(0, 16).toUpperCase();
+						const token = query
+							.trimStart()
+							.slice(0, 16)
+							.toUpperCase();
 						const returnsRows =
 							token.startsWith("SELECT") ||
 							token.startsWith("PRAGMA") ||
 							token.startsWith("WITH");
 						if (returnsRows) {
-							const { rows, columns } = await db.query(query, bindings);
+							const { rows, columns } = await db.query(
+								query,
+								bindings,
+							);
 							return rows.map((row: unknown[]) => {
 								const rowObj: Record<string, unknown> = {};
 								for (let i = 0; i < columns.length; i++) {
@@ -139,14 +164,17 @@ const provider: DatabaseProvider<RawAccess> = {
 					}
 					const results: Record<string, unknown>[] = [];
 					let columnNames: string[] | null = null;
-					await db.exec(query, (row: unknown[], columns: string[]) => {
-						if (!columnNames) columnNames = columns;
-						const rowObj: Record<string, unknown> = {};
-						for (let i = 0; i < row.length; i++) {
-							rowObj[columnNames[i]] = row[i];
-						}
-						results.push(rowObj);
-					});
+					await db.exec(
+						query,
+						(row: unknown[], columns: string[]) => {
+							if (!columnNames) columnNames = columns;
+							const rowObj: Record<string, unknown> = {};
+							for (let i = 0; i < row.length; i++) {
+								rowObj[columnNames[i]] = row[i];
+							}
+							results.push(rowObj);
+						},
+					);
 					return results as TRow[];
 				});
 			},
@@ -169,7 +197,9 @@ const provider: DatabaseProvider<RawAccess> = {
 				count INTEGER NOT NULL DEFAULT 0
 			)
 		`);
-		await client.execute(`INSERT OR IGNORE INTO counter (id, count) VALUES (1, 0)`);
+		await client.execute(
+			`INSERT OR IGNORE INTO counter (id, count) VALUES (1, 0)`,
+		);
 	},
 	onDestroy: async (client) => {
 		await client.close();
@@ -185,8 +215,12 @@ export const dbKvStatsActor = actor({
 			// the migration (CREATE TABLE + INSERT), which loads pages
 			// from KV into the pager cache. The second write ensures all
 			// dirty pages are flushed and the cache is fully warmed.
-			await c.db.execute(`UPDATE counter SET count = count + 1 WHERE id = 1`);
-			await c.db.execute(`UPDATE counter SET count = count + 1 WHERE id = 1`);
+			await c.db.execute(
+				`UPDATE counter SET count = count + 1 WHERE id = 1`,
+			);
+			await c.db.execute(
+				`UPDATE counter SET count = count + 1 WHERE id = 1`,
+			);
 			const data = getOrCreateData(c.actorId);
 			data.stats.getBatchCalls = 0;
 			data.stats.getBatchKeys = 0;
@@ -215,7 +249,9 @@ export const dbKvStatsActor = actor({
 		},
 
 		increment: async (c) => {
-			await c.db.execute(`UPDATE counter SET count = count + 1 WHERE id = 1`);
+			await c.db.execute(
+				`UPDATE counter SET count = count + 1 WHERE id = 1`,
+			);
 		},
 
 		getCount: async (c) => {
@@ -226,7 +262,9 @@ export const dbKvStatsActor = actor({
 		},
 
 		incrementAndRead: async (c) => {
-			await c.db.execute(`UPDATE counter SET count = count + 1 WHERE id = 1`);
+			await c.db.execute(
+				`UPDATE counter SET count = count + 1 WHERE id = 1`,
+			);
 			const rows = await c.db.execute<{ count: number }>(
 				`SELECT count FROM counter WHERE id = 1`,
 			);
@@ -289,7 +327,9 @@ export const dbKvStatsActor = actor({
 			const stmts = ["BEGIN;"];
 			for (let i = 0; i < 200; i++) {
 				const escaped = `bulk-${i}-${pad}`.replace(/'/g, "''");
-				stmts.push(`INSERT INTO bulk_data (payload) VALUES ('${escaped}');`);
+				stmts.push(
+					`INSERT INTO bulk_data (payload) VALUES ('${escaped}');`,
+				);
 			}
 			stmts.push("COMMIT;");
 			await c.db.execute(stmts.join("\n"));

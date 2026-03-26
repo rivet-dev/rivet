@@ -152,7 +152,10 @@ export class SqliteVfsPool {
 			for (const instance of this.#instances) {
 				if (instance.destroying) continue;
 				const count = instance.actors.size;
-				if (count < this.#config.actorsPerInstance && count > bestCount) {
+				if (
+					count < this.#config.actorsPerInstance &&
+					count > bestCount
+				) {
 					bestInstance = instance;
 					bestCount = count;
 				}
@@ -193,11 +196,7 @@ export class SqliteVfsPool {
 		bestInstance.actorShortNames.set(actorId, shortName);
 		this.#actorToInstance.set(actorId, bestInstance);
 
-		const handle = new PooledSqliteHandle(
-			shortName,
-			actorId,
-			this,
-		);
+		const handle = new PooledSqliteHandle(shortName, actorId, this);
 		this.#actorToHandle.set(actorId, handle);
 
 		return handle;
@@ -238,7 +237,11 @@ export class SqliteVfsPool {
 		// Start idle timer if instance has no actors and no in-flight ops.
 		// Skip if shutting down to avoid leaking timers after shutdown
 		// completes.
-		if (instance.actors.size === 0 && instance.opsInFlight === 0 && !this.#shuttingDown) {
+		if (
+			instance.actors.size === 0 &&
+			instance.opsInFlight === 0 &&
+			!this.#shuttingDown
+		) {
 			this.#startIdleTimer(instance);
 		}
 	}
@@ -280,7 +283,9 @@ export class SqliteVfsPool {
 	): Promise<IDatabase> {
 		const instance = this.#actorToInstance.get(actorId);
 		if (!instance) {
-			throw new Error(`Actor ${actorId} is not assigned to any pool instance`);
+			throw new Error(
+				`Actor ${actorId} is not assigned to any pool instance`,
+			);
 		}
 		return this.#trackOp(instance, () =>
 			instance.vfs.open(shortName, options),
@@ -366,7 +371,7 @@ export class SqliteVfsPool {
 			if (instance.opsInFlight > 0) {
 				console.warn(
 					`SqliteVfsPool: shutting down instance with ${instance.opsInFlight} in-flight operation(s). ` +
-					"Concurrent close is safe due to Database.close() idempotency.",
+						"Concurrent close is safe due to Database.close() idempotency.",
 				);
 			}
 
@@ -374,7 +379,10 @@ export class SqliteVfsPool {
 				await instance.vfs.forceCloseAll();
 				await instance.vfs.destroy();
 			} catch (error) {
-				console.warn("SqliteVfsPool: failed to destroy instance during shutdown", error);
+				console.warn(
+					"SqliteVfsPool: failed to destroy instance during shutdown",
+					error,
+				);
 			}
 		}
 
@@ -447,11 +455,7 @@ export class PooledSqliteHandle implements ISqliteVfs {
 	readonly #pool: SqliteVfsPool;
 	#released = false;
 
-	constructor(
-		shortName: string,
-		actorId: string,
-		pool: SqliteVfsPool,
-	) {
+	constructor(shortName: string, actorId: string, pool: SqliteVfsPool) {
 		this.#shortName = shortName;
 		this.#actorId = actorId;
 		this.#pool = pool;
@@ -473,11 +477,7 @@ export class PooledSqliteHandle implements ISqliteVfs {
 			this.#shortName,
 			options,
 		);
-		return new TrackedDatabase(
-			db,
-			this.#pool,
-			this.#actorId,
-		);
+		return new TrackedDatabase(db, this.#pool, this.#actorId);
 	}
 
 	/**

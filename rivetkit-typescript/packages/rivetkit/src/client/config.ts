@@ -34,8 +34,7 @@ export const ClientConfigSchemaBase = z.object({
 		.string()
 		.optional()
 		.transform((val) => {
-			const resolved =
-				val ?? getRivetEngine() ?? getRivetEndpoint();
+			const resolved = val ?? getRivetEngine() ?? getRivetEndpoint();
 			if (!resolved && !hasWarnedMissingEndpoint) {
 				hasWarnedMissingEndpoint = true;
 				console.warn(

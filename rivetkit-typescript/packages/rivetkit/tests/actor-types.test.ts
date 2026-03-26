@@ -118,7 +118,9 @@ describe("ActorDefinition", () => {
 
 			type DummyContext = ActorContextOf<typeof dummyActor>;
 
-			expectTypeOf<DummyContext["preventSleep"]>().toEqualTypeOf<boolean>();
+			expectTypeOf<
+				DummyContext["preventSleep"]
+			>().toEqualTypeOf<boolean>();
 			expectTypeOf<
 				Parameters<DummyContext["setPreventSleep"]>
 			>().toEqualTypeOf<[prevent: boolean]>();
@@ -530,7 +532,9 @@ describe("ActorDefinition", () => {
 
 			type WorkflowCtx = WorkflowContextOf<typeof workflowHelperActor>;
 
-			expectTypeOf<WorkflowCtx["preventSleep"]>().toEqualTypeOf<boolean>();
+			expectTypeOf<
+				WorkflowCtx["preventSleep"]
+			>().toEqualTypeOf<boolean>();
 			expectTypeOf<
 				Parameters<WorkflowCtx["setPreventSleep"]>
 			>().toEqualTypeOf<[prevent: boolean]>();

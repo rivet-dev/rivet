@@ -33,8 +33,9 @@ Use the inspector HTTP API to examine running actors. These endpoints are access
 - `GET /inspector/workflow-history` - workflow history and status as JSON (`nameRegistry`, `entries`, `entryMetadata`)
 - `GET /inspector/database/schema` - SQLite tables and views exposed by `c.db`
 - `GET /inspector/database/rows?table=...&limit=100&offset=0` - paged SQLite rows for a table or view
+- `POST /inspector/workflow/replay` - replay a workflow from a specific step or from the beginning
 
-In local dev, no auth token is needed. In production, pass `Authorization: Bearer <RIVET_INSPECTOR_TOKEN>`. See the [debugging docs](https://rivet.dev/docs/actors/debugging) for details.
+In local dev, no auth token is needed. In production, pass `Authorization: Bearer <RIVET_INSPECTOR_TOKEN>`. The actor-specific inspector token used by the standalone Inspector UI is also accepted for inspector endpoints. See the [debugging docs](https://rivet.dev/docs/actors/debugging) for details.
 
 ## Citing Sources
 

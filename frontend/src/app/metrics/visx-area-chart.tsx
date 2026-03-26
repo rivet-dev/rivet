@@ -42,7 +42,8 @@ function Chart({
 	height,
 }: VisxAreaChartProps & { width: number }) {
 	const chartId = useId();
-	const { hoveredTimestamp, setHoveredTimestamp, brushDomain } = useChartSync();
+	const { hoveredTimestamp, setHoveredTimestamp, brushDomain } =
+		useChartSync();
 
 	const innerWidth = width - MARGIN.left - MARGIN.right;
 	const innerHeight = height! - MARGIN.top - MARGIN.bottom;
@@ -84,7 +85,9 @@ function Chart({
 	}, [series, xDomain]);
 
 	const yScale = useMemo(() => {
-		const allValues = filteredSeries.flatMap((s) => s.data.map((d) => d.value));
+		const allValues = filteredSeries.flatMap((s) =>
+			s.data.map((d) => d.value),
+		);
 		const maxVal = Math.max(...allValues, 0);
 		return scaleLinear({
 			domain: [0, maxVal * 1.1 || 1],

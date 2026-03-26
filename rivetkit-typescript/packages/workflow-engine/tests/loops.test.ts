@@ -341,14 +341,11 @@ for (const mode of modes) {
 						{
 							name: "fast",
 							run: async (raceCtx) =>
-								await raceCtx.step(
-									"process-fast",
-									async () => {
-										const item = message.body.items[0]!;
-										processed.push(item);
-										return item;
-									},
-								),
+								await raceCtx.step("process-fast", async () => {
+									const item = message.body.items[0]!;
+									processed.push(item);
+									return item;
+								}),
 						},
 						{
 							name: "slow",

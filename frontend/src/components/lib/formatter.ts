@@ -53,8 +53,6 @@ export function formatCurrencyToParts(amount: number) {
 	return currencyFormatter.formatToParts(amount);
 }
 
-
-
 const listFormatter = new Intl.ListFormat("en", {
 	style: "long",
 	type: "conjunction",

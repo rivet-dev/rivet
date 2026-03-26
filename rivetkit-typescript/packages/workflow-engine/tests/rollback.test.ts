@@ -174,7 +174,8 @@ for (const mode of modes) {
 			};
 
 			await expect(
-				runWorkflow("wf-1", workflow, undefined, driver, { mode }).result,
+				runWorkflow("wf-1", workflow, undefined, driver, { mode })
+					.result,
 			).rejects.toThrow("boom");
 
 			const storage = await loadStorage(driver);

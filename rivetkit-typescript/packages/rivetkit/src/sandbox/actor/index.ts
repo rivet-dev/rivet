@@ -97,9 +97,7 @@ type SandboxProxyActionDefinitions<TConnParams> = {
  * in-memory state (event subscriptions, timers, hook tracking).
  * Does NOT destroy the sandbox itself.
  */
-async function teardownAgentRuntime(
-	vars: SandboxActorVars,
-): Promise<void> {
+async function teardownAgentRuntime(vars: SandboxActorVars): Promise<void> {
 	for (const subscription of vars.unsubscribeBySessionId.values()) {
 		subscription.event?.();
 		subscription.permission?.();
@@ -195,11 +193,7 @@ async function ensureAgent<TConnParams>(
 
 // These actions can read from the local SQLite persistence layer even after
 // the sandbox has been destroyed, allowing transcript access.
-const READ_ONLY_ACTIONS = new Set([
-	"listSessions",
-	"getSession",
-	"getEvents",
-]);
+const READ_ONLY_ACTIONS = new Set(["listSessions", "getSession", "getEvents"]);
 
 // --- Session-returning action detection ---
 
@@ -250,7 +244,10 @@ function buildProxyActions<TConnParams>(
 ): SandboxProxyActionDefinitions<TConnParams> {
 	const actions = {} as Record<
 		string,
-		(c: SandboxActionContext<TConnParams>, ...args: unknown[]) => Promise<unknown>
+		(
+			c: SandboxActionContext<TConnParams>,
+			...args: unknown[]
+		) => Promise<unknown>
 	>;
 
 	for (const actionName of SANDBOX_AGENT_ACTION_METHODS) {
@@ -393,8 +390,7 @@ export function sandboxActor<TConnParams = undefined>(
 			await teardownAgentRuntime(c.vars);
 		},
 		onDestroy: async (c) => {
-			const sandboxContext =
-				c as SandboxActionContext<TConnParams>;
+			const sandboxContext = c as SandboxActionContext<TConnParams>;
 			clearAllActiveSessions(sandboxContext);
 			await teardownAgentRuntime(sandboxContext.vars);
 

@@ -9,11 +9,19 @@ import {
 	type NodeMouseHandler,
 	ReactFlow,
 	ReactFlowProvider,
+	useNodesInitialized,
+	useReactFlow,
 } from "@xyflow/react";
-import { useCallback, useMemo, useState } from "react";
+import { faRefresh, faSpinnerThird, faXmark, Icon } from "@rivet-gg/icons";
+import {
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 import "@xyflow/react/dist/style.css";
-import { faXmark, Icon } from "@rivet-gg/icons";
-import { cn, DiscreteCopyButton } from "@/components";
+import { Button, cn, DiscreteCopyButton, WithTooltip } from "@/components";
 import { ActorObjectInspector } from "../console/actor-inspector";
 import { workflowHistoryToXYFlow } from "./workflow-to-xyflow";
 import type { WorkflowHistory } from "./workflow-types";
@@ -47,12 +55,28 @@ function miniMapNodeColor(node: Node): string {
 
 export function WorkflowVisualizer({
 	workflow,
+	currentStepId,
+	isReplayBlocked = false,
+	replayingEntryId,
+	onReplayStep,
 }: {
 	workflow: WorkflowHistory;
+	currentStepId?: string;
+	isReplayBlocked?: boolean;
+	replayingEntryId?: string;
+	onReplayStep?: (entryId: string) => void;
 }) {
+	const hasRunningStep =
+		isReplayBlocked ||
+		workflow.history.some((item) => item.entry.status === "running");
 	const { nodes, edges } = useMemo(
-		() => workflowHistoryToXYFlow(workflow),
-		[workflow],
+		() =>
+			workflowHistoryToXYFlow(workflow, {
+				currentStepId,
+				replayingEntryId,
+				onReplayStep,
+			}),
+		[workflow, currentStepId, replayingEntryId, onReplayStep],
 	);
 
 	const [selectedNode, setSelectedNode] = useState<WorkflowNodeData | null>(
@@ -69,39 +93,24 @@ export function WorkflowVisualizer({
 		setSelectedNode(null);
 	}, []);
 
+	const replayState = selectedNode
+		? getReplayState({
+				currentStepId,
+				hasRunningStep,
+				selectedNode,
+			})
+		: null;
+
 	return (
 		<div className="flex h-full w-full flex-col bg-background">
 			<div className="relative flex min-h-0 flex-1">
 				<ReactFlowProvider>
-					<ReactFlow
+					<WorkflowGraph
 						nodes={nodes}
 						edges={edges}
-						nodeTypes={workflowNodeTypes}
-						fitView
-						panOnScroll
-						panOnDrag
-						edgesFocusable={false}
-						panActivationKeyCode={null}
 						onNodeClick={onNodeClick}
 						onPaneClick={onPaneClick}
-						nodesDraggable={false}
-						nodesConnectable={false}
-						edgesReconnectable={false}
-						proOptions={{ hideAttribution: true }}
-					>
-						<Background
-							variant={BackgroundVariant.Dots}
-							gap={20}
-							size={1.5}
-							color="hsl(var(--border))"
-						/>
-						<Controls />
-						<MiniMap
-							nodeColor={miniMapNodeColor}
-							nodeStrokeColor="transparent"
-							maskColor="hsl(20 14.3% 4.1% / 0.7)"
-						/>
-					</ReactFlow>
+					/>
 				</ReactFlowProvider>
 			</div>
 
@@ -267,8 +276,164 @@ export function WorkflowVisualizer({
 							)}
 						</div>
 					)}
+
+					{selectedNode.entryId && replayState?.isVisible && (
+						<div className="mt-4 flex justify-end">
+							<MaybeTooltip
+								content={replayState.tooltip}
+								disabled={!replayState.tooltip}
+							>
+								<span className="inline-flex">
+									<Button
+										size="sm"
+										variant="outline"
+										disabled={
+											replayState.isDisabled ||
+											selectedNode.entryId ===
+												replayingEntryId
+										}
+										onClick={() => {
+											selectedNode.onReplayStep?.(
+												selectedNode.entryId!,
+											);
+										}}
+									>
+										<Icon
+											icon={
+												selectedNode.entryId ===
+												replayingEntryId
+													? faSpinnerThird
+													: faRefresh
+											}
+											className={
+												selectedNode.entryId ===
+												replayingEntryId
+													? "animate-spin"
+													: undefined
+											}
+										/>
+										Replay from this step
+									</Button>
+								</span>
+							</MaybeTooltip>
+						</div>
+					)}
 				</div>
 			)}
 		</div>
 	);
+}
+
+function WorkflowGraph({
+	nodes,
+	edges,
+	onNodeClick,
+	onPaneClick,
+}: {
+	nodes: Node[];
+	edges: ReturnType<typeof workflowHistoryToXYFlow>["edges"];
+	onNodeClick: NodeMouseHandler;
+	onPaneClick: () => void;
+}) {
+	const { fitView } = useReactFlow();
+	const nodesInitialized = useNodesInitialized();
+
+	useEffect(() => {
+		if (!nodesInitialized || nodes.length === 0) {
+			return;
+		}
+
+		// Refit when workflow history changes so replays stay visible.
+		void fitView({
+			duration: 200,
+			padding: 0.2,
+		});
+	}, [fitView, nodes, nodesInitialized]);
+
+	return (
+		<ReactFlow
+			nodes={nodes}
+			edges={edges}
+			nodeTypes={workflowNodeTypes}
+			fitView
+			panOnScroll
+			panOnDrag
+			edgesFocusable={false}
+			panActivationKeyCode={null}
+			onNodeClick={onNodeClick}
+			onPaneClick={onPaneClick}
+			nodesDraggable={false}
+			nodesConnectable={false}
+			edgesReconnectable={false}
+			proOptions={{ hideAttribution: true }}
+		>
+			<Background
+				variant={BackgroundVariant.Dots}
+				gap={20}
+				size={1.5}
+				color="hsl(var(--border))"
+			/>
+			<Controls />
+			<MiniMap
+				nodeColor={miniMapNodeColor}
+				nodeStrokeColor="transparent"
+				maskColor="hsl(20 14.3% 4.1% / 0.7)"
+			/>
+		</ReactFlow>
+	);
+}
+
+function getReplayState({
+	currentStepId,
+	hasRunningStep,
+	selectedNode,
+}: {
+	currentStepId?: string;
+	hasRunningStep: boolean;
+	selectedNode: WorkflowNodeData;
+}) {
+	if (
+		selectedNode.entryType !== "step" ||
+		!selectedNode.entryId ||
+		typeof selectedNode.onReplayStep !== "function"
+	) {
+		return { isVisible: false, isDisabled: false } as const;
+	}
+
+	const disabledBecauseRunning = hasRunningStep;
+	if (selectedNode.entryId !== currentStepId) {
+		return {
+			isVisible: true,
+			isDisabled: disabledBecauseRunning,
+			tooltip: disabledBecauseRunning
+				? "Step currently in progress."
+				: undefined,
+		} as const;
+	}
+
+	const canReplayCurrentStep =
+		selectedNode.retryCount !== undefined && selectedNode.retryCount > 0;
+	return {
+		isVisible: canReplayCurrentStep || disabledBecauseRunning,
+		isDisabled: disabledBecauseRunning,
+		tooltip: disabledBecauseRunning
+			? "Step currently in progress."
+			: undefined,
+	} as const;
+}
+
+function MaybeTooltip({
+	children,
+	content,
+	disabled,
+}: {
+	children: ReactNode;
+	content?: ReactNode;
+	disabled?: boolean;
+}) {
+	if (disabled || !content) {
+		return <>{children}</>;
+	}
+
+	return <WithTooltip content={content} trigger={children} />;
 }

@@ -220,9 +220,7 @@ describe("buildPreloadMap", () => {
 
 		it("returns empty array when prefix was requested but has no entries", () => {
 			const input: PreloadedKvInput = {
-				entries: [
-					{ key: bytes(2, 0).buffer, value: bytes(20).buffer },
-				],
+				entries: [{ key: bytes(2, 0).buffer, value: bytes(20).buffer }],
 				requestedGetKeys: [],
 				requestedPrefixes: [bytes(1).buffer],
 			};
@@ -234,9 +232,7 @@ describe("buildPreloadMap", () => {
 
 		it("returns undefined when prefix was not requested", () => {
 			const input: PreloadedKvInput = {
-				entries: [
-					{ key: bytes(1, 0).buffer, value: bytes(10).buffer },
-				],
+				entries: [{ key: bytes(1, 0).buffer, value: bytes(10).buffer }],
 				requestedGetKeys: [],
 				requestedPrefixes: [],
 			};
@@ -285,9 +281,7 @@ describe("buildPreloadMap", () => {
 
 		it("an exact key match counts as having that prefix", () => {
 			const input: PreloadedKvInput = {
-				entries: [
-					{ key: bytes(3).buffer, value: bytes(30).buffer },
-				],
+				entries: [{ key: bytes(3).buffer, value: bytes(30).buffer }],
 				requestedGetKeys: [],
 				requestedPrefixes: [bytes(3).buffer],
 			};

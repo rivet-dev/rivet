@@ -176,7 +176,14 @@ export function createRivetKit<Registry extends AnyActorRegistry>(
 			mount: () => () => void;
 			state: ActorsStateDerived<Registry, ActorName>;
 			key: string;
-		} => (getOrCreateActor as any)(client, createOpts, store, cache, actorOpts),
+		} =>
+			(getOrCreateActor as any)(
+				client,
+				createOpts,
+				store,
+				cache,
+				actorOpts,
+			),
 		store,
 	};
 }

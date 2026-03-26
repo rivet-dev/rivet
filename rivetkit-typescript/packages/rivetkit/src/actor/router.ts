@@ -184,15 +184,19 @@ export function createActorRouter(
 			}
 
 			const inspectorToken = config.inspector.token();
-			if (!inspectorToken) {
-				return c.text("Unauthorized", 401);
+			if (inspectorToken && timingSafeEqual(userToken, inspectorToken)) {
+				return undefined;
 			}
 
-			if (!timingSafeEqual(userToken, inspectorToken)) {
-				return c.text("Unauthorized", 401);
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			if (
+				actor.inspectorToken &&
+				timingSafeEqual(userToken, actor.inspectorToken)
+			) {
+				return undefined;
 			}
 
-			return undefined;
+			return c.text("Unauthorized", 401);
 		};
 
 		router.get("/inspector/state", async (c) => {
@@ -286,6 +290,18 @@ export function createActorRouter(
 
 			const actor = await actorDriver.loadActor(c.env.actorId);
 			const result = actor.inspector.getWorkflowHistoryJson();
+			return c.json(result);
+		});
+
+		router.post("/inspector/workflow/replay", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			const body = await c.req.json<{ entryId?: string }>();
+			const result = await actor.inspector.replayWorkflowFromStepJson(
+				body.entryId,
+			);
 			return c.json(result);
 		});
 

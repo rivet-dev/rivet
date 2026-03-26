@@ -38,7 +38,7 @@ export function buildServerlessRouter(
 			if (!parseResult.success) {
 				throw new InvalidRequest(
 					parseResult.error.issues[0]?.message ??
-					"invalid serverless start headers",
+						"invalid serverless start headers",
 				);
 			}
 			const { endpoint, token, totalSlots, runnerName, namespace } =

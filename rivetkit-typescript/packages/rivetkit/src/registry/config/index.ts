@@ -69,7 +69,12 @@ export const RegistryConfigSchema = z
 				/**
 				 * Number of actors per WASM SQLite instance.
 				 */
-				actorsPerInstance: z.number().int().min(1).optional().default(50),
+				actorsPerInstance: z
+					.number()
+					.int()
+					.min(1)
+					.optional()
+					.default(50),
 				/**
 				 * Milliseconds before an idle instance (no actors, no in-flight ops) is destroyed.
 				 */
@@ -191,11 +196,11 @@ export const RegistryConfigSchema = z
 		// Parse endpoint string (env var fallback is applied via transform above)
 		const parsedEndpoint = config.endpoint
 			? tryParseEndpoint(ctx, {
-				endpoint: config.endpoint,
-				path: ["endpoint"],
-				namespace: config.namespace,
-				token: config.token,
-			})
+					endpoint: config.endpoint,
+					path: ["endpoint"],
+					namespace: config.namespace,
+					token: config.token,
+				})
 			: undefined;
 
 		if (parsedEndpoint && config.serveManager) {
@@ -240,9 +245,9 @@ export const RegistryConfigSchema = z
 		// Parse publicEndpoint string (env var fallback is applied via transform in serverless schema)
 		const parsedPublicEndpoint = config.serverless.publicEndpoint
 			? tryParseEndpoint(ctx, {
-				endpoint: config.serverless.publicEndpoint,
-				path: ["serverless", "publicEndpoint"],
-			})
+					endpoint: config.serverless.publicEndpoint,
+					path: ["serverless", "publicEndpoint"],
+				})
 			: undefined;
 
 		// Validate that publicEndpoint namespace matches backend namespace if specified
@@ -276,9 +281,9 @@ export const RegistryConfigSchema = z
 		const willUseEngine = !!endpoint || config.serverless.spawnEngine;
 		const inspector = willUseEngine
 			? {
-				...config.inspector,
-				enabled: { manager: false, actor: true },
-			}
+					...config.inspector,
+					enabled: { manager: false, actor: true },
+				}
 			: config.inspector;
 
 		return {

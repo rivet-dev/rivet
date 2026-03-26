@@ -1,8 +1,12 @@
 import { faSpinnerThird, Icon } from "@rivet-gg/icons";
-import { useQuery } from "@tanstack/react-query";
-import type { PropsWithChildren } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, type PropsWithChildren } from "react";
+import { toast } from "@/components";
 import { useActorInspector } from "../actor-inspector-context";
+import { actorInspectorQueriesKeys } from "../actor-inspector-context";
+import { useDataProvider } from "../data-provider";
 import type { ActorId } from "../queries";
+import type { HistoryItem, WorkflowHistory } from "./workflow-types";
 import { WorkflowVisualizer } from "./workflow-visualizer";
 
 interface ActorWorkflowTabProps {
@@ -11,9 +15,14 @@ interface ActorWorkflowTabProps {
 
 export function ActorWorkflowTab({ actorId }: ActorWorkflowTabProps) {
 	const inspector = useActorInspector();
+	const queryClient = useQueryClient();
+	const dataProvider = useDataProvider();
 
 	const { data: isWorkflowEnabled, isLoading: isEnabledLoading } = useQuery(
 		inspector.actorIsWorkflowEnabledQueryOptions(actorId),
+	);
+	const { data: actorStatus } = useQuery(
+		dataProvider.actorStatusQueryOptions(actorId),
 	);
 
 	const { data: workflowData, isLoading: isHistoryLoading } = useQuery(
@@ -22,6 +31,50 @@ export function ActorWorkflowTab({ actorId }: ActorWorkflowTabProps) {
 
 	const isLoading = isEnabledLoading || isHistoryLoading;
 	const workflow = workflowData?.history ?? null;
+	const currentStep = useMemo(() => getCurrentStep(workflow), [workflow]);
+	const hasHiddenRunningStep =
+		actorStatus === "running" &&
+		workflow?.history.length !== 0 &&
+		workflow?.history.every((item) => item.entry.status === "completed");
+	const replayMutation = useMutation(
+		inspector.actorWorkflowReplayMutation(actorId),
+	);
+	const replayingEntryId = replayMutation.isPending
+		? replayMutation.variables
+		: undefined;
+
+	const handleReplay = async (entryId?: string) => {
+		try {
+			const result = await replayMutation.mutateAsync(entryId);
+			queryClient.setQueryData(
+				actorInspectorQueriesKeys.actorWorkflowHistory(actorId),
+				{
+					history: result.history,
+					isEnabled: result.isEnabled,
+				},
+			);
+			queryClient.setQueryData(
+				actorInspectorQueriesKeys.actorIsWorkflowEnabled(actorId),
+				result.isEnabled,
+			);
+			void syncWorkflowHistoryAfterReplay({
+				actorId,
+				inspector,
+				queryClient,
+			});
+			toast.success(
+				entryId
+					? "Workflow replay scheduled from selected step."
+					: "Workflow replay scheduled from the beginning.",
+			);
+		} catch (error) {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Failed to replay workflow step.",
+			);
+		}
+	};
 
 	if (isLoading) {
 		return (
@@ -55,7 +108,19 @@ export function ActorWorkflowTab({ actorId }: ActorWorkflowTabProps) {
 
 	return (
 		<div className="flex-1 w-full min-h-0 h-full flex flex-col">
-			<WorkflowVisualizer workflow={workflow} />
+			<WorkflowVisualizer
+				workflow={workflow}
+				currentStepId={currentStep?.entry.id}
+				isReplayBlocked={hasHiddenRunningStep}
+				replayingEntryId={replayingEntryId}
+				onReplayStep={
+					inspector.inspectorProtocolVersion >= 4
+						? (entryId) => {
+								void handleReplay(entryId);
+							}
+						: undefined
+				}
+			/>
 		</div>
 	);
 }
@@ -66,4 +131,68 @@ function Info({ children }: PropsWithChildren) {
 			{children}
 		</div>
 	);
+}
+
+function getCurrentStep(workflow: WorkflowHistory | null): HistoryItem | null {
+	if (!workflow) {
+		return null;
+	}
+
+	const steps = workflow.history.filter(
+		(item) => item.entry.kind.type === "step",
+	);
+	if (steps.length === 0) {
+		return null;
+	}
+
+	const activeOrFailedSteps = steps.filter(
+		(item) => item.entry.status !== "completed",
+	);
+	if (activeOrFailedSteps.length > 0) {
+		return activeOrFailedSteps[activeOrFailedSteps.length - 1]!;
+	}
+
+	return steps[steps.length - 1]!;
+}
+
+async function syncWorkflowHistoryAfterReplay({
+	actorId,
+	inspector,
+	queryClient,
+}: {
+	actorId: ActorId;
+	inspector: ReturnType<typeof useActorInspector>;
+	queryClient: ReturnType<typeof useQueryClient>;
+}) {
+	const workflowQueryKey =
+		actorInspectorQueriesKeys.actorWorkflowHistory(actorId);
+	const stateQueryKey = actorInspectorQueriesKeys.actorState(actorId);
+
+	for (const delayMs of [250, 1_000, 2_500, 5_000]) {
+		await new Promise((resolve) => setTimeout(resolve, delayMs));
+		await queryClient.invalidateQueries({
+			queryKey: workflowQueryKey,
+			exact: true,
+		});
+		const result = await queryClient.fetchQuery({
+			...inspector.actorWorkflowHistoryQueryOptions(actorId),
+			staleTime: 0,
+		});
+		queryClient.setQueryData(
+			actorInspectorQueriesKeys.actorIsWorkflowEnabled(actorId),
+			result.isEnabled,
+		);
+		await queryClient.invalidateQueries({
+			queryKey: stateQueryKey,
+			exact: true,
+		});
+		const stateResult = await queryClient.fetchQuery({
+			...inspector.actorStateQueryOptions(actorId),
+			staleTime: 0,
+		});
+		queryClient.setQueryData(
+			actorInspectorQueriesKeys.actorIsStateEnabled(actorId),
+			stateResult.isEnabled,
+		);
+	}
 }

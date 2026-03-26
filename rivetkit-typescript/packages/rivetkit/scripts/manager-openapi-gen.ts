@@ -499,6 +499,43 @@ function injectActorRouter(openApiDoc: any) {
 		},
 	};
 
+	// POST /gateway/{actorId}/inspector/workflow/replay
+	openApiDoc.paths["/gateway/{actorId}/inspector/workflow/replay"] = {
+		post: {
+			parameters: [actorIdParam, inspectorAuthHeader],
+			requestBody: {
+				required: false,
+				content: {
+					"application/json": {
+						schema: {
+							type: "object",
+							properties: {
+								entryId: { type: "string" },
+							},
+						},
+					},
+				},
+			},
+			responses: {
+				200: {
+					description: "Workflow history after scheduling a replay",
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									history: {},
+									isWorkflowEnabled: { type: "boolean" },
+								},
+							},
+						},
+					},
+				},
+				401: { description: "Unauthorized" },
+			},
+		},
+	};
+
 	// GET /gateway/{actorId}/inspector/summary
 	openApiDoc.paths["/gateway/{actorId}/inspector/summary"] = {
 		get: {

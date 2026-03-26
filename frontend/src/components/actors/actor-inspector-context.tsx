@@ -99,6 +99,10 @@ interface ActorInspectorApi {
 		history: WorkflowHistory | null;
 		isEnabled: boolean;
 	}>;
+	replayWorkflowFromStep: (entryId?: string) => Promise<{
+		history: WorkflowHistory | null;
+		isEnabled: boolean;
+	}>;
 	getDatabaseSchema: () => Promise<DatabaseSchema>;
 	getDatabaseTableRows: (
 		table: string,
@@ -115,9 +119,15 @@ type FeatureSupport = {
 	message: string;
 };
 
+type WorkflowHistoryHttpResponse = {
+	history: number[] | null;
+	isWorkflowEnabled: boolean;
+};
+
 const MIN_RIVETKIT_VERSION_TRACES = "2.0.40";
 const MIN_RIVETKIT_VERSION_QUEUE = "2.0.40";
 const MIN_RIVETKIT_VERSION_DATABASE = "2.0.42";
+const MIN_RIVETKIT_VERSION_WORKFLOW_REPLAY = "2.1.6";
 const INSPECTOR_ERROR_EVENTS_DROPPED = "inspector.events_dropped";
 
 function parseSemver(version?: string) {
@@ -187,6 +197,9 @@ function getInspectorProtocolVersion(version: string | undefined) {
 		return 2;
 	}
 	if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_DATABASE)) {
+		if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_WORKFLOW_REPLAY)) {
+			return 4;
+		}
 		return 3;
 	}
 	if (parsed.major >= 2) {
@@ -365,6 +378,15 @@ export const createDefaultActorInspectorContext = ({
 		});
 	},
 
+	actorWorkflowReplayMutation(actorId: ActorId) {
+		return mutationOptions({
+			mutationKey: ["actor", actorId, "workflow", "replay"],
+			mutationFn: async (entryId?: string) => {
+				return api.replayWorkflowFromStep(entryId);
+			},
+		});
+	},
+
 	actorPingQueryOptions(actorId: ActorId) {
 		return queryOptions({
 			queryKey: ["actor", actorId, "ping"],
@@ -404,6 +426,59 @@ export const createDefaultActorInspectorContext = ({
 
 const computeActorUrl = ({ url, actorId }: { url: string; actorId: ActorId }) =>
 	new URL(`/gateway/${actorId}`, url).href;
+
+function transformWorkflowHistoryFromJson(raw: number[] | null): {
+	history: WorkflowHistory | null;
+	isEnabled: boolean;
+} {
+	if (!raw) {
+		return { history: null, isEnabled: true };
+	}
+
+	return transformWorkflowHistoryFromInspector(
+		new Uint8Array(raw).buffer as ArrayBuffer,
+	);
+}
+
+const replayWorkflowFromStepHttp = async ({
+	actorId,
+	credentials,
+	entryId,
+}: {
+	actorId: ActorId;
+	credentials: { url: string; inspectorToken: string };
+	entryId?: string;
+}) => {
+	const response = await fetch(
+		new URL(
+			`${computeActorUrl({ url: credentials.url, actorId })}/inspector/workflow/replay`,
+		).href,
+		{
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${credentials.inspectorToken}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify(entryId ? { entryId } : {}),
+		},
+	);
+
+	if (!response.ok) {
+		throw new Error(`Failed to replay workflow: ${response.statusText}`);
+	}
+
+	const data = z
+		.object({
+			history: z.array(z.number().int().min(0).max(255)).nullable(),
+			isWorkflowEnabled: z.boolean(),
+		})
+		.parse((await response.json()) satisfies WorkflowHistoryHttpResponse);
+
+	return {
+		history: transformWorkflowHistoryFromJson(data.history).history,
+		isEnabled: data.isWorkflowEnabled,
+	};
+};
 
 export const actorWakeUpMutationOptions = () =>
 	mutationOptions({
@@ -771,6 +846,17 @@ export const ActorInspectorProvider = ({
 				return promise;
 			},
 
+			replayWorkflowFromStep: async (entryId) => {
+				return replayWorkflowFromStepHttp({
+					actorId,
+					credentials: {
+						url: credentials.url,
+						inspectorToken: credentials.inspectorToken,
+					},
+					entryId,
+				});
+			},
+
 			getDatabaseSchema: async () => {
 				const { id, promise } =
 					actionsManager.current.createResolver<DatabaseSchema>({
@@ -997,6 +1083,24 @@ const createMessageHandler =
 				const transformed = body.val.history
 					? transformWorkflowHistoryFromInspector(body.val.history)
 					: null;
+				actionsManager.current.resolve(Number(rid), {
+					history: transformed?.history ?? null,
+					isEnabled: body.val.isWorkflowEnabled,
+				});
+			})
+			.with({ tag: "WorkflowReplayResponse" }, (body) => {
+				const { rid } = body.val;
+				const transformed = body.val.history
+					? transformWorkflowHistoryFromInspector(body.val.history)
+					: null;
+				queryClient.setQueryData(
+					actorInspectorQueriesKeys.actorWorkflowHistory(actorId),
+					transformed,
+				);
+				queryClient.setQueryData(
+					actorInspectorQueriesKeys.actorIsWorkflowEnabled(actorId),
+					body.val.isWorkflowEnabled,
+				);
 				actionsManager.current.resolve(Number(rid), {
 					history: transformed?.history ?? null,
 					isEnabled: body.val.isWorkflowEnabled,

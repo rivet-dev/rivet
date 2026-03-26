@@ -78,6 +78,16 @@ export class StateNotEnabled extends ActorError {
 	}
 }
 
+export class WorkflowNotEnabled extends ActorError {
+	constructor() {
+		super(
+			"actor",
+			"workflow_not_enabled",
+			"Workflow not enabled. The run handler must use `workflow(...)` to expose workflow inspector controls.",
+		);
+	}
+}
+
 export class ConnStateNotEnabled extends ActorError {
 	constructor() {
 		super(

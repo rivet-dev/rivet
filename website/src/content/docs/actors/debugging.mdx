@@ -272,8 +272,8 @@ Standard actor endpoints (health, actions, requests) and inspector endpoints hav
 | Environment | Authentication |
 |---|---|
 | **Local development** | No authentication required if `RIVET_INSPECTOR_TOKEN` is not set. A warning is logged. |
-| **Self-hosted engine** | Set the `RIVET_INSPECTOR_TOKEN` environment variable. Pass it as a bearer token in the `Authorization` header. |
-| **Rivet Cloud** | Each actor auto-generates a unique inspector token stored in its KV. Retrieve it via the management KV endpoint (see below). Pass it as a bearer token in the `Authorization` header. |
+| **Self-hosted engine** | Set the `RIVET_INSPECTOR_TOKEN` environment variable. Pass it as a bearer token in the `Authorization` header. The actor-specific inspector token used by the standalone Inspector UI is also accepted. |
+| **Rivet Cloud** | Token is required. Pass it as a bearer token in the `Authorization` header. The actor-specific inspector token used by the standalone Inspector UI is also accepted. |
 
 ```bash
 curl "$RIVET_API/gateway/{actor_id}/inspector/summary" \
@@ -546,6 +546,29 @@ Returns paged rows for a specific SQLite table or view:
 
 For workflow-enabled actors, `history` is a JSON object with `nameRegistry`, `entries`, and `entryMetadata`. Step outputs, loop state, and message payloads are decoded from CBOR into normal JSON values.
 
+#### Replay Workflow From Step
+
+Reset a workflow to a specific step and restart execution immediately. Omitting `entryId` replays the workflow from the beginning.
+
+```bash
+curl -X POST http://localhost:6420/gateway/{actor_id}/inspector/workflow/replay \
+  -H 'Content-Type: application/json' \
+  -d '{"entryId":"workflow-step-id"}'
+```
+
+Returns the same JSON shape as `/inspector/workflow-history`:
+
+```json
+{
+  "history": {
+    "nameRegistry": ["step-one", "step-two"],
+    "entries": [],
+    "entryMetadata": {}
+  },
+  "isWorkflowEnabled": true
+}
+```
+
 #### Summary
 
 Get a full snapshot of the actor in a single request:
@@ -568,6 +591,8 @@ Returns:
   "workflowHistory": null
 }
 ```
+
+When workflow history is present in `/inspector/summary`, `workflowHistory` is returned as the same encoded byte array used by `/inspector/workflow-history`.
 
 #### Get Metrics (Experimental)
 

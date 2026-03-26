@@ -127,8 +127,9 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 		test("waitUntil can broadcast before sleep disconnect", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
-			const sleepActor =
-				client.sleepWithWaitUntilMessage.getOrCreate().connect();
+			const sleepActor = client.sleepWithWaitUntilMessage
+				.getOrCreate()
+				.connect();
 			const receivedMessages: Array<{
 				sleepCount: number;
 				startCount: number;

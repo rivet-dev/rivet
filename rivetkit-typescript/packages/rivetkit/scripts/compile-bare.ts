@@ -54,7 +54,9 @@ program
 		}
 	});
 
-program.parse();
+if (import.meta.filename === process.argv[1]) {
+	program.parse();
+}
 
 export interface CompileOptions {
 	schemaPath: string;

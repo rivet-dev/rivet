@@ -13,8 +13,17 @@ import { WSContext, type WSContextInit } from "hono/ws";
 import invariant from "invariant";
 import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
 import { lookupInRegistry } from "@/actor/definition";
-import { KEYS, queueMetadataKey, sqliteStoragePrefix, workflowStoragePrefix } from "@/actor/instance/keys";
-import { type PreloadMap, compareBytes, createPreloadMap } from "@/actor/instance/preload-map";
+import {
+	KEYS,
+	queueMetadataKey,
+	sqliteStoragePrefix,
+	workflowStoragePrefix,
+} from "@/actor/instance/keys";
+import {
+	type PreloadMap,
+	compareBytes,
+	createPreloadMap,
+} from "@/actor/instance/preload-map";
 import { deserializeActorKey } from "@/actor/keys";
 import { getValueLength } from "@/actor/protocol/old";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
@@ -171,7 +180,7 @@ export class EngineActorDriver implements ActorDriver {
 			onConnected: () => {
 				this.#runnerStarted.resolve(undefined);
 			},
-			onDisconnected: (_code, _reason) => { },
+			onDisconnected: (_code, _reason) => {},
 			onShutdown: () => {
 				this.#runnerStopped.resolve(undefined);
 				this.#isRunnerStopped = true;
@@ -447,7 +456,7 @@ export class EngineActorDriver implements ActorDriver {
 	async serverlessHandleStart(c: HonoContext): Promise<Response> {
 		return streamSSE(c, async (stream) => {
 			// NOTE: onAbort does not work reliably
-			stream.onAbort(() => { });
+			stream.onAbort(() => {});
 			c.req.raw.signal.addEventListener("abort", () => {
 				logger().debug("SSE aborted, shutting down runner");
 
@@ -500,10 +509,7 @@ export class EngineActorDriver implements ActorDriver {
 		actorId: string,
 		persistData: Uint8Array,
 	): Promise<{ preloadMap: PreloadMap; entries: number }> {
-		const remainingExactKeys = [
-			KEYS.INSPECTOR_TOKEN,
-			queueMetadataKey(),
-		];
+		const remainingExactKeys = [KEYS.INSPECTOR_TOKEN, queueMetadataKey()];
 
 		const prefixScans = [
 			KEYS.CONN_PREFIX,
@@ -538,7 +544,11 @@ export class EngineActorDriver implements ActorDriver {
 		const requestedGetKeys = allExactKeys.slice().sort(compareBytes);
 		const requestedPrefixes = prefixScans.slice().sort(compareBytes);
 
-		const preloadMap = createPreloadMap(entries, requestedGetKeys, requestedPrefixes);
+		const preloadMap = createPreloadMap(
+			entries,
+			requestedGetKeys,
+			requestedPrefixes,
+		);
 
 		return { preloadMap, entries: entries.length };
 	}
@@ -613,7 +623,10 @@ export class EngineActorDriver implements ActorDriver {
 				});
 			} else {
 				const preloadStart = performance.now();
-				const result = await this.#preloadStartupKv(actorId, persistDataBuffer);
+				const result = await this.#preloadStartupKv(
+					actorId,
+					persistDataBuffer,
+				);
 				preloadMap = result.preloadMap;
 				preloadKvEntries = result.entries;
 				preloadKvMs = performance.now() - preloadStart;
@@ -634,7 +647,8 @@ export class EngineActorDriver implements ActorDriver {
 			const instantiateMs = performance.now() - instantiateStart;
 
 			// Record driver-level startup metrics on the actor.
-			handler.actor.metrics.startup.checkPersistDataMs = checkPersistDataMs;
+			handler.actor.metrics.startup.checkPersistDataMs =
+				checkPersistDataMs;
 			handler.actor.metrics.startup.initNewActorMs = initNewActorMs;
 			handler.actor.metrics.startup.preloadKvMs = preloadKvMs;
 			handler.actor.metrics.startup.preloadKvEntries = preloadKvEntries;
@@ -659,7 +673,7 @@ export class EngineActorDriver implements ActorDriver {
 				if (protocolMetadata.serverlessDrainGracePeriod) {
 					const drainMax = Math.max(
 						Number(protocolMetadata.serverlessDrainGracePeriod) -
-						1000,
+							1000,
 						0,
 					);
 					handler.actor.overrides.runStopTimeout = drainMax;
@@ -683,12 +697,12 @@ export class EngineActorDriver implements ActorDriver {
 			const error =
 				innerError instanceof Error
 					? new Error(
-						`Failed to start actor ${actorId}: ${innerError.message}`,
-						{ cause: innerError },
-					)
+							`Failed to start actor ${actorId}: ${innerError.message}`,
+							{ cause: innerError },
+						)
 					: new Error(
-						`Failed to start actor ${actorId}: ${String(innerError)}`,
-					);
+							`Failed to start actor ${actorId}: ${String(innerError)}`,
+						);
 			handler.actor = undefined;
 			handler.actorStartError = error;
 			handler.actorStartPromise?.reject(error);
