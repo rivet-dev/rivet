@@ -15,7 +15,7 @@
 	},
 	"dependencies": {
 		"elysia": "^1.4.0",
-		"rivetkit": "^2.1.8"
+		"rivetkit": "^2.1.9"
 	},
 	"stableVersion": "0.8.0",
 	"license": "MIT"
