@@ -35,5 +35,3 @@ onlyBuiltDependencies:
   - lefthook
   - sharp
   - workerd
-
-enableGlobalVirtualStore: true
