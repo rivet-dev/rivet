@@ -59,7 +59,9 @@ export function db({
 			const mutex = new AsyncMutex();
 			const ensureOpen = () => {
 				if (closed) {
-					throw new Error("database is closed");
+					throw new Error(
+						"Database is closed. This usually means a background timer (setInterval, setTimeout) or a stray promise is still running after the actor stopped. Use c.abortSignal to clean up timers before the actor shuts down.",
+					);
 				}
 			};
 

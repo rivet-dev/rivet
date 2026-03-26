@@ -711,7 +711,9 @@ Once the actor becomes idle, the sleep timer starts. After `sleepTimeout` (defau
 
 #### Upgrades & Eviction
 
-Actors do not need special handling for upgrades or eviction. The platform may force an actor to sleep during version upgrades or when a serverless request is about to timeout. The same [shutdown sequence](#sleep-shutdown-sequence) and timeouts apply, so `onSleep`, `waitUntil`, and abort signals all work as expected.
+The platform may force an actor to migrate to a new machine during version upgrades or when a serverless request is about to timeout. The same [shutdown sequence](#shutdown-sequence) runs, then the actor is rescheduled on a new machine and wakes up with its persisted state.
+
+`setPreventSleep` does **not** prevent forced migrations. It only prevents the idle sleep timer from firing. Use `onSleep` and `waitUntil` to control cleanup before the actor moves to another machine.
 
 ### Preventing Sleep
 

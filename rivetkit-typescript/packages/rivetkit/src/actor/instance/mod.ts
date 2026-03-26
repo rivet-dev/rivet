@@ -453,7 +453,11 @@ export class ActorInstance<
 
 	get db(): InferDatabaseClient<DB> {
 		if (!this.#db) {
-			console.trace("[DEBUG] database not loaded");
+			if (this.#stopCalled) {
+				throw new errors.ActorStopping(
+					"database accessed after actor started stopping. If you are using setInterval or other background timers, clean them up with c.abortSignal.",
+				);
+			}
 			throw new errors.DatabaseNotEnabled();
 		}
 		return this.#db;

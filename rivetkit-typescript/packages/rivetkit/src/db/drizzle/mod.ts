@@ -93,7 +93,9 @@ function createProxyCallback(
 	): Promise<{ rows: any }> => {
 		return await mutex.run(async () => {
 			if (isClosed()) {
-				throw new Error("database is closed");
+				throw new Error(
+					"Database is closed. This usually means a background timer (setInterval, setTimeout) or a stray promise is still running after the actor stopped. Use c.abortSignal to clean up timers before the actor shuts down.",
+				);
 			}
 
 			const kvReadsBefore = metrics?.totalKvReads ?? 0;
@@ -229,7 +231,9 @@ export function db<
 			let closed = false;
 			const ensureOpen = () => {
 				if (closed) {
-					throw new Error("database is closed");
+					throw new Error(
+						"Database is closed. This usually means a background timer (setInterval, setTimeout) or a stray promise is still running after the actor stopped. Use c.abortSignal to clean up timers before the actor shuts down.",
+					);
 				}
 			};
 
