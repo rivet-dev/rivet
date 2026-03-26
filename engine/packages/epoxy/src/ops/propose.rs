@@ -452,20 +452,14 @@ mod tests {
 
 	#[test]
 	fn resolve_quorum_members_missing_local_errors() {
-		let config = make_config(&[
-			(1, ReplicaStatus::Active),
-			(2, ReplicaStatus::Active),
-		]);
+		let config = make_config(&[(1, ReplicaStatus::Active), (2, ReplicaStatus::Active)]);
 		let result = resolve_quorum_members(&config, 1, Some(&[2]));
 		assert!(result.is_err());
 	}
 
 	#[test]
 	fn resolve_quorum_members_inactive_replica_errors() {
-		let config = make_config(&[
-			(1, ReplicaStatus::Active),
-			(2, ReplicaStatus::Learning),
-		]);
+		let config = make_config(&[(1, ReplicaStatus::Active), (2, ReplicaStatus::Learning)]);
 		let result = resolve_quorum_members(&config, 1, Some(&[1, 2]));
 		assert!(result.is_err());
 	}
