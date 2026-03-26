@@ -3974,6 +3974,9 @@ importers:
 
   rivetkit-typescript/packages/rivetkit:
     dependencies:
+      '@fly/sprites':
+        specifier: '>=0.0.1'
+        version: 0.0.1
       '@hono/node-server':
         specifier: ^1.18.2
         version: 1.19.9(hono@4.11.9)
@@ -6934,6 +6937,10 @@ packages:
 
   '@floating-ui/utils@0.2.10':
     resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
+
+  '@fly/sprites@0.0.1':
+    resolution: {integrity: sha512-1s+dIVi/pTMP4Aj4Mkg+4LoZ/+a0Kp6l9piPRxvpgEKm11b/eRiZgJwVytwAHeI/vtg2fuwcFExjtXOEfny/TA==}
+    engines: {node: '>=24.0.0'}
 
   '@formkit/auto-animate@0.8.4':
     resolution: {integrity: sha512-DHHC01EJ1p70Q0z/ZFRBIY8NDnmfKccQoyoM84Tgb6omLMat6jivCdf272Y8k3nf4Lzdin/Y4R9q8uFtU0GbnA==}
@@ -20985,6 +20992,8 @@ snapshots:
       tabbable: 6.3.0
 
   '@floating-ui/utils@0.2.10': {}
+
+  '@fly/sprites@0.0.1': {}
 
   '@formkit/auto-animate@0.8.4': {}
 
