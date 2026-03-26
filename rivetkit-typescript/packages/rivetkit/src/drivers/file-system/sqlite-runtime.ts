@@ -122,42 +122,31 @@ export function loadSqliteRuntime(): SqliteRuntime {
 		loadErrors.push(`bun:sqlite unavailable: ${String(error)}`);
 	}
 
-	// node:sqlite is experimental and emits a noisy warning ("SQLite is an
-	// experimental feature and might change at any time"). Only use it when
-	// explicitly opted in via RIVETKIT_NODE_SQLITE=1. Once Node stabilizes
-	// node:sqlite and removes the warning, we'll enable it by default and
-	// remove the better-sqlite3 dependency.
-	if (process.env.RIVETKIT_NODE_SQLITE === "1") {
-		try {
-			const nodeSqlite = requireFn(
-				/* webpackIgnore: true */ "node:sqlite",
-			) as {
-				DatabaseSync?: SqliteDatabaseCtor;
+	try {
+		const nodeSqlite = requireFn(
+			/* webpackIgnore: true */ "node:sqlite",
+		) as {
+			DatabaseSync?: SqliteDatabaseCtor;
+		};
+		const NodeDatabaseSync = nodeSqlite.DatabaseSync;
+		if (NodeDatabaseSync) {
+			return {
+				kind: "node",
+				open: (path) => {
+					const rawDb = new NodeDatabaseSync(path);
+					configureSqliteRuntimeDatabase(rawDb, path);
+					const prepare = rawDb.prepare?.bind(rawDb);
+					if (!prepare) {
+						throw new Error(
+							"node:sqlite DatabaseSync missing prepare method",
+						);
+					}
+					return createPreparedDatabaseAdapter(rawDb, prepare);
+				},
 			};
-			const NodeDatabaseSync = nodeSqlite.DatabaseSync;
-			if (NodeDatabaseSync) {
-				return {
-					kind: "node",
-					open: (path) => {
-						const rawDb = new NodeDatabaseSync(path);
-						configureSqliteRuntimeDatabase(rawDb, path);
-						const prepare = rawDb.prepare?.bind(rawDb);
-						if (!prepare) {
-							throw new Error(
-								"node:sqlite DatabaseSync missing prepare method",
-							);
-						}
-						return createPreparedDatabaseAdapter(rawDb, prepare);
-					},
-				};
-			}
-		} catch (error) {
-			loadErrors.push(`node:sqlite unavailable: ${String(error)}`);
 		}
-	} else {
-		loadErrors.push(
-			"node:sqlite skipped (set RIVETKIT_NODE_SQLITE=1 to enable)",
-		);
+	} catch (error) {
+		loadErrors.push(`node:sqlite unavailable: ${String(error)}`);
 	}
 
 	try {
