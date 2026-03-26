@@ -399,7 +399,7 @@ export function runActorDestroyTests(driverTestConfig: DriverTestConfig) {
 			}>((resolve, reject) => {
 				websocket.addEventListener(
 					"message",
-					(event: MessageEvent<string>) => {
+					(event: MessageEvent) => {
 						resolve(JSON.parse(event.data));
 					},
 					{ once: true },

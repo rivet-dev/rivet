@@ -10,7 +10,7 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { compileSchema } from "./compile-bare.ts";
+import { compileSchema } from "./compile-bare.js";
 
 const schemasDir = path.resolve(import.meta.dirname, "../schemas");
 const distDir = path.resolve(import.meta.dirname, "../dist/schemas");

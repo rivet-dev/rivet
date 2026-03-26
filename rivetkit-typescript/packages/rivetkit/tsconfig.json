@@ -27,6 +27,7 @@
 		"scripts/**/*",
 		"fixtures/driver-test-suite/**/*",
 		"dist/schemas/**/*",
-		"runtime/index.ts"
+		"runtime/index.ts",
+		"../sqlite-vfs/src/wasm.d.ts"
 	]
 }
