@@ -90,7 +90,7 @@ const deploySidebarPages: SidebarItem[] = deployOptions.filter((x) => x.name !==
 export const sitemap = [
 	{
 		title: "Overview",
-		href: "/docs",
+		href: "/docs/actors",
 		sidebar: [
 			{
 				title: "General",

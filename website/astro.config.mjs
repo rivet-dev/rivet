@@ -10,6 +10,7 @@ import { rehypePlugins } from './src/mdx/rehype';
 import { generateRoutes } from './src/integrations/generate-routes';
 import { typecheckCodeBlocks } from './src/integrations/typecheck-code-blocks';
 import { skillVersion } from './src/integrations/skill-version';
+import { styleRedirects } from './src/integrations/style-redirects';
 
 
 export default defineConfig({
@@ -19,7 +20,6 @@ export default defineConfig({
 	// SEO Redirects - Astro generates HTML redirect files for static builds
 	// These work in dev server and all deployment platforms (Vercel, Netlify, Cloudflare, etc.)
 	redirects: {
-		'/docs': '/docs/actors/',
 		// Documentation restructure
 		'/docs/setup': '/docs/actors/quickstart/',
 		'/docs/actors/queue': '/docs/actors/queues/',
@@ -79,6 +79,7 @@ export default defineConfig({
       		org: "rivet-gaming",
 			authToken: process.env.SENTRY_AUTH_TOKEN,
 		}),
+		styleRedirects(),
 	],
 	vite: {
 		ssr: {

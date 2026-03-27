@@ -253,13 +253,13 @@ export function TechSection() {
             <TechSubSection title='Tools'>
               <TechLink href='/docs/integrations/vitest' name='Vitest' icon={vitestLogo} alt='Vitest' />
               <TechLink
-                href='/docs'
+                href='/docs/actors'
                 name='OpenAPI'
                 icon={javascriptLogo}
                 alt='OpenAPI'
               />
               <TechLink
-                href='/docs'
+                href='/docs/actors'
                 name='AsyncAPI'
                 icon={javascriptLogo}
                 alt='AsyncAPI'

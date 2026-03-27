@@ -459,7 +459,7 @@ export function Header({
 							<div className="flex items-center font-v2 subpixel-antialiased">
 								<ProductsDropdown active={active === "product"} />
 								<TextNavItem
-									href="/docs"
+									href="/docs/actors"
 									ariaCurrent={active === "docs" ? "page" : undefined}
 								>
 									Documentation
@@ -540,7 +540,7 @@ export function Header({
 				<div className="flex items-center font-v2 subpixel-antialiased">
 					<ProductsDropdown active={active === "product"} />
 					<TextNavItem
-						href="/docs"
+						href="/docs/actors"
 						ariaCurrent={active === "docs" ? "page" : undefined}
 					>
 						Documentation
@@ -577,7 +577,7 @@ function DocsMobileNavigation({ tree, sidebarData }: { tree?: ReactNode; sidebar
 	};
 
 	const sections = [
-		{ id: "overview", label: "Overview", href: "/docs" },
+		{ id: "overview", label: "Overview", href: "/docs/actors" },
 		{ id: "quickstart", label: "Quickstart", href: "/docs/quickstart" },
 		{ id: "actors", label: "Actors", href: "/docs/actors" },
 		{ id: "integrations", label: "Integrations", href: "/docs/integrations" },
@@ -585,7 +585,7 @@ function DocsMobileNavigation({ tree, sidebarData }: { tree?: ReactNode; sidebar
 	];
 
 	const mainLinks = [
-		{ href: "/docs", label: "Documentation" },
+		{ href: "/docs/actors", label: "Documentation" },
 		{ href: "/cloud", label: "Cloud" },
 		{ href: "/cookbook", label: "Cookbooks" },
 	];
