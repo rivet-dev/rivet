@@ -751,3 +751,73 @@ export const sleepWithRawWsCloseDb = actor({
 		sleepTimeout: RAW_WS_HANDLER_SLEEP_TIMEOUT,
 	},
 });
+
+export const sleepWithRawWsCloseDbListener = actor({
+	state: {
+		startCount: 0,
+		sleepCount: 0,
+		closeStarted: 0,
+		closeFinished: 0,
+	},
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS sleep_log (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					event TEXT NOT NULL,
+					created_at INTEGER NOT NULL
+				)
+			`);
+		},
+	}),
+	onWake: async (c) => {
+		c.state.startCount += 1;
+		await c.db.execute(
+			`INSERT INTO sleep_log (event, created_at) VALUES ('wake', ${Date.now()})`,
+		);
+	},
+	onSleep: async (c) => {
+		c.state.sleepCount += 1;
+		await c.db.execute(
+			`INSERT INTO sleep_log (event, created_at) VALUES ('sleep', ${Date.now()})`,
+		);
+	},
+	onWebSocket: (c, ws: UniversalWebSocket) => {
+		ws.addEventListener("close", async () => {
+			c.state.closeStarted += 1;
+			await c.db.execute(
+				`INSERT INTO sleep_log (event, created_at) VALUES ('close-start', ${Date.now()})`,
+			);
+			await new Promise((resolve) =>
+				setTimeout(resolve, RAW_WS_HANDLER_DELAY),
+			);
+			await c.db.execute(
+				`INSERT INTO sleep_log (event, created_at) VALUES ('close-finish', ${Date.now()})`,
+			);
+			c.state.closeFinished += 1;
+		});
+
+		ws.send(JSON.stringify({ type: "connected" }));
+	},
+	actions: {
+		triggerSleep: (c) => {
+			c.sleep();
+		},
+		getStatus: (c) => ({
+			startCount: c.state.startCount,
+			sleepCount: c.state.sleepCount,
+			closeStarted: c.state.closeStarted,
+			closeFinished: c.state.closeFinished,
+		}),
+		getLogEntries: async (c) => {
+			return await c.db.execute<{
+				id: number;
+				event: string;
+				created_at: number;
+			}>(`SELECT * FROM sleep_log ORDER BY id`);
+		},
+	},
+	options: {
+		sleepTimeout: RAW_WS_HANDLER_SLEEP_TIMEOUT,
+	},
+});

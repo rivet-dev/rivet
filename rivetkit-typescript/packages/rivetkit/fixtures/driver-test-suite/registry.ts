@@ -91,6 +91,7 @@ import {
 	sleepWithDbConn,
 	sleepWithDbAction,
 	sleepWithRawWsCloseDb,
+	sleepWithRawWsCloseDbListener,
 	sleepWaitUntil,
 	sleepNestedWaitUntil,
 	sleepEnqueue,
@@ -173,6 +174,7 @@ export const registry = setup({
 		sleepWaitUntilState,
 		sleepWithRawWs,
 		sleepWithRawWsCloseDb,
+		sleepWithRawWsCloseDbListener,
 		// From error-handling.ts
 		errorHandlingActor,
 		customTimeoutActor,
