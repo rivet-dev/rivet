@@ -23,14 +23,11 @@ use crate::pubsub::DriverOutput;
 struct Subscription {
 	// Channel to send messages to this subscription
 	tx: broadcast::Sender<Vec<u8>>,
-	// Cancellation token shared by all subscribers of this subject
-	token: tokio_util::sync::CancellationToken,
 }
 
 impl Subscription {
 	fn new(tx: broadcast::Sender<Vec<u8>>) -> Self {
-		let token = tokio_util::sync::CancellationToken::new();
-		Self { tx, token }
+		Self { tx }
 	}
 }
 
@@ -293,6 +290,34 @@ impl PostgresDriver {
 		subject.hash(&mut hasher);
 		format!("ups_{:x}", hasher.finish())
 	}
+
+	fn spawn_subscription_cleanup_task(
+		&self,
+		hashed: String,
+		tx: broadcast::Sender<Vec<u8>>,
+	) -> tokio_util::sync::DropGuard {
+		let driver = self.clone();
+		let token = tokio_util::sync::CancellationToken::new();
+		let drop_guard = token.clone().drop_guard();
+
+		tokio::spawn(async move {
+			token.cancelled().await;
+			if tx.receiver_count() == 0 {
+				if let Some(client) = &*driver.client.lock().await {
+					let sql = format!("UNLISTEN \"{}\"", hashed);
+					if let Err(err) = client.execute(sql.as_str(), &[]).await {
+						tracing::warn!(?err, %hashed, "failed to UNLISTEN channel");
+					} else {
+						tracing::trace!(%hashed, "unlistened channel");
+					}
+				}
+				driver.subscriptions.remove_async(&hashed).await;
+				metrics::POSTGRES_SUBSCRIPTION_COUNT.set(driver.subscriptions.len() as i64);
+			}
+		});
+
+		drop_guard
+	}
 }
 
 #[async_trait]
@@ -316,7 +341,8 @@ impl PubSubDriver for PostgresDriver {
 			scc::hash_map::Entry::Occupied(existing_sub) => {
 				// Reuse the existing broadcast channel
 				let rx = existing_sub.tx.subscribe();
-				let drop_guard = existing_sub.token.clone().drop_guard();
+				let drop_guard =
+					self.spawn_subscription_cleanup_task(hashed.clone(), existing_sub.tx.clone());
 				(rx, drop_guard)
 			}
 			scc::hash_map::Entry::Vacant(e) => {
@@ -349,27 +375,7 @@ impl PubSubDriver for PostgresDriver {
 					tracing::debug!(%hashed, "client not connected, will LISTEN on reconnection");
 				}
 
-				// Spawn a single cleanup task for this subscription waiting on its token
-				let driver = self.clone();
-				let tx_clone = tx.clone();
-				let token_clone = subscription.token.clone();
-				tokio::spawn(async move {
-					token_clone.cancelled().await;
-					if tx_clone.receiver_count() == 0 {
-						if let Some(client) = &*driver.client.lock().await {
-							let sql = format!("UNLISTEN \"{}\"", hashed);
-							if let Err(err) = client.execute(sql.as_str(), &[]).await {
-								tracing::warn!(?err, %hashed, "failed to UNLISTEN channel");
-							} else {
-								tracing::trace!(%hashed, "unlistened channel");
-							}
-						}
-						driver.subscriptions.remove_async(&hashed).await;
-						metrics::POSTGRES_SUBSCRIPTION_COUNT.set(driver.subscriptions.len() as i64);
-					}
-				});
-
-				let drop_guard = subscription.token.clone().drop_guard();
+				let drop_guard = self.spawn_subscription_cleanup_task(hashed.clone(), tx.clone());
 				(rx, drop_guard)
 			}
 		};
