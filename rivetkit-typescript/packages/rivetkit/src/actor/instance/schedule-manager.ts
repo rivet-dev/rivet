@@ -298,22 +298,6 @@ export class ScheduleManager<
 					action: event.action,
 				});
 
-				// Look up the action function
-				const actions = this.#config.actions ?? {};
-				const fn = actions[event.action];
-
-				if (!fn) {
-					throw new Error(
-						`Missing action for scheduled event: ${event.action}`,
-					);
-				}
-
-				if (typeof fn !== "function") {
-					throw new Error(
-						`Scheduled event action ${event.action} is not a function (got ${typeof fn})`,
-					);
-				}
-
 				// Decode arguments and execute
 				const args = event.args
 					? cbor.decode(new Uint8Array(event.args))
@@ -321,15 +305,11 @@ export class ScheduleManager<
 
 				await this.#actor.internalKeepAwake(() =>
 					this.#actor.traces.withSpan(span, async () => {
-						const result = fn.call(
-							undefined,
+						await this.#actor.invokeActionByName(
 							this.#actor.actorContext,
-							...args,
+							event.action,
+							args,
 						);
-
-						if (result instanceof Promise) {
-							await result;
-						}
 					}),
 				);
 

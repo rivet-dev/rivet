@@ -930,10 +930,11 @@ export class ActorInstance<
 	}
 
 	// MARK: - Action Execution
-	async executeAction(
-		ctx: ActionContext<S, CP, CS, V, I, DB, E, Q>,
+	async invokeActionByName(
+		ctx: ActorContext<S, CP, CS, V, I, DB, E, Q>,
 		actionName: string,
 		args: unknown[],
+		timeoutMs?: number,
 	): Promise<unknown> {
 		this.assertReady();
 
@@ -953,6 +954,33 @@ export class ActorInstance<
 			throw new errors.ActionNotFound(actionName);
 		}
 
+		const outputOrPromise = actionFunction.call(
+			undefined,
+			// TODO: Replace this cast after scheduled actions and direct actions
+			// share a properly typed internal action invocation context.
+			ctx as any,
+			...args,
+		);
+		const maybeThenable = outputOrPromise as {
+			then?: (onfulfilled?: unknown, onrejected?: unknown) => unknown;
+		};
+		if (maybeThenable && typeof maybeThenable.then === "function") {
+			const promise = Promise.resolve(outputOrPromise);
+			return await (timeoutMs === undefined
+				? promise
+				: deadline(promise, timeoutMs));
+		}
+
+		return outputOrPromise;
+	}
+
+	async executeAction(
+		ctx: ActionContext<S, CP, CS, V, I, DB, E, Q>,
+		actionName: string,
+		args: unknown[],
+	): Promise<unknown> {
+		this.assertReady();
+
 		this.#beginActiveAsyncRegion("internalKeepAwake");
 		this.#metrics.actionCalls++;
 		const actionStart = performance.now();
@@ -969,27 +997,12 @@ export class ActorInstance<
 					args,
 				});
 
-				const outputOrPromise = actionFunction.call(
-					undefined,
+				let output = await this.invokeActionByName(
 					ctx,
-					...args,
+					actionName,
+					args,
+					this.#config.options.actionTimeout,
 				);
-
-				let output: unknown;
-				const maybeThenable = outputOrPromise as {
-					then?: (
-						onfulfilled?: unknown,
-						onrejected?: unknown,
-					) => unknown;
-				};
-				if (maybeThenable && typeof maybeThenable.then === "function") {
-					output = await deadline(
-						Promise.resolve(outputOrPromise),
-						this.#config.options.actionTimeout,
-					);
-				} else {
-					output = outputOrPromise;
-				}
 
 				// Process through onBeforeActionResponse if configured
 				if (this.#config.onBeforeActionResponse) {
