@@ -282,7 +282,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               transition={{ duration: 0.5, delay: 0.05 }}
               className='mb-6 text-lg text-zinc-400 md:text-xl'
             >
-              Rivet Actors are built for AI agents,<br/>collaborative apps, and durable execution.
+              Composable stateful compute for AI agents,<br/>collaborative apps, and durable execution.
             </motion.p>
 
             <motion.div
