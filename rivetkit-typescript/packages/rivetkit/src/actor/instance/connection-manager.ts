@@ -9,6 +9,7 @@ import {
 import { ToClientSchema } from "@/schemas/client-protocol-zod/mod";
 import { arrayBuffersEqual, stringifyError } from "@/utils";
 import type { ConnDriver } from "../conn/driver";
+import * as errors from "../errors";
 import {
 	CONN_CONNECTED_SYMBOL,
 	CONN_DRIVER_SYMBOL,
@@ -110,6 +111,8 @@ export class ConnectionManager<
 		isRestoringHibernatable: boolean,
 	): Promise<Conn<S, CP, CS, V, I, DB, E, Q>> {
 		this.#actor.assertReady();
+		if (this.#actor.isStopping)
+			throw new errors.ActorStopping("Cannot accept new connections while actor is stopping");
 
 		// TODO: Add back
 		// const url = request?.url;

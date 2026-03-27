@@ -255,14 +255,18 @@ export class ScheduleManager<
 			this.#persist.scheduledEvents.splice(insertIndex, 0, newEvent);
 		}
 
-		// Update alarm if this is the newest event
-		if (insertIndex === 0 || this.#persist.scheduledEvents.length === 1) {
-			this.#actor.log.info({
-				msg: "setting alarm for new event",
-				timestamp: newEvent.timestamp,
-				eventCount: this.#persist.scheduledEvents.length,
-			});
-			await this.#queueSetAlarm(newEvent.timestamp);
+		// Only set local alarm if not shutting down. During shutdown, the
+		// event is persisted and will be re-armed by initializeAlarms() on
+		// next wake.
+		if (!this.#actor.isStopping) {
+			if (insertIndex === 0 || this.#persist.scheduledEvents.length === 1) {
+				this.#actor.log.info({
+					msg: "setting alarm for new event",
+					timestamp: newEvent.timestamp,
+					eventCount: this.#persist.scheduledEvents.length,
+				});
+				await this.#queueSetAlarm(newEvent.timestamp);
+			}
 		}
 	}
 

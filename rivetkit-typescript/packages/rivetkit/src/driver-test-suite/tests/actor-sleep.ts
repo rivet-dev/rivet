@@ -523,5 +523,130 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 				expect(status.preventSleepOnWake).toBe(false);
 			}
 		});
+
+		test("onSleep sends message to raw websocket", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const sleepActor = client.sleepRawWsSendOnSleep.getOrCreate();
+
+			// Connect WebSocket
+			const ws = await sleepActor.webSocket();
+
+			await new Promise<void>((resolve, reject) => {
+				ws.onopen = () => resolve();
+				ws.onerror = reject;
+			});
+
+			// Wait for connected message
+			await new Promise<void>((resolve) => {
+				ws.onmessage = (event: { data: string }) => {
+					const data = JSON.parse(event.data);
+					if (data.type === "connected") {
+						resolve();
+					}
+				};
+			});
+
+			// Listen for the sleeping message or close event
+			const result = await new Promise<{
+				message: any | null;
+				closed: boolean;
+			}>((resolve) => {
+				ws.onmessage = (event: { data: string }) => {
+					const data = JSON.parse(event.data);
+					if (data.type === "sleeping") {
+						resolve({ message: data, closed: false });
+					}
+				};
+				ws.onclose = () => {
+					resolve({ message: null, closed: true });
+				};
+
+				// Trigger sleep after handlers are set up
+				sleepActor.triggerSleep();
+			});
+
+			// The message should have been received
+			expect(result.message).toBeDefined();
+			expect(result.message?.type).toBe("sleeping");
+			expect(result.message?.sleepCount).toBe(1);
+
+			// Close the WebSocket from client side
+			ws.close();
+
+			// Wait for sleep to fully complete
+			await waitFor(driverTestConfig, 500);
+
+			// Verify sleep happened
+			{
+				const { startCount, sleepCount } =
+					await sleepActor.getCounts();
+				expect(sleepCount).toBe(1);
+				expect(startCount).toBe(2);
+			}
+		});
+
+		test("onSleep sends delayed message to raw websocket", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const sleepActor =
+				client.sleepRawWsDelayedSendOnSleep.getOrCreate();
+
+			// Connect WebSocket
+			const ws = await sleepActor.webSocket();
+
+			await new Promise<void>((resolve, reject) => {
+				ws.onopen = () => resolve();
+				ws.onerror = reject;
+			});
+
+			// Wait for connected message
+			await new Promise<void>((resolve) => {
+				ws.onmessage = (event: { data: string }) => {
+					const data = JSON.parse(event.data);
+					if (data.type === "connected") {
+						resolve();
+					}
+				};
+			});
+
+			// Listen for the sleeping message or close event
+			const result = await new Promise<{
+				message: any | null;
+				closed: boolean;
+			}>((resolve) => {
+				ws.onmessage = (event: { data: string }) => {
+					const data = JSON.parse(event.data);
+					if (data.type === "sleeping") {
+						resolve({ message: data, closed: false });
+					}
+				};
+				ws.onclose = () => {
+					resolve({ message: null, closed: true });
+				};
+
+				// Trigger sleep after handlers are set up
+				sleepActor.triggerSleep();
+			});
+
+			// The message should have been received after the delay
+			expect(result.message).toBeDefined();
+			expect(result.message?.type).toBe("sleeping");
+			expect(result.message?.sleepCount).toBe(1);
+
+			// Close the WebSocket from client side
+			ws.close();
+
+			// Wait for sleep to fully complete
+			await waitFor(driverTestConfig, 500);
+
+			// Verify sleep happened
+			{
+				const { startCount, sleepCount } =
+					await sleepActor.getCounts();
+				expect(sleepCount).toBe(1);
+				expect(startCount).toBe(2);
+			}
+		});
 	});
 }

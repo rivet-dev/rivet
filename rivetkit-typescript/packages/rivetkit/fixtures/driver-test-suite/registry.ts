@@ -67,6 +67,7 @@ import {
 } from "./run";
 import { dockerSandboxActor } from "./sandbox";
 import { scheduled } from "./scheduled";
+import { scheduledDb } from "./scheduled-db";
 import {
 	sleep,
 	sleepWithLongRpc,
@@ -75,7 +76,22 @@ import {
 	sleepWithRawHttp,
 	sleepWithRawWebSocket,
 	sleepWithWaitUntilMessage,
+	sleepRawWsSendOnSleep,
+	sleepRawWsDelayedSendOnSleep,
 } from "./sleep";
+import {
+	sleepWithDb,
+	sleepWithDbConn,
+	sleepWithDbAction,
+	sleepWaitUntil,
+	sleepNestedWaitUntil,
+	sleepEnqueue,
+	sleepScheduleAfter,
+	sleepOnSleepThrows,
+	sleepWaitUntilRejects,
+	sleepWaitUntilState,
+	sleepWithRawWs,
+} from "./sleep-db";
 import { lifecycleObserver, startStopRaceActor } from "./start-stop-race";
 import { statelessActor } from "./stateless";
 import { stateZodCoercionActor } from "./state-zod-coercion";
@@ -118,6 +134,8 @@ export const registry = setup({
 		counterWithLifecycle,
 		// From scheduled.ts
 		scheduled,
+		// From scheduled-db.ts
+		scheduledDb,
 		// From sandbox.ts
 		dockerSandboxActor,
 		// From sleep.ts
@@ -128,6 +146,20 @@ export const registry = setup({
 		sleepWithNoSleepOption,
 		sleepWithPreventSleep,
 		sleepWithWaitUntilMessage,
+		sleepRawWsSendOnSleep,
+		sleepRawWsDelayedSendOnSleep,
+		// From sleep-db.ts
+		sleepWithDb,
+		sleepWithDbConn,
+		sleepWithDbAction,
+		sleepWaitUntil,
+		sleepNestedWaitUntil,
+		sleepEnqueue,
+		sleepScheduleAfter,
+		sleepOnSleepThrows,
+		sleepWaitUntilRejects,
+		sleepWaitUntilState,
+		sleepWithRawWs,
 		// From error-handling.ts
 		errorHandlingActor,
 		customTimeoutActor,

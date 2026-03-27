@@ -228,6 +228,14 @@ export class EngineActorDriver implements ActorDriver {
 		return {};
 	}
 
+	cancelAlarm(actorId: string): void {
+		const handler = this.#actors.get(actorId);
+		if (handler?.alarmTimeout) {
+			handler.alarmTimeout.abort();
+			handler.alarmTimeout = undefined;
+		}
+	}
+
 	async setAlarm(actor: AnyActorInstance, timestamp: number): Promise<void> {
 		const handler = this.#actors.get(actor.id);
 		if (!handler) {

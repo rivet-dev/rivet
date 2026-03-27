@@ -199,7 +199,6 @@ export class ActorWorkflowDriver implements EngineDriver {
 				),
 				this.#actor.stateManager.saveState({
 					immediate: true,
-					allowStoppingState: true,
 				}),
 			]),
 		);

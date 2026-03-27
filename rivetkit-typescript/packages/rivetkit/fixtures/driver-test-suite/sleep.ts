@@ -222,6 +222,88 @@ export const sleepWithRawWebSocket = actor({
 	},
 });
 
+export const sleepRawWsSendOnSleep = actor({
+	state: { startCount: 0, sleepCount: 0 },
+	createVars: () => ({
+		websockets: [] as UniversalWebSocket[],
+	}),
+	onWake: (c) => {
+		c.state.startCount += 1;
+	},
+	onSleep: (c) => {
+		c.state.sleepCount += 1;
+		for (const ws of c.vars.websockets) {
+			ws.send(JSON.stringify({ type: "sleeping", sleepCount: c.state.sleepCount }));
+		}
+	},
+	onWebSocket: (c, websocket: UniversalWebSocket) => {
+		c.vars.websockets.push(websocket);
+
+		websocket.send(JSON.stringify({ type: "connected" }));
+
+		websocket.addEventListener("close", () => {
+			c.vars.websockets = c.vars.websockets.filter((ws) => ws !== websocket);
+		});
+	},
+	actions: {
+		triggerSleep: (c) => {
+			c.sleep();
+		},
+		getCounts: (c) => {
+			return {
+				startCount: c.state.startCount,
+				sleepCount: c.state.sleepCount,
+			};
+		},
+	},
+	options: {
+		sleepTimeout: SLEEP_TIMEOUT,
+	},
+});
+
+export const sleepRawWsDelayedSendOnSleep = actor({
+	state: { startCount: 0, sleepCount: 0 },
+	createVars: () => ({
+		websockets: [] as UniversalWebSocket[],
+	}),
+	onWake: (c) => {
+		c.state.startCount += 1;
+	},
+	onSleep: async (c) => {
+		c.state.sleepCount += 1;
+		// Wait before sending
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		for (const ws of c.vars.websockets) {
+			ws.send(JSON.stringify({ type: "sleeping", sleepCount: c.state.sleepCount }));
+		}
+		// Wait after sending before completing sleep
+		await new Promise((resolve) => setTimeout(resolve, 100));
+	},
+	onWebSocket: (c, websocket: UniversalWebSocket) => {
+		c.vars.websockets.push(websocket);
+
+		websocket.send(JSON.stringify({ type: "connected" }));
+
+		websocket.addEventListener("close", () => {
+			c.vars.websockets = c.vars.websockets.filter((ws) => ws !== websocket);
+		});
+	},
+	actions: {
+		triggerSleep: (c) => {
+			c.sleep();
+		},
+		getCounts: (c) => {
+			return {
+				startCount: c.state.startCount,
+				sleepCount: c.state.sleepCount,
+			};
+		},
+	},
+	options: {
+		sleepTimeout: SLEEP_TIMEOUT,
+	},
+});
+
 export const sleepWithNoSleepOption = actor({
 	state: { startCount: 0, sleepCount: 0 },
 	onWake: (c) => {

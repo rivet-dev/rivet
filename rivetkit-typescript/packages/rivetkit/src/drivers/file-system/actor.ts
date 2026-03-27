@@ -114,6 +114,10 @@ export class FileSystemActorDriver implements ActorDriver {
 		return await this.#state.kvListRange(actorId, start, end, options);
 	}
 
+	cancelAlarm(actorId: string): void {
+		this.#state.cancelAlarmTimeout(actorId);
+	}
+
 	async setAlarm(actor: AnyActorInstance, timestamp: number): Promise<void> {
 		await this.#state.setActorAlarm(actor.id, timestamp);
 	}

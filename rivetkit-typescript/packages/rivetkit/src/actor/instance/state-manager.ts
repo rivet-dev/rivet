@@ -24,8 +24,6 @@ export interface SaveStateOptions {
 	 * Forces the state to be saved immediately. This function will return when the state has saved successfully.
 	 */
 	immediate?: boolean;
-	/** Bypass ready check for stopping. */
-	allowStoppingState?: boolean;
 	/**
 	 * Maximum time in milliseconds to wait before forcing a save.
 	 *
@@ -216,7 +214,7 @@ export class StateManager<
 	 * Forces the state to get saved.
 	 */
 	async saveState(opts: SaveStateOptions): Promise<void> {
-		this.#actor.assertReady(opts.allowStoppingState);
+		this.#actor.assertReady();
 
 		if (this.#persistChanged) {
 			if (opts.immediate) {

@@ -68,6 +68,9 @@ export interface ActorDriver {
 	/** ActorInstance ensure that only one instance of setAlarm is called in parallel at a time. */
 	setAlarm(actor: AnyActorInstance, timestamp: number): Promise<void>;
 
+	/** Cancel any pending alarm timeout for the given actor. */
+	cancelAlarm?(actorId: string): void;
+
 	// Database
 	/**
 	 * Override the default raw database client for the actor.

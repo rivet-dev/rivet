@@ -709,6 +709,8 @@ An actor is considered idle and eligible to sleep when **all** of the following 
 
 Once the actor becomes idle, the sleep timer starts. After `sleepTimeout` (default 30 seconds) of continuous inactivity, the actor begins the sleep process. Any activity resets the timer.
 
+Outbound requests (e.g. `fetch` calls) do not count as activity and will not keep the actor awake. Wrap them with `c.waitUntil()` if they must complete before the actor sleeps.
+
 #### Upgrades & Eviction
 
 The platform may force an actor to migrate to a new machine during version upgrades or when a serverless request is about to timeout. The same [shutdown sequence](#shutdown-sequence) runs, then the actor is rescheduled on a new machine and wakes up with its persisted state.

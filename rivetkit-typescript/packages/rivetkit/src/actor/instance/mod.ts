@@ -180,6 +180,7 @@ export class ActorInstance<
 	#sleepCalled = false;
 	#destroyCalled = false;
 	#stopCalled = false;
+	#shutdownComplete = false;
 	#sleepTimeout?: NodeJS.Timeout;
 	#abortController = new AbortController();
 
@@ -453,7 +454,7 @@ export class ActorInstance<
 
 	get db(): InferDatabaseClient<DB> {
 		if (!this.#db) {
-			if (this.#stopCalled && "db" in this.#config) {
+			if (this.#shutdownComplete && "db" in this.#config) {
 				throw new errors.ActorStopping(
 					"database accessed after actor stopped. If you are using setInterval or other background timers, clean them up with c.abortSignal.",
 				);
@@ -612,14 +613,14 @@ export class ActorInstance<
 		return this.#ready;
 	}
 
-	assertReady(allowStoppingState: boolean = false) {
+	assertReady() {
 		if (!this.#ready) throw new errors.InternalError("Actor not ready");
-		if (!allowStoppingState && this.#stopCalled)
-			throw new errors.InternalError("Actor is stopping");
+		if (this.#shutdownComplete)
+			throw new errors.ActorStopping("Actor has shut down");
 	}
 
 	async cleanupPersistedConnections(reason?: string): Promise<number> {
-		this.assertReady(true);
+		this.assertReady();
 		return await this.connectionManager.cleanupPersistedHibernatableConnections(
 			reason,
 		);
@@ -627,6 +628,8 @@ export class ActorInstance<
 
 	async restartRunHandler(): Promise<void> {
 		this.assertReady();
+		if (this.#stopCalled)
+			throw new errors.InternalError("Actor is stopping");
 		if (this.#runHandlerActive && this.#runPromise) {
 			await this.#runPromise;
 		}
@@ -659,6 +662,11 @@ export class ActorInstance<
 				clearTimeout(this.#sleepTimeout);
 				this.#sleepTimeout = undefined;
 			}
+
+			// Cancel alarm timeouts so they cannot fire during shutdown.
+			// Scheduled events are persisted and will be re-initialized
+			// on wake via initializeAlarms().
+			this.driver.cancelAlarm?.(this.#actorId);
 
 			// Abort listeners in the canonical stop path.
 			// This must run for all stop modes, including sleep and remote stop.
@@ -706,13 +714,13 @@ export class ActorInstance<
 			this.#rLog.info({ msg: "saving state immediately" });
 			await this.stateManager.saveState({
 				immediate: true,
-				allowStoppingState: true,
 			});
 
 			// Wait for write queues
 			await this.stateManager.waitForPendingWrites();
 			await this.#scheduleManager.waitForPendingAlarmWrites();
 		} finally {
+			this.#shutdownComplete = true;
 			await this.#cleanupDatabase();
 		}
 	}
@@ -817,9 +825,10 @@ export class ActorInstance<
 		},
 		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
 	) {
-		// Hibernating WebSocket connections do not keep the actor alive on
-		// their own. Reset the sleep timer on each message so the actor
-		// stays awake while clients are actively communicating.
+		// Hibernating WebSocket connections intentionally do not keep the
+		// actor alive so the actor can sleep while connections are idle.
+		// Reset the sleep timer on each message so the actor stays awake
+		// while clients are actively communicating.
 		this.resetSleepTimer();
 
 		await processMessage(message, this, conn, {
@@ -1008,6 +1017,12 @@ export class ActorInstance<
 	}
 
 	// MARK: - HTTP/WebSocket Handlers
+	//
+	// handleRawRequest intentionally has no isStopping guard (unlike
+	// handleRawWebSocket). In-flight HTTP requests from pre-existing
+	// connections are allowed during the graceful shutdown window.
+	// New external requests cannot reach a stopping actor because the
+	// driver layer blocks them.
 	async handleRawRequest(
 		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
 		request: Request,
@@ -1055,6 +1070,8 @@ export class ActorInstance<
 		// NOTE: All code before `onWebSocket` must be synchronous in order to ensure the order of `open` events happen in the correct order.
 
 		this.assertReady();
+		if (this.#stopCalled)
+			throw new errors.InternalError("Actor is stopping");
 
 		if (!this.#config.onWebSocket) {
 			throw new errors.InternalError("onWebSocket handler not defined");
@@ -1136,6 +1153,7 @@ export class ActorInstance<
 	}
 
 	async onAlarm() {
+		if (this.#stopCalled) return;
 		this.resetSleepTimer();
 		await this.#scheduleManager.onAlarm();
 	}
@@ -1167,7 +1185,7 @@ export class ActorInstance<
 	 * Errors are propagated to the caller.
 	 */
 	async keepAwake<T>(promise: Promise<T>): Promise<T> {
-		this.assertReady(true);
+		this.assertReady();
 
 		this.#activeKeepAwakeCount++;
 		this.resetSleepTimer();
@@ -1199,7 +1217,7 @@ export class ActorInstance<
 	}
 
 	beginQueueWait() {
-		this.assertReady(true);
+		this.assertReady();
 		this.#activeQueueWaitCount++;
 		this.resetSleepTimer();
 	}
@@ -1829,11 +1847,15 @@ export class ActorInstance<
 		}
 
 		// Wait with timeout
+		let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 		const res = await Promise.race([
-			Promise.all(promises).then(() => false),
-			new Promise<boolean>((res) =>
-				globalThis.setTimeout(() => res(true), 1500),
-			),
+			Promise.all(promises).then(() => {
+				if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+				return false;
+			}),
+			new Promise<boolean>((res) => {
+				timeoutHandle = globalThis.setTimeout(() => res(true), 1500);
+			}),
 		]);
 
 		if (res) {
@@ -1844,26 +1866,52 @@ export class ActorInstance<
 	}
 
 	async #waitBackgroundPromises(timeoutMs: number) {
-		const pending = this.#backgroundPromises;
-		if (pending.length === 0) {
-			this.#rLog.debug({ msg: "no background promises" });
-			return;
+		const deadlineTs = Date.now() + timeoutMs;
+
+		// Drain in a loop so that waitUntil calls made inside waitUntil
+		// callbacks are also awaited. Each iteration waits for all promises
+		// that existed at the start of the iteration. If new ones appear
+		// during that wait, loop again. Stop when no new promises have been
+		// added or the timeout expires.
+		while (this.#backgroundPromises.length > 0) {
+			const remaining = deadlineTs - Date.now();
+			if (remaining <= 0) {
+				this.#rLog.error({
+					msg: "timed out waiting for background tasks",
+					count: this.#backgroundPromises.length,
+					timeoutMs,
+				});
+				break;
+			}
+
+			// Snapshot the current length so we can detect new additions.
+			const batch = this.#backgroundPromises.length;
+
+			let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+			const timedOut = await Promise.race([
+				Promise.allSettled(this.#backgroundPromises.slice(0, batch)).then(() => {
+					if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+					return false;
+				}),
+				new Promise<true>((resolve) => {
+					timeoutHandle = setTimeout(() => resolve(true), remaining);
+				}),
+			]);
+
+			if (timedOut) {
+				this.#rLog.error({
+					msg: "timed out waiting for background tasks",
+					count: this.#backgroundPromises.length,
+					timeoutMs,
+				});
+				break;
+			}
+
+			// Remove the settled promises from the front of the array.
+			this.#backgroundPromises.splice(0, batch);
 		}
 
-		const timedOut = await Promise.race([
-			Promise.allSettled(pending).then(() => false),
-			new Promise<true>((resolve) =>
-				setTimeout(() => resolve(true), timeoutMs),
-			),
-		]);
-
-		if (timedOut) {
-			this.#rLog.error({
-				msg: "timed out waiting for background tasks",
-				count: pending.length,
-				timeoutMs,
-			});
-		} else {
+		if (this.#backgroundPromises.length === 0) {
 			this.#rLog.debug({ msg: "background promises finished" });
 		}
 	}

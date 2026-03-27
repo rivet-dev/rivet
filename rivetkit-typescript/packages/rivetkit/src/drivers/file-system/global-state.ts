@@ -1228,6 +1228,18 @@ export class FileSystemGlobalState {
 	}
 
 	/**
+	 * Cancel any pending alarm timeout for the given actor.
+	 */
+	cancelAlarmTimeout(actorId: string) {
+		const entry = this.#actors.get(actorId);
+		if (entry?.alarmTimeout) {
+			entry.alarmTimeout.abort();
+			entry.alarmTimeout = undefined;
+			entry.alarmTimestamp = undefined;
+		}
+	}
+
+	/**
 	 * Schedule an alarm timer for an actor without writing to disk.
 	 */
 	#scheduleAlarmTimeout(actorId: string, timestamp: number) {

@@ -56,7 +56,29 @@ export function runActorScheduleTests(driverTestConfig: DriverTestConfig) {
 					expect(scheduledCount).toBe(1);
 				});
 
-				test("multiple scheduled tasks execute in order", async (c) => {
+				test("scheduled action can use c.db", async (c) => {
+				const { client } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
+
+				const actor = client.scheduledDb.getOrCreate();
+
+				// Schedule a task that writes to the database
+				await actor.scheduleDbWrite(250);
+
+				// Wait for the scheduled task to execute
+				await waitFor(driverTestConfig, 500);
+
+				// Verify the scheduled task wrote to the database
+				const logCount = await actor.getLogCount();
+				const scheduledCount = await actor.getScheduledCount();
+
+				expect(logCount).toBe(1);
+				expect(scheduledCount).toBe(1);
+			});
+
+			test("multiple scheduled tasks execute in order", async (c) => {
 					const { client } = await setupDriverTest(
 						c,
 						driverTestConfig,
