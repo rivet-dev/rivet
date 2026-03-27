@@ -147,6 +147,63 @@ export function runActorConnHibernationTests(
 				// Clean up
 				await conn2.dispose();
 			});
+
+			test("messages sent on a hibernating connection during onSleep resolve after wake", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				for (const delayMs of [0, 100, 400]) {
+					const connection = client.hibernationSleepWindowActor
+						.getOrCreate([`sleep-window-${delayMs}`])
+						.connect();
+
+					await vi.waitFor(async () => {
+						expect(connection.isConnected).toBe(true);
+					});
+
+					const sleepingPromise = new Promise<void>((resolve) => {
+						connection.once("sleeping", () => {
+							resolve();
+						});
+					});
+
+					await connection.triggerSleep();
+					await sleepingPromise;
+
+					if (delayMs > 0) {
+						await waitFor(driverTestConfig, delayMs);
+					}
+
+					const duringSleepPromise = connection.getActorCounts();
+					duringSleepPromise.catch(() => {});
+
+					const result = await Promise.race([
+						duringSleepPromise
+							.then((counts) => ({
+								tag: "resolved" as const,
+								counts,
+							}))
+							.catch((error) => ({
+								tag: "rejected" as const,
+								error:
+									error instanceof Error
+										? error.message
+										: String(error),
+							})),
+						(async () => {
+							await waitFor(driverTestConfig, 3000);
+							return { tag: "timed_out" as const };
+						})(),
+					]);
+
+					expect(result.tag).toBe("resolved");
+					if (result.tag === "resolved") {
+						expect(result.counts.sleepCount).toBe(1);
+						expect(result.counts.wakeCount).toBe(2);
+					}
+
+					await connection.dispose();
+				}
+			});
 		},
 	);
 }

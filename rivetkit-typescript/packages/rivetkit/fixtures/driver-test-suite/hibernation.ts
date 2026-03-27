@@ -1,4 +1,4 @@
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
 
 export const HIBERNATION_SLEEP_TIMEOUT = 500;
 
@@ -68,6 +68,39 @@ export const hibernationActor = actor({
 			};
 		},
 		// Trigger sleep
+		triggerSleep: (c) => {
+			c.sleep();
+		},
+	},
+	options: {
+		sleepTimeout: HIBERNATION_SLEEP_TIMEOUT,
+	},
+});
+
+export const hibernationSleepWindowActor = actor({
+	state: {
+		sleepCount: 0,
+		wakeCount: 0,
+	},
+	connState: {},
+	events: {
+		sleeping: event<void>(),
+	},
+	onWake: (c) => {
+		c.state.wakeCount += 1;
+	},
+	onSleep: async (c) => {
+		c.state.sleepCount += 1;
+		c.broadcast("sleeping", undefined);
+		await new Promise((resolve) => setTimeout(resolve, 500));
+	},
+	actions: {
+		getActorCounts: (c) => {
+			return {
+				sleepCount: c.state.sleepCount,
+				wakeCount: c.state.wakeCount,
+			};
+		},
 		triggerSleep: (c) => {
 			c.sleep();
 		},

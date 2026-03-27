@@ -35,7 +35,10 @@ import {
 import { destroyActor, destroyObserver } from "./destroy";
 import { customTimeoutActor, errorHandlingActor } from "./error-handling";
 import { fileSystemHibernationCleanupActor } from "./file-system-hibernation-cleanup";
-import { hibernationActor } from "./hibernation";
+import {
+	hibernationActor,
+	hibernationSleepWindowActor,
+} from "./hibernation";
 import { inlineClientActor } from "./inline-client";
 import { kvActor } from "./kv";
 import { largePayloadActor, largePayloadConnActor } from "./large-payloads";
@@ -217,6 +220,7 @@ export const registry = setup({
 		destroyObserver,
 		// From hibernation.ts
 		hibernationActor,
+		hibernationSleepWindowActor,
 		// From file-system-hibernation-cleanup.ts
 		fileSystemHibernationCleanupActor,
 		// From large-payloads.ts
