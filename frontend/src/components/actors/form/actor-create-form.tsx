@@ -4,7 +4,7 @@ import {
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { type UseFormReturn, useFormContext } from "react-hook-form";
+import { type UseFormReturn, useFormContext, useWatch } from "react-hook-form";
 import z from "zod";
 import { CodePreview, Input, Label } from "@/components";
 import { JsonCode } from "../../code-mirror";
@@ -186,9 +186,8 @@ export const RunnerNameSelector = () => {
 };
 
 export const ActorPreview = () => {
-	const { watch } = useFormContext<FormValues>();
-
-	const [name, key] = watch(["name", "key"]);
+	const name = useWatch<FormValues, "name">({ name: "name" });
+	const key = useWatch<FormValues, "key">({ name: "key" });
 
 	return (
 		<div className="space-y-2">
@@ -218,14 +217,13 @@ export const ActorPreview = () => {
 
 export const PrefillActorName = () => {
 	const prefilled = useRef(false);
-	const { watch } = useFormContext<FormValues>();
 
 	const { data: name, isSuccess } = useInfiniteQuery({
 		...useEngineCompatDataProvider().buildsQueryOptions(),
 		select: (data) => Object.keys(data.pages[0].names)[0],
 	});
 
-	const watchedValue = watch("name");
+	const watchedValue = useWatch<FormValues, "name">({ name: "name" });
 
 	const { setValue } = useFormContext<FormValues>();
 
@@ -241,13 +239,14 @@ export const PrefillActorName = () => {
 
 export const PrefillRunnerName = () => {
 	const prefilled = useRef(false);
-	const { watch } = useFormContext<FormValues>();
 
 	const { data = [], isSuccess } = useInfiniteQuery(
 		useEngineCompatDataProvider().runnerNamesQueryOptions(),
 	);
 
-	const watchedValue = watch("runnerNameSelector");
+	const watchedValue = useWatch<FormValues, "runnerNameSelector">({
+		name: "runnerNameSelector",
+	});
 
 	const { setValue } = useFormContext<FormValues>();
 
