@@ -130,7 +130,8 @@ export class Registry<A extends RegistryActors> {
 				(typeof process !== "undefined" &&
 					(process.env.RIVET_ENGINE || process.env.RIVET_ENDPOINT))
 			);
-			if (!hasEndpoint) {
+			const willSpawnEngine = !!this.#config.serverless?.spawnEngine;
+			if (!hasEndpoint && !willSpawnEngine) {
 				this.#config.serveManager = true;
 			}
 		}
