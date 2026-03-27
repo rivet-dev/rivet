@@ -9,6 +9,7 @@ import { BenchmarksSection } from '@/components/marketing/sections/BenchmarksSec
 import { CodeWalkthrough } from '@/components/marketing/sections/CodeWalkthrough';
 import { DynamicActorsSection } from '@/components/marketing/sections/DynamicActorsSection';
 import { HostingSection } from '@/components/marketing/sections/HostingSection';
+import { AgentOSSection } from '@/components/marketing/sections/AgentOSSection';
 import { IntegrationsSection } from '@/components/marketing/sections/IntegrationsSection';
 import { ObservabilitySection } from '@/components/marketing/sections/ObservabilitySection';
 import { RedesignedCTA } from '@/components/marketing/sections/RedesignedCTA';
@@ -99,7 +100,8 @@ const latestChangelogTitle = latest?.data.title ?? '';
 				<!-- <DynamicActorsSection client:visible /> -->
 				<!-- <BenchmarksSection client:visible /> -->
 				<!-- <CodeWalkthrough client:visible /> -->
-				<IntegrationsSection client:visible />
+				<AgentOSSection client:visible />
+			<IntegrationsSection client:visible />
 				<ObservabilitySection client:visible />
 				<HostingSection client:visible />
 				<RedesignedCTA client:visible />

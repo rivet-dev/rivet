@@ -31,6 +31,7 @@ import {
 	Globe,
 } from "lucide-react";
 import actorsLogoUrl from "@/images/products/actors-logo.svg";
+import agentosLogoUrl from "@/images/products/agentos-logo.svg";
 import sandboxAgentLogoUrl from "@/images/products/sandbox-agent-logo.svg";
 import { GitHubDropdown } from "./GitHubDropdown";
 import { HeaderSearch } from "./HeaderSearch";
@@ -79,18 +80,10 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 			description: "Build stateful backends",
 		},
 		{
-			label: "Sandbox Agent SDK",
-			href: "https://sandboxagent.dev/",
-			logo: sandboxAgentLogoUrl,
-			description: "SDK for coding agents",
-			external: true,
-		},
-		{
-			label: "Secure Exec SDK",
-			href: "https://secureexec.dev/",
-			logo: sandboxAgentLogoUrl,
-			description: "Secure Node.js Execution Without a Sandbox",
-			external: true,
+			label: "AgentOS",
+			href: "/agent-os",
+			logo: agentosLogoUrl,
+			description: "Everything agents need to run and operate",
 		},
 	];
 
@@ -172,7 +165,7 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 					<div className="flex flex-col gap-1">
 						{products.map((product, i) => (
 							<React.Fragment key={product.href}>
-								{i === 1 && <div className="border-t border-white/10 my-1" />}
+								{i === 2 && <div className="border-t border-white/10 my-1" />}
 								<a
 									href={product.href}
 									target={product.external ? "_blank" : undefined}
@@ -367,7 +360,7 @@ interface HeaderProps {
 	| "docs"
 	| "cookbook"
 	| "blog"
-	| "cloud"
+	| "pricing"
 	| "solutions"
 	| "learn";
 	subnav?: ReactNode;
@@ -472,9 +465,9 @@ export function Header({
 								</TextNavItem>
 								<TextNavItem
 									href="/cloud"
-									ariaCurrent={active === "cloud" ? "page" : undefined}
+									ariaCurrent={active === "pricing" ? "page" : undefined}
 								>
-									Cloud
+									Pricing
 								</TextNavItem>
 							</div>
 						}
@@ -553,9 +546,9 @@ export function Header({
 					</TextNavItem>
 					<TextNavItem
 						href="/cloud"
-						ariaCurrent={active === "cloud" ? "page" : undefined}
+						ariaCurrent={active === "pricing" ? "page" : undefined}
 					>
-						Cloud
+						Pricing
 					</TextNavItem>
 				</div>
 			}
@@ -586,7 +579,7 @@ function DocsMobileNavigation({ tree, sidebarData }: { tree?: ReactNode; sidebar
 
 	const mainLinks = [
 		{ href: "/docs", label: "Documentation" },
-		{ href: "/cloud", label: "Cloud" },
+		{ href: "/cloud", label: "Pricing" },
 		{ href: "/cookbook", label: "Cookbooks" },
 	];
 
@@ -616,6 +609,7 @@ function DocsMobileNavigation({ tree, sidebarData }: { tree?: ReactNode; sidebar
 	];
 
 	const products = [
+		{ label: "AgentOS", href: "/agent-os", logo: agentosLogoUrl },
 		{ label: "Actors", href: "/docs/actors", logo: actorsLogoUrl },
 		{
 			label: "Sandbox Agent SDK",

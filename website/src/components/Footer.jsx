@@ -20,7 +20,9 @@ import {
 const footer = {
 	product: [
 		{ name: "Actors", href: "/docs/actors" },
+		{ name: "AgentOS", href: "/agent-os" },
 		{ name: "Sandbox Agent SDK", href: "https://sandboxagent.dev" },
+		{ name: "Secure Exec SDK", href: "https://secureexec.dev" },
 		{ name: "Pricing", href: "/cloud#pricing" },
 		{ name: "Talk to an engineer", href: "/talk-to-an-engineer" },
 		{ name: "Sales", href: "/sales" },
