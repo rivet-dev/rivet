@@ -686,11 +686,13 @@ function TracesTimelineView({
 			return { minTime: 0n, maxTime: 0n };
 		}
 
-		const starts = allSpans.map((s) => s.startNs);
-		const ends = allSpans.map((s) => s.endNs ?? nowNs);
-
-		const min = starts.reduce((a, b) => (a < b ? a : b), starts[0]);
-		const max = ends.reduce((a, b) => (a > b ? a : b), ends[0]);
+		let min = allSpans[0].startNs;
+		let max = allSpans[0].endNs ?? nowNs;
+		for (const span of allSpans) {
+			if (span.startNs < min) min = span.startNs;
+			const end = span.endNs ?? nowNs;
+			if (end > max) max = end;
+		}
 
 		return { minTime: min, maxTime: max };
 	}, [allSpans, nowNs]);
@@ -760,15 +762,27 @@ function TracesTimelineView({
 	const rowGap = 4;
 	const gapMarkerHeight = 24;
 
-	const getRowTop = (row: number) => {
-		let top = row * (rowHeight + rowGap);
-		for (const gap of verticalGaps) {
-			if (gap.afterRow < row) {
-				top += gapMarkerHeight;
+	const rowTopOffsets = useMemo(() => {
+		const offsets = new Array<number>(flatSpans.length);
+		const sortedGaps = [...verticalGaps].sort(
+			(a, b) => a.afterRow - b.afterRow,
+		);
+		let gapCount = 0;
+		let gapIdx = 0;
+		for (let row = 0; row < flatSpans.length; row++) {
+			while (
+				gapIdx < sortedGaps.length &&
+				sortedGaps[gapIdx].afterRow < row
+			) {
+				gapCount++;
+				gapIdx++;
 			}
+			offsets[row] = row * (rowHeight + rowGap) + gapCount * gapMarkerHeight;
 		}
-		return top;
-	};
+		return offsets;
+	}, [flatSpans.length, verticalGaps, rowHeight, rowGap, gapMarkerHeight]);
+
+	const getRowTop = (row: number) => rowTopOffsets[row] ?? 0;
 
 	const totalHeight = useMemo(() => {
 		const baseHeight = flatSpans.length * (rowHeight + rowGap);
