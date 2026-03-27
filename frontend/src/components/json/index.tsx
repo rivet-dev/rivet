@@ -8,7 +8,7 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import type { OnChangeFn } from "@tanstack/react-table";
-import _ from "lodash";
+import { get, set, unset } from "lodash";
 import {
 	createContext,
 	type Dispatch,
@@ -168,13 +168,13 @@ function StringValue({
 							: newValue;
 
 						changeValue((prev: Record<string, unknown>) => {
-							_.set(prev, path.slice(2), parsedValue);
+							set(prev, path.slice(2), parsedValue);
 							return prev;
 						});
 					}}
 					onDelete={() => {
 						changeValue((prev: Record<string, unknown>) => {
-							_.unset(prev, path.slice(2));
+							unset(prev, path.slice(2));
 							return prev;
 						});
 					}}
@@ -217,17 +217,17 @@ function NumberValue({
 								: newValue;
 
 						changeValue((prev: Record<string, unknown>) => {
-							const existingValue = _.get(prev, path.slice(2));
+							const existingValue = get(prev, path.slice(2));
 							if (existingValue === parsedValue) {
 								return prev;
 							}
-							_.set(prev, path.slice(2), parsedValue);
+							set(prev, path.slice(2), parsedValue);
 							return prev;
 						});
 					}}
 					onDelete={() => {
 						changeValue((prev: Record<string, unknown>) => {
-							_.unset(prev, path.slice(2));
+							unset(prev, path.slice(2));
 							return prev;
 						});
 					}}
@@ -266,13 +266,13 @@ function BooleanValue({
 							: newValue;
 
 						changeValue((prev: Record<string, unknown>) => {
-							_.set(prev, path.slice(2), parsedValue);
+							set(prev, path.slice(2), parsedValue);
 							return prev;
 						});
 					}}
 					onDelete={() => {
 						changeValue((prev: Record<string, unknown>) => {
-							_.unset(prev, path.slice(2));
+							unset(prev, path.slice(2));
 							return prev;
 						});
 					}}
@@ -282,7 +282,7 @@ function BooleanValue({
 							checked={value}
 							onCheckedChange={(isChecked) => {
 								changeValue((prev: Record<string, unknown>) => {
-									_.set(prev, path.slice(2), isChecked);
+									set(prev, path.slice(2), isChecked);
 									return prev;
 								});
 							}}
@@ -322,13 +322,13 @@ function NullValue({
 							: newValue;
 
 						changeValue((prev: Record<string, unknown>) => {
-							_.set(prev, path.slice(2), parsedValue);
+							set(prev, path.slice(2), parsedValue);
 							return prev;
 						});
 					}}
 					onDelete={() => {
 						changeValue((prev: Record<string, unknown>) => {
-							_.unset(prev, path.slice(2));
+							unset(prev, path.slice(2));
 							return prev;
 						});
 					}}
@@ -365,13 +365,13 @@ function UndefinedValue({
 							: newValue;
 
 						changeValue((prev: Record<string, unknown>) => {
-							_.set(prev, path.slice(2), parsedValue);
+							set(prev, path.slice(2), parsedValue);
 							return prev;
 						});
 					}}
 					onDelete={() => {
 						changeValue((prev: Record<string, unknown>) => {
-							_.unset(prev, path.slice(2));
+							unset(prev, path.slice(2));
 							return prev;
 						});
 					}}
@@ -571,18 +571,18 @@ function Property({
 
 									changeValue(
 										(prev: Record<string, unknown>) => {
-											const value = _.get(
+											const value = get(
 												prev,
 												// removes $. from the start
 												path.slice(2),
 											);
-											_.unset(
+											unset(
 												prev,
 												// removes $. from the start
 												path.slice(2),
 											);
 
-											return _.set(
+											return set(
 												prev,
 												// removes $. from the start
 												newPath.slice(2),
@@ -594,7 +594,7 @@ function Property({
 								onDelete={() => {
 									changeValue(
 										(prev: Record<string, unknown>) => {
-											_.unset(
+											unset(
 												prev,
 												// removes $. from the start
 												path.slice(2),

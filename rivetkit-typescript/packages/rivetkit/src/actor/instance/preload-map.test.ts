@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-	compareBytes,
 	binarySearch,
 	buildPreloadMap,
+	compareBytes,
 	type PreloadedEntries,
 	type PreloadedKvInput,
 } from "./preload-map";

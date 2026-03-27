@@ -1,13 +1,13 @@
-import { describe, expect, test } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { SandboxProvider } from "sandbox-agent";
+import { describe, expect, test } from "vitest";
 import { sandboxActor } from "../src/sandbox/index";
 import {
 	SANDBOX_AGENT_ACTION_METHODS,
 	SANDBOX_AGENT_HOOK_METHODS,
 } from "../src/sandbox/types";
-import type { SandboxProvider } from "sandbox-agent";
 
 // --- SDK parity tests ---
 

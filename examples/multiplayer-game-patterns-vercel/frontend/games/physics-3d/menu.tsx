@@ -6,7 +6,9 @@ export interface Physics3dMatchInfo {
 }
 
 function generatePlayerName(): string {
-	return `Player#${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;
+	return `Player#${Math.floor(Math.random() * 10000)
+		.toString()
+		.padStart(4, "0")}`;
 }
 
 export function Physics3dMenu({
@@ -27,8 +29,9 @@ export function Physics3dMenu({
 			<div className="menu-container">
 				<h2>Physics 3D</h2>
 				<p className="menu-description">
-					Shared Rapier 3D physics at 10 TPS with client-side prediction and
-					network smoothing. WASD to move, Space to jump. Click to spawn cubes.
+					Shared Rapier 3D physics at 10 TPS with client-side
+					prediction and network smoothing. WASD to move, Space to
+					jump. Click to spawn cubes.
 				</p>
 				<div style={{ marginBottom: 16 }}>
 					<input
@@ -43,7 +46,9 @@ export function Physics3dMenu({
 				</div>
 				<button
 					className="btn btn-primary"
-					onClick={() => onReady({ name: name.trim() || generatePlayerName() })}
+					onClick={() =>
+						onReady({ name: name.trim() || generatePlayerName() })
+					}
 					disabled={!name.trim()}
 				>
 					Join World

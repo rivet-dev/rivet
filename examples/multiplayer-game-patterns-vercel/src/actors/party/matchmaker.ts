@@ -9,8 +9,12 @@ This matchmaker uses a private party flow with join tickets.
 import { actor, queue, UserError } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
-import { registry } from "../index.ts";
-import { generatePartyCode, generatePlayerName, MAX_PARTY_SIZE } from "./config.ts";
+import type { registry } from "../index.ts";
+import {
+	generatePartyCode,
+	generatePlayerName,
+	MAX_PARTY_SIZE,
+} from "./config.ts";
 
 export const partyMatchmaker = actor({
 	options: { name: "Party - Matchmaker", icon: "people-group" },
@@ -52,7 +56,8 @@ export const partyMatchmaker = actor({
 				const partyCode = generatePartyCode();
 				const playerId = crypto.randomUUID();
 				const joinToken = crypto.randomUUID();
-				const playerName = message.body.hostName || generatePlayerName();
+				const playerName =
+					message.body.hostName || generatePlayerName();
 
 				const client = c.client<typeof registry>();
 				await client.partyMatch.create([matchId], {
@@ -85,22 +90,30 @@ export const partyMatchmaker = actor({
 				});
 			} else if (message.name === "joinParty") {
 				const code = message.body.partyCode.toUpperCase().trim();
-				const rows = await c.db.execute<{ match_id: string; player_count: number }>(
+				const rows = await c.db.execute<{
+					match_id: string;
+					player_count: number;
+				}>(
 					`SELECT match_id, player_count FROM parties WHERE party_code = ?`,
 					code,
 				);
 				const row = rows[0];
 				if (!row) {
-					throw new UserError("Party not found", { code: "party_not_found" });
+					throw new UserError("Party not found", {
+						code: "party_not_found",
+					});
 				}
 				if (row.player_count >= MAX_PARTY_SIZE) {
-					throw new UserError("Party is full", { code: "party_full" });
+					throw new UserError("Party is full", {
+						code: "party_full",
+					});
 				}
 
 				const now = Date.now();
 				const playerId = crypto.randomUUID();
 				const joinToken = crypto.randomUUID();
-				const playerName = message.body.playerName || generatePlayerName();
+				const playerName =
+					message.body.playerName || generatePlayerName();
 
 				await c.db.execute(
 					`UPDATE parties SET player_count = player_count + 1 WHERE match_id = ?`,

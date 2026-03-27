@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { GameClient } from "../../client.ts";
+import { OpenWorldBot } from "./bot.ts";
 import type { OpenWorldMatchInfo } from "./menu.tsx";
 import { OpenWorldGame } from "./open-world-game.ts";
-import { OpenWorldBot } from "./bot.ts";
 
 export function OpenWorldGameView({
 	client,
@@ -39,11 +39,18 @@ export function OpenWorldGameView({
 			<div className="game-header">
 				<h2>Open World</h2>
 				<div className="btn-row">
-					<button className="btn btn-secondary" onClick={addBot}>Add Bot</button>
-					<button className="btn btn-secondary" onClick={onLeave}>Leave</button>
+					<button className="btn btn-secondary" onClick={addBot}>
+						Add Bot
+					</button>
+					<button className="btn btn-secondary" onClick={onLeave}>
+						Leave
+					</button>
 				</div>
 			</div>
-			<p className="controls-hint">WASD to move, Shift to sprint, +/- to zoom, LMB to place block, RMB to remove. Walk beyond chunk edges to transfer.</p>
+			<p className="controls-hint">
+				WASD to move, Shift to sprint, +/- to zoom, LMB to place block,
+				RMB to remove. Walk beyond chunk edges to transfer.
+			</p>
 			<canvas
 				ref={canvasRef}
 				width={600}

@@ -34,7 +34,7 @@ export default function ConfirmDeleteNamespaceContent({
 				dataProvider.project,
 				dataProvider.cloudNamespace,
 			);
-			queryClient.invalidateQueries();
+			queryClient.invalidateQueries({ queryKey: ["namespaces"] });
 			onClose?.();
 			return navigate({
 				to: "/orgs/$organization/projects/$project",

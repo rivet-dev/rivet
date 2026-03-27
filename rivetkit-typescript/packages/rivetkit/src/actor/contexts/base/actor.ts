@@ -16,10 +16,10 @@ import { ActorQueue } from "../../instance/queue";
 import type { Schedule } from "../../schedule";
 import {
 	type EventSchemaConfig,
+	hasSchemaConfigKey,
 	type InferEventArgs,
 	type InferSchemaMap,
 	type QueueSchemaConfig,
-	hasSchemaConfigKey,
 	validateSchemaSync,
 } from "../../schema";
 

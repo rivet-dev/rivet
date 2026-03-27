@@ -5,11 +5,11 @@ This matchmaker uses a queue and fill flow.
 3. The matchmaker stores assignments and broadcasts assignmentReady so each client can connect to the new match.
 4. onDisconnect unqueues pending players so stale queue entries do not stay in the pool.
 */
-import { actor, type ActorContextOf, queue } from "rivetkit";
+import { type ActorContextOf, actor, queue } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
-import { registry } from "../index.ts";
-import { type Mode, MODE_CONFIG } from "./config.ts";
+import type { registry } from "../index.ts";
+import { MODE_CONFIG, type Mode } from "./config.ts";
 
 export interface ArenaAssignment {
 	matchId: string;
@@ -58,10 +58,7 @@ export const arenaMatchmaker = actor({
 			}
 			return counts;
 		},
-		getAssignment: async (
-			c,
-			{ playerId }: { playerId: string },
-		) => {
+		getAssignment: async (c, { playerId }: { playerId: string }) => {
 			const rows = await c.db.execute<{
 				match_id: string;
 				player_id: string;
@@ -112,9 +109,7 @@ export const arenaMatchmaker = actor({
 	},
 });
 
-async function broadcastQueueSizes(
-	c: ActorContextOf<typeof arenaMatchmaker>,
-) {
+async function broadcastQueueSizes(c: ActorContextOf<typeof arenaMatchmaker>) {
 	const rows = await c.db.execute<{ mode: string; cnt: number }>(
 		`SELECT mode, COUNT(*) as cnt FROM player_pool GROUP BY mode`,
 	);

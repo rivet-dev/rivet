@@ -1,11 +1,11 @@
 import * as THREE from "three";
-import type { GameClient } from "../../client.ts";
-import type { Physics3dMatchInfo } from "./menu.tsx";
 import {
 	CORRECTION_ALPHA,
 	PLAYER_RADIUS,
 	SCENE_STATIC,
 } from "../../../src/actors/physics-3d/config.ts";
+import type { GameClient } from "../../client.ts";
+import type { Physics3dMatchInfo } from "./menu.tsx";
 
 type Physics3dConn = ReturnType<
 	ReturnType<GameClient["physics3dWorld"]["getOrCreate"]>["connect"]
@@ -29,7 +29,10 @@ interface Snapshot {
 	tick: number;
 	serverTime: number;
 	bodies: BodySnapshot[];
-	players: Record<string, { x: number; y: number; z: number; name: string; color: string }>;
+	players: Record<
+		string,
+		{ x: number; y: number; z: number; name: string; color: string }
+	>;
 }
 
 function colorFromId(id: string): number {
@@ -96,7 +99,8 @@ export class Physics3dGame {
 
 		// HUD overlay.
 		this.hudEl = document.createElement("div");
-		this.hudEl.style.cssText = "position:absolute;top:4px;right:8px;color:#fff;font:11px monospace;background:rgba(0,0,0,0.6);padding:4px 8px;border-radius:4px;pointer-events:none;text-align:right;";
+		this.hudEl.style.cssText =
+			"position:absolute;top:4px;right:8px;color:#fff;font:11px monospace;background:rgba(0,0,0,0.6);padding:4px 8px;border-radius:4px;pointer-events:none;text-align:right;";
 		container.appendChild(this.hudEl);
 
 		// Lighting.
@@ -157,13 +161,18 @@ export class Physics3dGame {
 				this.targets[body.id] = body;
 
 				// Create meshes for dynamic bodies we don't have yet (e.g. spawned cubes).
-				if (!body.id.startsWith("player-") && !this.dynamicMeshes[body.id]) {
+				if (
+					!body.id.startsWith("player-") &&
+					!this.dynamicMeshes[body.id]
+				) {
 					const geo = new THREE.BoxGeometry(
 						body.hx * 2,
 						body.hy * 2,
 						body.hz * 2,
 					);
-					const mat = new THREE.MeshStandardMaterial({ color: colorFromId(body.id) });
+					const mat = new THREE.MeshStandardMaterial({
+						color: colorFromId(body.id),
+					});
 					const mesh = new THREE.Mesh(geo, mat);
 					mesh.position.set(body.x, body.y, body.z);
 					mesh.quaternion.set(body.qx, body.qy, body.qz, body.qw);
@@ -255,7 +264,10 @@ export class Physics3dGame {
 		ctx.fillText(text, 128, 32);
 
 		const texture = new THREE.CanvasTexture(canvas);
-		const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+		const mat = new THREE.SpriteMaterial({
+			map: texture,
+			depthTest: false,
+		});
 		const sprite = new THREE.Sprite(mat);
 		sprite.scale.set(2, 0.5, 1);
 		return sprite;
@@ -288,16 +300,23 @@ export class Physics3dGame {
 		let ix = 0;
 		let iz = 0;
 		if (this.keys["a"] || this.keys["A"] || this.keys["ArrowLeft"]) ix -= 1;
-		if (this.keys["d"] || this.keys["D"] || this.keys["ArrowRight"]) ix += 1;
+		if (this.keys["d"] || this.keys["D"] || this.keys["ArrowRight"])
+			ix += 1;
 		if (this.keys["w"] || this.keys["W"] || this.keys["ArrowUp"]) iz -= 1;
 		if (this.keys["s"] || this.keys["S"] || this.keys["ArrowDown"]) iz += 1;
 		const jump = !!this.keys[" "];
 
-		if (ix !== this.lastIx || iz !== this.lastIz || (jump && !this.lastJump)) {
+		if (
+			ix !== this.lastIx ||
+			iz !== this.lastIz ||
+			(jump && !this.lastJump)
+		) {
 			this.lastIx = ix;
 			this.lastIz = iz;
 			this.lastJump = jump;
-			this.conn.setInput({ inputX: ix, inputZ: iz, jump }).catch(() => {});
+			this.conn
+				.setInput({ inputX: ix, inputZ: iz, jump })
+				.catch(() => {});
 		}
 		if (!jump && this.lastJump) {
 			this.lastJump = false;
@@ -344,16 +363,22 @@ export class Physics3dGame {
 		const myMesh = this.playerMeshes[this.myConnId];
 		if (myMesh) {
 			const target = myMesh.position;
-			this.camera.position.x += (target.x - this.camera.position.x) * 0.05;
-			this.camera.position.z += (target.z + 8 - this.camera.position.z) * 0.05;
-			this.camera.position.y += (target.y + 6 - this.camera.position.y) * 0.05;
+			this.camera.position.x +=
+				(target.x - this.camera.position.x) * 0.05;
+			this.camera.position.z +=
+				(target.z + 8 - this.camera.position.z) * 0.05;
+			this.camera.position.y +=
+				(target.y + 6 - this.camera.position.y) * 0.05;
 			this.camera.lookAt(target.x, target.y, target.z);
 		}
 
 		this.renderer.render(this.scene, this.camera);
 
 		// Update HUD.
-		const tps = this.tickIntervalMs > 0 ? (1000 / this.tickIntervalMs).toFixed(1) : "—";
+		const tps =
+			this.tickIntervalMs > 0
+				? (1000 / this.tickIntervalMs).toFixed(1)
+				: "—";
 		this.hudEl.textContent = `TPS: ${tps}  Interval: ${this.tickIntervalMs}ms | Latency: ~${this.latencyMs}ms`;
 
 		this.rafId = requestAnimationFrame(this.draw);

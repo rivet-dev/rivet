@@ -2,7 +2,7 @@ import { UserError } from "@/actor/errors";
 import { loggerWithoutContext } from "@/actor/log";
 import { createEngineDriver } from "@/drivers/engine/mod";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
-import { DriverConfig, RegistryConfig } from "@/registry/config";
+import type { DriverConfig, RegistryConfig } from "@/registry/config";
 
 /**
  * Chooses the appropriate driver based on the run configuration.

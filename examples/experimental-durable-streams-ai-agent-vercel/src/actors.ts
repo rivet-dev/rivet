@@ -1,7 +1,7 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import type { DurableStream } from "@durable-streams/client";
 import { streamText } from "ai";
-import { type ActorContextOf, actor, setup, event } from "rivetkit";
+import { type ActorContextOf, actor, event, setup } from "rivetkit";
 import { getStreams } from "./shared/streams.ts";
 import type { PromptMessage, ResponseChunk } from "./shared/types.ts";
 

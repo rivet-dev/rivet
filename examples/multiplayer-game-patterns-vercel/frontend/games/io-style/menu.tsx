@@ -22,9 +22,14 @@ export function IoStyleMenu({
 		setStatus("matching");
 		try {
 			const mm = client.ioStyleMatchmaker.getOrCreate(["main"]).connect();
-			const result = await mm.send("findLobby", {}, { wait: true, timeout: 10_000 });
+			const result = await mm.send(
+				"findLobby",
+				{},
+				{ wait: true, timeout: 10_000 },
+			);
 			mm.dispose();
-			const response = (result as { response?: IoStyleMatchInfo })?.response;
+			const response = (result as { response?: IoStyleMatchInfo })
+				?.response;
 			if (!response?.matchId || !response?.playerId) {
 				throw new Error("Matchmaker did not return a valid lobby");
 			}
@@ -43,8 +48,8 @@ export function IoStyleMenu({
 			<div className="menu-container">
 				<h2>IO-Style</h2>
 				<p className="menu-description">
-					Open lobby matchmaking with server-authoritative movement. Use WASD or arrow
-					keys to move your player around the world.
+					Open lobby matchmaking with server-authoritative movement.
+					Use WASD or arrow keys to move your player around the world.
 				</p>
 				<button
 					className="btn btn-primary"

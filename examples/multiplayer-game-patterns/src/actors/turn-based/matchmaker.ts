@@ -7,10 +7,10 @@ This matchmaker supports invite and queued public matchmaking flows.
 5. getAssignment lets clients poll for their match assignment.
 6. onDisconnect unqueues waiting players so stale queue entries do not remain.
 */
-import { actor, type ActorContextOf, queue, UserError } from "rivetkit";
+import { type ActorContextOf, actor, queue, UserError } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
-import { registry } from "../index.ts";
+import type { registry } from "../index.ts";
 import { generateInviteCode } from "./config.ts";
 
 export interface TurnBasedAssignment {
@@ -95,13 +95,11 @@ export const turnBasedMatchmaker = actor({
 					input: { matchId },
 				});
 
-				await client.turnBasedMatch
-					.get([matchId])
-					.createPlayer({
-						playerId,
-						playerName: message.body.playerName,
-						symbol: "X" as const,
-					});
+				await client.turnBasedMatch.get([matchId]).createPlayer({
+					playerId,
+					playerName: message.body.playerName,
+					symbol: "X" as const,
+				});
 
 				await c.db.execute(
 					`INSERT INTO matches (match_id, invite_code, player_count, is_open_pool, created_at) VALUES (?, ?, ?, ?, ?)`,
@@ -115,23 +113,28 @@ export const turnBasedMatchmaker = actor({
 				await message.complete({ matchId, playerId, inviteCode });
 			} else if (message.name === "joinByCode") {
 				const code = message.body.inviteCode.toUpperCase().trim();
-				const rows = await c.db.execute<{ match_id: string; player_count: number }>(
+				const rows = await c.db.execute<{
+					match_id: string;
+					player_count: number;
+				}>(
 					`SELECT match_id, player_count FROM matches WHERE invite_code = ?`,
 					code,
 				);
 				const row = rows[0];
-				if (!row) throw new UserError("Game not found", { code: "game_not_found" });
-				if (row.player_count >= 2) throw new UserError("Game is full", { code: "game_full" });
+				if (!row)
+					throw new UserError("Game not found", {
+						code: "game_not_found",
+					});
+				if (row.player_count >= 2)
+					throw new UserError("Game is full", { code: "game_full" });
 
 				const playerId = crypto.randomUUID();
 				const client = c.client<typeof registry>();
-				await client.turnBasedMatch
-					.get([row.match_id])
-					.createPlayer({
-						playerId,
-						playerName: message.body.playerName,
-						symbol: "O" as const,
-					});
+				await client.turnBasedMatch.get([row.match_id]).createPlayer({
+					playerId,
+					playerName: message.body.playerName,
+					symbol: "O" as const,
+				});
 
 				await c.db.execute(
 					`UPDATE matches SET player_count = 2 WHERE match_id = ?`,
@@ -193,8 +196,14 @@ async function attemptPairing(
 	const a = queued[0]!;
 	const b = queued[1]!;
 
-	await c.db.execute(`DELETE FROM player_pool WHERE player_id = ?`, a.player_id);
-	await c.db.execute(`DELETE FROM player_pool WHERE player_id = ?`, b.player_id);
+	await c.db.execute(
+		`DELETE FROM player_pool WHERE player_id = ?`,
+		a.player_id,
+	);
+	await c.db.execute(
+		`DELETE FROM player_pool WHERE player_id = ?`,
+		b.player_id,
+	);
 
 	const matchId = crypto.randomUUID();
 	const inviteCode = generateInviteCode();
@@ -204,20 +213,16 @@ async function attemptPairing(
 		input: { matchId },
 	});
 
-	await client.turnBasedMatch
-		.get([matchId])
-		.createPlayer({
-			playerId: a.player_id,
-			playerName: a.player_name,
-			symbol: "X" as const,
-		});
-	await client.turnBasedMatch
-		.get([matchId])
-		.createPlayer({
-			playerId: b.player_id,
-			playerName: b.player_name,
-			symbol: "O" as const,
-		});
+	await client.turnBasedMatch.get([matchId]).createPlayer({
+		playerId: a.player_id,
+		playerName: a.player_name,
+		symbol: "X" as const,
+	});
+	await client.turnBasedMatch.get([matchId]).createPlayer({
+		playerId: b.player_id,
+		playerName: b.player_name,
+		symbol: "O" as const,
+	});
 
 	await c.db.execute(
 		`INSERT INTO matches (match_id, invite_code, player_count, is_open_pool, created_at) VALUES (?, ?, ?, ?, ?)`,

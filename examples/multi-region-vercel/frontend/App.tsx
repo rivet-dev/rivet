@@ -2,7 +2,9 @@ import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useState } from "react";
 import type { Player, registry } from "../src/actors.ts";
 
-const { useActor } = createRivetKit<typeof registry>(`${window.location.origin}/api/rivet`);
+const { useActor } = createRivetKit<typeof registry>(
+	`${window.location.origin}/api/rivet`,
+);
 
 export function App() {
 	const [region, setRegion] = useState("us-east");
@@ -28,16 +30,23 @@ export function App() {
 		// Fetch initial game state
 		actor.connection
 			.getGameState()
-			.then((state: { players: Record<string, Player>; region: string }) => {
-				setPlayers(state.players);
-				setCurrentRegion(state.region);
-				// Set my player ID to one of the players (we'll update this when playerJoined event fires)
-				const playerIds = Object.keys(state.players);
-				if (playerIds.length > 0 && !myPlayerId) {
-					setMyPlayerId(playerIds[playerIds.length - 1]);
-				}
-			})
-			.catch((err: unknown) => console.error("Failed to get game state:", err));
+			.then(
+				(state: {
+					players: Record<string, Player>;
+					region: string;
+				}) => {
+					setPlayers(state.players);
+					setCurrentRegion(state.region);
+					// Set my player ID to one of the players (we'll update this when playerJoined event fires)
+					const playerIds = Object.keys(state.players);
+					if (playerIds.length > 0 && !myPlayerId) {
+						setMyPlayerId(playerIds[playerIds.length - 1]);
+					}
+				},
+			)
+			.catch((err: unknown) =>
+				console.error("Failed to get game state:", err),
+			);
 	}, [actor.connection, myPlayerId]);
 
 	// Handle keyboard input for movement
@@ -75,7 +84,9 @@ export function App() {
 						// Calculate round-trip latency
 						setLatency(Date.now() - startTime);
 					})
-					.catch((err: unknown) => console.error("Move failed:", err));
+					.catch((err: unknown) =>
+						console.error("Move failed:", err),
+					);
 			}
 		};
 
@@ -146,9 +157,10 @@ export function App() {
 			<div className="info-box">
 				<h3>Multi-Region Deployment</h3>
 				<p>
-					Select a region below to connect to a game room in that region. Each
-					region has its own isolated set of actors, allowing players to connect
-					to servers closer to them for lower latency.
+					Select a region below to connect to a game room in that
+					region. Each region has its own isolated set of actors,
+					allowing players to connect to servers closer to them for
+					lower latency.
 				</p>
 			</div>
 
@@ -156,7 +168,10 @@ export function App() {
 				<label>
 					<strong>Select Region:</strong>
 				</label>
-				<select value={region} onChange={(e) => handleRegionChange(e.target.value)}>
+				<select
+					value={region}
+					onChange={(e) => handleRegionChange(e.target.value)}
+				>
 					<option value="us-east">US East</option>
 					<option value="eu-west">EU West</option>
 					<option value="ap-south">AP South</option>
@@ -251,8 +266,8 @@ export function App() {
 				</p>
 				<p>Move: WASD or Arrow Keys</p>
 				<p>
-					Each region has its own isolated game rooms. Players in different
-					regions cannot see each other.
+					Each region has its own isolated game rooms. Players in
+					different regions cannot see each other.
 				</p>
 			</div>
 		</div>

@@ -1,12 +1,12 @@
+import type {
+	PermissionRequestListener,
+	SandboxProvider,
+	SessionEventListener,
+} from "sandbox-agent";
 import { z } from "zod/v4";
 import type { ActorContext, BeforeConnectContext } from "@/actor/contexts";
 import type { AnyDatabaseProvider } from "@/actor/database";
-import type {
-	PermissionRequestListener,
-	SessionEventListener,
-	SandboxProvider,
-} from "sandbox-agent";
-import type { SandboxActorVars, SandboxActorState } from "./types";
+import type { SandboxActorState, SandboxActorVars } from "./types";
 
 const zFunction = <
 	T extends (...args: any[]) => any = (...args: unknown[]) => unknown,

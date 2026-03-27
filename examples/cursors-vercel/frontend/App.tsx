@@ -1,12 +1,10 @@
 import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useRef, useState } from "react";
-import type {
-	CursorPosition,
-	TextLabel,
-	registry,
-} from "../src/actors.ts";
+import type { CursorPosition, registry, TextLabel } from "../src/actors.ts";
 
-const { useActor } = createRivetKit<typeof registry>(`${window.location.origin}/api/rivet`);
+const { useActor } = createRivetKit<typeof registry>(
+	`${window.location.origin}/api/rivet`,
+);
 
 // Generate a random user ID
 const generateUserId = () =>
@@ -78,12 +76,15 @@ export function App() {
 	// Load initial state
 	useEffect(() => {
 		if (cursorRoom.connection) {
-			cursorRoom.connection.getRoomState().then((state) => {
-				setCursors(state.cursors);
-				setTextLabels(state.textLabels);
-			}).catch((error) => {
-				console.error('error loading room state', error);
-			});
+			cursorRoom.connection
+				.getRoomState()
+				.then((state) => {
+					setCursors(state.cursors);
+					setTextLabels(state.textLabels);
+				})
+				.catch((error) => {
+					console.error("error loading room state", error);
+				});
 		}
 	}, [cursorRoom.connection]);
 
@@ -98,7 +99,7 @@ export function App() {
 	// Listen for text updates
 	cursorRoom.useEvent("textUpdated", (label: TextLabel) => {
 		setTextLabels((prev) => {
-			const existingIndex = prev.findIndex(l => l.id === label.id);
+			const existingIndex = prev.findIndex((l) => l.id === label.id);
 			if (existingIndex >= 0) {
 				const newLabels = [...prev];
 				newLabels[existingIndex] = label;
@@ -111,7 +112,7 @@ export function App() {
 
 	// Listen for text removal
 	cursorRoom.useEvent("textRemoved", (id: string) => {
-		setTextLabels((prev) => prev.filter(label => label.id !== id));
+		setTextLabels((prev) => prev.filter((label) => label.id !== id));
 	});
 
 	// Listen for cursor removal (when connection closes)
@@ -211,7 +212,10 @@ export function App() {
 					/>
 				</div>
 				<div className="user-info">
-					Your ID: <span style={{ color: getColorForUser(userId) }}>{userId}</span>
+					Your ID:{" "}
+					<span style={{ color: getColorForUser(userId) }}>
+						{userId}
+					</span>
 				</div>
 			</div>
 
@@ -321,7 +325,9 @@ export function App() {
 					})}
 
 					{!cursorRoom.connection && (
-						<div className="loading-overlay">Connecting to room...</div>
+						<div className="loading-overlay">
+							Connecting to room...
+						</div>
 					)}
 
 					{/* Hidden input to capture typing */}
@@ -332,8 +338,14 @@ export function App() {
 							value={textInput}
 							onChange={(e) => handleTextChange(e.target.value)}
 							onBlur={() => {
-								if (!textInput.trim() && cursorRoom.connection && currentTextId) {
-									cursorRoom.connection.removeText(currentTextId);
+								if (
+									!textInput.trim() &&
+									cursorRoom.connection &&
+									currentTextId
+								) {
+									cursorRoom.connection.removeText(
+										currentTextId,
+									);
 									setCurrentTextId(null);
 								}
 								setIsTyping(false);

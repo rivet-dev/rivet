@@ -11,8 +11,8 @@ import {
 	getNodeStream,
 	importNodeDependencies,
 } from "@/utils/node";
-import { logger } from "./log";
 import { ENGINE_ENDPOINT, ENGINE_PORT } from "./constants";
+import { logger } from "./log";
 
 export { ENGINE_ENDPOINT, ENGINE_PORT };
 

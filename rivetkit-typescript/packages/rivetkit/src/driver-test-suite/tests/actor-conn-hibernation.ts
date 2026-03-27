@@ -122,8 +122,7 @@ export function runActorConnHibernationTests(
 					const ping = await hibernatingActor.ping();
 					expect(ping).toBe("pong");
 
-					const actorCounts =
-						await hibernatingActor.getActorCounts();
+					const actorCounts = await hibernatingActor.getActorCounts();
 					expect(actorCounts.sleepCount).toBe(i + 1);
 					expect(actorCounts.wakeCount).toBe(i + 2);
 					expect(openCount).toBe(1);

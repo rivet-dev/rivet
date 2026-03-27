@@ -1,5 +1,5 @@
-import * as errors from "../errors";
 import type { AnyDatabaseProvider } from "../database";
+import * as errors from "../errors";
 import type {
 	EventSchemaConfig,
 	InferQueueCompleteMap,

@@ -1,6 +1,6 @@
-import { actor, type ActorContextOf, event, UserError } from "rivetkit";
+import { type ActorContextOf, actor, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
-import { registry } from "../index.ts";
+import type { registry } from "../index.ts";
 import { getPlayerColor } from "../player-color.ts";
 import { BOARD_SIZE, type CellValue, type GameResult } from "./config.ts";
 
@@ -62,7 +62,9 @@ export const turnBasedMatch = actor({
 		player.connId = null;
 		broadcastSnapshot(c);
 
-		const anyConnected = Object.values(c.state.players).some((p) => p.connId !== null);
+		const anyConnected = Object.values(c.state.players).some(
+			(p) => p.connId !== null,
+		);
 		if (!anyConnected) {
 			c.state.emptySince = Date.now();
 		}
@@ -81,7 +83,10 @@ export const turnBasedMatch = actor({
 				continue;
 			}
 			if (c.state.emptySince === null) continue;
-			if (Date.now() - c.state.emptySince >= EMPTY_MATCH_DESTROY_DELAY_MS) {
+			if (
+				Date.now() - c.state.emptySince >=
+				EMPTY_MATCH_DESTROY_DELAY_MS
+			) {
 				c.destroy();
 				break;
 			}
@@ -111,7 +116,9 @@ export const turnBasedMatch = actor({
 			}
 			const found = findPlayerByConnId(c.state, c.conn.id);
 			if (!found) {
-				throw new UserError("player not found", { code: "player_not_found" });
+				throw new UserError("player not found", {
+					code: "player_not_found",
+				});
 			}
 			const [, player] = found;
 			if (player.symbol !== c.state.currentTurn) {
@@ -122,7 +129,9 @@ export const turnBasedMatch = actor({
 				throw new UserError("invalid cell", { code: "invalid_cell" });
 			}
 			if (c.state.board[row]![col] !== "") {
-				throw new UserError("cell already taken", { code: "cell_taken" });
+				throw new UserError("cell already taken", {
+					code: "cell_taken",
+				});
 			}
 
 			c.state.board[row]![col] = player.symbol;
@@ -145,19 +154,35 @@ export const turnBasedMatch = actor({
 
 function checkWinner(board: CellValue[][]): "X" | "O" | null {
 	for (let r = 0; r < BOARD_SIZE; r++) {
-		if (board[r]![0] !== "" && board[r]![0] === board[r]![1] && board[r]![1] === board[r]![2]) {
+		if (
+			board[r]![0] !== "" &&
+			board[r]![0] === board[r]![1] &&
+			board[r]![1] === board[r]![2]
+		) {
 			return board[r]![0] as "X" | "O";
 		}
 	}
 	for (let c = 0; c < BOARD_SIZE; c++) {
-		if (board[0]![c] !== "" && board[0]![c] === board[1]![c] && board[1]![c] === board[2]![c]) {
+		if (
+			board[0]![c] !== "" &&
+			board[0]![c] === board[1]![c] &&
+			board[1]![c] === board[2]![c]
+		) {
 			return board[0]![c] as "X" | "O";
 		}
 	}
-	if (board[0]![0] !== "" && board[0]![0] === board[1]![1] && board[1]![1] === board[2]![2]) {
+	if (
+		board[0]![0] !== "" &&
+		board[0]![0] === board[1]![1] &&
+		board[1]![1] === board[2]![2]
+	) {
 		return board[0]![0] as "X" | "O";
 	}
-	if (board[0]![2] !== "" && board[0]![2] === board[1]![1] && board[1]![1] === board[2]![0]) {
+	if (
+		board[0]![2] !== "" &&
+		board[0]![2] === board[1]![1] &&
+		board[1]![1] === board[2]![0]
+	) {
 		return board[0]![2] as "X" | "O";
 	}
 	return null;
@@ -169,7 +194,10 @@ interface GameSnapshot {
 	currentTurn: "X" | "O";
 	result: GameResult;
 	moveCount: number;
-	players: Record<string, { name: string; color: string; symbol: "X" | "O"; connected: boolean }>;
+	players: Record<
+		string,
+		{ name: string; color: string; symbol: "X" | "O"; connected: boolean }
+	>;
 }
 
 function buildSnapshot(c: ActorContextOf<typeof turnBasedMatch>): GameSnapshot {

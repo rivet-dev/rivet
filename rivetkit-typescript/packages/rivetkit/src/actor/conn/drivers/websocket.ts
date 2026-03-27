@@ -1,11 +1,11 @@
 import type { WSContext } from "hono/ws";
 import type { AnyConn } from "@/actor/conn/mod";
+import * as errors from "@/actor/errors";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { CachedSerializer, Encoding } from "@/actor/protocol/serde";
-import * as errors from "@/actor/errors";
+import type { RegistryConfig } from "@/registry/config";
 import { loggerWithoutContext } from "../../log";
 import { type ConnDriver, DriverReadyState } from "../driver";
-import { RegistryConfig } from "@/registry/config";
 
 export type ConnDriverWebSocketState = Record<never, never>;
 

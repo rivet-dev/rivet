@@ -2,7 +2,9 @@ import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useState } from "react";
 import type { registry } from "../src/actors.ts";
 
-const { useActor } = createRivetKit<typeof registry>(`${window.location.origin}/api/rivet`);
+const { useActor } = createRivetKit<typeof registry>(
+	`${window.location.origin}/api/rivet`,
+);
 
 export function App() {
 	const [topValues, setTopValues] = useState<number[]>([]);
@@ -27,15 +29,22 @@ export function App() {
 	}, [streamProcessor.connection]);
 
 	// Listen for updates from other clients
-	streamProcessor.useEvent("updated", ({ topValues, totalCount, highestValue }: {
-		topValues: number[];
-		totalCount: number;
-		highestValue: number | null;
-	}) => {
-		setTopValues(topValues);
-		setTotalCount(totalCount);
-		setHighestValue(highestValue);
-	});
+	streamProcessor.useEvent(
+		"updated",
+		({
+			topValues,
+			totalCount,
+			highestValue,
+		}: {
+			topValues: number[];
+			totalCount: number;
+			highestValue: number | null;
+		}) => {
+			setTopValues(topValues);
+			setTotalCount(totalCount);
+			setHighestValue(highestValue);
+		},
+	);
 
 	// Add a new value to the stream
 	const handleAddValue = async () => {
@@ -77,9 +86,10 @@ export function App() {
 			<div className="info-box">
 				<h3>How it works</h3>
 				<p>
-					This stream processor maintains the top 3 highest values in real-time. 
-					Add numbers and watch as the system automatically keeps track of the highest values. 
-					All connected clients see updates immediately when new values are added.
+					This stream processor maintains the top 3 highest values in
+					real-time. Add numbers and watch as the system automatically
+					keeps track of the highest values. All connected clients see
+					updates immediately when new values are added.
 				</p>
 			</div>
 
@@ -89,14 +99,22 @@ export function App() {
 						<h3>🏆 Top 3 Values</h3>
 						{topValues.length === 0 ? (
 							<div className="empty-state">
-								No values added yet.<br />
+								No values added yet.
+								<br />
 								Add some numbers to get started!
 							</div>
 						) : (
 							topValues.map((value, index) => (
-								<div key={`${value}-${index}`} className="value-item">
-									<span className="value-rank">#{index + 1}</span>
-									<span className="value-number">{value.toLocaleString()}</span>
+								<div
+									key={`${value}-${index}`}
+									className="value-item"
+								>
+									<span className="value-rank">
+										#{index + 1}
+									</span>
+									<span className="value-number">
+										{value.toLocaleString()}
+									</span>
 								</div>
 							))
 						)}
@@ -106,30 +124,40 @@ export function App() {
 				<div className="input-section">
 					<form onSubmit={handleSubmit} className="input-form">
 						<h3>Add New Value</h3>
-						
+
 						<div className="input-group">
 							<label htmlFor="value-input">Number:</label>
 							<input
 								id="value-input"
 								type="number"
 								value={newValue || ""}
-								onChange={(e) => setNewValue(Number(e.target.value))}
+								onChange={(e) =>
+									setNewValue(Number(e.target.value))
+								}
 								placeholder="Enter any number..."
 								disabled={!streamProcessor.connection}
 							/>
 						</div>
 
-						<button 
-							type="submit" 
+						<button
+							type="submit"
 							className="submit-button"
-							disabled={!streamProcessor.connection || isNaN(newValue)}
+							disabled={
+								!streamProcessor.connection || isNaN(newValue)
+							}
 						>
 							Add to Stream
 						</button>
 					</form>
 
-					<div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
-						<button 
+					<div
+						style={{
+							marginTop: "15px",
+							display: "flex",
+							gap: "10px",
+						}}
+					>
+						<button
 							onClick={handleRandomValue}
 							style={{
 								flex: 1,
@@ -138,12 +166,12 @@ export function App() {
 								color: "white",
 								border: "none",
 								borderRadius: "4px",
-								cursor: "pointer"
+								cursor: "pointer",
 							}}
 						>
 							Random Value
 						</button>
-						<button 
+						<button
 							onClick={handleReset}
 							disabled={!streamProcessor.connection}
 							style={{
@@ -153,7 +181,7 @@ export function App() {
 								color: "white",
 								border: "none",
 								borderRadius: "4px",
-								cursor: "pointer"
+								cursor: "pointer",
 							}}
 						>
 							Reset Stream
@@ -168,7 +196,9 @@ export function App() {
 					<div className="stat-label">Total Values</div>
 				</div>
 				<div className="stat-item">
-					<div className="stat-value">{highestValue?.toLocaleString() || "—"}</div>
+					<div className="stat-value">
+						{highestValue?.toLocaleString() || "—"}
+					</div>
 					<div className="stat-label">Highest Value</div>
 				</div>
 				<div className="stat-item">

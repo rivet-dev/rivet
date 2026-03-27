@@ -12,7 +12,7 @@ import type {
 	ManagerDriver,
 } from "rivetkit/driver-helpers";
 import { promiseWithResolvers } from "rivetkit/utils";
-import { logger } from "./log";
+import { parseActorId } from "./actor-id";
 import {
 	kvDelete,
 	kvDeleteRange,
@@ -23,7 +23,7 @@ import {
 } from "./actor-kv";
 import { GLOBAL_KV_KEYS } from "./global-kv";
 import { getCloudflareAmbientEnv } from "./handler";
-import { parseActorId } from "./actor-id";
+import { logger } from "./log";
 
 interface DurableObjectGlobalState {
 	ctx: DurableObjectState;

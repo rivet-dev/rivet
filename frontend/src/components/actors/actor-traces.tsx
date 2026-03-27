@@ -93,7 +93,7 @@ export function ActorTraces({ actorId }: { actorId: ActorId }) {
 		enabled:
 			inspector.isInspectorAvailable &&
 			inspector.features.traces.supported,
-		refetchInterval: isLive ? 1000 : false,
+		refetchInterval: isLive ? 3000 : false,
 		staleTime: 0,
 	});
 

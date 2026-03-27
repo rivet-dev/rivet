@@ -17,9 +17,16 @@ export function TurnBasedMenu({
 	onReady: (info: TurnBasedMatchInfo) => void;
 	onBack: () => void;
 }) {
-	const [name, setName] = useState(() => `Player#${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`);
+	const [name, setName] = useState(
+		() =>
+			`Player#${Math.floor(Math.random() * 10000)
+				.toString()
+				.padStart(4, "0")}`,
+	);
 	const [joinCode, setJoinCode] = useState("");
-	const [status, setStatus] = useState<"idle" | "loading" | "waiting" | "error">("idle");
+	const [status, setStatus] = useState<
+		"idle" | "loading" | "waiting" | "error"
+	>("idle");
 	const [error, setError] = useState("");
 	// biome-ignore lint/suspicious/noExplicitAny: connection handle
 	const queueConnRef = useRef<any>(null);
@@ -44,9 +51,13 @@ export function TurnBasedMenu({
 		setStatus("loading");
 		setError("");
 		try {
-			const mm = client.turnBasedMatchmaker.getOrCreate(["main"]).connect();
+			const mm = client.turnBasedMatchmaker
+				.getOrCreate(["main"])
+				.connect();
 			queueConnRef.current = mm;
-			const queueResult = await mm.queueForMatch({ playerName: name.trim() }) as {
+			const queueResult = (await mm.queueForMatch({
+				playerName: name.trim(),
+			})) as {
 				playerId?: string;
 			};
 			const playerId = queueResult.playerId;
@@ -55,7 +66,10 @@ export function TurnBasedMenu({
 			}
 
 			setStatus("waiting");
-			const assignment = await waitForAssignment<TurnBasedMatchInfo>(mm, playerId);
+			const assignment = await waitForAssignment<TurnBasedMatchInfo>(
+				mm,
+				playerId,
+			);
 			if (queueConnRef.current === mm) {
 				queueConnRef.current = null;
 			}
@@ -78,14 +92,17 @@ export function TurnBasedMenu({
 		setStatus("loading");
 		setError("");
 		try {
-			const mm = client.turnBasedMatchmaker.getOrCreate(["main"]).connect();
+			const mm = client.turnBasedMatchmaker
+				.getOrCreate(["main"])
+				.connect();
 			const result = await mm.send(
 				"createGame",
 				{ playerName: name.trim() },
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (result as { response?: TurnBasedMatchInfo })?.response;
+			const response = (result as { response?: TurnBasedMatchInfo })
+				?.response;
 			if (!response?.matchId) throw new Error("Failed to create game");
 			onReady(response);
 		} catch (err) {
@@ -99,7 +116,9 @@ export function TurnBasedMenu({
 		setStatus("loading");
 		setError("");
 		try {
-			const mm = client.turnBasedMatchmaker.getOrCreate(["main"]).connect();
+			const mm = client.turnBasedMatchmaker
+				.getOrCreate(["main"])
+				.connect();
 			const result = await mm.send(
 				"joinByCode",
 				{ inviteCode: joinCode.trim(), playerName: name.trim() },
@@ -135,12 +154,19 @@ export function TurnBasedMenu({
 			<div className="menu-container">
 				<h2>Turn-Based</h2>
 				<p className="menu-description">
-					Tic-tac-toe with invite codes and open matchmaking. Find an open match,
-					create a private game, or join by code.
+					Tic-tac-toe with invite codes and open matchmaking. Find an
+					open match, create a private game, or join by code.
 				</p>
 
 				<div style={{ marginBottom: 16 }}>
-					<label style={{ display: "block", color: "#8e8e93", fontSize: 12, marginBottom: 4 }}>
+					<label
+						style={{
+							display: "block",
+							color: "#8e8e93",
+							fontSize: 12,
+							marginBottom: 4,
+						}}
+					>
 						Your Name
 					</label>
 					<input
@@ -167,11 +193,32 @@ export function TurnBasedMenu({
 					</div>
 				) : (
 					<>
-						<div style={{ height: 1, background: "#2c2c2e", marginBottom: 16 }} />
+						<div
+							style={{
+								height: 1,
+								background: "#2c2c2e",
+								marginBottom: 16,
+							}}
+						/>
 
 						<div style={{ display: "flex", gap: 16 }}>
-							<div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-								<div style={{ color: "#8e8e93", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>
+							<div
+								style={{
+									flex: 1,
+									display: "flex",
+									flexDirection: "column",
+									gap: 8,
+								}}
+							>
+								<div
+									style={{
+										color: "#8e8e93",
+										fontSize: 12,
+										fontWeight: 600,
+										textTransform: "uppercase",
+										letterSpacing: 1,
+									}}
+								>
 									Quick Play
 								</div>
 								<button
@@ -188,26 +235,48 @@ export function TurnBasedMenu({
 									disabled={isBusy || !name.trim()}
 									style={{ width: "100%" }}
 								>
-									{isLoading ? "Loading..." : "Create Private"}
+									{isLoading
+										? "Loading..."
+										: "Create Private"}
 								</button>
 							</div>
 
 							<div style={{ width: 1, background: "#2c2c2e" }} />
 
-							<div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-								<div style={{ color: "#8e8e93", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>
+							<div
+								style={{
+									flex: 1,
+									display: "flex",
+									flexDirection: "column",
+									gap: 8,
+								}}
+							>
+								<div
+									style={{
+										color: "#8e8e93",
+										fontSize: 12,
+										fontWeight: 600,
+										textTransform: "uppercase",
+										letterSpacing: 1,
+									}}
+								>
 									Join by Code
 								</div>
 								<input
 									type="text"
 									placeholder="Invite code"
 									value={joinCode}
-									onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+									onChange={(e) =>
+										setJoinCode(
+											e.target.value.toUpperCase(),
+										)
+									}
 									className="text-input"
 									maxLength={6}
 									style={{
 										width: "100%",
-										fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace",
+										fontFamily:
+											"ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace",
 										fontSize: 16,
 										letterSpacing: 3,
 										textAlign: "center",
@@ -216,7 +285,11 @@ export function TurnBasedMenu({
 								<button
 									className="btn btn-primary"
 									onClick={() => void joinByCode()}
-									disabled={isBusy || !name.trim() || !joinCode.trim()}
+									disabled={
+										isBusy ||
+										!name.trim() ||
+										!joinCode.trim()
+									}
 									style={{ width: "100%" }}
 								>
 									{isLoading ? "Loading..." : "Join Game"}

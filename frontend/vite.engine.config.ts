@@ -41,7 +41,11 @@ export default defineConfig(({ mode }) => {
 		base: "/ui",
 		plugins: [
 			tanstackRouter({ target: "react", autoCodeSplitting: true }),
-			react(),
+			react({
+				babel: {
+					plugins: ["babel-plugin-react-compiler"],
+				},
+			}),
 			liveChatPlugin(),
 			env.SENTRY_AUTH_TOKEN
 				? sentryVitePlugin({

@@ -2,7 +2,9 @@ import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useState } from "react";
 import type { registry } from "../src/actors.ts";
 
-const { useActor } = createRivetKit<typeof registry>(`${location.origin}/api/rivet`);
+const { useActor } = createRivetKit<typeof registry>(
+	`${location.origin}/api/rivet`,
+);
 
 export function App() {
 	const [counterId, setCounterId] = useState("default");
@@ -34,9 +36,13 @@ export function App() {
 			<div className="counter-container">
 				<div className="counter-header">
 					<h1>Hello World</h1>
-					<div className={`status-indicator ${counter.connection ? 'connected' : 'disconnected'}`}>
+					<div
+						className={`status-indicator ${counter.connection ? "connected" : "disconnected"}`}
+					>
 						<div className="status-dot"></div>
-						<span>{counter.connection ? 'Connected' : 'Connecting...'}</span>
+						<span>
+							{counter.connection ? "Connected" : "Connecting..."}
+						</span>
 					</div>
 				</div>
 
@@ -84,7 +90,10 @@ export function App() {
 				</div>
 
 				<div className="info-box">
-					<p>This counter is shared across all clients using the same Counter ID.</p>
+					<p>
+						This counter is shared across all clients using the same
+						Counter ID.
+					</p>
 					<p>Try opening this page in multiple tabs or browsers!</p>
 				</div>
 			</div>

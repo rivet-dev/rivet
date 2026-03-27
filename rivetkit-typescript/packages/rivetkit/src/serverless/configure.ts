@@ -1,11 +1,11 @@
-import { RegistryConfig } from "@/registry/config";
-import { logger } from "./log";
 import invariant from "invariant";
 import { convertRegistryConfigToClientConfig } from "@/client/config";
+import type { RegistryConfig } from "@/registry/config";
 import {
 	getDatacenters,
 	updateRunnerConfig,
 } from "@/remote-manager-driver/api-endpoints";
+import { logger } from "./log";
 
 export async function configureServerlessPool(
 	config: RegistryConfig,

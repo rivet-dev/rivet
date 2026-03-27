@@ -1,10 +1,9 @@
-import type { Hono } from "hono";
-import { detectRuntime, stringifyError, type Runtime } from "../utils";
-import { RegistryConfig } from "@/registry/config";
-import { logger } from "@/registry/log";
-
 // TODO: Go back to dynamic import for this
 import getPort from "get-port";
+import type { Hono } from "hono";
+import type { RegistryConfig } from "@/registry/config";
+import { logger } from "@/registry/log";
+import { detectRuntime, type Runtime, stringifyError } from "../utils";
 
 const DEFAULT_PORT = 6420;
 export type ServeStatic =

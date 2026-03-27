@@ -14,19 +14,19 @@ export const workflowCounterActor = actor({
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("counter", async (loopCtx) => {
-				try {
-					// Accessing state outside a step should throw.
-					// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
-					loopCtx.state;
-				} catch {}
+			try {
+				// Accessing state outside a step should throw.
+				// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
+				loopCtx.state;
+			} catch {}
 
-				await loopCtx.step("increment", async () => {
-					incrementWorkflowCounter(loopCtx);
-				});
-
-				await loopCtx.sleep("idle", 25);
-				return Loop.continue(undefined);
+			await loopCtx.step("increment", async () => {
+				incrementWorkflowCounter(loopCtx);
 			});
+
+			await loopCtx.sleep("idle", 25);
+			return Loop.continue(undefined);
+		});
 	}),
 	actions: {
 		getState: async (c) => {
@@ -51,19 +51,23 @@ export const workflowQueueActor = actor({
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("queue", async (loopCtx) => {
-				const message = await loopCtx.queue.next("queue-wait", {
-					names: [WORKFLOW_QUEUE_NAME],
-					completable: true,
-				});
-				if (!message.complete) {
-					return Loop.continue(undefined);
-				}
-				const complete = message.complete;
-				await loopCtx.step("store-message", async () => {
-					await storeWorkflowQueueMessage(loopCtx, message.body, complete);
-				});
-				return Loop.continue(undefined);
+			const message = await loopCtx.queue.next("queue-wait", {
+				names: [WORKFLOW_QUEUE_NAME],
+				completable: true,
 			});
+			if (!message.complete) {
+				return Loop.continue(undefined);
+			}
+			const complete = message.complete;
+			await loopCtx.step("store-message", async () => {
+				await storeWorkflowQueueMessage(
+					loopCtx,
+					message.body,
+					complete,
+				);
+			});
+			return Loop.continue(undefined);
+		});
 	}),
 	actions: {
 		getMessages: (c) => c.state.received,
@@ -76,12 +80,12 @@ export const workflowSleepActor = actor({
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("sleep", async (loopCtx) => {
-				await loopCtx.step("tick", async () => {
-					incrementWorkflowSleepTick(loopCtx);
-				});
-				await loopCtx.sleep("delay", 40);
-				return Loop.continue(undefined);
+			await loopCtx.step("tick", async () => {
+				incrementWorkflowSleepTick(loopCtx);
 			});
+			await loopCtx.sleep("delay", 40);
+			return Loop.continue(undefined);
+		});
 	}),
 	actions: {
 		getState: (c) => c.state,
@@ -101,34 +105,40 @@ export const workflowQueueTimeoutActor = actor({
 	},
 	events: {
 		tick: event<{ ticks: number; at: number }>(),
-		jobProcessed: event<{ processed: number; job: { id: string; payload: string } }>(),
+		jobProcessed: event<{
+			processed: number;
+			job: { id: string; payload: string };
+		}>(),
 	},
 	queues: {
 		[WORKFLOW_TIMEOUT_QUEUE_NAME]: queue<{ id: string; payload: string }>(),
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("queue-timeout-loop", async (loopCtx) => {
-				const timeoutMs = await loopCtx.step("read-timeout", async () => {
-					return readWorkflowTimeoutMs(loopCtx);
-				});
+			const timeoutMs = await loopCtx.step("read-timeout", async () => {
+				return readWorkflowTimeoutMs(loopCtx);
+			});
 
-				const [message] = await loopCtx.queue.nextBatch("wait-job-or-timeout", {
+			const [message] = await loopCtx.queue.nextBatch(
+				"wait-job-or-timeout",
+				{
 					names: [WORKFLOW_TIMEOUT_QUEUE_NAME],
 					timeout: timeoutMs,
-				});
+				},
+			);
 
-				if (!message) {
-					await loopCtx.step("tick", async () => {
-						recordWorkflowTimeoutTick(loopCtx);
-					});
-					return Loop.continue(undefined);
-				}
-
-				await loopCtx.step("process-job", async () => {
-					processWorkflowTimeoutJob(loopCtx, message.body);
+			if (!message) {
+				await loopCtx.step("tick", async () => {
+					recordWorkflowTimeoutTick(loopCtx);
 				});
 				return Loop.continue(undefined);
+			}
+
+			await loopCtx.step("process-job", async () => {
+				processWorkflowTimeoutJob(loopCtx, message.body);
 			});
+			return Loop.continue(undefined);
+		});
 	}),
 	actions: {
 		enqueueJob: async (c, payload: string) => {

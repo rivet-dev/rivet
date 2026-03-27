@@ -1,9 +1,9 @@
 import { z } from "zod/v4";
 import type { ClientConfig } from "@/client/config";
 import { sendHttpRequest } from "@/client/utils";
+import type { RegistryConfig } from "@/registry/config";
 import { combineUrlPath } from "@/utils";
 import { logger } from "./log";
-import { RegistryConfig } from "@/registry/config";
 
 // Error class for Engine API errors
 export class EngineApiError extends Error {

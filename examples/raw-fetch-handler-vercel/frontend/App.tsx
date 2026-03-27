@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
 import { createClient } from "@rivetkit/react";
+import { useEffect, useState } from "react";
 import type { registry } from "../src/actors.ts";
 
 // Create a client that connects to the running server
-const client = createClient<typeof registry>(`${window.location.origin}/api/rivet`);
+const client = createClient<typeof registry>(
+	`${window.location.origin}/api/rivet`,
+);
 
 function Counter({ name }: { name: string }) {
 	const [count, setCount] = useState<number | null>(null);
@@ -21,7 +23,9 @@ function Counter({ name }: { name: string }) {
 		setLoading(true);
 		try {
 			// Method 1: Using fetch API
-			const response = await actor.fetch("/increment", { method: "POST" });
+			const response = await actor.fetch("/increment", {
+				method: "POST",
+			});
 			const data = await response.json();
 			setCount(data.count);
 		} finally {
@@ -34,9 +38,12 @@ function Counter({ name }: { name: string }) {
 		try {
 			// Method 2: Using the forward endpoint
 			// FIXME: Use metadata's clientEndpoint
-			const response = await fetch(`http://localhost:8080/forward/${name}/increment`, {
-				method: "POST",
-			});
+			const response = await fetch(
+				`http://localhost:8080/forward/${name}/increment`,
+				{
+					method: "POST",
+				},
+			);
 			const data = await response.json();
 			setCount(data.count);
 		} finally {
@@ -52,17 +59,17 @@ function Counter({ name }: { name: string }) {
 		<div>
 			<h2>{name}</h2>
 			<p>Count: {count !== null ? count : "Loading..."}</p>
-			
+
 			<h3>Via Actor Fetch</h3>
 			<button onClick={handleIncrement} disabled={loading}>
 				Increment
 			</button>
-			
+
 			<h3>Via Forward Endpoint</h3>
 			<button onClick={handleForwardIncrement} disabled={loading}>
 				Increment
 			</button>
-			
+
 			<br />
 			<button onClick={fetchCount} disabled={loading}>
 				Refresh
@@ -86,7 +93,7 @@ function App() {
 	return (
 		<div>
 			<h1>RivetKit Raw Fetch Handler Example</h1>
-			
+
 			<div>
 				<input
 					type="text"
@@ -97,9 +104,9 @@ function App() {
 				/>
 				<button onClick={addCounter}>Add Counter</button>
 			</div>
-			
+
 			<hr />
-			
+
 			<div>
 				{counters.map((name) => (
 					<Counter key={name} name={name} />

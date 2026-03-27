@@ -1,10 +1,6 @@
 import { createClient } from "@rivetkit/react";
 import { useEffect, useRef, useState } from "react";
-import type {
-	CursorPosition,
-	TextLabel,
-	registry,
-} from "../src/index.ts";
+import type { CursorPosition, registry, TextLabel } from "../src/index.ts";
 
 const rivetUrl = "http://localhost:6420";
 const rivetWsUrl = "ws://localhost:6420";
@@ -87,7 +83,9 @@ export function App() {
 		const connect = async () => {
 			try {
 				// Get or create the actor for this room
-				const actorId = await client.cursorRoom.getOrCreate(roomId).resolve();
+				const actorId = await client.cursorRoom
+					.getOrCreate(roomId)
+					.resolve();
 				console.log("found actor", actorId);
 
 				// Connect directly to RivetKit server for WebSocket
@@ -142,7 +140,9 @@ export function App() {
 
 							case "textRemoved": {
 								setTextLabels((prev) =>
-									prev.filter((label) => label.id !== message.data),
+									prev.filter(
+										(label) => label.id !== message.data,
+									),
 								);
 								break;
 							}
@@ -157,7 +157,10 @@ export function App() {
 							}
 						}
 					} catch (error) {
-						console.error("error parsing websocket message:", error);
+						console.error(
+							"error parsing websocket message:",
+							error,
+						);
 					}
 				});
 
@@ -198,7 +201,11 @@ export function App() {
 
 	// Handle mouse movement on canvas
 	const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-		if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && canvasRef.current) {
+		if (
+			wsRef.current &&
+			wsRef.current.readyState === WebSocket.OPEN &&
+			canvasRef.current
+		) {
 			const { x, y } = screenToCanvas(e.clientX, e.clientY);
 			wsRef.current.send(
 				JSON.stringify({
@@ -224,7 +231,12 @@ export function App() {
 	// Handle text input changes
 	const handleTextChange = (newText: string) => {
 		setTextInput(newText);
-		if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && currentTextId && newText.trim()) {
+		if (
+			wsRef.current &&
+			wsRef.current.readyState === WebSocket.OPEN &&
+			currentTextId &&
+			newText.trim()
+		) {
 			wsRef.current.send(
 				JSON.stringify({
 					type: "updateText",
@@ -244,7 +256,12 @@ export function App() {
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key === "Enter") {
 			// Finalize the text
-			if (textInput.trim() && wsRef.current && wsRef.current.readyState === WebSocket.OPEN && currentTextId) {
+			if (
+				textInput.trim() &&
+				wsRef.current &&
+				wsRef.current.readyState === WebSocket.OPEN &&
+				currentTextId
+			) {
 				wsRef.current.send(
 					JSON.stringify({
 						type: "updateText",
@@ -257,7 +274,11 @@ export function App() {
 						},
 					}),
 				);
-			} else if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && currentTextId) {
+			} else if (
+				wsRef.current &&
+				wsRef.current.readyState === WebSocket.OPEN &&
+				currentTextId
+			) {
 				// Remove empty text
 				wsRef.current.send(
 					JSON.stringify({
@@ -271,7 +292,11 @@ export function App() {
 			setCurrentTextId(null);
 		} else if (e.key === "Escape") {
 			// Cancel typing and remove text
-			if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && currentTextId) {
+			if (
+				wsRef.current &&
+				wsRef.current.readyState === WebSocket.OPEN &&
+				currentTextId
+			) {
 				wsRef.current.send(
 					JSON.stringify({
 						type: "removeText",
@@ -298,7 +323,10 @@ export function App() {
 					/>
 				</div>
 				<div className="user-info">
-					Your ID: <span style={{ color: getColorForUser(userId) }}>{userId}</span>
+					Your ID:{" "}
+					<span style={{ color: getColorForUser(userId) }}>
+						{userId}
+					</span>
 				</div>
 			</div>
 
@@ -408,7 +436,9 @@ export function App() {
 					})}
 
 					{!connected && (
-						<div className="loading-overlay">Connecting to room...</div>
+						<div className="loading-overlay">
+							Connecting to room...
+						</div>
 					)}
 
 					{/* Hidden input to capture typing */}
@@ -419,7 +449,13 @@ export function App() {
 							value={textInput}
 							onChange={(e) => handleTextChange(e.target.value)}
 							onBlur={() => {
-								if (!textInput.trim() && wsRef.current && wsRef.current.readyState === WebSocket.OPEN && currentTextId) {
+								if (
+									!textInput.trim() &&
+									wsRef.current &&
+									wsRef.current.readyState ===
+										WebSocket.OPEN &&
+									currentTextId
+								) {
 									wsRef.current.send(
 										JSON.stringify({
 											type: "removeText",

@@ -23,8 +23,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
 	done: "Done",
 };
 
-const formatDate = (timestamp: number) =>
-	new Date(timestamp).toLocaleString();
+const formatDate = (timestamp: number) => new Date(timestamp).toLocaleString();
 
 const getInitials = (name: string) =>
 	name
@@ -57,9 +56,9 @@ export function App() {
 				<div className="hero-badge">Per-tenant database demo</div>
 				<h1>Isolate every company with a single Rivet Actor</h1>
 				<p>
-					Each company gets its own CompanyDatabase actor keyed by name. The
-					actor state is the database, so switching companies swaps the
-					entire dataset.
+					Each company gets its own CompanyDatabase actor keyed by
+					name. The actor state is the database, so switching
+					companies swaps the entire dataset.
 				</p>
 			</section>
 
@@ -72,15 +71,17 @@ export function App() {
 				<section className="card signin-card">
 					<h2 className="signin-title">Sign in to a company</h2>
 					<p className="signin-description">
-						Pick a company or enter a new one. The company name becomes the
-						actor key.
+						Pick a company or enter a new one. The company name
+						becomes the actor key.
 					</p>
 					<div className="switcher">
 						<label htmlFor="company-preset">Quick pick</label>
 						<select
 							id="company-preset"
 							value={preset}
-							onChange={(event) => handlePresetChange(event.target.value)}
+							onChange={(event) =>
+								handlePresetChange(event.target.value)
+							}
 						>
 							{COMPANY_PRESETS.map((company) => (
 								<option key={company} value={company}>
@@ -93,7 +94,9 @@ export function App() {
 						<input
 							id="company-input"
 							value={companyInput}
-							onChange={(event) => setCompanyInput(event.target.value)}
+							onChange={(event) =>
+								setCompanyInput(event.target.value)
+							}
 							placeholder="Enter company name"
 						/>
 
@@ -124,9 +127,8 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 	const [employeeName, setEmployeeName] = useState("");
 	const [employeeRole, setEmployeeRole] = useState("");
 	const [projectName, setProjectName] = useState("");
-	const [projectStatus, setProjectStatus] = useState<ProjectStatus>(
-		"planning",
-	);
+	const [projectStatus, setProjectStatus] =
+		useState<ProjectStatus>("planning");
 	const [switchName, setSwitchName] = useState(companyName);
 
 	useEffect(() => {
@@ -176,7 +178,10 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 		void refreshStats();
 	});
 
-	const companyInitials = useMemo(() => getInitials(companyName), [companyName]);
+	const companyInitials = useMemo(
+		() => getInitials(companyName),
+		[companyName],
+	);
 
 	const handleAddEmployee = async (event: FormEvent) => {
 		event.preventDefault();
@@ -211,7 +216,8 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 					<div>
 						<h2 className="company-name">{companyName}</h2>
 						<p className="company-subtitle">
-							Each company name maps to a unique actor with isolated state.
+							Each company name maps to a unique actor with
+							isolated state.
 						</p>
 					</div>
 				</div>
@@ -230,11 +236,15 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 					{stats ? (
 						<div className="stats-grid">
 							<div className="stat-card">
-								<div className="stat-value">{stats.employee_count}</div>
+								<div className="stat-value">
+									{stats.employee_count}
+								</div>
 								<div>Employees stored</div>
 							</div>
 							<div className="stat-card">
-								<div className="stat-value">{stats.project_count}</div>
+								<div className="stat-value">
+									{stats.project_count}
+								</div>
 								<div>Projects tracked</div>
 							</div>
 							<div className="stat-card">
@@ -251,7 +261,9 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 							</div>
 						</div>
 					) : (
-						<div className="empty">Loading stats from actor state.</div>
+						<div className="empty">
+							Loading stats from actor state.
+						</div>
 					)}
 				</div>
 
@@ -263,7 +275,9 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 					<div className="form">
 						<input
 							value={switchName}
-							onChange={(event) => setSwitchName(event.target.value)}
+							onChange={(event) =>
+								setSwitchName(event.target.value)
+							}
 							placeholder="Enter a different company name"
 						/>
 						<button type="button" onClick={handleSwitchCompany}>
@@ -273,7 +287,8 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 					<div className="status-row">
 						<span>Tip:</span>
 						<span>
-							Add employees or projects, then switch to another company.
+							Add employees or projects, then switch to another
+							company.
 						</span>
 					</div>
 				</div>
@@ -283,18 +298,24 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 				<div className="panel">
 					<div className="panel-header">
 						<h3>Employees</h3>
-						<span className="count-chip">{employees.length} total</span>
+						<span className="count-chip">
+							{employees.length} total
+						</span>
 					</div>
 					<form className="form" onSubmit={handleAddEmployee}>
 						<input
 							value={employeeName}
-							onChange={(event) => setEmployeeName(event.target.value)}
+							onChange={(event) =>
+								setEmployeeName(event.target.value)
+							}
 							placeholder="Employee name"
 							required
 						/>
 						<input
 							value={employeeRole}
-							onChange={(event) => setEmployeeRole(event.target.value)}
+							onChange={(event) =>
+								setEmployeeRole(event.target.value)
+							}
 							placeholder="Role or team"
 							required
 						/>
@@ -324,26 +345,34 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 				<div className="panel">
 					<div className="panel-header">
 						<h3>Projects</h3>
-						<span className="count-chip">{projects.length} total</span>
+						<span className="count-chip">
+							{projects.length} total
+						</span>
 					</div>
 					<form className="form" onSubmit={handleAddProject}>
 						<input
 							value={projectName}
-							onChange={(event) => setProjectName(event.target.value)}
+							onChange={(event) =>
+								setProjectName(event.target.value)
+							}
 							placeholder="Project name"
 							required
 						/>
 						<select
 							value={projectStatus}
 							onChange={(event) =>
-								setProjectStatus(event.target.value as ProjectStatus)
+								setProjectStatus(
+									event.target.value as ProjectStatus,
+								)
 							}
 						>
-							{Object.entries(STATUS_LABELS).map(([value, label]) => (
-								<option key={value} value={value}>
-									{label}
-								</option>
-							))}
+							{Object.entries(STATUS_LABELS).map(
+								([value, label]) => (
+									<option key={value} value={value}>
+										{label}
+									</option>
+								),
+							)}
 						</select>
 						<button type="submit" disabled={!company.connection}>
 							Add project
@@ -358,7 +387,9 @@ function CompanyDashboard({ companyName, onSwitch }: CompanyDashboardProps) {
 							projects.map((project) => (
 								<div key={project.id} className="list-item">
 									<strong>{project.name}</strong>
-									<span>Status: {STATUS_LABELS[project.status]}</span>
+									<span>
+										Status: {STATUS_LABELS[project.status]}
+									</span>
 									<span>
 										Added {formatDate(project.created_at)}
 									</span>

@@ -1,16 +1,16 @@
-import { actor, type ActorContextOf, event, UserError } from "rivetkit";
+import { type ActorContextOf, actor, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
-import { registry } from "../index.ts";
+import type { registry } from "../index.ts";
+import { getPlayerColor } from "../player-color.ts";
 import {
+	MAX_SPEED,
 	type Mode,
+	SCORE_LIMIT,
+	SHOOT_ANGLE,
+	SHOOT_RANGE,
 	TICK_MS,
 	WORLD_SIZE,
-	MAX_SPEED,
-	SHOOT_RANGE,
-	SHOOT_ANGLE,
-	SCORE_LIMIT,
 } from "./config.ts";
-import { getPlayerColor } from "../player-color.ts";
 
 interface PlayerEntry {
 	connId: string | null;
@@ -137,7 +137,9 @@ export const arenaMatch = actor({
 			}
 			const [, player] = found;
 			if (!player.alive) {
-				throw new UserError("player is not alive", { code: "not_alive" });
+				throw new UserError("player is not alive", {
+					code: "not_alive",
+				});
 			}
 
 			const now = Date.now();
@@ -171,7 +173,9 @@ export const arenaMatch = actor({
 			}
 			const [shooterId, shooter] = found;
 			if (!shooter.alive) {
-				throw new UserError("player is not alive", { code: "not_alive" });
+				throw new UserError("player is not alive", {
+					code: "not_alive",
+				});
 			}
 			if (c.state.phase !== "live") {
 				throw new UserError("match is not live", { code: "not_live" });
@@ -190,7 +194,8 @@ export const arenaMatch = actor({
 			for (const [targetId, target] of Object.entries(c.state.players)) {
 				if (targetId === shooterId) continue;
 				if (!target.alive) continue;
-				if (shooter.teamId >= 0 && target.teamId === shooter.teamId) continue;
+				if (shooter.teamId >= 0 && target.teamId === shooter.teamId)
+					continue;
 
 				const tx = target.x - shooter.x;
 				const ty = target.y - shooter.y;
@@ -248,7 +253,8 @@ function checkWinCondition(c: ActorContextOf<typeof arenaMatch>) {
 	} else {
 		const teamScores: Record<number, number> = {};
 		for (const player of Object.values(c.state.players)) {
-			teamScores[player.teamId] = (teamScores[player.teamId] ?? 0) + player.score;
+			teamScores[player.teamId] =
+				(teamScores[player.teamId] ?? 0) + player.score;
 		}
 		for (const [teamId, score] of Object.entries(teamScores)) {
 			if (score >= SCORE_LIMIT) {
@@ -274,7 +280,10 @@ interface Snapshot {
 	winnerPlayerId: string | null;
 	worldSize: number;
 	scoreLimit: number;
-	players: Record<string, { x: number; y: number; teamId: number; color: string; score: number }>;
+	players: Record<
+		string,
+		{ x: number; y: number; teamId: number; color: string; score: number }
+	>;
 }
 
 interface ShootEvent {
@@ -287,7 +296,10 @@ interface ShootEvent {
 }
 
 function buildSnapshot(c: ActorContextOf<typeof arenaMatch>): Snapshot {
-	const players: Record<string, { x: number; y: number; teamId: number; color: string; score: number }> = {};
+	const players: Record<
+		string,
+		{ x: number; y: number; teamId: number; color: string; score: number }
+	> = {};
 	for (const [id, entry] of Object.entries(c.state.players)) {
 		players[id] = {
 			x: entry.x,

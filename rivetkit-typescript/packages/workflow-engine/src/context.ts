@@ -21,7 +21,7 @@ import {
 	StepExhaustedError,
 	StepFailedError,
 } from "./errors.js";
-import { buildLoopIterationRange, buildEntryMetadataKey } from "./keys.js";
+import { buildEntryMetadataKey, buildLoopIterationRange } from "./keys.js";
 import {
 	appendLoopIteration,
 	appendName,
@@ -36,8 +36,8 @@ import {
 	flush,
 	getOrCreateMetadata,
 	loadMetadata,
-	setEntry,
 	type PendingDeletions,
+	setEntry,
 } from "./storage.js";
 import type {
 	BranchConfig,
@@ -66,11 +66,11 @@ import type {
 	WorkflowError,
 	WorkflowErrorEvent,
 	WorkflowErrorHandler,
+	WorkflowMessageDriver,
 	WorkflowQueue,
 	WorkflowQueueMessage,
 	WorkflowQueueNextBatchOptions,
 	WorkflowQueueNextOptions,
-	WorkflowMessageDriver,
 } from "./types.js";
 import { sleep } from "./utils.js";
 

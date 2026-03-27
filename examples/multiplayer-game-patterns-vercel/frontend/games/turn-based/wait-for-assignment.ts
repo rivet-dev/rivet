@@ -3,9 +3,9 @@ interface Assignment {
 }
 
 type AssignmentConnection = {
-	getAssignment: (
-		input: { playerId: string },
-	) => Promise<Assignment | null | Promise<Assignment | null>>;
+	getAssignment: (input: {
+		playerId: string;
+	}) => Promise<Assignment | null | Promise<Assignment | null>>;
 	on: (
 		event: "assignmentReady",
 		handler: (raw: unknown) => void,

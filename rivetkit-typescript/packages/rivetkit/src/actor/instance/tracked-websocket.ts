@@ -21,18 +21,12 @@ export class TrackedWebSocket implements UniversalWebSocket {
 	#options: TrackedWebSocketOptions;
 	#listeners = new Map<string, WebSocketListener[]>();
 	#onopen: ((event: RivetEvent) => void | Promise<void>) | null = null;
-	#onclose:
-		| ((event: RivetCloseEvent) => void | Promise<void>)
-		| null = null;
+	#onclose: ((event: RivetCloseEvent) => void | Promise<void>) | null = null;
 	#onerror: ((event: RivetEvent) => void | Promise<void>) | null = null;
-	#onmessage:
-		| ((event: RivetMessageEvent) => void | Promise<void>)
-		| null = null;
+	#onmessage: ((event: RivetMessageEvent) => void | Promise<void>) | null =
+		null;
 
-	constructor(
-		inner: UniversalWebSocket,
-		options: TrackedWebSocketOptions,
-	) {
+	constructor(inner: UniversalWebSocket, options: TrackedWebSocketOptions) {
 		this.#inner = inner;
 		this.#options = options;
 
@@ -133,15 +127,13 @@ export class TrackedWebSocket implements UniversalWebSocket {
 		this.#onopen = fn;
 	}
 
-	get onclose():
-		| ((event: RivetCloseEvent) => void | Promise<void>)
-		| null {
+	get onclose(): ((event: RivetCloseEvent) => void | Promise<void>) | null {
 		return this.#onclose;
 	}
 
-	set onclose(
-		fn: ((event: RivetCloseEvent) => void | Promise<void>) | null,
-	) {
+	set onclose(fn:
+		| ((event: RivetCloseEvent) => void | Promise<void>)
+		| null,) {
 		this.#onclose = fn;
 	}
 
@@ -159,9 +151,9 @@ export class TrackedWebSocket implements UniversalWebSocket {
 		return this.#onmessage;
 	}
 
-	set onmessage(
-		fn: ((event: RivetMessageEvent) => void | Promise<void>) | null,
-	) {
+	set onmessage(fn:
+		| ((event: RivetMessageEvent) => void | Promise<void>)
+		| null,) {
 		this.#onmessage = fn;
 	}
 
@@ -195,7 +187,9 @@ export class TrackedWebSocket implements UniversalWebSocket {
 					...(event.message !== undefined
 						? { message: event.message }
 						: {}),
-					...(event.error !== undefined ? { error: event.error } : {}),
+					...(event.error !== undefined
+						? { error: event.error }
+						: {}),
 				} satisfies RivetEvent;
 		}
 	}
@@ -213,10 +207,12 @@ export class TrackedWebSocket implements UniversalWebSocket {
 				if (this.#onopen) this.#callHandler(type, this.#onopen, event);
 				break;
 			case "close":
-				if (this.#onclose) this.#callHandler(type, this.#onclose, event);
+				if (this.#onclose)
+					this.#callHandler(type, this.#onclose, event);
 				break;
 			case "error":
-				if (this.#onerror) this.#callHandler(type, this.#onerror, event);
+				if (this.#onerror)
+					this.#callHandler(type, this.#onerror, event);
 				break;
 			case "message":
 				if (this.#onmessage)
@@ -225,11 +221,7 @@ export class TrackedWebSocket implements UniversalWebSocket {
 		}
 	}
 
-	#callHandler(
-		type: string,
-		handler: WebSocketListener,
-		event: any,
-	): void {
+	#callHandler(type: string, handler: WebSocketListener, event: any): void {
 		try {
 			const result = handler(event);
 			if (this.#isPromiseLike(result)) {
@@ -240,9 +232,7 @@ export class TrackedWebSocket implements UniversalWebSocket {
 		}
 	}
 
-	#isPromiseLike(
-		value: unknown,
-	): value is PromiseLike<void> {
+	#isPromiseLike(value: unknown): value is PromiseLike<void> {
 		return (
 			typeof value === "object" &&
 			value !== null &&

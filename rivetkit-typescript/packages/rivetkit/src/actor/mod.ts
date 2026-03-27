@@ -7,8 +7,8 @@ import {
 } from "./config";
 import type { AnyDatabaseProvider } from "./database";
 import { ActorDefinition } from "./definition";
-import { event as schemaEvent, queue as schemaQueue } from "./schema";
 import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
+import { event as schemaEvent, queue as schemaQueue } from "./schema";
 
 export function actor<
 	TState,

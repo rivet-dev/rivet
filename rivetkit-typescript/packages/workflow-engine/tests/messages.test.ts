@@ -3,8 +3,8 @@ import {
 	generateId,
 	InMemoryDriver,
 	Loop,
-	runWorkflow,
 	type Message,
+	runWorkflow,
 	type WorkflowContextInterface,
 	type WorkflowMessageDriver,
 } from "../src/testing.js";

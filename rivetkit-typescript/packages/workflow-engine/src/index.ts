@@ -13,6 +13,7 @@ export {
 } from "./context.js";
 // Driver
 export type { EngineDriver, KVEntry, KVWrite } from "./driver.js";
+export { extractErrorInfo } from "./error-utils.js";
 // Errors
 export {
 	CancelledError,
@@ -29,7 +30,6 @@ export {
 	StepExhaustedError,
 	StepFailedError,
 } from "./errors.js";
-export { extractErrorInfo } from "./error-utils.js";
 
 // Location utilities
 export {
@@ -82,9 +82,6 @@ export type {
 	PathSegment,
 	RaceEntry,
 	RemovedEntry,
-	WorkflowEntryMetadataSnapshot,
-	WorkflowHistoryEntry,
-	WorkflowHistorySnapshot,
 	RollbackCheckpointEntry,
 	RollbackContextInterface,
 	RunWorkflowOptions,
@@ -102,20 +99,23 @@ export type {
 	TryStepFailure,
 	TryStepResult,
 	WorkflowContextInterface,
+	WorkflowEntryMetadataSnapshot,
 	WorkflowError,
 	WorkflowErrorEvent,
 	WorkflowErrorHandler,
 	WorkflowFunction,
 	WorkflowHandle,
-	WorkflowRollbackErrorEvent,
+	WorkflowHistoryEntry,
+	WorkflowHistorySnapshot,
+	WorkflowMessageDriver,
 	WorkflowQueue,
 	WorkflowQueueMessage,
 	WorkflowQueueNextBatchOptions,
 	WorkflowQueueNextOptions,
-	WorkflowMessageDriver,
 	WorkflowResult,
-	WorkflowRunMode,
+	WorkflowRollbackErrorEvent,
 	WorkflowRunErrorEvent,
+	WorkflowRunMode,
 	WorkflowState,
 	WorkflowStepErrorEvent,
 } from "./types.js";
@@ -185,9 +185,9 @@ import type {
 	RunWorkflowOptions,
 	Storage,
 	WorkflowErrorEvent,
-	WorkflowHistorySnapshot,
 	WorkflowFunction,
 	WorkflowHandle,
+	WorkflowHistorySnapshot,
 	WorkflowMessageDriver,
 	WorkflowResult,
 	WorkflowRunMode,

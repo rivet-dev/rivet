@@ -1,15 +1,15 @@
-import { actor, type ActorContextOf, event, UserError } from "rivetkit";
-import { interval } from "rivetkit/utils";
 import RAPIER from "@dimforge/rapier3d-compat";
+import { type ActorContextOf, actor, event, UserError } from "rivetkit";
+import { interval } from "rivetkit/utils";
 import { getPlayerColor } from "../player-color.ts";
 import {
-	TICK_MS,
-	SUB_STEPS,
-	MOVE_FORCE,
 	JUMP_IMPULSE,
+	MOVE_FORCE,
 	PLAYER_RADIUS,
-	SCENE_STATIC,
 	SCENE_DYNAMIC,
+	SCENE_STATIC,
+	SUB_STEPS,
+	TICK_MS,
 } from "./config.ts";
 
 const DISCONNECT_GRACE_MS = 5000;
@@ -46,7 +46,10 @@ interface Snapshot {
 	tick: number;
 	serverTime: number;
 	bodies: BodySnapshot[];
-	players: Record<string, { x: number; y: number; z: number; name: string; color: string }>;
+	players: Record<
+		string,
+		{ x: number; y: number; z: number; name: string; color: string }
+	>;
 }
 
 export const physics3dWorld = actor({
@@ -72,7 +75,10 @@ export const physics3dWorld = actor({
 		world: null as RAPIER.World | null,
 		players: {} as Record<string, PlayerEntry>,
 		dynamicHandles: {} as Record<string, number>,
-		dynamicSizes: {} as Record<string, { hx: number; hy: number; hz: number }>,
+		dynamicSizes: {} as Record<
+			string,
+			{ hx: number; hy: number; hz: number }
+		>,
 	}),
 	onConnect: (c, conn) => {
 		const name = (conn.params as { name?: string })?.name || "Player";
@@ -134,9 +140,22 @@ export const physics3dWorld = actor({
 		}
 
 		// Load dynamic bodies from persisted state, or seed from config on first run.
-		const boxes = c.state.boxes.length > 0
-			? c.state.boxes
-			: SCENE_DYNAMIC.map((d): [string, number, number, number, number, number, number] => [d.id, d.x, d.y, d.z, d.hx, d.hy, d.hz]);
+		const boxes =
+			c.state.boxes.length > 0
+				? c.state.boxes
+				: SCENE_DYNAMIC.map(
+						(
+							d,
+						): [
+							string,
+							number,
+							number,
+							number,
+							number,
+							number,
+							number,
+						] => [d.id, d.x, d.y, d.z, d.hx, d.hy, d.hz],
+					);
 		for (const [id, x, y, z, hx, hy, hz] of boxes) {
 			const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
 				.setTranslation(x, y, z)
@@ -197,7 +216,10 @@ export const physics3dWorld = actor({
 
 				// Damp horizontal velocity only so gravity isn't affected.
 				const vel = body.linvel();
-				body.setLinvel(new RAPIER.Vector3(vel.x * 0.85, vel.y, vel.z * 0.85), true);
+				body.setLinvel(
+					new RAPIER.Vector3(vel.x * 0.85, vel.y, vel.z * 0.85),
+					true,
+				);
 			}
 
 			for (let i = 0; i < SUB_STEPS; i++) {
@@ -211,7 +233,15 @@ export const physics3dWorld = actor({
 				if (!body) continue;
 				const pos = body.translation();
 				const size = c.vars.dynamicSizes[id];
-				c.state.boxes.push([id, pos.x, pos.y, pos.z, size.hx, size.hy, size.hz]);
+				c.state.boxes.push([
+					id,
+					pos.x,
+					pos.y,
+					pos.z,
+					size.hx,
+					size.hy,
+					size.hz,
+				]);
 			}
 
 			broadcastSnapshot(c);
@@ -255,7 +285,13 @@ export const physics3dWorld = actor({
 
 function buildSnapshot(c: ActorContextOf<typeof physics3dWorld>): Snapshot {
 	const world = c.vars.world;
-	if (!world) return { tick: c.state.tick, serverTime: Date.now(), bodies: [], players: {} };
+	if (!world)
+		return {
+			tick: c.state.tick,
+			serverTime: Date.now(),
+			bodies: [],
+			players: {},
+		};
 
 	const bodies: BodySnapshot[] = [];
 
@@ -265,7 +301,11 @@ function buildSnapshot(c: ActorContextOf<typeof physics3dWorld>): Snapshot {
 		const pos = body.translation();
 		const rot = body.rotation();
 		const vel = body.linvel();
-		const size = c.vars.dynamicSizes[id] ?? { hx: 0.25, hy: 0.25, hz: 0.25 };
+		const size = c.vars.dynamicSizes[id] ?? {
+			hx: 0.25,
+			hy: 0.25,
+			hz: 0.25,
+		};
 		bodies.push({
 			id,
 			x: pos.x,

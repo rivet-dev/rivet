@@ -87,11 +87,11 @@ export const changelogQueryOptions = () => {
 export const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
-			staleTime: 5 * 1000,
-			gcTime: 60 * 1000,
+			staleTime: 30 * 1000,
+			gcTime: 5 * 60 * 1000,
 			retry: 3,
-			refetchOnWindowFocus: true,
-			refetchOnReconnect: false,
+			refetchOnWindowFocus: false,
+			refetchOnReconnect: true,
 		},
 		mutations: {
 			retry: 0,

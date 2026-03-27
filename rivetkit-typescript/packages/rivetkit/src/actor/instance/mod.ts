@@ -1,3 +1,4 @@
+import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
 import type { OtlpExportTraceServiceRequestJson } from "@rivetkit/traces";
 import {
 	createNoopTraces,
@@ -6,9 +7,8 @@ import {
 	type SpanStatusInput,
 	type Traces,
 } from "@rivetkit/traces";
-import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
-import { ActorMetrics, type StartupTimingKey } from "@/actor/metrics";
 import invariant from "invariant";
+import { ActorMetrics, type StartupTimingKey } from "@/actor/metrics";
 import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
 import { getBaseLogger, getIncludeTarget, type Logger } from "@/common/log";
@@ -20,9 +20,8 @@ import {
 	ACTOR_VERSIONED,
 	CONN_VERSIONED,
 } from "@/schemas/actor-persist/versioned";
-import { EXTRA_ERROR_LOG } from "@/utils";
+import { EXTRA_ERROR_LOG, promiseWithResolvers } from "@/utils";
 import { getRivetExperimentalOtel } from "@/utils/env-vars";
-import { promiseWithResolvers } from "@/utils";
 import {
 	type ActorConfig,
 	DEFAULT_ON_SLEEP_TIMEOUT,
@@ -43,7 +42,7 @@ import {
 	type PersistedConn,
 } from "../conn/persisted";
 import {
-	ActionContext,
+	type ActionContext,
 	ActorContext,
 	RequestContext,
 	WebSocketContext,
@@ -71,19 +70,15 @@ import { ConnectionManager } from "./connection-manager";
 import { EventManager } from "./event-manager";
 import { KEYS, sqliteStoragePrefix, workflowStoragePrefix } from "./keys";
 import {
-	type PreloadedEntries,
-	type PreloadHit,
-	type PreloadMap,
-} from "./preload-map";
-import {
 	convertActorFromBarePersisted,
 	type PersistedActor,
 } from "./persisted";
+import type { PreloadedEntries, PreloadHit, PreloadMap } from "./preload-map";
 import { QueueManager } from "./queue-manager";
 import { ScheduleManager } from "./schedule-manager";
 import { type SaveStateOptions, StateManager } from "./state-manager";
-import { TrackedWebSocket } from "./tracked-websocket";
 import { ActorTracesDriver } from "./traces-driver";
+import { TrackedWebSocket } from "./tracked-websocket";
 import { WriteCollector } from "./write-collector";
 
 export type { SaveStateOptions };
@@ -128,8 +123,7 @@ const ACTIVE_ASYNC_REGION_ERROR_MESSAGES: Record<
 	keyof ActiveAsyncRegionCounts,
 	string
 > = {
-	keepAwake:
-		"active keep awake count went below 0, this is a RivetKit bug",
+	keepAwake: "active keep awake count went below 0, this is a RivetKit bug",
 	internalKeepAwake:
 		"active internal keep awake count went below 0, this is a RivetKit bug",
 	websocketCallbacks:
@@ -1732,10 +1726,7 @@ export class ActorInstance<
 							if (remaining <= 0) {
 								throw new DeadlineError();
 							}
-							await deadline(
-								result,
-								remaining,
-							);
+							await deadline(result, remaining);
 						}
 					},
 				);
@@ -2117,7 +2108,8 @@ export class ActorInstance<
 			let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 			const timedOut = await Promise.race([
 				Promise.allSettled(promises.slice(0, batch)).then(() => {
-					if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+					if (timeoutHandle !== undefined)
+						clearTimeout(timeoutHandle);
 					return false;
 				}),
 				new Promise<true>((resolve) => {
@@ -2165,7 +2157,8 @@ export class ActorInstance<
 			let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 			const timedOut = await Promise.race([
 				this.#preventSleepClearedPromise.promise.then(() => {
-					if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+					if (timeoutHandle !== undefined)
+						clearTimeout(timeoutHandle);
 					return false;
 				}),
 				new Promise<true>((resolve) => {

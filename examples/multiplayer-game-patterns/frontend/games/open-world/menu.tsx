@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { GameClient } from "../../client.ts";
 import { CHUNK_SIZE, WORLD_ID } from "../../../src/actors/open-world/config.ts";
+import type { GameClient } from "../../client.ts";
 
 export interface OpenWorldMatchInfo {
 	chunkKey: [string, number, number];
@@ -18,7 +18,12 @@ export function OpenWorldMenu({
 	onReady: (info: OpenWorldMatchInfo) => void;
 	onBack: () => void;
 }) {
-	const [name, setName] = useState(() => `Player#${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`);
+	const [name, setName] = useState(
+		() =>
+			`Player#${Math.floor(Math.random() * 10000)
+				.toString()
+				.padStart(4, "0")}`,
+	);
 	const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
 	const [error, setError] = useState("");
 
@@ -38,8 +43,9 @@ export function OpenWorldMenu({
 			<div className="menu-container">
 				<h2>Open World</h2>
 				<p className="menu-description">
-					Infinite chunk-based world with cross-chunk movement. Walk beyond
-					chunk boundaries to transfer to adjacent chunks. WASD to move.
+					Infinite chunk-based world with cross-chunk movement. Walk
+					beyond chunk boundaries to transfer to adjacent chunks. WASD
+					to move.
 				</p>
 				<div style={{ marginBottom: 16 }}>
 					<input

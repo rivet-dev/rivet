@@ -1,11 +1,5 @@
-export * from "@/actor/mod";
 export type * from "@/actor/contexts";
-export type {
-	WorkflowBranchContextOf,
-	WorkflowContextOf,
-	WorkflowLoopContextOf,
-	WorkflowStepContextOf,
-} from "@/workflow/context";
+export * from "@/actor/mod";
 export {
 	type AnyClient,
 	type Client,
@@ -22,3 +16,9 @@ export type { ActorQuery } from "@/manager/protocol/query";
 export * from "@/registry";
 export * from "@/registry/config";
 export { toUint8Array } from "@/utils";
+export type {
+	WorkflowBranchContextOf,
+	WorkflowContextOf,
+	WorkflowLoopContextOf,
+	WorkflowStepContextOf,
+} from "@/workflow/context";

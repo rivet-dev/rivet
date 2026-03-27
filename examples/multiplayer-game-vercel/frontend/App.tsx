@@ -1,9 +1,11 @@
 import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { GameState, JoinResult, Player } from "../src/types.ts";
 import type { registry } from "../src/actors.ts";
+import type { GameState, JoinResult, Player } from "../src/types.ts";
 
-const { useActor } = createRivetKit<typeof registry>(`${window.location.origin}/api/rivet`);
+const { useActor } = createRivetKit<typeof registry>(
+	`${window.location.origin}/api/rivet`,
+);
 
 const WORLD_SIZE = 1200;
 const INPUT_RATE_MS = 50;
@@ -51,7 +53,7 @@ export function App() {
 
 		void (async () => {
 			try {
-				const nextRoomId = await (await connection.findGame());
+				const nextRoomId = await await connection.findGame();
 				setRoomId(nextRoomId);
 				setStatus(`Connected to ${nextRoomId}`);
 			} catch (err) {
@@ -99,7 +101,19 @@ export function App() {
 
 	gameRoom.useEvent(
 		"playerMoved",
-		({ playerId, x, y, mass, radius }: { playerId: string; x: number; y: number; mass: number; radius: number }) => {
+		({
+			playerId,
+			x,
+			y,
+			mass,
+			radius,
+		}: {
+			playerId: string;
+			x: number;
+			y: number;
+			mass: number;
+			radius: number;
+		}) => {
 			setPlayers((prev) => {
 				const player = prev[playerId];
 				if (!player) return prev;
@@ -120,7 +134,15 @@ export function App() {
 
 	gameRoom.useEvent(
 		"playerEaten",
-		({ eaterId, eatenId, eaterMass }: { eaterId: string; eatenId: string; eaterMass: number }) => {
+		({
+			eaterId,
+			eatenId,
+			eaterMass,
+		}: {
+			eaterId: string;
+			eatenId: string;
+			eaterMass: number;
+		}) => {
 			setPlayers((prev) => {
 				const next = { ...prev };
 				delete next[eatenId];
@@ -134,10 +156,10 @@ export function App() {
 				return next;
 			});
 
-		if (eatenId === myPlayerId) {
-			setMyPlayerId(null);
-			setStatus("You were eaten. Rejoin to respawn.");
-		}
+			if (eatenId === myPlayerId) {
+				setMyPlayerId(null);
+				setStatus("You were eaten. Rejoin to respawn.");
+			}
 		},
 	);
 
@@ -148,7 +170,11 @@ export function App() {
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
-			if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+			if (
+				["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
+					event.key,
+				)
+			) {
 				event.preventDefault();
 			}
 			keysRef.current.add(event.key);
@@ -268,10 +294,16 @@ export function App() {
 				<div>
 					<p className="eyebrow">Rivet multiplayer example</p>
 					<h1>Multiplayer Game</h1>
-					<p className="subhead">A real-time Agar.io style arena with Rivet Actors.</p>
+					<p className="subhead">
+						A real-time Agar.io style arena with Rivet Actors.
+					</p>
 				</div>
 				<div className="status">
-					<span className={gameRoom.connection ? "connected" : "disconnected"}>
+					<span
+						className={
+							gameRoom.connection ? "connected" : "disconnected"
+						}
+					>
 						{gameRoom.connection ? "Connected" : "Disconnected"}
 					</span>
 					<span>{status}</span>
@@ -311,16 +343,22 @@ export function App() {
 						<input
 							id="player-name"
 							value={displayName}
-							onChange={(event) => setDisplayName(event.target.value)}
+							onChange={(event) =>
+								setDisplayName(event.target.value)
+							}
 							placeholder="Pilot name"
 						/>
 						<button
 							onClick={joinGame}
-							disabled={!gameRoom.connection || !displayName.trim()}
+							disabled={
+								!gameRoom.connection || !displayName.trim()
+							}
 						>
 							{myPlayerId ? "Respawn" : "Join"}
 						</button>
-						{errorMessage && <p className="error">{errorMessage}</p>}
+						{errorMessage && (
+							<p className="error">{errorMessage}</p>
+						)}
 					</div>
 					<div className="panel">
 						<h3>Leaderboard</h3>
@@ -329,7 +367,12 @@ export function App() {
 						) : (
 							<ul>
 								{leaderboard.map((player) => (
-									<li key={player.id} className={player.id === myPlayerId ? "me" : ""}>
+									<li
+										key={player.id}
+										className={
+											player.id === myPlayerId ? "me" : ""
+										}
+									>
 										<span>{player.name}</span>
 										<span>{Math.round(player.mass)}</span>
 									</li>

@@ -54,7 +54,8 @@ export const formSchema = z
 export type FormValues = z.infer<typeof formSchema>;
 
 const { Form, Submit, SetValue } = createSchemaForm(formSchema);
-export { Form, Submit, SetValue };
+
+export { Form, SetValue, Submit };
 
 export const Image = () => {
 	const dataProvider = useCloudNamespaceDataProvider();

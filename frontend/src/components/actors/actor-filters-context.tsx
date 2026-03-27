@@ -64,15 +64,9 @@ export const ACTORS_FILTERS_DEFINITIONS = {
 
 const defaultActorFiltersContextValue = {
 	definitions: ACTORS_FILTERS_DEFINITIONS,
-	get pick() {
-		return createFiltersPicker(this.definitions);
-	},
-	get schema() {
-		return createFiltersSchema(this.definitions);
-	},
-	get remove() {
-		return createFiltersRemover(this.definitions);
-	},
+	pick: createFiltersPicker(ACTORS_FILTERS_DEFINITIONS),
+	schema: createFiltersSchema(ACTORS_FILTERS_DEFINITIONS),
+	remove: createFiltersRemover(ACTORS_FILTERS_DEFINITIONS),
 };
 
 export const ActorsFilters = createContext(defaultActorFiltersContextValue);

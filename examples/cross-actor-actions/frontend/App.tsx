@@ -1,5 +1,5 @@
-import { createClient } from "rivetkit/client";
 import { useEffect, useState } from "react";
+import { createClient } from "rivetkit/client";
 import type { registry } from "../src/index.ts";
 
 const client = createClient<typeof registry>("http://localhost:6420");
@@ -28,9 +28,8 @@ export function App() {
 
 	const [laptopStock, setLaptopStock] = useState<ItemStock | null>(null);
 	const [phoneStock, setPhoneStock] = useState<ItemStock | null>(null);
-	const [checkoutSummary, setCheckoutSummary] = useState<CheckoutSummary | null>(
-		null
-	);
+	const [checkoutSummary, setCheckoutSummary] =
+		useState<CheckoutSummary | null>(null);
 
 	const initializeInventory = async () => {
 		// Initialize laptop inventory
@@ -117,8 +116,8 @@ export function App() {
 			<div className="header">
 				<h1>Quickstart: Cross-Actor Actions</h1>
 				<p>
-					Demonstrates actors communicating with each other - checkout calling
-					inventory
+					Demonstrates actors communicating with each other - checkout
+					calling inventory
 				</p>
 			</div>
 
@@ -161,10 +160,7 @@ export function App() {
 						/>
 					</div>
 
-					<button
-						onClick={createCheckout}
-						className="primary"
-					>
+					<button onClick={createCheckout} className="primary">
 						Create Checkout
 					</button>
 
@@ -175,7 +171,9 @@ export function App() {
 								<label>Item:</label>
 								<select
 									value={selectedItem}
-									onChange={(e) => setSelectedItem(e.target.value)}
+									onChange={(e) =>
+										setSelectedItem(e.target.value)
+									}
 								>
 									<option value="laptop">Laptop</option>
 									<option value="phone">Phone</option>
@@ -187,12 +185,17 @@ export function App() {
 								<input
 									type="number"
 									value={quantity}
-									onChange={(e) => setQuantity(Number(e.target.value))}
+									onChange={(e) =>
+										setQuantity(Number(e.target.value))
+									}
 									min="1"
 								/>
 							</div>
 
-							<button onClick={addItemToCheckout} className="secondary">
+							<button
+								onClick={addItemToCheckout}
+								className="secondary"
+							>
 								Add to Checkout
 							</button>
 						</div>
@@ -202,14 +205,18 @@ export function App() {
 						<div className="summary">
 							<h3>Checkout Summary</h3>
 							<p>
-								<strong>Customer:</strong> {checkoutSummary.customerName}
+								<strong>Customer:</strong>{" "}
+								{checkoutSummary.customerName}
 							</p>
 							<p>
 								<strong>Status:</strong>{" "}
-								{checkoutSummary.completed ? "Completed" : "In Progress"}
+								{checkoutSummary.completed
+									? "Completed"
+									: "In Progress"}
 							</p>
 							<p>
-								<strong>Total Items:</strong> {checkoutSummary.totalItems}
+								<strong>Total Items:</strong>{" "}
+								{checkoutSummary.totalItems}
 							</p>
 
 							{checkoutSummary.items.length > 0 && (
@@ -225,10 +232,16 @@ export function App() {
 
 							{!checkoutSummary.completed && (
 								<div className="button-group">
-									<button onClick={completeCheckout} className="success">
+									<button
+										onClick={completeCheckout}
+										className="success"
+									>
 										Complete Checkout
 									</button>
-									<button onClick={cancelCheckout} className="danger">
+									<button
+										onClick={cancelCheckout}
+										className="danger"
+									>
 										Cancel Checkout
 									</button>
 								</div>

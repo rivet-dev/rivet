@@ -26,7 +26,10 @@ export class RankedGame {
 	private stopped = false;
 	private rafId = 0;
 	private worldSize = 600;
-	private targets: Record<string, { x: number; y: number; color: string; score: number; rating: number }> = {};
+	private targets: Record<
+		string,
+		{ x: number; y: number; color: string; score: number; rating: number }
+	> = {};
 	private display: Record<string, { x: number; y: number }> = {};
 	private keys: Record<string, boolean> = {};
 	private phase: "waiting" | "live" | "finished" = "waiting";
@@ -58,7 +61,16 @@ export class RankedGame {
 				phase: "waiting" | "live" | "finished";
 				winnerId: string | null;
 				scoreLimit: number;
-				players: Record<string, { x: number; y: number; color: string; score: number; rating: number }>;
+				players: Record<
+					string,
+					{
+						x: number;
+						y: number;
+						color: string;
+						score: number;
+						rating: number;
+					}
+				>;
 			};
 			this.worldSize = snap.worldSize;
 			this.phase = snap.phase;
@@ -109,12 +121,22 @@ export class RankedGame {
 				if (this.phase !== "live") return;
 				this.localX += (Math.random() - 0.5) * 40;
 				this.localY += (Math.random() - 0.5) * 40;
-				this.localX = Math.max(0, Math.min(this.worldSize, this.localX));
-				this.localY = Math.max(0, Math.min(this.worldSize, this.localY));
-				this.conn.updatePosition({ x: this.localX, y: this.localY }).catch(() => {});
+				this.localX = Math.max(
+					0,
+					Math.min(this.worldSize, this.localX),
+				);
+				this.localY = Math.max(
+					0,
+					Math.min(this.worldSize, this.localY),
+				);
+				this.conn
+					.updatePosition({ x: this.localX, y: this.localY })
+					.catch(() => {});
 				if (Math.random() < 0.2) {
 					const angle = Math.random() * Math.PI * 2;
-					this.conn.shoot({ dirX: Math.cos(angle), dirY: Math.sin(angle) }).catch(() => {});
+					this.conn
+						.shoot({ dirX: Math.cos(angle), dirY: Math.sin(angle) })
+						.catch(() => {});
 				}
 			}, 100);
 		} else if (canvas) {
@@ -138,8 +160,12 @@ export class RankedGame {
 		this.conn.dispose().catch(() => {});
 	}
 
-	private onKeyDown = (e: KeyboardEvent) => { this.keys[e.key] = true; };
-	private onKeyUp = (e: KeyboardEvent) => { this.keys[e.key] = false; };
+	private onKeyDown = (e: KeyboardEvent) => {
+		this.keys[e.key] = true;
+	};
+	private onKeyUp = (e: KeyboardEvent) => {
+		this.keys[e.key] = false;
+	};
 
 	private onClick = (e: MouseEvent) => {
 		if (this.phase !== "live" || !this.canvas) return;
@@ -168,18 +194,36 @@ export class RankedGame {
 		if (this.phase === "live") {
 			let ix = 0;
 			let iy = 0;
-			if (this.keys["w"] || this.keys["W"] || this.keys["ArrowUp"]) iy -= 1;
-			if (this.keys["s"] || this.keys["S"] || this.keys["ArrowDown"]) iy += 1;
-			if (this.keys["a"] || this.keys["A"] || this.keys["ArrowLeft"]) ix -= 1;
-			if (this.keys["d"] || this.keys["D"] || this.keys["ArrowRight"]) ix += 1;
+			if (this.keys["w"] || this.keys["W"] || this.keys["ArrowUp"])
+				iy -= 1;
+			if (this.keys["s"] || this.keys["S"] || this.keys["ArrowDown"])
+				iy += 1;
+			if (this.keys["a"] || this.keys["A"] || this.keys["ArrowLeft"])
+				ix -= 1;
+			if (this.keys["d"] || this.keys["D"] || this.keys["ArrowRight"])
+				ix += 1;
 			if (ix !== 0 || iy !== 0) {
 				const mag = Math.sqrt(ix * ix + iy * iy);
-				this.localX = Math.max(0, Math.min(this.worldSize, this.localX + (ix / mag) * MOVE_SPEED * dt));
-				this.localY = Math.max(0, Math.min(this.worldSize, this.localY + (iy / mag) * MOVE_SPEED * dt));
+				this.localX = Math.max(
+					0,
+					Math.min(
+						this.worldSize,
+						this.localX + (ix / mag) * MOVE_SPEED * dt,
+					),
+				);
+				this.localY = Math.max(
+					0,
+					Math.min(
+						this.worldSize,
+						this.localY + (iy / mag) * MOVE_SPEED * dt,
+					),
+				);
 			}
 			if (now - this.lastSendTime >= SEND_RATE_MS) {
 				this.lastSendTime = now;
-				this.conn.updatePosition({ x: this.localX, y: this.localY }).catch(() => {});
+				this.conn
+					.updatePosition({ x: this.localX, y: this.localY })
+					.catch(() => {});
 			}
 		}
 
@@ -201,7 +245,9 @@ export class RankedGame {
 		}
 		ctx.stroke();
 
-		this.shotLines = this.shotLines.filter((s) => now - s.createdAt < SHOT_LINE_DURATION);
+		this.shotLines = this.shotLines.filter(
+			(s) => now - s.createdAt < SHOT_LINE_DURATION,
+		);
 		for (const shot of this.shotLines) {
 			const alpha = 1 - (now - shot.createdAt) / SHOT_LINE_DURATION;
 			ctx.strokeStyle = shot.hit
@@ -260,7 +306,9 @@ export class RankedGame {
 		ctx.font = "12px sans-serif";
 		ctx.textAlign = "left";
 		const myData = this.targets[this.matchInfo.username];
-		const scoreText = myData ? `Score: ${myData.score}/${this.scoreLimit}  Rating: ${myData.rating}` : "";
+		const scoreText = myData
+			? `Score: ${myData.score}/${this.scoreLimit}  Rating: ${myData.rating}`
+			: "";
 		ctx.fillText(`${this.phase.toUpperCase()}  ${scoreText}`, 8, 18);
 
 		if (this.phase === "waiting") {
@@ -269,16 +317,21 @@ export class RankedGame {
 			ctx.fillStyle = "#ffffff";
 			ctx.font = "24px sans-serif";
 			ctx.textAlign = "center";
-			ctx.fillText("Waiting for opponent...", canvas.width / 2, canvas.height / 2);
+			ctx.fillText(
+				"Waiting for opponent...",
+				canvas.width / 2,
+				canvas.height / 2,
+			);
 		} else if (this.phase === "finished") {
 			ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
 			ctx.fillStyle = "#ffffff";
 			ctx.font = "24px sans-serif";
 			ctx.textAlign = "center";
-			const winText = this.winnerId === this.matchInfo.username
-				? "You Win!"
-				: "You Lose!";
+			const winText =
+				this.winnerId === this.matchInfo.username
+					? "You Win!"
+					: "You Lose!";
 			ctx.fillText(winText, canvas.width / 2, canvas.height / 2);
 		}
 

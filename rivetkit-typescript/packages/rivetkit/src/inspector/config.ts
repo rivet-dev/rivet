@@ -1,8 +1,8 @@
 import { z } from "zod/v4";
 import {
+	getRivetkitInspectorDisable,
 	getRivetkitInspectorToken,
 	isDev,
-	getRivetkitInspectorDisable,
 } from "@/utils/env-vars";
 
 const defaultTokenFn = () => {

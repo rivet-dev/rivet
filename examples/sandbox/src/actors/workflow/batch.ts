@@ -29,7 +29,7 @@ type State = BatchJob;
 function fetchBatch(
 	cursor: number,
 	batchSize: number,
-	totalItems: number
+	totalItems: number,
 ): { items: number[]; hasMore: boolean } {
 	const start = cursor * batchSize;
 	const end = Math.min(start + batchSize, totalItems);
@@ -62,7 +62,10 @@ export const batch = actor({
 	events: {
 		batchProcessed: event<BatchInfo>(),
 		stateChanged: event<BatchJob>(),
-		processingComplete: event<{ totalBatches: number; totalItems: number }>(),
+		processingComplete: event<{
+			totalBatches: number;
+			totalItems: number;
+		}>(),
 	},
 
 	actions: {
@@ -82,12 +85,20 @@ export const batch = actor({
 						jobId: c.state.id,
 						cursor: loopState.cursor,
 					});
-					await new Promise((r) => setTimeout(r, 200 + Math.random() * 300));
-					return fetchBatch(loopState.cursor, c.state.batchSize, c.state.totalItems);
+					await new Promise((r) =>
+						setTimeout(r, 200 + Math.random() * 300),
+					);
+					return fetchBatch(
+						loopState.cursor,
+						c.state.batchSize,
+						c.state.totalItems,
+					);
 				});
 
 				await batchCtx.step("process-batch", async () => {
-					await new Promise((r) => setTimeout(r, 300 + Math.random() * 500));
+					await new Promise((r) =>
+						setTimeout(r, 300 + Math.random() * 500),
+					);
 
 					const batchInfo: BatchInfo = {
 						id: loopState.cursor,

@@ -31,13 +31,23 @@ export function Physics3dGameView({
 			<div className="game-header">
 				<h2>Physics 3D</h2>
 				<div className="btn-row">
-					<button className="btn btn-secondary" onClick={onLeave}>Leave</button>
+					<button className="btn btn-secondary" onClick={onLeave}>
+						Leave
+					</button>
 				</div>
 			</div>
-			<p className="controls-hint">WASD to move, Space to jump. Shared Rapier 3D physics with network smoothing.</p>
+			<p className="controls-hint">
+				WASD to move, Space to jump. Shared Rapier 3D physics with
+				network smoothing.
+			</p>
 			<div
 				ref={containerRef}
-				style={{ width: 600, height: 600, borderRadius: 8, overflow: "hidden" }}
+				style={{
+					width: 600,
+					height: 600,
+					borderRadius: 8,
+					overflow: "hidden",
+				}}
 			/>
 		</div>
 	);

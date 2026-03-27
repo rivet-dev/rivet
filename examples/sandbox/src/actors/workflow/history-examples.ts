@@ -371,13 +371,19 @@ export const workflowHistoryFull = actor({
 					return Loop.break({ count: FULL_WORKFLOW_ITEMS.length });
 				}
 
-				await loopCtx.step(`fetch-item-${loopState.index}`, async () => {
-					return { itemId: item.id, basePrice: item.basePrice };
-				});
+				await loopCtx.step(
+					`fetch-item-${loopState.index}`,
+					async () => {
+						return { itemId: item.id, basePrice: item.basePrice };
+					},
+				);
 
-				await loopCtx.step(`compute-tax-${loopState.index}`, async () => {
-					return item.tax;
-				});
+				await loopCtx.step(
+					`compute-tax-${loopState.index}`,
+					async () => {
+						return item.tax;
+					},
+				);
 
 				await loopCtx.step(
 					`reserve-inventory-${loopState.index}`,

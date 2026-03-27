@@ -31,10 +31,15 @@ export function Physics2dGameView({
 			<div className="game-header">
 				<h2>Physics 2D</h2>
 				<div className="btn-row">
-					<button className="btn btn-secondary" onClick={onLeave}>Leave</button>
+					<button className="btn btn-secondary" onClick={onLeave}>
+						Leave
+					</button>
 				</div>
 			</div>
-			<p className="controls-hint">WASD to move, Space to jump, Click to spawn box. Shared Rapier 2D physics with network smoothing.</p>
+			<p className="controls-hint">
+				WASD to move, Space to jump, Click to spawn box. Shared Rapier
+				2D physics with network smoothing.
+			</p>
 			<canvas
 				ref={canvasRef}
 				width={600}

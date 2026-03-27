@@ -130,11 +130,15 @@ export const sleepRawWsAddEventListenerMessage =
 export const sleepRawWsAddEventListenerClose =
 	createAsyncRawWebSocketSleepActor("listener", "close");
 
-export const sleepRawWsOnMessage =
-	createAsyncRawWebSocketSleepActor("property", "message");
+export const sleepRawWsOnMessage = createAsyncRawWebSocketSleepActor(
+	"property",
+	"message",
+);
 
-export const sleepRawWsOnClose =
-	createAsyncRawWebSocketSleepActor("property", "close");
+export const sleepRawWsOnClose = createAsyncRawWebSocketSleepActor(
+	"property",
+	"close",
+);
 
 export const sleepWithLongRpc = actor({
 	state: { startCount: 0, sleepCount: 0 },
@@ -336,7 +340,12 @@ export const sleepRawWsSendOnSleep = actor({
 	onSleep: (c) => {
 		c.state.sleepCount += 1;
 		for (const ws of c.vars.websockets) {
-			ws.send(JSON.stringify({ type: "sleeping", sleepCount: c.state.sleepCount }));
+			ws.send(
+				JSON.stringify({
+					type: "sleeping",
+					sleepCount: c.state.sleepCount,
+				}),
+			);
 		}
 	},
 	onWebSocket: (c, websocket: UniversalWebSocket) => {
@@ -345,7 +354,9 @@ export const sleepRawWsSendOnSleep = actor({
 		websocket.send(JSON.stringify({ type: "connected" }));
 
 		websocket.addEventListener("close", () => {
-			c.vars.websockets = c.vars.websockets.filter((ws) => ws !== websocket);
+			c.vars.websockets = c.vars.websockets.filter(
+				(ws) => ws !== websocket,
+			);
 		});
 	},
 	actions: {
@@ -377,7 +388,12 @@ export const sleepRawWsDelayedSendOnSleep = actor({
 		// Wait before sending
 		await new Promise((resolve) => setTimeout(resolve, 100));
 		for (const ws of c.vars.websockets) {
-			ws.send(JSON.stringify({ type: "sleeping", sleepCount: c.state.sleepCount }));
+			ws.send(
+				JSON.stringify({
+					type: "sleeping",
+					sleepCount: c.state.sleepCount,
+				}),
+			);
 		}
 		// Wait after sending before completing sleep
 		await new Promise((resolve) => setTimeout(resolve, 100));
@@ -388,7 +404,9 @@ export const sleepRawWsDelayedSendOnSleep = actor({
 		websocket.send(JSON.stringify({ type: "connected" }));
 
 		websocket.addEventListener("close", () => {
-			c.vars.websockets = c.vars.websockets.filter((ws) => ws !== websocket);
+			c.vars.websockets = c.vars.websockets.filter(
+				(ws) => ws !== websocket,
+			);
 		});
 	},
 	actions: {

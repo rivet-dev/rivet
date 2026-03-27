@@ -61,13 +61,13 @@ export const ConnectionCheck = function ConnectionCheck({
 
 	const { data: queryData } = useInfiniteQuery({
 		...useEngineCompatDataProvider().runnersQueryOptions(),
-		refetchInterval: 1000,
+		refetchInterval: 3000,
 		maxPages: Infinity,
 	});
 
 	const { data: runnerConfigs } = useInfiniteQuery({
 		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
-		refetchInterval: 1000,
+		refetchInterval: 3000,
 		maxPages: Infinity,
 	});
 

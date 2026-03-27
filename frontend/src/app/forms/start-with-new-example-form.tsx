@@ -24,7 +24,8 @@ export type SubmitHandler = (
 ) => Promise<void>;
 
 const { Form, Submit, SetValue } = createSchemaForm(formSchema);
-export { Form, Submit, SetValue };
+
+export { Form, SetValue, Submit };
 
 export const Organization = ({ className }: { className?: string }) => {
 	const { control } = useFormContext<FormValues>();

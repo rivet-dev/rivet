@@ -1,11 +1,10 @@
-import type { DatabaseProviderContext } from "./config";
-import type { IDatabase } from "@rivetkit/sqlite-vfs";
-import type { KvVfsOptions } from "@rivetkit/sqlite-vfs";
+import type { IDatabase, KvVfsOptions } from "@rivetkit/sqlite-vfs";
 import type { ActorMetrics } from "@/actor/metrics";
 import {
 	binarySearch,
 	type PreloadedEntries,
 } from "../actor/instance/preload-map";
+import type { DatabaseProviderContext } from "./config";
 
 type ActorKvOperations = DatabaseProviderContext["kv"];
 type SqliteBindings = NonNullable<Parameters<IDatabase["run"]>[1]>;

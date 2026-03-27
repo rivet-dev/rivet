@@ -27,7 +27,18 @@ export class BattleRoyaleGame {
 	private stopped = false;
 	private rafId = 0;
 	private worldSize = 1200;
-	private targets: Record<string, { x: number; y: number; color: string; hp: number; maxHp: number; alive: boolean; placement: number | null }> = {};
+	private targets: Record<
+		string,
+		{
+			x: number;
+			y: number;
+			color: string;
+			hp: number;
+			maxHp: number;
+			alive: boolean;
+			placement: number | null;
+		}
+	> = {};
 	private display: Record<string, { x: number; y: number }> = {};
 	private keys: Record<string, boolean> = {};
 	private phase: "lobby" | "live" | "finished" = "lobby";
@@ -69,7 +80,18 @@ export class BattleRoyaleGame {
 				capacity: number;
 				lobbyCountdown: number | null;
 				zone: { centerX: number; centerY: number; radius: number };
-				players: Record<string, { x: number; y: number; color: string; hp: number; maxHp: number; alive: boolean; placement: number | null }>;
+				players: Record<
+					string,
+					{
+						x: number;
+						y: number;
+						color: string;
+						hp: number;
+						maxHp: number;
+						alive: boolean;
+						placement: number | null;
+					}
+				>;
 			};
 			this.worldSize = snap.worldSize;
 			this.phase = snap.phase;
@@ -90,7 +112,9 @@ export class BattleRoyaleGame {
 					} else {
 						const dx = data.x - this.localX;
 						const dy = data.y - this.localY;
-						if (Math.sqrt(dx * dx + dy * dy) > RUBBER_BAND_THRESHOLD) {
+						if (
+							Math.sqrt(dx * dx + dy * dy) > RUBBER_BAND_THRESHOLD
+						) {
 							this.localX = data.x;
 							this.localY = data.y;
 						}
@@ -129,12 +153,22 @@ export class BattleRoyaleGame {
 			this.botInterval = window.setInterval(() => {
 				this.localX += (Math.random() - 0.5) * 40;
 				this.localY += (Math.random() - 0.5) * 40;
-				this.localX = Math.max(0, Math.min(this.worldSize, this.localX));
-				this.localY = Math.max(0, Math.min(this.worldSize, this.localY));
-				this.conn.updatePosition({ x: this.localX, y: this.localY }).catch(() => {});
+				this.localX = Math.max(
+					0,
+					Math.min(this.worldSize, this.localX),
+				);
+				this.localY = Math.max(
+					0,
+					Math.min(this.worldSize, this.localY),
+				);
+				this.conn
+					.updatePosition({ x: this.localX, y: this.localY })
+					.catch(() => {});
 				if (this.phase === "live" && Math.random() < 0.15) {
 					const angle = Math.random() * Math.PI * 2;
-					this.conn.shoot({ dirX: Math.cos(angle), dirY: Math.sin(angle) }).catch(() => {});
+					this.conn
+						.shoot({ dirX: Math.cos(angle), dirY: Math.sin(angle) })
+						.catch(() => {});
 				}
 			}, 100);
 		} else if (canvas) {
@@ -158,8 +192,12 @@ export class BattleRoyaleGame {
 		this.conn.dispose().catch(() => {});
 	}
 
-	private onKeyDown = (e: KeyboardEvent) => { this.keys[e.key] = true; };
-	private onKeyUp = (e: KeyboardEvent) => { this.keys[e.key] = false; };
+	private onKeyDown = (e: KeyboardEvent) => {
+		this.keys[e.key] = true;
+	};
+	private onKeyUp = (e: KeyboardEvent) => {
+		this.keys[e.key] = false;
+	};
 
 	private onClick = (e: MouseEvent) => {
 		if (this.phase !== "live" || !this.canvas) return;
@@ -167,11 +205,13 @@ export class BattleRoyaleGame {
 		if (!myData?.alive) return;
 		const rect = this.canvas.getBoundingClientRect();
 		// Click relative to viewport center (player position).
-		const clickX = (e.clientX - rect.left) - VIEWPORT_SIZE / 2;
-		const clickY = (e.clientY - rect.top) - VIEWPORT_SIZE / 2;
+		const clickX = e.clientX - rect.left - VIEWPORT_SIZE / 2;
+		const clickY = e.clientY - rect.top - VIEWPORT_SIZE / 2;
 		const mag = Math.sqrt(clickX * clickX + clickY * clickY);
 		if (mag === 0) return;
-		this.conn.shoot({ dirX: clickX / mag, dirY: clickY / mag }).catch(() => {});
+		this.conn
+			.shoot({ dirX: clickX / mag, dirY: clickY / mag })
+			.catch(() => {});
 	};
 
 	private draw = () => {
@@ -189,18 +229,36 @@ export class BattleRoyaleGame {
 		if ((this.phase === "live" || this.phase === "lobby") && myAlive) {
 			let ix = 0;
 			let iy = 0;
-			if (this.keys["w"] || this.keys["W"] || this.keys["ArrowUp"]) iy -= 1;
-			if (this.keys["s"] || this.keys["S"] || this.keys["ArrowDown"]) iy += 1;
-			if (this.keys["a"] || this.keys["A"] || this.keys["ArrowLeft"]) ix -= 1;
-			if (this.keys["d"] || this.keys["D"] || this.keys["ArrowRight"]) ix += 1;
+			if (this.keys["w"] || this.keys["W"] || this.keys["ArrowUp"])
+				iy -= 1;
+			if (this.keys["s"] || this.keys["S"] || this.keys["ArrowDown"])
+				iy += 1;
+			if (this.keys["a"] || this.keys["A"] || this.keys["ArrowLeft"])
+				ix -= 1;
+			if (this.keys["d"] || this.keys["D"] || this.keys["ArrowRight"])
+				ix += 1;
 			if (ix !== 0 || iy !== 0) {
 				const mag = Math.sqrt(ix * ix + iy * iy);
-				this.localX = Math.max(0, Math.min(this.worldSize, this.localX + (ix / mag) * MOVE_SPEED * dt));
-				this.localY = Math.max(0, Math.min(this.worldSize, this.localY + (iy / mag) * MOVE_SPEED * dt));
+				this.localX = Math.max(
+					0,
+					Math.min(
+						this.worldSize,
+						this.localX + (ix / mag) * MOVE_SPEED * dt,
+					),
+				);
+				this.localY = Math.max(
+					0,
+					Math.min(
+						this.worldSize,
+						this.localY + (iy / mag) * MOVE_SPEED * dt,
+					),
+				);
 			}
 			if (now - this.lastSendTime >= SEND_RATE_MS) {
 				this.lastSendTime = now;
-				this.conn.updatePosition({ x: this.localX, y: this.localY }).catch(() => {});
+				this.conn
+					.updatePosition({ x: this.localX, y: this.localY })
+					.catch(() => {});
 			}
 		}
 
@@ -249,7 +307,12 @@ export class BattleRoyaleGame {
 			// Zone fill outside.
 			ctx.save();
 			ctx.beginPath();
-			ctx.rect(-camX - 100, -camY - 100, this.worldSize + 200, this.worldSize + 200);
+			ctx.rect(
+				-camX - 100,
+				-camY - 100,
+				this.worldSize + 200,
+				this.worldSize + 200,
+			);
 			ctx.arc(
 				this.zone.centerX - camX,
 				this.zone.centerY - camY,
@@ -264,7 +327,9 @@ export class BattleRoyaleGame {
 		}
 
 		// Shot lines.
-		this.shotLines = this.shotLines.filter((s) => now - s.createdAt < SHOT_LINE_DURATION);
+		this.shotLines = this.shotLines.filter(
+			(s) => now - s.createdAt < SHOT_LINE_DURATION,
+		);
 		for (const shot of this.shotLines) {
 			const alpha = 1 - (now - shot.createdAt) / SHOT_LINE_DURATION;
 			ctx.strokeStyle = shot.hit
@@ -296,7 +361,13 @@ export class BattleRoyaleGame {
 				py = d.y - camY;
 			}
 
-			if (px < -50 || px > VIEWPORT_SIZE + 50 || py < -50 || py > VIEWPORT_SIZE + 50) continue;
+			if (
+				px < -50 ||
+				px > VIEWPORT_SIZE + 50 ||
+				py < -50 ||
+				py > VIEWPORT_SIZE + 50
+			)
+				continue;
 
 			const color = target.color;
 
@@ -320,7 +391,12 @@ export class BattleRoyaleGame {
 				const hpRatio = target.hp / target.maxHp;
 				ctx.fillStyle = "#333";
 				ctx.fillRect(barX, barY, barWidth, barHeight);
-				ctx.fillStyle = hpRatio > 0.5 ? "#30d158" : hpRatio > 0.25 ? "#ff4f00" : "#ff3b30";
+				ctx.fillStyle =
+					hpRatio > 0.5
+						? "#30d158"
+						: hpRatio > 0.25
+							? "#ff4f00"
+							: "#ff3b30";
 				ctx.fillRect(barX, barY, barWidth * hpRatio, barHeight);
 			}
 
@@ -338,10 +414,15 @@ export class BattleRoyaleGame {
 		ctx.font = "12px sans-serif";
 		ctx.textAlign = "left";
 		if (this.phase === "lobby") {
-			const countdownText = this.lobbyCountdown !== null
-				? `  Starting in ${Math.ceil(this.lobbyCountdown / 10)}...`
-				: "";
-			ctx.fillText(`LOBBY  ${this.playerCount}/${this.capacity} players${countdownText}`, 8, 18);
+			const countdownText =
+				this.lobbyCountdown !== null
+					? `  Starting in ${Math.ceil(this.lobbyCountdown / 10)}...`
+					: "";
+			ctx.fillText(
+				`LOBBY  ${this.playerCount}/${this.capacity} players${countdownText}`,
+				8,
+				18,
+			);
 		} else if (this.phase === "live") {
 			ctx.fillText(`LIVE  ${this.aliveCount} alive`, 8, 18);
 		} else {
@@ -357,7 +438,11 @@ export class BattleRoyaleGame {
 			ctx.textAlign = "center";
 			if (this.winnerId === this.matchInfo.playerId) {
 				ctx.fillStyle = "#ffd700";
-				ctx.fillText("Victory Royale!", canvas.width / 2, canvas.height / 2);
+				ctx.fillText(
+					"Victory Royale!",
+					canvas.width / 2,
+					canvas.height / 2,
+				);
 			} else {
 				const placement = myData?.placement;
 				ctx.fillText(

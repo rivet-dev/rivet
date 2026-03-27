@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { deserializeEntry, serializeEntry } from "../schemas/serde.js";
+import { buildHistoryPrefixAll, keyStartsWith } from "../src/keys.js";
 import {
 	CriticalError,
 	EntryInProgressError,
@@ -7,11 +9,9 @@ import {
 	RollbackError,
 	runWorkflow,
 	StepExhaustedError,
-	type WorkflowErrorEvent,
 	type WorkflowContextInterface,
+	type WorkflowErrorEvent,
 } from "../src/testing.js";
-import { buildHistoryPrefixAll, keyStartsWith } from "../src/keys.js";
-import { deserializeEntry, serializeEntry } from "../schemas/serde.js";
 
 const modes = ["yield", "live"] as const;
 

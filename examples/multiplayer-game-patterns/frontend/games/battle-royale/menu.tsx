@@ -21,10 +21,17 @@ export function BattleRoyaleMenu({
 	const findMatch = async () => {
 		setStatus("matching");
 		try {
-			const mm = client.battleRoyaleMatchmaker.getOrCreate(["main"]).connect();
-			const result = await mm.send("findMatch", {}, { wait: true, timeout: 10_000 });
+			const mm = client.battleRoyaleMatchmaker
+				.getOrCreate(["main"])
+				.connect();
+			const result = await mm.send(
+				"findMatch",
+				{},
+				{ wait: true, timeout: 10_000 },
+			);
 			mm.dispose();
-			const response = (result as { response?: BattleRoyaleMatchInfo })?.response;
+			const response = (result as { response?: BattleRoyaleMatchInfo })
+				?.response;
 			if (!response?.matchId || !response?.playerId) {
 				throw new Error("Matchmaker did not return a valid match");
 			}
@@ -43,8 +50,8 @@ export function BattleRoyaleMenu({
 			<div className="menu-container">
 				<h2>Battle Royale</h2>
 				<p className="menu-description">
-					Join a lobby, wait for players, then fight in a shrinking zone. Last
-					one standing wins. WASD to move, click to shoot.
+					Join a lobby, wait for players, then fight in a shrinking
+					zone. Last one standing wins. WASD to move, click to shoot.
 				</p>
 				<button
 					className="btn btn-primary"

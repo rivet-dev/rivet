@@ -509,7 +509,9 @@ export const testSqliteLoad = actor({
 				"SELECT * FROM users WHERE email = ?",
 				`load-${now}@test.com`,
 			);
-			results.push(`fetched user: ${(users[0] as { name: string }).name}`);
+			results.push(
+				`fetched user: ${(users[0] as { name: string }).name}`,
+			);
 			const userId = (users[0] as { id: number }).id;
 
 			// Query 3: Insert a product
@@ -522,7 +524,9 @@ export const testSqliteLoad = actor({
 			results.push("inserted product");
 
 			// Query 4: Get products
-			const products = await c.db.execute("SELECT * FROM products LIMIT 10");
+			const products = await c.db.execute(
+				"SELECT * FROM products LIMIT 10",
+			);
 			results.push(`fetched ${(products as unknown[]).length} products`);
 			const productId = (products[0] as { id: number }).id;
 
@@ -536,7 +540,9 @@ export const testSqliteLoad = actor({
 
 			// Query 6: Get categories
 			const categories = await c.db.execute("SELECT * FROM categories");
-			results.push(`fetched ${(categories as unknown[]).length} categories`);
+			results.push(
+				`fetched ${(categories as unknown[]).length} categories`,
+			);
 
 			// Query 7: Insert an order
 			await c.db.execute(
@@ -553,7 +559,9 @@ export const testSqliteLoad = actor({
 				"SELECT * FROM orders WHERE user_id = ?",
 				userId,
 			);
-			results.push(`fetched ${(orders as unknown[]).length} orders for user`);
+			results.push(
+				`fetched ${(orders as unknown[]).length} orders for user`,
+			);
 			const orderId = (orders[0] as { id: number }).id;
 
 			// Query 9: Insert order item

@@ -39,7 +39,12 @@ export interface PlayerSnapshot {
 	losses: number;
 }
 
-function buildSnapshot(state: { username: string; rating: number; wins: number; losses: number }): PlayerSnapshot {
+function buildSnapshot(state: {
+	username: string;
+	rating: number;
+	wins: number;
+	losses: number;
+}): PlayerSnapshot {
 	return {
 		username: state.username,
 		rating: state.rating,

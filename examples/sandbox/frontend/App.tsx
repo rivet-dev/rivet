@@ -1,6 +1,4 @@
 import { createRivetKit } from "@rivetkit/react";
-import mermaid from "mermaid";
-import { Highlight, themes } from "prism-react-renderer";
 import {
 	Code,
 	Compass,
@@ -13,6 +11,8 @@ import {
 	Radio,
 	RefreshCw,
 } from "lucide-react";
+import mermaid from "mermaid";
+import { Highlight, themes } from "prism-react-renderer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { registry } from "../src/index.ts";
 import {
@@ -48,7 +48,8 @@ mermaid.initialize({
 		lineColor: "#3a3a3c",
 		secondaryColor: "#2c2c2e",
 		tertiaryColor: "#0f0f0f",
-		fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif",
+		fontFamily:
+			"-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif",
 		fontSize: "13px",
 	},
 });
@@ -63,10 +64,18 @@ function MermaidDiagram({ chart }: { chart: string }) {
 		mermaid.render(id, chart).then(({ svg: renderedSvg }) => {
 			if (!cancelled) setSvg(renderedSvg);
 		});
-		return () => { cancelled = true; };
+		return () => {
+			cancelled = true;
+		};
 	}, [chart]);
 
-	return <div ref={ref} className="mermaid-diagram" dangerouslySetInnerHTML={{ __html: svg }} />;
+	return (
+		<div
+			ref={ref}
+			className="mermaid-diagram"
+			dangerouslySetInnerHTML={{ __html: svg }}
+		/>
+	);
 }
 
 const rivetEndpoint = import.meta.env.DEV
@@ -79,12 +88,21 @@ type ActorPanelActor = {
 	connStatus: string | null;
 	error: unknown;
 	handle: {
-		action: (request: { name: string; args: unknown[] }) => Promise<unknown>;
-		fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+		action: (request: {
+			name: string;
+			args: unknown[];
+		}) => Promise<unknown>;
+		fetch: (
+			input: RequestInfo | URL,
+			init?: RequestInit,
+		) => Promise<Response>;
 		webSocket: () => Promise<WebSocket>;
 	} | null;
 	connection: {
-		on: (event: string, callback: (...args: unknown[]) => void) => () => void;
+		on: (
+			event: string,
+			callback: (...args: unknown[]) => void,
+		) => () => void;
 	} | null;
 };
 
@@ -150,7 +168,7 @@ function formatActorName(name: string) {
 
 function getStateAction(actorName: string): string | undefined {
 	const templates = ACTION_TEMPLATES[actorName] ?? [];
-	return templates.find(t => t.args.length === 0)?.action;
+	return templates.find((t) => t.args.length === 0)?.action;
 }
 
 // ── Main App ──────────────────────────────────────
@@ -196,22 +214,22 @@ export function App() {
 				{PAGE_GROUPS.map((group) => {
 					const Icon = GROUP_ICONS[group.icon];
 					return (
-					<div className="nav-group" key={group.id}>
-						<div className="nav-group-title">
-							{Icon && <Icon size={14} />}
-							{group.title}
+						<div className="nav-group" key={group.id}>
+							<div className="nav-group-title">
+								{Icon && <Icon size={14} />}
+								{group.title}
+							</div>
+							{group.pages.map((page) => (
+								<button
+									key={page.id}
+									className={`nav-button ${page.id === activePage.id ? "active" : ""}`}
+									onClick={() => setActivePageId(page.id)}
+									type="button"
+								>
+									{page.title}
+								</button>
+							))}
 						</div>
-						{group.pages.map((page) => (
-							<button
-								key={page.id}
-								className={`nav-button ${page.id === activePage.id ? "active" : ""}`}
-								onClick={() => setActivePageId(page.id)}
-								type="button"
-							>
-								{page.title}
-							</button>
-						))}
-					</div>
 					);
 				})}
 			</aside>
@@ -255,7 +273,9 @@ function DemoPanel({ page }: { page: PageConfig }) {
 function ActorDemoPanel({ page }: { page: PageConfig }) {
 	const [selectedIdx, setSelectedIdx] = useState(0);
 
-	useEffect(() => { setSelectedIdx(0); }, [page.id]);
+	useEffect(() => {
+		setSelectedIdx(0);
+	}, [page.id]);
 
 	const actorName = page.actors[selectedIdx] ?? page.actors[0];
 
@@ -294,7 +314,13 @@ function ActorDemoPanel({ page }: { page: PageConfig }) {
 
 // ── Actor View (two-column: controls | inspector) ─
 
-function ActorView({ actorName, page }: { actorName: string; page: PageConfig }) {
+function ActorView({
+	actorName,
+	page,
+}: {
+	actorName: string;
+	page: PageConfig;
+}) {
 	const [keyInput, setKeyInput] = usePersistedState(
 		`sandbox:${page.id}:${actorName}:key`,
 		`demo-${page.id}`,
@@ -335,11 +361,13 @@ function ActorView({ actorName, page }: { actorName: string; page: PageConfig })
 	});
 
 	const templates = ACTION_TEMPLATES[actorName] ?? [];
-	const stateAction = page.noAutoState ? undefined : getStateAction(actorName);
+	const stateAction = page.noAutoState
+		? undefined
+		: getStateAction(actorName);
 
 	const [stateRefreshCounter, setStateRefreshCounter] = useState(0);
 	const triggerStateRefresh = useCallback(
-		() => setStateRefreshCounter(c => c + 1),
+		() => setStateRefreshCounter((c) => c + 1),
 		[],
 	);
 
@@ -348,7 +376,9 @@ function ActorView({ actorName, page }: { actorName: string; page: PageConfig })
 			<div className="actor-view-header">
 				<div className="actor-view-title-row">
 					{page.actors.length === 1 && (
-						<span className="actor-name">{formatActorName(actorName)}</span>
+						<span className="actor-name">
+							{formatActorName(actorName)}
+						</span>
 					)}
 					<div className="status-pill">
 						<span
@@ -409,7 +439,10 @@ function ActorView({ actorName, page }: { actorName: string; page: PageConfig })
 							refreshTrigger={stateRefreshCounter}
 						/>
 					)}
-					<EventsPanel actor={actor} defaultEvents={page.defaultEvents} />
+					<EventsPanel
+						actor={actor}
+						defaultEvents={page.defaultEvents}
+					/>
 				</div>
 			</div>
 		</div>
@@ -443,7 +476,9 @@ function StatePanel({
 			});
 			setState(formatJson(result));
 		} catch (err) {
-			setState(`Error: ${err instanceof Error ? err.message : String(err)}`);
+			setState(
+				`Error: ${err instanceof Error ? err.message : String(err)}`,
+			);
 		} finally {
 			setIsRefreshing(false);
 		}
@@ -486,43 +521,63 @@ function StatePanel({
 
 // ── Events Panel ──────────────────────────────────
 
-function EventsPanel({ actor, defaultEvents }: { actor: ActorPanelActor; defaultEvents?: string[] }) {
+function EventsPanel({
+	actor,
+	defaultEvents,
+}: {
+	actor: ActorPanelActor;
+	defaultEvents?: string[];
+}) {
 	const [eventInput, setEventInput] = useState("");
-	const [subscribedEvents, setSubscribedEvents] = useState<string[]>(defaultEvents ?? []);
-	const [events, setEvents] = useState<Array<{ time: string; name: string; data: string }>>([]);
+	const [subscribedEvents, setSubscribedEvents] = useState<string[]>(
+		defaultEvents ?? [],
+	);
+	const [events, setEvents] = useState<
+		Array<{ time: string; name: string; data: string }>
+	>([]);
 
 	const subscribedKey = subscribedEvents.join(",");
 
 	const addEvent = () => {
 		const name = eventInput.trim();
 		if (name && !subscribedEvents.includes(name)) {
-			setSubscribedEvents(prev => [...prev, name]);
+			setSubscribedEvents((prev) => [...prev, name]);
 		}
 		setEventInput("");
 	};
 
 	const removeEvent = (name: string) => {
-		setSubscribedEvents(prev => prev.filter(e => e !== name));
+		setSubscribedEvents((prev) => prev.filter((e) => e !== name));
 	};
 
 	useEffect(() => {
 		if (!actor.connection || !subscribedKey) return;
 
 		const names = subscribedKey.split(",");
-		const stops = names.map(name =>
+		const stops = names.map((name) =>
 			actor.connection!.on(name, (...args: unknown[]) => {
 				const now = new Date();
-				const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
-					.map(n => n.toString().padStart(2, "0"))
+				const time = [
+					now.getHours(),
+					now.getMinutes(),
+					now.getSeconds(),
+				]
+					.map((n) => n.toString().padStart(2, "0"))
 					.join(":");
 				setEvents((prev) => [
-					{ time, name, data: formatJson(args.length === 1 ? args[0] : args) },
+					{
+						time,
+						name,
+						data: formatJson(args.length === 1 ? args[0] : args),
+					},
 					...prev.slice(0, 49),
 				]);
-			})
+			}),
 		);
 
-		return () => { for (const stop of stops) stop(); };
+		return () => {
+			for (const stop of stops) stop();
+		};
 	}, [actor.connection, subscribedKey]);
 
 	return (
@@ -533,7 +588,9 @@ function EventsPanel({ actor, defaultEvents }: { actor: ActorPanelActor; default
 					<input
 						value={eventInput}
 						onChange={(e) => setEventInput(e.target.value)}
-						onKeyDown={(e) => { if (e.key === "Enter") addEvent(); }}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") addEvent();
+						}}
 						placeholder="add event name"
 						className="inspector-input"
 					/>
@@ -558,7 +615,7 @@ function EventsPanel({ actor, defaultEvents }: { actor: ActorPanelActor; default
 			</div>
 			{subscribedEvents.length > 0 && (
 				<div className="event-tags">
-					{subscribedEvents.map(name => (
+					{subscribedEvents.map((name) => (
 						<span key={name} className="event-tag">
 							{name}
 							<button
@@ -674,22 +731,30 @@ function ActionRunner({
 
 		setInflight((n) => n + 1);
 		const start = performance.now();
-		actor.handle.action({
-			name: actionName,
-			args: parsedArgs.value,
-		}).then((response) => {
-			setLastLatency(performance.now() - start);
-			setResult(formatJson(response));
-			onActionComplete?.();
-		}).catch((err) => {
-			setError(err instanceof Error ? err.message : String(err));
-		}).finally(() => {
-			setInflight((n) => n - 1);
-		});
+		actor.handle
+			.action({
+				name: actionName,
+				args: parsedArgs.value,
+			})
+			.then((response) => {
+				setLastLatency(performance.now() - start);
+				setResult(formatJson(response));
+				onActionComplete?.();
+			})
+			.catch((err) => {
+				setError(err instanceof Error ? err.message : String(err));
+			})
+			.finally(() => {
+				setInflight((n) => n - 1);
+			});
 	};
 
 	if (templates.length === 0) {
-		return <div className="no-actions">No actions available for this actor.</div>;
+		return (
+			<div className="no-actions">
+				No actions available for this actor.
+			</div>
+		);
 	}
 
 	return (
@@ -725,9 +790,13 @@ function ActionRunner({
 					</button>
 				</div>
 				{lastLatency !== null && (
-					<div className="action-latency">{lastLatency.toFixed(0)}ms</div>
+					<div className="action-latency">
+						{lastLatency.toFixed(0)}ms
+					</div>
 				)}
-				{!parsedArgs.ok && <div className="notice">{parsedArgs.error}</div>}
+				{!parsedArgs.ok && (
+					<div className="notice">{parsedArgs.error}</div>
+				)}
 				{error && <div className="notice">{error}</div>}
 				{result && <pre className="action-result">{result}</pre>}
 			</div>
@@ -741,9 +810,9 @@ function WelcomePanel() {
 	return (
 		<section className="card">
 			<p className="card-subtitle">
-				This sandbox lets you interact with every Rivet Actor feature
-				in one place. Pick a topic from the sidebar to connect to
-				live actors, invoke actions, and observe events in real time.
+				This sandbox lets you interact with every Rivet Actor feature in
+				one place. Pick a topic from the sidebar to connect to live
+				actors, invoke actions, and observe events in real time.
 			</p>
 		</section>
 	);

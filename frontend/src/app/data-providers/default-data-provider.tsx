@@ -333,8 +333,8 @@ const defaultContext = {
 
 	actorInspectorTokenQueryOptions(actorId: ActorId) {
 		return queryOptions({
-			staleTime: 1000,
-			gcTime: 1000,
+			staleTime: 5 * 60 * 1000,
+			gcTime: 10 * 60 * 1000,
 			queryKey: ["tokens", actorId, "inspector"] as QueryKey,
 			queryFn: async () => {
 				throw new Error("Not implemented");

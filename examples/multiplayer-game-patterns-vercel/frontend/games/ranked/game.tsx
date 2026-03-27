@@ -29,12 +29,18 @@ export function RankedGameView({
 	return (
 		<div className="app">
 			<div className="game-header">
-				<h2>Ranked ({matchInfo.username} - ELO: {matchInfo.rating})</h2>
+				<h2>
+					Ranked ({matchInfo.username} - ELO: {matchInfo.rating})
+				</h2>
 				<div className="btn-row">
-					<button className="btn btn-secondary" onClick={onLeave}>Leave</button>
+					<button className="btn btn-secondary" onClick={onLeave}>
+						Leave
+					</button>
 				</div>
 			</div>
-			<p className="controls-hint">WASD to move, click to shoot. First to 5 kills.</p>
+			<p className="controls-hint">
+				WASD to move, click to shoot. First to 5 kills.
+			</p>
 			<canvas
 				ref={canvasRef}
 				width={600}

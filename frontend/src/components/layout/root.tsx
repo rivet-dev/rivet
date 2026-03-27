@@ -20,4 +20,4 @@ function Footer({ children }: PropsWithChildren) {
 	);
 }
 
-export { Root, Main, Footer };
+export { Footer, Main, Root };

@@ -2,7 +2,8 @@ import { createClient } from "rivetkit/client";
 import type { registry } from "../src/rivet/actors";
 
 async function main() {
-	const endpoint = process.env.RIVET_ENDPOINT ?? "http://localhost:3000/api/rivet";
+	const endpoint =
+		process.env.RIVET_ENDPOINT ?? "http://localhost:3000/api/rivet";
 	const client = createClient<typeof registry>({
 		endpoint,
 	});

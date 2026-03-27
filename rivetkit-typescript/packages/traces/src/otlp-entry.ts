@@ -1,4 +1,3 @@
-export { readRangeWireToOtlp } from "./read-range.js";
 export {
 	anyValueFromCborBytes,
 	anyValueFromJs,
@@ -16,3 +15,4 @@ export {
 	type OtlpSpanLink,
 	type OtlpSpanStatus,
 } from "./otlp.js";
+export { readRangeWireToOtlp } from "./read-range.js";

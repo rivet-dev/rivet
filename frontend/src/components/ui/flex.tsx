@@ -77,4 +77,4 @@ const Flex = forwardRef<HTMLDivElement, StackProps>(
 	},
 );
 
-export { HStack, VStack, Flex };
+export { Flex, HStack, VStack };
