@@ -39,7 +39,7 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 	}
 
 	async addMessage(message: Message): Promise<void> {
-		await this.#runCtx.keepAwake(
+		await this.#runCtx.internalKeepAwake(
 			this.#actor.queueManager.enqueue(message.name, message.data),
 		);
 	}
@@ -49,7 +49,7 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 		count: number;
 		completable: boolean;
 	}): Promise<Message[]> {
-		const messages = await this.#runCtx.keepAwake(
+		const messages = await this.#runCtx.internalKeepAwake(
 			this.#actor.queueManager.receive(
 				opts.names && opts.names.length > 0
 					? [...opts.names]
@@ -68,7 +68,7 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 			...(opts.completable
 				? {
 						complete: async (response?: unknown) => {
-							await this.#runCtx.keepAwake(
+							await this.#runCtx.internalKeepAwake(
 								this.#actor.queueManager.completeMessage(
 									message,
 									response,
@@ -91,7 +91,7 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 			return;
 		}
 
-		await this.#runCtx.keepAwake(
+		await this.#runCtx.internalKeepAwake(
 			this.#actor.queueManager.completeMessageById(parsedId, response),
 		);
 	}
@@ -113,7 +113,7 @@ export class ActorWorkflowDriver implements EngineDriver {
 	}
 
 	async get(key: Uint8Array): Promise<Uint8Array | null> {
-		const [value] = await this.#runCtx.keepAwake(
+		const [value] = await this.#runCtx.internalKeepAwake(
 			this.#actor.driver.kvBatchGet(this.#actor.id, [
 				makeWorkflowKey(key),
 			]),
@@ -122,7 +122,7 @@ export class ActorWorkflowDriver implements EngineDriver {
 	}
 
 	async set(key: Uint8Array, value: Uint8Array): Promise<void> {
-		await this.#runCtx.keepAwake(
+		await this.#runCtx.internalKeepAwake(
 			this.#actor.driver.kvBatchPut(this.#actor.id, [
 				[makeWorkflowKey(key), value],
 			]),
@@ -130,7 +130,7 @@ export class ActorWorkflowDriver implements EngineDriver {
 	}
 
 	async delete(key: Uint8Array): Promise<void> {
-		await this.#runCtx.keepAwake(
+		await this.#runCtx.internalKeepAwake(
 			this.#actor.driver.kvBatchDelete(this.#actor.id, [
 				makeWorkflowKey(key),
 			]),
@@ -141,17 +141,17 @@ export class ActorWorkflowDriver implements EngineDriver {
 		const start = makeWorkflowKey(prefix);
 		const end = computeUpperBound(start);
 		if (end) {
-			await this.#runCtx.keepAwake(
+			await this.#runCtx.internalKeepAwake(
 				this.#actor.driver.kvDeleteRange(this.#actor.id, start, end),
 			);
 		} else {
-			const entries = await this.#runCtx.keepAwake(
+			const entries = await this.#runCtx.internalKeepAwake(
 				this.#actor.driver.kvListPrefix(this.#actor.id, start),
 			);
 			if (entries.length === 0) {
 				return;
 			}
-			await this.#runCtx.keepAwake(
+			await this.#runCtx.internalKeepAwake(
 				this.#actor.driver.kvBatchDelete(
 					this.#actor.id,
 					entries.map(([key]) => key),
@@ -161,7 +161,7 @@ export class ActorWorkflowDriver implements EngineDriver {
 	}
 
 	async deleteRange(start: Uint8Array, end: Uint8Array): Promise<void> {
-		await this.#runCtx.keepAwake(
+		await this.#runCtx.internalKeepAwake(
 			this.#actor.driver.kvDeleteRange(
 				this.#actor.id,
 				makeWorkflowKey(start),
@@ -171,7 +171,7 @@ export class ActorWorkflowDriver implements EngineDriver {
 	}
 
 	async list(prefix: Uint8Array): Promise<KVEntry[]> {
-		const entries = await this.#runCtx.keepAwake(
+		const entries = await this.#runCtx.internalKeepAwake(
 			this.#actor.driver.kvListPrefix(
 				this.#actor.id,
 				makeWorkflowKey(prefix),
@@ -188,7 +188,7 @@ export class ActorWorkflowDriver implements EngineDriver {
 
 		// Flush actor state together with workflow state to ensure atomicity.
 		// If the server crashes after workflow flush, actor state must also be persisted.
-		await this.#runCtx.keepAwake(
+		await this.#runCtx.internalKeepAwake(
 			Promise.all([
 				this.#actor.driver.kvBatchPut(
 					this.#actor.id,
@@ -205,7 +205,7 @@ export class ActorWorkflowDriver implements EngineDriver {
 	}
 
 	async setAlarm(_workflowId: string, wakeAt: number): Promise<void> {
-		await this.#runCtx.keepAwake(
+		await this.#runCtx.internalKeepAwake(
 			this.#actor.driver.setAlarm(this.#actor, wakeAt),
 		);
 	}

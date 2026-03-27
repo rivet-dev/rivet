@@ -133,6 +133,41 @@ export function runActorSleepDbTests(driverTestConfig: DriverTestConfig) {
 				expect(events).toContain("alarm");
 			});
 
+			test("scheduled action stays awake until db work completes", async (c) => {
+				const { client } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
+
+				const actor = client.sleepWithSlowScheduledDb.getOrCreate([
+					"slow-scheduled-db",
+				]);
+
+				await actor.scheduleSlowAlarm(
+					50,
+					SLEEP_DB_TIMEOUT + 250,
+				);
+
+				await waitFor(
+					driverTestConfig,
+					50 + (SLEEP_DB_TIMEOUT + 250) + SLEEP_DB_TIMEOUT + 250,
+				);
+
+				const counts = await actor.getCounts();
+				expect(counts.sleepCount).toBe(1);
+				expect(counts.startCount).toBe(2);
+
+				const entries = await actor.getLogEntries();
+				const events = entries.map(
+					(e: { event: string }) => e.event,
+				);
+				expect(events).toContain("slow-alarm-start");
+				expect(events).toContain("slow-alarm-finish");
+				expect(events.indexOf("slow-alarm-finish")).toBeLessThan(
+					events.indexOf("sleep"),
+				);
+			});
+
 			test("onDisconnect can write to c.db during sleep shutdown", async (c) => {
 				const { client } = await setupDriverTest(
 					c,

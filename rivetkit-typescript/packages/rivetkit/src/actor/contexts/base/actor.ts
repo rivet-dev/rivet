@@ -312,6 +312,20 @@ export class ActorContext<
 	}
 
 	/**
+	 * Internal sleep blocker used by runtime subsystems.
+	 */
+	internalKeepAwake<T>(promise: Promise<T>): Promise<T>;
+	internalKeepAwake<T>(run: () => T | Promise<T>): Promise<T>;
+	internalKeepAwake<T>(
+		promiseOrRun: Promise<T> | (() => T | Promise<T>),
+	): Promise<T> {
+		if (typeof promiseOrRun === "function") {
+			return this.#actor.internalKeepAwake(promiseOrRun);
+		}
+		return this.#actor.internalKeepAwake(promiseOrRun);
+	}
+
+	/**
 	 * AbortSignal that fires when the actor is stopping.
 	 */
 	get abortSignal(): AbortSignal {

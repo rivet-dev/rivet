@@ -527,7 +527,7 @@ export class ActorWorkflowContext<
 	}
 
 	async #wrapActive<T>(run: () => Promise<T>): Promise<T> {
-		return await this.#runCtx.keepAwake(run());
+		return await this.#runCtx.internalKeepAwake(run);
 	}
 
 	async #withActorAccess<T>(run: () => Promise<T>): Promise<T> {

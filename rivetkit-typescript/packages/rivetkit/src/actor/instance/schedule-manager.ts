@@ -319,14 +319,19 @@ export class ScheduleManager<
 					? cbor.decode(new Uint8Array(event.args))
 					: [];
 
-				const result = this.#actor.traces.withSpan(span, () =>
-					fn.call(undefined, this.#actor.actorContext, ...args),
-				);
+				await this.#actor.internalKeepAwake(() =>
+					this.#actor.traces.withSpan(span, async () => {
+						const result = fn.call(
+							undefined,
+							this.#actor.actorContext,
+							...args,
+						);
 
-				// Handle async actions
-				if (result instanceof Promise) {
-					await result;
-				}
+						if (result instanceof Promise) {
+							await result;
+						}
+					}),
+				);
 
 				this.#actor.endTraceSpan(span, { code: "OK" });
 				this.#actor.log.debug({

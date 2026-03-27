@@ -105,6 +105,7 @@ enum CanSleep {
 	ActiveDisconnectCallbacks,
 	ActiveHonoHttpRequests,
 	ActiveKeepAwake,
+	ActiveInternalKeepAwake,
 	ActiveRun,
 	ActiveWebSocketCallbacks,
 }
@@ -115,6 +116,7 @@ enum CanSleep {
  */
 interface ActiveAsyncRegionCounts {
 	keepAwake: number;
+	internalKeepAwake: number;
 	websocketCallbacks: number;
 }
 
@@ -128,6 +130,8 @@ const ACTIVE_ASYNC_REGION_ERROR_MESSAGES: Record<
 > = {
 	keepAwake:
 		"active keep awake count went below 0, this is a RivetKit bug",
+	internalKeepAwake:
+		"active internal keep awake count went below 0, this is a RivetKit bug",
 	websocketCallbacks:
 		"active websocket callback count went below 0, this is a RivetKit bug",
 };
@@ -238,6 +242,7 @@ export class ActorInstance<
 	#activeHonoHttpRequests = 0;
 	#activeAsyncRegionCounts: ActiveAsyncRegionCounts = {
 		keepAwake: 0,
+		internalKeepAwake: 0,
 		websocketCallbacks: 0,
 	};
 	#preventSleep = false;
@@ -948,7 +953,7 @@ export class ActorInstance<
 			throw new errors.ActionNotFound(actionName);
 		}
 
-		this.#beginActiveAsyncRegion("keepAwake");
+		this.#beginActiveAsyncRegion("internalKeepAwake");
 		this.#metrics.actionCalls++;
 		const actionStart = performance.now();
 		const actionSpan = this.startTraceSpan(`actor.action.${actionName}`, {
@@ -1041,7 +1046,7 @@ export class ActorInstance<
 					status: { code: "OK" },
 				});
 			}
-			this.#endActiveAsyncRegion("keepAwake");
+			this.#endActiveAsyncRegion("internalKeepAwake");
 			this.stateManager.savePersistThrottled();
 		}
 	}
@@ -1301,6 +1306,10 @@ export class ActorInstance<
 	 *
 	 * Returns the resolved value and resets the sleep timer on completion.
 	 * Errors are propagated to the caller.
+	 *
+	 * @deprecated Use `setPreventSleep(true)` while work is active, or move
+	 * shutdown and flush work to `onSleep` if it can wait until the actor is
+	 * sleeping.
 	 */
 	async keepAwake<T>(promise: Promise<T>): Promise<T> {
 		this.assertReady();
@@ -1311,6 +1320,33 @@ export class ActorInstance<
 			return await promise;
 		} finally {
 			this.#endActiveAsyncRegion("keepAwake");
+		}
+	}
+
+	/**
+	 * Internal sleep blocker used by runtime subsystems.
+	 *
+	 * Accepts either a promise or a thunk. The thunk form exists so the actor
+	 * can enter the sleep-blocking region before user code starts running. This
+	 * avoids a race where work begins, but the actor is not yet marked active,
+	 * which can allow the sleep timer to fire underneath that work.
+	 */
+	internalKeepAwake<T>(promise: Promise<T>): Promise<T>;
+	internalKeepAwake<T>(run: () => T | Promise<T>): Promise<T>;
+	async internalKeepAwake<T>(
+		promiseOrRun: Promise<T> | (() => T | Promise<T>),
+	): Promise<T> {
+		this.assertReady();
+
+		this.#beginActiveAsyncRegion("internalKeepAwake");
+
+		try {
+			if (typeof promiseOrRun === "function") {
+				return await promiseOrRun();
+			}
+			return await promiseOrRun;
+		} finally {
+			this.#endActiveAsyncRegion("internalKeepAwake");
 		}
 	}
 
@@ -2151,6 +2187,9 @@ export class ActorInstance<
 			return CanSleep.ActiveHonoHttpRequests;
 		if (this.#activeAsyncRegionCounts.keepAwake > 0) {
 			return CanSleep.ActiveKeepAwake;
+		}
+		if (this.#activeAsyncRegionCounts.internalKeepAwake > 0) {
+			return CanSleep.ActiveInternalKeepAwake;
 		}
 		if (this.#runHandlerActive && this.#activeQueueWaitCount === 0) {
 			return CanSleep.ActiveRun;

@@ -83,6 +83,66 @@ export const sleepWithDb = actor({
 	},
 });
 
+export const sleepWithSlowScheduledDb = actor({
+	state: {
+		startCount: 0,
+		sleepCount: 0,
+	},
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS sleep_log (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					event TEXT NOT NULL,
+					created_at INTEGER NOT NULL
+				)
+			`);
+		},
+	}),
+	onWake: async (c) => {
+		c.state.startCount += 1;
+		await c.db.execute(
+			`INSERT INTO sleep_log (event, created_at) VALUES ('wake', ${Date.now()})`,
+		);
+	},
+	onSleep: async (c) => {
+		c.state.sleepCount += 1;
+		await c.db.execute(
+			`INSERT INTO sleep_log (event, created_at) VALUES ('sleep', ${Date.now()})`,
+		);
+	},
+	actions: {
+		scheduleSlowAlarm: (c, delayMs: number, workMs: number) => {
+			c.schedule.after(delayMs, "onSlowAlarm", workMs);
+		},
+		getCounts: (c) => {
+			return {
+				startCount: c.state.startCount,
+				sleepCount: c.state.sleepCount,
+			};
+		},
+		getLogEntries: async (c) => {
+			return await c.db.execute<{
+				id: number;
+				event: string;
+				created_at: number;
+			}>(`SELECT * FROM sleep_log ORDER BY id`);
+		},
+		onSlowAlarm: async (c, workMs: number) => {
+			await c.db.execute(
+				`INSERT INTO sleep_log (event, created_at) VALUES ('slow-alarm-start', ${Date.now()})`,
+			);
+			await new Promise((resolve) => setTimeout(resolve, workMs));
+			await c.db.execute(
+				`INSERT INTO sleep_log (event, created_at) VALUES ('slow-alarm-finish', ${Date.now()})`,
+			);
+		},
+	},
+	options: {
+		sleepTimeout: SLEEP_DB_TIMEOUT,
+	},
+});
+
 export const sleepWithDbConn = actor({
 	state: {
 		startCount: 0,
