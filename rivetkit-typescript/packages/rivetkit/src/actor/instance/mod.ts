@@ -817,6 +817,11 @@ export class ActorInstance<
 		},
 		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
 	) {
+		// Hibernating WebSocket connections do not keep the actor alive on
+		// their own. Reset the sleep timer on each message so the actor
+		// stays awake while clients are actively communicating.
+		this.resetSleepTimer();
+
 		await processMessage(message, this, conn, {
 			onExecuteAction: async (ctx, name, args) => {
 				return await this.executeAction(ctx, name, args);
