@@ -8,7 +8,7 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.19.1",
+		"@hono/node-server": "^1.19.10",
 		"@rivetkit/engine-runner": "workspace:*",
 		"@rivetkit/engine-runner-protocol": "workspace:*",
 		"hono": "^4.7.0",
