@@ -32,11 +32,16 @@ export class VirtualWebSocket implements UniversalWebSocket {
 	readonly CLOSED = 3 as const;
 
 	#options: VirtualWebSocketOptions;
-	#listeners: Map<string, ((ev: any) => void)[]> = new Map();
-	#onopen: ((event: RivetEvent) => void) | null = null;
-	#onclose: ((event: RivetCloseEvent) => void) | null = null;
-	#onerror: ((event: RivetEvent) => void) | null = null;
-	#onmessage: ((event: RivetMessageEvent) => void) | null = null;
+	#listeners: Map<string, ((ev: any) => void | Promise<void>)[]> =
+		new Map();
+	#onopen: ((event: RivetEvent) => void | Promise<void>) | null = null;
+	#onclose:
+		| ((event: RivetCloseEvent) => void | Promise<void>)
+		| null = null;
+	#onerror: ((event: RivetEvent) => void | Promise<void>) | null = null;
+	#onmessage:
+		| ((event: RivetMessageEvent) => void | Promise<void>)
+		| null = null;
 
 	constructor(options: VirtualWebSocketOptions) {
 		this.#options = options;
@@ -133,14 +138,20 @@ export class VirtualWebSocket implements UniversalWebSocket {
 		}
 	}
 
-	addEventListener(type: string, listener: (ev: any) => void): void {
+	addEventListener(
+		type: string,
+		listener: (ev: any) => void | Promise<void>,
+	): void {
 		if (!this.#listeners.has(type)) {
 			this.#listeners.set(type, []);
 		}
 		this.#listeners.get(type)!.push(listener);
 	}
 
-	removeEventListener(type: string, listener: (ev: any) => void): void {
+	removeEventListener(
+		type: string,
+		listener: (ev: any) => void | Promise<void>,
+	): void {
 		const listeners = this.#listeners.get(type);
 		if (listeners) {
 			const index = listeners.indexOf(listener);
@@ -156,31 +167,39 @@ export class VirtualWebSocket implements UniversalWebSocket {
 	}
 
 	// on* property getters/setters
-	get onopen(): ((event: RivetEvent) => void) | null {
+	get onopen(): ((event: RivetEvent) => void | Promise<void>) | null {
 		return this.#onopen;
 	}
-	set onopen(fn: ((event: RivetEvent) => void) | null) {
+	set onopen(fn: ((event: RivetEvent) => void | Promise<void>) | null) {
 		this.#onopen = fn;
 	}
 
-	get onclose(): ((event: RivetCloseEvent) => void) | null {
+	get onclose():
+		| ((event: RivetCloseEvent) => void | Promise<void>)
+		| null {
 		return this.#onclose;
 	}
-	set onclose(fn: ((event: RivetCloseEvent) => void) | null) {
+	set onclose(
+		fn: ((event: RivetCloseEvent) => void | Promise<void>) | null,
+	) {
 		this.#onclose = fn;
 	}
 
-	get onerror(): ((event: RivetEvent) => void) | null {
+	get onerror(): ((event: RivetEvent) => void | Promise<void>) | null {
 		return this.#onerror;
 	}
-	set onerror(fn: ((event: RivetEvent) => void) | null) {
+	set onerror(fn: ((event: RivetEvent) => void | Promise<void>) | null) {
 		this.#onerror = fn;
 	}
 
-	get onmessage(): ((event: RivetMessageEvent) => void) | null {
+	get onmessage():
+		| ((event: RivetMessageEvent) => void | Promise<void>)
+		| null {
 		return this.#onmessage;
 	}
-	set onmessage(fn: ((event: RivetMessageEvent) => void) | null) {
+	set onmessage(
+		fn: ((event: RivetMessageEvent) => void | Promise<void>) | null,
+	) {
 		this.#onmessage = fn;
 	}
 

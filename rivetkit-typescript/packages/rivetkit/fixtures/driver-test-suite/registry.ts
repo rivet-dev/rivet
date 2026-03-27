@@ -73,12 +73,16 @@ import { scheduled } from "./scheduled";
 import { scheduledDb } from "./scheduled-db";
 import {
 	sleep,
+	sleepRawWsAddEventListenerClose,
+	sleepRawWsAddEventListenerMessage,
 	sleepWithLongRpc,
 	sleepWithNoSleepOption,
 	sleepWithPreventSleep,
 	sleepWithRawHttp,
 	sleepWithRawWebSocket,
 	sleepWithWaitUntilMessage,
+	sleepRawWsOnClose,
+	sleepRawWsOnMessage,
 	sleepRawWsSendOnSleep,
 	sleepRawWsDelayedSendOnSleep,
 } from "./sleep";
@@ -86,6 +90,7 @@ import {
 	sleepWithDb,
 	sleepWithDbConn,
 	sleepWithDbAction,
+	sleepWithRawWsCloseDb,
 	sleepWaitUntil,
 	sleepNestedWaitUntil,
 	sleepEnqueue,
@@ -149,6 +154,10 @@ export const registry = setup({
 		sleepWithNoSleepOption,
 		sleepWithPreventSleep,
 		sleepWithWaitUntilMessage,
+		sleepRawWsAddEventListenerMessage,
+		sleepRawWsAddEventListenerClose,
+		sleepRawWsOnMessage,
+		sleepRawWsOnClose,
 		sleepRawWsSendOnSleep,
 		sleepRawWsDelayedSendOnSleep,
 		// From sleep-db.ts
@@ -163,6 +172,7 @@ export const registry = setup({
 		sleepWaitUntilRejects,
 		sleepWaitUntilState,
 		sleepWithRawWs,
+		sleepWithRawWsCloseDb,
 		// From error-handling.ts
 		errorHandlingActor,
 		customTimeoutActor,

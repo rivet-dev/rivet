@@ -357,12 +357,11 @@ Several timeouts control how long each part of the shutdown process can take:
 | Timeout | Default | Description | Configuration |
 |---------|---------|-------------|---------------|
 | `actor_stop_threshold` | 30s | Engine-side limit on how long each actor has to stop before being marked lost | [Engine config](/docs/self-hosting/configuration) (`pegboard.actor_stop_threshold`) |
-| `onSleepTimeout` | 5s | How long the `onSleep` hook can run | [Actor options](/docs/actors/lifecycle#options) |
+| `sleepGracePeriod` | 15s | Total graceful sleep budget for `onSleep`, `waitUntil`, async raw WebSocket handlers, and waiting for `preventSleep` to clear after shutdown starts | [Actor options](/docs/actors/lifecycle#options) |
 | `runStopTimeout` | 15s | How long to wait for the `run` handler to exit | [Actor options](/docs/actors/lifecycle#options) |
-| `waitUntilTimeout` | 15s | How long to wait for `waitUntil` background promises | [Actor options](/docs/actors/lifecycle#options) |
 | `runner_lost_threshold` | 15s | Fallback detection if the runner dies without graceful shutdown | [Engine config](/docs/self-hosting/configuration) (`pegboard.runner_lost_threshold`) |
 
-The per-actor timeouts (`onSleepTimeout`, `runStopTimeout`, `waitUntilTimeout`) must fit within `actor_stop_threshold`. The runner's 120-second wait is a hard upper bound on the entire shutdown process.
+Rivet has a max shutdown grace period of 30 minutes that cannot be configured.
 
 ## Related
 

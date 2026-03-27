@@ -22,6 +22,10 @@ import type {
 import type { AnyDatabaseProvider } from "./database";
 import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
 
+export const DEFAULT_ON_SLEEP_TIMEOUT = 5_000;
+export const DEFAULT_WAIT_UNTIL_TIMEOUT = 15_000;
+export const DEFAULT_SLEEP_GRACE_PERIOD = 15_000;
+
 export interface ActorTypes<
 	TState,
 	TConnParams,
@@ -219,17 +223,24 @@ export const ActorConfigSchema = z
 				createVarsTimeout: z.number().positive().default(5000),
 				createConnStateTimeout: z.number().positive().default(5000),
 				onConnectTimeout: z.number().positive().default(5000),
-				onSleepTimeout: z.number().positive().default(5000),
+				sleepGracePeriod: z.number().positive().optional(),
+				onSleepTimeout: z
+					.number()
+					.positive()
+					.default(DEFAULT_ON_SLEEP_TIMEOUT),
 				onDestroyTimeout: z.number().positive().default(5000),
 				stateSaveInterval: z.number().positive().default(1_000),
 				actionTimeout: z.number().positive().default(60_000),
 				// Deprecated timeout for legacy background shutdown tasks
-				waitUntilTimeout: z.number().positive().default(15_000),
+				waitUntilTimeout: z
+					.number()
+					.positive()
+					.default(DEFAULT_WAIT_UNTIL_TIMEOUT),
 				// Max time to wait for run handler to stop during shutdown
 				runStopTimeout: z.number().positive().default(15_000),
 				connectionLivenessTimeout: z.number().positive().default(2500),
 				connectionLivenessInterval: z.number().positive().default(5000),
-				/** @deprecated Use `c.setPreventSleep(true)` in `onWake` instead. Will be removed in 2.2. */
+				/** @deprecated Use `c.setPreventSleep(true)` for bounded delays or keep `noSleep` for actors that must stay awake indefinitely. Will be removed in 2.2.0. */
 				noSleep: z.boolean().default(false),
 				sleepTimeout: z.number().positive().default(30_000),
 				maxQueueSize: z.number().positive().default(1000),
@@ -512,6 +523,9 @@ interface BaseActorConfig<
 	 * **Important:** The actor may go to sleep at any time during the `run`
 	 * handler. Use `c.setPreventSleep(true)` while work is active, then clear
 	 * it with `c.setPreventSleep(false)` once the actor can sleep again.
+	 * `setPreventSleep` blocks idle sleep until it is cleared. If shutdown has
+	 * already started, RivetKit waits for `preventSleep` to clear within the
+	 * same graceful shutdown window controlled by `sleepGracePeriod`.
 	 *
 	 * The handler receives an abort signal via `c.abortSignal` and a
 	 * `c.aborted` alias for loop checks. Use these to gracefully exit.
@@ -724,7 +738,7 @@ interface BaseActorConfig<
 	 * Use this hook to handle custom WebSocket protocols, binary streams, or other WebSocket-based communication.
 	 *
 	 * @param c The WebSocket context with access to the connection
-	 * @param websocket The raw WebSocket connection
+	 * @param websocket The actor-facing raw WebSocket connection
 	 * @param opts Additional options including the original HTTP upgrade request
 	 */
 	onWebSocket?: (
@@ -1034,11 +1048,17 @@ export const DocActorOptionsSchema = z
 			.number()
 			.optional()
 			.describe("Timeout in ms for onConnect handler. Default: 5000"),
+		sleepGracePeriod: z
+			.number()
+			.optional()
+			.describe(
+				`Max time in ms for the graceful sleep window. Covers onSleep, waitUntil, async raw WebSocket handlers, and waiting for preventSleep to clear after shutdown starts. Default: ${DEFAULT_SLEEP_GRACE_PERIOD}. If sleepGracePeriod is unset, custom legacy onSleepTimeout and waitUntilTimeout values still factor into the effective shutdown budget.`,
+			),
 		onSleepTimeout: z
 			.number()
 			.optional()
 			.describe(
-				"Timeout in ms for onSleep handler. Must be less than ACTOR_STOP_THRESHOLD_MS. Default: 5000",
+				`Deprecated. Legacy timeout in ms for onSleep when sleepGracePeriod is not set. Must be less than ACTOR_STOP_THRESHOLD_MS. Default: ${DEFAULT_ON_SLEEP_TIMEOUT}`,
 			),
 		onDestroyTimeout: z
 			.number()
@@ -1058,7 +1078,7 @@ export const DocActorOptionsSchema = z
 			.number()
 			.optional()
 			.describe(
-				"Deprecated. Max time in ms to wait for legacy background shutdown tasks. Default: 15000",
+				`Deprecated. Legacy timeout in ms for waitUntil when sleepGracePeriod is not set. Default: ${DEFAULT_WAIT_UNTIL_TIMEOUT}`,
 			),
 		runStopTimeout: z
 			.number()
@@ -1082,7 +1102,7 @@ export const DocActorOptionsSchema = z
 			.boolean()
 			.optional()
 			.describe(
-				"Deprecated: use c.setPreventSleep(true) in onWake instead. Will be removed in 2.2. If true, the actor will never sleep. Default: false",
+				"Deprecated. If true, the actor will never sleep. Use c.setPreventSleep(true) for bounded idle sleep delays instead. Default: false",
 			),
 		sleepTimeout: z
 			.number()

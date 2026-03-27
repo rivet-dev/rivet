@@ -95,6 +95,43 @@ export function runActorConnHibernationTests(
 				await hibernatingActor.dispose();
 			});
 
+			test("onOpen is not emitted again after hibernation wake", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const hibernatingActor = client.hibernationActor
+					.getOrCreate(["onopen-once"])
+					.connect();
+
+				let openCount = 0;
+				hibernatingActor.onOpen(() => {
+					openCount += 1;
+				});
+
+				await vi.waitFor(() => {
+					expect(hibernatingActor.isConnected).toBe(true);
+					expect(openCount).toBe(1);
+				});
+
+				for (let i = 0; i < 2; i++) {
+					await hibernatingActor.triggerSleep();
+					await waitFor(
+						driverTestConfig,
+						HIBERNATION_SLEEP_TIMEOUT + 100,
+					);
+
+					const ping = await hibernatingActor.ping();
+					expect(ping).toBe("pong");
+
+					const actorCounts =
+						await hibernatingActor.getActorCounts();
+					expect(actorCounts.sleepCount).toBe(i + 1);
+					expect(actorCounts.wakeCount).toBe(i + 2);
+					expect(openCount).toBe(1);
+				}
+
+				await hibernatingActor.dispose();
+			});
+
 			test("closing connection during hibernation", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 

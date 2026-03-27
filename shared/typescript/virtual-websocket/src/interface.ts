@@ -47,13 +47,19 @@ export interface UniversalWebSocket {
 	// Methods
 	send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void;
 	close(code?: number, reason?: string): void;
-	addEventListener(type: string, listener: (event: any) => void): void;
-	removeEventListener(type: string, listener: (event: any) => void): void;
+	addEventListener(
+		type: string,
+		listener: (event: any) => void | Promise<void>,
+	): void;
+	removeEventListener(
+		type: string,
+		listener: (event: any) => void | Promise<void>,
+	): void;
 	dispatchEvent(event: RivetEvent): boolean;
 
 	// Event handlers (optional)
-	onopen?: ((event: RivetEvent) => void) | null;
-	onclose?: ((event: RivetCloseEvent) => void) | null;
-	onerror?: ((event: RivetEvent) => void) | null;
-	onmessage?: ((event: RivetMessageEvent) => void) | null;
+	onopen?: ((event: RivetEvent) => void | Promise<void>) | null;
+	onclose?: ((event: RivetCloseEvent) => void | Promise<void>) | null;
+	onerror?: ((event: RivetEvent) => void | Promise<void>) | null;
+	onmessage?: ((event: RivetMessageEvent) => void | Promise<void>) | null;
 }

@@ -72,7 +72,7 @@ actors have create, destroy, wake, and sleep lifecycle hooks that you can implem
 - actors sleep when not in use
 - an actor is considered not in use when there are no active network connections to the actor (or the network connections are hibernatable websockets, see below) and there are no actions in flight
 - actors have a sleep timeout (configured in `options.sleepTimeout`) that decides how long to keep the actor in memory with no recent activity
-- sleep can be prevented with `c.setPreventSleep(true)`
+- sleep can be delayed while idle with `c.setPreventSleep(true)`
 - see the [sleeping docs](/docs/actors/lifecycle#sleeping) for full details
 
 ### wake events
@@ -448,5 +448,4 @@ rivet has similarities with both to provide more flexibility:
 	- actors can impelment the inbox pattern optionally
 	- but we provide lower-level networking to be able to be compatible with more techniologies
 	- rivet assumes the same serial concurerntly that other actors do (by the nature of javascript being single-threaded) but we allow you to run promises in parallel or handl eyour own concurrency control (which some other actor frameworks might require a spawning new actor to do)
-
 

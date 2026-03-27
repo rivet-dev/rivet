@@ -22,7 +22,14 @@ import {
 } from "@/schemas/actor-persist/versioned";
 import { EXTRA_ERROR_LOG } from "@/utils";
 import { getRivetExperimentalOtel } from "@/utils/env-vars";
-import { type ActorConfig, getRunFunction } from "../config";
+import { promiseWithResolvers } from "@/utils";
+import {
+	type ActorConfig,
+	DEFAULT_ON_SLEEP_TIMEOUT,
+	DEFAULT_SLEEP_GRACE_PERIOD,
+	DEFAULT_WAIT_UNTIL_TIMEOUT,
+	getRunFunction,
+} from "../config";
 import type { ConnDriver } from "../conn/driver";
 import { createHttpDriver } from "../conn/drivers/http";
 import {
@@ -75,6 +82,7 @@ import {
 import { QueueManager } from "./queue-manager";
 import { ScheduleManager } from "./schedule-manager";
 import { type SaveStateOptions, StateManager } from "./state-manager";
+import { TrackedWebSocket } from "./tracked-websocket";
 import { ActorTracesDriver } from "./traces-driver";
 import { WriteCollector } from "./write-collector";
 
@@ -98,7 +106,31 @@ enum CanSleep {
 	ActiveHonoHttpRequests,
 	ActiveKeepAwake,
 	ActiveRun,
+	ActiveWebSocketCallbacks,
 }
+
+/**
+ * Names of actor-managed async regions that should keep the actor awake while
+ * work is still running.
+ */
+interface ActiveAsyncRegionCounts {
+	keepAwake: number;
+	websocketCallbacks: number;
+}
+
+/**
+ * Error messages for the async-region counters. These are used when a counter
+ * underflows, which indicates mismatched begin/end bookkeeping.
+ */
+const ACTIVE_ASYNC_REGION_ERROR_MESSAGES: Record<
+	keyof ActiveAsyncRegionCounts,
+	string
+> = {
+	keepAwake:
+		"active keep awake count went below 0, this is a RivetKit bug",
+	websocketCallbacks:
+		"active websocket callback count went below 0, this is a RivetKit bug",
+};
 
 /** Actor type alias with all `any` types. Used for `extends` in classes referencing this actor. */
 export type AnyActorInstance = ActorInstance<
@@ -196,13 +228,18 @@ export class ActorInstance<
 
 	// MARK: - Background Tasks
 	#backgroundPromises: Promise<void>[] = [];
+	#websocketCallbackPromises: Promise<void>[] = [];
+	#preventSleepClearedPromise?: ReturnType<typeof promiseWithResolvers<void>>;
 	#runPromise?: Promise<void>;
 	#runHandlerActive = false;
 	#activeQueueWaitCount = 0;
 
 	// MARK: - HTTP/WebSocket Tracking
 	#activeHonoHttpRequests = 0;
-	#activeKeepAwakeCount = 0;
+	#activeAsyncRegionCounts: ActiveAsyncRegionCounts = {
+		keepAwake: 0,
+		websocketCallbacks: 0,
+	};
 	#preventSleep = false;
 
 	// MARK: - Deprecated (kept for compatibility)
@@ -222,6 +259,7 @@ export class ActorInstance<
 	 * value and the override value.
 	 */
 	overrides: {
+		sleepGracePeriod?: number;
 		onSleepTimeout?: number;
 		onDestroyTimeout?: number;
 		runStopTimeout?: number;
@@ -686,27 +724,28 @@ export class ActorInstance<
 					: this.#config.options.runStopTimeout,
 			);
 
+			const shutdownTaskDeadlineTs =
+				Date.now() + this.#getEffectiveSleepGracePeriod();
+
 			// Call onStop lifecycle
 			if (mode === "sleep") {
-				await this.#callOnSleep();
+				await this.#callOnSleep(shutdownTaskDeadlineTs);
 			} else if (mode === "destroy") {
 				await this.#callOnDestroy();
 			} else {
 				assertUnreachable(mode);
 			}
 
-			// Wait for background tasks
-			await this.#waitBackgroundPromises(
-				this.overrides.waitUntilTimeout !== undefined
-					? Math.min(
-							this.#config.options.waitUntilTimeout,
-							this.overrides.waitUntilTimeout,
-						)
-					: this.#config.options.waitUntilTimeout,
-			);
+			// Wait for shutdown tasks that were already in flight before
+			// connection teardown starts.
+			await this.#waitShutdownTasks(shutdownTaskDeadlineTs);
 
 			// Disconnect non-hibernatable connections
 			await this.#disconnectConnections();
+
+			// Drain async WebSocket close handlers and any waitUntil work they
+			// enqueue before persisting final state.
+			await this.#waitShutdownTasks(shutdownTaskDeadlineTs);
 
 			// Clear timeouts and save state
 			this.#rLog.info({ msg: "clearing pending save timeouts" });
@@ -909,7 +948,7 @@ export class ActorInstance<
 			throw new errors.ActionNotFound(actionName);
 		}
 
-		this.#activeKeepAwakeCount++;
+		this.#beginActiveAsyncRegion("keepAwake");
 		this.#metrics.actionCalls++;
 		const actionStart = performance.now();
 		const actionSpan = this.startTraceSpan(`actor.action.${actionName}`, {
@@ -1002,15 +1041,7 @@ export class ActorInstance<
 					status: { code: "OK" },
 				});
 			}
-			this.#activeKeepAwakeCount--;
-			if (this.#activeKeepAwakeCount < 0) {
-				this.#activeKeepAwakeCount = 0;
-				this.#rLog.warn({
-					msg: "active keep awake count went below 0, this is a RivetKit bug",
-					...EXTRA_ERROR_LOG,
-				});
-			}
-			this.resetSleepTimer();
+			this.#endActiveAsyncRegion("keepAwake");
 			this.stateManager.savePersistThrottled();
 		}
 	}
@@ -1088,10 +1119,11 @@ export class ActorInstance<
 
 			// Handle WebSocket
 			const ctx = new WebSocketContext(this, conn, request);
+			const trackedWebSocket = this.#createTrackedWebSocket(websocket);
 
 			// NOTE: This is async and will run in the background
 			const voidOrPromise = this.#traces.withSpan(span, () =>
-				this.#config.onWebSocket!(ctx, websocket),
+				this.#config.onWebSocket!(ctx, trackedWebSocket),
 			);
 
 			// Save changes from the WebSocket open
@@ -1174,6 +1206,93 @@ export class ActorInstance<
 		this.#backgroundPromises.push(nonfailablePromise);
 	}
 
+	#getEffectiveSleepGracePeriod(): number {
+		// Resolve the graceful shutdown budget for sleep.
+		//
+		// If sleepGracePeriod is unset, use the new default unless one of the
+		// deprecated legacy timeout knobs was explicitly customized. In that case,
+		// keep honoring the legacy sum so existing tuned actors do not silently
+		// lose shutdown budget.
+		if (this.overrides.sleepGracePeriod !== undefined) {
+			return this.#config.options.sleepGracePeriod !== undefined
+				? Math.min(
+						this.#config.options.sleepGracePeriod,
+						this.overrides.sleepGracePeriod,
+					)
+				: this.overrides.sleepGracePeriod;
+		}
+
+		if (this.#config.options.sleepGracePeriod !== undefined) {
+			return this.#config.options.sleepGracePeriod;
+		}
+
+		const effectiveOnSleepTimeout =
+			this.overrides.onSleepTimeout !== undefined
+				? Math.min(
+						this.#config.options.onSleepTimeout,
+						this.overrides.onSleepTimeout,
+					)
+				: this.#config.options.onSleepTimeout;
+		const effectiveWaitUntilTimeout =
+			this.overrides.waitUntilTimeout !== undefined
+				? Math.min(
+						this.#config.options.waitUntilTimeout,
+						this.overrides.waitUntilTimeout,
+					)
+				: this.#config.options.waitUntilTimeout;
+
+		const usesDefaultLegacyTimeouts =
+			effectiveOnSleepTimeout === DEFAULT_ON_SLEEP_TIMEOUT &&
+			effectiveWaitUntilTimeout === DEFAULT_WAIT_UNTIL_TIMEOUT;
+		if (usesDefaultLegacyTimeouts) {
+			return DEFAULT_SLEEP_GRACE_PERIOD;
+		}
+
+		return effectiveOnSleepTimeout + effectiveWaitUntilTimeout;
+	}
+
+	#beginActiveAsyncRegion(region: keyof ActiveAsyncRegionCounts) {
+		this.#activeAsyncRegionCounts[region]++;
+		this.resetSleepTimer();
+	}
+
+	#endActiveAsyncRegion(region: keyof ActiveAsyncRegionCounts) {
+		this.#activeAsyncRegionCounts[region]--;
+		if (this.#activeAsyncRegionCounts[region] < 0) {
+			this.#activeAsyncRegionCounts[region] = 0;
+			this.#rLog.warn({
+				msg: ACTIVE_ASYNC_REGION_ERROR_MESSAGES[region],
+				...EXTRA_ERROR_LOG,
+			});
+		}
+
+		this.resetSleepTimer();
+	}
+
+	#trackWebSocketCallback(eventType: string, promise: Promise<void>) {
+		this.#beginActiveAsyncRegion("websocketCallbacks");
+
+		const trackedPromise = promise
+			.then(() => {
+				this.#rLog.debug({
+					msg: "websocket callback complete",
+					eventType,
+				});
+			})
+			.catch((error) => {
+				this.#rLog.error({
+					msg: "websocket callback failed",
+					eventType,
+					error: stringifyError(error),
+				});
+			})
+			.finally(() => {
+				this.#endActiveAsyncRegion("websocketCallbacks");
+			});
+
+		this.#websocketCallbackPromises.push(trackedPromise);
+	}
+
 	/**
 	 * Prevents the actor from sleeping while the given promise is running.
 	 *
@@ -1186,21 +1305,12 @@ export class ActorInstance<
 	async keepAwake<T>(promise: Promise<T>): Promise<T> {
 		this.assertReady();
 
-		this.#activeKeepAwakeCount++;
-		this.resetSleepTimer();
+		this.#beginActiveAsyncRegion("keepAwake");
 
 		try {
 			return await promise;
 		} finally {
-			this.#activeKeepAwakeCount--;
-			if (this.#activeKeepAwakeCount < 0) {
-				this.#activeKeepAwakeCount = 0;
-				this.#rLog.warn({
-					msg: "active keep awake count went below 0, this is a RivetKit bug",
-					...EXTRA_ERROR_LOG,
-				});
-			}
-			this.resetSleepTimer();
+			this.#endActiveAsyncRegion("keepAwake");
 		}
 	}
 
@@ -1208,6 +1318,10 @@ export class ActorInstance<
 		if (this.#preventSleep === prevent) return;
 
 		this.#preventSleep = prevent;
+		if (!prevent) {
+			this.#preventSleepClearedPromise?.resolve();
+			this.#preventSleepClearedPromise = undefined;
+		}
 		this.#rLog.debug({
 			msg: "updated prevent sleep state",
 			prevent,
@@ -1522,7 +1636,7 @@ export class ActorInstance<
 		}
 	}
 
-	async #callOnSleep() {
+	async #callOnSleep(deadlineTs: number) {
 		if (this.#config.onSleep) {
 			const onSleep = this.#config.onSleep;
 			try {
@@ -1533,14 +1647,13 @@ export class ActorInstance<
 					async () => {
 						const result = onSleep(this.actorContext);
 						if (result instanceof Promise) {
+							const remaining = deadlineTs - Date.now();
+							if (remaining <= 0) {
+								throw new DeadlineError();
+							}
 							await deadline(
 								result,
-								this.overrides.onSleepTimeout !== undefined
-									? Math.min(
-											this.#config.options.onSleepTimeout,
-											this.overrides.onSleepTimeout,
-										)
-									: this.#config.options.onSleepTimeout,
+								remaining,
 							);
 						}
 					},
@@ -1864,31 +1977,60 @@ export class ActorInstance<
 		}
 	}
 
-	async #waitBackgroundPromises(timeoutMs: number) {
-		const deadlineTs = Date.now() + timeoutMs;
+	/**
+	 * Drain shutdown blockers within the shared shutdown deadline.
+	 *
+	 * This method is intentionally called multiple times during shutdown so
+	 * work created by earlier shutdown phases, such as async WebSocket close
+	 * handlers or waitUntil calls they enqueue, is also drained before final
+	 * persistence.
+	 */
+	async #waitShutdownTasks(deadlineTs: number) {
+		while (
+			this.#backgroundPromises.length > 0 ||
+			this.#websocketCallbackPromises.length > 0 ||
+			this.#preventSleep
+		) {
+			await this.#drainPromiseQueue(
+				this.#backgroundPromises,
+				"background tasks",
+				deadlineTs,
+			);
+			await this.#drainPromiseQueue(
+				this.#websocketCallbackPromises,
+				"websocket callbacks",
+				deadlineTs,
+			);
+			await this.#waitForPreventSleepClear(deadlineTs);
 
-		// Drain in a loop so that waitUntil calls made inside waitUntil
-		// callbacks are also awaited. Each iteration waits for all promises
-		// that existed at the start of the iteration. If new ones appear
-		// during that wait, loop again. Stop when no new promises have been
-		// added or the timeout expires.
-		while (this.#backgroundPromises.length > 0) {
+			if (deadlineTs - Date.now() <= 0) {
+				break;
+			}
+		}
+	}
+
+	async #drainPromiseQueue(
+		promises: Promise<void>[],
+		label: string,
+		deadlineTs: number,
+	) {
+		// Drain in a loop so that work scheduled from earlier callbacks is also
+		// awaited within the same deadline.
+		while (promises.length > 0) {
 			const remaining = deadlineTs - Date.now();
 			if (remaining <= 0) {
 				this.#rLog.error({
-					msg: "timed out waiting for background tasks",
-					count: this.#backgroundPromises.length,
-					timeoutMs,
+					msg: `timed out waiting for ${label}`,
+					count: promises.length,
 				});
 				break;
 			}
 
-			// Snapshot the current length so we can detect new additions.
-			const batch = this.#backgroundPromises.length;
+			const batch = promises.length;
 
 			let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 			const timedOut = await Promise.race([
-				Promise.allSettled(this.#backgroundPromises.slice(0, batch)).then(() => {
+				Promise.allSettled(promises.slice(0, batch)).then(() => {
 					if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
 					return false;
 				}),
@@ -1899,20 +2041,74 @@ export class ActorInstance<
 
 			if (timedOut) {
 				this.#rLog.error({
-					msg: "timed out waiting for background tasks",
-					count: this.#backgroundPromises.length,
-					timeoutMs,
+					msg: `timed out waiting for ${label}`,
+					count: promises.length,
 				});
 				break;
 			}
 
-			// Remove the settled promises from the front of the array.
-			this.#backgroundPromises.splice(0, batch);
+			promises.splice(0, batch);
 		}
 
-		if (this.#backgroundPromises.length === 0) {
-			this.#rLog.debug({ msg: "background promises finished" });
+		if (promises.length === 0) {
+			this.#rLog.debug({ msg: `${label} finished` });
 		}
+	}
+
+	async #waitForPreventSleepClear(deadlineTs: number) {
+		while (this.#preventSleep) {
+			const remaining = deadlineTs - Date.now();
+			if (remaining <= 0) {
+				this.#rLog.error({
+					msg: "timed out waiting for preventSleep to clear during shutdown",
+				});
+				break;
+			}
+
+			if (!this.#preventSleepClearedPromise) {
+				this.#preventSleepClearedPromise = promiseWithResolvers<void>(
+					(reason: unknown) =>
+						this.#rLog.warn({
+							msg: "preventSleep clear waiter rejected unexpectedly",
+							reason: stringifyError(reason),
+							...EXTRA_ERROR_LOG,
+						}),
+				);
+			}
+
+			let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+			const timedOut = await Promise.race([
+				this.#preventSleepClearedPromise.promise.then(() => {
+					if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+					return false;
+				}),
+				new Promise<true>((resolve) => {
+					timeoutHandle = setTimeout(() => resolve(true), remaining);
+				}),
+			]);
+
+			if (timedOut) {
+				this.#rLog.error({
+					msg: "timed out waiting for preventSleep to clear during shutdown",
+				});
+				break;
+			}
+		}
+	}
+
+	#createTrackedWebSocket(websocket: UniversalWebSocket): TrackedWebSocket {
+		return new TrackedWebSocket(websocket, {
+			onPromise: (eventType, promise) => {
+				this.#trackWebSocketCallback(eventType, promise);
+			},
+			onError: (eventType, error) => {
+				this.#rLog.error({
+					msg: "error in websocket event handler",
+					eventType,
+					error: stringifyError(error),
+				});
+			},
+		});
 	}
 
 	resetSleepTimer() {
@@ -1920,12 +2116,17 @@ export class ActorInstance<
 		if (this.#stopCalled) return;
 
 		const canSleep = this.#canSleep();
+		let timeoutMs: number | undefined;
+
+		if (canSleep === CanSleep.Yes) {
+			timeoutMs = this.#config.options.sleepTimeout;
+		}
 
 		this.#rLog.debug({
 			msg: "resetting sleep timer",
 			canSleep: CanSleep[canSleep],
 			existingTimeout: !!this.#sleepTimeout,
-			timeout: this.#config.options.sleepTimeout,
+			timeout: timeoutMs,
 		});
 
 		if (this.#sleepTimeout) {
@@ -1935,10 +2136,10 @@ export class ActorInstance<
 
 		if (this.#sleepCalled) return;
 
-		if (canSleep === CanSleep.Yes) {
+		if (timeoutMs !== undefined) {
 			this.#sleepTimeout = setTimeout(() => {
 				this.startSleep();
-			}, this.#config.options.sleepTimeout);
+			}, timeoutMs);
 		}
 	}
 
@@ -1948,7 +2149,9 @@ export class ActorInstance<
 		if (this.#preventSleep) return CanSleep.PreventSleep;
 		if (this.#activeHonoHttpRequests > 0)
 			return CanSleep.ActiveHonoHttpRequests;
-		if (this.#activeKeepAwakeCount > 0) return CanSleep.ActiveKeepAwake;
+		if (this.#activeAsyncRegionCounts.keepAwake > 0) {
+			return CanSleep.ActiveKeepAwake;
+		}
 		if (this.#runHandlerActive && this.#activeQueueWaitCount === 0) {
 			return CanSleep.ActiveRun;
 		}
@@ -1962,6 +2165,10 @@ export class ActorInstance<
 
 		if (this.connectionManager.pendingDisconnectCount > 0) {
 			return CanSleep.ActiveDisconnectCallbacks;
+		}
+
+		if (this.#activeAsyncRegionCounts.websocketCallbacks > 0) {
+			return CanSleep.ActiveWebSocketCallbacks;
 		}
 
 		return CanSleep.Yes;

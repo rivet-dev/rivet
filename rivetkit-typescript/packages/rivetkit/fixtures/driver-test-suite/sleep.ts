@@ -2,6 +2,97 @@ import { actor, event, type UniversalWebSocket } from "rivetkit";
 import { promiseWithResolvers } from "rivetkit/utils";
 
 export const SLEEP_TIMEOUT = 1000;
+export const PREVENT_SLEEP_TIMEOUT = 250;
+export const RAW_WS_HANDLER_SLEEP_TIMEOUT = 100;
+export const RAW_WS_HANDLER_DELAY = 250;
+
+type AsyncRawWebSocketState = {
+	startCount: number;
+	sleepCount: number;
+	messageStarted: number;
+	messageFinished: number;
+	closeStarted: number;
+	closeFinished: number;
+};
+
+function delay(ms: number) {
+	return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function createAsyncRawWebSocketSleepActor(
+	registration: "listener" | "property",
+	eventType: "message" | "close",
+) {
+	return actor({
+		state: {
+			startCount: 0,
+			sleepCount: 0,
+			messageStarted: 0,
+			messageFinished: 0,
+			closeStarted: 0,
+			closeFinished: 0,
+		} satisfies AsyncRawWebSocketState,
+		createVars: () => ({
+			websocket: null as UniversalWebSocket | null,
+		}),
+		onWake: (c) => {
+			c.state.startCount += 1;
+		},
+		onSleep: (c) => {
+			c.state.sleepCount += 1;
+		},
+		onWebSocket: (c, websocket: UniversalWebSocket) => {
+			c.vars.websocket = websocket;
+
+			const onMessage = async (event: any) => {
+				if (event.data !== "track-message") return;
+
+				c.state.messageStarted += 1;
+				websocket.send(JSON.stringify({ type: "message-started" }));
+				await delay(RAW_WS_HANDLER_DELAY);
+				c.state.messageFinished += 1;
+			};
+
+			const onClose = async () => {
+				c.state.closeStarted += 1;
+				await delay(RAW_WS_HANDLER_DELAY);
+				c.state.closeFinished += 1;
+			};
+
+			if (registration === "listener") {
+				if (eventType === "message") {
+					websocket.addEventListener("message", onMessage);
+				} else {
+					websocket.addEventListener("close", onClose);
+				}
+			} else if (eventType === "message") {
+				websocket.onmessage = onMessage;
+			} else {
+				websocket.onclose = onClose;
+			}
+
+			websocket.send(JSON.stringify({ type: "connected" }));
+		},
+		actions: {
+			triggerSleep: (c) => {
+				c.sleep();
+			},
+			getStatus: (c) => {
+				return {
+					startCount: c.state.startCount,
+					sleepCount: c.state.sleepCount,
+					messageStarted: c.state.messageStarted,
+					messageFinished: c.state.messageFinished,
+					closeStarted: c.state.closeStarted,
+					closeFinished: c.state.closeFinished,
+				};
+			},
+		},
+		options: {
+			sleepTimeout: RAW_WS_HANDLER_SLEEP_TIMEOUT,
+		},
+	});
+}
 
 export const sleep = actor({
 	state: { startCount: 0, sleepCount: 0 },
@@ -32,6 +123,18 @@ export const sleep = actor({
 		sleepTimeout: SLEEP_TIMEOUT,
 	},
 });
+
+export const sleepRawWsAddEventListenerMessage =
+	createAsyncRawWebSocketSleepActor("listener", "message");
+
+export const sleepRawWsAddEventListenerClose =
+	createAsyncRawWebSocketSleepActor("listener", "close");
+
+export const sleepRawWsOnMessage =
+	createAsyncRawWebSocketSleepActor("property", "message");
+
+export const sleepRawWsOnClose =
+	createAsyncRawWebSocketSleepActor("property", "close");
 
 export const sleepWithLongRpc = actor({
 	state: { startCount: 0, sleepCount: 0 },
@@ -331,6 +434,8 @@ export const sleepWithPreventSleep = actor({
 		startCount: 0,
 		sleepCount: 0,
 		preventSleepOnWake: false,
+		delayPreventSleepDuringShutdown: false,
+		preventSleepClearedDuringShutdown: false,
 	},
 	onWake: (c) => {
 		c.state.startCount += 1;
@@ -338,6 +443,13 @@ export const sleepWithPreventSleep = actor({
 	},
 	onSleep: (c) => {
 		c.state.sleepCount += 1;
+		if (c.state.delayPreventSleepDuringShutdown) {
+			c.setPreventSleep(true);
+			setTimeout(() => {
+				c.state.preventSleepClearedDuringShutdown = true;
+				c.setPreventSleep(false);
+			}, PREVENT_SLEEP_TIMEOUT / 2);
+		}
 	},
 	actions: {
 		triggerSleep: (c) => {
@@ -349,6 +461,10 @@ export const sleepWithPreventSleep = actor({
 				sleepCount: c.state.sleepCount,
 				preventSleep: c.preventSleep,
 				preventSleepOnWake: c.state.preventSleepOnWake,
+				delayPreventSleepDuringShutdown:
+					c.state.delayPreventSleepDuringShutdown,
+				preventSleepClearedDuringShutdown:
+					c.state.preventSleepClearedDuringShutdown,
 			};
 		},
 		setPreventSleep: (c, prevent: boolean) => {
@@ -359,8 +475,14 @@ export const sleepWithPreventSleep = actor({
 			c.state.preventSleepOnWake = prevent;
 			return c.state.preventSleepOnWake;
 		},
+		setDelayPreventSleepDuringShutdown: (c, enabled: boolean) => {
+			c.state.delayPreventSleepDuringShutdown = enabled;
+			c.state.preventSleepClearedDuringShutdown = false;
+			return c.state.delayPreventSleepDuringShutdown;
+		},
 	},
 	options: {
 		sleepTimeout: SLEEP_TIMEOUT,
+		sleepGracePeriod: PREVENT_SLEEP_TIMEOUT,
 	},
 });

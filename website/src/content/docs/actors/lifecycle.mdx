@@ -710,6 +710,7 @@ An actor is considered idle and eligible to sleep when **all** of the following 
 - No active `run` handler (unless it is waiting on a queue)
 - `setPreventSleep` is not enabled
 - No pending disconnect callbacks
+- No async `onWebSocket` event handlers (eg `open`, `message`, `close`) still running
 
 Once the actor becomes idle, the sleep timer starts. After `sleepTimeout` (default 30 seconds) of continuous inactivity, the actor begins the sleep process. Any activity resets the timer.
 
@@ -719,11 +720,13 @@ Outbound requests (e.g. `fetch` calls) do not count as activity and will not kee
 
 The platform may force an actor to migrate to a new machine during version upgrades or when a serverless request is about to timeout. The same [shutdown sequence](#shutdown-sequence) runs, then the actor is rescheduled on a new machine and wakes up with its persisted state.
 
-`setPreventSleep` does **not** prevent forced migrations. It only prevents the idle sleep timer from firing. Use `onSleep` and `waitUntil` to control cleanup before the actor moves to another machine.
+Use `onSleep`, `waitUntil`, or `setPreventSleep` to control the length of the grace period before the actor moves to another machine.
 
 ### Preventing Sleep
 
 If actor state says the actor should stay awake, call `c.setPreventSleep(true)` and clear it once the actor can sleep again. You can read `c.preventSleep` to inspect the current flag.
+
+`setPreventSleep` blocks normal idle sleep until you clear it. It is not a platform-wide stop blocker though. If shutdown has already started, RivetKit waits for `preventSleep` to clear within the same `sleepGracePeriod` shutdown budget used by `onSleep` and `waitUntil`.
 
 ```typescript
 import { actor } from "rivetkit";
@@ -795,7 +798,7 @@ const analyticsActor = actor({
 });
 ```
 
-The actor waits up to `waitUntilTimeout` (default 15 seconds) for all registered promises to settle during the [shutdown sequence](#shutdown-sequence). If the timeout is exceeded, the actor proceeds with sleep anyway.
+The actor waits up to `sleepGracePeriod` for graceful sleep work during the [shutdown sequence](#shutdown-sequence). That single budget covers `onSleep`, `waitUntil`, async raw WebSocket handlers such as `message` and `close`, and waiting for `preventSleep` to clear after shutdown has started. By default, this graceful sleep window is 15 seconds total. If the timeout is exceeded, the actor proceeds with sleep anyway.
 
 ### Sleep Timeouts
 
@@ -803,8 +806,7 @@ The actor waits up to `waitUntilTimeout` (default 15 seconds) for all registered
 |--------|---------|-------------|
 | `sleepTimeout` | 30 seconds | Time of inactivity before the actor begins sleeping. |
 | `runStopTimeout` | 15 seconds | Max time to wait for the `run` handler to exit during shutdown. |
-| `onSleepTimeout` | 5 seconds | Max time for the `onSleep` hook to run. |
-| `waitUntilTimeout` | 15 seconds | Max time to wait for `waitUntil` background promises during shutdown. |
+| `sleepGracePeriod` | 15 seconds | Total graceful sleep budget for `onSleep`, `waitUntil`, async raw WebSocket handlers, and waiting for `preventSleep` to clear after shutdown starts. |
 
 Rivet enforces a hard limit of **30 minutes** for the entire stop process. These can be configured in the [options](#options).
 
@@ -818,16 +820,17 @@ When an actor sleeps, it shuts down in order:
 
 1. `c.abortSignal` fires and `c.aborted` becomes `true`. Alarm timeouts are cancelled. Scheduled events are persisted and will be re-armed when the actor wakes.
 2. Wait for `run` handler to exit (up to `runStopTimeout`).
-3. `onSleep` hook runs (up to `onSleepTimeout`). See the [`onSleep` hook reference](#onsleep).
-4. `waitUntil` background promises are awaited (up to `waitUntilTimeout`). Nested `waitUntil` calls made inside earlier `waitUntil` callbacks are also drained within the same timeout window.
+3. The graceful sleep window starts. `onSleep` runs first, using the shared `sleepGracePeriod` budget. See the [`onSleep` hook reference](#onsleep).
+4. `waitUntil` background promises and pending async raw WebSocket event handlers are awaited with the remaining `sleepGracePeriod` budget. Nested `waitUntil` calls made inside earlier callbacks are also drained within the same timeout window.
 5. Non-hibernatable connections are disconnected. Hibernatable WebSocket connections are preserved for live migration.
-6. State is saved and the database is cleaned up.
+6. Async raw WebSocket `close` handlers triggered by step 5 are awaited with the remaining `sleepGracePeriod` budget.
+7. State is saved and the database is cleaned up.
 
 The same sequence applies when an actor is destroyed, except `onDestroy` runs in place of `onSleep`.
 
 #### Graceful shutdown window
 
-During steps 1 through 5, the actor is still fully functional. Database access, `broadcast`, `waitUntil`, `queue.send`, and `schedule.after` all work. State mutations are persisted at step 6. Actions invoked by pre-existing connections or lifecycle hooks continue to execute normally.
+During steps 1 through 6, the actor is still fully functional. Database access, `broadcast`, `waitUntil`, `queue.send`, and `schedule.after` all work. State mutations are persisted at step 7. Actions invoked by pre-existing connections or lifecycle hooks continue to execute normally.
 
 New connections and raw WebSocket upgrades are rejected as soon as the shutdown sequence begins. New requests that arrive during shutdown are held until the actor wakes up again. The caller does not need to retry.
 
@@ -855,8 +858,8 @@ const myActor = actor({
     // Timeout for onConnect hook (default: 5000ms)
     onConnectTimeout: 5000,
 
-    // Timeout for onSleep hook (default: 5000ms)
-    onSleepTimeout: 5000,
+    // Total graceful shutdown sleep budget. Default: 15000ms.
+    sleepGracePeriod: 15_000,
 
     // Timeout for onDestroy hook (default: 5000ms)
     onDestroyTimeout: 5000,
@@ -869,9 +872,6 @@ const myActor = actor({
 
     // Max time to wait for run handler to stop during shutdown (default: 15000ms)
     runStopTimeout: 15_000,
-
-    // Max time to wait for waitUntil background promises during shutdown (default: 15000ms)
-    waitUntilTimeout: 15_000,
 
     // Timeout for connection liveness check (default: 2500ms)
     connectionLivenessTimeout: 2500,
@@ -896,12 +896,11 @@ const myActor = actor({
 | `createVarsTimeout` | 5000ms | Timeout for `createVars` function |
 | `createConnStateTimeout` | 5000ms | Timeout for `createConnState` function |
 | `onConnectTimeout` | 5000ms | Timeout for `onConnect` hook |
-| `onSleepTimeout` | 5000ms | Timeout for `onSleep` hook |
+| `sleepGracePeriod` | 15000ms | Total graceful sleep budget |
 | `onDestroyTimeout` | 5000ms | Timeout for `onDestroy` hook |
 | `stateSaveInterval` | 10000ms | Interval for persisting state |
 | `actionTimeout` | 60000ms | Timeout for action execution |
 | `runStopTimeout` | 15000ms | Max time to wait for run handler to stop during shutdown |
-| `waitUntilTimeout` | 15000ms | Max time to wait for `waitUntil` background promises during shutdown |
 | `connectionLivenessTimeout` | 2500ms | Timeout for connection liveness check |
 | `connectionLivenessInterval` | 5000ms | Interval for connection liveness check |
 | `sleepTimeout` | 30000ms | Time before actor sleeps due to inactivity |

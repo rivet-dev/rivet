@@ -686,6 +686,8 @@ export class EngineActorDriver implements ActorDriver {
 					);
 					handler.actor.overrides.runStopTimeout = drainMax;
 					handler.actor.overrides.waitUntilTimeout = drainMax;
+					handler.actor.overrides.sleepGracePeriod =
+						stopThresholdMax + drainMax;
 				}
 			}
 

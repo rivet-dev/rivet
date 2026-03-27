@@ -264,7 +264,7 @@ export class Conn<
 		if (this[CONN_DRIVER_SYMBOL]) {
 			const driver = this[CONN_DRIVER_SYMBOL];
 			if (driver.disconnect) {
-				driver.disconnect(this.#actor, this, reason);
+				await driver.disconnect(this.#actor, this, reason);
 			} else {
 				this.#actor.rLog.debug({
 					msg: "no disconnect handler for conn driver",

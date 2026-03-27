@@ -1,9 +1,46 @@
 import { describe, expect, test, vi } from "vitest";
-import { SLEEP_DB_TIMEOUT } from "../../../fixtures/driver-test-suite/sleep-db";
+import { RAW_WS_HANDLER_DELAY } from "../../../fixtures/driver-test-suite/sleep";
+import {
+	SLEEP_DB_TIMEOUT,
+} from "../../../fixtures/driver-test-suite/sleep-db";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
 type LogEntry = { id: number; event: string; created_at: number };
+
+async function connectRawWebSocket(handle: { webSocket(): Promise<WebSocket> }) {
+	const ws = await handle.webSocket();
+
+	await new Promise<void>((resolve, reject) => {
+		ws.addEventListener("open", () => resolve(), { once: true });
+		ws.addEventListener("error", () => reject(new Error("websocket error")), {
+			once: true,
+		});
+	});
+
+	await new Promise<void>((resolve, reject) => {
+		const onMessage = (event: MessageEvent) => {
+			const data = JSON.parse(String(event.data));
+			if (data.type === "connected") {
+				cleanup();
+				resolve();
+			}
+		};
+		const onClose = () => {
+			cleanup();
+			reject(new Error("websocket closed early"));
+		};
+		const cleanup = () => {
+			ws.removeEventListener("message", onMessage);
+			ws.removeEventListener("close", onClose);
+		};
+
+		ws.addEventListener("message", onMessage);
+		ws.addEventListener("close", onClose, { once: true });
+	});
+
+	return ws;
+}
 
 export function runActorSleepDbTests(driverTestConfig: DriverTestConfig) {
 	describe.skipIf(driverTestConfig.skip?.sleep)(
@@ -141,6 +178,42 @@ export function runActorSleepDbTests(driverTestConfig: DriverTestConfig) {
 				expect(events).toContain("before-sleep");
 				expect(events).toContain("sleep");
 				expect(events).toContain("disconnect");
+			});
+
+			test("async websocket close handler can use c.db before sleep completes", async (c) => {
+				const { client } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
+
+				const actor = client.sleepWithRawWsCloseDb.getOrCreate([
+					"raw-ws-close-db",
+				]);
+				const ws = await connectRawWebSocket(actor);
+
+				await new Promise<void>((resolve, reject) => {
+					ws.addEventListener("close", () => resolve(), { once: true });
+					ws.addEventListener(
+						"error",
+						() => reject(new Error("websocket error")),
+						{ once: true },
+					);
+					ws.close();
+				});
+
+				await waitFor(driverTestConfig, RAW_WS_HANDLER_DELAY + 150);
+
+				const status = await actor.getStatus();
+				expect(status.sleepCount).toBe(1);
+				expect(status.startCount).toBe(2);
+				expect(status.closeStarted).toBe(1);
+				expect(status.closeFinished).toBe(1);
+
+				const entries = await actor.getLogEntries();
+				const events = entries.map((entry: LogEntry) => entry.event);
+				expect(events).toContain("sleep");
+				expect(events).toContain("close-start");
+				expect(events).toContain("close-finish");
 			});
 
 			test("broadcast works in onSleep", async (c) => {

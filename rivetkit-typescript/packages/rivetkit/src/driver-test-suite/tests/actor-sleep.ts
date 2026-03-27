@@ -1,7 +1,66 @@
 import { describe, expect, test } from "vitest";
-import { SLEEP_TIMEOUT } from "../../../fixtures/driver-test-suite/sleep";
+import {
+	PREVENT_SLEEP_TIMEOUT,
+	RAW_WS_HANDLER_DELAY,
+	RAW_WS_HANDLER_SLEEP_TIMEOUT,
+	SLEEP_TIMEOUT,
+} from "../../../fixtures/driver-test-suite/sleep";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
+
+async function waitForRawWebSocketMessage(ws: WebSocket) {
+	return await new Promise<any>((resolve, reject) => {
+		const onMessage = (event: MessageEvent) => {
+			cleanup();
+			resolve(JSON.parse(String(event.data)));
+		};
+		const onClose = (event: { code?: number }) => {
+			cleanup();
+			reject(
+				new Error(
+					`websocket closed early: ${event.code ?? "unknown"}`,
+				),
+			);
+		};
+		const onError = () => {
+			cleanup();
+			reject(new Error("websocket error"));
+		};
+		const cleanup = () => {
+			ws.removeEventListener("message", onMessage);
+			ws.removeEventListener("close", onClose);
+			ws.removeEventListener("error", onError);
+		};
+
+		ws.addEventListener("message", onMessage, { once: true });
+		ws.addEventListener("close", onClose, { once: true });
+		ws.addEventListener("error", onError, { once: true });
+	});
+}
+
+async function connectRawWebSocket(handle: { webSocket(): Promise<WebSocket> }) {
+	const ws = await handle.webSocket();
+
+	await new Promise<void>((resolve, reject) => {
+		ws.addEventListener("open", () => resolve(), { once: true });
+		ws.addEventListener("error", () => reject(new Error("websocket error")), {
+			once: true,
+		});
+	});
+
+	await waitForRawWebSocketMessage(ws);
+	return ws;
+}
+
+async function closeRawWebSocket(ws: WebSocket) {
+	await new Promise<void>((resolve, reject) => {
+		ws.addEventListener("close", () => resolve(), { once: true });
+		ws.addEventListener("error", () => reject(new Error("websocket error")), {
+			once: true,
+		});
+		ws.close();
+	});
+}
 
 // TODO: These tests are broken with fake timers because `_sleep` requires
 // background async promises that have a race condition with calling
@@ -461,7 +520,6 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 			}
 
 			expect(await sleepActor.setPreventSleep(true)).toBe(true);
-
 			await waitFor(driverTestConfig, SLEEP_TIMEOUT + 250);
 
 			{
@@ -472,7 +530,6 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 			}
 
 			expect(await sleepActor.setPreventSleep(false)).toBe(false);
-
 			await waitFor(driverTestConfig, SLEEP_TIMEOUT + 250);
 
 			{
@@ -480,6 +537,29 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 				expect(status.sleepCount).toBe(1);
 				expect(status.startCount).toBe(2);
 				expect(status.preventSleep).toBe(false);
+			}
+		});
+
+		test("preventSleep delays shutdown until cleared", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const sleepActor = client.sleepWithPreventSleep.getOrCreate([
+				"prevent-sleep-shutdown-delay",
+			]);
+
+			expect(
+				await sleepActor.setDelayPreventSleepDuringShutdown(true),
+			).toBe(true);
+			await sleepActor.triggerSleep();
+			await waitFor(driverTestConfig, PREVENT_SLEEP_TIMEOUT + 150);
+
+			{
+				const status = await sleepActor.getStatus();
+				expect(status.sleepCount).toBe(1);
+				expect(status.startCount).toBe(2);
+				expect(status.preventSleep).toBe(false);
+				expect(status.delayPreventSleepDuringShutdown).toBe(true);
+				expect(status.preventSleepClearedDuringShutdown).toBe(true);
 			}
 		});
 
@@ -508,6 +588,7 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 				expect(status.sleepCount).toBe(1);
 				expect(status.startCount).toBe(2);
 				expect(status.preventSleep).toBe(true);
+				expect(status.preventSleepOnWake).toBe(true);
 			}
 
 			expect(await sleepActor.setPreventSleepOnWake(false)).toBe(false);
@@ -521,6 +602,139 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 				expect(status.startCount).toBe(3);
 				expect(status.preventSleep).toBe(false);
 				expect(status.preventSleepOnWake).toBe(false);
+			}
+		});
+
+		test("async websocket addEventListener message handler delays sleep", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const actor =
+				client.sleepRawWsAddEventListenerMessage.getOrCreate();
+			const ws = await connectRawWebSocket(actor);
+
+			ws.send("track-message");
+			const message = await waitForRawWebSocketMessage(ws);
+			expect(message.type).toBe("message-started");
+
+			await closeRawWebSocket(ws);
+			await waitFor(driverTestConfig, RAW_WS_HANDLER_SLEEP_TIMEOUT + 75);
+
+			{
+				const status = await actor.getStatus();
+				expect(status.startCount).toBe(1);
+				expect(status.sleepCount).toBe(0);
+				expect(status.messageStarted).toBe(1);
+				expect(status.messageFinished).toBe(0);
+			}
+
+			await waitFor(
+				driverTestConfig,
+				RAW_WS_HANDLER_DELAY + RAW_WS_HANDLER_SLEEP_TIMEOUT + 150,
+			);
+
+			{
+				const status = await actor.getStatus();
+				expect(status.startCount).toBe(2);
+				expect(status.sleepCount).toBe(1);
+				expect(status.messageStarted).toBe(1);
+				expect(status.messageFinished).toBe(1);
+			}
+		});
+
+		test("async websocket onmessage handler delays sleep", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const actor = client.sleepRawWsOnMessage.getOrCreate();
+			const ws = await connectRawWebSocket(actor);
+
+			ws.send("track-message");
+			const message = await waitForRawWebSocketMessage(ws);
+			expect(message.type).toBe("message-started");
+
+			await closeRawWebSocket(ws);
+			await waitFor(driverTestConfig, RAW_WS_HANDLER_SLEEP_TIMEOUT + 75);
+
+			{
+				const status = await actor.getStatus();
+				expect(status.startCount).toBe(1);
+				expect(status.sleepCount).toBe(0);
+				expect(status.messageStarted).toBe(1);
+				expect(status.messageFinished).toBe(0);
+			}
+
+			await waitFor(
+				driverTestConfig,
+				RAW_WS_HANDLER_DELAY + RAW_WS_HANDLER_SLEEP_TIMEOUT + 150,
+			);
+
+			{
+				const status = await actor.getStatus();
+				expect(status.startCount).toBe(2);
+				expect(status.sleepCount).toBe(1);
+				expect(status.messageStarted).toBe(1);
+				expect(status.messageFinished).toBe(1);
+			}
+		});
+
+		test("async websocket addEventListener close handler delays sleep", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const actor = client.sleepRawWsAddEventListenerClose.getOrCreate();
+			const ws = await connectRawWebSocket(actor);
+
+			await closeRawWebSocket(ws);
+			await waitFor(driverTestConfig, RAW_WS_HANDLER_SLEEP_TIMEOUT + 75);
+
+			{
+				const status = await actor.getStatus();
+				expect(status.startCount).toBe(1);
+				expect(status.sleepCount).toBe(0);
+				expect(status.closeStarted).toBe(1);
+				expect(status.closeFinished).toBe(0);
+			}
+
+			await waitFor(
+				driverTestConfig,
+				RAW_WS_HANDLER_DELAY + RAW_WS_HANDLER_SLEEP_TIMEOUT + 150,
+			);
+
+			{
+				const status = await actor.getStatus();
+				expect(status.startCount).toBe(2);
+				expect(status.sleepCount).toBe(1);
+				expect(status.closeStarted).toBe(1);
+				expect(status.closeFinished).toBe(1);
+			}
+		});
+
+		test("async websocket onclose handler delays sleep", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const actor = client.sleepRawWsOnClose.getOrCreate();
+			const ws = await connectRawWebSocket(actor);
+
+			await closeRawWebSocket(ws);
+			await waitFor(driverTestConfig, RAW_WS_HANDLER_SLEEP_TIMEOUT + 75);
+
+			{
+				const status = await actor.getStatus();
+				expect(status.startCount).toBe(1);
+				expect(status.sleepCount).toBe(0);
+				expect(status.closeStarted).toBe(1);
+				expect(status.closeFinished).toBe(0);
+			}
+
+			await waitFor(
+				driverTestConfig,
+				RAW_WS_HANDLER_DELAY + RAW_WS_HANDLER_SLEEP_TIMEOUT + 150,
+			);
+
+			{
+				const status = await actor.getStatus();
+				expect(status.startCount).toBe(2);
+				expect(status.sleepCount).toBe(1);
+				expect(status.closeStarted).toBe(1);
+				expect(status.closeFinished).toBe(1);
 			}
 		});
 
