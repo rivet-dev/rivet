@@ -911,7 +911,6 @@ export class ActorInstance<
 
 		this.#activeKeepAwakeCount++;
 		this.#metrics.actionCalls++;
-		this.resetSleepTimer();
 		const actionStart = performance.now();
 		const actionSpan = this.startTraceSpan(`actor.action.${actionName}`, {
 			"rivet.action.name": actionName,
