@@ -157,6 +157,8 @@ const counter = actor({
 
 The `onDestroy` hook is called when the actor is being permanently destroyed. Can be async. Use this for final cleanup operations like closing external connections, releasing resources, or performing any last-minute state persistence.
 
+The actor is still fully functional when `onDestroy` runs. You can access the database, broadcast events, call `waitUntil`, send queue messages, and use `schedule.after`. State mutations made during `onDestroy` are persisted before the actor is torn down.
+
 ```typescript
 import { actor } from "rivetkit";
 
@@ -215,6 +217,8 @@ const counter = actor({
 [API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 This hook is called when the actor is going to sleep. Can be async. Use this to clean up resources, close connections, or perform any shutdown operations.
+
+The actor is still fully functional when `onSleep` runs. You can access the database, broadcast events, call `waitUntil`, send queue messages, and use `schedule.after`. State mutations made during `onSleep` are persisted before the actor finishes sleeping.
 
 This hook may not always be called in situations like crashes or forced terminations. Don't rely on it for critical cleanup operations.
 
@@ -802,7 +806,7 @@ The actor waits up to `waitUntilTimeout` (default 15 seconds) for all registered
 | `onSleepTimeout` | 5 seconds | Max time for the `onSleep` hook to run. |
 | `waitUntilTimeout` | 15 seconds | Max time to wait for `waitUntil` background promises during shutdown. |
 
-Rivet enforces a hard limit of **30 seconds** for the entire stop process. These can be configured in the [options](#options).
+Rivet enforces a hard limit of **30 minutes** for the entire stop process. These can be configured in the [options](#options).
 
 ### WebSocket Hibernation
 
@@ -812,14 +816,22 @@ WebSocket connections are preserved across sleep cycles by default and transpare
 
 When an actor sleeps, it shuts down in order:
 
-1. `c.abortSignal` fires and `c.aborted` becomes `true`.
+1. `c.abortSignal` fires and `c.aborted` becomes `true`. Alarm timeouts are cancelled. Scheduled events are persisted and will be re-armed when the actor wakes.
 2. Wait for `run` handler to exit (up to `runStopTimeout`).
 3. `onSleep` hook runs (up to `onSleepTimeout`). See the [`onSleep` hook reference](#onsleep).
-4. `waitUntil` background promises are awaited (up to `waitUntilTimeout`).
+4. `waitUntil` background promises are awaited (up to `waitUntilTimeout`). Nested `waitUntil` calls made inside earlier `waitUntil` callbacks are also drained within the same timeout window.
 5. Non-hibernatable connections are disconnected. Hibernatable WebSocket connections are preserved for live migration.
 6. State is saved and the database is cleaned up.
 
-Requests that arrive during shutdown are held until the actor wakes up again. The caller does not need to retry.
+The same sequence applies when an actor is destroyed, except `onDestroy` runs in place of `onSleep`.
+
+#### Graceful shutdown window
+
+During steps 1 through 5, the actor is still fully functional. Database access, `broadcast`, `waitUntil`, `queue.send`, and `schedule.after` all work. State mutations are persisted at step 6. Actions invoked by pre-existing connections or lifecycle hooks continue to execute normally.
+
+New connections and raw WebSocket upgrades are rejected as soon as the shutdown sequence begins. New requests that arrive during shutdown are held until the actor wakes up again. The caller does not need to retry.
+
+If `schedule.after` is called during shutdown, the event is persisted so it survives the sleep/wake cycle, but no local timeout is scheduled. The event will fire after the actor wakes.
 
 In-flight actions are **not** waited on during shutdown. If an action must complete before the actor stops, wrap the critical work with `c.waitUntil()`.
 
@@ -900,6 +912,8 @@ const myActor = actor({
 ### Actor Shutdown Abort Signal
 
 The `c.abortSignal` provides an `AbortSignal` that fires when the actor is stopping, and `c.aborted` is the shorthand boolean for loop checks. Use these to cancel ongoing operations when the actor sleeps or is destroyed.
+
+The abort signal fires at the very start of the [shutdown sequence](#shutdown-sequence), before `onSleep` or `onDestroy` runs. This means `c.aborted` is already `true` inside those lifecycle hooks. The signal fires early so that the `run` handler can exit promptly, but the actor remains fully functional throughout the graceful shutdown window.
 
 ```typescript
 import { actor } from "rivetkit";
