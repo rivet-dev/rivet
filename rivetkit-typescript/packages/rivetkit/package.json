@@ -292,6 +292,9 @@
 				"types": "./dist/types/src/sandbox/providers/sprites.d.ts",
 				"default": "./dist/tsup/sandbox/providers/sprites.cjs"
 			}
+		},
+		"./_internal/*": {
+			"types": "./dist/types/src/*.d.ts"
 		}
 	},
 	"engines": {
