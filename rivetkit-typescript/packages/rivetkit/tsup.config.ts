@@ -6,6 +6,9 @@ import defaultConfig from "../../../tsup.base.ts";
 export default defineConfig({
 	...defaultConfig,
 	outDir: "dist/tsup/",
+	// DTS is generated separately via tsup.dts.config.ts with splitting:false
+	// to avoid hashed chunk .d.ts files that break composite/isolatedModules projects.
+	dts: false,
 	// Override shims: false to prevent ESM shims (fileURLToPath, etc.) from being
 	// injected into chunks. The shims import Node.js-only modules which break
 	// browser builds when importing from rivetkit/client.

@@ -1,0 +1,19 @@
+{
+	"extends": "../../../tsconfig.base.json",
+	"compilerOptions": {
+		"types": ["node"],
+		"resolveJsonModule": true,
+		"declaration": true,
+		"emitDeclarationOnly": true,
+		"outDir": "dist/types",
+		"declarationDir": "dist/types",
+		"declarationMap": true,
+		"rootDir": ".",
+		"skipLibCheck": true,
+		"paths": {
+			"@/*": ["./src/*"]
+		}
+	},
+	"include": ["src/**/*", "runtime/index.ts", "dist/schemas/**/*"],
+	"exclude": ["src/**/*.test.ts", "fixtures/**/*"]
+}
