@@ -2,7 +2,9 @@
 	"extends": "../../../tsconfig.base.json",
 	"compilerOptions": {
 		"composite": true,
-		"types": [],
+		"types": [
+			"node"
+		],
 		"resolveJsonModule": true,
 		"declaration": true,
 		"emitDeclarationOnly": true,

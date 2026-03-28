@@ -2,9 +2,12 @@
 	"name": "@rivetkit/engine-test-runner",
 	"version": "2.1.10",
 	"type": "module",
+	"rivetkit": {
+		".": "src/index.ts"
+	},
 	"scripts": {
 		"start": "tsx src/index.ts",
-		"build": "tsup src/index.ts",
+		"build": "tsup src/index.ts && tsc -p tsconfig.build.json --noCheck",
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
@@ -23,5 +26,31 @@
 		"tsx": "^4.20.5",
 		"typescript": "^5.9.2",
 		"vitest": "^1.6.1"
-	}
+	},
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/types/index.d.ts",
+				"default": "./dist/index.js"
+			},
+			"require": {
+				"types": "./dist/types/index.d.ts",
+				"default": "./dist/index.cjs"
+			}
+		}
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"sideEffects": [
+		"./dist/chunk-*.js",
+		"./dist/chunk-*.cjs",
+		"./dist/tsup/chunk-*.js",
+		"./dist/tsup/chunk-*.cjs"
+	],
+	"files": [
+		"dist",
+		"src",
+		"package.json"
+	]
 }

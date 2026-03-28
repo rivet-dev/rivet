@@ -22,6 +22,53 @@
 		"package.json"
 	],
 	"type": "module",
+	"rivetkit": {
+		"outDir": "dist/tsup",
+		"typesDir": "dist/types/src",
+		"rootDir": ".",
+		"extraIncludes": [
+			"runtime/index.ts",
+			"dist/schemas/**/*"
+		],
+		"extraExcludes": [
+			"fixtures/**/*"
+		],
+		"preBuild": "pnpm run build:schema",
+		".": "src/mod.ts",
+		"./workflow": "src/workflow/mod.ts",
+		"./client": {
+			"default": "src/client/mod.ts",
+			"browser": "src/client/mod.browser.ts",
+			"browserName": "client"
+		},
+		"./log": "src/common/log.ts",
+		"./errors": "src/actor/errors.ts",
+		"./utils": "src/utils.ts",
+		"./driver-helpers": "src/driver-helpers/mod.ts",
+		"./driver-helpers/websocket": "src/common/websocket.ts",
+		"./driver-test-suite": "src/driver-test-suite/mod.ts",
+		"./serve-test-suite": "src/serve-test-suite/mod.ts",
+		"./topologies/coordinate": "src/topologies/coordinate/mod.ts",
+		"./topologies/partition": "src/topologies/partition/mod.ts",
+		"./test": "src/test/mod.ts",
+		"./inspector": "src/inspector/mod.ts",
+		"./inspector/client": {
+			"browser": "src/inspector/mod.browser.ts",
+			"browserName": "inspector/client"
+		},
+		"./db": "src/db/mod.ts",
+		"./db/drizzle": "src/db/drizzle/mod.ts",
+		"./sandbox": "src/sandbox/index.ts",
+		"./sandbox/client": "src/sandbox/client.ts",
+		"./sandbox/docker": "src/sandbox/providers/docker.ts",
+		"./sandbox/e2b": "src/sandbox/providers/e2b.ts",
+		"./sandbox/daytona": "src/sandbox/providers/daytona.ts",
+		"./sandbox/local": "src/sandbox/providers/local.ts",
+		"./sandbox/vercel": "src/sandbox/providers/vercel.ts",
+		"./sandbox/modal": "src/sandbox/providers/modal.ts",
+		"./sandbox/computesdk": "src/sandbox/providers/computesdk.ts",
+		"./sandbox/sprites": "src/sandbox/providers/sprites.ts"
+	},
 	"exports": {
 		".": {
 			"import": {
@@ -301,11 +348,13 @@
 		"node": ">=22.0.0"
 	},
 	"sideEffects": [
+		"./dist/chunk-*.js",
+		"./dist/chunk-*.cjs",
 		"./dist/tsup/chunk-*.js",
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/serve-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts src/db/mod.ts src/db/drizzle/mod.ts src/sandbox/index.ts src/sandbox/client.ts src/sandbox/providers/docker.ts src/sandbox/providers/e2b.ts src/sandbox/providers/daytona.ts src/sandbox/providers/local.ts src/sandbox/providers/vercel.ts src/sandbox/providers/modal.ts src/sandbox/providers/computesdk.ts src/sandbox/providers/sprites.ts && tsc -p tsconfig.build.json --noCheck && tsc-alias -p tsconfig.build.json",
+		"build": "pnpm run build:schema && tsup src/mod.ts src/workflow/mod.ts src/client/mod.ts src/common/log.ts src/actor/errors.ts src/utils.ts src/driver-helpers/mod.ts src/common/websocket.ts src/driver-test-suite/mod.ts src/serve-test-suite/mod.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/test/mod.ts src/inspector/mod.ts src/db/mod.ts src/db/drizzle/mod.ts src/sandbox/index.ts src/sandbox/client.ts src/sandbox/providers/docker.ts src/sandbox/providers/e2b.ts src/sandbox/providers/daytona.ts src/sandbox/providers/local.ts src/sandbox/providers/vercel.ts src/sandbox/providers/modal.ts src/sandbox/providers/computesdk.ts src/sandbox/providers/sprites.ts && tsc -p tsconfig.build.json --noCheck && tsc-alias -p tsconfig.build.json",
 		"build:browser": "tsup --config tsup.browser.config.ts",
 		"build:schema": "./scripts/compile-all-bare.ts",
 		"check-types": "tsc --noEmit",

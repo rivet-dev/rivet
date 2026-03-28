@@ -16,33 +16,41 @@
 		"package.json"
 	],
 	"type": "module",
+	"rivetkit": {
+		"outDir": "dist/tsup",
+		"typesDir": "dist/types/src",
+		"rootDir": ".",
+		"preBuild": "pnpm run compile:bare",
+		".": "src/index.ts",
+		"./testing": "src/testing.ts"
+	},
 	"exports": {
 		".": {
 			"import": {
-				"types": "./dist/tsup/index.d.ts",
+				"types": "./dist/types/src/index.d.ts",
 				"default": "./dist/tsup/index.js"
 			},
 			"require": {
-				"types": "./dist/tsup/index.d.cts",
+				"types": "./dist/types/src/index.d.ts",
 				"default": "./dist/tsup/index.cjs"
 			}
 		},
 		"./testing": {
 			"import": {
-				"types": "./dist/tsup/testing.d.ts",
+				"types": "./dist/types/src/testing.d.ts",
 				"default": "./dist/tsup/testing.js"
 			},
 			"require": {
-				"types": "./dist/tsup/testing.d.cts",
+				"types": "./dist/types/src/testing.d.ts",
 				"default": "./dist/tsup/testing.cjs"
 			}
 		}
 	},
 	"engines": {
-		"node": ">=18.0.0"
+		"node": ">=22.0.0"
 	},
 	"scripts": {
-		"build": "pnpm run compile:bare && tsup src/index.ts src/testing.ts",
+		"build": "pnpm run compile:bare && tsup src/index.ts src/testing.ts && tsc -p tsconfig.build.json --noCheck",
 		"compile:bare": "tsx scripts/compile-bare.ts compile schemas/v1.bare -o dist/schemas/v1.ts",
 		"check-types": "tsc --noEmit",
 		"lint": "biome check .",
@@ -66,5 +74,11 @@
 		"tsup": "^8.4.0",
 		"typescript": "^5.7.3",
 		"vitest": "^3.1.1"
-	}
+	},
+	"sideEffects": [
+		"./dist/chunk-*.js",
+		"./dist/chunk-*.cjs",
+		"./dist/tsup/chunk-*.js",
+		"./dist/tsup/chunk-*.cjs"
+	]
 }

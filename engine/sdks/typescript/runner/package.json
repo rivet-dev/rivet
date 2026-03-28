@@ -2,23 +2,28 @@
 	"name": "@rivetkit/engine-runner",
 	"version": "2.1.10",
 	"type": "module",
+	"rivetkit": {
+		".": "src/mod.ts"
+	},
 	"files": [
 		"dist",
 		"src",
 		"package.json"
 	],
 	"exports": {
-		"import": {
-			"types": "./dist/mod.d.ts",
-			"default": "./dist/mod.js"
-		},
-		"require": {
-			"types": "./dist/mod.d.cts",
-			"default": "./dist/mod.cjs"
+		".": {
+			"import": {
+				"types": "./dist/types/mod.d.ts",
+				"default": "./dist/mod.js"
+			},
+			"require": {
+				"types": "./dist/types/mod.d.ts",
+				"default": "./dist/mod.cjs"
+			}
 		}
 	},
 	"scripts": {
-		"build": "tsup src/mod.ts",
+		"build": "tsup src/mod.ts && tsc -p tsconfig.build.json --noCheck",
 		"check-types": "tsc --noEmit",
 		"test": "vitest run",
 		"test:watch": "vitest",
@@ -39,5 +44,14 @@
 		"tsx": "^4.20.5",
 		"typescript": "^5.9.2",
 		"vitest": "^1.6.1"
-	}
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"sideEffects": [
+		"./dist/chunk-*.js",
+		"./dist/chunk-*.cjs",
+		"./dist/tsup/chunk-*.js",
+		"./dist/tsup/chunk-*.cjs"
+	]
 }

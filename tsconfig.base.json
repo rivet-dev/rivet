@@ -3,6 +3,7 @@
 		"target": "esnext",
 		"module": "esnext",
 		"strict": true,
+		"isolatedModules": true,
 		"skipLibCheck": true,
 		"esModuleInterop": false,
 		"allowSyntheticDefaultImports": true,

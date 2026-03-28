@@ -1,19 +1,48 @@
 {
 	"extends": "../../../tsconfig.base.json",
 	"compilerOptions": {
-		"types": ["node"],
+		"composite": true,
+		"types": [
+			"node"
+		],
 		"resolveJsonModule": true,
 		"declaration": true,
 		"emitDeclarationOnly": true,
+		"declarationMap": true,
 		"outDir": "dist/types",
 		"declarationDir": "dist/types",
-		"declarationMap": true,
 		"rootDir": ".",
 		"skipLibCheck": true,
 		"paths": {
-			"@/*": ["./src/*"]
+			"@/*": [
+				"./src/*"
+			]
 		}
 	},
-	"include": ["src/**/*", "runtime/index.ts", "dist/schemas/**/*"],
-	"exclude": ["src/**/*.test.ts", "fixtures/**/*"]
+	"include": [
+		"src/**/*",
+		"runtime/index.ts",
+		"dist/schemas/**/*"
+	],
+	"exclude": [
+		"src/**/*.test.ts",
+		"fixtures/**/*"
+	],
+	"references": [
+		{
+			"path": "../../../engine/sdks/typescript/runner/tsconfig.build.json"
+		},
+		{
+			"path": "../sqlite-vfs/tsconfig.build.json"
+		},
+		{
+			"path": "../traces/tsconfig.build.json"
+		},
+		{
+			"path": "../../../shared/typescript/virtual-websocket/tsconfig.build.json"
+		},
+		{
+			"path": "../workflow-engine/tsconfig.build.json"
+		}
+	]
 }

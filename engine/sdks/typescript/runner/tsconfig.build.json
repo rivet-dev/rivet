@@ -1,8 +1,10 @@
 {
-	"extends": "../../../tsconfig.base.json",
+	"extends": "../../../../tsconfig.base.json",
 	"compilerOptions": {
 		"composite": true,
-		"types": [],
+		"types": [
+			"node"
+		],
 		"resolveJsonModule": true,
 		"declaration": true,
 		"emitDeclarationOnly": true,
@@ -20,7 +22,10 @@
 	],
 	"references": [
 		{
-			"path": "../rivetkit/tsconfig.build.json"
+			"path": "../../../../shared/typescript/virtual-websocket/tsconfig.build.json"
+		},
+		{
+			"path": "../runner-protocol/tsconfig.build.json"
 		}
 	]
 }

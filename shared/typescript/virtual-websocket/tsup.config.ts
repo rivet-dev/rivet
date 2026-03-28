@@ -1,8 +1,6 @@
 import { defineConfig } from "tsup";
+import defaultConfig from "../../../tsup.base.ts";
 
 export default defineConfig({
-	entry: ["src/mod.ts"],
-	format: ["esm", "cjs"],
-	dts: true,
-	clean: true,
+	...defaultConfig,
 });

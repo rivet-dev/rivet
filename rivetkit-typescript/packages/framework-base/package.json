@@ -12,26 +12,32 @@
 	],
 	"sideEffects": [
 		"./dist/chunk-*.js",
-		"./dist/chunk-*.cjs"
+		"./dist/chunk-*.cjs",
+		"./dist/tsup/chunk-*.js",
+		"./dist/tsup/chunk-*.cjs"
 	],
+	"rivetkit": {
+		".": "src/mod.ts"
+	},
 	"files": [
 		"dist",
-		"package.json"
+		"package.json",
+		"src"
 	],
 	"exports": {
 		".": {
 			"import": {
-				"types": "./dist/mod.d.mts",
-				"default": "./dist/mod.mjs"
+				"types": "./dist/types/mod.d.ts",
+				"default": "./dist/mod.js"
 			},
 			"require": {
-				"types": "./dist/mod.d.ts",
-				"default": "./dist/mod.js"
+				"types": "./dist/types/mod.d.ts",
+				"default": "./dist/mod.cjs"
 			}
 		}
 	},
 	"scripts": {
-		"build": "tsup src/mod.ts",
+		"build": "tsup src/mod.ts && tsc -p tsconfig.build.json --noCheck",
 		"check-types": "tsc --noEmit"
 	},
 	"devDependencies": {
@@ -43,5 +49,9 @@
 		"@tanstack/store": "^0.7.1",
 		"fast-deep-equal": "^3.1.3",
 		"rivetkit": "workspace:*"
+	},
+	"type": "module",
+	"engines": {
+		"node": ">=22.0.0"
 	}
 }

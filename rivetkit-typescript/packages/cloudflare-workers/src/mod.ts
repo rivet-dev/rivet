@@ -6,6 +6,6 @@ export {
 	type Bindings,
 	createHandler,
 	createInlineClient,
-	HandlerOutput,
-	InlineOutput,
+	type HandlerOutput,
+	type InlineOutput,
 } from "./handler";

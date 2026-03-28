@@ -4,6 +4,9 @@
 	"description": "Virtual WebSocket implementation for creating linked WebSocket pairs",
 	"license": "Apache-2.0",
 	"type": "module",
+	"rivetkit": {
+		".": "src/mod.ts"
+	},
 	"files": [
 		"dist",
 		"src",
@@ -12,17 +15,17 @@
 	"exports": {
 		".": {
 			"import": {
-				"types": "./dist/mod.d.ts",
+				"types": "./dist/types/mod.d.ts",
 				"default": "./dist/mod.js"
 			},
 			"require": {
-				"types": "./dist/mod.d.cts",
+				"types": "./dist/types/mod.d.ts",
 				"default": "./dist/mod.cjs"
 			}
 		}
 	},
 	"scripts": {
-		"build": "tsup src/mod.ts",
+		"build": "tsup src/mod.ts && tsc -p tsconfig.build.json --noCheck",
 		"check-types": "tsc --noEmit"
 	},
 	"devDependencies": {
@@ -30,5 +33,14 @@
 		"tsup": "^8.4.0",
 		"typescript": "^5.7.3"
 	},
-	"stableVersion": "0.8.0"
+	"stableVersion": "0.8.0",
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"sideEffects": [
+		"./dist/chunk-*.js",
+		"./dist/chunk-*.cjs",
+		"./dist/tsup/chunk-*.js",
+		"./dist/tsup/chunk-*.cjs"
+	]
 }

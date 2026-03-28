@@ -16,14 +16,20 @@
 		"package.json"
 	],
 	"type": "module",
+	"rivetkit": {
+		".": "src/mod.ts",
+		"./tsconfig": {
+			"static": "dist/tsconfig.json"
+		}
+	},
 	"exports": {
 		".": {
 			"import": {
-				"types": "./dist/mod.d.ts",
+				"types": "./dist/types/mod.d.ts",
 				"default": "./dist/mod.js"
 			},
 			"require": {
-				"types": "./dist/mod.d.cts",
+				"types": "./dist/types/mod.d.ts",
 				"default": "./dist/mod.cjs"
 			}
 		},
@@ -31,10 +37,12 @@
 	},
 	"sideEffects": [
 		"./dist/chunk-*.js",
-		"./dist/chunk-*.cjs"
+		"./dist/chunk-*.cjs",
+		"./dist/tsup/chunk-*.js",
+		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts",
+		"build": "tsup src/mod.ts && tsc -p tsconfig.build.json --noCheck",
 		"check-types": "tsc --noEmit",
 		"test": "vitest run tests"
 	},
@@ -53,5 +61,8 @@
 		"hono": "^4.7.0",
 		"rivetkit": "workspace:*"
 	},
-	"stableVersion": "0.8.0"
+	"stableVersion": "0.8.0",
+	"engines": {
+		"node": ">=22.0.0"
+	}
 }

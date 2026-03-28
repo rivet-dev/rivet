@@ -2,14 +2,16 @@
 	"extends": "../../../tsconfig.base.json",
 	"compilerOptions": {
 		"composite": true,
-		"types": [],
+		"types": [
+			"node"
+		],
 		"resolveJsonModule": true,
 		"declaration": true,
 		"emitDeclarationOnly": true,
 		"declarationMap": true,
 		"outDir": "dist/types",
 		"declarationDir": "dist/types",
-		"rootDir": "src",
+		"rootDir": ".",
 		"skipLibCheck": true
 	},
 	"include": [
@@ -17,10 +19,5 @@
 	],
 	"exclude": [
 		"src/**/*.test.ts"
-	],
-	"references": [
-		{
-			"path": "../rivetkit/tsconfig.build.json"
-		}
 	]
 }

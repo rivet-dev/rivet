@@ -20,6 +20,9 @@
 	],
 	"references": [
 		{
+			"path": "../framework-base/tsconfig.build.json"
+		},
+		{
 			"path": "../rivetkit/tsconfig.build.json"
 		}
 	]

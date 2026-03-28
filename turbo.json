@@ -9,6 +9,7 @@
 			"inputs": [
 				"src/**",
 				"tsconfig.json",
+				"tsconfig.build.json",
 				"tsup.config.ts",
 				"package.json"
 			],

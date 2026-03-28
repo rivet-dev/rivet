@@ -2,7 +2,9 @@
 	"extends": "../../../tsconfig.base.json",
 	"compilerOptions": {
 		"composite": true,
-		"types": [],
+		"types": [
+			"node"
+		],
 		"resolveJsonModule": true,
 		"declaration": true,
 		"emitDeclarationOnly": true,
@@ -19,6 +21,9 @@
 		"src/**/*.test.ts"
 	],
 	"references": [
+		{
+			"path": "../react/tsconfig.build.json"
+		},
 		{
 			"path": "../rivetkit/tsconfig.build.json"
 		}

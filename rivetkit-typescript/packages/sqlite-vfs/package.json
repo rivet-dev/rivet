@@ -4,6 +4,13 @@
 	"description": "SQLite VFS backed by KV storage for RivetKit",
 	"license": "Apache-2.0",
 	"type": "module",
+	"rivetkit": {
+		"outDir": "dist/tsup",
+		"typesDir": "dist/types/src",
+		"rootDir": ".",
+		"preBuild": "pnpm run generate:empty-db-page && pnpm run compile:bare",
+		".": "src/index.ts"
+	},
 	"files": [
 		"dist",
 		"src",
@@ -13,23 +20,23 @@
 	"exports": {
 		".": {
 			"import": {
-				"types": "./dist/tsup/index.d.ts",
+				"types": "./dist/types/src/index.d.ts",
 				"default": "./dist/tsup/index.js"
 			},
 			"require": {
-				"types": "./dist/tsup/index.d.cts",
+				"types": "./dist/types/src/index.d.ts",
 				"default": "./dist/tsup/index.cjs"
 			}
 		}
 	},
 	"engines": {
-		"node": ">=20.0.0"
+		"node": ">=22.0.0"
 	},
 	"scripts": {
-		"build": "pnpm run generate:empty-db-page && pnpm run compile:bare && tsup src/index.ts",
+		"build": "pnpm run generate:empty-db-page && pnpm run compile:bare && tsup src/index.ts && tsc -p tsconfig.build.json --noCheck",
 		"generate:empty-db-page": "tsx scripts/generate-empty-db-page.ts",
 		"compile:bare": "tsx scripts/compile-bare.ts compile schemas/file-meta/v1.bare -o dist/schemas/file-meta/v1.ts",
-		"check-types": "pnpm run generate:empty-db-page && pnpm run compile:bare && tsc --noEmit",
+		"check-types": "tsc --noEmit",
 		"test": "pnpm --filter @rivetkit/sqlite-vfs-test test"
 	},
 	"dependencies": {
@@ -45,5 +52,11 @@
 		"tsup": "^8.4.0",
 		"typescript": "^5.7.3",
 		"vitest": "^3.1.1"
-	}
+	},
+	"sideEffects": [
+		"./dist/chunk-*.js",
+		"./dist/chunk-*.cjs",
+		"./dist/tsup/chunk-*.js",
+		"./dist/tsup/chunk-*.cjs"
+	]
 }

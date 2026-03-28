@@ -4,6 +4,19 @@
 	"description": "Generic tracing storage and OTLP export for RivetKit",
 	"license": "Apache-2.0",
 	"type": "module",
+	"rivetkit": {
+		"outDir": "dist/tsup",
+		"typesDir": "dist/types/src",
+		"rootDir": ".",
+		"browserOutDir": "dist/tsup",
+		"preBuild": "pnpm run compile:bare",
+		".": {
+			"default": "src/index.ts",
+			"browser": "src/index.browser.ts"
+		},
+		"./encoding": "src/encoding.ts",
+		"./otlp": "src/otlp-entry.ts"
+	},
 	"files": [
 		"dist",
 		"src",
@@ -12,48 +25,47 @@
 	],
 	"exports": {
 		".": {
-			"browser": {
-				"types": "./dist/tsup/index.browser.d.ts",
-				"import": "./dist/tsup/index.browser.js",
-				"require": "./dist/tsup/index.browser.cjs"
-			},
 			"import": {
-				"types": "./dist/tsup/index.d.ts",
+				"browser": {
+					"types": "./dist/types/src/index.browser.d.ts",
+					"default": "./dist/tsup/index.browser.js"
+				},
+				"types": "./dist/types/src/index.d.ts",
 				"default": "./dist/tsup/index.js"
 			},
 			"require": {
-				"types": "./dist/tsup/index.d.cts",
+				"types": "./dist/types/src/index.d.ts",
 				"default": "./dist/tsup/index.cjs"
 			}
 		},
 		"./encoding": {
 			"import": {
-				"types": "./dist/tsup/encoding.d.ts",
+				"types": "./dist/types/src/encoding.d.ts",
 				"default": "./dist/tsup/encoding.js"
 			},
 			"require": {
-				"types": "./dist/tsup/encoding.d.cts",
+				"types": "./dist/types/src/encoding.d.ts",
 				"default": "./dist/tsup/encoding.cjs"
 			}
 		},
 		"./otlp": {
 			"import": {
-				"types": "./dist/tsup/otlp-entry.d.ts",
+				"types": "./dist/types/src/otlp-entry.d.ts",
 				"default": "./dist/tsup/otlp-entry.js"
 			},
 			"require": {
-				"types": "./dist/tsup/otlp-entry.d.cts",
+				"types": "./dist/types/src/otlp-entry.d.ts",
 				"default": "./dist/tsup/otlp-entry.cjs"
 			}
 		}
 	},
 	"engines": {
-		"node": ">=18.0.0"
+		"node": ">=22.0.0"
 	},
 	"scripts": {
-		"build": "pnpm run compile:bare && tsup src/index.ts src/index.browser.ts src/encoding.ts src/otlp-entry.ts",
+		"build": "pnpm run compile:bare && tsup src/index.ts src/index.browser.ts src/encoding.ts src/otlp-entry.ts && tsc -p tsconfig.build.json --noCheck",
 		"compile:bare": "tsx scripts/compile-bare.ts compile schemas/v1.bare -o dist/schemas/v1.ts",
-		"check-types": "pnpm run compile:bare && tsc --noEmit",
+		"check-types": "tsc --noEmit",
 		"test": "pnpm run compile:bare && vitest run"
 	},
 	"dependencies": {
@@ -70,5 +82,11 @@
 		"tsup": "^8.4.0",
 		"typescript": "^5.7.3",
 		"vitest": "^3.1.1"
-	}
+	},
+	"sideEffects": [
+		"./dist/chunk-*.js",
+		"./dist/chunk-*.cjs",
+		"./dist/tsup/chunk-*.js",
+		"./dist/tsup/chunk-*.cjs"
+	]
 }
