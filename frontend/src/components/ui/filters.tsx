@@ -8,7 +8,7 @@ import {
 } from "@rivet-gg/icons";
 import { endOfDay, lightFormat, startOfDay, subMonths } from "date-fns";
 import { motion } from "framer-motion";
-import _ from "lodash";
+
 import {
 	type Dispatch,
 	type FunctionComponent,
@@ -1364,7 +1364,9 @@ export function createFiltersPicker(definitions: FilterDefinitions) {
 		// add missing default values to the object
 		object = { ...filtersWithDefaultValues, ...object };
 
-		return _.pick(object, keys) as Record<string, FilterValue>;
+		return Object.fromEntries(
+			Object.entries(object).filter(([k]) => (keys as string[]).includes(k)),
+		) as Record<string, FilterValue>;
 	};
 }
 
@@ -1376,7 +1378,9 @@ export type PickFiltersOptions = {
 export function createFiltersRemover(definitions: FilterDefinitions) {
 	return (object: Record<string, unknown>) => {
 		const keys = Object.keys(definitions);
-		return _.omit(object, keys);
+		return Object.fromEntries(
+			Object.entries(object).filter(([k]) => !keys.includes(k)),
+		);
 	};
 }
 

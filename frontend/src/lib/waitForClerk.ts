@@ -1,6 +1,5 @@
 import type { Clerk } from "@clerk/clerk-js";
 import * as Sentry from "@sentry/react";
-import { posthog } from "posthog-js";
 
 export function waitForClerk(clerk: Clerk): Promise<void> {
 	if (clerk.status === "ready") {
@@ -30,10 +29,15 @@ function identify(clerk: Clerk) {
 		id: clerk.user?.id,
 		email: clerk.user?.primaryEmailAddress?.emailAddress,
 	});
-	posthog.setPersonProperties({
-		id: clerk.user?.id,
-		email: clerk.user?.primaryEmailAddress?.emailAddress,
-	});
+	// Dynamic import guarded by app type so posthog-js is not in the engine build.
+	if (__APP_TYPE__ === "cloud") {
+		import("posthog-js").then(({ default: posthog }) => {
+			posthog.setPersonProperties({
+				id: clerk.user?.id,
+				email: clerk.user?.primaryEmailAddress?.emailAddress,
+			});
+		});
+	}
 
 	// if (typeof Plain !== "undefined") {
 	// 	Plain?.setCustomerDetails({

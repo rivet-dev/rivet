@@ -42,6 +42,7 @@ export default defineConfig(({ mode }) => {
 		plugins: [
 			iconsSideEffectsFreePlugin(),
 			clerkSideEffectsFreePlugin(),
+			posthogStubPlugin(),
 			tanstackRouter({ target: "react", autoCodeSplitting: true }),
 			react({
 				exclude: [/packages\/icons\/dist/],
@@ -130,6 +131,38 @@ function clerkSideEffectsFreePlugin(): Plugin {
 		transform(code, id) {
 			if (id.includes("/node_modules/@clerk/")) {
 				return { code, map: null, moduleSideEffects: false };
+			}
+		},
+	};
+}
+
+// Replaces posthog-js with a no-op stub in the engine build so posthog code is excluded from
+// the bundle. Cloud-only files may import posthog-js statically; this prevents them from pulling
+// the full 5% posthog bundle into the engine build.
+function posthogStubPlugin(): Plugin {
+	const VIRTUAL_PREFIX = "\0posthog-stub:";
+	// A Proxy-based stub: every property access returns itself (callable no-op).
+	// Exports both default and named "posthog" to satisfy all import styles.
+	const STUB_CODE = `
+const _handler = { get: () => _noop, apply: () => undefined, construct: () => ({}) };
+function _noop() {}
+const posthog = new Proxy(_noop, _handler);
+export default posthog;
+export { posthog };
+export const usePostHog = () => posthog;
+export const PostHogProvider = ({ children }) => children;
+`;
+	return {
+		name: "posthog-stub",
+		enforce: "pre",
+		resolveId(id) {
+			if (id === "posthog-js" || id === "posthog-js/react") {
+				return `${VIRTUAL_PREFIX}${id}`;
+			}
+		},
+		load(id) {
+			if (id.startsWith(VIRTUAL_PREFIX)) {
+				return STUB_CODE;
 			}
 		},
 	};
