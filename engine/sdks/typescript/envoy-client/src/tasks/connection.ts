@@ -1,0 +1,194 @@
+import * as protocol from "@rivetkit/engine-envoy-protocol";
+import type { UnboundedSender } from "antiox/sync/mpsc";
+import { sleep } from "antiox/time";
+import { spawn } from "antiox/task";
+import type { SharedContext } from "../context.js";
+import { logger } from "../log.js";
+import { stringifyToEnvoy, stringifyToRivet } from "../stringify.js";
+import { calculateBackoff } from "../utils.js";
+import {
+	type WebSocketRxMessage,
+	type WebSocketTxMessage,
+	webSocket,
+} from "../websocket.js";
+
+export function startConnection(ctx: SharedContext) {
+	spawn(() => connectionLoop(ctx));
+}
+
+const STABLE_CONNECTION_MS = 60_000;
+
+async function connectionLoop(ctx: SharedContext) {
+	let attempt = 0;
+	while (true) {
+		const connectedAt = Date.now();
+		try {
+			await singleConnection(ctx);
+		} catch (error) {
+			log(ctx)?.error({
+				msg: "connection failed",
+				error,
+			});
+		}
+
+		if (Date.now() - connectedAt >= STABLE_CONNECTION_MS) {
+			attempt = 0;
+		}
+
+		const delay = calculateBackoff(attempt);
+		log(ctx)?.info({
+			msg: "reconnecting",
+			attempt,
+			delayMs: delay,
+		});
+		await sleep(delay);
+		attempt++;
+	}
+}
+
+async function singleConnection(ctx: SharedContext) {
+	const { config } = ctx;
+
+	const protocols = ["rivet"];
+	if (config.token) protocols.push(`rivet_token.${config.token}`);
+
+	const [wsTx, wsRx] = await webSocket({
+		url: wsUrl(ctx),
+		protocols,
+		debugLatencyMs: config.debugLatencyMs,
+	});
+	ctx.wsTx = wsTx;
+
+	log(ctx)?.info({
+		msg: "connected",
+		endpoint: config.endpoint,
+		namespace: config.namespace,
+		envoyKey: ctx.envoyKey,
+		hasToken: !!config.token,
+	});
+
+	sendEncoded(ctx, {
+		tag: "ToRivetInit",
+		val: {
+			envoyKey: ctx.envoyKey,
+			name: config.poolName,
+			version: config.version,
+			prepopulateActorNames: new Map(
+				Object.entries(config.prepopulateActorNames).map(
+					([name, data]) => [
+						name,
+						{ metadata: JSON.stringify(data.metadata) },
+					],
+				),
+			),
+			metadata: JSON.stringify(config.metadata),
+		},
+	});
+
+	try {
+		for await (const msg of wsRx) {
+			if (msg.type === "message") {
+				await handleWsData(ctx, msg);
+			} else if (msg.type === "close") {
+				log(ctx)?.info({
+					msg: "websocket closed",
+					code: msg.code,
+					reason: msg.reason,
+				});
+				break;
+			} else if (msg.type === "error") {
+				log(ctx)?.error({
+					msg: "websocket error",
+					error: msg.error,
+				});
+				break;
+			}
+		}
+	} finally {
+		ctx.wsTx = undefined;
+	}
+}
+
+async function handleWsData(
+	ctx: SharedContext,
+	msg: WebSocketRxMessage & { type: "message" },
+) {
+	let buf: Uint8Array;
+	if (msg.data instanceof Blob) {
+		buf = new Uint8Array(await msg.data.arrayBuffer());
+	} else if (Buffer.isBuffer(msg.data)) {
+		buf = new Uint8Array(msg.data);
+	} else if (msg.data instanceof ArrayBuffer) {
+		buf = new Uint8Array(msg.data);
+	} else {
+		throw new Error(`expected binary data, got ${typeof msg.data}`);
+	}
+
+	const message = protocol.decodeToEnvoy(buf);
+	log(ctx)?.debug({
+		msg: "received message",
+		data: stringifyToEnvoy(message),
+	});
+
+	forwardToEnvoy(ctx, message);
+}
+
+function forwardToEnvoy(ctx: SharedContext, message: protocol.ToEnvoy) {
+	if (message.tag === "ToEnvoyPing") {
+		sendEncoded(ctx, {
+			tag: "ToRivetPong",
+			val: { ts: message.val.ts },
+		});
+	} else {
+		ctx.envoyTx.send({ type: "conn-message", message });
+	}
+}
+
+function sendEncoded(ctx: SharedContext, message: protocol.ToRivet) {
+	log(ctx)?.debug({
+		msg: "sending message",
+		data: stringifyToRivet(message),
+	});
+
+	if (!ctx.wsTx) {
+		log(ctx)?.error({
+			msg: "websocket not available for sending",
+		});
+		return;
+	}
+
+	const encoded = protocol.encodeToRivet(message);
+	ctx.wsTx.send({ type: "send", data: encoded });
+}
+
+function wsUrl(ctx: SharedContext) {
+	const wsEndpoint = ctx.config.endpoint
+		.replace("http://", "ws://")
+		.replace("https://", "wss://");
+
+	const baseUrl = wsEndpoint.endsWith("/")
+		? wsEndpoint.slice(0, -1)
+		: wsEndpoint;
+	const parameters = [
+		["protocol_version", protocol.VERSION],
+		["namespace", ctx.config.namespace],
+		["envoy_key", ctx.envoyKey],
+		["pool_name", ctx.config.poolName],
+	];
+
+	return `${baseUrl}/envoys/connect?${parameters
+		.map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+		.join("&")}`;
+}
+
+function log(ctx: SharedContext) {
+	if (ctx.logCached) return ctx.logCached;
+
+	const baseLogger = ctx.config.logger ?? logger();
+	if (!baseLogger) return undefined;
+
+	ctx.logCached = baseLogger.child({
+		envoyKey: ctx.envoyKey,
+	});
+	return ctx.logCached;
+}

@@ -1,16 +1,38 @@
-import { logger } from "./log";
+import type { UnboundedReceiver, UnboundedSender } from "antiox/sync/mpsc";
+import { OnceCell } from "antiox/sync/once_cell";
+import { spawn } from "antiox/task";
+import type WsWebSocket from "ws";
+import { latencyChannel } from "./latency-channel.js";
+import { logger } from "./log.js";
 
-// Global singleton promise that will be reused for subsequent calls
-let webSocketPromise: Promise<typeof WebSocket> | null = null;
+export type WebSocketTxData = Parameters<WebSocket["send"]>[0];
+
+export type WebSocketRxData = WsWebSocket.Data | Blob;
+
+export type WebSocketTxMessage =
+	| { type: "send"; data: WebSocketTxData }
+	| { type: "close"; code?: number; reason?: string };
+
+export type WebSocketRxMessage =
+	| { type: "message"; data: WebSocketRxData }
+	| { type: "close"; code: number; reason: string }
+	| { type: "error"; error: Error };
+
+export type WebSocketHandle = [
+	UnboundedSender<WebSocketTxMessage>,
+	UnboundedReceiver<WebSocketRxMessage>,
+];
+
+export interface WebSocketOptions {
+	url: string;
+	protocols?: string | string[];
+	debugLatencyMs?: number;
+}
+
+const webSocketPromise = new OnceCell<typeof WebSocket>();
 
 export async function importWebSocket(): Promise<typeof WebSocket> {
-	// Return existing promise if we already started loading
-	if (webSocketPromise !== null) {
-		return webSocketPromise;
-	}
-
-	// Create and store the promise
-	webSocketPromise = (async () => {
+	return webSocketPromise.getOrInit(async () => {
 		let _WebSocket: typeof WebSocket;
 
 		if (typeof WebSocket !== "undefined") {
@@ -37,7 +59,65 @@ export async function importWebSocket(): Promise<typeof WebSocket> {
 		}
 
 		return _WebSocket;
-	})();
+	});
+}
 
-	return webSocketPromise;
+export async function webSocket(
+	options: WebSocketOptions,
+): Promise<WebSocketHandle> {
+	const { url, protocols, debugLatencyMs } = options;
+	const WS = await importWebSocket();
+	const raw = new WS(url, protocols);
+	const [outboundTx, outboundRx] =
+		latencyChannel<WebSocketTxMessage>(debugLatencyMs);
+	const [inboundTx, inboundRx] =
+		latencyChannel<WebSocketRxMessage>(debugLatencyMs);
+
+	raw.addEventListener("message", (event) => {
+		inboundTx.send({
+			type: "message",
+			data: event.data as WebSocketRxData,
+		});
+	});
+
+	raw.addEventListener("close", (event) => {
+		inboundTx.send({
+			type: "close",
+			code: event.code,
+			reason: event.reason,
+		});
+		inboundTx.close();
+		outboundRx.close();
+	});
+
+	raw.addEventListener("error", (event) => {
+		const error =
+			typeof event === "object" && event !== null && "error" in event
+				? event.error
+				: new Error("WebSocket error");
+		inboundTx.send({
+			type: "error",
+			error: error instanceof Error ? error : new Error(String(error)),
+		});
+		inboundTx.close();
+		outboundRx.close();
+	});
+
+	spawn(async () => {
+		for await (const message of outboundRx) {
+			if (message.type === "send") {
+				raw.send(message.data);
+			} else {
+				raw.close(message.code, message.reason);
+				break;
+			}
+		}
+
+		if (raw.readyState === 0 || raw.readyState === 1) {
+			raw.close();
+		}
+		inboundTx.close();
+	});
+
+	return [outboundTx, inboundRx];
 }

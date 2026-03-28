@@ -1,0 +1,2 @@
+- investigate conn channel and how that behaves with reconnects for epheemral messages
+- check how messages get buffered in wstx

@@ -80,6 +80,11 @@ git commit -m "chore(my-pkg): foo bar"
 ### pnpm Workspace
 - Use pnpm for all npm-related commands. We're using a pnpm workspace.
 
+### TypeScript Concurrency
+- Use `antiox` for TypeScript concurrency primitives instead of ad hoc Promise queues, custom channel wrappers, or event-emitter based coordination.
+- Prefer the Tokio-shaped APIs from `antiox` for concurrency needs. For example, use `antiox/sync/mpsc` for `tx` and `rx` channels, `antiox/task` for spawning tasks, and the matching sync and time modules as needed.
+- Treat `antiox` as the default choice for any TypeScript concurrency work because it mirrors Rust and Tokio APIs used elsewhere in the codebase.
+
 ### SQLite Package
 - Use `@rivetkit/sqlite` for SQLite WebAssembly support.
 - Do not use the legacy upstream package directly. `@rivetkit/sqlite` is the maintained fork used in this repository and is sourced from `rivet-dev/wa-sqlite`.
