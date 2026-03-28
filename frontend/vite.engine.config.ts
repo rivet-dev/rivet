@@ -43,6 +43,7 @@ export default defineConfig(({ mode }) => {
 			iconsSideEffectsFreePlugin(),
 			clerkSideEffectsFreePlugin(),
 			posthogStubPlugin(),
+			cloudRoutesStubPlugin(),
 			tanstackRouter({ target: "react", autoCodeSplitting: true }),
 			react({
 				exclude: [/packages\/icons\/dist/],
@@ -131,6 +132,39 @@ function clerkSideEffectsFreePlugin(): Plugin {
 		transform(code, id) {
 			if (id.includes("/node_modules/@clerk/")) {
 				return { code, map: null, moduleSideEffects: false };
+			}
+		},
+	};
+}
+
+// Replaces all cloud-only route files with minimal stubs in the engine build, eliminating
+// cloud-specific code (Clerk UI, PostHog, billing components, etc.) from the bundle entirely.
+//
+// TanStack Router's routeTree.gen.ts always patches imported routes via .update({ id, path,
+// getParentRoute }), so stubs only need to export a valid Route object. The path passed to
+// createFileRoute() is overridden and does not matter.
+function cloudRoutesStubPlugin(): Plugin {
+	// Files to stub: the _cloud layout, all _cloud child routes, and standalone cloud-only routes.
+	const CLOUD_ROUTE_RE =
+		/\/routes\/_context\/_cloud(\.tsx|\/)|\/routes\/(sso-callback|onboarding\/accept-invitation)\.tsx$/;
+
+	// autoCodeSplitting generates lazy split chunks that import RouteComponent (and possibly
+	// PendingComponent / ErrorComponent) from the original route file by name. The stub must
+	// export those names so the generated split imports resolve without errors.
+	const STUB_CODE = `
+import { createFileRoute } from "@tanstack/react-router";
+export function RouteComponent() { return null; }
+export function PendingComponent() { return null; }
+export function ErrorComponent() { return null; }
+export const Route = createFileRoute("/__cloud-stub")({ component: RouteComponent });
+`;
+
+	return {
+		name: "cloud-routes-stub",
+		enforce: "pre",
+		load(id) {
+			if (CLOUD_ROUTE_RE.test(id)) {
+				return STUB_CODE;
 			}
 		},
 	};
