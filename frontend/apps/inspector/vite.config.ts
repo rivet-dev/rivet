@@ -19,6 +19,7 @@ export default defineConfig({
 			generatedRouteTree: path.resolve(__dirname, "src/routeTree.gen.ts"),
 		}),
 		react({
+			exclude: [/packages\/icons\/dist/],
 			babel: {
 				plugins: ["babel-plugin-react-compiler"],
 			},

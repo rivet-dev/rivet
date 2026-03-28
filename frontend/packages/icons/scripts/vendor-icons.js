@@ -299,7 +299,7 @@ async function bundleWithEsbuild() {
 			metafile: true,
 		});
 
-		const stats = fs.statSync(resolve(distDir, "index.js"));
+		const stats = fs.statSync(resolve(distDir, "index.gen.js"));
 		const sizeKB = (stats.size / 1024).toFixed(2);
 		log("✅", `Generated dist/ (entry: ${sizeKB} KB)`);
 	} catch (err) {
@@ -341,7 +341,7 @@ async function main() {
 		console.log("\n🎉 Done! All files generated and ready to commit:");
 		console.log("   - src/index.gen.js");
 		console.log("   - src/index.gen.ts");
-		console.log("   - dist/index.js");
+		console.log("   - dist/index.gen.js");
 		console.log("\n💡 Next steps:");
 		console.log("   1. Review the generated files");
 		console.log("   2. Commit them to git");

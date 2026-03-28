@@ -40,8 +40,11 @@ export default defineConfig(({ mode }) => {
 	return mergeConfig(baseViteConfig(), {
 		base: "/ui",
 		plugins: [
+			iconsSideEffectsFreePlugin(),
+			clerkSideEffectsFreePlugin(),
 			tanstackRouter({ target: "react", autoCodeSplitting: true }),
 			react({
+				exclude: [/packages\/icons\/dist/],
 				babel: {
 					plugins: ["babel-plugin-react-compiler"],
 				},
@@ -89,6 +92,11 @@ export default defineConfig(({ mode }) => {
 			commonjsOptions: {
 				include: [/@rivet-gg\/components/, /node_modules/],
 			},
+			rollupOptions: {
+				treeshake: {
+					propertyReadSideEffects: false,
+				},
+			},
 		},
 	});
 });
@@ -98,6 +106,55 @@ export function liveChatPlugin(source: string = ""): Plugin {
 		name: "live-chat-plugin",
 		transformIndexHtml(html) {
 			return html.replace(/{{live_chat}}/, source);
+		},
+	};
+}
+
+// Marks @clerk/* packages as side-effect-free so Rollup tree-shakes them in the engine build,
+// where all Clerk usage is guarded by __APP_TYPE__ === "cloud" conditions.
+function clerkSideEffectsFreePlugin(): Plugin {
+	return {
+		name: "clerk-side-effects-free",
+		enforce: "pre",
+		async resolveId(id, importer, options) {
+			if (id.startsWith("@clerk/")) {
+				const resolved = await this.resolve(id, importer, {
+					...options,
+					skipSelf: true,
+				});
+				if (resolved) {
+					return { ...resolved, moduleSideEffects: false };
+				}
+			}
+		},
+		transform(code, id) {
+			if (id.includes("/node_modules/@clerk/")) {
+				return { code, map: null, moduleSideEffects: false };
+			}
+		},
+	};
+}
+
+// Marks the @rivet-gg/icons flat ESM as side-effect-free so Rollup tree-shakes unused icons.
+function iconsSideEffectsFreePlugin(): Plugin {
+	return {
+		name: "icons-side-effects-free",
+		enforce: "pre",
+		async resolveId(id, importer, options) {
+			if (id === "@rivet-gg/icons") {
+				const resolved = await this.resolve(id, importer, {
+					...options,
+					skipSelf: true,
+				});
+				if (resolved) {
+					return { ...resolved, moduleSideEffects: false };
+				}
+			}
+		},
+		transform(code, id) {
+			if (id.includes("packages/icons/dist/index.flat")) {
+				return { code, map: null, moduleSideEffects: false };
+			}
 		},
 	};
 }

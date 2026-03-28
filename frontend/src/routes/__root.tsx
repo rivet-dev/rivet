@@ -8,7 +8,6 @@ import {
 	useNavigate,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-import { match } from "ts-pattern";
 import type {
 	CloudContext,
 	CloudNamespaceContext,
@@ -103,8 +102,6 @@ interface RootRouteContext {
 }
 
 export const Route = createRootRouteWithContext<RootRouteContext>()({
-	component: match(__APP_TYPE__)
-		.with("cloud", () => CloudRoute)
-		.otherwise(() => RootRoute),
+	component: __APP_TYPE__ === "cloud" ? CloudRoute : RootRoute,
 	pendingComponent: FullscreenLoading,
 });

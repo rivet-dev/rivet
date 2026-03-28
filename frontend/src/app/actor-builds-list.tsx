@@ -26,12 +26,12 @@ function toPascalCase(str: string): string {
 		.join("");
 }
 
-const allIconsPromise = import("@rivet-gg/icons") as unknown as Promise<
-	Record<string, IconProp>
->;
+const allIconsPromise = import("@rivet-gg/icons/all") as unknown as Promise<{
+	default: Record<string, IconProp>;
+}>;
 
 function ActorIcon({ iconValue }: { iconValue: string | null }) {
-	const allIcons = use(allIconsPromise);
+	const { default: allIcons } = use(allIconsPromise);
 
 	if (iconValue && isEmoji(iconValue)) {
 		return (

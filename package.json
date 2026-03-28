@@ -47,12 +47,15 @@
 		"overrides": {
 			"react": "19.1.0",
 			"react-dom": "19.1.0",
-			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c",
+			"@rivet-gg/cloud": "file:/tmp/rivet-gg-cloud",
 			"@codemirror/state": "6.5.2",
 			"@codemirror/view": "6.38.2",
 			"@codemirror/autocomplete": "6.18.7",
 			"@codemirror/commands": "6.8.1",
-			"@codemirror/lint": "6.8.5"
+			"@codemirror/lint": "6.8.5",
+			"@durable-streams/client": "file:/tmp/durable-streams-client",
+			"@durable-streams/server": "file:/tmp/durable-streams-server",
+			"@durable-streams/writer": "file:/tmp/durable-streams-writer"
 		}
 	}
 }
