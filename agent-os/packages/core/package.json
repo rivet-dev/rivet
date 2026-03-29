@@ -1,0 +1,71 @@
+{
+	"name": "@rivet-dev/agent-os-core",
+	"version": "0.1.0",
+	"type": "module",
+	"license": "Apache-2.0",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./test/file-system": {
+			"types": "./dist/test/file-system.d.ts",
+			"import": "./dist/test/file-system.js",
+			"default": "./dist/test/file-system.js"
+		},
+		"./test/docker": {
+			"types": "./dist/test/docker.d.ts",
+			"import": "./dist/test/docker.js",
+			"default": "./dist/test/docker.js"
+		}
+	},
+	"scripts": {
+		"check-types": "tsc --noEmit",
+		"build": "tsc",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@secure-exec/core": "link:../../../../secure-exec-1/packages/core",
+		"@secure-exec/nodejs": "link:../../../../secure-exec-1/packages/nodejs",
+		"@secure-exec/python": "link:../../../../secure-exec-1/packages/python",
+		"@secure-exec/v8": "link:../../../../secure-exec-1/packages/v8",
+		"@secure-exec/wasmvm": "link:../../../../secure-exec-1/packages/wasmvm",
+		"croner": "^10.0.1",
+		"long-timeout": "^0.1.1",
+		"secure-exec": "link:../../../../secure-exec-1/packages/secure-exec"
+	},
+	"devDependencies": {
+		"@anthropic-ai/claude-code": "^2.1.86",
+		"@copilotkit/llmock": "^1.6.0",
+		"@mariozechner/pi-coding-agent": "^0.60.0",
+		"@rivet-dev/agent-os-codex": "link:../../../../agent-os-registry/software/codex",
+		"@rivet-dev/agent-os-coreutils": "link:../../../../agent-os-registry/software/coreutils",
+		"@rivet-dev/agent-os-curl": "link:../../../../agent-os-registry/software/curl",
+		"@rivet-dev/agent-os-diffutils": "link:../../../../agent-os-registry/software/diffutils",
+		"@rivet-dev/agent-os-fd": "link:../../../../agent-os-registry/software/fd",
+		"@rivet-dev/agent-os-file": "link:../../../../agent-os-registry/software/file",
+		"@rivet-dev/agent-os-findutils": "link:../../../../agent-os-registry/software/findutils",
+		"@rivet-dev/agent-os-gawk": "link:../../../../agent-os-registry/software/gawk",
+		"@rivet-dev/agent-os-grep": "link:../../../../agent-os-registry/software/grep",
+		"@rivet-dev/agent-os-gzip": "link:../../../../agent-os-registry/software/gzip",
+		"@rivet-dev/agent-os-jq": "link:../../../../agent-os-registry/software/jq",
+		"@rivet-dev/agent-os-ripgrep": "link:../../../../agent-os-registry/software/ripgrep",
+		"@rivet-dev/agent-os-sed": "link:../../../../agent-os-registry/software/sed",
+		"@rivet-dev/agent-os-tar": "link:../../../../agent-os-registry/software/tar",
+		"@rivet-dev/agent-os-tree": "link:../../../../agent-os-registry/software/tree",
+		"@rivet-dev/agent-os-yq": "link:../../../../agent-os-registry/software/yq",
+		"@types/node": "^22.10.2",
+		"opencode-ai": "^1.3.3",
+		"pi-acp": "^0.0.23",
+		"sandbox-agent": "^0.4.2",
+		"typescript": "^5.7.2",
+		"vitest": "^2.1.8",
+		"zod": "^3.25.0"
+	}
+}

@@ -1,0 +1,15 @@
+{
+	"fixtures": [
+		{
+			"match": {},
+			"response": {
+				"toolCalls": [
+					{
+						"name": "computer",
+						"arguments": "{\"action\":\"screenshot\"}"
+					}
+				]
+			}
+		}
+	]
+}

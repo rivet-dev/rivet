@@ -21,6 +21,7 @@ export default defineConfig({
 			"@rivetkit/workflow-engine",
 			"@rivetkit/sqlite",
 			"@rivetkit/sqlite-vfs",
+			"@rivet-dev/agent-os-core",
 		];
 	},
 	define: {

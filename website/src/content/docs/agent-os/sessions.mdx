@@ -1,0 +1,478 @@
+---
+title: "Sessions"
+description: "Create agent sessions, send prompts, stream responses, and replay event history."
+skill: true
+---
+
+- **Create sessions** with any supported agent type
+- **Stream responses** in real time via `sessionEvent` subscriptions
+- **Replay events** with sequence numbers for reconnection and history
+- **Persist transcripts** automatically in SQLite across sleep/wake cycles
+- **Universal transcript format** using the Agent Communication Protocol (ACP)
+
+<Note>
+Currently only [Pi](https://github.com/mariozechner/pi-coding-agent) is supported as an agent. Amp, Claude Code, Codex, and OpenCode are coming soon.
+</Note>
+
+## Create a session
+
+Use `createSession` to launch an agent inside the VM. Returns session metadata including capabilities and agent info.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+console.log(session.sessionId);
+console.log(session.capabilities);
+console.log(session.agentInfo);
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+### `env`
+
+Environment variables to pass to the agent process. The VM does not inherit from the host `process.env`, so API keys must be passed explicitly.
+
+```ts @nocheck
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+```
+
+### `cwd`
+
+Working directory for the agent session inside the VM. Defaults to `/home/user`.
+
+```ts @nocheck
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+  cwd: "/home/user/project",
+});
+```
+
+### `mcpServers`
+
+Pass MCP servers to give the agent access to additional tools. MCP servers provide typed tool definitions that the agent's LLM can discover and call natively.
+
+#### Local MCP server
+
+Run an MCP server as a child process inside the VM.
+
+```ts @nocheck
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+  mcpServers: [
+    {
+      type: "local",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/home/user"],
+      env: {},
+    },
+  ],
+});
+```
+
+#### Remote MCP server
+
+Connect to an MCP server running outside the VM.
+
+```ts @nocheck
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+  mcpServers: [
+    {
+      type: "remote",
+      url: "https://mcp.example.com/sse",
+      headers: {
+        Authorization: "Bearer my-token",
+      },
+    },
+  ],
+});
+```
+
+### `additionalInstructions`
+
+Append custom instructions to the agent's system prompt.
+
+```ts @nocheck
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+  additionalInstructions: "Always write tests before implementation.",
+});
+```
+
+### `skipOsInstructions`
+
+Skip the base OS instructions injection. Tool documentation is still included even when this is `true`.
+
+```ts @nocheck
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+  skipOsInstructions: true,
+});
+```
+
+## Send a prompt
+
+Use `sendPrompt` to send a message to an active session. The response contains the agent's reply.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+const response = await agent.sendPrompt(
+  session.sessionId,
+  "Create a TypeScript function that checks if a number is prime",
+);
+console.log(response);
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Stream responses
+
+Subscribe to `sessionEvent` to receive real-time streaming output from the agent.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+// Subscribe to session events before sending the prompt
+agent.on("sessionEvent", (data) => {
+  console.log(`[${data.sessionId}]`, data.event.method, data.event.params);
+});
+
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+await agent.sendPrompt(session.sessionId, "Explain how async/await works");
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Cancel a prompt
+
+Use `cancelPrompt` to stop an in-progress prompt.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+
+// Start a long-running prompt
+const promptPromise = agent.sendPrompt(
+  session.sessionId,
+  "Refactor the entire codebase to use TypeScript strict mode",
+);
+
+// Cancel after 10 seconds
+setTimeout(async () => {
+  await agent.cancelPrompt(session.sessionId);
+}, 10_000);
+
+const response = await promptPromise;
+console.log(response);
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Resume, close, and destroy sessions
+
+- `resumeSession` reconnects to a session that was suspended (e.g. after sleep)
+- `closeSession` gracefully closes a session
+- `destroySession` removes the session and all persisted data
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+// Resume a previously created session
+const resumed = await agent.resumeSession("session-id-from-earlier");
+
+// Close without destroying persisted data
+await agent.closeSession(resumed.sessionId);
+
+// Destroy session and all persisted events
+await agent.destroySession(resumed.sessionId);
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Runtime configuration
+
+Change model, mode, and thought level on a live session.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+
+// Change model
+await agent.setModel(session.sessionId, "claude-sonnet-4-6");
+
+// Change mode (e.g. "plan", "auto")
+await agent.setMode(session.sessionId, "plan");
+
+// Change thought level
+await agent.setThoughtLevel(session.sessionId, "high");
+
+// Query available options
+const modes = await agent.getModes(session.sessionId);
+console.log(modes);
+
+const options = await agent.getConfigOptions(session.sessionId);
+console.log(options);
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Replay events
+
+Use `getSequencedEvents` to replay in-memory session events (for live reconnection while the VM is running), or `getSessionEvents` to replay from persisted storage (for transcript history, including when the VM is not running). See [Events](/docs/agent-os/events#event-replay) for details on the difference.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+await agent.sendPrompt(session.sessionId, "Hello");
+
+// Get all events
+const events = await agent.getEvents(session.sessionId);
+console.log(events);
+
+// Get events with sequence numbers (for pagination/reconnection)
+const sequenced = await agent.getSequencedEvents(session.sessionId, {
+  since: 0,
+});
+console.log(sequenced);
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Persisted session history
+
+Query session history from SQLite. Works even when the VM is not running.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+// List all persisted sessions
+const sessions = await agent.listPersistedSessions();
+for (const s of sessions) {
+  console.log(s.sessionId, s.agentType, s.createdAt);
+}
+
+// Get full event history for a session
+const events = await agent.getSessionEvents(sessions[0].sessionId);
+for (const e of events) {
+  console.log(e.seq, e.event.method, e.createdAt);
+}
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Multiple sessions
+
+A single VM can run multiple sessions simultaneously. Each session has its own agent process but shares the same filesystem. Use different session IDs to manage them independently.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+// Create two sessions in the same VM
+const coder = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+const reviewer = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+
+// Coder writes code
+await agent.sendPrompt(coder.sessionId, "Write a REST API at /home/user/api.ts");
+
+// Reviewer reads and reviews the same file
+await agent.sendPrompt(reviewer.sessionId, "Review /home/user/api.ts for issues");
+
+// Close each session independently
+await agent.closeSession(coder.sessionId);
+await agent.closeSession(reviewer.sessionId);
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Recommendations
+
+- Subscribe to `sessionEvent` **before** calling `sendPrompt` to avoid missing early events.
+- Use `getSequencedEvents` with `since` for reconnection. Track the last sequence number you processed.
+- Use `listPersistedSessions` and `getSessionEvents` to build transcript history UIs without requiring a running VM.
+- Call `closeSession` when done to release resources. Use `destroySession` only when you want to permanently delete session data.

@@ -371,7 +371,7 @@ export const ProblemSection = () => {
           className='mb-12'
         >
           <h2 className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'>
-            See it in action.
+            Actors in action.
           </h2>
           <p className='text-base leading-relaxed text-zinc-500'>
             One primitive that adapts to agents, workflows, collaboration, and more.

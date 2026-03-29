@@ -4,8 +4,15 @@ import { ActiveLink } from "@/components/ActiveLink";
 import { Tree } from "@/components/DocsNavigation";
 import { NavigationStateProvider } from "@/providers/NavigationStateProvider";
 import type { SidebarItem } from "@/lib/sitemap";
+import { registry } from "@/data/registry";
 import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
 import logoIconUrl from "@/images/rivet-logos/icon-white.svg";
+import logoIconWhiteUrl from "@/images/rivet-logos/icon-white.svg";
+
+const WHITE_THEMED_PATHS = ['/agent-os', '/agent-os/registry', '/from-unix-to-agents', '/install'];
+const REGISTRY_PACKAGE_COUNT = registry.length;
+const AGENT_OS_DOCS_HREF = "/docs/agent-os";
+const AGENT_OS_REGISTRY_HREF = "/agent-os/registry";
 import { cn } from "@rivet-gg/components";
 import { Header as RivetHeader } from "@rivet-gg/components/header";
 import { Icon, faDiscord } from "@rivet-gg/icons";
@@ -31,6 +38,7 @@ import {
 	Globe,
 } from "lucide-react";
 import actorsLogoUrl from "@/images/products/actors-logo.svg";
+import agentosLogoUrl from "@/images/products/agentos-logo.svg";
 import sandboxAgentLogoUrl from "@/images/products/sandbox-agent-logo.svg";
 import { GitHubDropdown } from "./GitHubDropdown";
 import { HeaderSearch } from "./HeaderSearch";
@@ -66,7 +74,13 @@ function TextNavItem({
 	);
 }
 
-function ProductsDropdown({ active }: { active?: boolean }) {
+function ProductsDropdown({
+	active,
+	lightTheme = false,
+}: {
+	active?: boolean;
+	lightTheme?: boolean;
+}) {
 	const [isOpen, setIsOpen] = useState(false);
 	const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const isHoveringRef = useRef(false);
@@ -79,18 +93,10 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 			description: "Build stateful backends",
 		},
 		{
-			label: "Sandbox Agent SDK",
-			href: "https://sandboxagent.dev/",
-			logo: sandboxAgentLogoUrl,
-			description: "SDK for coding agents",
-			external: true,
-		},
-		{
-			label: "Secure Exec SDK",
-			href: "https://secureexec.dev/",
-			logo: sandboxAgentLogoUrl,
-			description: "Secure Node.js Execution Without a Sandbox",
-			external: true,
+			label: "agentOS",
+			href: "/agent-os",
+			logo: agentosLogoUrl,
+			description: "Everything agents need to run and operate",
 		},
 	];
 
@@ -138,7 +144,10 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 
 	return (
 		<div
-			className="px-2.5 py-2 opacity-60 hover:opacity-100 transition-all duration-200"
+			className={cn(
+				"px-2.5 py-2 opacity-60 hover:opacity-100 transition-all duration-200",
+				lightTheme && "opacity-100",
+			)}
 			onMouseEnter={handleMouseEnter}
 			onMouseLeave={handleMouseLeave}
 		>
@@ -148,7 +157,8 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 						<button
 							type="button"
 							className={cn(
-								"!text-white cursor-pointer flex items-center gap-1 relative",
+								"cursor-pointer flex items-center gap-1 relative",
+								lightTheme ? "!text-zinc-600 hover:!text-zinc-900" : "!text-white",
 								active && "opacity-100",
 								"after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:content-['']",
 							)}
@@ -162,7 +172,12 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 				</DropdownMenuTrigger>
 				<DropdownMenuContent
 					align="start"
-					className="min-w-[280px] p-4 bg-black/95 backdrop-blur-lg border border-white/10 rounded-xl shadow-xl"
+					className={cn(
+						"min-w-[280px] p-4 rounded-xl shadow-xl",
+						lightTheme
+							? "bg-white/95 backdrop-blur-lg border border-zinc-200"
+							: "bg-black/95 backdrop-blur-lg border border-white/10",
+					)}
 					onMouseEnter={handleMouseEnter}
 					onMouseLeave={handleMouseLeave}
 					sideOffset={0}
@@ -170,14 +185,14 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 					side="bottom"
 				>
 					<div className="flex flex-col gap-1">
-						{products.map((product, i) => (
+						{products.map((product) => (
 							<React.Fragment key={product.href}>
-								{i === 1 && <div className="border-t border-white/10 my-1" />}
 								<a
 									href={product.href}
-									target={product.external ? "_blank" : undefined}
-									rel={product.external ? "noopener noreferrer" : undefined}
-									className="group flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+									className={cn(
+										"group flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer",
+										lightTheme ? "hover:bg-zinc-100" : "hover:bg-white/5",
+									)}
 								>
 									<img
 										src={product.logo.src}
@@ -189,14 +204,45 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 										decoding="async"
 									/>
 									<div className="flex flex-col">
-										<div className="font-medium text-white text-sm group-hover:text-white transition-colors">
+										<div className={cn(
+											"font-medium text-sm transition-colors",
+											lightTheme ? "text-zinc-900" : "text-white group-hover:text-white",
+										)}>
 											{product.label}
 										</div>
-										<div className="text-xs text-zinc-400 group-hover:text-zinc-300 transition-colors leading-relaxed">
+										<div className={cn(
+											"text-xs transition-colors leading-relaxed",
+											lightTheme ? "text-zinc-500 group-hover:text-zinc-700" : "text-zinc-400 group-hover:text-zinc-300",
+										)}>
 											{product.description}
 										</div>
 									</div>
 								</a>
+								{product.subItems?.map((sub) => (
+									<a
+										key={sub.href}
+										href={sub.href}
+										className={cn(
+											"group flex items-center gap-2.5 py-1.5 pl-12 pr-3 rounded-lg transition-colors cursor-pointer",
+											lightTheme ? "hover:bg-zinc-100" : "hover:bg-white/5",
+										)}
+									>
+										<sub.icon
+											className={cn(
+												"h-3.5 w-3.5 transition-colors",
+												lightTheme ? "text-zinc-500 group-hover:text-zinc-700" : "text-zinc-500 group-hover:text-zinc-300",
+											)}
+										/>
+										<span
+											className={cn(
+												"text-xs transition-colors",
+												lightTheme ? "text-zinc-500 group-hover:text-zinc-700" : "text-zinc-400 group-hover:text-zinc-300",
+											)}
+										>
+											{sub.label}
+										</span>
+									</a>
+								))}
 							</React.Fragment>
 						))}
 					</div>
@@ -367,7 +413,7 @@ interface HeaderProps {
 	| "docs"
 	| "cookbook"
 	| "blog"
-	| "cloud"
+	| "pricing"
 	| "solutions"
 	| "learn";
 	subnav?: ReactNode;
@@ -376,6 +422,7 @@ interface HeaderProps {
 	variant?: "floating" | "full-width";
 	learnMode?: boolean;
 	showDocsTabs?: boolean;
+	initialPathname?: string;
 }
 
 export function Header({
@@ -386,6 +433,7 @@ export function Header({
 	variant = "full-width",
 	learnMode = false,
 	showDocsTabs = false,
+	initialPathname = "",
 }: HeaderProps) {
 	const [isScrolled, setIsScrolled] = useState(false);
 
@@ -403,6 +451,24 @@ export function Header({
 		}
 	}, [variant]);
 
+	const clientPathname = usePathname();
+	const pathname = clientPathname || initialPathname;
+	const isLightTheme = WHITE_THEMED_PATHS.some((p) => pathname === p || pathname === p + '/');
+	const isRegistryPage =
+		pathname === AGENT_OS_REGISTRY_HREF || pathname === `${AGENT_OS_REGISTRY_HREF}/`;
+
+	// Set body attribute for global CSS targeting (e.g., mobile sheet styling)
+	useEffect(() => {
+		if (isLightTheme) {
+			document.body.setAttribute('data-light-theme', 'true');
+		} else {
+			document.body.removeAttribute('data-light-theme');
+		}
+		return () => {
+			document.body.removeAttribute('data-light-theme');
+		};
+	}, [isLightTheme]);
+
 	if (variant === "floating") {
 		const headerStyles = cn(
 			"md:border-transparent md:static md:bg-transparent md:rounded-2xl md:max-w-[1200px] md:border-transparent md:backdrop-none [&>div:first-child]:px-3 md:backdrop-blur-none transition-all hover:opacity-100",
@@ -410,30 +476,96 @@ export function Header({
 		);
 
 		return (
-			<div className="fixed top-0 z-50 w-full max-w-[1200px] md:left-1/2 md:top-4 md:-translate-x-1/2 md:px-8">
+			<div
+				className={cn(
+					"fixed top-0 z-50 w-full max-w-[1200px] md:left-1/2 md:top-4 md:-translate-x-1/2 md:px-8",
+					isLightTheme && "selection:bg-orange-200 selection:text-orange-900"
+				)}
+				data-light-theme={isLightTheme ? "true" : undefined}
+			>
 				<div
 					className={cn(
 						"hero-bg-exclude",
-						'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:hidden before:rounded-2xl before:border before:border-white/10 before:content-[""] before:transition-colors before:duration-300 before:ease-in-out md:before:block',
+						isLightTheme
+							? 'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:hidden before:rounded-2xl before:border before:border-zinc-200 before:content-[""] before:transition-colors before:duration-300 before:ease-in-out md:before:block'
+							: 'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:hidden before:rounded-2xl before:border before:border-white/10 before:content-[""] before:transition-colors before:duration-300 before:ease-in-out md:before:block',
 					)}
 				>
-					<div className="absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl bg-background/80 backdrop-blur-lg md:block" />
+					<div className={cn("absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl backdrop-blur-lg md:block", isLightTheme ? "bg-white/80" : "bg-background/80")} />
 					<RivetHeader
-						className={headerStyles}
+						className={cn(
+							headerStyles,
+							isLightTheme && "md:bg-transparent [&_button[data-mobile-menu-trigger]]:text-zinc-900 bg-white/95 backdrop-blur-lg md:backdrop-blur-none"
+						)}
 						logo={
-							<div className="hidden md:block">
-								<LogoContextMenu>
-									<a href="/">
-										<img
-											src={logoUrl.src}
-											width={80}
-											height={24}
-											className="ml-1 w-20 shrink-0"
-											alt="Rivet logo"
-										/>
-									</a>
-								</LogoContextMenu>
-							</div>
+							<>
+								{/* Mobile logo */}
+								<div className="md:hidden ml-1">
+									{isLightTheme ? (
+										<a href="/" className="flex items-center gap-2">
+											<img
+												src={logoIconWhiteUrl.src}
+												width={24}
+												height={24}
+												className="h-6 w-6"
+												alt="Rivet logo"
+											/>
+											<div className="h-4 w-px bg-zinc-300" />
+											<img
+												src="/images/agent-os/agentos-hero-logo.svg"
+												className="h-4 w-auto"
+												alt="agentOS"
+											/>
+										</a>
+									) : (
+										<a href="/">
+											<img
+												src={logoUrl.src}
+												width={80}
+												height={24}
+												className="w-20 shrink-0"
+												alt="Rivet logo"
+											/>
+										</a>
+									)}
+								</div>
+								{/* Desktop logo */}
+								<div className="hidden md:block">
+									{isLightTheme ? (
+										<div className="ml-1 flex items-center gap-3">
+											<a href="/">
+												<img
+													src={logoIconWhiteUrl.src}
+													width={24}
+													height={24}
+													className="h-6 w-6"
+													alt="Rivet logo"
+												/>
+											</a>
+											<div className="h-5 w-px bg-zinc-300" />
+											<a href="/agent-os">
+												<img
+													src="/images/agent-os/agentos-hero-logo.svg"
+													className="h-5 w-auto"
+													alt="agentOS"
+												/>
+											</a>
+										</div>
+									) : (
+										<LogoContextMenu>
+											<a href="/">
+												<img
+													src={logoUrl.src}
+													width={80}
+													height={24}
+													className="ml-1 w-20 shrink-0"
+													alt="Rivet logo"
+												/>
+											</a>
+										</LogoContextMenu>
+									)}
+								</div>
+							</>
 						}
 						subnav={effectiveSubnav}
 						support={null}
@@ -441,41 +573,75 @@ export function Header({
 							<div className="flex flex-row items-center">
 								{variant === "full-width" && <HeaderSearch />}
 								<RivetHeader.NavItem asChild className="p-2 mr-4">
-									<a href="https://rivet.dev/discord" className="text-white/90">
+									<a href="https://rivet.dev/discord" className={isLightTheme ? "text-zinc-500 hover:text-zinc-900" : "text-white/90"}>
 										<Icon icon={faDiscord} className="drop-shadow-md" />
 									</a>
 								</RivetHeader.NavItem>
-								<GitHubDropdown className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 h-10 text-sm mr-2 hover:border-white/20 text-white/90 hover:text-white transition-colors" />
-								<a
-									href="https://dashboard.rivet.dev"
-									className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors"
-								>
-									Sign In
-								</a>
+								<GitHubDropdown className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md border px-4 py-2 h-10 text-sm mr-2 transition-colors", isLightTheme ? "border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-900" : "border-white/10 text-white/90 hover:border-white/20 hover:text-white")} />
+								{isLightTheme ? (
+									<a
+										href="/install"
+										className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-zinc-200 bg-zinc-900 px-4 py-2 text-sm text-white shadow-sm hover:bg-zinc-700 transition-colors"
+									>
+										Install
+									</a>
+								) : (
+									<a
+										href="https://dashboard.rivet.dev"
+										className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors"
+									>
+										Sign In
+									</a>
+								)}
 							</div>
 						}
-						mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} sidebarData={sidebarData} />}
+						mobileBreadcrumbs={
+							<DocsMobileNavigation
+								tree={mobileSidebar}
+								sidebarData={sidebarData}
+								isLightTheme={isLightTheme}
+							/>
+						}
+						sheetClassName={isLightTheme ? "!bg-white [&>button]:!bg-white [&>button]:!text-zinc-900 [&>button]:!border-zinc-200" : undefined}
+						lightTheme={isLightTheme}
 						breadcrumbs={
-							<div className="flex items-center font-v2 subpixel-antialiased">
-								<ProductsDropdown active={active === "product"} />
+							<div className={cn("flex items-center font-v2 subpixel-antialiased", isLightTheme && "[&_a]:!text-zinc-600 [&_button]:!text-zinc-600")}>
+								{!isLightTheme && <ProductsDropdown active={active === "product"} />}
 								<TextNavItem
-									href="/docs"
+									href={isLightTheme ? AGENT_OS_DOCS_HREF : "/docs"}
 									ariaCurrent={active === "docs" ? "page" : undefined}
 								>
 									Documentation
 								</TextNavItem>
-								<TextNavItem
-									href="/cookbook"
-									ariaCurrent={active === "cookbook" ? "page" : undefined}
-								>
-									Cookbooks
-								</TextNavItem>
-								<TextNavItem
-									href="/cloud"
-									ariaCurrent={active === "cloud" ? "page" : undefined}
-								>
-									Cloud
-								</TextNavItem>
+								{!isLightTheme && (
+									<TextNavItem
+										href="/cookbook"
+										ariaCurrent={active === "cookbook" ? "page" : undefined}
+									>
+										Cookbooks
+									</TextNavItem>
+								)}
+								{isLightTheme && (
+									<TextNavItem
+										href={AGENT_OS_REGISTRY_HREF}
+										ariaCurrent={isRegistryPage ? "page" : undefined}
+									>
+										<span className="inline-flex items-center gap-2">
+											<span>Registry</span>
+											<span className="inline-flex min-w-6 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium leading-none text-zinc-600">
+												{REGISTRY_PACKAGE_COUNT}
+											</span>
+										</span>
+									</TextNavItem>
+								)}
+								{!isLightTheme && (
+									<TextNavItem
+										href="/cloud"
+										ariaCurrent={active === "pricing" ? "page" : undefined}
+									>
+										Pricing
+									</TextNavItem>
+								)}
 							</div>
 						}
 					/>
@@ -553,9 +719,9 @@ export function Header({
 					</TextNavItem>
 					<TextNavItem
 						href="/cloud"
-						ariaCurrent={active === "cloud" ? "page" : undefined}
+						ariaCurrent={active === "pricing" ? "page" : undefined}
 					>
-						Cloud
+						Pricing
 					</TextNavItem>
 				</div>
 			}
@@ -563,7 +729,15 @@ export function Header({
 	);
 }
 
-function DocsMobileNavigation({ tree, sidebarData }: { tree?: ReactNode; sidebarData?: SidebarItem[] }) {
+function DocsMobileNavigation({
+	tree,
+	sidebarData,
+	isLightTheme = false,
+}: {
+	tree?: ReactNode;
+	sidebarData?: SidebarItem[];
+	isLightTheme?: boolean;
+}) {
 	const pathname = usePathname() || "";
 	const isDocsPage = pathname.startsWith("/docs");
 
@@ -584,11 +758,16 @@ function DocsMobileNavigation({ tree, sidebarData }: { tree?: ReactNode; sidebar
 		{ id: "api", label: "API Reference", href: "/docs/api" },
 	];
 
-	const mainLinks = [
-		{ href: "/docs", label: "Documentation" },
-		{ href: "/cloud", label: "Cloud" },
-		{ href: "/cookbook", label: "Cookbooks" },
-	];
+	const mainLinks = isLightTheme
+		? [
+			{ href: AGENT_OS_DOCS_HREF, label: "Documentation" },
+			{ href: AGENT_OS_REGISTRY_HREF, label: `Registry (${REGISTRY_PACKAGE_COUNT})` },
+		]
+		: [
+			{ href: "/docs", label: "Documentation" },
+			{ href: "/cloud", label: "Pricing" },
+			{ href: "/cookbook", label: "Cookbooks" },
+		];
 
 	const solutions = [
 		{ label: "Agent Orchestration", href: "/solutions/agents", icon: Bot },
@@ -616,6 +795,7 @@ function DocsMobileNavigation({ tree, sidebarData }: { tree?: ReactNode; sidebar
 	];
 
 	const products = [
+		{ label: "agentOS", href: "/agent-os", logo: agentosLogoUrl },
 		{ label: "Actors", href: "/docs/actors", logo: actorsLogoUrl },
 		{
 			label: "Sandbox Agent SDK",
@@ -632,6 +812,50 @@ function DocsMobileNavigation({ tree, sidebarData }: { tree?: ReactNode; sidebar
 	];
 
 	const currentSection = sections.find((s) => s.id === getCurrentSection());
+
+	if (isLightTheme) {
+		return (
+			<div className="flex flex-col gap-2 font-v2 subpixel-antialiased text-sm">
+				{/* Home logo with agentOS */}
+				<a href="/" className="py-3 px-2 flex items-center gap-2">
+					<img
+						src={logoIconWhiteUrl.src}
+						alt="Rivet"
+						width={24}
+						height={24}
+						className="h-6 w-6"
+					/>
+					<div className="h-4 w-px bg-zinc-300" />
+					<img
+						src="/images/agent-os/agentos-hero-logo.svg"
+						className="h-4 w-auto"
+						alt="agentOS"
+					/>
+				</a>
+
+				{/* Main navigation links */}
+				{mainLinks.map(({ href, label }) => (
+					<a
+						key={href}
+						href={href}
+						className="text-zinc-900 py-2 px-2 hover:bg-zinc-100 rounded-sm transition-colors"
+					>
+						{label}
+					</a>
+				))}
+
+				{/* Install button */}
+				<div className="mt-4 pt-4 border-t border-zinc-200">
+					<a
+						href="/install"
+						className="flex items-center justify-center w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
+					>
+						Install
+					</a>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex flex-col gap-2 font-v2 subpixel-antialiased text-sm">

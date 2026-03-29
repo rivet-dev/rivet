@@ -1,0 +1,37 @@
+---
+import { readFile } from 'node:fs/promises';
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import AgentOSPage from '@/components/marketing/solutions/AgentOSPage';
+import { highlightCodeHtml } from '@/lib/highlight-code';
+
+const heroTabFiles = [
+	{ key: 'agent', fileName: 'agent-session.ts' },
+	{ key: 'tools', fileName: 'expose-tools.ts' },
+	{ key: 'cron', fileName: 'cron-jobs.ts' },
+	{ key: 'networking', fileName: 'networking.ts' },
+	{ key: 'file-system', fileName: 'file-system.ts' },
+	{ key: 'processes', fileName: 'processes.ts' },
+];
+
+const heroTabs = await Promise.all(
+	heroTabFiles.map(async (tab) => {
+		const fileUrl = new URL(`../../../agent-os/examples/quickstart/src/${tab.fileName}`, import.meta.url);
+		const code = await readFile(fileUrl, 'utf8');
+
+		return {
+			...tab,
+			code,
+			highlightedCode: await highlightCodeHtml(code, 'ts'),
+		};
+	}),
+);
+---
+
+<MarketingLayout
+	title="agentOS - Everything Agents Need to Run and Operate"
+	description="The complete platform for production AI agents. Stateful runtime, universal agent interface, and secure code execution. One SDK, one platform, deploy anywhere."
+	canonicalUrl="https://rivet.dev/agent-os/"
+	ogImage="/images/agent-os/agentos-og.png"
+>
+	<AgentOSPage heroTabs={heroTabs} client:load />
+</MarketingLayout>

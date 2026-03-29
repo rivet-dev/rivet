@@ -1,0 +1,230 @@
+---
+title: "Cron Jobs"
+description: "Schedule recurring commands and agent sessions in agentOS VMs."
+skill: true
+---
+
+- **Cron expressions** for flexible scheduling (e.g. `"0 9 * * *"` for 9 AM daily)
+- **Two action types**: `exec` for commands, `session` for agent sessions
+- **Overlap modes**: `allow`, `skip`, or `queue` concurrent executions
+- **Event streaming** via `cronEvent` for monitoring job execution
+
+## Schedule a command
+
+Run a shell command on a recurring schedule.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+// Schedule a cleanup script every hour
+const { id } = await agent.scheduleCron({
+  schedule: "0 * * * *",
+  action: {
+    type: "exec",
+    command: "rm",
+    args: ["-rf", "/tmp/cache/*"],
+  },
+});
+console.log("Cron job ID:", id);
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Schedule an agent session
+
+Create a recurring agent session that runs a prompt on a schedule.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+// Run an agent every day at 9 AM to check for issues
+await agent.scheduleCron({
+  schedule: "0 9 * * *",
+  action: {
+    type: "session",
+    agentType: "pi",
+    prompt: "Review the logs in /home/user/logs/ and summarize any errors",
+    options: { cwd: "/home/user" },
+  },
+});
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Overlap modes
+
+Control what happens when a cron job triggers while a previous execution is still running.
+
+| Mode | Behavior |
+|------|----------|
+| `"skip"` | Skip this trigger if the previous run is still active |
+| `"allow"` | Allow concurrent executions (default) |
+| `"queue"` | Queue this trigger and run it after the previous one finishes |
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+// Queue overlapping executions
+await agent.scheduleCron({
+  schedule: "*/5 * * * *",
+  overlap: "queue",
+  action: {
+    type: "session",
+    agentType: "pi",
+    prompt: "Process the next batch of tasks",
+  },
+});
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Monitor cron events
+
+Subscribe to `cronEvent` to track job execution.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+agent.on("cronEvent", (data) => {
+  console.log("Cron event:", data.event);
+});
+
+await agent.scheduleCron({
+  schedule: "*/1 * * * *",
+  action: { type: "exec", command: "echo", args: ["heartbeat"] },
+});
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## List and cancel cron jobs
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+// List all cron jobs
+const jobs = await agent.listCronJobs();
+for (const job of jobs) {
+  console.log(job.id, job.schedule);
+}
+
+// Cancel a specific job
+await agent.cancelCronJob(jobs[0].id);
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Example: Heartbeat pattern
+
+Schedule a recurring agent session to periodically check on a task. This is the core pattern behind [OpenClaw](https://openclaw.org), where an agent wakes up on a schedule to review progress, take action, and go back to sleep.
+
+```ts @nocheck
+await agent.scheduleCron({
+  schedule: "*/30 * * * *",
+  overlap: "skip",
+  action: {
+    type: "session",
+    agentType: "pi",
+    prompt: "Check the status of open issues and take any necessary action",
+  },
+});
+```
+
+The agent sleeps between executions and only consumes resources when the cron job fires.
+
+## Recommendations
+
+- Use `"skip"` overlap mode for most jobs. This prevents unbounded concurrency if a job takes longer than the interval. The default is `"allow"`.
+- Use `"queue"` when every trigger must execute, even if they back up.
+- Cron jobs keep the actor alive while executing. The actor can sleep between executions.
+- Provide a custom `id` when scheduling to make it easier to manage and cancel jobs later.

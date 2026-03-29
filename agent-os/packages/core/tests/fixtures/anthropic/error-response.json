@@ -1,0 +1,15 @@
+{
+	"fixtures": [
+		{
+			"match": {},
+			"response": {
+				"error": {
+					"message": "Rate limit exceeded. Please retry after 30 seconds.",
+					"type": "rate_limit_error",
+					"code": "rate_limit_error"
+				},
+				"status": 429
+			}
+		}
+	]
+}

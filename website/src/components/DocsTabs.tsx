@@ -26,6 +26,11 @@ export function DocsTabs() {
 						)}
 					>
 						{tab.title}
+						{tab.badge && (
+							<span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border px-1 py-px rounded">
+								{tab.badge}
+							</span>
+						)}
 					</a>
 				);
 			})}

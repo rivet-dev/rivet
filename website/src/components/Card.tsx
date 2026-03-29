@@ -66,7 +66,7 @@ export function Card({
 
 	if (href) {
 		return (
-			<a href={href} className="flex group w-full" target={target}>
+			<a href={href} className="flex group w-full no-underline" target={target}>
 				{content}
 			</a>
 		);

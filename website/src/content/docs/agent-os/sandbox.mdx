@@ -1,0 +1,100 @@
+---
+title: "Sandbox Extension"
+description: "Extend agentOS with full sandboxes for heavy workloads like browsers, desktop automation, and compilation."
+skill: true
+---
+
+- **Hybrid architecture** pairs agentOS with full sandboxes on demand
+- **Pay-per-second billing** so sandboxes only cost money while they are running
+- **Filesystem mount** projects the sandbox into the VM as a native directory
+- **Toolkit** exposes sandbox process management as [host tools](/docs/agent-os/tools)
+- **Provider-agnostic** via [Sandbox Agent](https://sandboxagent.dev) under the hood
+
+## Why use agentOS with a sandbox?
+
+agentOS is not a replacement for sandboxes. It's designed to work alongside them. agentOS makes it easy to integrate agents into your backend with [host tools](/docs/agent-os/tools), [permissions](/docs/agent-os/permissions), the [LLM gateway](/docs/agent-os/llm-gateway), and orchestration. The sandbox extension lets you connect a full sandbox environment when the workload needs it.
+
+See [agentOS vs Sandbox](/docs/agent-os/versus-sandbox) for a detailed comparison.
+
+## When to use a sandbox
+
+- **Native binaries** not yet supported in the agentOS runtime.
+- **Node.js packages with native extensions** (e.g. `sharp`, `bcrypt`, `better-sqlite3`) that require a full build toolchain.
+- **Browsers and desktop automation**: Playwright, Puppeteer, Selenium, or anything that needs a display server.
+- **Heavy compilation**: Large builds or native toolchains that require a full Linux environment.
+- **GUI applications**: Desktop apps, VNC sessions, or any workload that needs a graphical environment.
+
+## Getting started
+
+The `@rivet-dev/agent-os-sandbox` package integrates through two mechanisms: a **filesystem mount** that projects the sandbox into the VM as a native directory, and a **toolkit** that exposes process management as [host tools](/docs/agent-os/tools). Both are powered by [Sandbox Agent](https://sandboxagent.dev), so you can swap providers without changing agent code.
+
+```bash
+npm install @rivet-dev/agent-os-sandbox sandbox-agent
+```
+
+```ts @nocheck
+import { SandboxAgent } from "sandbox-agent";
+import { DockerProvider } from "sandbox-agent/docker";
+import { AgentOs } from "@rivet-dev/agent-os-core";
+import common from "@rivet-dev/agent-os-common";
+import { createSandboxFs, createSandboxToolkit } from "@rivet-dev/agent-os-sandbox";
+
+const sandbox = await SandboxAgent.start({
+  sandbox: new DockerProvider(),
+});
+
+const vm = await AgentOs.create({
+  software: [common],
+  mounts: [
+    {
+      path: "/sandbox",
+      driver: createSandboxFs({ client: sandbox }),
+    },
+  ],
+  toolKits: [createSandboxToolkit({ client: sandbox })],
+});
+
+// Write code via the filesystem. The /sandbox mount maps to the sandbox root.
+await vm.writeFile("/sandbox/app/index.ts", 'console.log("hello")');
+
+// Run it via the toolkit. Commands execute inside the sandbox, so paths are
+// relative to the sandbox root (/app/index.ts), not the VM mount (/sandbox/app/index.ts).
+const result = await vm.exec("agentos-sandbox run-command --command node --json '{\"args\": [\"/app/index.ts\"]}'");
+```
+
+## Tools reference
+
+The toolkit exposes these commands inside the VM:
+
+```bash
+# Run a command synchronously
+agentos-sandbox run-command --command "npm install" --cwd "/app"
+
+# Start a background process
+agentos-sandbox create-process --command "npm" --json '{"args": ["run", "dev"]}'
+
+# List running processes
+agentos-sandbox list-processes
+
+# Get process output
+agentos-sandbox get-process-logs --id "proc_abc123"
+
+# Stop or kill a process
+agentos-sandbox stop-process --id "proc_abc123"
+agentos-sandbox kill-process --id "proc_abc123"
+
+# Send input to an interactive process
+agentos-sandbox send-input --id "proc_abc123" --input "yes"
+```
+
+## Sandbox providers
+
+The extension works with any [Sandbox Agent](https://sandboxagent.dev) provider. See the [Sandbox Agent documentation](https://sandboxagent.dev) for available providers and setup instructions.
+
+## Recommendations
+
+- Start with the default agentOS VM for all workloads. Only spin up a sandbox when you hit a task that genuinely requires one.
+- Sandboxes are billed per second of uptime. Spin them up on demand and tear them down when the task is done to minimize cost.
+- The hybrid model means your agent can handle both lightweight coding tasks and heavy system operations in the same session, using the right tool for each.
+- See [Tools](/docs/agent-os/tools) for how host tools work and how the agent calls them as CLI commands.
+- See [Architecture](/docs/agent-os/architecture) for details on the VM isolation model.

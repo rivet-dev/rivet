@@ -92,7 +92,7 @@ export const HostingSection = () => (
           </div>
           <h3 className='mb-2 text-base font-normal text-white'>Rivet Cloud</h3>
           <p className='mb-6 text-sm leading-relaxed text-zinc-500'>
-            Fully managed. Global edge network. Connects to your existing cloud — Vercel, Railway, AWS, wherever you already deploy.
+            Fully managed Actors and agentOS. Global edge network. Connects to your existing cloud — Vercel, Railway, AWS, wherever you already deploy.
           </p>
           <ul className='mb-6 space-y-1'>
             {['Global Edge Network', 'Scales Seamlessly', 'Connects To Your Cloud'].map(item => (
