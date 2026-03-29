@@ -840,7 +840,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 		let sizeData: Uint8Array | null;
 		try {
 			sizeData = await options.get(metaKey);
-		} catch {
+		} catch (error) {
+			options.onError?.(error);
 			return VFS.SQLITE_CANTOPEN;
 		}
 
@@ -872,7 +873,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 						[chunkKey, EMPTY_DB_PAGE],
 						[metaKey, encodeFileMeta(size)],
 					]);
-				} catch {
+				} catch (error) {
+					options.onError?.(error);
 					return VFS.SQLITE_CANTOPEN;
 				}
 			} else {
@@ -880,7 +882,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 				size = 0;
 				try {
 					await options.put(metaKey, encodeFileMeta(size));
-				} catch {
+				} catch (error) {
+					options.onError?.(error);
 					return VFS.SQLITE_CANTOPEN;
 				}
 			}
@@ -924,8 +927,9 @@ class SqliteSystem implements SqliteVfsRegistration {
 				await file.options.put(file.metaKey, encodeFileMeta(file.size));
 				file.metaDirty = false;
 			}
-		} catch {
+		} catch (error) {
 			// Always clean up the file handle even if the KV operation fails.
+			file.options.onError?.(error);
 			this.#openFiles.delete(fileId);
 			return VFS.SQLITE_IOERR;
 		}
@@ -990,7 +994,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 		try {
 			kvChunks =
 				chunkKeys.length > 0 ? await options.getBatch(chunkKeys) : [];
-		} catch {
+		} catch (error) {
+			options.onError?.(error);
 			return VFS.SQLITE_IOERR_READ;
 		}
 
@@ -1153,7 +1158,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 				chunkKeysToFetch.length > 0
 					? await options.getBatch(chunkKeysToFetch)
 					: [];
-		} catch {
+		} catch (error) {
+			options.onError?.(error);
 			return VFS.SQLITE_IOERR_WRITE;
 		}
 
@@ -1206,7 +1212,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 		// Write all chunks and metadata
 		try {
 			await options.putBatch(entriesToWrite);
-		} catch {
+		} catch (error) {
+			options.onError?.(error);
 			file.size = previousSize;
 			file.metaDirty = previousMetaDirty;
 			return VFS.SQLITE_IOERR_WRITE;
@@ -1243,7 +1250,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 				file.metaDirty = true;
 				try {
 					await options.put(file.metaKey, encodeFileMeta(file.size));
-				} catch {
+				} catch (error) {
+					options.onError?.(error);
 					file.size = previousSize;
 					file.metaDirty = previousMetaDirty;
 					return VFS.SQLITE_IOERR_TRUNCATE;
@@ -1267,7 +1275,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 		file.metaDirty = true;
 		try {
 			await options.put(file.metaKey, encodeFileMeta(file.size));
-		} catch {
+		} catch (error) {
+			options.onError?.(error);
 			file.size = previousSize;
 			file.metaDirty = previousMetaDirty;
 			return VFS.SQLITE_IOERR_TRUNCATE;
@@ -1303,7 +1312,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 					keysToDelete.slice(b, b + KV_MAX_BATCH_KEYS),
 				);
 			}
-		} catch {
+		} catch (error) {
+			options.onError?.(error);
 			return VFS.SQLITE_IOERR_TRUNCATE;
 		}
 
@@ -1318,7 +1328,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 
 		try {
 			await file.options.put(file.metaKey, encodeFileMeta(file.size));
-		} catch {
+		} catch (error) {
+			file.options.onError?.(error);
 			return VFS.SQLITE_IOERR_FSYNC;
 		}
 		file.metaDirty = false;
@@ -1343,7 +1354,10 @@ class SqliteSystem implements SqliteVfsRegistration {
 	): Promise<number> {
 		try {
 			await this.#delete(this.#module.UTF8ToString(zName));
-		} catch {
+		} catch (error) {
+			// xDelete doesn't have a file handle, so we can't resolve
+			// options.onError here. The error is still surfaced by
+			// SQLite as SQLITE_IOERR_DELETE.
 			return VFS.SQLITE_IOERR_DELETE;
 		}
 		return VFS.SQLITE_OK;
@@ -1401,7 +1415,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 		let metaData: Uint8Array | null;
 		try {
 			metaData = await resolved.options.get(compactMetaKey);
-		} catch {
+		} catch (error) {
+			resolved.options.onError?.(error);
 			return VFS.SQLITE_IOERR_ACCESS;
 		}
 
@@ -1474,7 +1489,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 
 				try {
 					await options.putBatch(entries);
-				} catch {
+				} catch (error) {
+					options.onError?.(error);
 					file.dirtyBuffer = null;
 					file.size = file.savedFileSize;
 					file.metaDirty = false;

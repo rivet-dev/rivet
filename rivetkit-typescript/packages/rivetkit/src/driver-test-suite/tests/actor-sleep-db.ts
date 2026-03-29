@@ -2,6 +2,14 @@ import { describe, expect, test, vi } from "vitest";
 import { RAW_WS_HANDLER_DELAY } from "../../../fixtures/driver-test-suite/sleep";
 import {
 	SLEEP_DB_TIMEOUT,
+	EXCEEDS_GRACE_HANDLER_DELAY,
+	EXCEEDS_GRACE_PERIOD,
+	EXCEEDS_GRACE_SLEEP_TIMEOUT,
+	ACTIVE_DB_WRITE_COUNT,
+	ACTIVE_DB_WRITE_DELAY_MS,
+	ACTIVE_DB_GRACE_PERIOD,
+	ACTIVE_DB_SLEEP_TIMEOUT,
+	RAW_DB_SLEEP_TIMEOUT,
 } from "../../../fixtures/driver-test-suite/sleep-db";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
@@ -838,6 +846,332 @@ export function runActorSleepDbTests(driverTestConfig: DriverTestConfig) {
 				);
 				expect(events).toContain("alarm");
 			});
+
+			test(
+				"ws handler exceeding grace period should still complete db writes",
+				async (c) => {
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
+
+					const actor =
+						client.sleepWsMessageExceedsGrace.getOrCreate([
+							"ws-exceeds-grace",
+						]);
+					const ws = await connectRawWebSocket(actor);
+
+					// Send a message that starts slow async DB work
+					ws.send("slow-db-work");
+
+					// Wait for the handler to confirm it started
+					await new Promise<void>((resolve) => {
+						const onMessage = (event: MessageEvent) => {
+							const data = JSON.parse(String(event.data));
+							if (data.type === "started") {
+								ws.removeEventListener(
+									"message",
+									onMessage,
+								);
+								resolve();
+							}
+						};
+						ws.addEventListener("message", onMessage);
+					});
+
+					// Trigger sleep while the handler is still doing slow
+					// work. The grace period (200ms) is much shorter than the
+					// handler delay (2000ms), so shutdown will time out and
+					// clean up the database while the handler is still running.
+					await actor.triggerSleep();
+
+					// Wait for the handler to finish and the actor to complete
+					// its sleep cycle. The handler runs for 2000ms. After that
+					// the actor sleeps (the timed-out shutdown already ran, but
+					// the handler promise still resolves in the background).
+					await waitFor(
+						driverTestConfig,
+						EXCEEDS_GRACE_HANDLER_DELAY +
+							EXCEEDS_GRACE_SLEEP_TIMEOUT +
+							500,
+					);
+
+					// Wake the actor and check what happened.
+					const status = await actor.getStatus();
+					expect(status.sleepCount).toBeGreaterThanOrEqual(1);
+					expect(status.startCount).toBeGreaterThanOrEqual(2);
+
+					// The handler started.
+					expect(status.messageStarted).toBe(1);
+
+					// BUG: The handler's second DB write should succeed, but
+					// the grace period expired and the database was cleaned up
+					// before the handler finished. The handler's post-delay
+					// c.db.execute call runs against a destroyed database,
+					// so messageFinished is never incremented and "msg-finish"
+					// is missing from the log.
+					//
+					// Correct behavior: the handler should complete and
+					// msg-finish should appear in the DB.
+					expect(status.messageFinished).toBe(1);
+
+					const entries = await actor.getLogEntries();
+					const events = entries.map(
+						(e: { event: string }) => e.event,
+					);
+					expect(events).toContain("msg-start");
+					expect(events).toContain("msg-finish");
+				},
+				{ timeout: 15_000 },
+			);
+
+			test(
+				"concurrent ws handlers with cached db ref get errors when grace period exceeded",
+				async (c) => {
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
+
+					const actor =
+						client.sleepWsConcurrentDbExceedsGrace.getOrCreate(
+							["ws-concurrent-exceeds-grace"],
+						);
+					const ws = await connectRawWebSocket(actor);
+
+					const MESSAGE_COUNT = 3;
+					let startedCount = 0;
+
+					// Set up listener for "started" confirmations
+					const allStarted = new Promise<void>((resolve) => {
+						const onMessage = (event: MessageEvent) => {
+							const data = JSON.parse(String(event.data));
+							if (data.type === "started") {
+								startedCount++;
+								if (startedCount === MESSAGE_COUNT) {
+									ws.removeEventListener(
+										"message",
+										onMessage,
+									);
+									resolve();
+								}
+							}
+						};
+						ws.addEventListener("message", onMessage);
+					});
+
+					// Send multiple messages rapidly. Each handler captures
+					// c.db before awaiting and uses the cached reference after
+					// the delay. Multiple handlers will try to use the cached
+					// db reference after VFS teardown.
+					for (let i = 0; i < MESSAGE_COUNT; i++) {
+						ws.send(
+							JSON.stringify({
+								type: "slow-db-work",
+								index: i,
+							}),
+						);
+					}
+
+					// Wait for all handlers to confirm they started
+					await allStarted;
+
+					// Trigger sleep while all handlers are doing slow work
+					await actor.triggerSleep();
+
+					// Wait for handlers to finish + actor to sleep and wake
+					await waitFor(
+						driverTestConfig,
+						EXCEEDS_GRACE_HANDLER_DELAY +
+							MESSAGE_COUNT * 50 +
+							EXCEEDS_GRACE_SLEEP_TIMEOUT +
+							500,
+					);
+
+					// Wake the actor. All handlers should have completed
+					// their DB writes successfully.
+					const status = await actor.getStatus();
+					expect(status.sleepCount).toBeGreaterThanOrEqual(1);
+					expect(status.startCount).toBeGreaterThanOrEqual(2);
+					expect(status.handlerStarted).toBe(MESSAGE_COUNT);
+
+					// BUG: The handlers' post-delay DB writes fail because
+					// the grace period expired and the VFS was destroyed.
+					// With a cached db reference and staggered delays, the
+					// first handler to resume may get "disk I/O error" and
+					// leave a transaction open, and subsequent handlers get
+					// "cannot start a transaction within a transaction".
+					//
+					// Correct behavior: all handler DB writes should succeed.
+					expect(status.handlerFinished).toBe(MESSAGE_COUNT);
+					expect(status.handlerErrors).toEqual([]);
+				},
+				{ timeout: 15_000 },
+			);
+
+			test(
+				"active db writes interrupted by sleep produce db error",
+				async (c) => {
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
+
+					const actor =
+						client.sleepWsActiveDbExceedsGrace.getOrCreate([
+							"ws-active-db-exceeds-grace",
+						]);
+					const ws = await connectRawWebSocket(actor);
+
+					// Listen for error message from the handler. The
+					// handler sends { type: "error", index, error } over
+					// the WebSocket when the DB write fails.
+					const errorPromise = new Promise<{
+						index: number;
+						error: string;
+					}>((resolve) => {
+						const onMessage = (event: MessageEvent) => {
+							const data = JSON.parse(String(event.data));
+							if (data.type === "error") {
+								ws.removeEventListener(
+									"message",
+									onMessage,
+								);
+								resolve(data);
+							}
+						};
+						ws.addEventListener("message", onMessage);
+					});
+
+					// Start the write loop
+					ws.send("start-writes");
+
+					// Wait for confirmation
+					await new Promise<void>((resolve) => {
+						const onMessage = (event: MessageEvent) => {
+							const data = JSON.parse(String(event.data));
+							if (data.type === "started") {
+								ws.removeEventListener(
+									"message",
+									onMessage,
+								);
+								resolve();
+							}
+						};
+						ws.addEventListener("message", onMessage);
+					});
+
+					// Trigger sleep while writes are in progress.
+					await actor.triggerSleep();
+
+					// Wait for the error message from the handler.
+					const errorData = await errorPromise;
+
+					// The handler's write was interrupted by shutdown.
+					// With the file-system driver, the c.db getter throws
+					// ActorStopping because #db is already undefined. With
+					// the engine driver, the KV transport fails mid-query
+					// and the VFS onError callback produces a descriptive
+					// "underlying storage is no longer available" message.
+					expect(errorData.error).toMatch(
+						/actor stop|database accessed after|Database is closed|underlying storage/i,
+					);
+					expect(errorData.index).toBeGreaterThan(0);
+					expect(errorData.index).toBeLessThan(
+						ACTIVE_DB_WRITE_COUNT,
+					);
+
+					// Wait for actor to sleep + wake so we can query it.
+					await waitFor(
+						driverTestConfig,
+						ACTIVE_DB_SLEEP_TIMEOUT + 500,
+					);
+
+					// Verify the DB has fewer rows than the full count.
+					const entries = await actor.getLogEntries();
+					const writeEntries = entries.filter(
+						(e: { event: string }) =>
+							e.event.startsWith("write-"),
+					);
+					expect(writeEntries.length).toBeGreaterThan(0);
+					expect(writeEntries.length).toBeLessThan(
+						ACTIVE_DB_WRITE_COUNT,
+					);
+				},
+				{ timeout: 30_000 },
+			);
+
+			test(
+				"poisoned KV produces disk I/O error on commit",
+				async (c) => {
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
+
+					const actor =
+						client.sleepWsRawDbAfterClose.getOrCreate([
+							`raw-db-${crypto.randomUUID()}`,
+						]);
+					const ws = await connectRawWebSocket(actor);
+
+					// Listen for the error (or committed) message.
+					const resultPromise = new Promise<{
+						type: string;
+						error?: string;
+					}>((resolve) => {
+						const onMessage = (event: MessageEvent) => {
+							const data = JSON.parse(String(event.data));
+							if (
+								data.type === "error" ||
+								data.type === "committed"
+							) {
+								ws.removeEventListener(
+									"message",
+									onMessage,
+								);
+								resolve(data);
+							}
+						};
+						ws.addEventListener("message", onMessage);
+					});
+
+					// Tell the handler to BEGIN a transaction, poison the
+					// KV store, then try to COMMIT.
+					ws.send("raw-db-after-close");
+
+					// Wait for the handler's result with a timeout. The
+					// COMMIT may hang if the VFS error causes SQLite's
+					// pager to enter a retry loop, so we set a deadline.
+					const result = await Promise.race([
+						resultPromise,
+						new Promise<{ type: string; error?: string }>(
+							(resolve) =>
+								setTimeout(
+									() =>
+										resolve({
+											type: "timeout",
+											error: "handler did not respond within 5s",
+										}),
+									5000,
+								),
+						),
+					]);
+
+					// The COMMIT should have failed with a raw SQLite
+					// error caused by the poisoned KV. The exact message
+					// depends on which VFS operation fails first:
+					// "disk I/O error" (xWrite) or "unable to open
+					// database file" (xOpen during rollback).
+					expect(result.type).not.toBe("committed");
+					if (result.type === "error") {
+						expect(result.error).toMatch(
+							/disk I\/O|unable to open|SQLITE_IOERR/i,
+						);
+					}
+				},
+				{ timeout: 15_000 },
+			);
 		},
 	);
 }

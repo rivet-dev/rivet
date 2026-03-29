@@ -54,11 +54,15 @@ export function db({
 				);
 			}
 
+			let lastVfsError: unknown = null;
 			const kvStore = createActorKvStore(
 				ctx.kv,
 				ctx.metrics,
 				ctx.preloadedEntries,
 			);
+			kvStore.onError = (error: unknown) => {
+				lastVfsError = error;
+			};
 			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
 			let closed = false;
 			const mutex = new AsyncMutex();
@@ -93,55 +97,77 @@ export function db({
 						// Keep using `db.exec` for non-parameterized SQL because it
 						// supports multi-statement migrations.
 						let result: TRow[];
-						if (args.length > 0) {
-							const bindings =
-								args.length === 1 &&
-								isSqliteBindingObject(args[0])
-									? toSqliteBindings(args[0])
-									: toSqliteBindings(args);
-							const token = query
-								.trimStart()
-								.slice(0, 16)
-								.toUpperCase();
-							const returnsRows =
-								token.startsWith("SELECT") ||
-								token.startsWith("PRAGMA") ||
-								token.startsWith("WITH") ||
-								/\bRETURNING\b/i.test(query);
+						try {
+							if (args.length > 0) {
+								const bindings =
+									args.length === 1 &&
+									isSqliteBindingObject(args[0])
+										? toSqliteBindings(args[0])
+										: toSqliteBindings(args);
+								const token = query
+									.trimStart()
+									.slice(0, 16)
+									.toUpperCase();
+								const returnsRows =
+									token.startsWith("SELECT") ||
+									token.startsWith("PRAGMA") ||
+									token.startsWith("WITH") ||
+									/\bRETURNING\b/i.test(query);
 
-							if (returnsRows) {
-								const { rows, columns } = await db.query(
-									query,
-									bindings,
-								);
-								result = rows.map((row: unknown[]) => {
-									const rowObj: Record<string, unknown> = {};
-									for (let i = 0; i < columns.length; i++) {
-										rowObj[columns[i]] = row[i];
-									}
-									return rowObj;
-								}) as TRow[];
+								if (returnsRows) {
+									const { rows, columns } = await db.query(
+										query,
+										bindings,
+									);
+									result = rows.map((row: unknown[]) => {
+										const rowObj: Record<
+											string,
+											unknown
+										> = {};
+										for (
+											let i = 0;
+											i < columns.length;
+											i++
+										) {
+											rowObj[columns[i]] = row[i];
+										}
+										return rowObj;
+									}) as TRow[];
+								} else {
+									await db.run(query, bindings);
+									result = [] as TRow[];
+								}
 							} else {
-								await db.run(query, bindings);
-								result = [] as TRow[];
+								const results: Record<string, unknown>[] = [];
+								let columnNames: string[] | null = null;
+								await db.exec(
+									query,
+									(row: unknown[], columns: string[]) => {
+										if (!columnNames) {
+											columnNames = columns;
+										}
+										const rowObj: Record<
+											string,
+											unknown
+										> = {};
+										for (let i = 0; i < row.length; i++) {
+											rowObj[columnNames[i]] = row[i];
+										}
+										results.push(rowObj);
+									},
+								);
+								result = results as TRow[];
 							}
-						} else {
-							const results: Record<string, unknown>[] = [];
-							let columnNames: string[] | null = null;
-							await db.exec(
-								query,
-								(row: unknown[], columns: string[]) => {
-									if (!columnNames) {
-										columnNames = columns;
-									}
-									const rowObj: Record<string, unknown> = {};
-									for (let i = 0; i < row.length; i++) {
-										rowObj[columnNames[i]] = row[i];
-									}
-									results.push(rowObj);
-								},
-							);
-							result = results as TRow[];
+						} catch (error) {
+							if (lastVfsError != null) {
+								const cause = lastVfsError;
+								lastVfsError = null;
+								throw new Error(
+									`Database query failed because the underlying storage is no longer available (${cause instanceof Error ? cause.message : String(cause)}). This usually means the actor is stopping. Use c.abortSignal to cancel long-running work before the actor shuts down.`,
+									{ cause: cause instanceof Error ? cause : undefined },
+								);
+							}
+							throw error;
 						}
 
 						const durationMs = performance.now() - start;
@@ -163,6 +189,13 @@ export function db({
 					});
 				},
 				close: async () => {
+					// Poison the KV store before acquiring the mutex. If a
+					// query is in-flight (holding the mutex), its next VFS
+					// page read/write will fail immediately with a
+					// descriptive error instead of hanging or producing a
+					// cryptic "disk I/O error".
+					kvStore.poison();
+
 					const shouldClose = await mutex.run(async () => {
 						if (closed) return false;
 						closed = true;

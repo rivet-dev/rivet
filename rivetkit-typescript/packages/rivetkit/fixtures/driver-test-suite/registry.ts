@@ -94,6 +94,8 @@ import {
 	sleepWithDbAction,
 	sleepWithRawWsCloseDb,
 	sleepWithRawWsCloseDbListener,
+	sleepWsMessageExceedsGrace,
+	sleepWsConcurrentDbExceedsGrace,
 	sleepWaitUntil,
 	sleepNestedWaitUntil,
 	sleepEnqueue,
@@ -102,6 +104,10 @@ import {
 	sleepWaitUntilRejects,
 	sleepWaitUntilState,
 	sleepWithRawWs,
+	sleepWsMessageExceedsGrace,
+	sleepWsConcurrentDbExceedsGrace,
+	sleepWsActiveDbExceedsGrace,
+	sleepWsRawDbAfterClose,
 } from "./sleep-db";
 import { lifecycleObserver, startStopRaceActor } from "./start-stop-race";
 import { statelessActor } from "./stateless";
@@ -180,6 +186,10 @@ export const registry = setup({
 		sleepWithRawWs,
 		sleepWithRawWsCloseDb,
 		sleepWithRawWsCloseDbListener,
+		sleepWsMessageExceedsGrace,
+		sleepWsConcurrentDbExceedsGrace,
+		sleepWsActiveDbExceedsGrace,
+		sleepWsRawDbAfterClose,
 		// From error-handling.ts
 		errorHandlingActor,
 		customTimeoutActor,
