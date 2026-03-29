@@ -18,7 +18,8 @@
 			"rivetkit/sandbox": ["./src/sandbox/index.ts"],
 			"rivetkit/sandbox/docker": ["./src/sandbox/providers/docker.ts"],
 			"rivetkit/db": ["./src/db/mod.ts"],
-			"rivetkit/db/drizzle": ["./src/db/drizzle/mod.ts"]
+			"rivetkit/db/drizzle": ["./src/db/drizzle/mod.ts"],
+			"rivetkit/agent-os": ["./src/agent-os/index.ts"]
 		}
 	},
 	"include": [

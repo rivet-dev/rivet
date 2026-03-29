@@ -1,0 +1,28 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import AppsPageClient from '@/components/marketing/apps/AppsPageClient';
+import apps from '@/data/apps.json';
+---
+
+<MarketingLayout
+	title="Apps"
+	description="Browse the Agent OS app registry. Find agents, tools, and file system integrations for your Agent OS environment."
+	canonicalUrl="https://rivet.dev/agent-os/apps/"
+>
+	<main class="min-h-screen w-full bg-black">
+		<div class="relative isolate overflow-hidden pt-40">
+			<div class="mx-auto max-w-4xl px-6 lg:px-8 text-center">
+				<h1 class="text-6xl font-700 text-white leading-[1.1] tracking-normal">
+					Apps
+				</h1>
+				<p class="mt-6 max-w-3xl mx-auto text-xl leading-[1.2] tracking-tight font-500 text-white/60">
+					Browse agents, tools, and integrations for Agent OS.
+				</p>
+			</div>
+		</div>
+
+		<div class="mx-auto max-w-4xl px-6 lg:px-8 pt-10 pb-24">
+			<AppsPageClient apps={apps} client:load />
+		</div>
+	</main>
+</MarketingLayout>

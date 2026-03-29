@@ -89,7 +89,7 @@ const deploySidebarPages: SidebarItem[] = deployOptions.filter((x) => x.name !==
 
 export const sitemap = [
 	{
-		title: "Overview",
+		title: "Actors",
 		href: "/docs",
 		sidebar: [
 			{
@@ -489,6 +489,32 @@ export const sitemap = [
 				],
 			},
 		],
+	},
+	{
+		title: "AgentOS",
+		href: "/docs/agent-os",
+		sidebar: [
+			{
+				title: "General",
+				pages: [
+					{
+						title: "Overview",
+						href: "/docs/agent-os",
+						icon: faSquareInfo,
+					},
+					{
+						title: "Quickstart",
+						href: "/docs/agent-os/quickstart",
+						icon: faSquareInfo,
+					},
+					{
+						title: "Core",
+						href: "/docs/agent-os/core",
+						icon: faSquareInfo,
+					},
+				]
+			}
+		]
 	},
 	// {
 	// 	title: "Integrations",

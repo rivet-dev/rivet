@@ -1,0 +1,48 @@
+---
+title: "Overview"
+description: "Run coding agents inside isolated VMs with full filesystem, process, and network control."
+skill: true
+---
+
+## Quickstart
+
+<Card
+	title="Get Started"
+	href="/docs/agent-os/quickstart"
+	icon="rocket"
+>
+	Install AgentOS, boot a VM, and run your first agent in minutes
+</Card>
+
+## Features
+
+- **VM Lifecycle** — create, configure, and dispose isolated virtual machines
+- **Agent Sessions (ACP)** — launch coding agents (PI, OpenCode) via JSON-RPC over stdio
+- **Filesystem Operations** — read, write, mkdir, stat, move, delete, recursive listing, batch read/write
+- **Process Management** — spawn, exec, stop, kill processes; inspect process trees across all runtimes
+- **Agent Registry** — discover available agents and their installation status
+- **Networking** — reach services running inside the VM via `fetch()`
+- **Shell Access** — open interactive shells with PTY support
+- **Mount Backends** — memory, host directory, S3, overlay (copy-on-write), or custom VirtualFileSystem
+
+## How It Works
+
+AgentOS wraps a secure, in-process OS kernel that manages a virtual filesystem, process table, and network stack. Three runtimes mount into the kernel:
+
+- **WASM** — POSIX utilities (coreutils, sh, grep, etc.) compiled to WebAssembly
+- **Node.js** — Sandboxed V8 isolates for JS/TS agent code
+- **Python** — CPython via Pyodide with kernel-backed I/O
+
+Everything — agent processes, servers, file I/O, network requests — runs inside the VM. Nothing executes on the host.
+
+## Reference
+
+<CardGroup cols={2}>
+	<Card
+		title="Core API"
+		href="/docs/agent-os/core"
+		icon="code"
+	>
+		Full API reference for AgentOs, Session, and all exported types
+	</Card>
+</CardGroup>

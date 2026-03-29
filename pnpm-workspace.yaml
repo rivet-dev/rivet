@@ -18,6 +18,8 @@ packages:
   - shared/typescript/*
   - website
   - website/scripts/typecheck-staging
+  - agent-os/packages/*
+  - agent-os/examples/*
 
 ignoredBuiltDependencies:
   - '@clerk/shared'
@@ -28,6 +30,7 @@ ignoredBuiltDependencies:
 
 onlyBuiltDependencies:
   - '@biomejs/biome'
+  - opencode-ai
   - '@rivet-gg/icons'
   - better-sqlite3
   - cbor-extract

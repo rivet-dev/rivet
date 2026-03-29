@@ -37,6 +37,7 @@
 		"@rivetkit/next-js": "workspace:*",
 		"@rivetkit/db": "workspace:*",
 		"@rivetkit/sqlite-vfs": "workspace:*",
+		"@rivet-dev/agent-os-core": "workspace:*",
 		"@rivetkit/engine-api-full": "workspace:*",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",

@@ -1,0 +1,61 @@
+---
+title: "Quickstart"
+description: "Install AgentOS, boot a VM, and run your first coding agent."
+skill: true
+---
+
+<Steps>
+<Step title="Install">
+
+```bash
+npm install @rivet-dev/agent-os-core
+# Install an agent adapter + its underlying agent
+npm install pi-acp @mariozechner/pi-coding-agent
+```
+
+</Step>
+
+<Step title="Write Code">
+
+Create a file with your VM setup and agent session:
+
+```ts index.ts
+import { AgentOs } from "@rivet-dev/agent-os-core";
+
+// Boot a VM
+const vm = await AgentOs.create();
+
+// Run commands
+const result = await vm.exec("echo hello");
+console.log(result.stdout); // "hello\n"
+
+// Work with the filesystem
+await vm.writeFile("/home/user/test.txt", "hello world");
+const content = await vm.readFile("/home/user/test.txt");
+
+// Spawn an ACP coding agent session
+const session = await vm.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY },
+});
+const response = await session.prompt("Write a hello world script");
+console.log(response);
+
+// Clean up
+session.close();
+await vm.dispose();
+```
+
+</Step>
+
+<Step title="Run It">
+
+```bash
+npx tsx index.ts
+```
+
+</Step>
+</Steps>
+
+## Next Steps
+
+- [Core API Reference](/docs/agent-os/core) — full API docs for AgentOs, Session, and all exported types

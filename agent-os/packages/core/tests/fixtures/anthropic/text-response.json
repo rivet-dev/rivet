@@ -1,0 +1,8 @@
+{
+	"fixtures": [
+		{
+			"match": {},
+			"response": { "content": "Hello from llmock" }
+		}
+	]
+}

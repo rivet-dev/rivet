@@ -1,0 +1,32 @@
+[
+  {
+    "title": "Claude Code",
+    "package": "@anthropic/agent-os-claude-code",
+    "description": "Run Claude Code as an Agent OS agent with full tool access, file editing, and shell execution.",
+    "types": ["agent"]
+  },
+  {
+    "title": "Filesystem",
+    "package": "@anthropic/agent-os-fs",
+    "description": "Mount and manage virtual filesystems with support for S3, local, and overlay drivers.",
+    "types": ["file-system"]
+  },
+  {
+    "title": "Web Browser",
+    "package": "@anthropic/agent-os-browser",
+    "description": "Headless Chromium browser for web scraping, testing, and automation tasks.",
+    "types": ["tool"]
+  },
+  {
+    "title": "Code Interpreter",
+    "package": "@anthropic/agent-os-code-interpreter",
+    "description": "Execute Python and JavaScript code in a sandboxed environment with package support.",
+    "types": ["tool"]
+  },
+  {
+    "title": "Terminal",
+    "package": "@anthropic/agent-os-terminal",
+    "description": "Persistent shell sessions with PTY support for interactive command execution.",
+    "types": ["tool"]
+  }
+]

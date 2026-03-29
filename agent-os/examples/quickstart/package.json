@@ -1,0 +1,29 @@
+{
+	"name": "@rivet-dev/agent-os-core-quickstart",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"check-types": "tsc --noEmit",
+		"build": "tsc",
+		"hello-world": "node --import tsx src/hello-world.ts",
+		"filesystem": "node --import tsx src/filesystem.ts",
+		"execute": "node --import tsx src/execute.ts",
+		"shell": "node --import tsx src/shell.ts",
+		"network": "node --import tsx src/network.ts",
+		"agent-session": "node --import tsx src/agent-session.ts",
+		"agent-session-events": "node --import tsx src/agent-session-events.ts",
+		"mcp-servers": "node --import tsx src/mcp-servers.ts",
+		"multi-agent": "node --import tsx src/multi-agent.ts",
+		"mount-s3": "node --import tsx src/mount-s3.ts"
+	},
+	"dependencies": {
+		"@rivet-dev/agent-os-core": "workspace:*"
+	},
+	"devDependencies": {
+		"@copilotkit/llmock": "^1.6.0",
+		"@types/node": "^22.10.2",
+		"tsx": "^4.19.0",
+		"typescript": "^5.7.2"
+	}
+}

@@ -1,0 +1,15 @@
+{
+	"fixtures": [
+		{
+			"match": {},
+			"response": {
+				"toolCalls": [
+					{
+						"name": "bash",
+						"arguments": "{\"command\":\"ls -la\"}"
+					}
+				]
+			}
+		}
+	]
+}
