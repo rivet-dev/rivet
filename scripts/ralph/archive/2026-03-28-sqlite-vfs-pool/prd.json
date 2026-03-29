@@ -1,0 +1,278 @@
+{
+  "project": "RivetKit Agent-OS Module",
+  "branchName": "ralph/rivetkit-agent-os",
+  "description": "Wrap @rivet-dev/agent-os-core as a RivetKit actor module at rivetkit/agent-os. Provides VM lifecycle, sessions, process execution, filesystem, networking, and signed preview URLs over Rivet's actor infrastructure with sleep/wake and event broadcasting. See .agent/notes/agent-os-spec.md for the full design spec and rivetkit-typescript/packages/rivetkit/src/agent-os/todo.md for deferred items.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Scaffold module structure and package exports",
+      "description": "As a developer, I need the agent-os module directory structure and package exports so subsequent stories can add code incrementally.",
+      "acceptanceCriteria": [
+        "rivetkit-typescript/packages/rivetkit/src/agent-os/ directory exists with subdirectory actor/",
+        "agent-os/index.ts exists with stub default export (function agentOs() that returns a placeholder ActorDefinition)",
+        "agent-os/actor/index.ts exists (empty or stub)",
+        "agent-os/actor/session.ts exists (empty or stub)",
+        "agent-os/actor/process.ts exists (empty or stub)",
+        "agent-os/actor/preview.ts exists (empty or stub)",
+        "agent-os/actor/db.ts exists (empty or stub)",
+        "agent-os/config.ts exists (empty or stub)",
+        "agent-os/types.ts exists (empty or stub)",
+        "rivetkit-typescript/packages/rivetkit/package.json has exports entry for './agent-os' pointing to src/agent-os/index.ts (follow pattern of existing './sandbox' export)",
+        "@rivet-dev/agent-os-core is added as a dependency to rivetkit package.json (use link: pointing to ~/a1/packages/core)",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Follow the exact same pattern as the existing sandbox module export. Check rivetkit-typescript/packages/rivetkit/package.json exports field for the './sandbox' entry and mirror it. The link: dependency path should be relative from rivetkit-typescript/packages/rivetkit/ to ~/a1/packages/core. Stub exports should be enough to typecheck but don't need real implementations yet."
+    },
+    {
+      "id": "US-002",
+      "title": "Config types and Zod validation schema",
+      "description": "As a developer, I need the AgentOsActorConfig type and Zod schema so the factory function can validate user config.",
+      "acceptanceCriteria": [
+        "config.ts exports AgentOsActorConfig<TConnParams> interface with: options (AgentOsOptions from @rivet-dev/agent-os-core), onBeforeConnect, onSessionEvent, onPermissionRequest, preview",
+        "preview field has type { defaultExpiresInSeconds?: number; maxExpiresInSeconds?: number }",
+        "config.ts exports Zod schema (agentOsActorConfigSchema) that validates the config shape",
+        "Default values: preview.defaultExpiresInSeconds = 3600, preview.maxExpiresInSeconds = 86400",
+        "Config pattern mirrors rivetkit-typescript/packages/rivetkit/src/sandbox/config.ts",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Read the sandbox config.ts at rivetkit-typescript/packages/rivetkit/src/sandbox/config.ts for the exact pattern. Import AgentOsOptions and related types from @rivet-dev/agent-os-core. The onSessionEvent and onPermissionRequest hooks take an action context, a sessionId string, and the event/request payload."
+    },
+    {
+      "id": "US-003",
+      "title": "State, vars, event, and serialization types",
+      "description": "As a developer, I need the type definitions for actor state, ephemeral vars, events, and session serialization.",
+      "acceptanceCriteria": [
+        "types.ts exports AgentOsActorState interface (intentionally empty object, VM state is ephemeral)",
+        "types.ts exports AgentOsActorVars interface with fields: agentOs (AgentOs | null), activeSessionIds (Set<string>), activeProcesses (Map<number, ManagedProcess>), activeHooks (Set<Promise<void>>), sessions (Map<string, Session>)",
+        "types.ts exports event type definitions matching: sessionEvent ({ sessionId, event }), permissionRequest ({ sessionId, request }), vmBooted ({}), vmShutdown ({ reason: 'sleep' | 'destroy' | 'error' })",
+        "types.ts exports SessionRecord interface with fields: sessionId (string), agentType (string), capabilities (AgentCapabilities), agentInfo (AgentInfo | null)",
+        "All types import from @rivet-dev/agent-os-core (AgentOs, Session, ManagedProcess, AgentCapabilities, AgentInfo, etc.)",
+        "types.ts exports AgentOsActionContext type alias for the action context parameterized with AgentOsActorState and AgentOsActorVars",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Import RivetKit context types from the actor module. Session and ManagedProcess are class types from @rivet-dev/agent-os-core. These will be replaced with ID-based serializable patterns after the agentOS flatten migration (see todo.md). The AgentOsActorState is deliberately empty because the in-process VM is fully destroyed on sleep. Only preview tokens persist, and they're in SQLite, not actor state."
+    },
+    {
+      "id": "US-004",
+      "title": "SQLite migration for preview token storage",
+      "description": "As a developer, I need the SQLite schema and migration function for storing signed preview URL tokens.",
+      "acceptanceCriteria": [
+        "actor/db.ts exports migrateAgentOsTables function that takes a sql tagged template function",
+        "Migration creates table agent_os_preview_tokens with columns: token (TEXT PRIMARY KEY), port (INTEGER NOT NULL), created_at (INTEGER NOT NULL), expires_at (INTEGER NOT NULL)",
+        "Migration creates index idx_preview_tokens_expires_at on agent_os_preview_tokens(expires_at)",
+        "Both statements use IF NOT EXISTS for idempotency",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Follow the pattern of existing SQLite migrations in RivetKit. The sql function is a tagged template literal. Port is stored with the token so the URL doesn't need to contain the port (Daytona-inspired approach)."
+    },
+    {
+      "id": "US-005",
+      "title": "Core actor factory with VM lifecycle and prevent-sleep",
+      "description": "As a developer, I need the agentOs() factory function that returns a complete ActorDefinition with VM boot/sleep/wake/destroy lifecycle, prevent-sleep coordination, and hook tracking.",
+      "acceptanceCriteria": [
+        "actor/index.ts exports the agentOs() factory function accepting AgentOsActorConfig, returning ActorDefinition",
+        "Actor options: sleepGracePeriod = 900_000, actionTimeout = 900_000",
+        "Vars initialized: agentOs: null, activeSessionIds: new Set(), activeProcesses: new Map(), activeHooks: new Set(), sessions: new Map()",
+        "ensureVm(c) helper: if c.vars.agentOs is not null, returns it; otherwise calls AgentOs.create(config.options), stores in c.vars.agentOs, broadcasts vmBooted event, logs boot duration",
+        "onSleep handler: logs summary (activeSessions, activeProcesses), calls agentOs.dispose(), broadcasts vmShutdown with reason 'sleep'",
+        "onDestroy handler: same cleanup as onSleep, broadcasts vmShutdown with reason 'destroy'",
+        "syncPreventSleep(c) function: checks activeSessionIds.size, activeProcesses.size, activeHooks.size; calls c.setPreventSleep(shouldPrevent); logs state",
+        "runHook(c, name, callback) function: wraps callback in promise, tracks in activeHooks, calls c.waitUntil, syncs prevent-sleep on completion, logs errors",
+        "db configured with migrateAgentOsTables from actor/db.ts",
+        "Events declared: sessionEvent, permissionRequest, vmBooted, vmShutdown",
+        "index.ts re-exports agentOs as default export",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "This is the central story. Read the sandbox actor at rivetkit-typescript/packages/rivetkit/src/sandbox/actor/index.ts for the overall pattern. Key difference: the agent-os VM is in-process (Secure-Exec) and fully destroyed on sleep, unlike the sandbox actor which reconnects to an external sandbox. The ensureVm pattern is similar to the sandbox's ensureSandbox. The sleepGracePeriod and actionTimeout are both 15 minutes because sendPrompt can take 5-10+ minutes for complex coding tasks. See .agent/notes/agent-os-spec.md sections 'VM Lifecycle', 'Prevent-Sleep Coordination', and 'Hook Tracking' for the exact logic."
+    },
+    {
+      "id": "US-006",
+      "title": "Session management actions with event broadcasting",
+      "description": "As a developer, I need createSession, listSessions, getSession, and destroySession actions, plus session event subscription and broadcasting.",
+      "acceptanceCriteria": [
+        "actor/session.ts exports subscribeToSession(c, session, parsedConfig) function that wires session.onSessionEvent to broadcast 'sessionEvent' and run user's onSessionEvent hook via runHook",
+        "subscribeToSession also wires session.onPermissionRequest to broadcast 'permissionRequest' and run user's onPermissionRequest hook via runHook",
+        "subscribeToSession stores session in c.vars.sessions keyed by session.sessionId",
+        "createSession action: calls ensureVm, calls agentOs.createSession(agentType, options), calls subscribeToSession, logs session created, returns SessionRecord (sessionId, agentType, capabilities, agentInfo)",
+        "listSessions action: calls agentOs.listSessions(), returns SessionInfo[]",
+        "getSession action: looks up c.vars.sessions by sessionId, throws 'session not found' if missing, returns SessionRecord",
+        "destroySession action: calls agentOs.destroySession(sessionId), removes from c.vars.sessions, deletes from c.vars.activeSessionIds, calls syncPreventSleep, logs session destroyed",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Read the sandbox actor session.ts at rivetkit-typescript/packages/rivetkit/src/sandbox/actor/session.ts for the pattern. Key difference: session.onSessionEvent() returns void (no unsubscribe function), so cleanup happens implicitly when agentOs.dispose() destroys sessions. The SessionRecord is a plain serializable object extracted from the Session class instance. See .agent/notes/agent-os-spec.md section 'Event Broadcasting'."
+    },
+    {
+      "id": "US-007",
+      "title": "Prompt, cancel, and permission actions with turn tracking",
+      "description": "As a developer, I need sendPrompt, cancelPrompt, and respondPermission actions with turn tracking that coordinates with prevent-sleep.",
+      "acceptanceCriteria": [
+        "sendPrompt action: checks c.aborted (throws 'actor is shutting down, cannot start new prompt' if true), looks up session from c.vars.sessions (throws if not found), adds sessionId to c.vars.activeSessionIds, calls syncPreventSleep, logs turn started, awaits session.prompt(text), removes sessionId from activeSessionIds in finally block, calls syncPreventSleep in finally block, logs turn ended with durationMs, returns prompt result",
+        "cancelPrompt action: looks up session by sessionId, calls session.cancel()",
+        "respondPermission action: looks up session by sessionId, calls session.respondPermission(permissionId, reply)",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Turn tracking is the core prevent-sleep mechanism for sessions. Unlike the sandbox actor which inspects JSON-RPC id matching in the event stream, we track turns via the sendPrompt promise lifecycle. This is simpler because we own the full call. The c.aborted check prevents starting new prompts during the sleep grace period. Existing in-flight prompts continue until they resolve. See .agent/notes/agent-os-spec.md section 'Turn Tracking'."
+    },
+    {
+      "id": "US-008",
+      "title": "Session configuration actions",
+      "description": "As a developer, I need the session config actions (setMode, getModes, setModel, setThoughtLevel, getConfigOptions, getEvents, getSequencedEvents, rawSend) that proxy to Session methods.",
+      "acceptanceCriteria": [
+        "setMode action: looks up session, calls session.setMode(modeId)",
+        "getModes action: looks up session, calls session.getModes()",
+        "setModel action: looks up session, calls session.setModel(model)",
+        "setThoughtLevel action: looks up session, calls session.setThoughtLevel(level)",
+        "getConfigOptions action: looks up session, calls session.getConfigOptions()",
+        "getEvents action: looks up session, calls session.getEvents(options)",
+        "getSequencedEvents action: looks up session, calls session.getSequencedEvents(options)",
+        "rawSend action: looks up session, calls session.rawSend(method, params)",
+        "All actions infer parameter and return types from @rivet-dev/agent-os-core Session class",
+        "All actions throw 'session not found' if sessionId not in c.vars.sessions",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "These are thin proxies. Each one looks up the Session from c.vars.sessions and calls the corresponding method. Types should be inferred from the Session class in @rivet-dev/agent-os-core, not manually redefined. A shared helper (e.g., getSessionOrThrow(c, sessionId)) would reduce duplication."
+    },
+    {
+      "id": "US-009",
+      "title": "Process execution actions with process tracking",
+      "description": "As a developer, I need exec, spawn, and process management actions. spawn must track active processes for prevent-sleep coordination.",
+      "acceptanceCriteria": [
+        "exec action: calls ensureVm, calls agentOs.exec(command, options), returns KernelExecResult",
+        "spawn action: calls ensureVm, calls agentOs.spawn(command, args, options), stores ManagedProcess in c.vars.activeProcesses keyed by pid, calls syncPreventSleep, attaches exit listener via proc.wait().then() that removes from activeProcesses and syncs prevent-sleep, logs process spawned, returns { pid }",
+        "Exit listener catch handler silently cleans up (process killed during dispose)",
+        "listProcesses action: calls agentOs.listProcesses()",
+        "allProcesses action: calls agentOs.allProcesses()",
+        "processTree action: calls agentOs.processTree()",
+        "getProcess action: calls agentOs.getProcess(pid)",
+        "stopProcess action: calls agentOs.stopProcess(pid) (sends SIGTERM)",
+        "killProcess action: calls agentOs.killProcess(pid) (sends SIGKILL)",
+        "Structured logging for process spawn (pid, command) and exit (pid, exitCode)",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Process tracking keeps the actor alive while spawned processes are running. The spawn action is the only one that modifies prevent-sleep state. exec is synchronous (blocks until process exits) so it doesn't need tracking. See .agent/notes/agent-os-spec.md section 'Process Tracking'. ManagedProcess is stored in vars because we need the reference for proc.wait(). After the flatten migration (US-102 in todo.md), spawn() will return { pid } and process I/O becomes ID-based."
+    },
+    {
+      "id": "US-010",
+      "title": "Filesystem and agent registry actions",
+      "description": "As a developer, I need filesystem proxy actions and the listAgents action.",
+      "acceptanceCriteria": [
+        "readFile action: calls ensureVm, returns agentOs.readFile(path) (Uint8Array, BARE/CBOR handles binary natively)",
+        "writeFile action: calls ensureVm, calls agentOs.writeFile(path, content)",
+        "readFiles action: calls agentOs.readFiles(paths) (batch read)",
+        "writeFiles action: calls agentOs.writeFiles(entries) (batch write)",
+        "mkdir action: calls agentOs.mkdir(path)",
+        "readdir action: calls agentOs.readdir(path)",
+        "readdirRecursive action: calls agentOs.readdirRecursive(path, options)",
+        "stat action: calls agentOs.stat(path)",
+        "exists action: calls agentOs.exists(path)",
+        "move action: calls agentOs.move(from, to)",
+        "deleteFile action: calls agentOs.delete(path, options)",
+        "mountFs action: calls agentOs.mountFs(path, config)",
+        "unmountFs action: calls agentOs.unmountFs(path)",
+        "listAgents action: calls agentOs.listAgents()",
+        "All actions call ensureVm first",
+        "All actions infer types from @rivet-dev/agent-os-core",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "These are all thin proxies. No prevent-sleep tracking needed since filesystem ops are synchronous/fast. BARE/CBOR encoding handles Uint8Array natively so readFile can return binary without base64 overhead. The action name is 'deleteFile' (not 'delete') to avoid JavaScript reserved word conflicts. agentOs.fetch() goes through the VM's virtual network stack, not the host's globalThis.fetch."
+    },
+    {
+      "id": "US-011",
+      "title": "Signed preview URL create and expire actions",
+      "description": "As a developer, I need createSignedPreviewUrl and expireSignedPreviewUrl actions that manage tokens in SQLite.",
+      "acceptanceCriteria": [
+        "actor/preview.ts exports generateToken() function that produces a 32-character lowercase alphanumeric string (a-z0-9) via crypto.randomBytes",
+        "createSignedPreviewUrl action: validates expiresInSeconds against config bounds (default 3600, max 86400), generates token, inserts (token, port, now, expiresAt) into agent_os_preview_tokens via c.sql, lazy-deletes expired tokens, constructs URL as ${c.endpoint}/gateway/${encodeURIComponent(c.actorId)}/request/fetch/${token}, returns { url, token, port, expiresAt }",
+        "expireSignedPreviewUrl action: deletes token from agent_os_preview_tokens by token value via c.sql",
+        "Port is baked into the token at creation time, not part of the URL path",
+        "Structured logging for token create (port, expiresInSeconds) and expire",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Token alphabet is a-z0-9 (no dashes or underscores) to avoid URL parsing issues. 36^32 ~= 1.6e49 possible tokens, brute-force infeasible. The URL format uses the gateway path: external clients hit /gateway/{actorId}/request/fetch/{token}/..., the actor router strips /request/ and the actor's onRequest receives /fetch/{token}/.... See .agent/notes/agent-os-spec.md section 'Signed Preview URL System'."
+    },
+    {
+      "id": "US-012",
+      "title": "Preview URL onRequest handler with CORS",
+      "description": "As a developer, I need the onRequest handler that validates preview tokens, proxies requests through the VM's virtual network, and adds CORS headers.",
+      "acceptanceCriteria": [
+        "onRequest handler parses URL pathname, expects fetch/{token}/... pattern",
+        "Returns 404 Response for paths that don't match fetch/{token}",
+        "Validates token from SQLite: SELECT port FROM agent_os_preview_tokens WHERE token = ? AND expires_at > now",
+        "Returns 403 Response for invalid or expired tokens with warning log",
+        "Calls ensureVm to boot VM if needed",
+        "Constructs Request to http://localhost:{port}/{remainingPath}{search} with original method, headers, and body",
+        "Proxies via agentOs.fetch(port, vmRequest) which goes through VM's virtual network stack",
+        "Adds CORS headers to response: Access-Control-Allow-Origin: *, Access-Control-Allow-Methods: GET/POST/PUT/DELETE/OPTIONS, Access-Control-Allow-Headers: *",
+        "Handles OPTIONS preflight requests: returns 204 with CORS headers before token validation",
+        "Structured logging for preview requests (port, method, path, status) and auth failures",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "The actor router handles /request/* routes and strips the /request prefix before calling onRequest. So the actor sees paths starting with /fetch/{token}/.... agentOs.fetch() goes through the VM's virtual network stack, NOT the host's globalThis.fetch. Preview URLs are browser-navigable (no special headers needed from the browser). CORS is permissive because the signed URL IS the credential. See .agent/notes/agent-os-spec.md section 'onRequest Handler (Preview Proxy)'."
+    },
+    {
+      "id": "US-013",
+      "title": "onBeforeConnect wrapper for preview URL auth bypass",
+      "description": "As a developer, I need the agentOs factory to wrap the user's onBeforeConnect so preview URL requests (which come from browsers with no actor connection params) skip user auth.",
+      "acceptanceCriteria": [
+        "agentOs() factory wraps the user-provided onBeforeConnect callback",
+        "Wrapper detects preview URL requests by checking the request path for /fetch/ prefix",
+        "Preview URL requests skip the user's onBeforeConnect entirely (signed token validation in onRequest is the auth)",
+        "Non-preview requests pass through to the user's onBeforeConnect normally",
+        "If user did not provide onBeforeConnect, no wrapping needed",
+        "Behavior is transparent to the user: they configure onBeforeConnect as normal",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "onRequest creates a connection via prepareAndConnectConn which calls onBeforeConnect. For preview URL requests, browsers can't pass actor connection parameters. The wrapper checks if the request that triggered the connection is a preview URL request. This detection mechanism needs to inspect the request object available in the connection context. Read the actor router and connection flow in rivetkit-typescript/packages/rivetkit/src/actor/router.ts and rivetkit-typescript/packages/rivetkit/src/manager/gateway.ts to understand how onBeforeConnect gets called for onRequest connections."
+    },
+    {
+      "id": "US-014",
+      "title": "CLAUDE.md documentation for agent-os module",
+      "description": "As a developer, I need a CLAUDE.md at the agent-os module root documenting all implementation constraints for future development.",
+      "acceptanceCriteria": [
+        "rivetkit-typescript/packages/rivetkit/src/agent-os/CLAUDE.md exists",
+        "Documents: VM is in-process (Secure-Exec), all state lost on sleep, no reconnection on wake",
+        "Documents: sessions and processes are ephemeral, clients must handle vmShutdown events and recreate",
+        "Documents: turn tracking uses promise lifecycle (not event-stream inspection like sandbox actor)",
+        "Documents: no stale/idle timeouts, actor cannot sleep while any turn or process is active",
+        "Documents: onBeforeConnect is wrapped to skip auth for preview URL requests (/fetch/ path prefix)",
+        "Documents: preview URL port baked into token, not in URL path, token lookup resolves port",
+        "Documents: openShell is intentionally not implemented, needs WebSocket proxying design (see todo.md)",
+        "Documents: action timeout is 15 minutes due to long-running prompts",
+        "Documents: new prompts rejected when c.aborted is true (during sleep grace period)",
+        "Documents: Session/ManagedProcess class instances in vars until agentOS flatten migration (see todo.md)",
+        "Documents: BARE/CBOR encoding handles binary data (Uint8Array) natively, no base64 overhead",
+        "Documents: agentOs.fetch() goes through VM's virtual network stack, not the host",
+        "Typecheck passes (no code changes, just verify nothing broken)"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "This documents constraints that aren't obvious from reading the code alone. Follow the style of existing CLAUDE.md files in the rivetkit-typescript/ tree (e.g., rivetkit-typescript/CLAUDE.md). Keep it concise and actionable. Each bullet should help a future developer avoid a specific mistake or understand a specific design decision."
+    }
+  ]
+}

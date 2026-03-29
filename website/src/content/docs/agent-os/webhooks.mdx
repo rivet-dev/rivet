@@ -1,0 +1,102 @@
+---
+title: "Webhooks"
+description: "Trigger agent workflows from external webhooks using Hono and queues."
+skill: true
+---
+
+Use a lightweight HTTP server to receive webhooks and queue them for agent processing. This example uses [Hono](https://hono.dev) to receive Slack webhooks and dispatch them to an agent via queues.
+
+## Example: Slack webhook to agent
+
+<CodeGroup stacked>
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+import { actor, queue, setup } from "rivetkit";
+import { Hono } from "hono";
+import { createClient } from "rivetkit/client";
+
+// Actor that processes Slack messages via a queue
+const slackWorker = actor({
+  queues: {
+    messages: queue<{ channel: string; text: string; user: string }>(),
+  },
+  run: async (c) => {
+    const agentHandle = c.actors.vm.getOrCreate(["slack-agent"]);
+
+    for await (const message of c.queue.iter()) {
+      const { channel, text, user } = message.body;
+
+      const session = await agentHandle.createSession("pi", {
+        env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+      });
+      const response = await agentHandle.sendPrompt(
+        session.sessionId,
+        `Slack message from ${user} in #${channel}:\n\n${text}\n\nRespond helpfully.`,
+      );
+      await agentHandle.closeSession(session.sessionId);
+
+      // Post the response back to Slack
+      await fetch("https://slack.com/api/chat.postMessage", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+        },
+        body: JSON.stringify({ channel, text: response }),
+      });
+    }
+  },
+});
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { slackWorker, vm } });
+registry.start();
+
+// Hono server to receive Slack webhooks
+const app = new Hono();
+const client = createClient<typeof registry>("http://localhost:6420");
+
+app.post("/slack/events", async (c) => {
+  const body = await c.req.json();
+
+  // Handle Slack URL verification
+  if (body.type === "url_verification") {
+    return c.json({ challenge: body.challenge });
+  }
+
+  // Queue the message for the agent
+  if (body.event?.type === "message" && !body.event?.bot_id) {
+    const worker = client.slackWorker.getOrCreate(["main"]);
+    await worker.send("messages", {
+      channel: body.event.channel,
+      text: body.event.text,
+      user: body.event.user,
+    });
+  }
+
+  return c.json({ ok: true });
+});
+
+export default app;
+```
+</CodeGroup>
+
+## How it works
+
+1. Slack sends an HTTP POST to `/slack/events`
+2. The Hono handler validates the event and pushes it to the actor's queue
+3. The queue processes messages one at a time, creating agent sessions for each
+4. The agent responds and the worker posts the reply back to Slack
+
+The queue provides backpressure and durability. If the agent is busy, messages wait in the queue. If the server restarts, queued messages are replayed.
+
+## Recommendations
+
+- Use [Queues](/docs/agent-os/queues) to decouple webhook ingestion from agent processing. This prevents slow agent responses from blocking the webhook endpoint.
+- Return `200` from the webhook handler immediately after queuing. External services like Slack have short timeout windows.
+- Store webhook secrets in environment variables, not in code.

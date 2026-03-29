@@ -11,9 +11,10 @@ interface Props {
 }
 
 const { title, description, canonicalUrl, ogImage, keywords } = Astro.props;
+const pathname = Astro.url.pathname;
 ---
 
 <BaseLayout title={title} description={description} canonicalUrl={canonicalUrl} ogImage={ogImage} keywords={keywords}>
-	<Header variant="floating" client:load />
+	<Header variant="floating" initialPathname={pathname} client:load />
 	<slot />
 </BaseLayout>

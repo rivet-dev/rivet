@@ -1,0 +1,49 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import RegistryPageClient from '@/components/marketing/registry/RegistryPageClient';
+import { registry } from '@/data/registry';
+---
+
+<MarketingLayout
+	title="agentOS Registry"
+	description="Browse agents, tools, file systems, and sandbox extensions for agentOS."
+	canonicalUrl="https://rivet.dev/agent-os/registry/"
+	ogImage="/images/agent-os/agentos-og.png"
+>
+	<main class="min-h-screen w-full bg-white selection:bg-zinc-200 selection:text-zinc-900">
+		<div class="relative isolate pt-40">
+			<div class="mx-auto max-w-4xl px-6 text-center lg:px-8">
+				<h1 class="text-6xl leading-[1.1] tracking-normal text-zinc-900">
+					agentOS Registry
+				</h1>
+				<p class="mx-auto mt-6 max-w-3xl text-xl font-medium leading-[1.2] tracking-tight text-zinc-500">
+					Browse agents, tools, file systems, and sandbox extensions for agentOS.
+				</p>
+				<div class="mt-8 flex items-center justify-center gap-3">
+					<a
+						href="https://github.com/rivet-dev/agent-os-registry/blob/main/CONTRIBUTING.md"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-5 py-2.5 text-sm font-medium text-zinc-600 no-underline transition-all duration-200 hover:border-zinc-300 hover:text-zinc-900"
+					>
+						Publish a Package
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+					</a>
+					<a
+						href="https://github.com/rivet-dev/agent-os-registry/issues"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-5 py-2.5 text-sm font-medium text-zinc-600 no-underline transition-all duration-200 hover:border-zinc-300 hover:text-zinc-900"
+					>
+						Request an Extension
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+					</a>
+				</div>
+			</div>
+		</div>
+
+		<div class="mx-auto max-w-4xl px-6 pb-24 pt-10 lg:px-8">
+			<RegistryPageClient entries={registry} theme="light" client:load />
+		</div>
+	</main>
+</MarketingLayout>

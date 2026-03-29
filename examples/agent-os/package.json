@@ -1,0 +1,50 @@
+{
+	"name": "example-agent-os",
+	"version": "2.0.21",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"hello-world:server": "tsx src/hello-world/server.ts",
+		"hello-world": "tsx src/hello-world/client.ts",
+		"git:server": "tsx src/git/server.ts",
+		"git": "tsx src/git/client.ts",
+		"filesystem:server": "tsx src/filesystem/server.ts",
+		"filesystem": "tsx src/filesystem/client.ts",
+		"processes:server": "tsx src/processes/server.ts",
+		"processes": "tsx src/processes/client.ts",
+		"network:server": "tsx src/network/server.ts",
+		"network": "tsx src/network/client.ts",
+		"cron:server": "tsx src/cron/server.ts",
+		"cron": "tsx src/cron/client.ts",
+		"tools:server": "tsx src/tools/server.ts",
+		"tools": "tsx src/tools/client.ts",
+		"agent-session:server": "tsx src/agent-session/server.ts",
+		"agent-session": "tsx src/agent-session/client.ts",
+		"sandbox:server": "tsx src/sandbox/server.ts",
+		"sandbox": "tsx src/sandbox/client.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"rivetkit": "*",
+		"@rivet-dev/agent-os-core": "*",
+		"@rivet-dev/agent-os-common": "link:../../../agent-os-registry/software/common",
+		"@rivet-dev/agent-os-git": "link:../../../agent-os-registry/software/git",
+		"@rivet-dev/agent-os-pi": "link:../../agent-os/packages/agent-pi",
+		"@rivet-dev/agent-os-sandbox": "link:../../agent-os/packages/sandbox",
+		"sandbox-agent": "^0.4.2",
+		"zod": "^3.25.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"tsx": "^3.12.7",
+		"typescript": "^5.5.2"
+	},
+	"template": {
+		"technologies": ["typescript"],
+		"tags": ["agent-os", "vm"],
+		"noFrontend": true,
+		"skipVercel": true
+	},
+	"stableVersion": "0.8.0",
+	"license": "MIT"
+}

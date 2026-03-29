@@ -28,6 +28,7 @@ import {
 	faFloppyDisk,
 	faForward,
 	faFunction,
+	faBoxesStacked,
 	faGear,
 	faGlobe,
 	faInfoSquare,
@@ -73,6 +74,7 @@ import {
 	faGrid,
 	faGrid2,
 	faMailbox,
+	faRobot,
 } from "@rivet-gg/icons";
 import { deployOptions, type DeployOption } from "@rivetkit/shared-data";
 import nextjs from "@/images/vendors/next-js.svg";
@@ -89,7 +91,7 @@ const deploySidebarPages: SidebarItem[] = deployOptions.filter((x) => x.name !==
 
 export const sitemap = [
 	{
-		title: "Overview",
+		title: "Actors",
 		href: "/docs",
 		sidebar: [
 			{
@@ -489,6 +491,189 @@ export const sitemap = [
 				],
 			},
 		],
+	},
+	{
+		title: "agentOS",
+		badge: "Beta",
+		href: "/docs/agent-os",
+		sidebar: [
+			{
+				title: "General",
+				pages: [
+					{
+						title: "Overview",
+						href: "/docs/agent-os",
+						icon: faSquareInfo,
+					},
+					{
+						title: "Quickstart",
+						href: "/docs/agent-os/quickstart",
+						icon: faRocket,
+					},
+				]
+			},
+			{
+				title: "Agent",
+				pages: [
+					{
+						title: "Sessions & Transcripts",
+						href: "/docs/agent-os/sessions",
+						icon: faRobot,
+					},
+					{
+						title: "Permissions",
+						href: "/docs/agent-os/permissions",
+						icon: faKey,
+					},
+					{
+						title: "Tools",
+						href: "/docs/agent-os/tools",
+						icon: faScrewdriverWrench,
+					},
+					{
+						title: "LLM Credentials",
+						href: "/docs/agent-os/llm-credentials",
+						icon: faKey,
+					},
+					{
+						title: "eLLM Gateway",
+						href: "/docs/agent-os/llm-gateway",
+						icon: faCloud,
+						badge: "Coming Soon",
+					},
+				]
+			},
+			{
+				title: "Operating System",
+				pages: [
+					{
+						title: "Software",
+						href: "/docs/agent-os/software",
+						icon: faDownload,
+					},
+					{
+						title: "Filesystem",
+						href: "/docs/agent-os/filesystem",
+						icon: faFloppyDisk,
+					},
+					{
+						title: "Processes & Shell",
+						href: "/docs/agent-os/processes",
+						icon: faSquareTerminal,
+					},
+					{
+						title: "Networking & Previews",
+						href: "/docs/agent-os/networking",
+						icon: faGlobe,
+					},
+					{
+						title: "Cron Jobs",
+						href: "/docs/agent-os/cron",
+						icon: faClock,
+					},
+					{
+						title: "Sandbox Extension",
+						href: "/docs/agent-os/sandbox",
+						icon: faLayerGroup,
+					},
+				]
+			},
+			{
+				title: "Orchestration",
+				pages: [
+					{
+						title: "Authentication",
+						href: "/docs/agent-os/authentication",
+						icon: faKey,
+					},
+					{
+						title: "Webhooks",
+						href: "/docs/agent-os/webhooks",
+						icon: faLink,
+					},
+					{
+						title: "Multiplayer & Realtime",
+						href: "/docs/agent-os/multiplayer",
+						icon: faTowerBroadcast,
+					},
+					{
+						title: "Agent-to-Agent",
+						href: "/docs/agent-os/agent-to-agent",
+						icon: faArrowsLeftRight,
+					},
+					{
+						title: "Workflows",
+						href: "/docs/agent-os/workflows",
+						icon: faDiagramNext,
+					},
+					{
+						title: "Queues",
+						href: "/docs/agent-os/queues",
+						icon: faMailbox,
+					},
+					{
+						title: "SQLite",
+						href: "/docs/agent-os/sqlite",
+						icon: faDatabase,
+					},
+				]
+			},
+			{
+				title: "Reference",
+				pages: [
+					{
+						title: "Configuration",
+						href: "/docs/agent-os/configuration",
+					},
+					{
+						title: "Events",
+						href: "/docs/agent-os/events",
+					},
+					{
+						title: "Limitations",
+						href: "/docs/agent-os/limitations",
+					},
+					{
+						title: "agentOS Core",
+						href: "/docs/agent-os/core",
+					},
+					{
+						title: "Deployment",
+						href: "/docs/agent-os/deployment",
+					},
+					{
+						title: "agentOS vs Sandbox",
+						href: "/docs/agent-os/versus-sandbox",
+					},
+					{
+						title: "Internals",
+						collapsible: true,
+						pages: [
+							{
+								title: "Architecture",
+								href: "/docs/agent-os/architecture",
+							},
+							{
+								title: "Security",
+								href: "/docs/agent-os/security",
+							},
+							{
+								title: "Persistence & Sleep",
+								href: "/docs/agent-os/persistence",
+							},
+							{
+								title: "System Prompt",
+								href: "/docs/agent-os/system-prompt",
+							},
+							{
+								title: "Benchmarks",
+								href: "/docs/agent-os/benchmarks",
+							},
+						]
+					},
+				]
+			},
+		]
 	},
 	// {
 	// 	title: "Integrations",

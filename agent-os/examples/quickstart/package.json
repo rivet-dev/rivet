@@ -1,0 +1,33 @@
+{
+	"name": "@rivet-dev/agent-os-core-quickstart",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"check-types": "tsc --noEmit",
+		"build": "tsc",
+		"hello-world": "node --import tsx src/hello-world.ts",
+		"git": "node --import tsx src/git.ts",
+		"filesystem": "node --import tsx src/filesystem.ts",
+		"processes": "node --import tsx src/processes.ts",
+		"network": "node --import tsx src/network.ts",
+		"cron": "node --import tsx src/cron.ts",
+		"tools": "node --import tsx src/tools.ts",
+		"agent-session": "node --import tsx src/agent-session.ts",
+		"sandbox": "node --import tsx src/sandbox.ts"
+	},
+	"dependencies": {
+		"@rivet-dev/agent-os-core": "workspace:*",
+		"@rivet-dev/agent-os-sandbox": "link:../../packages/sandbox",
+		"sandbox-agent": "^0.4.2",
+		"@rivet-dev/agent-os-common": "link:../../../../agent-os-registry/software/common",
+		"@rivet-dev/agent-os-git": "link:../../../../agent-os-registry/software/git",
+		"@rivet-dev/agent-os-pi": "link:../../packages/agent-pi",
+		"zod": "^3.25.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.2",
+		"tsx": "^4.19.0",
+		"typescript": "^5.7.2"
+	}
+}

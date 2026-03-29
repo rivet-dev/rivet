@@ -3,6 +3,7 @@ import {
 	accessControlActor,
 	accessControlNoQueuesActor,
 } from "./access-control";
+import { agentOsTestActor } from "./agent-os";
 
 import { inputActor } from "./action-inputs";
 import {
@@ -291,5 +292,7 @@ export const registry = setup({
 		dbPragmaMigrationActor,
 		// From state-zod-coercion.ts
 		stateZodCoercionActor,
+		// From agent-os.ts
+		agentOsTestActor,
 	},
 });

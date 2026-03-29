@@ -50,7 +50,52 @@
 	function initializeCodeGroups() {
 		const codeGroupContainers = document.querySelectorAll('[data-code-group-container]');
 		codeGroupContainers.forEach((container) => {
-			initializeWorkspaceCodeGroup(container);
+			if (container.hasAttribute('data-code-group-stacked')) {
+				initializeStackedCodeGroup(container);
+			} else {
+				initializeWorkspaceCodeGroup(container);
+			}
+		});
+	}
+
+	function initializeStackedCodeGroup(container: Element) {
+		const stackedContent = container.querySelector('[data-code-group-stacked-content]');
+		const source = container.querySelector('[data-code-group-source]');
+
+		if (!stackedContent || !source) return;
+
+		// Already initialized
+		if (stackedContent.children.length > 0) return;
+
+		const codeBlocks = source.querySelectorAll('[data-code-block]');
+
+		codeBlocks.forEach((block) => {
+			const isHidden = block.getAttribute('data-code-hide') === 'true';
+			if (isHidden) return;
+
+			const title = block.getAttribute('data-code-title') || 'Code';
+			const clonedBlock = block.cloneNode(true) as HTMLElement;
+			const iconEl = clonedBlock.querySelector('[data-code-icon]');
+
+			const wrapper = document.createElement('div');
+
+			const titleBar = document.createElement('div');
+			titleBar.className = 'flex items-center gap-2 text-xs text-zinc-400 mb-1';
+
+			if (iconEl) {
+				const iconClone = iconEl.cloneNode(true) as HTMLElement;
+				iconClone.removeAttribute('data-code-icon');
+				iconClone.className = 'flex items-center shrink-0 [&_svg]:size-3';
+				titleBar.appendChild(iconClone);
+			}
+
+			const titleSpan = document.createElement('span');
+			titleSpan.textContent = title;
+			titleBar.appendChild(titleSpan);
+
+			wrapper.appendChild(titleBar);
+			wrapper.appendChild(clonedBlock);
+			stackedContent.appendChild(wrapper);
 		});
 	}
 

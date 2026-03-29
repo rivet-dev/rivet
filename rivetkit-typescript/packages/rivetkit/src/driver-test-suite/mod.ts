@@ -40,6 +40,7 @@ import { runRawWebSocketTests } from "./tests/raw-websocket";
 import { runActorDbKvStatsTests } from "./tests/actor-db-kv-stats";
 import { runActorDbPragmaMigrationTests } from "./tests/actor-db-pragma-migration";
 import { runActorStateZodCoercionTests } from "./tests/actor-state-zod-coercion";
+import { runActorAgentOsTests } from "./tests/actor-agent-os";
 import { runRequestAccessTests } from "./tests/request-access";
 
 export interface SkipTests {
@@ -48,6 +49,7 @@ export interface SkipTests {
 	hibernation?: boolean;
 	inline?: boolean;
 	sandbox?: boolean;
+	agentOs?: boolean;
 }
 
 export interface DriverTestConfig {
@@ -172,6 +174,8 @@ export function runDriverTests(
 						runActorDbPragmaMigrationTests(driverTestConfig);
 
 						runActorStateZodCoercionTests(driverTestConfig);
+
+						runActorAgentOsTests(driverTestConfig);
 					});
 				}
 			});

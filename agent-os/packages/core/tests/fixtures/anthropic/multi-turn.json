@@ -1,0 +1,19 @@
+{
+	"fixtures": [
+		{
+			"match": { "sequenceIndex": 0 },
+			"response": {
+				"toolCalls": [
+					{
+						"name": "bash",
+						"arguments": "{\"command\":\"ls\"}"
+					}
+				]
+			}
+		},
+		{
+			"match": { "sequenceIndex": 1 },
+			"response": { "content": "Task completed: found 2 files in the directory" }
+		}
+	]
+}
