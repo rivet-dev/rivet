@@ -1,0 +1,34 @@
+{
+	"name": "@rivet-dev/agent-os-fs-postgres",
+	"version": "0.1.0",
+	"type": "module",
+	"license": "Apache-2.0",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"check-types": "tsc --noEmit",
+		"build": "tsc",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"pg": "^8.13.3",
+		"@secure-exec/core": "link:../../../../secure-exec-1/packages/core"
+	},
+	"devDependencies": {
+		"@rivet-dev/agent-os": "link:../core",
+		"@types/pg": "^8.11.11",
+		"@types/node": "^22.10.2",
+		"typescript": "^5.7.2",
+		"vitest": "^2.1.8"
+	}
+}

@@ -36,8 +36,8 @@ export type { HostDirBackendOptions } from "./backends/host-dir-backend.js";
 export { createHostDirBackend } from "./backends/host-dir-backend.js";
 export type { OverlayBackendOptions } from "./backends/overlay-backend.js";
 export { createOverlayBackend } from "./backends/overlay-backend.js";
-export type { S3BackendOptions } from "./backends/s3-backend.js";
-export { createS3Backend } from "./backends/s3-backend.js";
+export type { S3FsOptions as S3BackendOptions } from "@rivet-dev/agent-os-fs-s3";
+export { createS3Backend } from "@rivet-dev/agent-os-fs-s3";
 export type {
 	CronAction,
 	CronEvent,

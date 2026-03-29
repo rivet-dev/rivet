@@ -88,9 +88,9 @@ importers:
 
   agent-os/packages/core:
     dependencies:
-      '@aws-sdk/client-s3':
-        specifier: ^3.1019.0
-        version: 3.1019.0
+      '@rivet-dev/agent-os-fs-s3':
+        specifier: link:../fs-s3
+        version: link:../fs-s3
       '@secure-exec/core':
         specifier: link:../../../../secure-exec-1/packages/core
         version: link:../../../../secure-exec-1/packages/core
@@ -134,6 +134,9 @@ importers:
       pi-acp:
         specifier: ^0.0.23
         version: 0.0.23
+      sandbox-agent:
+        specifier: ^0.4.2
+        version: 0.4.2(@daytonaio/sdk@0.150.0(ws@8.19.0))(@e2b/code-interpreter@2.3.3)(@fly/sprites@0.0.1)(@vercel/sandbox@1.9.0)(computesdk@2.5.3)(dockerode@4.0.9)(get-port@7.1.0)(modal@0.7.3)(zod@3.25.76)
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -143,6 +146,100 @@ importers:
       zod:
         specifier: ^3.25.0
         version: 3.25.76
+
+  agent-os/packages/fs-postgres:
+    dependencies:
+      '@secure-exec/core':
+        specifier: link:../../../../secure-exec-1/packages/core
+        version: link:../../../../secure-exec-1/packages/core
+      pg:
+        specifier: ^8.13.3
+        version: 8.17.2
+    devDependencies:
+      '@rivet-dev/agent-os':
+        specifier: workspace:*
+        version: link:../core
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.15
+      '@types/pg':
+        specifier: ^8.11.11
+        version: 8.16.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.15)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.15)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
+
+  agent-os/packages/fs-s3:
+    dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1019.0
+        version: 3.1019.0
+      '@secure-exec/core':
+        specifier: link:../../../../secure-exec-1/packages/core
+        version: link:../../../../secure-exec-1/packages/core
+    devDependencies:
+      '@rivet-dev/agent-os':
+        specifier: workspace:*
+        version: link:../core
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.15
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.15)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.15)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
+
+  agent-os/packages/fs-sandbox:
+    dependencies:
+      '@secure-exec/core':
+        specifier: link:../../../../secure-exec-1/packages/core
+        version: link:../../../../secure-exec-1/packages/core
+      sandbox-agent:
+        specifier: ^0.4.2
+        version: 0.4.2(@daytonaio/sdk@0.150.0(ws@8.19.0))(@e2b/code-interpreter@2.3.3)(@fly/sprites@0.0.1)(@vercel/sandbox@1.9.0)(computesdk@2.5.3)(dockerode@4.0.9)(get-port@7.1.0)(modal@0.7.3)
+    devDependencies:
+      '@rivet-dev/agent-os':
+        specifier: workspace:*
+        version: link:../core
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.15
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.15)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.15)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
+
+  agent-os/packages/fs-sqlite:
+    dependencies:
+      '@secure-exec/core':
+        specifier: link:../../../../secure-exec-1/packages/core
+        version: link:../../../../secure-exec-1/packages/core
+      better-sqlite3:
+        specifier: ^11.8.1
+        version: 11.10.0
+    devDependencies:
+      '@rivet-dev/agent-os':
+        specifier: workspace:*
+        version: link:../core
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.15
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.15)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.15)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
   engine: {}
 
@@ -11581,6 +11678,9 @@ packages:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
     engines: {node: '>=12.0.0'}
 
+  better-sqlite3@11.10.0:
+    resolution: {integrity: sha512-EwhOpyXiOEL/lKzHz9AW1msWFNzGc/z+LzeB3/jnFJpxu+th2yqvzsSWas1v9jgs9+xiXJcD5A8CJxAG2TaghQ==}
+
   better-sqlite3@12.8.0:
     resolution: {integrity: sha512-RxD2Vd96sQDjQr20kdP+F+dK/1OUNiVOl200vKBZY8u0vTwysfolF6Hq+3ZK2+h8My9YvZhHsF+RSGZW2VYrPQ==}
     engines: {node: 20.x || 22.x || 23.x || 24.x || 25.x}
@@ -18872,6 +18972,10 @@ snapshots:
     dependencies:
       zod: 3.25.76
 
+  '@agentclientprotocol/sdk@0.16.1(zod@3.25.76)':
+    dependencies:
+      zod: 3.25.76
+
   '@agentclientprotocol/sdk@0.16.1(zod@4.1.13)':
     dependencies:
       zod: 4.1.13
@@ -26013,7 +26117,6 @@ snapshots:
   '@types/better-sqlite3@7.6.13':
     dependencies:
       '@types/node': 22.19.15
-    optional: true
 
   '@types/canvas-confetti@1.9.0': {}
 
@@ -27140,6 +27243,18 @@ snapshots:
 
   acorn@8.16.0: {}
 
+  acp-http-client@0.4.2:
+    dependencies:
+      '@agentclientprotocol/sdk': 0.16.1(zod@4.1.13)
+    transitivePeerDependencies:
+      - zod
+
+  acp-http-client@0.4.2(zod@3.25.76):
+    dependencies:
+      '@agentclientprotocol/sdk': 0.16.1(zod@3.25.76)
+    transitivePeerDependencies:
+      - zod
+
   acp-http-client@0.4.2(zod@4.1.13):
     dependencies:
       '@agentclientprotocol/sdk': 0.16.1(zod@4.1.13)
@@ -27657,6 +27772,11 @@ snapshots:
     dependencies:
       open: 8.4.2
 
+  better-sqlite3@11.10.0:
+    dependencies:
+      bindings: 1.5.0
+      prebuild-install: 7.1.3
+
   better-sqlite3@12.8.0:
     dependencies:
       bindings: 1.5.0
@@ -27672,7 +27792,6 @@ snapshots:
   bindings@1.5.0:
     dependencies:
       file-uri-to-path: 1.0.0
-    optional: true
 
   bl@4.1.0:
     dependencies:
@@ -28578,7 +28697,6 @@ snapshots:
   decompress-response@6.0.0:
     dependencies:
       mimic-response: 3.1.0
-    optional: true
 
   dedent@1.7.0(babel-plugin-macros@3.1.0):
     optionalDependencies:
@@ -29277,8 +29395,7 @@ snapshots:
 
   exit-hook@2.2.1: {}
 
-  expand-template@2.0.3:
-    optional: true
+  expand-template@2.0.3: {}
 
   expand-tilde@2.0.2:
     dependencies:
@@ -29587,8 +29704,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  file-uri-to-path@1.0.0:
-    optional: true
+  file-uri-to-path@1.0.0: {}
 
   filesize@11.0.2: {}
 
@@ -29884,8 +30000,7 @@ snapshots:
 
   github-buttons@2.29.1: {}
 
-  github-from-package@0.0.0:
-    optional: true
+  github-from-package@0.0.0: {}
 
   github-slugger@2.0.0: {}
 
@@ -31968,8 +32083,7 @@ snapshots:
 
   mimic-fn@4.0.0: {}
 
-  mimic-response@3.1.0:
-    optional: true
+  mimic-response@3.1.0: {}
 
   mini-svg-data-uri@1.4.4: {}
 
@@ -32235,8 +32349,7 @@ snapshots:
 
   nanoid@3.3.6: {}
 
-  napi-build-utils@2.0.0:
-    optional: true
+  napi-build-utils@2.0.0: {}
 
   natural-compare@1.4.0: {}
 
@@ -32339,7 +32452,6 @@ snapshots:
   node-abi@3.88.0:
     dependencies:
       semver: 7.7.4
-    optional: true
 
   node-addon-api@6.1.0: {}
 
@@ -33099,7 +33211,6 @@ snapshots:
       simple-get: 4.0.1
       tar-fs: 2.1.4
       tunnel-agent: 0.6.0
-    optional: true
 
   prelude-ls@1.2.1: {}
 
@@ -33936,6 +34047,40 @@ snapshots:
 
   safer-buffer@2.1.2: {}
 
+  sandbox-agent@0.4.2(@daytonaio/sdk@0.150.0(ws@8.19.0))(@e2b/code-interpreter@2.3.3)(@fly/sprites@0.0.1)(@vercel/sandbox@1.9.0)(computesdk@2.5.3)(dockerode@4.0.9)(get-port@7.1.0)(modal@0.7.3):
+    dependencies:
+      '@sandbox-agent/cli-shared': 0.4.2
+      acp-http-client: 0.4.2
+    optionalDependencies:
+      '@daytonaio/sdk': 0.150.0(ws@8.19.0)
+      '@e2b/code-interpreter': 2.3.3
+      '@fly/sprites': 0.0.1
+      '@sandbox-agent/cli': 0.4.2
+      '@vercel/sandbox': 1.9.0
+      computesdk: 2.5.3
+      dockerode: 4.0.9
+      get-port: 7.1.0
+      modal: 0.7.3
+    transitivePeerDependencies:
+      - zod
+
+  sandbox-agent@0.4.2(@daytonaio/sdk@0.150.0(ws@8.19.0))(@e2b/code-interpreter@2.3.3)(@fly/sprites@0.0.1)(@vercel/sandbox@1.9.0)(computesdk@2.5.3)(dockerode@4.0.9)(get-port@7.1.0)(modal@0.7.3)(zod@3.25.76):
+    dependencies:
+      '@sandbox-agent/cli-shared': 0.4.2
+      acp-http-client: 0.4.2(zod@3.25.76)
+    optionalDependencies:
+      '@daytonaio/sdk': 0.150.0(ws@8.19.0)
+      '@e2b/code-interpreter': 2.3.3
+      '@fly/sprites': 0.0.1
+      '@sandbox-agent/cli': 0.4.2
+      '@vercel/sandbox': 1.9.0
+      computesdk: 2.5.3
+      dockerode: 4.0.9
+      get-port: 7.1.0
+      modal: 0.7.3
+    transitivePeerDependencies:
+      - zod
+
   sandbox-agent@0.4.2(@daytonaio/sdk@0.150.0(ws@8.19.0))(@e2b/code-interpreter@2.3.3)(@fly/sprites@0.0.1)(@vercel/sandbox@1.9.0)(computesdk@2.5.3)(dockerode@4.0.9)(get-port@7.1.0)(modal@0.7.3)(zod@4.1.13):
     dependencies:
       '@sandbox-agent/cli-shared': 0.4.2
@@ -34204,15 +34349,13 @@ snapshots:
 
   signal-exit@4.1.0: {}
 
-  simple-concat@1.0.1:
-    optional: true
+  simple-concat@1.0.1: {}
 
   simple-get@4.0.1:
     dependencies:
       decompress-response: 6.0.0
       once: 1.4.0
       simple-concat: 1.0.1
-    optional: true
 
   simple-plist@1.3.1:
     dependencies:
@@ -35002,7 +35145,6 @@ snapshots:
   tunnel-agent@0.6.0:
     dependencies:
       safe-buffer: 5.2.1
-    optional: true
 
   turbo-darwin-64@2.5.6:
     optional: true

@@ -13,6 +13,16 @@
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js",
 			"default": "./dist/index.js"
+		},
+		"./test/file-system": {
+			"types": "./dist/test/file-system.d.ts",
+			"import": "./dist/test/file-system.js",
+			"default": "./dist/test/file-system.js"
+		},
+		"./test/docker": {
+			"types": "./dist/test/docker.d.ts",
+			"import": "./dist/test/docker.js",
+			"default": "./dist/test/docker.js"
 		}
 	},
 	"scripts": {
@@ -21,7 +31,7 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
-		"@aws-sdk/client-s3": "^3.1019.0",
+		"@rivet-dev/agent-os-fs-s3": "link:../fs-s3",
 		"@secure-exec/core": "link:../../../../secure-exec-1/packages/core",
 		"@secure-exec/nodejs": "link:../../../../secure-exec-1/packages/nodejs",
 		"@secure-exec/python": "link:../../../../secure-exec-1/packages/python",
@@ -33,6 +43,7 @@
 	},
 	"devDependencies": {
 		"@anthropic-ai/claude-code": "^2.1.86",
+		"sandbox-agent": "^0.4.2",
 		"@copilotkit/llmock": "^1.6.0",
 		"@mariozechner/pi-coding-agent": "^0.60.0",
 		"@types/node": "^22.10.2",

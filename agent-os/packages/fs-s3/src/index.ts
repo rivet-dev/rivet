@@ -21,7 +21,7 @@ import {
 	type VirtualStat,
 } from "@secure-exec/core";
 
-export interface S3BackendOptions {
+export interface S3FsOptions {
 	/** S3 bucket name. */
 	bucket: string;
 	/** Key prefix prepended to all paths (e.g. "vm-1/"). */
@@ -47,8 +47,11 @@ function makeDirPrefix(prefix: string, p: string): string {
 /**
  * Create a VirtualFileSystem backed by S3-compatible object storage.
  */
-export function createS3Backend(options: S3BackendOptions): VirtualFileSystem {
-	const prefix = options.prefix ?? "";
+export function createS3Backend(options: S3FsOptions): VirtualFileSystem {
+	const rawPrefix = options.prefix ?? "";
+	// Normalize prefix to always end with "/" or be empty.
+	const prefix =
+		rawPrefix === "" ? "" : rawPrefix.endsWith("/") ? rawPrefix : `${rawPrefix}/`;
 	const bucket = options.bucket;
 
 	const client = new S3Client({
@@ -111,81 +114,89 @@ export function createS3Backend(options: S3BackendOptions): VirtualFileSystem {
 
 		async readDir(p: string): Promise<string[]> {
 			const dirPrefix = makeDirPrefix(prefix, p);
-			const resp = await client.send(
-				new ListObjectsV2Command({
-					Bucket: bucket,
-					Prefix: dirPrefix,
-					Delimiter: "/",
-				}),
-			);
-
 			const names: string[] = [];
-			// Files (Contents)
-			if (resp.Contents) {
-				for (const obj of resp.Contents) {
-					if (!obj.Key || obj.Key === dirPrefix) continue;
-					const name = obj.Key.slice(dirPrefix.length);
-					if (name && !name.includes("/")) {
-						names.push(name);
+			let continuationToken: string | undefined;
+
+			do {
+				const resp = await client.send(
+					new ListObjectsV2Command({
+						Bucket: bucket,
+						Prefix: dirPrefix,
+						Delimiter: "/",
+						ContinuationToken: continuationToken,
+					}),
+				);
+
+				if (resp.Contents) {
+					for (const obj of resp.Contents) {
+						if (!obj.Key || obj.Key === dirPrefix) continue;
+						const name = obj.Key.slice(dirPrefix.length);
+						if (name && !name.includes("/")) {
+							names.push(name);
+						}
 					}
 				}
-			}
-			// Subdirectories (CommonPrefixes)
-			if (resp.CommonPrefixes) {
-				for (const cp of resp.CommonPrefixes) {
-					if (!cp.Prefix) continue;
-					const name = cp.Prefix.slice(dirPrefix.length).replace(
-						/\/$/,
-						"",
-					);
-					if (name) {
-						names.push(name);
+				if (resp.CommonPrefixes) {
+					for (const cp of resp.CommonPrefixes) {
+						if (!cp.Prefix) continue;
+						const name = cp.Prefix.slice(dirPrefix.length).replace(/\/$/, "");
+						if (name) {
+							names.push(name);
+						}
 					}
 				}
-			}
+
+				continuationToken = resp.IsTruncated
+					? resp.NextContinuationToken
+					: undefined;
+			} while (continuationToken);
+
 			return names;
 		},
 
 		async readDirWithTypes(p: string): Promise<VirtualDirEntry[]> {
 			const dirPrefix = makeDirPrefix(prefix, p);
-			const resp = await client.send(
-				new ListObjectsV2Command({
-					Bucket: bucket,
-					Prefix: dirPrefix,
-					Delimiter: "/",
-				}),
-			);
-
 			const entries: VirtualDirEntry[] = [];
-			if (resp.Contents) {
-				for (const obj of resp.Contents) {
-					if (!obj.Key || obj.Key === dirPrefix) continue;
-					const name = obj.Key.slice(dirPrefix.length);
-					if (name && !name.includes("/")) {
-						entries.push({
-							name,
-							isDirectory: false,
-							isSymbolicLink: false,
-						});
+			let continuationToken: string | undefined;
+
+			do {
+				const resp = await client.send(
+					new ListObjectsV2Command({
+						Bucket: bucket,
+						Prefix: dirPrefix,
+						Delimiter: "/",
+						ContinuationToken: continuationToken,
+					}),
+				);
+
+				if (resp.Contents) {
+					for (const obj of resp.Contents) {
+						if (!obj.Key || obj.Key === dirPrefix) continue;
+						const name = obj.Key.slice(dirPrefix.length);
+						if (name && !name.includes("/")) {
+							entries.push({
+								name,
+								isDirectory: false,
+								isSymbolicLink: false,
+							});
+						}
 					}
 				}
-			}
-			if (resp.CommonPrefixes) {
-				for (const cp of resp.CommonPrefixes) {
-					if (!cp.Prefix) continue;
-					const name = cp.Prefix.slice(dirPrefix.length).replace(
-						/\/$/,
-						"",
-					);
-					if (name) {
-						entries.push({
-							name,
-							isDirectory: true,
-							isSymbolicLink: false,
-						});
+				if (resp.CommonPrefixes) {
+					for (const cp of resp.CommonPrefixes) {
+						if (!cp.Prefix) continue;
+						const name = cp.Prefix.slice(dirPrefix.length).replace(/\/$/, "");
+						if (name) {
+							entries.push({ name, isDirectory: true, isSymbolicLink: false });
+						}
 					}
 				}
-			}
+
+				continuationToken = resp.IsTruncated
+					? resp.NextContinuationToken
+					: undefined;
+			} while (continuationToken);
+
 			return entries;
 		},
 
@@ -207,14 +218,11 @@ export function createS3Backend(options: S3BackendOptions): VirtualFileSystem {
 		},
 
 		async createDir(_p: string): Promise<void> {
-			// S3 directories are implicit; no-op
+			// S3 directories are implicit; no-op.
 		},
 
-		async mkdir(
-			_p: string,
-			_options?: { recursive?: boolean },
-		): Promise<void> {
-			// S3 directories are implicit; no-op
+		async mkdir(_p: string, _options?: { recursive?: boolean }): Promise<void> {
+			// S3 directories are implicit; no-op.
 		},
 
 		async exists(p: string): Promise<boolean> {
@@ -229,7 +237,6 @@ export function createS3Backend(options: S3BackendOptions): VirtualFileSystem {
 			} catch (err) {
 				const e = err as { name?: string };
 				if (e.name === "NotFound" || e.name === "NoSuchKey") {
-					// Also check if it's a "directory" (has objects with this prefix)
 					const dirPrefix = makeDirPrefix(prefix, p);
 					const resp = await client.send(
 						new ListObjectsV2Command({
@@ -260,7 +267,6 @@ export function createS3Backend(options: S3BackendOptions): VirtualFileSystem {
 			} catch (err) {
 				const e = err as { name?: string };
 				if (e.name === "NotFound" || e.name === "NoSuchKey") {
-					// Check if it's a "directory"
 					const dirPrefix = makeDirPrefix(prefix, p);
 					const resp = await client.send(
 						new ListObjectsV2Command({
@@ -282,28 +288,53 @@ export function createS3Backend(options: S3BackendOptions): VirtualFileSystem {
 		},
 
 		async removeFile(p: string): Promise<void> {
+			const key = makeKey(prefix, p);
+			// Check that the object exists before deleting. S3 DeleteObject
+			// silently succeeds on nonexistent keys.
+			try {
+				await client.send(
+					new HeadObjectCommand({ Bucket: bucket, Key: key }),
+				);
+			} catch (err) {
+				const e = err as { name?: string };
+				if (e.name === "NotFound" || e.name === "NoSuchKey") {
+					throw new KernelError("ENOENT", `no such file: ${p}`);
+				}
+				throw err;
+			}
 			await client.send(
-				new DeleteObjectCommand({
-					Bucket: bucket,
-					Key: makeKey(prefix, p),
-				}),
+				new DeleteObjectCommand({ Bucket: bucket, Key: key }),
 			);
 		},
 
 		async removeDir(_p: string): Promise<void> {
-			// S3 directories are implicit; no-op
+			// S3 directories are implicit; no-op.
 		},
 
 		async rename(oldPath: string, newPath: string): Promise<void> {
 			const sourceKey = makeKey(prefix, oldPath);
 			const destKey = makeKey(prefix, newPath);
-			await client.send(
-				new CopyObjectCommand({
-					Bucket: bucket,
-					CopySource: `${bucket}/${sourceKey}`,
-					Key: destKey,
-				}),
+			// URL-encode the CopySource to handle special characters.
+			const encodedSource = encodeURIComponent(`${bucket}/${sourceKey}`).replace(
+				/%2F/g,
+				"/",
 			);
+			try {
+				await client.send(
+					new CopyObjectCommand({
+						Bucket: bucket,
+						CopySource: encodedSource,
+						Key: destKey,
+					}),
+				);
+			} catch (err) {
+				if (err instanceof KernelError) throw err;
+				const e = err as { name?: string };
+				if (e.name === "NoSuchKey" || e.name === "NotFound") {
+					throw new KernelError("ENOENT", `no such file: ${oldPath}`);
+				}
+				throw err;
+			}
 			await client.send(
 				new DeleteObjectCommand({ Bucket: bucket, Key: sourceKey }),
 			);
@@ -349,12 +380,8 @@ export function createS3Backend(options: S3BackendOptions): VirtualFileSystem {
 			);
 		},
 
-		async utimes(
-			_p: string,
-			_atime: number,
-			_mtime: number,
-		): Promise<void> {
-			// S3 doesn't support setting arbitrary timestamps; no-op
+		async utimes(_p: string, _atime: number, _mtime: number): Promise<void> {
+			// S3 doesn't support setting arbitrary timestamps; no-op.
 		},
 
 		async truncate(p: string, length: number): Promise<void> {
@@ -371,6 +398,9 @@ export function createS3Backend(options: S3BackendOptions): VirtualFileSystem {
 			offset: number,
 			length: number,
 		): Promise<Uint8Array> {
+			if (length === 0) {
+				return new Uint8Array(0);
+			}
 			try {
 				const resp = await client.send(
 					new GetObjectCommand({
@@ -385,9 +415,16 @@ export function createS3Backend(options: S3BackendOptions): VirtualFileSystem {
 				return new Uint8Array(bytes);
 			} catch (err) {
 				if (err instanceof KernelError) throw err;
-				const e = err as { name?: string };
+				const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
 				if (e.name === "NoSuchKey" || e.name === "NotFound") {
 					throw new KernelError("ENOENT", `no such file: ${p}`);
+				}
+				// InvalidRange: offset is beyond the file. Return empty bytes.
+				if (
+					e.name === "InvalidRange" ||
+					e.$metadata?.httpStatusCode === 416
+				) {
+					return new Uint8Array(0);
 				}
 				throw err;
 			}

@@ -87,7 +87,7 @@ import { AcpClient } from "./acp-client.js";
 import { AGENT_CONFIGS, type AgentType } from "./agents.js";
 import { createHostDirBackend } from "./backends/host-dir-backend.js";
 import { createOverlayBackend } from "./backends/overlay-backend.js";
-import { createS3Backend } from "./backends/s3-backend.js";
+import { createS3Backend } from "@rivet-dev/agent-os-fs-s3";
 import { CronManager } from "./cron/cron-manager.js";
 import type { ScheduleDriver } from "./cron/schedule-driver.js";
 import { TimerScheduleDriver } from "./cron/timer-driver.js";
