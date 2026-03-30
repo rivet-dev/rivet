@@ -84,7 +84,7 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 			description: "Build stateful backends",
 		},
 		{
-			label: "AgentOS",
+			label: "agentOS",
 			href: "/agent-os",
 			logo: agentosLogoUrl,
 			description: "Everything agents need to run and operate",
@@ -472,7 +472,7 @@ export function Header({
 											<img
 												src="/images/agent-os/agentos-hero-logo.svg"
 												className="h-4 w-auto"
-												alt="AgentOS"
+												alt="agentOS"
 											/>
 										</a>
 									) : (
@@ -505,7 +505,7 @@ export function Header({
 												<img
 													src="/images/agent-os/agentos-hero-logo.svg"
 													className="h-5 w-auto"
-													alt="AgentOS"
+													alt="agentOS"
 												/>
 											</a>
 										</div>
@@ -733,7 +733,7 @@ function DocsMobileNavigation({ tree, sidebarData, isLightTheme = false }: { tre
 	];
 
 	const products = [
-		{ label: "AgentOS", href: "/agent-os", logo: agentosLogoUrl },
+		{ label: "agentOS", href: "/agent-os", logo: agentosLogoUrl },
 		{ label: "Actors", href: "/docs/actors", logo: actorsLogoUrl },
 		{
 			label: "Sandbox Agent SDK",
@@ -754,7 +754,7 @@ function DocsMobileNavigation({ tree, sidebarData, isLightTheme = false }: { tre
 	if (isLightTheme) {
 		return (
 			<div className="flex flex-col gap-2 font-v2 subpixel-antialiased text-sm">
-				{/* Home logo with AgentOS */}
+				{/* Home logo with agentOS */}
 				<a href="/" className="py-3 px-2 flex items-center gap-2">
 					<img
 						src={logoIconWhiteUrl.src}
@@ -767,7 +767,7 @@ function DocsMobileNavigation({ tree, sidebarData, isLightTheme = false }: { tre
 					<img
 						src="/images/agent-os/agentos-hero-logo.svg"
 						className="h-4 w-auto"
-						alt="AgentOS"
+						alt="agentOS"
 					/>
 				</a>
 

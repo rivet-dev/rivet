@@ -42,7 +42,7 @@ export default function GetStartedPage() {
 						<div className='relative'>
 							<img
 								src='/images/agent-os/agentos-hero-logo.svg'
-								alt='AgentOS'
+								alt='agentOS'
 								className='h-16 w-auto md:h-20'
 							/>
 							<span className='absolute -top-2 -right-12 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700'>Beta</span>

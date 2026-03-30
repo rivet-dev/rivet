@@ -23,7 +23,7 @@ import {
 import { AnimatePresence, motion } from 'framer-motion';
 import agentosLogo from '@/images/products/agentos-logo.svg';
 
-// --- Animated AgentOS Logo ---
+// --- Animated agentOS Logo ---
 const AnimatedAgentOSLogo = ({ className }: { className?: string }) => {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [isReady, setIsReady] = useState(false);
@@ -582,7 +582,7 @@ const Hero = () => {
 				>
 					<div className='relative'>
 						<AnimatedAgentOSLogo className='h-12 w-auto md:h-16 lg:h-20' />
-						<span className='absolute -top-2 -right-12 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700'>Beta</span>
+						<span className='absolute -right-[8px] -top-[7px] rounded-full border border-zinc-900 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-900'>Beta</span>
 					</div>
 				</motion.div>
 
@@ -593,8 +593,33 @@ const Hero = () => {
 					transition={{ duration: 0.5, delay: 0.1 }}
 					className='mb-10 max-w-xl text-center text-base text-zinc-500 md:text-left md:text-lg'
 				>
-					Unix gave humans a common language to control machines.<br />AgentOS gives agents the same power.
+					Unix gave humans a common language to control machines.<br />agentOS gives agents the same power.
 				</motion.p>
+
+				{/* Supported Harnesses */}
+				<motion.div
+					initial={{ opacity: 0, y: 20 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.5, delay: 0.12 }}
+					className='mb-10 flex flex-wrap items-center justify-center gap-2 md:justify-start md:gap-4'
+				>
+					<span className='text-xs text-zinc-400 uppercase tracking-wider'>Works with</span>
+					<div className='flex flex-wrap items-center justify-center gap-2 md:justify-start md:gap-4'>
+						{[
+							{ src: '/images/agent-logos/pi.svg', name: 'Pi', comingSoon: false },
+							{ src: '/images/agent-logos/claude-code.svg', name: 'Claude Code', comingSoon: true },
+							{ src: '/images/agent-logos/codex.svg', name: 'Codex', comingSoon: true },
+							{ src: '/images/agent-logos/opencode.svg', name: 'OpenCode', comingSoon: true },
+							{ src: '/images/agent-logos/amp.svg', name: 'Amp', comingSoon: true },
+						].map((agent) => (
+							<div key={agent.name} className='flex items-center gap-1.5'>
+								<img src={agent.src} alt={agent.name} className='h-4 w-4' />
+								<span className='text-sm text-zinc-500'>{agent.name}{agent.comingSoon && '*'}</span>
+							</div>
+						))}
+					</div>
+					<span className='text-xs text-zinc-400'>*Coming Soon</span>
+				</motion.div>
 
 				{/* Code snippets */}
 				<motion.div
@@ -626,25 +651,6 @@ const Hero = () => {
 								</button>
 							);
 						})}
-					</div>
-
-					{/* Supported Harnesses */}
-					<div className='mb-4 flex flex-wrap items-center justify-center gap-2 md:justify-start md:gap-4'>
-						<span className='text-xs text-zinc-400 uppercase tracking-wider'>Works with</span>
-						<div className='flex flex-wrap items-center justify-center gap-2 md:justify-start md:gap-4'>
-							{[
-								{ src: '/images/agent-logos/claude-code.svg', name: 'Claude Code', comingSoon: true },
-								{ src: '/images/agent-logos/opencode.svg', name: 'OpenCode', comingSoon: true },
-								{ src: '/images/agent-logos/codex.svg', name: 'Codex', comingSoon: true },
-								{ src: '/images/agent-logos/pi.svg', name: 'Pi', comingSoon: false },
-							].map((agent) => (
-								<div key={agent.name} className='flex items-center gap-1.5'>
-									<img src={agent.src} alt={agent.name} className='h-4 w-4' />
-									<span className='text-sm text-zinc-500'>{agent.name}{agent.comingSoon && '*'}</span>
-								</div>
-							))}
-						</div>
-						<span className='rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700'>*Coming Soon</span>
 					</div>
 
 					{/* Code block */}
@@ -770,7 +776,7 @@ const getStartedTabs: { icon: typeof Bot; label: string; code: React.ReactNode }
 ];
 
 
-// --- Icon Box (rounded square outline like Rivet/AgentOS logos) ---
+// --- Icon Box (rounded square outline like Rivet/agentOS logos) ---
 const IconBox = ({ children }: { children: React.ReactNode }) => (
 	<div className='relative mb-6 flex h-10 w-10 items-center justify-center md:h-12 md:w-12'>
 		<svg
@@ -834,7 +840,7 @@ const themedSections: ThemedSection[] = [
 			{ icon: Terminal, title: 'Easy to deploy on prem', description: 'A single npm package. No Kubernetes operators, no sidecar containers. Just install and run.' },
 			{ icon: Clock, title: 'Low overhead', description: 'No VMs to boot. No containers to pull. Start in milliseconds with minimal memory footprint.' },
 			{ icon: FolderOpen, title: 'Mount anything as a file system', description: 'S3, GitHub, databases. No per-agent credentials needed. The host handles access scoping.' },
-			{ icon: Shield, title: 'Extend with a sandbox when needed', description: 'AgentOS handles most tasks, but pairs seamlessly with sandboxes for heavier workloads.' },
+			{ icon: Shield, title: 'Extend with a sandbox when needed', description: 'agentOS handles most tasks, but pairs seamlessly with sandboxes for heavier workloads.' },
 		],
 	},
 	{
@@ -883,11 +889,11 @@ const StackingFeatureCards = () => {
 	}, []);
 
 	const stackFeatures = [
-		{ icon: Clock, title: 'Low overhead and cost.', description: 'No VMs to boot. No containers to pull. Start in milliseconds with minimal memory footprint.', detail: 'Traditional sandboxes take seconds to spin up and consume hundreds of megabytes. AgentOS starts instantly and runs lean, so you can scale to thousands of agents without the cost.', metrics: [{ value: '~5ms', label: 'coldstart' }, { value: '200x', label: 'cheaper than sandboxes' }] },
+		{ icon: Clock, title: 'Low overhead and cost.', description: 'No VMs to boot. No containers to pull. Start in milliseconds with minimal memory footprint.', detail: 'Traditional sandboxes take seconds to spin up and consume hundreds of megabytes. agentOS starts instantly and runs lean, so you can scale to thousands of agents without the cost.', metrics: [{ value: '~5ms', label: 'coldstart' }, { value: '200x', label: 'cheaper than sandboxes' }] },
 		{ icon: Terminal, title: 'Embed in your backend.', detail: 'Your APIs. Your toolchains. No complex agent authentication needed. Just JavaScript functions or hooks.' },
-		{ icon: FolderOpen, title: 'Mount anything as a file system.', description: 'S3, SQLite, Google Drive, or the host file system. No per-agent credentials needed.', detail: 'Agents think in files. AgentOS lets you expose any storage backend as a familiar directory tree. The host handles credential scoping, so agents never see API keys or secrets.' },
+		{ icon: FolderOpen, title: 'Mount anything as a file system.', description: 'S3, SQLite, Google Drive, or the host file system. No per-agent credentials needed.', detail: 'Agents think in files. agentOS lets you expose any storage backend as a familiar directory tree. The host handles credential scoping, so agents never see API keys or secrets.' },
 		{ icon: Shield, title: 'Granular security.', detail: 'Fully configurable network and file system security. Control rate limits, bandwidth limits, and file system permissions. Set precise CPU and memory limitations per agent.' },
-		{ icon: Globe, title: 'Runs on your laptop, infrastructure, and on-prem.', description: 'Railway, Vercel, Kubernetes, and more. Deploy wherever your code already runs.', detail: 'AgentOS is just an npm package. No vendor lock-in, no special infrastructure. Your agents run in your stack, on your terms.', tags: ['Rivet', 'Railway', 'Vercel', 'Kubernetes', 'ECS', 'Lambda', 'Google Cloud Run'] },
+		{ icon: Globe, title: 'Your laptop, your infra, or on-prem.', description: 'Railway, Vercel, Kubernetes, and more. Deploy wherever your code already runs.', detail: 'agentOS is just an npm package. No vendor lock-in, no special infrastructure. Your agents run in your stack, on your terms.', tags: ['Rivet', 'Railway', 'Vercel', 'Kubernetes', 'ECS', 'Lambda', 'Google Cloud Run'] },
 	];
 
 	return (
@@ -1121,7 +1127,7 @@ const ThemedFeatureSections = () => (
 	</div>
 );
 
-// --- AgentOS Features Section ---
+// --- agentOS Features Section ---
 const AgentOSFeatures = () => (
 	<div id='agentos'>
 		<StackingFeatureCards />
@@ -1174,11 +1180,11 @@ function BenchColdStartChart() {
 						<BenchInfoTooltip>
 							<strong>What&apos;s measured:</strong> Time from requesting an execution to first code running.
 							<br /><br />
-							<strong>Why the gap:</strong> AgentOS spins up a V8 isolate inside the host process. No container, no VM, no network hop. Sandboxes must boot an entire container or microVM, allocate memory, and establish a network connection before code can run.
+							<strong>Why the gap:</strong> agentOS spins up a V8 isolate inside the host process. No container, no VM, no network hop. Sandboxes must boot an entire container or microVM, allocate memory, and establish a network connection before code can run.
 							<br /><br />
 							<strong>Sandbox baseline:</strong> e2b, the fastest provider on ComputeSDK as of March 18, 2026.
 							<br /><br />
-							<strong>AgentOS:</strong> Median of 10,000 runs (100 iterations x 100 samples) on Intel i7-12700KF.
+							<strong>agentOS:</strong> Median of 10,000 runs (100 iterations x 100 samples) on Intel i7-12700KF.
 						</BenchInfoTooltip>
 					</h4>
 					<p className='mt-1 text-[11px] italic text-zinc-600'>Lower is better</p>
@@ -1199,7 +1205,7 @@ function BenchColdStartChart() {
 			</div>
 			<div className='space-y-1.5'>
 				<div className='flex items-center gap-4'>
-					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>AgentOS</span>
+					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>agentOS</span>
 					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
 						<motion.div
 							key={active}
@@ -1280,7 +1286,7 @@ function BenchMetricBar({
 			</div>
 			<div className='space-y-1.5'>
 				<div className='flex items-center gap-4'>
-					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>AgentOS</span>
+					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>agentOS</span>
 					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
 						<motion.div
 							initial={{ width: 0 }}
@@ -1362,7 +1368,7 @@ function BenchCostChart() {
 							<br /><br />
 							<strong>Sandbox baseline:</strong> The cheapest sandbox provider benchmarked. Billed at $0.0000025/GiB-s with a 256 MB minimum (March 18, 2026).
 							<br /><br />
-							<strong>AgentOS:</strong> 3.4 MB baseline per execution, assuming 70% utilization. Select a hardware tier above to compare.
+							<strong>agentOS:</strong> 3.4 MB baseline per execution, assuming 70% utilization. Select a hardware tier above to compare.
 						</BenchInfoTooltip>
 					</h4>
 					<p className='mt-1 text-[11px] italic text-zinc-600'>Lower is better</p>
@@ -1383,7 +1389,7 @@ function BenchCostChart() {
 			</div>
 			<div className='space-y-1.5'>
 				<div className='flex items-center gap-4'>
-					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>AgentOS</span>
+					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>agentOS</span>
 					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
 						<motion.div
 							key={active}
@@ -1449,7 +1455,7 @@ const TechnologyAndBenchmarks = () => (
 					A new operating system architecture.
 				</h2>
 				<p className='mb-6 max-w-3xl text-base leading-relaxed text-zinc-500 md:text-lg'>
-					Built from the ground up for lightweight agents. AgentOS provides the flexibility of Linux with lower overhead than virtual machines.
+					Built from the ground up for lightweight agents. agentOS provides the flexibility of Linux with lower overhead than virtual machines.
 				</p>
 				<div className='grid gap-6 md:grid-cols-2'>
 					<div className='rounded-xl border border-zinc-200 bg-zinc-50 p-6'>
@@ -1488,7 +1494,7 @@ const TechnologyAndBenchmarks = () => (
 					Performance benchmarks
 				</h3>
 				<p className='mb-8 text-base leading-relaxed text-zinc-500'>
-					AgentOS vs. traditional sandboxes.
+					agentOS vs. traditional sandboxes.
 				</p>
 
 				<div className='rounded-xl border border-zinc-200 bg-zinc-50 p-8'>
@@ -1502,11 +1508,11 @@ const TechnologyAndBenchmarks = () => (
 								<br /><br />
 								<strong>Why the gap:</strong> V8 isolates share the host process and its V8 engine. Each additional execution only adds its own heap and stack (~3.4 MB). Sandboxes allocate a dedicated container with a minimum memory reservation, even if the code inside uses far less.
 								<br /><br />
-								<strong>What this means:</strong> On a 1 GB server, you can run ~210 concurrent AgentOS executions vs. ~4 sandboxes.
+								<strong>What this means:</strong> On a 1 GB server, you can run ~210 concurrent agentOS executions vs. ~4 sandboxes.
 								<br /><br />
 								<strong>Sandbox baseline:</strong> 256 MB, the smallest minimum among popular providers as of March 18, 2026.
 								<br /><br />
-								<strong>AgentOS:</strong> 3.4 MB, the converged average per execution under sustained load.
+								<strong>agentOS:</strong> 3.4 MB, the converged average per execution under sustained load.
 							</>
 						}
 						agentOS={{ value: '~3.4 MB', bar: 2 }}
@@ -1529,7 +1535,7 @@ const TechnologyAndBenchmarks = () => (
 				<div className='flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between'>
 					<div>
 						<h3 className='mb-2 text-2xl font-normal tracking-tight text-zinc-900 md:text-3xl'>
-							AgentOS Registry
+							agentOS Registry
 						</h3>
 						<p className='max-w-lg text-base leading-relaxed text-zinc-500'>
 							Browse and install pre-built tools, integrations, and capabilities for your agents. From file systems to databases to API connectors.
@@ -1586,7 +1592,7 @@ const BeforeAfterSlider = ({ before, after }: { before: string; after: string })
 				<span className='absolute bottom-3 left-3 whitespace-nowrap rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm'>Unix Operators</span>
 			</div>
 			<div className='absolute inset-0 overflow-hidden z-10 pointer-events-none' style={{ left: `${position}%`, width: `${100 - position}%` }}>
-				<span className='absolute bottom-3 right-3 whitespace-nowrap rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm'>AgentOS Operators</span>
+				<span className='absolute bottom-3 right-3 whitespace-nowrap rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm'>agentOS Operators</span>
 			</div>
 		</div>
 	);
@@ -1638,77 +1644,12 @@ const FromUnixToAgents = () => (
 	</section>
 );
 
-// --- Intro Splash ---
-const IntroSplash = ({ onComplete }: { onComplete: () => void }) => {
-	const [phase, setPhase] = useState<'in' | 'hold' | 'out'>('in');
-
-	useEffect(() => {
-		const holdTimer = setTimeout(() => setPhase('hold'), 800);
-		const outTimer = setTimeout(() => setPhase('out'), 2800);
-		const doneTimer = setTimeout(() => onComplete(), 3600);
-		return () => {
-			clearTimeout(holdTimer);
-			clearTimeout(outTimer);
-			clearTimeout(doneTimer);
-		};
-	}, [onComplete]);
-
-	return (
-		<motion.div
-			className='absolute inset-0 z-10 flex items-center justify-center bg-white'
-			initial={{ opacity: 1 }}
-			animate={{ opacity: phase === 'out' ? 0 : 1 }}
-			transition={{ duration: 0.8, ease: 'easeInOut' }}
-		>
-			<motion.p
-				initial={{ opacity: 0 }}
-				animate={{ opacity: phase === 'in' ? 0 : 1 }}
-				transition={{ duration: 1, ease: 'easeOut' }}
-				className='text-3xl text-zinc-900/90 md:text-5xl'
-				style={{ fontFamily: '"Manrope", sans-serif' }}
-			>
-				It&apos;s like saying{' '}
-				<motion.span
-					initial={{ opacity: 0, scale: 0.9 }}
-					animate={{ opacity: phase !== 'in' ? 1 : 0, scale: phase !== 'in' ? 1 : 0.9 }}
-					transition={{ duration: 1.2, delay: 0.3, ease: 'easeOut' }}
-					className='italic mx-2'
-					style={{ fontFamily: '"Playwrite IE", cursive' }}
-				>
-					hello
-				</motion.span>{' '}
-				for the first time again
-			</motion.p>
-		</motion.div>
-	);
-};
-
 // --- Main Page ---
 export default function AgentOSPage() {
-	const [showIntro, setShowIntro] = useState(true);
-
 	return (
-		<div className='min-h-screen overflow-x-hidden bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
+		<div className='min-h-screen bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
 			<main>
-				<div className='relative overflow-hidden'>
-					<AnimatePresence>
-						{showIntro && <IntroSplash onComplete={() => setShowIntro(false)} />}
-					</AnimatePresence>
-					{!showIntro && (
-						<motion.div
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							transition={{ duration: 0.8 }}
-						>
-							<Hero />
-						</motion.div>
-					)}
-					{showIntro && (
-						<div className='invisible'>
-							<Hero />
-						</div>
-					)}
-				</div>
+				<Hero />
 				<AgentOSFeatures />
 				<TechnologyAndBenchmarks />
 				<FromUnixToAgents />

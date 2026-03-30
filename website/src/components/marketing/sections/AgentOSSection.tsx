@@ -73,7 +73,7 @@ export const AgentOSSection = () => (
           transition={{ duration: 0.5, delay: 0.05 }}
           className='mb-4 text-2xl font-normal tracking-tight text-white md:text-4xl'
         >
-          Need more than primitives? Try AgentOS.
+          Need more than primitives? Try agentOS.
         </motion.h2>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
@@ -82,7 +82,7 @@ export const AgentOSSection = () => (
           transition={{ duration: 0.5, delay: 0.1 }}
           className='text-base leading-relaxed text-zinc-500 md:text-lg'
         >
-          Unix gave humans a common language to control machines. AgentOS gives agents the same power.
+          Unix gave humans a common language to control machines. agentOS gives agents the same power.
           A lightweight runtime with a real file system, real tools, and security via V8 isolates.
         </motion.p>
       </div>
@@ -119,7 +119,7 @@ export const AgentOSSection = () => (
           href='/agent-os'
           className='inline-flex items-center gap-2 text-sm text-zinc-400 transition-colors hover:text-white'
         >
-          Learn more about AgentOS
+          Learn more about agentOS
           <ArrowRight className='h-3.5 w-3.5' />
         </a>
         <CopyInstallButton />
