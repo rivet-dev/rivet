@@ -658,6 +658,10 @@ export class ActorInstance<
 
 	assertReady() {
 		if (!this.#ready) throw new errors.InternalError("Actor not ready");
+		this.assertNotShutdown();
+	}
+
+	assertNotShutdown() {
 		if (this.#shutdownComplete)
 			throw new errors.ActorStopping("Actor has shut down");
 	}
@@ -1209,7 +1213,7 @@ export class ActorInstance<
 
 	// MARK: - Background Tasks
 	waitUntil(promise: Promise<void>) {
-		this.assertReady();
+		this.assertNotShutdown();
 
 		const nonfailablePromise = promise
 			.then(() => {
@@ -1325,7 +1329,7 @@ export class ActorInstance<
 	 * sleeping.
 	 */
 	async keepAwake<T>(promise: Promise<T>): Promise<T> {
-		this.assertReady();
+		this.assertNotShutdown();
 
 		this.#beginActiveAsyncRegion("keepAwake");
 
@@ -1349,7 +1353,7 @@ export class ActorInstance<
 	async internalKeepAwake<T>(
 		promiseOrRun: Promise<T> | (() => T | Promise<T>),
 	): Promise<T> {
-		this.assertReady();
+		this.assertNotShutdown();
 
 		this.#beginActiveAsyncRegion("internalKeepAwake");
 

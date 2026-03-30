@@ -218,6 +218,31 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 			}
 		});
 
+		test("waitUntil works in onWake", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const sleepActor = client.sleepWithWaitUntilInOnWake.getOrCreate();
+
+			// Verify waitUntil did not throw during onWake
+			{
+				const status = await sleepActor.getStatus();
+				expect(status.startCount).toBe(1);
+				expect(status.waitUntilCalled).toBe(true);
+			}
+
+			// Trigger sleep so the waitUntil promise drains before persisting
+			await sleepActor.triggerSleep();
+			await waitFor(driverTestConfig, 250);
+
+			// After sleep and wake, verify the waitUntil promise completed
+			{
+				const status = await sleepActor.getStatus();
+				expect(status.sleepCount).toBe(1);
+				expect(status.startCount).toBe(2);
+				expect(status.waitUntilCompleted).toBe(true);
+			}
+		});
+
 		test("rpc calls keep actor awake", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
