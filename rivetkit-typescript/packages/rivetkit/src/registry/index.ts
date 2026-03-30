@@ -36,17 +36,19 @@ export class Registry<A extends RegistryActors> {
 		// Start the local manager or engine before /api/rivet is hit so clients can
 		// reach the public endpoint preemptively. This waits one tick because some
 		// integrations mutate registry config immediately after setup() returns.
-		setTimeout(() => {
-			const parsedConfig = this.parseConfig();
+		if (config.serverless?.spawnEngine || config.serveManager) {
+			setTimeout(() => {
+				const parsedConfig = this.parseConfig();
 
-			if (
-				parsedConfig.serverless.spawnEngine ||
-				parsedConfig.serveManager
-			) {
-				// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
-				this.#ensureRuntime();
-			}
-		}, 0);
+				if (
+					parsedConfig.serverless.spawnEngine ||
+					parsedConfig.serveManager
+				) {
+					// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
+					this.#ensureRuntime();
+				}
+			}, 0);
+		}
 	}
 
 	/** Creates runtime if not already created. Idempotent. */
