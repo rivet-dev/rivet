@@ -407,6 +407,45 @@ export const sleepRawWsDelayedSendOnSleep = actor({
 	},
 });
 
+export const sleepWithWaitUntilInOnWake = actor({
+	state: {
+		startCount: 0,
+		sleepCount: 0,
+		waitUntilCalled: false,
+		waitUntilCompleted: false,
+	},
+	onWake: (c) => {
+		c.state.startCount += 1;
+		// This should not throw. Before the fix, assertReady() would throw
+		// because #ready is false during onWake.
+		c.waitUntil(
+			(async () => {
+				c.state.waitUntilCompleted = true;
+			})(),
+		);
+		c.state.waitUntilCalled = true;
+	},
+	onSleep: (c) => {
+		c.state.sleepCount += 1;
+	},
+	actions: {
+		triggerSleep: (c) => {
+			c.sleep();
+		},
+		getStatus: (c) => {
+			return {
+				startCount: c.state.startCount,
+				sleepCount: c.state.sleepCount,
+				waitUntilCalled: c.state.waitUntilCalled,
+				waitUntilCompleted: c.state.waitUntilCompleted,
+			};
+		},
+	},
+	options: {
+		sleepTimeout: SLEEP_TIMEOUT,
+	},
+});
+
 export const sleepWithNoSleepOption = actor({
 	state: { startCount: 0, sleepCount: 0 },
 	onWake: (c) => {
