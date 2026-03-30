@@ -5,7 +5,7 @@
 			"frontend/**/*.{tsx,ts,js}",
 			"!frontend/packages",
 			"!**/*.gen.*",
-			"rivetkit-typescript/**/*.{tsx,ts,css}",
+			"rivetkit-typescript/**/*.{tsx,ts,css,svelte}",
 			"examples/**/*.{ts,tsx}",
 			"!/**/node_modules"
 		],
@@ -94,6 +94,21 @@
 					}
 				}
 			}
-		}
+		},
+		 {
+      "includes": ["**/*.svelte", "**/*.astro", "**/*.vue"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useConst": "off",
+            "useImportType": "off"
+          },
+          "correctness": {
+            "noUnusedVariables": "off",
+            "noUnusedImports": "off"
+          }
+        }
+      }
+    }
 	]
 }
