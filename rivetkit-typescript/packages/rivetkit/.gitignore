@@ -1,0 +1,5 @@
+# Generated declaration files from tsc build (tsconfig.build.json)
+fixtures/**/*.d.ts
+fixtures/**/*.d.ts.map
+runtime/**/*.d.ts
+runtime/**/*.d.ts.map
