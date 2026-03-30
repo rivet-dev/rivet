@@ -54,6 +54,10 @@ cd rivetkit-typescript/packages/rivetkit
 
 The script installs each drizzle-orm version, runs the drizzle driver tests, and reports pass/fail per version. It restores the original package.json and lockfile on exit. Update the `DEFAULT_VERSIONS` array in the script and `SUPPORTED_DRIZZLE_RANGE` in `packages/rivetkit/src/db/drizzle/mod.ts` when adding support for new drizzle releases.
 
+## Cloudflare Workers Compatibility
+
+Cloudflare Workers forbid `setTimeout`, `fetch`, `connect`, and other async I/O in global scope (outside a request handler). The `Registry` constructor runs in global scope, so it must never call these APIs unconditionally. Any deferred work (e.g., prestarting the runtime) must be gated behind a synchronous config check before scheduling a timer. See `packages/rivetkit/src/registry/index.ts` for the pattern: the outer `if` guards `setTimeout`, and the inner `if` re-checks after the tick to pick up late config mutations.
+
 ## Workflow Context Actor Access Guards
 
 In `ActorWorkflowContext` (`packages/rivetkit/src/workflow/context.ts`), all side-effectful `#runCtx` access must be guarded by `#ensureActorAccess` so that side effects only run inside workflow steps and are not replayed outside of them. Read-only properties (e.g., `actorId`, `log`) do not need guards. When adding new methods or properties to the workflow context that delegate to `#runCtx`, apply the guard if the operation has side effects.
