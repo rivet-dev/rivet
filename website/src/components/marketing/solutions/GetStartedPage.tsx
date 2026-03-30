@@ -29,7 +29,7 @@ const CopyCommand = ({ command }: { command: string }) => {
 
 export default function GetStartedPage() {
 	return (
-		<div className='flex min-h-screen flex-col items-center justify-center bg-white selection:bg-orange-200 selection:text-orange-900'>
+		<div className='flex min-h-screen flex-col items-center justify-center bg-white selection:bg-zinc-200 selection:text-zinc-900'>
 			{/* Hero */}
 			<section className='px-6'>
 				<div className='mx-auto max-w-3xl text-center'>

@@ -1,39 +1,63 @@
 'use client';
 
-import { ArrowRight, Shield, Terminal, FolderOpen, Clock, Layers, Globe } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowRight, Shield, FolderOpen, Clock, Globe, Bot, Code, Terminal, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
-import agentosLogo from '@/images/products/agentos-logo.svg';
+
+const CopyInstallButton = () => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText('npm install @rivetkit/agent-os');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-400 transition-colors hover:border-white/20 hover:text-white'
+    >
+      {copied ? <Check className='h-4 w-4 text-green-500' /> : <Terminal className='h-4 w-4' />}
+      npm install @rivetkit/agent-os
+    </button>
+  );
+};
 
 const features = [
   {
-    icon: Terminal,
-    title: 'Your tools, ready to go',
-    description: 'Git, curl, Python, npm. The tools agents already know.',
+    icon: Bot,
+    title: 'Works with any agent',
+    description: 'Claude Code, Codex, OpenCode, and more. One unified API.',
   },
   {
     icon: Clock,
-    title: 'Instant coldstart',
-    description: '~5ms startup. No waiting for VMs to boot.',
+    title: 'Low overhead',
+    description: '~5ms coldstart. 200x cheaper than sandboxes.',
+  },
+  {
+    icon: Code,
+    title: 'Embed in your backend',
+    description: 'Your APIs. Your toolchains. No complex agent authentication.',
   },
   {
     icon: FolderOpen,
-    title: 'Real file system',
-    description: 'A real, persistent file system agents can navigate like any Linux environment.',
+    title: 'Mount anything as a file system',
+    description: 'S3, SQLite, Google Drive, or the host file system.',
   },
   {
     icon: Shield,
     title: 'Granular security',
-    description: 'V8 isolates + WebAssembly. Hardware-level isolation without the overhead.',
-  },
-  {
-    icon: Layers,
-    title: 'Hybrid execution',
-    description: 'Lightweight isolation by default. Full sandboxes when you need them.',
+    description: 'V8 isolates + WebAssembly. Configurable network and file system policies.',
   },
   {
     icon: Globe,
     title: 'Runs anywhere',
-    description: 'Railway, Kubernetes, browsers, edge. Just npm install and go.',
+    description: 'Rivet Cloud, Railway, Vercel, Kubernetes, or on-prem.',
   },
 ];
 
@@ -42,22 +66,6 @@ export const AgentOSSection = () => (
     <div className='mx-auto max-w-7xl px-6'>
       {/* Header */}
       <div className='mb-16 max-w-3xl'>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className='mb-4 flex items-center gap-3'
-        >
-          <img
-            src={agentosLogo.src}
-            alt='AgentOS'
-            className='h-8 w-8'
-          />
-          <span className='font-mono text-xs font-semibold uppercase tracking-widest text-zinc-500'>
-            AgentOS
-          </span>
-        </motion.div>
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -65,7 +73,7 @@ export const AgentOSSection = () => (
           transition={{ duration: 0.5, delay: 0.05 }}
           className='mb-4 text-2xl font-normal tracking-tight text-white md:text-4xl'
         >
-          Need more than primitives?
+          Need more than primitives? Try AgentOS.
         </motion.h2>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
@@ -74,9 +82,8 @@ export const AgentOSSection = () => (
           transition={{ duration: 0.5, delay: 0.1 }}
           className='text-base leading-relaxed text-zinc-500 md:text-lg'
         >
-          Actors give you building blocks. AgentOS gives agents a complete environment.
-          A lightweight VM with a real file system, real tools, and security via V8 isolates.
-          Built on Actors underneath. Think of Actors as Unix and AgentOS as Linux.
+          Unix gave humans a common language to control machines. AgentOS gives agents the same power.
+          A lightweight runtime with a real file system, real tools, and security via V8 isolates.
         </motion.p>
       </div>
 
@@ -115,9 +122,7 @@ export const AgentOSSection = () => (
           Learn more about AgentOS
           <ArrowRight className='h-3.5 w-3.5' />
         </a>
-        <code className='rounded border border-white/10 bg-white/5 px-3 py-1.5 font-mono text-xs text-zinc-500'>
-          npm install @rivetkit/agent-os
-        </code>
+        <CopyInstallButton />
       </motion.div>
     </div>
   </section>

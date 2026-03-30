@@ -415,6 +415,18 @@ export function Header({
 	const pathname = clientPathname || initialPathname;
 	const isLightTheme = WHITE_THEMED_PATHS.some((p) => pathname === p || pathname === p + '/');
 
+	// Set body attribute for global CSS targeting (e.g., mobile sheet styling)
+	useEffect(() => {
+		if (isLightTheme) {
+			document.body.setAttribute('data-light-theme', 'true');
+		} else {
+			document.body.removeAttribute('data-light-theme');
+		}
+		return () => {
+			document.body.removeAttribute('data-light-theme');
+		};
+	}, [isLightTheme]);
+
 	if (variant === "floating") {
 		const headerStyles = cn(
 			"md:border-transparent md:static md:bg-transparent md:rounded-2xl md:max-w-[1200px] md:border-transparent md:backdrop-none [&>div:first-child]:px-3 md:backdrop-blur-none transition-all hover:opacity-100",
@@ -422,7 +434,13 @@ export function Header({
 		);
 
 		return (
-			<div className={cn("fixed top-0 z-50 w-full max-w-[1200px] md:left-1/2 md:top-4 md:-translate-x-1/2 md:px-8", isLightTheme && "selection:bg-orange-200 selection:text-orange-900")}>
+			<div
+				className={cn(
+					"fixed top-0 z-50 w-full max-w-[1200px] md:left-1/2 md:top-4 md:-translate-x-1/2 md:px-8",
+					isLightTheme && "selection:bg-orange-200 selection:text-orange-900"
+				)}
+				data-light-theme={isLightTheme ? "true" : undefined}
+			>
 				<div
 					className={cn(
 						"hero-bg-exclude",
@@ -433,12 +451,16 @@ export function Header({
 				>
 					<div className={cn("absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl backdrop-blur-lg md:block", isLightTheme ? "bg-white/80" : "bg-background/80")} />
 					<RivetHeader
-						className={headerStyles}
+						className={cn(
+							headerStyles,
+							isLightTheme && "md:bg-transparent [&_button[data-mobile-menu-trigger]]:text-zinc-900 bg-white/95 backdrop-blur-lg md:backdrop-blur-none"
+						)}
 						logo={
-							<div className="hidden md:block">
-								{isLightTheme ? (
-									<div className="ml-1 flex items-center gap-3">
-										<a href="/">
+							<>
+								{/* Mobile logo */}
+								<div className="md:hidden ml-1">
+									{isLightTheme ? (
+										<a href="/" className="flex items-center gap-2">
 											<img
 												src={logoIconWhiteUrl.src}
 												width={24}
@@ -446,30 +468,62 @@ export function Header({
 												className="h-6 w-6"
 												alt="Rivet logo"
 											/>
-										</a>
-										<div className="h-5 w-px bg-zinc-300" />
-										<a href="/agent-os">
+											<div className="h-4 w-px bg-zinc-300" />
 											<img
 												src="/images/agent-os/agentos-hero-logo.svg"
-												className="h-5 w-auto"
+												className="h-4 w-auto"
 												alt="AgentOS"
 											/>
 										</a>
-									</div>
-								) : (
-									<LogoContextMenu>
+									) : (
 										<a href="/">
 											<img
 												src={logoUrl.src}
 												width={80}
 												height={24}
-												className="ml-1 w-20 shrink-0"
+												className="w-20 shrink-0"
 												alt="Rivet logo"
 											/>
 										</a>
-									</LogoContextMenu>
-								)}
-							</div>
+									)}
+								</div>
+								{/* Desktop logo */}
+								<div className="hidden md:block">
+									{isLightTheme ? (
+										<div className="ml-1 flex items-center gap-3">
+											<a href="/">
+												<img
+													src={logoIconWhiteUrl.src}
+													width={24}
+													height={24}
+													className="h-6 w-6"
+													alt="Rivet logo"
+												/>
+											</a>
+											<div className="h-5 w-px bg-zinc-300" />
+											<a href="/agent-os">
+												<img
+													src="/images/agent-os/agentos-hero-logo.svg"
+													className="h-5 w-auto"
+													alt="AgentOS"
+												/>
+											</a>
+										</div>
+									) : (
+										<LogoContextMenu>
+											<a href="/">
+												<img
+													src={logoUrl.src}
+													width={80}
+													height={24}
+													className="ml-1 w-20 shrink-0"
+													alt="Rivet logo"
+												/>
+											</a>
+										</LogoContextMenu>
+									)}
+								</div>
+							</>
 						}
 						subnav={effectiveSubnav}
 						support={null}
@@ -499,7 +553,9 @@ export function Header({
 								)}
 							</div>
 						}
-						mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} sidebarData={sidebarData} />}
+						mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} sidebarData={sidebarData} isLightTheme={isLightTheme} />}
+						sheetClassName={isLightTheme ? "!bg-white [&>button]:!bg-white [&>button]:!text-zinc-900 [&>button]:!border-zinc-200" : undefined}
+						lightTheme={isLightTheme}
 						breadcrumbs={
 							<div className={cn("flex items-center font-v2 subpixel-antialiased", isLightTheme && "[&_a]:!text-zinc-600 [&_button]:!text-zinc-600")}>
 								{!isLightTheme && <ProductsDropdown active={active === "product"} />}
@@ -619,7 +675,7 @@ export function Header({
 	);
 }
 
-function DocsMobileNavigation({ tree, sidebarData }: { tree?: ReactNode; sidebarData?: SidebarItem[] }) {
+function DocsMobileNavigation({ tree, sidebarData, isLightTheme = false }: { tree?: ReactNode; sidebarData?: SidebarItem[]; isLightTheme?: boolean }) {
 	const pathname = usePathname() || "";
 	const isDocsPage = pathname.startsWith("/docs");
 
@@ -640,11 +696,16 @@ function DocsMobileNavigation({ tree, sidebarData }: { tree?: ReactNode; sidebar
 		{ id: "api", label: "API Reference", href: "/docs/api" },
 	];
 
-	const mainLinks = [
-		{ href: "/docs", label: "Documentation" },
-		{ href: "/cloud", label: "Pricing" },
-		{ href: "/cookbook", label: "Cookbooks" },
-	];
+	const mainLinks = isLightTheme
+		? [
+			{ href: "/docs", label: "Documentation" },
+			{ href: "/registry", label: "Registry" },
+		]
+		: [
+			{ href: "/docs", label: "Documentation" },
+			{ href: "/cloud", label: "Pricing" },
+			{ href: "/cookbook", label: "Cookbooks" },
+		];
 
 	const solutions = [
 		{ label: "Agent Orchestration", href: "/solutions/agents", icon: Bot },
@@ -689,6 +750,50 @@ function DocsMobileNavigation({ tree, sidebarData }: { tree?: ReactNode; sidebar
 	];
 
 	const currentSection = sections.find((s) => s.id === getCurrentSection());
+
+	if (isLightTheme) {
+		return (
+			<div className="flex flex-col gap-2 font-v2 subpixel-antialiased text-sm">
+				{/* Home logo with AgentOS */}
+				<a href="/" className="py-3 px-2 flex items-center gap-2">
+					<img
+						src={logoIconWhiteUrl.src}
+						alt="Rivet"
+						width={24}
+						height={24}
+						className="h-6 w-6"
+					/>
+					<div className="h-4 w-px bg-zinc-300" />
+					<img
+						src="/images/agent-os/agentos-hero-logo.svg"
+						className="h-4 w-auto"
+						alt="AgentOS"
+					/>
+				</a>
+
+				{/* Main navigation links */}
+				{mainLinks.map(({ href, label }) => (
+					<a
+						key={href}
+						href={href}
+						className="text-zinc-900 py-2 px-2 hover:bg-zinc-100 rounded-sm transition-colors"
+					>
+						{label}
+					</a>
+				))}
+
+				{/* Install button */}
+				<div className="mt-4 pt-4 border-t border-zinc-200">
+					<a
+						href="/install"
+						className="flex items-center justify-center w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
+					>
+						Install
+					</a>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex flex-col gap-2 font-v2 subpixel-antialiased text-sm">

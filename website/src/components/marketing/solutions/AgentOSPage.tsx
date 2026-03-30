@@ -23,6 +23,146 @@ import {
 import { AnimatePresence, motion } from 'framer-motion';
 import agentosLogo from '@/images/products/agentos-logo.svg';
 
+// --- Animated AgentOS Logo ---
+const AnimatedAgentOSLogo = ({ className }: { className?: string }) => {
+	const containerRef = useRef<HTMLDivElement>(null);
+	const [isReady, setIsReady] = useState(false);
+
+	useEffect(() => {
+		const container = containerRef.current;
+		if (!container) return;
+
+		fetch('/images/agent-os/agentos-hero-logo-animated.svg')
+			.then((res) => res.text())
+			.then((svgText) => {
+				container.innerHTML = svgText;
+
+				const svg = container.querySelector('svg');
+				if (!svg) return;
+
+				svg.removeAttribute('width');
+				svg.removeAttribute('height');
+				svg.style.height = '100%';
+				svg.style.width = 'auto';
+				svg.style.display = 'block';
+
+				const ns = 'http://www.w3.org/2000/svg';
+				const textLayer = svg.querySelector('#text-layer');
+				const strokeLayer = svg.querySelector('#stroke-layer');
+				if (!textLayer || !strokeLayer) return;
+
+				const strokePath = strokeLayer.querySelector('path');
+				if (!strokePath) return;
+
+				const strokeStyle =
+					'fill:none; stroke:white; stroke-width:10.57px; stroke-linecap:round; stroke-linejoin:round;';
+
+				// Split the path data into main path and short tail path
+				const fullD = strokePath.getAttribute('d') || '';
+				const lastM = fullD.lastIndexOf('M');
+				const mainD = fullD.substring(0, lastM);
+				const tailD = fullD.substring(lastM);
+
+				// Create mask
+				const defs = document.createElementNS(ns, 'defs');
+				svg.insertBefore(defs, svg.firstChild);
+
+				const mask = document.createElementNS(ns, 'mask');
+				mask.setAttribute('id', 'reveal-mask');
+				mask.setAttribute('maskUnits', 'userSpaceOnUse');
+				mask.setAttribute('x', '0');
+				mask.setAttribute('y', '0');
+				mask.setAttribute('width', '99999');
+				mask.setAttribute('height', '99999');
+
+				// Clone the stroke group transform wrapper for both paths
+				const groupTransform = strokeLayer.getAttribute('transform') || '';
+
+				// Main path
+				const mainGroup = document.createElementNS(ns, 'g');
+				mainGroup.setAttribute('transform', groupTransform);
+				const mainPath = document.createElementNS(ns, 'path');
+				mainPath.setAttribute('d', mainD);
+				mainPath.setAttribute('style', strokeStyle);
+				mainGroup.appendChild(mainPath);
+				mask.appendChild(mainGroup);
+
+				// Tail path
+				const tailGroup = document.createElementNS(ns, 'g');
+				tailGroup.setAttribute('transform', groupTransform);
+				const tailPath = document.createElementNS(ns, 'path');
+				tailPath.setAttribute('d', tailD);
+				tailPath.setAttribute('style', strokeStyle);
+				tailGroup.appendChild(tailPath);
+				mask.appendChild(tailGroup);
+
+				defs.appendChild(mask);
+
+				// Wrap text layer in a masked group
+				const parent = textLayer.parentNode;
+				if (parent) {
+					const wrapper = document.createElementNS(ns, 'g');
+					wrapper.setAttribute('mask', 'url(#reveal-mask)');
+					parent.insertBefore(wrapper, textLayer);
+					wrapper.appendChild(textLayer);
+				}
+
+				// Remove the original stroke layer
+				strokeLayer.remove();
+
+				// Measure path lengths
+				const mainLength = mainPath.getTotalLength();
+				const tailLength = tailPath.getTotalLength();
+
+				// Set up dash offsets (hidden initially)
+				mainPath.style.strokeDasharray = String(mainLength);
+				mainPath.style.strokeDashoffset = String(mainLength);
+				tailPath.style.strokeDasharray = String(tailLength);
+				tailPath.style.strokeDashoffset = String(tailLength);
+
+				// Animate: main path first, then tail after main finishes
+				const mainDuration = 3;
+				const tailDuration = 0.3;
+
+				// Add keyframes if not already present
+				if (!document.querySelector('#agentos-logo-animation-style')) {
+					const style = document.createElement('style');
+					style.id = 'agentos-logo-animation-style';
+					style.textContent = `
+						@keyframes reveal-main {
+							to { stroke-dashoffset: 0; }
+						}
+						@keyframes reveal-tail {
+							to { stroke-dashoffset: 0; }
+						}
+					`;
+					document.head.appendChild(style);
+				}
+
+				mainPath.style.animation = `reveal-main ${mainDuration}s ease forwards`;
+				tailPath.style.animation = `reveal-tail ${tailDuration}s ease ${mainDuration}s forwards`;
+
+				setIsReady(true);
+			});
+
+		return () => {
+			if (container) {
+				container.innerHTML = '';
+			}
+		};
+	}, []);
+
+	return (
+		<div
+			ref={containerRef}
+			className={className}
+			style={{
+				opacity: isReady ? 1 : 0,
+				transition: 'opacity 0.3s ease',
+			}}
+		/>
+	);
+};
 
 // --- Hero Image Data ---
 interface HeroImage {
@@ -245,7 +385,7 @@ const CopyInstallButton = () => {
 	return (
 		<button
 			onClick={handleCopy}
-			className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-900'
+			className='inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-900 sm:w-auto'
 		>
 			{copied ? <Check className='h-4 w-4 text-green-500' /> : <Terminal className='h-4 w-4' />}
 			npm install @rivetkit/agent-os
@@ -438,14 +578,10 @@ const Hero = () => {
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5, delay: 0.05 }}
-					className='mb-6 flex items-center'
+					className='mb-6 flex items-center justify-center md:justify-start'
 				>
 					<div className='relative'>
-						<img
-							src='/images/agent-os/agentos-hero-logo.svg'
-							alt='AgentOS'
-							className='h-12 w-auto md:h-16 lg:h-20'
-						/>
+						<AnimatedAgentOSLogo className='h-12 w-auto md:h-16 lg:h-20' />
 						<span className='absolute -top-2 -right-12 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700'>Beta</span>
 					</div>
 				</motion.div>
@@ -455,7 +591,7 @@ const Hero = () => {
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5, delay: 0.1 }}
-					className='mb-10 max-w-xl text-base text-zinc-500 md:text-lg'
+					className='mb-10 max-w-xl text-center text-base text-zinc-500 md:text-left md:text-lg'
 				>
 					Unix gave humans a common language to control machines.<br />AgentOS gives agents the same power.
 				</motion.p>
@@ -467,7 +603,7 @@ const Hero = () => {
 					transition={{ duration: 0.5, delay: 0.15 }}
 				>
 					{/* Tabs */}
-					<div className='mb-4 flex flex-wrap items-center gap-2'>
+					<div className='mb-4 flex flex-wrap items-center justify-center gap-2 md:justify-start'>
 						{getStartedTabs.map((tab, idx) => {
 							const Icon = tab.icon;
 							return (
@@ -493,9 +629,9 @@ const Hero = () => {
 					</div>
 
 					{/* Supported Harnesses */}
-					<div className='mb-4 flex items-center gap-4'>
+					<div className='mb-4 flex flex-wrap items-center justify-center gap-2 md:justify-start md:gap-4'>
 						<span className='text-xs text-zinc-400 uppercase tracking-wider'>Works with</span>
-						<div className='flex items-center gap-4'>
+						<div className='flex flex-wrap items-center justify-center gap-2 md:justify-start md:gap-4'>
 							{[
 								{ src: '/images/agent-logos/claude-code.svg', name: 'Claude Code', comingSoon: true },
 								{ src: '/images/agent-logos/opencode.svg', name: 'OpenCode', comingSoon: true },
@@ -541,11 +677,11 @@ const Hero = () => {
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5, delay: 0.2 }}
-					className='mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center'
+					className='mt-6 flex flex-col items-center gap-3 sm:flex-row sm:items-center md:items-start'
 				>
 					<a
 						href='/docs'
-						className='selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
+						className='selection-dark inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 sm:w-auto'
 					>
 						Read the Docs
 						<ArrowRight className='h-4 w-4' />
@@ -1400,7 +1536,7 @@ const TechnologyAndBenchmarks = () => (
 						</p>
 					</div>
 					<a
-						href='/docs'
+						href='/registry'
 						className='selection-dark inline-flex flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
 					>
 						Explore the Registry
@@ -1552,7 +1688,7 @@ export default function AgentOSPage() {
 	const [showIntro, setShowIntro] = useState(true);
 
 	return (
-		<div className='min-h-screen bg-white font-sans text-zinc-600 selection:bg-orange-200 selection:text-orange-900'>
+		<div className='min-h-screen overflow-x-hidden bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
 			<main>
 				<div className='relative overflow-hidden'>
 					<AnimatePresence>
