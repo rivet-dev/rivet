@@ -1,6 +1,7 @@
 import type * as protocol from "@rivetkit/engine-envoy-protocol";
 import type { EnvoyContext, ToEnvoyMessage } from "./index.js";
 import { getActorEntry, log, wsSend } from "./index.js";
+import { closeTunnelRequestsForActor } from "../tunnel/index.js";
 
 export function handleSendEvents(
 	ctx: EnvoyContext,
@@ -50,6 +51,8 @@ export function handleCommandStopActorComplete(
 	};
 
 	handleSendEvents(ctx, [event]);
+
+	closeTunnelRequestsForActor(ctx, msg.actorId);
 
 	// Close the actor channel but keep event history for ack/resend.
 	// The entry is cleaned up when all events are acked.

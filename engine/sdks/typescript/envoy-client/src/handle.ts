@@ -71,4 +71,11 @@ export interface EnvoyHandle {
 
 	/** Drop all key-value data for an actor. */
 	kvDrop(actorId: string): Promise<void>;
+
+	/** Acknowledge a processed hibernatable WebSocket message. */
+	sendHibernatableWebSocketMessageAck(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		messageIndex: number,
+	): void;
 }

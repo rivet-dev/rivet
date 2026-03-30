@@ -20,7 +20,7 @@ export async function handleCommands(
 		} = commandWrapper;
 
 		if (tag === "CommandStartActor") {
-			const handle = createActor(ctx.shared, {
+			const { tx, actorStartPromise } = createActor(ctx.shared, {
 				commandIdx: checkpoint.index,
 				actorId: checkpoint.actorId,
 				generation: checkpoint.generation,
@@ -34,9 +34,10 @@ export async function handleCommands(
 				ctx.actors.set(checkpoint.actorId, generations);
 			}
 			generations.set(checkpoint.generation, {
-				handle,
+				handle: tx,
 				eventHistory: [],
 				lastCommandIdx: checkpoint.index,
+				actorStartPromise,
 			});
 		} else if (tag === "CommandStopActor") {
 			const entry = getActorEntry(

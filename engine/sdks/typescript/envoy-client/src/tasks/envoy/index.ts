@@ -29,6 +29,16 @@ import {
 	handleKvResponse,
 	processUnsentKvRequests,
 } from "./kv.js";
+import type {
+	RequestEntry,
+	BufferedTunnelMessage,
+} from "../tunnel/index.js";
+import {
+	handleTunnelMessage,
+	resendBufferedTunnelMessages,
+	sendTunnelMessage,
+	shutdownTunnel,
+} from "../tunnel/index.js";
 
 export interface EnvoyContext {
 	shared: SharedContext;
@@ -36,12 +46,18 @@ export interface EnvoyContext {
 	actors: Map<string, Map<number, ActorEntry>>;
 	kvRequests: Map<number, KvRequestEntry>;
 	nextKvRequestId: number;
+
+	// Tunnel state
+	tunnelRequests: Map<string, RequestEntry>;
+	bufferedTunnelMessages: BufferedTunnelMessage[];
+	shuttingDown: boolean;
 }
 
 export interface ActorEntry {
 	handle: UnboundedSender<ToActor>;
 	eventHistory: protocol.EventWrapper[];
 	lastCommandIdx: bigint;
+	actorStartPromise: Promise<void>;
 }
 
 /**
@@ -76,6 +92,13 @@ export type ToEnvoyMessage =
 			data: protocol.KvRequestData;
 			resolve: (data: protocol.KvResponseData) => void;
 			reject: (error: Error) => void;
+	  }
+	// Sent from handle for hibernatable websocket ack
+	| {
+			type: "hws-message-ack";
+			gatewayId: protocol.GatewayId;
+			requestId: protocol.RequestId;
+			messageIndex: number;
 	  };
 
 export async function startEnvoy(config: EnvoyConfig) {
@@ -97,6 +120,9 @@ export async function startEnvoy(config: EnvoyConfig) {
 		actors,
 		kvRequests: new Map(),
 		nextKvRequestId: 0,
+		tunnelRequests: new Map(),
+		bufferedTunnelMessages: [],
+		shuttingDown: false,
 	};
 
 	log(ctx.shared)?.info({ msg: "starting envoy" });
@@ -118,6 +144,11 @@ export async function startEnvoy(config: EnvoyConfig) {
 			handleCommandStopActorComplete(ctx, msg);
 		} else if (msg.type === "kv-request") {
 			handleKvRequest(ctx, msg);
+		} else if (msg.type === "hws-message-ack") {
+			sendTunnelMessage(ctx, msg.gatewayId, msg.requestId, {
+				tag: "ToRivetWebSocketMessageAck",
+				val: { index: msg.messageIndex },
+			});
 		} else {
 			unreachable(msg);
 		}
@@ -126,6 +157,8 @@ export async function startEnvoy(config: EnvoyConfig) {
 	// Cleanup
 	clearInterval(ackInterval);
 	clearInterval(kvCleanupInterval);
+
+	shutdownTunnel(ctx);
 
 	for (const request of ctx.kvRequests.values()) {
 		request.reject(new Error("envoy shutting down"));
@@ -153,6 +186,7 @@ async function handleConnMessage(
 
 		resendUnacknowledgedEvents(ctx);
 		processUnsentKvRequests(ctx);
+		resendBufferedTunnelMessages(ctx);
 	} else if (message.tag === "ToEnvoyCommands") {
 		await handleCommands(ctx, message.val);
 	} else if (message.tag === "ToEnvoyAckEvents") {
@@ -160,7 +194,7 @@ async function handleConnMessage(
 	} else if (message.tag === "ToEnvoyKvResponse") {
 		handleKvResponse(ctx, message.val);
 	} else if (message.tag === "ToEnvoyTunnelMessage") {
-		// TODO:
+		handleTunnelMessage(ctx, message.val);
 	} else {
 		unreachable(message);
 	}
@@ -203,6 +237,20 @@ export function getActorEntry(
 	generation: number,
 ): ActorEntry | undefined {
 	return ctx.actors.get(actorId)?.get(generation);
+}
+
+export function findActiveActor(
+	ctx: EnvoyContext,
+	actorId: string,
+): { entry: ActorEntry; generation: number } | undefined {
+	const gens = ctx.actors.get(actorId);
+	if (!gens || gens.size === 0) return undefined;
+	for (const [generation, entry] of gens) {
+		if (!entry.handle.isClosed()) {
+			return { entry, generation };
+		}
+	}
+	return undefined;
 }
 
 // MARK: Handle
@@ -470,6 +518,22 @@ function createHandle(
 			await sendKvRequest(actorId, {
 				tag: "KvDropRequest",
 				val: null,
+			});
+		},
+
+		sendHibernatableWebSocketMessageAck(
+			gatewayId: ArrayBuffer,
+			requestId: ArrayBuffer,
+			messageIndex: number,
+		): void {
+			if (messageIndex < 0 || messageIndex > 65535) {
+				throw new Error("Invalid websocket ack index");
+			}
+			envoyTx.send({
+				type: "hws-message-ack",
+				gatewayId,
+				requestId,
+				messageIndex,
 			});
 		},
 	};

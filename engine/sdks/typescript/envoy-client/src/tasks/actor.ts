@@ -8,7 +8,7 @@ import { spawn } from "antiox/task";
 import type { SharedContext } from "../context.js";
 import { logger } from "../log.js";
 import { unreachable } from "antiox/panic";
-import { stringifyError } from "../utils.js";
+import { promiseWithResolvers, stringifyError } from "../utils.js";
 
 export interface CreateActorOpts {
 	commandIdx: bigint;
@@ -59,16 +59,23 @@ interface ActorContext {
 export function createActor(
 	ctx: SharedContext,
 	start: CreateActorOpts,
-): UnboundedSender<ToActor> {
+): { tx: UnboundedSender<ToActor>; actorStartPromise: Promise<void> } {
 	const [tx, rx] = unboundedChannel<ToActor>();
-	spawn(() => actorInner(ctx, start, rx));
-	return tx;
+	const startPromise = promiseWithResolvers<void>();
+	// Prevent unhandled rejection if no tunnel handler awaits this
+	startPromise.promise.catch(() => {});
+	spawn(() =>
+		actorInner(ctx, start, rx, startPromise.resolve, startPromise.reject),
+	);
+	return { tx, actorStartPromise: startPromise.promise };
 }
 
 async function actorInner(
 	shared: SharedContext,
 	opts: CreateActorOpts,
 	rx: UnboundedReceiver<ToActor>,
+	resolveStart: (value: void) => void,
+	rejectStart: (reason?: any) => void,
 ) {
 	const ctx: ActorContext = {
 		shared,
@@ -89,6 +96,10 @@ async function actorInner(
 			opts.config,
 		);
 	} catch (error) {
+		rejectStart(
+			error instanceof Error ? error : new Error("actor start failed"),
+		);
+
 		log(ctx)?.error({
 			msg: "actor start failed",
 			actorId: opts.actorId,
@@ -102,6 +113,8 @@ async function actorInner(
 		sendStoppedEvent(ctx, stopCode, stopMessage);
 		return;
 	}
+
+	resolveStart();
 
 	sendEvent(ctx, {
 		tag: "EventActorStateUpdate",
