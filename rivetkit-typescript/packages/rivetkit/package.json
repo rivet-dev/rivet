@@ -1,6 +1,6 @@
 {
 	"name": "rivetkit",
-	"version": "2.1.10",
+	"version": "2.1.11-rc.1",
 	"description": "Lightweight libraries for building stateful actors on edge platforms",
 	"license": "Apache-2.0",
 	"keywords": [

@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/mcp-hub",
-	"version": "2.1.10",
+	"version": "2.1.11-rc.1",
 	"private": true,
 	"type": "module",
 	"files": [
