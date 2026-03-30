@@ -1,0 +1,35 @@
+{
+	"name": "example-svelte",
+	"version": "2.0.21",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "concurrently -n server,vite \"tsx --watch src/index.ts\" \"vite\"",
+		"dev:server": "tsx --watch src/index.ts",
+		"check-types": "svelte-check --tsconfig ./tsconfig.json",
+		"build": "vite build",
+		"start": "tsx src/index.ts"
+	},
+	"dependencies": {
+		"@rivetkit/svelte": "*",
+		"rivetkit": "*",
+		"svelte": "^5.0.0"
+	},
+	"devDependencies": {
+		"@sveltejs/vite-plugin-svelte": "^5.0.0",
+		"@types/node": "^22.13.9",
+		"concurrently": "^9.1.2",
+		"svelte-check": "^4.4.3",
+		"tsx": "^3.12.7",
+		"typescript": "^5.5.2",
+		"vite": "^5.0.0"
+	},
+	"stableVersion": "0.8.0",
+	"template": {
+		"technologies": ["svelte", "typescript"],
+		"tags": ["real-time"],
+		"frontendPort": 5173,
+		"skipVercel": true
+	},
+	"license": "MIT"
+}

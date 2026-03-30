@@ -33,6 +33,7 @@
 	"resolutions": {
 		"rivetkit": "workspace:*",
 		"@rivetkit/react": "workspace:*",
+		"@rivetkit/svelte": "workspace:*",
 		"@rivetkit/cloudflare-workers": "workspace:*",
 		"@rivetkit/next-js": "workspace:*",
 		"@rivetkit/db": "workspace:*",
