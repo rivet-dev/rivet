@@ -24,9 +24,16 @@ import { AnimatePresence, motion } from 'framer-motion';
 import agentosLogo from '@/images/products/agentos-logo.svg';
 
 // --- Animated agentOS Logo ---
-const AnimatedAgentOSLogo = ({ className }: { className?: string }) => {
+interface AnimatedAgentOSLogoProps {
+	className?: string;
+	displayedAgent?: { src: string; name: string } | null;
+}
+
+const AnimatedAgentOSLogo = ({ className, displayedAgent }: AnimatedAgentOSLogoProps) => {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [isReady, setIsReady] = useState(false);
+	const osLayerRef = useRef<Element | null>(null);
+	const agentImageRef = useRef<SVGImageElement | null>(null);
 
 	useEffect(() => {
 		const container = containerRef.current;
@@ -50,6 +57,29 @@ const AnimatedAgentOSLogo = ({ className }: { className?: string }) => {
 				const textLayer = svg.querySelector('#text-layer');
 				const strokeLayer = svg.querySelector('#stroke-layer');
 				if (!textLayer || !strokeLayer) return;
+
+				// Find and store reference to the OS layer (contains the "OS" text)
+				const osLayer = svg.querySelector('#os-layer');
+				if (osLayer) {
+					osLayerRef.current = osLayer;
+					// Set up transition for smooth opacity changes
+					(osLayer as HTMLElement).style.transition = 'opacity 0.15s ease-out';
+				}
+
+				// Create agent image element inside the os-layer's parent, positioned like os-layer
+				// The image will be positioned to appear inside the squircle where "OS" is
+				const agentImg = document.createElementNS(ns, 'image');
+				agentImg.setAttribute('id', 'agent-logo');
+				// Position inside the squircle (viewBox is 0 0 305 102, squircle is on the right)
+				agentImg.setAttribute('width', '32');
+				agentImg.setAttribute('height', '32');
+				agentImg.setAttribute('x', '249');
+				agentImg.setAttribute('y', '25');
+				agentImg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+				agentImg.style.opacity = '0';
+				agentImg.style.transition = 'opacity 0.15s ease-out';
+				svg.appendChild(agentImg);
+				agentImageRef.current = agentImg;
 
 				const strokePath = strokeLayer.querySelector('path');
 				if (!strokePath) return;
@@ -151,6 +181,28 @@ const AnimatedAgentOSLogo = ({ className }: { className?: string }) => {
 			}
 		};
 	}, []);
+
+	// Update OS layer and agent image visibility when displayedAgent changes
+	useEffect(() => {
+		if (!isReady) return;
+
+		const osLayer = osLayerRef.current;
+		const agentImg = agentImageRef.current;
+
+		if (osLayer && agentImg) {
+			if (displayedAgent) {
+				// Hide OS layer, show agent logo
+				(osLayer as HTMLElement).style.opacity = '0';
+				agentImg.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', displayedAgent.src);
+				agentImg.setAttribute('href', displayedAgent.src);
+				agentImg.style.opacity = '1';
+			} else {
+				// Show OS layer, hide agent logo
+				(osLayer as HTMLElement).style.opacity = '1';
+				agentImg.style.opacity = '0';
+			}
+		}
+	}, [displayedAgent, isReady]);
 
 	return (
 		<div
@@ -581,9 +633,9 @@ const Hero = () => {
 	const [autoPlayAgent, setAutoPlayAgent] = useState<{ src: string; name: string } | null>(null);
 	const [autoPlayComplete, setAutoPlayComplete] = useState(false);
 
-	// Auto-cycle through agents after logo animation completes
+	// Auto-cycle through agents starting 2.5s before stroke animation ends
 	useEffect(() => {
-		const logoAnimationDuration = 3300; // 3s main + 0.3s tail
+		const logoAnimationDuration = 800; // Start cycling 2.5s before the 3.3s animation ends
 		const agentDisplayDuration = 400; // Time to show each agent
 
 		const startAutoPlay = setTimeout(() => {
@@ -621,32 +673,7 @@ const Hero = () => {
 					className='mb-6 flex items-center justify-center md:justify-start'
 				>
 					<div className='relative'>
-						<AnimatedAgentOSLogo className='h-12 w-auto md:h-16 lg:h-20' />
-						{/* Agent logo overlay on squircle - positioned over the "OS" box */}
-						<AnimatePresence>
-							{displayedAgent && (
-								<motion.div
-									key={displayedAgent.name}
-									initial={{ opacity: 0, scale: 0.8 }}
-									animate={{ opacity: 1, scale: 1 }}
-									exit={{ opacity: 0, scale: 0.8 }}
-									transition={{ duration: 0.15, ease: 'easeOut' }}
-									className='absolute flex items-center justify-center bg-white rounded-[22%]'
-									style={{
-										left: '54.5%',
-										top: '12%',
-										width: '20%',
-										height: '76%',
-									}}
-								>
-									<img
-										src={displayedAgent.src}
-										alt={displayedAgent.name}
-										className='w-[55%] h-[55%] object-contain'
-									/>
-								</motion.div>
-							)}
-						</AnimatePresence>
+						<AnimatedAgentOSLogo className='h-12 w-auto md:h-16 lg:h-20' displayedAgent={displayedAgent} />
 						<span className='absolute -right-[8px] -top-[7px] rounded-full border border-zinc-900 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-900'>Beta</span>
 					</div>
 				</motion.div>
