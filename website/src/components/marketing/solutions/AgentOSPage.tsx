@@ -567,8 +567,48 @@ const FakeTerminal = () => {
 };
 
 // --- Hero ---
+const agents = [
+	{ src: '/images/agent-logos/pi.svg', name: 'Pi', comingSoon: false },
+	{ src: '/images/agent-logos/claude-code.svg', name: 'Claude Code', comingSoon: true },
+	{ src: '/images/agent-logos/codex.svg', name: 'Codex', comingSoon: true },
+	{ src: '/images/agent-logos/opencode.svg', name: 'OpenCode', comingSoon: true },
+	{ src: '/images/agent-logos/amp.svg', name: 'Amp', comingSoon: true },
+];
+
 const Hero = () => {
 	const [activeTab, setActiveTab] = useState(0);
+	const [hoveredAgent, setHoveredAgent] = useState<{ src: string; name: string } | null>(null);
+	const [autoPlayAgent, setAutoPlayAgent] = useState<{ src: string; name: string } | null>(null);
+	const [autoPlayComplete, setAutoPlayComplete] = useState(false);
+
+	// Auto-cycle through agents after logo animation completes
+	useEffect(() => {
+		const logoAnimationDuration = 3300; // 3s main + 0.3s tail
+		const agentDisplayDuration = 400; // Time to show each agent
+
+		const startAutoPlay = setTimeout(() => {
+			let currentIndex = 0;
+
+			const cycleAgents = () => {
+				if (currentIndex < agents.length) {
+					setAutoPlayAgent(agents[currentIndex]);
+					currentIndex++;
+					setTimeout(cycleAgents, agentDisplayDuration);
+				} else {
+					// End on OS (null)
+					setAutoPlayAgent(null);
+					setAutoPlayComplete(true);
+				}
+			};
+
+			cycleAgents();
+		}, logoAnimationDuration);
+
+		return () => clearTimeout(startAutoPlay);
+	}, []);
+
+	// Displayed agent is either hovered (if autoplay complete) or autoplay agent
+	const displayedAgent = autoPlayComplete ? hoveredAgent : autoPlayAgent;
 
 	return (
 		<section className='relative flex min-h-[100svh] flex-col justify-center px-6 pt-20 md:pt-0'>
@@ -582,6 +622,31 @@ const Hero = () => {
 				>
 					<div className='relative'>
 						<AnimatedAgentOSLogo className='h-12 w-auto md:h-16 lg:h-20' />
+						{/* Agent logo overlay on squircle - positioned over the "OS" box */}
+						<AnimatePresence>
+							{displayedAgent && (
+								<motion.div
+									key={displayedAgent.name}
+									initial={{ opacity: 0, scale: 0.8 }}
+									animate={{ opacity: 1, scale: 1 }}
+									exit={{ opacity: 0, scale: 0.8 }}
+									transition={{ duration: 0.15, ease: 'easeOut' }}
+									className='absolute flex items-center justify-center bg-white rounded-[22%]'
+									style={{
+										left: '54.5%',
+										top: '12%',
+										width: '20%',
+										height: '76%',
+									}}
+								>
+									<img
+										src={displayedAgent.src}
+										alt={displayedAgent.name}
+										className='w-[55%] h-[55%] object-contain'
+									/>
+								</motion.div>
+							)}
+						</AnimatePresence>
 						<span className='absolute -right-[8px] -top-[7px] rounded-full border border-zinc-900 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-900'>Beta</span>
 					</div>
 				</motion.div>
@@ -605,14 +670,13 @@ const Hero = () => {
 				>
 					<span className='text-xs text-zinc-400 uppercase tracking-wider'>Works with</span>
 					<div className='flex flex-wrap items-center justify-center gap-2 md:justify-start md:gap-4'>
-						{[
-							{ src: '/images/agent-logos/pi.svg', name: 'Pi', comingSoon: false },
-							{ src: '/images/agent-logos/claude-code.svg', name: 'Claude Code', comingSoon: true },
-							{ src: '/images/agent-logos/codex.svg', name: 'Codex', comingSoon: true },
-							{ src: '/images/agent-logos/opencode.svg', name: 'OpenCode', comingSoon: true },
-							{ src: '/images/agent-logos/amp.svg', name: 'Amp', comingSoon: true },
-						].map((agent) => (
-							<div key={agent.name} className='flex items-center gap-1.5'>
+						{agents.map((agent) => (
+							<div
+								key={agent.name}
+								className='flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 transition-colors hover:bg-zinc-100'
+								onMouseEnter={() => autoPlayComplete && setHoveredAgent(agent)}
+								onMouseLeave={() => autoPlayComplete && setHoveredAgent(null)}
+							>
 								<img src={agent.src} alt={agent.name} className='h-4 w-4' />
 								<span className='text-sm text-zinc-500'>{agent.name}{agent.comingSoon && '*'}</span>
 							</div>
