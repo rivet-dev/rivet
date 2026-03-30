@@ -16,6 +16,7 @@ import {
 	Pencil,
 	Workflow,
 	Bot,
+	Cpu,
 } from 'lucide-react';
 
 interface UseCaseProps {
@@ -201,6 +202,18 @@ const useCases: UseCaseProps[] = [
 			'Approval gates and notifications',
 		],
 		example: 'A hiring workflow where agents screen resumes, schedule interviews, and prepare onboarding docs.',
+	},
+	{
+		icon: Cpu,
+		title: 'Edge & Embedded Agents',
+		description: 'Run agents on resource-constrained devices like Raspberry Pi, edge servers, or IoT gateways.',
+		benefits: [
+			'~3.4 MB memory footprint per agent',
+			'No containers or VMs required',
+			'Works offline with local LLMs',
+			'ARM and x86 support',
+		],
+		example: 'A home automation agent running on a Raspberry Pi that controls smart devices and responds to voice commands.',
 	},
 ];
 

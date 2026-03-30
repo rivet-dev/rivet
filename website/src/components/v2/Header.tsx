@@ -9,7 +9,7 @@ import logoBlackUrl from "@/images/rivet-logos/icon-text-black.svg";
 import logoIconUrl from "@/images/rivet-logos/icon-white.svg";
 import logoIconWhiteUrl from "@/images/rivet-logos/icon-white.svg";
 
-const WHITE_THEMED_PATHS = ['/agent-os', '/from-unix-to-agents', '/registry', '/install'];
+const WHITE_THEMED_PATHS = ['/agent-os', '/agent-os/use-cases', '/from-unix-to-agents', '/registry', '/install'];
 import { cn } from "@rivet-gg/components";
 import { Header as RivetHeader } from "@rivet-gg/components/header";
 import { Icon, faDiscord } from "@rivet-gg/icons";
@@ -574,11 +574,14 @@ export function Header({
 									</TextNavItem>
 								)}
 								{isLightTheme && (
-									<TextNavItem
-										href="/registry"
-									>
-										Registry
-									</TextNavItem>
+									<>
+										<TextNavItem href="/agent-os/use-cases">
+											Use Cases
+										</TextNavItem>
+										<TextNavItem href="/registry">
+											Registry
+										</TextNavItem>
+									</>
 								)}
 								{!isLightTheme && (
 									<TextNavItem
@@ -699,6 +702,7 @@ function DocsMobileNavigation({ tree, sidebarData, isLightTheme = false }: { tre
 	const mainLinks = isLightTheme
 		? [
 			{ href: "/docs", label: "Documentation" },
+			{ href: "/agent-os/use-cases", label: "Use Cases" },
 			{ href: "/registry", label: "Registry" },
 		]
 		: [
