@@ -1,0 +1,54 @@
+{
+  "name": "@rivetkit/svelte",
+  "version": "0.1.0",
+  "description": "Svelte 5 runes integration for RivetKit actors",
+  "license": "Apache-2.0",
+  "type": "module",
+  "svelte": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "svelte": "./dist/testing/index.js",
+      "default": "./dist/testing/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "svelte-package -i src/lib",
+    "check-types": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run --environment jsdom src/lib/__tests__/*.test.ts"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "dependencies": {
+    "@rivetkit/framework-base": "2.1.10",
+    "esm-env": "^1.2.2",
+    "rivetkit": "2.1.10"
+  },
+  "devDependencies": {
+    "@sveltejs/package": "^2.5.7",
+    "jsdom": "^28.0.0",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.4.3",
+    "typescript": "^5.5.0",
+    "vitest": "^4.0.0"
+  },
+  "keywords": [
+    "rivetkit",
+    "svelte",
+    "svelte5",
+    "runes",
+    "actors",
+    "realtime",
+    "websocket"
+  ]
+}
