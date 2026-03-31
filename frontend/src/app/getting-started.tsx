@@ -50,9 +50,9 @@ import { cloudEnv } from "@/lib/env";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
 import { cn } from "../components/lib/utils";
-import { TEST_IDS } from "../utils/test-ids";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { TEST_IDS } from "../utils/test-ids";
 import { DeploymentCheck } from "./deployment-check";
 import { useEndpoint } from "./dialogs/connect-manual-serverfull-frame";
 import {
@@ -372,9 +372,8 @@ function ProviderSetup() {
 	return (
 		<div data-testid={TEST_IDS.Onboarding.IntegrationProviderSelection}>
 			<p className="text-sm text-muted-foreground mb-4">
-				Deploy your application to Rivet Compute, our serverless hosting
-				solution. We manage the actor orchestration, state, and scaling
-				for you.
+				Deploy your application to your preferred backend provider. We
+				manage the actor orchestration, state, and scaling for you.
 			</p>
 			<FormField
 				control={control}
@@ -1049,7 +1048,7 @@ function AgentPromptBanner({ code }: { code: string }) {
 			</Badge>
 			<span className="text-sm font-medium text-white text-left">
 				Have your coding agent complete these steps automatically to
-				deploy to Rivet Compute.
+				deploy to Rivet Cloud.
 			</span>
 			<Button
 				asChild
@@ -1245,7 +1244,7 @@ function BackendSetupRivet() {
 				</div>
 			</div>
 			<div>
-				<p className="font-medium mb-2">Deploy to Rivet Compute</p>
+				<p className="font-medium mb-2">Deploy to Rivet Cloud</p>
 				<p className="text-sm text-muted-foreground mb-2">
 					Push your changes to trigger the{" "}
 					<strong>Rivet Deploy</strong> workflow. The status check

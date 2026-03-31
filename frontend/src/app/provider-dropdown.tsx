@@ -101,23 +101,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
 			<DropdownMenuContent className="w-[--radix-popper-anchor-width]">
-				{__APP_TYPE__ === "cloud" ? (
-					<>
-						<RivetCloudDropdownMenuItem />
-						<DropdownMenuSub>
-							<DropdownMenuSubTrigger>
-								External cloud
-							</DropdownMenuSubTrigger>
-							<DropdownMenuPortal>
-								<DropdownMenuSubContent>
-									{externalClouds}
-								</DropdownMenuSubContent>
-							</DropdownMenuPortal>
-						</DropdownMenuSub>
-					</>
-				) : (
-					externalClouds
-				)}
+				{externalClouds}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
@@ -155,7 +139,7 @@ function RivetCloudDropdownMenuItem() {
 				})
 			}
 		>
-			Rivet Cloud {config ? "(Connected)" : ""}
+			Rivet Compute {config ? "(Connected)" : ""}
 			<span className="ml-1 text-[10px] font-medium px-1.5 py-0 rounded-full bg-primary/10 text-primary">
 				Beta
 			</span>

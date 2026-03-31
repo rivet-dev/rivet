@@ -12,17 +12,22 @@ import {
 	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { Suspense, useEffect } from "react";
-import { type DialogContentProps, Frame } from "@/components";
-import { Button } from "@/components/ui/button";
+import { useRivetDsn } from "@/app/env-variables";
+import {
+	CodeFrame,
+	CodeGroup,
+	CodePreview,
+	type DialogContentProps,
+	Frame,
+} from "@/components";
 import {
 	ErrorDetails,
 	useCloudNamespaceDataProvider,
 } from "@/components/actors";
+import { Button } from "@/components/ui/button";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
-import { CodeFrame, CodeGroup, CodePreview } from "@/components";
-import { useRivetDsn } from "@/app/env-variables";
 
 interface ConnectRivetFrameContentProps extends DialogContentProps {}
 
