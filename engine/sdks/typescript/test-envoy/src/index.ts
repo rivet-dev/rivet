@@ -55,7 +55,7 @@ app.get("/health", (c) => {
 });
 
 app.get("/shutdown", async (c) => {
-	await envoy?.shutdown();
+	envoy?.shutdown(false);
 	return c.text("ok");
 });
 
@@ -160,6 +160,7 @@ if (AUTOSTART_ENVOY) {
 				`Actor ${_actorId} stopped (generation ${_generation})`,
 			);
 		},
+		onShutdown() { },
 		// TODO:
 		websocket: async (
 			envoy: EnvoyHandle,

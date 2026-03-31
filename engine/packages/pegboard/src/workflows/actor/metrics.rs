@@ -42,7 +42,7 @@ impl LifecycleState {
 }
 
 #[workflow]
-pub(crate) async fn pegboard_actor2_metrics(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+pub(crate) async fn pegboard_actor_metrics(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	let start_paused = ctx
 		.activity(InitStateInput {
 			actor_id: input.actor_id,

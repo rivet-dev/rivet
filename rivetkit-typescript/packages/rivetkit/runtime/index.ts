@@ -5,7 +5,7 @@ import { chooseDefaultDriver } from "@/drivers/default";
 import { ENGINE_PORT, ensureEngineProcess } from "@/engine-process/mod";
 import { getInspectorUrl } from "@/inspector/utils";
 import { buildManagerRouter } from "@/manager/router";
-import { configureServerlessRunner } from "@/serverless/configure";
+import { configureServerlessPool } from "@/serverless/configure";
 import { detectRuntime, type GetUpgradeWebSocket } from "@/utils";
 import pkg from "../package.json" with { type: "json" };
 import {
@@ -24,8 +24,8 @@ import { buildServerlessRouter } from "@/serverless/router";
 import type { Registry } from "@/registry";
 import { getNodeFsSync } from "@/utils/node";
 
-/** Tracks whether the runtime was started as serverless or runner. */
-export type StartKind = "serverless" | "runner";
+/** Tracks whether the runtime was started as serverless or serverful. */
+export type StartKind = "serverless" | "serverful";
 
 function logLine(label: string, value: string): void {
 	const padding = " ".repeat(Math.max(0, 13 - label.length));
@@ -38,9 +38,9 @@ function logLine(label: string, value: string): void {
  * Startup happens in two phases:
  * 1. `Runtime.create()` initializes shared infrastructure like the manager
  *    server and engine process. This runs before we know the deployment mode.
- * 2. `startServerless()` or `startRunner()` configures mode-specific behavior.
+ * 2. `startServerless()` or `startEnvoy()` configures mode-specific behavior.
  *    These are idempotent and called lazily when the first request arrives
- *    or when explicitly starting a runner.
+ *    or when explicitly starting a envoy.
  */
 export class Runtime<A extends RegistryActors> {
 	#registry: Registry<A>;
@@ -110,7 +110,7 @@ export class Runtime<A extends RegistryActors> {
 		//   6420. This is a fallback for platforms that cannot use the manager
 		//   like Next.js.
 		//
-		// We do this before startServerless or startRunner has been called
+		// We do this before startServerless or startEnvoy has been called
 		// since the engine API needs to be available on port 6420 before
 		// anything else happens. For example, serverless platforms use
 		// `registry.handler(req)` so `startServerless` is called lazily.
@@ -254,18 +254,18 @@ export class Runtime<A extends RegistryActors> {
 
 		this.#printWelcome();
 
-		if (this.#config.serverless.configureRunnerPool) {
+		if (this.#config.serverless.configurePool) {
 			// biome-ignore lint/nursery/noFloatingPromises: intentional
-			configureServerlessRunner(this.#config);
+			configureServerlessPool(this.#config);
 		}
 	}
 
-	startRunner(): void {
-		if (this.#startKind === "runner") return;
+	startEnvoy(): void {
+		if (this.#startKind === "serverful") return;
 		invariant(!this.#startKind, "Runtime already started as serverless");
-		this.#startKind = "runner";
+		this.#startKind = "serverful";
 
-		if (this.#config.runner && this.#driver.autoStartActorDriver) {
+		if (this.#config.envoy && this.#driver.autoStartActorDriver) {
 			logger().debug("starting actor driver");
 			const inlineClient = createClientWithDriver<Registry<A>>(
 				this.#managerDriver,
@@ -285,7 +285,7 @@ export class Runtime<A extends RegistryActors> {
 
 		console.log();
 		console.log(
-			`  RivetKit ${pkg.version} (${this.#driver.displayName} - ${this.#startKind === "serverless" ? "Serverless" : "Runner"})`,
+			`  RivetKit ${pkg.version} (${this.#driver.displayName} - ${this.#startKind === "serverless" ? "Serverless" : "Serverful"})`,
 		);
 
 		// Show namespace

@@ -158,14 +158,14 @@ export function stringifyEventWrapper(wrapper: protocol.EventWrapper): string {
 export function stringifyToRivet(message: protocol.ToRivet): string {
 	switch (message.tag) {
 		case "ToRivetInit": {
-			const { envoyKey, name, version, prepopulateActorNames, metadata } =
+			const { envoyKey, version, prepopulateActorNames, metadata } =
 				message.val;
 			const prepopulateActorNamesStr =
 				prepopulateActorNames === null
 					? "null"
 					: `Map(${prepopulateActorNames.size})`;
 			const metadataStr = metadata === null ? "null" : `"${metadata}"`;
-			return `ToRivetInit{envoyKey: "${envoyKey}", name: "${name}", version: ${version}, prepopulateActorNames: ${prepopulateActorNamesStr}, metadata: ${metadataStr}}`;
+			return `ToRivetInit{envoyKey: "${envoyKey}", version: ${version}, prepopulateActorNames: ${prepopulateActorNamesStr}, metadata: ${metadataStr}}`;
 		}
 		case "ToRivetEvents": {
 			const events = message.val;
@@ -201,7 +201,7 @@ export function stringifyToEnvoy(message: protocol.ToEnvoy): string {
 	switch (message.tag) {
 		case "ToEnvoyInit": {
 			const { metadata } = message.val;
-			const metadataStr = `{envoyLostThreshold: ${stringifyBigInt(metadata.envoyLostThreshold)}, actorStopThreshold: ${stringifyBigInt(metadata.actorStopThreshold)}, serverlessDrainGracePeriod: ${metadata.serverlessDrainGracePeriod === null ? "null" : stringifyBigInt(metadata.serverlessDrainGracePeriod)}}`;
+			const metadataStr = `{envoyLostThreshold: ${stringifyBigInt(metadata.envoyLostThreshold)}, actorStopThreshold: ${stringifyBigInt(metadata.actorStopThreshold)}, serverlessDrainGracePeriod: ${metadata.serverlessDrainGracePeriod === null ? "null" : stringifyBigInt(metadata.serverlessDrainGracePeriod)}, maxResponsePayloadSize: ${stringifyBigInt(metadata.maxResponsePayloadSize)}}`;
 			return `ToEnvoyInit{metadata: ${metadataStr}}`;
 		}
 		case "ToEnvoyCommands": {

@@ -1509,6 +1509,9 @@ importers:
 
   examples/hono:
     dependencies:
+      '@hono/node-server':
+        specifier: ^1.19.12
+        version: 1.19.12(hono@4.11.9)
       hono:
         specifier: ^4.7.0
         version: 4.11.9
@@ -4141,6 +4144,9 @@ importers:
       '@rivetkit/bare-ts':
         specifier: ^0.6.2
         version: 0.6.2
+      '@rivetkit/engine-envoy-client':
+        specifier: workspace:*
+        version: link:../../../engine/sdks/typescript/envoy-client
       '@rivetkit/engine-runner':
         specifier: workspace:*
         version: link:../../../engine/sdks/typescript/runner
@@ -7257,6 +7263,12 @@ packages:
 
   '@hono/node-server@1.14.2':
     resolution: {integrity: sha512-GHjpOeHYbr9d1vkID2sNUYkl5IxumyhDrUJB7wBp7jvqYwPFt+oNKsAPBRcdSbV7kIrXhouLE199ks1QcK4r7A==}
+    engines: {node: '>=18.14.1'}
+    peerDependencies:
+      hono: ^4
+
+  '@hono/node-server@1.19.12':
+    resolution: {integrity: sha512-txsUW4SQ1iilgE0l9/e9VQWmELXifEFvmdA1j6WFh/aFPj99hIntrSsq/if0UWyGVkmrRPKA1wCeP+UCr1B9Uw==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: ^4
@@ -22206,6 +22218,10 @@ snapshots:
   '@hey-api/client-fetch@0.5.7': {}
 
   '@hono/node-server@1.14.2(hono@4.11.9)':
+    dependencies:
+      hono: 4.11.9
+
+  '@hono/node-server@1.19.12(hono@4.11.9)':
     dependencies:
       hono: 4.11.9
 

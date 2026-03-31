@@ -33,18 +33,20 @@ export const toNextHandler = (registry: Registry<any>) => {
 		// Set these on the registry's config directly since the legacy inputConfig
 		// isn't used by the serverless router
 		registry.config.serverless.spawnEngine = true;
-		registry.config.serverless.configureRunnerPool = {
+		registry.config.serverless.configurePool = {
 			url: `${publicUrl}/api/rivet`,
+			requestLifespan: 300,
+			maxConcurrentActors: 100_000,
+			metadata: { provider: "next-js" },
+
 			minRunners: 0,
 			maxRunners: 100_000,
-			requestLifespan: 300,
 			slotsPerRunner: 1,
-			metadata: { provider: "next-js" },
 		};
 
 		// Set runner version to enable hot-reloading on code changes
-		registry.config.runner = {
-			...registry.config.runner,
+		registry.config.envoy = {
+			...registry.config.envoy,
 			version: DEV_RUNNER_VERSION,
 		};
 	} else {

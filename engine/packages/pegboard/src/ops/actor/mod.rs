@@ -1,8 +1,8 @@
 pub mod create;
 pub mod get;
-pub mod get_for_envoy;
 pub mod get_for_gateway;
 pub mod get_for_key;
+pub mod get_for_kv;
 pub mod get_for_runner;
 pub mod get_reservation_for_key;
 pub mod hibernating_request;

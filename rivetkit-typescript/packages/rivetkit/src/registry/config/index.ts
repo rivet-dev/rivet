@@ -15,7 +15,7 @@ import {
 	isDev,
 } from "@/utils/env-vars";
 import { type DriverConfig, DriverConfigSchema } from "./driver";
-import { RunnerConfigSchema } from "./runner";
+import { EnvoyConfigSchema } from "./envoy";
 import { ServerlessConfigSchema } from "./serverless";
 
 export { DriverConfigSchema, type DriverConfig };
@@ -186,8 +186,8 @@ export const RegistryConfigSchema = z
 		serverless: ServerlessConfigSchema.optional().default(() =>
 			ServerlessConfigSchema.parse({}),
 		),
-		runner: RunnerConfigSchema.optional().default(() =>
-			RunnerConfigSchema.parse({}),
+		envoy: EnvoyConfigSchema.optional().default(() =>
+			EnvoyConfigSchema.parse({}),
 		),
 	})
 	.transform((config, ctx) => {
@@ -196,11 +196,11 @@ export const RegistryConfigSchema = z
 		// Parse endpoint string (env var fallback is applied via transform above)
 		const parsedEndpoint = config.endpoint
 			? tryParseEndpoint(ctx, {
-					endpoint: config.endpoint,
-					path: ["endpoint"],
-					namespace: config.namespace,
-					token: config.token,
-				})
+				endpoint: config.endpoint,
+				path: ["endpoint"],
+				namespace: config.namespace,
+				token: config.token,
+			})
 			: undefined;
 
 		if (parsedEndpoint && config.serveManager) {
@@ -218,16 +218,16 @@ export const RegistryConfigSchema = z
 			});
 		}
 
-		// configureRunnerPool requires an engine (via endpoint or spawnEngine)
+		// configurerPool requires an engine (via endpoint or spawnEngine)
 		if (
-			config.serverless.configureRunnerPool &&
+			config.serverless.configurePool &&
 			!parsedEndpoint &&
 			!config.serverless.spawnEngine
 		) {
 			ctx.addIssue({
 				code: "custom",
 				message:
-					"configureRunnerPool requires either endpoint or spawnEngine",
+					"configurePool requires either endpoint or spawnEngine",
 			});
 		}
 
@@ -245,9 +245,9 @@ export const RegistryConfigSchema = z
 		// Parse publicEndpoint string (env var fallback is applied via transform in serverless schema)
 		const parsedPublicEndpoint = config.serverless.publicEndpoint
 			? tryParseEndpoint(ctx, {
-					endpoint: config.serverless.publicEndpoint,
-					path: ["serverless", "publicEndpoint"],
-				})
+				endpoint: config.serverless.publicEndpoint,
+				path: ["serverless", "publicEndpoint"],
+			})
 			: undefined;
 
 		// Validate that publicEndpoint namespace matches backend namespace if specified
@@ -281,9 +281,9 @@ export const RegistryConfigSchema = z
 		const willUseEngine = !!endpoint || config.serverless.spawnEngine;
 		const inspector = willUseEngine
 			? {
-					...config.inspector,
-					enabled: { manager: false, actor: true },
-				}
+				...config.inspector,
+				enabled: { manager: false, actor: true },
+			}
 			: config.inspector;
 
 		return {

@@ -98,3 +98,67 @@ async fn get_or_create_inner(
 		.await
 	}
 }
+
+#[utoipa::path(
+	put,
+	operation_id = "actors2_get_or_create",
+	path = "/actors2",
+	params(GetOrCreateQuery),
+	request_body(content = GetOrCreateRequest, content_type = "application/json"),
+	responses(
+		(status = 200, body = GetOrCreateResponse),
+	),
+)]
+pub async fn get_or_create2(
+	Extension(ctx): Extension<ApiCtx>,
+	Query(query): Query<GetOrCreateQuery>,
+	Json(body): Json<GetOrCreateRequest>,
+) -> Response {
+	match get_or_create_inner2(ctx, query, body).await {
+		Ok(response) => Json(response).into_response(),
+		Err(err) => ApiError::from(err).into_response(),
+	}
+}
+
+#[tracing::instrument(skip_all)]
+async fn get_or_create_inner2(
+	ctx: ApiCtx,
+	query: GetOrCreateQuery,
+	body: GetOrCreateRequest,
+) -> Result<GetOrCreateResponse> {
+	ctx.skip_auth();
+
+	let namespace = ctx
+		.op(namespace::ops::resolve_for_name_global::Input {
+			name: query.namespace.clone(),
+		})
+		.await?
+		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+
+	let target_dc_label = super::utils::find_dc_for_actor_creation(
+		&ctx,
+		namespace.namespace_id,
+		&query.namespace,
+		&body.runner_name_selector,
+		body.datacenter.as_ref().map(String::as_str),
+	)
+	.await?;
+
+	let query = GetOrCreateQuery {
+		namespace: query.namespace,
+	};
+
+	if target_dc_label == ctx.config().dc_label() {
+		rivet_api_peer::actors::get_or_create::get_or_create2(ctx.into(), (), query, body).await
+	} else {
+		request_remote_datacenter::<GetOrCreateResponse>(
+			ctx.config(),
+			target_dc_label,
+			"/actors2",
+			axum::http::Method::PUT,
+			Some(&query),
+			Some(&body),
+		)
+		.await
+	}
+}

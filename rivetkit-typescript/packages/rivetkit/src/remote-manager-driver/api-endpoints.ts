@@ -59,7 +59,7 @@ export async function getOrCreateActor(
 	return apiCall<ActorsGetOrCreateRequest, ActorsGetOrCreateResponse>(
 		config,
 		"PUT",
-		`/actors`,
+		`/actors2`,
 		request,
 	);
 }
@@ -72,7 +72,7 @@ export async function createActor(
 	return apiCall<ActorsCreateRequest, ActorsCreateResponse>(
 		config,
 		"POST",
-		`/actors`,
+		`/actors2`,
 		request,
 	);
 }

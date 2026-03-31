@@ -18,3 +18,12 @@ app.post("/increment/:name", async (c) => {
 });
 
 export default app;
+
+// Start server when run directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+	const { serve } = await import("@hono/node-server");
+	const port = 3000;
+	serve({ fetch: app.fetch, port }, () =>
+		console.log(`Server running at http://localhost:${port}`),
+	);
+}

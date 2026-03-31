@@ -453,7 +453,7 @@ pub async fn handle_stopped(
 	metrics_workflow_id: Id,
 	variant: StoppedVariant,
 ) -> Result<StoppedResult> {
-	tracing::debug!(?variant, "actor stopped");
+	tracing::debug!(?variant, ?state.transition, "actor stopped");
 
 	// Save error to state
 	match &variant {
@@ -544,19 +544,19 @@ pub async fn handle_stopped(
 				if let Some(allocation) = allocate_res.allocation {
 					state.generation += 1;
 
-					// Transition to allocating
-					state.transition = Transition::Allocating {
-						destroy_after_start: false,
-						lost_timeout_ts: util::timestamp::now()
-							+ ctx.config().pegboard().actor_allocation_threshold(),
-					};
-
 					ctx.activity(SendOutboundInput {
 						generation: state.generation,
 						input: input.input.clone(),
 						allocation,
 					})
 					.await?;
+
+					// Transition to allocating
+					state.transition = Transition::Allocating {
+						destroy_after_start: false,
+						lost_timeout_ts: util::timestamp::now()
+							+ ctx.config().pegboard().actor_allocation_threshold(),
+					};
 				} else {
 					// Transition to retry backoff
 					state.transition = Transition::Sleeping {
@@ -602,6 +602,11 @@ pub async fn handle_stopped(
 			}
 		}
 	} else {
+		// Transition to sleeping
+		state.transition = Transition::Sleeping {
+			attempting_reallocation: false,
+		};
+
 		StoppedResult::Continue
 	};
 

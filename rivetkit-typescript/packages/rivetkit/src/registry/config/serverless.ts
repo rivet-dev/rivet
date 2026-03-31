@@ -7,19 +7,22 @@ import {
 	getRivetPublicToken,
 } from "@/utils/env-vars";
 
-export const ConfigureRunnerPoolSchema = z
+export const ConfigurePoolSchema = z
 	.object({
 		name: z.string().optional(),
 		url: z.string(),
 		headers: z.record(z.string(), z.string()).optional(),
-		maxRunners: z.number().optional(),
-		minRunners: z.number().optional(),
 		requestLifespan: z.number().optional(),
-		runnersMargin: z.number().optional(),
-		slotsPerRunner: z.number().optional(),
+		maxConcurrentActors: z.number().optional(),
 		metadata: z.record(z.string(), z.unknown()).optional(),
 		metadataPollInterval: z.number().optional(),
 		drainOnVersionUpgrade: z.boolean().optional(),
+
+		// Deprecated
+		maxRunners: z.number().optional(),
+		minRunners: z.number().optional(),
+		runnersMargin: z.number().optional(),
+		slotsPerRunner: z.number().optional(),
 	})
 	.optional();
 
@@ -42,11 +45,11 @@ export const ServerlessConfigSchema = z.object({
 	/**
 	 * @experimental
 	 *
-	 * Automatically configure serverless runners in the engine.
-	 * Can only be used when runnerKind is "serverless".
+	 * Automatically configure serverless envoys in the engine.
+	 * Can only be used when envoyKind is "serverless".
 	 * If true, uses default configuration. Can also provide custom configuration.
 	 */
-	configureRunnerPool: ConfigureRunnerPoolSchema.optional(),
+	configurePool: ConfigurePoolSchema.optional(),
 
 	// MARK: Routing
 	// TODO: serverlessBasePath? better naming?

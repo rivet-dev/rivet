@@ -161,7 +161,7 @@ async fn handle_message(
 			};
 
 			let actor_res = ctx
-				.op(pegboard::ops::actor::get_for_envoy::Input { actor_id })
+				.op(pegboard::ops::actor::get_for_kv::Input { actor_id })
 				.await
 				.with_context(|| format!("failed to get envoy for actor: {}", actor_id))?;
 
@@ -170,10 +170,9 @@ async fn handle_message(
 				return Ok(());
 			};
 
-			// Verify actor belongs to this envoy
-			if actor.namespace_id != conn.namespace_id || actor.envoy_key != conn.envoy_key {
-				send_actor_kv_error(&conn, req.request_id, "actor does not belong to envoy")
-					.await?;
+			// Verify actor belongs to this namespace
+			if actor.namespace_id != conn.namespace_id {
+				send_actor_kv_error(&conn, req.request_id, "actor does not exist").await?;
 				return Ok(());
 			}
 

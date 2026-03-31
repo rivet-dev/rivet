@@ -23,7 +23,9 @@ pub async fn router(
 			// MARK: Actors
 			.route("/actors", get(actors::list::list))
 			.route("/actors", post(actors::create::create))
+			.route("/actors2", post(actors::create::create2))
 			.route("/actors", put(actors::get_or_create::get_or_create))
+			.route("/actors2", put(actors::get_or_create::get_or_create2))
 			.route("/actors/{actor_id}", delete(actors::delete::delete))
 			.route("/actors/names", get(actors::list_names::list_names))
 			.route(

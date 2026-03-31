@@ -1,4 +1,4 @@
-use anyhow::*;
+use anyhow::Result;
 use gas::prelude::*;
 use rivet_guard_core::{RoutingOutput, request_context::RequestContext};
 use std::sync::Arc;

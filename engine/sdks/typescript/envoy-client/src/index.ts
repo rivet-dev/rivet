@@ -6,4 +6,7 @@ export {
 	type ToEnvoyMessage,
 	type ToEnvoyFromConnMessage,
 	startEnvoy,
+	startEnvoySync,
 } from "./tasks/envoy/index.js";
+export * as protocol from "@rivetkit/engine-envoy-protocol";
+export * as utils from './utils.js';
