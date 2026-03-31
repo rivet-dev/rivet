@@ -4,10 +4,7 @@ import {
 	drizzle as proxyDrizzle,
 	type SqliteRemoteDatabase,
 } from "drizzle-orm/sqlite-proxy";
-import {
-	drizzle as durableDrizzle,
-	type DrizzleSqliteDODatabase,
-} from "drizzle-orm/durable-sqlite";
+import { drizzle as durableDrizzle } from "drizzle-orm/durable-sqlite";
 import type { DatabaseProvider, RawAccess } from "../config";
 import {
 	AsyncMutex,
