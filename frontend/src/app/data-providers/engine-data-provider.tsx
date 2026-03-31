@@ -7,6 +7,7 @@ import {
 	type QueryKey,
 	queryOptions,
 } from "@tanstack/react-query";
+import * as cbor from "cbor-x";
 import { KV_KEYS } from "rivetkit/client";
 import z from "zod";
 import { getConfig, ls } from "@/components";
@@ -330,8 +331,14 @@ export const createNamespaceContext = ({
 						datacenter: data.datacenter,
 						crashPolicy: data.crashPolicy,
 						runnerNameSelector: data.runnerNameSelector,
-						// convert to base64
-						input: btoa(JSON.stringify(data.input)),
+						// encode input as CBOR then base64
+						input: data.input
+							? btoa(
+									String.fromCharCode(
+										...cbor.encode(data.input),
+									),
+								)
+							: undefined,
 					});
 
 					return response.actor.actorId;
