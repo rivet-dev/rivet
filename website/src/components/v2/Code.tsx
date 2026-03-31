@@ -77,28 +77,9 @@ interface CodeGroupProps {
 	children: ReactNode;
 	/** Marks this code group as a workspace for type-checking multi-file examples. */
 	workspace?: boolean;
-	/** Display all code blocks stacked vertically instead of as tabs. */
-	stacked?: boolean;
 }
 
-export function CodeGroup({ children, className, stacked }: CodeGroupProps) {
-	if (stacked) {
-		return (
-			<div
-				className={cn("code-group group my-4", className)}
-				data-code-group-container
-				data-code-group-stacked
-			>
-				<div data-code-group-stacked-content className="flex flex-col gap-4">
-					{/* Code blocks moved here by TabsScript.astro */}
-				</div>
-				<div data-code-group-source className="hidden">
-					{children}
-				</div>
-			</div>
-		);
-	}
-
+export function CodeGroup({ children, className }: CodeGroupProps) {
 	return (
 		<div
 			className={cn("code-group group my-4 overflow-hidden rounded-xl", className)}
@@ -233,7 +214,7 @@ export const pre = ({
 	const codeBlock = (
 		<div
 			className={cn(
-				"not-prose group/code relative group-[.code-group]:my-0 group-[[data-code-group-workspace]]:border-none group-[[data-code-group-workspace]]:overflow-visible",
+				"not-prose group/code relative group-[.code-group]:my-0 group-[.code-group]:border-none group-[.code-group]:overflow-visible",
 				flush ? "" : "my-4 overflow-hidden rounded-xl border"
 			)}
 			data-code-block

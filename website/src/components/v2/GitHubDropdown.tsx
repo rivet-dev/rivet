@@ -3,7 +3,7 @@ import { cn } from "@rivet-gg/components";
 import { Icon, faGithub } from "@rivet-gg/icons";
 import { useEffect, useState } from "react";
 
-type GitHubDropdownProps = React.HTMLAttributes<HTMLAnchorElement>;
+interface GitHubDropdownProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 interface RepoData {
 	stars: number;
@@ -17,55 +17,55 @@ function formatNumber(num: number): string {
 	return num.toString();
 }
 
-const REPOS = [
-	"rivet-dev/rivet",
-	"rivet-dev/secure-exec",
-	"rivet-dev/sandbox-agent",
-	"rivet-dev/antiox",
-	"rivet-dev/agent-os",
-];
-
 export function GitHubDropdown({ className, ...props }: GitHubDropdownProps) {
-	const [totalStars, setTotalStars] = useState<RepoData>({
+	const [rivetStars, setRivetStars] = useState<RepoData>({
 		stars: 0,
 		loading: true,
 	});
 
-	useEffect(() => {
-		const cacheKey = "github-stars-aggregate";
+	const fetchStars = async (
+		repo: string,
+		setter: (data: RepoData) => void,
+	) => {
+		const cacheKey = `github-stars-${repo}`;
 		const cachedData = sessionStorage.getItem(cacheKey);
 
 		if (cachedData) {
 			const { stars: cachedStars, timestamp } = JSON.parse(cachedData);
 			if (Date.now() - timestamp < 5 * 60 * 1000) {
-				setTotalStars({ stars: cachedStars, loading: false });
+				setter({ stars: cachedStars, loading: false });
 				return;
 			}
 		}
 
-		Promise.allSettled(
-			REPOS.map((repo) =>
-				fetch(`https://api.github.com/repos/${repo}`)
-					.then((res) => (res.ok ? res.json() : null))
-					.then((data) => data?.stargazers_count ?? 0)
-					.catch(() => 0),
-			),
-		).then((results) => {
-			const total = results.reduce(
-				(sum, r) => sum + (r.status === "fulfilled" ? r.value : 0),
-				0,
+		try {
+			const response = await fetch(
+				`https://api.github.com/repos/${repo}`,
 			);
-			setTotalStars({ stars: total, loading: false });
+			if (!response.ok) throw new Error("Failed to fetch");
+			const data = await response.json();
+			const newStars = data.stargazers_count;
+			setter({ stars: newStars, loading: false });
 			sessionStorage.setItem(
 				cacheKey,
-				JSON.stringify({ stars: total, timestamp: Date.now() }),
+				JSON.stringify({
+					stars: newStars,
+					timestamp: Date.now(),
+				}),
 			);
-		});
+		} catch (err) {
+			console.error(`Failed to fetch stars for ${repo}`, err);
+			setter({ stars: 0, loading: false });
+		}
+	};
+
+	useEffect(() => {
+		fetchStars("rivet-dev/rivet", setRivetStars);
 	}, []);
 
 	return (
 		<a
-			href="https://github.com/rivet-dev"
+			href="https://github.com/rivet-dev/rivet"
 			target="_blank"
 			rel="noreferrer"
 			className={cn(
@@ -79,7 +79,7 @@ export function GitHubDropdown({ className, ...props }: GitHubDropdownProps) {
 		>
 			<Icon icon={faGithub} />
 			<span className="hidden md:inline">
-				{totalStars.loading ? "GitHub" : `${formatNumber(totalStars.stars)} stars`}
+				{rivetStars.loading ? "GitHub" : `${formatNumber(rivetStars.stars)} stars`}
 			</span>
 		</a>
 	);

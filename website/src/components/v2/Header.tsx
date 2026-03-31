@@ -4,15 +4,12 @@ import { ActiveLink } from "@/components/ActiveLink";
 import { Tree } from "@/components/DocsNavigation";
 import { NavigationStateProvider } from "@/providers/NavigationStateProvider";
 import type { SidebarItem } from "@/lib/sitemap";
-import { registry } from "@/data/registry";
 import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
+import logoBlackUrl from "@/images/rivet-logos/icon-text-black.svg";
 import logoIconUrl from "@/images/rivet-logos/icon-white.svg";
 import logoIconWhiteUrl from "@/images/rivet-logos/icon-white.svg";
 
-const WHITE_THEMED_PATHS = ['/agent-os', '/agent-os/registry', '/from-unix-to-agents', '/install'];
-const REGISTRY_PACKAGE_COUNT = registry.length;
-const AGENT_OS_DOCS_HREF = "/docs/agent-os";
-const AGENT_OS_REGISTRY_HREF = "/agent-os/registry";
+const WHITE_THEMED_PATHS = ['/agent-os', '/agent-os/use-cases', '/agent-os/pricing', '/from-unix-to-agents', '/registry', '/install'];
 import { cn } from "@rivet-gg/components";
 import { Header as RivetHeader } from "@rivet-gg/components/header";
 import { Icon, faDiscord } from "@rivet-gg/icons";
@@ -74,13 +71,7 @@ function TextNavItem({
 	);
 }
 
-function ProductsDropdown({
-	active,
-	lightTheme = false,
-}: {
-	active?: boolean;
-	lightTheme?: boolean;
-}) {
+function ProductsDropdown({ active }: { active?: boolean }) {
 	const [isOpen, setIsOpen] = useState(false);
 	const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const isHoveringRef = useRef(false);
@@ -144,10 +135,7 @@ function ProductsDropdown({
 
 	return (
 		<div
-			className={cn(
-				"px-2.5 py-2 opacity-60 hover:opacity-100 transition-all duration-200",
-				lightTheme && "opacity-100",
-			)}
+			className="px-2.5 py-2 opacity-60 hover:opacity-100 transition-all duration-200"
 			onMouseEnter={handleMouseEnter}
 			onMouseLeave={handleMouseLeave}
 		>
@@ -157,8 +145,7 @@ function ProductsDropdown({
 						<button
 							type="button"
 							className={cn(
-								"cursor-pointer flex items-center gap-1 relative",
-								lightTheme ? "!text-zinc-600 hover:!text-zinc-900" : "!text-white",
+								"!text-white cursor-pointer flex items-center gap-1 relative",
 								active && "opacity-100",
 								"after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:content-['']",
 							)}
@@ -172,12 +159,7 @@ function ProductsDropdown({
 				</DropdownMenuTrigger>
 				<DropdownMenuContent
 					align="start"
-					className={cn(
-						"min-w-[280px] p-4 rounded-xl shadow-xl",
-						lightTheme
-							? "bg-white/95 backdrop-blur-lg border border-zinc-200"
-							: "bg-black/95 backdrop-blur-lg border border-white/10",
-					)}
+					className="min-w-[280px] p-4 bg-black/95 backdrop-blur-lg border border-white/10 rounded-xl shadow-xl"
 					onMouseEnter={handleMouseEnter}
 					onMouseLeave={handleMouseLeave}
 					sideOffset={0}
@@ -189,10 +171,7 @@ function ProductsDropdown({
 							<React.Fragment key={product.href}>
 								<a
 									href={product.href}
-									className={cn(
-										"group flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer",
-										lightTheme ? "hover:bg-zinc-100" : "hover:bg-white/5",
-									)}
+									className="group flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
 								>
 									<img
 										src={product.logo.src}
@@ -204,16 +183,10 @@ function ProductsDropdown({
 										decoding="async"
 									/>
 									<div className="flex flex-col">
-										<div className={cn(
-											"font-medium text-sm transition-colors",
-											lightTheme ? "text-zinc-900" : "text-white group-hover:text-white",
-										)}>
+										<div className="font-medium text-white text-sm group-hover:text-white transition-colors">
 											{product.label}
 										</div>
-										<div className={cn(
-											"text-xs transition-colors leading-relaxed",
-											lightTheme ? "text-zinc-500 group-hover:text-zinc-700" : "text-zinc-400 group-hover:text-zinc-300",
-										)}>
+										<div className="text-xs text-zinc-400 group-hover:text-zinc-300 transition-colors leading-relaxed">
 											{product.description}
 										</div>
 									</div>
@@ -222,23 +195,10 @@ function ProductsDropdown({
 									<a
 										key={sub.href}
 										href={sub.href}
-										className={cn(
-											"group flex items-center gap-2.5 py-1.5 pl-12 pr-3 rounded-lg transition-colors cursor-pointer",
-											lightTheme ? "hover:bg-zinc-100" : "hover:bg-white/5",
-										)}
+										className="group flex items-center gap-2.5 py-1.5 pl-12 pr-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
 									>
-										<sub.icon
-											className={cn(
-												"h-3.5 w-3.5 transition-colors",
-												lightTheme ? "text-zinc-500 group-hover:text-zinc-700" : "text-zinc-500 group-hover:text-zinc-300",
-											)}
-										/>
-										<span
-											className={cn(
-												"text-xs transition-colors",
-												lightTheme ? "text-zinc-500 group-hover:text-zinc-700" : "text-zinc-400 group-hover:text-zinc-300",
-											)}
-										>
+										<sub.icon className="h-3.5 w-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+										<span className="text-xs text-zinc-400 group-hover:text-zinc-300 transition-colors">
 											{sub.label}
 										</span>
 									</a>
@@ -454,8 +414,6 @@ export function Header({
 	const clientPathname = usePathname();
 	const pathname = clientPathname || initialPathname;
 	const isLightTheme = WHITE_THEMED_PATHS.some((p) => pathname === p || pathname === p + '/');
-	const isRegistryPage =
-		pathname === AGENT_OS_REGISTRY_HREF || pathname === `${AGENT_OS_REGISTRY_HREF}/`;
 
 	// Set body attribute for global CSS targeting (e.g., mobile sheet styling)
 	useEffect(() => {
@@ -595,20 +553,14 @@ export function Header({
 								)}
 							</div>
 						}
-						mobileBreadcrumbs={
-							<DocsMobileNavigation
-								tree={mobileSidebar}
-								sidebarData={sidebarData}
-								isLightTheme={isLightTheme}
-							/>
-						}
+						mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} sidebarData={sidebarData} isLightTheme={isLightTheme} />}
 						sheetClassName={isLightTheme ? "!bg-white [&>button]:!bg-white [&>button]:!text-zinc-900 [&>button]:!border-zinc-200" : undefined}
 						lightTheme={isLightTheme}
 						breadcrumbs={
 							<div className={cn("flex items-center font-v2 subpixel-antialiased", isLightTheme && "[&_a]:!text-zinc-600 [&_button]:!text-zinc-600")}>
 								{!isLightTheme && <ProductsDropdown active={active === "product"} />}
 								<TextNavItem
-									href={isLightTheme ? AGENT_OS_DOCS_HREF : "/docs"}
+									href="/docs"
 									ariaCurrent={active === "docs" ? "page" : undefined}
 								>
 									Documentation
@@ -622,17 +574,17 @@ export function Header({
 									</TextNavItem>
 								)}
 								{isLightTheme && (
-									<TextNavItem
-										href={AGENT_OS_REGISTRY_HREF}
-										ariaCurrent={isRegistryPage ? "page" : undefined}
-									>
-										<span className="inline-flex items-center gap-2">
-											<span>Registry</span>
-											<span className="inline-flex min-w-6 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium leading-none text-zinc-600">
-												{REGISTRY_PACKAGE_COUNT}
-											</span>
-										</span>
-									</TextNavItem>
+									<>
+										<TextNavItem href="/agent-os/use-cases">
+											Use Cases
+										</TextNavItem>
+										<TextNavItem href="/registry">
+											Registry <span className="ml-1 inline-flex items-center justify-center rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-medium leading-none">29</span>
+										</TextNavItem>
+										<TextNavItem href="/agent-os/pricing">
+											Pricing
+										</TextNavItem>
+									</>
 								)}
 								{!isLightTheme && (
 									<TextNavItem
@@ -729,15 +681,7 @@ export function Header({
 	);
 }
 
-function DocsMobileNavigation({
-	tree,
-	sidebarData,
-	isLightTheme = false,
-}: {
-	tree?: ReactNode;
-	sidebarData?: SidebarItem[];
-	isLightTheme?: boolean;
-}) {
+function DocsMobileNavigation({ tree, sidebarData, isLightTheme = false }: { tree?: ReactNode; sidebarData?: SidebarItem[]; isLightTheme?: boolean }) {
 	const pathname = usePathname() || "";
 	const isDocsPage = pathname.startsWith("/docs");
 
@@ -760,8 +704,10 @@ function DocsMobileNavigation({
 
 	const mainLinks = isLightTheme
 		? [
-			{ href: AGENT_OS_DOCS_HREF, label: "Documentation" },
-			{ href: AGENT_OS_REGISTRY_HREF, label: `Registry (${REGISTRY_PACKAGE_COUNT})` },
+			{ href: "/docs", label: "Documentation" },
+			{ href: "/agent-os/use-cases", label: "Use Cases" },
+			{ href: "/registry", label: <>Registry <span className="ml-1 inline-flex items-center justify-center rounded-full bg-zinc-900/10 px-1.5 py-0.5 text-[10px] font-medium leading-none">29</span></> },
+			{ href: "/agent-os/pricing", label: "Pricing" },
 		]
 		: [
 			{ href: "/docs", label: "Documentation" },

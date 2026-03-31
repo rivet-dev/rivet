@@ -5,18 +5,13 @@ import { motion } from 'framer-motion';
 import {
 	ArrowRight,
 	Clock,
-	Rocket,
 	FlaskConical,
-	Globe,
 	Code,
 	User,
 	Users,
 	Headphones,
-	Server,
 	Database,
-	Pencil,
 	Workflow,
-	Cpu,
 	Check,
 	Terminal,
 } from 'lucide-react';
@@ -27,7 +22,7 @@ const CopyInstallButton = () => {
 
 	const handleCopy = async () => {
 		try {
-			await navigator.clipboard.writeText('npm install @rivetkit/agent-os');
+			await navigator.clipboard.writeText('npm install rivetkit');
 			setCopied(true);
 			setTimeout(() => setCopied(false), 2000);
 		} catch (err) {
@@ -41,7 +36,7 @@ const CopyInstallButton = () => {
 			className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-zinc-300 px-6 py-3 text-sm text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-900'
 		>
 			{copied ? <Check className='h-4 w-4 text-green-500' /> : <Terminal className='h-4 w-4' />}
-			npm install @rivetkit/agent-os
+			npm install rivetkit
 		</button>
 	);
 };
@@ -61,7 +56,7 @@ const UseCase = ({ icon: Icon, title, description, benefits, example, delay = 0 
 		whileInView={{ opacity: 1, y: 0 }}
 		viewport={{ once: true }}
 		transition={{ duration: 0.5, delay }}
-		className='rounded-2xl border border-zinc-200 bg-white p-8 transition-shadow hover:shadow-lg'
+		className='rounded-2xl border border-zinc-200 bg-white p-8'
 	>
 		<div className='mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100'>
 			<Icon className='h-6 w-6 text-zinc-700' />
@@ -87,42 +82,6 @@ const UseCase = ({ icon: Icon, title, description, benefits, example, delay = 0 
 
 const useCases: UseCaseProps[] = [
 	{
-		icon: Clock,
-		title: 'Background Agents',
-		description: 'Long-running agents that operate asynchronously, processing tasks over hours or days without human intervention.',
-		benefits: [
-			'Persistent state survives crashes and restarts',
-			'Queue commands while agents work',
-			'Resume from exactly where they left off',
-			'Monitor progress in real-time',
-		],
-		example: 'A code migration agent that refactors a large codebase over several hours, committing changes incrementally.',
-	},
-	{
-		icon: Rocket,
-		title: 'Production Agents',
-		description: 'Deploy agents at scale with enterprise-grade reliability, security, and observability built in.',
-		benefits: [
-			'Auto-scaling to thousands of concurrent agents',
-			'Built-in health checks and recovery',
-			'Comprehensive audit logging',
-			'Network isolation and access controls',
-		],
-		example: 'A fleet of agents processing customer requests 24/7 with guaranteed uptime and automatic failover.',
-	},
-	{
-		icon: Cpu,
-		title: 'Edge & Embedded Agents',
-		description: 'Run agents on resource-constrained devices like Raspberry Pi, edge servers, or IoT gateways.',
-		benefits: [
-			'~3.4 MB memory footprint per agent',
-			'No containers or VMs required',
-			'Works offline with local LLMs',
-			'ARM and x86 support',
-		],
-		example: 'A home automation agent running on a Raspberry Pi that controls smart devices and responds to voice commands.',
-	},
-	{
 		icon: FlaskConical,
 		title: 'Efficient Evals',
 		description: 'Run agent evaluations and benchmarks at scale without spinning up expensive sandboxes for each test.',
@@ -133,18 +92,6 @@ const useCases: UseCaseProps[] = [
 			'Cost-effective at thousands of runs',
 		],
 		example: 'Evaluating 10,000 agent responses in parallel to measure performance across different prompts.',
-	},
-	{
-		icon: Globe,
-		title: 'Browser-based LLM Interfaces',
-		description: 'Build interactive web applications where agents execute code and manage state in real-time.',
-		benefits: [
-			'WebSocket streaming for live updates',
-			'Preview URLs for agent-generated apps',
-			'Secure execution in isolated environments',
-			'Session persistence across page reloads',
-		],
-		example: 'An AI coding assistant that runs in the browser, executing code and showing live previews.',
 	},
 	{
 		icon: Code,
@@ -159,18 +106,6 @@ const useCases: UseCaseProps[] = [
 		example: 'An agent that takes a GitHub issue, writes the fix, runs tests, and opens a pull request.',
 	},
 	{
-		icon: User,
-		title: 'Personal Agents',
-		description: 'Lightweight agents that assist individual users with daily tasks and workflows.',
-		benefits: [
-			'Low resource overhead for personal use',
-			'Local-first with optional cloud sync',
-			'Custom tool integration',
-			'Privacy-focused execution',
-		],
-		example: 'A personal agent that organizes your calendar, drafts emails, and manages your todo list.',
-	},
-	{
 		icon: Users,
 		title: 'Multi-Agent Systems',
 		description: 'Coordinate multiple agents working together on complex tasks with shared state and communication.',
@@ -183,28 +118,16 @@ const useCases: UseCaseProps[] = [
 		example: 'A team of agents where one researches, one writes, and one reviews, all collaborating on a document.',
 	},
 	{
-		icon: Headphones,
-		title: 'Customer Support Agents',
-		description: 'Deploy agents that handle customer inquiries with access to your systems and data.',
+		icon: Clock,
+		title: 'Background Agents',
+		description: 'Long-running agents that operate asynchronously, processing tasks over hours or days without human intervention.',
 		benefits: [
-			'Database and API integration',
-			'Secure credential management',
-			'Audit trails for compliance',
-			'Human handoff capabilities',
+			'Persistent state survives crashes and restarts',
+			'Queue commands while agents work',
+			'Resume from exactly where they left off',
+			'Monitor progress in real-time',
 		],
-		example: 'An agent that resolves billing issues by checking accounts, applying credits, and sending confirmations.',
-	},
-	{
-		icon: Server,
-		title: 'DevOps Agents',
-		description: 'Agents that manage infrastructure, deployments, and incident response autonomously.',
-		benefits: [
-			'SSH and cloud provider access',
-			'Infrastructure as code execution',
-			'Automated incident remediation',
-			'Deployment pipeline integration',
-		],
-		example: 'An on-call agent that detects issues, diagnoses root causes, and applies fixes automatically.',
+		example: 'A code migration agent that refactors a large codebase over several hours, committing changes incrementally.',
 	},
 	{
 		icon: Database,
@@ -219,18 +142,6 @@ const useCases: UseCaseProps[] = [
 		example: 'An agent that ingests raw data, cleans it, runs analysis, and generates reports on a schedule.',
 	},
 	{
-		icon: Pencil,
-		title: 'Content Creation Agents',
-		description: 'Agents that create, edit, and publish content across multiple platforms.',
-		benefits: [
-			'Multi-modal content support',
-			'Publishing API integrations',
-			'Asset management',
-			'Version control for drafts',
-		],
-		example: 'An agent that writes blog posts, generates images, and publishes to your CMS automatically.',
-	},
-	{
 		icon: Workflow,
 		title: 'Workflow Automation',
 		description: 'Chain agent tasks into complex workflows with conditional logic and human-in-the-loop steps.',
@@ -241,6 +152,30 @@ const useCases: UseCaseProps[] = [
 			'Approval gates and notifications',
 		],
 		example: 'A hiring workflow where agents screen resumes, schedule interviews, and prepare onboarding docs.',
+	},
+	{
+		icon: Headphones,
+		title: 'Customer Support Agents',
+		description: 'Deploy agents that handle customer inquiries with access to your systems and data.',
+		benefits: [
+			'Database and API integration',
+			'Secure credential management',
+			'Audit trails for compliance',
+			'Human handoff capabilities',
+		],
+		example: 'An agent that resolves billing issues by checking accounts, applying credits, and sending confirmations.',
+	},
+	{
+		icon: User,
+		title: 'Personal Agents',
+		description: 'Lightweight agents that assist individual users with daily tasks and workflows.',
+		benefits: [
+			'Low resource overhead for personal use',
+			'Local-first with optional cloud sync',
+			'Custom tool integration',
+			'Privacy-focused execution',
+		],
+		example: 'A personal agent that organizes your calendar, drafts emails, and manages your todo list.',
 	},
 ];
 

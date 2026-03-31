@@ -196,9 +196,9 @@ export default function GetStartedPage() {
 						transition={{ duration: 0.5, delay: 0.1 }}
 						className='mx-auto max-w-xl flex flex-col gap-4'
 					>
-						<CopyCommand command='npm install rivetkit' />
+						<CopyCommand command='npm install @rivetkit/agent-os' />
 						<a
-							href='/docs/agent-os/quickstart'
+							href='/docs/actors'
 							className='inline-flex items-center justify-center gap-3 rounded-md bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
 						>
 							<span className='text-zinc-400'>{'>_'}</span>

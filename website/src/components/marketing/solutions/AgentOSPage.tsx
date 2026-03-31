@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
 	ArrowRight,
+	Check,
 	Shield,
 	Terminal,
 	FolderOpen,
@@ -16,24 +17,17 @@ import {
 	Activity,
 	HardDrive,
 	Code,
-	Cpu,
-	Package,
 	ChevronLeft,
 	ChevronRight,
+	Cloud,
+	Webhook,
+	Users,
+	MessageSquare,
+	ListOrdered,
+	Database,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import agentosLogo from '@/images/products/agentos-logo.svg';
-
-interface HeroTabCode {
-	key: string;
-	fileName: string;
-	code: string;
-	highlightedCode: string;
-}
-
-interface AgentOSPageProps {
-	heroTabs: HeroTabCode[];
-}
 
 // --- Animated agentOS Logo ---
 interface AnimatedAgentOSLogoProps {
@@ -163,8 +157,8 @@ const AnimatedAgentOSLogo = ({ className, displayedAgent }: AnimatedAgentOSLogoP
 				tailPath.style.strokeDashoffset = String(tailLength);
 
 				// Animate: main path first, then tail after main finishes
-				const mainDuration = 3;
-				const tailDuration = 0.3;
+				const mainDuration = 1.5;
+				const tailDuration = 0.15;
 
 				// Add keyframes if not already present
 				if (!document.querySelector('#agentos-logo-animation-style')) {
@@ -432,16 +426,28 @@ const ImageCycler = ({ images }: { images: HeroImage[] }) => {
 	);
 };
 
-// --- Package Registry Button ---
-const PackageRegistryButton = () => {
+// --- Copy Install Button ---
+const CopyInstallButton = () => {
+	const [copied, setCopied] = useState(false);
+
+	const handleCopy = async () => {
+		try {
+			await navigator.clipboard.writeText('npm install @rivetkit/agent-os');
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
+		} catch (err) {
+			console.error('Failed to copy:', err);
+		}
+	};
+
 	return (
-		<a
-			href='/agent-os/registry'
+		<button
+			onClick={handleCopy}
 			className='inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-900 sm:w-auto'
 		>
-			<Package className='h-4 w-4' />
-			View Package Registry
-		</a>
+			{copied ? <Check className='h-4 w-4 text-green-500' /> : <Terminal className='h-4 w-4' />}
+			npm install @rivetkit/agent-os
+		</button>
 	);
 };
 
@@ -626,25 +632,12 @@ const agents = [
 	{ src: '/images/agent-logos/opencode.svg', name: 'OpenCode', comingSoon: true },
 	{ src: '/images/agent-logos/amp.svg', name: 'Amp', comingSoon: true },
 ];
-const heroTabMeta: Array<{ key: string; icon: typeof Bot; label: string; docsHref: string }> = [
-	{ key: 'agent', icon: Bot, label: 'Agent', docsHref: '/docs/agent-os/sessions' },
-	{ key: 'tools', icon: Wrench, label: 'Tools', docsHref: '/docs/agent-os/tools' },
-	{ key: 'cron', icon: CalendarClock, label: 'Cron', docsHref: '/docs/agent-os/cron' },
-	{ key: 'networking', icon: Globe, label: 'Networking', docsHref: '/docs/agent-os/networking' },
-	{ key: 'file-system', icon: FolderOpen, label: 'File system', docsHref: '/docs/agent-os/filesystem' },
-	{ key: 'processes', icon: Cpu, label: 'Processes', docsHref: '/docs/agent-os/processes' },
-];
 
-const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
+const Hero = () => {
 	const [activeTab, setActiveTab] = useState(0);
 	const [hoveredAgent, setHoveredAgent] = useState<{ src: string; name: string } | null>(null);
 	const [autoPlayAgent, setAutoPlayAgent] = useState<{ src: string; name: string } | null>(null);
 	const [autoPlayComplete, setAutoPlayComplete] = useState(false);
-
-	const getStartedTabs = heroTabMeta.map((tab) => ({
-		...tab,
-		...heroTabs.find((heroTab) => heroTab.key === tab.key),
-	}));
 
 	// Auto-cycle through agents starting 2.5s before stroke animation ends
 	useEffect(() => {
@@ -696,9 +689,9 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5, delay: 0.1 }}
-					className='mb-10 max-w-2xl text-center text-base text-zinc-500 md:text-left md:text-lg'
+					className='mb-10 max-w-xl text-center text-base text-zinc-500 md:text-left md:text-lg'
 				>
-					A portable open-source operating system for agents. ~6 ms coldstarts, 32x cheaper than sandboxes. Powered by WebAssembly and V8 isolates.
+					Unix gave humans a common language to control machines.<br />agentOS gives agents the same power.
 				</motion.p>
 
 				{/* Supported Harnesses */}
@@ -730,17 +723,17 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5, delay: 0.15 }}
+					className='overflow-hidden'
 				>
 					{/* Tabs */}
-					<div className='mb-4 overflow-x-auto pb-1'>
-						<div className='flex min-w-max flex-nowrap items-center justify-start gap-1.5'>
+					<div className='mb-4 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none' style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
 						{getStartedTabs.map((tab, idx) => {
 							const Icon = tab.icon;
 							return (
 								<button
 									key={tab.label}
 									onClick={() => setActiveTab(idx)}
-									className='relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs whitespace-nowrap transition-colors md:text-sm'
+									className='relative inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm transition-colors'
 								>
 									{activeTab === idx && (
 										<motion.div
@@ -756,7 +749,6 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 								</button>
 							);
 						})}
-						</div>
 					</div>
 
 					{/* Code block */}
@@ -765,24 +757,20 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 							<div className='h-3 w-3 rounded-full bg-zinc-200' />
 							<div className='h-3 w-3 rounded-full bg-zinc-200' />
 							<div className='h-3 w-3 rounded-full bg-zinc-200' />
-							<span className='ml-2 text-xs text-zinc-600'>{getStartedTabs[activeTab]?.fileName ?? 'index.ts'}</span>
+							<span className='ml-2 text-xs text-zinc-600'>index.ts</span>
 						</div>
-						<div className='relative h-[280px] overflow-y-auto'>
+						<div className='relative h-[240px] overflow-y-auto'>
 							<AnimatePresence mode='wait'>
-								<motion.div
+								<motion.pre
 									key={activeTab}
 									initial={{ opacity: 0 }}
 									animate={{ opacity: 1 }}
 									exit={{ opacity: 0 }}
 									transition={{ duration: 0.2 }}
-									className='overflow-x-auto p-6 font-mono text-sm leading-relaxed text-zinc-600 [&_.line]:break-all [&_.shiki]:!m-0 [&_.shiki]:!bg-transparent [&_.shiki]:!p-0 [&_.shiki]:font-mono [&_.shiki]:text-sm [&_.shiki]:leading-relaxed'
+									className='overflow-x-auto p-6 font-mono text-sm leading-relaxed text-zinc-600'
 								>
-									<span
-										className='not-prose code'
-										// biome-ignore lint/security/noDangerouslySetInnerHtml: generated from shiki during Astro render
-										dangerouslySetInnerHTML={{ __html: getStartedTabs[activeTab]?.highlightedCode ?? '' }}
-									/>
-								</motion.div>
+									<code>{getStartedTabs[activeTab].code}</code>
+								</motion.pre>
 							</AnimatePresence>
 						</div>
 					</div>
@@ -796,13 +784,13 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 					className='mt-6 flex flex-col items-center gap-3 sm:flex-row sm:items-center md:items-start'
 				>
 					<a
-						href='/docs/agent-os'
+						href='/docs'
 						className='selection-dark inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 sm:w-auto'
 					>
 						Read the Docs
 						<ArrowRight className='h-4 w-4' />
 					</a>
-					<PackageRegistryButton />
+					<CopyInstallButton />
 				</motion.div>
 
 			</div>
@@ -864,14 +852,30 @@ const FeatureCard = ({
 	</motion.div>
 );
 
-const DocsLink = ({ href }: { href: string }) => (
-	<a
-		href={href}
-		className='inline-flex items-center gap-1 text-sm text-zinc-500 transition-colors hover:text-zinc-900'
-	>
-		Docs <span aria-hidden='true'>→</span>
-	</a>
-);
+
+// --- Get Started Section ---
+// Syntax highlighting helpers
+const kw = (s: string) => <span className='text-purple-600'>{s}</span>;
+const fn_ = (s: string) => <span className='text-blue-600'>{s}</span>;
+const str = (s: string) => <span className='text-emerald-600'>{s}</span>;
+const cm = (s: string) => <span className='text-zinc-400'>{s}</span>;
+const num = (s: string) => <span className='text-orange-600'>{s}</span>;
+const op = (s: string) => <span className='text-zinc-500'>{s}</span>;
+const vr = (s: string) => <span className='text-cyan-700'>{s}</span>;
+const br = <>{'\n'}</>;
+
+const getStartedTabs: { icon: typeof Bot; label: string; code: React.ReactNode }[] = [
+	{ icon: Bot, label: 'Agents', code: <>{kw('import')} {'{ '}{vr('AgentOs')}{' }'} {kw('from')} {str('"@rivet-dev/agent-os"')}{op(';')}{br}{br}{kw('const')} {vr('vm')} {op('=')} {kw('await')} {vr('AgentOs')}{op('.')}{fn_('create')}{op('()')}{op(';')}{br}{kw('await')} {vr('vm')}{op('.')}{fn_('prompt')}{op('(')}{str('"Write a Python script that calculates pi"')}{op(')')}{op(';')}</> },
+	{ icon: Wrench, label: 'Tools', code: <>{kw('import')} {'{ '}{vr('AgentOs')}{' }'} {kw('from')} {str('"@rivet-dev/agent-os"')}{op(';')}{br}{br}{kw('const')} {vr('vm')} {op('=')} {kw('await')} {vr('AgentOs')}{op('.')}{fn_('create')}{op('()')}{op(';')}{br}{vr('vm')}{op('.')}{vr('tools')}{op('.')}{fn_('register')}{op('(')}{str('"search"')}{op(', {')} {br}{'  '}{vr('description')}{op(':')} {str('"Search the web"')}{op(',')}{br}{'  '}{vr('parameters')}{op(':')} {'{ '}{vr('query')}{op(':')} {str('"string"')}{' }'}{op(',')}{br}{'  '}{fn_('handler')}{op(':')} {kw('async')} {op('(')}{op('{ ')}{vr('query')}{op(' }')}{op(')')} {op('=>')} {'{'}{br}{'    '}{kw('return')} {kw('await')} {fn_('fetch')}{op('(')}{str('`/api/search?q=${')}{vr('query')}{str('}`')}{op(')')}{op(';')}{br}{'  }'}{br}{op('});')}</> },
+	{ icon: Cloud, label: 'S3 File System', code: <>{kw('import')} {'{ '}{vr('AgentOs')}{' }'} {kw('from')} {str('"@rivet-dev/agent-os"')}{op(';')}{br}{kw('import')} {'{ '}{vr('S3FileSystem')}{' }'} {kw('from')} {str('"@rivet-dev/agent-os/fs"')}{op(';')}{br}{br}{kw('const')} {vr('vm')} {op('=')} {kw('await')} {vr('AgentOs')}{op('.')}{fn_('create')}{op('({')} {br}{'  '}{vr('fs')}{op(':')} {kw('new')} {vr('S3FileSystem')}{op('({')} {vr('bucket')}{op(':')} {str('"my-bucket"')} {op('})')}{br}{op('})')}{op(';')}{br}{kw('await')} {vr('vm')}{op('.')}{vr('fs')}{op('.')}{fn_('write')}{op('(')}{str('"/data/output.json"')}{op(',')} {vr('result')}{op(')')}{op(';')}</> },
+	{ icon: CalendarClock, label: 'Cron', code: <>{kw('import')} {'{ '}{vr('AgentOs')}{' }'} {kw('from')} {str('"@rivet-dev/agent-os"')}{op(';')}{br}{br}{kw('const')} {vr('vm')} {op('=')} {kw('await')} {vr('AgentOs')}{op('.')}{fn_('create')}{op('()')}{op(';')}{br}{vr('vm')}{op('.')}{fn_('cron')}{op('(')}{str('"0 */6 * * *"')}{op(',')} {kw('async')} {op('()')} {op('=>')} {'{'}{br}{'  '}{kw('await')} {vr('vm')}{op('.')}{fn_('prompt')}{op('(')}{str('"Check for dependency updates"')}{op(')')}{op(';')}{br}{'}'}{op(')')}{op(';')}</> },
+	{ icon: Webhook, label: 'Webhooks', code: <>{kw('import')} {'{ '}{vr('AgentOs')}{' }'} {kw('from')} {str('"@rivet-dev/agent-os"')}{op(';')}{br}{br}{kw('const')} {vr('vm')} {op('=')} {kw('await')} {vr('AgentOs')}{op('.')}{fn_('create')}{op('()')}{op(';')}{br}{vr('vm')}{op('.')}{fn_('webhook')}{op('(')}{str('"/github"')}{op(',')} {kw('async')} {op('(')}{vr('req')}{op(')')} {op('=>')} {'{'}{br}{'  '}{kw('const')} {vr('event')} {op('=')} {vr('req')}{op('.')}{vr('headers')}{op('[')}{str('"x-github-event"')}{op(']')}{op(';')}{br}{'  '}{kw('await')} {vr('vm')}{op('.')}{fn_('prompt')}{op('(')}{str('`Handle GitHub ${')}{vr('event')}{str('} event`')}{op(')')}{op(';')}{br}{'}'}{op(')')}{op(';')}</> },
+	{ icon: Users, label: 'Multiplayer', code: <>{kw('import')} {'{ '}{vr('AgentOs')}{' }'} {kw('from')} {str('"@rivet-dev/agent-os"')}{op(';')}{br}{br}{kw('const')} {vr('session')} {op('=')} {kw('await')} {vr('AgentOs')}{op('.')}{fn_('createSession')}{op('()')}{op(';')}{br}{kw('await')} {vr('session')}{op('.')}{fn_('addAgent')}{op('(')}{str('"claude"')}{op(')')}{op(';')}{br}{kw('await')} {vr('session')}{op('.')}{fn_('addAgent')}{op('(')}{str('"codex"')}{op(')')}{op(';')}{br}{kw('await')} {vr('session')}{op('.')}{fn_('addHuman')}{op('(')}{vr('userId')}{op(')')}{op(';')}</> },
+	{ icon: MessageSquare, label: 'Agent-Agent', code: <>{kw('import')} {'{ '}{vr('AgentOs')}{' }'} {kw('from')} {str('"@rivet-dev/agent-os"')}{op(';')}{br}{br}{kw('const')} {vr('planner')} {op('=')} {kw('await')} {vr('AgentOs')}{op('.')}{fn_('create')}{op('({ ')} {vr('name')}{op(':')} {str('"planner"')} {op('})')}{op(';')}{br}{kw('const')} {vr('executor')} {op('=')} {kw('await')} {vr('AgentOs')}{op('.')}{fn_('create')}{op('({ ')} {vr('name')}{op(':')} {str('"executor"')} {op('})')}{op(';')}{br}{br}{vr('planner')}{op('.')}{fn_('on')}{op('(')}{str('"task"')}{op(',')} {op('(')}{vr('task')}{op(')')} {op('=>')} {vr('executor')}{op('.')}{fn_('send')}{op('(')}{vr('task')}{op(')')}{op(')')}{op(';')}</> },
+	{ icon: ListOrdered, label: 'Queues', code: <>{kw('import')} {'{ '}{vr('AgentOs')}{' }'} {kw('from')} {str('"@rivet-dev/agent-os"')}{op(';')}{br}{br}{kw('const')} {vr('vm')} {op('=')} {kw('await')} {vr('AgentOs')}{op('.')}{fn_('create')}{op('()')}{op(';')}{br}{kw('const')} {vr('queue')} {op('=')} {vr('vm')}{op('.')}{fn_('queue')}{op('(')}{str('"tasks"')}{op(')')}{op(';')}{br}{br}{kw('await')} {vr('queue')}{op('.')}{fn_('push')}{op('({')} {vr('type')}{op(':')} {str('"analyze"')}{op(',')} {vr('data')}{op(':')} {vr('payload')} {op('})')}{op(';')}{br}{kw('const')} {vr('task')} {op('=')} {kw('await')} {vr('queue')}{op('.')}{fn_('pop')}{op('()')}{op(';')}</> },
+	{ icon: Database, label: 'SQLite', code: <>{kw('import')} {'{ '}{vr('AgentOs')}{' }'} {kw('from')} {str('"@rivet-dev/agent-os"')}{op(';')}{br}{br}{kw('const')} {vr('vm')} {op('=')} {kw('await')} {vr('AgentOs')}{op('.')}{fn_('create')}{op('()')}{op(';')}{br}{kw('const')} {vr('db')} {op('=')} {vr('vm')}{op('.')}{fn_('sqlite')}{op('(')}{str('"data.db"')}{op(')')}{op(';')}{br}{br}{kw('await')} {vr('db')}{op('.')}{fn_('exec')}{op('(')}{str('`CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY, msg TEXT)`')}{op(')')}{op(';')}{br}{kw('const')} {vr('rows')} {op('=')} {kw('await')} {vr('db')}{op('.')}{fn_('query')}{op('(')}{str('"SELECT * FROM logs"')}{op(')')}{op(';')}</> },
+];
+
 
 // --- Icon Box (rounded square outline like Rivet/agentOS logos) ---
 const IconBox = ({ children }: { children: React.ReactNode }) => (
@@ -908,19 +912,11 @@ interface StackFeature {
 }
 
 // --- Themed Feature Sections (card carousel) ---
-interface ThemedFeature {
-	title: string;
-	description: string;
-	icon: React.ComponentType<{ className?: string }>;
-	comingSoon?: boolean;
-	docsHref?: string;
-}
-
 interface ThemedSection {
 	category: string;
 	title: string;
 	subtitle: string;
-	features: ThemedFeature[];
+	features: { title: string; description: string; icon: React.ComponentType<{ className?: string }>; comingSoon?: boolean }[];
 }
 
 const themedSections: ThemedSection[] = [
@@ -930,10 +926,10 @@ const themedSections: ThemedSection[] = [
 		subtitle: 'Every agent deserves a runtime that understands it.',
 		features: [
 			{ icon: Bot, title: 'Supports Claude Code, Codex, OpenCode, Amp, and more', description: 'Run any coding agent with a single unified API. Swap agents without changing your infrastructure.' },
-			{ icon: Code, title: 'Simple sessions API', description: 'Create, manage, and resume agent sessions with a few lines of code. State persists automatically.', docsHref: '/docs/agent-os/sessions' },
-			{ icon: Activity, title: 'Embedded LLM metering', description: 'Track token usage, cost, and latency per agent. No per-agent API keys needed. The host handles credential scoping.', comingSoon: true, docsHref: '/docs/agent-os/llm-gateway' },
-			{ icon: Layers, title: 'Universal transcript format', description: 'One transcript format across all agents. Powered by ACP. Compare, debug, and audit any session.', docsHref: '/docs/agent-os/sessions' },
-			{ icon: Clock, title: 'Automatic transcript persistence', description: 'Every conversation is saved. Replay sessions, audit behavior, and build on past context without extra code.', docsHref: '/docs/agent-os/persistence' },
+			{ icon: Code, title: 'Simple sessions API', description: 'Create, manage, and resume agent sessions with a few lines of code. State persists automatically.' },
+			{ icon: Activity, title: 'Embedded LLM metering', description: 'Track token usage, cost, and latency per agent. No per-agent API keys needed. The host handles credential scoping.', comingSoon: true },
+			{ icon: Layers, title: 'Universal transcript format', description: 'One transcript format across all agents. Powered by ACP. Compare, debug, and audit any session.' },
+			{ icon: Clock, title: 'Automatic transcript persistence', description: 'Every conversation is saved. Replay sessions, audit behavior, and build on past context without extra code.' },
 		],
 	},
 	{
@@ -941,11 +937,11 @@ const themedSections: ThemedSection[] = [
 		title: 'Infrastructure that disappears.',
 		subtitle: 'Deploy anywhere. Scale to anything. Forget about servers.',
 		features: [
-			{ icon: Globe, title: 'Runs on Rivet Cloud or your infra', description: 'Managed hosting or self-hosted. Same API, same experience, your choice of where it runs.', docsHref: '/docs/agent-os/deployment' },
-			{ icon: Terminal, title: 'Easy to deploy on prem', description: 'A single npm package. No Kubernetes operators, no sidecar containers. Just install and run.', docsHref: '/docs/agent-os/deployment' },
+			{ icon: Globe, title: 'Runs on Rivet Cloud or your infra', description: 'Managed hosting or self-hosted. Same API, same experience, your choice of where it runs.' },
+			{ icon: Terminal, title: 'Easy to deploy on prem', description: 'A single npm package. No Kubernetes operators, no sidecar containers. Just install and run.' },
 			{ icon: Clock, title: 'Low overhead', description: 'No VMs to boot. No containers to pull. Start in milliseconds with minimal memory footprint.' },
-			{ icon: FolderOpen, title: 'Mount anything as a file system', description: 'S3, GitHub, databases. No per-agent credentials needed. The host handles access scoping.', docsHref: '/docs/agent-os/filesystem' },
-			{ icon: Shield, title: 'Extend with a sandbox when needed', description: 'agentOS handles most tasks, but pairs seamlessly with sandboxes for heavier workloads.', docsHref: '/docs/agent-os/sandbox' },
+			{ icon: FolderOpen, title: 'Mount anything as a file system', description: 'S3, GitHub, databases. No per-agent credentials needed. The host handles access scoping.' },
+			{ icon: Shield, title: 'Extend with a sandbox when needed', description: 'agentOS handles most tasks, but pairs seamlessly with sandboxes for heavier workloads.' },
 		],
 	},
 	{
@@ -953,13 +949,9 @@ const themedSections: ThemedSection[] = [
 		title: 'Orchestration without complexity.',
 		subtitle: 'Coordinate agents, humans, and systems out of the box.',
 		features: [
-			{ icon: Shield, title: 'Authentication', description: 'Authenticate agent connections with your existing auth model. Validate credentials and attach user state on connect.', docsHref: '/docs/agent-os/authentication' },
-			{ icon: Globe, title: 'Webhooks', description: 'Receive external events and route them into agents with lightweight HTTP handlers and durable queues.', docsHref: '/docs/agent-os/webhooks' },
-			{ icon: Bot, title: 'Multiplayer & Realtime', description: 'Multiple clients can observe and collaborate with the same agent environment in real time.', docsHref: '/docs/agent-os/multiplayer' },
-			{ icon: Layers, title: 'Agent-to-Agent', description: 'Let agents delegate work to other agents through host-defined tools and shared orchestration flows.', docsHref: '/docs/agent-os/agent-to-agent' },
-			{ icon: Wrench, title: 'Workflows', description: 'Chain agent tasks into durable workflows with retries, branching, and resumable execution built in.', docsHref: '/docs/agent-os/workflows' },
-			{ icon: HardDrive, title: 'Queues', description: 'Serialize agent work with durable queues for backpressure, async processing, and ordered execution.', docsHref: '/docs/agent-os/queues' },
-			{ icon: Code, title: 'SQLite', description: 'Give agents access to a persistent SQLite database through host tools for structured state and queryable memory.', docsHref: '/docs/agent-os/sqlite' },
+			{ icon: Bot, title: 'Multiplayer', description: 'Multiple agents and humans collaborating in the same environment. Shared file systems, shared state.' },
+			{ icon: Wrench, title: 'Automate with workflows', description: 'Chain agent tasks into durable workflows with retries, branching, and scheduling built in.' },
+			{ icon: HardDrive, title: 'Queue commands', description: 'Send work to agents asynchronously. Commands queue up and execute in order, even across restarts.' },
 		],
 	},
 	{
@@ -967,11 +959,11 @@ const themedSections: ThemedSection[] = [
 		title: 'Security without compromise.',
 		subtitle: 'The same isolation technology trusted by browsers worldwide.',
 		features: [
-			{ icon: Activity, title: 'Restrict CPU and memory granularly', description: 'Set precise resource limits per agent. No runaway processes, no noisy neighbors.', docsHref: '/docs/agent-os/security' },
-			{ icon: Globe, title: 'Programmatic network control', description: 'Allow, deny, or proxy any outbound connection. Full control over what your agents can reach.', docsHref: '/docs/agent-os/security' },
-			{ icon: Shield, title: 'Custom authentication', description: 'Bring your own auth. API keys, OAuth, JWTs. Agents authenticate on your terms.', docsHref: '/docs/agent-os/authentication' },
-			{ icon: Layers, title: 'Isolated private network', description: 'Each agent runs in its own network namespace. No cross-talk between tenants.', docsHref: '/docs/agent-os/security' },
-			{ icon: HardDrive, title: 'Powered by WebAssembly and V8 isolates', description: 'The same sandboxing technology behind Google Chrome. Battle-tested at planet scale.', docsHref: '/docs/agent-os/architecture' },
+			{ icon: Activity, title: 'Restrict CPU and memory granularly', description: 'Set precise resource limits per agent. No runaway processes, no noisy neighbors.' },
+			{ icon: Globe, title: 'Programmatic network control', description: 'Allow, deny, or proxy any outbound connection. Full control over what your agents can reach.' },
+			{ icon: Shield, title: 'Custom authentication', description: 'Bring your own auth. API keys, OAuth, JWTs. Agents authenticate on your terms.' },
+			{ icon: Layers, title: 'Isolated private network', description: 'Each agent runs in its own network namespace. No cross-talk between tenants.' },
+			{ icon: HardDrive, title: 'Powered by WebAssembly and V8 isolates', description: 'The same sandboxing technology behind Google Chrome. Battle-tested at planet scale.' },
 		],
 	},
 ];
@@ -997,11 +989,8 @@ const StackingFeatureCards = () => {
 		return () => observer.disconnect();
 	}, []);
 
-	const coldStartP99 = benchColdStart[2]; // p99
-	const awsArmAgentCost = benchWorkloads.agent.cost[0]; // AWS ARM
-
 	const stackFeatures = [
-		// { icon: Clock, title: 'Low overhead and cost.', description: 'No VMs to boot. No containers to pull. Start in milliseconds with minimal memory footprint.', detail: 'Traditional sandboxes take seconds to spin up and consume hundreds of megabytes. agentOS starts instantly and runs lean, so you can scale to thousands of agents without the cost. More details in benchmarks below.', metrics: [{ value: `~${Math.round(coldStartP99.agentOS)}ms`, label: 'p99 coldstart' }, { value: `${awsArmAgentCost.ratio}x`, label: 'cheaper than sandboxes' }] },
+		{ icon: Clock, title: 'Low overhead and cost.', description: 'No VMs to boot. No containers to pull. Start in milliseconds with minimal memory footprint.', detail: 'Traditional sandboxes take seconds to spin up and consume hundreds of megabytes. agentOS starts instantly and runs lean, so you can scale to thousands of agents without the cost.', metrics: [{ value: '~5ms', label: 'coldstart' }, { value: '200x', label: 'cheaper than sandboxes' }] },
 		{ icon: Terminal, title: 'Embed in your backend.', detail: 'Your APIs. Your toolchains. No complex agent authentication needed. Just JavaScript functions or hooks.' },
 		{ icon: FolderOpen, title: 'Mount anything as a file system.', description: 'S3, SQLite, Google Drive, or the host file system. No per-agent credentials needed.', detail: 'Agents think in files. agentOS lets you expose any storage backend as a familiar directory tree. The host handles credential scoping, so agents never see API keys or secrets.' },
 		{ icon: Shield, title: 'Granular security.', detail: 'Fully configurable network and file system security. Control rate limits, bandwidth limits, and file system permissions. Set precise CPU and memory limitations per agent.' },
@@ -1051,7 +1040,7 @@ const StackingFeatureCards = () => {
 									}}
 								>
 									<div
-										className='mb-6 flex min-h-0 flex-col rounded-2xl border border-zinc-200 bg-zinc-50 p-8 shadow-2xl md:p-12'
+										className='mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-8 shadow-2xl md:p-12'
 										style={{
 											minHeight: `${CARD_HEIGHT - 24}px`,
 											boxShadow: '0 -20px 60px rgba(0, 0, 0, 0.08), 0 -4px 30px rgba(0, 0, 0, 0.04)',
@@ -1094,7 +1083,7 @@ const StackingFeatureCards = () => {
 													</div>
 												))}
 											</div>
-											)}
+										)}
 									</div>
 								</div>
 							);
@@ -1147,11 +1136,11 @@ const FeatureCardCarousel = ({ section }: { section: ThemedSection }) => {
 			>
 				{section.features.map((feature) => {
 					const Icon = feature.icon;
-						return (
-							<div
-								key={feature.title}
-								className='relative flex w-[280px] flex-shrink-0 flex-col rounded-2xl bg-zinc-50 p-6'
-							>
+					return (
+						<div
+							key={feature.title}
+							className='relative flex w-[280px] flex-shrink-0 flex-col rounded-2xl bg-zinc-50 p-6'
+						>
 							{feature.comingSoon && (
 								<span className='absolute top-4 right-4 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700'>
 									Coming Soon
@@ -1163,15 +1152,10 @@ const FeatureCardCarousel = ({ section }: { section: ThemedSection }) => {
 							<h3 className='mb-2 text-sm font-semibold text-zinc-900'>
 								{feature.title}
 							</h3>
-								<p className='text-sm leading-relaxed text-zinc-500'>
-									{feature.description}
-								</p>
-								{feature.docsHref && (
-									<div className='mt-auto pt-4'>
-										<DocsLink href={feature.docsHref} />
-									</div>
-								)}
-							</div>
+							<p className='text-sm leading-relaxed text-zinc-500'>
+								{feature.description}
+							</p>
+						</div>
 					);
 				})}
 			</div>
@@ -1245,52 +1229,16 @@ const ThemedFeatureSections = () => (
 );
 
 // --- agentOS Features Section ---
-const RegistryCallout = () => (
-	<section className='border-t border-zinc-200 px-6 py-24 md:py-40'>
-		<div className='mx-auto max-w-7xl'>
-			<motion.div
-				initial={{ opacity: 0, y: 20 }}
-				whileInView={{ opacity: 1, y: 0 }}
-				viewport={{ once: true }}
-				transition={{ duration: 0.5 }}
-				className='rounded-xl border border-zinc-200 bg-zinc-50 p-8 md:p-12'
-			>
-				<div className='flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between'>
-					<div>
-						<h3 className='mb-2 text-2xl font-normal tracking-tight text-zinc-900 md:text-3xl'>
-							agentOS Registry
-						</h3>
-						<p className='max-w-lg text-base leading-relaxed text-zinc-500'>
-							Browse and install pre-built tools, integrations, and capabilities for your agents. From file systems to databases to API connectors.
-						</p>
-					</div>
-					<a
-						href='/agent-os/registry'
-						className='selection-dark inline-flex flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
-					>
-						Explore the Registry
-						<ArrowRight className='h-4 w-4' />
-					</a>
-				</div>
-			</motion.div>
-		</div>
-	</section>
-);
-
 const AgentOSFeatures = () => (
 	<div id='agentos'>
 		<StackingFeatureCards />
 		<ThemedFeatureSections />
-		<RegistryCallout />
 	</div>
 );
 
 // --- Benchmarks ---
 const BENCH_ACCENT = '#18181b';
 const BENCH_ACCENT_LIGHT = '#3f3f46';
-
-// Benchmark data (computed from raw inputs in bench.ts)
-import { benchColdStart, benchWorkloads, SANDBOX_COLDSTART_PROVIDER, SANDBOX_COST_PROVIDER, type WorkloadKey } from '@/data/bench';
 
 function BenchInfoTooltip({ children }: { children: React.ReactNode }) {
 	return (
@@ -1310,7 +1258,11 @@ function BenchInfoTooltip({ children }: { children: React.ReactNode }) {
 }
 
 function BenchColdStartChart() {
-	const groups = benchColdStart;
+	const groups = [
+		{ label: 'p50', agentOS: 16.2, sandbox: 440 },
+		{ label: 'p95', agentOS: 17.9, sandbox: 950 },
+		{ label: 'p99', agentOS: 17.9, sandbox: 3150 },
+	];
 	const [active, setActive] = useState(2);
 	const g = groups[active];
 	const pct = Math.max((g.agentOS / g.sandbox) * 100, 1);
@@ -1329,9 +1281,9 @@ function BenchColdStartChart() {
 						<BenchInfoTooltip>
 							<strong>What&apos;s measured:</strong> Time from requesting an execution to first code running.
 							<br /><br />
-							<strong>Why the gap:</strong> agentOS boots a lightweight VM inside the host process. No network hop, no disk image. Sandboxes must boot an entire environment, allocate memory, and establish a network connection before code can run.
+							<strong>Why the gap:</strong> agentOS spins up a V8 isolate inside the host process. No container, no VM, no network hop. Sandboxes must boot an entire container or microVM, allocate memory, and establish a network connection before code can run.
 							<br /><br />
-							<strong>Sandbox baseline:</strong> {SANDBOX_COLDSTART_PROVIDER}, the fastest mainstream sandbox provider as of March 30, 2026.
+							<strong>Sandbox baseline:</strong> e2b, the fastest provider on ComputeSDK as of March 18, 2026.
 							<br /><br />
 							<strong>agentOS:</strong> Median of 10,000 runs (100 iterations x 100 samples) on Intel i7-12700KF.
 						</BenchInfoTooltip>
@@ -1357,7 +1309,7 @@ function BenchColdStartChart() {
 					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>agentOS</span>
 					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
 						<motion.div
-							key={`coldstart-${active}`}
+							key={active}
 							initial={{ width: 0 }}
 							animate={{ width: `${pct}%` }}
 							transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
@@ -1365,7 +1317,7 @@ function BenchColdStartChart() {
 							style={{ background: `linear-gradient(90deg, ${BENCH_ACCENT}, ${BENCH_ACCENT_LIGHT})` }}
 						/>
 						<motion.span
-							key={`label-coldstart-${active}`}
+							key={`label-${active}`}
 							initial={{ opacity: 0 }}
 							animate={{ opacity: 1 }}
 							transition={{ duration: 0.4, delay: 0.5 }}
@@ -1383,14 +1335,14 @@ function BenchColdStartChart() {
 					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>Fastest sandbox</span>
 					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
 						<motion.div
-							key={`coldstart-sandbox-${active}`}
+							key={active}
 							initial={{ width: 0 }}
 							animate={{ width: '100%' }}
 							transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
 							className='absolute inset-y-0 left-0 rounded-sm bg-zinc-400'
 						/>
 						<motion.span
-							key={`sandbox-label-coldstart-${active}`}
+							key={`sandbox-label-${active}`}
 							initial={{ opacity: 0 }}
 							animate={{ opacity: 1 }}
 							transition={{ duration: 0.4, delay: 0.6 }}
@@ -1405,9 +1357,20 @@ function BenchColdStartChart() {
 	);
 }
 
-function BenchMemoryBar({ workload }: { workload: WorkloadKey }) {
-	const mem = benchWorkloads[workload].memory;
-	const barMin = Math.max(mem.agentOSBar, 1);
+function BenchMetricBar({
+	label,
+	tooltip,
+	agentOS,
+	sandbox,
+	multiplier,
+}: {
+	label: string;
+	tooltip?: React.ReactNode;
+	agentOS: { value: string; bar: number };
+	sandbox: { value: string; bar: number; label: string };
+	multiplier?: string;
+}) {
+	const barMin = Math.max(agentOS.bar, 1);
 	return (
 		<motion.div
 			className='space-y-4'
@@ -1417,52 +1380,46 @@ function BenchMemoryBar({ workload }: { workload: WorkloadKey }) {
 		>
 			<div>
 				<h4 className='flex items-center text-sm font-medium text-zinc-900'>
-					Memory per instance
-					<BenchInfoTooltip>
-						<strong>What&apos;s measured:</strong> Memory footprint added per concurrent execution.
-						<br /><br />
-						<strong>Why the gap:</strong> Lightweight VMs share the host process. Each additional execution only adds its own heap and stack. Sandboxes allocate a dedicated environment with a minimum memory reservation, even if the code inside uses far less.
-						<br /><br />
-						<strong>Sandbox baseline:</strong> {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of March 30, 2026. Default sandbox: 1 vCPU + 1 GiB RAM.
-						<br /><br />
-						<strong>agentOS:</strong> {workload === 'agent' ? `${benchWorkloads.agent.memory.agentOS} for a full Pi coding agent session with MCP servers and file system mounts.` : `${benchWorkloads.shell.memory.agentOS} for the minimal shell workload under sustained load.`}
-					</BenchInfoTooltip>
+					{label}
+					{tooltip && <BenchInfoTooltip>{tooltip}</BenchInfoTooltip>}
 				</h4>
-				<p className='mt-1 text-[11px] italic text-zinc-600'>Lower is better. Sandboxes reserve idle RAM per agent.</p>
+				<p className='mt-1 text-[11px] italic text-zinc-600'>Lower is better</p>
 			</div>
 			<div className='space-y-1.5'>
 				<div className='flex items-center gap-4'>
 					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>agentOS</span>
 					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
 						<motion.div
-							key={workload}
 							initial={{ width: 0 }}
-							animate={{ width: `${barMin}%` }}
+							whileInView={{ width: `${barMin}%` }}
+							viewport={{ once: true }}
 							transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
 							className='absolute inset-y-0 left-0 rounded-sm'
 							style={{ background: `linear-gradient(90deg, ${BENCH_ACCENT}, ${BENCH_ACCENT_LIGHT})` }}
 						/>
 						<motion.span
-							key={`mem-label-${workload}`}
 							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
+							whileInView={{ opacity: 1 }}
+							viewport={{ once: true }}
 							transition={{ duration: 0.4, delay: 0.5 }}
 							className='absolute inset-y-0 z-10 flex items-center gap-2 font-mono text-xs font-medium text-zinc-500'
 							style={{ left: `calc(${barMin}% + 8px)` }}
 						>
-							{mem.agentOS}
-							<span className='text-[11px] font-semibold' style={{ color: BENCH_ACCENT_LIGHT }}>
-								{mem.multiplier}
-							</span>
+							{agentOS.value}
+							{multiplier && (
+								<span className='text-[11px] font-semibold' style={{ color: BENCH_ACCENT_LIGHT }}>
+									{multiplier}
+								</span>
+							)}
 						</motion.span>
 					</div>
 				</div>
 				<div className='flex items-center gap-4'>
-					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>Cheapest sandbox</span>
+					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>{sandbox.label}</span>
 					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
 						<motion.div
 							initial={{ width: 0 }}
-							whileInView={{ width: `${mem.sandboxBar}%` }}
+							whileInView={{ width: `${sandbox.bar}%` }}
 							viewport={{ once: true }}
 							transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
 							className='absolute inset-y-0 left-0 rounded-sm bg-zinc-400'
@@ -1474,7 +1431,7 @@ function BenchMemoryBar({ workload }: { workload: WorkloadKey }) {
 							transition={{ duration: 0.4, delay: 0.6 }}
 							className='absolute inset-y-0 left-2 z-10 flex items-center font-mono text-xs text-zinc-700'
 						>
-							{mem.sandbox}
+							{sandbox.value}
 						</motion.span>
 					</div>
 				</div>
@@ -1483,9 +1440,13 @@ function BenchMemoryBar({ workload }: { workload: WorkloadKey }) {
 	);
 }
 
-function BenchCostChart({ workload }: { workload: WorkloadKey }) {
-	const tiers = benchWorkloads[workload].cost;
-	const sandboxCost = benchWorkloads[workload].sandboxCost;
+function BenchCostChart() {
+	const tiers = [
+		{ label: 'AWS ARM', value: '$0.000011/s', multiplier: '56x cheaper', bar: 1.8 },
+		{ label: 'AWS x86', value: '$0.000014/s', multiplier: '45x cheaper', bar: 2.2 },
+		{ label: 'Hetzner ARM', value: '$0.0000016/s', multiplier: '380x cheaper', bar: 0.3 },
+		{ label: 'Hetzner x86', value: '$0.0000027/s', multiplier: '232x cheaper', bar: 0.4 },
+	];
 	const [active, setActive] = useState(0);
 	const t = tiers[active];
 	const barMin = Math.max(t.bar, 1);
@@ -1504,14 +1465,14 @@ function BenchCostChart({ workload }: { workload: WorkloadKey }) {
 						<BenchInfoTooltip>
 							<strong>What&apos;s measured:</strong> <code className='rounded bg-zinc-200 px-1 py-0.5 text-[10px]'>server price per second / concurrent executions per server</code>
 							<br /><br />
-							<strong>Why it&apos;s cheaper:</strong> Each execution uses {benchWorkloads[workload].memory.agentOS} instead of a {benchWorkloads[workload].memory.sandbox} sandbox minimum. And you run on your own hardware, which is significantly cheaper than per-second sandbox billing.
+							<strong>Why it&apos;s cheaper:</strong> Each execution uses ~3.4 MB instead of a 256 MB container minimum. And you run on your own hardware, which is significantly cheaper than per-second sandbox billing.
 							<br /><br />
-							<strong>Sandbox baseline:</strong> {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of March 30, 2026. Default sandbox: 1 vCPU + 1 GiB RAM at $0.0504/vCPU-h + $0.0162/GiB-h.
+							<strong>Sandbox baseline:</strong> The cheapest sandbox provider benchmarked. Billed at $0.0000025/GiB-s with a 256 MB minimum (March 18, 2026).
 							<br /><br />
-							<strong>agentOS:</strong> {benchWorkloads[workload].memory.agentOS} baseline per execution, assuming 70% utilization (industry-standard HPA scaling threshold). Select a hardware tier above to compare.
+							<strong>agentOS:</strong> 3.4 MB baseline per execution, assuming 70% utilization. Select a hardware tier above to compare.
 						</BenchInfoTooltip>
 					</h4>
-					<p className='mt-1 text-[11px] italic text-zinc-600'>Lower is better. Assumes one agent per sandbox, needed for isolation.</p>
+					<p className='mt-1 text-[11px] italic text-zinc-600'>Lower is better</p>
 				</div>
 				<div className='ml-auto flex gap-1'>
 					{tiers.map((tier, i) => (
@@ -1532,7 +1493,7 @@ function BenchCostChart({ workload }: { workload: WorkloadKey }) {
 					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>agentOS</span>
 					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
 						<motion.div
-							key={`${workload}-${active}`}
+							key={active}
 							initial={{ width: 0 }}
 							animate={{ width: `${barMin}%` }}
 							transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
@@ -1540,7 +1501,7 @@ function BenchCostChart({ workload }: { workload: WorkloadKey }) {
 							style={{ background: `linear-gradient(90deg, ${BENCH_ACCENT}, ${BENCH_ACCENT_LIGHT})` }}
 						/>
 						<motion.span
-							key={`cost-label-${workload}-${active}`}
+							key={`label-${active}`}
 							initial={{ opacity: 0 }}
 							animate={{ opacity: 1 }}
 							transition={{ duration: 0.4, delay: 0.5 }}
@@ -1558,82 +1519,24 @@ function BenchCostChart({ workload }: { workload: WorkloadKey }) {
 					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>Cheapest sandbox</span>
 					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
 						<motion.div
-							key={`${workload}-${active}`}
+							key={active}
 							initial={{ width: 0 }}
 							animate={{ width: '100%' }}
 							transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
 							className='absolute inset-y-0 left-0 rounded-sm bg-zinc-400'
 						/>
 						<motion.span
-							key={`sandbox-cost-${workload}-${active}`}
+							key={`sandbox-label-${active}`}
 							initial={{ opacity: 0 }}
 							animate={{ opacity: 1 }}
 							transition={{ duration: 0.4, delay: 0.6 }}
 							className='absolute inset-y-0 left-2 z-10 flex items-center font-mono text-xs text-zinc-700'
 						>
-							{sandboxCost}
+							$0.000625/s
 						</motion.span>
 					</div>
 				</div>
 			</div>
-		</motion.div>
-	);
-}
-
-function BenchmarkSection() {
-	const [workload, setWorkload] = useState<WorkloadKey>('agent');
-	const wl = benchWorkloads[workload];
-
-	return (
-		<motion.div
-			initial={{ opacity: 0, y: 20 }}
-			whileInView={{ opacity: 1, y: 0 }}
-			viewport={{ once: true }}
-			transition={{ duration: 0.5 }}
-		>
-			<div className='mb-8'>
-				<h3 className='mb-2 text-2xl font-normal tracking-tight text-zinc-900 md:text-3xl'>
-					Performance benchmarks
-				</h3>
-				<p className='text-base leading-relaxed text-zinc-500'>
-					agentOS vs. traditional sandboxes.
-				</p>
-			</div>
-
-			<div className='rounded-xl border border-zinc-200 bg-zinc-50 p-8'>
-				<BenchColdStartChart />
-				<div className='my-8 border-t border-zinc-100' />
-				<div className='mb-4 flex items-center justify-between'>
-					<p className='text-xs text-zinc-400'>Workload: {wl.description}</p>
-					<div className='flex gap-1 rounded-lg border border-zinc-200 bg-white p-1'>
-						{(Object.keys(benchWorkloads) as WorkloadKey[]).map((key) => (
-							<button
-								key={key}
-								onClick={() => setWorkload(key)}
-								className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-									workload === key ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-zinc-700'
-								}`}
-							>
-								{benchWorkloads[key].label}
-							</button>
-						))}
-					</div>
-				</div>
-				<BenchMemoryBar workload={workload} />
-				<div className='my-8 border-t border-zinc-100' />
-				<BenchCostChart workload={workload} />
-			</div>
-
-			<p className='mt-4 text-[11px] leading-relaxed text-zinc-400'>
-				Measured on Intel i7-12700KF. Cold start baseline: {SANDBOX_COLDSTART_PROVIDER}, the fastest mainstream sandbox provider as of March 30, 2026. Cost baseline: {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of March 30, 2026 (1 vCPU + 1 GiB default). Cost assumes 70% utilization on self-hosted hardware vs. per-second sandbox billing.{' '}
-				<a
-					href='/docs/agent-os/benchmarks'
-					className='inline-flex items-center gap-1 text-zinc-500 underline underline-offset-2 transition-colors hover:text-zinc-700'
-				>
-					Benchmark document
-					<ExternalLink className='h-3 w-3' />
-				</a>
-			</p>
 		</motion.div>
 	);
 }
@@ -1653,7 +1556,7 @@ const TechnologyAndBenchmarks = () => (
 					A new operating system architecture.
 				</h2>
 				<p className='mb-6 max-w-3xl text-base leading-relaxed text-zinc-500 md:text-lg'>
-					Built from the ground up for lightweight agents. agentOS provides the flexibility of Linux with lower overhead than sandboxes.
+					Built from the ground up for lightweight agents. agentOS provides the flexibility of Linux with lower overhead than virtual machines.
 				</p>
 				<div className='grid gap-6 md:grid-cols-2'>
 					<div className='rounded-xl border border-zinc-200 bg-zinc-50 p-6'>
@@ -1682,8 +1585,72 @@ const TechnologyAndBenchmarks = () => (
 			</motion.div>
 
 			{/* Benchmarks */}
-			<BenchmarkSection />
+			<motion.div
+				initial={{ opacity: 0, y: 20 }}
+				whileInView={{ opacity: 1, y: 0 }}
+				viewport={{ once: true }}
+				transition={{ duration: 0.5 }}
+			>
+				<h3 className='mb-2 text-2xl font-normal tracking-tight text-zinc-900 md:text-3xl'>
+					Performance benchmarks
+				</h3>
+				<p className='mb-8 text-base leading-relaxed text-zinc-500'>
+					agentOS vs. traditional sandboxes.
+				</p>
 
+				<div className='rounded-xl border border-zinc-200 bg-zinc-50 p-8'>
+					<BenchColdStartChart />
+					<div className='my-8 border-t border-zinc-100' />
+					<BenchMetricBar
+						label='Memory per instance'
+						tooltip={
+							<>
+								<strong>What&apos;s measured:</strong> Memory footprint added per concurrent execution.
+								<br /><br />
+								<strong>Why the gap:</strong> V8 isolates share the host process and its V8 engine. Each additional execution only adds its own heap and stack (~3.4 MB). Sandboxes allocate a dedicated container with a minimum memory reservation, even if the code inside uses far less.
+								<br /><br />
+								<strong>What this means:</strong> On a 1 GB server, you can run ~210 concurrent agentOS executions vs. ~4 sandboxes.
+								<br /><br />
+								<strong>Sandbox baseline:</strong> 256 MB, the smallest minimum among popular providers as of March 18, 2026.
+								<br /><br />
+								<strong>agentOS:</strong> 3.4 MB, the converged average per execution under sustained load.
+							</>
+						}
+						agentOS={{ value: '~3.4 MB', bar: 2 }}
+						sandbox={{ value: '~256 MB', bar: 100, label: 'Sandbox provider minimum' }}
+						multiplier='75x smaller'
+					/>
+					<div className='my-8 border-t border-zinc-100' />
+					<BenchCostChart />
+				</div>
+			</motion.div>
+
+			{/* Registry callout */}
+			<motion.div
+				initial={{ opacity: 0, y: 20 }}
+				whileInView={{ opacity: 1, y: 0 }}
+				viewport={{ once: true }}
+				transition={{ duration: 0.5 }}
+				className='mt-16 rounded-xl border border-zinc-200 bg-zinc-50 p-8 md:p-12'
+			>
+				<div className='flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between'>
+					<div>
+						<h3 className='mb-2 text-2xl font-normal tracking-tight text-zinc-900 md:text-3xl'>
+							agentOS Registry
+						</h3>
+						<p className='max-w-lg text-base leading-relaxed text-zinc-500'>
+							Browse and install pre-built tools, integrations, and capabilities for your agents. From file systems to databases to API connectors.
+						</p>
+					</div>
+					<a
+						href='/registry'
+						className='selection-dark inline-flex flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
+					>
+						Explore the Registry
+						<ArrowRight className='h-4 w-4' />
+					</a>
+				</div>
+			</motion.div>
 		</div>
 	</section>
 );
@@ -1778,14 +1745,64 @@ const FromUnixToAgents = () => (
 	</section>
 );
 
+// --- Pricing CTA ---
+const PricingCTA = () => (
+	<section className='border-t border-zinc-200 px-6 py-16 md:py-24'>
+		<div className='mx-auto max-w-5xl'>
+			<motion.div
+				initial={{ opacity: 0, y: 20 }}
+				whileInView={{ opacity: 1, y: 0 }}
+				viewport={{ once: true }}
+				transition={{ duration: 0.5 }}
+				className='rounded-2xl border border-zinc-200 bg-zinc-50 p-8 md:p-12'
+			>
+				<div className='flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between'>
+					<div>
+						<div className='mb-2 flex items-center gap-2'>
+							<span className='rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700'>
+								Apache 2.0
+							</span>
+							<span className='rounded-full bg-zinc-200 px-2.5 py-0.5 text-xs font-medium text-zinc-700'>
+								Free & Open Source
+							</span>
+						</div>
+						<h3 className='mb-2 text-2xl font-normal tracking-tight text-zinc-900 md:text-3xl'>
+							Run anywhere, pay nothing.
+						</h3>
+						<p className='max-w-lg text-base leading-relaxed text-zinc-500'>
+							Self-host agentOS for free, or use Rivet Cloud for managed infrastructure. Enterprise support available.
+						</p>
+					</div>
+					<div className='flex flex-shrink-0 flex-col gap-3 sm:flex-row'>
+						<a
+							href='/agent-os/pricing'
+							className='selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
+						>
+							View Pricing
+							<ArrowRight className='h-4 w-4' />
+						</a>
+						<a
+							href='/sales'
+							className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100'
+						>
+							Contact Sales
+						</a>
+					</div>
+				</div>
+			</motion.div>
+		</div>
+	</section>
+);
+
 // --- Main Page ---
-export default function AgentOSPage({ heroTabs }: AgentOSPageProps) {
+export default function AgentOSPage() {
 	return (
 		<div className='min-h-screen bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
 			<main>
-				<Hero heroTabs={heroTabs} />
-				<TechnologyAndBenchmarks />
+				<Hero />
 				<AgentOSFeatures />
+				<TechnologyAndBenchmarks />
+				<PricingCTA />
 				<FromUnixToAgents />
 			</main>
 		</div>

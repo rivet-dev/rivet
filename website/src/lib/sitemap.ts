@@ -40,7 +40,6 @@ type SiteTab = {
 	href: Href;
 	external?: boolean;
 	sidebar: SidebarItem[];
-	badge?: string;
 };
 
 export type Sitemap = SiteTab[];

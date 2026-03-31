@@ -19,9 +19,9 @@ const pricingTiers = [
 		price: 'Free',
 		priceSuffix: 'Apache 2.0',
 		icon: Server,
-		cta: 'npm install @rivetkit/agent-os',
+		cta: 'npm install rivetkit',
 		ctaHref: '',
-		copyCommand: 'npm install @rivetkit/agent-os',
+		copyCommand: 'npm install rivetkit',
 		highlight: false,
 		features: [
 			{ text: 'Full agentOS runtime', included: true },
@@ -48,8 +48,7 @@ const pricingTiers = [
 			{ text: 'On-premise deployment', included: true },
 			{ text: 'Air-gapped environments', included: true },
 			{ text: 'Custom SLAs', included: true },
-			{ text: 'Dedicated account manager', included: true },
-			{ text: 'Priority support (Slack, phone)', included: true },
+			{ text: 'Priority support (Slack)', included: true },
 			{ text: 'Custom integrations', included: true },
 			{ text: 'Security reviews & compliance', included: true },
 		],
@@ -80,7 +79,7 @@ const CopyButton = ({ command, highlight = false }: { command: string; highlight
 				<Terminal className="h-4 w-4 text-zinc-500" />
 			)}
 			<span className="truncate">{command}</span>
-			{!copied && <Copy className="h-3.5 w-3.5 ml-auto text-zinc-400" />}
+			<Copy className={`h-3.5 w-3.5 ml-auto ${copied ? 'text-transparent' : 'text-zinc-400'}`} />
 		</button>
 	);
 };
@@ -234,7 +233,7 @@ const CTASection = () => (
 			</p>
 			<div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
 				<a
-					href="https://hub.rivet.dev"
+					href="/agent-os"
 					className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
 				>
 					Start for Free

@@ -1,36 +1,6 @@
 ---
-import { readFile } from 'node:fs/promises';
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import AgentOSPage from '@/components/marketing/solutions/AgentOSPage';
-import { highlightCodeHtml } from '@/lib/highlight-code';
-
-const heroTabFiles = [
-	{ key: 'agent', fileName: 'agent-session.ts' },
-	{ key: 'tools', fileName: 'expose-tools.ts' },
-	{ key: 'cron', fileName: 'cron-jobs.ts' },
-	{ key: 'networking', fileName: 'networking.ts' },
-	{ key: 'file-system', fileName: 'file-system.ts' },
-	{ key: 'processes', fileName: 'processes.ts' },
-];
-
-const heroTabs = await Promise.all(
-	heroTabFiles.map(async (tab) => {
-		let code = '';
-		try {
-			const fileUrl = new URL(`../../../agent-os/examples/quickstart/src/${tab.fileName}`, import.meta.url);
-			code = await readFile(fileUrl, 'utf8');
-		} catch {
-			// agent-os examples may not be available in all build environments
-			code = `// ${tab.fileName} (source not available in this build)`;
-		}
-
-		return {
-			...tab,
-			code,
-			highlightedCode: await highlightCodeHtml(code, 'ts'),
-		};
-	}),
-);
 ---
 
 <MarketingLayout
@@ -39,5 +9,5 @@ const heroTabs = await Promise.all(
 	canonicalUrl="https://rivet.dev/agent-os/"
 	ogImage="/images/agent-os/agentos-og.png"
 >
-	<AgentOSPage heroTabs={heroTabs} client:load />
+	<AgentOSPage client:load />
 </MarketingLayout>

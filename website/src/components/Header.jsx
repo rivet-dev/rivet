@@ -255,7 +255,7 @@ export const Header = forwardRef(function Header(
 						{/* <div className='flex gap-1.5'> */}
 						{[
 							[faDiscord, "https://rivet.dev/discord"],
-							[faGithub, "https://github.com/rivet-dev"],
+							[faGithub, "https://github.com/rivet-dev/rivet"],
 						].map(([icon, href]) => (
 							<a
 								className="flex items-center justify-center p-1 opacity-75 transition hover:opacity-100"
