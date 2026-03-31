@@ -251,13 +251,13 @@ pnpm add @e2b/code-interpreter
 import { e2b } from "rivetkit/sandbox/e2b";
 
 const provider = e2b({
-	create: { template: "base" },
-	connect: async (sandboxId) => ({ sandboxId }),
+	template: "base",
 });
 ```
 
 | Option      | Default          | Description                                                                                                                    |
 | ----------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `template`  | `undefined`      | E2B sandbox template to use. Can be a string or an async function.                                                             |
 | `create`    | `{}`             | Options passed to `Sandbox.create()`. Can be a static object or an async function.                                             |
 | `connect`   | `{}`             | Options passed to `Sandbox.connect()` when reconnecting. Can be a static object or an async function receiving the sandbox ID. |
 | `agentPort` | Provider default | Port the sandbox-agent server listens on.                                                                                      |
