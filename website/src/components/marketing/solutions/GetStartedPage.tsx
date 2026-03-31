@@ -166,7 +166,7 @@ const CopyCommand = ({ command }: { command: string }) => {
 
 export default function GetStartedPage() {
 	return (
-		<div className='relative flex min-h-screen flex-col items-center justify-center bg-white selection:bg-zinc-200 selection:text-zinc-900'>
+		<div className='relative flex min-h-screen flex-col items-center justify-center overflow-x-hidden bg-white selection:bg-zinc-200 selection:text-zinc-900'>
 			{/* Game of Life Background */}
 			<div className='absolute inset-0 z-0'>
 				<GameOfLife />

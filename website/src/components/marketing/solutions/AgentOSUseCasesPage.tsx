@@ -168,7 +168,7 @@ const useCases: UseCaseProps[] = [
 
 export default function AgentOSUseCasesPage() {
 	return (
-		<div className='min-h-screen bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
+		<div className='min-h-screen overflow-x-hidden bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
 			<main>
 				{/* Hero */}
 				<section className='relative flex min-h-[50svh] flex-col items-center justify-center px-6 pt-32 overflow-hidden'>

@@ -20,10 +20,10 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
-	"file-system": "bg-blue-500/20 text-blue-400 border-blue-500/30",
-	tool: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-	agent: "bg-orange-500/20 text-orange-400 border-orange-500/30",
-	"sandbox-extension": "bg-purple-500/20 text-purple-400 border-purple-500/30",
+	"file-system": "bg-blue-50 text-blue-600 border-blue-200",
+	tool: "bg-emerald-50 text-emerald-600 border-emerald-200",
+	agent: "bg-orange-50 text-orange-600 border-orange-200",
+	"sandbox-extension": "bg-purple-50 text-purple-600 border-purple-200",
 };
 
 const isComingSoon = entry.status === "coming-soon";
@@ -35,12 +35,12 @@ const installCmd = !isComingSoon ? `npm install ${entry.package}` : null;
 	description={entry.description}
 	canonicalUrl={`https://rivet.dev/agent-os/registry/${entry.slug}/`}
 >
-	<main class="min-h-screen w-full bg-black">
+	<main class="min-h-screen w-full overflow-x-hidden bg-white selection:bg-zinc-200 selection:text-zinc-900">
 		<div class="relative isolate overflow-hidden pt-40">
 			<div class="mx-auto max-w-3xl px-6 lg:px-8">
 				<a
 					href="/agent-os/registry"
-					class="inline-flex items-center text-sm text-white/50 hover:text-white mb-8 transition-colors no-underline"
+					class="inline-flex items-center text-sm text-zinc-400 hover:text-zinc-900 mb-8 transition-colors no-underline"
 				>
 					&larr; Back to Registry
 				</a>
@@ -56,13 +56,13 @@ const installCmd = !isComingSoon ? `npm install ${entry.package}` : null;
 						/>
 					)}
 					{entry.icon && (
-						<Icon icon={entry.icon} className="text-white w-10 h-10" />
+						<Icon icon={entry.icon} className="text-zinc-900 w-10 h-10" />
 					)}
-					<h1 class="text-5xl font-700 text-white leading-[1.1] tracking-normal">
+					<h1 class="text-5xl font-700 text-zinc-900 leading-[1.1] tracking-normal">
 						{entry.title}
 					</h1>
 					{isComingSoon && (
-						<span class="text-xs px-2.5 py-1 rounded-full border border-white/20 text-white/50">
+						<span class="text-xs px-2.5 py-1 rounded-full border border-zinc-200 text-zinc-400">
 							Coming Soon
 						</span>
 					)}
@@ -78,7 +78,7 @@ const installCmd = !isComingSoon ? `npm install ${entry.package}` : null;
 					))}
 				</div>
 
-				<p class="mt-6 text-lg text-white/70 leading-relaxed">
+				<p class="mt-6 text-lg text-zinc-500 leading-relaxed">
 					{entry.description}
 				</p>
 			</div>
@@ -86,15 +86,15 @@ const installCmd = !isComingSoon ? `npm install ${entry.package}` : null;
 
 		<div class="mx-auto max-w-3xl px-6 lg:px-8 pt-10 pb-24">
 			{isComingSoon ? (
-				<div class="rounded-xl border border-white/10 bg-white/2 p-8 text-center">
-					<p class="text-white/50 text-lg">This integration is coming soon.</p>
+				<div class="rounded-xl border border-zinc-200 bg-zinc-50 p-8 text-center">
+					<p class="text-zinc-400 text-lg">This integration is coming soon.</p>
 				</div>
 			) : (
 				<>
 					<section>
-						<h2 class="text-xl font-600 text-white mb-3">Install</h2>
-						<div class="flex items-center gap-2 bg-[#111] rounded-lg border border-white/10 px-4 py-3 mb-6">
-							<code class="text-sm text-white/90 flex-1 font-mono">
+						<h2 class="text-xl font-600 text-zinc-900 mb-3">Install</h2>
+						<div class="flex items-center gap-2 bg-zinc-50 rounded-lg border border-zinc-200 px-4 py-3 mb-6">
+							<code class="text-sm text-zinc-700 flex-1 font-mono">
 								{installCmd}
 							</code>
 						</div>
@@ -104,7 +104,7 @@ const installCmd = !isComingSoon ? `npm install ${entry.package}` : null;
 						href={`https://www.npmjs.com/package/${entry.package}`}
 						target="_blank"
 						rel="noopener noreferrer"
-						class="inline-flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-white text-sm font-medium px-4 py-2 transition-colors no-underline"
+						class="inline-flex items-center justify-center rounded-lg bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 text-sm font-medium px-4 py-2 transition-colors no-underline"
 					>
 						View on npm
 					</a>

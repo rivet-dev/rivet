@@ -117,6 +117,24 @@ const Hero = () => (
 					Pre-built tools, integrations, and capabilities for your agents.<br />
 					From file systems to databases to API connectors.
 				</p>
+				<div className='mt-6 flex items-center justify-center gap-4'>
+					<a
+						href='https://github.com/rivet-dev/agent-os/blob/main/registry/CONTRIBUTING.md'
+						target='_blank'
+						rel='noopener noreferrer'
+						className='inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-900'
+					>
+						Publish a package
+					</a>
+					<a
+						href='https://github.com/rivet-dev/agent-os/issues'
+						target='_blank'
+						rel='noopener noreferrer'
+						className='inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-900'
+					>
+						Request an extension
+					</a>
+				</div>
 			</motion.div>
 		</div>
 	</section>
@@ -258,7 +276,7 @@ export default function RegistryPage() {
 	});
 
 	return (
-		<div className='min-h-screen bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
+		<div className='min-h-screen overflow-x-hidden bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
 			<main>
 				<Hero />
 				<SearchAndFilter

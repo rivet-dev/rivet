@@ -252,7 +252,7 @@ const CTASection = () => (
 
 export default function AgentOSPricingPage() {
 	return (
-		<div className="min-h-screen bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900">
+		<div className="min-h-screen overflow-x-hidden bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900">
 			<main>
 				{/* Hero */}
 				<section className="px-6 pt-24 pb-16 md:pt-32">
