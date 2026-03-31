@@ -15,8 +15,14 @@ const heroTabFiles = [
 
 const heroTabs = await Promise.all(
 	heroTabFiles.map(async (tab) => {
-		const fileUrl = new URL(`../../../agent-os/examples/quickstart/src/${tab.fileName}`, import.meta.url);
-		const code = await readFile(fileUrl, 'utf8');
+		let code = '';
+		try {
+			const fileUrl = new URL(`../../../agent-os/examples/quickstart/src/${tab.fileName}`, import.meta.url);
+			code = await readFile(fileUrl, 'utf8');
+		} catch {
+			// agent-os examples may not be available in all build environments
+			code = `// ${tab.fileName} (source not available in this build)`;
+		}
 
 		return {
 			...tab,

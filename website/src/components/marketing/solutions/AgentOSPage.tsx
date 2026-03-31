@@ -696,9 +696,9 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5, delay: 0.1 }}
-					className='mb-10 max-w-xl text-center text-base text-zinc-500 md:text-left md:text-lg'
+					className='mb-10 max-w-2xl text-center text-base text-zinc-500 md:text-left md:text-lg'
 				>
-					Unix gave humans a common language to control machines.<br />agentOS gives agents the same power.
+					A portable open-source operating system for agents. ~6 ms coldstarts, 32x cheaper than sandboxes. Powered by WebAssembly and V8 isolates.
 				</motion.p>
 
 				{/* Supported Harnesses */}
@@ -1001,7 +1001,7 @@ const StackingFeatureCards = () => {
 	const awsArmAgentCost = benchWorkloads.agent.cost[0]; // AWS ARM
 
 	const stackFeatures = [
-		{ icon: Clock, title: 'Low overhead and cost.', description: 'No VMs to boot. No containers to pull. Start in milliseconds with minimal memory footprint.', detail: 'Traditional sandboxes take seconds to spin up and consume hundreds of megabytes. agentOS starts instantly and runs lean, so you can scale to thousands of agents without the cost. More details in benchmarks below.', metrics: [{ value: `~${Math.round(coldStartP99.agentOS)}ms`, label: 'p99 coldstart' }, { value: `${awsArmAgentCost.ratio}x`, label: 'cheaper than sandboxes' }] },
+		// { icon: Clock, title: 'Low overhead and cost.', description: 'No VMs to boot. No containers to pull. Start in milliseconds with minimal memory footprint.', detail: 'Traditional sandboxes take seconds to spin up and consume hundreds of megabytes. agentOS starts instantly and runs lean, so you can scale to thousands of agents without the cost. More details in benchmarks below.', metrics: [{ value: `~${Math.round(coldStartP99.agentOS)}ms`, label: 'p99 coldstart' }, { value: `${awsArmAgentCost.ratio}x`, label: 'cheaper than sandboxes' }] },
 		{ icon: Terminal, title: 'Embed in your backend.', detail: 'Your APIs. Your toolchains. No complex agent authentication needed. Just JavaScript functions or hooks.' },
 		{ icon: FolderOpen, title: 'Mount anything as a file system.', description: 'S3, SQLite, Google Drive, or the host file system. No per-agent credentials needed.', detail: 'Agents think in files. agentOS lets you expose any storage backend as a familiar directory tree. The host handles credential scoping, so agents never see API keys or secrets.' },
 		{ icon: Shield, title: 'Granular security.', detail: 'Fully configurable network and file system security. Control rate limits, bandwidth limits, and file system permissions. Set precise CPU and memory limitations per agent.' },
@@ -1245,10 +1245,43 @@ const ThemedFeatureSections = () => (
 );
 
 // --- agentOS Features Section ---
+const RegistryCallout = () => (
+	<section className='border-t border-zinc-200 px-6 py-24 md:py-40'>
+		<div className='mx-auto max-w-7xl'>
+			<motion.div
+				initial={{ opacity: 0, y: 20 }}
+				whileInView={{ opacity: 1, y: 0 }}
+				viewport={{ once: true }}
+				transition={{ duration: 0.5 }}
+				className='rounded-xl border border-zinc-200 bg-zinc-50 p-8 md:p-12'
+			>
+				<div className='flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between'>
+					<div>
+						<h3 className='mb-2 text-2xl font-normal tracking-tight text-zinc-900 md:text-3xl'>
+							agentOS Registry
+						</h3>
+						<p className='max-w-lg text-base leading-relaxed text-zinc-500'>
+							Browse and install pre-built tools, integrations, and capabilities for your agents. From file systems to databases to API connectors.
+						</p>
+					</div>
+					<a
+						href='/agent-os/registry'
+						className='selection-dark inline-flex flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
+					>
+						Explore the Registry
+						<ArrowRight className='h-4 w-4' />
+					</a>
+				</div>
+			</motion.div>
+		</div>
+	</section>
+);
+
 const AgentOSFeatures = () => (
 	<div id='agentos'>
 		<StackingFeatureCards />
 		<ThemedFeatureSections />
+		<RegistryCallout />
 	</div>
 );
 
@@ -1651,32 +1684,6 @@ const TechnologyAndBenchmarks = () => (
 			{/* Benchmarks */}
 			<BenchmarkSection />
 
-			{/* Registry callout */}
-			<motion.div
-				initial={{ opacity: 0, y: 20 }}
-				whileInView={{ opacity: 1, y: 0 }}
-				viewport={{ once: true }}
-				transition={{ duration: 0.5 }}
-				className='mt-16 rounded-xl border border-zinc-200 bg-zinc-50 p-8 md:p-12'
-			>
-				<div className='flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between'>
-					<div>
-						<h3 className='mb-2 text-2xl font-normal tracking-tight text-zinc-900 md:text-3xl'>
-							agentOS Registry
-						</h3>
-						<p className='max-w-lg text-base leading-relaxed text-zinc-500'>
-							Browse and install pre-built tools, integrations, and capabilities for your agents. From file systems to databases to API connectors.
-						</p>
-					</div>
-					<a
-						href='/agent-os/registry'
-						className='selection-dark inline-flex flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
-					>
-						Explore the Registry
-						<ArrowRight className='h-4 w-4' />
-					</a>
-				</div>
-			</motion.div>
 		</div>
 	</section>
 );
@@ -1777,8 +1784,8 @@ export default function AgentOSPage({ heroTabs }: AgentOSPageProps) {
 		<div className='min-h-screen bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
 			<main>
 				<Hero heroTabs={heroTabs} />
-				<AgentOSFeatures />
 				<TechnologyAndBenchmarks />
+				<AgentOSFeatures />
 				<FromUnixToAgents />
 			</main>
 		</div>
