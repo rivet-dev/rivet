@@ -692,7 +692,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 	const displayedAgent = autoPlayComplete ? hoveredAgent : autoPlayAgent;
 
 	return (
-		<section className='relative flex min-h-[100svh] flex-col justify-center px-6 pt-20 md:pt-0'>
+		<section className='relative flex min-h-[100svh] flex-col justify-center px-6 pt-24 md:pt-24'>
 			<div className='mx-auto w-full max-w-5xl'>
 				{/* Title */}
 				<motion.div
@@ -1231,7 +1231,7 @@ const FeatureCardCarousel = ({ section }: { section: ThemedSection }) => {
 };
 
 const ThemedFeatureSections = () => (
-	<div className='mt-32 md:mt-48'>
+	<div className='mt-16 md:mt-48'>
 		{themedSections.map((section) => (
 			<section
 				key={section.category}
@@ -1807,7 +1807,7 @@ const FromUnixToAgents = () => (
 // --- Main Page ---
 export default function AgentOSPage({ heroTabs }: AgentOSPageProps) {
 	return (
-		<div className='min-h-screen overflow-x-hidden bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
+		<div className='min-h-screen bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900' style={{ overflowX: 'clip' }}>
 			<main>
 				<Hero heroTabs={heroTabs} />
 				<TechnologyAndBenchmarks />
