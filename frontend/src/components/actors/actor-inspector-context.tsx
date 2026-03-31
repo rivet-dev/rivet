@@ -86,6 +86,16 @@ export type DatabaseSchema = {
 	tables: DatabaseTableInfo[];
 };
 
+export type DatabaseExecuteResult = {
+	rows: unknown[];
+};
+
+export type DatabaseExecuteRequest = {
+	sql: string;
+	args?: unknown[];
+	properties?: Record<string, unknown>;
+};
+
 interface ActorInspectorApi {
 	ping: () => Promise<void>;
 	executeAction: (name: string, args: unknown[]) => Promise<unknown>;
@@ -109,6 +119,9 @@ interface ActorInspectorApi {
 		limit: number,
 		offset: number,
 	) => Promise<unknown[]>;
+	executeDatabaseSql: (
+		request: DatabaseExecuteRequest,
+	) => Promise<DatabaseExecuteResult>;
 	getMetadata: () => Promise<{ version: string }>;
 }
 
@@ -312,6 +325,26 @@ export const createDefaultActorInspectorContext = ({
 					pageSize,
 					page * pageSize,
 				);
+			},
+		});
+	},
+
+	actorDatabaseExecuteMutation(actorId: ActorId) {
+		return mutationOptions({
+			mutationKey: [
+				...actorInspectorQueriesKeys.actorDatabase(actorId),
+				"execute",
+			],
+			mutationFn: async ({
+				sql,
+				args,
+				properties,
+			}: {
+				sql: string;
+				args?: unknown[];
+				properties?: Record<string, unknown>;
+			}) => {
+				return api.executeDatabaseSql({ sql, args, properties });
 			},
 		});
 	},
@@ -905,6 +938,51 @@ export const ActorInspectorProvider = ({
 				);
 
 				return promise;
+			},
+
+			executeDatabaseSql: async ({ sql, args, properties }) => {
+				const headers: Record<string, string> = {
+					"Content-Type": "application/json",
+					"X-Rivet-Target": "actor",
+					"X-Rivet-Actor": actorId,
+				};
+				if (credentials.inspectorToken) {
+					headers.Authorization = `Bearer ${credentials.inspectorToken}`;
+				}
+				if (credentials.token) {
+					headers["x-rivet-token"] = credentials.token;
+				}
+
+				const response = await fetch(
+					`${computeActorUrl({ ...credentials, actorId })}/inspector/database/execute`,
+					{
+						method: "POST",
+						headers,
+						body: JSON.stringify({
+							sql,
+							args,
+							properties,
+						}),
+					},
+				);
+
+				const payload = await response
+					.json()
+					.catch(() => ({ error: response.statusText }));
+
+				if (!response.ok) {
+					const errorMessage =
+						typeof payload?.error === "string"
+							? payload.error
+							: "Failed to execute SQL";
+					throw new Error(errorMessage);
+				}
+
+				return z
+					.object({
+						rows: z.array(z.unknown()),
+					})
+					.parse(payload);
 			},
 
 			getMetadata() {
