@@ -4,20 +4,16 @@ description: "When to use the lightweight agentOS VM, a full sandbox, or both to
 skill: true
 ---
 
-agentOS and sandboxes solve different problems. agentOS is a lightweight operating system for agents that runs inside your process with near-zero overhead. Sandboxes are full Linux environments with root access, system packages, and persistent disk.
-
-The key difference: agentOS integrates agents into your backend. [Host tools](/docs/agent-os/tools) call your JavaScript functions directly, the [LLM gateway](/docs/agent-os/llm-gateway) keeps API keys on the server, and [permissions](/docs/agent-os/permissions) give you fine-grained control. These features work because agentOS runs in your process, not in an isolated container.
-
-Sandboxes give you a full OS. They're the right choice when agents need to install system packages, run native binaries, launch browsers, or use a display server.
-
-**You don't have to choose one or the other.** agentOS is designed to work with sandboxes through the [sandbox extension](/docs/agent-os/sandbox). Agents run in the lightweight VM by default and spin up a full sandbox on demand when the workload needs it.
+- **agentOS** is a lightweight VM that runs inside your process. Near-zero cold start, low memory, direct backend integration via [host tools](/docs/agent-os/tools).
+- **Sandboxes** are full Linux environments with root access, system packages, and native binary support.
+- **You can use both.** agentOS works with sandboxes through the [sandbox extension](/docs/agent-os/sandbox). Agents run in the lightweight VM by default and spin up a full sandbox on demand.
 
 ## Comparison
 
 |  | agentOS VM | Full Sandbox |
 |---|---|---|
 | **Cost** | Very low. Runs in your process. | Pay per second of uptime. |
-| **Startup** | Instant. No cold start. | Seconds to spin up. |
+| **Startup** | Near-zero cold start (~6 ms). | Seconds to spin up. |
 | **Backend integration** | Direct. [Host tools](/docs/agent-os/tools) call your functions with zero latency. | Indirect. Requires network calls back to your backend. |
 | **API keys** | Stay on the server via the [LLM gateway](/docs/agent-os/llm-gateway). | Must be injected into the sandbox environment. |
 | **Permissions** | Granular, deny-by-default. | Coarse-grained (container-level). |

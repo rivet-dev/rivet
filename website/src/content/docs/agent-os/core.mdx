@@ -15,7 +15,7 @@ The `agentOs()` actor (from `rivetkit/agent-os`) wraps the core package and adds
 
 | | Core (`@rivet-dev/agent-os-core`) | Actor (`rivetkit/agent-os`) |
 |-|---|---|
-| Persistence | None (in-memory only) | Persistent filesystem and sessions |
+| Persistence | In-memory by default (pluggable via [mounts](#mounts)) | Persistent filesystem and sessions |
 | Sleep/wake | Manual `dispose()` / `create()` | Automatic with 15 min grace period |
 | Events | Direct callbacks | Broadcasted to all connected clients |
 | Preview URLs | None | Built-in signed URL server |
@@ -138,9 +138,11 @@ console.log(response);
 await vm.setSessionModel(sessionId, "claude-sonnet-4-6");
 await vm.setSessionMode(sessionId, "plan");
 
-// Event history
+// Event history (returns SequencedEvent[] with .sequenceNumber and .notification)
 const events = vm.getSessionEvents(sessionId);
-console.log(`${events.length} events`);
+for (const event of events) {
+  console.log(event.sequenceNumber, event.notification.method);
+}
 
 vm.closeSession(sessionId);
 await vm.dispose();
@@ -217,6 +219,7 @@ vm.scheduleCron({
 
 vm.onCronEvent((event) => {
   if (event.type === "cron:fire") console.log("Job fired:", event.jobId);
+  if (event.type === "cron:complete") console.log("Job done:", event.jobId, event.durationMs, "ms");
   if (event.type === "cron:error") console.error("Job error:", event.error);
 });
 
@@ -255,7 +258,7 @@ await vm.dispose();
 
 ## What you give up without the actor
 
-- **No persistent filesystem.** Files are lost when you call `dispose()`. You must configure your own mounts or persistence layer.
+- **No built-in persistence.** The default filesystem is in-memory and lost on `dispose()`. You can configure your own [mounts](#mounts) (S3, host directories, etc.) for persistence.
 - **No sleep/wake.** You manage the full VM lifecycle yourself.
 - **No event broadcasting.** Events are local callbacks, not distributed to remote clients.
 - **No preview URLs.** No built-in HTTP server for sharing VM services.

@@ -103,7 +103,7 @@ export const HostingSection = () => (
           </ul>
           <div className='mt-auto'>
             <a
-              href='https://hub.rivet.dev'
+              href='https://dashboard.rivet.dev'
               target='_blank'
               rel='noopener noreferrer'
               className='selection-dark inline-flex items-center justify-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200'

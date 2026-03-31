@@ -19,9 +19,9 @@ const pricingTiers = [
 		price: 'Free',
 		priceSuffix: 'Apache 2.0',
 		icon: Server,
-		cta: 'npm install @rivetkit/agent-os',
+		cta: 'npm install rivetkit',
 		ctaHref: '',
-		copyCommand: 'npm install @rivetkit/agent-os',
+		copyCommand: 'npm install rivetkit',
 		highlight: false,
 		features: [
 			{ text: 'Full agentOS runtime', included: true },
@@ -30,7 +30,6 @@ const pricingTiers = [
 			{ text: 'File system mounting (S3, local, etc.)', included: true },
 			{ text: 'Tool registry', included: true },
 			{ text: 'Cron, webhooks, queues', included: true },
-			{ text: 'SQLite per agent', included: true },
 			{ text: 'Network security controls', included: true },
 			{ text: 'Community support (Discord, GitHub)', included: true },
 		],
@@ -48,8 +47,7 @@ const pricingTiers = [
 			{ text: 'On-premise deployment', included: true },
 			{ text: 'Air-gapped environments', included: true },
 			{ text: 'Custom SLAs', included: true },
-			{ text: 'Dedicated account manager', included: true },
-			{ text: 'Priority support (Slack, phone)', included: true },
+			{ text: 'Priority support (Slack)', included: true },
 			{ text: 'Custom integrations', included: true },
 			{ text: 'Security reviews & compliance', included: true },
 		],
@@ -152,7 +150,7 @@ const PricingCard = ({ tier, index, showCloudNotice = false }: { tier: typeof pr
 			{showCloudNotice && (
 				<div className="mt-6 pt-6 border-t border-zinc-200">
 					<a
-						href="https://hub.rivet.dev"
+						href="https://dashboard.rivet.dev"
 						className="group flex items-center gap-3 rounded-lg bg-zinc-50 p-4 transition-colors hover:bg-zinc-100"
 					>
 						<Cloud className="h-5 w-5 text-zinc-500 group-hover:text-zinc-700 transition-colors" />
@@ -234,7 +232,7 @@ const CTASection = () => (
 			</p>
 			<div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
 				<a
-					href="https://hub.rivet.dev"
+					href="/docs/agent-os"
 					className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
 				>
 					Start for Free

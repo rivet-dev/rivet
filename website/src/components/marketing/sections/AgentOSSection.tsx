@@ -9,7 +9,7 @@ const CopyInstallButton = () => {
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText('npm install @rivetkit/agent-os');
+      await navigator.clipboard.writeText('npm install rivetkit');
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -23,7 +23,7 @@ const CopyInstallButton = () => {
       className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-400 transition-colors hover:border-white/20 hover:text-white'
     >
       {copied ? <Check className='h-4 w-4 text-green-500' /> : <Terminal className='h-4 w-4' />}
-      npm install @rivetkit/agent-os
+      npm install rivetkit
     </button>
   );
 };

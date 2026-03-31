@@ -1,89 +1,33 @@
 ---
 title: "Architecture"
-description: "System design, event flow, and persistence model for agentOS."
+description: "How agentOS uses WebAssembly and V8 isolates to run agent workloads."
 skill: true
 ---
 
-- **Client -> Actor -> VM** architecture with clear separation of concerns
-- **Secure-exec kernel** powered by WebAssembly and V8 isolates (same as Cloudflare and Chromium)
-- **SQLite VFS** for filesystem persistence across sleep/wake cycles
-- **Event-driven** communication from VM to actor to client
+## V8 isolates
 
-## System diagram
+agentOS uses V8 isolates (the same engine behind Node.js, Chromium, and Cloudflare Workers) to run JavaScript and TypeScript workloads. Isolates provide near-native execution speed with strong memory isolation between actors. Each actor gets its own isolate with no shared state.
 
-```
-┌─────────┐     ┌──────────────────────┐     ┌──────────────────┐
-│  Client  │────>│   agentOS Actor      │────>│   Secure-Exec VM │
-│          │<────│                      │<────│                  │
-│ (browser │     │ - Session management │     │ - WASM runtime   │
-│  or      │     │ - Event broadcasting │     │ - Node.js isolate│
-│  server) │     │ - SQLite persistence │     │ - Python runtime │
-│          │     │ - Preview URL tokens │     │ - Virtual FS     │
-└─────────┘     └──────────────────────┘     │ - Process table  │
-                                              │ - Network stack  │
-                                              └──────────────────┘
-```
+## WebAssembly kernel
 
-**Client** connects to the actor via WebSocket or HTTP. Calls actions, subscribes to events.
+The kernel is a WebAssembly module that provides a POSIX-like interface to the V8 isolate. It manages:
 
-**agentOS Actor** manages the VM lifecycle, persists session data in SQLite, and broadcasts events to connected clients.
+- **Process table.** Each process (shell command, script, agent session) runs as its own WebAssembly instance coordinated by the kernel. Processes are isolated from each other.
+- **Virtual filesystem.** A unified filesystem abstraction backed by pluggable drivers (in-memory, SQLite VFS, S3, host directories).
+- **Virtual network.** Outbound requests are proxied through the host with configurable controls. No direct host network access.
 
-**Secure-Exec VM** is the isolated execution environment. Three runtimes mount into the kernel:
-- **WASM** for POSIX utilities (coreutils, sh, grep, etc.)
-- **Node.js** for sandboxed V8 isolates running agent code
-- **Python** for CPython via Pyodide with kernel-backed I/O
+## Process isolation
 
-## Event flow
+Every process spawned inside the VM gets its own WebAssembly instance. This means:
 
-Events flow from the VM through the actor to all connected clients.
+- A runaway process cannot corrupt another process's memory
+- Each process has its own stack and heap
+- The kernel mediates all IPC and filesystem access between processes
 
-```
-VM Process stdout ──> Actor processOutput event ──> Client A
-                                                ──> Client B
-                                                ──> Client C
+## Runtimes
 
-Agent session event ──> Actor sessionEvent ──> All clients
-                    ──> onSessionEvent hook (server-side)
+Three runtimes mount into the kernel:
 
-Permission request ──> Actor permissionRequest ──> Client / hook
-                   <── respondPermission <──────── Client / hook
-```
-
-Events are:
-1. **Generated** inside the VM (process output, session events, permission requests)
-2. **Captured** by the actor, persisted to SQLite if applicable, and server-side hooks are called
-3. **Broadcasted** to all connected clients
-
-## Persistence
-
-agentOS uses the actor's SQLite database for all persistent state. Filesystem contents, session records, event history, and preview tokens all survive sleep/wake cycles. Running processes and VM kernel state do not.
-
-See [Persistence & Sleep](/docs/agent-os/persistence) for the full lifecycle, table schemas, and sleep/wake behavior.
-
-## Core vs actor layer
-
-The **core layer** (`@rivet-dev/agent-os-core`) manages the VM kernel directly. The **actor layer** (`rivetkit/agent-os`) wraps it with persistence, event broadcasting, sleep/wake, and orchestration.
-
-See [agentOS Core](/docs/agent-os/core) for the standalone SDK and a detailed comparison.
-
-## VM isolation
-
-Each actor runs its own isolated VM using WebAssembly and V8 isolates (same sandboxing as Chromium and Cloudflare Workers), with a virtual filesystem and network stack that prevent host access.
-
-See [Security](/docs/agent-os/security) for resource limits, network controls, and authentication.
-
-## Performance
-
-agentOS VMs add minimal overhead compared to native execution. WebAssembly runs at near-native speed, V8 isolates use the same engine as Node.js, and the virtual filesystem is backed by SQLite.
-
-- **Cold boot**: VM initialization + filesystem restoration from SQLite
-- **Warm boot** (wake from sleep): filesystem restoration only. Scales with persisted filesystem size.
-- **Small files** (< 1 MB): negligible latency
-- **Batch operations**: `writeFiles` and `readFiles` are significantly faster than individual calls
-
-| | agentOS VM | Traditional container | Traditional VM |
-|-|------------|----------------------|----------------|
-| Boot time | Milliseconds | Seconds | Minutes |
-| Memory overhead | Low | Medium | High |
-| Isolation | WebAssembly + V8 | Namespace/cgroup | Hypervisor |
-| Filesystem | SQLite VFS | Overlay FS | Disk image |
+- **WebAssembly** for POSIX utilities (coreutils, grep, sed, etc.)
+- **V8 isolate** for JavaScript/TypeScript agent code
+- **Pyodide** for Python workloads with kernel-backed I/O

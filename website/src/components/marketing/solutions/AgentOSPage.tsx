@@ -18,8 +18,13 @@ import {
 	Code,
 	Cpu,
 	Package,
+	Users,
+	Webhook,
+	Workflow,
 	ChevronLeft,
 	ChevronRight,
+	Copy,
+	Check,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import agentosLogo from '@/images/products/agentos-logo.svg';
@@ -432,16 +437,25 @@ const ImageCycler = ({ images }: { images: HeroImage[] }) => {
 	);
 };
 
-// --- Package Registry Button ---
-const PackageRegistryButton = () => {
+// --- Copy Command ---
+const CopyCommand = ({ command }: { command: string }) => {
+	const [copied, setCopied] = useState(false);
+
+	const handleCopy = async () => {
+		await navigator.clipboard.writeText(command);
+		setCopied(true);
+		setTimeout(() => setCopied(false), 2000);
+	};
+
 	return (
-		<a
-			href='/agent-os/registry'
-			className='inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-900 sm:w-auto'
+		<button
+			onClick={handleCopy}
+			className='group inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-zinc-300 px-4 py-2 text-sm transition-colors hover:border-zinc-400 sm:w-auto'
 		>
-			<Package className='h-4 w-4' />
-			View Package Registry
-		</a>
+			<Terminal className='h-4 w-4 text-zinc-400' />
+			<span className='text-zinc-700'>{command}</span>
+			{copied && <Check className='h-4 w-4 text-emerald-500' />}
+		</button>
 	);
 };
 
@@ -627,12 +641,14 @@ const agents = [
 	{ src: '/images/agent-logos/amp.svg', name: 'Amp', comingSoon: true },
 ];
 const heroTabMeta: Array<{ key: string; icon: typeof Bot; label: string; docsHref: string }> = [
-	{ key: 'agent', icon: Bot, label: 'Agent', docsHref: '/docs/agent-os/sessions' },
+	{ key: 'agents', icon: Bot, label: 'Agents', docsHref: '/docs/agent-os/sessions' },
 	{ key: 'tools', icon: Wrench, label: 'Tools', docsHref: '/docs/agent-os/tools' },
+	{ key: 's3-filesystem', icon: HardDrive, label: 'S3 File System', docsHref: '/docs/agent-os/filesystem' },
 	{ key: 'cron', icon: CalendarClock, label: 'Cron', docsHref: '/docs/agent-os/cron' },
-	{ key: 'networking', icon: Globe, label: 'Networking', docsHref: '/docs/agent-os/networking' },
-	{ key: 'file-system', icon: FolderOpen, label: 'File system', docsHref: '/docs/agent-os/filesystem' },
-	{ key: 'processes', icon: Cpu, label: 'Processes', docsHref: '/docs/agent-os/processes' },
+	{ key: 'webhooks', icon: Webhook, label: 'Webhooks', docsHref: '/docs/agent-os/webhooks' },
+	{ key: 'multiplayer', icon: Users, label: 'Multiplayer', docsHref: '/docs/agent-os/multiplayer' },
+	{ key: 'agent-agent', icon: Layers, label: 'Agent-Agent', docsHref: '/docs/agent-os/agent-to-agent' },
+	{ key: 'workflows', icon: Workflow, label: 'Workflows', docsHref: '/docs/agent-os/workflows' },
 ];
 
 const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
@@ -767,7 +783,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 							<div className='h-3 w-3 rounded-full bg-zinc-200' />
 							<span className='ml-2 text-xs text-zinc-600'>{getStartedTabs[activeTab]?.fileName ?? 'index.ts'}</span>
 						</div>
-						<div className='relative h-[280px] overflow-y-auto'>
+						<div className='relative h-[380px] overflow-y-auto'>
 							<AnimatePresence mode='wait'>
 								<motion.div
 									key={activeTab}
@@ -793,7 +809,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5, delay: 0.2 }}
-					className='mt-6 flex flex-col items-center gap-3 sm:flex-row sm:items-center md:items-start'
+					className='mt-6 flex flex-col items-center gap-3 sm:flex-row sm:items-center md:items-start w-full'
 				>
 					<a
 						href='/docs/agent-os'
@@ -802,7 +818,16 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 						Read the Docs
 						<ArrowRight className='h-4 w-4' />
 					</a>
-					<PackageRegistryButton />
+					<CopyCommand command='npm install rivetkit' />
+					<div className='flex-1' />
+					<a
+						href='/agent-os/registry'
+						className='inline-flex items-center gap-2 whitespace-nowrap text-sm text-zinc-500 transition-colors hover:text-zinc-900'
+					>
+						<Package className='h-4 w-4' />
+						View Package Registry
+						<ArrowRight className='h-4 w-4' />
+					</a>
 				</motion.div>
 
 			</div>

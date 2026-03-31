@@ -1,35 +1,208 @@
 ---
-import { readFile } from 'node:fs/promises';
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import AgentOSPage from '@/components/marketing/solutions/AgentOSPage';
 import { highlightCodeHtml } from '@/lib/highlight-code';
 
-const heroTabFiles = [
-	{ key: 'agent', fileName: 'agent-session.ts' },
-	{ key: 'tools', fileName: 'expose-tools.ts' },
-	{ key: 'cron', fileName: 'cron-jobs.ts' },
-	{ key: 'networking', fileName: 'networking.ts' },
-	{ key: 'file-system', fileName: 'file-system.ts' },
-	{ key: 'processes', fileName: 'processes.ts' },
+const heroTabSnippets = [
+	{ key: 'agents', fileName: 'agents.ts', code: `import { AgentOs } from "@rivet-dev/agent-os-core";
+
+const vm = await AgentOs.create();
+
+// Create an agent session
+const { sessionId } = await vm.createSession("pi");
+
+// Stream events (tool calls, text output, etc.)
+vm.onSessionEvent(sessionId, (event) => console.log(event));
+
+// Send a prompt and wait for the response
+await vm.prompt(sessionId, "Write a Python script that calculates pi");` },
+
+	{ key: 'tools', fileName: 'tools.ts', code: `import { z } from "zod";
+import { AgentOs, hostTool, toolKit } from "@rivet-dev/agent-os-core";
+import common from "@rivet-dev/agent-os-common";
+
+// Agents call tools as CLI commands inside the VM:
+// $ agentos-weather get --city London
+const weatherToolkit = toolKit({
+	name: "weather",
+	description: "Look up weather information for cities.",
+	tools: {
+		get: hostTool({
+			description: "Get the current weather for a city.",
+			inputSchema: z.object({
+				city: z.string().describe("City name (e.g. 'London')."),
+			}),
+			execute: async ({ city }) => ({
+				city,
+				temperature: 18,
+				conditions: "partly cloudy",
+				humidity: 65,
+			}),
+		}),
+	},
+});
+
+const vm = await AgentOs.create({
+	software: [common],
+	toolKits: [weatherToolkit],
+});
+
+// Tools are injected into the agent's system prompt automatically
+await vm.prompt(sessionId, "What's the weather in London?");
+// The agent will call: agentos-weather get --city London` },
+
+	{ key: 's3-filesystem', fileName: 's3-filesystem.ts', code: `import { AgentOs } from "@rivet-dev/agent-os-core";
+import { createS3Backend } from "@rivet-dev/agent-os-s3";
+
+// Mount an S3 bucket as a local filesystem inside the VM
+const s3 = createS3Backend({ bucket: process.env.S3_BUCKET! });
+
+const vm = await AgentOs.create({
+  mounts: [{ path: "/mnt/data", driver: s3 }],
+});
+
+await vm.writeFile("/mnt/data/notes.txt", "Hello from agentOS!");
+const content = await vm.readFile("/mnt/data/notes.txt");
+console.log(content);` },
+
+	{ key: 'cron', fileName: 'cron.ts', code: `import { AgentOs } from "@rivet-dev/agent-os-core";
+import common from "@rivet-dev/agent-os-common";
+
+const vm = await AgentOs.create({ software: [common] });
+
+// Heartbeat: agent wakes up every 30 minutes to check on issues
+vm.scheduleCron({
+  schedule: "*/30 * * * *",
+  action: {
+    type: "session",
+    agentType: "pi",
+    prompt: "Check the status of open issues and take any necessary action",
+  },
+});` },
+
+	{ key: 'webhooks', fileName: 'webhooks.ts', code: `import { Hono } from "hono";
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const app = new Hono();
+const client = createClient<typeof registry>("http://localhost:6420");
+
+app.post("/slack/events", async (c) => {
+  const body = await c.req.json();
+  const { team_id, text, user } = body.event;
+
+  // Each workspace gets its own persistent agent
+  const agent = client.vm.getOrCreate([team_id]);
+  const { sessionId } = await agent.createSession("pi");
+  await agent.sendPrompt(sessionId, \`Message from \${user}: \${text}\`);
+
+  return c.json({ ok: true });
+});` },
+
+	{ key: 'multiplayer', fileName: 'multiplayer.ts', code: `import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+// Both clients connect to the same agent by key
+const clientA = createClient<typeof registry>("http://localhost:6420").vm.getOrCreate(["shared-agent"]);
+const clientB = createClient<typeof registry>("http://localhost:6420").vm.getOrCreate(["shared-agent"]);
+
+// Both receive the same session events
+clientA.on("sessionEvent", (e) => console.log("[A]", e.event.method));
+clientB.on("sessionEvent", (e) => console.log("[B]", e.event.method));
+
+// Either client can send prompts to the shared session
+const { sessionId } = await clientA.createSession("pi");
+await clientA.sendPrompt(sessionId, "Build a REST API");
+await clientB.sendPrompt(sessionId, "Add authentication to it");` },
+
+	{ key: 'agent-agent', fileName: 'agent-agent.ts', code: `import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import { toolKit, hostTool } from "@rivet-dev/agent-os-core";
+import { createClient } from "rivetkit/client";
+import { z } from "zod";
+
+// Tool that lets the writer request a code review from the reviewer
+const reviewToolkit = toolKit({
+  name: "review",
+  description: "Send code to the reviewer agent",
+  tools: {
+    submit: hostTool({
+      description: "Submit a file for code review",
+      inputSchema: z.object({
+        path: z.string().describe("Path to the file"),
+      }),
+      execute: async ({ path }) => {
+        const client = createClient<typeof registry>("http://localhost:6420");
+        const writer = client.writer.getOrCreate(["my-project"]);
+        const reviewer = client.reviewer.getOrCreate(["my-project"]);
+
+        // Copy the file from the writer's VM to the reviewer's VM
+        const code = await writer.readFile(path);
+        await reviewer.writeFile(path, code);
+
+        // Ask the reviewer agent to review it
+        const { sessionId } = await reviewer.createSession("pi");
+        return reviewer.sendPrompt(sessionId, \`Review \${path}\`);
+      },
+    }),
+  },
+});
+
+// Writer gets the review tool; reviewer is plain
+// The writer calls: agentos-review submit --path /home/user/api.ts
+const writer = agentOs({ options: { toolKits: [reviewToolkit] } });
+const reviewer = agentOs();
+
+export const registry = setup({ use: { writer, reviewer } });
+registry.start();` },
+
+	{ key: 'workflows', fileName: 'workflows.ts', code: `import { agentOs } from "rivetkit/agent-os";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+import { actor, setup, workflow } from "rivetkit";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+// Durable workflow: each step survives crashes and replays from where it left off
+const automator = actor({
+  workflows: {
+    fixBug: workflow<{ repo: string; issue: string }>(),
+  },
+  run: async (c) => {
+    for await (const message of c.workflow.iter("fixBug")) {
+      const { repo, issue } = message.body;
+      const vm = c.actors.vm.getOrCreate([\`fix-\${issue}\`]);
+
+      await c.step("clone-repo", async () => {
+        return vm.exec(\`git clone \${repo} /home/user/repo\`);
+      });
+
+      await c.step("fix-bug", async () => {
+        const { sessionId } = await vm.createSession("pi");
+        await vm.sendPrompt(sessionId, \`Fix: \${issue}\`);
+        await vm.closeSession(sessionId);
+      });
+
+      await c.step("run-tests", async () => {
+        return vm.exec("cd /home/user/repo && npm test");
+      });
+
+      await message.complete();
+    }
+  },
+});
+
+export const registry = setup({ use: { automator, vm } });
+registry.start();` },
 ];
 
 const heroTabs = await Promise.all(
-	heroTabFiles.map(async (tab) => {
-		let code = '';
-		try {
-			const fileUrl = new URL(`../../../agent-os/examples/quickstart/src/${tab.fileName}`, import.meta.url);
-			code = await readFile(fileUrl, 'utf8');
-		} catch {
-			// agent-os examples may not be available in all build environments
-			code = `// ${tab.fileName} (source not available in this build)`;
-		}
-
-		return {
-			...tab,
-			code,
-			highlightedCode: await highlightCodeHtml(code, 'ts'),
-		};
-	}),
+	heroTabSnippets.map(async (tab) => ({
+		...tab,
+		highlightedCode: await highlightCodeHtml(tab.code, 'ts'),
+	})),
 );
 ---
 

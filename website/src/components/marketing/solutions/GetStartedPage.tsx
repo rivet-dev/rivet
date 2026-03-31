@@ -186,7 +186,7 @@ export default function GetStartedPage() {
 								alt='agentOS'
 								className='h-16 w-auto md:h-20'
 							/>
-							<span className='absolute -top-2 -right-12 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700'>Beta</span>
+
 						</div>
 					</motion.div>
 
@@ -201,7 +201,6 @@ export default function GetStartedPage() {
 							href='/docs/agent-os/quickstart'
 							className='inline-flex items-center justify-center gap-3 rounded-md bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
 						>
-							<span className='text-zinc-400'>{'>_'}</span>
 							Quickstart Guide
 							<ArrowRight className='h-4 w-4' />
 						</a>

@@ -1,0 +1,29 @@
+{
+	"name": "example-agent-os-e2e",
+	"version": "2.0.21",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test:server": "tsx src/server.ts",
+		"test": "tsx src/client.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"rivetkit": "*",
+		"@rivet-dev/agent-os-common": "*",
+		"@rivet-dev/agent-os-pi": "^0.1.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"tsx": "^3.12.7",
+		"typescript": "^5.5.2"
+	},
+	"template": {
+		"technologies": ["typescript"],
+		"tags": ["agent-os", "vm", "e2e"],
+		"noFrontend": true,
+		"skipVercel": true
+	},
+	"stableVersion": "0.8.0",
+	"license": "MIT"
+}

@@ -18,8 +18,7 @@ import common from "@rivet-dev/agent-os-common";
 //
 // For this example, we use the default in-memory mount.
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const vm = agentOs({ options: { software: [common] } }) as any;
+const vm = agentOs({ options: { software: [common] } });
 
 export const registry = setup({ use: { vm } });
 registry.start();

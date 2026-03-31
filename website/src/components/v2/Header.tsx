@@ -9,7 +9,7 @@ import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
 import logoIconUrl from "@/images/rivet-logos/icon-white.svg";
 import logoIconWhiteUrl from "@/images/rivet-logos/icon-white.svg";
 
-const WHITE_THEMED_PATHS = ['/agent-os', '/agent-os/registry', '/from-unix-to-agents', '/install'];
+const WHITE_THEMED_PATHS = ['/agent-os', '/agent-os/use-cases', '/agent-os/pricing', '/agent-os/registry', '/from-unix-to-agents', '/install'];
 const REGISTRY_PACKAGE_COUNT = registry.length;
 const AGENT_OS_DOCS_HREF = "/docs/agent-os";
 const AGENT_OS_REGISTRY_HREF = "/agent-os/registry";
@@ -622,17 +622,25 @@ export function Header({
 									</TextNavItem>
 								)}
 								{isLightTheme && (
-									<TextNavItem
-										href={AGENT_OS_REGISTRY_HREF}
-										ariaCurrent={isRegistryPage ? "page" : undefined}
-									>
-										<span className="inline-flex items-center gap-2">
-											<span>Registry</span>
-											<span className="inline-flex min-w-6 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium leading-none text-zinc-600">
-												{REGISTRY_PACKAGE_COUNT}
+									<>
+										<TextNavItem href="/agent-os/use-cases">
+											Use Cases
+										</TextNavItem>
+										<TextNavItem
+											href={AGENT_OS_REGISTRY_HREF}
+											ariaCurrent={isRegistryPage ? "page" : undefined}
+										>
+											<span className="inline-flex items-center gap-2">
+												<span>Registry</span>
+												<span className="inline-flex min-w-6 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium leading-none text-zinc-600">
+													{REGISTRY_PACKAGE_COUNT}
+												</span>
 											</span>
-										</span>
-									</TextNavItem>
+										</TextNavItem>
+										<TextNavItem href="/agent-os/pricing">
+											Pricing
+										</TextNavItem>
+									</>
 								)}
 								{!isLightTheme && (
 									<TextNavItem
@@ -761,7 +769,9 @@ function DocsMobileNavigation({
 	const mainLinks = isLightTheme
 		? [
 			{ href: AGENT_OS_DOCS_HREF, label: "Documentation" },
+			{ href: "/agent-os/use-cases", label: "Use Cases" },
 			{ href: AGENT_OS_REGISTRY_HREF, label: `Registry (${REGISTRY_PACKAGE_COUNT})` },
+			{ href: "/agent-os/pricing", label: "Pricing" },
 		]
 		: [
 			{ href: "/docs", label: "Documentation" },

@@ -75,6 +75,8 @@ import {
 	faGrid2,
 	faMailbox,
 	faRobot,
+	faScaleBalanced,
+    faLock,
 } from "@rivet-gg/icons";
 import { deployOptions, type DeployOption } from "@rivetkit/shared-data";
 import nextjs from "@/images/vendors/next-js.svg";
@@ -510,6 +512,11 @@ export const sitemap = [
 						href: "/docs/agent-os/quickstart",
 						icon: faRocket,
 					},
+					{
+						title: "agentOS vs Sandbox",
+						href: "/docs/agent-os/versus-sandbox",
+						icon: faScaleBalanced,
+					},
 				]
 			},
 			{
@@ -576,6 +583,11 @@ export const sitemap = [
 						href: "/docs/agent-os/sandbox",
 						icon: faLayerGroup,
 					},
+					{
+						title: "Security & Auth",
+						href: "/docs/agent-os/security",
+						icon: faLock,
+					},
 				]
 			},
 			{
@@ -622,6 +634,10 @@ export const sitemap = [
 				title: "Reference",
 				pages: [
 					{
+						title: "agentOS Core",
+						href: "/docs/agent-os/core",
+					},
+					{
 						title: "Configuration",
 						href: "/docs/agent-os/configuration",
 					},
@@ -630,32 +646,24 @@ export const sitemap = [
 						href: "/docs/agent-os/events",
 					},
 					{
-						title: "Limitations",
-						href: "/docs/agent-os/limitations",
-					},
-					{
-						title: "agentOS Core",
-						href: "/docs/agent-os/core",
-					},
-					{
 						title: "Deployment",
 						href: "/docs/agent-os/deployment",
 					},
 					{
-						title: "agentOS vs Sandbox",
-						href: "/docs/agent-os/versus-sandbox",
+						title: "Limitations",
+						href: "/docs/agent-os/limitations",
 					},
 					{
 						title: "Internals",
 						collapsible: true,
 						pages: [
 							{
-								title: "Architecture",
-								href: "/docs/agent-os/architecture",
+								title: "Security Model",
+								href: "/docs/agent-os/security-model",
 							},
 							{
-								title: "Security",
-								href: "/docs/agent-os/security",
+								title: "Architecture",
+								href: "/docs/agent-os/architecture",
 							},
 							{
 								title: "Persistence & Sleep",

@@ -4,6 +4,8 @@
 
 **ALWAYS use `rivet.dev` - NEVER use `rivet.gg`**
 
+**Never claim "zero cold start" or "no cold start" for agentOS or Rivet Actors.** Always say "near-zero cold start" or specify the actual latency (e.g. "~6 ms cold start"). Cold starts are real, just very small.
+
 - API endpoint: `https://api.rivet.dev`
 - Cloud API endpoint: `https://cloud-api.rivet.dev`
 - Dashboard: `https://hub.rivet.dev`

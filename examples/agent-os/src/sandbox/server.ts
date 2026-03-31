@@ -19,7 +19,6 @@ const sandbox = await SandboxAgent.start({
 	sandbox: docker(),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const vm = agentOs({
 	options: {
 		software: [common],
@@ -31,7 +30,7 @@ const vm = agentOs({
 		],
 		toolKits: [createSandboxToolkit({ client: sandbox })],
 	},
-}) as any;
+});
 
 export const registry = setup({ use: { vm } });
 registry.start();

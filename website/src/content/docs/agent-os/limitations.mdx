@@ -1,183 +1,33 @@
 ---
 title: "Limitations"
-description: "What agentOS can and cannot do, and when to escalate to a sandbox."
+description: "What the agentOS VM does not support, and how to work around it."
 skill: true
 ---
 
-agentOS is lightweight by design. The in-process kernel gives you fast boot times, low memory overhead, and a complete filesystem/process/network API as a plugin layer. Most agent workloads run entirely within this model.
+agentOS is a hybrid model. The lightweight VM handles most agent workloads (coding, scripting, file I/O, API calls) with near-zero overhead. When a workload hits a VM limitation, agents can escalate to a full [sandbox](/docs/agent-os/sandbox) on demand without changing code. The two share a filesystem, so files written in the VM are available in the sandbox and vice versa.
 
-This page covers what agentOS does not support and how to escalate to a [Sandbox Extension](/docs/agent-os/sandbox) when you need more.
+See [agentOS vs Sandbox](/docs/agent-os/versus-sandbox) for a detailed comparison.
 
-## What agentOS provides
-
-- **Full filesystem API.** Persistent and survives sleep/wake without managing disk images.
-- **Process execution** for JavaScript, TypeScript, Python, and shell commands.
-- **Networking** with HTTP proxy into VM services and signed preview URLs.
-- **Agent sessions** with streaming, permissions, and transcript persistence.
-- **Millisecond boot times** compared to seconds for containers and minutes for traditional VMs.
-- **Low memory footprint.** No hypervisor, no guest kernel, no disk image. More agents per host.
-- **Pluggable filesystem** that lets you layer in S3, host directories, or overlays without changing agent code.
-- **Easy escalation.** When you hit a limitation, add a sandbox actor and bridge via file mounts or tools. No rewrite needed.
-
-## The hybrid model
-
-agentOS is designed so that escalating to a sandbox is seamless. The filesystem mount system is the bridge between the two.
-
-### Share files between agentOS and a sandbox
-
-Use filesystem mounts to share the agentOS persistent filesystem with a sandbox actor. The agent does its work in the lightweight VM, and heavy operations kick out to the sandbox.
-
-<CodeGroup stacked>
-```ts @nocheck server.ts
-import { agentOs } from "rivetkit/agent-os";
-import common from "@rivet-dev/agent-os-common";
-import pi from "@rivet-dev/agent-os-pi";
-import { actor, setup } from "rivetkit";
-
-// Lightweight agentOS VM for agent sessions and file management
-const codeAgent = agentOs({
-  options: { software: [common, pi] },
-});
-
-// Full sandbox for native binary execution
-const sandbox = actor({
-  actions: {
-    runNative: async (c, command: string) => {
-      // This actor runs in a full sandbox with Linux kernel access.
-      // It can execute native binaries, install packages, etc.
-      const result = await c.runCommand(command);
-      return result;
-    },
-  },
-});
-
-export const registry = setup({ use: { codeAgent, sandbox } });
-registry.start();
-```
-
-```ts @nocheck client.ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./server";
-
-const client = createClient<typeof registry>("http://localhost:6420");
-const agent = client.codeAgent.getOrCreate(["my-agent"]);
-const sandbox = client.sandbox.getOrCreate(["my-sandbox"]);
-
-// Agent writes code in the lightweight VM
-const session = await agent.createSession("pi", {
-  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
-});
-await agent.sendPrompt(
-  session.sessionId,
-  "Write a Go program at /home/user/main.go that prints hello world",
-);
-
-// Read the file the agent created
-const code = await agent.readFile("/home/user/main.go");
-
-// Kick out to the sandbox for native compilation
-const result = await sandbox.runNative("go build -o /tmp/app /home/user/main.go && /tmp/app");
-console.log(result);
-```
-</CodeGroup>
-
-### Expose sandbox capabilities as a tool
-
-Make the sandbox available to the agent as a tool it can invoke during a session.
-
-<CodeGroup stacked>
-```ts @nocheck server.ts
-import { agentOs } from "rivetkit/agent-os";
-import { setup } from "rivetkit";
-import common from "@rivet-dev/agent-os-common";
-import pi from "@rivet-dev/agent-os-pi";
-
-const codeAgent = agentOs({
-  onPermissionRequest: async (c, sessionId, request) => {
-    // Auto-approve tool use so the agent can call the sandbox
-    await c.respondPermission(sessionId, request.permissionId, "always");
-  },
-  options: { software: [common, pi] },
-});
-
-export const registry = setup({ use: { codeAgent } });
-registry.start();
-```
-
-```ts @nocheck client.ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./server";
-
-const client = createClient<typeof registry>("http://localhost:6420");
-const agent = client.codeAgent.getOrCreate(["my-agent"]);
-
-// Provide a local MCP server that bridges to the sandbox
-const session = await agent.createSession("pi", {
-  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
-  mcpServers: [
-    {
-      type: "local",
-      command: "node",
-      args: ["/home/user/sandbox-bridge.js"],
-    },
-  ],
-});
-
-// The agent can now call sandbox tools during its session
-await agent.sendPrompt(
-  session.sessionId,
-  "Compile and run the Go program using the sandbox tool",
-);
-```
-</CodeGroup>
-
-## VM limitations
-
-### No native Linux binaries
+## No native Linux binaries
 
 agentOS runs JavaScript, TypeScript, Python, and shell commands. Native x86/ARM binaries compiled for Linux cannot run directly.
 
-**Affected workloads:**
 - Precompiled CLI tools (e.g. `docker`, `kubectl`, `terraform`)
 - Native language runtimes (Go, Rust, C++ binaries)
 - System packages installed via `apt` or `yum`
 
-### No real Linux kernel
+## No real Linux kernel
 
 The VM uses a virtual kernel. System calls that require a real Linux kernel are not available.
 
-**Affected workloads:**
 - Raw sockets and custom network protocols
 - Kernel modules and eBPF
 - Container runtimes (Docker-in-Docker)
 - Low-level filesystem operations (inotify, fuse)
 
-### No hardware access
+## No hardware access
 
 The VM has no access to GPUs, USB devices, or other hardware.
 
-**Affected workloads:**
 - GPU-accelerated ML inference
 - Hardware-dependent testing
-
-### Limited package ecosystem
-
-Only packages that run in JavaScript or Python are available. Native npm packages with C++ bindings may not work.
-
-## When to escalate to a sandbox
-
-Use the [Sandbox Extension](/docs/agent-os/sandbox) when your agent workload hits a VM limitation. The key decision is straightforward:
-
-| Need | agentOS VM | Sandbox |
-|------|-----------|---------|
-| Run JavaScript/TypeScript | ✅ | ✅ |
-| Run Python scripts | ✅ | ✅ |
-| Run shell commands (coreutils) | ✅ | ✅ |
-| File read/write/mount | ✅ | ✅ |
-| Agent sessions (Claude Code, etc.) | ✅ | ✅ |
-| Run native Linux binaries | ❌ | ✅ |
-| Install system packages (apt) | ❌ | ✅ |
-| Docker / containers | ❌ | ✅ |
-| Raw sockets | ❌ | ✅ |
-| GPU access | ❌ | ✅ |
-

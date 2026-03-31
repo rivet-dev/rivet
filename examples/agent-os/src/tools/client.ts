@@ -1,8 +1,14 @@
-// Host toolkits: call tools registered on the server from inside the VM.
+// Host toolkits are exposed as CLI commands inside the VM.
 //
-// Each toolkit's tools are accessible via an HTTP RPC server inside the VM
-// at the port specified by AGENTOS_TOOLS_PORT. Node scripts inside the VM
-// can call the server directly with fetch.
+// When toolkits are registered in server.ts, CLI shims are auto-installed
+// at /usr/local/bin/agentos-{toolkit} and the tool list is injected into
+// the agent's system prompt.
+//
+// The agent calls tools as shell commands:
+//   agentos-weather forecast --city Paris --days 3
+//
+// Responses are JSON:
+//   {"ok":true,"result":{"city":"Paris","days":3,"temperature":22,"conditions":"sunny"}}
 
 import { createClient } from "rivetkit/client";
 import type { registry } from "./server.ts";
@@ -10,44 +16,17 @@ import type { registry } from "./server.ts";
 const client = createClient<typeof registry>("http://localhost:6420");
 const agent = client.vm.getOrCreate(["my-agent"]);
 
-// Get the tools RPC port from the VM environment
-const env = (await agent.exec("echo $AGENTOS_TOOLS_PORT")) as {
+// Call a tool using the auto-generated CLI command
+const result = (await agent.exec("agentos-weather forecast --city Paris --days 3")) as {
 	stdout: string;
+	exitCode: number;
 };
-const port = env.stdout.trim();
-console.log("Tools RPC port:", port);
+console.log("Weather:", result.stdout.trim());
 
-// Helper: call a tool via the RPC server and read the result from a temp file
-async function callTool(
-	toolkit: string,
-	tool: string,
-	input: Record<string, unknown>,
-): Promise<unknown> {
-	const outFile = `/tmp/${toolkit}-${tool}-out.json`;
-	await agent.writeFile(
-		"/tmp/tool-call.mjs",
-		`
-import { writeFileSync } from "node:fs";
-const res = await fetch("http://127.0.0.1:${port}/call", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(${JSON.stringify({ toolkit, tool, input })}),
-});
-writeFileSync("${outFile}", await res.text());
-`,
-	);
-	const proc = (await agent.spawn("node", ["/tmp/tool-call.mjs"])) as {
-		pid: number;
-	};
-	await agent.waitProcess(proc.pid);
-	const data = (await agent.readFile(outFile)) as Uint8Array;
-	return JSON.parse(new TextDecoder().decode(data));
-}
+// Create a session and let the agent use tools naturally
+const session = (await agent.createSession("pi", {
+	env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+})) as { sessionId: string };
 
-// Call the weather tool
-const weather = await callTool("weather", "get", { city: "London" });
-console.log("Weather:", JSON.stringify(weather));
-
-// Call the calculator tool
-const sum = await callTool("calc", "add", { a: 10, b: 32 });
-console.log("Sum:", JSON.stringify(sum));
+// The agent will call agentos-weather forecast automatically
+await agent.sendPrompt(session.sessionId, "What's the weather in Paris?");

@@ -240,7 +240,7 @@ export const registry: RegistryEntry[] = [
 		slug: "filesystem",
 		title: "Filesystem",
 		status: "available",
-		package: "@anthropic/agent-os-fs",
+		package: "@rivet-dev/agent-os-core",
 		description:
 			"Mount and manage virtual filesystems with support for S3, local, and overlay drivers.",
 		types: ["file-system"],
@@ -249,7 +249,8 @@ export const registry: RegistryEntry[] = [
 	{
 		slug: "s3",
 		title: "S3",
-		status: "coming-soon",
+		status: "available",
+		package: "@rivet-dev/agent-os-s3",
 		description:
 			"Mount S3-compatible object storage as a filesystem inside the VM.",
 		types: ["file-system"],
