@@ -11,7 +11,6 @@ overrides:
   '@rivetkit/next-js': workspace:*
   '@rivetkit/db': workspace:*
   '@rivetkit/sqlite-vfs': workspace:*
-  '@rivet-dev/agent-os-core': workspace:*
   '@rivetkit/engine-api-full': workspace:*
   '@types/react': ^19
   '@types/react-dom': ^19
@@ -104,7 +103,7 @@ importers:
   agent-os/packages/agent-opencode:
     dependencies:
       '@rivet-dev/agent-os-core':
-        specifier: workspace:*
+        specifier: link:../core
         version: link:../core
       opencode-ai:
         specifier: ^1.3.3
@@ -123,7 +122,7 @@ importers:
         specifier: ^0.60.0
         version: 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
       '@rivet-dev/agent-os-core':
-        specifier: workspace:*
+        specifier: link:../core
         version: link:../core
       pi-acp:
         specifier: ^0.0.23
@@ -295,7 +294,7 @@ importers:
   agent-os/packages/sandbox:
     dependencies:
       '@rivet-dev/agent-os-core':
-        specifier: workspace:*
+        specifier: link:../core
         version: link:../core
       '@secure-exec/core':
         specifier: link:../../../../secure-exec-1/packages/core
@@ -583,27 +582,9 @@ importers:
 
   examples/agent-os:
     dependencies:
-      '@rivet-dev/agent-os-common':
-        specifier: link:../../../agent-os-registry/software/common
-        version: link:../../../agent-os-registry/software/common
-      '@rivet-dev/agent-os-core':
-        specifier: workspace:*
-        version: link:../../agent-os/packages/core
-      '@rivet-dev/agent-os-git':
-        specifier: link:../../../agent-os-registry/software/git
-        version: link:../../../agent-os-registry/software/git
-      '@rivet-dev/agent-os-pi':
-        specifier: link:../../agent-os/packages/agent-pi
-        version: link:../../agent-os/packages/agent-pi
-      '@rivet-dev/agent-os-sandbox':
-        specifier: link:../../agent-os/packages/sandbox
-        version: link:../../agent-os/packages/sandbox
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
-      sandbox-agent:
-        specifier: ^0.4.2
-        version: 0.4.2(@daytonaio/sdk@0.150.0(ws@8.19.0))(@e2b/code-interpreter@2.3.3)(@fly/sprites@0.0.1)(@vercel/sandbox@1.9.0)(computesdk@2.5.3)(dockerode@4.0.9)(get-port@7.1.0)(modal@0.7.3)(zod@3.25.76)
       zod:
         specifier: ^3.25.0
         version: 3.25.76
@@ -4284,7 +4265,7 @@ importers:
         specifier: ^1.1.5
         version: 1.1.5(hono@4.11.9)(zod@4.1.13)
       '@rivet-dev/agent-os-core':
-        specifier: workspace:*
+        specifier: link:../../../agent-os/packages/core
         version: link:../../../agent-os/packages/core
       '@rivetkit/bare-ts':
         specifier: ^0.6.2
