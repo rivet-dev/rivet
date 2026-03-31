@@ -600,7 +600,7 @@
           ],
           "format": "int64"
         },
-        "envoy_max_response_payload_body_size": {
+        "envoy_max_response_payload_size": {
           "description": "Max response payload size in bytes from actors.",
           "type": [
             "integer",

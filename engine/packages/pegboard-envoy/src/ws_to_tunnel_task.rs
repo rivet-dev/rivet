@@ -454,12 +454,7 @@ async fn handle_tunnel_message(
 	let inner_data_len = tunnel_message_inner_data_len(&msg.message_kind);
 
 	// Enforce incoming payload size
-	if inner_data_len
-		> ctx
-			.config()
-			.pegboard()
-			.envoy_max_response_payload_body_size()
-	{
+	if inner_data_len > ctx.config().pegboard().envoy_max_response_payload_size() {
 		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
 	}
 

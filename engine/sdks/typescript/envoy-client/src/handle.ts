@@ -1,11 +1,12 @@
-import type * as protocol from "@rivetkit/engine-envoy-protocol";
-
 export interface KvListOptions {
 	reverse?: boolean;
 	limit?: number;
 }
 
 export interface EnvoyHandle {
+	/** Starts the shutdown procedure for this envoy. */
+	shutdown(): void;
+
 	/** Send sleep intent for an actor. */
 	sleepActor(actorId: string, generation?: number): void;
 

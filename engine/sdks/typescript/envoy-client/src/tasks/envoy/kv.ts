@@ -1,7 +1,8 @@
 import type * as protocol from "@rivetkit/engine-envoy-protocol";
 import type { EnvoyContext, ToEnvoyMessage } from "./index.js";
-import { log, wsSend } from "./index.js";
+import { log } from "./index.js";
 import { stringifyError } from "../../utils.js";
+import { wsSend } from "../connection.js";
 
 export interface KvRequestEntry {
 	actorId: string;
@@ -67,7 +68,7 @@ export function sendSingleKvRequest(ctx: EnvoyContext, requestId: number) {
 	if (!request || request.sent) return;
 
 	try {
-		wsSend(ctx, {
+		wsSend(ctx.shared, {
 			tag: "ToRivetKvRequest",
 			val: {
 				actorId: request.actorId,

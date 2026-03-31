@@ -125,7 +125,7 @@ pub struct Pegboard {
 	/// Max time since last seen before actor is considered stale, in milliseconds.
 	pub envoy_event_demuxer_max_last_seen_threshold: Option<u64>,
 	/// Max response payload size in bytes from actors.
-	pub envoy_max_response_payload_body_size: Option<usize>,
+	pub envoy_max_response_payload_size: Option<usize>,
 	/// Ping interval for envoy updates in milliseconds.
 	pub envoy_update_ping_interval: Option<u64>,
 	/// How long after last ping before considering a envoy ineligible for allocation.
@@ -282,8 +282,8 @@ impl Pegboard {
 			.unwrap_or(30_000)
 	}
 
-	pub fn envoy_max_response_payload_body_size(&self) -> usize {
-		self.envoy_max_response_payload_body_size
+	pub fn envoy_max_response_payload_size(&self) -> usize {
+		self.envoy_max_response_payload_size
 			.unwrap_or(20 * 1024 * 1024) // 20 MiB
 	}
 

@@ -9,6 +9,8 @@ import type { SharedContext } from "../context.js";
 import { logger } from "../log.js";
 import { unreachable } from "antiox/panic";
 import { stringifyError } from "../utils.js";
+import { sendResponse } from "./envoy/tunnel.js";
+import { EnvoyContext } from "./envoy/index.js";
 
 export interface CreateActorOpts {
 	commandIdx: bigint;
@@ -32,21 +34,34 @@ export interface CreateActorOpts {
 export type ToActor =
 	// Sent when wants to stop the actor, will be forwarded to Envoy
 	| {
-			type: "actor-intent";
-			commandIdx: bigint;
-			intent: protocol.ActorIntent;
-	  }
+		type: "actor-intent";
+		commandIdx: bigint;
+		intent: protocol.ActorIntent;
+	}
 	// Sent when actor is told to stop
 	| {
-			type: "command-stop-actor";
-			commandIdx: bigint;
-			reason: protocol.StopActorReason;
-	  }
+		type: "command-stop-actor";
+		commandIdx: bigint;
+		reason: protocol.StopActorReason;
+	}
 	// Set or clear an alarm
 	| {
-			type: "set-alarm";
-			alarmTs: bigint | null;
-	  };
+		type: "set-alarm";
+		alarmTs: bigint | null;
+	}
+	| {
+		type: "request-start";
+		messageId: protocol.MessageId,
+		req: protocol.ToEnvoyRequestStart,
+	}
+	| {
+		type: "request-chunk";
+		messageId: protocol.MessageId,
+		chunk: protocol.ToEnvoyRequestChunk;
+	} | {
+		type: "request-abort";
+		messageId: protocol.MessageId,
+	};
 
 interface ActorContext {
 	shared: SharedContext;
@@ -54,6 +69,14 @@ interface ActorContext {
 	generation: number;
 	config: protocol.ActorConfig;
 	eventIndex: bigint;
+	pendingRequests: Map<
+		[protocol.GatewayId, protocol.RequestId],
+		PendingRequest
+	>;
+	// webSockets: Map<
+	// 	[protocol.GatewayId, protocol.RequestId],
+	// 	WebSocketTunnelAdapter
+	// >;
 }
 
 export function createActor(
@@ -76,6 +99,8 @@ async function actorInner(
 		generation: opts.generation,
 		config: opts.config,
 		eventIndex: 0n,
+		pendingRequests: new Map(),
+		// webSockets: new Map(),
 	};
 
 	let stopCode = protocol.StopCode.Ok;
@@ -143,10 +168,124 @@ async function actorInner(
 				tag: "EventActorSetAlarm",
 				val: { alarmTs: msg.alarmTs },
 			});
+		} else if (msg.type === "request-start") {
+			// Convert headers map to Headers object
+			const headers = new Headers();
+			for (const [key, value] of msg.req.headers) {
+				headers.append(key, value);
+			}
+
+			// Create Request object
+			const request = new Request(`http://localhost${msg.req.path}`, {
+				method: msg.req.method,
+				headers,
+				body: msg.req.body ? new Uint8Array(msg.req.body) : undefined,
+			});
+
+			// Handle streaming request
+			if (msg.req.stream) {
+				// Create a stream for the request body
+				const stream = new ReadableStream<Uint8Array>({
+					start: (controller) => {
+						// Store controller for chunks
+						ctx.pendingRequests.set(
+							[msg.messageId.gatewayId, msg.messageId.requestId],
+							{
+								clientMessageIndex: 0,
+								streamController: controller,
+							}
+						);
+					},
+				});
+
+				// Create request with streaming body
+				const streamingRequest = new Request(request, {
+					body: stream,
+					duplex: "half",
+				} as any);
+
+				spawn(async () => {
+					const response = await ctx.shared.config.fetch(
+						ctx.shared.handle,
+						ctx.actorId,
+						msg.messageId.gatewayId,
+						msg.messageId.requestId,
+						streamingRequest,
+					);
+					await sendResponse(
+						ctx.shared,
+						{
+							gatewayId: msg.messageId.gatewayId,
+							requestId: msg.messageId.requestId,
+							messageIndex: 0,
+						},
+						response,
+					);
+				});
+			} else {
+				// Non-streaming request
+				spawn(async () => {
+					const response = await ctx.shared.config.fetch(
+						ctx.shared.handle,
+						ctx.actorId,
+						msg.messageId.gatewayId,
+						msg.messageId.requestId,
+						request,
+					);
+					await sendResponse(
+						ctx.shared,
+						{
+							gatewayId: msg.messageId.gatewayId,
+							requestId: msg.messageId.requestId,
+							messageIndex: 0,
+						},
+						response,
+					);
+				});
+			}
+		} else if (msg.type === "request-chunk") {
+			const existing = ctx.pendingRequests.get(
+				[msg.messageId.gatewayId, msg.messageId.requestId]
+			);
+			if (existing) {
+				existing.streamController.enqueue(new Uint8Array(msg.chunk.body));
+
+				if (msg.chunk.finish) {
+					existing.streamController.close();
+
+					ctx.pendingRequests.delete(
+						[msg.messageId.gatewayId, msg.messageId.requestId],
+					);
+				}
+			} else {
+				log(ctx)?.warn({
+					msg: "received chunk for unknown pending request",
+				});
+			}
+		} else if (msg.type === "request-abort") {
+			const existing = ctx.pendingRequests.get(
+				[msg.messageId.gatewayId, msg.messageId.requestId]
+			);
+			if (existing) {
+				existing.streamController.error(new Error("Request aborted"));
+
+				ctx.pendingRequests.delete(
+					[msg.messageId.gatewayId, msg.messageId.requestId],
+				);
+			} else {
+				log(ctx)?.warn({
+					msg: "received abort for unknown pending request",
+				});
+			}
 		} else {
 			unreachable(msg);
 		}
 	}
+}
+
+interface PendingRequest {
+	clientMessageIndex: number;
+	streamController: ReadableStreamDefaultController<Uint8Array>;
 }
 
 function sendEvent(ctx: ActorContext, inner: protocol.Event) {

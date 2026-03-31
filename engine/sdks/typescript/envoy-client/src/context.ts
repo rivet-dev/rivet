@@ -1,3 +1,4 @@
+import * as protocol from "@rivetkit/engine-envoy-protocol";
 import type { Logger } from "pino";
 import type { UnboundedSender } from "antiox/sync/mpsc";
 import type { EnvoyConfig } from "./config.js";
@@ -21,4 +22,6 @@ export interface SharedContext {
 
 	/** Current websocket sender. Set by connect, undefined between connections. */
 	wsTx?: UnboundedSender<WebSocketTxMessage>;
+
+	protocolMetadata?: protocol.ProtocolMetadata;
 }

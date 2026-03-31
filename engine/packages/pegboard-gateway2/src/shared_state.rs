@@ -308,7 +308,7 @@ impl SharedState {
 		while let Ok(NextOutput::Message(msg)) = sub.next().await {
 			tracing::trace!(
 				payload_len = msg.payload.len(),
-				"received message from pubsub"
+				"received message from envoy"
 			);
 
 			match versioned::ToGateway::deserialize_with_embedded_version(&msg.payload) {

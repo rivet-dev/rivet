@@ -17,7 +17,11 @@ impl SharedState {
 	}
 
 	pub async fn start(&self) -> Result<()> {
-		self.pegboard_gateway.start().await?;
+		tokio::try_join!(
+			self.pegboard_gateway.start(),
+			self.pegboard_gateway2.start(),
+		)?;
+
 		Ok(())
 	}
 }

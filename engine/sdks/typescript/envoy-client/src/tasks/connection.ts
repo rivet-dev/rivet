@@ -5,7 +5,7 @@ import { spawn } from "antiox/task";
 import type { SharedContext } from "../context.js";
 import { logger } from "../log.js";
 import { stringifyToEnvoy, stringifyToRivet } from "../stringify.js";
-import { calculateBackoff } from "../utils.js";
+import { calculateBackoff, ParsedCloseReason, parseWebSocketCloseReason } from "../utils.js";
 import {
 	type WebSocketRxMessage,
 	type WebSocketTxMessage,
@@ -23,7 +23,15 @@ async function connectionLoop(ctx: SharedContext) {
 	while (true) {
 		const connectedAt = Date.now();
 		try {
-			await singleConnection(ctx);
+			const res = await singleConnection(ctx);
+
+			if (res?.group == 'ws' && res?.error == "eviction") {
+				log(ctx)?.debug({
+					msg: "connection evicted",
+				});
+				ctx.envoyTx.send({ type: "evict" });
+				return;
+			}
 		} catch (error) {
 			log(ctx)?.error({
 				msg: "connection failed",
@@ -46,7 +54,7 @@ async function connectionLoop(ctx: SharedContext) {
 	}
 }
 
-async function singleConnection(ctx: SharedContext) {
+async function singleConnection(ctx: SharedContext): Promise<ParsedCloseReason | undefined> {
 	const { config } = ctx;
 
 	const protocols = ["rivet"];
@@ -60,18 +68,17 @@ async function singleConnection(ctx: SharedContext) {
 	ctx.wsTx = wsTx;
 
 	log(ctx)?.info({
-		msg: "connected",
+		msg: "websocket connected",
 		endpoint: config.endpoint,
 		namespace: config.namespace,
 		envoyKey: ctx.envoyKey,
 		hasToken: !!config.token,
 	});
 
-	sendEncoded(ctx, {
+	wsSend(ctx, {
 		tag: "ToRivetInit",
 		val: {
 			envoyKey: ctx.envoyKey,
-			name: config.poolName,
 			version: config.version,
 			prepopulateActorNames: new Map(
 				Object.entries(config.prepopulateActorNames).map(
@@ -85,6 +92,8 @@ async function singleConnection(ctx: SharedContext) {
 		},
 	});
 
+	let res;
+
 	try {
 		for await (const msg of wsRx) {
 			if (msg.type === "message") {
@@ -95,6 +104,7 @@ async function singleConnection(ctx: SharedContext) {
 					code: msg.code,
 					reason: msg.reason,
 				});
+				res = parseWebSocketCloseReason(msg.reason);
 				break;
 			} else if (msg.type === "error") {
 				log(ctx)?.error({
@@ -107,6 +117,8 @@ async function singleConnection(ctx: SharedContext) {
 	} finally {
 		ctx.wsTx = undefined;
 	}
+
+	return res;
 }
 
 async function handleWsData(
@@ -135,7 +147,7 @@ async function handleWsData(
 
 function forwardToEnvoy(ctx: SharedContext, message: protocol.ToEnvoy) {
 	if (message.tag === "ToEnvoyPing") {
-		sendEncoded(ctx, {
+		wsSend(ctx, {
 			tag: "ToRivetPong",
 			val: { ts: message.val.ts },
 		});
@@ -144,7 +156,7 @@ function forwardToEnvoy(ctx: SharedContext, message: protocol.ToEnvoy) {
 	}
 }
 
-function sendEncoded(ctx: SharedContext, message: protocol.ToRivet) {
+export function wsSend(ctx: SharedContext, message: protocol.ToRivet) {
 	log(ctx)?.debug({
 		msg: "sending message",
 		data: stringifyToRivet(message),
