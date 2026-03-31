@@ -671,9 +671,6 @@ export default function PricingPageClient() {
   return (
     <div className="min-h-screen bg-black text-zinc-300 font-sans selection:bg-[#FF4500]/30 selection:text-orange-200">
       <main>
-        <Hero />
-        <CloudFeatures />
-        <SelfHostingComparison />
         <Pricing />
       </main>
     </div>

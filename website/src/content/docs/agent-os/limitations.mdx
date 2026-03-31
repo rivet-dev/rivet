@@ -1,0 +1,33 @@
+---
+title: "Limitations"
+description: "What the agentOS VM does not support, and how to work around it."
+skill: true
+---
+
+agentOS is a hybrid model. The lightweight VM handles most agent workloads (coding, scripting, file I/O, API calls) with near-zero overhead. When a workload hits a VM limitation, agents can escalate to a full [sandbox](/docs/agent-os/sandbox) on demand without changing code. The two share a filesystem, so files written in the VM are available in the sandbox and vice versa.
+
+See [agentOS vs Sandbox](/docs/agent-os/versus-sandbox) for a detailed comparison.
+
+## No native Linux binaries
+
+agentOS runs JavaScript, TypeScript, Python, and shell commands. Native x86/ARM binaries compiled for Linux cannot run directly.
+
+- Precompiled CLI tools (e.g. `docker`, `kubectl`, `terraform`)
+- Native language runtimes (Go, Rust, C++ binaries)
+- System packages installed via `apt` or `yum`
+
+## No real Linux kernel
+
+The VM uses a virtual kernel. System calls that require a real Linux kernel are not available.
+
+- Raw sockets and custom network protocols
+- Kernel modules and eBPF
+- Container runtimes (Docker-in-Docker)
+- Low-level filesystem operations (inotify, fuse)
+
+## No hardware access
+
+The VM has no access to GPUs, USB devices, or other hardware.
+
+- GPU-accelerated ML inference
+- Hardware-dependent testing

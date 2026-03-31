@@ -1,0 +1,195 @@
+---
+title: "Multiplayer"
+description: "Connect multiple clients to the same agentOS actor for collaborative agent workflows."
+skill: true
+---
+
+- **Multiple clients** connected to the same agent VM simultaneously
+- **Broadcast events** so all subscribers see session output, process logs, and shell data
+- **Collaborative patterns** where one user prompts and others observe
+- **Handoff** between human and agent control
+
+## Multiple clients observing a session
+
+All clients connected to the same actor receive broadcasted events. This enables building collaborative UIs where multiple users watch an agent work.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+// Client A: creates the session and sends prompts
+const clientA = createClient<typeof registry>("http://localhost:6420");
+const agentA = clientA.vm.getOrCreate(["shared-agent"]);
+
+agentA.on("sessionEvent", (data) => {
+  console.log("[A]", data.event.method);
+});
+
+const session = await agentA.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+await agentA.sendPrompt(session.sessionId, "Build a REST API");
+
+// Client B: observes the same session (in a separate process)
+const clientB = createClient<typeof registry>("http://localhost:6420");
+const agentB = clientB.vm.getOrCreate(["shared-agent"]);
+
+agentB.on("sessionEvent", (data) => {
+  console.log("[B]", data.event.method);
+});
+
+// Client B sees the same events as Client A
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Shared process output
+
+All clients receive process output events from the same VM.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["shared-agent"]);
+
+// All connected clients see process output
+agent.on("processOutput", (data) => {
+  const text = new TextDecoder().decode(data.data);
+  console.log(`[pid ${data.pid}] ${data.stream}: ${text}`);
+});
+
+// All connected clients see shell data
+agent.on("shellData", (data) => {
+  const text = new TextDecoder().decode(data.data);
+  process.stdout.write(text);
+});
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Collaborative prompt/observe pattern
+
+One client acts as the driver (sending prompts), while others observe.
+
+<CodeGroup stacked>
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  onSessionEvent: async (c, sessionId, event) => {
+    // Server-side hook runs once per event, even with multiple clients
+    console.log("Session event:", sessionId, event.method);
+  },
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+// Driver client
+const driver = createClient<typeof registry>("http://localhost:6420");
+const driverAgent = driver.vm.getOrCreate(["shared-agent"]);
+
+const session = await driverAgent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+
+// Observer client (different user, same actor)
+const observer = createClient<typeof registry>("http://localhost:6420");
+const observerAgent = observer.vm.getOrCreate(["shared-agent"]);
+
+observerAgent.on("sessionEvent", (data) => {
+  console.log("[observer]", data.event.method, data.event.params);
+});
+
+// Driver sends a prompt. Observer sees the streaming response.
+await driverAgent.sendPrompt(session.sessionId, "Refactor the auth module");
+```
+</CodeGroup>
+
+## Reconnection with event replay
+
+When a client reconnects, use `getSequencedEvents` to replay missed events and catch up.
+
+<CodeGroup>
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["shared-agent"]);
+
+// On reconnect, replay events from the last known sequence number
+const lastSeq = 42; // Track this on the client side
+const missedEvents = await agent.getSequencedEvents("session-id", {
+  since: lastSeq,
+});
+for (const event of missedEvents) {
+  console.log("Replaying:", event.sequenceNumber, event.notification.method);
+}
+
+// Resume live streaming
+agent.on("sessionEvent", (data) => {
+  console.log("Live:", data.event.method);
+});
+```
+
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+</CodeGroup>
+
+## Recommendations
+
+- Use the same actor key (e.g. `["shared-agent"]`) for all clients that should share the same VM.
+- Events are broadcasted to all connected clients automatically. No additional setup needed.
+- For reconnection, track the last sequence number on the client and use `getSequencedEvents` to replay missed events.
+- Use the server-side `onSessionEvent` hook for logic that should run once per event regardless of connected clients.

@@ -1,0 +1,47 @@
+---
+title: "Security Model"
+description: "Trust boundaries, isolation guarantees, and the agentOS threat model."
+skill: true
+---
+
+<Warning>
+agentOS is in beta and still undergoing security review. The security model described here is subject to change.
+</Warning>
+
+## Trust boundaries
+
+agentOS has two trust boundaries:
+
+1. **Runtime boundary.** The VM isolate that runs agent code. All code inside the VM is untrusted. The isolate prevents access to the host process, host filesystem, and host network.
+2. **Host boundary.** Your application code that configures and manages the VM. You are responsible for hardening the host process, validating inputs, and managing secrets.
+
+## VM isolation
+
+Each agentOS actor runs in its own isolated VM:
+
+- **Sandboxed execution.** All agent code runs inside a V8 isolate with WebAssembly. No code escapes the isolate boundary.
+- **Virtual filesystem.** The VM has its own filesystem. Agents cannot access host files unless explicitly mounted.
+- **Virtual network.** The VM has no direct access to the host network. Outbound requests are proxied through the host with configurable controls.
+- **Process isolation.** No host process is visible or accessible from inside the VM.
+
+## What agentOS guarantees
+
+- Agent code cannot read or write host files outside configured mounts
+- Agent code cannot make network requests except through the host proxy
+- Agent code cannot access host environment variables or secrets
+- Each actor's filesystem, sessions, and state are isolated from other actors
+- Resource limits (CPU, memory) are enforced at the VM level
+
+## What you are responsible for
+
+- Hardening the host process and deployment environment
+- Validating authentication tokens in `onBeforeConnect`
+- Scoping [permissions](/docs/agent-os/permissions) appropriately for your use case
+- Managing API keys and secrets on the host side (use the [LLM gateway](/docs/agent-os/llm-gateway) to avoid passing keys into the VM)
+- Configuring [resource limits and network controls](/docs/agent-os/security) to match your threat model
+
+## Further reading
+
+- [Security configuration](/docs/agent-os/security) for resource limits, network control, and authentication setup
+- [Permissions](/docs/agent-os/permissions) for agent tool-use approval patterns
+- [agentOS vs Sandbox](/docs/agent-os/versus-sandbox) for when to escalate to a full sandbox

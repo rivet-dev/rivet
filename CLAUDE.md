@@ -4,6 +4,8 @@
 
 **ALWAYS use `rivet.dev` - NEVER use `rivet.gg`**
 
+**Never claim "zero cold start" or "no cold start" for agentOS or Rivet Actors.** Always say "near-zero cold start" or specify the actual latency (e.g. "~6 ms cold start"). Cold starts are real, just very small.
+
 - API endpoint: `https://api.rivet.dev`
 - Cloud API endpoint: `https://cloud-api.rivet.dev`
 - Dashboard: `https://hub.rivet.dev`
@@ -153,9 +155,16 @@ Optional frontmatter fields:
 
 All example READMEs in `/examples/` should follow the format defined in `.claude/resources/EXAMPLE_TEMPLATE.md`.
 
-## Notes Tracking
+## Agent Working Directory
 
-- When the user asks to track something in a note, store it in `.agent/notes/` by default.
+All agent working files live in `.agent/` at the repo root.
+
+- **Specs**: `.agent/specs/` -- design specs and interface definitions for planned work.
+- **Research**: `.agent/research/` -- research documents on external systems, prior art, and design analysis.
+- **Todo**: `.agent/todo/*.md` -- deferred work items with context on what needs to be done and why.
+- **Notes**: `.agent/notes/` -- general notes and tracking.
+
+When the user asks to track something in a note, store it in `.agent/notes/` by default. When something is identified as "do later", add it to `.agent/todo/`. Design documents and interface specs go in `.agent/specs/`.
 
 ## Architecture
 
@@ -270,6 +279,7 @@ Data structures often include:
 - When adding or changing any version value in the repo, verify `scripts/release/update_version.ts` updates that location so release bumps cannot leave stale versions behind.
 
 ## Testing Guidelines
+- **Never use `vi.mock`, `jest.mock`, or module-level mocking.** Write tests against real infrastructure (Docker containers, real databases, real filesystems). For LLM calls, use `@copilotkit/llmock` to run a mock LLM server. For protocol-level test doubles (e.g., ACP adapters), write hand-written scripts that run as real processes. If you need callback tracking, `vi.fn()` for simple callbacks is acceptable.
 - When running tests, always pipe the test to a file in /tmp/ then grep it in a second step. You can grep test logs multiple times to search for different log lines.
 - For RivetKit TypeScript tests, run from `rivetkit-typescript/packages/rivetkit` and use `pnpm test <filter>` with `-t` to narrow to specific suites. For example: `pnpm test driver-file-system -t ".*Actor KV.*"`.
 - For frontend testing, use the `agent-browser` skill to interact with and test web UIs in examples. This allows automated browser-based testing of frontend applications.

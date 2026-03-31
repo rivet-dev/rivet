@@ -1,0 +1,65 @@
+---
+title: "Configuration"
+description: "Configure the agentOS VM options, preview settings, and lifecycle hooks."
+skill: true
+---
+
+`agentOs()` accepts the following configuration object.
+
+```ts @nocheck
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: {
+    // Custom filesystem mounts
+    mounts: [],
+    // Software packages to install in the VM (see /docs/agent-os/software)
+    software: [common, pi],
+    // Ports exempt from SSRF checks
+    loopbackExemptPorts: [3000],
+    // Host directory with node_modules
+    moduleAccessCwd: "/path/to/project",
+    // Extra instructions appended to agent system prompts
+    additionalInstructions: "Always write tests first.",
+  },
+
+  // Preview URL token lifetimes
+  preview: {
+    defaultExpiresInSeconds: 3600,   // 1 hour (default)
+    maxExpiresInSeconds: 86400,      // 24 hours (default)
+  },
+
+  // Called when a client connects. Throw to reject. See /docs/agent-os/authentication
+  onBeforeConnect: async (c, params) => {
+    const user = await verifyToken(params.token);
+    if (!user) throw new Error("Unauthorized");
+  },
+  // Called for every session event, server-side. Runs once per event.
+  onSessionEvent: async (c, sessionId, event) => {
+    console.log("Session event:", sessionId, event.method);
+  },
+  // Called when an agent requests permission. See /docs/agent-os/permissions
+  onPermissionRequest: async (c, sessionId, request) => {
+    await c.respondPermission(sessionId, request.permissionId, "always");
+  },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+
+## Session options
+
+Options passed to `createSession`. See [Sessions](/docs/agent-os/sessions) for full documentation.
+
+## Timeouts
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Action timeout | 15 minutes | Maximum time for any single action |
+| Sleep grace period | 15 minutes | Time before sleeping after all activity stops |
+
+These are set internally by the `agentOs()` factory and cannot be overridden per-call. See [Persistence & Sleep](/docs/agent-os/persistence) for details on the sleep lifecycle.

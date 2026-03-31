@@ -28,6 +28,7 @@ ignoredBuiltDependencies:
 
 onlyBuiltDependencies:
   - '@biomejs/biome'
+  - opencode-ai
   - '@rivet-gg/icons'
   - better-sqlite3
   - cbor-extract

@@ -1,0 +1,150 @@
+---
+title: "Tools"
+description: "Expose custom tools to agents as CLI commands inside the VM."
+skill: true
+---
+
+Expose your JavaScript functions to agents as CLI commands inside the VM.
+
+- **Define tools on the host** with Zod input schemas
+- **Auto-generated CLI commands** installed at `/usr/local/bin/agentos-{toolkit}`
+- **Code mode compatible** for up to 80% token reduction since tool calls are just shell commands
+- **Tool list injected** into the agent's [system prompt](/docs/agent-os/system-prompt) automatically
+
+## Getting started
+
+Define a toolkit with Zod input schemas and pass it to `agentOs()`. Each tool becomes a CLI command inside the VM.
+
+<CodeGroup stacked>
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+import { toolKit, hostTool } from "@rivet-dev/agent-os-core";
+import { z } from "zod";
+
+const weatherToolkit = toolKit({
+  name: "weather",
+  description: "Weather data tools",
+  tools: {
+    forecast: hostTool({
+      description: "Get the weather forecast for a city",
+      inputSchema: z.object({
+        city: z.string().describe("City name"),
+        days: z.number().optional().describe("Number of days"),
+      }),
+      execute: async (input) => {
+        const res = await fetch(`https://api.weather.example/forecast?city=${input.city}&days=${input.days ?? 3}`);
+        return res.json();
+      },
+      examples: [
+        { description: "3-day forecast for Paris", input: { city: "Paris", days: 3 } },
+      ],
+    }),
+  },
+});
+
+const vm = agentOs({
+  options: { software: [common, pi],
+    toolKits: [weatherToolkit],
+  },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+await agent.sendPrompt(session.sessionId, "What's the weather in Paris?");
+```
+</CodeGroup>
+
+### Zod to CLI mapping
+
+Zod schema fields are converted to CLI flags automatically. Field names are converted from camelCase to kebab-case.
+
+| Zod type | CLI syntax | Example |
+|---|---|---|
+| `z.string()` | `--name value` | `--path /tmp/out.png` |
+| `z.number()` | `--name 42` | `--limit 5` |
+| `z.boolean()` | `--flag` / `--no-flag` | `--full-page` |
+| `z.enum(["a","b"])` | `--name a` | `--format json` |
+| `z.array(z.string())` | `--name a --name b` | `--tags foo --tags bar` |
+
+Optional fields (via `.optional()`) become optional flags. Required fields are enforced at validation time.
+
+### What the agent sees
+
+When toolkits are registered, CLI shims are installed at `/usr/local/bin/agentos-{name}` inside the VM and the tool list is injected into the agent's [system prompt](/docs/agent-os/system-prompt).
+
+The agent interacts with tools as shell commands:
+
+```bash
+# List all available toolkits
+agentos list-tools
+
+# List tools in a specific toolkit
+agentos list-tools weather
+
+# Get help for a tool
+agentos-weather forecast --help
+
+# Call a tool with flags
+agentos-weather forecast --city Paris --days 3
+
+# Call a tool with inline JSON
+agentos-weather forecast --json '{"city":"Paris","days":3}'
+
+# Call a tool with JSON from a file
+agentos-weather forecast --json-file /tmp/input.json
+
+# Pipe JSON via stdin
+echo '{"city":"Paris"}' | agentos-weather forecast
+```
+
+Tool responses are JSON:
+
+```json
+{"ok":true,"result":{"temperature":22,"condition":"sunny"}}
+```
+
+Error responses include an error code and message:
+
+```json
+{"ok":false,"error":"VALIDATION_ERROR","message":"Expected string at \"city\", received number"}
+```
+
+## Tools vs MCP servers
+
+agentOS supports two ways to give agents access to external functionality: **host tools** and **MCP servers**. Both work, but they have different tradeoffs.
+
+|  | Host Tools | MCP Servers |
+|---|---|---|
+| **How it works** | Call JavaScript functions on the host directly | Connect to a standard MCP server |
+| **Authentication** | None required. Direct binding to the agent's OS. | Requires custom auth configuration per server |
+| **Code mode** | Built-in. Tools are exposed as CLI commands, so agents can call them inside scripts for up to 80% token reduction. | Requires extra work to make code mode work out of the box |
+| **Latency** | Near-zero. Bound directly to the host process. | Extra network hop to reach the MCP server |
+| **Setup** | Define tools in your actor code with Zod schemas | Configure any standard MCP server |
+
+Use host tools when you want to expose your own JavaScript functions to agents. Use MCP servers when you want to connect to existing third-party services. See [Sessions](/docs/agent-os/sessions#mcpservers) for MCP server configuration.
+
+## Security
+
+Tool calls from the agent securely invoke your `execute()` functions on the host. Your functions run with full access to the host environment, so you can call databases, APIs, and services directly without proxying credentials into the VM. The agent never sees the credentials — it only sees the tool's input/output contract.
+
+## Recommendations
+
+- Keep tool descriptions concise. They are injected into the agent's system prompt and consume tokens.
+- Use `.describe()` on Zod fields to generate useful `--help` output.
+- Set explicit timeouts on long-running tools instead of relying on the 30s default.
+- Tools execute on the host with full access to the host environment. Do not expose tools that could compromise the host without appropriate safeguards.

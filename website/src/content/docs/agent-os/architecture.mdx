@@ -1,0 +1,33 @@
+---
+title: "Architecture"
+description: "How agentOS uses WebAssembly and V8 isolates to run agent workloads."
+skill: true
+---
+
+## V8 isolates
+
+agentOS uses V8 isolates (the same engine behind Node.js, Chromium, and Cloudflare Workers) to run JavaScript and TypeScript workloads. Isolates provide near-native execution speed with strong memory isolation between actors. Each actor gets its own isolate with no shared state.
+
+## WebAssembly kernel
+
+The kernel is a WebAssembly module that provides a POSIX-like interface to the V8 isolate. It manages:
+
+- **Process table.** Each process (shell command, script, agent session) runs as its own WebAssembly instance coordinated by the kernel. Processes are isolated from each other.
+- **Virtual filesystem.** A unified filesystem abstraction backed by pluggable drivers (in-memory, SQLite VFS, S3, host directories).
+- **Virtual network.** Outbound requests are proxied through the host with configurable controls. No direct host network access.
+
+## Process isolation
+
+Every process spawned inside the VM gets its own WebAssembly instance. This means:
+
+- A runaway process cannot corrupt another process's memory
+- Each process has its own stack and heap
+- The kernel mediates all IPC and filesystem access between processes
+
+## Runtimes
+
+Three runtimes mount into the kernel:
+
+- **WebAssembly** for POSIX utilities (coreutils, grep, sed, etc.)
+- **V8 isolate** for JavaScript/TypeScript agent code
+- **Pyodide** for Python workloads with kernel-backed I/O

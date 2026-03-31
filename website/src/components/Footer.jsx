@@ -20,8 +20,11 @@ import {
 const footer = {
 	product: [
 		{ name: "Actors", href: "/docs/actors" },
+		{ name: "agentOS", href: "/agent-os" },
+		{ name: "agentOS Pricing", href: "/agent-os/pricing" },
 		{ name: "Sandbox Agent SDK", href: "https://sandboxagent.dev" },
-		{ name: "Pricing", href: "/cloud#pricing" },
+		{ name: "Secure Exec SDK", href: "https://secureexec.dev" },
+		{ name: "Cloud Pricing", href: "/cloud#pricing" },
 		{ name: "Talk to an engineer", href: "/talk-to-an-engineer" },
 		{ name: "Sales", href: "/sales" },
 	],
@@ -236,7 +239,7 @@ function SmallPrint() {
 						<span>Y Combinator</span>
 					</div>
 					<div className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-400">
-						<img src={imgA16z.src} alt="a16z" className="h-3 w-auto" />
+						<img src={imgA16z.src} alt="a16z" className="h-3 w-auto footer-invert" />
 						<span>a16z Speedrun</span>
 					</div>
 				</div>
@@ -280,9 +283,14 @@ function SmallPrint() {
 	);
 }
 
+const WHITE_THEMED_PATHS = ['/agent-os', '/agent-os/use-cases', '/agent-os/pricing', '/agent-os/registry', '/from-unix-to-agents', '/install'];
+
 export function Footer() {
+	const pathname = usePathname();
+	const isWhite = WHITE_THEMED_PATHS.some((p) => pathname === p || pathname === p + '/');
+
 	return (
-		<div>
+		<div className={isWhite ? 'bg-white [&_*]:!border-zinc-200 [&_a]:!text-zinc-500 [&_a:hover]:!text-zinc-900 [&_hr]:!border-zinc-200 [&_.footer-invert]:invert' : ''}>
 			<hr className="mb-8 border-white/10" />
 
 			<footer

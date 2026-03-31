@@ -217,6 +217,18 @@ export const Header = forwardRef(function Header(
 												Actors
 											</a>
 											<a
+												href="/agent-os"
+												className="block px-4 py-2 text-sm text-cream-100 hover:bg-white/5 hover:text-white transition"
+											>
+												agentOS
+											</a>
+											<a
+												href="/agent-os/pricing"
+												className="block px-4 py-2 text-sm text-cream-100 hover:bg-white/5 hover:text-white transition pl-8 text-xs"
+											>
+												Pricing
+											</a>
+											<a
 												href="https://sandboxagent.dev"
 												target="_blank"
 												rel="noopener noreferrer"
@@ -243,7 +255,7 @@ export const Header = forwardRef(function Header(
 						{/* <div className='flex gap-1.5'> */}
 						{[
 							[faDiscord, "https://rivet.dev/discord"],
-							[faGithub, "https://github.com/rivet-dev/rivet"],
+							[faGithub, "https://github.com/rivet-dev"],
 						].map(([icon, href]) => (
 							<a
 								className="flex items-center justify-center p-1 opacity-75 transition hover:opacity-100"

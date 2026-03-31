@@ -1,0 +1,78 @@
+---
+title: "Authentication"
+description: "Authenticate connections to agentOS actors using hooks."
+skill: true
+---
+
+agentOS uses the same authentication system as Rivet Actors. Validate credentials in `onBeforeConnect` or extract user data with `createConnState`.
+
+For full documentation including JWT examples, role-based access control, rate limiting, and token caching, see [Actor Authentication](/docs/actors/authentication).
+
+## `onBeforeConnect`
+
+Validate credentials before allowing a connection. Throw an error to reject.
+
+```ts @nocheck
+import { agentOs } from "rivetkit/agent-os";
+import { setup, UserError } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  onBeforeConnect: async (c, params: { authToken: string }) => {
+    const isValid = await validateToken(params.authToken);
+    if (!isValid) {
+      throw new UserError("Forbidden", { code: "forbidden" });
+    }
+  },
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+
+## `createConnState`
+
+Extract user data from credentials and store it in connection state. Accessible in actions via `c.conn.state`.
+
+```ts @nocheck
+import { agentOs } from "rivetkit/agent-os";
+import { setup, UserError } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+interface ConnState {
+  userId: string;
+  role: string;
+}
+
+const vm = agentOs({
+  createConnState: async (c, params: { authToken: string }): Promise<ConnState> => {
+    const payload = await validateToken(params.authToken);
+    if (!payload) {
+      throw new UserError("Forbidden", { code: "forbidden" });
+    }
+    return { userId: payload.sub, role: payload.role };
+  },
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+
+## Client usage
+
+Pass credentials when connecting:
+
+```ts @nocheck
+import { createClient } from "rivetkit/client";
+
+const client = createClient("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"], {
+  params: { authToken: "my-jwt-token" },
+});
+```
+
+See [Actor Authentication](/docs/actors/authentication) for more patterns including external auth providers, role-based access control, and token caching.

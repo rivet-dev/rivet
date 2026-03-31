@@ -21,6 +21,8 @@ interface HeaderProps {
 	suffix?: ReactNode;
 	logo?: ReactNode;
 	support?: ReactNode;
+	sheetClassName?: string;
+	lightTheme?: boolean;
 }
 
 export function Header({
@@ -32,6 +34,8 @@ export function Header({
 	links,
 	suffix,
 	logo,
+	sheetClassName,
+	lightTheme = false,
 	support = (
 		<Flex direction="col" justify="end" gap="6">
 			<NavItem asChild>
@@ -72,7 +76,12 @@ export function Header({
 							<Button
 								variant="outline"
 								size="icon"
-								className="shrink-0 md:hidden text-white border-white/10 bg-transparent hover:bg-white/5 hover:border-white/20 hover:text-white"
+								className={cn(
+									"shrink-0 md:hidden",
+									lightTheme
+										? "text-zinc-900 border-zinc-200 bg-transparent hover:bg-zinc-100 hover:border-zinc-300 hover:text-zinc-900"
+										: "text-white border-white/10 bg-transparent hover:bg-white/5 hover:border-white/20 hover:text-white"
+								)}
 							>
 								<Icon icon={faBars} className="size-5" />
 								<span className="sr-only">
@@ -80,7 +89,7 @@ export function Header({
 								</span>
 							</Button>
 						</SheetTrigger>
-						<SheetContent side="left" className="overflow-auto p-0 [&>button]:fixed [&>button]:left-[calc(100vw-4rem)] [&>button]:top-4 [&>button]:bg-black/80 [&>button]:backdrop-blur [&>button]:border [&>button]:border-white/10 [&>button]:shadow-lg [&>button]:text-white [&>button]:ring-offset-black [&>button]:focus:ring-white/20 [&>button]:hover:bg-white/5 [&>button]:hover:border-white/20">
+						<SheetContent side="left" className={cn("overflow-auto p-0 [&>button]:fixed [&>button]:left-[calc(100vw-4rem)] [&>button]:top-4 [&>button]:bg-black/80 [&>button]:backdrop-blur [&>button]:border [&>button]:border-white/10 [&>button]:shadow-lg [&>button]:text-white [&>button]:ring-offset-black [&>button]:focus:ring-white/20 [&>button]:hover:bg-white/5 [&>button]:hover:border-white/20", sheetClassName)}>
 							<nav className="min-h-full text-lg font-medium h-full max-w-full">
 								<div className="flex flex-col min-h-full">
 									<a

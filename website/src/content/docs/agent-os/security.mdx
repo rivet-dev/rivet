@@ -1,0 +1,98 @@
+---
+title: "Security & Auth"
+description: "Configure resource limits, network control, authentication, and filesystem isolation for agentOS."
+skill: true
+---
+
+For the isolation model and trust boundaries, see [Security Model](/docs/agent-os/security-model).
+
+## Resource limits
+
+Restrict CPU and memory per actor to prevent runaway agents.
+
+```ts @nocheck
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: {
+    software: [common, pi],
+    maxMemoryMb: 512,
+    maxCpuPercent: 50,
+  },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+
+## Network control
+
+Control which ports and hosts the VM can access.
+
+```ts @nocheck
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+
+const vm = agentOs({
+  options: {
+    software: [common],
+    loopbackExemptPorts: [8080, 3000],
+  },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+
+## Custom authentication
+
+Use the `onBeforeConnect` hook to validate clients before they access the agent.
+
+```ts @nocheck
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  onBeforeConnect: async (c, params) => {
+    const isValid = await verifyToken(params.token);
+    if (!isValid) {
+      throw new Error("Unauthorized");
+    }
+  },
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+
+async function verifyToken(token: string): Promise<boolean> {
+  // Your authentication logic
+  return token === "valid-token";
+}
+```
+
+## Permission system
+
+Agents request permission before using tools. See [Permissions](/docs/agent-os/permissions) for auto-approve, selective approval, and human-in-the-loop patterns.
+
+## Preview URL security
+
+Preview URLs use randomly generated 32-character alphanumeric tokens with configurable expiration. See [Networking & Previews](/docs/agent-os/networking) for token management.
+
+- Tokens are stored in SQLite and survive sleep/wake
+- Expired tokens are automatically cleaned up
+- Use `expireSignedPreviewUrl` to immediately revoke a token
+
+## Filesystem isolation
+
+Each VM has its own virtual filesystem. Files are isolated per actor instance.
+
+- `/home/user` is persistent and survives sleep/wake
+- Mount boundaries prevent escape via symlinks or path traversal
+- Host directory mounts (if configured) prevent symlink escape beyond the mount point

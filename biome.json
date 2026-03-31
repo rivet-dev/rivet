@@ -6,6 +6,7 @@
 			"!frontend/packages",
 			"!**/*.gen.*",
 			"rivetkit-typescript/**/*.{tsx,ts,css}",
+			"agent-os/**/*.ts",
 			"examples/**/*.{ts,tsx}",
 			"!/**/node_modules"
 		],
