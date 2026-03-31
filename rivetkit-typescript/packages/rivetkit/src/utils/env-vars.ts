@@ -45,6 +45,10 @@ export const getRivetkitInspectorDisable = (): boolean =>
 export const getRivetkitStoragePath = (): string | undefined =>
 	getEnvUniversal("RIVETKIT_STORAGE_PATH");
 
+// Internal compute marker for backend logging. Intentionally undocumented for now.
+export const getRivetComputeEnabled = (): boolean =>
+	getEnvUniversal("_RIVET_COMPUTE_ENABLED") === "1";
+
 // Logging configuration
 // DEPRECATED: LOG_LEVEL will be removed in a future version
 export const getLogLevel = (): string | undefined =>

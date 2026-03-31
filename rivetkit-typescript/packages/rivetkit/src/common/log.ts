@@ -5,13 +5,19 @@ import {
 	stdTimeFunctions,
 } from "pino";
 import { z } from "zod/v4";
-import { getLogLevel, getLogTarget, getLogTimestamp } from "@/utils/env-vars";
+import {
+	getLogLevel,
+	getLogTarget,
+	getLogTimestamp,
+	getRivetComputeEnabled,
+} from "@/utils/env-vars";
 import {
 	castToLogValue,
 	formatTimestamp,
 	LOGGER_CONFIG,
 	stringify,
 } from "./logfmt";
+import { createGcpLoggingPinoConfig } from "./gcp-log-helper";
 
 export type { Logger } from "pino";
 
@@ -114,6 +120,19 @@ export function configureDefaultLogger(logLevel?: LogLevel) {
 	// Store the configured log level
 	if (logLevel) {
 		configuredLogLevel = logLevel;
+	}
+
+	if (getRivetComputeEnabled() && typeof window === "undefined") {
+		baseLogger = pino(
+			createGcpLoggingPinoConfig({
+				level: getPinoLevel(logLevel),
+				messageKey: "msg",
+				base: {},
+				timestamp: getLogTimestamp() ? stdTimeFunctions.epochTime : false,
+			}),
+		);
+		loggerCache.clear();
+		return;
 	}
 
 	baseLogger = pino({
