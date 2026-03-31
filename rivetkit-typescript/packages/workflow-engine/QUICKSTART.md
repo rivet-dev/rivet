@@ -143,6 +143,36 @@ await ctx.step("halt", async () => {
 });
 ```
 
+Use `ctx.tryStep()` when you want to keep terminal step failures as data:
+
+```typescript
+const charge = await ctx.tryStep({
+  name: "charge-card",
+  maxRetries: 3,
+  run: async () => await chargeCard(orderId),
+});
+
+if (!charge.ok) {
+  return {
+    status: "manual-review",
+    reason: charge.failure.error.message,
+  };
+}
+```
+
+Use `ctx.try()` for a named block that can recover from terminal `step`, `join`, or `race` failures:
+
+```typescript
+const payment = await ctx.try("payment-flow", async (blockCtx) => {
+  const auth = await blockCtx.step("authorize", () => authorize(orderId));
+  const capture = await blockCtx.step("capture", () => captureFunds(orderId));
+  return { auth, capture };
+});
+```
+
+- Both helpers still rethrow retry backoff, sleeps, queue waits, eviction, and history divergence.
+- `RollbackError` is opt-in. Pass `catch: ["rollback"]` if you want it returned as data.
+
 ### Rollback
 
 Rollback handlers run only for steps that completed successfully and registered

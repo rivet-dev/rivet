@@ -42,6 +42,7 @@ type MetaExtendedEntryType =
 	| "rollback_checkpoint"
 	| "join"
 	| "race"
+	| "try"
 	| "removed"
 	| "input"
 	| "output";
@@ -264,6 +265,11 @@ export function WorkflowVisualizer({
 										{selectedNode.retryCount} retry(s)
 									</div>
 								)}
+							{selectedNode.handledFailure && (
+								<div className="rounded bg-amber-500/10 px-2 py-0.5 font-mono-console text-xs text-amber-500">
+									handled
+								</div>
+							)}
 						</div>
 						<button
 							type="button"

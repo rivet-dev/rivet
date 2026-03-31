@@ -429,6 +429,62 @@ export const workflowSleepActor = actor({
 	},
 });
 
+export const workflowTryActor = actor({
+	state: {
+		innerWrites: 0,
+		tryStepFailure: null as
+			| {
+					kind: string;
+					message: string;
+					attempts: number;
+			  }
+			| null,
+		tryJoinFailure: null as string | null,
+	},
+	run: workflow(async (ctx) => {
+		const stepResult = await ctx.tryStep({
+			name: "charge-card",
+			maxRetries: 0,
+			run: async () => {
+				ctx.state.innerWrites += 1;
+				throw new Error("card declined");
+			},
+		});
+
+		const joinResult = await ctx.try("parallel-flow", async (blockCtx) => {
+			return await blockCtx.join("parallel", {
+				ok: {
+					run: async () => "ok",
+				},
+				bad: {
+					run: async () => {
+						throw new Error("join failed");
+					},
+				},
+			});
+		});
+
+		await ctx.step("store-try-results", async () => {
+			if (!stepResult.ok) {
+				ctx.state.tryStepFailure = {
+					kind: stepResult.failure.kind,
+					message: stepResult.failure.error.message,
+					attempts: stepResult.failure.attempts,
+				};
+			}
+			if (!joinResult.ok) {
+				ctx.state.tryJoinFailure = `${joinResult.failure.source}:${joinResult.failure.name}`;
+			}
+		});
+	}),
+	actions: {
+		getState: (c) => c.state,
+	},
+	options: {
+		sleepTimeout: 50,
+	},
+});
+
 export const workflowStopTeardownActor = actor({
 	state: {
 		wakeAts: [] as number[],

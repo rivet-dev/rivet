@@ -26,6 +26,10 @@ import type {
 	LoopConfig,
 	LoopResult,
 	StepConfig,
+	TryBlockConfig,
+	TryBlockResult,
+	TryStepConfig,
+	TryStepResult,
 	WorkflowQueueMessage,
 } from "@rivetkit/workflow-engine";
 import { WORKFLOW_GUARD_KV_KEY } from "./constants";
@@ -249,6 +253,63 @@ export class ActorWorkflowContext<
 			run: () => this.#withActorAccess(stepConfig.run),
 		};
 		return await this.#wrapActive(() => this.#inner.step(config));
+	}
+
+	async tryStep<T>(
+		nameOrConfig:
+			| string
+			| Parameters<WorkflowContextInterface["tryStep"]>[0],
+		run?: () => Promise<T>,
+	): Promise<TryStepResult<T>> {
+		if (typeof nameOrConfig === "string") {
+			if (!run) {
+				throw new Error("Step run function missing");
+			}
+			return await this.#wrapActive(() =>
+				this.#inner.tryStep(nameOrConfig, () =>
+					this.#withActorAccess(run),
+				),
+			);
+		}
+		const stepConfig = nameOrConfig as TryStepConfig<T>;
+		const config: TryStepConfig<T> = {
+			...stepConfig,
+			run: () => this.#withActorAccess(stepConfig.run),
+		};
+		return await this.#wrapActive(() => this.#inner.tryStep(config));
+	}
+
+	async try<T>(
+		nameOrConfig: string | Parameters<WorkflowContextInterface["try"]>[0],
+		run?: (
+			ctx: ActorWorkflowContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase,
+				TEvents,
+				TQueues
+			>,
+		) => Promise<T>,
+	): Promise<TryBlockResult<T>> {
+		if (typeof nameOrConfig === "string") {
+			if (!run) {
+				throw new Error("Try run function missing");
+			}
+			return await this.#wrapActive(() =>
+				this.#inner.try(nameOrConfig, async (ctx) =>
+					run(this.#createChildContext(ctx)),
+				),
+			);
+		}
+		const tryConfig = nameOrConfig as TryBlockConfig<T>;
+		const config: TryBlockConfig<T> = {
+			...tryConfig,
+			run: async (ctx) => tryConfig.run(this.#createChildContext(ctx)),
+		};
+		return await this.#wrapActive(() => this.#inner.try(config));
 	}
 
 	async loop<T>(

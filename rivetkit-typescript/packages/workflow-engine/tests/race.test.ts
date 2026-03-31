@@ -284,5 +284,74 @@ for (const mode of modes) {
 				value: "nested-fast",
 			});
 		});
+
+		it("should preserve branch retries instead of failing the race", async () => {
+			let attempts = 0;
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.race("retrying-race", [
+					{
+						name: "flaky",
+						run: async (branchCtx) => {
+							return await branchCtx.step({
+								name: "flaky-step",
+								maxRetries: 1,
+								retryBackoffBase: 5,
+								retryBackoffMax: 5,
+								run: async () => {
+									attempts += 1;
+									if (attempts === 1) {
+										throw new Error("retry");
+									}
+									return "winner";
+								},
+							});
+						},
+					},
+					{
+						name: "slow",
+						run: async (branchCtx) => {
+							await branchCtx.sleep("slow-wait", 200);
+							return "slow";
+						},
+					},
+				]);
+			};
+
+			const firstResult = await runWorkflow(
+				"wf-race-retry",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+
+			if (mode === "yield") {
+				expect(firstResult.state).toBe("sleeping");
+				await new Promise((resolve) => setTimeout(resolve, 10));
+
+				const secondResult = await runWorkflow(
+					"wf-race-retry",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+
+				expect(secondResult.state).toBe("completed");
+				expect(secondResult.output).toEqual({
+					winner: "flaky",
+					value: "winner",
+				});
+			} else {
+				expect(firstResult.state).toBe("completed");
+				expect(firstResult.output).toEqual({
+					winner: "flaky",
+					value: "winner",
+				});
+			}
+
+			expect(attempts).toBe(2);
+		});
 	});
 }

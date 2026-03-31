@@ -248,5 +248,65 @@ for (const mode of modes) {
 			expect(result.state).toBe("completed");
 			expect(result.output).toBe("winner:plain");
 		});
+
+		it("should preserve branch retries instead of failing the join", async () => {
+			let attempts = 0;
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				const result = await ctx.join("retrying-join", {
+					flaky: {
+						run: async (branchCtx) => {
+							return await branchCtx.step({
+								name: "flaky-step",
+								maxRetries: 1,
+								retryBackoffBase: 5,
+								retryBackoffMax: 5,
+								run: async () => {
+									attempts += 1;
+									if (attempts === 1) {
+										throw new Error("retry");
+									}
+									return "a";
+								},
+							});
+						},
+					},
+					stable: {
+						run: async () => "b",
+					},
+				});
+
+				return result.flaky + result.stable;
+			};
+
+			const firstResult = await runWorkflow(
+				"wf-join-retry",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+
+			if (mode === "yield") {
+				expect(firstResult.state).toBe("sleeping");
+				await new Promise((resolve) => setTimeout(resolve, 10));
+
+				const secondResult = await runWorkflow(
+					"wf-join-retry",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+
+				expect(secondResult.state).toBe("completed");
+				expect(secondResult.output).toBe("ab");
+			} else {
+				expect(firstResult.state).toBe("completed");
+				expect(firstResult.output).toBe("ab");
+			}
+
+			expect(attempts).toBe(2);
+		});
 	});
 }

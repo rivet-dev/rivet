@@ -132,6 +132,7 @@ import {
 	workflowSpawnChildActor,
 	workflowSpawnParentActor,
 	workflowStopTeardownActor,
+	workflowTryActor,
 } from "./workflow";
 
 // Consolidated setup with all actors
@@ -258,6 +259,7 @@ export const registry = setup({
 		workflowRunningStepActor,
 		workflowReplayActor,
 		workflowSleepActor,
+		workflowTryActor,
 		workflowStopTeardownActor,
 		workflowErrorHookActor,
 		workflowErrorHookEffectsActor,
