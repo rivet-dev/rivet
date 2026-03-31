@@ -105,8 +105,6 @@ import {
 	sleepWaitUntilRejects,
 	sleepWaitUntilState,
 	sleepWithRawWs,
-	sleepWsMessageExceedsGrace,
-	sleepWsConcurrentDbExceedsGrace,
 	sleepWsActiveDbExceedsGrace,
 	sleepWsRawDbAfterClose,
 } from "./sleep-db";
