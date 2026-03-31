@@ -89,11 +89,20 @@ export function createActorKvStore(
 	kv: ActorKvOperations,
 	metrics?: ActorMetrics,
 	preloadedEntries?: PreloadedEntries,
-): KvVfsOptions & { clearPreload: () => void } {
+): KvVfsOptions & { clearPreload: () => void; poison: () => void } {
 	let preload: PreloadedEntries | undefined = preloadedEntries;
+	let poisoned = false;
+	const ensureNotPoisoned = () => {
+		if (poisoned) {
+			throw new Error(
+				"Database is shutting down. A query was still in progress when the actor started stopping. Use c.abortSignal to cancel long-running work before the actor shuts down.",
+			);
+		}
+	};
 
 	return {
 		get: async (key: Uint8Array) => {
+			ensureNotPoisoned();
 			// Preload hits bypass KV entirely and are not tracked in
 			// kvGet metrics. Only cache misses are counted below.
 			if (preload) {
@@ -110,6 +119,7 @@ export function createActorKvStore(
 			return results[0] ?? null;
 		},
 		getBatch: async (keys: Uint8Array[]) => {
+			ensureNotPoisoned();
 			if (!preload || keys.length === 0) {
 				const start = performance.now();
 				const results = await kv.batchGet(keys);
@@ -155,6 +165,7 @@ export function createActorKvStore(
 			return results;
 		},
 		put: async (key: Uint8Array, value: Uint8Array) => {
+			ensureNotPoisoned();
 			const start = performance.now();
 			await kv.batchPut([[key, value]]);
 			if (metrics) {
@@ -164,6 +175,7 @@ export function createActorKvStore(
 			}
 		},
 		putBatch: async (entries: [Uint8Array, Uint8Array][]) => {
+			ensureNotPoisoned();
 			const start = performance.now();
 			await kv.batchPut(entries);
 			if (metrics) {
@@ -173,6 +185,7 @@ export function createActorKvStore(
 			}
 		},
 		deleteBatch: async (keys: Uint8Array[]) => {
+			ensureNotPoisoned();
 			const start = performance.now();
 			await kv.batchDelete(keys);
 			if (metrics) {
@@ -183,6 +196,9 @@ export function createActorKvStore(
 		},
 		clearPreload: () => {
 			preload = undefined;
+		},
+		poison: () => {
+			poisoned = true;
 		},
 	};
 }

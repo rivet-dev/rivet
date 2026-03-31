@@ -9,4 +9,10 @@ export interface KvVfsOptions {
 	putBatch: (entries: [Uint8Array, Uint8Array][]) => Promise<void>;
 	/** Delete multiple keys */
 	deleteBatch: (keys: Uint8Array[]) => Promise<void>;
+	/**
+	 * Called when a KV operation fails inside a VFS callback. The VFS must
+	 * return a generic SQLite error code to the pager, so the original error
+	 * is lost unless the caller captures it through this callback.
+	 */
+	onError?: (error: unknown) => void;
 }
