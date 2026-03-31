@@ -26,12 +26,6 @@
 	},
 	"dependencies": {
 		"rivetkit": "*",
-		"@rivet-dev/agent-os-core": "*",
-		"@rivet-dev/agent-os-common": "link:../../../agent-os-registry/software/common",
-		"@rivet-dev/agent-os-git": "link:../../../agent-os-registry/software/git",
-		"@rivet-dev/agent-os-pi": "link:../../agent-os/packages/agent-pi",
-		"@rivet-dev/agent-os-sandbox": "link:../../agent-os/packages/sandbox",
-		"sandbox-agent": "^0.4.2",
 		"zod": "^3.25.0"
 	},
 	"devDependencies": {
