@@ -10,6 +10,8 @@ export const EXCLUDED_RIVETKIT_PACKAGES = [
 	"@rivetkit/shared-data",
 	"@rivetkit/engine-frontend",
 	"@rivetkit/mcp-hub",
+	"example-agent-os",
+	"example-agent-os-e2e",
 ] as const;
 
 async function npmVersionExists(
