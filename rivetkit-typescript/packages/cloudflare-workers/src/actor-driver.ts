@@ -234,6 +234,25 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 		return this.#getDOCtx(actorId).storage.sql;
 	}
 
+	async overrideRawDatabaseClient(actorId: string) {
+		const sql = this.#getDOCtx(actorId).storage.sql;
+		return {
+			exec: <TRow extends Record<string, unknown> = Record<string, unknown>>(
+				query: string,
+				...args: unknown[]
+			): TRow[] => {
+				const cursor = args.length > 0
+					? sql.exec(query, ...args)
+					: sql.exec(query);
+				return cursor.toArray() as TRow[];
+			},
+		};
+	}
+
+	async overrideDrizzleDatabaseClient(actorId: string) {
+		return this.#getDOCtx(actorId).storage;
+	}
+
 	// Batch KV operations
 	async kvBatchPut(
 		actorId: string,
