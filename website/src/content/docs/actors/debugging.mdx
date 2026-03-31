@@ -651,6 +651,7 @@ Returns in-memory metrics for the current actor wake cycle. Metrics are not pers
 
 Includes counters for `action_calls`, `action_errors`, `action_duration_ms`, `connections_opened`, `connections_closed`, `sql_statements`, `sql_duration_ms`, and `kv_operations`.
 
+
 ### Polling
 
 Inspector endpoints are safe to poll. For live monitoring, poll at 1-5 second intervals. The `/inspector/summary` endpoint is useful for periodic snapshots since it returns all data in a single request.

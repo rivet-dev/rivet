@@ -1,7 +1,7 @@
 import { faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, type PropsWithChildren } from "react";
-import { toast } from "@/components";
+import { Button, toast } from "@/components";
 import { useActorInspector } from "../actor-inspector-context";
 import { actorInspectorQueriesKeys } from "../actor-inspector-context";
 import { useDataProvider } from "../data-provider";
@@ -39,6 +39,11 @@ export function ActorWorkflowTab({ actorId }: ActorWorkflowTabProps) {
 	const replayMutation = useMutation(
 		inspector.actorWorkflowReplayMutation(actorId),
 	);
+	const canReplayCurrentStep =
+		inspector.inspectorProtocolVersion >= 4 &&
+		currentStep?.entry.status !== "running" &&
+		currentStep?.entry.retryCount !== undefined &&
+		currentStep.entry.retryCount > 0;
 	const replayingEntryId = replayMutation.isPending
 		? replayMutation.variables
 		: undefined;
@@ -108,6 +113,22 @@ export function ActorWorkflowTab({ actorId }: ActorWorkflowTabProps) {
 
 	return (
 		<div className="flex-1 w-full min-h-0 h-full flex flex-col">
+			<div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 text-sm">
+				<p className="text-muted-foreground">
+					Right-click a previous step to replay the workflow from
+					there.
+				</p>
+				{canReplayCurrentStep && currentStep && (
+					<Button
+						size="sm"
+						variant="outline"
+						disabled={replayMutation.isPending}
+						onClick={() => handleReplay(currentStep.entry.id)}
+					>
+						Replay From Current Step
+					</Button>
+				)}
+			</div>
 			<WorkflowVisualizer
 				workflow={workflow}
 				currentStepId={currentStep?.entry.id}

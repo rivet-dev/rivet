@@ -18,6 +18,7 @@ import {
 	useCallback,
 	useEffect,
 	useMemo,
+	useRef,
 	useState,
 } from "react";
 import "@xyflow/react/dist/style.css";
@@ -82,6 +83,14 @@ export function WorkflowVisualizer({
 	const [selectedNode, setSelectedNode] = useState<WorkflowNodeData | null>(
 		null,
 	);
+	const [contextMenu, setContextMenu] = useState<{
+		x: number;
+		y: number;
+		entryId: string;
+		isReplaying: boolean;
+		onReplayStep: (entryId: string) => void;
+	} | null>(null);
+	const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
 	const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
 		if (node.type === "workflow" && node.data) {
@@ -101,6 +110,65 @@ export function WorkflowVisualizer({
 			})
 		: null;
 
+	const onNodeContextMenu: NodeMouseHandler = useCallback((event, node) => {
+		if (node.type !== "workflow" || !node.data) {
+			setContextMenu(null);
+			return;
+		}
+
+		const data = node.data as WorkflowNodeData;
+		if (
+			!data.canReplay ||
+			!data.entryId ||
+			typeof data.onReplayStep !== "function"
+		) {
+			setContextMenu(null);
+			return;
+		}
+
+		event.preventDefault();
+		event.stopPropagation();
+		setSelectedNode(data);
+		setContextMenu({
+			x: event.clientX,
+			y: event.clientY,
+			entryId: data.entryId,
+			isReplaying: Boolean(data.isReplaying),
+			onReplayStep: data.onReplayStep,
+		});
+	}, []);
+
+	useEffect(() => {
+		if (!contextMenu) {
+			return;
+		}
+
+		const onPointerDown = (event: PointerEvent) => {
+			if (
+				contextMenuRef.current &&
+				event.target instanceof globalThis.Node &&
+				contextMenuRef.current.contains(event.target)
+			) {
+				return;
+			}
+			setContextMenu(null);
+		};
+
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				setContextMenu(null);
+			}
+		};
+
+		window.addEventListener("pointerdown", onPointerDown);
+		window.addEventListener("keydown", onKeyDown);
+
+		return () => {
+			window.removeEventListener("pointerdown", onPointerDown);
+			window.removeEventListener("keydown", onKeyDown);
+		};
+	}, [contextMenu]);
+
 	return (
 		<div className="flex h-full w-full flex-col bg-background">
 			<div className="relative flex min-h-0 flex-1">
@@ -109,8 +177,37 @@ export function WorkflowVisualizer({
 						nodes={nodes}
 						edges={edges}
 						onNodeClick={onNodeClick}
+						onNodeContextMenu={onNodeContextMenu}
 						onPaneClick={onPaneClick}
 					/>
+					{contextMenu && (
+						<div
+							ref={contextMenuRef}
+							className="fixed z-50 min-w-[12rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+							style={{ left: contextMenu.x, top: contextMenu.y }}
+							onContextMenu={(event) => event.preventDefault()}
+						>
+							<button
+								type="button"
+								disabled={contextMenu.isReplaying}
+								className={cn(
+									"relative flex w-full select-none items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors",
+									contextMenu.isReplaying
+										? "cursor-not-allowed opacity-50"
+										: "cursor-default hover:bg-accent hover:text-accent-foreground",
+								)}
+								onClick={() => {
+									contextMenu.onReplayStep(contextMenu.entryId);
+									setContextMenu(null);
+								}}
+							>
+								<Icon icon={faRefresh} />
+								{contextMenu.isReplaying
+									? "Replaying from step..."
+									: "Replay from this step"}
+							</button>
+						</div>
+					)}
 				</ReactFlowProvider>
 			</div>
 
@@ -328,11 +425,13 @@ function WorkflowGraph({
 	nodes,
 	edges,
 	onNodeClick,
+	onNodeContextMenu,
 	onPaneClick,
 }: {
 	nodes: Node[];
 	edges: ReturnType<typeof workflowHistoryToXYFlow>["edges"];
 	onNodeClick: NodeMouseHandler;
+	onNodeContextMenu: NodeMouseHandler;
 	onPaneClick: () => void;
 }) {
 	const { fitView } = useReactFlow();
@@ -361,6 +460,7 @@ function WorkflowGraph({
 			edgesFocusable={false}
 			panActivationKeyCode={null}
 			onNodeClick={onNodeClick}
+			onNodeContextMenu={onNodeContextMenu}
 			onPaneClick={onPaneClick}
 			nodesDraggable={false}
 			nodesConnectable={false}
