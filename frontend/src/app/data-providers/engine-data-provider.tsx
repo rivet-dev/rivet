@@ -331,7 +331,7 @@ export const createNamespaceContext = ({
 						crashPolicy: data.crashPolicy,
 						runnerNameSelector: data.runnerNameSelector,
 						// convert to base64
-						input: btoa(JSON.stringify(data.input)),
+						input: data.input ? btoa(JSON.stringify(data.input)) : undefined,
 					});
 
 					return response.actor.actorId;
