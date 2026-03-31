@@ -453,7 +453,7 @@ export function Header({
 
 	const clientPathname = usePathname();
 	const pathname = clientPathname || initialPathname;
-	const isLightTheme = WHITE_THEMED_PATHS.some((p) => pathname === p || pathname === p + '/');
+	const isLightTheme = WHITE_THEMED_PATHS.some((p) => pathname === p || pathname === p + '/') || pathname.startsWith('/agent-os/registry/');
 	const isRegistryPage =
 		pathname === AGENT_OS_REGISTRY_HREF || pathname === `${AGENT_OS_REGISTRY_HREF}/`;
 

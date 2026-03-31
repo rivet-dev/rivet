@@ -287,7 +287,7 @@ const WHITE_THEMED_PATHS = ['/agent-os', '/agent-os/use-cases', '/agent-os/prici
 
 export function Footer() {
 	const pathname = usePathname();
-	const isWhite = WHITE_THEMED_PATHS.some((p) => pathname === p || pathname === p + '/');
+	const isWhite = WHITE_THEMED_PATHS.some((p) => pathname === p || pathname === p + '/') || pathname.startsWith('/agent-os/registry/');
 
 	return (
 		<div className={isWhite ? 'bg-white [&_*]:!border-zinc-200 [&_a]:!text-zinc-500 [&_a:hover]:!text-zinc-900 [&_hr]:!border-zinc-200 [&_.footer-invert]:invert' : ''}>
