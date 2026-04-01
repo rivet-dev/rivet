@@ -44,6 +44,16 @@ export default defineConfig({
 		'/docs/clients/next-js': '/docs/clients/javascript/',
 		// Self-hosting redirect
 		'/docs/general/self-hosting': '/docs/self-hosting/',
+		// Removed solution pages
+		'/solutions/agents': '/',
+		'/solutions/app-generators': '/',
+		'/solutions/collaborative-state': '/',
+		'/solutions/game-servers': '/',
+		'/solutions/games': '/',
+		'/solutions/geo-distributed-db': '/',
+		'/solutions/per-tenant-db': '/',
+		'/solutions/user-session-store': '/',
+		'/solutions/workflows': '/',
 	},
 	prefetch: {
 		prefetchAll: true,
