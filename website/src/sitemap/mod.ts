@@ -77,6 +77,9 @@ import {
 	faRobot,
 	faScaleBalanced,
     faLock,
+    faUsb,
+    faUsbDrive,
+    faHardDrive,
 } from "@rivet-gg/icons";
 import { deployOptions, type DeployOption } from "@rivetkit/shared-data";
 import nextjs from "@/images/vendors/next-js.svg";
@@ -579,9 +582,9 @@ export const sitemap = [
 						icon: faClock,
 					},
 					{
-						title: "Sandbox Extension",
+						title: "Sandbox Mounting",
 						href: "/docs/agent-os/sandbox",
-						icon: faLayerGroup,
+						icon: faHardDrive
 					},
 					{
 						title: "Security & Auth",
@@ -661,11 +664,7 @@ export const sitemap = [
 								title: "Security Model",
 								href: "/docs/agent-os/security-model",
 							},
-							{
-								title: "Architecture",
-								href: "/docs/agent-os/architecture",
-							},
-							{
+{
 								title: "Persistence & Sleep",
 								href: "/docs/agent-os/persistence",
 							},

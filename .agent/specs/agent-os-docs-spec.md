@@ -36,7 +36,7 @@ agentOS
 │   ├── Processes & Shell           /docs/agent-os/processes
 │   ├── Networking & Previews       /docs/agent-os/networking
 │   ├── Cron Jobs                   /docs/agent-os/cron
-│   └── Sandbox Extension           /docs/agent-os/sandbox
+│   └── Sandbox Mounting           /docs/agent-os/sandbox
 ├── Orchestration
 │   ├── Multiplayer                 /docs/agent-os/multiplayer
 │   ├── Workflow Automation         /docs/agent-os/workflows
@@ -142,11 +142,11 @@ Rewrite existing page. Registry setup with `agentOs()` actor, client creation, c
 - Overlap modes: `allow`, `skip`, `queue`
 - Example: schedule periodic cleanup command, schedule recurring agent session
 
-#### Sandbox Extension (`/docs/agent-os/sandbox`)
+#### Sandbox Mounting (`/docs/agent-os/sandbox`)
 - Hybrid OS model: when and why to extend with a full sandbox
 - Escalating from lightweight VM to sandbox for untrusted workloads
 - Configuration and setup
-- Example: configure sandbox extension for an agent-os actor
+- Example: configure sandbox mounting for an agent-os actor
 
 ---
 
@@ -248,7 +248,7 @@ All items from the landing page are mapped to docs pages:
 - [x] Mount anything as a filesystem → Filesystem
 - [x] Low overhead → Performance
 - [x] Granular security → Security
-- [x] Extend with sandbox (hybrid OS) → Sandbox Extension
+- [x] Extend with sandbox (hybrid OS) → Sandbox Mounting
 - [x] Runs on your infra → Deployment
 - [x] Expose tools with simple API → Tools
 - [x] Cron jobs → Cron Jobs

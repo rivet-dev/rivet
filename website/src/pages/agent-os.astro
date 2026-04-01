@@ -51,6 +51,118 @@ const vm = await AgentOs.create({
 await vm.prompt(sessionId, "What's the weather in London?");
 // The agent will call: agentos-weather get --city London` },
 
+	{ key: 'agent-agent', fileName: 'agent-agent.ts', code: `import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import { toolKit, hostTool } from "@rivet-dev/agent-os-core";
+import { createClient } from "rivetkit/client";
+import { z } from "zod";
+
+// Tool that lets the writer request a code review from the reviewer
+const reviewToolkit = toolKit({
+  name: "review",
+  description: "Send code to the reviewer agent",
+  tools: {
+    submit: hostTool({
+      description: "Submit a file for code review",
+      inputSchema: z.object({
+        path: z.string().describe("Path to the file"),
+      }),
+      execute: async ({ path }) => {
+        const client = createClient<typeof registry>("http://localhost:6420");
+        const writer = client.writer.getOrCreate(["my-project"]);
+        const reviewer = client.reviewer.getOrCreate(["my-project"]);
+
+        // Copy the file from the writer's VM to the reviewer's VM
+        const code = await writer.readFile(path);
+        await reviewer.writeFile(path, code);
+
+        // Ask the reviewer agent to review it
+        const { sessionId } = await reviewer.createSession("pi");
+        return reviewer.sendPrompt(sessionId, \`Review \${path}\`);
+      },
+    }),
+  },
+});
+
+// Writer gets the review tool; reviewer is plain
+// The writer calls: agentos-review submit --path /home/user/api.ts
+const writer = agentOs({ options: { toolKits: [reviewToolkit] } });
+const reviewer = agentOs();
+
+export const registry = setup({ use: { writer, reviewer } });
+registry.start();` },
+
+
+	{ key: 'nodejs', fileName: 'nodejs.ts', code: `import { AgentOs } from "@rivet-dev/agent-os-core";
+import common from "@rivet-dev/agent-os-common";
+
+const vm = await AgentOs.create({ software: [common] });
+
+await vm.writeFile("/tmp/demo.mjs", \`
+import fs from "fs";
+
+// Create a directory and write files
+fs.mkdirSync("/project/src", { recursive: true });
+fs.writeFileSync("/project/src/index.js", 'console.log("hello");');
+fs.writeFileSync("/project/README.md", "# My Project");
+
+// Read them back
+const files = fs.readdirSync("/project", { recursive: true });
+console.log("Files:", files);
+
+const content = fs.readFileSync("/project/src/index.js", "utf8");
+console.log("index.js:", content);
+\`);
+
+const result = await vm.exec("node /tmp/demo.mjs");
+console.log(result.stdout);` },
+
+	{ key: 'python', fileName: 'python.ts', code: `import { AgentOs } from "@rivet-dev/agent-os-core";
+import common from "@rivet-dev/agent-os-common";
+
+const vm = await AgentOs.create({ software: [common] });
+
+await vm.writeFile("/tmp/demo.py", \`
+import os
+import json
+
+# Create a directory and write files
+os.makedirs("/project/src", exist_ok=True)
+
+with open("/project/src/main.py", "w") as f:
+    f.write("print('hello')")
+
+with open("/project/README.md", "w") as f:
+    f.write("# My Project")
+
+# Read them back
+files = os.listdir("/project")
+print("Files:", files)
+
+with open("/project/src/main.py") as f:
+    print("main.py:", f.read())
+\`);
+
+const result = await vm.exec("python /tmp/demo.py");
+console.log(result.stdout);` },
+
+	{ key: 'bash', fileName: 'bash.ts', code: `import { AgentOs } from "@rivet-dev/agent-os-core";
+import common from "@rivet-dev/agent-os-common";
+
+const vm = await AgentOs.create({ software: [common] });
+
+// Write a script to back up /app/data
+await vm.writeFile("/tmp/backup.sh", \`#!/bin/bash
+set -e
+mkdir -p /backups
+tar -czf /backups/backup_\$(date +%s).tar.gz -C /app/data .
+sha256sum /backups/*.tar.gz
+echo "Done:" && ls -lh /backups/
+\`);
+
+const result = await vm.exec("bash /tmp/backup.sh");
+console.log(result.stdout);` },
+
 	{ key: 's3-filesystem', fileName: 's3-filesystem.ts', code: `import { AgentOs } from "@rivet-dev/agent-os-core";
 import { createS3Backend } from "@rivet-dev/agent-os-s3";
 
@@ -115,47 +227,6 @@ const { sessionId } = await clientA.createSession("pi");
 await clientA.sendPrompt(sessionId, "Build a REST API");
 await clientB.sendPrompt(sessionId, "Add authentication to it");` },
 
-	{ key: 'agent-agent', fileName: 'agent-agent.ts', code: `import { agentOs } from "rivetkit/agent-os";
-import { setup } from "rivetkit";
-import { toolKit, hostTool } from "@rivet-dev/agent-os-core";
-import { createClient } from "rivetkit/client";
-import { z } from "zod";
-
-// Tool that lets the writer request a code review from the reviewer
-const reviewToolkit = toolKit({
-  name: "review",
-  description: "Send code to the reviewer agent",
-  tools: {
-    submit: hostTool({
-      description: "Submit a file for code review",
-      inputSchema: z.object({
-        path: z.string().describe("Path to the file"),
-      }),
-      execute: async ({ path }) => {
-        const client = createClient<typeof registry>("http://localhost:6420");
-        const writer = client.writer.getOrCreate(["my-project"]);
-        const reviewer = client.reviewer.getOrCreate(["my-project"]);
-
-        // Copy the file from the writer's VM to the reviewer's VM
-        const code = await writer.readFile(path);
-        await reviewer.writeFile(path, code);
-
-        // Ask the reviewer agent to review it
-        const { sessionId } = await reviewer.createSession("pi");
-        return reviewer.sendPrompt(sessionId, \`Review \${path}\`);
-      },
-    }),
-  },
-});
-
-// Writer gets the review tool; reviewer is plain
-// The writer calls: agentos-review submit --path /home/user/api.ts
-const writer = agentOs({ options: { toolKits: [reviewToolkit] } });
-const reviewer = agentOs();
-
-export const registry = setup({ use: { writer, reviewer } });
-registry.start();` },
-
 	{ key: 'workflows', fileName: 'workflows.ts', code: `import { agentOs } from "rivetkit/agent-os";
 import common from "@rivet-dev/agent-os-common";
 import pi from "@rivet-dev/agent-os-pi";
@@ -195,6 +266,84 @@ const automator = actor({
 });
 
 export const registry = setup({ use: { automator, vm } });
+registry.start();` },
+
+	{ key: 'git', fileName: 'git.ts', code: `import { AgentOs } from "@rivet-dev/agent-os-core";
+import common from "@rivet-dev/agent-os-common";
+import git from "@rivet-dev/agent-os-git";
+
+const vm = await AgentOs.create({ software: [common, git] });
+
+// Initialize a repo, commit, and branch
+await vm.exec("git init /tmp/repo");
+await vm.writeFile("/tmp/repo/README.md", "# My Project");
+await vm.exec("git -C /tmp/repo add README.md");
+await vm.exec("git -C /tmp/repo commit -m 'initial commit'");
+
+// Create a feature branch
+await vm.exec("git -C /tmp/repo checkout -b feature");
+await vm.writeFile("/tmp/repo/feature.txt", "new feature");
+await vm.exec("git -C /tmp/repo add feature.txt");
+await vm.exec("git -C /tmp/repo commit -m 'add feature'");
+
+// Clone and check out the feature branch
+await vm.exec("git clone /tmp/repo /tmp/clone");
+await vm.exec("git -C /tmp/clone checkout feature");
+
+const content = await vm.readFile("/tmp/clone/feature.txt");
+console.log(new TextDecoder().decode(content));` },
+
+	{ key: 'sandbox', fileName: 'sandbox.ts', code: `import { AgentOs } from "@rivet-dev/agent-os-core";
+import common from "@rivet-dev/agent-os-common";
+import { SandboxAgent } from "sandbox-agent";
+import { docker } from "sandbox-agent/docker";
+import { createSandboxFs, createSandboxToolkit } from "@rivet-dev/agent-os-sandbox";
+
+// Start a Docker-backed sandbox
+const sandbox = await SandboxAgent.start({ sandbox: docker() });
+
+// Mount its filesystem and register the toolkit
+const vm = await AgentOs.create({
+  software: [common],
+  mounts: [{ path: "/sandbox", driver: createSandboxFs({ client: sandbox }) }],
+  toolKits: [createSandboxToolkit({ client: sandbox })],
+});
+
+// Write a file through the mounted sandbox filesystem
+await vm.writeFile("/sandbox/hello.txt", "Hello from agentOS!");
+const content = await vm.readFile("/sandbox/hello.txt");
+console.log(new TextDecoder().decode(content));
+
+// Run a command inside the Docker sandbox
+const result = await vm.exec("agentos-sandbox run-command --command echo --json '{\\"args\\": [\\"hello from Docker\\"]}'");
+console.log(result.stdout);` },
+
+	{ key: 'permissions', fileName: 'permissions.ts', code: `import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+
+const vm = agentOs({
+  options: {
+    // Auto-approve permissions server-side
+    onPermissionRequest: async (c, sessionId, request) => {
+      // Allow read-only operations automatically
+      if (request.type === "read") {
+        await c.respondPermission(sessionId, request.permissionId, "always");
+        return;
+      }
+
+      // Deny dangerous operations
+      if (request.description?.includes("rm -rf")) {
+        await c.respondPermission(sessionId, request.permissionId, "reject");
+        return;
+      }
+
+      // Approve everything else once
+      await c.respondPermission(sessionId, request.permissionId, "once");
+    },
+  },
+});
+
+export const registry = setup({ use: { vm } });
 registry.start();` },
 ];
 

@@ -4,11 +4,6 @@ description: "Use @rivet-dev/agent-os-core standalone for direct VM control with
 skill: true
 ---
 
-- **Standalone SDK** for programmatic VM management without the actor runtime
-- **ID-based flat API** where sessions are referenced by ID strings
-- **No persistence** by default. Filesystem and sessions live in memory only.
-- **No event broadcasting**, sleep/wake, or preview URLs. You manage the lifecycle.
-
 ## agentOS vs agentOS Core
 
 The `agentOs()` actor (from `rivetkit/agent-os`) wraps the core package and adds:
@@ -16,14 +11,17 @@ The `agentOs()` actor (from `rivetkit/agent-os`) wraps the core package and adds
 | | Core (`@rivet-dev/agent-os-core`) | Actor (`rivetkit/agent-os`) |
 |-|---|---|
 | Persistence | In-memory by default (pluggable via [mounts](#mounts)) | Persistent filesystem and sessions |
-| Sleep/wake | Manual `dispose()` / `create()` | Automatic with 15 min grace period |
+| Distributed state | Manage yourself | Built-in distributed statefulness |
+| Stateful sandboxes | Complex to run yourself | Built into Rivet |
+| Sleep/wake | Manual `dispose()` / `create()` | Automatic |
 | Events | Direct callbacks | Broadcasted to all connected clients |
 | Preview URLs | None | Built-in signed URL server |
-| Sessions | ID-based (`vm.prompt(sessionId, ...)`) | ID-based flat API over RPC |
 | Multiplayer | N/A | Multiple clients on same actor |
 | Orchestration | N/A | Workflows, queues, cron |
+| Agent-to-agent communication | Custom | Built into [Rivet Actors](/docs/agent-os/agent-to-agent) |
+| Authentication | Set up yourself | [Documentation](/docs/agent-os/authentication) |
 
-**Use the core package** when you want direct VM control in a script, CLI tool, or custom runtime. **Use the actor** when you want persistence, multiplayer, and the full Rivet platform.
+We recommend using [Rivet Actors](/docs/actors) because they provide a portable way to run agentOS on any infrastructure with built-in persistence, networking, and orchestration. Use the core package if you need the most bare-bones implementation possible.
 
 ## Install
 

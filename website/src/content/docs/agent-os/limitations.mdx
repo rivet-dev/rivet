@@ -4,30 +4,30 @@ description: "What the agentOS VM does not support, and how to work around it."
 skill: true
 ---
 
-agentOS is a hybrid model. The lightweight VM handles most agent workloads (coding, scripting, file I/O, API calls) with near-zero overhead. When a workload hits a VM limitation, agents can escalate to a full [sandbox](/docs/agent-os/sandbox) on demand without changing code. The two share a filesystem, so files written in the VM are available in the sandbox and vice versa.
+agentOS is a Linux-like environment with a POSIX-compliant virtual kernel. It handles most agent workloads (coding, scripting, file I/O, networking) with near-zero overhead.
+
+## Sandbox mounting
+
+When a workload needs a full Linux OS, agents can escalate to a full sandbox on demand without changing code. The [sandbox mounting](/docs/agent-os/sandbox) extension mounts the sandbox as a filesystem and lets you execute commands on it, like mounting a hard drive on your own machine. Files written in the VM are available in the sandbox and vice versa.
 
 See [agentOS vs Sandbox](/docs/agent-os/versus-sandbox) for a detailed comparison.
 
-## No native Linux binaries
+## Limitations
 
-agentOS runs JavaScript, TypeScript, Python, and shell commands. Native x86/ARM binaries compiled for Linux cannot run directly.
+### Software registry
 
-- Precompiled CLI tools (e.g. `docker`, `kubectl`, `terraform`)
-- Native language runtimes (Go, Rust, C++ binaries)
-- System packages installed via `apt` or `yum`
+agentOS uses its own [software registry](/agent-os/registry) of popular tools cross-compiled for the runtime. Native language runtimes like Go, Rust, and C++ are supported. Standard Linux package managers (`apt`, `yum`) are not available since agentOS is not a full Linux OS.
 
-## No real Linux kernel
+See [Software](/docs/agent-os/software) for how to install and configure available packages.
 
-The VM uses a virtual kernel. System calls that require a real Linux kernel are not available.
+### POSIX-compliant, not full Linux
 
-- Raw sockets and custom network protocols
+agentOS provides a POSIX-compliant virtual kernel with full filesystem operations, networking, and process management. It is not a full Linux kernel, so some Linux-specific features are not available:
+
 - Kernel modules and eBPF
-- Container runtimes (Docker-in-Docker)
-- Low-level filesystem operations (inotify, fuse)
+- Container runtimes (e.g. Docker)
 
-## No hardware access
+### No hardware access
 
 The VM has no access to GPUs, USB devices, or other hardware.
 
-- GPU-accelerated ML inference
-- Hardware-dependent testing

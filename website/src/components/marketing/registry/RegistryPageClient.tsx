@@ -13,6 +13,12 @@ const CATEGORY_ORDER: { type: string; label: string; description: string }[] = [
 			"Coding agents with programmatic API access and universal transcript format (ACP).",
 	},
 	{
+		type: "tool",
+		label: "Toolkits",
+		description:
+			"Host-side tools and integrations that extend agent capabilities.",
+	},
+	{
 		type: "file-system",
 		label: "File Systems",
 		description:
@@ -20,15 +26,9 @@ const CATEGORY_ORDER: { type: string; label: string; description: string }[] = [
 	},
 	{
 		type: "sandbox-extension",
-		label: "Sandbox Extensions",
+		label: "Sandbox Mounting",
 		description:
 			"agentOS is a hybrid OS. Mount sandbox file systems and interact with them via tools for heavier workloads. Use agentOS natively for lightweight tasks.",
-	},
-	{
-		type: "tool",
-		label: "Tools",
-		description:
-			"Host-side tools and integrations that extend agent capabilities.",
 	},
 	{
 		type: "software",

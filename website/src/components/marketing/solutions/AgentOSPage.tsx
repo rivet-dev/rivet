@@ -25,8 +25,13 @@ import {
 	ChevronRight,
 	Copy,
 	Check,
+	GitBranch,
+	Container,
+	ShieldCheck,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Icon, faNodeJs, faPython } from '@rivet-gg/icons';
+import type { IconProp } from '@rivet-gg/icons';
 import agentosLogo from '@/images/products/agentos-logo.svg';
 
 interface HeroTabCode {
@@ -632,6 +637,120 @@ const FakeTerminal = () => {
 	);
 };
 
+// --- Hero Tabs (scrollable with fade + arrows) ---
+interface HeroTabEntry {
+	key: string;
+	icon?: typeof Bot;
+	faIcon?: IconProp;
+	label: string;
+	docsHref: string;
+	fileName?: string;
+	code?: string;
+	highlightedCode?: string;
+}
+
+const HeroTabs = ({ tabs, activeTab, onTabChange }: { tabs: HeroTabEntry[]; activeTab: number; onTabChange: (idx: number) => void }) => {
+	const scrollRef = useRef<HTMLDivElement>(null);
+	const [canScrollLeft, setCanScrollLeft] = useState(false);
+	const [canScrollRight, setCanScrollRight] = useState(false);
+
+	const checkOverflow = useCallback(() => {
+		const el = scrollRef.current;
+		if (!el) return;
+		setCanScrollLeft(el.scrollLeft > 2);
+		setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+	}, []);
+
+	useEffect(() => {
+		const el = scrollRef.current;
+		if (!el) return;
+		checkOverflow();
+		el.addEventListener('scroll', checkOverflow, { passive: true });
+		const ro = new ResizeObserver(checkOverflow);
+		ro.observe(el);
+		return () => {
+			el.removeEventListener('scroll', checkOverflow);
+			ro.disconnect();
+		};
+	}, [checkOverflow]);
+
+	const scroll = (direction: 'left' | 'right') => {
+		const el = scrollRef.current;
+		if (!el) return;
+		const amount = el.clientWidth * 0.5;
+		el.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' });
+	};
+
+	return (
+		<div className='relative mb-4 overflow-hidden'>
+			{/* Left fade + arrow */}
+			{canScrollLeft && (
+				<div
+					className='absolute inset-y-0 left-0 z-20 flex w-20 items-center justify-start bg-gradient-to-r from-white from-30% via-white/70 via-60% to-transparent'
+				>
+					<button
+						type='button'
+						onClick={() => scroll('left')}
+						className='ml-1 flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 hover:text-zinc-800'
+						aria-label='Scroll tabs left'
+					>
+						<ChevronLeft className='h-4 w-4' />
+					</button>
+				</div>
+			)}
+
+			{/* Scrollable tabs */}
+			<div ref={scrollRef} className='scrollbar-hide overflow-x-auto'>
+				<div className='flex min-w-max flex-nowrap items-center justify-start gap-1.5 px-1'>
+					{tabs.map((tab, idx) => {
+						const LucideIcon = tab.icon;
+						return (
+							<button
+								key={tab.label}
+								type='button'
+								onClick={() => onTabChange(idx)}
+								className='relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs whitespace-nowrap transition-colors md:px-5 md:text-sm'
+							>
+								{activeTab === idx && (
+									<motion.div
+										layoutId='activeTab'
+										className='absolute inset-0 rounded-lg bg-zinc-200'
+										transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
+									/>
+								)}
+								<span className={`relative z-10 flex items-center gap-2 ${activeTab === idx ? 'text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}>
+									{tab.faIcon ? (
+										<Icon icon={tab.faIcon} className='h-4 w-4' />
+									) : LucideIcon ? (
+										<LucideIcon className='h-4 w-4' />
+									) : null}
+									{tab.label}
+								</span>
+							</button>
+						);
+					})}
+				</div>
+			</div>
+
+			{/* Right fade + arrow */}
+			{canScrollRight && (
+				<div
+					className='absolute inset-y-0 right-0 z-20 flex w-20 items-center justify-end bg-gradient-to-l from-white from-30% via-white/70 via-60% to-transparent'
+				>
+					<button
+						type='button'
+						onClick={() => scroll('right')}
+						className='mr-1 flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 hover:text-zinc-800'
+						aria-label='Scroll tabs right'
+					>
+						<ChevronRight className='h-4 w-4' />
+					</button>
+				</div>
+			)}
+		</div>
+	);
+};
+
 // --- Hero ---
 const agents = [
 	{ src: '/images/agent-logos/pi.svg', name: 'Pi', comingSoon: false },
@@ -640,15 +759,21 @@ const agents = [
 	{ src: '/images/agent-logos/opencode.svg', name: 'OpenCode', comingSoon: true },
 	{ src: '/images/agent-logos/amp.svg', name: 'Amp', comingSoon: true },
 ];
-const heroTabMeta: Array<{ key: string; icon: typeof Bot; label: string; docsHref: string }> = [
+const heroTabMeta: Array<{ key: string; icon?: typeof Bot; faIcon?: IconProp; label: string; docsHref: string }> = [
 	{ key: 'agents', icon: Bot, label: 'Agents', docsHref: '/docs/agent-os/sessions' },
 	{ key: 'tools', icon: Wrench, label: 'Tools', docsHref: '/docs/agent-os/tools' },
 	{ key: 's3-filesystem', icon: HardDrive, label: 'S3 File System', docsHref: '/docs/agent-os/filesystem' },
 	{ key: 'cron', icon: CalendarClock, label: 'Cron', docsHref: '/docs/agent-os/cron' },
-	{ key: 'webhooks', icon: Webhook, label: 'Webhooks', docsHref: '/docs/agent-os/webhooks' },
-	{ key: 'multiplayer', icon: Users, label: 'Multiplayer', docsHref: '/docs/agent-os/multiplayer' },
 	{ key: 'agent-agent', icon: Layers, label: 'Agent-Agent', docsHref: '/docs/agent-os/agent-to-agent' },
 	{ key: 'workflows', icon: Workflow, label: 'Workflows', docsHref: '/docs/agent-os/workflows' },
+	{ key: 'nodejs', faIcon: faNodeJs, label: 'Node.js', docsHref: '/docs/agent-os/processes' },
+	{ key: 'python', faIcon: faPython, label: 'Python', docsHref: '/docs/agent-os/processes' },
+	{ key: 'bash', icon: Terminal, label: 'Bash', docsHref: '/docs/agent-os/processes' },
+	{ key: 'multiplayer', icon: Users, label: 'Multiplayer', docsHref: '/docs/agent-os/multiplayer' },
+	{ key: 'webhooks', icon: Webhook, label: 'Webhooks', docsHref: '/docs/agent-os/webhooks' },
+	{ key: 'git', icon: GitBranch, label: 'Git', docsHref: '/docs/agent-os/processes' },
+	{ key: 'sandbox', icon: Container, label: 'Sandbox Mounting', docsHref: '/docs/agent-os/sandbox' },
+	{ key: 'permissions', icon: ShieldCheck, label: 'Permissions', docsHref: '/docs/agent-os/permissions' },
 ];
 
 const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
@@ -748,32 +873,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 					transition={{ duration: 0.5, delay: 0.15 }}
 				>
 					{/* Tabs */}
-					<div className='mb-4 overflow-x-auto pb-1'>
-						<div className='flex min-w-max flex-nowrap items-center justify-start gap-1.5'>
-						{getStartedTabs.map((tab, idx) => {
-							const Icon = tab.icon;
-							return (
-								<button
-									key={tab.label}
-									onClick={() => setActiveTab(idx)}
-									className='relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs whitespace-nowrap transition-colors md:text-sm'
-								>
-									{activeTab === idx && (
-										<motion.div
-											layoutId='activeTab'
-											className='absolute inset-0 rounded-lg bg-zinc-200'
-											transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
-										/>
-									)}
-									<span className={`relative z-10 flex items-center gap-2 ${activeTab === idx ? 'text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}>
-										<Icon className='h-4 w-4' />
-										{tab.label}
-									</span>
-								</button>
-							);
-						})}
-						</div>
-					</div>
+					<HeroTabs tabs={getStartedTabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
 					{/* Code block */}
 					<div className='overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50'>
@@ -1167,7 +1267,7 @@ const FeatureCardCarousel = ({ section }: { section: ThemedSection }) => {
 			{/* Cards */}
 			<div
 				ref={scrollRef}
-				className='-mx-6 flex gap-4 overflow-x-auto px-6 pb-4 scrollbar-none'
+				className='-mx-6 flex gap-4 overflow-x-auto px-6 pb-4 scrollbar-hide'
 				style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
 			>
 				{section.features.map((feature) => {

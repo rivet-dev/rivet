@@ -76,7 +76,7 @@ pnpm agent-session:server
 ANTHROPIC_API_KEY=sk-... pnpm agent-session
 ```
 
-**Sandbox Extension** - Mount a Docker sandbox into the VM (requires Docker):
+**Sandbox Mounting** - Mount a sandbox into the VM (requires Docker for demonstrating local sandbox):
 
 ```bash
 pnpm sandbox:server
@@ -92,12 +92,12 @@ pnpm sandbox
 - Process spawning and lifecycle management through actor actions
 - Cron scheduling for recurring commands and agent sessions
 - Host toolkits that expose JavaScript functions as CLI commands inside the VM
-- Sandbox extension for heavy workloads via Docker containers
+- Sandbox mounting for heavy workloads via Docker containers
 
 ## Prerequisites
 
 - `ANTHROPIC_API_KEY` for the agent-session example
-- Docker for the sandbox extension example
+- Docker for the sandbox mounting example
 
 ## Implementation
 
@@ -123,7 +123,7 @@ Each example folder contains a `server.ts` that configures an agentOS actor and 
 - [Cron](/docs/agent-os/cron)
 - [Tools](/docs/agent-os/tools)
 - [Sessions](/docs/agent-os/sessions)
-- [Sandbox Extension](/docs/agent-os/sandbox)
+- [Sandbox Mounting](/docs/agent-os/sandbox)
 
 ## License
 

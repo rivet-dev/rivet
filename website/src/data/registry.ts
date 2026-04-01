@@ -308,7 +308,7 @@ export const registry: RegistryEntry[] = [
 		image: "/images/registry/browserbase.svg",
 	},
 
-	// Sandbox Extensions
+	// Sandbox Mounting
 	{
 		slug: "local",
 		title: "Local",

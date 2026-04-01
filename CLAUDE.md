@@ -13,6 +13,8 @@
 
 The `rivet.gg` domain is deprecated and should never be used in this codebase.
 
+**Use "sandbox mounting" when referring to the agentOS sandbox integration.** Do not use "sandbox extension" or "sandbox escalation." The feature mounts a sandbox as a filesystem inside the VM.
+
 **ALWAYS use `github.com/rivet-dev/rivet` - NEVER use `rivet-dev/rivetkit` or `rivet-gg/*`**
 
 **Never modify an existing published `*.bare` runner protocol version unless explicitly asked to do so.**
