@@ -25,18 +25,6 @@ import {
 	DropdownMenuTrigger,
 } from "@rivet-gg/components";
 import { faChevronDown } from "@rivet-gg/icons";
-import {
-	Bot,
-	Gamepad2,
-	FileText,
-	Workflow,
-	ShoppingCart,
-	Wand2,
-	Network,
-	Clock,
-	Database,
-	Globe,
-} from "lucide-react";
 import actorsLogoUrl from "@/images/products/actors-logo.svg";
 import agentosLogoUrl from "@/images/products/agentos-logo.svg";
 import sandboxAgentLogoUrl from "@/images/products/sandbox-agent-logo.svg";
@@ -252,161 +240,6 @@ function ProductsDropdown({
 	);
 }
 
-function SolutionsDropdown({ active }: { active?: boolean }) {
-	const [isOpen, setIsOpen] = useState(false);
-	const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-	const isHoveringRef = useRef(false);
-
-	const solutions = [
-		{
-			label: "Agent Orchestration",
-			href: "/solutions/agents",
-			icon: Bot,
-			description: "Build durable AI assistants",
-		},
-		{
-			label: "Multiplayer Documents",
-			href: "/solutions/collaborative-state",
-			icon: FileText,
-			description: "Real-time collaboration",
-		},
-		{
-			label: "Workflows",
-			href: "/solutions/workflows",
-			icon: Workflow,
-			description: "Durable multi-step processes",
-		},
-		{
-			label: "Vibe-Coded Backends",
-			href: "/solutions/app-generators",
-			icon: Wand2,
-			description: "Backend for AI-generated apps",
-		},
-		{
-			label: "Geo-Distributed Databases",
-			href: "/solutions/geo-distributed-db",
-			icon: Globe,
-			description: "Multi-region state replication",
-		},
-		{
-			label: "Per-Tenant Databases",
-			href: "/solutions/per-tenant-db",
-			icon: Database,
-			description: "Isolated state per customer",
-		},
-	];
-
-	const cancelClose = () => {
-		if (closeTimeoutRef.current) {
-			clearTimeout(closeTimeoutRef.current);
-			closeTimeoutRef.current = null;
-		}
-	};
-
-	const scheduleClose = () => {
-		cancelClose();
-		closeTimeoutRef.current = setTimeout(() => {
-			setIsOpen(false);
-		}, 150);
-	};
-
-	const handleMouseEnter = () => {
-		isHoveringRef.current = true;
-		cancelClose();
-		setIsOpen(true);
-	};
-
-	const handleMouseLeave = () => {
-		isHoveringRef.current = false;
-		scheduleClose();
-	};
-
-	// Handle Radix's open change events (escape key, click outside, etc.)
-	const handleOpenChange = (open: boolean) => {
-		if (!open) {
-			// Close immediately for keyboard/click-outside events
-			// These fire when user explicitly wants to close
-			cancelClose();
-			setIsOpen(false);
-		}
-		// Ignore open events from Radix - hover controls opening
-	};
-
-	// Click toggles the menu, but we handle it ourselves to avoid Radix's double-toggle
-	const handlePointerDown = (e: React.PointerEvent) => {
-		e.preventDefault();
-		cancelClose();
-		setIsOpen((prev) => !prev);
-	};
-
-	useEffect(() => {
-		return () => cancelClose();
-	}, []);
-
-	return (
-		<div
-			className="px-2.5 py-2 opacity-60 hover:opacity-100 transition-all duration-200"
-			onMouseEnter={handleMouseEnter}
-			onMouseLeave={handleMouseLeave}
-		>
-			<DropdownMenu open={isOpen} onOpenChange={handleOpenChange} modal={false}>
-				<DropdownMenuTrigger asChild>
-					<RivetHeader.NavItem asChild>
-						<button
-							type="button"
-							className={cn(
-								"!text-white cursor-pointer flex items-center gap-1 relative",
-								active && "opacity-100",
-								// Invisible bridge to prevent gap issues when moving to dropdown
-								"after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:content-['']",
-							)}
-							onPointerDown={handlePointerDown}
-							onMouseEnter={handleMouseEnter}
-						>
-							Solutions
-							<Icon icon={faChevronDown} className="h-3 w-3 ml-0.5" />
-						</button>
-					</RivetHeader.NavItem>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent
-					align="start"
-					className="min-w-[600px] p-6 bg-black/95 backdrop-blur-lg border border-white/10 rounded-xl shadow-xl"
-					onMouseEnter={handleMouseEnter}
-					onMouseLeave={handleMouseLeave}
-					sideOffset={0}
-					alignOffset={0}
-					side="bottom"
-				>
-					<div className="grid grid-cols-2 gap-x-8 gap-y-5">
-						{solutions.map((solution) => {
-							const IconComponent = solution.icon;
-							return (
-								<a
-									key={solution.href}
-									href={solution.href}
-									className="group flex items-start gap-4 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer -m-3"
-								>
-									<div className="flex-shrink-0 pt-0.5 text-zinc-500 group-hover:text-zinc-400 transition-colors">
-										<IconComponent className="w-4 h-4" />
-									</div>
-									<div className="flex-1 min-w-0 pt-0.5">
-										<div className="font-medium text-white mb-1.5 text-sm group-hover:text-white transition-colors">
-											{solution.label}
-										</div>
-										<div className="text-xs text-zinc-400 group-hover:text-zinc-300 transition-colors leading-relaxed">
-											{solution.description}
-										</div>
-									</div>
-								</a>
-							);
-						})}
-					</div>
-				</DropdownMenuContent>
-			</DropdownMenu>
-		</div>
-	);
-}
-
 interface HeaderProps {
 	active?:
 	| "product"
@@ -414,7 +247,6 @@ interface HeaderProps {
 	| "cookbook"
 	| "blog"
 	| "pricing"
-	| "solutions"
 	| "learn";
 	subnav?: ReactNode;
 	mobileSidebar?: ReactNode;
@@ -778,31 +610,6 @@ function DocsMobileNavigation({
 			{ href: "/cloud", label: "Pricing" },
 			{ href: "/cookbook", label: "Cookbooks" },
 		];
-
-	const solutions = [
-		{ label: "Agent Orchestration", href: "/solutions/agents", icon: Bot },
-		{
-			label: "Multiplayer Documents",
-			href: "/solutions/collaborative-state",
-			icon: FileText,
-		},
-		{ label: "Workflows", href: "/solutions/workflows", icon: Workflow },
-		{
-			label: "Vibe-Coded Backends",
-			href: "/solutions/app-generators",
-			icon: Wand2,
-		},
-		{
-			label: "Geo-Distributed Databases",
-			href: "/solutions/geo-distributed-db",
-			icon: Globe,
-		},
-		{
-			label: "Per-Tenant Databases",
-			href: "/solutions/per-tenant-db",
-			icon: Database,
-		},
-	];
 
 	const products = [
 		{ label: "agentOS", href: "/agent-os", logo: agentosLogoUrl },
