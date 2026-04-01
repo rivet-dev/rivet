@@ -692,7 +692,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 	const displayedAgent = autoPlayComplete ? hoveredAgent : autoPlayAgent;
 
 	return (
-		<section className='relative flex min-h-[100svh] flex-col justify-center px-6 pt-20 md:pt-0'>
+		<section className='relative flex min-h-[100svh] flex-col justify-center px-6 pt-24 md:pt-24'>
 			<div className='mx-auto w-full max-w-5xl'>
 				{/* Title */}
 				<motion.div
@@ -1231,7 +1231,7 @@ const FeatureCardCarousel = ({ section }: { section: ThemedSection }) => {
 };
 
 const ThemedFeatureSections = () => (
-	<div className='mt-32 md:mt-48'>
+	<div className='mt-16 md:mt-48'>
 		{themedSections.map((section) => (
 			<section
 				key={section.category}
@@ -1628,15 +1628,16 @@ function BenchmarkSection() {
 			<div className='rounded-xl border border-zinc-200 bg-zinc-50 p-8'>
 				<BenchColdStartChart />
 				<div className='my-8 border-t border-zinc-100' />
-				<div className='mb-4 flex items-center justify-between'>
-					<p className='text-xs text-zinc-400'>Workload: {wl.description}</p>
-					<div className='flex gap-1 rounded-lg border border-zinc-200 bg-white p-1'>
+				<div className='mb-4 flex items-center justify-between max-sm:flex-col max-sm:items-stretch max-sm:gap-2'>
+					<p className='text-xs text-zinc-400 max-sm:order-2 max-sm:px-1 max-sm:leading-relaxed'>Workload: {wl.description}</p>
+					<div className='flex gap-1 rounded-lg border border-zinc-200 bg-white p-1 max-sm:order-1 max-sm:grid max-sm:w-full max-sm:grid-cols-2 max-sm:rounded-xl'>
 						{(Object.keys(benchWorkloads) as WorkloadKey[]).map((key) => (
 							<button
 								key={key}
 								onClick={() => setWorkload(key)}
-								className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-									workload === key ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-zinc-700'
+								aria-pressed={workload === key}
+								className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors max-sm:flex max-sm:min-h-10 max-sm:w-full max-sm:items-center max-sm:justify-center max-sm:rounded-lg max-sm:py-2 max-sm:text-center ${
+									workload === key ? 'bg-zinc-900 text-white max-sm:shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
 								}`}
 							>
 								{benchWorkloads[key].label}
@@ -1806,7 +1807,7 @@ const FromUnixToAgents = () => (
 // --- Main Page ---
 export default function AgentOSPage({ heroTabs }: AgentOSPageProps) {
 	return (
-		<div className='min-h-screen overflow-x-hidden bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
+		<div className='min-h-screen bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900' style={{ overflowX: 'clip' }}>
 			<main>
 				<Hero heroTabs={heroTabs} />
 				<TechnologyAndBenchmarks />

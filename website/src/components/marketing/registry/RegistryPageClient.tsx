@@ -228,7 +228,7 @@ function FeaturedCarousel({
 				</AnimatePresence>
 			</div>
 
-			<div className="mt-3 flex justify-center gap-1">
+			<div className="mt-3 flex flex-wrap justify-center gap-1">
 				{entries.map((candidate, candidateIndex) => (
 					<button
 						key={candidate.slug}
