@@ -349,8 +349,8 @@ importers:
         specifier: '*'
         version: 0.0.260331072558
       '@rivet-dev/agent-os-pi':
-        specifier: ^0.1.0
-        version: 0.1.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
+        specifier: ^0.1.1
+        version: 0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
@@ -4031,8 +4031,8 @@ importers:
         specifier: ^1.1.5
         version: 1.1.5(hono@4.11.9)(zod@4.1.13)
       '@rivet-dev/agent-os-core':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.1.1
+        version: 0.1.1
       '@rivetkit/bare-ts':
         specifier: ^0.6.2
         version: 0.6.2
@@ -4128,8 +4128,8 @@ importers:
         specifier: '*'
         version: 0.0.260331072558
       '@rivet-dev/agent-os-pi':
-        specifier: ^0.1.0
-        version: 0.1.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
+        specifier: ^0.1.1
+        version: 0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
       '@standard-schema/spec':
         specifier: ^1.0.0
         version: 1.0.0
@@ -9259,8 +9259,8 @@ packages:
   '@rivet-dev/agent-os-common@0.0.260331072558':
     resolution: {integrity: sha512-bkMU6yqLxNLoXYA2/f2qRf0JrlqbIiBRKRpP3d+tbmF+VV2wrAY+iLJDHN6Jw+Q8q3CkT6jB5KTnCZkcYEF3RQ==}
 
-  '@rivet-dev/agent-os-core@0.1.0':
-    resolution: {integrity: sha512-0dYKSAs+OO+q2jp1KMnoRQSiC3rVwNJxer+AZqSuUqfEpu3GLOh1DyRoU14+zWcXMLS9q+69CPaBel5O2Jw6tw==}
+  '@rivet-dev/agent-os-core@0.1.1':
+    resolution: {integrity: sha512-Uw5jr+gUXDY7TDUFqlypjGe1BD2KL9kTHPNo/f1iNS1R+l9IWuvT+FF/MXsLOEkc3fB06OPVu2ZvUuNwp9MpLQ==}
 
   '@rivet-dev/agent-os-coreutils@0.0.260331072558':
     resolution: {integrity: sha512-vI/J2MJnpsJQZ7F5DU/udGqGMtliqhTg28lE6XZ/qEGyjUvmEQ9AiV8CaAcX5HrImAUWOofBbTv6/XGKjOhT1w==}
@@ -9280,8 +9280,8 @@ packages:
   '@rivet-dev/agent-os-gzip@0.0.260331072558':
     resolution: {integrity: sha512-id9iOrZFAuaXaFWIIiQEo70Ze/poI7hodSqWfo9ro0sajV0xI7kSp0BbXgS4PvGc9O2+VWcOE2qzqTUnKNlBzQ==}
 
-  '@rivet-dev/agent-os-pi@0.1.0':
-    resolution: {integrity: sha512-L52bLN2Il3EW+yfzKU16HRtgi2kXBgxlfv7NBpzORF+XamLcr1X4V7PxnpG49gd7mo2IWcS8fZwLoiNl95BJnQ==}
+  '@rivet-dev/agent-os-pi@0.1.1':
+    resolution: {integrity: sha512-+PWE8Kubl6ZfXAPETFXhPRBoPKJbsnbXKK3gvrgGqvBa7kJvzPCYM5muUipSsSPwXurLOtIN+vnCiu8bU/Q7kA==}
     hasBin: true
 
   '@rivet-dev/agent-os-posix@0.1.0':
@@ -24852,7 +24852,7 @@ snapshots:
       '@rivet-dev/agent-os-sed': 0.0.260331072558
       '@rivet-dev/agent-os-tar': 0.0.260331072558
 
-  '@rivet-dev/agent-os-core@0.1.0':
+  '@rivet-dev/agent-os-core@0.1.1':
     dependencies:
       '@rivet-dev/agent-os-posix': 0.1.0
       '@rivet-dev/agent-os-python': 0.1.0
@@ -24877,12 +24877,12 @@ snapshots:
 
   '@rivet-dev/agent-os-gzip@0.0.260331072558': {}
 
-  '@rivet-dev/agent-os-pi@0.1.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)':
+  '@rivet-dev/agent-os-pi@0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)':
     dependencies:
       '@agentclientprotocol/sdk': 0.16.1(zod@3.25.76)
       '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
       '@mariozechner/pi-coding-agent': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
-      '@rivet-dev/agent-os-core': 0.1.0
+      '@rivet-dev/agent-os-core': 0.1.1
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - aws-crt
@@ -24893,12 +24893,12 @@ snapshots:
       - ws
       - zod
 
-  '@rivet-dev/agent-os-pi@0.1.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)':
+  '@rivet-dev/agent-os-pi@0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)':
     dependencies:
       '@agentclientprotocol/sdk': 0.16.1(zod@4.1.13)
       '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
       '@mariozechner/pi-coding-agent': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
-      '@rivet-dev/agent-os-core': 0.1.0
+      '@rivet-dev/agent-os-core': 0.1.1
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - aws-crt

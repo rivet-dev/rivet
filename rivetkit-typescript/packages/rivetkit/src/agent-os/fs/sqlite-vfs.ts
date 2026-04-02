@@ -18,10 +18,10 @@
 import * as posixPath from "node:path/posix";
 import type { RawAccess } from "@/db/config";
 
-// Infer VirtualFileSystem from the MountConfig.driver field since
+// Infer VirtualFileSystem from PlainMountConfig.driver since
 // @secure-exec/core is not a direct dependency of this package.
 type VirtualFileSystem =
-	import("@rivet-dev/agent-os-core").MountConfig["driver"];
+	import("@rivet-dev/agent-os-core").PlainMountConfig["driver"];
 
 // Infer VirtualStat from AgentOs.stat() return type.
 type VirtualStat = Awaited<
