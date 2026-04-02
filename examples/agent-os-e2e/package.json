@@ -11,7 +11,7 @@
 	"dependencies": {
 		"rivetkit": "*",
 		"@rivet-dev/agent-os-common": "*",
-		"@rivet-dev/agent-os-pi": "^0.1.0"
+		"@rivet-dev/agent-os-pi": "^0.1.1"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
