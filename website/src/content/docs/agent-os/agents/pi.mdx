@@ -1,0 +1,80 @@
+---
+title: "Pi"
+description: "Run the Pi coding agent inside a VM with extensions and custom configuration."
+skill: true
+---
+
+## Quick start
+
+<CodeGroup>
+```ts @nocheck server.ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({
+  options: { software: [common, pi] },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+
+```ts @nocheck client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+
+const { text } = await agent.sendPrompt(
+  session.sessionId,
+  "What files are in the current directory?",
+);
+console.log(text);
+```
+</CodeGroup>
+
+Read [Sessions](/docs/agent-os/sessions) first for session options, streaming events, prompts, and lifecycle management.
+
+## Extensions
+
+Pi supports [extensions](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent/examples/extensions) that let you register custom tools, modify the system prompt, and hook into agent lifecycle events. Write a `.js` file into the VM's extensions directory before creating a session and Pi discovers it automatically.
+
+Pi scans two directories for `.js` extension files:
+
+| Directory | Scope |
+|-----------|-------|
+| `~/.pi/agent/extensions/` | Global — applies to all Pi sessions |
+| `<cwd>/.pi/extensions/` | Project — applies only when cwd matches |
+
+```ts
+const extensionCode = `
+module.exports = function(pi) {
+  // Modify the system prompt before each agent turn
+  pi.on("before_agent_start", async (event) => {
+    return {
+      systemPrompt: event.systemPrompt +
+        "\\n\\nAlways respond in formal English."
+    };
+  });
+};
+`;
+
+// Write the extension before creating the session
+await vm.mkdir("/home/user/.pi/agent/extensions", { recursive: true });
+await vm.writeFile("/home/user/.pi/agent/extensions/formal.js", extensionCode);
+
+// Pi discovers the extension automatically
+const { sessionId } = await vm.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY },
+});
+```
+
+See the [Pi extension documentation](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent/examples/extensions) for the full extension API.
+

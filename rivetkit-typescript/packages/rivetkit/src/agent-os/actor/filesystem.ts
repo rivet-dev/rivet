@@ -59,9 +59,10 @@ export function buildFilesystemActions<TConnParams>(
 		mkdir: async (
 			c: AgentOsActionContext<TConnParams>,
 			path: string,
+			options?: { recursive?: boolean },
 		): Promise<void> => {
 			const agentOs = await ensureVm(c, config);
-			await agentOs.mkdir(path);
+			await agentOs.mkdir(path, options);
 		},
 
 		readdir: async (

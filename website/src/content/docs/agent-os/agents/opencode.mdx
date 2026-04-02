@@ -1,0 +1,18 @@
+---
+title: "OpenCode"
+description: "Run the OpenCode coding agent inside a VM."
+skill: false
+---
+
+<Note>
+OpenCode agent documentation is coming soon.
+</Note>
+
+```ts
+import opencode from "@rivet-dev/agent-os-opencode";
+
+const vm = await AgentOs.create({ software: [common, opencode] });
+const { sessionId } = await vm.createSession("opencode", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY },
+});
+```

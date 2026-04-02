@@ -80,6 +80,7 @@ import {
     faUsb,
     faUsbDrive,
     faHardDrive,
+    faMessages,
 } from "@rivet-gg/icons";
 import { deployOptions, type DeployOption } from "@rivetkit/shared-data";
 import nextjs from "@/images/vendors/next-js.svg";
@@ -526,9 +527,40 @@ export const sitemap = [
 				title: "Agent",
 				pages: [
 					{
+						title: "Agents",
+						icon: faRobot,
+						collapsible: true,
+						pages: [
+							{
+								title: "Pi",
+								href: "/docs/agent-os/agents/pi",
+							},
+							{
+								title: "ClaudeCode",
+								href: "/docs/agent-os/agents/claude",
+								badge: "Coming Soon",
+							},
+							{
+								title: "Codex",
+								href: "/docs/agent-os/agents/codex",
+								badge: "Coming Soon",
+							},
+							{
+								title: "Amp",
+								href: "/docs/agent-os/agents/amp",
+								badge: "Coming Soon",
+							},
+							{
+								title: "OpenCode",
+								href: "/docs/agent-os/agents/opencode",
+								badge: "Coming Soon",
+							},
+						]
+					},
+					{
 						title: "Sessions & Transcripts",
 						href: "/docs/agent-os/sessions",
-						icon: faRobot,
+						icon: faMessages,
 					},
 					{
 						title: "Permissions",

@@ -4,6 +4,7 @@ import type {
 	AgentOs,
 	CronEvent,
 	JsonRpcNotification,
+	JsonRpcResponse,
 	PermissionRequest,
 } from "@rivet-dev/agent-os-core";
 import type { ActionContext } from "@/actor/contexts";
@@ -73,6 +74,16 @@ export interface AgentOsEvents {
 	processExit: ProcessExitPayload;
 	shellData: ShellDataPayload;
 	cronEvent: CronEventPayload;
+}
+
+// --- Prompt result ---
+
+/** Result from sendPrompt. */
+export interface PromptResult {
+	/** Raw JSON-RPC response from the ACP adapter. */
+	response: JsonRpcResponse;
+	/** Accumulated agent text output from streamed message chunks. */
+	text: string;
 }
 
 // --- Session serialization ---

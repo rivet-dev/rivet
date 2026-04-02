@@ -16,6 +16,7 @@ import type {
 	AgentOsActionContext,
 	PersistedSessionEvent,
 	PersistedSessionRecord,
+	PromptResult,
 	SessionRecord,
 } from "../types";
 import { ensureVm, runHook, syncPreventSleep } from "./index";
@@ -260,7 +261,7 @@ export function buildPromptActions<TConnParams>(
 			c: AgentOsActionContext<TConnParams>,
 			sessionId: string,
 			text: string,
-		): Promise<JsonRpcResponse> => {
+		): Promise<PromptResult> => {
 			if (c.aborted) {
 				throw new Error(
 					"actor is shutting down, cannot start new prompt",
@@ -279,8 +280,11 @@ export function buildPromptActions<TConnParams>(
 
 			const start = Date.now();
 			try {
-				const raw = await agentOs.prompt(sessionId, text);
-				return JSON.parse(JSON.stringify(raw));
+				const result = await agentOs.prompt(sessionId, text);
+				return {
+					response: JSON.parse(JSON.stringify(result.response)),
+					text: result.text,
+				};
 			} finally {
 				c.vars.activeSessionIds.delete(sessionId);
 				syncPreventSleep(c);

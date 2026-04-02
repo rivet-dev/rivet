@@ -48,6 +48,7 @@ export type {
 	PersistedSessionEvent,
 	PersistedSessionRecord,
 	PermissionRequestPayload,
+	PromptResult,
 	ProcessExitPayload,
 	ProcessOutputPayload,
 	SerializableCronAction,

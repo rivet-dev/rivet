@@ -1,0 +1,18 @@
+---
+title: "Codex"
+description: "Run the Codex coding agent inside a VM."
+skill: false
+---
+
+<Note>
+Codex agent documentation is coming soon.
+</Note>
+
+```ts
+import codex from "@rivet-dev/agent-os-codex-agent";
+
+const vm = await AgentOs.create({ software: [common, ...codex] });
+const { sessionId } = await vm.createSession("codex", {
+  env: { OPENAI_API_KEY: process.env.OPENAI_API_KEY },
+});
+```
