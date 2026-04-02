@@ -29,6 +29,7 @@ pub struct Input {
 
 	/// Arbitrary user-provided binary data encoded in base64.
 	pub input: Option<String>,
+	pub from_v1: bool,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -123,61 +124,64 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 		namespace_id: input.namespace_id,
 		crash_policy: input.crash_policy,
 		create_ts: ctx.create_ts(),
+		from_v1: input.from_v1,
 	})
 	.await?;
 
-	if let Some(key) = &input.key {
-		match keys::reserve_key(
-			ctx,
-			input.namespace_id,
-			&input.name,
-			&key,
-			input.actor_id,
-			&input.pool_name,
-		)
-		.await?
-		{
-			keys::ReserveKeyOutput::Success => {}
-			keys::ReserveKeyOutput::ForwardToDatacenter { dc_label } => {
-				ctx.msg(Failed {
-					error: errors::Actor::KeyReservedInDifferentDatacenter {
-						datacenter_label: dc_label,
-					},
-				})
-				.topic(("actor_id", input.actor_id))
-				.send()
-				.await?;
+	if !input.from_v1 {
+		if let Some(key) = &input.key {
+			match keys::reserve_key(
+				ctx,
+				input.namespace_id,
+				&input.name,
+				&key,
+				input.actor_id,
+				&input.pool_name,
+			)
+			.await?
+			{
+				keys::ReserveKeyOutput::Success => {}
+				keys::ReserveKeyOutput::ForwardToDatacenter { dc_label } => {
+					ctx.msg(Failed {
+						error: errors::Actor::KeyReservedInDifferentDatacenter {
+							datacenter_label: dc_label,
+						},
+					})
+					.topic(("actor_id", input.actor_id))
+					.send()
+					.await?;
 
-				// Destroyed early
-				destroy(ctx, input).await?;
+					// Destroyed early
+					destroy(ctx, input).await?;
 
-				return Ok(());
-			}
-			keys::ReserveKeyOutput::KeyExists { existing_actor_id } => {
-				ctx.msg(Failed {
-					error: errors::Actor::DuplicateKey {
-						key: key.clone(),
-						existing_actor_id,
-					},
-				})
-				.topic(("actor_id", input.actor_id))
-				.send()
-				.await?;
+					return Ok(());
+				}
+				keys::ReserveKeyOutput::KeyExists { existing_actor_id } => {
+					ctx.msg(Failed {
+						error: errors::Actor::DuplicateKey {
+							key: key.clone(),
+							existing_actor_id,
+						},
+					})
+					.topic(("actor_id", input.actor_id))
+					.send()
+					.await?;
 
-				// Destroyed early
-				destroy(ctx, input).await?;
+					// Destroyed early
+					destroy(ctx, input).await?;
 
-				return Ok(());
+					return Ok(());
+				}
 			}
 		}
+
+		ctx.activity(PopulateIndexesInput {}).await?;
+
+		ctx.msg(CreateComplete {})
+			.topic(("actor_id", input.actor_id))
+			.send()
+			.await?;
 	}
-
-	ctx.activity(PopulateIndexesInput {}).await?;
-
-	ctx.msg(CreateComplete {})
-		.topic(("actor_id", input.actor_id))
-		.send()
-		.await?;
 
 	// Spawn adjacent workflows
 	let metrics_workflow_id = ctx
@@ -235,6 +239,7 @@ pub struct InitStateAndUdbInput {
 	pub crash_policy: CrashPolicy,
 	pub pool_name: String,
 	pub create_ts: i64,
+	pub from_v1: bool,
 }
 
 #[activity(InitStateAndDb)]
@@ -255,10 +260,12 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 		.run(|tx| async move {
 			let tx = tx.with_subspace(crate::keys::subspace());
 
-			tx.write(
-				&crate::keys::actor::CreateTsKey::new(input.actor_id),
-				input.create_ts,
-			)?;
+			if !input.from_v1 {
+				tx.write(
+					&crate::keys::actor::CreateTsKey::new(input.actor_id),
+					input.create_ts,
+				)?;
+			}
 			tx.write(
 				&crate::keys::actor::WorkflowIdKey::new(input.actor_id),
 				ctx.workflow_id(),
@@ -284,13 +291,15 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 				)?;
 			}
 
-			// Update metrics
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				input.namespace_id,
-				namespace::keys::metric::Metric::TotalActors(input.name.clone()),
-				1,
-			);
+			if !input.from_v1 {
+				// Update metrics
+				namespace::keys::metric::inc(
+					&tx.with_subspace(namespace::keys::subspace()),
+					input.namespace_id,
+					namespace::keys::metric::Metric::TotalActors(input.name.clone()),
+					1,
+				);
+			}
 
 			Ok(())
 		})
@@ -519,7 +528,7 @@ async fn process_signal(
 	match sig {
 		Main::Allocated(sig) => {
 			// Ignore signals for previous generations
-			if sig.generation == state.generation {
+			if sig.generation != state.generation {
 				return Ok(Loop::Continue);
 			}
 

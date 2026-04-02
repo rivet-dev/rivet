@@ -197,6 +197,15 @@ pub async fn handle_init(
 					),
 					(),
 				)?;
+				tx.write(
+					&pegboard::keys::ns::ActiveEnvoyByNameKey::new(
+						namespace_id,
+						pool_name.clone(),
+						create_ts,
+						envoy_key.clone(),
+					),
+					(),
+				)?;
 
 				// Unset expired (upon reconnection)
 				if create_ts_entry.is_some() {

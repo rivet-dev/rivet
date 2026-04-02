@@ -29,7 +29,10 @@ pub async fn task(
 		.await?
 		{
 			Ok(msg) => {
-				handle_message(&ctx, &conn, msg).await?;
+				let evicted = handle_message(&ctx, &conn, msg).await?;
+				if evicted {
+					return Ok(LifecycleResult::Evicted);
+				}
 			}
 			Err(lifecycle_res) => return Ok(lifecycle_res),
 		}
@@ -78,13 +81,17 @@ async fn recv_msg(
 	Ok(Ok(tunnel_msg))
 }
 
-async fn handle_message(ctx: &StandaloneCtx, conn: &Conn, tunnel_msg: ups::Message) -> Result<()> {
+async fn handle_message(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	tunnel_msg: ups::Message,
+) -> Result<bool> {
 	// Parse message
 	let msg = match versioned::ToEnvoyConn::deserialize_with_embedded_version(&tunnel_msg.payload) {
 		Result::Ok(x) => x,
 		Err(err) => {
 			tracing::error!(?err, "failed to parse tunnel message");
-			return Ok(());
+			return Ok(false);
 		}
 	};
 
@@ -113,8 +120,9 @@ async fn handle_message(ctx: &StandaloneCtx, conn: &Conn, tunnel_msg: ups::Messa
 				})?;
 
 			// Not sent to envoy
-			return Ok(());
+			return Ok(false);
 		}
+		protocol::ToEnvoyConn::ToEnvoyConnClose => return Ok(true),
 		protocol::ToEnvoyConn::ToEnvoyCommands(mut command_wrappers) => {
 			// TODO: Parallelize
 			for command_wrapper in &mut command_wrappers {
@@ -159,5 +167,5 @@ async fn handle_message(ctx: &StandaloneCtx, conn: &Conn, tunnel_msg: ups::Messa
 		.await
 		.context("failed to send message to WebSocket")?;
 
-	Ok(())
+	Ok(false)
 }

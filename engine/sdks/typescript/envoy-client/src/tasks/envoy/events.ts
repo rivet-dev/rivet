@@ -6,7 +6,9 @@ import { wsSend } from "../connection.js";
 export function handleSendEvents(
 	ctx: EnvoyContext,
 	events: protocol.EventWrapper[],
-) {
+): boolean {
+	let stop = false;
+
 	// Record in history per actor
 	for (const event of events) {
 		const entry = getActorEntry(
@@ -22,6 +24,9 @@ export function handleSendEvents(
 			if (event.inner.tag === "EventActorStateUpdate") {
 				if (event.inner.val.state.tag === "ActorStateStopped") {
 					entry.handle.close();
+
+					// Serverless envoys only handle one actor which means if it stops, the envoy should stop too
+					if (ctx.serverless) stop = true;
 				}
 			}
 		}
@@ -32,6 +37,8 @@ export function handleSendEvents(
 		tag: "ToRivetEvents",
 		val: events,
 	});
+
+	return stop;
 }
 
 export function handleAckEvents(

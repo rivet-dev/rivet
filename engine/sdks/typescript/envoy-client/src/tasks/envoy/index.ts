@@ -19,7 +19,7 @@ import {
 	handleSendEvents,
 	resendUnacknowledgedEvents,
 } from "./events.js";
-import { handleTunnelMessage } from './tunnel.js';
+import { handleTunnelMessage, HibernatingWebSocketMetadata, resendBufferedTunnelMessages, sendHibernatableWebSocketMessageAck } from './tunnel.js';
 import {
 	KV_CLEANUP_INTERVAL_MS,
 	type KvRequestEntry,
@@ -28,15 +28,19 @@ import {
 	handleKvResponse,
 	processUnsentKvRequests,
 } from "./kv.js";
-import { spawn, watch, WatchReceiver, WatchSender } from "antiox";
+import { sleep, spawn, watch, WatchReceiver, WatchSender } from "antiox";
+import { BufferMap, EnvoyShutdownError } from "@/utils.js";
+import { stringifyToEnvoy } from "@/stringify.js";
 
 export interface EnvoyContext {
 	shared: SharedContext;
+	serverless: boolean;
 	actors: Map<string, Map<number, ActorEntry>>;
 	kvRequests: Map<number, KvRequestEntry>;
 	nextKvRequestId: number;
-	// Maps tunnel requests to actors
-	requestToActor: Map<[protocol.GatewayId, protocol.RequestId], string>;
+	// Maps tunnel requests to actors (not http requests)
+	requestToActor: BufferMap<string>;
+	bufferedMessages: protocol.ToRivetTunnelMessage[];
 }
 
 export interface ActorEntry {
@@ -59,6 +63,10 @@ export type ToEnvoyFromConnMessage = Exclude<
 export type ToEnvoyMessage =
 	// Inbound from connection
 	| { type: "conn-message"; message: ToEnvoyFromConnMessage }
+	| {
+		type: "conn-close";
+		evict: boolean;
+	}
 	// Sent from actor
 	| {
 		type: "send-events";
@@ -71,20 +79,21 @@ export type ToEnvoyMessage =
 		resolve: (data: protocol.KvResponseData) => void;
 		reject: (error: Error) => void;
 	}
+	| { type: "buffer-tunnel-msg", msg: protocol.ToRivetTunnelMessage }
 	| { type: "shutdown" }
-	| { type: "evict" };
+	| { type: "stop" };
 
 export async function startEnvoy(config: EnvoyConfig): Promise<EnvoyHandle> {
-	const [handle, startRx] = startEnvoySync(config);
+	const handle = startEnvoySync(config);
 
 	// Wait for envoy start
-	await startRx.changed();
+	await handle.started();
 
 	return handle;
 }
 
 // Must manually wait for envoy to start.
-export function startEnvoySync(config: EnvoyConfig): [EnvoyHandle, WatchReceiver<void>] {
+export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 	const [envoyTx, envoyRx] = unboundedChannel<ToEnvoyMessage>();
 	const [startTx, startRx] = watch<void>(void 0);
 	const actors: Map<string, Map<number, ActorEntry>> = new Map();
@@ -97,18 +106,20 @@ export function startEnvoySync(config: EnvoyConfig): [EnvoyHandle, WatchReceiver
 		handle: null as any,
 	};
 
-	startConnection(shared);
+	const connHandle = startConnection(shared);
 
 	const ctx: EnvoyContext = {
 		shared,
+		serverless: false,
 		actors,
 		kvRequests: new Map(),
 		nextKvRequestId: 0,
-		requestToActor: new Map(),
+		requestToActor: new BufferMap(),
+		bufferedMessages: [],
 	};
 
 	// Set shared handle
-	const handle = createHandle(ctx);
+	const handle = createHandle(ctx, startRx);
 	shared.handle = handle;
 
 	log(ctx.shared)?.info({ msg: "starting envoy" });
@@ -122,19 +133,65 @@ export function startEnvoySync(config: EnvoyConfig): [EnvoyHandle, WatchReceiver
 			cleanupOldKvRequests(ctx);
 		}, KV_CLEANUP_INTERVAL_MS);
 
+		let lostTimeout: NodeJS.Timeout | undefined = undefined;
+
 		for await (const msg of envoyRx) {
 			if (msg.type === "conn-message") {
-				await handleConnMessage(ctx, startTx, msg.message);
+				await handleConnMessage(ctx, startTx, lostTimeout, msg.message);
+			} else if (msg.type === "conn-close") {
+				await handleConnClose(ctx, lostTimeout);
+				if (msg.evict) break;
 			} else if (msg.type === "send-events") {
-				handleSendEvents(ctx, msg.events);
+				const stop = handleSendEvents(ctx, msg.events);
+
+				if (stop) {
+					log(ctx.shared)?.info({
+						msg: "serverless actor stopped, stopping envoy"
+					});
+					break;
+				}
 			} else if (msg.type === "kv-request") {
 				handleKvRequest(ctx, msg);
+			} else if (msg.type === "buffer-tunnel-msg") {
+				ctx.bufferedMessages.push(msg.msg);
 			} else if (msg.type === "shutdown") {
 				wsSend(ctx.shared, {
 					tag: "ToRivetStopping",
 					val: null,
 				});
-			} else if (msg.type === "evict") {
+
+				// Start shutdown checker
+				spawn(async () => {
+					let i = 0;
+
+					while (true) {
+						let total = 0;
+
+						// Check for actors with open handles
+						for (const gens of ctx.actors.values()) {
+							const last = Array.from(gens.values())[gens.size - 1];
+
+							if (last && !last.handle.isClosed()) total++;
+						}
+
+						// Wait until no actors remain
+						if (total === 0) {
+							ctx.shared.envoyTx.send({ type: "stop" });
+							break;
+						}
+
+						await sleep(1000);
+
+						if (i % 10 === 0) {
+							log(ctx.shared)?.info({
+								msg: "waiting on actors to stop before shutdown",
+								actors: total,
+							});
+						}
+						i++;
+					}
+				});
+			} else if (msg.type === "stop") {
 				break;
 			} else {
 				unreachable(msg);
@@ -146,6 +203,7 @@ export function startEnvoySync(config: EnvoyConfig): [EnvoyHandle, WatchReceiver
 		});
 
 		// Cleanup
+		ctx.shared.wsTx?.send({ type: "close", code: 1000, reason: "envoy.shutdown" });
 		clearInterval(ackInterval);
 		clearInterval(kvCleanupInterval);
 
@@ -162,12 +220,18 @@ export function startEnvoySync(config: EnvoyConfig): [EnvoyHandle, WatchReceiver
 		ctx.actors.clear();
 	});
 
-	return [handle, startRx];
+	// Queue start actor
+	if (shared.config.serverlessStartPayload) {
+		handle.startServerless(shared.config.serverlessStartPayload);
+	}
+
+	return handle;
 }
 
 async function handleConnMessage(
 	ctx: EnvoyContext,
 	startTx: WatchSender<void>,
+	lostTimeout: NodeJS.Timeout | undefined,
 	message: ToEnvoyFromConnMessage,
 ) {
 	if (message.tag === "ToEnvoyInit") {
@@ -177,8 +241,10 @@ async function handleConnMessage(
 			protocolMetadata: message.val.metadata,
 		});
 
+		clearTimeout(lostTimeout);
 		resendUnacknowledgedEvents(ctx);
 		processUnsentKvRequests(ctx);
+		resendBufferedTunnelMessages(ctx);
 
 		startTx.send();
 	} else if (message.tag === "ToEnvoyCommands") {
@@ -191,6 +257,45 @@ async function handleConnMessage(
 		handleTunnelMessage(ctx, message.val);
 	} else {
 		unreachable(message);
+	}
+}
+
+async function handleConnClose(ctx: EnvoyContext, lostTimeout: NodeJS.Timeout | undefined) {
+	if (!lostTimeout) {
+		let lostThreshold = ctx.shared.protocolMetadata ? Number(ctx.shared.protocolMetadata.envoyLostThreshold) : 10000;
+		log(ctx.shared)?.debug({
+			msg: "starting runner lost timeout",
+			seconds: lostThreshold / 1000,
+		});
+
+		lostTimeout = setTimeout(
+			() => {
+				// Remove all remaining kv requests
+				for (const [_, request] of ctx.kvRequests.entries()) {
+					request.reject(new EnvoyShutdownError());
+				}
+
+				ctx.kvRequests.clear();
+
+				if (ctx.actors.size == 0) return;
+
+				log(ctx.shared)?.warn({
+					msg: "stopping all actors due to runner lost threshold",
+				});
+
+				// Stop all actors
+				for (const [_, gens] of ctx.actors) {
+					for (const [_, entry] of gens) {
+						if (!entry.handle.isClosed()) {
+							entry.handle.send({ type: "lost" });
+						}
+					}
+				}
+
+				ctx.actors.clear();
+			},
+			lostThreshold,
+		);
 	}
 }
 
@@ -220,7 +325,10 @@ export function getActorEntry(
 
 function createHandle(
 	ctx: EnvoyContext,
+	startRx: WatchReceiver<void>,
 ): EnvoyHandle {
+	let startedPromise = startRx.changed();
+
 	return {
 		shutdown(immediate: boolean) {
 			ctx.shared.envoyTx.send({ type: "shutdown" });
@@ -233,6 +341,10 @@ function createHandle(
 
 		getEnvoyKey(): string {
 			return ctx.shared.envoyKey;
+		},
+
+		started(): Promise<void> {
+			return startedPromise;
 		},
 
 		getActor(actorId: string, generation?: number): ActorEntry | undefined {
@@ -248,12 +360,13 @@ function createHandle(
 			);
 		},
 
-		stopActor(actorId: string, generation?: number): void {
+		stopActor(actorId: string, generation?: number, error?: string): void {
 			sendActorIntent(
 				ctx,
 				actorId,
 				{ tag: "ActorIntentStop", val: null },
 				generation,
+				error,
 			);
 		},
 
@@ -426,6 +539,54 @@ function createHandle(
 				val: null,
 			});
 		},
+
+		restoreHibernatingRequests(
+			actorId: string,
+			metaEntries: HibernatingWebSocketMetadata[],
+		) {
+			const actor = getActor(ctx, actorId);
+			if (!actor) {
+				throw new Error(
+					`Actor ${actorId} not found for restoring hibernating requests`,
+				);
+			}
+
+			actor.handle.send({ type: "hws-restore", metaEntries });
+		},
+
+		sendHibernatableWebSocketMessageAck(
+			gatewayId: protocol.GatewayId,
+			requestId: protocol.RequestId,
+			clientMessageIndex: number,
+		) {
+			sendHibernatableWebSocketMessageAck(ctx, gatewayId, requestId, clientMessageIndex);
+		},
+
+		startServerless(payload: ArrayBuffer) {
+			if (ctx.serverless) throw new Error("Already started serverless actor");
+			ctx.serverless = true;
+
+			let version = new DataView(payload).getUint16(0, true);
+
+			if (version != protocol.VERSION)
+				throw new Error(`Serverless start payload does not match protocol version: ${version} vs ${protocol.VERSION}`);
+
+			// Skip first 2 bytes (version)
+			const message = protocol.decodeToEnvoy(new Uint8Array(payload, 2));
+
+			if (message.tag !== "ToEnvoyCommands") throw new Error("invalid serverless body");
+			if (message.val.length !== 1) throw new Error("invalid serverless body");
+			if (message.val[0].inner.tag !== "CommandStartActor") throw new Error("invalid serverless body");
+
+			// Wait for envoy to start before adding message
+			startedPromise.then(() => {
+				log(ctx.shared)?.debug({
+					msg: "received serverless start",
+					data: stringifyToEnvoy(message),
+				});
+				ctx.shared.envoyTx.send({ type: "conn-message", message });
+			});
+		}
 	};
 }
 
@@ -434,13 +595,14 @@ function sendActorIntent(
 	actorId: string,
 	intent: protocol.ActorIntent,
 	generation?: number,
+	error?: string,
 ): void {
 	const entry = getActor(ctx, actorId, generation);
 	if (!entry) return;
 	entry.handle.send({
-		type: "actor-intent",
-		commandIdx: 0n,
+		type: "intent",
 		intent,
+		error,
 	});
 }
 

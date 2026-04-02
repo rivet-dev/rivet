@@ -21,6 +21,9 @@ pub enum RunnerPoolError {
 		raw_payload: Option<String>,
 	},
 
+	/// RivetKit was downgraded to a version after being upgraded to use envoys
+	Downgrade,
+
 	/// Internal error
 	InternalError,
 }

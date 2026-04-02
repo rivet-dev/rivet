@@ -1,5 +1,6 @@
 import * as protocol from "@rivetkit/engine-envoy-protocol";
 import { ActorEntry } from "./tasks/envoy";
+import { HibernatingWebSocketMetadata } from "./tasks/envoy/tunnel";
 
 export interface KvListOptions {
 	reverse?: boolean;
@@ -13,6 +14,8 @@ export interface EnvoyHandle {
 	getProtocolMetadata(): protocol.ProtocolMetadata | undefined;
 
 	getEnvoyKey(): string;
+
+	started(): Promise<void>;
 
 	getActor(actorId: string, generation?: number): ActorEntry | undefined;
 
@@ -81,4 +84,17 @@ export interface EnvoyHandle {
 
 	/** Drop all key-value data for an actor. */
 	kvDrop(actorId: string): Promise<void>;
+
+	restoreHibernatingRequests(
+		actorId: string,
+		metaEntries: HibernatingWebSocketMetadata[],
+	): void;
+
+	sendHibernatableWebSocketMessageAck(
+		gatewayId: protocol.GatewayId,
+		requestId: protocol.RequestId,
+		clientMessageIndex: number,
+	): void;
+
+	startServerless(payload: ArrayBuffer): void;
 }

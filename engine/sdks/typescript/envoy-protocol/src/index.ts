@@ -2028,12 +2028,11 @@ export function writeToEnvoyConnPing(bc: bare.ByteCursor, x: ToEnvoyConnPing): v
     bare.writeI64(bc, x.ts)
 }
 
-/**
- * We have to re-declare the entire union since BARE will not generate the
- * ser/de for ToEnvoy if it's not a top-level type
- */
+export type ToEnvoyConnClose = null
+
 export type ToEnvoyConn =
     | { readonly tag: "ToEnvoyConnPing"; readonly val: ToEnvoyConnPing }
+    | { readonly tag: "ToEnvoyConnClose"; readonly val: ToEnvoyConnClose }
     | { readonly tag: "ToEnvoyCommands"; readonly val: ToEnvoyCommands }
     | { readonly tag: "ToEnvoyAckEvents"; readonly val: ToEnvoyAckEvents }
     | { readonly tag: "ToEnvoyTunnelMessage"; readonly val: ToEnvoyTunnelMessage }
@@ -2045,10 +2044,12 @@ export function readToEnvoyConn(bc: bare.ByteCursor): ToEnvoyConn {
         case 0:
             return { tag: "ToEnvoyConnPing", val: readToEnvoyConnPing(bc) }
         case 1:
-            return { tag: "ToEnvoyCommands", val: readToEnvoyCommands(bc) }
+            return { tag: "ToEnvoyConnClose", val: null }
         case 2:
-            return { tag: "ToEnvoyAckEvents", val: readToEnvoyAckEvents(bc) }
+            return { tag: "ToEnvoyCommands", val: readToEnvoyCommands(bc) }
         case 3:
+            return { tag: "ToEnvoyAckEvents", val: readToEnvoyAckEvents(bc) }
+        case 4:
             return { tag: "ToEnvoyTunnelMessage", val: readToEnvoyTunnelMessage(bc) }
         default: {
             bc.offset = offset
@@ -2064,18 +2065,22 @@ export function writeToEnvoyConn(bc: bare.ByteCursor, x: ToEnvoyConn): void {
             writeToEnvoyConnPing(bc, x.val)
             break
         }
-        case "ToEnvoyCommands": {
+        case "ToEnvoyConnClose": {
             bare.writeU8(bc, 1)
+            break
+        }
+        case "ToEnvoyCommands": {
+            bare.writeU8(bc, 2)
             writeToEnvoyCommands(bc, x.val)
             break
         }
         case "ToEnvoyAckEvents": {
-            bare.writeU8(bc, 2)
+            bare.writeU8(bc, 3)
             writeToEnvoyAckEvents(bc, x.val)
             break
         }
         case "ToEnvoyTunnelMessage": {
-            bare.writeU8(bc, 3)
+            bare.writeU8(bc, 4)
             writeToEnvoyTunnelMessage(bc, x.val)
             break
         }

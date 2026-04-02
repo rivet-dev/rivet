@@ -337,84 +337,6 @@
         ]
       }
     },
-    "/actors2": {
-      "put": {
-        "tags": [
-          "actors::get_or_create"
-        ],
-        "operationId": "actors2_get_or_create",
-        "parameters": [
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ActorsGetOrCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActorsGetOrCreateResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "actors::create"
-        ],
-        "operationId": "actors2_create",
-        "parameters": [
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ActorsCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActorsCreateResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/datacenters": {
       "get": {
         "tags": [
@@ -428,6 +350,77 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DatacentersListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/envoys": {
+      "get": {
+        "tags": [
+          "envoys"
+        ],
+        "operationId": "envoys_list",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "envoy_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvoysListResponse"
                 }
               }
             }
@@ -1369,6 +1362,101 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Datacenter"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Envoy": {
+        "type": "object",
+        "required": [
+          "envoy_key",
+          "namespace_id",
+          "datacenter",
+          "pool_name",
+          "version",
+          "slots",
+          "create_ts",
+          "last_ping_ts",
+          "last_rtt"
+        ],
+        "properties": {
+          "create_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "datacenter": {
+            "type": "string"
+          },
+          "envoy_key": {
+            "type": "string"
+          },
+          "last_connected_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "last_ping_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_rtt": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "metadata": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "namespace_id": {
+            "$ref": "#/components/schemas/RivetId"
+          },
+          "pool_name": {
+            "type": "string"
+          },
+          "slots": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "stop_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "EnvoysListResponse": {
+        "type": "object",
+        "required": [
+          "envoys",
+          "pagination"
+        ],
+        "properties": {
+          "envoys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Envoy"
             }
           },
           "pagination": {

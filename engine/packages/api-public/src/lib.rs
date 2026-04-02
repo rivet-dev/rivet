@@ -1,6 +1,7 @@
 pub mod actors;
 pub mod ctx;
 pub mod datacenters;
+pub mod envoys;
 mod errors;
 pub mod health;
 pub mod metadata;

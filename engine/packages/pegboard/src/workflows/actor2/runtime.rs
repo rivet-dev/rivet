@@ -182,6 +182,7 @@ pub async fn allocate(ctx: &ActivityCtx, input: &AllocateInput) -> Result<Alloca
 		_ => None,
 	});
 
+	let actor_id = state.actor_id;
 	let namespace_id = state.namespace_id;
 	let pool_name = &state.pool_name;
 	let envoy_eligible_threshold = ctx.config().pegboard().envoy_eligible_threshold();
@@ -196,6 +197,9 @@ pub async fn allocate(ctx: &ActivityCtx, input: &AllocateInput) -> Result<Alloca
 		.run(|tx| async move {
 			let ping_threshold_ts = util::timestamp::now() - envoy_eligible_threshold;
 			let tx = tx.with_subspace(keys::subspace());
+
+			// Set not sleeping
+			tx.delete(&keys::actor::SleepTsKey::new(actor_id));
 
 			let actor_slots_key = keys::ns::ActorSlotsKey::new(namespace_id, pool_name.clone());
 
@@ -517,7 +521,7 @@ pub async fn handle_stopped(
 		.await?;
 	}
 
-	let (try_reallocate, was_going_away) = match state.transition {
+	let (try_reallocate, going_away) = match state.transition {
 		Transition::SleepIntent {
 			rewake_after_stop, ..
 		} => (rewake_after_stop, false),
@@ -526,16 +530,43 @@ pub async fn handle_stopped(
 		_ => (true, false),
 	};
 
-	let stopped_res = if try_reallocate {
-		// An actor stopping with `StopCode::Ok` indicates a graceful exit (if not going away)
-		let graceful_exit = !was_going_away
-			&& matches!(
-				variant,
-				StoppedVariant::Normal {
-					code: protocol::StopCode::Ok,
-					..
-				}
-			);
+	// Always immediately reallocate if going away
+	let stopped_res = if going_away {
+		let allocate_res = ctx.activity(AllocateInput {}).await?;
+
+		if let Some(allocation) = allocate_res.allocation {
+			state.generation += 1;
+
+			ctx.activity(SendOutboundInput {
+				generation: state.generation,
+				input: input.input.clone(),
+				allocation,
+			})
+			.await?;
+
+			// Transition to allocating
+			state.transition = Transition::Allocating {
+				destroy_after_start: false,
+				lost_timeout_ts: util::timestamp::now()
+					+ ctx.config().pegboard().actor_allocation_threshold(),
+			};
+		} else {
+			// Transition to retry backoff
+			state.transition = Transition::Sleeping {
+				attempting_reallocation: true,
+			};
+		}
+
+		StoppedResult::Continue
+	} else if try_reallocate {
+		// An actor stopping with `StopCode::Ok` indicates a graceful exit
+		let graceful_exit = matches!(
+			variant,
+			StoppedVariant::Normal {
+				code: protocol::StopCode::Ok,
+				..
+			}
+		);
 
 		match (input.crash_policy, graceful_exit) {
 			(CrashPolicy::Restart, false) => {
@@ -568,8 +599,6 @@ pub async fn handle_stopped(
 			}
 			(CrashPolicy::Sleep, false) => {
 				tracing::debug!(actor_id=?input.actor_id, "actor sleeping due to ungraceful exit");
-
-				ctx.activity(SetSleepingInput {}).await?;
 
 				// Clear alarm
 				if let Some(alarm_ts) = state.alarm_ts {
@@ -609,6 +638,10 @@ pub async fn handle_stopped(
 
 		StoppedResult::Continue
 	};
+
+	if let Transition::Sleeping { .. } = state.transition {
+		ctx.activity(SetSleepingInput {}).await?;
+	}
 
 	ctx.msg(Stopped {})
 		.topic(("actor_id", input.actor_id))

@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use anyhow::*;
 
 pub mod actors;
+pub mod envoys;
 pub mod internal;
 pub mod namespaces;
 pub mod router;

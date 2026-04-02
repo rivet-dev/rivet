@@ -1,6 +1,6 @@
 use rivet_api_builder::{create_router, prelude::*};
 
-use crate::{actors, internal, namespaces, runner_configs, runners};
+use crate::{actors, envoys, internal, namespaces, runner_configs, runners};
 
 #[tracing::instrument(skip_all)]
 pub async fn router(
@@ -23,9 +23,7 @@ pub async fn router(
 			// MARK: Actors
 			.route("/actors", get(actors::list::list))
 			.route("/actors", post(actors::create::create))
-			.route("/actors2", post(actors::create::create2))
 			.route("/actors", put(actors::get_or_create::get_or_create))
-			.route("/actors2", put(actors::get_or_create::get_or_create2))
 			.route("/actors/{actor_id}", delete(actors::delete::delete))
 			.route("/actors/names", get(actors::list_names::list_names))
 			.route(
@@ -35,6 +33,8 @@ pub async fn router(
 			// MARK: Runners
 			.route("/runners", get(runners::list))
 			.route("/runners/names", get(runners::list_names))
+			// MARK: Envoys
+			.route("/envoys", get(envoys::list))
 			// MARK: Internal
 			.route("/cache/purge", post(internal::cache_purge))
 			.route(

@@ -13,7 +13,7 @@ pub struct ServerlessMetadata {
 	pub runtime: String,
 	pub version: String,
 	pub actor_names: HashMap<String, serde_json::Value>,
-	pub runner_version: Option<u32>,
+	pub envoy_version: Option<u32>,
 }
 
 impl From<pegboard::ops::serverless_metadata::fetch::Output> for ServerlessMetadata {
@@ -26,7 +26,7 @@ impl From<pegboard::ops::serverless_metadata::fetch::Output> for ServerlessMetad
 				.into_iter()
 				.map(|a| (a.name, serde_json::Value::Object(a.metadata)))
 				.collect(),
-			runner_version: output.runner_version,
+			envoy_version: output.envoy_version,
 		}
 	}
 }
@@ -40,12 +40,10 @@ pub async fn fetch_serverless_runner_metadata(
 	url: String,
 	headers: HashMap<String, String>,
 ) -> Result<ServerlessMetadata, ServerlessMetadataError> {
-	let result = ctx
-		.op(pegboard::ops::serverless_metadata::fetch::Input { url, headers })
+	ctx.op(pegboard::ops::serverless_metadata::fetch::Input { url, headers })
 		.await
-		.map_err(|_| ServerlessMetadataError::RequestFailed {})?;
-
-	result.map(ServerlessMetadata::from)
+		.map_err(|_| ServerlessMetadataError::RequestFailed {})?
+		.map(ServerlessMetadata::from)
 }
 
 /// Fetches metadata from the given URL and populates actor names in the database.

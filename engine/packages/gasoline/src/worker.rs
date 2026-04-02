@@ -344,10 +344,10 @@ impl Worker {
 		let shutdown_start = Instant::now();
 		loop {
 			// Future will resolve once all workflow tasks complete
-			let join_fut = async { while let Some(_) = wf_futs.next().await {} };
+			let complete_fut = async { while let Some(_) = wf_futs.next().await {} };
 
 			tokio::select! {
-				_ = join_fut => {
+				_ = complete_fut => {
 					break;
 				}
 				_ = progress_interval.tick() => {

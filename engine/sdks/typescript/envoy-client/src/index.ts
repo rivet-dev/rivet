@@ -8,5 +8,6 @@ export {
 	startEnvoy,
 	startEnvoySync,
 } from "./tasks/envoy/index.js";
+export { type HibernatingWebSocketMetadata } from "./tasks/envoy/tunnel.js";
 export * as protocol from "@rivetkit/engine-envoy-protocol";
 export * as utils from './utils.js';

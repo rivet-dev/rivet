@@ -30,166 +30,133 @@ pub struct Output {
 #[operation]
 pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	// Set up subscriptions before dispatching workflow
-	let mut create_sub = ctx
-		.subscribe::<crate::workflows::actor::CreateComplete>(("actor_id", input.actor_id))
-		.await?;
-	let mut fail_sub = ctx
-		.subscribe::<crate::workflows::actor::Failed>(("actor_id", input.actor_id))
-		.await?;
-	let mut destroy_sub = ctx
-		.subscribe::<crate::workflows::actor::DestroyStarted>(("actor_id", input.actor_id))
-		.await?;
+	let (
+		mut create_sub,
+		mut fail_sub,
+		mut destroy_sub,
+		mut create_sub2,
+		mut fail_sub2,
+		mut destroy_sub2,
+		pool_res,
+	) = tokio::try_join!(
+		ctx.subscribe::<crate::workflows::actor::CreateComplete>(("actor_id", input.actor_id)),
+		ctx.subscribe::<crate::workflows::actor::Failed>(("actor_id", input.actor_id)),
+		ctx.subscribe::<crate::workflows::actor::DestroyStarted>(("actor_id", input.actor_id)),
+		ctx.subscribe::<crate::workflows::actor2::CreateComplete>(("actor_id", input.actor_id)),
+		ctx.subscribe::<crate::workflows::actor2::Failed>(("actor_id", input.actor_id)),
+		ctx.subscribe::<crate::workflows::actor2::DestroyStarted>(("actor_id", input.actor_id)),
+		ctx.op(crate::ops::runner_config::get::Input {
+			runners: vec![(input.namespace_id, input.runner_name_selector.clone())],
+			bypass_cache: false,
+		}),
+	)?;
 
-	// TODO: check rivetkit version before choosing actor version
-
-	// Dispatch actor workflow
-	ctx.workflow(crate::workflows::actor::Input {
-		actor_id: input.actor_id,
-		name: input.name.clone(),
-		runner_name_selector: input.runner_name_selector.clone(),
-		key: input.key.clone(),
-		namespace_id: input.namespace_id,
-		crash_policy: input.crash_policy,
-		input: input.input.clone(),
-	})
-	.tag("actor_id", input.actor_id)
-	.dispatch()
-	.await?;
-
-	// Wait for actor creation to complete, fail, or be destroyed
-	tokio::select! {
-		res = create_sub.next() => { res?; },
-		res = fail_sub.next() => {
-			let msg = res?;
-			let error = msg.into_body().error;
-
-			// Check if this request needs to be forwarded
-			//
-			// We cannot forward if `datacenter_name` is specified because this actor is being
-			// restricted to the given datacenter.
-			if input.forward_request && input.datacenter_name.is_none() {
-				if let crate::errors::Actor::KeyReservedInDifferentDatacenter { datacenter_label } = &error {
-					// Forward the request to the correct datacenter
-					return forward_to_datacenter(
-						ctx,
-						*datacenter_label,
-						input.namespace_id,
-						input.name.clone(),
-						input.key.clone(),
-						input.runner_name_selector.clone(),
-						input.input.clone(),
-					input.crash_policy
-					).await;
-				}
-			}
-
-			// Otherwise, return the error as-is
-			return Err(error.build());
-		}
-		res = destroy_sub.next() => {
-			res?;
-			return Err(crate::errors::Actor::DestroyedDuringCreation.build());
-		}
-	}
-
-	// Fetch the created actor
-	let actors_res = ctx
-		.op(crate::ops::actor::get::Input {
-			actor_ids: vec![input.actor_id],
-			fetch_error: false,
-		})
-		.await?;
-
-	let actor = actors_res
-		.actors
+	let actor_v2 = pool_res
 		.into_iter()
 		.next()
-		.ok_or_else(|| crate::errors::Actor::NotFound.build())?;
+		.map(|p| p.protocol_version.is_some())
+		.unwrap_or_default();
 
-	Ok(Output { actor })
-}
-
-#[derive(Debug)]
-pub struct Input2 {
-	pub actor_id: Id,
-	pub namespace_id: Id,
-	pub name: String,
-	pub key: Option<String>,
-	pub pool_name: String,
-	pub crash_policy: CrashPolicy,
-	pub input: Option<String>,
-	/// If true, will handle ForwardToDatacenter errors by forwarding the request to the correct datacenter.
-	/// Used by api-public. api-peer should set this to false.
-	pub forward_request: bool,
-	/// Datacenter to create the actor in
-	///
-	/// Providing this value will cause an error if attempting to create an actor where the key is
-	/// reserved in a different datacenter.
-	pub datacenter_name: Option<String>,
-}
-
-#[operation(Operation2)]
-pub async fn pegboard_actor_create2(ctx: &OperationCtx, input: &Input2) -> Result<Output> {
-	// Set up subscriptions before dispatching workflow
-	let mut create_sub = ctx
-		.subscribe::<crate::workflows::actor2::CreateComplete>(("actor_id", input.actor_id))
-		.await?;
-	let mut fail_sub = ctx
-		.subscribe::<crate::workflows::actor2::Failed>(("actor_id", input.actor_id))
-		.await?;
-	let mut destroy_sub = ctx
-		.subscribe::<crate::workflows::actor2::DestroyStarted>(("actor_id", input.actor_id))
+	if actor_v2 {
+		// Dispatch actor workflow
+		ctx.workflow(crate::workflows::actor2::Input {
+			actor_id: input.actor_id,
+			name: input.name.clone(),
+			pool_name: input.runner_name_selector.clone(),
+			key: input.key.clone(),
+			namespace_id: input.namespace_id,
+			crash_policy: input.crash_policy,
+			input: input.input.clone(),
+			from_v1: false,
+		})
+		.tag("actor_id", input.actor_id)
+		.dispatch()
 		.await?;
 
-	// TODO: check rivetkit version before choosing actor version
+		// Wait for actor creation to complete, fail, or be destroyed
+		tokio::select! {
+			res = create_sub2.next() => { res?; },
+			res = fail_sub2.next() => {
+				let msg = res?;
+				let error = msg.into_body().error;
 
-	// Dispatch actor workflow
-	ctx.workflow(crate::workflows::actor2::Input {
-		actor_id: input.actor_id,
-		name: input.name.clone(),
-		pool_name: input.pool_name.clone(),
-		key: input.key.clone(),
-		namespace_id: input.namespace_id,
-		crash_policy: input.crash_policy,
-		input: input.input.clone(),
-	})
-	.tag("actor_id", input.actor_id)
-	.dispatch()
-	.await?;
-
-	// Wait for actor creation to complete, fail, or be destroyed
-	tokio::select! {
-		res = create_sub.next() => { res?; },
-		res = fail_sub.next() => {
-			let msg = res?;
-			let error = msg.into_body().error;
-
-			// Check if this request needs to be forwarded
-			//
-			// We cannot forward if `datacenter_name` is specified because this actor is being
-			// restricted to the given datacenter.
-			if input.forward_request && input.datacenter_name.is_none() {
-				if let crate::errors::Actor::KeyReservedInDifferentDatacenter { datacenter_label } = &error {
-					// Forward the request to the correct datacenter
-					return forward_to_datacenter(
-						ctx,
-						*datacenter_label,
-						input.namespace_id,
-						input.name.clone(),
-						input.key.clone(),
-						input.pool_name.clone(),
-						input.input.clone(),
-					input.crash_policy
-					).await;
+				// Check if this request needs to be forwarded
+				//
+				// We cannot forward if `datacenter_name` is specified because this actor is being
+				// restricted to the given datacenter.
+				if input.forward_request && input.datacenter_name.is_none() {
+					if let crate::errors::Actor::KeyReservedInDifferentDatacenter { datacenter_label } = &error {
+						// Forward the request to the correct datacenter
+						return forward_to_datacenter(
+							ctx,
+							*datacenter_label,
+							input.namespace_id,
+							input.name.clone(),
+							input.key.clone(),
+							input.runner_name_selector.clone(),
+							input.input.clone(),
+						input.crash_policy
+						).await;
+					}
 				}
-			}
 
-			// Otherwise, return the error as-is
-			return Err(error.build());
+				// Otherwise, return the error as-is
+				return Err(error.build());
+			}
+			res = destroy_sub2.next() => {
+				res?;
+				return Err(crate::errors::Actor::DestroyedDuringCreation.build());
+			}
 		}
-		res = destroy_sub.next() => {
-			res?;
-			return Err(crate::errors::Actor::DestroyedDuringCreation.build());
+	} else {
+		// Dispatch actor workflow
+		ctx.workflow(crate::workflows::actor::Input {
+			actor_id: input.actor_id,
+			name: input.name.clone(),
+			runner_name_selector: input.runner_name_selector.clone(),
+			key: input.key.clone(),
+			namespace_id: input.namespace_id,
+			crash_policy: input.crash_policy,
+			input: input.input.clone(),
+		})
+		.tag("actor_id", input.actor_id)
+		.dispatch()
+		.await?;
+
+		// Wait for actor creation to complete, fail, or be destroyed
+		tokio::select! {
+			res = create_sub.next() => { res?; },
+			res = fail_sub.next() => {
+				let msg = res?;
+				let error = msg.into_body().error;
+
+				// Check if this request needs to be forwarded
+				//
+				// We cannot forward if `datacenter_name` is specified because this actor is being
+				// restricted to the given datacenter.
+				if input.forward_request && input.datacenter_name.is_none() {
+					if let crate::errors::Actor::KeyReservedInDifferentDatacenter { datacenter_label } = &error {
+						// Forward the request to the correct datacenter
+						return forward_to_datacenter(
+							ctx,
+							*datacenter_label,
+							input.namespace_id,
+							input.name.clone(),
+							input.key.clone(),
+							input.runner_name_selector.clone(),
+							input.input.clone(),
+						input.crash_policy
+						).await;
+					}
+				}
+
+				// Otherwise, return the error as-is
+				return Err(error.build());
+			}
+			res = destroy_sub.next() => {
+				res?;
+				return Err(crate::errors::Actor::DestroyedDuringCreation.build());
+			}
 		}
 	}
 
