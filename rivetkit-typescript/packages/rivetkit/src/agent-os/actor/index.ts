@@ -211,7 +211,9 @@ export function agentOs<TConnParams = undefined>(
 			sleepGracePeriod: 900_000,
 			actionTimeout: 900_000,
 		},
-		createState: async () => ({}),
+		createState: async () => ({
+			sandboxId: null,
+		}),
 		createVars: () => ({
 			agentOs: null,
 			vmBootPromise: null,
@@ -257,11 +259,14 @@ export function agentOs<TConnParams = undefined>(
 				activeShells: c.vars.activeShells.size,
 			});
 
-			if (c.vars.agentOs) {
-				await c.vars.agentOs.dispose();
+			try {
+				if (c.vars.agentOs) {
+					await c.vars.agentOs.dispose();
+				}
+			} finally {
 				c.vars.agentOs = null;
+				c.vars.vmBootPromise = null;
 			}
-			c.vars.vmBootPromise = null;
 
 			c.broadcast("vmShutdown", { reason: "sleep" as const });
 		},
@@ -273,11 +278,31 @@ export function agentOs<TConnParams = undefined>(
 				activeShells: c.vars.activeShells.size,
 			});
 
-			if (c.vars.agentOs) {
-				await c.vars.agentOs.dispose();
+			// Tear down the VM. Always clear vars even if dispose throws.
+			try {
+				if (c.vars.agentOs) {
+					await c.vars.agentOs.dispose();
+				}
+			} finally {
 				c.vars.agentOs = null;
+				c.vars.vmBootPromise = null;
 			}
-			c.vars.vmBootPromise = null;
+
+			// Let the user clean up external resources (e.g., destroy
+			// a sandbox container). Use try/finally to guarantee state
+			// is cleared even if the callback fails.
+			try {
+				if (parsedConfig.destroyOptions) {
+					await parsedConfig.destroyOptions(c);
+				}
+			} catch (err) {
+				c.log.error({
+					msg: "agent-os destroyOptions callback failed",
+					error: err instanceof Error ? err.message : String(err),
+				});
+			} finally {
+				c.state.sandboxId = null;
+			}
 
 			c.broadcast("vmShutdown", { reason: "destroy" as const });
 		},

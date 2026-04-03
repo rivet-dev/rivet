@@ -46,13 +46,18 @@ import { docker } from "sandbox-agent/docker";
 import { createSandboxFs, createSandboxToolkit } from "@rivet-dev/agent-os-sandbox";
 
 // Each actor instance gets its own Docker sandbox via createOptions.
+// The sandbox ID is persisted in state so the actor reconnects to the
+// same container after a sleep/wake cycle instead of creating a new one.
 const vm = agentOs({
   createOptions: async (c) => {
-    c.log.info({ msg: "provisioning sandbox" });
-
+    // Reconnect to an existing sandbox after sleep, or provision a new one.
     const sandbox = await SandboxAgent.start({
       sandbox: docker(),
+      sandboxId: c.state.sandboxId ?? undefined,
     });
+
+    // Persist the sandbox ID so future wakes reuse the same container.
+    c.state.sandboxId = sandbox.sandboxId;
 
     return {
       software: [common],
@@ -64,6 +69,13 @@ const vm = agentOs({
       ],
       toolKits: [createSandboxToolkit({ client: sandbox })],
     };
+  },
+  // Clean up the sandbox container when the actor is destroyed.
+  destroyOptions: async (c) => {
+    if (c.state.sandboxId) {
+      const provider = docker();
+      await provider.destroy(c.state.sandboxId);
+    }
   },
 });
 
@@ -115,7 +127,7 @@ agentos-sandbox send-input --id "proc_abc123" --input "yes"
 
 ## Sandbox providers
 
-The extension works with any [Sandbox Agent](https://sandboxagent.dev) provider. See the [Sandbox Agent documentation](https://sandboxagent.dev) for available providers and setup instructions.
+Sandbox mounting works with any [Sandbox Agent](https://sandboxagent.dev) provider. See the [Sandbox Agent documentation](https://sandboxagent.dev) for available providers and setup instructions.
 
 ## Recommendations
 

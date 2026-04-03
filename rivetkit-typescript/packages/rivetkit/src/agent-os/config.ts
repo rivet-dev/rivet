@@ -24,6 +24,7 @@ export const agentOsActorConfigSchema = z
 	.object({
 		options: AgentOsOptionsSchema.optional(),
 		createOptions: zFunction().optional(),
+		destroyOptions: zFunction().optional(),
 		preview: z
 			.object({
 				defaultExpiresInSeconds: z.number().positive().default(3600),
@@ -42,6 +43,14 @@ export const agentOsActorConfigSchema = z
 		{
 			message:
 				"agentOs config must define exactly one of 'options' or 'createOptions'",
+		},
+	)
+	.refine(
+		(data) =>
+			!(data.options !== undefined && data.destroyOptions !== undefined),
+		{
+			message:
+				"agentOs config: 'destroyOptions' is only valid with 'createOptions', not 'options'",
 		},
 	);
 
@@ -88,15 +97,29 @@ type AgentOsActorOptionsConfig<TConnParams> =
 			 * filesystem mounts, or per-instance configuration. */
 			options: AgentOsOptions;
 			createOptions?: never;
+			destroyOptions?: never;
 	  }
 	| {
 			options?: never;
 			/** Factory called lazily on first VM access. Receives the actor
 			 * context so options can vary per instance (e.g., dedicated
-			 * sandboxes). Mutually exclusive with `options`. May be async. */
+			 * sandboxes). Mutually exclusive with `options`. May be async.
+			 *
+			 * The callback should read `c.state.sandboxId` and pass it to
+			 * `SandboxAgent.start()` to reconnect to an existing sandbox
+			 * after sleep/wake. After starting, persist the ID back:
+			 * `c.state.sandboxId = sandbox.sandboxId`. */
 			createOptions: (
 				c: AgentOsActorContext<TConnParams>,
 			) => AgentOsOptions | Promise<AgentOsOptions>;
+			/** Called on actor destroy to clean up external resources
+			 * provisioned by `createOptions` (e.g., destroying a sandbox
+			 * container). Receives the actor context with `c.state.sandboxId`
+			 * still set so the callback can resolve the provider and destroy
+			 * the sandbox. */
+			destroyOptions?: (
+				c: AgentOsActorContext<TConnParams>,
+			) => void | Promise<void>;
 	  };
 
 // Parsed config (after Zod defaults/transforms applied).
@@ -104,6 +127,7 @@ export type AgentOsActorConfig<TConnParams = undefined> = Omit<
 	z.infer<typeof agentOsActorConfigSchema>,
 	| "options"
 	| "createOptions"
+	| "destroyOptions"
 	| "onBeforeConnect"
 	| "onSessionEvent"
 	| "onPermissionRequest"
@@ -116,6 +140,7 @@ export type AgentOsActorConfigInput<TConnParams = undefined> = Omit<
 	z.input<typeof agentOsActorConfigSchema>,
 	| "options"
 	| "createOptions"
+	| "destroyOptions"
 	| "onBeforeConnect"
 	| "onSessionEvent"
 	| "onPermissionRequest"

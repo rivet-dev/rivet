@@ -395,8 +395,12 @@ import { docker } from "sandbox-agent/docker";
 import { createSandboxFs, createSandboxToolkit } from "@rivet-dev/agent-os-sandbox";
 
 const vm = agentOs({
-  createOptions: async () => {
-    const sandbox = await SandboxAgent.start({ sandbox: docker() });
+  createOptions: async (c) => {
+    const sandbox = await SandboxAgent.start({
+      sandbox: docker(),
+      sandboxId: c.state.sandboxId ?? undefined,
+    });
+    c.state.sandboxId = sandbox.sandboxId;
 
     return {
       software: [common],

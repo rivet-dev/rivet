@@ -7,6 +7,10 @@
 // Using `createOptions` ensures every actor instance spawned via
 // `client.vm.getOrCreate(...)` provisions a dedicated sandbox so
 // multiple agents never share the same container.
+//
+// The sandbox ID is persisted in `c.state.sandboxId` so that after a
+// sleep/wake cycle the actor reconnects to the same container instead of
+// creating a new one.
 
 import common from "@rivet-dev/agent-os-common";
 import {
@@ -20,12 +24,19 @@ import { docker } from "sandbox-agent/docker";
 
 const vm = agentOs({
 	createOptions: async (c) => {
-		c.log.info({ msg: "provisioning sandbox for actor instance" });
+		c.log.info({
+			msg: "booting sandbox",
+			existingSandboxId: c.state.sandboxId,
+		});
 
-		// Start a dedicated Docker-backed sandbox for this actor instance.
+		// Reconnect to an existing sandbox after sleep, or provision a new one.
 		const sandbox = await SandboxAgent.start({
 			sandbox: docker(),
+			sandboxId: c.state.sandboxId ?? undefined,
 		});
+
+		// Persist the sandbox ID so future wakes reuse the same container.
+		c.state.sandboxId = sandbox.sandboxId;
 
 		return {
 			software: [common],
@@ -37,6 +48,13 @@ const vm = agentOs({
 			],
 			toolKits: [createSandboxToolkit({ client: sandbox })],
 		};
+	},
+	destroyOptions: async (c) => {
+		// Destroy the sandbox container when the actor is destroyed.
+		if (c.state.sandboxId) {
+			const provider = docker();
+			await provider.destroy(c.state.sandboxId);
+		}
 	},
 });
 

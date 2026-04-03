@@ -63,6 +63,14 @@ This is required for [sandbox mounting](/docs/agent-os/sandbox) where each insta
 
 `options` and `createOptions` are **mutually exclusive**. Providing both causes a validation error.
 
+### Sandbox reuse across sleep/wake
+
+The actor state includes `sandboxId` which you should use to reconnect to the same sandbox after a sleep/wake cycle. Without this, every wake would provision a new sandbox container.
+
+Read `c.state.sandboxId` and pass it to `SandboxAgent.start()`. After starting, persist the ID back so future wakes reuse the same container.
+
+Provide `destroyOptions` to clean up external resources (e.g., destroy the sandbox container) when the actor is destroyed. This callback only applies when using `createOptions`.
+
 ```ts @nocheck
 import { agentOs } from "rivetkit/agent-os";
 import { setup } from "rivetkit";
@@ -73,15 +81,27 @@ import { createSandboxFs, createSandboxToolkit } from "@rivet-dev/agent-os-sandb
 
 const vm = agentOs({
   createOptions: async (c) => {
-    c.log.info({ msg: "provisioning sandbox" });
+    // Reconnect to an existing sandbox after sleep, or provision a new one.
+    const sandbox = await SandboxAgent.start({
+      sandbox: docker(),
+      sandboxId: c.state.sandboxId ?? undefined,
+    });
 
-    const sandbox = await SandboxAgent.start({ sandbox: docker() });
+    // Persist the sandbox ID so future wakes reuse the same container.
+    c.state.sandboxId = sandbox.sandboxId;
 
     return {
       software: [common],
       mounts: [{ path: "/sandbox", driver: createSandboxFs({ client: sandbox }) }],
       toolKits: [createSandboxToolkit({ client: sandbox })],
     };
+  },
+  // Clean up the sandbox container when the actor is destroyed.
+  destroyOptions: async (c) => {
+    if (c.state.sandboxId) {
+      const provider = docker();
+      await provider.destroy(c.state.sandboxId);
+    }
   },
 });
 

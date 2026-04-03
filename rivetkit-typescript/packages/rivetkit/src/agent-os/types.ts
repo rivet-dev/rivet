@@ -13,8 +13,13 @@ import type { RawAccess } from "@/db/config";
 
 // --- Actor state (persisted across sleep/wake) ---
 
-// biome-ignore lint/complexity/noBannedTypes: empty state placeholder, consumers extend via generics
-export type AgentOsActorState = {};
+export interface AgentOsActorState {
+	/** Sandbox ID persisted across sleep/wake so the `createOptions`
+	 * callback can reconnect to the same sandbox instead of provisioning
+	 * a new one. Format is `"{provider}/{rawId}"` (e.g. `"docker/abc123"`).
+	 * Set by the user inside `createOptions`; read back on subsequent wakes. */
+	sandboxId: string | null;
+}
 
 // --- Actor vars (ephemeral, recreated on wake) ---
 
