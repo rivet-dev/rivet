@@ -8,16 +8,26 @@ import type {
 	PermissionRequest,
 } from "@rivet-dev/agent-os-core";
 import type { ActionContext } from "@/actor/contexts";
+import type { DatabaseProvider } from "@/actor/database";
+import type { RawAccess } from "@/db/config";
 
 // --- Actor state (persisted across sleep/wake) ---
 
-// biome-ignore lint/complexity/noBannedTypes: empty state placeholder, consumers extend via generics
-export type AgentOsActorState = {};
+export interface AgentOsActorState {
+	/** Sandbox ID persisted across sleep/wake so the `createOptions`
+	 * callback can reconnect to the same sandbox instead of provisioning
+	 * a new one. Format is `"{provider}/{rawId}"` (e.g. `"docker/abc123"`).
+	 * Set by the user inside `createOptions`; read back on subsequent wakes. */
+	sandboxId: string | null;
+}
 
 // --- Actor vars (ephemeral, recreated on wake) ---
 
 export interface AgentOsActorVars {
 	agentOs: AgentOs | null;
+	/** In-flight VM boot promise used to prevent concurrent ensureVm calls from
+	 * creating duplicate VMs. Reset on sleep/wake and cleared on boot failure. */
+	vmBootGuard: Promise<AgentOs> | null;
 	activeSessionIds: Set<string>;
 	activeProcesses: Set<number>;
 	activeHooks: Set<Promise<void>>;
@@ -133,5 +143,5 @@ export type AgentOsActionContext<TConnParams = undefined> = ActionContext<
 	undefined,
 	AgentOsActorVars,
 	undefined,
-	any
+	DatabaseProvider<RawAccess>
 >;

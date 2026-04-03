@@ -25,7 +25,9 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@rivet-dev/agent-os-common": "*",
 		"rivetkit": "*",
+		"sandbox-agent": "*",
 		"zod": "^3.25.0"
 	},
 	"devDependencies": {

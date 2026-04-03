@@ -26,45 +26,51 @@ See [agentOS vs Sandbox](/docs/agent-os/versus-sandbox) for a detailed compariso
 
 ## Getting started
 
-The `@rivet-dev/agent-os-sandbox` package integrates through two mechanisms:
+Use `c.getSandbox()` inside `createOptions` to provision a sandbox per actor instance. It returns a filesystem driver and a toolkit you can pass directly to the VM options.
 
-- **Filesystem mount**: Projects the sandbox into the VM as a native directory, like mounting a hard drive on your own machine. Read and write files through the mount directly.
-- **Toolkit**: Exposes sandbox process management as [host tools](/docs/agent-os/tools). Execute commands on the sandbox from within the VM.
-
-Both are powered by [Sandbox Agent](https://sandboxagent.dev), so you can swap providers without changing agent code.
+The sandbox ID is persisted internally across sleep/wake cycles, so the actor reconnects to the same container automatically. The sandbox is also auto-destroyed when the actor is destroyed.
 
 ```bash
-npm install @rivet-dev/agent-os-sandbox sandbox-agent
+npm install sandbox-agent
 ```
 
 ```ts @nocheck
-import { SandboxAgent } from "sandbox-agent";
-import { DockerProvider } from "sandbox-agent/docker";
-import { AgentOs } from "@rivet-dev/agent-os-core";
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
 import common from "@rivet-dev/agent-os-common";
-import { createSandboxFs, createSandboxToolkit } from "@rivet-dev/agent-os-sandbox";
+import { docker } from "sandbox-agent/docker";
 
-const sandbox = await SandboxAgent.start({
-  sandbox: new DockerProvider(),
+const vm = agentOs({
+  createOptions: async (c) => {
+    const { fs, toolkit } = await c.getSandbox({ provider: docker() });
+
+    return {
+      software: [common],
+      mounts: [{ path: "/sandbox", driver: fs }],
+      toolKits: [toolkit],
+    };
+  },
 });
 
-const vm = await AgentOs.create({
-  software: [common],
-  mounts: [
-    {
-      path: "/sandbox",
-      driver: createSandboxFs({ client: sandbox }),
-    },
-  ],
-  toolKits: [createSandboxToolkit({ client: sandbox })],
-});
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+
+From a client, interact with the sandbox through the actor:
+
+```ts @nocheck
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server.ts";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
 
 // Write code via the filesystem. The /sandbox mount maps to the sandbox root.
-await vm.writeFile("/sandbox/app/index.ts", 'console.log("hello")');
+await agent.writeFile("/sandbox/app/index.ts", 'console.log("hello")');
 
 // Run it via the toolkit. Commands execute inside the sandbox, so paths are
 // relative to the sandbox root (/app/index.ts), not the VM mount (/sandbox/app/index.ts).
-const result = await vm.exec("agentos-sandbox run-command --command node --json '{\"args\": [\"/app/index.ts\"]}'");
+const result = await agent.exec("agentos-sandbox run-command --command node --json '{\"args\": [\"/app/index.ts\"]}'");
 ```
 
 ## Tools reference
@@ -94,7 +100,7 @@ agentos-sandbox send-input --id "proc_abc123" --input "yes"
 
 ## Sandbox providers
 
-The extension works with any [Sandbox Agent](https://sandboxagent.dev) provider. See the [Sandbox Agent documentation](https://sandboxagent.dev) for available providers and setup instructions.
+Sandbox mounting works with any [Sandbox Agent](https://sandboxagent.dev) provider. See the [Sandbox Agent documentation](https://sandboxagent.dev) for available providers and setup instructions.
 
 ## Recommendations
 
