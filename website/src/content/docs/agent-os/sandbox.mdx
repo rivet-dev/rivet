@@ -26,56 +26,29 @@ See [agentOS vs Sandbox](/docs/agent-os/versus-sandbox) for a detailed compariso
 
 ## Getting started
 
-The `@rivet-dev/agent-os-sandbox` package integrates through two mechanisms:
+Use `c.getSandbox()` inside `createOptions` to provision a sandbox per actor instance. It returns a filesystem driver and a toolkit you can pass directly to the VM options.
 
-- **Filesystem mount**: Projects the sandbox into the VM as a native directory, like mounting a hard drive on your own machine. Read and write files through the mount directly.
-- **Toolkit**: Exposes sandbox process management as [host tools](/docs/agent-os/tools). Execute commands on the sandbox from within the VM.
-
-Both are powered by [Sandbox Agent](https://sandboxagent.dev), so you can swap providers without changing agent code.
+The sandbox ID is persisted internally across sleep/wake cycles, so the actor reconnects to the same container automatically. The sandbox is also auto-destroyed when the actor is destroyed.
 
 ```bash
-npm install @rivet-dev/agent-os-sandbox sandbox-agent
+npm install sandbox-agent
 ```
 
 ```ts @nocheck
 import { agentOs } from "rivetkit/agent-os";
 import { setup } from "rivetkit";
 import common from "@rivet-dev/agent-os-common";
-import { SandboxAgent } from "sandbox-agent";
 import { docker } from "sandbox-agent/docker";
-import { createSandboxFs, createSandboxToolkit } from "@rivet-dev/agent-os-sandbox";
 
-// Each actor instance gets its own Docker sandbox via createOptions.
-// The sandbox ID is persisted in state so the actor reconnects to the
-// same container after a sleep/wake cycle instead of creating a new one.
 const vm = agentOs({
   createOptions: async (c) => {
-    // Reconnect to an existing sandbox after sleep, or provision a new one.
-    const sandbox = await SandboxAgent.start({
-      sandbox: docker(),
-      sandboxId: c.state.sandboxId ?? undefined,
-    });
-
-    // Persist the sandbox ID so future wakes reuse the same container.
-    c.state.sandboxId = sandbox.sandboxId;
+    const { fs, toolkit } = await c.getSandbox({ provider: docker() });
 
     return {
       software: [common],
-      mounts: [
-        {
-          path: "/sandbox",
-          driver: createSandboxFs({ client: sandbox }),
-        },
-      ],
-      toolKits: [createSandboxToolkit({ client: sandbox })],
+      mounts: [{ path: "/sandbox", driver: fs }],
+      toolKits: [toolkit],
     };
-  },
-  // Clean up the sandbox container when the actor is destroyed.
-  destroyOptions: async (c) => {
-    if (c.state.sandboxId) {
-      const provider = docker();
-      await provider.destroy(c.state.sandboxId);
-    }
   },
 });
 

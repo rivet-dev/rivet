@@ -49,8 +49,8 @@ async function ensureVm<TConnParams>(
 
 	// Guard against concurrent callers. If another action is already booting
 	// the VM, wait for that same promise instead of creating a duplicate.
-	if (c.vars.vmBootPromise) {
-		return c.vars.vmBootPromise;
+	if (c.vars.vmBootGuard) {
+		return c.vars.vmBootGuard;
 	}
 
 	const bootPromise = (async (): Promise<AgentOs> => {
@@ -98,14 +98,14 @@ async function ensureVm<TConnParams>(
 		return agentOs;
 	})();
 
-	c.vars.vmBootPromise = bootPromise;
+	c.vars.vmBootGuard = bootPromise;
 
 	try {
 		return await bootPromise;
 	} catch (err) {
 		// Clear the cached promise on failure so the next caller retries
 		// instead of reusing a rejected promise.
-		c.vars.vmBootPromise = null;
+		c.vars.vmBootGuard = null;
 		throw err;
 	}
 }
@@ -216,7 +216,7 @@ export function agentOs<TConnParams = undefined>(
 		}),
 		createVars: () => ({
 			agentOs: null,
-			vmBootPromise: null,
+			vmBootGuard: null,
 			activeSessionIds: new Set<string>(),
 			activeProcesses: new Set<number>(),
 			activeHooks: new Set<Promise<void>>(),
@@ -265,7 +265,7 @@ export function agentOs<TConnParams = undefined>(
 				}
 			} finally {
 				c.vars.agentOs = null;
-				c.vars.vmBootPromise = null;
+				c.vars.vmBootGuard = null;
 			}
 
 			c.broadcast("vmShutdown", { reason: "sleep" as const });
@@ -278,30 +278,13 @@ export function agentOs<TConnParams = undefined>(
 				activeShells: c.vars.activeShells.size,
 			});
 
-			// Tear down the VM. Always clear vars even if dispose throws.
 			try {
 				if (c.vars.agentOs) {
 					await c.vars.agentOs.dispose();
 				}
 			} finally {
 				c.vars.agentOs = null;
-				c.vars.vmBootPromise = null;
-			}
-
-			// Let the user clean up external resources (e.g., destroy
-			// a sandbox container). Use try/finally to guarantee state
-			// is cleared even if the callback fails.
-			try {
-				if (parsedConfig.destroyOptions) {
-					await parsedConfig.destroyOptions(c);
-				}
-			} catch (err) {
-				c.log.error({
-					msg: "agent-os destroyOptions callback failed",
-					error: err instanceof Error ? err.message : String(err),
-				});
-			} finally {
-				c.state.sandboxId = null;
+				c.vars.vmBootGuard = null;
 			}
 
 			c.broadcast("vmShutdown", { reason: "destroy" as const });

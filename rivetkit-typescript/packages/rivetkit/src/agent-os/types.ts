@@ -27,7 +27,7 @@ export interface AgentOsActorVars {
 	agentOs: AgentOs | null;
 	/** In-flight VM boot promise used to prevent concurrent ensureVm calls from
 	 * creating duplicate VMs. Reset on sleep/wake and cleared on boot failure. */
-	vmBootPromise: Promise<AgentOs> | null;
+	vmBootGuard: Promise<AgentOs> | null;
 	activeSessionIds: Set<string>;
 	activeProcesses: Set<number>;
 	activeHooks: Set<Promise<void>>;

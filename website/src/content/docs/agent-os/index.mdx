@@ -390,22 +390,16 @@ agentOS uses a hybrid model: agents run in a lightweight VM by default and spin 
 import { agentOs } from "rivetkit/agent-os";
 import { setup } from "rivetkit";
 import common from "@rivet-dev/agent-os-common";
-import { SandboxAgent } from "sandbox-agent";
 import { docker } from "sandbox-agent/docker";
-import { createSandboxFs, createSandboxToolkit } from "@rivet-dev/agent-os-sandbox";
 
 const vm = agentOs({
   createOptions: async (c) => {
-    const sandbox = await SandboxAgent.start({
-      sandbox: docker(),
-      sandboxId: c.state.sandboxId ?? undefined,
-    });
-    c.state.sandboxId = sandbox.sandboxId;
+    const { fs, toolkit } = await c.getSandbox({ provider: docker() });
 
     return {
       software: [common],
-      mounts: [{ path: "/sandbox", driver: createSandboxFs({ client: sandbox }) }],
-      toolKits: [createSandboxToolkit({ client: sandbox })],
+      mounts: [{ path: "/sandbox", driver: fs }],
+      toolKits: [toolkit],
     };
   },
 });

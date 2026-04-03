@@ -31,13 +31,11 @@ export {
 } from "./actor/session";
 // Shell actions
 export { buildShellActions } from "./actor/shell";
-// User-facing alias for the createOptions callback context parameter.
-export type { AgentOsActorContext as AgentOsCreateContext } from "./config";
 // Config schema and types
 export {
 	type AgentOsActorConfig,
 	type AgentOsActorConfigInput,
-	type AgentOsActorContext,
+	type AgentOsContext,
 	agentOsActorConfigSchema,
 } from "./config";
 // SQLite-backed VFS

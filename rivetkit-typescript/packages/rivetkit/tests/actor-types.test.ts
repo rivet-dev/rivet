@@ -649,35 +649,4 @@ describe("agentOs config exclusive union types", () => {
 			},
 		};
 	});
-
-	it("options config forbids destroyOptions", () => {
-		// @ts-expect-error destroyOptions is only allowed with createOptions
-		const config: AgentOsActorConfigInput = {
-			options: { software: [] },
-			destroyOptions: async () => {},
-		};
-	});
-
-	it("createOptions config accepts destroyOptions", () => {
-		const config: AgentOsActorConfigInput = {
-			createOptions: async (c) => ({ software: [] }),
-			destroyOptions: async (c) => {
-				expectTypeOf(c.state.sandboxId).toEqualTypeOf<string | null>();
-			},
-		};
-		expectTypeOf(config).toMatchTypeOf<AgentOsActorConfigInput>();
-	});
-
-	it("agentOs() accepts createOptions with destroyOptions", () => {
-		agentOs({
-			createOptions: async (c) => {
-				c.state.sandboxId = "docker/test";
-				return { software: [] };
-			},
-			destroyOptions: async (c) => {
-				// Should have access to sandboxId for cleanup.
-				const _id: string | null = c.state.sandboxId;
-			},
-		});
-	});
 });
