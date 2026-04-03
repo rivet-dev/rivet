@@ -1,7 +1,10 @@
+import type { AgentOsOptions } from "@rivet-dev/agent-os-core";
 import { describe, expectTypeOf, it } from "vitest";
-import { actor, event, queue } from "@/actor/mod";
 import type { ActorContext, ActorContextOf } from "@/actor/contexts";
 import type { ActorDefinition } from "@/actor/definition";
+import { actor, event, queue } from "@/actor/mod";
+import type { AgentOsActorConfigInput } from "@/agent-os/config";
+import { agentOs } from "@/agent-os/index";
 import type { ActorConn, ActorHandle } from "@/client/mod";
 import type { DatabaseProviderContext } from "@/db/config";
 import { db } from "@/db/mod";
@@ -560,6 +563,79 @@ describe("ActorDefinition", () => {
 					},
 				},
 			});
+		});
+	});
+});
+
+describe("agentOs config exclusive union types", () => {
+	it("accepts options-only config", () => {
+		const config: AgentOsActorConfigInput = {
+			options: { software: [] },
+		};
+		expectTypeOf(config).toMatchTypeOf<AgentOsActorConfigInput>();
+	});
+
+	it("accepts createOptions-only config", () => {
+		const config: AgentOsActorConfigInput = {
+			createOptions: () => ({ software: [] }),
+		};
+		expectTypeOf(config).toMatchTypeOf<AgentOsActorConfigInput>();
+	});
+
+	it("rejects config with both options and createOptions", () => {
+		// @ts-expect-error options and createOptions are mutually exclusive
+		const config: AgentOsActorConfigInput = {
+			options: { software: [] },
+			createOptions: () => ({ software: [] }),
+		};
+	});
+
+	it("rejects config with neither options nor createOptions", () => {
+		// @ts-expect-error must provide one of options or createOptions
+		const config: AgentOsActorConfigInput = {};
+	});
+
+	it("createOptions callback receives context and returns AgentOsOptions", () => {
+		const config: AgentOsActorConfigInput = {
+			createOptions: (c) => {
+				expectTypeOf(c.log).not.toBeAny();
+				expectTypeOf(c.vars).not.toBeAny();
+				return { software: [] };
+			},
+		};
+	});
+
+	it("createOptions callback has typed db access", () => {
+		const config: AgentOsActorConfigInput = {
+			createOptions: (c) => {
+				expectTypeOf(c.db).not.toBeAny();
+				return { software: [] };
+			},
+		};
+	});
+
+	it("createOptions callback can be async", () => {
+		const config: AgentOsActorConfigInput = {
+			createOptions: async (c) => {
+				return { software: [] };
+			},
+		};
+	});
+
+	it("agentOs() accepts createOptions config without error", () => {
+		// This is a compile-time-only test. If it compiles, the types work.
+		agentOs({
+			createOptions: async () => ({ software: [] }),
+		});
+	});
+
+	it("agentOs() with connParams types the createOptions context", () => {
+		agentOs<{ userId: string }>({
+			createOptions: async (c) => {
+				// The context should be typed, not any.
+				expectTypeOf(c).not.toBeAny();
+				return { software: [] };
+			},
 		});
 	});
 });

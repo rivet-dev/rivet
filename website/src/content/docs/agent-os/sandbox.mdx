@@ -38,33 +38,54 @@ npm install @rivet-dev/agent-os-sandbox sandbox-agent
 ```
 
 ```ts @nocheck
-import { SandboxAgent } from "sandbox-agent";
-import { DockerProvider } from "sandbox-agent/docker";
-import { AgentOs } from "@rivet-dev/agent-os-core";
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
 import common from "@rivet-dev/agent-os-common";
+import { SandboxAgent } from "sandbox-agent";
+import { docker } from "sandbox-agent/docker";
 import { createSandboxFs, createSandboxToolkit } from "@rivet-dev/agent-os-sandbox";
 
-const sandbox = await SandboxAgent.start({
-  sandbox: new DockerProvider(),
+// Each actor instance gets its own Docker sandbox via createOptions.
+const vm = agentOs({
+  createOptions: async (c) => {
+    c.log.info({ msg: "provisioning sandbox" });
+
+    const sandbox = await SandboxAgent.start({
+      sandbox: docker(),
+    });
+
+    return {
+      software: [common],
+      mounts: [
+        {
+          path: "/sandbox",
+          driver: createSandboxFs({ client: sandbox }),
+        },
+      ],
+      toolKits: [createSandboxToolkit({ client: sandbox })],
+    };
+  },
 });
 
-const vm = await AgentOs.create({
-  software: [common],
-  mounts: [
-    {
-      path: "/sandbox",
-      driver: createSandboxFs({ client: sandbox }),
-    },
-  ],
-  toolKits: [createSandboxToolkit({ client: sandbox })],
-});
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+
+From a client, interact with the sandbox through the actor:
+
+```ts @nocheck
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server.ts";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+const agent = client.vm.getOrCreate(["my-agent"]);
 
 // Write code via the filesystem. The /sandbox mount maps to the sandbox root.
-await vm.writeFile("/sandbox/app/index.ts", 'console.log("hello")');
+await agent.writeFile("/sandbox/app/index.ts", 'console.log("hello")');
 
 // Run it via the toolkit. Commands execute inside the sandbox, so paths are
 // relative to the sandbox root (/app/index.ts), not the VM mount (/sandbox/app/index.ts).
-const result = await vm.exec("agentos-sandbox run-command --command node --json '{\"args\": [\"/app/index.ts\"]}'");
+const result = await agent.exec("agentos-sandbox run-command --command node --json '{\"args\": [\"/app/index.ts\"]}'");
 ```
 
 ## Tools reference

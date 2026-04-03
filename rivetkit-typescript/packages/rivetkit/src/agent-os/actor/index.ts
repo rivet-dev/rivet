@@ -1,5 +1,5 @@
-import { AgentOs, createInMemoryFileSystem } from "@rivet-dev/agent-os-core";
 import type { AgentOsOptions, MountConfig } from "@rivet-dev/agent-os-core";
+import { AgentOs, createInMemoryFileSystem } from "@rivet-dev/agent-os-core";
 import type { DatabaseProvider } from "@/actor/database";
 import { actor, event } from "@/actor/mod";
 import type { RawAccess } from "@/db/config";
@@ -42,35 +42,75 @@ async function ensureVm<TConnParams>(
 	c: AgentOsActionContext<TConnParams>,
 	config: AgentOsActorConfig<TConnParams>,
 ): Promise<AgentOs> {
+	// Fast path: VM already booted.
 	if (c.vars.agentOs) {
 		return c.vars.agentOs;
 	}
 
-	const start = Date.now();
+	// Guard against concurrent callers. If another action is already booting
+	// the VM, wait for that same promise instead of creating a duplicate.
+	if (c.vars.vmBootPromise) {
+		return c.vars.vmBootPromise;
+	}
 
-	// Build options with in-memory VFS as default working directory mount.
-	const options = buildVmOptions(config.options);
+	const bootPromise = (async (): Promise<AgentOs> => {
+		const start = Date.now();
 
-	const agentOs = await AgentOs.create(options);
-	c.vars.agentOs = agentOs;
+		// Resolve options from the per-actor-instance factory or the static config.
+		let resolvedOptions: AgentOsOptions | undefined;
+		if (config.createOptions) {
+			c.log.debug({ msg: "agent-os resolving createOptions" });
+			try {
+				resolvedOptions = await config.createOptions(c);
+			} catch (err) {
+				throw new Error(
+					`agentOs: createOptions callback failed: ${err instanceof Error ? err.message : String(err)}`,
+					{ cause: err },
+				);
+			}
+		} else {
+			resolvedOptions = config.options;
+		}
 
-	// Wire cron events to actor events.
-	agentOs.onCronEvent((cronEvent) => {
-		c.broadcast("cronEvent", { event: cronEvent });
-	});
+		if (!resolvedOptions) {
+			throw new Error(
+				"agentOs: createOptions callback returned a falsy value. It must return an AgentOsOptions object.",
+			);
+		}
 
-	c.broadcast("vmBooted", {});
-	c.log.info({
-		msg: "agent-os vm booted",
-		bootDurationMs: Date.now() - start,
-	});
+		// Build options with in-memory VFS as default working directory mount.
+		const options = buildVmOptions(resolvedOptions);
 
-	return agentOs;
+		const agentOs = await AgentOs.create(options);
+		c.vars.agentOs = agentOs;
+
+		// Wire cron events to actor events.
+		agentOs.onCronEvent((cronEvent) => {
+			c.broadcast("cronEvent", { event: cronEvent });
+		});
+
+		c.broadcast("vmBooted", {});
+		c.log.info({
+			msg: "agent-os vm booted",
+			bootDurationMs: Date.now() - start,
+		});
+
+		return agentOs;
+	})();
+
+	c.vars.vmBootPromise = bootPromise;
+
+	try {
+		return await bootPromise;
+	} catch (err) {
+		// Clear the cached promise on failure so the next caller retries
+		// instead of reusing a rejected promise.
+		c.vars.vmBootPromise = null;
+		throw err;
+	}
 }
 
-function buildVmOptions(
-	userOptions?: AgentOsOptions,
-): AgentOsOptions {
+function buildVmOptions(userOptions?: AgentOsOptions): AgentOsOptions {
 	const userMounts = userOptions?.mounts ?? [];
 
 	// Check if the user already provided a mount at /home/user. If so, respect
@@ -174,6 +214,7 @@ export function agentOs<TConnParams = undefined>(
 		createState: async () => ({}),
 		createVars: () => ({
 			agentOs: null,
+			vmBootPromise: null,
 			activeSessionIds: new Set<string>(),
 			activeProcesses: new Set<number>(),
 			activeHooks: new Set<Promise<void>>(),
@@ -220,6 +261,7 @@ export function agentOs<TConnParams = undefined>(
 				await c.vars.agentOs.dispose();
 				c.vars.agentOs = null;
 			}
+			c.vars.vmBootPromise = null;
 
 			c.broadcast("vmShutdown", { reason: "sleep" as const });
 		},
@@ -235,6 +277,7 @@ export function agentOs<TConnParams = undefined>(
 				await c.vars.agentOs.dispose();
 				c.vars.agentOs = null;
 			}
+			c.vars.vmBootPromise = null;
 
 			c.broadcast("vmShutdown", { reason: "destroy" as const });
 		},
@@ -264,4 +307,4 @@ const processExitToken = event<ProcessExitPayload>();
 const shellDataToken = event<ShellDataPayload>();
 const cronEventToken = event<CronEventPayload>();
 
-export { ensureVm, syncPreventSleep, runHook };
+export { ensureVm, runHook, syncPreventSleep };

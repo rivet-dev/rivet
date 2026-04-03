@@ -1,4 +1,4 @@
-// Sandbox extension: write files and run commands in a Docker sandbox.
+// Sandbox mounting: write files and run commands in a Docker sandbox.
 //
 // The /sandbox mount projects the sandbox filesystem into the VM.
 // The sandbox toolkit is accessible via the tools RPC server.

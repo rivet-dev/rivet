@@ -8,6 +8,8 @@ import type {
 	PermissionRequest,
 } from "@rivet-dev/agent-os-core";
 import type { ActionContext } from "@/actor/contexts";
+import type { DatabaseProvider } from "@/actor/database";
+import type { RawAccess } from "@/db/config";
 
 // --- Actor state (persisted across sleep/wake) ---
 
@@ -18,6 +20,9 @@ export type AgentOsActorState = {};
 
 export interface AgentOsActorVars {
 	agentOs: AgentOs | null;
+	/** In-flight VM boot promise used to prevent concurrent ensureVm calls from
+	 * creating duplicate VMs. Reset on sleep/wake and cleared on boot failure. */
+	vmBootPromise: Promise<AgentOs> | null;
 	activeSessionIds: Set<string>;
 	activeProcesses: Set<number>;
 	activeHooks: Set<Promise<void>>;
@@ -133,5 +138,5 @@ export type AgentOsActionContext<TConnParams = undefined> = ActionContext<
 	undefined,
 	AgentOsActorVars,
 	undefined,
-	any
+	DatabaseProvider<RawAccess>
 >;

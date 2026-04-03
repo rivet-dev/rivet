@@ -4,7 +4,11 @@ description: "Configure the agentOS VM options, preview settings, and lifecycle 
 skill: true
 ---
 
-`agentOs()` accepts the following configuration object.
+`agentOs()` accepts the following configuration object. You must provide exactly one of `options` or `createOptions`.
+
+## Static options
+
+Use `options` when the same VM configuration works for all actor instances.
 
 ```ts @nocheck
 import { agentOs } from "rivetkit/agent-os";
@@ -44,6 +48,40 @@ const vm = agentOs({
   // Called when an agent requests permission. See /docs/agent-os/permissions
   onPermissionRequest: async (c, sessionId, request) => {
     await c.respondPermission(sessionId, request.permissionId, "always");
+  },
+});
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+
+## Per-instance options
+
+Use `createOptions` when each actor instance needs its own VM configuration. The callback receives the actor context and runs lazily on first VM access. It may be async.
+
+This is required for [sandbox mounting](/docs/agent-os/sandbox) where each instance needs a dedicated sandbox container, and useful for any scenario where options depend on the actor instance (e.g., per-tenant mounts or credentials).
+
+`options` and `createOptions` are **mutually exclusive**. Providing both causes a validation error.
+
+```ts @nocheck
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import { SandboxAgent } from "sandbox-agent";
+import { docker } from "sandbox-agent/docker";
+import { createSandboxFs, createSandboxToolkit } from "@rivet-dev/agent-os-sandbox";
+
+const vm = agentOs({
+  createOptions: async (c) => {
+    c.log.info({ msg: "provisioning sandbox" });
+
+    const sandbox = await SandboxAgent.start({ sandbox: docker() });
+
+    return {
+      software: [common],
+      mounts: [{ path: "/sandbox", driver: createSandboxFs({ client: sandbox }) }],
+      toolKits: [createSandboxToolkit({ client: sandbox })],
+    };
   },
 });
 

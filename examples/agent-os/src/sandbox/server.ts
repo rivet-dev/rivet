@@ -1,34 +1,42 @@
-// Sandbox extension: mount a remote Docker sandbox into the VM.
+// Sandbox mounting: each actor instance gets its own Docker sandbox.
 //
 // Requires Docker running locally. The sandbox-agent package manages the
 // container lifecycle. The sandbox filesystem is mounted at /sandbox and
 // the toolkit exposes process management as CLI commands.
+//
+// Using `createOptions` ensures every actor instance spawned via
+// `client.vm.getOrCreate(...)` provisions a dedicated sandbox so
+// multiple agents never share the same container.
 
-import { agentOs } from "rivetkit/agent-os";
-import { setup } from "rivetkit";
 import common from "@rivet-dev/agent-os-common";
-import { SandboxAgent } from "sandbox-agent";
-import { docker } from "sandbox-agent/docker";
 import {
 	createSandboxFs,
 	createSandboxToolkit,
 } from "@rivet-dev/agent-os-sandbox";
-
-// Start a Docker-backed sandbox.
-const sandbox = await SandboxAgent.start({
-	sandbox: docker(),
-});
+import { setup } from "rivetkit";
+import { agentOs } from "rivetkit/agent-os";
+import { SandboxAgent } from "sandbox-agent";
+import { docker } from "sandbox-agent/docker";
 
 const vm = agentOs({
-	options: {
-		software: [common],
-		mounts: [
-			{
-				path: "/sandbox",
-				driver: createSandboxFs({ client: sandbox }),
-			},
-		],
-		toolKits: [createSandboxToolkit({ client: sandbox })],
+	createOptions: async (c) => {
+		c.log.info({ msg: "provisioning sandbox for actor instance" });
+
+		// Start a dedicated Docker-backed sandbox for this actor instance.
+		const sandbox = await SandboxAgent.start({
+			sandbox: docker(),
+		});
+
+		return {
+			software: [common],
+			mounts: [
+				{
+					path: "/sandbox",
+					driver: createSandboxFs({ client: sandbox }),
+				},
+			],
+			toolKits: [createSandboxToolkit({ client: sandbox })],
+		};
 	},
 });
 
