@@ -58,7 +58,10 @@ async function loadAgentOsCore() {
 	// returning a permanently rejected promise.
 	agentOsCorePromise = promise.catch((err) => {
 		agentOsCorePromise = null;
-		throw err;
+		throw new Error(
+			`failed to load @rivet-dev/agent-os-core: ${err instanceof Error ? err.message : String(err)}`,
+			{ cause: err },
+		);
 	});
 	return agentOsCorePromise;
 }
@@ -100,9 +103,12 @@ async function ensureVm<TConnParams>(
 	return agentOs;
 }
 
+type CreateMemFs =
+	typeof import("@rivet-dev/agent-os-core")["createInMemoryFileSystem"];
+
 function buildVmOptions(
 	userOptions: AgentOsOptions | undefined,
-	createMemFs: typeof import("@rivet-dev/agent-os-core")["createInMemoryFileSystem"],
+	createMemFs: CreateMemFs,
 ): AgentOsOptions {
 	const userMounts = userOptions?.mounts ?? [];
 
