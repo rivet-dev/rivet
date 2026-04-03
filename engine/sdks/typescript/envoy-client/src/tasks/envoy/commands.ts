@@ -5,7 +5,7 @@ import type { EnvoyContext } from "./index.js";
 import { getActorEntry, log } from "./index.js";
 import { wsSend } from "../connection.js";
 
-export async function handleCommands(
+export function handleCommands(
 	ctx: EnvoyContext,
 	commands: protocol.ToEnvoyCommands,
 ) {

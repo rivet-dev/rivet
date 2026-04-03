@@ -11,7 +11,7 @@ use universaldb::prelude::*;
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
-use super::{ActorError, GetTsInput, Input, LostReason, State, Stopped, metrics};
+use super::{ActorError, Input, LostReason, State, Stopped, metrics};
 use crate::keys;
 
 #[derive(Deserialize, Serialize)]
@@ -68,9 +68,9 @@ pub(crate) enum Transition {
 		envoy: EnvoyState,
 		lost_timeout_ts: i64,
 	},
-	Sleeping {
-		/// True if the workflow is currently trying to reallocate with backoff.
-		attempting_reallocation: bool,
+	Sleeping,
+	Reallocating {
+		since_ts: i64,
 	},
 	Destroying {
 		envoy: EnvoyState,
@@ -88,7 +88,8 @@ impl Transition {
 			| Transition::Destroying { envoy, .. } => Some(envoy),
 			Transition::Allocating { .. }
 			| Transition::Starting { .. }
-			| Transition::Sleeping { .. } => None,
+			| Transition::Sleeping
+			| Transition::Reallocating { .. } => None,
 		}
 	}
 }
@@ -156,6 +157,7 @@ pub enum Allocation {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AllocateOutput {
 	pub allocation: Option<Allocation>,
+	pub now: i64,
 }
 
 #[activity(Allocate)]
@@ -299,7 +301,10 @@ pub async fn allocate(ctx: &ActivityCtx, input: &AllocateInput) -> Result<Alloca
 	state.error = error;
 	state.envoy_last_command_idx = 0;
 
-	Ok(AllocateOutput { allocation })
+	Ok(AllocateOutput {
+		allocation,
+		now: util::timestamp::now(),
+	})
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -391,21 +396,21 @@ pub async fn reschedule_actor(
 	if let Some(allocation) = allocate_res.allocation {
 		state.generation += 1;
 
+		let now = ctx.activity(GetTsInput {}).await?;
+
 		match &allocation {
 			Allocation::Serverless => {
 				// Transition to allocating
 				state.transition = Transition::Allocating {
 					destroy_after_start: false,
-					lost_timeout_ts: util::timestamp::now()
-						+ ctx.config().pegboard().actor_allocation_threshold(),
+					lost_timeout_ts: now + ctx.config().pegboard().actor_allocation_threshold(),
 				};
 			}
 			Allocation::Serverful { .. } => {
 				// Transition to starting
 				state.transition = Transition::Starting {
 					destroy_after_start: false,
-					lost_timeout_ts: util::timestamp::now()
-						+ ctx.config().pegboard().actor_start_threshold(),
+					lost_timeout_ts: now + ctx.config().pegboard().actor_start_threshold(),
 				};
 			}
 		}
@@ -547,13 +552,13 @@ pub async fn handle_stopped(
 			// Transition to allocating
 			state.transition = Transition::Allocating {
 				destroy_after_start: false,
-				lost_timeout_ts: util::timestamp::now()
+				lost_timeout_ts: allocate_res.now
 					+ ctx.config().pegboard().actor_allocation_threshold(),
 			};
 		} else {
 			// Transition to retry backoff
-			state.transition = Transition::Sleeping {
-				attempting_reallocation: true,
+			state.transition = Transition::Reallocating {
+				since_ts: allocate_res.now,
 			};
 		}
 
@@ -585,13 +590,13 @@ pub async fn handle_stopped(
 					// Transition to allocating
 					state.transition = Transition::Allocating {
 						destroy_after_start: false,
-						lost_timeout_ts: util::timestamp::now()
+						lost_timeout_ts: allocate_res.now
 							+ ctx.config().pegboard().actor_allocation_threshold(),
 					};
 				} else {
 					// Transition to retry backoff
-					state.transition = Transition::Sleeping {
-						attempting_reallocation: true,
+					state.transition = Transition::Reallocating {
+						since_ts: allocate_res.now,
 					};
 				}
 
@@ -610,19 +615,17 @@ pub async fn handle_stopped(
 				}
 
 				// Transition to sleeping
-				state.transition = Transition::Sleeping {
-					attempting_reallocation: false,
-				};
+				state.transition = Transition::Sleeping;
 
 				StoppedResult::Continue
 			}
 			_ => {
+				let now = ctx.activity(GetTsInput {}).await?;
+
 				// Don't destroy on failed allocation, retry instead
 				if let StoppedVariant::FailedAllocation { .. } = &variant {
 					// Transition to retry backoff
-					state.transition = Transition::Sleeping {
-						attempting_reallocation: true,
-					};
+					state.transition = Transition::Reallocating { since_ts: now };
 
 					StoppedResult::Continue
 				} else {
@@ -632,14 +635,12 @@ pub async fn handle_stopped(
 		}
 	} else {
 		// Transition to sleeping
-		state.transition = Transition::Sleeping {
-			attempting_reallocation: false,
-		};
+		state.transition = Transition::Sleeping;
 
 		StoppedResult::Continue
 	};
 
-	if let Transition::Sleeping { .. } = state.transition {
+	if let Transition::Sleeping = state.transition {
 		ctx.activity(SetSleepingInput {}).await?;
 	}
 
@@ -649,6 +650,14 @@ pub async fn handle_stopped(
 		.await?;
 
 	Ok(stopped_res)
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct GetTsInput {}
+
+#[activity(GetTs)]
+pub async fn get_ts(ctx: &ActivityCtx, input: &GetTsInput) -> Result<i64> {
+	Ok(util::timestamp::now())
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

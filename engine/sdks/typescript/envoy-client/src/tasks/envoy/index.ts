@@ -35,6 +35,7 @@ import { stringifyToEnvoy } from "@/stringify.js";
 export interface EnvoyContext {
 	shared: SharedContext;
 	serverless: boolean;
+	shuttingDown: boolean;
 	actors: Map<string, Map<number, ActorEntry>>;
 	kvRequests: Map<number, KvRequestEntry>;
 	nextKvRequestId: number;
@@ -111,6 +112,7 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 	const ctx: EnvoyContext = {
 		shared,
 		serverless: false,
+		shuttingDown: false,
 		actors,
 		kvRequests: new Map(),
 		nextKvRequestId: 0,
@@ -139,7 +141,7 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 			if (msg.type === "conn-message") {
 				await handleConnMessage(ctx, startTx, lostTimeout, msg.message);
 			} else if (msg.type === "conn-close") {
-				await handleConnClose(ctx, lostTimeout);
+				handleConnClose(ctx, lostTimeout);
 				if (msg.evict) break;
 			} else if (msg.type === "send-events") {
 				const stop = handleSendEvents(ctx, msg.events);
@@ -155,42 +157,7 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 			} else if (msg.type === "buffer-tunnel-msg") {
 				ctx.bufferedMessages.push(msg.msg);
 			} else if (msg.type === "shutdown") {
-				wsSend(ctx.shared, {
-					tag: "ToRivetStopping",
-					val: null,
-				});
-
-				// Start shutdown checker
-				spawn(async () => {
-					let i = 0;
-
-					while (true) {
-						let total = 0;
-
-						// Check for actors with open handles
-						for (const gens of ctx.actors.values()) {
-							const last = Array.from(gens.values())[gens.size - 1];
-
-							if (last && !last.handle.isClosed()) total++;
-						}
-
-						// Wait until no actors remain
-						if (total === 0) {
-							ctx.shared.envoyTx.send({ type: "stop" });
-							break;
-						}
-
-						await sleep(1000);
-
-						if (i % 10 === 0) {
-							log(ctx.shared)?.info({
-								msg: "waiting on actors to stop before shutdown",
-								actors: total,
-							});
-						}
-						i++;
-					}
-				});
+				handleShutdown(ctx);
 			} else if (msg.type === "stop") {
 				break;
 			} else {
@@ -228,7 +195,7 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 	return handle;
 }
 
-async function handleConnMessage(
+function handleConnMessage(
 	ctx: EnvoyContext,
 	startTx: WatchSender<void>,
 	lostTimeout: NodeJS.Timeout | undefined,
@@ -248,7 +215,7 @@ async function handleConnMessage(
 
 		startTx.send();
 	} else if (message.tag === "ToEnvoyCommands") {
-		await handleCommands(ctx, message.val);
+		handleCommands(ctx, message.val);
 	} else if (message.tag === "ToEnvoyAckEvents") {
 		handleAckEvents(ctx, message.val);
 	} else if (message.tag === "ToEnvoyKvResponse") {
@@ -260,7 +227,7 @@ async function handleConnMessage(
 	}
 }
 
-async function handleConnClose(ctx: EnvoyContext, lostTimeout: NodeJS.Timeout | undefined) {
+function handleConnClose(ctx: EnvoyContext, lostTimeout: NodeJS.Timeout | undefined) {
 	if (!lostTimeout) {
 		let lostThreshold = ctx.shared.protocolMetadata ? Number(ctx.shared.protocolMetadata.envoyLostThreshold) : 10000;
 		log(ctx.shared)?.debug({
@@ -297,6 +264,48 @@ async function handleConnClose(ctx: EnvoyContext, lostTimeout: NodeJS.Timeout | 
 			lostThreshold,
 		);
 	}
+}
+
+function handleShutdown(ctx: EnvoyContext) {
+	if (ctx.shuttingDown) return;
+	ctx.shuttingDown = true;
+
+	wsSend(ctx.shared, {
+		tag: "ToRivetStopping",
+		val: null,
+	});
+
+	// Start shutdown checker
+	spawn(async () => {
+		let i = 0;
+
+		while (true) {
+			let total = 0;
+
+			// Check for actors with open handles
+			for (const gens of ctx.actors.values()) {
+				const last = Array.from(gens.values())[gens.size - 1];
+
+				if (last && !last.handle.isClosed()) total++;
+			}
+
+			// Wait until no actors remain
+			if (total === 0) {
+				ctx.shared.envoyTx.send({ type: "stop" });
+				break;
+			}
+
+			await sleep(1000);
+
+			if (i % 10 === 0) {
+				log(ctx.shared)?.info({
+					msg: "waiting on actors to stop before shutdown",
+					actors: total,
+				});
+			}
+			i++;
+		}
+	});
 }
 
 // MARK: Util

@@ -20,6 +20,10 @@ pub struct Pegboard {
 	///
 	/// Unit is in milliseconds.
 	pub actor_stop_threshold: Option<i64>,
+	/// How long to wait after starting to attempt to reallocate before before setting actor to sleep.
+	///
+	/// Unit is in milliseconds.
+	pub actor_retry_duration_threshold: Option<i64>,
 	/// How long an actor goes without retries before it's retry count is reset to 0, effectively resetting its
 	/// backoff to 0.
 	///
@@ -161,6 +165,10 @@ impl Pegboard {
 	/// website/src/content/docs/actors/versions.mdx (SIGTERM Handling section).
 	pub fn actor_stop_threshold(&self) -> i64 {
 		self.actor_stop_threshold.unwrap_or(30_000)
+	}
+
+	pub fn actor_retry_duration_threshold(&self) -> i64 {
+		self.actor_retry_duration_threshold.unwrap_or(300_000)
 	}
 
 	pub fn retry_reset_duration(&self) -> i64 {

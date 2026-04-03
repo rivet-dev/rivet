@@ -189,6 +189,7 @@ async fn route_request_inner(
 		stopped_sub,
 		fail_sub,
 		destroy_sub,
+		migrate_sub,
 		ready_sub2,
 		stopped_sub2,
 		fail_sub2,
@@ -198,6 +199,7 @@ async fn route_request_inner(
 		ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", actor_id)),
 		ctx.subscribe::<pegboard::workflows::actor::Failed>(("actor_id", actor_id)),
 		ctx.subscribe::<pegboard::workflows::actor::DestroyStarted>(("actor_id", actor_id)),
+		ctx.subscribe::<pegboard::workflows::actor::MigratedToV2>(("actor_id", actor_id)),
 		ctx.subscribe::<pegboard::workflows::actor2::Ready>(("actor_id", actor_id)),
 		ctx.subscribe::<pegboard::workflows::actor2::Stopped>(("actor_id", actor_id)),
 		ctx.subscribe::<pegboard::workflows::actor2::Failed>(("actor_id", actor_id)),
@@ -218,6 +220,12 @@ async fn route_request_inner(
 
 	match actor.version {
 		2 => {
+			drop(ready_sub);
+			drop(stopped_sub);
+			drop(fail_sub);
+			drop(destroy_sub);
+			drop(migrate_sub);
+
 			handle_actor_v2(
 				ctx,
 				shared_state,
@@ -242,6 +250,11 @@ async fn route_request_inner(
 				stopped_sub,
 				fail_sub,
 				destroy_sub,
+				migrate_sub,
+				ready_sub2,
+				stopped_sub2,
+				fail_sub2,
+				destroy_sub2,
 			)
 			.await
 		}
@@ -359,6 +372,11 @@ async fn handle_actor_v1(
 	mut stopped_sub: SubscriptionHandle<pegboard::workflows::actor::Stopped>,
 	mut fail_sub: SubscriptionHandle<pegboard::workflows::actor::Failed>,
 	mut destroy_sub: SubscriptionHandle<pegboard::workflows::actor::DestroyStarted>,
+	mut migrate_sub: SubscriptionHandle<pegboard::workflows::actor::MigratedToV2>,
+	ready_sub2: SubscriptionHandle<pegboard::workflows::actor2::Ready>,
+	stopped_sub2: SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
+	fail_sub2: SubscriptionHandle<pegboard::workflows::actor2::Failed>,
+	destroy_sub2: SubscriptionHandle<pegboard::workflows::actor2::DestroyStarted>,
 ) -> Result<RoutingOutput> {
 	// Wake actor if sleeping
 	if actor.sleeping {
@@ -382,11 +400,9 @@ async fn handle_actor_v1(
 		let mut wake_retries = 0;
 
 		// Create pool error check future
-		let pool_error_check_fut = check_runner_pool_error_loop(
-			ctx,
-			actor.namespace_id,
-			actor.runner_name_selector.as_deref(),
-		);
+		let runner_name_selector = actor.runner_name_selector.clone();
+		let pool_error_check_fut =
+			check_runner_pool_error_loop(ctx, actor.namespace_id, runner_name_selector.as_deref());
 		tokio::pin!(pool_error_check_fut);
 
 		// Wait for ready, fail, or destroy
@@ -429,6 +445,20 @@ async fn handle_actor_v1(
 				res = destroy_sub.next() => {
 					res?;
 					return Err(pegboard::errors::Actor::DestroyedWhileWaitingForReady.build());
+				}
+				res = migrate_sub.next() => {
+					res?;
+					return handle_actor_v2(
+						ctx,
+						shared_state,
+						actor_id,
+						actor,
+						stripped_path,
+						ready_sub2,
+						stopped_sub2,
+						fail_sub2,
+						destroy_sub2,
+					).await;
 				}
 				res = &mut pool_error_check_fut => {
 					if res? {

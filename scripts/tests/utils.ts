@@ -9,7 +9,7 @@ export async function createActor(
 	withKey: boolean = true
 ): Promise<any> {
 	const response = await fetch(
-		`${RIVET_ENDPOINT}/actors2?namespace=${namespaceName}`,
+		`${RIVET_ENDPOINT}/actors?namespace=${namespaceName}`,
 		{
 			method: "POST",
 			headers: {
@@ -21,7 +21,7 @@ export async function createActor(
 				key: withKey ? crypto.randomUUID() : undefined,
 				input: btoa("hello"),
 				runner_name_selector: runnerNameSelector,
-				crash_policy: "destroy",
+				crash_policy: "sleep",
 			}),
 		},
 	);

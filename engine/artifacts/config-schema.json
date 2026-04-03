@@ -532,6 +532,14 @@
           ],
           "format": "int64"
         },
+        "actor_retry_duration_threshold": {
+          "description": "How long to wait after starting to attempt to reallocate before before setting actor to sleep.\n\nUnit is in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
         "actor_start_threshold": {
           "description": "How long to wait after creating and not receiving a starting state before setting actor as lost.\n\nUnit is in milliseconds.",
           "type": [

@@ -204,7 +204,7 @@ async fn poll_metadata(ctx: &ActivityCtx, input: &PollMetadataInput) -> Result<P
 	let downgraded = ctx
 		.udb()?
 		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::subspace());
+			let tx = tx.with_subspace(namespace::keys::subspace());
 
 			let protocol_version_key = keys::runner_config::ProtocolVersionKey::new(
 				input.namespace_id,
