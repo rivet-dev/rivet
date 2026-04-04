@@ -22,6 +22,7 @@ pub async fn namespace_resolve_for_name_global(
 
 		ctx.cache()
 			.clone()
+			.namespace()
 			.request()
 			.fetch_one_json("namespace.resolve_for_name_global", input.name.clone(), {
 				let leader_dc = leader_dc.clone();

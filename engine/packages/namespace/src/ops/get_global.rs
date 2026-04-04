@@ -19,6 +19,7 @@ pub async fn namespace_get_global(ctx: &OperationCtx, input: &Input) -> Result<V
 
 		ctx.cache()
 			.clone()
+			.namespace()
 			.request()
 			.fetch_all_json("namespace.get_global", input.namespace_ids.clone(), {
 				let leader_dc = leader_dc.clone();

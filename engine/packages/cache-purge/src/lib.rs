@@ -24,14 +24,30 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 					"received cache purge request"
 				);
 
+				let keys = purge_msg.keys.clone();
+
 				// Purge the cache locally without publishing to NATS again
 				if let Err(err) = cache
 					.clone()
 					.request()
-					.purge_local(&purge_msg.base_key, purge_msg.keys)
+					.purge_local(&purge_msg.base_key, keys.clone())
 					.await
 				{
 					tracing::error!(?err, base_key = ?purge_msg.base_key, "failed to purge cache");
+				}
+
+				if let Err(err) = cache
+					.clone()
+					.namespace()
+					.request()
+					.purge_local(&purge_msg.base_key, keys)
+					.await
+				{
+					tracing::error!(
+						?err,
+						base_key = ?purge_msg.base_key,
+						"failed to purge namespace cache"
+					);
 				}
 			}
 			Err(err) => {

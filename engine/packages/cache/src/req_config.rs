@@ -5,12 +5,14 @@ use serde::{Serialize, de::DeserializeOwned};
 use tracing::Instrument;
 
 use super::*;
+use crate::driver::CacheStore;
 use crate::{errors::Error, metrics};
 
 /// Config specifying how cached values will behave.
 #[derive(Clone)]
 pub struct RequestConfig {
 	pub(super) cache: Cache,
+	store: CacheStore,
 	ttl: i64,
 }
 
@@ -18,6 +20,7 @@ impl Debug for RequestConfig {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("RequestConfig")
 			.field("cache", &self.cache)
+			.field("store", &self.store)
 			.field("ttl", &self.ttl)
 			.finish()
 	}
@@ -27,6 +30,15 @@ impl RequestConfig {
 	pub(crate) fn new(cache: Cache) -> Self {
 		RequestConfig {
 			cache,
+			store: CacheStore::Default,
+			ttl: rivet_util::duration::hours(2),
+		}
+	}
+
+	pub(crate) fn new_with_store(cache: Cache, store: CacheStore) -> Self {
+		RequestConfig {
+			cache,
+			store,
 			ttl: rivet_util::duration::hours(2),
 		}
 	}
@@ -147,7 +159,12 @@ impl RequestConfig {
 			.collect::<Vec<_>>();
 
 		// Attempt to fetch value from cache, fall back to getter
-		match self.cache.driver.fetch_values(&base_key, &cache_keys).await {
+		match self
+			.cache
+			.driver
+			.fetch_values_store(self.store, &base_key, &cache_keys)
+			.await
+		{
 			Ok(cached_values) => {
 				debug_assert_eq!(
 					cache_keys.len(),
@@ -229,11 +246,13 @@ impl RequestConfig {
 					if !keys_values.is_empty() {
 						let driver = self.cache.driver.clone();
 						let base_key_clone = base_key.clone();
+						let store = self.store;
 
 						let spawn_res = tokio::task::Builder::new().name("cache::write").spawn(
 							async move {
-								if let Err(err) =
-									driver.set_values(&base_key_clone, keys_values).await
+								if let Err(err) = driver
+									.set_values_store(store, &base_key_clone, keys_values)
+									.await
 								{
 									tracing::error!(?err, "failed to write to cache");
 								}
@@ -348,7 +367,12 @@ impl RequestConfig {
 		let cache_keys = keys.into_iter().map(|k| k.cache_key()).collect::<Vec<_>>();
 
 		// Delete keys locally
-		match self.cache.driver.delete_keys(base_key, cache_keys).await {
+		match self
+			.cache
+			.driver
+			.delete_keys_store(self.store, base_key, cache_keys)
+			.await
+		{
 			Ok(_) => {
 				tracing::trace!("successfully deleted keys");
 			}

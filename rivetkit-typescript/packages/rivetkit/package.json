@@ -339,7 +339,7 @@
 		"nanoevents": "^9.1.0",
 		"p-retry": "^6.2.1",
 		"pino": "^9.5.0",
-		"sandbox-agent": "^0.4.2",
+		"sandbox-agent": "link:../../../../sandbox-agent/sdks/typescript",
 		"tar": "^7.5.0",
 		"uuid": "^12.0.0",
 		"vbare": "^0.0.4",
@@ -371,10 +371,10 @@
 		"zod-to-json-schema": "^3.25.0"
 	},
 	"peerDependencies": {
-		"@fly/sprites": ">=0.0.1",
-		"@vercel/sandbox": ">=0.1.0",
 		"@daytonaio/sdk": "^0.150.0",
 		"@e2b/code-interpreter": "^2.3.3",
+		"@fly/sprites": ">=0.0.1",
+		"@vercel/sandbox": ">=0.1.0",
 		"computesdk": ">=0.1.0",
 		"dockerode": "^4.0.9",
 		"drizzle-kit": "^0.31.2",

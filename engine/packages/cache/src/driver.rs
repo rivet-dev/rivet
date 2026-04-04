@@ -12,6 +12,12 @@ use crate::{errors::Error, metrics};
 /// Type alias for cache values stored as bytes
 pub type CacheValue = Vec<u8>;
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum CacheStore {
+	Default,
+	NamespaceRequests,
+}
+
 /// Enum wrapper for different cache driver implementations
 #[derive(Debug, Clone)]
 #[non_exhaustive]
@@ -27,8 +33,19 @@ impl Driver {
 		base_key: &'a str,
 		keys: &[String],
 	) -> Result<Vec<Option<CacheValue>>, Error> {
+		self.fetch_values_store(CacheStore::Default, base_key, keys)
+			.await
+	}
+
+	#[tracing::instrument(skip_all, fields(driver=%self))]
+	pub(crate) async fn fetch_values_store<'a>(
+		&'a self,
+		store: CacheStore,
+		base_key: &'a str,
+		keys: &[String],
+	) -> Result<Vec<Option<CacheValue>>, Error> {
 		match self {
-			Driver::InMemory(d) => d.fetch_values(base_key, keys).await,
+			Driver::InMemory(d) => d.fetch_values_store(store, base_key, keys).await,
 		}
 	}
 
@@ -39,8 +56,19 @@ impl Driver {
 		base_key: &'a str,
 		keys_values: Vec<(String, CacheValue, i64)>,
 	) -> Result<(), Error> {
+		self.set_values_store(CacheStore::Default, base_key, keys_values)
+			.await
+	}
+
+	#[tracing::instrument(skip_all, fields(driver=%self))]
+	pub(crate) async fn set_values_store<'a>(
+		&'a self,
+		store: CacheStore,
+		base_key: &'a str,
+		keys_values: Vec<(String, CacheValue, i64)>,
+	) -> Result<(), Error> {
 		match self {
-			Driver::InMemory(d) => d.set_values(base_key, keys_values).await,
+			Driver::InMemory(d) => d.set_values_store(store, base_key, keys_values).await,
 		}
 	}
 
@@ -51,8 +79,19 @@ impl Driver {
 		base_key: &'a str,
 		keys: Vec<String>,
 	) -> Result<(), Error> {
+		self.delete_keys_store(CacheStore::Default, base_key, keys)
+			.await
+	}
+
+	#[tracing::instrument(skip_all, fields(driver=%self))]
+	pub(crate) async fn delete_keys_store<'a>(
+		&'a self,
+		store: CacheStore,
+		base_key: &'a str,
+		keys: Vec<String>,
+	) -> Result<(), Error> {
 		match self {
-			Driver::InMemory(d) => d.delete_keys(base_key, keys).await,
+			Driver::InMemory(d) => d.delete_keys_store(store, base_key, keys).await,
 		}
 	}
 
@@ -174,6 +213,7 @@ impl moka::Expiry<String, ExpiringValue> for ValueExpiry {
 pub struct InMemoryDriver {
 	service_name: String,
 	cache: Cache<String, ExpiringValue>,
+	namespace_requests: Cache<String, ExpiringValue>,
 	/// In-memory rate limiting store - maps keys to hit counts with expiration
 	rate_limits: Cache<String, ExpiringValue>,
 }
@@ -193,6 +233,10 @@ impl InMemoryDriver {
 			.expire_after(ValueExpiry)
 			.build();
 
+		let namespace_requests = CacheBuilder::new(max_capacity)
+			.expire_after(ValueExpiry)
+			.build();
+
 		// Create a separate cache for rate limiting with the same expiry mechanism
 		let rate_limits = CacheBuilder::new(max_capacity)
 			.expire_after(ValueExpiry)
@@ -201,6 +245,7 @@ impl InMemoryDriver {
 		Self {
 			service_name,
 			cache,
+			namespace_requests,
 			rate_limits,
 		}
 	}
@@ -210,8 +255,21 @@ impl InMemoryDriver {
 		_base_key: &'a str,
 		keys: &[String],
 	) -> Result<Vec<Option<CacheValue>>, Error> {
+		self.fetch_values_store(CacheStore::Default, _base_key, keys)
+			.await
+	}
+
+	pub(crate) async fn fetch_values_store<'a>(
+		&'a self,
+		store: CacheStore,
+		_base_key: &'a str,
+		keys: &[String],
+	) -> Result<Vec<Option<CacheValue>>, Error> {
 		let keys = keys.to_vec();
-		let cache = self.cache.clone();
+		let cache = match store {
+			CacheStore::Default => self.cache.clone(),
+			CacheStore::NamespaceRequests => self.namespace_requests.clone(),
+		};
 
 		let mut result = Vec::with_capacity(keys.len());
 
@@ -238,7 +296,20 @@ impl InMemoryDriver {
 		_base_key: &'a str,
 		keys_values: Vec<(String, CacheValue, i64)>,
 	) -> Result<(), Error> {
-		let cache = self.cache.clone();
+		self.set_values_store(CacheStore::Default, _base_key, keys_values)
+			.await
+	}
+
+	pub(crate) async fn set_values_store<'a>(
+		&'a self,
+		store: CacheStore,
+		_base_key: &'a str,
+		keys_values: Vec<(String, CacheValue, i64)>,
+	) -> Result<(), Error> {
+		let cache = match store {
+			CacheStore::Default => self.cache.clone(),
+			CacheStore::NamespaceRequests => self.namespace_requests.clone(),
+		};
 
 		// Async block for metrics
 		async {
@@ -265,7 +336,20 @@ impl InMemoryDriver {
 		base_key: &'a str,
 		keys: Vec<String>,
 	) -> Result<(), Error> {
-		let cache = self.cache.clone();
+		self.delete_keys_store(CacheStore::Default, base_key, keys)
+			.await
+	}
+
+	pub(crate) async fn delete_keys_store<'a>(
+		&'a self,
+		store: CacheStore,
+		base_key: &'a str,
+		keys: Vec<String>,
+	) -> Result<(), Error> {
+		let cache = match store {
+			CacheStore::Default => self.cache.clone(),
+			CacheStore::NamespaceRequests => self.namespace_requests.clone(),
+		};
 
 		metrics::CACHE_PURGE_REQUEST_TOTAL
 			.with_label_values(&[base_key])

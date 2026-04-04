@@ -1,7 +1,7 @@
 use std::{fmt::Debug, sync::Arc};
 
 use super::*;
-use crate::driver::{Driver, InMemoryDriver};
+use crate::driver::{CacheStore, Driver, InMemoryDriver};
 
 pub type Cache = Arc<CacheInner>;
 
@@ -56,5 +56,21 @@ impl CacheInner {
 	/// Returns a new request config builder.
 	pub fn request(self: Arc<Self>) -> RequestConfig {
 		RequestConfig::new(self.clone())
+	}
+
+	pub fn namespace(self: Arc<Self>) -> CacheNamespace {
+		CacheNamespace {
+			cache: self.clone(),
+		}
+	}
+}
+
+pub struct CacheNamespace {
+	cache: Arc<CacheInner>,
+}
+
+impl CacheNamespace {
+	pub fn request(self) -> RequestConfig {
+		RequestConfig::new_with_store(self.cache.clone(), CacheStore::NamespaceRequests)
 	}
 }
