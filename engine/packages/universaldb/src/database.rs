@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::time::Instant;
 use std::{
 	future::Future,
@@ -91,5 +92,10 @@ impl Database {
 	/// Set a database option
 	pub fn set_option(&self, opt: DatabaseOption) -> Result<()> {
 		self.driver.set_option(opt)
+	}
+
+	/// Create a consistent point-in-time snapshot of the database at the given path.
+	pub fn checkpoint(&self, path: &Path) -> Result<()> {
+		self.driver.checkpoint(path)
 	}
 }

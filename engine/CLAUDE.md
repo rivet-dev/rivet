@@ -26,3 +26,13 @@ When changing a versioned VBARE schema, follow the existing migration pattern.
      - `engine/sdks/rust/runner-protocol/src/lib.rs` `PROTOCOL_MK2_VERSION`
      - `engine/sdks/typescript/runner/src/mod.ts` `PROTOCOL_VERSION`
    - Update the Rust latest re-export in `engine/sdks/rust/runner-protocol/src/lib.rs` to the new generated module.
+
+## Epoxy durable keys
+
+- All epoxy durable state lives under per-replica subspaces (`keys::subspace(replica_id)` for v2, `keys::legacy_subspace(replica_id)` for read-only legacy data). Shared key types (`KvValueKey`, `KvBallotKey`, etc.) live in `engine/packages/epoxy/src/keys/keys.rs` and new tuple segment constants go in `engine/packages/universaldb/src/utils/keys.rs`.
+- When adding fields to epoxy workflow state structs, mark them `#[serde(default)]` so Gasoline can replay older serialized state.
+- Epoxy integration tests that spin up `tests/common::TestCtx` must call `shutdown()` before returning.
+
+## Test snapshots
+
+Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB KV store for migration and integration tests. Scenarios produce per-replica RocksDB checkpoints stored under `engine/packages/test-snapshot-gen/snapshots/` (git LFS tracked). In tests, use `test_snapshot::SnapshotTestCtx::from_snapshot("scenario-name")` to boot a cluster from snapshot data. See `docs-internal/engine/TEST_SNAPSHOTS.md` for the full guide.

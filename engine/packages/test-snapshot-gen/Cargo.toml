@@ -1,0 +1,36 @@
+[package]
+name = "test-snapshot-gen"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[lib]
+name = "test_snapshot"
+path = "src/lib.rs"
+
+[[bin]]
+name = "test-snapshot-gen"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+clap.workspace = true
+epoxy.workspace = true
+epoxy-protocol.workspace = true
+gas.workspace = true
+portpicker.workspace = true
+rivet-api-builder.workspace = true
+rivet-config.workspace = true
+rivet-pools.workspace = true
+rivet-test-deps.workspace = true
+rivet-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+universaldb.workspace = true
+url.workspace = true
+uuid.workspace = true

@@ -22,6 +22,7 @@ rand.workspace = true
 rivet-config.workspace = true
 rivet-data.workspace = true
 rivet-error.workspace = true
+rivet-envoy-protocol.workspace = true
 rivet-guard-core.workspace = true
 rivet-metrics.workspace = true
 rivet-runner-protocol.workspace = true

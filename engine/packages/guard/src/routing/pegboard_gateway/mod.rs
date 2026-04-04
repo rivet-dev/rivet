@@ -43,7 +43,6 @@ pub async fn route_request_path_based(
 		resolved_route.token.as_deref(),
 	)
 	.await
-	.map(Some)
 }
 
 /// Route requests to actor services based on headers
@@ -210,7 +209,7 @@ async fn route_request_inner(
 			.dc_for_label(actor_id.label())
 			.context("dc with the given label not found")?;
 
-		return Ok(RoutingOutput::Route(RouteConfig {
+		return Ok(Some(RoutingOutput::Route(RouteConfig {
 			targets: vec![RouteTarget {
 				host: peer_dc
 					.proxy_url_host()
@@ -221,7 +220,7 @@ async fn route_request_inner(
 					.context("bad peer dc proxy url port")?,
 				path: req_ctx.path().to_owned(),
 			}],
-		}));
+		})));
 	}
 
 	// Create subs before checking if actor exists/is not destroyed

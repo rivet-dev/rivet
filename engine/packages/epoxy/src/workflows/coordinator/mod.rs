@@ -25,8 +25,14 @@ pub struct ReplicaState {
 }
 
 #[workflow]
-pub async fn epoxy_coordinator(ctx: &mut WorkflowCtx, _input: &Input) -> Result<()> {
+pub async fn epoxy_coordinator_v2(ctx: &mut WorkflowCtx, _input: &Input) -> Result<()> {
 	ctx.activity(InitInput {}).await?;
+
+	// Send BeginLearning to every replica so they can transition out of setup_replica.
+	// On fresh clusters there is nothing to catch up, but the signal is still required
+	// for replicas to proceed.
+	ctx.activity(reconfigure::SendBeginLearningToAllInput {})
+		.await?;
 
 	ctx.repeat(|ctx| {
 		async move {
@@ -61,16 +67,36 @@ pub async fn epoxy_coordinator(ctx: &mut WorkflowCtx, _input: &Input) -> Result<
 pub struct InitInput {}
 
 #[activity(Init)]
-pub async fn check_config_changes(ctx: &ActivityCtx, _input: &InitInput) -> Result<()> {
+pub async fn init(ctx: &ActivityCtx, _input: &InitInput) -> Result<()> {
 	let mut state = ctx.state::<Option<State>>()?;
 	*state = Some(State {
-		config: types::ClusterConfig {
-			coordinator_replica_id: ctx.config().epoxy_replica_id(),
-			epoch: 0,
-			replicas: Vec::new(),
-		},
+		// This cutover intentionally starts fresh workflow state. Pre-cutover committed values stay
+		// readable through dual reads and are repopulated into the v2 changelog by the background
+		// backfill workflow.
+		config: initial_cluster_config(ctx),
 	});
 	Ok(())
+}
+
+fn initial_cluster_config(ctx: &ActivityCtx) -> types::ClusterConfig {
+	let replicas = ctx
+		.config()
+		.topology()
+		.datacenters
+		.iter()
+		.map(|dc| types::ReplicaConfig {
+			replica_id: dc.datacenter_label as u64,
+			status: types::ReplicaStatus::Active,
+			api_peer_url: dc.peer_url.to_string(),
+			guard_url: dc.public_url.to_string(),
+		})
+		.collect();
+
+	types::ClusterConfig {
+		coordinator_replica_id: ctx.config().epoxy_replica_id(),
+		epoch: 0,
+		replicas,
+	}
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]

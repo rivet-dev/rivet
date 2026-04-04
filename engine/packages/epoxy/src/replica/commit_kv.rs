@@ -1,80 +1,86 @@
-use anyhow::*;
-use epoxy_protocol::protocol::{self, ReplicaId};
-use universaldb::Transaction;
-use universaldb::prelude::*;
+use anyhow::Result;
+use epoxy_protocol::protocol;
+use universaldb::{
+	Transaction,
+	utils::IsolationLevel::Serializable,
+};
 
-use crate::{keys, ops::propose::CommandError, replica::utils};
+use crate::{
+	keys::{self, CommittedValue, KvAcceptedKey, KvBallotKey, KvOptimisticCacheKey, KvValueKey},
+	replica::ballot::Ballot,
+};
 
-/// Commits a proposal to KV store.
-#[tracing::instrument(skip_all)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommitKvOutcome {
+	Committed,
+	AlreadyCommitted { value: Vec<u8>, version: u64 },
+	StaleBallot { current_ballot: protocol::Ballot },
+}
+
+#[tracing::instrument(skip_all, fields(%replica_id, key = ?key))]
 pub async fn commit_kv(
 	tx: &Transaction,
-	replica_id: ReplicaId,
-	commands: &[protocol::Command],
-) -> Result<Option<CommandError>> {
-	let subspace = keys::subspace(replica_id);
+	replica_id: protocol::ReplicaId,
+	key: Vec<u8>,
+	value: Vec<u8>,
+	ballot: protocol::Ballot,
+	mutable: bool,
+	version: u64,
+) -> Result<CommitKvOutcome> {
+	let tx = tx.with_subspace(keys::subspace(replica_id));
+	let value_key = KvValueKey::new(key.clone());
+	let ballot_key = KvBallotKey::new(key.clone());
+	let accepted_key = KvAcceptedKey::new(key.clone());
+	let cache_key = KvOptimisticCacheKey::new(key.clone());
+	let request_ballot = Ballot::from(ballot.clone());
 
-	for command in commands.iter() {
-		// Validate command logic
-		match &command.kind {
-			protocol::CommandKind::SetCommand(_) => {
-				// Always succeeds
-			}
-			protocol::CommandKind::CheckAndSetCommand(cmd) => {
-				// Read current value
-				let kv_key = keys::keys::KvValueKey::new(cmd.key.clone());
-				let packed_key = subspace.pack(&kv_key);
-				let current_value = if let Some(bytes) = tx.get(&packed_key, Serializable).await? {
-					Some(kv_key.deserialize(&bytes)?)
-				} else {
-					None
-				};
+	let (committed_value, current_ballot, accepted_value) = tokio::try_join!(
+		tx.read_opt(&value_key, Serializable),
+		tx.read_opt(&ballot_key, Serializable),
+		tx.read_opt(&accepted_key, Serializable),
+	)?;
 
-				// Validate CAS state
-				if !cmd.expect_one_of.iter().any(|x| *x == current_value) {
-					return Result::Ok(Some(CommandError::ExpectedValueDoesNotMatch {
-						current_value,
-					}));
-				}
-			}
-			protocol::CommandKind::NoopCommand => {
-				// No-op command does nothing
-			}
-		};
-	}
-
-	// Apply commands
-	for command in commands.iter() {
-		let Some(key) = utils::extract_key_from_command(&command) else {
-			continue;
-		};
-
-		// Build key
-		let kv_key = keys::keys::KvValueKey::new(key.clone());
-		let packed_key = subspace.pack(&kv_key);
-
-		// Read value
-		let new_value = match &command.kind {
-			protocol::CommandKind::SetCommand(cmd) => &cmd.value,
-			protocol::CommandKind::CheckAndSetCommand(cmd) => &cmd.new_value,
-			protocol::CommandKind::NoopCommand => {
-				continue;
-			}
-		};
-
-		// Update the value
-		if let Some(value) = new_value {
-			let serialized = kv_key.serialize(value.clone())?;
-			tx.set(&packed_key, &serialized);
-		} else {
-			tx.clear(&packed_key);
+	if let Some(committed_value) = committed_value {
+		if !committed_value.mutable || !mutable || version <= committed_value.version {
+			return Ok(CommitKvOutcome::AlreadyCommitted {
+				value: committed_value.value,
+				version: committed_value.version,
+			});
 		}
-
-		// Clear cached key, since we have the committed value for sure
-		let cache_key = keys::keys::KvOptimisticCacheKey::new(key.clone());
-		let cache_packed_key = subspace.pack(&cache_key);
-		tx.clear(&cache_packed_key);
 	}
 
-	Result::Ok(None)
+	let accepted_matches_request = accepted_value.as_ref().map_or(false, |accepted_value| {
+		accepted_value.ballot == ballot
+			&& accepted_value.value == value
+			&& accepted_value.version == version
+			&& accepted_value.mutable == mutable
+	});
+
+	if let Some(current_ballot) = current_ballot.map(Ballot::from) {
+		// Once a replica has accepted this exact value at this ballot, a later prepare can raise
+		// the promise without invalidating the already-chosen value. Allow the commit to finish in
+		// that case so quorum acceptance can still become learned state.
+		if request_ballot < current_ballot && !accepted_matches_request {
+			return Ok(CommitKvOutcome::StaleBallot {
+				current_ballot: current_ballot.into(),
+			});
+		}
+	}
+
+	tx.write(
+		&value_key,
+		CommittedValue {
+			value: value.clone(),
+			version,
+			mutable,
+		},
+	)?;
+	tx.delete(&accepted_key);
+	if mutable {
+		tx.delete(&ballot_key);
+		tx.delete(&cache_key);
+	}
+	crate::replica::changelog::append(replica_id, &tx, key, value, version, mutable)?;
+
+	Ok(CommitKvOutcome::Committed)
 }

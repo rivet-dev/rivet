@@ -1,5 +1,8 @@
 use anyhow::*;
-use epoxy_protocol::protocol::{ReplicaId, SlotId};
+use epoxy::{
+	ops::propose::{Command, CommandKind, Proposal, SetCommand},
+	protocol::ReplicaId,
+};
 use gas::prelude::*;
 use indexmap::IndexMap;
 use rivet_api_builder::ApiCtx;
@@ -226,13 +229,11 @@ pub async fn get_epoxy_replica_debug(
 ) -> Result<GetEpoxyReplicaDebugResponse> {
 	let replica_id = ctx.config().epoxy_replica_id();
 
-	let (config, ballot, instance_number) = ctx
+	let config = ctx
 		.udb()?
 		.run(|tx| async move {
 			let config = epoxy::utils::read_config(&tx, replica_id).await?;
-			let ballot = epoxy::replica::ballot::get_ballot(&tx, replica_id).await?;
-			let instance_number = epoxy::utils::read_instance_number(&tx, replica_id).await?;
-			Result::Ok((config, ballot, instance_number))
+			Result::Ok(config)
 		})
 		.await?;
 
@@ -284,11 +285,12 @@ pub async fn get_epoxy_replica_debug(
 		},
 		state: EpoxyReplicaDebugState {
 			ballot: EpoxyBallot {
-				epoch: ballot.epoch,
-				ballot: ballot.ballot,
-				replica_id: ballot.replica_id,
+				epoch: 0,
+				ballot: 0,
+				replica_id,
 			},
-			instance_number,
+			// Epoxy v2 no longer maintains replica-global ballot or instance counters.
+			instance_number: 0,
 		},
 	})
 }
@@ -310,7 +312,7 @@ pub struct GetEpoxyKeyDebugResponse {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EpoxyKeyInstance {
 	pub replica_id: ReplicaId,
-	pub slot_id: SlotId,
+	pub slot_id: u64,
 	pub log_entry: Option<EpoxyKeyLogEntry>,
 }
 
@@ -325,7 +327,7 @@ pub struct EpoxyKeyLogEntry {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EpoxyInstance {
 	pub replica_id: ReplicaId,
-	pub slot_id: SlotId,
+	pub slot_id: u64,
 }
 
 /// Returns debug information for a specific key on this replica.
@@ -342,45 +344,32 @@ pub async fn get_epoxy_key_debug(
 	let key_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &path.key)
 		.context("invalid base64 key")?;
 
-	let instances = ctx
-		.udb()?
-		.run(|tx| {
-			let key_bytes = key_bytes.clone();
-			async move {
-				let protocol_instances =
-					epoxy::utils::read_key_instances(&tx, replica_id, key_bytes).await?;
-
-				let mut instances = Vec::new();
-				for instance in protocol_instances {
-					let log_entry =
-						epoxy::utils::read_log_entry(&tx, replica_id, &instance).await?;
-					instances.push(EpoxyKeyInstance {
-						replica_id: instance.replica_id,
-						slot_id: instance.slot_id,
-						log_entry: log_entry.map(|entry| EpoxyKeyLogEntry {
-							status: format!("{:?}", entry.state),
-							ballot: EpoxyBallot {
-								epoch: entry.ballot.epoch,
-								ballot: entry.ballot.ballot,
-								replica_id: entry.ballot.replica_id,
-							},
-							seq: entry.seq,
-							deps: entry
-								.deps
-								.into_iter()
-								.map(|d| EpoxyInstance {
-									replica_id: d.replica_id,
-									slot_id: d.slot_id,
-								})
-								.collect(),
-						}),
-					});
-				}
-
-				Result::Ok(instances)
-			}
+	let local_value = ctx
+		.op(epoxy::ops::kv::get_local::Input {
+			replica_id,
+			key: key_bytes,
 		})
 		.await?;
+
+	let instances = local_value
+		.value
+		.map(|_| {
+			vec![EpoxyKeyInstance {
+				replica_id,
+				slot_id: 0,
+				log_entry: Some(EpoxyKeyLogEntry {
+					status: "committed".to_string(),
+					ballot: EpoxyBallot {
+						epoch: 0,
+						ballot: 0,
+						replica_id,
+					},
+					seq: 0,
+					deps: Vec::new(),
+				}),
+			}]
+		})
+		.unwrap_or_default();
 
 	// Compute instances by status
 	let mut instances_by_status = IndexMap::new();
@@ -536,6 +525,7 @@ pub async fn get_epoxy_kv_optimistic(
 		.op(epoxy::ops::kv::get_optimistic::Input {
 			replica_id,
 			key: key_bytes,
+			caching_behavior: epoxy::protocol::CachingBehavior::Optimistic,
 		})
 		.await?;
 
@@ -567,7 +557,6 @@ pub async fn set_epoxy_kv(
 	body: SetEpoxyKvRequest,
 ) -> Result<SetEpoxyKvResponse> {
 	use base64::Engine;
-	use epoxy_protocol::protocol;
 
 	let key_bytes = base64::engine::general_purpose::STANDARD
 		.decode(&path.key)
@@ -582,16 +571,21 @@ pub async fn set_epoxy_kv(
 		})
 		.transpose()?;
 
+	let value_bytes = value_bytes.ok_or_else(|| {
+		anyhow!("epoxy v2 debug set only supports immutable set-if-absent writes")
+	})?;
+
 	let result = ctx
 		.op(epoxy::ops::propose::Input {
-			proposal: protocol::Proposal {
-				commands: vec![protocol::Command {
-					kind: protocol::CommandKind::SetCommand(protocol::SetCommand {
+			proposal: Proposal {
+				commands: vec![Command {
+					kind: CommandKind::SetCommand(SetCommand {
 						key: key_bytes,
-						value: value_bytes,
+						value: Some(value_bytes),
 					}),
 				}],
 			},
+			mutable: false,
 			purge_cache: true,
 			target_replicas: None,
 		})

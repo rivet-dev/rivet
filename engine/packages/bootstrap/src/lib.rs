@@ -18,6 +18,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 		async {
 			// Replicas must exist before coordinator
 			setup_epoxy_replica(&ctx).await?;
+			setup_epoxy_backfill(&ctx).await?;
 			setup_epoxy_coordinator(&ctx).await
 		},
 		create_default_namespace(&ctx),
@@ -44,12 +45,6 @@ async fn setup_epoxy_coordinator(ctx: &StandaloneCtx) -> Result<()> {
 		.await?;
 	tracing::info!(%workflow_id, "created epoxy coordinator");
 
-	// Check for reconfiguration.
-	//
-	// Do this on every startup in order to catch any possible config changes.
-	//
-	// This does not guarantee the config will change immediately since we can't guarantee that the
-	// coordinator workflow is running on a node with the newest version of the config.
 	ctx.signal(epoxy::workflows::coordinator::Reconfigure {})
 		.to_workflow_id(workflow_id)
 		.send()
@@ -68,6 +63,18 @@ async fn setup_epoxy_replica(ctx: &StandaloneCtx) -> Result<()> {
 		.dispatch()
 		.await?;
 	tracing::info!(%workflow_id, "created epoxy replica");
+
+	Ok(())
+}
+
+async fn setup_epoxy_backfill(ctx: &StandaloneCtx) -> Result<()> {
+	let workflow_id = ctx
+		.workflow(epoxy::workflows::backfill::Input { chunk_size: None })
+		.tag("replica", ctx.config().epoxy_replica_id())
+		.unique()
+		.dispatch()
+		.await?;
+	tracing::info!(%workflow_id, "created epoxy backfill");
 
 	Ok(())
 }

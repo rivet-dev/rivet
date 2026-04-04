@@ -1,4 +1,4 @@
-use anyhow::*;
+use anyhow::{Result, bail};
 use epoxy_protocol::protocol::{self, ReplicaId};
 use std::fmt;
 use universaldb::{Transaction, utils::IsolationLevel::*};
@@ -22,14 +22,8 @@ impl fmt::Display for QuorumType {
 	}
 }
 
-pub enum ReplicaFilter {
-	All,
-	Active,
-}
-
 /// Use this replica list for any action that requires a quorum.
 pub fn get_quorum_members(config: &protocol::ClusterConfig) -> Vec<ReplicaId> {
-	// Only active nodes can participate in quorums
 	config
 		.replicas
 		.iter()
@@ -43,54 +37,38 @@ pub fn get_all_replicas(config: &protocol::ClusterConfig) -> Vec<ReplicaId> {
 	config.replicas.iter().map(|r| r.replica_id).collect()
 }
 
-// See EPaxos 4.3
-pub fn calculate_quorum(n: usize, q: QuorumType) -> usize {
+fn calculate_slow_quorum_size(n: usize) -> usize {
 	match n {
-		// Nonsensical
+		0 => 0,
+		_ => (n / 2) + 1,
+	}
+}
+
+fn calculate_fast_quorum_size(n: usize) -> usize {
+	match n {
 		0 => 0,
 		1 => 1,
-		// EPaxos does not apply to clusters with N < 3 because you cannot tolerate any faults. However we can
-		// still get correctness invariants to hold by requiring both nodes to agree on everything (quorum
-		// size is always 2)
-		2 => match q {
-			QuorumType::Fast => 2,
-			QuorumType::Slow => 2,
-			QuorumType::All => 2,
-			QuorumType::Any => 1,
-		},
-		// Note that for even N's we don't gain any extra fault tolerance but we get potentially better read
-		// latency. N=4 acts like N=3 in terms of fault tolerance.
-		n => {
-			let f = (n - 1) / 2;
-
-			match q {
-				QuorumType::Fast => f + (f + 1) / 2,
-				QuorumType::Slow => f + 1,
-				QuorumType::All => n,
-				QuorumType::Any => 1,
-			}
+		_ => {
+			let slow_quorum = calculate_slow_quorum_size(n);
+			n - ((slow_quorum - 1) / 2)
 		}
+	}
+}
+
+pub fn calculate_quorum(n: usize, q: QuorumType) -> usize {
+	match q {
+		QuorumType::Fast => calculate_fast_quorum_size(n),
+		QuorumType::Slow => calculate_slow_quorum_size(n),
+		QuorumType::All => n,
+		QuorumType::Any => usize::from(n > 0),
 	}
 }
 
 /// Calculates quorum size assuming the sender is excluded.
 pub fn calculate_fanout_quorum(n: usize, q: QuorumType) -> usize {
-	match n {
-		// Nonsensical
-		0 => 0,
-		1 => 0,
-		// NOTE: See comments in `calculate_quorum`
-		2 => 1,
-		n => {
-			let f = (n - 1) / 2;
-
-			match q {
-				QuorumType::Fast => (f + (f + 1) / 2) - 1,
-				QuorumType::Slow => f,
-				QuorumType::All => n - 1,
-				QuorumType::Any => 1,
-			}
-		}
+	match q {
+		QuorumType::Any => usize::from(n > 0),
+		_ => calculate_quorum(n, q).saturating_sub(1),
 	}
 }
 
@@ -105,75 +83,98 @@ pub async fn read_config(
 	let packed_key = subspace.pack(&config_key);
 
 	match tx.get(&packed_key, Serializable).await? {
-		Some(value) => {
-			let config = config_key.deserialize(&value)?;
-			Ok(config)
+		Some(value) => Ok(config_key.deserialize(&value)?),
+		None => bail!(
+			"replica {} has not been configured yet, verify that the coordinator has reconfigured the cluster for this replica successfully",
+			replica_id
+		),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{QuorumType, calculate_fanout_quorum, calculate_quorum};
+
+	#[test]
+	fn quorum_sizes_match_expected_values_for_small_clusters() {
+		let expected = [
+			(1, 1, 1, 1, 1, 0, 0, 0, 1),
+			(2, 2, 2, 2, 1, 1, 1, 1, 1),
+			(3, 3, 2, 3, 1, 2, 1, 2, 1),
+			(4, 3, 3, 4, 1, 2, 2, 3, 1),
+			(5, 4, 3, 5, 1, 3, 2, 4, 1),
+			(6, 5, 4, 6, 1, 4, 3, 5, 1),
+			(7, 6, 4, 7, 1, 5, 3, 6, 1),
+		];
+
+		for (n, fast, slow, all, any, fanout_fast, fanout_slow, fanout_all, fanout_any) in
+			expected
+		{
+			assert_eq!(calculate_quorum(n, QuorumType::Fast), fast, "fast quorum for n={n}");
+			assert_eq!(calculate_quorum(n, QuorumType::Slow), slow, "slow quorum for n={n}");
+			assert_eq!(calculate_quorum(n, QuorumType::All), all, "all quorum for n={n}");
+			assert_eq!(calculate_quorum(n, QuorumType::Any), any, "any quorum for n={n}");
+			assert_eq!(
+				calculate_fanout_quorum(n, QuorumType::Fast),
+				fanout_fast,
+				"fanout fast quorum for n={n}"
+			);
+			assert_eq!(
+				calculate_fanout_quorum(n, QuorumType::Slow),
+				fanout_slow,
+				"fanout slow quorum for n={n}"
+			);
+			assert_eq!(
+				calculate_fanout_quorum(n, QuorumType::All),
+				fanout_all,
+				"fanout all quorum for n={n}"
+			);
+			assert_eq!(
+				calculate_fanout_quorum(n, QuorumType::Any),
+				fanout_any,
+				"fanout any quorum for n={n}"
+			);
 		}
-		None => {
-			bail!(
-				"replica {} has not been configured yet, verify that the coordinator has reconfigured the cluster for this replica successfully",
-				replica_id
-			)
+	}
+
+	#[test]
+	fn quorum_invariants_hold_for_small_clusters() {
+		for n in 1..=7 {
+			let fast = calculate_quorum(n, QuorumType::Fast);
+			let slow = calculate_quorum(n, QuorumType::Slow);
+			let all = calculate_quorum(n, QuorumType::All);
+			let any = calculate_quorum(n, QuorumType::Any);
+
+			assert_eq!(all, n, "all quorum should include every replica for n={n}");
+			assert_eq!(any, 1, "any quorum should require one replica for n={n}");
+			assert_eq!(
+				calculate_fanout_quorum(n, QuorumType::Fast),
+				fast.saturating_sub(1),
+				"fanout fast quorum should exclude the sender for n={n}"
+			);
+			assert_eq!(
+				calculate_fanout_quorum(n, QuorumType::Slow),
+				slow.saturating_sub(1),
+				"fanout slow quorum should exclude the sender for n={n}"
+			);
+			assert_eq!(
+				calculate_fanout_quorum(n, QuorumType::All),
+				all.saturating_sub(1),
+				"fanout all quorum should exclude the sender for n={n}"
+			);
+			assert_eq!(
+				calculate_fanout_quorum(n, QuorumType::Any),
+				1,
+				"fanout any quorum should continue to target one remote response for n={n}"
+			);
+
+			if n >= 2 {
+				assert!(slow * 2 > n, "slow quorum must be a strict majority for n={n}");
+				assert!(
+					(2 * fast) + slow > 2 * n,
+					"fast quorum must satisfy the Fast Paxos intersection invariant for n={n}"
+				);
+			}
 		}
-	}
-}
-
-pub async fn read_instance_number(tx: &Transaction, replica_id: ReplicaId) -> Result<u64> {
-	use universaldb::prelude::*;
-
-	let subspace = crate::keys::subspace(replica_id);
-	let instance_number_key = crate::keys::replica::InstanceNumberKey;
-	let packed_key = subspace.pack(&instance_number_key);
-
-	match tx.get(&packed_key, Serializable).await? {
-		Some(bytes) => Ok(instance_number_key.deserialize(&bytes)?),
-		None => Ok(0),
-	}
-}
-
-/// Reads all instances that have touched a specific key.
-pub async fn read_key_instances(
-	tx: &Transaction,
-	replica_id: ReplicaId,
-	key: Vec<u8>,
-) -> Result<Vec<protocol::Instance>> {
-	use universaldb::RangeOption;
-	use universaldb::prelude::*;
-
-	let subspace = crate::keys::subspace(replica_id);
-	let key_subspace = subspace.subspace(&crate::keys::replica::KeyInstanceKey::subspace(key));
-
-	let range_opt: RangeOption = (&key_subspace).into();
-	let entries = tx.get_range(&range_opt, 1, Serializable).await?;
-
-	let mut instances = Vec::new();
-	for kv in entries.into_iter() {
-		// Unpack the key to get instance info
-		let (instance_replica_id, instance_slot_id): (ReplicaId, protocol::SlotId) =
-			key_subspace.unpack(kv.key())?;
-		instances.push(protocol::Instance {
-			replica_id: instance_replica_id,
-			slot_id: instance_slot_id,
-		});
-	}
-
-	Ok(instances)
-}
-
-/// Reads a log entry for a specific instance.
-pub async fn read_log_entry(
-	tx: &Transaction,
-	replica_id: ReplicaId,
-	instance: &protocol::Instance,
-) -> Result<Option<protocol::LogEntry>> {
-	use universaldb::prelude::*;
-
-	let subspace = crate::keys::subspace(replica_id);
-	let log_key = crate::keys::replica::LogEntryKey::new(instance.replica_id, instance.slot_id);
-	let packed_key = subspace.pack(&log_key);
-
-	match tx.get(&packed_key, Serializable).await? {
-		Some(bytes) => Ok(Some(log_key.deserialize(&bytes)?)),
-		None => Ok(None),
 	}
 }

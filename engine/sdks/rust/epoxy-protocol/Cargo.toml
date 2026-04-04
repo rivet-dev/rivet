@@ -10,8 +10,6 @@ anyhow.workspace = true
 rivet-util.workspace = true
 serde_bare.workspace = true
 serde.workspace = true
-vbare.workspace = true
 
 [build-dependencies]
 vbare-compiler.workspace = true
-

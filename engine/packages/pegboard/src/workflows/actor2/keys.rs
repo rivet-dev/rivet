@@ -1,6 +1,6 @@
 use epoxy::{
-	ops::propose::{CommandError, ProposalResult},
-	protocol::{self, ReplicaId},
+	ops::propose::{CheckAndSetCommand, Command, CommandError, CommandKind, Proposal, ProposalResult},
+	protocol::ReplicaId,
 };
 use futures_util::TryStreamExt;
 use gas::prelude::*;
@@ -171,6 +171,7 @@ pub async fn lookup_key_optimistic(
 		.op(epoxy::ops::kv::get_optimistic::Input {
 			replica_id: ctx.config().epoxy_replica_id(),
 			key: keys::subspace().pack(&reservation_key),
+			caching_behavior: epoxy::protocol::CachingBehavior::Optimistic,
 		})
 		.await?
 		.value;
@@ -243,15 +244,16 @@ pub async fn propose(ctx: &ActivityCtx, input: &ProposeInput) -> Result<Proposal
 
 	let proposal_result = ctx
 		.op(epoxy::ops::propose::Input {
-			proposal: protocol::Proposal {
-				commands: vec![protocol::Command {
-					kind: protocol::CommandKind::CheckAndSetCommand(protocol::CheckAndSetCommand {
+			proposal: Proposal {
+				commands: vec![Command {
+					kind: CommandKind::CheckAndSetCommand(CheckAndSetCommand {
 						key: keys::subspace().pack(&reservation_key),
 						expect_one_of: vec![None],
 						new_value: Some(reservation_value),
 					}),
 				}],
 			},
+			mutable: false,
 			purge_cache: false,
 			target_replicas: Some(input.target_replicas.clone()),
 		})

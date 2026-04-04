@@ -1,59 +1,93 @@
-use anyhow::{Result, ensure};
+use anyhow::Result;
 use epoxy_protocol::protocol;
-use universaldb::Transaction;
+use universaldb::{Transaction, utils::IsolationLevel::Serializable};
 
-use crate::{metrics, replica::ballot};
+use crate::{
+	keys::{self, KvAcceptedKey, KvAcceptedValue, KvBallotKey, KvValueKey},
+	replica::ballot::Ballot,
+};
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip_all, fields(%replica_id, key = ?accept_req.key))]
 pub async fn accept(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,
 	accept_req: protocol::AcceptRequest,
 ) -> Result<protocol::AcceptResponse> {
-	let protocol::Payload {
-		proposal,
-		seq,
-		deps,
-		instance,
-	} = accept_req.payload;
+	let tx = tx.with_subspace(keys::subspace(replica_id));
+	let protocol::AcceptRequest {
+		key,
+		value,
+		ballot,
+		mutable,
+		version,
+	} = accept_req;
 
-	tracing::debug!(?replica_id, ?instance, "handling accept message");
+	let value_key = KvValueKey::new(key.clone());
+	let ballot_key = KvBallotKey::new(key.clone());
+	let accepted_key = KvAcceptedKey::new(key);
+	let request_ballot = Ballot::from(ballot.clone());
 
-	// Validate ballot
-	let current_ballot = ballot::get_ballot(tx, replica_id).await?;
-	let validation =
-		ballot::validate_and_update_ballot_for_instance(tx, replica_id, &current_ballot, &instance)
-			.await?;
+	let (committed_value, current_ballot, accepted_value) = tokio::try_join!(
+		tx.read_opt(&value_key, Serializable),
+		tx.read_opt(&ballot_key, Serializable),
+		tx.read_opt(&accepted_key, Serializable),
+	)?;
 
-	if !validation.is_valid {
-		metrics::ACCEPT_TOTAL
-			.with_label_values(&["invalid_ballot"])
-			.inc();
+	if let Some(committed_value) = committed_value {
+		if !committed_value.mutable || !mutable || version <= committed_value.version {
+			return Ok(
+				protocol::AcceptResponse::AcceptResponseAlreadyCommitted(
+					protocol::AcceptResponseAlreadyCommitted {
+						value: committed_value.value,
+					},
+				),
+			);
+		}
 	}
 
-	ensure!(
-		validation.is_valid,
-		"ballot validation failed for accept: incoming ballot {:?} is not greater than stored ballot {:?} for instance {:?} (comparison: {:?})",
-		validation.incoming_ballot,
-		validation.stored_ballot,
-		instance,
-		validation.comparison
-	);
+	if let Some(current_ballot) = current_ballot.map(Ballot::from) {
+		if current_ballot > request_ballot {
+			return Ok(protocol::AcceptResponse::AcceptResponseHigherBallot(
+				protocol::AcceptResponseHigherBallot {
+					ballot: current_ballot.into(),
+				},
+			));
+		}
+	}
 
-	// EPaxos Step 18
-	let log_entry = protocol::LogEntry {
-		commands: proposal.commands.clone(),
-		seq,
-		deps,
-		state: protocol::State::Accepted,
-		ballot: current_ballot,
-	};
-	crate::replica::update_log(tx, replica_id, log_entry, &instance).await?;
+	if let Some(existing_accepted) = accepted_value {
+		let existing_ballot = Ballot::from(existing_accepted.ballot.clone());
+		if existing_ballot == request_ballot {
+			let same_value = existing_accepted.value == value;
+			let same_version = existing_accepted.version == version;
+			let same_mutability = existing_accepted.mutable == mutable;
+			if same_value && same_version && same_mutability {
+				tx.write(&ballot_key, ballot.clone())?;
+				return Ok(protocol::AcceptResponse::AcceptResponseOk(
+					protocol::AcceptResponseOk { ballot },
+				));
+			}
 
-	metrics::ACCEPT_TOTAL.with_label_values(&["ok"]).inc();
+			return Ok(protocol::AcceptResponse::AcceptResponseHigherBallot(
+				protocol::AcceptResponseHigherBallot {
+					ballot: existing_ballot.into(),
+				},
+			));
+		}
+	}
 
-	// EPaxos Step 19
-	Ok(protocol::AcceptResponse {
-		payload: protocol::AcceptOKPayload { proposal, instance },
-	})
+	tx.write(&ballot_key, ballot.clone())?;
+	tx.write(
+		&accepted_key,
+		KvAcceptedValue {
+			value,
+			ballot: ballot.clone(),
+			version,
+			mutable,
+		},
+	)?;
+
+	Ok(protocol::AcceptResponse::AcceptResponseOk(
+		protocol::AcceptResponseOk { ballot },
+	))
 }

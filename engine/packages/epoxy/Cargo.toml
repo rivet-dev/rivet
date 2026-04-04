@@ -14,6 +14,7 @@ gas.workspace = true
 epoxy-protocol.workspace = true
 futures-util.workspace = true
 lazy_static.workspace = true
+rand.workspace = true
 reqwest.workspace = true
 rivet-api-builder.workspace = true
 rivet-config.workspace = true
@@ -34,12 +35,12 @@ tracing.workspace = true
 universaldb.workspace = true
 url.workspace = true
 uuid.workspace = true
-vbare.workspace = true
 
 [dev-dependencies]
 gas.workspace = true
 rivet-runtime.workspace = true
 rivet-test-deps.workspace = true
+test-snapshot-gen.workspace = true
 portpicker.workspace = true
 tokio.workspace = true
 libc.workspace = true

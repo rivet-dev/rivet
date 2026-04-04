@@ -1,7 +1,4 @@
 pub mod generated;
-pub mod versioned;
+pub mod protocol;
 
-// Re-export latest
-pub use generated::v1 as protocol;
-
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 2;

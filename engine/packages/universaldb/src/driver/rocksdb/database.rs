@@ -1,5 +1,5 @@
 use std::{
-	path::PathBuf,
+	path::{Path, PathBuf},
 	sync::{
 		Arc,
 		atomic::{AtomicI32, Ordering},
@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use rocksdb::{OptimisticTransactionDB, Options};
+use rocksdb::{OptimisticTransactionDB, Options, checkpoint::Checkpoint};
 
 use crate::{
 	RetryableTransaction, Transaction,
@@ -118,6 +118,13 @@ impl DatabaseDriver for RocksDbDatabaseDriver {
 				Ok(())
 			}
 		}
+	}
+
+	fn checkpoint(&self, path: &Path) -> Result<()> {
+		let cp = Checkpoint::new(&*self.db).context("failed to create checkpoint handle")?;
+		cp.create_checkpoint(path)
+			.context("failed to create rocksdb checkpoint")?;
+		Ok(())
 	}
 }
 

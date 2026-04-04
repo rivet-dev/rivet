@@ -1450,6 +1450,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "portpicker",
+ "rand 0.8.5",
  "reqwest",
  "rivet-api-builder",
  "rivet-config",
@@ -1466,13 +1467,13 @@ dependencies = [
  "slog",
  "slog-async",
  "slog-term",
+ "test-snapshot-gen",
  "tokio",
  "tracing",
  "tracing-slog",
  "universaldb",
  "url",
  "uuid",
- "vbare",
 ]
 
 [[package]]
@@ -1483,7 +1484,6 @@ dependencies = [
  "rivet-util",
  "serde",
  "serde_bare",
- "vbare",
  "vbare-compiler",
 ]
 
@@ -3548,6 +3548,7 @@ dependencies = [
  "rand 0.8.5",
  "rivet-config",
  "rivet-data",
+ "rivet-envoy-protocol",
  "rivet-error",
  "rivet-guard-core",
  "rivet-metrics",
@@ -6119,6 +6120,32 @@ checksum = "45c6481c4829e4cc63825e62c49186a34538b7b2750b73b266581ffb612fb5ed"
 dependencies = [
  "rustix",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "test-snapshot-gen"
+version = "2.2.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.8.4",
+ "clap",
+ "epoxy",
+ "epoxy-protocol",
+ "gasoline",
+ "portpicker",
+ "rivet-api-builder",
+ "rivet-config",
+ "rivet-pools",
+ "rivet-test-deps",
+ "rivet-util",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "universaldb",
+ "url",
+ "uuid",
 ]
 
 [[package]]
