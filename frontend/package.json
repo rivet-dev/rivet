@@ -24,11 +24,6 @@
 		"build:ladle": "ladle build"
 	},
 	"dependencies": {
-		"@clerk/clerk-js": "^5.97",
-		"@clerk/clerk-react": "^5.49.1",
-		"@clerk/elements": "^0.23.63",
-		"@clerk/shared": "*",
-		"@clerk/themes": "^2.4.18",
 		"@codemirror/autocomplete": "^6.18.7",
 		"@codemirror/commands": "^6.8.1",
 		"@codemirror/lang-javascript": "^6.2.4",
@@ -123,6 +118,7 @@
 		"actor-core": "^0.6.3",
 		"autoprefixer": "^10.4.21",
 		"bcryptjs": "^2.4.3",
+		"better-auth": "^1.5.6",
 		"canvas-confetti": "^1.9.3",
 		"cbor-x": "^1.6.0",
 		"class-variance-authority": "^0.7.1",
@@ -169,7 +165,6 @@
 		"zod": "^3.25.76"
 	},
 	"devDependencies": {
-		"@clerk/testing": "^1.13.30",
 		"@playwright/test": "^1.57.0",
 		"dotenv": "^17.2.3",
 		"vitest": "^4.0.18"
