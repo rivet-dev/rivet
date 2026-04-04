@@ -1,11 +1,8 @@
 "use client";
-import { useClerk } from "@clerk/clerk-react";
-import * as Clerk from "@clerk/elements/common";
-import * as ClerkSignUp from "@clerk/elements/sign-up";
-import { faGithub, faGoogle, faSpinnerThird, Icon } from "@rivet-gg/icons";
-import { Link } from "@tanstack/react-router";
+import { faGoogle, faSpinnerThird, Icon } from "@rivet-gg/icons";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Badge, cn, Skeleton } from "@/components";
+import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -17,9 +14,63 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { authClient } from "@/lib/auth";
 
 export function SignUp() {
-	const clerk = useClerk();
+	const navigate = useNavigate();
+
+	const [name, setName] = useState("");
+	const [email, setEmail] = useState("");
+	const [password, setPassword] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	const [isLoading, setIsLoading] = useState(false);
+	const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+	const handleSubmit = async (e: FormEvent) => {
+		e.preventDefault();
+		setError(null);
+		setIsLoading(true);
+
+		try {
+			const result = await authClient.signUp.email({
+				email,
+				password,
+				name,
+			});
+
+			if (result.error) {
+				setError(result.error.message ?? "Sign up failed");
+				setIsLoading(false);
+				return;
+			}
+
+			// On success, redirect to onboarding
+			await navigate({ to: "/onboarding/choose-organization" });
+		} catch (e) {
+			// Re-throw redirect errors from TanStack Router
+			if (e && typeof e === "object" && "to" in e) {
+				throw e;
+			}
+			setError("An unexpected error occurred");
+			setIsLoading(false);
+		}
+	};
+
+	const handleGoogleSignUp = async () => {
+		setError(null);
+		setIsGoogleLoading(true);
+
+		try {
+			await authClient.signIn.social({
+				provider: "google",
+				callbackURL: "/onboarding/choose-organization",
+			});
+		} catch {
+			setError("Failed to initiate Google sign-up");
+			setIsGoogleLoading(false);
+		}
+	};
+
 	return (
 		<motion.div
 			className="grid w-full grow items-center px-4 sm:justify-center"
@@ -27,409 +78,111 @@ export function SignUp() {
 			animate={{ opacity: 1, y: 0 }}
 			exit={{ opacity: 0, y: 10 }}
 		>
-			<ClerkSignUp.Root
-				routing="virtual"
-				path="/"
-				fallback={
-					<Card className="w-full sm:w-96">
-						<CardHeader>
-							<CardTitle>Welcome!</CardTitle>
-							<CardDescription>
-								Enter your email below to login to your account.
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="grid gap-y-4">
-							<div className="grid grid-cols-2 gap-4">
-								<Skeleton className="h-10 w-full" />
-								<Skeleton className="h-10 w-full" />
-							</div>
-							<p className="flex items-center gap-x-3 text-sm text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
-								or
-							</p>
-							<div className="space-y-2">
-								<Label>Email address</Label>
-								<Input disabled placeholder="you@company.com" />
-							</div>
-							<div className="space-y-2">
-								<Label>Password</Label>
-								<Input disabled placeholder="Your password" />
-							</div>
-						</CardContent>
-						<CardFooter>
-							<div className="grid w-full gap-y-4">
-								<Skeleton className="h-10 w-full" />
-								<Button
-									variant="link"
-									size="sm"
-									disabled
-									className="text-primary-foreground"
-								>
+			<Card className="w-full sm:w-96">
+				<CardHeader>
+					<CardTitle>Welcome!</CardTitle>
+					<CardDescription>
+						Create your account to get started.
+					</CardDescription>
+				</CardHeader>
+				<form onSubmit={handleSubmit}>
+					<CardContent className="grid gap-y-4">
+						<div className="grid grid-cols-1 gap-x-4">
+							<Button
+								variant="outline"
+								type="button"
+								disabled={isGoogleLoading || isLoading}
+								onClick={handleGoogleSignUp}
+							>
+								{isGoogleLoading ? (
+									<Icon
+										icon={faSpinnerThird}
+										className="size-4 animate-spin"
+									/>
+								) : (
+									<>
+										<Icon
+											icon={faGoogle}
+											className="mr-2 size-4"
+										/>
+										Google
+									</>
+								)}
+							</Button>
+						</div>
+						<p className="flex items-center gap-x-3 text-sm text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
+							or
+						</p>
+						<div className="space-y-2">
+							<Label htmlFor="name">Name</Label>
+							<Input
+								id="name"
+								type="text"
+								required
+								placeholder="Your name"
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+								disabled={isLoading}
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="email">Email address</Label>
+							<Input
+								id="email"
+								type="email"
+								required
+								placeholder="you@company.com"
+								value={email}
+								onChange={(e) => setEmail(e.target.value)}
+								disabled={isLoading}
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="password">Password</Label>
+							<Input
+								id="password"
+								type="password"
+								required
+								placeholder="Your password"
+								autoComplete="new-password"
+								value={password}
+								onChange={(e) => setPassword(e.target.value)}
+								disabled={isLoading}
+							/>
+						</div>
+						{error ? (
+							<p className="text-sm text-destructive">{error}</p>
+						) : null}
+					</CardContent>
+					<CardFooter>
+						<div className="grid w-full gap-y-4">
+							<Button
+								type="submit"
+								disabled={isLoading || isGoogleLoading}
+							>
+								{isLoading ? (
+									<Icon
+										icon={faSpinnerThird}
+										className="size-4 animate-spin"
+									/>
+								) : (
+									"Continue"
+								)}
+							</Button>
+							<Button
+								variant="link"
+								className="text-primary-foreground"
+								size="sm"
+								asChild
+							>
+								<Link to="/login">
 									Already have an account? Sign in
-								</Button>
-							</div>
-						</CardFooter>
-					</Card>
-				}
-			>
-				<Clerk.Loading>
-					{(isGlobalLoading) => (
-						<>
-							<ClerkSignUp.Step name="start">
-								<Card className="w-full sm:w-96">
-									<CardHeader>
-										<CardTitle>Welcome!</CardTitle>
-										<CardDescription>
-											Enter your email below to login to
-											your account.
-										</CardDescription>
-									</CardHeader>
-									<CardContent className="grid gap-y-4">
-										<div className="grid grid-cols-1 gap-x-4">
-											{/* <Clerk.Connection
-												name="github"
-												asChild
-											>
-												<Button
-													variant="outline"
-													type="button"
-													disabled={isGlobalLoading}
-												>
-													<Clerk.Loading scope="provider:github">
-														{(isLoading) =>
-															isLoading ? (
-																<Icon
-																	icon={
-																		faSpinnerThird
-																	}
-																	className="size-4 animate-spin"
-																/>
-															) : (
-																<>
-																	<Icon
-																		icon={
-																			faGithub
-																		}
-																		className="mr-2 size-4"
-																	/>
-																	GitHub
-																</>
-															)
-														}
-													</Clerk.Loading>
-													{clerk.client
-														.lastAuthenticationStrategy ===
-													"oauth_github" ? (
-														<Badge className="ml-2 absolute -top-1/2 -right-4 text-xs">
-															Last used
-														</Badge>
-													) : null}
-												</Button>
-											</Clerk.Connection> */}
-											<Clerk.Connection
-												name="google"
-												asChild
-											>
-												<Button
-													variant="outline"
-													type="button"
-													disabled={isGlobalLoading}
-												>
-													<Clerk.Loading scope="provider:google">
-														{(isLoading) =>
-															isLoading ? (
-																<Icon
-																	icon={
-																		faSpinnerThird
-																	}
-																	className="size-4 animate-spin"
-																/>
-															) : (
-																<>
-																	<Icon
-																		icon={
-																			faGoogle
-																		}
-																		className="mr-2 size-4"
-																	/>
-																	Google
-																</>
-															)
-														}
-													</Clerk.Loading>
-
-													{clerk.client
-														.lastAuthenticationStrategy ===
-													"oauth_google" ? (
-														<Badge className="ml-2 absolute -top-1/2 -right-4 text-xs">
-															Last used
-														</Badge>
-													) : null}
-												</Button>
-											</Clerk.Connection>
-										</div>
-										<p className="flex items-center gap-x-3 text-sm text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
-											or
-										</p>
-										<Clerk.Field
-											name="emailAddress"
-											className="space-y-2"
-										>
-											<Clerk.Label asChild>
-												<Label>Email address</Label>
-											</Clerk.Label>
-											<Clerk.Input
-												type="email"
-												required
-												placeholder="you@company.com"
-												autoComplete="email"
-												asChild
-											>
-												<Input />
-											</Clerk.Input>
-											<Clerk.FieldError className="block text-sm text-destructive" />
-										</Clerk.Field>
-										<Clerk.Field
-											name="password"
-											className="space-y-2"
-										>
-											<Clerk.Label asChild>
-												<Label>Password</Label>
-											</Clerk.Label>
-											<Clerk.Input
-												type="password"
-												required
-												placeholder="Your password"
-												name="password"
-												autoComplete="current-password"
-												asChild
-											>
-												<Input />
-											</Clerk.Input>
-											<Clerk.FieldError className="block text-sm text-destructive" />
-										</Clerk.Field>
-									</CardContent>
-									<CardFooter>
-										<div className="grid w-full gap-y-4">
-											<ClerkSignUp.Captcha className="empty:hidden" />
-											<ClerkSignUp.Action submit asChild>
-												<Button
-													disabled={isGlobalLoading}
-												>
-													<Clerk.Loading>
-														{(isLoading) => {
-															return isLoading ? (
-																<Icon
-																	icon={
-																		faSpinnerThird
-																	}
-																	className="size-4 animate-spin"
-																/>
-															) : (
-																"Continue"
-															);
-														}}
-													</Clerk.Loading>
-												</Button>
-											</ClerkSignUp.Action>
-											<Button
-												variant="link"
-												size="sm"
-												asChild
-												className="text-primary-foreground"
-											>
-												<Link to="/login">
-													Already have an account?
-													Sign in
-												</Link>
-											</Button>
-										</div>
-									</CardFooter>
-								</Card>
-							</ClerkSignUp.Step>
-
-							<ClerkSignUp.Step name="continue">
-								<Card className="w-full sm:w-96">
-									<CardHeader>
-										<CardTitle>
-											Continue registration
-										</CardTitle>
-									</CardHeader>
-									<CardContent>
-										<Clerk.Field
-											name="username"
-											className="space-y-2"
-										>
-											<Clerk.Label>
-												<Label>Username</Label>
-											</Clerk.Label>
-											<Clerk.Input
-												type="text"
-												required
-												autoComplete="username"
-												asChild
-											>
-												<Input />
-											</Clerk.Input>
-											<Clerk.FieldError className="block text-sm text-destructive" />
-										</Clerk.Field>
-									</CardContent>
-									<CardFooter>
-										<div className="grid w-full gap-y-4">
-											<ClerkSignUp.Action submit asChild>
-												<Button
-													disabled={isGlobalLoading}
-												>
-													<Clerk.Loading>
-														{(isLoading) => {
-															return isLoading ? (
-																<Icon
-																	icon={
-																		faSpinnerThird
-																	}
-																	className="size-4 animate-spin"
-																/>
-															) : (
-																"Continue"
-															);
-														}}
-													</Clerk.Loading>
-												</Button>
-											</ClerkSignUp.Action>
-										</div>
-									</CardFooter>
-								</Card>
-							</ClerkSignUp.Step>
-
-							<ClerkSignUp.Step name="verifications">
-								<ClerkSignUp.Strategy name="email_code">
-									<Card className="w-full sm:w-96">
-										<CardHeader>
-											<CardTitle>
-												Verify your email
-											</CardTitle>
-											<CardDescription>
-												Use the verification link sent
-												to your email address
-											</CardDescription>
-										</CardHeader>
-										<CardContent className="grid gap-y-4">
-											<div className="grid items-center justify-center gap-y-2">
-												<Clerk.Field
-													name="code"
-													className="space-y-2"
-												>
-													<Clerk.Label className="sr-only">
-														Email address
-													</Clerk.Label>
-													<div className="flex justify-center text-center">
-														<Clerk.Input
-															type="otp"
-															className="flex justify-center has-[:disabled]:opacity-50"
-															autoSubmit
-															render={({
-																value,
-																status,
-															}) => {
-																return (
-																	<div
-																		data-status={
-																			status
-																		}
-																		className={cn(
-																			"relative flex size-10 items-center justify-center border-y border-r border-input text-sm transition-all first:rounded-l-md first:border-l last:rounded-r-md",
-																			{
-																				"z-10 ring-2 ring-ring ring-offset-background":
-																					status ===
-																						"cursor" ||
-																					status ===
-																						"selected",
-																			},
-																		)}
-																	>
-																		{value}
-																		{status ===
-																			"cursor" && (
-																			<div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-																				<div className="animate-caret-blink h-4 w-px bg-foreground duration-1000" />
-																			</div>
-																		)}
-																	</div>
-																);
-															}}
-														/>
-													</div>
-													<Clerk.FieldError className="block text-center text-sm text-destructive" />
-												</Clerk.Field>
-												<ClerkSignUp.Action
-													asChild
-													resend
-													className="text-muted-foreground"
-													fallback={({
-														resendableAfter,
-													}) => (
-														<Button
-															variant="link"
-															size="sm"
-															disabled
-														>
-															Didn&apos;t receive
-															a code? Resend (
-															<span className="tabular-nums">
-																{
-																	resendableAfter
-																}
-															</span>
-															)
-														</Button>
-													)}
-												>
-													<Button
-														type="button"
-														variant="link"
-														size="sm"
-													>
-														Didn&apos;t receive a
-														code? Resend
-													</Button>
-												</ClerkSignUp.Action>
-											</div>
-										</CardContent>
-										<CardFooter>
-											<div className="grid w-full gap-y-4">
-												<ClerkSignUp.Action
-													submit
-													asChild
-												>
-													<Button
-														disabled={
-															isGlobalLoading
-														}
-													>
-														<Clerk.Loading>
-															{(isLoading) => {
-																return isLoading ? (
-																	<Icon
-																		icon={
-																			faSpinnerThird
-																		}
-																		className="size-4 animate-spin"
-																	/>
-																) : (
-																	"Continue"
-																);
-															}}
-														</Clerk.Loading>
-													</Button>
-												</ClerkSignUp.Action>
-											</div>
-										</CardFooter>
-									</Card>
-								</ClerkSignUp.Strategy>
-							</ClerkSignUp.Step>
-						</>
-					)}
-				</Clerk.Loading>
-			</ClerkSignUp.Root>
+								</Link>
+							</Button>
+						</div>
+					</CardFooter>
+				</form>
+			</Card>
 		</motion.div>
 	);
 }
