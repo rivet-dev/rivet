@@ -6,8 +6,8 @@ export const agentOsTestActor = agentOs({ options: { software: [common] } });
 
 // Actor configured with acpTimeoutMs to verify the option passes through to
 // AgentOs.create() without errors.
-// TODO: Remove the type assertion once @rivet-dev/agent-os-core is published
-// with acpTimeoutMs in AgentOsOptions.
+// TODO(#4552): Remove the type assertion once @rivet-dev/agent-os-core is
+// published with acpTimeoutMs in AgentOsOptions.
 export const agentOsTimeoutTestActor = agentOs({
 	options: {
 		software: [common],

@@ -293,7 +293,7 @@ server.listen(9876, "127.0.0.1", () => {
 
 			// --- acpTimeoutMs option passthrough ---
 
-			test("acpTimeoutMs option passes through without errors", async (c) => {
+			test("acpTimeoutMs option is accepted and VM boots correctly", async (c) => {
 				const { client } = await setupDriverTest(c, {
 					...driverTestConfig,
 					useRealTimers: true,
@@ -311,7 +311,7 @@ server.listen(9876, "127.0.0.1", () => {
 				expect(new TextDecoder().decode(data)).toBe("ok");
 			}, 60_000);
 
-			test("acpTimeoutMs option works with exec", async (c) => {
+			test("acpTimeoutMs option is accepted and exec runs correctly", async (c) => {
 				const { client } = await setupDriverTest(c, {
 					...driverTestConfig,
 					useRealTimers: true,
