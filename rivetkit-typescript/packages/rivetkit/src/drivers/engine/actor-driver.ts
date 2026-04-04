@@ -100,7 +100,7 @@ export class EngineActorDriver implements ActorDriver {
 				reason,
 			}),
 	);
-	#envoyStopped: PromiseWithResolvers<undefined> = promiseWithResolvers(
+	#envoyStopped: PromiseWithResolvers<utils.ShutdownReason> = promiseWithResolvers(
 		(reason) =>
 			logger().warn({
 				msg: "unhandled envoy stopped promise rejection",
@@ -172,8 +172,8 @@ export class EngineActorDriver implements ActorDriver {
 				rivetkit: { version: VERSION },
 			},
 			prepopulateActorNames: buildActorNames(config),
-			onShutdown: () => {
-				this.#envoyStopped.resolve(undefined);
+			onShutdown: (reason: utils.ShutdownReason) => {
+				this.#envoyStopped.resolve(reason);
 				this.#isEnvoyStopped = true;
 			},
 			fetch: this.#envoyFetch.bind(this),
@@ -501,7 +501,10 @@ export class EngineActorDriver implements ActorDriver {
 			}
 
 			// Wait for the runner to stop if the SSE stream aborted early for any reason
-			await this.#envoyStopped.promise;
+			let reason = await this.#envoyStopped.promise;
+			if (reason === "serverless-early-exit") {
+				stream.writeSSE({ event: "stopping", data: "" });
+			}
 		});
 	}
 

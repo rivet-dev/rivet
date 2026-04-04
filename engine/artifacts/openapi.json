@@ -337,6 +337,112 @@
         ]
       }
     },
+    "/actors/{actor_id}/reschedule": {
+      "post": {
+        "tags": [
+          "actors::reschedule"
+        ],
+        "operationId": "actors_reschedule",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActorsRescheduleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsRescheduleResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/actors/{actor_id}/sleep": {
+      "post": {
+        "tags": [
+          "actors::sleep"
+        ],
+        "operationId": "actors_sleep",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActorsSleepRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsSleepResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/datacenters": {
       "get": {
         "tags": [
@@ -1234,7 +1340,8 @@
           "value": {
             "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ActorsListNamesResponse": {
         "type": "object",
@@ -1275,6 +1382,22 @@
             "$ref": "#/components/schemas/Pagination"
           }
         },
+        "additionalProperties": false
+      },
+      "ActorsRescheduleRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ActorsRescheduleResponse": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ActorsSleepRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ActorsSleepResponse": {
+        "type": "object",
         "additionalProperties": false
       },
       "CrashPolicy": {

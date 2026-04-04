@@ -23,7 +23,7 @@ export interface EnvoyHandle {
 	sleepActor(actorId: string, generation?: number): void;
 
 	/** Send stop intent for an actor. */
-	stopActor(actorId: string, generation?: number): void;
+	stopActor(actorId: string, generation?: number, error?: string): void;
 
 	/**
 	 * Like stopActor but ensures the actor is fully destroyed rather than

@@ -4,9 +4,7 @@ use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
 };
-use rivet_api_types::actors::get_or_create::{
-	GetOrCreateQuery, GetOrCreateRequest, GetOrCreateResponse,
-};
+use rivet_api_types::actors::get_or_create::*;
 use rivet_api_util::request_remote_datacenter;
 
 use crate::ctx::ApiCtx;

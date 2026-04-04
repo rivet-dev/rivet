@@ -1,5 +1,7 @@
 import { logger } from "./log";
 
+export type ShutdownReason = "normal" | "serverless-early-exit";
+
 export class BufferMap<T> {
 	#inner: Map<string, T>;
 	constructor() {

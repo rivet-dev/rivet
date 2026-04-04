@@ -3,30 +3,8 @@ use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
+use rivet_api_types::actors::kv_get::*;
 use rivet_util::Id;
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct KvGetPath {
-	pub actor_id: Id,
-	pub key: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct KvGetQuery {
-	pub namespace: String,
-}
-
-#[derive(Serialize, ToSchema)]
-#[schema(as = ActorsKvGetResponse)]
-pub struct KvGetResponse {
-	/// Value encoded in base 64.
-	pub value: String,
-	pub update_ts: i64,
-}
 
 #[utoipa::path(
 	get,

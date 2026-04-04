@@ -21,6 +21,8 @@ use crate::{
 		actors::list_names::list_names,
 		actors::get_or_create::get_or_create,
 		actors::kv_get::kv_get,
+		actors::sleep::sleep,
+		actors::reschedule::reschedule,
 		runners::list,
 		runners::list_names,
 		envoys::list,
@@ -97,6 +99,14 @@ pub async fn router(
 			.route(
 				"/actors/{actor_id}/kv/keys/{key}",
 				axum::routing::get(actors::kv_get::kv_get),
+			)
+			.route(
+				"/actors/{actor_id}/sleep",
+				axum::routing::post(actors::sleep::sleep),
+			)
+			.route(
+				"/actors/{actor_id}/reschedule",
+				axum::routing::post(actors::reschedule::reschedule),
 			)
 			// MARK: Runners
 			.route("/runners", axum::routing::get(runners::list))

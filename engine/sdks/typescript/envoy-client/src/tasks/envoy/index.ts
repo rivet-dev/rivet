@@ -136,6 +136,7 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 		}, KV_CLEANUP_INTERVAL_MS);
 
 		let lostTimeout: NodeJS.Timeout | undefined = undefined;
+		let serverlessShutdown = false;
 
 		for await (const msg of envoyRx) {
 			if (msg.type === "conn-message") {
@@ -147,6 +148,7 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 				const stop = handleSendEvents(ctx, msg.events);
 
 				if (stop) {
+					serverlessShutdown = true;
 					log(ctx.shared)?.info({
 						msg: "serverless actor stopped, stopping envoy"
 					});
@@ -186,7 +188,7 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 			msg: "envoy stopped",
 		});
 
-		ctx.shared.config.onShutdown();
+		ctx.shared.config.onShutdown(serverlessShutdown ? "serverless-early-exit" : "normal");
 	});
 
 	// Queue start actor

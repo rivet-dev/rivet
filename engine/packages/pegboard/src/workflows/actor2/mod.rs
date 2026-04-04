@@ -864,7 +864,7 @@ async fn process_signal(
 				| Transition::Destroying { .. } => {}
 			}
 		}
-		Main::Reallocate(_) => {
+		Main::Reschedule(_) => {
 			match &mut state.transition {
 				Transition::Running { envoy, .. } => {
 					let now = ctx.activity(runtime::GetTsInput {}).await?;
@@ -1204,8 +1204,8 @@ pub struct Wake {}
 #[signal("pegboard_actor2_sleep")]
 pub struct Sleep {}
 
-#[signal("pegboard_actor2_reallocate")]
-pub struct Reallocate {}
+#[signal("pegboard_actor2_reschedule")]
+pub struct Reschedule {}
 
 /// Ack response from outbound req handler service.
 #[signal("pegboard_actor2_allocated")]
@@ -1251,7 +1251,7 @@ join_signal!(Main {
 	Events,
 	Wake,
 	Sleep,
-	Reallocate,
+	Reschedule,
 	Lost,
 	GoingAway,
 	Destroy,
