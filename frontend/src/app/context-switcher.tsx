@@ -1,4 +1,3 @@
-import { useClerk } from "@clerk/clerk-react";
 import type { Rivet } from "@rivet-gg/cloud";
 import {
 	faChevronDown,
@@ -34,6 +33,7 @@ import {
 } from "@/components/actors";
 import { SafeHover } from "@/components/safe-hover";
 import { VisibilitySensor } from "@/components/visibility-sensor";
+import { authClient } from "@/lib/auth";
 import { LazyBillingPlanBadge } from "./billing/billing-plan-badge";
 
 export function ContextSwitcher({ inline }: { inline?: boolean }) {
@@ -315,7 +315,6 @@ function ProjectList({
 			return params.project;
 		},
 	});
-	const clerk = useClerk();
 
 	return (
 		<div className="border-l w-48">
@@ -371,8 +370,8 @@ function ProjectList({
 										organization={organization}
 										onSelect={() => {
 											onClose?.();
-											clerk.setActive({
-												organization,
+											authClient.organization.setActive({
+												organizationId: organization,
 											});
 											return navigate({
 												to: "/orgs/$organization/projects/$project",
@@ -503,7 +502,6 @@ function NamespaceList({
 			}),
 		);
 	const navigate = useNavigate();
-	const clerk = useClerk();
 	const namespace = useParams({
 		strict: false,
 		select(params) {
@@ -561,8 +559,8 @@ function NamespaceList({
 										className="static w-full"
 										onSelect={() => {
 											onClose?.();
-											clerk.setActive({
-												organization,
+											authClient.organization.setActive({
+												organizationId: organization,
 											});
 											return navigate({
 												to: "/orgs/$organization/projects/$project/ns/$namespace",

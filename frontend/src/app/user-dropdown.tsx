@@ -1,4 +1,3 @@
-import { useClerk, useOrganizationList } from "@clerk/clerk-react";
 import { faChevronDown, faPlus, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useMatchRoute, useNavigate, useParams } from "@tanstack/react-router";
@@ -20,14 +19,14 @@ import {
 	Skeleton,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
-import { VisibilitySensor } from "@/components/visibility-sensor";
+import { authClient } from "@/lib/auth";
 
 export function UserDropdown({ children }: { children?: React.ReactNode }) {
 	const params = useParams({
 		strict: false,
 	});
 
-	const clerk = useClerk();
+	const { data: session } = authClient.useSession();
 	const navigate = useNavigate();
 	const match = useMatchRoute();
 
@@ -49,39 +48,11 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 							className="text-muted-foreground justify-between py-1 min-h-8 gap-2 w-full"
 							endIcon={<Icon icon={faChevronDown} />}
 						>
-							{clerk.user?.primaryEmailAddress?.emailAddress}
+							{session?.user?.email}
 						</Button>
 					))}
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
-				<DropdownMenuItem
-					onSelect={() => {
-						clerk.openUserProfile();
-					}}
-				>
-					Profile
-				</DropdownMenuItem>
-				{clerk.organization ? (
-					<DropdownMenuItem
-						onSelect={() => {
-							clerk.openOrganizationProfile();
-						}}
-					>
-						Settings
-					</DropdownMenuItem>
-				) : null}
-				{clerk.organization ? (
-					<DropdownMenuItem
-						onSelect={() => {
-							clerk.openOrganizationProfile({
-								__experimental_startPath:
-									"/organization-members",
-							});
-						}}
-					>
-						Members
-					</DropdownMenuItem>
-				) : null}
 				{isMatchingProjectRoute ? (
 					<DropdownMenuItem
 						onSelect={() => {
@@ -95,7 +66,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 					</DropdownMenuItem>
 				) : null}
 				<DropdownMenuSeparator />
-				{clerk.organization ? (
+				{params.organization ? (
 					<DropdownMenuSub>
 						<DropdownMenuSubTrigger>
 							Switch Organization
@@ -111,7 +82,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 				) : null}
 				<DropdownMenuItem
 					onSelect={() => {
-						clerk.signOut();
+						authClient.signOut();
 					}}
 				>
 					Logout
@@ -157,21 +128,9 @@ function Preview({ org }: { org: string }) {
 }
 
 function OrganizationSwitcher({ value }: { value: string | undefined }) {
-	const {
-		userMemberships: {
-			data: userMemberships = [],
-			isLoading,
-			hasNextPage,
-			isFetching,
-			fetchNext,
-		},
-	} = useOrganizationList({
-		userMemberships: {
-			infinite: true,
-		},
-	});
+	const { data: organizations, isPending: isLoading } =
+		authClient.useListOrganizations();
 
-	const clerk = useClerk();
 	const navigate = useNavigate();
 
 	return (
@@ -187,57 +146,47 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 					<DropdownMenuCheckboxItem>
 						<Skeleton className="h-4 w-full" />
 					</DropdownMenuCheckboxItem>
-					<DropdownMenuCheckboxItem>
-						<Skeleton className="h-4 w-full" />
-					</DropdownMenuCheckboxItem>
-					<DropdownMenuCheckboxItem>
-						<Skeleton className="h-4 w-full" />
-					</DropdownMenuCheckboxItem>
 				</>
 			) : null}
-			{userMemberships.map((membership) => (
+			{organizations?.map((org) => (
 				<DropdownMenuCheckboxItem
-					key={membership.id}
-					checked={membership.organization.id === value}
+					key={org.id}
+					checked={org.id === value}
 					onSelect={() => {
-						clerk.setActive({
-							organization: membership.organization.id,
-							navigate: () => {
-								return navigate({
-									to: `/orgs/$organization`,
-									params: {
-										organization:
-											membership.organization.id,
-									},
-								});
+						authClient.organization.setActive({
+							organizationId: org.id,
+						});
+						navigate({
+							to: `/orgs/$organization`,
+							params: {
+								organization: org.id,
 							},
 						});
 					}}
 				>
 					<Avatar className="size-4 mr-2">
-						<AvatarImage src={membership.organization.imageUrl} />
+						<AvatarImage src={org.logo ?? undefined} />
 						<AvatarFallback>
-							{membership.organization.name[0].toUpperCase()}
+							{org.name[0].toUpperCase()}
 						</AvatarFallback>
 					</Avatar>
-					{membership.organization.name}
+					{org.name}
 				</DropdownMenuCheckboxItem>
 			))}
 			<DropdownMenuItem
 				onSelect={() => {
-					clerk.openCreateOrganization({
-						hideSlug: true,
-						afterCreateOrganizationUrl: (org: { id: string }) =>
-							`/orgs/${org.id}`,
+					navigate({
+						to: ".",
+						search: (old) => ({
+							...old,
+							modal: "create-organization",
+						}),
 					});
 				}}
 				indicator={<Icon icon={faPlus} className="size-4" />}
 			>
 				Create a new organization
 			</DropdownMenuItem>
-			{hasNextPage && !isFetching ? (
-				<VisibilitySensor onChange={fetchNext} />
-			) : null}
 		</>
 	);
 }
