@@ -96,7 +96,9 @@ export function runActorAgentOsTests(driverTestConfig: DriverTestConfig) {
 
 				await actor.writeFile("/home/user/todelete.txt", "gone");
 				await actor.deleteFile("/home/user/todelete.txt");
-				expect(await actor.exists("/home/user/todelete.txt")).toBe(false);
+				expect(await actor.exists("/home/user/todelete.txt")).toBe(
+					false,
+				);
 			}, 60_000);
 
 			test("writeFiles and readFiles batch operations", async (c) => {
@@ -118,12 +120,12 @@ export function runActorAgentOsTests(driverTestConfig: DriverTestConfig) {
 					"/home/user/batch-a.txt",
 					"/home/user/batch-b.txt",
 				]);
-				expect(
-					new TextDecoder().decode(readResults[0].content),
-				).toBe("aaa");
-				expect(
-					new TextDecoder().decode(readResults[1].content),
-				).toBe("bbb");
+				expect(new TextDecoder().decode(readResults[0].content)).toBe(
+					"aaa",
+				);
+				expect(new TextDecoder().decode(readResults[1].content)).toBe(
+					"bbb",
+				);
 			}, 60_000);
 
 			test("readdirRecursive lists nested files", async (c) => {
@@ -172,10 +174,7 @@ export function runActorAgentOsTests(driverTestConfig: DriverTestConfig) {
 				]);
 
 				// Write a script that exits with code 42.
-				await actor.writeFile(
-					"/tmp/exit42.js",
-					'process.exit(42);',
-				);
+				await actor.writeFile("/tmp/exit42.js", "process.exit(42);");
 
 				const { pid } = await actor.spawn("node", ["/tmp/exit42.js"]);
 				expect(typeof pid).toBe("number");
@@ -196,7 +195,7 @@ export function runActorAgentOsTests(driverTestConfig: DriverTestConfig) {
 				// Write a long-running script.
 				await actor.writeFile(
 					"/tmp/long.js",
-					'setTimeout(() => {}, 30000);',
+					"setTimeout(() => {}, 30000);",
 				);
 
 				const { pid } = await actor.spawn("node", ["/tmp/long.js"]);
@@ -217,7 +216,7 @@ export function runActorAgentOsTests(driverTestConfig: DriverTestConfig) {
 
 				await actor.writeFile(
 					"/tmp/hang.js",
-					'setTimeout(() => {}, 60000);',
+					"setTimeout(() => {}, 60000);",
 				);
 
 				const { pid } = await actor.spawn("node", ["/tmp/hang.js"]);
@@ -262,7 +261,9 @@ server.listen(9876, "127.0.0.1", () => {
 					"http://127.0.0.1:9876/test",
 				);
 				expect(result.status).toBe(200);
-				expect(new TextDecoder().decode(result.body)).toBe("vm-response");
+				expect(new TextDecoder().decode(result.body)).toBe(
+					"vm-response",
+				);
 			}, 60_000);
 
 			// --- Cron ---
@@ -288,6 +289,40 @@ server.listen(9876, "127.0.0.1", () => {
 				await actor.cancelCronJob(id);
 				const jobsAfter = await actor.listCronJobs();
 				expect(jobsAfter.some((j: any) => j.id === id)).toBe(false);
+			}, 60_000);
+
+			// --- acpTimeoutMs option passthrough ---
+
+			test("acpTimeoutMs option is accepted and VM boots correctly", async (c) => {
+				const { client } = await setupDriverTest(c, {
+					...driverTestConfig,
+					useRealTimers: true,
+				});
+				const actor = client.agentOsTimeoutTestActor.getOrCreate([
+					`timeout-${crypto.randomUUID()}`,
+				]);
+
+				// Verify the VM boots and basic operations work with
+				// acpTimeoutMs set in the actor config options.
+				await actor.writeFile("/home/user/timeout-test.txt", "ok");
+				const data = await actor.readFile(
+					"/home/user/timeout-test.txt",
+				);
+				expect(new TextDecoder().decode(data)).toBe("ok");
+			}, 60_000);
+
+			test("acpTimeoutMs option is accepted and exec runs correctly", async (c) => {
+				const { client } = await setupDriverTest(c, {
+					...driverTestConfig,
+					useRealTimers: true,
+				});
+				const actor = client.agentOsTimeoutTestActor.getOrCreate([
+					`timeout-exec-${crypto.randomUUID()}`,
+				]);
+
+				const result = await actor.exec("echo timeout-path");
+				expect(result.exitCode).toBe(0);
+				expect(result.stdout.trim()).toBe("timeout-path");
 			}, 60_000);
 		},
 	);
