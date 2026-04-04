@@ -9,7 +9,7 @@ import { match } from "ts-pattern";
 import z from "zod";
 import { getConfig, ls, useDialog } from "@/components";
 import { ModalRenderer } from "@/components/modal-renderer";
-import { waitForClerk } from "@/lib/waitForClerk";
+import { authClient } from "@/lib/auth";
 
 const searchSchema = z
 	.object({
@@ -28,9 +28,6 @@ const searchSchema = z
 		n: z.array(z.string()).optional(),
 		u: z.string().optional(),
 		t: z.string().optional(),
-		// clerk related
-		__clerk_ticket: z.string().optional(),
-		__clerk_status: z.string().optional(),
 	})
 	.and(z.record(z.string(), z.any()));
 
@@ -46,7 +43,7 @@ export const Route = createFileRoute("/_context")({
 				__type: "engine" as const,
 			}))
 			.with("cloud", () => ({
-				dataProvider: context.getOrCreateCloudContext(context.clerk),
+				dataProvider: context.getOrCreateCloudContext(),
 				__type: "cloud" as const,
 			}))
 			.otherwise(() => {
@@ -58,9 +55,9 @@ export const Route = createFileRoute("/_context")({
 	beforeLoad: async (route) => {
 		return await match(route.context)
 			.with({ __type: "cloud" }, () => async () => {
-				await waitForClerk(route.context.clerk);
+				const session = await authClient.getSession();
 
-				if (!route.context.clerk.user) {
+				if (!session.data) {
 					throw redirect({
 						to: "/login",
 						search: (old) => ({

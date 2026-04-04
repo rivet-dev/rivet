@@ -1,4 +1,3 @@
-import type { Clerk } from "@clerk/clerk-js";
 import {
 	createNamespaceContext as createCloudNamespaceContext,
 	createGlobalContext as createGlobalCloudContext,
@@ -29,9 +28,9 @@ const engineNamespaceContextCache = new Map<string, EngineNamespaceContext>();
 const organizationContextCache = new Map<string, OrganizationContext>();
 const projectContextCache = new Map<string, ProjectContext>();
 
-export function getOrCreateCloudContext(clerk: Clerk): CloudContext {
+export function getOrCreateCloudContext(): CloudContext {
 	if (!cloudContextCache) {
-		cloudContextCache = createGlobalCloudContext({ clerk });
+		cloudContextCache = createGlobalCloudContext();
 	}
 	return cloudContextCache;
 }

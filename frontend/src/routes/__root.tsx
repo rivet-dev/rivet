@@ -38,7 +38,7 @@ function CloudRoute() {
 
 interface RootRouteContext {
 	queryClient: QueryClient;
-	getOrCreateCloudContext: (...args: unknown[]) => CloudContext;
+	getOrCreateCloudContext: () => CloudContext;
 	getOrCreateEngineContext: (
 		engineToken: (() => string) | string | (() => Promise<string>),
 	) => EngineContext;

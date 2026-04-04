@@ -106,7 +106,7 @@ function Preview({ org }: { org: string }) {
 		>
 			<div className="flex gap-2 items-center w-full min-w-0">
 				<Avatar className="size-5">
-					<AvatarImage src={data?.imageUrl} />
+					<AvatarImage src={data?.logo ?? undefined} />
 					<AvatarFallback>
 						{isLoading ? (
 							<Skeleton className="h-5 w-5" />
