@@ -1,4 +1,3 @@
-import { useUser } from "@clerk/clerk-react";
 import {
 	faArrowUpRight,
 	faBook,
@@ -48,6 +47,7 @@ import {
 } from "@/components/actors";
 import { useRootLayoutOptional } from "@/components/actors/root-layout-context";
 import type { HeaderLinkProps } from "@/components/header/header-link";
+import { authClient } from "@/lib/auth";
 import { ensureTrailingSlash } from "@/lib/utils";
 import { TEST_IDS } from "@/utils/test-ids";
 import { ActorBuildsList } from "./actor-builds-list";
@@ -708,7 +708,7 @@ export const Content = ({
 };
 
 export const SidebarlessHeader = () => {
-	const { user } = useUser();
+	const { data: session } = authClient.useSession();
 	return (
 		<div className="rounded-lg flex items-center pe-1.5 justify-between bg-card/10 backdrop-blur-lg fixed inset-x-0 top-0 z-10">
 			<Logo />
@@ -722,7 +722,7 @@ export const SidebarlessHeader = () => {
 					>
 						Logged in as{" "}
 						<span className="text-foreground">
-							{user?.primaryEmailAddress?.emailAddress}
+							{session?.user?.email}
 						</span>
 					</Button>
 				</UserDropdown>

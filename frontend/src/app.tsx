@@ -1,4 +1,3 @@
-import type { Clerk } from "@clerk/clerk-js";
 import * as Sentry from "@sentry/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
@@ -35,57 +34,47 @@ declare module "@tanstack/react-query" {
 	}
 }
 
-export function createAppRouter(clerk: Clerk) {
-	return createRouter({
-		basepath: import.meta.env.BASE_URL,
-		routeTree,
-		context: {
-			clerk:
-				__APP_TYPE__ === "cloud"
-					? clerk
-					: (undefined as unknown as Clerk),
-			queryClient: queryClient,
-			getOrCreateCloudContext,
-			getOrCreateEngineContext,
-			getOrCreateOrganizationContext,
-			getOrCreateProjectContext,
-			getOrCreateCloudNamespaceContext,
-			getOrCreateEngineNamespaceContext,
-		},
-		defaultPreloadStaleTime: 0,
-		defaultGcTime: 0,
-		defaultPreloadGcTime: 0,
-		defaultStaleTime: Infinity,
-		scrollRestoration: true,
-		defaultPendingMinMs: 300,
-		defaultPendingComponent: FullscreenLoading,
-		defaultOnCatch: (error) => {
-			console.error("Router caught an error:", error);
-			Sentry.captureException(error);
-		},
-		defaultNotFoundComponent: () => (
-			<RouteLayout>
-				<NotFoundCard />
-			</RouteLayout>
-		),
-	});
-}
+export const router = createRouter({
+	basepath: import.meta.env.BASE_URL,
+	routeTree,
+	context: {
+		queryClient: queryClient,
+		getOrCreateCloudContext,
+		getOrCreateEngineContext,
+		getOrCreateOrganizationContext,
+		getOrCreateProjectContext,
+		getOrCreateCloudNamespaceContext,
+		getOrCreateEngineNamespaceContext,
+	},
+	defaultPreloadStaleTime: 0,
+	defaultGcTime: 0,
+	defaultPreloadGcTime: 0,
+	defaultStaleTime: Infinity,
+	scrollRestoration: true,
+	defaultPendingMinMs: 300,
+	defaultPendingComponent: FullscreenLoading,
+	defaultOnCatch: (error) => {
+		console.error("Router caught an error:", error);
+		Sentry.captureException(error);
+	},
+	defaultNotFoundComponent: () => (
+		<RouteLayout>
+			<NotFoundCard />
+		</RouteLayout>
+	),
+});
 
 declare module "@tanstack/react-router" {
 	interface Register {
-		router: ReturnType<typeof createAppRouter>;
+		router: typeof router;
 	}
 }
 
-function InnerApp({ router }: { router: ReturnType<typeof createAppRouter> }) {
+function InnerApp({ router }: { router: typeof router }) {
 	return <RouterProvider router={router} />;
 }
 
-export function App({
-	router,
-}: {
-	router: ReturnType<typeof createAppRouter>;
-}) {
+export function App({ router }: { router: typeof router }) {
 	return (
 		<QueryClientProvider client={queryClient}>
 			<ConfigProvider value={getConfig()}>
