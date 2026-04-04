@@ -37,6 +37,10 @@ impl Pools {
 			udb,
 		}));
 
+		// Initialize here to avoid cold starts elsewhere
+		crate::reqwest::client().await?;
+		crate::reqwest::client_no_timeout().await?;
+
 		Ok(pool)
 	}
 

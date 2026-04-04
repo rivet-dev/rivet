@@ -20,21 +20,6 @@ pub async fn list_runner_config_epoxy_replica_ids(
 	ctx: &OperationCtx,
 	input: &Input,
 ) -> Result<Output> {
-	let start = std::time::Instant::now();
-	let replicas = list_runner_config_epoxy_replica_ids_inner(ctx, input).await?;
-	tracing::debug!(
-		duration_ms = %start.elapsed().as_millis(),
-		?replicas,
-		"list_runner_config_epoxy_replica_ids completed"
-	);
-
-	Ok(Output { replicas })
-}
-
-async fn list_runner_config_epoxy_replica_ids_inner(
-	ctx: &OperationCtx,
-	input: &Input,
-) -> Result<Vec<ReplicaId>> {
 	let (enabled_dcs, cluster_config) = tokio::try_join!(
 		ctx.op(crate::ops::runner::list_runner_config_enabled_dcs::Input {
 			namespace_id: input.namespace_id,
@@ -62,5 +47,5 @@ async fn list_runner_config_epoxy_replica_ids_inner(
 		bail!("resolved runner config epoxy replica set is empty");
 	}
 
-	Ok(replicas)
+	Ok(Output { replicas })
 }

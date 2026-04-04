@@ -1166,6 +1166,7 @@ impl Database for DatabaseKv {
 
 							anyhow::Ok(buffer)
 						}
+						.custom_instrument(tracing::debug_span!("read_wake_conditions"))
 					)?;
 
 					// Sort for consistency across all workers
@@ -1312,7 +1313,7 @@ impl Database for DatabaseKv {
 						.buffer_unordered(1024)
 						.try_filter_map(|x| std::future::ready(Ok(x)))
 						.try_collect::<Vec<_>>()
-						.instrument(tracing::trace_span!("map_to_leased_workflows"))
+						.custom_instrument(tracing::debug_span!("map_to_leased_workflows"))
 						.await?;
 
 					// Clear all wake conditions from workflows that we have leased

@@ -18,24 +18,44 @@ pub async fn namespace_resolve_for_name_local(
 		return Err(errors::Namespace::NotLeader.build());
 	}
 
-	ctx.udb()?
-		.run(|tx| {
-			let name = input.name.clone();
-			async move {
-				let tx = tx.with_subspace(keys::subspace());
+	ctx.cache()
+		.clone()
+		.request()
+		.fetch_one_json(
+			"namespace.resolve_for_name_local",
+			input.name.clone(),
+			move |mut cache, key| {
+				async move {
+					let ns = ctx
+						.udb()?
+						.run(|tx| {
+							let name = input.name.clone();
+							async move {
+								let tx = tx.with_subspace(keys::subspace());
 
-				let Some(namespace_id) = tx
-					.read_opt(&keys::ByNameKey::new(name.clone()), Serializable)
-					.await?
-				else {
-					// Namespace not found
-					return Ok(None);
-				};
+								let Some(namespace_id) = tx
+									.read_opt(&keys::ByNameKey::new(name.clone()), Serializable)
+									.await?
+								else {
+									// Namespace not found
+									return Ok(None);
+								};
 
-				get_inner(namespace_id, &tx).await
-			}
-		})
-		.custom_instrument(tracing::info_span!("namespace_resolve_for_name_local_tx"))
+								get_inner(namespace_id, &tx).await
+							}
+						})
+						.custom_instrument(tracing::info_span!(
+							"namespace_resolve_for_name_local_tx"
+						))
+						.await?;
+
+					if let Some(ns) = ns {
+						cache.resolve(&key, ns);
+					}
+
+					Ok(cache)
+				}
+			},
+		)
 		.await
-		.map_err(Into::into)
 }

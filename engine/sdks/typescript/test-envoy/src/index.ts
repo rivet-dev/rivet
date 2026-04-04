@@ -1,4 +1,3 @@
-import { serve } from "@hono/node-server";
 import * as protocol from "@rivetkit/engine-envoy-protocol";
 import { EnvoyHandle, startEnvoy, startEnvoySync } from "@rivetkit/engine-envoy-client";
 import { Hono, type Context as HonoContext, type Next } from "hono";
@@ -176,6 +175,10 @@ app.get("/shutdown", async (c) => {
 });
 
 app.post("/api/rivet/start", async (c) => {
+	getLogger().info({
+		msg: `Received SSE request`,
+	});
+
 	let payload = await c.req.arrayBuffer();
 
 	return streamSSE(c, async (stream) => {
@@ -197,6 +200,38 @@ app.post("/api/rivet/start", async (c) => {
 	});
 });
 
+app.post("/foo", async (c) => {
+	let payload = await c.req.arrayBuffer();
+	getLogger().info({
+		msg: `Received SSE request`,
+		payload,
+	});
+
+	return streamSSE(c, async (stream) => {
+		const stopped = Promise.withResolvers<void>();
+
+		// Use setTimeout to immediately defer back to SSE
+		setTimeout(() => {
+			const envoy = startEnvoySync({
+				...config,
+				serverlessStartPayload: payload,
+				onShutdown() {
+					stopped.resolve();
+				}
+			});
+
+			c.req.raw.signal.addEventListener("abort", () => {
+				getLogger().debug("SSE aborted, shutting down runner");
+				envoy!.shutdown(true);
+			});
+		}, 0);
+
+		await stream.writeSSE({ event: "ping", data: "" });
+
+		await stopped.promise;
+	});
+});
+
 app.get("/api/rivet/metadata", async (c) => {
 	return c.json({
 		// Not actually rivetkit
@@ -207,10 +242,12 @@ app.get("/api/rivet/metadata", async (c) => {
 });
 
 if (AUTOSTART_SERVER) {
-	serve({
-		fetch: app.fetch,
-		port: INTERNAL_SERVER_PORT,
-	});
+	if (process.versions.bun) {
+		Bun.serve({ fetch: app.fetch, port: INTERNAL_SERVER_PORT, idleTimeout: 0 });
+	} else {
+		const { serve } = await import("@hono/node-server");
+		serve({ fetch: app.fetch, port: INTERNAL_SERVER_PORT });
+	}
 	getLogger().info(
 		`Internal HTTP server listening on port ${INTERNAL_SERVER_PORT}`,
 	);
@@ -270,5 +307,3 @@ async function autoConfigureServerless() {
 		);
 	}
 }
-
-export default app;

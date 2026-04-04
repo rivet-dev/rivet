@@ -16,24 +16,40 @@ pub async fn namespace_get_local(ctx: &OperationCtx, input: &Input) -> Result<Ve
 		return Err(errors::Namespace::NotLeader.build());
 	}
 
-	let namespaces = ctx
-		.udb()?
-		.run(|tx| async move {
-			futures_util::stream::iter(input.namespace_ids.clone())
-				.map(|namespace_id| {
-					let tx = tx.clone();
+	ctx.cache()
+		.clone()
+		.request()
+		.fetch_all_json(
+			"namespace.get_local",
+			input.namespace_ids.clone(),
+			move |mut cache, namespace_ids| async move {
+				let namespace_ids = &namespace_ids;
+				let namespaces = ctx
+					.udb()?
+					.run(|tx| async move {
+						futures_util::stream::iter(namespace_ids.clone())
+							.map(|namespace_id| {
+								let tx = tx.clone();
 
-					async move { get_inner(namespace_id, &tx).await }
-				})
-				.buffer_unordered(1024)
-				.try_filter_map(|x| std::future::ready(Ok(x)))
-				.try_collect::<Vec<_>>()
-				.await
-		})
-		.custom_instrument(tracing::info_span!("namespace_get_local_tx"))
-		.await?;
+								async move { get_inner(namespace_id, &tx).await }
+							})
+							.buffer_unordered(1024)
+							.try_filter_map(|x| std::future::ready(Ok(x)))
+							.try_collect::<Vec<_>>()
+							.await
+					})
+					.custom_instrument(tracing::info_span!("namespace_get_local_tx"))
+					.await?;
 
-	Ok(namespaces)
+				for ns in namespaces {
+					let namespace_id = ns.namespace_id;
+					cache.resolve(&&namespace_id, ns);
+				}
+
+				Ok(cache)
+			},
+		)
+		.await
 }
 
 pub(crate) async fn get_inner(

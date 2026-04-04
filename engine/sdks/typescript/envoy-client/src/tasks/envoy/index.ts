@@ -165,10 +165,6 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 			}
 		}
 
-		log(ctx.shared)?.info({
-			msg: "stopping envoy",
-		});
-
 		// Cleanup
 		ctx.shared.wsTx?.send({ type: "close", code: 1000, reason: "envoy.shutdown" });
 		clearInterval(ackInterval);
@@ -185,6 +181,12 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 			}
 		}
 		ctx.actors.clear();
+
+		log(ctx.shared)?.info({
+			msg: "envoy stopped",
+		});
+
+		ctx.shared.config.onShutdown();
 	});
 
 	// Queue start actor
@@ -270,6 +272,8 @@ function handleShutdown(ctx: EnvoyContext) {
 	if (ctx.shuttingDown) return;
 	ctx.shuttingDown = true;
 
+	log(ctx.shared)?.debug({ msg: "envoy received shutdown" });
+
 	wsSend(ctx.shared, {
 		tag: "ToRivetStopping",
 		val: null,
@@ -341,7 +345,6 @@ function createHandle(
 	return {
 		shutdown(immediate: boolean) {
 			ctx.shared.envoyTx.send({ type: "shutdown" });
-			ctx.shared.config.onShutdown();
 		},
 
 		getProtocolMetadata(): protocol.ProtocolMetadata | undefined {

@@ -331,7 +331,7 @@ impl ProxyService {
 	}
 
 	/// Process an individual request.
-	#[tracing::instrument(name = "guard_request", skip_all, fields(ray_id, req_id))]
+	#[tracing::instrument(name = "guard_request", skip_all, fields(ray_id, req_id, uri=%req.uri()))]
 	pub async fn process(&self, mut req: Request<BodyIncoming>) -> Result<Response<ResponseBody>> {
 		let start_time = Instant::now();
 
