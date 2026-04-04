@@ -60,16 +60,6 @@ export const Route = createFileRoute("/_context")({
 			.with({ __type: "cloud" }, () => async () => {
 				await waitForClerk(route.context.clerk);
 
-				if (
-					route.search.__clerk_ticket &&
-					route.search.__clerk_status
-				) {
-					throw redirect({
-						to: "/onboarding/accept-invitation",
-						search: true,
-					});
-				}
-
 				if (!route.context.clerk.user) {
 					throw redirect({
 						to: "/login",
