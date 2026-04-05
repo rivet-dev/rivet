@@ -1,5 +1,7 @@
 use epoxy::{
-	ops::propose::{CheckAndSetCommand, Command, CommandError, CommandKind, Proposal, ProposalResult},
+	ops::propose::{
+		CheckAndSetCommand, Command, CommandError, CommandKind, Proposal, ProposalResult,
+	},
 	protocol::ReplicaId,
 };
 use futures_util::TryStreamExt;

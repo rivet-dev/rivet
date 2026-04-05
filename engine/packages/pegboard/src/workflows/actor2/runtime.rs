@@ -966,66 +966,25 @@ pub async fn insert_and_send_commands(
 
 	state.envoy_last_command_idx += input.commands.len() as i64;
 
-	// Fetch preloaded KV at send time for any start commands. Preloaded KV is
-	// never persisted in the command queue or workflow history.
-	let preloaded_kv = {
-		let has_start_cmd = input
-			.commands
-			.iter()
-			.any(|command| matches!(command, protocol::Command::CommandStartActor(_)));
-		if has_start_cmd {
-			let db = ctx.udb()?;
-			crate::actor_kv::preload::fetch_preloaded_kv(
-				&db,
-				ctx.config().pegboard(),
-				actor_id,
-				namespace_id,
-				&input
-					.commands
-					.iter()
-					.find_map(|command| match command {
-						protocol::Command::CommandStartActor(start) => {
-							Some(start.config.name.clone())
-						}
-						_ => None,
-					})
-					.unwrap_or_default(),
-			)
-			.await?
-		} else {
-			None
-		}
-	};
-
 	let receiver_subject = crate::pubsub_subjects::EnvoyReceiverSubject::new(
 		state.namespace_id,
 		input.envoy_key.clone(),
 	)
 	.to_string();
 
-	let mut preloaded_kv = preloaded_kv;
 	let message_serialized =
 		versioned::ToEnvoyConn::wrap_latest(protocol::ToEnvoyConn::ToEnvoyCommands(
 			input
 				.commands
 				.iter()
 				.enumerate()
-				.map(|(i, command)| {
-					let mut command = command.clone();
-					if let protocol::Command::CommandStartActor(ref mut start) =
-						command
-					{
-						start.preloaded_kv = preloaded_kv.take();
-					}
-
-					protocol::CommandWrapper {
-						checkpoint: protocol::ActorCheckpoint {
-							actor_id: state.actor_id.to_string(),
-							generation: input.generation,
-							index: old_last_command_idx + i as i64 + 1,
-						},
-						inner: command,
-					}
+				.map(|(i, command)| protocol::CommandWrapper {
+					checkpoint: protocol::ActorCheckpoint {
+						actor_id: state.actor_id.to_string(),
+						generation: input.generation,
+						index: old_last_command_idx + i as i64 + 1,
+					},
+					inner: command.clone(),
 				})
 				.collect(),
 		))

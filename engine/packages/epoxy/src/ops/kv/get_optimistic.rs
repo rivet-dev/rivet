@@ -123,13 +123,7 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 			};
 
 			if input.caching_behavior == protocol::CachingBehavior::Optimistic {
-				cache_fanout_value(
-					ctx,
-					input.replica_id,
-					input.key.clone(),
-					value.clone(),
-				)
-				.await?;
+				cache_fanout_value(ctx, input.replica_id, input.key.clone(), value.clone()).await?;
 			}
 
 			return Ok(Output {
@@ -162,7 +156,10 @@ async fn cache_fanout_value(
 				// This covers the race where a commit lands between the fanout read and
 				// the cache write.
 				if let Some(committed_value) = tx
-					.read_opt(&committed_key, universaldb::utils::IsolationLevel::Serializable)
+					.read_opt(
+						&committed_key,
+						universaldb::utils::IsolationLevel::Serializable,
+					)
 					.await?
 				{
 					if committed_value.version >= value_to_cache.version {
@@ -174,10 +171,7 @@ async fn cache_fanout_value(
 				// prevents a slow fanout response from overwriting a fresher cache entry
 				// written by a concurrent request.
 				if let Some(existing_cache) = tx
-					.read_opt(
-						&cache_key,
-						universaldb::utils::IsolationLevel::Serializable,
-					)
+					.read_opt(&cache_key, universaldb::utils::IsolationLevel::Serializable)
 					.await?
 				{
 					if existing_cache.version > value_to_cache.version {

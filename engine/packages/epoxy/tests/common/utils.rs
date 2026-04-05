@@ -4,7 +4,9 @@ use epoxy::{
 		self, ChangelogKey, CommittedValue, KvAcceptedKey, KvAcceptedValue, KvBallotKey,
 		KvOptimisticCacheKey, KvValueKey, LegacyCommittedValueKey,
 	},
-	ops::propose::{self, CheckAndSetCommand, Command, CommandKind, Proposal, ProposalResult, SetCommand},
+	ops::propose::{
+		self, CheckAndSetCommand, Command, CommandKind, Proposal, ProposalResult, SetCommand,
+	},
 };
 use epoxy_protocol::protocol::{self, ReplicaId};
 use futures_util::TryStreamExt;
@@ -12,10 +14,7 @@ use gas::prelude::TestCtx as WorkflowTestCtx;
 use universaldb::{
 	RangeOption,
 	options::StreamingMode,
-	utils::{
-		FormalKey, IsolationLevel::Serializable,
-		keys::CHANGELOG,
-	},
+	utils::{FormalKey, IsolationLevel::Serializable, keys::CHANGELOG},
 };
 
 #[allow(dead_code)]
@@ -74,7 +73,11 @@ pub async fn check_and_set_absent(
 }
 
 #[allow(dead_code)]
-pub async fn set_mutable(ctx: &WorkflowTestCtx, key: &[u8], value: &[u8]) -> Result<ProposalResult> {
+pub async fn set_mutable(
+	ctx: &WorkflowTestCtx,
+	key: &[u8],
+	value: &[u8],
+) -> Result<ProposalResult> {
 	let result = ctx
 		.op(propose::Input {
 			proposal: Proposal {
@@ -176,7 +179,7 @@ pub async fn write_v2_committed_value(
 				Ok(())
 			}
 		})
-	.await
+		.await
 }
 
 #[allow(dead_code)]
@@ -191,7 +194,8 @@ pub async fn read_legacy_value(
 			let key = key.clone();
 			async move {
 				let tx = tx.with_subspace(keys::legacy_subspace(replica_id));
-				tx.read_opt(&LegacyCommittedValueKey::new(key), Serializable).await
+				tx.read_opt(&LegacyCommittedValueKey::new(key), Serializable)
+					.await
 			}
 		})
 		.await
@@ -254,7 +258,8 @@ pub async fn read_cache_committed_value(
 			let key = key.clone();
 			async move {
 				let tx = tx.with_subspace(keys::subspace(replica_id));
-				tx.read_opt(&KvOptimisticCacheKey::new(key), Serializable).await
+				tx.read_opt(&KvOptimisticCacheKey::new(key), Serializable)
+					.await
 			}
 		})
 		.await

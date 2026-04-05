@@ -74,7 +74,10 @@ pub enum Actor {
 		"Not enough space left in storage.",
 		"Not enough space left in storage ({remaining} bytes remaining, current payload is {payload_size} bytes)."
 	)]
-	KvStorageQuotaExceeded { remaining: usize, payload_size: usize },
+	KvStorageQuotaExceeded {
+		remaining: usize,
+		payload_size: usize,
+	},
 }
 
 #[derive(RivetError, Debug, Clone, Deserialize, Serialize)]

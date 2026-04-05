@@ -27,9 +27,7 @@ pub async fn commit(
 				protocol::CommitResponseAlreadyCommitted { value },
 			)
 		}
-		CommitKvOutcome::StaleBallot { .. } => {
-			protocol::CommitResponse::CommitResponseStaleCommit
-		}
+		CommitKvOutcome::StaleBallot { .. } => protocol::CommitResponse::CommitResponseStaleCommit,
 	};
 
 	Ok(response)

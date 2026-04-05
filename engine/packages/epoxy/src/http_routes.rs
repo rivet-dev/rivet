@@ -16,7 +16,10 @@ pub fn mount_routes(
 ) -> axum::Router<rivet_api_builder::GlobalApiCtx> {
 	router
 		.route("/v{version}/epoxy/message", bin::post(message))
-		.route("/v{version}/epoxy/changelog-read", bin::post(changelog_read))
+		.route(
+			"/v{version}/epoxy/changelog-read",
+			bin::post(changelog_read),
+		)
 }
 
 pub async fn message(ctx: ApiCtx, path: ProtocolPath, _query: (), body: Bytes) -> Result<Vec<u8>> {
@@ -66,7 +69,9 @@ fn request_kind_label(kind: &protocol::RequestKind) -> &'static str {
 		protocol::RequestKind::CommitRequest(_) => "commit",
 		protocol::RequestKind::ChangelogReadRequest(_) => "changelog_read",
 		protocol::RequestKind::HealthCheckRequest => "health_check",
-		protocol::RequestKind::CoordinatorUpdateReplicaStatusRequest(_) => "coordinator_update_replica_status",
+		protocol::RequestKind::CoordinatorUpdateReplicaStatusRequest(_) => {
+			"coordinator_update_replica_status"
+		}
 		protocol::RequestKind::BeginLearningRequest(_) => "begin_learning",
 		protocol::RequestKind::KvGetRequest(_) => "kv_get",
 		protocol::RequestKind::KvPurgeCacheRequest(_) => "kv_purge_cache",

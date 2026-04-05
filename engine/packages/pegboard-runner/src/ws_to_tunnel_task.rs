@@ -6,8 +6,8 @@ use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::actor_kv;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
-use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_envoy_protocol as ep;
+use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK2_VERSION, versioned};
 use std::sync::{Arc, atomic::Ordering};
 use tokio::sync::{Mutex, MutexGuard, watch};
@@ -106,7 +106,7 @@ async fn recv_msg(
 				])
 				.inc();
 
-			return Err(errors::WsError::Eviction.build());
+			return Ok(Err(LifecycleResult::Evicted));
 		}
 		_ = ws_to_tunnel_abort_rx.changed() => {
 			tracing::debug!("task aborted");
@@ -242,9 +242,9 @@ async fn handle_message_mk2(
 												values,
 												metadata: metadata
 													.into_iter()
-													.map(|x| protocol::mk2::KvMetadata {
-														version: x.version,
-														update_ts: x.update_ts,
+													.map(|m| protocol::mk2::KvMetadata {
+														version: m.version,
+														update_ts: m.update_ts,
 													})
 													.collect(),
 											},
@@ -277,16 +277,16 @@ async fn handle_message_mk2(
 							protocol::mk2::KvListQuery::KvListAllQuery => {
 								ep::KvListQuery::KvListAllQuery
 							}
-							protocol::mk2::KvListQuery::KvListRangeQuery(q) => {
+							protocol::mk2::KvListQuery::KvListRangeQuery(x) => {
 								ep::KvListQuery::KvListRangeQuery(ep::KvListRangeQuery {
-									start: q.start,
-									end: q.end,
-									exclusive: q.exclusive,
+									start: x.start,
+									end: x.end,
+									exclusive: x.exclusive,
 								})
 							}
-							protocol::mk2::KvListQuery::KvListPrefixQuery(q) => {
+							protocol::mk2::KvListQuery::KvListPrefixQuery(x) => {
 								ep::KvListQuery::KvListPrefixQuery(ep::KvListPrefixQuery {
-									key: q.key,
+									key: x.key,
 								})
 							}
 						},
@@ -310,9 +310,9 @@ async fn handle_message_mk2(
 												values,
 												metadata: metadata
 													.into_iter()
-													.map(|x| protocol::mk2::KvMetadata {
-														version: x.version,
-														update_ts: x.update_ts,
+													.map(|m| protocol::mk2::KvMetadata {
+														version: m.version,
+														update_ts: m.update_ts,
 													})
 													.collect(),
 											},
@@ -636,10 +636,10 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 							}
 							protocol::KvListQuery::KvListRangeQuery(q) => {
 								ep::KvListQuery::KvListRangeQuery(ep::KvListRangeQuery {
-										start: q.start,
-										end: q.end,
-										exclusive: q.exclusive,
-									})
+									start: q.start,
+									end: q.end,
+									exclusive: q.exclusive,
+								})
 							}
 							protocol::KvListQuery::KvListPrefixQuery(q) => {
 								ep::KvListQuery::KvListPrefixQuery(ep::KvListPrefixQuery {

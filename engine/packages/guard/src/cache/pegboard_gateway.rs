@@ -8,7 +8,8 @@ use gas::prelude::*;
 use rivet_guard_core::request_context::RequestContext;
 
 use crate::routing::{
-	SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_ACTOR, actor_path::ActorPathInfo,
+	SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_ACTOR,
+	actor_path::{ActorPathInfo, QueryActorPathInfo},
 	pegboard_gateway::X_RIVET_ACTOR,
 };
 
@@ -98,4 +99,46 @@ pub fn build_cache_key_target_based(req_ctx: &RequestContext, target: &str) -> R
 	let hash = hasher.finish();
 
 	Ok(hash)
+}
+
+/// Build a cache key from only the routing-relevant fields of a query gateway
+/// path. Token is intentionally excluded so requests with different tokens but
+/// the same query resolve to the same cached route.
+pub fn build_cache_key_query_based(info: &QueryActorPathInfo, req_ctx: &RequestContext) -> u64 {
+	use crate::routing::actor_path::QueryActorQuery;
+
+	let mut hasher = DefaultHasher::new();
+	match &info.query {
+		QueryActorQuery::Get {
+			namespace,
+			name,
+			key,
+		} => {
+			"get".hash(&mut hasher);
+			namespace.hash(&mut hasher);
+			name.hash(&mut hasher);
+			key.hash(&mut hasher);
+		}
+		QueryActorQuery::GetOrCreate {
+			namespace,
+			name,
+			runner_name,
+			key,
+			input,
+			region,
+			crash_policy,
+		} => {
+			"getOrCreate".hash(&mut hasher);
+			namespace.hash(&mut hasher);
+			name.hash(&mut hasher);
+			runner_name.hash(&mut hasher);
+			key.hash(&mut hasher);
+			input.hash(&mut hasher);
+			region.hash(&mut hasher);
+			crash_policy.hash(&mut hasher);
+		}
+	}
+	info.stripped_path.hash(&mut hasher);
+	req_ctx.method().as_str().hash(&mut hasher);
+	hasher.finish()
 }

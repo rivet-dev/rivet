@@ -9,8 +9,9 @@ use std::collections::{BTreeSet, HashSet};
 use std::time::{Duration, Instant};
 
 use crate::{
-	http_client, metrics,
+	http_client,
 	keys::CommittedValue,
+	metrics,
 	replica::{
 		ballot::{self, Ballot, BallotSelection},
 		commit_kv::{self, CommitKvOutcome},
@@ -101,13 +102,11 @@ impl SetProposal {
 				key,
 				expect_one_of,
 				new_value: Some(value),
-			}) if expect_one_of.len() == 1 && matches!(expect_one_of.first(), Some(None)) => {
-				Ok(Self {
-					key: key.clone(),
-					value: value.clone(),
-					mutable,
-				})
-			}
+			}) if expect_one_of.len() == 1 && matches!(expect_one_of.first(), Some(None)) => Ok(Self {
+				key: key.clone(),
+				value: value.clone(),
+				mutable,
+			}),
 			_ => bail!(
 				"epoxy v2 only supports single-key set-if-absent proposals with a concrete value"
 			),
@@ -314,14 +313,14 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 				replica_id,
 				&quorum_members,
 				proposal.key.clone(),
-					CommittedValue {
-						value: proposal.value.clone(),
-						version: 1,
-						mutable: proposal.mutable,
-					},
-					ballot,
-				)
-				.await?
+				CommittedValue {
+					value: proposal.value.clone(),
+					version: 1,
+					mutable: proposal.mutable,
+				},
+				ballot,
+			)
+			.await?
 			{
 				PreparePhaseOutcome::Prepared { ballot, value } => {
 					run_slow_path(
@@ -444,16 +443,7 @@ async fn run_accept_path(
 					version,
 					mutable,
 				} = value;
-				commit_kv::commit_kv(
-					&tx,
-					replica_id,
-					key,
-					value,
-					ballot,
-					mutable,
-					version,
-				)
-				.await
+				commit_kv::commit_kv(&tx, replica_id, key, value, ballot, mutable, version).await
 			}
 		})
 		.custom_instrument(tracing::info_span!("commit_kv_tx"))
@@ -472,16 +462,15 @@ async fn run_accept_path(
 				let ballot = ballot;
 				let purge_cache = purge_cache && proposal.mutable;
 				async move {
-					if let Err(err) =
-						broadcast_commits(
-							&ctx,
-							&config,
-							replica_id,
-							key.clone(),
-							chosen_value.clone(),
-							ballot,
-						)
-							.await
+					if let Err(err) = broadcast_commits(
+						&ctx,
+						&config,
+						replica_id,
+						key.clone(),
+						chosen_value.clone(),
+						ballot,
+					)
+					.await
 					{
 						tracing::warn!(?err, "commit broadcast failed after local commit");
 					}
@@ -550,7 +539,8 @@ async fn run_prepare_phase(
 			}
 			PrepareRoundOutcome::Retry { next_ballot } => {
 				store_prepare_ballot(ctx, replica_id, key.clone(), next_ballot).await?;
-				let Some(retry_delay) = next_prepare_retry_delay(retry_count, &mut rand::thread_rng())
+				let Some(retry_delay) =
+					next_prepare_retry_delay(retry_count, &mut rand::thread_rng())
 				else {
 					tracing::warn!(
 						%replica_id,
@@ -592,31 +582,32 @@ async fn send_prepare_round(
 	ballot: protocol::Ballot,
 ) -> Result<PrepareRoundOutcome> {
 	let target = utils::calculate_quorum(replica_ids.len(), utils::QuorumType::Slow);
-	let mut pending = futures_util::stream::iter(replica_ids.iter().copied().map(|to_replica_id| {
-		let key = key.clone();
-		let proposed_value = proposed_value.clone();
-		let ballot = ballot.clone();
-		async move {
-			(
-				to_replica_id,
-				tokio::time::timeout(
-					crate::consts::REQUEST_TIMEOUT,
-					send_prepare_request(
-						ctx,
-						config,
-						from_replica_id,
-						to_replica_id,
-						key,
-						proposed_value,
-						ballot,
-					),
+	let mut pending =
+		futures_util::stream::iter(replica_ids.iter().copied().map(|to_replica_id| {
+			let key = key.clone();
+			let proposed_value = proposed_value.clone();
+			let ballot = ballot.clone();
+			async move {
+				(
+					to_replica_id,
+					tokio::time::timeout(
+						crate::consts::REQUEST_TIMEOUT,
+						send_prepare_request(
+							ctx,
+							config,
+							from_replica_id,
+							to_replica_id,
+							key,
+							proposed_value,
+							ballot,
+						),
+					)
+					.await,
 				)
-				.await,
-			)
-		}
-	}))
-	.collect::<FuturesUnordered<_>>()
-	.await;
+			}
+		}))
+		.collect::<FuturesUnordered<_>>()
+		.await;
 
 	let mut ok_responses = 0;
 	let mut remaining = replica_ids.len();
@@ -655,7 +646,9 @@ async fn send_prepare_round(
 					}
 					(None, None) => {}
 					_ => {
-						bail!("prepare response from replica {to_replica_id} returned partial accepted state");
+						bail!(
+							"prepare response from replica {to_replica_id} returned partial accepted state"
+						);
 					}
 				}
 
@@ -720,31 +713,32 @@ async fn send_accept_round(
 	accept_quorum: utils::QuorumType,
 ) -> Result<AcceptPhaseOutcome> {
 	let target = utils::calculate_quorum(replica_ids.len(), accept_quorum);
-	let mut pending = futures_util::stream::iter(replica_ids.iter().copied().map(|to_replica_id| {
-		let key = key.clone();
-		let value = value.clone();
-		let ballot = ballot.clone();
-		async move {
-			(
-				to_replica_id,
-				tokio::time::timeout(
-					crate::consts::REQUEST_TIMEOUT,
-					send_accept_request(
-						ctx,
-						config,
-						from_replica_id,
-						to_replica_id,
-						key,
-						value,
-						ballot,
-					),
+	let mut pending =
+		futures_util::stream::iter(replica_ids.iter().copied().map(|to_replica_id| {
+			let key = key.clone();
+			let value = value.clone();
+			let ballot = ballot.clone();
+			async move {
+				(
+					to_replica_id,
+					tokio::time::timeout(
+						crate::consts::REQUEST_TIMEOUT,
+						send_accept_request(
+							ctx,
+							config,
+							from_replica_id,
+							to_replica_id,
+							key,
+							value,
+							ballot,
+						),
+					)
+					.await,
 				)
-				.await,
-			)
-		}
-	}))
-	.collect::<FuturesUnordered<_>>()
-	.await;
+			}
+		}))
+		.collect::<FuturesUnordered<_>>()
+		.await;
 
 	let mut state = AcceptRoundState {
 		target,
@@ -754,9 +748,7 @@ async fn send_accept_round(
 
 	while let Some((to_replica_id, response)) = pending.next().await {
 		let observation = match response {
-			Ok(Ok(protocol::AcceptResponse::AcceptResponseOk(_))) => {
-				AcceptObservation::Ok
-			}
+			Ok(Ok(protocol::AcceptResponse::AcceptResponseOk(_))) => AcceptObservation::Ok,
 			Ok(Ok(protocol::AcceptResponse::AcceptResponseAlreadyCommitted(committed))) => {
 				AcceptObservation::AlreadyCommitted(committed.value)
 			}

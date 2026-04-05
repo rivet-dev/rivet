@@ -15,10 +15,7 @@ pub async fn setup_replica(ctx: &mut WorkflowCtx, _input: &super::Input) -> Resu
 }
 
 #[tracing::instrument(skip_all, fields(replica_id = %ctx.config().epoxy_replica_id()))]
-pub async fn begin_learning(
-	ctx: &mut WorkflowCtx,
-	signal: &super::BeginLearning,
-) -> Result<()> {
+pub async fn begin_learning(ctx: &mut WorkflowCtx, signal: &super::BeginLearning) -> Result<()> {
 	ctx.activity(StoreConfigInput {
 		config: signal.config.clone(),
 	})
@@ -111,9 +108,7 @@ pub async fn catch_up_replica(ctx: &ActivityCtx, input: &CatchUpReplicaInput) ->
 			ctx.udb()?
 				.run(|tx| {
 					let entry = entry.clone();
-					async move {
-						crate::replica::changelog::apply_entry(&*tx, replica_id, entry).await
-					}
+					async move { crate::replica::changelog::apply_entry(&*tx, replica_id, entry).await }
 				})
 				.custom_instrument(tracing::info_span!("apply_changelog_entry_tx"))
 				.await?;

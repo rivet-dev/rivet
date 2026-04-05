@@ -3,7 +3,9 @@ use epoxy_protocol::protocol::ReplicaId;
 use gas::prelude::*;
 use universaldb::utils::{FormalKey, IsolationLevel::Serializable};
 
-use crate::keys::{self, CommittedValue, KvOptimisticCacheKey, KvValueKey, LegacyCommittedValueKey};
+use crate::keys::{
+	self, CommittedValue, KvOptimisticCacheKey, KvValueKey, LegacyCommittedValueKey,
+};
 
 #[derive(Debug)]
 pub(crate) struct LocalValueRead {

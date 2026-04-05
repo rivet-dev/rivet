@@ -137,7 +137,9 @@ async fn v1_snapshot_dual_read_mutate_and_backfill() {
 		// -- Phase 4: Run backfill and verify migration --
 
 		let workflow_id = ctx
-			.workflow(epoxy::workflows::backfill::Input { chunk_size: Some(10) })
+			.workflow(epoxy::workflows::backfill::Input {
+				chunk_size: Some(10),
+			})
 			.tag("replica", replica_id)
 			.dispatch()
 			.await
@@ -207,19 +209,17 @@ async fn v1_snapshot_dual_read_mutate_and_backfill() {
 		// The backfilled keys are immutable (version 0, mutable=false). A same-
 		// value re-proposal should be idempotent. A new-value proposal should
 		// be rejected since the v2 committed value now exists.
-		let result =
-			propose_local(ctx, replica_id, b"actor:def456", b"stopped", false)
-				.await
-				.unwrap();
+		let result = propose_local(ctx, replica_id, b"actor:def456", b"stopped", false)
+			.await
+			.unwrap();
 		assert!(
 			matches!(result, ProposalResult::Committed),
 			"replica {replica_id}: idempotent proposal on backfilled key should succeed: {result:?}",
 		);
 
-		let result =
-			propose_local(ctx, replica_id, b"actor:def456", b"changed", false)
-				.await
-				.unwrap();
+		let result = propose_local(ctx, replica_id, b"actor:def456", b"changed", false)
+			.await
+			.unwrap();
 		assert!(
 			matches!(
 				result,

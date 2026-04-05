@@ -165,4 +165,3 @@ pub struct QueryInvalidCborInput {
 pub struct QueryInvalidPercentEncoding {
 	pub name: String,
 }
-
