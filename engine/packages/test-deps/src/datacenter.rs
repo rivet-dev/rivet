@@ -1,4 +1,5 @@
-use anyhow::*;
+use anyhow::Result;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::TestDeps;
@@ -9,7 +10,7 @@ use rivet_test_deps_docker::{TestDatabase, TestPubSub};
 pub async fn setup_single_datacenter(
 	test_id: Uuid,
 	dc_label: u16,
-	datacenters: Vec<rivet_config::config::topology::Datacenter>,
+	datacenters: HashMap<String, rivet_config::config::topology::Datacenter>,
 	api_peer_port: u16,
 	guard_port: u16,
 ) -> Result<TestDeps> {
@@ -18,8 +19,9 @@ pub async fn setup_single_datacenter(
 
 	let dc = datacenters
 		.iter()
-		.find(|x| x.datacenter_label == dc_label)
+		.find(|(_, x)| x.datacenter_label == dc_label)
 		.expect("invalid dc label")
+		.1
 		.clone();
 
 	tracing::info!(
@@ -79,7 +81,7 @@ pub async fn setup_single_datacenter(
 
 	root.topology = Some(rivet_config::config::topology::Topology {
 		datacenter_label: dc.datacenter_label,
-		datacenters,
+		datacenters: rivet_config::config::topology::DatacentersRepr::Map(datacenters),
 	});
 
 	root.guard = Some(rivet_config::config::guard::Guard {

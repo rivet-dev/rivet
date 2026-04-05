@@ -39,7 +39,13 @@ pub async fn delete(
 async fn delete_inner(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result<DeleteResponse> {
 	ctx.auth().await?;
 
-	let dcs = ctx.config().topology().datacenters.clone();
+	let dcs = ctx
+		.config()
+		.topology()
+		.datacenters
+		.iter()
+		.cloned()
+		.collect::<Vec<_>>();
 	futures_util::stream::iter(dcs)
 		.map(|dc| {
 			let ctx = ctx.clone();
