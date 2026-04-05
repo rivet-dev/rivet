@@ -12,6 +12,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.join("sdks")
 		.join("schemas")
 		.join("epoxy-protocol");
+	let latest_schema = schema_dir.join("v2.bare");
+
+	if !latest_schema.exists() {
+		return Err(format!("missing latest epoxy schema: {}", latest_schema.display()).into());
+	}
+
+	println!("cargo:rerun-if-changed={}", latest_schema.display());
 
 	let cfg = vbare_compiler::Config::with_hashable_map();
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)

@@ -1,89 +1,88 @@
 use anyhow::Result;
 use epoxy_protocol::protocol;
-use universaldb::Transaction;
-use universaldb::utils::{FormalKey, IsolationLevel::*};
+use universaldb::{Transaction, utils::IsolationLevel::Serializable};
 
-use crate::{keys, replica::ballot};
+use crate::{
+	keys::{self, KvAcceptedKey, KvBallotKey, KvValueKey},
+	replica::ballot::Ballot,
+};
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip_all, fields(%replica_id, key = ?prepare_req.key))]
 pub async fn prepare(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,
 	prepare_req: protocol::PrepareRequest,
 ) -> Result<protocol::PrepareResponse> {
-	tracing::debug!(?replica_id, "handling prepare message");
+	let tx = tx.with_subspace(keys::subspace(replica_id));
+	let protocol::PrepareRequest {
+		key,
+		ballot,
+		mutable,
+		version,
+	} = prepare_req;
 
-	let protocol::PrepareRequest { ballot, instance } = prepare_req;
+	let value_key = KvValueKey::new(key.clone());
+	let ballot_key = KvBallotKey::new(key.clone());
+	let accepted_key = KvAcceptedKey::new(key);
+	let request_ballot = Ballot::from(ballot.clone());
 
-	tracing::debug!(?ballot, ?instance, "processing prepare request");
+	let (committed_value, current_ballot, accepted_value) = tokio::try_join!(
+		tx.read_opt(&value_key, Serializable),
+		tx.read_opt(&ballot_key, Serializable),
+		tx.read_opt(&accepted_key, Serializable),
+	)?;
 
-	// Look up the current log entry for this instance
-	let subspace = keys::subspace(replica_id);
-	let log_key = keys::replica::LogEntryKey::new(instance.replica_id, instance.slot_id);
-
-	let current_entry = match tx.get(&subspace.pack(&log_key), Serializable).await? {
-		Some(bytes) => {
-			// Deserialize the existing log entry
-			Some(log_key.deserialize(&bytes)?)
+	if let Some(committed_value) = committed_value {
+		if !committed_value.mutable || !mutable || version <= committed_value.version {
+			return Ok(protocol::PrepareResponse::PrepareResponseAlreadyCommitted(
+				protocol::PrepareResponseAlreadyCommitted {
+					value: committed_value.value,
+				},
+			));
 		}
-		None => None,
-	};
+	}
 
-	// EPaxos Step 38: Validate ballot for this instance
-	let validation =
-		ballot::validate_and_update_ballot_for_instance(tx, replica_id, &ballot, &instance).await?;
-	let response = if validation.is_valid {
-		// EPaxos Step 39: Reply PrepareOK with current log entry data
-		match current_entry {
-			Some(entry) => protocol::PrepareResponse::PrepareOk(protocol::PrepareOk {
-				data: Some(protocol::PrepareResponseData {
-					commands: entry.commands,
-					seq: entry.seq,
-					deps: entry.deps,
-					state: entry.state,
-					ballot: entry.ballot.clone(),
+	if let Some(current_ballot) = current_ballot.map(Ballot::from) {
+		// Equal-ballot Prepare is idempotent. This allows a proposer that has already
+		// reserved a ballot locally to include itself in the prepare quorum.
+		if request_ballot < current_ballot {
+			return Ok(protocol::PrepareResponse::PrepareResponseHigherBallot(
+				protocol::PrepareResponseHigherBallot {
+					ballot: current_ballot.into(),
+				},
+			));
+		}
+	}
+
+	// Promise not to accept lower ballots by persisting the request ballot.
+	// After this write, highest_ballot == request.ballot by construction.
+	tx.write(&ballot_key, ballot.clone())?;
+
+	let (accepted_value, accepted_ballot) = match accepted_value {
+		Some(accepted_value) => {
+			let crate::keys::KvAcceptedValue {
+				value,
+				ballot,
+				version,
+				mutable,
+			} = accepted_value;
+			(
+				Some(protocol::CommittedValue {
+					value,
+					version,
+					mutable,
 				}),
-				previous_ballot: entry.ballot,
-				instance,
-			}),
-			None => {
-				// No existing entry
-				let default_ballot = protocol::Ballot {
-					epoch: 0,
-					ballot: 0,
-					replica_id: instance.replica_id,
-				};
-
-				protocol::PrepareResponse::PrepareOk(protocol::PrepareOk {
-					data: None,
-					previous_ballot: default_ballot,
-					instance,
-				})
-			}
+				Some(ballot),
+			)
 		}
-	} else {
-		// EPaxos Step 40: Ballot validation failed
-		// EPaxos Step 41: Reply NACK with highest ballot stored for this instance
-		let instance_ballot_key =
-			keys::replica::InstanceBallotKey::new(instance.replica_id, instance.slot_id);
-		let subspace = keys::subspace(replica_id);
-		let packed_key = subspace.pack(&instance_ballot_key);
-
-		let highest_ballot = match tx.get(&packed_key, Serializable).await? {
-			Some(bytes) => instance_ballot_key.deserialize(&bytes)?,
-			None => {
-				// Default ballot for the original replica
-				protocol::Ballot {
-					epoch: 0,
-					ballot: 0,
-					replica_id: instance.replica_id,
-				}
-			}
-		};
-
-		protocol::PrepareResponse::PrepareNack(protocol::PrepareNack { highest_ballot })
+		None => (None, None),
 	};
 
-	tracing::debug!(?response, "prepare response generated");
-	Ok(response)
+	Ok(protocol::PrepareResponse::PrepareResponseOk(
+		protocol::PrepareResponseOk {
+			highest_ballot: ballot,
+			accepted_value,
+			accepted_ballot,
+		},
+	))
 }

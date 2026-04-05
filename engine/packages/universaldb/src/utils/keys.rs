@@ -95,7 +95,7 @@ define_keys! {
 	(67, ALL, "all"),
 	(68, BY_NAME_AND_KEY, "by_name_and_key"),
 	(69, DESTROY_TS, "destroy_ts"),
-	(70, EPOXY, "epoxy"),
+	(70, EPOXY_V1, "epoxy"),
 	(71, PEER_STATE, "peer_state"),
 	(72, ACTOR_KV, "actor_kv"),
 	(73, STOP_TS, "stop_ts"),
@@ -145,4 +145,9 @@ define_keys! {
 	(117, POOL_NAME, "pool_name"),
 	(118, SLOTS, "slots"),
 	(119, ENVOY_LOAD_BALANCER_IDX, "envoy_load_balancer_idx"),
+	(120, BALLOT, "ballot"),
+	(121, ACCEPTED, "accepted"),
+	(122, CACHE, "cache"),
+	(123, CHANGELOG, "changelog"),
+	(124, EPOXY_V2, "epoxy_v2"),
 }

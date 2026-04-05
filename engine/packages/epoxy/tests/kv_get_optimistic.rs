@@ -1,179 +1,275 @@
 mod common;
 
+use common::{
+	DEFAULT_REPLICA_IDS, THREE_REPLICAS, TestCtx,
+	utils::{
+		get_local, read_cache_committed_value, read_cache_value, read_v2_value, set_if_absent,
+		set_mutable, write_cache_committed_value, write_legacy_value, write_v2_committed_value,
+		write_v2_value,
+	},
+};
 use epoxy::ops::propose::ProposalResult;
-use epoxy_protocol::protocol;
-use gas::prelude::*;
+use epoxy_protocol::protocol::{CachingBehavior, ReplicaId};
 
-use common::{DEFAULT_REPLICA_IDS, THREE_REPLICAS, TestCtx, utils::execute_command};
+static TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_get_optimistic_local() {
-	let test_ctx = TestCtx::new_with(THREE_REPLICAS).await.unwrap();
-	let replica_id = test_ctx.leader_id;
-	let ctx = test_ctx.get_ctx(replica_id);
+async fn optimistic_get(
+	ctx: &gas::prelude::TestCtx,
+	replica_id: ReplicaId,
+	key: &[u8],
+) -> Option<Vec<u8>> {
+	get_with_behavior(ctx, replica_id, key, CachingBehavior::Optimistic).await
+}
 
-	let key = b"test_optimistic_local";
-	let value = b"local_value";
-
-	// Set value locally
-	let result = execute_command(
-		ctx,
-		protocol::CommandKind::SetCommand(protocol::SetCommand {
-			key: key.to_vec(),
-			value: Some(value.to_vec()),
-		}),
-		true, // Wait for propagation to ensure value is committed
-	)
+async fn get_with_behavior(
+	ctx: &gas::prelude::TestCtx,
+	replica_id: ReplicaId,
+	key: &[u8],
+	caching_behavior: CachingBehavior,
+) -> Option<Vec<u8>> {
+	ctx.op(epoxy::ops::kv::get_optimistic::Input {
+		replica_id,
+		key: key.to_vec(),
+		caching_behavior,
+	})
 	.await
-	.unwrap();
-	assert!(matches!(result, ProposalResult::Committed));
-
-	let output = ctx
-		.op(epoxy::ops::kv::get_optimistic::Input {
-			replica_id,
-			key: key.to_vec(),
-		})
-		.await
-		.unwrap();
-	assert_eq!(output.value, Some(value.to_vec()));
+	.unwrap()
+	.value
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_kv_get_optimistic_remote() {
-	// Create test context with multiple replicas
-	let test_ctx = TestCtx::new_with(THREE_REPLICAS).await.unwrap();
+async fn test_kv_get_optimistic_paths() {
+	let _guard = TEST_LOCK.lock().await;
+	{
+		let mut test_ctx = TestCtx::new_with(THREE_REPLICAS).await.unwrap();
+		let replica_id = test_ctx.leader_id;
+		let ctx = test_ctx.get_ctx(replica_id);
+		let key = b"test-optimistic-local";
+		let value = b"local-value";
 
-	// Use replica 1 to write data
-	let writer_replica_id = THREE_REPLICAS[0];
-	let writer_ctx = test_ctx.get_ctx(writer_replica_id);
+		let result = set_if_absent(ctx, key, value).await.unwrap();
+		assert!(matches!(result, ProposalResult::Committed));
+		assert_eq!(optimistic_get(ctx, replica_id, key).await, Some(value.to_vec()));
 
-	// Use replica 2 to read (simulating remote DC fetch)
-	let reader_replica_id = THREE_REPLICAS[1];
-	let reader_ctx = test_ctx.get_ctx(reader_replica_id);
+		test_ctx.shutdown().await.unwrap();
+	}
 
-	let key = b"test_optimistic_remote";
-	let value = b"remote_value";
+	{
+		let mut test_ctx = TestCtx::new().await.unwrap();
+		let writer_replica_id = DEFAULT_REPLICA_IDS[0];
+		let reader_replica_id = DEFAULT_REPLICA_IDS[1];
 
-	// Set value on replica 1
-	let result = execute_command(
-		writer_ctx,
-		protocol::CommandKind::SetCommand(protocol::SetCommand {
-			key: key.to_vec(),
-			value: Some(value.to_vec()),
-		}),
-		true, // Wait for propagation
-	)
-	.await
-	.unwrap();
-	assert!(matches!(result, ProposalResult::Committed));
+		assert_eq!(
+			optimistic_get(
+				test_ctx.get_ctx(reader_replica_id),
+				reader_replica_id,
+				b"nonexistent-key",
+			)
+			.await,
+			None,
+		);
 
-	let output = reader_ctx
-		.op(epoxy::ops::kv::get_optimistic::Input {
-			replica_id: reader_replica_id,
-			key: key.to_vec(),
-		})
+		let remote_key = b"test-optimistic-remote";
+		let remote_value = b"remote-value";
+		write_v2_value(
+			test_ctx.get_ctx(writer_replica_id),
+			writer_replica_id,
+			remote_key,
+			remote_value,
+		)
 		.await
 		.unwrap();
-	assert_eq!(output.value, Some(value.to_vec()));
+		assert_eq!(
+			read_v2_value(
+				test_ctx.get_ctx(reader_replica_id),
+				reader_replica_id,
+				remote_key,
+			)
+			.await
+			.unwrap(),
+			None,
+		);
 
-	// Second read from replica 2 - should now be cached
-	let output2 = reader_ctx
-		.op(epoxy::ops::kv::get_optimistic::Input {
-			replica_id: reader_replica_id,
-			key: key.to_vec(),
-		})
+		assert_eq!(
+			optimistic_get(
+				test_ctx.get_ctx(reader_replica_id),
+				reader_replica_id,
+				remote_key,
+			)
+			.await,
+			Some(remote_value.to_vec()),
+		);
+		assert_eq!(
+			read_cache_value(
+				test_ctx.get_ctx(reader_replica_id),
+				reader_replica_id,
+				remote_key,
+			)
+			.await
+			.unwrap(),
+			Some(remote_value.to_vec()),
+		);
+
+		test_ctx.stop_replica(writer_replica_id, false).await.unwrap();
+		assert_eq!(
+			optimistic_get(
+				test_ctx.get_ctx(reader_replica_id),
+				reader_replica_id,
+				remote_key,
+			)
+			.await,
+			Some(remote_value.to_vec()),
+		);
+
+		let fallback_key = b"test-optimistic-v1-fallback";
+		let fallback_value = b"legacy-value";
+		write_legacy_value(
+			test_ctx.get_ctx(reader_replica_id),
+			reader_replica_id,
+			fallback_key,
+			fallback_value,
+		)
 		.await
 		.unwrap();
-	assert_eq!(output2.value, Some(value.to_vec()));
-}
+		assert_eq!(
+			read_v2_value(
+				test_ctx.get_ctx(reader_replica_id),
+				reader_replica_id,
+				fallback_key,
+			)
+			.await
+			.unwrap(),
+			None,
+		);
+		assert_eq!(
+			get_local(
+				test_ctx.get_ctx(reader_replica_id),
+				reader_replica_id,
+				fallback_key,
+			)
+			.await
+			.unwrap(),
+			Some(fallback_value.to_vec()),
+		);
+		assert_eq!(
+			optimistic_get(
+				test_ctx.get_ctx(reader_replica_id),
+				reader_replica_id,
+				fallback_key,
+			)
+			.await,
+			Some(fallback_value.to_vec()),
+		);
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_get_optimistic_not_found() {
-	let test_ctx = TestCtx::new().await.unwrap();
-	let replica_id = DEFAULT_REPLICA_IDS[0];
-	let ctx = test_ctx.get_ctx(replica_id);
+		test_ctx.shutdown().await.unwrap();
+	}
 
-	let key = b"nonexistent_key";
+	{
+		let mut test_ctx = TestCtx::new().await.unwrap();
+		let writer_replica_id = DEFAULT_REPLICA_IDS[0];
+		let reader_replica_id = DEFAULT_REPLICA_IDS[1];
+		let key = b"skip-cache-key";
 
-	// Read a key that doesn't exist
-	let output = ctx
-		.op(epoxy::ops::kv::get_optimistic::Input {
-			replica_id,
-			key: key.to_vec(),
-		})
+		write_v2_committed_value(
+			test_ctx.get_ctx(writer_replica_id),
+			writer_replica_id,
+			key,
+			epoxy::keys::CommittedValue {
+				value: b"remote-value".to_vec(),
+				version: 2,
+				mutable: true,
+			},
+		)
 		.await
 		.unwrap();
-	assert_eq!(output.value, None);
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_get_optimistic_cache_persistence() {
-	// Create test context with multiple replicas
-	let test_ctx = TestCtx::new().await.unwrap();
-
-	let writer_replica_id = DEFAULT_REPLICA_IDS[0];
-	let writer_ctx = test_ctx.get_ctx(writer_replica_id);
-
-	let reader_replica_id = DEFAULT_REPLICA_IDS[1];
-	let reader_ctx = test_ctx.get_ctx(reader_replica_id);
-
-	let key = b"test_cache_persistence";
-	let initial_value = b"initial";
-	let updated_value = b"updated";
-
-	// Set initial value on replica 1
-	let result = execute_command(
-		writer_ctx,
-		protocol::CommandKind::SetCommand(protocol::SetCommand {
-			key: key.to_vec(),
-			value: Some(initial_value.to_vec()),
-		}),
-		true,
-	)
-	.await
-	.unwrap();
-	assert!(matches!(result, ProposalResult::Committed));
-
-	// Wait for propagation
-	tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-	// Read from replica 2 - this will cache the initial value
-	let output = reader_ctx
-		.op(epoxy::ops::kv::get_optimistic::Input {
-			replica_id: reader_replica_id,
-			key: key.to_vec(),
-		})
-		.await
-		.unwrap();
-	assert_eq!(output.value, Some(initial_value.to_vec()));
-
-	// Update value on replica 1
-	let result = execute_command(
-		writer_ctx,
-		protocol::CommandKind::SetCommand(protocol::SetCommand {
-			key: key.to_vec(),
-			value: Some(updated_value.to_vec()),
-		}),
-		true,
-	)
-	.await
-	.unwrap();
-	assert!(matches!(result, ProposalResult::Committed));
-
-	// Wait for propagation
-	tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-	// Read from replica 2 again
-	// Since the value has been propagated to replica 2, it will now find it locally
-	// and return the updated value (not from cache)
-	let output2 = reader_ctx
-		.op(epoxy::ops::kv::get_optimistic::Input {
-			replica_id: reader_replica_id,
-			key: key.to_vec(),
-		})
+		write_cache_committed_value(
+			test_ctx.get_ctx(reader_replica_id),
+			reader_replica_id,
+			key,
+			epoxy::keys::CommittedValue {
+				value: b"stale-cache".to_vec(),
+				version: 1,
+				mutable: true,
+			},
+		)
 		.await
 		.unwrap();
 
-	// The value should be updated since it's now available locally on replica 2
-	assert_eq!(output2.value, Some(updated_value.to_vec()));
+		assert_eq!(
+			get_with_behavior(
+				test_ctx.get_ctx(reader_replica_id),
+				reader_replica_id,
+				key,
+				CachingBehavior::SkipCache,
+			)
+			.await,
+			Some(b"remote-value".to_vec()),
+		);
+		assert_eq!(
+			read_cache_committed_value(
+				test_ctx.get_ctx(reader_replica_id),
+				reader_replica_id,
+				key,
+			)
+			.await
+			.unwrap(),
+			Some(epoxy::keys::CommittedValue {
+				value: b"stale-cache".to_vec(),
+				version: 1,
+				mutable: true,
+			}),
+		);
+
+		test_ctx.shutdown().await.unwrap();
+	}
+
+	{
+		let mut test_ctx = TestCtx::new().await.unwrap();
+		let leader_replica_id = DEFAULT_REPLICA_IDS[0];
+		let follower_replica_id = DEFAULT_REPLICA_IDS[1];
+		let leader_ctx = test_ctx.get_ctx(leader_replica_id);
+		let follower_ctx = test_ctx.get_ctx(follower_replica_id);
+		let key = b"mutable-cache-purge";
+
+		assert!(matches!(
+			set_mutable(leader_ctx, key, b"value1").await.unwrap(),
+			ProposalResult::Committed
+		));
+		write_cache_committed_value(
+			follower_ctx,
+			follower_replica_id,
+			key,
+			epoxy::keys::CommittedValue {
+				value: b"value1".to_vec(),
+				version: 1,
+				mutable: true,
+			},
+		)
+		.await
+		.unwrap();
+
+		assert!(matches!(
+			set_mutable(leader_ctx, key, b"value2").await.unwrap(),
+			ProposalResult::Committed
+		));
+
+		for _ in 0..20 {
+			if read_cache_value(follower_ctx, follower_replica_id, key)
+				.await
+				.unwrap()
+				.is_none()
+				&& read_v2_value(follower_ctx, follower_replica_id, key)
+					.await
+					.unwrap()
+					== Some(b"value2".to_vec())
+			{
+				test_ctx.shutdown().await.unwrap();
+				return;
+			}
+
+			tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+		}
+
+		panic!("mutable commit did not clear follower cache and replicate the new value");
+	}
 }

@@ -1,6 +1,6 @@
 # Actor Key Reservation
 
-Epoxy is used to globally store which datacenter an actor lives in for a given actor ID.
+Epoxy uses per-key Paxos to globally store which datacenter an actor key resolves to.
 
 ## Schema
 
@@ -12,8 +12,8 @@ The reservation ID includes the datacenter of where the actor lives.
 
 Actors have 2 touch points with Epoxy:
 
-- Reserve actor key (epaxos fast path = 1 RTT, epaxos slow path = 2 RTT)
-- Resolve actor ID for key (fast path = 0 RTT, slow path = 1 RTT to nearest DC that has the key)
+- Reserve actor key. Fresh keys use the per-key Paxos fast path in 1 RTT. If contention or recovery forces `Prepare`, the retry path is `Prepare -> PreAccept -> Commit`, which adds another round and makes a failed-then-retried write 3 RTT total.
+- Resolve actor ID for key. Hot reads are local. Cache misses use one best-effort fanout round to the nearest datacenter that has the key.
 
 Resolving actor ID uses `kv_get_optimistic`, which assumes a value does not change after being set. This allows us to cache the actor's datacenter locally and never have to read from other nodes once we've resolved it once.
 
@@ -98,4 +98,3 @@ _This section needs more elaboration on edge cases._
 ## Current Limitation: Keys are tied to a datacenter
 
 Because we cannot change the value of the reservation ID, actors can only be created in the original for a given ID.
-

@@ -2,14 +2,20 @@ use anyhow::*;
 use epoxy_protocol::protocol::{self, ReplicaId};
 use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
-use universaldb::utils::{FormalKey, IsolationLevel::*};
 
-use crate::{http_client, keys, utils};
+use crate::{
+	http_client,
+	keys::{self, CommittedValue},
+	utils,
+};
+
+use super::read_value;
 
 #[derive(Debug)]
 pub struct Input {
 	pub replica_id: ReplicaId,
 	pub key: Vec<u8>,
+	pub caching_behavior: protocol::CachingBehavior,
 }
 
 #[derive(Debug)]
@@ -26,64 +32,41 @@ pub struct Output {
 /// WARNING: This will incorrectly return `None` in the rare case that all of the nodes that have
 /// committed the value are offline.
 ///
-/// This only reads committed values (from the COMMITTED_VALUE keyspace) and cached values (from
-/// the OPTIMISTIC_CACHED_VALUE keyspace, which caches committed values from remote datacenters).
-/// Values are only written to COMMITTED_VALUE after the EPaxos commit phase, so all values
-/// returned have achieved consensus.
+/// This reads committed values from the v2 `kv/{key}/value` path, falls back to the legacy
+/// `kv/{key}/committed_value` and legacy `kv/{key}/value` paths, then checks the v2
+/// `kv/{key}/cache` path for remote values.
 ///
 /// This works by:
-/// 1. Attempt to read committed value locally
-/// 2. If not locally, check the optimistic cache
-/// 3. If not in cache, reach out to any datacenter, then cache & return the first datacenter that has a value
+/// 1. Attempt to read the v2 committed value locally
+/// 2. If not found, fall back to the legacy committed-value path
+/// 3. If still not found, fall back to the legacy value path
+/// 4. If still not found, check the v2 optimistic cache
+/// 5. If not in cache, reach out to any datacenter, then cache and return the first datacenter that has a value
 ///
 /// This means that if the value changes, the value will be inconsistent across all datacenters --
 /// even if it has a quorum.
 ///
-/// We cannot use quorum reads for the fanout read because of the constraints of Epaxos.
+/// We cannot use quorum reads for the fanout read because the optimistic path is intentionally a
+/// best-effort lookup.
 #[operation]
 pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Result<Output> {
-	// Try to read locally
-	let kv_key = keys::keys::KvValueKey::new(input.key.clone());
-	let cache_key = keys::keys::KvOptimisticCacheKey::new(input.key.clone());
-	let subspace = keys::subspace(input.replica_id);
-	let packed_key = subspace.pack(&kv_key);
-	let packed_cache_key = subspace.pack(&cache_key);
+	let local_read = read_value::read_local_value(
+		ctx,
+		input.replica_id,
+		input.key.clone(),
+		input.caching_behavior == protocol::CachingBehavior::Optimistic,
+	)
+	.await?;
+	if local_read.value.is_some() {
+		return Ok(Output {
+			value: local_read.value.map(|value| value.value),
+		});
+	}
 
-	let value = ctx
-		.udb()?
-		.run(|tx| {
-			let packed_key = packed_key.clone();
-			let packed_cache_key = packed_cache_key.clone();
-			let kv_key = kv_key.clone();
-			let cache_key = cache_key.clone();
-			async move {
-				let (value, cache_value) = tokio::try_join!(
-					async {
-						let v = tx.get(&packed_key, Serializable).await?;
-						if let Some(ref bytes) = v {
-							Ok(Some(kv_key.deserialize(bytes)?))
-						} else {
-							Ok(None)
-						}
-					},
-					async {
-						let v = tx.get(&packed_cache_key, Serializable).await?;
-						if let Some(ref bytes) = v {
-							Ok(Some(cache_key.deserialize(bytes)?))
-						} else {
-							Ok(None)
-						}
-					}
-				)?;
-
-				Ok(value.or(cache_value))
-			}
-		})
-		.custom_instrument(tracing::info_span!("get_optimistic_tx"))
-		.await?;
-
-	if value.is_some() {
-		return Ok(Output { value });
+	if let Some(value) = local_read.cache_value {
+		return Ok(Output {
+			value: Some(value.value),
+		});
 	}
 
 	// Request fanout to other datacenters, return first datacenter with any non-none value
@@ -111,7 +94,10 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 				let request = protocol::Request {
 					from_replica_id,
 					to_replica_id: replica_id,
-					kind: protocol::RequestKind::KvGetRequest(protocol::KvGetRequest { key }),
+					kind: protocol::RequestKind::KvGetRequest(protocol::KvGetRequest {
+						key,
+						caching_behavior: input.caching_behavior.clone(),
+					}),
 				};
 
 				// Send the message and extract the KV response
@@ -130,26 +116,79 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 
 	for response in responses {
 		if let Some(value) = response {
-			// Cache value
-			ctx.udb()?
-				.run(|tx| {
-					let packed_cache_key = packed_cache_key.clone();
-					let cache_key = cache_key.clone();
-					let value_to_cache = value.clone();
+			let value = CommittedValue {
+				value: value.value,
+				version: value.version,
+				mutable: value.mutable,
+			};
 
-					async move {
-						let serialized = cache_key.serialize(value_to_cache)?;
-						tx.set(&packed_cache_key, &serialized);
-						Ok(())
-					}
-				})
-				.custom_instrument(tracing::info_span!("cache_value_tx"))
+			if input.caching_behavior == protocol::CachingBehavior::Optimistic {
+				cache_fanout_value(
+					ctx,
+					input.replica_id,
+					input.key.clone(),
+					value.clone(),
+				)
 				.await?;
+			}
 
-			return Ok(Output { value: Some(value) });
+			return Ok(Output {
+				value: Some(value.value),
+			});
 		}
 	}
 
 	// No value found in any datacenter
 	Ok(Output { value: None })
+}
+
+async fn cache_fanout_value(
+	ctx: &OperationCtx,
+	replica_id: ReplicaId,
+	key: Vec<u8>,
+	value_to_cache: CommittedValue,
+) -> Result<()> {
+	ctx.udb()?
+		.run(|tx| {
+			let value_to_cache = value_to_cache.clone();
+			let key = key.clone();
+
+			async move {
+				let tx = tx.with_subspace(keys::subspace(replica_id));
+				let committed_key = keys::KvValueKey::new(key);
+				let cache_key = keys::KvOptimisticCacheKey::new(committed_key.key().to_vec());
+
+				// Skip caching if a committed value exists with an equal or newer version.
+				// This covers the race where a commit lands between the fanout read and
+				// the cache write.
+				if let Some(committed_value) = tx
+					.read_opt(&committed_key, universaldb::utils::IsolationLevel::Serializable)
+					.await?
+				{
+					if committed_value.version >= value_to_cache.version {
+						return Ok(());
+					}
+				}
+
+				// Skip caching if the existing cache entry is strictly newer. This
+				// prevents a slow fanout response from overwriting a fresher cache entry
+				// written by a concurrent request.
+				if let Some(existing_cache) = tx
+					.read_opt(
+						&cache_key,
+						universaldb::utils::IsolationLevel::Serializable,
+					)
+					.await?
+				{
+					if existing_cache.version > value_to_cache.version {
+						return Ok(());
+					}
+				}
+
+				tx.write(&cache_key, value_to_cache)?;
+				Ok(())
+			}
+		})
+		.custom_instrument(tracing::info_span!("cache_value_tx"))
+		.await
 }

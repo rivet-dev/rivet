@@ -2,15 +2,13 @@ use anyhow::{Context, Result, bail};
 use epoxy_protocol::{
 	PROTOCOL_VERSION,
 	protocol::{self, ReplicaId},
-	versioned,
 };
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
 use std::future::Future;
-use vbare::OwnedVersionedData;
 
-use crate::{metrics, utils};
+use crate::utils;
 
 /// Find the API replica URL for a given replica ID in the topology
 fn find_replica_address(
@@ -88,17 +86,6 @@ where
 		}
 	}
 
-	metrics::QUORUM_ATTEMPTS_TOTAL
-		.with_label_values(&[
-			quorum_type.to_string().as_str(),
-			if successful_responses.len() == target_responses {
-				"ok"
-			} else {
-				"insufficient_responses"
-			},
-		])
-		.inc();
-
 	Ok(successful_responses)
 }
 
@@ -112,10 +99,51 @@ pub async fn send_message(
 	send_message_to_address(ctx, replica_url, request).await
 }
 
+#[tracing::instrument(skip_all, fields(%from_replica_id, %to_replica_id, count))]
+pub async fn read_changelog(
+	ctx: &ApiCtx,
+	config: &protocol::ClusterConfig,
+	from_replica_id: ReplicaId,
+	to_replica_id: ReplicaId,
+	after_versionstamp: Option<Vec<u8>>,
+	count: u64,
+) -> Result<protocol::ChangelogReadResponse> {
+	let replica_url = find_replica_address(config, to_replica_id)?;
+	let response = send_request_to_address(
+		ctx,
+		replica_url,
+		"changelog-read",
+		protocol::Request {
+			from_replica_id,
+			to_replica_id,
+			kind: protocol::RequestKind::ChangelogReadRequest(protocol::ChangelogReadRequest {
+				after_versionstamp,
+				count,
+			}),
+		},
+	)
+	.await?;
+
+	match response.kind {
+		protocol::ResponseKind::ChangelogReadResponse(response) => Ok(response),
+		_ => bail!("unexpected response type for changelog read request"),
+	}
+}
+
 #[tracing::instrument(skip_all, fields(%replica_url))]
 pub async fn send_message_to_address(
 	ctx: &ApiCtx,
 	replica_url: String,
+	request: protocol::Request,
+) -> Result<protocol::Response> {
+	send_request_to_address(ctx, replica_url, "message", request).await
+}
+
+#[tracing::instrument(skip_all, fields(%replica_url, endpoint))]
+async fn send_request_to_address(
+	ctx: &ApiCtx,
+	replica_url: String,
+	endpoint: &'static str,
 	request: protocol::Request,
 ) -> Result<protocol::Response> {
 	let from_replica_id = request.from_replica_id;
@@ -131,7 +159,7 @@ pub async fn send_message_to_address(
 	}
 
 	let mut replica_url = url::Url::parse(&replica_url)?;
-	replica_url.set_path(&format!("/v{PROTOCOL_VERSION}/epoxy/message"));
+	replica_url.set_path(&format!("/v{PROTOCOL_VERSION}/epoxy/{endpoint}"));
 
 	tracing::debug!(
 		to_replica = to_replica_id,
@@ -142,9 +170,7 @@ pub async fn send_message_to_address(
 	let client = rivet_pools::reqwest::client().await?;
 
 	// Create the request
-	let request = versioned::Request::wrap_latest(request)
-		.serialize()
-		.context("failed to serialize epoxy request")?;
+	let request = serde_bare::to_vec(&request).context("failed to serialize epoxy request")?;
 
 	// Send the request
 	let response_result = client
@@ -188,7 +214,7 @@ pub async fn send_message_to_address(
 	}
 
 	let body = response.bytes().await?;
-	let response_body = versioned::Response::deserialize(&body)?;
+	let response_body = serde_bare::from_slice(&body)?;
 
 	tracing::debug!(
 		to_replica = to_replica_id,
