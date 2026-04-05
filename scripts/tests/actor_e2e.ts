@@ -30,6 +30,7 @@ async function main() {
 
 		// Make a request to the actor
 		console.log("Making request to actor...");
+		console.log(new Date().toISOString());
 		console.time("ping 1");
 		const actorPingResponse = await fetch(`${RIVET_ENDPOINT}/ping`, {
 			method: "GET",
@@ -40,6 +41,7 @@ async function main() {
 			},
 		});
 		console.timeEnd("ping 1");
+		console.log(new Date().toISOString());
 
 		const pingResult = await actorPingResponse.text();
 

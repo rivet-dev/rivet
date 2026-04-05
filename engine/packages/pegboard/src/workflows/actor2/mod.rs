@@ -823,6 +823,89 @@ async fn process_signal(
 				}
 			}
 		}
+		Main::Sleep(_) => {
+			match &mut state.transition {
+				Transition::Allocating { .. }
+				| Transition::Starting { .. }
+				| Transition::GoingAway { .. } => {
+					// TODO: Set to sleep after allocation is complete
+				}
+				Transition::Running { envoy, .. } => {
+					let envoy_key = envoy.envoy_key.clone();
+					let now = ctx.activity(runtime::GetTsInput {}).await?;
+
+					// Transition to sleep intent
+					state.transition = Transition::SleepIntent {
+						envoy: std::mem::take(envoy),
+						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
+						rewake_after_stop: false,
+					};
+
+					ctx.activity(runtime::SetSleepingInput {}).await?;
+
+					ctx.activity(runtime::InsertAndSendCommandsInput {
+						generation: state.generation,
+						envoy_key,
+						commands: vec![protocol::Command::CommandStopActor(
+							protocol::CommandStopActor {
+								reason: protocol::StopActorReason::SleepIntent,
+							},
+						)],
+					})
+					.await?;
+				}
+				Transition::Reallocating { .. } => {
+					// Stop reallocating
+					state.transition = Transition::Sleeping;
+				}
+				Transition::SleepIntent { .. }
+				| Transition::StopIntent { .. }
+				| Transition::Sleeping
+				| Transition::Destroying { .. } => {}
+			}
+		}
+		Main::Reallocate(_) => {
+			match &mut state.transition {
+				Transition::Running { envoy, .. } => {
+					let now = ctx.activity(runtime::GetTsInput {}).await?;
+					let envoy_key = envoy.envoy_key.clone();
+
+					// Transition to going away
+					state.transition = Transition::GoingAway {
+						envoy: std::mem::take(envoy),
+						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
+					};
+
+					ctx.activity(runtime::InsertAndSendCommandsInput {
+						generation: state.generation,
+						envoy_key,
+						commands: vec![protocol::Command::CommandStopActor(
+							protocol::CommandStopActor {
+								reason: protocol::StopActorReason::GoingAway,
+							},
+						)],
+					})
+					.await?;
+				}
+				Transition::SleepIntent { envoy, .. } | Transition::StopIntent { envoy, .. } => {
+					let now = ctx.activity(runtime::GetTsInput {}).await?;
+
+					state.transition = Transition::GoingAway {
+						envoy: std::mem::take(envoy),
+						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
+					};
+
+					// Stop command was already sent
+				}
+				Transition::Allocating { .. }
+				| Transition::Starting { .. }
+				| Transition::Sleeping
+				| Transition::Reallocating { .. } => {
+					// Do nothing, already mid allocation
+				}
+				Transition::GoingAway { .. } | Transition::Destroying { .. } => {}
+			}
+		}
 		Main::Lost(sig) => {
 			// Ignore signals for previous generations
 			if sig.generation != state.generation {
@@ -1118,6 +1201,12 @@ pub struct Events {
 #[signal("pegboard_actor2_wake")]
 pub struct Wake {}
 
+#[signal("pegboard_actor2_sleep")]
+pub struct Sleep {}
+
+#[signal("pegboard_actor2_reallocate")]
+pub struct Reallocate {}
+
 /// Ack response from outbound req handler service.
 #[signal("pegboard_actor2_allocated")]
 pub struct Allocated {
@@ -1161,6 +1250,8 @@ join_signal!(Main {
 	Allocated,
 	Events,
 	Wake,
+	Sleep,
+	Reallocate,
 	Lost,
 	GoingAway,
 	Destroy,

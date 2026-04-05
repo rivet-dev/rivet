@@ -96,6 +96,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 	res
 }
 
+#[tracing::instrument(skip_all)]
 async fn inner(ctx: &StandaloneCtx, conns: &mut Vec<OutboundHandler>) -> Result<()> {
 	let mut sub = ctx
 		.ups()?
@@ -136,16 +137,20 @@ struct OutboundHandler {
 impl OutboundHandler {
 	fn new(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Self {
 		let ctx = ctx.clone();
-		let handle = tokio::spawn(async move {
-			if let Err(err) = handle(&ctx, packet).await {
-				tracing::error!(?err, "outbound handler failed");
+		let handle = tokio::spawn(
+			async move {
+				if let Err(err) = handle(&ctx, packet).await {
+					tracing::error!(?err, "outbound handler failed");
+				}
 			}
-		});
+			.instrument(tracing::info_span!("outbound_handle_task")),
+		);
 
 		OutboundHandler { handle }
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()> {
 	let (namespace_id, pool_name, checkpoint, actor_config) = match packet {
 		protocol::ToOutbound::ToOutboundActorStart(protocol::ToOutboundActorStart {
@@ -246,6 +251,7 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 	res
 }
 
+#[tracing::instrument(skip_all)]
 async fn serverless_outbound_req(
 	ctx: &StandaloneCtx,
 	namespace_id: Id,
@@ -295,18 +301,24 @@ async fn serverless_outbound_req(
 
 	let endpoint_url = format!("{}/start", url.trim_end_matches('/'));
 
-	tracing::debug!(%endpoint_url, "sending outbound req");
-
 	let client = rivet_pools::reqwest::client_no_timeout().await?;
-	let req = client.post(endpoint_url).body(payload).headers(headers);
-
+	let req = client
+		.post(endpoint_url.clone())
+		.body(payload)
+		.headers(headers);
 	let mut source = sse::EventSource::new(req).context("failed creating event source")?;
 
+	tracing::debug!(%endpoint_url, "sending outbound req");
+
 	let stream_handler = async {
+		tracing::debug!(%endpoint_url, "stream handler future");
+
 		while let Some(event) = source.next().await {
 			match event {
 				Ok(event) => match event {
-					sse::Event::Open => {}
+					sse::Event::Open => {
+						tracing::debug!(%endpoint_url, "sse stream opened");
+					}
 					sse::Event::Message(msg) => match msg.event.as_str() {
 						"ping" => {}
 						event => {
@@ -421,7 +433,7 @@ async fn serverless_outbound_req(
 			}
 
 			return res;
-		},
+		}
 		_ = tokio::time::sleep(sleep_until_drain) => {}
 		_ = term_signal.recv() => {}
 	}
@@ -453,6 +465,7 @@ async fn serverless_outbound_req(
 }
 
 /// Report an error to the error tracker workflow.
+#[tracing::instrument(skip_all)]
 async fn report_error(
 	ctx: &StandaloneCtx,
 	namespace_id: Id,

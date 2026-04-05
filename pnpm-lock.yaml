@@ -272,6 +272,9 @@ importers:
         specifier: ^8.18.3
         version: 8.19.0
     devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.3.11
       '@types/node':
         specifier: ^22.18.1
         version: 22.19.15
@@ -1509,9 +1512,6 @@ importers:
 
   examples/hono:
     dependencies:
-      '@hono/node-server':
-        specifier: ^1.19.12
-        version: 1.19.12(hono@4.11.9)
       hono:
         specifier: ^4.7.0
         version: 4.11.9
@@ -2614,7 +2614,7 @@ importers:
         version: 4.3.19(react@19.1.0)(zod@3.25.76)
       drizzle-orm:
         specifier: ^0.44.2
-        version: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.0(@types/react@19.2.13))(kysely@0.28.8)(pg@8.17.2)(sql.js@1.13.0)
+        version: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.8)(pg@8.17.2)(sql.js@1.13.0)
       fdb-tuple:
         specifier: ^1.0.0
         version: 1.0.0
@@ -2785,7 +2785,7 @@ importers:
         version: 4.3.19(react@19.1.0)(zod@3.25.76)
       drizzle-orm:
         specifier: ^0.44.2
-        version: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.0(@types/react@19.2.13))(kysely@0.28.8)(pg@8.17.2)(sql.js@1.13.0)
+        version: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.8)(pg@8.17.2)(sql.js@1.13.0)
       fdb-tuple:
         specifier: ^1.0.0
         version: 1.0.0
@@ -2938,7 +2938,7 @@ importers:
         version: 0.31.5
       drizzle-orm:
         specifier: ^0.44.2
-        version: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.0(@types/react@19.2.13))(kysely@0.28.8)(pg@8.17.2)(sql.js@1.13.0)
+        version: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.8)(pg@8.17.2)(sql.js@1.13.0)
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -4270,7 +4270,7 @@ importers:
         version: 4.0.9
       drizzle-orm:
         specifier: ^0.44.2
-        version: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.0(@types/react@19.2.13))(kysely@0.28.8)(pg@8.17.2)(sql.js@1.13.0)
+        version: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.8)(pg@8.17.2)(sql.js@1.13.0)
       eventsource:
         specifier: ^4.0.0
         version: 4.0.0
@@ -4787,7 +4787,7 @@ importers:
         version: 19.2.13
       drizzle-orm:
         specifier: ^0.38.0
-        version: 0.38.4(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/react@19.2.13)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.0(@types/react@19.2.13))(kysely@0.28.8)(pg@8.17.2)(react@19.1.0)(sql.js@1.13.0)
+        version: 0.38.4(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/react@19.2.13)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.8)(pg@8.17.2)(react@19.1.0)(sql.js@1.13.0)
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -5970,6 +5970,7 @@ packages:
   '@copilotkit/llmock@1.6.0':
     resolution: {integrity: sha512-wq4J7ampjoEiOi6v2d7GMK5lTZcTnuhMduSPCIwmyxBTCPA3lekXyNKGJ4t3xM5OgoJReMQ5KmlfrMBVTRNGsA==}
     engines: {node: '>=20.15.0'}
+    deprecated: This package has moved to @copilotkit/aimock
     hasBin: true
 
   '@cspotcode/source-map-support@0.8.1':
@@ -7263,12 +7264,6 @@ packages:
 
   '@hono/node-server@1.14.2':
     resolution: {integrity: sha512-GHjpOeHYbr9d1vkID2sNUYkl5IxumyhDrUJB7wBp7jvqYwPFt+oNKsAPBRcdSbV7kIrXhouLE199ks1QcK4r7A==}
-    engines: {node: '>=18.14.1'}
-    peerDependencies:
-      hono: ^4
-
-  '@hono/node-server@1.19.12':
-    resolution: {integrity: sha512-txsUW4SQ1iilgE0l9/e9VQWmELXifEFvmdA1j6WFh/aFPj99hIntrSsq/if0UWyGVkmrRPKA1wCeP+UCr1B9Uw==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: ^4
@@ -10617,6 +10612,9 @@ packages:
   '@types/better-sqlite3@7.6.13':
     resolution: {integrity: sha512-NMv9ASNARoKksWtsq/SHakpYAYnhBrQgGD8zkLYk/jaK8jUGn08CfEdTRgYhMypUQAfzSP8W6gNLe0q19/t4VA==}
 
+  '@types/bun@1.3.11':
+    resolution: {integrity: sha512-5vPne5QvtpjGpsGYXiFyycfpDF2ECyPcTSsFBMa0fraoxiQyMJ3SmuQIGhzPg2WJuWxVBoxWJ2kClYTcw/4fAg==}
+
   '@types/canvas-confetti@1.9.0':
     resolution: {integrity: sha512-aBGj/dULrimR1XDZLtG9JwxX1b4HPRF6CX9Yfwh3NvstZEm1ZL7RBnel4keCPSqs1ANRu1u2Aoz9R+VmtjYuTg==}
 
@@ -11919,10 +11917,8 @@ packages:
   builtin-status-codes@3.0.0:
     resolution: {integrity: sha512-HpGFw18DgFWlncDfjTa2rcQ4W88O1mC8e8yZ2AvQY5KDaktSTwo+KRf6nHK6FRI5FyRyb/5T6+TSxfP7QyGsmQ==}
 
-  bun-types@1.3.0:
-    resolution: {integrity: sha512-u8X0thhx+yJ0KmkxuEo9HAtdfgCBaM/aI9K90VQcQioAmkVp3SG3FkwWGibUFz3WdXAdcsqOcbU40lK7tbHdkQ==}
-    peerDependencies:
-      '@types/react': ^19
+  bun-types@1.3.11:
+    resolution: {integrity: sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg==}
 
   bundle-name@4.1.0:
     resolution: {integrity: sha512-tjwM5exMg6BGRI+kNmTntNsvdZS1X8BFYS6tnJ2hdH0kVxM6/eVZ2xy+FqStSWvYmtfFMDLIxurorHwDKfDz5Q==}
@@ -22221,10 +22217,6 @@ snapshots:
     dependencies:
       hono: 4.11.9
 
-  '@hono/node-server@1.19.12(hono@4.11.9)':
-    dependencies:
-      hono: 4.11.9
-
   '@hono/node-server@1.19.9(hono@4.11.9)':
     dependencies:
       hono: 4.11.9
@@ -26616,6 +26608,10 @@ snapshots:
       '@types/node': 22.19.15
     optional: true
 
+  '@types/bun@1.3.11':
+    dependencies:
+      bun-types: 1.3.11
+
   '@types/canvas-confetti@1.9.0': {}
 
   '@types/chai@5.2.3':
@@ -28459,11 +28455,9 @@ snapshots:
 
   builtin-status-codes@3.0.0: {}
 
-  bun-types@1.3.0(@types/react@19.2.13):
+  bun-types@1.3.11:
     dependencies:
       '@types/node': 22.19.15
-      '@types/react': 19.2.13
-    optional: true
 
   bundle-name@4.1.0:
     dependencies:
@@ -29515,7 +29509,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.38.4(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/react@19.2.13)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.0(@types/react@19.2.13))(kysely@0.28.8)(pg@8.17.2)(react@19.1.0)(sql.js@1.13.0):
+  drizzle-orm@0.38.4(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/react@19.2.13)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.8)(pg@8.17.2)(react@19.1.0)(sql.js@1.13.0):
     optionalDependencies:
       '@cloudflare/workers-types': 4.20251014.0
       '@opentelemetry/api': 1.9.0
@@ -29524,13 +29518,13 @@ snapshots:
       '@types/react': 19.2.13
       '@types/sql.js': 1.4.9
       better-sqlite3: 12.8.0
-      bun-types: 1.3.0(@types/react@19.2.13)
+      bun-types: 1.3.11
       kysely: 0.28.8
       pg: 8.17.2
       react: 19.1.0
       sql.js: 1.13.0
 
-  drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.0(@types/react@19.2.13))(kysely@0.28.8)(pg@8.17.2)(sql.js@1.13.0):
+  drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.8)(pg@8.17.2)(sql.js@1.13.0):
     optionalDependencies:
       '@cloudflare/workers-types': 4.20251014.0
       '@opentelemetry/api': 1.9.0
@@ -29538,7 +29532,7 @@ snapshots:
       '@types/pg': 8.16.0
       '@types/sql.js': 1.4.9
       better-sqlite3: 12.8.0
-      bun-types: 1.3.0(@types/react@19.2.13)
+      bun-types: 1.3.11
       kysely: 0.28.8
       pg: 8.17.2
       sql.js: 1.13.0

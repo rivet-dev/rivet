@@ -244,7 +244,8 @@ impl PegboardGateway2 {
 			}
 
 			Err(ServiceUnavailable.build())
-		};
+		}
+		.instrument(tracing::info_span!("wait_for_tunnel_response"));
 		let response_start_timeout = Duration::from_millis(
 			self.ctx
 				.config()
@@ -864,6 +865,7 @@ impl PegboardGateway2 {
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn hibernate_ws(ws_rx: Arc<Mutex<WebSocketReceiver>>) -> Result<HibernationResult> {
 	let mut guard = ws_rx.lock().await;
 	let mut pinned = std::pin::Pin::new(&mut *guard);
@@ -888,6 +890,7 @@ async fn hibernate_ws(ws_rx: Arc<Mutex<WebSocketReceiver>>) -> Result<Hibernatio
 	}
 }
 
+#[derive(Debug)]
 enum Metric {
 	HttpIngress(usize),
 	HttpEgress(usize),
@@ -899,6 +902,7 @@ enum Metric {
 	WebsocketStopHibernate,
 }
 
+#[tracing::instrument(skip_all, fields(?actor_id, ?metric))]
 async fn record_req_metrics(
 	ctx: &StandaloneCtx,
 	actor_id: Id,
@@ -918,6 +922,7 @@ async fn record_req_metrics(
 
 			Ok(())
 		})
+		.instrument(tracing::info_span!("record_req_metrics_tx"))
 		.await?;
 
 	Ok(())

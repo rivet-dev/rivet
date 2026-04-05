@@ -1,11 +1,10 @@
-import { inspect } from "node:util";
 import {
-	type Level,
 	type LevelWithSilent,
 	type Logger,
 	pino,
 	stdTimeFunctions,
 } from "pino";
+import { castToLogValue, formatTimestamp, stringify } from "./logfmt";
 
 export type { Logger } from "pino";
 
@@ -38,9 +37,9 @@ function customWrite(level: string, o: any) {
 	const entries: any = {};
 
 	// Add timestamp if enabled
-	if (process.env["LOG_TIMESTAMP"] === "1" && o.time) {
+	if (process.env["LOG_TIMESTAMP"] !== "0" && o.time) {
 		const date = typeof o.time === "number" ? new Date(o.time) : new Date();
-		entries.ts = date;
+		entries.ts = formatTimestamp(date);
 	}
 
 	// Add level
@@ -66,15 +65,11 @@ function customWrite(level: string, o: any) {
 			key !== "pid" &&
 			key !== "hostname"
 		) {
-			entries[key] = value;
+			entries[key] = castToLogValue(value);
 		}
 	}
 
-	const output = inspect(entries, {
-		compact: true,
-		breakLength: Infinity,
-		colors: true,
-	});
+	const output = stringify(entries);
 	console.log(output);
 }
 
@@ -94,7 +89,7 @@ export async function configureDefaultLogger(): Promise<void> {
 			},
 		},
 		timestamp:
-			process.env["LOG_TIMESTAMP"] === "1"
+			process.env["LOG_TIMESTAMP"] !== "0"
 				? stdTimeFunctions.epochTime
 				: false,
 		browser: {
@@ -121,7 +116,7 @@ export async function configureDefaultLogger(): Promise<void> {
 				};
 				const levelName = levelMap[level] || "info";
 				const time =
-					process.env["LOG_TIMESTAMP"] === "1"
+					process.env["LOG_TIMESTAMP"] !== "0"
 						? Date.now()
 						: undefined;
 				// TODO: This can be simplified in logfmt.ts

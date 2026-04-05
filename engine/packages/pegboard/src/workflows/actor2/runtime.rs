@@ -396,21 +396,21 @@ pub async fn reschedule_actor(
 	if let Some(allocation) = allocate_res.allocation {
 		state.generation += 1;
 
-		let now = ctx.activity(GetTsInput {}).await?;
-
 		match &allocation {
 			Allocation::Serverless => {
 				// Transition to allocating
 				state.transition = Transition::Allocating {
 					destroy_after_start: false,
-					lost_timeout_ts: now + ctx.config().pegboard().actor_allocation_threshold(),
+					lost_timeout_ts: allocate_res.now
+						+ ctx.config().pegboard().actor_allocation_threshold(),
 				};
 			}
 			Allocation::Serverful { .. } => {
 				// Transition to starting
 				state.transition = Transition::Starting {
 					destroy_after_start: false,
-					lost_timeout_ts: now + ctx.config().pegboard().actor_start_threshold(),
+					lost_timeout_ts: allocate_res.now
+						+ ctx.config().pegboard().actor_start_threshold(),
 				};
 			}
 		}
