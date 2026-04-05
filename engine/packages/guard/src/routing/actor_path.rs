@@ -115,7 +115,11 @@ pub fn parse_actor_path(path: &str) -> Result<Option<ParsedActorPath>> {
 		Some(q) => format!("?{q}"),
 		None => String::new(),
 	};
-	Ok(parse_direct_actor_path(base_path, &segments, &raw_query_string))
+	Ok(parse_direct_actor_path(
+		base_path,
+		&segments,
+		&raw_query_string,
+	))
 }
 
 fn parse_direct_actor_path(
@@ -143,10 +147,7 @@ fn parse_direct_actor_path(
 		let token = urlencoding::decode(raw_token).ok()?.into_owned();
 		(actor_id, Some(token))
 	} else {
-		(
-			urlencoding::decode(actor_segment).ok()?.into_owned(),
-			None,
-		)
+		(urlencoding::decode(actor_segment).ok()?.into_owned(), None)
 	};
 
 	let remaining_path = build_remaining_path(base_path, raw_query_string, 2);
@@ -252,13 +253,11 @@ fn build_actor_query(name: &str, rvt: RvtParams) -> Result<QueryActorQuery> {
 			})
 		}
 		"getOrCreate" => {
-			let runner_name = rvt.runner.ok_or_else(|| errors::QueryMissingRunnerName.build())?;
+			let runner_name = rvt
+				.runner
+				.ok_or_else(|| errors::QueryMissingRunnerName.build())?;
 
-			let input = rvt
-				.input
-				.as_deref()
-				.map(decode_query_input)
-				.transpose()?;
+			let input = rvt.input.as_deref().map(decode_query_input).transpose()?;
 
 			let crash_policy = rvt
 				.crash_policy

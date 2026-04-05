@@ -7,7 +7,8 @@ use universaldb::{
 	KeySelector, RangeOption,
 	options::StreamingMode,
 	utils::{
-		FormalKey, IsolationLevel::Serializable,
+		FormalKey,
+		IsolationLevel::Serializable,
 		keys::{COMMITTED_VALUE, KV, VALUE},
 	},
 };
@@ -76,7 +77,10 @@ pub struct BackfillChunkOutput {
 }
 
 #[activity(BackfillChunk)]
-pub async fn backfill_chunk(ctx: &ActivityCtx, input: &BackfillChunkInput) -> Result<BackfillChunkOutput> {
+pub async fn backfill_chunk(
+	ctx: &ActivityCtx,
+	input: &BackfillChunkInput,
+) -> Result<BackfillChunkOutput> {
 	let replica_id = ctx.config().epoxy_replica_id();
 
 	ctx.udb()?
@@ -180,11 +184,9 @@ async fn migrate_legacy_key(
 	legacy_value: Option<Vec<u8>>,
 	legacy_committed_value: Option<Vec<u8>>,
 ) -> Result<bool> {
-	let Some(committed_value) = build_legacy_committed_value(
-		key.clone(),
-		legacy_value,
-		legacy_committed_value,
-	)? else {
+	let Some(committed_value) =
+		build_legacy_committed_value(key.clone(), legacy_value, legacy_committed_value)?
+	else {
 		return Ok(false);
 	};
 

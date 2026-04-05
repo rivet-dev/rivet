@@ -24,7 +24,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::protocol::{
 	decode_to_client, encode_to_server, ErrorResponse, RequestData, ResponseData, ToClient,
-	ToServer, ToServerPong, ToServerRequest, PROTOCOL_VERSION,
+	ToRivet, ToRivetPong, ToRivetRequest, PROTOCOL_VERSION,
 };
 
 // MARK: Constants
@@ -324,7 +324,7 @@ impl KvChannel {
 		};
 
 		// Serialize the message.
-		let msg = ToServer::ToServerRequest(ToServerRequest {
+		let msg = ToRivet::ToRivetRequest(ToRivetRequest {
 			request_id,
 			actor_id: actor_id.to_string(),
 			data,
@@ -483,7 +483,7 @@ async fn connection_loop(inner: Arc<Inner>, mut shutdown_rx: watch::Receiver<boo
 						ready.insert(actor_id.clone(), tx);
 						req_ids.insert(next_id, actor_id.clone());
 
-						let msg = ToServer::ToServerRequest(ToServerRequest {
+						let msg = ToRivet::ToRivetRequest(ToRivetRequest {
 							request_id: next_id,
 							actor_id: actor_id.clone(),
 							data: RequestData::ActorOpenRequest,
@@ -652,7 +652,7 @@ async fn run_connection<S, W>(
 							Ok(ToClient::ToClientPing(ping)) => {
 								// Respond with pong echoing the timestamp.
 								let pong =
-									ToServer::ToServerPong(ToServerPong { ts: ping.ts });
+									ToRivet::ToRivetPong(ToRivetPong { ts: ping.ts });
 								if let Ok(bytes) = encode_to_server(&pong) {
 									let tx_guard = inner.outgoing_tx.lock().await;
 									if let Some(tx) = tx_guard.as_ref() {

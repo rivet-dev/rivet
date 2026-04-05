@@ -11,7 +11,7 @@ use super::{
 	SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_ACTOR, WS_PROTOCOL_TOKEN, X_RIVET_TOKEN,
 	actor_path::ParsedActorPath,
 };
-use crate::{errors, shared_state::SharedState};
+use crate::{errors, routing::actor_path::parse_actor_path, shared_state::SharedState};
 use resolve_actor_query::resolve_query_actor_id;
 
 const ACTOR_FORCE_WAKE_PENDING_TIMEOUT: i64 = util::duration::seconds(60);
@@ -30,9 +30,14 @@ pub async fn route_request_path_based(
 	ctx: &StandaloneCtx,
 	shared_state: &SharedState,
 	req_ctx: &RequestContext,
-	actor_path: &ParsedActorPath,
 ) -> Result<Option<RoutingOutput>> {
-	let resolved_route = resolve_path_based_route(ctx, req_ctx, actor_path).await?;
+	let Some(actor_path) = parse_actor_path(req_ctx.path())? else {
+		return Ok(None);
+	};
+
+	tracing::debug!(?actor_path, "routing using path-based actor routing");
+
+	let resolved_route = resolve_path_based_route(ctx, req_ctx, &actor_path).await?;
 
 	route_request_inner(
 		ctx,
@@ -43,6 +48,7 @@ pub async fn route_request_path_based(
 		resolved_route.token.as_deref(),
 	)
 	.await
+	.map(Some)
 }
 
 /// Route requests to actor services based on headers
@@ -121,7 +127,9 @@ pub async fn route_request(
 	// Find actor to route to
 	let actor_id = Id::parse(&actor_id_str).context("invalid x-rivet-actor header")?;
 
-	route_request_inner(ctx, shared_state, req_ctx, actor_id, req_ctx.path(), token).await
+	route_request_inner(ctx, shared_state, req_ctx, actor_id, req_ctx.path(), token)
+		.await
+		.map(Some)
 }
 
 #[derive(Debug)]
@@ -197,7 +205,7 @@ async fn route_request_inner(
 	actor_id: Id,
 	stripped_path: &str,
 	_token: Option<&str>,
-) -> Result<Option<RoutingOutput>> {
+) -> Result<RoutingOutput> {
 	// NOTE: Token validation implemented in EE
 
 	// Route to peer dc where the actor lives
@@ -209,7 +217,7 @@ async fn route_request_inner(
 			.dc_for_label(actor_id.label())
 			.context("dc with the given label not found")?;
 
-		return Ok(Some(RoutingOutput::Route(RouteConfig {
+		return Ok(RoutingOutput::Route(RouteConfig {
 			targets: vec![RouteTarget {
 				host: peer_dc
 					.proxy_url_host()
@@ -220,7 +228,7 @@ async fn route_request_inner(
 					.context("bad peer dc proxy url port")?,
 				path: req_ctx.path().to_owned(),
 			}],
-		})));
+		}));
 	}
 
 	// Create subs before checking if actor exists/is not destroyed
@@ -278,7 +286,6 @@ async fn route_request_inner(
 				destroy_sub2,
 			)
 			.await
-			.map(Some)
 		}
 		1 => {
 			handle_actor_v1(
@@ -298,7 +305,6 @@ async fn route_request_inner(
 				destroy_sub2,
 			)
 			.await
-			.map(Some)
 		}
 		_ => bail!("unknown actor version"),
 	}

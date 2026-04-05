@@ -104,11 +104,9 @@ async fn run_scenario(scenario: &dyn scenarios::Scenario) -> Result<()> {
 
 	// Clean previous snapshot if it exists.
 	if scenario_dir.exists() {
-		std::fs::remove_dir_all(&scenario_dir)
-			.context("failed to remove old snapshot")?;
+		std::fs::remove_dir_all(&scenario_dir).context("failed to remove old snapshot")?;
 	}
-	std::fs::create_dir_all(&scenario_dir)
-		.context("failed to create snapshot directory")?;
+	std::fs::create_dir_all(&scenario_dir).context("failed to create snapshot directory")?;
 
 	// Build the cluster.
 	let replica_ids: Vec<u64> = (1..=scenario.replica_count() as u64).collect();

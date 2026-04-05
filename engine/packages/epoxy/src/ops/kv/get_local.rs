@@ -19,14 +19,10 @@ pub struct Output {
 
 #[operation]
 pub async fn epoxy_kv_get_local(ctx: &OperationCtx, input: &Input) -> Result<Output> {
-	let committed_value = read_value::read_local_value(
-		ctx,
-		input.replica_id,
-		input.key.clone(),
-		false,
-	)
-	.await?
-	.value;
+	let committed_value =
+		read_value::read_local_value(ctx, input.replica_id, input.key.clone(), false)
+			.await?
+			.value;
 
 	Ok(Output {
 		value: committed_value.as_ref().map(|value| value.value.clone()),

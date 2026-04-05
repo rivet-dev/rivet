@@ -41,11 +41,19 @@ pub async fn pegboard_actor_get_for_runner(
 				tx.exists(&connectable_key, Serializable),
 			)?;
 
-			let (Some(workflow_id), Some(namespace_id), Some(runner_id)) = (workflow_id, namespace_id, runner_id_entry) else {
+			let (Some(workflow_id), Some(namespace_id), Some(runner_id)) =
+				(workflow_id, namespace_id, runner_id_entry)
+			else {
 				return Ok(None);
 			};
 
-			Ok(Some((workflow_id, name_entry, namespace_id, runner_id, is_connectable)))
+			Ok(Some((
+				workflow_id,
+				name_entry,
+				namespace_id,
+				runner_id,
+				is_connectable,
+			)))
 		})
 		.custom_instrument(tracing::info_span!("actor_get_for_runner_tx"))
 		.await?;

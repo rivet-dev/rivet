@@ -49,7 +49,10 @@ async fn test_kv_get_optimistic_paths() {
 
 		let result = set_if_absent(ctx, key, value).await.unwrap();
 		assert!(matches!(result, ProposalResult::Committed));
-		assert_eq!(optimistic_get(ctx, replica_id, key).await, Some(value.to_vec()));
+		assert_eq!(
+			optimistic_get(ctx, replica_id, key).await,
+			Some(value.to_vec())
+		);
 
 		test_ctx.shutdown().await.unwrap();
 	}
@@ -110,7 +113,10 @@ async fn test_kv_get_optimistic_paths() {
 			Some(remote_value.to_vec()),
 		);
 
-		test_ctx.stop_replica(writer_replica_id, false).await.unwrap();
+		test_ctx
+			.stop_replica(writer_replica_id, false)
+			.await
+			.unwrap();
 		assert_eq!(
 			optimistic_get(
 				test_ctx.get_ctx(reader_replica_id),
@@ -257,11 +263,9 @@ async fn test_kv_get_optimistic_paths() {
 			if read_cache_value(follower_ctx, follower_replica_id, key)
 				.await
 				.unwrap()
-				.is_none()
-				&& read_v2_value(follower_ctx, follower_replica_id, key)
-					.await
-					.unwrap()
-					== Some(b"value2".to_vec())
+				.is_none() && read_v2_value(follower_ctx, follower_replica_id, key)
+				.await
+				.unwrap() == Some(b"value2".to_vec())
 			{
 				test_ctx.shutdown().await.unwrap();
 				return;

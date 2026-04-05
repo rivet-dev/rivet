@@ -279,15 +279,18 @@ impl TestCtx {
 		for &other_replica_id in &replica_ids {
 			let metadata = &self.replica_metadata[&other_replica_id];
 			let name = format!("dc-{}", other_replica_id);
-			datacenters.insert(name.clone(), rivet_config::config::topology::Datacenter {
-				name: format!("dc-{}", other_replica_id),
-				datacenter_label: other_replica_id as u16,
-				is_leader: other_replica_id == self.leader_id,
-				peer_url: Url::parse(&format!("http://127.0.0.1:{}", metadata.api_peer_port))?,
-				public_url: Url::parse(&format!("http://127.0.0.1:{}", metadata.guard_port))?,
-				proxy_url: None,
-				valid_hosts: None,
-			});
+			datacenters.insert(
+				name.clone(),
+				rivet_config::config::topology::Datacenter {
+					name: format!("dc-{}", other_replica_id),
+					datacenter_label: other_replica_id as u16,
+					is_leader: other_replica_id == self.leader_id,
+					peer_url: Url::parse(&format!("http://127.0.0.1:{}", metadata.api_peer_port))?,
+					public_url: Url::parse(&format!("http://127.0.0.1:{}", metadata.guard_port))?,
+					proxy_url: None,
+					valid_hosts: None,
+				},
+			);
 		}
 
 		Ok(datacenters)

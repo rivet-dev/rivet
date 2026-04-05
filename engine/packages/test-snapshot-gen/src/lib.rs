@@ -21,10 +21,7 @@ pub fn snapshot_dir(scenario: &str) -> PathBuf {
 ///
 /// Returns a map of `replica_id -> temp_path` where each temp_path is a
 /// copy of that replica's RocksDB data directory.
-pub fn load_snapshot(
-	scenario: &str,
-	test_id: uuid::Uuid,
-) -> Result<HashMap<ReplicaId, PathBuf>> {
+pub fn load_snapshot(scenario: &str, test_id: uuid::Uuid) -> Result<HashMap<ReplicaId, PathBuf>> {
 	let dir = snapshot_dir(scenario);
 	load_snapshot_from(&dir, test_id)
 }
@@ -128,8 +125,7 @@ impl SnapshotTestCtx {
 		for &replica_id in &replica_ids {
 			let api_peer_port =
 				portpicker::pick_unused_port().context("failed to pick API peer port")?;
-			let guard_port =
-				portpicker::pick_unused_port().context("failed to pick guard port")?;
+			let guard_port = portpicker::pick_unused_port().context("failed to pick guard port")?;
 			ctx.replica_metadata.insert(
 				replica_id,
 				ReplicaMetadata {
@@ -224,7 +220,9 @@ impl SnapshotTestCtx {
 		)
 		.await?;
 
-		let reg = epoxy::registry()?;
+		let reg = epoxy::registry()?
+			.merge(namespace::registry()?)?
+			.merge(pegboard::registry()?)?;
 		let test_ctx = WorkflowTestCtx::new_with_deps(reg, test_deps).await?;
 
 		let api_handle = setup_api_server(
@@ -269,14 +267,8 @@ impl SnapshotTestCtx {
 					name: format!("dc-{}", id),
 					datacenter_label: id as u16,
 					is_leader: id == self.leader_id,
-					peer_url: Url::parse(&format!(
-						"http://127.0.0.1:{}",
-						metadata.api_peer_port
-					))?,
-					public_url: Url::parse(&format!(
-						"http://127.0.0.1:{}",
-						metadata.guard_port
-					))?,
+					peer_url: Url::parse(&format!("http://127.0.0.1:{}", metadata.api_peer_port))?,
+					public_url: Url::parse(&format!("http://127.0.0.1:{}", metadata.guard_port))?,
 					proxy_url: None,
 					valid_hosts: None,
 				},

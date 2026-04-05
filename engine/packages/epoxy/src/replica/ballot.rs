@@ -65,7 +65,9 @@ pub enum BallotSelection {
 		value: CommittedValue,
 		ballot: Ballot,
 	},
-	NeedsPrepare { ballot: Ballot },
+	NeedsPrepare {
+		ballot: Ballot,
+	},
 	FreshBallot(Ballot),
 }
 
@@ -88,12 +90,7 @@ pub async fn ballot_selection(
 	let packed_legacy_v2_value_key = legacy_subspace.pack(&legacy_v2_value_key);
 	let packed_ballot_key = subspace.pack(&ballot_key);
 
-	let (
-		committed_value,
-		legacy_committed_value,
-		legacy_v2_committed_value,
-		current_ballot,
-	) = tokio::try_join!(
+	let (committed_value, legacy_committed_value, legacy_v2_committed_value, current_ballot) = tokio::try_join!(
 		async {
 			let value = tx.get(&packed_value_key, Serializable).await?;
 			if let Some(bytes) = value {
@@ -136,9 +133,7 @@ pub async fn ballot_selection(
 				mutable: false,
 			})
 		})
-		.or_else(|| {
-			legacy_v2_committed_value
-		})
+		.or_else(|| legacy_v2_committed_value)
 	{
 		if !value.mutable || !mutable {
 			return Ok(BallotSelection::AlreadyCommitted(value.value));
@@ -150,10 +145,7 @@ pub async fn ballot_selection(
 			ballot_key,
 			current_ballot.unwrap_or_else(|| Ballot::zero(replica_id)),
 		)?;
-		return Ok(BallotSelection::AlreadyCommittedMutable {
-			value,
-			ballot,
-		});
+		return Ok(BallotSelection::AlreadyCommittedMutable { value, ballot });
 	}
 
 	let current_ballot = current_ballot.unwrap_or_else(|| Ballot::zero(replica_id));

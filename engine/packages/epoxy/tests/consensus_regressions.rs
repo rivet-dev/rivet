@@ -5,11 +5,9 @@ use common::{
 	THREE_REPLICAS, TestCtx,
 	utils::{read_accepted_value, read_v2_value, set_if_absent, write_ballot},
 };
-use epoxy::{
-	protocol::{
-		self, AcceptRequest, AcceptResponse, CommitRequest, CommitResponse, PrepareRequest,
-		PrepareResponse, Request, RequestKind, ResponseKind,
-	},
+use epoxy::protocol::{
+	self, AcceptRequest, AcceptResponse, CommitRequest, CommitResponse, PrepareRequest,
+	PrepareResponse, Request, RequestKind, ResponseKind,
 };
 use epoxy_protocol::PROTOCOL_VERSION;
 
@@ -34,11 +32,17 @@ async fn slow_path_recovery_uses_majority_quorum_after_prepare() {
 	.await
 	.unwrap();
 
-	test_ctx.stop_replica(THREE_REPLICAS[2], false).await.unwrap();
+	test_ctx
+		.stop_replica(THREE_REPLICAS[2], false)
+		.await
+		.unwrap();
 
 	let ctx = test_ctx.get_ctx(replica_id);
 	let result = set_if_absent(ctx, key, b"committed").await.unwrap();
-	assert!(matches!(result, epoxy::ops::propose::ProposalResult::Committed));
+	assert!(matches!(
+		result,
+		epoxy::ops::propose::ProposalResult::Committed
+	));
 	assert_eq!(
 		read_v2_value(ctx, replica_id, key).await.unwrap(),
 		Some(b"committed".to_vec()),
@@ -67,8 +71,8 @@ async fn equal_ballot_accepts_do_not_overwrite_accepted_state() {
 		b"value-1",
 		ballot.clone(),
 	)
-		.await
-		.unwrap();
+	.await
+	.unwrap();
 	assert!(matches!(
 		first_response,
 		AcceptResponse::AcceptResponseOk(_)
@@ -89,8 +93,8 @@ async fn equal_ballot_accepts_do_not_overwrite_accepted_state() {
 		b"value-2",
 		ballot.clone(),
 	)
-		.await
-		.unwrap();
+	.await
+	.unwrap();
 	assert!(matches!(
 		second_response,
 		AcceptResponse::AcceptResponseHigherBallot(_)

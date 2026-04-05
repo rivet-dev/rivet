@@ -41,8 +41,7 @@ impl TestCluster {
 		for &replica_id in replica_ids {
 			let api_peer_port =
 				portpicker::pick_unused_port().context("failed to pick API peer port")?;
-			let guard_port =
-				portpicker::pick_unused_port().context("failed to pick guard port")?;
+			let guard_port = portpicker::pick_unused_port().context("failed to pick guard port")?;
 			cluster.replica_metadata.insert(
 				replica_id,
 				ReplicaMetadata {
@@ -92,13 +91,6 @@ impl TestCluster {
 			.wf_ctx
 	}
 
-	pub fn replica_ids(&self) -> Vec<ReplicaId> {
-		let mut ids = self.replica_metadata.keys().copied().collect::<Vec<_>>();
-		ids.sort_unstable();
-		ids
-	}
-
-	#[allow(dead_code)]
 	pub fn leader_id(&self) -> ReplicaId {
 		self.leader_id
 	}
@@ -134,7 +126,9 @@ impl TestCluster {
 		)
 		.await?;
 
-		let reg = epoxy::registry()?;
+		let reg = epoxy::registry()?
+			.merge(namespace::registry()?)?
+			.merge(pegboard::registry()?)?;
 		let test_ctx = WorkflowTestCtx::new_with_deps(reg, test_deps).await?;
 
 		let api_handle = setup_api_server(
@@ -179,14 +173,8 @@ impl TestCluster {
 					name: format!("dc-{}", id),
 					datacenter_label: id as u16,
 					is_leader: id == self.leader_id,
-					peer_url: Url::parse(&format!(
-						"http://127.0.0.1:{}",
-						metadata.api_peer_port
-					))?,
-					public_url: Url::parse(&format!(
-						"http://127.0.0.1:{}",
-						metadata.guard_port
-					))?,
+					peer_url: Url::parse(&format!("http://127.0.0.1:{}", metadata.api_peer_port))?,
+					public_url: Url::parse(&format!("http://127.0.0.1:{}", metadata.guard_port))?,
 					proxy_url: None,
 					valid_hosts: None,
 				},

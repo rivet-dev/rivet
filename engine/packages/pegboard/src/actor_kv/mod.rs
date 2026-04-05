@@ -49,101 +49,108 @@ pub async fn get(
 	keys: Vec<ep::KvKey>,
 ) -> Result<(Vec<ep::KvKey>, Vec<ep::KvValue>, Vec<ep::KvMetadata>)> {
 	let start = std::time::Instant::now();
-metrics::ACTOR_KV_KEYS_PER_OP.with_label_values(&["get"]).observe(keys.len() as f64);
+	metrics::ACTOR_KV_KEYS_PER_OP
+		.with_label_values(&["get"])
+		.observe(keys.len() as f64);
 	validate_keys(&keys)?;
 
-	let result = db.run(|tx| {
-		let keys = keys.clone();
-		async move {
-			let tx = tx.with_subspace(keys::actor_kv::subspace(recipient.actor_id));
+	let result = db
+		.run(|tx| {
+			let keys = keys.clone();
+			async move {
+				let tx = tx.with_subspace(keys::actor_kv::subspace(recipient.actor_id));
 
-			let mut stream = futures_util::stream::iter(keys)
-				.map(|key| {
-					let key_subspace = keys::actor_kv::subspace(recipient.actor_id)
-						.subspace(&keys::actor_kv::KeyWrapper(key));
+				let mut stream = futures_util::stream::iter(keys)
+					.map(|key| {
+						let key_subspace = keys::actor_kv::subspace(recipient.actor_id)
+							.subspace(&keys::actor_kv::KeyWrapper(key));
 
-					// Get all sub keys in the key subspace
-					tx.get_ranges_keyvalues(
-						universaldb::RangeOption {
-							mode: universaldb::options::StreamingMode::WantAll,
-							..key_subspace.range().into()
-						},
-						Serializable,
-					)
-				})
-				.flatten();
+						// Get all sub keys in the key subspace
+						tx.get_ranges_keyvalues(
+							universaldb::RangeOption {
+								mode: universaldb::options::StreamingMode::WantAll,
+								..key_subspace.range().into()
+							},
+							Serializable,
+						)
+					})
+					.flatten();
 
-			let mut keys = Vec::new();
-			let mut values = Vec::new();
-			let mut metadata = Vec::new();
-			let mut total_size = 0;
-			let mut current_entry: Option<EntryBuilder> = None;
+				let mut keys = Vec::new();
+				let mut values = Vec::new();
+				let mut metadata = Vec::new();
+				let mut total_size = 0;
+				let mut current_entry: Option<EntryBuilder> = None;
 
-			loop {
-				let Some(entry) = stream.try_next().await? else {
-					break;
-				};
+				loop {
+					let Some(entry) = stream.try_next().await? else {
+						break;
+					};
 
-				total_size += entry.key().len() + entry.value().len();
+					total_size += entry.key().len() + entry.value().len();
 
-				let key = tx.unpack::<keys::actor_kv::EntryBaseKey>(&entry.key())?.key;
+					let key = tx.unpack::<keys::actor_kv::EntryBaseKey>(&entry.key())?.key;
 
-				let current_entry = if let Some(inner) = &mut current_entry {
-					if inner.key != key {
-						let (key, value, meta) =
-							std::mem::replace(inner, EntryBuilder::new(key)).build()?;
+					let current_entry = if let Some(inner) = &mut current_entry {
+						if inner.key != key {
+							let (key, value, meta) =
+								std::mem::replace(inner, EntryBuilder::new(key)).build()?;
 
-						keys.push(key);
-						values.push(value);
-						metadata.push(meta);
+							keys.push(key);
+							values.push(value);
+							metadata.push(meta);
+						}
+
+						inner
+					} else {
+						current_entry = Some(EntryBuilder::new(key));
+
+						current_entry.as_mut().expect("must be set")
+					};
+
+					if let Ok(chunk_key) =
+						tx.unpack::<keys::actor_kv::EntryValueChunkKey>(&entry.key())
+					{
+						current_entry.append_chunk(chunk_key.chunk, entry.value());
+					} else if let Ok(metadata_key) =
+						tx.unpack::<keys::actor_kv::EntryMetadataKey>(&entry.key())
+					{
+						let value = metadata_key.deserialize(entry.value())?;
+
+						current_entry.append_metadata(value);
+					} else {
+						bail!("unexpected sub key");
 					}
-
-					inner
-				} else {
-					current_entry = Some(EntryBuilder::new(key));
-
-					current_entry.as_mut().expect("must be set")
-				};
-
-				if let Ok(chunk_key) = tx.unpack::<keys::actor_kv::EntryValueChunkKey>(&entry.key())
-				{
-					current_entry.append_chunk(chunk_key.chunk, entry.value());
-				} else if let Ok(metadata_key) =
-					tx.unpack::<keys::actor_kv::EntryMetadataKey>(&entry.key())
-				{
-					let value = metadata_key.deserialize(entry.value())?;
-
-					current_entry.append_metadata(value);
-				} else {
-					bail!("unexpected sub key");
 				}
+
+				if let Some(inner) = current_entry {
+					let (key, value, meta) = inner.build()?;
+
+					keys.push(key);
+					values.push(value);
+					metadata.push(meta);
+				}
+
+				// Total read bytes (rounded up to nearest chunk)
+				let total_size_chunked = (total_size as u64)
+					.div_ceil(util::metric::KV_BILLABLE_CHUNK)
+					* util::metric::KV_BILLABLE_CHUNK;
+				namespace::keys::metric::inc(
+					&tx.with_subspace(namespace::keys::subspace()),
+					recipient.namespace_id,
+					namespace::keys::metric::Metric::KvRead(recipient.name.clone()),
+					total_size_chunked.try_into().unwrap_or_default(),
+				);
+
+				Ok((keys, values, metadata))
 			}
-
-			if let Some(inner) = current_entry {
-				let (key, value, meta) = inner.build()?;
-
-				keys.push(key);
-				values.push(value);
-				metadata.push(meta);
-			}
-
-			// Total read bytes (rounded up to nearest chunk)
-			let total_size_chunked = (total_size as u64).div_ceil(util::metric::KV_BILLABLE_CHUNK)
-				* util::metric::KV_BILLABLE_CHUNK;
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				recipient.namespace_id,
-				namespace::keys::metric::Metric::KvRead(recipient.name.clone()),
-				total_size_chunked.try_into().unwrap_or_default(),
-			);
-
-			Ok((keys, values, metadata))
-		}
-	})
-	.custom_instrument(tracing::info_span!("kv_get_tx"))
-	.await
-	.map_err(Into::<anyhow::Error>::into);
-	metrics::ACTOR_KV_OPERATION_DURATION.with_label_values(&["get"]).observe(start.elapsed().as_secs_f64());
+		})
+		.custom_instrument(tracing::info_span!("kv_get_tx"))
+		.await
+		.map_err(Into::<anyhow::Error>::into);
+	metrics::ACTOR_KV_OPERATION_DURATION
+		.with_label_values(&["get"])
+		.observe(start.elapsed().as_secs_f64());
 	result
 }
 
@@ -268,79 +275,85 @@ pub async fn put(
 	values: Vec<ep::KvValue>,
 ) -> Result<()> {
 	let start = std::time::Instant::now();
-metrics::ACTOR_KV_KEYS_PER_OP.with_label_values(&["put"]).observe(keys.len() as f64);
+	metrics::ACTOR_KV_KEYS_PER_OP
+		.with_label_values(&["put"])
+		.observe(keys.len() as f64);
 	let keys = &keys;
 	let values = &values;
-	let result = db.run(|tx| {
-		async move {
-			let total_size = estimate_kv_size(&tx, recipient.actor_id).await? as usize;
+	let result = db
+		.run(|tx| {
+			async move {
+				let total_size = estimate_kv_size(&tx, recipient.actor_id).await? as usize;
 
-			validate_entries(&keys, &values, total_size)?;
+				validate_entries(&keys, &values, total_size)?;
 
-			let subspace = &keys::actor_kv::subspace(recipient.actor_id);
-			let tx = tx.with_subspace(subspace.clone());
-			let now = util::timestamp::now();
+				let subspace = &keys::actor_kv::subspace(recipient.actor_id);
+				let tx = tx.with_subspace(subspace.clone());
+				let now = util::timestamp::now();
 
-			// TODO: Include metadata size?
-			// Total written bytes (rounded up to nearest chunk)
-			let total_size = keys.iter().fold(0, |s, key| s + key.len())
-				+ values.iter().fold(0, |s, value| s + value.len());
-			let total_size_chunked = (total_size as u64).div_ceil(util::metric::KV_BILLABLE_CHUNK)
-				* util::metric::KV_BILLABLE_CHUNK;
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				recipient.namespace_id,
-				namespace::keys::metric::Metric::KvWrite(recipient.name.clone()),
-				total_size_chunked.try_into().unwrap_or_default(),
-			);
+				// TODO: Include metadata size?
+				// Total written bytes (rounded up to nearest chunk)
+				let total_size = keys.iter().fold(0, |s, key| s + key.len())
+					+ values.iter().fold(0, |s, value| s + value.len());
+				let total_size_chunked = (total_size as u64)
+					.div_ceil(util::metric::KV_BILLABLE_CHUNK)
+					* util::metric::KV_BILLABLE_CHUNK;
+				namespace::keys::metric::inc(
+					&tx.with_subspace(namespace::keys::subspace()),
+					recipient.namespace_id,
+					namespace::keys::metric::Metric::KvWrite(recipient.name.clone()),
+					total_size_chunked.try_into().unwrap_or_default(),
+				);
 
-			futures_util::stream::iter(0..keys.len())
-				.map(|i| {
-					let tx = tx.clone();
-					async move {
-						// TODO: Costly clone
-						let key = keys::actor_kv::KeyWrapper(
-							keys.get(i).context("index should exist")?.clone(),
-						);
-						let value = values.get(i).context("index should exist")?;
-						// Clear previous key data before setting
-						tx.clear_subspace_range(&subspace.subspace(&key));
-
-						// Set metadata
-						tx.write(
-							&keys::actor_kv::EntryMetadataKey::new(key.clone()),
-							ep::KvMetadata {
-								version: VERSION.as_bytes().to_vec(),
-								update_ts: now,
-							},
-						)?;
-
-						// Set key data in chunks
-						for start in (0..value.len()).step_by(VALUE_CHUNK_SIZE) {
-							let idx = start / VALUE_CHUNK_SIZE;
-							let end = (start + VALUE_CHUNK_SIZE).min(value.len());
-
-							tx.set(
-								&subspace.pack(&keys::actor_kv::EntryValueChunkKey::new(
-									key.clone(),
-									idx,
-								)),
-								&value.get(start..end).context("bad slice")?,
+				futures_util::stream::iter(0..keys.len())
+					.map(|i| {
+						let tx = tx.clone();
+						async move {
+							// TODO: Costly clone
+							let key = keys::actor_kv::KeyWrapper(
+								keys.get(i).context("index should exist")?.clone(),
 							);
-						}
+							let value = values.get(i).context("index should exist")?;
+							// Clear previous key data before setting
+							tx.clear_subspace_range(&subspace.subspace(&key));
 
-						Ok(())
-					}
-				})
-				.buffer_unordered(32)
-				.try_collect()
-				.await
-		}
-	})
-	.custom_instrument(tracing::info_span!("kv_put_tx"))
-	.await
-	.map_err(Into::into);
-	metrics::ACTOR_KV_OPERATION_DURATION.with_label_values(&["put"]).observe(start.elapsed().as_secs_f64());
+							// Set metadata
+							tx.write(
+								&keys::actor_kv::EntryMetadataKey::new(key.clone()),
+								ep::KvMetadata {
+									version: VERSION.as_bytes().to_vec(),
+									update_ts: now,
+								},
+							)?;
+
+							// Set key data in chunks
+							for start in (0..value.len()).step_by(VALUE_CHUNK_SIZE) {
+								let idx = start / VALUE_CHUNK_SIZE;
+								let end = (start + VALUE_CHUNK_SIZE).min(value.len());
+
+								tx.set(
+									&subspace.pack(&keys::actor_kv::EntryValueChunkKey::new(
+										key.clone(),
+										idx,
+									)),
+									&value.get(start..end).context("bad slice")?,
+								);
+							}
+
+							Ok(())
+						}
+					})
+					.buffer_unordered(32)
+					.try_collect()
+					.await
+			}
+		})
+		.custom_instrument(tracing::info_span!("kv_put_tx"))
+		.await
+		.map_err(Into::into);
+	metrics::ACTOR_KV_OPERATION_DURATION
+		.with_label_values(&["put"])
+		.observe(start.elapsed().as_secs_f64());
 	result
 }
 
@@ -352,38 +365,44 @@ pub async fn delete(
 	keys: Vec<ep::KvKey>,
 ) -> Result<()> {
 	let start = std::time::Instant::now();
-metrics::ACTOR_KV_KEYS_PER_OP.with_label_values(&["delete"]).observe(keys.len() as f64);
+	metrics::ACTOR_KV_KEYS_PER_OP
+		.with_label_values(&["delete"])
+		.observe(keys.len() as f64);
 	validate_keys(&keys)?;
 
 	let keys = &keys;
-	let result = db.run(|tx| {
-		async move {
-			// Total written bytes (rounded up to nearest chunk)
-			let total_size = keys.iter().fold(0, |s, key| s + key.len());
-			let total_size_chunked = (total_size as u64).div_ceil(util::metric::KV_BILLABLE_CHUNK)
-				* util::metric::KV_BILLABLE_CHUNK;
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				recipient.namespace_id,
-				namespace::keys::metric::Metric::KvWrite(recipient.name.clone()),
-				total_size_chunked.try_into().unwrap_or_default(),
-			);
+	let result = db
+		.run(|tx| {
+			async move {
+				// Total written bytes (rounded up to nearest chunk)
+				let total_size = keys.iter().fold(0, |s, key| s + key.len());
+				let total_size_chunked = (total_size as u64)
+					.div_ceil(util::metric::KV_BILLABLE_CHUNK)
+					* util::metric::KV_BILLABLE_CHUNK;
+				namespace::keys::metric::inc(
+					&tx.with_subspace(namespace::keys::subspace()),
+					recipient.namespace_id,
+					namespace::keys::metric::Metric::KvWrite(recipient.name.clone()),
+					total_size_chunked.try_into().unwrap_or_default(),
+				);
 
-			for key in keys {
-				// TODO: Costly clone
-				let key_subspace = keys::actor_kv::subspace(recipient.actor_id)
-					.subspace(&keys::actor_kv::KeyWrapper(key.clone()));
+				for key in keys {
+					// TODO: Costly clone
+					let key_subspace = keys::actor_kv::subspace(recipient.actor_id)
+						.subspace(&keys::actor_kv::KeyWrapper(key.clone()));
 
-				tx.clear_subspace_range(&key_subspace);
+					tx.clear_subspace_range(&key_subspace);
+				}
+
+				Ok(())
 			}
-
-			Ok(())
-		}
-	})
-	.custom_instrument(tracing::info_span!("kv_delete_tx"))
-	.await
-	.map_err(Into::into);
-	metrics::ACTOR_KV_OPERATION_DURATION.with_label_values(&["delete"]).observe(start.elapsed().as_secs_f64());
+		})
+		.custom_instrument(tracing::info_span!("kv_delete_tx"))
+		.await
+		.map_err(Into::into);
+	metrics::ACTOR_KV_OPERATION_DURATION
+		.with_label_values(&["delete"])
+		.observe(start.elapsed().as_secs_f64());
 	result
 }
 
@@ -396,45 +415,51 @@ pub async fn delete_range(
 	end: ep::KvKey,
 ) -> Result<()> {
 	let timer = std::time::Instant::now();
-validate_range(&start, &end)?;
+	validate_range(&start, &end)?;
 	if start >= end {
-		metrics::ACTOR_KV_OPERATION_DURATION.with_label_values(&["delete_range"]).observe(timer.elapsed().as_secs_f64());
+		metrics::ACTOR_KV_OPERATION_DURATION
+			.with_label_values(&["delete_range"])
+			.observe(timer.elapsed().as_secs_f64());
 		return Ok(());
 	}
 
-	let result = db.run(|tx| {
-		let start = start.clone();
-		let end = end.clone();
-		async move {
-			// Total written bytes (rounded up to nearest chunk)
-			let total_size = start.len() + end.len();
-			let total_size_chunked = (total_size as u64).div_ceil(util::metric::KV_BILLABLE_CHUNK)
-				* util::metric::KV_BILLABLE_CHUNK;
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				recipient.namespace_id,
-				namespace::keys::metric::Metric::KvWrite(recipient.name.clone()),
-				total_size_chunked.try_into().unwrap_or_default(),
-			);
+	let result = db
+		.run(|tx| {
+			let start = start.clone();
+			let end = end.clone();
+			async move {
+				// Total written bytes (rounded up to nearest chunk)
+				let total_size = start.len() + end.len();
+				let total_size_chunked = (total_size as u64)
+					.div_ceil(util::metric::KV_BILLABLE_CHUNK)
+					* util::metric::KV_BILLABLE_CHUNK;
+				namespace::keys::metric::inc(
+					&tx.with_subspace(namespace::keys::subspace()),
+					recipient.namespace_id,
+					namespace::keys::metric::Metric::KvWrite(recipient.name.clone()),
+					total_size_chunked.try_into().unwrap_or_default(),
+				);
 
-			let subspace = keys::actor_kv::subspace(recipient.actor_id);
-			let begin = subspace
-				.subspace(&keys::actor_kv::KeyWrapper(start))
-				.range()
-				.0;
-			let end = subspace
-				.subspace(&keys::actor_kv::KeyWrapper(end))
-				.range()
-				.0;
-			tx.clear_range(&begin, &end);
+				let subspace = keys::actor_kv::subspace(recipient.actor_id);
+				let begin = subspace
+					.subspace(&keys::actor_kv::KeyWrapper(start))
+					.range()
+					.0;
+				let end = subspace
+					.subspace(&keys::actor_kv::KeyWrapper(end))
+					.range()
+					.0;
+				tx.clear_range(&begin, &end);
 
-			Ok(())
-		}
-	})
-	.custom_instrument(tracing::info_span!("kv_delete_range_tx"))
-	.await
-	.map_err(Into::into);
-	metrics::ACTOR_KV_OPERATION_DURATION.with_label_values(&["delete_range"]).observe(timer.elapsed().as_secs_f64());
+				Ok(())
+			}
+		})
+		.custom_instrument(tracing::info_span!("kv_delete_range_tx"))
+		.await
+		.map_err(Into::into);
+	metrics::ACTOR_KV_OPERATION_DURATION
+		.with_label_values(&["delete_range"])
+		.observe(timer.elapsed().as_secs_f64());
 	result
 }
 

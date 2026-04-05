@@ -35,13 +35,11 @@ pub async fn accept(
 
 	if let Some(committed_value) = committed_value {
 		if !committed_value.mutable || !mutable || version <= committed_value.version {
-			return Ok(
-				protocol::AcceptResponse::AcceptResponseAlreadyCommitted(
-					protocol::AcceptResponseAlreadyCommitted {
-						value: committed_value.value,
-					},
-				),
-			);
+			return Ok(protocol::AcceptResponse::AcceptResponseAlreadyCommitted(
+				protocol::AcceptResponseAlreadyCommitted {
+					value: committed_value.value,
+				},
+			));
 		}
 	}
 

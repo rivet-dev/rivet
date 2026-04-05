@@ -7,8 +7,8 @@ use rivet_guard_core::{RoutingFn, request_context::RequestContext};
 
 use crate::{errors, metrics, shared_state::SharedState};
 
-mod api_public;
 pub mod actor_path;
+mod api_public;
 mod envoy;
 mod kv_channel;
 pub mod pegboard_gateway;
@@ -27,9 +27,9 @@ pub(crate) const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
 #[tracing::instrument(skip_all)]
 pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -> RoutingFn {
 	let ctx = ctx.clone();
-	let kv_channel_handler = Arc::new(
-		pegboard_kv_channel::PegboardKvChannelCustomServe::new(ctx.clone()),
-	);
+	let kv_channel_handler = Arc::new(pegboard_kv_channel::PegboardKvChannelCustomServe::new(
+		ctx.clone(),
+	));
 	Arc::new(move |req_ctx| {
 		let ctx = ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id()).unwrap();
 		let shared_state = shared_state.clone();
@@ -58,21 +58,12 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 
 				// MARK: Path-based routing
 				// Route actor
-				if let Some(actor_path_info) = actor_path::parse_actor_path(req_ctx.path())? {
-					tracing::debug!(?actor_path_info, "routing using path-based actor routing");
+				if let Some(routing_output) =
+					pegboard_gateway::route_request_path_based(&ctx, &shared_state, req_ctx).await?
+				{
+					metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
 
-					if let Some(routing_output) = pegboard_gateway::route_request_path_based(
-						&ctx,
-						&shared_state,
-						req_ctx,
-						&actor_path_info,
-					)
-					.await?
-					{
-						metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
-
-						return Ok(routing_output);
-					}
+					return Ok(routing_output);
 				}
 
 				// Route runner
@@ -94,8 +85,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 
 				// Route KV channel
 				if let Some(routing_output) =
-					kv_channel::route_request_path_based(&ctx, req_ctx, &kv_channel_handler)
-						.await?
+					kv_channel::route_request_path_based(&ctx, req_ctx, &kv_channel_handler).await?
 				{
 					metrics::ROUTE_TOTAL
 						.with_label_values(&["kv_channel"])
@@ -186,10 +176,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 
 /// Validates that the request hostname is valid for the current datacenter.
 /// Returns an error if the host does not match a valid regional host.
-pub(crate) fn validate_regional_host(
-	ctx: &StandaloneCtx,
-	req_ctx: &RequestContext,
-) -> Result<()> {
+pub(crate) fn validate_regional_host(ctx: &StandaloneCtx, req_ctx: &RequestContext) -> Result<()> {
 	let current_dc = ctx.config().topology().current_dc()?;
 	if !current_dc.is_valid_regional_host(req_ctx.hostname()) {
 		tracing::warn!(

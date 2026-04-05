@@ -107,13 +107,28 @@ mod tests {
 			(7, 6, 4, 7, 1, 5, 3, 6, 1),
 		];
 
-		for (n, fast, slow, all, any, fanout_fast, fanout_slow, fanout_all, fanout_any) in
-			expected
+		for (n, fast, slow, all, any, fanout_fast, fanout_slow, fanout_all, fanout_any) in expected
 		{
-			assert_eq!(calculate_quorum(n, QuorumType::Fast), fast, "fast quorum for n={n}");
-			assert_eq!(calculate_quorum(n, QuorumType::Slow), slow, "slow quorum for n={n}");
-			assert_eq!(calculate_quorum(n, QuorumType::All), all, "all quorum for n={n}");
-			assert_eq!(calculate_quorum(n, QuorumType::Any), any, "any quorum for n={n}");
+			assert_eq!(
+				calculate_quorum(n, QuorumType::Fast),
+				fast,
+				"fast quorum for n={n}"
+			);
+			assert_eq!(
+				calculate_quorum(n, QuorumType::Slow),
+				slow,
+				"slow quorum for n={n}"
+			);
+			assert_eq!(
+				calculate_quorum(n, QuorumType::All),
+				all,
+				"all quorum for n={n}"
+			);
+			assert_eq!(
+				calculate_quorum(n, QuorumType::Any),
+				any,
+				"any quorum for n={n}"
+			);
 			assert_eq!(
 				calculate_fanout_quorum(n, QuorumType::Fast),
 				fanout_fast,
@@ -169,7 +184,10 @@ mod tests {
 			);
 
 			if n >= 2 {
-				assert!(slow * 2 > n, "slow quorum must be a strict majority for n={n}");
+				assert!(
+					slow * 2 > n,
+					"slow quorum must be a strict majority for n={n}"
+				);
 				assert!(
 					(2 * fast) + slow > 2 * n,
 					"fast quorum must satisfy the Fast Paxos intersection invariant for n={n}"

@@ -4,10 +4,7 @@ use common::{
 	THREE_REPLICAS, TestCtx,
 	utils::{get_local, read_ballot, set_if_absent, set_mutable, write_ballot},
 };
-use epoxy::{
-	metrics,
-	ops::propose::ProposalResult,
-};
+use epoxy::{metrics, ops::propose::ProposalResult};
 use epoxy_protocol::protocol;
 
 static TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -52,15 +49,13 @@ async fn proposal_uses_fast_and_contention_paths() {
 	assert_eq!(
 		metrics::PROPOSAL_TOTAL
 			.with_label_values(&["committed"])
-			.get()
-			- committed_before,
+			.get() - committed_before,
 		1,
 	);
 	assert_eq!(
 		metrics::PROPOSAL_TOTAL
 			.with_label_values(&["slow_path"])
-			.get()
-			- slow_result_before,
+			.get() - slow_result_before,
 		0,
 	);
 
@@ -106,8 +101,7 @@ async fn proposal_uses_fast_and_contention_paths() {
 	assert_eq!(
 		metrics::PROPOSAL_TOTAL
 			.with_label_values(&["slow_path"])
-			.get()
-			- slow_result_before,
+			.get() - slow_result_before,
 		1,
 	);
 	let key = b"mutable-fast-path";
@@ -132,8 +126,7 @@ async fn proposal_uses_fast_and_contention_paths() {
 		for replica_id in THREE_REPLICAS {
 			if get_local(test_ctx.get_ctx(*replica_id), *replica_id, key)
 				.await
-				.unwrap()
-				!= Some(b"value2".to_vec())
+				.unwrap() != Some(b"value2".to_vec())
 			{
 				replicated = false;
 				break;

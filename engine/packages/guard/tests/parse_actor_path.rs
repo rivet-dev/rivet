@@ -47,8 +47,8 @@ fn parses_query_actor_get_paths() {
 #[test]
 fn parses_query_actor_get_or_create_paths_with_input_and_region() {
 	let input_bytes = vec![
-		0xa2, 0x65, b'c', b'o', b'u', b'n', b't', 0x02, 0x67, b'e', b'n', b'a', b'b', b'l',
-		b'e', b'd', 0xf5,
+		0xa2, 0x65, b'c', b'o', b'u', b'n', b't', 0x02, 0x67, b'e', b'n', b'a', b'b', b'l', b'e',
+		b'd', 0xf5,
 	];
 	let input = encode_cbor_base64url(&input_bytes);
 	let path = format!(
@@ -245,7 +245,8 @@ fn preserves_percent_encoding_in_actor_query_params() {
 #[test]
 fn preserves_plus_in_actor_query_params() {
 	// Actor params should preserve + literally, not re-encode to %2B or decode to space.
-	let path = "/gateway/lobby/api?rvt-namespace=default&rvt-method=get&search=hello+world&tag=c%2B%2B";
+	let path =
+		"/gateway/lobby/api?rvt-namespace=default&rvt-method=get&search=hello+world&tag=c%2B%2B";
 	let result = parse_actor_path(path).unwrap().unwrap();
 
 	match result {
@@ -282,7 +283,8 @@ fn handles_interleaved_rvt_and_actor_params() {
 fn decodes_plus_as_space_in_rvt_values() {
 	// rvt-* values should decode + as space (form-urlencoded), while actor
 	// params preserve + literally.
-	let path = "/gateway/lobby/api?rvt-namespace=my+ns&rvt-method=get&rvt-key=hello+world&q=search+term";
+	let path =
+		"/gateway/lobby/api?rvt-namespace=my+ns&rvt-method=get&rvt-key=hello+world&q=search+term";
 	let result = parse_actor_path(path).unwrap().unwrap();
 
 	match result {
@@ -332,10 +334,7 @@ fn rejects_missing_method() {
 	let err = parse_actor_path("/gateway/lobby?rvt-namespace=default")
 		.unwrap_err()
 		.to_string();
-	assert!(
-		err.contains("method"),
-		"expected method error, got: {err}"
-	);
+	assert!(err.contains("method"), "expected method error, got: {err}");
 }
 
 #[test]
@@ -351,11 +350,10 @@ fn rejects_invalid_query_method() {
 
 #[test]
 fn rejects_unknown_query_params() {
-	let err = parse_actor_path(
-		"/gateway/lobby?rvt-namespace=default&rvt-method=get&rvt-unknown=value",
-	)
-	.unwrap_err()
-	.to_string();
+	let err =
+		parse_actor_path("/gateway/lobby?rvt-namespace=default&rvt-method=get&rvt-unknown=value")
+			.unwrap_err()
+			.to_string();
 	assert!(
 		err.contains("unknown field"),
 		"expected unknown field error, got: {err}"
@@ -406,10 +404,9 @@ fn rejects_invalid_cbor_input() {
 
 #[test]
 fn rejects_raw_at_token_syntax_in_query_paths() {
-	let err =
-		parse_actor_path("/gateway/lobby@token/connect?rvt-namespace=default&rvt-method=get")
-			.unwrap_err()
-			.to_string();
+	let err = parse_actor_path("/gateway/lobby@token/connect?rvt-namespace=default&rvt-method=get")
+		.unwrap_err()
+		.to_string();
 	assert!(err.contains("query gateway paths must not use @token syntax"));
 }
 
@@ -454,11 +451,10 @@ fn rejects_crash_policy_for_get_queries() {
 
 #[test]
 fn rejects_runner_for_get_queries() {
-	let err = parse_actor_path(
-		"/gateway/lobby?rvt-namespace=default&rvt-method=get&rvt-runner=default",
-	)
-	.unwrap_err()
-	.to_string();
+	let err =
+		parse_actor_path("/gateway/lobby?rvt-namespace=default&rvt-method=get&rvt-runner=default")
+			.unwrap_err()
+			.to_string();
 	assert!(err.contains(
 		"query gateway method=get does not allow rvt-input, rvt-region, rvt-crash-policy, or rvt-runner params"
 	));
@@ -466,13 +462,10 @@ fn rejects_runner_for_get_queries() {
 
 #[test]
 fn rejects_missing_runner_for_get_or_create_queries() {
-	let err =
-		parse_actor_path("/gateway/lobby?rvt-namespace=default&rvt-method=getOrCreate")
-			.unwrap_err()
-			.to_string();
-	assert!(err.contains(
-		"query gateway method=getOrCreate requires rvt-runner param"
-	));
+	let err = parse_actor_path("/gateway/lobby?rvt-namespace=default&rvt-method=getOrCreate")
+		.unwrap_err()
+		.to_string();
+	assert!(err.contains("query gateway method=getOrCreate requires rvt-runner param"));
 }
 
 #[test]
