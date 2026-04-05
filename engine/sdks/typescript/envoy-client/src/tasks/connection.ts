@@ -34,7 +34,7 @@ async function connectionLoop(ctx: SharedContext, signal: AbortSignal) {
 					ctx.envoyTx.send({ type: "conn-close", evict: true });
 
 					return;
-				} else if (res.group === 'channel' && res.error === "closed") {
+				} else if (res.group === "channel" && res.error === "closed") {
 					// Client side shutdown
 					return;
 				}
@@ -106,6 +106,7 @@ async function singleConnection(ctx: SharedContext, signal: AbortSignal): Promis
 	let res;
 
 	try {
+		let errored = false;
 		for await (const msg of wsRx) {
 			if (msg.type === "message") {
 				await handleWsData(ctx, msg);
@@ -122,11 +123,12 @@ async function singleConnection(ctx: SharedContext, signal: AbortSignal): Promis
 					msg: "websocket error",
 					error: msg.error,
 				});
+				errored = true;
 				break;
 			}
 		}
 
-		res = { group: "channel", error: "closed" };
+		if (!res && !errored) res = { group: "channel", error: "closed" };
 	} finally {
 		ctx.wsTx = undefined;
 	}

@@ -235,6 +235,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					input: input.input.clone(),
 					from_v1: true,
 				})
+				.tag("actor_id", input.actor_id)
 				.dispatch()
 				.await?;
 				return Ok(());
@@ -845,15 +846,36 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 		.send()
 		.await?;
 
-	ctx.workflow(destroy::Input {
-		namespace_id: input.namespace_id,
-		actor_id: input.actor_id,
-		name: input.name.clone(),
-		key: input.key.clone(),
-		generation: lifecycle_res.generation,
-	})
-	.output()
-	.await?;
+	if lifecycle_res.migrate_to_v2 {
+		ctx.workflow(crate::workflows::actor2::Input {
+			actor_id: input.actor_id,
+			name: input.name.clone(),
+			pool_name: input.runner_name_selector.clone(),
+			key: input.key.clone(),
+			namespace_id: input.namespace_id,
+			crash_policy: input.crash_policy,
+			input: input.input.clone(),
+			from_v1: true,
+		})
+		.tag("actor_id", input.actor_id)
+		.dispatch()
+		.await?;
+
+		ctx.msg(MigratedToV2 {})
+			.topic(("actor_id", input.actor_id))
+			.send()
+			.await?;
+	} else {
+		ctx.workflow(destroy::Input {
+			namespace_id: input.namespace_id,
+			actor_id: input.actor_id,
+			name: input.name.clone(),
+			key: input.key.clone(),
+			generation: lifecycle_res.generation,
+		})
+		.output()
+		.await?;
+	}
 
 	Ok(())
 }
@@ -1381,6 +1403,9 @@ pub struct GoingAway {
 	#[serde(default)]
 	pub reset_rescheduling: bool,
 }
+
+#[message("pegboard_actor_migrated_to_v2")]
+pub struct MigratedToV2 {}
 
 #[signal("pegboard_actor_destroy")]
 pub struct Destroy {}

@@ -22,7 +22,7 @@ async function main() {
 		// Create an actor
 		console.log("Creating actor...");
 		console.time("actor create");
-		const actorResponse = await createActor(RIVET_NAMESPACE, "test-envoy");
+		const actorResponse = await createActor(RIVET_NAMESPACE, "test");
 		console.timeEnd("actor create");
 		console.log("Actor created:", actorResponse.actor);
 

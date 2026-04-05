@@ -477,26 +477,8 @@ async fn listen_for_signals(
 				signals
 			}
 		}
-		Transition::Sleeping {
-			attempting_reallocation,
-		} => {
-			if *attempting_reallocation {
-				let next_retry_ts = state.retry_backoff_state.get_next_retry_ts(ctx).await?;
-
-				let signals = if let Some(next_retry_ts) = next_retry_ts {
-					// Listen for signals with timeout
-					ctx.listen_n_until::<Main>(next_retry_ts, 256).await?
-				} else {
-					Vec::new()
-				};
-
-				// Attempt reallocation
-				if signals.is_empty() {
-					runtime::reschedule_actor(ctx, &input, state, metrics_workflow_id).await?;
-				}
-
-				signals
-			} else if let Some(alarm_ts) = state.alarm_ts {
+		Transition::Sleeping => {
+			if let Some(alarm_ts) = state.alarm_ts {
 				// Listen for signals with timeout. if a timeout happens, it means this actor should
 				// wake up
 				let signals = ctx.listen_n_until::<Main>(alarm_ts, 256).await?;
@@ -511,6 +493,32 @@ async fn listen_for_signals(
 			} else {
 				// Listen for signals with no timeout
 				ctx.listen_n::<Main>(256).await?
+			}
+		}
+		Transition::Reallocating { since_ts } => {
+			let next_retry_ts = state.retry_backoff_state.get_next_retry_ts(ctx).await?;
+
+			// If the actor has been retrying for too long, set it to sleep
+			if state.retry_backoff_state.last_retry_ts
+				> *since_ts + ctx.config().pegboard().actor_retry_duration_threshold()
+			{
+				state.transition = Transition::Sleeping;
+
+				Vec::new()
+			} else {
+				let signals = if let Some(next_retry_ts) = next_retry_ts {
+					// Listen for signals with timeout
+					ctx.listen_n_until::<Main>(next_retry_ts, 256).await?
+				} else {
+					Vec::new()
+				};
+
+				// Attempt reallocation
+				if signals.is_empty() {
+					runtime::reschedule_actor(ctx, &input, state, metrics_workflow_id).await?;
+				}
+
+				signals
 			}
 		}
 	};
@@ -537,11 +545,12 @@ async fn process_signal(
 				..
 			} = &state.transition
 			{
+				let now = ctx.activity(runtime::GetTsInput {}).await?;
+
 				// Transition to starting
 				state.transition = Transition::Starting {
 					destroy_after_start: *destroy_after_start,
-					lost_timeout_ts: util::timestamp::now()
-						+ ctx.config().pegboard().actor_start_threshold(),
+					lost_timeout_ts: now + ctx.config().pegboard().actor_start_threshold(),
 				};
 			}
 
@@ -566,11 +575,15 @@ async fn process_signal(
 						return Ok(Loop::Continue);
 					}
 				}
-				Transition::Allocating { .. } | Transition::Sleeping { .. } => {
+				Transition::Allocating { .. }
+				| Transition::Sleeping
+				| Transition::Reallocating { .. } => {
 					tracing::warn!(?sig, "actor not allocated, ignoring events");
 					return Ok(Loop::Continue);
 				}
 			}
+
+			let now = ctx.activity(runtime::GetTsInput {}).await?;
 
 			// Fetch the last event index for the current envoy or default to -1 (if still starting)
 			let last_event_idx = state
@@ -604,7 +617,7 @@ async fn process_signal(
 									// Transition to sleep intent
 									state.transition = Transition::SleepIntent {
 										envoy: std::mem::take(envoy),
-										lost_timeout_ts: util::timestamp::now()
+										lost_timeout_ts: now
 											+ ctx.config().pegboard().actor_stop_threshold(),
 										rewake_after_stop: false,
 									};
@@ -628,7 +641,7 @@ async fn process_signal(
 									// Transition to stop intent
 									state.transition = Transition::StopIntent {
 										envoy: std::mem::take(envoy),
-										lost_timeout_ts: util::timestamp::now()
+										lost_timeout_ts: now
 											+ ctx.config().pegboard().actor_stop_threshold(),
 									};
 
@@ -662,7 +675,7 @@ async fn process_signal(
 									// Transition to destroying
 									state.transition = Transition::Destroying {
 										envoy: runtime::EnvoyState::new(sig.envoy_key.clone()),
-										lost_timeout_ts: util::timestamp::now()
+										lost_timeout_ts: now
 											+ ctx.config().pegboard().actor_stop_threshold(),
 									};
 
@@ -680,7 +693,7 @@ async fn process_signal(
 									// Transition to starting
 									state.transition = Transition::Running {
 										envoy: runtime::EnvoyState::new(sig.envoy_key.clone()),
-										last_liveness_check_ts: util::timestamp::now(),
+										last_liveness_check_ts: now,
 									};
 
 									ctx.activity(runtime::SetConnectableInput {
@@ -779,7 +792,7 @@ async fn process_signal(
 		Main::Wake(_) => {
 			// Clear alarm
 			if let Some(alarm_ts) = state.alarm_ts {
-				let now = ctx.activity(GetTsInput {}).await?;
+				let now = ctx.activity(runtime::GetTsInput {}).await?;
 
 				if now >= alarm_ts {
 					state.alarm_ts = None;
@@ -787,7 +800,7 @@ async fn process_signal(
 			}
 
 			match &mut state.transition {
-				Transition::Sleeping { .. } => {
+				Transition::Sleeping => {
 					runtime::reschedule_actor(ctx, &input, state, metrics_workflow_id).await?;
 				}
 				Transition::SleepIntent {
@@ -836,12 +849,13 @@ async fn process_signal(
 
 			match &mut state.transition {
 				Transition::Running { envoy, .. } => {
+					let now = ctx.activity(runtime::GetTsInput {}).await?;
 					let envoy_key = envoy.envoy_key.clone();
+
 					// Transition to going away
 					state.transition = Transition::GoingAway {
 						envoy: std::mem::take(envoy),
-						lost_timeout_ts: util::timestamp::now()
-							+ ctx.config().pegboard().actor_stop_threshold(),
+						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
 					};
 
 					ctx.activity(runtime::InsertAndSendCommandsInput {
@@ -856,17 +870,19 @@ async fn process_signal(
 					.await?;
 				}
 				Transition::SleepIntent { envoy, .. } | Transition::StopIntent { envoy, .. } => {
+					let now = ctx.activity(runtime::GetTsInput {}).await?;
+
 					state.transition = Transition::GoingAway {
 						envoy: std::mem::take(envoy),
-						lost_timeout_ts: util::timestamp::now()
-							+ ctx.config().pegboard().actor_stop_threshold(),
+						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
 					};
 
 					// Stop command was already sent
 				}
 				Transition::Allocating { .. }
 				| Transition::Starting { .. }
-				| Transition::Sleeping { .. } => {
+				| Transition::Sleeping
+				| Transition::Reallocating { .. } => {
 					tracing::warn!(transition=?state.transition, "should not be reachable");
 				}
 				Transition::GoingAway { .. } | Transition::Destroying { .. } => {}
@@ -875,13 +891,13 @@ async fn process_signal(
 		Main::Destroy(_) => {
 			match &mut state.transition {
 				Transition::Running { envoy, .. } => {
+					let now = ctx.activity(runtime::GetTsInput {}).await?;
 					let envoy_key = envoy.envoy_key.clone();
 
 					// Transition to destroying
 					state.transition = Transition::Destroying {
 						envoy: std::mem::take(envoy),
-						lost_timeout_ts: util::timestamp::now()
-							+ ctx.config().pegboard().actor_stop_threshold(),
+						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
 					};
 
 					ctx.activity(runtime::InsertAndSendCommandsInput {
@@ -898,10 +914,11 @@ async fn process_signal(
 				Transition::SleepIntent { envoy, .. }
 				| Transition::StopIntent { envoy, .. }
 				| Transition::GoingAway { envoy, .. } => {
+					let now = ctx.activity(runtime::GetTsInput {}).await?;
+
 					state.transition = Transition::Destroying {
 						envoy: std::mem::take(envoy),
-						lost_timeout_ts: util::timestamp::now()
-							+ ctx.config().pegboard().actor_stop_threshold(),
+						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
 					};
 
 					// Stop command was already sent
@@ -918,7 +935,7 @@ async fn process_signal(
 				} => {
 					*destroy_after_start = true;
 				}
-				Transition::Sleeping { .. } => {
+				Transition::Sleeping | Transition::Reallocating { .. } => {
 					return Ok(Loop::Break(()));
 				}
 				Transition::Destroying { .. } => {}
@@ -960,14 +977,6 @@ impl ActorError {
 			| ActorError::NoEnvoys => true,
 		}
 	}
-}
-
-#[derive(Debug, Serialize, Deserialize, Hash)]
-struct GetTsInput {}
-
-#[activity(GetTs)]
-async fn get_ts(ctx: &ActivityCtx, input: &GetTsInput) -> Result<i64> {
-	Ok(util::timestamp::now())
 }
 
 async fn destroy(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {

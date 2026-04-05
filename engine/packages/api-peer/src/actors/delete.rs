@@ -19,9 +19,10 @@ use rivet_util::Id;
 #[tracing::instrument(skip_all)]
 pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result<DeleteResponse> {
 	// Subscribe before fetching actor data
-	let mut destroy_sub = ctx
-		.subscribe::<pegboard::workflows::actor::DestroyComplete>(("actor_id", path.actor_id))
-		.await?;
+	let (mut destroy_sub, mut destroy_sub2) = tokio::try_join!(
+		ctx.subscribe::<pegboard::workflows::actor::DestroyComplete>(("actor_id", path.actor_id)),
+		ctx.subscribe::<pegboard::workflows::actor2::DestroyComplete>(("actor_id", path.actor_id)),
+	)?;
 
 	let (actors_res, namespace_res) = tokio::try_join!(
 		// Get the actor to verify it exists
@@ -52,21 +53,33 @@ pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result
 		return Err(pegboard::errors::Actor::NotFound.build());
 	}
 
-	// TODO: Actor v2
+	// Try actor2 first, then fallback to actor
 	let res = ctx
-		.signal(pegboard::workflows::actor::Destroy {})
-		.to_workflow::<pegboard::workflows::actor::Workflow>()
+		.signal(pegboard::workflows::actor2::Destroy {})
+		.to_workflow::<pegboard::workflows::actor2::Workflow>()
 		.tag("actor_id", path.actor_id)
 		.graceful_not_found()
 		.send()
 		.await?;
 	if res.is_none() {
-		tracing::warn!(
-			actor_id=?path.actor_id,
-			"actor workflow not found, likely already stopped"
-		);
+		let res = ctx
+			.signal(pegboard::workflows::actor::Destroy {})
+			.to_workflow::<pegboard::workflows::actor::Workflow>()
+			.tag("actor_id", path.actor_id)
+			.graceful_not_found()
+			.send()
+			.await?;
+
+		if res.is_none() {
+			tracing::warn!(
+				actor_id=?path.actor_id,
+				"actor workflow not found, likely already stopped"
+			);
+		} else {
+			destroy_sub.next().await?;
+		}
 	} else {
-		destroy_sub.next().await?;
+		destroy_sub2.next().await?;
 	}
 
 	Ok(DeleteResponse {})
