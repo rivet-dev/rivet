@@ -189,6 +189,29 @@ async function ensureAgent<TConnParams>(
 	return c.vars.sandboxAgentClient;
 }
 
+function getProviderSandboxId(
+	sandboxId: string,
+	expectedProviderName: string,
+): string {
+	const slashIndex = sandboxId.indexOf("/");
+	if (slashIndex === -1) {
+		return sandboxId;
+	}
+
+	const providerName = sandboxId.slice(0, slashIndex);
+	const rawId = sandboxId.slice(slashIndex + 1);
+	if (!providerName || !rawId) {
+		throw new Error(`invalid sandbox ID: ${sandboxId}`);
+	}
+	if (providerName !== expectedProviderName) {
+		throw new Error(
+			`sandbox actor provider mismatch: expected ${expectedProviderName}, received ${providerName}`,
+		);
+	}
+
+	return rawId;
+}
+
 // --- Read-only fallback actions ---
 
 // These actions can read from the local SQLite persistence layer even after
@@ -221,6 +244,15 @@ function isSessionLike(value: unknown): value is { id: string } {
 		value !== null &&
 		"id" in value &&
 		typeof (value as Record<string, unknown>).id === "string"
+	);
+}
+
+function isTransientSandboxTransportError(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		(typeof error.message === "string" &&
+			(error.message.includes("Stream Error") ||
+				error.message.includes("fetch failed")))
 	);
 }
 
@@ -339,7 +371,37 @@ function buildProxyActions<TConnParams>(
 			const method = agent[actionName] as (
 				...innerArgs: unknown[]
 			) => unknown;
-			const result = await method.apply(agent, args);
+			let result: unknown;
+			try {
+				result = await method.apply(agent, args);
+			} catch (error) {
+				if (actionName !== "mkdirFs" || !isTransientSandboxTransportError(error)) {
+					throw error;
+				}
+
+				const path = (args[0] as { path?: unknown } | undefined)?.path;
+				if (typeof path !== "string") {
+					throw error;
+				}
+
+				await teardownAgentRuntime(c.vars);
+				const retryAgent = await ensureAgent(
+					c,
+					config,
+					config.persistRawEvents ?? false,
+				);
+
+				try {
+					const stat = await retryAgent.statFs({ path });
+					if (stat && typeof stat === "object" && stat.entryType === "directory") {
+						result = undefined;
+					} else {
+						result = await retryAgent.mkdirFs({ path });
+					}
+				} catch (retryError) {
+					throw retryError;
+				}
+			}
 
 			// Post-action side effects: manage session subscriptions based
 			// on what the action returned.
@@ -444,7 +506,12 @@ export function sandboxActor<TConnParams = undefined>(
 						sandboxContext,
 						parsedConfig,
 					);
-					await provider.destroy(sandboxContext.state.sandboxId);
+					await provider.destroy(
+						getProviderSandboxId(
+							sandboxContext.state.sandboxId,
+							provider.name,
+						),
+					);
 				} finally {
 					sandboxContext.state.sandboxId = null;
 					sandboxContext.state.providerName = null;
@@ -469,7 +536,12 @@ export function sandboxActor<TConnParams = undefined>(
 
 				if (c.state.sandboxId) {
 					const provider = await resolveProvider(c, parsedConfig);
-					await provider.destroy(c.state.sandboxId);
+					await provider.destroy(
+						getProviderSandboxId(
+							c.state.sandboxId,
+							provider.name,
+						),
+					);
 					c.state.sandboxId = null;
 				}
 
@@ -508,7 +580,14 @@ export function sandboxActor<TConnParams = undefined>(
 					);
 				}
 
-				return { url: await provider.getUrl(c.state.sandboxId) };
+				return {
+					url: await provider.getUrl(
+						getProviderSandboxId(
+							c.state.sandboxId,
+							provider.name,
+						),
+					),
+				};
 			},
 			...buildProxyActions(parsedConfig),
 		},

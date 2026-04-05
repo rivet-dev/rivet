@@ -78,3 +78,6 @@ examples/*/public/
 !examples/multiplayer-game-patterns/public/**
 !examples/multiplayer-game-patterns-vercel/public/
 !examples/multiplayer-game-patterns-vercel/public/**
+
+# Native addon binaries
+*.node

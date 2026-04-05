@@ -1,6 +1,5 @@
 import type { Context as HonoContext } from "hono";
 import invariant from "invariant";
-import { ActorStopping } from "@/actor/errors";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import { routeWebSocket } from "@/actor/router-websocket-endpoints";
 import { createClientWithDriver } from "@/client/client";
@@ -200,13 +199,13 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	async getForId({
 		actorId,
 	}: GetForIdInput): Promise<ActorOutput | undefined> {
-		// Validate the actor exists
-		const actor = await this.#state.loadActor(actorId);
+		let actor = await this.#state.loadActor(actorId);
+		if (this.#state.isActorStopping(actorId)) {
+			await this.#state.waitForActorStop(actorId);
+			actor = await this.#state.loadActor(actorId);
+		}
 		if (!actor.state) {
 			return undefined;
-		}
-		if (this.#state.isActorStopping(actorId)) {
-			throw new ActorStopping(actorId);
 		}
 
 		return actorStateToOutput(actor.state);
@@ -220,7 +219,11 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		const actorId = generateActorId(name, key);
 
 		// Check if actor exists
-		const actor = await this.#state.loadActor(actorId);
+		let actor = await this.#state.loadActor(actorId);
+		if (this.#state.isActorStopping(actorId)) {
+			await this.#state.waitForActorStop(actorId);
+			actor = await this.#state.loadActor(actorId);
+		}
 		if (actor.state) {
 			return actorStateToOutput(actor.state);
 		}
@@ -341,6 +344,12 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 	setKvChannelShutdown(fn: () => void): void {
 		this.#kvChannelShutdown = fn;
+	}
+
+	async shutdownForTests(): Promise<void> {
+		await this.#state.shutdown();
+		await this.#actorDriver.shutdownRunner?.(false);
+		this.shutdown();
 	}
 
 	shutdown(): void {

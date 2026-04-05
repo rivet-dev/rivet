@@ -354,6 +354,6 @@ export const dbKvStatsActor = actor({
 		},
 	},
 	options: {
-		sleepTimeout: 100,
+		sleepTimeout: 5_000,
 	},
 });

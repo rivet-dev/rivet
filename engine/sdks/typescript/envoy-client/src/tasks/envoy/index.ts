@@ -161,9 +161,14 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 
 		for await (const msg of envoyRx) {
 			if (msg.type === "conn-message") {
-				await handleConnMessage(ctx, startTx, lostTimeout, msg.message);
+				lostTimeout = handleConnMessage(
+					ctx,
+					startTx,
+					lostTimeout,
+					msg.message,
+				);
 			} else if (msg.type === "conn-close") {
-				handleConnClose(ctx, lostTimeout);
+				lostTimeout = handleConnClose(ctx, lostTimeout);
 				if (msg.evict) break;
 			} else if (msg.type === "send-events") {
 				handleSendEvents(ctx, msg.events);
@@ -181,7 +186,12 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 		}
 
 		// Cleanup
+		if (lostTimeout) {
+			clearTimeout(lostTimeout);
+		}
 		ctx.shared.wsTx?.send({ type: "close", code: 1000, reason: "envoy.shutdown" });
+		connHandle.abort();
+		await connHandle.catch(() => undefined);
 		clearInterval(ackInterval);
 		clearInterval(kvCleanupInterval);
 
@@ -217,7 +227,7 @@ function handleConnMessage(
 	startTx: WatchSender<void>,
 	lostTimeout: NodeJS.Timeout | undefined,
 	message: ToEnvoyFromConnMessage,
-) {
+): NodeJS.Timeout | undefined {
 	if (message.tag === "ToEnvoyInit") {
 		ctx.shared.protocolMetadata = message.val.metadata;
 		log(ctx.shared)?.info({
@@ -225,7 +235,10 @@ function handleConnMessage(
 			protocolMetadata: message.val.metadata,
 		});
 
-		clearTimeout(lostTimeout);
+		if (lostTimeout) {
+			clearTimeout(lostTimeout);
+			lostTimeout = undefined;
+		}
 		resendUnacknowledgedEvents(ctx);
 		processUnsentKvRequests(ctx);
 		resendBufferedTunnelMessages(ctx);
@@ -242,9 +255,14 @@ function handleConnMessage(
 	} else {
 		unreachable(message);
 	}
+
+	return lostTimeout;
 }
 
-function handleConnClose(ctx: EnvoyContext, lostTimeout: NodeJS.Timeout | undefined) {
+function handleConnClose(
+	ctx: EnvoyContext,
+	lostTimeout: NodeJS.Timeout | undefined,
+): NodeJS.Timeout | undefined {
 	if (!lostTimeout) {
 		let lostThreshold = ctx.shared.protocolMetadata ? Number(ctx.shared.protocolMetadata.envoyLostThreshold) : 10000;
 		log(ctx.shared)?.debug({
@@ -281,6 +299,8 @@ function handleConnClose(ctx: EnvoyContext, lostTimeout: NodeJS.Timeout | undefi
 			lostThreshold,
 		);
 	}
+
+	return lostTimeout;
 }
 
 function handleShutdown(ctx: EnvoyContext) {
@@ -359,7 +379,14 @@ function createHandle(
 
 	return {
 		shutdown(immediate: boolean) {
-			ctx.shared.envoyTx.send({ type: "shutdown" });
+			if (immediate) {
+				log(ctx.shared)?.debug({
+					msg: "envoy received immediate shutdown",
+				});
+				ctx.shared.envoyTx.send({ type: "stop" });
+			} else {
+				ctx.shared.envoyTx.send({ type: "shutdown" });
+			}
 		},
 
 		getProtocolMetadata(): protocol.ProtocolMetadata | undefined {

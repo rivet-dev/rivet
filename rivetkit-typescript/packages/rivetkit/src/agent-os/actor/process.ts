@@ -3,6 +3,7 @@ import type {
 	ProcessTreeNode,
 	SpawnedProcessInfo,
 } from "@rivet-dev/agent-os-core";
+import { ActorStopping } from "@/actor/errors";
 import type { AgentOsActorConfig } from "../config";
 import type { AgentOsActionContext } from "../types";
 import { ensureVm, syncPreventSleep } from "./index";
@@ -15,6 +16,21 @@ type ExecOptions = Parameters<import("@rivet-dev/agent-os-core").AgentOs["exec"]
 type SpawnOptions = Parameters<
 	import("@rivet-dev/agent-os-core").AgentOs["spawn"]
 >[2];
+
+function broadcastProcessEvent<TConnParams>(
+	c: AgentOsActionContext<TConnParams>,
+	name: "processOutput" | "processExit",
+	payload: unknown,
+) {
+	try {
+		c.broadcast(name, payload);
+	} catch (error) {
+		if (error instanceof ActorStopping) {
+			return;
+		}
+		throw error;
+	}
+}
 
 // Build process execution actions for the actor factory.
 export function buildProcessActions<TConnParams>(
@@ -40,11 +56,19 @@ export function buildProcessActions<TConnParams>(
 			const { pid } = agentOs.spawn(command, args, {
 				...options,
 				onStdout: (data: Uint8Array) => {
-					c.broadcast("processOutput", { pid, stream: "stdout" as const, data });
+					broadcastProcessEvent(c, "processOutput", {
+						pid,
+						stream: "stdout" as const,
+						data,
+					});
 					options?.onStdout?.(data);
 				},
 				onStderr: (data: Uint8Array) => {
-					c.broadcast("processOutput", { pid, stream: "stderr" as const, data });
+					broadcastProcessEvent(c, "processOutput", {
+						pid,
+						stream: "stderr" as const,
+						data,
+					});
 					options?.onStderr?.(data);
 				},
 			});
@@ -59,7 +83,7 @@ export function buildProcessActions<TConnParams>(
 
 			agentOs.waitProcess(pid)
 				.then((exitCode) => {
-					c.broadcast("processExit", { pid, exitCode });
+					broadcastProcessEvent(c, "processExit", { pid, exitCode });
 					c.log.info({
 						msg: "agent-os process exited",
 						pid,

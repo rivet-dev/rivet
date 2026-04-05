@@ -5,6 +5,25 @@ import { setupDriverTest, waitFor } from "../utils";
 
 const STRESS_TEST_TIMEOUT_MS = 60_000;
 
+async function forceDisconnectKvChannel(
+	endpoint: string,
+	forceDisconnect?: () => Promise<number>,
+): Promise<number> {
+	if (forceDisconnect) {
+		return await forceDisconnect();
+	}
+
+	const res = await fetch(`${endpoint}/.test/kv-channel/force-disconnect`, {
+		method: "POST",
+	});
+	if (!res.ok) {
+		throw new Error(await res.text());
+	}
+
+	const body = (await res.json()) as { closed: number };
+	return body.closed;
+}
+
 /**
  * Stress and resilience tests for the SQLite database subsystem.
  *
@@ -138,7 +157,11 @@ export function runActorDbStressTests(driverTestConfig: DriverTestConfig) {
 				test(
 					"recovers from forced WebSocket disconnect during DB writes",
 					async (c) => {
-						const { client, endpoint } =
+						const {
+							client,
+							endpoint,
+							forceDisconnectKvChannel: disconnectKvChannel,
+						} =
 							await setupDriverTest(c, driverTestConfig);
 
 						const actor = client.dbStressActor.getOrCreate([
@@ -151,15 +174,11 @@ export function runActorDbStressTests(driverTestConfig: DriverTestConfig) {
 
 						// Force-close all KV channel WebSocket connections.
 						// The native SQLite addon should reconnect automatically.
-						const res = await fetch(
-							`${endpoint}/.test/kv-channel/force-disconnect`,
-							{ method: "POST" },
+						const closed = await forceDisconnectKvChannel(
+							endpoint,
+							disconnectKvChannel,
 						);
-						expect(res.ok).toBe(true);
-						const body = (await res.json()) as {
-							closed: number;
-						};
-						expect(body.closed).toBeGreaterThanOrEqual(0);
+						expect(closed).toBeGreaterThanOrEqual(0);
 
 						// Give the native addon time to detect the disconnect
 						// and reconnect.
@@ -181,7 +200,11 @@ export function runActorDbStressTests(driverTestConfig: DriverTestConfig) {
 				test(
 					"handles disconnect during active write operation",
 					async (c) => {
-						const { client, endpoint } =
+						const {
+							client,
+							endpoint,
+							forceDisconnectKvChannel: disconnectKvChannel,
+						} =
 							await setupDriverTest(c, driverTestConfig);
 
 						const actor = client.dbStressActor.getOrCreate([
@@ -205,9 +228,9 @@ export function runActorDbStressTests(driverTestConfig: DriverTestConfig) {
 							setTimeout(resolve, 50),
 						);
 
-						await fetch(
-							`${endpoint}/.test/kv-channel/force-disconnect`,
-							{ method: "POST" },
+						await forceDisconnectKvChannel(
+							endpoint,
+							disconnectKvChannel,
 						);
 
 						// Wait for the write to settle (success or failure).
