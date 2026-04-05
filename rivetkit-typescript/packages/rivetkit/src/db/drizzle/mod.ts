@@ -5,6 +5,7 @@ import {
 	type SqliteRemoteDatabase,
 } from "drizzle-orm/sqlite-proxy";
 import type { DatabaseProvider, RawAccess } from "../config";
+import { openActorDatabase } from "../open-database";
 import {
 	AsyncMutex,
 	createActorKvStore,
@@ -216,19 +217,7 @@ export function db<
 
 	return {
 		createClient: async (ctx) => {
-			// Construct KV-backed client using actor driver's KV operations
-			if (!ctx.sqliteVfs) {
-				throw new Error(
-					"SqliteVfs instance not provided in context. The driver must provide a sqliteVfs instance.",
-				);
-			}
-
-			const kvStore = createActorKvStore(
-				ctx.kv,
-				ctx.metrics,
-				ctx.preloadedEntries,
-			);
-			const waDb = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
+			const { database: waDb, kvStore } = await openActorDatabase(ctx);
 			// Per-client mutex so actors of the same type do not serialize
 			// against each other. Each actor has its own database handle and
 			// its own closed flag, so there is no shared state to guard.
@@ -344,7 +333,9 @@ export function db<
 			} satisfies RawAccess);
 
 			clientToRawDb.set(result, waDb);
-			clientToKvStore.set(result, kvStore);
+			if (kvStore) {
+				clientToKvStore.set(result, kvStore);
+			}
 			return result;
 		},
 		onMigrate: async (client) => {

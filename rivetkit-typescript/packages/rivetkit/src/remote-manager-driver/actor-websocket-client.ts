@@ -159,9 +159,149 @@ export async function openWebSocketToGateway(
 	// Set binary type to arraybuffer for proper encoding support
 	ws.binaryType = "arraybuffer";
 
-	logger().debug({ msg: "websocket connection opened", gatewayUrl });
+	await waitForWebSocketOpen(ws as UniversalWebSocket);
+
+	logger().debug({ msg: "websocket connection ready", gatewayUrl });
 
 	return ws as UniversalWebSocket;
+}
+
+async function waitForWebSocketOpen(
+	ws: UniversalWebSocket,
+): Promise<void> {
+	await new Promise<void>((resolve, reject) => {
+		let settled = false;
+
+		const cleanup = () => {
+			removeWsListener(ws, "open", onOpen);
+			removeWsListener(ws, "error", onError);
+			removeWsListener(ws, "close", onClose);
+		};
+
+		const settleResolve = () => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			resolve();
+		};
+
+		const settleReject = (error: Error) => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			reject(error);
+		};
+
+		const onOpen = () => {
+			settleResolve();
+		};
+		const onError = (event: unknown) => {
+			settleReject(webSocketOpenError(event));
+		};
+		const onClose = (event: unknown) => {
+			settleReject(webSocketCloseError(event));
+		};
+
+		addWsListener(ws, "open", onOpen);
+		addWsListener(ws, "error", onError);
+		addWsListener(ws, "close", onClose);
+	});
+}
+
+function addWsListener(
+	ws: UniversalWebSocket,
+	event: "open" | "error" | "close",
+	handler: (event?: unknown) => void,
+): void {
+	if ("addEventListener" in ws && typeof ws.addEventListener === "function") {
+		ws.addEventListener(event, handler as EventListener, { once: true });
+		return;
+	}
+
+	if ("once" in ws && typeof (ws as { once?: unknown }).once === "function") {
+		(ws as { once(event: string, handler: (event?: unknown) => void): void })
+			.once(event, handler);
+		return;
+	}
+
+	if ("on" in ws && typeof (ws as { on?: unknown }).on === "function") {
+		(ws as { on(event: string, handler: (event?: unknown) => void): void })
+			.on(event, handler);
+	}
+}
+
+function removeWsListener(
+	ws: UniversalWebSocket,
+	event: "open" | "error" | "close",
+	handler: (event?: unknown) => void,
+): void {
+	if (
+		"removeEventListener" in ws &&
+		typeof ws.removeEventListener === "function"
+	) {
+		ws.removeEventListener(event, handler as EventListener);
+		return;
+	}
+
+	if ("off" in ws && typeof (ws as { off?: unknown }).off === "function") {
+		(ws as { off(event: string, handler: (event?: unknown) => void): void })
+			.off(event, handler);
+		return;
+	}
+
+	if (
+		"removeListener" in ws &&
+		typeof (ws as { removeListener?: unknown }).removeListener === "function"
+	) {
+		(
+			ws as {
+				removeListener(
+					event: string,
+					handler: (event?: unknown) => void,
+				): void;
+			}
+		).removeListener(event, handler);
+	}
+}
+
+function webSocketOpenError(event: unknown): Error {
+	if (event instanceof Error) {
+		return event;
+	}
+
+	if (
+		typeof event === "object" &&
+		event !== null &&
+		"error" in event &&
+		event.error instanceof Error
+	) {
+		return event.error;
+	}
+
+	return new Error("WebSocket failed before opening");
+}
+
+function webSocketCloseError(event: unknown): Error {
+	if (
+		typeof event === "object" &&
+		event !== null &&
+		"reason" in event &&
+		typeof event.reason === "string" &&
+		event.reason.length > 0
+	) {
+		return new Error(event.reason);
+	}
+
+	if (
+		typeof event === "object" &&
+		event !== null &&
+		"code" in event &&
+		typeof event.code === "number"
+	) {
+		return new Error(`WebSocket closed before opening (code ${event.code})`);
+	}
+
+	return new Error("WebSocket closed before opening");
 }
 
 export function buildWebSocketProtocols(

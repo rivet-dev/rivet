@@ -136,6 +136,7 @@ const ACTIVE_ASYNC_REGION_ERROR_MESSAGES: Record<
 		"active websocket callback count went below 0, this is a RivetKit bug",
 };
 
+
 /** Actor type alias with all `any` types. Used for `extends` in classes referencing this actor. */
 export type AnyActorInstance = ActorInstance<
 	any,
@@ -1022,7 +1023,7 @@ export class ActorInstance<
 		let spanEnded = false;
 
 		try {
-			return await this.#traces.withSpan(actionSpan, async () => {
+			const output = await this.#traces.withSpan(actionSpan, async () => {
 				this.#rLog.debug({
 					msg: "executing action",
 					actionName,
@@ -1060,6 +1061,8 @@ export class ActorInstance<
 
 				return output;
 			});
+
+			return output;
 		} catch (error) {
 			this.#metrics.actionErrors++;
 			const isTimeout = error instanceof DeadlineError;

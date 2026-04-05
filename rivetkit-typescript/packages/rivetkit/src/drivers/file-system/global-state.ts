@@ -622,9 +622,14 @@ export class FileSystemGlobalState {
 			"cannot sleep actor with memory driver, must use file system driver",
 		);
 
-		// Get the actor. We upsert it even though we're about to destroy it so we have a lock on flagging `destroying` as true.
-		const actor = this.#upsertEntry(actorId);
-		invariant(actor, `tried to sleep ${actorId}, does not exist`);
+		const actor = this.#actors.get(actorId);
+		if (!actor) {
+			logger().debug({
+				msg: "ignoring stale sleep request for missing actor",
+				actorId,
+			});
+			return;
+		}
 
 		// Check if already destroying
 		if (this.isActorStopping(actorId)) {
@@ -642,6 +647,29 @@ export class FileSystemGlobalState {
 		if (actor.loadPromise) await actor.loadPromise.catch();
 		if (actor.startPromise?.promise)
 			await actor.startPromise.promise.catch();
+
+		if (this.#actors.get(actorId) !== actor) {
+			logger().debug({
+				msg: "ignoring stale sleep request for replaced actor entry",
+				actorId,
+			});
+			actor.stopPromise?.resolve();
+			actor.stopPromise = undefined;
+			return;
+		}
+
+		if (!actor.actor) {
+			logger().debug({
+				msg: "ignoring stale sleep request for unloaded actor",
+				actorId,
+			});
+			actor.lifecycleState = actor.state
+				? ActorLifecycleState.AWAKE
+				: ActorLifecycleState.NONEXISTENT;
+			actor.stopPromise?.resolve();
+			actor.stopPromise = undefined;
+			return;
+		}
 
 		try {
 			// Update state with sleep timestamp
@@ -669,6 +697,12 @@ export class FileSystemGlobalState {
 			invariant(actor.actor, "actor should be loaded");
 			await actor.actor.onStop("sleep");
 		} finally {
+			if (this.#actors.get(actorId) !== actor) {
+				actor.stopPromise?.resolve();
+				actor.stopPromise = undefined;
+				return;
+			}
+
 			// Ensure any pending KV writes finish before removing the entry.
 			await this.#withActorWrite(actorId, async () => {});
 			this.#closeActorKvDatabase(actorId);
@@ -895,6 +929,10 @@ export class FileSystemGlobalState {
 		}
 	}
 
+	async waitForActorStop(actorId: string): Promise<void> {
+		await this.#waitForActorStop(actorId);
+	}
+
 	async #withActorWrite<T>(
 		actorId: string,
 		fn: (entry: ActorEntry) => Promise<T>,
@@ -1106,6 +1144,69 @@ export class FileSystemGlobalState {
 		}
 	}
 
+	async shutdown(): Promise<void> {
+		const actorIds = Array.from(this.#actors.keys());
+
+		for (const actorId of actorIds) {
+			const entry = this.#actors.get(actorId);
+			if (!entry) {
+				continue;
+			}
+
+			entry.alarmTimeout?.abort();
+			entry.alarmTimeout = undefined;
+
+			if (entry.stopPromise) {
+				try {
+					await entry.stopPromise.promise;
+				} catch {
+					// Ignore shutdown races from earlier stop attempts.
+				}
+			}
+
+			if (entry.loadPromise) {
+				await entry.loadPromise.catch(() => undefined);
+			}
+			if (entry.startPromise?.promise) {
+				await entry.startPromise.promise.catch(() => undefined);
+			}
+
+			if (entry.actor) {
+				try {
+					if (entry.actor.isReady()) {
+						await entry.actor.onStop("destroy");
+					} else {
+						await entry.actor.debugForceCrash();
+					}
+				} catch (error) {
+					logger().warn({
+						msg: "failed to stop actor during file-system shutdown",
+						actorId,
+						error: stringifyError(error),
+					});
+				}
+			}
+
+			try {
+				await this.#withActorWrite(actorId, async () => {});
+			} catch {
+				// Ignore pending write failures during shutdown.
+			}
+
+			this.#closeActorKvDatabase(actorId);
+			entry.actor = undefined;
+			entry.startPromise = undefined;
+			entry.stopPromise = undefined;
+			entry.pendingWriteResolver = undefined;
+		}
+
+		for (const actorId of Array.from(this.#actorKvDatabases.keys())) {
+			this.#closeActorKvDatabase(actorId);
+		}
+
+		this.#actors.clear();
+	}
+
 	async startActor(
 		config: RegistryConfig,
 		inlineClient: AnyClient,
@@ -1192,6 +1293,20 @@ export class FileSystemGlobalState {
 
 			return entry.actor;
 		} catch (innerError) {
+			const failedActor = entry.actor;
+			entry.actor = undefined;
+			if (failedActor) {
+				try {
+					await failedActor.debugForceCrash();
+				} catch (cleanupError) {
+					logger().warn({
+						msg: "failed to cleanup actor after start failure",
+						actorId,
+						error: stringifyError(cleanupError),
+					});
+				}
+			}
+
 			if (innerError instanceof ActorError) {
 				entry.startPromise?.reject(innerError);
 				entry.startPromise = undefined;

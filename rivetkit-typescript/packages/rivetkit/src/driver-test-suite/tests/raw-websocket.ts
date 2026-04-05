@@ -2,6 +2,30 @@ import { describe, expect, test } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";
 
+async function waitForWebSocketOpen(ws: WebSocket): Promise<void> {
+	if (ws.readyState === WebSocket.OPEN) {
+		return;
+	}
+
+	await new Promise<void>((resolve, reject) => {
+		ws.addEventListener("open", () => resolve(), { once: true });
+		ws.addEventListener("error", () => reject(new Error("websocket error")), {
+			once: true,
+		});
+		ws.addEventListener(
+			"close",
+			(evt: any) => {
+				reject(
+					new Error(
+						`WebSocket closed: code=${evt.code} reason=${evt.reason}`,
+					),
+				);
+			},
+			{ once: true },
+		);
+	});
+}
+
 export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 	describe("raw websocket", () => {
 		test("should establish raw WebSocket connection", async (c) => {
@@ -268,14 +292,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			const actor = client.rawWebSocketActor.getOrCreate(["paths"]);
 
 			const ws = await actor.webSocket("custom/path");
-
-			await new Promise<void>((resolve, reject) => {
-				ws.addEventListener("open", () => {
-					resolve();
-				});
-				ws.addEventListener("error", reject);
-				ws.addEventListener("close", reject);
-			});
+			await waitForWebSocketOpen(ws);
 
 			// Should still work
 			const welcomeMessage = await new Promise<any>((resolve) => {
@@ -345,11 +362,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			// Create first connection
 			const ws1 = await actor.webSocket();
 
-			// Wait for open event
-			await new Promise<void>((resolve, reject) => {
-				ws1.addEventListener("open", () => resolve(), { once: true });
-				ws1.addEventListener("close", reject);
-			});
+			await waitForWebSocketOpen(ws1);
 
 			// Wait for welcome message which confirms onWebSocket was called
 			const welcome1 = await new Promise<any>((resolve, reject) => {
@@ -368,11 +381,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 
 			// Create second connection to same actor
 			const ws2 = await actor.webSocket();
-
-			await new Promise<void>((resolve, reject) => {
-				ws2.addEventListener("open", () => resolve(), { once: true });
-				ws2.addEventListener("close", reject);
-			});
+			await waitForWebSocketOpen(ws2);
 
 			const welcome2 = await new Promise<any>((resolve, reject) => {
 				ws2.addEventListener(
@@ -441,11 +450,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			const ws = await actor.webSocket(
 				"api/v1/stream?token=abc123&user=test",
 			);
-
-			await new Promise<void>((resolve, reject) => {
-				ws.addEventListener("open", () => resolve(), { once: true });
-				ws.addEventListener("error", reject);
-			});
+			await waitForWebSocketOpen(ws);
 
 			const requestInfoPromise = new Promise<any>((resolve, reject) => {
 				ws.addEventListener("message", (event: any) => {
@@ -479,18 +484,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			// Test WebSocket with ONLY query parameters on the base path
 			// This tests the case where path is "/websocket?foo=bar" without trailing slash
 			const ws = await actor.webSocket("?token=secret&session=123");
-
-			await new Promise<void>((resolve, reject) => {
-				ws.addEventListener("open", () => resolve(), { once: true });
-				ws.addEventListener("error", reject);
-				ws.addEventListener("close", (evt: any) => {
-					reject(
-						new Error(
-							`WebSocket closed: code=${evt.code} reason=${evt.reason}`,
-						),
-					);
-				});
-			});
+			await waitForWebSocketOpen(ws);
 
 			const requestInfoPromise = new Promise<any>((resolve, reject) => {
 				ws.addEventListener("message", (event: any) => {

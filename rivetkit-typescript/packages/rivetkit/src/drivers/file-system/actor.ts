@@ -9,6 +9,7 @@ import {
 import { SqliteVfsPoolManager } from "@/driver-helpers/sqlite-pool";
 import type { FileSystemGlobalState } from "./global-state";
 import { RegistryConfig } from "@/registry/config";
+import { logger } from "./log";
 
 export type ActorDriverContext = Record<never, never>;
 
@@ -39,8 +40,14 @@ export class FileSystemActorDriver implements ActorDriver {
 			// Only define startSleep when persistence is enabled. The actor runtime
 			// checks for this property to determine whether the driver supports sleep.
 			this.startSleep = (actorId: string) => {
-				// Spawns the sleepActor promise.
-				this.#state.sleepActor(actorId);
+				// Spawn sleep in the background without leaking unhandled rejections.
+				void this.#state.sleepActor(actorId).catch((error) => {
+					logger().error({
+						msg: "failed to sleep actor",
+						actorId,
+						error,
+					});
+				});
 			};
 		}
 	}
