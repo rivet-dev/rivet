@@ -9,16 +9,16 @@
 	],
 	"exports": {
 		"import": {
-			"types": "./dist/mod.d.ts",
-			"default": "./dist/mod.js"
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
 		},
 		"require": {
-			"types": "./dist/mod.d.cts",
-			"default": "./dist/mod.cjs"
+			"types": "./dist/index.d.cts",
+			"default": "./dist/index.cjs"
 		}
 	},
 	"scripts": {
-		"build": "tsup src/mod.ts",
+		"build": "tsup src/index.ts",
 		"check-types": "tsc --noEmit",
 		"test": "vitest run",
 		"test:watch": "vitest",
@@ -27,6 +27,7 @@
 	"dependencies": {
 		"@rivetkit/virtual-websocket": "workspace:*",
 		"@rivetkit/engine-envoy-protocol": "workspace:*",
+		"antiox": "link:/home/nathan/antiox",
 		"uuid": "^12.0.0",
 		"pino": "^9.9.5",
 		"ws": "^8.18.3"
