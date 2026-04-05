@@ -2,7 +2,8 @@ import type * as protocol from "@rivetkit/engine-envoy-protocol";
 import { createActor } from "../actor.js";
 import { unreachable } from "antiox/panic";
 import type { EnvoyContext } from "./index.js";
-import { getActorEntry, log, wsSend } from "./index.js";
+import { getActorEntry, log } from "./index.js";
+import { wsSend } from "../connection.js";
 
 export async function handleCommands(
 	ctx: EnvoyContext,
@@ -85,7 +86,7 @@ export function sendCommandAck(ctx: EnvoyContext) {
 
 	if (lastCommandCheckpoints.length === 0) return;
 
-	wsSend(ctx, {
+	wsSend(ctx.shared, {
 		tag: "ToRivetAckCommands",
 		val: { lastCommandCheckpoints },
 	});

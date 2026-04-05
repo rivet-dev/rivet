@@ -376,6 +376,7 @@ type ProtocolMetadata struct {
 	envoyLostThreshold: i64
 	actorStopThreshold: i64
 	serverlessDrainGracePeriod: optional<i64>
+	maxResponsePayloadSize: u64
 }
 
 type ToEnvoyInit struct {

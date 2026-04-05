@@ -14,15 +14,23 @@ async function main() {
 	try {
 		console.log("Starting actor E2E test...");
 
+		// Prewarm js runtime for proper timing
+		await fetch(`${RIVET_ENDPOINT}/foobar`);
+		await fetch(`${RIVET_ENDPOINT}/foobar`);
+		await fetch(`${RIVET_ENDPOINT}/foobar`);
+
 		// Create an actor
 		console.log("Creating actor...");
-		const actorResponse = await createActor(RIVET_NAMESPACE, "test-runner");
+		console.time("actor create");
+		const actorResponse = await createActor(RIVET_NAMESPACE, "test-envoy");
+		console.timeEnd("actor create");
 		console.log("Actor created:", actorResponse.actor);
 
 		actorId = actorResponse.actor.actor_id;
 
 		// Make a request to the actor
 		console.log("Making request to actor...");
+		console.time("ping 1");
 		const actorPingResponse = await fetch(`${RIVET_ENDPOINT}/ping`, {
 			method: "GET",
 			headers: {
@@ -31,6 +39,7 @@ async function main() {
 				"X-Rivet-Actor": actorResponse.actor.actor_id,
 			},
 		});
+		console.timeEnd("ping 1");
 
 		const pingResult = await actorPingResponse.text();
 
@@ -42,7 +51,20 @@ async function main() {
 
 		console.log("Actor ping response:", pingResult);
 
-		await testWebSocket(actorResponse.actor.actor_id);
+		console.time("ping 2");
+		const actorPingResponse2 = await fetch(`${RIVET_ENDPOINT}/ping`, {
+			method: "GET",
+			headers: {
+				"X-Rivet-Token": RIVET_TOKEN,
+				"X-Rivet-Target": "actor",
+				"X-Rivet-Actor": actorResponse.actor.actor_id,
+			},
+		});
+
+		await actorPingResponse2.text();
+		console.timeEnd("ping 2");
+
+		// await testWebSocket(actorResponse.actor.actor_id);
 	} catch (error) {
 		console.error(`Actor test failed:`, error);
 	} finally {

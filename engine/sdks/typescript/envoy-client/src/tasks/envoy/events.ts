@@ -1,6 +1,7 @@
 import type * as protocol from "@rivetkit/engine-envoy-protocol";
 import type { EnvoyContext, ToEnvoyMessage } from "./index.js";
-import { getActorEntry, log, wsSend } from "./index.js";
+import { getActorEntry, log } from "./index.js";
+import { wsSend } from "../connection.js";
 
 export function handleSendEvents(
 	ctx: EnvoyContext,
@@ -19,7 +20,7 @@ export function handleSendEvents(
 	}
 
 	// Send if connected
-	wsSend(ctx, {
+	wsSend(ctx.shared, {
 		tag: "ToRivetEvents",
 		val: events,
 	});
@@ -102,7 +103,7 @@ export function resendUnacknowledgedEvents(ctx: EnvoyContext) {
 		count: events.length,
 	});
 
-	wsSend(ctx, {
+	wsSend(ctx.shared, {
 		tag: "ToRivetEvents",
 		val: events,
 	});

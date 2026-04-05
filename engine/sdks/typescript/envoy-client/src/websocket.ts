@@ -119,5 +119,12 @@ export async function webSocket(
 		inboundTx.close();
 	});
 
+	// Wait for socket ready or error
+	await new Promise((res, rej) => {
+		raw.addEventListener("open", res, { once: true });
+		raw.addEventListener("close", () => rej(new Error("websocket closed")), { once: true });
+		raw.addEventListener("error", (event) => rej(event.error), { once: true });
+	});
+
 	return [outboundTx, inboundRx];
 }

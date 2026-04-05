@@ -334,6 +334,7 @@ pub async fn handle_init(
 				serverless_drain_grace_period: conn
 					.is_serverless
 					.then(|| pb.serverless_drain_grace_period() as i64),
+				max_response_payload_size: pb.envoy_max_response_payload_size() as u64,
 			},
 		}));
 	let init_msg_serialized = init_msg.serialize(conn.protocol_version)?;

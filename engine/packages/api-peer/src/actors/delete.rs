@@ -34,6 +34,8 @@ pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result
 		}),
 	)?;
 
+	let namespace = namespace_res.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+
 	let actor = actors_res
 		.actors
 		.into_iter()
@@ -45,13 +47,12 @@ pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result
 		return Err(pegboard::errors::Actor::NotFound.build());
 	}
 
-	let namespace = namespace_res.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
-
 	// Verify the actor belongs to the specified namespace
 	if actor.namespace_id != namespace.namespace_id {
 		return Err(pegboard::errors::Actor::NotFound.build());
 	}
 
+	// TODO: Actor v2
 	let res = ctx
 		.signal(pegboard::workflows::actor::Destroy {})
 		.to_workflow::<pegboard::workflows::actor::Workflow>()

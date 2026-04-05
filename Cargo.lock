@@ -3326,7 +3326,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-envoy"
-version = "2.1.10"
+version = "2.1.11-rc.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3398,7 +3398,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-gateway2"
-version = "2.1.10"
+version = "2.1.11-rc.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3432,7 +3432,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-outbound"
-version = "2.1.10"
+version = "2.1.11-rc.1"
 dependencies = [
  "anyhow",
  "epoxy",
@@ -4559,7 +4559,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-envoy-client"
-version = "2.1.10"
+version = "2.1.11-rc.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4580,7 +4580,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-envoy-protocol"
-version = "2.1.10"
+version = "2.1.11-rc.1"
 dependencies = [
  "anyhow",
  "gasoline",

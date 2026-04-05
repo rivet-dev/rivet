@@ -1,0 +1,11 @@
+{
+	"extends": "../../../../tsconfig.base.json",
+	"compilerOptions": {
+		"paths": {
+			"@/*": ["./src/*"]
+		},
+		"lib": ["ESNext", "DOM"]
+	},
+	"include": ["src/**/*", "tests/**/*", "benches/**/*"],
+	"exclude": ["node_modules"]
+}

@@ -5,10 +5,9 @@ import { v4 as uuidv4 } from "uuid";
 import type { ToActor } from "../actor.js";
 import type { EnvoyConfig } from "../../config.js";
 import type { EnvoyHandle, KvListOptions } from "../../handle.js";
-import { startConnection } from "../connection.js";
+import { startConnection, wsSend } from "../connection.js";
 import type { SharedContext } from "../../context.js";
 import { logger } from "../../log.js";
-import { stringifyToRivet } from "../../stringify.js";
 import { unreachable } from "antiox/panic";
 import {
 	ACK_COMMANDS_INTERVAL_MS,
@@ -21,6 +20,7 @@ import {
 	handleSendEvents,
 	resendUnacknowledgedEvents,
 } from "./events.js";
+import { handleTunnelMessage } from './tunnel.js';
 import {
 	KV_CLEANUP_INTERVAL_MS,
 	type KvRequestEntry,
@@ -29,13 +29,15 @@ import {
 	handleKvResponse,
 	processUnsentKvRequests,
 } from "./kv.js";
+import { spawn, watch, WatchSender } from "antiox";
 
 export interface EnvoyContext {
 	shared: SharedContext;
-	protocolMetadata?: protocol.ProtocolMetadata;
 	actors: Map<string, Map<number, ActorEntry>>;
 	kvRequests: Map<number, KvRequestEntry>;
 	nextKvRequestId: number;
+	// Maps tunnel requests to actors
+	requestToActor: Map<[protocol.GatewayId, protocol.RequestId], string>;
 }
 
 export interface ActorEntry {
@@ -49,37 +51,40 @@ export interface ActorEntry {
  *
  * Ping is handled by the connection task.
  */
-export type ToEnvoyConnMessage = Exclude<
+export type ToEnvoyFromConnMessage = Exclude<
 	protocol.ToEnvoy,
 	{ tag: "ToEnvoyPing" }
 >;
 
 export type ToEnvoyMessage =
 	// Inbound from connection
-	| { type: "conn-message"; message: ToEnvoyConnMessage }
+	| { type: "conn-message"; message: ToEnvoyFromConnMessage }
 	// Sent from actor
 	| {
-			type: "send-events";
-			events: protocol.EventWrapper[];
-	  }
+		type: "send-events";
+		events: protocol.EventWrapper[];
+	}
 	| {
-			type: "command-stop-actor-complete";
-			actorId: string;
-			generation: number;
-			checkpointIndex: bigint;
-			code: protocol.StopCode;
-			message: string | null;
-	  }
+		type: "command-stop-actor-complete";
+		actorId: string;
+		generation: number;
+		checkpointIndex: bigint;
+		code: protocol.StopCode;
+		message: string | null;
+	}
 	| {
-			type: "kv-request";
-			actorId: string;
-			data: protocol.KvRequestData;
-			resolve: (data: protocol.KvResponseData) => void;
-			reject: (error: Error) => void;
-	  };
+		type: "kv-request";
+		actorId: string;
+		data: protocol.KvRequestData;
+		resolve: (data: protocol.KvResponseData) => void;
+		reject: (error: Error) => void;
+	}
+	| { type: "shutdown" }
+	| { type: "evict" };
 
-export async function startEnvoy(config: EnvoyConfig) {
+export async function startEnvoy(config: EnvoyConfig): Promise<EnvoyHandle> {
 	const [envoyTx, envoyRx] = unboundedChannel<ToEnvoyMessage>();
+	const [startTx, startRx] = watch<void>(void 0);
 	const actors: Map<string, Map<number, ActorEntry>> = new Map();
 
 	const handle = createHandle(actors, envoyTx);
@@ -97,55 +102,75 @@ export async function startEnvoy(config: EnvoyConfig) {
 		actors,
 		kvRequests: new Map(),
 		nextKvRequestId: 0,
+		requestToActor: new Map(),
 	};
 
 	log(ctx.shared)?.info({ msg: "starting envoy" });
 
-	const ackInterval = setInterval(() => {
-		sendCommandAck(ctx);
-	}, ACK_COMMANDS_INTERVAL_MS);
+	spawn(async () => {
+		const ackInterval = setInterval(() => {
+			sendCommandAck(ctx);
+		}, ACK_COMMANDS_INTERVAL_MS);
 
-	const kvCleanupInterval = setInterval(() => {
-		cleanupOldKvRequests(ctx);
-	}, KV_CLEANUP_INTERVAL_MS);
+		const kvCleanupInterval = setInterval(() => {
+			cleanupOldKvRequests(ctx);
+		}, KV_CLEANUP_INTERVAL_MS);
 
-	for await (const msg of envoyRx) {
-		if (msg.type === "conn-message") {
-			await handleConnMessage(ctx, msg.message);
-		} else if (msg.type === "send-events") {
-			handleSendEvents(ctx, msg.events);
-		} else if (msg.type === "command-stop-actor-complete") {
-			handleCommandStopActorComplete(ctx, msg);
-		} else if (msg.type === "kv-request") {
-			handleKvRequest(ctx, msg);
-		} else {
-			unreachable(msg);
+		for await (const msg of envoyRx) {
+			if (msg.type === "conn-message") {
+				await handleConnMessage(ctx, startTx, msg.message);
+			} else if (msg.type === "send-events") {
+				handleSendEvents(ctx, msg.events);
+			} else if (msg.type === "command-stop-actor-complete") {
+				handleCommandStopActorComplete(ctx, msg);
+			} else if (msg.type === "kv-request") {
+				handleKvRequest(ctx, msg);
+			} else if (msg.type === "shutdown") {
+				wsSend(ctx.shared, {
+					tag: "ToRivetStopping",
+					val: null,
+				});
+			} else if (msg.type === "evict") {
+				break;
+			} else {
+				unreachable(msg);
+			}
 		}
-	}
 
-	// Cleanup
-	clearInterval(ackInterval);
-	clearInterval(kvCleanupInterval);
+		log(ctx.shared)?.info({
+			msg: "stopping envoy",
+		});
 
-	for (const request of ctx.kvRequests.values()) {
-		request.reject(new Error("envoy shutting down"));
-	}
-	ctx.kvRequests.clear();
+		// Cleanup
+		clearInterval(ackInterval);
+		clearInterval(kvCleanupInterval);
 
-	for (const [, generations] of ctx.actors) {
-		for (const [, entry] of generations) {
-			entry.handle.close();
+		for (const request of ctx.kvRequests.values()) {
+			request.reject(new Error("envoy shutting down"));
 		}
-	}
-	ctx.actors.clear();
+		ctx.kvRequests.clear();
+
+		for (const [, generations] of ctx.actors) {
+			for (const [, entry] of generations) {
+				entry.handle.close();
+			}
+		}
+		ctx.actors.clear();
+	});
+
+	// Wait for envoy start
+	await startRx.changed();
+
+	return handle;
 }
 
 async function handleConnMessage(
 	ctx: EnvoyContext,
-	message: ToEnvoyConnMessage,
+	startTx: WatchSender<void>,
+	message: ToEnvoyFromConnMessage,
 ) {
 	if (message.tag === "ToEnvoyInit") {
-		ctx.protocolMetadata = message.val.metadata;
+		ctx.shared.protocolMetadata = message.val.metadata;
 		log(ctx.shared)?.info({
 			msg: "received init",
 			protocolMetadata: message.val.metadata,
@@ -153,6 +178,8 @@ async function handleConnMessage(
 
 		resendUnacknowledgedEvents(ctx);
 		processUnsentKvRequests(ctx);
+
+		startTx.send();
 	} else if (message.tag === "ToEnvoyCommands") {
 		await handleCommands(ctx, message.val);
 	} else if (message.tag === "ToEnvoyAckEvents") {
@@ -160,30 +187,13 @@ async function handleConnMessage(
 	} else if (message.tag === "ToEnvoyKvResponse") {
 		handleKvResponse(ctx, message.val);
 	} else if (message.tag === "ToEnvoyTunnelMessage") {
-		// TODO:
+		handleTunnelMessage(ctx, message.val);
 	} else {
 		unreachable(message);
 	}
 }
 
 // MARK: Util
-
-export function wsSend(ctx: EnvoyContext, message: protocol.ToRivet) {
-	log(ctx.shared)?.debug({
-		msg: "sending message",
-		data: stringifyToRivet(message),
-	});
-
-	if (!ctx.shared.wsTx) {
-		log(ctx.shared)?.warn({
-			msg: "websocket not available for sending, events will be resent on reconnect",
-		});
-		return;
-	}
-
-	const encoded = protocol.encodeToRivet(message);
-	ctx.shared.wsTx.send({ type: "send", data: encoded });
-}
 
 export function log(ctx: SharedContext) {
 	if (ctx.logCached) return ctx.logCached;
@@ -211,6 +221,8 @@ function createHandle(
 	actors: Map<string, Map<number, ActorEntry>>,
 	envoyTx: UnboundedSender<ToEnvoyMessage>,
 ): EnvoyHandle {
+	// NOTE: Because of the weird order we have to create the handle/shared context/envoy context, these
+	// functions are defined here instead of globally
 	function findActor(
 		actorId: string,
 		generation?: number,
@@ -288,6 +300,10 @@ function createHandle(
 	}
 
 	return {
+		shutdown() {
+			envoyTx.send({ type: "shutdown" });
+		},
+
 		sleepActor(actorId: string, generation?: number): void {
 			sendActorIntent(
 				actorId,
@@ -473,6 +489,27 @@ function createHandle(
 			});
 		},
 	};
+}
+
+export function findActor(
+	ctx: EnvoyContext,
+	actorId: string,
+	generation?: number,
+): ActorEntry | undefined {
+	const gens = ctx.actors.get(actorId);
+	if (!gens || gens.size === 0) return undefined;
+
+	if (generation !== undefined) {
+		return gens.get(generation);
+	}
+
+	// Return first non-closed (active) entry
+	for (const entry of gens.values()) {
+		if (!entry.handle.isClosed()) {
+			return entry;
+		}
+	}
+	return undefined;
 }
 
 function uint8ArraysEqual(a: Uint8Array, b: Uint8Array): boolean {

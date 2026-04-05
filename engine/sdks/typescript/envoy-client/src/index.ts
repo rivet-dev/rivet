@@ -4,6 +4,6 @@ export type { EnvoyHandle, KvListOptions } from "./handle.js";
 export {
 	type EnvoyContext,
 	type ToEnvoyMessage,
-	type ToEnvoyConnMessage,
+	type ToEnvoyFromConnMessage,
 	startEnvoy,
 } from "./tasks/envoy/index.js";

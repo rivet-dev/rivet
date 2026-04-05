@@ -358,8 +358,17 @@ struct CheckEnvoyLivenessInput {
 	envoy_key: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct CheckEnvoyLivenessOutput {
+	expired: bool,
+	now: i64,
+}
+
 #[activity(CheckEnvoyLiveness)]
-async fn check_envoy_liveness(ctx: &ActivityCtx, input: &CheckEnvoyLivenessInput) -> Result<bool> {
+async fn check_envoy_liveness(
+	ctx: &ActivityCtx,
+	input: &CheckEnvoyLivenessInput,
+) -> Result<CheckEnvoyLivenessOutput> {
 	let state = ctx.state::<State>()?;
 	let envoy_lost_threshold = ctx.config().pegboard().envoy_lost_threshold();
 
@@ -378,7 +387,7 @@ async fn check_envoy_liveness(ctx: &ActivityCtx, input: &CheckEnvoyLivenessInput
 			let now = util::timestamp::now();
 			let expired = last_ping_ts < now - envoy_lost_threshold;
 
-			Ok(expired)
+			Ok(CheckEnvoyLivenessOutput { expired, now })
 		})
 		.custom_instrument(tracing::info_span!("actor_check_envoy_liveness_tx"))
 		.await
@@ -392,7 +401,7 @@ async fn listen_for_signals(
 	metrics_workflow_id: Id,
 ) -> Result<Vec<Main>> {
 	// Listen for signals based on transition
-	let signals = match &state.transition {
+	let signals = match &mut state.transition {
 		Transition::Allocating {
 			lost_timeout_ts, ..
 		}
@@ -432,20 +441,22 @@ async fn listen_for_signals(
 			// Listen for signals with periodic liveness check timeout
 			let signals = ctx
 				.listen_n_until::<Main>(
-					last_liveness_check_ts + ctx.config().pegboard().envoy_lost_threshold(),
+					*last_liveness_check_ts + ctx.config().pegboard().envoy_lost_threshold(),
 					256,
 				)
 				.await?;
 
 			// Perform liveness check
 			if signals.is_empty() {
-				let expired = ctx
+				let res = ctx
 					.activity(CheckEnvoyLivenessInput {
 						envoy_key: envoy.envoy_key.clone(),
 					})
 					.await?;
 
-				if expired {
+				*last_liveness_check_ts = res.now;
+
+				if res.expired {
 					vec![Main::Lost(Lost {
 						generation: state.generation,
 						reason: LostReason::EnvoyConnectionLost,
