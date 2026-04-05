@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Deref};
 
 /// A type that can be serialized in to a key that can be used in the cache.
 pub trait CacheKey: Clone + Debug + PartialEq {
@@ -97,5 +97,19 @@ impl CacheKey for RawCacheKey {
 impl From<String> for RawCacheKey {
 	fn from(value: String) -> Self {
 		RawCacheKey(value)
+	}
+}
+
+impl From<RawCacheKey> for String {
+	fn from(value: RawCacheKey) -> Self {
+		value.0
+	}
+}
+
+impl Deref for RawCacheKey {
+	type Target = String;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
 	}
 }

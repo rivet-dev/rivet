@@ -42,66 +42,8 @@ impl RequestConfig {
 
 // MARK: Fetch
 impl RequestConfig {
-	/// Attempts to fetch a given key from the database and falls back to the
-	/// getter if not found. If both the cache and the getter return `None`,
-	/// then this returns `None`.
-	///
-	/// See `fetch_all` for more details.
-	#[tracing::instrument(err, skip(key, getter))]
-	pub async fn fetch_one<K, V, Getter, Fut>(
-		self,
-		base_key: impl ToString + Debug,
-		key: K,
-		getter: Getter,
-	) -> Result<Option<V>>
-	where
-		K: CacheKey + Send + Sync,
-		V: Serialize + DeserializeOwned + Clone + Debug + Send + Sync,
-		Getter: Fn(GetterCtx<K, V>, K) -> Fut + Clone,
-		Fut: Future<Output = Result<GetterCtx<K, V>>>,
-	{
-		let values = self
-			.fetch_all(base_key, [key], move |cache, keys| {
-				let getter = getter.clone();
-				async move {
-					debug_assert_eq!(1, keys.len());
-					if let Some(key) = keys.into_iter().next() {
-						getter(cache, key).await
-					} else {
-						tracing::error!("no keys provided to fetch one");
-						Ok(cache)
-					}
-				}
-			})
-			.await?;
-		Ok(values.into_iter().next().map(|(_, v)| v))
-	}
-
-	#[tracing::instrument(err, skip(keys, getter))]
-	pub async fn fetch_all<Key, Value, Getter, Fut>(
-		self,
-		base_key: impl ToString + Debug,
-		keys: impl IntoIterator<Item = Key>,
-		getter: Getter,
-	) -> Result<Vec<(Key, Value)>>
-	where
-		Key: CacheKey + Send + Sync,
-		Value: Serialize + DeserializeOwned + Clone + Debug + Send + Sync,
-		Getter: Fn(GetterCtx<Key, Value>, Vec<Key>) -> Fut + Clone,
-		Fut: Future<Output = Result<GetterCtx<Key, Value>>>,
-	{
-		self.fetch_all_convert(
-			base_key,
-			keys,
-			getter,
-			|x: &Value| Ok(x.clone()),
-			|x: &Value| Ok(x.clone()),
-		)
-		.await
-	}
-
 	#[tracing::instrument(err, skip(keys, getter, encoder, decoder))]
-	async fn fetch_all_convert<Key, Value, ValueSerde, Getter, Fut, Encoder, Decoder>(
+	async fn fetch_all_convert<Key, Value, Getter, Fut, Encoder, Decoder>(
 		self,
 		base_key: impl ToString + Debug,
 		keys: impl IntoIterator<Item = Key>,
@@ -112,11 +54,10 @@ impl RequestConfig {
 	where
 		Key: CacheKey + Send + Sync,
 		Value: Debug + Send + Sync,
-		ValueSerde: Serialize + DeserializeOwned + Debug + Send + Sync,
 		Getter: Fn(GetterCtx<Key, Value>, Vec<Key>) -> Fut + Clone,
 		Fut: Future<Output = Result<GetterCtx<Key, Value>>>,
-		Encoder: Fn(&Value) -> Result<ValueSerde> + Clone,
-		Decoder: Fn(&ValueSerde) -> Result<Value> + Clone,
+		Encoder: Fn(&Value) -> Result<Vec<u8>> + Clone,
+		Decoder: Fn(&[u8]) -> Result<Value> + Clone,
 	{
 		let base_key = base_key.to_string();
 		let keys = keys.into_iter().collect::<Vec<Key>>();
@@ -145,12 +86,13 @@ impl RequestConfig {
 			.iter()
 			.map(|key| self.cache.driver.process_key(&base_key, &key.key))
 			.collect::<Vec<_>>();
+		let cache_keys_len = cache_keys.len();
 
 		// Attempt to fetch value from cache, fall back to getter
-		match self.cache.driver.fetch_values(&base_key, &cache_keys).await {
+		match self.cache.driver.get(&base_key, cache_keys).await {
 			Ok(cached_values) => {
 				debug_assert_eq!(
-					cache_keys.len(),
+					cache_keys_len,
 					cached_values.len(),
 					"cache returned wrong number of values"
 				);
@@ -159,15 +101,10 @@ impl RequestConfig {
 				for (i, value) in cached_values.into_iter().enumerate() {
 					if let Some(value_bytes) = value {
 						// Try to decode the value using the driver
-						match self.cache.driver.decode_value(&value_bytes) {
-							Ok(value_serde) => match decoder(&value_serde) {
-								Ok(value) => {
-									ctx.resolve_from_cache(i, value);
-								}
-								Err(err) => {
-									tracing::error!(?err, "Failed to decode value");
-								}
-							},
+						match decoder(&value_bytes) {
+							Ok(value) => {
+								ctx.resolve_from_cache(i, value);
+							}
 							Err(err) => {
 								tracing::error!(?err, "Failed to decode value");
 							}
@@ -204,19 +141,8 @@ impl RequestConfig {
 							// Process the key with the appropriate driver
 							let driver_key = self.cache.driver.process_key(&base_key, &key.key);
 							// Try to decode the value using the driver
-							match encoder(&value) {
-								Ok(value_bytes) => {
-									match self.cache.driver.encode_value(&value_bytes) {
-										Ok(value_serde) => {
-											Some((driver_key, value_serde, expire_at))
-										}
-										Err(err) => {
-											tracing::error!(?err, "Failed to encode value");
-
-											None
-										}
-									}
-								}
+							match encoder(value) {
+								Ok(value_bytes) => Some((driver_key, value_bytes, expire_at)),
 								Err(err) => {
 									tracing::error!(?err, "Failed to encode value");
 
@@ -227,13 +153,13 @@ impl RequestConfig {
 						.collect::<Vec<_>>();
 
 					if !keys_values.is_empty() {
-						let driver = self.cache.driver.clone();
+						let cache = self.cache.clone();
 						let base_key_clone = base_key.clone();
 
 						let spawn_res = tokio::task::Builder::new().name("cache::write").spawn(
 							async move {
 								if let Err(err) =
-									driver.set_values(&base_key_clone, keys_values).await
+									cache.driver.set(&base_key_clone, keys_values).await
 								{
 									tracing::error!(?err, "failed to write to cache");
 								}
@@ -296,10 +222,7 @@ impl RequestConfig {
 		if let Some(ups) = &self.cache.ups {
 			let message = CachePurgeMessage {
 				base_key: base_key.to_string(),
-				keys: cache_keys
-					.iter()
-					.map(|k| RawCacheKey::from(k.clone()))
-					.collect(),
+				keys: cache_keys.clone(),
 			};
 
 			let payload = serde_json::to_vec(&message)?;
@@ -323,11 +246,7 @@ impl RequestConfig {
 		}
 
 		// Delete keys locally
-		let raw_keys = cache_keys
-			.into_iter()
-			.map(RawCacheKey::from)
-			.collect::<Vec<_>>();
-		self.purge_local(base_key, raw_keys).await
+		self.purge_local(base_key, cache_keys).await
 	}
 
 	/// Purges keys from the local cache without publishing to NATS.
@@ -344,11 +263,15 @@ impl RequestConfig {
 			return Ok(());
 		}
 
-		// Convert RawCacheKey to String for driver
-		let cache_keys = keys.into_iter().map(|k| k.cache_key()).collect::<Vec<_>>();
+		metrics::CACHE_PURGE_REQUEST_TOTAL
+			.with_label_values(&[base_key])
+			.inc();
+		metrics::CACHE_PURGE_VALUE_TOTAL
+			.with_label_values(&[base_key])
+			.inc_by(keys.len() as u64);
 
 		// Delete keys locally
-		match self.cache.driver.delete_keys(base_key, cache_keys).await {
+		match self.cache.driver.delete(base_key, keys).await {
 			Ok(_) => {
 				tracing::trace!("successfully deleted keys");
 			}
@@ -430,12 +353,12 @@ impl RequestConfig {
 			keys,
 			getter,
 			|value: &Value| -> Result<Vec<u8>> {
-				serde_json::to_vec(value)
+				serde_json::to_vec(&value)
 					.map_err(Error::SerdeEncode)
 					.map_err(Into::into)
 			},
-			|value: &Vec<u8>| -> Result<Value> {
-				serde_json::from_slice(value.as_slice())
+			|value: &[u8]| -> Result<Value> {
+				serde_json::from_slice(value)
 					.map_err(Error::SerdeDecode)
 					.map_err(Into::into)
 			},
