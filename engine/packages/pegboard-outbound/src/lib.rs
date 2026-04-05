@@ -1,15 +1,15 @@
 use anyhow::Result;
-use futures_util::StreamExt;
+use futures_util::{StreamExt, stream::FuturesUnordered};
 use gas::prelude::*;
 use pegboard::pubsub_subjects::ServerlessOutboundSubject;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest_eventsource as sse;
-use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
+use rivet_envoy_protocol::{self as protocol, versioned};
 use rivet_runtime::TermSignal;
 use rivet_types::actor::RunnerPoolError;
 use rivet_types::runner_configs::RunnerConfigKind;
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
 use universalpubsub::NextOutput;
 use vbare::OwnedVersionedData;
@@ -20,6 +20,7 @@ const X_RIVET_ENDPOINT: HeaderName = HeaderName::from_static("x-rivet-endpoint")
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 const X_RIVET_POOL_NAME: HeaderName = HeaderName::from_static("x-rivet-pool-name");
 const X_RIVET_NAMESPACE_NAME: HeaderName = HeaderName::from_static("x-rivet-namespace-name");
+const SHUTDOWN_PROGRESS_INTERVAL: Duration = Duration::from_secs(7);
 
 #[tracing::instrument(skip_all)]
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
@@ -45,8 +46,52 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 		}
 	}
 
-	// Wait for remaining conns to stop
-	futures_util::future::join_all(conns.into_iter().map(|c| c.handle).collect::<Vec<_>>()).await;
+	let mut term_signal = TermSignal::get();
+	let shutdown_duration = config.runtime.guard_shutdown_duration();
+	tracing::info!(remaining_conns=%conns.len(), duration=?shutdown_duration, "starting outbound shutdown");
+
+	let mut conn_futs = conns
+		.iter_mut()
+		.map(|conn| &mut conn.handle)
+		.collect::<FuturesUnordered<_>>();
+
+	let mut progress_interval = tokio::time::interval(SHUTDOWN_PROGRESS_INTERVAL);
+	progress_interval.tick().await;
+
+	let shutdown_start = Instant::now();
+	loop {
+		// Future will resolve once all workflow tasks complete
+		let complete_fut = async { while let Some(_) = conn_futs.next().await {} };
+
+		tokio::select! {
+			// Wait for remaining conns to stop
+			_ = complete_fut => {
+				break;
+			}
+			_ = progress_interval.tick() => {
+				tracing::info!(remaining_conns=%conn_futs.len(), "outbound still shutting down");
+			}
+			abort = term_signal.recv() => {
+				if abort {
+					tracing::warn!("aborting outbound shutdown");
+					break;
+				}
+			}
+			_ = tokio::time::sleep(shutdown_duration.saturating_sub(shutdown_start.elapsed())) => {
+				tracing::warn!("outbound shutdown timed out");
+				break;
+			}
+		}
+	}
+
+	let remaining_conns = conn_futs.into_iter().count();
+	if remaining_conns == 0 {
+		tracing::info!("all outbound connections complete");
+	} else {
+		tracing::warn!(%remaining_conns, "not all outbound connections completed");
+	}
+
+	tracing::info!("outbound shutdown complete");
 
 	res
 }
@@ -114,6 +159,8 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 	let actor_id = Id::parse(&checkpoint.actor_id)?;
 	let generation = checkpoint.generation;
 
+	tracing::debug!(?namespace_id, %pool_name, ?actor_id, ?generation, "received outbound request");
+
 	// Check pool
 	let (pool_res, namespace_res) = tokio::try_join!(
 		ctx.op(pegboard::ops::runner_config::get::Input {
@@ -151,7 +198,7 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 			}),
 		},
 	]))
-	.serialize_with_embedded_version(PROTOCOL_VERSION)?;
+	.serialize_with_embedded_version(pool.protocol_version.unwrap_or(1))?;
 
 	let RunnerConfigKind::Serverless {
 		url,

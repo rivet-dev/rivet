@@ -30,6 +30,9 @@ export interface EnvoyConfig {
 		request: Request,
 	) => Promise<Response>;
 
+	/** Payload to start an actor from a serverless SSE POST request. Can also use `EnvoyHandle.startServerless` */
+	serverlessStartPayload?: ArrayBuffer;
+
 	// TODO: fix doc comment
 	/**
 	 * Called when receiving a WebSocket connection.

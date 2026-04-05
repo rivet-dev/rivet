@@ -8,7 +8,8 @@ use rand::prelude::SliceRandom;
 use rivet_runner_protocol::{
 	self as protocol, PROTOCOL_MK1_VERSION, PROTOCOL_MK2_VERSION, versioned,
 };
-use rivet_types::{actors::CrashPolicy, keys::namespace::runner_config::RunnerConfigVariant};
+use rivet_types::actors::CrashPolicy;
+use rivet_types::runner_configs::RunnerConfigKind;
 use std::time::Instant;
 use universaldb::prelude::*;
 use universalpubsub::PublishOpts;
@@ -109,6 +110,8 @@ impl LifecycleState {
 #[derive(Serialize, Deserialize)]
 pub struct LifecycleResult {
 	pub generation: u32,
+	#[serde(default)]
+	pub migrate_to_v2: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -227,6 +230,7 @@ enum AllocateActorStatus {
 		pending_allocation_ts: i64,
 	},
 	Sleep,
+	MigrateToV2,
 }
 
 // If no availability, returns the timestamp of the actor's queue key
@@ -248,6 +252,26 @@ async fn allocate_actor_v2(
 		.pegboard()
 		.actor_allocation_candidate_sample_size();
 
+	let pool_res = ctx
+		.op(crate::ops::runner_config::get::Input {
+			runners: vec![(namespace_id, runner_name_selector.clone())],
+			bypass_cache: false,
+		})
+		.await?;
+	let pool = pool_res.into_iter().next();
+	let for_serverless = pool
+		.as_ref()
+		.map(|pool| matches!(pool.config.kind, RunnerConfigKind::Serverless { .. }))
+		.unwrap_or(false);
+
+	// Protocol version is set, we must migrate to actor v2
+	if pool.and_then(|p| p.protocol_version).is_some() {
+		return Ok(AllocateActorOutputV2 {
+			status: AllocateActorStatus::MigrateToV2,
+			serverless: false,
+		});
+	}
+
 	// NOTE: This txn should closely resemble the one found in the allocate_pending_actors activity of the
 	// client wf
 	let res = ctx
@@ -265,12 +289,6 @@ async fn allocate_actor_v2(
 				),
 			);
 
-			let ns_tx = tx.with_subspace(namespace::keys::subspace());
-			let runner_config_variant_key = keys::runner_config::ByVariantKey::new(
-				namespace_id,
-				RunnerConfigVariant::Serverless,
-				runner_name_selector.clone(),
-			);
 			let mut queue_stream = tx.get_ranges_keyvalues(
 				universaldb::RangeOption {
 					mode: StreamingMode::Exact,
@@ -281,13 +299,7 @@ async fn allocate_actor_v2(
 				// inserts/clears to this range
 				Snapshot,
 			);
-			let (for_serverless_res, queue_exists_res) = tokio::join!(
-				// Check if runner is a serverless runner
-				ns_tx.exists(&runner_config_variant_key, Serializable),
-				queue_stream.next(),
-			);
-			let for_serverless = for_serverless_res?;
-			let queue_exists = queue_exists_res.is_some();
+			let queue_exists = queue_stream.next().await.is_some();
 
 			if for_serverless {
 				tx.atomic_op(
@@ -478,6 +490,7 @@ async fn allocate_actor_v2(
 				AllocateActorStatus::Allocated { .. } => "allocated",
 				AllocateActorStatus::Pending { .. } => "pending",
 				AllocateActorStatus::Sleep { .. } => "sleep",
+				AllocateActorStatus::MigrateToV2 => bail!("should not be migrate_to_v2"),
 			},
 		])
 		.observe(dt);
@@ -517,6 +530,7 @@ async fn allocate_actor_v2(
 				state.failure_reason = Some(super::FailureReason::NoCapacity);
 			}
 		}
+		AllocateActorStatus::MigrateToV2 => bail!("should not be migrate_to_v2"),
 	}
 
 	Ok(res)
@@ -620,6 +634,7 @@ pub enum SpawnActorOutput {
 	},
 	Sleep,
 	Destroy,
+	MigrateToV2,
 }
 
 /// Wrapper around `allocate_actor` that handles pending state.
@@ -1033,6 +1048,7 @@ pub async fn spawn_actor(
 			}
 		}
 		AllocateActorStatus::Sleep => Ok(SpawnActorOutput::Sleep),
+		AllocateActorStatus::MigrateToV2 => Ok(SpawnActorOutput::MigrateToV2),
 	}
 }
 

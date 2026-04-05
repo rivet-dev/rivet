@@ -5,7 +5,12 @@ export interface RivetEvent {
 	currentTarget?: any;
 	/**
 	 * @experimental
-	 * Request ID for hibernatable websockets (provided by engine runner)
+	 * Gateway ID for hibernatable websockets (provided by engine envoy)
+	 **/
+	rivetGatewayId?: ArrayBuffer;
+	/**
+	 * @experimental
+	 * Request ID for hibernatable websockets (provided by engine envoy)
 	 **/
 	rivetRequestId?: ArrayBuffer;
 }
@@ -14,7 +19,7 @@ export interface RivetMessageEvent extends RivetEvent {
 	data: any;
 	/**
 	 * @experimental
-	 * Message index for hibernatable websockets (provided by engine runner)
+	 * Message index for hibernatable websockets (provided by engine envoy)
 	 **/
 	rivetMessageIndex?: number;
 }

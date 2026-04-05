@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import * as protocol from "@rivetkit/engine-envoy-protocol";
-import { EnvoyHandle, startEnvoy } from "@rivetkit/engine-envoy-client";
+import { EnvoyHandle, startEnvoy, startEnvoySync } from "@rivetkit/engine-envoy-client";
 import { Hono, type Context as HonoContext, type Next } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { Logger } from "pino";
@@ -23,6 +23,122 @@ const AUTOCONFIGURE_SERVERLESS = (process.env.AUTOCONFIGURE_SERVERLESS ?? "1") =
 
 let envoy: EnvoyHandle | null = null;
 const websocketLastMsgIndexes: Map<string, number> = new Map();
+const config = {
+	logger: getLogger(),
+	version: RIVET_ENVOY_VERSION,
+	endpoint: RIVET_ENDPOINT,
+	token: RIVET_TOKEN,
+	namespace: RIVET_NAMESPACE,
+	poolName: RIVET_POOL_NAME,
+	prepopulateActorNames: {},
+	fetch: async (
+		envoy: EnvoyHandle,
+		actorId: string,
+		_gatewayId: ArrayBuffer,
+		_requestId: ArrayBuffer,
+		request: Request,
+	) => {
+		getLogger().info(
+			`Fetch called for actor ${actorId}, URL: ${request.url}`,
+		);
+		const url = new URL(request.url);
+		if (url.pathname === "/ping") {
+			// Return the actor ID in response
+			const responseData = {
+				actorId,
+				status: "ok",
+				timestamp: Date.now(),
+			};
+
+			return new Response(JSON.stringify(responseData), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		} else if (url.pathname === "/sleep") {
+			envoy.sleepActor(actorId);
+
+			return new Response("ok", {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+
+		return new Response("ok", { status: 200 });
+	},
+	onActorStart: async (
+		_envoy: EnvoyHandle,
+		_actorId: string,
+		_generation: number,
+		_config: protocol.ActorConfig,
+	) => {
+		getLogger().info(
+			`Actor ${_actorId} started (generation ${_generation})`,
+		);
+	},
+	onActorStop: async (
+		_envoy: EnvoyHandle,
+		_actorId: string,
+		_generation: number,
+		reason: protocol.StopActorReason,
+	) => {
+		getLogger().info(
+			`Actor ${_actorId} stopped (generation ${_generation})`,
+		);
+	},
+	onShutdown() { },
+	websocket: async (
+		envoy: EnvoyHandle,
+		actorId: string,
+		ws: WebSocket,
+		_gatewayId: ArrayBuffer,
+		_requestId: ArrayBuffer,
+		_request: Request,
+	) => {
+		getLogger().info(`WebSocket connected for actor ${actorId}`);
+
+		// Echo server - send back any messages received
+		ws.addEventListener("message", (event) => {
+			const data = event.data;
+			getLogger().info({
+				msg: `WebSocket message from actor ${actorId}`,
+				data,
+				index: (event as any).rivetMessageIndex,
+			});
+
+			ws.send(`Echo: ${data}`);
+
+			// Ack
+			const websocketId = Buffer.from(
+				(event as any).rivetRequestId,
+			).toString("base64");
+			websocketLastMsgIndexes.set(
+				websocketId,
+				(event as any).rivetMessageIndex,
+			);
+			envoy.sendHibernatableWebSocketMessageAck(
+				(event as any).rivetGatewayId,
+				(event as any).rivetRequestId,
+				(event as any).rivetMessageIndex,
+			);
+		});
+
+		ws.addEventListener("close", () => {
+			getLogger().info(`WebSocket closed for actor ${actorId}`);
+		});
+
+		ws.addEventListener("error", (error) => {
+			getLogger().error({
+				msg: `WebSocket error for actor ${actorId}:`,
+				error,
+			});
+		});
+	},
+	hibernatableWebSocket: {
+		canHibernate() {
+			return true;
+		},
+	},
+};
 
 // Create internal server
 const app = new Hono();
@@ -59,24 +175,26 @@ app.get("/shutdown", async (c) => {
 	return c.text("ok");
 });
 
-// TODO:
-app.get("/api/rivet/start", async (c) => {
-	// return streamSSE(c, async (stream) => {
-	// 	const runnerStarted = Promise.withResolvers<Runner>();
-	// 	const runnerStopped = Promise.withResolvers<Runner>();
-	// 	const runner = await startRunner(runnerStarted, runnerStopped);
+app.post("/api/rivet/start", async (c) => {
+	let payload = await c.req.arrayBuffer();
 
-	// 	c.req.raw.signal.addEventListener("abort", () => {
-	// 		getLogger().debug("SSE aborted, shutting down runner");
-	// 		runner!.shutdown(true);
-	// 	});
+	return streamSSE(c, async (stream) => {
+		const stopped = Promise.withResolvers<void>();
+		const envoy = startEnvoySync({
+			...config,
+			serverlessStartPayload: payload,
+			onShutdown() {
+				stopped.resolve();
+			}
+		});
 
-	// 	await runnerStarted.promise;
+		c.req.raw.signal.addEventListener("abort", () => {
+			getLogger().debug("SSE aborted, shutting down runner");
+			envoy!.shutdown(true);
+		});
 
-	// 	stream.writeSSE({ data: runner.getServerlessInitPacket()! });
-
-	// 	await runnerStopped.promise;
-	// });
+		await stopped.promise;
+	});
 });
 
 app.get("/api/rivet/metadata", async (c) => {
@@ -84,6 +202,7 @@ app.get("/api/rivet/metadata", async (c) => {
 		// Not actually rivetkit
 		runtime: "rivetkit",
 		version: "1",
+		envoyProtocolVersion: protocol.VERSION,
 	});
 });
 
@@ -98,123 +217,7 @@ if (AUTOSTART_SERVER) {
 }
 
 if (AUTOSTART_ENVOY) {
-	envoy = await startEnvoy({
-		logger: getLogger(),
-		version: RIVET_ENVOY_VERSION,
-		endpoint: RIVET_ENDPOINT,
-		token: RIVET_TOKEN,
-		namespace: RIVET_NAMESPACE,
-		poolName: RIVET_POOL_NAME,
-		prepopulateActorNames: {},
-		fetch: async (
-			envoy: EnvoyHandle,
-			actorId: string,
-			_gatewayId: ArrayBuffer,
-			_requestId: ArrayBuffer,
-			request: Request,
-		) => {
-			getLogger().info(
-				`Fetch called for actor ${actorId}, URL: ${request.url}`,
-			);
-			const url = new URL(request.url);
-			if (url.pathname === "/ping") {
-				// Return the actor ID in response
-				const responseData = {
-					actorId,
-					status: "ok",
-					timestamp: Date.now(),
-				};
-
-				return new Response(JSON.stringify(responseData), {
-					status: 200,
-					headers: { "Content-Type": "application/json" },
-				});
-			} else if (url.pathname === "/sleep") {
-				envoy.sleepActor(actorId);
-
-				return new Response("ok", {
-					status: 200,
-					headers: { "Content-Type": "application/json" },
-				});
-			}
-
-			return new Response("ok", { status: 200 });
-		},
-		onActorStart: async (
-			_envoy: EnvoyHandle,
-			_actorId: string,
-			_generation: number,
-			_config: protocol.ActorConfig,
-		) => {
-			getLogger().info(
-				`Actor ${_actorId} started (generation ${_generation})`,
-			);
-		},
-		onActorStop: async (
-			_envoy: EnvoyHandle,
-			_actorId: string,
-			_generation: number,
-			reason: protocol.StopActorReason,
-		) => {
-			getLogger().info(
-				`Actor ${_actorId} stopped (generation ${_generation})`,
-			);
-		},
-		onShutdown() { },
-		// TODO:
-		websocket: async (
-			envoy: EnvoyHandle,
-			actorId: string,
-			ws: WebSocket,
-			_gatewayId: ArrayBuffer,
-			_requestId: ArrayBuffer,
-			_request: Request,
-		) => {
-			// getLogger().info(`WebSocket connected for actor ${actorId}`);
-
-			// // Echo server - send back any messages received
-			// ws.addEventListener("message", (event) => {
-			// 	const data = event.data;
-			// 	getLogger().info({
-			// 		msg: `WebSocket message from actor ${actorId}`,
-			// 		data,
-			// 		index: (event as any).rivetMessageIndex,
-			// 	});
-
-			// 	ws.send(`Echo: ${data}`);
-
-			// 	// Ack
-			// 	const websocketId = Buffer.from(
-			// 		(event as any).rivetRequestId,
-			// 	).toString("base64");
-			// 	websocketLastMsgIndexes.set(
-			// 		websocketId,
-			// 		(event as any).rivetMessageIndex,
-			// 	);
-			// 	envoy.sendHibernatableWebSocketMessageAck(
-			// 		(event as any).rivetGatewayId,
-			// 		(event as any).rivetRequestId,
-			// 		(event as any).rivetMessageIndex,
-			// 	);
-			// });
-
-			// ws.addEventListener("close", () => {
-			// 	getLogger().info(`WebSocket closed for actor ${actorId}`);
-			// });
-
-			// ws.addEventListener("error", (error) => {
-			// 	getLogger().error({
-			// 		msg: `WebSocket error for actor ${actorId}:`,
-			// 		error,
-			// 	});
-			// });
-		},
-		hibernatableWebSocket: {
-			canHibernate() {
-				return true;
-			},
-		},
-	});
+	envoy = await startEnvoy(config);
 } else if (AUTOCONFIGURE_SERVERLESS) {
 	await autoConfigureServerless();
 }

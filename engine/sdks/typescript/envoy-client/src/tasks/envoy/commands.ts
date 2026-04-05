@@ -22,7 +22,6 @@ export async function handleCommands(
 
 		if (tag === "CommandStartActor") {
 			const handle = createActor(ctx.shared, {
-				commandIdx: checkpoint.index,
 				actorId: checkpoint.actorId,
 				generation: checkpoint.generation,
 				config: val.config,
@@ -58,7 +57,7 @@ export async function handleCommands(
 
 			entry.lastCommandIdx = checkpoint.index;
 			entry.handle.send({
-				type: "command-stop-actor",
+				type: "stop",
 				commandIdx: checkpoint.index,
 				reason: val.reason,
 			});

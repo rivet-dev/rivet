@@ -1716,3 +1716,131 @@ impl TuplePack for ActiveEnvoySubspaceKey {
 		Ok(offset)
 	}
 }
+
+#[derive(Debug)]
+pub struct ActiveEnvoyByNameKey {
+	namespace_id: Id,
+	pub name: String,
+	pub create_ts: i64,
+	pub envoy_key: String,
+}
+
+impl ActiveEnvoyByNameKey {
+	pub fn new(namespace_id: Id, name: String, create_ts: i64, envoy_key: String) -> Self {
+		ActiveEnvoyByNameKey {
+			namespace_id,
+			name,
+			create_ts,
+			envoy_key,
+		}
+	}
+
+	pub fn subspace(namespace_id: Id, name: String) -> ActiveEnvoyByNameSubspaceKey {
+		ActiveEnvoyByNameSubspaceKey::new(namespace_id, name)
+	}
+
+	pub fn subspace_with_create_ts(
+		namespace_id: Id,
+		name: String,
+		create_ts: i64,
+	) -> ActiveEnvoyByNameSubspaceKey {
+		ActiveEnvoyByNameSubspaceKey::new_with_create_ts(namespace_id, name, create_ts)
+	}
+}
+
+impl FormalKey for ActiveEnvoyByNameKey {
+	type Value = ();
+
+	fn deserialize(&self, _raw: &[u8]) -> Result<Self::Value> {
+		Ok(())
+	}
+
+	fn serialize(&self, _value: Self::Value) -> Result<Vec<u8>> {
+		Ok(Vec::new())
+	}
+}
+
+impl TuplePack for ActiveEnvoyByNameKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			NAMESPACE,
+			ENVOY,
+			BY_NAME,
+			ACTIVE,
+			self.namespace_id,
+			&self.name,
+			self.create_ts,
+			&self.envoy_key,
+		);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for ActiveEnvoyByNameKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, _, _, namespace_id, name, create_ts, envoy_key)) =
+			<(usize, usize, usize, usize, Id, String, i64, String)>::unpack(input, tuple_depth)?;
+		let v = ActiveEnvoyByNameKey {
+			namespace_id,
+			name,
+			create_ts,
+			envoy_key,
+		};
+
+		Ok((input, v))
+	}
+}
+
+pub struct ActiveEnvoyByNameSubspaceKey {
+	namespace_id: Id,
+	name: String,
+	create_ts: Option<i64>,
+}
+
+impl ActiveEnvoyByNameSubspaceKey {
+	pub fn new(namespace_id: Id, name: String) -> Self {
+		ActiveEnvoyByNameSubspaceKey {
+			namespace_id,
+			name,
+			create_ts: None,
+		}
+	}
+
+	pub fn new_with_create_ts(namespace_id: Id, name: String, create_ts: i64) -> Self {
+		ActiveEnvoyByNameSubspaceKey {
+			namespace_id,
+			name,
+			create_ts: Some(create_ts),
+		}
+	}
+}
+
+impl TuplePack for ActiveEnvoyByNameSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let mut offset = VersionstampOffset::None { size: 0 };
+
+		let t = (
+			NAMESPACE,
+			ENVOY,
+			BY_NAME,
+			ACTIVE,
+			self.namespace_id,
+			&self.name,
+		);
+		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(create_ts) = &self.create_ts {
+			offset += create_ts.pack(w, tuple_depth)?;
+		}
+
+		Ok(offset)
+	}
+}

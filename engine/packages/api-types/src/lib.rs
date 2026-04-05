@@ -1,5 +1,6 @@
 pub mod actors;
 pub mod datacenters;
+pub mod envoys;
 pub mod namespaces;
 pub mod pagination;
 pub mod runner_configs;

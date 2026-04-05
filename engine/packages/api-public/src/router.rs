@@ -8,21 +8,22 @@ use rivet_api_builder::{create_router, extract::FailedExtraction};
 use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 
-use crate::{actors, ctx, datacenters, health, metadata, namespaces, runner_configs, runners, ui};
+use crate::{
+	actors, ctx, datacenters, envoys, health, metadata, namespaces, runner_configs, runners, ui,
+};
 
 #[derive(OpenApi)]
 #[openapi(
 	paths(
 		actors::list::list,
 		actors::create::create,
-		actors::create::create2,
 		actors::delete::delete,
 		actors::list_names::list_names,
 		actors::get_or_create::get_or_create,
-		actors::get_or_create::get_or_create2,
 		actors::kv_get::kv_get,
 		runners::list,
 		runners::list_names,
+		envoys::list,
 		namespaces::list,
 		namespaces::create,
 		runner_configs::list::list,
@@ -81,14 +82,9 @@ pub async fn router(
 			// MARK: Actors
 			.route("/actors", axum::routing::get(actors::list::list))
 			.route("/actors", axum::routing::post(actors::create::create))
-			.route("/actors2", axum::routing::post(actors::create::create2))
 			.route(
 				"/actors",
 				axum::routing::put(actors::get_or_create::get_or_create),
-			)
-			.route(
-				"/actors2",
-				axum::routing::put(actors::get_or_create::get_or_create2),
 			)
 			.route(
 				"/actors/{actor_id}",
@@ -104,6 +100,8 @@ pub async fn router(
 			)
 			// MARK: Runners
 			.route("/runners", axum::routing::get(runners::list))
+			// MARK: Envoys
+			.route("/envoys", axum::routing::get(envoys::list))
 			.route("/runners/names", axum::routing::get(runners::list_names))
 			// MARK: Datacenters
 			.route("/datacenters", axum::routing::get(datacenters::list))

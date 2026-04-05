@@ -1,7 +1,7 @@
 import type { EnvoyConfig } from "@rivetkit/engine-envoy-client";
 import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
 import { SqliteVfsPoolManager } from "@/driver-helpers/sqlite-pool";
-import { protocol, utils, EnvoyHandle, startEnvoySync } from "@rivetkit/engine-envoy-client";
+import { type HibernatingWebSocketMetadata, protocol, utils, EnvoyHandle, startEnvoySync } from "@rivetkit/engine-envoy-client";
 import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -190,11 +190,11 @@ export class EngineActorDriver implements ActorDriver {
 		};
 
 		// Create and start envoy
-		const [envoy, startRx] = startEnvoySync(envoyConfig);
+		const envoy = startEnvoySync(envoyConfig);
 
 		this.#envoy = envoy;
 
-		startRx.changed().then(() => {
+		envoy.started().then(() => {
 			this.#envoyStarted.resolve(undefined);
 		});
 
@@ -459,47 +459,46 @@ export class EngineActorDriver implements ActorDriver {
 	}
 
 	async serverlessHandleStart(c: HonoContext): Promise<Response> {
+		let payload = await c.req.arrayBuffer();
+
 		return streamSSE(c, async (stream) => {
-			// TODO:
-			// // NOTE: onAbort does not work reliably
-			// stream.onAbort(() => { });
-			// c.req.raw.signal.addEventListener("abort", () => {
-			// 	logger().debug("SSE aborted, shutting down runner");
+			// NOTE: onAbort does not work reliably
+			stream.onAbort(() => { });
+			c.req.raw.signal.addEventListener("abort", () => {
+				logger().debug("SSE aborted, shutting down runner");
 
-			// 	// We cannot assume that the request will always be closed gracefully by Rivet. We always proceed with a graceful shutdown in case the request was terminated for any other reason.
-			// 	//
-			// 	// If we did not use a graceful shutdown, the runner would
-			// 	this.shutdownRunner(false);
-			// });
+				// We cannot assume that the request will always be closed gracefully by Rivet. We always proceed with a graceful shutdown in case the request was terminated for any other reason.
+				//
+				// If we did not use a graceful shutdown, the runner would
+				this.shutdown(false);
+			});
 
-			// await this.#envoyStarted.promise;
+			await this.#envoyStarted.promise;
 
-			// // Runner id should be set if the runner started
-			// const payload = this.#envoy.getServerlessInitPacket();
-			// invariant(payload, "runnerId not set");
-			// await stream.writeSSE({ data: payload });
+			// Runner id should be set if the runner started
+			this.#envoy.startServerless(payload);
 
-			// // Send ping every second to keep the connection alive
-			// while (true) {
-			// 	if (this.#isRunnerStopped) {
-			// 		logger().debug({
-			// 			msg: "runner is stopped",
-			// 		});
-			// 		break;
-			// 	}
+			// Send ping every second to keep the connection alive
+			while (true) {
+				if (this.#isEnvoyStopped) {
+					logger().debug({
+						msg: "envoy is stopped",
+					});
+					break;
+				}
 
-			// 	if (stream.closed || stream.aborted) {
-			// 		logger().debug({
-			// 			msg: "runner sse stream closed",
-			// 			closed: stream.closed,
-			// 			aborted: stream.aborted,
-			// 		});
-			// 		break;
-			// 	}
+				if (stream.closed || stream.aborted) {
+					logger().debug({
+						msg: "envoy sse stream closed",
+						closed: stream.closed,
+						aborted: stream.aborted,
+					});
+					break;
+				}
 
-			// 	await stream.writeSSE({ event: "ping", data: "" });
-			// 	await stream.sleep(RUNNER_SSE_PING_INTERVAL);
-			// }
+				await stream.writeSSE({ event: "ping", data: "" });
+				await stream.sleep(ENVOY_SSE_PING_INTERVAL);
+			}
 
 			// Wait for the runner to stop if the SSE stream aborted early for any reason
 			await this.#envoyStopped.promise;
@@ -725,7 +724,7 @@ export class EngineActorDriver implements ActorDriver {
 			});
 
 			try {
-				this.#envoy.stopActor(actorId);
+				this.#envoy.stopActor(actorId, undefined, stringifyError(error));
 			} catch (stopError) {
 				logger().debug({
 					msg: "failed to stop actor after start failure",
@@ -1130,28 +1129,28 @@ export class EngineActorDriver implements ActorDriver {
 		}
 	}
 
-	// async #hwsLoadAll(
-	// 	actorId: string,
-	// ): Promise<HibernatingWebSocketMetadata[]> {
-	// 	const actor = await this.loadActor(actorId);
-	// 	return actor.conns
-	// 		.values()
-	// 		.map((conn) => {
-	// 			const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
-	// 			const hibernatable = connStateManager.hibernatableData;
-	// 			if (!hibernatable) return undefined;
-	// 			return {
-	// 				gatewayId: hibernatable.gatewayId,
-	// 				requestId: hibernatable.requestId,
-	// 				serverMessageIndex: hibernatable.serverMessageIndex,
-	// 				clientMessageIndex: hibernatable.clientMessageIndex,
-	// 				path: hibernatable.requestPath,
-	// 				headers: hibernatable.requestHeaders,
-	// 			} satisfies HibernatingWebSocketMetadata;
-	// 		})
-	// 		.filter((x) => x !== undefined)
-	// 		.toArray();
-	// }
+	async #hwsLoadAll(
+		actorId: string,
+	): Promise<HibernatingWebSocketMetadata[]> {
+		const actor = await this.loadActor(actorId);
+		return actor.conns
+			.values()
+			.map((conn) => {
+				const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
+				const hibernatable = connStateManager.hibernatableData;
+				if (!hibernatable) return undefined;
+				return {
+					gatewayId: hibernatable.gatewayId,
+					requestId: hibernatable.requestId,
+					rivetMessageIndex: hibernatable.serverMessageIndex,
+					envoyMessageIndex: hibernatable.clientMessageIndex,
+					path: hibernatable.requestPath,
+					headers: hibernatable.requestHeaders,
+				} satisfies HibernatingWebSocketMetadata;
+			})
+			.filter((x) => x !== undefined)
+			.toArray();
+	}
 
 	async onBeforeActorStart(actor: AnyActorInstance): Promise<void> {
 		// Resolve promise if waiting
@@ -1161,10 +1160,9 @@ export class EngineActorDriver implements ActorDriver {
 		handler.actorStartPromise?.resolve();
 		handler.actorStartPromise = undefined;
 
-		// TODO:
-		// // Restore hibernating requests
-		// const metaEntries = await this.#hwsLoadAll(actor.id);
-		// await this.#envoy.restoreHibernatingRequests(actor.id, metaEntries);
+		// Restore hibernating requests
+		const metaEntries = await this.#hwsLoadAll(actor.id);
+		await this.#envoy.restoreHibernatingRequests(actor.id, metaEntries);
 	}
 
 	onCreateConn(conn: AnyConn) {
@@ -1231,12 +1229,11 @@ export class EngineActorDriver implements ActorDriver {
 			entry.pendingAckFromMessageIndex ||
 			entry.pendingAckFromBufferSize
 		) {
-			// TODO:
-			// this.#envoy.sendHibernatableWebSocketMessageAck(
-			// 	hibernatable.gatewayId,
-			// 	hibernatable.requestId,
-			// 	entry.serverMessageIndex,
-			// );
+			this.#envoy.sendHibernatableWebSocketMessageAck(
+				hibernatable.gatewayId,
+				hibernatable.requestId,
+				entry.serverMessageIndex,
+			);
 			entry.pendingAckFromMessageIndex = false;
 			entry.pendingAckFromBufferSize = false;
 			entry.bufferedMessageSize = 0;

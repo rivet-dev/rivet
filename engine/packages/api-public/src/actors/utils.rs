@@ -156,9 +156,9 @@ pub async fn find_dc_for_actor_creation(
 		if let Some(dc_label) = res.dc_labels.into_iter().next() {
 			dc_label
 		} else {
-			return Err(pegboard::errors::Actor::NoRunnersAvailable {
+			return Err(pegboard::errors::Actor::NoRunnerConfigConfigured {
 				namespace: namespace_name.into(),
-				runner_name: runner_name.into(),
+				pool_name: runner_name.into(),
 			}
 			.build());
 		}

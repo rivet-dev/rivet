@@ -37,6 +37,13 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
+	pub static ref ENVOY_VERSION_UPGRADE_DRAIN_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"pegboard_envoy_version_upgrade_drain_total",
+		"Count of envoys drained due to version upgrade.",
+		&["namespace_id", "pool_name"],
+		*REGISTRY
+	).unwrap();
+
 	pub static ref SERVERLESS_OUTBOUND_REQ_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
 		"pegboard_serverless_outbound_req_total",
 		"Count of serverless outbound requests made.",

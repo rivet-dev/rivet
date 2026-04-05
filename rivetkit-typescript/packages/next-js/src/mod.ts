@@ -1,14 +1,14 @@
 import type { Registry } from "rivetkit";
 import { logger } from "./log";
 
-// Runner version set to seconds since epoch when the module loads in development mode.
+// Envoy version set to seconds since epoch when the module loads in development mode.
 //
 // This creates a version number that increments each time the code is updated
 // and the module reloads, allowing the engine to detect code changes via the
-// /metadata endpoint and hot-reload all actors by draining older runners.
+// /metadata endpoint and hot-reload all actors by draining older envoys.
 //
-// We use seconds (not milliseconds) because the runner version is a u32 on the engine side.
-const DEV_RUNNER_VERSION = Math.floor(Date.now() / 1000);
+// We use seconds (not milliseconds) because the envoy version is a u32 on the engine side.
+const DEV_ENVOY_VERSION = Math.floor(Date.now() / 1000);
 
 export const toNextHandler = (registry: Registry<any>) => {
 	// Don't run server locally since we're using the fetch handler directly
@@ -44,10 +44,10 @@ export const toNextHandler = (registry: Registry<any>) => {
 			slotsPerRunner: 1,
 		};
 
-		// Set runner version to enable hot-reloading on code changes
+		// Set envoy version to enable hot-reloading on code changes
 		registry.config.envoy = {
 			...registry.config.envoy,
-			version: DEV_RUNNER_VERSION,
+			version: DEV_ENVOY_VERSION,
 		};
 	} else {
 		logger().debug(

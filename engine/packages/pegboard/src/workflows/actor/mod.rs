@@ -217,6 +217,28 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 				return Ok(());
 			}
+			runtime::SpawnActorOutput::MigrateToV2 => {
+				ctx.signal(metrics::Destroy {
+					ts: util::timestamp::now(),
+				})
+				.to_workflow_id(metrics_workflow_id)
+				.send()
+				.await?;
+
+				ctx.workflow(crate::workflows::actor2::Input {
+					actor_id: input.actor_id,
+					name: input.name.clone(),
+					pool_name: input.runner_name_selector.clone(),
+					key: input.key.clone(),
+					namespace_id: input.namespace_id,
+					crash_policy: input.crash_policy,
+					input: input.input.clone(),
+					from_v1: true,
+				})
+				.dispatch()
+				.await?;
+				return Ok(());
+			}
 		};
 
 	let lifecycle_res = ctx
@@ -368,7 +390,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 									protocol::ActorState::ActorStateStopped(
 										protocol::ActorStateStopped { code, message },
 									) => {
-										if let StoppedResult::Destroy = handle_stopped(
+										match handle_stopped(
 											ctx,
 											&input,
 											state,
@@ -383,9 +405,19 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										)
 										.await?
 										{
-											return Ok(Loop::Break(runtime::LifecycleResult {
-												generation: state.generation,
-											}));
+											StoppedResult::Continue => {}
+											StoppedResult::Destroy => {
+												return Ok(Loop::Break(runtime::LifecycleResult {
+													generation: state.generation,
+													migrate_to_v2: false,
+												}));
+											}
+											StoppedResult::MigrateToV2 => {
+												return Ok(Loop::Break(runtime::LifecycleResult {
+													generation: state.generation,
+													migrate_to_v2: true,
+												}));
+											}
 										}
 									}
 								},
@@ -511,7 +543,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										protocol::mk2::ActorState::ActorStateStopped(
 											protocol::mk2::ActorStateStopped { code, message },
 										) => {
-											if let StoppedResult::Destroy = handle_stopped(
+											match handle_stopped(
 												ctx,
 												&input,
 												state,
@@ -523,9 +555,19 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											)
 											.await?
 											{
-												return Ok(Loop::Break(runtime::LifecycleResult {
-													generation: state.generation,
-												}));
+												StoppedResult::Continue => {}
+												StoppedResult::Destroy => {
+													return Ok(Loop::Break(runtime::LifecycleResult {
+														generation: state.generation,
+														migrate_to_v2: false,
+													}));
+												}
+												StoppedResult::MigrateToV2 => {
+													return Ok(Loop::Break(runtime::LifecycleResult {
+														generation: state.generation,
+														migrate_to_v2: true,
+													}));
+												}
 											}
 										}
 									},
@@ -616,6 +658,13 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											// Destroyed early
 											return Ok(Loop::Break(runtime::LifecycleResult {
 												generation: state.generation,
+												migrate_to_v2: false,
+											}));
+										}
+										runtime::SpawnActorOutput::MigrateToV2 => {
+											return Ok(Loop::Break(runtime::LifecycleResult {
+												generation: state.generation,
+												migrate_to_v2: true,
 											}));
 										}
 									}
@@ -665,7 +714,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								None
                             };
 
-							if let StoppedResult::Destroy = handle_stopped(
+							match handle_stopped(
 								ctx,
 								&input,
 								state,
@@ -677,9 +726,19 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							)
 							.await?
 							{
-								return Ok(Loop::Break(runtime::LifecycleResult {
-									generation: state.generation,
-								}));
+								StoppedResult::Continue => {}
+								StoppedResult::Destroy => {
+									return Ok(Loop::Break(runtime::LifecycleResult {
+										generation: state.generation,
+										migrate_to_v2: false,
+									}));
+								}
+								StoppedResult::MigrateToV2 => {
+									return Ok(Loop::Break(runtime::LifecycleResult {
+										generation: state.generation,
+										migrate_to_v2: true,
+									}));
+								}
 							}
 						}
 						Main::GoingAway(sig) => {
@@ -763,6 +822,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 							return Ok(Loop::Break(runtime::LifecycleResult {
 								generation: state.generation,
+								migrate_to_v2: false,
 							}));
 						}
 					}
@@ -945,6 +1005,7 @@ enum StoppedVariant {
 enum StoppedResult {
 	Continue,
 	Destroy,
+	MigrateToV2,
 }
 
 async fn handle_stopped(
@@ -1128,6 +1189,7 @@ async fn handle_stopped(
 			}
 			// Destroyed early
 			runtime::SpawnActorOutput::Destroy => return Ok(StoppedResult::Destroy),
+			runtime::SpawnActorOutput::MigrateToV2 => return Ok(StoppedResult::MigrateToV2),
 		}
 	}
 	// Handle rescheduling if not marked as sleeping
@@ -1170,6 +1232,9 @@ async fn handle_stopped(
 						// Destroyed early
 						return Ok(StoppedResult::Destroy);
 					}
+					runtime::SpawnActorOutput::MigrateToV2 => {
+						return Ok(StoppedResult::MigrateToV2);
+					}
 				}
 			}
 			(CrashPolicy::Sleep, false) => {
@@ -1210,6 +1275,7 @@ async fn handle_stopped(
 			}
 			// Destroyed early
 			runtime::SpawnActorOutput::Destroy => return Ok(StoppedResult::Destroy),
+			runtime::SpawnActorOutput::MigrateToV2 => return Ok(StoppedResult::MigrateToV2),
 		}
 	}
 

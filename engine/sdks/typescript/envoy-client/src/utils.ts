@@ -1,5 +1,48 @@
 import { logger } from "./log";
 
+export class BufferMap<T> {
+	#inner: Map<string, T>;
+	constructor() {
+		this.#inner = new Map();
+	}
+
+	get(buffers: ArrayBuffer[]): T | undefined {
+		return this.#inner.get(cyrb53(buffers));
+	}
+
+	set(buffers: ArrayBuffer[], value: T) {
+		this.#inner.set(cyrb53(buffers), value);
+	}
+
+	delete(buffers: ArrayBuffer[]): boolean {
+		return this.#inner.delete(cyrb53(buffers));
+	}
+
+	has(buffers: ArrayBuffer[]): boolean {
+		return this.#inner.has(cyrb53(buffers));
+	}
+}
+
+function cyrb53(buffers: ArrayBuffer[], seed: number = 0): string {
+	let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+	for (const buffer of buffers) {
+		const bytes = new Uint8Array(buffer);
+		for (const b of bytes) {
+			h1 = Math.imul(h1 ^ b, 2654435761);
+			h2 = Math.imul(h2 ^ b, 1597334677);
+		}
+	}
+	h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+	h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+	return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
+}
+
+export class EnvoyShutdownError extends Error {
+	constructor() {
+		super("Envoy shut down");
+	}
+}
+
 /** Resolves after the configured debug latency, or immediately if none. */
 export function injectLatency(ms?: number): Promise<void> {
 	if (!ms) return Promise.resolve();

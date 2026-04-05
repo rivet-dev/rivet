@@ -1,6 +1,7 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, Next } from "hono";
 import type { Encoding } from "@/actor/protocol/serde";
+import { protocol as envoyProtocol } from "@rivetkit/engine-envoy-client";
 import {
 	getRequestEncoding,
 	getRequestExposeInternalError,
@@ -103,7 +104,7 @@ export function handleRouteError(error: unknown, c: HonoContext) {
 	return c.body(output as any, { status: statusCode });
 }
 
-export type MetadataRunnerKind =
+export type MetadataEnvoyKind =
 	| { serverless: Record<never, never> }
 	| { normal: Record<never, never> };
 
@@ -113,17 +114,18 @@ export type MetadataRunnerKind =
 export interface MetadataResponse {
 	runtime: string;
 	version: string;
-	runner?: {
-		kind: MetadataRunnerKind;
+	envoy?: {
+		kind: MetadataEnvoyKind;
 		version?: number;
 	};
+	envoyProtocolVersion: number,
 	actorNames: ReturnType<typeof buildActorNames>;
 	/**
-	 * Endpoint that the client should connect to to access this runner.
+	 * Endpoint that the client should connect to to access this envoy.
 	 *
 	 * If defined, will override the endpoint the user has configured on startup.
 	 *
-	 * This is helpful if attempting to connect to a serverless runner, so the serverless runner can define where the main endpoint lives.
+	 * This is helpful if attempting to connect to a serverless envoy, so the serverless runner can define where the main endpoint lives.
 	 *
 	 * This is also helpful for setting up clean redirects as needed.
 	 **/
@@ -141,7 +143,7 @@ export interface MetadataResponse {
 export function handleMetadataRequest(
 	c: HonoContext,
 	config: RegistryConfig,
-	runnerKind: MetadataRunnerKind,
+	envoyKind: MetadataEnvoyKind,
 	clientEndpoint: string | undefined,
 	clientNamespace: string | undefined,
 	clientToken: string | undefined,
@@ -149,10 +151,11 @@ export function handleMetadataRequest(
 	const response: MetadataResponse = {
 		runtime: "rivetkit",
 		version: VERSION,
-		runner: {
-			kind: runnerKind,
-			version: config.runner.version,
+		envoy: {
+			kind: envoyKind,
+			version: config.envoy.version,
 		},
+		envoyProtocolVersion: envoyProtocol.VERSION,
 		actorNames: buildActorNames(config),
 		clientEndpoint,
 		clientNamespace,

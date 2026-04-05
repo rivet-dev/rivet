@@ -2,9 +2,10 @@ use std::time::Duration;
 
 use futures_util::FutureExt;
 use gas::prelude::*;
-use rivet_types::runner_configs::RunnerConfigKind;
+use rivet_types::{actor::RunnerPoolError, runner_configs::RunnerConfigKind};
+use universaldb::prelude::*;
 
-use crate::ops::actor_name::upsert_batch::ActorNameEntry;
+use crate::{keys, ops::actor_name::upsert_batch::ActorNameEntry};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
@@ -199,6 +200,39 @@ async fn poll_metadata(ctx: &ActivityCtx, input: &PollMetadataInput) -> Result<P
 		}
 	};
 
+	// Save protocol to udb
+	let downgraded = ctx
+		.udb()?
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
+
+			let protocol_version_key = keys::runner_config::ProtocolVersionKey::new(
+				input.namespace_id,
+				input.runner_name.clone(),
+			);
+
+			if let Some(protocol_version) = metadata.envoy_protocol_version {
+				tx.write(&protocol_version_key, protocol_version)?;
+
+				Ok(false)
+			} else if tx.exists(&protocol_version_key, Serializable).await? {
+				Ok(true)
+			} else {
+				Ok(false)
+			}
+		})
+		.await?;
+
+	if downgraded {
+		report_error(
+			ctx,
+			input.namespace_id,
+			&input.runner_name,
+			RunnerPoolError::Downgrade,
+		)
+		.await;
+	}
+
 	// Update actor names in DB if present
 	if !metadata.actor_names.is_empty() {
 		let actor_names: Vec<ActorNameEntry> = metadata
@@ -219,24 +253,54 @@ async fn poll_metadata(ctx: &ActivityCtx, input: &PollMetadataInput) -> Result<P
 
 	// Drain older runners if runner_version is set
 	let older_runner_workflow_ids = if let Some(version) = metadata.runner_version {
-		let drain_result = ctx
-			.op(crate::ops::runner::drain::Input {
-				namespace_id: input.namespace_id,
-				name: input.runner_name.clone(),
-				version,
-				// Signals are sent by the workflow directly
-				send_runner_stop_signals: false,
-			})
-			.await?;
-		drain_result.older_runner_workflow_ids
+		ctx.op(crate::ops::runner::drain::Input {
+			namespace_id: input.namespace_id,
+			name: input.runner_name.clone(),
+			version,
+			// Signals are sent by the workflow directly
+			send_runner_stop_signals: false,
+		})
+		.await?
+		.older_runner_workflow_ids
 	} else {
 		Vec::new()
 	};
+
+	// Drain older envoys if envoy_version is set
+	if let Some(version) = metadata.envoy_version {
+		ctx.op(crate::ops::envoy::drain::Input {
+			namespace_id: input.namespace_id,
+			pool_name: input.runner_name.clone(),
+			version,
+		})
+		.await?;
+	}
 
 	Ok(PollMetadataOutput::Success {
 		poll_interval: base_poll_interval,
 		older_runner_workflow_ids,
 	})
+}
+
+/// Report an error to the error tracker workflow.
+async fn report_error(
+	ctx: &ActivityCtx,
+	namespace_id: Id,
+	pool_name: &str,
+	error: RunnerPoolError,
+) {
+	if let Err(err) = ctx
+		.signal(crate::workflows::runner_pool_error_tracker::ReportError { error })
+		.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
+		.to_workflow::<crate::workflows::runner_pool_error_tracker::Workflow>()
+		.tag("namespace_id", namespace_id)
+		.tag("runner_name", pool_name)
+		.graceful_not_found()
+		.send()
+		.await
+	{
+		tracing::warn!(?err, "failed to report serverless error");
+	}
 }
 
 #[signal("pegboard_runner_pool_metadata_poller_endpoint_config_changed")]

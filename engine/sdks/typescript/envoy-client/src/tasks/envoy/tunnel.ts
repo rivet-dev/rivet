@@ -3,6 +3,18 @@ import { EnvoyContext, getActor, log } from "./index.js";
 import { SharedContext } from "@/context.js";
 import { unreachable } from "antiox";
 import { wsSend } from "../connection.js";
+import { idToStr } from "@/utils.js";
+import { stringifyToRivetTunnelMessageKind } from "@/stringify.js";
+
+export interface HibernatingWebSocketMetadata {
+	gatewayId: protocol.GatewayId;
+	requestId: protocol.RequestId;
+	envoyMessageIndex: number;
+	rivetMessageIndex: number;
+
+	path: string;
+	headers: Record<string, string>;
+}
 
 export function handleTunnelMessage(ctx: EnvoyContext, msg: protocol.ToEnvoyTunnelMessage) {
 	const {
@@ -21,7 +33,7 @@ export function handleTunnelMessage(ctx: EnvoyContext, msg: protocol.ToEnvoyTunn
 	} else if (tag === "ToEnvoyWebSocketMessage") {
 		handleWebSocketMessage(ctx, messageId, val);
 	} else if (tag === "ToEnvoyWebSocketClose") {
-		handleWebSocketClose(ctx, messageId);
+		handleWebSocketClose(ctx, messageId, val);
 	} else {
 		unreachable(tag);
 	}
@@ -36,20 +48,15 @@ function handleRequestStart(ctx: EnvoyContext, messageId: protocol.MessageId, re
 			actorId: req.actorId,
 		});
 
-		// NOTE: This is a special response that will cause Guard to retry the request
-		//
-		// See should_retry_request_inner
-		// https://github.com/rivet-dev/rivet/blob/222dae87e3efccaffa2b503de40ecf8afd4e31eb/engine/packages/guard-core/src/proxy_service.rs#L2458
-		sendResponse(ctx.shared, messageId, new Response("Actor not found", {
-			status: 503,
-			headers: { "x-rivet-error": "envoy.actor_not_found" },
-		}));
+		sendErrorResponse(ctx, messageId.gatewayId, messageId.requestId);
 
 		return;
 	}
 
+	ctx.requestToActor.set([messageId.gatewayId, messageId.requestId], req.actorId);
+
 	actor.handle.send({
-		type: "request-start",
+		type: "req-start",
 		messageId,
 		req,
 	});
@@ -60,7 +67,7 @@ function handleRequestChunk(ctx: EnvoyContext, messageId: protocol.MessageId, ch
 	if (actorId) {
 		let actor = getActor(ctx, actorId);
 		if (actor) {
-			actor.handle.send({ type: "request-chunk", messageId, chunk });
+			actor.handle.send({ type: "req-chunk", messageId, chunk });
 		}
 	}
 
@@ -74,54 +81,166 @@ function handleRequestAbort(ctx: EnvoyContext, messageId: protocol.MessageId) {
 	if (actorId) {
 		let actor = getActor(ctx, actorId);
 		if (actor) {
-			actor.handle.send({ type: "request-abort", messageId });
+			actor.handle.send({ type: "req-abort", messageId });
 		}
 	}
 
 	ctx.requestToActor.delete([messageId.gatewayId, messageId.requestId]);
 }
 
-export async function sendResponse(ctx: SharedContext, messageId: protocol.MessageId, response: Response) {
-	// Always treat responses as non-streaming for now
-	// In the future, we could detect streaming responses based on:
-	// - Transfer-Encoding: chunked
-	// - Content-Type: text/event-stream
-	// - Explicit stream flag from the handler
+function handleWebSocketOpen(ctx: EnvoyContext, messageId: protocol.MessageId, open: protocol.ToEnvoyWebSocketOpen) {
+	const actor = getActor(ctx, open.actorId);
 
-	// Read the body first to get the actual content
-	const body = response.body ? await response.arrayBuffer() : null;
+	if (!actor) {
+		log(ctx.shared)?.warn({
+			msg: "received request for unknown actor",
+			actorId: open.actorId,
+		});
 
-	if (body && body.byteLength > ctx.protocolMetadata?.maxPayloadSize) {
-		throw new Error("Response body too large");
+		wsSend(ctx.shared, {
+			tag: "ToRivetTunnelMessage",
+			val: {
+				messageId,
+				messageKind: {
+					tag: "ToRivetWebSocketClose",
+					val: {
+						code: 1011,
+						reason: "Actor not found",
+						hibernate: false,
+					},
+				}
+			}
+		});
+
+		return;
 	}
 
-	// Convert headers to map and add Content-Length if not present
-	const headers = new Map<string, string>();
-	response.headers.forEach((value, key) => {
-		headers.set(key, value);
+	ctx.requestToActor.set([messageId.gatewayId, messageId.requestId], open.actorId);
+
+	actor.handle.send({
+		type: "ws-open",
+		messageId,
+		path: open.path,
+		headers: open.headers,
 	});
+}
+
+function handleWebSocketMessage(ctx: EnvoyContext, messageId: protocol.MessageId, msg: protocol.ToEnvoyWebSocketMessage) {
+	const actorId = ctx.requestToActor.get([messageId.gatewayId, messageId.requestId]);
+	if (actorId) {
+		let actor = getActor(ctx, actorId);
+		if (actor) {
+			actor.handle.send({ type: "ws-msg", messageId, msg });
+		}
+	}
+}
+
+function handleWebSocketClose(ctx: EnvoyContext, messageId: protocol.MessageId, close: protocol.ToEnvoyWebSocketClose) {
+	const actorId = ctx.requestToActor.get([messageId.gatewayId, messageId.requestId]);
+	if (actorId) {
+		let actor = getActor(ctx, actorId);
+		if (actor) {
+			actor.handle.send({ type: "ws-close", messageId, close });
+		}
+	}
+
+	ctx.requestToActor.delete([messageId.gatewayId, messageId.requestId]);
+}
+
+export function sendHibernatableWebSocketMessageAck(
+	ctx: EnvoyContext,
+	gatewayId: protocol.GatewayId,
+	requestId: protocol.RequestId,
+	envoyMessageIndex: number,
+) {
+	const actorId = ctx.requestToActor.get([gatewayId, requestId]);
+	if (actorId) {
+		let actor = getActor(ctx, actorId);
+		if (actor) {
+			actor.handle.send({ type: "hws-ack", gatewayId, requestId, envoyMessageIndex });
+		}
+	}
+}
+
+export function resendBufferedTunnelMessages(ctx: EnvoyContext) {
+	if (ctx.bufferedMessages.length === 0) {
+		return;
+	}
+
+	log(ctx.shared)?.info({
+		msg: "resending buffered tunnel messages",
+		count: ctx.bufferedMessages.length,
+	});
+
+	const messages = ctx.bufferedMessages;
+	ctx.bufferedMessages = [];
+
+	for (const msg of messages) {
+		wsSend(
+			ctx.shared,
+			{
+				tag: "ToRivetTunnelMessage",
+				val: msg,
+			},
+		);
+	}
+}
+
+// NOTE: This is a special response that will cause Guard to retry the request
+//
+// See should_retry_request_inner
+// https://github.com/rivet-dev/rivet/blob/222dae87e3efccaffa2b503de40ecf8afd4e31eb/engine/packages/guard-core/src/proxy_service.rs#L2458
+function sendErrorResponse(ctx: EnvoyContext, gatewayId: protocol.GatewayId, requestId: protocol.RequestId) {
+	const body = new TextEncoder().encode("Actor not found").buffer;
+	const headers = new Map([["x-rivet-error", "envoy.actor_not_found"]]);
 
 	// Add Content-Length header if we have a body and it's not already set
 	if (body && !headers.has("content-length")) {
 		headers.set("content-length", String(body.byteLength));
 	}
 
-	wsSend(
-		ctx, {
-		tag: "ToRivetTunnelMessage",
-		val: {
-			messageId,
-			messageKind: {
-				tag: "ToRivetResponseStart",
-				val: {
-					status: response.status as protocol.u16,
-					headers,
-					body: body || null,
-					stream: false,
-				}
+	sendMessage(
+		ctx,
+		gatewayId,
+		requestId,
+		{
+			tag: "ToRivetResponseStart",
+			val: {
+				status: 503,
+				headers,
+				body: body,
+				stream: false,
 			}
 		}
-	}
+	);
+}
+
+export async function sendMessage(ctx: EnvoyContext, gatewayId: protocol.GatewayId, requestId: protocol.RequestId, msg: protocol.ToRivetTunnelMessageKind) {
+	const payload = {
+		messageId: {
+			gatewayId,
+			requestId,
+			messageIndex: 0,
+		},
+		messageKind: msg,
+	};
+
+	const failed = wsSend(
+		ctx.shared,
+		{
+			tag: "ToRivetTunnelMessage",
+			val: payload
+		},
 	);
 
+	// Buffer message if not connected
+	if (failed) {
+		log(ctx.shared)?.debug({
+			msg: "buffering tunnel message, socket not connected to engine",
+			requestId: idToStr(requestId),
+			message: stringifyToRivetTunnelMessageKind(msg),
+		});
+		ctx.bufferedMessages.push(payload);
+		return;
+	}
 }

@@ -74,6 +74,14 @@ pub async fn pegboard_envoy_expire(ctx: &OperationCtx, input: &Input) -> Result<
 							input.envoy_key.clone(),
 						),
 					);
+					tx.delete(
+						&keys::ns::ActiveEnvoyByNameKey::new(
+							input.namespace_id,
+							pool_name.clone(),
+							create_ts,
+							input.envoy_key.clone(),
+						),
+					);
 				}
 
 				Ok(())

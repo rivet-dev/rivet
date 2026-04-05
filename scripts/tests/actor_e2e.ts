@@ -64,7 +64,7 @@ async function main() {
 		await actorPingResponse2.text();
 		console.timeEnd("ping 2");
 
-		// await testWebSocket(actorResponse.actor.actor_id);
+		await testWebSocket(actorResponse.actor.actor_id);
 	} catch (error) {
 		console.error(`Actor test failed:`, error);
 	} finally {

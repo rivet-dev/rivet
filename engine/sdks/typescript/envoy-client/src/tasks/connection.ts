@@ -1,7 +1,7 @@
 import * as protocol from "@rivetkit/engine-envoy-protocol";
 import type { UnboundedSender } from "antiox/sync/mpsc";
 import { sleep } from "antiox/time";
-import { spawn } from "antiox/task";
+import { JoinHandle, spawn } from "antiox/task";
 import type { SharedContext } from "../context.js";
 import { logger } from "../log.js";
 import { stringifyToEnvoy, stringifyToRivet } from "../stringify.js";
@@ -12,31 +12,42 @@ import {
 	webSocket,
 } from "../websocket.js";
 
-export function startConnection(ctx: SharedContext) {
-	spawn(() => connectionLoop(ctx));
+export function startConnection(ctx: SharedContext): JoinHandle<void> {
+	return spawn(signal => connectionLoop(ctx, signal));
 }
 
 const STABLE_CONNECTION_MS = 60_000;
 
-async function connectionLoop(ctx: SharedContext) {
+async function connectionLoop(ctx: SharedContext, signal: AbortSignal) {
 	let attempt = 0;
 	while (true) {
 		const connectedAt = Date.now();
 		try {
-			const res = await singleConnection(ctx);
+			const res = await singleConnection(ctx, signal);
 
-			if (res?.group == 'ws' && res?.error == "eviction") {
-				log(ctx)?.debug({
-					msg: "connection evicted",
-				});
-				ctx.envoyTx.send({ type: "evict" });
-				return;
+			if (res) {
+				if (res.group === "ws" && res.error === "eviction") {
+					log(ctx)?.debug({
+						msg: "connection evicted",
+					});
+
+					ctx.envoyTx.send({ type: "conn-close", evict: true });
+
+					return;
+				} else if (res.group === 'channel' && res.error === "closed") {
+					// Client side shutdown
+					return;
+				}
 			}
+
+			ctx.envoyTx.send({ type: "conn-close", evict: false });
 		} catch (error) {
 			log(ctx)?.error({
 				msg: "connection failed",
 				error,
 			});
+
+			ctx.envoyTx.send({ type: "conn-close", evict: false });
 		}
 
 		if (Date.now() - connectedAt >= STABLE_CONNECTION_MS) {
@@ -54,7 +65,7 @@ async function connectionLoop(ctx: SharedContext) {
 	}
 }
 
-async function singleConnection(ctx: SharedContext): Promise<ParsedCloseReason | undefined> {
+async function singleConnection(ctx: SharedContext, signal: AbortSignal): Promise<ParsedCloseReason | undefined> {
 	const { config } = ctx;
 
 	const protocols = ["rivet"];
@@ -114,6 +125,8 @@ async function singleConnection(ctx: SharedContext): Promise<ParsedCloseReason |
 				break;
 			}
 		}
+
+		res = { group: "channel", error: "closed" };
 	} finally {
 		ctx.wsTx = undefined;
 	}
@@ -158,21 +171,26 @@ function forwardToEnvoy(ctx: SharedContext, message: protocol.ToEnvoy) {
 	}
 }
 
-export function wsSend(ctx: SharedContext, message: protocol.ToRivet) {
+// Returns true if not sent.
+export function wsSend(ctx: SharedContext, message: protocol.ToRivet): boolean {
 	log(ctx)?.debug({
 		msg: "sending message",
 		data: stringifyToRivet(message),
 	});
 
+	// We don't queue messages when the ws isn't available because any durable messages we need to send are
+	// tracked via either the event history or the buffered tunnel messages system
 	if (!ctx.wsTx) {
 		log(ctx)?.error({
 			msg: "websocket not available for sending",
 		});
-		return;
+		return true;
 	}
 
 	const encoded = protocol.encodeToRivet(message);
 	ctx.wsTx.send({ type: "send", data: encoded });
+
+	return false;
 }
 
 function wsUrl(ctx: SharedContext) {

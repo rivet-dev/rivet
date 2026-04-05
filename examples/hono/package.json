@@ -5,10 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "tsx --watch src/index.ts",
-		"dev:server": "tsx --watch src/server.ts",
 		"check-types": "tsc --noEmit",
-		"start": "tsx src/index.ts",
-		"start:server": "tsx src/server.ts"
+		"start": "tsx src/index.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
@@ -16,7 +14,6 @@
 		"typescript": "^5.5.2"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.19.12",
 		"hono": "^4.7.0",
 		"rivetkit": "^2.2.1"
 	},

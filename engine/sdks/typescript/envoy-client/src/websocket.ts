@@ -1,3 +1,4 @@
+import type * as protocol from "@rivetkit/engine-runner-protocol";
 import type { UnboundedReceiver, UnboundedSender } from "antiox/sync/mpsc";
 import { OnceCell } from "antiox/sync/once_cell";
 import { spawn } from "antiox/task";
@@ -5,9 +6,10 @@ import type WsWebSocket from "ws";
 import { latencyChannel } from "./latency-channel.js";
 import { logger } from "./log.js";
 import { VirtualWebSocket, type UniversalWebSocket, type RivetMessageEvent } from "@rivetkit/virtual-websocket";
-import { wrappingAddU16, wrappingLteU16, wrappingSubU16 } from "./utils";
+import { idToStr, wrappingAddU16, wrappingLteU16, wrappingSubU16 } from "./utils";
 import { SharedContext } from "./context.js";
 import { log } from "./tasks/envoy/index.js";
+import { unreachable } from "antiox";
 
 export const HIBERNATABLE_SYMBOL = Symbol("hibernatable");
 
@@ -87,24 +89,28 @@ export async function webSocket(
 	});
 
 	raw.addEventListener("close", (event) => {
-		inboundTx.send({
-			type: "close",
-			code: event.code,
-			reason: event.reason,
-		});
+		if (!inboundTx.isClosed()) {
+			inboundTx.send({
+				type: "close",
+				code: event.code,
+				reason: event.reason,
+			});
+		}
 		inboundTx.close();
 		outboundRx.close();
 	});
 
 	raw.addEventListener("error", (event) => {
-		const error =
-			typeof event === "object" && event !== null && "error" in event
-				? event.error
-				: new Error("WebSocket error");
-		inboundTx.send({
-			type: "error",
-			error: error instanceof Error ? error : new Error(String(error)),
-		});
+		if (!inboundTx.isClosed()) {
+			const error =
+				typeof event === "object" && event !== null && "error" in event
+					? event.error
+					: new Error("WebSocket error");
+			inboundTx.send({
+				type: "error",
+				error: error instanceof Error ? error : new Error(String(error)),
+			});
+		}
 		inboundTx.close();
 		outboundRx.close();
 	});
@@ -113,9 +119,11 @@ export async function webSocket(
 		for await (const message of outboundRx) {
 			if (message.type === "send") {
 				raw.send(message.data);
-			} else {
+			} else if (message.type === "close") {
 				raw.close(message.code, message.reason);
 				break;
+			} else {
+				unreachable(message);
 			}
 		}
 
@@ -141,9 +149,10 @@ export class WebSocketTunnelAdapter {
 	#shared: SharedContext;
 	#ws: VirtualWebSocket;
 	#actorId: string;
-	#requestId: string;
+	#gatewayId: protocol.GatewayId;
+	#requestId: protocol.RequestId;
 	#hibernatable: boolean;
-	#messageIndex: number;
+	#rivetMessageIndex: number;
 	#sendCallback: (data: ArrayBuffer | string, isBinary: boolean) => void;
 	#closeCallback: (code?: number, reason?: string) => void;
 
@@ -154,8 +163,9 @@ export class WebSocketTunnelAdapter {
 	constructor(
 		ctx: SharedContext,
 		actorId: string,
-		requestId: string,
-		messageIndex: number,
+		gatewayId: protocol.GatewayId,
+		requestId: protocol.RequestId,
+		rivetMessageIndex: number,
 		hibernatable: boolean,
 		isRestoringHibernatable: boolean,
 		public readonly request: Request,
@@ -164,9 +174,10 @@ export class WebSocketTunnelAdapter {
 	) {
 		this.#shared = ctx;
 		this.#actorId = actorId;
+		this.#gatewayId = gatewayId;
 		this.#requestId = requestId;
 		this.#hibernatable = hibernatable;
-		this.#messageIndex = messageIndex;
+		this.#rivetMessageIndex = rivetMessageIndex;
 		this.#sendCallback = sendCallback;
 		this.#closeCallback = closeCallback;
 
@@ -181,7 +192,7 @@ export class WebSocketTunnelAdapter {
 			log(this.#shared)?.debug({
 				msg: "setting WebSocket to OPEN state for restored connection",
 				actorId: this.#actorId,
-				requestId: this.#requestId,
+				requestId: idToStr(this.#requestId),
 			});
 			this.#readyState = 1;
 		}
@@ -226,23 +237,22 @@ export class WebSocketTunnelAdapter {
 	}
 
 	// Called by Tunnel when WebSocket is opened
-	_handleOpen(requestId: ArrayBuffer): void {
+	_handleOpen(): void {
 		if (this.#readyState !== 0) return;
 		this.#readyState = 1;
-		this.#ws.dispatchEvent({ type: "open", rivetRequestId: requestId, target: this.#ws });
+		this.#ws.dispatchEvent({ type: "open", rivetGatewayId: this.#gatewayId, rivetRequestId: this.#requestId, target: this.#ws });
 	}
 
 	// Called by Tunnel when message is received
 	_handleMessage(
-		requestId: ArrayBuffer,
 		data: string | Uint8Array,
-		messageIndex: number,
+		rivetMessageIndex: number,
 		isBinary: boolean,
 	): boolean {
 		if (this.#readyState !== 1) {
 			log(this.#shared)?.warn({
 				msg: "WebSocket message ignored - not in OPEN state",
-				requestId: this.#requestId,
+				requestId: idToStr(this.#requestId),
 				actorId: this.#actorId,
 				currentReadyState: this.#readyState,
 			});
@@ -251,37 +261,37 @@ export class WebSocketTunnelAdapter {
 
 		// Validate message index for hibernatable websockets
 		if (this.#hibernatable) {
-			const previousIndex = this.#messageIndex;
+			const previousIndex = this.#rivetMessageIndex;
 
-			if (wrappingLteU16(messageIndex, previousIndex)) {
+			if (wrappingLteU16(rivetMessageIndex, previousIndex)) {
 				log(this.#shared)?.info({
 					msg: "received duplicate hibernating websocket message",
-					requestId,
+					requestId: idToStr(this.#requestId),
 					actorId: this.#actorId,
 					previousIndex,
-					receivedIndex: messageIndex,
+					receivedIndex: rivetMessageIndex,
 				});
 				return true;
 			}
 
 			const expectedIndex = wrappingAddU16(previousIndex, 1);
-			if (messageIndex !== expectedIndex) {
+			if (rivetMessageIndex !== expectedIndex) {
 				const closeReason = "ws.message_index_skip";
 				log(this.#shared)?.warn({
 					msg: "hibernatable websocket message index out of sequence, closing connection",
-					requestId,
+					requestId: idToStr(this.#requestId),
 					actorId: this.#actorId,
 					previousIndex,
 					expectedIndex,
-					receivedIndex: messageIndex,
+					receivedIndex: rivetMessageIndex,
 					closeReason,
-					gap: wrappingSubU16(wrappingSubU16(messageIndex, previousIndex), 1),
+					gap: wrappingSubU16(wrappingSubU16(rivetMessageIndex, previousIndex), 1),
 				});
 				this.#close(1008, closeReason, true);
 				return true;
 			}
 
-			this.#messageIndex = messageIndex;
+			this.#rivetMessageIndex = rivetMessageIndex;
 		}
 
 		// Convert data based on binaryType
@@ -297,8 +307,9 @@ export class WebSocketTunnelAdapter {
 		this.#ws.dispatchEvent({
 			type: "message",
 			data: messageData,
-			rivetRequestId: requestId,
-			rivetMessageIndex: messageIndex,
+			rivetGatewayId: this.#gatewayId,
+			rivetRequestId: this.#requestId,
+			rivetMessageIndex: rivetMessageIndex,
 			target: this.#ws,
 		} as RivetMessageEvent);
 
@@ -306,7 +317,7 @@ export class WebSocketTunnelAdapter {
 	}
 
 	// Called by Tunnel when close is received
-	_handleClose(_requestId: ArrayBuffer, code?: number, reason?: string): void {
+	_handleClose(code?: number, reason?: string): void {
 		this.#close(code, reason, true);
 	}
 

@@ -410,10 +410,11 @@ type ToEnvoyConnPing struct {
 	ts: i64
 }
 
-# We have to re-declare the entire union since BARE will not generate the
-# ser/de for ToEnvoy if it's not a top-level type
+type ToEnvoyConnClose void
+
 type ToEnvoyConn union {
 	ToEnvoyConnPing |
+	ToEnvoyConnClose |
 	ToEnvoyCommands |
 	ToEnvoyAckEvents |
 	ToEnvoyTunnelMessage
