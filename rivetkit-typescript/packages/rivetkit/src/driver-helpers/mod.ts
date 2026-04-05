@@ -4,7 +4,6 @@ export type { ActorInstance, AnyActorInstance } from "@/actor/instance/mod";
 export {
 	ALLOWED_PUBLIC_HEADERS,
 	HEADER_ACTOR_ID,
-	HEADER_ACTOR_QUERY,
 	HEADER_CONN_PARAMS,
 	HEADER_ENCODING,
 	HEADER_RIVET_ACTOR,
@@ -22,6 +21,7 @@ export {
 export type {
 	ActorOutput,
 	CreateInput,
+	GatewayTarget,
 	GetForIdInput,
 	GetOrCreateWithKeyInput,
 	GetWithKeyInput,
@@ -30,5 +30,6 @@ export type {
 	ManagerDriver,
 } from "@/manager/driver";
 export { buildManagerRouter } from "@/manager/router";
-export { getInitialActorKvState } from "./utils";
+export { resolveGatewayTarget } from "./resolve-gateway-target";
 export { SqliteVfsPoolManager } from "./sqlite-pool";
+export { getInitialActorKvState } from "./utils";

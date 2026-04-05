@@ -1,6 +1,9 @@
 import type { AnyActorDefinition } from "@/actor/definition";
 import type { Encoding } from "@/actor/protocol/serde";
-import type { ManagerDriver } from "@/driver-helpers/mod";
+import {
+	resolveGatewayTarget,
+	type ManagerDriver,
+} from "@/driver-helpers/mod";
 import type { ActorQuery } from "@/manager/protocol/query";
 import type { Registry } from "@/registry";
 import type { ActorActionFunction } from "./actor-common";
@@ -10,8 +13,6 @@ import {
 	CONNECT_SYMBOL,
 } from "./actor-conn";
 import { type ActorHandle, ActorHandleRaw } from "./actor-handle";
-import { createActorResolutionState, queryActor } from "./actor-query";
-import type { ClientConfig } from "./config";
 import { logger } from "./log";
 
 export type { ClientConfig, ClientConfigInput } from "./config";
@@ -32,8 +33,8 @@ export interface ActorAccessor<AD extends AnyActorDefinition> {
 	 * Gets a stateless handle to a actor by its key, but does not create the actor if it doesn't exist.
 	 * The actor name is automatically injected from the property accessor.
 	 *
-	 * If the resolved actor is destroyed, operations will automatically re-resolve
-	 * the key and retry once.
+	 * Each operation resolves the current actor for the key before sending the
+	 * request.
 	 *
 	 * @template AD The actor class that this handle is for.
 	 * @param {string | string[]} [key=[]] - The key to identify the actor. Can be a single string or an array of strings.
@@ -46,8 +47,8 @@ export interface ActorAccessor<AD extends AnyActorDefinition> {
 	 * Gets a stateless handle to a actor by its key, creating it if necessary.
 	 * The actor name is automatically injected from the property accessor.
 	 *
-	 * If the resolved actor is destroyed, operations will automatically re-resolve
-	 * the key (creating a new actor if needed) and retry once.
+	 * Each operation resolves the current actor for the key before sending the
+	 * request.
 	 *
 	 * @template AD The actor class that this handle is for.
 	 * @param {string | string[]} [key=[]] - The key to identify the actor. Can be a single string or an array of strings.
@@ -342,11 +343,7 @@ export class ClientRaw {
 		});
 
 		// Create the actor
-		const { actorId } = await queryActor(
-			undefined,
-			createQuery,
-			this.#driver,
-		);
+		const actorId = await resolveGatewayTarget(this.#driver, createQuery);
 		logger().debug({
 			msg: "created actor with ID",
 			name,
@@ -383,7 +380,7 @@ export class ClientRaw {
 			params,
 			getParams,
 			this.#encodingKind,
-			createActorResolutionState(actorQuery),
+			actorQuery,
 		);
 	}
 

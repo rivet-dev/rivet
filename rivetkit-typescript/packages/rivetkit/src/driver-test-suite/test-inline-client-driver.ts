@@ -1,14 +1,10 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
 import invariant from "invariant";
-import type { WebSocket } from "ws";
 import type { Encoding } from "@/actor/protocol/serde";
 import { assertUnreachable } from "@/actor/utils";
 import { ActorError as ClientActorError } from "@/client/errors";
 import {
-	HEADER_ACTOR_QUERY,
-	HEADER_CONN_PARAMS,
-	HEADER_ENCODING,
 	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
@@ -16,12 +12,12 @@ import {
 	WS_PROTOCOL_TARGET,
 	WS_TEST_PROTOCOL_PATH,
 } from "@/common/actor-router-consts";
-import type { UniversalEventSource } from "@/common/eventsource-interface";
 import { type DeconstructedError, noopNext } from "@/common/utils";
 import { importWebSocket } from "@/common/websocket";
 import {
 	type ActorOutput,
 	type CreateInput,
+	type GatewayTarget,
 	type GetForIdInput,
 	type GetOrCreateWithKeyInput,
 	type GetWithKeyInput,
@@ -29,10 +25,9 @@ import {
 	type ListActorsInput,
 	type ManagerDisplayInformation,
 	type ManagerDriver,
+	resolveGatewayTarget,
 } from "@/driver-helpers/mod";
-import type { ActorQuery } from "@/manager/protocol/query";
 import type { UniversalWebSocket } from "@/mod";
-import type * as protocol from "@/schemas/client-protocol/mod";
 import type { GetUpgradeWebSocket } from "@/utils";
 import { logger } from "./log";
 
@@ -58,7 +53,7 @@ export function createTestInlineClientDriver(
 	encoding: Encoding,
 ): ManagerDriver {
 	let getUpgradeWebSocket: GetUpgradeWebSocket;
-	return {
+	const driver: ManagerDriver = {
 		getForId(input: GetForIdInput): Promise<ActorOutput | undefined> {
 			return makeInlineRequest(endpoint, encoding, "getForId", [input]);
 		},
@@ -81,9 +76,11 @@ export function createTestInlineClientDriver(
 			return makeInlineRequest(endpoint, encoding, "listActors", [input]);
 		},
 		async sendRequest(
-			actorId: string,
+			target: GatewayTarget,
 			actorRequest: Request,
 		): Promise<Response> {
+			const actorId = await resolveGatewayTarget(driver, target);
+
 			// Normalize path to match other drivers
 			const oldUrl = new URL(actorRequest.url);
 			const normalizedPath = oldUrl.pathname.startsWith("/")
@@ -160,10 +157,11 @@ export function createTestInlineClientDriver(
 		},
 		async openWebSocket(
 			path: string,
-			actorId: string,
+			target: GatewayTarget,
 			encoding: Encoding,
 			params: unknown,
 		): Promise<UniversalWebSocket> {
+			const actorId = await resolveGatewayTarget(driver, target);
 			const WebSocket = await importWebSocket();
 
 			// Normalize path to match other drivers
@@ -213,11 +211,11 @@ export function createTestInlineClientDriver(
 			return ws;
 		},
 		async proxyRequest(
-			c: HonoContext,
+			_c: HonoContext,
 			actorRequest: Request,
 			actorId: string,
 		): Promise<Response> {
-			return await this.sendRequest(actorId, actorRequest);
+			return await this.sendRequest({ directId: actorId }, actorRequest);
 		},
 		proxyWebSocket(
 			c: HonoContext,
@@ -231,14 +229,15 @@ export function createTestInlineClientDriver(
 
 			const wsHandler = this.openWebSocket(
 				path,
-				actorId,
+				{ directId: actorId },
 				encoding,
 				params,
 			);
 			return upgradeWebSocket(() => wsHandler)(c, noopNext());
 		},
-		async buildGatewayUrl(actorId: string): Promise<string> {
-			return `${endpoint}/gateway/${actorId}`;
+		async buildGatewayUrl(target: GatewayTarget): Promise<string> {
+			const resolvedActorId = await resolveGatewayTarget(driver, target);
+			return `${endpoint}/gateway/${resolvedActorId}`;
 		},
 		displayInformation(): ManagerDisplayInformation {
 			return { properties: {} };
@@ -250,6 +249,7 @@ export function createTestInlineClientDriver(
 			throw new Error("kvGet not impelmented on inline client driver");
 		},
 	} satisfies ManagerDriver;
+	return driver;
 }
 
 async function makeInlineRequest<T>(

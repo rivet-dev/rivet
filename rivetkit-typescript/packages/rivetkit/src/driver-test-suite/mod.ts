@@ -41,6 +41,7 @@ import { runActorDbKvStatsTests } from "./tests/actor-db-kv-stats";
 import { runActorDbPragmaMigrationTests } from "./tests/actor-db-pragma-migration";
 import { runActorStateZodCoercionTests } from "./tests/actor-state-zod-coercion";
 import { runActorAgentOsTests } from "./tests/actor-agent-os";
+import { runGatewayQueryUrlTests } from "./tests/gateway-query-url";
 import { runRequestAccessTests } from "./tests/request-access";
 
 export interface SkipTests {
@@ -168,6 +169,7 @@ export function runDriverTests(
 						// runRawWebSocketDirectRegistryTests(driverTestConfig);
 
 						runActorInspectorTests(driverTestConfig);
+						runGatewayQueryUrlTests(driverTestConfig);
 
 						runActorDbKvStatsTests(driverTestConfig);
 

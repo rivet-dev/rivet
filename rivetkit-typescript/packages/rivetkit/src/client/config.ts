@@ -1,17 +1,18 @@
 import z from "zod/v4";
 import { EncodingSchema } from "@/actor/protocol/serde";
-import { type GetUpgradeWebSocket } from "@/utils";
+import type { RegistryConfig } from "@/registry/config";
+import type { GetUpgradeWebSocket } from "@/utils";
+import { tryParseEndpoint } from "@/utils/endpoint-parser";
 import {
-	getRivetEngine,
 	getRivetEndpoint,
-	getRivetToken,
+	getRivetEngine,
 	getRivetNamespace,
 	getRivetPool,
+	getRivetToken,
 } from "@/utils/env-vars";
-import type { RegistryConfig } from "@/registry/config";
-import { tryParseEndpoint } from "@/utils/endpoint-parser";
 
 const DEFAULT_ENDPOINT = "http://localhost:6420";
+export const DEFAULT_MAX_QUERY_INPUT_SIZE = 4 * 1024;
 
 let hasWarnedMissingEndpoint = false;
 
@@ -78,6 +79,17 @@ export const ClientConfigSchemaBase = z.object({
 	/** Whether to automatically perform health checks when the client is created. */
 	disableMetadataLookup: z.boolean().optional().default(false),
 
+	/**
+	 * Maximum serialized query input size in bytes before base64url encoding.
+	 *
+	 * This applies to query-backed `getOrCreate()` and `create()` gateway URLs.
+	 */
+	maxInputSize: z
+		.number()
+		.int()
+		.positive()
+		.default(DEFAULT_MAX_QUERY_INPUT_SIZE),
+
 	/** Whether to enable RivetKit Devtools integration. */
 	devtools: z
 		.boolean()
@@ -139,6 +151,7 @@ export function convertRegistryConfigToClientConfig(
 		getUpgradeWebSocket: undefined,
 		// We don't need health checks for internal clients
 		disableMetadataLookup: true,
+		maxInputSize: DEFAULT_MAX_QUERY_INPUT_SIZE,
 		devtools:
 			typeof window !== "undefined" &&
 			(window?.location?.hostname === "127.0.0.1" ||

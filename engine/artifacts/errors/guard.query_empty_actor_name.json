@@ -1,0 +1,5 @@
+{
+  "code": "query_empty_actor_name",
+  "group": "guard",
+  "message": "query gateway actor name must not be empty"
+}

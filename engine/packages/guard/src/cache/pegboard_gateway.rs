@@ -8,7 +8,8 @@ use gas::prelude::*;
 use rivet_guard_core::request_context::RequestContext;
 
 use crate::routing::{
-	ActorPathInfo, SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_ACTOR, pegboard_gateway::X_RIVET_ACTOR,
+	SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_ACTOR, actor_path::ActorPathInfo,
+	pegboard_gateway::X_RIVET_ACTOR,
 };
 
 /// Build cache key for path-based actor routing
