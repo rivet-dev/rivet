@@ -180,7 +180,7 @@ async fn mock_accept_loop(listener: TcpListener, state: Arc<MockState>) {
 							msg = read.next() => {
 								match msg {
 									Some(Ok(Message::Binary(data))) => {
-										if let Ok(ToServer::ToServerRequest(req)) = decode_to_server(&data) {
+										if let Ok(ToRivet::ToRivetRequest(req)) = decode_to_server(&data) {
 											let state = state.clone();
 											let resp_tx = resp_tx.clone();
 											let open_actors = open_actors.clone();

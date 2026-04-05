@@ -21,7 +21,9 @@ async fn backfill_migrates_legacy_values_into_v2_and_changelog() {
 		.unwrap();
 
 	let workflow_id = ctx
-		.workflow(epoxy::workflows::backfill::Input { chunk_size: Some(1) })
+		.workflow(epoxy::workflows::backfill::Input {
+			chunk_size: Some(1),
+		})
 		.tag("replica", replica_id)
 		.dispatch()
 		.await

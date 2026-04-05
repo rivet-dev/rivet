@@ -112,14 +112,9 @@ async fn resolve_query_get_or_create_actor_id(
 		return Ok(actor_id);
 	}
 
-	let target_dc_label = resolve_query_target_dc_label(
-		ctx,
-		namespace_id,
-		namespace_name,
-		runner_name,
-		region,
-	)
-	.await?;
+	let target_dc_label =
+		resolve_query_target_dc_label(ctx, namespace_id, namespace_name, runner_name, region)
+			.await?;
 	let encoded_input = input.map(|input| STANDARD.encode(input));
 
 	if target_dc_label == ctx.config().dc_label() {
@@ -157,14 +152,16 @@ async fn resolve_query_get_or_create_actor_id(
 			Some(&rivet_api_types::actors::get_or_create::GetOrCreateQuery {
 				namespace: namespace_name.to_string(),
 			}),
-			Some(&rivet_api_types::actors::get_or_create::GetOrCreateRequest {
-				datacenter: None,
-				name: name.to_string(),
-				key: serialized_key,
-				input: encoded_input,
-				runner_name_selector: runner_name.to_string(),
-				crash_policy,
-			}),
+			Some(
+				&rivet_api_types::actors::get_or_create::GetOrCreateRequest {
+					datacenter: None,
+					name: name.to_string(),
+					key: serialized_key,
+					input: encoded_input,
+					runner_name_selector: runner_name.to_string(),
+					crash_policy,
+				},
+			),
 		)
 		.await?;
 		Ok(response.actor.actor_id)
@@ -190,10 +187,12 @@ async fn resolve_query_target_dc_label(
 	}
 
 	let res = ctx
-		.op(pegboard::ops::runner::list_runner_config_enabled_dcs::Input {
-			namespace_id,
-			runner_name: runner_name_selector.to_string(),
-		})
+		.op(
+			pegboard::ops::runner::list_runner_config_enabled_dcs::Input {
+				namespace_id,
+				runner_name: runner_name_selector.to_string(),
+			},
+		)
 		.await?;
 
 	if let Some(dc_label) = res.dc_labels.into_iter().next() {

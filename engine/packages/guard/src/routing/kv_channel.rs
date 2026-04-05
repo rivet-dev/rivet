@@ -43,7 +43,11 @@ pub async fn route_request_path_based(
 				.build()
 			})?;
 
-		if token.as_bytes().ct_ne(auth.admin_token.read().as_bytes()).into() {
+		if token
+			.as_bytes()
+			.ct_ne(auth.admin_token.read().as_bytes())
+			.into()
+		{
 			return Err(rivet_api_builder::ApiForbidden.build());
 		}
 

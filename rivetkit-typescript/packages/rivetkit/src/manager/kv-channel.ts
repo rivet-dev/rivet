@@ -8,12 +8,12 @@
 import type { WSContext } from "hono/ws";
 import {
 	PROTOCOL_VERSION,
-	type ToServer,
+	type ToRivet,
 	type ToClient,
 	type RequestData,
 	type ResponseData,
-	type ToServerRequest,
-	decodeToServer,
+	type ToRivetRequest,
+	decodeToRivet,
 	encodeToClient,
 } from "@rivetkit/engine-kv-channel-protocol";
 import { KvStorageQuotaExceededError } from "@/drivers/file-system/kv-limits";
@@ -125,8 +125,8 @@ export function createKvChannelManager(): KvChannelManager {
 							return;
 						}
 
-						const msg = decodeToServer(bytes);
-						handleToServerMessage(state, conn, managerDriver, msg);
+						const msg = decodeToRivet(bytes);
+						handleToRivetMessage(state, conn, managerDriver, msg);
 					} catch (err: unknown) {
 						logger().error({
 							msg: "kv channel failed to decode message",
@@ -273,7 +273,7 @@ async function handleRequest(
 	state: KvChannelManagerState,
 	conn: KvChannelConnection,
 	managerDriver: ManagerDriver,
-	request: ToServerRequest,
+	request: ToRivetRequest,
 ): Promise<void> {
 	const { requestId, actorId, data } = request;
 
@@ -649,14 +649,14 @@ async function handleKvOperation(
 	}
 }
 
-function handleToServerMessage(
+function handleToRivetMessage(
 	state: KvChannelManagerState,
 	conn: KvChannelConnection,
 	managerDriver: ManagerDriver,
-	msg: ToServer,
+	msg: ToRivet,
 ): void {
 	switch (msg.tag) {
-		case "ToServerRequest": {
+		case "ToRivetRequest": {
 			const { actorId } = msg.val;
 
 			// Chain requests per actor so they execute sequentially,
@@ -688,7 +688,7 @@ function handleToServerMessage(
 			break;
 		}
 
-		case "ToServerPong":
+		case "ToRivetPong":
 			conn.lastPongTs = Date.now();
 			break;
 	}

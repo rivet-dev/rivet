@@ -5,13 +5,13 @@ pub use generated::v1::*;
 
 pub const PROTOCOL_VERSION: u32 = 1;
 
-/// Serialize a ToServer message to BARE bytes.
-pub fn encode_to_server(msg: &ToServer) -> Result<Vec<u8>, serde_bare::error::Error> {
+/// Serialize a ToRivet message to BARE bytes.
+pub fn encode_to_server(msg: &ToRivet) -> Result<Vec<u8>, serde_bare::error::Error> {
 	serde_bare::to_vec(msg)
 }
 
-/// Deserialize a ToServer message from BARE bytes.
-pub fn decode_to_server(bytes: &[u8]) -> Result<ToServer, serde_bare::error::Error> {
+/// Deserialize a ToRivet message from BARE bytes.
+pub fn decode_to_server(bytes: &[u8]) -> Result<ToRivet, serde_bare::error::Error> {
 	serde_bare::from_slice(bytes)
 }
 
@@ -33,7 +33,7 @@ mod tests {
 
 	#[test]
 	fn round_trip_to_server_request_actor_open() {
-		let msg = ToServer::ToServerRequest(ToServerRequest {
+		let msg = ToRivet::ToRivetRequest(ToRivetRequest {
 			request_id: 1,
 			actor_id: "abc".into(),
 			data: RequestData::ActorOpenRequest,
@@ -45,7 +45,7 @@ mod tests {
 
 	#[test]
 	fn round_trip_to_server_request_kv_get() {
-		let msg = ToServer::ToServerRequest(ToServerRequest {
+		let msg = ToRivet::ToRivetRequest(ToRivetRequest {
 			request_id: 3,
 			actor_id: "actor1".into(),
 			data: RequestData::KvGetRequest(KvGetRequest {
@@ -91,7 +91,7 @@ mod tests {
 
 	#[test]
 	fn bytes_to_server_request_actor_open() {
-		let msg = ToServer::ToServerRequest(ToServerRequest {
+		let msg = ToRivet::ToRivetRequest(ToRivetRequest {
 			request_id: 1,
 			actor_id: "abc".into(),
 			data: RequestData::ActorOpenRequest,
@@ -105,7 +105,7 @@ mod tests {
 
 	#[test]
 	fn bytes_to_server_pong() {
-		let msg = ToServer::ToServerPong(ToServerPong { ts: 1234567890 });
+		let msg = ToRivet::ToRivetPong(ToRivetPong { ts: 1234567890 });
 		let bytes = encode_to_server(&msg).unwrap();
 		assert_eq!(
 			bytes,
@@ -132,7 +132,10 @@ mod tests {
 		let bytes = encode_to_client(&msg).unwrap();
 		assert_eq!(
 			bytes,
-			[0x00, 0x2A, 0x00, 0x00, 0x00, 0x03, 0x01, 0x02, 0x01, 0x02, 0x01, 0x03, 0x03, 0x04, 0x05]
+			[
+				0x00, 0x2A, 0x00, 0x00, 0x00, 0x03, 0x01, 0x02, 0x01, 0x02, 0x01, 0x03, 0x03, 0x04,
+				0x05
+			]
 		);
 	}
 }

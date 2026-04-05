@@ -7,8 +7,8 @@
 mod metrics;
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -21,8 +21,7 @@ use hyper::{Response, StatusCode};
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::actor_kv;
 use rivet_guard_core::{
-	ResponseBody, WebSocketHandle, custom_serve::CustomServeTrait,
-	request_context::RequestContext,
+	ResponseBody, WebSocketHandle, custom_serve::CustomServeTrait, request_context::RequestContext,
 };
 use tokio::sync::{Mutex, mpsc, watch};
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
@@ -270,7 +269,7 @@ async fn message_loop(
 	// parallelism. Do not use tokio::spawn per request as that would break
 	// optimistic pipelining and journal write ordering.
 	// See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 2.
-	let mut actor_channels: HashMap<String, mpsc::Sender<protocol::ToServerRequest>> =
+	let mut actor_channels: HashMap<String, mpsc::Sender<protocol::ToRivetRequest>> =
 		HashMap::new();
 	let mut actor_tasks = tokio::task::JoinSet::new();
 
@@ -339,7 +338,7 @@ async fn handle_binary_message(
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	last_pong_ts: &AtomicI64,
 	data: &[u8],
-	actor_channels: &mut HashMap<String, mpsc::Sender<protocol::ToServerRequest>>,
+	actor_channels: &mut HashMap<String, mpsc::Sender<protocol::ToRivetRequest>>,
 	actor_tasks: &mut tokio::task::JoinSet<()>,
 ) -> Result<()> {
 	let msg = match protocol::decode_to_server(data) {
@@ -355,11 +354,11 @@ async fn handle_binary_message(
 	};
 
 	match msg {
-		protocol::ToServer::ToServerPong(pong) => {
+		protocol::ToRivet::ToRivetPong(pong) => {
 			last_pong_ts.store(util::timestamp::now(), Ordering::Relaxed);
 			tracing::trace!(ts = pong.ts, "received pong");
 		}
-		protocol::ToServer::ToServerRequest(req) => {
+		protocol::ToRivet::ToRivetRequest(req) => {
 			let is_close = matches!(req.data, protocol::RequestData::ActorCloseRequest);
 			let actor_id = req.actor_id.clone();
 			let request_id = req.request_id;
@@ -401,10 +400,7 @@ async fn handle_binary_message(
 						send_response(
 							ws_handle,
 							request_id,
-							error_response(
-								"internal_error",
-								"internal error",
-							),
+							error_response("internal_error", "internal error"),
 						)
 						.await;
 					}
@@ -432,7 +428,7 @@ async fn actor_request_task(
 	conn_id: Uuid,
 	namespace_id: Id,
 	open_actors: Arc<Mutex<HashSet<String>>>,
-	mut rx: mpsc::Receiver<protocol::ToServerRequest>,
+	mut rx: mpsc::Receiver<protocol::ToRivetRequest>,
 ) {
 	// Cached actor resolution. Populated on first KV request, reused for all
 	// subsequent requests. Actor name is immutable so this never goes stale.
@@ -443,8 +439,7 @@ async fn actor_request_task(
 
 		let response_data = match &req.data {
 			// Open/close are lifecycle ops that don't need a resolved actor.
-			protocol::RequestData::ActorOpenRequest
-			| protocol::RequestData::ActorCloseRequest => {
+			protocol::RequestData::ActorOpenRequest | protocol::RequestData::ActorCloseRequest => {
 				handle_request(&ctx, &state, conn_id, namespace_id, &open_actors, &req).await
 			}
 			// KV ops: resolve once, cache, reuse.
@@ -453,15 +448,9 @@ async fn actor_request_task(
 				if !is_open {
 					let locks = state.actor_locks.lock().await;
 					if locks.contains_key(&req.actor_id) {
-						error_response(
-							"actor_locked",
-							"actor is locked by another connection",
-						)
+						error_response("actor_locked", "actor is locked by another connection")
 					} else {
-						error_response(
-							"actor_not_open",
-							"actor is not opened on this connection",
-						)
+						error_response("actor_not_open", "actor is not opened on this connection")
 					}
 				} else {
 					// Lazy-resolve and cache.
@@ -518,15 +507,9 @@ async fn actor_request_task(
 }
 
 /// Encode and send a response to the client. Logs warnings on failure.
-async fn send_response(
-	ws_handle: &WebSocketHandle,
-	request_id: u32,
-	data: protocol::ResponseData,
-) {
-	let response = protocol::ToClient::ToClientResponse(protocol::ToClientResponse {
-		request_id,
-		data,
-	});
+async fn send_response(ws_handle: &WebSocketHandle, request_id: u32, data: protocol::ResponseData) {
+	let response =
+		protocol::ToClient::ToClientResponse(protocol::ToClientResponse { request_id, data });
 
 	match protocol::encode_to_client(&response) {
 		Ok(encoded) => {
@@ -550,7 +533,7 @@ async fn handle_request(
 	conn_id: Uuid,
 	_namespace_id: Id,
 	open_actors: &Arc<Mutex<HashSet<String>>>,
-	req: &protocol::ToServerRequest,
+	req: &protocol::ToRivetRequest,
 ) -> protocol::ResponseData {
 	match &req.data {
 		protocol::RequestData::ActorOpenRequest => {
@@ -577,9 +560,7 @@ async fn handle_actor_open(
 		if current_count >= MAX_ACTORS_PER_CONNECTION {
 			return error_response(
 				"too_many_actors",
-				&format!(
-					"connection has too many open actors (max {MAX_ACTORS_PER_CONNECTION})"
-				),
+				&format!("connection has too many open actors (max {MAX_ACTORS_PER_CONNECTION})"),
 			);
 		}
 	}
@@ -636,8 +617,12 @@ async fn handle_kv_get(
 	body: &protocol::KvGetRequest,
 ) -> protocol::ResponseData {
 	let start = Instant::now();
-	metrics::KV_CHANNEL_REQUESTS_TOTAL.with_label_values(&["get"]).inc();
-	metrics::KV_CHANNEL_REQUEST_KEYS.with_label_values(&["get"]).observe(body.keys.len() as f64);
+	metrics::KV_CHANNEL_REQUESTS_TOTAL
+		.with_label_values(&["get"])
+		.inc();
+	metrics::KV_CHANNEL_REQUEST_KEYS
+		.with_label_values(&["get"])
+		.observe(body.keys.len() as f64);
 
 	if let Err(resp) = validate_keys(&body.keys) {
 		return resp;
@@ -654,7 +639,9 @@ async fn handle_kv_get(
 		}
 		Err(err) => internal_error(&err),
 	};
-	metrics::KV_CHANNEL_REQUEST_DURATION.with_label_values(&["get"]).observe(start.elapsed().as_secs_f64());
+	metrics::KV_CHANNEL_REQUEST_DURATION
+		.with_label_values(&["get"])
+		.observe(start.elapsed().as_secs_f64());
 	result
 }
 
@@ -664,8 +651,12 @@ async fn handle_kv_put(
 	body: &protocol::KvPutRequest,
 ) -> protocol::ResponseData {
 	let start = Instant::now();
-	metrics::KV_CHANNEL_REQUESTS_TOTAL.with_label_values(&["put"]).inc();
-	metrics::KV_CHANNEL_REQUEST_KEYS.with_label_values(&["put"]).observe(body.keys.len() as f64);
+	metrics::KV_CHANNEL_REQUESTS_TOTAL
+		.with_label_values(&["put"])
+		.inc();
+	metrics::KV_CHANNEL_REQUEST_KEYS
+		.with_label_values(&["put"])
+		.observe(body.keys.len() as f64);
 
 	// Validate keys/values length match.
 	if body.keys.len() != body.values.len() {
@@ -687,7 +678,10 @@ async fn handle_kv_put(
 		if key.len() + KEY_WRAPPER_OVERHEAD > MAX_KEY_SIZE {
 			return error_response(
 				"key_too_large",
-				&format!("key is too long (max {} bytes)", MAX_KEY_SIZE - KEY_WRAPPER_OVERHEAD),
+				&format!(
+					"key is too long (max {} bytes)",
+					MAX_KEY_SIZE - KEY_WRAPPER_OVERHEAD
+				),
 			);
 		}
 	}
@@ -700,7 +694,11 @@ async fn handle_kv_put(
 		}
 	}
 
-	let payload_size: usize = body.keys.iter().map(|k| k.len() + KEY_WRAPPER_OVERHEAD).sum::<usize>()
+	let payload_size: usize = body
+		.keys
+		.iter()
+		.map(|k| k.len() + KEY_WRAPPER_OVERHEAD)
+		.sum::<usize>()
 		+ body.values.iter().map(|v| v.len()).sum::<usize>();
 	if payload_size > MAX_PUT_PAYLOAD_SIZE {
 		return error_response(
@@ -717,7 +715,8 @@ async fn handle_kv_put(
 		Err(err) => return internal_error(&err),
 	};
 
-	let result = match actor_kv::put(&*udb, recipient, body.keys.clone(), body.values.clone()).await {
+	let result = match actor_kv::put(&*udb, recipient, body.keys.clone(), body.values.clone()).await
+	{
 		Ok(()) => protocol::ResponseData::KvPutResponse,
 		Err(err) => {
 			let rivet_err = rivet_error::RivetError::extract(&err);
@@ -728,7 +727,9 @@ async fn handle_kv_put(
 			}
 		}
 	};
-	metrics::KV_CHANNEL_REQUEST_DURATION.with_label_values(&["put"]).observe(start.elapsed().as_secs_f64());
+	metrics::KV_CHANNEL_REQUEST_DURATION
+		.with_label_values(&["put"])
+		.observe(start.elapsed().as_secs_f64());
 	result
 }
 
@@ -738,8 +739,12 @@ async fn handle_kv_delete(
 	body: &protocol::KvDeleteRequest,
 ) -> protocol::ResponseData {
 	let start = Instant::now();
-	metrics::KV_CHANNEL_REQUESTS_TOTAL.with_label_values(&["delete"]).inc();
-	metrics::KV_CHANNEL_REQUEST_KEYS.with_label_values(&["delete"]).observe(body.keys.len() as f64);
+	metrics::KV_CHANNEL_REQUESTS_TOTAL
+		.with_label_values(&["delete"])
+		.inc();
+	metrics::KV_CHANNEL_REQUEST_KEYS
+		.with_label_values(&["delete"])
+		.observe(body.keys.len() as f64);
 
 	if let Err(resp) = validate_keys(&body.keys) {
 		return resp;
@@ -754,7 +759,9 @@ async fn handle_kv_delete(
 		Ok(()) => protocol::ResponseData::KvDeleteResponse,
 		Err(err) => internal_error(&err),
 	};
-	metrics::KV_CHANNEL_REQUEST_DURATION.with_label_values(&["delete"]).observe(start.elapsed().as_secs_f64());
+	metrics::KV_CHANNEL_REQUEST_DURATION
+		.with_label_values(&["delete"])
+		.observe(start.elapsed().as_secs_f64());
 	result
 }
 
@@ -764,17 +771,25 @@ async fn handle_kv_delete_range(
 	body: &protocol::KvDeleteRangeRequest,
 ) -> protocol::ResponseData {
 	let start = Instant::now();
-	metrics::KV_CHANNEL_REQUESTS_TOTAL.with_label_values(&["delete_range"]).inc();
+	metrics::KV_CHANNEL_REQUESTS_TOTAL
+		.with_label_values(&["delete_range"])
+		.inc();
 	if body.start.len() + KEY_WRAPPER_OVERHEAD > MAX_KEY_SIZE {
 		return error_response(
 			"key_too_large",
-			&format!("start key is too long (max {} bytes)", MAX_KEY_SIZE - KEY_WRAPPER_OVERHEAD),
+			&format!(
+				"start key is too long (max {} bytes)",
+				MAX_KEY_SIZE - KEY_WRAPPER_OVERHEAD
+			),
 		);
 	}
 	if body.end.len() + KEY_WRAPPER_OVERHEAD > MAX_KEY_SIZE {
 		return error_response(
 			"key_too_large",
-			&format!("end key is too long (max {} bytes)", MAX_KEY_SIZE - KEY_WRAPPER_OVERHEAD),
+			&format!(
+				"end key is too long (max {} bytes)",
+				MAX_KEY_SIZE - KEY_WRAPPER_OVERHEAD
+			),
 		);
 	}
 
@@ -783,11 +798,20 @@ async fn handle_kv_delete_range(
 		Err(err) => return internal_error(&err),
 	};
 
-	let result = match actor_kv::delete_range(&*udb, recipient, body.start.clone(), body.end.clone()).await {
+	let result = match actor_kv::delete_range(
+		&*udb,
+		recipient,
+		body.start.clone(),
+		body.end.clone(),
+	)
+	.await
+	{
 		Ok(()) => protocol::ResponseData::KvDeleteResponse,
 		Err(err) => internal_error(&err),
 	};
-	metrics::KV_CHANNEL_REQUEST_DURATION.with_label_values(&["delete_range"]).observe(start.elapsed().as_secs_f64());
+	metrics::KV_CHANNEL_REQUEST_DURATION
+		.with_label_values(&["delete_range"])
+		.observe(start.elapsed().as_secs_f64());
 	result
 }
 
@@ -804,12 +828,8 @@ async fn resolve_actor(
 	actor_id: &str,
 	expected_namespace_id: Id,
 ) -> std::result::Result<(Id, String), protocol::ResponseData> {
-	let parsed_id = Id::parse(actor_id).map_err(|err| {
-		error_response(
-			"actor_not_found",
-			&format!("invalid actor id: {err}"),
-		)
-	})?;
+	let parsed_id = Id::parse(actor_id)
+		.map_err(|err| error_response("actor_not_found", &format!("invalid actor id: {err}")))?;
 
 	let actor = ctx
 		.op(pegboard::ops::actor::get_for_runner::Input {
@@ -847,7 +867,10 @@ fn validate_keys(keys: &[protocol::KvKey]) -> std::result::Result<(), protocol::
 		if key.len() + KEY_WRAPPER_OVERHEAD > MAX_KEY_SIZE {
 			return Err(error_response(
 				"key_too_large",
-				&format!("key is too long (max {} bytes)", MAX_KEY_SIZE - KEY_WRAPPER_OVERHEAD),
+				&format!(
+					"key is too long (max {} bytes)",
+					MAX_KEY_SIZE - KEY_WRAPPER_OVERHEAD
+				),
 			));
 		}
 	}

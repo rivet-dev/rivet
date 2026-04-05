@@ -336,8 +336,7 @@ impl TuplePack for ChangelogKey {
 
 impl<'de> TupleUnpack<'de> for ChangelogKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (root, versionstamp)) =
-			<(usize, Versionstamp)>::unpack(input, tuple_depth)?;
+		let (input, (root, versionstamp)) = <(usize, Versionstamp)>::unpack(input, tuple_depth)?;
 		if root != CHANGELOG {
 			return Err(PackError::Message("expected CHANGELOG root".into()));
 		}
@@ -347,4 +346,3 @@ impl<'de> TupleUnpack<'de> for ChangelogKey {
 		Ok((input, v))
 	}
 }
-

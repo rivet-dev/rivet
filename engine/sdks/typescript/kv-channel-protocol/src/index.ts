@@ -24,7 +24,7 @@ export function writeId(bc: bare.ByteCursor, x: Id): void {
 }
 
 /**
- * actorId is on ToServerRequest, not on open/close. The outer
+ * actorId is on ToRivetRequest, not on open/close. The outer
  * actorId is the single source of truth for routing.
  */
 export type ActorOpenRequest = null
@@ -332,13 +332,13 @@ export function writeResponseData(bc: bare.ByteCursor, x: ResponseData): void {
     }
 }
 
-export type ToServerRequest = {
+export type ToRivetRequest = {
     readonly requestId: u32
     readonly actorId: Id
     readonly data: RequestData
 }
 
-export function readToServerRequest(bc: bare.ByteCursor): ToServerRequest {
+export function readToRivetRequest(bc: bare.ByteCursor): ToRivetRequest {
     return {
         requestId: bare.readU32(bc),
         actorId: readId(bc),
@@ -346,38 +346,38 @@ export function readToServerRequest(bc: bare.ByteCursor): ToServerRequest {
     }
 }
 
-export function writeToServerRequest(bc: bare.ByteCursor, x: ToServerRequest): void {
+export function writeToRivetRequest(bc: bare.ByteCursor, x: ToRivetRequest): void {
     bare.writeU32(bc, x.requestId)
     writeId(bc, x.actorId)
     writeRequestData(bc, x.data)
 }
 
-export type ToServerPong = {
+export type ToRivetPong = {
     readonly ts: i64
 }
 
-export function readToServerPong(bc: bare.ByteCursor): ToServerPong {
+export function readToRivetPong(bc: bare.ByteCursor): ToRivetPong {
     return {
         ts: bare.readI64(bc),
     }
 }
 
-export function writeToServerPong(bc: bare.ByteCursor, x: ToServerPong): void {
+export function writeToRivetPong(bc: bare.ByteCursor, x: ToRivetPong): void {
     bare.writeI64(bc, x.ts)
 }
 
-export type ToServer =
-    | { readonly tag: "ToServerRequest"; readonly val: ToServerRequest }
-    | { readonly tag: "ToServerPong"; readonly val: ToServerPong }
+export type ToRivet =
+    | { readonly tag: "ToRivetRequest"; readonly val: ToRivetRequest }
+    | { readonly tag: "ToRivetPong"; readonly val: ToRivetPong }
 
-export function readToServer(bc: bare.ByteCursor): ToServer {
+export function readToRivet(bc: bare.ByteCursor): ToRivet {
     const offset = bc.offset
     const tag = bare.readU8(bc)
     switch (tag) {
         case 0:
-            return { tag: "ToServerRequest", val: readToServerRequest(bc) }
+            return { tag: "ToRivetRequest", val: readToRivetRequest(bc) }
         case 1:
-            return { tag: "ToServerPong", val: readToServerPong(bc) }
+            return { tag: "ToRivetPong", val: readToRivetPong(bc) }
         default: {
             bc.offset = offset
             throw new bare.BareError(offset, "invalid tag")
@@ -385,34 +385,34 @@ export function readToServer(bc: bare.ByteCursor): ToServer {
     }
 }
 
-export function writeToServer(bc: bare.ByteCursor, x: ToServer): void {
+export function writeToRivet(bc: bare.ByteCursor, x: ToRivet): void {
     switch (x.tag) {
-        case "ToServerRequest": {
+        case "ToRivetRequest": {
             bare.writeU8(bc, 0)
-            writeToServerRequest(bc, x.val)
+            writeToRivetRequest(bc, x.val)
             break
         }
-        case "ToServerPong": {
+        case "ToRivetPong": {
             bare.writeU8(bc, 1)
-            writeToServerPong(bc, x.val)
+            writeToRivetPong(bc, x.val)
             break
         }
     }
 }
 
-export function encodeToServer(x: ToServer, config?: Partial<bare.Config>): Uint8Array {
+export function encodeToRivet(x: ToRivet, config?: Partial<bare.Config>): Uint8Array {
     const fullConfig = config != null ? bare.Config(config) : DEFAULT_CONFIG
     const bc = new bare.ByteCursor(
         new Uint8Array(fullConfig.initialBufferLength),
         fullConfig,
     )
-    writeToServer(bc, x)
+    writeToRivet(bc, x)
     return new Uint8Array(bc.view.buffer, bc.view.byteOffset, bc.offset)
 }
 
-export function decodeToServer(bytes: Uint8Array): ToServer {
+export function decodeToRivet(bytes: Uint8Array): ToRivet {
     const bc = new bare.ByteCursor(bytes, DEFAULT_CONFIG)
-    const result = readToServer(bc)
+    const result = readToRivet(bc)
     if (bc.offset < bc.view.byteLength) {
         throw new bare.BareError(bc.offset, "remaining bytes")
     }

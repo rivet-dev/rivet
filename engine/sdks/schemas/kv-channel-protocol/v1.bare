@@ -19,7 +19,7 @@ type Id str
 # the server sends an error response for the open and rejects
 # subsequent KV requests for that actor with "actor_locked".
 
-# actorId is on ToServerRequest, not on open/close. The outer
+# actorId is on ToRivetRequest, not on open/close. The outer
 # actorId is the single source of truth for routing.
 type ActorOpenRequest void
 
@@ -105,21 +105,21 @@ type ResponseData union {
 	KvDeleteResponse
 }
 
-# MARK: To Server
+# MARK: To Rivet
 
-type ToServerRequest struct {
+type ToRivetRequest struct {
 	requestId: u32
 	actorId: Id
 	data: RequestData
 }
 
-type ToServerPong struct {
+type ToRivetPong struct {
 	ts: i64
 }
 
-type ToServer union {
-	ToServerRequest |
-	ToServerPong
+type ToRivet union {
+	ToRivetRequest |
+	ToRivetPong
 }
 
 # MARK: To Client

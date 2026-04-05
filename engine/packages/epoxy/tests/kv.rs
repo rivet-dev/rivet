@@ -49,14 +49,18 @@ async fn test_kv_operations() {
 
 	let cas_key = b"immutable-cas-key";
 
-	let first_result = check_and_set_absent(ctx, cas_key, b"created").await.unwrap();
+	let first_result = check_and_set_absent(ctx, cas_key, b"created")
+		.await
+		.unwrap();
 	assert!(matches!(first_result, ProposalResult::Committed));
 	assert_eq!(
 		get_local(ctx, replica_id, cas_key).await.unwrap(),
 		Some(b"created".to_vec()),
 	);
 
-	let same_value_result = check_and_set_absent(ctx, cas_key, b"created").await.unwrap();
+	let same_value_result = check_and_set_absent(ctx, cas_key, b"created")
+		.await
+		.unwrap();
 	assert!(matches!(same_value_result, ProposalResult::Committed));
 
 	let different_value_result = check_and_set_absent(ctx, cas_key, b"other").await.unwrap();
@@ -105,26 +109,29 @@ async fn test_kv_operations() {
 	));
 
 	let changelog_entries = read_changelog_entries(ctx, replica_id).await.unwrap();
-	assert!(changelog_entries.contains(&epoxy::protocol::ChangelogEntry {
-		key: key.to_vec(),
-		value: b"value1".to_vec(),
-		version: 1,
-		mutable: true,
-	}));
-	assert!(changelog_entries.contains(&epoxy::protocol::ChangelogEntry {
-		key: key.to_vec(),
-		value: b"value2".to_vec(),
-		version: 2,
-		mutable: true,
-	}));
+	assert!(
+		changelog_entries.contains(&epoxy::protocol::ChangelogEntry {
+			key: key.to_vec(),
+			value: b"value1".to_vec(),
+			version: 1,
+			mutable: true,
+		})
+	);
+	assert!(
+		changelog_entries.contains(&epoxy::protocol::ChangelogEntry {
+			key: key.to_vec(),
+			value: b"value2".to_vec(),
+			version: 2,
+			mutable: true,
+		})
+	);
 
 	for _ in 0..20 {
 		let mut replicated = true;
 		for replica_id in THREE_REPLICAS {
 			if read_v2_value(test_ctx.get_ctx(*replica_id), *replica_id, key)
 				.await
-				.unwrap()
-				!= Some(b"value2".to_vec())
+				.unwrap() != Some(b"value2".to_vec())
 			{
 				replicated = false;
 				break;

@@ -190,7 +190,8 @@ async fn verify_changelog_catch_up(
 	replica_id: ReplicaId,
 	expected_keys: &[(Vec<u8>, Vec<u8>)],
 ) -> Result<()> {
-	let changelog_entries = read_changelog_entries(test_ctx.get_ctx(replica_id), replica_id).await?;
+	let changelog_entries =
+		read_changelog_entries(test_ctx.get_ctx(replica_id), replica_id).await?;
 	assert_eq!(
 		changelog_entries.len(),
 		expected_keys.len(),

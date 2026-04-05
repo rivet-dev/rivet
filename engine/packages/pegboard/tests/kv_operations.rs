@@ -1,7 +1,7 @@
 use anyhow::Result;
 use gas::prelude::*;
 use pegboard::actor_kv as kv;
-use rivet_runner_protocol::mk2 as rp;
+use rivet_envoy_protocol as ep;
 
 #[tokio::test]
 async fn test_kv_operations() -> Result<()> {
@@ -13,15 +13,20 @@ async fn test_kv_operations() -> Result<()> {
 
 	let test_id = Uuid::new_v4();
 	let dc_label = 1;
-	let datacenters = vec![rivet_config::config::topology::Datacenter {
-		name: "test-dc".to_string(),
-		datacenter_label: dc_label,
-		is_leader: true,
-		peer_url: url::Url::parse("http://127.0.0.1:8080")?,
-		public_url: url::Url::parse("http://127.0.0.1:8081")?,
-		proxy_url: None,
-		valid_hosts: None,
-	}];
+	let datacenters = [(
+		"test-dc".to_string(),
+		rivet_config::config::topology::Datacenter {
+			name: "test-dc".to_string(),
+			datacenter_label: dc_label,
+			is_leader: true,
+			peer_url: url::Url::parse("http://127.0.0.1:8080")?,
+			public_url: url::Url::parse("http://127.0.0.1:8081")?,
+			proxy_url: None,
+			valid_hosts: None,
+		},
+	)]
+	.into_iter()
+	.collect();
 
 	let api_peer_port = portpicker::pick_unused_port().expect("failed to pick api peer port");
 	let guard_port = portpicker::pick_unused_port().expect("failed to pick guard port");
@@ -98,7 +103,7 @@ async fn test_kv_operations() -> Result<()> {
 	// Test 3: List all keys
 	tracing::info!("test 3: listing all keys");
 	let (list_keys, list_values, list_metadata) =
-		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, false, None).await?;
+		kv::list(db, &recipient, ep::KvListQuery::KvListAllQuery, false, None).await?;
 
 	assert_eq!(list_keys.len(), 5, "should list 5 keys");
 	assert_eq!(list_values.len(), 5, "should list 5 values");
@@ -110,7 +115,7 @@ async fn test_kv_operations() -> Result<()> {
 	let (limited_keys, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListAllQuery,
+		ep::KvListQuery::KvListAllQuery,
 		false,
 		Some(2),
 	)
@@ -122,9 +127,9 @@ async fn test_kv_operations() -> Result<()> {
 	// Test 5: List with reverse
 	tracing::info!("test 5: listing in reverse");
 	let (forward_keys, _, _) =
-		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, false, None).await?;
+		kv::list(db, &recipient, ep::KvListQuery::KvListAllQuery, false, None).await?;
 	let (reverse_keys, _, _) =
-		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, true, None).await?;
+		kv::list(db, &recipient, ep::KvListQuery::KvListAllQuery, true, None).await?;
 
 	assert_eq!(forward_keys.len(), reverse_keys.len());
 	// Keys should be in opposite order
@@ -161,7 +166,7 @@ async fn test_kv_operations() -> Result<()> {
 	let (users_keys, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
+		ep::KvListQuery::KvListPrefixQuery(ep::KvListPrefixQuery {
 			key: b"users:".to_vec(),
 		}),
 		false,
@@ -177,7 +182,7 @@ async fn test_kv_operations() -> Result<()> {
 	let (posts_keys, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
+		ep::KvListQuery::KvListPrefixQuery(ep::KvListPrefixQuery {
 			key: b"posts:".to_vec(),
 		}),
 		false,
@@ -199,7 +204,7 @@ async fn test_kv_operations() -> Result<()> {
 	let (range_keys, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListRangeQuery(rp::KvListRangeQuery {
+		ep::KvListQuery::KvListRangeQuery(ep::KvListRangeQuery {
 			start: b"key1".to_vec(),
 			end: b"key2".to_vec(),
 			exclusive: false,
@@ -223,7 +228,7 @@ async fn test_kv_operations() -> Result<()> {
 	let (exclusive_range_keys, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListRangeQuery(rp::KvListRangeQuery {
+		ep::KvListQuery::KvListRangeQuery(ep::KvListRangeQuery {
 			start: b"key1".to_vec(),
 			end: b"key2".to_vec(),
 			exclusive: true,
@@ -245,7 +250,7 @@ async fn test_kv_operations() -> Result<()> {
 
 	// Verify keys are deleted
 	let (remaining_keys, _, _) =
-		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, false, None).await?;
+		kv::list(db, &recipient, ep::KvListQuery::KvListAllQuery, false, None).await?;
 	assert_eq!(remaining_keys.len(), 3, "should have 3 keys remaining");
 	assert!(!remaining_keys.contains(&b"key1".to_vec()));
 	assert!(!remaining_keys.contains(&b"key2".to_vec()));
@@ -256,7 +261,7 @@ async fn test_kv_operations() -> Result<()> {
 	kv::delete_range(db, &recipient, b"key3".to_vec(), b"key5".to_vec()).await?;
 
 	let (post_range_keys, _, _) =
-		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, false, None).await?;
+		kv::list(db, &recipient, ep::KvListQuery::KvListAllQuery, false, None).await?;
 	assert_eq!(post_range_keys.len(), 1, "should have 1 key remaining");
 	assert_eq!(
 		post_range_keys[0],
@@ -271,7 +276,7 @@ async fn test_kv_operations() -> Result<()> {
 
 	// Verify all keys are deleted
 	let (all_keys, _, _) =
-		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, false, None).await?;
+		kv::list(db, &recipient, ep::KvListQuery::KvListAllQuery, false, None).await?;
 	assert_eq!(all_keys.len(), 0, "should have no keys remaining");
 	tracing::info!("successfully deleted all keys");
 
