@@ -428,9 +428,8 @@ async fn actor_request_task(
 	open_actors: Arc<Mutex<HashSet<String>>>,
 	mut rx: mpsc::Receiver<protocol::ToRivetRequest>,
 ) {
-	// Cached actor resolution. Populated on first KV request, reused for all
-	// subsequent requests. Actor name is immutable so this never goes stale.
-	let mut cached_actor: Option<(Id, String)> = None;
+	// Cache keyed by actor id since a single connection multiplexes many actors.
+	let mut cached_actors: HashMap<String, (Id, String)> = HashMap::new();
 
 	while let Some(req) = rx.recv().await {
 		let is_close = matches!(req.data, protocol::RequestData::ActorCloseRequest);
@@ -451,11 +450,10 @@ async fn actor_request_task(
 						error_response("actor_not_open", "actor is not opened on this connection")
 					}
 				} else {
-					// Lazy-resolve and cache.
-					if cached_actor.is_none() {
+					if !cached_actors.contains_key(&req.actor_id) {
 						match resolve_actor(&ctx, &req.actor_id, namespace_id).await {
 							Ok(v) => {
-								cached_actor = Some(v);
+								cached_actors.insert(req.actor_id.clone(), v);
 							}
 							Err(resp) => {
 								// Don't cache failures. Next request will retry.
@@ -467,7 +465,8 @@ async fn actor_request_task(
 							}
 						}
 					}
-					let (parsed_id, actor_name) = cached_actor.as_ref().unwrap();
+					let (parsed_id, actor_name) =
+						cached_actors.get(&req.actor_id).unwrap();
 
 					let recipient = actor_kv::Recipient {
 						actor_id: *parsed_id,
@@ -817,7 +816,7 @@ async fn handle_kv_delete_range(
 
 /// Look up an actor by ID and return the parsed ID and actor name.
 ///
-/// Defense-in-depth: verifies the actor belongs to the authenticated namespace.
+/// Verifies the actor belongs to the authenticated namespace.
 async fn resolve_actor(
 	ctx: &StandaloneCtx,
 	actor_id: &str,
@@ -827,11 +826,15 @@ async fn resolve_actor(
 		.map_err(|err| error_response("actor_not_found", &format!("invalid actor id: {err}")))?;
 
 	let actor = ctx
-		.op(pegboard::ops::actor::get_for_runner::Input {
-			actor_id: parsed_id,
+		.op(pegboard::ops::actor::get::Input {
+			actor_ids: vec![parsed_id],
+			fetch_error: false,
 		})
 		.await
-		.map_err(|err| internal_error(&err))?;
+		.map_err(|err| internal_error(&err))?
+		.actors
+		.into_iter()
+		.next();
 
 	match actor {
 		Some(actor) => {

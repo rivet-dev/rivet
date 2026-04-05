@@ -1,0 +1,24 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"],
+	"tasks": {
+		"build": {
+			"inputs": [
+				"src/**",
+				"scripts/**",
+				"Cargo.toml",
+				"Cargo.lock",
+				"build.rs",
+				"package.json",
+				"index.js",
+				"index.d.ts"
+			],
+			"outputs": [
+				"sqlite-native.*.node",
+				"npm/**/*.node",
+				"target/release/librivetkit_sqlite_native.*",
+				"target/release/rivetkit_sqlite_native.dll"
+			]
+		}
+	}
+}

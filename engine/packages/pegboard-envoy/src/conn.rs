@@ -147,7 +147,7 @@ pub async fn handle_init(
 				// Read existing data
 				let (create_ts_entry, old_last_ping_ts_entry, version_entry) = tokio::try_join!(
 					tx.read_opt(&create_ts_key, Serializable),
-					tx.read_opt(&create_ts_key, Serializable),
+					tx.read_opt(&last_ping_ts_key, Serializable),
 					tx.read_opt(&version_key, Serializable),
 				)?;
 

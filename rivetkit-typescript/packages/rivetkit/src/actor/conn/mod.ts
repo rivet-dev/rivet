@@ -1,4 +1,5 @@
 import * as cbor from "cbor-x";
+import { stringifyError } from "@/common/utils";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
@@ -53,6 +54,7 @@ export class Conn<
 	Q extends QueueSchemaConfig = Record<never, never>,
 > {
 	#actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>;
+	#disconnectPromise?: Promise<void>;
 
 	get [CONN_ACTOR_SYMBOL](): ActorInstance<S, CP, CS, V, I, DB, E, Q> {
 		return this.#actor;
@@ -261,28 +263,43 @@ export class Conn<
 	 * @param reason - The reason for disconnection.
 	 */
 	async disconnect(reason?: string) {
-		if (this[CONN_DRIVER_SYMBOL]) {
-			const driver = this[CONN_DRIVER_SYMBOL];
-			if (driver.disconnect) {
-				await driver.disconnect(this.#actor, this, reason);
-			} else {
-				this.#actor.rLog.debug({
-					msg: "no disconnect handler for conn driver",
-					conn: this.id,
-				});
-			}
+		if (!this.#disconnectPromise) {
+			this.#disconnectPromise = (async () => {
+				if (this[CONN_DRIVER_SYMBOL]) {
+					const driver = this[CONN_DRIVER_SYMBOL];
+					try {
+						if (driver.disconnect) {
+							try {
+								await driver.disconnect(this.#actor, this, reason);
+							} catch (error) {
+								this.#actor.rLog.warn({
+									msg: "conn driver disconnect failed, continuing connection cleanup",
+									conn: this.id,
+									reason,
+									error: stringifyError(error),
+								});
+							}
+						} else {
+							this.#actor.rLog.debug({
+								msg: "no disconnect handler for conn driver",
+								conn: this.id,
+							});
+						}
 
-			try {
-				await this.#actor.connectionManager.connDisconnected(this);
-			} finally {
-				this[CONN_DRIVER_SYMBOL] = undefined;
-			}
-		} else {
-			this.#actor.rLog.warn({
-				msg: "missing connection driver state for disconnect",
-				conn: this.id,
-			});
-			this[CONN_DRIVER_SYMBOL] = undefined;
+						await this.#actor.connectionManager.connDisconnected(this);
+					} finally {
+						this[CONN_DRIVER_SYMBOL] = undefined;
+					}
+				} else {
+					this.#actor.rLog.warn({
+						msg: "missing connection driver state for disconnect",
+						conn: this.id,
+					});
+					this[CONN_DRIVER_SYMBOL] = undefined;
+				}
+			})();
 		}
+
+		await this.#disconnectPromise;
 	}
 }
