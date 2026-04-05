@@ -1,4 +1,4 @@
-use std::{any::Any, future::Future, pin::Pin, sync::Arc};
+use std::{any::Any, future::Future, path::Path, pin::Pin, sync::Arc};
 
 use anyhow::{Result, bail};
 
@@ -29,6 +29,10 @@ pub trait DatabaseDriver: Send + Sync {
 		closure: Box<dyn Fn(RetryableTransaction) -> BoxFut<'a, Result<Erased>> + Send + Sync + 'a>,
 	) -> BoxFut<'a, Result<Erased>>;
 	fn set_option(&self, opt: DatabaseOption) -> Result<()>;
+
+	fn checkpoint(&self, _path: &Path) -> Result<()> {
+		bail!("checkpoint not supported by this database driver")
+	}
 }
 
 pub trait TransactionDriver: Send + Sync {

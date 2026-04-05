@@ -36,6 +36,7 @@ members = [
   "engine/packages/telemetry",
   "engine/packages/test-deps",
   "engine/packages/test-deps-docker",
+  "engine/packages/test-snapshot-gen",
   "engine/packages/tracing-reconfigure",
   "engine/packages/tracing-utils",
   "engine/packages/types",
@@ -443,6 +444,9 @@ members = [
 
     [workspace.dependencies.rivet-test-deps-docker]
     path = "engine/packages/test-deps-docker"
+
+    [workspace.dependencies.test-snapshot-gen]
+    path = "engine/packages/test-snapshot-gen"
 
     [workspace.dependencies.rivet-tracing-reconfigure]
     path = "engine/packages/tracing-reconfigure"

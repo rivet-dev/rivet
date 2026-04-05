@@ -92,4 +92,8 @@ impl Database {
 	pub fn set_option(&self, opt: DatabaseOption) -> Result<()> {
 		self.driver.set_option(opt)
 	}
+
+	pub fn checkpoint(&self, path: &std::path::Path) -> Result<()> {
+		self.driver.checkpoint(path)
+	}
 }
