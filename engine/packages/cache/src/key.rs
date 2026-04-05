@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, ops::Deref};
+use std::{fmt::Debug, hash::Hash, ops::Deref};
 
 /// A type that can be serialized in to a key that can be used in the cache.
-pub trait CacheKey: Clone + Debug + PartialEq {
+pub trait CacheKey: Clone + Debug + Eq + PartialEq + Hash {
 	fn cache_key(&self) -> String;
 }
 
@@ -85,7 +85,7 @@ impl_to_string!(isize);
 /// Unlike other types that implement `CacheKey` (which escape special characters like `:` and `\`),
 /// `RawCacheKey` uses the provided string as-is. This is useful when you already have a properly
 /// formatted cache key string or need to preserve the exact format without transformations.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct RawCacheKey(String);
 
 impl CacheKey for RawCacheKey {
