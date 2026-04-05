@@ -196,7 +196,7 @@ export class RemoteManagerDriver implements ManagerDriver {
 			datacenter: region,
 			name,
 			key: serializeActorKey(key),
-			runner_name_selector: this.#config.runnerName,
+			runner_name_selector: this.#config.poolName,
 			input: actorInput
 				? uint8ArrayToBase64(cbor.encode(actorInput))
 				: undefined,
@@ -232,7 +232,7 @@ export class RemoteManagerDriver implements ManagerDriver {
 		const result = await createActor(this.#config, {
 			datacenter: region,
 			name,
-			runner_name_selector: this.#config.runnerName,
+			runner_name_selector: this.#config.poolName,
 			key: serializeActorKey(key),
 			input: input ? uint8ArrayToBase64(cbor.encode(input)) : undefined,
 			crash_policy: "sleep",

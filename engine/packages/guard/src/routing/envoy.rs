@@ -1,10 +1,9 @@
-use anyhow::*;
+use anyhow::Result;
 use gas::prelude::*;
 use rivet_guard_core::{RoutingOutput, request_context::RequestContext};
 use std::sync::Arc;
 
-use super::{SEC_WEBSOCKET_PROTOCOL, X_RIVET_TOKEN};
-pub(crate) const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
+use super::{SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_TOKEN, X_RIVET_TOKEN};
 
 /// Route requests to the envoy service using header-based routing
 #[tracing::instrument(skip_all)]

@@ -16,7 +16,6 @@ import {
 } from "./commands.js";
 import {
 	handleAckEvents,
-	handleCommandStopActorComplete,
 	handleSendEvents,
 	resendUnacknowledgedEvents,
 } from "./events.js";
@@ -29,7 +28,7 @@ import {
 	handleKvResponse,
 	processUnsentKvRequests,
 } from "./kv.js";
-import { spawn, watch, WatchSender } from "antiox";
+import { spawn, watch, WatchReceiver, WatchSender } from "antiox";
 
 export interface EnvoyContext {
 	shared: SharedContext;
@@ -42,6 +41,7 @@ export interface EnvoyContext {
 
 export interface ActorEntry {
 	handle: UnboundedSender<ToActor>;
+	name: string;
 	eventHistory: protocol.EventWrapper[];
 	lastCommandIdx: bigint;
 }
@@ -65,14 +65,6 @@ export type ToEnvoyMessage =
 		events: protocol.EventWrapper[];
 	}
 	| {
-		type: "command-stop-actor-complete";
-		actorId: string;
-		generation: number;
-		checkpointIndex: bigint;
-		code: protocol.StopCode;
-		message: string | null;
-	}
-	| {
 		type: "kv-request";
 		actorId: string;
 		data: protocol.KvRequestData;
@@ -83,16 +75,26 @@ export type ToEnvoyMessage =
 	| { type: "evict" };
 
 export async function startEnvoy(config: EnvoyConfig): Promise<EnvoyHandle> {
+	const [handle, startRx] = startEnvoySync(config);
+
+	// Wait for envoy start
+	await startRx.changed();
+
+	return handle;
+}
+
+// Must manually wait for envoy to start.
+export function startEnvoySync(config: EnvoyConfig): [EnvoyHandle, WatchReceiver<void>] {
 	const [envoyTx, envoyRx] = unboundedChannel<ToEnvoyMessage>();
 	const [startTx, startRx] = watch<void>(void 0);
 	const actors: Map<string, Map<number, ActorEntry>> = new Map();
 
-	const handle = createHandle(actors, envoyTx);
 	const shared: SharedContext = {
 		config,
 		envoyKey: uuidv4(),
 		envoyTx,
-		handle,
+		// Start undefined
+		handle: null as any,
 	};
 
 	startConnection(shared);
@@ -104,6 +106,10 @@ export async function startEnvoy(config: EnvoyConfig): Promise<EnvoyHandle> {
 		nextKvRequestId: 0,
 		requestToActor: new Map(),
 	};
+
+	// Set shared handle
+	const handle = createHandle(ctx);
+	shared.handle = handle;
 
 	log(ctx.shared)?.info({ msg: "starting envoy" });
 
@@ -121,8 +127,6 @@ export async function startEnvoy(config: EnvoyConfig): Promise<EnvoyHandle> {
 				await handleConnMessage(ctx, startTx, msg.message);
 			} else if (msg.type === "send-events") {
 				handleSendEvents(ctx, msg.events);
-			} else if (msg.type === "command-stop-actor-complete") {
-				handleCommandStopActorComplete(ctx, msg);
 			} else if (msg.type === "kv-request") {
 				handleKvRequest(ctx, msg);
 			} else if (msg.type === "shutdown") {
@@ -158,10 +162,7 @@ export async function startEnvoy(config: EnvoyConfig): Promise<EnvoyHandle> {
 		ctx.actors.clear();
 	});
 
-	// Wait for envoy start
-	await startRx.changed();
-
-	return handle;
+	return [handle, startRx];
 }
 
 async function handleConnMessage(
@@ -218,94 +219,29 @@ export function getActorEntry(
 // MARK: Handle
 
 function createHandle(
-	actors: Map<string, Map<number, ActorEntry>>,
-	envoyTx: UnboundedSender<ToEnvoyMessage>,
+	ctx: EnvoyContext,
 ): EnvoyHandle {
-	// NOTE: Because of the weird order we have to create the handle/shared context/envoy context, these
-	// functions are defined here instead of globally
-	function findActor(
-		actorId: string,
-		generation?: number,
-	): ActorEntry | undefined {
-		const gens = actors.get(actorId);
-		if (!gens || gens.size === 0) return undefined;
-
-		if (generation !== undefined) {
-			return gens.get(generation);
-		}
-
-		// Return first non-closed (active) entry
-		for (const entry of gens.values()) {
-			if (!entry.handle.isClosed()) {
-				return entry;
-			}
-		}
-		return undefined;
-	}
-
-	function sendActorIntent(
-		actorId: string,
-		intent: protocol.ActorIntent,
-		generation?: number,
-	): void {
-		const entry = findActor(actorId, generation);
-		if (!entry) return;
-		entry.handle.send({
-			type: "actor-intent",
-			commandIdx: 0n,
-			intent,
-		});
-	}
-
-	function sendKvRequest(
-		actorId: string,
-		data: protocol.KvRequestData,
-	): Promise<protocol.KvResponseData> {
-		return new Promise((resolve, reject) => {
-			envoyTx.send({
-				type: "kv-request",
-				actorId,
-				data,
-				resolve,
-				reject,
-			});
-		});
-	}
-
-	function toBuffer(arr: Uint8Array): ArrayBuffer {
-		return arr.buffer.slice(
-			arr.byteOffset,
-			arr.byteOffset + arr.byteLength,
-		) as ArrayBuffer;
-	}
-
-	function parseListResponse(
-		response: protocol.KvResponseData,
-	): [Uint8Array, Uint8Array][] {
-		const val = (
-			response as {
-				tag: "KvListResponse";
-				val: protocol.KvListResponse;
-			}
-		).val;
-		const result: [Uint8Array, Uint8Array][] = [];
-		for (let i = 0; i < val.keys.length; i++) {
-			const key = val.keys[i];
-			const value = val.values[i];
-			if (key && value) {
-				result.push([new Uint8Array(key), new Uint8Array(value)]);
-			}
-		}
-		return result;
-	}
-
 	return {
-		shutdown() {
-			envoyTx.send({ type: "shutdown" });
+		shutdown(immediate: boolean) {
+			ctx.shared.envoyTx.send({ type: "shutdown" });
+			ctx.shared.config.onShutdown();
+		},
+
+		getProtocolMetadata(): protocol.ProtocolMetadata | undefined {
+			return ctx.shared.protocolMetadata;
+		},
+
+		getEnvoyKey(): string {
+			return ctx.shared.envoyKey;
+		},
+
+		getActor(actorId: string, generation?: number): ActorEntry | undefined {
+			return getActor(ctx, actorId, generation);
 		},
 
 		sleepActor(actorId: string, generation?: number): void {
 			sendActorIntent(
+				ctx,
 				actorId,
 				{ tag: "ActorIntentSleep", val: null },
 				generation,
@@ -314,6 +250,7 @@ function createHandle(
 
 		stopActor(actorId: string, generation?: number): void {
 			sendActorIntent(
+				ctx,
 				actorId,
 				{ tag: "ActorIntentStop", val: null },
 				generation,
@@ -322,6 +259,7 @@ function createHandle(
 
 		destroyActor(actorId: string, generation?: number): void {
 			sendActorIntent(
+				ctx,
 				actorId,
 				{ tag: "ActorIntentStop", val: null },
 				generation,
@@ -333,7 +271,7 @@ function createHandle(
 			alarmTs: number | null,
 			generation?: number,
 		): void {
-			const entry = findActor(actorId, generation);
+			const entry = getActor(ctx, actorId, generation);
 			if (!entry) return;
 			entry.handle.send({
 				type: "set-alarm",
@@ -346,7 +284,7 @@ function createHandle(
 			keys: Uint8Array[],
 		): Promise<(Uint8Array | null)[]> {
 			const kvKeys = keys.map(toBuffer);
-			const response = await sendKvRequest(actorId, {
+			const response = await sendKvRequest(ctx, actorId, {
 				tag: "KvGetRequest",
 				val: { keys: kvKeys },
 			});
@@ -385,7 +323,7 @@ function createHandle(
 			actorId: string,
 			options?: KvListOptions,
 		): Promise<[Uint8Array, Uint8Array][]> {
-			const response = await sendKvRequest(actorId, {
+			const response = await sendKvRequest(ctx, actorId, {
 				tag: "KvListRequest",
 				val: {
 					query: { tag: "KvListAllQuery", val: null },
@@ -406,7 +344,7 @@ function createHandle(
 			exclusive?: boolean,
 			options?: KvListOptions,
 		): Promise<[Uint8Array, Uint8Array][]> {
-			const response = await sendKvRequest(actorId, {
+			const response = await sendKvRequest(ctx, actorId, {
 				tag: "KvListRequest",
 				val: {
 					query: {
@@ -432,7 +370,7 @@ function createHandle(
 			prefix: Uint8Array,
 			options?: KvListOptions,
 		): Promise<[Uint8Array, Uint8Array][]> {
-			const response = await sendKvRequest(actorId, {
+			const response = await sendKvRequest(ctx, actorId, {
 				tag: "KvListRequest",
 				val: {
 					query: {
@@ -455,7 +393,7 @@ function createHandle(
 		): Promise<void> {
 			const keys = entries.map(([k]) => toBuffer(k));
 			const values = entries.map(([, v]) => toBuffer(v));
-			await sendKvRequest(actorId, {
+			await sendKvRequest(ctx, actorId, {
 				tag: "KvPutRequest",
 				val: { keys, values },
 			});
@@ -465,7 +403,7 @@ function createHandle(
 			actorId: string,
 			keys: Uint8Array[],
 		): Promise<void> {
-			await sendKvRequest(actorId, {
+			await sendKvRequest(ctx, actorId, {
 				tag: "KvDeleteRequest",
 				val: { keys: keys.map(toBuffer) },
 			});
@@ -476,14 +414,14 @@ function createHandle(
 			start: Uint8Array,
 			end: Uint8Array,
 		): Promise<void> {
-			await sendKvRequest(actorId, {
+			await sendKvRequest(ctx, actorId, {
 				tag: "KvDeleteRangeRequest",
 				val: { start: toBuffer(start), end: toBuffer(end) },
 			});
 		},
 
 		async kvDrop(actorId: string): Promise<void> {
-			await sendKvRequest(actorId, {
+			await sendKvRequest(ctx, actorId, {
 				tag: "KvDropRequest",
 				val: null,
 			});
@@ -491,7 +429,65 @@ function createHandle(
 	};
 }
 
-export function findActor(
+function sendActorIntent(
+	ctx: EnvoyContext,
+	actorId: string,
+	intent: protocol.ActorIntent,
+	generation?: number,
+): void {
+	const entry = getActor(ctx, actorId, generation);
+	if (!entry) return;
+	entry.handle.send({
+		type: "actor-intent",
+		commandIdx: 0n,
+		intent,
+	});
+}
+
+function sendKvRequest(
+	ctx: EnvoyContext,
+	actorId: string,
+	data: protocol.KvRequestData,
+): Promise<protocol.KvResponseData> {
+	return new Promise((resolve, reject) => {
+		ctx.shared.envoyTx.send({
+			type: "kv-request",
+			actorId,
+			data,
+			resolve,
+			reject,
+		});
+	});
+}
+
+function toBuffer(arr: Uint8Array): ArrayBuffer {
+	return arr.buffer.slice(
+		arr.byteOffset,
+		arr.byteOffset + arr.byteLength,
+	) as ArrayBuffer;
+}
+
+function parseListResponse(
+	response: protocol.KvResponseData,
+): [Uint8Array, Uint8Array][] {
+	const val = (
+		response as {
+			tag: "KvListResponse";
+			val: protocol.KvListResponse;
+		}
+	).val;
+	const result: [Uint8Array, Uint8Array][] = [];
+	for (let i = 0; i < val.keys.length; i++) {
+		const key = val.keys[i];
+		const value = val.values[i];
+		if (key && value) {
+			result.push([new Uint8Array(key), new Uint8Array(value)]);
+		}
+	}
+	return result;
+}
+
+export function getActor(
 	ctx: EnvoyContext,
 	actorId: string,
 	generation?: number,
@@ -503,8 +499,8 @@ export function findActor(
 		return gens.get(generation);
 	}
 
-	// Return first non-closed (active) entry
-	for (const entry of gens.values()) {
+	// Return highest generation non-closed (active) entry
+	for (const entry of Array.from(gens.values()).reverse()) {
 		if (!entry.handle.isClosed()) {
 			return entry;
 		}

@@ -143,7 +143,9 @@ pub async fn route_request(
 	// Find actor to route to
 	let actor_id = Id::parse(&actor_id_str).context("invalid x-rivet-actor header")?;
 
-	route_request_inner(ctx, shared_state, req_ctx, actor_id, req_ctx.path(), token).await
+	route_request_inner(ctx, shared_state, req_ctx, actor_id, req_ctx.path(), token)
+		.await
+		.map(Some)
 }
 
 async fn route_request_inner(
@@ -153,7 +155,7 @@ async fn route_request_inner(
 	actor_id: Id,
 	stripped_path: &str,
 	_token: Option<&str>,
-) -> Result<Option<RoutingOutput>> {
+) -> Result<RoutingOutput> {
 	// NOTE: Token validation implemented in EE
 
 	// Route to peer dc where the actor lives
@@ -213,32 +215,34 @@ async fn route_request_inner(
 	}
 
 	match actor.version {
-		2 => handle_actor_v2(
-			ctx,
-			shared_state,
-			actor_id,
-			actor,
-			stripped_path,
-			ready_sub2,
-			stopped_sub2,
-			fail_sub2,
-			destroy_sub2,
-		)
-		.await
-		.map(Some),
-		1 => handle_actor_v1(
-			ctx,
-			shared_state,
-			actor_id,
-			actor,
-			stripped_path,
-			ready_sub,
-			stopped_sub,
-			fail_sub,
-			destroy_sub,
-		)
-		.await
-		.map(Some),
+		2 => {
+			handle_actor_v2(
+				ctx,
+				shared_state,
+				actor_id,
+				actor,
+				stripped_path,
+				ready_sub2,
+				stopped_sub2,
+				fail_sub2,
+				destroy_sub2,
+			)
+			.await
+		}
+		1 => {
+			handle_actor_v1(
+				ctx,
+				shared_state,
+				actor_id,
+				actor,
+				stripped_path,
+				ready_sub,
+				stopped_sub,
+				fail_sub,
+				destroy_sub,
+			)
+			.await
+		}
 		_ => bail!("unknown actor version"),
 	}
 }

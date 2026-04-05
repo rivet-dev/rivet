@@ -16,6 +16,14 @@ export function handleSendEvents(
 		);
 		if (entry) {
 			entry.eventHistory.push(event);
+
+			// Close the actor channel but keep event history for ack/resend.
+			// The entry is cleaned up when all events are acked.
+			if (event.inner.tag === "EventActorStateUpdate") {
+				if (event.inner.val.state.tag === "ActorStateStopped") {
+					entry.handle.close();
+				}
+			}
 		}
 	}
 
@@ -24,40 +32,6 @@ export function handleSendEvents(
 		tag: "ToRivetEvents",
 		val: events,
 	});
-}
-
-export function handleCommandStopActorComplete(
-	ctx: EnvoyContext,
-	msg: Extract<ToEnvoyMessage, { type: "command-stop-actor-complete" }>,
-) {
-	const event: protocol.EventWrapper = {
-		checkpoint: {
-			actorId: msg.actorId,
-			generation: msg.generation,
-			index: msg.checkpointIndex,
-		},
-		inner: {
-			tag: "EventActorStateUpdate",
-			val: {
-				state: {
-					tag: "ActorStateStopped",
-					val: {
-						code: msg.code,
-						message: msg.message,
-					},
-				},
-			},
-		},
-	};
-
-	handleSendEvents(ctx, [event]);
-
-	// Close the actor channel but keep event history for ack/resend.
-	// The entry is cleaned up when all events are acked.
-	const entry = getActorEntry(ctx, msg.actorId, msg.generation);
-	if (entry) {
-		entry.handle.close();
-	}
 }
 
 export function handleAckEvents(

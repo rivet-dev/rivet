@@ -6,7 +6,7 @@ import {
 	getRivetEndpoint,
 	getRivetToken,
 	getRivetNamespace,
-	getRivetRunner,
+	getRivetPool,
 } from "@/utils/env-vars";
 import type { RegistryConfig } from "@/registry/config";
 import { tryParseEndpoint } from "@/utils/endpoint-parser";
@@ -39,9 +39,9 @@ export const ClientConfigSchemaBase = z.object({
 				hasWarnedMissingEndpoint = true;
 				console.warn(
 					`[rivetkit] No endpoint provided to client. Defaulting to ${DEFAULT_ENDPOINT}. ` +
-						`Starting in 2.2.0, an explicit endpoint will be required. ` +
-						`Pass an endpoint to createClient() or createRivetKit(), ` +
-						`or set the RIVET_ENDPOINT environment variable.`,
+					`Starting in 2.2.0, an explicit endpoint will be required. ` +
+					`Pass an endpoint to createClient() or createRivetKit(), ` +
+					`or set the RIVET_ENDPOINT environment variable.`,
 				);
 			}
 			return resolved ?? DEFAULT_ENDPOINT;
@@ -59,8 +59,8 @@ export const ClientConfigSchemaBase = z.object({
 		.optional()
 		.transform((val) => val ?? getRivetNamespace()),
 
-	/** Name of the runner. This is used to group together runners in to different pools. */
-	runnerName: z.string().default(() => getRivetRunner() ?? "default"),
+	/** Name of the envoy pool. This is used to group together envoys in to different pools. */
+	poolName: z.string().default(() => getRivetPool() ?? "default"),
 
 	encoding: EncodingSchema.default("bare"),
 
@@ -133,7 +133,7 @@ export function convertRegistryConfigToClientConfig(
 		endpoint: config.endpoint,
 		token: config.token,
 		namespace: config.namespace,
-		runnerName: config.runner.runnerName,
+		poolName: config.envoy.poolName,
 		headers: config.headers,
 		encoding: "bare",
 		getUpgradeWebSocket: undefined,

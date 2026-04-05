@@ -10,7 +10,6 @@ import { logger } from "../log.js";
 import { unreachable } from "antiox/panic";
 import { stringifyError } from "../utils.js";
 import { sendResponse } from "./envoy/tunnel.js";
-import { EnvoyContext } from "./envoy/index.js";
 
 export interface CreateActorOpts {
 	commandIdx: bigint;
@@ -73,10 +72,10 @@ interface ActorContext {
 		[protocol.GatewayId, protocol.RequestId],
 		PendingRequest
 	>;
-	// webSockets: Map<
-	// 	[protocol.GatewayId, protocol.RequestId],
-	// 	WebSocketTunnelAdapter
-	// >;
+	webSockets: Map<
+		[protocol.GatewayId, protocol.RequestId],
+		WebSocketTunnelAdapter
+	>;
 }
 
 export function createActor(
@@ -124,7 +123,18 @@ async function actorInner(
 		stopMessage =
 			error instanceof Error ? error.message : "actor start failed";
 
-		sendStoppedEvent(ctx, stopCode, stopMessage);
+		sendEvent(ctx, {
+			tag: "EventActorStateUpdate",
+			val: {
+				state: {
+					tag: "ActorStateStopped",
+					val: {
+						code: stopCode,
+						message: stopMessage
+					},
+				},
+			},
+		});
 		return;
 	}
 
@@ -161,7 +171,18 @@ async function actorInner(
 						: "actor stop failed";
 			}
 
-			sendStoppedEvent(ctx, stopCode, stopMessage);
+			sendEvent(ctx, {
+				tag: "EventActorStateUpdate",
+				val: {
+					state: {
+						tag: "ActorStateStopped",
+						val: {
+							code: stopCode,
+							message: stopMessage
+						},
+					},
+				},
+			});
 			return;
 		} else if (msg.type === "set-alarm") {
 			sendEvent(ctx, {
@@ -297,22 +318,6 @@ function sendEvent(ctx: ActorContext, inner: protocol.Event) {
 				inner,
 			},
 		],
-	});
-}
-
-function sendStoppedEvent(
-	ctx: ActorContext,
-	code: protocol.StopCode,
-	message: string | null,
-) {
-	const checkpoint = incrementCheckpoint(ctx);
-	ctx.shared.envoyTx.send({
-		type: "command-stop-actor-complete",
-		checkpointIndex: checkpoint.index,
-		actorId: ctx.actorId,
-		generation: ctx.generation,
-		code,
-		message,
 	});
 }
 

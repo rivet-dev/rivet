@@ -214,6 +214,8 @@ impl WorkflowError {
 				Some(deadline_ts)
 			}
 			WorkflowError::Sleep(ts) | WorkflowError::NoSignalFoundAndSleep(_, ts) => Some(*ts),
+			// Always retry udb errors, they're usually caused by ephemeral outages and can be retried
+			WorkflowError::Udb(_) => Some(rivet_util::timestamp::now() + 30_000),
 			_ => None,
 		}
 	}

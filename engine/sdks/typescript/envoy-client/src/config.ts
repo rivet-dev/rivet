@@ -156,4 +156,5 @@ export interface EnvoyConfig {
 		generation: number,
 		reason: protocol.StopActorReason,
 	) => Promise<void>;
+	onShutdown: () => void;
 }

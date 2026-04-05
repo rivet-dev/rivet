@@ -1,23 +1,34 @@
 import * as protocol from "@rivetkit/engine-envoy-protocol";
-import { EnvoyContext, findActor, log } from "./index.js";
+import { EnvoyContext, getActor, log } from "./index.js";
 import { SharedContext } from "@/context.js";
 import { unreachable } from "antiox";
 import { wsSend } from "../connection.js";
 
 export function handleTunnelMessage(ctx: EnvoyContext, msg: protocol.ToEnvoyTunnelMessage) {
-	if (msg.messageKind.tag === "ToEnvoyRequestStart") {
-		handleRequestStart(ctx, msg.messageId, msg.messageKind.val);
-	} else if (msg.messageKind.tag === "ToEnvoyRequestChunk") {
-		handleRequestChunk(ctx, msg.messageId, msg.messageKind.val);
-	} else if (msg.messageKind.tag === "ToEnvoyRequestAbort") {
-		handleRequestAbort(ctx, msg.messageId);
+	const {
+		messageId,
+		messageKind: { tag, val },
+	} = msg;
+
+	if (tag === "ToEnvoyRequestStart") {
+		handleRequestStart(ctx, messageId, val);
+	} else if (tag === "ToEnvoyRequestChunk") {
+		handleRequestChunk(ctx, messageId, val);
+	} else if (tag === "ToEnvoyRequestAbort") {
+		handleRequestAbort(ctx, messageId);
+	} else if (tag === "ToEnvoyWebSocketOpen") {
+		handleWebSocketOpen(ctx, messageId, val);
+	} else if (tag === "ToEnvoyWebSocketMessage") {
+		handleWebSocketMessage(ctx, messageId, val);
+	} else if (tag === "ToEnvoyWebSocketClose") {
+		handleWebSocketClose(ctx, messageId);
 	} else {
-		unreachable(msg.messageKind.tag);
+		unreachable(tag);
 	}
 }
 
 function handleRequestStart(ctx: EnvoyContext, messageId: protocol.MessageId, req: protocol.ToEnvoyRequestStart) {
-	const actor = findActor(ctx, req.actorId);
+	const actor = getActor(ctx, req.actorId);
 
 	if (!actor) {
 		log(ctx.shared)?.warn({
@@ -47,7 +58,7 @@ function handleRequestStart(ctx: EnvoyContext, messageId: protocol.MessageId, re
 function handleRequestChunk(ctx: EnvoyContext, messageId: protocol.MessageId, chunk: protocol.ToEnvoyRequestChunk) {
 	const actorId = ctx.requestToActor.get([messageId.gatewayId, messageId.requestId]);
 	if (actorId) {
-		let actor = findActor(ctx, actorId);
+		let actor = getActor(ctx, actorId);
 		if (actor) {
 			actor.handle.send({ type: "request-chunk", messageId, chunk });
 		}
@@ -61,7 +72,7 @@ function handleRequestChunk(ctx: EnvoyContext, messageId: protocol.MessageId, ch
 function handleRequestAbort(ctx: EnvoyContext, messageId: protocol.MessageId) {
 	const actorId = ctx.requestToActor.get([messageId.gatewayId, messageId.requestId]);
 	if (actorId) {
-		let actor = findActor(ctx, actorId);
+		let actor = getActor(ctx, actorId);
 		if (actor) {
 			actor.handle.send({ type: "request-abort", messageId });
 		}

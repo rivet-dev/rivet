@@ -36,6 +36,7 @@ export async function handleCommands(
 			}
 			generations.set(checkpoint.generation, {
 				handle,
+				name: val.config.name,
 				eventHistory: [],
 				lastCommandIdx: checkpoint.index,
 			});

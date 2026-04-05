@@ -1,8 +1,5 @@
 import { logger } from "./log";
 
-// 20MiB. Keep in sync with runner_max_response_payload_body_size from engine/packages/config/src/config/pegboard.rs
-export const MAX_PAYLOAD_SIZE = 20 * 1024 * 1024;
-
 /** Resolves after the configured debug latency, or immediately if none. */
 export function injectLatency(ms?: number): Promise<void> {
 	if (!ms) return Promise.resolve();

@@ -13,7 +13,7 @@ import { getEnvUniversal, VERSION } from "@/utils";
 import {
 	getRivetRunEngine,
 	getRivetRunEngineVersion,
-	getRivetRunnerKind,
+	getRivetEnvoyKind,
 	getRivetToken,
 } from "@/utils/env-vars";
 
@@ -74,7 +74,7 @@ const LegacyRunnerConfigSchemaUnmerged = z
 			.enum(["serverless", "normal"])
 			.optional()
 			.default(() =>
-				getRivetRunnerKind() === "serverless" ? "serverless" : "normal",
+				getRivetEnvoyKind() === "serverless" ? "serverless" : "normal",
 			),
 		totalSlots: z.number().optional(),
 

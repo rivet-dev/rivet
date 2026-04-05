@@ -9,7 +9,7 @@ export async function createActor(
 	withKey: boolean = true
 ): Promise<any> {
 	const response = await fetch(
-		`${RIVET_ENDPOINT}/actors?namespace=${namespaceName}`,
+		`${RIVET_ENDPOINT}/actors2?namespace=${namespaceName}`,
 		{
 			method: "POST",
 			headers: {

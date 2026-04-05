@@ -7,10 +7,10 @@ import {
 	updateRunnerConfig,
 } from "@/remote-manager-driver/api-endpoints";
 
-export async function configureServerlessRunner(
+export async function configureServerlessPool(
 	config: RegistryConfig,
 ): Promise<void> {
-	logger().debug("configuring serverless runner");
+	logger().debug("configuring serverless pool");
 
 	try {
 		// Ensure we have required config values
@@ -26,8 +26,8 @@ export async function configureServerlessRunner(
 		}
 
 		// Prepare the configuration
-		const customConfig = config.serverless.configureRunnerPool;
-		invariant(customConfig, "configureRunnerPool should exist");
+		const customConfig = config.serverless.configurePool;
+		invariant(customConfig, "configurePool should exist");
 
 		const clientConfig = convertRegistryConfigToClientConfig(config);
 
@@ -39,46 +39,48 @@ export async function configureServerlessRunner(
 		const dcsRes = await getDatacenters(clientConfig);
 
 		// Build the request body
-		const runnerName = customConfig.name ?? "default";
+		const poolName = customConfig.name ?? "default";
 		logger().debug({
-			msg: "configuring serverless runner",
-			runnerName,
+			msg: "configuring serverless pool",
+			poolName,
 			namespace: config.namespace,
 		});
 		const serverlessConfig = {
 			serverless: {
 				url: customConfig.url,
 				headers: customConfig.headers ?? {},
-				max_runners: customConfig.maxRunners ?? 100_000,
-				min_runners: customConfig.minRunners ?? 0,
 				request_lifespan: customConfig.requestLifespan ?? 15 * 60,
-				runners_margin: customConfig.runnersMargin ?? 0,
-				slots_per_runner: customConfig.slotsPerRunner ?? 1,
+				max_concurrent_actors: customConfig.maxConcurrentActors ?? 100_000,
 				metadata_poll_interval:
 					customConfig.metadataPollInterval ?? 1000,
+
+				max_runners: customConfig.maxRunners ?? 100_000,
+				min_runners: customConfig.minRunners ?? 0,
+				runners_margin: customConfig.runnersMargin ?? 0,
+				slots_per_runner: customConfig.slotsPerRunner ?? 1,
 			},
 			metadata: customConfig.metadata ?? {},
 			drain_on_version_upgrade:
 				customConfig.drainOnVersionUpgrade ?? true,
 			metadataPollInterval: customConfig.metadataPollInterval ?? 1000,
 		};
-		await updateRunnerConfig(clientConfig, runnerName, {
+		await updateRunnerConfig(clientConfig, poolName, {
 			datacenters: Object.fromEntries(
 				dcsRes.datacenters.map((dc) => [dc.name, serverlessConfig]),
 			),
 		});
 
 		logger().info({
-			msg: "serverless runner configured successfully",
-			runnerName,
+			msg: "serverless pool configured successfully",
+			poolName,
 			namespace: config.namespace,
 		});
 	} catch (error) {
 		logger().error({
-			msg: "failed to configure serverless runner, validate endpoint is configured correctly then restart this process",
+			msg: "failed to configure serverless pool, validate endpoint is configured correctly then restart this process",
 			error,
 		});
 
-		// Don't throw, allow the runner to continue
+		// Don't throw, allow the envoy to continue
 	}
 }

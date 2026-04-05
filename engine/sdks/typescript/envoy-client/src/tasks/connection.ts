@@ -152,6 +152,8 @@ function forwardToEnvoy(ctx: SharedContext, message: protocol.ToEnvoy) {
 			val: { ts: message.val.ts },
 		});
 	} else {
+		if (ctx.envoyTx.isClosed()) console.error("envoy tx should not be closed");
+
 		ctx.envoyTx.send({ type: "conn-message", message });
 	}
 }
