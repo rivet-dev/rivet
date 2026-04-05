@@ -1,16 +1,20 @@
-use std::{fmt::Debug, sync::Arc};
+use std::{
+	fmt::Debug,
+	sync::{Arc, OnceLock},
+};
 
 use tokio::sync::broadcast;
 
 use super::*;
 use crate::driver::{Driver, InMemoryDriver};
 
+static IN_FLIGHT: OnceLock<scc::HashMap<RawCacheKey, broadcast::Sender<()>>> = OnceLock::new();
+
 pub type Cache = Arc<CacheInner>;
 
 /// Utility type used to hold information relating to caching.
 pub struct CacheInner {
 	pub(crate) driver: Driver,
-	pub(crate) in_flight: scc::HashMap<RawCacheKey, broadcast::Sender<()>>,
 	pub(crate) ups: Option<universalpubsub::PubSub>,
 }
 
@@ -36,11 +40,12 @@ impl CacheInner {
 	#[tracing::instrument(skip(ups))]
 	pub fn new_in_memory(max_capacity: u64, ups: Option<universalpubsub::PubSub>) -> Cache {
 		let driver = Driver::InMemory(InMemoryDriver::new(max_capacity));
-		Arc::new(CacheInner {
-			driver,
-			in_flight: scc::HashMap::new(),
-			ups,
-		})
+
+		Arc::new(CacheInner { driver, ups })
+	}
+
+	pub(crate) fn in_flight(&self) -> &scc::HashMap<RawCacheKey, broadcast::Sender<()>> {
+		IN_FLIGHT.get_or_init(scc::HashMap::new)
 	}
 }
 
