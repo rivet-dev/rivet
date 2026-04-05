@@ -4,58 +4,60 @@ use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Path, Query},
 };
-use rivet_api_types::actors::kv_get::*;
+use rivet_api_types::actors::sleep::*;
 use rivet_api_util::request_remote_datacenter_raw;
 use rivet_util::Id;
 
 use crate::ctx::ApiCtx;
 
 #[utoipa::path(
-	get,
-	operation_id = "actors_kv_get",
-	path = "/actors/{actor_id}/kv/keys/{key}",
+	post,
+	operation_id = "actors_sleep",
+	path = "/actors/{actor_id}/sleep",
 	params(
 		("actor_id" = Id, Path),
-		("key" = String, Path),
-		KvGetQuery,
+		SleepQuery,
 	),
+	request_body(content = SleepRequest, content_type = "application/json"),
 	responses(
-		(status = 200, body = KvGetResponse),
+		(status = 200, body = SleepResponse),
 	),
 	security(("bearer_auth" = [])),
 )]
 #[tracing::instrument(skip_all)]
-pub async fn kv_get(
+pub async fn sleep(
 	Extension(ctx): Extension<ApiCtx>,
-	Path(path): Path<KvGetPath>,
-	Query(query): Query<KvGetQuery>,
+	Path(path): Path<SleepPath>,
+	Query(query): Query<SleepQuery>,
+	Json(body): Json<SleepRequest>,
 ) -> Response {
-	match kv_get_inner(ctx, path, query).await {
+	match sleep_inner(ctx, path, query, body).await {
 		Ok(response) => response,
 		Err(err) => ApiError::from(err).into_response(),
 	}
 }
 
 #[tracing::instrument(skip_all)]
-async fn kv_get_inner(ctx: ApiCtx, path: KvGetPath, query: KvGetQuery) -> Result<Response> {
+async fn sleep_inner(
+	ctx: ApiCtx,
+	path: SleepPath,
+	query: SleepQuery,
+	body: SleepRequest,
+) -> Result<Response> {
 	ctx.auth().await?;
 
 	if path.actor_id.label() == ctx.config().dc_label() {
-		let res = rivet_api_peer::actors::kv_get::kv_get(ctx.into(), path, query).await?;
+		let res = rivet_api_peer::actors::sleep::sleep(ctx.into(), path, query, body).await?;
 
 		Ok(Json(res).into_response())
 	} else {
 		request_remote_datacenter_raw(
 			&ctx,
 			path.actor_id.label(),
-			&format!(
-				"/actors/{}/kv/keys/{}",
-				path.actor_id,
-				urlencoding::encode(&path.key)
-			),
-			axum::http::Method::GET,
+			&format!("/actors/{}/sleep", path.actor_id),
+			axum::http::Method::POST,
 			Some(&query),
-			Option::<&()>::None,
+			Some(&body),
 		)
 		.await
 	}

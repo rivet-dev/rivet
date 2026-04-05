@@ -1,5 +1,5 @@
 import * as protocol from "@rivetkit/engine-envoy-protocol";
-import { EnvoyHandle, startEnvoy, startEnvoySync } from "@rivetkit/engine-envoy-client";
+import { ShutdownReason, EnvoyHandle, startEnvoy, startEnvoySync } from "@rivetkit/engine-envoy-client";
 import { Hono, type Context as HonoContext, type Next } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { Logger } from "pino";
@@ -182,12 +182,12 @@ app.post("/api/rivet/start", async (c) => {
 	let payload = await c.req.arrayBuffer();
 
 	return streamSSE(c, async (stream) => {
-		const stopped = Promise.withResolvers<void>();
+		const stopped = Promise.withResolvers<ShutdownReason>();
 		const envoy = startEnvoySync({
 			...config,
 			serverlessStartPayload: payload,
-			onShutdown() {
-				stopped.resolve();
+			onShutdown(reason: ShutdownReason) {
+				stopped.resolve(reason);
 			}
 		});
 
@@ -196,39 +196,10 @@ app.post("/api/rivet/start", async (c) => {
 			envoy!.shutdown(true);
 		});
 
-		await stopped.promise;
-	});
-});
-
-app.post("/foo", async (c) => {
-	let payload = await c.req.arrayBuffer();
-	getLogger().info({
-		msg: `Received SSE request`,
-		payload,
-	});
-
-	return streamSSE(c, async (stream) => {
-		const stopped = Promise.withResolvers<void>();
-
-		// Use setTimeout to immediately defer back to SSE
-		setTimeout(() => {
-			const envoy = startEnvoySync({
-				...config,
-				serverlessStartPayload: payload,
-				onShutdown() {
-					stopped.resolve();
-				}
-			});
-
-			c.req.raw.signal.addEventListener("abort", () => {
-				getLogger().debug("SSE aborted, shutting down runner");
-				envoy!.shutdown(true);
-			});
-		}, 0);
-
-		await stream.writeSSE({ event: "ping", data: "" });
-
-		await stopped.promise;
+		let reason = await stopped.promise;
+		if (reason === "serverless-early-exit") {
+			stream.writeSSE({ event: "stopping", data: "" });
+		}
 	});
 });
 

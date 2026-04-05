@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
 import * as protocol from "@rivetkit/engine-envoy-protocol";
 import type { EnvoyHandle } from "./handle.js";
+import { ShutdownReason } from "./utils.js";
 
 export interface EnvoyConfig {
 	logger?: Logger;
@@ -159,5 +160,5 @@ export interface EnvoyConfig {
 		generation: number,
 		reason: protocol.StopActorReason,
 	) => Promise<void>;
-	onShutdown: () => void;
+	onShutdown: (reason: ShutdownReason) => void;
 }

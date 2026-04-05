@@ -321,6 +321,10 @@ async fn serverless_outbound_req(
 					}
 					sse::Event::Message(msg) => match msg.event.as_str() {
 						"ping" => {}
+						// Special message that allows the client to close first. This is used when the
+						// envoy's actor stops so that it can close early instead of waiting for the entire
+						// request lifespan.
+						"stopping" => return Ok(()),
 						event => {
 							tracing::warn!(
 								event,

@@ -30,6 +30,11 @@ pub async fn router(
 				"/actors/{actor_id}/kv/keys/{key}",
 				get(actors::kv_get::kv_get),
 			)
+			.route("/actors/{actor_id}/sleep", post(actors::sleep::sleep))
+			.route(
+				"/actors/{actor_id}/reschedule",
+				post(actors::reschedule::reschedule),
+			)
 			// MARK: Runners
 			.route("/runners", get(runners::list))
 			.route("/runners/names", get(runners::list_names))
