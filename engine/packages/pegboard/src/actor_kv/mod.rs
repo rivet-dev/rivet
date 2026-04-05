@@ -2,7 +2,7 @@ use anyhow::Result;
 use entry::EntryBuilder;
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
-use rivet_runner_protocol::mk2 as rp;
+use rivet_envoy_protocol as ep;
 use universaldb::prelude::*;
 use universaldb::tuple::Subspace;
 use utils::{validate_entries, validate_keys, validate_range};
@@ -44,8 +44,8 @@ pub async fn estimate_kv_size(tx: &universaldb::Transaction, actor_id: Id) -> Re
 pub async fn get(
 	db: &universaldb::Database,
 	recipient: &Recipient,
-	keys: Vec<rp::KvKey>,
-) -> Result<(Vec<rp::KvKey>, Vec<rp::KvValue>, Vec<rp::KvMetadata>)> {
+	keys: Vec<ep::KvKey>,
+) -> Result<(Vec<ep::KvKey>, Vec<ep::KvValue>, Vec<ep::KvMetadata>)> {
 	validate_keys(&keys)?;
 
 	db.run(|tx| {
@@ -146,10 +146,10 @@ pub async fn get(
 pub async fn list(
 	db: &universaldb::Database,
 	recipient: &Recipient,
-	query: rp::KvListQuery,
+	query: ep::KvListQuery,
 	reverse: bool,
 	limit: Option<usize>,
-) -> Result<(Vec<rp::KvKey>, Vec<rp::KvValue>, Vec<rp::KvMetadata>)> {
+) -> Result<(Vec<ep::KvKey>, Vec<ep::KvValue>, Vec<ep::KvMetadata>)> {
 	utils::validate_list_query(&query)?;
 
 	let limit = limit.unwrap_or(16384);
@@ -258,8 +258,8 @@ pub async fn list(
 pub async fn put(
 	db: &universaldb::Database,
 	recipient: &Recipient,
-	keys: Vec<rp::KvKey>,
-	values: Vec<rp::KvValue>,
+	keys: Vec<ep::KvKey>,
+	values: Vec<ep::KvValue>,
 ) -> Result<()> {
 	let keys = &keys;
 	let values = &values;
@@ -301,7 +301,7 @@ pub async fn put(
 						// Set metadata
 						tx.write(
 							&keys::actor_kv::EntryMetadataKey::new(key.clone()),
-							rp::KvMetadata {
+							ep::KvMetadata {
 								version: VERSION.as_bytes().to_vec(),
 								update_ts: now,
 							},
@@ -339,7 +339,7 @@ pub async fn put(
 pub async fn delete(
 	db: &universaldb::Database,
 	recipient: &Recipient,
-	keys: Vec<rp::KvKey>,
+	keys: Vec<ep::KvKey>,
 ) -> Result<()> {
 	validate_keys(&keys)?;
 
@@ -378,8 +378,8 @@ pub async fn delete(
 pub async fn delete_range(
 	db: &universaldb::Database,
 	recipient: &Recipient,
-	start: rp::KvKey,
-	end: rp::KvKey,
+	start: ep::KvKey,
+	end: ep::KvKey,
 ) -> Result<()> {
 	validate_range(&start, &end)?;
 	if start >= end {
@@ -443,10 +443,10 @@ pub async fn delete_all(db: &universaldb::Database, recipient: &Recipient) -> Re
 	.map_err(Into::into)
 }
 
-fn list_query_range(query: rp::KvListQuery, subspace: &Subspace) -> (Vec<u8>, Vec<u8>) {
+fn list_query_range(query: ep::KvListQuery, subspace: &Subspace) -> (Vec<u8>, Vec<u8>) {
 	match query {
-		rp::KvListQuery::KvListAllQuery => subspace.range(),
-		rp::KvListQuery::KvListRangeQuery(range) => (
+		ep::KvListQuery::KvListAllQuery => subspace.range(),
+		ep::KvListQuery::KvListRangeQuery(range) => (
 			subspace
 				.subspace(&keys::actor_kv::ListKeyWrapper(range.start))
 				.range()
@@ -463,7 +463,7 @@ fn list_query_range(query: rp::KvListQuery, subspace: &Subspace) -> (Vec<u8>, Ve
 					.1
 			},
 		),
-		rp::KvListQuery::KvListPrefixQuery(prefix) => {
+		ep::KvListQuery::KvListPrefixQuery(prefix) => {
 			// For prefix queries, we need to create a range that matches all keys
 			// that start with the given prefix bytes. The tuple encoding adds a
 			// terminating 0 byte to strings, which would make the range too narrow.

@@ -1,11 +1,11 @@
 use anyhow::{Context, Result, ensure};
-use rivet_runner_protocol::mk2 as rp;
+use rivet_envoy_protocol as ep;
 
 use crate::keys::actor_kv::KeyWrapper;
 
 pub struct EntryBuilder {
 	pub key: KeyWrapper,
-	metadata: Option<rp::KvMetadata>,
+	metadata: Option<ep::KvMetadata>,
 	value: Vec<u8>,
 	next_idx: usize,
 }
@@ -20,7 +20,7 @@ impl EntryBuilder {
 		}
 	}
 
-	pub fn append_metadata(&mut self, metadata: rp::KvMetadata) {
+	pub fn append_metadata(&mut self, metadata: ep::KvMetadata) {
 		// We ignore setting the metadata again because it means the same key was given twice in the
 		// input keys for `get`. We don't perform automatic deduplication.
 		if self.metadata.is_none() {
@@ -35,7 +35,7 @@ impl EntryBuilder {
 		}
 	}
 
-	pub fn build(self) -> Result<(rp::KvKey, rp::KvValue, rp::KvMetadata)> {
+	pub fn build(self) -> Result<(ep::KvKey, ep::KvValue, ep::KvMetadata)> {
 		ensure!(!self.value.is_empty(), "empty value at key");
 
 		Ok((

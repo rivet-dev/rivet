@@ -592,3 +592,135 @@ impl TuplePack for HibernatingRequestSubspaceKey {
 		Ok(offset)
 	}
 }
+
+#[derive(Debug)]
+pub struct EnvoyKeyKey {
+	actor_id: Id,
+}
+
+impl EnvoyKeyKey {
+	pub fn new(actor_id: Id) -> Self {
+		EnvoyKeyKey { actor_id }
+	}
+}
+
+impl FormalKey for EnvoyKeyKey {
+	type Value = String;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(String::from_utf8(raw.to_vec())?)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.into_bytes())
+	}
+}
+
+impl TuplePack for EnvoyKeyKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (ACTOR, DATA, self.actor_id, ENVOY_KEY);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for EnvoyKeyKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, actor_id, _)) = <(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+
+		let v = EnvoyKeyKey { actor_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct PoolNameKey {
+	actor_id: Id,
+}
+
+impl PoolNameKey {
+	pub fn new(actor_id: Id) -> Self {
+		PoolNameKey { actor_id }
+	}
+}
+
+impl FormalKey for PoolNameKey {
+	type Value = String;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(String::from_utf8(raw.to_vec())?)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.into_bytes())
+	}
+}
+
+impl TuplePack for PoolNameKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (ACTOR, DATA, self.actor_id, POOL_NAME);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for PoolNameKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, actor_id, _)) = <(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+
+		let v = PoolNameKey { actor_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct VersionKey {
+	actor_id: Id,
+}
+
+impl VersionKey {
+	pub fn new(actor_id: Id) -> Self {
+		VersionKey { actor_id }
+	}
+}
+
+impl FormalKey for VersionKey {
+	type Value = u32;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(u32::from_be_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_be_bytes().to_vec())
+	}
+}
+
+impl TuplePack for VersionKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (ACTOR, DATA, self.actor_id, VERSION);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for VersionKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, actor_id, _)) = <(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+
+		let v = VersionKey { actor_id };
+
+		Ok((input, v))
+	}
+}

@@ -241,6 +241,9 @@ Key points:
 - ClickHouse for analytics and time-series data
 - Connection pooling through `packages/common/pools/`
 
+**Performance**
+- ALWAYS prefer a dedicated concurrency container like `scc::HashMap<_, _>` with its async api or `moka::Cache` over `Arc<Mutex<HashMap<_, _>>>`. `Arc<Mutex<_>>` is very slow for containers.
+
 ### Code Style
 - Hard tabs for Rust formatting (see `rustfmt.toml`)
 - Follow existing patterns in neighboring files

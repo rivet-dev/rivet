@@ -78,3 +78,55 @@ impl std::fmt::Display for GatewayReceiverSubject {
 		)
 	}
 }
+
+pub struct EnvoyReceiverSubject {
+	namespace_id: Id,
+	envoy_key: String,
+}
+
+impl EnvoyReceiverSubject {
+	pub fn new(namespace_id: Id, envoy_key: String) -> Self {
+		Self {
+			namespace_id,
+			envoy_key,
+		}
+	}
+}
+
+impl std::fmt::Display for EnvoyReceiverSubject {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "pegboard.envoy.{}.{}", self.namespace_id, self.envoy_key)
+	}
+}
+
+pub struct EnvoyEvictionSubject {
+	namespace_id: Id,
+	envoy_key: String,
+}
+
+impl EnvoyEvictionSubject {
+	pub fn new(namespace_id: Id, envoy_key: String) -> Self {
+		Self {
+			namespace_id,
+			envoy_key,
+		}
+	}
+}
+
+impl std::fmt::Display for EnvoyEvictionSubject {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(
+			f,
+			"pegboard.envoy.eviction.{}.{}",
+			self.namespace_id, self.envoy_key
+		)
+	}
+}
+
+pub struct ServerlessOutboundSubject;
+
+impl std::fmt::Display for ServerlessOutboundSubject {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "pegboard.serverless.outbound",)
+	}
+}

@@ -42,11 +42,12 @@ pub struct ApiDoc;
 
 #[tracing::instrument(skip_all)]
 pub async fn router(
-	name: &'static str,
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
 ) -> anyhow::Result<axum::Router> {
-	create_router(name, config, pools, |router| {
+	tracing::debug!("creating api-public router");
+
+	create_router("api-public", config, pools, |router| {
 		router
 			// Root redirect
 			.route(

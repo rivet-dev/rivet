@@ -306,6 +306,7 @@ pub trait Database: Send {
 #[derive(Debug)]
 pub struct WorkflowData {
 	pub workflow_id: Id,
+	pub name: String,
 	input: Box<serde_json::value::RawValue>,
 	state: Box<serde_json::value::RawValue>,
 	output: Option<Box<serde_json::value::RawValue>>,

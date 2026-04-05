@@ -1,0 +1,24 @@
+[package]
+name = "rivet-envoy-client"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Rust-based envoy client for Rivet, enabling programmatic actor lifecycle control"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+rand.workspace = true
+rivet-envoy-protocol.workspace = true
+serde_bare.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+tokio-tungstenite.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+urlencoding.workspace = true
+uuid.workspace = true
+vbare.workspace = true

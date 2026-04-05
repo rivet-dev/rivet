@@ -8,7 +8,11 @@ pub struct SharedState(Arc<SharedStateInner>);
 impl SharedState {
 	pub fn new(config: &rivet_config::Config, pubsub: PubSub) -> SharedState {
 		SharedState(Arc::new(SharedStateInner {
-			pegboard_gateway: pegboard_gateway::shared_state::SharedState::new(config, pubsub),
+			pegboard_gateway: pegboard_gateway::shared_state::SharedState::new(
+				config,
+				pubsub.clone(),
+			),
+			pegboard_gateway2: pegboard_gateway2::shared_state::SharedState::new(config, pubsub),
 		}))
 	}
 
@@ -28,4 +32,5 @@ impl Deref for SharedState {
 
 pub struct SharedStateInner {
 	pub pegboard_gateway: pegboard_gateway::shared_state::SharedState,
+	pub pegboard_gateway2: pegboard_gateway2::shared_state::SharedState,
 }

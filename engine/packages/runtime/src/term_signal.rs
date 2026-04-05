@@ -1,9 +1,7 @@
 use anyhow::Result;
 
-use tokio::{
-	sync::{OnceCell, watch},
-	task::JoinHandle,
-};
+use std::sync::OnceLock;
+use tokio::{sync::watch, task::JoinHandle};
 
 #[cfg(unix)]
 use tokio::signal::unix::{Signal, SignalKind, signal};
@@ -13,8 +11,7 @@ use tokio::signal::windows::ctrl_c as windows_ctrl_c;
 
 const FORCE_CLOSE_THRESHOLD: usize = 3;
 
-static HANDLER_CELL: OnceCell<(watch::Receiver<bool>, Option<JoinHandle<()>>)> =
-	OnceCell::const_new();
+static HANDLER_CELL: OnceLock<(watch::Receiver<bool>, Option<JoinHandle<()>>)> = OnceLock::new();
 
 /// Cross-platform termination signal wrapper that handles:
 /// - Unix: SIGTERM and SIGINT
@@ -82,7 +79,7 @@ impl TermSignalHandler {
 pub struct TermSignal(watch::Receiver<bool>);
 
 impl TermSignal {
-	pub async fn new() -> Self {
+	pub fn get() -> Self {
 		let rx = HANDLER_CELL
 			.get_or_init(|| {
 				let term_signal = TermSignalHandler::new()
@@ -104,9 +101,8 @@ impl TermSignal {
 						Some(tokio::spawn(term_signal.run()))
 					};
 
-				std::future::ready((rx, tokio_join_handle))
+				(rx, tokio_join_handle)
 			})
-			.await
 			.0
 			.clone();
 
@@ -119,6 +115,7 @@ impl TermSignal {
 		*self.0.borrow()
 	}
 
+	// Stop background handler task
 	pub fn stop() {
 		if let Some((_, tokio_join_handle)) = HANDLER_CELL.get() {
 			if let Some(tokio_join_handle) = tokio_join_handle {

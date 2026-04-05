@@ -106,6 +106,8 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 				&keys::actor::NameKey::new(input.actor_id),
 				input.name.clone(),
 			)?;
+			tx.write(&crate::keys::actor::VersionKey::new(input.actor_id), 1)?;
+
 			if let Some(key) = &input.key {
 				tx.write(&keys::actor::KeyKey::new(input.actor_id), key.clone())?;
 			}

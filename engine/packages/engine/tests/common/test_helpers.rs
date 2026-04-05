@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use serde_json::json;
 
@@ -34,6 +34,22 @@ pub async fn setup_test_namespace_with_runner(
 	.await;
 
 	(namespace_name, namespace_id, runner)
+}
+
+// Setup namespace with envoy
+pub async fn setup_test_namespace_with_envoy(
+	dc: &super::TestDatacenter,
+) -> (String, rivet_util::Id, super::test_envoy::TestEnvoy) {
+	let (namespace_name, namespace_id) = setup_test_namespace(dc).await;
+
+	let envoy = setup_envoy(dc, &namespace_name, |builder| {
+		builder.with_actor_behavior("test-actor", |_config| {
+			Box::new(super::test_envoy::EchoActor::new())
+		})
+	})
+	.await;
+
+	(namespace_name, namespace_id, envoy)
 }
 
 pub async fn cleanup_test_namespace(namespace_id: rivet_util::Id, _guard_port: u16) {
@@ -195,6 +211,70 @@ where
 	runner.wait_ready().await;
 
 	runner
+}
+
+/// Build a test envoy with specified configuration
+///
+/// Defaults to 20 total slots, but can be overridden in the builder closure.
+///
+/// Example:
+/// ```
+/// // Default 20 slots
+/// let envoy = setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+///     builder
+///         .with_actor_behavior("test-actor", |_| Box::new(EchoActor::new()))
+///         .with_actor_behavior("crash-actor", |_| Box::new(CrashOnStartActor::new(1)))
+/// }).await;
+///
+/// // Override slots
+/// let envoy = setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+///     builder
+///         .with_total_slots(2)
+///         .with_actor_behavior("test-actor", |_| Box::new(EchoActor::new()))
+/// }).await;
+/// ```
+pub async fn setup_envoy<F>(
+	dc: &super::TestDatacenter,
+	namespace: &str,
+	configure: F,
+) -> super::test_envoy::TestEnvoy
+where
+	F: FnOnce(super::test_envoy::TestEnvoyBuilder) -> super::test_envoy::TestEnvoyBuilder,
+{
+	let builder = super::test_envoy::TestEnvoyBuilder::new(namespace).with_version(1);
+
+	let builder = configure(builder);
+
+	let envoy = builder.build(dc).await.expect("failed to build test envoy");
+
+	// Upsert serverful runner config
+	let mut datacenters = HashMap::new();
+	datacenters.insert(
+		dc.config.dc_name().unwrap().to_string(),
+		rivet_api_types::namespaces::runner_configs::RunnerConfig {
+			kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
+			metadata: None,
+			drain_on_version_upgrade: true,
+		},
+	);
+
+	crate::common::api::public::runner_configs_upsert(
+		dc.guard_port(),
+		rivet_api_peer::runner_configs::UpsertPath {
+			runner_name: envoy.pool_name().to_string(),
+		},
+		rivet_api_peer::runner_configs::UpsertQuery {
+			namespace: namespace.to_string(),
+		},
+		rivet_api_public::runner_configs::upsert::UpsertRequest { datacenters },
+	)
+	.await
+	.expect("failed to upsert runner config");
+
+	envoy.start().await.expect("failed to start envoy");
+	envoy.wait_ready().await;
+
+	envoy
 }
 
 pub fn convert_strings_to_ids(actor_ids: Vec<String>) -> Vec<rivet_util::Id> {

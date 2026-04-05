@@ -524,6 +524,14 @@
           "format": "uint",
           "minimum": 0.0
         },
+        "actor_allocation_threshold": {
+          "description": "How long to wait for an ack response from the outbound request layer before setting actor as lost.\n\nUnit is in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
         "actor_start_threshold": {
           "description": "How long to wait after creating and not receiving a starting state before setting actor as lost.\n\nUnit is in milliseconds.",
           "type": [
@@ -551,6 +559,66 @@
         },
         "default_metadata_poll_interval": {
           "description": "Default metadata poll interval for serverless runners when not specified in runner config.\n\nUnit is in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "envoy_eligible_threshold": {
+          "description": "How long after last ping before considering a envoy ineligible for allocation.\n\nUnit is in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "envoy_event_demuxer_gc_interval": {
+          "description": "GC interval for actor event demuxer in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "envoy_event_demuxer_max_last_seen_threshold": {
+          "description": "Max time since last seen before actor is considered stale, in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "envoy_lost_threshold": {
+          "description": "How long to wait before considering an envoy lost and evicting all of its actors.\n\nUnit is in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "envoy_max_response_payload_body_size": {
+          "description": "Max response payload size in bytes from actors.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "envoy_ping_timeout": {
+          "description": "Max time since last pong before the envoy connection is terminated. Unit is in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "envoy_update_ping_interval": {
+          "description": "Ping interval for envoy updates in milliseconds.",
           "type": [
             "integer",
             "null"

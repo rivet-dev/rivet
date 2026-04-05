@@ -4,11 +4,10 @@ use crate::{actors, internal, namespaces, runner_configs, runners};
 
 #[tracing::instrument(skip_all)]
 pub async fn router(
-	name: &'static str,
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
 ) -> anyhow::Result<axum::Router> {
-	create_router(name, config, pools, |mut router| {
+	create_router("api-peer", config, pools, |mut router| {
 		router = epoxy::http_routes::mount_routes(router);
 		router
 			// MARK: Namespaces

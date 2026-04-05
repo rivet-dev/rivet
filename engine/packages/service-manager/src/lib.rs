@@ -156,7 +156,7 @@ pub async fn start(
 	let mut running_services = Vec::new();
 	let cron_schedule = tokio_cron_scheduler::JobScheduler::new().await?;
 
-	let mut term_signal = rivet_runtime::TermSignal::new().await;
+	let mut term_signal = rivet_runtime::TermSignal::get();
 	let shutting_down = Arc::new(AtomicBool::new(false));
 
 	for service in services {

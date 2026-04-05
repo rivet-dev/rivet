@@ -9,13 +9,12 @@ use rivet_runner_protocol::{
 	self as protocol, PROTOCOL_MK1_VERSION, PROTOCOL_MK2_VERSION, versioned,
 };
 use rivet_types::{actors::CrashPolicy, keys::namespace::runner_config::RunnerConfigVariant};
-
-use super::FailureReason;
 use std::time::Instant;
-use universaldb::options::{ConflictRangeType, MutationType, StreamingMode};
-use universaldb::utils::{FormalKey, IsolationLevel::*};
+use universaldb::prelude::*;
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
+
+use super::FailureReason;
 
 use crate::{keys, metrics};
 
@@ -283,7 +282,7 @@ async fn allocate_actor_v2(
 				Snapshot,
 			);
 			let (for_serverless_res, queue_exists_res) = tokio::join!(
-				// Check if runner is an serverless runner
+				// Check if runner is a serverless runner
 				ns_tx.exists(&runner_config_variant_key, Serializable),
 				queue_stream.next(),
 			);
@@ -469,11 +468,18 @@ async fn allocate_actor_v2(
 
 	let dt = start_instant.elapsed().as_secs_f64();
 	metrics::ACTOR_ALLOCATE_DURATION
-		.with_label_values(&[match res.status {
-			AllocateActorStatus::Allocated { .. } => "allocated",
-			AllocateActorStatus::Pending { .. } => "pending",
-			AllocateActorStatus::Sleep { .. } => "sleep",
-		}])
+		.with_label_values(&[
+			if res.serverless {
+				"serverless"
+			} else {
+				"serverful"
+			},
+			match res.status {
+				AllocateActorStatus::Allocated { .. } => "allocated",
+				AllocateActorStatus::Pending { .. } => "pending",
+				AllocateActorStatus::Sleep { .. } => "sleep",
+			},
+		])
 		.observe(dt);
 
 	state.for_serverless = res.serverless;
@@ -527,6 +533,8 @@ pub async fn set_not_connectable(ctx: &ActivityCtx, input: &SetNotConnectableInp
 
 	ctx.udb()?
 		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
+
 			let connectable_key = keys::actor::ConnectableKey::new(input.actor_id);
 			tx.clear(&keys::subspace().pack(&connectable_key));
 
@@ -1216,6 +1224,8 @@ pub async fn set_started(ctx: &ActivityCtx, input: &SetStartedInput) -> Result<(
 
 	ctx.udb()?
 		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
+
 			let connectable_key = keys::actor::ConnectableKey::new(input.actor_id);
 			tx.set(
 				&keys::subspace().pack(&connectable_key),

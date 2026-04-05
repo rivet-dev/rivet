@@ -10,4 +10,4 @@ pub mod runner_configs;
 pub mod runners;
 pub mod ui;
 
-pub use router::router as create_router;
+pub use router::router;
