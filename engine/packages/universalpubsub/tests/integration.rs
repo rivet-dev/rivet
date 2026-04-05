@@ -1,4 +1,4 @@
-use anyhow::*;
+use anyhow::Result;
 use futures_util::StreamExt;
 use rivet_error::RivetError;
 use rivet_test_deps_docker::{TestDatabase, TestPubSub};
@@ -150,6 +150,18 @@ async fn test_memory_driver() {
 }
 
 async fn test_inner(pubsub: &PubSub) {
+	let start = Instant::now();
+	test_queue_subscribe_single(pubsub).await.unwrap();
+	tracing::info!(duration_ms = ?start.elapsed().as_millis(), "test_queue_subscribe_single completed");
+
+	let start = Instant::now();
+	test_queue_subscribe_load_balance(pubsub).await.unwrap();
+	tracing::info!(duration_ms = ?start.elapsed().as_millis(), "test_queue_subscribe_load_balance completed");
+
+	let start = Instant::now();
+	test_queue_subscribe_multi_group(pubsub).await.unwrap();
+	tracing::info!(duration_ms = ?start.elapsed().as_millis(), "test_queue_subscribe_multi_group completed");
+
 	let start = Instant::now();
 	test_basic_pub_sub(&pubsub).await.unwrap();
 	tracing::info!(duration_ms = ?start.elapsed().as_millis(), "test_basic_pub_sub completed");
@@ -392,6 +404,133 @@ async fn test_large_payloads(pubsub: &PubSub) -> Result<()> {
 
 	// Test 2.5x max size
 	test_payload_size(pubsub, (base_size as f64 * 2.5) as usize, "2.5x").await?;
+
+	Ok(())
+}
+
+async fn test_queue_subscribe_single(pubsub: &PubSub) -> Result<()> {
+	tracing::info!("testing queue subscribe single subscriber");
+
+	let subject = format!("test.queue.single.{}", Uuid::new_v4());
+	let mut sub = pubsub.queue_subscribe(&subject, "workers").await?;
+
+	let message = b"queue message";
+	pubsub
+		.publish(&subject, message, PublishOpts::broadcast())
+		.await?;
+	pubsub.flush().await?;
+
+	match tokio::time::timeout(Duration::from_secs(5), sub.next()).await {
+		Ok(Ok(NextOutput::Message(msg))) => {
+			assert_eq!(msg.payload, message);
+		}
+		Ok(Ok(NextOutput::Unsubscribed)) => panic!("unexpected unsubscribe"),
+		Ok(Err(e)) => panic!("error: {e}"),
+		Err(_) => panic!("timed out waiting for queue message"),
+	}
+
+	Ok(())
+}
+
+async fn test_queue_subscribe_load_balance(pubsub: &PubSub) -> Result<()> {
+	tracing::info!("testing queue subscribe load balancing");
+
+	let subject = format!("test.queue.lb.{}", Uuid::new_v4());
+
+	let mut sub1 = pubsub.queue_subscribe(&subject, "workers").await?;
+	let mut sub2 = pubsub.queue_subscribe(&subject, "workers").await?;
+
+	let message_count = 10usize;
+	for i in 0..message_count {
+		let payload = format!("msg-{i}");
+		pubsub
+			.publish(&subject, payload.as_bytes(), PublishOpts::broadcast())
+			.await?;
+	}
+	pubsub.flush().await?;
+
+	// Collect all received messages across both subscribers within a timeout
+	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+
+	let tx1 = tx.clone();
+	let collect1 = tokio::spawn(async move {
+		while let Ok(NextOutput::Message(msg)) =
+			tokio::time::timeout(Duration::from_millis(500), sub1.next())
+				.await
+				.unwrap_or(Ok(NextOutput::Unsubscribed))
+		{
+			let _ = tx1.send(msg.payload);
+		}
+	});
+
+	let tx2 = tx.clone();
+	let collect2 = tokio::spawn(async move {
+		while let Ok(NextOutput::Message(msg)) =
+			tokio::time::timeout(Duration::from_millis(500), sub2.next())
+				.await
+				.unwrap_or(Ok(NextOutput::Unsubscribed))
+		{
+			let _ = tx2.send(msg.payload);
+		}
+	});
+
+	drop(tx);
+	let _ = tokio::join!(collect1, collect2);
+
+	let mut received = Vec::new();
+	while let Ok(payload) = rx.try_recv() {
+		received.push(payload);
+	}
+
+	// Every message must be received exactly once
+	assert_eq!(
+		received.len(),
+		message_count,
+		"expected {message_count} messages, got {}",
+		received.len()
+	);
+
+	let mut payloads: Vec<String> = received
+		.iter()
+		.map(|p| String::from_utf8(p.clone()).unwrap())
+		.collect();
+	payloads.sort();
+	let expected: Vec<String> = (0..message_count).map(|i| format!("msg-{i}")).collect();
+	assert_eq!(payloads, expected, "messages were duplicated or lost");
+
+	Ok(())
+}
+
+async fn test_queue_subscribe_multi_group(pubsub: &PubSub) -> Result<()> {
+	tracing::info!("testing queue subscribe multiple groups");
+
+	let subject = format!("test.queue.multigroup.{}", Uuid::new_v4());
+
+	// Two separate queue groups: each group must receive every message
+	let mut group_a = pubsub.queue_subscribe(&subject, "group-a").await?;
+	let mut group_b = pubsub.queue_subscribe(&subject, "group-b").await?;
+
+	let message = b"multi-group message";
+	pubsub
+		.publish(&subject, message, PublishOpts::broadcast())
+		.await?;
+	pubsub.flush().await?;
+
+	let recv_a = tokio::time::timeout(Duration::from_secs(5), group_a.next()).await;
+	let recv_b = tokio::time::timeout(Duration::from_secs(5), group_b.next()).await;
+
+	match recv_a {
+		Ok(Ok(NextOutput::Message(msg))) => assert_eq!(msg.payload, message),
+		Ok(Ok(NextOutput::Unsubscribed)) => panic!("group-a unexpected unsubscribe"),
+		Ok(Err(e)) => panic!("group-a error: {e}"),
+		Err(_) => panic!("group-a timed out"),
+	}
+	match recv_b {
+		Ok(Ok(NextOutput::Message(msg))) => assert_eq!(msg.payload, message),
+		Ok(Ok(NextOutput::Unsubscribed)) => panic!("group-b unexpected unsubscribe"),
+		Ok(Err(e)) => panic!("group-b error: {e}"),
+		Err(_) => panic!("group-b timed out"),
+	}
 
 	Ok(())
 }
