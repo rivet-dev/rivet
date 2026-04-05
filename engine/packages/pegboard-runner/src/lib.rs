@@ -26,7 +26,6 @@ mod ws_to_tunnel_task;
 enum LifecycleResult {
 	Closed,
 	Aborted,
-	Evicted,
 }
 
 pub struct PegboardRunnerWsCustomServe {
@@ -223,40 +222,34 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		);
 
 		// Determine single result from all tasks
-		let mut lifecycle_res = match (tunnel_to_ws_res, ws_to_tunnel_res, ping_res) {
+		let lifecycle_res = match (tunnel_to_ws_res, ws_to_tunnel_res, ping_res) {
 			// Prefer error
 			(Err(err), _, _) => Err(err),
 			(_, Err(err), _) => Err(err),
 			(_, _, Err(err)) => Err(err),
-			// Prefer non aborted result
+			// Prefer non aborted result if both succeed
 			(Ok(res), Ok(LifecycleResult::Aborted), _) => Ok(res),
 			(Ok(LifecycleResult::Aborted), Ok(res), _) => Ok(res),
 			// Unlikely case
 			(res, _, _) => res,
 		};
 
-		if let Ok(LifecycleResult::Evicted) = &lifecycle_res {
-			lifecycle_res = Err(errors::WsError::Eviction.build());
-		}
-		// Clear alloc idx if not evicted
-		else {
-			// Make runner immediately ineligible when it disconnects
-			let update_alloc_res = self
-				.ctx
-				.op(pegboard::ops::runner::update_alloc_idx::Input {
-					runners: vec![pegboard::ops::runner::update_alloc_idx::Runner {
-						runner_id: conn.runner_id,
-						action: Action::ClearIdx,
-					}],
-				})
-				.await;
-			if let Err(err) = update_alloc_res {
-				tracing::error!(
-					runner_id=?conn.runner_id,
-					?err,
-					"failed to evict runner from allocation index during disconnect"
-				);
-			}
+		// Make runner immediately ineligible when it disconnects
+		let update_alloc_res = self
+			.ctx
+			.op(pegboard::ops::runner::update_alloc_idx::Input {
+				runners: vec![pegboard::ops::runner::update_alloc_idx::Runner {
+					runner_id: conn.runner_id,
+					action: Action::ClearIdx,
+				}],
+			})
+			.await;
+		if let Err(err) = update_alloc_res {
+			tracing::error!(
+				runner_id=?conn.runner_id,
+				?err,
+				"critical: failed to evict runner from allocation index during disconnect"
+			);
 		}
 
 		tracing::debug!(%topic, "runner websocket closed");

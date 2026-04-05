@@ -17,6 +17,8 @@ export async function setupDriverTest(
 ): Promise<{
 	client: Client<typeof registry>;
 	endpoint: string;
+	hardCrashActor?: (actorId: string) => Promise<void>;
+	hardCrashPreservesData: boolean;
 }> {
 	if (!driverTestConfig.useRealTimers) {
 		vi.useFakeTimers();
@@ -24,7 +26,14 @@ export async function setupDriverTest(
 	}
 
 	// Build drivers
-	const { endpoint, namespace, runnerName, cleanup } =
+	const {
+		endpoint,
+		namespace,
+		runnerName,
+		hardCrashActor,
+		hardCrashPreservesData,
+		cleanup,
+	} =
 		await driverTestConfig.start();
 
 	let client: Client<typeof registry>;
@@ -33,7 +42,7 @@ export async function setupDriverTest(
 		client = createClient<typeof registry>({
 			endpoint,
 			namespace,
-			runnerName,
+			poolName: runnerName,
 			encoding: driverTestConfig.encoding,
 			// Disable metadata lookup to prevent redirect to the wrong port.
 			// Each test starts a new server on a dynamic port, but the
@@ -64,6 +73,8 @@ export async function setupDriverTest(
 	return {
 		client,
 		endpoint,
+		hardCrashActor,
+		hardCrashPreservesData: hardCrashPreservesData ?? false,
 	};
 }
 

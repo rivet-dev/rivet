@@ -57,8 +57,8 @@ export function createInlineClient<R extends Registry<any>>(
 ): InlineOutput<R> {
 	// HACK: Cloudflare does not support using `crypto.randomUUID()` before start, so we pass a default value
 	//
-	// Runner key is not used on Cloudflare
-	inputConfig = { ...inputConfig, runnerKey: "" };
+	// Envoy key is not used on Cloudflare
+	inputConfig = { ...inputConfig, envoyKey: "" };
 
 	// Parse config
 	const config = ConfigSchema.parse(inputConfig);

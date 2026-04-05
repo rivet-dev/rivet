@@ -1,9 +1,20 @@
+import { createRequire } from "node:module";
 import { describe, expect, test } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";
 
+const require = createRequire(import.meta.url);
+const hasAgentOsCore = (() => {
+	try {
+		require.resolve("@rivet-dev/agent-os-core");
+		return true;
+	} catch {
+		return false;
+	}
+})();
+
 export function runActorAgentOsTests(driverTestConfig: DriverTestConfig) {
-	describe.skipIf(driverTestConfig.skip?.agentOs)(
+	describe.skipIf(driverTestConfig.skip?.agentOs || !hasAgentOsCore)(
 		"Actor agentOS Tests",
 		() => {
 			// --- Filesystem ---

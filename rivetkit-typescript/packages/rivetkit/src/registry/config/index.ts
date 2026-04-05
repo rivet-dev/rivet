@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { getRunMetadata } from "@/actor/config";
 import type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
+import {
+	KEYS,
+	queueMetadataKey,
+	sqliteStoragePrefix,
+	workflowStoragePrefix,
+} from "@/actor/instance/keys";
 import { type Logger, LogLevelSchema } from "@/common/log";
 import { ENGINE_ENDPOINT } from "@/engine-process/constants";
 import { InspectorConfigSchema } from "@/inspector/config";
@@ -218,7 +224,7 @@ export const RegistryConfigSchema = z
 			});
 		}
 
-		// configurerPool requires an engine (via endpoint or spawnEngine)
+		// configurePool requires an engine (via endpoint or spawnEngine)
 		if (
 			config.serverless.configurePool &&
 			!parsedEndpoint &&
@@ -321,6 +327,30 @@ export function buildActorNames(
 			// Actor options take precedence over run metadata
 			metadata.icon = options.icon ?? runMeta.icon;
 			metadata.name = options.name ?? runMeta.name;
+			metadata.preload = {
+				keys: [
+					Array.from(KEYS.PERSIST_DATA),
+					Array.from(KEYS.INSPECTOR_TOKEN),
+					Array.from(queueMetadataKey()),
+				],
+				prefixes: [
+					{
+						prefix: Array.from(sqliteStoragePrefix()),
+						maxBytes: options.preloadMaxSqliteBytes ?? 786_432,
+						partial: true,
+					},
+					{
+						prefix: Array.from(workflowStoragePrefix()),
+						maxBytes: options.preloadMaxWorkflowBytes ?? 131_072,
+						partial: false,
+					},
+					{
+						prefix: Array.from(KEYS.CONN_PREFIX),
+						maxBytes: options.preloadMaxConnectionsBytes ?? 65_536,
+						partial: false,
+					},
+				],
+			};
 			// Remove undefined values
 			if (!metadata.icon) delete metadata.icon;
 			if (!metadata.name) delete metadata.name;
@@ -440,26 +470,26 @@ export const DocServerlessConfigSchema = z
 	})
 	.describe("Configuration for serverless deployment mode.");
 
-export const DocRunnerConfigSchema = z
+export const DocEnvoyConfigSchema = z
 	.object({
 		totalSlots: z
 			.number()
 			.optional()
 			.describe("Total number of actor slots available. Default: 100000"),
-		runnerName: z
+		poolName: z
 			.string()
 			.optional()
-			.describe("Name of this runner. Default: 'default'"),
-		runnerKey: z
+			.describe("Name of this envoy pool. Default: 'default'"),
+		envoyKey: z
 			.string()
 			.optional()
-			.describe("Deprecated. Authentication key for the runner."),
+			.describe("Deprecated. Authentication key for the envoy."),
 		version: z
 			.number()
 			.optional()
-			.describe("Version number of this runner. Default: 1"),
+			.describe("Version number of this envoy. Default: 1"),
 	})
-	.describe("Configuration for runner mode.");
+	.describe("Configuration for envoy mode.");
 
 export const DocRegistryConfigSchema = z
 	.object({
@@ -563,6 +593,6 @@ export const DocRegistryConfigSchema = z
 			.describe("Port to run the manager on. Default: 6420"),
 		inspector: DocInspectorConfigSchema,
 		serverless: DocServerlessConfigSchema.optional(),
-		runner: DocRunnerConfigSchema.optional(),
+		envoy: DocEnvoyConfigSchema.optional(),
 	})
 	.describe("RivetKit registry configuration.");

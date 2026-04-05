@@ -4,7 +4,7 @@ use gas::prelude::*;
 use pegboard::pubsub_subjects::ServerlessOutboundSubject;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest_eventsource as sse;
-use rivet_envoy_protocol::{self as protocol, versioned};
+use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_runtime::TermSignal;
 use rivet_types::actor::RunnerPoolError;
 use rivet_types::runner_configs::RunnerConfigKind;
@@ -192,6 +192,16 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		return Ok(());
 	};
 
+	let udb = ctx.udb()?;
+	let preloaded_kv = pegboard::actor_kv::preload::fetch_preloaded_kv(
+		&udb,
+		ctx.config().pegboard(),
+		actor_id,
+		namespace_id,
+		&actor_config.name,
+	)
+	.await?;
+
 	let payload = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(vec![
 		protocol::CommandWrapper {
 			checkpoint,
@@ -200,10 +210,11 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 				// Empty because request ids are ephemeral. This is intercepted by guard and
 				// populated before it reaches the envoy
 				hibernating_requests: Vec::new(),
+				preloaded_kv,
 			}),
 		},
 	]))
-	.serialize_with_embedded_version(pool.protocol_version.unwrap_or(1))?;
+	.serialize_with_embedded_version(pool.protocol_version.unwrap_or(PROTOCOL_VERSION))?;
 
 	let RunnerConfigKind::Serverless {
 		url,

@@ -865,6 +865,65 @@ export function writeEventWrapper(bc: bare.ByteCursor, x: EventWrapper): void {
     writeEvent(bc, x.inner)
 }
 
+export type PreloadedKvEntry = {
+    readonly key: KvKey
+    readonly value: KvValue
+    readonly metadata: KvMetadata
+}
+
+export function readPreloadedKvEntry(bc: bare.ByteCursor): PreloadedKvEntry {
+    return {
+        key: readKvKey(bc),
+        value: readKvValue(bc),
+        metadata: readKvMetadata(bc),
+    }
+}
+
+export function writePreloadedKvEntry(bc: bare.ByteCursor, x: PreloadedKvEntry): void {
+    writeKvKey(bc, x.key)
+    writeKvValue(bc, x.value)
+    writeKvMetadata(bc, x.metadata)
+}
+
+function read8(bc: bare.ByteCursor): readonly PreloadedKvEntry[] {
+    const len = bare.readUintSafe(bc)
+    if (len === 0) {
+        return []
+    }
+    const result = [readPreloadedKvEntry(bc)]
+    for (let i = 1; i < len; i++) {
+        result[i] = readPreloadedKvEntry(bc)
+    }
+    return result
+}
+
+function write8(bc: bare.ByteCursor, x: readonly PreloadedKvEntry[]): void {
+    bare.writeUintSafe(bc, x.length)
+    for (let i = 0; i < x.length; i++) {
+        writePreloadedKvEntry(bc, x[i])
+    }
+}
+
+export type PreloadedKv = {
+    readonly entries: readonly PreloadedKvEntry[]
+    readonly requestedGetKeys: readonly KvKey[]
+    readonly requestedPrefixes: readonly KvKey[]
+}
+
+export function readPreloadedKv(bc: bare.ByteCursor): PreloadedKv {
+    return {
+        entries: read8(bc),
+        requestedGetKeys: read0(bc),
+        requestedPrefixes: read0(bc),
+    }
+}
+
+export function writePreloadedKv(bc: bare.ByteCursor, x: PreloadedKv): void {
+    write8(bc, x.entries)
+    write0(bc, x.requestedGetKeys)
+    write0(bc, x.requestedPrefixes)
+}
+
 export type HibernatingRequest = {
     readonly gatewayId: GatewayId
     readonly requestId: RequestId
@@ -882,7 +941,7 @@ export function writeHibernatingRequest(bc: bare.ByteCursor, x: HibernatingReque
     writeRequestId(bc, x.requestId)
 }
 
-function read8(bc: bare.ByteCursor): readonly HibernatingRequest[] {
+function read9(bc: bare.ByteCursor): readonly HibernatingRequest[] {
     const len = bare.readUintSafe(bc)
     if (len === 0) {
         return []
@@ -894,28 +953,42 @@ function read8(bc: bare.ByteCursor): readonly HibernatingRequest[] {
     return result
 }
 
-function write8(bc: bare.ByteCursor, x: readonly HibernatingRequest[]): void {
+function write9(bc: bare.ByteCursor, x: readonly HibernatingRequest[]): void {
     bare.writeUintSafe(bc, x.length)
     for (let i = 0; i < x.length; i++) {
         writeHibernatingRequest(bc, x[i])
     }
 }
 
+function read10(bc: bare.ByteCursor): PreloadedKv | null {
+    return bare.readBool(bc) ? readPreloadedKv(bc) : null
+}
+
+function write10(bc: bare.ByteCursor, x: PreloadedKv | null): void {
+    bare.writeBool(bc, x != null)
+    if (x != null) {
+        writePreloadedKv(bc, x)
+    }
+}
+
 export type CommandStartActor = {
     readonly config: ActorConfig
     readonly hibernatingRequests: readonly HibernatingRequest[]
+    readonly preloadedKv: PreloadedKv | null
 }
 
 export function readCommandStartActor(bc: bare.ByteCursor): CommandStartActor {
     return {
         config: readActorConfig(bc),
-        hibernatingRequests: read8(bc),
+        hibernatingRequests: read9(bc),
+        preloadedKv: read10(bc),
     }
 }
 
 export function writeCommandStartActor(bc: bare.ByteCursor, x: CommandStartActor): void {
     writeActorConfig(bc, x.config)
-    write8(bc, x.hibernatingRequests)
+    write9(bc, x.hibernatingRequests)
+    write10(bc, x.preloadedKv)
 }
 
 export enum StopActorReason {
@@ -1122,7 +1195,7 @@ export function writeMessageId(bc: bare.ByteCursor, x: MessageId): void {
     writeMessageIndex(bc, x.messageIndex)
 }
 
-function read9(bc: bare.ByteCursor): ReadonlyMap<string, string> {
+function read11(bc: bare.ByteCursor): ReadonlyMap<string, string> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, string>()
     for (let i = 0; i < len; i++) {
@@ -1137,7 +1210,7 @@ function read9(bc: bare.ByteCursor): ReadonlyMap<string, string> {
     return result
 }
 
-function write9(bc: bare.ByteCursor, x: ReadonlyMap<string, string>): void {
+function write11(bc: bare.ByteCursor, x: ReadonlyMap<string, string>): void {
     bare.writeUintSafe(bc, x.size)
     for (const kv of x) {
         bare.writeString(bc, kv[0])
@@ -1162,7 +1235,7 @@ export function readToEnvoyRequestStart(bc: bare.ByteCursor): ToEnvoyRequestStar
         actorId: readId(bc),
         method: bare.readString(bc),
         path: bare.readString(bc),
-        headers: read9(bc),
+        headers: read11(bc),
         body: read6(bc),
         stream: bare.readBool(bc),
     }
@@ -1172,7 +1245,7 @@ export function writeToEnvoyRequestStart(bc: bare.ByteCursor, x: ToEnvoyRequestS
     writeId(bc, x.actorId)
     bare.writeString(bc, x.method)
     bare.writeString(bc, x.path)
-    write9(bc, x.headers)
+    write11(bc, x.headers)
     write6(bc, x.body)
     bare.writeBool(bc, x.stream)
 }
@@ -1206,7 +1279,7 @@ export type ToRivetResponseStart = {
 export function readToRivetResponseStart(bc: bare.ByteCursor): ToRivetResponseStart {
     return {
         status: bare.readU16(bc),
-        headers: read9(bc),
+        headers: read11(bc),
         body: read6(bc),
         stream: bare.readBool(bc),
     }
@@ -1214,7 +1287,7 @@ export function readToRivetResponseStart(bc: bare.ByteCursor): ToRivetResponseSt
 
 export function writeToRivetResponseStart(bc: bare.ByteCursor, x: ToRivetResponseStart): void {
     bare.writeU16(bc, x.status)
-    write9(bc, x.headers)
+    write11(bc, x.headers)
     write6(bc, x.body)
     bare.writeBool(bc, x.stream)
 }
@@ -1251,14 +1324,14 @@ export function readToEnvoyWebSocketOpen(bc: bare.ByteCursor): ToEnvoyWebSocketO
     return {
         actorId: readId(bc),
         path: bare.readString(bc),
-        headers: read9(bc),
+        headers: read11(bc),
     }
 }
 
 export function writeToEnvoyWebSocketOpen(bc: bare.ByteCursor, x: ToEnvoyWebSocketOpen): void {
     writeId(bc, x.actorId)
     bare.writeString(bc, x.path)
-    write9(bc, x.headers)
+    write11(bc, x.headers)
 }
 
 export type ToEnvoyWebSocketMessage = {
@@ -1278,11 +1351,11 @@ export function writeToEnvoyWebSocketMessage(bc: bare.ByteCursor, x: ToEnvoyWebS
     bare.writeBool(bc, x.binary)
 }
 
-function read10(bc: bare.ByteCursor): u16 | null {
+function read12(bc: bare.ByteCursor): u16 | null {
     return bare.readBool(bc) ? bare.readU16(bc) : null
 }
 
-function write10(bc: bare.ByteCursor, x: u16 | null): void {
+function write12(bc: bare.ByteCursor, x: u16 | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         bare.writeU16(bc, x)
@@ -1296,13 +1369,13 @@ export type ToEnvoyWebSocketClose = {
 
 export function readToEnvoyWebSocketClose(bc: bare.ByteCursor): ToEnvoyWebSocketClose {
     return {
-        code: read10(bc),
+        code: read12(bc),
         reason: read5(bc),
     }
 }
 
 export function writeToEnvoyWebSocketClose(bc: bare.ByteCursor, x: ToEnvoyWebSocketClose): void {
-    write10(bc, x.code)
+    write12(bc, x.code)
     write5(bc, x.reason)
 }
 
@@ -1359,14 +1432,14 @@ export type ToRivetWebSocketClose = {
 
 export function readToRivetWebSocketClose(bc: bare.ByteCursor): ToRivetWebSocketClose {
     return {
-        code: read10(bc),
+        code: read12(bc),
         reason: read5(bc),
         hibernate: bare.readBool(bc),
     }
 }
 
 export function writeToRivetWebSocketClose(bc: bare.ByteCursor, x: ToRivetWebSocketClose): void {
-    write10(bc, x.code)
+    write12(bc, x.code)
     write5(bc, x.reason)
     bare.writeBool(bc, x.hibernate)
 }
@@ -1575,7 +1648,7 @@ export function writeToEnvoyPing(bc: bare.ByteCursor, x: ToEnvoyPing): void {
     bare.writeI64(bc, x.ts)
 }
 
-function read11(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
+function read13(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, ActorName>()
     for (let i = 0; i < len; i++) {
@@ -1590,7 +1663,7 @@ function read11(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     return result
 }
 
-function write11(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
+function write13(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     bare.writeUintSafe(bc, x.size)
     for (const kv of x) {
         bare.writeString(bc, kv[0])
@@ -1598,22 +1671,22 @@ function write11(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     }
 }
 
-function read12(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
-    return bare.readBool(bc) ? read11(bc) : null
+function read14(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
+    return bare.readBool(bc) ? read13(bc) : null
 }
 
-function write12(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
+function write14(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
-        write11(bc, x)
+        write13(bc, x)
     }
 }
 
-function read13(bc: bare.ByteCursor): Json | null {
+function read15(bc: bare.ByteCursor): Json | null {
     return bare.readBool(bc) ? readJson(bc) : null
 }
 
-function write13(bc: bare.ByteCursor, x: Json | null): void {
+function write15(bc: bare.ByteCursor, x: Json | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         writeJson(bc, x)
@@ -1634,16 +1707,16 @@ export function readToRivetInit(bc: bare.ByteCursor): ToRivetInit {
     return {
         envoyKey: bare.readString(bc),
         version: bare.readU32(bc),
-        prepopulateActorNames: read12(bc),
-        metadata: read13(bc),
+        prepopulateActorNames: read14(bc),
+        metadata: read15(bc),
     }
 }
 
 export function writeToRivetInit(bc: bare.ByteCursor, x: ToRivetInit): void {
     bare.writeString(bc, x.envoyKey)
     bare.writeU32(bc, x.version)
-    write12(bc, x.prepopulateActorNames)
-    write13(bc, x.metadata)
+    write14(bc, x.prepopulateActorNames)
+    write15(bc, x.metadata)
 }
 
 export type ToRivetEvents = readonly EventWrapper[]
@@ -1667,7 +1740,7 @@ export function writeToRivetEvents(bc: bare.ByteCursor, x: ToRivetEvents): void 
     }
 }
 
-function read14(bc: bare.ByteCursor): readonly ActorCheckpoint[] {
+function read16(bc: bare.ByteCursor): readonly ActorCheckpoint[] {
     const len = bare.readUintSafe(bc)
     if (len === 0) {
         return []
@@ -1679,7 +1752,7 @@ function read14(bc: bare.ByteCursor): readonly ActorCheckpoint[] {
     return result
 }
 
-function write14(bc: bare.ByteCursor, x: readonly ActorCheckpoint[]): void {
+function write16(bc: bare.ByteCursor, x: readonly ActorCheckpoint[]): void {
     bare.writeUintSafe(bc, x.length)
     for (let i = 0; i < x.length; i++) {
         writeActorCheckpoint(bc, x[i])
@@ -1692,12 +1765,12 @@ export type ToRivetAckCommands = {
 
 export function readToRivetAckCommands(bc: bare.ByteCursor): ToRivetAckCommands {
     return {
-        lastCommandCheckpoints: read14(bc),
+        lastCommandCheckpoints: read16(bc),
     }
 }
 
 export function writeToRivetAckCommands(bc: bare.ByteCursor, x: ToRivetAckCommands): void {
-    write14(bc, x.lastCommandCheckpoints)
+    write16(bc, x.lastCommandCheckpoints)
 }
 
 export type ToRivetStopping = null
@@ -1895,12 +1968,12 @@ export type ToEnvoyAckEvents = {
 
 export function readToEnvoyAckEvents(bc: bare.ByteCursor): ToEnvoyAckEvents {
     return {
-        lastEventCheckpoints: read14(bc),
+        lastEventCheckpoints: read16(bc),
     }
 }
 
 export function writeToEnvoyAckEvents(bc: bare.ByteCursor, x: ToEnvoyAckEvents): void {
-    write14(bc, x.lastEventCheckpoints)
+    write16(bc, x.lastEventCheckpoints)
 }
 
 export type ToEnvoyKvResponse = {

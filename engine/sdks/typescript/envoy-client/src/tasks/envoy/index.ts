@@ -235,7 +235,7 @@ function handleConnClose(ctx: EnvoyContext, lostTimeout: NodeJS.Timeout | undefi
 	if (!lostTimeout) {
 		let lostThreshold = ctx.shared.protocolMetadata ? Number(ctx.shared.protocolMetadata.envoyLostThreshold) : 10000;
 		log(ctx.shared)?.debug({
-			msg: "starting runner lost timeout",
+			msg: "starting envoy lost timeout",
 			seconds: lostThreshold / 1000,
 		});
 
@@ -251,7 +251,7 @@ function handleConnClose(ctx: EnvoyContext, lostTimeout: NodeJS.Timeout | undefi
 				if (ctx.actors.size == 0) return;
 
 				log(ctx.shared)?.warn({
-					msg: "stopping all actors due to runner lost threshold",
+					msg: "stopping all actors due to envoy lost threshold",
 				});
 
 				// Stop all actors

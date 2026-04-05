@@ -26,6 +26,7 @@ export function handleCommands(
 				generation: checkpoint.generation,
 				config: val.config,
 				hibernatingRequests: val.hibernatingRequests,
+				preloadedKv: val.preloadedKv ?? null,
 			});
 
 			let generations = ctx.actors.get(checkpoint.actorId);

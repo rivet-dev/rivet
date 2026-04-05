@@ -4,7 +4,11 @@ import type { ManagerDriver } from "@/manager/driver";
 import { type AnyConn } from "./conn/mod";
 import type { AnyActorInstance } from "./instance/mod";
 import type { RegistryConfig } from "@/registry/config";
-import type { RawDatabaseClient, DrizzleDatabaseClient } from "@/db/config";
+import type {
+	RawDatabaseClient,
+	DrizzleDatabaseClient,
+	NativeSqliteConfig,
+} from "@/db/config";
 import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
 
 export type ActorDriverBuilder = (
@@ -102,6 +106,13 @@ export interface ActorDriver {
 	createSqliteVfs?(actorId: string): ISqliteVfs | Promise<ISqliteVfs>;
 
 	/**
+	 * Returns native SQLite channel configuration for this actor.
+	 */
+	getNativeSqliteConfig?(
+		actorId: string,
+	): NativeSqliteConfig | undefined;
+
+	/**
 	 * Requests the actor to go to sleep.
 	 *
 	 * This will call `ActorInstance.onStop` independently.
@@ -114,6 +125,15 @@ export interface ActorDriver {
 	 * This will call `ActorInstance.onStop` independently.
 	 */
 	startDestroy(actorId: string): void;
+
+	/**
+	 * Test-only helper that simulates an abrupt actor crash.
+	 *
+	 * Unlike startSleep/startDestroy, this skips actor lifecycle hooks and the
+	 * final persist flush. Drivers may still release local resources so the
+	 * current test process can continue running.
+	 */
+	hardCrashActor?(actorId: string): Promise<void>;
 
 	/**
 	 * Shuts down the actor runner.

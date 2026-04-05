@@ -3,7 +3,6 @@ import {
 	accessControlActor,
 	accessControlNoQueuesActor,
 } from "./access-control";
-import { agentOsTestActor } from "./agent-os";
 
 import { inputActor } from "./action-inputs";
 import {
@@ -71,6 +70,7 @@ import {
 } from "./run";
 import { dockerSandboxActor } from "./sandbox";
 import { scheduled } from "./scheduled";
+import { dbStressActor } from "./db-stress";
 import { scheduledDb } from "./scheduled-db";
 import {
 	sleep,
@@ -140,6 +140,18 @@ import {
 	workflowTryActor,
 } from "./workflow";
 
+let agentOsTestActor:
+	| (Awaited<typeof import("./agent-os")>["agentOsTestActor"])
+	| undefined;
+
+try {
+	({ agentOsTestActor } = await import("./agent-os"));
+} catch (error) {
+	if (!(error instanceof Error) || !error.message.includes("agent-os")) {
+		throw error;
+	}
+}
+
 // Consolidated setup with all actors
 export const registry = setup({
 	use: {
@@ -151,6 +163,8 @@ export const registry = setup({
 		counterWithLifecycle,
 		// From scheduled.ts
 		scheduled,
+		// From db-stress.ts
+		dbStressActor,
 		// From scheduled-db.ts
 		scheduledDb,
 		// From sandbox.ts
@@ -302,7 +316,11 @@ export const registry = setup({
 		dbPragmaMigrationActor,
 		// From state-zod-coercion.ts
 		stateZodCoercionActor,
-		// From agent-os.ts
-		agentOsTestActor,
+		...(agentOsTestActor
+			? {
+					// From agent-os.ts
+					agentOsTestActor,
+				}
+			: {}),
 	},
 });

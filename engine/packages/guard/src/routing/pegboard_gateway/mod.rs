@@ -122,9 +122,7 @@ pub async fn route_request(
 	// Find actor to route to
 	let actor_id = Id::parse(&actor_id_str).context("invalid x-rivet-actor header")?;
 
-	route_request_inner(ctx, shared_state, req_ctx, actor_id, req_ctx.path(), token)
-		.await
-		.map(Some)
+	route_request_inner(ctx, shared_state, req_ctx, actor_id, req_ctx.path(), token).await
 }
 
 #[derive(Debug)]
@@ -200,7 +198,7 @@ async fn route_request_inner(
 	actor_id: Id,
 	stripped_path: &str,
 	_token: Option<&str>,
-) -> Result<RoutingOutput> {
+) -> Result<Option<RoutingOutput>> {
 	// NOTE: Token validation implemented in EE
 
 	// Route to peer dc where the actor lives
@@ -281,6 +279,7 @@ async fn route_request_inner(
 				destroy_sub2,
 			)
 			.await
+			.map(Some)
 		}
 		1 => {
 			handle_actor_v1(
@@ -300,6 +299,7 @@ async fn route_request_inner(
 				destroy_sub2,
 			)
 			.await
+			.map(Some)
 		}
 		_ => bail!("unknown actor version"),
 	}

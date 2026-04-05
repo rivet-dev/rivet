@@ -3,6 +3,12 @@ import type { ActorMetrics } from "@/actor/metrics";
 
 export type AnyDatabaseProvider = DatabaseProvider<any> | undefined;
 
+export interface NativeSqliteConfig {
+	endpoint: string;
+	token?: string;
+	namespace: string;
+}
+
 /**
  * Context provided to database providers for creating database clients
  */
@@ -33,6 +39,7 @@ export interface DatabaseProviderContext {
 		batchPut: (entries: [Uint8Array, Uint8Array][]) => Promise<void>;
 		batchGet: (keys: Uint8Array[]) => Promise<(Uint8Array | null)[]>;
 		batchDelete: (keys: Uint8Array[]) => Promise<void>;
+		deleteRange: (start: Uint8Array, end: Uint8Array) => Promise<void>;
 	};
 
 	/**
@@ -58,6 +65,12 @@ export interface DatabaseProviderContext {
 	 * duration and KV call count.
 	 */
 	log?: { debug(obj: Record<string, unknown>): void };
+
+	/**
+	 * Native SQLite channel configuration. When provided, the native addon
+	 * connects to this explicit endpoint instead of reading process env.
+	 */
+	nativeSqliteConfig?: NativeSqliteConfig;
 }
 
 export type DatabaseProvider<DB extends RawAccess> = {

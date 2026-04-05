@@ -1,0 +1,13 @@
+{
+	"name": "@rivetkit/sqlite-native-win32-x64-msvc",
+	"version": "2.1.6",
+	"description": "Native SQLite addon for RivetKit - Windows x64 MSVC",
+	"license": "Apache-2.0",
+	"os": ["win32"],
+	"cpu": ["x64"],
+	"main": "sqlite-native.win32-x64-msvc.node",
+	"files": ["sqlite-native.win32-x64-msvc.node"],
+	"engines": {
+		"node": ">= 20.0.0"
+	}
+}

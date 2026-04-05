@@ -152,6 +152,7 @@ export interface EnvoyConfig {
 		actorId: string,
 		generation: number,
 		config: protocol.ActorConfig,
+		preloadedKv: protocol.PreloadedKv | null,
 	) => Promise<void>;
 
 	onActorStop: (

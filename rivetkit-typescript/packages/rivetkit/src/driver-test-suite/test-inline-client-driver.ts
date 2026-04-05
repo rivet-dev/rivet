@@ -246,7 +246,34 @@ export function createTestInlineClientDriver(
 			getUpgradeWebSocket = getUpgradeWebSocketInner;
 		},
 		kvGet: (_actorId: string, _key: Uint8Array) => {
-			throw new Error("kvGet not impelmented on inline client driver");
+			throw new Error("kvGet not implemented on inline client driver");
+		},
+		kvBatchGet: (_actorId: string, _keys: Uint8Array[]) => {
+			throw new Error(
+				"kvBatchGet not implemented on inline client driver",
+			);
+		},
+		kvBatchPut: (
+			_actorId: string,
+			_entries: [Uint8Array, Uint8Array][],
+		) => {
+			throw new Error(
+				"kvBatchPut not implemented on inline client driver",
+			);
+		},
+		kvBatchDelete: (_actorId: string, _keys: Uint8Array[]) => {
+			throw new Error(
+				"kvBatchDelete not implemented on inline client driver",
+			);
+		},
+		kvDeleteRange: (
+			_actorId: string,
+			_start: Uint8Array,
+			_end: Uint8Array,
+		) => {
+			throw new Error(
+				"kvDeleteRange not implemented on inline client driver",
+			);
 		},
 	} satisfies ManagerDriver;
 	return driver;

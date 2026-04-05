@@ -66,7 +66,7 @@ async fn recv_msg(
 				])
 				.inc();
 
-			return Ok(Err(LifecycleResult::Evicted));
+			return Err(errors::WsError::Eviction.build());
 		}
 		_ = tunnel_to_ws_abort_rx.changed() => {
 			tracing::debug!("task aborted");

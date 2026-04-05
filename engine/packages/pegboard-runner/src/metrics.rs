@@ -31,13 +31,13 @@ lazy_static::lazy_static! {
 	).unwrap();
 
 	pub static ref EVENT_MULTIPLEXER_COUNT: IntGauge = register_int_gauge_with_registry!(
-		"pegboard_runner_event_multiplexer_count",
+		"pegboard_event_multiplexer_count",
 		"Number of active actor event multiplexers.",
 		*REGISTRY
 	).unwrap();
 
 	pub static ref INGESTED_EVENTS_TOTAL: IntCounter = register_int_counter_with_registry!(
-		"pegboard_runner_ingested_events_total",
+		"pegboard_ingested_events_total",
 		"Count of actor events.",
 		*REGISTRY
 	).unwrap();

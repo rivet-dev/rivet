@@ -1,14 +1,16 @@
 use std::sync::Arc;
 
+use anyhow::Result;
 use gas::prelude::*;
 use hyper::header::HeaderName;
-use rivet_guard_core::RoutingFn;
+use rivet_guard_core::{RoutingFn, request_context::RequestContext};
 
 use crate::{errors, metrics, shared_state::SharedState};
 
 mod api_public;
 pub mod actor_path;
 mod envoy;
+mod kv_channel;
 pub(crate) mod matrix_param_deserializer;
 pub mod pegboard_gateway;
 mod runner;
@@ -25,9 +27,13 @@ pub(crate) const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
 #[tracing::instrument(skip_all)]
 pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -> RoutingFn {
 	let ctx = ctx.clone();
+	let kv_channel_handler = Arc::new(
+		pegboard_kv_channel::PegboardKvChannelCustomServe::new(ctx.clone()),
+	);
 	Arc::new(move |req_ctx| {
 		let ctx = ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id()).unwrap();
 		let shared_state = shared_state.clone();
+		let kv_channel_handler = kv_channel_handler.clone();
 		let hostname = req_ctx.hostname().to_string();
 		let path = req_ctx.path().to_string();
 
@@ -67,6 +73,18 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 				if let Some(routing_output) = envoy::route_request_path_based(&ctx, req_ctx).await?
 				{
 					metrics::ROUTE_TOTAL.with_label_values(&["envoy"]).inc();
+
+					return Ok(routing_output);
+				}
+
+				// Route KV channel
+				if let Some(routing_output) =
+					kv_channel::route_request_path_based(&ctx, req_ctx, &kv_channel_handler)
+						.await?
+				{
+					metrics::ROUTE_TOTAL
+						.with_label_values(&["kv_channel"])
+						.inc();
 
 					return Ok(routing_output);
 				}
@@ -149,4 +167,39 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 			.instrument(tracing::info_span!("routing_fn", %hostname, %path)),
 		)
 	})
+}
+
+/// Validates that the request hostname is valid for the current datacenter.
+/// Returns an error if the host does not match a valid regional host.
+pub(crate) fn validate_regional_host(
+	ctx: &StandaloneCtx,
+	req_ctx: &RequestContext,
+) -> Result<()> {
+	let current_dc = ctx.config().topology().current_dc()?;
+	if !current_dc.is_valid_regional_host(req_ctx.hostname()) {
+		tracing::warn!(
+			hostname = %req_ctx.hostname(),
+			datacenter = ?current_dc.name,
+			"invalid host for current datacenter"
+		);
+
+		let valid_hosts = if let Some(hosts) = &current_dc.valid_hosts {
+			hosts.join(", ")
+		} else {
+			current_dc
+				.public_url
+				.host_str()
+				.map(|h| h.to_string())
+				.unwrap_or_else(|| "unknown".to_string())
+		};
+
+		return Err(errors::MustUseRegionalHost {
+			host: req_ctx.hostname().to_string(),
+			datacenter: current_dc.name.clone(),
+			valid_hosts,
+		}
+		.build());
+	}
+
+	Ok(())
 }

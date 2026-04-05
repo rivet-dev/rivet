@@ -28,7 +28,7 @@ export const EnvoyConfigSchema = z.object({
 
 	// Deprecated.
 	totalSlots: z.number().default(() => getRivetTotalSlots() ?? 100000),
-	runnerKey: z.string().optional(),
+	envoyKey: z.string().optional(),
 });
 export type EnvoyConfigInput = z.input<typeof EnvoyConfigSchema>;
 export type EnvoyConfig = z.infer<typeof EnvoyConfigSchema>;
