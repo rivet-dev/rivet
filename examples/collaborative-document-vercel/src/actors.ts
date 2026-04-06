@@ -1,11 +1,11 @@
-import { randomUUID } from "node:crypto";
-import { actor, event, setup } from "rivetkit";
+import { actor, setup, event } from "rivetkit";
 import {
-	Awareness,
 	applyAwarenessUpdate,
+	Awareness,
 	encodeAwarenessUpdate,
 	removeAwarenessStates,
 } from "y-protocols/awareness";
+import { randomUUID } from "node:crypto";
 import * as Y from "yjs";
 
 export type DocumentSummary = {
@@ -118,12 +118,9 @@ export const documentList = actor({
 			const safeTitle = title.trim() || "Untitled document";
 
 			const client = c.client<typeof registry>();
-			const handle = await client.document.create(
-				[workspaceId, documentId],
-				{
-					input: { title: safeTitle, createdAt },
-				},
-			);
+			const handle = await client.document.create([workspaceId, documentId], {
+				input: { title: safeTitle, createdAt },
+			});
 			await handle.resolve();
 
 			const summary: DocumentSummary = {

@@ -59,10 +59,10 @@ export const userSession = actor({
 				page: entry.page,
 				timestamp: Date.now(),
 			};
-			c.state.recentActivity = [
-				activity,
-				...c.state.recentActivity,
-			].slice(0, MAX_ACTIVITY);
+			c.state.recentActivity = [activity, ...c.state.recentActivity].slice(
+				0,
+				MAX_ACTIVITY,
+			);
 			if (entry.isLogin) {
 				c.state.lastLoginAt = activity.timestamp;
 			}

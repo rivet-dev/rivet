@@ -115,105 +115,96 @@ export const dashboard = actor({
 
 	run: workflow(async (ctx) => {
 		await ctx.loop("refresh-loop", async (loopCtx) => {
-			const c = actorCtx<State>(loopCtx);
+				const c = actorCtx<State>(loopCtx);
 
-			await loopCtx.queue.next("wait-refresh", {
-				names: [QUEUE_REFRESH],
-			});
+				await loopCtx.queue.next("wait-refresh", {
+					names: [QUEUE_REFRESH],
+				});
 
-			ctx.log.info({ msg: "starting dashboard refresh" });
+				ctx.log.info({ msg: "starting dashboard refresh" });
 
-			const results = await loopCtx.join("fetch-all", {
-				users: {
-					run: async (branchCtx) => {
-						const bc = actorCtx<State>(branchCtx);
+				const results = await loopCtx.join("fetch-all", {
+					users: {
+						run: async (branchCtx) => {
+							const bc = actorCtx<State>(branchCtx);
 
-						await branchCtx.step("mark-running", async () => {
-							bc.state.branches.users = "running";
-							bc.broadcast("stateChanged", bc.state);
-						});
+							await branchCtx.step("mark-running", async () => {
+								bc.state.branches.users = "running";
+								bc.broadcast("stateChanged", bc.state);
+							});
 
-						const data = await branchCtx.step(
-							"fetch-users",
-							async () => {
+							const data = await branchCtx.step("fetch-users", async () => {
 								return await fetchUserStats();
-							},
-						);
+							});
 
-						await branchCtx.step("mark-complete", async () => {
-							bc.state.branches.users = "completed";
-							bc.broadcast("stateChanged", bc.state);
-						});
+							await branchCtx.step("mark-complete", async () => {
+								bc.state.branches.users = "completed";
+								bc.broadcast("stateChanged", bc.state);
+							});
 
-						return data;
+							return data;
+						},
 					},
-				},
-				orders: {
-					run: async (branchCtx) => {
-						const bc = actorCtx<State>(branchCtx);
+					orders: {
+						run: async (branchCtx) => {
+							const bc = actorCtx<State>(branchCtx);
 
-						await branchCtx.step("mark-running", async () => {
-							bc.state.branches.orders = "running";
-							bc.broadcast("stateChanged", bc.state);
-						});
+							await branchCtx.step("mark-running", async () => {
+								bc.state.branches.orders = "running";
+								bc.broadcast("stateChanged", bc.state);
+							});
 
-						const data = await branchCtx.step(
-							"fetch-orders",
-							async () => {
+							const data = await branchCtx.step("fetch-orders", async () => {
 								return await fetchOrderStats();
-							},
-						);
+							});
 
-						await branchCtx.step("mark-complete", async () => {
-							bc.state.branches.orders = "completed";
-							bc.broadcast("stateChanged", bc.state);
-						});
+							await branchCtx.step("mark-complete", async () => {
+								bc.state.branches.orders = "completed";
+								bc.broadcast("stateChanged", bc.state);
+							});
 
-						return data;
+							return data;
+						},
 					},
-				},
-				metrics: {
-					run: async (branchCtx) => {
-						const bc = actorCtx<State>(branchCtx);
+					metrics: {
+						run: async (branchCtx) => {
+							const bc = actorCtx<State>(branchCtx);
 
-						await branchCtx.step("mark-running", async () => {
-							bc.state.branches.metrics = "running";
-							bc.broadcast("stateChanged", bc.state);
-						});
+							await branchCtx.step("mark-running", async () => {
+								bc.state.branches.metrics = "running";
+								bc.broadcast("stateChanged", bc.state);
+							});
 
-						const data = await branchCtx.step(
-							"fetch-metrics",
-							async () => {
+							const data = await branchCtx.step("fetch-metrics", async () => {
 								return await fetchMetricsStats();
-							},
-						);
+							});
 
-						await branchCtx.step("mark-complete", async () => {
-							bc.state.branches.metrics = "completed";
-							bc.broadcast("stateChanged", bc.state);
-						});
+							await branchCtx.step("mark-complete", async () => {
+								bc.state.branches.metrics = "completed";
+								bc.broadcast("stateChanged", bc.state);
+							});
 
-						return data;
+							return data;
+						},
 					},
-				},
+				});
+
+				await loopCtx.step("save-data", async () => {
+					c.state.data = {
+						users: results.users,
+						orders: results.orders,
+						metrics: results.metrics,
+						fetchedAt: Date.now(),
+					};
+					c.state.loading = false;
+					c.state.lastRefresh = Date.now();
+					c.broadcast("stateChanged", c.state);
+					c.broadcast("refreshComplete", c.state.data);
+				});
+
+				ctx.log.info({ msg: "dashboard refresh complete" });
+
+				return Loop.continue(undefined);
 			});
-
-			await loopCtx.step("save-data", async () => {
-				c.state.data = {
-					users: results.users,
-					orders: results.orders,
-					metrics: results.metrics,
-					fetchedAt: Date.now(),
-				};
-				c.state.loading = false;
-				c.state.lastRefresh = Date.now();
-				c.broadcast("stateChanged", c.state);
-				c.broadcast("refreshComplete", c.state.data);
-			});
-
-			ctx.log.info({ msg: "dashboard refresh complete" });
-
-			return Loop.continue(undefined);
-		});
 	}),
 });

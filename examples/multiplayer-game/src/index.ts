@@ -1,4 +1,4 @@
-import { actor, event, setup } from "rivetkit";
+import { actor, setup, event } from "rivetkit";
 import type { GameState, JoinResult, Player, RoomStats } from "./types.ts";
 
 const MAX_PLAYERS = 10;
@@ -36,11 +36,7 @@ const createPlayer = (id: string, name: string): Player => {
 	};
 };
 
-const buildGameState = (
-	roomId: string,
-	maxPlayers: number,
-	players: Record<string, Player>,
-): GameState => ({
+const buildGameState = (roomId: string, maxPlayers: number, players: Record<string, Player>): GameState => ({
 	roomId,
 	maxPlayers,
 	players,
@@ -122,11 +118,7 @@ const gameRoom = actor({
 		playerLeft: event<{ playerId: string }>(),
 		gameState: event<GameState>(),
 		playerJoined: event<{ playerId: string; player: Player }>(),
-		playerEaten: event<{
-			eaterId: string;
-			eatenId: string;
-			eaterMass: number;
-		}>(),
+		playerEaten: event<{ eaterId: string; eatenId: string; eaterMass: number }>(),
 		playerMoved: event<{
 			playerId: string;
 			x: number;
@@ -142,14 +134,7 @@ const gameRoom = actor({
 		if (c.state.players[playerId]) {
 			delete c.state.players[playerId];
 			c.broadcast("playerLeft", { playerId });
-			c.broadcast(
-				"gameState",
-				buildGameState(
-					c.state.roomId,
-					c.state.maxPlayers,
-					c.state.players,
-				),
-			);
+			c.broadcast("gameState", buildGameState(c.state.roomId, c.state.maxPlayers, c.state.players));
 			void reportRoomCount(c);
 		}
 
@@ -159,10 +144,7 @@ const gameRoom = actor({
 		join: async (c, name: string): Promise<JoinResult | null> => {
 			const existingId = c.conn.state.playerId;
 			if (existingId && c.state.players[existingId]) {
-				return {
-					playerId: existingId,
-					player: c.state.players[existingId],
-				};
+				return { playerId: existingId, player: c.state.players[existingId] };
 			}
 
 			if (Object.keys(c.state.players).length >= c.state.maxPlayers) {
@@ -176,14 +158,7 @@ const gameRoom = actor({
 			c.state.players[playerId] = player;
 
 			c.broadcast("playerJoined", { playerId, player });
-			c.broadcast(
-				"gameState",
-				buildGameState(
-					c.state.roomId,
-					c.state.maxPlayers,
-					c.state.players,
-				),
-			);
+			c.broadcast("gameState", buildGameState(c.state.roomId, c.state.maxPlayers, c.state.players));
 			await reportRoomCount(c);
 
 			return { playerId, player };
@@ -197,20 +172,11 @@ const gameRoom = actor({
 
 			const magnitude = Math.hypot(dx, dy);
 			if (magnitude > 0) {
-				const speed =
-					SPEED_BASE * Math.max(0.4, START_MASS / player.mass);
+				const speed = SPEED_BASE * Math.max(0.4, START_MASS / player.mass);
 				const nx = dx / magnitude;
 				const ny = dy / magnitude;
-				player.x = clamp(
-					player.x + nx * speed,
-					player.radius,
-					WORLD_SIZE - player.radius,
-				);
-				player.y = clamp(
-					player.y + ny * speed,
-					player.radius,
-					WORLD_SIZE - player.radius,
-				);
+				player.x = clamp(player.x + nx * speed, player.radius, WORLD_SIZE - player.radius);
+				player.y = clamp(player.y + ny * speed, player.radius, WORLD_SIZE - player.radius);
 				player.lastUpdate = Date.now();
 			}
 
@@ -233,42 +199,26 @@ const gameRoom = actor({
 				await reportRoomCount(c);
 			}
 
-			c.broadcast(
-				"gameState",
-				buildGameState(
-					c.state.roomId,
-					c.state.maxPlayers,
-					c.state.players,
-				),
-			);
+			c.broadcast("gameState", buildGameState(c.state.roomId, c.state.maxPlayers, c.state.players));
 
-			return {
-				x: player.x,
-				y: player.y,
-				mass: player.mass,
-				radius: player.radius,
-			};
+			return { x: player.x, y: player.y, mass: player.mass, radius: player.radius };
 		},
-		getState: (c) =>
-			buildGameState(c.state.roomId, c.state.maxPlayers, c.state.players),
+		getState: (c) => buildGameState(c.state.roomId, c.state.maxPlayers, c.state.players),
 	},
 });
 
-const clamp = (value: number, min: number, max: number) =>
-	Math.max(min, Math.min(value, max));
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
 
 const resolveCollisions = (
 	players: Record<string, Player>,
 	connections: Map<string, { state: { playerId: string | null } }>,
 ) => {
 	const playerIds = Object.keys(players);
-	const ordered = playerIds.sort((a, b) => players[b].mass - players[a].mass);
+	const ordered = playerIds.sort(
+		(a, b) => players[b].mass - players[a].mass,
+	);
 	const removed = new Set<string>();
-	const eaten: Array<{
-		eaterId: string;
-		eatenId: string;
-		eaterMass: number;
-	}> = [];
+	const eaten: Array<{ eaterId: string; eatenId: string; eaterMass: number }> = [];
 
 	for (let i = 0; i < ordered.length; i++) {
 		const eaterId = ordered[i];
@@ -287,11 +237,7 @@ const resolveCollisions = (
 				removed.add(targetId);
 				eater.mass += target.mass;
 				eater.radius = radiusFromMass(eater.mass);
-				eaten.push({
-					eaterId,
-					eatenId: targetId,
-					eaterMass: eater.mass,
-				});
+				eaten.push({ eaterId, eatenId: targetId, eaterMass: eater.mass });
 			}
 		}
 	}

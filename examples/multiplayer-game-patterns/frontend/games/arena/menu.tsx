@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MODE_CONFIG, type Mode } from "../../../src/actors/arena/config.ts";
 import type { GameClient } from "../../client.ts";
+import { type Mode, MODE_CONFIG } from "../../../src/actors/arena/config.ts";
 import { ArenaBot } from "./bot.ts";
 import { waitForAssignment } from "./wait-for-assignment.ts";
 
@@ -90,16 +90,15 @@ export function ArenaMenu({
 
 			setStatus("queued");
 
-			const response = (await mm.queueForMatch({
+			const response = await mm.queueForMatch({
 				mode,
-			})) as { playerId?: string };
+			}) as { playerId?: string };
 			if (!response?.playerId || abortRef.current)
 				throw new Error("Failed to queue");
 			myPlayerId = response.playerId;
 
 			const sizes = await mm.getQueueSizes();
-			if (!abortRef.current)
-				setQueueCount((sizes as Record<string, number>)[mode] ?? 0);
+			if (!abortRef.current) setQueueCount((sizes as Record<string, number>)[mode] ?? 0);
 
 			const assignment = await waitForAssignment<ArenaMatchInfo>(
 				mm,
@@ -192,9 +191,7 @@ export function ArenaMenu({
 								}}
 							/>
 						</div>
-						<div
-							style={{ display: "flex", gap: 12, marginTop: 20 }}
-						>
+						<div style={{ display: "flex", gap: 12, marginTop: 20 }}>
 							<button
 								className="btn btn-secondary"
 								onClick={addBot}

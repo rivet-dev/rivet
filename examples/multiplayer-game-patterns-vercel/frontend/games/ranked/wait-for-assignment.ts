@@ -8,9 +8,9 @@ interface RankedAssignmentEvent {
 }
 
 type AssignmentConnection = {
-	getAssignment: (input: {
-		username: string;
-	}) => Promise<RankedMatchInfo | null | Promise<RankedMatchInfo | null>>;
+	getAssignment: (
+		input: { username: string },
+	) => Promise<RankedMatchInfo | null | Promise<RankedMatchInfo | null>>;
 	on: (
 		event: "assignmentReady",
 		handler: (raw: unknown) => void,

@@ -1,9 +1,9 @@
 import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useMemo, useState } from "react";
 import type {
-	registry,
 	UserSessionPreferences,
 	UserSessionState,
+	registry,
 } from "../src/actors.ts";
 
 const { useActor } = createRivetKit<typeof registry>(
@@ -46,10 +46,7 @@ const THEMES: Array<{ id: UserSessionPreferences["theme"]; label: string }> = [
 	{ id: "dark", label: "Dark" },
 ];
 
-const LANGUAGES: Array<{
-	id: UserSessionPreferences["language"];
-	label: string;
-}> = [
+const LANGUAGES: Array<{ id: UserSessionPreferences["language"]; label: string }> = [
 	{ id: "en", label: "English" },
 	{ id: "es", label: "Espanol" },
 	{ id: "fr", label: "Francais" },
@@ -63,10 +60,7 @@ function formatTimestamp(timestamp?: number) {
 }
 
 function regionLabel(regionId: string) {
-	return (
-		REGION_OPTIONS.find((region) => region.id === regionId)?.label ??
-		regionId
-	);
+	return REGION_OPTIONS.find((region) => region.id === regionId)?.label ?? regionId;
 }
 
 function RegionMap({ activeRegion }: { activeRegion: string }) {
@@ -92,9 +86,7 @@ function RegionMap({ activeRegion }: { activeRegion: string }) {
 					return (
 						<g
 							key={region.id}
-							className={
-								isActive ? "map-marker active" : "map-marker"
-							}
+							className={isActive ? "map-marker active" : "map-marker"}
 						>
 							<circle
 								cx={region.map.x}
@@ -113,9 +105,7 @@ function RegionMap({ activeRegion }: { activeRegion: string }) {
 }
 
 export function App() {
-	const [selectedRegion, setSelectedRegion] = useState(
-		REGION_OPTIONS[1]?.id ?? "us-east",
-	);
+	const [selectedRegion, setSelectedRegion] = useState(REGION_OPTIONS[1]?.id ?? "us-east");
 	const [session, setSession] = useState<UserSessionState | null>(null);
 	const [reportedRegion, setReportedRegion] = useState<string>("");
 	const [latencyMs, setLatencyMs] = useState<number | null>(null);
@@ -181,10 +171,7 @@ export function App() {
 		if (!actor.connection) return;
 		try {
 			const start = performance.now();
-			const updated = await actor.connection.logActivity({
-				page,
-				isLogin,
-			});
+			const updated = await actor.connection.logActivity({ page, isLogin });
 			setSession(updated);
 			setLatencyMs(Math.round(performance.now() - start));
 		} catch (err: unknown) {
@@ -204,24 +191,20 @@ export function App() {
 					<div className="eyebrow">Geo-Distributed Database</div>
 					<h1>Edge sessions that follow your users.</h1>
 					<p>
-						Each user session lives inside a regional Rivet Actor.
-						Preference updates and page visits stay close to the
-						user, reducing round trip latency while keeping data
-						persistent.
+						Each user session lives inside a regional Rivet Actor. Preference
+						updates and page visits stay close to the user, reducing round trip
+						latency while keeping data persistent.
 					</p>
 					<div className="status-row">
 						<span
 							className={
-								actor.connection
-									? "status connected"
-									: "status connecting"
+								actor.connection ? "status connected" : "status connecting"
 							}
 						>
 							{actor.connection ? "Connected" : "Connecting"}
 						</span>
 						<span className="status detail">
-							Edge latency{" "}
-							{latencyMs ? `${latencyMs}ms` : "measuring"}
+							Edge latency {latencyMs ? `${latencyMs}ms` : "measuring"}
 						</span>
 					</div>
 				</div>
@@ -243,8 +226,7 @@ export function App() {
 						<div>
 							<h2>Data locality map</h2>
 							<p>
-								Your session state is pinned to a regional data
-								plane.
+								Your session state is pinned to a regional data plane.
 							</p>
 						</div>
 						<div className="chip">{activeRegionLabel}</div>
@@ -270,10 +252,7 @@ export function App() {
 					<div className="panel-header">
 						<div>
 							<h2>Session preferences</h2>
-							<p>
-								Update state with actions and see it persist
-								instantly.
-							</p>
+							<p>Update state with actions and see it persist instantly.</p>
 						</div>
 					</div>
 					<div className="form-row">
@@ -282,11 +261,7 @@ export function App() {
 							id="theme"
 							value={session?.preferences.theme ?? "light"}
 							onChange={(event) =>
-								updatePreferences({
-									theme: event.target.value as
-										| "light"
-										| "dark",
-								})
+								updatePreferences({ theme: event.target.value as "light" | "dark" })
 							}
 						>
 							{THEMES.map((theme) => (
@@ -303,10 +278,7 @@ export function App() {
 							value={session?.preferences.language ?? "en"}
 							onChange={(event) =>
 								updatePreferences({
-									language: event.target.value as
-										| "en"
-										| "es"
-										| "fr",
+									language: event.target.value as "en" | "es" | "fr",
 								})
 							}
 						>
@@ -329,9 +301,7 @@ export function App() {
 											? "tag active"
 											: "tag"
 									}
-									onClick={() =>
-										handleRegionChange(region.id)
-									}
+									onClick={() => handleRegionChange(region.id)}
 								>
 									{region.label}
 								</button>
@@ -353,13 +323,9 @@ export function App() {
 						{session?.recentActivity.length ? (
 							<ul>
 								{session.recentActivity.map((entry) => (
-									<li
-										key={`${entry.page}-${entry.timestamp}`}
-									>
+									<li key={`${entry.page}-${entry.timestamp}`}>
 										<span>{entry.page}</span>
-										<time>
-											{formatTimestamp(entry.timestamp)}
-										</time>
+										<time>{formatTimestamp(entry.timestamp)}</time>
 									</li>
 								))}
 							</ul>
@@ -375,8 +341,7 @@ export function App() {
 					<div>
 						<h2>Simulate nearby activity</h2>
 						<p>
-							Click a page to store activity at the edge and
-							measure latency.
+							Click a page to store activity at the edge and measure latency.
 						</p>
 					</div>
 				</div>

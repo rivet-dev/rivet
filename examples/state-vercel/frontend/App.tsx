@@ -2,9 +2,7 @@ import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useRef, useState } from "react";
 import type { Message, registry } from "../src/actors.ts";
 
-const { useActor } = createRivetKit<typeof registry>(
-	`${window.location.origin}/api/rivet`,
-);
+const { useActor } = createRivetKit<typeof registry>(`${window.location.origin}/api/rivet`);
 
 export function App() {
 	const [username, setUsername] = useState("User");
@@ -84,13 +82,9 @@ export function App() {
 					messages.map((msg) => (
 						<div key={msg.id} className="message">
 							<div className="message-header">
-								<span className="message-sender">
-									{msg.sender}
-								</span>
+								<span className="message-sender">{msg.sender}</span>
 								<span className="message-timestamp">
-									{new Date(
-										msg.timestamp,
-									).toLocaleTimeString()}
+									{new Date(msg.timestamp).toLocaleTimeString()}
 								</span>
 							</div>
 							<div className="message-text">{msg.text}</div>

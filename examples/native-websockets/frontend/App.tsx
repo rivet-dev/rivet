@@ -50,9 +50,7 @@ export function App() {
 		const connect = async () => {
 			try {
 				// Get or create the actor for the room
-				const actorId = await client.cursorRoom
-					.getOrCreate("main")
-					.resolve();
+				const actorId = await client.cursorRoom.getOrCreate("main").resolve();
 				console.log("found actor", actorId);
 
 				// Build WebSocket URL with userId query parameter
@@ -96,10 +94,7 @@ export function App() {
 							}
 						}
 					} catch (error) {
-						console.error(
-							"error parsing websocket message:",
-							error,
-						);
+						console.error("error parsing websocket message:", error);
 					}
 				};
 
@@ -151,18 +146,12 @@ export function App() {
 				<h1>Quickstart: Raw WebSockets</h1>
 				<div className="info">
 					<div className="connection-status">
-						Status:{" "}
-						<span
-							className={connected ? "connected" : "disconnected"}
-						>
+						Status: <span className={connected ? "connected" : "disconnected"}>
 							{connected ? "Connected" : "Disconnected"}
 						</span>
 					</div>
 					<div className="user-info">
-						Your ID:{" "}
-						<span style={{ color: getColorForUser(userId) }}>
-							{userId}
-						</span>
+						Your ID: <span style={{ color: getColorForUser(userId) }}>{userId}</span>
 					</div>
 				</div>
 			</div>

@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { lookup } from "node:dns/promises";
 import { performance } from "node:perf_hooks";
 import { promisify } from "node:util";
-import { type Client, createClient } from "rivetkit/client";
+import { createClient, type Client } from "rivetkit/client";
 import type { registry } from "../src/index.ts";
 
 const execFileAsync = promisify(execFile);
@@ -55,7 +55,9 @@ interface ConnectionBenchmarkResult extends NoConnectionBenchmarkResult {
 	connectMs: number;
 }
 
-type BenchmarkResult = NoConnectionBenchmarkResult | ConnectionBenchmarkResult;
+type BenchmarkResult =
+	| NoConnectionBenchmarkResult
+	| ConnectionBenchmarkResult;
 
 interface BenchmarkSummary {
 	resolveMs: number[];
@@ -117,7 +119,10 @@ function parseArgs(argv: string[]): Args {
 		);
 	}
 
-	if (!Number.isFinite(args.benchmarkSamples) || args.benchmarkSamples < 1) {
+	if (
+		!Number.isFinite(args.benchmarkSamples) ||
+		args.benchmarkSamples < 1
+	) {
 		throw new Error(
 			"Invalid benchmark sample count. Pass a positive integer.",
 		);
@@ -168,9 +173,8 @@ async function runCurlBaselineSample(
 		url,
 	]);
 
-	const [pretransferStr, starttransferStr, totalStr, statusCode] = stdout
-		.trim()
-		.split(/\s+/);
+	const [pretransferStr, starttransferStr, totalStr, statusCode] =
+		stdout.trim().split(/\s+/);
 	const pretransferMs = Number.parseFloat(pretransferStr) * 1000;
 	const starttransferMs = Number.parseFloat(starttransferStr) * 1000;
 	const totalMs = Number.parseFloat(totalStr) * 1000;
@@ -232,7 +236,10 @@ function createBenchmarkKey(actorName: string, kind: string): string[] {
 	];
 }
 
-function assertCounterResults(firstValue: number, secondValue: number): void {
+function assertCounterResults(
+	firstValue: number,
+	secondValue: number,
+): void {
 	if (firstValue !== 1) {
 		throw new Error(
 			`Expected first increment to return 1. Received ${firstValue}.`,
@@ -303,7 +310,9 @@ async function benchmarkWithConnection(
 	const connectStartedAt = performance.now();
 	const connection = handle.connect();
 	const connectMs = performance.now() - connectStartedAt;
-	opts?.onLine?.(`      connection handle created: ${formatMs(connectMs)}`);
+	opts?.onLine?.(
+		`      connection handle created: ${formatMs(connectMs)}`,
+	);
 
 	try {
 		opts?.onLine?.("      first action...");
@@ -419,13 +428,17 @@ async function main(): Promise<void> {
 
 	console.log("\nRegional baseline");
 	console.log("  warming baseline connection...");
-	const baseline = await measureBaseline(baselineHost, args.baselineSamples, {
-		onSample: (sample, index, total) => {
-			console.log(
-				`  sample ${index + 1}/${total}: rtt=${formatMs(sample.roundTripMs)} pretransfer=${formatMs(sample.pretransferMs)} total=${formatMs(sample.totalMs)} status=${sample.statusCode}`,
-			);
+	const baseline = await measureBaseline(
+		baselineHost,
+		args.baselineSamples,
+		{
+			onSample: (sample, index, total) => {
+				console.log(
+					`  sample ${index + 1}/${total}: rtt=${formatMs(sample.roundTripMs)} pretransfer=${formatMs(sample.pretransferMs)} total=${formatMs(sample.totalMs)} status=${sample.statusCode}`,
+				);
+			},
 		},
-	});
+	);
 
 	console.log(
 		`  host: ${baseline.hostname} (${baseline.address}, IPv${baseline.family})`,

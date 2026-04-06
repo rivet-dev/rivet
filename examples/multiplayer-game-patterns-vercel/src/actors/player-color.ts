@@ -18,8 +18,6 @@ export function getPlayerColor(playerId: string): string {
 	for (let i = 0; i < playerId.length; i++) {
 		hash = (hash * 31 + playerId.charCodeAt(i)) | 0;
 	}
-	const index =
-		((hash % PLAYER_COLOR_PALETTE.length) + PLAYER_COLOR_PALETTE.length) %
-		PLAYER_COLOR_PALETTE.length;
+	const index = ((hash % PLAYER_COLOR_PALETTE.length) + PLAYER_COLOR_PALETTE.length) % PLAYER_COLOR_PALETTE.length;
 	return PLAYER_COLOR_PALETTE[index]!;
 }

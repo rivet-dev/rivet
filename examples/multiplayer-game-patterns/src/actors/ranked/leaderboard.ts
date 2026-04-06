@@ -1,4 +1,4 @@
-import { type ActorContextOf, actor, event, queue } from "rivetkit";
+import { actor, type ActorContextOf, event, queue } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
 export interface LeaderboardEntry {
@@ -25,15 +25,7 @@ export const rankedLeaderboard = actor({
 		leaderboardUpdate: event<LeaderboardEntry[]>(),
 	},
 	actions: {
-		updatePlayer: async (
-			c,
-			input: {
-				username: string;
-				rating: number;
-				wins: number;
-				losses: number;
-			},
-		) => {
+		updatePlayer: async (c, input: { username: string; rating: number; wins: number; losses: number }) => {
 			await c.queue.send("updatePlayer", input);
 		},
 		getTopScores: async (c) => {
@@ -71,9 +63,7 @@ async function getTop(
 		rating: number;
 		wins: number;
 		losses: number;
-	}>(
-		`SELECT username, rating, wins, losses FROM leaderboard ORDER BY rating DESC LIMIT 20`,
-	);
+	}>(`SELECT username, rating, wins, losses FROM leaderboard ORDER BY rating DESC LIMIT 20`);
 	return rows.map((r) => ({
 		username: r.username,
 		rating: r.rating,

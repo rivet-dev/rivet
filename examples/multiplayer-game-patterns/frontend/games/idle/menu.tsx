@@ -17,12 +17,7 @@ export function IdleMenu({
 }) {
 	// Suppress unused variable warning; client is needed by interface.
 	void client;
-	const [name, setName] = useState(
-		() =>
-			`Player#${Math.floor(Math.random() * 10000)
-				.toString()
-				.padStart(4, "0")}`,
-	);
+	const [name, setName] = useState(() => `Player#${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`);
 
 	const startPlaying = () => {
 		if (!name.trim()) return;
@@ -38,9 +33,9 @@ export function IdleMenu({
 			<div className="menu-container">
 				<h2>Idle</h2>
 				<p className="menu-description">
-					Build production buildings that generate resources even
-					while offline. Uses scheduled actions for offline
-					progression and a global leaderboard.
+					Build production buildings that generate resources even while offline.
+					Uses scheduled actions for offline progression and a global
+					leaderboard.
 				</p>
 				<div style={{ marginBottom: 16 }}>
 					<input

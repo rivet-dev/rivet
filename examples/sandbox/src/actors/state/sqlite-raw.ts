@@ -25,19 +25,14 @@ export const sqliteRawActor = actor({
 			return { title, createdAt };
 		},
 		getTodos: async (c) => {
-			return await c.db.execute(
-				"SELECT * FROM todos ORDER BY created_at DESC",
-			);
+			return await c.db.execute("SELECT * FROM todos ORDER BY created_at DESC");
 		},
 		toggleTodo: async (c, id: number) => {
 			await c.db.execute(
 				"UPDATE todos SET completed = NOT completed WHERE id = ?",
 				id,
 			);
-			const rows = await c.db.execute(
-				"SELECT * FROM todos WHERE id = ?",
-				id,
-			);
+			const rows = await c.db.execute("SELECT * FROM todos WHERE id = ?", id);
 			return rows[0];
 		},
 		deleteTodo: async (c, id: number) => {

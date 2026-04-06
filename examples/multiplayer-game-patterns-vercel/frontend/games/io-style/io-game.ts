@@ -13,8 +13,7 @@ export class IoGame {
 	private stopped = false;
 	private rafId = 0;
 	private worldSize = 600;
-	private targets: Record<string, { x: number; y: number; color: string }> =
-		{};
+	private targets: Record<string, { x: number; y: number; color: string }> = {};
 	private display: Record<string, { x: number; y: number }> = {};
 	private keys: Record<string, boolean> = {};
 	private lastIx = 0;
@@ -39,16 +38,12 @@ export class IoGame {
 		this.conn.on("snapshot", (raw: unknown) => {
 			const snap = raw as {
 				worldSize: number;
-				players: Record<
-					string,
-					{ x: number; y: number; color: string }
-				>;
+				players: Record<string, { x: number; y: number; color: string }>;
 			};
 			this.worldSize = snap.worldSize;
 			for (const [id, pos] of Object.entries(snap.players)) {
 				this.targets[id] = pos;
-				if (!this.display[id])
-					this.display[id] = { x: pos.x, y: pos.y };
+				if (!this.display[id]) this.display[id] = { x: pos.x, y: pos.y };
 			}
 			for (const id of Object.keys(this.targets)) {
 				if (!snap.players[id]) {
@@ -98,8 +93,7 @@ export class IoGame {
 		if (this.keys["w"] || this.keys["W"] || this.keys["ArrowUp"]) iy -= 1;
 		if (this.keys["s"] || this.keys["S"] || this.keys["ArrowDown"]) iy += 1;
 		if (this.keys["a"] || this.keys["A"] || this.keys["ArrowLeft"]) ix -= 1;
-		if (this.keys["d"] || this.keys["D"] || this.keys["ArrowRight"])
-			ix += 1;
+		if (this.keys["d"] || this.keys["D"] || this.keys["ArrowRight"]) ix += 1;
 		if (ix !== this.lastIx || iy !== this.lastIy) {
 			this.lastIx = ix;
 			this.lastIy = iy;

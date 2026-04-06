@@ -1,22 +1,16 @@
 import { createRivetKit } from "@rivetkit/react";
-import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-	Awareness,
-	applyAwarenessUpdate,
-	encodeAwarenessUpdate,
-} from "y-protocols/awareness";
-import * as Y from "yjs";
+import type { CSSProperties, ReactNode } from "react";
 import type {
 	AwarenessEvent,
 	DocumentSummary,
-	registry,
 	SyncEvent,
+	registry,
 } from "../src/actors.ts";
+import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from "y-protocols/awareness";
+import * as Y from "yjs";
 
-const { useActor } = createRivetKit<typeof registry>(
-	`${location.origin}/api/rivet`,
-);
+const { useActor } = createRivetKit<typeof registry>(`${location.origin}/api/rivet`);
 
 const CURSOR_COLORS = [
 	"#f97316",
@@ -46,15 +40,13 @@ const toNumbers = (update: Uint8Array) => Array.from(update);
 const toBytes = (update: number[]) => Uint8Array.from(update);
 
 const buildPresence = (awareness: Awareness): PresenceEntry[] => {
-	return Array.from(awareness.getStates().entries()).map(
-		([clientId, state]) => {
-			return {
-				clientId,
-				user: state.user as PresenceEntry["user"],
-				cursor: state.cursor as PresenceEntry["cursor"],
-			};
-		},
-	);
+	return Array.from(awareness.getStates().entries()).map(([clientId, state]) => {
+		return {
+			clientId,
+			user: state.user as PresenceEntry["user"],
+			cursor: state.cursor as PresenceEntry["cursor"],
+		};
+	});
 };
 
 const renderWithCursors = (text: string, cursors: RemoteCursor[]) => {
@@ -77,11 +69,9 @@ const renderWithCursors = (text: string, cursors: RemoteCursor[]) => {
 				key={`cursor-${cursor.clientId}-${clamped}`}
 				className="cursor-marker"
 				data-name={cursor.name}
-				style={
-					{
-						"--cursor-color": cursor.color,
-					} as CSSProperties
-				}
+				style={{
+					"--cursor-color": cursor.color,
+				} as CSSProperties}
 			/>,
 		);
 		lastIndex = clamped;
@@ -146,11 +136,7 @@ function DocumentEditor({
 		};
 
 		const handleAwarenessUpdate = (
-			{
-				added,
-				updated,
-				removed,
-			}: { added: number[]; updated: number[]; removed: number[] },
+			{ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] },
 			origin: unknown,
 		) => {
 			setPresence(buildPresence(awareness));
@@ -166,11 +152,7 @@ function DocumentEditor({
 				...updated,
 				...removed,
 			]);
-			connection.applyUpdate(
-				toNumbers(update),
-				"awareness",
-				awareness.clientID,
-			);
+			connection.applyUpdate(toNumbers(update), "awareness", awareness.clientID);
 		};
 
 		doc.on("update", handleDocUpdate);
@@ -189,10 +171,7 @@ function DocumentEditor({
 		if (!awareness) {
 			return;
 		}
-		awareness.setLocalStateField("user", {
-			name: username,
-			color: userColor,
-		});
+		awareness.setLocalStateField("user", { name: username, color: userColor });
 	}, [username, userColor, document.id, documentActor.connection]);
 
 	useEffect(() => {
@@ -323,9 +302,7 @@ function DocumentEditor({
 						<textarea
 							ref={textareaRef}
 							value={content}
-							onChange={(event) =>
-								handleChange(event.target.value)
-							}
+							onChange={(event) => handleChange(event.target.value)}
 							onSelect={updateLocalCursor}
 							onKeyUp={updateLocalCursor}
 							onMouseUp={updateLocalCursor}
@@ -334,8 +311,7 @@ function DocumentEditor({
 						/>
 					</div>
 					<p className="editor-hint">
-						This editor uses Yjs updates broadcast through the
-						document actor.
+						This editor uses Yjs updates broadcast through the document actor.
 					</p>
 				</div>
 
@@ -349,23 +325,14 @@ function DocumentEditor({
 								<li key={entry.clientId}>
 									<span
 										className="presence-color"
-										style={
-											{
-												"--cursor-color":
-													entry.user?.color ??
-													"#94a3b8",
-											} as CSSProperties
-										}
+										style={{
+											"--cursor-color": entry.user?.color ?? "#94a3b8",
+										} as CSSProperties}
 									/>
 									<div>
-										<strong>
-											{entry.user?.name ?? "Anonymous"}
-										</strong>
+										<strong>{entry.user?.name ?? "Anonymous"}</strong>
 										<span>
-											Cursor:{" "}
-											{entry.cursor
-												? entry.cursor.index
-												: "idle"}
+											Cursor: {entry.cursor ? entry.cursor.index : "idle"}
 										</span>
 									</div>
 								</li>
@@ -383,15 +350,10 @@ export function App() {
 	const [username, setUsername] = useState("Ada");
 	const [newTitle, setNewTitle] = useState("Product spec");
 	const [documents, setDocuments] = useState<DocumentSummary[]>([]);
-	const [activeDocumentId, setActiveDocumentId] = useState<string | null>(
-		null,
-	);
+	const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
 
 	const userColor = useMemo(() => {
-		const hash = Array.from(username).reduce(
-			(sum, char) => sum + char.charCodeAt(0),
-			0,
-		);
+		const hash = Array.from(username).reduce((sum, char) => sum + char.charCodeAt(0), 0);
 		return CURSOR_COLORS[hash % CURSOR_COLORS.length];
 	}, [username]);
 
@@ -431,8 +393,7 @@ export function App() {
 		}
 	};
 
-	const activeDocument =
-		documents.find((doc) => doc.id === activeDocumentId) ?? null;
+	const activeDocument = documents.find((doc) => doc.id === activeDocumentId) ?? null;
 
 	return (
 		<div className="page">
@@ -441,8 +402,8 @@ export function App() {
 					<p className="eyebrow">Collaborative Document</p>
 					<h1>Shared documents with Yjs and Rivet Actors</h1>
 					<p>
-						Document actors keep CRDT state in KV storage, while the
-						coordinator indexes documents per workspace.
+						Document actors keep CRDT state in KV storage, while the coordinator
+						indexes documents per workspace.
 					</p>
 				</div>
 				<div className="hero-card">
@@ -450,9 +411,7 @@ export function App() {
 						Workspace
 						<input
 							value={workspaceId}
-							onChange={(event) =>
-								setWorkspaceId(event.target.value)
-							}
+							onChange={(event) => setWorkspaceId(event.target.value)}
 							placeholder="workspace-id"
 						/>
 					</label>
@@ -460,16 +419,11 @@ export function App() {
 						Name
 						<input
 							value={username}
-							onChange={(event) =>
-								setUsername(event.target.value)
-							}
+							onChange={(event) => setUsername(event.target.value)}
 							placeholder="Your name"
 						/>
 					</label>
-					<div
-						className="color-chip"
-						style={{ "--cursor-color": userColor } as CSSProperties}
-					>
+				<div className="color-chip" style={{ "--cursor-color": userColor } as CSSProperties}>
 						Active color
 					</div>
 				</div>
@@ -481,9 +435,7 @@ export function App() {
 					<div className="create-row">
 						<input
 							value={newTitle}
-							onChange={(event) =>
-								setNewTitle(event.target.value)
-							}
+							onChange={(event) => setNewTitle(event.target.value)}
 							placeholder="New document title"
 						/>
 						<button
@@ -496,40 +448,26 @@ export function App() {
 				</div>
 				<div className="documents-list">
 					{documents.length === 0 ? (
-						<p className="empty">
-							No documents yet. Create one to start.
-						</p>
+						<p className="empty">No documents yet. Create one to start.</p>
 					) : (
 						documents.map((doc) => (
 							<article
 								key={doc.id}
 								className={
-									doc.id === activeDocumentId
-										? "document-card active"
-										: "document-card"
+									doc.id === activeDocumentId ? "document-card active" : "document-card"
 								}
 							>
 								<div>
 									<h3>{doc.title}</h3>
-									<p>
-										{new Date(
-											doc.createdAt,
-										).toLocaleString()}
-									</p>
+									<p>{new Date(doc.createdAt).toLocaleString()}</p>
 								</div>
 								<div className="document-actions">
-									<button
-										onClick={() =>
-											setActiveDocumentId(doc.id)
-										}
-									>
+									<button onClick={() => setActiveDocumentId(doc.id)}>
 										Open
 									</button>
 									<button
 										className="secondary"
-										onClick={() =>
-											handleDeleteDocument(doc.id)
-										}
+										onClick={() => handleDeleteDocument(doc.id)}
 									>
 										Delete
 									</button>
@@ -550,10 +488,7 @@ export function App() {
 			) : (
 				<section className="editor empty">
 					<h2>Select a document</h2>
-					<p>
-						Choose a document from the workspace list to start
-						editing.
-					</p>
+					<p>Choose a document from the workspace list to start editing.</p>
 				</section>
 			)}
 		</div>

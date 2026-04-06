@@ -26,9 +26,7 @@ export const todoList = actor({
 			return { title, createdAt };
 		},
 		getTodos: async (c) => {
-			const rows = await c.db.execute(
-				"SELECT * FROM todos ORDER BY created_at DESC",
-			);
+			const rows = await c.db.execute("SELECT * FROM todos ORDER BY created_at DESC");
 			return rows;
 		},
 		toggleTodo: async (c, id: number) => {
@@ -36,10 +34,7 @@ export const todoList = actor({
 				"UPDATE todos SET completed = NOT completed WHERE id = ?",
 				id,
 			);
-			const rows = await c.db.execute(
-				"SELECT * FROM todos WHERE id = ?",
-				id,
-			);
+			const rows = await c.db.execute("SELECT * FROM todos WHERE id = ?", id);
 			return rows[0];
 		},
 		deleteTodo: async (c, id: number) => {

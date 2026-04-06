@@ -32,9 +32,7 @@ export const parallelismTest = actor({
 			return { count: c.state.stateCount };
 		},
 		incrementSqlite: async (c) => {
-			await c.db.execute(
-				`UPDATE counter SET count = count + 1 WHERE id = 1`,
-			);
+			await c.db.execute(`UPDATE counter SET count = count + 1 WHERE id = 1`);
 			const results = await c.db.execute<{ count: number }>(
 				`SELECT count FROM counter WHERE id = 1`,
 			);

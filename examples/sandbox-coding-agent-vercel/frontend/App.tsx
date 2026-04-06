@@ -43,15 +43,15 @@ function AgentPanel({ info }: { info: AgentInfo }) {
 
 	agent.useEvent("messageAdded", (message: AgentMessage) => {
 		setMessages((prev) => {
-			const existingIndex = prev.findIndex(
-				(item) => item.id === message.id,
-			);
+			const existingIndex = prev.findIndex((item) => item.id === message.id);
 			if (existingIndex !== -1) {
 				const next = [...prev];
 				next[existingIndex] = message;
 				return next;
 			}
-			return [...prev, message].sort((a, b) => a.createdAt - b.createdAt);
+			return [...prev, message].sort(
+				(a, b) => a.createdAt - b.createdAt,
+			);
 		});
 	});
 
@@ -122,16 +122,12 @@ function AgentPanel({ info }: { info: AgentInfo }) {
 							className={`message message--${message.role}`}
 						>
 							<div className="message__header">
-								<span className="message__sender">
-									{message.sender}
-								</span>
+								<span className="message__sender">{message.sender}</span>
 								<span className="message__time">
 									{formatTime(message.createdAt)}
 								</span>
 							</div>
-							<p className="message__content">
-								{message.content}
-							</p>
+							<p className="message__content">{message.content}</p>
 						</article>
 					))
 				)}
@@ -211,9 +207,7 @@ export function App() {
 						<span>Agent name</span>
 						<input
 							value={agentName}
-							onChange={(event) =>
-								setAgentName(event.target.value)
-							}
+							onChange={(event) => setAgentName(event.target.value)}
 							onKeyDown={handleCreateKeyDown}
 							placeholder="Ops Analyst"
 							disabled={!manager.connection}

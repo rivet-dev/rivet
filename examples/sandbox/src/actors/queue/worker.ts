@@ -18,10 +18,7 @@ export const worker = actor({
 		lastJob: null as WorkerJob | null,
 	},
 	events: {
-		statusChanged: event<{
-			status: "idle" | "running";
-			processed: number;
-		}>(),
+		statusChanged: event<{ status: "idle" | "running"; processed: number }>(),
 		jobProcessed: event<{ processed: number; job: WorkerJob }>(),
 	},
 	queues: {

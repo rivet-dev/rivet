@@ -5,37 +5,27 @@ export class PartyBot {
 	private conn: any = null;
 	private destroyed = false;
 
-	constructor(
-		private client: GameClient,
-		private partyCode: string,
-	) {
+	constructor(private client: GameClient, private partyCode: string) {
 		this.start();
 	}
 
 	private async start() {
 		try {
-			const mm = this.client.partyMatchmaker
-				.getOrCreate(["main"])
-				.connect();
+			const mm = this.client.partyMatchmaker.getOrCreate(["main"]).connect();
 			const result = await mm.send(
 				"joinParty",
-				{
-					partyCode: this.partyCode,
-					playerName: `Bot-${Math.random().toString(36).slice(2, 6)}`,
-				},
+				{ partyCode: this.partyCode, playerName: `Bot-${Math.random().toString(36).slice(2, 6)}` },
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (
-				result as {
-					response?: {
-						matchId: string;
-						playerId: string;
-						joinToken: string;
-						playerName: string;
-					};
-				}
-			)?.response;
+			const response = (result as {
+				response?: {
+					matchId: string;
+					playerId: string;
+					joinToken: string;
+					playerName: string;
+				};
+			})?.response;
 			if (!response || this.destroyed) return;
 
 			this.conn = this.client.partyMatch

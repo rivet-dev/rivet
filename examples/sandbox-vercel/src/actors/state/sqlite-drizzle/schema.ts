@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "rivetkit/db/drizzle";
+import { sqliteTable, text, integer } from "rivetkit/db/drizzle";
 
 export const todos = sqliteTable("todos", {
 	id: integer("id").primaryKey({ autoIncrement: true }),

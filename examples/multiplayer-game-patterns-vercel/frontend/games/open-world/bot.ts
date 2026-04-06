@@ -1,5 +1,5 @@
-import { CHUNK_SIZE, WORLD_ID } from "../../../src/actors/open-world/config.ts";
 import type { GameClient } from "../../client.ts";
+import { CHUNK_SIZE, WORLD_ID } from "../../../src/actors/open-world/config.ts";
 import { OpenWorldGame } from "./open-world-game.ts";
 
 export class OpenWorldBot {
@@ -18,10 +18,7 @@ export class OpenWorldBot {
 			this.game = new OpenWorldGame(
 				null,
 				this.client,
-				{
-					...response,
-					playerName: `Bot-${Math.random().toString(36).slice(2, 6)}`,
-				},
+				{ ...response, playerName: `Bot-${Math.random().toString(36).slice(2, 6)}` },
 				{ bot: true },
 			);
 		} catch {

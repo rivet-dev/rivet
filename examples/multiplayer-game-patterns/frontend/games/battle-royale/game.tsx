@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { GameClient } from "../../client.ts";
+import type { BattleRoyaleMatchInfo } from "./menu.tsx";
 import { BattleRoyaleGame } from "./battle-royale-game.ts";
 import { BattleRoyaleBot } from "./bot.ts";
-import type { BattleRoyaleMatchInfo } from "./menu.tsx";
 
 export function BattleRoyaleGameView({
 	client,
@@ -39,12 +39,8 @@ export function BattleRoyaleGameView({
 			<div className="game-header">
 				<h2>Battle Royale</h2>
 				<div className="btn-row">
-					<button className="btn btn-secondary" onClick={addBot}>
-						Add Bot
-					</button>
-					<button className="btn btn-secondary" onClick={onLeave}>
-						Leave
-					</button>
+					<button className="btn btn-secondary" onClick={addBot}>Add Bot</button>
+					<button className="btn btn-secondary" onClick={onLeave}>Leave</button>
 				</div>
 			</div>
 			<p className="controls-hint">WASD to move, click to shoot</p>

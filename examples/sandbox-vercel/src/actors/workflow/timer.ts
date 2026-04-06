@@ -39,29 +39,29 @@ export const timer = actor({
 
 	run: workflow(async (ctx) => {
 		await ctx.loop("timer-loop", async (loopCtx) => {
-			const c = actorCtx<State>(loopCtx);
+				const c = actorCtx<State>(loopCtx);
 
-			// Get duration inside a step since state is only available in steps
-			const durationMs = await loopCtx.step("start-timer", async () => {
-				ctx.log.info({
-					msg: "starting timer",
-					timerId: c.state.id,
-					durationMs: c.state.durationMs,
+				// Get duration inside a step since state is only available in steps
+				const durationMs = await loopCtx.step("start-timer", async () => {
+					ctx.log.info({
+						msg: "starting timer",
+						timerId: c.state.id,
+						durationMs: c.state.durationMs,
+					});
+					c.broadcast("timerStarted", c.state);
+					return c.state.durationMs;
 				});
-				c.broadcast("timerStarted", c.state);
-				return c.state.durationMs;
+
+				await loopCtx.sleep("countdown", durationMs);
+
+				await loopCtx.step("complete-timer", async () => {
+					c.state.completedAt = Date.now();
+					c.broadcast("timerCompleted", c.state);
+					ctx.log.info({ msg: "timer completed", timerId: c.state.id });
+				});
+
+				return Loop.break(undefined);
 			});
-
-			await loopCtx.sleep("countdown", durationMs);
-
-			await loopCtx.step("complete-timer", async () => {
-				c.state.completedAt = Date.now();
-				c.broadcast("timerCompleted", c.state);
-				ctx.log.info({ msg: "timer completed", timerId: c.state.id });
-			});
-
-			return Loop.break(undefined);
-		});
 	}),
 
 	options: {

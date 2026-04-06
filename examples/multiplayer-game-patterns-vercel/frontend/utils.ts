@@ -1,10 +1,6 @@
-export const sleep = (ms: number) =>
-	new Promise((resolve) => setTimeout(resolve, ms));
+export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function waitFor<T>(
-	fn: () => Promise<T | null | undefined>,
-	timeoutMs = 5000,
-): Promise<T> {
+export async function waitFor<T>(fn: () => Promise<T | null | undefined>, timeoutMs = 5000): Promise<T> {
 	const start = Date.now();
 	while (Date.now() - start < timeoutMs) {
 		const value = await fn();

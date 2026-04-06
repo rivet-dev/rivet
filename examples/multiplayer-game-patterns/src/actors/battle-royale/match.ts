@@ -1,22 +1,22 @@
-import { type ActorContextOf, actor, event, UserError } from "rivetkit";
+import { actor, type ActorContextOf, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
-import type { registry } from "../index.ts";
-import { getPlayerColor } from "../player-color.ts";
+import { registry } from "../index.ts";
 import {
 	LOBBY_CAPACITY,
-	LOBBY_COUNTDOWN_TICKS,
-	MAX_SPEED,
-	PLAYER_MAX_HP,
-	SHOOT_ANGLE,
-	SHOOT_RANGE,
 	TICK_MS,
 	WORLD_SIZE,
-	ZONE_DAMAGE_PER_TICK,
+	MAX_SPEED,
+	SHOOT_RANGE,
+	SHOOT_ANGLE,
 	ZONE_INITIAL_RADIUS,
-	ZONE_MIN_RADIUS,
-	ZONE_SHRINK_RATE,
 	ZONE_SHRINK_START_TICK,
+	ZONE_SHRINK_RATE,
+	ZONE_MIN_RADIUS,
+	ZONE_DAMAGE_PER_TICK,
+	PLAYER_MAX_HP,
+	LOBBY_COUNTDOWN_TICKS,
 } from "./config.ts";
+import { getPlayerColor } from "../player-color.ts";
 
 interface PlayerEntry {
 	connId: string | null;
@@ -56,11 +56,7 @@ export const battleRoyaleMatch = actor({
 		tick: 0,
 		phase: "lobby",
 		players: {},
-		zone: {
-			centerX: WORLD_SIZE / 2,
-			centerY: WORLD_SIZE / 2,
-			radius: ZONE_INITIAL_RADIUS,
-		},
+		zone: { centerX: WORLD_SIZE / 2, centerY: WORLD_SIZE / 2, radius: ZONE_INITIAL_RADIUS },
 		eliminationOrder: [],
 		winnerId: null,
 		lobbyCountdown: null,
@@ -144,10 +140,7 @@ export const battleRoyaleMatch = actor({
 				const connectedCount = Object.values(c.state.players).filter(
 					(p) => p.connId !== null,
 				).length;
-				if (
-					connectedCount >= LOBBY_CAPACITY &&
-					c.state.lobbyCountdown === null
-				) {
+				if (connectedCount >= LOBBY_CAPACITY && c.state.lobbyCountdown === null) {
 					c.state.lobbyCountdown = LOBBY_COUNTDOWN_TICKS;
 				}
 				if (c.state.lobbyCountdown !== null) {
@@ -162,9 +155,7 @@ export const battleRoyaleMatch = actor({
 				if (c.state.tick > ZONE_SHRINK_START_TICK) {
 					c.state.zone.radius = Math.max(
 						ZONE_MIN_RADIUS,
-						ZONE_INITIAL_RADIUS -
-							ZONE_SHRINK_RATE *
-								(c.state.tick - ZONE_SHRINK_START_TICK),
+						ZONE_INITIAL_RADIUS - ZONE_SHRINK_RATE * (c.state.tick - ZONE_SHRINK_START_TICK),
 					);
 				}
 
@@ -204,9 +195,7 @@ export const battleRoyaleMatch = actor({
 		updatePosition: (c, input: { x: number; y: number }) => {
 			const found = findPlayerByConnId(c.state, c.conn.id);
 			if (!found) {
-				throw new UserError("player not found", {
-					code: "player_not_found",
-				});
+				throw new UserError("player not found", { code: "player_not_found" });
 			}
 			const [, player] = found;
 			if (!player.alive) return;
@@ -239,16 +228,12 @@ export const battleRoyaleMatch = actor({
 			}
 			const found = findPlayerByConnId(c.state, c.conn.id);
 			if (!found) {
-				throw new UserError("player not found", {
-					code: "player_not_found",
-				});
+				throw new UserError("player not found", { code: "player_not_found" });
 			}
 			const [shooterId, shooter] = found;
 			if (!shooter.alive) return;
 
-			const mag = Math.sqrt(
-				input.dirX * input.dirX + input.dirY * input.dirY,
-			);
+			const mag = Math.sqrt(input.dirX * input.dirX + input.dirY * input.dirY);
 			if (mag === 0) return;
 			const ndx = input.dirX / mag;
 			const ndy = input.dirY / mag;
@@ -334,22 +319,12 @@ function startGame(c: ActorContextOf<typeof battleRoyaleMatch>) {
 	}
 }
 
-function randomPositionInZone(zone: {
-	centerX: number;
-	centerY: number;
-	radius: number;
-}): { x: number; y: number } {
+function randomPositionInZone(zone: { centerX: number; centerY: number; radius: number }): { x: number; y: number } {
 	const angle = Math.random() * Math.PI * 2;
 	const r = Math.sqrt(Math.random()) * zone.radius * 0.9;
 	return {
-		x: Math.max(
-			0,
-			Math.min(WORLD_SIZE, zone.centerX + Math.cos(angle) * r),
-		),
-		y: Math.max(
-			0,
-			Math.min(WORLD_SIZE, zone.centerY + Math.sin(angle) * r),
-		),
+		x: Math.max(0, Math.min(WORLD_SIZE, zone.centerX + Math.cos(angle) * r)),
+		y: Math.max(0, Math.min(WORLD_SIZE, zone.centerY + Math.sin(angle) * r)),
 	};
 }
 
@@ -401,18 +376,7 @@ interface Snapshot {
 	lobbyCountdown: number | null;
 	worldSize: number;
 	zone: { centerX: number; centerY: number; radius: number };
-	players: Record<
-		string,
-		{
-			x: number;
-			y: number;
-			color: string;
-			hp: number;
-			maxHp: number;
-			alive: boolean;
-			placement: number | null;
-		}
-	>;
+	players: Record<string, { x: number; y: number; color: string; hp: number; maxHp: number; alive: boolean; placement: number | null }>;
 }
 
 interface ShootEvent {
@@ -446,9 +410,7 @@ function buildSnapshot(c: ActorContextOf<typeof battleRoyaleMatch>): Snapshot {
 		tick: c.state.tick,
 		phase: c.state.phase,
 		capacity: LOBBY_CAPACITY,
-		playerCount: Object.values(c.state.players).filter(
-			(p) => p.connId !== null,
-		).length,
+		playerCount: Object.values(c.state.players).filter((p) => p.connId !== null).length,
 		aliveCount: countAlivePlayers(c.state),
 		winnerId: c.state.winnerId,
 		lobbyCountdown: c.state.lobbyCountdown,

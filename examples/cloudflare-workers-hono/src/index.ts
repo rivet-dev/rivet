@@ -19,5 +19,4 @@ app.post("/increment/:name", async (c) => {
 });
 
 const { handler, ActorHandler } = createHandler(registry, { fetch: app.fetch });
-
-export { ActorHandler, handler as default };
+export { handler as default, ActorHandler };

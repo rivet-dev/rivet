@@ -1,5 +1,5 @@
 import { openai } from "@ai-sdk/openai";
-import { type CoreMessage, streamText } from "ai";
+import { streamText, type CoreMessage } from "ai";
 import { actor, event, queue, setup } from "rivetkit";
 
 export type AgentMessage = {

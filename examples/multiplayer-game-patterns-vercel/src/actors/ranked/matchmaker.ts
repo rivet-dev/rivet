@@ -5,11 +5,11 @@ This matchmaker uses a rating window flow.
 3. createRankedMatch removes paired players, creates a match actor, stores assignments, and broadcasts assignmentReady.
 4. matchCompleted updates player rating actors and leaderboard entries, then removes the match row.
 */
-import { type ActorContextOf, actor, queue } from "rivetkit";
+import { actor, type ActorContextOf, queue } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 import { interval } from "rivetkit/utils";
 
-import type { registry } from "../index.ts";
+import { registry } from "../index.ts";
 import {
 	INITIAL_RATING_WINDOW,
 	MAX_RATING_WINDOW,
@@ -67,7 +67,10 @@ export const rankedMatchmaker = actor({
 			);
 			return rows[0]?.cnt ?? 0;
 		},
-		getAssignment: async (c, { username }: { username: string }) => {
+		getAssignment: async (
+			c,
+			{ username }: { username: string },
+		) => {
 			const rows = await c.db.execute<{
 				match_id: string;
 				username: string;
@@ -109,11 +112,9 @@ export const rankedMatchmaker = actor({
 				const { username, connId } = message.body;
 
 				const client = c.client<typeof registry>();
-				const playerHandle = client.rankedPlayer.getOrCreate([
-					username,
-				]);
+				const playerHandle = client.rankedPlayer.getOrCreate([username]);
 				await playerHandle.initialize({ username });
-				const rating = (await playerHandle.getRating()) as number;
+				const rating = await playerHandle.getRating() as number;
 
 				// Clear any stale assignment for this username before re-queueing.
 				await c.db.execute(
@@ -142,33 +143,13 @@ export const rankedMatchmaker = actor({
 				const client = c.client<typeof registry>();
 
 				if (body.winnerUsername && body.loserUsername) {
-					const winnerHandle = client.rankedPlayer.getOrCreate([
-						body.winnerUsername,
-					]);
-					await winnerHandle.applyMatchResult({
-						won: true,
-						newRating: body.winnerNewRating,
-					});
-					const loserHandle = client.rankedPlayer.getOrCreate([
-						body.loserUsername,
-					]);
-					await loserHandle.applyMatchResult({
-						won: false,
-						newRating: body.loserNewRating,
-					});
+					const winnerHandle = client.rankedPlayer.getOrCreate([body.winnerUsername]);
+					await winnerHandle.applyMatchResult({ won: true, newRating: body.winnerNewRating });
+					const loserHandle = client.rankedPlayer.getOrCreate([body.loserUsername]);
+					await loserHandle.applyMatchResult({ won: false, newRating: body.loserNewRating });
 
-					const winnerProfile = (await winnerHandle.getProfile()) as {
-						username: string;
-						rating: number;
-						wins: number;
-						losses: number;
-					};
-					const loserProfile = (await loserHandle.getProfile()) as {
-						username: string;
-						rating: number;
-						wins: number;
-						losses: number;
-					};
+					const winnerProfile = await winnerHandle.getProfile() as { username: string; rating: number; wins: number; losses: number };
+					const loserProfile = await loserHandle.getProfile() as { username: string; rating: number; wins: number; losses: number };
 
 					const lb = client.rankedLeaderboard.getOrCreate(["main"]);
 					await lb.updatePlayer(winnerProfile);
@@ -188,7 +169,9 @@ export const rankedMatchmaker = actor({
 	},
 });
 
-async function attemptPairing(c: ActorContextOf<typeof rankedMatchmaker>) {
+async function attemptPairing(
+	c: ActorContextOf<typeof rankedMatchmaker>,
+) {
 	const now = Date.now();
 	const pool = await c.db.execute<QueuePlayerRow>(
 		`SELECT * FROM player_pool ORDER BY queued_at ASC`,
@@ -235,14 +218,8 @@ async function createRankedMatch(
 	a: QueuePlayerRow,
 	b: QueuePlayerRow,
 ) {
-	await c.db.execute(
-		`DELETE FROM player_pool WHERE username = ?`,
-		a.username,
-	);
-	await c.db.execute(
-		`DELETE FROM player_pool WHERE username = ?`,
-		b.username,
-	);
+	await c.db.execute(`DELETE FROM player_pool WHERE username = ?`, a.username);
+	await c.db.execute(`DELETE FROM player_pool WHERE username = ?`, b.username);
 
 	const matchId = crypto.randomUUID();
 	const assignedPlayers = [
@@ -344,9 +321,7 @@ async function sendQueueUpdates(c: ActorContextOf<typeof rankedMatchmaker>) {
 	}
 }
 
-async function runQueueUpdateTicker(
-	c: ActorContextOf<typeof rankedMatchmaker>,
-) {
+async function runQueueUpdateTicker(c: ActorContextOf<typeof rankedMatchmaker>) {
 	const tick = interval(QUEUE_UPDATE_TICK_MS);
 	while (!c.aborted) {
 		await tick();

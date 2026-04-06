@@ -23,9 +23,7 @@ export const largePayloadActor = actor({
 		getLargeResponse: (c, itemCount: number) => {
 			const items: string[] = [];
 			for (let i = 0; i < itemCount; i++) {
-				items.push(
-					`Item ${i} with some additional text to increase size`,
-				);
+				items.push(`Item ${i} with some additional text to increase size`);
 			}
 			return { items };
 		},
@@ -66,9 +64,7 @@ export const largePayloadConnActor = actor({
 		getLargeResponse: (c, itemCount: number) => {
 			const items: string[] = [];
 			for (let i = 0; i < itemCount; i++) {
-				items.push(
-					`Item ${i} with some additional text to increase size`,
-				);
+				items.push(`Item ${i} with some additional text to increase size`);
 			}
 			return { items };
 		},

@@ -5,8 +5,8 @@ import {
 	daytona,
 	docker,
 	e2b,
-	type SessionEvent,
 	sandboxActor,
+	type SessionEvent,
 } from "rivetkit/sandbox";
 
 export type AgentMessage = {
@@ -198,7 +198,10 @@ export const agent = actor({
 	actions: {
 		getHistory: (c) => c.state.messages,
 		getStatus: (c) => c.state.status,
-		sendMessage: async (c, input: { text: string; sender?: string }) => {
+		sendMessage: async (
+			c,
+			input: { text: string; sender?: string },
+		) => {
 			const text = input.text.trim();
 			if (!text) {
 				return;
@@ -232,9 +235,9 @@ export const agent = actor({
 			c.broadcast("status", c.state.status);
 
 			try {
-				const sandbox = c
-					.client<typeof registry>()
-					.codingSandbox.getOrCreate([c.key[0]]);
+				const sandbox = c.client<typeof registry>().codingSandbox.getOrCreate([
+					c.key[0],
+				]);
 				const sessionId = c.state.sessionId ?? buildId("session");
 
 				if (!c.state.sessionId) {
@@ -251,10 +254,7 @@ export const agent = actor({
 					c.state.sessionId = sessionId;
 				}
 
-				const previousEvents = await fetchAllSessionEvents(
-					sandbox,
-					sessionId,
-				);
+				const previousEvents = await fetchAllSessionEvents(sandbox, sessionId);
 				const previousMaxEventIndex =
 					previousEvents.at(-1)?.eventIndex ?? -1;
 
@@ -271,10 +271,7 @@ export const agent = actor({
 					};
 				};
 
-				const nextEvents = await fetchAllSessionEvents(
-					sandbox,
-					sessionId,
-				);
+				const nextEvents = await fetchAllSessionEvents(sandbox, sessionId);
 				const assistantText = extractAssistantText(
 					nextEvents,
 					previousMaxEventIndex,

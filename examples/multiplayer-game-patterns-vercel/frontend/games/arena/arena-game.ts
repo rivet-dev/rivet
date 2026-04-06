@@ -26,10 +26,7 @@ export class ArenaGame {
 	private stopped = false;
 	private rafId = 0;
 	private worldSize = 600;
-	private targets: Record<
-		string,
-		{ x: number; y: number; teamId: number; color: string; score: number }
-	> = {};
+	private targets: Record<string, { x: number; y: number; teamId: number; color: string; score: number }> = {};
 	private display: Record<string, { x: number; y: number }> = {};
 	private keys: Record<string, boolean> = {};
 	private phase: "waiting" | "live" | "finished" = "waiting";
@@ -63,16 +60,7 @@ export class ArenaGame {
 				phase: "waiting" | "live" | "finished";
 				winnerTeam: number | null;
 				winnerPlayerId: string | null;
-				players: Record<
-					string,
-					{
-						x: number;
-						y: number;
-						teamId: number;
-						color: string;
-						score: number;
-					}
-				>;
+				players: Record<string, { x: number; y: number; teamId: number; color: string; score: number }>;
 			};
 			this.worldSize = snap.worldSize;
 			this.scoreLimit = snap.scoreLimit;
@@ -128,22 +116,12 @@ export class ArenaGame {
 				if (this.phase !== "live") return;
 				this.localX += (Math.random() - 0.5) * 40;
 				this.localY += (Math.random() - 0.5) * 40;
-				this.localX = Math.max(
-					0,
-					Math.min(this.worldSize, this.localX),
-				);
-				this.localY = Math.max(
-					0,
-					Math.min(this.worldSize, this.localY),
-				);
-				this.conn
-					.updatePosition({ x: this.localX, y: this.localY })
-					.catch(() => {});
+				this.localX = Math.max(0, Math.min(this.worldSize, this.localX));
+				this.localY = Math.max(0, Math.min(this.worldSize, this.localY));
+				this.conn.updatePosition({ x: this.localX, y: this.localY }).catch(() => {});
 				if (Math.random() < 0.2) {
 					const angle = Math.random() * Math.PI * 2;
-					this.conn
-						.shoot({ dirX: Math.cos(angle), dirY: Math.sin(angle) })
-						.catch(() => {});
+					this.conn.shoot({ dirX: Math.cos(angle), dirY: Math.sin(angle) }).catch(() => {});
 				}
 			}, 100);
 		} else if (canvas) {
@@ -203,29 +181,19 @@ export class ArenaGame {
 		if (this.phase === "live") {
 			let ix = 0;
 			let iy = 0;
-			if (this.keys["w"] || this.keys["W"] || this.keys["ArrowUp"])
-				iy -= 1;
-			if (this.keys["s"] || this.keys["S"] || this.keys["ArrowDown"])
-				iy += 1;
-			if (this.keys["a"] || this.keys["A"] || this.keys["ArrowLeft"])
-				ix -= 1;
-			if (this.keys["d"] || this.keys["D"] || this.keys["ArrowRight"])
-				ix += 1;
+			if (this.keys["w"] || this.keys["W"] || this.keys["ArrowUp"]) iy -= 1;
+			if (this.keys["s"] || this.keys["S"] || this.keys["ArrowDown"]) iy += 1;
+			if (this.keys["a"] || this.keys["A"] || this.keys["ArrowLeft"]) ix -= 1;
+			if (this.keys["d"] || this.keys["D"] || this.keys["ArrowRight"]) ix += 1;
 			if (ix !== 0 || iy !== 0) {
 				const mag = Math.sqrt(ix * ix + iy * iy);
 				this.localX = Math.max(
 					0,
-					Math.min(
-						this.worldSize,
-						this.localX + (ix / mag) * MOVE_SPEED * dt,
-					),
+					Math.min(this.worldSize, this.localX + (ix / mag) * MOVE_SPEED * dt),
 				);
 				this.localY = Math.max(
 					0,
-					Math.min(
-						this.worldSize,
-						this.localY + (iy / mag) * MOVE_SPEED * dt,
-					),
+					Math.min(this.worldSize, this.localY + (iy / mag) * MOVE_SPEED * dt),
 				);
 			}
 
@@ -322,9 +290,7 @@ export class ArenaGame {
 		ctx.font = "12px sans-serif";
 		ctx.textAlign = "left";
 		const myData = this.targets[this.matchInfo.playerId];
-		const scoreText = myData
-			? `Score: ${myData.score}/${this.scoreLimit}`
-			: "";
+		const scoreText = myData ? `Score: ${myData.score}/${this.scoreLimit}` : "";
 		ctx.fillText(`${this.phase.toUpperCase()}  ${scoreText}`, 8, 18);
 
 		// Phase overlay.

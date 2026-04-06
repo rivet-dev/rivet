@@ -1,4 +1,4 @@
-import { type ActorContextOf, actor, event, queue } from "rivetkit";
+import { actor, type ActorContextOf, event, queue } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
 export interface LeaderboardEntry {

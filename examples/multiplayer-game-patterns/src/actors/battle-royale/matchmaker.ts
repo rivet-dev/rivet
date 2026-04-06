@@ -6,10 +6,10 @@ This matchmaker uses a two phase join flow.
 4. Pending players expire after JOIN_RESERVATION_TTL_MS, which removes never connected players.
 5. updateMatch reports occupied player count and started state, while player_count stays pending + occupied.
 */
-import { type ActorContextOf, actor, queue } from "rivetkit";
+import { actor, type ActorContextOf, queue } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
-import type { registry } from "../index.ts";
+import { registry } from "../index.ts";
 import { LOBBY_CAPACITY } from "./config.ts";
 
 const JOIN_RESERVATION_TTL_MS = 15_000;
@@ -44,11 +44,7 @@ export const battleRoyaleMatchmaker = actor({
 				const result = await processFindMatch(c, now);
 				await message.complete(result);
 			} else if (message.name === "pendingPlayerConnected") {
-				const result = await processPendingPlayerConnected(
-					c,
-					message.body,
-					now,
-				);
+				const result = await processPendingPlayerConnected(c, message.body, now);
 				await message.complete(result);
 			} else if (message.name === "updateMatch") {
 				await c.db.execute(

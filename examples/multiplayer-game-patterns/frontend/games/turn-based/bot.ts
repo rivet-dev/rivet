@@ -1,8 +1,5 @@
-import type {
-	CellValue,
-	GameResult,
-} from "../../../src/actors/turn-based/config.ts";
 import type { GameClient } from "../../client.ts";
+import type { CellValue, GameResult } from "../../../src/actors/turn-based/config.ts";
 
 interface GameSnapshot {
 	board: CellValue[][];
@@ -18,38 +15,26 @@ export class TurnBasedBot {
 	private playerId = "";
 	private symbol: "X" | "O" = "O";
 
-	constructor(
-		private client: GameClient,
-		inviteCode: string,
-	) {
+	constructor(private client: GameClient, inviteCode: string) {
 		this.start(inviteCode);
 	}
 
 	private async start(inviteCode: string) {
 		try {
-			const mm = this.client.turnBasedMatchmaker
-				.getOrCreate(["main"])
-				.connect();
+			const mm = this.client.turnBasedMatchmaker.getOrCreate(["main"]).connect();
 			const result = await mm.send(
 				"joinByCode",
-				{
-					inviteCode,
-					playerName: `Bot-${Math.random().toString(36).slice(2, 6)}`,
-				},
+				{ inviteCode, playerName: `Bot-${Math.random().toString(36).slice(2, 6)}` },
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (
-				result as { response?: { matchId: string; playerId: string } }
-			)?.response;
+			const response = (result as { response?: { matchId: string; playerId: string } })?.response;
 			if (!response || this.destroyed) return;
 
 			this.playerId = response.playerId;
 
 			this.conn = this.client.turnBasedMatch
-				.get([response.matchId], {
-					params: { playerId: response.playerId },
-				})
+				.get([response.matchId], { params: { playerId: response.playerId } })
 				.connect();
 
 			this.conn.on("gameUpdate", (raw: unknown) => {
@@ -80,8 +65,7 @@ export class TurnBasedBot {
 		}
 		if (emptyCells.length === 0) return;
 
-		const [row, col] =
-			emptyCells[Math.floor(Math.random() * emptyCells.length)]!;
+		const [row, col] = emptyCells[Math.floor(Math.random() * emptyCells.length)]!;
 		setTimeout(() => {
 			if (!this.destroyed) {
 				this.conn?.makeMove({ row, col }).catch(() => {});

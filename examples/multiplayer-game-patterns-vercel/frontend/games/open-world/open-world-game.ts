@@ -1,7 +1,7 @@
-import { CHUNK_SIZE, WORLD_ID } from "../../../src/actors/open-world/config.ts";
-import { getPlayerColor } from "../../../src/actors/player-color.ts";
 import type { GameClient } from "../../client.ts";
 import type { OpenWorldMatchInfo } from "./menu.tsx";
+import { CHUNK_SIZE, WORLD_ID } from "../../../src/actors/open-world/config.ts";
+import { getPlayerColor } from "../../../src/actors/player-color.ts";
 
 const PLAYER_RADIUS = 12;
 const LERP_FACTOR = 0.2;
@@ -20,10 +20,7 @@ interface ChunkConnection {
 	cx: number;
 	cy: number;
 	conn: OpenWorldChunkConn;
-	players: Record<
-		string,
-		{ x: number; y: number; name: string; color: string }
-	>;
+	players: Record<string, { x: number; y: number; name: string; color: string }>;
 	display: Record<string, { x: number; y: number }>;
 	blocks: Map<string, string>;
 	selfPresent: boolean;
@@ -34,10 +31,7 @@ interface ChunkSnapshot {
 	chunkX: number;
 	chunkY: number;
 	selfPlayerId: string | null;
-	players: Record<
-		string,
-		{ x: number; y: number; name: string; color: string }
-	>;
+	players: Record<string, { x: number; y: number; name: string; color: string }>;
 	blocks?: Record<string, string> | string[];
 }
 
@@ -71,7 +65,10 @@ export class OpenWorldGame {
 		this.chunkY = matchInfo.chunkKey[2];
 		this.playerName = matchInfo.playerName;
 
-		this.connectToChunk(matchInfo.chunkKey[1], matchInfo.chunkKey[2]);
+		this.connectToChunk(
+			matchInfo.chunkKey[1],
+			matchInfo.chunkKey[2],
+		);
 		void this.setPrimaryChunk(
 			matchInfo.chunkKey[1],
 			matchInfo.chunkKey[2],
@@ -85,12 +82,8 @@ export class OpenWorldGame {
 				const iy = Math.floor(Math.random() * 3) - 1;
 				this.lastIx = ix;
 				this.lastIy = iy;
-				const primary = this.chunks.get(
-					chunkKey(this.chunkX, this.chunkY),
-				);
-				primary?.conn
-					.setInput({ inputX: ix, inputY: iy })
-					.catch(() => {});
+				const primary = this.chunks.get(chunkKey(this.chunkX, this.chunkY));
+				primary?.conn.setInput({ inputX: ix, inputY: iy }).catch(() => {});
 			}, 500);
 		} else if (canvas) {
 			window.addEventListener("keydown", this.onKeyDown);
@@ -127,13 +120,11 @@ export class OpenWorldGame {
 		conn.on("snapshot", (raw: unknown) => {
 			const snap = raw as ChunkSnapshot;
 			this.chunkSize = snap.chunkSize;
-			const isPrimaryChunk =
-				chunk.cx === this.chunkX && chunk.cy === this.chunkY;
+			const isPrimaryChunk = chunk.cx === this.chunkX && chunk.cy === this.chunkY;
 			chunk.selfPresent = snap.selfPlayerId === this.playerId;
 			for (const [id, pos] of Object.entries(snap.players)) {
 				chunk.players[id] = pos;
-				if (!chunk.display[id])
-					chunk.display[id] = { x: pos.x, y: pos.y };
+				if (!chunk.display[id]) chunk.display[id] = { x: pos.x, y: pos.y };
 			}
 			for (const id of Object.keys(chunk.players)) {
 				if (!snap.players[id]) {
@@ -156,11 +147,9 @@ export class OpenWorldGame {
 				const me = snap.players[this.playerId];
 				if (me && !this.transferring) {
 					const atLeft = me.x <= 0 && this.lastIx < 0;
-					const atRight =
-						me.x >= this.chunkSize - 1 && this.lastIx > 0;
+					const atRight = me.x >= this.chunkSize - 1 && this.lastIx > 0;
 					const atTop = me.y <= 0 && this.lastIy < 0;
-					const atBottom =
-						me.y >= this.chunkSize - 1 && this.lastIy > 0;
+					const atBottom = me.y >= this.chunkSize - 1 && this.lastIy > 0;
 					if (atLeft || atRight || atTop || atBottom) {
 						this.initiateTransfer(me.x, me.y);
 					}
@@ -221,11 +210,7 @@ export class OpenWorldGame {
 		}
 
 		newPrimary.conn
-			.setInput({
-				inputX: this.lastIx,
-				inputY: this.lastIy,
-				sprint: this.lastSprint,
-			})
+			.setInput({ inputX: this.lastIx, inputY: this.lastIy, sprint: this.lastSprint })
 			.catch(() => {});
 	}
 
@@ -241,15 +226,8 @@ export class OpenWorldGame {
 	}
 
 	/** Compute which chunk indices are visible based on player position and zoom. */
-	private getVisibleChunkRange(): {
-		minCx: number;
-		maxCx: number;
-		minCy: number;
-		maxCy: number;
-	} {
-		const primaryChunk = this.chunks.get(
-			chunkKey(this.chunkX, this.chunkY),
-		);
+	private getVisibleChunkRange(): { minCx: number; maxCx: number; minCy: number; maxCy: number } {
+		const primaryChunk = this.chunks.get(chunkKey(this.chunkX, this.chunkY));
 		const me = primaryChunk?.display[this.playerId];
 		const localX = me?.x ?? this.chunkSize / 2;
 		const localY = me?.y ?? this.chunkSize / 2;
@@ -279,10 +257,7 @@ export class OpenWorldGame {
 
 		// Disconnect chunks that are no longer needed.
 		for (const [key, chunk] of this.chunks) {
-			if (
-				!needed.has(key) &&
-				!(chunk.cx === this.chunkX && chunk.cy === this.chunkY)
-			) {
+			if (!needed.has(key) && !(chunk.cx === this.chunkX && chunk.cy === this.chunkY)) {
 				chunk.conn.dispose().catch(() => {});
 				this.chunks.delete(key);
 			}
@@ -394,9 +369,7 @@ export class OpenWorldGame {
 		// Convert canvas coords to world coords.
 		const viewportSize = DEFAULT_VIEWPORT_SIZE / this.zoom;
 		const scale = DEFAULT_VIEWPORT_SIZE / viewportSize;
-		const primaryChunk = this.chunks.get(
-			chunkKey(this.chunkX, this.chunkY),
-		);
+		const primaryChunk = this.chunks.get(chunkKey(this.chunkX, this.chunkY));
 		const meDisplay = primaryChunk?.display[this.playerId];
 		const localPlayerX = meDisplay?.x ?? this.chunkSize / 2;
 		const localPlayerY = meDisplay?.y ?? this.chunkSize / 2;
@@ -436,19 +409,13 @@ export class OpenWorldGame {
 		if (this.keys["s"] || this.keys["ArrowDown"]) iy += 1;
 		if (this.keys["a"] || this.keys["ArrowLeft"]) ix -= 1;
 		if (this.keys["d"] || this.keys["ArrowRight"]) ix += 1;
-		const sprint = !!this.keys["Shift"];
-		if (
-			ix !== this.lastIx ||
-			iy !== this.lastIy ||
-			sprint !== this.lastSprint
-		) {
+		const sprint = !!(this.keys["Shift"]);
+		if (ix !== this.lastIx || iy !== this.lastIy || sprint !== this.lastSprint) {
 			this.lastIx = ix;
 			this.lastIy = iy;
 			this.lastSprint = sprint;
 			const primary = this.chunks.get(chunkKey(this.chunkX, this.chunkY));
-			primary?.conn
-				.setInput({ inputX: ix, inputY: iy, sprint })
-				.catch(() => {});
+			primary?.conn.setInput({ inputX: ix, inputY: iy, sprint }).catch(() => {});
 		}
 	}
 
@@ -459,9 +426,7 @@ export class OpenWorldGame {
 		const viewportSize = DEFAULT_VIEWPORT_SIZE / this.zoom;
 
 		// Get player position from primary chunk.
-		const primaryChunk = this.chunks.get(
-			chunkKey(this.chunkX, this.chunkY),
-		);
+		const primaryChunk = this.chunks.get(chunkKey(this.chunkX, this.chunkY));
 		const me = primaryChunk?.players[this.playerId];
 		const meDisplay = primaryChunk?.display[this.playerId];
 		if (meDisplay && me) {
@@ -517,13 +482,7 @@ export class OpenWorldGame {
 				const wy = chunk.cy * this.chunkSize + gy! * BLOCK_SIZE;
 				const sx = wx - camX;
 				const sy = wy - camY;
-				if (
-					sx + BLOCK_SIZE < 0 ||
-					sx > viewportSize ||
-					sy + BLOCK_SIZE < 0 ||
-					sy > viewportSize
-				)
-					continue;
+				if (sx + BLOCK_SIZE < 0 || sx > viewportSize || sy + BLOCK_SIZE < 0 || sy > viewportSize) continue;
 				ctx.fillStyle = colorWithAlpha(blockColor, 0.3);
 				ctx.fillRect(sx, sy, BLOCK_SIZE, BLOCK_SIZE);
 				ctx.strokeStyle = colorWithAlpha(blockColor, 0.65);
@@ -551,19 +510,11 @@ export class OpenWorldGame {
 		const chunkStartX = Math.floor(camX / this.chunkSize) * this.chunkSize;
 		const chunkStartY = Math.floor(camY / this.chunkSize) * this.chunkSize;
 		ctx.beginPath();
-		for (
-			let x = chunkStartX;
-			x <= camX + viewportSize + this.chunkSize;
-			x += this.chunkSize
-		) {
+		for (let x = chunkStartX; x <= camX + viewportSize + this.chunkSize; x += this.chunkSize) {
 			ctx.moveTo(x - camX, 0);
 			ctx.lineTo(x - camX, viewportSize);
 		}
-		for (
-			let y = chunkStartY;
-			y <= camY + viewportSize + this.chunkSize;
-			y += this.chunkSize
-		) {
+		for (let y = chunkStartY; y <= camY + viewportSize + this.chunkSize; y += this.chunkSize) {
 			ctx.moveTo(0, y - camY);
 			ctx.lineTo(viewportSize, y - camY);
 		}
@@ -615,13 +566,7 @@ export class OpenWorldGame {
 				const px = wx - camX;
 				const py = wy - camY;
 
-				if (
-					px < -50 / scale ||
-					px > viewportSize + 50 / scale ||
-					py < -50 / scale ||
-					py > viewportSize + 50 / scale
-				)
-					continue;
+				if (px < -50 / scale || px > viewportSize + 50 / scale || py < -50 / scale || py > viewportSize + 50 / scale) continue;
 
 				ctx.beginPath();
 				ctx.arc(px, py, PLAYER_RADIUS / scale, 0, Math.PI * 2);
@@ -631,11 +576,7 @@ export class OpenWorldGame {
 				ctx.fillStyle = "#ffffff";
 				ctx.font = `${11 / scale}px sans-serif`;
 				ctx.textAlign = "center";
-				ctx.fillText(
-					target.name || id.slice(0, 6),
-					px,
-					py - PLAYER_RADIUS / scale - 4 / scale,
-				);
+				ctx.fillText(target.name || id.slice(0, 6), px, py - PLAYER_RADIUS / scale - 4 / scale);
 			}
 		}
 
@@ -643,13 +584,7 @@ export class OpenWorldGame {
 		const selfScreenX = viewportSize / 2;
 		const selfScreenY = viewportSize / 2;
 		ctx.beginPath();
-		ctx.arc(
-			selfScreenX,
-			selfScreenY,
-			PLAYER_RADIUS / scale,
-			0,
-			Math.PI * 2,
-		);
+		ctx.arc(selfScreenX, selfScreenY, PLAYER_RADIUS / scale, 0, Math.PI * 2);
 		ctx.fillStyle = selfColor;
 		ctx.fill();
 		ctx.lineWidth = 2 / scale;
@@ -674,8 +609,7 @@ export class OpenWorldGame {
 		ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
 		ctx.fillRect(0, 0, canvas.width, 28);
 		ctx.fillStyle = "#ffffff";
-		ctx.font =
-			"12px ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace";
+		ctx.font = "12px ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace";
 		ctx.textAlign = "left";
 		const sprintLabel = this.lastSprint ? "  [SPRINT]" : "";
 		ctx.fillText(
@@ -685,13 +619,8 @@ export class OpenWorldGame {
 		);
 
 		// Debug: connected chunks list on the right side.
-		const chunkEntries = Array.from(this.chunks.entries()).sort(
-			([a], [b]) => a.localeCompare(b),
-		);
-		const totalPlayers = chunkEntries.reduce(
-			(sum, [, c]) => sum + Object.keys(c.players).length,
-			0,
-		);
+		const chunkEntries = Array.from(this.chunks.entries()).sort(([a], [b]) => a.localeCompare(b));
+		const totalPlayers = chunkEntries.reduce((sum, [, c]) => sum + Object.keys(c.players).length, 0);
 		ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
 		const debugX = canvas.width - 130;
 		const lineH = 14;
@@ -699,22 +628,16 @@ export class OpenWorldGame {
 		ctx.fillRect(debugX - 6, 0, 136, debugH);
 
 		ctx.fillStyle = "#ffffff";
-		ctx.font =
-			"11px ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace";
+		ctx.font = "11px ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace";
 		ctx.textAlign = "left";
 		let dy = 14;
 		ctx.fillText(`Chunks (${totalPlayers} players):`, debugX, dy);
 		dy += lineH;
 		for (const [key, chunk] of chunkEntries) {
-			const isPrimary =
-				chunk.cx === this.chunkX && chunk.cy === this.chunkY;
+			const isPrimary = chunk.cx === this.chunkX && chunk.cy === this.chunkY;
 			const pCount = Object.keys(chunk.players).length;
 			ctx.fillStyle = isPrimary ? "#ff4f00" : "#8e8e93";
-			ctx.fillText(
-				`${key}${pCount > 0 ? ` (${pCount})` : ""}${isPrimary ? " *" : ""}`,
-				debugX,
-				dy,
-			);
+			ctx.fillText(`${key}${pCount > 0 ? ` (${pCount})` : ""}${isPrimary ? " *" : ""}`, debugX, dy);
 			dy += lineH;
 		}
 		this.rafId = requestAnimationFrame(this.draw);

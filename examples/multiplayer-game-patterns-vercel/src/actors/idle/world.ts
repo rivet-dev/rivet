@@ -1,6 +1,6 @@
-import { type ActorContextOf, actor, event } from "rivetkit";
-import type { registry } from "../index.ts";
-import { BUILDINGS, type BuildingType, STARTING_RESOURCES } from "./config.ts";
+import { actor, type ActorContextOf, event } from "rivetkit";
+import { registry } from "../index.ts";
+import { BUILDINGS, STARTING_RESOURCES, type BuildingType } from "./config.ts";
 
 interface BuildingEntry {
 	id: string;
@@ -75,9 +75,7 @@ export const idleWorld = actor({
 			broadcastState(c);
 		},
 		build: (c, input: { buildingTypeId: string }) => {
-			const buildingType = BUILDINGS.find(
-				(b: BuildingType) => b.id === input.buildingTypeId,
-			);
+			const buildingType = BUILDINGS.find((b: BuildingType) => b.id === input.buildingTypeId);
 			if (!buildingType) {
 				throw new Error("Unknown building type");
 			}
@@ -93,29 +91,19 @@ export const idleWorld = actor({
 				lastCollectedAt: Date.now(),
 			};
 			c.state.buildings.push(building);
-			scheduleCollection(
-				c,
-				building.id,
-				buildingType.productionIntervalMs,
-			);
+			scheduleCollection(c, building.id, buildingType.productionIntervalMs);
 			broadcastState(c);
 		},
 		collectProduction: (c, input: { buildingId: string }) => {
-			const building = c.state.buildings.find(
-				(b: BuildingEntry) => b.id === input.buildingId,
-			);
+			const building = c.state.buildings.find((b: BuildingEntry) => b.id === input.buildingId);
 			if (!building) return;
 
-			const buildingType = BUILDINGS.find(
-				(b: BuildingType) => b.id === building.typeId,
-			);
+			const buildingType = BUILDINGS.find((b: BuildingType) => b.id === building.typeId);
 			if (!buildingType) return;
 
 			const now = Date.now();
 			const elapsed = now - building.lastCollectedAt;
-			const intervals = Math.floor(
-				elapsed / buildingType.productionIntervalMs,
-			);
+			const intervals = Math.floor(elapsed / buildingType.productionIntervalMs);
 			if (intervals <= 0) {
 				const remaining = buildingType.productionIntervalMs - elapsed;
 				scheduleCollection(c, building.id, remaining);
@@ -127,11 +115,7 @@ export const idleWorld = actor({
 			c.state.totalProduced += produced;
 			building.lastCollectedAt = now;
 
-			scheduleCollection(
-				c,
-				building.id,
-				buildingType.productionIntervalMs,
-			);
+			scheduleCollection(c, building.id, buildingType.productionIntervalMs);
 
 			updateLeaderboard(c);
 			broadcastState(c);
@@ -173,9 +157,7 @@ function buildSnapshot(c: ActorContextOf<typeof idleWorld>): IdleSnapshot {
 		resources: c.state.resources,
 		totalProduced: c.state.totalProduced,
 		buildings: c.state.buildings.map((b: BuildingEntry) => {
-			const bType = BUILDINGS.find(
-				(bt: BuildingType) => bt.id === b.typeId,
-			) as BuildingType;
+			const bType = BUILDINGS.find((bt: BuildingType) => bt.id === b.typeId) as BuildingType;
 			return {
 				id: b.id,
 				typeId: b.typeId,

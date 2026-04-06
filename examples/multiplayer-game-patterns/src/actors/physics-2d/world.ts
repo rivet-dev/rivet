@@ -1,15 +1,15 @@
-import RAPIER from "@dimforge/rapier2d-compat";
-import { type ActorContextOf, actor, event, UserError } from "rivetkit";
+import { actor, type ActorContextOf, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
+import RAPIER from "@dimforge/rapier2d-compat";
 import { getPlayerColor } from "../player-color.ts";
 import {
-	JUMP_IMPULSE,
-	MOVE_FORCE,
-	PLAYER_RADIUS,
-	SCENE_DYNAMIC,
-	SCENE_STATIC,
-	SUB_STEPS,
 	TICK_MS,
+	SUB_STEPS,
+	MOVE_FORCE,
+	JUMP_IMPULSE,
+	PLAYER_RADIUS,
+	SCENE_STATIC,
+	SCENE_DYNAMIC,
 } from "./config.ts";
 
 const DISCONNECT_GRACE_MS = 5000;
@@ -39,10 +39,7 @@ interface Snapshot {
 	tick: number;
 	serverTime: number;
 	bodies: BodySnapshot[];
-	players: Record<
-		string,
-		{ x: number; y: number; name: string; color: string }
-	>;
+	players: Record<string, { x: number; y: number; name: string; color: string }>;
 }
 
 export const physics2dWorld = actor({
@@ -113,10 +110,7 @@ export const physics2dWorld = actor({
 
 		// Create static bodies.
 		for (const s of SCENE_STATIC) {
-			const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(
-				s.x,
-				s.y,
-			);
+			const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(s.x, s.y);
 			const body = world.createRigidBody(bodyDesc);
 			const colliderDesc = RAPIER.ColliderDesc.cuboid(s.hw, s.hh)
 				.setFriction(0.8)
@@ -125,18 +119,9 @@ export const physics2dWorld = actor({
 		}
 
 		// Load dynamic bodies from persisted state, or seed from config on first run.
-		const boxes =
-			c.state.boxes.length > 0
-				? c.state.boxes
-				: SCENE_DYNAMIC.map(
-						(d): [string, number, number, number, number] => [
-							d.id,
-							d.x,
-							d.y,
-							d.hw,
-							d.hh,
-						],
-					);
+		const boxes = c.state.boxes.length > 0
+			? c.state.boxes
+			: SCENE_DYNAMIC.map((d): [string, number, number, number, number] => [d.id, d.x, d.y, d.hw, d.hh]);
 		for (const [id, x, y, hw, hh] of boxes) {
 			const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
 				.setTranslation(x, y)
@@ -249,13 +234,7 @@ export const physics2dWorld = actor({
 
 function buildSnapshot(c: ActorContextOf<typeof physics2dWorld>): Snapshot {
 	const world = c.vars.world;
-	if (!world)
-		return {
-			tick: c.state.tick,
-			serverTime: Date.now(),
-			bodies: [],
-			players: {},
-		};
+	if (!world) return { tick: c.state.tick, serverTime: Date.now(), bodies: [], players: {} };
 
 	const bodies: BodySnapshot[] = [];
 
@@ -296,12 +275,7 @@ function buildSnapshot(c: ActorContextOf<typeof physics2dWorld>): Snapshot {
 			hw: PLAYER_RADIUS,
 			hh: PLAYER_RADIUS,
 		});
-		players[id] = {
-			x: pos.x,
-			y: pos.y,
-			name: entry.name,
-			color: entry.color,
-		};
+		players[id] = { x: pos.x, y: pos.y, name: entry.name, color: entry.color };
 	}
 
 	return { tick: c.state.tick, serverTime: Date.now(), bodies, players };

@@ -11,23 +11,15 @@ export class IoBot {
 
 	private async start() {
 		try {
-			const mm = this.client.ioStyleMatchmaker
-				.getOrCreate(["main"])
-				.connect();
-			const result = await mm.send(
-				"findLobby",
-				{},
-				{ wait: true, timeout: 10_000 },
-			);
+			const mm = this.client.ioStyleMatchmaker.getOrCreate(["main"]).connect();
+			const result = await mm.send("findLobby", {}, { wait: true, timeout: 10_000 });
 			mm.dispose();
-			const response = (
-				result as {
-					response?: {
-						matchId: string;
-						playerId: string;
-					};
-				}
-			)?.response;
+			const response = (result as {
+				response?: {
+					matchId: string;
+					playerId: string;
+				};
+			})?.response;
 			if (!response || this.destroyed) return;
 
 			this.game = new IoGame(null, this.client, response, { bot: true });
