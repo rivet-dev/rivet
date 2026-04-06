@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::{
 	ops::Deref,
 	sync::{
@@ -5,8 +6,7 @@ use std::{
 		atomic::{AtomicBool, Ordering},
 	},
 };
-
-use anyhow::Result;
+use subtle::ConstantTimeEq;
 
 #[derive(Clone)]
 pub struct ApiCtx {
@@ -31,11 +31,19 @@ impl ApiCtx {
 
 		self.authentication_handled.store(true, Ordering::Relaxed);
 
-		if self.token.as_ref() == Some(auth.admin_token.read()) {
-			Ok(())
-		} else {
-			Err(rivet_api_builder::ApiForbidden.build())
+		let Some(token) = &self.token else {
+			return Err(rivet_api_builder::ApiForbidden.build());
+		};
+
+		if token
+			.as_bytes()
+			.ct_ne(auth.admin_token.read().as_bytes())
+			.into()
+		{
+			return Err(rivet_api_builder::ApiForbidden.build());
 		}
+
+		Ok(())
 	}
 
 	pub fn skip_auth(&self) {
