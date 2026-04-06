@@ -720,7 +720,7 @@ async fn process_signal(
 								&input,
 								state,
 								metrics_workflow_id,
-								runtime::StoppedVariant::Normal {
+								runtime::StoppedVariant::Stopped {
 									code: code.clone(),
 									message: message.clone(),
 								},

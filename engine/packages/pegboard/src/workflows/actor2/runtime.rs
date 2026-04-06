@@ -441,7 +441,7 @@ pub async fn reschedule_actor(
 #[derive(Debug)]
 pub enum StoppedVariant {
 	FailedAllocation,
-	Normal {
+	Stopped {
 		code: protocol::StopCode,
 		message: Option<String>,
 	},
@@ -468,11 +468,11 @@ pub async fn handle_stopped(
 	// Save error to state
 	match &variant {
 		StoppedVariant::FailedAllocation => {}
-		StoppedVariant::Normal {
+		StoppedVariant::Stopped {
 			code: protocol::StopCode::Ok,
 			..
 		} => {}
-		StoppedVariant::Normal {
+		StoppedVariant::Stopped {
 			code: protocol::StopCode::Error,
 			message,
 		} => {
@@ -527,122 +527,106 @@ pub async fn handle_stopped(
 		.await?;
 	}
 
-	let (try_reallocate, going_away) = match state.transition {
-		Transition::SleepIntent {
-			rewake_after_stop, ..
-		} => (rewake_after_stop, false),
-		Transition::GoingAway { .. } => (true, true),
-		Transition::Destroying { .. } => return Ok(StoppedResult::Destroy),
-		_ => (true, false),
-	};
+	enum Decision {
+		Reallocate,
+		Backoff,
+		Sleep,
+		Destroy,
+	}
 
-	// Always immediately reallocate if going away
-	let stopped_res = if going_away {
-		let allocate_res = ctx.activity(AllocateInput {}).await?;
-
-		if let Some(allocation) = allocate_res.allocation {
-			state.generation += 1;
-
-			ctx.activity(SendOutboundInput {
-				generation: state.generation,
-				input: input.input.clone(),
-				allocation,
-			})
-			.await?;
-
-			// Transition to allocating
-			state.transition = Transition::Allocating {
-				destroy_after_start: false,
-				lost_timeout_ts: allocate_res.now
-					+ ctx.config().pegboard().actor_allocation_threshold(),
-			};
-		} else {
-			// Transition to retry backoff
-			state.transition = Transition::Reallocating {
-				since_ts: allocate_res.now,
-			};
-		}
-
-		StoppedResult::Continue
-	} else if try_reallocate {
+	let decision = match (&state.transition, input.crash_policy, variant) {
+		(
+			Transition::SleepIntent {
+				rewake_after_stop: true,
+				..
+			},
+			_,
+			_,
+		) => Decision::Reallocate,
+		(
+			Transition::SleepIntent {
+				rewake_after_stop: false,
+				..
+			},
+			_,
+			_,
+		) => Decision::Reallocate,
+		(Transition::GoingAway { .. }, _, _) => Decision::Reallocate,
+		(Transition::Destroying { .. }, _, _) => Decision::Destroy,
+		(_, _, StoppedVariant::FailedAllocation) => Decision::Backoff,
 		// An actor stopping with `StopCode::Ok` indicates a graceful exit
-		let graceful_exit = matches!(
-			variant,
-			StoppedVariant::Normal {
+		(
+			_,
+			_,
+			StoppedVariant::Stopped {
 				code: protocol::StopCode::Ok,
 				..
-			}
-		);
-
-		match (input.crash_policy, graceful_exit) {
-			(CrashPolicy::Restart, false) => {
-				let allocate_res = ctx.activity(AllocateInput {}).await?;
-
-				if let Some(allocation) = allocate_res.allocation {
-					state.generation += 1;
-
-					ctx.activity(SendOutboundInput {
-						generation: state.generation,
-						input: input.input.clone(),
-						allocation,
-					})
-					.await?;
-
-					// Transition to allocating
-					state.transition = Transition::Allocating {
-						destroy_after_start: false,
-						lost_timeout_ts: allocate_res.now
-							+ ctx.config().pegboard().actor_allocation_threshold(),
-					};
-				} else {
-					// Transition to retry backoff
-					state.transition = Transition::Reallocating {
-						since_ts: allocate_res.now,
-					};
-				}
-
-				StoppedResult::Continue
-			}
-			(CrashPolicy::Sleep, false) => {
-				tracing::debug!(actor_id=?input.actor_id, "actor sleeping due to ungraceful exit");
-
-				// Clear alarm
-				if let Some(alarm_ts) = state.alarm_ts {
-					let now = ctx.activity(GetTsInput {}).await?;
-
-					if now >= alarm_ts {
-						state.alarm_ts = None;
-					}
-				}
-
-				// Transition to sleeping
-				state.transition = Transition::Sleeping;
-
-				StoppedResult::Continue
-			}
-			_ => {
-				let now = ctx.activity(GetTsInput {}).await?;
-
-				// Don't destroy on failed allocation, retry instead
-				if let StoppedVariant::FailedAllocation { .. } = &variant {
-					// Transition to retry backoff
-					state.transition = Transition::Reallocating { since_ts: now };
-
-					StoppedResult::Continue
-				} else {
-					StoppedResult::Destroy
-				}
-			}
-		}
-	} else {
-		// Transition to sleeping
-		state.transition = Transition::Sleeping;
-
-		StoppedResult::Continue
+			},
+		) => Decision::Destroy,
+		(_, CrashPolicy::Restart, _) => Decision::Reallocate,
+		(_, CrashPolicy::Sleep, _) => Decision::Sleep,
+		(_, CrashPolicy::Destroy, _) => Decision::Destroy,
 	};
 
-	if let Transition::Sleeping = state.transition {
-		ctx.activity(SetSleepingInput {}).await?;
+	let stopped_res = match decision {
+		Decision::Reallocate => {
+			let allocate_res = ctx.activity(AllocateInput {}).await?;
+
+			if let Some(allocation) = allocate_res.allocation {
+				state.generation += 1;
+
+				ctx.activity(SendOutboundInput {
+					generation: state.generation,
+					input: input.input.clone(),
+					allocation,
+				})
+				.await?;
+
+				// Transition to allocating
+				state.transition = Transition::Allocating {
+					destroy_after_start: false,
+					lost_timeout_ts: allocate_res.now
+						+ ctx.config().pegboard().actor_allocation_threshold(),
+				};
+			} else {
+				// Transition to retry backoff
+				state.transition = Transition::Reallocating {
+					since_ts: allocate_res.now,
+				};
+			}
+
+			StoppedResult::Continue
+		}
+		Decision::Backoff => {
+			let now = ctx.activity(GetTsInput {}).await?;
+
+			state.transition = Transition::Reallocating { since_ts: now };
+
+			StoppedResult::Continue
+		}
+		Decision::Sleep => {
+			// Clear alarm
+			if let Some(alarm_ts) = state.alarm_ts {
+				let now = ctx.activity(GetTsInput {}).await?;
+
+				if now >= alarm_ts {
+					state.alarm_ts = None;
+				}
+			}
+
+			// Transition to sleeping
+			state.transition = Transition::Sleeping;
+
+			StoppedResult::Continue
+		}
+		Decision::Destroy => StoppedResult::Destroy,
+	};
+
+	match state.transition {
+		Transition::Sleeping | Transition::Reallocating { .. } => {
+			ctx.activity(SetSleepingInput {}).await?;
+		}
+		_ => {}
 	}
 
 	ctx.msg(Stopped {})
