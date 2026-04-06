@@ -12,9 +12,6 @@ export function runActorSandboxTests(driverTestConfig: DriverTestConfig) {
 				const sandbox = client.dockerSandboxActor.getOrCreate([
 					`sandbox-${crypto.randomUUID()}`,
 				]);
-				const baseDir = `/tmp/rivetkit-sandbox-${crypto.randomUUID()}`;
-				const helloPath = `${baseDir}/hello.txt`;
-				const renamedPath = `${baseDir}/renamed.txt`;
 				const decoder = new TextDecoder();
 
 				const health = await vi.waitFor(
@@ -30,30 +27,30 @@ export function runActorSandboxTests(driverTestConfig: DriverTestConfig) {
 				const { url } = await sandbox.getSandboxUrl();
 				expect(url).toMatch(/^https?:\/\//);
 
-				await sandbox.mkdirFs({ path: baseDir });
+				await sandbox.mkdirFs({ path: "/root/tmp" });
 				await sandbox.writeFsFile(
-					{ path: helloPath },
+					{ path: "/root/tmp/hello.txt" },
 					"sandbox actor driver test",
 				);
 				expect(
 					decoder.decode(
 						await sandbox.readFsFile({
-							path: helloPath,
+							path: "/root/tmp/hello.txt",
 						}),
 					),
 				).toBe("sandbox actor driver test");
 
 				const stat = await sandbox.statFs({
-					path: helloPath,
+					path: "/root/tmp/hello.txt",
 				});
 				expect(stat.entryType).toBe("file");
 
 				await sandbox.moveFs({
-					from: helloPath,
-					to: renamedPath,
+					from: "/root/tmp/hello.txt",
+					to: "/root/tmp/renamed.txt",
 				});
 				expect(
-					(await sandbox.listFsEntries({ path: baseDir })).map(
+					(await sandbox.listFsEntries({ path: "/root/tmp" })).map(
 						(entry: { name: string }) => entry.name,
 					),
 				).toContain("renamed.txt");
@@ -73,26 +70,22 @@ export function runActorSandboxTests(driverTestConfig: DriverTestConfig) {
 				expect(
 					decoder.decode(
 						await sandbox.readFsFile({
-							path: renamedPath,
+							path: "/root/tmp/renamed.txt",
 						}),
 					),
 				).toBe("sandbox actor driver test");
 
 				await sandbox.deleteFsEntry({
-					path: baseDir,
+					path: "/root/tmp",
 					recursive: true,
 				});
 				expect(
-					await sandbox.listFsEntries({ path: "/tmp" }),
+					await sandbox.listFsEntries({ path: "/root" }),
 				).not.toEqual(
 					expect.arrayContaining([
-						expect.objectContaining({
-							name: baseDir.split("/").at(-1),
-						}),
+						expect.objectContaining({ name: "tmp" }),
 					]),
 				);
-
-				await sandbox.destroy();
 			}, 180_000);
 		},
 	);

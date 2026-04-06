@@ -525,7 +525,7 @@ export function buildManagerRouter(
 					// Connect to the actor using the inline client driver - this returns a Promise<WebSocket>
 					const clientToProxyWsPromise = managerDriver.openWebSocket(
 						path,
-						{ directId: actorId },
+						actorId,
 						encoding,
 						params,
 					);
@@ -563,7 +563,7 @@ export function buildManagerRouter(
 				try {
 					// Forward the request using the inline client driver
 					const response = await managerDriver.sendRequest(
-						{ directId: actorId },
+						actorId,
 						new Request(`http://actor/${pathWithQuery}`, {
 							method: c.req.method,
 							headers: c.req.raw.headers,
@@ -616,7 +616,7 @@ export function buildManagerRouter(
 				try {
 					// Send a special request to the actor to force disconnect the connection
 					const response = await managerDriver.sendRequest(
-						{ directId: actorId },
+						actorId,
 						new Request(
 							`http://actor/.test/force-disconnect?conn=${connId}`,
 							{
