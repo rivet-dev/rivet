@@ -11,11 +11,13 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 axum.workspace = true
 base64.workspace = true
 bytes.workspace = true
 ciborium.workspace = true
 futures.workspace = true
+futures-util.workspace = true
 gas.workspace = true
 http-body-util.workspace = true
 http-body.workspace = true

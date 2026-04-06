@@ -368,6 +368,13 @@
     "Guard": {
       "type": "object",
       "properties": {
+        "enable_websocket_health_route": {
+          "description": "Enables the internal websocket health route for debug and latency testing. This is intended for websocket ping/pong verification and should remain disabled in normal deployments.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "host": {
           "description": "Host for HTTP traffic",
           "type": [
@@ -404,6 +411,13 @@
           ],
           "format": "uint16",
           "minimum": 0.0
+        },
+        "tcp_nodelay": {
+          "description": "Enables TCP_NODELAY on accepted Guard sockets.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "additionalProperties": false

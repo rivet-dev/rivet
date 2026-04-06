@@ -4698,11 +4698,13 @@ name = "rivet-guard"
 version = "2.2.1"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum 0.8.4",
  "base64 0.22.1",
  "bytes",
  "ciborium",
  "futures",
+ "futures-util",
  "gasoline",
  "http-body 1.0.1",
  "http-body-util",
