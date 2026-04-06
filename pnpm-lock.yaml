@@ -271,7 +271,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.19.1
-        version: 1.19.12(hono@4.11.9)
+        version: 1.19.9(hono@4.11.9)
       '@rivetkit/engine-envoy-client':
         specifier: workspace:*
         version: link:../envoy-client
@@ -23765,7 +23765,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76)':
     dependencies:
-      '@hono/node-server': 1.19.12(hono@4.11.9)
+      '@hono/node-server': 1.19.9(hono@4.11.9)
       ajv: 8.17.1
       ajv-formats: 3.0.1(ajv@8.17.1)
       content-type: 1.0.5
@@ -23787,7 +23787,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13)':
     dependencies:
-      '@hono/node-server': 1.19.12(hono@4.11.9)
+      '@hono/node-server': 1.19.9(hono@4.11.9)
       ajv: 8.17.1
       ajv-formats: 3.0.1(ajv@8.17.1)
       content-type: 1.0.5
