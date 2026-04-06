@@ -8,7 +8,7 @@ export function runGatewayQueryUrlTests(driverTestConfig: DriverTestConfig) {
 			driverTestConfig.clientType === "http" ? test : test.skip;
 
 		httpOnlyTest(
-			"getOrCreate gateway URLs stay query-backed and resolve through the gateway",
+			"getOrCreate gateway URLs use rvt-* query params and resolve through the gateway",
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 				const handle = client.counter.getOrCreate(["gateway-query"]);
@@ -16,9 +16,10 @@ export function runGatewayQueryUrlTests(driverTestConfig: DriverTestConfig) {
 				await handle.increment(5);
 
 				const gatewayUrl = await handle.getGatewayUrl();
-				expect(gatewayUrl).toContain(";namespace=");
-				expect(gatewayUrl).toContain(";method=getOrCreate;");
-				expect(gatewayUrl).toContain(";crashPolicy=sleep");
+				const parsedUrl = new URL(gatewayUrl);
+				expect(parsedUrl.searchParams.get("rvt-namespace")).toBeTruthy();
+				expect(parsedUrl.searchParams.get("rvt-method")).toBe("getOrCreate");
+				expect(parsedUrl.searchParams.get("rvt-crash-policy")).toBe("sleep");
 
 				const response = await fetch(`${gatewayUrl}/inspector/state`, {
 					headers: { Authorization: "Bearer token" },
@@ -33,7 +34,7 @@ export function runGatewayQueryUrlTests(driverTestConfig: DriverTestConfig) {
 		);
 
 		httpOnlyTest(
-			"get gateway URLs stay query-backed and resolve through the gateway",
+			"get gateway URLs use rvt-* query params and resolve through the gateway",
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 				const createHandle = client.counter.getOrCreate([
@@ -44,8 +45,9 @@ export function runGatewayQueryUrlTests(driverTestConfig: DriverTestConfig) {
 				const gatewayUrl = await client.counter
 					.get(["existing-gateway-query"])
 					.getGatewayUrl();
-				expect(gatewayUrl).toContain(";namespace=");
-				expect(gatewayUrl).toContain(";method=get;");
+				const parsedUrl = new URL(gatewayUrl);
+				expect(parsedUrl.searchParams.get("rvt-namespace")).toBeTruthy();
+				expect(parsedUrl.searchParams.get("rvt-method")).toBe("get");
 
 				const response = await fetch(`${gatewayUrl}/inspector/state`, {
 					headers: { Authorization: "Bearer token" },

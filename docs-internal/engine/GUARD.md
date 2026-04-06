@@ -82,8 +82,9 @@ The Gateway (a portion of Guard) acts as a proxy for HTTP requests and WebSocket
 
 In addition to header-based routing, Guard can route requests to actors when the request path matches:
 
-- `/gateway/{actor_id}/{...path}`
-- `/gateway/{actor_id}@{token}/{...path}`
+- `/gateway/{actor_id}/{...path}` (direct)
+- `/gateway/{actor_id}@{token}/{...path}` (direct with token)
+- `/gateway/{name}/{...path}?rvt-namespace=...&rvt-method=...` (query-backed, resolves to actor via key lookup)
 
 When connecting a WebSocket, Guard may also determine the actor target from `Sec-Websocket-Protocol` when it consists of comma delimited dot separated pairs like `rivet_target.actor,rivet_actor.{actor_id}`.
 

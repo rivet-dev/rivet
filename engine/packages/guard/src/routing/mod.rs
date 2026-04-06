@@ -11,7 +11,6 @@ mod api_public;
 pub mod actor_path;
 mod envoy;
 mod kv_channel;
-pub(crate) mod matrix_param_deserializer;
 pub mod pegboard_gateway;
 mod runner;
 mod ws_health;
