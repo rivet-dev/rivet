@@ -218,8 +218,13 @@ export async function handleWebSocketConnect(
 		exposeInternalError,
 	}: WebSocketHandlerOpts,
 ): Promise<UpgradeWebSocketArgs> {
-	// Process WS messages in order to avoid races between subscription updates
-	// and subsequent action requests.
+	// Parse and apply subscription updates in order so subscribe/unsubscribe
+	// messages are visible to later messages deterministically.
+	//
+	// Action execution itself is intentionally not awaited in this chain.
+	// Actions are allowed to overlap on a single connection, and tests depend
+	// on a follow-up action being able to unblock a long-running action on the
+	// same WebSocket.
 	let pendingMessage = Promise.resolve();
 
 	return {
@@ -248,7 +253,25 @@ export async function handleWebSocketConnect(
 						maxIncomingMessageSize:
 							runConfig.maxIncomingMessageSize,
 					});
-					await actor.processMessage(message, conn);
+
+					if (message.body.tag === "SubscriptionRequest") {
+						await actor.processMessage(message, conn);
+						return;
+					}
+
+					void actor.processMessage(message, conn).catch((error) => {
+						const { group, code } = deconstructError(
+							error,
+							actor.rLog,
+							{
+								wsEvent: "message",
+								actionId: message.body.val.id,
+								actionName: message.body.val.name,
+							},
+							exposeInternalError,
+						);
+						ws.close(1011, `${group}.${code}`);
+					});
 				})
 				.catch((error) => {
 					const { group, code } = deconstructError(
@@ -313,7 +336,12 @@ export async function handleWebSocketConnect(
 
 export async function handleRawWebSocket(
 	setWebSocket: (ws: UniversalWebSocket) => void,
-	{ request, actor, closePromiseResolvers, conn }: WebSocketHandlerOpts,
+	{
+		request,
+		actor,
+		closePromiseResolvers,
+		conn,
+	}: WebSocketHandlerOpts,
 ): Promise<UpgradeWebSocketArgs> {
 	return {
 		conn,
@@ -343,17 +371,21 @@ export async function handleRawWebSocket(
 			// this is called synchronously within onOpen.
 			actor.handleRawWebSocket(conn, ws, request);
 		},
-		// Raw websocket messages are handled directly by the actor's event
-		// listeners on the WebSocket object, not through this callback
-		onMessage: (_evt: any, _ws: any) => {},
+		onMessage: (_evt: any, _wsContext: any) => {},
 		onClose: (evt: any, ws: any) => {
 			// Resolve the close promise
 			closePromiseResolvers.resolve();
 
 			// Clean up the connection
-			conn.disconnect(evt?.reason);
+			void conn.disconnect(evt?.reason).catch((error) => {
+				actor.rLog.error({
+					msg: "raw websocket disconnect failed",
+					error: String(error),
+					reason: evt?.reason,
+				});
+			});
 		},
-		onError: (error: any, ws: any) => {},
+		onError: (_error: any, _ws: any) => {},
 	};
 }
 

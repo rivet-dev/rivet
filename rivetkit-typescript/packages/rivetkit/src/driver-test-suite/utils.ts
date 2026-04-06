@@ -19,7 +19,6 @@ export async function setupDriverTest(
 	endpoint: string;
 	hardCrashActor?: (actorId: string) => Promise<void>;
 	hardCrashPreservesData: boolean;
-	forceDisconnectKvChannel?: () => Promise<number>;
 }> {
 	if (!driverTestConfig.useRealTimers) {
 		vi.useFakeTimers();
@@ -33,7 +32,6 @@ export async function setupDriverTest(
 		runnerName,
 		hardCrashActor,
 		hardCrashPreservesData,
-		forceDisconnectKvChannel,
 		cleanup,
 	} =
 		await driverTestConfig.start();
@@ -63,7 +61,7 @@ export async function setupDriverTest(
 		assertUnreachable(driverTestConfig.clientType);
 	}
 
-c.onTestFinished(async () => {
+	c.onTestFinished(async () => {
 		if (!driverTestConfig.HACK_skipCleanupNet) {
 			await client.dispose();
 		}
@@ -77,7 +75,6 @@ c.onTestFinished(async () => {
 		endpoint,
 		hardCrashActor,
 		hardCrashPreservesData: hardCrashPreservesData ?? false,
-		forceDisconnectKvChannel,
 	};
 }
 

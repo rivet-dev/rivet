@@ -1,5 +1,4 @@
 import { describe, expect, test } from "vitest";
-import { wasStartStopRaceDestroyed } from "../../../fixtures/driver-test-suite/start-stop-race";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";
 
@@ -137,14 +136,14 @@ export function runActorLifecycleTests(driverTestConfig: DriverTestConfig) {
 
 			// Create actor
 			const actor = client.startStopRaceActor.getOrCreate([actorKey]);
-			const actorId = await actor.resolve();
 
 			// Start and immediately destroy
 			const statePromise = actor.getState();
 			await actor.destroy();
 
-			await statePromise;
-			expect(wasStartStopRaceDestroyed(actorId)).toBe(true);
+			// Verify onDestroy was called (requires actor to be started)
+			const state = await statePromise;
+			expect(state.destroyCalled).toBe(true);
 		});
 	});
 }

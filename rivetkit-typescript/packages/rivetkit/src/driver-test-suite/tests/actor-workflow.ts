@@ -409,7 +409,7 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 				try {
 					await client.workflowDestroyActor
 						.getForId(actorId)
-						.ping();
+						.resolve();
 					actorRunning = true;
 				} catch (err) {
 					expect((err as ActorError).group).toBe("actor");

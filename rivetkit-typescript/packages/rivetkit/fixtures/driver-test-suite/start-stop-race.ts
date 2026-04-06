@@ -1,11 +1,5 @@
 import { actor } from "rivetkit";
 
-const destroyedActorIds = new Set<string>();
-
-export function wasStartStopRaceDestroyed(actorId: string): boolean {
-	return destroyedActorIds.has(actorId);
-}
-
 /**
  * Actor designed to test start/stop race conditions.
  * Has a slow initialization to make race conditions easier to trigger.
@@ -18,7 +12,6 @@ export const startStopRaceActor = actor({
 		startCompleted: false,
 	},
 	onWake: async (c) => {
-		destroyedActorIds.delete(c.actorId);
 		c.state.startTime = Date.now();
 
 		// Simulate slow initialization to create window for race condition
@@ -28,7 +21,6 @@ export const startStopRaceActor = actor({
 		c.state.startCompleted = true;
 	},
 	onDestroy: (c) => {
-		destroyedActorIds.add(c.actorId);
 		c.state.destroyCalled = true;
 		// Don't save state here - the actor framework will save it automatically
 	},
