@@ -96,5 +96,5 @@ export interface EnvoyHandle {
 		clientMessageIndex: number,
 	): void;
 
-	startServerless(payload: ArrayBuffer): void;
+	startServerlessActor(payload: ArrayBuffer): void;
 }
