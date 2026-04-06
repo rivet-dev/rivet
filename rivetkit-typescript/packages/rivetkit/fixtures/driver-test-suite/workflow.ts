@@ -555,9 +555,6 @@ export const workflowDestroyActor = actor({
 			ctx.destroy();
 		});
 	}),
-	actions: {
-		ping: () => true,
-	},
 });
 
 export const workflowFailedStepActor = actor({

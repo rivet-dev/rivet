@@ -3,7 +3,6 @@ import { createNodeWebSocket } from "@hono/node-ws";
 import invariant from "invariant";
 import { describe } from "vitest";
 import type { Encoding } from "@/client/mod";
-import { configureDefaultLogger } from "@/common/log";
 import { buildManagerRouter } from "@/manager/router";
 import { createClientWithDriver, type Registry } from "@/mod";
 import {
@@ -91,7 +90,6 @@ export interface DriverDeployOutput {
 	runnerName: string;
 	hardCrashActor?: (actorId: string) => Promise<void>;
 	hardCrashPreservesData?: boolean;
-	forceDisconnectKvChannel?: () => Promise<number>;
 
 	/** Cleans up the test. */
 	cleanup(): Promise<void>;
@@ -227,8 +225,6 @@ export async function createTestRuntime(
 		cleanup?: () => Promise<void>;
 	}>,
 ): Promise<DriverDeployOutput> {
-	configureDefaultLogger("warn");
-
 	// Import using dynamic imports with vitest alias resolution
 	//
 	// Vitest is configured to resolve `import ... from "rivetkit"` to the
@@ -256,7 +252,6 @@ export async function createTestRuntime(
 		rivetEngine,
 		hardCrashActor,
 		hardCrashPreservesData,
-		forceDisconnectKvChannel,
 	} = await driverFactory(registry);
 
 	if (rivetEngine) {
@@ -273,7 +268,6 @@ export async function createTestRuntime(
 			runnerName: rivetEngine.runnerName,
 			hardCrashActor,
 			hardCrashPreservesData,
-			forceDisconnectKvChannel,
 			cleanup,
 		};
 	} else {
@@ -335,15 +329,6 @@ export async function createTestRuntime(
 
 		// Cleanup
 		const cleanup = async () => {
-			if ("shutdownForTests" in managerDriver) {
-				const shutdownForTests = managerDriver.shutdownForTests;
-				if (typeof shutdownForTests === "function") {
-					await shutdownForTests.call(managerDriver);
-				}
-			} else {
-				managerDriver.shutdown?.();
-			}
-
 			// Disconnect only the current test runtime's native KV channel so
 			// concurrent local runtimes do not shut down each other's channel.
 			try {
@@ -373,19 +358,6 @@ export async function createTestRuntime(
 			runnerName: "default",
 			hardCrashActor: managerDriver.hardCrashActor?.bind(managerDriver),
 			hardCrashPreservesData: driver.name !== "memory",
-			forceDisconnectKvChannel: async () => {
-				try {
-					const { disconnectKvChannelForCurrentConfig } = await import(
-						"@/db/native-sqlite"
-					);
-					return await disconnectKvChannelForCurrentConfig({
-						endpoint: serverEndpoint,
-						namespace: "default",
-					});
-				} catch {
-					return 0;
-				}
-			},
 			cleanup,
 		};
 	}

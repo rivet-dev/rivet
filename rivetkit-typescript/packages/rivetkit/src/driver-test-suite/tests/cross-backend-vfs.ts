@@ -21,11 +21,10 @@ const CROSS_BACKEND_TIMEOUT_MS = 30_000;
  */
 export function runCrossBackendVfsTests(driverTestConfig: DriverTestConfig) {
 	const nativeAvailable = nativeSqliteAvailable();
-	const describeCrossBackend = nativeAvailable
-		? describe.sequential
-		: describe.skip;
 
-	describeCrossBackend("Cross-Backend VFS Compatibility Tests", () => {
+	describe.skipIf(!nativeAvailable)(
+		"Cross-Backend VFS Compatibility Tests",
+		() => {
 			test(
 				"WASM-to-native: data written with WASM VFS is readable with native VFS",
 				async (c) => {
@@ -162,5 +161,6 @@ export function runCrossBackendVfsTests(driverTestConfig: DriverTestConfig) {
 				},
 				CROSS_BACKEND_TIMEOUT_MS,
 			);
-		});
+		},
+	);
 }

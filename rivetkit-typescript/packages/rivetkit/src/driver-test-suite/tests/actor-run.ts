@@ -140,7 +140,7 @@ export function runActorRunTests(driverTestConfig: DriverTestConfig) {
 			expect(state1.runStarted).toBe(true);
 
 			// Wait for the run handler to exit and the normal idle sleep timeout.
-			await waitFor(driverTestConfig, RUN_SLEEP_TIMEOUT + 1_000);
+			await waitFor(driverTestConfig, RUN_SLEEP_TIMEOUT + 400);
 
 			const state2 = await actor.getState();
 			expect(state2.runStarted).toBe(true);
