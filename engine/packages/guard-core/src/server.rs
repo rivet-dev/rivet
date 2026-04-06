@@ -74,6 +74,7 @@ pub async fn run_server(
 	let server = hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new());
 	let graceful = hyper_util::server::graceful::GracefulShutdown::new();
 	let mut term_signal = TermSignal::get();
+	let tcp_nodelay = config.guard().tcp_nodelay();
 
 	tracing::info!("HTTP server listening on {}", http_addr);
 	if let Some(addr) = &https_addr {
@@ -86,6 +87,7 @@ pub async fn run_server(
 		tcp_stream: tokio::net::TcpStream,
 		remote_addr: SocketAddr,
 		factory_clone: Arc<ProxyServiceFactory>,
+		tcp_nodelay: bool,
 		server: &hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>,
 		graceful: &hyper_util::server::graceful::GracefulShutdown,
 		port_type_str: String,
@@ -93,6 +95,12 @@ pub async fn run_server(
 		let connection_start = Instant::now();
 		metrics::TCP_CONNECTION_PENDING.inc();
 		metrics::TCP_CONNECTION_TOTAL.inc();
+
+		if tcp_nodelay
+			&& let Err(err) = tcp_stream.set_nodelay(true)
+		{
+			tracing::debug!(?err, "failed to enable tcp nodelay");
+		}
 
 		let io = hyper_util::rt::TokioIo::new(tcp_stream);
 
@@ -134,6 +142,7 @@ pub async fn run_server(
 							tcp_stream,
 							remote_addr,
 							http_factory.clone(),
+							tcp_nodelay,
 							&server,
 							&graceful,
 							"HTTP".to_string()
@@ -170,6 +179,12 @@ pub async fn run_server(
 										let connection_start = Instant::now();
 										metrics::TCP_CONNECTION_PENDING.inc();
 										metrics::TCP_CONNECTION_TOTAL.inc();
+
+										if tcp_nodelay
+											&& let Err(err) = tcp_stream.set_nodelay(true)
+										{
+											tracing::debug!(?err, "failed to enable tcp nodelay");
+										}
 
 										match acceptor_clone
 											.accept(tcp_stream)
@@ -219,6 +234,7 @@ pub async fn run_server(
 										tcp_stream,
 										remote_addr,
 										factory.clone(),
+										tcp_nodelay,
 										&server,
 										&graceful,
 										"HTTPS (unsecured)".to_string()

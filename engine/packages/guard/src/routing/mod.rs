@@ -14,6 +14,7 @@ mod kv_channel;
 pub(crate) mod matrix_param_deserializer;
 pub mod pegboard_gateway;
 mod runner;
+mod ws_health;
 
 pub(crate) const X_RIVET_TARGET: HeaderName = HeaderName::from_static("x-rivet-target");
 pub(crate) const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
@@ -40,6 +41,21 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 		Box::pin(
 			async move {
 				tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path(), "Routing request");
+
+				if ws_health::matches_path(req_ctx.path()) {
+					if ctx.config().guard().enable_websocket_health_route() {
+						metrics::ROUTE_TOTAL.with_label_values(&["ws_health"]).inc();
+						return Ok(ws_health::route_request());
+					}
+
+					metrics::ROUTE_TOTAL.with_label_values(&["none"]).inc();
+
+					return Err(errors::NoRoute {
+						host: req_ctx.hostname().to_string(),
+						path: req_ctx.path().to_string(),
+					}
+					.build());
+				}
 
 				// MARK: Path-based routing
 				// Route actor

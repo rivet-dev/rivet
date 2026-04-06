@@ -9,6 +9,11 @@ pub struct Guard {
 	pub host: Option<IpAddr>,
 	/// Port for HTTP traffic
 	pub port: Option<u16>,
+	/// Enables TCP_NODELAY on accepted Guard sockets.
+	pub tcp_nodelay: Option<bool>,
+	/// Enables the internal websocket health route for debug and latency testing. This is intended
+	/// for websocket ping/pong verification and should remain disabled in normal deployments.
+	pub enable_websocket_health_route: Option<bool>,
 	/// Enable & configure HTTPS
 	pub https: Option<Https>,
 	/// Max HTTP request body size in bytes (first line of defense).
@@ -22,6 +27,14 @@ impl Guard {
 
 	pub fn port(&self) -> u16 {
 		self.port.unwrap_or(crate::defaults::ports::GUARD)
+	}
+
+	pub fn tcp_nodelay(&self) -> bool {
+		self.tcp_nodelay.unwrap_or(false)
+	}
+
+	pub fn enable_websocket_health_route(&self) -> bool {
+		self.enable_websocket_health_route.unwrap_or(false)
 	}
 
 	pub fn http_max_request_body_size(&self) -> usize {

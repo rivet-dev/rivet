@@ -49,6 +49,12 @@ pub struct ProxyState {
 	config: rivet_config::Config,
 	routing_fn: RoutingFn,
 	cache_key_fn: CacheKeyFn,
+	// NOTE: Using the hyper legacy client is the only option currently.
+	// This is what reqwest uses under the hood. Eventually we'll migrate to h3 once it's ready.
+	client: Client<
+		hyper_tls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+		Full<Bytes>,
+	>,
 	route_cache: RouteCache,
 	// We use moka::Cache instead of scc::HashMap because it automatically handles TTL and capacity
 	rate_limiters: Cache<std::net::IpAddr, Arc<Mutex<RateLimiter>>>,
@@ -64,10 +70,16 @@ impl ProxyState {
 		routing_fn: RoutingFn,
 		cache_key_fn: CacheKeyFn,
 	) -> Self {
+		let https_connector = hyper_tls::HttpsConnector::new();
+		let client = Client::builder(TokioExecutor::new())
+			.pool_idle_timeout(Duration::from_secs(30))
+			.build(https_connector);
+
 		Self {
 			config,
 			routing_fn,
 			cache_key_fn,
+			client,
 			route_cache: RouteCache::new(),
 			rate_limiters: Cache::builder()
 				.max_capacity(10_000)
@@ -307,26 +319,15 @@ fn choose_random_target(targets: &[RouteTarget]) -> Option<&RouteTarget> {
 pub struct ProxyService {
 	state: Arc<ProxyState>,
 	remote_addr: SocketAddr,
-	// Note: Using the hyper legacy client is the only option currently.
-	// This is what reqwest uses under the hood. Eventually we'll migrate to h3 once it's ready.
-	client: Client<
-		hyper_tls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-		Full<Bytes>,
-	>,
+	connection_start: Instant,
 }
 
 impl ProxyService {
 	pub fn new(state: Arc<ProxyState>, remote_addr: SocketAddr) -> Self {
-		// Create a client with the hyper-util legacy client
-		let https_connector = hyper_tls::HttpsConnector::new();
-		let client = Client::builder(TokioExecutor::new())
-			.pool_idle_timeout(Duration::from_secs(30))
-			.build(https_connector);
-
 		Self {
 			state,
 			remote_addr,
-			client,
+			connection_start: Instant::now(),
 		}
 	}
 
@@ -749,10 +750,10 @@ impl ProxyService {
 						.body(Full::new(req_body.clone()))
 						.map_err(|err| errors::RequestBuildError(err.to_string()).build())?;
 
-					// Send the request with timeout
-					let res = timeout(timeout_duration, self.client.request(proxied_req))
-						.await
-						.map_err(|_| {
+						// Send the request with timeout
+						let res = timeout(timeout_duration, self.state.client.request(proxied_req))
+							.await
+							.map_err(|_| {
 							errors::RequestTimeout {
 								timeout_seconds: timeout_duration.as_secs(),
 							}
@@ -1761,7 +1762,7 @@ impl Clone for ProxyService {
 		Self {
 			state: self.state.clone(),
 			remote_addr: self.remote_addr,
-			client: self.client.clone(),
+			connection_start: self.connection_start,
 		}
 	}
 }

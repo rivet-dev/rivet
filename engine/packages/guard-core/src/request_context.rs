@@ -4,7 +4,7 @@ use rivet_runner_protocol as protocol;
 use rivet_util::Id;
 use std::{
 	net::{IpAddr, SocketAddr},
-	time::Instant,
+	time::{Duration, Instant},
 };
 
 #[derive(Clone)]
@@ -111,6 +111,10 @@ impl RequestContext {
 
 	pub fn is_websocket(&self) -> bool {
 		self.is_websocket
+	}
+
+	pub fn elapsed(&self) -> Duration {
+		self.start_time.elapsed()
 	}
 
 	pub fn in_flight_request_id(&self) -> Result<protocol::RequestId> {
