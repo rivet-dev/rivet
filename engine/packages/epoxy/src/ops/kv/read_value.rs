@@ -21,10 +21,7 @@ pub(crate) struct LocalValueRead {
 /// 1. **V2 value** (`EPOXY_V2/replica/{id}/kv/{key}/value`). The current write path.
 /// 2. **Legacy committed value** (`EPOXY_V1/replica/{id}/kv/{key}/committed_value`). Written by
 ///    the original EPaxos protocol. Deserialized as raw bytes with version 0 and mutable=false.
-/// 3. **Legacy v2-format value** (`EPOXY_V1/replica/{id}/kv/{key}/value`). Written during the
-///    intermediate v1-to-v2 transition where the key layout matched v2 but the subspace was
-///    still v1.
-/// 4. **Optimistic cache** (`EPOXY_V2/replica/{id}/kv/{key}/cache`). Only checked when
+/// 3. **Optimistic cache** (`EPOXY_V2/replica/{id}/kv/{key}/cache`). Only checked when
 ///    `include_cache` is true. Contains values fetched from remote replicas for the optimistic
 ///    read path.
 ///
@@ -38,24 +35,20 @@ pub(crate) async fn read_local_value(
 ) -> Result<LocalValueRead> {
 	let value_key = KvValueKey::new(key.clone());
 	let legacy_value_key = LegacyCommittedValueKey::new(key.clone());
-	let legacy_v2_value_key = KvValueKey::new(key.clone());
 	let cache_key = KvOptimisticCacheKey::new(key);
 	let subspace = keys::subspace(replica_id);
 	let legacy_subspace = keys::legacy_subspace(replica_id);
 	let packed_value_key = subspace.pack(&value_key);
 	let packed_legacy_value_key = legacy_subspace.pack(&legacy_value_key);
-	let packed_legacy_v2_value_key = legacy_subspace.pack(&legacy_v2_value_key);
 	let packed_cache_key = subspace.pack(&cache_key);
 
 	ctx.udb()?
 		.run(|tx| {
 			let packed_value_key = packed_value_key.clone();
 			let packed_legacy_value_key = packed_legacy_value_key.clone();
-			let packed_legacy_v2_value_key = packed_legacy_v2_value_key.clone();
 			let packed_cache_key = packed_cache_key.clone();
 			let value_key = value_key.clone();
 			let legacy_value_key = legacy_value_key.clone();
-			let legacy_v2_value_key = legacy_v2_value_key.clone();
 			let cache_key = cache_key.clone();
 
 			async move {
@@ -75,14 +68,6 @@ pub(crate) async fn read_local_value(
 							version: 0,
 							mutable: false,
 						}),
-						cache_value: None,
-					});
-				}
-
-				// Legacy v2-format value (v1 subspace, v2 key layout)
-				if let Some(value) = tx.get(&packed_legacy_v2_value_key, Serializable).await? {
-					return Ok(LocalValueRead {
-						value: Some(legacy_v2_value_key.deserialize(&value)?),
 						cache_value: None,
 					});
 				}
