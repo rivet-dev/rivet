@@ -35,13 +35,7 @@ When changing a versioned VBARE schema, follow the existing migration pattern.
 
 ## Concurrent containers
 
-Never use `Mutex<HashMap<K, V>>` or `RwLock<HashMap<K, V>>`. They serialize all access behind a single lock and are extremely slow under contention. Use lock-free concurrent maps instead:
-
-- `scc::HashMap` for general concurrent key-value storage. Use `entry_async`, `get_async`, `insert_async`, `remove_async` for async contexts. Be aware that `scc::HashMap` does not hold entries locked across `.await` points. Each async method acquires and releases its lock atomically. If you need read-then-write atomicity, use `entry_async` which holds the bucket lock for the duration of the closure, but the closure itself must be synchronous.
-- `moka::Cache` when you need TTL-based expiration or bounded capacity.
-- `DashMap` is also acceptable but `scc::HashMap` is preferred in this codebase.
-
-The same applies to `Mutex<HashSet<T>>`. Use `scc::HashSet` instead.
+Never use `Mutex<HashMap<...>>` or `RwLock<HashMap<...>>`. Use `scc::HashMap` (preferred), `moka::Cache` (for TTL/bounded), or `DashMap`. Same for sets: use `scc::HashSet` instead of `Mutex<HashSet<...>>`. Note that `scc` async methods do not hold locks across `.await` points. Use `entry_async` for atomic read-then-write.
 
 ## Test snapshots
 
