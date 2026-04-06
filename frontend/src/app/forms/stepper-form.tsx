@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { faArrowLeft, faArrowRight, Icon } from "@rivet-gg/icons";
 import type * as Stepperize from "@stepperize/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { posthog } from "posthog-js";
+import { posthog } from "@/lib/posthog";
 import {
 	createContext,
 	type MutableRefObject,

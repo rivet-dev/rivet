@@ -74,51 +74,50 @@ function checkIconExists(pkg, iconName) {
 }
 
 /**
+ * @typedef {{ name: string, source: string, inlineCode: null } | { name: string, source: null, inlineCode: string }} IconEntry
+ */
+
+/**
  * @param {string} pkg
  * @param {string} iconName
  * @param {string} exportName
+ * @returns {IconEntry}
  */
-function generateIconExport(pkg, iconName, exportName) {
+function makeIconEntry(pkg, iconName, exportName) {
 	const exists = checkIconExists(pkg, iconName);
 	const sourcePkg = exists ? `${pkg}/${iconName}` : "@fortawesome/free-solid-svg-icons/faSquare";
-	return `export { definition as ${exportName} } from "${sourcePkg}";\n`;
+	return { name: exportName, source: sourcePkg, inlineCode: null };
 }
 
 /**
  * @param {string} pkg
  * @param {Array<{icon: string, aliases: string[]}>} icons
+ * @returns {{ entries: IconEntry[], count: number }}
  */
 function processCustomPackage(pkg, icons) {
-	const iconNames = icons.map(({ icon }) => icon);
-	const exports = iconNames.join(", ");
-	return {
-		code: `export { ${exports} } from "${pkg}";\n`,
-		count: iconNames.length,
-	};
+	const entries = icons.map(({ icon }) => ({ name: icon, source: pkg, inlineCode: null }));
+	return { entries, count: entries.length };
 }
 
 /**
- * Process legacy custom packages (duotone icons from JS files)
- * These need to be inlined as the legacy format isn't ES module compatible
+ * Process legacy custom packages (duotone icons from JS files).
+ * These need to be inlined as the legacy format is not ES module compatible.
  * @param {string} pkg
  * @param {Array<{icon: string, aliases: string[]}>} icons
+ * @returns {{ entries: IconEntry[], count: number }}
  */
 function processLegacyCustomPackage(pkg, icons) {
-	// Read the legacy JS file and extract icon definitions
 	const jsFilePath = join(PATHS.srcNodeModules, pkg);
 	const jsContent = fs.readFileSync(jsFilePath, "utf-8");
 
-	// Extract the icons object from the file
 	// The format is: var icons = { "iconName": [width, height, aliases, unicode, pathData], ... }
 	const iconsMatch = jsContent.match(/var\s+icons\s*=\s*(\{[\s\S]*?\});/);
 	if (!iconsMatch) {
-		return { code: "", count: 0 };
+		return { entries: [], count: 0 };
 	}
 
-	let code = "";
-	let count = 0;
-
 	const iconsObj = JSON.parse(iconsMatch[1]);
+	const entries = [];
 
 	for (const { icon } of icons) {
 		// Convert faIconName back to icon-name
@@ -129,66 +128,54 @@ function processLegacyCustomPackage(pkg, icons) {
 			.replace(/^-/, "");
 
 		const iconData = iconsObj[baseName];
-		if (!iconData) {
-			continue;
-		}
+		if (!iconData) continue;
 
-		// Create an inline icon definition
 		// FontAwesome icon format: [width, height, aliases, unicode, pathData]
 		const [width, height, , unicode, pathData] = iconData;
-		const iconDef = {
-			prefix: "fakd",
-			iconName: baseName,
-			icon: [width, height, [], unicode, pathData],
-		};
-
-		code += `export const ${icon} = ${JSON.stringify(iconDef)};\n`;
-		count++;
+		const iconDef = { prefix: "fakd", iconName: baseName, icon: [width, height, [], unicode, pathData] };
+		entries.push({ name: icon, source: null, inlineCode: `export const ${icon} = ${JSON.stringify(iconDef)};` });
 	}
 
-	return { code, count };
+	return { entries, count: entries.length };
 }
 
 /**
  * @param {string} pkg
  * @param {Array<{icon: string, aliases: string[]}>} icons
  * @param {Set<string>} existingExports
+ * @returns {{ entries: IconEntry[], count: number }}
  */
 function processStandardPackage(pkg, icons, existingExports) {
-	let code = "";
-	let count = 0;
+	const entries = [];
 
 	for (const { icon, aliases } of icons) {
-		// Export main icon if not already exported
 		if (!existingExports.has(icon)) {
-			code += generateIconExport(pkg, icon, icon);
+			entries.push(makeIconEntry(pkg, icon, icon));
 			existingExports.add(icon);
-			count++;
 		}
 
-		// Export aliases
 		for (const alias of aliases) {
-			if (alias === icon || existingExports.has(alias)) {
-				continue;
-			}
-			code += generateIconExport(pkg, icon, alias);
+			if (alias === icon || existingExports.has(alias)) continue;
+			entries.push(makeIconEntry(pkg, icon, alias));
 			existingExports.add(alias);
 		}
 	}
 
-	return { code, count };
+	return { entries, count: entries.length };
 }
 
 /**
  * @param {Record<string, {icons: Array<{icon: string, aliases: string[]}>}>} manifest
+ * @returns {{ iconCode: string, iconEntries: IconEntry[] }}
  */
 function generateIconExports(manifest) {
 	log("🎨", "Generating icon exports...");
 
 	const existingExports = new Set();
-	let iconCode = "";
+	/** @type {IconEntry[]} */
+	const iconEntries = [];
 	let totalIcons = 0;
-	const stats = { custom: 0, pro: 0, free: 0, fallback: 0 };
+	const stats = { custom: 0, pro: 0, free: 0 };
 
 	for (const [pkg, { icons }] of Object.entries(manifest)) {
 		const isLegacyCustom = pkg.endsWith(".js");
@@ -204,28 +191,43 @@ function generateIconExports(manifest) {
 			result = processStandardPackage(pkg, icons, existingExports);
 		}
 
-		iconCode += result.code;
+		iconEntries.push(...result.entries);
 		totalIcons += result.count;
 
-		// Track stats
 		if (isCustom || isLegacyCustom) stats.custom += result.count;
 		else if (isPro) stats.pro += result.count;
 		else stats.free += result.count;
 	}
 
-	log("✅", `Generated ${totalIcons} icon exports`);
-	log(
-		"📊",
-		`  Free: ${stats.free} | Pro: ${stats.pro} | Custom: ${stats.custom}`,
-	);
+	// Build the code string for .gen.js / .gen.ts from the structured entries.
+	// Custom packages use a single bulk export line grouped by source.
+	const bulkSources = new Map();
+	let iconCode = "";
+	for (const entry of iconEntries) {
+		if (entry.inlineCode) {
+			iconCode += `${entry.inlineCode}\n`;
+		} else if (entry.source?.startsWith("@awesome.me/")) {
+			const names = bulkSources.get(entry.source) ?? [];
+			names.push(entry.name);
+			bulkSources.set(entry.source, names);
+		} else {
+			iconCode += `export { definition as ${entry.name} } from "${entry.source}";\n`;
+		}
+	}
+	for (const [source, names] of bulkSources) {
+		iconCode += `export { ${names.join(", ")} } from "${source}";\n`;
+	}
 
-	return iconCode;
+	log("✅", `Generated ${totalIcons} icon exports`);
+	log("📊", `  Free: ${stats.free} | Pro: ${stats.pro} | Custom: ${stats.custom}`);
+
+	return { iconCode, iconEntries };
 }
 
 /**
- * @param {string} iconExports
+ * @param {string} iconCode
  */
-function generateJavaScriptFile(iconExports) {
+function generateJavaScriptFile(iconCode) {
 	log("📝", "Generating src/index.gen.js...");
 
 	const baseCode = dedent`
@@ -234,7 +236,7 @@ function generateJavaScriptFile(iconExports) {
 		export function Icon(props) { return createElement(FontAwesomeIcon, props)}
 	`;
 
-	const content = LEGAL_BANNER + "\n" + baseCode + "\n" + iconExports;
+	const content = LEGAL_BANNER + "\n" + baseCode + "\n" + iconCode;
 	fs.writeFileSync(join(PATHS.src, "index.gen.js"), content);
 
 	const sizeKB = (Buffer.byteLength(content, "utf8") / 1024).toFixed(2);
@@ -242,9 +244,9 @@ function generateJavaScriptFile(iconExports) {
 }
 
 /**
- * @param {string} iconExports
+ * @param {string} iconCode
  */
-function generateTypeScriptFile(iconExports) {
+function generateTypeScriptFile(iconCode) {
 	log("📝", "Generating src/index.gen.ts...");
 
 	const baseCode = dedent`
@@ -254,7 +256,7 @@ function generateTypeScriptFile(iconExports) {
 		export type IconProp = string | { prefix: string; iconName: string } | [string, string];
 	`;
 
-	const content = LEGAL_BANNER + "\n" + baseCode + "\n" + iconExports;
+	const content = LEGAL_BANNER + "\n" + baseCode + "\n" + iconCode;
 	fs.writeFileSync(join(PATHS.src, "index.gen.ts"), content);
 
 	const sizeKB = (Buffer.byteLength(content, "utf8") / 1024).toFixed(2);
@@ -265,12 +267,12 @@ function generateTypeScriptFile(iconExports) {
 // BUNDLING PHASE
 // ============================================================================
 
-async function bundleWithEsbuild() {
-	log("📦", "Bundling with esbuild (splitting enabled)...");
+/**
+ * @param {IconEntry[]} iconEntries
+ */
+async function bundleWithEsbuild(iconEntries) {
+	log("📦", "Bundling with esbuild (per-icon files for ESM tree-shaking)...");
 
-	// Externalize free FA packages — they ship individual subpath files and are
-	// peer deps, so Vite can tree-shake them. Pro/custom icons have no runtime
-	// equivalent and must be inlined.
 	const extPackages = [
 		"react",
 		"react-dom",
@@ -278,29 +280,112 @@ async function bundleWithEsbuild() {
 	];
 
 	const distDir = resolve(PATHS.dist);
-	if (!fs.existsSync(distDir)) {
-		fs.mkdirSync(distDir, { recursive: true });
+	if (fs.existsSync(distDir)) {
+		fs.rmSync(distDir, { recursive: true, force: true });
 	}
+	fs.mkdirSync(distDir, { recursive: true });
+	fs.mkdirSync(resolve(distDir, "icons"), { recursive: true });
+
+	const entryDir = resolve(PATHS.src, "_entries");
+	if (fs.existsSync(entryDir)) {
+		fs.rmSync(entryDir, { recursive: true, force: true });
+	}
+	fs.mkdirSync(entryDir, { recursive: true });
 
 	try {
+		log("📊", `Building ${iconEntries.length} icon entry files`);
+
+		// Build each icon into its own dist/icons/<name>.js file.
+		// No splitting — each icon file is self-contained and includes its SVG data.
+		//
+		// Some icon names are case-equivalent aliases (e.g. faPaintBrush /
+		// faPaintbrush). esbuild uses the entry key as the output path, so two keys
+		// that differ only in case would collide on case-insensitive file systems.
+		// For the secondary alias we skip the esbuild entry and instead write a
+		// thin static re-export file directly into dist/icons/ after the build.
+		const entryPoints = {};
+		const seenLower = new Map(); // lowercase name -> primary export name
+		/** @type {Array<{name: string, primaryName: string}>} */
+		const deferredAliases = [];
+
+		for (const { name, source, inlineCode } of iconEntries) {
+			const lower = name.toLowerCase();
+			if (seenLower.has(lower)) {
+				deferredAliases.push({ name, primaryName: seenLower.get(lower) });
+				continue;
+			}
+			seenLower.set(lower, name);
+			const entryFile = join(entryDir, `${name}.js`);
+			let code;
+			if (inlineCode) {
+				code = `${inlineCode}\n`;
+			} else if (source.startsWith("@awesome.me/")) {
+				// Custom kit: source is the package path, export by name directly
+				code = `export { ${name} } from "${source}";\n`;
+			} else {
+				// Standard/pro: source is a subpath file exporting `definition`
+				code = `export { definition as ${name} } from "${source}";\n`;
+			}
+			fs.writeFileSync(entryFile, code);
+			entryPoints[`icons/${name}`] = entryFile;
+		}
+
+		// Build the Icon component entry separately (no icon data included).
+		const iconComponentEntry = join(entryDir, "_icon-component.js");
+		fs.writeFileSync(
+			iconComponentEntry,
+			`import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";\nimport { createElement } from "react";\nexport function Icon(props) { return createElement(FontAwesomeIcon, props); }\n`,
+		);
+		entryPoints["icon-component"] = iconComponentEntry;
+
 		await esbuild.build({
-			entryPoints: [resolve(PATHS.src, "index.gen.js")],
+			entryPoints,
 			outdir: distDir,
 			external: extPackages.flatMap((pkg) => [pkg, `${pkg}/*`]),
 			bundle: true,
-			splitting: true,
+			splitting: false,
 			platform: "neutral",
 			format: "esm",
 			treeShaking: true,
-			metafile: true,
 		});
 
-		fs.renameSync(resolve(distDir, "index.gen.js"), resolve(distDir, "index.js"));
+		// Build a map of deferred alias name -> primary name for the barrel.
+		// We do NOT write separate alias files because on case-insensitive file
+		// systems the deferred file would overwrite the esbuild-generated primary.
+		// Instead, the barrel re-exports the alias name directly from the primary file.
+		/** @type {Map<string, string>} */
+		const aliasToPrimary = new Map(deferredAliases.map(({ name, primaryName }) => [name, primaryName]));
 
-		const stats = fs.statSync(resolve(distDir, "index.js"));
-		const sizeKB = (stats.size / 1024).toFixed(2);
-		log("✅", `Generated dist/ (entry: ${sizeKB} KB)`);
+		// Generate a pure static re-export barrel so consumers can do:
+		//   import { faCheck } from "@rivet-gg/icons"
+		// and their bundler will tree-shake via the static re-exports.
+		const allNames = iconEntries.map(({ name }) => name);
+		let barrelLines = "";
+		for (const name of allNames) {
+			const primaryName = aliasToPrimary.get(name);
+			if (primaryName) {
+				// Alias: re-export from the primary file under the alias name.
+				barrelLines += `export { ${primaryName} as ${name} } from "./icons/${primaryName}.js";\n`;
+			} else {
+				barrelLines += `export { ${name} } from "./icons/${name}.js";\n`;
+			}
+		}
+		barrelLines += `export { Icon } from "./icon-component.js";\n`;
+		const barrelPath = resolve(distDir, "index.barrel.js");
+		fs.writeFileSync(barrelPath, barrelLines);
+		fs.renameSync(barrelPath, resolve(distDir, "index.js"));
+
+		// Clean up temp entry files
+		fs.rmSync(entryDir, { recursive: true, force: true });
+
+		const indexStats = fs.statSync(resolve(distDir, "index.js"));
+		const iconFiles = fs.readdirSync(resolve(distDir, "icons")).length;
+		log("✅", `Generated dist/ (barrel: ${(indexStats.size / 1024).toFixed(2)} KB, ${iconFiles} icon files)`);
 	} catch (err) {
+		// Clean up temp entry files on failure too
+		if (fs.existsSync(entryDir)) {
+			fs.rmSync(entryDir, { recursive: true, force: true });
+		}
 		const message = err instanceof Error ? err.message : String(err);
 		exitWithError(`Build failed: ${message}`);
 	}
@@ -326,20 +411,21 @@ async function main() {
 
 		// Generation phase
 		const manifest = loadManifest();
-		const iconExports = generateIconExports(manifest);
-		generateJavaScriptFile(iconExports);
-		generateTypeScriptFile(iconExports);
+		const { iconCode, iconEntries } = generateIconExports(manifest);
+		generateJavaScriptFile(iconCode);
+		generateTypeScriptFile(iconCode);
 
 		console.log();
 
 		// Bundle phase: produce individual icon chunks + barrel index
-		await bundleWithEsbuild();
+		await bundleWithEsbuild(iconEntries);
 
 		// Success!
 		console.log("\n🎉 Done! All files generated and ready to commit:");
 		console.log("   - src/index.gen.js");
 		console.log("   - src/index.gen.ts");
 		console.log("   - dist/index.js");
+		console.log("   - dist/icons/*.js (per-icon chunks)");
 		console.log("\n💡 Next steps:");
 		console.log("   1. Review the generated files");
 		console.log("   2. Commit them to git");

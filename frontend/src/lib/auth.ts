@@ -1,11 +1,24 @@
-import { Clerk } from "@clerk/clerk-js";
+import type { Clerk } from "@clerk/clerk-js";
 import { redirect } from "@tanstack/react-router";
 import { cloudEnv } from "./env";
 
-export const clerk =
+async function createClerk(): Promise<Clerk> {
+	const { Clerk } = await import("@clerk/clerk-js");
+	return new Clerk(cloudEnv().VITE_APP_CLERK_PUBLISHABLE_KEY);
+}
+
+export const clerkPromise: Promise<Clerk> =
 	__APP_TYPE__ === "cloud"
-		? new Clerk(cloudEnv().VITE_APP_CLERK_PUBLISHABLE_KEY)
-		: (null as unknown as Clerk);
+		? createClerk()
+		: Promise.resolve(null as unknown as Clerk);
+
+// Resolved synchronously after clerkPromise settles (awaited in main.tsx before
+// the router renders). Safe to use in any lazy-loaded chunk.
+export let clerk: Clerk = null as unknown as Clerk;
+clerkPromise.then(
+	(instance) => { clerk = instance; },
+	() => {},
+);
 
 export const redirectToOrganization = async (
 	clerk: Clerk,

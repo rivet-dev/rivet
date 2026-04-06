@@ -1,25 +1,18 @@
 import * as Sentry from "@sentry/react";
-import posthog, { type PostHog } from "posthog-js";
-import { PostHogProvider } from "posthog-js/react";
-import type { PropsWithChildren } from "react";
+import { type PropsWithChildren, Suspense, lazy } from "react";
 import { getConfig, useConfig } from "@/components";
 import { commonEnv } from "@/lib/env";
+import { initPosthog } from "@/lib/posthog";
 
-export function initThirdPartyProviders(router: unknown, debug: boolean) {
+export async function initThirdPartyProviders(router: unknown, debug: boolean) {
 	const config = getConfig();
 
-	let ph: PostHog | null = null;
+	let ph = null;
 
-	// init posthog
 	if (config.posthog) {
-		ph =
-			posthog.init(config.posthog.apiKey, {
-				api_host: config.posthog.apiHost,
-				debug: debug,
-			}) || null;
+		ph = await initPosthog(config.posthog.apiKey, config.posthog.apiHost, debug);
 	}
 
-	// init sentry
 	if (config.sentry) {
 		const integrations = [
 			Sentry.tanstackRouterBrowserTracingIntegration(router),
@@ -51,12 +44,26 @@ export function initThirdPartyProviders(router: unknown, debug: boolean) {
 	}
 }
 
+const LazyPostHogProvider = lazy(() =>
+	Promise.all([import("posthog-js"), import("posthog-js/react")]).then(
+		([{ default: posthog }, { PostHogProvider }]) => ({
+			default: ({ children }: PropsWithChildren) => (
+				<PostHogProvider client={posthog}>{children}</PostHogProvider>
+			),
+		}),
+	),
+);
+
 export function ThirdPartyProviders({ children }: PropsWithChildren) {
 	const config = useConfig();
 
-	const phProvider = config.posthog ? (
-		<PostHogProvider client={posthog}>{children}</PostHogProvider>
-	) : null;
+	if (!config.posthog) {
+		return children;
+	}
 
-	return phProvider;
+	return (
+		<Suspense fallback={children}>
+			<LazyPostHogProvider>{children}</LazyPostHogProvider>
+		</Suspense>
+	);
 }

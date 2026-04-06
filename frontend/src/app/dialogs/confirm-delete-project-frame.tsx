@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import posthog from "posthog-js";
+import { posthog } from "@/lib/posthog";
 import { useState } from "react";
 import { Button, type DialogContentProps, Frame } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";

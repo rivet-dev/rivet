@@ -1,7 +1,7 @@
 import { DialogDescription } from "@radix-ui/react-dialog";
 import { faDiscord, Icon } from "@rivet-gg/icons";
-import { usePostHog } from "posthog-js/react";
 import { useState } from "react";
+import { posthog } from "@/lib/posthog";
 import * as FeedbackForm from "../forms/feedback-form";
 import type { DialogContentProps } from "../hooks";
 import { FEEDBACK_FORM_ID } from "../lib/constants";
@@ -18,8 +18,6 @@ export default function FeedbackDialogContent({
 	onClose,
 	source = "web",
 }: ContentProps) {
-	const posthog = usePostHog();
-
 	const [isSubmit, setIsSubmit] = useState(false);
 
 	if (isSubmit) {
