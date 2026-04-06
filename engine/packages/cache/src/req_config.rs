@@ -47,7 +47,7 @@ impl RequestConfig {
 
 // MARK: Fetch
 impl RequestConfig {
-	#[tracing::instrument(err, skip_all, fields(?base_key))]
+	#[tracing::instrument(err, skip(keys, getter, encoder, decoder))]
 	async fn fetch_all_convert<Key, Value, Getter, Fut, Encoder, Decoder>(
 		self,
 		base_key: impl ToString + Debug,
@@ -129,7 +129,7 @@ impl RequestConfig {
 					// Determine which keys are currently being fetched and not
 					for key in remaining_keys {
 						let cache_key = self.cache.driver.process_key(&base_key, &key);
-						match self.cache.in_flight().entry_async(cache_key).await {
+						match self.cache.in_flight.entry_async(cache_key).await {
 							scc::hash_map::Entry::Occupied(broadcast) => {
 								waiting_keys.push((key, broadcast.subscribe()));
 							}
@@ -189,13 +189,7 @@ impl RequestConfig {
 								succeeded_keys.into_iter().unzip();
 
 							let (cached_values_res, ctx3_res) = tokio::join!(
-								async {
-									if succeeded_cache_keys.is_empty() {
-										Ok(Vec::new())
-									} else {
-										cache.driver.get(&base_key2, &succeeded_cache_keys).await
-									}
-								},
+								cache.driver.get(&base_key2, &succeeded_cache_keys),
 								async {
 									if failed_keys.is_empty() {
 										Ok(ctx3)
@@ -282,7 +276,7 @@ impl RequestConfig {
 					// Release leases
 					for key in leased_keys {
 						let cache_key = self.cache.driver.process_key(&base_key, &key);
-						self.cache.in_flight().remove_async(&cache_key).await;
+						self.cache.in_flight.remove_async(&cache_key).await;
 					}
 				}
 
@@ -316,7 +310,7 @@ impl RequestConfig {
 		}
 	}
 
-	#[tracing::instrument(err, skip_all, fields(?base_key))]
+	#[tracing::instrument(err, skip(keys))]
 	pub async fn purge<Key>(
 		self,
 		base_key: impl AsRef<str> + Debug,
@@ -369,7 +363,7 @@ impl RequestConfig {
 
 	/// Purges keys from the local cache without publishing to NATS.
 	/// This is used by the cache-purge service to avoid recursive publishing.
-	#[tracing::instrument(err, skip_all, fields(?base_key))]
+	#[tracing::instrument(err, skip(keys))]
 	pub async fn purge_local(
 		self,
 		base_key: impl AsRef<str> + Debug,
@@ -404,6 +398,7 @@ impl RequestConfig {
 
 // MARK: JSON fetch
 impl RequestConfig {
+	#[tracing::instrument(err, skip(key, getter))]
 	pub async fn fetch_one_json<Key, Value, Getter, Fut>(
 		self,
 		base_key: impl ToString + Debug,
@@ -433,6 +428,7 @@ impl RequestConfig {
 		Ok(values.into_iter().next().map(|(_, v)| v))
 	}
 
+	#[tracing::instrument(err, skip(keys, getter))]
 	pub async fn fetch_all_json<Key, Value, Getter, Fut>(
 		self,
 		base_key: impl ToString + Debug,
@@ -451,6 +447,7 @@ impl RequestConfig {
 			.map(|x| x.into_iter().map(|(_, v)| v).collect::<Vec<_>>())
 	}
 
+	#[tracing::instrument(err, skip(keys, getter))]
 	pub async fn fetch_all_json_with_keys<Key, Value, Getter, Fut>(
 		self,
 		base_key: impl ToString + Debug,

@@ -1,6 +1,5 @@
 use std::{
 	fmt::Debug,
-	sync::OnceLock,
 	time::{Duration, Instant},
 };
 
@@ -133,10 +132,10 @@ impl moka::Expiry<String, ExpiringValue> for ValueExpiry {
 	}
 }
 
-static CACHE: OnceLock<Cache<String, ExpiringValue>> = OnceLock::new();
-
 /// In-memory cache driver implementation using the moka crate
-pub struct InMemoryDriver {}
+pub struct InMemoryDriver {
+	cache: Cache<String, ExpiringValue>,
+}
 
 impl Debug for InMemoryDriver {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -147,20 +146,11 @@ impl Debug for InMemoryDriver {
 impl InMemoryDriver {
 	pub fn new(max_capacity: u64) -> Self {
 		// Create a cache with ValueExpiry implementation for custom expiration times
-		CACHE.get_or_init(|| {
-			CacheBuilder::new(max_capacity)
-				.expire_after(ValueExpiry)
-				.eviction_listener(|key, _value, cause| {
-					tracing::debug!(?key, ?cause, "cache eviction");
-				})
-				.build()
-		});
+		let cache = CacheBuilder::new(max_capacity)
+			.expire_after(ValueExpiry)
+			.build();
 
-		Self {}
-	}
-
-	fn cache(&self) -> &Cache<String, ExpiringValue> {
-		CACHE.get().expect("should be initialized")
+		Self { cache }
 	}
 
 	pub async fn get<'a>(
@@ -173,7 +163,7 @@ impl InMemoryDriver {
 		// Async block for metrics
 		async {
 			for key in keys {
-				result.push(self.cache().get(&**key).await.map(|x| x.value.clone()));
+				result.push(self.cache.get(&**key).await.map(|x| x.value.clone()));
 			}
 		}
 		.instrument(tracing::info_span!("get"))
@@ -203,7 +193,7 @@ impl InMemoryDriver {
 				};
 
 				// Store in cache - expiry will be handled by ValueExpiry
-				self.cache().insert(key.into(), entry).await;
+				self.cache.insert(key.into(), entry).await;
 			}
 		}
 		.instrument(tracing::info_span!("set"))
@@ -222,7 +212,7 @@ impl InMemoryDriver {
 		async {
 			for key in keys {
 				// Use remove instead of invalidate to ensure it's actually removed
-				self.cache().remove(&*key).await;
+				self.cache.remove(&*key).await;
 			}
 		}
 		.instrument(tracing::info_span!("delete"))
