@@ -32,9 +32,10 @@ import { sleep, spawn, watch, WatchReceiver, WatchSender } from "antiox";
 import { BufferMap, EnvoyShutdownError } from "@/utils.js";
 import { stringifyToEnvoy } from "@/stringify.js";
 
+let GLOBAL_ENVOY: EnvoyHandle | undefined = undefined;
+
 export interface EnvoyContext {
 	shared: SharedContext;
-	serverless: boolean;
 	shuttingDown: boolean;
 	actors: Map<string, Map<number, ActorEntry>>;
 	kvRequests: Map<number, KvRequestEntry>;
@@ -95,6 +96,8 @@ export async function startEnvoy(config: EnvoyConfig): Promise<EnvoyHandle> {
 
 // Must manually wait for envoy to start.
 export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
+	if (!config.notGlobal && GLOBAL_ENVOY) return GLOBAL_ENVOY;
+
 	const [envoyTx, envoyRx] = unboundedChannel<ToEnvoyMessage>();
 	const [startTx, startRx] = watch<void>(void 0);
 	const actors: Map<string, Map<number, ActorEntry>> = new Map();
@@ -107,11 +110,10 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 		handle: null as any,
 	};
 
-	const connHandle = startConnection(shared);
+	startConnection(shared);
 
 	const ctx: EnvoyContext = {
 		shared,
-		serverless: false,
 		shuttingDown: false,
 		actors,
 		kvRequests: new Map(),
@@ -123,6 +125,16 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 	// Set shared handle
 	const handle = createHandle(ctx, startRx);
 	shared.handle = handle;
+
+	GLOBAL_ENVOY = handle;
+
+	// Register signal handlers
+	const onSignal = () => {
+		log(ctx.shared)?.info({ msg: "received stop signal, starting envoy shutdown" });
+		handle.shutdown(false);
+	};
+	process.once("SIGINT", onSignal);
+	process.once("SIGTERM", onSignal);
 
 	log(ctx.shared)?.info({ msg: "starting envoy" });
 
@@ -136,7 +148,6 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 		}, KV_CLEANUP_INTERVAL_MS);
 
 		let lostTimeout: NodeJS.Timeout | undefined = undefined;
-		let serverlessShutdown = false;
 
 		for await (const msg of envoyRx) {
 			if (msg.type === "conn-message") {
@@ -145,15 +156,7 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 				handleConnClose(ctx, lostTimeout);
 				if (msg.evict) break;
 			} else if (msg.type === "send-events") {
-				const stop = handleSendEvents(ctx, msg.events);
-
-				if (stop) {
-					serverlessShutdown = true;
-					log(ctx.shared)?.info({
-						msg: "serverless actor stopped, stopping envoy"
-					});
-					break;
-				}
+				handleSendEvents(ctx, msg.events);
 			} else if (msg.type === "kv-request") {
 				handleKvRequest(ctx, msg);
 			} else if (msg.type === "buffer-tunnel-msg") {
@@ -188,13 +191,8 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 			msg: "envoy stopped",
 		});
 
-		ctx.shared.config.onShutdown(serverlessShutdown ? "serverless-early-exit" : "normal");
+		ctx.shared.config.onShutdown();
 	});
-
-	// Queue start actor
-	if (shared.config.serverlessStartPayload) {
-		handle.startServerless(shared.config.serverlessStartPayload);
-	}
 
 	return handle;
 }
@@ -576,10 +574,7 @@ function createHandle(
 			sendHibernatableWebSocketMessageAck(ctx, gatewayId, requestId, clientMessageIndex);
 		},
 
-		startServerless(payload: ArrayBuffer) {
-			if (ctx.serverless) throw new Error("Already started serverless actor");
-			ctx.serverless = true;
-
+		startServerlessActor(payload: ArrayBuffer) {
 			let version = new DataView(payload).getUint16(0, true);
 
 			if (version != protocol.VERSION)
@@ -588,9 +583,9 @@ function createHandle(
 			// Skip first 2 bytes (version)
 			const message = protocol.decodeToEnvoy(new Uint8Array(payload, 2));
 
-			if (message.tag !== "ToEnvoyCommands") throw new Error("invalid serverless body");
-			if (message.val.length !== 1) throw new Error("invalid serverless body");
-			if (message.val[0].inner.tag !== "CommandStartActor") throw new Error("invalid serverless body");
+			if (message.tag !== "ToEnvoyCommands") throw new Error("invalid serverless payload");
+			if (message.val.length !== 1) throw new Error("invalid serverless payload");
+			if (message.val[0].inner.tag !== "CommandStartActor") throw new Error("invalid serverless payload");
 
 			// Wait for envoy to start before adding message
 			startedPromise.then(() => {

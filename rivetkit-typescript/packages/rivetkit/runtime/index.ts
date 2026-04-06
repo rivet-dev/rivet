@@ -244,7 +244,7 @@ export class Runtime<A extends RegistryActors> {
 
 	startServerless(): void {
 		if (this.#startKind === "serverless") return;
-		invariant(!this.#startKind, "Runtime already started as runner");
+		invariant(!this.#startKind, "Runtime already started as serverful");
 		this.#startKind = "serverless";
 
 		this.#serverlessRouter = buildServerlessRouter(

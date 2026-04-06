@@ -12,6 +12,11 @@ export interface EnvoyConfig {
 	poolName: string;
 	prepopulateActorNames: Record<string, { metadata: Record<string, any> }>;
 	metadata?: Record<string, any>;
+	/**
+	 * When startEnvoy is called, create a new envoy every time instead of using a single global envoy
+	 * instance for the entire runtime.
+	 */
+	notGlobal?: boolean;
 
 	/**
 	 * Debug option to inject artificial latency (in ms) into WebSocket
@@ -161,5 +166,5 @@ export interface EnvoyConfig {
 		generation: number,
 		reason: protocol.StopActorReason,
 	) => Promise<void>;
-	onShutdown: (reason: ShutdownReason) => void;
+	onShutdown: () => void;
 }
