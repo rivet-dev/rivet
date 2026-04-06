@@ -2,6 +2,7 @@ use anyhow::Result;
 use gas::prelude::*;
 use rivet_guard_core::{RoutingOutput, request_context::RequestContext};
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
 
 use super::{SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_TOKEN, X_RIVET_TOKEN, validate_regional_host};
 
@@ -81,7 +82,11 @@ async fn route_envoy_internal(
 		};
 
 		// Validate token
-		if token != auth.admin_token.read() {
+		if token
+			.as_bytes()
+			.ct_ne(auth.admin_token.read().as_bytes())
+			.into()
+		{
 			return Err(rivet_api_builder::ApiForbidden.build());
 		}
 
