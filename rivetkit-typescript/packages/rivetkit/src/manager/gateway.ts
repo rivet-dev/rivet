@@ -130,7 +130,7 @@ async function handleHttpGatewayPathBased(
  * Path-based routing (checked first):
  * - /gateway/{actor_id}/{...path}
  * - /gateway/{actor_id}@{token}/{...path}
- * - /gateway/{name};namespace={namespace};method={get|getOrCreate};.../{...path}
+ * - /gateway/{name}/{...path}?rvt-namespace={namespace}&rvt-method={get|getOrCreate}&...
  *
  * Header-based routing (fallback):
  * - WebSocket requests: Uses sec-websocket-protocol for routing (target.actor, actor.{id})

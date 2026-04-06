@@ -38,7 +38,7 @@ describe("actorGateway query path routing", () => {
 		const app = createGatewayApp(managerDriver);
 
 		const response = await app.request(
-			"http://example.com/gateway/chat-room;namespace=default;method=get;key=tenant,room/messages?watch=true",
+			"http://example.com/gateway/chat-room/messages?rvt-namespace=default&rvt-method=get&rvt-key=tenant,room&watch=true",
 			{
 				method: "POST",
 				headers: {
@@ -86,7 +86,7 @@ describe("actorGateway query path routing", () => {
 		const app = createGatewayApp(managerDriver);
 
 		const response = await app.request(
-			`http://example.com/gateway/worker;namespace=default;method=getOrCreate;runnerName=default;key=tenant,job;input=${encodedInput};region=us-west-2;crashPolicy=restart/input`,
+			`http://example.com/gateway/worker/input?rvt-namespace=default&rvt-method=getOrCreate&rvt-runner=default&rvt-key=tenant,job&rvt-input=${encodedInput}&rvt-region=us-west-2&rvt-crash-policy=restart`,
 		);
 
 		expect(response.status).toBe(200);
@@ -133,7 +133,7 @@ describe("actorGateway query path routing", () => {
 		);
 
 		const response = await app.request(
-			`http://example.com/gateway/builder;namespace=default;method=getOrCreate;runnerName=default;input=${encodedInput};region=iad;crashPolicy=restart/connect`,
+			`http://example.com/gateway/builder/connect?rvt-namespace=default&rvt-method=getOrCreate&rvt-runner=default&rvt-input=${encodedInput}&rvt-region=iad&rvt-crash-policy=restart`,
 			{
 				headers: {
 					upgrade: "websocket",
@@ -171,7 +171,7 @@ describe("actorGateway query path routing", () => {
 		const app = createGatewayApp(managerDriver);
 
 		const response = await app.request(
-			"http://example.com/gateway/missing;namespace=default;method=get;key=nope/action",
+			"http://example.com/gateway/missing/action?rvt-namespace=default&rvt-method=get&rvt-key=nope",
 		);
 
 		expect(response.status).toBe(500);
@@ -190,7 +190,7 @@ describe("actorGateway query path routing", () => {
 		);
 
 		const response = await app.request(
-			"http://example.com/gateway/worker;namespace=default;method=getOrCreate;runnerName=default/connect",
+			"http://example.com/gateway/worker/connect?rvt-namespace=default&rvt-method=getOrCreate&rvt-runner=default",
 			{
 				headers: {
 					upgrade: "websocket",
@@ -220,7 +220,7 @@ describe("actorGateway query path routing", () => {
 		const app = createGatewayApp(managerDriver);
 
 		await app.request(
-			"http://example.com/gateway/svc;namespace=default;method=getOrCreate;runnerName=default;key=a/data?format=json&page=2",
+			"http://example.com/gateway/svc/data?rvt-namespace=default&rvt-method=getOrCreate&rvt-runner=default&rvt-key=a&format=json&page=2",
 		);
 
 		expect(proxiedRequests).toHaveLength(1);

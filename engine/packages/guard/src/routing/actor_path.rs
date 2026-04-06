@@ -3,8 +3,12 @@ use gas::prelude::*;
 use rivet_types::actors::CrashPolicy;
 use serde::Deserialize;
 
-use super::matrix_param_deserializer::{MatrixParamDeserializer, MatrixParamValue};
 use crate::errors;
+
+/// The `rvt-` query parameter prefix is reserved for Rivet gateway routing.
+/// All query parameters with this prefix are stripped before forwarding
+/// requests to the actor, so actors will never see them.
+const RVT_PREFIX: &str = "rvt-";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActorPathInfo {
@@ -44,76 +48,81 @@ pub enum ParsedActorPath {
 	Query(QueryActorPathInfo),
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-enum GatewayQueryMethod {
-	Get,
-	GetOrCreate,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct GatewayQueryPathParams {
+/// Parsed rvt-* query parameters.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RvtParams {
 	namespace: String,
-	name: String,
-	method: GatewayQueryMethod,
-	runner_name: Option<String>,
-	key: Option<Vec<String>>,
+	method: String,
+	#[serde(default)]
+	runner: Option<String>,
+	#[serde(default)]
+	key: Option<String>,
+	#[serde(default)]
 	input: Option<String>,
+	#[serde(default)]
 	region: Option<String>,
+	#[serde(default, rename = "crash-policy")]
+	crash_policy: Option<String>,
+	#[serde(default)]
 	token: Option<String>,
-	crash_policy: Option<CrashPolicy>,
 }
-
 
 /// Parse actor routing information from path.
 /// Matches patterns:
 /// - /gateway/{actor_id}/{...path}
 /// - /gateway/{actor_id}@{token}/{...path}
-/// - /gateway/{name};namespace={namespace};method={method};.../{...path}
+/// - /gateway/{name}/{...path}?rvt-namespace=...&rvt-method=...
 ///
 /// Returns `Ok(None)` for paths that are not gateway paths or for malformed
 /// direct paths (backwards-compatible silent fallthrough). Returns `Err` for
 /// malformed query paths so clients receive actionable error messages.
 pub fn parse_actor_path(path: &str) -> Result<Option<ParsedActorPath>> {
-	let query_pos = path.find('?');
-	let fragment_pos = path.find('#');
-
-	let query_string = match (query_pos, fragment_pos) {
-		(Some(q), Some(f)) if q < f => &path[q..f],
-		(Some(q), None) => &path[q..],
-		_ => "",
-	};
-
-	let base_path = match query_pos {
-		Some(pos) => &path[..pos],
-		None => match fragment_pos {
-			Some(pos) => &path[..pos],
-			None => path,
-		},
-	};
+	// Extract base path and raw query from the original path string directly,
+	// without running through a URL parser, to preserve actor query params
+	// byte-for-byte (no re-encoding of %20, +, etc.).
+	let (base_path, raw_query) = split_path_and_query(path);
 
 	if base_path.contains("//") {
 		return Ok(None);
 	}
 
-	let segments: Vec<&str> = base_path.split('/').filter(|segment| !segment.is_empty()).collect();
+	let segments: Vec<&str> = base_path
+		.split('/')
+		.filter(|segment| !segment.is_empty())
+		.collect();
 	if segments.first().copied() != Some("gateway") {
 		return Ok(None);
 	}
 
-	if let Some(name_segment) = segments.get(1).copied() {
-		if name_segment.contains(';') {
-			return parse_query_actor_path(name_segment, base_path, query_string)
-				.map(|path| Some(ParsedActorPath::Query(path)));
-		}
+	let raw_query_str = raw_query.unwrap_or("");
+
+	// Check if any raw query param key starts with rvt-.
+	let has_rvt = !raw_query_str.is_empty()
+		&& raw_query_str
+			.split('&')
+			.any(|part| part.split('=').next().unwrap_or("").starts_with(RVT_PREFIX));
+
+	if has_rvt {
+		let rvt_params = extract_rvt_params_from_raw_query(raw_query_str)?;
+		let actor_query_string = strip_rvt_query_params(raw_query_str);
+		return parse_query_actor_path(base_path, &segments, &rvt_params, &actor_query_string)
+			.map(|path| Some(ParsedActorPath::Query(path)));
 	}
 
-	Ok(parse_direct_actor_path(base_path, query_string))
+	// Direct path: pass the raw query string through unchanged.
+	let raw_query_string = match raw_query {
+		Some(q) => format!("?{q}"),
+		None => String::new(),
+	};
+	Ok(parse_direct_actor_path(base_path, &segments, &raw_query_string))
 }
 
-fn parse_direct_actor_path(base_path: &str, query_string: &str) -> Option<ParsedActorPath> {
-	let segments: Vec<&str> = base_path.split('/').filter(|segment| !segment.is_empty()).collect();
+fn parse_direct_actor_path(
+	base_path: &str,
+	segments: &[&str],
+	raw_query_string: &str,
+) -> Option<ParsedActorPath> {
 	if segments.len() < 2 || segments[0] != "gateway" {
 		return None;
 	}
@@ -130,166 +139,159 @@ fn parse_direct_actor_path(base_path: &str, query_string: &str) -> Option<Parsed
 			return None;
 		}
 
-		let actor_id = strict_percent_decode(raw_actor_id).ok()?;
-		let token = strict_percent_decode(raw_token).ok()?;
+		let actor_id = urlencoding::decode(raw_actor_id).ok()?.into_owned();
+		let token = urlencoding::decode(raw_token).ok()?.into_owned();
 		(actor_id, Some(token))
 	} else {
-		(strict_percent_decode(actor_segment).ok()?, None)
+		(
+			urlencoding::decode(actor_segment).ok()?.into_owned(),
+			None,
+		)
 	};
+
+	let remaining_path = build_remaining_path(base_path, raw_query_string, 2);
 
 	Some(ParsedActorPath::Direct(ActorPathInfo {
 		actor_id,
 		token,
-		stripped_path: build_remaining_path(base_path, query_string, 2),
+		stripped_path: remaining_path,
 	}))
 }
 
 fn parse_query_actor_path(
-	name_segment: &str,
 	base_path: &str,
-	query_string: &str,
+	segments: &[&str],
+	rvt_params: &[(String, String)],
+	actor_query_string: &str,
 ) -> Result<QueryActorPathInfo> {
+	let name_segment = segments
+		.get(1)
+		.copied()
+		.ok_or_else(|| errors::QueryEmptyActorName.build())?;
+
 	if name_segment.contains('@') {
 		return Err(errors::QueryPathTokenSyntax.build());
 	}
 
-	let params = parse_query_gateway_params(name_segment)?;
-	let stripped_path = build_remaining_path(base_path, query_string, 2);
-
-	Ok(QueryActorPathInfo {
-		token: params.token.clone(),
-		query: build_actor_query_from_gateway_params(params)?,
-		stripped_path,
-	})
-}
-
-fn parse_query_gateway_params(name_segment: &str) -> Result<GatewayQueryPathParams> {
-	let params = GatewayQueryPathParams::deserialize(build_matrix_param_deserializer(
-		name_segment,
-	)?)
-	.map_err(|err| {
-		errors::QueryInvalidParams {
-			detail: err.to_string(),
+	let name = urlencoding::decode(name_segment).map_err(|_| {
+		errors::QueryInvalidPercentEncoding {
+			name: "name".to_string(),
 		}
 		.build()
 	})?;
 
-	if matches!(params.method, GatewayQueryMethod::Get)
-		&& (params.input.is_some() || params.region.is_some() || params.crash_policy.is_some() || params.runner_name.is_some())
-	{
-		return Err(errors::QueryGetDisallowedParams.build());
-	}
-
-	if matches!(params.method, GatewayQueryMethod::GetOrCreate) && params.runner_name.is_none() {
-		return Err(errors::QueryMissingRunnerName.build());
-	}
-
-	Ok(params)
-}
-
-fn build_actor_query_from_gateway_params(params: GatewayQueryPathParams) -> Result<QueryActorQuery> {
-	let key = params.key.unwrap_or_default();
-	let input = params
-		.input
-		.as_deref()
-		.map(decode_query_input)
-		.transpose()?;
-
-	let query = match params.method {
-		GatewayQueryMethod::Get => QueryActorQuery::Get {
-			namespace: params.namespace,
-			name: params.name,
-			key,
-		},
-		GatewayQueryMethod::GetOrCreate => QueryActorQuery::GetOrCreate {
-			namespace: params.namespace,
-			name: params.name,
-			runner_name: params.runner_name.expect("runner_name validated as required for getOrCreate"),
-			key,
-			input,
-			region: params.region,
-			crash_policy: params.crash_policy,
-		},
-	};
-
-	Ok(query)
-}
-
-/// Parse a name segment with matrix params into a `MatrixParamDeserializer`.
-/// The segment format is `{name};param1=value1;param2=value2`.
-fn build_matrix_param_deserializer(name_segment: &str) -> Result<MatrixParamDeserializer> {
-	let mut parts = name_segment.splitn(2, ';');
-	let raw_name = parts.next().unwrap_or("");
-	let params_str = parts.next().unwrap_or("");
-
-	let decoded_name = decode_matrix_param_value(raw_name, "name")?;
-	if decoded_name.is_empty() {
+	if name.is_empty() {
 		return Err(errors::QueryEmptyActorName.build());
 	}
 
-	let mut entries = vec![("name".to_string(), MatrixParamValue::String(decoded_name))];
+	let rvt = extract_rvt_params(rvt_params)?;
+	let stripped_path = build_remaining_path(base_path, actor_query_string, 2);
 
-	if !params_str.is_empty() {
-		for raw_param in params_str.split(';') {
-			let Some(equals_pos) = raw_param.find('=') else {
-				return Err(errors::QueryParamMissingEquals {
-					param: raw_param.to_string(),
-				}
-				.build());
-			};
+	Ok(QueryActorPathInfo {
+		token: rvt.token.clone(),
+		query: build_actor_query(&name, rvt)?,
+		stripped_path,
+	})
+}
 
-			let name = &raw_param[..equals_pos];
-			let raw_value = &raw_param[equals_pos + 1..];
+/// Extract and validate rvt-* params from pre-parsed query pairs.
+fn extract_rvt_params(rvt_params: &[(String, String)]) -> Result<RvtParams> {
+	let mut map = serde_json::Map::new();
 
-			if name == "name" {
-				return Err(errors::QueryDuplicateParam {
-					name: name.to_string(),
-				}
-				.build());
+	for (raw_key, value) in rvt_params {
+		let stripped = raw_key
+			.strip_prefix(RVT_PREFIX)
+			.expect("rvt_params should only contain rvt- prefixed keys");
+
+		if map.contains_key(stripped) {
+			return Err(errors::QueryDuplicateParam {
+				name: raw_key.clone(),
 			}
-
-			if !is_query_gateway_param_name(name) {
-				return Err(errors::QueryUnknownParam {
-					name: name.to_string(),
-				}
-				.build());
-			}
-
-			if entries.iter().any(|(existing_name, _)| existing_name == name) {
-				return Err(errors::QueryDuplicateParam {
-					name: name.to_string(),
-				}
-				.build());
-			}
-
-			entries.push((
-				name.to_string(),
-				parse_query_gateway_param_value(name, raw_value)?,
-			));
+			.build());
 		}
+		map.insert(
+			stripped.to_string(),
+			serde_json::Value::String(value.clone()),
+		);
 	}
 
-	Ok(MatrixParamDeserializer { entries })
+	serde_json::from_value(serde_json::Value::Object(map)).map_err(|e| {
+		errors::QueryInvalidParams {
+			detail: e.to_string(),
+		}
+		.build()
+	})
 }
 
-fn is_query_gateway_param_name(name: &str) -> bool {
-	matches!(
-		name,
-		"namespace" | "method" | "runnerName" | "key" | "input" | "region" | "token" | "crashPolicy"
-	)
+/// Split a comma-separated key string into components.
+/// Missing or empty key yields an empty vec.
+fn split_key(raw: Option<&str>) -> Vec<String> {
+	match raw {
+		None | Some("") => Vec::new(),
+		Some(s) => s.split(',').map(String::from).collect(),
+	}
 }
 
-fn parse_query_gateway_param_value(name: &str, raw_value: &str) -> Result<MatrixParamValue> {
-	match name {
-		"key" => Ok(MatrixParamValue::Seq(
-			raw_value
-				.split(',')
-				.map(|component| decode_matrix_param_value(component, name))
-				.collect::<Result<Vec<_>>>()?,
-		)),
-		_ => Ok(MatrixParamValue::String(decode_matrix_param_value(
-			raw_value, name,
-		)?)),
+fn build_actor_query(name: &str, rvt: RvtParams) -> Result<QueryActorQuery> {
+	let key = split_key(rvt.key.as_deref());
+
+	match rvt.method.as_str() {
+		"get" => {
+			if rvt.input.is_some()
+				|| rvt.region.is_some()
+				|| rvt.crash_policy.is_some()
+				|| rvt.runner.is_some()
+			{
+				return Err(errors::QueryGetDisallowedParams.build());
+			}
+
+			Ok(QueryActorQuery::Get {
+				namespace: rvt.namespace,
+				name: name.to_string(),
+				key,
+			})
+		}
+		"getOrCreate" => {
+			let runner_name = rvt.runner.ok_or_else(|| errors::QueryMissingRunnerName.build())?;
+
+			let input = rvt
+				.input
+				.as_deref()
+				.map(decode_query_input)
+				.transpose()?;
+
+			let crash_policy = rvt
+				.crash_policy
+				.as_deref()
+				.map(parse_crash_policy)
+				.transpose()?;
+
+			Ok(QueryActorQuery::GetOrCreate {
+				namespace: rvt.namespace,
+				name: name.to_string(),
+				runner_name,
+				key,
+				input,
+				region: rvt.region,
+				crash_policy,
+			})
+		}
+		other => Err(errors::QueryInvalidParams {
+			detail: format!("unknown method: {other}, expected get or getOrCreate"),
+		}
+		.build()),
+	}
+}
+
+fn parse_crash_policy(value: &str) -> Result<CrashPolicy> {
+	match value {
+		"restart" => Ok(CrashPolicy::Restart),
+		"sleep" => Ok(CrashPolicy::Sleep),
+		"destroy" => Ok(CrashPolicy::Destroy),
+		other => Err(errors::QueryInvalidParams {
+			detail: format!("unknown crash policy: {other}, expected restart, sleep, or destroy"),
+		}
+		.build()),
 	}
 }
 
@@ -316,50 +318,73 @@ fn decode_query_input(value: &str) -> Result<Vec<u8>> {
 	Ok(bytes)
 }
 
-fn decode_matrix_param_value(raw_value: &str, name: &str) -> Result<String> {
-	strict_percent_decode(raw_value).map_err(|_| {
-		errors::QueryInvalidPercentEncoding {
-			name: name.to_string(),
-		}
-		.build()
-	})
+/// Split a path into the base path and the raw query string (without `?`).
+/// Fragments are stripped.
+fn split_path_and_query(path: &str) -> (&str, Option<&str>) {
+	let path = match path.find('#') {
+		Some(pos) => &path[..pos],
+		None => path,
+	};
+	match path.find('?') {
+		Some(pos) => (&path[..pos], Some(&path[pos + 1..])),
+		None => (path, None),
+	}
 }
 
-fn strict_percent_decode(raw_value: &str) -> Result<String> {
-	let bytes = raw_value.as_bytes();
-	let mut decoded = Vec::with_capacity(bytes.len());
-	let mut idx = 0;
-
-	while idx < bytes.len() {
-		if bytes[idx] == b'%' {
-			if idx + 2 >= bytes.len() {
-				bail!("incomplete percent-encoding");
-			}
-
-			let hi = decode_hex(bytes[idx + 1]).context("invalid percent-encoding")?;
-			let lo = decode_hex(bytes[idx + 2]).context("invalid percent-encoding")?;
-			decoded.push((hi << 4) | lo);
-			idx += 3;
-		} else {
-			decoded.push(bytes[idx]);
-			idx += 1;
+/// Extract rvt-* params from a raw query string, decoding their values
+/// using form-urlencoded rules (`+` as space, then percent-decode).
+fn extract_rvt_params_from_raw_query(raw_query: &str) -> Result<Vec<(String, String)>> {
+	let mut params = Vec::new();
+	for part in raw_query.split('&') {
+		let (raw_key, raw_value) = match part.find('=') {
+			Some(pos) => (&part[..pos], &part[pos + 1..]),
+			None => (part, ""),
+		};
+		if raw_key.starts_with(RVT_PREFIX) {
+			let decoded_value = decode_form_value(raw_value).map_err(|_| {
+				errors::QueryInvalidPercentEncoding {
+					name: raw_key.to_string(),
+				}
+				.build()
+			})?;
+			params.push((raw_key.to_string(), decoded_value));
 		}
 	}
-
-	String::from_utf8(decoded).context("invalid utf-8 in percent-encoding")
+	Ok(params)
 }
 
-fn decode_hex(byte: u8) -> Option<u8> {
-	match byte {
-		b'0'..=b'9' => Some(byte - b'0'),
-		b'a'..=b'f' => Some(byte - b'a' + 10),
-		b'A'..=b'F' => Some(byte - b'A' + 10),
-		_ => None,
+/// Decode a form-urlencoded value: treat `+` as space, then percent-decode.
+fn decode_form_value(raw: &str) -> std::result::Result<String, std::string::FromUtf8Error> {
+	let with_spaces = raw.replace('+', " ");
+	urlencoding::decode(&with_spaces).map(|s| s.into_owned())
+}
+
+/// Strip rvt-* params from a raw query string, preserving actor params
+/// byte-for-byte without re-encoding.
+fn strip_rvt_query_params(raw_query: &str) -> String {
+	let actor_parts: Vec<&str> = raw_query
+		.split('&')
+		.filter(|part| {
+			if part.is_empty() {
+				return false;
+			}
+			let key = part.split('=').next().unwrap_or("");
+			!key.starts_with(RVT_PREFIX)
+		})
+		.collect();
+
+	if actor_parts.is_empty() {
+		String::new()
+	} else {
+		format!("?{}", actor_parts.join("&"))
 	}
 }
 
 fn build_remaining_path(base_path: &str, query_string: &str, consumed_segments: usize) -> String {
-	let segments: Vec<&str> = base_path.split('/').filter(|segment| !segment.is_empty()).collect();
+	let segments: Vec<&str> = base_path
+		.split('/')
+		.filter(|segment| !segment.is_empty())
+		.collect();
 
 	let mut prefix_len = 0;
 	for segment in segments.iter().take(consumed_segments) {

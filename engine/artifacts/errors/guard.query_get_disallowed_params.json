@@ -1,5 +1,5 @@
 {
   "code": "query_get_disallowed_params",
   "group": "guard",
-  "message": "query gateway method=get does not allow input, region, crashPolicy, or runnerName params"
+  "message": "query gateway method=get does not allow rvt-input, rvt-region, rvt-crash-policy, or rvt-runner params"
 }

@@ -105,7 +105,7 @@ pub struct QueryPathTokenSyntax;
 #[error(
 	"guard",
 	"query_get_disallowed_params",
-	"query gateway method=get does not allow input, region, crashPolicy, or runnerName params"
+	"query gateway method=get does not allow rvt-input, rvt-region, rvt-crash-policy, or rvt-runner params"
 )]
 pub struct QueryGetDisallowedParams;
 
@@ -113,7 +113,7 @@ pub struct QueryGetDisallowedParams;
 #[error(
 	"guard",
 	"query_missing_runner_name",
-	"query gateway method=getOrCreate requires runnerName param"
+	"query gateway method=getOrCreate requires rvt-runner param"
 )]
 pub struct QueryMissingRunnerName;
 
@@ -128,33 +128,11 @@ pub struct QueryEmptyActorName;
 #[derive(RivetError, Serialize)]
 #[error(
 	"guard",
-	"query_param_missing_equals",
-	"query gateway param is missing '='",
-	"query gateway param is missing '=': {param}"
-)]
-pub struct QueryParamMissingEquals {
-	pub param: String,
-}
-
-#[derive(RivetError, Serialize)]
-#[error(
-	"guard",
 	"query_duplicate_param",
 	"duplicate query gateway param",
 	"duplicate query gateway param: {name}"
 )]
 pub struct QueryDuplicateParam {
-	pub name: String,
-}
-
-#[derive(RivetError, Serialize)]
-#[error(
-	"guard",
-	"query_unknown_param",
-	"unknown query gateway param",
-	"unknown query gateway param: {name}"
-)]
-pub struct QueryUnknownParam {
 	pub name: String,
 }
 

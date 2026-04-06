@@ -18,7 +18,7 @@ describe.sequential("file-system manager gateway query routing", () => {
 		}
 	});
 
-	test("getOrCreate gateway URLs stay query-backed for the local manager", async () => {
+	test("getOrCreate gateway URLs use rvt-* query params for the local manager", async () => {
 		const runtime = await startFileSystemGatewayRuntime();
 		cleanups.push(runtime.cleanup);
 
@@ -26,10 +26,10 @@ describe.sequential("file-system manager gateway query routing", () => {
 			.getOrCreate(["gateway-query"])
 			.getGatewayUrl();
 
-		expect(new URL(gatewayUrl).pathname).toMatch(/\/gateway\/[^/]+;/);
-		expect(gatewayUrl).toContain(";namespace=default;");
-		expect(gatewayUrl).toContain(";method=getOrCreate;");
-		expect(gatewayUrl).toContain(";crashPolicy=sleep");
+		const parsedUrl = new URL(gatewayUrl);
+		expect(parsedUrl.searchParams.get("rvt-namespace")).toBe("default");
+		expect(parsedUrl.searchParams.get("rvt-method")).toBe("getOrCreate");
+		expect(parsedUrl.searchParams.get("rvt-crash-policy")).toBe("sleep");
 
 		const response = await fetch(`${gatewayUrl}/inspector/state`, {
 			headers: { Authorization: "Bearer token" },
@@ -42,7 +42,7 @@ describe.sequential("file-system manager gateway query routing", () => {
 		});
 	});
 
-	test("get gateway URLs resolve existing actors through matrix paths", async () => {
+	test("get gateway URLs resolve existing actors through rvt-* query paths", async () => {
 		const runtime = await startFileSystemGatewayRuntime();
 		cleanups.push(runtime.cleanup);
 
@@ -55,9 +55,9 @@ describe.sequential("file-system manager gateway query routing", () => {
 			.get(["existing-query"])
 			.getGatewayUrl();
 
-		expect(new URL(getGatewayUrl).pathname).toMatch(/\/gateway\/[^/]+;/);
-		expect(getGatewayUrl).toContain(";namespace=default;");
-		expect(getGatewayUrl).toContain(";method=get;");
+		const parsedUrl = new URL(getGatewayUrl);
+		expect(parsedUrl.searchParams.get("rvt-namespace")).toBe("default");
+		expect(parsedUrl.searchParams.get("rvt-method")).toBe("get");
 
 		const response = await fetch(`${getGatewayUrl}/inspector/state`, {
 			headers: { Authorization: "Bearer token" },
@@ -70,12 +70,12 @@ describe.sequential("file-system manager gateway query routing", () => {
 		});
 	});
 
-	test("invalid matrix syntax is rejected by the local manager route", async () => {
+	test("unknown rvt-* params are rejected by the local manager route", async () => {
 		const runtime = await startFileSystemGatewayRuntime();
 		cleanups.push(runtime.cleanup);
 
 		const response = await fetch(
-			`${runtime.endpoint}/gateway/counter;namespace=default;method=get;extra=value/inspector/state`,
+			`${runtime.endpoint}/gateway/counter/inspector/state?rvt-namespace=default&rvt-method=get&rvt-extra=value`,
 		);
 
 		expect(response.status).toBe(400);
@@ -85,12 +85,12 @@ describe.sequential("file-system manager gateway query routing", () => {
 		});
 	});
 
-	test("create query gateway paths are rejected by the local manager route", async () => {
+	test("invalid query methods are rejected by the local manager route", async () => {
 		const runtime = await startFileSystemGatewayRuntime();
 		cleanups.push(runtime.cleanup);
 
 		const response = await fetch(
-			`${runtime.endpoint}/gateway/counter;namespace=default;method=create/inspector/state`,
+			`${runtime.endpoint}/gateway/counter?rvt-namespace=default&rvt-method=create`,
 		);
 
 		expect(response.status).toBe(400);
@@ -100,7 +100,7 @@ describe.sequential("file-system manager gateway query routing", () => {
 		});
 	});
 
-	test("WebSocket connections work through query-backed gateway paths", async () => {
+	test("WebSocket connections work through rvt-* query-backed gateway paths", async () => {
 		const runtime = await startFileSystemGatewayRuntime();
 		cleanups.push(runtime.cleanup);
 
@@ -121,7 +121,7 @@ describe.sequential("file-system manager gateway query routing", () => {
 		cleanups.push(runtime.cleanup);
 
 		const response = await fetch(
-			`${runtime.endpoint}/gateway/counter;namespace=wrong;method=get;key=room/inspector/state`,
+			`${runtime.endpoint}/gateway/counter/inspector/state?rvt-namespace=wrong&rvt-method=get&rvt-key=room`,
 		);
 
 		expect(response.status).toBe(400);

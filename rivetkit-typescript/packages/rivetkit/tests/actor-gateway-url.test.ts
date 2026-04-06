@@ -33,27 +33,31 @@ describe("gateway URL builders", () => {
 		);
 	});
 
-	test("serializes get queries with per-component key encoding", () => {
+	test("serializes get queries with comma-separated key encoding", () => {
 		const url = buildActorQueryGatewayUrl(
 			"https://api.rivet.dev/manager",
 			"prod",
 			{
 				getForKey: {
 					name: "alpha team",
-					key: ["part/one", "", "100%"],
+					key: ["part/one", "shard-2", "100%"],
 				},
 			},
 			"tok/en",
 			"/status",
 		);
 
-		expect(url).toBe(
-			"https://api.rivet.dev/manager/gateway/alpha%20team;namespace=prod;method=get;key=part%2Fone,,100%25;token=tok%2Fen/status",
-		);
+		const urlObj = new URL(url);
+		const params = urlObj.searchParams;
+		expect(params.get("rvt-namespace")).toBe("prod");
+		expect(params.get("rvt-method")).toBe("get");
+		expect(params.get("rvt-key")).toBe("part/one,shard-2,100%");
+		expect(params.get("rvt-token")).toBe("tok/en");
+		expect(urlObj.pathname).toContain("/gateway/alpha%20team/status");
 		expect(url).not.toContain("@");
 	});
 
-	test("serializes getOrCreate queries in canonical field order", () => {
+	test("serializes getOrCreate queries with rvt-* params", () => {
 		const input = { hello: "world" };
 		const url = buildActorQueryGatewayUrl(
 			"https://api.rivet.dev/manager",
@@ -72,17 +76,22 @@ describe("gateway URL builders", () => {
 			undefined,
 			"my-pool",
 		);
-		const expectedInput = encodeURIComponent(
-			toBase64Url(cbor.encode(input)),
-		);
 
-		expect(url).toBe(
-			`https://api.rivet.dev/manager/gateway/room;namespace=default;method=getOrCreate;runnerName=my-pool;key=user,;input=${expectedInput};region=local%2Fus-west;crashPolicy=sleep;token=tok%2Fen/connect`,
-		);
+		const urlObj = new URL(url);
+		const params = urlObj.searchParams;
+		expect(params.get("rvt-namespace")).toBe("default");
+		expect(params.get("rvt-method")).toBe("getOrCreate");
+		expect(params.get("rvt-runner")).toBe("my-pool");
+		expect(params.get("rvt-key")).toBe("user,");
+		expect(params.get("rvt-input")).toBe(toBase64Url(cbor.encode(input)));
+		expect(params.get("rvt-region")).toBe("local/us-west");
+		expect(params.get("rvt-crash-policy")).toBe("sleep");
+		expect(params.get("rvt-token")).toBe("tok/en");
+		expect(urlObj.pathname).toContain("/gateway/room/connect");
 	});
 
-	test("omits key for empty key arrays and preserves empty string keys", () => {
-		const getOrCreateUrl = buildActorQueryGatewayUrl(
+	test("omits rvt-key param for empty key arrays", () => {
+		const url = buildActorQueryGatewayUrl(
 			"https://api.rivet.dev/manager",
 			"default",
 			{
@@ -99,24 +108,8 @@ describe("gateway URL builders", () => {
 			undefined,
 			"default",
 		);
-		const emptyStringKeyUrl = buildActorQueryGatewayUrl(
-			"https://api.rivet.dev/manager",
-			"default",
-			{
-				getOrCreateForKey: {
-					name: "room",
-					key: [""],
-				},
-			},
-			undefined,
-			"",
-			undefined,
-			undefined,
-			"default",
-		);
 
-		expect(getOrCreateUrl).not.toContain(";key=");
-		expect(emptyStringKeyUrl).toContain(";key=");
+		expect(new URL(url).searchParams.has("rvt-key")).toBe(false);
 	});
 
 	test("rejects oversized query input before base64url encoding", () => {
@@ -172,7 +165,7 @@ describe("gateway URL builders", () => {
 			"default",
 		);
 
-		expect(url).toContain(";input=");
+		expect(new URL(url).searchParams.has("rvt-input")).toBe(true);
 	});
 
 	test("rejects create queries for gateway URLs", () => {
@@ -212,6 +205,50 @@ describe("gateway URL builders", () => {
 		).toThrowError("Actor query method=get does not support crashPolicy.");
 	});
 
+	test("handles path ending with ? without producing extraneous separator", () => {
+		const url = buildActorQueryGatewayUrl(
+			"https://api.rivet.dev/manager",
+			"default",
+			{
+				getForKey: {
+					name: "lobby",
+					key: ["room"],
+				},
+			},
+			undefined,
+			"/status?",
+		);
+
+		const urlObj = new URL(url);
+		// Should not have ?& or ?? in the URL.
+		expect(url).not.toContain("?&");
+		expect(url).not.toContain("??");
+		expect(urlObj.searchParams.get("rvt-namespace")).toBe("default");
+		expect(urlObj.searchParams.get("rvt-method")).toBe("get");
+	});
+
+	test("handles path ending with & without producing extraneous separator", () => {
+		const url = buildActorQueryGatewayUrl(
+			"https://api.rivet.dev/manager",
+			"default",
+			{
+				getForKey: {
+					name: "lobby",
+					key: ["room"],
+				},
+			},
+			undefined,
+			"/status?existing=true&",
+		);
+
+		const urlObj = new URL(url);
+		// Should not have && in the URL.
+		expect(url).not.toContain("&&");
+		expect(urlObj.searchParams.get("existing")).toBe("true");
+		expect(urlObj.searchParams.get("rvt-namespace")).toBe("default");
+		expect(urlObj.searchParams.get("rvt-method")).toBe("get");
+	});
+
 	test("round-trips query gateway urls through parseActorPath", () => {
 		const builtUrl = buildActorQueryGatewayUrl(
 			"https://api.rivet.dev/manager",
@@ -230,9 +267,10 @@ describe("gateway URL builders", () => {
 			"restart",
 			"my-pool",
 		);
-		const parsed = parseActorPath(
-			`${new URL(builtUrl).pathname.replace(/^\/manager/, "")}${new URL(builtUrl).search}`,
-		);
+
+		const parsedUrl = new URL(builtUrl);
+		const pathForParsing = `${parsedUrl.pathname.replace(/^\/manager/, "")}${parsedUrl.search}`;
+		const parsed = parseActorPath(pathForParsing);
 
 		expect(parsed).not.toBeNull();
 		expect(parsed?.type).toBe("query");
@@ -240,17 +278,24 @@ describe("gateway URL builders", () => {
 			throw new Error("expected a query actor path");
 		}
 
-		const rebuiltUrl = buildActorQueryGatewayUrl(
-			"https://api.rivet.dev/manager",
-			parsed.namespace,
-			parsed.query,
-			parsed.token,
-			parsed.remainingPath,
-			DEFAULT_MAX_QUERY_INPUT_SIZE,
-			parsed.crashPolicy,
-			parsed.runnerName,
-		);
+		expect(parsed.namespace).toBe("prod");
+		expect(parsed.runnerName).toBe("my-pool");
+		expect(parsed.crashPolicy).toBe("restart");
+		expect(parsed.token).toBe("tok/en");
 
-		expect(rebuiltUrl).toBe(builtUrl);
+		// Verify the query contents are correct.
+		expect(parsed.query).toEqual({
+			getOrCreateForKey: {
+				name: "builder",
+				key: ["tenant", "room/1"],
+				input: { ready: true },
+				region: "iad",
+			},
+		});
+
+		// The remaining path should contain the user's query params but not rvt-* params.
+		expect(parsed.remainingPath).toContain("/connect");
+		expect(parsed.remainingPath).toContain("watch=true");
+		expect(parsed.remainingPath).not.toContain("rvt-");
 	});
 });

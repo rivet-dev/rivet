@@ -1,5 +1,5 @@
 {
   "code": "query_missing_runner_name",
   "group": "guard",
-  "message": "query gateway method=getOrCreate requires runnerName param"
+  "message": "query gateway method=getOrCreate requires rvt-runner param"
 }

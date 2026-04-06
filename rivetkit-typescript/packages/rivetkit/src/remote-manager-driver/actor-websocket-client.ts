@@ -42,13 +42,13 @@ export function buildActorQueryGatewayUrl(
 	}
 
 	let name: string;
-	const params: Array<[string, string]> = [];
-	params.push(["namespace", encodeURIComponent(namespace)]);
+	const params = new URLSearchParams();
+	params.append("rvt-namespace", namespace);
 
 	if ("getForKey" in query) {
 		name = query.getForKey.name;
-		params.push(["method", "get"]);
-		pushKeyMatrixParam(params, query.getForKey.key);
+		params.append("rvt-method", "get");
+		pushKeyQueryParams(params, query.getForKey.key);
 		if (crashPolicy !== undefined) {
 			throw new Error(
 				"Actor query method=get does not support crashPolicy.",
@@ -61,19 +61,19 @@ export function buildActorQueryGatewayUrl(
 		}
 	} else if ("getOrCreateForKey" in query) {
 		name = query.getOrCreateForKey.name;
-		params.push(["method", "getOrCreate"]);
+		params.append("rvt-method", "getOrCreate");
 		if (runnerName === undefined) {
 			throw new Error(
 				"Actor query method=getOrCreate requires runnerName.",
 			);
 		}
-		params.push(["runnerName", encodeURIComponent(runnerName)]);
-		pushKeyMatrixParam(params, query.getOrCreateForKey.key);
-		pushInputMatrixParam(params, query.getOrCreateForKey.input, maxInputSize);
+		params.append("rvt-runner", runnerName);
+		pushKeyQueryParams(params, query.getOrCreateForKey.key);
+		pushInputQueryParam(params, query.getOrCreateForKey.input, maxInputSize);
 		if (query.getOrCreateForKey.region !== undefined) {
-			params.push(["region", encodeURIComponent(query.getOrCreateForKey.region)]);
+			params.append("rvt-region", query.getOrCreateForKey.region);
 		}
-		params.push(["crashPolicy", encodeURIComponent(crashPolicy ?? "sleep")]);
+		params.append("rvt-crash-policy", crashPolicy ?? "sleep");
 	} else {
 		throw new Error(
 			"Actor query gateway URLs only support get and getOrCreate.",
@@ -85,32 +85,34 @@ export function buildActorQueryGatewayUrl(
 	}
 
 	if (token !== undefined) {
-		params.push(["token", encodeURIComponent(token)]);
+		params.append("rvt-token", token);
 	}
 
-	const gatewayPath = `/gateway/${encodeURIComponent(name)}${params
-		.map(([key, value]) => `;${key}=${value}`)
-		.join("")}${path}`;
+	const queryString = params.toString();
+	let separator: string;
+	if (path.endsWith("?") || path.endsWith("&")) {
+		separator = "";
+	} else if (path.includes("?")) {
+		separator = "&";
+	} else {
+		separator = "?";
+	}
+	const gatewayPath = `/gateway/${encodeURIComponent(name)}${path}${separator}${queryString}`;
 
 	return combineUrlPath(endpoint, gatewayPath);
 }
 
-function pushKeyMatrixParam(
-	params: Array<[string, string]>,
+function pushKeyQueryParams(
+	params: URLSearchParams,
 	key: string[],
 ): void {
-	if (key.length === 0) {
-		return;
+	if (key.length > 0) {
+		params.append("rvt-key", key.join(","));
 	}
-
-	params.push([
-		"key",
-		key.map((component) => encodeURIComponent(component)).join(","),
-	]);
 }
 
-function pushInputMatrixParam(
-	params: Array<[string, string]>,
+function pushInputQueryParam(
+	params: URLSearchParams,
 	input: unknown,
 	maxInputSize: number,
 ): void {
@@ -125,7 +127,7 @@ function pushInputMatrixParam(
 		);
 	}
 
-	params.push(["input", encodeURIComponent(uint8ArrayToBase64Url(encodedInput))]);
+	params.append("rvt-input", uint8ArrayToBase64Url(encodedInput));
 }
 
 function uint8ArrayToBase64Url(value: Uint8Array): string {
