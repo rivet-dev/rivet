@@ -19,7 +19,7 @@ rivet-kv-channel-protocol = { path = "../../../engine/sdks/rust/kv-channel-proto
 serde = { version = "1", features = ["derive"] }
 serde_bare = "0.5"
 serde_json = "1"
-lru = "0.12"
+lru = "0.16"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 urlencoding = "2"
