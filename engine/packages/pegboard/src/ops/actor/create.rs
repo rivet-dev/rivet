@@ -54,17 +54,7 @@ pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<
 	let actor_v2 = pool_res
 		.into_iter()
 		.next()
-		.map(|p| {
-			// Serverless configs require the metadata poller to report
-			// the envoy protocol version before we can use v2.
-			// Normal (envoy-based) configs always use v2 since they
-			// inherently speak the envoy protocol.
-			p.protocol_version.is_some()
-				|| matches!(
-					p.config.kind,
-					rivet_types::runner_configs::RunnerConfigKind::Normal { .. }
-				)
-		})
+		.map(|p| p.protocol_version.is_some())
 		.unwrap_or_default();
 
 	if actor_v2 {

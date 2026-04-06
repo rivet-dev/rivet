@@ -89,6 +89,9 @@ docker-compose up -d
 git commit -m "chore(my-pkg): foo bar"
 ```
 
+- We use Graphite for stacked PRs. Diff against the parent branch (`gt ls` to see the stack), not `main`.
+- To revert a file to the version before this branch's changes, checkout from the first child branch (below in the stack), not from `main` or the parent. Child branches contain the pre-this-branch state of files modified by branches further down the stack.
+
 **Never push to `main` unless explicitly specified by the user.**
 
 ## Dependency Management
@@ -338,6 +341,10 @@ When making changes to the engine or RivetKit, ensure the corresponding document
 - **Kubernetes manifest changes**: When modifying k8s manifests in `self-host/k8s/engine/`, update `website/src/content/docs/self-hosting/kubernetes.mdx`, `self-host/k8s/README.md`, and `scripts/run/k8s/engine.sh` if file names or deployment steps change.
 - **Landing page changes**: When updating the landing page (`website/src/pages/index.astro` and its section components in `website/src/components/marketing/sections/`), update `README.md` to reflect the same headlines, features, benchmarks, and talking points where applicable.
 - **Sandbox provider changes**: When adding, removing, or modifying sandbox providers in `rivetkit-typescript/packages/rivetkit/src/sandbox/providers/`, update `website/src/content/docs/actors/sandbox.mdx` to keep provider documentation, option tables, and custom provider guidance in sync.
+
+### CLAUDE.md conventions
+
+- When adding entries to any CLAUDE.md file, keep them concise. Ideally a single bullet point or minimal bullet points. Do not write paragraphs.
 
 ### Comments
 
