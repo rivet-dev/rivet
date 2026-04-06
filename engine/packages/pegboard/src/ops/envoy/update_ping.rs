@@ -68,10 +68,8 @@ pub async fn pegboard_envoy_update_ping(ctx: &OperationCtx, input: &Input) -> Re
 						input.envoy_key.clone(),
 					);
 
-					// Add read conflict
-					tx.add_conflict_key(&old_lb_key, ConflictRangeType::Read)?;
-
 					// Clear old key
+					tx.add_conflict_key(&old_lb_key, ConflictRangeType::Read)?;
 					tx.delete(&old_lb_key);
 
 					tx.write(

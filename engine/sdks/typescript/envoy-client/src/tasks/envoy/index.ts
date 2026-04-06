@@ -33,6 +33,7 @@ import { BufferMap, EnvoyShutdownError } from "@/utils.js";
 import { stringifyToEnvoy } from "@/stringify.js";
 
 let GLOBAL_ENVOY: EnvoyHandle | undefined = undefined;
+let GLOBAL_SHARED_CTX: SharedContext | undefined = undefined;
 
 export interface EnvoyContext {
 	shared: SharedContext;
@@ -96,7 +97,14 @@ export async function startEnvoy(config: EnvoyConfig): Promise<EnvoyHandle> {
 
 // Must manually wait for envoy to start.
 export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
-	if (!config.notGlobal && GLOBAL_ENVOY) return GLOBAL_ENVOY;
+	if (!config.notGlobal && GLOBAL_ENVOY && GLOBAL_SHARED_CTX) {
+		// Copy the token when called multiple times. This is done for serverless envoys where the token
+		// normally expires around the same time as the /start request expires. The envoy persists longer
+		// than the /start request so it needs an up to date token.
+		GLOBAL_SHARED_CTX.config.token = config.token;
+
+		return GLOBAL_ENVOY;
+	}
 
 	const [envoyTx, envoyRx] = unboundedChannel<ToEnvoyMessage>();
 	const [startTx, startRx] = watch<void>(void 0);
@@ -109,6 +117,8 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 		// Start undefined
 		handle: null as any,
 	};
+
+	if (!config.notGlobal) GLOBAL_SHARED_CTX = shared;
 
 	startConnection(shared);
 
@@ -126,7 +136,7 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 	const handle = createHandle(ctx, startRx);
 	shared.handle = handle;
 
-	GLOBAL_ENVOY = handle;
+	if (!config.notGlobal) GLOBAL_ENVOY = handle;
 
 	// Register signal handlers
 	const onSignal = () => {
@@ -190,6 +200,11 @@ export function startEnvoySync(config: EnvoyConfig): EnvoyHandle {
 		log(ctx.shared)?.info({
 			msg: "envoy stopped",
 		});
+
+		if (!ctx.shared.config.notGlobal) {
+			GLOBAL_ENVOY = undefined;
+			GLOBAL_SHARED_CTX = undefined;
+		}
 
 		ctx.shared.config.onShutdown();
 	});
