@@ -52,6 +52,33 @@ impl TestCtx {
 		Self::new_with(DEFAULT_REPLICA_IDS).await
 	}
 
+	#[allow(dead_code)]
+	pub async fn new_replica_only_with(replica_ids: &[ReplicaId]) -> anyhow::Result<Self> {
+		gas::ctx::test::setup_logging();
+
+		let leader_id = replica_ids[0];
+
+		let mut test_ctx = TestCtx {
+			test_id: Uuid::new_v4(),
+			leader_id,
+			coordinator_workflow_id: Id::new_v1(leader_id as u16),
+			replica_contexts: HashMap::new(),
+			replica_metadata: HashMap::new(),
+		};
+
+		tracing::info!("adding replicas");
+		for &replica_id in replica_ids {
+			test_ctx.add_replica(replica_id).await?;
+		}
+
+		tracing::info!("starting replicas");
+		for &replica_id in replica_ids {
+			test_ctx.start_replica(replica_id).await?;
+		}
+
+		Ok(test_ctx)
+	}
+
 	pub async fn new_with(replica_ids: &[ReplicaId]) -> anyhow::Result<Self> {
 		gas::ctx::test::setup_logging();
 
@@ -112,6 +139,15 @@ impl TestCtx {
 			.get(&replica_id)
 			.expect("replica not started")
 			.wf_ctx
+	}
+
+	#[allow(dead_code)]
+	pub fn api_peer_url(&self, replica_id: ReplicaId) -> String {
+		let metadata = self
+			.replica_metadata
+			.get(&replica_id)
+			.expect("replica metadata not found");
+		format!("http://127.0.0.1:{}", metadata.api_peer_port)
 	}
 
 	pub async fn add_replica(&mut self, replica_id: ReplicaId) -> anyhow::Result<()> {
@@ -186,6 +222,22 @@ impl TestCtx {
 	}
 
 	#[allow(dead_code)]
+	pub async fn shutdown(&mut self) -> anyhow::Result<()> {
+		// Epoxy commit propagation is fire-and-forget in production. Give local test
+		// broadcasts a moment to finish before tearing replicas down.
+		tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+		let mut replica_ids = self.replica_contexts.keys().copied().collect::<Vec<_>>();
+		replica_ids.sort_unstable();
+
+		for replica_id in replica_ids {
+			self.stop_replica(replica_id, false).await?;
+		}
+
+		Ok(())
+	}
+
+	#[allow(dead_code)]
 	pub async fn stop_replica(
 		&mut self,
 		replica_id: ReplicaId,
@@ -216,14 +268,18 @@ impl TestCtx {
 		Ok(())
 	}
 
-	fn build_datacenters(&self) -> Result<Vec<rivet_config::config::topology::Datacenter>> {
-		// Build datacenters using our predetermined metadata
-		let mut datacenters = Vec::new();
-		let replica_ids: Vec<_> = self.replica_metadata.keys().copied().collect();
+	fn build_datacenters(
+		&self,
+	) -> Result<HashMap<String, rivet_config::config::topology::Datacenter>> {
+		// Build datacenters using our predetermined metadata.
+		let mut datacenters = HashMap::new();
+		let mut replica_ids: Vec<_> = self.replica_metadata.keys().copied().collect();
+		replica_ids.sort_unstable();
 
 		for &other_replica_id in &replica_ids {
 			let metadata = &self.replica_metadata[&other_replica_id];
-			datacenters.push(rivet_config::config::topology::Datacenter {
+			let name = format!("dc-{}", other_replica_id);
+			datacenters.insert(name.clone(), rivet_config::config::topology::Datacenter {
 				name: format!("dc-{}", other_replica_id),
 				datacenter_label: other_replica_id as u16,
 				is_leader: other_replica_id == self.leader_id,
@@ -239,7 +295,9 @@ impl TestCtx {
 
 	#[allow(dead_code)]
 	pub fn replica_ids(&self) -> Vec<ReplicaId> {
-		self.replica_metadata.keys().cloned().collect()
+		let mut replica_ids = self.replica_metadata.keys().cloned().collect::<Vec<_>>();
+		replica_ids.sort_unstable();
+		replica_ids
 	}
 }
 

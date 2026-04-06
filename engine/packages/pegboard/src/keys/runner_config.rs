@@ -209,3 +209,56 @@ impl TuplePack for ByVariantSubspaceKey {
 		Ok(offset)
 	}
 }
+
+#[derive(Debug)]
+pub struct ProtocolVersionKey {
+	pub namespace_id: Id,
+	pub name: String,
+}
+
+impl ProtocolVersionKey {
+	pub fn new(namespace_id: Id, name: String) -> Self {
+		ProtocolVersionKey { namespace_id, name }
+	}
+}
+
+impl FormalKey for ProtocolVersionKey {
+	type Value = u16;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(u16::from_be_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_be_bytes().to_vec())
+	}
+}
+
+impl TuplePack for ProtocolVersionKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			RUNNER,
+			CONFIG,
+			DATA,
+			PROTOCOL_VERSION,
+			self.namespace_id,
+			&self.name,
+		);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for ProtocolVersionKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, _, _, namespace_id, name)) =
+			<(usize, usize, usize, usize, Id, String)>::unpack(input, tuple_depth)?;
+
+		let v = ProtocolVersionKey { namespace_id, name };
+
+		Ok((input, v))
+	}
+}

@@ -1,0 +1,5 @@
+{
+  "code": "query_ambiguous_runner_configs",
+  "group": "guard",
+  "message": "query gateway actor resolution found multiple runner configs for namespace"
+}

@@ -11,6 +11,7 @@ pub struct Input {
 #[derive(Debug)]
 pub struct Output {
 	pub name: String,
+	pub namespace_id: Id,
 	pub runner_id: Id,
 	pub is_connectable: bool,
 }
@@ -28,26 +29,28 @@ pub async fn pegboard_actor_get_for_runner(
 
 			let workflow_id_key = keys::actor::WorkflowIdKey::new(input.actor_id);
 			let name_key = keys::actor::NameKey::new(input.actor_id);
+			let namespace_id_key = keys::actor::NamespaceIdKey::new(input.actor_id);
 			let runner_id_key = keys::actor::RunnerIdKey::new(input.actor_id);
 			let connectable_key = keys::actor::ConnectableKey::new(input.actor_id);
 
-			let (workflow_id, name_entry, runner_id_entry, is_connectable) = tokio::try_join!(
+			let (workflow_id, name_entry, namespace_id, runner_id_entry, is_connectable) = tokio::try_join!(
 				tx.read_opt(&workflow_id_key, Serializable),
 				tx.read_opt(&name_key, Serializable),
+				tx.read_opt(&namespace_id_key, Serializable),
 				tx.read_opt(&runner_id_key, Serializable),
 				tx.exists(&connectable_key, Serializable),
 			)?;
 
-			let (Some(workflow_id), Some(runner_id)) = (workflow_id, runner_id_entry) else {
+			let (Some(workflow_id), Some(namespace_id), Some(runner_id)) = (workflow_id, namespace_id, runner_id_entry) else {
 				return Ok(None);
 			};
 
-			Ok(Some((workflow_id, name_entry, runner_id, is_connectable)))
+			Ok(Some((workflow_id, name_entry, namespace_id, runner_id, is_connectable)))
 		})
 		.custom_instrument(tracing::info_span!("actor_get_for_runner_tx"))
 		.await?;
 
-	let Some((workflow_id, name, runner_id, is_connectable)) = res else {
+	let Some((workflow_id, name, namespace_id, runner_id, is_connectable)) = res else {
 		return Ok(None);
 	};
 
@@ -81,6 +84,7 @@ pub async fn pegboard_actor_get_for_runner(
 
 	Ok(Some(Output {
 		name,
+		namespace_id,
 		runner_id,
 		is_connectable,
 	}))

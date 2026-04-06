@@ -1,5 +1,5 @@
 import type { AnyClient } from "@/client/client";
-import type { RawDatabaseClient } from "@/db/config";
+import type { NativeSqliteConfig, RawDatabaseClient } from "@/db/config";
 import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
 import {
 	type ActorDriver,
@@ -63,6 +63,10 @@ export class FileSystemActorDriver implements ActorDriver {
 
 	getContext(_actorId: string): ActorDriverContext {
 		return {};
+	}
+
+	getNativeSqliteConfig(_actorId: string): NativeSqliteConfig | undefined {
+		return this.#state.nativeSqliteConfig;
 	}
 
 	async kvBatchPut(
@@ -129,6 +133,10 @@ export class FileSystemActorDriver implements ActorDriver {
 
 	async shutdownRunner(_immediate: boolean): Promise<void> {
 		await this.#sqlitePool.shutdown();
+	}
+
+	async hardCrashActor(actorId: string): Promise<void> {
+		await this.#state.hardCrashActor(actorId);
 	}
 
 	async startDestroy(actorId: string): Promise<void> {

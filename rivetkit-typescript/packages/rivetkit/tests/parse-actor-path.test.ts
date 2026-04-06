@@ -1,306 +1,270 @@
+// Keep this test suite in sync with the Rust equivalent at
+// engine/packages/guard/tests/parse_actor_path.rs
+import * as cbor from "cbor-x";
 import { describe, expect, test } from "vitest";
+import { InvalidRequest } from "@/actor/errors";
 import { parseActorPath } from "@/manager/gateway";
+import { toBase64Url } from "./test-utils";
 
 describe("parseActorPath", () => {
-	describe("Valid paths with token", () => {
-		test("should parse basic path with token", () => {
-			const path = "/gateway/actor-123@my-token/api/v1/endpoint";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-123");
-			expect(result?.token).toBe("my-token");
-			expect(result?.remainingPath).toBe("/api/v1/endpoint");
-		});
-
-		test("should parse path with UUID as actor ID", () => {
-			const path =
-				"/gateway/12345678-1234-1234-1234-123456789abc@my-token/status";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe(
-				"12345678-1234-1234-1234-123456789abc",
+	describe("direct actor paths", () => {
+		test("parses a direct actor path with token", () => {
+			const result = parseActorPath(
+				"/gateway/actor-123@my-token/api/v1/endpoint",
 			);
-			expect(result?.token).toBe("my-token");
-			expect(result?.remainingPath).toBe("/status");
-		});
-
-		test("should parse path with token and query parameters", () => {
-			const path = "/gateway/actor-456@token123/api?key=value";
-			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-456");
-			expect(result?.token).toBe("token123");
-			expect(result?.remainingPath).toBe("/api?key=value");
+			expect(result?.type).toBe("direct");
+			if (!result || result.type !== "direct") {
+				throw new Error("expected a direct actor path");
+			}
+
+			expect(result.actorId).toBe("actor-123");
+			expect(result.token).toBe("my-token");
+			expect(result.remainingPath).toBe("/api/v1/endpoint");
 		});
 
-		test("should parse path with token and no remaining path", () => {
-			const path = "/gateway/actor-000@tok";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-000");
-			expect(result?.token).toBe("tok");
-			expect(result?.remainingPath).toBe("/");
-		});
-
-		test("should parse complex path with token and multiple segments", () => {
-			const path =
-				"/gateway/actor-complex@secure-token/api/v2/users/123/profile/settings";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-complex");
-			expect(result?.token).toBe("secure-token");
-			expect(result?.remainingPath).toBe(
-				"/api/v2/users/123/profile/settings",
+		test("parses a direct actor path without token and preserves the query string", () => {
+			const result = parseActorPath(
+				"/gateway/actor-456/api/endpoint?foo=bar&baz=qux",
 			);
-		});
-	});
-
-	describe("Valid paths without token", () => {
-		test("should parse basic path without token", () => {
-			const path = "/gateway/actor-123/api/v1/endpoint";
-			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-123");
-			expect(result?.token).toBeUndefined();
-			expect(result?.remainingPath).toBe("/api/v1/endpoint");
+			expect(result?.type).toBe("direct");
+			if (!result || result.type !== "direct") {
+				throw new Error("expected a direct actor path");
+			}
+
+			expect(result.actorId).toBe("actor-456");
+			expect(result.token).toBeUndefined();
+			expect(result.remainingPath).toBe("/api/endpoint?foo=bar&baz=qux");
 		});
 
-		test("should parse path with UUID without token", () => {
-			const path = "/gateway/12345678-1234-1234-1234-123456789abc/status";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe(
-				"12345678-1234-1234-1234-123456789abc",
+		test("strips fragments and preserves a root remaining path", () => {
+			const result = parseActorPath(
+				"/gateway/actor-123?direct=true#frag",
 			);
-			expect(result?.token).toBeUndefined();
-			expect(result?.remainingPath).toBe("/status");
-		});
-
-		test("should parse path without token and with query params", () => {
-			const path = "/gateway/actor-456/api/endpoint?foo=bar&baz=qux";
-			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-456");
-			expect(result?.token).toBeUndefined();
-			expect(result?.remainingPath).toBe("/api/endpoint?foo=bar&baz=qux");
+			expect(result?.type).toBe("direct");
+			if (!result || result.type !== "direct") {
+				throw new Error("expected a direct actor path");
+			}
+
+			expect(result.actorId).toBe("actor-123");
+			expect(result.remainingPath).toBe("/?direct=true");
 		});
 
-		test("should parse path without token and no remaining path", () => {
-			const path = "/gateway/actor-000";
-			const result = parseActorPath(path);
+		test("decodes URL-encoded actor IDs and tokens", () => {
+			const result = parseActorPath(
+				"/gateway/actor%2D123@token%40value/endpoint",
+			);
 
 			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-000");
-			expect(result?.token).toBeUndefined();
-			expect(result?.remainingPath).toBe("/");
-		});
-	});
+			expect(result?.type).toBe("direct");
+			if (!result || result.type !== "direct") {
+				throw new Error("expected a direct actor path");
+			}
 
-	describe("Query parameters and fragments", () => {
-		test("should preserve query parameters", () => {
-			const path = "/gateway/actor-456/api/endpoint?foo=bar&baz=qux";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.remainingPath).toBe("/api/endpoint?foo=bar&baz=qux");
+			expect(result.actorId).toBe("actor-123");
+			expect(result.token).toBe("token@value");
+			expect(result.remainingPath).toBe("/endpoint");
 		});
 
-		test("should strip fragment from path", () => {
-			const path = "/gateway/actor-789/page#section";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-789");
-			expect(result?.token).toBeUndefined();
-			expect(result?.remainingPath).toBe("/page");
-		});
-
-		test("should preserve query but strip fragment", () => {
-			const path = "/gateway/actor-123/api?query=1#section";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-123");
-			expect(result?.token).toBeUndefined();
-			expect(result?.remainingPath).toBe("/api?query=1");
-		});
-
-		test("should handle path with only actor ID and query string", () => {
-			const path = "/gateway/actor-123?direct=true";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-123");
-			expect(result?.token).toBeUndefined();
-			expect(result?.remainingPath).toBe("/?direct=true");
-		});
-	});
-
-	describe("Trailing slashes", () => {
-		test("should preserve trailing slash in remaining path", () => {
-			const path = "/gateway/actor-111/api/";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-111");
-			expect(result?.token).toBeUndefined();
-			expect(result?.remainingPath).toBe("/api/");
-		});
-	});
-
-	describe("Special characters", () => {
-		test("should handle actor ID with allowed special characters", () => {
-			const path = "/gateway/actor_id-123.test/endpoint";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor_id-123.test");
-			expect(result?.token).toBeUndefined();
-			expect(result?.remainingPath).toBe("/endpoint");
-		});
-
-		test("should handle URL encoded characters in remaining path", () => {
-			const path = "/gateway/actor-123/api%20endpoint/test%2Fpath";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-123");
-			expect(result?.token).toBeUndefined();
-			expect(result?.remainingPath).toBe("/api%20endpoint/test%2Fpath");
-		});
-	});
-
-	describe("URL-encoded actor_id and token", () => {
-		test("should decode URL-encoded characters in actor_id", () => {
-			const path = "/gateway/actor%2D123/endpoint";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-123");
-			expect(result?.token).toBeUndefined();
-			expect(result?.remainingPath).toBe("/endpoint");
-		});
-
-		test("should decode URL-encoded characters in token", () => {
-			const path = "/gateway/actor-123@tok%40en/endpoint";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-123");
-			expect(result?.token).toBe("tok@en");
-			expect(result?.remainingPath).toBe("/endpoint");
-		});
-
-		test("should decode URL-encoded characters in both actor_id and token", () => {
-			const path = "/gateway/actor%2D123@token%2Dwith%2Dencoded/endpoint";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-123");
-			expect(result?.token).toBe("token-with-encoded");
-			expect(result?.remainingPath).toBe("/endpoint");
-		});
-
-		test("should decode URL-encoded spaces in actor_id", () => {
-			const path = "/gateway/actor%20with%20spaces/endpoint";
-			const result = parseActorPath(path);
-
-			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor with spaces");
-			expect(result?.token).toBeUndefined();
-			expect(result?.remainingPath).toBe("/endpoint");
-		});
-
-		test("should reject invalid URL encoding in actor_id", () => {
-			// %ZZ is invalid hex
-			const path = "/gateway/actor%ZZ123/endpoint";
-			const result = parseActorPath(path);
-
-			expect(result).toBeNull();
-		});
-
-		test("should reject invalid URL encoding in token", () => {
-			// %GG is invalid hex
-			const path = "/gateway/actor-123@token%GG/endpoint";
-			const result = parseActorPath(path);
-
-			expect(result).toBeNull();
-		});
-	});
-
-	describe("Invalid paths - wrong prefix", () => {
-		test("should reject path with wrong prefix", () => {
+		test("rejects malformed direct actor paths", () => {
 			expect(parseActorPath("/api/123/endpoint")).toBeNull();
-		});
-
-		test("should reject path missing gateway prefix", () => {
-			expect(parseActorPath("/123/endpoint")).toBeNull();
-		});
-	});
-
-	describe("Invalid paths - too short", () => {
-		test("should reject path with only gateway", () => {
 			expect(parseActorPath("/gateway")).toBeNull();
-		});
-	});
-
-	describe("Invalid paths - malformed token", () => {
-		test("should reject path with empty actor ID before @", () => {
 			expect(parseActorPath("/gateway/@token/endpoint")).toBeNull();
-		});
-
-		test("should reject path with empty token after @", () => {
 			expect(parseActorPath("/gateway/actor-123@/endpoint")).toBeNull();
-		});
-	});
-
-	describe("Invalid paths - empty values", () => {
-		test("should reject path with empty actor segment", () => {
 			expect(parseActorPath("/gateway//endpoint")).toBeNull();
+			expect(parseActorPath("/gateway/actor%ZZ123/endpoint")).toBeNull();
 		});
 	});
 
-	describe("Invalid paths - double slash", () => {
-		test("should reject path with double slashes", () => {
-			const path = "/gateway//actor-123/endpoint";
-			expect(parseActorPath(path)).toBeNull();
-		});
-	});
-
-	describe("Invalid paths - case sensitive", () => {
-		test("should reject path with capitalized Gateway", () => {
-			expect(parseActorPath("/Gateway/123/endpoint")).toBeNull();
-		});
-	});
-
-	describe("Token edge cases", () => {
-		test("should handle token with special characters", () => {
-			const path =
-				"/gateway/actor-123@token-with-dashes_and_underscores/api";
-			const result = parseActorPath(path);
+	describe("matrix query actor paths", () => {
+		test("parses a get query path with special-character keys and preserves empty key components", () => {
+			const result = parseActorPath(
+				"/gateway/chat-room;namespace=prod;method=get;key=room%2C1%2Fwest,,member%40a;token=query%2Ftoken/ws?debug=true",
+			);
 
 			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-123");
-			expect(result?.token).toBe("token-with-dashes_and_underscores");
-			expect(result?.remainingPath).toBe("/api");
+			expect(result?.type).toBe("query");
+			if (!result || result.type !== "query") {
+				throw new Error("expected a query actor path");
+			}
+
+			expect(result.query).toEqual({
+				getForKey: {
+					name: "chat-room",
+					key: ["room,1/west", "", "member@a"],
+				},
+			});
+			expect(result.namespace).toBe("prod");
+			expect(result.crashPolicy).toBeUndefined();
+			expect(result.token).toBe("query/token");
+			expect(result.remainingPath).toBe("/ws?debug=true");
 		});
 
-		test("should handle multiple @ symbols (only first is used)", () => {
-			const path = "/gateway/actor-123@token@extra/api";
-			const result = parseActorPath(path);
+		test("parses getOrCreate input from base64url CBOR", () => {
+			const input = { message: "hello", count: 2 };
+			const encodedInput = toBase64Url(cbor.encode(input));
+
+			const result = parseActorPath(
+				`/gateway/worker;namespace=default;method=getOrCreate;runnerName=my-pool;key=tenant,job;input=${encodedInput};region=iad;crashPolicy=restart/action`,
+			);
 
 			expect(result).not.toBeNull();
-			expect(result?.actorId).toBe("actor-123");
-			expect(result?.token).toBe("token@extra");
-			expect(result?.remainingPath).toBe("/api");
+			expect(result?.type).toBe("query");
+			if (!result || result.type !== "query") {
+				throw new Error("expected a query actor path");
+			}
+
+			expect(result.query).toEqual({
+				getOrCreateForKey: {
+					name: "worker",
+					key: ["tenant", "job"],
+					input,
+					region: "iad",
+				},
+			});
+			expect(result.namespace).toBe("default");
+			expect(result.runnerName).toBe("my-pool");
+			expect(result.crashPolicy).toBe("restart");
+			expect(result.remainingPath).toBe("/action");
+		});
+
+		test("parses key= as a single empty-string key component", () => {
+			const result = parseActorPath(
+				"/gateway/builder;namespace=default;method=get;key=",
+			);
+
+			expect(result).not.toBeNull();
+			expect(result?.type).toBe("query");
+			if (!result || result.type !== "query") {
+				throw new Error("expected a query actor path");
+			}
+
+			expect(result.query).toEqual({
+				getForKey: {
+					name: "builder",
+					key: [""],
+				},
+			});
+			expect(result.namespace).toBe("default");
+		});
+	});
+
+	describe("invalid matrix query actor paths", () => {
+		test("rejects a missing namespace", () => {
+			expect(() =>
+				parseActorPath("/gateway/chat-room;method=get"),
+			).toThrowError(InvalidRequest);
+		});
+
+		test("rejects unknown params", () => {
+			expect(() =>
+				parseActorPath(
+					"/gateway/chat-room;namespace=default;method=get;extra=value",
+				),
+			).toThrowError(InvalidRequest);
+		});
+
+		test("rejects duplicate params", () => {
+			expect(() =>
+				parseActorPath(
+					"/gateway/chat-room;namespace=default;method=get;name=other-room",
+				),
+			).toThrowError(InvalidRequest);
+		});
+
+		test("rejects create query methods", () => {
+			expect(() =>
+				parseActorPath(
+					"/gateway/chat-room;namespace=default;method=create",
+				),
+			).toThrowError(InvalidRequest);
+		});
+
+		test("rejects params missing '='", () => {
+			expect(() =>
+				parseActorPath("/gateway/chat-room;namespace=default;method/get"),
+			).toThrowError(InvalidRequest);
+		});
+
+		test("rejects invalid percent-encoding", () => {
+			expect(() =>
+				parseActorPath("/gateway/chat%ZZroom;namespace=default;method=get"),
+			).toThrowError(InvalidRequest);
+		});
+
+		test("rejects @token syntax on query paths", () => {
+			expect(() =>
+				parseActorPath(
+					"/gateway/chat-room;namespace=default;method=get@token/ws",
+				),
+			).toThrowError(InvalidRequest);
+		});
+
+		test("rejects input and region for get queries", () => {
+			const encodedInput = toBase64Url(cbor.encode({ ok: true }));
+
+			expect(() =>
+				parseActorPath(
+					`/gateway/chat-room;namespace=default;method=get;input=${encodedInput}`,
+				),
+			).toThrowError(InvalidRequest);
+
+			expect(() =>
+				parseActorPath(
+					"/gateway/chat-room;namespace=default;method=get;region=iad",
+				),
+			).toThrowError(InvalidRequest);
+
+			expect(() =>
+				parseActorPath(
+					"/gateway/chat-room;namespace=default;method=get;crashPolicy=restart",
+				),
+			).toThrowError(InvalidRequest);
+		});
+
+		test("rejects runnerName for get queries", () => {
+			expect(() =>
+				parseActorPath(
+					"/gateway/chat-room;namespace=default;method=get;runnerName=default",
+				),
+			).toThrowError(InvalidRequest);
+		});
+
+		test("rejects missing runnerName for getOrCreate queries", () => {
+			expect(() =>
+				parseActorPath(
+					"/gateway/worker;namespace=default;method=getOrCreate",
+				),
+			).toThrowError(InvalidRequest);
+		});
+
+		test("rejects invalid base64url input", () => {
+			expect(() =>
+				parseActorPath(
+					"/gateway/worker;namespace=default;method=getOrCreate;runnerName=default;input=***",
+				),
+			).toThrowError(InvalidRequest);
+		});
+
+		test("rejects invalid CBOR input", () => {
+			const invalidCbor = toBase64Url(new Uint8Array([0x1c]));
+
+			expect(() =>
+				parseActorPath(
+					`/gateway/worker;namespace=default;method=getOrCreate;runnerName=default;input=${invalidCbor}`,
+				),
+			).toThrowError(InvalidRequest);
+		});
+
+		test("rejects an empty actor name", () => {
+			expect(() =>
+				parseActorPath("/gateway/;namespace=default;method=get"),
+			).toThrowError(InvalidRequest);
 		});
 	});
 });

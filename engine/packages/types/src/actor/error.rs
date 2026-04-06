@@ -21,6 +21,9 @@ pub enum RunnerPoolError {
 		raw_payload: Option<String>,
 	},
 
+	/// RivetKit was downgraded to a version after being upgraded to use envoys
+	Downgrade,
+
 	/// Internal error
 	InternalError,
 }
@@ -44,4 +47,13 @@ pub enum ActorError {
 	Crashed { message: Option<String> },
 	/// Actor has an internal error
 	InternalError,
+
+	/// Actor cannot allocate due to the concurrent actor limit.
+	ConcurrentActorLimitReached,
+	/// No envoys available matching the pool name
+	NoEnvoys,
+	/// Envoy was allocated but never started the actor (GC timeout)
+	EnvoyNoResponse { envoy_key: String },
+	/// Envoy connection was lost (no recent ping, network issue, or crash)
+	EnvoyConnectionLost { envoy_key: String },
 }

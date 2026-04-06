@@ -10,18 +10,17 @@ export function generateDatacenterRivetEngine(
 ) {
 	const clickhouseHost =
 		context.config.networkMode === "host" ? "127.0.0.1" : "clickhouse";
-	const datacenters = [];
+	const datacenters: Record<string, any> = {};
 
 	for (const dc of context.config.datacenters) {
 		const serviceHost = context.getServiceHost("rivet-engine", dc.name, 0);
-		datacenters.push({
-			name: dc.name,
+		datacenters[dc.name] = {
 			datacenter_label: dc.id,
 			is_leader: dc.id === 1,
 			peer_url: `http://${serviceHost}:${API_PEER_PORT}`,
 			public_url: `http://${serviceHost}:${GUARD_PORT}`,
 			valid_hosts: [`${serviceHost}`, `127.0.0.1`, `localhost`],
-		});
+		};
 	}
 
 	// Generate a separate config file for each engine node

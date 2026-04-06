@@ -4,33 +4,11 @@ use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Path, Query},
 };
+use rivet_api_types::actors::kv_get::*;
 use rivet_api_util::request_remote_datacenter_raw;
 use rivet_util::Id;
-use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
 
 use crate::ctx::ApiCtx;
-
-#[derive(Debug, Deserialize, Serialize, IntoParams)]
-#[serde(deny_unknown_fields)]
-#[into_params(parameter_in = Query)]
-pub struct KvGetQuery {
-	pub namespace: String,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct KvGetPath {
-	pub actor_id: Id,
-	pub key: String,
-}
-
-#[derive(Serialize, ToSchema)]
-#[schema(as = ActorsKvGetResponse)]
-pub struct KvGetResponse {
-	pub value: String,
-	pub update_ts: i64,
-}
 
 #[utoipa::path(
 	get,
@@ -63,14 +41,7 @@ async fn kv_get_inner(ctx: ApiCtx, path: KvGetPath, query: KvGetQuery) -> Result
 	ctx.auth().await?;
 
 	if path.actor_id.label() == ctx.config().dc_label() {
-		let peer_path = rivet_api_peer::actors::kv_get::KvGetPath {
-			actor_id: path.actor_id,
-			key: path.key,
-		};
-		let peer_query = rivet_api_peer::actors::kv_get::KvGetQuery {
-			namespace: query.namespace,
-		};
-		let res = rivet_api_peer::actors::kv_get::kv_get(ctx.into(), peer_path, peer_query).await?;
+		let res = rivet_api_peer::actors::kv_get::kv_get(ctx.into(), path, query).await?;
 
 		Ok(Json(res).into_response())
 	} else {

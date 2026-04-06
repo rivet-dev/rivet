@@ -10,6 +10,8 @@ const HIGH_VOLUME_COUNT = 1000;
 const SLEEP_WAIT_MS = 150;
 const LIFECYCLE_POLL_INTERVAL_MS = 25;
 const LIFECYCLE_POLL_ATTEMPTS = 40;
+const REAL_TIMER_HARD_CRASH_POLL_INTERVAL_MS = 50;
+const REAL_TIMER_HARD_CRASH_POLL_ATTEMPTS = 600;
 const REAL_TIMER_DB_TIMEOUT_MS = 180_000;
 const CHUNK_BOUNDARY_SIZES = [
 	CHUNK_SIZE - 1,
@@ -163,6 +165,71 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 				dbTestTimeout,
 			);
 
+			test.skipIf(driverTestConfig.skip?.sleep)(
+				"preserves committed rows across a hard crash and restart",
+				async (c) => {
+					const {
+						client,
+						hardCrashActor,
+						hardCrashPreservesData,
+					} = await setupDriverTest(c, driverTestConfig);
+					if (!hardCrashPreservesData) {
+						return;
+					}
+					if (!hardCrashActor) {
+						throw new Error(
+							"hardCrashActor test helper is unavailable for this driver",
+						);
+					}
+
+					const actor = getDbActor(client, variant).getOrCreate([
+						`db-${variant}-hard-crash-${crypto.randomUUID()}`,
+					]);
+
+					await actor.reset();
+					await actor.insertValue("before-crash");
+					expect(await actor.getCount()).toBe(1);
+
+					const actorId = await actor.resolve();
+					await hardCrashActor(actorId);
+
+					const hardCrashPollAttempts =
+						driverTestConfig.useRealTimers
+							? REAL_TIMER_HARD_CRASH_POLL_ATTEMPTS
+							: LIFECYCLE_POLL_ATTEMPTS;
+					const hardCrashPollIntervalMs =
+						driverTestConfig.useRealTimers
+							? REAL_TIMER_HARD_CRASH_POLL_INTERVAL_MS
+							: LIFECYCLE_POLL_INTERVAL_MS;
+
+					let countAfterCrash = 0;
+					for (let i = 0; i < hardCrashPollAttempts; i++) {
+						try {
+							countAfterCrash = await actor.getCount();
+						} catch {
+							countAfterCrash = 0;
+						}
+						if (countAfterCrash === 1) {
+							break;
+						}
+						await waitFor(
+							driverTestConfig,
+							hardCrashPollIntervalMs,
+						);
+					}
+
+					expect(countAfterCrash).toBe(1);
+					const values = await actor.getValues();
+					expect(
+						values.some((row) => row.value === "before-crash"),
+					).toBe(true);
+
+					await actor.insertValue("after-crash");
+					expect(await actor.getCount()).toBe(2);
+				},
+				lifecycleTestTimeout,
+			);
+
 			test(
 				"completes onDisconnect DB writes before sleeping",
 				async (c) => {
@@ -181,7 +248,25 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 					await waitFor(driverTestConfig, SLEEP_WAIT_MS + 250);
 					await actor.configureDisconnectInsert(false, 0);
 
-					expect(await actor.getDisconnectInsertCount()).toBe(1);
+					// Poll for the disconnect insert to complete.
+					// Native SQLite routes writes through a WebSocket KV
+					// channel, which adds latency that can push the
+					// onDisconnect DB write past the fixed wait window
+					// under concurrent test load.
+					let count = 0;
+					for (let i = 0; i < LIFECYCLE_POLL_ATTEMPTS; i++) {
+						count =
+							await actor.getDisconnectInsertCount();
+						if (count >= 1) {
+							break;
+						}
+						await waitFor(
+							driverTestConfig,
+							LIFECYCLE_POLL_INTERVAL_MS,
+						);
+					}
+
+					expect(count).toBe(1);
 				},
 				dbTestTimeout,
 			);

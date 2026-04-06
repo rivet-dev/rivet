@@ -126,6 +126,23 @@ impl PubSub {
 	}
 
 	#[tracing::instrument(skip_all, fields(%subject))]
+	pub async fn queue_subscribe<T: Subject>(&self, subject: T, queue: &str) -> Result<Subscriber> {
+		// Underlying driver subscription
+		let driver = self
+			.driver
+			.queue_subscribe(&subject.as_cow(), queue)
+			.await?;
+
+		return Ok(Subscriber::new(
+			driver,
+			self.clone(),
+			false,
+			subject.to_string(),
+			T::root().map(|x| x.to_string()),
+		));
+	}
+
+	#[tracing::instrument(skip_all, fields(%subject))]
 	pub async fn publish(
 		&self,
 		subject: impl Subject,
@@ -464,6 +481,15 @@ pub enum DriverOutput {
 pub enum NextOutput {
 	Message(Message),
 	Unsubscribed,
+}
+
+impl From<NextOutput> for Option<Message> {
+	fn from(value: NextOutput) -> Self {
+		match value {
+			NextOutput::Message(msg) => Some(msg),
+			NextOutput::Unsubscribed => None,
+		}
+	}
 }
 
 pub struct Message {

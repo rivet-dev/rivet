@@ -41,7 +41,7 @@ impl TuplePack for ReservationByKeyKey {
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (
-			EPOXY,
+			EPOXY_V1,
 			NAMESPACE,
 			self.namespace_id,
 			RESERVATION,

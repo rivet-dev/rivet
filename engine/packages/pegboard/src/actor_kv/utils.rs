@@ -1,18 +1,19 @@
 use anyhow::{Result, ensure};
-use rivet_runner_protocol::mk2 as rp;
+use rivet_envoy_protocol as ep;
 
 use super::{
 	MAX_KEY_SIZE, MAX_KEYS, MAX_PUT_PAYLOAD_SIZE, MAX_STORAGE_SIZE, MAX_VALUE_SIZE,
 	keys::actor_kv::KeyWrapper,
 };
+use crate::errors;
 
-pub fn validate_list_query(query: &rp::KvListQuery) -> Result<()> {
+pub fn validate_list_query(query: &ep::KvListQuery) -> Result<()> {
 	match query {
-		rp::KvListQuery::KvListAllQuery => {}
-		rp::KvListQuery::KvListRangeQuery(range) => {
+		ep::KvListQuery::KvListAllQuery => {}
+		ep::KvListQuery::KvListRangeQuery(range) => {
 			validate_range(&range.start, &range.end)?;
 		}
-		rp::KvListQuery::KvListPrefixQuery(prefix) => {
+		ep::KvListQuery::KvListPrefixQuery(prefix) => {
 			ensure!(
 				KeyWrapper::tuple_len(&prefix.key) <= MAX_KEY_SIZE,
 				"prefix key is too long (max 2048 bytes)"
@@ -23,7 +24,7 @@ pub fn validate_list_query(query: &rp::KvListQuery) -> Result<()> {
 	Ok(())
 }
 
-pub fn validate_range(start: &rp::KvKey, end: &rp::KvKey) -> Result<()> {
+pub fn validate_range(start: &ep::KvKey, end: &ep::KvKey) -> Result<()> {
 	ensure!(
 		KeyWrapper::tuple_len(start) <= MAX_KEY_SIZE,
 		"start key is too long (max 2048 bytes)"
@@ -36,7 +37,7 @@ pub fn validate_range(start: &rp::KvKey, end: &rp::KvKey) -> Result<()> {
 	Ok(())
 }
 
-pub fn validate_keys(keys: &[rp::KvKey]) -> Result<()> {
+pub fn validate_keys(keys: &[ep::KvKey]) -> Result<()> {
 	ensure!(keys.len() <= MAX_KEYS, "a maximum of 128 keys is allowed");
 
 	for key in keys {
@@ -50,8 +51,8 @@ pub fn validate_keys(keys: &[rp::KvKey]) -> Result<()> {
 }
 
 pub fn validate_entries(
-	keys: &[rp::KvKey],
-	values: &[rp::KvValue],
+	keys: &[ep::KvKey],
+	values: &[ep::KvValue],
 	total_size: usize,
 ) -> Result<()> {
 	ensure!(
@@ -74,10 +75,13 @@ pub fn validate_entries(
 	);
 
 	let storage_remaining = MAX_STORAGE_SIZE.saturating_sub(total_size);
-	ensure!(
-		payload_size <= storage_remaining,
-		"not enough space left in storage ({storage_remaining} bytes remaining, current payload is {payload_size} bytes)"
-	);
+	if payload_size > storage_remaining {
+		return Err(errors::Actor::KvStorageQuotaExceeded {
+			remaining: storage_remaining,
+			payload_size,
+		}
+		.build());
+	}
 
 	for key in keys {
 		ensure!(

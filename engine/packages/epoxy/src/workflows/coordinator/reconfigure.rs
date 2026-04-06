@@ -32,6 +32,10 @@ pub async fn reconfigure(ctx: &mut WorkflowCtx) -> Result<()> {
 		})
 		.await?;
 
+		// Broadcast the joining config before catch-up so live commits fan out to the learner.
+		ctx.activity(super::replica_status_change::NotifyAllReplicasInput {})
+			.await?;
+
 		// Send begin learning message to new replicas
 		let proceed = ctx
 			.activity(SendBeginLearningInput {
@@ -42,6 +46,11 @@ pub async fn reconfigure(ctx: &mut WorkflowCtx) -> Result<()> {
 		if !proceed {
 			return Ok(());
 		}
+	} else {
+		// No new replicas to add. Push the current config to every replica so each one has
+		// an up-to-date local copy in UDB. This is needed for v2 changelog replication where
+		// replicas read their cluster config from UDB for consensus fanout.
+		super::replica_status_change::replica_reconfigure(ctx).await?;
 	}
 
 	Ok(())
@@ -211,6 +220,41 @@ pub async fn add_replicas_as_joining(
 pub struct SendBeginLearningInput {
 	pub new_replicas: Vec<types::ReplicaConfig>,
 	pub config: types::ClusterConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct SendBeginLearningToAllInput {}
+
+#[activity(SendBeginLearningToAll)]
+pub async fn send_begin_learning_to_all(
+	ctx: &ActivityCtx,
+	_input: &SendBeginLearningToAllInput,
+) -> Result<()> {
+	let state = ctx.state::<State>()?;
+	let config: protocol::ClusterConfig = state.config.clone().into();
+	let replicas = state.config.replicas.clone();
+
+	let begin_learning_futures = replicas.iter().map(|replica| {
+		let replica_id = replica.replica_id;
+		let config = config.clone();
+
+		async move {
+			let request = protocol::Request {
+				from_replica_id: ctx.config().epoxy_replica_id(),
+				to_replica_id: replica_id,
+				kind: protocol::RequestKind::BeginLearningRequest(protocol::BeginLearningRequest {
+					config: config.clone(),
+				}),
+			};
+
+			crate::http_client::send_message(&ApiCtx::new_from_activity(ctx)?, &config, request)
+				.await?;
+			Ok(())
+		}
+	});
+
+	futures_util::future::try_join_all(begin_learning_futures).await?;
+	Ok(())
 }
 
 #[activity(SendBeginLearning)]

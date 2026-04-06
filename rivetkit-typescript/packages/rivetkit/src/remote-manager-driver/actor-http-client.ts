@@ -1,30 +1,14 @@
 import type { ClientConfig } from "@/client/config";
 import { HEADER_RIVET_TOKEN } from "@/common/actor-router-consts";
-import { buildActorGatewayUrl } from "./actor-websocket-client";
-import { getEndpoint } from "./api-utils";
 
-export async function sendHttpRequestToActor(
+export async function sendHttpRequestToGateway(
 	runConfig: ClientConfig,
-	actorId: string,
+	gatewayUrl: string,
 	actorRequest: Request,
 ): Promise<Response> {
-	// Route through guard port
-	const url = new URL(actorRequest.url);
-	const endpoint = getEndpoint(runConfig);
-	const guardUrl = buildActorGatewayUrl(
-		endpoint,
-		actorId,
-		runConfig.token,
-		`${url.pathname}${url.search}`,
-	);
-
 	// Handle body properly based on method and presence
 	let bodyToSend: ArrayBuffer | null = null;
-	const guardHeaders = buildGuardHeadersForHttp(
-		runConfig,
-		actorRequest,
-		actorId,
-	);
+	const guardHeaders = buildGuardHeaders(runConfig, actorRequest);
 
 	if (actorRequest.method !== "GET" && actorRequest.method !== "HEAD") {
 		if (actorRequest.bodyUsed) {
@@ -45,7 +29,7 @@ export async function sendHttpRequestToActor(
 		}
 	}
 
-	const guardRequest = new Request(guardUrl, {
+	const guardRequest = new Request(gatewayUrl, {
 		method: actorRequest.method,
 		headers: guardHeaders,
 		body: bodyToSend,
@@ -62,10 +46,9 @@ function mutableResponse(fetchRes: Response): Response {
 	return new Response(fetchRes.body, fetchRes);
 }
 
-function buildGuardHeadersForHttp(
+function buildGuardHeaders(
 	runConfig: ClientConfig,
 	actorRequest: Request,
-	actorId: string,
 ): Headers {
 	const headers = new Headers();
 	// Copy all headers from the original request

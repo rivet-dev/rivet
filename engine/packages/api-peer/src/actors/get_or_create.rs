@@ -1,9 +1,7 @@
 use anyhow::Result;
 use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
-use rivet_api_types::actors::get_or_create::{
-	GetOrCreateQuery, GetOrCreateRequest, GetOrCreateResponse,
-};
+use rivet_api_types::actors::get_or_create::*;
 use rivet_error::RivetError;
 
 #[tracing::instrument(skip_all)]

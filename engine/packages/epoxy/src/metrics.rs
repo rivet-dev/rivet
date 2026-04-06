@@ -1,31 +1,11 @@
+use epoxy_protocol::protocol;
 use rivet_metrics::{BUCKETS, REGISTRY, prometheus::*};
 
 lazy_static::lazy_static! {
-	// MARK: Consensus Operations
-	pub static ref PROPOSALS_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+	// MARK: Proposals
+	pub static ref PROPOSAL_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
 		"epoxy_proposals_total",
-		"Total number of proposals.",
-		&["status"],
-		*REGISTRY
-	).unwrap();
-
-	pub static ref PRE_ACCEPT_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
-		"epoxy_pre_accept_total",
-		"Total number of pre-accept operations.",
-		&["result"],
-		*REGISTRY
-	).unwrap();
-
-	pub static ref ACCEPT_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
-		"epoxy_accept_total",
-		"Total number of accept operations.",
-		&["result"],
-		*REGISTRY
-	).unwrap();
-
-	pub static ref COMMIT_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
-		"epoxy_commit_total",
-		"Total number of commit operations.",
+		"Total number of per-key proposal outcomes.",
 		&["result"],
 		*REGISTRY
 	).unwrap();
@@ -37,74 +17,100 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
-	// MARK: Message Handling
-	pub static ref REQUESTS_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+	pub static ref FAST_PATH_TOTAL: IntCounter = register_int_counter_with_registry!(
+		"epoxy_fast_path_total",
+		"Total number of fast-path proposal attempts.",
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SLOW_PATH_TOTAL: IntCounter = register_int_counter_with_registry!(
+		"epoxy_slow_path_total",
+		"Total number of slow-path proposal attempts.",
+		*REGISTRY
+	).unwrap();
+
+	pub static ref PREPARE_TOTAL: IntCounter = register_int_counter_with_registry!(
+		"epoxy_prepare_total",
+		"Total number of recovery Prepare phases triggered.",
+		*REGISTRY
+	).unwrap();
+
+	pub static ref PREPARE_RETRY_TOTAL: IntCounter = register_int_counter_with_registry!(
+		"epoxy_prepare_retry_total",
+		"Total number of Prepare retries caused by contention.",
+		*REGISTRY
+	).unwrap();
+
+	pub static ref BALLOT_BUMP_TOTAL: IntCounter = register_int_counter_with_registry!(
+		"epoxy_ballot_bump_total",
+		"Total number of proposal ballot bumps caused by contention.",
+		*REGISTRY
+	).unwrap();
+
+	// MARK: Changelog
+	pub static ref CHANGELOG_SIZE: IntGauge = register_int_gauge_with_registry!(
+		"epoxy_changelog_size",
+		"Current number of changelog entries on the local replica.",
+		*REGISTRY
+	).unwrap();
+
+	// MARK: HTTP request-level
+	pub static ref REQUEST_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
 		"epoxy_requests_total",
-		"Total number of requests.",
+		"Total number of replica HTTP requests.",
 		&["request_type", "result"],
 		*REGISTRY
 	).unwrap();
 
 	pub static ref REQUEST_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"epoxy_request_duration",
-		"Duration of request handling in seconds.",
+		"Duration of replica HTTP request handling in seconds.",
 		&["request_type"],
 		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
 
-	// MARK: Quorum
-	pub static ref QUORUM_ATTEMPTS_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
-		"epoxy_quorum_attempts_total",
-		"Total number of quorum attempts.",
-		&["quorum_type", "result"],
-		*REGISTRY
-	).unwrap();
-
-	pub static ref QUORUM_SIZE: IntGaugeVec = register_int_gauge_vec_with_registry!(
-		"epoxy_quorum_size",
-		"Current quorum size.",
-		&["quorum_type"],
-		*REGISTRY
-	).unwrap();
-
-	// MARK: Replica State
-	pub static ref BALLOT_EPOCH: IntGauge = register_int_gauge_with_registry!(
-		"epoxy_ballot_epoch",
-		"Current ballot epoch.",
-		*REGISTRY
-	).unwrap();
-
-	pub static ref BALLOT_NUMBER: IntGauge = register_int_gauge_with_registry!(
-		"epoxy_ballot_number",
-		"Current ballot number.",
-		*REGISTRY
-	).unwrap();
-
-	pub static ref INSTANCE_NUMBER: IntGauge = register_int_gauge_with_registry!(
-		"epoxy_instance_number",
-		"Current instance/slot number.",
-		*REGISTRY
-	).unwrap();
-
-	// MARK: Cluster Health
+	// MARK: Cluster state
 	pub static ref REPLICAS_TOTAL: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"epoxy_replicas_total",
-		"Total number of replicas.",
+		"Total number of replicas by status.",
 		&["status"],
 		*REGISTRY
 	).unwrap();
+}
 
-	// MARK: Errors
-	pub static ref BALLOT_REJECTIONS_TOTAL: IntCounter = register_int_counter_with_registry!(
-		"epoxy_ballot_rejections_total",
-		"Total number of ballot rejections due to stale ballot.",
-		*REGISTRY
-	).unwrap();
+pub fn record_proposal_result(result: &str) {
+	PROPOSAL_TOTAL.with_label_values(&[result]).inc();
+}
 
-	pub static ref INTERFERENCE_DETECTED_TOTAL: IntCounter = register_int_counter_with_registry!(
-		"epoxy_interference_detected_total",
-		"Total number of key conflict interferences detected.",
-		*REGISTRY
-	).unwrap();
+pub fn record_ballot_bump() {
+	BALLOT_BUMP_TOTAL.inc();
+}
+
+pub fn record_prepare_retry() {
+	PREPARE_RETRY_TOTAL.inc();
+}
+
+pub fn record_changelog_append() {
+	CHANGELOG_SIZE.inc();
+}
+
+pub fn record_request(request_type: &str, result: &str, duration: std::time::Duration) {
+	REQUEST_TOTAL.with_label_values(&[request_type, result]).inc();
+	REQUEST_DURATION
+		.with_label_values(&[request_type])
+		.observe(duration.as_secs_f64());
+}
+
+pub fn record_replicas(config: &protocol::ClusterConfig) {
+	REPLICAS_TOTAL.reset();
+	for replica in &config.replicas {
+		REPLICAS_TOTAL
+			.with_label_values(&[match replica.status {
+				protocol::ReplicaStatus::Active => "active",
+				protocol::ReplicaStatus::Learning => "learning",
+				protocol::ReplicaStatus::Joining => "joining",
+			}])
+			.inc();
+	}
 }

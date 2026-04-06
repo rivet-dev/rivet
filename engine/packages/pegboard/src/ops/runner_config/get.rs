@@ -16,6 +16,8 @@ pub struct RunnerConfig {
 	pub namespace_id: Id,
 	pub name: String,
 	pub config: rivet_types::runner_configs::RunnerConfig,
+	/// Unset if the runner's metadata endpoint has never returned `envoyProtocolVersion``
+	pub protocol_version: Option<u16>,
 }
 
 #[operation]
@@ -68,10 +70,17 @@ async fn runner_config_get_inner(
 								namespace_id,
 								runner_name.clone(),
 							);
+							let protocol_version_key = keys::runner_config::ProtocolVersionKey::new(
+								namespace_id,
+								runner_name.clone(),
+							);
 
-							let Some(runner_config) =
-								tx.read_opt(&runner_config_key, Serializable).await?
-							else {
+							let (runner_config_entry, protocol_version_entry) = tokio::try_join!(
+								tx.read_opt(&runner_config_key, Serializable),
+								tx.read_opt(&protocol_version_key, Serializable),
+							)?;
+
+							let Some(runner_config) = runner_config_entry else {
 								// Runner config not found
 								return Ok(None);
 							};
@@ -80,6 +89,7 @@ async fn runner_config_get_inner(
 								namespace_id,
 								name: runner_name,
 								config: runner_config,
+								protocol_version: protocol_version_entry,
 							}))
 						}
 					})

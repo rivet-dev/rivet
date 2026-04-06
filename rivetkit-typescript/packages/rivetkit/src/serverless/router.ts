@@ -26,29 +26,27 @@ export function buildServerlessRouter(
 		});
 
 		// Serverless start endpoint
-		router.get("/start", async (c) => {
+		router.post("/start", async (c) => {
 			// Parse headers
 			const parseResult = ServerlessStartHeadersSchema.safeParse({
 				endpoint: c.req.header("x-rivet-endpoint"),
 				token: c.req.header("x-rivet-token") ?? undefined,
-				totalSlots: c.req.header("x-rivet-total-slots"),
-				runnerName: c.req.header("x-rivet-runner-name"),
+				poolName: c.req.header("x-rivet-pool-name"),
 				namespace: c.req.header("x-rivet-namespace-name"),
 			});
 			if (!parseResult.success) {
 				throw new InvalidRequest(
 					parseResult.error.issues[0]?.message ??
-						"invalid serverless start headers",
+					"invalid serverless start headers",
 				);
 			}
-			const { endpoint, token, totalSlots, runnerName, namespace } =
+			const { endpoint, token, poolName, namespace } =
 				parseResult.data;
 
 			logger().debug({
 				msg: "received serverless runner start request",
 				endpoint,
-				totalSlots,
-				runnerName,
+				poolName,
 				namespace,
 			});
 
@@ -72,10 +70,9 @@ export function buildServerlessRouter(
 				...config,
 				endpoint,
 				namespace,
-				runner: {
-					...config.runner,
-					totalSlots,
-					runnerName,
+				envoy: {
+					...config.envoy,
+					poolName,
 				},
 			};
 			const runnerConfig: RegistryConfig = {

@@ -8,7 +8,9 @@ use rivet_api_builder::{create_router, extract::FailedExtraction};
 use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 
-use crate::{actors, ctx, datacenters, health, metadata, namespaces, runner_configs, runners, ui};
+use crate::{
+	actors, ctx, datacenters, envoys, health, metadata, namespaces, runner_configs, runners, ui,
+};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -19,8 +21,11 @@ use crate::{actors, ctx, datacenters, health, metadata, namespaces, runner_confi
 		actors::list_names::list_names,
 		actors::get_or_create::get_or_create,
 		actors::kv_get::kv_get,
+		actors::sleep::sleep,
+		actors::reschedule::reschedule,
 		runners::list,
 		runners::list_names,
+		envoys::list,
 		namespaces::list,
 		namespaces::create,
 		runner_configs::list::list,
@@ -42,11 +47,12 @@ pub struct ApiDoc;
 
 #[tracing::instrument(skip_all)]
 pub async fn router(
-	name: &'static str,
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
 ) -> anyhow::Result<axum::Router> {
-	create_router(name, config, pools, |router| {
+	tracing::debug!("creating api-public router");
+
+	create_router("api-public", config, pools, |router| {
 		router
 			// Root redirect
 			.route(
@@ -94,8 +100,18 @@ pub async fn router(
 				"/actors/{actor_id}/kv/keys/{key}",
 				axum::routing::get(actors::kv_get::kv_get),
 			)
+			.route(
+				"/actors/{actor_id}/sleep",
+				axum::routing::post(actors::sleep::sleep),
+			)
+			.route(
+				"/actors/{actor_id}/reschedule",
+				axum::routing::post(actors::reschedule::reschedule),
+			)
 			// MARK: Runners
 			.route("/runners", axum::routing::get(runners::list))
+			// MARK: Envoys
+			.route("/envoys", axum::routing::get(envoys::list))
 			.route("/runners/names", axum::routing::get(runners::list_names))
 			// MARK: Datacenters
 			.route("/datacenters", axum::routing::get(datacenters::list))

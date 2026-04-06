@@ -89,7 +89,7 @@ export async function setupTest<A extends Registry<any>>(
 	const client = createClient<A>({
 		endpoint,
 		namespace: "default",
-		runnerName: "default",
+		poolName: "default",
 		disableMetadataLookup: true,
 	});
 	c.onTestFinished(async () => await client.dispose());

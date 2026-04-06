@@ -22,6 +22,18 @@ The `rivet.gg` domain is deprecated and should never be used in this codebase.
 - Add a new versioned schema instead, then migrate `versioned.rs` and related compatibility code to bridge old versions forward.
 - When bumping the protocol version, update `PROTOCOL_MK2_VERSION` in `engine/sdks/rust/runner-protocol/src/lib.rs` and `PROTOCOL_VERSION` in `engine/sdks/typescript/runner/src/mod.ts` together. Both must match the latest schema version.
 
+**Keep the KV API in sync between the runner protocol and the KV channel protocol.**
+
+- The runner protocol (`engine/sdks/schemas/runner-protocol/`) and KV channel protocol (`engine/sdks/schemas/kv-channel-protocol/`) both expose KV operations. When adding, removing, or changing KV request/response types in one protocol, update the other to match.
+
+**Keep KV channel protocol versions in sync.**
+
+- When bumping the KV channel protocol version, update these two locations together:
+  - `engine/sdks/rust/kv-channel-protocol/src/lib.rs` (`PROTOCOL_VERSION`)
+  - `engine/sdks/rust/kv-channel-protocol/build.rs` (TypeScript `PROTOCOL_VERSION` in post-processing)
+- All consumers (pegboard-kv-channel, sqlite-native, TS manager) get the version from the shared crate.
+- The TypeScript SDK at `engine/sdks/typescript/kv-channel-protocol/src/index.ts` is auto-generated from the BARE schema during the Rust build. Do not edit it by hand.
+
 ## Commands
 
 ### Build Commands
@@ -84,9 +96,15 @@ git commit -m "chore(my-pkg): foo bar"
 ### pnpm Workspace
 - Use pnpm for all npm-related commands. We're using a pnpm workspace.
 
+### TypeScript Concurrency
+- Use `antiox` for TypeScript concurrency primitives instead of ad hoc Promise queues, custom channel wrappers, or event-emitter based coordination.
+- Prefer the Tokio-shaped APIs from `antiox` for concurrency needs. For example, use `antiox/sync/mpsc` for `tx` and `rx` channels, `antiox/task` for spawning tasks, and the matching sync and time modules as needed.
+- Treat `antiox` as the default choice for any TypeScript concurrency work because it mirrors Rust and Tokio APIs used elsewhere in the codebase.
+
 ### SQLite Package
 - Use `@rivetkit/sqlite` for SQLite WebAssembly support.
 - Do not use the legacy upstream package directly. `@rivetkit/sqlite` is the maintained fork used in this repository and is sourced from `rivet-dev/wa-sqlite`.
+- The native SQLite addon (`@rivetkit/sqlite-native`) statically links SQLite via `libsqlite3-sys` with the `bundled` feature. The bundled SQLite version must match the version used by `@rivetkit/sqlite` (WASM). When upgrading either, upgrade both.
 
 ### RivetKit Package Resolutions
 The root `/package.json` contains `resolutions` that map RivetKit packages to their local workspace versions:
@@ -224,11 +242,22 @@ Key points:
 - Always return anyhow errors from failable functions
 	- For example: `fn foo() -> Result<i64> { /* ... */ }`
 - Do not glob import (`::*`) from anyhow. Instead, import individual types and traits
+- Prefer anyhow's `.context()` over `anyhow!` macro
 
 **Rust Dependency Management**
 - When adding a dependency, check for a workspace dependency in Cargo.toml
 - If available, use the workspace dependency (e.g., `anyhow.workspace = true`)
 - If you need to add a dependency and can't find it in the Cargo.toml of the workspace, add it to the workspace dependencies in Cargo.toml (`[workspace.dependencies]`) and then add it to the package you need with `{dependency}.workspace = true`
+
+**Native SQLite & KV Channel**
+- Native SQLite (`rivetkit-typescript/packages/sqlite-native/`) is a napi-rs addon that statically links SQLite and uses a custom VFS backed by KV over a WebSocket KV channel. The WASM implementation (`@rivetkit/sqlite-vfs`) is the fallback.
+- The KV channel (`engine/sdks/schemas/kv-channel-protocol/`) is independent of the runner protocol. It authenticates with `admin_token` (engine) or `config.token` (manager), not the runner key.
+- The KV channel enforces single-writer locks per actor. Open/close are optimistic (no round-trip wait).
+- The native VFS uses the same 4 KiB chunk layout and KV key encoding as the WASM VFS. Data is compatible between backends.
+- **The native Rust VFS and the WASM TypeScript VFS must match 1:1.** This includes: KV key layout and encoding, chunk size, PRAGMA settings, VFS callback-to-KV-operation mapping, delete/truncate strategy (both must use `deleteRange`), and journal mode. When changing any VFS behavior in one implementation, update the other. The relevant files are:
+  - Native: `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `kv.rs`
+  - WASM: `rivetkit-typescript/packages/sqlite-vfs/src/vfs.ts`, `kv.ts`
+- Full spec: `docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md`
 
 **Inspector HTTP API**
 - When updating the WebSocket inspector (`rivetkit-typescript/packages/rivetkit/src/inspector/`), also update the HTTP inspector endpoints in `rivetkit-typescript/packages/rivetkit/src/actor/router.ts`. The HTTP API mirrors the WebSocket inspector for agent-based debugging.
@@ -239,6 +268,9 @@ Key points:
 - UniversalDB for distributed state storage
 - ClickHouse for analytics and time-series data
 - Connection pooling through `packages/common/pools/`
+
+**Performance**
+- ALWAYS prefer a dedicated concurrency container like `scc::HashMap<_, _>` with its async api or `moka::Cache` over `Arc<Mutex<HashMap<_, _>>>`. `Arc<Mutex<_>>` is very slow for containers.
 
 ### Code Style
 - Hard tabs for Rust formatting (see `rustfmt.toml`)
@@ -266,7 +298,8 @@ Data structures often include:
 ## Logging Patterns
 
 ### Structured Logging
-- Use tracing for logging. Do not format parameters into the main message, instead use tracing's structured logging. 
+- Use tracing for logging. Never use `eprintln!` or `println!` for logging in Rust code. Always use tracing macros (`tracing::info!`, `tracing::warn!`, `tracing::error!`, etc.).
+- Do not format parameters into the main message, instead use tracing's structured logging.
   - For example, instead of `tracing::info!("foo {x}")`, do `tracing::info!(?x, "foo")`
 - Log messages should be lowercase unless mentioning specific code symbols. For example, `tracing::info!("inserted UserRow")` instead of `tracing::info!("Inserted UserRow")`
 

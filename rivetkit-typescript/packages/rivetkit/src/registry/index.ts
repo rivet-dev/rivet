@@ -92,11 +92,11 @@ export class Registry<A extends RegistryActors> {
 	}
 
 	/**
-	 * Starts an actor runner for standalone server deployments.
+	 * Starts an actor envoy for standalone server deployments.
 	 */
-	public startRunner() {
+	public startEnvoy() {
 		// biome-ignore lint/nursery/noFloatingPromises: bg task
-		this.#ensureRuntime().then((runtime) => runtime.startRunner());
+		this.#ensureRuntime().then((runtime) => runtime.startEnvoy());
 	}
 
 	/**
@@ -104,7 +104,7 @@ export class Registry<A extends RegistryActors> {
 	 *
 	 * This is the simplest way to run RivetKit. It starts a local manager
 	 * server, serves static files from the configured `publicDir` (default
-	 * `"public"`), and starts the actor runner.
+	 * `"public"`), and starts the actor envoy.
 	 *
 	 * When an endpoint is configured (via config or RIVET_ENDPOINT env var),
 	 * operates in serverless mode connected to the remote engine instead.
@@ -125,7 +125,7 @@ export class Registry<A extends RegistryActors> {
 		// manager server starts and serves the API + static files.
 		// When an endpoint IS configured, the config transform handles
 		// the mode (serveManager defaults to false, spawnEngine may be
-		// true, etc.) and we just start the runner.
+		// true, etc.) and we just start the envoy.
 		if (this.#config.serveManager === undefined) {
 			const hasEndpoint = !!(
 				this.#config.endpoint ||
@@ -139,7 +139,7 @@ export class Registry<A extends RegistryActors> {
 		}
 
 		// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
-		this.#ensureRuntime().then((runtime) => runtime.startRunner());
+		this.#ensureRuntime().then((runtime) => runtime.startEnvoy());
 	}
 }
 

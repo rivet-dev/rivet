@@ -91,6 +91,17 @@ These limits apply to the [SQLite database](/docs/actors/state#sqlite-database) 
 |------|------------|------------|-------------|
 | Max storage size per actor | — | 10 GiB | Maximum total storage size for a single actor. This limit is shared with KV storage. |
 
+### KV Preloading
+
+When an actor starts, the engine can pre-fetch KV data declared in the actor name metadata and deliver it alongside the start command. This removes round-trips to storage during actor startup. RivetKit emits the preload manifest from its own key layout and exposes per-actor overrides via `options`. Operators can still enforce a global cap in the [engine config](/docs/self-hosting/configuration) with `pegboard.preload_max_total_bytes`.
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Max total preload size | 1 MiB | — | Maximum total size of all preloaded KV data sent with the start command. Configurable via `pegboard.preload_max_total_bytes`. Setting to 0 disables all preloading. |
+| Max SQLite preload size | 768 KiB | — | Default maximum size of preloaded SQLite VFS data for RivetKit actors. Configurable per actor via `options.preloadMaxSqliteBytes`. Setting to 0 disables SQLite preloading for that actor. |
+| Max workflow preload size | 128 KiB | — | Default maximum size of preloaded workflow data for RivetKit actors. Configurable per actor via `options.preloadMaxWorkflowBytes`. Setting to 0 disables workflow preloading for that actor. |
+| Max connections preload size | 64 KiB | — | Default maximum size of preloaded connection data for RivetKit actors. Configurable per actor via `options.preloadMaxConnectionsBytes`. Setting to 0 disables connections preloading for that actor. |
+
 ### Actor Input
 
 See [Actor Input](/docs/actors/input) for details.

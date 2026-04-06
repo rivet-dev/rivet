@@ -1,3 +1,5 @@
 [build]
 rustflags = ["--cfg", "tokio_unstable"]
 
+[env]
+LIBSQLITE3_FLAGS = "SQLITE_ENABLE_BATCH_ATOMIC_WRITE"

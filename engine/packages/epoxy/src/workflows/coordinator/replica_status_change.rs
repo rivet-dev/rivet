@@ -16,7 +16,7 @@ pub async fn replica_status_change(
 	let should_increment_epoch = ctx
 		.activity(UpdateReplicaStatusInput {
 			replica_id: signal.replica_id,
-			new_status: signal.status.into(),
+			new_status: signal.status.clone().into(),
 		})
 		.await?;
 
@@ -148,6 +148,7 @@ pub struct NotifyAllReplicasOutput {
 }
 
 #[activity(NotifyAllReplicas)]
+#[max_retries = usize::MAX]
 pub async fn notify_all_replicas(
 	ctx: &ActivityCtx,
 	_input: &NotifyAllReplicasInput,

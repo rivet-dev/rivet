@@ -1381,3 +1381,466 @@ impl TuplePack for RunnerNameSubspaceKey {
 		t.pack(w, tuple_depth)
 	}
 }
+
+#[derive(Debug)]
+pub struct ActorSlotsKey {
+	pub namespace_id: Id,
+	pub pool_name: String,
+}
+
+impl ActorSlotsKey {
+	pub fn new(namespace_id: Id, pool_name: String) -> Self {
+		ActorSlotsKey {
+			namespace_id,
+			pool_name,
+		}
+	}
+
+	pub fn subspace(namespace_id: Id) -> ActorSlotsSubspaceKey {
+		ActorSlotsSubspaceKey::new(namespace_id)
+	}
+
+	pub fn entire_subspace() -> ActorSlotsSubspaceKey {
+		ActorSlotsSubspaceKey::entire()
+	}
+}
+
+impl FormalKey for ActorSlotsKey {
+	/// Count.
+	type Value = i64;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		// NOTE: Atomic ops use little endian
+		Ok(i64::from_le_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		// NOTE: Atomic ops use little endian
+		Ok(value.to_le_bytes().to_vec())
+	}
+}
+
+impl TuplePack for ActorSlotsKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (NAMESPACE, ACTOR, SLOTS, self.namespace_id, &self.pool_name);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for ActorSlotsKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, _, namespace_id, pool_name)) =
+			<(usize, usize, usize, Id, String)>::unpack(input, tuple_depth)?;
+
+		let v = ActorSlotsKey {
+			namespace_id,
+			pool_name,
+		};
+
+		Ok((input, v))
+	}
+}
+
+pub struct ActorSlotsSubspaceKey {
+	namespace_id: Option<Id>,
+}
+
+impl ActorSlotsSubspaceKey {
+	pub fn new(namespace_id: Id) -> Self {
+		ActorSlotsSubspaceKey {
+			namespace_id: Some(namespace_id),
+		}
+	}
+
+	pub fn entire() -> Self {
+		ActorSlotsSubspaceKey { namespace_id: None }
+	}
+}
+
+impl TuplePack for ActorSlotsSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let mut offset = VersionstampOffset::None { size: 0 };
+
+		let t = (NAMESPACE, ACTOR, SLOTS);
+		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(namespace_id) = self.namespace_id {
+			offset += namespace_id.pack(w, tuple_depth)?;
+		}
+
+		Ok(offset)
+	}
+}
+
+#[derive(Debug)]
+pub struct EnvoyLoadBalancerIdxKey {
+	pub namespace_id: Id,
+	pub pool_name: String,
+	pub version: u32,
+	pub last_ping_ts: i64,
+	pub envoy_key: String,
+}
+
+impl EnvoyLoadBalancerIdxKey {
+	pub fn new(
+		namespace_id: Id,
+		pool_name: String,
+		version: u32,
+		last_ping_ts: i64,
+		envoy_key: String,
+	) -> Self {
+		EnvoyLoadBalancerIdxKey {
+			namespace_id,
+			pool_name,
+			version,
+			last_ping_ts,
+			envoy_key,
+		}
+	}
+
+	pub fn subspace(namespace_id: Id, pool_name: String) -> EnvoyLoadBalancerIdxSubspaceKey {
+		EnvoyLoadBalancerIdxSubspaceKey::new(namespace_id, pool_name)
+	}
+
+	pub fn entire_subspace() -> EnvoyLoadBalancerIdxSubspaceKey {
+		EnvoyLoadBalancerIdxSubspaceKey::entire()
+	}
+}
+
+impl FormalKey for EnvoyLoadBalancerIdxKey {
+	type Value = ();
+
+	fn deserialize(&self, _raw: &[u8]) -> Result<Self::Value> {
+		Ok(())
+	}
+
+	fn serialize(&self, _value: Self::Value) -> Result<Vec<u8>> {
+		Ok(Vec::new())
+	}
+}
+
+impl TuplePack for EnvoyLoadBalancerIdxKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			NAMESPACE,
+			ENVOY_LOAD_BALANCER_IDX,
+			self.namespace_id,
+			&self.pool_name,
+			// Stored in reverse order (higher versions are first)
+			-(self.version as i32),
+			self.last_ping_ts,
+			&self.envoy_key,
+		);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for EnvoyLoadBalancerIdxKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, namespace_id, pool_name, version, last_ping_ts, envoy_key)) =
+			<(usize, usize, Id, String, i32, i64, String)>::unpack(input, tuple_depth)?;
+
+		let v = EnvoyLoadBalancerIdxKey {
+			namespace_id,
+			pool_name,
+			version: -version as u32,
+			last_ping_ts,
+			envoy_key,
+		};
+
+		Ok((input, v))
+	}
+}
+
+pub struct EnvoyLoadBalancerIdxSubspaceKey {
+	pub namespace_id: Option<Id>,
+	pub pool_name: Option<String>,
+}
+
+impl EnvoyLoadBalancerIdxSubspaceKey {
+	pub fn new(namespace_id: Id, pool_name: String) -> Self {
+		EnvoyLoadBalancerIdxSubspaceKey {
+			namespace_id: Some(namespace_id),
+			pool_name: Some(pool_name),
+		}
+	}
+
+	pub fn entire() -> Self {
+		EnvoyLoadBalancerIdxSubspaceKey {
+			namespace_id: None,
+			pool_name: None,
+		}
+	}
+}
+
+impl TuplePack for EnvoyLoadBalancerIdxSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let mut offset = VersionstampOffset::None { size: 0 };
+
+		let t = (NAMESPACE, ENVOY_LOAD_BALANCER_IDX);
+		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(namespace_id) = &self.namespace_id {
+			offset += namespace_id.pack(w, tuple_depth)?;
+
+			if let Some(name) = &self.pool_name {
+				offset += name.pack(w, tuple_depth)?;
+			}
+		}
+
+		Ok(offset)
+	}
+}
+
+#[derive(Debug)]
+pub struct ActiveEnvoyKey {
+	namespace_id: Id,
+	pub create_ts: i64,
+	pub envoy_key: String,
+}
+
+impl ActiveEnvoyKey {
+	pub fn new(namespace_id: Id, create_ts: i64, envoy_key: String) -> Self {
+		ActiveEnvoyKey {
+			namespace_id,
+			create_ts,
+			envoy_key,
+		}
+	}
+
+	pub fn subspace(namespace_id: Id) -> ActiveEnvoySubspaceKey {
+		ActiveEnvoySubspaceKey::new(namespace_id)
+	}
+
+	pub fn subspace_with_create_ts(namespace_id: Id, create_ts: i64) -> ActiveEnvoySubspaceKey {
+		ActiveEnvoySubspaceKey::new_with_create_ts(namespace_id, create_ts)
+	}
+}
+
+impl FormalKey for ActiveEnvoyKey {
+	type Value = ();
+
+	fn deserialize(&self, _raw: &[u8]) -> Result<Self::Value> {
+		Ok(())
+	}
+
+	fn serialize(&self, _value: Self::Value) -> Result<Vec<u8>> {
+		Ok(Vec::new())
+	}
+}
+
+impl TuplePack for ActiveEnvoyKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			NAMESPACE,
+			ENVOY,
+			ACTIVE,
+			self.namespace_id,
+			self.create_ts,
+			&self.envoy_key,
+		);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for ActiveEnvoyKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, _, namespace_id, create_ts, envoy_key)) =
+			<(usize, usize, usize, Id, i64, String)>::unpack(input, tuple_depth)?;
+		let v = ActiveEnvoyKey {
+			namespace_id,
+			create_ts,
+			envoy_key,
+		};
+
+		Ok((input, v))
+	}
+}
+
+pub struct ActiveEnvoySubspaceKey {
+	namespace_id: Id,
+	create_ts: Option<i64>,
+}
+
+impl ActiveEnvoySubspaceKey {
+	pub fn new(namespace_id: Id) -> Self {
+		ActiveEnvoySubspaceKey {
+			namespace_id,
+			create_ts: None,
+		}
+	}
+
+	pub fn new_with_create_ts(namespace_id: Id, create_ts: i64) -> Self {
+		ActiveEnvoySubspaceKey {
+			namespace_id,
+			create_ts: Some(create_ts),
+		}
+	}
+}
+
+impl TuplePack for ActiveEnvoySubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let mut offset = VersionstampOffset::None { size: 0 };
+
+		let t = (NAMESPACE, ENVOY, ACTIVE, self.namespace_id);
+		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(create_ts) = &self.create_ts {
+			offset += create_ts.pack(w, tuple_depth)?;
+		}
+
+		Ok(offset)
+	}
+}
+
+#[derive(Debug)]
+pub struct ActiveEnvoyByNameKey {
+	namespace_id: Id,
+	pub name: String,
+	pub create_ts: i64,
+	pub envoy_key: String,
+}
+
+impl ActiveEnvoyByNameKey {
+	pub fn new(namespace_id: Id, name: String, create_ts: i64, envoy_key: String) -> Self {
+		ActiveEnvoyByNameKey {
+			namespace_id,
+			name,
+			create_ts,
+			envoy_key,
+		}
+	}
+
+	pub fn subspace(namespace_id: Id, name: String) -> ActiveEnvoyByNameSubspaceKey {
+		ActiveEnvoyByNameSubspaceKey::new(namespace_id, name)
+	}
+
+	pub fn subspace_with_create_ts(
+		namespace_id: Id,
+		name: String,
+		create_ts: i64,
+	) -> ActiveEnvoyByNameSubspaceKey {
+		ActiveEnvoyByNameSubspaceKey::new_with_create_ts(namespace_id, name, create_ts)
+	}
+}
+
+impl FormalKey for ActiveEnvoyByNameKey {
+	type Value = ();
+
+	fn deserialize(&self, _raw: &[u8]) -> Result<Self::Value> {
+		Ok(())
+	}
+
+	fn serialize(&self, _value: Self::Value) -> Result<Vec<u8>> {
+		Ok(Vec::new())
+	}
+}
+
+impl TuplePack for ActiveEnvoyByNameKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			NAMESPACE,
+			ENVOY,
+			BY_NAME,
+			ACTIVE,
+			self.namespace_id,
+			&self.name,
+			self.create_ts,
+			&self.envoy_key,
+		);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for ActiveEnvoyByNameKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, _, _, namespace_id, name, create_ts, envoy_key)) =
+			<(usize, usize, usize, usize, Id, String, i64, String)>::unpack(input, tuple_depth)?;
+		let v = ActiveEnvoyByNameKey {
+			namespace_id,
+			name,
+			create_ts,
+			envoy_key,
+		};
+
+		Ok((input, v))
+	}
+}
+
+pub struct ActiveEnvoyByNameSubspaceKey {
+	namespace_id: Id,
+	name: String,
+	create_ts: Option<i64>,
+}
+
+impl ActiveEnvoyByNameSubspaceKey {
+	pub fn new(namespace_id: Id, name: String) -> Self {
+		ActiveEnvoyByNameSubspaceKey {
+			namespace_id,
+			name,
+			create_ts: None,
+		}
+	}
+
+	pub fn new_with_create_ts(namespace_id: Id, name: String, create_ts: i64) -> Self {
+		ActiveEnvoyByNameSubspaceKey {
+			namespace_id,
+			name,
+			create_ts: Some(create_ts),
+		}
+	}
+}
+
+impl TuplePack for ActiveEnvoyByNameSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let mut offset = VersionstampOffset::None { size: 0 };
+
+		let t = (
+			NAMESPACE,
+			ENVOY,
+			BY_NAME,
+			ACTIVE,
+			self.namespace_id,
+			&self.name,
+		);
+		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(create_ts) = &self.create_ts {
+			offset += create_ts.pack(w, tuple_depth)?;
+		}
+
+		Ok(offset)
+	}
+}

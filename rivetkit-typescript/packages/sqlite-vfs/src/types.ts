@@ -15,4 +15,6 @@ export interface KvVfsOptions {
 	 * is lost unless the caller captures it through this callback.
 	 */
 	onError?: (error: unknown) => void;
+	/** Delete all keys in the half-open range [start, end). */
+	deleteRange: (start: Uint8Array, end: Uint8Array) => Promise<void>;
 }

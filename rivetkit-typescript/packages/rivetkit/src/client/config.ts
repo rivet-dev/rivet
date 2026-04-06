@@ -1,17 +1,18 @@
 import z from "zod/v4";
 import { EncodingSchema } from "@/actor/protocol/serde";
-import { type GetUpgradeWebSocket } from "@/utils";
-import {
-	getRivetEngine,
-	getRivetEndpoint,
-	getRivetToken,
-	getRivetNamespace,
-	getRivetRunner,
-} from "@/utils/env-vars";
 import type { RegistryConfig } from "@/registry/config";
+import type { GetUpgradeWebSocket } from "@/utils";
 import { tryParseEndpoint } from "@/utils/endpoint-parser";
+import {
+	getRivetEndpoint,
+	getRivetEngine,
+	getRivetNamespace,
+	getRivetPool,
+	getRivetToken,
+} from "@/utils/env-vars";
 
 const DEFAULT_ENDPOINT = "http://localhost:6420";
+export const DEFAULT_MAX_QUERY_INPUT_SIZE = 4 * 1024;
 
 let hasWarnedMissingEndpoint = false;
 
@@ -39,9 +40,9 @@ export const ClientConfigSchemaBase = z.object({
 				hasWarnedMissingEndpoint = true;
 				console.warn(
 					`[rivetkit] No endpoint provided to client. Defaulting to ${DEFAULT_ENDPOINT}. ` +
-						`Starting in 2.2.0, an explicit endpoint will be required. ` +
-						`Pass an endpoint to createClient() or createRivetKit(), ` +
-						`or set the RIVET_ENDPOINT environment variable.`,
+					`Starting in 2.2.0, an explicit endpoint will be required. ` +
+					`Pass an endpoint to createClient() or createRivetKit(), ` +
+					`or set the RIVET_ENDPOINT environment variable.`,
 				);
 			}
 			return resolved ?? DEFAULT_ENDPOINT;
@@ -59,8 +60,8 @@ export const ClientConfigSchemaBase = z.object({
 		.optional()
 		.transform((val) => val ?? getRivetNamespace()),
 
-	/** Name of the runner. This is used to group together runners in to different pools. */
-	runnerName: z.string().default(() => getRivetRunner() ?? "default"),
+	/** Name of the envoy pool. This is used to group together envoys in to different pools. */
+	poolName: z.string().default(() => getRivetPool() ?? "default"),
 
 	encoding: EncodingSchema.default("bare"),
 
@@ -77,6 +78,17 @@ export const ClientConfigSchemaBase = z.object({
 
 	/** Whether to automatically perform health checks when the client is created. */
 	disableMetadataLookup: z.boolean().optional().default(false),
+
+	/**
+	 * Maximum serialized query input size in bytes before base64url encoding.
+	 *
+	 * This applies to query-backed `getOrCreate()` and `create()` gateway URLs.
+	 */
+	maxInputSize: z
+		.number()
+		.int()
+		.positive()
+		.default(DEFAULT_MAX_QUERY_INPUT_SIZE),
 
 	/** Whether to enable RivetKit Devtools integration. */
 	devtools: z
@@ -133,12 +145,13 @@ export function convertRegistryConfigToClientConfig(
 		endpoint: config.endpoint,
 		token: config.token,
 		namespace: config.namespace,
-		runnerName: config.runner.runnerName,
+		poolName: config.envoy.poolName,
 		headers: config.headers,
 		encoding: "bare",
 		getUpgradeWebSocket: undefined,
 		// We don't need health checks for internal clients
 		disableMetadataLookup: true,
+		maxInputSize: DEFAULT_MAX_QUERY_INPUT_SIZE,
 		devtools:
 			typeof window !== "undefined" &&
 			(window?.location?.hostname === "127.0.0.1" ||

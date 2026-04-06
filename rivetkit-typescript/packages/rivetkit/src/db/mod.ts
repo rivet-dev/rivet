@@ -1,5 +1,9 @@
 import type { DatabaseProvider, RawAccess } from "./config";
 import {
+	nativeSqliteAvailable,
+	createNativeRawAccess,
+} from "./native-sqlite";
+import {
 	AsyncMutex,
 	createActorKvStore,
 	isSqliteBindingObject,
@@ -7,6 +11,9 @@ import {
 } from "./shared";
 
 export type { RawAccess } from "./config";
+
+// Log the native SQLite fallback warning at most once per process.
+let nativeFallbackWarned = false;
 
 interface DatabaseFactoryConfig {
 	onMigrate?: (db: RawAccess) => Promise<void> | void;
@@ -45,6 +52,24 @@ export function db({
 						// Override clients don't need cleanup
 					},
 				} satisfies RawAccess;
+			}
+
+			// Use native SQLite when the addon is available. The native path
+			// routes KV operations over a WebSocket KV channel, bypassing
+			// the WASM VFS entirely.
+			if (nativeSqliteAvailable()) {
+				return await createNativeRawAccess(
+					ctx.actorId,
+					ctx.nativeSqliteConfig,
+				);
+			}
+
+			// Native addon not available. Fall back to WASM SQLite.
+			if (!nativeFallbackWarned) {
+				nativeFallbackWarned = true;
+				console.warn(
+					"native SQLite not available, falling back to WebAssembly. run npm rebuild to install native bindings.",
+				);
 			}
 
 			// Construct KV-backed client using actor driver's KV operations

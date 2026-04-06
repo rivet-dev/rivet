@@ -1,14 +1,14 @@
 import type { Registry } from "rivetkit";
 import { logger } from "./log";
 
-// Runner version set to seconds since epoch when the module loads in development mode.
+// Envoy version set to seconds since epoch when the module loads in development mode.
 //
 // This creates a version number that increments each time the code is updated
 // and the module reloads, allowing the engine to detect code changes via the
-// /metadata endpoint and hot-reload all actors by draining older runners.
+// /metadata endpoint and hot-reload all actors by draining older envoys.
 //
-// We use seconds (not milliseconds) because the runner version is a u32 on the engine side.
-const DEV_RUNNER_VERSION = Math.floor(Date.now() / 1000);
+// We use seconds (not milliseconds) because the envoy version is a u32 on the engine side.
+const DEV_ENVOY_VERSION = Math.floor(Date.now() / 1000);
 
 export const toNextHandler = (registry: Registry<any>) => {
 	// Don't run server locally since we're using the fetch handler directly
@@ -33,19 +33,21 @@ export const toNextHandler = (registry: Registry<any>) => {
 		// Set these on the registry's config directly since the legacy inputConfig
 		// isn't used by the serverless router
 		registry.config.serverless.spawnEngine = true;
-		registry.config.serverless.configureRunnerPool = {
+		registry.config.serverless.configurePool = {
 			url: `${publicUrl}/api/rivet`,
+			requestLifespan: 300,
+			maxConcurrentActors: 100_000,
+			metadata: { provider: "next-js" },
+
 			minRunners: 0,
 			maxRunners: 100_000,
-			requestLifespan: 300,
 			slotsPerRunner: 1,
-			metadata: { provider: "next-js" },
 		};
 
-		// Set runner version to enable hot-reloading on code changes
-		registry.config.runner = {
-			...registry.config.runner,
-			version: DEV_RUNNER_VERSION,
+		// Set envoy version to enable hot-reloading on code changes
+		registry.config.envoy = {
+			...registry.config.envoy,
+			version: DEV_ENVOY_VERSION,
 		};
 	} else {
 		logger().debug(

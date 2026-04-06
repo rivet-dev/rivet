@@ -1,0 +1,43 @@
+{
+	"name": "@rivetkit/sqlite-native",
+	"version": "2.1.6",
+	"description": "Native SQLite addon for RivetKit backed by KV channel protocol",
+	"license": "Apache-2.0",
+	"main": "index.js",
+	"types": "index.d.ts",
+	"engines": {
+		"node": ">= 20.0.0"
+	},
+	"napi": {
+		"name": "sqlite-native",
+		"triples": {
+			"defaults": false,
+			"additional": [
+				"x86_64-unknown-linux-gnu",
+				"aarch64-unknown-linux-gnu",
+				"x86_64-apple-darwin",
+				"aarch64-apple-darwin",
+				"x86_64-pc-windows-msvc"
+			]
+		}
+	},
+	"files": [
+		"index.js",
+		"index.d.ts",
+		"package.json"
+	],
+	"scripts": {
+		"build": "napi build --platform --release",
+		"prepublishOnly": "napi prepublish -t npm"
+	},
+	"optionalDependencies": {
+		"@rivetkit/sqlite-native-linux-x64-gnu": "2.1.6",
+		"@rivetkit/sqlite-native-linux-arm64-gnu": "2.1.6",
+		"@rivetkit/sqlite-native-darwin-x64": "2.1.6",
+		"@rivetkit/sqlite-native-darwin-arm64": "2.1.6",
+		"@rivetkit/sqlite-native-win32-x64-msvc": "2.1.6"
+	},
+	"devDependencies": {
+		"@napi-rs/cli": "^2.18.0"
+	}
+}

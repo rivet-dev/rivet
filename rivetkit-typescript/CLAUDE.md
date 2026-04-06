@@ -14,6 +14,24 @@ The `*ContextOf` types exported from `packages/rivetkit/src/actor/contexts/index
 - `website/src/content/docs/actors/types.mdx` — public docs page
 - `website/src/content/docs/actors/index.mdx` — crash course (Context Types section)
 
+## Gateway Targets
+
+For client-facing gateway operations on `ManagerDriver`, use the shared `GatewayTarget` type from `packages/rivetkit/src/manager/driver.ts` instead of ad hoc `string | ActorQuery` unions. Drivers should preserve direct actor ID behavior and resolve `ActorQuery` targets inside the driver implementation so higher-level client flows can widen their target type without duplicating query-resolution logic.
+
+Query-backed remote gateway URLs use the format `/gateway/{name};namespace=...;method=...;key=.../{path}` where the actor name is the path segment and matrix params follow it on the same segment. Serialize query params in canonical order `namespace`, `method`, `runnerName`, `key`, `input`, `region`, `crashPolicy`, `token` (name is the segment prefix, not a matrix param). `runnerName` is required for `getOrCreate` and disallowed for `get`. Percent-encode each field value exactly once before insertion. For `key`, percent-encode each component independently, join components with literal commas, omit the `key` param for `[]`, and emit `key=` for `[""]`.
+
+In `packages/rivetkit/src/drivers/file-system/manager.ts`, keep `buildGatewayUrl()` query-backed for `get()` and `getOrCreate()` handles instead of pre-resolving to an actor ID. Local `getGatewayUrl()` flows should exercise the shared `actorGateway` matrix parser on the served manager path, while direct actor ID targets still use `/gateway/{actorId}`.
+
+When parsing matrix query gateway paths in `packages/rivetkit/src/manager/gateway.ts` or in parity implementations, detect query paths by checking if the second segment (after `gateway`) contains `;`. Extract the actor name from before the first `;` and parse remaining params from after it, all before percent-decoding. Reject raw `@token` syntax, unknown params, duplicate params, `name` as a matrix param, missing `=`, and invalid percent-encoding. For `key`, split on literal commas first and then percent-decode each component so empty string components are preserved.
+
+Once a matrix query path has been parsed in `packages/rivetkit/src/manager/gateway.ts`, resolve it to an actor ID inside the shared path-based HTTP and WebSocket gateway helpers before calling `proxyRequest` or `proxyWebSocket`. After resolution, reuse the existing direct-ID proxy flow and preserve the original remaining path and query string.
+
+When adding or validating matrix query input payloads in `packages/rivetkit/src/remote-manager-driver/actor-websocket-client.ts`, enforce `ClientConfig.maxInputSize` against the raw CBOR byte length before base64url encoding. This keeps the limit aligned with the actual serialized payload instead of the encoded URL expansion.
+
+For `ClientRaw.get()` and `ClientRaw.getOrCreate()` flows, do not cache a resolved actor ID on `ActorResolutionState`. Key-based handles and connections should resolve fresh for each operation so they do not stay pinned to an older actor selection after a destroy or recreate.
+
+For gateway-facing client helpers in `packages/rivetkit/src/client`, derive the `ManagerDriver` target from `getGatewayTarget()` instead of calling `resolveActorId()` up front. `get()` and `getOrCreate()` handles must pass their `ActorQuery` through to `sendRequest`, `openWebSocket`, and `buildGatewayUrl` so each request and reconnect re-resolves at the gateway. Only `getForId()` and create-backed handles should collapse to a plain actor ID target.
+
 ## Raw KV Limits
 
 When working with raw actor KV, always enforce engine limits:

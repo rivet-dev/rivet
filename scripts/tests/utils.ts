@@ -21,7 +21,7 @@ export async function createActor(
 				key: withKey ? crypto.randomUUID() : undefined,
 				input: btoa("hello"),
 				runner_name_selector: runnerNameSelector,
-				crash_policy: "destroy",
+				crash_policy: "sleep",
 			}),
 		},
 	);

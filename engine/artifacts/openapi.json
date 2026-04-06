@@ -11,7 +11,7 @@
       "name": "Apache-2.0",
       "identifier": "Apache-2.0"
     },
-    "version": "2.2.0"
+    "version": "2.2.1"
   },
   "paths": {
     "/actors": {
@@ -337,6 +337,112 @@
         ]
       }
     },
+    "/actors/{actor_id}/reschedule": {
+      "post": {
+        "tags": [
+          "actors::reschedule"
+        ],
+        "operationId": "actors_reschedule",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActorsRescheduleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsRescheduleResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/actors/{actor_id}/sleep": {
+      "post": {
+        "tags": [
+          "actors::sleep"
+        ],
+        "operationId": "actors_sleep",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActorsSleepRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsSleepResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/datacenters": {
       "get": {
         "tags": [
@@ -350,6 +456,77 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DatacentersListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/envoys": {
+      "get": {
+        "tags": [
+          "envoys"
+        ],
+        "operationId": "envoys_list",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "envoy_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvoysListResponse"
                 }
               }
             }
@@ -1064,7 +1241,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Arbitrary base64 encoded binary data."
           },
           "key": {
             "type": [
@@ -1162,7 +1340,8 @@
           "value": {
             "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ActorsListNamesResponse": {
         "type": "object",
@@ -1203,6 +1382,22 @@
             "$ref": "#/components/schemas/Pagination"
           }
         },
+        "additionalProperties": false
+      },
+      "ActorsRescheduleRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ActorsRescheduleResponse": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ActorsSleepRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ActorsSleepResponse": {
+        "type": "object",
         "additionalProperties": false
       },
       "CrashPolicy": {
@@ -1290,6 +1485,101 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Datacenter"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Envoy": {
+        "type": "object",
+        "required": [
+          "envoy_key",
+          "namespace_id",
+          "datacenter",
+          "pool_name",
+          "version",
+          "slots",
+          "create_ts",
+          "last_ping_ts",
+          "last_rtt"
+        ],
+        "properties": {
+          "create_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "datacenter": {
+            "type": "string"
+          },
+          "envoy_key": {
+            "type": "string"
+          },
+          "last_connected_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "last_ping_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_rtt": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "metadata": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "namespace_id": {
+            "$ref": "#/components/schemas/RivetId"
+          },
+          "pool_name": {
+            "type": "string"
+          },
+          "slots": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "stop_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "EnvoysListResponse": {
+        "type": "object",
+        "required": [
+          "envoys",
+          "pagination"
+        ],
+        "properties": {
+          "envoys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Envoy"
             }
           },
           "pagination": {
@@ -1611,6 +1901,14 @@
                     "propertyNames": {
                       "type": "string"
                     }
+                  },
+                  "max_concurrent_actors": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "format": "int64",
+                    "minimum": 0
                   },
                   "max_runners": {
                     "type": "integer",

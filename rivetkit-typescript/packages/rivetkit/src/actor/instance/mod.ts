@@ -773,6 +773,34 @@ export class ActorInstance<
 		}
 	}
 
+	async debugForceCrash() {
+		if (this.#shutdownComplete) {
+			return;
+		}
+		if (this.#stopCalled) {
+			this.#rLog.warn({ msg: "already stopping actor during hard crash" });
+			return;
+		}
+		this.#stopCalled = true;
+
+		try {
+			if (this.#sleepTimeout) {
+				clearTimeout(this.#sleepTimeout);
+				this.#sleepTimeout = undefined;
+			}
+
+			this.driver.cancelAlarm?.(this.#actorId);
+			this.stateManager.clearPendingSaveTimeout();
+
+			try {
+				this.#abortController.abort();
+			} catch {}
+		} finally {
+			this.#shutdownComplete = true;
+			await this.#cleanupDatabase();
+		}
+	}
+
 	// MARK: - Sleep
 	startSleep() {
 		if (this.#stopCalled || this.#destroyCalled) {
@@ -1901,11 +1929,16 @@ export class ActorInstance<
 							this.driver.kvBatchGet(this.#actorId, keys),
 						batchDelete: (keys: Uint8Array[]) =>
 							this.driver.kvBatchDelete(this.#actorId, keys),
+						deleteRange: (start: Uint8Array, end: Uint8Array) =>
+							this.driver.kvDeleteRange(this.#actorId, start, end),
 					},
 					sqliteVfs: this.#sqliteVfs,
 					metrics: this.#metrics,
 					preloadedEntries: sqlitePreloadEntries,
 					log: this.#rLog,
+					nativeSqliteConfig: this.driver.getNativeSqliteConfig?.(
+						this.#actorId,
+					),
 				}),
 			);
 			this.#rLog.info({ msg: "database migration starting" });

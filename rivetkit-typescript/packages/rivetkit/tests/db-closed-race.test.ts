@@ -22,7 +22,7 @@ describe("database closed race condition", () => {
 		const client = createClient<typeof registry>({
 			endpoint: runtime.endpoint,
 			namespace: runtime.namespace,
-			runnerName: runtime.runnerName,
+			poolName: runtime.runnerName,
 			disableMetadataLookup: true,
 		});
 

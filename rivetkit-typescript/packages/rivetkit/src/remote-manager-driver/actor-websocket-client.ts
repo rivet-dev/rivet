@@ -1,16 +1,18 @@
-import type { ClientConfig } from "@/client/config";
+import * as cbor from "cbor-x";
 import {
-	HEADER_CONN_PARAMS,
-	HEADER_ENCODING,
+	type ClientConfig,
+	DEFAULT_MAX_QUERY_INPUT_SIZE,
+} from "@/client/config";
+import {
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
 	WS_PROTOCOL_STANDARD as WS_PROTOCOL_RIVETKIT,
-	WS_PROTOCOL_TOKEN,
 } from "@/common/actor-router-consts";
 import { importWebSocket } from "@/common/websocket";
+import type { ActorGatewayQuery, CrashPolicy } from "@/manager/protocol/query";
 import type { Encoding, UniversalWebSocket } from "@/mod";
+import { uint8ArrayToBase64 } from "@/serde";
 import { combineUrlPath } from "@/utils";
-import { getEndpoint } from "./api-utils";
 import { logger } from "./log";
 
 export function buildActorGatewayUrl(
@@ -25,47 +27,143 @@ export function buildActorGatewayUrl(
 	return combineUrlPath(endpoint, gatewayPath);
 }
 
-export async function openWebSocketToActor(
+export function buildActorQueryGatewayUrl(
+	endpoint: string,
+	namespace: string,
+	query: ActorGatewayQuery,
+	token: string | undefined,
+	path = "",
+	maxInputSize = DEFAULT_MAX_QUERY_INPUT_SIZE,
+	crashPolicy: CrashPolicy | undefined = undefined,
+	runnerName?: string,
+): string {
+	if (namespace.length === 0) {
+		throw new Error("actor query namespace must not be empty");
+	}
+
+	let name: string;
+	const params: Array<[string, string]> = [];
+	params.push(["namespace", encodeURIComponent(namespace)]);
+
+	if ("getForKey" in query) {
+		name = query.getForKey.name;
+		params.push(["method", "get"]);
+		pushKeyMatrixParam(params, query.getForKey.key);
+		if (crashPolicy !== undefined) {
+			throw new Error(
+				"Actor query method=get does not support crashPolicy.",
+			);
+		}
+		if (runnerName !== undefined) {
+			throw new Error(
+				"Actor query method=get does not support runnerName.",
+			);
+		}
+	} else if ("getOrCreateForKey" in query) {
+		name = query.getOrCreateForKey.name;
+		params.push(["method", "getOrCreate"]);
+		if (runnerName === undefined) {
+			throw new Error(
+				"Actor query method=getOrCreate requires runnerName.",
+			);
+		}
+		params.push(["runnerName", encodeURIComponent(runnerName)]);
+		pushKeyMatrixParam(params, query.getOrCreateForKey.key);
+		pushInputMatrixParam(params, query.getOrCreateForKey.input, maxInputSize);
+		if (query.getOrCreateForKey.region !== undefined) {
+			params.push(["region", encodeURIComponent(query.getOrCreateForKey.region)]);
+		}
+		params.push(["crashPolicy", encodeURIComponent(crashPolicy ?? "sleep")]);
+	} else {
+		throw new Error(
+			"Actor query gateway URLs only support get and getOrCreate.",
+		);
+	}
+
+	if (name.length === 0) {
+		throw new Error("actor query name must not be empty");
+	}
+
+	if (token !== undefined) {
+		params.push(["token", encodeURIComponent(token)]);
+	}
+
+	const gatewayPath = `/gateway/${encodeURIComponent(name)}${params
+		.map(([key, value]) => `;${key}=${value}`)
+		.join("")}${path}`;
+
+	return combineUrlPath(endpoint, gatewayPath);
+}
+
+function pushKeyMatrixParam(
+	params: Array<[string, string]>,
+	key: string[],
+): void {
+	if (key.length === 0) {
+		return;
+	}
+
+	params.push([
+		"key",
+		key.map((component) => encodeURIComponent(component)).join(","),
+	]);
+}
+
+function pushInputMatrixParam(
+	params: Array<[string, string]>,
+	input: unknown,
+	maxInputSize: number,
+): void {
+	if (input === undefined) {
+		return;
+	}
+
+	const encodedInput = cbor.encode(input);
+	if (encodedInput.byteLength > maxInputSize) {
+		throw new Error(
+			`Actor query input exceeds maxInputSize (${encodedInput.byteLength} > ${maxInputSize} bytes). Increase client maxInputSize to allow larger query payloads.`,
+		);
+	}
+
+	params.push(["input", encodeURIComponent(uint8ArrayToBase64Url(encodedInput))]);
+}
+
+function uint8ArrayToBase64Url(value: Uint8Array): string {
+	return uint8ArrayToBase64(value)
+		.replace(/\+/g, "-")
+		.replace(/\//g, "_")
+		.replace(/=+$/g, "");
+}
+
+export async function openWebSocketToGateway(
 	runConfig: ClientConfig,
-	path: string,
-	actorId: string,
+	gatewayUrl: string,
 	encoding: Encoding,
 	params: unknown,
 ): Promise<UniversalWebSocket> {
 	const WebSocket = await importWebSocket();
 
-	// WebSocket connections go through guard
-	const endpoint = getEndpoint(runConfig);
-	const guardUrl = buildActorGatewayUrl(
-		endpoint,
-		actorId,
-		runConfig.token,
-		path,
-	);
-
 	logger().debug({
 		msg: "opening websocket to actor via guard",
-		actorId,
-		path,
-		guardUrl,
+		gatewayUrl,
 	});
 
 	// Create WebSocket connection
 	const ws = new WebSocket(
-		guardUrl,
+		gatewayUrl,
 		buildWebSocketProtocols(runConfig, encoding, params),
 	);
 
 	// Set binary type to arraybuffer for proper encoding support
 	ws.binaryType = "arraybuffer";
 
-	logger().debug({ msg: "websocket connection opened", actorId });
+	logger().debug({ msg: "websocket connection opened", gatewayUrl });
 
 	return ws as UniversalWebSocket;
 }
 
 export function buildWebSocketProtocols(
-	runConfig: ClientConfig,
+	_runConfig: ClientConfig,
 	encoding: Encoding,
 	params?: unknown,
 ): string[] {

@@ -27,7 +27,11 @@ members = [
   "engine/packages/metrics",
   "engine/packages/namespace",
   "engine/packages/pegboard",
+  "engine/packages/pegboard-envoy",
   "engine/packages/pegboard-gateway",
+  "engine/packages/pegboard-gateway2",
+  "engine/packages/pegboard-kv-channel",
+  "engine/packages/pegboard-outbound",
   "engine/packages/pegboard-runner",
   "engine/packages/pools",
   "engine/packages/postgres-util",
@@ -36,6 +40,7 @@ members = [
   "engine/packages/telemetry",
   "engine/packages/test-deps",
   "engine/packages/test-deps-docker",
+  "engine/packages/test-snapshot-gen",
   "engine/packages/tracing-reconfigure",
   "engine/packages/tracing-utils",
   "engine/packages/types",
@@ -47,7 +52,10 @@ members = [
   "engine/sdks/rust/api-full",
   "engine/sdks/rust/data",
   "engine/sdks/rust/engine-runner",
+  "engine/sdks/rust/envoy-client",
+  "engine/sdks/rust/envoy-protocol",
   "engine/sdks/rust/epoxy-protocol",
+  "engine/sdks/rust/kv-channel-protocol",
   "engine/sdks/rust/runner-protocol",
   "engine/sdks/rust/ups-protocol"
 ]
@@ -67,6 +75,7 @@ members = [
   axum-test = "17"
   base64 = "0.22"
   bcrypt = "0.13.0"
+  ciborium = "0.2"
   bytes = "1.6.0"
   cjson = "0.1"
   colored_json = "5.0.0"
@@ -118,6 +127,7 @@ members = [
   slog-async = "2.8"
   slog-term = "2.9"
   statrs = "0.18"
+  subtle = "2"
   sysinfo = "0.37.2"
   tabled = "0.17.0"
   tempfile = "3.13.0"
@@ -417,8 +427,20 @@ members = [
     [workspace.dependencies.pegboard]
     path = "engine/packages/pegboard"
 
+    [workspace.dependencies.pegboard-envoy]
+    path = "engine/packages/pegboard-envoy"
+
     [workspace.dependencies.pegboard-gateway]
     path = "engine/packages/pegboard-gateway"
+
+    [workspace.dependencies.pegboard-gateway2]
+    path = "engine/packages/pegboard-gateway2"
+
+    [workspace.dependencies.pegboard-kv-channel]
+    path = "engine/packages/pegboard-kv-channel"
+
+    [workspace.dependencies.pegboard-outbound]
+    path = "engine/packages/pegboard-outbound"
 
     [workspace.dependencies.pegboard-runner]
     path = "engine/packages/pegboard-runner"
@@ -443,6 +465,9 @@ members = [
 
     [workspace.dependencies.rivet-test-deps-docker]
     path = "engine/packages/test-deps-docker"
+
+    [workspace.dependencies.test-snapshot-gen]
+    path = "engine/packages/test-snapshot-gen"
 
     [workspace.dependencies.rivet-tracing-reconfigure]
     path = "engine/packages/tracing-reconfigure"
@@ -481,8 +506,17 @@ members = [
     [workspace.dependencies.epoxy-protocol]
     path = "engine/sdks/rust/epoxy-protocol"
 
+    [workspace.dependencies.rivet-kv-channel-protocol]
+    path = "engine/sdks/rust/kv-channel-protocol"
+
     [workspace.dependencies.rivet-engine-runner]
     path = "engine/sdks/rust/engine-runner"
+
+    [workspace.dependencies.rivet-envoy-client]
+    path = "engine/sdks/rust/envoy-client"
+
+    [workspace.dependencies.rivet-envoy-protocol]
+    path = "engine/sdks/rust/envoy-protocol"
 
     [workspace.dependencies.rivet-runner-protocol]
     path = "engine/sdks/rust/runner-protocol"

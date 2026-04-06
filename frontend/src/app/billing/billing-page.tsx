@@ -52,14 +52,14 @@ const USAGE_METRICS: UsageMetricConfig[] = [
 	{
 		key: "kv_read",
 		title: "Reads",
-		description: "Data read from actor state, measured in 4KB units.",
+		description: "Data read from actor state, measured in 4KiB units.",
 		icon: faBarcodeRead,
 		metricType: "operations",
 	},
 	{
 		key: "kv_write",
 		title: "Writes",
-		description: "Data written to actor state, measured in 4KB units.",
+		description: "Data written to actor state, measured in 4KiB units.",
 		icon: faPencil,
 		metricType: "operations",
 	},

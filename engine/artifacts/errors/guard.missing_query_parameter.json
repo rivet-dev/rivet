@@ -1,0 +1,5 @@
+{
+  "code": "missing_query_parameter",
+  "group": "guard",
+  "message": "Missing query parameter required for routing."
+}

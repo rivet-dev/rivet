@@ -4,6 +4,7 @@ import { ActorDuplicateKey, ActorError, ActorNotFound } from "@/actor/errors";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { ActorKey } from "@/actor/mod";
 import type { AnyClient } from "@/client/client";
+import type { NativeSqliteConfig } from "@/db/config";
 import { type ActorDriver, getInitialActorKvState } from "@/driver-helpers/mod";
 import type { RegistryConfig } from "@/registry/config";
 import type * as schema from "@/schemas/file-system-driver/mod";
@@ -123,6 +124,7 @@ export class FileSystemGlobalState {
 	#actors = new Map<string, ActorEntry>();
 
 	#actorCountOnStartup: number = 0;
+	#nativeSqliteConfig?: NativeSqliteConfig;
 
 	#runnerParams?: {
 		config: RegistryConfig;
@@ -140,6 +142,10 @@ export class FileSystemGlobalState {
 
 	get actorCountOnStartup() {
 		return this.#actorCountOnStartup;
+	}
+
+	get nativeSqliteConfig() {
+		return this.#nativeSqliteConfig;
 	}
 
 	constructor(options: FileSystemDriverOptions = {}) {
@@ -203,6 +209,10 @@ export class FileSystemGlobalState {
 				sqliteRuntime: this.#sqliteRuntime.kind,
 			});
 		}
+	}
+
+	setNativeSqliteConfig(config: NativeSqliteConfig): void {
+		this.#nativeSqliteConfig = config;
 	}
 
 	getActorStatePath(actorId: string): string {
@@ -798,6 +808,41 @@ export class FileSystemGlobalState {
 		}
 	}
 
+	async hardCrashActor(actorId: string): Promise<void> {
+		const actor = this.#actors.get(actorId);
+		if (!actor) {
+			return;
+		}
+
+		if (this.isActorStopping(actorId)) {
+			await this.#waitForActorStop(actorId);
+			return;
+		}
+
+		if (actor.loadPromise) {
+			await actor.loadPromise.catch(() => undefined);
+		}
+		if (actor.startPromise?.promise) {
+			await actor.startPromise.promise.catch(() => undefined);
+		}
+
+		try {
+			if (actor.alarmTimeout) {
+				actor.alarmTimeout.abort();
+				actor.alarmTimeout = undefined;
+			}
+
+			if (actor.actor) {
+				await actor.actor.debugForceCrash();
+			}
+		} finally {
+			this.#closeActorKvDatabase(actorId);
+			actor.stopPromise?.resolve();
+			actor.stopPromise = undefined;
+			this.#actors.delete(actorId);
+		}
+	}
+
 	/**
 	 * Save actor state to disk.
 	 */
@@ -1367,13 +1412,12 @@ export class FileSystemGlobalState {
 	): Promise<void> {
 		await this.loadActor(actorId);
 		await this.#withActorWrite(actorId, async (entry) => {
-			if (!entry.state) {
-				if (this.isActorStopping(actorId)) {
-					return;
-				}
-				throw new Error(`Actor ${actorId} state not loaded`);
+			if (!entry.state && this.isActorStopping(actorId)) {
+				return;
 			}
 
+			// KV database is independent of actor state and may be written
+			// during actor creation (e.g. native SQLite via KV channel).
 			const db = this.#getOrCreateActorKvDatabase(actorId);
 			const totalSize = estimateKvSize(db);
 			validateKvEntries(entries, totalSize);
@@ -1388,15 +1432,8 @@ export class FileSystemGlobalState {
 		actorId: string,
 		keys: Uint8Array[],
 	): Promise<(Uint8Array | null)[]> {
-		const entry = await this.loadActor(actorId);
+		await this.loadActor(actorId);
 		await this.#waitForPendingWrite(actorId);
-		if (!entry.state) {
-			if (this.isActorStopping(actorId)) {
-				throw new Error(`Actor ${actorId} is stopping`);
-			} else {
-				throw new Error(`Actor ${actorId} state not loaded`);
-			}
-		}
 
 		validateKvKeys(keys);
 
@@ -1422,11 +1459,8 @@ export class FileSystemGlobalState {
 	async kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void> {
 		await this.loadActor(actorId);
 		await this.#withActorWrite(actorId, async (entry) => {
-			if (!entry.state) {
-				if (this.isActorStopping(actorId)) {
-					return;
-				}
-				throw new Error(`Actor ${actorId} state not loaded`);
+			if (!entry.state && this.isActorStopping(actorId)) {
+				return;
 			}
 
 			if (keys.length === 0) {
@@ -1462,11 +1496,8 @@ export class FileSystemGlobalState {
 	): Promise<void> {
 		await this.loadActor(actorId);
 		await this.#withActorWrite(actorId, async (entry) => {
-			if (!entry.state) {
-				if (this.isActorStopping(actorId)) {
-					return;
-				}
-				throw new Error(`Actor ${actorId} state not loaded`);
+			if (!entry.state && this.isActorStopping(actorId)) {
+				return;
 			}
 
 			validateKvKey(start, "start key");
@@ -1491,15 +1522,8 @@ export class FileSystemGlobalState {
 			limit?: number;
 		},
 	): Promise<[Uint8Array, Uint8Array][]> {
-		const entry = await this.loadActor(actorId);
+		await this.loadActor(actorId);
 		await this.#waitForPendingWrite(actorId);
-		if (!entry.state) {
-			if (this.isActorStopping(actorId)) {
-				throw new Error(`Actor ${actorId} is destroying`);
-			} else {
-				throw new Error(`Actor ${actorId} state not loaded`);
-			}
-		}
 		validateKvKey(prefix, "prefix key");
 
 		const db = this.#getOrCreateActorKvDatabase(actorId);

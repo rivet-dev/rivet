@@ -2,49 +2,35 @@ use anyhow::Result;
 use epoxy_protocol::protocol;
 use universaldb::Transaction;
 
-use crate::{metrics, replica::ballot};
+use crate::replica::commit_kv::{self, CommitKvOutcome};
 
-// EPaxos Step 24
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip_all, fields(%replica_id, key = ?commit_req.key))]
 pub async fn commit(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,
 	commit_req: protocol::CommitRequest,
-	commit_to_kv: bool,
-) -> Result<()> {
-	let protocol::Payload {
-		proposal,
-		seq,
-		deps,
-		instance,
-	} = commit_req.payload;
+) -> Result<protocol::CommitResponse> {
+	let protocol::CommitRequest {
+		key,
+		value,
+		ballot,
+		mutable,
+		version,
+	} = commit_req;
 
-	tracing::debug!(?replica_id, ?instance, "handling commit message");
-
-	// EPaxos Step 24
-	let current_ballot = ballot::get_ballot(tx, replica_id).await?;
-	let log_entry = protocol::LogEntry {
-		commands: proposal.commands.clone(),
-		seq,
-		deps,
-		state: protocol::State::Committed,
-		ballot: current_ballot,
-	};
-	crate::replica::update_log(tx, replica_id, log_entry, &instance).await?;
-
-	// Commit commands if requested
-	let cmd_err = if commit_to_kv {
-		crate::replica::commit_kv::commit_kv(&*tx, replica_id, &proposal.commands).await?
-	} else {
-		tracing::debug!(?replica_id, ?instance, "skipping kv commit");
-		None
+	let response = match commit_kv::commit_kv(tx, replica_id, key, value, ballot, mutable, version)
+		.await?
+	{
+		CommitKvOutcome::Committed => protocol::CommitResponse::CommitResponseOk,
+		CommitKvOutcome::AlreadyCommitted { value, .. } => {
+			protocol::CommitResponse::CommitResponseAlreadyCommitted(
+				protocol::CommitResponseAlreadyCommitted { value },
+			)
+		}
+		CommitKvOutcome::StaleBallot { .. } => {
+			protocol::CommitResponse::CommitResponseStaleCommit
+		}
 	};
 
-	metrics::COMMIT_TOTAL
-		.with_label_values(&[if cmd_err.is_none() { "ok" } else { "cmd_err" }])
-		.inc();
-
-	tracing::debug!(?replica_id, ?instance, ?cmd_err, "committed");
-
-	Ok(())
+	Ok(response)
 }

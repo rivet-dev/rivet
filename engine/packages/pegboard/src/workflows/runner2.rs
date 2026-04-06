@@ -484,13 +484,18 @@ struct MarkEligibleInput {
 #[activity(MarkEligible)]
 async fn mark_eligible(ctx: &ActivityCtx, input: &MarkEligibleInput) -> Result<()> {
 	// Mark eligible
-	ctx.op(crate::ops::runner::update_alloc_idx::Input {
-		runners: vec![crate::ops::runner::update_alloc_idx::Runner {
-			runner_id: input.runner_id,
-			action: crate::ops::runner::update_alloc_idx::Action::AddIdx,
-		}],
-	})
-	.await?;
+	let res = ctx
+		.op(crate::ops::runner::update_alloc_idx::Input {
+			runners: vec![crate::ops::runner::update_alloc_idx::Runner {
+				runner_id: input.runner_id,
+				action: crate::ops::runner::update_alloc_idx::Action::AddIdx,
+			}],
+		})
+		.await?;
+
+	if !res.notifications.is_empty() {
+		tracing::warn!(notifs=?res.notifications, runner_id=?input.runner_id, "non-empty update alloc idx response");
+	}
 
 	Ok(())
 }
@@ -535,7 +540,6 @@ async fn clear_db(ctx: &ActivityCtx, input: &ClearDbInput) -> Result<()> {
 			match input.update_state {
 				RunnerState::Draining => {
 					tx.write(&keys::runner::DrainTsKey::new(input.runner_id), now)?;
-					tx.write(&keys::runner::ExpiredTsKey::new(input.runner_id), now)?;
 				}
 				RunnerState::Stopped => {
 					tx.write(&keys::runner::StopTsKey::new(input.runner_id), now)?;

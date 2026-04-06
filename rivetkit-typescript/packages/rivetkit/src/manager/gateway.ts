@@ -10,21 +10,24 @@ import {
 	HEADER_RIVET_ACTOR,
 	HEADER_RIVET_TARGET,
 	WS_PROTOCOL_ACTOR,
-	WS_PROTOCOL_CONN_PARAMS,
-	WS_PROTOCOL_ENCODING,
 	WS_PROTOCOL_TARGET,
 } from "@/common/actor-router-consts";
 import type { UniversalWebSocket } from "@/mod";
 import type { RegistryConfig } from "@/registry/config";
-import { type GetUpgradeWebSocket, promiseWithResolvers } from "@/utils";
+import { promiseWithResolvers } from "@/utils";
+import type { GetUpgradeWebSocket } from "@/utils";
+import { parseActorPath } from "./actor-path";
 import type { ManagerDriver } from "./driver";
 import { logger } from "./log";
+import { resolvePathBasedActorPath } from "./resolve-query";
 
-interface ActorPathInfo {
-	actorId: string;
-	token?: string;
-	remainingPath: string;
-}
+// Re-export types used by tests and other consumers
+export type {
+	ParsedActorPath,
+	ParsedDirectActorPath,
+	ParsedQueryActorPath,
+} from "./actor-path";
+export { parseActorPath } from "./actor-path";
 
 /**
  * Handle path-based WebSocket routing
@@ -33,13 +36,20 @@ async function handleWebSocketGatewayPathBased(
 	config: RegistryConfig,
 	managerDriver: ManagerDriver,
 	c: HonoContext,
-	actorPathInfo: ActorPathInfo,
+	actorPathInfo: ReturnType<typeof parseActorPath> & {},
 	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 ): Promise<Response> {
 	const upgradeWebSocket = getUpgradeWebSocket?.();
 	if (!upgradeWebSocket) {
 		throw new WebSocketsNotEnabled();
 	}
+
+	const resolvedActorPathInfo = await resolvePathBasedActorPath(
+		config,
+		managerDriver,
+		c,
+		actorPathInfo,
+	);
 
 	// NOTE: Token validation implemented in EE
 
@@ -50,15 +60,15 @@ async function handleWebSocketGatewayPathBased(
 
 	logger().debug({
 		msg: "proxying websocket to actor via path-based routing",
-		actorId: actorPathInfo.actorId,
-		path: actorPathInfo.remainingPath,
+		actorId: resolvedActorPathInfo.actorId,
+		path: resolvedActorPathInfo.remainingPath,
 		encoding,
 	});
 
 	return await managerDriver.proxyWebSocket(
 		c,
-		actorPathInfo.remainingPath,
-		actorPathInfo.actorId,
+		resolvedActorPathInfo.remainingPath,
+		resolvedActorPathInfo.actorId,
 		encoding as any, // Will be validated by driver
 		connParams,
 	);
@@ -68,16 +78,24 @@ async function handleWebSocketGatewayPathBased(
  * Handle path-based HTTP routing
  */
 async function handleHttpGatewayPathBased(
+	config: RegistryConfig,
 	managerDriver: ManagerDriver,
 	c: HonoContext,
-	actorPathInfo: ActorPathInfo,
+	actorPathInfo: ReturnType<typeof parseActorPath> & {},
 ): Promise<Response> {
+	const resolvedActorPathInfo = await resolvePathBasedActorPath(
+		config,
+		managerDriver,
+		c,
+		actorPathInfo,
+	);
+
 	// NOTE: Token validation implemented in EE
 
 	logger().debug({
 		msg: "proxying request to actor via path-based routing",
-		actorId: actorPathInfo.actorId,
-		path: actorPathInfo.remainingPath,
+		actorId: resolvedActorPathInfo.actorId,
+		path: resolvedActorPathInfo.remainingPath,
 		method: c.req.method,
 	});
 
@@ -85,7 +103,9 @@ async function handleHttpGatewayPathBased(
 	const proxyHeaders = new Headers(c.req.raw.headers);
 
 	// Build the proxy request with the actor URL format
-	const proxyUrl = new URL(`http://actor${actorPathInfo.remainingPath}`);
+	const proxyUrl = new URL(
+		`http://actor${resolvedActorPathInfo.remainingPath}`,
+	);
 
 	const proxyRequest = new Request(proxyUrl, {
 		method: c.req.raw.method,
@@ -98,7 +118,7 @@ async function handleHttpGatewayPathBased(
 	return await managerDriver.proxyRequest(
 		c,
 		proxyRequest,
-		actorPathInfo.actorId,
+		resolvedActorPathInfo.actorId,
 	);
 }
 
@@ -110,6 +130,7 @@ async function handleHttpGatewayPathBased(
  * Path-based routing (checked first):
  * - /gateway/{actor_id}/{...path}
  * - /gateway/{actor_id}@{token}/{...path}
+ * - /gateway/{name};namespace={namespace};method={get|getOrCreate};.../{...path}
  *
  * Header-based routing (fallback):
  * - WebSocket requests: Uses sec-websocket-protocol for routing (target.actor, actor.{id})
@@ -127,6 +148,11 @@ export async function actorGateway(
 		return next();
 	}
 
+	// Skip KV channel routes - handled by the dedicated KV channel endpoint
+	if (c.req.path.endsWith("/kv/connect")) {
+		return next();
+	}
+
 	// Strip basePath from the request path
 	let strippedPath = c.req.path;
 	if (
@@ -136,7 +162,7 @@ export async function actorGateway(
 		strippedPath = strippedPath.slice(config.managerBasePath.length);
 		// Ensure the path starts with /
 		if (!strippedPath.startsWith("/")) {
-			strippedPath = "/" + strippedPath;
+			strippedPath = `/${strippedPath}`;
 		}
 	}
 
@@ -168,6 +194,7 @@ export async function actorGateway(
 
 		// Handle regular HTTP requests
 		return await handleHttpGatewayPathBased(
+			config,
 			managerDriver,
 			c,
 			actorPathInfo,
@@ -194,7 +221,7 @@ export async function actorGateway(
  * Handle WebSocket requests using sec-websocket-protocol for routing
  */
 async function handleWebSocketGateway(
-	config: RegistryConfig,
+	_config: RegistryConfig,
 	managerDriver: ManagerDriver,
 	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 	c: HonoContext,
@@ -205,13 +232,18 @@ async function handleWebSocketGateway(
 		throw new WebSocketsNotEnabled();
 	}
 
-	let target: string | undefined;
-	let actorId: string | undefined;
+	// Parse target and actor ID from Sec-WebSocket-Protocol header
+	const protocolsHeader = c.req.header("sec-websocket-protocol");
+	const protocols = protocolsHeader?.split(",").map((p) => p.trim()) ?? [];
+	const target = protocols
+		.find((p) => p.startsWith(WS_PROTOCOL_TARGET))
+		?.slice(WS_PROTOCOL_TARGET.length);
+	const actorId = protocols
+		.find((p) => p.startsWith(WS_PROTOCOL_ACTOR))
+		?.slice(WS_PROTOCOL_ACTOR.length);
 
-	// Parse configuration from Sec-WebSocket-Protocol header
-	const { encoding, connParams } = parseWebSocketProtocols(
-		c.req.header("sec-websocket-protocol"),
-	);
+	// Parse encoding and connection params from protocols
+	const { encoding, connParams } = parseWebSocketProtocols(protocolsHeader);
 
 	if (target !== "actor") {
 		return c.text("WebSocket upgrade requires target.actor protocol", 400);
@@ -287,126 +319,6 @@ async function handleHttpGateway(
 	} as RequestInit);
 
 	return await managerDriver.proxyRequest(c, proxyRequest, actorId);
-}
-
-/**
- * Parse actor routing information from path
- * Matches patterns:
- * - /gateway/{actor_id}/{...path}
- * - /gateway/{actor_id}@{token}/{...path}
- */
-export function parseActorPath(path: string): ActorPathInfo | null {
-	// Find query string position (everything from ? onwards, but before fragment)
-	const queryPos = path.indexOf("?");
-	const fragmentPos = path.indexOf("#");
-
-	// Extract query string (excluding fragment)
-	let queryString = "";
-	if (queryPos !== -1) {
-		if (fragmentPos !== -1 && queryPos < fragmentPos) {
-			queryString = path.slice(queryPos, fragmentPos);
-		} else {
-			queryString = path.slice(queryPos);
-		}
-	}
-
-	// Extract base path (before query and fragment)
-	let basePath = path;
-	if (queryPos !== -1) {
-		basePath = path.slice(0, queryPos);
-	} else if (fragmentPos !== -1) {
-		basePath = path.slice(0, fragmentPos);
-	}
-
-	// Check for double slashes (invalid path)
-	if (basePath.includes("//")) {
-		return null;
-	}
-
-	// Split the path into segments
-	const segments = basePath.split("/").filter((s) => s.length > 0);
-
-	// Check minimum required segments: gateway, {actor_id}
-	if (segments.length < 2) {
-		return null;
-	}
-
-	// Verify the first segment is "gateway"
-	if (segments[0] !== "gateway") {
-		return null;
-	}
-
-	// Extract actor_id segment (may contain @token)
-	const actorSegment = segments[1];
-
-	// Check for empty actor segment
-	if (actorSegment.length === 0) {
-		return null;
-	}
-
-	// Parse actor_id and optional token from the segment
-	let actorId: string;
-	let token: string | undefined;
-
-	const atPos = actorSegment.indexOf("@");
-	if (atPos !== -1) {
-		// Pattern: /gateway/{actor_id}@{token}/{...path}
-		const rawActorId = actorSegment.slice(0, atPos);
-		const rawToken = actorSegment.slice(atPos + 1);
-
-		// Check for empty actor_id or token
-		if (rawActorId.length === 0 || rawToken.length === 0) {
-			return null;
-		}
-
-		// URL-decode both actor_id and token
-		try {
-			actorId = decodeURIComponent(rawActorId);
-			token = decodeURIComponent(rawToken);
-		} catch (e) {
-			// Invalid URL encoding
-			return null;
-		}
-	} else {
-		// Pattern: /gateway/{actor_id}/{...path}
-		// URL-decode actor_id
-		try {
-			actorId = decodeURIComponent(actorSegment);
-		} catch (e) {
-			// Invalid URL encoding
-			return null;
-		}
-		token = undefined;
-	}
-
-	// Calculate remaining path
-	// The remaining path starts after /gateway/{actor_id[@token]}/
-	let prefixLen = 0;
-	for (let i = 0; i < 2; i++) {
-		prefixLen += 1 + segments[i].length; // +1 for the slash
-	}
-
-	// Extract the remaining path preserving trailing slashes
-	let remainingBase: string;
-	if (prefixLen < basePath.length) {
-		remainingBase = basePath.slice(prefixLen);
-	} else {
-		remainingBase = "/";
-	}
-
-	// Ensure remaining path starts with /
-	let remainingPath: string;
-	if (remainingBase.length === 0 || !remainingBase.startsWith("/")) {
-		remainingPath = `/${remainingBase}${queryString}`;
-	} else {
-		remainingPath = `${remainingBase}${queryString}`;
-	}
-
-	return {
-		actorId,
-		token,
-		remainingPath,
-	};
 }
 
 /**

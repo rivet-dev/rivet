@@ -4,26 +4,29 @@ import invariant from "invariant";
 import { deserializeActorKey, serializeActorKey } from "@/actor/keys";
 import type { ClientConfig } from "@/client/client";
 import { noopNext } from "@/common/utils";
-import type {
-	ActorOutput,
-	CreateInput,
-	GetForIdInput,
-	GetOrCreateWithKeyInput,
-	GetWithKeyInput,
-	ListActorsInput,
-	ManagerDisplayInformation,
-	ManagerDriver,
+import {
+	type ActorOutput,
+	type CreateInput,
+	type GatewayTarget,
+	type GetForIdInput,
+	type GetOrCreateWithKeyInput,
+	type GetWithKeyInput,
+	type ListActorsInput,
+	type ManagerDisplayInformation,
+	type ManagerDriver,
 } from "@/driver-helpers/mod";
+import type { ActorQuery } from "@/manager/protocol/query";
 import type { Actor as ApiActor } from "@/manager-api/actors";
 import type { Encoding, UniversalWebSocket } from "@/mod";
 import { uint8ArrayToBase64 } from "@/serde";
 import { combineUrlPath, type GetUpgradeWebSocket } from "@/utils";
 import { getNextPhase } from "@/utils/env-vars";
-import { sendHttpRequestToActor } from "./actor-http-client";
+import { sendHttpRequestToGateway } from "./actor-http-client";
 import {
 	buildActorGatewayUrl,
+	buildActorQueryGatewayUrl,
 	buildWebSocketProtocols,
-	openWebSocketToActor,
+	openWebSocketToGateway,
 } from "./actor-websocket-client";
 import {
 	createActor,
@@ -39,19 +42,6 @@ import { logger } from "./log";
 import { lookupMetadataCached } from "./metadata";
 import { createWebSocketProxy } from "./ws-proxy";
 
-// TODO:
-// // Lazily import the dynamic imports so we don't have to turn `createClient` in to an async fn
-// const dynamicImports = (async () => {
-// 	// Import dynamic dependencies
-// 	const [WebSocket, EventSource] = await Promise.all([
-// 		importWebSocket(),
-// 		importEventSource(),
-// 	]);
-// 	return {
-// 		WebSocket,
-// 		EventSource,
-// 	};
-// })();
 
 export class RemoteManagerDriver implements ManagerDriver {
 	#config: ClientConfig;
@@ -110,14 +100,10 @@ export class RemoteManagerDriver implements ManagerDriver {
 	}
 
 	async getForId({
-		c,
 		name,
 		actorId,
 	}: GetForIdInput): Promise<ActorOutput | undefined> {
-		// Wait for metadata check to complete if in progress
-		if (this.#metadataPromise) {
-			await this.#metadataPromise;
-		}
+		await this.#metadataPromise;
 
 		// Fetch from API if not in cache
 		const response = await getActor(this.#config, name, actorId);
@@ -139,14 +125,10 @@ export class RemoteManagerDriver implements ManagerDriver {
 	}
 
 	async getWithKey({
-		c,
 		name,
 		key,
 	}: GetWithKeyInput): Promise<ActorOutput | undefined> {
-		// Wait for metadata check to complete if in progress
-		if (this.#metadataPromise) {
-			await this.#metadataPromise;
-		}
+		await this.#metadataPromise;
 
 		logger().debug({ msg: "getWithKey: searching for actor", name, key });
 
@@ -179,12 +161,15 @@ export class RemoteManagerDriver implements ManagerDriver {
 	async getOrCreateWithKey(
 		input: GetOrCreateWithKeyInput,
 	): Promise<ActorOutput> {
-		// Wait for metadata check to complete if in progress
-		if (this.#metadataPromise) {
-			await this.#metadataPromise;
-		}
+		await this.#metadataPromise;
 
-		const { c, name, key, input: actorInput, region } = input;
+		const {
+			name,
+			key,
+			input: actorInput,
+			region,
+			crashPolicy,
+		} = input;
 
 		logger().info({
 			msg: "getOrCreateWithKey: getting or creating actor via engine api",
@@ -196,11 +181,11 @@ export class RemoteManagerDriver implements ManagerDriver {
 			datacenter: region,
 			name,
 			key: serializeActorKey(key),
-			runner_name_selector: this.#config.runnerName,
+			runner_name_selector: this.#config.poolName,
 			input: actorInput
 				? uint8ArrayToBase64(cbor.encode(actorInput))
 				: undefined,
-			crash_policy: "sleep",
+			crash_policy: crashPolicy ?? "sleep",
 		});
 
 		logger().info({
@@ -215,16 +200,13 @@ export class RemoteManagerDriver implements ManagerDriver {
 	}
 
 	async createActor({
-		c,
 		name,
 		key,
 		input,
 		region,
+		crashPolicy,
 	}: CreateInput): Promise<ActorOutput> {
-		// Wait for metadata check to complete if in progress
-		if (this.#metadataPromise) {
-			await this.#metadataPromise;
-		}
+		await this.#metadataPromise;
 
 		logger().info({ msg: "creating actor via engine api", name, key });
 
@@ -232,10 +214,10 @@ export class RemoteManagerDriver implements ManagerDriver {
 		const result = await createActor(this.#config, {
 			datacenter: region,
 			name,
-			runner_name_selector: this.#config.runnerName,
+			runner_name_selector: this.#config.poolName,
 			key: serializeActorKey(key),
 			input: input ? uint8ArrayToBase64(cbor.encode(input)) : undefined,
-			crash_policy: "sleep",
+			crash_policy: crashPolicy ?? "sleep",
 		});
 
 		logger().info({
@@ -248,11 +230,8 @@ export class RemoteManagerDriver implements ManagerDriver {
 		return apiActorToOutput(result.actor);
 	}
 
-	async listActors({ c, name }: ListActorsInput): Promise<ActorOutput[]> {
-		// Wait for metadata check to complete if in progress
-		if (this.#metadataPromise) {
-			await this.#metadataPromise;
-		}
+	async listActors({ name }: ListActorsInput): Promise<ActorOutput[]> {
+		await this.#metadataPromise;
 
 		logger().debug({ msg: "listing actors via engine api", name });
 
@@ -262,10 +241,7 @@ export class RemoteManagerDriver implements ManagerDriver {
 	}
 
 	async destroyActor(actorId: string): Promise<void> {
-		// Wait for metadata check to complete if in progress
-		if (this.#metadataPromise) {
-			await this.#metadataPromise;
-		}
+		await this.#metadataPromise;
 
 		logger().info({ msg: "destroying actor via engine api", actorId });
 
@@ -275,48 +251,35 @@ export class RemoteManagerDriver implements ManagerDriver {
 	}
 
 	async sendRequest(
-		actorId: string,
+		target: GatewayTarget,
 		actorRequest: Request,
 	): Promise<Response> {
-		// Wait for metadata check to complete if in progress
-		if (this.#metadataPromise) {
-			await this.#metadataPromise;
-		}
+		await this.#metadataPromise;
 
-		return await sendHttpRequestToActor(
-			this.#config,
-			actorId,
-			actorRequest,
+		const gatewayUrl = this.#buildGatewayUrlForTarget(
+			target,
+			requestPath(actorRequest),
 		);
+
+		return sendHttpRequestToGateway(this.#config, gatewayUrl, actorRequest);
 	}
 
 	async openWebSocket(
 		path: string,
-		actorId: string,
+		target: GatewayTarget,
 		encoding: Encoding,
 		params: unknown,
 	): Promise<UniversalWebSocket> {
-		// Wait for metadata check to complete if in progress
-		if (this.#metadataPromise) {
-			await this.#metadataPromise;
-		}
+		await this.#metadataPromise;
 
-		return await openWebSocketToActor(
-			this.#config,
-			path,
-			actorId,
-			encoding,
-			params,
-		);
+		const gatewayUrl = this.#buildGatewayUrlForTarget(target, path);
+
+		return openWebSocketToGateway(this.#config, gatewayUrl, encoding, params);
 	}
 
-	async buildGatewayUrl(actorId: string): Promise<string> {
-		if (this.#metadataPromise) {
-			await this.#metadataPromise;
-		}
-
-		const endpoint = getEndpoint(this.#config);
-		return buildActorGatewayUrl(endpoint, actorId, this.#config.token);
+	async buildGatewayUrl(target: GatewayTarget): Promise<string> {
+		await this.#metadataPromise;
+		return this.#buildGatewayUrlForTarget(target, "");
 	}
 
 	async proxyRequest(
@@ -324,16 +287,14 @@ export class RemoteManagerDriver implements ManagerDriver {
 		actorRequest: Request,
 		actorId: string,
 	): Promise<Response> {
-		// Wait for metadata check to complete if in progress
-		if (this.#metadataPromise) {
-			await this.#metadataPromise;
-		}
+		await this.#metadataPromise;
 
-		return await sendHttpRequestToActor(
-			this.#config,
-			actorId,
-			actorRequest,
+		const gatewayUrl = this.#buildGatewayUrlForTarget(
+			{ directId: actorId },
+			requestPath(actorRequest),
 		);
+
+		return sendHttpRequestToGateway(this.#config, gatewayUrl, actorRequest);
 	}
 
 	async proxyWebSocket(
@@ -343,10 +304,7 @@ export class RemoteManagerDriver implements ManagerDriver {
 		encoding: Encoding,
 		params: unknown,
 	): Promise<Response> {
-		// Wait for metadata check to complete if in progress
-		if (this.#metadataPromise) {
-			await this.#metadataPromise;
-		}
+		await this.#metadataPromise;
 
 		const upgradeWebSocket = this.#config.getUpgradeWebSocket?.();
 		invariant(upgradeWebSocket, "missing getUpgradeWebSocket");
@@ -374,10 +332,7 @@ export class RemoteManagerDriver implements ManagerDriver {
 	}
 
 	async kvGet(actorId: string, key: Uint8Array): Promise<string | null> {
-		// Wait for metadata check to complete if in progress
-		if (this.#metadataPromise) {
-			await this.#metadataPromise;
-		}
+		await this.#metadataPromise;
 
 		logger().debug({ msg: "getting kv value via engine api", key });
 
@@ -390,6 +345,39 @@ export class RemoteManagerDriver implements ManagerDriver {
 		return response.value;
 	}
 
+	async kvBatchGet(
+		_actorId: string,
+		_keys: Uint8Array[],
+	): Promise<(Uint8Array | null)[]> {
+		throw new Error("kvBatchGet not supported on remote manager driver");
+	}
+
+	async kvBatchPut(
+		_actorId: string,
+		_entries: [Uint8Array, Uint8Array][],
+	): Promise<void> {
+		throw new Error("kvBatchPut not supported on remote manager driver");
+	}
+
+	async kvBatchDelete(
+		_actorId: string,
+		_keys: Uint8Array[],
+	): Promise<void> {
+		throw new Error(
+			"kvBatchDelete not supported on remote manager driver",
+		);
+	}
+
+	async kvDeleteRange(
+		_actorId: string,
+		_start: Uint8Array,
+		_end: Uint8Array,
+	): Promise<void> {
+		throw new Error(
+			"kvDeleteRange not supported on remote manager driver",
+		);
+	}
+
 	displayInformation(): ManagerDisplayInformation {
 		return { properties: {} };
 	}
@@ -397,6 +385,50 @@ export class RemoteManagerDriver implements ManagerDriver {
 	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void {
 		this.#config.getUpgradeWebSocket = getUpgradeWebSocket;
 	}
+
+	#buildGatewayUrlForTarget(target: GatewayTarget, path: string): string {
+		const endpoint = getEndpoint(this.#config);
+
+		if ("directId" in target) {
+			return buildActorGatewayUrl(endpoint, target.directId, this.#config.token, path);
+		}
+
+		if ("getForId" in target) {
+			return buildActorGatewayUrl(
+				endpoint,
+				target.getForId.actorId,
+				this.#config.token,
+				path,
+			);
+		}
+
+		if ("getForKey" in target || "getOrCreateForKey" in target) {
+			return buildActorQueryGatewayUrl(
+				endpoint,
+				this.#config.namespace,
+				target,
+				this.#config.token,
+				path,
+				this.#config.maxInputSize,
+				undefined,
+				"getOrCreateForKey" in target ? this.#config.poolName : undefined,
+			);
+		}
+
+		if ("create" in target) {
+			throw new Error(
+				"Gateway URLs only support direct actor IDs, get, and getOrCreate targets.",
+			);
+		}
+
+		throw new Error("unreachable: unknown gateway target type");
+	}
+
+}
+
+function requestPath(req: Request): string {
+	const url = new URL(req.url);
+	return `${url.pathname}${url.search}`;
 }
 
 function apiActorToOutput(actor: ApiActor): ActorOutput {

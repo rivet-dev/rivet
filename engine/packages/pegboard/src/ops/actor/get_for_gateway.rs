@@ -18,6 +18,8 @@ pub struct Output {
 	pub destroyed: bool,
 	pub connectable: bool,
 	pub runner_id: Option<Id>,
+	pub envoy_key: Option<String>,
+	pub version: u32,
 }
 
 #[operation]
@@ -37,6 +39,8 @@ pub async fn pegboard_actor_get_for_gateway(
 			let destroy_ts_key = keys::actor::DestroyTsKey::new(input.actor_id);
 			let connectable_key = keys::actor::ConnectableKey::new(input.actor_id);
 			let runner_id_key = keys::actor::RunnerIdKey::new(input.actor_id);
+			let version_key = keys::actor::VersionKey::new(input.actor_id);
+			let envoy_key_key = keys::actor::EnvoyKeyKey::new(input.actor_id);
 
 			let (
 				namespace_id_entry,
@@ -46,6 +50,8 @@ pub async fn pegboard_actor_get_for_gateway(
 				destroyed,
 				connectable,
 				runner_id,
+				version_entry,
+				envoy_key,
 			) = tokio::try_join!(
 				tx.read_opt(&namespace_id_key, Serializable),
 				tx.read_opt(&workflow_id_key, Serializable),
@@ -54,6 +60,8 @@ pub async fn pegboard_actor_get_for_gateway(
 				tx.exists(&destroy_ts_key, Serializable),
 				tx.exists(&connectable_key, Serializable),
 				tx.read_opt(&runner_id_key, Serializable),
+				tx.read_opt(&version_key, Serializable),
+				tx.read_opt(&envoy_key_key, Serializable),
 			)?;
 
 			let (Some(namespace_id), Some(workflow_id)) = (namespace_id_entry, workflow_id_entry)
@@ -69,6 +77,8 @@ pub async fn pegboard_actor_get_for_gateway(
 				destroyed,
 				connectable,
 				runner_id,
+				envoy_key,
+				version: version_entry.unwrap_or(1),
 			}))
 		})
 		.custom_instrument(tracing::info_span!("actor_get_for_gateway_tx"))

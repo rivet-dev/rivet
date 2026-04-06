@@ -1,12 +1,17 @@
 use std::sync::Arc;
 
+use anyhow::Result;
 use gas::prelude::*;
 use hyper::header::HeaderName;
-use rivet_guard_core::RoutingFn;
+use rivet_guard_core::{RoutingFn, request_context::RequestContext};
 
 use crate::{errors, metrics, shared_state::SharedState};
 
 mod api_public;
+pub mod actor_path;
+mod envoy;
+mod kv_channel;
+pub(crate) mod matrix_param_deserializer;
 pub mod pegboard_gateway;
 mod runner;
 
@@ -18,20 +23,17 @@ pub(crate) const WS_PROTOCOL_TARGET: &str = "rivet_target.";
 pub(crate) const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
 pub(crate) const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
 
-#[derive(Debug, Clone)]
-pub struct ActorPathInfo {
-	pub actor_id: String,
-	pub token: Option<String>,
-	pub stripped_path: String,
-}
-
 /// Creates the main routing function that handles all incoming requests
 #[tracing::instrument(skip_all)]
 pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -> RoutingFn {
 	let ctx = ctx.clone();
+	let kv_channel_handler = Arc::new(
+		pegboard_kv_channel::PegboardKvChannelCustomServe::new(ctx.clone()),
+	);
 	Arc::new(move |req_ctx| {
 		let ctx = ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id()).unwrap();
 		let shared_state = shared_state.clone();
+		let kv_channel_handler = kv_channel_handler.clone();
 		let hostname = req_ctx.hostname().to_string();
 		let path = req_ctx.path().to_string();
 
@@ -41,17 +43,14 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 
 				// MARK: Path-based routing
 				// Route actor
-				if let Some(actor_path_info) = parse_actor_path(req_ctx.path()) {
+				if let Some(actor_path_info) = actor_path::parse_actor_path(req_ctx.path())? {
 					tracing::debug!(?actor_path_info, "routing using path-based actor routing");
 
-					// Route to pegboard gateway with the extracted information
 					if let Some(routing_output) = pegboard_gateway::route_request_path_based(
 						&ctx,
 						&shared_state,
 						req_ctx,
-						&actor_path_info.actor_id,
-						actor_path_info.token.as_deref(),
-						&actor_path_info.stripped_path,
+						&actor_path_info,
 					)
 					.await?
 					{
@@ -66,6 +65,26 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 					runner::route_request_path_based(&ctx, req_ctx).await?
 				{
 					metrics::ROUTE_TOTAL.with_label_values(&["runner"]).inc();
+
+					return Ok(routing_output);
+				}
+
+				// Route envoy
+				if let Some(routing_output) = envoy::route_request_path_based(&ctx, req_ctx).await?
+				{
+					metrics::ROUTE_TOTAL.with_label_values(&["envoy"]).inc();
+
+					return Ok(routing_output);
+				}
+
+				// Route KV channel
+				if let Some(routing_output) =
+					kv_channel::route_request_path_based(&ctx, req_ctx, &kv_channel_handler)
+						.await?
+				{
+					metrics::ROUTE_TOTAL
+						.with_label_values(&["kv_channel"])
+						.inc();
 
 					return Ok(routing_output);
 				}
@@ -96,6 +115,15 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 				// Read target
 				if let Some(target) = target {
 					if let Some(routing_output) =
+						pegboard_gateway::route_request(&ctx, &shared_state, req_ctx, target)
+							.await?
+					{
+						metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
+
+						return Ok(routing_output);
+					}
+
+					if let Some(routing_output) =
 						runner::route_request(&ctx, req_ctx, target).await?
 					{
 						metrics::ROUTE_TOTAL.with_label_values(&["runner"]).inc();
@@ -104,10 +132,9 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 					}
 
 					if let Some(routing_output) =
-						pegboard_gateway::route_request(&ctx, &shared_state, req_ctx, target)
-							.await?
+						envoy::route_request(&ctx, req_ctx, target).await?
 					{
-						metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
+						metrics::ROUTE_TOTAL.with_label_values(&["envoy"]).inc();
 
 						return Ok(routing_output);
 					}
@@ -142,98 +169,37 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 	})
 }
 
-/// Parse actor routing information from path
-/// Matches patterns:
-/// - /gateway/{actor_id}/{...path}
-/// - /gateway/{actor_id}@{token}/{...path}
-pub fn parse_actor_path(path: &str) -> Option<ActorPathInfo> {
-	// Find query string position (everything from ? onwards, but before fragment)
-	let query_pos = path.find('?');
-	let fragment_pos = path.find('#');
+/// Validates that the request hostname is valid for the current datacenter.
+/// Returns an error if the host does not match a valid regional host.
+pub(crate) fn validate_regional_host(
+	ctx: &StandaloneCtx,
+	req_ctx: &RequestContext,
+) -> Result<()> {
+	let current_dc = ctx.config().topology().current_dc()?;
+	if !current_dc.is_valid_regional_host(req_ctx.hostname()) {
+		tracing::warn!(
+			hostname = %req_ctx.hostname(),
+			datacenter = ?current_dc.name,
+			"invalid host for current datacenter"
+		);
 
-	// Extract query string (excluding fragment)
-	let query_string = match (query_pos, fragment_pos) {
-		(Some(q), Some(f)) if q < f => &path[q..f],
-		(Some(q), None) => &path[q..],
-		_ => "",
-	};
+		let valid_hosts = if let Some(hosts) = &current_dc.valid_hosts {
+			hosts.join(", ")
+		} else {
+			current_dc
+				.public_url
+				.host_str()
+				.map(|h| h.to_string())
+				.unwrap_or_else(|| "unknown".to_string())
+		};
 
-	// Extract base path (before query and fragment)
-	let base_path = match query_pos {
-		Some(pos) => &path[..pos],
-		None => match fragment_pos {
-			Some(pos) => &path[..pos],
-			None => path,
-		},
-	};
-
-	// Check for double slashes (invalid path)
-	if base_path.contains("//") {
-		return None;
-	}
-
-	// Split the path into segments
-	let segments: Vec<&str> = base_path.split('/').filter(|s| !s.is_empty()).collect();
-
-	// Check minimum required segments: gateway, {actor_id}
-	if segments.len() < 2 {
-		return None;
-	}
-
-	// Verify the fixed segment
-	if segments[0] != "gateway" {
-		return None;
-	}
-
-	// Check for empty actor_id segment
-	if segments[1].is_empty() {
-		return None;
-	}
-
-	// Parse actor_id and optional token from second segment
-	// Pattern: {actor_id}@{token} or just {actor_id}
-	let actor_id_segment = segments[1];
-	let (actor_id, token) = if let Some(at_pos) = actor_id_segment.find('@') {
-		let aid = &actor_id_segment[..at_pos];
-		let tok = &actor_id_segment[at_pos + 1..];
-
-		// Check for empty actor_id or token
-		if aid.is_empty() || tok.is_empty() {
-			return None;
+		return Err(errors::MustUseRegionalHost {
+			host: req_ctx.hostname().to_string(),
+			datacenter: current_dc.name.clone(),
+			valid_hosts,
 		}
+		.build());
+	}
 
-		// URL-decode both actor_id and token
-		let decoded_aid = urlencoding::decode(aid).ok()?.to_string();
-		let decoded_tok = urlencoding::decode(tok).ok()?.to_string();
-
-		(decoded_aid, Some(decoded_tok))
-	} else {
-		// URL-decode actor_id
-		let decoded_aid = urlencoding::decode(actor_id_segment).ok()?.to_string();
-		(decoded_aid, None)
-	};
-
-	// Calculate the position in the original path where remaining path starts
-	// We need to skip "/gateway/{actor_id_segment}"
-	let prefix_len = 1 + segments[0].len() + 1 + segments[1].len(); // "/gateway/{actor_id_segment}"
-
-	// Extract the remaining path preserving trailing slashes
-	let remaining_base = if prefix_len < base_path.len() {
-		&base_path[prefix_len..]
-	} else {
-		"/"
-	};
-
-	// Ensure remaining path starts with /
-	let remaining_path = if remaining_base.is_empty() || !remaining_base.starts_with('/') {
-		format!("/{}{}", remaining_base, query_string)
-	} else {
-		format!("{}{}", remaining_base, query_string)
-	};
-
-	Some(ActorPathInfo {
-		actor_id,
-		token,
-		stripped_path: remaining_path,
-	})
+	Ok(())
 }

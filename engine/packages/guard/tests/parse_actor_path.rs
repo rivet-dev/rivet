@@ -1,240 +1,348 @@
-use rivet_guard::routing::parse_actor_path;
+// Keep this test suite in sync with the TypeScript equivalent at
+// rivetkit-typescript/packages/rivetkit/tests/parse-actor-path.test.ts
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use rivet_guard::routing::actor_path::{ParsedActorPath, QueryActorQuery, parse_actor_path};
 
 #[test]
-fn test_parse_actor_path_with_token() {
-	// Basic path with token using @ syntax
-	let path = "/gateway/actor-123@my-token/api/v1/endpoint";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-123");
-	assert_eq!(result.token, Some("my-token".to_string()));
-	assert_eq!(result.stripped_path, "/api/v1/endpoint");
+fn parses_direct_actor_paths_with_existing_behavior() {
+	let path = "/gateway/actor%2D123@tok%40en/api/v1/endpoint?foo=bar#section";
+	let result = parse_actor_path(path).unwrap().unwrap();
+
+	match result {
+		ParsedActorPath::Direct(path) => {
+			assert_eq!(path.actor_id, "actor-123");
+			assert_eq!(path.token.as_deref(), Some("tok@en"));
+			assert_eq!(path.stripped_path, "/api/v1/endpoint?foo=bar");
+		}
+		ParsedActorPath::Query(_) => panic!("expected direct actor path"),
+	}
 }
 
 #[test]
-fn test_parse_actor_path_without_token() {
-	// Path without token
-	let path = "/gateway/actor-123/api/v1/endpoint";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-123");
-	assert_eq!(result.token, None);
-	assert_eq!(result.stripped_path, "/api/v1/endpoint");
+fn parses_query_actor_get_paths() {
+	let path = "/gateway/lobby;namespace=prod;method=get;key=region%2Cwest%2F1,,alpha%40beta;token=guard%2Ftoken/inspect?watch=1";
+	let result = parse_actor_path(path).unwrap().unwrap();
+
+	match result {
+		ParsedActorPath::Query(path) => {
+			assert_eq!(path.token.as_deref(), Some("guard/token"));
+			assert_eq!(path.stripped_path, "/inspect?watch=1");
+			assert_eq!(
+				path.query,
+				QueryActorQuery::Get {
+					namespace: "prod".to_string(),
+					name: "lobby".to_string(),
+					key: vec![
+						"region,west/1".to_string(),
+						"".to_string(),
+						"alpha@beta".to_string(),
+					],
+				}
+			);
+		}
+		ParsedActorPath::Direct(_) => panic!("expected query actor path"),
+	}
 }
 
 #[test]
-fn test_parse_actor_path_with_uuid() {
-	// Path with UUID as actor ID
-	let path = "/gateway/12345678-1234-1234-1234-123456789abc/status";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "12345678-1234-1234-1234-123456789abc");
-	assert_eq!(result.token, None);
-	assert_eq!(result.stripped_path, "/status");
+fn parses_query_actor_get_or_create_paths_with_input_and_region() {
+	let input_bytes = vec![
+		0xa2, 0x65, b'c', b'o', b'u', b'n', b't', 0x02, 0x67, b'e', b'n', b'a', b'b', b'l',
+		b'e', b'd', 0xf5,
+	];
+	let input = encode_cbor_base64url(&input_bytes);
+	let path = format!(
+		"/gateway/worker;namespace=default;method=getOrCreate;runnerName=default;key=shard-1;input={input};region=us-west-2/connect"
+	);
+
+	let result = parse_actor_path(&path).unwrap().unwrap();
+
+	match result {
+		ParsedActorPath::Query(path) => {
+			assert_eq!(path.token, None);
+			assert_eq!(path.stripped_path, "/connect");
+			assert_eq!(
+				path.query,
+				QueryActorQuery::GetOrCreate {
+					namespace: "default".to_string(),
+					name: "worker".to_string(),
+					runner_name: "default".to_string(),
+					key: vec!["shard-1".to_string()],
+					input: Some(input_bytes),
+					region: Some("us-west-2".to_string()),
+					crash_policy: None,
+				}
+			);
+		}
+		ParsedActorPath::Direct(_) => panic!("expected query actor path"),
+	}
 }
 
 #[test]
-fn test_parse_actor_path_with_query_params() {
-	// Path with query parameters
-	let path = "/gateway/actor-456/api/endpoint?foo=bar&baz=qux";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-456");
-	assert_eq!(result.token, None);
-	assert_eq!(result.stripped_path, "/api/endpoint?foo=bar&baz=qux");
+fn parses_query_actor_get_or_create_paths_with_empty_key_component() {
+	let input_bytes = vec![0x65, b'h', b'e', b'l', b'l', b'o'];
+	let input = encode_cbor_base64url(&input_bytes);
+	let path = format!(
+		"/gateway/worker;namespace=default;method=getOrCreate;runnerName=default;key=,;input={input}/socket"
+	);
 
-	// Path with token and query parameters
-	let path = "/gateway/actor-456@token123/api?key=value";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-456");
-	assert_eq!(result.token, Some("token123".to_string()));
-	assert_eq!(result.stripped_path, "/api?key=value");
+	let result = parse_actor_path(&path).unwrap().unwrap();
+
+	match result {
+		ParsedActorPath::Query(path) => {
+			assert_eq!(
+				path.query,
+				QueryActorQuery::GetOrCreate {
+					namespace: "default".to_string(),
+					name: "worker".to_string(),
+					runner_name: "default".to_string(),
+					key: vec!["".to_string(), "".to_string()],
+					input: Some(input_bytes),
+					region: None,
+					crash_policy: None,
+				}
+			);
+			assert_eq!(path.stripped_path, "/socket");
+		}
+		ParsedActorPath::Direct(_) => panic!("expected query actor path"),
+	}
 }
 
 #[test]
-fn test_parse_actor_path_with_fragment() {
-	// Path with fragment
-	let path = "/gateway/actor-789/page#section";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-789");
-	assert_eq!(result.token, None);
-	// Fragment is stripped during parsing
-	assert_eq!(result.stripped_path, "/page");
+fn parses_query_actor_get_paths_with_key_equals_as_single_empty_component() {
+	let path = "/gateway/lobby;namespace=default;method=get;key=";
+	let result = parse_actor_path(path).unwrap().unwrap();
+
+	match result {
+		ParsedActorPath::Query(path) => {
+			assert_eq!(
+				path.query,
+				QueryActorQuery::Get {
+					namespace: "default".to_string(),
+					name: "lobby".to_string(),
+					key: vec!["".to_string()],
+				}
+			);
+			assert_eq!(path.stripped_path, "/");
+		}
+		ParsedActorPath::Direct(_) => panic!("expected query actor path"),
+	}
 }
 
 #[test]
-fn test_parse_actor_path_empty_remaining() {
-	// Path with no remaining path
-	let path = "/gateway/actor-000";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-000");
-	assert_eq!(result.token, None);
-	assert_eq!(result.stripped_path, "/");
+fn omits_key_when_not_present() {
+	let path = "/gateway/builder;namespace=default;method=getOrCreate;runnerName=default";
+	let result = parse_actor_path(path).unwrap().unwrap();
 
-	// With token and no remaining path
-	let path = "/gateway/actor-000@tok";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-000");
-	assert_eq!(result.token, Some("tok".to_string()));
-	assert_eq!(result.stripped_path, "/");
+	match result {
+		ParsedActorPath::Query(path) => {
+			assert_eq!(
+				path.query,
+				QueryActorQuery::GetOrCreate {
+					namespace: "default".to_string(),
+					name: "builder".to_string(),
+					runner_name: "default".to_string(),
+					key: Vec::new(),
+					input: None,
+					region: None,
+					crash_policy: None,
+				}
+			);
+			assert_eq!(path.stripped_path, "/");
+		}
+		ParsedActorPath::Direct(_) => panic!("expected query actor path"),
+	}
 }
 
 #[test]
-fn test_parse_actor_path_with_trailing_slash() {
-	// Path with trailing slash
-	let path = "/gateway/actor-111/api/";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-111");
-	assert_eq!(result.token, None);
-	assert_eq!(result.stripped_path, "/api/");
+fn parses_crash_policy_param() {
+	let path = "/gateway/worker;namespace=default;method=getOrCreate;runnerName=default;crashPolicy=restart";
+	let result = parse_actor_path(path).unwrap().unwrap();
+
+	match result {
+		ParsedActorPath::Query(path) => {
+			assert_eq!(
+				path.query,
+				QueryActorQuery::GetOrCreate {
+					namespace: "default".to_string(),
+					name: "worker".to_string(),
+					runner_name: "default".to_string(),
+					key: Vec::new(),
+					input: None,
+					region: None,
+					crash_policy: Some(rivet_types::actors::CrashPolicy::Restart),
+				}
+			);
+		}
+		ParsedActorPath::Direct(_) => panic!("expected query actor path"),
+	}
 }
 
 #[test]
-fn test_parse_actor_path_complex_remaining() {
-	// Complex remaining path with multiple segments
-	let path = "/gateway/actor-complex@secure-token/api/v2/users/123/profile/settings";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-complex");
-	assert_eq!(result.token, Some("secure-token".to_string()));
-	assert_eq!(result.stripped_path, "/api/v2/users/123/profile/settings");
+fn rejects_missing_namespace() {
+	let err = parse_actor_path("/gateway/lobby;method=get")
+		.unwrap_err()
+		.to_string();
+	assert!(err.contains("namespace"), "expected namespace error, got: {err}");
 }
 
 #[test]
-fn test_parse_actor_path_special_characters() {
-	// Actor ID with allowed special characters
-	let path = "/gateway/actor_id-123.test/endpoint";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor_id-123.test");
-	assert_eq!(result.token, None);
-	assert_eq!(result.stripped_path, "/endpoint");
+fn rejects_create_query_method() {
+	let err = parse_actor_path("/gateway/lobby;namespace=default;method=create")
+		.unwrap_err()
+		.to_string();
+	assert!(err.contains("create"), "expected create error, got: {err}");
 }
 
 #[test]
-fn test_parse_actor_path_encoded_characters() {
-	// URL encoded characters in remaining path
-	let path = "/gateway/actor-123/api%20endpoint/test%2Fpath";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-123");
-	assert_eq!(result.token, None);
-	assert_eq!(result.stripped_path, "/api%20endpoint/test%2Fpath");
+fn rejects_unknown_query_params() {
+	let err = parse_actor_path("/gateway/lobby;namespace=default;method=get;unknown=value")
+		.unwrap_err()
+		.to_string();
+	assert!(err.contains("unknown query gateway param: unknown"));
 }
 
 #[test]
-fn test_parse_actor_path_encoded_actor_id() {
-	// URL encoded characters in actor_id (e.g., actor-123 with hyphen encoded)
-	let path = "/gateway/actor%2D123/endpoint";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-123");
-	assert_eq!(result.token, None);
-	assert_eq!(result.stripped_path, "/endpoint");
+fn rejects_duplicate_query_params() {
+	let err = parse_actor_path("/gateway/lobby;namespace=default;method=get;method=create")
+		.unwrap_err()
+		.to_string();
+	assert!(err.contains("duplicate query gateway param: method"));
 }
 
 #[test]
-fn test_parse_actor_path_encoded_token() {
-	// URL encoded characters in token (e.g., @ symbol encoded in token)
-	let path = "/gateway/actor-123@tok%40en/endpoint";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-123");
-	assert_eq!(result.token, Some("tok@en".to_string()));
-	assert_eq!(result.stripped_path, "/endpoint");
+fn rejects_name_as_matrix_param() {
+	let err = parse_actor_path("/gateway/lobby;namespace=default;method=get;name=other")
+		.unwrap_err()
+		.to_string();
+	assert!(err.contains("duplicate query gateway param: name"));
 }
 
 #[test]
-fn test_parse_actor_path_encoded_actor_id_and_token() {
-	// URL encoded characters in both actor_id and token
-	let path = "/gateway/actor%2D123@token%2Dwith%2Dencoded/endpoint";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-123");
-	assert_eq!(result.token, Some("token-with-encoded".to_string()));
-	assert_eq!(result.stripped_path, "/endpoint");
+fn rejects_namespace_as_matrix_param() {
+	let err = parse_actor_path("/gateway/lobby;namespace=default;method=get;namespace=other")
+		.unwrap_err()
+		.to_string();
+	assert!(err.contains("duplicate query gateway param: namespace"));
 }
 
 #[test]
-fn test_parse_actor_path_encoded_spaces() {
-	// URL encoded spaces in actor_id
-	let path = "/gateway/actor%20with%20spaces/endpoint";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor with spaces");
-	assert_eq!(result.token, None);
-	assert_eq!(result.stripped_path, "/endpoint");
-}
-
-// Invalid path tests
-
-#[test]
-fn test_parse_actor_path_invalid_prefix() {
-	// Wrong prefix
-	assert!(parse_actor_path("/api/123/endpoint").is_none());
-	assert!(parse_actor_path("/actor/123/endpoint").is_none());
+fn rejects_query_params_missing_equals() {
+	let err = parse_actor_path("/gateway/lobby;namespace=default;method=get;key")
+		.unwrap_err()
+		.to_string();
+	assert!(err.contains("query gateway param is missing '=': key"));
 }
 
 #[test]
-fn test_parse_actor_path_too_short() {
-	// Too few segments
-	assert!(parse_actor_path("/gateway").is_none());
+fn rejects_invalid_percent_encoding_in_name() {
+	let err = parse_actor_path("/gateway/lobb%ZZy;namespace=default;method=get")
+		.unwrap_err()
+		.to_string();
+	assert!(err.contains("invalid percent-encoding for query gateway param 'name'"));
 }
 
 #[test]
-fn test_parse_actor_path_malformed_token() {
-	// Token without actor_id (empty before @)
-	assert!(parse_actor_path("/gateway/@tok/api").is_none());
-	// Empty token (nothing after @)
-	assert!(parse_actor_path("/gateway/actor-123@/api").is_none());
+fn rejects_empty_query_actor_name() {
+	let err = parse_actor_path("/gateway/;namespace=default;method=get")
+		.unwrap_err()
+		.to_string();
+	assert!(err.contains("query gateway actor name must not be empty"));
 }
 
 #[test]
-fn test_parse_actor_path_empty_values() {
-	// Empty actor_id
-	assert!(parse_actor_path("/gateway//endpoint").is_none());
+fn rejects_invalid_base64url_input() {
+	let err = parse_actor_path("/gateway/lobby;namespace=default;method=getOrCreate;runnerName=default;input=*")
+		.unwrap_err()
+		.to_string();
+	assert!(err.contains("invalid base64url in query gateway input"));
 }
 
 #[test]
-fn test_parse_actor_path_double_slash() {
-	// Double slashes in path
-	let path = "/gateway//actor-123/endpoint";
-	// This will fail because the double slash creates an empty segment
-	assert!(parse_actor_path(path).is_none());
+fn rejects_invalid_cbor_input() {
+	let invalid_input = URL_SAFE_NO_PAD.encode(b"foo");
+	let err = parse_actor_path(&format!(
+		"/gateway/lobby;namespace=default;method=getOrCreate;runnerName=default;input={invalid_input}"
+	))
+	.unwrap_err()
+	.to_string();
+	assert!(err.contains("invalid query gateway input cbor"));
 }
 
 #[test]
-fn test_parse_actor_path_case_sensitive() {
-	// Keywords are case sensitive
-	assert!(parse_actor_path("/Gateway/123/endpoint").is_none());
+fn rejects_raw_at_token_syntax_in_query_paths() {
+	let err = parse_actor_path("/gateway/lobby;namespace=default;method=get@token/connect")
+		.unwrap_err()
+		.to_string();
+	assert!(err.contains("query gateway paths must not use @token syntax"));
 }
 
 #[test]
-fn test_parse_actor_path_query_and_fragment() {
-	// Path with both query and fragment
-	let path = "/gateway/actor-123/api?query=1#section";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-123");
-	assert_eq!(result.token, None);
-	// Fragment is stripped, query is preserved
-	assert_eq!(result.stripped_path, "/api?query=1");
+fn rejects_input_for_get_queries() {
+	let input = encode_cbor_base64url(&[
+		0xa1, 0x65, b'h', b'e', b'l', b'l', b'o', 0x65, b'w', b'o', b'r', b'l', b'd',
+	]);
+	let err = parse_actor_path(&format!(
+		"/gateway/lobby;namespace=default;method=get;input={input}"
+	))
+	.unwrap_err()
+	.to_string();
+	assert!(err.contains(
+		"query gateway method=get does not allow input, region, crashPolicy, or runnerName params"
+	));
 }
 
 #[test]
-fn test_parse_actor_path_only_query_string() {
-	// Path ending after actor_id but having query string
-	let path = "/gateway/actor-123?direct=true";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-123");
-	assert_eq!(result.token, None);
-	assert_eq!(result.stripped_path, "/?direct=true");
+fn rejects_region_for_get_queries() {
+	let err = parse_actor_path("/gateway/lobby;namespace=default;method=get;region=us-east-1")
+		.unwrap_err()
+		.to_string();
+	assert!(err.contains(
+		"query gateway method=get does not allow input, region, crashPolicy, or runnerName params"
+	));
 }
 
 #[test]
-fn test_parse_actor_path_token_with_special_chars() {
-	// Token containing special characters
-	let path = "/gateway/actor-123@token_with-chars.123/endpoint";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-123");
-	assert_eq!(result.token, Some("token_with-chars.123".to_string()));
-	assert_eq!(result.stripped_path, "/endpoint");
+fn rejects_crash_policy_for_get_queries() {
+	let err = parse_actor_path(
+		"/gateway/lobby;namespace=default;method=get;crashPolicy=restart",
+	)
+	.unwrap_err()
+	.to_string();
+	assert!(err.contains(
+		"query gateway method=get does not allow input, region, crashPolicy, or runnerName params"
+	));
 }
 
 #[test]
-fn test_parse_actor_path_multiple_at_signs() {
-	// Multiple @ signs - only first one is used for token splitting
-	let path = "/gateway/actor-123@token@with@ats/endpoint";
-	let result = parse_actor_path(path).unwrap();
-	assert_eq!(result.actor_id, "actor-123");
-	assert_eq!(result.token, Some("token@with@ats".to_string()));
-	assert_eq!(result.stripped_path, "/endpoint");
+fn rejects_runner_name_for_get_queries() {
+	let err = parse_actor_path(
+		"/gateway/lobby;namespace=default;method=get;runnerName=default",
+	)
+	.unwrap_err()
+	.to_string();
+	assert!(err.contains(
+		"query gateway method=get does not allow input, region, crashPolicy, or runnerName params"
+	));
+}
+
+#[test]
+fn rejects_missing_runner_name_for_get_or_create_queries() {
+	let err = parse_actor_path(
+		"/gateway/lobby;namespace=default;method=getOrCreate",
+	)
+	.unwrap_err()
+	.to_string();
+	assert!(err.contains(
+		"query gateway method=getOrCreate requires runnerName param"
+	));
+}
+
+#[test]
+fn preserves_non_gateway_paths_as_none() {
+	assert!(parse_actor_path("/actors/lobby").unwrap().is_none());
+}
+
+fn encode_cbor_base64url(bytes: &[u8]) -> String {
+	URL_SAFE_NO_PAD.encode(bytes)
 }

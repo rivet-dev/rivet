@@ -54,7 +54,7 @@ pub struct DatabaseKv {
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
 	subspace: universaldb::utils::Subspace,
-	system: Mutex<system::SystemInfo>,
+	system: Arc<Mutex<system::SystemInfo>>,
 }
 
 impl DatabaseKv {
@@ -431,11 +431,12 @@ impl Database for DatabaseKv {
 		config: rivet_config::Config,
 		pools: rivet_pools::Pools,
 	) -> anyhow::Result<Arc<Self>> {
+		metrics::DB_INSTANCE.inc();
 		Ok(Arc::new(DatabaseKv {
 			config,
 			pools,
 			subspace: universaldb::utils::Subspace::new(&(RIVET, GASOLINE, KV)),
-			system: Mutex::new(system::SystemInfo::new()),
+			system: system::SystemInfo::get(),
 		}))
 	}
 
@@ -899,6 +900,7 @@ impl Database for DatabaseKv {
 						.map(|workflow_id| {
 							let tx = tx.clone();
 							async move {
+								let name_key = keys::workflow::NameKey::new(workflow_id);
 								let input_key = keys::workflow::InputKey::new(workflow_id);
 								let input_subspace = self.subspace.subspace(&input_key);
 								let state_key = keys::workflow::StateKey::new(workflow_id);
@@ -910,11 +912,13 @@ impl Database for DatabaseKv {
 
 								// Read input and output
 								let (
+									name_entry,
 									input_chunks,
 									state_chunks,
 									output_chunks,
 									has_wake_condition_entry,
 								) = tokio::try_join!(
+									tx.get(&self.subspace.pack(&name_key), Serializable),
 									tx.get_ranges_keyvalues(
 										universaldb::RangeOption {
 											mode: StreamingMode::WantAll,
@@ -964,6 +968,9 @@ impl Database for DatabaseKv {
 
 									Ok(Some(WorkflowData {
 										workflow_id,
+										name: name_key.deserialize(
+											&name_entry.context("name key should exist")?,
+										)?,
 										input,
 										state,
 										output,
@@ -1159,6 +1166,7 @@ impl Database for DatabaseKv {
 
 							anyhow::Ok(buffer)
 						}
+						.custom_instrument(tracing::debug_span!("read_wake_conditions"))
 					)?;
 
 					// Sort for consistency across all workers
@@ -1305,7 +1313,7 @@ impl Database for DatabaseKv {
 						.buffer_unordered(1024)
 						.try_filter_map(|x| std::future::ready(Ok(x)))
 						.try_collect::<Vec<_>>()
-						.instrument(tracing::trace_span!("map_to_leased_workflows"))
+						.custom_instrument(tracing::debug_span!("map_to_leased_workflows"))
 						.await?;
 
 					// Clear all wake conditions from workflows that we have leased
@@ -2392,6 +2400,7 @@ impl Database for DatabaseKv {
 			.map_err(WorkflowError::PoolsGeneric)?
 			.run(|tx| {
 				async move {
+					let name_key = keys::workflow::NameKey::new(sub_workflow_id);
 					let input_key = keys::workflow::InputKey::new(sub_workflow_id);
 					let input_subspace = self.subspace.subspace(&input_key);
 					let state_key = keys::workflow::StateKey::new(sub_workflow_id);
@@ -2402,7 +2411,14 @@ impl Database for DatabaseKv {
 						keys::workflow::HasWakeConditionKey::new(sub_workflow_id);
 
 					// Read input and output
-					let (input_chunks, state_chunks, output_chunks, has_wake_condition_entry) = tokio::try_join!(
+					let (
+						name_entry,
+						input_chunks,
+						state_chunks,
+						output_chunks,
+						has_wake_condition_entry,
+					) = tokio::try_join!(
+						tx.get(&self.subspace.pack(&name_key), Serializable),
 						tx.get_ranges_keyvalues(
 							universaldb::RangeOption {
 								mode: StreamingMode::WantAll,
@@ -2464,6 +2480,8 @@ impl Database for DatabaseKv {
 
 						Ok(Some(WorkflowData {
 							workflow_id: sub_workflow_id,
+							name: name_key
+								.deserialize(&name_entry.context("name key should exist")?)?,
 							input,
 							state,
 							output,
@@ -3117,6 +3135,12 @@ impl Database for DatabaseKv {
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
+	}
+}
+
+impl Drop for DatabaseKv {
+	fn drop(&mut self) {
+		metrics::DB_INSTANCE.dec();
 	}
 }
 

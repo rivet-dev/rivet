@@ -96,7 +96,7 @@ actors have create, destroy, wake, and sleep lifecycle hooks that you can implem
 
 - acotrs can optionally have a globally unique "key"
 - when creating an actor with a key
-- this system is highly optimized to reduce wan round trips using a process call EPaxos with a custom database called Epoxy (link to https://github.com/rivet-dev/rivet/tree/main/engine/packages/epoxy)
+- this system is highly optimized to reduce wan round trips using per-key Paxos with a custom database called Epoxy (https://github.com/rivet-dev/rivet/tree/main/engine/packages/epoxy)
 - limitation: when creating an actor with a given key, that key will always be pinned to that region even if the actor is destroyed. creating a new actor with the same key will always live in the same region.
 - see the acotr keys document
 
@@ -448,4 +448,3 @@ rivet has similarities with both to provide more flexibility:
 	- actors can impelment the inbox pattern optionally
 	- but we provide lower-level networking to be able to be compatible with more techniologies
 	- rivet assumes the same serial concurerntly that other actors do (by the nature of javascript being single-threaded) but we allow you to run promises in parallel or handl eyour own concurrency control (which some other actor frameworks might require a spawning new actor to do)
-

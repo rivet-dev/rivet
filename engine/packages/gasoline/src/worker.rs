@@ -84,7 +84,7 @@ impl Worker {
 		let mut tick_interval = tokio::time::interval(self.db.worker_poll_interval());
 		tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-		let mut term_signal = TermSignal::new().await;
+		let mut term_signal = TermSignal::get();
 
 		// Update ping at least once before doing anything else
 		self.db
@@ -344,10 +344,10 @@ impl Worker {
 		let shutdown_start = Instant::now();
 		loop {
 			// Future will resolve once all workflow tasks complete
-			let join_fut = async { while let Some(_) = wf_futs.next().await {} };
+			let complete_fut = async { while let Some(_) = wf_futs.next().await {} };
 
 			tokio::select! {
-				_ = join_fut => {
+				_ = complete_fut => {
 					break;
 				}
 				_ = progress_interval.tick() => {

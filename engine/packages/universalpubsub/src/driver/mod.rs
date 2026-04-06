@@ -45,6 +45,11 @@ impl PublishOpts {
 #[async_trait]
 pub trait PubSubDriver: Send + Sync {
 	async fn subscribe(&self, subject: &str) -> Result<Box<dyn SubscriberDriver>>;
+	async fn queue_subscribe(
+		&self,
+		subject: &str,
+		queue: &str,
+	) -> Result<Box<dyn SubscriberDriver>>;
 	async fn publish(&self, subject: &str, message: &[u8]) -> Result<()>;
 	async fn flush(&self) -> Result<()>;
 	fn max_message_size(&self) -> usize;

@@ -8,18 +8,19 @@ pub enum NamespaceRunnerConfig {
 	V2(namespace_runner_config_v2::RunnerConfig),
 	V3(namespace_runner_config_v3::RunnerConfig),
 	V4(namespace_runner_config_v4::RunnerConfig),
+	V5(namespace_runner_config_v5::RunnerConfig),
 }
 
 impl OwnedVersionedData for NamespaceRunnerConfig {
-	type Latest = namespace_runner_config_v4::RunnerConfig;
+	type Latest = namespace_runner_config_v5::RunnerConfig;
 
-	fn wrap_latest(latest: namespace_runner_config_v4::RunnerConfig) -> Self {
-		NamespaceRunnerConfig::V4(latest)
+	fn wrap_latest(latest: namespace_runner_config_v5::RunnerConfig) -> Self {
+		NamespaceRunnerConfig::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
-		if let NamespaceRunnerConfig::V4(data) = self {
+		if let NamespaceRunnerConfig::V5(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -32,6 +33,7 @@ impl OwnedVersionedData for NamespaceRunnerConfig {
 			2 => Ok(NamespaceRunnerConfig::V2(serde_bare::from_slice(payload)?)),
 			3 => Ok(NamespaceRunnerConfig::V3(serde_bare::from_slice(payload)?)),
 			4 => Ok(NamespaceRunnerConfig::V4(serde_bare::from_slice(payload)?)),
+			5 => Ok(NamespaceRunnerConfig::V5(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -42,15 +44,26 @@ impl OwnedVersionedData for NamespaceRunnerConfig {
 			NamespaceRunnerConfig::V2(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			NamespaceRunnerConfig::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			NamespaceRunnerConfig::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			NamespaceRunnerConfig::V5(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4]
+		vec![
+			Self::v1_to_v2,
+			Self::v2_to_v3,
+			Self::v3_to_v4,
+			Self::v4_to_v5,
+		]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1]
+		vec![
+			Self::v5_to_v4,
+			Self::v4_to_v3,
+			Self::v3_to_v2,
+			Self::v2_to_v1,
+		]
 	}
 }
 
@@ -267,6 +280,89 @@ impl NamespaceRunnerConfig {
 
 			Ok(NamespaceRunnerConfig::V3(
 				namespace_runner_config_v3::RunnerConfig {
+					kind,
+					metadata,
+					drain_on_version_upgrade,
+				},
+			))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v4_to_v5(self) -> Result<Self> {
+		if let NamespaceRunnerConfig::V4(config) = self {
+			let namespace_runner_config_v4::RunnerConfig {
+				kind,
+				metadata,
+				drain_on_version_upgrade,
+			} = config;
+
+			let kind = match kind {
+				namespace_runner_config_v4::RunnerConfigKind::Serverless(serverless) => {
+					namespace_runner_config_v5::RunnerConfigKind::Serverless(
+						namespace_runner_config_v5::Serverless {
+							url: serverless.url,
+							headers: serverless.headers,
+							request_lifespan: serverless.request_lifespan,
+							// Default to max_runners for v4 -> v5 migration
+							max_concurrent_actors: serverless.max_runners as u64,
+							slots_per_runner: serverless.slots_per_runner,
+							min_runners: serverless.min_runners,
+							max_runners: serverless.max_runners,
+							runners_margin: serverless.runners_margin,
+							metadata_poll_interval: serverless.metadata_poll_interval,
+						},
+					)
+				}
+				namespace_runner_config_v4::RunnerConfigKind::Normal => {
+					namespace_runner_config_v5::RunnerConfigKind::Normal
+				}
+			};
+
+			Ok(NamespaceRunnerConfig::V5(
+				namespace_runner_config_v5::RunnerConfig {
+					kind,
+					metadata,
+					drain_on_version_upgrade,
+				},
+			))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v5_to_v4(self) -> Result<Self> {
+		if let NamespaceRunnerConfig::V5(config) = self {
+			let namespace_runner_config_v5::RunnerConfig {
+				kind,
+				metadata,
+				drain_on_version_upgrade,
+			} = config;
+
+			let kind = match kind {
+				namespace_runner_config_v5::RunnerConfigKind::Serverless(serverless) => {
+					namespace_runner_config_v4::RunnerConfigKind::Serverless(
+						namespace_runner_config_v4::Serverless {
+							url: serverless.url,
+							headers: serverless.headers,
+							request_lifespan: serverless.request_lifespan,
+							// max_concurrent_actors is dropped in downgrade
+							slots_per_runner: serverless.slots_per_runner,
+							min_runners: serverless.min_runners,
+							max_runners: serverless.max_runners,
+							runners_margin: serverless.runners_margin,
+							metadata_poll_interval: serverless.metadata_poll_interval,
+						},
+					)
+				}
+				namespace_runner_config_v5::RunnerConfigKind::Normal => {
+					namespace_runner_config_v4::RunnerConfigKind::Normal
+				}
+			};
+
+			Ok(NamespaceRunnerConfig::V4(
+				namespace_runner_config_v4::RunnerConfig {
 					kind,
 					metadata,
 					drain_on_version_upgrade,

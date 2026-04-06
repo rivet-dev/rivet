@@ -148,6 +148,8 @@ where
 			} else {
 				tracing::debug!(?tags, "unique workflow already exists");
 			}
+		} else {
+			tracing::debug!(?actual_workflow_id, "dispatched workflow");
 		}
 
 		if workflow_id == actual_workflow_id {

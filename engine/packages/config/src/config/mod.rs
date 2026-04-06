@@ -203,6 +203,31 @@ impl Root {
 			}
 		}
 
+		// Set name property for map topology
+		if let Some(topology) = &mut self.topology {
+			match &mut topology.datacenters {
+				DatacentersRepr::Map(m) => {
+					for (name, dc) in m {
+						if !dc.name.is_empty() {
+							bail!(
+								"datacenter '{}' cannot have the `name` property set because it is automatically derived from key",
+								dc.name
+							);
+						}
+
+						dc.name = name.clone();
+					}
+				}
+				DatacentersRepr::List(l) => {
+					for (i, dc) in l.iter().enumerate() {
+						if dc.name.is_empty() {
+							bail!("datacenter at index {} must have a name", i);
+						}
+					}
+				}
+			}
+		}
+
 		// Validate force_shutdown_duration is greater than worker and guard shutdown durations
 		let worker = self.runtime.worker_shutdown_duration();
 		let guard = self.runtime.guard_shutdown_duration();

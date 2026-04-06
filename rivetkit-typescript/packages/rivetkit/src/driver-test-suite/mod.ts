@@ -17,6 +17,7 @@ import { runActorConnTests } from "./tests/actor-conn";
 import { runActorConnHibernationTests } from "./tests/actor-conn-hibernation";
 import { runActorConnStateTests } from "./tests/actor-conn-state";
 import { runActorDbTests } from "./tests/actor-db";
+import { runActorDbStressTests } from "./tests/actor-db-stress";
 import { runConnErrorSerializationTests } from "./tests/conn-error-serialization";
 import { runActorDestroyTests } from "./tests/actor-destroy";
 import { runActorDriverTests } from "./tests/actor-driver";
@@ -33,6 +34,7 @@ import { runActorSandboxTests } from "./tests/actor-sandbox";
 import { runActorStatelessTests } from "./tests/actor-stateless";
 import { runActorVarsTests } from "./tests/actor-vars";
 import { runActorWorkflowTests } from "./tests/actor-workflow";
+import { runCrossBackendVfsTests } from "./tests/cross-backend-vfs";
 import { runManagerDriverTests } from "./tests/manager-driver";
 import { runRawHttpTests } from "./tests/raw-http";
 import { runRawHttpRequestPropertiesTests } from "./tests/raw-http-request-properties";
@@ -41,6 +43,7 @@ import { runActorDbKvStatsTests } from "./tests/actor-db-kv-stats";
 import { runActorDbPragmaMigrationTests } from "./tests/actor-db-pragma-migration";
 import { runActorStateZodCoercionTests } from "./tests/actor-state-zod-coercion";
 import { runActorAgentOsTests } from "./tests/actor-agent-os";
+import { runGatewayQueryUrlTests } from "./tests/gateway-query-url";
 import { runRequestAccessTests } from "./tests/request-access";
 
 export interface SkipTests {
@@ -85,6 +88,8 @@ export interface DriverDeployOutput {
 	endpoint: string;
 	namespace: string;
 	runnerName: string;
+	hardCrashActor?: (actorId: string) => Promise<void>;
+	hardCrashPreservesData?: boolean;
 
 	/** Cleans up the test. */
 	cleanup(): Promise<void>;
@@ -168,6 +173,7 @@ export function runDriverTests(
 						// runRawWebSocketDirectRegistryTests(driverTestConfig);
 
 						runActorInspectorTests(driverTestConfig);
+						runGatewayQueryUrlTests(driverTestConfig);
 
 						runActorDbKvStatsTests(driverTestConfig);
 
@@ -180,6 +186,22 @@ export function runDriverTests(
 				}
 			});
 		}
+
+		// Cross-backend VFS compatibility runs once, independent of
+		// client type and encoding. Skips when native SQLite is unavailable.
+		runCrossBackendVfsTests({
+			...driverTestConfigPartial,
+			clientType: "http",
+			encoding: "bare",
+		});
+
+		// Stress tests for DB lifecycle races, event loop blocking, and
+		// KV channel resilience. Run once, not per-encoding.
+		runActorDbStressTests({
+			...driverTestConfigPartial,
+			clientType: "http",
+			encoding: "bare",
+		});
 	});
 }
 
@@ -198,6 +220,8 @@ export async function createTestRuntime(
 			token: string;
 		};
 		driver: DriverConfig;
+		hardCrashActor?: (actorId: string) => Promise<void>;
+		hardCrashPreservesData?: boolean;
 		cleanup?: () => Promise<void>;
 	}>,
 ): Promise<DriverDeployOutput> {
@@ -226,6 +250,8 @@ export async function createTestRuntime(
 		driver,
 		cleanup: driverCleanup,
 		rivetEngine,
+		hardCrashActor,
+		hardCrashPreservesData,
 	} = await driverFactory(registry);
 
 	if (rivetEngine) {
@@ -240,6 +266,8 @@ export async function createTestRuntime(
 			endpoint: rivetEngine.endpoint,
 			namespace: rivetEngine.namespace,
 			runnerName: rivetEngine.runnerName,
+			hardCrashActor,
+			hardCrashPreservesData,
 			cleanup,
 		};
 	} else {
@@ -292,11 +320,29 @@ export async function createTestRuntime(
 		);
 		const port = address.port;
 		const serverEndpoint = `http://127.0.0.1:${port}`;
+		managerDriver.setNativeSqliteConfig?.({
+			endpoint: serverEndpoint,
+			namespace: "default",
+		});
 
 		logger().info({ msg: "test serer listening", port });
 
 		// Cleanup
 		const cleanup = async () => {
+			// Disconnect only the current test runtime's native KV channel so
+			// concurrent local runtimes do not shut down each other's channel.
+			try {
+				const { disconnectKvChannelForCurrentConfig } = await import(
+					"@/db/native-sqlite"
+				);
+				await disconnectKvChannelForCurrentConfig({
+					endpoint: serverEndpoint,
+					namespace: "default",
+				});
+			} catch {
+				// Native module may not be available.
+			}
+
 			// Stop server
 			await new Promise((resolve) =>
 				server.close(() => resolve(undefined)),
@@ -310,6 +356,8 @@ export async function createTestRuntime(
 			endpoint: serverEndpoint,
 			namespace: "default",
 			runnerName: "default",
+			hardCrashActor: managerDriver.hardCrashActor?.bind(managerDriver),
+			hardCrashPreservesData: driver.name !== "memory",
 			cleanup,
 		};
 	}

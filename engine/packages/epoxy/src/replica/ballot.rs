@@ -1,137 +1,198 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use epoxy_protocol::protocol;
+use std::cmp::Ordering;
 use universaldb::Transaction;
-use universaldb::utils::{FormalKey, IsolationLevel::*};
+use universaldb::utils::{FormalKey, IsolationLevel::Serializable};
 
-use crate::{keys, metrics};
+use crate::keys::{self, CommittedValue, KvBallotKey, KvValueKey, LegacyCommittedValueKey};
 
-/// Get the current ballot for this replica
-#[tracing::instrument(skip_all)]
-pub async fn get_ballot(
-	tx: &Transaction,
-	replica_id: protocol::ReplicaId,
-) -> Result<protocol::Ballot> {
-	let ballot_key = keys::replica::CurrentBallotKey;
-	let subspace = keys::subspace(replica_id);
-	let packed_key = subspace.pack(&ballot_key);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Ballot {
+	pub counter: u64,
+	pub replica_id: protocol::ReplicaId,
+}
 
-	match tx.get(&packed_key, Serializable).await? {
-		Some(bytes) => {
-			let ballot = ballot_key.deserialize(&bytes)?;
-			Ok(ballot)
+impl Ballot {
+	pub const fn new(counter: u64, replica_id: protocol::ReplicaId) -> Self {
+		Self {
+			counter,
+			replica_id,
 		}
-		None => {
-			// Default ballot for this replica
-			Ok(protocol::Ballot {
-				epoch: 0,
-				ballot: 0,
-				replica_id,
-			})
+	}
+
+	pub const fn zero(replica_id: protocol::ReplicaId) -> Self {
+		Self::new(0, replica_id)
+	}
+
+	pub const fn is_zero(self) -> bool {
+		self.counter == 0
+	}
+}
+
+impl Ord for Ballot {
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.counter
+			.cmp(&other.counter)
+			.then_with(|| self.replica_id.cmp(&other.replica_id))
+	}
+}
+
+impl PartialOrd for Ballot {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl From<protocol::Ballot> for Ballot {
+	fn from(ballot: protocol::Ballot) -> Self {
+		Self::new(ballot.counter, ballot.replica_id)
+	}
+}
+
+impl From<Ballot> for protocol::Ballot {
+	fn from(ballot: Ballot) -> Self {
+		protocol::Ballot {
+			counter: ballot.counter,
+			replica_id: ballot.replica_id,
 		}
 	}
 }
 
-/// Increment the ballot number and return the new ballot
-#[tracing::instrument(skip_all)]
-pub async fn increment_ballot(
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BallotSelection {
+	AlreadyCommitted(Vec<u8>),
+	AlreadyCommittedMutable {
+		value: CommittedValue,
+		ballot: Ballot,
+	},
+	NeedsPrepare { ballot: Ballot },
+	FreshBallot(Ballot),
+}
+
+#[tracing::instrument(skip_all, fields(%replica_id))]
+pub async fn ballot_selection(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,
-) -> Result<protocol::Ballot> {
-	let mut current_ballot = get_ballot(tx, replica_id).await?;
-
-	// Increment ballot number
-	current_ballot.ballot += 1;
-
-	// Store the new ballot
-	let ballot_key = keys::replica::CurrentBallotKey;
+	key: Vec<u8>,
+	mutable: bool,
+) -> Result<BallotSelection> {
 	let subspace = keys::subspace(replica_id);
-	let packed_key = subspace.pack(&ballot_key);
-	let serialized = ballot_key.serialize(current_ballot.clone())?;
+	let legacy_subspace = keys::legacy_subspace(replica_id);
+	let value_key = KvValueKey::new(key.clone());
+	let legacy_value_key = LegacyCommittedValueKey::new(key.clone());
+	let legacy_v2_value_key = KvValueKey::new(key.clone());
+	let ballot_key = KvBallotKey::new(key);
 
-	tx.set(&packed_key, &serialized);
+	let packed_value_key = subspace.pack(&value_key);
+	let packed_legacy_value_key = legacy_subspace.pack(&legacy_value_key);
+	let packed_legacy_v2_value_key = legacy_subspace.pack(&legacy_v2_value_key);
+	let packed_ballot_key = subspace.pack(&ballot_key);
 
-	metrics::BALLOT_EPOCH.set(current_ballot.epoch as i64);
-	metrics::BALLOT_NUMBER.set(current_ballot.ballot as i64);
-
-	Ok(current_ballot)
-}
-
-/// Compare two ballots to determine ordering
-pub fn compare_ballots(
-	ballot_a: &protocol::Ballot,
-	ballot_b: &protocol::Ballot,
-) -> std::cmp::Ordering {
-	(ballot_a.epoch, ballot_a.ballot, ballot_a.replica_id).cmp(&(
-		ballot_b.epoch,
-		ballot_b.ballot,
-		ballot_b.replica_id,
-	))
-}
-
-/// Result of ballot validation with detailed context for error reporting
-#[derive(Debug)]
-pub struct BallotValidationResult {
-	pub is_valid: bool,
-	pub incoming_ballot: protocol::Ballot,
-	pub stored_ballot: protocol::Ballot,
-	pub comparison: std::cmp::Ordering,
-}
-
-/// Validate that a ballot is the highest seen for the given instance & updates the highest stored
-/// ballot if needed.
-///
-/// Returns detailed validation result including comparison information.
-#[tracing::instrument(skip_all)]
-pub async fn validate_and_update_ballot_for_instance(
-	tx: &Transaction,
-	replica_id: protocol::ReplicaId,
-	ballot: &protocol::Ballot,
-	instance: &protocol::Instance,
-) -> Result<BallotValidationResult> {
-	let instance_ballot_key =
-		keys::replica::InstanceBallotKey::new(instance.replica_id, instance.slot_id);
-	let subspace = keys::subspace(replica_id);
-	let packed_key = subspace.pack(&instance_ballot_key);
-
-	// Get the highest ballot seen for this instance
-	let highest_ballot = match tx.get(&packed_key, Serializable).await? {
-		Some(bytes) => {
-			let stored_ballot = instance_ballot_key.deserialize(&bytes)?;
-			stored_ballot
-		}
-		None => {
-			// No ballot seen yet for this instance - use default
-			protocol::Ballot {
-				epoch: 0,
-				ballot: 0,
-				replica_id: instance.replica_id,
+	let (
+		committed_value,
+		legacy_committed_value,
+		legacy_v2_committed_value,
+		current_ballot,
+	) = tokio::try_join!(
+		async {
+			let value = tx.get(&packed_value_key, Serializable).await?;
+			if let Some(bytes) = value {
+				Ok::<_, anyhow::Error>(Some(value_key.deserialize(&bytes)?))
+			} else {
+				Ok::<_, anyhow::Error>(None)
+			}
+		},
+		async {
+			let value = tx.get(&packed_legacy_value_key, Serializable).await?;
+			if let Some(bytes) = value {
+				Ok::<_, anyhow::Error>(Some(legacy_value_key.deserialize(&bytes)?))
+			} else {
+				Ok::<_, anyhow::Error>(None)
+			}
+		},
+		async {
+			let value = tx.get(&packed_legacy_v2_value_key, Serializable).await?;
+			if let Some(bytes) = value {
+				Ok::<_, anyhow::Error>(Some(legacy_v2_value_key.deserialize(&bytes)?))
+			} else {
+				Ok::<_, anyhow::Error>(None)
+			}
+		},
+		async {
+			let ballot = tx.get(&packed_ballot_key, Serializable).await?;
+			if let Some(bytes) = ballot {
+				Ok::<_, anyhow::Error>(Some(Ballot::from(ballot_key.deserialize(&bytes)?)))
+			} else {
+				Ok::<_, anyhow::Error>(None)
 			}
 		}
-	};
+	)?;
 
-	// Compare incoming ballot with highest seen - only accept if strictly greater
-	let comparison = compare_ballots(ballot, &highest_ballot);
-	let is_valid = match comparison {
-		std::cmp::Ordering::Greater => true,
-		std::cmp::Ordering::Equal | std::cmp::Ordering::Less => false,
-	};
+	if let Some(value) = committed_value
+		.or_else(|| {
+			legacy_committed_value.map(|value| CommittedValue {
+				value,
+				version: 0,
+				mutable: false,
+			})
+		})
+		.or_else(|| {
+			legacy_v2_committed_value
+		})
+	{
+		if !value.mutable || !mutable {
+			return Ok(BallotSelection::AlreadyCommitted(value.value));
+		}
 
-	// If the incoming ballot is higher, update our stored highest
-	if comparison == std::cmp::Ordering::Greater {
-		let serialized = instance_ballot_key.serialize(ballot.clone())?;
-		tx.set(&packed_key, &serialized);
-
-		tracing::debug!(?ballot, ?instance, "updated highest ballot for instance");
+		let ballot = reserve_next_ballot(
+			tx,
+			replica_id,
+			ballot_key,
+			current_ballot.unwrap_or_else(|| Ballot::zero(replica_id)),
+		)?;
+		return Ok(BallotSelection::AlreadyCommittedMutable {
+			value,
+			ballot,
+		});
 	}
 
-	if !is_valid {
-		metrics::BALLOT_REJECTIONS_TOTAL.inc();
+	let current_ballot = current_ballot.unwrap_or_else(|| Ballot::zero(replica_id));
+	let ballot = reserve_next_ballot(tx, replica_id, ballot_key, current_ballot)?;
+	if current_ballot.is_zero() {
+		Ok(BallotSelection::FreshBallot(ballot))
+	} else {
+		Ok(BallotSelection::NeedsPrepare { ballot })
 	}
+}
 
-	Ok(BallotValidationResult {
-		is_valid,
-		incoming_ballot: ballot.clone(),
-		stored_ballot: highest_ballot,
-		comparison,
-	})
+pub fn store_ballot(
+	tx: &Transaction,
+	replica_id: protocol::ReplicaId,
+	key: Vec<u8>,
+	ballot: Ballot,
+) -> Result<()> {
+	let ballot_key = KvBallotKey::new(key);
+	let subspace = keys::subspace(replica_id);
+	let packed_ballot_key = subspace.pack(&ballot_key);
+	let serialized = ballot_key.serialize(ballot.into())?;
+	tx.set(&packed_ballot_key, &serialized);
+	Ok(())
+}
+
+fn reserve_next_ballot(
+	tx: &Transaction,
+	replica_id: protocol::ReplicaId,
+	ballot_key: KvBallotKey,
+	current_ballot: Ballot,
+) -> Result<Ballot> {
+	let next_counter = current_ballot
+		.counter
+		.checked_add(1)
+		.context("ballot counter overflow")?;
+	let ballot = Ballot::new(next_counter, replica_id);
+	let subspace = keys::subspace(replica_id);
+	let packed_ballot_key = subspace.pack(&ballot_key);
+	let serialized = ballot_key.serialize(ballot.into())?;
+	tx.set(&packed_ballot_key, &serialized);
+	Ok(ballot)
 }

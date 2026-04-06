@@ -25,7 +25,7 @@ lazy_static::lazy_static! {
 	pub static ref ACTOR_ALLOCATE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"pegboard_actor_allocate_duration",
 		"Total duration to allocate an actor.",
-		&["status"],
+		&["kind", "result"],
 		MICRO_BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
@@ -34,6 +34,13 @@ lazy_static::lazy_static! {
 		"pegboard_runner_version_upgrade_drain_total",
 		"Count of runners drained due to version upgrade.",
 		&["namespace_id", "runner_name"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_VERSION_UPGRADE_DRAIN_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"pegboard_envoy_version_upgrade_drain_total",
+		"Count of envoys drained due to version upgrade.",
+		&["namespace_id", "pool_name"],
 		*REGISTRY
 	).unwrap();
 

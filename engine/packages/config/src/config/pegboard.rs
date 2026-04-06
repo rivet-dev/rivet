@@ -8,6 +8,10 @@ pub struct Pegboard {
 	///
 	/// Unit is in milliseconds.
 	pub base_retry_timeout: Option<usize>,
+	/// How long to wait for an ack response from the outbound request layer before setting actor as lost.
+	///
+	/// Unit is in milliseconds.
+	pub actor_allocation_threshold: Option<i64>,
 	/// How long to wait after creating and not receiving a starting state before setting actor as lost.
 	///
 	/// Unit is in milliseconds.
@@ -16,6 +20,10 @@ pub struct Pegboard {
 	///
 	/// Unit is in milliseconds.
 	pub actor_stop_threshold: Option<i64>,
+	/// How long to wait after starting to attempt to reallocate before before setting actor to sleep.
+	///
+	/// Unit is in milliseconds.
+	pub actor_retry_duration_threshold: Option<i64>,
 	/// How long an actor goes without retries before it's retry count is reset to 0, effectively resetting its
 	/// backoff to 0.
 	///
@@ -76,8 +84,20 @@ pub struct Pegboard {
 	/// This prevents a single success from clearing an error during flapping conditions.
 	/// Higher values provide more stability but slower recovery from transient errors.
 	pub runner_pool_consecutive_successes_to_clear_error: Option<u32>,
+
 	/// Amount of runners to query from the allocation queue and choose at random when allocating an actor.
 	pub actor_allocation_candidate_sample_size: Option<usize>,
+
+	/// Max response payload size in bytes from actors.
+	pub runner_max_response_payload_body_size: Option<usize>,
+	/// Ping interval for runner updates in milliseconds.
+	pub runner_update_ping_interval_ms: Option<u64>,
+	/// Max time since last pong before the runner connection is terminated. Unit is in milliseconds.
+	pub runner_ping_timeout_ms: Option<i64>,
+	/// GC interval for actor event demuxer in milliseconds.
+	pub runner_event_demuxer_gc_interval_ms: Option<u64>,
+	/// Max time since last seen before actor is considered stale, in milliseconds.
+	pub runner_event_demuxer_max_last_seen_ms: Option<u64>,
 
 	// === Gateway Settings ===
 	/// WebSocket open/handshake timeout in milliseconds.
@@ -97,18 +117,27 @@ pub struct Pegboard {
 	/// Max HTTP request body size in bytes for requests to actors.
 	pub gateway_http_max_request_body_size: Option<usize>,
 
-	// === Runner Settings ===
-	/// Max response payload size in bytes from actors.
-	pub runner_max_response_payload_body_size: Option<usize>,
-	/// Ping interval for runner updates in milliseconds.
-	pub runner_update_ping_interval_ms: Option<u64>,
-	/// Max time since last pong before the runner connection is terminated. Unit is in milliseconds.
-	pub runner_ping_timeout_ms: Option<i64>,
+	// === Envoy Settings ===
+	/// How long to wait before considering an envoy lost and evicting all of its actors.
+	///
+	/// Unit is in milliseconds.
+	pub envoy_lost_threshold: Option<i64>,
+	/// Max time since last pong before the envoy connection is terminated. Unit is in milliseconds.
+	pub envoy_ping_timeout: Option<i64>,
 	/// GC interval for actor event demuxer in milliseconds.
-	pub runner_event_demuxer_gc_interval_ms: Option<u64>,
+	pub envoy_event_demuxer_gc_interval: Option<u64>,
 	/// Max time since last seen before actor is considered stale, in milliseconds.
-	pub runner_event_demuxer_max_last_seen_ms: Option<u64>,
+	pub envoy_event_demuxer_max_last_seen_threshold: Option<u64>,
+	/// Max response payload size in bytes from actors.
+	pub envoy_max_response_payload_size: Option<usize>,
+	/// Ping interval for envoy updates in milliseconds.
+	pub envoy_update_ping_interval: Option<u64>,
+	/// How long after last ping before considering a envoy ineligible for allocation.
+	///
+	/// Unit is in milliseconds.
+	pub envoy_eligible_threshold: Option<i64>,
 
+	// === Serverless Settings ===
 	/// Drain grace period for serverless runners.
 	///
 	/// This time is subtracted from the configured request duration. Once `duration - grace` is reached, the
@@ -117,11 +146,22 @@ pub struct Pegboard {
 	///
 	/// Unit is in milliseconds.
 	pub serverless_drain_grace_period: Option<u64>,
+
+	// === KV Preload Settings ===
+	/// Maximum total size of all preloaded KV data sent with the actor start command.
+	/// Setting to 0 disables all preloading.
+	///
+	/// Unit is in bytes. Default: 1,048,576 (1 MiB).
+	pub preload_max_total_bytes: Option<u64>,
 }
 
 impl Pegboard {
 	pub fn base_retry_timeout(&self) -> usize {
 		self.base_retry_timeout.unwrap_or(2000)
+	}
+
+	pub fn actor_allocation_threshold(&self) -> i64 {
+		self.actor_allocation_threshold.unwrap_or(2_000)
 	}
 
 	pub fn actor_start_threshold(&self) -> i64 {
@@ -132,6 +172,10 @@ impl Pegboard {
 	/// website/src/content/docs/actors/versions.mdx (SIGTERM Handling section).
 	pub fn actor_stop_threshold(&self) -> i64 {
 		self.actor_stop_threshold.unwrap_or(30_000)
+	}
+
+	pub fn actor_retry_duration_threshold(&self) -> i64 {
+		self.actor_retry_duration_threshold.unwrap_or(300_000)
 	}
 
 	pub fn retry_reset_duration(&self) -> i64 {
@@ -236,7 +280,41 @@ impl Pegboard {
 		self.runner_event_demuxer_max_last_seen_ms.unwrap_or(30_000)
 	}
 
+	pub fn envoy_lost_threshold(&self) -> i64 {
+		self.envoy_lost_threshold.unwrap_or(15_000)
+	}
+
+	pub fn envoy_ping_timeout(&self) -> i64 {
+		self.envoy_ping_timeout.unwrap_or(15_000)
+	}
+
+	pub fn envoy_event_demuxer_gc_interval(&self) -> u64 {
+		self.envoy_event_demuxer_gc_interval.unwrap_or(30_000)
+	}
+
+	pub fn envoy_event_demuxer_max_last_seen_threshold(&self) -> u64 {
+		self.envoy_event_demuxer_max_last_seen_threshold
+			.unwrap_or(30_000)
+	}
+
+	pub fn envoy_max_response_payload_size(&self) -> usize {
+		self.envoy_max_response_payload_size
+			.unwrap_or(20 * 1024 * 1024) // 20 MiB
+	}
+
+	pub fn envoy_update_ping_interval(&self) -> u64 {
+		self.envoy_update_ping_interval.unwrap_or(3_000)
+	}
+
+	pub fn envoy_eligible_threshold(&self) -> i64 {
+		self.envoy_eligible_threshold.unwrap_or(10_000)
+	}
+
 	pub fn serverless_drain_grace_period(&self) -> u64 {
 		self.serverless_drain_grace_period.unwrap_or(10_000)
+	}
+
+	pub fn preload_max_total_bytes(&self) -> u64 {
+		self.preload_max_total_bytes.unwrap_or(1_048_576)
 	}
 }

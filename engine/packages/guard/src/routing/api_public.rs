@@ -54,9 +54,7 @@ pub async fn route_request(ctx: &StandaloneCtx, target: &str) -> Result<Option<R
 	}
 
 	// Create the router once
-	let router =
-		rivet_api_public::create_router("api-public", ctx.config().clone(), ctx.pools().clone())
-			.await?;
+	let router = rivet_api_public::router(ctx.config().clone(), ctx.pools().clone()).await?;
 
 	let service = Arc::new(ApiPublicService { router });
 

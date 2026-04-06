@@ -1,0 +1,5 @@
+{
+  "code": "query_get_disallowed_params",
+  "group": "guard",
+  "message": "query gateway method=get does not allow input, region, crashPolicy, or runnerName params"
+}

@@ -156,7 +156,7 @@ pub async fn start(
 	let mut running_services = Vec::new();
 	let cron_schedule = tokio_cron_scheduler::JobScheduler::new().await?;
 
-	let mut term_signal = rivet_runtime::TermSignal::new().await;
+	let mut term_signal = rivet_runtime::TermSignal::get();
 	let shutting_down = Arc::new(AtomicBool::new(false));
 
 	for service in services {
@@ -369,16 +369,18 @@ pub async fn start(
 				break;
 			}
 			abort = term_signal.recv() => {
-				shutting_down.store(true, Ordering::SeqCst);
+				if !shutting_down.load(Ordering::SeqCst) {
+					// Spawn force exit task in case of a lingering task
+					let force_shutdown_duration = config.runtime.force_shutdown_duration();
+					tokio::spawn(async move {
+						tracing::info!(?force_shutdown_duration, "force shutdown timer started");
+						tokio::time::sleep(force_shutdown_duration).await;
+						tracing::warn!("force shutdown timeout reached, exiting process, this indicates a bug");
+						std::process::exit(1);
+					});
+				}
 
-				// Spawn force exit task in case of a lingering task
-				let force_shutdown_duration = config.runtime.force_shutdown_duration();
-				tokio::spawn(async move {
-					tracing::info!(?force_shutdown_duration, "force shutdown timer started");
-					tokio::time::sleep(force_shutdown_duration).await;
-					tracing::warn!("force shutdown timeout reached, exiting process, this indicates a bug");
-					std::process::exit(1);
-				});
+				shutting_down.store(true, Ordering::SeqCst);
 
 				// Abort services that don't require graceful shutdown
 				running_services.retain(|task| {

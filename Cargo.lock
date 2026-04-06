@@ -670,6 +670,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "ciborium"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e"
+dependencies = [
+ "ciborium-io",
+ "ciborium-ll",
+ "serde",
+]
+
+[[package]]
+name = "ciborium-io"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
+
+[[package]]
+name = "ciborium-ll"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
+dependencies = [
+ "ciborium-io",
+ "half",
+]
+
+[[package]]
 name = "cipher"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -987,6 +1014,12 @@ name = "crossbeam-utils"
 version = "0.8.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
+
+[[package]]
+name = "crunchy"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crypto-common"
@@ -1405,7 +1438,7 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
 name = "epoxy"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -1417,6 +1450,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "portpicker",
+ "rand 0.8.5",
  "reqwest",
  "rivet-api-builder",
  "rivet-config",
@@ -1433,24 +1467,23 @@ dependencies = [
  "slog",
  "slog-async",
  "slog-term",
+ "test-snapshot-gen",
  "tokio",
  "tracing",
  "tracing-slog",
  "universaldb",
  "url",
  "uuid",
- "vbare",
 ]
 
 [[package]]
 name = "epoxy-protocol"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "rivet-util",
  "serde",
  "serde_bare",
- "vbare",
  "vbare-compiler",
 ]
 
@@ -1708,7 +1741,7 @@ dependencies = [
 
 [[package]]
 name = "gasoline"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1757,7 +1790,7 @@ dependencies = [
 
 [[package]]
 name = "gasoline-macros"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1766,7 +1799,7 @@ dependencies = [
 
 [[package]]
 name = "gasoline-runtime"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "epoxy",
@@ -1880,6 +1913,17 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "half"
+version = "2.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b"
+dependencies = [
+ "cfg-if",
+ "crunchy",
+ "zerocopy",
 ]
 
 [[package]]
@@ -2784,7 +2828,7 @@ dependencies = [
 
 [[package]]
 name = "namespace"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "epoxy",
@@ -3279,7 +3323,7 @@ checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
 
 [[package]]
 name = "pegboard"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3300,6 +3344,7 @@ dependencies = [
  "rivet-api-util",
  "rivet-config",
  "rivet-data",
+ "rivet-envoy-protocol",
  "rivet-error",
  "rivet-metrics",
  "rivet-pools",
@@ -3324,8 +3369,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "pegboard-envoy"
+version = "2.2.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "futures-util",
+ "gasoline",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.6.0",
+ "hyper-tungstenite",
+ "hyper-util",
+ "lazy_static",
+ "namespace",
+ "pegboard",
+ "rand 0.8.5",
+ "rivet-config",
+ "rivet-data",
+ "rivet-envoy-protocol",
+ "rivet-error",
+ "rivet-guard-core",
+ "rivet-metrics",
+ "rivet-runtime",
+ "rivet-types",
+ "serde",
+ "serde_bare",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "universaldb",
+ "universalpubsub",
+ "url",
+ "vbare",
+]
+
+[[package]]
 name = "pegboard-gateway"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3358,8 +3441,96 @@ dependencies = [
 ]
 
 [[package]]
+name = "pegboard-gateway2"
+version = "2.2.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "futures-util",
+ "gasoline",
+ "http-body-util",
+ "hyper 1.6.0",
+ "hyper-tungstenite",
+ "lazy_static",
+ "namespace",
+ "pegboard",
+ "rand 0.8.5",
+ "rivet-config",
+ "rivet-envoy-protocol",
+ "rivet-error",
+ "rivet-guard-core",
+ "rivet-metrics",
+ "rivet-util",
+ "scc",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "universaldb",
+ "universalpubsub",
+ "vbare",
+]
+
+[[package]]
+name = "pegboard-kv-channel"
+version = "2.2.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "futures-util",
+ "gasoline",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.6.0",
+ "hyper-tungstenite",
+ "lazy_static",
+ "namespace",
+ "pegboard",
+ "rivet-config",
+ "rivet-error",
+ "rivet-guard-core",
+ "rivet-kv-channel-protocol",
+ "rivet-metrics",
+ "rivet-runtime",
+ "rivet-util",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "universaldb",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "pegboard-outbound"
+version = "2.2.1"
+dependencies = [
+ "anyhow",
+ "epoxy",
+ "gasoline",
+ "lazy_static",
+ "namespace",
+ "pegboard",
+ "reqwest",
+ "reqwest-eventsource",
+ "rivet-config",
+ "rivet-envoy-protocol",
+ "rivet-metrics",
+ "rivet-runtime",
+ "rivet-types",
+ "tokio",
+ "tracing",
+ "universalpubsub",
+ "vbare",
+]
+
+[[package]]
 name = "pegboard-runner"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3377,6 +3548,7 @@ dependencies = [
  "rand 0.8.5",
  "rivet-config",
  "rivet-data",
+ "rivet-envoy-protocol",
  "rivet-error",
  "rivet-guard-core",
  "rivet-metrics",
@@ -4099,7 +4271,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-builder"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4142,7 +4314,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-peer"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4172,7 +4344,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-public"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4206,7 +4378,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-public-openapi-gen"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "rivet-api-public",
  "serde_json",
@@ -4215,7 +4387,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-types"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "gasoline",
@@ -4230,7 +4402,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-util"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4250,7 +4422,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-bootstrap"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "epoxy",
  "gasoline",
@@ -4270,10 +4442,11 @@ dependencies = [
 
 [[package]]
 name = "rivet-cache"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "futures-util",
+ "itertools 0.14.0",
  "lazy_static",
  "moka",
  "rand 0.8.5",
@@ -4283,6 +4456,7 @@ dependencies = [
  "rivet-metrics",
  "rivet-pools",
  "rivet-util",
+ "scc",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -4311,14 +4485,14 @@ dependencies = [
 
 [[package]]
 name = "rivet-cache-result"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "rivet-util",
 ]
 
 [[package]]
 name = "rivet-config"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "config",
@@ -4337,7 +4511,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-config-schema-gen"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "rivet-config",
  "schemars 0.8.22",
@@ -4346,7 +4520,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-data"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "gasoline",
@@ -4360,7 +4534,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-engine"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4379,6 +4553,7 @@ dependencies = [
  "namespace",
  "once_cell",
  "pegboard",
+ "pegboard-outbound",
  "pegboard-runner",
  "portpicker",
  "rand 0.8.5",
@@ -4391,6 +4566,8 @@ dependencies = [
  "rivet-cache-purge",
  "rivet-config",
  "rivet-engine-runner",
+ "rivet-envoy-client",
+ "rivet-envoy-protocol",
  "rivet-guard",
  "rivet-logs",
  "rivet-pools",
@@ -4429,7 +4606,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-engine-runner"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4449,15 +4626,53 @@ dependencies = [
 
 [[package]]
 name = "rivet-env"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "lazy_static",
  "uuid",
 ]
 
 [[package]]
+name = "rivet-envoy-client"
+version = "2.2.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "futures-util",
+ "rand 0.8.5",
+ "rivet-envoy-protocol",
+ "serde",
+ "serde_bare",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "vbare",
+]
+
+[[package]]
+name = "rivet-envoy-protocol"
+version = "2.2.1"
+dependencies = [
+ "anyhow",
+ "gasoline",
+ "hex",
+ "rand 0.8.5",
+ "rivet-util",
+ "serde",
+ "serde_bare",
+ "utoipa",
+ "uuid",
+ "vbare",
+ "vbare-compiler",
+]
+
+[[package]]
 name = "rivet-error"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "indoc",
@@ -4469,7 +4684,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-error-macros"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "indoc",
  "proc-macro2",
@@ -4480,11 +4695,13 @@ dependencies = [
 
 [[package]]
 name = "rivet-guard"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
+ "base64 0.22.1",
  "bytes",
+ "ciborium",
  "futures",
  "gasoline",
  "http-body 1.0.1",
@@ -4493,13 +4710,19 @@ dependencies = [
  "hyper-tungstenite",
  "indoc",
  "lazy_static",
+ "namespace",
  "once_cell",
  "pegboard",
+ "pegboard-envoy",
  "pegboard-gateway",
+ "pegboard-gateway2",
+ "pegboard-kv-channel",
  "pegboard-runner",
  "regex",
  "rivet-api-builder",
  "rivet-api-public",
+ "rivet-api-types",
+ "rivet-api-util",
  "rivet-cache",
  "rivet-config",
  "rivet-data",
@@ -4510,10 +4733,12 @@ dependencies = [
  "rivet-pools",
  "rivet-runner-protocol",
  "rivet-runtime",
+ "rivet-types",
  "rustls",
  "rustls-pemfile",
  "serde",
  "serde_json",
+ "subtle",
  "tokio",
  "tokio-tungstenite",
  "tower 0.5.2",
@@ -4526,7 +4751,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-guard-core"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4569,8 +4794,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-kv-channel-protocol"
+version = "2.2.1"
+dependencies = [
+ "serde",
+ "serde_bare",
+ "vbare",
+ "vbare-compiler",
+]
+
+[[package]]
 name = "rivet-logs"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4584,7 +4819,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-metrics"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "console-subscriber",
@@ -4603,7 +4838,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-pools"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -4635,7 +4870,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-postgres-util"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "rustls",
@@ -4646,7 +4881,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-runner-protocol"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "gasoline",
@@ -4663,7 +4898,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-runtime"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "console-subscriber",
@@ -4690,7 +4925,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-service-manager"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4707,7 +4942,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-telemetry"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "rivet-config",
@@ -4731,7 +4966,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-test-deps"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -4749,7 +4984,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-test-deps-docker"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "portpicker",
@@ -4780,7 +5015,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-tracing-utils"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "futures-util",
  "lazy_static",
@@ -4790,7 +5025,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-types"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "gasoline",
@@ -4807,7 +5042,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-ups-protocol"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4820,7 +5055,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4852,7 +5087,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-id"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
@@ -4863,7 +5098,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-workflow-worker"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "epoxy",
@@ -5888,6 +6123,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-snapshot-gen"
+version = "2.2.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.8.4",
+ "clap",
+ "epoxy",
+ "epoxy-protocol",
+ "gasoline",
+ "portpicker",
+ "rivet-api-builder",
+ "rivet-config",
+ "rivet-pools",
+ "rivet-test-deps",
+ "rivet-util",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "universaldb",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6518,7 +6779,7 @@ checksum = "4a1a07cc7db3810833284e8d372ccdc6da29741639ecc70c9ec107df0fa6154c"
 
 [[package]]
 name = "universaldb"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6544,12 +6805,13 @@ dependencies = [
  "tokio-postgres-rustls",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
 ]
 
 [[package]]
 name = "universalpubsub"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -6558,6 +6820,7 @@ dependencies = [
  "deadpool-postgres",
  "futures-util",
  "lazy_static",
+ "rand 0.8.5",
  "rivet-config",
  "rivet-env",
  "rivet-error",

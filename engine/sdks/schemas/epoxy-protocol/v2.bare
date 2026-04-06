@@ -1,0 +1,220 @@
+# MARK: Common Types
+type ReplicaId u64
+
+type Ballot struct {
+	counter: u64
+	replicaId: ReplicaId
+}
+
+type CommittedValue struct {
+	value: data
+	version: u64
+	mutable: bool
+}
+
+# MARK: Cluster config
+type ReplicaStatus enum {
+	# Receives nothing
+	JOINING
+	# Receives commits, cannot propose, cannot vote
+	LEARNING
+	# Receives commits, can propose, can vote
+	ACTIVE
+}
+
+type ReplicaConfig struct {
+	replicaId: ReplicaId
+	status: ReplicaStatus
+	apiPeerUrl: str
+	guardUrl: str
+}
+
+type ClusterConfig struct {
+	coordinatorReplicaId: ReplicaId
+	epoch: u64
+	replicas: list<ReplicaConfig>
+}
+
+# MARK: Config Change
+type UpdateConfigRequest struct {
+	config: ClusterConfig
+}
+
+type UpdateConfigResponse void
+
+# MARK: Recovery
+type PrepareRequest struct {
+	key: data
+	ballot: Ballot
+	mutable: bool
+	version: u64
+}
+
+type PrepareResponseOk struct {
+	highestBallot: Ballot
+	acceptedValue: optional<CommittedValue>
+	acceptedBallot: optional<Ballot>
+}
+
+type PrepareResponseAlreadyCommitted struct {
+	value: data
+}
+
+type PrepareResponseHigherBallot struct {
+	ballot: Ballot
+}
+
+type PrepareResponse union {
+	PrepareResponseOk |
+	PrepareResponseAlreadyCommitted |
+	PrepareResponseHigherBallot
+}
+
+# MARK: Proposal
+type PreAcceptRequest struct {
+	key: data
+	value: data
+	ballot: Ballot
+	mutable: bool
+	version: u64
+}
+
+type PreAcceptResponseOk struct {
+	ballot: Ballot
+}
+
+type PreAcceptResponseAlreadyCommitted struct {
+	value: data
+}
+
+type PreAcceptResponseHigherBallot struct {
+	ballot: Ballot
+}
+
+type PreAcceptResponse union {
+	PreAcceptResponseOk |
+	PreAcceptResponseAlreadyCommitted |
+	PreAcceptResponseHigherBallot
+}
+
+type CommitRequest struct {
+	key: data
+	value: data
+	ballot: Ballot
+	mutable: bool
+	version: u64
+}
+
+type CommitResponseOk void
+
+type CommitResponseAlreadyCommitted struct {
+	value: data
+}
+
+type CommitResponseStaleCommit void
+
+type CommitResponse union {
+	CommitResponseOk |
+	CommitResponseAlreadyCommitted |
+	CommitResponseStaleCommit
+}
+
+# MARK: Cache Control
+type CachingBehavior enum {
+	OPTIMISTIC
+	SKIP_CACHE
+}
+
+# MARK: KV Operations
+type KvGetRequest struct {
+	key: data
+	cachingBehavior: CachingBehavior
+}
+
+type KvGetResponse struct {
+	value: optional<CommittedValue>
+}
+
+type KvPurgeCacheEntry struct {
+	key: data
+	version: u64
+}
+
+type KvPurgeCacheRequest struct {
+	entries: list<KvPurgeCacheEntry>
+}
+
+type KvPurgeCacheResponse void
+
+# MARK: Changelog
+type ChangelogReadRequest struct {
+	afterVersionstamp: optional<data>
+	count: u64
+}
+
+type ChangelogEntry struct {
+	key: data
+	value: data
+	version: u64
+	mutable: bool
+}
+
+type ChangelogReadResponse struct {
+	entries: list<ChangelogEntry>
+	lastVersionstamp: data
+}
+
+# MARK: Replica Join
+type HealthCheckRequest void
+
+type HealthCheckResponse void
+
+type CoordinatorUpdateReplicaStatusRequest struct {
+	replicaId: ReplicaId
+	status: ReplicaStatus
+}
+
+type CoordinatorUpdateReplicaStatusResponse void
+
+type BeginLearningRequest struct {
+	config: ClusterConfig
+}
+
+type BeginLearningResponse void
+
+# MARK: Request/Response
+type RequestKind union {
+	UpdateConfigRequest |
+	PrepareRequest |
+	PreAcceptRequest |
+	CommitRequest |
+	ChangelogReadRequest |
+	HealthCheckRequest |
+	CoordinatorUpdateReplicaStatusRequest |
+	BeginLearningRequest |
+	KvGetRequest |
+	KvPurgeCacheRequest
+}
+
+type Request struct {
+	fromReplicaId: ReplicaId
+	toReplicaId: ReplicaId
+	kind: RequestKind
+}
+
+type ResponseKind union {
+	UpdateConfigResponse |
+	PrepareResponse |
+	PreAcceptResponse |
+	CommitResponse |
+	ChangelogReadResponse |
+	HealthCheckResponse |
+	CoordinatorUpdateReplicaStatusResponse |
+	BeginLearningResponse |
+	KvGetResponse |
+	KvPurgeCacheResponse
+}
+
+type Response struct {
+	kind: ResponseKind
+}

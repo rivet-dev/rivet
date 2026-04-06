@@ -13,7 +13,7 @@ import {
 	createCloudflareActorsActorDriverBuilder,
 } from "./actor-driver";
 import { buildActorId, parseActorId } from "./actor-id";
-import { kvGet, kvPut } from "./actor-kv";
+import { kvDelete, kvDeleteRange, kvGet, kvPut } from "./actor-kv";
 import { GLOBAL_KV_KEYS } from "./global-kv";
 import type { Bindings } from "./handler";
 import { getCloudflareAmbientEnv } from "./handler";
@@ -32,6 +32,10 @@ export interface ActorHandlerInterface extends DurableObject {
 		| undefined
 	>;
 	managerKvGet(key: Uint8Array): Promise<Uint8Array | null>;
+	managerKvBatchGet(keys: Uint8Array[]): Promise<(Uint8Array | null)[]>;
+	managerKvBatchPut(entries: [Uint8Array, Uint8Array][]): Promise<void>;
+	managerKvBatchDelete(keys: Uint8Array[]): Promise<void>;
+	managerKvDeleteRange(start: Uint8Array, end: Uint8Array): Promise<void>;
 }
 
 export interface ActorInitRequest {
@@ -279,6 +283,33 @@ export function createActorDurableObject(
 		/** RPC called by ManagerDriver.kvGet to read from KV. */
 		async managerKvGet(key: Uint8Array): Promise<Uint8Array | null> {
 			return kvGet(this.ctx.storage.sql, key);
+		}
+
+		/** RPC called by ManagerDriver.kvBatchGet to read multiple keys from KV. */
+		async managerKvBatchGet(keys: Uint8Array[]): Promise<(Uint8Array | null)[]> {
+			const sql = this.ctx.storage.sql;
+			return keys.map((key) => kvGet(sql, key));
+		}
+
+		/** RPC called by ManagerDriver.kvBatchPut to write multiple entries to KV. */
+		async managerKvBatchPut(entries: [Uint8Array, Uint8Array][]): Promise<void> {
+			const sql = this.ctx.storage.sql;
+			for (const [key, value] of entries) {
+				kvPut(sql, key, value);
+			}
+		}
+
+		/** RPC called by ManagerDriver.kvBatchDelete to delete multiple keys from KV. */
+		async managerKvBatchDelete(keys: Uint8Array[]): Promise<void> {
+			const sql = this.ctx.storage.sql;
+			for (const key of keys) {
+				kvDelete(sql, key);
+			}
+		}
+
+		/** RPC called by ManagerDriver.kvDeleteRange to delete a key range from KV. */
+		async managerKvDeleteRange(start: Uint8Array, end: Uint8Array): Promise<void> {
+			kvDeleteRange(this.ctx.storage.sql, start, end);
 		}
 
 		/** RPC called by the manager to create a DO. Can optionally allow existing actors. */

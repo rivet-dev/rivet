@@ -4,6 +4,7 @@ use std::time::Duration;
 use anyhow::Result;
 use gas::prelude::*;
 use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue};
+use rivet_envoy_protocol::PROTOCOL_VERSION;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -32,14 +33,21 @@ pub enum ServerlessMetadataError {
 pub struct Output {
 	pub runtime: String,
 	pub version: String,
+	pub envoy_protocol_version: Option<u16>,
 	pub actor_names: Vec<ActorNameMetadata>,
 	pub runner_version: Option<u32>,
+	pub envoy_version: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct ActorNameMetadata {
 	pub name: String,
 	pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Deserialize)]
+struct ServerlessMetadataEnvoy {
+	version: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -51,9 +59,17 @@ struct ServerlessMetadataRunner {
 struct ServerlessMetadataPayload {
 	runtime: String,
 	version: String,
+	#[serde(rename = "envoyProtocolVersion")]
+	envoy_protocol_version: Option<u16>,
 	#[serde(rename = "actorNames", default)]
-	actor_names: HashMap<String, serde_json::Value>,
+	actor_names: HashMap<String, ActorName>,
+	envoy: Option<ServerlessMetadataEnvoy>,
 	runner: Option<ServerlessMetadataRunner>,
+}
+
+#[derive(Deserialize)]
+struct ActorName {
+	metadata: Option<serde_json::Value>,
 }
 
 fn truncate_response_body(body: &str) -> String {
@@ -72,7 +88,7 @@ fn truncate_response_body(body: &str) -> String {
 #[operation]
 #[tracing::instrument(skip_all)]
 pub async fn pegboard_serverless_metadata_fetch(
-	_ctx: &OperationCtx,
+	ctx: &OperationCtx,
 	input: &Input,
 ) -> Result<std::result::Result<Output, ServerlessMetadataError>> {
 	tracing::debug!(url = ?input.url, "fetching serverless runner metadata");
@@ -154,17 +170,20 @@ pub async fn pegboard_serverless_metadata_fetch(
 	let ServerlessMetadataPayload {
 		runtime,
 		version,
+		envoy_protocol_version,
 		actor_names,
+		envoy,
 		runner,
 	} = payload;
 
 	let runner_version = runner.and_then(|r| r.version);
+	let envoy_version = envoy.and_then(|e| e.version);
 
 	tracing::debug!(
 		?runtime,
 		?version,
 		actor_names_count = actor_names.len(),
-		?runner_version,
+		?envoy_version,
 		"parsed metadata payload"
 	);
 
@@ -176,11 +195,19 @@ pub async fn pegboard_serverless_metadata_fetch(
 		}));
 	}
 
+	if let Some(envoy_protocol_version) = envoy_protocol_version {
+		if envoy_protocol_version < 1 || envoy_protocol_version > PROTOCOL_VERSION {
+			return Ok(Err(ServerlessMetadataError::InvalidResponseJson {
+				body: body_for_user,
+			}));
+		}
+	}
+
 	// Convert actor names, filtering out non-object metadata
 	let actor_names: Vec<ActorNameMetadata> = actor_names
 		.into_iter()
-		.filter_map(|(name, value)| {
-			let metadata = value.get("metadata")?.as_object()?.clone();
+		.filter_map(|(name, data)| {
+			let metadata = data.metadata?.as_object()?.clone();
 			Some(ActorNameMetadata { name, metadata })
 		})
 		.collect();
@@ -188,7 +215,9 @@ pub async fn pegboard_serverless_metadata_fetch(
 	Ok(Ok(Output {
 		runtime,
 		version: trimmed_version.to_owned(),
+		envoy_protocol_version,
 		actor_names,
 		runner_version,
+		envoy_version,
 	}))
 }

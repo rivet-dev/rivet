@@ -1,14 +1,13 @@
 use rivet_api_builder::{create_router, prelude::*};
 
-use crate::{actors, internal, namespaces, runner_configs, runners};
+use crate::{actors, envoys, internal, namespaces, runner_configs, runners};
 
 #[tracing::instrument(skip_all)]
 pub async fn router(
-	name: &'static str,
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
 ) -> anyhow::Result<axum::Router> {
-	create_router(name, config, pools, |mut router| {
+	create_router("api-peer", config, pools, |mut router| {
 		router = epoxy::http_routes::mount_routes(router);
 		router
 			// MARK: Namespaces
@@ -31,9 +30,16 @@ pub async fn router(
 				"/actors/{actor_id}/kv/keys/{key}",
 				get(actors::kv_get::kv_get),
 			)
+			.route("/actors/{actor_id}/sleep", post(actors::sleep::sleep))
+			.route(
+				"/actors/{actor_id}/reschedule",
+				post(actors::reschedule::reschedule),
+			)
 			// MARK: Runners
 			.route("/runners", get(runners::list))
 			.route("/runners/names", get(runners::list_names))
+			// MARK: Envoys
+			.route("/envoys", get(envoys::list))
 			// MARK: Internal
 			.route("/cache/purge", post(internal::cache_purge))
 			.route(

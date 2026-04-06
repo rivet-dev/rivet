@@ -1,5 +1,5 @@
 use std::{
-	path::PathBuf,
+	path::{Path, PathBuf},
 	sync::{
 		Arc,
 		atomic::{AtomicI32, Ordering},
@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use rocksdb::{OptimisticTransactionDB, Options};
+use rocksdb::{OptimisticTransactionDB, Options, checkpoint::Checkpoint};
 
 use crate::{
 	RetryableTransaction, Transaction,
@@ -30,7 +30,7 @@ pub struct RocksDbDatabaseDriver {
 
 impl RocksDbDatabaseDriver {
 	pub async fn new(db_path: PathBuf) -> Result<Self> {
-		tracing::info!(?db_path, "starting file system driver");
+		tracing::info!(db_path=%db_path.display(), "starting file system driver");
 
 		// Create directory if it doesn't exist
 		std::fs::create_dir_all(&db_path).context("failed to create database directory")?;
@@ -118,6 +118,13 @@ impl DatabaseDriver for RocksDbDatabaseDriver {
 				Ok(())
 			}
 		}
+	}
+
+	fn checkpoint(&self, path: &Path) -> Result<()> {
+		let cp = Checkpoint::new(&*self.db).context("failed to create checkpoint handle")?;
+		cp.create_checkpoint(path)
+			.context("failed to create rocksdb checkpoint")?;
+		Ok(())
 	}
 }
 

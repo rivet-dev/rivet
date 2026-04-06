@@ -20,10 +20,11 @@ rivet-tracing-utils.workspace = true
 rocksdb.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-tokio-postgres.workspace = true
 tokio-postgres-rustls.workspace = true
+tokio-postgres.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]

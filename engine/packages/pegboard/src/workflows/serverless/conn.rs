@@ -8,6 +8,7 @@ use reqwest::header::{HeaderName, HeaderValue};
 use reqwest_eventsource as sse;
 use rivet_runner_protocol as protocol;
 use rivet_runtime::TermSignal;
+use rivet_types::actor::RunnerPoolError;
 use rivet_types::runner_configs::RunnerConfigKind;
 use rivet_util::safe_slice;
 use tokio::time::Duration;
@@ -17,7 +18,6 @@ use vbare::OwnedVersionedData;
 use crate::metrics;
 use crate::pubsub_subjects::RunnerReceiverSubject;
 use crate::workflows::{runner_pool, runner_pool_error_tracker, serverless::receiver};
-use rivet_types::actor::RunnerPoolError;
 
 const X_RIVET_ENDPOINT: HeaderName = HeaderName::from_static("x-rivet-endpoint");
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
@@ -155,7 +155,7 @@ enum OutboundReqOutput {
 #[activity(OutboundReq)]
 #[timeout = u64::MAX]
 async fn outbound_req(ctx: &ActivityCtx, input: &OutboundReqInput) -> Result<OutboundReqOutput> {
-	let mut term_signal = TermSignal::new().await;
+	let mut term_signal = TermSignal::get();
 	let mut drain_sub = ctx
 		.subscribe::<Drain>(("workflow_id", ctx.workflow_id()))
 		.await?;

@@ -8,6 +8,7 @@
 			"rivetkit-typescript/**/*.{tsx,ts,css}",
 			"agent-os/**/*.ts",
 			"examples/**/*.{ts,tsx}",
+			"engine/sdks/typescript/**/*.ts",
 			"!/**/node_modules"
 		],
 		"ignoreUnknown": true

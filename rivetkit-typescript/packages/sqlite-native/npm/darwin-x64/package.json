@@ -1,0 +1,13 @@
+{
+	"name": "@rivetkit/sqlite-native-darwin-x64",
+	"version": "2.1.6",
+	"description": "Native SQLite addon for RivetKit - macOS x64",
+	"license": "Apache-2.0",
+	"os": ["darwin"],
+	"cpu": ["x64"],
+	"main": "sqlite-native.darwin-x64.node",
+	"files": ["sqlite-native.darwin-x64.node"],
+	"engines": {
+		"node": ">= 20.0.0"
+	}
+}

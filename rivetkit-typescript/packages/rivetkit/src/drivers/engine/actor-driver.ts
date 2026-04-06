@@ -1,11 +1,7 @@
-import type {
-	ActorConfig as EngineActorConfig,
-	RunnerConfig as EngineRunnerConfig,
-	HibernatingWebSocketMetadata,
-} from "@rivetkit/engine-runner";
+import type { EnvoyConfig } from "@rivetkit/engine-envoy-client";
 import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
 import { SqliteVfsPoolManager } from "@/driver-helpers/sqlite-pool";
-import { idToStr, Runner } from "@rivetkit/engine-runner";
+import { type HibernatingWebSocketMetadata, protocol, utils, EnvoyHandle, startEnvoySync } from "@rivetkit/engine-envoy-client";
 import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -15,9 +11,6 @@ import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
 import { lookupInRegistry } from "@/actor/definition";
 import {
 	KEYS,
-	queueMetadataKey,
-	sqliteStoragePrefix,
-	workflowStoragePrefix,
 } from "@/actor/instance/keys";
 import {
 	type PreloadMap,
@@ -62,8 +55,8 @@ import {
 } from "@/utils";
 import { logger } from "./log";
 
-const RUNNER_SSE_PING_INTERVAL = 1000;
-const RUNNER_STOP_WAIT_MS = 15_000;
+const ENVOY_SSE_PING_INTERVAL = 1000;
+const ENVOY_STOP_WAIT_MS = 15_000;
 
 // Message ack deadline is 30s on the gateway, but we will ack more frequently
 // in order to minimize the message buffer size on the gateway and to give
@@ -92,31 +85,31 @@ export class EngineActorDriver implements ActorDriver {
 	#config: RegistryConfig;
 	#managerDriver: ManagerDriver;
 	#inlineClient: Client<any>;
-	#runner: Runner;
+	#envoy: EnvoyHandle;
 	#actors: Map<string, ActorHandler> = new Map();
 	#actorRouter: ActorRouter;
 	#sqlitePool: SqliteVfsPoolManager;
 
-	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers(
+	#envoyStarted: PromiseWithResolvers<undefined> = promiseWithResolvers(
 		(reason) =>
 			logger().warn({
-				msg: "unhandled runner started promise rejection",
+				msg: "unhandled envoy started promise rejection",
 				reason,
 			}),
 	);
-	#runnerStopped: PromiseWithResolvers<undefined> = promiseWithResolvers(
+	#envoyStopped: PromiseWithResolvers<utils.ShutdownReason> = promiseWithResolvers(
 		(reason) =>
 			logger().warn({
-				msg: "unhandled runner stopped promise rejection",
+				msg: "unhandled envoy stopped promise rejection",
 				reason,
 			}),
 	);
-	#isRunnerStopped: boolean = false;
+	#isEnvoyStopped: boolean = false;
 
-	// HACK: Track actor stop intent locally since the runner protocol doesn't
-	// pass the stop reason to onActorStop. This will be fixed when the runner
+	// HACK: Track actor stop intent locally since the envoy protocol doesn't
+	// pass the stop reason to onActorStop. This will be fixed when the envoy
 	// protocol is updated to send the intent directly (see RVT-5284)
-	#actorStopIntent: Map<string, "sleep" | "destroy"> = new Map();
+	#actorStopIntent: Map<string, "sleep" | "destroy" | "crash"> = new Map();
 
 	// Map of conn IDs to message index waiting to be persisted before sending
 	// an ack
@@ -152,7 +145,6 @@ export class EngineActorDriver implements ActorDriver {
 
 		// HACK: Override inspector token (which are likely to be
 		// removed later on) with token from x-rivet-token header
-		const token = config.token;
 		// TODO:
 		// if (token && runConfig.inspector && runConfig.inspector.enabled) {
 		// 	runConfig.inspector.token = () => token;
@@ -165,52 +157,80 @@ export class EngineActorDriver implements ActorDriver {
 			config.test.enabled,
 		);
 
-		// Create runner configuration
-		const engineRunnerConfig: EngineRunnerConfig = {
-			version: config.runner.version,
+		// Create configuration
+		const envoyConfig: EnvoyConfig = {
+			version: config.envoy.version,
 			endpoint: getEndpoint(config),
-			token,
+			token: config.token,
 			namespace: config.namespace,
-			totalSlots: config.runner.totalSlots,
-			runnerName: config.runner.runnerName,
+			poolName: config.envoy.poolName,
 			metadata: {
 				rivetkit: { version: VERSION },
 			},
 			prepopulateActorNames: buildActorNames(config),
-			onConnected: () => {
-				this.#runnerStarted.resolve(undefined);
+			onShutdown: (reason: utils.ShutdownReason) => {
+				this.#envoyStopped.resolve(reason);
+				this.#isEnvoyStopped = true;
 			},
-			onDisconnected: (_code, _reason) => {},
-			onShutdown: () => {
-				this.#runnerStopped.resolve(undefined);
-				this.#isRunnerStopped = true;
-			},
-			fetch: this.#runnerFetch.bind(this),
-			websocket: this.#runnerWebSocket.bind(this),
+			fetch: this.#envoyFetch.bind(this),
+			websocket: this.#envoyWebSocket.bind(this),
 			hibernatableWebSocket: {
 				canHibernate: this.#hwsCanHibernate.bind(this),
 			},
-			onActorStart: this.#runnerOnActorStart.bind(this),
-			onActorStop: this.#runnerOnActorStop.bind(this),
-			logger: getLogger("engine-runner"),
+			onActorStart: this.#envoyOnActorStart.bind(this),
+			onActorStop: this.#envoyOnActorStop.bind(this),
+			logger: getLogger("envoy-client"),
 			debugLatencyMs: process.env._RIVET_DEBUG_LATENCY_MS
 				? Number.parseInt(process.env._RIVET_DEBUG_LATENCY_MS, 10)
 				: undefined,
 		};
 
-		// Create and start runner
-		this.#runner = new Runner(engineRunnerConfig);
-		this.#runner.start();
+		// Create and start envoy
+		const envoy = startEnvoySync(envoyConfig);
+
+		this.#envoy = envoy;
+
+		envoy.started().then(() => {
+			this.#envoyStarted.resolve(undefined);
+		});
+
 		logger().debug({
-			msg: "engine runner started",
+			msg: "envoy client started",
 			endpoint: config.endpoint,
 			namespace: config.namespace,
-			runnerName: config.runner.runnerName,
+			poolName: config.envoy.poolName,
 		});
 	}
 
+	async #discardCrashedActorState(actorId: string) {
+		const handler = this.#actors.get(actorId);
+		if (!handler) {
+			return;
+		}
+
+		if (handler.alarmTimeout) {
+			handler.alarmTimeout.abort();
+			handler.alarmTimeout = undefined;
+		}
+
+		if (handler.actor) {
+			try {
+				await handler.actor.debugForceCrash();
+			} catch (err) {
+				logger().debug({
+					msg: "actor crash cleanup errored",
+					actorId,
+					err: stringifyError(err),
+				});
+			}
+		}
+
+		this.#actors.delete(actorId);
+		this.#actorStopIntent.delete(actorId);
+	}
+
 	getExtraActorLogParams(): Record<string, string> {
-		return { runnerId: this.#runner.runnerId ?? "-" };
+		return { envoyKey: this.#envoy.getEnvoyKey() ?? "-" };
 	}
 
 	async #loadActorHandler(actorId: string): Promise<ActorHandler> {
@@ -268,28 +288,36 @@ export class EngineActorDriver implements ActorDriver {
 		//
 		// onAlarm is automatically called on `ActorInstance.start` when waking
 		// again.
-		this.#runner.setAlarm(actor.id, timestamp);
+		this.#envoy.setAlarm(actor.id, timestamp);
 	}
 
 	// No database overrides - will use KV-backed implementation from rivetkit/db
+
+	getNativeSqliteConfig() {
+		return {
+			endpoint: getEndpoint(this.#config),
+			token: this.#config.token,
+			namespace: this.#config.namespace,
+		};
+	}
 
 	// MARK: - Batch KV operations
 	async kvBatchPut(
 		actorId: string,
 		entries: [Uint8Array, Uint8Array][],
 	): Promise<void> {
-		await this.#runner.kvPut(actorId, entries);
+		await this.#envoy.kvPut(actorId, entries);
 	}
 
 	async kvBatchGet(
 		actorId: string,
 		keys: Uint8Array[],
 	): Promise<(Uint8Array | null)[]> {
-		return await this.#runner.kvGet(actorId, keys);
+		return await this.#envoy.kvGet(actorId, keys);
 	}
 
 	async kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void> {
-		await this.#runner.kvDelete(actorId, keys);
+		await this.#envoy.kvDelete(actorId, keys);
 	}
 
 	async kvDeleteRange(
@@ -297,20 +325,20 @@ export class EngineActorDriver implements ActorDriver {
 		start: Uint8Array,
 		end: Uint8Array,
 	): Promise<void> {
-		await this.#runner.kvDeleteRange(actorId, start, end);
+		await this.#envoy.kvDeleteRange(actorId, start, end);
 	}
 
 	async kvList(actorId: string): Promise<Uint8Array[]> {
-		const entries = await this.#runner.kvListPrefix(
+		const entries = await this.#envoy.kvListPrefix(
 			actorId,
 			new Uint8Array(),
 		);
-		const keys = entries.map(([key]) => key);
+		const keys = entries.map(([key]: [Uint8Array, ...unknown[]]) => key);
 		logger().info({
 			msg: "kvList called",
 			actorId,
 			keysCount: keys.length,
-			keys: keys.map((k) => new TextDecoder().decode(k)),
+			keys: keys.map((k: Uint8Array) => new TextDecoder().decode(k)),
 		});
 		return keys;
 	}
@@ -323,7 +351,7 @@ export class EngineActorDriver implements ActorDriver {
 			limit?: number;
 		},
 	): Promise<[Uint8Array, Uint8Array][]> {
-		const result = await this.#runner.kvListPrefix(
+		const result = await this.#envoy.kvListPrefix(
 			actorId,
 			prefix,
 			options,
@@ -333,7 +361,7 @@ export class EngineActorDriver implements ActorDriver {
 			actorId,
 			prefixStr: new TextDecoder().decode(prefix),
 			entriesCount: result.length,
-			keys: result.map(([key]) => new TextDecoder().decode(key)),
+			keys: result.map(([key]: [Uint8Array, ...unknown[]]) => new TextDecoder().decode(key)),
 		});
 		return result;
 	}
@@ -347,7 +375,7 @@ export class EngineActorDriver implements ActorDriver {
 			limit?: number;
 		},
 	): Promise<[Uint8Array, Uint8Array][]> {
-		return await this.#runner.kvListRange(
+		return await this.#envoy.kvListRange(
 			actorId,
 			start,
 			end,
@@ -371,42 +399,60 @@ export class EngineActorDriver implements ActorDriver {
 	startSleep(actorId: string) {
 		// HACK: Track intent for onActorStop (see RVT-5284)
 		this.#actorStopIntent.set(actorId, "sleep");
-		this.#runner.sleepActor(actorId);
+		this.#envoy.sleepActor(actorId);
 	}
 
 	startDestroy(actorId: string) {
 		// HACK: Track intent for onActorStop (see RVT-5284)
 		this.#actorStopIntent.set(actorId, "destroy");
-		this.#runner.destroyActor(actorId);
+		this.#envoy.destroyActor(actorId);
 	}
 
-	async shutdownRunner(immediate: boolean): Promise<void> {
+	async hardCrashActor(actorId: string): Promise<void> {
+		const handler = this.#actors.get(actorId);
+		if (!handler) {
+			return;
+		}
+
+		if (handler.actorStartPromise) {
+			await handler.actorStartPromise.promise.catch(() => undefined);
+		}
+
+		logger().info({
+			msg: "simulating hard crash for actor",
+			actorId,
+		});
+
+		await this.#discardCrashedActorState(actorId);
+	}
+
+	async shutdown(immediate: boolean): Promise<void> {
 		logger().info({ msg: "stopping engine actor driver", immediate });
 
-		// TODO: We need to update the runner to have a draining state so:
+		// TODO: We need to update the envoy to have a draining state so:
 		// 1. Send ToServerDraining
-		//		- This causes Pegboard to stop allocating actors to this runner
-		// 2. Pegboard sends ToClientStopActor for all actors on this runner which handles the graceful migration of each actor independently
+		//		- This causes Pegboard to stop allocating actors to this envoy
+		// 2. Pegboard sends ToClientStopActor for all actors on this envoy which handles the graceful migration of each actor independently
 		// 3. Send ToServerStopping once all actors have successfully stopped
 		//
 		// What's happening right now is:
 		// 1. All actors enter stopped state
 		// 2. Actors still respond to requests because only RivetKit knows it's
 		//    stopping, this causes all requests to issue errors that the actor is
-		//    stopping. (This will NOT return a 503 bc the runner has no idea the
+		//    stopping. (This will NOT return a 503 bc the envoy has no idea the
 		//    actors are stopping.)
-		// 3. Once the last actor stops, then the runner finally stops + actors
+		// 3. Once the last actor stops, then the envoy finally stops + actors
 		//    reschedule
 		//
 		// This means that:
-		// - All actors on this runner are bricked until the slowest onStop finishes
+		// - All actors on this envoy are bricked until the slowest onStop finishes
 		// - Guard will not gracefully handle requests bc it's not receiving a 503
-		// - Actors can still be scheduled to this runner while the other
+		// - Actors can still be scheduled to this envoy while the other
 		//   actors are stopping, meaning that those actors will NOT get onStop
-		//   and will potentiall corrupt their state
+		//   and will potentially corrupt their state
 		//
 		// HACK: Stop all actors to allow state to be saved
-		// NOTE: onStop is only supposed to be called by the runner, we're
+		// NOTE: onStop is only supposed to be called by the envoy, we're
 		// abusing it here
 		logger().debug({
 			msg: "stopping all actors before shutdown",
@@ -431,7 +477,7 @@ export class EngineActorDriver implements ActorDriver {
 		await this.#sqlitePool.shutdown();
 
 		try {
-			await this.#runner.shutdown(immediate);
+			await this.#envoy.shutdown(immediate);
 		} catch (error) {
 			const message =
 				error instanceof Error ? error.message : String(error);
@@ -448,51 +494,51 @@ export class EngineActorDriver implements ActorDriver {
 		}
 
 		const stopped = await Promise.race([
-			this.#runnerStopped.promise.then(() => true),
+			this.#envoyStopped.promise.then(() => true),
 			new Promise<false>((resolve) =>
-				setTimeout(() => resolve(false), RUNNER_STOP_WAIT_MS),
+				setTimeout(() => resolve(false), ENVOY_STOP_WAIT_MS),
 			),
 		]);
 		if (!stopped) {
 			logger().warn({
-				msg: "timed out waiting for runner shutdown",
-				waitMs: RUNNER_STOP_WAIT_MS,
+				msg: "timed out waiting for envoy shutdown",
+				waitMs: ENVOY_STOP_WAIT_MS,
 			});
 		}
 	}
 
 	async serverlessHandleStart(c: HonoContext): Promise<Response> {
+		let payload = await c.req.arrayBuffer();
+
 		return streamSSE(c, async (stream) => {
 			// NOTE: onAbort does not work reliably
-			stream.onAbort(() => {});
+			stream.onAbort(() => { });
 			c.req.raw.signal.addEventListener("abort", () => {
 				logger().debug("SSE aborted, shutting down runner");
 
 				// We cannot assume that the request will always be closed gracefully by Rivet. We always proceed with a graceful shutdown in case the request was terminated for any other reason.
 				//
 				// If we did not use a graceful shutdown, the runner would
-				this.shutdownRunner(false);
+				this.shutdown(false);
 			});
 
-			await this.#runnerStarted.promise;
+			await this.#envoyStarted.promise;
 
 			// Runner id should be set if the runner started
-			const payload = this.#runner.getServerlessInitPacket();
-			invariant(payload, "runnerId not set");
-			await stream.writeSSE({ data: payload });
+			this.#envoy.startServerless(payload);
 
 			// Send ping every second to keep the connection alive
 			while (true) {
-				if (this.#isRunnerStopped) {
+				if (this.#isEnvoyStopped) {
 					logger().debug({
-						msg: "runner is stopped",
+						msg: "envoy is stopped",
 					});
 					break;
 				}
 
 				if (stream.closed || stream.aborted) {
 					logger().debug({
-						msg: "runner sse stream closed",
+						msg: "envoy sse stream closed",
 						closed: stream.closed,
 						aborted: stream.aborted,
 					});
@@ -500,74 +546,72 @@ export class EngineActorDriver implements ActorDriver {
 				}
 
 				await stream.writeSSE({ event: "ping", data: "" });
-				await stream.sleep(RUNNER_SSE_PING_INTERVAL);
+				await stream.sleep(ENVOY_SSE_PING_INTERVAL);
 			}
 
 			// Wait for the runner to stop if the SSE stream aborted early for any reason
-			await this.#runnerStopped.promise;
+			let reason = await this.#envoyStopped.promise;
+			if (reason === "serverless-early-exit") {
+				stream.writeSSE({ event: "stopping", data: "" });
+			}
 		});
 	}
 
-	/**
-	 * Fetch remaining startup KV data in parallel and build a PreloadMap.
-	 * PERSIST_DATA is already known (passed in), so we only fetch the
-	 * remaining exact keys and prefix scans.
-	 */
-	async #preloadStartupKv(
-		actorId: string,
-		persistData: Uint8Array,
-	): Promise<{ preloadMap: PreloadMap; entries: number }> {
-		const remainingExactKeys = [KEYS.INSPECTOR_TOKEN, queueMetadataKey()];
-
-		const prefixScans = [
-			KEYS.CONN_PREFIX,
-			sqliteStoragePrefix(),
-			workflowStoragePrefix(),
-		];
-
-		const [exactResults, ...prefixResults] = await Promise.all([
-			this.#runner.kvGet(actorId, remainingExactKeys),
-			...prefixScans.map((prefix) =>
-				this.#runner.kvListPrefix(actorId, prefix),
-			),
-		]);
-
-		const allExactKeys = [KEYS.PERSIST_DATA, ...remainingExactKeys];
-		const entries: [Uint8Array, Uint8Array][] = [];
-
-		entries.push([KEYS.PERSIST_DATA, persistData]);
-		for (let i = 0; i < remainingExactKeys.length; i++) {
-			const value = exactResults[i];
-			if (value !== null) {
-				entries.push([remainingExactKeys[i], value]);
-			}
+	#buildStartupPreloadMap(
+		preloadedKv: protocol.PreloadedKv | null,
+		persistDataOverride?: Uint8Array,
+	): { preloadMap: PreloadMap | undefined; entries: number } {
+		if (preloadedKv == null) {
+			return { preloadMap: undefined, entries: 0 };
 		}
-		for (const prefixEntries of prefixResults) {
-			for (const entry of prefixEntries) {
-				entries.push(entry);
+
+		const entries: [Uint8Array, Uint8Array][] = preloadedKv.entries.map(
+			(entry) => [new Uint8Array(entry.key), new Uint8Array(entry.value)],
+		);
+
+		if (persistDataOverride) {
+			let replaced = false;
+			for (const entry of entries) {
+				if (compareBytes(entry[0], KEYS.PERSIST_DATA) === 0) {
+					entry[1] = persistDataOverride;
+					replaced = true;
+					break;
+				}
+			}
+
+			if (!replaced) {
+				entries.push([KEYS.PERSIST_DATA, persistDataOverride]);
 			}
 		}
 
 		entries.sort((a, b) => compareBytes(a[0], b[0]));
-		const requestedGetKeys = allExactKeys.slice().sort(compareBytes);
-		const requestedPrefixes = prefixScans.slice().sort(compareBytes);
 
-		const preloadMap = createPreloadMap(
-			entries,
-			requestedGetKeys,
-			requestedPrefixes,
-		);
+		const requestedGetKeys = preloadedKv.requestedGetKeys
+			.map((key) => new Uint8Array(key))
+			.sort(compareBytes);
+		const requestedPrefixes = preloadedKv.requestedPrefixes
+			.map((prefix) => new Uint8Array(prefix))
+			.sort(compareBytes);
 
-		return { preloadMap, entries: entries.length };
+		return {
+			preloadMap: createPreloadMap(
+				entries,
+				requestedGetKeys,
+				requestedPrefixes,
+			),
+			entries: entries.length,
+		};
 	}
 
-	async #runnerOnActorStart(
+	async #envoyOnActorStart(
+		_envoy: EnvoyHandle,
 		actorId: string,
 		generation: number,
-		actorConfig: EngineActorConfig,
+		actorConfig: protocol.ActorConfig,
+		preloadedKv: protocol.PreloadedKv | null,
 	): Promise<void> {
 		logger().debug({
-			msg: "runner actor starting",
+			msg: "engine actor starting",
 			actorId,
 			name: actorConfig.name,
 			key: actorConfig.key,
@@ -577,7 +621,7 @@ export class EngineActorDriver implements ActorDriver {
 		// Deserialize input
 		let input: any;
 		if (actorConfig.input) {
-			input = cbor.decode(actorConfig.input);
+			input = cbor.decode(new Uint8Array(actorConfig.input));
 		}
 
 		// Get or create handler
@@ -603,47 +647,60 @@ export class EngineActorDriver implements ActorDriver {
 		const key = deserializeActorKey(actorConfig.key);
 
 		try {
-			// Check if this actor already has persisted state.
-			let checkStart = performance.now();
-			const [persistDataBuffer] = await this.#runner.kvGet(actorId, [
-				KEYS.PERSIST_DATA,
-			]);
-			const checkPersistDataMs = performance.now() - checkStart;
-
-			// For new actors there is no existing KV data to preload.
 			let preloadMap: PreloadMap | undefined;
+			let persistDataBuffer: Uint8Array | null | undefined;
+			let checkPersistDataMs = 0;
 			let initNewActorMs = 0;
 			let preloadKvMs = 0;
 			let preloadKvEntries = 0;
-			// 1 round-trip for the persist data check
-			let driverKvRoundTrips = 1;
+			let driverKvRoundTrips = 0;
+
+			if (preloadedKv) {
+				const preloadStart = performance.now();
+				const preloaded = this.#buildStartupPreloadMap(preloadedKv);
+				preloadMap = preloaded.preloadMap;
+				preloadKvEntries = preloaded.entries;
+				preloadKvMs = performance.now() - preloadStart;
+				persistDataBuffer = preloadMap?.get(KEYS.PERSIST_DATA)?.value;
+				logger().debug({
+					msg: "received startup kv preload from start command",
+					actorId,
+					entries: preloadKvEntries,
+					durationMs: preloadKvMs,
+				});
+			}
+
+			if (persistDataBuffer === undefined) {
+				const checkStart = performance.now();
+				const [persistData] = await this.#envoy.kvGet(actorId, [
+					KEYS.PERSIST_DATA,
+				]);
+				persistDataBuffer = persistData;
+				checkPersistDataMs = performance.now() - checkStart;
+				driverKvRoundTrips++;
+			}
 
 			if (persistDataBuffer === null) {
 				const initStart = performance.now();
 				const initialKvState = getInitialActorKvState(input);
-				await this.#runner.kvPut(actorId, initialKvState);
+				const persistData = initialKvState[0]?.[1];
+				await this.#envoy.kvPut(actorId, initialKvState);
 				initNewActorMs = performance.now() - initStart;
 				driverKvRoundTrips++;
+				if (preloadedKv && persistData) {
+					const preloadStart = performance.now();
+					const preloaded = this.#buildStartupPreloadMap(
+						preloadedKv,
+						persistData,
+					);
+					preloadMap = preloaded.preloadMap;
+					preloadKvEntries = preloaded.entries;
+					preloadKvMs += performance.now() - preloadStart;
+				}
 				logger().debug({
 					msg: "initialized persist data for new actor",
 					actorId,
 					durationMs: initNewActorMs,
-				});
-			} else {
-				const preloadStart = performance.now();
-				const result = await this.#preloadStartupKv(
-					actorId,
-					persistDataBuffer,
-				);
-				preloadMap = result.preloadMap;
-				preloadKvEntries = result.entries;
-				preloadKvMs = performance.now() - preloadStart;
-				driverKvRoundTrips++;
-				logger().debug({
-					msg: "preloaded startup kv for existing actor",
-					actorId,
-					entries: preloadKvEntries,
-					durationMs: preloadKvMs,
 				});
 			}
 
@@ -664,7 +721,7 @@ export class EngineActorDriver implements ActorDriver {
 			handler.actor.metrics.startup.kvRoundTrips = driverKvRoundTrips;
 
 			// Apply protocol limits as per-instance overrides without mutating the shared definition
-			const protocolMetadata = this.#runner.getProtocolMetadata();
+			const protocolMetadata = this.#envoy.getProtocolMetadata();
 			if (protocolMetadata) {
 				logger().debug({
 					msg: "applying config limits from protocol",
@@ -681,7 +738,7 @@ export class EngineActorDriver implements ActorDriver {
 				if (protocolMetadata.serverlessDrainGracePeriod) {
 					const drainMax = Math.max(
 						Number(protocolMetadata.serverlessDrainGracePeriod) -
-							1000,
+						1000,
 						0,
 					);
 					handler.actor.overrides.runStopTimeout = drainMax;
@@ -702,23 +759,23 @@ export class EngineActorDriver implements ActorDriver {
 				preloadMap,
 			);
 
-			logger().debug({ msg: "runner actor started", actorId, name, key });
+			logger().debug({ msg: "engine actor started", actorId, name, key });
 		} catch (innerError) {
 			const error =
 				innerError instanceof Error
 					? new Error(
-							`Failed to start actor ${actorId}: ${innerError.message}`,
-							{ cause: innerError },
-						)
+						`Failed to start actor ${actorId}: ${innerError.message}`,
+						{ cause: innerError },
+					)
 					: new Error(
-							`Failed to start actor ${actorId}: ${String(innerError)}`,
-						);
+						`Failed to start actor ${actorId}: ${String(innerError)}`,
+					);
 			handler.actor = undefined;
 			handler.actorStartError = error;
 			handler.actorStartPromise?.reject(error);
 			handler.actorStartPromise = undefined;
 			logger().error({
-				msg: "runner actor failed to start",
+				msg: "engine actor failed to start",
 				actorId,
 				name,
 				key,
@@ -726,7 +783,7 @@ export class EngineActorDriver implements ActorDriver {
 			});
 
 			try {
-				this.#runner.stopActor(actorId);
+					this.#envoy.stopActor(actorId, undefined);
 			} catch (stopError) {
 				logger().debug({
 					msg: "failed to stop actor after start failure",
@@ -737,11 +794,13 @@ export class EngineActorDriver implements ActorDriver {
 		}
 	}
 
-	async #runnerOnActorStop(
+	async #envoyOnActorStop(
+		_envoyHandle: EnvoyHandle,
 		actorId: string,
 		generation: number,
+		_reason: protocol.StopActorReason,
 	): Promise<void> {
-		logger().debug({ msg: "runner actor stopping", actorId, generation });
+		logger().debug({ msg: "engine actor stopping", actorId, generation });
 
 		// HACK: Retrieve the stop intent we tracked locally (see RVT-5284)
 		// Default to "sleep" if no intent was recorded (e.g., if the runner
@@ -756,7 +815,7 @@ export class EngineActorDriver implements ActorDriver {
 		const handler = this.#actors.get(actorId);
 		if (!handler) {
 			logger().debug({
-				msg: "no runner actor handler to stop",
+				msg: "no engine actor handler to stop",
 				actorId,
 				reason,
 			});
@@ -766,7 +825,7 @@ export class EngineActorDriver implements ActorDriver {
 		if (handler.actorStartPromise) {
 			try {
 				logger().debug({
-					msg: "runner actor stopping before it started, waiting",
+					msg: "engine actor stopping before it started, waiting",
 					actorId,
 					generation,
 				});
@@ -783,7 +842,11 @@ export class EngineActorDriver implements ActorDriver {
 
 		if (handler.actor) {
 			try {
-				await handler.actor.onStop(reason);
+				if (reason === "crash") {
+					await handler.actor.debugForceCrash();
+				} else {
+					await handler.actor.onStop(reason);
+				}
 			} catch (err) {
 				logger().error({
 					msg: "error in onStop, proceeding with removing actor",
@@ -792,21 +855,26 @@ export class EngineActorDriver implements ActorDriver {
 			}
 		}
 
+		if (handler.alarmTimeout) {
+			handler.alarmTimeout.abort();
+			handler.alarmTimeout = undefined;
+		}
+
 		this.#actors.delete(actorId);
 
-		logger().debug({ msg: "runner actor stopped", actorId, reason });
+		logger().debug({ msg: "engine actor stopped", actorId, reason });
 	}
 
-	// MARK: - Runner Networking
-	async #runnerFetch(
-		_runner: Runner,
+	// MARK: - Envoy Networking
+	async #envoyFetch(
+		_envoy: EnvoyHandle,
 		actorId: string,
 		_gatewayIdBuf: ArrayBuffer,
 		_requestIdBuf: ArrayBuffer,
 		request: Request,
 	): Promise<Response> {
 		logger().debug({
-			msg: "runner fetch",
+			msg: "envoy fetch",
 			actorId,
 			url: request.url,
 			method: request.method,
@@ -814,8 +882,8 @@ export class EngineActorDriver implements ActorDriver {
 		return await this.#actorRouter.fetch(request, { actorId });
 	}
 
-	async #runnerWebSocket(
-		_runner: Runner,
+	async #envoyWebSocket(
+		_envoy: EnvoyHandle,
 		actorId: string,
 		websocketRaw: any,
 		gatewayIdBuf: ArrayBuffer,
@@ -833,7 +901,7 @@ export class EngineActorDriver implements ActorDriver {
 		(websocket as any).__rivet_ws_id = wsUniqueId;
 
 		logger().debug({
-			msg: "runner websocket",
+			msg: "envoy websocket",
 			actorId,
 			url: request.url,
 			isRestoringHibernatable,
@@ -1026,8 +1094,8 @@ export class EngineActorDriver implements ActorDriver {
 				msg: "event listeners attached to restored websocket",
 				actorId,
 				connId: conn?.id,
-				gatewayId: idToStr(gatewayIdBuf),
-				requestId: idToStr(requestIdBuf),
+				gatewayId: utils.idToStr(gatewayIdBuf),
+				requestId: utils.idToStr(requestIdBuf),
 				websocketType: websocket?.constructor?.name,
 				hasMessageListener: !!websocket.addEventListener,
 			});
@@ -1044,8 +1112,8 @@ export class EngineActorDriver implements ActorDriver {
 		const url = new URL(request.url);
 		const path = url.pathname;
 
-		// Get actor instance from runner to access actor name
-		const actorInstance = this.#runner.getActor(actorId);
+		// Get actor instance from envoy to access actor name
+		const actorInstance = this.#envoy.getActor(actorId);
 		if (!actorInstance) {
 			logger().warn({
 				msg: "actor not found in #hwsCanHibernate",
@@ -1074,8 +1142,8 @@ export class EngineActorDriver implements ActorDriver {
 		// Determine configuration for new WS
 		logger().debug({
 			msg: "no existing hibernatable websocket found",
-			gatewayId: idToStr(gatewayId),
-			requestId: idToStr(requestId),
+			gatewayId: utils.idToStr(gatewayId),
+			requestId: utils.idToStr(requestId),
 		});
 		if (path === PATH_CONNECT) {
 			return true;
@@ -1086,7 +1154,7 @@ export class EngineActorDriver implements ActorDriver {
 			// Find actor config
 			const definition = lookupInRegistry(
 				this.#config,
-				actorInstance.config.name,
+				actorInstance.name,
 			);
 
 			// Check if can hibernate
@@ -1142,8 +1210,8 @@ export class EngineActorDriver implements ActorDriver {
 				return {
 					gatewayId: hibernatable.gatewayId,
 					requestId: hibernatable.requestId,
-					serverMessageIndex: hibernatable.serverMessageIndex,
-					clientMessageIndex: hibernatable.clientMessageIndex,
+					rivetMessageIndex: hibernatable.serverMessageIndex,
+					envoyMessageIndex: hibernatable.clientMessageIndex,
 					path: hibernatable.requestPath,
 					headers: hibernatable.requestHeaders,
 				} satisfies HibernatingWebSocketMetadata;
@@ -1162,7 +1230,7 @@ export class EngineActorDriver implements ActorDriver {
 
 		// Restore hibernating requests
 		const metaEntries = await this.#hwsLoadAll(actor.id);
-		await this.#runner.restoreHibernatingRequests(actor.id, metaEntries);
+		await this.#envoy.restoreHibernatingRequests(actor.id, metaEntries);
 	}
 
 	onCreateConn(conn: AnyConn) {
@@ -1229,7 +1297,7 @@ export class EngineActorDriver implements ActorDriver {
 			entry.pendingAckFromMessageIndex ||
 			entry.pendingAckFromBufferSize
 		) {
-			this.#runner.sendHibernatableWebSocketMessageAck(
+			this.#envoy.sendHibernatableWebSocketMessageAck(
 				hibernatable.gatewayId,
 				hibernatable.requestId,
 				entry.serverMessageIndex,

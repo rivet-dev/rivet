@@ -57,17 +57,24 @@ pub enum Actor {
 	KeyReservedInDifferentDatacenter { datacenter_label: u16 },
 
 	#[error(
-		"no_runners_available",
-		"No runners are available in any datacenter. Validate the runner is listed in the Connect tab and that the runner's name matches the requested runner name.",
-		"No runners with name '{runner_name}' are available in any datacenter for the namespace '{namespace}'. Validate the runner is listed in the Connect tab and that the runner's name matches the requested runner name."
+		"no_runner_config_configured",
+		"No runner config configured in any datacenter. Validate a provider is listed that matches requested pool name.",
+		"No runner config with name '{pool_name}' are available in any datacenter for the namespace '{namespace}'. Validate a provider is listed that matches the requested pool name."
 	)]
-	NoRunnersAvailable {
+	NoRunnerConfigConfigured {
 		namespace: String,
-		runner_name: String,
+		pool_name: String,
 	},
 
 	#[error("kv_key_not_found", "The KV key does not exist for this actor.")]
 	KvKeyNotFound,
+
+	#[error(
+		"kv_storage_quota_exceeded",
+		"Not enough space left in storage.",
+		"Not enough space left in storage ({remaining} bytes remaining, current payload is {payload_size} bytes)."
+	)]
+	KvStorageQuotaExceeded { remaining: usize, payload_size: usize },
 }
 
 #[derive(RivetError, Debug, Clone, Deserialize, Serialize)]

@@ -1,5 +1,6 @@
-use anyhow::*;
+use anyhow::{Context, Result};
 use futures_util::future;
+use std::collections::HashMap;
 use tokio::sync::OnceCell;
 use url::Url;
 
@@ -56,39 +57,41 @@ impl TestDeps {
 		set_test_environment_variables().await;
 		tracing::info!(?dc_ids, "setting up test dependencies");
 
-		let mut datacenters = Vec::with_capacity(dc_ids.len());
+		let mut datacenters = HashMap::with_capacity(dc_ids.len());
 		let mut ports = Vec::with_capacity(dc_ids.len());
 
 		for &dc_id in dc_ids {
 			let api_peer_port = portpicker::pick_unused_port().context("api_peer_port")?;
 			let guard_port = portpicker::pick_unused_port().context("guard_port")?;
+			let name = format!("dc-{dc_id}");
 
-			datacenters.push(rivet_config::config::topology::Datacenter {
-				name: format!("dc-{dc_id}"),
-				datacenter_label: dc_id,
-				is_leader: dc_id == dc_ids[0], // First DC in list is leader
-				public_url: Url::parse(&format!("http://127.0.0.1:{guard_port}"))?,
-				peer_url: Url::parse(&format!("http://127.0.0.1:{api_peer_port}"))?,
-				proxy_url: None,
-				valid_hosts: None,
-			});
+			datacenters.insert(
+				name.clone(),
+				rivet_config::config::topology::Datacenter {
+					name,
+					datacenter_label: dc_id,
+					is_leader: dc_id == dc_ids[0], // First DC in list is leader
+					public_url: Url::parse(&format!("http://127.0.0.1:{guard_port}"))?,
+					peer_url: Url::parse(&format!("http://127.0.0.1:{api_peer_port}"))?,
+					proxy_url: None,
+					valid_hosts: None,
+				},
+			);
 			ports.push((api_peer_port, guard_port));
 		}
 
 		// Create futures for each datacenter
-		let futures =
-			datacenters
-				.iter()
-				.zip(ports.into_iter())
-				.map(|(dc, (api_peer_port, guard_port))| {
-					setup_single_datacenter(
-						test_id,
-						dc.datacenter_label,
-						datacenters.clone(),
-						api_peer_port,
-						guard_port,
-					)
-				});
+		let futures = datacenters.iter().zip(ports.into_iter()).map(
+			|((_, dc), (api_peer_port, guard_port))| {
+				setup_single_datacenter(
+					test_id,
+					dc.datacenter_label,
+					datacenters.clone(),
+					api_peer_port,
+					guard_port,
+				)
+			},
+		);
 
 		// Execute all futures concurrently
 		let deps = future::try_join_all(futures).await?;

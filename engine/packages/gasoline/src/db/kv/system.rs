@@ -1,9 +1,13 @@
 use std::fs;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 
 use sysinfo::{CpuRefreshKind, Pid, ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System};
 
 const CPU_UPDATE_INTERVAL: Duration = Duration::from_millis(150);
+
+static SYSTEM_INFO_CELL: OnceLock<Arc<Mutex<SystemInfo>>> = OnceLock::new();
 
 pub struct SystemInfo {
 	system: System,
@@ -15,19 +19,23 @@ pub struct SystemInfo {
 }
 
 impl SystemInfo {
-	pub fn new() -> Self {
-		SystemInfo {
-			system: System::new_with_specifics(
-				RefreshKind::nothing()
-					.with_cpu(CpuRefreshKind::nothing().with_cpu_usage())
-					.with_processes(ProcessRefreshKind::nothing().with_cpu()),
-			),
-			pid: Pid::from_u32(std::process::id()),
-			last_cpu_usage_read: Instant::now(),
-			cgroup_cpu_max: CgroupCpuMax::read(),
-			last_cgroup_usage_usec: CgroupCpuUsage::read(),
-			last_cgroup_cores: 0.0,
-		}
+	pub fn get() -> Arc<Mutex<Self>> {
+		SYSTEM_INFO_CELL
+			.get_or_init(|| {
+				Arc::new(Mutex::new(SystemInfo {
+					system: System::new_with_specifics(
+						RefreshKind::nothing()
+							.with_cpu(CpuRefreshKind::nothing().with_cpu_usage())
+							.with_processes(ProcessRefreshKind::nothing().with_cpu()),
+					),
+					pid: Pid::from_u32(std::process::id()),
+					last_cpu_usage_read: Instant::now(),
+					cgroup_cpu_max: CgroupCpuMax::read(),
+					last_cgroup_usage_usec: CgroupCpuUsage::read(),
+					last_cgroup_cores: 0.0,
+				}))
+			})
+			.clone()
 	}
 
 	/// Returns a float 0.0-1.0 of the avg cpu usage in the current container (if cgroups are configured) or

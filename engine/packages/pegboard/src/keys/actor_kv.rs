@@ -1,6 +1,6 @@
 use anyhow::Result;
 use gas::prelude::*;
-use rivet_runner_protocol::mk2 as rp;
+use rivet_envoy_protocol as ep;
 use universaldb::prelude::*;
 
 pub fn subspace(actor_id: Id) -> universaldb::utils::Subspace {
@@ -16,10 +16,10 @@ pub fn subspace(actor_id: Id) -> universaldb::utils::Subspace {
 /// - Getting/deleting specific keys
 /// - Range query end points (to create closed boundaries)
 #[derive(Debug, Clone, PartialEq)]
-pub struct KeyWrapper(pub rp::KvKey);
+pub struct KeyWrapper(pub ep::KvKey);
 
 impl KeyWrapper {
-	pub fn tuple_len(key: &rp::KvKey) -> usize {
+	pub fn tuple_len(key: &ep::KvKey) -> usize {
 		key.len() + 2
 	}
 }
@@ -63,7 +63,7 @@ impl<'de> TupleUnpack<'de> for KeyWrapper {
 /// Use this for:
 /// - Range query start points (to create open boundaries)
 /// - Prefix queries (to match all keys starting with these bytes)
-pub struct ListKeyWrapper(pub rp::KvKey);
+pub struct ListKeyWrapper(pub ep::KvKey);
 
 impl TuplePack for ListKeyWrapper {
 	fn pack<W: std::io::Write>(
@@ -145,7 +145,7 @@ impl EntryMetadataKey {
 }
 
 impl FormalKey for EntryMetadataKey {
-	type Value = rp::KvMetadata;
+	type Value = ep::KvMetadata;
 
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
 		serde_bare::from_slice(raw).map_err(Into::into)

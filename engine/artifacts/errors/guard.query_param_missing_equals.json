@@ -1,0 +1,5 @@
+{
+  "code": "query_param_missing_equals",
+  "group": "guard",
+  "message": "query gateway param is missing '='"
+}

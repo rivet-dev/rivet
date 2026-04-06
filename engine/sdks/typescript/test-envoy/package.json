@@ -1,0 +1,29 @@
+{
+	"name": "@rivetkit/engine-test-envoy",
+	"version": "2.1.11-rc.1",
+	"type": "module",
+	"scripts": {
+		"start": "tsx src/index.ts",
+		"start:bun": "bun src/index.ts",
+		"build": "tsup src/index.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@hono/node-server": "^1.19.1",
+		"@rivetkit/engine-envoy-client": "workspace:*",
+		"@rivetkit/engine-envoy-protocol": "workspace:*",
+		"hono": "^4.7.0",
+		"pino": "^9.9.5",
+		"ws": "^8.18.3"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.3.11",
+		"@types/node": "^22.18.1",
+		"@types/ws": "^8.18.1",
+		"tinybench": "^5.0.1",
+		"tsup": "^8.5.0",
+		"tsx": "^4.20.5",
+		"typescript": "^5.9.2",
+		"vitest": "^1.6.1"
+	}
+}

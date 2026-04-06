@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use anyhow::*;
 
 pub mod actors;
+pub mod envoys;
 pub mod internal;
 pub mod namespaces;
 pub mod router;
@@ -17,7 +18,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 	let port = config.api_peer().port();
 	let addr = SocketAddr::from((host, port));
 
-	let router = router::router("api-peer", config, pools).await?;
+	let router = router::router(config, pools).await?;
 
 	let listener = tokio::net::TcpListener::bind(addr).await?;
 	tracing::info!(?host, ?port, "api-peer server listening");

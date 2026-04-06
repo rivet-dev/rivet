@@ -112,7 +112,13 @@ where
 	A: Fn(u16, I, &mut R),
 	R: Default + Send + 'static,
 {
-	let dcs = ctx.config().topology().datacenters.clone();
+	let dcs = ctx
+		.config()
+		.topology()
+		.datacenters
+		.iter()
+		.cloned()
+		.collect::<Vec<_>>();
 
 	let results = futures_util::stream::iter(dcs)
 		.map(|dc| {
@@ -182,9 +188,7 @@ pub async fn reqwest_to_axum_response(reqwest_response: reqwest::Response) -> Re
 
 	if !status.is_success() {
 		let body_text = String::from_utf8_lossy(&body_bytes);
-		anyhow::bail!(
-			"remote dc returned error (status: {status}, ray_id: {ray_id:?}, body: {body_text})"
-		);
+		tracing::error!(?status, ?ray_id, %body_text, "remote dc returned error");
 	}
 
 	let mut response = Response::builder()

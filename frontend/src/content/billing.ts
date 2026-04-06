@@ -1,4 +1,5 @@
 import type { Rivet } from "@rivet-gg/cloud";
+import { bigBytes } from "@/utils/bytes";
 
 const ACTOR_AWAKE_PRICE_PER_SECOND =
 	0.05 /
@@ -9,37 +10,37 @@ const ACTOR_AWAKE_PRICE_PER_SECOND =
 /**
  * prices:
  * actor_awake: $0.05 per 1k awake actor-hours
- * kv_storage_used: $0.40 per GB-month
- * kv_read: $0.20 per million 4KB units
- * kv_write: $1 per million 4KB units
- * gateway_egress: $0.15 per GB
+ * kv_storage_used: $0.40 per GiB-month
+ * kv_read: $0.20 per million 4KiB units
+ * kv_write: $1 per million 4KiB units
+ * gateway_egress: $0.15 per GiB
  *
  * measurement units:
  * actor_awake measured in seconds
  * kv_storage_used measured in bytes
- * kv_read measured in bytes (rounded up to 4KB units)
- * kv_write measured in bytes (rounded up to 4KB units)
+ * kv_read measured in bytes (rounded up to 4KiB units)
+ * kv_write measured in bytes (rounded up to 4KiB units)
  * gateway_egress measured in bytes
  *
  * included in plans:
  * free:
  *   actor_awake: $5 dollars worth
- *   kv_storage_used: 5 GB
+ *   kv_storage_used: 5 GiB
  *   kv_read: 200M
  *   kv_write: 5M
- *   gateway_egress: 100 GB
+ *   gateway_egress: 100 GiB
  * pro:
  *   actor_awake: $20 dollars worth
- *   kv_storage_used: 5 GB
+ *   kv_storage_used: 5 GiB
  *   kv_read: 25B
  *   kv_write: 50M
- *   gateway_egress: 1 TB
+ *   gateway_egress: 1 TiB
  * team:
  *   actor_awake: $20 dollars worth
- *   kv_storage_used: 5 GB
+ *   kv_storage_used: 5 GiB
  *   kv_read: 25B
  *   kv_write: 50M
- *   gateway_egress: 1 TB
+ *   gateway_egress: 1 TiB
  */
 
 type BilledMetrics = Extract<
@@ -50,26 +51,23 @@ type BilledMetrics = Extract<
 	| "kv_write"
 	| "gateway_egress"
 >;
-const GB = 1_000_000_000n;
-const TB = 1_000_000_000_000n;
-const KB = 1_000n;
 
 export const BILLING = {
 	included: {
 		free: {
-			kv_read: 200_000_000n * (4n * KB), // 200M 4KB units
-			kv_write: 5_000_000n * (4n * KB), // 5M 4KB units
-			gateway_egress: 100n * GB, // 100 GB
-			kv_storage_used: 5n * GB, // 5 GB
+			kv_read: 200_000_000n * bigBytes.KiB(4n), // 200M 4KiB units
+			kv_write: 5_000_000n * bigBytes.KiB(4n), // 5M 4KiB units
+			gateway_egress: bigBytes.GiB(100n), // 100 GiB
+			kv_storage_used: bigBytes.GiB(5n), // 5 GiB
 			actor_awake: BigInt(
 				5_00 /* $5 to cents */ / ACTOR_AWAKE_PRICE_PER_SECOND,
 			),
 		},
 		pro: {
-			kv_read: 25_000_000_000n * (4n * KB), // 25B 4KB units
-			kv_write: 50_000_000n * (4n * KB), // 50M 4KB units
-			gateway_egress: 1n * TB, // 1 TB
-			kv_storage_used: 5n * GB, // 5 GB
+			kv_read: 25_000_000_000n * bigBytes.KiB(4n), // 25B 4KiB units
+			kv_write: 50_000_000n * bigBytes.KiB(4n), // 50M 4KiB units
+			gateway_egress: bigBytes.TiB(1n), // 1 TiB
+			kv_storage_used: bigBytes.GiB(5n), // 5 GiB
 			actor_awake: BigInt(
 				20_00 /* $20 to cents */ / ACTOR_AWAKE_PRICE_PER_SECOND,
 			),
