@@ -25,7 +25,6 @@ use rivet_guard_core::{
 };
 use tokio::sync::{Mutex, mpsc, watch};
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
-use uuid::Uuid;
 
 pub use rivet_kv_channel_protocol as protocol;
 
@@ -40,27 +39,13 @@ const KEY_WRAPPER_OVERHEAD: usize = 2;
 /// Prevents a malicious client from exhausting memory via unbounded actor_channels.
 const MAX_ACTORS_PER_CONNECTION: usize = 1000;
 
-/// Shared state across all KV channel connections.
-pub struct KvChannelState {
-	/// Maps actor_id string to the connection_id holding the single-writer lock and a reference
-	/// to that connection's open_actors set. The Arc reference allows lock eviction to remove the
-	/// actor from the old connection's set without acquiring the global lock on the KV hot path.
-	actor_locks: Mutex<HashMap<String, (Uuid, Arc<Mutex<HashSet<String>>>)>>,
-}
-
 pub struct PegboardKvChannelCustomServe {
 	ctx: StandaloneCtx,
-	state: Arc<KvChannelState>,
 }
 
 impl PegboardKvChannelCustomServe {
 	pub fn new(ctx: StandaloneCtx) -> Self {
-		Self {
-			ctx,
-			state: Arc::new(KvChannelState {
-				actor_locks: Mutex::new(HashMap::new()),
-			}),
-		}
+		Self { ctx }
 	}
 }
 
@@ -89,7 +74,6 @@ impl CustomServeTrait for PegboardKvChannelCustomServe {
 		_after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
 		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
-		let state = self.state.clone();
 
 		// Parse URL params.
 		let url = url::Url::parse(&format!("ws://placeholder{}", req_ctx.path()))
@@ -123,44 +107,24 @@ impl CustomServeTrait for PegboardKvChannelCustomServe {
 			.ok_or_else(|| namespace::errors::Namespace::NotFound.build())
 			.with_context(|| format!("namespace not found: {namespace_name}"))?;
 
-		// Assign connection ID. Uses UUID to eliminate any possibility of ID collision.
-		let conn_id = Uuid::new_v4();
 		let namespace_id = namespace.namespace_id;
 
-		tracing::info!(%conn_id, %namespace_id, "kv channel connection established");
+		tracing::info!(%namespace_id, "kv channel connection established");
 
-		// Track actors opened by this connection for cleanup on disconnect.
+		// Track actors opened by this connection.
 		let open_actors: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
 		let last_pong_ts = Arc::new(AtomicI64::new(util::timestamp::now()));
 
-		// Run the connection loop. Any error triggers cleanup below.
 		let result = run_connection(
 			ctx.clone(),
-			state.clone(),
 			ws_handle,
-			conn_id,
 			namespace_id,
-			open_actors.clone(),
+			open_actors,
 			last_pong_ts,
 		)
 		.await;
 
-		// Release all locks held by this connection. Only remove entries where the lock is still
-		// held by this conn_id, since another connection may have evicted it via ActorOpenRequest.
-		{
-			let open = open_actors.lock().await;
-			let mut locks = state.actor_locks.lock().await;
-			for actor_id in open.iter() {
-				if let Some((lock_conn, _)) = locks.get(actor_id) {
-					if *lock_conn == conn_id {
-						locks.remove(actor_id);
-						tracing::debug!(%conn_id, %actor_id, "released actor lock on disconnect");
-					}
-				}
-			}
-		}
-
-		tracing::info!(%conn_id, "kv channel connection closed");
+		tracing::info!("kv channel connection closed");
 
 		result.map(|_| None)
 	}
@@ -170,9 +134,7 @@ impl CustomServeTrait for PegboardKvChannelCustomServe {
 
 async fn run_connection(
 	ctx: StandaloneCtx,
-	state: Arc<KvChannelState>,
 	ws_handle: WebSocketHandle,
-	conn_id: Uuid,
 	namespace_id: Id,
 	open_actors: Arc<Mutex<HashSet<String>>>,
 	last_pong_ts: Arc<AtomicI64>,
@@ -200,9 +162,7 @@ async fn run_connection(
 	// Run message loop.
 	let msg_result = message_loop(
 		&ctx,
-		&state,
 		&ws_handle,
-		conn_id,
 		namespace_id,
 		&open_actors,
 		&last_pong_ts,
@@ -250,9 +210,7 @@ async fn ping_task(
 
 async fn message_loop(
 	ctx: &StandaloneCtx,
-	state: &Arc<KvChannelState>,
 	ws_handle: &WebSocketHandle,
-	conn_id: Uuid,
 	namespace_id: Id,
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	last_pong_ts: &AtomicI64,
@@ -297,9 +255,7 @@ async fn message_loop(
 				Message::Binary(data) => {
 					handle_binary_message(
 						ctx,
-						state,
 						ws_handle,
-						conn_id,
 						namespace_id,
 						open_actors,
 						last_pong_ts,
@@ -329,9 +285,7 @@ async fn message_loop(
 
 async fn handle_binary_message(
 	ctx: &StandaloneCtx,
-	state: &Arc<KvChannelState>,
 	ws_handle: &WebSocketHandle,
-	conn_id: Uuid,
 	namespace_id: Id,
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	last_pong_ts: &AtomicI64,
@@ -366,9 +320,7 @@ async fn handle_binary_message(
 				let (tx, rx) = mpsc::channel(64);
 				actor_tasks.spawn(actor_request_task(
 					Clone::clone(ctx),
-					Clone::clone(state),
 					Clone::clone(ws_handle),
-					conn_id,
 					namespace_id,
 					Clone::clone(open_actors),
 					rx,
@@ -421,9 +373,7 @@ async fn handle_binary_message(
 /// dropped (connection end) or after processing an ActorCloseRequest.
 async fn actor_request_task(
 	ctx: StandaloneCtx,
-	state: Arc<KvChannelState>,
 	ws_handle: WebSocketHandle,
-	conn_id: Uuid,
 	namespace_id: Id,
 	open_actors: Arc<Mutex<HashSet<String>>>,
 	mut rx: mpsc::Receiver<protocol::ToRivetRequest>,
@@ -436,19 +386,18 @@ async fn actor_request_task(
 
 		let response_data = match &req.data {
 			// Open/close are lifecycle ops that don't need a resolved actor.
-			protocol::RequestData::ActorOpenRequest | protocol::RequestData::ActorCloseRequest => {
-				handle_request(&ctx, &state, conn_id, namespace_id, &open_actors, &req).await
+			protocol::RequestData::ActorOpenRequest
+			| protocol::RequestData::ActorCloseRequest => {
+				handle_request(&open_actors, &req).await
 			}
 			// KV ops: resolve once, cache, reuse.
 			_ => {
 				let is_open = open_actors.lock().await.contains(&req.actor_id);
 				if !is_open {
-					let locks = state.actor_locks.lock().await;
-					if locks.contains_key(&req.actor_id) {
-						error_response("actor_locked", "actor is locked by another connection")
-					} else {
-						error_response("actor_not_open", "actor is not opened on this connection")
-					}
+					error_response(
+						"actor_not_open",
+						"actor is not opened on this connection",
+					)
 				} else {
 					if !cached_actors.contains_key(&req.actor_id) {
 						match resolve_actor(&ctx, &req.actor_id, namespace_id).await {
@@ -525,19 +474,15 @@ async fn send_response(ws_handle: &WebSocketHandle, request_id: u32, data: proto
 /// Handles actor lifecycle requests (open/close). KV operations are handled
 /// directly in `actor_request_task` with cached actor resolution.
 async fn handle_request(
-	_ctx: &StandaloneCtx,
-	state: &KvChannelState,
-	conn_id: Uuid,
-	_namespace_id: Id,
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	req: &protocol::ToRivetRequest,
 ) -> protocol::ResponseData {
 	match &req.data {
 		protocol::RequestData::ActorOpenRequest => {
-			handle_actor_open(state, conn_id, open_actors, &req.actor_id).await
+			handle_actor_open(open_actors, &req.actor_id).await
 		}
 		protocol::RequestData::ActorCloseRequest => {
-			handle_actor_close(state, conn_id, open_actors, &req.actor_id).await
+			handle_actor_close(open_actors, &req.actor_id).await
 		}
 		_ => unreachable!("KV operations are handled in actor_request_task"),
 	}
@@ -546,8 +491,6 @@ async fn handle_request(
 // MARK: Actor open/close
 
 async fn handle_actor_open(
-	state: &KvChannelState,
-	conn_id: Uuid,
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	actor_id: &str,
 ) -> protocol::ResponseData {
@@ -562,47 +505,17 @@ async fn handle_actor_open(
 		}
 	}
 
-	let mut locks = state.actor_locks.lock().await;
-
-	// If the actor is locked by a different connection, unconditionally evict the old lock.
-	// This handles reconnection scenarios where the server hasn't detected the old connection's
-	// disconnect yet. The old connection's next KV request will fail the fast-path check
-	// (open_actors.contains) and return actor_not_open.
-	// See docs-internal/engine/NATIVE_SQLITE_REVIEW_FINDINGS.md Finding 4.
-	if let Some((existing_conn, old_open_actors)) = locks.get(actor_id) {
-		if *existing_conn != conn_id {
-			old_open_actors.lock().await.remove(actor_id);
-			tracing::info!(
-				%conn_id,
-				old_conn_id = %existing_conn,
-				%actor_id,
-				"evicted stale actor lock from old connection"
-			);
-		}
-	}
-
-	locks.insert(actor_id.to_string(), (conn_id, open_actors.clone()));
 	open_actors.lock().await.insert(actor_id.to_string());
-	tracing::debug!(%conn_id, %actor_id, "actor lock acquired");
+	tracing::debug!(%actor_id, "actor opened");
 	protocol::ResponseData::ActorOpenResponse
 }
 
 async fn handle_actor_close(
-	state: &KvChannelState,
-	conn_id: Uuid,
 	open_actors: &Arc<Mutex<HashSet<String>>>,
 	actor_id: &str,
 ) -> protocol::ResponseData {
-	let mut locks = state.actor_locks.lock().await;
-
-	if let Some((lock_conn, _)) = locks.get(actor_id) {
-		if *lock_conn == conn_id {
-			locks.remove(actor_id);
-			open_actors.lock().await.remove(actor_id);
-			tracing::debug!(%conn_id, %actor_id, "actor lock released");
-		}
-	}
-
+	open_actors.lock().await.remove(actor_id);
+	tracing::debug!(%actor_id, "actor closed");
 	protocol::ResponseData::ActorCloseResponse
 }
 
