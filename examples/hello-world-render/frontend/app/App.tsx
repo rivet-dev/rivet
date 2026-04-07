@@ -197,7 +197,7 @@ export function App() {
 							</CardHeader>
 							<CardContent className="flex justify-center pt-0">
 								<a
-									href="https://render.com/deploy?repo=https://github.com/ojusave/rivet-render"
+									href="https://render.com/deploy?repo=https://github.com/rivet-dev/rivet/tree/main/examples/hello-world-render"
 									target="_blank"
 									rel="noopener noreferrer"
 									className="inline-flex shrink-0"
