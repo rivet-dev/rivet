@@ -245,7 +245,11 @@ export function buildActorQueryGatewayUrl(
 		}
 		params.append("rvt-runner", runnerName);
 		pushKeyQueryParams(params, query.getOrCreateForKey.key);
-		pushInputQueryParam(params, query.getOrCreateForKey.input, maxInputSize);
+		pushInputQueryParam(
+			params,
+			query.getOrCreateForKey.input,
+			maxInputSize,
+		);
 		if (query.getOrCreateForKey.region !== undefined) {
 			params.append("rvt-region", query.getOrCreateForKey.region);
 		}
@@ -278,10 +282,7 @@ export function buildActorQueryGatewayUrl(
 	return combineUrlPath(endpoint, gatewayPath);
 }
 
-function pushKeyQueryParams(
-	params: URLSearchParams,
-	key: string[],
-): void {
+function pushKeyQueryParams(params: URLSearchParams, key: string[]): void {
 	if (key.length > 0) {
 		params.append("rvt-key", key.join(","));
 	}

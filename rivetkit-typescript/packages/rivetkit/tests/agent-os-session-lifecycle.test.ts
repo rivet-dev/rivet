@@ -14,7 +14,10 @@ describe("agentOS session lifecycle", () => {
 	beforeAll(async () => {
 		mock = new LLMock({ port: 0, logLevel: "silent" });
 		mock.addFixtures([
-			{ match: { predicate: () => true }, response: { content: "Hello from mock LLM" } },
+			{
+				match: { predicate: () => true },
+				response: { content: "Hello from mock LLM" },
+			},
 		]);
 		mockUrl = await mock.start();
 		mockPort = Number(new URL(mockUrl).port);
@@ -36,7 +39,9 @@ describe("agentOS session lifecycle", () => {
 
 	test("writeFile, readFile, exec", async (c) => {
 		const { client } = await setupTest(c, createRegistry());
-		const actor = (client as any).vm.getOrCreate([`basic-${crypto.randomUUID()}`]);
+		const actor = (client as any).vm.getOrCreate([
+			`basic-${crypto.randomUUID()}`,
+		]);
 
 		await actor.writeFile("/tmp/test.txt", "hello");
 		const data = await actor.readFile("/tmp/test.txt");
@@ -49,7 +54,9 @@ describe("agentOS session lifecycle", () => {
 
 	test("create session, send prompt, close session", async (c) => {
 		const { client } = await setupTest(c, createRegistry());
-		const actor = (client as any).vm.getOrCreate([`session-${crypto.randomUUID()}`]);
+		const actor = (client as any).vm.getOrCreate([
+			`session-${crypto.randomUUID()}`,
+		]);
 
 		const session = await actor.createSession("pi", {
 			env: {

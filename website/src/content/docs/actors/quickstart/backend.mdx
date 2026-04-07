@@ -75,14 +75,7 @@ deno run --allow-net --allow-read --allow-env --watch index.ts
 
 </CodeGroup>
 
-Your server is now running on `http://localhost:6420`. To change the port, pass `managerPort` in the setup config:
-
-```ts @nocheck
-const registry = setup({
-	use: { counter },
-	managerPort: 3000,
-});
-```
+Your server is now running on `http://localhost:6420`. Clients connect directly to the Rivet Engine on this port.
 
 </Step>
 
@@ -221,4 +214,3 @@ See the [React documentation](/docs/clients/react) for more information.
 ## Configuration Options
 
 <ConfigurationOptions />
-

@@ -262,7 +262,10 @@ export class ScheduleManager<
 		// event is persisted and will be re-armed by initializeAlarms() on
 		// next wake.
 		if (!this.#actor.isStopping) {
-			if (insertIndex === 0 || this.#persist.scheduledEvents.length === 1) {
+			if (
+				insertIndex === 0 ||
+				this.#persist.scheduledEvents.length === 1
+			) {
 				this.#actor.log.info({
 					msg: "setting alarm for new event",
 					timestamp: newEvent.timestamp,

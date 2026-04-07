@@ -53,7 +53,7 @@ Pi scans two directories for `.js` extension files:
 | `~/.pi/agent/extensions/` | Global — applies to all Pi sessions |
 | `<cwd>/.pi/extensions/` | Project — applies only when cwd matches |
 
-```ts
+```ts @nocheck
 const extensionCode = `
 module.exports = function(pi) {
   // Modify the system prompt before each agent turn

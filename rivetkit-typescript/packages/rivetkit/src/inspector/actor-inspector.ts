@@ -145,7 +145,11 @@ export class ActorInspector {
 				)) as { count: number }[];
 
 				tableInfos.push({
-					table: { schema: "main", name: table.name, type: table.type },
+					table: {
+						schema: "main",
+						name: table.name,
+						type: table.type,
+					},
 					columns: columns.map((column) => ({
 						cid: column.cid,
 						name: column.name,

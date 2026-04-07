@@ -1,8 +1,5 @@
 import type { ActorKey } from "@/actor/mod";
-import type {
-	ActorConfig,
-	GlobalActorOptionsInput,
-} from "@/actor/config";
+import type { ActorConfig, GlobalActorOptionsInput } from "@/actor/config";
 import { ActorConfigSchema } from "@/actor/config";
 import type {
 	AnyActorDefinition,
@@ -60,9 +57,13 @@ abstract class DynamicActorContextBase<TInput = unknown> {
 	}
 }
 
-export class DynamicActorLoaderContext<TInput = unknown> extends DynamicActorContextBase<TInput> {}
+export class DynamicActorLoaderContext<
+	TInput = unknown,
+> extends DynamicActorContextBase<TInput> {}
 
-export class DynamicActorAuthContext<TInput = unknown> extends DynamicActorContextBase<TInput> {
+export class DynamicActorAuthContext<
+	TInput = unknown,
+> extends DynamicActorContextBase<TInput> {
 	readonly request: Request | undefined;
 
 	constructor(
@@ -102,7 +103,7 @@ export interface DynamicActorConfigInput<
 
 export class DynamicActorDefinition<TInput = unknown, TConnParams = unknown>
 	implements
-	BaseActorDefinition<
+		BaseActorDefinition<
 			any,
 			any,
 			any,
@@ -125,7 +126,7 @@ export class DynamicActorDefinition<TInput = unknown, TConnParams = unknown>
 		AnyDatabaseProvider,
 		EventSchemaConfig,
 		QueueSchemaConfig
-		>;
+	>;
 
 	constructor(input: DynamicActorConfigInput<TInput, TConnParams>) {
 		this.#loader = input.load;

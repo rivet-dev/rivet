@@ -270,7 +270,11 @@ export class Conn<
 					try {
 						if (driver.disconnect) {
 							try {
-								await driver.disconnect(this.#actor, this, reason);
+								await driver.disconnect(
+									this.#actor,
+									this,
+									reason,
+								);
 							} catch (error) {
 								this.#actor.rLog.warn({
 									msg: "conn driver disconnect failed, continuing connection cleanup",
@@ -286,7 +290,9 @@ export class Conn<
 							});
 						}
 
-						await this.#actor.connectionManager.connDisconnected(this);
+						await this.#actor.connectionManager.connDisconnected(
+							this,
+						);
 					} finally {
 						this[CONN_DRIVER_SYMBOL] = undefined;
 					}

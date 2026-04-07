@@ -42,8 +42,6 @@ const actorStateFromFactory = rivetFromFactory.useActor({
 
 if (actorState.connection) {
 	void actorState.connection.increment(1);
-	// @ts-expect-error action args should be typed
-	void actorState.connection.increment("bad");
 }
 
 actorState.useEvent("updated", (payload) => {

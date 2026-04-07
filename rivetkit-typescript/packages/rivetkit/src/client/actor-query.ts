@@ -1,6 +1,9 @@
 import * as errors from "@/actor/errors";
 import { stringifyError } from "@/common/utils";
-import { type GatewayTarget, type EngineControlClient } from "@/driver-helpers/mod";
+import {
+	type GatewayTarget,
+	type EngineControlClient,
+} from "@/driver-helpers/mod";
 import type { ActorQuery } from "@/client/query";
 import { ActorSchedulingError } from "./errors";
 import { logger } from "./log";

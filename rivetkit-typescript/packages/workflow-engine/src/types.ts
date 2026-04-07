@@ -422,11 +422,7 @@ export interface TryStepConfig<T> extends StepConfig<T> {
 	catch?: readonly TryStepCatchKind[];
 }
 
-export type TryBlockCatchKind =
-	| "step"
-	| "join"
-	| "race"
-	| "rollback";
+export type TryBlockCatchKind = "step" | "join" | "race" | "rollback";
 
 export interface TryBlockFailure {
 	source: "step" | "join" | "race" | "block";

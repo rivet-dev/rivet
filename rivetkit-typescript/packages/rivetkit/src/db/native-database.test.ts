@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { wrapJsNativeDatabase, type JsNativeDatabaseLike } from "./native-database";
+import {
+	wrapJsNativeDatabase,
+	type JsNativeDatabaseLike,
+} from "./native-database";
 
 function createDatabase(
 	overrides: Partial<JsNativeDatabaseLike> = {},

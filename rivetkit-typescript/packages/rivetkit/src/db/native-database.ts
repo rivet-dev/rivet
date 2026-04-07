@@ -24,8 +24,14 @@ interface NativeRunResult {
 
 export interface JsNativeDatabaseLike {
 	exec(sql: string): Promise<NativeExecResult>;
-	query(sql: string, params?: NativeBindParam[] | null): Promise<NativeQueryResult>;
-	run(sql: string, params?: NativeBindParam[] | null): Promise<NativeRunResult>;
+	query(
+		sql: string,
+		params?: NativeBindParam[] | null,
+	): Promise<NativeQueryResult>;
+	run(
+		sql: string,
+		params?: NativeBindParam[] | null,
+	): Promise<NativeRunResult>;
 	takeLastKvError?(): string | null;
 	close(): Promise<void>;
 }

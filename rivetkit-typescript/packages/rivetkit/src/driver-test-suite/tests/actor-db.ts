@@ -214,11 +214,8 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			test.skipIf(driverTestConfig.skip?.sleep)(
 				"preserves committed rows across a hard crash and restart",
 				async (c) => {
-					const {
-						client,
-						hardCrashActor,
-						hardCrashPreservesData,
-					} = await setupDriverTest(c, driverTestConfig);
+					const { client, hardCrashActor, hardCrashPreservesData } =
+						await setupDriverTest(c, driverTestConfig);
 					if (!hardCrashPreservesData) {
 						return;
 					}
@@ -239,10 +236,9 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 					const actorId = await actor.resolve();
 					await hardCrashActor(actorId);
 
-					const hardCrashPollAttempts =
-						driverTestConfig.useRealTimers
-							? REAL_TIMER_HARD_CRASH_POLL_ATTEMPTS
-							: LIFECYCLE_POLL_ATTEMPTS;
+					const hardCrashPollAttempts = driverTestConfig.useRealTimers
+						? REAL_TIMER_HARD_CRASH_POLL_ATTEMPTS
+						: LIFECYCLE_POLL_ATTEMPTS;
 					const hardCrashPollIntervalMs =
 						driverTestConfig.useRealTimers
 							? REAL_TIMER_HARD_CRASH_POLL_INTERVAL_MS
@@ -301,8 +297,7 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 					// under concurrent test load.
 					let count = 0;
 					for (let i = 0; i < LIFECYCLE_POLL_ATTEMPTS; i++) {
-						count =
-							await actor.getDisconnectInsertCount();
+						count = await actor.getDisconnectInsertCount();
 						if (count >= 1) {
 							break;
 						}

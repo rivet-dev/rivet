@@ -23,14 +23,20 @@ export function runGatewayQueryUrlTests(driverTestConfig: DriverTestConfig) {
 
 				const gatewayUrl = await handle.getGatewayUrl();
 				const parsedUrl = new URL(gatewayUrl);
-				expect(parsedUrl.searchParams.get("rvt-namespace")).toBeTruthy();
-				expect(parsedUrl.searchParams.get("rvt-method")).toBe("getOrCreate");
-				expect(parsedUrl.searchParams.get("rvt-crash-policy")).toBe("sleep");
+				expect(
+					parsedUrl.searchParams.get("rvt-namespace"),
+				).toBeTruthy();
+				expect(parsedUrl.searchParams.get("rvt-method")).toBe(
+					"getOrCreate",
+				);
+				expect(parsedUrl.searchParams.get("rvt-crash-policy")).toBe(
+					"sleep",
+				);
 
 				const response = await fetch(
 					buildGatewayInspectorUrl(gatewayUrl, "/inspector/state"),
 					{
-					headers: { Authorization: "Bearer token" },
+						headers: { Authorization: "Bearer token" },
 					},
 				);
 
@@ -55,13 +61,15 @@ export function runGatewayQueryUrlTests(driverTestConfig: DriverTestConfig) {
 					.get(["existing-gateway-query"])
 					.getGatewayUrl();
 				const parsedUrl = new URL(gatewayUrl);
-				expect(parsedUrl.searchParams.get("rvt-namespace")).toBeTruthy();
+				expect(
+					parsedUrl.searchParams.get("rvt-namespace"),
+				).toBeTruthy();
 				expect(parsedUrl.searchParams.get("rvt-method")).toBe("get");
 
 				const response = await fetch(
 					buildGatewayInspectorUrl(gatewayUrl, "/inspector/state"),
 					{
-					headers: { Authorization: "Bearer token" },
+						headers: { Authorization: "Bearer token" },
 					},
 				);
 

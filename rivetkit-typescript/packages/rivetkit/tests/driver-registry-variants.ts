@@ -88,14 +88,15 @@ function getDynamicVariantSkipReason(): string | undefined {
 		return `Dynamic registry parity requires secure-exec dist at one of: ${SECURE_EXEC_DIST_CANDIDATE_PATHS.join(", ")}.`;
 	}
 
-	process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER = pathToFileURL(
-		secureExecDistPath,
-	).href;
+	process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER =
+		pathToFileURL(secureExecDistPath).href;
 
 	return undefined;
 }
 
-export function getDriverRegistryVariants(currentDir: string): DriverRegistryVariant[] {
+export function getDriverRegistryVariants(
+	currentDir: string,
+): DriverRegistryVariant[] {
 	return [
 		{
 			name: "static",

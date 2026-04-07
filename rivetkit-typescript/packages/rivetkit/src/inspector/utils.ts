@@ -22,11 +22,11 @@ export const secureInspector = (config: RegistryConfig) =>
 
 export function getInspectorUrl(
 	config: RegistryConfig,
-	managerPort: number,
+	httpPort: number,
 ): string | undefined {
 	if (!config.inspector.enabled) return undefined;
 
 	const base =
-		config.inspector.defaultEndpoint ?? `http://127.0.0.1:${managerPort}`;
+		config.inspector.defaultEndpoint ?? `http://127.0.0.1:${httpPort}`;
 	return new URL("/ui/", base).href;
 }

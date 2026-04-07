@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { getRunMetadata } from "@/actor/config";
-import type { BaseActorDefinition, AnyActorDefinition } from "@/actor/definition";
+import type {
+	BaseActorDefinition,
+	AnyActorDefinition,
+} from "@/actor/definition";
 import {
 	KEYS,
 	queueMetadataKey,
@@ -9,21 +12,25 @@ import {
 import { type Logger, LogLevelSchema } from "@/common/log";
 import { ENGINE_ENDPOINT } from "@/engine-process/constants";
 import { InspectorConfigSchema } from "@/inspector/config";
-import { DeepReadonly } from "@/utils";
+import { DeepReadonly, VERSION } from "@/utils";
 import { tryParseEndpoint } from "@/utils/endpoint-parser";
 import {
 	getRivetEndpoint,
 	getRivetEngine,
 	getRivetNamespace,
+	getRivetRunEngine,
+	getRivetRunEngineVersion,
 	getRivetToken,
 	isDev,
 } from "@/utils/env-vars";
 import { EnvoyConfigSchema } from "./envoy";
-import { ServerlessConfigSchema } from "./serverless";
+import { ConfigurePoolSchema, ServerlessConfigSchema } from "./serverless";
 
 export const ActorsSchema = z.record(
 	z.string(),
-	z.custom<BaseActorDefinition<any, any, any, any, any, any, any, any, any>>(),
+	z.custom<
+		BaseActorDefinition<any, any, any, any, any, any, any, any, any>
+	>(),
 );
 export type RegistryActors = z.infer<typeof ActorsSchema>;
 
@@ -106,12 +113,7 @@ export const RegistryConfigSchema = z
 		// TODO:
 		// client: ClientConfigSchema.optional(),
 
-		// MARK: Manager
-		/**
-		 * Whether to start the local RivetKit server.
-		 * Auto-determined based on endpoint and NODE_ENV if not specified.
-		 */
-		serveManager: z.boolean().optional(),
+		// MARK: Local HTTP
 		/**
 		 * Directory to serve static files from.
 		 *
@@ -119,7 +121,7 @@ export const RegistryConfigSchema = z
 		 * directory. This is used by `registry.start()` to serve a frontend
 		 * alongside the actor API.
 		 */
-		publicDir: z.string().optional(),
+		staticDir: z.string().optional(),
 		/**
 		 * @experimental
 		 *
@@ -127,22 +129,41 @@ export const RegistryConfigSchema = z
 		 * For example, if the base path is `/foo`, then the route `/actors`
 		 * will be available at `/foo/actors`.
 		 */
-		managerBasePath: z.string().optional().default("/"),
+		httpBasePath: z.string().optional().default("/"),
 		/**
 		 * @experimental
 		 *
-		 * What port to run the manager on.
+		 * What port to run the local HTTP server on.
 		 */
-		managerPort: z.number().optional().default(6420),
+		httpPort: z.number().optional().default(6421),
 		/**
 		 * @experimental
 		 *
-		 * What host to bind the local RivetKit server to.
+		 * What host to bind the local HTTP server to.
 		 */
-		managerHost: z.string().optional(),
+		httpHost: z.string().optional(),
 
 		/** @experimental */
 		inspector: InspectorConfigSchema,
+
+		// MARK: Engine
+		/**
+		 * @experimental
+		 *
+		 * Starts the full Rust engine process locally.
+		 */
+		startEngine: z.boolean().default(() => getRivetRunEngine()),
+		/** @experimental */
+		engineVersion: z
+			.string()
+			.optional()
+			.default(() => getRivetRunEngineVersion() ?? VERSION),
+		/**
+		 * @experimental
+		 *
+		 * Automatically configure serverless envoys in the engine.
+		 */
+		configurePool: ConfigurePoolSchema.optional(),
 
 		// MARK: Runtime-specific
 		serverless: ServerlessConfigSchema.optional().default(() =>
@@ -158,44 +179,33 @@ export const RegistryConfigSchema = z
 		// Parse endpoint string (env var fallback is applied via transform above)
 		const parsedEndpoint = config.endpoint
 			? tryParseEndpoint(ctx, {
-				endpoint: config.endpoint,
-				path: ["endpoint"],
-				namespace: config.namespace,
-				token: config.token,
-			})
+					endpoint: config.endpoint,
+					path: ["endpoint"],
+					namespace: config.namespace,
+					token: config.token,
+				})
 			: undefined;
 
-		if (parsedEndpoint && config.serveManager) {
+		// Can't start a local engine and connect to a remote endpoint.
+		if (config.startEngine && parsedEndpoint) {
 			ctx.addIssue({
 				code: "custom",
-				message: "cannot specify both endpoint and serveManager",
+				message: "cannot specify both startEngine and endpoint",
 			});
 		}
 
-		// Can't spawn engine AND connect to remote endpoint
-		if (config.serverless.spawnEngine && parsedEndpoint) {
-			ctx.addIssue({
-				code: "custom",
-				message: "cannot specify both spawnEngine and endpoint",
-			});
-		}
-
-		// configurePool requires an engine (via endpoint or spawnEngine)
-		if (
-			config.serverless.configurePool &&
-			!parsedEndpoint &&
-			!config.serverless.spawnEngine
-		) {
+		// configurePool requires an engine (via endpoint or startEngine).
+		if (config.configurePool && !parsedEndpoint && !config.startEngine) {
 			ctx.addIssue({
 				code: "custom",
 				message:
-					"configurePool requires either endpoint or spawnEngine",
+					"configurePool requires either endpoint or startEngine",
 			});
 		}
 
 		// Flatten the endpoint and apply defaults for namespace/token
-		// If spawnEngine is enabled, set endpoint to the engine endpoint
-		const endpoint = config.serverless.spawnEngine
+		// If startEngine is enabled, set endpoint to the engine endpoint.
+		const endpoint = config.startEngine
 			? ENGINE_ENDPOINT
 			: parsedEndpoint?.endpoint;
 		// Namespace priority: parsed from endpoint URL > config value (includes env var) > "default"
@@ -207,9 +217,9 @@ export const RegistryConfigSchema = z
 		// Parse publicEndpoint string (env var fallback is applied via transform in serverless schema)
 		const parsedPublicEndpoint = config.serverless.publicEndpoint
 			? tryParseEndpoint(ctx, {
-				endpoint: config.serverless.publicEndpoint,
-				path: ["serverless", "publicEndpoint"],
-			})
+					endpoint: config.serverless.publicEndpoint,
+					path: ["serverless", "publicEndpoint"],
+				})
 			: undefined;
 
 		// Validate that publicEndpoint namespace matches backend namespace if specified
@@ -224,40 +234,25 @@ export const RegistryConfigSchema = z
 			});
 		}
 
-		// Determine serveManager: default to true in dev mode without endpoint, false otherwise
-		const serveManager = config.serveManager ?? (isDevEnv && !endpoint);
-
-		// In dev mode, fall back to 127.0.0.1 if serving manager
+		// In dev mode, clients connect directly to the local Rivet Engine.
 		const publicEndpoint =
 			parsedPublicEndpoint?.endpoint ??
-			(isDevEnv && (serveManager || config.serverless.spawnEngine)
-				? `http://127.0.0.1:${config.managerPort}`
-				: undefined);
+			(isDevEnv && config.startEngine ? ENGINE_ENDPOINT : undefined);
 		// We extract publicNamespace to validate that it matches the backend
 		// namespace (see validation above), not for functional use.
 		const publicNamespace = parsedPublicEndpoint?.namespace;
 		const publicToken =
 			parsedPublicEndpoint?.token ?? config.serverless.publicToken;
 
-		// If endpoint is set or spawning engine, we'll use engine driver - disable manager inspector
-		const willUseEngine = !!endpoint || config.serverless.spawnEngine;
-		const inspector = willUseEngine
-			? {
-				...config.inspector,
-				enabled: { manager: false, actor: true },
-			}
-			: config.inspector;
-
+		// If endpoint is set or starting the engine, we'll use the engine driver.
 		return {
 			...config,
 			endpoint,
 			namespace,
 			token,
-			serveManager,
 			publicEndpoint,
 			publicNamespace,
 			publicToken,
-			inspector,
 			serverless: {
 				...config.serverless,
 				publicEndpoint,
@@ -336,7 +331,7 @@ export const DocInspectorConfigSchema = z
 	.optional()
 	.describe("Inspector configuration for debugging and development.");
 
-export const DocConfigureRunnerPoolSchema = z
+export const DocConfigurePoolSchema = z
 	.object({
 		name: z.string().optional().describe("Name of the runner pool."),
 		url: z
@@ -348,26 +343,10 @@ export const DocConfigureRunnerPoolSchema = z
 			.describe(
 				"Headers to include in requests to the serverless platform.",
 			),
-		maxRunners: z
-			.number()
-			.optional()
-			.describe("Maximum number of runners in the pool."),
-		minRunners: z
-			.number()
-			.optional()
-			.describe("Minimum number of runners to keep warm."),
 		requestLifespan: z
 			.number()
 			.optional()
-			.describe("Maximum lifespan of a request in milliseconds."),
-		runnersMargin: z
-			.number()
-			.optional()
-			.describe("Buffer margin for scaling runners."),
-		slotsPerRunner: z
-			.number()
-			.optional()
-			.describe("Number of actor slots per runner."),
+			.describe("Maximum lifespan of a request in seconds."),
 		metadata: z
 			.record(z.string(), z.unknown())
 			.optional()
@@ -380,26 +359,17 @@ export const DocConfigureRunnerPoolSchema = z
 			.describe(
 				"Interval in milliseconds between metadata polls from the engine. Defaults to 10000 milliseconds (10 seconds).",
 			),
+		drainOnVersionUpgrade: z
+			.boolean()
+			.optional()
+			.describe(
+				"Drain runners when a new version is deployed. Defaults to true.",
+			),
 	})
 	.optional();
 
 export const DocServerlessConfigSchema = z
 	.object({
-		spawnEngine: z
-			.boolean()
-			.optional()
-			.describe(
-				"Downloads and starts the full Rust engine process. Auto-enabled in development mode when no endpoint is provided. Default: false",
-			),
-		engineVersion: z
-			.string()
-			.optional()
-			.describe(
-				"Version of the engine to download. Defaults to the current RivetKit version.",
-			),
-		configureRunnerPool: DocConfigureRunnerPoolSchema.describe(
-			"Automatically configure serverless runners in the engine.",
-		),
 		basePath: z
 			.string()
 			.optional()
@@ -497,27 +467,40 @@ export const DocRegistryConfigSchema = z
 			.describe(
 				"Additional headers to include in requests to Rivet Engine.",
 			),
-		serveManager: z
-			.boolean()
-			.optional()
-			.describe(
-				"Whether to start the local RivetKit server. Auto-determined based on endpoint and NODE_ENV if not specified.",
-			),
-		publicDir: z
+		staticDir: z
 			.string()
 			.optional()
 			.describe(
-				"Directory to serve static files from. When set, the local RivetKit server serves static files alongside the actor API. Used by registry.start().",
+				"Directory to serve static files from. When set, registry.start() serves static files alongside the actor API.",
 			),
-		managerBasePath: z
+		httpBasePath: z
 			.string()
 			.optional()
 			.describe("Base path for the local RivetKit API. Default: '/'"),
-		managerPort: z
+		httpPort: z
 			.number()
 			.optional()
-			.describe("Port to run the manager on. Default: 6420"),
+			.describe("Port to run the local HTTP server on. Default: 6421"),
+		httpHost: z
+			.string()
+			.optional()
+			.describe("Host to bind the local HTTP server to."),
 		inspector: DocInspectorConfigSchema,
+		startEngine: z
+			.boolean()
+			.optional()
+			.describe(
+				"Starts the full Rust engine process locally. Default: false",
+			),
+		engineVersion: z
+			.string()
+			.optional()
+			.describe(
+				"Version of the local engine package to use. Defaults to the current RivetKit version.",
+			),
+		configurePool: DocConfigurePoolSchema.describe(
+			"Automatically configure serverless runners in the engine.",
+		),
 		serverless: DocServerlessConfigSchema.optional(),
 		envoy: DocEnvoyConfigSchema.optional(),
 	})

@@ -71,61 +71,75 @@ export function runActorErrorHandlingTests(driverTestConfig: DriverTestConfig) {
 			});
 		});
 
-		describe.skipIf(!driverTestConfig.useRealTimers)("Action Timeout", () => {
-			test("should handle action timeouts with custom duration", async (c) => {
-				const { client } = await setupDriverTest(c, driverTestConfig);
+		describe.skipIf(!driverTestConfig.useRealTimers)(
+			"Action Timeout",
+			() => {
+				test("should handle action timeouts with custom duration", async (c) => {
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 
-				// Call an action that should time out
-				const handle = client.errorHandlingActor.getOrCreate();
+					// Call an action that should time out
+					const handle = client.errorHandlingActor.getOrCreate();
 
-				// This should throw a timeout error because errorHandlingActor has
-				// a 500ms timeout and this action tries to run for much longer
-				const timeoutPromise = handle.timeoutAction();
+					// This should throw a timeout error because errorHandlingActor has
+					// a 500ms timeout and this action tries to run for much longer
+					const timeoutPromise = handle.timeoutAction();
 
-				try {
-					await timeoutPromise;
-					// If we get here, the test failed - timeout didn't occur
-					expect(true).toBe(false); // This should not be reached
-				} catch (error: any) {
-					// Verify it's a timeout error
-					expect(error.message).toMatch(/timed out/i);
-				}
-			});
+					try {
+						await timeoutPromise;
+						// If we get here, the test failed - timeout didn't occur
+						expect(true).toBe(false); // This should not be reached
+					} catch (error: any) {
+						// Verify it's a timeout error
+						expect(error.message).toMatch(/timed out/i);
+					}
+				});
 
-			test("should successfully run actions within timeout", async (c) => {
-				const { client } = await setupDriverTest(c, driverTestConfig);
+				test("should successfully run actions within timeout", async (c) => {
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 
-				// Call an action with a delay shorter than the timeout
-				const handle = client.errorHandlingActor.getOrCreate();
+					// Call an action with a delay shorter than the timeout
+					const handle = client.errorHandlingActor.getOrCreate();
 
-				// This should succeed because 200ms < 500ms timeout
-				const result = await handle.delayedAction(200);
-				expect(result).toBe("Completed after 200ms");
-			});
+					// This should succeed because 200ms < 500ms timeout
+					const result = await handle.delayedAction(200);
+					expect(result).toBe("Completed after 200ms");
+				});
 
-			test("should respect different timeouts for different actors", async (c) => {
-				const { client } = await setupDriverTest(c, driverTestConfig);
+				test("should respect different timeouts for different actors", async (c) => {
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 
-				// The following actors have different timeout settings:
-				// customTimeoutActor: 200ms timeout
-				// standardTimeoutActor: default timeout (much longer)
+					// The following actors have different timeout settings:
+					// customTimeoutActor: 200ms timeout
+					// standardTimeoutActor: default timeout (much longer)
 
-				// This should fail - 300ms delay with 200ms timeout
-				try {
-					await client.customTimeoutActor.getOrCreate().slowAction();
-					// Should not reach here
-					expect(true).toBe(false);
-				} catch (error: any) {
-					expect(error.message).toMatch(/timed out/i);
-				}
+					// This should fail - 300ms delay with 200ms timeout
+					try {
+						await client.customTimeoutActor
+							.getOrCreate()
+							.slowAction();
+						// Should not reach here
+						expect(true).toBe(false);
+					} catch (error: any) {
+						expect(error.message).toMatch(/timed out/i);
+					}
 
-				// This should succeed - 50ms delay with 200ms timeout
-				const quickResult = await client.customTimeoutActor
-					.getOrCreate()
-					.quickAction();
-				expect(quickResult).toBe("Quick action completed");
-			});
-		});
+					// This should succeed - 50ms delay with 200ms timeout
+					const quickResult = await client.customTimeoutActor
+						.getOrCreate()
+						.quickAction();
+					expect(quickResult).toBe("Quick action completed");
+				});
+			},
+		);
 
 		describe("Error Recovery", () => {
 			test("should continue working after errors", async (c) => {

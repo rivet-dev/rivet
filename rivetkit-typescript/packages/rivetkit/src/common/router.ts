@@ -118,7 +118,7 @@ export interface MetadataResponse {
 		kind: MetadataEnvoyKind;
 		version?: number;
 	};
-	envoyProtocolVersion: number,
+	envoyProtocolVersion: number;
 	actorNames: ReturnType<typeof buildActorNames>;
 	/**
 	 * Endpoint that the client should connect to to access this envoy.

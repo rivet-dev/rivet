@@ -15,7 +15,13 @@ import {
 	type SortingState,
 	useReactTable as useTable,
 } from "@tanstack/react-table";
-import { Fragment, type ReactNode, useCallback, useMemo, useState } from "react";
+import {
+	Fragment,
+	type ReactNode,
+	useCallback,
+	useMemo,
+	useState,
+} from "react";
 import {
 	Badge,
 	Button,
@@ -49,7 +55,9 @@ interface DatabaseTableProps {
 	enableSorting?: boolean;
 	enableColumnResizing?: boolean;
 	renderCell?: (context: DatabaseTableCellContext) => ReactNode;
-	getCellClassName?: (context: DatabaseTableCellContext) => string | undefined;
+	getCellClassName?: (
+		context: DatabaseTableCellContext,
+	) => string | undefined;
 	onCellDoubleClick?: (context: DatabaseTableCellContext) => void;
 }
 
@@ -209,7 +217,7 @@ export function DatabaseTable({
 				{table.getRowModel().rows.map((row) => (
 					<Fragment key={row.id}>
 						<TableRow>
-							{row.getVisibleCells().map((cell) => (
+							{row.getVisibleCells().map((cell) =>
 								(() => {
 									const column = dataColumnsByName.get(
 										cell.column.id,
@@ -218,7 +226,9 @@ export function DatabaseTable({
 										? {
 												column,
 												row: row.original,
-												value: row.original[column.name],
+												value: row.original[
+													column.name
+												],
 												rowIndex: row.index,
 											}
 										: null;
@@ -230,7 +240,7 @@ export function DatabaseTable({
 												cellContext
 													? getCellClassName?.(
 															cellContext,
-													  )
+														)
 													: undefined,
 											)}
 											style={{
@@ -248,19 +258,21 @@ export function DatabaseTable({
 											<div className="flex items-center gap-2">
 												<div className="flex-1">
 													{cellContext && renderCell
-														? renderCell(cellContext)
+														? renderCell(
+																cellContext,
+															)
 														: flexRender(
 																cell.column
 																	.columnDef
 																	.cell,
 																cell.getContext(),
-														  )}
+															)}
 												</div>
 											</div>
 										</TableCell>
 									);
-								})()
-							))}
+								})(),
+							)}
 						</TableRow>
 					</Fragment>
 				))}

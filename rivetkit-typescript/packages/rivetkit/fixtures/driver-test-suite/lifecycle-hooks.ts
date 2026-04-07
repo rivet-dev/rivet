@@ -11,7 +11,9 @@ export const beforeConnectTimeoutActor = actor({
 	},
 	onBeforeConnect: async (_c, _params: {}) => {
 		// Delay longer than the configured timeout
-		await new Promise((resolve) => setTimeout(resolve, ON_BEFORE_CONNECT_DELAY));
+		await new Promise((resolve) =>
+			setTimeout(resolve, ON_BEFORE_CONNECT_DELAY),
+		);
 	},
 	actions: {
 		ping: () => "pong",

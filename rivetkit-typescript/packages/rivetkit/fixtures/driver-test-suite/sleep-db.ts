@@ -1,10 +1,7 @@
 import type { UniversalWebSocket } from "rivetkit";
 import { actor, event, queue } from "rivetkit";
 import { db } from "rivetkit/db";
-import {
-	RAW_WS_HANDLER_DELAY,
-	RAW_WS_HANDLER_SLEEP_TIMEOUT,
-} from "./sleep";
+import { RAW_WS_HANDLER_DELAY, RAW_WS_HANDLER_SLEEP_TIMEOUT } from "./sleep";
 
 export const SLEEP_DB_TIMEOUT = 1000;
 
@@ -320,11 +317,13 @@ export const sleepWaitUntil = actor({
 		await c.db.execute(
 			`INSERT INTO sleep_log (event, created_at) VALUES ('sleep-start', ${Date.now()})`,
 		);
-		c.waitUntil((async () => {
-			await c.db.execute(
-				`INSERT INTO sleep_log (event, created_at) VALUES ('waituntil-write', ${Date.now()})`,
-			);
-		})());
+		c.waitUntil(
+			(async () => {
+				await c.db.execute(
+					`INSERT INTO sleep_log (event, created_at) VALUES ('waituntil-write', ${Date.now()})`,
+				);
+			})(),
+		);
 	},
 	actions: {
 		triggerSleep: (c) => {
@@ -374,17 +373,21 @@ export const sleepNestedWaitUntil = actor({
 		await c.db.execute(
 			`INSERT INTO sleep_log (event, created_at) VALUES ('sleep-start', ${Date.now()})`,
 		);
-		c.waitUntil((async () => {
-			await c.db.execute(
-				`INSERT INTO sleep_log (event, created_at) VALUES ('outer-waituntil', ${Date.now()})`,
-			);
-			// Nested waitUntil inside a waitUntil callback
-			c.waitUntil((async () => {
+		c.waitUntil(
+			(async () => {
 				await c.db.execute(
-					`INSERT INTO sleep_log (event, created_at) VALUES ('nested-waituntil', ${Date.now()})`,
+					`INSERT INTO sleep_log (event, created_at) VALUES ('outer-waituntil', ${Date.now()})`,
 				);
-			})());
-		})());
+				// Nested waitUntil inside a waitUntil callback
+				c.waitUntil(
+					(async () => {
+						await c.db.execute(
+							`INSERT INTO sleep_log (event, created_at) VALUES ('nested-waituntil', ${Date.now()})`,
+						);
+					})(),
+				);
+			})(),
+		);
 	},
 	actions: {
 		triggerSleep: (c) => {
@@ -605,13 +608,17 @@ export const sleepWaitUntilRejects = actor({
 			`INSERT INTO sleep_log (event, created_at) VALUES ('sleep', ${Date.now()})`,
 		);
 		// Register a waitUntil that rejects. Shutdown should still complete.
-		c.waitUntil(Promise.reject(new Error("waitUntil intentional rejection")));
+		c.waitUntil(
+			Promise.reject(new Error("waitUntil intentional rejection")),
+		);
 		// Also register one that succeeds, to verify it still runs.
-		c.waitUntil((async () => {
-			await c.db.execute(
-				`INSERT INTO sleep_log (event, created_at) VALUES ('waituntil-after-reject', ${Date.now()})`,
-			);
-		})());
+		c.waitUntil(
+			(async () => {
+				await c.db.execute(
+					`INSERT INTO sleep_log (event, created_at) VALUES ('waituntil-after-reject', ${Date.now()})`,
+				);
+			})(),
+		);
 	},
 	actions: {
 		triggerSleep: (c) => {
@@ -659,12 +666,14 @@ export const sleepWaitUntilState = actor({
 	},
 	onSleep: async (c) => {
 		c.state.sleepCount += 1;
-		c.waitUntil((async () => {
-			c.state.waitUntilRan = true;
-			await c.db.execute(
-				`INSERT INTO sleep_log (event, created_at) VALUES ('waituntil-state', ${Date.now()})`,
-			);
-		})());
+		c.waitUntil(
+			(async () => {
+				c.state.waitUntilRan = true;
+				await c.db.execute(
+					`INSERT INTO sleep_log (event, created_at) VALUES ('waituntil-state', ${Date.now()})`,
+				);
+			})(),
+		);
 	},
 	actions: {
 		triggerSleep: (c) => {
@@ -818,7 +827,11 @@ const EXCEEDS_GRACE_HANDLER_DELAY = 2000;
 const EXCEEDS_GRACE_PERIOD = 200;
 const EXCEEDS_GRACE_SLEEP_TIMEOUT = 100;
 
-export { EXCEEDS_GRACE_HANDLER_DELAY, EXCEEDS_GRACE_PERIOD, EXCEEDS_GRACE_SLEEP_TIMEOUT };
+export {
+	EXCEEDS_GRACE_HANDLER_DELAY,
+	EXCEEDS_GRACE_PERIOD,
+	EXCEEDS_GRACE_SLEEP_TIMEOUT,
+};
 
 // Number of sequential DB writes the handler performs. The loop runs long
 // enough that shutdown (close()) runs between two writes. The write that
@@ -880,13 +893,16 @@ export const sleepWsActiveDbExceedsGrace = actor({
 					c.log.warn({
 						msg: "websocket send failed during active db write test",
 						error:
-							error instanceof Error ? error.message : String(error),
+							error instanceof Error
+								? error.message
+								: String(error),
 					});
 				});
 			} catch (error) {
 				c.log.warn({
 					msg: "websocket send failed during active db write test",
-					error: error instanceof Error ? error.message : String(error),
+					error:
+						error instanceof Error ? error.message : String(error),
 				});
 			}
 		};

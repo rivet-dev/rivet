@@ -65,11 +65,14 @@ export async function rawHttpFetch(
 	try {
 		logger().debug(
 			"directId" in target
-				? { msg: "sending raw http request to actor", actorId: target.directId }
+				? {
+						msg: "sending raw http request to actor",
+						actorId: target.directId,
+					}
 				: {
-					msg: "sending raw http request with actor query",
-					query: target,
-				},
+						msg: "sending raw http request with actor query",
+						query: target,
+					},
 		);
 
 		// Build the URL with normalized path

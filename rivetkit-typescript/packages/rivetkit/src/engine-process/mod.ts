@@ -91,7 +91,7 @@ export async function ensureEngineProcess(
 
 	const childProcess = getNodeChildProcess();
 	const child = childProcess.spawn(binaryPath, ["start"], {
-		cwd: path.dirname(binaryPath),
+		cwd: storageRoot,
 		stdio: ["inherit", "pipe", "pipe"],
 		env: {
 			...process.env,
@@ -148,7 +148,7 @@ export async function ensureEngineProcess(
 	logger().debug({
 		msg: "spawned engine process",
 		pid: child.pid,
-		cwd: path.dirname(binaryPath),
+		cwd: storageRoot,
 	});
 
 	child.once("exit", (code, signal) => {
@@ -337,7 +337,9 @@ async function waitForEngineHealth(): Promise<EngineHealthResponse> {
 				attempt: i + 1,
 				maxRetries,
 			});
-			await new Promise((resolve) => setTimeout(resolve, HEALTH_INTERVAL));
+			await new Promise((resolve) =>
+				setTimeout(resolve, HEALTH_INTERVAL),
+			);
 		}
 	}
 

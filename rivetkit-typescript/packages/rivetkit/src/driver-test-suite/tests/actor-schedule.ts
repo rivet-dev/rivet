@@ -72,15 +72,14 @@ export function runActorScheduleTests(driverTestConfig: DriverTestConfig) {
 
 					await vi.waitFor(async () => {
 						const logCount = await actor.getLogCount();
-						const scheduledCount =
-							await actor.getScheduledCount();
+						const scheduledCount = await actor.getScheduledCount();
 
 						expect(logCount).toBe(1);
 						expect(scheduledCount).toBe(1);
 					});
 				});
 
-			test("multiple scheduled tasks execute in order", async (c) => {
+				test("multiple scheduled tasks execute in order", async (c) => {
 					const { client } = await setupDriverTest(
 						c,
 						driverTestConfig,
@@ -118,11 +117,7 @@ export function runActorScheduleTests(driverTestConfig: DriverTestConfig) {
 					await waitFor(driverTestConfig, 500);
 					await vi.waitFor(async () => {
 						const history3 = await scheduled.getTaskHistory();
-						expect(history3).toEqual([
-							"first",
-							"second",
-							"third",
-						]);
+						expect(history3).toEqual(["first", "second", "third"]);
 					});
 				});
 			});

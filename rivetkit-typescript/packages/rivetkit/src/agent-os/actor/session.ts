@@ -134,7 +134,10 @@ export function subscribeToSession<TConnParams>(
 	parsedConfig: AgentOsActorConfig<TConnParams>,
 ): void {
 	agentOs.onSessionEvent(sessionId, (event) => {
-		c.broadcast("sessionEvent", JSON.parse(JSON.stringify({ sessionId, event })));
+		c.broadcast(
+			"sessionEvent",
+			JSON.parse(JSON.stringify({ sessionId, event })),
+		);
 
 		// Persist event to SQLite for sleep/wake recovery.
 		persistSessionEvent(c, sessionId, event).catch((err) =>
@@ -153,7 +156,10 @@ export function subscribeToSession<TConnParams>(
 	});
 
 	agentOs.onPermissionRequest(sessionId, (request) => {
-		c.broadcast("permissionRequest", JSON.parse(JSON.stringify({ sessionId, request })));
+		c.broadcast(
+			"permissionRequest",
+			JSON.parse(JSON.stringify({ sessionId, request })),
+		);
 
 		if (parsedConfig.onPermissionRequest) {
 			runHook(c, "onPermissionRequest", () =>
@@ -176,7 +182,10 @@ export function buildSessionActions<TConnParams>(
 			options?: CreateSessionOptions,
 		): Promise<SessionRecord> => {
 			const agentOs = await ensureVm(c, config);
-			const { sessionId } = await agentOs.createSession(agentType, options);
+			const { sessionId } = await agentOs.createSession(
+				agentType,
+				options,
+			);
 			subscribeToSession(c, agentOs, sessionId, config);
 
 			// Persist session metadata to SQLite for sleep/wake recovery.
@@ -203,7 +212,9 @@ export function buildSessionActions<TConnParams>(
 		): Promise<SessionRecord> => {
 			assertSessionExists(c, sessionId);
 			const agentOs = await ensureVm(c, config);
-			const info = agentOs.listSessions().find((s) => s.sessionId === sessionId);
+			const info = agentOs
+				.listSessions()
+				.find((s) => s.sessionId === sessionId);
 			if (!info) {
 				throw new Error(`session not found: ${sessionId}`);
 			}
@@ -305,7 +316,9 @@ export function buildPromptActions<TConnParams>(
 			if (!agentOs) {
 				throw new Error("VM not initialized");
 			}
-			return stripFunctions(agentOs.cancelSession(sessionId)) as JsonRpcResponse;
+			return stripFunctions(
+				agentOs.cancelSession(sessionId),
+			) as JsonRpcResponse;
 		},
 
 		respondPermission: async (
@@ -319,7 +332,9 @@ export function buildPromptActions<TConnParams>(
 			if (!agentOs) {
 				throw new Error("VM not initialized");
 			}
-			return stripFunctions(agentOs.respondPermission(sessionId, permissionId, reply)) as JsonRpcResponse;
+			return stripFunctions(
+				agentOs.respondPermission(sessionId, permissionId, reply),
+			) as JsonRpcResponse;
 		},
 	};
 }
@@ -339,7 +354,9 @@ export function buildConfigActions<TConnParams>(
 			if (!agentOs) {
 				throw new Error("VM not initialized");
 			}
-			return stripFunctions(agentOs.setSessionMode(sessionId, modeId)) as JsonRpcResponse;
+			return stripFunctions(
+				agentOs.setSessionMode(sessionId, modeId),
+			) as JsonRpcResponse;
 		},
 
 		getModes: async (
@@ -364,7 +381,9 @@ export function buildConfigActions<TConnParams>(
 			if (!agentOs) {
 				throw new Error("VM not initialized");
 			}
-			return stripFunctions(agentOs.setSessionModel(sessionId, model)) as JsonRpcResponse;
+			return stripFunctions(
+				agentOs.setSessionModel(sessionId, model),
+			) as JsonRpcResponse;
 		},
 
 		setThoughtLevel: async (
@@ -377,7 +396,9 @@ export function buildConfigActions<TConnParams>(
 			if (!agentOs) {
 				throw new Error("VM not initialized");
 			}
-			return stripFunctions(agentOs.setSessionThoughtLevel(sessionId, level)) as JsonRpcResponse;
+			return stripFunctions(
+				agentOs.setSessionThoughtLevel(sessionId, level),
+			) as JsonRpcResponse;
 		},
 
 		getConfigOptions: async (
@@ -431,7 +452,9 @@ export function buildConfigActions<TConnParams>(
 			if (!agentOs) {
 				throw new Error("VM not initialized");
 			}
-			return stripFunctions(agentOs.rawSessionSend(sessionId, method, params)) as JsonRpcResponse;
+			return stripFunctions(
+				agentOs.rawSessionSend(sessionId, method, params),
+			) as JsonRpcResponse;
 		},
 	};
 }

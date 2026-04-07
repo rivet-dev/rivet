@@ -29,9 +29,16 @@ export interface EnvoyHandle {
 	sleepActor(actorId: string, generation?: number): void;
 	stopActor(actorId: string, generation?: number, error?: string): void;
 	destroyActor(actorId: string, generation?: number): void;
-	setAlarm(actorId: string, alarmTs: number | null, generation?: number): void;
+	setAlarm(
+		actorId: string,
+		alarmTs: number | null,
+		generation?: number,
+	): void;
 	kvGet(actorId: string, keys: Uint8Array[]): Promise<(Uint8Array | null)[]>;
-	kvListAll(actorId: string, options?: KvListOptions): Promise<[Uint8Array, Uint8Array][]>;
+	kvListAll(
+		actorId: string,
+		options?: KvListOptions,
+	): Promise<[Uint8Array, Uint8Array][]>;
 	kvListRange(
 		actorId: string,
 		start: Uint8Array,
@@ -46,7 +53,11 @@ export interface EnvoyHandle {
 	): Promise<[Uint8Array, Uint8Array][]>;
 	kvPut(actorId: string, entries: [Uint8Array, Uint8Array][]): Promise<void>;
 	kvDelete(actorId: string, keys: Uint8Array[]): Promise<void>;
-	kvDeleteRange(actorId: string, start: Uint8Array, end: Uint8Array): Promise<void>;
+	kvDeleteRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+	): Promise<void>;
 	kvDrop(actorId: string): Promise<void>;
 	restoreHibernatingRequests(
 		actorId: string,
@@ -105,7 +116,9 @@ export interface EnvoyConfig {
 		actorId: string,
 		generation: number,
 		config: import("@rivetkit/engine-envoy-protocol").ActorConfig,
-		preloadedKv: import("@rivetkit/engine-envoy-protocol").PreloadedKv | null,
+		preloadedKv:
+			| import("@rivetkit/engine-envoy-protocol").PreloadedKv
+			| null,
 	) => Promise<void>;
 	onActorStop: (
 		envoyHandle: EnvoyHandle,

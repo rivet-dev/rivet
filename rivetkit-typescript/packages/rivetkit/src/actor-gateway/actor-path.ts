@@ -101,7 +101,12 @@ export function parseActorPath(path: string): ParsedActorPath | null {
 	if (hasRvt) {
 		const rvtParams = extractRvtParamsFromRaw(rawQueryStr);
 		const actorQueryString = stripRvtQueryParams(rawQueryStr);
-		return parseQueryActorPath(basePath, segments, rvtParams, actorQueryString);
+		return parseQueryActorPath(
+			basePath,
+			segments,
+			rvtParams,
+			actorQueryString,
+		);
 	}
 
 	// Direct path: pass the raw query string through unchanged.
@@ -225,9 +230,7 @@ function splitKey(raw: string | undefined): string[] {
 	return raw.split(",");
 }
 
-function extractRvtParams(
-	rvtRaw: Array<[string, string]>,
-): RvtParams {
+function extractRvtParams(rvtRaw: Array<[string, string]>): RvtParams {
 	const params = new Map<string, string>();
 
 	for (const [rawKey, value] of rvtRaw) {
@@ -315,10 +318,7 @@ function extractRvtParams(
 	};
 }
 
-function buildActorQuery(
-	name: string,
-	rvt: RvtParams,
-): ActorGatewayQuery {
+function buildActorQuery(name: string, rvt: RvtParams): ActorGatewayQuery {
 	switch (rvt.method) {
 		case "get": {
 			if (
@@ -405,9 +405,7 @@ function splitPathAndQuery(path: string): [string, string | null] {
  * Extract rvt-* params from a raw query string, decoding their values
  * using form-urlencoded rules (`+` as space, then percent-decode).
  */
-function extractRvtParamsFromRaw(
-	rawQuery: string,
-): Array<[string, string]> {
+function extractRvtParamsFromRaw(rawQuery: string): Array<[string, string]> {
 	const params: Array<[string, string]> = [];
 	for (const part of rawQuery.split("&")) {
 		const eqPos = part.indexOf("=");

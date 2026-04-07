@@ -432,13 +432,11 @@ export const workflowSleepActor = actor({
 export const workflowTryActor = actor({
 	state: {
 		innerWrites: 0,
-		tryStepFailure: null as
-			| {
-					kind: string;
-					message: string;
-					attempts: number;
-			  }
-			| null,
+		tryStepFailure: null as {
+			kind: string;
+			message: string;
+			attempts: number;
+		} | null,
 		tryJoinFailure: null as string | null,
 	},
 	run: workflow(async (ctx) => {

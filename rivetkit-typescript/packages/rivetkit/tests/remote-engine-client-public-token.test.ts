@@ -47,7 +47,8 @@ describe.sequential("RemoteEngineControlClient public token usage", () => {
 
 		const driver = new RemoteEngineControlClient(
 			ClientConfigSchema.parse({
-				endpoint: "https://default:backend-http-token@backend-http.example/manager",
+				endpoint:
+					"https://default:backend-http-token@backend-http.example/manager",
 			}),
 		);
 
@@ -111,7 +112,8 @@ describe.sequential("RemoteEngineControlClient public token usage", () => {
 
 		const driver = new RemoteEngineControlClient(
 			ClientConfigSchema.parse({
-				endpoint: "https://default:backend-ws-token@backend-ws.example/manager",
+				endpoint:
+					"https://default:backend-ws-token@backend-ws.example/manager",
 			}),
 		);
 

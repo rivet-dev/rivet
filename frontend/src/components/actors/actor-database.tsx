@@ -137,7 +137,9 @@ function ActorDatabaseBrowser({ actorId }: ActorDatabaseProps) {
 		return [...(currentTable?.columns ?? [])]
 			.filter((column) => Boolean(column.pk))
 			.sort(
-				(a, b) => Number(a.pk ?? Number.MAX_SAFE_INTEGER) - Number(b.pk ?? Number.MAX_SAFE_INTEGER),
+				(a, b) =>
+					Number(a.pk ?? Number.MAX_SAFE_INTEGER) -
+					Number(b.pk ?? Number.MAX_SAFE_INTEGER),
 			);
 	}, [currentTable]);
 	const canEditRows =
@@ -164,9 +166,9 @@ function ActorDatabaseBrowser({ actorId }: ActorDatabaseProps) {
 	}, [currentTable?.columns]);
 	const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
 	const [editingValue, setEditingValue] = useState("");
-	const [stagedEdits, setStagedEdits] = useState<Record<string, StagedCellEdit>>(
-		{},
-	);
+	const [stagedEdits, setStagedEdits] = useState<
+		Record<string, StagedCellEdit>
+	>({});
 	const [isApplyingEdits, setIsApplyingEdits] = useState(false);
 	const [tableEditError, setTableEditError] = useState<string | null>(null);
 	const { mutateAsync: executeDatabaseSql } = useMutation(
@@ -340,7 +342,9 @@ function ActorDatabaseBrowser({ actorId }: ActorDatabaseProps) {
 					<Input
 						autoFocus
 						value={editingValue}
-						onChange={(event) => setEditingValue(event.target.value)}
+						onChange={(event) =>
+							setEditingValue(event.target.value)
+						}
 						onBlur={commitCellEdit}
 						onKeyDown={(event) => {
 							if (event.key === "Enter") {
@@ -362,7 +366,13 @@ function ActorDatabaseBrowser({ actorId }: ActorDatabaseProps) {
 				stagedEdit ? stagedEdit.nextValue : context.value,
 			);
 		},
-		[commitCellEdit, editingCell, editingValue, primaryKeyColumns, stagedEdits],
+		[
+			commitCellEdit,
+			editingCell,
+			editingValue,
+			primaryKeyColumns,
+			stagedEdits,
+		],
 	);
 
 	const getBrowserCellClassName = useCallback(
@@ -452,7 +462,9 @@ function ActorDatabaseBrowser({ actorId }: ActorDatabaseProps) {
 									variant="ghost"
 									size="icon-sm"
 									disabled={!hasPrevPage}
-									onClick={() => setPage((current) => current - 1)}
+									onClick={() =>
+										setPage((current) => current - 1)
+									}
 								>
 									<Icon icon={faChevronLeft} />
 								</Button>
@@ -468,7 +480,9 @@ function ActorDatabaseBrowser({ actorId }: ActorDatabaseProps) {
 									variant="ghost"
 									size="icon-sm"
 									disabled={!hasNextPage}
-									onClick={() => setPage((current) => current + 1)}
+									onClick={() =>
+										setPage((current) => current + 1)
+									}
 								>
 									<Icon icon={faChevronRight} />
 								</Button>
@@ -605,9 +619,7 @@ function ActorDatabaseSqlShell({ actorId }: ActorDatabaseProps) {
 		sql,
 	]);
 	const canRun =
-		sql.trim() !== "" &&
-		bindingError === null &&
-		propertiesError === null;
+		sql.trim() !== "" && bindingError === null && propertiesError === null;
 
 	useEffect(() => {
 		if (
@@ -827,10 +839,7 @@ function TableSelect({
 
 function areObjectRows(rows: unknown[]): rows is Record<string, unknown>[] {
 	return rows.every(
-		(row) =>
-			row !== null &&
-			typeof row === "object" &&
-			!Array.isArray(row),
+		(row) => row !== null && typeof row === "object" && !Array.isArray(row),
 	);
 }
 
@@ -839,9 +848,7 @@ function createResultColumns(rows: unknown[]): DatabaseColumn[] {
 		return [];
 	}
 
-	const names = Array.from(
-		new Set(rows.flatMap((row) => Object.keys(row))),
-	);
+	const names = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
 	return names.map((name, cid) => ({
 		cid,
 		name,

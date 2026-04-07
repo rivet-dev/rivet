@@ -539,12 +539,7 @@ export class DynamicActorIsolateRuntime {
 		const input = await requestToEnvelope(request);
 		const envelope = (await refs.fetch.apply(
 			undefined,
-			[
-				input.url,
-				input.method,
-				input.headers,
-				input.bodyBase64 ?? null,
-			],
+			[input.url, input.method, input.headers, input.bodyBase64 ?? null],
 			{
 				arguments: {
 					copy: true,
@@ -1672,9 +1667,7 @@ function resolveEsmPackageEntry(packageName: string): string | undefined {
 				// inside the sandbox where the fs polyfill lacks it.
 				try {
 					const runtimeRequire = createRuntimeRequire();
-					const nodeFs = runtimeRequire(
-						["node", "fs"].join(":"),
-					) as {
+					const nodeFs = runtimeRequire(["node", "fs"].join(":")) as {
 						realpathSync: (p: string) => string;
 					};
 					return nodeFs.realpathSync(resolved);
@@ -1784,9 +1777,8 @@ function resolveSecureExecEntryPath(): string {
 			if (resolved) return resolved;
 		}
 
-		const pnpmResolved = resolvePnpmVirtualStorePackageEntry(
-			packageSpecifier,
-		);
+		const pnpmResolved =
+			resolvePnpmVirtualStorePackageEntry(packageSpecifier);
 		if (pnpmResolved) {
 			return pnpmResolved;
 		}

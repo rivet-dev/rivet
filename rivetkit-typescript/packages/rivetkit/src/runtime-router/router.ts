@@ -55,7 +55,7 @@ export function buildRuntimeRouter(
 	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 	runtime: Runtime = "node",
 ) {
-	return createRouter(config.managerBasePath, (router) => {
+	return createRouter(config.httpBasePath, (router) => {
 		// Actor gateway
 		router.use(
 			"*",
@@ -94,9 +94,9 @@ export function buildRuntimeRouter(
 
 				const actorIdsParsed = actor_ids
 					? actor_ids
-						.split(",")
-						.map((id) => id.trim())
-						.filter((id) => id.length > 0)
+							.split(",")
+							.map((id) => id.trim())
+							.filter((id) => id.length > 0)
 					: undefined;
 
 				const actors: ActorOutput[] = [];
@@ -153,12 +153,13 @@ export function buildRuntimeRouter(
 							// If no name is provided, try all registered actor types
 							// Actor IDs are globally unique, so we'll find it in one of them
 							for (const actorName of Object.keys(config.use)) {
-								const actorOutput =
-									await engineClient.getForId({
+								const actorOutput = await engineClient.getForId(
+									{
 										c,
 										name: actorName,
 										actorId,
-									});
+									},
+								);
 								if (actorOutput) {
 									actors.push(actorOutput);
 									break; // Found the actor, no need to check other names
@@ -425,7 +426,6 @@ export function buildRuntimeRouter(
 					return c.text(`Error: ${error}`, 500);
 				}
 			});
-
 		}
 
 		if (config.inspector.enabled) {

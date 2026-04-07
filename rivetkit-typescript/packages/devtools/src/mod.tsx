@@ -71,8 +71,8 @@ const openDevtools = () => {
 	if (config.namespace) {
 		url.searchParams.set("ns", config.namespace);
 	}
-	if (config.runnerName) {
-		url.searchParams.set("r", config.runnerName);
+	if (config.poolName) {
+		url.searchParams.set("r", config.poolName);
 	}
 	window.open(url.toString(), "_blank");
 };

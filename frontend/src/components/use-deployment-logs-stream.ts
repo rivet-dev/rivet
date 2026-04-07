@@ -59,17 +59,11 @@ async function streamWithRetry(
 
 		try {
 			const sse = await getRivetSse();
-			const stream = sse.streamLogs(
-				options,
-				project,
-				namespace,
-				pool,
-				{
-					contains: filter || undefined,
-					region: region || undefined,
-					abortSignal: signal,
-				},
-			);
+			const stream = sse.streamLogs(options, project, namespace, pool, {
+				contains: filter || undefined,
+				region: region || undefined,
+				abortSignal: signal,
+			});
 
 			for await (const event of stream) {
 				if (event.event === "connected") {

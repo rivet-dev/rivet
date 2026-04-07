@@ -33,8 +33,7 @@ export async function setupDriverTest(
 		hardCrashActor,
 		hardCrashPreservesData,
 		cleanup,
-	} =
-		await driverTestConfig.start();
+	} = await driverTestConfig.start();
 
 	let client: Client<typeof registry>;
 	if (driverTestConfig.clientType === "http") {
@@ -52,10 +51,7 @@ export async function setupDriverTest(
 	} else if (driverTestConfig.clientType === "inline") {
 		// Use inline client from driver
 		const encoding = driverTestConfig.encoding ?? "bare";
-		const managerDriver = createTestInlineClientDriver(
-			endpoint,
-			encoding,
-		);
+		const managerDriver = createTestInlineClientDriver(endpoint, encoding);
 		const runConfig = ClientConfigSchema.parse({
 			encoding: encoding,
 		});

@@ -24,9 +24,7 @@ export function OnboardingFooter() {
 				variant="link"
 				size="xs"
 				asChild
-				endIcon={
-					<Icon icon={faArrowUpRight} className="ms-1" />
-				}
+				endIcon={<Icon icon={faArrowUpRight} className="ms-1" />}
 			>
 				<Link
 					to="."

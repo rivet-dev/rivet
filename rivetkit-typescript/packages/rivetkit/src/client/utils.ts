@@ -90,8 +90,8 @@ export interface HttpRequestOpts<
 	requestVersionedDataHandler: VersionedDataHandler<RequestBare> | undefined;
 	requestVersion: number | undefined;
 	responseVersionedDataHandler:
-	| VersionedDataHandler<ResponseBare>
-	| undefined;
+		| VersionedDataHandler<ResponseBare>
+		| undefined;
 	responseVersion: number | undefined;
 	requestZodSchema: z.ZodType<RequestJson>;
 	responseZodSchema: z.ZodType<ResponseJson>;
@@ -152,8 +152,8 @@ export async function sendHttpRequest<
 					...opts.headers,
 					...(contentType
 						? {
-							"Content-Type": contentType,
-						}
+								"Content-Type": contentType,
+							}
 						: {}),
 					"User-Agent": httpUserAgent(),
 				},

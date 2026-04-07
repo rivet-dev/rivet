@@ -201,8 +201,7 @@ function itemToNodeData(
 		onReplayStep?: (entryId: string) => void;
 	} = {},
 ) {
-	const { id, startedAt, completedAt, kind, retryCount, error } =
-		item.entry;
+	const { id, startedAt, completedAt, kind, retryCount, error } = item.entry;
 	const duration =
 		startedAt != null && completedAt != null
 			? completedAt - startedAt

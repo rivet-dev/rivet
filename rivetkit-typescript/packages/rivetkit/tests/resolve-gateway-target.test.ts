@@ -18,7 +18,9 @@ describe("resolveGatewayTarget", () => {
 	test("resolves getForKey targets and reports missing actors", async () => {
 		const driver = createMockDriver({
 			getWithKey: async ({ key }) =>
-				key[0] === "room" ? actorOutput("resolved-key-actor") : undefined,
+				key[0] === "room"
+					? actorOutput("resolved-key-actor")
+					: undefined,
 		});
 
 		await expect(
@@ -48,7 +50,9 @@ describe("resolveGatewayTarget", () => {
 		const createCalls: Array<Record<string, unknown>> = [];
 		const driver = createMockDriver({
 			getOrCreateWithKey: async (input) => {
-				getOrCreateCalls.push(input as unknown as Record<string, unknown>);
+				getOrCreateCalls.push(
+					input as unknown as Record<string, unknown>,
+				);
 				return actorOutput("get-or-create-actor");
 			},
 			createActor: async (input) => {
@@ -109,7 +113,9 @@ describe("resolveGatewayTarget", () => {
 	});
 });
 
-function createMockDriver(overrides: Partial<EngineControlClient> = {}): EngineControlClient {
+function createMockDriver(
+	overrides: Partial<EngineControlClient> = {},
+): EngineControlClient {
 	return {
 		getForId: async () => undefined,
 		getWithKey: async () => undefined,

@@ -401,7 +401,9 @@ describe("parseActorPath", () => {
 
 		test("rejects an empty actor name", () => {
 			expect(() =>
-				parseActorPath("/gateway/?rvt-namespace=default&rvt-method=get"),
+				parseActorPath(
+					"/gateway/?rvt-namespace=default&rvt-method=get",
+				),
 			).toThrowError(InvalidRequest);
 		});
 	});

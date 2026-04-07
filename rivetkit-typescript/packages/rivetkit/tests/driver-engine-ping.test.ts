@@ -75,7 +75,10 @@ describe("engine driver smoke test", () => {
 	it("WebSocket echo works", async () => {
 		const { actor_id } = await createActor();
 		try {
-			const wsEndpoint = RIVET_ENDPOINT.replace("http://", "ws://").replace("https://", "wss://");
+			const wsEndpoint = RIVET_ENDPOINT.replace(
+				"http://",
+				"ws://",
+			).replace("https://", "wss://");
 			const ws = new WebSocket(`${wsEndpoint}/ws`, [
 				"rivet",
 				"rivet_target.actor",
@@ -84,7 +87,10 @@ describe("engine driver smoke test", () => {
 			]);
 
 			const result = await new Promise<string>((resolve, reject) => {
-				const timeout = setTimeout(() => reject(new Error("WebSocket timeout")), 10_000);
+				const timeout = setTimeout(
+					() => reject(new Error("WebSocket timeout")),
+					10_000,
+				);
 
 				ws.addEventListener("open", () => {
 					ws.send("ping");
@@ -98,7 +104,11 @@ describe("engine driver smoke test", () => {
 
 				ws.addEventListener("error", (e) => {
 					clearTimeout(timeout);
-					reject(new Error(`WebSocket error: ${(e as any)?.message ?? "unknown"}`));
+					reject(
+						new Error(
+							`WebSocket error: ${(e as any)?.message ?? "unknown"}`,
+						),
+					);
 				});
 			});
 

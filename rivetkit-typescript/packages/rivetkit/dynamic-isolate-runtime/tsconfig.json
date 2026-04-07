@@ -3,11 +3,12 @@
 	"compilerOptions": {
 		"baseUrl": "..",
 		"target": "ES2022",
-		"module": "CommonJS",
-		"moduleResolution": "Node",
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
 		"types": ["node"],
 		"lib": ["ES2022", "DOM"],
 		"resolveJsonModule": true,
+		"noEmit": true,
 		"paths": {
 			"@/*": ["./src/*"]
 		}

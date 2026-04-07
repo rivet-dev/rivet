@@ -64,17 +64,21 @@
         "type": "string"
       }
     },
-    "serveManager": {
-      "description": "Whether to start the local RivetKit server. Auto-determined based on endpoint and NODE_ENV if not specified.",
-      "type": "boolean"
+    "staticDir": {
+      "description": "Directory to serve static files from. When set, registry.start() serves static files alongside the actor API.",
+      "type": "string"
     },
-    "managerBasePath": {
+    "httpBasePath": {
       "description": "Base path for the local RivetKit API. Default: '/'",
       "type": "string"
     },
-    "managerPort": {
-      "description": "Port to run the manager on. Default: 6420",
+    "httpPort": {
+      "description": "Port to run the local HTTP server on. Default: 6421",
       "type": "number"
+    },
+    "httpHost": {
+      "description": "Host to bind the local HTTP server to.",
+      "type": "string"
     },
     "inspector": {
       "description": "Inspector configuration for debugging and development.",
@@ -95,74 +99,66 @@
       },
       "additionalProperties": false
     },
+    "startEngine": {
+      "description": "Starts the full Rust engine process locally. Default: false",
+      "type": "boolean"
+    },
+    "engineVersion": {
+      "description": "Version of the local engine package to use. Defaults to the current RivetKit version.",
+      "type": "string"
+    },
+    "configurePool": {
+      "description": "Automatically configure serverless runners in the engine.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Name of the runner pool.",
+          "type": "string"
+        },
+        "url": {
+          "description": "URL of the serverless platform to configure runners.",
+          "type": "string"
+        },
+        "headers": {
+          "description": "Headers to include in requests to the serverless platform.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "requestLifespan": {
+          "description": "Maximum lifespan of a request in seconds.",
+          "type": "number"
+        },
+        "metadata": {
+          "description": "Additional metadata to pass to the serverless platform.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        },
+        "metadataPollInterval": {
+          "description": "Interval in milliseconds between metadata polls from the engine. Defaults to 10000 milliseconds (10 seconds).",
+          "type": "number"
+        },
+        "drainOnVersionUpgrade": {
+          "description": "Drain runners when a new version is deployed. Defaults to true.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false
+    },
     "serverless": {
       "description": "Configuration for serverless deployment mode.",
       "type": "object",
       "properties": {
-        "spawnEngine": {
-          "description": "Downloads and starts the full Rust engine process. Auto-enabled in development mode when no endpoint is provided. Default: false",
-          "type": "boolean"
-        },
-        "engineVersion": {
-          "description": "Version of the engine to download. Defaults to the current RivetKit version.",
-          "type": "string"
-        },
-        "configureRunnerPool": {
-          "description": "Automatically configure serverless runners in the engine.",
-          "type": "object",
-          "properties": {
-            "name": {
-              "description": "Name of the runner pool.",
-              "type": "string"
-            },
-            "url": {
-              "description": "URL of the serverless platform to configure runners.",
-              "type": "string"
-            },
-            "headers": {
-              "description": "Headers to include in requests to the serverless platform.",
-              "type": "object",
-              "propertyNames": {
-                "type": "string"
-              },
-              "additionalProperties": {
-                "type": "string"
-              }
-            },
-            "maxRunners": {
-              "description": "Maximum number of runners in the pool.",
-              "type": "number"
-            },
-            "minRunners": {
-              "description": "Minimum number of runners to keep warm.",
-              "type": "number"
-            },
-            "requestLifespan": {
-              "description": "Maximum lifespan of a request in milliseconds.",
-              "type": "number"
-            },
-            "runnersMargin": {
-              "description": "Buffer margin for scaling runners.",
-              "type": "number"
-            },
-            "slotsPerRunner": {
-              "description": "Number of actor slots per runner.",
-              "type": "number"
-            },
-            "metadata": {
-              "description": "Additional metadata to pass to the serverless platform.",
-              "type": "object",
-              "propertyNames": {
-                "type": "string"
-              },
-              "additionalProperties": {}
-            }
-          },
-          "required": [
-            "url"
-          ],
-          "additionalProperties": false
-        },
         "basePath": {
           "description": "Base path for serverless API routes. Default: '/api/rivet'",
           "type": "string"
@@ -178,24 +174,24 @@
       },
       "additionalProperties": false
     },
-    "runner": {
-      "description": "Configuration for runner mode.",
+    "envoy": {
+      "description": "Configuration for envoy mode.",
       "type": "object",
       "properties": {
         "totalSlots": {
           "description": "Total number of actor slots available. Default: 100000",
           "type": "number"
         },
-        "runnerName": {
-          "description": "Name of this runner. Default: 'default'",
+        "poolName": {
+          "description": "Name of this envoy pool. Default: 'default'",
           "type": "string"
         },
-        "runnerKey": {
-          "description": "Authentication key for the runner.",
+        "envoyKey": {
+          "description": "Deprecated. Authentication key for the envoy.",
           "type": "string"
         },
         "version": {
-          "description": "Version number of this runner. Default: 1",
+          "description": "Version number of this envoy. Default: 1",
           "type": "number"
         }
       },

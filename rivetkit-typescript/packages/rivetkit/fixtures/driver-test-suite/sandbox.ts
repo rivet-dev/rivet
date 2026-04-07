@@ -19,8 +19,7 @@ function dockerSocketRequest(
 	body?: unknown,
 ): Promise<DockerResponse> {
 	return new Promise((resolve, reject) => {
-		const payload =
-			body === undefined ? undefined : JSON.stringify(body);
+		const payload = body === undefined ? undefined : JSON.stringify(body);
 		const req = httpRequest(
 			{
 				socketPath: DOCKER_SOCKET_PATH,
@@ -193,7 +192,9 @@ export const dockerSandboxControlActor = actor({
 				},
 			);
 			assertDockerSuccess(createContainer, "docker container create");
-			const container = JSON.parse(createContainer.body) as { Id?: string };
+			const container = JSON.parse(createContainer.body) as {
+				Id?: string;
+			};
 			if (!container.Id) {
 				throw new Error(
 					`docker container create returned no id: ${createContainer.body}`,
@@ -212,15 +213,20 @@ export const dockerSandboxControlActor = actor({
 				"POST",
 				`/containers/${containerId}/stop?t=5`,
 			);
-			assertDockerSuccess(stopContainer, "docker container stop", [
-				304,
-				404,
-			]);
+			assertDockerSuccess(
+				stopContainer,
+				"docker container stop",
+				[304, 404],
+			);
 			const deleteContainer = await dockerSocketRequest(
 				"DELETE",
 				`/containers/${containerId}?force=true`,
 			);
-			assertDockerSuccess(deleteContainer, "docker container delete", [404]);
+			assertDockerSuccess(
+				deleteContainer,
+				"docker container delete",
+				[404],
+			);
 		},
 		getSandboxUrl: async (_c, sandboxId: string) => {
 			const containerInfo = await inspectContainer(sandboxId);
@@ -232,9 +238,9 @@ export const dockerSandboxControlActor = actor({
 
 export const dockerSandboxActor = sandboxActor({
 	createProvider: (c) => {
-		const controller = c.client<any>().dockerSandboxControlActor.getOrCreate(
-			DOCKER_SANDBOX_CONTROL_KEY,
-		);
+		const controller = c
+			.client<any>()
+			.dockerSandboxControlActor.getOrCreate(DOCKER_SANDBOX_CONTROL_KEY);
 
 		const provider: SandboxProvider = {
 			name: "docker",

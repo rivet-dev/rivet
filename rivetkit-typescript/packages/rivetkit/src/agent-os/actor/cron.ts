@@ -1,6 +1,9 @@
 import type { CronAction, CronJobInfo } from "@rivet-dev/agent-os-core";
 import type { AgentOsActorConfig } from "../config";
-import type { AgentOsActionContext, SerializableCronJobOptions } from "../types";
+import type {
+	AgentOsActionContext,
+	SerializableCronJobOptions,
+} from "../types";
 import { ensureVm } from "./index";
 
 // Build cron scheduling actions for the actor factory.

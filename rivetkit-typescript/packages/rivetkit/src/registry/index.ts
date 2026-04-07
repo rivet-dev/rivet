@@ -1,4 +1,5 @@
 import { Runtime } from "../../runtime";
+import { ENGINE_ENDPOINT } from "@/engine-process/constants";
 import {
 	type RegistryActors,
 	type RegistryConfig,
@@ -33,17 +34,14 @@ export class Registry<A extends RegistryActors> {
 	constructor(config: RegistryConfigInput<A>) {
 		this.#config = config;
 
-		// Start the local runtime or engine before /api/rivet is hit so clients can
-		// reach the public endpoint preemptively. This waits one tick because some
+		// Start the local engine before /api/rivet is hit so clients can
+		// reach the endpoint preemptively. This waits one tick because some
 		// integrations mutate registry config immediately after setup() returns.
-		if (config.serverless?.spawnEngine || config.serveManager) {
+		if (config.startEngine) {
 			setTimeout(() => {
 				const parsedConfig = this.parseConfig();
 
-				if (
-					parsedConfig.serverless.spawnEngine ||
-					parsedConfig.serveManager
-				) {
+				if (parsedConfig.startEngine) {
 					// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
 					this.#ensureRuntime();
 				}
@@ -103,7 +101,7 @@ export class Registry<A extends RegistryActors> {
 	 * Starts the server, serving both the actor API and static files.
 	 *
 	 * This is the simplest way to run RivetKit. It starts a local runtime
-	 * server, serves static files from the configured `publicDir` (default
+	 * server, serves static files from the configured `staticDir` (default
 	 * `"public"`), and starts the actor envoy.
 	 *
 	 * When an endpoint is configured (via config or RIVET_ENDPOINT env var),
@@ -116,30 +114,22 @@ export class Registry<A extends RegistryActors> {
 	 * ```
 	 */
 	public start() {
-		// Default publicDir to "public" if not explicitly set
-		if (this.#config.publicDir === undefined) {
-			this.#config.publicDir = "public";
+		// Default staticDir to "public" if not explicitly set.
+		if (this.#config.staticDir === undefined) {
+			this.#config.staticDir = "public";
 		}
 
-		// Force serveManager when there's no remote endpoint so the
-		// local runtime starts and serves the API + static files.
-		// When an endpoint IS configured, the config transform handles
-		// the mode (serveManager defaults to false, spawnEngine may be
-		// true, etc.) and we just start the envoy.
-		if (this.#config.serveManager === undefined) {
-			const hasEndpoint = !!(
-				this.#config.endpoint ||
-				(typeof process !== "undefined" &&
-					(process.env.RIVET_ENGINE || process.env.RIVET_ENDPOINT))
-			);
-			const willSpawnEngine = !!this.#config.serverless?.spawnEngine;
-			if (!hasEndpoint && !willSpawnEngine) {
-				this.#config.serveManager = true;
-			}
+		if (this.#config.serverless === undefined) {
+			this.#config.serverless = {};
 		}
-
+		if (this.#config.serverless.publicEndpoint === undefined) {
+			this.#config.serverless.publicEndpoint = ENGINE_ENDPOINT;
+		}
 		// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
-		this.#ensureRuntime().then((runtime) => runtime.startEnvoy());
+		this.#ensureRuntime().then(async (runtime) => {
+			await runtime.ensureHttpServer();
+			await runtime.startEnvoy();
+		});
 	}
 }
 
