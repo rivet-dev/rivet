@@ -148,11 +148,6 @@ export async function actorGateway(
 		return next();
 	}
 
-	// Skip KV channel routes - handled by the dedicated KV channel endpoint
-	if (c.req.path.endsWith("/kv/connect")) {
-		return next();
-	}
-
 	// Strip basePath from the request path
 	let strippedPath = c.req.path;
 	if (

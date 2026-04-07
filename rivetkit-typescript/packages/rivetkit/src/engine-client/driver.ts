@@ -44,7 +44,10 @@ export interface EngineControlClient {
 	modifyRuntimeRouter?: (config: RegistryConfig, router: Hono) => void;
 	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void;
 	shutdown?(): void;
-	setKvChannelShutdown?(fn: () => void): void;
+
+	/**
+	 * Test-only helper that simulates an abrupt actor crash.
+	 */
 	hardCrashActor?(actorId: string): Promise<void>;
 	setNativeSqliteConfig?(config: NativeSqliteConfig): void;
 	kvGet(actorId: string, key: Uint8Array): Promise<string | null>;

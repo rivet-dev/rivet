@@ -47,10 +47,6 @@ import {
 	actorGateway,
 	createTestWebSocketProxy,
 } from "@/actor-gateway/gateway";
-import {
-	createKvChannelManager,
-	validateProtocolVersion,
-} from "./kv-channel";
 import { logger } from "./log";
 
 export function buildRuntimeRouter(
@@ -59,12 +55,6 @@ export function buildRuntimeRouter(
 	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 	runtime: Runtime = "node",
 ) {
-	const kvChannelManager = createKvChannelManager();
-
-	// Inject the KV channel shutdown into the driver so it can be
-	// called during the driver's teardown, after all actors have stopped.
-	engineClient.setKvChannelShutdown?.(kvChannelManager.shutdown);
-
 	return createRouter(config.managerBasePath, (router) => {
 		// Actor gateway
 		router.use(
@@ -364,53 +354,6 @@ export function buildRuntimeRouter(
 			});
 		}
 
-		// GET /kv/connect - KV channel WebSocket endpoint for native SQLite
-		router.get("/kv/connect", async (c) => {
-			// Validate authentication.
-			if (isDev() && !config.token) {
-				logger().warn({
-					msg: "RIVET_TOKEN is not set, skipping KV channel auth in development mode",
-				});
-			} else {
-				const token = c.req.query("token");
-				if (!config.token) {
-					return c.text("KV channel requires RIVET_TOKEN to be set", 403);
-				}
-				if (
-					!token ||
-					timingSafeEqual(config.token, token) === false
-				) {
-					return c.json(
-						{
-							error: {
-								code: "unauthorized",
-								message: "invalid or missing authentication token",
-							},
-						},
-						401,
-					);
-				}
-			}
-
-			// Validate protocol version.
-			const versionError = validateProtocolVersion(
-				c.req.query("protocol_version"),
-			);
-			if (versionError) {
-				return c.text(versionError, 400);
-			}
-
-			// Upgrade to WebSocket.
-			const upgradeWebSocket = getUpgradeWebSocket?.();
-			if (!upgradeWebSocket) {
-				return c.text("WebSocket upgrades not supported on this platform", 500);
-			}
-
-			return upgradeWebSocket(() =>
-				kvChannelManager.createHandler(engineClient),
-			)(c, noopNext());
-		});
-
 		// TODO:
 		// // DELETE /actors/{actor_id}
 		// {
@@ -483,12 +426,6 @@ export function buildRuntimeRouter(
 				}
 			});
 
-			// Force-close all KV channel WebSocket connections. Used by
-			// stress tests to simulate network failures mid-operation.
-			router.post("/.test/kv-channel/force-disconnect", async (c) => {
-				const closed = kvChannelManager._testForceCloseAllKvChannels();
-				return c.json({ closed });
-			});
 		}
 
 		if (config.inspector.enabled) {

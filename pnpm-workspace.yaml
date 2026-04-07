@@ -4,7 +4,6 @@ packages:
   - engine/sdks/typescript/api-full
   - engine/sdks/typescript/envoy-client
   - engine/sdks/typescript/envoy-protocol
-  - engine/sdks/typescript/kv-channel-protocol
   - engine/sdks/typescript/test-envoy
   - engine/sdks/typescript/test-envoy-native
   - engine/sdks/typescript/test-runner
