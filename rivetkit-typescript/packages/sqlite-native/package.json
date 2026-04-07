@@ -30,13 +30,6 @@
 		"build": "napi build --platform --release",
 		"prepublishOnly": "napi prepublish -t npm"
 	},
-	"optionalDependencies": {
-		"@rivetkit/sqlite-native-linux-x64-gnu": "2.1.6",
-		"@rivetkit/sqlite-native-linux-arm64-gnu": "2.1.6",
-		"@rivetkit/sqlite-native-darwin-x64": "2.1.6",
-		"@rivetkit/sqlite-native-darwin-arm64": "2.1.6",
-		"@rivetkit/sqlite-native-win32-x64-msvc": "2.1.6"
-	},
 	"devDependencies": {
 		"@napi-rs/cli": "^2.18.0"
 	}
