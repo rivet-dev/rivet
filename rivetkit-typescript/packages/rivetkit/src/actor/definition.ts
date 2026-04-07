@@ -70,7 +70,8 @@ export class ActorDefinition<
 		E,
 		Q
 	>,
-	> implements BaseActorDefinition<S, CP, CS, V, I, DB, E, Q, R> {
+> implements BaseActorDefinition<S, CP, CS, V, I, DB, E, Q, R>
+{
 	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q>;
 
 	constructor(config: ActorConfig<S, CP, CS, V, I, DB, E, Q>) {

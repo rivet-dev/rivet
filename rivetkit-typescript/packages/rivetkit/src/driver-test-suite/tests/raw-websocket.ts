@@ -770,7 +770,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 							type: "indexedAckProbe",
 							payload: "x".repeat(
 								HIBERNATABLE_WEBSOCKET_BUFFERED_MESSAGE_SIZE_THRESHOLD +
-								8_000,
+									8_000,
 							),
 						}),
 					);

@@ -71,7 +71,10 @@ import {
 	stringifyError,
 	VERSION,
 } from "@/utils";
-import { wrapJsNativeDatabase, type JsNativeDatabaseLike } from "@/db/native-database";
+import {
+	wrapJsNativeDatabase,
+	type JsNativeDatabaseLike,
+} from "@/db/native-database";
 import { logger } from "./log";
 
 const ENVOY_SSE_PING_INTERVAL = 1000;
@@ -133,19 +136,17 @@ export class EngineActorDriver implements ActorDriver {
 	>();
 	#actorRouter: ActorRouter;
 
-	#envoyStarted: PromiseWithResolvers<void> = promiseWithResolvers(
-		(reason) =>
-			logger().warn({
-				msg: "unhandled envoy started promise rejection",
-				reason,
-			}),
+	#envoyStarted: PromiseWithResolvers<void> = promiseWithResolvers((reason) =>
+		logger().warn({
+			msg: "unhandled envoy started promise rejection",
+			reason,
+		}),
 	);
-	#envoyStopped: PromiseWithResolvers<void> = promiseWithResolvers(
-		(reason) =>
-			logger().warn({
-				msg: "unhandled envoy stopped promise rejection",
-				reason,
-			}),
+	#envoyStopped: PromiseWithResolvers<void> = promiseWithResolvers((reason) =>
+		logger().warn({
+			msg: "unhandled envoy stopped promise rejection",
+			reason,
+		}),
 	);
 	#isEnvoyStopped: boolean = false;
 	#isShuttingDown: boolean = false;
@@ -622,17 +623,15 @@ export class EngineActorDriver implements ActorDriver {
 			limit?: number;
 		},
 	): Promise<[Uint8Array, Uint8Array][]> {
-		const result = await this.#envoy.kvListPrefix(
-			actorId,
-			prefix,
-			options,
-		);
+		const result = await this.#envoy.kvListPrefix(actorId, prefix, options);
 		logger().info({
 			msg: "kvListPrefix called",
 			actorId,
 			prefixStr: new TextDecoder().decode(prefix),
 			entriesCount: result.length,
-			keys: result.map(([key]: [Uint8Array, ...unknown[]]) => new TextDecoder().decode(key)),
+			keys: result.map(([key]: [Uint8Array, ...unknown[]]) =>
+				new TextDecoder().decode(key),
+			),
 		});
 		return result;
 	}
@@ -790,7 +789,7 @@ export class EngineActorDriver implements ActorDriver {
 
 		return streamSSE(c, async (stream) => {
 			// NOTE: onAbort does not work reliably
-			stream.onAbort(() => { });
+			stream.onAbort(() => {});
 			c.req.raw.signal.addEventListener("abort", () => {
 				logger().debug("SSE aborted");
 			});
@@ -1103,12 +1102,12 @@ export class EngineActorDriver implements ActorDriver {
 			const error =
 				innerError instanceof Error
 					? new Error(
-						`Failed to start actor ${actorId}: ${innerError.message}`,
-						{ cause: innerError },
-					)
+							`Failed to start actor ${actorId}: ${innerError.message}`,
+							{ cause: innerError },
+						)
 					: new Error(
-						`Failed to start actor ${actorId}: ${String(innerError)}`,
-					);
+							`Failed to start actor ${actorId}: ${String(innerError)}`,
+						);
 			handler.actor = undefined;
 			handler.actorStartError = error;
 			handler.actorStartPromise?.reject(error);
@@ -1181,7 +1180,10 @@ export class EngineActorDriver implements ActorDriver {
 
 		if (handler.actor) {
 			try {
-				if (reason === "crash" && isStaticActorInstance(handler.actor)) {
+				if (
+					reason === "crash" &&
+					isStaticActorInstance(handler.actor)
+				) {
 					await handler.actor.debugForceCrash();
 				} else if (reason !== "crash") {
 					await handler.actor.onStop(reason);
@@ -1230,10 +1232,7 @@ export class EngineActorDriver implements ActorDriver {
 		return await this.#actorRouter.fetch(request, { actorId });
 	}
 
-	#routeOverlayRequest(
-		actorId: string,
-		request: Request,
-	): Response | null {
+	#routeOverlayRequest(actorId: string, request: Request): Response | null {
 		const url = new URL(request.url);
 		switch (`${request.method} ${url.pathname}`) {
 			case "PUT /dynamic/reload":
@@ -1376,7 +1375,10 @@ export class EngineActorDriver implements ActorDriver {
 
 			const run = async () => {
 				// Process message
-				if (isHibernatable && typeof event.rivetMessageIndex === "number") {
+				if (
+					isHibernatable &&
+					typeof event.rivetMessageIndex === "number"
+				) {
 					this.#recordInboundHibernatableWebSocketMessage(
 						gatewayIdBuf,
 						requestIdBuf,
@@ -1640,11 +1642,11 @@ export class EngineActorDriver implements ActorDriver {
 		const handler = this.#actors.get(actorId);
 		const actorName =
 			actorInstance &&
-				"config" in actorInstance &&
-				actorInstance.config &&
-				typeof actorInstance.config === "object" &&
-				"name" in actorInstance.config &&
-				typeof actorInstance.config.name === "string"
+			"config" in actorInstance &&
+			actorInstance.config &&
+			typeof actorInstance.config === "object" &&
+			"name" in actorInstance.config &&
+			typeof actorInstance.config.name === "string"
 				? actorInstance.config.name
 				: handler?.actorName;
 		if (!actorName) {
@@ -1756,5 +1758,4 @@ export class EngineActorDriver implements ActorDriver {
 		const metaEntries = await this.#hwsLoadAll(actor.id);
 		await this.#envoy.restoreHibernatingRequests(actor.id, metaEntries);
 	}
-
 }

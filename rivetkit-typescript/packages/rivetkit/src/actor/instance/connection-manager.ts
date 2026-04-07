@@ -106,7 +106,9 @@ export class ConnectionManager<
 	): Promise<Conn<S, CP, CS, V, I, DB, E, Q>> {
 		this.#actor.assertReady();
 		if (this.#actor.isStopping)
-			throw new errors.ActorStopping("Cannot accept new connections while actor is stopping");
+			throw new errors.ActorStopping(
+				"Cannot accept new connections while actor is stopping",
+			);
 
 		// TODO: Add back
 		// const url = request?.url;

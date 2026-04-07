@@ -24,15 +24,12 @@ export function runGatewayRoutingTests(driverTestConfig: DriverTestConfig) {
 					const actorId = await handle.resolve();
 
 					// Make a direct request using header-based routing
-					const response = await fetch(
-						`${endpoint}/api/hello`,
-						{
-							headers: {
-								"x-rivet-target": "actor",
-								"x-rivet-actor": actorId,
-							},
+					const response = await fetch(`${endpoint}/api/hello`, {
+						headers: {
+							"x-rivet-target": "actor",
+							"x-rivet-actor": actorId,
 						},
-					);
+					});
 
 					expect(response.ok).toBe(true);
 					const data = await response.json();
@@ -48,14 +45,11 @@ export function runGatewayRoutingTests(driverTestConfig: DriverTestConfig) {
 						driverTestConfig,
 					);
 
-					const response = await fetch(
-						`${endpoint}/api/hello`,
-						{
-							headers: {
-								"x-rivet-target": "actor",
-							},
+					const response = await fetch(`${endpoint}/api/hello`, {
+						headers: {
+							"x-rivet-target": "actor",
 						},
-					);
+					});
 
 					expect(response.ok).toBe(false);
 				},
@@ -134,54 +128,44 @@ export function runGatewayRoutingTests(driverTestConfig: DriverTestConfig) {
 				},
 			);
 
-			httpOnlyTest(
-				"rejects unknown rvt-* params",
-				async (c) => {
-					const { client, endpoint } = await setupDriverTest(
-						c,
-						driverTestConfig,
-					);
+			httpOnlyTest("rejects unknown rvt-* params", async (c) => {
+				const { client, endpoint } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
 
-					const handle = client.rawHttpActor.getOrCreate([
-						"query-unknown-param",
-					]);
-					await handle.fetch("api/hello");
+				const handle = client.rawHttpActor.getOrCreate([
+					"query-unknown-param",
+				]);
+				await handle.fetch("api/hello");
 
-					const gatewayUrl = await handle.getGatewayUrl();
-					const parsedUrl = new URL(gatewayUrl);
-					const namespace =
-						parsedUrl.searchParams.get("rvt-namespace")!;
-					const runner = parsedUrl.searchParams.get("rvt-runner")!;
+				const gatewayUrl = await handle.getGatewayUrl();
+				const parsedUrl = new URL(gatewayUrl);
+				const namespace = parsedUrl.searchParams.get("rvt-namespace")!;
+				const runner = parsedUrl.searchParams.get("rvt-runner")!;
 
-					const queryUrl = new URL(
-						`${endpoint}/gateway/rawHttpActor/api/hello`,
-					);
-					queryUrl.searchParams.set("rvt-namespace", namespace);
-					queryUrl.searchParams.set("rvt-method", "getOrCreate");
-					queryUrl.searchParams.set("rvt-key", "query-unknown-param");
-					queryUrl.searchParams.set("rvt-runner", runner);
-					queryUrl.searchParams.set("rvt-bogus", "invalid");
+				const queryUrl = new URL(
+					`${endpoint}/gateway/rawHttpActor/api/hello`,
+				);
+				queryUrl.searchParams.set("rvt-namespace", namespace);
+				queryUrl.searchParams.set("rvt-method", "getOrCreate");
+				queryUrl.searchParams.set("rvt-key", "query-unknown-param");
+				queryUrl.searchParams.set("rvt-runner", runner);
+				queryUrl.searchParams.set("rvt-bogus", "invalid");
 
-					const response = await fetch(queryUrl.toString());
-					expect(response.ok).toBe(false);
-				},
-			);
+				const response = await fetch(queryUrl.toString());
+				expect(response.ok).toBe(false);
+			});
 
-			httpOnlyTest(
-				"rejects duplicate scalar rvt-* params",
-				async (c) => {
-					const { endpoint } = await setupDriverTest(
-						c,
-						driverTestConfig,
-					);
+			httpOnlyTest("rejects duplicate scalar rvt-* params", async (c) => {
+				const { endpoint } = await setupDriverTest(c, driverTestConfig);
 
-					// Manually build URL with duplicate rvt-namespace
-					const url = `${endpoint}/gateway/rawHttpActor/api/hello?rvt-namespace=a&rvt-namespace=b&rvt-method=get&rvt-key=dup`;
+				// Manually build URL with duplicate rvt-namespace
+				const url = `${endpoint}/gateway/rawHttpActor/api/hello?rvt-namespace=a&rvt-namespace=b&rvt-method=get&rvt-key=dup`;
 
-					const response = await fetch(url);
-					expect(response.ok).toBe(false);
-				},
-			);
+				const response = await fetch(url);
+				expect(response.ok).toBe(false);
+			});
 
 			httpOnlyTest(
 				"strips rvt-* params before forwarding to actor",

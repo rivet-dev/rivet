@@ -10,7 +10,13 @@ import {
 	stringifyToClientTunnelMessageKind,
 	stringifyToServerTunnelMessageKind,
 } from "./stringify";
-import { arraysEqual, idToStr, MAX_PAYLOAD_SIZE, stringifyError, unreachable } from "./utils";
+import {
+	arraysEqual,
+	idToStr,
+	MAX_PAYLOAD_SIZE,
+	stringifyError,
+	unreachable,
+} from "./utils";
 import {
 	HIBERNATABLE_SYMBOL,
 	WebSocketTunnelAdapter,

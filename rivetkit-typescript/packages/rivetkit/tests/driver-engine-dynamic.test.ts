@@ -1,4 +1,8 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+	createServer,
+	type IncomingMessage,
+	type ServerResponse,
+} from "node:http";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -20,8 +24,7 @@ const hasEngineEndpointEnv = !!(
 	process.env.RIVET_NAMESPACE_ENDPOINT ||
 	process.env.RIVET_API_ENDPOINT
 );
-const initialDynamicSourceUrlEnv =
-	process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL;
+const initialDynamicSourceUrlEnv = process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL;
 const initialSecureExecSpecifierEnv =
 	process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER;
 
@@ -36,238 +39,243 @@ type DynamicHandle = {
 	}>;
 	putText: (key: string, value: string) => Promise<boolean>;
 	getText: (key: string) => Promise<string | null>;
-	listText: (prefix: string) => Promise<Array<{ key: string; value: string }>>;
+	listText: (
+		prefix: string,
+	) => Promise<Array<{ key: string; value: string }>>;
 	triggerSleep: () => Promise<boolean>;
 	scheduleAlarm: (duration: number) => Promise<boolean>;
 	webSocket: (path?: string) => Promise<WebSocket>;
 };
 
 type DynamicAuthHandle = DynamicHandle & {
-	fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+	fetch: (
+		input: string | URL | Request,
+		init?: RequestInit,
+	) => Promise<Response>;
 };
 
 describe.skipIf(!hasSecureExecDist || !hasEngineEndpointEnv)(
 	"engine dynamic actor runtime",
 	() => {
-	let sourceServer:
-		| {
-				url: string;
-				close: () => Promise<void>;
-		  }
-		| undefined;
+		let sourceServer:
+			| {
+					url: string;
+					close: () => Promise<void>;
+			  }
+			| undefined;
 
-	afterEach(async () => {
-		if (sourceServer) {
-			await sourceServer.close();
-			sourceServer = undefined;
-		}
-		if (initialDynamicSourceUrlEnv === undefined) {
-			delete process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL;
-		} else {
-			process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL =
-				initialDynamicSourceUrlEnv;
-		}
-		if (initialSecureExecSpecifierEnv === undefined) {
-			delete process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER;
-		} else {
-			process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER =
-				initialSecureExecSpecifierEnv;
-		}
-	});
-
-	test("loads dynamic actor source from URL", async () => {
-		sourceServer = await startSourceServer(DYNAMIC_SOURCE);
-		process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL = sourceServer.url;
-		process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER = pathToFileURL(
-			SECURE_EXEC_DIST_PATH,
-		).href;
-
-		const runtime = await createDynamicEngineRuntime();
-		const client = createClient<typeof registry>({
-			endpoint: runtime.endpoint,
-			namespace: runtime.namespace,
-			poolName: runtime.runnerName,
-			encoding: "json",
-			disableMetadataLookup: true,
-		});
-		const bareClient = createClient<typeof registry>({
-			endpoint: runtime.endpoint,
-			namespace: runtime.namespace,
-			poolName: runtime.runnerName,
-			encoding: "bare",
-			disableMetadataLookup: true,
+		afterEach(async () => {
+			if (sourceServer) {
+				await sourceServer.close();
+				sourceServer = undefined;
+			}
+			if (initialDynamicSourceUrlEnv === undefined) {
+				delete process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL;
+			} else {
+				process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL =
+					initialDynamicSourceUrlEnv;
+			}
+			if (initialSecureExecSpecifierEnv === undefined) {
+				delete process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER;
+			} else {
+				process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER =
+					initialSecureExecSpecifierEnv;
+			}
 		});
 
-		try {
-			const actor = client.dynamicFromUrl.getOrCreate([
-				"url-loader",
-			]) as unknown as DynamicHandle;
-			expect(await actor.increment(2)).toBe(2);
-			expect(await actor.increment(3)).toBe(5);
-			expect(await actor.getSourceCodeLength()).toBeGreaterThan(0);
+		test("loads dynamic actor source from URL", async () => {
+			sourceServer = await startSourceServer(DYNAMIC_SOURCE);
+			process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL = sourceServer.url;
+			process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER = pathToFileURL(
+				SECURE_EXEC_DIST_PATH,
+			).href;
 
-			const bareActor = bareClient.dynamicFromUrl.getOrCreate([
-				"url-loader",
-			]) as unknown as DynamicHandle;
-			expect(await bareActor.increment(1)).toBe(6);
-
-			const state = await actor.getState();
-			expect(state.count).toBe(6);
-			expect(state.wakeCount).toBeGreaterThanOrEqual(1);
-		} finally {
-			await client.dispose();
-			await bareClient.dispose();
-			await runtime.cleanup();
-		}
-	}, 180_000);
-
-	test("supports actions, kv, websockets, alarms, and sleep/wake from actor-loaded source", async () => {
-		sourceServer = await startSourceServer(DYNAMIC_SOURCE);
-		process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL = sourceServer.url;
-		process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER = pathToFileURL(
-			SECURE_EXEC_DIST_PATH,
-		).href;
-
-		const runtime = await createDynamicEngineRuntime();
-		const client = createClient<typeof registry>({
-			endpoint: runtime.endpoint,
-			namespace: runtime.namespace,
-			poolName: runtime.runnerName,
-			encoding: "json",
-			disableMetadataLookup: true,
-		});
-
-		let ws: WebSocket | undefined;
-
-		try {
-			const actor = client.dynamicFromActor.getOrCreate([
-				"actor-loader",
-			]) as unknown as DynamicHandle;
-
-			expect(await actor.increment(1)).toBe(1);
-			expect(await actor.getSourceCodeLength()).toBeGreaterThan(0);
-
-			await actor.putText("prefix-a", "alpha");
-			await actor.putText("prefix-b", "beta");
-			expect(await actor.getText("prefix-a")).toBe("alpha");
-			expect(
-				(await actor.listText("prefix-")).sort((a, b) =>
-					a.key.localeCompare(b.key),
-				),
-			).toEqual([
-				{ key: "prefix-a", value: "alpha" },
-				{ key: "prefix-b", value: "beta" },
-			]);
-
-			ws = await actor.webSocket();
-			const welcome = await readWebSocketJson(ws);
-			expect(welcome).toMatchObject({ type: "welcome" });
-			ws.send(JSON.stringify({ type: "ping" }));
-			expect(await readWebSocketJson(ws)).toEqual({ type: "pong" });
-			ws.close();
-			ws = undefined;
-
-			const beforeSleep = await actor.getState();
-			await actor.triggerSleep();
-			await wait(350);
-
-			const afterSleep = await actor.getState();
-			expect(afterSleep.sleepCount).toBeGreaterThanOrEqual(
-				beforeSleep.sleepCount + 1,
-			);
-			expect(afterSleep.wakeCount).toBeGreaterThanOrEqual(
-				beforeSleep.wakeCount + 1,
-			);
-
-			const beforeAlarm = await actor.getState();
-			await actor.scheduleAlarm(500);
-			await wait(900);
-
-			const afterAlarm = await actor.getState();
-			expect(afterAlarm.alarmCount).toBeGreaterThanOrEqual(
-				beforeAlarm.alarmCount + 1,
-			);
-			expect(afterAlarm.sleepCount).toBeGreaterThanOrEqual(
-				beforeAlarm.sleepCount + 1,
-			);
-			expect(afterAlarm.wakeCount).toBeGreaterThanOrEqual(
-				beforeAlarm.wakeCount + 1,
-			);
-		} finally {
-			ws?.close();
-			await client.dispose();
-			await runtime.cleanup();
-		}
-	}, 180_000);
-
-	test("authenticates dynamic actor actions, raw requests, and websockets", async () => {
-		sourceServer = await startSourceServer(DYNAMIC_SOURCE);
-		process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL = sourceServer.url;
-		process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER = pathToFileURL(
-			SECURE_EXEC_DIST_PATH,
-		).href;
-
-		const runtime = await createDynamicEngineRuntime();
-		const client = createClient<typeof registry>({
-			endpoint: runtime.endpoint,
-			namespace: runtime.namespace,
-			poolName: runtime.runnerName,
-			encoding: "json",
-			disableMetadataLookup: true,
-		});
-
-		let ws: WebSocket | undefined;
-
-		try {
-			const unauthorized = client.dynamicWithAuth.getOrCreate([
-				"auth-unauthorized",
-			]) as unknown as DynamicAuthHandle;
-			await expect(unauthorized.increment(1)).rejects.toMatchObject({
-				group: "user",
-				code: "unauthorized",
+			const runtime = await createDynamicEngineRuntime();
+			const client = createClient<typeof registry>({
+				endpoint: runtime.endpoint,
+				namespace: runtime.namespace,
+				poolName: runtime.runnerName,
+				encoding: "json",
+				disableMetadataLookup: true,
+			});
+			const bareClient = createClient<typeof registry>({
+				endpoint: runtime.endpoint,
+				namespace: runtime.namespace,
+				poolName: runtime.runnerName,
+				encoding: "bare",
+				disableMetadataLookup: true,
 			});
 
-			const unauthorizedResponse = await unauthorized.fetch("/auth");
-			expect(unauthorizedResponse.status).toBe(400);
-			expect(await unauthorizedResponse.json()).toMatchObject({
-				group: "user",
-				code: "unauthorized",
+			try {
+				const actor = client.dynamicFromUrl.getOrCreate([
+					"url-loader",
+				]) as unknown as DynamicHandle;
+				expect(await actor.increment(2)).toBe(2);
+				expect(await actor.increment(3)).toBe(5);
+				expect(await actor.getSourceCodeLength()).toBeGreaterThan(0);
+
+				const bareActor = bareClient.dynamicFromUrl.getOrCreate([
+					"url-loader",
+				]) as unknown as DynamicHandle;
+				expect(await bareActor.increment(1)).toBe(6);
+
+				const state = await actor.getState();
+				expect(state.count).toBe(6);
+				expect(state.wakeCount).toBeGreaterThanOrEqual(1);
+			} finally {
+				await client.dispose();
+				await bareClient.dispose();
+				await runtime.cleanup();
+			}
+		}, 180_000);
+
+		test("supports actions, kv, websockets, alarms, and sleep/wake from actor-loaded source", async () => {
+			sourceServer = await startSourceServer(DYNAMIC_SOURCE);
+			process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL = sourceServer.url;
+			process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER = pathToFileURL(
+				SECURE_EXEC_DIST_PATH,
+			).href;
+
+			const runtime = await createDynamicEngineRuntime();
+			const client = createClient<typeof registry>({
+				endpoint: runtime.endpoint,
+				namespace: runtime.namespace,
+				poolName: runtime.runnerName,
+				encoding: "json",
+				disableMetadataLookup: true,
 			});
 
-			const headerAuthorized = client.dynamicWithAuth.getOrCreate([
-				"auth-header",
-			]) as unknown as DynamicAuthHandle;
-			const headerResponse = await headerAuthorized.fetch("/auth", {
-				headers: {
-					"x-dynamic-auth": "allow",
-				},
-			});
-			expect(headerResponse.status).toBe(200);
-			expect(await headerResponse.json()).toEqual({
-				method: "GET",
-				token: "allow",
+			let ws: WebSocket | undefined;
+
+			try {
+				const actor = client.dynamicFromActor.getOrCreate([
+					"actor-loader",
+				]) as unknown as DynamicHandle;
+
+				expect(await actor.increment(1)).toBe(1);
+				expect(await actor.getSourceCodeLength()).toBeGreaterThan(0);
+
+				await actor.putText("prefix-a", "alpha");
+				await actor.putText("prefix-b", "beta");
+				expect(await actor.getText("prefix-a")).toBe("alpha");
+				expect(
+					(await actor.listText("prefix-")).sort((a, b) =>
+						a.key.localeCompare(b.key),
+					),
+				).toEqual([
+					{ key: "prefix-a", value: "alpha" },
+					{ key: "prefix-b", value: "beta" },
+				]);
+
+				ws = await actor.webSocket();
+				const welcome = await readWebSocketJson(ws);
+				expect(welcome).toMatchObject({ type: "welcome" });
+				ws.send(JSON.stringify({ type: "ping" }));
+				expect(await readWebSocketJson(ws)).toEqual({ type: "pong" });
+				ws.close();
+				ws = undefined;
+
+				const beforeSleep = await actor.getState();
+				await actor.triggerSleep();
+				await wait(350);
+
+				const afterSleep = await actor.getState();
+				expect(afterSleep.sleepCount).toBeGreaterThanOrEqual(
+					beforeSleep.sleepCount + 1,
+				);
+				expect(afterSleep.wakeCount).toBeGreaterThanOrEqual(
+					beforeSleep.wakeCount + 1,
+				);
+
+				const beforeAlarm = await actor.getState();
+				await actor.scheduleAlarm(500);
+				await wait(900);
+
+				const afterAlarm = await actor.getState();
+				expect(afterAlarm.alarmCount).toBeGreaterThanOrEqual(
+					beforeAlarm.alarmCount + 1,
+				);
+				expect(afterAlarm.sleepCount).toBeGreaterThanOrEqual(
+					beforeAlarm.sleepCount + 1,
+				);
+				expect(afterAlarm.wakeCount).toBeGreaterThanOrEqual(
+					beforeAlarm.wakeCount + 1,
+				);
+			} finally {
+				ws?.close();
+				await client.dispose();
+				await runtime.cleanup();
+			}
+		}, 180_000);
+
+		test("authenticates dynamic actor actions, raw requests, and websockets", async () => {
+			sourceServer = await startSourceServer(DYNAMIC_SOURCE);
+			process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL = sourceServer.url;
+			process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER = pathToFileURL(
+				SECURE_EXEC_DIST_PATH,
+			).href;
+
+			const runtime = await createDynamicEngineRuntime();
+			const client = createClient<typeof registry>({
+				endpoint: runtime.endpoint,
+				namespace: runtime.namespace,
+				poolName: runtime.runnerName,
+				encoding: "json",
+				disableMetadataLookup: true,
 			});
 
-			const paramsAuthorized = client.dynamicWithAuth.getOrCreate(
-				["auth-params"],
-				{
-					params: {
-						token: "allow",
+			let ws: WebSocket | undefined;
+
+			try {
+				const unauthorized = client.dynamicWithAuth.getOrCreate([
+					"auth-unauthorized",
+				]) as unknown as DynamicAuthHandle;
+				await expect(unauthorized.increment(1)).rejects.toMatchObject({
+					group: "user",
+					code: "unauthorized",
+				});
+
+				const unauthorizedResponse = await unauthorized.fetch("/auth");
+				expect(unauthorizedResponse.status).toBe(400);
+				expect(await unauthorizedResponse.json()).toMatchObject({
+					group: "user",
+					code: "unauthorized",
+				});
+
+				const headerAuthorized = client.dynamicWithAuth.getOrCreate([
+					"auth-header",
+				]) as unknown as DynamicAuthHandle;
+				const headerResponse = await headerAuthorized.fetch("/auth", {
+					headers: {
+						"x-dynamic-auth": "allow",
 					},
-				},
-			) as unknown as DynamicAuthHandle;
-			expect(await paramsAuthorized.increment(1)).toBe(1);
+				});
+				expect(headerResponse.status).toBe(200);
+				expect(await headerResponse.json()).toEqual({
+					method: "GET",
+					token: "allow",
+				});
 
-			ws = await paramsAuthorized.webSocket();
-			expect(await readWebSocketJson(ws)).toMatchObject({
-				type: "welcome",
-			});
-		} finally {
-			ws?.close();
-			await client.dispose();
-			await runtime.cleanup();
-		}
-	}, 180_000);
+				const paramsAuthorized = client.dynamicWithAuth.getOrCreate(
+					["auth-params"],
+					{
+						params: {
+							token: "allow",
+						},
+					},
+				) as unknown as DynamicAuthHandle;
+				expect(await paramsAuthorized.increment(1)).toBe(1);
+
+				ws = await paramsAuthorized.webSocket();
+				expect(await readWebSocketJson(ws)).toMatchObject({
+					type: "welcome",
+				});
+			} finally {
+				ws?.close();
+				await client.dispose();
+				await runtime.cleanup();
+			}
+		}, 180_000);
 	},
 );
 
@@ -275,7 +283,8 @@ async function createDynamicEngineRuntime() {
 	return await createTestRuntime(
 		join(__dirname, "../fixtures/driver-test-suite/dynamic-registry.ts"),
 		async (registry) => {
-			const endpoint = process.env.RIVET_ENDPOINT || "http://127.0.0.1:6420";
+			const endpoint =
+				process.env.RIVET_ENDPOINT || "http://127.0.0.1:6420";
 			const namespaceEndpoint =
 				process.env.RIVET_NAMESPACE_ENDPOINT ||
 				process.env.RIVET_API_ENDPOINT ||
@@ -315,7 +324,9 @@ async function createDynamicEngineRuntime() {
 				convertRegistryConfigToClientConfig(parsedConfig),
 			);
 
-			const runnersUrl = new URL(`${endpoint.replace(/\/$/, "")}/runners`);
+			const runnersUrl = new URL(
+				`${endpoint.replace(/\/$/, "")}/runners`,
+			);
 			runnersUrl.searchParams.set("namespace", namespace);
 			runnersUrl.searchParams.set("name", runnerName);
 			let probeError: unknown;
@@ -326,7 +337,9 @@ async function createDynamicEngineRuntime() {
 						headers: { Authorization: `Bearer ${token}` },
 					});
 					if (!runnerResponse.ok) {
-						const errorBody = await runnerResponse.text().catch(() => "");
+						const errorBody = await runnerResponse
+							.text()
+							.catch(() => "");
 						probeError = new Error(
 							`List runners failed: ${runnerResponse.status} ${runnerResponse.statusText} ${errorBody}`,
 						);
@@ -365,7 +378,7 @@ async function createDynamicEngineRuntime() {
 				},
 				engineClient,
 				cleanup: async () => {
-					((engineClient as any).shutdown?.());
+					(engineClient as any).shutdown?.();
 				},
 			};
 		},
@@ -389,7 +402,9 @@ async function startSourceServer(source: string): Promise<{
 		res.end(source);
 	});
 
-	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	await new Promise<void>((resolve) =>
+		server.listen(0, "127.0.0.1", resolve),
+	);
 	const address = server.address();
 	if (!address || typeof address === "string") {
 		throw new Error("failed to get dynamic source server address");

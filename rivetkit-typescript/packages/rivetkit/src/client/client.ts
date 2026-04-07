@@ -184,7 +184,10 @@ export class ClientRaw {
 	/**
 	 * Creates an instance of Client.
 	 */
-	public constructor(driver: EngineControlClient, encoding: Encoding | undefined) {
+	public constructor(
+		driver: EngineControlClient,
+		encoding: Encoding | undefined,
+	) {
 		this.#driver = driver;
 
 		this.#encodingKind = encoding ?? "bare";

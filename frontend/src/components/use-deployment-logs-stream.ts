@@ -2,24 +2,6 @@ import type { RivetSse } from "@rivet-gg/cloud";
 import { startTransition, useEffect, useRef, useState } from "react";
 import { cloudEnv } from "@/lib/env";
 
-// Lazy-load RivetSse at runtime. The @rivet-gg/cloud package may not export
-// this in all versions (e.g. pkg.pr.new previews), and this file is only used
-// by cloud routes, never the engine UI. The dynamic import prevents rollup from
-// failing at build time when the named export is missing.
-let _rivetSse: typeof RivetSse | null = null;
-async function getRivetSse(): Promise<typeof RivetSse> {
-	if (!_rivetSse) {
-		const mod = await import("@rivet-gg/cloud");
-		if (!("RivetSse" in mod)) {
-			throw new Error(
-				"@rivet-gg/cloud does not export RivetSse — this feature requires a cloud SDK version that includes SSE support",
-			);
-		}
-		_rivetSse = (mod as { RivetSse: typeof RivetSse }).RivetSse;
-	}
-	return _rivetSse;
-}
-
 const MAX_RETRIES = 8;
 const BASE_DELAY_MS = 1_000;
 

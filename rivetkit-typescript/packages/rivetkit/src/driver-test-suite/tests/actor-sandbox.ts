@@ -86,7 +86,9 @@ export function runActorSandboxTests(driverTestConfig: DriverTestConfig) {
 					await sandbox.listFsEntries({ path: "/home/sandbox" }),
 				).not.toEqual(
 					expect.arrayContaining([
-						expect.objectContaining({ name: testDir.split("/").at(-1) }),
+						expect.objectContaining({
+							name: testDir.split("/").at(-1),
+						}),
 					]),
 				);
 			}, 180_000);

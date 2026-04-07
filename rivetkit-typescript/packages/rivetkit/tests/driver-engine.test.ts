@@ -36,9 +36,7 @@ async function refreshRunnerMetadata(
 }
 
 for (const registryVariant of getDriverRegistryVariants(__dirname)) {
-	const describeVariant = registryVariant.skip
-		? describe.skip
-		: describe;
+	const describeVariant = registryVariant.skip ? describe.skip : describe;
 	const variantName = registryVariant.skipReason
 		? `${registryVariant.name} (${registryVariant.skipReason})`
 		: registryVariant.name;
@@ -64,8 +62,7 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 						const poolName =
 							process.env.RIVET_POOL_NAME ||
 							`test-driver-${crypto.randomUUID().slice(0, 8)}`;
-						const token =
-							process.env.RIVET_TOKEN || "dev";
+						const token = process.env.RIVET_TOKEN || "dev";
 
 						// Create a fresh namespace for test isolation
 						const nsResp = await fetch(`${endpoint}/namespaces`, {
@@ -74,10 +71,15 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 								"Content-Type": "application/json",
 								Authorization: `Bearer ${token}`,
 							},
-							body: JSON.stringify({ name: namespace, display_name: namespace }),
+							body: JSON.stringify({
+								name: namespace,
+								display_name: namespace,
+							}),
 						});
 						if (!nsResp.ok) {
-							throw new Error(`Create namespace failed: ${nsResp.status} ${await nsResp.text()}`);
+							throw new Error(
+								`Create namespace failed: ${nsResp.status} ${await nsResp.text()}`,
+							);
 						}
 
 						// Configure registry
@@ -90,9 +92,15 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 						};
 
 						const parsedConfig = registry.parseConfig();
-						const clientConfig = convertRegistryConfigToClientConfig(parsedConfig);
-						const engineClient = new RemoteEngineControlClient(clientConfig);
-						const inlineClient = createClientWithDriver(engineClient, clientConfig);
+						const clientConfig =
+							convertRegistryConfigToClientConfig(parsedConfig);
+						const engineClient = new RemoteEngineControlClient(
+							clientConfig,
+						);
+						const inlineClient = createClientWithDriver(
+							engineClient,
+							clientConfig,
+						);
 						let actorDriver: EngineActorDriver | undefined;
 
 						// Start serverless HTTP server
@@ -173,7 +181,8 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 								token,
 							},
 							engineClient,
-							hardCrashActor: actorDriver.hardCrashActor.bind(actorDriver),
+							hardCrashActor:
+								actorDriver.hardCrashActor.bind(actorDriver),
 							cleanup: async () => {
 								await actorDriver.shutdown(false);
 								await new Promise((resolve) =>

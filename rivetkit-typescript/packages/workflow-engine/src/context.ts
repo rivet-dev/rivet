@@ -954,15 +954,12 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					willRetry: false,
 				});
 				throw markErrorReported(
-					attachTryStepFailure(
-						new CriticalError(error.message),
-						{
-							kind: "timeout",
-							stepName: config.name,
-							attempts: metadata.attempts,
-							error: extractErrorInfo(error),
-						},
-					),
+					attachTryStepFailure(new CriticalError(error.message), {
+						kind: "timeout",
+						stepName: config.name,
+						attempts: metadata.attempts,
+						error: extractErrorInfo(error),
+					}),
 				);
 			}
 

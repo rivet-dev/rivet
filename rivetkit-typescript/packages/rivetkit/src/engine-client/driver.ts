@@ -9,9 +9,7 @@ export type GatewayTarget = { directId: string } | ActorQuery;
 export interface EngineControlClient {
 	getForId(input: GetForIdInput): Promise<ActorOutput | undefined>;
 	getWithKey(input: GetWithKeyInput): Promise<ActorOutput | undefined>;
-	getOrCreateWithKey(
-		input: GetOrCreateWithKeyInput,
-	): Promise<ActorOutput>;
+	getOrCreateWithKey(input: GetOrCreateWithKeyInput): Promise<ActorOutput>;
 	createActor(input: CreateInput): Promise<ActorOutput>;
 	listActors(input: ListActorsInput): Promise<ActorOutput[]>;
 

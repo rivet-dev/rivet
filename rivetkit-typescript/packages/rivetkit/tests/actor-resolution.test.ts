@@ -260,7 +260,10 @@ describe("actor resolution flow", () => {
 		await vi.waitFor(() => {
 			expect(conn.connStatus).toBe("connected");
 		});
-		expect(sendTargets).toEqual([expectedDirectTarget, expectedDirectTarget]);
+		expect(sendTargets).toEqual([
+			expectedDirectTarget,
+			expectedDirectTarget,
+		]);
 		expect(gatewayTargets).toEqual([expectedDirectTarget]);
 		expect(webSocketCalls).toHaveLength(2);
 		expect(webSocketCalls[0]?.target).toEqual(expectedDirectTarget);
@@ -293,7 +296,9 @@ describe("actor resolution flow", () => {
 	});
 });
 
-function createMockDriver(overrides: Partial<EngineControlClient>): EngineControlClient {
+function createMockDriver(
+	overrides: Partial<EngineControlClient>,
+): EngineControlClient {
 	return {
 		getForId: async () => undefined,
 		getWithKey: async () => undefined,

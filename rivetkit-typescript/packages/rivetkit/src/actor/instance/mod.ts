@@ -201,8 +201,7 @@ const ACTIVE_ASYNC_REGION_ERROR_MESSAGES: Record<
 	keyof ActiveAsyncRegionCounts,
 	string
 > = {
-	keepAwake:
-		"active keep awake count went below 0, this is a RivetKit bug",
+	keepAwake: "active keep awake count went below 0, this is a RivetKit bug",
 	internalKeepAwake:
 		"active internal keep awake count went below 0, this is a RivetKit bug",
 	websocketCallbacks:
@@ -287,18 +286,18 @@ export function isStaticActorInstance(
 
 export type ExtractActorState<A extends AnyActorInstance> =
 	A extends ActorInstance<infer State, any, any, any, any, any, any, any>
-	? State
-	: never;
+		? State
+		: never;
 
 export type ExtractActorConnParams<A extends AnyActorInstance> =
 	A extends ActorInstance<any, infer ConnParams, any, any, any, any, any, any>
-	? ConnParams
-	: never;
+		? ConnParams
+		: never;
 
 export type ExtractActorConnState<A extends AnyActorInstance> =
 	A extends ActorInstance<any, any, infer ConnState, any, any, any, any, any>
-	? ConnState
-	: never;
+		? ConnState
+		: never;
 
 // MARK: - Main ActorInstance Class
 export class ActorInstance<
@@ -310,7 +309,8 @@ export class ActorInstance<
 	DB extends AnyDatabaseProvider,
 	E extends EventSchemaConfig = Record<never, never>,
 	Q extends QueueSchemaConfig = Record<never, never>,
-> implements BaseActorInstance<S, CP, CS, V, I, DB, E, Q> {
+> implements BaseActorInstance<S, CP, CS, V, I, DB, E, Q>
+{
 	// MARK: - Core Properties
 	actorContext: ActorContext<S, CP, CS, V, I, DB, E, Q>;
 	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q>;
@@ -968,15 +968,15 @@ export class ActorInstance<
 			// is intentional and safe.
 			try {
 				this.#abortController.abort();
-			} catch { }
+			} catch {}
 
 			// Wait for run handler to complete
 			await this.#waitForRunHandler(
 				this.overrides.runStopTimeout !== undefined
 					? Math.min(
-						this.#config.options.runStopTimeout,
-						this.overrides.runStopTimeout,
-					)
+							this.#config.options.runStopTimeout,
+							this.overrides.runStopTimeout,
+						)
 					: this.#config.options.runStopTimeout,
 			);
 
@@ -1025,7 +1025,9 @@ export class ActorInstance<
 			return;
 		}
 		if (this.#stopCalled) {
-			this.#rLog.warn({ msg: "already stopping actor during hard crash" });
+			this.#rLog.warn({
+				msg: "already stopping actor during hard crash",
+			});
 			return;
 		}
 		this.#stopCalled = true;
@@ -1041,7 +1043,7 @@ export class ActorInstance<
 
 			try {
 				this.#abortController.abort();
-			} catch { }
+			} catch {}
 		} finally {
 			this.#shutdownComplete = true;
 			await this.#cleanupDatabase();
@@ -1100,7 +1102,7 @@ export class ActorInstance<
 		// modes.
 		try {
 			this.#abortController.abort();
-		} catch { }
+		} catch {}
 
 		const destroy = this.driver.startDestroy.bind(
 			this.driver,
@@ -1137,14 +1139,14 @@ export class ActorInstance<
 	async processMessage(
 		message: {
 			body:
-			| {
-				tag: "ActionRequest";
-				val: { id: bigint; name: string; args: unknown };
-			}
-			| {
-				tag: "SubscriptionRequest";
-				val: { eventName: string; subscribe: boolean };
-			};
+				| {
+						tag: "ActionRequest";
+						val: { id: bigint; name: string; args: unknown };
+				  }
+				| {
+						tag: "SubscriptionRequest";
+						val: { eventName: string; subscribe: boolean };
+				  };
 		},
 		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
 	) {
@@ -1515,9 +1517,9 @@ export class ActorInstance<
 		if (this.overrides.sleepGracePeriod !== undefined) {
 			return this.#config.options.sleepGracePeriod !== undefined
 				? Math.min(
-					this.#config.options.sleepGracePeriod,
-					this.overrides.sleepGracePeriod,
-				)
+						this.#config.options.sleepGracePeriod,
+						this.overrides.sleepGracePeriod,
+					)
 				: this.overrides.sleepGracePeriod;
 		}
 
@@ -1528,16 +1530,16 @@ export class ActorInstance<
 		const effectiveOnSleepTimeout =
 			this.overrides.onSleepTimeout !== undefined
 				? Math.min(
-					this.#config.options.onSleepTimeout,
-					this.overrides.onSleepTimeout,
-				)
+						this.#config.options.onSleepTimeout,
+						this.overrides.onSleepTimeout,
+					)
 				: this.#config.options.onSleepTimeout;
 		const effectiveWaitUntilTimeout =
 			this.overrides.waitUntilTimeout !== undefined
 				? Math.min(
-					this.#config.options.waitUntilTimeout,
-					this.overrides.waitUntilTimeout,
-				)
+						this.#config.options.waitUntilTimeout,
+						this.overrides.waitUntilTimeout,
+					)
 				: this.#config.options.waitUntilTimeout;
 
 		const usesDefaultLegacyTimeouts =
@@ -1981,10 +1983,7 @@ export class ActorInstance<
 							if (remaining <= 0) {
 								throw new DeadlineError();
 							}
-							await deadline(
-								result,
-								remaining,
-							);
+							await deadline(result, remaining);
 						}
 					},
 				);
@@ -2017,10 +2016,10 @@ export class ActorInstance<
 								result,
 								this.overrides.onDestroyTimeout !== undefined
 									? Math.min(
-										this.#config.options
-											.onDestroyTimeout,
-										this.overrides.onDestroyTimeout,
-									)
+											this.#config.options
+												.onDestroyTimeout,
+											this.overrides.onDestroyTimeout,
+										)
 									: this.#config.options.onDestroyTimeout,
 							);
 						}
@@ -2150,16 +2149,16 @@ export class ActorInstance<
 					overrideRawDatabaseClient: this.driver
 						.overrideRawDatabaseClient
 						? () =>
-							this.driver.overrideRawDatabaseClient!(
-								this.#actorId,
-							)
+								this.driver.overrideRawDatabaseClient!(
+									this.#actorId,
+								)
 						: undefined,
 					overrideDrizzleDatabaseClient: this.driver
 						.overrideDrizzleDatabaseClient
 						? () =>
-							this.driver.overrideDrizzleDatabaseClient!(
-								this.#actorId,
-							)
+								this.driver.overrideDrizzleDatabaseClient!(
+									this.#actorId,
+								)
 						: undefined,
 					kv: {
 						batchPut: (entries: [Uint8Array, Uint8Array][]) =>
@@ -2169,7 +2168,11 @@ export class ActorInstance<
 						batchDelete: (keys: Uint8Array[]) =>
 							this.driver.kvBatchDelete(this.#actorId, keys),
 						deleteRange: (start: Uint8Array, end: Uint8Array) =>
-							this.driver.kvDeleteRange(this.#actorId, start, end),
+							this.driver.kvDeleteRange(
+								this.#actorId,
+								start,
+								end,
+							),
 					},
 					metrics: this.#metrics,
 					log: this.#rLog,
@@ -2329,7 +2332,8 @@ export class ActorInstance<
 			let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 			const timedOut = await Promise.race([
 				Promise.allSettled(promises.slice(0, batch)).then(() => {
-					if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+					if (timeoutHandle !== undefined)
+						clearTimeout(timeoutHandle);
 					return false;
 				}),
 				new Promise<true>((resolve) => {
@@ -2377,7 +2381,8 @@ export class ActorInstance<
 			let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 			const timedOut = await Promise.race([
 				this.#preventSleepClearedPromise.promise.then(() => {
-					if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+					if (timeoutHandle !== undefined)
+						clearTimeout(timeoutHandle);
 					return false;
 				}),
 				new Promise<true>((resolve) => {

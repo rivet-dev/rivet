@@ -171,7 +171,10 @@ export function RunnerPoolError({ error }: { error: RivetActorError }) {
 					<p>Internal error occurred in runner pool</p>
 				))
 				.with("downgrade", () => (
-					<p>Runner pool was downgraded to an unsupported version. Revert to the higher version.</p>
+					<p>
+						Runner pool was downgraded to an unsupported version.
+						Revert to the higher version.
+					</p>
 				))
 				.with("serverless_stream_ended_early", () => (
 					<p>

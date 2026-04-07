@@ -8,7 +8,6 @@ import {
 	queryOptions,
 } from "@tanstack/react-query";
 import * as cbor from "cbor-x";
-import { KV_KEYS } from "rivetkit/client";
 import z from "zod";
 import { getConfig, ls } from "@/components";
 import type { ActorId } from "@/components/actors";
@@ -25,6 +24,15 @@ import {
 } from "./default-data-provider";
 
 const mightRequireAuth = !features.auth;
+const INSPECTOR_TOKEN_KEY = Uint8Array.from([3]);
+
+function encodeBase64(bytes: Uint8Array): string {
+	let binary = "";
+	for (const byte of bytes) {
+		binary += String.fromCharCode(byte);
+	}
+	return btoa(binary);
+}
 
 export type CreateNamespace = {
 	displayName: string;
@@ -484,9 +492,7 @@ export const createNamespaceContext = ({
 				queryFn: async () => {
 					const response = await client.actorsKvGet(
 						actorId,
-						KV_KEYS.INSPECTOR_TOKEN
-							// @ts-expect-error
-							.toBase64(),
+						encodeBase64(INSPECTOR_TOKEN_KEY),
 						{ namespace },
 					);
 

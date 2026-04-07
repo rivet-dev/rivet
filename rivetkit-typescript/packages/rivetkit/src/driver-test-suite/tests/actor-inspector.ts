@@ -37,7 +37,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			const response = await fetch(
 				buildInspectorUrl(gatewayUrl, "/inspector/state"),
 				{
-				headers: { Authorization: "Bearer token" },
+					headers: { Authorization: "Bearer token" },
 				},
 			);
 			expect(response.status).toBe(200);
@@ -60,12 +60,12 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			const patchResponse = await fetch(
 				buildInspectorUrl(gatewayUrl, "/inspector/state"),
 				{
-				method: "PATCH",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: "Bearer token",
-				},
-				body: JSON.stringify({ state: { count: 42 } }),
+					method: "PATCH",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: "Bearer token",
+					},
+					body: JSON.stringify({ state: { count: 42 } }),
 				},
 			);
 			expect(patchResponse.status).toBe(200);
@@ -112,7 +112,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			const response = await fetch(
 				buildInspectorUrl(gatewayUrl, "/inspector/rpcs"),
 				{
-				headers: { Authorization: "Bearer token" },
+					headers: { Authorization: "Bearer token" },
 				},
 			);
 			expect(response.status).toBe(200);
@@ -395,10 +395,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			const data = (await response.json()) as {
 				rows: Array<{ value: string }>;
 			};
-			expect(data.rows).toEqual([
-				{ value: "alpha" },
-				{ value: "beta" },
-			]);
+			expect(data.rows).toEqual([{ value: "alpha" }, { value: "beta" }]);
 		});
 
 		test("GET /inspector/database/rows returns SQLite rows", async (c) => {
@@ -555,7 +552,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			const response = await fetch(
 				buildInspectorUrl(gatewayUrl, "/inspector/summary"),
 				{
-				headers: { Authorization: "Bearer token" },
+					headers: { Authorization: "Bearer token" },
 				},
 			);
 			expect(response.status).toBe(200);
@@ -599,7 +596,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			const response = await fetch(
 				buildInspectorUrl(gatewayUrl, "/inspector/summary"),
 				{
-				headers: { Authorization: "Bearer token" },
+					headers: { Authorization: "Bearer token" },
 				},
 			);
 			expect(response.status).toBe(200);
@@ -634,7 +631,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			const response = await fetch(
 				buildInspectorUrl(gatewayUrl, "/inspector/state"),
 				{
-				headers: { Authorization: "Bearer wrong-token" },
+					headers: { Authorization: "Bearer wrong-token" },
 				},
 			);
 			expect(response.status).toBe(401);
@@ -652,7 +649,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			const response = await fetch(
 				buildInspectorUrl(gatewayUrl, "/inspector/metrics"),
 				{
-				headers: { Authorization: "Bearer token" },
+					headers: { Authorization: "Bearer token" },
 				},
 			);
 			expect(response.status).toBe(200);

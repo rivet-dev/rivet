@@ -36,10 +36,7 @@ import {
 import { destroyActor, destroyObserver } from "./destroy";
 import { customTimeoutActor, errorHandlingActor } from "./error-handling";
 import { fileSystemHibernationCleanupActor } from "./file-system-hibernation-cleanup";
-import {
-	hibernationActor,
-	hibernationSleepWindowActor,
-} from "./hibernation";
+import { hibernationActor, hibernationSleepWindowActor } from "./hibernation";
 import { inlineClientActor } from "./inline-client";
 import {
 	beforeConnectTimeoutActor,
@@ -147,7 +144,7 @@ import {
 } from "./workflow";
 
 let agentOsTestActor:
-	| (Awaited<typeof import("./agent-os")>["agentOsTestActor"])
+	| Awaited<typeof import("./agent-os")>["agentOsTestActor"]
 	| undefined;
 
 try {
@@ -327,9 +324,9 @@ export const registry = setup({
 		stateChangeRecursionActor,
 		...(agentOsTestActor
 			? {
-				// From agent-os.ts
-				agentOsTestActor,
-			}
+					// From agent-os.ts
+					agentOsTestActor,
+				}
 			: {}),
 	},
 });

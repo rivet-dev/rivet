@@ -68,9 +68,7 @@ async function ensureVm<TConnParams>(
 	return agentOs;
 }
 
-function buildVmOptions(
-	userOptions?: AgentOsOptions,
-): AgentOsOptions {
+function buildVmOptions(userOptions?: AgentOsOptions): AgentOsOptions {
 	const userMounts = userOptions?.mounts ?? [];
 
 	// Check if the user already provided a mount at /home/user. If so, respect

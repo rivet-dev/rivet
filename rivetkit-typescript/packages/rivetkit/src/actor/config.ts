@@ -223,10 +223,7 @@ const InstanceActorOptionsBaseSchema = z
 		onBeforeConnectTimeout: z.number().positive().default(5000),
 		onConnectTimeout: z.number().positive().default(5000),
 		sleepGracePeriod: z.number().positive().optional(),
-		onSleepTimeout: z
-			.number()
-			.positive()
-			.default(DEFAULT_ON_SLEEP_TIMEOUT),
+		onSleepTimeout: z.number().positive().default(DEFAULT_ON_SLEEP_TIMEOUT),
 		onDestroyTimeout: z.number().positive().default(5000),
 		stateSaveInterval: z.number().positive().default(1_000),
 		actionTimeout: z.number().positive().default(60_000),
@@ -243,7 +240,10 @@ const InstanceActorOptionsBaseSchema = z
 		noSleep: z.boolean().default(false),
 		sleepTimeout: z.number().positive().default(30_000),
 		maxQueueSize: z.number().positive().default(1000),
-		maxQueueMessageSize: z.number().positive().default(64 * 1024),
+		maxQueueMessageSize: z
+			.number()
+			.positive()
+			.default(64 * 1024),
 		/** Override RivetKit's workflow preload budget for this actor. Set to 0 to disable workflow preloading. */
 		preloadMaxWorkflowBytes: z.number().nonnegative().optional(),
 		/** Override RivetKit's connections preload budget for this actor. Set to 0 to disable connections preloading. */

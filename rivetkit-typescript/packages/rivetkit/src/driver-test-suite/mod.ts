@@ -118,11 +118,19 @@ export function runDriverTests(
 	driverTestConfigPartial: Omit<DriverTestConfig, "clientType" | "encoding">,
 ) {
 	describe("Driver Tests", () => {
-		const clientTypes: ClientType[] = driverTestConfigPartial.clientTypes
-			?? (driverTestConfigPartial.skip?.inline ? ["http"] : ["http", "inline"]);
+		const clientTypes: ClientType[] =
+			driverTestConfigPartial.clientTypes ??
+			(driverTestConfigPartial.skip?.inline
+				? ["http"]
+				: ["http", "inline"]);
 		for (const clientType of clientTypes) {
 			describe(`client type (${clientType})`, () => {
-				const encodings: Encoding[] = driverTestConfigPartial.encodings ?? ["bare", "cbor", "json"];
+				const encodings: Encoding[] =
+					driverTestConfigPartial.encodings ?? [
+						"bare",
+						"cbor",
+						"json",
+					];
 
 				for (const encoding of encodings) {
 					describe(`encoding (${encoding})`, () => {

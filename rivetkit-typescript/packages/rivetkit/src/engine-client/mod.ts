@@ -42,7 +42,6 @@ import { logger } from "./log";
 import { lookupMetadataCached } from "./metadata";
 import { createWebSocketProxy } from "./ws-proxy";
 
-
 export class RemoteEngineControlClient implements EngineControlClient {
 	#config: ClientConfig;
 	#metadataPromise: Promise<void> | undefined;
@@ -163,13 +162,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 	): Promise<ActorOutput> {
 		await this.#metadataPromise;
 
-		const {
-			name,
-			key,
-			input: actorInput,
-			region,
-			crashPolicy,
-		} = input;
+		const { name, key, input: actorInput, region, crashPolicy } = input;
 
 		logger().info({
 			msg: "getOrCreateWithKey: getting or creating actor via engine api",
@@ -274,7 +267,12 @@ export class RemoteEngineControlClient implements EngineControlClient {
 
 		const gatewayUrl = this.#buildGatewayUrlForTarget(target, path);
 
-		return openWebSocketToGateway(this.#config, gatewayUrl, encoding, params);
+		return openWebSocketToGateway(
+			this.#config,
+			gatewayUrl,
+			encoding,
+			params,
+		);
 	}
 
 	async buildGatewayUrl(target: GatewayTarget): Promise<string> {
@@ -364,13 +362,8 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		throw new Error("kvBatchPut not supported on remote engine client");
 	}
 
-	async kvBatchDelete(
-		_actorId: string,
-		_keys: Uint8Array[],
-	): Promise<void> {
-		throw new Error(
-			"kvBatchDelete not supported on remote engine client",
-		);
+	async kvBatchDelete(_actorId: string, _keys: Uint8Array[]): Promise<void> {
+		throw new Error("kvBatchDelete not supported on remote engine client");
 	}
 
 	async kvDeleteRange(
@@ -378,9 +371,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		_start: Uint8Array,
 		_end: Uint8Array,
 	): Promise<void> {
-		throw new Error(
-			"kvDeleteRange not supported on remote engine client",
-		);
+		throw new Error("kvDeleteRange not supported on remote engine client");
 	}
 
 	displayInformation(): RuntimeDisplayInformation {
@@ -395,7 +386,12 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		const endpoint = getEndpoint(this.#config);
 
 		if ("directId" in target) {
-			return buildActorGatewayUrl(endpoint, target.directId, this.#config.token, path);
+			return buildActorGatewayUrl(
+				endpoint,
+				target.directId,
+				this.#config.token,
+				path,
+			);
 		}
 
 		if ("getForId" in target) {
@@ -416,7 +412,9 @@ export class RemoteEngineControlClient implements EngineControlClient {
 				path,
 				this.#config.maxInputSize,
 				undefined,
-				"getOrCreateForKey" in target ? this.#config.poolName : undefined,
+				"getOrCreateForKey" in target
+					? this.#config.poolName
+					: undefined,
 			);
 		}
 
@@ -428,7 +426,6 @@ export class RemoteEngineControlClient implements EngineControlClient {
 
 		throw new Error("unreachable: unknown gateway target type");
 	}
-
 }
 
 function requestPath(req: Request): string {

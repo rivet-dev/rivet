@@ -12,9 +12,7 @@ import {
 	unreachable,
 } from "./utils";
 import { importWebSocket } from "./websocket.js";
-import {
-	v4 as uuidv4,
-} from "uuid";
+import { v4 as uuidv4 } from "uuid";
 
 export type { HibernatingWebSocketMetadata };
 export { RunnerActor, type ActorConfig };
@@ -1253,9 +1251,10 @@ export class Runner {
 			actorState = {
 				tag: "ActorStateStopped",
 				val: {
-					code: actor.stopIntentSent || this.#draining
-						? protocol.StopCode.Ok
-						: protocol.StopCode.Error,
+					code:
+						actor.stopIntentSent || this.#draining
+							? protocol.StopCode.Ok
+							: protocol.StopCode.Error,
 					message: null,
 				},
 			};

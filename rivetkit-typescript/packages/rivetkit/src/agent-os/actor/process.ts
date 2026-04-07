@@ -12,7 +12,9 @@ import { ensureVm, syncPreventSleep } from "./index";
 type ExecResult = Awaited<
 	ReturnType<import("@rivet-dev/agent-os-core").AgentOs["exec"]>
 >;
-type ExecOptions = Parameters<import("@rivet-dev/agent-os-core").AgentOs["exec"]>[1];
+type ExecOptions = Parameters<
+	import("@rivet-dev/agent-os-core").AgentOs["exec"]
+>[1];
 type SpawnOptions = Parameters<
 	import("@rivet-dev/agent-os-core").AgentOs["spawn"]
 >[2];
@@ -81,7 +83,8 @@ export function buildProcessActions<TConnParams>(
 				command,
 			});
 
-			agentOs.waitProcess(pid)
+			agentOs
+				.waitProcess(pid)
 				.then((exitCode) => {
 					broadcastProcessEvent(c, "processExit", { pid, exitCode });
 					c.log.info({

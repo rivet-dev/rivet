@@ -26,7 +26,7 @@ export async function configureServerlessPool(
 		}
 
 		// Prepare the configuration
-		const customConfig = config.serverless.configurePool;
+		const customConfig = config.configurePool;
 		invariant(customConfig, "configurePool should exist");
 
 		const clientConfig = convertRegistryConfigToClientConfig(config);
@@ -50,19 +50,18 @@ export async function configureServerlessPool(
 				url: customConfig.url,
 				headers: customConfig.headers ?? {},
 				request_lifespan: customConfig.requestLifespan ?? 15 * 60,
-				max_concurrent_actors: customConfig.maxConcurrentActors ?? 100_000,
 				metadata_poll_interval:
 					customConfig.metadataPollInterval ?? 1000,
 
-				max_runners: customConfig.maxRunners ?? 100_000,
-				min_runners: customConfig.minRunners ?? 0,
-				runners_margin: customConfig.runnersMargin ?? 0,
-				slots_per_runner: customConfig.slotsPerRunner ?? 1,
+				// Deprecated engine fields with hardcoded defaults.
+				max_runners: 100_000,
+				min_runners: 0,
+				runners_margin: 0,
+				slots_per_runner: 1,
 			},
 			metadata: customConfig.metadata ?? {},
 			drain_on_version_upgrade:
 				customConfig.drainOnVersionUpgrade ?? true,
-			metadataPollInterval: customConfig.metadataPollInterval ?? 1000,
 		};
 		await updateRunnerConfig(clientConfig, poolName, {
 			datacenters: Object.fromEntries(

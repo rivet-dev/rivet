@@ -19,10 +19,7 @@ import {
 	loggerMiddleware,
 } from "@/common/router";
 import { noopNext } from "@/common/utils";
-import {
-	isSqliteBindingArray,
-	isSqliteBindingObject,
-} from "@/db/shared";
+import { isSqliteBindingArray, isSqliteBindingObject } from "@/db/shared";
 import { inspectorLogger } from "@/inspector/log";
 import type { RegistryConfig } from "@/registry/config";
 import { type GetUpgradeWebSocket, VERSION } from "@/utils";
@@ -55,7 +52,9 @@ export interface MetadataResponse {
 async function loadStaticActor(actorDriver: ActorDriver, actorId: string) {
 	const actor = await actorDriver.loadActor(actorId);
 	if (!isStaticActorInstance(actor)) {
-		throw new Error("dynamic actor cannot be handled by static actor router");
+		throw new Error(
+			"dynamic actor cannot be handled by static actor router",
+		);
 	}
 	return actor;
 }
@@ -475,13 +474,12 @@ export function createActorRouter(
 		// TODO: This is not a clean way of doing this since `/http/` might exist mid-path
 		// Strip the /http prefix from the URL to get the original path
 		const requestUrl =
-			c.req.url ||
-			c.req.raw.url ||
-			`http://actor${c.req.path || "/"}`;
-		const url = requestUrl.startsWith("http://") ||
+			c.req.url || c.req.raw.url || `http://actor${c.req.path || "/"}`;
+		const url =
+			requestUrl.startsWith("http://") ||
 			requestUrl.startsWith("https://")
-			? new URL(requestUrl)
-			: new URL(requestUrl, "http://actor");
+				? new URL(requestUrl)
+				: new URL(requestUrl, "http://actor");
 		const originalPath = url.pathname.replace(/^\/request/, "") || "/";
 
 		// Create a new request with the corrected URL

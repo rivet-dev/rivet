@@ -4,11 +4,7 @@ import {
 	type SqliteRemoteDatabase,
 } from "drizzle-orm/sqlite-proxy";
 import type { DatabaseProvider, RawAccess, SqliteDatabase } from "../config";
-import {
-	AsyncMutex,
-	isSqliteBindingObject,
-	toSqliteBindings,
-} from "../shared";
+import { AsyncMutex, isSqliteBindingObject, toSqliteBindings } from "../shared";
 
 export * from "./sqlite-core";
 
@@ -110,7 +106,10 @@ function createProxyCallback(
 				await db.run(sql, toSqliteBindings(params));
 				result = { rows: [] };
 			} else {
-				const queryResult = await db.query(sql, toSqliteBindings(params));
+				const queryResult = await db.query(
+					sql,
+					toSqliteBindings(params),
+				);
 
 				// drizzle's mapResultRow accesses rows by column index (positional arrays)
 				// so we return raw arrays for all methods
@@ -255,10 +254,7 @@ export function db<
 								isSqliteBindingObject(args[0])
 									? toSqliteBindings(args[0])
 									: toSqliteBindings(args);
-							const result = await db.query(
-								query,
-								bindings,
-							);
+							const result = await db.query(query, bindings);
 							rows = result.rows.map((row: unknown[]) => {
 								const obj: Record<string, unknown> = {};
 								for (

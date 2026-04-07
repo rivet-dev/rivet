@@ -29,9 +29,7 @@ export const dbPragmaMigrationActor = actor({
 	}),
 	actions: {
 		insertItem: async (c, name: string) => {
-			await c.db.execute(
-				`INSERT INTO items (name) VALUES ('${name}')`,
-			);
+			await c.db.execute(`INSERT INTO items (name) VALUES ('${name}')`);
 			const results = await c.db.execute<{ id: number }>(
 				"SELECT last_insert_rowid() as id",
 			);

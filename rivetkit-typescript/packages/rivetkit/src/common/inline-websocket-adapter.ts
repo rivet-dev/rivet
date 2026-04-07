@@ -153,10 +153,7 @@ export class InlineWebSocketAdapter {
 				if (!next) {
 					continue;
 				}
-				this.#dispatchClientMessage(
-					next.data,
-					next.rivetMessageIndex,
-				);
+				this.#dispatchClientMessage(next.data, next.rivetMessageIndex);
 			}
 		} catch (err) {
 			this.#handleError(err);

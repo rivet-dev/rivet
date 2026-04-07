@@ -1,7 +1,10 @@
 import type { RunContext } from "@/actor/contexts/run";
 import type { Client } from "@/client/client";
 import type { Registry } from "@/registry";
-import type { BaseActorDefinition, AnyActorDefinition } from "@/actor/definition";
+import type {
+	BaseActorDefinition,
+	AnyActorDefinition,
+} from "@/actor/definition";
 import type {
 	AnyDatabaseProvider,
 	InferDatabaseClient,

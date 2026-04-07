@@ -426,7 +426,8 @@ export function createDatabaseVfs(
 				);
 
 				for (const desc of descendants) {
-					const newDescPath = newPrefix + desc.path.slice(prefix.length);
+					const newDescPath =
+						newPrefix + desc.path.slice(prefix.length);
 					await db.execute(
 						"UPDATE agent_os_fs_entries SET path = ? WHERE path = ?",
 						newDescPath,

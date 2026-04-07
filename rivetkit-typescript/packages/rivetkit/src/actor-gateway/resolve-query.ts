@@ -35,11 +35,7 @@ export async function resolvePathBasedActorPath(
 
 	assertQueryNamespaceMatchesConfig(config, actorPathInfo.namespace);
 
-	const actorId = await resolveQueryActorId(
-		engineClient,
-		c,
-		actorPathInfo,
-	);
+	const actorId = await resolveQueryActorId(engineClient, c, actorPathInfo);
 
 	logger().debug({
 		msg: "resolved query gateway path to actor",
@@ -104,7 +100,7 @@ function assertQueryNamespaceMatchesConfig(
 		return;
 	}
 
-		throw new errors.InvalidRequest(
+	throw new errors.InvalidRequest(
 		`query gateway namespace '${namespace}' does not match runtime namespace '${config.namespace}'`,
 	);
 }

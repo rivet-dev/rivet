@@ -1,7 +1,10 @@
 import { ACTOR_CONTEXT_INTERNAL_SYMBOL } from "@/actor/contexts/base/actor";
 import type { RunContext } from "@/actor/contexts/run";
 import type { AnyDatabaseProvider } from "@/actor/database";
-import type { AnyActorInstance, AnyStaticActorInstance } from "@/actor/instance/mod";
+import type {
+	AnyActorInstance,
+	AnyStaticActorInstance,
+} from "@/actor/instance/mod";
 import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
 import { RUN_FUNCTION_CONFIG_SYMBOL } from "@/actor/config";
 import { stringifyError } from "@/utils";

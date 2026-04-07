@@ -1,7 +1,16 @@
 import type { Logger } from "pino";
-import { VirtualWebSocket, type UniversalWebSocket, type RivetMessageEvent } from "@rivetkit/virtual-websocket";
+import {
+	VirtualWebSocket,
+	type UniversalWebSocket,
+	type RivetMessageEvent,
+} from "@rivetkit/virtual-websocket";
 import type { Tunnel } from "./tunnel";
-import { MAX_PAYLOAD_SIZE, wrappingAddU16, wrappingLteU16, wrappingSubU16 } from "./utils";
+import {
+	MAX_PAYLOAD_SIZE,
+	wrappingAddU16,
+	wrappingLteU16,
+	wrappingSubU16,
+} from "./utils";
 
 export const HIBERNATABLE_SYMBOL = Symbol("hibernatable");
 
@@ -77,18 +86,28 @@ export class WebSocketTunnelAdapter {
 
 			messageData = data;
 		} else if (data instanceof ArrayBuffer) {
-			if (data.byteLength > MAX_PAYLOAD_SIZE) throw new Error("WebSocket message too large");
+			if (data.byteLength > MAX_PAYLOAD_SIZE)
+				throw new Error("WebSocket message too large");
 
 			isBinary = true;
 			messageData = data;
 		} else if (ArrayBuffer.isView(data)) {
-			if (data.byteLength > MAX_PAYLOAD_SIZE) throw new Error("WebSocket message too large");
+			if (data.byteLength > MAX_PAYLOAD_SIZE)
+				throw new Error("WebSocket message too large");
 
 			isBinary = true;
 			const view = data;
-			const buffer = view.buffer instanceof SharedArrayBuffer
-				? new Uint8Array(view.buffer, view.byteOffset, view.byteLength).slice().buffer
-				: view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
+			const buffer =
+				view.buffer instanceof SharedArrayBuffer
+					? new Uint8Array(
+							view.buffer,
+							view.byteOffset,
+							view.byteLength,
+						).slice().buffer
+					: view.buffer.slice(
+							view.byteOffset,
+							view.byteOffset + view.byteLength,
+						);
 			messageData = buffer as ArrayBuffer;
 		} else {
 			throw new Error("Unsupported data type");
@@ -101,7 +120,11 @@ export class WebSocketTunnelAdapter {
 	_handleOpen(requestId: ArrayBuffer): void {
 		if (this.#readyState !== 0) return;
 		this.#readyState = 1;
-		this.#ws.dispatchEvent({ type: "open", rivetRequestId: requestId, target: this.#ws });
+		this.#ws.dispatchEvent({
+			type: "open",
+			rivetRequestId: requestId,
+			target: this.#ws,
+		});
 	}
 
 	// Called by Tunnel when message is received
@@ -147,7 +170,10 @@ export class WebSocketTunnelAdapter {
 					expectedIndex,
 					receivedIndex: serverMessageIndex,
 					closeReason,
-					gap: wrappingSubU16(wrappingSubU16(serverMessageIndex, previousIndex), 1),
+					gap: wrappingSubU16(
+						wrappingSubU16(serverMessageIndex, previousIndex),
+						1,
+					),
 				});
 				this.#close(1008, closeReason, true);
 				return true;
@@ -162,7 +188,10 @@ export class WebSocketTunnelAdapter {
 			if (this.#binaryType === "nodebuffer") {
 				messageData = Buffer.from(data);
 			} else if (this.#binaryType === "arraybuffer") {
-				messageData = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+				messageData = data.buffer.slice(
+					data.byteOffset,
+					data.byteOffset + data.byteLength,
+				);
 			}
 		}
 
@@ -178,7 +207,11 @@ export class WebSocketTunnelAdapter {
 	}
 
 	// Called by Tunnel when close is received
-	_handleClose(_requestId: ArrayBuffer, code?: number, reason?: string): void {
+	_handleClose(
+		_requestId: ArrayBuffer,
+		code?: number,
+		reason?: string,
+	): void {
 		this.#close(code, reason, true);
 	}
 
@@ -192,7 +225,11 @@ export class WebSocketTunnelAdapter {
 		this.#close(code, reason, true);
 	}
 
-	#close(code: number | undefined, reason: string | undefined, sendCallback: boolean): void {
+	#close(
+		code: number | undefined,
+		reason: string | undefined,
+		sendCallback: boolean,
+	): void {
 		if (this.#readyState >= 2) return;
 
 		this.#readyState = 2;

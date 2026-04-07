@@ -1,5 +1,8 @@
 import { ActorNotFound, InvalidRequest } from "@/actor/errors";
-import type { GatewayTarget, EngineControlClient } from "@/engine-client/driver";
+import type {
+	GatewayTarget,
+	EngineControlClient,
+} from "@/engine-client/driver";
 
 /**
  * Resolves a GatewayTarget to a concrete actor ID string.

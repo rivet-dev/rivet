@@ -18,10 +18,7 @@ export function runActorDbStressTests(driverTestConfig: DriverTestConfig) {
 		test(
 			"destroy during long-running DB operation completes without crash",
 			async (c) => {
-				const { client } = await setupDriverTest(
-					c,
-					driverTestConfig,
-				);
+				const { client } = await setupDriverTest(c, driverTestConfig);
 
 				// Start multiple actors and kick off long DB operations,
 				// then destroy them mid-flight. The test passes if no
@@ -66,10 +63,7 @@ export function runActorDbStressTests(driverTestConfig: DriverTestConfig) {
 		test(
 			"rapid create-insert-destroy cycles handle DB lifecycle correctly",
 			async (c) => {
-				const { client } = await setupDriverTest(
-					c,
-					driverTestConfig,
-				);
+				const { client } = await setupDriverTest(c, driverTestConfig);
 
 				// Perform rapid cycles of create -> insert -> destroy.
 				// This exercises the close_database path racing with
@@ -96,10 +90,7 @@ export function runActorDbStressTests(driverTestConfig: DriverTestConfig) {
 		test(
 			"DB operations complete without excessive blocking",
 			async (c) => {
-				const { client } = await setupDriverTest(
-					c,
-					driverTestConfig,
-				);
+				const { client } = await setupDriverTest(c, driverTestConfig);
 
 				const actor = client.dbStressActor.getOrCreate([
 					`stress-health-${crypto.randomUUID()}`,
@@ -124,6 +115,5 @@ export function runActorDbStressTests(driverTestConfig: DriverTestConfig) {
 			},
 			STRESS_TEST_TIMEOUT_MS,
 		);
-
 	});
 }

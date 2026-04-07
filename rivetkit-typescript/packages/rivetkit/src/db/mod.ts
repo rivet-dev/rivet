@@ -1,9 +1,5 @@
 import type { DatabaseProvider, RawAccess } from "./config";
-import {
-	AsyncMutex,
-	isSqliteBindingObject,
-	toSqliteBindings,
-} from "./shared";
+import { AsyncMutex, isSqliteBindingObject, toSqliteBindings } from "./shared";
 
 export type { RawAccess } from "./config";
 

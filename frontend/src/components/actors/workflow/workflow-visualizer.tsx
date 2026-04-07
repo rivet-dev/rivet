@@ -198,7 +198,9 @@ export function WorkflowVisualizer({
 										: "cursor-default hover:bg-accent hover:text-accent-foreground",
 								)}
 								onClick={() => {
-									contextMenu.onReplayStep(contextMenu.entryId);
+									contextMenu.onReplayStep(
+										contextMenu.entryId,
+									);
 									setContextMenu(null);
 								}}
 							>

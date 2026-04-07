@@ -41,7 +41,8 @@ describe("hibernatable websocket ack state", () => {
 		handleInboundHibernatableWebSocketMessage({
 			connId: "conn-1",
 			hibernatable,
-			messageLength: HIBERNATABLE_WEBSOCKET_BUFFERED_MESSAGE_SIZE_THRESHOLD,
+			messageLength:
+				HIBERNATABLE_WEBSOCKET_BUFFERED_MESSAGE_SIZE_THRESHOLD,
 			rivetMessageIndex: 1,
 			ackState,
 			saveState,

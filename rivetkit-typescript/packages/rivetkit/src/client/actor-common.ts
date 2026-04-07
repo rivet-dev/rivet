@@ -1,4 +1,7 @@
-import type { BaseActorDefinition, AnyActorDefinition } from "@/actor/definition";
+import type {
+	BaseActorDefinition,
+	AnyActorDefinition,
+} from "@/actor/definition";
 import type {
 	EventSchemaConfig,
 	InferEventArgs,
@@ -33,7 +36,17 @@ export type ActorActionFunction<
  */
 export type ActorDefinitionActions<AD extends AnyActorDefinition> =
 	// biome-ignore lint/suspicious/noExplicitAny: safe to use any here
-	AD extends BaseActorDefinition<any, any, any, any, any, any, any, any, infer R>
+	AD extends BaseActorDefinition<
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		infer R
+	>
 		? {
 				[K in keyof R]: R[K] extends (
 					...args: infer Args
@@ -79,7 +92,17 @@ type ActorEventSubscribe<TEvents extends EventSchemaConfig> = {
 
 export type ActorDefinitionQueueSend<AD extends AnyActorDefinition> =
 	// biome-ignore lint/suspicious/noExplicitAny: safe to use any here
-	AD extends BaseActorDefinition<any, any, any, any, any, any, any, infer Q, any>
+	AD extends BaseActorDefinition<
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		infer Q,
+		any
+	>
 		? Q extends QueueSchemaConfig
 			? { send: ActorQueueSend<Q> }
 			: never
@@ -87,7 +110,17 @@ export type ActorDefinitionQueueSend<AD extends AnyActorDefinition> =
 
 export type ActorDefinitionEventSubscriptions<AD extends AnyActorDefinition> =
 	// biome-ignore lint/suspicious/noExplicitAny: safe to use any here
-	AD extends BaseActorDefinition<any, any, any, any, any, any, infer E, any, any>
+	AD extends BaseActorDefinition<
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		infer E,
+		any,
+		any
+	>
 		? E extends EventSchemaConfig
 			? {
 					on: ActorEventSubscribe<E>;

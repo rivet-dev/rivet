@@ -35,11 +35,10 @@ export function buildServerlessRouter(config: RegistryConfig) {
 			if (!parseResult.success) {
 				throw new InvalidRequest(
 					parseResult.error.issues[0]?.message ??
-					"invalid serverless start headers",
+						"invalid serverless start headers",
 				);
 			}
-			const { endpoint, token, poolName, namespace } =
-				parseResult.data;
+			const { endpoint, token, poolName, namespace } = parseResult.data;
 
 			logger().debug({
 				msg: "received serverless runner start request",

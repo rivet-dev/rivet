@@ -6,7 +6,7 @@ import { logger } from "@/registry/log";
 // TODO: Go back to dynamic import for this
 import getPort from "get-port";
 
-const DEFAULT_PORT = 6420;
+const DEFAULT_PORT = 6421;
 export type ServeStatic =
 	typeof import("@hono/node-server/serve-static").serveStatic;
 const serveStaticLoaderPromises: Partial<
@@ -37,7 +37,7 @@ export async function findFreePort(
 
 export async function crossPlatformServe(
 	config: RegistryConfig,
-	managerPort: number,
+	httpPort: number,
 	app: Hono<any>,
 	runtime: Runtime = detectRuntime(),
 ): Promise<{ upgradeWebSocket: any; closeServer?: () => void }> {
@@ -45,13 +45,13 @@ export async function crossPlatformServe(
 
 	switch (runtime) {
 		case "deno":
-			return serveDeno(config, managerPort, app);
+			return serveDeno(config, httpPort, app);
 		case "bun":
-			return serveBun(config, managerPort, app);
+			return serveBun(config, httpPort, app);
 		case "node":
-			return serveNode(config, managerPort, app);
+			return serveNode(config, httpPort, app);
 		default:
-			return serveNode(config, managerPort, app);
+			return serveNode(config, httpPort, app);
 	}
 }
 
@@ -87,7 +87,7 @@ export async function loadRuntimeServeStatic(
 
 async function serveNode(
 	config: RegistryConfig,
-	managerPort: number,
+	httpPort: number,
 	app: Hono<any>,
 ): Promise<{ upgradeWebSocket: any; closeServer: () => void }> {
 	// Import @hono/node-server using string variable to prevent static analysis
@@ -130,8 +130,8 @@ async function serveNode(
 	});
 
 	// Start server
-	const port = managerPort;
-	const hostname = config.managerHost;
+	const port = httpPort;
+	const hostname = config.httpHost;
 	const server = serve({ fetch: app.fetch, port, hostname }, () =>
 		logger().info({ msg: "server listening", port, hostname }),
 	);
@@ -146,7 +146,7 @@ async function serveNode(
 
 async function serveDeno(
 	config: RegistryConfig,
-	managerPort: number,
+	httpPort: number,
 	app: Hono<any>,
 ): Promise<{ upgradeWebSocket: any }> {
 	// Import hono/deno using string variable to prevent static analysis
@@ -166,8 +166,8 @@ async function serveDeno(
 		process.exit(1);
 	}
 
-	const port = config.managerPort;
-	const hostname = config.managerHost;
+	const port = httpPort;
+	const hostname = config.httpHost;
 
 	// Use Deno.serve
 	Deno.serve({ port, hostname }, app.fetch);
@@ -178,7 +178,7 @@ async function serveDeno(
 
 async function serveBun(
 	config: RegistryConfig,
-	managerPort: number,
+	httpPort: number,
 	app: Hono<any>,
 ): Promise<{ upgradeWebSocket: any }> {
 	// Import hono/bun using string variable to prevent static analysis
@@ -200,8 +200,8 @@ async function serveBun(
 
 	const { websocket, upgradeWebSocket } = createBunWebSocket();
 
-	const port = config.managerPort;
-	const hostname = config.managerHost;
+	const port = httpPort;
+	const hostname = config.httpHost;
 
 	// Use Bun.serve
 	// @ts-expect-error - Bun global

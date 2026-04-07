@@ -222,7 +222,8 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 			for (
 				let i = 0;
 				i < 40 &&
-				(state.tryStepFailure === null || state.tryJoinFailure === null);
+				(state.tryStepFailure === null ||
+					state.tryJoinFailure === null);
 				i++
 			) {
 				await waitFor(driverTestConfig, 50);
@@ -382,34 +383,33 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 			);
 		});
 
-			test.skipIf(driverTestConfig.skip?.sleep)(
-				"completed workflows sleep instead of destroying the actor",
-				async (c) => {
-					const { client } = await setupDriverTest(c, driverTestConfig);
-					const actor = client.workflowCompleteActor.getOrCreate([
-						"workflow-complete",
-					]);
+		test.skipIf(driverTestConfig.skip?.sleep)(
+			"completed workflows sleep instead of destroying the actor",
+			async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor = client.workflowCompleteActor.getOrCreate([
+					"workflow-complete",
+				]);
 
-					let state = await actor.getState();
-					for (
-						let i = 0;
-						i < 20 &&
-						(state.sleepCount === 0 || state.startCount < 2);
-						i++
-					) {
-						await waitFor(driverTestConfig, 100);
-						try {
-							state = await actor.getState();
-						} catch (error) {
-							if (!isActorStoppingConnectionError(error)) {
-								throw error;
-							}
+				let state = await actor.getState();
+				for (
+					let i = 0;
+					i < 20 && (state.sleepCount === 0 || state.startCount < 2);
+					i++
+				) {
+					await waitFor(driverTestConfig, 100);
+					try {
+						state = await actor.getState();
+					} catch (error) {
+						if (!isActorStoppingConnectionError(error)) {
+							throw error;
 						}
 					}
-					expect(state.runCount).toBeGreaterThan(0);
-					expect(state.sleepCount).toBeGreaterThan(0);
-					expect(state.startCount).toBeGreaterThan(1);
-				},
+				}
+				expect(state.runCount).toBeGreaterThan(0);
+				expect(state.sleepCount).toBeGreaterThan(0);
+				expect(state.startCount).toBeGreaterThan(1);
+			},
 		);
 
 		test("workflow steps can destroy the actor", async (c) => {
@@ -426,16 +426,14 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 				expect(wasDestroyed, "actor onDestroy not called").toBeTruthy();
 			});
 
-				await vi.waitFor(async () => {
-					let actorRunning = false;
-					try {
-						await client.workflowDestroyActor
-							.get([actorKey])
-							.resolve();
-						actorRunning = true;
-					} catch (err) {
-						expect((err as ActorError).group).toBe("actor");
-						expect((err as ActorError).code).toBe("not_found");
+			await vi.waitFor(async () => {
+				let actorRunning = false;
+				try {
+					await client.workflowDestroyActor.get([actorKey]).resolve();
+					actorRunning = true;
+				} catch (err) {
+					expect((err as ActorError).group).toBe("actor");
+					expect((err as ActorError).code).toBe("not_found");
 				}
 
 				expect(actorRunning, "actor still running").toBeFalsy();
