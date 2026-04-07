@@ -640,7 +640,6 @@ For detailed setup instructions, see the quickstart guides:
 - Node.js & Bun: https://rivet.dev/docs/actors/quickstart/backend
 - React: https://rivet.dev/docs/actors/quickstart/react
 - Next.js: https://rivet.dev/docs/actors/quickstart/next-js
-- Cloudflare Workers: https://rivet.dev/docs/actors/quickstart/cloudflare-workers
 
 ## If You Get Stuck
 

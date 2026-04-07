@@ -2,17 +2,10 @@
 	"$schema": "https://turbo.build/schema.json",
 	"extends": ["//"],
 	"tasks": {
-		"manager-openapi-gen": {
-			"inputs": [
-				"package.json",
-				"packages/rivetkit/src/manager/router.ts"
-			],
-			"dependsOn": ["build:schema"]
-		},
 		"dump-asyncapi": {
 			"inputs": [
 				"package.json",
-				"packages/rivetkit/src/manager/router.ts"
+				"packages/rivetkit/src/runtime-router/router.ts"
 			],
 			"dependsOn": ["build:schema"]
 		},
@@ -58,7 +51,6 @@
 		"build": {
 			"dependsOn": [
 				"^build",
-				"manager-openapi-gen",
 				"dump-asyncapi",
 				"build:schema",
 				"build:dynamic-isolate-runtime",

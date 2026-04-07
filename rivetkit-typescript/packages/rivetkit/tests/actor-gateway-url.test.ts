@@ -4,11 +4,11 @@ import {
 	ClientConfigSchema,
 	DEFAULT_MAX_QUERY_INPUT_SIZE,
 } from "@/client/config";
-import { parseActorPath } from "@/manager/gateway";
+import { parseActorPath } from "@/actor-gateway/gateway";
 import {
 	buildActorGatewayUrl,
 	buildActorQueryGatewayUrl,
-} from "@/remote-manager-driver/actor-websocket-client";
+} from "@/engine-client/actor-websocket-client";
 import { toBase64Url } from "./test-utils";
 
 describe("gateway URL builders", () => {

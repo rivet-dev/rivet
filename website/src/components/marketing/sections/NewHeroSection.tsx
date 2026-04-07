@@ -464,7 +464,7 @@ export function NewHeroSection() {
                 >
                   Quickstart – 5 Mins
                 </a>
-                <a href='https://github.com/rivet-gg/rivet'
+                <a href='https://github.com/rivet-dev/rivet'
                   className='rounded-lg px-8 py-3.5 text-center font-medium transition-all duration-200'
                   style={{
                     border: '1px solid #252525',

@@ -37,10 +37,6 @@ const footer = {
 	],
 	resources: [
 		{ name: "Blog", href: "/blog" },
-		{
-			name: "Rivet vs Cloudflare Workers",
-			href: "/rivet-vs-cloudflare-workers",
-		},
 		{ name: "YC & Speedrun Deal", href: "/startups" },
 		{ name: "Open-Source Friends", href: "/oss-friends" },
 		{ name: "Press Kit", href: "https://releases.rivet.dev/press-kit.zip" },

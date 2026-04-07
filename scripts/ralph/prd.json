@@ -72,9 +72,9 @@
       "title": "Add SQLite proxy driver tests and fixture actors",
       "description": "As a developer, I need tests to verify dynamic actors can use db() and drizzle through the SQLite proxy bridge.",
       "acceptanceCriteria": [
-        "Add fixture actors in fixtures/driver-test-suite/ that use db() (raw) with a simple schema",
+        "Add shared fixture actors that use db() (raw) with a simple schema",
         "Add fixture actors that use db() from rivetkit/db/drizzle with schema + migrations",
-        "Add driver test in src/driver-test-suite/tests/ that creates a dynamic actor using raw db(), runs migrations, inserts rows, and queries them back",
+        "Add an engine-focused integration test that creates a dynamic actor using raw db(), runs migrations, inserts rows, and queries them back",
         "Test verifies data persists across actor sleep/wake cycles",
         "Test verifies drizzle queries work through the proxy",
         "Tests pass",
@@ -82,7 +82,7 @@
       ],
       "priority": 5,
       "passes": false,
-      "notes": "Tests should run in the shared driver-test-suite so both file-system and engine drivers execute them."
+      "notes": "Tests should run in the shared engine-focused integration suite so the single runtime path executes them."
     },
     {
       "id": "US-006",
@@ -316,7 +316,7 @@
       "title": "Add failed-start reload driver tests",
       "description": "As a developer, I need comprehensive tests for the failed-start lifecycle to ensure parity between drivers.",
       "acceptanceCriteria": [
-        "Tests are in src/driver-test-suite/ so both file-system and engine drivers run the same cases",
+        "Tests run in the shared engine-focused integration suite so the single runtime path uses the same cases",
         "Test: normal request retries startup after backoff expires",
         "Test: normal request during active backoff returns stored failed-start error",
         "Test: no background retry loop runs while actor is in failed-start backoff",

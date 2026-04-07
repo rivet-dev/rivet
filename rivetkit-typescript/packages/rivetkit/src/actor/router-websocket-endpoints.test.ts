@@ -12,7 +12,7 @@ import {
  *
  * NOTE: The driver-file-system end-to-end tests pass because the driver
  * correctly strips query parameters before calling routeWebSocket
- * (see FileSystemManagerDriver.openWebSocket). However, the bug still
+ * (see FileSystemEngineControlClient.openWebSocket). However, the bug still
  * exists in routeWebSocket itself and could be triggered by other callers
  * (e.g., engine driver's runnerWebSocket which passes requestPath directly).
  */

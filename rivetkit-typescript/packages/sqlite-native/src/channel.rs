@@ -7,8 +7,7 @@
 //! One channel per process, shared across all actors.
 //! See `docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md` for the full spec.
 //!
-//! End-to-end tests are in the driver-test-suite
-//! (`rivetkit-typescript/packages/rivetkit/src/driver-test-suite/`).
+//! End-to-end tests live in the RivetKit integration tests.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;

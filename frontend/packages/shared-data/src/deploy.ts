@@ -50,16 +50,6 @@ export const deployOptions = [
 		icon: faRailway as any,
 	},
 	{
-		displayName: "Cloudflare Workers",
-		name: "cloudflare-workers" as const,
-		shortTitle: "Cloudflare",
-		href: "/docs/connect/cloudflare-workers",
-		description:
-			"Run your app on Cloudflare's global edge network with Durable Objects",
-		icon: faCloudflare as any,
-		specializedPlatform: true,
-	},
-	{
 		displayName: "Kubernetes",
 		name: "kubernetes" as const,
 		href: "/docs/connect/kubernetes",

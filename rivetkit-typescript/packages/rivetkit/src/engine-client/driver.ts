@@ -1,0 +1,118 @@
+import type { Hono, Context as HonoContext } from "hono";
+import type { ActorKey, Encoding, UniversalWebSocket } from "@/actor/mod";
+import type { NativeSqliteConfig } from "@/db/config";
+import type { RegistryConfig } from "@/registry/config";
+import type { GetUpgradeWebSocket } from "@/utils";
+import type { ActorQuery, CrashPolicy } from "@/client/query";
+
+export type GatewayTarget = { directId: string } | ActorQuery;
+
+export interface EngineControlClient {
+	getForId(input: GetForIdInput): Promise<ActorOutput | undefined>;
+	getWithKey(input: GetWithKeyInput): Promise<ActorOutput | undefined>;
+	getOrCreateWithKey(
+		input: GetOrCreateWithKeyInput,
+	): Promise<ActorOutput>;
+	createActor(input: CreateInput): Promise<ActorOutput>;
+	listActors(input: ListActorsInput): Promise<ActorOutput[]>;
+
+	sendRequest(
+		target: GatewayTarget,
+		actorRequest: Request,
+	): Promise<Response>;
+	openWebSocket(
+		path: string,
+		target: GatewayTarget,
+		encoding: Encoding,
+		params: unknown,
+	): Promise<UniversalWebSocket>;
+	proxyRequest(
+		c: HonoContext,
+		actorRequest: Request,
+		actorId: string,
+	): Promise<Response>;
+	proxyWebSocket(
+		c: HonoContext,
+		path: string,
+		actorId: string,
+		encoding: Encoding,
+		params: unknown,
+	): Promise<Response>;
+	buildGatewayUrl(target: GatewayTarget): Promise<string>;
+	displayInformation(): RuntimeDisplayInformation;
+	extraStartupLog?: () => Record<string, unknown>;
+	modifyRuntimeRouter?: (config: RegistryConfig, router: Hono) => void;
+	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void;
+	shutdown?(): void;
+	setKvChannelShutdown?(fn: () => void): void;
+	hardCrashActor?(actorId: string): Promise<void>;
+	setNativeSqliteConfig?(config: NativeSqliteConfig): void;
+	kvGet(actorId: string, key: Uint8Array): Promise<string | null>;
+	kvBatchGet(
+		actorId: string,
+		keys: Uint8Array[],
+	): Promise<(Uint8Array | null)[]>;
+	kvBatchPut(
+		actorId: string,
+		entries: [Uint8Array, Uint8Array][],
+	): Promise<void>;
+	kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void>;
+	kvDeleteRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+	): Promise<void>;
+}
+
+export interface RuntimeDisplayInformation {
+	properties: Record<string, string>;
+}
+
+export interface GetForIdInput {
+	c?: HonoContext | undefined;
+	name: string;
+	actorId: string;
+}
+
+export interface GetWithKeyInput {
+	c?: HonoContext | undefined;
+	name: string;
+	key: ActorKey;
+}
+
+export interface GetOrCreateWithKeyInput {
+	c?: HonoContext | undefined;
+	name: string;
+	key: ActorKey;
+	input?: unknown;
+	region?: string;
+	crashPolicy?: CrashPolicy;
+}
+
+export interface CreateInput {
+	c?: HonoContext | undefined;
+	name: string;
+	key: ActorKey;
+	input?: unknown;
+	region?: string;
+	crashPolicy?: CrashPolicy;
+}
+
+export interface ListActorsInput {
+	c?: HonoContext | undefined;
+	name: string;
+	key?: string;
+	includeDestroyed?: boolean;
+}
+
+export interface ActorOutput {
+	actorId: string;
+	name: string;
+	key: ActorKey;
+	createTs?: number;
+	startTs?: number | null;
+	connectableTs?: number | null;
+	sleepTs?: number | null;
+	destroyTs?: number | null;
+	error?: unknown;
+}

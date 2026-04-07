@@ -30,9 +30,9 @@ Similar to Durable Objects, Rivet Actors provide long-lived, stateful actors wit
 
 - **No Database Round Trips**: State is stored on the same machine as your compute so reads and writes are ultra-fast. No database round trips, no latency spikes.
 
-- **Sleep When Idle, No Cold Starts**: Actors automatically hibernate when idle and wake up instantly on demand with zero cold start delays. Only pay for active compute time.
+- **Sleep When Idle, Near-Zero Cold Starts**: Actors automatically hibernate when idle and wake up quickly on demand. Only pay for active compute time.
 
-- **Architected For Insane Scale**: Automatically scale from zero to millions of concurrent actors. Pay only for what you use with instant scaling and no cold starts.
+- **Architected For Insane Scale**: Automatically scale from zero to millions of concurrent actors. Pay only for what you use with instant scaling and near-zero cold starts.
 
 - **No Vendor Lock-In**: Open-source and fully self-hostable.
 
@@ -42,7 +42,7 @@ Running Rivet Actors on Vercel provides many benefits:
 
 - **Industry standard runtime**: Runs on Node.js today (with Bun coming soon to Vercel Functions). No proprietary runtime, use the Node APIs and NPM packages you already know.
 - **More memory & CPU**: Vercel Functions let you configure memory and vCPU per function (up to 4 GB RAM, 2 vCPU cores). This enables larger PDF processing, multiplayer games, agent context, and heavier compute that would exceed typical isolate caps.
-- **Scale to zero with zero cold starts**: Actors scale down when idle to eliminate costs, yet wake instantly on demand with hibernation preserving state for immediate activation.
+- **Scale to zero with near-zero cold starts**: Actors scale down when idle to eliminate costs, yet wake quickly on demand with hibernation preserving state for immediate activation.
 - **Regions you choose**: Set regions directly to keep actors close to your primary database or within compliance boundaries.
 - **Developer experience**: Deploy actors alongside your Next.js app in one place, leverage Vercel's best-in-class observability, and use Rivet's built-in inspector for deep visibility into your actors.
 
@@ -52,11 +52,11 @@ Until today, Vercel Functions have [not supported WebSockets](https://vercel.com
 
 This unlocks use cases like:
 
-- Collaborative documents ([example code](https://github.com/rivet-dev/rivetkit/tree/main/examples/crdt/src/backend/registry.ts))
-- Chat rooms ([example code](https://github.com/rivet-dev/rivetkit/tree/main/examples/chat-room/src/backend/registry.ts))
-- Local-first sync ([example code](https://github.com/rivet-dev/rivetkit/tree/main/examples/sync/src/backend/registry.ts))
-- Multiplayer games ([example code](https://github.com/rivet-dev/rivetkit/tree/main/examples/game/src/backend/registry.ts))
-- Agent streams ([example code](https://github.com/rivet-dev/rivetkit/tree/main/examples/ai-agent/src/backend/registry.ts))
+- Collaborative documents ([example code](https://github.com/rivet-dev/rivet/tree/main/examples/collaborative-document))
+- Chat rooms ([example code](https://github.com/rivet-dev/rivet/tree/main/examples/chat-room))
+- Local-first sync ([example code](https://github.com/rivet-dev/rivet/tree/main/examples/state))
+- Multiplayer games ([example code](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game))
+- Agent streams ([example code](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent))
 
 Read more about [realtime events](/docs/actors/events/) and the [raw WebSocket handler](/docs/actors/fetch-and-websocket-handler/).
 
@@ -237,7 +237,7 @@ export function AgentChat() {
 ## FAQ
 
 - **Do Rivet Actors scale to zero?** Yes. Actors run as a Vercel Function invocation. When no actors are active, no Vercel Functions will be running.
-- **Do Rivet Actors have coldstarts?** No. Vercel's platform enables Rivet Actors to scale to zero without coldstarts.
+- **Do Rivet Actors have coldstarts?** They have near-zero cold starts. Vercel's platform and Rivet's hibernation model keep wake-up latency very low.
 - **Do I pay for Vercel Function invocation time for the entire lifespan of my Rivet Actor?** No. Rivet Actors go to sleep when not in use and wake up immediately when activated again.
 - **Can Rivet Actors live longer than Vercel Function timeouts?** Yes, actors have a transparent migration system that allows it to migrate between processes in order to live longer than your timeout.
 - **How does Rivet make WebSockets work on Vercel?** Rivet's tunneling technology works similar to tools like Ngrok or Tailscale which enables us to achieve advanced routing, including support for WebSockets.
@@ -249,4 +249,3 @@ export function AgentChat() {
 
 - [GitHub Issues](https://github.com/rivet-dev/rivet/issues)  
 - [Discord](https://rivet.dev/discord)
-

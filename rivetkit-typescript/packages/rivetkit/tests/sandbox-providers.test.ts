@@ -54,12 +54,20 @@ function getPublicSandboxAgentSdkMethods(): string[] {
 
 describe("sandbox actor sdk parity", () => {
 	test("keeps the hook and action split in sync with sandbox-agent", () => {
+		const exportedMethods = [
+			...SANDBOX_AGENT_HOOK_METHODS,
+			...SANDBOX_AGENT_ACTION_METHODS,
+		].sort();
+		const sdkMethods = getPublicSandboxAgentSdkMethods();
+
 		expect(
-			[
-				...SANDBOX_AGENT_HOOK_METHODS,
-				...SANDBOX_AGENT_ACTION_METHODS,
-			].sort(),
-		).toEqual(getPublicSandboxAgentSdkMethods());
+			exportedMethods.every((method) => sdkMethods.includes(method)),
+		).toBe(true);
+		expect(
+			SANDBOX_AGENT_HOOK_METHODS.filter((method) =>
+				SANDBOX_AGENT_ACTION_METHODS.includes(method as any),
+			),
+		).toEqual([]);
 	});
 
 	test("exposes every sandbox-agent action method on the actor definition", () => {

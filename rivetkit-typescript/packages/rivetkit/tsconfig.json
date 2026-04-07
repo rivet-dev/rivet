@@ -9,7 +9,6 @@
 			"rivetkit": ["./src/mod.ts"],
 			"rivetkit/errors": ["./src/actor/errors.ts"],
 			"rivetkit/dynamic": ["./src/dynamic/mod.ts"],
-			"rivetkit/errors": ["./src/actor/errors.ts"],
 			"rivetkit/utils": ["./src/utils.ts"],
 			"rivetkit/sandbox": ["./src/sandbox/index.ts"],
 			"rivetkit/sandbox/docker": ["./src/sandbox/providers/docker.ts"],
@@ -22,7 +21,6 @@
 		"src/**/*",
 		"tests/**/*",
 		"scripts/**/*",
-		"fixtures/driver-test-suite/**/*",
 		"dist/schemas/**/*",
 		"runtime/index.ts",
 		"../sqlite-vfs/src/wasm.d.ts"

@@ -8,7 +8,7 @@ Use this client to connect to RivetKit services from Python applications.
 
 - [Quickstart](https://rivetkit.org/introduction)
 - [Documentation](https://rivetkit.org/clients/python)
-- [Examples](https://github.com/rivet-dev/rivetkit/tree/main/examples)
+- [Examples](https://github.com/rivet-dev/rivet/tree/main/examples)
 
 ## Getting Started
 
@@ -25,7 +25,7 @@ from python_rivetkit_client import AsyncClient as ActorClient
 import asyncio
 
 async def main():
-    # Create a client connected to your RivetKit manager
+    # Create a client connected to your RivetKit endpoint
     client = ActorClient("http://localhost:8080")
 
     # Connect to a chat room actor
@@ -57,8 +57,8 @@ if __name__ == "__main__":
 - Join our [Discord](https://rivet.dev/discord)
 - Follow us on [X](https://x.com/rivet_gg)
 - Follow us on [Bluesky](https://bsky.app/profile/rivet.gg)
-- File bug reports in [GitHub Issues](https://github.com/rivet-dev/rivetkit/issues)
-- Post questions & ideas in [GitHub Discussions](https://github.com/rivet-dev/rivetkit/discussions)
+- File bug reports in [GitHub Issues](https://github.com/rivet-dev/rivet/issues)
+- Post questions & ideas in [GitHub Discussions](https://github.com/rivet-dev/rivet/discussions)
 
 ## License
 

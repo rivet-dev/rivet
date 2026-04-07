@@ -5,18 +5,16 @@ import {
 	NamespaceMismatch,
 } from "@/actor/errors";
 import { convertRegistryConfigToClientConfig } from "@/client/config";
+import { createClientWithDriver } from "@/client/client";
 import { handleHealthRequest, handleMetadataRequest } from "@/common/router";
-import { ServerlessStartHeadersSchema } from "@/manager/router-schema";
-import { createClientWithDriver } from "@/mod";
-import type { DriverConfig, RegistryConfig } from "@/registry/config";
-import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
+import { EngineActorDriver } from "@/drivers/engine/mod";
+import { RemoteEngineControlClient } from "@/engine-client/mod";
+import { ServerlessStartHeadersSchema } from "@/runtime-router/router-schema";
+import type { RegistryConfig } from "@/registry/config";
 import { createRouter } from "@/utils/router";
 import { logger } from "./log";
 
-export function buildServerlessRouter(
-	driverConfig: DriverConfig,
-	config: RegistryConfig,
-) {
+export function buildServerlessRouter(config: RegistryConfig) {
 	return createRouter(config.serverless.basePath, (router) => {
 		// GET /
 		router.get("/", (c) => {
@@ -87,20 +85,14 @@ export function buildServerlessRouter(
 				token: config.token ?? token,
 			};
 
-			// Create manager driver on demand based on the properties provided
-			// by headers
-			//
-			// NOTE: This relies on the `runnerConfig.runner.runnerName` to
-			// configure which runner to create actors on.
-			const managerDriver = new RemoteManagerDriver(
+			const engineClient = new RemoteEngineControlClient(
 				convertRegistryConfigToClientConfig(clientConfig),
 			);
-			const client = createClientWithDriver(managerDriver);
+			const client = createClientWithDriver(engineClient);
 
-			// Create new actor driver with updated config
-			const actorDriver = driverConfig.actor(
+			const actorDriver = new EngineActorDriver(
 				runnerConfig,
-				managerDriver,
+				engineClient,
 				client,
 			);
 			invariant(

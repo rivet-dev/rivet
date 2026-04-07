@@ -1,14 +1,14 @@
 import { ActorNotFound, InvalidRequest } from "@/actor/errors";
-import type { GatewayTarget, ManagerDriver } from "@/manager/driver";
+import type { GatewayTarget, EngineControlClient } from "@/engine-client/driver";
 
 /**
  * Resolves a GatewayTarget to a concrete actor ID string.
  *
- * Shared across all ManagerDriver implementations to avoid duplicating the
+ * Shared across all EngineControlClient implementations to avoid duplicating the
  * same query-to-actorId dispatch logic.
  */
 export async function resolveGatewayTarget(
-	driver: ManagerDriver,
+	driver: EngineControlClient,
 	target: GatewayTarget,
 ): Promise<string> {
 	if ("directId" in target) {

@@ -1,7 +1,7 @@
 import { ACTOR_CONTEXT_INTERNAL_SYMBOL } from "@/actor/contexts/base/actor";
 import type { RunContext } from "@/actor/contexts/run";
 import type { AnyDatabaseProvider } from "@/actor/database";
-import type { AnyStaticActorInstance } from "@/actor/instance/mod";
+import type { AnyActorInstance, AnyStaticActorInstance } from "@/actor/instance/mod";
 import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
 import { RUN_FUNCTION_CONFIG_SYMBOL } from "@/actor/config";
 import { stringifyError } from "@/utils";
@@ -19,8 +19,8 @@ import {
 	type WorkflowErrorEvent,
 } from "@rivetkit/workflow-engine";
 import invariant from "invariant";
-import { ActorWorkflowContext } from "./context";
 import { ActorWorkflowControlDriver, ActorWorkflowDriver } from "./driver";
+import { ActorWorkflowContext } from "./context";
 import { createWorkflowInspectorAdapter } from "./inspector";
 
 export { Loop } from "@rivetkit/workflow-engine";

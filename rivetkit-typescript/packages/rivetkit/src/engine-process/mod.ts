@@ -1,8 +1,4 @@
 import {
-	ensureDirectoryExists,
-	getStoragePath,
-} from "@/drivers/file-system/utils";
-import {
 	getNodeChildProcess,
 	getNodeCrypto,
 	getNodeFs,
@@ -21,6 +17,17 @@ const ENGINE_BINARY_NAME = "rivet-engine";
 
 interface EnsureEngineProcessOptions {
 	version: string;
+}
+
+async function ensureDirectoryExists(pathname: string): Promise<void> {
+	const fs = await getNodeFs();
+	await fs.mkdir(pathname, { recursive: true });
+}
+
+function getStoragePath(): string {
+	const path = getNodePath();
+	const home = process.env.HOME ?? process.cwd();
+	return path.join(process.env.RIVETKIT_STORAGE_PATH ?? home, ".rivetkit");
 }
 
 export async function ensureEngineProcess(
@@ -163,7 +170,7 @@ export async function ensureEngineProcess(
 				signal,
 				stdoutLog: stdoutLogPath,
 				stderrLog: stderrLogPath,
-				issues: "https://github.com/rivet-dev/rivetkit/issues",
+				issues: "https://github.com/rivet-dev/rivet/issues",
 				support: "https://rivet.dev/discord",
 			});
 		} else if (
@@ -186,7 +193,7 @@ export async function ensureEngineProcess(
 				signal,
 				stdoutLog: stdoutLogPath,
 				stderrLog: stderrLogPath,
-				issues: "https://github.com/rivet-dev/rivetkit/issues",
+				issues: "https://github.com/rivet-dev/rivet/issues",
 				support: "https://rivet.dev/discord",
 			});
 		}
@@ -312,7 +319,7 @@ async function downloadEngineBinaryIfNeeded(
 			msg: "engine download failed, please report this error",
 			tempPath,
 			error,
-			issues: "https://github.com/rivet-dev/rivetkit/issues",
+			issues: "https://github.com/rivet-dev/rivet/issues",
 			support: "https://rivet.dev/discord",
 		});
 		try {

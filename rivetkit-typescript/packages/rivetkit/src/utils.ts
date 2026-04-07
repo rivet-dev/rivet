@@ -409,7 +409,7 @@ export function arrayBuffersEqual(
 }
 
 export const EXTRA_ERROR_LOG = {
-	issues: "https://github.com/rivet-dev/rivetkit/issues",
+	issues: "https://github.com/rivet-dev/rivet/issues",
 	support: "https://rivet.dev/discord",
 	version: VERSION,
 };
