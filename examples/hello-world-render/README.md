@@ -29,8 +29,8 @@ This example demonstrates the core RivetKit concepts with a simple counter:
 
 | Variable | Description |
 |----------|-------------|
-| `RIVET_ENDPOINT` | Server credential URL (`sk_…`) from [dashboard.rivet.dev](https://dashboard.rivet.dev) |
-| `RIVET_PUBLIC_ENDPOINT` | Client credential URL (`pk_…`), embedded at build time |
+| `RIVET_ENDPOINT` | Backend endpoint URL from your [Rivet Cloud](https://hub.rivet.dev) project |
+| `RIVET_PUBLIC_ENDPOINT` | Public endpoint URL from your [Rivet Cloud](https://hub.rivet.dev) project |
 
 3. In the Rivet dashboard, point **Connect your backend** at your service's HTTPS URL.
 
