@@ -17,7 +17,6 @@ use vbare::OwnedVersionedData;
 mod metrics;
 
 const X_RIVET_ENDPOINT: HeaderName = HeaderName::from_static("x-rivet-endpoint");
-const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 const X_RIVET_POOL_NAME: HeaderName = HeaderName::from_static("x-rivet-pool-name");
 const X_RIVET_NAMESPACE_NAME: HeaderName = HeaderName::from_static("x-rivet-namespace-name");
 const SHUTDOWN_PROGRESS_INTERVAL: Duration = Duration::from_secs(7);
@@ -249,10 +248,6 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		&url,
 		headers,
 		request_lifespan,
-		ctx.config()
-			.auth
-			.as_ref()
-			.map(|a| a.admin_token.read().as_str()),
 	)
 	.await;
 
@@ -275,16 +270,9 @@ async fn serverless_outbound_req(
 	url: &str,
 	headers: HashMap<String, String>,
 	request_lifespan: u32,
-	token: Option<&str>,
 ) -> Result<()> {
 	let current_dc = ctx.config().topology().current_dc()?;
 	let mut term_signal = TermSignal::get();
-
-	let token = if let Some(token) = token {
-		Some((X_RIVET_TOKEN, HeaderValue::try_from(token)?))
-	} else {
-		None
-	};
 
 	let headers = headers
 		.into_iter()
@@ -306,7 +294,6 @@ async fn serverless_outbound_req(
 				HeaderValue::try_from(namespace_name)?,
 			),
 		])
-		.chain(token)
 		.collect();
 
 	let endpoint_url = format!("{}/start", url.trim_end_matches('/'));
