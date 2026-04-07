@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import type { IDatabase } from "@rivetkit/sqlite-vfs";
+import type { IDatabase } from "@rivetkit/sqlite-wasm";
 import {
 	drizzle as proxyDrizzle,
 	type SqliteRemoteDatabase,

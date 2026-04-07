@@ -1,0 +1,24 @@
+[package]
+name = "rivet-envoy-client"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+futures-util.workspace = true
+hex.workspace = true
+rand.workspace = true
+rivet-envoy-protocol.workspace = true
+rivet-util.workspace = true
+scc.workspace = true
+serde.workspace = true
+serde_bare.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+tracing.workspace = true
+urlencoding.workspace = true
+uuid.workspace = true
+vbare.workspace = true

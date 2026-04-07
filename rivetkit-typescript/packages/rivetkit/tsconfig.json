@@ -20,9 +20,10 @@
 	"include": [
 		"src/**/*",
 		"tests/**/*",
+		"fixtures/**/*",
 		"scripts/**/*",
 		"dist/schemas/**/*",
 		"runtime/index.ts",
-		"../sqlite-vfs/src/wasm.d.ts"
+		"../sqlite-wasm/src/wasm.d.ts"
 	]
 }

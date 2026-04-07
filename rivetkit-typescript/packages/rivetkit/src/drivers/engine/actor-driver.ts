@@ -1,7 +1,7 @@
-import type { EnvoyConfig } from "@rivetkit/engine-envoy-client";
-import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
+import type { EnvoyConfig } from "@rivetkit/rivetkit-native/wrapper";
+import type { ISqliteVfs } from "@rivetkit/sqlite-wasm";
 import { SqliteVfsPoolManager } from "@/driver-helpers/sqlite-pool";
-import { type HibernatingWebSocketMetadata, protocol, utils, EnvoyHandle, startEnvoySync } from "@rivetkit/engine-envoy-client";
+import { type HibernatingWebSocketMetadata, type EnvoyHandle, protocol, utils, startEnvoySync } from "@rivetkit/rivetkit-native/wrapper";
 import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -565,6 +565,40 @@ export class EngineActorDriver implements ActorDriver {
 		};
 	}
 
+	getNativeDatabaseProvider() {
+		// Try to load the native package. If available, return a provider
+		// that opens databases from the live envoy handle.
+		try {
+			const requireFn =
+				typeof require !== "undefined"
+					? require
+					: typeof globalThis.require !== "undefined"
+						? globalThis.require
+						: undefined;
+			if (!requireFn) return undefined;
+
+			const nativeMod = requireFn(
+				/* webpackIgnore: true */ "@rivetkit/rivetkit-native/wrapper",
+			);
+			if (!nativeMod?.openDatabaseFromEnvoy) return undefined;
+
+			const envoy = this.#envoy;
+			return {
+				open: async (actorId: string) => {
+					const nativeDb = await nativeMod.openDatabaseFromEnvoy(
+						envoy,
+						actorId,
+					);
+					// The native database is opened from the envoy's KV channel.
+					// Return a RawAccess-compatible interface.
+					return nativeDb;
+				},
+			};
+		} catch {
+			return undefined;
+		}
+	}
+
 	// MARK: - Batch KV operations
 	async kvBatchPut(
 		actorId: string,
@@ -786,7 +820,7 @@ export class EngineActorDriver implements ActorDriver {
 
 			await this.#envoyStarted.promise;
 
-			this.#envoy.startServerless(payload);
+			this.#envoy.startServerlessActor(payload);
 
 			// Send ping every second to keep the connection alive
 			while (true) {

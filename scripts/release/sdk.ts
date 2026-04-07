@@ -18,6 +18,7 @@ export const EXCLUDED_RIVETKIT_PACKAGES = [
 // These have native/Rust dependencies that require separate build steps (e.g., napi-rs cross-compilation).
 const BUILD_EXCLUDED_RIVETKIT_PACKAGES = [
 	"@rivetkit/sqlite-native",
+	"@rivetkit/rivetkit-native",
 ] as const;
 
 async function npmVersionExists(
@@ -216,6 +217,50 @@ export async function publishSdk(opts: ReleaseOpts) {
 		await $({
 			stdio: "inherit",
 			cwd: join(sqliteNativeNpmDir, dir),
+		})`npm publish --access public --tag ${rcTag}`;
+	}
+
+	// Publish rivetkit-native platform packages.
+	const rivetNativeNpmDir = join(
+		opts.root,
+		"rivetkit-typescript/packages/rivetkit-native/npm",
+	);
+	let nativePlatformDirs: string[];
+	try {
+		nativePlatformDirs = await readdir(rivetNativeNpmDir);
+	} catch {
+		nativePlatformDirs = [];
+		console.log(
+			"==> rivetkit-native npm/ directory not found, skipping platform packages",
+		);
+	}
+
+	for (const dir of nativePlatformDirs) {
+		const platformPkgPath = join(rivetNativeNpmDir, dir, "package.json");
+		let platformPkg: { name: string };
+		try {
+			platformPkg = JSON.parse(await readFile(platformPkgPath, "utf-8"));
+		} catch {
+			continue;
+		}
+
+		const versionExists = await npmVersionExists(
+			platformPkg.name,
+			opts.version,
+		);
+		if (versionExists) {
+			console.log(
+				`Version ${opts.version} of ${platformPkg.name} already exists. Skipping...`,
+			);
+			continue;
+		}
+
+		console.log(
+			`==> Publishing to NPM: ${platformPkg.name}@${opts.version}`,
+		);
+		await $({
+			stdio: "inherit",
+			cwd: join(rivetNativeNpmDir, dir),
 		})`npm publish --access public --tag ${rcTag}`;
 	}
 }

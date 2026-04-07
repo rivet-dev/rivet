@@ -1,6 +1,6 @@
 import type { DatabaseProviderContext } from "./config";
-import type { IDatabase } from "@rivetkit/sqlite-vfs";
-import type { KvVfsOptions } from "@rivetkit/sqlite-vfs";
+import type { IDatabase } from "@rivetkit/sqlite-wasm";
+import type { KvVfsOptions } from "@rivetkit/sqlite-wasm";
 import type { ActorMetrics } from "@/actor/metrics";
 import {
 	binarySearch,

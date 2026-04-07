@@ -48,6 +48,13 @@ export function db({
 				} satisfies RawAccess;
 			}
 
+			// Use native database provider when available. This is the new
+			// path where databases are opened from a live runtime handle
+			// (e.g., the native envoy client).
+			if (ctx.nativeDatabaseProvider) {
+				return await ctx.nativeDatabaseProvider.open(ctx.actorId);
+			}
+
 			const { database: db, kvStore } = await openActorDatabase(ctx);
 			let lastVfsError: unknown = null;
 			if (kvStore) {

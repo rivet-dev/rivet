@@ -1,0 +1,20 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"],
+	"tasks": {
+		"build": {
+			"inputs": [
+				"build.mjs",
+				"src/**/*.rs",
+				"Cargo.toml",
+				"wrapper.js",
+				"wrapper.d.ts",
+				"../../engine/sdks/rust/envoy-client/src/**/*.rs",
+				"../../engine/sdks/rust/envoy-client/Cargo.toml",
+				"../../engine/sdks/rust/envoy-protocol/src/**/*.rs",
+				"../../engine/sdks/rust/envoy-protocol/Cargo.toml"
+			],
+			"outputs": ["*.node"]
+		}
+	}
+}

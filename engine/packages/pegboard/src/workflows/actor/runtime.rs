@@ -264,8 +264,8 @@ async fn allocate_actor_v2(
 		.map(|pool| matches!(pool.config.kind, RunnerConfigKind::Serverless { .. }))
 		.unwrap_or(false);
 
-	// Protocol version is set, we must migrate to actor v2
-	if pool.and_then(|p| p.protocol_version).is_some() {
+	// Protocol version is set or this is a serverless pool; migrate to actor v2
+	if pool.as_ref().and_then(|p| p.protocol_version).is_some() || for_serverless {
 		return Ok(AllocateActorOutputV2 {
 			status: AllocateActorStatus::MigrateToV2,
 			serverless: false,

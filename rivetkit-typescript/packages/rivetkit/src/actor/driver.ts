@@ -7,8 +7,9 @@ import type {
 	RawDatabaseClient,
 	DrizzleDatabaseClient,
 	NativeSqliteConfig,
+	NativeDatabaseProvider,
 } from "@/db/config";
-import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
+import type { ISqliteVfs } from "@rivetkit/sqlite-wasm";
 
 export type ActorDriverBuilder = (
 	config: RegistryConfig,
@@ -105,11 +106,18 @@ export interface ActorDriver {
 	createSqliteVfs?(actorId: string): ISqliteVfs | Promise<ISqliteVfs>;
 
 	/**
+	 * @deprecated Use getNativeDatabaseProvider instead.
 	 * Returns native SQLite channel configuration for this actor.
 	 */
 	getNativeSqliteConfig?(
 		actorId: string,
 	): NativeSqliteConfig | undefined;
+
+	/**
+	 * Returns a provider for opening native databases from a live runtime handle.
+	 * When provided, takes precedence over getNativeSqliteConfig.
+	 */
+	getNativeDatabaseProvider?(): NativeDatabaseProvider | undefined;
 
 	/**
 	 * Requests the actor to go to sleep.

@@ -1,7 +1,7 @@
 //! Custom SQLite VFS backed by KV operations over the KV channel.
 //!
 //! Keep this file behaviorally aligned with
-//! `rivetkit-typescript/packages/sqlite-vfs/src/vfs.ts`.
+//! `rivetkit-typescript/packages/sqlite-wasm/src/vfs.ts`.
 
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
@@ -13,9 +13,8 @@ use std::sync::Arc;
 use libsqlite3_sys::*;
 use tokio::runtime::Handle;
 
-use crate::channel::KvChannel;
 use crate::kv;
-use crate::protocol::*;
+use crate::sqlite_kv::{KvGetResult, SqliteKv};
 
 // MARK: Panic Guard
 
@@ -141,7 +140,7 @@ impl VfsMetrics {
 // MARK: VFS Context
 
 struct VfsContext {
-	channel: Arc<KvChannel>,
+	kv: Arc<dyn SqliteKv>,
 	actor_id: String,
 	main_file_name: String,
 	rt_handle: Handle,
@@ -167,20 +166,13 @@ impl VfsContext {
 		}
 	}
 
-	fn send_sync(&self, data: RequestData) -> Result<ResponseData, String> {
-		let op_name = match &data {
-			RequestData::KvGetRequest(r) => format!("get({}keys)", r.keys.len()),
-			RequestData::KvPutRequest(r) => format!("put({}keys)", r.keys.len()),
-			RequestData::KvDeleteRequest(r) => format!("del({}keys)", r.keys.len()),
-			RequestData::KvDeleteRangeRequest(_) => "delRange".to_string(),
-			RequestData::ActorOpenRequest => "open".to_string(),
-			RequestData::ActorCloseRequest => "close".to_string(),
-		};
+	fn kv_get(&self, keys: Vec<Vec<u8>>) -> Result<KvGetResult, String> {
+		let op_name = format!("get({}keys)", keys.len());
 		let start = std::time::Instant::now();
 		let result = self
 			.rt_handle
-			.block_on(self.channel.send_request(&self.actor_id, data))
-			.map_err(|err| err.to_string());
+			.block_on(self.kv.batch_get(&self.actor_id, keys))
+			.map_err(|e| e.to_string());
 		let elapsed = start.elapsed();
 		if std::env::var("RIVET_TRACE_SQL").is_ok() {
 			eprintln!("[sql-trace]   kv_roundtrip op={} duration={}us", op_name, elapsed.as_micros());
@@ -193,35 +185,61 @@ impl VfsContext {
 		result
 	}
 
-	fn kv_get(&self, keys: Vec<Vec<u8>>) -> Result<KvGetResponse, String> {
-		match self.send_sync(RequestData::KvGetRequest(KvGetRequest { keys }))? {
-			ResponseData::KvGetResponse(resp) => Ok(resp),
-			other => Err(format!("expected KvGetResponse, got {other:?}")),
-		}
-	}
-
 	fn kv_put(&self, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<(), String> {
-		match self.send_sync(RequestData::KvPutRequest(KvPutRequest { keys, values }))? {
-			ResponseData::KvPutResponse => Ok(()),
-			other => Err(format!("expected KvPutResponse, got {other:?}")),
+		let op_name = format!("put({}keys)", keys.len());
+		let start = std::time::Instant::now();
+		let result = self
+			.rt_handle
+			.block_on(self.kv.batch_put(&self.actor_id, keys, values))
+			.map_err(|e| e.to_string());
+		let elapsed = start.elapsed();
+		if std::env::var("RIVET_TRACE_SQL").is_ok() {
+			eprintln!("[sql-trace]   kv_roundtrip op={} duration={}us", op_name, elapsed.as_micros());
 		}
+		tracing::debug!(
+			op = %op_name,
+			duration_us = elapsed.as_micros() as u64,
+			"kv round-trip"
+		);
+		result
 	}
 
 	fn kv_delete(&self, keys: Vec<Vec<u8>>) -> Result<(), String> {
-		match self.send_sync(RequestData::KvDeleteRequest(KvDeleteRequest { keys }))? {
-			ResponseData::KvDeleteResponse => Ok(()),
-			other => Err(format!("expected KvDeleteResponse, got {other:?}")),
+		let op_name = format!("del({}keys)", keys.len());
+		let start = std::time::Instant::now();
+		let result = self
+			.rt_handle
+			.block_on(self.kv.batch_delete(&self.actor_id, keys))
+			.map_err(|e| e.to_string());
+		let elapsed = start.elapsed();
+		if std::env::var("RIVET_TRACE_SQL").is_ok() {
+			eprintln!("[sql-trace]   kv_roundtrip op={} duration={}us", op_name, elapsed.as_micros());
 		}
+		tracing::debug!(
+			op = %op_name,
+			duration_us = elapsed.as_micros() as u64,
+			"kv round-trip"
+		);
+		result
 	}
 
 	fn kv_delete_range(&self, start: Vec<u8>, end: Vec<u8>) -> Result<(), String> {
-		match self.send_sync(RequestData::KvDeleteRangeRequest(KvDeleteRangeRequest {
-			start,
-			end,
-		}))? {
-			ResponseData::KvDeleteResponse => Ok(()),
-			other => Err(format!("expected KvDeleteResponse, got {other:?}")),
+		let op_name = "delRange";
+		let start_time = std::time::Instant::now();
+		let result = self
+			.rt_handle
+			.block_on(self.kv.delete_range(&self.actor_id, start, end))
+			.map_err(|e| e.to_string());
+		let elapsed = start_time.elapsed();
+		if std::env::var("RIVET_TRACE_SQL").is_ok() {
+			eprintln!("[sql-trace]   kv_roundtrip op={} duration={}us", op_name, elapsed.as_micros());
 		}
+		tracing::debug!(
+			op = %op_name,
+			duration_us = elapsed.as_micros() as u64,
+			"kv round-trip"
+		);
+		result
 	}
 
 	fn delete_file(&self, file_tag: u8) -> Result<(), String> {
@@ -296,7 +314,7 @@ unsafe fn get_vfs_ctx(p: *mut sqlite3_vfs) -> &'static VfsContext {
 	&*((*p).pAppData as *const VfsContext)
 }
 
-fn build_value_map(resp: &KvGetResponse) -> HashMap<&[u8], &[u8]> {
+fn build_value_map(resp: &KvGetResult) -> HashMap<&[u8], &[u8]> {
 	resp.keys
 		.iter()
 		.zip(resp.values.iter())
@@ -398,7 +416,7 @@ unsafe extern "C" fn kv_io_read(
 		}
 
 		let resp = if chunk_keys_to_fetch.is_empty() {
-			KvGetResponse {
+			KvGetResult {
 				keys: Vec::new(),
 				values: Vec::new(),
 			}
@@ -879,9 +897,6 @@ unsafe extern "C" fn kv_io_file_control(
 				ctx.vfs_metrics.commit_atomic_count.fetch_add(1, Ordering::Relaxed);
 				ctx.vfs_metrics.commit_atomic_pages.fetch_add(dirty_page_count, Ordering::Relaxed);
 				ctx.vfs_metrics.commit_atomic_us.fetch_add(commit_start.elapsed().as_micros() as u64, Ordering::Relaxed);
-				// Also record in the channel-level batch metrics.
-				ctx.channel.metrics().batch_atomic_commits.fetch_add(1, Ordering::Relaxed);
-				ctx.channel.metrics().batch_atomic_pages.fetch_add(dirty_page_count, Ordering::Relaxed);
 				SQLITE_OK
 			}
 			SQLITE_FCNTL_ROLLBACK_ATOMIC_WRITE => {
@@ -1149,7 +1164,7 @@ unsafe impl Sync for KvVfs {}
 impl KvVfs {
 	pub fn register(
 		name: &str,
-		channel: Arc<KvChannel>,
+		kv: Arc<dyn SqliteKv>,
 		actor_id: String,
 		rt_handle: Handle,
 	) -> Result<Self, String> {
@@ -1170,7 +1185,7 @@ impl KvVfs {
 
 		let vfs_metrics = Arc::new(VfsMetrics::new());
 		let ctx = Box::new(VfsContext {
-			channel,
+			kv,
 			actor_id: actor_id.clone(),
 			main_file_name: actor_id,
 			rt_handle,

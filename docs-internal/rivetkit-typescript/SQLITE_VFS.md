@@ -1,4 +1,4 @@
-# SQLite VFS (`@rivetkit/sqlite-vfs`)
+# SQLite VFS (`@rivetkit/sqlite-wasm`)
 
 ## How It Works
 - SQLite issues byte-range reads/writes; VFS translates to chunked KV operations

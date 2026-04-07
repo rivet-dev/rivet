@@ -1,5 +1,8 @@
 /**
- * Native SQLite integration via @rivetkit/sqlite-native.
+ * @deprecated This module is a legacy fallback for native SQLite via
+ * @rivetkit/sqlite-native. New code should use the nativeDatabaseProvider
+ * seam which opens databases from the live native envoy handle via
+ * @rivetkit/rivetkit-native.
  *
  * Attempts to load the native addon at runtime and provides a fallback-aware
  * API for the database provider. The KV channel connection is initialized once
@@ -7,7 +10,7 @@
  *
  * The native VFS and WASM VFS are byte-compatible. See
  * rivetkit-typescript/packages/sqlite-native/src/vfs.rs and
- * rivetkit-typescript/packages/sqlite-vfs/src/vfs.ts.
+ * rivetkit-typescript/packages/sqlite-wasm/src/vfs.ts.
  */
 
 import { getRequireFn } from "@/utils/node";

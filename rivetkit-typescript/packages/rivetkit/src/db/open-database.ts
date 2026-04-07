@@ -1,4 +1,4 @@
-import type { IDatabase } from "@rivetkit/sqlite-vfs";
+import type { IDatabase } from "@rivetkit/sqlite-wasm";
 import type { DatabaseProviderContext } from "./config";
 import { openNativeDatabase } from "./native-adapter";
 import { nativeSqliteAvailable } from "./native-sqlite";

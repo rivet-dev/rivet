@@ -3,32 +3,17 @@ name = "rivetkit-sqlite-native"
 version = "2.1.6"
 edition = "2021"
 license = "Apache-2.0"
-description = "Native SQLite addon for RivetKit backed by KV channel protocol"
+description = "Native SQLite VFS for RivetKit backed by a transport-agnostic KV trait"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["lib"]
 
 [dependencies]
-napi = { version = "2", default-features = false, features = ["napi6", "async", "serde-json"] }
-napi-derive = "2"
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
-tokio = { version = "1", features = ["rt-multi-thread", "sync", "net", "time", "macros"] }
-tokio-tungstenite = "0.24"
-futures-util = { version = "0.3", default-features = false, features = ["sink"] }
-rivet-kv-channel-protocol = { path = "../../../engine/sdks/rust/kv-channel-protocol" }
-serde = { version = "1", features = ["derive"] }
-serde_bare = "0.5"
-serde_json = "1"
-lru = "0.12"
+tokio = { version = "1", features = ["rt"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-urlencoding = "2"
+async-trait = "0.1"
 getrandom = "0.2"
-
-[build-dependencies]
-napi-build = "2"
-
-[workspace]
 
 [profile.release]
 lto = true
