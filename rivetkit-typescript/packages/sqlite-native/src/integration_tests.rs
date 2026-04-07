@@ -5,8 +5,7 @@
 //! channel reconnection. They use a mock WebSocket server with an in-memory
 //! KV store that implements the KV channel protocol.
 //!
-//! End-to-end tests (Layer 2) are in the driver test suite:
-//! `rivetkit-typescript/packages/rivetkit/src/driver-test-suite/`
+//! End-to-end tests (Layer 2) live in the RivetKit integration tests.
 
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::{CStr, CString};

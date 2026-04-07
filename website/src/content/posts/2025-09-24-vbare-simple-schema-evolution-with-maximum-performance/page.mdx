@@ -130,10 +130,9 @@ For examples, VBARE powers almost all of Rivet:
   - Internal network protocols ([Epoxy](https://github.com/rivet-dev/engine/tree/f62142df1fa538499692deeb44f79b68f6e3c3c0/sdks/schemas/epoxy-protocol), [UPS](https://github.com/rivet-dev/engine/tree/f62142df1fa538499692deeb44f79b68f6e3c3c0/sdks/schemas/ups-protocol))
   - [Public network protocols](https://github.com/rivet-dev/engine/tree/f62142df1fa538499692deeb44f79b68f6e3c3c0/sdks/schemas/runner-protocol)
 
-- **[RivetKit](https://github.com/rivet-dev/rivetkit)**
-  - [Client protocol](https://github.com/rivet-dev/rivetkit/tree/b81d9536ba7ccad4449639dd83a770eb7c353617/packages/rivetkit/schemas/client-protocol)
-  - [Persisted state](https://github.com/rivet-dev/rivetkit/tree/b81d9536ba7ccad4449639dd83a770eb7c353617/packages/rivetkit/schemas/actor-persist)
-  - [File system driver](https://github.com/rivet-dev/rivetkit/tree/b81d9536ba7ccad4449639dd83a770eb7c353617/packages/rivetkit/schemas/file-system-driver)
+- **[RivetKit](https://github.com/rivet-dev/rivet/tree/main/rivetkit-typescript/packages/rivetkit)**
+  - [Client protocol](https://github.com/rivet-dev/rivet/tree/main/rivetkit-typescript/packages/rivetkit/schemas/client-protocol)
+  - [Persisted state](https://github.com/rivet-dev/rivet/tree/main/rivetkit-typescript/packages/rivetkit/schemas/actor-persist)
 
 
 ## Example Code
@@ -229,8 +228,8 @@ For a full list of BARE implementations, visit [baremessages.org](https://bareme
 RPC interfaces are trivial to implement yourself. Libraries that provide RPC interfaces tend to add extra bloat and cognitive load through things like abstracting transports, compatibility with the language's async runtime, and complex codegen to implement handlers.
 
 Usually, you just want a `ToServer` and `ToClient` union that looks like this: 
-- [ToClient example](https://github.com/rivet-dev/rivetkit/blob/b81d9536ba7ccad4449639dd83a770eb7c353617/packages/rivetkit/schemas/client-protocol/v1.bare#L34)
-- [ToServer example](https://github.com/rivet-dev/rivetkit/blob/b81d9536ba7ccad4449639dd83a770eb7c353617/packages/rivetkit/schemas/client-protocol/v1.bare#L56)
+- [ToClient example](https://github.com/rivet-dev/rivet/blob/main/rivetkit-typescript/packages/rivetkit/schemas/client-protocol/v1.bare#L34)
+- [ToServer example](https://github.com/rivet-dev/rivet/blob/main/rivetkit-typescript/packages/rivetkit/schemas/client-protocol/v1.bare#L56)
 
 ### Don't migration steps get repetitive?
 
@@ -247,4 +246,3 @@ Migration steps are fairly minimal to write. The most verbose migration steps wi
 VBARE is open source and [available on GitHub](https://github.com/rivet-dev/vbare).
 
 See the guides for getting started with [TypeScript](https://github.com/rivet-dev/vbare/tree/main/typescript) and [Rust](https://github.com/rivet-dev/vbare/tree/main/rust).
-

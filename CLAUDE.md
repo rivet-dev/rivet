@@ -108,11 +108,9 @@ git commit -m "chore(my-pkg): foo bar"
 - If `rivetkit` type or DTS builds fail with missing `@rivetkit/*` declarations, run `pnpm build -F rivetkit` from repo root (Turbo build path) before changing TypeScript `paths`.
 - Do not add temporary `@rivetkit/*` path aliases in `rivetkit-typescript/packages/rivetkit/tsconfig.json` to work around stale or missing built declarations.
 
-### RivetKit Driver Registry Variants
-- Keep `rivetkit-typescript/packages/rivetkit/fixtures/driver-test-suite/registry.ts` as the canonical type anchor for fixtures and test typing.
-- Run driver runtime suites through `registry-static.ts` and `registry-dynamic.ts` instead of executing `registry.ts` directly.
-- Load static fixture actors with dynamic ESM `import()` from the `fixtures/driver-test-suite/actors/` directory.
-- Skip dynamic registry parity only for the explicit nested dynamic harness gate or missing secure-exec dist, and still treat full static and dynamic compatibility as the target for all normal driver suites.
+### RivetKit Test Fixtures
+- Keep RivetKit test fixtures scoped to the engine-only runtime.
+- Prefer targeted integration tests under `rivetkit-typescript/packages/rivetkit/tests/` over shared multi-driver matrices.
 
 ### SQLite Package
 - Use `@rivetkit/sqlite` for SQLite WebAssembly support.
@@ -287,7 +285,7 @@ let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build(
 
 **Inspector HTTP API**
 - When updating the WebSocket inspector (`rivetkit-typescript/packages/rivetkit/src/inspector/`), also update the HTTP inspector endpoints in `rivetkit-typescript/packages/rivetkit/src/actor/router.ts`. The HTTP API mirrors the WebSocket inspector for agent-based debugging.
-- When adding or modifying inspector endpoints, also update the driver test at `rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-inspector.ts` to cover all inspector HTTP endpoints.
+- When adding or modifying inspector endpoints, also update the relevant RivetKit tests in `rivetkit-typescript/packages/rivetkit/tests/` to cover all inspector HTTP endpoints.
 - When adding or modifying inspector endpoints, also update the documentation in `website/src/metadata/skill-base-rivetkit.md` and `website/src/content/docs/actors/debugging.mdx` to keep them in sync.
 
 **Database Usage**

@@ -244,7 +244,7 @@ All data crosses the bridge as JSON strings:
 
 ## Testing
 
-Add a driver test in `src/driver-test-suite/tests/` that:
+Add an engine-focused integration test that:
 
 1. Creates a dynamic actor that uses `db()` (raw) with a simple schema
 2. Runs migrations, inserts rows, queries them back
@@ -252,7 +252,7 @@ Add a driver test in `src/driver-test-suite/tests/` that:
 4. Creates a dynamic actor that uses `db()` from `rivetkit/db/drizzle` with schema + migrations
 5. Verifies drizzle queries work through the proxy
 
-Add corresponding fixture actors in `fixtures/driver-test-suite/`.
+Add corresponding fixture actors in the shared sandbox-style test fixtures.
 
 ## Files to modify
 
@@ -263,8 +263,8 @@ Add corresponding fixture actors in `fixtures/driver-test-suite/`.
 | `src/dynamic/isolate-runtime.ts` | Wire `sqliteExec`/`sqliteBatch` refs in `#setIsolateBridge()` |
 | `src/dynamic/host-runtime.ts` | Wire bridge refs + add `overrideRawDatabaseClient` to isolate-side `actorDriver` |
 | `src/db/drizzle/mod.ts` | Add override check at top of `createClient` |
-| `src/driver-test-suite/tests/` | New test file for dynamic SQLite proxy |
-| `fixtures/driver-test-suite/` | New fixture actors using `db()` in dynamic actors |
+| `tests/` | New engine-focused integration test for dynamic SQLite proxy |
+| shared test fixtures | New fixture actors using `db()` in dynamic actors |
 | `docs-internal/rivetkit-typescript/DYNAMIC_ACTORS_ARCHITECTURE.md` | Document SQLite proxy bridge |
 
 ## Non-goals

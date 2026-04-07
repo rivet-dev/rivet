@@ -3,7 +3,7 @@ import { deconstructError } from "@/common/utils";
 import {
 	type GatewayTarget,
 	HEADER_CONN_PARAMS,
-	type ManagerDriver,
+	type EngineControlClient,
 } from "@/driver-helpers/mod";
 import { ActorError } from "./errors";
 import { logger } from "./log";
@@ -12,7 +12,7 @@ import { logger } from "./log";
  * Shared implementation for raw HTTP fetch requests
  */
 export async function rawHttpFetch(
-	driver: ManagerDriver,
+	driver: EngineControlClient,
 	target: GatewayTarget,
 	params: unknown,
 	input: string | URL | Request,
@@ -105,7 +105,7 @@ export async function rawHttpFetch(
  * Shared implementation for raw WebSocket connections
  */
 export async function rawWebSocket(
-	driver: ManagerDriver,
+	driver: EngineControlClient,
 	target: GatewayTarget,
 	params: unknown,
 	path?: string,

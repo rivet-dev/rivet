@@ -17,7 +17,7 @@ export type {
 	RivetMessageEvent,
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
-export type { ActorKey } from "@/manager/protocol/query";
+export type { ActorKey } from "@/client/query";
 export type * from "./config";
 export { CONN_STATE_MANAGER_SYMBOL } from "./conn/mod";
 export type { AnyConn, Conn } from "./conn/mod";

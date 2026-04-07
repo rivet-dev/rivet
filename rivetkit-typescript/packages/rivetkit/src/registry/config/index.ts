@@ -15,16 +15,12 @@ import { tryParseEndpoint } from "@/utils/endpoint-parser";
 import {
 	getRivetEndpoint,
 	getRivetEngine,
-	getRivetkitStoragePath,
 	getRivetNamespace,
 	getRivetToken,
 	isDev,
 } from "@/utils/env-vars";
-import { type DriverConfig, DriverConfigSchema } from "./driver";
 import { EnvoyConfigSchema } from "./envoy";
 import { ServerlessConfigSchema } from "./serverless";
-
-export { DriverConfigSchema, type DriverConfig };
 
 export const ActorsSchema = z.record(
 	z.string(),
@@ -49,20 +45,6 @@ export const RegistryConfigSchema = z
 		 * @internal
 		 **/
 		test: TestConfigSchema.optional().default({ enabled: false }),
-
-		// MARK: Driver
-		driver: DriverConfigSchema.optional(),
-		/**
-		 * Storage path for RivetKit file-system state when using the default driver.
-		 *
-		 * If not set, RivetKit uses the platform default data location.
-		 *
-		 * Can also be set via RIVETKIT_STORAGE_PATH.
-		 */
-		storagePath: z
-			.string()
-			.optional()
-			.transform((val) => val ?? getRivetkitStoragePath()),
 
 		// MARK: Database
 		/**
@@ -152,14 +134,14 @@ export const RegistryConfigSchema = z
 
 		// MARK: Manager
 		/**
-		 * Whether to start the local manager server.
+		 * Whether to start the local RivetKit server.
 		 * Auto-determined based on endpoint and NODE_ENV if not specified.
 		 */
 		serveManager: z.boolean().optional(),
 		/**
 		 * Directory to serve static files from.
 		 *
-		 * When set, the manager server will serve static files from this
+		 * When set, the local RivetKit server will serve static files from this
 		 * directory. This is used by `registry.start()` to serve a frontend
 		 * alongside the actor API.
 		 */
@@ -167,7 +149,7 @@ export const RegistryConfigSchema = z
 		/**
 		 * @experimental
 		 *
-		 * Base path for the manager API. This is used to prefix all routes.
+		 * Base path for the local RivetKit API. This is used to prefix all routes.
 		 * For example, if the base path is `/foo`, then the route `/actors`
 		 * will be available at `/foo/actors`.
 		 */
@@ -181,7 +163,7 @@ export const RegistryConfigSchema = z
 		/**
 		 * @experimental
 		 *
-		 * What host to bind the manager server to.
+		 * What host to bind the local RivetKit server to.
 		 */
 		managerHost: z.string().optional(),
 
@@ -498,12 +480,6 @@ export const DocRegistryConfigSchema = z
 			.describe(
 				"Actor definitions. Keys are actor names, values are actor definitions.",
 			),
-		storagePath: z
-			.string()
-			.optional()
-			.describe(
-				"Storage path for RivetKit file-system state when using the default driver. Can also be set via RIVETKIT_STORAGE_PATH.",
-			),
 		sqlitePool: z
 			.object({
 				actorsPerInstance: z
@@ -575,18 +551,18 @@ export const DocRegistryConfigSchema = z
 			.boolean()
 			.optional()
 			.describe(
-				"Whether to start the local manager server. Auto-determined based on endpoint and NODE_ENV if not specified.",
+				"Whether to start the local RivetKit server. Auto-determined based on endpoint and NODE_ENV if not specified.",
 			),
 		publicDir: z
 			.string()
 			.optional()
 			.describe(
-				"Directory to serve static files from. When set, the manager server serves static files alongside the actor API. Used by registry.start().",
+				"Directory to serve static files from. When set, the local RivetKit server serves static files alongside the actor API. Used by registry.start().",
 			),
 		managerBasePath: z
 			.string()
 			.optional()
-			.describe("Base path for the manager API. Default: '/'"),
+			.describe("Base path for the local RivetKit API. Default: '/'"),
 		managerPort: z
 			.number()
 			.optional()

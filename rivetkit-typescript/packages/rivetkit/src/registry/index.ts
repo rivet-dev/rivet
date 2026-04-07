@@ -33,7 +33,7 @@ export class Registry<A extends RegistryActors> {
 	constructor(config: RegistryConfigInput<A>) {
 		this.#config = config;
 
-		// Start the local manager or engine before /api/rivet is hit so clients can
+		// Start the local runtime or engine before /api/rivet is hit so clients can
 		// reach the public endpoint preemptively. This waits one tick because some
 		// integrations mutate registry config immediately after setup() returns.
 		if (config.serverless?.spawnEngine || config.serveManager) {
@@ -102,7 +102,7 @@ export class Registry<A extends RegistryActors> {
 	/**
 	 * Starts the server, serving both the actor API and static files.
 	 *
-	 * This is the simplest way to run RivetKit. It starts a local manager
+	 * This is the simplest way to run RivetKit. It starts a local runtime
 	 * server, serves static files from the configured `publicDir` (default
 	 * `"public"`), and starts the actor envoy.
 	 *
@@ -122,7 +122,7 @@ export class Registry<A extends RegistryActors> {
 		}
 
 		// Force serveManager when there's no remote endpoint so the
-		// manager server starts and serves the API + static files.
+		// local runtime starts and serves the API + static files.
 		// When an endpoint IS configured, the config transform handles
 		// the mode (serveManager defaults to false, spawnEngine may be
 		// true, etc.) and we just start the envoy.

@@ -16,8 +16,8 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/rivet-dev/rivetkit"
-Issues = "https://github.com/rivet-dev/rivetkit/issues"
+Homepage = "https://github.com/rivet-dev/rivet"
+Issues = "https://github.com/rivet-dev/rivet/issues"
 
 [project.optional-dependencies]
 tests = [

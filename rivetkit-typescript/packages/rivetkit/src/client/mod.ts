@@ -1,6 +1,6 @@
 import { injectDevtools } from "@/devtools-loader";
 import type { Registry } from "@/registry";
-import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
+import { RemoteEngineControlClient } from "@/engine-client/mod";
 import {
 	type Client,
 	type ClientConfigInput,
@@ -18,7 +18,7 @@ export {
 	MalformedResponseMessage,
 	ManagerError,
 } from "@/client/errors";
-export type { CreateRequest } from "@/manager/protocol/query";
+export type { CreateRequest } from "@/client/query";
 export { KEYS as KV_KEYS } from "../actor/instance/keys";
 export type { ActorActionFunction } from "./actor-common";
 export type {
@@ -61,7 +61,7 @@ export function createClient<A extends Registry<any>>(
 	const config = ClientConfigSchema.parse(configInput);
 
 	// Create client
-	const driver = new RemoteManagerDriver(config);
+	const driver = new RemoteEngineControlClient(config);
 
 	if (config.devtools) {
 		injectDevtools(config);

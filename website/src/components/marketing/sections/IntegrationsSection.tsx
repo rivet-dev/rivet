@@ -8,7 +8,7 @@ import { deployOptions } from '@rivetkit/shared-data';
 const frameworks = [
   { name: 'React', href: '/docs/clients/react' },
   { name: 'Next.js', href: '/docs/clients/next-js' },
-  { name: 'Svelte', href: 'https://github.com/rivet-dev/rivetkit/pull/1172', external: true },
+  { name: 'Svelte', href: '/docs/clients/javascript' },
   { name: 'Hono', href: 'https://github.com/rivet-dev/rivet/tree/main/examples/hono', external: true },
   { name: 'Express', href: 'https://github.com/rivet-dev/rivet/tree/main/examples/express', external: true },
   { name: 'Elysia', href: 'https://github.com/rivet-dev/rivet/tree/main/examples/elysia', external: true },
@@ -83,8 +83,7 @@ export const IntegrationsSection = () => (
             {[
               { name: 'Node.js', href: '/docs/actors/quickstart/backend' },
               { name: 'Bun', href: '/docs/actors/quickstart/backend' },
-              { name: 'Deno', href: 'https://github.com/rivet-dev/rivet/tree/main/examples/deno', external: true },
-              { name: 'Cloudflare Workers', href: '/docs/actors/quickstart/cloudflare-workers' }
+              { name: 'Deno', href: 'https://github.com/rivet-dev/rivet/tree/main/examples/deno', external: true }
             ].map(tech => (
               <a
                 key={tech.name}

@@ -328,7 +328,6 @@ async function generateMarkdownAndLlms() {
 		`${siteUrl}/changelog.json`,
 		`${siteUrl}/oss-friends`,
 		`${siteUrl}/cloud`,
-		`${siteUrl}/rivet-vs-cloudflare-workers`,
 		`${siteUrl}/changelog`,
 		`${siteUrl}/terms`,
 		`${siteUrl}/blog`,

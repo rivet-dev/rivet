@@ -121,10 +121,6 @@ export function ServerlessConnectionCheck({
 								.with("railway", () => "Railway")
 								.with("vercel", () => "Vercel")
 								.with("aws-ecs", () => "AWS ECS")
-								.with(
-									"cloudflare-workers",
-									() => "Cloudflare Worker",
-								)
 								.with("gcp-cloud-run", () => "GCP Cloud Run")
 								.with("hetzner", () => "Hetzner")
 								.with("kubernetes", () => "Kubernetes")

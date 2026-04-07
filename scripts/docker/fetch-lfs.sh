@@ -5,7 +5,7 @@
 
 set -e
 
-REPO_URL="${1:-https://github.com/rivet-gg/rivet.git}"
+REPO_URL="${1:-https://github.com/rivet-dev/rivet.git}"
 
 git init
 git remote add origin "$REPO_URL"

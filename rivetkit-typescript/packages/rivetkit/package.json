@@ -117,26 +117,6 @@
 				"default": "./dist/tsup/common/websocket.cjs"
 			}
 		},
-		"./driver-test-suite": {
-			"import": {
-				"types": "./dist/tsup/driver-test-suite/mod.d.ts",
-				"default": "./dist/tsup/driver-test-suite/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/driver-test-suite/mod.d.cts",
-				"default": "./dist/tsup/driver-test-suite/mod.cjs"
-			}
-		},
-		"./serve-test-suite": {
-			"import": {
-				"types": "./dist/tsup/serve-test-suite/mod.d.ts",
-				"default": "./dist/tsup/serve-test-suite/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/serve-test-suite/mod.d.cts",
-				"default": "./dist/tsup/serve-test-suite/mod.cjs"
-			}
-		},
 		"./topologies/coordinate": {
 			"import": {
 				"types": "./dist/tsup/topologies/coordinate/mod.d.ts",
@@ -322,7 +302,7 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/serve-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts src/dynamic/mod.ts src/db/mod.ts src/db/drizzle/mod.ts src/sandbox/index.ts src/sandbox/client.ts src/sandbox/providers/docker.ts src/sandbox/providers/e2b.ts src/sandbox/providers/daytona.ts src/sandbox/providers/local.ts src/sandbox/providers/vercel.ts src/sandbox/providers/modal.ts src/sandbox/providers/computesdk.ts src/sandbox/providers/sprites.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts src/dynamic/mod.ts src/db/mod.ts src/db/drizzle/mod.ts src/sandbox/index.ts src/sandbox/client.ts src/sandbox/providers/docker.ts src/sandbox/providers/e2b.ts src/sandbox/providers/daytona.ts src/sandbox/providers/local.ts src/sandbox/providers/vercel.ts src/sandbox/providers/modal.ts src/sandbox/providers/computesdk.ts src/sandbox/providers/sprites.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
 		"build:dynamic-isolate-runtime": "tsup --config tsup.dynamic-isolate-runtime.config.ts",
 		"build:browser": "tsup --config tsup.browser.config.ts",
 		"build:schema": "./scripts/compile-all-bare.ts",
@@ -334,7 +314,6 @@
 		"format:write": "biome format --write .",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"manager-openapi-gen": "tsx scripts/manager-openapi-gen.ts",
 		"dump-asyncapi": "tsx scripts/dump-asyncapi.ts",
 		"registry-config-schema-gen": "tsx scripts/registry-config-schema-gen.ts",
 		"actor-config-schema-gen": "tsx scripts/actor-config-schema-gen.ts",
