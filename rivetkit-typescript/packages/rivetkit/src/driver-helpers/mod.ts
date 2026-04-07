@@ -1,4 +1,3 @@
-export type { ActorDriver } from "@/actor/driver";
 export { KEYS, makeConnKey } from "@/actor/instance/keys";
 export type {
 	BaseActorInstance,
@@ -26,15 +25,15 @@ export {
 export type {
 	ActorOutput,
 	CreateInput,
+	EngineControlClient,
 	GatewayTarget,
 	GetForIdInput,
 	GetOrCreateWithKeyInput,
 	GetWithKeyInput,
 	ListActorsInput,
-	ManagerDisplayInformation,
-	ManagerDriver,
-} from "@/manager/driver";
-export { buildManagerRouter } from "@/manager/router";
+	RuntimeDisplayInformation,
+} from "@/engine-client/driver";
+export { buildRuntimeRouter } from "@/runtime-router/router";
 export { resolveGatewayTarget } from "./resolve-gateway-target";
 export { SqliteVfsPoolManager } from "./sqlite-pool";
 export { getInitialActorKvState } from "./utils";

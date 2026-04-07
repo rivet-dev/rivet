@@ -209,7 +209,7 @@ export default app;
 
 function generateVercelDeployUrl(exampleName: string): string {
 	const repoUrl = encodeURIComponent(
-		`https://github.com/rivet-gg/rivet/tree/main/examples/${exampleName}${VERCEL_SUFFIX}`
+		`https://github.com/rivet-dev/rivet/tree/main/examples/${exampleName}${VERCEL_SUFFIX}`
 	);
 	const projectName = encodeURIComponent(`${exampleName}${VERCEL_SUFFIX}`);
 	return `https://vercel.com/new/clone?repository-url=${repoUrl}&project-name=${projectName}`;

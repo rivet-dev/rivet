@@ -114,7 +114,13 @@ export class InlineWebSocketAdapter {
 				{ data, rivetMessageIndex },
 				this.#wsContext,
 			);
-			(this.#actorWs as any).triggerMessage(data, rivetMessageIndex);
+			(this.#actorWs as any).dispatchEvent({
+				type: "message",
+				data,
+				rivetMessageIndex,
+				target: this.#actorWs,
+				currentTarget: this.#actorWs,
+			});
 		} catch (err) {
 			this.#handleError(err);
 			this.#close(1011, "Internal error processing message");

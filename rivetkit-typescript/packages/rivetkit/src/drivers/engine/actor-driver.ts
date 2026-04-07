@@ -49,17 +49,17 @@ import type {
 	RivetMessageEvent,
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
+import type { ActorDriver } from "@/actor/driver";
+import type { AnyActorInstance } from "@/actor/instance/mod";
 import {
-	type ActorDriver,
-	type AnyActorInstance,
 	getInitialActorKvState,
-	type ManagerDriver,
+	type EngineControlClient,
 } from "@/driver-helpers/mod";
 import { DynamicActorInstance } from "@/dynamic/instance";
 import { DynamicActorIsolateRuntime } from "@/dynamic/isolate-runtime";
 import { isDynamicActorDefinition } from "@/dynamic/internal";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
-import { getEndpoint } from "@/remote-manager-driver/api-utils";
+import { getEndpoint } from "@/engine-client/api-utils";
 import {
 	type LongTimeoutHandle,
 	promiseWithResolvers,
@@ -108,7 +108,7 @@ export type DriverContext = {};
 
 export class EngineActorDriver implements ActorDriver {
 	#config: RegistryConfig;
-	#managerDriver: ManagerDriver;
+	#engineClient: EngineControlClient;
 	#inlineClient: Client<any>;
 	#envoy: EnvoyHandle;
 	#actors: Map<string, ActorHandler> = new Map();
@@ -152,11 +152,11 @@ export class EngineActorDriver implements ActorDriver {
 
 	constructor(
 		config: RegistryConfig,
-		managerDriver: ManagerDriver,
+		engineClient: EngineControlClient,
 		inlineClient: Client<any>,
 	) {
 		this.#config = config;
-		this.#managerDriver = managerDriver;
+		this.#engineClient = engineClient;
 		this.#inlineClient = inlineClient;
 		this.#sqlitePool = new SqliteVfsPoolManager(config);
 
@@ -974,6 +974,7 @@ export class EngineActorDriver implements ActorDriver {
 						loader: definition.loader,
 						actorDriver: this,
 						inlineClient: this.#inlineClient,
+						test: this.#config.test,
 					});
 					await runtime.start();
 					this.#dynamicRuntimes.set(actorId, runtime);

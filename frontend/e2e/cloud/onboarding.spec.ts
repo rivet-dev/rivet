@@ -25,7 +25,7 @@ test.describe("onboarding wizard", () => {
 		// skip local steps to reach provider selection
 		await onboardingPage.skipToDeploy();
 
-		// all expected providers should be visible (cloudflare-workers is filtered out as specializedPlatform)
+		// all expected providers should be visible
 		for (const provider of [
 			"vercel",
 			"gcp-cloud-run",

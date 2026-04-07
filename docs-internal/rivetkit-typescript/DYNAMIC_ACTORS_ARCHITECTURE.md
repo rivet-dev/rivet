@@ -7,14 +7,14 @@ Dynamic actors let a registry entry resolve actor source code at actor start tim
 Dynamic actors are represented by `dynamicActor({ load, auth?, options? })`
 and still participate in normal registry routing and actor lifecycle.
 
-Driver parity is verified by running the same driver test suites against two
-fixture registries:
+Dynamic actor parity is verified by running the same engine-focused integration
+tests against two fixture registries:
 
-- `fixtures/driver-test-suite/registry-static.ts`
-- `fixtures/driver-test-suite/registry-dynamic.ts`
+- `examples/sandbox/src/index.ts` for shared actor behavior
+- dedicated static and dynamic registry fixtures in test coverage
 
-Both registries are built from `fixtures/driver-test-suite/actors/` to keep
-actor behavior consistent between static and dynamic execution.
+The shared actor fixtures keep behavior consistent between static and dynamic
+execution.
 
 ## Main Components
 

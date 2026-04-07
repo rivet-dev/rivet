@@ -15,6 +15,7 @@ import {
 } from "@/common/actor-router-consts";
 import { getLogger } from "@/common/log";
 import { deconstructError, stringifyError } from "@/common/utils";
+import { setIndexedWebSocketTestSender } from "@/common/websocket-test-hooks";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { AnyClient } from "@/client/client";
 import type { RegistryConfig } from "@/registry/config";
@@ -296,6 +297,9 @@ interface DynamicActorIsolateRuntimeConfig {
 	auth?: DynamicActorAuth;
 	actorDriver: ActorDriver;
 	inlineClient: AnyClient;
+	test: {
+		enabled: boolean;
+	};
 }
 
 interface DynamicRuntimeRefs {
@@ -571,9 +575,12 @@ export class DynamicActorIsolateRuntime {
 		};
 		setIndexedWebSocketTestSender(
 			session.websocket,
-			(data, rivetMessageIndex) =>
+			(
+				data: string | ArrayBufferLike | Blob | ArrayBufferView,
+				rivetMessageIndex?: number,
+			) =>
 				this.#sendWebSocketMessage(session.id, data, rivetMessageIndex),
-			this.#config.runtimeConfig.testEnabled,
+			this.#config.test.enabled,
 		);
 		this.#webSocketSessions.set(session.id, session);
 		this.#sessionIdsByWebSocket.set(session.websocket, session.id);

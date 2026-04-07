@@ -276,14 +276,16 @@ export async function handleWebSocketConnect(
 						return;
 					}
 
+					const actionRequest = message.body.val;
+
 					void actor.processMessage(message, conn).catch((error) => {
 						const { group, code } = deconstructError(
 							error,
 							actor.rLog,
 							{
 								wsEvent: "message",
-								actionId: message.body.val.id,
-								actionName: message.body.val.name,
+								actionId: actionRequest.id,
+								actionName: actionRequest.name,
 							},
 							exposeInternalError,
 						);

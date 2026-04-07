@@ -221,7 +221,6 @@ Works with Claude Code, Cursor, Windsurf, and other AI coding tools.
 - [Node.js & Bun](https://www.rivet.dev/docs/actors/quickstart/backend)
 - [React](https://www.rivet.dev/docs/actors/quickstart/react)
 - [Next.js](https://www.rivet.dev/docs/actors/quickstart/next-js)
-- [Cloudflare Workers](https://www.rivet.dev/docs/actors/quickstart/cloudflare-workers)
 
 [View documentation →](https://www.rivet.dev/docs)
 
@@ -237,7 +236,7 @@ Serverless, containers, or your own servers — Rivet Actors work with your exis
 
 **Frameworks**: [React](https://www.rivet.dev/docs/clients/react) • [Next.js](https://www.rivet.dev/docs/clients/next-js) • [Hono](https://github.com/rivet-dev/rivet/tree/main/examples/hono) • [Express](https://github.com/rivet-dev/rivet/tree/main/examples/express) • [Elysia](https://github.com/rivet-dev/rivet/tree/main/examples/elysia) • [tRPC](https://github.com/rivet-dev/rivet/tree/main/examples/trpc)
 
-**Runtimes**: [Node.js](https://www.rivet.dev/docs/actors/quickstart/backend) • [Bun](https://www.rivet.dev/docs/actors/quickstart/backend) • [Deno](https://github.com/rivet-dev/rivet/tree/main/examples/deno) • [Cloudflare Workers](https://www.rivet.dev/docs/actors/quickstart/cloudflare-workers)
+**Runtimes**: [Node.js](https://www.rivet.dev/docs/actors/quickstart/backend) • [Bun](https://www.rivet.dev/docs/actors/quickstart/backend) • [Deno](https://github.com/rivet-dev/rivet/tree/main/examples/deno)
 
 **Tools**: [Vitest](https://www.rivet.dev/docs/actors/testing) • [Pino](https://www.rivet.dev/docs/general/logging) • [AI SDK](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent) • [OpenAPI](https://github.com/rivet-dev/rivet/tree/main/rivetkit-openapi) • [AsyncAPI](https://github.com/rivet-dev/rivet/tree/main/rivetkit-asyncapi)
 

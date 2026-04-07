@@ -5,7 +5,7 @@ import { convertRegistryConfigToClientConfig } from "@/client/config";
 import {
 	getDatacenters,
 	updateRunnerConfig,
-} from "@/remote-manager-driver/api-endpoints";
+} from "@/engine-client/api-endpoints";
 
 export async function configureServerlessPool(
 	config: RegistryConfig,

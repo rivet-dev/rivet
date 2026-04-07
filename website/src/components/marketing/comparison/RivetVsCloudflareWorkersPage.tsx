@@ -303,7 +303,7 @@ const ComparisonTable = () => {
 							<>
 								Yes, Rivet is open-source with the Apache 2.0
 								license.{" "}
-								<a href="https://github.com/rivet-dev/engine">
+								<a href="https://github.com/rivet-dev/rivet">
 									View on GitHub
 								</a>
 								.

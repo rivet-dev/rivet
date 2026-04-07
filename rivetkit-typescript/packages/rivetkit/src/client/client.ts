@@ -2,9 +2,9 @@ import type { AnyActorDefinition } from "@/actor/definition";
 import type { Encoding } from "@/actor/protocol/serde";
 import {
 	resolveGatewayTarget,
-	type ManagerDriver,
+	type EngineControlClient,
 } from "@/driver-helpers/mod";
-import type { ActorQuery } from "@/manager/protocol/query";
+import type { ActorQuery } from "@/client/query";
 import type { Registry } from "@/registry";
 import type { ActorActionFunction } from "./actor-common";
 import {
@@ -178,13 +178,13 @@ export class ClientRaw {
 
 	[ACTOR_CONNS_SYMBOL] = new Set<ActorConnRaw>();
 
-	#driver: ManagerDriver;
+	#driver: EngineControlClient;
 	#encodingKind: Encoding;
 
 	/**
 	 * Creates an instance of Client.
 	 */
-	public constructor(driver: ManagerDriver, encoding: Encoding | undefined) {
+	public constructor(driver: EngineControlClient, encoding: Encoding | undefined) {
 		this.#driver = driver;
 
 		this.#encodingKind = encoding ?? "bare";
@@ -436,7 +436,7 @@ export type Client<A extends Registry<any>> = ClientRaw & {
 export type AnyClient = Client<Registry<any>>;
 
 export function createClientWithDriver<A extends Registry<any>>(
-	driver: ManagerDriver,
+	driver: EngineControlClient,
 	config: { encoding?: Encoding } = {},
 ): Client<A> {
 	const client = new ClientRaw(driver, config.encoding);

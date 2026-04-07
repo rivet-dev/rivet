@@ -1,7 +1,6 @@
 
 // Platform images
 import rivetWhiteLogo from '../images/platforms/rivet-white.svg';
-import cloudflareWorkersLogo from '../images/platforms/cloudflare-workers.svg';
 import vercelLogo from '../images/platforms/vercel.svg';
 import nodejsLogo from '../images/platforms/nodejs.svg';
 import bunLogo from '../images/platforms/bun.svg';
@@ -88,7 +87,7 @@ export function PlatformIcons() {
       tooltip: 'Next.js (Frontend & Backend)'
     },
     {
-      href: 'https://github.com/rivet-dev/rivetkit/pull/1172',
+      href: '/docs/clients/javascript',
       src: svelteLogo,
       alt: 'Svelte',
       tooltip: 'Svelte (Frontend)'
@@ -131,7 +130,7 @@ export function PlatformIcons() {
     //}
     'SEPARATOR',
     {
-      href: 'https://github.com/rivet-dev/rivetkit/tree/67e8e26b1fdb22dcb4997a7f0a1dfb1461d7b3e7/examples/next-js',
+      href: 'https://github.com/rivet-dev/rivet/tree/main/examples/next-js',
       src: vercelLogo,
       alt: 'Vercel Functions',
       tooltip: 'Vercel Functions'
@@ -141,12 +140,6 @@ export function PlatformIcons() {
       src: railwayLogo,
       alt: 'Railway',
       tooltip: 'Railway'
-    },
-    {
-      href: '/docs/actors/quickstart/cloudflare-workers',
-      src: cloudflareWorkersLogo,
-      alt: 'Cloudflare Durable Objects',
-      tooltip: 'Cloudflare Durable Objects'
     },
     {
       href: '/docs/connect/kubernetes',

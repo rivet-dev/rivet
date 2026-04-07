@@ -133,11 +133,6 @@ export const sitemap = [
 								href: "/docs/actors/quickstart/next-js",
 								icon: faNextjs,
 							},
-							{
-								title: "Cloudflare Workers",
-								href: "/docs/actors/quickstart/cloudflare-workers",
-								icon: faCloudflare,
-							},
 						],
 					},
 				]

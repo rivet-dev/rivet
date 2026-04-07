@@ -1,7 +1,7 @@
 import * as errors from "@/actor/errors";
 import { stringifyError } from "@/common/utils";
-import { type GatewayTarget, type ManagerDriver } from "@/driver-helpers/mod";
-import type { ActorQuery } from "@/manager/protocol/query";
+import { type GatewayTarget, type EngineControlClient } from "@/driver-helpers/mod";
+import type { ActorQuery } from "@/client/query";
 import { ActorSchedulingError } from "./errors";
 import { logger } from "./log";
 
@@ -58,7 +58,7 @@ export async function checkForSchedulingError(
 	code: string,
 	actorId: string,
 	query: ActorQuery,
-	driver: ManagerDriver,
+	driver: EngineControlClient,
 ): Promise<ActorSchedulingError | null> {
 	const name = getActorNameFromQuery(query);
 

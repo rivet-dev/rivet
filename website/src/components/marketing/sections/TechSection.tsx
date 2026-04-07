@@ -1,6 +1,5 @@
 
 // Platform images
-import cloudflareWorkersLogo from '../images/platforms/cloudflare-workers.svg';
 import bunLogo from '../images/platforms/bun.svg';
 import denoLogo from '../images/platforms/deno.svg';
 import nodejsLogo from '../images/platforms/nodejs.svg';
@@ -162,7 +161,7 @@ export function TechSection() {
             heading='Stack Agnostic'
             description="Use Rivet with your existing stack. Works with any framework, runtime, or infrastructure."
             linkText='Add your own'
-            linkHref='https://github.com/rivet-dev/rivetkit/issues/new'
+            linkHref='https://github.com/rivet-dev/rivet/issues/new'
             linkExternal
           />
 
@@ -182,12 +181,6 @@ export function TechSection() {
                 alt='Railway'
                 external
                 status='1-click-deploy'
-              />
-              <TechLink
-                href='/docs/actors/quickstart/backend'
-                name='Durable Objects'
-                icon={cloudflareWorkersLogo}
-                alt='Cloudflare Durable Objects'
               />
               <TechLink
                 href='/docs/connect/kubernetes'
@@ -215,11 +208,10 @@ export function TechSection() {
               <TechLink href='/docs/clients/react' name='React' icon={reactLogo} alt='React' />
               <TechLink href='/docs/clients/next-js' name='Next.js' icon={nextjsLogo} alt='Next.js' />
               <TechLink
-                href='https://github.com/rivet-dev/rivetkit/pull/1172'
+                href='/docs/clients/javascript'
                 name='Svelte'
                 icon={svelteLogo}
                 alt='Svelte'
-                external
               />
               <TechLink href='/docs/integrations/hono' name='Hono' icon={honoLogo} alt='Hono' />
               <TechLink href='/docs/integrations/express' name='Express' icon={expressLogo} alt='Express' />
@@ -236,17 +228,10 @@ export function TechSection() {
               />
               <TechLink href='/docs/actors/quickstart/backend' name='Bun' icon={bunLogo} alt='Bun' />
               <TechLink
-                href='https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/deno'
+                href='/docs/actors/quickstart/backend'
                 name='Deno'
                 icon={denoLogo}
                 alt='Deno'
-                external
-              />
-              <TechLink
-                href='/docs/actors/quickstart/backend'
-                name='Cloudflare Workers'
-                icon={cloudflareWorkersLogo}
-                alt='Cloudflare Workers'
               />
             </TechSubSection>
 
@@ -280,7 +265,7 @@ export function TechSection() {
             heading='Works With Your Tools'
             description='Seamlessly integrate Rivet with your favorite frameworks, languages, and tools.'
             linkText='Request an integration'
-            linkHref='https://github.com/rivet-dev/rivetkit/issues/new'
+            linkHref='https://github.com/rivet-dev/rivet/issues/new'
             linkExternal
           />
 
@@ -301,14 +286,13 @@ export function TechSection() {
               <TechLink href='/docs/clients/react' name='React' icon={reactLogo} alt='React' />
               <TechLink href='/docs/clients/next-js' name='Next.js' icon={nextjsLogo} alt='Next.js' />
               <TechLink
-                href='https://github.com/rivet-dev/rivetkit/pull/1172'
+                href='/docs/clients/javascript'
                 name='Svelte'
                 icon={svelteLogo}
                 alt='Svelte'
-                external
               />
               <TechLink
-                href='https://github.com/rivet-dev/rivetkit/issues/903'
+                href='https://github.com/rivet-dev/rivet/issues/new'
                 name='Vue'
                 icon={vueLogo}
                 alt='Vue'
@@ -338,7 +322,7 @@ export function TechSection() {
 
             <TechSubSection title='AI'>
               <TechLink
-                href='https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/ai-agent'
+                href='https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent'
                 name='AI SDK'
                 icon={vercelLogo}
                 alt='AI SDK'
@@ -348,28 +332,28 @@ export function TechSection() {
 
             <TechSubSection title='Sync'>
               <TechLink
-                href='https://github.com/rivet-dev/rivetkit/issues/908'
+                href='https://github.com/rivet-dev/rivet/issues/new'
                 name='LiveStore'
                 icon={livestoreLogo}
                 alt='LiveStore'
                 status='coming-soon'
               />
               <TechLink
-                href='https://github.com/rivet-dev/rivetkit/issues/909'
+                href='https://github.com/rivet-dev/rivet/issues/new'
                 name='ZeroSync'
                 icon={zerosyncLogo}
                 alt='ZeroSync'
                 status='help-wanted'
               />
               <TechLink
-                href='https://github.com/rivet-dev/rivetkit/issues/910'
+                href='https://github.com/rivet-dev/rivet/issues/new'
                 name='TinyBase'
                 icon={tinybaseLogo}
                 alt='TinyBase'
                 status='help-wanted'
               />
               <TechLink
-                href='https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/crdt'
+                href='https://github.com/rivet-dev/rivet/tree/main/examples/collaborative-document'
                 name='Yjs'
                 icon={yjsLogo}
                 alt='Yjs'
