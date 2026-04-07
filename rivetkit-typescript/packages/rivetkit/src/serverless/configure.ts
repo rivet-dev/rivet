@@ -26,7 +26,7 @@ export async function configureServerlessPool(
 		}
 
 		// Prepare the configuration
-		const customConfig = config.serverless.configurePool;
+		const customConfig = config.configurePool;
 		invariant(customConfig, "configurePool should exist");
 
 		const clientConfig = convertRegistryConfigToClientConfig(config);

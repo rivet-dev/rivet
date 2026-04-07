@@ -7,6 +7,11 @@ import type { ReleaseOpts } from "./main";
 // These are either private packages or have dependencies that aren't available in CI.
 // This should match the filters in .github/workflows/pkg-pr-new.yaml
 export const EXCLUDED_RIVETKIT_PACKAGES = [
+	"@rivetkit/engine",
+	"@rivetkit/engine-darwin-arm64",
+	"@rivetkit/engine-darwin-x64",
+	"@rivetkit/engine-linux-x64-musl",
+	"@rivetkit/engine-win32-x64-gnu",
 	"@rivetkit/shared-data",
 	"@rivetkit/engine-frontend",
 	"@rivetkit/mcp-hub",

@@ -1,0 +1,24 @@
+{
+	"name": "@rivetkit/engine",
+	"version": "2.2.1",
+	"description": "Platform-aware Rivet Engine binary resolver",
+	"license": "Apache-2.0",
+	"type": "module",
+	"files": [
+		"index.js",
+		"index.d.ts",
+		"package.json"
+	],
+	"exports": {
+		".": {
+			"types": "./index.d.ts",
+			"default": "./index.js"
+		}
+	},
+	"optionalDependencies": {
+		"@rivetkit/engine-darwin-arm64": "workspace:*",
+		"@rivetkit/engine-darwin-x64": "workspace:*",
+		"@rivetkit/engine-linux-x64-musl": "workspace:*",
+		"@rivetkit/engine-win32-x64-gnu": "workspace:*"
+	}
+}

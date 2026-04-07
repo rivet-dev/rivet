@@ -335,7 +335,6 @@ async function getRuntimeState(): Promise<DynamicRuntimeState> {
 				use: {
 					[bootstrapConfig.actorName]: actorDefinition,
 				},
-				serveManager: false,
 				noWelcome: true,
 				test: { enabled: false },
 			});

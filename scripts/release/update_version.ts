@@ -39,6 +39,11 @@ export async function updateVersion(opts: ReleaseOpts) {
 			replace: `"version": "${opts.version}"`,
 		},
 		{
+			path: "rivetkit-typescript/packages/engine/npm/*/package.json",
+			find: /"version": ".*"/,
+			replace: `"version": "${opts.version}"`,
+		},
+		{
 			path: "rivetkit-typescript/packages/sqlite-native/package.json",
 			find: /("@rivetkit\/sqlite-native-[^"]+": )"[^"]+"/g,
 			replace: `$1"${opts.version}"`,

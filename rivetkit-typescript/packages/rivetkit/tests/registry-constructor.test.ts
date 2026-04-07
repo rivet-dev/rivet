@@ -47,10 +47,10 @@ describe("Registry constructor", () => {
 	test("reads config mutations made before the prestart tick", async () => {
 		const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
 		const initialTimeoutCalls = setTimeoutSpy.mock.calls.length;
-		let managerPort: number | undefined;
+		let engineVersion: string | undefined;
 
 		vi.spyOn(Runtime, "create").mockImplementation(async (registry) => {
-			managerPort = registry.parseConfig().managerPort;
+			engineVersion = registry.parseConfig().engineVersion;
 
 			return createMockRuntime();
 		});
@@ -59,14 +59,14 @@ describe("Registry constructor", () => {
 			use: {
 				test: testActor,
 			},
-			serveManager: true,
+			startEngine: true,
 		});
 
-		registry.config.managerPort = 7777;
+		registry.config.engineVersion = "9.9.9-test";
 
 		expect(setTimeoutSpy.mock.calls).toHaveLength(initialTimeoutCalls + 1);
 
 		await vi.runAllTimersAsync();
-		expect(managerPort).toBe(7777);
+		expect(engineVersion).toBe("9.9.9-test");
 	});
 });

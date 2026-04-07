@@ -1,10 +1,8 @@
 import {
 	getNodeChildProcess,
-	getNodeCrypto,
 	getNodeFs,
 	getNodeFsSync,
 	getNodePath,
-	getNodeStream,
 	importNodeDependencies,
 } from "@/utils/node";
 import { logger } from "./log";
@@ -12,10 +10,13 @@ import { ENGINE_ENDPOINT, ENGINE_PORT } from "./constants";
 
 export { ENGINE_ENDPOINT, ENGINE_PORT };
 
-const ENGINE_BASE_URL = "https://releases.rivet.dev/rivet";
-const ENGINE_BINARY_NAME = "rivet-engine";
-
 interface EnsureEngineProcessOptions {
+	version: string;
+}
+
+interface PackagedEngineBinary {
+	binaryPath: string;
+	packageName: string;
 	version: string;
 }
 
@@ -42,10 +43,8 @@ export async function ensureEngineProcess(
 
 	const path = getNodePath();
 	const storageRoot = getStoragePath();
-	const binDir = path.join(storageRoot, "bin");
 	const varDir = path.join(storageRoot, "var");
 	const logsDir = path.join(varDir, "logs", "rivet-engine");
-	await ensureDirectoryExists(binDir);
 	await ensureDirectoryExists(varDir);
 	await ensureDirectoryExists(logsDir);
 
@@ -69,12 +68,7 @@ export async function ensureEngineProcess(
 		}
 	}
 
-	const executableName =
-		process.platform === "win32"
-			? `${ENGINE_BINARY_NAME}-${options.version}.exe`
-			: `${ENGINE_BINARY_NAME}-${options.version}`;
-	const binaryPath = path.join(binDir, executableName);
-	await downloadEngineBinaryIfNeeded(binaryPath, options.version, varDir);
+	const binaryPath = await ensureEngineBinaryPath(options.version);
 	// Create log file streams with timestamp in the filename
 	const timestamp = new Date()
 		.toISOString()
@@ -99,7 +93,7 @@ export async function ensureEngineProcess(
 
 	const childProcess = getNodeChildProcess();
 	const child = childProcess.spawn(binaryPath, ["start"], {
-		cwd: path.dirname(binaryPath),
+		cwd: storageRoot,
 		stdio: ["inherit", "pipe", "pipe"],
 		env: {
 			...process.env,
@@ -156,7 +150,7 @@ export async function ensureEngineProcess(
 	logger().debug({
 		msg: "spawned engine process",
 		pid: child.pid,
-		cwd: path.dirname(binaryPath),
+		cwd: storageRoot,
 	});
 
 	child.once("exit", (code, signal) => {
@@ -226,150 +220,43 @@ export async function ensureEngineProcess(
 	});
 }
 
-async function downloadEngineBinaryIfNeeded(
-	binaryPath: string,
-	version: string,
-	varDir: string,
-): Promise<void> {
-	const binaryExists = await fileExists(binaryPath);
-	if (binaryExists) {
-		logger().debug({
-			msg: "engine binary already cached",
-			version,
-			path: binaryPath,
-		});
-		return;
-	}
-
-	const { targetTriplet, extension } = resolveTargetTriplet();
-	const remoteFile = `${ENGINE_BINARY_NAME}-${targetTriplet}${extension}`;
-	const downloadUrl = `${ENGINE_BASE_URL}/${version}/engine/${remoteFile}`;
+async function ensureEngineBinaryPath(version: string): Promise<string> {
+	const packagedBinary = await resolvePackagedEngineBinary(version);
 	logger().info({
-		msg: "downloading engine binary",
-		url: downloadUrl,
-		path: binaryPath,
-		version,
+		msg: "using packaged engine binary",
+		packageName: packagedBinary.packageName,
+		path: packagedBinary.binaryPath,
+		version: packagedBinary.version,
 	});
+	return packagedBinary.binaryPath;
+}
 
-	const response = await fetch(downloadUrl);
-	if (!response.ok || !response.body) {
-		throw new Error(
-			`failed to download rivet engine binary from ${downloadUrl}: ${response.status} ${response.statusText}`,
-		);
-	}
-
-	// Generate unique temp file name to prevent parallel download conflicts
-	const crypto = getNodeCrypto();
-	const tempPath = `${binaryPath}.${crypto.randomUUID()}.tmp`;
-	const startTime = Date.now();
-
-	logger().debug({
-		msg: "starting binary download",
-		tempPath,
-		contentLength: response.headers.get("content-length"),
-	});
-
-	// Warn user if download is taking a long time
-	const slowDownloadWarning = setTimeout(() => {
-		logger().warn({
-			msg: "engine binary download is taking longer than expected, please be patient",
-			version,
-		});
-	}, 5000);
-
+async function resolvePackagedEngineBinary(
+	requestedVersion: string,
+): Promise<PackagedEngineBinary> {
 	try {
-		const stream = getNodeStream();
-		const fsSync = getNodeFsSync();
-		await stream.pipeline(
-			response.body as any,
-			fsSync.createWriteStream(tempPath),
-		);
+		const enginePackageModule = await import(["@rivetkit", "engine"].join("/"));
+		const resolved = enginePackageModule.resolveEngineBinary() as PackagedEngineBinary;
 
-		// Clear the slow download warning
-		clearTimeout(slowDownloadWarning);
-
-		// Get file size to verify download
-		const fs = getNodeFs();
-		const stats = await fs.stat(tempPath);
-		const downloadDuration = Date.now() - startTime;
-
-		if (process.platform !== "win32") {
-			await fs.chmod(tempPath, 0o755);
+		if (resolved.version !== requestedVersion) {
+			throw new Error(
+				`Installed @rivetkit/engine version ${resolved.version} does not match requested engine version ${requestedVersion}. Install matching package versions or set engineVersion to ${resolved.version}.`,
+			);
 		}
-		await fs.rename(tempPath, binaryPath);
 
-		logger().debug({
-			msg: "engine binary download complete",
-			version,
-			path: binaryPath,
-			size: stats.size,
-			durationMs: downloadDuration,
-		});
-		logger().info({
-			msg: "engine binary downloaded",
-			version,
-			path: binaryPath,
-		});
+		return resolved;
 	} catch (error) {
-		// Clear the slow download warning
-		clearTimeout(slowDownloadWarning);
-
-		// Clean up partial temp file on error
-		logger().warn({
-			msg: "engine download failed, please report this error",
-			tempPath,
-			error,
-			issues: "https://github.com/rivet-dev/rivet/issues",
-			support: "https://rivet.dev/discord",
-		});
-		try {
-			const fs = getNodeFs();
-			await fs.unlink(tempPath);
-		} catch (unlinkError) {
-			// Ignore errors when cleaning up (file may not exist)
+		if (error instanceof Error) {
+			throw new Error(
+				`Failed to resolve Rivet Engine binary from @rivetkit/engine for ${process.platform}/${process.arch}. ${error.message}`,
+				{ cause: error },
+			);
 		}
-		throw error;
+		throw new Error(
+			`Failed to resolve Rivet Engine binary from @rivetkit/engine for ${process.platform}/${process.arch}.`,
+			{ cause: error },
+		);
 	}
-}
-//
-function resolveTargetTriplet(): { targetTriplet: string; extension: string } {
-	return resolveTargetTripletFor(process.platform, process.arch);
-}
-
-export function resolveTargetTripletFor(
-	platform: NodeJS.Platform,
-	arch: typeof process.arch,
-): { targetTriplet: string; extension: string } {
-	switch (platform) {
-		case "darwin":
-			if (arch === "arm64") {
-				return { targetTriplet: "aarch64-apple-darwin", extension: "" };
-			}
-			if (arch === "x64") {
-				return { targetTriplet: "x86_64-apple-darwin", extension: "" };
-			}
-			break;
-		case "linux":
-			if (arch === "x64") {
-				return {
-					targetTriplet: "x86_64-unknown-linux-musl",
-					extension: "",
-				};
-			}
-			break;
-		case "win32":
-			if (arch === "x64") {
-				return {
-					targetTriplet: "x86_64-pc-windows-gnu",
-					extension: ".exe",
-				};
-			}
-			break;
-	}
-
-	throw new Error(
-		`unsupported platform for rivet engine binary: ${platform}/${arch}`,
-	);
 }
 async function isEngineRunning(): Promise<boolean> {
 	// Check if the engine is running on the port
@@ -415,16 +302,6 @@ async function checkIfEngineAlreadyRunningOnPort(
 	// Port responded but not with OK status
 	return false;
 }
-async function fileExists(filePath: string): Promise<boolean> {
-	try {
-		const fs = getNodeFs();
-		await fs.access(filePath);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
 const HEALTH_MAX_WAIT = 10_000;
 const HEALTH_INTERVAL = 100;
 

@@ -1,8 +1,5 @@
 import { z } from "zod/v4";
-import { VERSION } from "@/utils";
 import {
-	getRivetRunEngineVersion,
-	getRivetRunEngine,
 	getRivetPublicEndpoint,
 	getRivetPublicToken,
 } from "@/utils/env-vars";
@@ -27,32 +24,7 @@ export const ConfigurePoolSchema = z
 	.optional();
 
 export const ServerlessConfigSchema = z.object({
-	// MARK: Run Engine
-	/**
-	 * @experimental
-	 *
-	 * Downloads and starts the full Rust engine process.
-	 * Auto-enabled in development mode when no endpoint is provided.
-	 */
-	spawnEngine: z.boolean().default(() => getRivetRunEngine()),
-
-	/** @experimental */
-	engineVersion: z
-		.string()
-		.optional()
-		.default(() => getRivetRunEngineVersion() ?? VERSION),
-
-	/**
-	 * @experimental
-	 *
-	 * Automatically configure serverless envoys in the engine.
-	 * Can only be used when envoyKind is "serverless".
-	 * If true, uses default configuration. Can also provide custom configuration.
-	 */
-	configurePool: ConfigurePoolSchema.optional(),
-
 	// MARK: Routing
-	// TODO: serverlessBasePath? better naming?
 	basePath: z.string().optional().default("/api/rivet"),
 
 	// MARK: Public Endpoint Configuration

@@ -1,0 +1,12 @@
+{
+	"name": "@rivetkit/engine-win32-x64-gnu",
+	"version": "2.2.1",
+	"description": "Rivet Engine binary for Windows x64 GNU",
+	"license": "Apache-2.0",
+	"os": ["win32"],
+	"cpu": ["x64"],
+	"files": ["rivet-engine.exe"],
+	"rivet": {
+		"binary": "rivet-engine.exe"
+	}
+}

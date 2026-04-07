@@ -65,7 +65,7 @@ export function buildRuntimeRouter(
 	// called during the driver's teardown, after all actors have stopped.
 	engineClient.setKvChannelShutdown?.(kvChannelManager.shutdown);
 
-	return createRouter(config.managerBasePath, (router) => {
+	return createRouter(config.httpBasePath, (router) => {
 		// Actor gateway
 		router.use(
 			"*",

@@ -110,6 +110,18 @@ export async function uploadContentToReleases(
 	})`aws s3 cp - s3://rivet-releases/${remotePath} --endpoint-url ${endpointUrl}`;
 }
 
+export async function downloadFileFromReleases(
+	remotePath: string,
+	localPath: string,
+): Promise<void> {
+	const { awsEnv, endpointUrl } = await getReleasesS3Config();
+	await $({
+		env: awsEnv,
+		shell: true,
+		stdio: "inherit",
+	})`aws s3 cp s3://rivet-releases/${remotePath} ${localPath} --endpoint-url ${endpointUrl}`;
+}
+
 export interface ListReleasesResult {
 	Contents?: { Key: string; Size: number }[];
 }

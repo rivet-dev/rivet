@@ -14,8 +14,7 @@ export async function setupTest<A extends Registry<any>>(
 	registry: A,
 ): Promise<SetupTestResult<A>> {
 	registry.config.test = { ...registry.config.test, enabled: true };
-	registry.config.serveManager = true;
-	registry.config.managerPort = 10_000 + Math.floor(Math.random() * 40_000);
+	registry.config.httpPort = 10_000 + Math.floor(Math.random() * 40_000);
 	registry.config.inspector = {
 		enabled: true,
 		token: () => "token",
@@ -25,8 +24,10 @@ export async function setupTest<A extends Registry<any>>(
 	await runtime.startEnvoy();
 	await new Promise((resolve) => setTimeout(resolve, 250));
 
-	invariant(runtime.managerPort, "missing runtime manager port");
-	const endpoint = `http://127.0.0.1:${runtime.managerPort}`;
+	await runtime.ensureHttpServer();
+
+	invariant(runtime.httpPort, "missing runtime HTTP port");
+	const endpoint = `http://127.0.0.1:${runtime.httpPort}`;
 
 	const client = createClient<A>({
 		endpoint,

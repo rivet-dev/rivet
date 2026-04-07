@@ -11,9 +11,6 @@ import { logger } from "./log";
 const DEV_ENVOY_VERSION = Math.floor(Date.now() / 1000);
 
 export const toNextHandler = (registry: Registry<any>) => {
-	// Don't run server locally since we're using the fetch handler directly
-	registry.config.serveManager = false;
-
 	// Set basePath to "/" since Next.js route strips the /api/rivet prefix
 	registry.config.serverless = {
 		...registry.config.serverless,
@@ -32,8 +29,8 @@ export const toNextHandler = (registry: Registry<any>) => {
 
 		// Set these on the registry's config directly since the legacy inputConfig
 		// isn't used by the serverless router
-		registry.config.serverless.spawnEngine = true;
-		registry.config.serverless.configurePool = {
+		registry.config.startEngine = true;
+		registry.config.configurePool = {
 			url: `${publicUrl}/api/rivet`,
 			requestLifespan: 300,
 			maxConcurrentActors: 100_000,

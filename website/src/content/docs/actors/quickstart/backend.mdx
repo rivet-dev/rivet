@@ -75,12 +75,12 @@ deno run --allow-net --allow-read --allow-env --watch index.ts
 
 </CodeGroup>
 
-Your server is now running on `http://localhost:6420`. To change the port, pass `managerPort` in the setup config:
+Your server is now running on `http://localhost:6421`. To change the port, pass `httpPort` in the setup config:
 
 ```ts @nocheck
 const registry = setup({
 	use: { counter },
-	managerPort: 3000,
+	httpPort: 3000,
 });
 ```
 
@@ -120,7 +120,7 @@ registry.start();
 import { createClient } from "rivetkit/client";
 import type { registry } from "./index";
 
-const client = createClient<typeof registry>("http://localhost:6420");
+const client = createClient<typeof registry>("http://localhost:6421");
 
 // Get or create a counter actor for the key "my-counter"
 const counter = client.counter.getOrCreate(["my-counter"]);
@@ -173,7 +173,7 @@ import { createRivetKit } from "@rivetkit/react";
 import { useState } from "react";
 import type { registry } from "./index";
 
-const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6421");
 
 function Counter() {
 	const [count, setCount] = useState(0);
@@ -221,4 +221,3 @@ See the [React documentation](/docs/clients/react) for more information.
 ## Configuration Options
 
 <ConfigurationOptions />
-

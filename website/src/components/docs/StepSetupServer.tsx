@@ -11,7 +11,7 @@ import { createClient } from "rivetkit/client";
 import { registry } from "./registry";
 
 // Build client to communicate with actors (optional)
-const client = createClient<typeof registry>("http://localhost:6420");
+const client = createClient<typeof registry>("http://localhost:6421");
 
 const app = new Hono();
 
@@ -35,7 +35,7 @@ import { createClient } from "rivetkit/client";
 import { registry } from "./registry";
 
 // Build client to communicate with actors (optional)
-const client = createClient<typeof registry>("http://localhost:6420");
+const client = createClient<typeof registry>("http://localhost:6421");
 
 const app = new Elysia()
 	// Exposes Rivet API to communicate with actors

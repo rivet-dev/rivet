@@ -1,0 +1,12 @@
+{
+	"name": "@rivetkit/engine-darwin-arm64",
+	"version": "2.2.1",
+	"description": "Rivet Engine binary for macOS arm64",
+	"license": "Apache-2.0",
+	"os": ["darwin"],
+	"cpu": ["arm64"],
+	"files": ["rivet-engine"],
+	"rivet": {
+		"binary": "rivet-engine"
+	}
+}

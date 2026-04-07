@@ -7,6 +7,7 @@ import { $ } from "execa";
 import { program } from "commander";
 import * as semver from "semver";
 import { buildJsArtifacts } from "./build-artifacts";
+import { publishEnginePackage } from "./engine";
 import { promoteArtifacts } from "./promote-artifacts";
 import { tagDocker } from "./docker";
 import {
@@ -286,6 +287,7 @@ const STEPS = [
 	"validate-reuse-version",
 	"run-ci-build-and-checks",
 	"build-js-artifacts",
+	"publish-engine-package",
 	"publish-sdk",
 	"tag-docker",
 	"promote-artifacts",
@@ -326,6 +328,7 @@ const PHASE_MAP: Record<Phase, Step[]> = {
 	"setup-ci": ["validate-reuse-version", "run-ci-build-and-checks", "build-js-artifacts"],
 	// These steps run after the required artifacts have been successfully built.
 	"complete-ci": [
+		"publish-engine-package",
 		"publish-sdk",
 		"tag-docker",
 		"promote-artifacts",
@@ -596,6 +599,11 @@ async function main() {
 	if (shouldRunStep("build-js-artifacts")) {
 		console.log("==> Building JS Artifacts");
 		await buildJsArtifacts(releaseOpts);
+	}
+
+	if (shouldRunStep("publish-engine-package")) {
+		console.log("==> Publishing Engine Package");
+		await publishEnginePackage(releaseOpts);
 	}
 
 	if (shouldRunStep("publish-sdk")) {

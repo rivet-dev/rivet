@@ -6,6 +6,7 @@ settings:
 
 overrides:
   rivetkit: workspace:*
+  '@rivetkit/engine': workspace:*
   '@rivetkit/react': workspace:*
   '@rivetkit/next-js': workspace:*
   '@rivetkit/db': workspace:*
@@ -4062,6 +4063,29 @@ importers:
         specifier: ^5.5.2
         version: 5.9.3
 
+  rivetkit-typescript/packages/engine:
+    optionalDependencies:
+      '@rivetkit/engine-darwin-arm64':
+        specifier: workspace:*
+        version: link:npm/darwin-arm64
+      '@rivetkit/engine-darwin-x64':
+        specifier: workspace:*
+        version: link:npm/darwin-x64
+      '@rivetkit/engine-linux-x64-musl':
+        specifier: workspace:*
+        version: link:npm/linux-x64-musl
+      '@rivetkit/engine-win32-x64-gnu':
+        specifier: workspace:*
+        version: link:npm/win32-x64-gnu
+
+  rivetkit-typescript/packages/engine/npm/darwin-arm64: {}
+
+  rivetkit-typescript/packages/engine/npm/darwin-x64: {}
+
+  rivetkit-typescript/packages/engine/npm/linux-x64-musl: {}
+
+  rivetkit-typescript/packages/engine/npm/win32-x64-gnu: {}
+
   rivetkit-typescript/packages/framework-base:
     dependencies:
       '@tanstack/store':
@@ -4354,6 +4378,10 @@ importers:
       zod-to-json-schema:
         specifier: ^3.25.0
         version: 3.25.1(zod@4.1.13)
+    optionalDependencies:
+      '@rivetkit/engine':
+        specifier: workspace:*
+        version: link:../engine
 
   rivetkit-typescript/packages/sql-loader:
     devDependencies:

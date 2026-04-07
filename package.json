@@ -33,6 +33,7 @@
 	},
 	"resolutions": {
 		"rivetkit": "workspace:*",
+		"@rivetkit/engine": "workspace:*",
 		"@rivetkit/react": "workspace:*",
 		"@rivetkit/next-js": "workspace:*",
 		"@rivetkit/db": "workspace:*",

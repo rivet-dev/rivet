@@ -62,7 +62,7 @@ export class Runtime<A extends RegistryActors> {
 	#actorDriver?: EngineActorDriver;
 	#startKind?: StartKind;
 
-	managerPort?: number;
+	httpPort?: number;
 	#serverlessRouter?: ReturnType<typeof buildServerlessRouter>["router"];
 
 	get config() {
@@ -77,12 +77,12 @@ export class Runtime<A extends RegistryActors> {
 		registry: Registry<A>,
 		config: RegistryConfig,
 		engineClient: EngineControlClient,
-		managerPort?: number,
+		httpPort?: number,
 	) {
 		this.#registry = registry;
 		this.#config = config;
 		this.#engineClient = engineClient;
-		this.managerPort = managerPort;
+		this.httpPort = httpPort;
 	}
 
 	static async create<A extends RegistryActors>(
@@ -98,17 +98,15 @@ export class Runtime<A extends RegistryActors> {
 			configureDefaultLogger(config.logging?.level);
 		}
 
-		const shouldSpawnEngine =
-			config.serverless.spawnEngine || (config.serveManager && !config.endpoint);
-		if (shouldSpawnEngine) {
+		if (config.startEngine) {
 			config.endpoint = ENGINE_ENDPOINT;
 
 			logger().debug({
 				msg: "spawning engine",
-				version: config.serverless.engineVersion,
+				version: config.engineVersion,
 			});
 			await ensureEngineProcess({
-				version: config.serverless.engineVersion,
+				version: config.engineVersion,
 			});
 		}
 
@@ -117,86 +115,7 @@ export class Runtime<A extends RegistryActors> {
 		);
 		await ensureLocalRunnerConfig(config);
 
-		let managerPort: number | undefined;
-		if (config.serveManager) {
-			const configuredManagerPort = config.managerPort;
-			const serveRuntime = detectRuntime();
-			let upgradeWebSocket: any;
-			const getUpgradeWebSocket: GetUpgradeWebSocket = () =>
-				upgradeWebSocket;
-			engineClient.setGetUpgradeWebSocket(getUpgradeWebSocket);
-
-			const { router: runtimeRouter } = buildRuntimeRouter(
-				config,
-				engineClient,
-				getUpgradeWebSocket,
-				serveRuntime,
-			);
-
-			managerPort = await findFreePort(config.managerPort);
-
-			if (managerPort !== configuredManagerPort) {
-				logger().warn({
-					msg: `port ${configuredManagerPort} is in use, using ${managerPort}`,
-				});
-			}
-
-			logger().debug({
-				msg: "serving runtime router",
-				port: managerPort,
-			});
-
-			if (
-				config.publicEndpoint ===
-				`http://127.0.0.1:${configuredManagerPort}`
-			) {
-				config.publicEndpoint = `http://127.0.0.1:${managerPort}`;
-				config.serverless.publicEndpoint = config.publicEndpoint;
-			}
-			config.managerPort = managerPort;
-
-			let serverApp = runtimeRouter;
-			if (config.publicDir) {
-				let dirExists = false;
-				try {
-					const fsSync = getNodeFsSync();
-					dirExists = fsSync.existsSync(config.publicDir);
-				} catch {
-					// Node fs not available.
-				}
-
-				if (dirExists) {
-					const { Hono } = await import("hono");
-					const serveStaticFn =
-						await loadRuntimeServeStatic(serveRuntime);
-					const wrapper = new Hono();
-					wrapper.use(
-						"*",
-						serveStaticFn({ root: `./${config.publicDir}` }),
-					);
-					wrapper.route("/", runtimeRouter);
-					serverApp = wrapper;
-				}
-			}
-
-			const out = await crossPlatformServe(
-				config,
-				managerPort,
-				serverApp,
-				serveRuntime,
-			);
-			upgradeWebSocket = out.upgradeWebSocket;
-
-			if (out.closeServer && process.env.NODE_ENV !== "production") {
-				const shutdown = () => {
-					out.closeServer!();
-				};
-				process.on("SIGTERM", shutdown);
-				process.on("SIGINT", shutdown);
-			}
-		}
-
-		const runtime = new Runtime(registry, config, engineClient, managerPort);
+		const runtime = new Runtime(registry, config, engineClient);
 
 		logger().info({
 			msg: "rivetkit ready",
@@ -208,6 +127,87 @@ export class Runtime<A extends RegistryActors> {
 		return runtime;
 	}
 
+	async ensureHttpServer(): Promise<void> {
+		if (this.httpPort) {
+			return;
+		}
+
+		const configuredHttpPort = this.#config.httpPort;
+		const serveRuntime = detectRuntime();
+		let upgradeWebSocket: any;
+		const getUpgradeWebSocket: GetUpgradeWebSocket = () => upgradeWebSocket;
+		this.#engineClient.setGetUpgradeWebSocket(getUpgradeWebSocket);
+
+		const { router: runtimeRouter } = buildRuntimeRouter(
+			this.#config,
+			this.#engineClient,
+			getUpgradeWebSocket,
+			serveRuntime,
+		);
+
+		const httpPort = await findFreePort(configuredHttpPort);
+		if (httpPort !== configuredHttpPort) {
+			logger().warn({
+				msg: `port ${configuredHttpPort} is in use, using ${httpPort}`,
+			});
+		}
+
+		logger().debug({
+			msg: "serving local HTTP server",
+			port: httpPort,
+		});
+
+		if (
+			this.#config.publicEndpoint ===
+			`http://127.0.0.1:${configuredHttpPort}`
+		) {
+			this.#config.publicEndpoint = `http://127.0.0.1:${httpPort}`;
+			this.#config.serverless.publicEndpoint = this.#config.publicEndpoint;
+		}
+		this.#config.httpPort = httpPort;
+
+		let serverApp = runtimeRouter;
+		if (this.#config.staticDir) {
+			let dirExists = false;
+			try {
+				const fsSync = getNodeFsSync();
+				dirExists = fsSync.existsSync(this.#config.staticDir);
+			} catch {
+				// Node fs not available.
+			}
+
+			if (dirExists) {
+				const { Hono } = await import("hono");
+				const serveStaticFn = await loadRuntimeServeStatic(serveRuntime);
+				const wrapper = new Hono();
+				wrapper.use(
+					"*",
+					serveStaticFn({ root: `./${this.#config.staticDir}` }),
+				);
+				wrapper.route("/", runtimeRouter);
+				serverApp = wrapper;
+			}
+		}
+
+		const out = await crossPlatformServe(
+			this.#config,
+			httpPort,
+			serverApp,
+			serveRuntime,
+		);
+		upgradeWebSocket = out.upgradeWebSocket;
+
+		if (out.closeServer && process.env.NODE_ENV !== "production") {
+			const shutdown = () => {
+				out.closeServer!();
+			};
+			process.on("SIGTERM", shutdown);
+			process.on("SIGINT", shutdown);
+		}
+
+		this.httpPort = httpPort;
+	}
+
 	startServerless(): void {
 		if (this.#startKind === "serverless") return;
 		invariant(!this.#startKind, "Runtime already started as serverful");
@@ -217,7 +217,7 @@ export class Runtime<A extends RegistryActors> {
 
 		this.#printWelcome();
 
-		if (this.#config.serverless.configurePool) {
+		if (this.#config.configurePool) {
 			// biome-ignore lint/nursery/noFloatingPromises: intentional
 			configureServerlessPool(this.#config);
 		}
@@ -247,8 +247,8 @@ export class Runtime<A extends RegistryActors> {
 	#printWelcome(): void {
 		if (this.#config.noWelcome) return;
 
-		const inspectorUrl = this.managerPort
-			? getInspectorUrl(this.#config, this.managerPort)
+		const inspectorUrl = this.httpPort
+			? getInspectorUrl(this.#config, this.httpPort)
 			: undefined;
 
 		console.log();
@@ -271,11 +271,11 @@ export class Runtime<A extends RegistryActors> {
 			logLine("Client", this.#config.publicEndpoint);
 		}
 
-		if (this.#config.publicDir) {
+		if (this.#config.staticDir) {
 			try {
 				const fsSync = getNodeFsSync();
-				if (fsSync.existsSync(this.#config.publicDir)) {
-					logLine("Static", `./${this.#config.publicDir}`);
+				if (fsSync.existsSync(this.#config.staticDir)) {
+					logLine("Static", `./${this.#config.staticDir}`);
 				}
 			} catch {
 				// Node fs not available.
