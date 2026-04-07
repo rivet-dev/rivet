@@ -106,8 +106,8 @@ export async function publishSdk(opts: ReleaseOpts) {
 
 	// Get list of packages to publish
 	const enginePackagePaths = [
-		`${opts.root}/engine/sdks/typescript/runner`,
-		`${opts.root}/engine/sdks/typescript/runner-protocol`,
+		`${opts.root}/rivetkit-typescript/packages/engine-runner`,
+		`${opts.root}/rivetkit-typescript/packages/engine-runner-protocol`,
 		`${opts.root}/engine/sdks/typescript/api-full`,
 	];
 

@@ -24,4 +24,4 @@ jobs:
           find /tmp/inspector-repack -name '*.map' -delete
           tar czf inspector.tar.gz -C /tmp/inspector-repack .
           rm -rf /tmp/inspector-repack
-      - run: pnpm dlx pkg-pr-new publish 'shared/typescript/*' 'engine/sdks/typescript/runner/' 'engine/sdks/typescript/runner-protocol/' 'engine/sdks/typescript/envoy-client/' 'engine/sdks/typescript/envoy-protocol/' 'rivetkit-typescript/packages/*' --packageManager pnpm --template './examples/*'
+      - run: pnpm dlx pkg-pr-new publish 'shared/typescript/*' 'engine/sdks/typescript/envoy-client/' 'engine/sdks/typescript/envoy-protocol/' 'rivetkit-typescript/packages/*' --packageManager pnpm --template './examples/*'

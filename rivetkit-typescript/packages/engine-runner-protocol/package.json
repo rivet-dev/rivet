@@ -1,0 +1,36 @@
+{
+	"name": "@rivetkit/engine-runner-protocol",
+	"version": "2.2.1",
+	"license": "Apache-2.0",
+	"type": "module",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/index.d.ts",
+				"default": "./dist/index.js"
+			},
+			"require": {
+				"types": "./dist/index.d.cts",
+				"default": "./dist/index.cjs"
+			}
+		}
+	},
+	"files": [
+		"dist/**/*.js",
+		"dist/**/*.d.ts"
+	],
+	"scripts": {
+		"build": "tsup src/index.ts",
+		"clean": "rm -rf dist",
+		"check-types": "tsc --noEmit"
+	},
+	"types": "dist/index.d.ts",
+	"dependencies": {
+		"@rivetkit/bare-ts": "^0.6.2"
+	},
+	"devDependencies": {
+		"@types/node": "^20.19.13",
+		"tsup": "^8.5.0",
+		"typescript": "^5.9.2"
+	}
+}

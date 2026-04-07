@@ -29,7 +29,7 @@ use crate::protocol::{
 // MARK: Constants
 
 /// Timeout for individual KV operations in milliseconds.
-/// Matches KV_EXPIRE in engine/sdks/typescript/runner/src/mod.ts.
+/// Matches KV_EXPIRE in rivetkit-typescript/packages/engine-runner/src/mod.ts.
 const KV_EXPIRE_MS: u64 = 30_000;
 
 /// Initial reconnect delay in milliseconds.
@@ -708,7 +708,7 @@ fn build_ws_url(config: &KvChannelConfig) -> String {
 /// Calculate exponential backoff delay with jitter.
 ///
 /// Matches the runner protocol reconnect strategy from
-/// engine/sdks/typescript/runner/src/utils.ts.
+/// rivetkit-typescript/packages/engine-runner/src/utils.ts.
 fn calculate_backoff(attempt: u32) -> Duration {
 	let delay = INITIAL_BACKOFF_MS as f64 * BACKOFF_MULTIPLIER.powi(attempt as i32);
 	let delay = delay.min(MAX_BACKOFF_MS as f64);
@@ -881,7 +881,7 @@ mod tests {
 
 	#[test]
 	fn backoff_constants_match_runner_protocol() {
-		// These must match engine/sdks/typescript/runner/src/utils.ts.
+		// These must match rivetkit-typescript/packages/engine-runner/src/utils.ts.
 		assert_eq!(INITIAL_BACKOFF_MS, 1000);
 		assert_eq!(MAX_BACKOFF_MS, 30_000);
 		assert!((BACKOFF_MULTIPLIER - 2.0).abs() < f64::EPSILON);

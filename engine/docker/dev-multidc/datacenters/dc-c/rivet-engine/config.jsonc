@@ -11,9 +11,8 @@
 	},
 	"topology": {
 		"datacenter_label": 3,
-		"datacenters": [
-			{
-				"name": "dc-a",
+		"datacenters": {
+			"dc-a": {
 				"datacenter_label": 1,
 				"is_leader": true,
 				"peer_url": "http://rivet-engine-dc-a:6421",
@@ -24,8 +23,7 @@
 					"localhost"
 				]
 			},
-			{
-				"name": "dc-b",
+			"dc-b": {
 				"datacenter_label": 2,
 				"is_leader": false,
 				"peer_url": "http://rivet-engine-dc-b:6421",
@@ -36,8 +34,7 @@
 					"localhost"
 				]
 			},
-			{
-				"name": "dc-c",
+			"dc-c": {
 				"datacenter_label": 3,
 				"is_leader": false,
 				"peer_url": "http://rivet-engine-dc-c:6421",
@@ -48,7 +45,7 @@
 					"localhost"
 				]
 			}
-		]
+		}
 	},
 	"postgres": {
 		"url": "postgresql://postgres:postgres@postgres-dc-c:5432/rivet_engine"

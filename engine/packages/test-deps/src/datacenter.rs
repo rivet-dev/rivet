@@ -90,6 +90,10 @@ pub async fn setup_single_datacenter(
 		https: None,
 		..Default::default()
 	});
+	root.metrics = rivet_config::config::metrics::Metrics {
+		host: None,
+		port: Some(0),
+	};
 
 	// Use short timeouts for tests
 	root.pegboard = Some(rivet_config::config::pegboard::Pegboard {

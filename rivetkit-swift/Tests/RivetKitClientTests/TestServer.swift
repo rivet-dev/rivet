@@ -155,11 +155,11 @@ actor TestServer {
                 ["pnpm", "--filter", "@rivetkit/virtual-websocket", "build"]
             ),
             (
-                repoRoot.appendingPathComponent("engine/sdks/typescript/runner-protocol/dist/mod.js"),
+                repoRoot.appendingPathComponent("rivetkit-typescript/packages/engine-runner-protocol/dist/mod.js"),
                 ["pnpm", "--filter", "@rivetkit/engine-runner-protocol", "build"]
             ),
             (
-                repoRoot.appendingPathComponent("engine/sdks/typescript/runner/dist/mod.js"),
+                repoRoot.appendingPathComponent("rivetkit-typescript/packages/engine-runner/dist/mod.js"),
                 ["pnpm", "--filter", "@rivetkit/engine-runner", "build"]
             ),
         ]
