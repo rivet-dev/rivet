@@ -14,7 +14,6 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as JoinRouteImport } from './routes/join'
 import { Route as ContextRouteImport } from './routes/_context'
 import { Route as ContextIndexRouteImport } from './routes/_context/index'
-import { Route as OnboardingChooseOrganizationRouteImport } from './routes/onboarding/choose-organization'
 import { Route as ContextEngineRouteImport } from './routes/_context/_engine'
 import { Route as ContextCloudRouteImport } from './routes/_context/_cloud'
 import { Route as ContextCloudNewIndexRouteImport } from './routes/_context/_cloud/new/index'
@@ -64,12 +63,6 @@ const ContextIndexRoute = ContextIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ContextRoute,
 } as any)
-const OnboardingChooseOrganizationRoute =
-  OnboardingChooseOrganizationRouteImport.update({
-    id: '/choose-organization',
-    path: '/choose-organization',
-    getParentRoute: () => OnboardingRoute,
-  } as any)
 const ContextEngineRoute = ContextEngineRouteImport.update({
   id: '/_engine',
   getParentRoute: () => ContextRoute,
@@ -236,8 +229,7 @@ export interface FileRoutesByFullPath {
   '/': typeof ContextIndexRoute
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
-  '/onboarding': typeof OnboardingRouteWithChildren
-  '/onboarding/choose-organization': typeof OnboardingChooseOrganizationRoute
+  '/onboarding': typeof OnboardingRoute
   '/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
   '/ns/$namespace': typeof ContextEngineNsNamespaceRouteWithChildren
   '/new/': typeof ContextCloudNewIndexRoute
@@ -264,9 +256,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
-  '/onboarding': typeof OnboardingRouteWithChildren
+  '/onboarding': typeof OnboardingRoute
   '/': typeof ContextIndexRoute
-  '/onboarding/choose-organization': typeof OnboardingChooseOrganizationRoute
   '/new': typeof ContextCloudNewIndexRoute
   '/ns/$namespace/settings': typeof ContextEngineNsNamespaceSettingsRoute
   '/orgs/$organization': typeof ContextCloudOrgsOrganizationIndexRoute
@@ -291,10 +282,9 @@ export interface FileRoutesById {
   '/_context': typeof ContextRouteWithChildren
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
-  '/onboarding': typeof OnboardingRouteWithChildren
+  '/onboarding': typeof OnboardingRoute
   '/_context/_cloud': typeof ContextCloudRouteWithChildren
   '/_context/_engine': typeof ContextEngineRouteWithChildren
-  '/onboarding/choose-organization': typeof OnboardingChooseOrganizationRoute
   '/_context/': typeof ContextIndexRoute
   '/_context/_cloud/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
   '/_context/_engine/ns/$namespace': typeof ContextEngineNsNamespaceRouteWithChildren
@@ -326,7 +316,6 @@ export interface FileRouteTypes {
     | '/join'
     | '/login'
     | '/onboarding'
-    | '/onboarding/choose-organization'
     | '/orgs/$organization'
     | '/ns/$namespace'
     | '/new/'
@@ -355,7 +344,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/'
-    | '/onboarding/choose-organization'
     | '/new'
     | '/ns/$namespace/settings'
     | '/orgs/$organization'
@@ -382,7 +370,6 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/_context/_cloud'
     | '/_context/_engine'
-    | '/onboarding/choose-organization'
     | '/_context/'
     | '/_context/_cloud/orgs/$organization'
     | '/_context/_engine/ns/$namespace'
@@ -412,7 +399,7 @@ export interface RootRouteChildren {
   ContextRoute: typeof ContextRouteWithChildren
   JoinRoute: typeof JoinRoute
   LoginRoute: typeof LoginRoute
-  OnboardingRoute: typeof OnboardingRouteWithChildren
+  OnboardingRoute: typeof OnboardingRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -451,13 +438,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof ContextIndexRouteImport
       parentRoute: typeof ContextRoute
-    }
-    '/onboarding/choose-organization': {
-      id: '/onboarding/choose-organization'
-      path: '/choose-organization'
-      fullPath: '/onboarding/choose-organization'
-      preLoaderRoute: typeof OnboardingChooseOrganizationRouteImport
-      parentRoute: typeof OnboardingRoute
     }
     '/_context/_engine': {
       id: '/_context/_engine'
@@ -776,23 +756,11 @@ const ContextRouteChildren: ContextRouteChildren = {
 const ContextRouteWithChildren =
   ContextRoute._addFileChildren(ContextRouteChildren)
 
-interface OnboardingRouteChildren {
-  OnboardingChooseOrganizationRoute: typeof OnboardingChooseOrganizationRoute
-}
-
-const OnboardingRouteChildren: OnboardingRouteChildren = {
-  OnboardingChooseOrganizationRoute: OnboardingChooseOrganizationRoute,
-}
-
-const OnboardingRouteWithChildren = OnboardingRoute._addFileChildren(
-  OnboardingRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   ContextRoute: ContextRouteWithChildren,
   JoinRoute: JoinRoute,
   LoginRoute: LoginRoute,
-  OnboardingRoute: OnboardingRouteWithChildren,
+  OnboardingRoute: OnboardingRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

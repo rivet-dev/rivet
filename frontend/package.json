@@ -126,6 +126,7 @@
 		"cmdk": "^1.1.1",
 		"d3-array": "^3.2.4",
 		"date-fns": "^4.1.0",
+		"es-toolkit": "^1.45.1",
 		"esast-util-from-js": "^2.0.1",
 		"escape-html": "^1.0.3",
 		"estree-util-to-js": "^2.0.0",

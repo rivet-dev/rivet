@@ -1,5 +1,5 @@
 import { faPlus, Icon } from "@rivet-gg/icons";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { type ComponentProps, useCallback } from "react";
 import {
 	Avatar,
@@ -13,7 +13,6 @@ import {
 	SelectValue,
 	Skeleton,
 } from "@/components";
-import { VisibilitySensor } from "@/components/visibility-sensor";
 import { useCloudDataProvider } from "./actors";
 
 interface CloudOrganizationSelectProps extends ComponentProps<typeof Select> {
@@ -27,13 +26,9 @@ export function CloudOrganizationSelect({
 	onValueChange,
 	...props
 }: CloudOrganizationSelectProps) {
-	const {
-		data = [],
-		isLoading,
-		hasNextPage,
-		fetchNextPage,
-		isFetchingNextPage,
-	} = useInfiniteQuery(useCloudDataProvider().organizationsQueryOptions());
+	const { data = [], isLoading } = useQuery(
+		useCloudDataProvider().organizationsQueryOptions(),
+	);
 
 	const handleValueChange = useCallback(
 		(value: string) => {
@@ -74,29 +69,19 @@ export function CloudOrganizationSelect({
 						</SelectItem>
 					</>
 				) : null}
-				{data.map((membership) => (
-					<SelectItem
-						key={membership.id}
-						value={membership.organization.id}
-					>
+				{data.map((org) => (
+					<SelectItem key={org.id} value={org.id}>
 						<span className="inline-flex items-center gap-2">
 							<Avatar className="size-5">
-								<AvatarImage
-									src={membership.organization.imageUrl}
-								/>
+								<AvatarImage src={org.logo ?? undefined} />
 								<AvatarFallback>
-									{membership.organization.name?.[0]?.toUpperCase()}
+									{org.name?.[0]?.toUpperCase()}
 								</AvatarFallback>
 							</Avatar>
-							<span className="truncate">
-								{membership.organization.name}
-							</span>
+							<span className="truncate">{org.name}</span>
 						</span>
 					</SelectItem>
 				))}
-				{hasNextPage && !isFetchingNextPage ? (
-					<VisibilitySensor onChange={fetchNextPage} />
-				) : null}
 			</SelectContent>
 		</Select>
 	);

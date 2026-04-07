@@ -7,9 +7,15 @@ export const Route = createFileRoute("/_context/_cloud/orgs/$organization")({
 	beforeLoad: async ({ context, params }) => {
 		return await match(context)
 			.with({ __type: "cloud" }, async (context) => {
-				await authClient.organization.setActive({
-					organizationId: params.organization,
-				});
+				const session = await authClient.getSession();
+				if (
+					session.data?.session.activeOrganizationId !==
+					params.organization
+				) {
+					await authClient.organization.setActive({
+						organizationId: params.organization,
+					});
+				}
 
 				return {
 					dataProvider: context.getOrCreateOrganizationContext(

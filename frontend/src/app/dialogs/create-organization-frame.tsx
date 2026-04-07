@@ -5,17 +5,6 @@ import { useCloudDataProvider } from "@/components/actors";
 import { authClient } from "@/lib/auth";
 import { queryClient } from "@/queries/global";
 
-function generateSlug(name: string): string {
-	const base = name
-		.toLowerCase()
-		.replace(/[^a-z0-9\s-]/g, "")
-		.replace(/\s+/g, "-")
-		.replace(/-+/g, "-")
-		.replace(/^-|-$/g, "");
-	const suffix = Math.random().toString(36).substring(2, 6);
-	return `${base}-${suffix}`;
-}
-
 interface CreateOrganizationContentProps extends DialogContentProps {}
 
 export default function CreateOrganizationContent({
@@ -24,9 +13,10 @@ export default function CreateOrganizationContent({
 	const dataProvider = useCloudDataProvider();
 	const { mutateAsync } = useMutation({
 		mutationFn: async (values: { name: string }) => {
+			// Slug is generated server-side; send a throwaway value to satisfy the API requirement.
 			const result = await authClient.organization.create({
 				name: values.name,
-				slug: generateSlug(values.name),
+				slug: crypto.randomUUID(),
 			});
 			return result;
 		},

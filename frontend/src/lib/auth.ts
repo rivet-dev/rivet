@@ -15,25 +15,31 @@ export const authClient: AuthClient =
 	__APP_TYPE__ === "cloud" ? createClient() : (null as unknown as AuthClient);
 
 export const redirectToOrganization = async (
-	search: Record<string, string>,
+	{ from }: { from?: string } = {},
 ) => {
 	const session = await authClient.getSession();
 	if (session.data) {
-		const orgs = await authClient.organization.list();
 
-		if (orgs.data && orgs.data.length > 0) {
-			await authClient.organization.setActive({
-				organizationId: orgs.data[0].id,
-			});
+		if (session.data.session.activeOrganizationId) {
 			throw redirect({
 				to: "/orgs/$organization",
-				search: true,
-				params: { organization: orgs.data[0].id },
+				search: from ? { from } : undefined,
+				params: { organization: session.data.session.activeOrganizationId },
 			});
 		}
+		const orgs = await authClient.organization.list();
+
+		if (!orgs.data?.[0]) {
+			return false;
+		}
+
+		await authClient.organization.setActive({
+			organizationId: orgs.data[0].id,
+		});
 		throw redirect({
-			to: "/onboarding/choose-organization",
-			search: true,
+			to: "/orgs/$organization",
+			search: from ? { from } : undefined,
+			params: { organization: orgs.data[0].id },
 		});
 	}
 
