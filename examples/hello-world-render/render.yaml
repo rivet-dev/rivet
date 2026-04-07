@@ -1,0 +1,35 @@
+# Render Blueprint (Infrastructure as Code)
+# Spec: https://render.com/docs/blueprint-spec
+#
+# Quick deploy
+#   1. Commit this file to GitHub/GitLab/Bitbucket (monorepo: use Root Directory for this folder).
+#   2. Dashboard → Blueprints → New Blueprint Instance → pick the repo, Apply.
+#
+# Monorepo
+#   Set Root Directory to `examples/hello-world-render` (or add rootDir in Blueprint).
+#
+# Rivet Cloud: RIVET_ENDPOINT (sk) and RIVET_PUBLIC_ENDPOINT (pk) for the browser bundle.
+#   Use Rivet’s regional api-*.rivet.dev host from the Rivet dashboard.
+#   RIVET_ENVOY_VERSION: optional override; if unset, the app derives a version from RENDER_GIT_COMMIT on Render.
+
+services:
+  - type: web
+    name: hello-world-render
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "22.12.0"
+      - key: NODE_ENV
+        value: production
+      - key: RIVETKIT_STORAGE_PATH
+        value: /tmp/rivetkit
+      - key: RIVET_ENDPOINT
+        sync: false
+      - key: RIVET_PUBLIC_ENDPOINT
+        sync: false
