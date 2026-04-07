@@ -1,0 +1,15 @@
+@import "render-dds/styles";
+
+body {
+	font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	font-family: Roboto, ui-sans-serif, system-ui, sans-serif;
+	font-weight: 300;
+}
