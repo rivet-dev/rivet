@@ -270,8 +270,7 @@ function handleEvent(event, config, wrappedHandle) {
 				const messageId = Buffer.from(event.messageId);
 				const gatewayId = messageId.subarray(0, 4);
 				const requestId = messageId.subarray(4, 8);
-				// Use the hex key from Rust (matches the ws_senders map key)
-				const messageIdHex = event.messageIdHex || messageId.toString("hex");
+				const wsIdHex = gatewayId.toString("hex") + requestId.toString("hex");
 
 				const headers = new Headers(event.headers || {});
 				headers.set("Upgrade", "websocket");
@@ -292,18 +291,31 @@ function handleEvent(event, config, wrappedHandle) {
 					readyState: { value: OPEN, writable: true },
 					OPEN: { value: OPEN },
 					CLOSED: { value: CLOSED },
-					send: { value: (data) => {
-						if (handle._raw && messageIdHex) {
-							const binary = data instanceof Buffer || data instanceof Uint8Array || data instanceof ArrayBuffer;
-							const buf = Buffer.from(data);
-							handle._raw.sendWsMessage(messageIdHex, buf, binary).catch((e) => {
-								console.error("ws.send error:", e.message);
-							});
+					send: {
+						value: (data) => {
+							if (handle._raw) {
+								const isBinary =
+									data instanceof ArrayBuffer || ArrayBuffer.isView(data);
+								const bytes = isBinary
+									? Buffer.from(data instanceof ArrayBuffer ? data : data.buffer, data instanceof ArrayBuffer ? 0 : data.byteOffset, data instanceof ArrayBuffer ? data.byteLength : data.byteLength)
+									: Buffer.from(String(data));
+								handle._raw.sendWsMessage(gatewayId, requestId, bytes, isBinary);
+							}
 						}
-					}},
-					close: { value: (code, reason) => {
-						ws.readyState = CLOSED;
-					}},
+					},
+					close: {
+						value: (code, reason) => {
+							ws.readyState = CLOSED;
+							if (handle._raw) {
+								handle._raw.closeWebsocket(
+									gatewayId,
+									requestId,
+									code != null ? code : undefined,
+									reason != null ? String(reason) : undefined,
+								);
+							}
+						}
+					},
 					addEventListener: { value: target.addEventListener.bind(target) },
 					removeEventListener: { value: target.removeEventListener.bind(target) },
 					dispatchEvent: { value: target.dispatchEvent.bind(target) },
@@ -311,18 +323,18 @@ function handleEvent(event, config, wrappedHandle) {
 
 				// Store the ws object so websocket_message/close events can dispatch to it
 				if (!handle._wsMap) handle._wsMap = new Map();
-				handle._wsMap.set(messageIdHex, ws);
+				handle._wsMap.set(wsIdHex, ws);
 
 				const canHibernate = config.hibernatableWebSocket
 					? config.hibernatableWebSocket.canHibernate(
-							event.actorId,
-							gatewayId,
-							requestId,
-							request,
-						)
+						event.actorId,
+						gatewayId,
+						requestId,
+						request,
+					)
 					: false;
 
-				console.log("[wrapper] websocket_open actorId:", event.actorId?.slice(0,12), "path:", event.path);
+				console.log("[wrapper] websocket_open actorId:", event.actorId?.slice(0, 12), "path:", event.path);
 				Promise.resolve(
 					config.websocket(
 						handle,
@@ -349,8 +361,12 @@ function handleEvent(event, config, wrappedHandle) {
 		case "websocket_message": {
 			if (handle._wsMap && event.messageId) {
 				const messageId = Buffer.from(event.messageId);
-				const messageIdHex = messageId.toString("hex");
-				const ws = handle._wsMap.get(messageIdHex);
+				const gatewayId = messageId.subarray(0, 4);
+				const requestId = messageId.subarray(4, 8);
+				const wsIdHex = gatewayId.toString("hex") + requestId.toString("hex");
+
+				const ws = handle._wsMap.get(wsIdHex);
+
 				if (ws) {
 					const data = event.data
 						? (event.binary
@@ -369,15 +385,18 @@ function handleEvent(event, config, wrappedHandle) {
 		case "websocket_close": {
 			if (handle._wsMap && event.messageId) {
 				const messageId = Buffer.from(event.messageId);
-				const messageIdHex = messageId.toString("hex");
-				const ws = handle._wsMap.get(messageIdHex);
+				const gatewayId = messageId.subarray(0, 4);
+				const requestId = messageId.subarray(4, 8);
+				const wsIdHex = gatewayId.toString("hex") + requestId.toString("hex");
+
+				const ws = handle._wsMap.get(wsIdHex);
 				if (ws) {
 					ws.readyState = 3;
 					ws.dispatchEvent(new CloseEvent("close", {
 						code: event.code || 1000,
 						reason: event.reason || "",
 					}));
-					handle._wsMap.delete(messageIdHex);
+					handle._wsMap.delete(wsIdHex);
 				}
 			}
 			break;

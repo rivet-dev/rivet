@@ -9,13 +9,24 @@ use tokio::runtime::Runtime;
 use crate::bridge_actor::{ResponseMap, WsSenderMap};
 use crate::types::{self, JsKvEntry, JsKvListOptions};
 
+fn make_ws_key(gateway_id: &[u8], request_id: &[u8]) -> [u8; 8] {
+	let mut key = [0u8; 8];
+	if gateway_id.len() >= 4 {
+		key[..4].copy_from_slice(&gateway_id[..4]);
+	}
+	if request_id.len() >= 4 {
+		key[4..].copy_from_slice(&request_id[..4]);
+	}
+	key
+}
+
 /// Native envoy handle exposed to JavaScript via N-API.
 #[napi]
 pub struct JsEnvoyHandle {
 	pub(crate) runtime: Arc<Runtime>,
 	pub(crate) handle: EnvoyHandle,
 	pub(crate) response_map: ResponseMap,
-	pub(crate) ws_senders: WsSenderMap,
+	pub(crate) ws_sender_map: WsSenderMap,
 }
 
 impl JsEnvoyHandle {
@@ -23,13 +34,13 @@ impl JsEnvoyHandle {
 		runtime: Arc<Runtime>,
 		handle: EnvoyHandle,
 		response_map: ResponseMap,
-		ws_senders: WsSenderMap,
+		ws_sender_map: WsSenderMap,
 	) -> Self {
 		Self {
 			runtime,
 			handle,
 			response_map,
-			ws_senders,
+			ws_sender_map,
 		}
 	}
 }
@@ -214,7 +225,11 @@ impl JsEnvoyHandle {
 		let limit = options.as_ref().and_then(|o| o.limit).map(|l| l as u64);
 		let result = self
 			.runtime
-			.spawn(async move { handle.kv_list_prefix(actor_id, prefix_vec, reverse, limit).await })
+			.spawn(async move {
+				handle
+					.kv_list_prefix(actor_id, prefix_vec, reverse, limit)
+					.await
+			})
 			.await
 			.map_err(|e| napi::Error::from_reason(e.to_string()))?
 			.map_err(|e| napi::Error::from_reason(e.to_string()))?;
@@ -300,19 +315,37 @@ impl JsEnvoyHandle {
 	#[napi]
 	pub async fn send_ws_message(
 		&self,
-		message_id_hex: String,
+		gateway_id: Buffer,
+		request_id: Buffer,
 		data: Buffer,
 		binary: bool,
 	) -> napi::Result<()> {
-		let senders = self.ws_senders.lock().await;
-		if let Some(sender) = senders.get(&message_id_hex) {
+		let key = make_ws_key(&gateway_id, &request_id);
+		let map = self.ws_sender_map.lock().await;
+		if let Some(sender) = map.get(&key) {
 			sender.send(data.to_vec(), binary);
 			Ok(())
 		} else {
 			Err(napi::Error::from_reason(format!(
-				"no WebSocket sender for {}",
-				message_id_hex
+				"no WebSocket sender for {:?}",
+				key
 			)))
+		}
+	}
+
+	/// Close an open WebSocket connection.
+	#[napi]
+	pub async fn close_websocket(
+		&self,
+		gateway_id: Buffer,
+		request_id: Buffer,
+		code: Option<u32>,
+		reason: Option<String>,
+	) {
+		let key = make_ws_key(&gateway_id, &request_id);
+		let mut map = self.ws_sender_map.lock().await;
+		if let Some(sender) = map.remove(&key) {
+			sender.close(code.map(|c| c as u16), reason);
 		}
 	}
 

@@ -13,6 +13,11 @@ export interface JsEnvoyConfig {
   poolName: string
   version: number
   metadata?: any
+  /**
+   * Log level for the Rust tracing subscriber (e.g. "trace", "debug", "info", "warn", "error").
+   * Falls back to RIVET_LOG_LEVEL, then LOG_LEVEL, then RUST_LOG env vars. Defaults to "warn".
+   */
+  logLevel?: string
 }
 /** Options for KV list operations. */
 export interface JsKvListOptions {
@@ -60,5 +65,9 @@ export declare class JsEnvoyHandle {
   restoreHibernatingRequests(actorId: string, requests: Array<HibernatingRequestEntry>): void
   sendHibernatableWebSocketMessageAck(gatewayId: Buffer, requestId: Buffer, clientMessageIndex: number): void
   startServerless(payload: Buffer): Promise<void>
+  /** Send a message on an open WebSocket connection. */
+  sendWsMessage(gatewayId: Buffer, requestId: Buffer, data: Buffer, binary: boolean): void
+  /** Close an open WebSocket connection. */
+  closeWebsocket(gatewayId: Buffer, requestId: Buffer, code?: number | undefined | null, reason?: string | undefined | null): void
   respondCallback(responseId: string, data: any): Promise<void>
 }

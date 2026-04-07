@@ -33,10 +33,7 @@ macro_rules! vfs_catch_unwind {
 		match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $body)) {
 			Ok(result) => result,
 			Err(panic) => {
-				tracing::error!(
-					message = panic_message(&panic),
-					"vfs callback panicked"
-				);
+				tracing::error!(message = panic_message(&panic), "vfs callback panicked");
 				$err_val
 			}
 		}
@@ -62,11 +59,10 @@ const KV_MAX_BATCH_KEYS: usize = 128;
 /// This must match `HEADER_PREFIX` in
 /// `rivetkit-typescript/packages/sqlite-vfs/src/generated/empty-db-page.ts`.
 const EMPTY_DB_PAGE_HEADER_PREFIX: [u8; 108] = [
-	83, 81, 76, 105, 116, 101, 32, 102, 111, 114, 109, 97, 116, 32, 51, 0, 16, 0,
-	1, 1, 0, 64, 32, 32, 0, 0, 0, 3, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	3, 0, 46, 138, 17, 13, 0, 0, 0, 0, 16, 0, 0,
+	83, 81, 76, 105, 116, 101, 32, 102, 111, 114, 109, 97, 116, 32, 51, 0, 16, 0, 1, 1, 0, 64, 32,
+	32, 0, 0, 0, 3, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 46, 138, 17, 13, 0, 0, 0, 0, 16, 0, 0,
 ];
 
 fn empty_db_page() -> Vec<u8> {
@@ -175,7 +171,11 @@ impl VfsContext {
 			.map_err(|e| e.to_string());
 		let elapsed = start.elapsed();
 		if std::env::var("RIVET_TRACE_SQL").is_ok() {
-			eprintln!("[sql-trace]   kv_roundtrip op={} duration={}us", op_name, elapsed.as_micros());
+			eprintln!(
+				"[sql-trace]   kv_roundtrip op={} duration={}us",
+				op_name,
+				elapsed.as_micros()
+			);
 		}
 		tracing::debug!(
 			op = %op_name,
@@ -194,7 +194,11 @@ impl VfsContext {
 			.map_err(|e| e.to_string());
 		let elapsed = start.elapsed();
 		if std::env::var("RIVET_TRACE_SQL").is_ok() {
-			eprintln!("[sql-trace]   kv_roundtrip op={} duration={}us", op_name, elapsed.as_micros());
+			eprintln!(
+				"[sql-trace]   kv_roundtrip op={} duration={}us",
+				op_name,
+				elapsed.as_micros()
+			);
 		}
 		tracing::debug!(
 			op = %op_name,
@@ -213,7 +217,11 @@ impl VfsContext {
 			.map_err(|e| e.to_string());
 		let elapsed = start.elapsed();
 		if std::env::var("RIVET_TRACE_SQL").is_ok() {
-			eprintln!("[sql-trace]   kv_roundtrip op={} duration={}us", op_name, elapsed.as_micros());
+			eprintln!(
+				"[sql-trace]   kv_roundtrip op={} duration={}us",
+				op_name,
+				elapsed.as_micros()
+			);
 		}
 		tracing::debug!(
 			op = %op_name,
@@ -232,7 +240,11 @@ impl VfsContext {
 			.map_err(|e| e.to_string());
 		let elapsed = start_time.elapsed();
 		if std::env::var("RIVET_TRACE_SQL").is_ok() {
-			eprintln!("[sql-trace]   kv_roundtrip op={} duration={}us", op_name, elapsed.as_micros());
+			eprintln!(
+				"[sql-trace]   kv_roundtrip op={} duration={}us",
+				op_name,
+				elapsed.as_micros()
+			);
 		}
 		tracing::debug!(
 			op = %op_name,
@@ -437,24 +449,23 @@ unsafe extern "C" fn kv_io_read(
 		let value_map = build_value_map(&resp);
 
 		for chunk_idx in start_chunk..=end_chunk {
-			let chunk_data: Option<&[u8]> = buffered_chunks.get(&chunk_idx).map(|v| v.as_slice()).or_else(|| {
-				let key = kv::get_chunk_key(file.file_tag, chunk_idx as u32);
-				value_map.get(key.as_slice()).copied()
-			});
+			let chunk_data: Option<&[u8]> = buffered_chunks
+				.get(&chunk_idx)
+				.map(|v| v.as_slice())
+				.or_else(|| {
+					let key = kv::get_chunk_key(file.file_tag, chunk_idx as u32);
+					value_map.get(key.as_slice()).copied()
+				});
 			let chunk_offset = chunk_idx * kv::CHUNK_SIZE;
 			let read_start = offset.saturating_sub(chunk_offset);
-			let read_end = std::cmp::min(
-				kv::CHUNK_SIZE,
-				offset + requested_length - chunk_offset,
-			);
+			let read_end = std::cmp::min(kv::CHUNK_SIZE, offset + requested_length - chunk_offset);
 			let dest_start = chunk_offset + read_start - offset;
 
 			if let Some(chunk_data) = chunk_data {
 				let source_end = std::cmp::min(read_end, chunk_data.len());
 				if source_end > read_start {
 					let dest_end = dest_start + (source_end - read_start);
-					buf[dest_start..dest_end]
-						.copy_from_slice(&chunk_data[read_start..source_end]);
+					buf[dest_start..dest_end].copy_from_slice(&chunk_data[read_start..source_end]);
 				}
 				if source_end < read_end {
 					let zero_start = dest_start + (source_end - read_start);
@@ -470,11 +481,15 @@ unsafe extern "C" fn kv_io_read(
 		let actual_bytes = std::cmp::min(requested_length, file_size - offset);
 		if actual_bytes < requested_length {
 			buf[actual_bytes..].fill(0);
-			ctx.vfs_metrics.xread_us.fetch_add(read_start.elapsed().as_micros() as u64, Ordering::Relaxed);
+			ctx.vfs_metrics
+				.xread_us
+				.fetch_add(read_start.elapsed().as_micros() as u64, Ordering::Relaxed);
 			return SQLITE_IOERR_SHORT_READ;
 		}
 
-		ctx.vfs_metrics.xread_us.fetch_add(read_start.elapsed().as_micros() as u64, Ordering::Relaxed);
+		ctx.vfs_metrics
+			.xread_us
+			.fetch_add(read_start.elapsed().as_micros() as u64, Ordering::Relaxed);
 		SQLITE_OK
 	})
 }
@@ -518,12 +533,10 @@ unsafe extern "C" fn kv_io_write(
 			if state.batch_mode {
 				for chunk_idx in start_chunk..=end_chunk {
 					let chunk_offset = chunk_idx * kv::CHUNK_SIZE;
-					let source_start = std::cmp::max(0isize, chunk_offset as isize - offset as isize)
-						as usize;
-					let source_end = std::cmp::min(
-						write_length,
-						chunk_offset + kv::CHUNK_SIZE - offset,
-					);
+					let source_start =
+						std::cmp::max(0isize, chunk_offset as isize - offset as isize) as usize;
+					let source_end =
+						std::cmp::min(write_length, chunk_offset + kv::CHUNK_SIZE - offset);
 					state
 						.dirty_buffer
 						.insert(chunk_idx as u32, data[source_start..source_end].to_vec());
@@ -535,8 +548,12 @@ unsafe extern "C" fn kv_io_write(
 					file.meta_dirty = true;
 				}
 
-				ctx.vfs_metrics.xwrite_buffered_count.fetch_add(1, Ordering::Relaxed);
-				ctx.vfs_metrics.xwrite_us.fetch_add(write_start.elapsed().as_micros() as u64, Ordering::Relaxed);
+				ctx.vfs_metrics
+					.xwrite_buffered_count
+					.fetch_add(1, Ordering::Relaxed);
+				ctx.vfs_metrics
+					.xwrite_us
+					.fetch_add(write_start.elapsed().as_micros() as u64, Ordering::Relaxed);
 				return SQLITE_OK;
 			}
 		}
@@ -554,10 +571,7 @@ unsafe extern "C" fn kv_io_write(
 		for chunk_idx in start_chunk..=end_chunk {
 			let chunk_offset = chunk_idx * kv::CHUNK_SIZE;
 			let write_start = offset.saturating_sub(chunk_offset);
-			let write_end = std::cmp::min(
-				kv::CHUNK_SIZE,
-				offset + write_length - chunk_offset,
-			);
+			let write_end = std::cmp::min(kv::CHUNK_SIZE, offset + write_length - chunk_offset);
 			let existing_bytes_in_chunk = if file.size as usize > chunk_offset {
 				std::cmp::min(kv::CHUNK_SIZE, file.size as usize - chunk_offset)
 			} else {
@@ -650,15 +664,14 @@ unsafe extern "C" fn kv_io_write(
 		}
 		file.meta_dirty = false;
 
-		ctx.vfs_metrics.xwrite_us.fetch_add(write_start.elapsed().as_micros() as u64, Ordering::Relaxed);
+		ctx.vfs_metrics
+			.xwrite_us
+			.fetch_add(write_start.elapsed().as_micros() as u64, Ordering::Relaxed);
 		SQLITE_OK
 	})
 }
 
-unsafe extern "C" fn kv_io_truncate(
-	p_file: *mut sqlite3_file,
-	size: sqlite3_int64,
-) -> c_int {
+unsafe extern "C" fn kv_io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int64) -> c_int {
 	vfs_catch_unwind!(SQLITE_IOERR_TRUNCATE, {
 		let file = get_file(p_file);
 		let ctx = &*file.ctx;
@@ -692,7 +705,11 @@ unsafe extern "C" fn kv_io_truncate(
 		// Invalidate read cache entries for truncated chunks.
 		{
 			let state = get_file_state(file.state);
-			let truncate_from_chunk = if size == 0 { 0u32 } else { (size as u32 / kv::CHUNK_SIZE as u32) + 1 };
+			let truncate_from_chunk = if size == 0 {
+				0u32
+			} else {
+				(size as u32 / kv::CHUNK_SIZE as u32) + 1
+			};
 			state.read_cache.retain(|key, _| {
 				// Chunk keys are 8 bytes: [prefix, version, CHUNK_PREFIX, file_tag, idx_be32]
 				if key.len() == 8 && key[3] == file.file_tag {
@@ -772,10 +789,7 @@ unsafe extern "C" fn kv_io_truncate(
 	})
 }
 
-unsafe extern "C" fn kv_io_sync(
-	p_file: *mut sqlite3_file,
-	_flags: c_int,
-) -> c_int {
+unsafe extern "C" fn kv_io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_int {
 	vfs_catch_unwind!(SQLITE_IOERR_FSYNC, {
 		let file = get_file(p_file);
 		if !file.meta_dirty {
@@ -887,16 +901,24 @@ unsafe extern "C" fn kv_io_file_control(
 
 				// Move dirty buffer entries into the read cache so subsequent
 				// reads can serve them without a KV round-trip.
-				let flushed: Vec<_> = std::mem::take(&mut state.dirty_buffer).into_iter().collect();
+				let flushed: Vec<_> = std::mem::take(&mut state.dirty_buffer)
+					.into_iter()
+					.collect();
 				for (chunk_index, data) in flushed {
 					let key = kv::get_chunk_key(file.file_tag, chunk_index);
 					state.read_cache.insert(key.to_vec(), data);
 				}
 				file.meta_dirty = false;
 				state.batch_mode = false;
-				ctx.vfs_metrics.commit_atomic_count.fetch_add(1, Ordering::Relaxed);
-				ctx.vfs_metrics.commit_atomic_pages.fetch_add(dirty_page_count, Ordering::Relaxed);
-				ctx.vfs_metrics.commit_atomic_us.fetch_add(commit_start.elapsed().as_micros() as u64, Ordering::Relaxed);
+				ctx.vfs_metrics
+					.commit_atomic_count
+					.fetch_add(1, Ordering::Relaxed);
+				ctx.vfs_metrics
+					.commit_atomic_pages
+					.fetch_add(dirty_page_count, Ordering::Relaxed);
+				ctx.vfs_metrics
+					.commit_atomic_us
+					.fetch_add(commit_start.elapsed().as_micros() as u64, Ordering::Relaxed);
 				SQLITE_OK
 			}
 			SQLITE_FCNTL_ROLLBACK_ATOMIC_WRITE => {
@@ -977,10 +999,7 @@ unsafe extern "C" fn kv_vfs_open(
 			} else {
 				let size = 0i64;
 				if ctx
-					.kv_put(
-						vec![meta_key.to_vec()],
-						vec![encode_file_meta(size)],
-					)
+					.kv_put(vec![meta_key.to_vec()], vec![encode_file_meta(size)])
 					.is_err()
 				{
 					return SQLITE_CANTOPEN;
@@ -1077,7 +1096,11 @@ unsafe extern "C" fn kv_vfs_access(
 			Err(_) => return SQLITE_IOERR_ACCESS,
 		};
 		let value_map = build_value_map(&resp);
-		*p_res_out = if value_map.contains_key(meta_key.as_slice()) { 1 } else { 0 };
+		*p_res_out = if value_map.contains_key(meta_key.as_slice()) {
+			1
+		} else {
+			0
+		};
 
 		SQLITE_OK
 	})
@@ -1119,20 +1142,14 @@ unsafe extern "C" fn kv_vfs_randomness(
 	})
 }
 
-unsafe extern "C" fn kv_vfs_sleep(
-	_p_vfs: *mut sqlite3_vfs,
-	microseconds: c_int,
-) -> c_int {
+unsafe extern "C" fn kv_vfs_sleep(_p_vfs: *mut sqlite3_vfs, microseconds: c_int) -> c_int {
 	vfs_catch_unwind!(0, {
 		std::thread::sleep(std::time::Duration::from_micros(microseconds as u64));
 		microseconds
 	})
 }
 
-unsafe extern "C" fn kv_vfs_current_time(
-	_p_vfs: *mut sqlite3_vfs,
-	p_time_out: *mut f64,
-) -> c_int {
+unsafe extern "C" fn kv_vfs_current_time(_p_vfs: *mut sqlite3_vfs, p_time_out: *mut f64) -> c_int {
 	vfs_catch_unwind!(SQLITE_IOERR, {
 		let now = std::time::SystemTime::now()
 			.duration_since(std::time::UNIX_EPOCH)
@@ -1299,15 +1316,8 @@ pub fn open_database(vfs: KvVfs, file_name: &str) -> Result<NativeDatabase, Stri
 		"PRAGMA locking_mode = EXCLUSIVE;",
 	] {
 		let c_sql = CString::new(*pragma).map_err(|err| err.to_string())?;
-		let rc = unsafe {
-			sqlite3_exec(
-				db,
-				c_sql.as_ptr(),
-				None,
-				ptr::null_mut(),
-				ptr::null_mut(),
-			)
-		};
+		let rc =
+			unsafe { sqlite3_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) };
 		if rc != SQLITE_OK {
 			unsafe {
 				sqlite3_close(db);

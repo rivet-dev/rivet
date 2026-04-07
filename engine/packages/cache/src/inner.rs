@@ -14,7 +14,7 @@ pub type Cache = Arc<CacheInner>;
 
 /// Utility type used to hold information relating to caching.
 pub struct CacheInner {
-	pub(crate) driver: Driver,
+	pub(crate) driver: Option<Driver>,
 	pub(crate) ups: Option<universalpubsub::PubSub>,
 }
 
@@ -33,7 +33,10 @@ impl CacheInner {
 		let ups = pools.ups().ok();
 
 		match &config.cache().driver {
-			rivet_config::config::CacheDriver::InMemory => Ok(Self::new_in_memory(10000, ups)),
+			Some(rivet_config::config::CacheDriver::InMemory) => {
+				Ok(Self::new_in_memory(10000, ups))
+			}
+			None => Ok(Self::new_disabled()),
 		}
 	}
 
@@ -41,7 +44,17 @@ impl CacheInner {
 	pub fn new_in_memory(max_capacity: u64, ups: Option<universalpubsub::PubSub>) -> Cache {
 		let driver = Driver::InMemory(InMemoryDriver::new(max_capacity));
 
-		Arc::new(CacheInner { driver, ups })
+		Arc::new(CacheInner {
+			driver: Some(driver),
+			ups,
+		})
+	}
+
+	pub fn new_disabled() -> Cache {
+		Arc::new(CacheInner {
+			driver: None,
+			ups: None,
+		})
 	}
 
 	pub(crate) fn in_flight(&self) -> &scc::HashMap<RawCacheKey, broadcast::Sender<()>> {

@@ -1452,6 +1452,7 @@ export class EngineActorDriver implements ActorDriver {
 			if (isRawWebSocketPath) {
 				attachMessageListener();
 			}
+
 			wsHandler.onOpen(event, wsContext);
 
 			attachPostOpenListeners();
@@ -1667,10 +1668,10 @@ export class EngineActorDriver implements ActorDriver {
 			// envoy can decide it before the actor has fully started.
 			const actorName =
 				"config" in actorInstance &&
-				actorInstance.config &&
-				typeof actorInstance.config === "object" &&
-				"name" in actorInstance.config &&
-				typeof actorInstance.config.name === "string"
+					actorInstance.config &&
+					typeof actorInstance.config === "object" &&
+					"name" in actorInstance.config &&
+					typeof actorInstance.config.name === "string"
 					? actorInstance.config.name
 					: this.#actors.get(actorId)?.actorName;
 			invariant(

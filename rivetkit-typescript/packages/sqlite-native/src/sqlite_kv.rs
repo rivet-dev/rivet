@@ -98,11 +98,7 @@ pub trait SqliteKv: Send + Sync {
 	) -> Result<(), SqliteKvError>;
 
 	/// Delete multiple keys in one batch.
-	async fn batch_delete(
-		&self,
-		actor_id: &str,
-		keys: Vec<Vec<u8>>,
-	) -> Result<(), SqliteKvError>;
+	async fn batch_delete(&self, actor_id: &str, keys: Vec<Vec<u8>>) -> Result<(), SqliteKvError>;
 
 	/// Delete all keys in the half-open range `[start, end)`.
 	async fn delete_range(

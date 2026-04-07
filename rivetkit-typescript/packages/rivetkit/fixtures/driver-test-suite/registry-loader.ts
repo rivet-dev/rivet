@@ -129,6 +129,7 @@ export async function loadStaticActors(): Promise<
 	Record<string, AnyActorDefinition>
 > {
 	const actors: Record<string, AnyActorDefinition> = {};
+	console.log(listActorFixtureFiles(), "WHATHATHTHATHTH");
 	for (const actorFixturePath of listActorFixtureFiles()) {
 		actors[actorNameFromFilePath(actorFixturePath)] =
 			await importActorDefinition(actorFixturePath);

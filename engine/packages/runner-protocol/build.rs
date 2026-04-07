@@ -62,17 +62,15 @@ mod typescript {
 
 		let output_path = src_dir.join("index.ts");
 
-		let output = Command::new(
-			repo_root.join("node_modules/@bare-ts/tools/dist/bin/cli.js"),
-		)
-		.arg("compile")
-		.arg("--generator")
-		.arg("ts")
-		.arg(highest_version_path)
-		.arg("-o")
-		.arg(&output_path)
-		.output()
-		.expect("Failed to execute bare compiler for TypeScript");
+		let output = Command::new(repo_root.join("node_modules/@bare-ts/tools/dist/bin/cli.js"))
+			.arg("compile")
+			.arg("--generator")
+			.arg("ts")
+			.arg(highest_version_path)
+			.arg("-o")
+			.arg(&output_path)
+			.output()
+			.expect("Failed to execute bare compiler for TypeScript");
 
 		if !output.status.success() {
 			panic!(

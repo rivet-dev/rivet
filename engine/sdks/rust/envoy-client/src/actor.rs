@@ -11,7 +11,7 @@ use crate::connection::ws_send;
 use crate::context::SharedContext;
 use crate::handle::EnvoyHandle;
 use crate::stringify::stringify_to_rivet_tunnel_message_kind;
-use crate::utils::{id_to_str, wrapping_add_u16, wrapping_lte_u16, wrapping_sub_u16, BufferMap};
+use crate::utils::{BufferMap, id_to_str, wrapping_add_u16, wrapping_lte_u16, wrapping_sub_u16};
 
 pub enum ToActor {
 	Intent {
@@ -135,7 +135,13 @@ async fn actor_inner(
 	let start_result = shared
 		.config
 		.callbacks
-		.on_actor_start(handle.clone(), actor_id.clone(), generation, config, preloaded_kv)
+		.on_actor_start(
+			handle.clone(),
+			actor_id.clone(),
+			generation,
+			config,
+			preloaded_kv,
+		)
 		.await;
 
 	if let Err(error) = start_result {
@@ -165,9 +171,7 @@ async fn actor_inner(
 			ToActor::Intent { intent, error } => {
 				send_event(
 					&mut ctx,
-					protocol::Event::EventActorIntent(protocol::EventActorIntent {
-						intent,
-					}),
+					protocol::Event::EventActorIntent(protocol::EventActorIntent { intent }),
 				);
 				if error.is_some() {
 					ctx.error = error;
@@ -192,9 +196,7 @@ async fn actor_inner(
 			ToActor::SetAlarm { alarm_ts } => {
 				send_event(
 					&mut ctx,
-					protocol::Event::EventActorSetAlarm(protocol::EventActorSetAlarm {
-						alarm_ts,
-					}),
+					protocol::Event::EventActorSetAlarm(protocol::EventActorSetAlarm { alarm_ts }),
 				);
 			}
 			ToActor::ReqStart { message_id, req } => {
@@ -237,9 +239,12 @@ async fn actor_inner(
 
 fn send_event(ctx: &mut ActorContext, inner: protocol::Event) {
 	let checkpoint = increment_checkpoint(ctx);
-	let _ = ctx.shared.envoy_tx.send(crate::envoy::ToEnvoyMessage::SendEvents {
-		events: vec![protocol::EventWrapper { checkpoint, inner }],
-	});
+	let _ = ctx
+		.shared
+		.envoy_tx
+		.send(crate::envoy::ToEnvoyMessage::SendEvents {
+			events: vec![protocol::EventWrapper { checkpoint, inner }],
+		});
 }
 
 async fn handle_stop(
@@ -258,12 +263,7 @@ async fn handle_stop(
 		.shared
 		.config
 		.callbacks
-		.on_actor_stop(
-			handle.clone(),
-			ctx.actor_id.clone(),
-			ctx.generation,
-			reason,
-		)
+		.on_actor_stop(handle.clone(), ctx.actor_id.clone(), ctx.generation, reason)
 		.await;
 
 	if let Err(error) = stop_result {
@@ -298,7 +298,11 @@ fn handle_req_start(
 	ctx.pending_requests
 		.insert(&[&message_id.gateway_id, &message_id.request_id], pending);
 
-	let headers: HashMap<String, String> = req.headers.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+	let headers: HashMap<String, String> = req
+		.headers
+		.iter()
+		.map(|(k, v)| (k.clone(), v.clone()))
+		.collect();
 
 	let body_stream = if req.stream {
 		let (body_tx, body_rx) = mpsc::unbounded_channel::<Vec<u8>>();
@@ -440,7 +444,6 @@ async fn handle_ws_open(
 
 	match ws_result {
 		Ok(ws_handler) => {
-
 			ctx.ws_entries.insert(
 				&[&message_id.gateway_id, &message_id.request_id],
 				WsEntry {
@@ -457,15 +460,10 @@ async fn handle_ws_open(
 				let shared = ctx.shared.clone();
 				let gateway_id = message_id.gateway_id;
 				let request_id = message_id.request_id;
-				let ws_msg_counter = std::sync::Arc::new(std::sync::atomic::AtomicU16::new(0));
-				// Store counter ref on pending request so send_actor_message can coordinate
-				if let Some(req) = ctx.pending_requests.get_mut(&[&gateway_id, &request_id]) {
-					// The pending request's envoy_message_index will be managed separately;
-					// the outgoing task uses its own counter space starting from a high offset.
-				}
 				tokio::spawn(async move {
 					let mut idx: u16 = 0;
 					while let Some(msg) = outgoing_rx.recv().await {
+						idx += 1;
 						match msg {
 							crate::config::WsOutgoing::Message { data, binary } => {
 								ws_send(
@@ -523,13 +521,17 @@ async fn handle_ws_open(
 			.await;
 
 			// Call on_open if provided
-			if let Some(ws_entry) = ctx
+			if let Some(ws) = ctx
 				.ws_entries
 				.get_mut(&[&message_id.gateway_id, &message_id.request_id])
 			{
-				if let Some(handler) = &mut ws_entry.ws_handler {
+				if let Some(handler) = &mut ws.ws_handler {
 					if let Some(on_open) = handler.on_open.take() {
-						on_open().await;
+						let sender = crate::config::WebSocketSender {
+							tx: ws.outgoing_tx.clone(),
+						};
+
+						on_open(sender).await;
 					}
 				}
 			}
@@ -696,7 +698,9 @@ async fn handle_hws_restore(
 			};
 
 			let (hws_outgoing_tx, _hws_outgoing_rx) = mpsc::unbounded_channel();
-			let hws_sender = crate::config::WebSocketSender { tx: hws_outgoing_tx.clone() };
+			let hws_sender = crate::config::WebSocketSender {
+				tx: hws_outgoing_tx.clone(),
+			};
 
 			let ws_result = ctx
 				.shared
@@ -782,9 +786,9 @@ async fn handle_hws_restore(
 
 	// Process loaded but not connected (stale)
 	for meta in &meta_entries {
-		let is_connected = hibernating_requests.iter().any(|req| {
-			req.gateway_id == meta.gateway_id && req.request_id == meta.request_id
-		});
+		let is_connected = hibernating_requests
+			.iter()
+			.any(|req| req.gateway_id == meta.gateway_id && req.request_id == meta.request_id);
 
 		if !is_connected {
 			tracing::warn!(
@@ -873,9 +877,7 @@ async fn send_actor_message(
 	request_id: protocol::RequestId,
 	message_kind: protocol::ToRivetTunnelMessageKind,
 ) {
-	let req = ctx
-		.pending_requests
-		.get_mut(&[&gateway_id, &request_id]);
+	let req = ctx.pending_requests.get_mut(&[&gateway_id, &request_id]);
 	let envoy_message_index = if let Some(req) = req {
 		let idx = req.envoy_message_index;
 		req.envoy_message_index += 1;
@@ -899,11 +901,7 @@ async fn send_actor_message(
 	};
 
 	let buffer_msg = msg.clone();
-	let failed = ws_send(
-		&ctx.shared,
-		protocol::ToRivet::ToRivetTunnelMessage(msg),
-	)
-	.await;
+	let failed = ws_send(&ctx.shared, protocol::ToRivet::ToRivetTunnelMessage(msg)).await;
 
 	if failed {
 		if tracing::enabled!(tracing::Level::DEBUG) {

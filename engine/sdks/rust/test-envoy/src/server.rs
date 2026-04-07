@@ -6,7 +6,10 @@ use axum::{
 	Router,
 	body::Bytes,
 	extract::State,
-	response::{IntoResponse, Json, Sse, sse::{Event, KeepAlive}},
+	response::{
+		IntoResponse, Json, Sse,
+		sse::{Event, KeepAlive},
+	},
 	routing::{get, post},
 };
 use rivet_envoy_protocol as protocol;
@@ -110,7 +113,10 @@ async fn run_http_server(state: AppState) -> Result<()> {
 		.await
 		.with_context(|| format!("failed to bind {addr}"))?;
 
-	tracing::info!(port = state.settings.internal_server_port, "internal http server listening");
+	tracing::info!(
+		port = state.settings.internal_server_port,
+		"internal http server listening"
+	);
 
 	axum::serve(listener, app)
 		.await
@@ -136,10 +142,7 @@ async fn metadata() -> Json<serde_json::Value> {
 	}))
 }
 
-async fn start_serverless(
-	State(state): State<AppState>,
-	body: Bytes,
-) -> impl IntoResponse {
+async fn start_serverless(State(state): State<AppState>, body: Bytes) -> impl IntoResponse {
 	tracing::info!("received serverless start request");
 
 	let handle = match create_envoy(&state.settings).await {
@@ -184,7 +187,6 @@ async fn create_envoy(settings: &Settings) -> Result<EnvoyHandle> {
 		prepopulate_actor_names: std::collections::HashMap::new(),
 		metadata: None,
 		envoy_key: None,
-		auto_restart: false,
 		debug_latency_ms: None,
 		callbacks: Arc::new(DefaultTestCallbacks),
 	};

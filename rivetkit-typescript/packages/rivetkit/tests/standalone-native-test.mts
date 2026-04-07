@@ -62,11 +62,15 @@ const port = (server.address() as any).port;
 
 // Point runner config at our serverless server
 await updateRunnerConfig(clientConfig, poolName, {
-	datacenters: { default: { serverless: {
-		url: `http://127.0.0.1:${port}`,
-		request_lifespan: 300, max_concurrent_actors: 10000,
-		slots_per_runner: 1, min_runners: 0, max_runners: 10000,
-	}}},
+	datacenters: {
+		default: {
+			serverless: {
+				url: `http://127.0.0.1:${port}`,
+				request_lifespan: 300, max_concurrent_actors: 10000,
+				slots_per_runner: 1, min_runners: 0, max_runners: 10000,
+			}
+		}
+	},
 });
 
 await actorDriver.waitForReady();
@@ -116,12 +120,6 @@ try {
 
 	// Connect
 	const conn = handle.connect();
-	await new Promise<void>((resolve, reject) => {
-		const timeout = setTimeout(() => reject(new Error("connect timeout")), 10000);
-		conn.addEventListener("open", () => { clearTimeout(timeout); resolve(); });
-		conn.addEventListener("error", (e: any) => { clearTimeout(timeout); reject(new Error(`error: ${e?.message}`)); });
-	});
-	ok("connected");
 
 	// Action through existing connection
 	const val = await handle.increment(42);

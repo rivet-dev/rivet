@@ -13,28 +13,41 @@ use tokio::sync::{Mutex, oneshot};
 use crate::types;
 
 /// Type alias for the threadsafe event callback function.
-pub type EventCallback =
-	napi::threadsafe_function::ThreadsafeFunction<serde_json::Value, napi::threadsafe_function::ErrorStrategy::Fatal>;
+pub type EventCallback = napi::threadsafe_function::ThreadsafeFunction<
+	serde_json::Value,
+	napi::threadsafe_function::ErrorStrategy::Fatal,
+>;
 
 /// Map of pending callback response channels, keyed by response ID.
 pub type ResponseMap = Arc<Mutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>;
 
-/// Map of WebSocket senders, keyed by hex-encoded messageId.
-pub type WsSenderMap = Arc<Mutex<HashMap<String, WebSocketSender>>>;
+/// Map of open WebSocket senders, keyed by concatenated gateway_id + request_id (8 bytes).
+pub type WsSenderMap = Arc<Mutex<HashMap<[u8; 8], WebSocketSender>>>;
+
+fn make_ws_key(gateway_id: &protocol::GatewayId, request_id: &protocol::RequestId) -> [u8; 8] {
+	let mut key = [0u8; 8];
+	key[..4].copy_from_slice(gateway_id);
+	key[4..].copy_from_slice(request_id);
+	key
+}
 
 /// Callbacks implementation that bridges envoy events to JavaScript via N-API.
 pub struct BridgeCallbacks {
 	event_cb: EventCallback,
 	response_map: ResponseMap,
-	pub ws_senders: WsSenderMap,
+	ws_sender_map: WsSenderMap,
 }
 
 impl BridgeCallbacks {
-	pub fn new(event_cb: EventCallback, response_map: ResponseMap) -> Self {
+	pub fn new(
+		event_cb: EventCallback,
+		response_map: ResponseMap,
+		ws_sender_map: WsSenderMap,
+	) -> Self {
 		Self {
 			event_cb,
 			response_map,
-			ws_senders: Arc::new(Mutex::new(HashMap::new())),
+			ws_sender_map,
 		}
 	}
 
@@ -206,10 +219,10 @@ impl EnvoyCallbacks for BridgeCallbacks {
 		headers: HashMap<String, String>,
 		_is_hibernatable: bool,
 		_is_restoring_hibernatable: bool,
-		sender: WebSocketSender,
+		_sender: WebSocketSender,
 	) -> BoxFuture<anyhow::Result<WebSocketHandler>> {
 		let event_cb = self.event_cb.clone();
-		let ws_senders = self.ws_senders.clone();
+		let ws_sender_map = self.ws_sender_map.clone();
 
 		Box::pin(async move {
 			let msg_id = protocol::MessageId {
@@ -217,30 +230,19 @@ impl EnvoyCallbacks for BridgeCallbacks {
 				request_id,
 				message_index: 0,
 			};
-			let msg_id_hex = hex::encode(types::encode_message_id(&msg_id));
+			let msg_id_bytes = types::encode_message_id(&msg_id);
 
-			// Store the sender so JS can call ws.send() via the native handle
-			{
-				let mut senders = ws_senders.lock().await;
-				senders.insert(msg_id_hex.clone(), sender);
-			}
+			let ws_key = make_ws_key(&gateway_id, &request_id);
 
-			let envelope = serde_json::json!({
-				"kind": "websocket_open",
-				"actorId": actor_id,
-				"messageId": types::encode_message_id(&msg_id),
-				"messageIdHex": msg_id_hex,
-				"path": path,
-				"headers": headers,
-			});
-			event_cb.call(envelope, ThreadsafeFunctionCallMode::NonBlocking);
-
+			let event_cb_open = event_cb.clone();
 			let event_cb_msg = event_cb.clone();
 			let event_cb_close = event_cb.clone();
+			let actor_id_open = actor_id.clone();
 			let actor_id_msg = actor_id.clone();
 			let actor_id_close = actor_id;
-			let ws_senders_close = ws_senders.clone();
-			let msg_id_hex_close = msg_id_hex;
+			let msg_id_bytes_close = msg_id_bytes.clone();
+			let ws_sender_map_open = ws_sender_map.clone();
+			let ws_sender_map_close = ws_sender_map.clone();
 
 			Ok(WebSocketHandler {
 				on_message: Box::new(move |msg: WebSocketMessage| {
@@ -260,21 +262,38 @@ impl EnvoyCallbacks for BridgeCallbacks {
 					Box::pin(async {})
 				}),
 				on_close: Box::new(move |code, reason| {
-					let ws_senders = ws_senders_close.clone();
-					let msg_id_hex = msg_id_hex_close.clone();
 					let envelope = serde_json::json!({
 						"kind": "websocket_close",
 						"actorId": actor_id_close,
+						"messageId": msg_id_bytes_close,
 						"code": code,
 						"reason": reason,
 					});
 					event_cb_close.call(envelope, ThreadsafeFunctionCallMode::NonBlocking);
+
+					let ws_sender_map_close = ws_sender_map_close.clone();
 					Box::pin(async move {
-						let mut senders = ws_senders.lock().await;
-						senders.remove(&msg_id_hex);
+						let mut senders = ws_sender_map_close.lock().await;
+						senders.remove(&ws_key);
 					})
 				}),
-				on_open: None,
+				// on_open fires the websocket_open event only after the sender is stored,
+				// guaranteeing that ws.send() works as soon as JS receives the event.
+				on_open: Some(Box::new(move |sender: WebSocketSender| {
+					let envelope = serde_json::json!({
+						"kind": "websocket_open",
+						"actorId": actor_id_open,
+						"messageId": msg_id_bytes,
+						"path": path,
+						"headers": headers,
+					});
+					event_cb_open.call(envelope, ThreadsafeFunctionCallMode::NonBlocking);
+
+					Box::pin(async move {
+						let mut senders = ws_sender_map_open.lock().await;
+						senders.insert(ws_key, sender);
+					})
+				})),
 			})
 		})
 	}

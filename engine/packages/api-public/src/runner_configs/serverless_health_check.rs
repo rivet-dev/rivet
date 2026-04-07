@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::IntoParams;
 use utoipa::ToSchema;
 
-use super::utils::{ServerlessMetadataError, fetch_serverless_runner_metadata};
+use super::utils::{ServerlessMetadataError, fetch_serverless_metadata};
 use crate::ctx::ApiCtx;
 
 #[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]
@@ -72,7 +72,7 @@ async fn serverless_health_check_inner(
 
 	let ServerlessHealthCheckRequest { url, headers } = body;
 
-	match fetch_serverless_runner_metadata(&ctx, url, headers).await {
+	match fetch_serverless_metadata(&ctx, url, headers).await {
 		Ok(metadata) => Ok(ServerlessHealthCheckResponse::Success {
 			version: metadata.version,
 		}),

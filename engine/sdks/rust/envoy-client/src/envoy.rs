@@ -6,19 +6,19 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
 use crate::actor::ToActor;
-use crate::commands::{handle_commands, send_command_ack, ACK_COMMANDS_INTERVAL_MS};
+use crate::commands::{ACK_COMMANDS_INTERVAL_MS, handle_commands, send_command_ack};
 use crate::config::EnvoyConfig;
 use crate::connection::{start_connection, ws_send};
 use crate::context::{SharedContext, WsTxMessage};
 use crate::events::{handle_ack_events, handle_send_events, resend_unacknowledged_events};
 use crate::handle::EnvoyHandle;
 use crate::kv::{
-	cleanup_old_kv_requests, handle_kv_request, handle_kv_response, process_unsent_kv_requests,
-	KvRequestEntry, KV_CLEANUP_INTERVAL_MS,
+	KV_CLEANUP_INTERVAL_MS, KvRequestEntry, cleanup_old_kv_requests, handle_kv_request,
+	handle_kv_response, process_unsent_kv_requests,
 };
 use crate::tunnel::{
-	handle_tunnel_message, resend_buffered_tunnel_messages, send_hibernatable_ws_message_ack,
-	HibernatingWebSocketMetadata,
+	HibernatingWebSocketMetadata, handle_tunnel_message, resend_buffered_tunnel_messages,
+	send_hibernatable_ws_message_ack,
 };
 use crate::utils::{BufferMap, EnvoyShutdownError};
 
@@ -94,11 +94,7 @@ pub struct ActorInfo {
 }
 
 impl EnvoyContext {
-	pub fn get_actor(
-		&self,
-		actor_id: &str,
-		generation: Option<u32>,
-	) -> Option<&ActorEntry> {
+	pub fn get_actor(&self, actor_id: &str, generation: Option<u32>) -> Option<&ActorEntry> {
 		let gens = self.actors.get(actor_id)?;
 		if gens.is_empty() {
 			return None;
@@ -303,7 +299,9 @@ async fn envoy_loop(
 	}
 
 	for (_id, request) in ctx.kv_requests.drain() {
-		let _ = request.response_tx.send(Err(anyhow::anyhow!("envoy shutting down")));
+		let _ = request
+			.response_tx
+			.send(Err(anyhow::anyhow!("envoy shutting down")));
 	}
 
 	ctx.actors.clear();
@@ -372,7 +370,9 @@ fn handle_conn_close(
 
 	tracing::debug!(ms = lost_threshold, "starting envoy lost timeout");
 
-	Some(Box::pin(tokio::time::sleep(std::time::Duration::from_millis(lost_threshold))))
+	Some(Box::pin(tokio::time::sleep(
+		std::time::Duration::from_millis(lost_threshold),
+	)))
 }
 
 async fn handle_shutdown(ctx: &mut EnvoyContext) {
@@ -383,16 +383,13 @@ async fn handle_shutdown(ctx: &mut EnvoyContext) {
 
 	tracing::debug!("envoy received shutdown");
 
-	ws_send(
-		&ctx.shared,
-		protocol::ToRivet::ToRivetStopping,
-	)
-	.await;
+	ws_send(&ctx.shared, protocol::ToRivet::ToRivetStopping).await;
 
 	// Check if any actors are still active
-	let has_actors = ctx.actors.values().any(|gens| {
-		gens.values().any(|entry| !entry.handle.is_closed())
-	});
+	let has_actors = ctx
+		.actors
+		.values()
+		.any(|gens| gens.values().any(|entry| !entry.handle.is_closed()));
 
 	if !has_actors {
 		let _ = ctx.shared.envoy_tx.send(ToEnvoyMessage::Stop);

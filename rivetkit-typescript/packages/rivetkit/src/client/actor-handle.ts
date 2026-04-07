@@ -161,9 +161,9 @@ export class ActorHandleRaw {
 				actorId
 					? { msg: "using direct actor gateway target", actorId }
 					: {
-							msg: "using query gateway target for action",
-							query: this.#actorResolutionState,
-						},
+						msg: "using query gateway target for action",
+						query: this.#actorResolutionState,
+					},
 			);
 
 			logger().debug({
@@ -185,10 +185,10 @@ export class ActorHandleRaw {
 					[HEADER_ENCODING]: this.#encoding,
 					...(this.#params !== undefined
 						? {
-								[HEADER_CONN_PARAMS]: JSON.stringify(
-									this.#params,
-								),
-							}
+							[HEADER_CONN_PARAMS]: JSON.stringify(
+								this.#params,
+							),
+						}
 						: {}),
 				},
 				body: opts.args,

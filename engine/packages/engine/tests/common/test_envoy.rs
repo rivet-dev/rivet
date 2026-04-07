@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 // Re-export everything from the standalone package
+pub use rivet_envoy_protocol::PROTOCOL_VERSION;
 pub use rivet_test_envoy::{
 	ActorConfig, ActorEvent, ActorLifecycleEvent, ActorStartResult, ActorStopResult,
 	CountingCrashActor, CrashNTimesThenSucceedActor, CrashOnStartActor, CustomActor,
@@ -15,7 +16,6 @@ pub use rivet_test_envoy::{
 	NotifyOnStartActor, SleepImmediatelyActor, StopImmediatelyActor, TestActor, TimeoutActor,
 	VerifyInputActor,
 };
-pub use rivet_envoy_protocol::PROTOCOL_VERSION;
 
 // Type alias for backwards compatibility
 pub type TestEnvoy = Envoy;

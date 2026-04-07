@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use rivet_envoy_protocol as protocol;
-use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 
 use crate::config::EnvoyConfig;
 use crate::envoy::ToEnvoyMessage;

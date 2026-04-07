@@ -81,15 +81,27 @@ impl RequestConfig {
 
 		let mut ctx = GetterCtx::new(keys);
 
+		// No driver (cache disabled)
+		let Some(driver) = &self.cache.driver else {
+			let keys = ctx.unresolved_keys();
+			let ctx = getter(ctx, keys).await.map_err(Error::Getter)?;
+
+			metrics::CACHE_VALUE_EMPTY_TOTAL
+				.with_label_values(&[&base_key])
+				.inc_by(ctx.unresolved_keys().len() as u64);
+
+			return Ok(ctx.into_values());
+		};
+
 		// Build driver-specific cache keys
 		let (keys, cache_keys): (Vec<_>, Vec<_>) = ctx
 			.entries()
-			.map(|(key, _)| (key.clone(), self.cache.driver.process_key(&base_key, key)))
+			.map(|(key, _)| (key.clone(), driver.process_key(&base_key, key)))
 			.unzip();
 		let cache_keys_len = cache_keys.len();
 
 		// Attempt to fetch value from cache, fall back to getter
-		match self.cache.driver.get(&base_key, &cache_keys).await {
+		match driver.get(&base_key, &cache_keys).await {
 			Ok(cached_values) => {
 				debug_assert_eq!(
 					cache_keys_len,
@@ -128,7 +140,7 @@ impl RequestConfig {
 
 					// Determine which keys are currently being fetched and not
 					for key in remaining_keys {
-						let cache_key = self.cache.driver.process_key(&base_key, &key);
+						let cache_key = driver.process_key(&base_key, &key);
 						match self.cache.in_flight().entry_async(cache_key).await {
 							scc::hash_map::Entry::Occupied(broadcast) => {
 								waiting_keys.push((key, broadcast.subscribe()));
@@ -141,7 +153,6 @@ impl RequestConfig {
 					}
 
 					let getter2 = getter.clone();
-					let cache = self.cache.clone();
 					let ctx2 = GetterCtx::new(leased_keys.clone());
 					let base_key2 = base_key.clone();
 					let leased_keys2 = leased_keys.clone();
@@ -178,8 +189,7 @@ impl RequestConfig {
 									.into_iter()
 									.partition_map(|(key, succeeded)| {
 										if succeeded {
-											let cache_key =
-												cache.driver.process_key(&base_key2, &key);
+											let cache_key = driver.process_key(&base_key2, &key);
 											Either::Left((key, cache_key))
 										} else {
 											Either::Right(key)
@@ -193,7 +203,7 @@ impl RequestConfig {
 									if succeeded_cache_keys.is_empty() {
 										Ok(Vec::new())
 									} else {
-										cache.driver.get(&base_key2, &succeeded_cache_keys).await
+										driver.get(&base_key2, &succeeded_cache_keys).await
 									}
 								},
 								async {
@@ -255,7 +265,7 @@ impl RequestConfig {
 						.into_iter()
 						.filter_map(|(key, value)| {
 							// Process the key with the appropriate driver
-							let cache_key = self.cache.driver.process_key(&base_key, key);
+							let cache_key = driver.process_key(&base_key, key);
 							// Try to decode the value using the driver
 							match encoder(value) {
 								Ok(value_bytes) => Some((cache_key, value_bytes, expire_at)),
@@ -269,10 +279,9 @@ impl RequestConfig {
 						.collect::<Vec<_>>();
 
 					if !entries_values.is_empty() {
-						let cache = self.cache.clone();
 						let base_key_clone = base_key.clone();
 
-						if let Err(err) = cache.driver.set(&base_key_clone, entries_values).await {
+						if let Err(err) = driver.set(&base_key_clone, entries_values).await {
 							tracing::error!(?err, "failed to write to cache");
 						}
 
@@ -281,7 +290,7 @@ impl RequestConfig {
 
 					// Release leases
 					for key in leased_keys {
-						let cache_key = self.cache.driver.process_key(&base_key, &key);
+						let cache_key = driver.process_key(&base_key, &key);
 						self.cache.in_flight().remove_async(&cache_key).await;
 					}
 				}
@@ -298,13 +307,17 @@ impl RequestConfig {
 					"failed to read batch keys from cache, falling back to getter"
 				);
 
+				let keys = ctx.unresolved_keys();
+
 				metrics::CACHE_REQUEST_ERRORS
 					.with_label_values(&[&base_key])
 					.inc();
+				metrics::CACHE_VALUE_MISS_TOTAL
+					.with_label_values(&[base_key.as_str()])
+					.inc_by(keys.len() as u64);
 
 				// Fall back to the getter since we can't fetch the value from
 				// the cache
-				let keys = ctx.unresolved_keys();
 				let ctx = getter(ctx, keys).await.map_err(Error::Getter)?;
 
 				metrics::CACHE_VALUE_EMPTY_TOTAL
@@ -325,11 +338,16 @@ impl RequestConfig {
 	where
 		Key: CacheKey + Send + Sync,
 	{
+		// Cache disabled
+		let Some(driver) = &self.cache.driver else {
+			return Ok(());
+		};
+
 		// Build keys
 		let base_key = base_key.as_ref();
 		let cache_keys = keys
 			.into_iter()
-			.map(|key| self.cache.driver.process_key(base_key, &key))
+			.map(|key| driver.process_key(base_key, &key))
 			.collect::<Vec<_>>();
 
 		if cache_keys.is_empty() {
@@ -375,6 +393,11 @@ impl RequestConfig {
 		base_key: impl AsRef<str> + Debug,
 		keys: Vec<RawCacheKey>,
 	) -> Result<()> {
+		// Cache disabled
+		let Some(driver) = &self.cache.driver else {
+			return Ok(());
+		};
+
 		let base_key = base_key.as_ref();
 
 		if keys.is_empty() {
@@ -389,7 +412,7 @@ impl RequestConfig {
 			.inc_by(keys.len() as u64);
 
 		// Delete keys locally
-		match self.cache.driver.delete(base_key, keys).await {
+		match driver.delete(base_key, keys).await {
 			Ok(_) => {
 				tracing::trace!("successfully deleted keys");
 			}
