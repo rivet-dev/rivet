@@ -9,7 +9,7 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.19.1",
+		"@hono/node-server": "^1.19.10",
 		"@rivetkit/engine-envoy-client": "workspace:*",
 		"@rivetkit/engine-envoy-protocol": "workspace:*",
 		"hono": "^4.7.0",

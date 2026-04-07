@@ -40,7 +40,7 @@
 	},
 	"devDependencies": {
 		"dedent": "^1.7.0",
-		"esbuild": "^0.25.9",
+		"esbuild": "^0.25.0",
 		"local-pkg": "^0.5.1"
 	}
 }
