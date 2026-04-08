@@ -532,7 +532,7 @@ function useEngineToken() {
 	if (features.multitenancy) {
 		const { data } = useQuery(
 			useRouteContext({
-				from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
+				from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
 			}).dataProvider.publishableTokenQueryOptions(),
 		);
 		return data;

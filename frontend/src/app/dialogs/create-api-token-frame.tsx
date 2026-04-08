@@ -54,7 +54,7 @@ export default function CreateApiTokenFrameContent({
 	onClose,
 }: CreateApiTokenFrameContentProps) {
 	const { dataProvider } = useRouteContext({
-		from: "/_context/_cloud/orgs/$organization/projects/$project",
+		from: "/_context/orgs/$organization/projects/$project",
 	});
 	const [createdToken, setCreatedToken] = useState<string | null>(null);
 

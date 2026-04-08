@@ -14,7 +14,7 @@ const useDataProvider = () => {
 	if (features.multitenancy) {
 		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 		return useRouteContext({
-			from: "/_context/_cloud/orgs/$organization/projects/$project",
+			from: "/_context/orgs/$organization/projects/$project",
 			select: (ctx) => ctx.dataProvider,
 		});
 	}

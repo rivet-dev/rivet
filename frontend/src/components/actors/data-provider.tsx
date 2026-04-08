@@ -28,13 +28,13 @@ export const useDataProvider = (): EngineDataProvider | CloudDataProvider => {
 	if (features.multitenancy) {
 		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 		return useRouteContext({
-			from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
+			from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
 			select: (ctx) => ctx.dataProvider,
 		}) as CloudDataProvider;
 	}
 	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 	return useRouteContext({
-		from: "/_context/_engine/ns/$namespace",
+		from: "/_context/ns/$namespace",
 	}).dataProvider as EngineDataProvider;
 };
 
@@ -50,23 +50,23 @@ export const useDataProviderCheck = () => {
 
 export const useEngineDataProvider = () => {
 	return useRouteContext({
-		from: "/_context/_engine",
+		from: "/_context",
 	}).dataProvider;
 };
 
 export const useEngineNamespaceDataProvider = () => {
 	return useRouteContext({
-		from: "/_context/_engine/ns/$namespace",
+		from: "/_context/ns/$namespace",
 	}).dataProvider;
 };
 
 type OnlyCloudRouteIds = Extract<
 	RouteIds<RegisteredRouter["routeTree"]>,
-	`/_context/_cloud/orgs/${string}`
+	`/_context/orgs/${string}`
 >;
 
 export const useCloudDataProvider = ({
-	from = "/_context/_cloud/orgs/$organization",
+	from = "/_context/orgs/$organization",
 }: {
 	from?: OnlyCloudRouteIds;
 } = {}) => {
@@ -77,20 +77,20 @@ export const useCloudDataProvider = ({
 
 export const useCloudProjectDataProvider = () => {
 	return useRouteContext({
-		from: "/_context/_cloud/orgs/$organization/projects/$project",
+		from: "/_context/orgs/$organization/projects/$project",
 	}).dataProvider;
 };
 
 export const useCloudNamespaceDataProvider = () => {
 	return useRouteContext({
-		from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
+		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
 	}).dataProvider;
 };
 
 export const useEngineCompatDataProvider = () => {
 	const routePath = features.multitenancy
-		? ("/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace" as const)
-		: ("/_context/_engine/ns/$namespace" as const);
+		? ("/_context/orgs/$organization/projects/$project/ns/$namespace" as const)
+		: ("/_context/ns/$namespace" as const);
 
 	return useRouteContext({
 		from: routePath,

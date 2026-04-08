@@ -55,7 +55,7 @@ export default function TokensFrameContent({
 
 function SecretToken() {
 	const dataProvider = useRouteContext({
-		from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
+		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
 		select: (c) => c.dataProvider,
 	});
 	const { data: token, isLoading: isTokenLoading } = useQuery(
@@ -125,7 +125,7 @@ registry.start();`;
 
 function PublishableToken() {
 	const dataProvider = useRouteContext({
-		from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
+		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
 		select: (c) => c.dataProvider,
 	});
 	const { data: token, isLoading } = useQuery(
