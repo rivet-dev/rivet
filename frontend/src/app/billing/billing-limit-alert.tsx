@@ -3,9 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Button, cn } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
+import { features } from "@/lib/features";
 import { useHighestUsagePercent } from "./hooks";
 
 export function BillingLimitAlert() {
+	if (!features.billing) return null;
+	return <BillingLimitAlertInner />;
+}
+
+function BillingLimitAlertInner() {
 	const dataProvider = useCloudProjectDataProvider();
 	const { data: billingData } = useQuery({
 		...dataProvider.currentProjectBillingDetailsQueryOptions(),
