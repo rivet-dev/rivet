@@ -30,7 +30,6 @@ members = [
   "engine/packages/pegboard-envoy",
   "engine/packages/pegboard-gateway",
   "engine/packages/pegboard-gateway2",
-  "engine/packages/pegboard-kv-channel",
   "engine/packages/pegboard-outbound",
   "engine/packages/pegboard-runner",
   "engine/packages/pools",
@@ -53,7 +52,6 @@ members = [
   "engine/sdks/rust/data",
   "engine/sdks/rust/envoy-protocol",
   "engine/sdks/rust/epoxy-protocol",
-  "engine/sdks/rust/kv-channel-protocol",
   "engine/packages/runner-protocol",
   "engine/sdks/rust/test-envoy",
   "engine/sdks/typescript/test-envoy-native",
@@ -436,9 +434,6 @@ members = [
     [workspace.dependencies.pegboard-gateway2]
     path = "engine/packages/pegboard-gateway2"
 
-    [workspace.dependencies.pegboard-kv-channel]
-    path = "engine/packages/pegboard-kv-channel"
-
     [workspace.dependencies.pegboard-outbound]
     path = "engine/packages/pegboard-outbound"
 
@@ -505,9 +500,6 @@ members = [
 
     [workspace.dependencies.epoxy-protocol]
     path = "engine/sdks/rust/epoxy-protocol"
-
-    [workspace.dependencies.rivet-kv-channel-protocol]
-    path = "engine/sdks/rust/kv-channel-protocol"
 
     [workspace.dependencies.rivet-envoy-protocol]
     path = "engine/sdks/rust/envoy-protocol"
