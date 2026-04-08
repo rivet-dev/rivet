@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-router";
 import { Actors } from "@/app/actors";
 
-export const Route = createFileRoute("/_context/_engine/ns/$namespace/")({
+export const Route = createFileRoute("/_context/ns/$namespace/")({
 	component: RouteComponent,
 	beforeLoad: async ({ context }) => {
 		if (context.__type !== "engine") {

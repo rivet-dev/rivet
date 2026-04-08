@@ -4,7 +4,7 @@ import { NotFoundCard } from "@/app/not-found-card";
 import { RouteLayout } from "@/app/route-layout";
 import { useDialog } from "@/app/use-dialog";
 
-export const Route = createFileRoute("/_context/_engine/ns/$namespace")({
+export const Route = createFileRoute("/_context/ns/$namespace")({
 	context: ({ context, params }) => {
 		return match(context)
 			.with({ __type: "engine" }, (ctx) => {
