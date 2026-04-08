@@ -37,6 +37,7 @@ export function SignUp() {
 	const from = useSearch({ strict: false, select: (s) => s?.from as string });
 	const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 	const turnstileSiteKey = cloudEnv().VITE_APP_TURNSTILE_SITE_KEY;
+	const [sentEmail, setSentEmail] = useState<string | null>(null);
 
 	const handleSubmit: SubmitHandler = async (
 		{ name, email, password },
@@ -65,6 +66,7 @@ export function SignUp() {
 
 		setTurnstileToken(null);
 
+		// If email verification is not required server-side, session is available immediately.
 		const [error] = await attemptAsync(
 			async () => await redirectToOrganization(),
 		);
@@ -72,6 +74,9 @@ export function SignUp() {
 		if (error && isRedirect(error)) {
 			return navigate(error.options);
 		}
+
+		// Email verification required — show check-your-inbox state.
+		setSentEmail(email);
 	};
 
 	const handleGoogleSignUp = async () => {
@@ -80,6 +85,50 @@ export function SignUp() {
 			callbackURL: from ?? "/",
 		});
 	};
+
+	const handleResend = async () => {
+		if (!sentEmail) return;
+		await authClient.sendVerificationEmail({ email: sentEmail });
+	};
+
+	if (sentEmail) {
+		return (
+			<motion.div
+				className="grid w-full grow items-center px-4"
+				initial={{ opacity: 0, y: 10 }}
+				animate={{ opacity: 1, y: 0 }}
+				exit={{ opacity: 0, y: 10 }}
+			>
+				<Card className="w-full max-w-md grow mx-auto">
+					<CardHeader>
+						<CardTitle>Check your email</CardTitle>
+						<CardDescription>
+							We sent a verification link to{" "}
+							<span className="font-medium text-foreground">
+								{sentEmail}
+							</span>
+							. Click it to activate your account.
+						</CardDescription>
+					</CardHeader>
+					<CardFooter>
+						<div className="grid w-full gap-y-4">
+							<Button variant="outline" onClick={handleResend}>
+								Resend email
+							</Button>
+							<Button
+								variant="link"
+								className="text-primary-foreground"
+								size="sm"
+								asChild
+							>
+								<Link to="/login">Back to sign in</Link>
+							</Button>
+						</div>
+					</CardFooter>
+				</Card>
+			</motion.div>
+		);
+	}
 
 	return (
 		<motion.div
