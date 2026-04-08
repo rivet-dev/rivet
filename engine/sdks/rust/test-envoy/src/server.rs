@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+	Arc,
+	atomic::{AtomicBool, Ordering},
+};
 
 use anyhow::{Context, Result};
 use async_stream::stream;
@@ -21,7 +24,7 @@ use tracing_subscriber::EnvFilter;
 
 use crate::behaviors::DefaultTestCallbacks;
 use rivet_envoy_client::config::EnvoyConfig;
-use rivet_envoy_client::envoy::start_envoy;
+use rivet_envoy_client::envoy::start_envoy_sync;
 use rivet_envoy_client::handle::EnvoyHandle;
 
 #[derive(Clone)]
@@ -77,7 +80,7 @@ pub async fn run_from_env() -> Result<()> {
 	};
 
 	if settings.autostart_envoy {
-		let handle = create_envoy(&settings).await?;
+		let (handle, _) = create_envoy(&settings);
 		*state.envoy_handle.lock().await = Some(handle);
 	} else if settings.autoconfigure_serverless {
 		auto_configure_serverless(&settings).await?;
@@ -145,19 +148,12 @@ async fn metadata() -> Json<serde_json::Value> {
 async fn start_serverless(State(state): State<AppState>, body: Bytes) -> impl IntoResponse {
 	tracing::info!("received serverless start request");
 
-	let handle = match create_envoy(&state.settings).await {
-		Ok(h) => h,
-		Err(err) => {
-			tracing::error!(?err, "failed to start serverless envoy");
-			return axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response();
-		}
-	};
+	let (handle, is_shutdown) = create_envoy(&state.settings);
 
 	// Inject the serverless start payload
 	let handle_clone = handle.clone();
-	let payload = body.to_vec();
 	tokio::spawn(async move {
-		if let Err(err) = handle_clone.start_serverless_actor(&payload).await {
+		if let Err(err) = handle_clone.start_serverless_actor(&body).await {
 			tracing::error!(?err, "failed to inject serverless start payload");
 		}
 	});
@@ -168,6 +164,12 @@ async fn start_serverless(State(state): State<AppState>, body: Bytes) -> impl In
 		let mut interval = tokio::time::interval(Duration::from_secs(1));
 		loop {
 			interval.tick().await;
+
+			if is_shutdown.load(Ordering::SeqCst) {
+				tracing::debug!("envoy shutdown, aborting SSE");
+				return;
+			}
+
 			yield Ok::<Event, Infallible>(Event::default().event("ping").data(""));
 		}
 	};
@@ -177,7 +179,10 @@ async fn start_serverless(State(state): State<AppState>, body: Bytes) -> impl In
 		.into_response()
 }
 
-async fn create_envoy(settings: &Settings) -> Result<EnvoyHandle> {
+fn create_envoy(settings: &Settings) -> (EnvoyHandle, Arc<AtomicBool>) {
+	let cbs = DefaultTestCallbacks::default();
+	let is_shutdown = cbs.is_shutdown.clone();
+
 	let config = EnvoyConfig {
 		version: settings.envoy_version,
 		endpoint: settings.endpoint.clone(),
@@ -186,13 +191,12 @@ async fn create_envoy(settings: &Settings) -> Result<EnvoyHandle> {
 		pool_name: settings.pool_name.clone(),
 		prepopulate_actor_names: std::collections::HashMap::new(),
 		metadata: None,
-		envoy_key: None,
+		not_global: false,
 		debug_latency_ms: None,
-		callbacks: Arc::new(DefaultTestCallbacks),
+		callbacks: Arc::new(cbs),
 	};
 
-	let handle = start_envoy(config).await;
-	Ok(handle)
+	(start_envoy_sync(config), is_shutdown)
 }
 
 async fn auto_configure_serverless(settings: &Settings) -> Result<()> {

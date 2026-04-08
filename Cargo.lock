@@ -4593,7 +4593,7 @@ dependencies = [
  "hex",
  "rand 0.8.5",
  "rivet-envoy-protocol",
- "rivet-util",
+ "rivet-util-serde",
  "scc",
  "serde",
  "serde_bare",
@@ -4613,7 +4613,7 @@ dependencies = [
  "anyhow",
  "hex",
  "rand 0.8.5",
- "rivet-util",
+ "rivet-util-serde",
  "serde",
  "serde_bare",
  "utoipa",
@@ -5022,7 +5022,6 @@ dependencies = [
  "bcrypt",
  "chrono",
  "futures-util",
- "indexmap 2.10.0",
  "ipnet",
  "lazy_static",
  "rand 0.8.5",
@@ -5032,9 +5031,8 @@ dependencies = [
  "rivet-metrics",
  "rivet-tracing-utils",
  "rivet-util-id",
+ "rivet-util-serde",
  "serde",
- "serde_json",
- "thiserror 1.0.69",
  "tokio",
  "tracing",
  "url",
@@ -5053,6 +5051,16 @@ dependencies = [
  "universaldb",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "rivet-util-serde"
+version = "2.2.1"
+dependencies = [
+ "indexmap 2.10.0",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

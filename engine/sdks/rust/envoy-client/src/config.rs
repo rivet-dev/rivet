@@ -43,9 +43,9 @@ pub struct EnvoyConfig {
 	pub pool_name: String,
 	pub prepopulate_actor_names: HashMap<String, PrepopulatedActor>,
 	pub metadata: Option<HashMap<String, String>>,
-
-	/// Optional envoy key. If not provided, a UUID will be generated.
-	pub envoy_key: Option<String>,
+	/// When `start_envoy` is called, create a new envoy every time instead of using a single global envoy
+	/// instance for the entire runtime.
+	pub not_global: bool,
 
 	/// Debug option to inject artificial latency (in ms) into WebSocket communication.
 	pub debug_latency_ms: Option<u64>,

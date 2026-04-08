@@ -2,7 +2,6 @@ use futures_util::FutureExt;
 use gas::prelude::*;
 use rivet_data::converted::ActorByKeyKeyData;
 use rivet_envoy_protocol as protocol;
-use rivet_types::actors::CrashPolicy;
 use universaldb::prelude::*;
 
 use crate::errors;
@@ -25,7 +24,6 @@ pub struct Input {
 	pub key: Option<String>,
 
 	pub namespace_id: Id,
-	pub crash_policy: CrashPolicy,
 
 	/// Arbitrary user-provided binary data encoded in base64.
 	pub input: Option<String>,
@@ -39,7 +37,6 @@ pub struct State {
 	pub pool_name: String,
 	pub key: Option<String>,
 	pub namespace_id: Id,
-	pub crash_policy: CrashPolicy,
 
 	pub acquired_slot: bool,
 	pub envoy_last_command_idx: i64,
@@ -72,7 +69,6 @@ impl State {
 		pool_name: String,
 		key: Option<String>,
 		namespace_id: Id,
-		crash_policy: CrashPolicy,
 		create_ts: i64,
 	) -> Self {
 		State {
@@ -81,7 +77,6 @@ impl State {
 			pool_name,
 			key,
 			namespace_id,
-			crash_policy,
 
 			acquired_slot: false,
 			envoy_last_command_idx: -1,
@@ -122,7 +117,6 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 		pool_name: input.pool_name.clone(),
 		key: input.key.clone(),
 		namespace_id: input.namespace_id,
-		crash_policy: input.crash_policy,
 		create_ts: ctx.create_ts(),
 		from_v1: input.from_v1,
 	})
@@ -236,7 +230,6 @@ pub struct InitStateAndUdbInput {
 	pub name: String,
 	pub key: Option<String>,
 	pub namespace_id: Id,
-	pub crash_policy: CrashPolicy,
 	pub pool_name: String,
 	pub create_ts: i64,
 	pub from_v1: bool,
@@ -252,7 +245,6 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 		input.pool_name.clone(),
 		input.key.clone(),
 		input.namespace_id,
-		input.crash_policy,
 		input.create_ts,
 	));
 

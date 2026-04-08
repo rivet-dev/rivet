@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use rivet_envoy_client::config::{
 	BoxFuture, EnvoyCallbacks, HttpRequest, HttpResponse, WebSocketHandler,
@@ -7,7 +9,10 @@ use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_protocol as protocol;
 
 /// Default test callbacks that handle HTTP ping and WebSocket echo.
-pub struct DefaultTestCallbacks;
+#[derive(Default)]
+pub struct DefaultTestCallbacks {
+	pub is_shutdown: Arc<AtomicBool>,
+}
 
 impl EnvoyCallbacks for DefaultTestCallbacks {
 	fn on_actor_start(
@@ -39,6 +44,8 @@ impl EnvoyCallbacks for DefaultTestCallbacks {
 
 	fn on_shutdown(&self) {
 		tracing::info!("envoy shutdown");
+
+		self.is_shutdown.store(true, Ordering::SeqCst);
 	}
 
 	fn fetch(

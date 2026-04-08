@@ -48,6 +48,7 @@ members = [
   "engine/packages/universalpubsub",
   "engine/packages/util",
   "engine/packages/util-id",
+  "engine/packages/util-serde",
   "engine/packages/workflow-worker",
   "engine/sdks/rust/api-full",
   "engine/sdks/rust/data",
@@ -491,6 +492,9 @@ members = [
 
     [workspace.dependencies.rivet-util-id]
     path = "engine/packages/util-id"
+
+    [workspace.dependencies.rivet-util-serde]
+    path = "engine/packages/util-serde"
 
     [workspace.dependencies.rivet-workflow-worker]
     path = "engine/packages/workflow-worker"

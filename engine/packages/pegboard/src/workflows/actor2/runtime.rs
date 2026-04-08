@@ -5,7 +5,6 @@ use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rand::prelude::SliceRandom;
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
-use rivet_types::actors::CrashPolicy;
 use rivet_types::runner_configs::RunnerConfigKind;
 use universaldb::prelude::*;
 use universalpubsub::PublishOpts;
@@ -534,38 +533,30 @@ pub async fn handle_stopped(
 		Destroy,
 	}
 
-	let decision = match (&state.transition, input.crash_policy, variant) {
-		(
-			Transition::SleepIntent {
-				rewake_after_stop: true,
-				..
-			},
-			_,
-			_,
-		) => Decision::Reallocate,
-		(
-			Transition::SleepIntent {
-				rewake_after_stop: false,
-				..
-			},
-			_,
-			_,
-		) => Decision::Reallocate,
-		(Transition::GoingAway { .. }, _, _) => Decision::Reallocate,
-		(Transition::Destroying { .. }, _, _) => Decision::Destroy,
-		(_, _, StoppedVariant::FailedAllocation) => Decision::Backoff,
-		// An actor stopping with `StopCode::Ok` indicates a graceful exit
-		(
-			_,
-			_,
+	let decision = match &state.transition {
+		Transition::SleepIntent {
+			rewake_after_stop: true,
+			..
+		} => Decision::Reallocate,
+		Transition::SleepIntent {
+			rewake_after_stop: false,
+			..
+		} => Decision::Sleep,
+		Transition::GoingAway { .. } => Decision::Reallocate,
+		Transition::Destroying { .. } => Decision::Destroy,
+		_ => match variant {
+			StoppedVariant::FailedAllocation => Decision::Backoff,
+			// An actor stopping with `StopCode::Ok` indicates a graceful exit
 			StoppedVariant::Stopped {
 				code: protocol::StopCode::Ok,
 				..
-			},
-		) => Decision::Destroy,
-		(_, CrashPolicy::Restart, _) => Decision::Reallocate,
-		(_, CrashPolicy::Sleep, _) => Decision::Sleep,
-		(_, CrashPolicy::Destroy, _) => Decision::Destroy,
+			} => Decision::Destroy,
+			StoppedVariant::Stopped {
+				code: protocol::StopCode::Error,
+				..
+			}
+			| StoppedVariant::Lost { .. } => Decision::Sleep,
+		},
 	};
 
 	let stopped_res = match decision {

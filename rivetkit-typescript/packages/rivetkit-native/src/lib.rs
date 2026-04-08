@@ -86,7 +86,7 @@ pub fn start_envoy_sync_js(
 		pool_name: config.pool_name,
 		prepopulate_actor_names: HashMap::new(),
 		metadata,
-		envoy_key: None,
+		not_global: config.not_global,
 		debug_latency_ms: None,
 		callbacks,
 	};

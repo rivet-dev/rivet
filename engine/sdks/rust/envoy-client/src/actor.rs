@@ -116,7 +116,8 @@ async fn actor_inner(
 ) {
 	let handle = EnvoyHandle {
 		shared: shared.clone(),
-		started_rx: tokio::sync::watch::channel(true).1,
+		// Fake channel, don't care
+		started_rx: tokio::sync::watch::channel(()).1,
 	};
 
 	let mut ctx = ActorContext {
