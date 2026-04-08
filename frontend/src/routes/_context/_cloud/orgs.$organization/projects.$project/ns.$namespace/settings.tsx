@@ -5,8 +5,8 @@ import {
 	useQuery,
 } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
-import { match } from "ts-pattern";
 import { HelpDropdown } from "@/app/help-dropdown";
+import { features } from "@/lib/features";
 import { Content } from "@/app/layout";
 import { ProviderDropdown } from "@/app/provider-dropdown";
 import { RunnerConfigsTable } from "@/app/runner-config-table";
@@ -38,11 +38,11 @@ import { CloudApiTokens, PublishableToken, SecretToken } from "./tokens";
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings",
 )({
-	component: match(__APP_TYPE__)
-		.with("cloud", () => RouteComponent)
-		.otherwise(() => () => {
-			throw notFound();
-		}),
+	component: features.namespaceManagement
+		? RouteComponent
+		: () => {
+				throw notFound();
+			},
 	pendingComponent: DataLoadingPlaceholder,
 	loader: async ({ context }) => {
 		const dataProvider = context.dataProvider;
@@ -258,9 +258,9 @@ function Advanced() {
 				<AccordionContent>
 					<SecretToken />
 					<PublishableToken />
-					{__APP_TYPE__ === "cloud" ? <CloudApiTokens /> : null}
+					{features.auth ? <CloudApiTokens /> : null}
 					<DatacenterStatus />
-					{__APP_TYPE__ === "cloud" ? <DangerZone /> : null}
+					{features.namespaceManagement ? <DangerZone /> : null}
 				</AccordionContent>
 			</AccordionItem>
 		</Accordion>
