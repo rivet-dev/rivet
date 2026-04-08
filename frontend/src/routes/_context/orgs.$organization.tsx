@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute, notFound, Outlet } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { authClient } from "@/lib/auth";
 
@@ -7,21 +7,29 @@ export const Route = createFileRoute("/_context/orgs/$organization")({
 	beforeLoad: async ({ context, params }) => {
 		return await match(context)
 			.with({ __type: "cloud" }, async (context) => {
+				const org = await authClient.organization.getFullOrganization({
+					query: { organizationSlug: params.organization },
+				});
+
+				if (org.error) {
+					throw notFound();
+				}
+
 				const session = await authClient.getSession();
 				if (
-					session.data?.session.activeOrganizationId !==
-					params.organization
+					session.data?.session.activeOrganizationId !== org.data.id
 				) {
 					await authClient.organization.setActive({
-						organizationId: params.organization,
+						organizationSlug: params.organization,
 					});
 				}
 
 				return {
 					dataProvider: context.getOrCreateOrganizationContext(
 						context.dataProvider,
-						params.organization,
+						org.data.slug,
 					),
+					org: org.data,
 				};
 			})
 			.otherwise(() => {

@@ -70,7 +70,7 @@ export function CloudOrganizationSelect({
 					</>
 				) : null}
 				{data.map((org) => (
-					<SelectItem key={org.id} value={org.id}>
+					<SelectItem key={org.id} value={org.slug}>
 						<span className="inline-flex items-center gap-2">
 							<Avatar className="size-5">
 								<AvatarImage src={org.logo ?? undefined} />

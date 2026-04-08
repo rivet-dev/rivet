@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import * as CreateOrganizationForm from "@/app/forms/create-organization-form";
 import { Button, type DialogContentProps, Frame } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
@@ -10,6 +11,7 @@ interface CreateOrganizationContentProps extends DialogContentProps {}
 export default function CreateOrganizationContent({
 	onClose,
 }: CreateOrganizationContentProps) {
+	const navigate = useNavigate();
 	const dataProvider = useCloudDataProvider();
 	const { mutateAsync } = useMutation({
 		mutationFn: async (values: { name: string }) => {
@@ -18,12 +20,20 @@ export default function CreateOrganizationContent({
 				name: values.name,
 				slug: crypto.randomUUID(),
 			});
+			if (result.error) {
+				throw result.error;
+			}
 			return result;
 		},
-		onSuccess: async () => {
+		onSuccess: async (data) => {
 			await queryClient.invalidateQueries(
 				dataProvider.organizationsQueryOptions(),
 			);
+			await navigate({
+				to: "/orgs/$organization",
+				params: { organization: data.data.slug },
+			});
+
 			onClose?.();
 		},
 	});
@@ -40,12 +50,20 @@ export default function CreateOrganizationContent({
 			</Frame.Header>
 			<CreateOrganizationForm.Form
 				defaultValues={{ name: "" }}
-				onSubmit={async (values) => {
-					await mutateAsync(values);
+				onSubmit={async (values, form) => {
+					try {
+						await mutateAsync(values);
+					} catch {
+						form.setError("root", {
+							message: "Failed to create organization.",
+						});
+						return;
+					}
 				}}
 			>
 				<Frame.Content>
 					<CreateOrganizationForm.Name />
+					<CreateOrganizationForm.RootError />
 				</Frame.Content>
 				<Frame.Footer>
 					<Button variant="secondary" onClick={onClose}>

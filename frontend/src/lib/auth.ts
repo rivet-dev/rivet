@@ -1,4 +1,4 @@
-import { redirect } from "@tanstack/react-router";
+import { notFound, redirect } from "@tanstack/react-router";
 import { organizationClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { cloudEnv } from "./env";
@@ -22,10 +22,18 @@ export const redirectToOrganization = async (
 	if (session.data) {
 
 		if (session.data.session.activeOrganizationId) {
+			const org = await authClient.organization.getFullOrganization({
+				query: { organizationId: session.data.session.activeOrganizationId },
+			});
+
+			if (org.error) {
+				throw notFound();
+			}
+
 			throw redirect({
 				to: "/orgs/$organization",
 				search: from ? { from } : undefined,
-				params: { organization: session.data.session.activeOrganizationId },
+				params: { organization: org.data.slug },
 			});
 		}
 		const orgs = await authClient.organization.list();
@@ -40,7 +48,7 @@ export const redirectToOrganization = async (
 		throw redirect({
 			to: "/orgs/$organization",
 			search: from ? { from } : undefined,
-			params: { organization: orgs.data[0].id },
+			params: { organization: orgs.data[0].slug },
 		});
 	}
 

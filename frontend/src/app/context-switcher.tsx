@@ -470,10 +470,12 @@ function ProjectListItem({
 				onFocus={onHover}
 			>
 				<span className="truncate flex-1">{displayName}</span>
-				<LazyBillingPlanBadge
-					project={name}
-					organization={organization}
-				/>
+				{features.billing && (
+					<LazyBillingPlanBadge
+						project={name}
+						organization={organization}
+					/>
+				)}
 			</CommandItem>
 		</SafeHover>
 	);

@@ -1,45 +1,46 @@
 import { createFileRoute, isRedirect, redirect } from "@tanstack/react-router";
-import { Logo } from "@/app/logo";
 import CreateNamespacesFrameContent from "@/app/dialogs/create-namespace-frame";
+import { Logo } from "@/app/logo";
 import { Card } from "@/components";
 import { redirectToOrganization } from "@/lib/auth";
 import { features } from "@/lib/features";
 
 export const Route = createFileRoute("/_context/")({
-	component: () => features.multitenancy ? <CloudRoute /> : <EngineRoute />,
+	component: () => (features.multitenancy ? <CloudRoute /> : <EngineRoute />),
 	beforeLoad: async ({ context, search }) => {
 		if (features.multitenancy) {
 			if (!(await redirectToOrganization(search))) {
 				throw redirect({ to: "/login", search: true });
 			}
-		} else {
-			const ctx = context as Extract<typeof context, { __type: "engine" }>;
-			try {
-				const result = await ctx.queryClient.fetchInfiniteQuery(
-					ctx.dataProvider.namespacesQueryOptions(),
-				);
+			return;
+		}
 
-				const firstNamespace = result.pages[0]?.namespaces[0];
-				if (!firstNamespace) {
-					throw redirect({
-						to: "/ns/$namespace",
-						params: { namespace: "default" },
-						search: true,
-					});
-				}
+		const ctx = context as Extract<typeof context, { __type: "engine" }>;
+		try {
+			const result = await ctx.queryClient.fetchInfiniteQuery(
+				ctx.dataProvider.namespacesQueryOptions(),
+			);
+
+			const firstNamespace = result.pages[0]?.namespaces[0];
+			if (!firstNamespace) {
 				throw redirect({
 					to: "/ns/$namespace",
-					params: { namespace: firstNamespace.name },
+					params: { namespace: "default" },
 					search: true,
 				});
-			} catch (e) {
-				if (isRedirect(e)) {
-					throw e;
-				}
-
-				// Ignore errors here, they will be handled in the UI
-				return;
 			}
+			throw redirect({
+				to: "/ns/$namespace",
+				params: { namespace: firstNamespace.name },
+				search: true,
+			});
+		} catch (e) {
+			if (isRedirect(e)) {
+				throw e;
+			}
+
+			// Ignore errors here, they will be handled in the UI
+			return;
 		}
 	},
 });
