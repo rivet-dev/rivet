@@ -72,18 +72,33 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 					</>
 				) : null}
 				{params.organization ? (
-					<DropdownMenuSub>
-						<DropdownMenuSubTrigger>
-							Switch Organization
-						</DropdownMenuSubTrigger>
-						<DropdownMenuPortal>
-							<DropdownMenuSubContent>
-								<OrganizationSwitcher
-									value={params.organization}
-								/>
-							</DropdownMenuSubContent>
-						</DropdownMenuPortal>
-					</DropdownMenuSub>
+					<>
+						<DropdownMenuSub>
+							<DropdownMenuSubTrigger>
+								Switch Organization
+							</DropdownMenuSubTrigger>
+							<DropdownMenuPortal>
+								<DropdownMenuSubContent>
+									<OrganizationSwitcher
+										value={params.organization}
+									/>
+								</DropdownMenuSubContent>
+							</DropdownMenuPortal>
+						</DropdownMenuSub>
+						<DropdownMenuItem
+							onSelect={() => {
+								return navigate({
+									to: ".",
+									search: (old) => ({
+										...old,
+										modal: "org-members",
+									}),
+								});
+							}}
+						>
+							Manage Members
+						</DropdownMenuItem>
+					</>
 				) : null}
 				<DropdownMenuItem
 					onSelect={() => {

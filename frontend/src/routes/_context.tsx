@@ -21,6 +21,7 @@ const searchSchema = z
 				"create-ns",
 				"create-project",
 				"billing",
+				"org-members",
 			])
 			.or(z.string())
 			.optional(),
@@ -132,6 +133,7 @@ function CloudModals() {
 
 	const CreateProjectDialog = useDialog.CreateProject.Dialog;
 	const CreateOrganizationDialog = useDialog.CreateOrganization.Dialog;
+	const OrgMembersDialog = useDialog.OrgMembers.Dialog;
 
 	return (
 		<>
@@ -152,6 +154,19 @@ function CloudModals() {
 			<CreateOrganizationDialog
 				dialogProps={{
 					open: search?.modal === "create-organization",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({ ...old, modal: undefined }),
+							});
+						}
+					},
+				}}
+			/>
+			<OrgMembersDialog
+				dialogProps={{
+					open: search?.modal === "org-members",
 					onOpenChange: (value) => {
 						if (!value) {
 							return navigate({
