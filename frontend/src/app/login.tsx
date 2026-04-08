@@ -111,6 +111,14 @@ export function Login() {
 						</p>
 						<EmailField />
 						<PasswordField />
+						<div className="flex justify-end">
+							<Link
+								to="/forgot-password"
+								className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+							>
+								Forgot password?
+							</Link>
+						</div>
 						<RootError />
 						{features.captcha && turnstileSiteKey && (
 							<TurnstileWidget
