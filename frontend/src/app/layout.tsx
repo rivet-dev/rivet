@@ -210,7 +210,7 @@ const Sidebar = ({
 						{features.multitenancy ? (
 							<>
 								<div className="flex gap-0.5 my-2 px-2.5 flex-col">
-									{matchRoute({
+									{features.billing && matchRoute({
 										to: "/orgs/$organization/projects/$project/ns/$namespace",
 										fuzzy: true,
 									}) ? (
@@ -228,12 +228,12 @@ const Sidebar = ({
 													Billing
 												</p>
 												<div className="flex gap-1">
-													{features.billing ? <BillingUsageGauge /> : null}
-													{features.billing ? <BillingPlanBadge /> : null}
+													<BillingUsageGauge />
+													<BillingPlanBadge />
 												</div>
 											</Link>
 										</HeaderButton>
-									) : matchRoute({
+									) : features.billing && matchRoute({
 											to: "/orgs/$organization/projects/$project",
 											fuzzy: true,
 										}) ? (
@@ -251,8 +251,8 @@ const Sidebar = ({
 													Billing
 												</p>
 												<div className="flex gap-1">
-													{features.billing ? <BillingUsageGauge /> : null}
-													{features.billing ? <BillingPlanBadge /> : null}
+													<BillingUsageGauge />
+													<BillingPlanBadge />
 												</div>
 											</Link>
 										</HeaderButton>
