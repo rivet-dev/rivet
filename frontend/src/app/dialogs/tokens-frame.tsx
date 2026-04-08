@@ -78,10 +78,7 @@ function SecretToken() {
 	const namespace = dataProvider.engineNamespace;
 
 	const endpoint = features.multitenancy
-		? (() => {
-			const region = regions.find((r) => r.name === selectedDatacenter);
-			return region?.url || cloudEnv().VITE_APP_API_URL;
-		})()
+		? regions.find((r) => r.name === selectedDatacenter)?.url || cloudEnv().VITE_APP_API_URL
 		: getConfig().apiUrl;
 
 	const envVars = `RIVET_ENDPOINT=${endpoint}
