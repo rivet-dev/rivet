@@ -1,22 +1,20 @@
 import { faQuestionCircle, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
-import { match } from "ts-pattern";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { Content } from "@/app/layout";
 import { RouteLayout } from "@/app/route-layout";
 import { SidebarToggle } from "@/app/sidebar-toggle";
 import { Button, H1, H3, H4 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
+import { features } from "@/lib/features";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/settings",
 )({
-	component: match(__APP_TYPE__)
-		.with("cloud", () => RouteComponent)
-		.otherwise(() => () => {
-			throw notFound();
-		}),
+	component: features.multitenancy ? RouteComponent : () => {
+		throw notFound();
+	},
 });
 
 function RouteComponent() {

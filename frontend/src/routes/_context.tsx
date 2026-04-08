@@ -5,11 +5,11 @@ import {
 	useNavigate,
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
-import { match } from "ts-pattern";
 import z from "zod";
 import { getConfig, ls, useDialog } from "@/components";
 import { ModalRenderer } from "@/components/modal-renderer";
 import { authClient } from "@/lib/auth";
+import { features } from "@/lib/features";
 
 const searchSchema = z
 	.object({
@@ -35,39 +35,33 @@ export const Route = createFileRoute("/_context")({
 	component: RouteComponent,
 	validateSearch: zodValidator(searchSchema),
 	context: ({ context }) => {
-		return match(__APP_TYPE__)
-			.with("engine", () => ({
-				dataProvider: context.getOrCreateEngineContext(
-					() => ls.engineCredentials.get(getConfig().apiUrl) || "",
-				),
-				__type: "engine" as const,
-			}))
-			.with("cloud", () => ({
+		if (features.multitenancy) {
+			return {
 				dataProvider: context.getOrCreateCloudContext(),
 				__type: "cloud" as const,
-			}))
-			.otherwise(() => {
-				throw new Error(
-					"Inspector routes are not supported in the dashboard build",
-				);
-			});
+			};
+		}
+		return {
+			dataProvider: context.getOrCreateEngineContext(
+				() => ls.engineCredentials.get(getConfig().apiUrl) || "",
+			),
+			__type: "engine" as const,
+		};
 	},
 	beforeLoad: async (route) => {
-		return await match(route.context)
-			.with({ __type: "cloud" }, () => async () => {
-				const session = await authClient.getSession();
+		if (features.multitenancy) {
+			const session = await authClient.getSession();
 
-				if (!session.data) {
-					throw redirect({
-						to: "/login",
-						search: (old) => ({
-							...old,
-							from: route.location.pathname,
-						}),
-					});
-				}
-			})
-			.otherwise(() => () => {})();
+			if (!session.data) {
+				throw redirect({
+					to: "/login",
+					search: (old) => ({
+						...old,
+						from: route.location.pathname,
+					}),
+				});
+			}
+		}
 	},
 });
 

@@ -1,37 +1,35 @@
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
-import { match } from "ts-pattern";
 import CreateNamespacesFrameContent from "@/app/dialogs/create-namespace-frame";
 import { RouteLayout } from "@/app/route-layout";
 import { Card } from "@/components";
+import { features } from "@/lib/features";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/",
 )({
-	beforeLoad: ({ context, params, search }) => {
-		return match(__APP_TYPE__)
-			.with("cloud", async () => {
-				const result = await context.queryClient.fetchInfiniteQuery(
-					context.dataProvider.currentProjectNamespacesQueryOptions(),
-				);
+	beforeLoad: async ({ context, params }) => {
+		if (!features.multitenancy) {
+			throw notFound();
+		}
 
-				const firstNamespace = result.pages[0].namespaces[0];
+		const result = await context.queryClient.fetchInfiniteQuery(
+			context.dataProvider.currentProjectNamespacesQueryOptions(),
+		);
 
-				if (firstNamespace) {
-					throw redirect({
-						to: "/orgs/$organization/projects/$project/ns/$namespace",
-						replace: true,
-						search: true,
-						params: {
-							organization: params.organization,
-							project: params.project,
-							namespace: firstNamespace.name,
-						},
-					});
-				}
-			})
-			.otherwise(() => {
-				throw notFound();
+		const firstNamespace = result.pages[0].namespaces[0];
+
+		if (firstNamespace) {
+			throw redirect({
+				to: "/orgs/$organization/projects/$project/ns/$namespace",
+				replace: true,
+				search: true,
+				params: {
+					organization: params.organization,
+					project: params.project,
+					namespace: firstNamespace.name,
+				},
 			});
+		}
 	},
 	component: RouteComponent,
 });

@@ -5,17 +5,15 @@ import {
 	useNavigate,
 	useSearch,
 } from "@tanstack/react-router";
-import { match } from "ts-pattern";
 import { useDialog } from "@/app/use-dialog";
+import { features } from "@/lib/features";
 
 export const Route = createFileRoute("/_context/_engine")({
 	component: RouteComponent,
 	beforeLoad: () => {
-		return match(__APP_TYPE__)
-			.with("engine", () => {})
-			.otherwise(() => {
-				throw notFound();
-			});
+		if (features.multitenancy) {
+			throw notFound();
+		}
 	},
 });
 
