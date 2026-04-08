@@ -8,11 +8,8 @@
 		"check-types": "tsc --noEmit",
 		"build": "NODE_OPTIONS='--max-old-space-size=8192' vite build --mode=production",
 		"preview": "vite preview",
-		"test:e2e": "playwright test",
-		"test:e2e:ui": "playwright test --ui",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"test:e2e:update-snapshots": "playwright test --update-snapshots",
 		"dev:ladle": "ladle dev",
 		"build:ladle": "ladle build"
 	},
@@ -160,8 +157,6 @@
 		"zod": "^3.25.76"
 	},
 	"devDependencies": {
-		"@playwright/test": "^1.57.0",
-		"dotenv": "^17.2.3",
 		"vitest": "^4.0.18"
 	}
 }

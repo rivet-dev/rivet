@@ -13,7 +13,7 @@ This document outlines critical testing scenarios for the Rivet Cloud onboarding
 
 **Development URL**: http://localhost:5173 (or configured port)
 **Production URL**: https://rivet.gg
-**Authentication**: Clerk
+**Authentication**: Better Auth
 
 ---
 
@@ -36,7 +36,7 @@ This document outlines critical testing scenarios for the Rivet Cloud onboarding
 
 **Scenario**: User logs in and system determines where to route them based on account state
 
-**Prerequisites**: User has successfully authenticated via Clerk
+**Prerequisites**: User has successfully authenticated
 
 **Routing Logic** (evaluated in order):
 

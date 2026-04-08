@@ -54,18 +54,23 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
 				{isMatchingProjectRoute ? (
-					<DropdownMenuItem
-						onSelect={() => {
-							return navigate({
-								to: ".",
-								search: (old) => ({ ...old, modal: "billing" }),
-							});
-						}}
-					>
-						Billing
-					</DropdownMenuItem>
+					<>
+						<DropdownMenuItem
+							onSelect={() => {
+								return navigate({
+									to: ".",
+									search: (old) => ({
+										...old,
+										modal: "billing",
+									}),
+								});
+							}}
+						>
+							Billing
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+					</>
 				) : null}
-				<DropdownMenuSeparator />
 				{params.organization ? (
 					<DropdownMenuSub>
 						<DropdownMenuSubTrigger>

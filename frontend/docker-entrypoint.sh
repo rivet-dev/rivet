@@ -26,7 +26,6 @@ replace_env_var() {
 replace_env_var "https://VITE_APP_API_URL.placeholder.rivet.dev" "VITE_APP_API_URL"
 replace_env_var "https://VITE_APP_CLOUD_API_URL.placeholder.rivet.dev" "VITE_APP_CLOUD_API_URL"
 replace_env_var "https://VITE_APP_ASSETS_URL.placeholder.rivet.dev" "VITE_APP_ASSETS_URL"
-replace_env_var "pk_placeholder_clerk_key" "VITE_APP_CLERK_PUBLISHABLE_KEY"
 replace_env_var "https://VITE_APP_SENTRY_DSN.placeholder.rivet.dev/0" "VITE_APP_SENTRY_DSN"
 
 echo "Environment variable substitution complete"

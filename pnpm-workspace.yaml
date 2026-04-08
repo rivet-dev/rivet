@@ -21,7 +21,6 @@ packages:
   - website/scripts/typecheck-staging
 
 ignoredBuiltDependencies:
-  - '@clerk/shared'
   - '@parcel/watcher'
   - '@sentry/cli'
   - browser-tabs-lock

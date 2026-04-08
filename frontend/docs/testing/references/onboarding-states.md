@@ -6,7 +6,7 @@ This document defines all possible states during the Rivet Cloud onboarding flow
 
 ### 1. Anonymous (Unauthenticated)
 
-**Description**: User is not logged in via Clerk
+**Description**: User is not logged in
 
 **User is shown**:
 - Authentication page
