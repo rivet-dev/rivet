@@ -27,9 +27,16 @@ const getVariantForMode = (mode: string) => {
 	}
 };
 
+function isFlagEnabled(featureFlags: string | undefined, flag: string): boolean {
+	if (featureFlags === undefined) return true;
+	return featureFlags.split(",").map((s) => s.trim()).includes(flag);
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
 	const env = commonEnvSchema.parse(loadEnv(mode, process.cwd(), ""));
+	const featureFlags = process.env.VITE_FEATURE_FLAGS;
+	const supportEnabled = isFlagEnabled(featureFlags, "support");
 
 	console.log(
 		env.SENTRY_AUTH_TOKEN
@@ -44,14 +51,14 @@ export default defineConfig(({ mode }) => {
 			react(),
 			env.SENTRY_AUTH_TOKEN
 				? sentryVitePlugin({
-						org: "rivet-gaming",
-						project: env.SENTRY_PROJECT,
-						authToken: env.SENTRY_AUTH_TOKEN,
-						release:
-							GIT_BRANCH === "main"
-								? { name: GIT_SHA }
-								: undefined,
-					})
+					org: "rivet-gaming",
+					project: env.SENTRY_PROJECT,
+					authToken: env.SENTRY_AUTH_TOKEN,
+					release:
+						GIT_BRANCH === "main"
+							? { name: GIT_SHA }
+							: undefined,
+				})
 				: null,
 			favigo({
 				source: "./public/favicon.svg",

@@ -151,8 +151,8 @@ jobs:
         run: pnpm build --filter='./frontend'
         env:
           NODE_OPTIONS: '--max-old-space-size=8192'
-      - name: Build cloud dashboard
-        run: pnpm build:cloud
+      - name: Build frontend
+        run: pnpm build
         working-directory: ./frontend
         env:
           NODE_OPTIONS: '--max-old-space-size=8192'
