@@ -1,0 +1,30 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Deploy:
+#   1. Push this repo to GitHub/GitLab/Bitbucket.
+#   2. Dashboard > Blueprints > New Blueprint Instance > pick the repo > Apply.
+#
+# Monorepo: set Root Directory to `examples/state-render`.
+#
+# RIVET_ENVOY_VERSION is derived automatically from RENDER_GIT_COMMIT.
+
+services:
+  - type: web
+    name: state-render
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22.12.0"
+      - key: NODE_ENV
+        value: production
+      - key: RIVETKIT_STORAGE_PATH
+        value: /tmp/rivetkit
+      - key: RIVET_ENDPOINT
+        sync: false
+      - key: RIVET_PUBLIC_ENDPOINT
+        sync: false
