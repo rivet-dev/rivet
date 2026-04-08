@@ -164,9 +164,9 @@ export async function createWebSocketProxy(
 
 			if (state.targetWs) {
 				if (state.targetWs.readyState === WebSocket.OPEN) {
-					state.targetWs.close(1011, "Client WebSocket error");
+					state.targetWs.close(1011, "ws.client_error");
 				} else if (state.targetWs.readyState === WebSocket.CONNECTING) {
-					state.targetWs.close();
+					state.targetWs.close(1011, "ws.client_error");
 				}
 			}
 		},

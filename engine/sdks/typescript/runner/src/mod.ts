@@ -616,7 +616,7 @@ export class Runner {
 						msg: "error during websocket shutdown:",
 						error,
 					});
-					pegboardWebSocket.close();
+					pegboardWebSocket.close(1011, "pegboard.shutdown_error");
 				}
 			}
 		} else {
@@ -762,7 +762,7 @@ export class Runner {
 			this.log?.error(
 				"found duplicate pegboardWebSocket, closing previous",
 			);
-			this.#pegboardWebSocket.close(1000, "duplicate_websocket");
+			this.#pegboardWebSocket.close(1000, "pegboard.duplicate_websocket");
 		}
 
 		const ws = new WS(this.pegboardUrl, protocols) as any as WebSocket;
