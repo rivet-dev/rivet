@@ -1,7 +1,8 @@
 {
 	"name": "@rivetkit/sqlite-native",
 	"version": "2.1.6",
-	"description": "Native SQLite addon for RivetKit backed by KV channel protocol",
+	"description": "DEPRECATED: Use @rivetkit/rivetkit-native instead. Native SQLite addon for RivetKit backed by KV channel protocol",
+	"deprecated": "Use @rivetkit/rivetkit-native which provides both native SQLite and envoy client through a unified N-API addon.",
 	"license": "Apache-2.0",
 	"main": "index.js",
 	"types": "index.d.ts",

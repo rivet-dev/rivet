@@ -1,7 +1,7 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, Next } from "hono";
 import type { Encoding } from "@/actor/protocol/serde";
-import { protocol as envoyProtocol } from "@rivetkit/engine-envoy-client";
+import * as envoyProtocol from "@rivetkit/engine-envoy-protocol";
 import {
 	getRequestEncoding,
 	getRequestExposeInternalError,

@@ -1,15 +1,11 @@
-mod actor;
-mod behaviors;
-mod envoy;
+pub mod behaviors;
 mod server;
-mod utils;
 
-pub use actor::{ActorConfig, ActorEvent, ActorStartResult, ActorStopResult, KvRequest, TestActor};
-pub use behaviors::{
-	CountingCrashActor, CrashNTimesThenSucceedActor, CrashOnStartActor, CustomActor,
-	CustomActorBuilder, DelayedStartActor, EchoActor, NotifyOnStartActor, SleepImmediatelyActor,
-	StopImmediatelyActor, TimeoutActor, VerifyInputActor,
+pub use rivet_envoy_client::config::{
+	BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse, PrepopulatedActor,
+	ResponseChunk, WebSocketHandler, WebSocketMessage,
 };
-pub use envoy::{ActorLifecycleEvent, Envoy, EnvoyBuilder, EnvoyConfig, EnvoyConfigBuilder};
-pub use rivet_envoy_protocol as protocol;
+pub use rivet_envoy_client::envoy::{start_envoy, start_envoy_sync};
+pub use rivet_envoy_client::handle::EnvoyHandle;
+pub use rivet_envoy_client::protocol;
 pub use server::run_from_env;

@@ -2613,6 +2613,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "libsqlite3-sys"
+version = "0.30.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "libz-sys"
 version = "1.1.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2879,6 +2890,8 @@ dependencies = [
  "napi-derive",
  "napi-sys",
  "once_cell",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 
@@ -3550,37 +3563,6 @@ dependencies = [
  "universaldb",
  "universalpubsub",
  "vbare",
-]
-
-[[package]]
-name = "pegboard-kv-channel"
-version = "2.2.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "futures-util",
- "gasoline",
- "http-body 1.0.1",
- "http-body-util",
- "hyper 1.6.0",
- "hyper-tungstenite",
- "lazy_static",
- "namespace",
- "pegboard",
- "rivet-config",
- "rivet-error",
- "rivet-guard-core",
- "rivet-kv-channel-protocol",
- "rivet-metrics",
- "rivet-runtime",
- "rivet-util",
- "tokio",
- "tokio-tungstenite",
- "tracing",
- "universaldb",
- "url",
- "uuid",
 ]
 
 [[package]]
@@ -4683,21 +4665,33 @@ dependencies = [
 ]
 
 [[package]]
-name = "rivet-engine-test-envoy-native"
-version = "2.2.1"
-dependencies = [
- "napi",
- "napi-build",
- "napi-derive",
- "rivet-test-envoy",
-]
-
-[[package]]
 name = "rivet-env"
 version = "2.2.1"
 dependencies = [
  "lazy_static",
  "uuid",
+]
+
+[[package]]
+name = "rivet-envoy-client"
+version = "2.2.1"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "hex",
+ "rand 0.8.5",
+ "rivet-envoy-protocol",
+ "rivet-util",
+ "scc",
+ "serde",
+ "serde_bare",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "vbare",
 ]
 
 [[package]]
@@ -4765,7 +4759,6 @@ dependencies = [
  "pegboard-envoy",
  "pegboard-gateway",
  "pegboard-gateway2",
- "pegboard-kv-channel",
  "pegboard-runner",
  "regex",
  "rivet-api-builder",
@@ -4840,16 +4833,6 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
-]
-
-[[package]]
-name = "rivet-kv-channel-protocol"
-version = "2.2.1"
-dependencies = [
- "serde",
- "serde_bare",
- "vbare",
- "vbare-compiler",
 ]
 
 [[package]]
@@ -5050,26 +5033,14 @@ version = "2.2.1"
 dependencies = [
  "anyhow",
  "async-stream",
- "async-trait",
  "axum 0.8.4",
- "chrono",
- "futures-util",
- "hex",
  "reqwest",
+ "rivet-envoy-client",
  "rivet-envoy-protocol",
- "rivet-runner-protocol",
- "rivet-util",
- "serde",
- "serde_bare",
  "serde_json",
  "tokio",
- "tokio-stream",
- "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
- "urlencoding",
- "uuid",
- "vbare",
 ]
 
 [[package]]
@@ -5184,6 +5155,40 @@ dependencies = [
  "namespace",
  "pegboard",
  "rivet-config",
+ "tracing",
+]
+
+[[package]]
+name = "rivetkit-native"
+version = "2.2.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "hex",
+ "libsqlite3-sys",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "rivet-envoy-client",
+ "rivet-envoy-protocol",
+ "rivetkit-sqlite-native",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "rivetkit-sqlite-native"
+version = "2.1.6"
+dependencies = [
+ "async-trait",
+ "getrandom 0.2.16",
+ "libsqlite3-sys",
+ "tokio",
  "tracing",
 ]
 

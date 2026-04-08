@@ -20,7 +20,7 @@ export default defineConfig({
 			"@rivetkit/traces/otlp",
 			"@rivetkit/workflow-engine",
 			"@rivetkit/sqlite",
-			"@rivetkit/sqlite-vfs",
+			"@rivetkit/sqlite-wasm",
 			"@rivet-dev/agent-os-core",
 		];
 	},

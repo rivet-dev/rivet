@@ -135,7 +135,7 @@ git commit -m "chore(my-pkg): foo bar"
 ### Dynamic Import Pattern
 - For runtime-only dependencies, use dynamic loading so bundlers do not eagerly include them.
 - Build the module specifier from string parts (for example with `["pkg", "name"].join("-")` or `["@scope", "pkg"].join("/")`) instead of a single string literal.
-- Prefer this pattern for modules like `@rivetkit/sqlite-vfs`, `sandboxed-node`, and `isolated-vm`.
+- Prefer this pattern for modules like `@rivetkit/sqlite-wasm`, `sandboxed-node`, and `isolated-vm`.
 - If loading by resolved file path, resolve first and then import via `pathToFileURL(...).href`.
 
 ### Fail-By-Default Runtime Behavior
@@ -270,7 +270,7 @@ let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build(
 - The native VFS uses the same 4 KiB chunk layout and KV key encoding as the WASM VFS. Data is compatible between backends.
 - **The native Rust VFS and the WASM TypeScript VFS must match 1:1.** This includes: KV key layout and encoding, chunk size, PRAGMA settings, VFS callback-to-KV-operation mapping, delete/truncate strategy (both must use `deleteRange`), and journal mode. When changing any VFS behavior in one implementation, update the other. The relevant files are:
   - Native: `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `kv.rs`
-  - WASM: `rivetkit-typescript/packages/sqlite-vfs/src/vfs.ts`, `kv.ts`
+  - WASM: `rivetkit-typescript/packages/sqlite-wasm/src/vfs.ts`, `kv.ts`
 - Full spec: `docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md`
 
 **Inspector HTTP API**

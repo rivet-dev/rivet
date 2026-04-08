@@ -1,24 +1,25 @@
+use std::sync::Arc;
+
 use anyhow::{Context, Result};
 use async_stream::stream;
 use axum::{
 	Router,
 	body::Bytes,
 	extract::State,
-	response::{
-		IntoResponse,
-		Json,
-		Sse,
-		sse::{Event, KeepAlive},
-	},
+	response::{IntoResponse, Json, Sse, sse::{Event, KeepAlive}},
 	routing::{get, post},
 };
 use rivet_envoy_protocol as protocol;
 use serde_json::json;
-use std::{convert::Infallible, sync::Arc, time::Duration};
-use tokio::{net::TcpListener, sync::Mutex};
+use std::convert::Infallible;
+use std::time::Duration;
+use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
 
-use crate::{EchoActor, Envoy, EnvoyBuilder, EnvoyConfig};
+use crate::behaviors::DefaultTestCallbacks;
+use rivet_envoy_client::config::EnvoyConfig;
+use rivet_envoy_client::envoy::start_envoy;
+use rivet_envoy_client::handle::EnvoyHandle;
 
 #[derive(Clone)]
 struct Settings {
@@ -41,7 +42,8 @@ impl Settings {
 				.and_then(|value| value.parse().ok())
 				.unwrap_or(5051),
 			namespace: std::env::var("RIVET_NAMESPACE").unwrap_or_else(|_| "default".to_string()),
-			pool_name: std::env::var("RIVET_POOL_NAME").unwrap_or_else(|_| "test-envoy".to_string()),
+			pool_name: std::env::var("RIVET_POOL_NAME")
+				.unwrap_or_else(|_| "test-envoy".to_string()),
 			envoy_version: std::env::var("RIVET_ENVOY_VERSION")
 				.ok()
 				.and_then(|value| value.parse().ok())
@@ -59,7 +61,7 @@ impl Settings {
 #[derive(Clone)]
 struct AppState {
 	settings: Settings,
-	envoy: Arc<Mutex<Option<Arc<Envoy>>>>,
+	envoy_handle: Arc<tokio::sync::Mutex<Option<EnvoyHandle>>>,
 }
 
 pub async fn run_from_env() -> Result<()> {
@@ -68,12 +70,12 @@ pub async fn run_from_env() -> Result<()> {
 	let settings = Settings::from_env();
 	let state = AppState {
 		settings: settings.clone(),
-		envoy: Arc::new(Mutex::new(None)),
+		envoy_handle: Arc::new(tokio::sync::Mutex::new(None)),
 	};
 
 	if settings.autostart_envoy {
-		let envoy = start_envoy(&settings).await?;
-		*state.envoy.lock().await = Some(envoy);
+		let handle = create_envoy(&settings).await?;
+		*state.envoy_handle.lock().await = Some(handle);
 	} else if settings.autoconfigure_serverless {
 		auto_configure_serverless(&settings).await?;
 	}
@@ -110,7 +112,9 @@ async fn run_http_server(state: AppState) -> Result<()> {
 
 	tracing::info!(port = state.settings.internal_server_port, "internal http server listening");
 
-	axum::serve(listener, app).await.context("http server failed")
+	axum::serve(listener, app)
+		.await
+		.context("http server failed")
 }
 
 async fn health() -> &'static str {
@@ -118,8 +122,8 @@ async fn health() -> &'static str {
 }
 
 async fn shutdown(State(state): State<AppState>) -> &'static str {
-	if let Some(envoy) = state.envoy.lock().await.clone() {
-		let _ = envoy.shutdown().await;
+	if let Some(handle) = state.envoy_handle.lock().await.as_ref() {
+		handle.shutdown(false);
 	}
 	"ok"
 }
@@ -138,20 +142,24 @@ async fn start_serverless(
 ) -> impl IntoResponse {
 	tracing::info!("received serverless start request");
 
-	let envoy = match start_envoy(&state.settings).await {
-		Ok(envoy) => envoy,
+	let handle = match create_envoy(&state.settings).await {
+		Ok(h) => h,
 		Err(err) => {
 			tracing::error!(?err, "failed to start serverless envoy");
 			return axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response();
 		}
 	};
 
-	if let Err(err) = envoy.start_serverless_actor(body.as_ref()).await {
-		tracing::error!(?err, "failed to inject serverless start payload");
-		return axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response();
-	}
+	// Inject the serverless start payload
+	let handle_clone = handle.clone();
+	let payload = body.to_vec();
+	tokio::spawn(async move {
+		if let Err(err) = handle_clone.start_serverless_actor(&payload).await {
+			tracing::error!(?err, "failed to inject serverless start payload");
+		}
+	});
 
-	*state.envoy.lock().await = Some(envoy.clone());
+	*state.envoy_handle.lock().await = Some(handle);
 
 	let stream = stream! {
 		let mut interval = tokio::time::interval(Duration::from_secs(1));
@@ -166,24 +174,23 @@ async fn start_serverless(
 		.into_response()
 }
 
-async fn start_envoy(settings: &Settings) -> Result<Arc<Envoy>> {
-	let config = EnvoyConfig::builder()
-		.endpoint(&settings.endpoint)
-		.token(&settings.token)
-		.namespace(&settings.namespace)
-		.pool_name(&settings.pool_name)
-		.version(settings.envoy_version)
-		.build()?;
+async fn create_envoy(settings: &Settings) -> Result<EnvoyHandle> {
+	let config = EnvoyConfig {
+		version: settings.envoy_version,
+		endpoint: settings.endpoint.clone(),
+		token: Some(settings.token.clone()),
+		namespace: settings.namespace.clone(),
+		pool_name: settings.pool_name.clone(),
+		prepopulate_actor_names: std::collections::HashMap::new(),
+		metadata: None,
+		envoy_key: None,
+		auto_restart: false,
+		debug_latency_ms: None,
+		callbacks: Arc::new(DefaultTestCallbacks),
+	};
 
-	let envoy = EnvoyBuilder::new(config)
-		.with_default_actor_behavior(|_config| Box::new(EchoActor::new()))
-		.build()?;
-	let envoy = Arc::new(envoy);
-
-	envoy.start().await?;
-	envoy.wait_ready().await;
-
-	Ok(envoy)
+	let handle = start_envoy(config).await;
+	Ok(handle)
 }
 
 async fn auto_configure_serverless(settings: &Settings) -> Result<()> {

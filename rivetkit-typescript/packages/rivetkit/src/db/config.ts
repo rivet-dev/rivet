@@ -1,12 +1,23 @@
-import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
+import type { ISqliteVfs } from "@rivetkit/sqlite-wasm";
 import type { ActorMetrics } from "@/actor/metrics";
 
 export type AnyDatabaseProvider = DatabaseProvider<any> | undefined;
 
+/**
+ * @deprecated Use nativeDatabaseProvider instead.
+ */
 export interface NativeSqliteConfig {
 	endpoint: string;
 	token?: string;
 	namespace: string;
+}
+
+/**
+ * Provider for opening native databases from a live runtime handle.
+ * Replaces the transport-config-based NativeSqliteConfig seam.
+ */
+export interface NativeDatabaseProvider {
+	open(actorId: string): Promise<RawAccess>;
 }
 
 /**
@@ -67,10 +78,17 @@ export interface DatabaseProviderContext {
 	log?: { debug(obj: Record<string, unknown>): void };
 
 	/**
+	 * @deprecated Use nativeDatabaseProvider instead.
 	 * Native SQLite channel configuration. When provided, the native addon
 	 * connects to this explicit endpoint instead of reading process env.
 	 */
 	nativeSqliteConfig?: NativeSqliteConfig;
+
+	/**
+	 * Provider for opening native databases from a live runtime handle.
+	 * When provided, takes precedence over nativeSqliteConfig.
+	 */
+	nativeDatabaseProvider?: NativeDatabaseProvider;
 }
 
 export type DatabaseProvider<DB extends RawAccess> = {

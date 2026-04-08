@@ -1,0 +1,50 @@
+{
+	"name": "@rivetkit/rivetkit-native",
+	"version": "2.2.1",
+	"description": "Native N-API addon for RivetKit providing envoy client and SQLite access",
+	"license": "Apache-2.0",
+	"main": "index.js",
+	"types": "index.d.ts",
+	"exports": {
+		".": {
+			"types": "./index.d.ts",
+			"default": "./index.js"
+		},
+		"./wrapper": {
+			"types": "./wrapper.d.ts",
+			"default": "./wrapper.js"
+		}
+	},
+	"engines": {
+		"node": ">= 20.0.0"
+	},
+	"napi": {
+		"name": "rivetkit-native",
+		"triples": {
+			"defaults": false,
+			"additional": [
+				"x86_64-unknown-linux-gnu",
+				"aarch64-unknown-linux-gnu",
+				"x86_64-apple-darwin",
+				"aarch64-apple-darwin",
+				"x86_64-pc-windows-msvc"
+			]
+		}
+	},
+	"files": [
+		"index.js",
+		"index.d.ts",
+		"wrapper.js",
+		"wrapper.d.ts",
+		"package.json"
+	],
+	"scripts": {
+		"build": "napi build --platform",
+		"build:release": "napi build --platform --release",
+		"prepublishOnly": "napi prepublish -t npm"
+	},
+	"dependencies": {
+		"@napi-rs/cli": "^2.18.4",
+		"@rivetkit/engine-envoy-protocol": "workspace:*"
+	}
+}

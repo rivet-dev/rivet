@@ -1,7 +1,7 @@
 //! KV key layout for SQLite-over-KV storage.
 //!
 //! This module must produce byte-identical keys to the TypeScript implementation
-//! in `rivetkit-typescript/packages/sqlite-vfs/src/kv.ts`.
+//! in `rivetkit-typescript/packages/sqlite-wasm/src/kv.ts`.
 //!
 //! Key layout:
 //!   Meta key:  [SQLITE_PREFIX, SCHEMA_VERSION, META_PREFIX, file_tag]       (4 bytes)

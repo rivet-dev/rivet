@@ -6,7 +6,7 @@ import {
 	type SpanStatusInput,
 	type Traces,
 } from "@rivetkit/traces";
-import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
+import type { ISqliteVfs } from "@rivetkit/sqlite-wasm";
 import { ActorMetrics, type StartupTimingKey } from "@/actor/metrics";
 import invariant from "invariant";
 import type { Client } from "@/client/client";
@@ -2191,6 +2191,8 @@ export class ActorInstance<
 					nativeSqliteConfig: this.driver.getNativeSqliteConfig?.(
 						this.#actorId,
 					),
+					nativeDatabaseProvider:
+						this.driver.getNativeDatabaseProvider?.(),
 				}),
 			);
 			this.#rLog.info({ msg: "database migration starting" });

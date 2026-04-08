@@ -47,7 +47,7 @@ traces (7)/    # Traces namespace.
         {chunk_id}    # fdb-tuple key: [1, bucket_start_sec, chunk_id].
 
 sqlite (8)/    # SQLite VFS namespace.
-  v1 (1)/    # SQLite data version. Legacy pre-v1 SQLite keys are still resolved in sqlite-vfs/src/vfs.ts.
+  v1 (1)/    # SQLite data version. Legacy pre-v1 SQLite keys are still resolved in sqlite-wasm/src/vfs.ts.
     metadata (0)/
       {file_tag}    # 0=main, 1=journal, 2=wal, 3=shm.
     chunks (1)/
