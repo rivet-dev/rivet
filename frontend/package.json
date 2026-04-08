@@ -33,6 +33,7 @@
 		"@fortawesome/react-fontawesome": "^0.2.6",
 		"@hookform/resolvers": "^5.2",
 		"@ladle/react": "^5.1.1",
+		"@marsidev/react-turnstile": "^1.5.0",
 		"@microsoft/fetch-event-source": "^2.0.1",
 		"@radix-ui/react-accordion": "^1.2.12",
 		"@radix-ui/react-avatar": "^1.1.10",

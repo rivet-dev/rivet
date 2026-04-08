@@ -20,6 +20,7 @@ const multitenancy = isEnabled("multitenancy") && auth;
 export const features = {
 	auth,
 	billing: isEnabled("billing"),
+	captcha: isEnabled("captcha") && auth,
 	support: isEnabled("support"),
 	branding: isEnabled("branding"),
 	datacenter: isEnabled("datacenter"),
