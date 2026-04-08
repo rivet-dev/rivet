@@ -446,7 +446,7 @@ export function typecheckCodeBlocks(): AstroIntegration {
 				if (!rivetKitBuilt) {
 					logger.info("Building rivetkit packages...");
 					try {
-						execSync("pnpm build -F rivetkit -F @rivetkit/react -F @rivetkit/cloudflare-workers", {
+						execSync("pnpm build -F rivetkit -F @rivetkit/react", {
 							cwd: MONOREPO_ROOT,
 							encoding: "utf-8",
 							stdio: ["pipe", "pipe", "pipe"],

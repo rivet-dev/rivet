@@ -359,33 +359,6 @@ export const templates: Template[] = [
     }
   },
   {
-    "name": "cloudflare-workers",
-    "displayName": "Cloudflare Workers",
-    "description": "Example project demonstrating Cloudflare Workers deployment.",
-    "technologies": [
-      "rivet",
-      "cloudflare-workers",
-      "typescript"
-    ],
-    "tags": [],
-    "noFrontend": true,
-    "providers": {}
-  },
-  {
-    "name": "cloudflare-workers-hono",
-    "displayName": "Cloudflare Workers with Hono",
-    "description": "Example project demonstrating Cloudflare Workers deployment with Hono router.",
-    "technologies": [
-      "rivet",
-      "cloudflare-workers",
-      "hono",
-      "typescript"
-    ],
-    "tags": [],
-    "noFrontend": true,
-    "providers": {}
-  },
-  {
     "name": "cursors-raw-websocket",
     "displayName": "Real-time Collaborative Cursors (Raw WebSocket)",
     "description": "Demonstrates real-time cursor tracking and collaborative canvas using raw WebSocket handlers instead of RivetKit's higher-level WebSocket abstraction.",

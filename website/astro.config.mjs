@@ -32,7 +32,6 @@ export default defineConfig({
 		// Platform docs moved to clients/connect
 		'/docs/platforms/react': '/docs/clients/react/',
 		'/docs/platforms/next-js': '/docs/clients/javascript/',
-		'/docs/platforms/cloudflare-workers': '/docs/connect/cloudflare-workers/',
 		// Registry configuration moved
 		'/docs/connect/registry-configuration': '/docs/general/registry-configuration/',
 		// Cloud docs removed - redirect to relevant sections

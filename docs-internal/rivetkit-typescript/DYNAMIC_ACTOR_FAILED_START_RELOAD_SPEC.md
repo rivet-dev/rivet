@@ -424,7 +424,7 @@ export interface DynamicStartupOptions {
 ### Backoff Implementation
 
 Reuse the `p-retry` exponential backoff algorithm that is already used in
-`remote-manager-driver/metadata.ts` and `client/actor-conn.ts`. The
+`engine-client/metadata.ts` and `client/actor-conn.ts`. The
 implementation does not need to use `p-retry` directly (since retries are
 passive, not loop-driven), but must compute backoff delays using the same
 formula: `min(maxDelay, initialDelay * multiplier^attempt)` with optional
@@ -658,9 +658,9 @@ Comments should explain intent and invariants, not implementation history.
 
 ## Test Requirements
 
-All failed-start tests must be added to the shared driver-test-suite
-(`src/driver-test-suite/`) so both file-system and engine drivers run the same
-test cases. This enforces the parity requirement.
+All failed-start tests must be added to the shared engine-focused integration
+suite so the runtime path uses one common set of cases. This enforces the
+parity requirement.
 
 Add or update tests for:
 

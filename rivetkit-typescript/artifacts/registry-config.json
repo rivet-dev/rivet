@@ -65,11 +65,11 @@
       }
     },
     "serveManager": {
-      "description": "Whether to start the local manager server. Auto-determined based on endpoint and NODE_ENV if not specified.",
+      "description": "Whether to start the local RivetKit server. Auto-determined based on endpoint and NODE_ENV if not specified.",
       "type": "boolean"
     },
     "managerBasePath": {
-      "description": "Base path for the manager API. Default: '/'",
+      "description": "Base path for the local RivetKit API. Default: '/'",
       "type": "string"
     },
     "managerPort": {

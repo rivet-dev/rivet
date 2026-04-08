@@ -14,7 +14,7 @@ import { getBaseLogger, getIncludeTarget, type Logger } from "@/common/log";
 import { stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import { ActorInspector } from "@/inspector/actor-inspector";
-import type { ActorKey } from "@/manager/protocol/query";
+import type { ActorKey } from "@/client/query";
 import type { Registry } from "@/mod";
 import {
 	ACTOR_VERSIONED,

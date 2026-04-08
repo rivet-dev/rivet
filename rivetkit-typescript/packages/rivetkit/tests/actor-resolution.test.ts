@@ -3,7 +3,7 @@ import { ClientRaw } from "@/client/client";
 import type {
 	ActorOutput,
 	GatewayTarget,
-	ManagerDriver,
+	EngineControlClient,
 } from "@/driver-helpers/mod";
 import { PATH_CONNECT } from "@/driver-helpers/mod";
 
@@ -293,7 +293,7 @@ describe("actor resolution flow", () => {
 	});
 });
 
-function createMockDriver(overrides: Partial<ManagerDriver>): ManagerDriver {
+function createMockDriver(overrides: Partial<EngineControlClient>): EngineControlClient {
 	return {
 		getForId: async () => undefined,
 		getWithKey: async () => undefined,
@@ -319,6 +319,10 @@ function createMockDriver(overrides: Partial<ManagerDriver>): ManagerDriver {
 		displayInformation: () => ({ properties: {} }),
 		setGetUpgradeWebSocket: () => {},
 		kvGet: async () => null,
+		kvBatchGet: async (_actorId, keys) => keys.map(() => null),
+		kvBatchPut: async () => {},
+		kvBatchDelete: async () => {},
+		kvDeleteRange: async () => {},
 		...overrides,
 	};
 }

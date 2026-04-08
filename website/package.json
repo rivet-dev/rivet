@@ -89,7 +89,6 @@
 		"zustand": "^5.0.8"
 	},
 	"devDependencies": {
-		"@rivetkit/cloudflare-workers": "workspace:*",
 		"@rivetkit/react": "workspace:*",
 		"@types/escape-html": "^1.0.4",
 		"@types/lodash": "^4.17.21",

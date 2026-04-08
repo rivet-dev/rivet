@@ -21,7 +21,7 @@ let hasWarnedMissingEndpoint = false;
  */
 export const ClientConfigSchemaBase = z.object({
 	/**
-	 * Endpoint to connect to for Rivet Engine or RivetKit manager API.
+	 * Endpoint to connect to for Rivet Engine or the local RivetKit runtime API.
 	 *
 	 * Supports URL auth syntax for namespace and token:
 	 * - `https://namespace:token@api.rivet.dev`

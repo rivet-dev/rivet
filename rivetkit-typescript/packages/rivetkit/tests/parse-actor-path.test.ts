@@ -3,7 +3,7 @@
 import * as cbor from "cbor-x";
 import { describe, expect, test } from "vitest";
 import { InvalidRequest } from "@/actor/errors";
-import { parseActorPath } from "@/manager/gateway";
+import { parseActorPath } from "@/actor-gateway/gateway";
 import { toBase64Url } from "./test-utils";
 
 describe("parseActorPath", () => {

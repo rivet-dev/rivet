@@ -49,7 +49,7 @@ export function LandingHeader() {
 						>
 							Blog
 						</a>
-						<a href="https://github.com/rivet-gg/rivet"
+						<a href="https://github.com/rivet-dev/rivet"
 							className="text-sm font-medium transition-colors"
 							style={{ color: '#A0A0A0' }}
 						>

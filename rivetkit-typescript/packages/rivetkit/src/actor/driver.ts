@@ -1,6 +1,6 @@
 import type { Context as HonoContext } from "hono";
 import type { AnyClient } from "@/client/client";
-import type { ManagerDriver } from "@/manager/driver";
+import type { EngineControlClient } from "@/engine-client/driver";
 import type { AnyActorInstance, AnyStaticActorInstance } from "./instance/mod";
 import type { RegistryConfig } from "@/registry/config";
 import type {
@@ -12,7 +12,7 @@ import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
 
 export type ActorDriverBuilder = (
 	config: RegistryConfig,
-	managerDriver: ManagerDriver,
+	engineClient: EngineControlClient,
 	inlineClient: AnyClient,
 ) => ActorDriver;
 

@@ -1,28 +1,30 @@
 import invariant from "invariant";
+import { convertRegistryConfigToClientConfig } from "@/client/config";
 import { createClientWithDriver } from "@/client/client";
 import { configureBaseLogger, configureDefaultLogger } from "@/common/log";
-import { chooseDefaultDriver } from "@/drivers/default";
-import { ENGINE_PORT, ensureEngineProcess } from "@/engine-process/mod";
+import { ENGINE_ENDPOINT, ENGINE_PORT, ensureEngineProcess } from "@/engine-process/mod";
+import {
+	getDatacenters,
+	updateRunnerConfig,
+} from "@/engine-client/api-endpoints";
+import { type EngineControlClient } from "@/engine-client/driver";
+import { RemoteEngineControlClient } from "@/engine-client/mod";
 import { getInspectorUrl } from "@/inspector/utils";
-import { buildManagerRouter } from "@/manager/router";
+import { type RegistryActors, type RegistryConfig } from "@/registry/config";
+import { logger } from "../src/registry/log";
+import { buildRuntimeRouter } from "@/runtime-router/router";
+import { EngineActorDriver } from "@/drivers/engine/mod";
+import { buildServerlessRouter } from "@/serverless/router";
 import { configureServerlessPool } from "@/serverless/configure";
 import { detectRuntime, type GetUpgradeWebSocket } from "@/utils";
-import pkg from "../package.json" with { type: "json" };
-import {
-	type DriverConfig,
-	type RegistryActors,
-	type RegistryConfig,
-} from "@/registry/config";
-import { logger } from "../src/registry/log";
 import {
 	crossPlatformServe,
 	findFreePort,
 	loadRuntimeServeStatic,
 } from "@/utils/serve";
-import { ManagerDriver } from "@/manager/driver";
-import { buildServerlessRouter } from "@/serverless/router";
 import type { Registry } from "@/registry";
 import { getNodeFsSync } from "@/utils/node";
+import pkg from "../package.json" with { type: "json" };
 
 /** Tracks whether the runtime was started as serverless or serverful. */
 export type StartKind = "serverless" | "serverful";
@@ -32,21 +34,32 @@ function logLine(label: string, value: string): void {
 	console.log(`  - ${label}:${padding}${value}`);
 }
 
-/**
- * Manages the lifecycle of RivetKit.
- *
- * Startup happens in two phases:
- * 1. `Runtime.create()` initializes shared infrastructure like the manager
- *    server and engine process. This runs before we know the deployment mode.
- * 2. `startServerless()` or `startEnvoy()` configures mode-specific behavior.
- *    These are idempotent and called lazily when the first request arrives
- *    or when explicitly starting a envoy.
- */
+async function ensureLocalRunnerConfig(config: RegistryConfig): Promise<void> {
+	if (config.endpoint !== ENGINE_ENDPOINT) {
+		return;
+	}
+
+	const clientConfig = convertRegistryConfigToClientConfig(config);
+	const dcsRes = await getDatacenters(clientConfig);
+
+	await updateRunnerConfig(clientConfig, config.envoy.poolName, {
+		datacenters: Object.fromEntries(
+			dcsRes.datacenters.map((dc) => [
+				dc.name,
+				{
+					normal: {},
+					drain_on_version_upgrade: true,
+				},
+			]),
+		),
+	});
+}
+
 export class Runtime<A extends RegistryActors> {
 	#registry: Registry<A>;
 	#config: RegistryConfig;
-	#driver: DriverConfig;
-	#managerDriver: ManagerDriver;
+	#engineClient: EngineControlClient;
+	#actorDriver?: EngineActorDriver;
 	#startKind?: StartKind;
 
 	managerPort?: number;
@@ -56,26 +69,19 @@ export class Runtime<A extends RegistryActors> {
 		return this.#config;
 	}
 
-	get driver() {
-		return this.#driver;
+	get engineClient() {
+		return this.#engineClient;
 	}
 
-	get managerDriver() {
-		return this.#managerDriver;
-	}
-
-	/** Use Runtime.create() instead */
 	private constructor(
 		registry: Registry<A>,
 		config: RegistryConfig,
-		driver: DriverConfig,
-		managerDriver: ManagerDriver,
+		engineClient: EngineControlClient,
 		managerPort?: number,
 	) {
 		this.#registry = registry;
 		this.#config = config;
-		this.#driver = driver;
-		this.#managerDriver = managerDriver;
+		this.#engineClient = engineClient;
 		this.managerPort = managerPort;
 	}
 
@@ -92,33 +98,11 @@ export class Runtime<A extends RegistryActors> {
 			configureDefaultLogger(config.logging?.level);
 		}
 
-		// This should be unreachable: Zod defaults serveManager to false when
-		// spawnEngine is enabled (since endpoint gets set to ENGINE_ENDPOINT).
-		// We check anyway as a safety net for explicit misconfiguration.
-		invariant(
-			!(config.serverless.spawnEngine && config.serveManager),
-			"cannot specify both spawnEngine and serveManager",
-		);
+		const shouldSpawnEngine =
+			config.serverless.spawnEngine || (config.serveManager && !config.endpoint);
+		if (shouldSpawnEngine) {
+			config.endpoint = ENGINE_ENDPOINT;
 
-		const driver = chooseDefaultDriver(config);
-		const managerDriver = driver.manager(config);
-
-		// Start main server. This is either:
-		// - Manager: Run a server in-process on port 6420 that mimics the
-		//   engine's API for development.
-		// - Engine: Download and run the full Rivet engine binary on port
-		//   6420. This is a fallback for platforms that cannot use the manager
-		//   like Next.js.
-		//
-		// We do this before startServerless or startEnvoy has been called
-		// since the engine API needs to be available on port 6420 before
-		// anything else happens. For example, serverless platforms use
-		// `registry.handler(req)` so `startServerless` is called lazily.
-		// Starting the server preemptively allows for clients to reach 6420
-		// BEFORE `startServerless` is called.
-		let managerPort: number | undefined;
-		if (config.serverless.spawnEngine) {
-			managerPort = ENGINE_PORT;
 			logger().debug({
 				msg: "spawning engine",
 				version: config.serverless.engineVersion,
@@ -126,17 +110,25 @@ export class Runtime<A extends RegistryActors> {
 			await ensureEngineProcess({
 				version: config.serverless.engineVersion,
 			});
-		} else if (config.serveManager) {
+		}
+
+		const engineClient: EngineControlClient = new RemoteEngineControlClient(
+			convertRegistryConfigToClientConfig(config),
+		);
+		await ensureLocalRunnerConfig(config);
+
+		let managerPort: number | undefined;
+		if (config.serveManager) {
 			const configuredManagerPort = config.managerPort;
 			const serveRuntime = detectRuntime();
 			let upgradeWebSocket: any;
 			const getUpgradeWebSocket: GetUpgradeWebSocket = () =>
 				upgradeWebSocket;
-			managerDriver.setGetUpgradeWebSocket(getUpgradeWebSocket);
+			engineClient.setGetUpgradeWebSocket(getUpgradeWebSocket);
 
-			const { router: managerRouter } = buildManagerRouter(
+			const { router: runtimeRouter } = buildRuntimeRouter(
 				config,
-				managerDriver,
+				engineClient,
 				getUpgradeWebSocket,
 				serveRuntime,
 			);
@@ -150,16 +142,10 @@ export class Runtime<A extends RegistryActors> {
 			}
 
 			logger().debug({
-				msg: "serving manager",
+				msg: "serving runtime router",
 				port: managerPort,
 			});
 
-			// `publicEndpoint` is derived from `config.managerPort` during config parsing,
-			// but we may have chosen a different free port at runtime. Keep them in sync
-			// so browser clients that rely on `/metadata` connect to the correct manager.
-			//
-			// Only rewrite when `publicEndpoint` is still on the default localhost pattern,
-			// to avoid clobbering explicitly-configured public endpoints.
 			if (
 				config.publicEndpoint ===
 				`http://127.0.0.1:${configuredManagerPort}`
@@ -169,16 +155,14 @@ export class Runtime<A extends RegistryActors> {
 			}
 			config.managerPort = managerPort;
 
-			// Wrap with static file serving if publicDir is configured
-			// and the directory actually exists on disk.
-			let serverApp = managerRouter;
+			let serverApp = runtimeRouter;
 			if (config.publicDir) {
 				let dirExists = false;
 				try {
 					const fsSync = getNodeFsSync();
 					dirExists = fsSync.existsSync(config.publicDir);
 				} catch {
-					// Node fs not available
+					// Node fs not available.
 				}
 
 				if (dirExists) {
@@ -186,13 +170,11 @@ export class Runtime<A extends RegistryActors> {
 					const serveStaticFn =
 						await loadRuntimeServeStatic(serveRuntime);
 					const wrapper = new Hono();
-					// Serve static files first. Passes through to API
-					// routes when no file matches.
 					wrapper.use(
 						"*",
 						serveStaticFn({ root: `./${config.publicDir}` }),
 					);
-					wrapper.route("/", managerRouter);
+					wrapper.route("/", runtimeRouter);
 					serverApp = wrapper;
 				}
 			}
@@ -205,13 +187,6 @@ export class Runtime<A extends RegistryActors> {
 			);
 			upgradeWebSocket = out.upgradeWebSocket;
 
-			// Close the server on SIGTERM/SIGINT so the port is freed quickly
-			// during hot reload. Dev servers like tsx --watch, nodemon, etc.
-			// sometimes start the new process before the old one fully exits,
-			// causing findFreePort to skip the preferred port.
-			//
-			// Only do this for the manager, not the engine. Closing the engine
-			// server on signal would cause running actors to hard fail.
 			if (out.closeServer && process.env.NODE_ENV !== "production") {
 				const shutdown = () => {
 					out.closeServer!();
@@ -221,22 +196,13 @@ export class Runtime<A extends RegistryActors> {
 			}
 		}
 
-		// Create runtime
-		const runtime = new Runtime(
-			registry,
-			config,
-			driver,
-			managerDriver,
-			managerPort,
-		);
+		const runtime = new Runtime(registry, config, engineClient, managerPort);
 
-		// Log ready
-		const driverLog = managerDriver.extraStartupLog?.() ?? {};
 		logger().info({
 			msg: "rivetkit ready",
-			driver: driver.name,
+			driver: "engine",
 			definitions: Object.keys(config.use).length,
-			...driverLog,
+			...(engineClient.extraStartupLog?.() ?? {}),
 		});
 
 		return runtime;
@@ -247,10 +213,7 @@ export class Runtime<A extends RegistryActors> {
 		invariant(!this.#startKind, "Runtime already started as serverful");
 		this.#startKind = "serverless";
 
-		this.#serverlessRouter = buildServerlessRouter(
-			this.#driver,
-			this.#config,
-		).router;
+		this.#serverlessRouter = buildServerlessRouter(this.#config).router;
 
 		this.#printWelcome();
 
@@ -260,17 +223,22 @@ export class Runtime<A extends RegistryActors> {
 		}
 	}
 
-	startEnvoy(): void {
+	async startEnvoy(): Promise<void> {
 		if (this.#startKind === "serverful") return;
 		invariant(!this.#startKind, "Runtime already started as serverless");
 		this.#startKind = "serverful";
 
-		if (this.#config.envoy && this.#driver.autoStartActorDriver) {
-			logger().debug("starting actor driver");
+		if (this.#config.envoy && !this.#actorDriver) {
+			logger().debug("starting engine actor driver");
 			const inlineClient = createClientWithDriver<Registry<A>>(
-				this.#managerDriver,
+				this.#engineClient,
 			);
-			this.#driver.actor(this.#config, this.#managerDriver, inlineClient);
+			this.#actorDriver = new EngineActorDriver(
+				this.#config,
+				this.#engineClient,
+				inlineClient,
+			);
+			await this.#actorDriver.waitForReady();
 		}
 
 		this.#printWelcome();
@@ -285,30 +253,24 @@ export class Runtime<A extends RegistryActors> {
 
 		console.log();
 		console.log(
-			`  RivetKit ${pkg.version} (${this.#driver.displayName} - ${this.#startKind === "serverless" ? "Serverless" : "Serverful"})`,
+			`  RivetKit ${pkg.version} (Engine - ${this.#startKind === "serverless" ? "Serverless" : "Serverful"})`,
 		);
 
-		// Show namespace
 		if (this.#config.namespace !== "default") {
 			logLine("Namespace", this.#config.namespace);
 		}
 
-		// Show backend endpoint (where we connect to engine)
 		if (this.#config.endpoint) {
-			const endpointType = this.#config.serverless.spawnEngine
+			const endpointType = this.#config.endpoint === ENGINE_ENDPOINT
 				? "local native"
-				: this.#config.serveManager
-					? "local manager"
-					: "remote";
+				: "remote";
 			logLine("Endpoint", `${this.#config.endpoint} (${endpointType})`);
 		}
 
-		// Show public endpoint (where clients connect)
 		if (this.#startKind === "serverless" && this.#config.publicEndpoint) {
 			logLine("Client", this.#config.publicEndpoint);
 		}
 
-		// Show static file serving
 		if (this.#config.publicDir) {
 			try {
 				const fsSync = getNodeFsSync();
@@ -316,21 +278,17 @@ export class Runtime<A extends RegistryActors> {
 					logLine("Static", `./${this.#config.publicDir}`);
 				}
 			} catch {
-				// Node fs not available (e.g. Deno, Bun, or importNodeDependencies not called)
+				// Node fs not available.
 			}
 		}
 
-		// Show inspector
 		if (inspectorUrl && this.#config.inspector.enabled) {
 			logLine("Inspector", inspectorUrl);
 		}
 
-		// Show actor count
-		const actorCount = Object.keys(this.#config.use).length;
-		logLine("Actors", actorCount.toString());
+		logLine("Actors", Object.keys(this.#config.use).length.toString());
 
-		// Show driver-specific info
-		const displayInfo = this.#managerDriver.displayInformation();
+		const displayInfo = this.#engineClient.displayInformation();
 		for (const [k, v] of Object.entries(displayInfo.properties)) {
 			logLine(k, v);
 		}
@@ -338,7 +296,6 @@ export class Runtime<A extends RegistryActors> {
 		console.log();
 	}
 
-	/** Handle serverless request */
 	handleServerlessRequest(request: Request): Response | Promise<Response> {
 		invariant(
 			this.#startKind === "serverless",

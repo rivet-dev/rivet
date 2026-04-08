@@ -18,12 +18,12 @@ export function CommunitySection() {
       label: 'Bluesky'
     },
     {
-      href: 'https://github.com/rivet-dev/rivetkit/discussions',
+      href: 'https://github.com/rivet-dev/rivet/discussions',
       icon: faGithub,
       label: 'Discussions'
     },
     {
-      href: 'https://github.com/rivet-dev/rivetkit/issues',
+      href: 'https://github.com/rivet-dev/rivet/issues',
       icon: faGithub,
       label: 'Issues'
     }

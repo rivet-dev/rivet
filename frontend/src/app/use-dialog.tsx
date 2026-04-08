@@ -26,9 +26,6 @@ export const useDialog = {
 	ConnectManual: createDialogHook(
 		() => import("@/app/dialogs/connect-manual-frame"),
 	),
-	ConnectCloudflare: createDialogHook(
-		() => import("@/app/dialogs/connect-cloudflare-frame"),
-	),
 	ConnectAws: createDialogHook(
 		() => import("@/app/dialogs/connect-aws-frame"),
 	),

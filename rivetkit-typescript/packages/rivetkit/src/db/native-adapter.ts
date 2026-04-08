@@ -5,6 +5,7 @@ import {
 	disconnectKvChannelIfCurrent,
 	getOrCreateKvChannel,
 	toNativeBindings,
+	type NativeBindParam,
 	type NativeKvChannel,
 	type NativeDatabase,
 } from "./native-sqlite";
@@ -51,7 +52,10 @@ function resolveNamedSqliteBinding(
 	return undefined;
 }
 
-function normalizeNativeBindings(sql: string, params?: unknown): unknown[] {
+function normalizeNativeBindings(
+	sql: string,
+	params?: unknown,
+): NativeBindParam[] {
 	if (params === undefined || params === null) {
 		return [];
 	}

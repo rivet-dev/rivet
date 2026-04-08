@@ -3,7 +3,7 @@ import {
 	resolveGatewayTarget,
 	type ActorOutput,
 	type GatewayTarget,
-	type ManagerDriver,
+	type EngineControlClient,
 } from "@/driver-helpers/mod";
 
 describe("resolveGatewayTarget", () => {
@@ -109,7 +109,7 @@ describe("resolveGatewayTarget", () => {
 	});
 });
 
-function createMockDriver(overrides: Partial<ManagerDriver> = {}): ManagerDriver {
+function createMockDriver(overrides: Partial<EngineControlClient> = {}): EngineControlClient {
 	return {
 		getForId: async () => undefined,
 		getWithKey: async () => undefined,
@@ -134,6 +134,10 @@ function createMockDriver(overrides: Partial<ManagerDriver> = {}): ManagerDriver
 		displayInformation: () => ({ properties: {} }),
 		setGetUpgradeWebSocket: () => {},
 		kvGet: async () => null,
+		kvBatchGet: async (_actorId, keys) => keys.map(() => null),
+		kvBatchPut: async () => {},
+		kvBatchDelete: async () => {},
+		kvDeleteRange: async () => {},
 		...overrides,
 	};
 }

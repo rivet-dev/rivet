@@ -1,6 +1,5 @@
 import {
 	faAws,
-	faCloudflare,
 	faEllipsisVertical,
 	faGoogleCloud,
 	faHetznerH,
@@ -376,13 +375,6 @@ function Endpoints({
 function Provider({ metadata }: { metadata: unknown }) {
 	const provider = deriveProviderFromMetadata(metadata);
 
-	if (provider === "cloudflare-workers") {
-		return (
-			<div>
-				<Icon icon={faCloudflare} className="mr-1" /> Cloudflare Workers
-			</div>
-		);
-	}
 	if (provider === "vercel") {
 		return (
 			<div className="whitespace-nowrap">

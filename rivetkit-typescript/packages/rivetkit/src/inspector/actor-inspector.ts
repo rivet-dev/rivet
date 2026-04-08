@@ -412,7 +412,7 @@ export class ActorInspector {
 	}
 
 	async #withDatabase<T>(
-		fn: (db: NonNullable<AnyActorInstance["db"]>) => Promise<T>,
+		fn: (db: NonNullable<AnyStaticActorInstance["db"]>) => Promise<T>,
 	): Promise<T> {
 		if (!this.isDatabaseEnabled()) {
 			throw new actorErrors.DatabaseNotEnabled();

@@ -6,7 +6,7 @@ import {
 	HEADER_CONN_PARAMS,
 	HEADER_ENCODING,
 	resolveGatewayTarget,
-	type ManagerDriver,
+	type EngineControlClient,
 } from "@/driver-helpers/mod";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
@@ -52,7 +52,7 @@ import { sendHttpRequest } from "./utils";
  */
 export class ActorHandleRaw {
 	#client: ClientRaw;
-	#driver: ManagerDriver;
+	#driver: EngineControlClient;
 	#encoding: Encoding;
 	#actorResolutionState: ActorResolutionState;
 	#params: unknown;
@@ -68,7 +68,7 @@ export class ActorHandleRaw {
 	 */
 	public constructor(
 		client: any,
-		driver: ManagerDriver,
+		driver: EngineControlClient,
 		params: unknown,
 		getParams: (() => Promise<unknown>) | undefined,
 		encoding: Encoding,

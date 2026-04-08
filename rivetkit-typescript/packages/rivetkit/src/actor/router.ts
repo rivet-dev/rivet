@@ -65,7 +65,7 @@ async function loadStaticActor(actorDriver: ActorDriver, actorId: string) {
  *
  * You only need to pass `getUpgradeWebSocket` if this router is exposed
  * directly publicly. Usually WebSockets are routed manually in the
- * ManagerDriver instead of via Hono. The only platform that uses this
+ * EngineControlClient instead of via Hono. The only platform that uses this
  * currently is Cloudflare Workers.
  */
 export function createActorRouter(
@@ -137,8 +137,8 @@ export function createActorRouter(
 	// Route all WebSocket paths using the same handler
 	//
 	// All WebSockets use a separate underlying router in routeWebSocket since
-	// WebSockets also need to be routed from ManagerDriver.proxyWebSocket and
-	// ManagerDriver.openWebSocket.
+	// WebSockets also need to be routed from EngineControlClient.proxyWebSocket and
+	// EngineControlClient.openWebSocket.
 	if (getUpgradeWebSocket) {
 		router.on(
 			"GET",
@@ -201,7 +201,7 @@ export function createActorRouter(
 				return undefined;
 			}
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			if (
 				actor.inspectorToken &&
 				timingSafeEqual(userToken, actor.inspectorToken)
@@ -310,7 +310,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			const body = await c.req.json<{ entryId?: string }>();
 			const result = await actor.inspector.replayWorkflowFromStepJson(
 				body.entryId,
@@ -322,7 +322,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			const schema = await actor.inspector.getDatabaseSchemaJson();
 			return c.json({ schema });
 		});
@@ -331,7 +331,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			const table = c.req.query("table");
 			if (!table) {
 				return c.json(
@@ -354,7 +354,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			const body = await c.req.json<{
 				sql?: unknown;
 				args?: unknown;
@@ -446,7 +446,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			return c.json(actor.metrics.snapshot());
 		});
 	}

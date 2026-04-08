@@ -41,13 +41,13 @@ actor TestServer {
             return info
         }
         let repoRoot = try resolveRepoRoot()
-        let distPath = repoRoot.appendingPathComponent("rivetkit-typescript/packages/rivetkit/dist/tsup/serve-test-suite/mod.js")
-        try await ensureBuildArtifacts(in: repoRoot, serveTestSuitePath: distPath)
+        let scriptPath = repoRoot.appendingPathComponent("examples/sandbox/src/swift-test-server.ts")
+        try await ensureBuildArtifacts(in: repoRoot, scriptPath: scriptPath)
 
         let process = Process()
-        process.currentDirectoryURL = repoRoot
+        process.currentDirectoryURL = repoRoot.appendingPathComponent("examples/sandbox")
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["node", distPath.path]
+        process.arguments = ["pnpm", "exec", "tsx", "src/swift-test-server.ts"]
 
         let outputPipe = Pipe()
         process.standardOutput = outputPipe
@@ -139,7 +139,7 @@ actor TestServer {
         }
     }
 
-    private func ensureBuildArtifacts(in repoRoot: URL, serveTestSuitePath: URL) async throws {
+    private func ensureBuildArtifacts(in repoRoot: URL, scriptPath: URL) async throws {
         let nodeModules = repoRoot.appendingPathComponent("node_modules")
         if !FileManager.default.fileExists(atPath: nodeModules.path) {
             try await runProcess(
@@ -172,11 +172,13 @@ actor TestServer {
             )
         }
 
-        let serveTestSuiteSource = repoRoot.appendingPathComponent("rivetkit-typescript/packages/rivetkit/src/serve-test-suite/mod.ts")
-        let registrySource = repoRoot.appendingPathComponent("rivetkit-typescript/packages/rivetkit/fixtures/driver-test-suite/registry.ts")
-        let rejectSource = repoRoot.appendingPathComponent("rivetkit-typescript/packages/rivetkit/fixtures/driver-test-suite/reject-connection.ts")
-        let connStateSource = repoRoot.appendingPathComponent("rivetkit-typescript/packages/rivetkit/fixtures/driver-test-suite/conn-state.ts")
-        if isArtifactStale(artifact: serveTestSuitePath, sources: [serveTestSuiteSource, registrySource, rejectSource, connStateSource]) {
+        let rivetkitDist = repoRoot.appendingPathComponent("rivetkit-typescript/packages/rivetkit/dist/tsup/mod.js")
+        let rivetkitSourceDir = repoRoot.appendingPathComponent("rivetkit-typescript/packages/rivetkit/src")
+        if isArtifactStale(
+            artifact: rivetkitDist,
+            sources: [scriptPath],
+            sourceDirectories: [rivetkitSourceDir]
+        ) {
             try await runProcess(
                 in: repoRoot,
                 command: "/usr/bin/env",
@@ -190,7 +192,11 @@ actor TestServer {
         }
     }
 
-    private func isArtifactStale(artifact: URL, sources: [URL]) -> Bool {
+    private func isArtifactStale(
+        artifact: URL,
+        sources: [URL],
+        sourceDirectories: [URL] = []
+    ) -> Bool {
         guard FileManager.default.fileExists(atPath: artifact.path) else {
             return true
         }
@@ -205,6 +211,42 @@ actor TestServer {
                 return true
             }
         }
+        for sourceDirectory in sourceDirectories {
+            if let latestSourceDate = latestModificationDate(in: sourceDirectory), artifactDate < latestSourceDate {
+                return true
+            }
+        }
         return false
+    }
+
+    private func latestModificationDate(in directory: URL) -> Date? {
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+
+        var latestDate: Date?
+        for case let fileURL as URL in enumerator {
+            guard
+                let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .contentModificationDateKey]),
+                values.isRegularFile == true,
+                let modificationDate = values.contentModificationDate
+            else {
+                continue
+            }
+
+            if let currentLatestDate = latestDate {
+                if modificationDate > currentLatestDate {
+                    latestDate = modificationDate
+                }
+            } else {
+                latestDate = modificationDate
+            }
+        }
+
+        return latestDate
     }
 }

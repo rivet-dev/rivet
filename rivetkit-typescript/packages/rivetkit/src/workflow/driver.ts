@@ -1,5 +1,5 @@
 import type { RunContext } from "@/actor/contexts/run";
-import type { AnyStaticActorInstance } from "@/actor/instance/mod";
+import type { AnyActorInstance, AnyStaticActorInstance } from "@/actor/instance/mod";
 import { makeWorkflowKey, workflowStoragePrefix } from "@/actor/instance/keys";
 import type {
 	EngineDriver,
@@ -251,9 +251,9 @@ export class ActorWorkflowControlDriver implements EngineDriver {
 	readonly workerPollInterval = 100;
 	readonly messageDriver: WorkflowMessageDriver =
 		new NoopWorkflowMessageDriver();
-	#actor: AnyActorInstance;
+	#actor: AnyStaticActorInstance;
 
-	constructor(actor: AnyActorInstance) {
+	constructor(actor: AnyStaticActorInstance) {
 		this.#actor = actor;
 	}
 

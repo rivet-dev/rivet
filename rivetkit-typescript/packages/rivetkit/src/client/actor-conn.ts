@@ -8,7 +8,7 @@ import { type Encoding, jsonStringifyCompat } from "@/actor/protocol/serde";
 import { PATH_CONNECT } from "@/common/actor-router-consts";
 import { assertUnreachable, stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
-import type { ManagerDriver } from "@/driver-helpers/mod";
+import type { EngineControlClient } from "@/driver-helpers/mod";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
@@ -165,7 +165,7 @@ export class ActorConnRaw {
 	#websocket?: UniversalWebSocket;
 
 	#client: ClientRaw;
-	#driver: ManagerDriver;
+	#driver: EngineControlClient;
 	#params: unknown;
 	#getParams?: () => Promise<unknown>;
 	#encoding: Encoding;
@@ -182,7 +182,7 @@ export class ActorConnRaw {
 	 */
 	public constructor(
 		client: ClientRaw,
-		driver: ManagerDriver,
+		driver: EngineControlClient,
 		params: unknown,
 		getParams: (() => Promise<unknown>) | undefined,
 		encoding: Encoding,

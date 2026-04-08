@@ -16,13 +16,13 @@ import sharedworkerimg from "./sharedworker.png";
 
 
 
-**We're Rivet, a new open-source, self-hostable serverless platform with a focus on stateful serverless. If you want to support our mission of building a production-ready and self-hostable serverless runtime, <a href="https://github.com/rivet-dev/engine" target="_blank">give us a star on GitHub</a>.**
+**We're Rivet, a new open-source, self-hostable serverless platform with a focus on stateful serverless. If you want to support our mission of building a production-ready and self-hostable serverless runtime, <a href="https://github.com/rivet-dev/rivet" target="_blank">give us a star on GitHub</a>.**
 
 Earlier today, I was <a href="https://x.com/janwilmake/status/1903580372920590667" target="_blank">called upon</a> by Cloudflare's <a href="https://x.com/threepointone" target="_blank">@threepointone</a> and <a href="https://x.com/janwilmake" target="_blank">@janwilmake</a> regarding my thoughts on a standard for stateful serverless.
 
 <a href="https://x.com/janwilmake/status/1903580372920590667" target="_blank"><img src={tweetImg.src} alt="threepointone tweet" /></a>
 
-Having implemented a cloud-agnostic stateful serverless library called <a href="https://github.com/rivet-dev/rivetkit" target="_blank">RivetKit</a>, I have a lot of experience with what's required to build a portable standard. And thus, I derailed my Saturday to write them down here.
+Having implemented a cloud-agnostic stateful serverless library called <a href="https://github.com/rivet-dev/rivet/tree/main/rivetkit-typescript/packages/rivetkit" target="_blank">RivetKit</a>, I have a lot of experience with what's required to build a portable standard. And thus, I derailed my Saturday to write them down here.
 
 This specification is intended as step 1 to start the conversation about what is required to develop a stateful serverless specification that makes stateful serverless easier for companies to adopt. I don't expect this to be the end result. See _Specification Goals_ for more information.
 
@@ -85,7 +85,7 @@ The primary use cases of stateful serverless are:
 * **Horizontal Scalability**: Systems that need to scale by distributing load across many instances. For example, **Realtime Stream Processing** for stateful event handling.
 * **Local-First Architecture**: Systems that synchronize state between offline clients. For example, **Local-First Sync** between devices.
 
-Read more about stateful serverless <a href="https://github.com/rivet-dev/rivetkit" target="_blank">here</a>.
+Read more about stateful serverless <a href="https://rivet.dev/docs/actors" target="_blank">here</a>.
 
 ### Scope Of This Proposal
 
@@ -172,7 +172,7 @@ I'm the founder of Rivet and have a vested interest in seeing stateful serverles
 
 We also provide a handful of features in our runtime that don't make sense to be part of a standard, since the best W3C standards build on existing web standards: Docker containers for non-JavaScript applications, HTTP, UDP, and TCP support, advanced lifecycle management, actor tagging for advanced multi-tenant applications, advanced control over actor upgrades for companies with specific use cases, fine-grained control over where your actor is running, and a developer-friendly REST API for managing Rivet Actors.
 
-We encourage developers building on Rivet to use [RivetKit](https://github.com/rivet-dev/rivetkit). However, we also provide a low-level API for defining actors:
+We encourage developers building on Rivet to use [RivetKit](https://github.com/rivet-dev/rivet/tree/main/rivetkit-typescript/packages/rivetkit). However, we also provide a low-level API for defining actors:
 
 ```typescript
 import type { ActorContext } from "@rivet-gg/actor";
@@ -198,11 +198,11 @@ export default {
 
 Unlike Durable Objects, Rivet's core API design opts to lean into Unix-like patterns such as using `SIGINT` signals, leveraging `process.exit`, and using environment variables.
 
-Check out the [source code on GitHub](https://github.com/rivet-dev/engine).
+Check out the [source code on GitHub](https://github.com/rivet-dev/rivet).
 
 ### RivetKit Framework: Stateful Serverless On Any Cloud
 
-At Rivet, we also manage a framework called [RivetKit](https://github.com/rivet-dev/rivetkit) that provides a Durable Object-like experience on any cloud that provides _stateless_ serverless.
+At Rivet, we also manage a framework called [RivetKit](https://github.com/rivet-dev/rivet/tree/main/rivetkit-typescript/packages/rivetkit) that provides a Durable Object-like experience on any cloud that provides _stateless_ serverless.
 
 A Rivet Actor definition looks something like this:
 
@@ -228,9 +228,9 @@ const chatRoom = actor({
 
 Under the hood is where it gets interesting: RivetKit is intended to support as many platforms as possible and is **completely abstracted with drivers**. By doing so, RivetKit supports Rivet, Cloudflare Durable Objects, Bun, Node.js. Vercel, Supabase, Deno, and Lambda are coming in the near future.
 
-These drivers provide a **peek at what a standard might require**, since they're already abstracted to be platform-agnostic:
+At the time, these internal drivers provided a **peek at what a standard might require**, since they were abstracted to be platform-agnostic:
 
-**[ActorDriver](https://github.com/rivet-dev/rivetkit/blob/a9a5cfa5b91aff73889bbbee965d52221f89c2c7/packages/actor-core/src/actor/driver.ts#L12)**: Manages actor state, lifecycle, and persistence
+**ActorDriver**: Managed actor state, lifecycle, and persistence
 
 ```typescript
 export interface ActorDriver {
@@ -244,7 +244,7 @@ export interface ActorDriver {
 }
 ```
 
-**[ManagerDriver](https://github.com/rivet-dev/rivetkit/blob/a9a5cfa5b91aff73889bbbee965d52221f89c2c7/packages/actor-core/src/manager/driver.ts#L5)**: Handles actor discovery, routing, and scaling
+**ManagerDriver**: Handled actor discovery, routing, and scaling
 
 ```typescript
 export interface ManagerDriver {
@@ -286,11 +286,11 @@ export interface CreateActorOutput {
 }
 ```
 
-There is also a **[CoordinatedDriver](https://github.com/rivet-dev/rivetkit/blob/a9a5cfa5b91aff73889bbbee965d52221f89c2c7/packages/actor-core/src/topologies/coordinate/driver.ts#L29)** that provides support for implementing actors over peer-to-peer for platforms that don't natively support stateful serverless. This would not apply to an actor standard.
+There was also a coordinated topology for implementing actors over peer-to-peer for platforms that do not natively support stateful serverless. This would not apply to an actor standard.
 
-Read more about [building your own RivetKit drivers](https://github.com/rivet-dev/rivetkit/tree/main/docs).
+Read more about the framework in the [Rivet repository](https://github.com/rivet-dev/rivet/tree/main/rivetkit-typescript/packages/rivetkit).
 
-Check out the [source code on GitHub](https://github.com/rivet-dev/engine).
+Check out the [source code on GitHub](https://github.com/rivet-dev/rivet).
 
 ### Other Actor Runtimes: The Precursor To Stateful Serverless
 
@@ -304,7 +304,7 @@ The goals of this proposal are:
 
 - **Simplicity Of Implementation**: Implementing standards correctly is difficult, expensive, and highly error prone. Simpler is better.
 - **Simplicity Of Usage**: Stateful serverless is not a concept that is easy for many developers to understand. Prefer simplicity vs advanced features to keep the API as simple as possible for greater adoption.
-- **Build For Frameworks**: <a href="https://hono.dev/" target="_blank">Hono</a> and <a href="https://itty.dev/itty-router/" target="_blank">itty-router</a> already proved that frameworks are almost always used with serverless runtimes. Stateful serverless is already used widely with <a href="https://www.partykit.io/" target="_blank">PartyKit</a>, <a href="https://github.com/rivet-dev/rivetkit" target="_blank">RivetKit</a>, <a href="https://developers.cloudflare.com/agents/" target="_blank">Agents</a>, and misc tools like <a href="https://tinybase.org/" target="_blank">TinyBase</a>. If possible, leave functionality up to frameworks to implement.
+- **Build For Frameworks**: <a href="https://hono.dev/" target="_blank">Hono</a> and <a href="https://itty.dev/itty-router/" target="_blank">itty-router</a> already proved that frameworks are almost always used with serverless runtimes. Stateful serverless is already used widely with <a href="https://www.partykit.io/" target="_blank">PartyKit</a>, <a href="https://github.com/rivet-dev/rivet/tree/main/rivetkit-typescript/packages/rivetkit" target="_blank">RivetKit</a>, <a href="https://developers.cloudflare.com/agents/" target="_blank">Agents</a>, and misc tools like <a href="https://tinybase.org/" target="_blank">TinyBase</a>. If possible, leave functionality up to frameworks to implement.
 - **Built On Existing Web Development Paradigms**: Stateful serverless is very similar to <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API" target="_blank">Web Workers</a>. Where possible refer to Web Workers to see what works well.
 - **Focus On Stateful Workloads, Not Actors**: I love building distributed systems with the actor model, but actors require extra consideration around message handling, concurrency, and backpressure.
 
@@ -444,7 +444,7 @@ Rivet and RivetKit provide a tagging system for organizing actors. This allows y
 
 Rivet allows you to create actors with the `actors.create` endpoint. The API accepts environment variables to configure how the actor behaves.
 
-RivetKit allows passing tags to [`client.get({ /* tags */ })`](https://github.com/rivet-dev/rivetkit) to get or create an actor, but does not provide environment variables. You can also use the `client.create` method to create a fresh actor. Actors can read their own tags to configure behavior accordingly:
+RivetKit allows passing tags to [`client.get({ /* tags */ })`](https://rivet.dev/docs/actors/keys) to get or create an actor, but does not provide environment variables. You can also use the `client.create` method to create a fresh actor. Actors can read their own tags to configure behavior accordingly:
 
 ```typescript
 const client = createClient<App>("http://localhost:6420");
@@ -1338,4 +1338,3 @@ If you are either (a) a user of Durable Objects/Rivet actors or (b) want to aid 
 - **Should this spec care about regions?** `ServerlessWorker` shine when they run at the edge. Should they have a default for configuring locations, similar to Rivet and Cloudflare?
 
 _Thanks to [LambrosPetrou](https://x.com/LambrosPetrou), [firtozb](https://x.com/firtozb), [uripont_](https://x.com/uripont_), and [p\_mbanugo](https://x.com/p_mbanugo) for feedback on the initial document._
-
