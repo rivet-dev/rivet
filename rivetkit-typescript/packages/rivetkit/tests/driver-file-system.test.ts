@@ -1,8 +1,8 @@
 import { join } from "node:path";
+import { describe, expect, test, vi } from "vitest";
 import { createClient } from "@/client/mod";
 import { createTestRuntime, runDriverTests } from "@/driver-test-suite/mod";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
-import { describe, expect, test, vi } from "vitest";
 import type { registry } from "../fixtures/driver-test-suite/registry";
 
 runDriverTests({

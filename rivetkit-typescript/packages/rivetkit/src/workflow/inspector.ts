@@ -1,5 +1,3 @@
-import * as cbor from "cbor-x";
-import { createNanoEvents } from "nanoevents";
 import type {
 	BranchStatus,
 	BranchStatusType,
@@ -7,10 +5,12 @@ import type {
 	EntryStatus,
 	Location,
 	SleepState,
+	WorkflowEntryMetadataSnapshot,
 	WorkflowHistoryEntry,
 	WorkflowHistorySnapshot,
-	WorkflowEntryMetadataSnapshot,
 } from "@rivetkit/workflow-engine";
+import * as cbor from "cbor-x";
+import { createNanoEvents } from "nanoevents";
 import { encodeWorkflowHistoryTransport } from "@/inspector/transport";
 import type * as inspectorSchema from "@/schemas/actor-inspector/mod";
 import * as transport from "@/schemas/transport/mod";

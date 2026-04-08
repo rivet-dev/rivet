@@ -5,9 +5,9 @@ import { type TestContext, vi } from "vitest";
 import { ClientConfigSchema } from "@/client/config";
 import { type Client, createClient } from "@/client/mod";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
+import { buildManagerRouter } from "@/manager/router";
 import { createClientWithDriver, type Registry } from "@/mod";
 import { RegistryConfig, RegistryConfigSchema } from "@/registry/config";
-import { buildManagerRouter } from "@/manager/router";
 import { logger } from "./log";
 
 export interface SetupTestResult<A extends Registry<any>> {

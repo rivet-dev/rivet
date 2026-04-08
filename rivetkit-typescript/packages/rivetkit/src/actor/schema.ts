@@ -155,7 +155,7 @@ export function hasSchemaConfigKey<T extends AnySchemaConfig>(
 	if (!schemas) {
 		return false;
 	}
-	return Object.prototype.hasOwnProperty.call(schemas, key);
+	return Object.hasOwn(schemas, key);
 }
 
 export function getEventCanSubscribe<TContext = any>(

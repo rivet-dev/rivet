@@ -600,7 +600,7 @@ export const actorMetadataQueryOptions = ({
 		queryKey: ["actor", actorId, "metadata"],
 		retry: 0,
 		retryDelay: 5_000,
-		refetchInterval: 1_000,
+		refetchInterval: 3_000,
 		queryFn: async () => {
 			return getActorMetadata({ actorId, credentials });
 		},
@@ -683,7 +683,7 @@ export const ActorInspectorProvider = ({
 
 	const onMessage = useMemo(() => {
 		return createMessageHandler({ queryClient, actorId, actionsManager });
-	}, [queryClient, actorId]);
+	}, [queryClient, actorId, actionsManager]);
 
 	const { sendMessage, reconnect, status } = useWebSocket(
 		`${computeActorUrl({ ...credentials, actorId })}/inspector/connect`,

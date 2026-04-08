@@ -1,4 +1,3 @@
-import type { RawAccess } from "@/db/config";
 import type {
 	ListEventsRequest,
 	ListPage,
@@ -7,6 +6,7 @@ import type {
 	SessionPersistDriver,
 	SessionRecord,
 } from "sandbox-agent";
+import type { RawAccess } from "@/db/config";
 
 type PersistSessionRow = {
 	record_json: string;

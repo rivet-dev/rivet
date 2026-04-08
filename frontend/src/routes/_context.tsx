@@ -97,14 +97,14 @@ function RouteComponent() {
 
 function Modals() {
 	const navigate = useNavigate();
-	const search = Route.useSearch();
+	const modal = Route.useSearch({ select: (s) => s.modal });
 
 	const FeedbackDialog = useDialog.Feedback.Dialog;
 
 	return (
 		<FeedbackDialog
 			dialogProps={{
-				open: search.modal === "feedback",
+				open: modal === "feedback",
 				onOpenChange: (value) => {
 					if (!value) {
 						return navigate({

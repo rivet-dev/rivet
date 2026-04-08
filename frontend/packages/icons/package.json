@@ -13,9 +13,10 @@
 		"dist"
 	],
 	"scripts": {
-		"generate": "npm run gen:manifest && npm run gen:vendor",
+		"generate": "npm run gen:manifest && npm run gen:vendor && npm run gen:flat",
 		"gen:vendor": "node scripts/vendor-icons.js",
-		"gen:manifest": "node scripts/generate-manifest.js"
+		"gen:manifest": "node scripts/generate-manifest.js",
+		"gen:flat": "node scripts/gen-flat-esm.mjs"
 	},
 	"engines": {
 		"node": ">=18"
@@ -29,13 +30,17 @@
 		"react-dom": "^19"
 	},
 	"type": "module",
-	"main": "./dist/index.js",
+	"main": "./dist/index.flat.js",
 	"types": "./src/index.gen.ts",
 	"exports": {
 		".": {
 			"types": "./src/index.gen.ts",
-			"import": "./dist/index.js",
-			"default": "./dist/index.js"
+			"import": "./dist/index.flat.js",
+			"default": "./dist/index.flat.js"
+		},
+		"./all": {
+			"import": "./dist/index.all.js",
+			"default": "./dist/index.all.js"
 		}
 	},
 	"devDependencies": {

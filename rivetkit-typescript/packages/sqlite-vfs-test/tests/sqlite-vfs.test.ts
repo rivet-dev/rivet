@@ -1,6 +1,6 @@
+import type { KvVfsOptions } from "@rivetkit/sqlite-vfs";
 import { describe, expect, it } from "vitest";
 import { createSqliteVfs } from "../src/backend";
-import type { KvVfsOptions } from "@rivetkit/sqlite-vfs";
 
 const CHUNK_SIZE = 4096;
 

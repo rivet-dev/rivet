@@ -7,9 +7,9 @@
 
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { SqliteVfs } from "./vfs";
-import type { ISqliteVfs, IDatabase } from "./vfs";
 import type { KvVfsOptions } from "./types";
+import type { IDatabase, ISqliteVfs } from "./vfs";
+import { SqliteVfs } from "./vfs";
 
 export interface SqliteVfsPoolConfig {
 	actorsPerInstance: number;

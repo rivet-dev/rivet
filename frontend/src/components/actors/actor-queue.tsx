@@ -14,7 +14,7 @@ export function ActorQueue({ actorId }: { actorId: ActorId }) {
 		enabled:
 			inspector.isInspectorAvailable &&
 			inspector.features.queue.supported,
-		refetchInterval: 1000,
+		refetchInterval: 3000,
 		refetchOnWindowFocus: false,
 	});
 	const queueSizeQuery = useQuery(

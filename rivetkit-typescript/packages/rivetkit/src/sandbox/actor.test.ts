@@ -1,8 +1,8 @@
+import type { SandboxProvider } from "sandbox-agent";
 import { describe, expect, test, vi } from "vitest";
 import { setup } from "@/mod";
 import { setupTest } from "@/test/mod";
 import { sandboxActor } from "./index";
-import type { SandboxProvider } from "sandbox-agent";
 
 describe("sandbox actor direct URL access", () => {
 	test("getSandboxUrl provisions the sandbox without connecting the SDK", async (c) => {

@@ -1,6 +1,6 @@
+import { describe, expect, type TestContext, test } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";
-import { describe, expect, test, type TestContext } from "vitest";
 
 export function runActorKvTests(driverTestConfig: DriverTestConfig) {
 	type KvTextHandle = {

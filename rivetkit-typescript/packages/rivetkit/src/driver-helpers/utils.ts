@@ -6,6 +6,7 @@ import {
 	CURRENT_VERSION,
 } from "@/schemas/actor-persist/versioned";
 import { bufferToArrayBuffer } from "@/utils";
+
 function serializeEmptyPersistData(input: unknown | undefined): Uint8Array {
 	const persistData: persistSchema.Actor = {
 		input:

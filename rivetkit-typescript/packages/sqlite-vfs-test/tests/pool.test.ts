@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { SqliteVfsPool } from "@rivetkit/sqlite-vfs";
 import type { KvVfsOptions } from "@rivetkit/sqlite-vfs";
+import { SqliteVfsPool } from "@rivetkit/sqlite-vfs";
+import { describe, expect, it } from "vitest";
 
 function keyToString(key: Uint8Array): string {
 	return Buffer.from(key).toString("hex");

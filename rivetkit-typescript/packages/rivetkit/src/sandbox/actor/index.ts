@@ -51,24 +51,24 @@
  * active with idle timers.
  */
 
+import { SandboxAgent, type SandboxProvider } from "sandbox-agent";
 import type { DatabaseProvider } from "@/actor/database";
 import { actor } from "@/actor/mod";
 import type { RawAccess } from "@/db/config";
 import { db } from "@/db/mod";
-import { SandboxAgent, type SandboxProvider } from "sandbox-agent";
 import {
 	type SandboxActorConfig,
 	type SandboxActorConfigInput,
-	type SandboxActorOptionsRuntime,
 	SandboxActorConfigSchema,
+	type SandboxActorOptionsRuntime,
 } from "../config";
 import { SqliteSessionPersistDriver } from "../session-persist-driver";
 import {
+	SANDBOX_AGENT_ACTION_METHODS,
 	type SandboxActionContext,
 	type SandboxActorActions,
 	type SandboxActorState,
 	type SandboxActorVars,
-	SANDBOX_AGENT_ACTION_METHODS,
 } from "../types";
 import { migrateSandboxTables } from "./db";
 import {

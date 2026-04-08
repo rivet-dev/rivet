@@ -2,16 +2,16 @@ import {
 	copyFileSync,
 	mkdirSync,
 	mkdtempSync,
-	readFileSync,
 	readdirSync,
+	readFileSync,
 	rmSync,
 } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { importNodeDependencies } from "@/utils/node";
 import { FileSystemGlobalState } from "@/drivers/file-system/global-state";
 import { loadSqliteRuntime } from "@/drivers/file-system/sqlite-runtime";
+import { importNodeDependencies } from "@/utils/node";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();

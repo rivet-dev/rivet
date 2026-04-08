@@ -5,7 +5,7 @@ import {
 	QueryClient,
 	queryOptions,
 } from "@tanstack/react-query";
-import posthog from "posthog-js";
+
 import { toast } from "@/components";
 import { isRivetApiError } from "@/lib/errors";
 import { modal } from "@/utils/modal-utils";
@@ -29,11 +29,13 @@ const queryCache = new QueryCache({
 			return;
 		}
 
-		if (query.meta?.reportType) {
-			posthog.capture(query.meta.reportType, {
-				type: "error",
-				error,
-				queryKey: query.queryKey,
+		if (query.meta?.reportType && __APP_TYPE__ === "cloud") {
+			import("posthog-js").then(({ default: posthog }) => {
+				posthog.capture(query.meta!.reportType!, {
+					type: "error",
+					error,
+					queryKey: query.queryKey,
+				});
 			});
 		}
 
@@ -87,11 +89,11 @@ export const changelogQueryOptions = () => {
 export const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
-			staleTime: 5 * 1000,
-			gcTime: 60 * 1000,
+			staleTime: 30 * 1000,
+			gcTime: 5 * 60 * 1000,
 			retry: 3,
-			refetchOnWindowFocus: true,
-			refetchOnReconnect: false,
+			refetchOnWindowFocus: false,
+			refetchOnReconnect: true,
 		},
 		mutations: {
 			retry: 0,

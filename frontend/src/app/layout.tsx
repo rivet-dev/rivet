@@ -423,7 +423,7 @@ const Footer = () => {
 	return null;
 };
 
-export { Root, Main, Header, Footer, VisibleInFull, Sidebar };
+export { Footer, Header, Main, Root, Sidebar, VisibleInFull };
 
 const Breadcrumbs = (): ReactNode => {
 	const matchRoute = useMatchRoute();

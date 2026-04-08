@@ -1,8 +1,8 @@
 import type {
 	AnyDatabaseProvider,
 	DatabaseProvider,
-	RawDatabaseClient,
 	DrizzleDatabaseClient,
+	RawDatabaseClient,
 } from "@/db/config";
 
 export type InferDatabaseClient<DBProvider extends AnyDatabaseProvider> =
@@ -13,6 +13,6 @@ export type InferDatabaseClient<DBProvider extends AnyDatabaseProvider> =
 export type {
 	AnyDatabaseProvider,
 	DatabaseProvider,
-	RawDatabaseClient,
 	DrizzleDatabaseClient,
+	RawDatabaseClient,
 };

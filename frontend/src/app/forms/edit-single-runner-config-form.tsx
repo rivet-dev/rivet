@@ -36,7 +36,8 @@ export type SubmitHandler = (
 ) => Promise<void>;
 
 const { Form, Submit, SetValue } = createSchemaForm(formSchema);
-export { Form, Submit, SetValue };
+
+export { Form, SetValue, Submit };
 
 export const Enable = <TValues extends Record<string, any> = FormValues>({
 	name,

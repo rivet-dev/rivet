@@ -660,8 +660,8 @@ export const createNamespaceContext = ({
 		},
 		engineAdminTokenQueryOptions() {
 			return queryOptions({
-				staleTime: 1000,
-				gcTime: 1000,
+				staleTime: 5 * 60 * 1000,
+				gcTime: 10 * 60 * 1000,
 				queryKey: [{ namespace }, "tokens", "engine-admin"] as QueryKey,
 				queryFn: async () => {
 					return (ls.engineCredentials.get(getConfig().apiUrl) ||

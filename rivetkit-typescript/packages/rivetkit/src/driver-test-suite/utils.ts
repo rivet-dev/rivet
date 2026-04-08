@@ -1,12 +1,12 @@
 import { type TestContext, vi } from "vitest";
 import { assertUnreachable } from "@/actor/utils";
+import { ClientConfigSchema } from "@/client/config";
 import { type Client, createClient } from "@/client/mod";
 import { createClientWithDriver } from "@/mod";
 import type { registry } from "../../fixtures/driver-test-suite/registry";
 import { logger } from "./log";
 import type { DriverTestConfig } from "./mod";
 import { createTestInlineClientDriver } from "./test-inline-client-driver";
-import { ClientConfigSchema } from "@/client/config";
 
 export const FAKE_TIME = new Date("2024-01-01T00:00:00.000Z");
 

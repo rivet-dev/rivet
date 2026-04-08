@@ -17,9 +17,7 @@ async function waitForRawWebSocketMessage(ws: WebSocket) {
 		const onClose = (event: { code?: number }) => {
 			cleanup();
 			reject(
-				new Error(
-					`websocket closed early: ${event.code ?? "unknown"}`,
-				),
+				new Error(`websocket closed early: ${event.code ?? "unknown"}`),
 			);
 		};
 		const onError = () => {
@@ -38,14 +36,20 @@ async function waitForRawWebSocketMessage(ws: WebSocket) {
 	});
 }
 
-async function connectRawWebSocket(handle: { webSocket(): Promise<WebSocket> }) {
+async function connectRawWebSocket(handle: {
+	webSocket(): Promise<WebSocket>;
+}) {
 	const ws = await handle.webSocket();
 
 	await new Promise<void>((resolve, reject) => {
 		ws.addEventListener("open", () => resolve(), { once: true });
-		ws.addEventListener("error", () => reject(new Error("websocket error")), {
-			once: true,
-		});
+		ws.addEventListener(
+			"error",
+			() => reject(new Error("websocket error")),
+			{
+				once: true,
+			},
+		);
 	});
 
 	await waitForRawWebSocketMessage(ws);
@@ -55,9 +59,13 @@ async function connectRawWebSocket(handle: { webSocket(): Promise<WebSocket> }) 
 async function closeRawWebSocket(ws: WebSocket) {
 	await new Promise<void>((resolve, reject) => {
 		ws.addEventListener("close", () => resolve(), { once: true });
-		ws.addEventListener("error", () => reject(new Error("websocket error")), {
-			once: true,
-		});
+		ws.addEventListener(
+			"error",
+			() => reject(new Error("websocket error")),
+			{
+				once: true,
+			},
+		);
 		ws.close();
 	});
 }
@@ -818,8 +826,7 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 
 			// Verify sleep happened
 			{
-				const { startCount, sleepCount } =
-					await sleepActor.getCounts();
+				const { startCount, sleepCount } = await sleepActor.getCounts();
 				expect(sleepCount).toBe(1);
 				expect(startCount).toBe(2);
 			}
@@ -881,8 +888,7 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 
 			// Verify sleep happened
 			{
-				const { startCount, sleepCount } =
-					await sleepActor.getCounts();
+				const { startCount, sleepCount } = await sleepActor.getCounts();
 				expect(sleepCount).toBe(1);
 				expect(startCount).toBe(2);
 			}

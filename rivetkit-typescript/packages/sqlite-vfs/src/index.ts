@@ -1,5 +1,5 @@
-export { SqliteVfs, Database } from "./vfs";
-export type { ISqliteVfs, IDatabase } from "./vfs";
-export type { KvVfsOptions } from "./types";
-export { SqliteVfsPool, PooledSqliteHandle } from "./pool";
 export type { SqliteVfsPoolConfig } from "./pool";
+export { PooledSqliteHandle, SqliteVfsPool } from "./pool";
+export type { KvVfsOptions } from "./types";
+export type { IDatabase, ISqliteVfs } from "./vfs";
+export { Database, SqliteVfs } from "./vfs";

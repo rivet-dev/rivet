@@ -54,10 +54,10 @@ const TooltipArrow = TooltipPrimitive.TooltipArrow;
 
 export {
 	Tooltip,
-	TooltipTrigger,
-	TooltipContent,
-	TooltipProvider,
-	TooltipPortal,
 	TooltipArrow,
+	TooltipContent,
+	TooltipPortal,
+	TooltipProvider,
+	TooltipTrigger,
 	WithTooltip,
 };

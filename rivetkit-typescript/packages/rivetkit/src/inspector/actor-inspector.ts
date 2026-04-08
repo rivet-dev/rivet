@@ -1,12 +1,12 @@
 import * as cbor from "cbor-x";
 import { createNanoEvents } from "nanoevents";
+import { getRunInspectorConfig } from "@/actor/config";
 import { createHttpDriver } from "@/actor/conn/drivers/http";
 import { Lock } from "@/actor/utils";
 import {
 	CONN_DRIVER_SYMBOL,
 	CONN_STATE_MANAGER_SYMBOL,
 } from "@/actor/conn/mod";
-import { getRunInspectorConfig } from "@/actor/config";
 import { ActionContext } from "@/actor/contexts/action";
 import * as actorErrors from "@/actor/errors";
 import type { AnyActorInstance } from "@/mod";

@@ -1,9 +1,9 @@
 import type { Client } from "@/client/client";
 import { convertRegistryConfigToClientConfig } from "@/client/config";
 import type { ManagerDriver } from "@/manager/driver";
+import type { DriverConfig, RegistryConfig } from "@/registry/config";
 import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
 import { EngineActorDriver } from "./actor-driver";
-import { RegistryConfig, DriverConfig } from "@/registry/config";
 
 export { EngineActorDriver } from "./actor-driver";
 export {

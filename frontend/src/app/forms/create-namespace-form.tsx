@@ -1,4 +1,4 @@
-import { type UseFormReturn, useFormContext } from "react-hook-form";
+import { type UseFormReturn, useFormContext, useWatch } from "react-hook-form";
 import z from "zod";
 import {
 	createSchemaForm,
@@ -28,7 +28,8 @@ export type SubmitHandler = (
 ) => Promise<void>;
 
 const { Form, Submit, SetValue } = createSchemaForm(formSchema);
-export { Form, Submit, SetValue };
+
+export { Form, SetValue, Submit };
 
 export const Name = ({ className }: { className?: string }) => {
 	const { control } = useFormContext<FormValues>();
@@ -54,9 +55,9 @@ export const Name = ({ className }: { className?: string }) => {
 };
 
 export const Slug = ({ className }: { className?: string }) => {
-	const { control, watch } = useFormContext<FormValues>();
+	const { control } = useFormContext<FormValues>();
 
-	const name = watch("name");
+	const name = useWatch({ name: "name", control });
 
 	return (
 		<FormField

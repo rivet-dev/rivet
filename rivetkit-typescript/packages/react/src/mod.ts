@@ -14,14 +14,14 @@ import {
 	type ExtractActorsFromRegistry,
 } from "rivetkit/client";
 
-export { ActorConnDisposed, createClient } from "rivetkit/client";
 export type { ActorConnStatus } from "@rivetkit/framework-base";
+export { ActorConnDisposed, createClient } from "rivetkit/client";
 
 export function createRivetKit<Registry extends AnyActorRegistry>(
 	clientInput: string | ClientConfigInput | undefined = undefined,
 	opts: CreateRivetKitOptions<Registry> = {},
 ) {
-	// @ts-ignore Type instantiation can be excessively deep for complex registries.
+	// @ts-expect-error Type instantiation can be excessively deep for complex registries.
 	return createRivetKitWithClient<Registry>(
 		createClient<Registry>(clientInput),
 		opts,
@@ -32,7 +32,7 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 	client: Client<Registry>,
 	opts: CreateRivetKitOptions<Registry> = {},
 ) {
-	// @ts-ignore Type instantiation can be excessively deep for complex registries.
+	// @ts-expect-error Type instantiation can be excessively deep for complex registries.
 	const { getOrCreateActor } = createVanillaRivetKit(client, opts);
 
 	/**

@@ -1,5 +1,6 @@
 "use client";
 
+import { faRefresh, faSpinnerThird, faXmark, Icon } from "@rivet-gg/icons";
 import {
 	Background,
 	BackgroundVariant,
@@ -12,7 +13,6 @@ import {
 	useNodesInitialized,
 	useReactFlow,
 } from "@xyflow/react";
-import { faRefresh, faSpinnerThird, faXmark, Icon } from "@rivet-gg/icons";
 import {
 	type ReactNode,
 	useCallback,

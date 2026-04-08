@@ -17,15 +17,21 @@
  * logic and keeps memory usage predictable for each actor.
  */
 
-import * as VFS from "@rivetkit/sqlite/src/VFS.js";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import {
 	Factory,
 	SQLITE_OPEN_CREATE,
 	SQLITE_OPEN_READWRITE,
 	SQLITE_ROW,
 } from "@rivetkit/sqlite";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import * as VFS from "@rivetkit/sqlite/src/VFS.js";
+import type { FileMeta } from "../schemas/file-meta/mod";
+import {
+	CURRENT_VERSION,
+	FILE_META_VERSIONED,
+} from "../schemas/file-meta/versioned";
+import { EMPTY_DB_PAGE } from "./generated/empty-db-page";
 import {
 	CHUNK_SIZE,
 	FILE_TAG_JOURNAL,
@@ -37,12 +43,6 @@ import {
 	getMetaKey,
 	type SqliteFileTag,
 } from "./kv";
-import { EMPTY_DB_PAGE } from "./generated/empty-db-page";
-import {
-	FILE_META_VERSIONED,
-	CURRENT_VERSION,
-} from "../schemas/file-meta/versioned";
-import type { FileMeta } from "../schemas/file-meta/mod";
 import type { KvVfsOptions } from "./types";
 
 /**

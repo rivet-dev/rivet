@@ -2,12 +2,12 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { cors } from "@/common/cors";
+import { getLogger } from "@/common/log";
 import {
 	handleRouteError,
 	handleRouteNotFound,
 	loggerMiddleware,
 } from "@/common/router";
-import { getLogger } from "@/common/log";
 
 export function logger() {
 	return getLogger("router");

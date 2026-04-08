@@ -1,10 +1,10 @@
 import { z } from "zod/v4";
 import { VERSION } from "@/utils";
 import {
-	getRivetRunEngineVersion,
-	getRivetRunEngine,
 	getRivetPublicEndpoint,
 	getRivetPublicToken,
+	getRivetRunEngine,
+	getRivetRunEngineVersion,
 } from "@/utils/env-vars";
 
 export const ConfigurePoolSchema = z

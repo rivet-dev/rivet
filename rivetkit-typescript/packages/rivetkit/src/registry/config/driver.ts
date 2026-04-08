@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
-import { ActorDriverBuilder } from "@/actor/driver";
-import { ManagerDriverBuilder } from "@/manager/driver";
+import type { ActorDriverBuilder } from "@/actor/driver";
+import type { ManagerDriverBuilder } from "@/manager/driver";
 
 export const DriverConfigSchema = z.object({
 	/** Machine-readable name to identify this driver by. */

@@ -24,7 +24,7 @@ import { type DriverConfig, DriverConfigSchema } from "./driver";
 import { EnvoyConfigSchema } from "./envoy";
 import { ServerlessConfigSchema } from "./serverless";
 
-export { DriverConfigSchema, type DriverConfig };
+export { type DriverConfig, DriverConfigSchema };
 
 export const ActorsSchema = z.record(
 	z.string(),

@@ -149,5 +149,5 @@ export function setup<A extends RegistryActors>(
 	return new Registry(input);
 }
 
-export type { RegistryConfig, RegistryActors };
+export type { RegistryActors, RegistryConfig };
 export { RegistryConfigSchema };

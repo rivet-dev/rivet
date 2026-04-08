@@ -102,7 +102,7 @@ export function GuardConnectableInspector({
 }: GuardConnectableInspectorProps) {
 	const { data: status } = useQuery({
 		...useDataProvider().actorStatusQueryOptions(actorId),
-		refetchInterval: 1000,
+		refetchInterval: 3000,
 	});
 
 	return match(status)
@@ -509,7 +509,7 @@ function useActorRunner({ actorId }: { actorId: ActorId }) {
 			runnerName: actor.runnerNameSelector,
 		}),
 		retryDelay: 10_000,
-		refetchInterval: 1000,
+		refetchInterval: 3000,
 	});
 
 	return {

@@ -117,6 +117,7 @@
 		"@visx/shape": "^3.12.0",
 		"@visx/tooltip": "^3.12.0",
 		"@vitejs/plugin-react": "^4.7.0",
+		"babel-plugin-react-compiler": "^1.0.0",
 		"@xyflow/react": "^12.10.0",
 		"actor-core": "^0.6.3",
 		"autoprefixer": "^10.4.21",

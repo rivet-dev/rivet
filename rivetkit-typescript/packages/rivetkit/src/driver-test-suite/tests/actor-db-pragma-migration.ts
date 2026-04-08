@@ -16,14 +16,10 @@ export function runActorDbPragmaMigrationTests(
 		test(
 			"applies all migrations on first start",
 			async (c) => {
-				const { client } = await setupDriverTest(
-					c,
-					driverTestConfig,
-				);
-				const actor =
-					client.dbPragmaMigrationActor.getOrCreate([
-						`pragma-init-${crypto.randomUUID()}`,
-					]);
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor = client.dbPragmaMigrationActor.getOrCreate([
+					`pragma-init-${crypto.randomUUID()}`,
+				]);
 
 				// user_version should be set to 2 after migrations
 				const version = await actor.getUserVersion();
@@ -41,14 +37,10 @@ export function runActorDbPragmaMigrationTests(
 		test(
 			"inserts with default status from migration v2",
 			async (c) => {
-				const { client } = await setupDriverTest(
-					c,
-					driverTestConfig,
-				);
-				const actor =
-					client.dbPragmaMigrationActor.getOrCreate([
-						`pragma-default-${crypto.randomUUID()}`,
-					]);
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor = client.dbPragmaMigrationActor.getOrCreate([
+					`pragma-default-${crypto.randomUUID()}`,
+				]);
 
 				await actor.insertItem("test-item");
 				const items = await actor.getItems();
@@ -63,14 +55,10 @@ export function runActorDbPragmaMigrationTests(
 		test(
 			"inserts with explicit status",
 			async (c) => {
-				const { client } = await setupDriverTest(
-					c,
-					driverTestConfig,
-				);
-				const actor =
-					client.dbPragmaMigrationActor.getOrCreate([
-						`pragma-explicit-${crypto.randomUUID()}`,
-					]);
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor = client.dbPragmaMigrationActor.getOrCreate([
+					`pragma-explicit-${crypto.randomUUID()}`,
+				]);
 
 				await actor.insertItemWithStatus("done-item", "completed");
 				const items = await actor.getItems();
@@ -85,13 +73,9 @@ export function runActorDbPragmaMigrationTests(
 		test(
 			"migrations are idempotent across sleep/wake",
 			async (c) => {
-				const { client } = await setupDriverTest(
-					c,
-					driverTestConfig,
-				);
+				const { client } = await setupDriverTest(c, driverTestConfig);
 				const key = `pragma-sleep-${crypto.randomUUID()}`;
-				const actor =
-					client.dbPragmaMigrationActor.getOrCreate([key]);
+				const actor = client.dbPragmaMigrationActor.getOrCreate([key]);
 
 				// Insert data before sleep
 				await actor.insertItemWithStatus("before-sleep", "pending");

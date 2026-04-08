@@ -37,7 +37,6 @@ import {
 	type Actor as ApiActor,
 } from "@/manager-api/actors";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
-import { loadRuntimeServeStatic } from "@/utils/serve";
 import type { GetUpgradeWebSocket, Runtime } from "@/utils";
 import { timingSafeEqual } from "@/utils/crypto";
 import { isDev } from "@/utils/env-vars";
@@ -46,6 +45,7 @@ import {
 	buildOpenApiResponses,
 	createRouter,
 } from "@/utils/router";
+import { loadRuntimeServeStatic } from "@/utils/serve";
 import type { ActorOutput, ManagerDriver } from "./driver";
 import { actorGateway, createTestWebSocketProxy } from "./gateway";
 import {

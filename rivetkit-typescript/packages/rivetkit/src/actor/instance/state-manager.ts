@@ -1,5 +1,6 @@
 import { idToStr } from "@rivetkit/engine-runner";
 import onChange from "@rivetkit/on-change";
+import { loggerWithoutContext } from "@/actor/log";
 import { isCborSerializable, stringifyError } from "@/common/utils";
 import {
 	CURRENT_VERSION as ACTOR_PERSIST_CURRENT_VERSION,
@@ -7,7 +8,6 @@ import {
 	CONN_VERSIONED,
 } from "@/schemas/actor-persist/versioned";
 import { promiseWithResolvers, SinglePromiseQueue } from "@/utils";
-import { loggerWithoutContext } from "@/actor/log";
 import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "../conn/mod";
 import { convertConnToBarePersistedConn } from "../conn/persisted";
 import type { ActorDriver } from "../driver";

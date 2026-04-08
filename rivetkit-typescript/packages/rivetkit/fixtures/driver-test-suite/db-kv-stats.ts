@@ -1,4 +1,6 @@
 // @ts-nocheck
+
+import type { KvVfsOptions } from "@rivetkit/sqlite-vfs";
 import { actor } from "rivetkit";
 import type {
 	DatabaseProvider,
@@ -6,7 +8,6 @@ import type {
 	RawAccess,
 } from "rivetkit/db";
 import { AsyncMutex, toSqliteBindings } from "../../src/db/shared";
-import type { KvVfsOptions } from "@rivetkit/sqlite-vfs";
 
 export interface KvStats {
 	getBatchCalls: number;

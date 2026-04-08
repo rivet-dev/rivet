@@ -8,7 +8,7 @@ import {
 } from "@rivet-gg/icons";
 import { endOfDay, lightFormat, startOfDay, subMonths } from "date-fns";
 import { motion } from "framer-motion";
-import _ from "lodash";
+import { pick } from "lodash";
 import {
 	type Dispatch,
 	type FunctionComponent,
@@ -1088,6 +1088,6 @@ export function createFiltersSchema(definitions: FilterDefinitions) {
 export function createFiltersPicker(definitions: FilterDefinitions) {
 	return (object: Record<string, unknown>) => {
 		const keys = Object.keys(definitions);
-		return _.pick(object, keys);
+		return pick(object, keys);
 	};
 }

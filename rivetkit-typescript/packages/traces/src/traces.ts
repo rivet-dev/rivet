@@ -5,14 +5,13 @@ import { performance } from "node:perf_hooks";
 import { decode as decodeCbor, encode as encodeCbor } from "cbor-x";
 import { pack, unpack } from "fdb-tuple";
 import {
-	CHUNK_VERSIONED,
-	CURRENT_VERSION,
-	encodeRecord,
 	type ActiveSpanRef,
 	type Attributes,
+	CHUNK_VERSIONED,
 	type Chunk,
+	CURRENT_VERSION,
+	encodeRecord,
 	type KeyValue,
-	type Record as TraceRecord,
 	type RecordBody,
 	type SpanEnd,
 	type SpanEvent,
@@ -26,6 +25,7 @@ import {
 	type SpanUpdate,
 	type StringId,
 	type TraceId,
+	type Record as TraceRecord,
 } from "../schemas/versioned.js";
 import {
 	hexFromBytes,
@@ -287,7 +287,7 @@ export function createTraces(
 		dropped: number;
 	} {
 		const result: SpanLink[] = [];
-		let dropped = 0;
+		const dropped = 0;
 		if (!links) {
 			return { links: result, dropped };
 		}
@@ -437,9 +437,7 @@ export function createTraces(
 			const key = strings[kv.key] ?? "";
 			try {
 				map.set(key, decodeCbor(toUint8Array(kv.value)) as unknown);
-			} catch {
-				continue;
-			}
+			} catch {}
 		}
 		return map;
 	}
@@ -462,7 +460,7 @@ export function createTraces(
 		dropped: number;
 	} {
 		const result: SpanLink[] = [];
-		let dropped = 0;
+		const dropped = 0;
 		for (const link of links) {
 			const { attributes, dropped: droppedAttributes } =
 				encodeAttributeMap(link.attributes);

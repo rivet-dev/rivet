@@ -1,5 +1,5 @@
-import { RegistryConfigSchema } from "@/registry/config";
 import { describe, expect, test } from "vitest";
+import { RegistryConfigSchema } from "@/registry/config";
 
 describe.sequential("registry config storagePath", () => {
 	test("reads storagePath from RIVETKIT_STORAGE_PATH when unset in config", () => {

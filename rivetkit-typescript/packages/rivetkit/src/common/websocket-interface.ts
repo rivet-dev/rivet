@@ -1,7 +1,7 @@
 // Re-export everything from the virtual-websocket package
 export type {
+	RivetCloseEvent,
 	RivetEvent,
 	RivetMessageEvent,
-	RivetCloseEvent,
 	UniversalWebSocket,
 } from "@rivetkit/virtual-websocket";
