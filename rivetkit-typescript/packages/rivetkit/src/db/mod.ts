@@ -1,8 +1,5 @@
 import type { DatabaseProvider, RawAccess } from "./config";
-import {
-	nativeSqliteAvailable,
-	createNativeRawAccess,
-} from "./native-sqlite";
+import { openActorDatabase } from "./open-database";
 import {
 	AsyncMutex,
 	createActorKvStore,
@@ -11,9 +8,6 @@ import {
 } from "./shared";
 
 export type { RawAccess } from "./config";
-
-// Log the native SQLite fallback warning at most once per process.
-let nativeFallbackWarned = false;
 
 interface DatabaseFactoryConfig {
 	onMigrate?: (db: RawAccess) => Promise<void> | void;
@@ -54,41 +48,13 @@ export function db({
 				} satisfies RawAccess;
 			}
 
-			// Use native SQLite when the addon is available. The native path
-			// routes KV operations over a WebSocket KV channel, bypassing
-			// the WASM VFS entirely.
-			if (nativeSqliteAvailable()) {
-				return await createNativeRawAccess(
-					ctx.actorId,
-					ctx.nativeSqliteConfig,
-				);
-			}
-
-			// Native addon not available. Fall back to WASM SQLite.
-			if (!nativeFallbackWarned) {
-				nativeFallbackWarned = true;
-				console.warn(
-					"native SQLite not available, falling back to WebAssembly. run npm rebuild to install native bindings.",
-				);
-			}
-
-			// Construct KV-backed client using actor driver's KV operations
-			if (!ctx.sqliteVfs) {
-				throw new Error(
-					"SqliteVfs instance not provided in context. The driver must provide a sqliteVfs instance.",
-				);
-			}
-
+			const { database: db, kvStore } = await openActorDatabase(ctx);
 			let lastVfsError: unknown = null;
-			const kvStore = createActorKvStore(
-				ctx.kv,
-				ctx.metrics,
-				ctx.preloadedEntries,
-			);
-			kvStore.onError = (error: unknown) => {
-				lastVfsError = error;
-			};
-			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
+			if (kvStore) {
+				kvStore.onError = (error: unknown) => {
+					lastVfsError = error;
+				};
+			}
 			let closed = false;
 			const mutex = new AsyncMutex();
 			const ensureOpen = () => {
@@ -219,7 +185,7 @@ export function db({
 					// page read/write will fail immediately with a
 					// descriptive error instead of hanging or producing a
 					// cryptic "disk I/O error".
-					kvStore.poison();
+					kvStore?.poison();
 
 					const shouldClose = await mutex.run(async () => {
 						if (closed) return false;
@@ -231,7 +197,9 @@ export function db({
 					}
 				},
 			} satisfies RawAccess;
-			clientToKvStore.set(client, kvStore);
+			if (kvStore) {
+				clientToKvStore.set(client, kvStore);
+			}
 			return client;
 		},
 		onMigrate: async (client) => {

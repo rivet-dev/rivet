@@ -156,10 +156,10 @@ export async function openWebSocketToGateway(
 		buildWebSocketProtocols(runConfig, encoding, params),
 	);
 
-	// Set binary type to arraybuffer for proper encoding support
+	// The WebSocket is returned before the connection is open. This follows
+	// standard WebSocket behavior where the caller listens for the "open"
+	// event before sending messages.
 	ws.binaryType = "arraybuffer";
-
-	logger().debug({ msg: "websocket connection opened", gatewayUrl });
 
 	return ws as UniversalWebSocket;
 }

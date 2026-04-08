@@ -57,6 +57,7 @@ import { logger } from "./log";
 
 const ENVOY_SSE_PING_INTERVAL = 1000;
 const ENVOY_STOP_WAIT_MS = 15_000;
+const INITIAL_SLEEP_TIMEOUT_MS = 250;
 
 // Message ack deadline is 30s on the gateway, but we will ack more frequently
 // in order to minimize the message buffer size on the gateway and to give
@@ -293,6 +294,13 @@ export class EngineActorDriver implements ActorDriver {
 
 	// No database overrides - will use KV-backed implementation from rivetkit/db
 
+	getInitialSleepTimeoutMs(
+		_actor: AnyActorInstance,
+		defaultTimeoutMs: number,
+	): number {
+		return Math.max(defaultTimeoutMs, INITIAL_SLEEP_TIMEOUT_MS);
+	}
+
 	getNativeSqliteConfig() {
 		return {
 			endpoint: getEndpoint(this.#config),
@@ -424,6 +432,8 @@ export class EngineActorDriver implements ActorDriver {
 		});
 
 		await this.#discardCrashedActorState(actorId);
+		this.#actorStopIntent.set(actorId, "crash");
+		this.#envoy.stopActor(actorId, undefined, "simulated hard crash");
 	}
 
 	async shutdown(immediate: boolean): Promise<void> {
@@ -505,6 +515,10 @@ export class EngineActorDriver implements ActorDriver {
 				waitMs: ENVOY_STOP_WAIT_MS,
 			});
 		}
+	}
+
+	async waitForReady(): Promise<void> {
+		await this.#envoy.started();
 	}
 
 	async serverlessHandleStart(c: HonoContext): Promise<Response> {
@@ -925,6 +939,7 @@ export class EngineActorDriver implements ActorDriver {
 				requestIdBuf,
 				isHibernatable,
 				isRestoringHibernatable,
+				true,
 			);
 		} catch (err) {
 			logger().error({ msg: "building websocket handlers errored", err });
@@ -964,11 +979,10 @@ export class EngineActorDriver implements ActorDriver {
 			wsHandler.onRestore?.(wsContext);
 		}
 
-		websocket.addEventListener("open", (event) => {
-			wsHandler.onOpen(event, wsContext);
-		});
-
-		websocket.addEventListener("message", (event: RivetMessageEvent) => {
+		const isRawWebSocketPath =
+			requestPath === PATH_WEBSOCKET_BASE ||
+			requestPath.startsWith(PATH_WEBSOCKET_PREFIX);
+		const handleMessageEvent = (event: RivetMessageEvent) => {
 			logger().debug({
 				msg: "websocket message event listener triggered",
 				connId: conn?.id,
@@ -982,9 +996,6 @@ export class EngineActorDriver implements ActorDriver {
 				eventTargetWsId: (event.target as any)?.__rivet_ws_id,
 			});
 
-			// Check if actor is stopping - if so, don't process new messages.
-			// These messages will be reprocessed when the actor wakes up from hibernation.
-			// TODO: This will never retransmit the socket and the socket will close
 			if (actor?.isStopping) {
 				logger().debug({
 					msg: "ignoring ws message, actor is stopping",
@@ -995,86 +1006,107 @@ export class EngineActorDriver implements ActorDriver {
 				return;
 			}
 
-			// Process message
-			logger().debug({
-				msg: "calling wsHandler.onMessage",
-				connId: conn?.id,
-				messageIndex: event.rivetMessageIndex,
-			});
-			wsHandler.onMessage(event, wsContext);
-
-			// Persist message index for hibernatable connections
-			const hibernate = connStateManager?.hibernatableData;
-
-			if (hibernate && conn && actor) {
-				invariant(
-					typeof event.rivetMessageIndex === "number",
-					"missing event.rivetMessageIndex",
-				);
-
-				// Persist message index
-				const previousMsgIndex = hibernate.serverMessageIndex;
-				hibernate.serverMessageIndex = event.rivetMessageIndex;
-				logger().info({
-					msg: "persisting message index",
-					connId: conn.id,
-					previousMsgIndex,
-					newMsgIndex: event.rivetMessageIndex,
+			const run = async () => {
+				logger().debug({
+					msg: "calling wsHandler.onMessage",
+					connId: conn?.id,
+					messageIndex: event.rivetMessageIndex,
 				});
+				wsHandler.onMessage(event, wsContext);
 
-				// Calculate message size and track cumulative size
-				const entry = this.#hwsMessageIndex.get(conn.id);
-				if (entry) {
-					// Track message length
-					const messageLength = getValueLength(event.data);
-					entry.bufferedMessageSize += messageLength;
+				const hibernate = connStateManager?.hibernatableData;
 
-					if (
-						entry.bufferedMessageSize >=
-						CONN_BUFFERED_MESSAGE_SIZE_THRESHOLD
-					) {
-						// Reset buffered message size immediately (instead
-						// of waiting for onAfterPersistConn) since we may
-						// receive more messages before onAfterPersistConn
-						// is called, which would called saveState
-						// immediate multiple times
-						entry.bufferedMessageSize = 0;
-						entry.pendingAckFromBufferSize = true;
+				if (hibernate && conn && actor) {
+					invariant(
+						typeof event.rivetMessageIndex === "number",
+						"missing event.rivetMessageIndex",
+					);
 
-						// Save state immediately if approaching buffer threshold
-						actor.stateManager.saveState({
-							immediate: true,
-						});
+					const previousMsgIndex = hibernate.serverMessageIndex;
+					hibernate.serverMessageIndex = event.rivetMessageIndex;
+					logger().info({
+						msg: "persisting message index",
+						connId: conn.id,
+						previousMsgIndex,
+						newMsgIndex: event.rivetMessageIndex,
+					});
+
+					const entry = this.#hwsMessageIndex.get(conn.id);
+					if (entry) {
+						const messageLength = getValueLength(event.data);
+						entry.bufferedMessageSize += messageLength;
+
+						if (
+							entry.bufferedMessageSize >=
+							CONN_BUFFERED_MESSAGE_SIZE_THRESHOLD
+						) {
+							entry.bufferedMessageSize = 0;
+							entry.pendingAckFromBufferSize = true;
+
+							actor.stateManager.saveState({
+								immediate: true,
+							});
+						} else {
+							actor.stateManager.saveState({
+								maxWait: CONN_MESSAGE_ACK_DEADLINE,
+							});
+						}
 					} else {
-						// Save message index. The maxWait is set to the ack deadline
-						// since we ack the message immediately after persisting the index.
-						// If cumulative size exceeds threshold, force immediate persist.
-						//
-						// This will call EngineActorDriver.onAfterPersistConn after
-						// persist to send the ack to the gateway.
 						actor.stateManager.saveState({
 							maxWait: CONN_MESSAGE_ACK_DEADLINE,
 						});
 					}
-				} else {
-					// Fallback if entry missing
-					actor.stateManager.saveState({
-						maxWait: CONN_MESSAGE_ACK_DEADLINE,
-					});
 				}
+			};
+
+			if (isRawWebSocketPath && actor) {
+				void actor.internalKeepAwake(run);
+			} else {
+				void run();
 			}
+		};
+		const attachMessageListener = () => {
+			websocket.addEventListener("message", handleMessageEvent);
+		};
+		let postOpenListenersAttached = false;
+		const attachPostOpenListeners = () => {
+			if (postOpenListenersAttached) {
+				return;
+			}
+			postOpenListenersAttached = true;
+
+			if (!isRawWebSocketPath) {
+				attachMessageListener();
+			}
+
+			websocket.addEventListener("close", (event) => {
+				if (isRawWebSocketPath && actor) {
+					void actor.internalKeepAwake(async () => {
+						await Promise.resolve();
+						wsHandler.onClose(event, wsContext);
+					});
+				} else {
+					wsHandler.onClose(event, wsContext);
+				}
+			});
+
+			websocket.addEventListener("error", (event) => {
+				wsHandler.onError(event, wsContext);
+			});
+		};
+
+		websocket.addEventListener("open", (event) => {
+			if (isRawWebSocketPath) {
+				attachMessageListener();
+			}
+			wsHandler.onOpen(event, wsContext);
+
+			attachPostOpenListeners();
 		});
 
-		websocket.addEventListener("close", (event) => {
-			wsHandler.onClose(event, wsContext);
-
-			// NOTE: Persisted connection is removed when `conn.disconnect`
-			// is called by the WebSocket route
-		});
-
-		websocket.addEventListener("error", (event) => {
-			wsHandler.onError(event, wsContext);
-		});
+		if (!isRawWebSocketPath) {
+			attachPostOpenListeners();
+		}
 
 		// Log event listener attachment for restored connections
 		if (isRestoringHibernatable) {

@@ -24,7 +24,7 @@ import { AsyncMutex } from "./shared";
 // which may not be installed or compiled.
 
 /** Typed bind parameter matching the Rust BindParam napi struct. */
-interface NativeBindParam {
+export interface NativeBindParam {
 	kind: "null" | "int" | "float" | "text" | "blob";
 	intValue?: number;
 	floatValue?: number;
@@ -32,7 +32,7 @@ interface NativeBindParam {
 	blobValue?: Buffer;
 }
 
-interface NativeSqliteModule {
+export interface NativeSqliteModule {
 	connect(config: {
 		url: string;
 		token?: string;
@@ -81,8 +81,8 @@ export interface KvChannelMetricsSnapshot {
 }
 
 // Opaque handles from the native addon.
-type NativeKvChannel = object;
-type NativeDatabase = object;
+export type NativeKvChannel = object;
+export type NativeDatabase = object;
 
 // Cached detection result.
 let nativeModule: NativeSqliteModule | null = null;
@@ -153,7 +153,7 @@ export function nativeSqliteAvailable(): boolean {
  * Returns the loaded native module. Only valid after nativeSqliteAvailable()
  * returns true.
  */
-function getNativeModule(): NativeSqliteModule {
+export function getNativeModule(): NativeSqliteModule {
 	if (!nativeModule) {
 		throw new Error("native SQLite module not loaded");
 	}
@@ -226,7 +226,9 @@ function getKvChannelConfig(config?: NativeSqliteConfig) {
 	};
 }
 
-function getOrCreateKvChannel(config?: NativeSqliteConfig): NativeKvChannel {
+export function getOrCreateKvChannel(
+	config?: NativeSqliteConfig,
+): NativeKvChannel {
 	const mod = getNativeModule();
 	const channelConfig = getKvChannelConfig(config);
 	const existing = kvChannels.get(channelConfig.key);
@@ -244,36 +246,96 @@ function getOrCreateKvChannel(config?: NativeSqliteConfig): NativeKvChannel {
 	return channel;
 }
 
+function toNativeBinding(arg: unknown): NativeBindParam {
+	if (arg === null || arg === undefined) {
+		return { kind: "null" };
+	}
+	if (typeof arg === "bigint") {
+		return { kind: "int", intValue: Number(arg) };
+	}
+	if (typeof arg === "number") {
+		if (Number.isInteger(arg)) {
+			return { kind: "int", intValue: arg };
+		}
+		return { kind: "float", floatValue: arg };
+	}
+	if (typeof arg === "string") {
+		return { kind: "text", textValue: arg };
+	}
+	if (typeof arg === "boolean") {
+		return { kind: "int", intValue: arg ? 1 : 0 };
+	}
+	if (arg instanceof Uint8Array) {
+		return { kind: "blob", blobValue: Buffer.from(arg) };
+	}
+	throw new Error(`unsupported bind parameter type: ${typeof arg}`);
+}
+
 /**
  * Convert binding values to typed BindParam objects for the native addon.
  * Uses Buffer for blobs instead of JSON arrays to avoid 20x serialization
  * overhead. See docs-internal/engine/NATIVE_SQLITE_REVIEW_FIXES.md M7.
  */
-function toNativeBindings(args: unknown[]): NativeBindParam[] {
+export function toNativeBindings(args: unknown[]): NativeBindParam[] {
 	return args.map((arg): NativeBindParam => {
-		if (arg === null || arg === undefined) {
-			return { kind: "null" };
-		}
-		if (typeof arg === "bigint") {
-			return { kind: "int", intValue: Number(arg) };
-		}
-		if (typeof arg === "number") {
-			if (Number.isInteger(arg)) {
-				return { kind: "int", intValue: arg };
-			}
-			return { kind: "float", floatValue: arg };
-		}
-		if (typeof arg === "string") {
-			return { kind: "text", textValue: arg };
-		}
-		if (typeof arg === "boolean") {
-			return { kind: "int", intValue: arg ? 1 : 0 };
-		}
-		if (arg instanceof Uint8Array) {
-			return { kind: "blob", blobValue: Buffer.from(arg) };
-		}
-		throw new Error(`unsupported bind parameter type: ${typeof arg}`);
+		return toNativeBinding(arg);
 	});
+}
+
+function toNativeNamedBindings(
+	sql: string,
+	bindings: Record<string, unknown>,
+): NativeBindParam[] {
+	const orderedNames = extractNamedSqliteParameters(sql);
+	if (orderedNames.length === 0) {
+		return toNativeBindings(Object.values(bindings));
+	}
+
+	return orderedNames.map((name) => {
+		const value = getNamedSqliteBinding(bindings, name);
+		if (value === undefined) {
+			throw new Error(`missing bind parameter: ${name}`);
+		}
+		return toNativeBinding(value);
+	});
+}
+
+function extractNamedSqliteParameters(sql: string): string[] {
+	const orderedNames: string[] = [];
+	const seen = new Set<string>();
+	const pattern = /([:@$][A-Za-z_][A-Za-z0-9_]*)/g;
+	for (const match of sql.matchAll(pattern)) {
+		const name = match[1];
+		if (seen.has(name)) {
+			continue;
+		}
+		seen.add(name);
+		orderedNames.push(name);
+	}
+	return orderedNames;
+}
+
+function getNamedSqliteBinding(
+	bindings: Record<string, unknown>,
+	name: string,
+): unknown {
+	if (name in bindings) {
+		return bindings[name];
+	}
+
+	const bareName = name.slice(1);
+	if (bareName in bindings) {
+		return bindings[bareName];
+	}
+
+	for (const prefix of [":", "@", "$"] as const) {
+		const candidate = `${prefix}${bareName}`;
+		if (candidate in bindings) {
+			return bindings[candidate];
+		}
+	}
+
+	return undefined;
 }
 
 /**
@@ -294,18 +356,39 @@ export function getKvChannelMetrics(): KvChannelMetricsSnapshot | undefined {
  */
 export async function disconnectKvChannelForCurrentConfig(
 	config?: NativeSqliteConfig,
+): Promise<number> {
+	if (!nativeModule) {
+		return 0;
+	}
+
+	const { key } = getKvChannelConfig(config);
+	const channel = kvChannels.get(key);
+	if (!channel) {
+		return 0;
+	}
+
+	kvChannels.delete(key);
+	await nativeModule.disconnect(channel);
+	return 1;
+}
+
+/**
+ * Disconnect a specific KV channel instance and only clear the cached entry
+ * if it still points at that same channel.
+ */
+export async function disconnectKvChannelIfCurrent(
+	channel: NativeKvChannel,
+	config?: NativeSqliteConfig,
 ): Promise<void> {
 	if (!nativeModule) {
 		return;
 	}
 
 	const { key } = getKvChannelConfig(config);
-	const channel = kvChannels.get(key);
-	if (!channel) {
-		return;
+	if (kvChannels.get(key) === channel) {
+		kvChannels.delete(key);
 	}
 
-	kvChannels.delete(key);
 	await nativeModule.disconnect(channel);
 }
 
@@ -346,7 +429,17 @@ export async function createNativeRawAccess(
 					// The native addon validates binding types in Rust
 					// (bind_params). Convert bigint/Uint8Array to
 					// JSON-compatible representations.
-					const bindings = toNativeBindings(args);
+					const bindings =
+						args.length === 1 &&
+						args[0] !== null &&
+						typeof args[0] === "object" &&
+						!Array.isArray(args[0]) &&
+						!(args[0] instanceof Uint8Array)
+							? toNativeNamedBindings(
+									query,
+									args[0] as Record<string, unknown>,
+								)
+							: toNativeBindings(args);
 					const token = query
 						.trimStart()
 						.slice(0, 16)
