@@ -231,7 +231,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					pool_name: input.runner_name_selector.clone(),
 					key: input.key.clone(),
 					namespace_id: input.namespace_id,
-					crash_policy: input.crash_policy,
 					input: input.input.clone(),
 					from_v1: true,
 				})
@@ -867,7 +866,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 			pool_name: input.runner_name_selector.clone(),
 			key: input.key.clone(),
 			namespace_id: input.namespace_id,
-			crash_policy: input.crash_policy,
 			input: input.input.clone(),
 			from_v1: true,
 		})

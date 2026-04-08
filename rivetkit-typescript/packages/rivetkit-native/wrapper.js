@@ -123,6 +123,7 @@ function startEnvoySync(config) {
 			poolName: config.poolName,
 			version: config.version,
 			metadata: config.metadata || null,
+			notGlobal: config.notGlobal,
 		},
 		(event) => {
 			handleEvent(event, config, wrappedHandle);

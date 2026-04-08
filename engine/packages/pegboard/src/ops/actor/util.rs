@@ -1,6 +1,6 @@
 use gas::db::WorkflowData;
 use gas::prelude::*;
-use rivet_types::actors::Actor;
+use rivet_types::actors::{Actor, CrashPolicy};
 use std::collections::{HashMap, HashSet};
 
 use crate::workflows::actor::FailureReason as WorkflowFailureReason;
@@ -212,7 +212,7 @@ pub async fn build_actors_from_workflows(
 				namespace_id: s.namespace_id,
 				datacenter: dc_name.to_string(),
 				runner_name_selector: s.pool_name,
-				crash_policy: s.crash_policy,
+				crash_policy: CrashPolicy::Sleep,
 
 				create_ts: s.create_ts,
 				start_ts: s.start_ts,

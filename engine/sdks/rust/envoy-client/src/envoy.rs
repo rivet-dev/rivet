@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use rivet_envoy_protocol as protocol;
 use tokio::sync::mpsc;
@@ -21,6 +22,8 @@ use crate::tunnel::{
 	send_hibernatable_ws_message_ack,
 };
 use crate::utils::{BufferMap, EnvoyShutdownError};
+
+static GLOBAL_ENVOY: OnceLock<EnvoyHandle> = OnceLock::new();
 
 pub struct EnvoyContext {
 	pub shared: Arc<SharedContext>,
@@ -135,14 +138,20 @@ pub async fn start_envoy(config: EnvoyConfig) -> EnvoyHandle {
 }
 
 pub fn start_envoy_sync(config: EnvoyConfig) -> EnvoyHandle {
+	if config.not_global {
+		start_envoy_sync_inner(config)
+	} else {
+		GLOBAL_ENVOY
+			.get_or_init(|| start_envoy_sync_inner(config))
+			.clone()
+	}
+}
+
+fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 	let (envoy_tx, envoy_rx) = mpsc::unbounded_channel::<ToEnvoyMessage>();
-	let (start_tx, start_rx) = tokio::sync::watch::channel(false);
+	let (start_tx, start_rx) = tokio::sync::watch::channel(());
 
-	let envoy_key = config
-		.envoy_key
-		.clone()
-		.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-
+	let envoy_key = uuid::Uuid::new_v4().to_string();
 	let shared = Arc::new(SharedContext {
 		config,
 		envoy_key,
@@ -156,6 +165,13 @@ pub fn start_envoy_sync(config: EnvoyConfig) -> EnvoyHandle {
 		shared: shared.clone(),
 		started_rx: start_rx,
 	};
+
+	// Start signal handler
+	let handle2 = handle.clone();
+	tokio::spawn(async move {
+		let _ = tokio::signal::ctrl_c().await;
+		handle2.shutdown(false);
+	});
 
 	start_connection(shared.clone());
 
@@ -179,7 +195,7 @@ pub fn start_envoy_sync(config: EnvoyConfig) -> EnvoyHandle {
 async fn envoy_loop(
 	mut ctx: EnvoyContext,
 	mut rx: mpsc::UnboundedReceiver<ToEnvoyMessage>,
-	start_tx: tokio::sync::watch::Sender<bool>,
+	start_tx: tokio::sync::watch::Sender<()>,
 ) {
 	let mut ack_interval =
 		tokio::time::interval(std::time::Duration::from_millis(ACK_COMMANDS_INTERVAL_MS));
@@ -313,7 +329,7 @@ async fn envoy_loop(
 
 async fn handle_conn_message(
 	ctx: &mut EnvoyContext,
-	start_tx: &tokio::sync::watch::Sender<bool>,
+	start_tx: &tokio::sync::watch::Sender<()>,
 	mut lost_timeout: Option<std::pin::Pin<Box<tokio::time::Sleep>>>,
 	message: protocol::ToEnvoy,
 ) -> Option<std::pin::Pin<Box<tokio::time::Sleep>>> {
@@ -330,7 +346,7 @@ async fn handle_conn_message(
 			process_unsent_kv_requests(ctx).await;
 			resend_buffered_tunnel_messages(ctx).await;
 
-			let _ = start_tx.send(true);
+			let _ = start_tx.send(());
 		}
 		protocol::ToEnvoy::ToEnvoyCommands(commands) => {
 			handle_commands(ctx, commands).await;

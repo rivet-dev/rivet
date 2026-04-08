@@ -10,7 +10,7 @@ use crate::tunnel::HibernatingWebSocketMetadata;
 #[derive(Clone)]
 pub struct EnvoyHandle {
 	pub(crate) shared: Arc<SharedContext>,
-	pub(crate) started_rx: tokio::sync::watch::Receiver<bool>,
+	pub(crate) started_rx: tokio::sync::watch::Receiver<()>,
 }
 
 impl EnvoyHandle {
@@ -31,12 +31,7 @@ impl EnvoyHandle {
 	}
 
 	pub async fn started(&self) {
-		let mut rx = self.started_rx.clone();
-		while !*rx.borrow_and_update() {
-			if rx.changed().await.is_err() {
-				break;
-			}
-		}
+		let _ = self.started_rx.clone().changed().await;
 	}
 
 	pub fn sleep_actor(&self, actor_id: String, generation: Option<u32>) {
