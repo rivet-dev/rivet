@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { attemptAsync } from "es-toolkit";
 import { motion } from "framer-motion";
+import { useState } from "react";
 import {
 	EmailField,
 	Form,
@@ -26,17 +27,35 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { TurnstileWidget } from "@/components/ui/turnstile";
 import { authClient, redirectToOrganization } from "@/lib/auth";
+import { cloudEnv } from "@/lib/env";
+import { features } from "@/lib/features";
 
 export function SignUp() {
 	const navigate = useNavigate();
 	const from = useSearch({ strict: false, select: (s) => s?.from as string });
+	const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
 	const handleSubmit: SubmitHandler = async (
 		{ name, email, password },
 		form,
 	) => {
-		const result = await authClient.signUp.email({ email, password, name });
+		if (features.captcha && !turnstileToken) {
+			form.setError("root", {
+				message: "Captcha verification is still loading, please try again",
+			});
+			return;
+		}
+
+		const result = await authClient.signUp.email(
+			{ email, password, name },
+			features.captcha && turnstileToken
+				? { headers: { "x-captcha-response": turnstileToken } }
+				: undefined,
+		);
+
+		setTurnstileToken(null);
 
 		if (result.error) {
 			form.setError("root", {
@@ -97,6 +116,14 @@ export function SignUp() {
 						<EmailField />
 						<PasswordField />
 						<RootError />
+						{features.captcha && (
+							<TurnstileWidget
+								siteKey={cloudEnv().VITE_APP_TURNSTILE_SITE_KEY!}
+								onSuccess={setTurnstileToken}
+								onExpire={() => setTurnstileToken(null)}
+								onError={() => setTurnstileToken(null)}
+							/>
+						)}
 					</CardContent>
 					<CardFooter>
 						<div className="grid w-full gap-y-4">
