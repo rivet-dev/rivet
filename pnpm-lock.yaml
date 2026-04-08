@@ -2669,6 +2669,64 @@ importers:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
+  examples/react-render:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^1.14.1
+        version: 1.19.9(hono@4.11.9)
+      '@rivetkit/react':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/react
+      '@tailwindcss/postcss':
+        specifier: ^4.2.2
+        version: 4.2.2
+      '@tailwindcss/typography':
+        specifier: ^0.5.19
+        version: 0.5.19(tailwindcss@4.2.2)
+      hono:
+        specifier: ^4.7.7
+        version: 4.11.9
+      react:
+        specifier: 19.1.0
+        version: 19.1.0
+      react-dom:
+        specifier: 19.1.0
+        version: 19.1.0(react@19.1.0)
+      render-dds:
+        specifier: github:R4ph-t/DDS#v0.8.6
+        version: https://codeload.github.com/R4ph-t/DDS/tar.gz/9d48aa53aff50f4a1994920d07a706d1b7d9f0b1(@tailwindcss/typography@0.5.19(tailwindcss@4.2.2))(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(tailwindcss@4.2.2)
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+      tailwindcss:
+        specifier: ^4.2.2
+        version: 4.2.2
+      tsx:
+        specifier: ^4.19.0
+        version: 4.21.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.15
+      '@types/react':
+        specifier: ^19
+        version: 19.2.13
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.2.3(@types/react@19.2.13)
+      '@vitejs/plugin-react':
+        specifier: ^4.2.0
+        version: 4.7.0(vite@5.4.21(@types/node@22.19.15)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+      concurrently:
+        specifier: ^9.1.2
+        version: 9.2.1
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+      vite:
+        specifier: ^5.0.0
+        version: 5.4.21(@types/node@22.19.15)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
+
   examples/react-vercel:
     dependencies:
       '@hono/node-server':
