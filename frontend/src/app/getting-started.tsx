@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
+import { features } from "@/lib/features";
 import {
 	AccordionItem,
 	AccordionTrigger,
@@ -264,7 +265,7 @@ export function GettingStarted({
 									}
 
 									await Promise.all([
-										...(__APP_TYPE__ === "cloud"
+										...(features.auth
 											? [
 													queryClient.prefetchQuery(
 														dataProvider.publishableTokenQueryOptions(),

@@ -14,6 +14,7 @@ import { getConfig, ls } from "@/components";
 import type { ActorId } from "@/components/actors";
 import { engineEnv } from "@/lib/env";
 import { convertStringToId } from "@/lib/utils";
+import { features } from "@/lib/features";
 import { noThrow, shouldRetryAllExpect403 } from "@/queries/utils";
 import {
 	type ActorQueryOptions,
@@ -22,7 +23,7 @@ import {
 	RECORDS_PER_PAGE,
 } from "./default-data-provider";
 
-const mightRequireAuth = __APP_TYPE__ === "engine";
+const mightRequireAuth = !features.auth;
 
 export type CreateNamespace = {
 	displayName: string;
