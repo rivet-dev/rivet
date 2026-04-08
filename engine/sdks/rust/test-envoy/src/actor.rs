@@ -1,0 +1,343 @@
+use anyhow::Result;
+use async_trait::async_trait;
+use rivet_envoy_protocol as protocol;
+use rivet_runner_protocol::mk2 as runner_protocol;
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot};
+
+use crate::utils;
+
+/// Configuration passed to actor when it starts
+#[derive(Clone)]
+pub struct ActorConfig {
+	pub actor_id: String,
+	pub generation: u32,
+	pub name: String,
+	pub key: Option<String>,
+	pub create_ts: i64,
+	pub input: Option<Vec<u8>>,
+
+	/// Channel to send events to the runner
+	pub event_tx: mpsc::UnboundedSender<ActorEvent>,
+
+	/// Channel to send KV requests to the runner
+	pub kv_request_tx: mpsc::UnboundedSender<KvRequest>,
+}
+
+impl ActorConfig {
+	pub fn new(
+		config: &protocol::ActorConfig,
+		actor_id: String,
+		generation: u32,
+		event_tx: mpsc::UnboundedSender<ActorEvent>,
+		kv_request_tx: mpsc::UnboundedSender<KvRequest>,
+	) -> Self {
+		ActorConfig {
+			actor_id,
+			generation,
+			name: config.name.clone(),
+			key: config.key.clone(),
+			create_ts: config.create_ts,
+			input: config.input.as_ref().map(|i| i.to_vec()),
+			event_tx,
+			kv_request_tx,
+		}
+	}
+}
+
+impl ActorConfig {
+	/// Converts compatible KV list queries into the envoy protocol shape.
+	fn convert_kv_list_query(query: impl IntoEnvoyKvListQuery) -> protocol::KvListQuery {
+		query.into_envoy_kv_list_query()
+	}
+
+	/// Send a sleep intent
+	pub fn send_sleep_intent(&self) {
+		let event = utils::make_actor_intent(protocol::ActorIntent::ActorIntentSleep);
+		self.send_event(event);
+	}
+
+	/// Send a stop intent
+	pub fn send_stop_intent(&self) {
+		let event = utils::make_actor_intent(protocol::ActorIntent::ActorIntentStop);
+		self.send_event(event);
+	}
+
+	/// Set an alarm to wake at specified timestamp (milliseconds)
+	pub fn send_set_alarm(&self, alarm_ts: i64) {
+		let event = utils::make_set_alarm(Some(alarm_ts));
+		self.send_event(event);
+	}
+
+	/// Clear the alarm
+	pub fn send_clear_alarm(&self) {
+		let event = utils::make_set_alarm(None);
+		self.send_event(event);
+	}
+
+	/// Send a custom event
+	fn send_event(&self, event: protocol::Event) {
+		let actor_event = ActorEvent {
+			actor_id: self.actor_id.clone(),
+			generation: self.generation,
+			event,
+		};
+		let _ = self.event_tx.send(actor_event);
+	}
+
+	/// Send a KV get request
+	pub async fn send_kv_get(&self, keys: Vec<Vec<u8>>) -> Result<protocol::KvGetResponse> {
+		let (response_tx, response_rx) = oneshot::channel();
+		let request = KvRequest {
+			actor_id: self.actor_id.clone(),
+			data: protocol::KvRequestData::KvGetRequest(protocol::KvGetRequest { keys }),
+			response_tx,
+		};
+		self.kv_request_tx
+			.send(request)
+			.map_err(|_| anyhow::anyhow!("failed to send KV get request"))?;
+		let response: protocol::KvResponseData = response_rx
+			.await
+			.map_err(|_| anyhow::anyhow!("KV get request response channel closed"))?;
+
+		match response {
+			protocol::KvResponseData::KvGetResponse(data) => Ok(data),
+			protocol::KvResponseData::KvErrorResponse(err) => {
+				Err(anyhow::anyhow!("KV get failed: {}", err.message))
+			}
+			_ => Err(anyhow::anyhow!("unexpected response type for KV get")),
+		}
+	}
+
+	/// Send a KV list request
+	pub async fn send_kv_list(
+		&self,
+		query: impl IntoEnvoyKvListQuery,
+		reverse: Option<bool>,
+		limit: Option<u64>,
+	) -> Result<protocol::KvListResponse> {
+		let (response_tx, response_rx) = oneshot::channel();
+		let request = KvRequest {
+			actor_id: self.actor_id.clone(),
+			data: protocol::KvRequestData::KvListRequest(protocol::KvListRequest {
+				query: Self::convert_kv_list_query(query),
+				reverse,
+				limit,
+			}),
+			response_tx,
+		};
+		self.kv_request_tx
+			.send(request)
+			.map_err(|_| anyhow::anyhow!("failed to send KV list request"))?;
+		let response: protocol::KvResponseData = response_rx
+			.await
+			.map_err(|_| anyhow::anyhow!("KV list request response channel closed"))?;
+
+		match response {
+			protocol::KvResponseData::KvListResponse(data) => Ok(data),
+			protocol::KvResponseData::KvErrorResponse(err) => {
+				Err(anyhow::anyhow!("KV list failed: {}", err.message))
+			}
+			_ => Err(anyhow::anyhow!("unexpected response type for KV list")),
+		}
+	}
+
+	/// Send a KV put request
+	pub async fn send_kv_put(&self, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<()> {
+		let (response_tx, response_rx) = oneshot::channel();
+		let request = KvRequest {
+			actor_id: self.actor_id.clone(),
+			data: protocol::KvRequestData::KvPutRequest(protocol::KvPutRequest { keys, values }),
+			response_tx,
+		};
+
+		self.kv_request_tx
+			.send(request)
+			.map_err(|_| anyhow::anyhow!("failed to send KV put request"))?;
+
+		let response: protocol::KvResponseData = response_rx
+			.await
+			.map_err(|_| anyhow::anyhow!("KV put request response channel closed"))?;
+
+		match response {
+			protocol::KvResponseData::KvPutResponse => Ok(()),
+			protocol::KvResponseData::KvErrorResponse(err) => {
+				Err(anyhow::anyhow!("KV put failed: {}", err.message))
+			}
+			_ => Err(anyhow::anyhow!("unexpected response type for KV put")),
+		}
+	}
+
+	/// Send a KV delete request
+	pub async fn send_kv_delete(&self, keys: Vec<Vec<u8>>) -> Result<()> {
+		let (response_tx, response_rx) = oneshot::channel();
+		let request = KvRequest {
+			actor_id: self.actor_id.clone(),
+			data: protocol::KvRequestData::KvDeleteRequest(protocol::KvDeleteRequest { keys }),
+			response_tx,
+		};
+		self.kv_request_tx
+			.send(request)
+			.map_err(|_| anyhow::anyhow!("failed to send KV delete request"))?;
+		let response: protocol::KvResponseData = response_rx
+			.await
+			.map_err(|_| anyhow::anyhow!("KV delete request response channel closed"))?;
+
+		match response {
+			protocol::KvResponseData::KvDeleteResponse => Ok(()),
+			protocol::KvResponseData::KvErrorResponse(err) => {
+				Err(anyhow::anyhow!("KV delete failed: {}", err.message))
+			}
+			_ => Err(anyhow::anyhow!("unexpected response type for KV delete")),
+		}
+	}
+
+	/// Send a KV delete range request.
+	pub async fn send_kv_delete_range(&self, start: Vec<u8>, end: Vec<u8>) -> Result<()> {
+		let (response_tx, response_rx) = oneshot::channel();
+		let request = KvRequest {
+			actor_id: self.actor_id.clone(),
+			data: protocol::KvRequestData::KvDeleteRangeRequest(protocol::KvDeleteRangeRequest {
+				start,
+				end,
+			}),
+			response_tx,
+		};
+		self.kv_request_tx
+			.send(request)
+			.map_err(|_| anyhow::anyhow!("failed to send KV delete range request"))?;
+		let response: protocol::KvResponseData = response_rx
+			.await
+			.map_err(|_| anyhow::anyhow!("KV delete range request response channel closed"))?;
+
+		match response {
+			protocol::KvResponseData::KvDeleteResponse => Ok(()),
+			protocol::KvResponseData::KvErrorResponse(err) => {
+				Err(anyhow::anyhow!("KV delete range failed: {}", err.message))
+			}
+			_ => Err(anyhow::anyhow!(
+				"unexpected response type for KV delete range"
+			)),
+		}
+	}
+
+	/// Send a KV drop request
+	pub async fn send_kv_drop(&self) -> Result<()> {
+		let (response_tx, response_rx) = oneshot::channel();
+		let request = KvRequest {
+			actor_id: self.actor_id.clone(),
+			data: protocol::KvRequestData::KvDropRequest,
+			response_tx,
+		};
+		self.kv_request_tx
+			.send(request)
+			.map_err(|_| anyhow::anyhow!("failed to send KV drop request"))?;
+		let response: protocol::KvResponseData = response_rx
+			.await
+			.map_err(|_| anyhow::anyhow!("KV drop request response channel closed"))?;
+
+		match response {
+			protocol::KvResponseData::KvDropResponse => Ok(()),
+			protocol::KvResponseData::KvErrorResponse(err) => {
+				Err(anyhow::anyhow!("KV drop failed: {}", err.message))
+			}
+			_ => Err(anyhow::anyhow!("unexpected response type for KV drop")),
+		}
+	}
+}
+
+pub trait IntoEnvoyKvListQuery {
+	fn into_envoy_kv_list_query(self) -> protocol::KvListQuery;
+}
+
+impl IntoEnvoyKvListQuery for protocol::KvListQuery {
+	fn into_envoy_kv_list_query(self) -> protocol::KvListQuery {
+		self
+	}
+}
+
+impl IntoEnvoyKvListQuery for runner_protocol::KvListQuery {
+	fn into_envoy_kv_list_query(self) -> protocol::KvListQuery {
+		match self {
+			runner_protocol::KvListQuery::KvListAllQuery => protocol::KvListQuery::KvListAllQuery,
+			runner_protocol::KvListQuery::KvListPrefixQuery(prefix) => {
+				protocol::KvListQuery::KvListPrefixQuery(protocol::KvListPrefixQuery {
+					key: prefix.key,
+				})
+			}
+			runner_protocol::KvListQuery::KvListRangeQuery(range) => {
+				protocol::KvListQuery::KvListRangeQuery(protocol::KvListRangeQuery {
+					start: range.start,
+					end: range.end,
+					exclusive: range.exclusive,
+				})
+			}
+		}
+	}
+}
+
+/// Result of actor start operation
+#[derive(Debug, Clone)]
+pub enum ActorStartResult {
+	/// Send ActorStateRunning immediately
+	Running,
+	/// Wait specified duration before sending running
+	Delay(Duration),
+	/// Never send running (simulates timeout)
+	Timeout,
+	/// Crash immediately with exit code
+	Crash { code: i32, message: String },
+}
+
+/// Result of actor stop operation
+#[derive(Debug, Clone)]
+pub enum ActorStopResult {
+	/// Stop successfully (exit code 0)
+	Success,
+	/// Wait before stopping
+	Delay(Duration),
+	/// Crash with exit code
+	Crash { code: i32, message: String },
+}
+
+/// Trait for test actors that can be controlled programmatically
+#[async_trait]
+pub trait TestActor: Send + Sync {
+	/// Called when actor receives start command
+	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult>;
+
+	/// Called when actor receives stop command
+	async fn on_stop(&mut self) -> Result<ActorStopResult>;
+
+	/// Called when actor receives alarm wake signal
+	async fn on_alarm(&mut self) -> Result<()> {
+		tracing::debug!("actor received alarm (default no-op)");
+		Ok(())
+	}
+
+	/// Called when actor receives wake signal (from sleep)
+	async fn on_wake(&mut self) -> Result<()> {
+		tracing::debug!("actor received wake (default no-op)");
+		Ok(())
+	}
+
+	/// Get actor's name for logging
+	fn name(&self) -> &str {
+		"TestActor"
+	}
+}
+
+/// Events that actors can send directly via the event channel
+#[derive(Debug, Clone)]
+pub struct ActorEvent {
+	pub actor_id: String,
+	pub generation: u32,
+	pub event: protocol::Event,
+}
+
+/// KV requests that actors can send to the runner
+pub struct KvRequest {
+	pub actor_id: String,
+	pub data: protocol::KvRequestData,
+	pub response_tx: oneshot::Sender<protocol::KvResponseData>,
+}

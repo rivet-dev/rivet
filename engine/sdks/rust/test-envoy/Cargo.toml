@@ -1,0 +1,35 @@
+[package]
+name = "rivet-test-envoy"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Rust test envoy process and harness for pegboard actor testing"
+
+[[bin]]
+name = "rivet-test-envoy"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+async-stream.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+hex.workspace = true
+reqwest.workspace = true
+rivet-envoy-protocol.workspace = true
+rivet-runner-protocol.workspace = true
+rivet-util.workspace = true
+serde.workspace = true
+serde_bare.workspace = true
+serde_json.workspace = true
+tokio-stream.workspace = true
+tokio-tungstenite.workspace = true
+tokio.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tracing.workspace = true
+urlencoding.workspace = true
+uuid.workspace = true
+vbare.workspace = true

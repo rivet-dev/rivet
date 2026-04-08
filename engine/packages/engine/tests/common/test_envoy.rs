@@ -1,6 +1,6 @@
-//! Test envoy client wrapper for engine tests.
+//! Test envoy wrapper for engine tests.
 //!
-//! This module provides a `TestEnvoyBuilder` that wraps the standalone `rivet-envoy-client`
+//! This module provides a `TestEnvoyBuilder` that wraps the standalone `rivet-test-envoy`
 //! package, adding test-specific functionality like building from a `TestDatacenter`.
 
 use anyhow::Result;
@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 // Re-export everything from the standalone package
-pub use rivet_envoy_client::{
+pub use rivet_test_envoy::{
 	ActorConfig, ActorEvent, ActorLifecycleEvent, ActorStartResult, ActorStopResult,
 	CountingCrashActor, CrashNTimesThenSucceedActor, CrashOnStartActor, CustomActor,
 	CustomActorBuilder, DelayedStartActor, EchoActor, Envoy, EnvoyBuilder, EnvoyConfig, KvRequest,

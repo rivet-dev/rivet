@@ -10,6 +10,7 @@ import {
 
 async function main() {
 	let actorId;
+	const runnerNameSelector = getRunnerNameSelector();
 
 	try {
 		console.log("Starting actor E2E test...");
@@ -22,7 +23,10 @@ async function main() {
 		// Create an actor
 		console.log("Creating actor...");
 		console.time("actor create");
-		const actorResponse = await createActor(RIVET_NAMESPACE, "test");
+		const actorResponse = await createActor(
+			RIVET_NAMESPACE,
+			runnerNameSelector,
+		);
 		console.timeEnd("actor create");
 		console.log("Actor created:", actorResponse.actor);
 
@@ -75,6 +79,35 @@ async function main() {
 			await destroyActor(RIVET_NAMESPACE, actorId);
 		}
 	}
+}
+
+function getRunnerNameSelector(): string {
+	if (process.env.RUNNER_NAME_SELECTOR) {
+		return process.env.RUNNER_NAME_SELECTOR;
+	}
+
+	const implementation = (
+		process.env.TEST_ENVOY_IMPL ??
+		process.env.ACTOR_E2E_TEST_ENVOY_IMPL ??
+		"rust"
+	).toLowerCase();
+
+	if (implementation === "rust") {
+		return "test-envoy";
+	}
+
+	if (
+		implementation === "typescript" ||
+		implementation === "ts" ||
+		implementation === "node" ||
+		implementation === "napi"
+	) {
+		return "test-envoy-ts";
+	}
+
+	throw new Error(
+		`Unsupported test envoy implementation: ${implementation}. Expected "rust" or "typescript".`,
+	);
 }
 
 function testWebSocket(actorId: string): Promise<void> {

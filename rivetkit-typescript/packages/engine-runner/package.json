@@ -1,0 +1,43 @@
+{
+	"name": "@rivetkit/engine-runner",
+	"version": "2.2.1",
+	"type": "module",
+	"files": [
+		"dist",
+		"src",
+		"package.json"
+	],
+	"exports": {
+		"import": {
+			"types": "./dist/mod.d.ts",
+			"default": "./dist/mod.js"
+		},
+		"require": {
+			"types": "./dist/mod.d.cts",
+			"default": "./dist/mod.cjs"
+		}
+	},
+	"scripts": {
+		"build": "tsup src/mod.ts",
+		"check-types": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"bench": "tsx benches/actor-lifecycle.bench.ts"
+	},
+	"dependencies": {
+		"@rivetkit/virtual-websocket": "workspace:*",
+		"@rivetkit/engine-runner-protocol": "workspace:*",
+		"uuid": "^12.0.0",
+		"pino": "^9.9.5",
+		"ws": "^8.18.3"
+	},
+	"devDependencies": {
+		"@types/node": "^22.18.1",
+		"@types/ws": "^8.18.1",
+		"tinybench": "^5.0.1",
+		"tsup": "^8.5.0",
+		"tsx": "^4.20.5",
+		"typescript": "^5.9.2",
+		"vitest": "^1.6.1"
+	}
+}

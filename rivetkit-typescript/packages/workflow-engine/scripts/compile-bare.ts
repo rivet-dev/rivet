@@ -9,7 +9,7 @@
  * 2. Replace Node.js assert import with a custom assert function
  *
  * IMPORTANT: Keep the post-processing logic in sync with:
- * engine/sdks/rust/runner-protocol/build.rs
+ * engine/packages/runner-protocol/build.rs
  */
 
 import * as fs from "node:fs/promises";
@@ -97,7 +97,7 @@ function assert(condition: boolean, message?: string): asserts condition {
  * 1. Replace @bare-ts/lib import with @rivetkit/bare-ts
  * 2. Replace Node.js assert import with a custom assert function
  *
- * IMPORTANT: Keep this in sync with engine/sdks/rust/runner-protocol/build.rs
+ * IMPORTANT: Keep this in sync with engine/packages/runner-protocol/build.rs
  */
 function postProcess(code: string): string {
 	// Skip if already post-processed

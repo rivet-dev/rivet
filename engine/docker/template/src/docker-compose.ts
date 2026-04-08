@@ -336,14 +336,15 @@ export function generateDockerCompose(context: TemplateContext) {
 			services[serviceName] = {
 				build: {
 					context: "../../..",
-					dockerfile: "engine/sdks/typescript/test-runner/Dockerfile",
+					dockerfile: "engine/sdks/rust/test-envoy/Dockerfile",
 				},
 				platform: "linux/amd64",
 				restart: "unless-stopped",
 				environment: [
 					`RIVET_ENDPOINT=http://${context.getServiceHost("rivet-engine", datacenter.name, 0)}:6420`,
-					`RIVET_RUNNER_TOTAL_SLOTS=1000000`,
-					`AUTOSTART_RUNNER=1`,
+					`INTERNAL_SERVER_PORT=5050`,
+					`RIVET_POOL_NAME=test-envoy`,
+					`AUTOSTART_ENVOY=1`,
 					`AUTOCONFIGURE_SERVERLESS=0`
 				],
 				stop_grace_period: "4s",

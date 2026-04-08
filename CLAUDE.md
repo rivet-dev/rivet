@@ -20,7 +20,7 @@ The `rivet.gg` domain is deprecated and should never be used in this codebase.
 **Never modify an existing published `*.bare` runner protocol version unless explicitly asked to do so.**
 
 - Add a new versioned schema instead, then migrate `versioned.rs` and related compatibility code to bridge old versions forward.
-- When bumping the protocol version, update `PROTOCOL_MK2_VERSION` in `engine/sdks/rust/runner-protocol/src/lib.rs` and `PROTOCOL_VERSION` in `engine/sdks/typescript/runner/src/mod.ts` together. Both must match the latest schema version.
+- When bumping the protocol version, update `PROTOCOL_MK2_VERSION` in `engine/packages/runner-protocol/src/lib.rs` and `PROTOCOL_VERSION` in `rivetkit-typescript/packages/engine-runner/src/mod.ts` together. Both must match the latest schema version.
 
 **Keep the KV API in sync between the runner protocol and the KV channel protocol.**
 
