@@ -750,10 +750,10 @@ impl ProxyService {
 						.body(Full::new(req_body.clone()))
 						.map_err(|err| errors::RequestBuildError(err.to_string()).build())?;
 
-						// Send the request with timeout
-						let res = timeout(timeout_duration, self.state.client.request(proxied_req))
-							.await
-							.map_err(|_| {
+					// Send the request with timeout
+					let res = timeout(timeout_duration, self.state.client.request(proxied_req))
+						.await
+						.map_err(|_| {
 							errors::RequestTimeout {
 								timeout_seconds: timeout_duration.as_secs(),
 							}

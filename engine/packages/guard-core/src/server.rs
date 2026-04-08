@@ -96,9 +96,7 @@ pub async fn run_server(
 		metrics::TCP_CONNECTION_PENDING.inc();
 		metrics::TCP_CONNECTION_TOTAL.inc();
 
-		if tcp_nodelay
-			&& let Err(err) = tcp_stream.set_nodelay(true)
-		{
+		if tcp_nodelay && let Err(err) = tcp_stream.set_nodelay(true) {
 			tracing::debug!(?err, "failed to enable tcp nodelay");
 		}
 

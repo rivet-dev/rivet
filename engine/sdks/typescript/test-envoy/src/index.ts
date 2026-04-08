@@ -182,23 +182,21 @@ app.post("/api/rivet/start", async (c) => {
 	let payload = await c.req.arrayBuffer();
 
 	return streamSSE(c, async (stream) => {
-		const stopped = Promise.withResolvers<ShutdownReason>();
+		c.req.raw.signal.addEventListener("abort", () => {
+			getLogger().debug("SSE aborted");
+		});
+
 		const envoy = startEnvoySync({
 			...config,
-			serverlessStartPayload: payload,
-			onShutdown(reason: ShutdownReason) {
-				stopped.resolve(reason);
-			}
 		});
 
-		c.req.raw.signal.addEventListener("abort", () => {
-			getLogger().debug("SSE aborted, shutting down runner");
-			envoy!.shutdown(true);
-		});
+		envoy.startServerlessActor(payload);
 
-		let reason = await stopped.promise;
-		if (reason === "serverless-early-exit") {
-			stream.writeSSE({ event: "stopping", data: "" });
+		while (true) {
+			if (stream.closed || stream.aborted) break;
+
+			await stream.writeSSE({ event: "ping", data: "" });
+			await stream.sleep(1000);
 		}
 	});
 });
