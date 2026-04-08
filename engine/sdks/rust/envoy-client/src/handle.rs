@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use rivet_envoy_protocol as protocol;
 
-use crate::envoy::{ActorInfo, ToEnvoyMessage};
 use crate::context::SharedContext;
+use crate::envoy::{ActorInfo, ToEnvoyMessage};
 use crate::tunnel::HibernatingWebSocketMetadata;
 
 /// Handle for interacting with the envoy from callbacks.
@@ -66,11 +66,7 @@ impl EnvoyHandle {
 		});
 	}
 
-	pub async fn get_actor(
-		&self,
-		actor_id: &str,
-		generation: Option<u32>,
-	) -> Option<ActorInfo> {
+	pub async fn get_actor(&self, actor_id: &str, generation: Option<u32>) -> Option<ActorInfo> {
 		let (tx, rx) = tokio::sync::oneshot::channel();
 		self.shared
 			.envoy_tx
@@ -253,10 +249,7 @@ impl EnvoyHandle {
 
 	pub async fn kv_drop(&self, actor_id: String) -> anyhow::Result<()> {
 		let response = self
-			.send_kv_request(
-				actor_id,
-				protocol::KvRequestData::KvDropRequest,
-			)
+			.send_kv_request(actor_id, protocol::KvRequestData::KvDropRequest)
 			.await?;
 		match response {
 			protocol::KvResponseData::KvDropResponse => Ok(()),
@@ -306,8 +299,7 @@ impl EnvoyHandle {
 			);
 		}
 
-		let message =
-			crate::protocol::versioned::ToEnvoy::deserialize(&payload[2..], version)?;
+		let message = crate::protocol::versioned::ToEnvoy::deserialize(&payload[2..], version)?;
 
 		let protocol::ToEnvoy::ToEnvoyCommands(ref commands) = message else {
 			anyhow::bail!("invalid serverless payload: expected ToEnvoyCommands");
@@ -348,7 +340,8 @@ impl EnvoyHandle {
 				response_tx: tx,
 			})
 			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
-		rx.await.map_err(|_| anyhow::anyhow!("kv response channel closed"))?
+		rx.await
+			.map_err(|_| anyhow::anyhow!("kv response channel closed"))?
 	}
 }
 

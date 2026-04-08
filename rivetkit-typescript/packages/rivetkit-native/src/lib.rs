@@ -32,7 +32,7 @@ fn init_tracing(log_level: Option<&str>) {
 	});
 }
 
-use crate::bridge_actor::{BridgeCallbacks, ResponseMap};
+use crate::bridge_actor::{BridgeCallbacks, ResponseMap, WsSenderMap};
 use crate::envoy_handle::JsEnvoyHandle;
 use crate::types::JsEnvoyConfig;
 
@@ -52,17 +52,23 @@ pub fn start_envoy_sync_js(
 	let runtime = Arc::new(runtime);
 
 	let response_map: ResponseMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+	let ws_sender_map: WsSenderMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 
 	// Create threadsafe callback for bridging events to JS
-	let tsfn: bridge_actor::EventCallback = event_callback
-		.create_threadsafe_function(0, |ctx: napi::threadsafe_function::ThreadSafeCallContext<serde_json::Value>| {
+	let tsfn: bridge_actor::EventCallback = event_callback.create_threadsafe_function(
+		0,
+		|ctx: napi::threadsafe_function::ThreadSafeCallContext<serde_json::Value>| {
 			let env = ctx.env;
 			let value = env.to_js_value(&ctx.value)?;
 			Ok(vec![value])
-		})?;
+		},
+	)?;
 
-	let callbacks = Arc::new(BridgeCallbacks::new(tsfn.clone(), response_map.clone()));
-	let ws_senders = callbacks.ws_senders.clone();
+	let callbacks = Arc::new(BridgeCallbacks::new(
+		tsfn.clone(),
+		response_map.clone(),
+		ws_sender_map.clone(),
+	));
 
 	let metadata: Option<HashMap<String, String>> = config.metadata.and_then(|v| {
 		if let serde_json::Value::Object(map) = v {
@@ -81,7 +87,6 @@ pub fn start_envoy_sync_js(
 		prepopulate_actor_names: HashMap::new(),
 		metadata,
 		envoy_key: None,
-		auto_restart: false,
 		debug_latency_ms: None,
 		callbacks,
 	};
@@ -89,7 +94,12 @@ pub fn start_envoy_sync_js(
 	let _guard = runtime.enter();
 	let handle = start_envoy_sync(envoy_config);
 
-	Ok(JsEnvoyHandle::new(runtime, handle, response_map, ws_senders))
+	Ok(JsEnvoyHandle::new(
+		runtime,
+		handle,
+		response_map,
+		ws_sender_map,
+	))
 }
 
 /// Start the native envoy client asynchronously.

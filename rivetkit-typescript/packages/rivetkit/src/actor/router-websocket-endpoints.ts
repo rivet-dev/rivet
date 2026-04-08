@@ -180,6 +180,7 @@ export async function routeWebSocket(
 		);
 		createdConn = conn;
 
+
 		// Create handler
 		//
 		// This must call actor.connectionManager.connectConn in onOpen.
@@ -215,8 +216,8 @@ export async function routeWebSocket(
 			onMessage: (_evt: { data: any }, ws: WSContext) => {
 				ws.close(1011, "actor.not_loaded");
 			},
-			onClose: (_event: any, _ws: WSContext) => {},
-			onError: (_error: unknown) => {},
+			onClose: (_event: any, _ws: WSContext) => { },
+			onError: (_error: unknown) => { },
 		};
 	}
 }
@@ -408,7 +409,7 @@ export async function handleRawWebSocket(
 			// this is called synchronously within onOpen.
 			actor.handleRawWebSocket(conn, ws, request);
 		},
-		onMessage: (_evt: any, _wsContext: any) => {},
+		onMessage: (_evt: any, _wsContext: any) => { },
 		onClose: (evt: any, ws: any) => {
 			// Resolve the close promise
 			closePromiseResolvers.resolve();
@@ -422,7 +423,7 @@ export async function handleRawWebSocket(
 				});
 			});
 		},
-		onError: (_error: any, _ws: any) => {},
+		onError: (_error: any, _ws: any) => { },
 	};
 }
 

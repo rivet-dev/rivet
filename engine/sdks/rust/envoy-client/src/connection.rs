@@ -10,7 +10,7 @@ use vbare::OwnedVersionedData;
 use crate::context::{SharedContext, WsTxMessage};
 use crate::envoy::ToEnvoyMessage;
 use crate::stringify::{stringify_to_envoy, stringify_to_rivet};
-use crate::utils::{calculate_backoff, parse_ws_close_reason, BackoffOptions};
+use crate::utils::{BackoffOptions, calculate_backoff, parse_ws_close_reason};
 
 const STABLE_CONNECTION_MS: u64 = 60_000;
 
@@ -29,15 +29,21 @@ async fn connection_loop(shared: Arc<SharedContext>) {
 				if let Some(reason) = &close_reason {
 					if reason.group == "ws" && reason.error == "eviction" {
 						tracing::debug!("connection evicted");
-						let _ = shared.envoy_tx.send(ToEnvoyMessage::ConnClose { evict: true });
+						let _ = shared
+							.envoy_tx
+							.send(ToEnvoyMessage::ConnClose { evict: true });
 						return;
 					}
 				}
-				let _ = shared.envoy_tx.send(ToEnvoyMessage::ConnClose { evict: false });
+				let _ = shared
+					.envoy_tx
+					.send(ToEnvoyMessage::ConnClose { evict: false });
 			}
 			Err(error) => {
 				tracing::error!(?error, "connection failed");
-				let _ = shared.envoy_tx.send(ToEnvoyMessage::ConnClose { evict: false });
+				let _ = shared
+					.envoy_tx
+					.send(ToEnvoyMessage::ConnClose { evict: false });
 			}
 		}
 
@@ -107,17 +113,22 @@ async fn single_connection(
 	}
 
 	// Serialize metadata HashMap to JSON string for the protocol
-	let metadata_json = shared.config.metadata.as_ref().map(|m| {
-		serde_json::to_string(m).unwrap_or_else(|_| "{}".to_string())
-	});
+	let metadata_json = shared
+		.config
+		.metadata
+		.as_ref()
+		.map(|m| serde_json::to_string(m).unwrap_or_else(|_| "{}".to_string()));
 
 	// Send init
-	ws_send(shared, protocol::ToRivet::ToRivetInit(protocol::ToRivetInit {
-		envoy_key: shared.envoy_key.clone(),
-		version: shared.config.version,
-		prepopulate_actor_names: Some(prepopulate_map),
-		metadata: metadata_json,
-	}))
+	ws_send(
+		shared,
+		protocol::ToRivet::ToRivetInit(protocol::ToRivetInit {
+			envoy_key: shared.envoy_key.clone(),
+			version: shared.config.version,
+			prepopulate_actor_names: Some(prepopulate_map),
+			metadata: metadata_json,
+		}),
+	)
 	.await;
 
 	// Spawn write task
@@ -154,8 +165,10 @@ async fn single_connection(
 			Ok(tungstenite::Message::Binary(data)) => {
 				crate::utils::inject_latency(debug_latency_ms).await;
 
-				let decoded =
-					crate::protocol::versioned::ToEnvoy::deserialize(&data, protocol::PROTOCOL_VERSION)?;
+				let decoded = crate::protocol::versioned::ToEnvoy::deserialize(
+					&data,
+					protocol::PROTOCOL_VERSION,
+				)?;
 
 				if tracing::enabled!(tracing::Level::DEBUG) {
 					tracing::debug!(data = stringify_to_envoy(&decoded), "received message");
@@ -223,10 +236,9 @@ pub async fn ws_send(shared: &SharedContext, message: protocol::ToRivet) -> bool
 		return true;
 	};
 
-	let encoded =
-		crate::protocol::versioned::ToRivet::wrap_latest(message)
-			.serialize(protocol::PROTOCOL_VERSION)
-			.expect("failed to encode message");
+	let encoded = crate::protocol::versioned::ToRivet::wrap_latest(message)
+		.serialize(protocol::PROTOCOL_VERSION)
+		.expect("failed to encode message");
 	let _ = tx.send(WsTxMessage::Send(encoded));
 	false
 }

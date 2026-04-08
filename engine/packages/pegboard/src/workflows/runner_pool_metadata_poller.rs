@@ -2,10 +2,7 @@ use std::time::Duration;
 
 use futures_util::FutureExt;
 use gas::prelude::*;
-use rivet_types::{actor::RunnerPoolError, runner_configs::RunnerConfigKind};
-use universaldb::prelude::*;
-
-use crate::{keys, ops::actor_name::upsert_batch::ActorNameEntry};
+use rivet_types::runner_configs::RunnerConfigKind;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
@@ -176,9 +173,13 @@ async fn poll_metadata(ctx: &ActivityCtx, input: &PollMetadataInput) -> Result<P
 	);
 	let backoff_poll_interval = backoff.current_duration() as u64;
 
-	// Fetch metadata using the shared op
 	let result = ctx
-		.op(crate::ops::serverless_metadata::fetch::Input { url, headers })
+		.op(crate::ops::runner_config::refresh_metadata::Input {
+			namespace_id: input.namespace_id,
+			runner_name: input.runner_name.clone(),
+			url,
+			headers,
+		})
 		.await?;
 
 	let metadata = match result {
@@ -199,57 +200,6 @@ async fn poll_metadata(ctx: &ActivityCtx, input: &PollMetadataInput) -> Result<P
 			});
 		}
 	};
-
-	// Save protocol to udb
-	let downgraded = ctx
-		.udb()?
-		.run(|tx| async move {
-			let tx = tx.with_subspace(namespace::keys::subspace());
-
-			let protocol_version_key = keys::runner_config::ProtocolVersionKey::new(
-				input.namespace_id,
-				input.runner_name.clone(),
-			);
-
-			if let Some(protocol_version) = metadata.envoy_protocol_version {
-				tx.write(&protocol_version_key, protocol_version)?;
-
-				Ok(false)
-			} else if tx.exists(&protocol_version_key, Serializable).await? {
-				Ok(true)
-			} else {
-				Ok(false)
-			}
-		})
-		.await?;
-
-	if downgraded {
-		report_error(
-			ctx,
-			input.namespace_id,
-			&input.runner_name,
-			RunnerPoolError::Downgrade,
-		)
-		.await;
-	}
-
-	// Update actor names in DB if present
-	if !metadata.actor_names.is_empty() {
-		let actor_names: Vec<ActorNameEntry> = metadata
-			.actor_names
-			.iter()
-			.map(|a| ActorNameEntry {
-				name: a.name.clone(),
-				metadata: a.metadata.clone(),
-			})
-			.collect();
-
-		ctx.op(crate::ops::actor_name::upsert_batch::Input {
-			namespace_id: input.namespace_id,
-			actor_names,
-		})
-		.await?;
-	}
 
 	// Drain older runners if runner_version is set
 	let older_runner_workflow_ids = if let Some(version) = metadata.runner_version {
@@ -280,27 +230,6 @@ async fn poll_metadata(ctx: &ActivityCtx, input: &PollMetadataInput) -> Result<P
 		poll_interval: base_poll_interval,
 		older_runner_workflow_ids,
 	})
-}
-
-/// Report an error to the error tracker workflow.
-async fn report_error(
-	ctx: &ActivityCtx,
-	namespace_id: Id,
-	pool_name: &str,
-	error: RunnerPoolError,
-) {
-	if let Err(err) = ctx
-		.signal(crate::workflows::runner_pool_error_tracker::ReportError { error })
-		.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
-		.to_workflow::<crate::workflows::runner_pool_error_tracker::Workflow>()
-		.tag("namespace_id", namespace_id)
-		.tag("runner_name", pool_name)
-		.graceful_not_found()
-		.send()
-		.await
-	{
-		tracing::warn!(?err, "failed to report serverless error");
-	}
 }
 
 #[signal("pegboard_runner_pool_metadata_poller_endpoint_config_changed")]

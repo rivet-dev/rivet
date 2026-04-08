@@ -1,5 +1,4 @@
 pub mod actor;
-pub mod actor_name;
 pub mod envoy;
 pub mod runner;
 pub mod runner_config;

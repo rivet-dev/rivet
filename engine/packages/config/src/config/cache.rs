@@ -5,14 +5,22 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Cache {
-	pub driver: CacheDriver,
+	pub enabled: bool,
+	pub driver: Option<CacheDriver>,
 }
 
 impl Default for Cache {
 	fn default() -> Cache {
 		Self {
-			driver: CacheDriver::InMemory,
+			enabled: true,
+			driver: None,
 		}
+	}
+}
+
+impl Cache {
+	pub fn driver(&self) -> CacheDriver {
+		self.driver.clone().unwrap_or(CacheDriver::InMemory)
 	}
 }
 

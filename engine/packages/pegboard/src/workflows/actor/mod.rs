@@ -238,6 +238,12 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 				.tag("actor_id", input.actor_id)
 				.dispatch()
 				.await?;
+
+				ctx.msg(MigratedToV2 {})
+					.topic(("actor_id", input.actor_id))
+					.send()
+					.await?;
+
 				return Ok(());
 			}
 		};

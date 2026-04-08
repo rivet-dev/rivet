@@ -8,7 +8,10 @@ fn stringify_bytes(data: &[u8]) -> String {
 }
 
 fn stringify_map(map: &HashableMap<String, String>) -> String {
-	let entries: Vec<String> = map.iter().map(|(k, v)| format!("\"{k}\": \"{v}\"")).collect();
+	let entries: Vec<String> = map
+		.iter()
+		.map(|(k, v)| format!("\"{k}\": \"{v}\""))
+		.collect();
 	format!("Map({}){{{}}}", map.len(), entries.join(", "))
 }
 
@@ -47,7 +50,10 @@ pub fn stringify_to_rivet_tunnel_message_kind(kind: &protocol::ToRivetTunnelMess
 			"ToRivetResponseAbort".to_string()
 		}
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(val) => {
-			format!("ToRivetWebSocketOpen{{canHibernate: {}}}", val.can_hibernate)
+			format!(
+				"ToRivetWebSocketOpen{{canHibernate: {}}}",
+				val.can_hibernate
+			)
 		}
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(val) => {
 			format!(
@@ -76,9 +82,7 @@ pub fn stringify_to_rivet_tunnel_message_kind(kind: &protocol::ToRivetTunnelMess
 	}
 }
 
-pub fn stringify_to_envoy_tunnel_message_kind(
-	kind: &protocol::ToEnvoyTunnelMessageKind,
-) -> String {
+pub fn stringify_to_envoy_tunnel_message_kind(kind: &protocol::ToEnvoyTunnelMessageKind) -> String {
 	match kind {
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(val) => {
 			let body_str = match &val.body {
@@ -87,7 +91,12 @@ pub fn stringify_to_envoy_tunnel_message_kind(
 			};
 			format!(
 				"ToEnvoyRequestStart{{actorId: \"{}\", method: \"{}\", path: \"{}\", headers: {}, body: {}, stream: {}}}",
-				val.actor_id, val.method, val.path, stringify_map(&val.headers), body_str, val.stream
+				val.actor_id,
+				val.method,
+				val.path,
+				stringify_map(&val.headers),
+				body_str,
+				val.stream
 			)
 		}
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(val) => {
@@ -194,7 +203,10 @@ pub fn stringify_event(event: &protocol::Event) -> String {
 						Some(m) => format!("\"{m}\""),
 						None => "null".to_string(),
 					};
-					format!("Stopped{{code: {:?}, message: {message_str}}}", stopped.code)
+					format!(
+						"Stopped{{code: {:?}, message: {message_str}}}",
+						stopped.code
+					)
 				}
 			};
 			format!("EventActorStateUpdate{{state: {state_str}}}")
@@ -228,8 +240,7 @@ pub fn stringify_to_rivet(message: &protocol::ToRivet) -> String {
 			)
 		}
 		protocol::ToRivet::ToRivetEvents(events) => {
-			let event_strs: Vec<String> =
-				events.iter().map(stringify_event_wrapper).collect();
+			let event_strs: Vec<String> = events.iter().map(stringify_event_wrapper).collect();
 			format!(
 				"ToRivetEvents{{count: {}, events: [{}]}}",
 				events.len(),
@@ -240,14 +251,12 @@ pub fn stringify_to_rivet(message: &protocol::ToRivet) -> String {
 			let checkpoints: Vec<String> = val
 				.last_command_checkpoints
 				.iter()
-				.map(|cp| {
-					format!(
-						"{{actorId: \"{}\", index: {}}}",
-						cp.actor_id, cp.index
-					)
-				})
+				.map(|cp| format!("{{actorId: \"{}\", index: {}}}", cp.actor_id, cp.index))
 				.collect();
-			format!("ToRivetAckCommands{{lastCommandCheckpoints: [{}]}}", checkpoints.join(", "))
+			format!(
+				"ToRivetAckCommands{{lastCommandCheckpoints: [{}]}}",
+				checkpoints.join(", ")
+			)
 		}
 		protocol::ToRivet::ToRivetStopping => "ToRivetStopping".to_string(),
 		protocol::ToRivet::ToRivetPong(val) => {
@@ -278,10 +287,7 @@ pub fn stringify_to_envoy(message: &protocol::ToEnvoy) -> String {
 			)
 		}
 		protocol::ToEnvoy::ToEnvoyCommands(commands) => {
-			let cmd_strs: Vec<String> = commands
-				.iter()
-				.map(stringify_command_wrapper)
-				.collect();
+			let cmd_strs: Vec<String> = commands.iter().map(stringify_command_wrapper).collect();
 			format!(
 				"ToEnvoyCommands{{count: {}, commands: [{}]}}",
 				commands.len(),
@@ -292,12 +298,7 @@ pub fn stringify_to_envoy(message: &protocol::ToEnvoy) -> String {
 			let checkpoints: Vec<String> = val
 				.last_event_checkpoints
 				.iter()
-				.map(|cp| {
-					format!(
-						"{{actorId: \"{}\", index: {}}}",
-						cp.actor_id, cp.index
-					)
-				})
+				.map(|cp| format!("{{actorId: \"{}\", index: {}}}", cp.actor_id, cp.index))
 				.collect();
 			format!(
 				"ToEnvoyAckEvents{{lastEventCheckpoints: [{}]}}",

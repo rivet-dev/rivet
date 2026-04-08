@@ -320,9 +320,9 @@ export const registry = setup({
 		stateZodCoercionActor,
 		...(agentOsTestActor
 			? {
-					// From agent-os.ts
-					agentOsTestActor,
-				}
+				// From agent-os.ts
+				agentOsTestActor,
+			}
 			: {}),
 	},
 });

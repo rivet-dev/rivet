@@ -47,9 +47,6 @@ pub struct EnvoyConfig {
 	/// Optional envoy key. If not provided, a UUID will be generated.
 	pub envoy_key: Option<String>,
 
-	/// Whether to automatically restart actors that crash.
-	pub auto_restart: bool,
-
 	/// Debug option to inject artificial latency (in ms) into WebSocket communication.
 	pub debug_latency_ms: Option<u64>,
 
@@ -117,7 +114,7 @@ pub trait EnvoyCallbacks: Send + Sync + 'static {
 pub struct WebSocketHandler {
 	pub on_message: Box<dyn Fn(WebSocketMessage) -> BoxFuture<()> + Send + Sync>,
 	pub on_close: Box<dyn Fn(u16, String) -> BoxFuture<()> + Send + Sync>,
-	pub on_open: Option<Box<dyn FnOnce() -> BoxFuture<()> + Send>>,
+	pub on_open: Option<Box<dyn FnOnce(WebSocketSender) -> BoxFuture<()> + Send>>,
 }
 
 pub struct WebSocketMessage {
@@ -137,8 +134,14 @@ pub struct WebSocketSender {
 }
 
 pub(crate) enum WsOutgoing {
-	Message { data: Vec<u8>, binary: bool },
-	Close { code: Option<u16>, reason: Option<String> },
+	Message {
+		data: Vec<u8>,
+		binary: bool,
+	},
+	Close {
+		code: Option<u16>,
+		reason: Option<String>,
+	},
 }
 
 impl WebSocketSender {

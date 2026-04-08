@@ -4699,7 +4699,6 @@ name = "rivet-envoy-protocol"
 version = "2.2.1"
 dependencies = [
  "anyhow",
- "gasoline",
  "hex",
  "rand 0.8.5",
  "rivet-util",

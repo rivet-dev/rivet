@@ -56,7 +56,9 @@ async fn handle_request_start(
 	);
 
 	let actor = ctx.get_actor(&actor_id, None).unwrap();
-	let _ = actor.handle.send(crate::actor::ToActor::ReqStart { message_id, req });
+	let _ = actor
+		.handle
+		.send(crate::actor::ToActor::ReqStart { message_id, req });
 }
 
 fn handle_request_chunk(
@@ -137,7 +139,11 @@ async fn handle_ws_open(
 	);
 
 	// Convert HashableMap headers to BTreeMap for the actor message
-	let headers = open.headers.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+	let headers = open
+		.headers
+		.iter()
+		.map(|(k, v)| (k.clone(), v.clone()))
+		.collect();
 
 	let actor = ctx.get_actor(&actor_id, None).unwrap();
 	let _ = actor.handle.send(crate::actor::ToActor::WsOpen {
@@ -158,10 +164,9 @@ fn handle_ws_message(
 		.cloned();
 	if let Some(actor_id) = &actor_id {
 		if let Some(actor) = ctx.get_actor(actor_id, None) {
-			let _ = actor.handle.send(crate::actor::ToActor::WsMsg {
-				message_id,
-				msg,
-			});
+			let _ = actor
+				.handle
+				.send(crate::actor::ToActor::WsMsg { message_id, msg });
 		}
 	}
 }
@@ -214,15 +219,14 @@ pub async fn resend_buffered_tunnel_messages(ctx: &mut EnvoyContext) {
 		return;
 	}
 
-	tracing::info!(count = ctx.buffered_messages.len(), "resending buffered tunnel messages");
+	tracing::info!(
+		count = ctx.buffered_messages.len(),
+		"resending buffered tunnel messages"
+	);
 
 	let messages = std::mem::take(&mut ctx.buffered_messages);
 	for msg in messages {
-		ws_send(
-			&ctx.shared,
-			protocol::ToRivet::ToRivetTunnelMessage(msg),
-		)
-		.await;
+		ws_send(&ctx.shared, protocol::ToRivet::ToRivetTunnelMessage(msg)).await;
 	}
 }
 
@@ -233,7 +237,10 @@ async fn send_error_response(
 ) {
 	let body = b"Actor not found".to_vec();
 	let mut headers = rivet_util::serde::HashableMap::new();
-	headers.insert("x-rivet-error".to_string(), "envoy.actor_not_found".to_string());
+	headers.insert(
+		"x-rivet-error".to_string(),
+		"envoy.actor_not_found".to_string(),
+	);
 	headers.insert("content-length".to_string(), body.len().to_string());
 
 	ws_send(

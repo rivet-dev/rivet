@@ -6,10 +6,8 @@ use crate::envoy::EnvoyContext;
 pub async fn handle_send_events(ctx: &mut EnvoyContext, events: Vec<protocol::EventWrapper>) {
 	// Record in history per actor
 	for event in &events {
-		let entry = ctx.get_actor_entry_mut(
-			&event.checkpoint.actor_id,
-			event.checkpoint.generation,
-		);
+		let entry =
+			ctx.get_actor_entry_mut(&event.checkpoint.actor_id, event.checkpoint.generation);
 		if let Some(entry) = entry {
 			entry.event_history.push(event.clone());
 
@@ -26,19 +24,16 @@ pub async fn handle_send_events(ctx: &mut EnvoyContext, events: Vec<protocol::Ev
 	}
 
 	// Send if connected
-	ws_send(
-		&ctx.shared,
-		protocol::ToRivet::ToRivetEvents(events),
-	)
-	.await;
+	ws_send(&ctx.shared, protocol::ToRivet::ToRivetEvents(events)).await;
 }
 
 pub fn handle_ack_events(ctx: &mut EnvoyContext, ack: protocol::ToEnvoyAckEvents) {
 	for checkpoint in &ack.last_event_checkpoints {
-		let entry =
-			ctx.get_actor_entry_mut(&checkpoint.actor_id, checkpoint.generation);
+		let entry = ctx.get_actor_entry_mut(&checkpoint.actor_id, checkpoint.generation);
 		if let Some(entry) = entry {
-			entry.event_history.retain(|event| event.checkpoint.index > checkpoint.index);
+			entry
+				.event_history
+				.retain(|event| event.checkpoint.index > checkpoint.index);
 
 			// Clean up fully acked stopped actors
 			if entry.event_history.is_empty() && entry.handle.is_closed() {
@@ -82,9 +77,5 @@ pub async fn resend_unacknowledged_events(ctx: &EnvoyContext) {
 
 	tracing::info!(count = events.len(), "resending unacknowledged events");
 
-	ws_send(
-		&ctx.shared,
-		protocol::ToRivet::ToRivetEvents(events),
-	)
-	.await;
+	ws_send(&ctx.shared, protocol::ToRivet::ToRivetEvents(events)).await;
 }

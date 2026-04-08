@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::collections::HashMap;
 
 use gas::prelude::*;
@@ -35,11 +36,11 @@ impl From<pegboard::ops::serverless_metadata::fetch::Output> for ServerlessMetad
 ///
 /// Returns metadata including runtime, version, and actor names if available.
 #[tracing::instrument(skip_all)]
-pub async fn fetch_serverless_runner_metadata(
+pub async fn fetch_serverless_metadata(
 	ctx: &ApiCtx,
 	url: String,
 	headers: HashMap<String, String>,
-) -> Result<ServerlessMetadata, ServerlessMetadataError> {
+) -> std::result::Result<ServerlessMetadata, ServerlessMetadataError> {
 	ctx.op(pegboard::ops::serverless_metadata::fetch::Input { url, headers })
 		.await
 		.map_err(|_| ServerlessMetadataError::RequestFailed {})?
@@ -54,49 +55,23 @@ pub async fn refresh_runner_config_metadata(
 	runner_name: String,
 	url: String,
 	headers: HashMap<String, String>,
-) -> anyhow::Result<()> {
+) -> Result<()> {
 	tracing::debug!(
 		?namespace_id,
 		?runner_name,
 		"refreshing runner config metadata"
 	);
 
-	// Fetch metadata using the op
-	let metadata = ctx
-		.op(pegboard::ops::serverless_metadata::fetch::Input { url, headers })
-		.await?
-		.map_err(|e| {
-			pegboard::errors::ServerlessRunnerPool::FailedToFetchMetadata { reason: e }.build()
-		})?;
-
-	if !metadata.actor_names.is_empty() {
-		tracing::debug!(
-			actor_names_count = metadata.actor_names.len(),
-			"storing actor names metadata"
-		);
-
-		// Convert and store actor names
-		let actor_names: Vec<pegboard::ops::actor_name::upsert_batch::ActorNameEntry> = metadata
-			.actor_names
-			.into_iter()
-			.map(
-				|a| pegboard::ops::actor_name::upsert_batch::ActorNameEntry {
-					name: a.name,
-					metadata: a.metadata,
-				},
-			)
-			.collect();
-
-		ctx.op(pegboard::ops::actor_name::upsert_batch::Input {
-			namespace_id,
-			actor_names,
-		})
-		.await?;
-
-		tracing::debug!("successfully stored actor names metadata");
-	} else {
-		tracing::debug!("no actor names to store");
-	}
+	ctx.op(pegboard::ops::runner_config::refresh_metadata::Input {
+		namespace_id,
+		runner_name,
+		url,
+		headers,
+	})
+	.await?
+	.map_err(|e| {
+		pegboard::errors::ServerlessRunnerPool::FailedToFetchMetadata { reason: e }.build()
+	})?;
 
 	Ok(())
 }

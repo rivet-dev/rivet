@@ -70,11 +70,7 @@ impl SqliteKv for EnvoyKv {
 			.map_err(|e| SqliteKvError::new(e.to_string()))
 	}
 
-	async fn batch_delete(
-		&self,
-		_actor_id: &str,
-		keys: Vec<Vec<u8>>,
-	) -> Result<(), SqliteKvError> {
+	async fn batch_delete(&self, _actor_id: &str, keys: Vec<Vec<u8>>) -> Result<(), SqliteKvError> {
 		self.handle
 			.kv_delete(self.actor_id.clone(), keys)
 			.await
@@ -92,7 +88,6 @@ impl SqliteKv for EnvoyKv {
 			.await
 			.map_err(|e| SqliteKvError::new(e.to_string()))
 	}
-
 }
 
 /// Native SQLite database handle exposed to JavaScript.

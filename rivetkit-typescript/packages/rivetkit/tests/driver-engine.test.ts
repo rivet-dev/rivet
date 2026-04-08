@@ -122,20 +122,6 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 						// Wait for envoy to connect
 						await actorDriver.waitForReady();
 
-						// Refresh metadata so the engine stores envoyProtocolVersion
-						// which enables v2 POST dispatch for serverless actors.
-						await fetch(
-							`${endpoint}/runner-configs/${poolName}/refresh-metadata?namespace=${namespace}`,
-							{
-								method: "POST",
-								headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-								body: JSON.stringify({}),
-							},
-						);
-
-						// TODO(US-XXX): Remove this delay once the engine processes metadata synchronously
-						await new Promise((resolve) => setTimeout(resolve, 5000));
-
 						return {
 							rivetEngine: {
 								endpoint,

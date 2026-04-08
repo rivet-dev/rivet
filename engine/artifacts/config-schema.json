@@ -228,11 +228,21 @@
       "description": "Configuration for the cache layer.",
       "type": "object",
       "required": [
-        "driver"
+        "enabled"
       ],
       "properties": {
         "driver": {
-          "$ref": "#/definitions/CacheDriver"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CacheDriver"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false
