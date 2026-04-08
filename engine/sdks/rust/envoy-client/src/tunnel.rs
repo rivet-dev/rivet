@@ -236,7 +236,7 @@ async fn send_error_response(
 	request_id: protocol::RequestId,
 ) {
 	let body = b"Actor not found".to_vec();
-	let mut headers = rivet_util::serde::HashableMap::new();
+	let mut headers = rivet_util_serde::HashableMap::new();
 	headers.insert(
 		"x-rivet-error".to_string(),
 		"envoy.actor_not_found".to_string(),
