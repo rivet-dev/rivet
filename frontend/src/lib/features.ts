@@ -14,12 +14,15 @@ function isEnabled(flag: string): boolean {
 	return enabled === null || enabled.has(flag);
 }
 
+const auth = isEnabled("auth");
+const multitenancy = isEnabled("multitenancy") && auth;
+
 export const features = {
-	auth: isEnabled("auth"),
+	auth,
 	billing: isEnabled("billing"),
 	support: isEnabled("support"),
 	branding: isEnabled("branding"),
 	datacenter: isEnabled("datacenter"),
 	namespaceManagement: isEnabled("namespace-management"),
-	multitenancy: isEnabled("multitenancy"),
+	multitenancy,
 } as const;
