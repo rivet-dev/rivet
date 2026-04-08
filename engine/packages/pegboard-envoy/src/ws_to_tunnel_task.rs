@@ -8,6 +8,7 @@ use pegboard::actor_kv;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
+use scc::HashMap;
 use std::sync::{Arc, atomic::Ordering};
 use tokio::sync::{Mutex, MutexGuard, watch};
 use universaldb::utils::end_of_key_range;
@@ -366,7 +367,7 @@ async fn handle_message(
 			}
 		}
 		protocol::ToRivet::ToRivetTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message(&ctx, tunnel_msg)
+			handle_tunnel_message(ctx, &conn.authorized_tunnel_routes, tunnel_msg)
 				.await
 				.context("failed to handle tunnel message")?;
 		}
@@ -447,6 +448,7 @@ async fn ack_commands(
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message(
 	ctx: &StandaloneCtx,
+	authorized_tunnel_routes: &HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
 	msg: protocol::ToRivetTunnelMessage,
 ) -> Result<()> {
 	// Extract inner data length before consuming msg
@@ -455,6 +457,15 @@ async fn handle_tunnel_message(
 	// Enforce incoming payload size
 	if inner_data_len > ctx.config().pegboard().envoy_max_response_payload_size() {
 		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
+	}
+
+	if !authorized_tunnel_routes
+		.contains_async(&(msg.message_id.gateway_id, msg.message_id.request_id))
+		.await
+	{
+		return Err(
+			errors::WsError::InvalidPacket("unauthorized tunnel message".to_string()).build(),
+		);
 	}
 
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
@@ -470,8 +481,7 @@ async fn handle_tunnel_message(
 	);
 
 	// Publish message to UPS
-	ctx.ups()
-		.context("failed to get UPS instance for tunnel message")?
+	ctx.ups()?
 		.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
 		.await
 		.with_context(|| {
@@ -499,6 +509,10 @@ fn tunnel_message_inner_data_len(kind: &protocol::ToRivetTunnelMessageKind) -> u
 		| ToRivetTunnelMessageKind::ToRivetWebSocketClose(_) => 0,
 	}
 }
+
+#[cfg(test)]
+#[path = "../tests/support/ws_to_tunnel_task.rs"]
+mod tests;
 
 async fn send_actor_kv_error(conn: &Conn, request_id: u32, message: &str) -> Result<()> {
 	let res_msg = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyKvResponse(

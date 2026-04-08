@@ -216,6 +216,14 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 - Any behavior, protocol handling, or test coverage added to one runner should be mirrored in the other runner in the same change whenever possible.
 - When parity cannot be completed in the same change, explicitly document the gap and add a follow-up task.
 
+### Trust Boundaries
+- Treat `client <-> engine` as untrusted.
+- Treat `envoy <-> pegboard-envoy` as untrusted.
+- Treat traffic inside the engine over `nats`, `fdb`, and other internal backends as trusted.
+- Treat `gateway`, `api`, `pegboard-envoy`, `nats`, `fdb`, and similar engine-internal services as one trusted internal boundary once traffic is inside the engine.
+- Validate and authorize all client-originated data at the engine edge before it reaches trusted internal systems.
+- Validate and authorize all envoy-originated data at `pegboard-envoy` before it reaches trusted internal systems.
+
 ### Important Patterns
 
 **Error Handling**

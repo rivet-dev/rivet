@@ -9,11 +9,12 @@ use pegboard::pubsub_subjects::GatewayReceiverSubject;
 use rivet_envoy_protocol as ep;
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK2_VERSION, versioned};
+use scc::HashMap;
 use std::sync::{Arc, atomic::Ordering};
 use tokio::sync::{Mutex, MutexGuard, watch};
 use universaldb::utils::end_of_key_range;
-use universalpubsub::PublishOpts;
 use universalpubsub::Subscriber;
+use universalpubsub::{PubSub, PublishOpts};
 use vbare::OwnedVersionedData;
 
 use crate::{LifecycleResult, actor_event_demuxer::ActorEventDemuxer, conn::Conn, errors, metrics};
@@ -455,9 +456,17 @@ async fn handle_message_mk2(
 			}
 		}
 		protocol::mk2::ToServer::ToServerTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message_mk2(&ctx, tunnel_msg)
-				.await
-				.context("failed to handle tunnel message")?;
+			handle_tunnel_message_mk2(
+				&ctx.ups()
+					.context("failed to get UPS instance for tunnel message")?,
+				ctx.config()
+					.pegboard()
+					.runner_max_response_payload_body_size(),
+				&conn.authorized_tunnel_routes,
+				tunnel_msg,
+			)
+			.await
+			.context("failed to handle tunnel message")?;
 		}
 		// NOTE: This does not process the first init event. See `conn::init_conn`
 		protocol::mk2::ToServer::ToServerInit(_) => {
@@ -775,9 +784,17 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 			}
 		}
 		protocol::ToServer::ToServerTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message_mk1(&ctx, tunnel_msg)
-				.await
-				.context("failed to handle tunnel message")?;
+			handle_tunnel_message_mk1(
+				&ctx.ups()
+					.context("failed to get UPS instance for tunnel message")?,
+				ctx.config()
+					.pegboard()
+					.runner_max_response_payload_body_size(),
+				&conn.authorized_tunnel_routes,
+				tunnel_msg,
+			)
+			.await
+			.context("failed to handle tunnel message")?;
 		}
 		// Forward to runner wf
 		protocol::ToServer::ToServerInit(_)
@@ -838,20 +855,26 @@ async fn ack_commands(
 
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message_mk2(
-	ctx: &StandaloneCtx,
+	ups: &PubSub,
+	max_payload_size: usize,
+	authorized_tunnel_routes: &HashMap<(protocol::mk2::GatewayId, protocol::mk2::RequestId), ()>,
 	msg: protocol::mk2::ToServerTunnelMessage,
 ) -> Result<()> {
 	// Extract inner data length before consuming msg
 	let inner_data_len = tunnel_message_inner_data_len_mk2(&msg.message_kind);
 
 	// Enforce incoming payload size
-	if inner_data_len
-		> ctx
-			.config()
-			.pegboard()
-			.runner_max_response_payload_body_size()
-	{
+	if inner_data_len > max_payload_size {
 		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
+	}
+
+	if !authorized_tunnel_routes
+		.contains_async(&(msg.message_id.gateway_id, msg.message_id.request_id))
+		.await
+	{
+		return Err(
+			errors::WsError::InvalidPacket("unauthorized tunnel message".to_string()).build(),
+		);
 	}
 
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
@@ -867,9 +890,7 @@ async fn handle_tunnel_message_mk2(
 	);
 
 	// Publish message to UPS
-	ctx.ups()
-		.context("failed to get UPS instance for tunnel message")?
-		.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
+	ups.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
 		.await
 		.with_context(|| {
 			format!(
@@ -883,7 +904,9 @@ async fn handle_tunnel_message_mk2(
 
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message_mk1(
-	ctx: &StandaloneCtx,
+	ups: &PubSub,
+	max_payload_size: usize,
+	authorized_tunnel_routes: &HashMap<(protocol::mk2::GatewayId, protocol::mk2::RequestId), ()>,
 	msg: protocol::ToServerTunnelMessage,
 ) -> Result<()> {
 	// Ignore DeprecatedTunnelAck messages (used only for backwards compatibility)
@@ -898,13 +921,17 @@ async fn handle_tunnel_message_mk1(
 	let inner_data_len = tunnel_message_inner_data_len_mk1(&msg.message_kind);
 
 	// Enforce incoming payload size
-	if inner_data_len
-		> ctx
-			.config()
-			.pegboard()
-			.runner_max_response_payload_body_size()
-	{
+	if inner_data_len > max_payload_size {
 		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
+	}
+
+	if !authorized_tunnel_routes
+		.contains_async(&(msg.message_id.gateway_id, msg.message_id.request_id))
+		.await
+	{
+		return Err(
+			errors::WsError::InvalidPacket("unauthorized tunnel message".to_string()).build(),
+		);
 	}
 
 	// Publish message to UPS
@@ -914,9 +941,7 @@ async fn handle_tunnel_message_mk1(
 	))?
 	.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)
 	.context("failed to serialize tunnel message for gateway")?;
-	ctx.ups()
-		.context("failed to get UPS instance for tunnel message")?
-		.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
+	ups.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
 		.await
 		.with_context(|| {
 			format!(
@@ -960,6 +985,10 @@ fn tunnel_message_inner_data_len_mk1(kind: &protocol::ToServerTunnelMessageKind)
 		| ToServerTunnelMessageKind::DeprecatedTunnelAck => 0,
 	}
 }
+
+#[cfg(test)]
+#[path = "../tests/support/ws_to_tunnel_task.rs"]
+mod tests;
 
 /// Send ack message for deprecated tunnel versions.
 ///

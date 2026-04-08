@@ -34,6 +34,7 @@ members = [
   "engine/packages/pegboard-runner",
   "engine/packages/pools",
   "engine/packages/postgres-util",
+  "engine/packages/runner-protocol",
   "engine/packages/runtime",
   "engine/packages/service-manager",
   "engine/packages/telemetry",
@@ -53,11 +54,8 @@ members = [
   "engine/sdks/rust/envoy-client",
   "engine/sdks/rust/envoy-protocol",
   "engine/sdks/rust/epoxy-protocol",
-  "engine/packages/runner-protocol",
   "engine/sdks/rust/test-envoy",
-  "engine/sdks/rust/ups-protocol",
-  "rivetkit-typescript/packages/sqlite-native",
-  "rivetkit-typescript/packages/rivetkit-native"
+  "engine/sdks/rust/ups-protocol"
 ]
 
   [workspace.package]
@@ -448,6 +446,9 @@ members = [
     [workspace.dependencies.rivet-postgres-util]
     path = "engine/packages/postgres-util"
 
+    [workspace.dependencies.rivet-runner-protocol]
+    path = "engine/packages/runner-protocol"
+
     [workspace.dependencies.rivet-runtime]
     path = "engine/packages/runtime"
 
@@ -503,17 +504,11 @@ members = [
     [workspace.dependencies.rivet-envoy-client]
     path = "engine/sdks/rust/envoy-client"
 
-    [workspace.dependencies.epoxy-protocol]
-    path = "engine/sdks/rust/epoxy-protocol"
-
     [workspace.dependencies.rivet-envoy-protocol]
     path = "engine/sdks/rust/envoy-protocol"
 
-    [workspace.dependencies.rivetkit-sqlite-native]
-    path = "rivetkit-typescript/packages/sqlite-native"
-
-    [workspace.dependencies.rivet-runner-protocol]
-    path = "engine/packages/runner-protocol"
+    [workspace.dependencies.epoxy-protocol]
+    path = "engine/sdks/rust/epoxy-protocol"
 
     [workspace.dependencies.rivet-test-envoy]
     path = "engine/sdks/rust/test-envoy"

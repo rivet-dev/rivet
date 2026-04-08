@@ -162,6 +162,10 @@ async fn handle_message(
 		}
 		protocol::ToEnvoyConn::ToEnvoyAckEvents(x) => protocol::ToEnvoy::ToEnvoyAckEvents(x),
 		protocol::ToEnvoyConn::ToEnvoyTunnelMessage(x) => {
+			let _ = conn
+				.authorized_tunnel_routes
+				.insert_async((x.message_id.gateway_id, x.message_id.request_id), ())
+				.await;
 			protocol::ToEnvoy::ToEnvoyTunnelMessage(x)
 		}
 	};

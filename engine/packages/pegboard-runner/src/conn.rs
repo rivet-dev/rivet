@@ -16,6 +16,7 @@ use rivet_data::converted::{ActorNameKeyData, MetadataKeyData};
 use rivet_guard_core::WebSocketHandle;
 use rivet_runner_protocol::{self as protocol, versioned};
 use rivet_types::runner_configs::RunnerConfigKind;
+use scc::HashMap;
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
 
@@ -29,6 +30,7 @@ pub struct Conn {
 	pub workflow_id: Id,
 	pub protocol_version: u16,
 	pub ws_handle: WebSocketHandle,
+	pub authorized_tunnel_routes: HashMap<(protocol::mk2::GatewayId, protocol::mk2::RequestId), ()>,
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the runner.
 	pub last_ping_ts: AtomicI64,
@@ -188,6 +190,7 @@ pub async fn init_conn(
 		workflow_id,
 		protocol_version,
 		ws_handle,
+		authorized_tunnel_routes: HashMap::new(),
 		last_rtt: AtomicU32::new(0),
 		last_ping_ts: AtomicI64::new(util::timestamp::now()),
 	});
@@ -213,7 +216,6 @@ pub async fn init_conn(
 
 	Ok(conn)
 }
-
 enum Init {
 	Mk2(protocol::mk2::ToServerInit),
 	Mk1(protocol::ToServerInit),

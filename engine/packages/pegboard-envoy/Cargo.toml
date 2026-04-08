@@ -27,6 +27,7 @@ rivet-metrics.workspace = true
 rivet-envoy-protocol.workspace = true
 rivet-runtime.workspace = true
 rivet-types.workspace = true
+scc.workspace = true
 serde_bare.workspace = true
 serde_json.workspace = true
 serde.workspace = true
