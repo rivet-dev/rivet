@@ -140,7 +140,7 @@ impl AlarmAndSleepActor {
 }
 
 #[async_trait]
-impl TestActor for AlarmAndSleepActor {
+impl Actor for AlarmAndSleepActor {
 	async fn on_start(&mut self, config: ActorConfig) -> anyhow::Result<ActorStartResult> {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "alarm actor starting");
@@ -195,7 +195,7 @@ impl AlarmAndSleepOnceActor {
 }
 
 #[async_trait]
-impl TestActor for AlarmAndSleepOnceActor {
+impl Actor for AlarmAndSleepOnceActor {
 	async fn on_start(&mut self, config: ActorConfig) -> anyhow::Result<ActorStartResult> {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "alarm once actor starting");
@@ -250,7 +250,7 @@ impl AlarmSleepThenClearActor {
 }
 
 #[async_trait]
-impl TestActor for AlarmSleepThenClearActor {
+impl Actor for AlarmSleepThenClearActor {
 	async fn on_start(&mut self, config: ActorConfig) -> anyhow::Result<ActorStartResult> {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "alarm actor starting");
@@ -311,7 +311,7 @@ impl AlarmSleepThenReplaceActor {
 }
 
 #[async_trait]
-impl TestActor for AlarmSleepThenReplaceActor {
+impl Actor for AlarmSleepThenReplaceActor {
 	async fn on_start(&mut self, config: ActorConfig) -> anyhow::Result<ActorStartResult> {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "alarm actor starting");
@@ -374,7 +374,7 @@ impl MultipleAlarmSetActor {
 }
 
 #[async_trait]
-impl TestActor for MultipleAlarmSetActor {
+impl Actor for MultipleAlarmSetActor {
 	async fn on_start(&mut self, config: ActorConfig) -> anyhow::Result<ActorStartResult> {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "multi alarm actor starting");
@@ -429,7 +429,7 @@ impl MultiCycleAlarmActor {
 }
 
 #[async_trait]
-impl TestActor for MultiCycleAlarmActor {
+impl Actor for MultiCycleAlarmActor {
 	async fn on_start(&mut self, config: ActorConfig) -> anyhow::Result<ActorStartResult> {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "multi cycle alarm actor starting");
@@ -481,7 +481,7 @@ impl AlarmOnceActor {
 }
 
 #[async_trait]
-impl TestActor for AlarmOnceActor {
+impl Actor for AlarmOnceActor {
 	async fn on_start(&mut self, config: ActorConfig) -> anyhow::Result<ActorStartResult> {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "alarm once actor starting");
@@ -536,7 +536,7 @@ impl AlarmSleepThenCrashActor {
 }
 
 #[async_trait]
-impl TestActor for AlarmSleepThenCrashActor {
+impl Actor for AlarmSleepThenCrashActor {
 	async fn on_start(&mut self, config: ActorConfig) -> anyhow::Result<ActorStartResult> {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "alarm crash actor starting");
@@ -599,7 +599,7 @@ impl RapidAlarmCycleActor {
 }
 
 #[async_trait]
-impl TestActor for RapidAlarmCycleActor {
+impl Actor for RapidAlarmCycleActor {
 	async fn on_start(&mut self, config: ActorConfig) -> anyhow::Result<ActorStartResult> {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "rapid alarm cycle actor starting");
@@ -647,7 +647,7 @@ impl SetClearAlarmAndSleepActor {
 }
 
 #[async_trait]
-impl TestActor for SetClearAlarmAndSleepActor {
+impl Actor for SetClearAlarmAndSleepActor {
 	async fn on_start(&mut self, config: ActorConfig) -> anyhow::Result<ActorStartResult> {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "alarm actor starting");

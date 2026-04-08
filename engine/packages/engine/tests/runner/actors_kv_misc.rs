@@ -39,7 +39,7 @@ impl BinaryDataActor {
 }
 
 #[async_trait]
-impl TestActor for BinaryDataActor {
+impl Actor for BinaryDataActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "binary data actor starting");
 
@@ -114,7 +114,7 @@ impl EmptyValueActor {
 }
 
 #[async_trait]
-impl TestActor for EmptyValueActor {
+impl Actor for EmptyValueActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "empty value actor starting");
 
@@ -203,7 +203,7 @@ impl LargeValueActor {
 }
 
 #[async_trait]
-impl TestActor for LargeValueActor {
+impl Actor for LargeValueActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "large value actor starting");
 
@@ -286,7 +286,7 @@ impl GetEmptyKeysActor {
 }
 
 #[async_trait]
-impl TestActor for GetEmptyKeysActor {
+impl Actor for GetEmptyKeysActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "get empty keys actor starting");
 
@@ -350,7 +350,7 @@ impl ListLimitZeroActor {
 }
 
 #[async_trait]
-impl TestActor for ListLimitZeroActor {
+impl Actor for ListLimitZeroActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "list limit zero actor starting");
 
@@ -429,7 +429,7 @@ impl KeyOrderingActor {
 }
 
 #[async_trait]
-impl TestActor for KeyOrderingActor {
+impl Actor for KeyOrderingActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "key ordering actor starting");
 
@@ -520,7 +520,7 @@ impl ManyKeysActor {
 }
 
 #[async_trait]
-impl TestActor for ManyKeysActor {
+impl Actor for ManyKeysActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "many keys actor starting");
 

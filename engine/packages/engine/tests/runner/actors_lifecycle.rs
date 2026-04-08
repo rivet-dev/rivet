@@ -42,7 +42,7 @@ fn actor_basic_create() {
 			"runner should have the actor allocated"
 		);
 
-		tracing::info!(?actor_id, runner_id = ?runner.runner_id, "actor allocated to runner");
+		tracing::info!(?actor_id, "actor allocated to runner");
 	});
 }
 

@@ -39,7 +39,7 @@ impl DropClearsAllActor {
 }
 
 #[async_trait]
-impl TestActor for DropClearsAllActor {
+impl Actor for DropClearsAllActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "drop clears all actor starting");
 
@@ -137,7 +137,7 @@ impl DropEmptyActor {
 }
 
 #[async_trait]
-impl TestActor for DropEmptyActor {
+impl Actor for DropEmptyActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "drop empty actor starting");
 
