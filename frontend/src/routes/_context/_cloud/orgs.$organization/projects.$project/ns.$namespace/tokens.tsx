@@ -21,8 +21,8 @@ import {
 	useRouteContext,
 } from "@tanstack/react-router";
 import { useState } from "react";
-import { match } from "ts-pattern";
 import { EnvVariables, useRivetDsn } from "@/app/env-variables";
+import { features } from "@/lib/features";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
 import { SidebarToggle } from "@/app/sidebar-toggle";
@@ -291,15 +291,9 @@ function RunnersModeInfo() {
 		() => regions[0]?.name,
 	);
 
-	const endpoint = match(__APP_TYPE__)
-		.with("cloud", () => {
-			const region = regions.find((r) => r.name === selectedDatacenter);
-			return region?.url || cloudEnv().VITE_APP_API_URL;
-		})
-		.with("engine", () => getConfig().apiUrl)
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
+	const endpoint = features.multitenancy
+		? regions.find((r) => r.name === selectedDatacenter)?.url || cloudEnv().VITE_APP_API_URL
+		: getConfig().apiUrl;
 
 	const codeSnippet = `import { registry } from "./registry";
 

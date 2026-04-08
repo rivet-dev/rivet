@@ -130,19 +130,12 @@ export function ActorBuildsList() {
 							variant={"ghost"}
 							size="sm"
 							onClick={() => {
-								if (features.multitenancy) {
-									return navigate({
-										to: "/orgs/$organization/projects/$project/ns/$namespace",
-										search: (old) => ({
-											...old,
-											actorId: undefined,
-											n: [build.id],
-										}),
-									});
-								}
-								return navigate({
-									to: "/ns/$namespace",
-									search: (old) => ({
+								// eslint-disable-next-line @typescript-eslint/no-explicit-any
+								return (navigate as any)({
+									to: features.multitenancy
+										? "/orgs/$organization/projects/$project/ns/$namespace"
+										: "/ns/$namespace",
+									search: (old: Record<string, unknown>) => ({
 										...old,
 										actorId: undefined,
 										n: [build.id],
