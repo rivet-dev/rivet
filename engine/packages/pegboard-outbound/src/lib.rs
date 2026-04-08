@@ -166,15 +166,14 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 
 	tracing::debug!(?namespace_id, %pool_name, ?actor_id, ?generation, "received outbound request");
 
-	// Check pool
 	let db = ctx.udb()?;
-	let (pool_res, namespace_res, preloaded_kv) = tokio::try_join!(
+	let (namespace_res, pool_res, preloaded_kv) = tokio::try_join!(
+		ctx.op(namespace::ops::get_global::Input {
+			namespace_ids: vec![namespace_id],
+		}),
 		ctx.op(pegboard::ops::runner_config::get::Input {
 			runners: vec![(namespace_id, pool_name.clone())],
 			bypass_cache: false,
-		}),
-		ctx.op(namespace::ops::get_global::Input {
-			namespace_ids: vec![namespace_id],
 		}),
 		pegboard::actor_kv::preload::fetch_preloaded_kv(
 			&db,
@@ -184,10 +183,6 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 			&actor_config.name,
 		),
 	)?;
-	let Some(pool) = pool_res.into_iter().next() else {
-		tracing::debug!("pool does not exist, ending outbound handler");
-		return Ok(());
-	};
 	let Some(namespace) = namespace_res.into_iter().next() else {
 		tracing::error!("namespace not found, ending outbound handler");
 		report_error(
@@ -197,6 +192,24 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 			RunnerPoolError::InternalError,
 		)
 		.await;
+		return Ok(());
+	};
+	let Some(pool) = pool_res.into_iter().next() else {
+		tracing::debug!("pool does not exist, ending outbound handler");
+		return Ok(());
+	};
+
+	let RunnerConfigKind::Serverless {
+		url,
+		headers,
+		request_lifespan,
+		..
+	} = pool.config.kind
+	else {
+		tracing::warn!(
+			?actor_id,
+			"config no longer serverless, ignoring outbound allocation"
+		);
 		return Ok(());
 	};
 
@@ -213,20 +226,6 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		},
 	]))
 	.serialize_with_embedded_version(pool.protocol_version.unwrap_or(PROTOCOL_VERSION))?;
-
-	let RunnerConfigKind::Serverless {
-		url,
-		headers,
-		request_lifespan,
-		..
-	} = pool.config.kind
-	else {
-		tracing::warn!(
-			?actor_id,
-			"config no longer serverless, ignoring outbound allocation"
-		);
-		return Ok(());
-	};
 
 	// Send ack to actor wf before starting an outbound req
 	ctx.signal(pegboard::workflows::actor2::Allocated { generation })
@@ -250,6 +249,10 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		&url,
 		headers,
 		request_lifespan,
+		ctx.config()
+			.auth
+			.as_ref()
+			.map(|a| a.admin_token.read().as_str()),
 	)
 	.await;
 
@@ -272,15 +275,13 @@ async fn serverless_outbound_req(
 	url: &str,
 	headers: HashMap<String, String>,
 	request_lifespan: u32,
+	token: Option<&str>,
 ) -> Result<()> {
 	let current_dc = ctx.config().topology().current_dc()?;
 	let mut term_signal = TermSignal::get();
 
-	let token = if let Some(auth) = &ctx.config().auth {
-		Some((
-			X_RIVET_TOKEN,
-			HeaderValue::try_from(auth.admin_token.read())?,
-		))
+	let token = if let Some(token) = token {
+		Some((X_RIVET_TOKEN, HeaderValue::try_from(token)?))
 	} else {
 		None
 	};

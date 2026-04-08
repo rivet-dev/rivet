@@ -228,6 +228,7 @@ pub async fn handle_init(
 					);
 
 					tx.add_conflict_key(&old_lb_key, ConflictRangeType::Read)?;
+					tx.delete(&old_lb_key);
 				}
 
 				// Insert into LB
@@ -258,6 +259,18 @@ pub async fn handle_init(
 					}
 				}
 
+				// Update the pool's protocol version. This is required for serverful pools because normally
+				// the pool's protocol version is updated via the metadata_poller wf but that only runs for
+				// serverless pools.
+				tx.write(
+					&pegboard::keys::runner_config::ProtocolVersionKey::new(
+						namespace_id,
+						pool_name.clone(),
+					),
+					protocol_version,
+				)?;
+
+				// Write envoy metadata
 				if let Some(metadata) = &init.metadata {
 					let metadata = MetadataKeyData {
 						metadata:

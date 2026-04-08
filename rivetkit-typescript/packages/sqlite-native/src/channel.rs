@@ -170,7 +170,7 @@ impl std::error::Error for ChannelError {}
 pub struct KvChannelConfig {
 	/// Base WebSocket endpoint URL (e.g., "ws://localhost:6420").
 	pub url: String,
-	/// Authentication token. Engine uses admin_token, manager uses config.token.
+	/// Authentication token.
 	pub token: Option<String>,
 	/// Namespace for actor scoping.
 	pub namespace: String,

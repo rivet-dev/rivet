@@ -94,14 +94,11 @@ impl CustomServeTrait for PegboardKvChannelCustomServe {
 		// Parse URL params.
 		let url = url::Url::parse(&format!("ws://placeholder{}", req_ctx.path()))
 			.context("failed to parse WebSocket URL")?;
-		let params: HashMap<String, String> = url
-			.query_pairs()
-			.map(|(k, v)| (k.to_string(), v.to_string()))
-			.collect();
 
 		// Validate protocol version.
-		let protocol_version: u32 = params
-			.get("protocol_version")
+		let protocol_version: u32 = url
+			.query_pairs()
+			.find_map(|(n, v)| (n == "protocol_version").then_some(v))
 			.context("missing protocol_version query param")?
 			.parse()
 			.context("invalid protocol_version")?;
@@ -112,10 +109,11 @@ impl CustomServeTrait for PegboardKvChannelCustomServe {
 		);
 
 		// Resolve namespace.
-		let namespace_name = params
-			.get("namespace")
+		let namespace_name = url
+			.query_pairs()
+			.find_map(|(n, v)| (n == "namespace").then_some(v))
 			.context("missing namespace query param")?
-			.clone();
+			.to_string();
 		let namespace = ctx
 			.op(namespace::ops::resolve_for_name_global::Input {
 				name: namespace_name.clone(),
@@ -820,9 +818,6 @@ async fn handle_kv_delete_range(
 /// Look up an actor by ID and return the parsed ID and actor name.
 ///
 /// Defense-in-depth: verifies the actor belongs to the authenticated namespace.
-/// The admin_token is a global credential, so this is not strictly necessary
-/// today, but prevents cross-namespace access if a less-privileged auth
-/// mechanism is introduced in the future.
 async fn resolve_actor(
 	ctx: &StandaloneCtx,
 	actor_id: &str,
