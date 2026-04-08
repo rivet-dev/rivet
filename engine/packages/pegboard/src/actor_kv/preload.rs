@@ -99,8 +99,7 @@ pub(crate) async fn batch_preload(
 				// Mark this key as scanned regardless of whether it exists in FDB.
 				requested_get_keys.push(key.clone());
 
-				let key_subspace =
-					subspace.subspace(&keys::actor_kv::KeyWrapper(key.clone()));
+				let key_subspace = subspace.subspace(&keys::actor_kv::KeyWrapper(key.clone()));
 				let mut stream = tx.get_ranges_keyvalues(
 					universaldb::RangeOption {
 						mode: universaldb::options::StreamingMode::WantAll,
@@ -113,9 +112,9 @@ pub(crate) async fn batch_preload(
 
 				while let Some(fdb_kv) = stream.try_next().await? {
 					if builder.is_none() {
-						let parsed_key =
-							tx.unpack::<keys::actor_kv::EntryBaseKey>(&fdb_kv.key())?
-								.key;
+						let parsed_key = tx
+							.unpack::<keys::actor_kv::EntryBaseKey>(&fdb_kv.key())?
+							.key;
 						builder = Some(EntryBuilder::new(parsed_key));
 					}
 
@@ -185,14 +184,14 @@ pub(crate) async fn batch_preload(
 				let mut exceeded = false;
 
 				while let Some(fdb_kv) = stream.try_next().await? {
-					let key =
-						tx.unpack::<keys::actor_kv::EntryBaseKey>(&fdb_kv.key())?.key;
+					let key = tx
+						.unpack::<keys::actor_kv::EntryBaseKey>(&fdb_kv.key())?
+						.key;
 
 					let curr = if let Some(inner) = &mut current_entry {
 						if inner.key != key {
 							// Finalize the previous entry.
-							let prev =
-								std::mem::replace(inner, EntryBuilder::new(key));
+							let prev = std::mem::replace(inner, EntryBuilder::new(key));
 							let (k, v, m) = prev.build()?;
 							let size = entry_size(&k, &v, &m);
 
@@ -301,10 +300,10 @@ pub async fn fetch_preloaded_kv(
 	let metadata = db
 		.run(|tx| {
 			let tx = tx.with_subspace(keys::subspace());
-			let name_key =
-				keys::ns::ActorNameKey::new(namespace_id, actor_name.to_string());
+			let name_key = keys::ns::ActorNameKey::new(namespace_id, actor_name.to_string());
 			async move { tx.read_opt(&name_key, Snapshot).await }
 		})
+		.instrument(tracing::info_span!("read_actor_metadata_tx"))
 		.await?;
 
 	let metadata_map = metadata
@@ -318,7 +317,8 @@ pub async fn fetch_preloaded_kv(
 		return Ok(None);
 	};
 
-	if config.preload_max_total_bytes() == 0 {
+	let preload_max_total_bytes = config.preload_max_total_bytes();
+	if preload_max_total_bytes == 0 {
 		return Ok(None);
 	};
 
@@ -337,7 +337,7 @@ pub async fn fetch_preloaded_kv(
 		actor_id,
 		preload_config.keys,
 		prefix_requests,
-		config.preload_max_total_bytes(),
+		preload_max_total_bytes,
 	)
 	.await?;
 

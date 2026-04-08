@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use crate::test_cluster::TestCluster;
 
 mod epoxy_keys;
+mod pb_actor_v1_pre_migration;
 
 #[async_trait(?Send)]
 pub trait Scenario {
@@ -19,5 +20,8 @@ pub trait Scenario {
 }
 
 pub fn all() -> Vec<Box<dyn Scenario>> {
-	vec![Box::new(epoxy_keys::EpoxyKeys)]
+	vec![
+		Box::new(epoxy_keys::EpoxyKeys),
+		Box::new(pb_actor_v1_pre_migration::PbActorV1PreMigration),
+	]
 }

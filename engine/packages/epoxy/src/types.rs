@@ -31,7 +31,11 @@ impl From<protocol::ClusterConfig> for ClusterConfig {
 		Self {
 			coordinator_replica_id: config.coordinator_replica_id,
 			epoch: config.epoch,
-			replicas: config.replicas.into_iter().map(ReplicaConfig::from).collect(),
+			replicas: config
+				.replicas
+				.into_iter()
+				.map(ReplicaConfig::from)
+				.collect(),
 		}
 	}
 }

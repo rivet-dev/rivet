@@ -1,7 +1,7 @@
 use anyhow::Result;
 use gas::prelude::*;
 use pegboard::actor_kv as kv;
-use rivet_runner_protocol::mk2 as rp;
+use rivet_envoy_protocol as ep;
 
 #[tokio::test]
 async fn test_list_edge_cases() -> Result<()> {
@@ -12,15 +12,20 @@ async fn test_list_edge_cases() -> Result<()> {
 
 	let test_id = Uuid::new_v4();
 	let dc_label = 1;
-	let datacenters = vec![rivet_config::config::topology::Datacenter {
-		name: "test-dc".to_string(),
-		datacenter_label: dc_label,
-		is_leader: true,
-		peer_url: url::Url::parse("http://127.0.0.1:8080")?,
-		public_url: url::Url::parse("http://127.0.0.1:8081")?,
-		proxy_url: None,
-		valid_hosts: None,
-	}];
+	let datacenters = [(
+		"test-dc".to_string(),
+		rivet_config::config::topology::Datacenter {
+			name: "test-dc".to_string(),
+			datacenter_label: dc_label,
+			is_leader: true,
+			peer_url: url::Url::parse("http://127.0.0.1:8080")?,
+			public_url: url::Url::parse("http://127.0.0.1:8081")?,
+			proxy_url: None,
+			valid_hosts: None,
+		},
+	)]
+	.into_iter()
+	.collect();
 
 	let api_peer_port = portpicker::pick_unused_port().expect("failed to pick api peer port");
 	let guard_port = portpicker::pick_unused_port().expect("failed to pick guard port");
@@ -45,7 +50,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	// Test 1: List when empty
 	tracing::info!("test 1: list when empty");
 	let (empty_keys, _, _) =
-		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, false, None).await?;
+		kv::list(db, &recipient, ep::KvListQuery::KvListAllQuery, false, None).await?;
 	assert_eq!(empty_keys.len(), 0, "should return empty list");
 
 	// Test 2: Prefix that matches nothing
@@ -61,7 +66,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (no_match, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
+		ep::KvListQuery::KvListPrefixQuery(ep::KvListPrefixQuery {
 			key: b"xyz".to_vec(),
 		}),
 		false,
@@ -79,7 +84,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (backwards_range, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListRangeQuery(rp::KvListRangeQuery {
+		ep::KvListQuery::KvListRangeQuery(ep::KvListRangeQuery {
 			start: b"z".to_vec(),
 			end: b"a".to_vec(),
 			exclusive: false,
@@ -99,7 +104,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (same_inclusive, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListRangeQuery(rp::KvListRangeQuery {
+		ep::KvListQuery::KvListRangeQuery(ep::KvListRangeQuery {
 			start: b"foo".to_vec(),
 			end: b"foo".to_vec(),
 			exclusive: false,
@@ -117,7 +122,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (same_exclusive, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListRangeQuery(rp::KvListRangeQuery {
+		ep::KvListQuery::KvListRangeQuery(ep::KvListRangeQuery {
 			start: b"foo".to_vec(),
 			end: b"foo".to_vec(),
 			exclusive: true,
@@ -153,7 +158,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (null_prefix, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
+		ep::KvListQuery::KvListPrefixQuery(ep::KvListPrefixQuery {
 			key: vec![b'a', 0x00],
 		}),
 		false,
@@ -198,7 +203,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (empty_prefix, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery { key: vec![] }),
+		ep::KvListQuery::KvListPrefixQuery(ep::KvListPrefixQuery { key: vec![] }),
 		false,
 		None,
 	)
@@ -214,7 +219,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (long_prefix, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
+		ep::KvListQuery::KvListPrefixQuery(ep::KvListPrefixQuery {
 			key: b"abcdefghijk".to_vec(),
 		}),
 		false,
@@ -248,7 +253,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (prefix_match, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
+		ep::KvListQuery::KvListPrefixQuery(ep::KvListPrefixQuery {
 			key: b"key".to_vec(),
 		}),
 		false,
@@ -271,7 +276,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (byte_range, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListRangeQuery(rp::KvListRangeQuery {
+		ep::KvListQuery::KvListRangeQuery(ep::KvListRangeQuery {
 			start: b"key\x00".to_vec(),
 			end: b"key\x02".to_vec(),
 			exclusive: false,
@@ -297,7 +302,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (zero_limit, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListAllQuery,
+		ep::KvListQuery::KvListAllQuery,
 		false,
 		Some(0),
 	)
@@ -309,7 +314,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (one_limit, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListAllQuery,
+		ep::KvListQuery::KvListAllQuery,
 		false,
 		Some(1),
 	)
@@ -321,7 +326,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (large_limit, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListAllQuery,
+		ep::KvListQuery::KvListAllQuery,
 		false,
 		Some(1000),
 	)
@@ -347,7 +352,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (reverse_limited, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListAllQuery,
+		ep::KvListQuery::KvListAllQuery,
 		true,
 		Some(2),
 	)
@@ -366,7 +371,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (prefix_reverse, _, _) = kv::list(
 		db,
 		&recipient,
-		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery { key: vec![] }),
+		ep::KvListQuery::KvListPrefixQuery(ep::KvListPrefixQuery { key: vec![] }),
 		true,
 		None,
 	)

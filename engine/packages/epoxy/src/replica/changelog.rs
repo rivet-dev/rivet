@@ -5,13 +5,14 @@ use universaldb::{
 	KeySelector, RangeOption, Transaction,
 	options::StreamingMode,
 	tuple::Versionstamp,
-	utils::{
-		FormalKey, IsolationLevel::Serializable, keys::CHANGELOG,
-	},
+	utils::{FormalKey, IsolationLevel::Serializable, keys::CHANGELOG},
 	versionstamp::{generate_versionstamp, substitute_versionstamp},
 };
 
-use crate::keys::{self, ChangelogKey, CommittedValue, KvAcceptedKey, KvBallotKey, KvOptimisticCacheKey, KvValueKey};
+use crate::keys::{
+	self, ChangelogKey, CommittedValue, KvAcceptedKey, KvBallotKey, KvOptimisticCacheKey,
+	KvValueKey,
+};
 use crate::metrics;
 
 #[tracing::instrument(skip_all, fields(%replica_id, key = ?key))]
@@ -52,15 +53,15 @@ pub async fn read(
 	let replica_subspace = keys::subspace(replica_id);
 	let changelog_subspace = replica_subspace.subspace(&(CHANGELOG,));
 	let mut range: RangeOption<'static> = (&changelog_subspace).into();
-	range.limit = Some(
-		usize::try_from(req.count).context("changelog read count does not fit in usize")?,
-	);
+	range.limit =
+		Some(usize::try_from(req.count).context("changelog read count does not fit in usize")?);
 	range.mode = StreamingMode::WantAll;
 
 	let mut last_versionstamp = req.after_versionstamp.clone().unwrap_or_default();
 	if let Some(after_versionstamp) = req.after_versionstamp {
-		let after_key =
-			replica_subspace.pack(&ChangelogKey::new(decode_versionstamp(&after_versionstamp)?));
+		let after_key = replica_subspace.pack(&ChangelogKey::new(decode_versionstamp(
+			&after_versionstamp,
+		)?));
 		range.begin = KeySelector::first_greater_than(after_key);
 	}
 
@@ -144,4 +145,3 @@ fn decode_versionstamp(raw: &[u8]) -> Result<Versionstamp> {
 		.context("expected 12-byte versionstamp cursor")?;
 	Ok(Versionstamp::from(bytes))
 }
-

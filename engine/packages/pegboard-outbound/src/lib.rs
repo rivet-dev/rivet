@@ -167,7 +167,8 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 	tracing::debug!(?namespace_id, %pool_name, ?actor_id, ?generation, "received outbound request");
 
 	// Check pool
-	let (pool_res, namespace_res) = tokio::try_join!(
+	let db = ctx.udb()?;
+	let (pool_res, namespace_res, preloaded_kv) = tokio::try_join!(
 		ctx.op(pegboard::ops::runner_config::get::Input {
 			runners: vec![(namespace_id, pool_name.clone())],
 			bypass_cache: false,
@@ -175,6 +176,13 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		ctx.op(namespace::ops::get_global::Input {
 			namespace_ids: vec![namespace_id],
 		}),
+		pegboard::actor_kv::preload::fetch_preloaded_kv(
+			&db,
+			ctx.config().pegboard(),
+			actor_id,
+			namespace_id,
+			&actor_config.name,
+		),
 	)?;
 	let Some(pool) = pool_res.into_iter().next() else {
 		tracing::debug!("pool does not exist, ending outbound handler");
@@ -191,16 +199,6 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		.await;
 		return Ok(());
 	};
-
-	let udb = ctx.udb()?;
-	let preloaded_kv = pegboard::actor_kv::preload::fetch_preloaded_kv(
-		&udb,
-		ctx.config().pegboard(),
-		actor_id,
-		namespace_id,
-		&actor_config.name,
-	)
-	.await?;
 
 	let payload = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(vec![
 		protocol::CommandWrapper {
