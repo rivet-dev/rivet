@@ -6,7 +6,8 @@ import {
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import z from "zod";
-import { getConfig, ls, useDialog } from "@/components";
+import { getConfig, ls } from "@/components";
+import { useDialog } from "@/app/use-dialog";
 import { ModalRenderer } from "@/components/modal-renderer";
 import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
