@@ -27,7 +27,9 @@ export const DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS = {
 	kvBatchPut: "__rivetkitDynamicHostKvBatchPut",
 	kvBatchGet: "__rivetkitDynamicHostKvBatchGet",
 	kvBatchDelete: "__rivetkitDynamicHostKvBatchDelete",
+	kvDeleteRange: "__rivetkitDynamicHostKvDeleteRange",
 	kvListPrefix: "__rivetkitDynamicHostKvListPrefix",
+	kvListRange: "__rivetkitDynamicHostKvListRange",
 	setAlarm: "__rivetkitDynamicHostSetAlarm",
 	clientCall: "__rivetkitDynamicHostClientCall",
 	ackHibernatableWebSocketMessage:
@@ -80,7 +82,7 @@ export interface FetchEnvelopeInput {
 	url: string;
 	method: string;
 	headers: Record<string, string>;
-	body?: BridgeBinary;
+	bodyBase64?: string;
 }
 
 /** Serialized HTTP response envelope crossing host<->isolate boundary. */
@@ -178,7 +180,10 @@ export interface DynamicHibernatingWebSocketMetadata {
  */
 export interface DynamicBootstrapExports {
 	dynamicFetchEnvelope: (
-		input: FetchEnvelopeInput,
+		url: string,
+		method: string,
+		headers: Record<string, string>,
+		bodyBase64?: string | null,
 	) => Promise<FetchEnvelopeOutput>;
 	dynamicDispatchAlarmEnvelope: () => Promise<boolean>;
 	dynamicStopEnvelope: (mode: "sleep" | "destroy") => Promise<boolean>;

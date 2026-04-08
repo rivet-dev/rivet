@@ -15,6 +15,10 @@ export async function resolveGatewayTarget(
 		return target.directId;
 	}
 
+	if ("getForId" in target) {
+		return target.getForId.actorId;
+	}
+
 	if ("getForKey" in target) {
 		const output = await driver.getWithKey({
 			name: target.getForKey.name,

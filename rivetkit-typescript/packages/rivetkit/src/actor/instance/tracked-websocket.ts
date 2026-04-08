@@ -95,7 +95,19 @@ export class TrackedWebSocket implements UniversalWebSocket {
 	}
 
 	send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
-		this.#inner.send(data);
+		try {
+			const result = (this.#inner as {
+				send(
+					data: string | ArrayBufferLike | Blob | ArrayBufferView,
+				): unknown;
+			}).send(data);
+			void Promise.resolve(result).catch((error) => {
+				this.#options.onError("send", error);
+			});
+		} catch (error) {
+			this.#options.onError("send", error);
+			throw error;
+		}
 	}
 
 	close(code?: number, reason?: string): void {

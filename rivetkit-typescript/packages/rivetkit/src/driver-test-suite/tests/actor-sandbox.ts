@@ -12,6 +12,9 @@ export function runActorSandboxTests(driverTestConfig: DriverTestConfig) {
 				const sandbox = client.dockerSandboxActor.getOrCreate([
 					`sandbox-${crypto.randomUUID()}`,
 				]);
+				const testDir = `/home/sandbox/tmp-${crypto.randomUUID()}`;
+				const testFile = `${testDir}/hello.txt`;
+				const renamedFile = `${testDir}/renamed.txt`;
 				const decoder = new TextDecoder();
 
 				const health = await vi.waitFor(
@@ -27,30 +30,30 @@ export function runActorSandboxTests(driverTestConfig: DriverTestConfig) {
 				const { url } = await sandbox.getSandboxUrl();
 				expect(url).toMatch(/^https?:\/\//);
 
-				await sandbox.mkdirFs({ path: "/root/tmp" });
+				await sandbox.mkdirFs({ path: testDir });
 				await sandbox.writeFsFile(
-					{ path: "/root/tmp/hello.txt" },
+					{ path: testFile },
 					"sandbox actor driver test",
 				);
 				expect(
 					decoder.decode(
 						await sandbox.readFsFile({
-							path: "/root/tmp/hello.txt",
+							path: testFile,
 						}),
 					),
 				).toBe("sandbox actor driver test");
 
 				const stat = await sandbox.statFs({
-					path: "/root/tmp/hello.txt",
+					path: testFile,
 				});
 				expect(stat.entryType).toBe("file");
 
 				await sandbox.moveFs({
-					from: "/root/tmp/hello.txt",
-					to: "/root/tmp/renamed.txt",
+					from: testFile,
+					to: renamedFile,
 				});
 				expect(
-					(await sandbox.listFsEntries({ path: "/root/tmp" })).map(
+					(await sandbox.listFsEntries({ path: testDir })).map(
 						(entry: { name: string }) => entry.name,
 					),
 				).toContain("renamed.txt");
@@ -70,20 +73,20 @@ export function runActorSandboxTests(driverTestConfig: DriverTestConfig) {
 				expect(
 					decoder.decode(
 						await sandbox.readFsFile({
-							path: "/root/tmp/renamed.txt",
+							path: renamedFile,
 						}),
 					),
 				).toBe("sandbox actor driver test");
 
 				await sandbox.deleteFsEntry({
-					path: "/root/tmp",
+					path: testDir,
 					recursive: true,
 				});
 				expect(
-					await sandbox.listFsEntries({ path: "/root" }),
+					await sandbox.listFsEntries({ path: "/home/sandbox" }),
 				).not.toEqual(
 					expect.arrayContaining([
-						expect.objectContaining({ name: "tmp" }),
+						expect.objectContaining({ name: testDir.split("/").at(-1) }),
 					]),
 				);
 			}, 180_000);

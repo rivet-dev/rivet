@@ -474,7 +474,14 @@ export function createActorRouter(
 	router.all("/request/*", async (c) => {
 		// TODO: This is not a clean way of doing this since `/http/` might exist mid-path
 		// Strip the /http prefix from the URL to get the original path
-		const url = new URL(c.req.url);
+		const requestUrl =
+			c.req.url ||
+			c.req.raw.url ||
+			`http://actor${c.req.path || "/"}`;
+		const url = requestUrl.startsWith("http://") ||
+			requestUrl.startsWith("https://")
+			? new URL(requestUrl)
+			: new URL(requestUrl, "http://actor");
 		const originalPath = url.pathname.replace(/^\/request/, "") || "/";
 
 		// Create a new request with the corrected URL
@@ -488,7 +495,7 @@ export function createActorRouter(
 
 		loggerWithoutContext().debug({
 			msg: "rewriting http url",
-			from: c.req.url,
+			from: requestUrl,
 			to: correctedRequest.url,
 		});
 

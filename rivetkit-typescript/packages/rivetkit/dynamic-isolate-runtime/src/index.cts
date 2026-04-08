@@ -12,9 +12,12 @@
  *   inline client calls, websocket dispatch, and lifecycle requests.
  */
 import { CONN_STATE_MANAGER_SYMBOL } from "../../src/actor/conn/mod";
+import { createRawRequestDriver } from "../../src/actor/conn/drivers/raw-request";
 import { createActorRouter } from "../../src/actor/router";
 import { routeWebSocket } from "../../src/actor/router-websocket-endpoints";
+import { HEADER_CONN_PARAMS } from "../../src/common/actor-router-consts";
 import { InlineWebSocketAdapter } from "../../src/common/inline-websocket-adapter";
+import type { ISqliteVfs } from "@rivetkit/sqlite-wasm";
 import {
 	DYNAMIC_BOOTSTRAP_CONFIG_GLOBAL_KEY,
 	DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS,
@@ -30,6 +33,8 @@ import {
 	type WebSocketSendEnvelopeInput,
 } from "../../src/dynamic/runtime-bridge";
 import { RegistryConfigSchema } from "../../src/registry/config";
+
+const { SqliteVfsPool } = require("@rivetkit/sqlite-wasm") as typeof import("@rivetkit/sqlite-wasm");
 
 interface IsolateReferenceLike {
 	applySyncPromise(
@@ -52,7 +57,9 @@ interface DynamicHostBridge {
 	kvBatchPut: IsolateReferenceLike;
 	kvBatchGet: IsolateReferenceLike;
 	kvBatchDelete: IsolateReferenceLike;
+	kvDeleteRange: IsolateReferenceLike;
 	kvListPrefix: IsolateReferenceLike;
+	kvListRange: IsolateReferenceLike;
 	setAlarm: IsolateReferenceLike;
 	clientCall: IsolateReferenceLike;
 	ackHibernatableWebSocketMessage: IsolateReferenceLike;
@@ -73,6 +80,7 @@ interface DynamicHibernatableConnData {
 
 interface DynamicConnLike {
 	id?: string;
+	disconnect?: () => void;
 }
 
 interface DynamicConnStateManagerLike {
@@ -85,11 +93,22 @@ interface DynamicActorDriver {
 	kvBatchPut(actorId: string, entries: Array<[Uint8Array, Uint8Array]>): Promise<void>;
 	kvBatchGet(actorId: string, keys: Uint8Array[]): Promise<Array<Uint8Array | null>>;
 	kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void>;
+	kvDeleteRange(actorId: string, start: Uint8Array, end: Uint8Array): Promise<void>;
 	kvListPrefix(
 		actorId: string,
 		prefix: Uint8Array,
 	): Promise<Array<[Uint8Array, Uint8Array]>>;
+	kvListRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+		options?: {
+			reverse?: boolean;
+			limit?: number;
+		},
+	): Promise<Array<[Uint8Array, Uint8Array]>>;
 	setAlarm(actor: { id: string }, timestamp: number): Promise<void>;
+	createSqliteVfs(actorId: string): Promise<ISqliteVfs>;
 	startSleep(actorId: string): void;
 	ackHibernatableWebSocketMessage(
 		gatewayId: ArrayBuffer,
@@ -107,6 +126,15 @@ interface DynamicActorDefinitionLike {
 interface DynamicActorInstanceLike {
 	id: string;
 	isStopping: boolean;
+	connectionManager: {
+		prepareAndConnectConn: (
+			driver: unknown,
+			parameters: unknown,
+			request: Request,
+			path: string,
+			headers: Record<string, string>,
+		) => Promise<DynamicConnLike>;
+	};
 	start: (
 		actorDriver: DynamicActorDriver,
 		inlineClient: unknown,
@@ -132,6 +160,10 @@ interface DynamicActorInstanceLike {
 		payload: unknown,
 		rivetMessageIndex: number | undefined,
 	) => void;
+	handleRawRequest: (
+		conn: DynamicConnLike,
+		request: Request,
+	) => Promise<Response>;
 }
 
 interface ResponseLike {
@@ -173,6 +205,59 @@ function hasReadableStreamBody(
 
 const globalObject = globalThis as unknown as Record<string, unknown>;
 
+// isolated-vm's built-in text codecs are incomplete for this runtime.
+// Provide minimal Buffer-backed implementations for the encodings used by
+// RivetKit and wa-sqlite.
+class DynamicTextDecoder {
+	readonly encoding: string;
+
+	constructor(label = "utf-8") {
+		this.encoding = normalizeTextEncoding(label);
+	}
+
+	decode(input?: ArrayBuffer | ArrayBufferView): string {
+		if (!input) {
+			return "";
+		}
+		if (ArrayBuffer.isView(input)) {
+			return Buffer.from(
+				input.buffer,
+				input.byteOffset,
+				input.byteLength,
+			).toString(this.encoding);
+		}
+		return Buffer.from(input).toString(this.encoding);
+	}
+}
+
+class DynamicTextEncoder {
+	readonly encoding = "utf-8";
+
+	encode(input = ""): Uint8Array {
+		return Uint8Array.from(Buffer.from(input, "utf8"));
+	}
+}
+
+function normalizeTextEncoding(label: string): BufferEncoding {
+	switch (label.toLowerCase()) {
+		case "utf8":
+		case "utf-8":
+			return "utf8";
+		case "utf16le":
+		case "utf-16le":
+		case "utf16":
+		case "utf-16":
+			return "utf16le";
+		default:
+			throw new Error(
+				`unsupported text encoding in dynamic runtime: ${label}`,
+			);
+	}
+}
+
+globalObject.TextDecoder = DynamicTextDecoder as unknown;
+globalObject.TextEncoder = DynamicTextEncoder as unknown;
+
 const bootstrapConfig = readBootstrapConfig();
 const hostBridge = readHostBridge();
 
@@ -197,6 +282,12 @@ const webSocketSessions = new Map<
 	}
 >();
 const CLIENT_ACCESSOR_METHODS = new Set(["get", "getOrCreate", "getForId", "create"]);
+let sqliteVfsPoolPromise:
+	| Promise<{
+			acquire(actorId: string): Promise<ISqliteVfs>;
+			shutdown(): Promise<void>;
+	  }>
+	| undefined;
 
 type DynamicActorRouter = ReturnType<typeof createActorRouter>;
 
@@ -271,8 +362,14 @@ function readHostBridge(): DynamicHostBridge {
 		kvBatchDelete: getRequiredHostRef(
 			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvBatchDelete,
 		),
+		kvDeleteRange: getRequiredHostRef(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvDeleteRange,
+		),
 		kvListPrefix: getRequiredHostRef(
 			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvListPrefix,
+		),
+		kvListRange: getRequiredHostRef(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvListRange,
 		),
 		setAlarm: getRequiredHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.setAlarm),
 		clientCall: getRequiredHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.clientCall),
@@ -353,6 +450,23 @@ async function getRuntimeState(): Promise<DynamicRuntimeState> {
 		})();
 	}
 	return await runtimeStatePromise;
+}
+
+async function loadSqliteVfsPool(): Promise<{
+	acquire(actorId: string): Promise<ISqliteVfs>;
+	shutdown(): Promise<void>;
+}> {
+	if (!sqliteVfsPoolPromise) {
+		sqliteVfsPoolPromise = Promise.resolve().then(
+			() =>
+				new SqliteVfsPool({
+					actorsPerInstance: 50,
+					idleDestroyMs: 30_000,
+				}),
+		);
+	}
+
+	return await sqliteVfsPoolPromise;
 }
 
 function dynamicHostLog(level: "debug" | "warn", message: string): void {
@@ -689,6 +803,17 @@ const actorDriver: DynamicActorDriver = {
 		const encodedKeys = keys.map((key) => toArrayBuffer(key));
 		await bridgeCall(hostBridge.kvBatchDelete, [actorIdValue, encodedKeys]);
 	},
+	async kvDeleteRange(
+		actorIdValue: string,
+		start: Uint8Array,
+		end: Uint8Array,
+	): Promise<void> {
+		await bridgeCall(hostBridge.kvDeleteRange, [
+			actorIdValue,
+			toArrayBuffer(start),
+			toArrayBuffer(end),
+		]);
+	},
 	async kvListPrefix(
 		actorIdValue: string,
 		prefix: Uint8Array,
@@ -703,8 +828,32 @@ const actorDriver: DynamicActorDriver = {
 		);
 		return values.map(([key, value]) => [new Uint8Array(key), new Uint8Array(value)]);
 	},
+	async kvListRange(
+		actorIdValue: string,
+		start: Uint8Array,
+		end: Uint8Array,
+		options?: {
+			reverse?: boolean;
+			limit?: number;
+		},
+	): Promise<Array<[Uint8Array, Uint8Array]>> {
+		const values = await bridgeCall<Array<[ArrayBuffer, ArrayBuffer]>>(
+			hostBridge.kvListRange,
+			[
+				actorIdValue,
+				toArrayBuffer(start),
+				toArrayBuffer(end),
+				options,
+			],
+		);
+		return values.map(([key, value]) => [new Uint8Array(key), new Uint8Array(value)]);
+	},
 	async setAlarm(actor, timestamp: number): Promise<void> {
 		await bridgeCall(hostBridge.setAlarm, [actor.id, timestamp]);
+	},
+	async createSqliteVfs(actorIdValue: string): Promise<ISqliteVfs> {
+		const pool = await loadSqliteVfsPool();
+		return await pool.acquire(actorIdValue);
 	},
 	startSleep(requestActorId: string): void {
 		bridgeCallSync(hostBridge.startSleep, [requestActorId]);
@@ -725,34 +874,123 @@ const actorDriver: DynamicActorDriver = {
 	},
 };
 
-function ensureRequestArrayBuffer(
+function patchRequestBodyReaders(
 	request: Request,
 	requestBody: ArrayBuffer | undefined,
 ): void {
-	if (typeof request.arrayBuffer === "function") {
+	if (requestBody === undefined) {
 		return;
 	}
 
-	const fallbackBody = requestBody ? requestBody.slice(0) : new ArrayBuffer(0);
+	const fallbackBody = requestBody.slice(0);
+	const fallbackBytes = Buffer.from(fallbackBody);
+	const fallbackText = fallbackBytes.toString("utf8");
 	Object.defineProperty(request, "arrayBuffer", {
 		configurable: true,
 		value: async () => fallbackBody.slice(0),
 	});
+	Object.defineProperty(request, "text", {
+		configurable: true,
+		value: async () => fallbackText,
+	});
+	Object.defineProperty(request, "json", {
+		configurable: true,
+		value: async () => JSON.parse(fallbackText),
+	});
+}
+
+function decodeRequestBody(bodyBase64?: string | null): Uint8Array | undefined {
+	if (!bodyBase64) {
+		return undefined;
+	}
+
+	return Buffer.from(bodyBase64, "base64");
+}
+
+function toExactArrayBuffer(body: Uint8Array | undefined): ArrayBuffer | undefined {
+	if (!body) {
+		return undefined;
+	}
+
+	return body.buffer.slice(
+		body.byteOffset,
+		body.byteOffset + body.byteLength,
+	);
+}
+
+function parseRequestConnParams(request: Request): unknown {
+	const paramsParam = request.headers.get(HEADER_CONN_PARAMS);
+	if (!paramsParam) {
+		return null;
+	}
+
+	return JSON.parse(paramsParam);
+}
+
+async function handleDynamicRawRequest(request: Request): Promise<Response> {
+	const actor = await loadActor(bootstrapConfig.actorId);
+	const requestUrl = new URL(request.url);
+	const requestPath = requestUrl.pathname;
+	const originalPath = requestPath.replace(/^\/request/, "") || "/";
+	const correctedUrl = new URL(
+		originalPath + requestUrl.search,
+		requestUrl.origin,
+	);
+	const requestBody =
+		request.method !== "GET" && request.method !== "HEAD"
+			? new Uint8Array(await request.arrayBuffer())
+			: undefined;
+	const correctedRequest = new Request(correctedUrl, {
+		method: request.method,
+		headers: request.headers,
+		body: requestBody,
+		duplex: "half",
+	} as RequestInit);
+	patchRequestBodyReaders(correctedRequest, toExactArrayBuffer(requestBody));
+	Object.defineProperty(correctedRequest, "url", {
+		configurable: true,
+		value: correctedUrl.toString(),
+	});
+
+	const headerRecord: Record<string, string> = {};
+	request.headers.forEach((value, key) => {
+		headerRecord[key] = value;
+	});
+
+	let conn: DynamicConnLike | undefined;
+	try {
+		conn = await actor.connectionManager.prepareAndConnectConn(
+			createRawRequestDriver(),
+			parseRequestConnParams(request),
+			correctedRequest,
+			requestPath,
+			headerRecord,
+		);
+		return await actor.handleRawRequest(conn, correctedRequest);
+	} finally {
+		conn?.disconnect?.();
+	}
 }
 
 async function dynamicFetchEnvelope(
-	input: FetchEnvelopeInput,
+	url: string,
+	method: string,
+	headers: Record<string, string>,
+	bodyBase64?: string | null,
 ): Promise<FetchEnvelopeOutput> {
-	const request = new Request(input.url, {
-		method: input.method,
-		headers: input.headers,
-		body: input.body,
+	const requestBody = decodeRequestBody(bodyBase64);
+	const request = new Request(url, {
+		method,
+		headers,
+		body: requestBody,
 	});
-	ensureRequestArrayBuffer(request, input.body);
-	const runtimeState = await getRuntimeState();
-	const response = await runtimeState.actorRouter.fetch(request, {
-		actorId: bootstrapConfig.actorId,
-	});
+	patchRequestBodyReaders(request, toExactArrayBuffer(requestBody));
+	const requestUrl = new URL(request.url);
+	const response = requestUrl.pathname.startsWith("/request/")
+		? await handleDynamicRawRequest(request)
+		: await (await getRuntimeState()).actorRouter.fetch(request, {
+				actorId: bootstrapConfig.actorId,
+			});
 	const status = typeof response.status === "number" ? response.status : 200;
 	const body = await responseBodyToBinary(response);
 	if (status >= 500) {
@@ -1068,6 +1306,11 @@ async function dynamicDisposeEnvelope(): Promise<boolean> {
 	}
 	webSocketSessions.clear();
 	runtimeStopMode = undefined;
+	if (sqliteVfsPoolPromise) {
+		const sqliteVfsPool = await sqliteVfsPoolPromise;
+		await sqliteVfsPool.shutdown();
+		sqliteVfsPoolPromise = undefined;
+	}
 	return true;
 }
 

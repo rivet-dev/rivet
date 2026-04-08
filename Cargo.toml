@@ -490,6 +490,9 @@ members = [
     package = "rivet-util"
     path = "engine/packages/util"
 
+    [workspace.dependencies.rivet-util-serde]
+    path = "engine/packages/util-serde"
+
     [workspace.dependencies.rivet-util-id]
     path = "engine/packages/util-id"
 

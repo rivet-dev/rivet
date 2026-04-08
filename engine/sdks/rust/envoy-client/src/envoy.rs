@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
+use std::sync::atomic::Ordering;
 
 use rivet_envoy_protocol as protocol;
 use tokio::sync::mpsc;
@@ -396,6 +397,7 @@ async fn handle_shutdown(ctx: &mut EnvoyContext) {
 		return;
 	}
 	ctx.shutting_down = true;
+	ctx.shared.shutting_down.store(true, Ordering::Release);
 
 	tracing::debug!("envoy received shutdown");
 

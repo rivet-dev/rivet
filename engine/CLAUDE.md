@@ -33,10 +33,6 @@ When changing a versioned VBARE schema, follow the existing migration pattern.
 - When adding fields to epoxy workflow state structs, mark them `#[serde(default)]` so Gasoline can replay older serialized state.
 - Epoxy integration tests that spin up `tests/common::TestCtx` must call `shutdown()` before returning.
 
-## Concurrent containers
-
-Never use `Mutex<HashMap<...>>` or `RwLock<HashMap<...>>`. Use `scc::HashMap` (preferred), `moka::Cache` (for TTL/bounded), or `DashMap`. Same for sets: use `scc::HashSet` instead of `Mutex<HashSet<...>>`. Note that `scc` async methods do not hold locks across `.await` points. Use `entry_async` for atomic read-then-write.
-
 ## Test snapshots
 
 Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB KV store for migration and integration tests. Scenarios produce per-replica RocksDB checkpoints stored under `engine/packages/test-snapshot-gen/snapshots/` (git LFS tracked). In tests, use `test_snapshot::SnapshotTestCtx::from_snapshot("scenario-name")` to boot a cluster from snapshot data. See `docs-internal/engine/TEST_SNAPSHOTS.md` for the full guide.

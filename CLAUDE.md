@@ -64,6 +64,8 @@ cargo test -- --nocapture
 cargo clippy -- -W warnings
 ```
 
+- Ensure lefthook is installed and enabled for git hooks (`lefthook install`).
+
 ### Docker Development Environment
 ```bash
 # Start the development environment with all services
@@ -292,7 +294,10 @@ let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build(
 - Connection pooling through `packages/common/pools/`
 
 **Performance**
-- ALWAYS prefer a dedicated concurrency container like `scc::HashMap<_, _>` with its async api or `moka::Cache` over `Arc<Mutex<HashMap<_, _>>>`. `Arc<Mutex<_>>` is very slow for containers.
+- Never use `Mutex<HashMap<...>>` or `RwLock<HashMap<...>>`.
+- Use `scc::HashMap` (preferred), `moka::Cache` (for TTL/bounded), or `DashMap` for concurrent maps.
+- Use `scc::HashSet` instead of `Mutex<HashSet<...>>` for concurrent sets.
+- `scc` async methods do not hold locks across `.await` points. Use `entry_async` for atomic read-then-write.
 
 ### Code Style
 - Hard tabs for Rust formatting (see `rustfmt.toml`)

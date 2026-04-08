@@ -304,7 +304,12 @@ interface DynamicActorIsolateRuntimeConfig {
 
 interface DynamicRuntimeRefs {
 	fetch: ReferenceLike<
-		(input: FetchEnvelopeInput) => Promise<FetchEnvelopeOutput>
+		(
+			url: string,
+			method: string,
+			headers: Record<string, string>,
+			bodyBase64?: string | null,
+		) => Promise<FetchEnvelopeOutput>
 	>;
 	dispatchAlarm: ReferenceLike<() => Promise<boolean>>;
 	stop: ReferenceLike<(mode: "sleep" | "destroy") => Promise<boolean>>;
@@ -395,7 +400,6 @@ export class DynamicActorIsolateRuntime {
 			actorId: this.#config.actorId,
 			moduleAccessCwd,
 		});
-
 		const loadResult = await this.#config.loader(
 			createDynamicActorLoaderContext(
 				this.#config.inlineClient,
@@ -466,6 +470,12 @@ export class DynamicActorIsolateRuntime {
 					XDG_CACHE_HOME: `${DYNAMIC_SANDBOX_APP_ROOT}/.cache`,
 					TMPDIR: DYNAMIC_SANDBOX_TMP_ROOT,
 					RIVET_EXPOSE_ERRORS: "1",
+					...(process.env.RIVETKIT_TEST_DOCKER_HELPER_URL
+						? {
+								RIVETKIT_TEST_DOCKER_HELPER_URL:
+									process.env.RIVETKIT_TEST_DOCKER_HELPER_URL,
+							}
+						: {}),
 				},
 			},
 			osConfig: {
@@ -520,15 +530,24 @@ export class DynamicActorIsolateRuntime {
 
 		const refs = this.#runtimeRefs;
 		const input = await requestToEnvelope(request);
-		const envelope = (await refs.fetch.apply(undefined, [input], {
-			arguments: {
-				copy: true,
+		const envelope = (await refs.fetch.apply(
+			undefined,
+			[
+				input.url,
+				input.method,
+				input.headers,
+				input.bodyBase64 ?? null,
+			],
+			{
+				arguments: {
+					copy: true,
+				},
+				result: {
+					copy: true,
+					promise: true,
+				},
 			},
-			result: {
-				copy: true,
-				promise: true,
-			},
-		})) as FetchEnvelopeOutput;
+		)) as FetchEnvelopeOutput;
 		return envelopeToResponse(envelope);
 	}
 
@@ -912,6 +931,19 @@ export class DynamicActorIsolateRuntime {
 				);
 			},
 		);
+		const kvDeleteRangeRef = makeRef(
+			async (
+				actorId: string,
+				start: ArrayBuffer,
+				end: ArrayBuffer,
+			): Promise<void> => {
+				await this.#config.actorDriver.kvDeleteRange(
+					actorId,
+					new Uint8Array(start),
+					new Uint8Array(end),
+				);
+			},
+		);
 		const kvListPrefixRef = makeRef(
 			async (
 				actorId: string,
@@ -921,6 +953,30 @@ export class DynamicActorIsolateRuntime {
 				const entries = await this.#config.actorDriver.kvListPrefix(
 					actorId,
 					decodedPrefix,
+				);
+				return makeExternalCopy(
+					entries.map(([key, value]) => [
+						copyUint8ArrayToArrayBuffer(key),
+						copyUint8ArrayToArrayBuffer(value),
+					]),
+				);
+			},
+		);
+		const kvListRangeRef = makeRef(
+			async (
+				actorId: string,
+				start: ArrayBuffer,
+				end: ArrayBuffer,
+				options?: {
+					reverse?: boolean;
+					limit?: number;
+				},
+			): Promise<{ copy(): Array<[ArrayBuffer, ArrayBuffer]> }> => {
+				const entries = await this.#config.actorDriver.kvListRange(
+					actorId,
+					new Uint8Array(start),
+					new Uint8Array(end),
+					options,
 				);
 				return makeExternalCopy(
 					entries.map(([key, value]) => [
@@ -1044,8 +1100,16 @@ export class DynamicActorIsolateRuntime {
 			kvBatchDeleteRef,
 		);
 		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvDeleteRange,
+			kvDeleteRangeRef,
+		);
+		await context.global.set(
 			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvListPrefix,
 			kvListPrefixRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvListRange,
+			kvListRangeRef,
 		);
 		await context.global.set(
 			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.setAlarm,
@@ -1307,11 +1371,11 @@ async function requestToEnvelope(
 		headers[key] = value;
 	});
 
-	let body: ArrayBuffer | undefined;
+	let bodyBase64: string | undefined;
 	if (request.method !== "GET" && request.method !== "HEAD") {
 		const requestBody = await request.arrayBuffer();
 		if (requestBody.byteLength > 0) {
-			body = requestBody.slice(0);
+			bodyBase64 = Buffer.from(requestBody).toString("base64");
 		}
 	}
 
@@ -1319,7 +1383,7 @@ async function requestToEnvelope(
 		url: request.url,
 		method: request.method,
 		headers,
-		body,
+		bodyBase64,
 	};
 }
 
@@ -1531,6 +1595,65 @@ function resolveEsmPackageEntry(packageName: string): string | undefined {
 	return undefined;
 }
 
+function resolvePnpmVirtualStorePackageEntry(
+	packageName: string,
+): string | undefined {
+	try {
+		const runtimeRequire = createRuntimeRequire();
+		const nodeFs = runtimeRequire(["node", "fs"].join(":")) as {
+			existsSync: (path: string) => boolean;
+			readdirSync: (
+				path: string,
+				options: { withFileTypes: true },
+			) => Array<{ isDirectory(): boolean; name: string }>;
+			realpathSync: (path: string) => string;
+		};
+
+		let current = process.cwd();
+		while (true) {
+			const virtualStoreDir = path.join(current, "node_modules", ".pnpm");
+			if (nodeFs.existsSync(virtualStoreDir)) {
+				const scoreEntry = (entryName: string): number =>
+					entryName.includes("pkg.pr.new") ? 1 : 0;
+				const entries = nodeFs
+					.readdirSync(virtualStoreDir, {
+						withFileTypes: true,
+					})
+					.sort(
+						(a, b) =>
+							scoreEntry(b.name) - scoreEntry(a.name) ||
+							a.name.localeCompare(b.name),
+					);
+				for (const entry of entries) {
+					if (!entry.isDirectory()) {
+						continue;
+					}
+
+					const candidatePath = path.join(
+						virtualStoreDir,
+						entry.name,
+						"node_modules",
+						packageName,
+						"dist",
+						"index.js",
+					);
+					if (nodeFs.existsSync(candidatePath)) {
+						return nodeFs.realpathSync(candidatePath);
+					}
+				}
+			}
+
+			const parent = path.dirname(current);
+			if (parent === current) {
+				break;
+			}
+			current = parent;
+		}
+	} catch {}
+
+	return undefined;
+}
+
 function resolveSecureExecEntryPath(): string {
 	const explicitSpecifier =
 		process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER;
@@ -1562,6 +1685,13 @@ function resolveSecureExecEntryPath(): string {
 			// manually finding the package in node_modules and reading its entry.
 			const resolved = resolveEsmPackageEntry(packageSpecifier);
 			if (resolved) return resolved;
+		}
+
+		const pnpmResolved = resolvePnpmVirtualStorePackageEntry(
+			packageSpecifier,
+		);
+		if (pnpmResolved) {
+			return pnpmResolved;
 		}
 	}
 
@@ -1646,6 +1776,15 @@ function buildLockedDownPermissions(): {
 			operation === "exists"
 		);
 	};
+	const allowLocalhostNetwork =
+		process.env.RIVETKIT_DYNAMIC_ALLOW_LOCALHOST_NETWORK === "1";
+	const isLocalhostHostname = (hostname: string | undefined): boolean => {
+		return (
+			hostname === "127.0.0.1" ||
+			hostname === "localhost" ||
+			hostname === "::1"
+		);
+	};
 
 	return {
 		fs: (request: SecureExecFsAccessRequest) => {
@@ -1661,9 +1800,17 @@ function buildLockedDownPermissions(): {
 					isPathWithin(request.path, sandboxTmpRoot),
 			};
 		},
-		network: (_request: SecureExecNetworkAccessRequest) => ({
-			allow: false,
-		}),
+		network: (request: SecureExecNetworkAccessRequest) => {
+			if (allowLocalhostNetwork) {
+				const requestHostname =
+					request.hostname ??
+					(request.url ? new URL(request.url).hostname : undefined);
+				if (isLocalhostHostname(requestHostname)) {
+					return { allow: true };
+				}
+			}
+			return { allow: false };
+		},
 		childProcess: () => ({ allow: false }),
 		// Dynamic actors only receive explicitly injected env vars from
 		// processConfig.env, so this does not expose host environment values.

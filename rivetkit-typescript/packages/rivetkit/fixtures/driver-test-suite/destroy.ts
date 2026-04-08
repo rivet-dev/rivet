@@ -1,5 +1,5 @@
 import { actor, queue } from "rivetkit";
-import type { registry } from "./registry";
+import type { registry } from "./registry-static";
 
 export const destroyObserver = actor({
 	state: { destroyedActors: [] as string[] },

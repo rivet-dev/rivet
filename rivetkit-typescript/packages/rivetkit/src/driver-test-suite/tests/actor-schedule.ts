@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
@@ -57,26 +57,28 @@ export function runActorScheduleTests(driverTestConfig: DriverTestConfig) {
 				});
 
 				test("scheduled action can use c.db", async (c) => {
-				const { client } = await setupDriverTest(
-					c,
-					driverTestConfig,
-				);
+					const { client } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
 
-				const actor = client.scheduledDb.getOrCreate();
+					const actor = client.scheduledDb.getOrCreate();
 
-				// Schedule a task that writes to the database
-				await actor.scheduleDbWrite(250);
+					// Schedule a task that writes to the database
+					await actor.scheduleDbWrite(250);
 
-				// Wait for the scheduled task to execute
-				await waitFor(driverTestConfig, 500);
+					// Wait for the scheduled task to execute
+					await waitFor(driverTestConfig, 500);
 
-				// Verify the scheduled task wrote to the database
-				const logCount = await actor.getLogCount();
-				const scheduledCount = await actor.getScheduledCount();
+					await vi.waitFor(async () => {
+						const logCount = await actor.getLogCount();
+						const scheduledCount =
+							await actor.getScheduledCount();
 
-				expect(logCount).toBe(1);
-				expect(scheduledCount).toBe(1);
-			});
+						expect(logCount).toBe(1);
+						expect(scheduledCount).toBe(1);
+					});
+				});
 
 			test("multiple scheduled tasks execute in order", async (c) => {
 					const { client } = await setupDriverTest(
@@ -97,18 +99,31 @@ export function runActorScheduleTests(driverTestConfig: DriverTestConfig) {
 
 					// Wait for first task only
 					await waitFor(driverTestConfig, 500);
-					const history1 = await scheduled.getTaskHistory();
-					expect(history1[0]).toBe("first");
+					await vi.waitFor(async () => {
+						const history1 = await scheduled.getTaskHistory();
+						expect(history1[0]).toBe("first");
+					});
 
 					// Wait for second task
 					await waitFor(driverTestConfig, 500);
-					const history2 = await scheduled.getTaskHistory();
-					expect(history2.slice(0, 2)).toEqual(["first", "second"]);
+					await vi.waitFor(async () => {
+						const history2 = await scheduled.getTaskHistory();
+						expect(history2.slice(0, 2)).toEqual([
+							"first",
+							"second",
+						]);
+					});
 
 					// Wait for third task
 					await waitFor(driverTestConfig, 500);
-					const history3 = await scheduled.getTaskHistory();
-					expect(history3).toEqual(["first", "second", "third"]);
+					await vi.waitFor(async () => {
+						const history3 = await scheduled.getTaskHistory();
+						expect(history3).toEqual([
+							"first",
+							"second",
+							"third",
+						]);
+					});
 				});
 			});
 		},

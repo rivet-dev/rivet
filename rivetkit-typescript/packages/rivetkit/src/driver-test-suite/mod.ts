@@ -13,10 +13,16 @@ import { runActorConnTests } from "./tests/actor-conn";
 import { runActorConnHibernationTests } from "./tests/actor-conn-hibernation";
 import { runActorConnStateTests } from "./tests/actor-conn-state";
 import { runActorDbTests } from "./tests/actor-db";
+import { runActorDbRawTests } from "./tests/actor-db-raw";
 import { runActorDbStressTests } from "./tests/actor-db-stress";
 import { runConnErrorSerializationTests } from "./tests/conn-error-serialization";
 import { runActorDestroyTests } from "./tests/actor-destroy";
-import { runActorDriverTests } from "./tests/actor-driver";
+import { runActorLifecycleTests } from "./tests/actor-lifecycle";
+import { runActorScheduleTests } from "./tests/actor-schedule";
+import { runActorSleepTests } from "./tests/actor-sleep";
+import { runActorSleepDbTests } from "./tests/actor-sleep-db";
+import { runActorStateTests } from "./tests/actor-state";
+import { runActorConnStatusTests } from "./tests/actor-conn-status";
 import { runActorErrorHandlingTests } from "./tests/actor-error-handling";
 import { runActorHandleTests } from "./tests/actor-handle";
 import { runActorInlineClientTests } from "./tests/actor-inline-client";
@@ -41,6 +47,8 @@ import { runActorDbPragmaMigrationTests } from "./tests/actor-db-pragma-migratio
 import { runActorStateZodCoercionTests } from "./tests/actor-state-zod-coercion";
 import { runActorAgentOsTests } from "./tests/actor-agent-os";
 import { runGatewayQueryUrlTests } from "./tests/gateway-query-url";
+import { runGatewayRoutingTests } from "./tests/gateway-routing";
+import { runLifecycleHooksTests } from "./tests/lifecycle-hooks";
 import { runHibernatableWebSocketProtocolTests } from "./tests/hibernatable-websocket-protocol";
 import { runRequestAccessTests } from "./tests/request-access";
 
@@ -126,7 +134,11 @@ export function runDriverTests(
 							encoding,
 						};
 
-						runActorDriverTests(driverTestConfig);
+						runActorStateTests(driverTestConfig);
+						runActorScheduleTests(driverTestConfig);
+						runActorSleepTests(driverTestConfig);
+						runActorSleepDbTests(driverTestConfig);
+						runActorLifecycleTests(driverTestConfig);
 						runManagerDriverTests(driverTestConfig);
 
 						runActorConnTests(driverTestConfig);
@@ -134,6 +146,8 @@ export function runDriverTests(
 						runActorConnStateTests(driverTestConfig);
 
 						runActorConnHibernationTests(driverTestConfig);
+
+						runActorConnStatusTests(driverTestConfig);
 
 						runConnErrorSerializationTests(driverTestConfig);
 
@@ -163,7 +177,12 @@ export function runDriverTests(
 
 						runActorSandboxTests(driverTestConfig);
 
-						runDynamicReloadTests(driverTestConfig);
+						if (
+							driverTestConfig.isDynamic &&
+							!driverTestConfig.skip?.sleep
+						) {
+							runDynamicReloadTests(driverTestConfig);
+						}
 
 						runActorInlineClientTests(driverTestConfig);
 
@@ -188,6 +207,11 @@ export function runDriverTests(
 
 						runActorInspectorTests(driverTestConfig);
 						runGatewayQueryUrlTests(driverTestConfig);
+						runGatewayRoutingTests(driverTestConfig);
+
+						runLifecycleHooksTests(driverTestConfig);
+
+						runActorDbRawTests(driverTestConfig);
 
 						runActorDbKvStatsTests(driverTestConfig);
 
