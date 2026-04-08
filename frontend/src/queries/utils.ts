@@ -4,7 +4,7 @@ import { features } from "@/lib/features";
 export const shouldRetryAllExpect403 = (failureCount: number, error: Error) => {
 	if (error && "statusCode" in error) {
 		if (error.statusCode === 403 || error.statusCode === 401) {
-			// Don't retry on auth errors when auth is enabled
+			// Retry on auth errors when auth is enabled (auth system handles the redirect)
 			return features.auth;
 		}
 		if (error.statusCode === 404) {
