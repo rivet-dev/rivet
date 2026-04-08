@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
 use rivet_envoy_protocol as protocol;
-use rivet_util::serde::HashableMap;
+use rivet_util_serde::HashableMap;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite;
 use vbare::OwnedVersionedData;

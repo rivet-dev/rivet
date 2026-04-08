@@ -1,5 +1,5 @@
 use rivet_envoy_protocol as protocol;
-use rivet_util::serde::HashableMap;
+use rivet_util_serde::HashableMap;
 
 use crate::utils::id_to_str;
 

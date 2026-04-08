@@ -6,6 +6,7 @@ use std::{
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
+	let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
 	let workspace_root = Path::new(&manifest_dir)
 		.parent()
 		.and_then(|p| p.parent())
@@ -20,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	// Rust SDK generation
 	let cfg = vbare_compiler::Config::with_hashable_map();
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;
+	post_process_generated_rust(&out_dir)?;
 
 	// TypeScript SDK generation
 	let cli_js_path = workspace_root
@@ -33,6 +35,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			"cargo:warning=TypeScript SDK generation skipped: cli.js not found at {}. Run `pnpm install` to install.",
 			cli_js_path.display()
 		);
+	}
+
+	Ok(())
+}
+
+fn post_process_generated_rust(out_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+	for entry in fs::read_dir(out_dir)?.flatten() {
+		let path = entry.path();
+		if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+			continue;
+		}
+
+		let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+			continue;
+		};
+		if !file_name.ends_with("_generated.rs") {
+			continue;
+		}
+
+		let content = fs::read_to_string(&path)?;
+		let rewritten = content.replace(
+			"rivet_util::serde::HashableMap",
+			"rivet_util_serde::HashableMap",
+		);
+
+		if rewritten != content {
+			fs::write(path, rewritten)?;
+		}
 	}
 
 	Ok(())

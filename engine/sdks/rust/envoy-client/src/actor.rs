@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use rivet_envoy_protocol as protocol;
-use rivet_util::serde::HashableMap;
+use rivet_util_serde::HashableMap;
 use tokio::sync::mpsc;
 
 use crate::config::{HttpRequest, HttpResponse, WebSocketMessage};
