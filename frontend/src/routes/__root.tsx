@@ -1,7 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-import { match } from "ts-pattern";
 import type {
 	CloudContext,
 	CloudNamespaceContext,
@@ -12,6 +11,7 @@ import type {
 } from "@/app/data-providers/cache";
 import { DevToolbar } from "@/app/dev-toolbar";
 import { FullscreenLoading } from "@/components";
+import { features } from "@/lib/features";
 
 function RootRoute() {
 	return (
@@ -64,8 +64,6 @@ interface RootRouteContext {
 }
 
 export const Route = createRootRouteWithContext<RootRouteContext>()({
-	component: match(__APP_TYPE__)
-		.with("cloud", () => CloudRoute)
-		.otherwise(() => RootRoute),
+	component: features.auth && features.multitenancy ? CloudRoute : RootRoute,
 	pendingComponent: FullscreenLoading,
 });

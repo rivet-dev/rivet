@@ -2,6 +2,7 @@ import { redirect } from "@tanstack/react-router";
 import { organizationClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { cloudEnv } from "./env";
+import { features } from "./features";
 
 const createClient = () =>
 	createAuthClient({
@@ -12,7 +13,7 @@ const createClient = () =>
 type AuthClient = ReturnType<typeof createClient>;
 
 export const authClient: AuthClient =
-	__APP_TYPE__ === "cloud" ? createClient() : (null as unknown as AuthClient);
+	features.auth ? createClient() : (null as unknown as AuthClient);
 
 export const redirectToOrganization = async (
 	{ from }: { from?: string } = {},
