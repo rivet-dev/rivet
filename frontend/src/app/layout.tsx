@@ -27,7 +27,6 @@ import {
 	useState,
 } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
-import { match } from "ts-pattern";
 import {
 	Button,
 	type ButtonProps,
@@ -48,6 +47,7 @@ import {
 import { useRootLayoutOptional } from "@/components/actors/root-layout-context";
 import type { HeaderLinkProps } from "@/components/header/header-link";
 import { authClient } from "@/lib/auth";
+import { features } from "@/lib/features";
 import { ensureTrailingSlash } from "@/lib/utils";
 import { TEST_IDS } from "@/utils/test-ids";
 import { ActorBuildsList } from "./actor-builds-list";
@@ -193,122 +193,85 @@ const Sidebar = ({
 				>
 					<Logo />
 					<div className="flex flex-1 flex-col gap-2 px-2 min-h-0">
-						{match(__APP_TYPE__)
-							.with("engine", () => (
+						{features.multitenancy
+							? <CloudSidebar />
+							: (
 								<>
 									<Breadcrumbs />
 									<ScrollArea>
 										<EngineSubnav />
 									</ScrollArea>
 								</>
-							))
-							.with("cloud", () => <CloudSidebar />)
-							.otherwise(() => null)}
+							)}
 					</div>
 					<div>
 						<div className="border-t my-0.5 mx-2.5" />
 
-						{match(__APP_TYPE__)
-							.with("cloud", () => {
-								return (
-									<>
-										<div className="flex gap-0.5 my-2 px-2.5 flex-col">
-											{matchRoute({
-												to: "/orgs/$organization/projects/$project/ns/$namespace",
-												fuzzy: true,
-											}) ? (
-												<HeaderButton asChild>
-													<Link
-														from="/orgs/$organization/projects/$project/ns/$namespace"
-														to="/orgs/$organization/projects/$project/ns/$namespace/billing"
-														className="font-normal justify-between flex w-full"
-													>
-														<p>
-															<Icon
-																icon={faWallet}
-																className="me-1.5"
-															/>
-															Billing
-														</p>
-														<div className="flex gap-1">
-															<BillingUsageGauge />
-															<BillingPlanBadge />
-														</div>
-													</Link>
-												</HeaderButton>
-											) : matchRoute({
-													to: "/orgs/$organization/projects/$project",
-													fuzzy: true,
-												}) ? (
-												<HeaderButton asChild>
-													<Link
-														from="/orgs/$organization/projects/$project"
-														to="/orgs/$organization/projects/$project/billing"
-														className="font-normal justify-between flex w-full"
-													>
-														<p>
-															<Icon
-																icon={faWallet}
-																className="me-1.5"
-															/>
-															Billing
-														</p>
-														<div className="flex gap-1">
-															<BillingUsageGauge />
-															<BillingPlanBadge />
-														</div>
-													</Link>
-												</HeaderButton>
-											) : null}
-											<HelpDropdown>
-												<HeaderButton
-													startIcon={
-														<Icon
-															icon={
-																faMessageSmile
-															}
-															className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-														/>
-													}
-												>
-													Support
-												</HeaderButton>
-											</HelpDropdown>
-
-											<Changelog>
-												<HeaderButton
-													startIcon={
-														<Icon
-															icon={faGift}
-															className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-														/>
-													}
-												>
-													<a
-														href="https://www.rivet.dev/changelog"
-														target="_blank"
-														rel="noopener"
-													>
-														What's new?
-														<Ping
-															className="relative -right-1"
-															data-changelog-ping
-														/>
-													</a>
-												</HeaderButton>
-											</Changelog>
-										</div>
-										<div className="border-t my-0.5 mx-2.5" />
-
-										<div className=" px-1 pt-2 pb-4 flex flex-col">
-											<UserDropdown />
-										</div>
-									</>
-								);
-							})
-							.otherwise(() => (
-								<>
-									<div className="flex gap-0.5 my-2 px-2.5 flex-col">
+						{features.multitenancy ? (
+							<>
+								<div className="flex gap-0.5 my-2 px-2.5 flex-col">
+									{matchRoute({
+										to: "/orgs/$organization/projects/$project/ns/$namespace",
+										fuzzy: true,
+									}) ? (
+										<HeaderButton asChild>
+											<Link
+												from="/orgs/$organization/projects/$project/ns/$namespace"
+												to="/orgs/$organization/projects/$project/ns/$namespace/billing"
+												className="font-normal justify-between flex w-full"
+											>
+												<p>
+													<Icon
+														icon={faWallet}
+														className="me-1.5"
+													/>
+													Billing
+												</p>
+												<div className="flex gap-1">
+													{features.billing ? <BillingUsageGauge /> : null}
+													{features.billing ? <BillingPlanBadge /> : null}
+												</div>
+											</Link>
+										</HeaderButton>
+									) : matchRoute({
+											to: "/orgs/$organization/projects/$project",
+											fuzzy: true,
+										}) ? (
+										<HeaderButton asChild>
+											<Link
+												from="/orgs/$organization/projects/$project"
+												to="/orgs/$organization/projects/$project/billing"
+												className="font-normal justify-between flex w-full"
+											>
+												<p>
+													<Icon
+														icon={faWallet}
+														className="me-1.5"
+													/>
+													Billing
+												</p>
+												<div className="flex gap-1">
+													{features.billing ? <BillingUsageGauge /> : null}
+													{features.billing ? <BillingPlanBadge /> : null}
+												</div>
+											</Link>
+										</HeaderButton>
+									) : null}
+									{features.support ? (
+										<HelpDropdown>
+											<HeaderButton
+												startIcon={
+													<Icon
+														icon={faMessageSmile}
+														className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+													/>
+												}
+											>
+												Support
+											</HeaderButton>
+										</HelpDropdown>
+									) : null}
+									{features.branding ? (
 										<Changelog>
 											<HeaderButton
 												startIcon={
@@ -331,97 +294,131 @@ const Sidebar = ({
 												</a>
 											</HeaderButton>
 										</Changelog>
-										<HeaderButton
-											asChild
-											startIcon={
-												<Icon
-													icon={faMessageSmile}
-													className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-												/>
-											}
-										>
-											<Link
-												to="."
-												search={(old) => ({
-													...old,
-													modal: "feedback",
-												})}
-											>
-												Feedback
-											</Link>
-										</HeaderButton>
-										<HeaderButton
-											asChild
-											startIcon={
-												<Icon
-													icon={faBook}
-													className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-												/>
-											}
-											endIcon={
-												<Icon
-													icon={faArrowUpRight}
-													className="ms-1"
-												/>
-											}
-										>
-											<a
-												href="https://www.rivet.dev/docs"
-												target="_blank"
-												rel="noopener noreferrer"
-											>
-												Documentation
-											</a>
-										</HeaderButton>
-										<HeaderButton
-											asChild
-											startIcon={
-												<Icon
-													icon={faDiscord}
-													className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-												/>
-											}
-											endIcon={
-												<Icon
-													icon={faArrowUpRight}
-													className="ms-1"
-												/>
-											}
-										>
-											<a
-												href="http://www.rivet.dev/discord"
-												target="_blank"
-												rel="noopener noreferrer"
-											>
-												Discord
-											</a>
-										</HeaderButton>
-										<HeaderButton
-											asChild
-											startIcon={
-												<Icon
-													icon={faGithub}
-													className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-												/>
-											}
-											endIcon={
-												<Icon
-													icon={faArrowUpRight}
-													className="ms-1"
-												/>
-											}
-										>
-											<a
-												href="http://github.com/rivet-dev/rivet"
-												target="_blank"
-												rel="noopener noreferrer"
-											>
-												GitHub
-											</a>
-										</HeaderButton>
+									) : null}
+								</div>
+								<div className="border-t my-0.5 mx-2.5" />
+								{features.auth ? (
+									<div className=" px-1 pt-2 pb-4 flex flex-col">
+										<UserDropdown />
 									</div>
-								</>
-							))}
+								) : null}
+							</>
+						) : (
+							<div className="flex gap-0.5 my-2 px-2.5 flex-col">
+									{features.branding ? (
+										<Changelog>
+											<HeaderButton
+												startIcon={
+													<Icon
+														icon={faGift}
+														className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+													/>
+												}
+											>
+												<a
+													href="https://www.rivet.dev/changelog"
+													target="_blank"
+													rel="noopener"
+												>
+													Whats new?
+													<Ping
+														className="relative -right-1"
+														data-changelog-ping
+													/>
+												</a>
+											</HeaderButton>
+										</Changelog>
+									) : null}
+									<HeaderButton
+										asChild
+										startIcon={
+											<Icon
+												icon={faMessageSmile}
+												className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+											/>
+										}
+									>
+										<Link
+											to="."
+											search={(old) => ({
+												...old,
+												modal: "feedback",
+											})}
+										>
+											Feedback
+										</Link>
+									</HeaderButton>
+									<HeaderButton
+										asChild
+										startIcon={
+											<Icon
+												icon={faBook}
+												className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+											/>
+										}
+										endIcon={
+											<Icon
+												icon={faArrowUpRight}
+												className="ms-1"
+											/>
+										}
+									>
+										<a
+											href="https://www.rivet.dev/docs"
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											Documentation
+										</a>
+									</HeaderButton>
+									<HeaderButton
+										asChild
+										startIcon={
+											<Icon
+												icon={faDiscord}
+												className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+											/>
+										}
+										endIcon={
+											<Icon
+												icon={faArrowUpRight}
+												className="ms-1"
+											/>
+										}
+									>
+										<a
+											href="http://www.rivet.dev/discord"
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											Discord
+										</a>
+									</HeaderButton>
+									<HeaderButton
+										asChild
+										startIcon={
+											<Icon
+												icon={faGithub}
+												className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+											/>
+										}
+										endIcon={
+											<Icon
+												icon={faArrowUpRight}
+												className="ms-1"
+											/>
+										}
+									>
+										<a
+											href="http://github.com/rivet-dev/rivet"
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											GitHub
+										</a>
+									</HeaderButton>
+							</div>
+						)}
 					</div>
 				</div>
 			</ResizablePanel>
