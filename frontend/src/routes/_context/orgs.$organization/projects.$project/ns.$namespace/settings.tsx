@@ -36,7 +36,7 @@ import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
 import { CloudApiTokens, PublishableToken, SecretToken } from "./tokens";
 
 export const Route = createFileRoute(
-	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings",
+	"/_context/orgs/$organization/projects/$project/ns/$namespace/settings",
 )({
 	component: features.namespaceManagement
 		? RouteComponent

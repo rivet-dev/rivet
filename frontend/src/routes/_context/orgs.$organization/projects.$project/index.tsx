@@ -5,7 +5,7 @@ import { Card } from "@/components";
 import { features } from "@/lib/features";
 
 export const Route = createFileRoute(
-	"/_context/_cloud/orgs/$organization/projects/$project/",
+	"/_context/orgs/$organization/projects/$project/",
 )({
 	beforeLoad: async ({ context, params }) => {
 		if (!features.multitenancy) {

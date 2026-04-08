@@ -13,7 +13,7 @@ import { Button, H1, H2, Skeleton } from "@/components";
 import { useCloudNamespaceDataProvider } from "@/components/actors";
 
 export const Route = createFileRoute(
-	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments",
+	"/_context/orgs/$organization/projects/$project/ns/$namespace/deployments",
 )({
 	component: RouteComponent,
 	loader: async ({ context }) => {

@@ -2,7 +2,7 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { authClient } from "@/lib/auth";
 
-export const Route = createFileRoute("/_context/_cloud/orgs/$organization")({
+export const Route = createFileRoute("/_context/orgs/$organization")({
 	component: RouteComponent,
 	beforeLoad: async ({ context, params }) => {
 		return await match(context)

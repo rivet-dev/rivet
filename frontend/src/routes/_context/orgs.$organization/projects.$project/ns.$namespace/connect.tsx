@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute(
-	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect",
+	"/_context/orgs/$organization/projects/$project/ns/$namespace/connect",
 )({
 	component: () => null,
 	beforeLoad: ({ params }) => {

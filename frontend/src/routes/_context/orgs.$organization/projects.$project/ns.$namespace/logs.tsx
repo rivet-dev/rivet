@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export const Route = createFileRoute(
-	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/logs",
+	"/_context/orgs/$organization/projects/$project/ns/$namespace/logs",
 )({
 	validateSearch: z.object({
 		search: z.string().optional(),

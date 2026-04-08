@@ -8,7 +8,7 @@ import { OnboardingFooter } from "@/components/onboarding/footer";
 import { TEST_IDS } from "@/utils/test-ids";
 
 export const Route = createFileRoute(
-	"/_context/_cloud/orgs/$organization/new/",
+	"/_context/orgs/$organization/new/",
 )({
 	component: RouteComponent,
 	validateSearch: zodValidator(

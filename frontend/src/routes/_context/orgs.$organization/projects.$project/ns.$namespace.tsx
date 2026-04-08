@@ -16,7 +16,7 @@ import { isRivetApiError } from "@/lib/errors";
 import { posthog } from "@/lib/posthog";
 
 export const Route = createFileRoute(
-	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
+	"/_context/orgs/$organization/projects/$project/ns/$namespace",
 )({
 	component: RouteComponent,
 	beforeLoad: async ({ context, params, search }) => {

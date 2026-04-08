@@ -3,6 +3,7 @@ import {
 	Outlet,
 	redirect,
 	useNavigate,
+	useSearch,
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import z from "zod";
@@ -73,6 +74,7 @@ function RouteComponent() {
 			<ModalRenderer />
 			<Modals />
 			{!features.multitenancy && <EngineModals />}
+			{features.multitenancy && <CloudModals />}
 		</>
 	);
 }
@@ -121,5 +123,45 @@ function EngineModals() {
 				},
 			}}
 		/>
+	);
+}
+
+function CloudModals() {
+	const navigate = useNavigate();
+	const search = useSearch({ strict: false });
+
+	const CreateProjectDialog = useDialog.CreateProject.Dialog;
+	const CreateOrganizationDialog = useDialog.CreateOrganization.Dialog;
+
+	return (
+		<>
+			<CreateProjectDialog
+				organization={search?.organization}
+				dialogProps={{
+					open: search?.modal === "create-project",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({ ...old, modal: undefined }),
+							});
+						}
+					},
+				}}
+			/>
+			<CreateOrganizationDialog
+				dialogProps={{
+					open: search?.modal === "create-organization",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({ ...old, modal: undefined }),
+							});
+						}
+					},
+				}}
+			/>
+		</>
 	);
 }

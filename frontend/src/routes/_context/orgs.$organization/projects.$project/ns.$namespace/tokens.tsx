@@ -66,7 +66,7 @@ import { cloudEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 
 export const Route = createFileRoute(
-	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens",
+	"/_context/orgs/$organization/projects/$project/ns/$namespace/tokens",
 )({
 	beforeLoad: async ({ context, params }) => {
 		throw redirect({
@@ -365,7 +365,7 @@ registry.startRunner();`;
 
 export function CloudApiTokens() {
 	const { dataProvider } = useRouteContext({
-		from: "/_context/_cloud/orgs/$organization/projects/$project",
+		from: "/_context/orgs/$organization/projects/$project",
 	});
 	const params = useParams({ strict: false });
 	const organization = params.organization;

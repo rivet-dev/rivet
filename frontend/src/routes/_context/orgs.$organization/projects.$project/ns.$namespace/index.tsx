@@ -8,7 +8,7 @@ import { Actors } from "@/app/actors";
 import { FullscreenLoading } from "@/components";
 
 export const Route = createFileRoute(
-	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/",
+	"/_context/orgs/$organization/projects/$project/ns/$namespace/",
 )({
 	component: RouteComponent,
 	beforeLoad: async ({ context }) => {

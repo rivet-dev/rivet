@@ -3,7 +3,7 @@ import { BillingPage } from "@/app/billing/billing-page";
 import { RouteLayout } from "@/app/route-layout";
 
 export const Route = createFileRoute(
-	"/_context/_cloud/orgs/$organization/projects/$project/billing",
+	"/_context/orgs/$organization/projects/$project/billing",
 )({
 	component: () => (
 		<RouteLayout>

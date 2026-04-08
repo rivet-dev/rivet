@@ -4,7 +4,7 @@ import { RouteError } from "@/app/route-error";
 import { PendingRouteLayout } from "@/app/route-layout";
 import { FullscreenLoading } from "@/components";
 
-export const Route = createFileRoute("/_context/_cloud/orgs/$organization/")({
+export const Route = createFileRoute("/_context/orgs/$organization/")({
 	loader: async ({ context, params }) => {
 		return match(context)
 			.with({ __type: "cloud" }, async () => {

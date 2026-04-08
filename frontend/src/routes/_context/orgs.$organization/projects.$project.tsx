@@ -5,7 +5,7 @@ import { useDialog } from "@/app/use-dialog";
 import { FullscreenLoading } from "@/components";
 
 export const Route = createFileRoute(
-	"/_context/_cloud/orgs/$organization/projects/$project",
+	"/_context/orgs/$organization/projects/$project",
 )({
 	component: RouteComponent,
 	beforeLoad: ({ context, params }) => {
