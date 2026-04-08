@@ -36,6 +36,7 @@ export function SignUp() {
 	const navigate = useNavigate();
 	const from = useSearch({ strict: false, select: (s) => s?.from as string });
 	const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+	const turnstileSiteKey = cloudEnv().VITE_APP_TURNSTILE_SITE_KEY;
 
 	const handleSubmit: SubmitHandler = async (
 		{ name, email, password },
@@ -55,14 +56,14 @@ export function SignUp() {
 				: undefined,
 		);
 
-		setTurnstileToken(null);
-
 		if (result.error) {
 			form.setError("root", {
 				message: result.error.message ?? "Sign up failed",
 			});
 			return;
 		}
+
+		setTurnstileToken(null);
 
 		const [error] = await attemptAsync(
 			async () => await redirectToOrganization(),
@@ -116,12 +117,13 @@ export function SignUp() {
 						<EmailField />
 						<PasswordField />
 						<RootError />
-						{features.captcha && (
+						{features.captcha && turnstileSiteKey && (
 							<TurnstileWidget
-								siteKey={cloudEnv().VITE_APP_TURNSTILE_SITE_KEY!}
+								siteKey={turnstileSiteKey}
 								onSuccess={setTurnstileToken}
 								onExpire={() => setTurnstileToken(null)}
 								onError={() => setTurnstileToken(null)}
+								onTimeout={() => setTurnstileToken(null)}
 							/>
 						)}
 					</CardContent>

@@ -35,6 +35,7 @@ export function Login() {
 	const navigate = useNavigate();
 	const from = useSearch({ strict: false, select: (s) => s?.from as string });
 	const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+	const turnstileSiteKey = cloudEnv().VITE_APP_TURNSTILE_SITE_KEY;
 
 	const handleSubmit: SubmitHandler = async ({ email, password }, form) => {
 		if (features.captcha && !turnstileToken) {
@@ -51,14 +52,14 @@ export function Login() {
 				: undefined,
 		);
 
-		setTurnstileToken(null);
-
 		if (result.error) {
 			form.setError("root", {
 				message: result.error.message ?? "Invalid credentials",
 			});
 			return;
 		}
+
+		setTurnstileToken(null);
 
 		const [error] = await attemptAsync(
 			async () => await redirectToOrganization(),
@@ -111,12 +112,13 @@ export function Login() {
 						<EmailField />
 						<PasswordField />
 						<RootError />
-						{features.captcha && (
+						{features.captcha && turnstileSiteKey && (
 							<TurnstileWidget
-								siteKey={cloudEnv().VITE_APP_TURNSTILE_SITE_KEY!}
+								siteKey={turnstileSiteKey}
 								onSuccess={setTurnstileToken}
 								onExpire={() => setTurnstileToken(null)}
 								onError={() => setTurnstileToken(null)}
+								onTimeout={() => setTurnstileToken(null)}
 							/>
 						)}
 					</CardContent>

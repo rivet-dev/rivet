@@ -5,6 +5,7 @@ interface TurnstileWidgetProps {
 	onSuccess: (token: string) => void;
 	onExpire: () => void;
 	onError: () => void;
+	onTimeout?: () => void;
 }
 
 export function TurnstileWidget({
@@ -12,6 +13,7 @@ export function TurnstileWidget({
 	onSuccess,
 	onExpire,
 	onError,
+	onTimeout,
 }: TurnstileWidgetProps) {
 	return (
 		<Turnstile
@@ -19,6 +21,7 @@ export function TurnstileWidget({
 			onSuccess={onSuccess}
 			onExpire={onExpire}
 			onError={onError}
+			onTimeout={onTimeout}
 			options={{ appearance: "interaction-only" }}
 		/>
 	);
