@@ -90,14 +90,14 @@ export class EngineActorDriver implements ActorDriver {
 	#actorRouter: ActorRouter;
 	#sqlitePool: SqliteVfsPoolManager;
 
-	#envoyStarted: PromiseWithResolvers<undefined> = promiseWithResolvers(
+	#envoyStarted: PromiseWithResolvers<void> = promiseWithResolvers(
 		(reason) =>
 			logger().warn({
 				msg: "unhandled envoy started promise rejection",
 				reason,
 			}),
 	);
-	#envoyStopped: PromiseWithResolvers<utils.ShutdownReason> = promiseWithResolvers(
+	#envoyStopped: PromiseWithResolvers<void> = promiseWithResolvers(
 		(reason) =>
 			logger().warn({
 				msg: "unhandled envoy stopped promise rejection",
@@ -168,8 +168,8 @@ export class EngineActorDriver implements ActorDriver {
 				rivetkit: { version: VERSION },
 			},
 			prepopulateActorNames: buildActorNames(config),
-			onShutdown: (reason: utils.ShutdownReason) => {
-				this.#envoyStopped.resolve(reason);
+			onShutdown: () => {
+				this.#envoyStopped.resolve();
 				this.#isEnvoyStopped = true;
 			},
 			fetch: this.#envoyFetch.bind(this),
@@ -191,7 +191,7 @@ export class EngineActorDriver implements ActorDriver {
 		this.#envoy = envoy;
 
 		envoy.started().then(() => {
-			this.#envoyStarted.resolve(undefined);
+			this.#envoyStarted.resolve();
 		});
 
 		logger().debug({
@@ -514,18 +514,12 @@ export class EngineActorDriver implements ActorDriver {
 			// NOTE: onAbort does not work reliably
 			stream.onAbort(() => { });
 			c.req.raw.signal.addEventListener("abort", () => {
-				logger().debug("SSE aborted, shutting down runner");
-
-				// We cannot assume that the request will always be closed gracefully by Rivet. We always proceed with a graceful shutdown in case the request was terminated for any other reason.
-				//
-				// If we did not use a graceful shutdown, the runner would
-				this.shutdown(false);
+				logger().debug("SSE aborted");
 			});
 
 			await this.#envoyStarted.promise;
 
-			// Runner id should be set if the runner started
-			this.#envoy.startServerless(payload);
+			this.#envoy.startServerlessActor(payload);
 
 			// Send ping every second to keep the connection alive
 			while (true) {
@@ -547,12 +541,6 @@ export class EngineActorDriver implements ActorDriver {
 
 				await stream.writeSSE({ event: "ping", data: "" });
 				await stream.sleep(ENVOY_SSE_PING_INTERVAL);
-			}
-
-			// Wait for the runner to stop if the SSE stream aborted early for any reason
-			let reason = await this.#envoyStopped.promise;
-			if (reason === "serverless-early-exit") {
-				stream.writeSSE({ event: "stopping", data: "" });
 			}
 		});
 	}
@@ -783,7 +771,7 @@ export class EngineActorDriver implements ActorDriver {
 			});
 
 			try {
-					this.#envoy.stopActor(actorId, undefined);
+				this.#envoy.stopActor(actorId, undefined);
 			} catch (stopError) {
 				logger().debug({
 					msg: "failed to stop actor after start failure",
