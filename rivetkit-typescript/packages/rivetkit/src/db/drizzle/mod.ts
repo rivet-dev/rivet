@@ -4,6 +4,7 @@ import {
 	drizzle as proxyDrizzle,
 	type SqliteRemoteDatabase,
 } from "drizzle-orm/sqlite-proxy";
+import { drizzle as durableDrizzle } from "drizzle-orm/durable-sqlite";
 import type { DatabaseProvider, RawAccess } from "../config";
 import {
 	AsyncMutex,
@@ -195,6 +196,47 @@ async function runInlineMigrations(
 	}
 }
 
+/**
+ * Run inline migrations directly on Durable Object SqlStorage.
+ * Used when the driver provides overrideDrizzleDatabaseClient (e.g. CF Workers).
+ */
+function runDOInlineMigrations(sql: any, migrations: any): void {
+	sql.exec(`
+		CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			hash TEXT NOT NULL,
+			created_at INTEGER
+		)
+	`);
+
+	const existing = sql
+		.exec("SELECT id, hash, created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1")
+		.toArray() as { id: number; hash: string; created_at: number }[];
+	const lastMigration = existing[0];
+
+	const journal = migrations.journal;
+	if (!journal?.entries) return;
+
+	for (const entry of journal.entries) {
+		if (lastMigration && entry.when <= lastMigration.created_at) continue;
+
+		const migrationKey = `m${String(entry.idx).padStart(4, "0")}`;
+		const migrationSql = migrations.migrations[migrationKey];
+		if (!migrationSql) continue;
+
+		for (const stmt of migrationSql.split("--> statement-breakpoint")) {
+			const trimmed = stmt.trim();
+			if (trimmed) sql.exec(trimmed);
+		}
+
+		sql.exec(
+			"INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+			entry.tag,
+			entry.when,
+		);
+	}
+}
+
 export function db<
 	TSchema extends Record<string, unknown> = Record<string, never>,
 >(
@@ -214,8 +256,44 @@ export function db<
 		ReturnType<typeof createActorKvStore>
 	>();
 
+	// Storage reference for override path (used in onMigrate)
+	const clientToStorage = new WeakMap<object, any>();
+
 	return {
 		createClient: async (ctx) => {
+			// If the driver provides a Durable Object storage override (e.g.
+			// Cloudflare Workers), use the native DO SQLite instead of the
+			// KV-backed VFS path. This avoids the dynamic-import bundling
+			// issue where @rivetkit/sqlite-vfs cannot be resolved at runtime.
+			if (ctx.overrideDrizzleDatabaseClient) {
+				const storage = await ctx.overrideDrizzleDatabaseClient();
+				if (storage) {
+					const db = durableDrizzle(storage as any, config);
+
+					const result = Object.assign(db, {
+						execute: async <
+							TRow extends Record<string, unknown> = Record<
+								string,
+								unknown
+							>,
+						>(
+							query: string,
+							...args: unknown[]
+						): Promise<TRow[]> => {
+							const sqlStorage = (storage as any).sql;
+							const cursor = args.length > 0
+								? sqlStorage.exec(query, ...args)
+								: sqlStorage.exec(query);
+							return cursor.toArray() as TRow[];
+						},
+						close: async () => {},
+					} satisfies RawAccess);
+
+					clientToStorage.set(result, storage);
+					return result as any;
+				}
+			}
+
 			// Construct KV-backed client using actor driver's KV operations
 			if (!ctx.sqliteVfs) {
 				throw new Error(
@@ -348,6 +426,13 @@ export function db<
 			return result;
 		},
 		onMigrate: async (client) => {
+			// Override path: run migrations directly on DO SQLite
+			const storage = clientToStorage.get(client as object);
+			if (storage && config?.migrations) {
+				runDOInlineMigrations(storage.sql, config.migrations);
+				return;
+			}
+
 			// Clear preloaded entries before migrations run. Migrations may
 			// write and re-read pages, and stale preload data would be
 			// served instead of the freshly written values.
