@@ -1,5 +1,7 @@
 import { faArrowUpRight, Icon } from "@rivet-gg/icons";
+
 import { Link } from "@tanstack/react-router";
+
 import { Button } from "../ui/button";
 
 export function OnboardingFooter() {
@@ -24,9 +26,7 @@ export function OnboardingFooter() {
 				variant="link"
 				size="xs"
 				asChild
-				endIcon={
-					<Icon icon={faArrowUpRight} className="ms-1" />
-				}
+				endIcon={<Icon icon={faArrowUpRight} className="ms-1" />}
 			>
 				<Link
 					to="."

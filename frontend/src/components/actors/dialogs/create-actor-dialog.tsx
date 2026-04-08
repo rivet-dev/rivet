@@ -2,6 +2,7 @@ import { Rivet } from "@rivetkit/engine-api-full";
 import { useMutation } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
 import type { DialogContentProps } from "@/components/hooks";
+import { features } from "@/lib/features";
 import {
 	Accordion,
 	AccordionContent,
@@ -40,8 +41,7 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 					name: values.name,
 					input: values.input ? JSON.parse(values.input) : undefined,
 					key: values.key,
-					datacenter:
-						__APP_TYPE__ === "inspector" ? "" : values.datacenter,
+					datacenter: values.datacenter,
 					crashPolicy: values.crashPolicy || Rivet.CrashPolicy.Sleep,
 					runnerNameSelector: values.runnerNameSelector || "default",
 				});
@@ -63,7 +63,7 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 				{!name ? <ActorCreateForm.Build /> : null}
 				<ActorCreateForm.Keys />
 				<ActorCreateForm.ActorPreview />
-				{["engine", "cloud"].includes(__APP_TYPE__) ? (
+				{features.datacenter ? (
 					<>
 						<ActorCreateForm.PrefillActorName />
 						<ActorCreateForm.PrefillRunnerName />
@@ -75,7 +75,7 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 					<AccordionItem value="item-1">
 						<AccordionTrigger>Advanced</AccordionTrigger>
 						<AccordionContent className="flex gap-4 flex-col">
-							{["engine", "cloud"].includes(__APP_TYPE__) ? (
+							{features.datacenter ? (
 								<>
 									<ActorCreateForm.Datacenter />
 									<ActorCreateForm.RunnerNameSelector />
