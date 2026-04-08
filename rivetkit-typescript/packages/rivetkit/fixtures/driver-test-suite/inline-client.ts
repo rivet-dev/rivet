@@ -1,5 +1,5 @@
 import { actor } from "rivetkit";
-import type { registry } from "./registry";
+import type { registry } from "./registry-static";
 
 export const inlineClientActor = actor({
 	state: { messages: [] as string[] },

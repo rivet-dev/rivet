@@ -324,13 +324,13 @@ impl JsEnvoyHandle {
 		let map = self.ws_sender_map.lock().await;
 		if let Some(sender) = map.get(&key) {
 			sender.send(data.to_vec(), binary);
-			Ok(())
 		} else {
-			Err(napi::Error::from_reason(format!(
-				"no WebSocket sender for {:?}",
-				key
-			)))
+			// The sender can disappear during shutdown after the JavaScript
+			// side has already observed the socket as closed. Treat this like
+			// a best-effort send on a closed socket instead of surfacing an
+			// unhandled rejection back into the actor runtime.
 		}
+		Ok(())
 	}
 
 	/// Close an open WebSocket connection.

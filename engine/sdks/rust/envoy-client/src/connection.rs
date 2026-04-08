@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use futures_util::{SinkExt, StreamExt};
 use rivet_envoy_protocol as protocol;
@@ -22,6 +23,11 @@ async fn connection_loop(shared: Arc<SharedContext>) {
 	let mut attempt = 0u32;
 
 	loop {
+		if shared.shutting_down.load(Ordering::Acquire) {
+			tracing::debug!("stopping reconnect loop because envoy is shutting down");
+			return;
+		}
+
 		let connected_at = std::time::Instant::now();
 
 		match single_connection(&shared).await {
@@ -49,6 +55,11 @@ async fn connection_loop(shared: Arc<SharedContext>) {
 
 		if connected_at.elapsed().as_millis() >= STABLE_CONNECTION_MS as u128 {
 			attempt = 0;
+		}
+
+		if shared.shutting_down.load(Ordering::Acquire) {
+			tracing::debug!("skipping reconnect because envoy is shutting down");
+			return;
 		}
 
 		let delay = calculate_backoff(attempt, &BackoffOptions::default());

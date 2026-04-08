@@ -71,8 +71,7 @@ export function runActorErrorHandlingTests(driverTestConfig: DriverTestConfig) {
 			});
 		});
 
-		// TODO: Does not work with fake timers
-		describe.skip("Action Timeout", () => {
+		describe.skipIf(!driverTestConfig.useRealTimers)("Action Timeout", () => {
 			test("should handle action timeouts with custom duration", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 

@@ -1,12 +1,21 @@
+import { availableParallelism, cpus } from "node:os";
 import type { ViteUserConfig } from "vitest/config";
+
+const maxConcurrency = (() => {
+	try {
+		return availableParallelism();
+	} catch {
+		return cpus().length;
+	}
+})();
 
 export default {
 	test: {
 		testTimeout: 10_000,
 		hookTimeout: 10_000,
+		maxConcurrency,
 		// Enable parallelism
 		sequence: {
-			// TODO: This breaks fake timers, unsure how to make tests run in parallel within the same file
 			concurrent: true,
 		},
 		env: {

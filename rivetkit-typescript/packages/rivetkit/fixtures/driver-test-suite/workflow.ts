@@ -8,7 +8,7 @@ import {
 	type WorkflowLoopContextOf,
 	workflow,
 } from "@/workflow/mod";
-import type { registry } from "./registry";
+import type { registry } from "./registry-static";
 
 const WORKFLOW_QUEUE_NAME = "workflow-default";
 const WORKFLOW_NESTED_QUEUE_NAME = "workflow-nested";

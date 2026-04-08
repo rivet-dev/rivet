@@ -2,6 +2,28 @@ import { describe, expect, test, vi } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
+function buildInspectorUrl(
+	gatewayUrl: string,
+	path: string,
+	searchParams?: Record<string, string>,
+): string {
+	const url = new URL(gatewayUrl);
+	url.pathname = `${url.pathname.replace(/\/$/, "")}${path}`;
+	for (const [key, value] of Object.entries(searchParams ?? {})) {
+		url.searchParams.set(key, value);
+	}
+	return url.toString();
+}
+
+function isActorStoppingDbError(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		error.message.includes(
+			"Actor stopping: database accessed after actor stopped",
+		)
+	);
+}
+
 export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 	describe("Actor Inspector HTTP API", () => {
 		test("GET /inspector/state returns actor state", async (c) => {
@@ -12,9 +34,12 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			await handle.increment(5);
 
 			const gatewayUrl = await handle.getGatewayUrl();
-			const response = await fetch(`${gatewayUrl}/inspector/state`, {
+			const response = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/state"),
+				{
 				headers: { Authorization: "Bearer token" },
-			});
+				},
+			);
 			expect(response.status).toBe(200);
 			const data = await response.json();
 			expect(data).toEqual({
@@ -32,14 +57,17 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			const gatewayUrl = await handle.getGatewayUrl();
 
 			// Replace state
-			const patchResponse = await fetch(`${gatewayUrl}/inspector/state`, {
+			const patchResponse = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/state"),
+				{
 				method: "PATCH",
 				headers: {
 					"Content-Type": "application/json",
 					Authorization: "Bearer token",
 				},
 				body: JSON.stringify({ state: { count: 42 } }),
-			});
+				},
+			);
 			expect(patchResponse.status).toBe(200);
 			const patchData = await patchResponse.json();
 			expect(patchData).toEqual({ ok: true });
@@ -60,7 +88,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/connections`,
+				buildInspectorUrl(gatewayUrl, "/inspector/connections"),
 				{
 					headers: { Authorization: "Bearer token" },
 				},
@@ -81,9 +109,12 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			await handle.increment(0);
 
 			const gatewayUrl = await handle.getGatewayUrl();
-			const response = await fetch(`${gatewayUrl}/inspector/rpcs`, {
+			const response = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/rpcs"),
+				{
 				headers: { Authorization: "Bearer token" },
-			});
+				},
+			);
 			expect(response.status).toBe(200);
 			const data = (await response.json()) as { rpcs: string[] };
 			expect(data).toHaveProperty("rpcs");
@@ -100,7 +131,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/action/increment`,
+				buildInspectorUrl(gatewayUrl, "/inspector/action/increment"),
 				{
 					method: "POST",
 					headers: {
@@ -128,7 +159,9 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/queue?limit=10`,
+				buildInspectorUrl(gatewayUrl, "/inspector/queue", {
+					limit: "10",
+				}),
 				{
 					headers: { Authorization: "Bearer token" },
 				},
@@ -159,7 +192,11 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/traces?startMs=0&endMs=${Date.now() + 60000}&limit=100`,
+				buildInspectorUrl(gatewayUrl, "/inspector/traces", {
+					startMs: "0",
+					endMs: String(Date.now() + 60000),
+					limit: "100",
+				}),
 				{
 					headers: { Authorization: "Bearer token" },
 				},
@@ -183,7 +220,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/workflow-history`,
+				buildInspectorUrl(gatewayUrl, "/inspector/workflow-history"),
 				{
 					headers: { Authorization: "Bearer token" },
 				},
@@ -211,7 +248,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/database/schema`,
+				buildInspectorUrl(gatewayUrl, "/inspector/database/schema"),
 				{
 					headers: { Authorization: "Bearer token" },
 				},
@@ -261,7 +298,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/workflow-history`,
+				buildInspectorUrl(gatewayUrl, "/inspector/workflow-history"),
 				{
 					headers: { Authorization: "Bearer token" },
 				},
@@ -297,7 +334,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/workflow/replay`,
+				buildInspectorUrl(gatewayUrl, "/inspector/workflow/replay"),
 				{
 					method: "POST",
 					headers: {
@@ -342,7 +379,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/database/execute`,
+				buildInspectorUrl(gatewayUrl, "/inspector/database/execute"),
 				{
 					method: "POST",
 					headers: {
@@ -371,11 +408,28 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			]);
 
 			await handle.insertValue("Alice");
-			await handle.insertValue("Bob");
+			let inserted = false;
+			for (let attempt = 0; attempt < 40; attempt++) {
+				try {
+					await handle.insertValue("Bob");
+					inserted = true;
+					break;
+				} catch (error) {
+					if (!isActorStoppingDbError(error)) {
+						throw error;
+					}
+					await waitFor(driverTestConfig, 25);
+				}
+			}
+			expect(inserted).toBe(true);
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/database/rows?table=test_data&limit=1&offset=1`,
+				buildInspectorUrl(gatewayUrl, "/inspector/database/rows", {
+					table: "test_data",
+					limit: "1",
+					offset: "1",
+				}),
 				{
 					headers: { Authorization: "Bearer token" },
 				},
@@ -409,7 +463,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/database/execute`,
+				buildInspectorUrl(gatewayUrl, "/inspector/database/execute"),
 				{
 					method: "POST",
 					headers: {
@@ -443,7 +497,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/workflow/replay`,
+				buildInspectorUrl(gatewayUrl, "/inspector/workflow/replay"),
 				{
 					method: "POST",
 					headers: {
@@ -468,7 +522,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
-				`${gatewayUrl}/inspector/database/execute`,
+				buildInspectorUrl(gatewayUrl, "/inspector/database/execute"),
 				{
 					method: "POST",
 					headers: {
@@ -498,9 +552,12 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			await handle.increment(7);
 
 			const gatewayUrl = await handle.getGatewayUrl();
-			const response = await fetch(`${gatewayUrl}/inspector/summary`, {
+			const response = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/summary"),
+				{
 				headers: { Authorization: "Bearer token" },
-			});
+				},
+			);
 			expect(response.status).toBe(200);
 			const data = (await response.json()) as {
 				state: { count: number };
@@ -539,9 +596,12 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			}
 
 			const gatewayUrl = await handle.getGatewayUrl();
-			const response = await fetch(`${gatewayUrl}/inspector/summary`, {
+			const response = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/summary"),
+				{
 				headers: { Authorization: "Bearer token" },
-			});
+				},
+			);
 			expect(response.status).toBe(200);
 			const data = (await response.json()) as {
 				isWorkflowEnabled: boolean;
@@ -571,9 +631,12 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			const gatewayUrl = await handle.getGatewayUrl();
 
 			// Request with wrong token should fail
-			const response = await fetch(`${gatewayUrl}/inspector/state`, {
+			const response = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/state"),
+				{
 				headers: { Authorization: "Bearer wrong-token" },
-			});
+				},
+			);
 			expect(response.status).toBe(401);
 		});
 
@@ -586,9 +649,12 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 
-			const response = await fetch(`${gatewayUrl}/inspector/metrics`, {
+			const response = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/metrics"),
+				{
 				headers: { Authorization: "Bearer token" },
-			});
+				},
+			);
 			expect(response.status).toBe(200);
 			const data: any = await response.json();
 

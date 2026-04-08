@@ -1,5 +1,5 @@
 import { actor } from "rivetkit";
-import type { registry } from "./registry";
+import type { registry } from "./registry-static";
 
 export const RUN_SLEEP_TIMEOUT = 1000;
 

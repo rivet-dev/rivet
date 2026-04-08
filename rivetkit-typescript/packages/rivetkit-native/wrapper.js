@@ -99,9 +99,8 @@ function wrapHandle(jsHandle) {
 				Buffer.from(requestId),
 				clientMessageIndex,
 			),
-		startServerlessActor: (payload) => {
-			jsHandle.startServerless(Buffer.from(payload));
-		},
+		startServerlessActor: async (payload) =>
+			await jsHandle.startServerless(Buffer.from(payload)),
 		// Internal: expose raw handle for openDatabaseFromEnvoy
 		_raw: jsHandle,
 	};
@@ -152,6 +151,152 @@ async function openDatabaseFromEnvoy(handle, actorId) {
 	return native.openDatabaseFromEnvoy(rawHandle, actorId);
 }
 
+function isPlainObject(value) {
+	return (
+		!!value &&
+		typeof value === "object" &&
+		!Array.isArray(value) &&
+		Object.getPrototypeOf(value) === Object.prototype
+	);
+}
+
+function toNativeBinding(value) {
+	if (value === null || value === undefined) {
+		return { kind: "null" };
+	}
+	if (typeof value === "bigint") {
+		return { kind: "int", intValue: Number(value) };
+	}
+	if (typeof value === "number") {
+		return Number.isInteger(value)
+			? { kind: "int", intValue: value }
+			: { kind: "float", floatValue: value };
+	}
+	if (typeof value === "string") {
+		return { kind: "text", textValue: value };
+	}
+	if (value instanceof ArrayBuffer) {
+		return { kind: "blob", blobValue: Buffer.from(value) };
+	}
+	if (ArrayBuffer.isView(value)) {
+		return {
+			kind: "blob",
+			blobValue: Buffer.from(value.buffer, value.byteOffset, value.byteLength),
+		};
+	}
+
+	throw new Error(`unsupported sqlite binding type: ${typeof value}`);
+}
+
+function extractNamedSqliteParameters(sql) {
+	return [...sql.matchAll(/([:@$][A-Za-z_][A-Za-z0-9_]*)/g)].map(
+		(match) => match[1],
+	);
+}
+
+function getNamedSqliteBinding(bindings, name) {
+	if (name in bindings) {
+		return bindings[name];
+	}
+
+	const bareName = name.slice(1);
+	if (bareName in bindings) {
+		return bindings[bareName];
+	}
+
+	for (const prefix of [":", "@", "$"]) {
+		const candidate = `${prefix}${bareName}`;
+		if (candidate in bindings) {
+			return bindings[candidate];
+		}
+	}
+
+	return undefined;
+}
+
+function normalizeBindings(sql, args) {
+	if (!args || args.length === 0) {
+		return [];
+	}
+
+	if (
+		args.length === 1 &&
+		isPlainObject(args[0]) &&
+		!(args[0] instanceof Uint8Array)
+	) {
+		const names = extractNamedSqliteParameters(sql);
+		if (names.length === 0) {
+			throw new Error(
+				"native sqlite object bindings require named placeholders in the SQL statement",
+			);
+		}
+		return names.map((name) => {
+			const value = getNamedSqliteBinding(args[0], name);
+			if (value === undefined) {
+				throw new Error(`missing bind parameter: ${name}`);
+			}
+			return toNativeBinding(value);
+		});
+	}
+
+	return args.map(toNativeBinding);
+}
+
+function mapRows(rows, columns) {
+	return rows.map((row) => {
+		const rowObject = {};
+		for (let i = 0; i < columns.length; i++) {
+			rowObject[columns[i]] = row[i];
+		}
+		return rowObject;
+	});
+}
+
+async function openRawDatabaseFromEnvoy(handle, actorId) {
+	const nativeDb = await openDatabaseFromEnvoy(handle, actorId);
+	let closed = false;
+
+	const ensureOpen = () => {
+		if (closed) {
+			throw new Error("database is closed");
+		}
+	};
+
+	return {
+		execute: async (query, ...args) => {
+			ensureOpen();
+
+			if (args.length > 0) {
+				const bindings = normalizeBindings(query, args);
+				const token = query.trimStart().slice(0, 16).toUpperCase();
+				const returnsRows =
+					token.startsWith("SELECT") ||
+					token.startsWith("PRAGMA") ||
+					token.startsWith("WITH") ||
+					/\bRETURNING\b/i.test(query);
+
+				if (returnsRows) {
+					const result = await nativeDb.query(query, bindings);
+					return mapRows(result.rows, result.columns);
+				}
+
+				await nativeDb.run(query, bindings);
+				return [];
+			}
+
+			const result = await nativeDb.exec(query);
+			return mapRows(result.rows, result.columns);
+		},
+		close: async () => {
+			if (closed) {
+				return;
+			}
+			closed = true;
+			await nativeDb.close();
+		},
+	};
+}
+
 /**
  * Route callback envelopes from the native addon to EnvoyConfig callbacks.
  */
@@ -176,15 +321,15 @@ function handleEvent(event, config, wrappedHandle) {
 					null, // preloadedKv
 				),
 			).then(
-				() => {
+				async () => {
 					if (handle._raw) {
-						handle._raw.respondCallback(event.responseId, {});
+						await handle._raw.respondCallback(event.responseId, {});
 					}
 				},
-				(err) => {
+				async (err) => {
 					console.error("onActorStart error:", err);
 					if (handle._raw) {
-						handle._raw.respondCallback(event.responseId, {
+						await handle._raw.respondCallback(event.responseId, {
 							error: String(err),
 						});
 					}
@@ -201,15 +346,15 @@ function handleEvent(event, config, wrappedHandle) {
 					event.reason || "stopped",
 				),
 			).then(
-				() => {
+				async () => {
 					if (handle._raw) {
-						handle._raw.respondCallback(event.responseId, {});
+						await handle._raw.respondCallback(event.responseId, {});
 					}
 				},
-				(err) => {
+				async (err) => {
 					console.error("onActorStop error:", err);
 					if (handle._raw) {
-						handle._raw.respondCallback(event.responseId, {
+						await handle._raw.respondCallback(event.responseId, {
 							error: String(err),
 						});
 					}
@@ -246,17 +391,17 @@ function handleEvent(event, config, wrappedHandle) {
 						const respBody = response.body
 							? Buffer.from(await response.arrayBuffer()).toString("base64")
 							: undefined;
-						handle._raw.respondCallback(event.responseId, {
+						await handle._raw.respondCallback(event.responseId, {
 							status: response.status || 200,
 							headers: respHeaders,
 							body: respBody,
 						});
 					}
 				},
-				(err) => {
+				async (err) => {
 					console.error("fetch callback error:", err);
 					if (handle._raw) {
-						handle._raw.respondCallback(event.responseId, {
+						await handle._raw.respondCallback(event.responseId, {
 							status: 500,
 							headers: { "content-type": "text/plain" },
 							body: Buffer.from(String(err)).toString("base64"),
@@ -335,7 +480,6 @@ function handleEvent(event, config, wrappedHandle) {
 					)
 					: false;
 
-				console.log("[wrapper] websocket_open actorId:", event.actorId?.slice(0, 12), "path:", event.path);
 				Promise.resolve(
 					config.websocket(
 						handle,
@@ -350,9 +494,7 @@ function handleEvent(event, config, wrappedHandle) {
 						false,
 					),
 				).then(() => {
-					console.log("[wrapper] websocket callback resolved, dispatching open event");
 					ws.dispatchEvent(new Event("open"));
-					console.log("[wrapper] open event dispatched");
 				}).catch((err) => {
 					console.error("[wrapper] websocket callback error:", err);
 				});
@@ -420,3 +562,4 @@ function handleEvent(event, config, wrappedHandle) {
 module.exports.startEnvoy = startEnvoy;
 module.exports.startEnvoySync = startEnvoySync;
 module.exports.openDatabaseFromEnvoy = openDatabaseFromEnvoy;
+module.exports.openRawDatabaseFromEnvoy = openRawDatabaseFromEnvoy;

@@ -872,10 +872,30 @@ export const sleepWsActiveDbExceedsGrace = actor({
 		c.state.sleepCount += 1;
 	},
 	onWebSocket: (c, ws: UniversalWebSocket) => {
+		const sendMessage = (payload: unknown) => {
+			try {
+				const result = (ws as { send(data: string): unknown }).send(
+					JSON.stringify(payload),
+				);
+				void Promise.resolve(result).catch((error) => {
+					c.log.warn({
+						msg: "websocket send failed during active db write test",
+						error:
+							error instanceof Error ? error.message : String(error),
+					});
+				});
+			} catch (error) {
+				c.log.warn({
+					msg: "websocket send failed during active db write test",
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		};
+
 		ws.addEventListener("message", async (event: any) => {
 			if (event.data !== "start-writes") return;
 
-			ws.send(JSON.stringify({ type: "started" }));
+			sendMessage({ type: "started" });
 
 			// Perform many sequential DB writes. Each write acquires and
 			// releases the DB wrapper mutex. Between two writes, the
@@ -889,13 +909,11 @@ export const sleepWsActiveDbExceedsGrace = actor({
 				} catch (error) {
 					c.state.writeError =
 						error instanceof Error ? error.message : String(error);
-					ws.send(
-						JSON.stringify({
-							type: "error",
-							index: i,
-							error: c.state.writeError,
-						}),
-					);
+					sendMessage({
+						type: "error",
+						index: i,
+						error: c.state.writeError,
+					});
 					return;
 				}
 
@@ -906,10 +924,10 @@ export const sleepWsActiveDbExceedsGrace = actor({
 				);
 			}
 
-			ws.send(JSON.stringify({ type: "finished" }));
+			sendMessage({ type: "finished" });
 		});
 
-		ws.send(JSON.stringify({ type: "connected" }));
+		sendMessage({ type: "connected" });
 	},
 	actions: {
 		triggerSleep: (c) => {

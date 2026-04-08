@@ -67,6 +67,7 @@ import {
 	stringifyError,
 	VERSION,
 } from "@/utils";
+import { getRequireFn } from "@/utils/node";
 import { logger } from "./log";
 
 const ENVOY_SSE_PING_INTERVAL = 1000;
@@ -144,6 +145,7 @@ export class EngineActorDriver implements ActorDriver {
 			}),
 	);
 	#isEnvoyStopped: boolean = false;
+	#isShuttingDown: boolean = false;
 
 	// HACK: Track actor stop intent locally since the envoy protocol doesn't
 	// pass the stop reason to onActorStop. This will be fixed when the envoy
@@ -569,29 +571,20 @@ export class EngineActorDriver implements ActorDriver {
 		// Try to load the native package. If available, return a provider
 		// that opens databases from the live envoy handle.
 		try {
-			const requireFn =
-				typeof require !== "undefined"
-					? require
-					: typeof globalThis.require !== "undefined"
-						? globalThis.require
-						: undefined;
-			if (!requireFn) return undefined;
+			const requireFn = getRequireFn();
 
 			const nativeMod = requireFn(
 				/* webpackIgnore: true */ "@rivetkit/rivetkit-native/wrapper",
 			);
-			if (!nativeMod?.openDatabaseFromEnvoy) return undefined;
+			if (!nativeMod?.openRawDatabaseFromEnvoy) return undefined;
 
 			const envoy = this.#envoy;
 			return {
 				open: async (actorId: string) => {
-					const nativeDb = await nativeMod.openDatabaseFromEnvoy(
+					return await nativeMod.openRawDatabaseFromEnvoy(
 						envoy,
 						actorId,
 					);
-					// The native database is opened from the envoy's KV channel.
-					// Return a RawAccess-compatible interface.
-					return nativeDb;
 				},
 			};
 		} catch {
@@ -738,6 +731,11 @@ export class EngineActorDriver implements ActorDriver {
 	}
 
 	async shutdown(immediate: boolean): Promise<void> {
+		if (this.#isShuttingDown) {
+			return;
+		}
+		this.#isShuttingDown = true;
+
 		logger().info({ msg: "stopping engine actor driver", immediate });
 		if (!immediate) {
 			// Put actors through the normal sleep intent path before draining the
@@ -820,7 +818,14 @@ export class EngineActorDriver implements ActorDriver {
 
 			await this.#envoyStarted.promise;
 
-			this.#envoy.startServerlessActor(payload);
+			if (this.#isShuttingDown) {
+				logger().debug({
+					msg: "ignoring serverless start because driver is shutting down",
+				});
+				return;
+			}
+
+			await this.#envoy.startServerlessActor(payload);
 
 			// Send ping every second to keep the connection alive
 			while (true) {
@@ -899,6 +904,16 @@ export class EngineActorDriver implements ActorDriver {
 		actorConfig: protocol.ActorConfig,
 		preloadedKv: protocol.PreloadedKv | null,
 	): Promise<void> {
+		if (this.#isShuttingDown) {
+			logger().debug({
+				msg: "rejecting actor start because driver is shutting down",
+				actorId,
+				name: actorConfig.name,
+				generation,
+			});
+			throw new Error("engine actor driver is shutting down");
+		}
+
 		logger().debug({
 			msg: "engine actor starting",
 			actorId,
@@ -1639,17 +1654,27 @@ export class EngineActorDriver implements ActorDriver {
 		const url = new URL(request.url);
 		const path = url.pathname;
 
-		// Get actor instance from envoy to access actor name
+		// Resolve actor name from either the envoy's actor view or the local
+		// handler. WebSocket opens can race with actor startup, so the local
+		// handler may know the actor name slightly earlier than the envoy.
 		const actorInstance = this.#envoy.getActor(actorId);
-		if (!actorInstance) {
+		const handler = this.#actors.get(actorId);
+		const actorName =
+			actorInstance &&
+				"config" in actorInstance &&
+				actorInstance.config &&
+				typeof actorInstance.config === "object" &&
+				"name" in actorInstance.config &&
+				typeof actorInstance.config.name === "string"
+				? actorInstance.config.name
+				: handler?.actorName;
+		if (!actorName) {
 			logger().warn({
-				msg: "actor not found in #hwsCanHibernate",
+				msg: "actor name unavailable in #hwsCanHibernate",
 				actorId,
 			});
 			return false;
 		}
-
-		const handler = this.#actors.get(actorId);
 
 		// Determine configuration for new WS
 		logger().debug({
@@ -1666,18 +1691,6 @@ export class EngineActorDriver implements ActorDriver {
 			// Find actor config
 			// Hibernation capability is a definition-level property, so the
 			// envoy can decide it before the actor has fully started.
-			const actorName =
-				"config" in actorInstance &&
-					actorInstance.config &&
-					typeof actorInstance.config === "object" &&
-					"name" in actorInstance.config &&
-					typeof actorInstance.config.name === "string"
-					? actorInstance.config.name
-					: this.#actors.get(actorId)?.actorName;
-			invariant(
-				actorName,
-				`missing actor name for hibernatable websocket actor ${actorId}`,
-			);
 			const definition = lookupInRegistry(this.#config, actorName);
 
 			// Check if can hibernate

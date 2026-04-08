@@ -1040,6 +1040,23 @@ export class ActorConnRaw {
 	onOpen(callback: ConnectionStateCallback): () => void {
 		this.#openHandlers.add(callback);
 
+		if (this.#connStatus === "connected") {
+			queueMicrotask(() => {
+				if (!this.#openHandlers.has(callback)) {
+					return;
+				}
+
+				try {
+					callback();
+				} catch (err) {
+					logger().error({
+						msg: "error in open handler",
+						error: stringifyError(err),
+					});
+				}
+			});
+		}
+
 		// Return unsubscribe function
 		return () => {
 			this.#openHandlers.delete(callback);

@@ -7,6 +7,8 @@ import {
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
 	WS_PROTOCOL_STANDARD as WS_PROTOCOL_RIVETKIT,
+	WS_PROTOCOL_TARGET,
+	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_TEST_ACK_HOOK,
 	WS_PROTOCOL_TOKEN,
 } from "@/common/actor-router-consts";
@@ -358,10 +360,18 @@ export function buildWebSocketProtocols(
 	encoding: Encoding,
 	params?: unknown,
 	ackHookToken?: string,
+	target?: {
+		target: "actor";
+		actorId: string;
+	},
 ): string[] {
 	const protocols: string[] = [];
 	protocols.push(WS_PROTOCOL_RIVETKIT);
 	protocols.push(`${WS_PROTOCOL_ENCODING}${encoding}`);
+	if (target) {
+		protocols.push(`${WS_PROTOCOL_TARGET}${target.target}`);
+		protocols.push(`${WS_PROTOCOL_ACTOR}${target.actorId}`);
+	}
 	if (params) {
 		protocols.push(
 			`${WS_PROTOCOL_CONN_PARAMS}${encodeURIComponent(JSON.stringify(params))}`,

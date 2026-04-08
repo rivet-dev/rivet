@@ -93,11 +93,14 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 				});
 
 				// TODO: There is a race condition with opening subscription and sending events on SSE, so we need to wait for a successful round trip on the event
-				await vi.waitFor(async () => {
-					// Send one RPC call over the connection to ensure it's open
-					await connection.setCount(1);
-					expect(receivedEvents).includes(1);
-				});
+				await vi.waitFor(
+					async () => {
+						// Send one RPC call over the connection to ensure it's open.
+						await connection.setCount(1);
+						expect(receivedEvents).includes(1);
+					},
+					{ timeout: 10_000, interval: 25 },
+				);
 
 				// Now use stateless RPC calls through the handle (no connection)
 				// These should still trigger events that the connection receives
@@ -391,9 +394,12 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 				expect(connection.isConnected).toBe(false);
 
 				// Wait for connection to be established
-				await vi.waitFor(() => {
-					expect(connection.isConnected).toBe(true);
-				});
+				await vi.waitFor(
+					() => {
+						expect(connection.isConnected).toBe(true);
+					},
+					{ timeout: 10_000, interval: 25 },
+				);
 
 				// Clean up
 				await connection.dispose();
@@ -533,10 +539,13 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 				});
 
 				// Wait for connection to open
-				await vi.waitFor(() => {
-					expect(handler1Called).toBe(true);
-					expect(handler2Called).toBe(true);
-				});
+				await vi.waitFor(
+					() => {
+						expect(handler1Called).toBe(true);
+						expect(handler2Called).toBe(true);
+					},
+					{ timeout: 10_000, interval: 25 },
+				);
 
 				// Clean up
 				await connection.dispose();
@@ -563,9 +572,12 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 				});
 
 				// Wait for connection to open first
-				await vi.waitFor(() => {
-					expect(connection.isConnected).toBe(true);
-				});
+				await vi.waitFor(
+					() => {
+						expect(connection.isConnected).toBe(true);
+					},
+					{ timeout: 10_000, interval: 25 },
+				);
 
 				// Dispose connection
 				await connection.dispose();

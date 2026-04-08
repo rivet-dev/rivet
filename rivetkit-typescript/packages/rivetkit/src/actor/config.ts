@@ -220,6 +220,7 @@ const InstanceActorOptionsBaseSchema = z
 	.object({
 		createVarsTimeout: z.number().positive().default(5000),
 		createConnStateTimeout: z.number().positive().default(5000),
+		onBeforeConnectTimeout: z.number().positive().default(5000),
 		onConnectTimeout: z.number().positive().default(5000),
 		sleepGracePeriod: z.number().positive().optional(),
 		onSleepTimeout: z
@@ -1073,6 +1074,12 @@ export const DocActorOptionsSchema = z
 			.optional()
 			.describe(
 				"Timeout in ms for createConnState handler. Default: 5000",
+			),
+		onBeforeConnectTimeout: z
+			.number()
+			.optional()
+			.describe(
+				"Timeout in ms for onBeforeConnect handler. Default: 5000",
 			),
 		onConnectTimeout: z
 			.number()

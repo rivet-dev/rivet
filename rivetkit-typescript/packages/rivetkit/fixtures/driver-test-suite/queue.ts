@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { actor, queue } from "rivetkit";
-import type { registry } from "./registry";
+import type { registry } from "./registry-static";
 
 const queueSchemas = {
 	greeting: queue<{ hello: string }>(),

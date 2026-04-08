@@ -325,6 +325,11 @@ export class RemoteEngineControlClient implements EngineControlClient {
 			this.#config,
 			encoding,
 			params,
+			undefined,
+			{
+				target: "actor",
+				actorId,
+			},
 		);
 		const args = await createWebSocketProxy(c, wsGuardUrl, protocols);
 
