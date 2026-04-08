@@ -1,6 +1,11 @@
 import { type ActorContext, actor, type UniversalWebSocket } from "rivetkit";
+import { scheduleActorSleep } from "./schedule-sleep";
 
 export const rawWebSocketActor = actor({
+	options: {
+		canHibernateWebSocket: true,
+		sleepTimeout: 250,
+	},
 	state: {
 		connectionCount: 0,
 		messageCount: 0,
@@ -62,6 +67,51 @@ export const rawWebSocketActor = actor({
 								search: urlObj.search,
 							}),
 						);
+					} else if (parsed.type === "indexedEcho") {
+						const rivetMessageIndex =
+							typeof event.rivetMessageIndex === "number"
+								? event.rivetMessageIndex
+								: null;
+						ctx.state.indexedMessageOrder.push(rivetMessageIndex);
+						websocket.send(
+							JSON.stringify({
+								type: "indexedEcho",
+								payload: parsed.payload ?? null,
+								rivetMessageIndex,
+							}),
+						);
+					} else if (parsed.type === "indexedAckProbe") {
+						const rivetMessageIndex =
+							typeof event.rivetMessageIndex === "number"
+								? event.rivetMessageIndex
+								: null;
+						ctx.state.indexedMessageOrder.push(rivetMessageIndex);
+						websocket.send(
+							JSON.stringify({
+								type: "indexedAckProbe",
+								rivetMessageIndex,
+								payloadSize:
+									typeof parsed.payload === "string"
+										? parsed.payload.length
+										: 0,
+							}),
+						);
+					} else if (parsed.type === "getIndexedMessageOrder") {
+						websocket.send(
+							JSON.stringify({
+								type: "indexedMessageOrder",
+								order: ctx.state.indexedMessageOrder,
+							}),
+						);
+					} else if (parsed.type === "scheduleSleep") {
+						websocket.send(
+							JSON.stringify({
+								type: "sleepScheduled",
+							}),
+						);
+						globalThis.setTimeout(() => {
+							ctx.sleep();
+						}, 25);
 					} else {
 						// Echo back
 						websocket.send(data);
@@ -85,6 +135,10 @@ export const rawWebSocketActor = actor({
 		});
 	},
 	actions: {
+		triggerSleep: (c: ActorContext<any, any, any, any, any, any>) => {
+			scheduleActorSleep(c);
+			return true;
+		},
 		getStats(ctx: any) {
 			return {
 				connectionCount: ctx.state.connectionCount,

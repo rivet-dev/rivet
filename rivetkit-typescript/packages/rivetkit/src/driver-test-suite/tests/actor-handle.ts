@@ -201,7 +201,9 @@ export function runActorHandleTests(driverTestConfig: DriverTestConfig) {
 				// (onWake should only be called once when the actor is first created)
 				const events = await sameHandle.getEvents();
 				expect(events).toContain("onWake");
-				expect(events.filter((e) => e === "onWake").length).toBe(1);
+				expect(
+					events.filter((e: string) => e === "onWake").length,
+				).toBe(1);
 			});
 
 			test("should trigger lifecycle hooks for each Action call", async (c) => {
@@ -238,15 +240,18 @@ export function runActorHandleTests(driverTestConfig: DriverTestConfig) {
 
 				// Each should have count 1
 				expect(
-					eventsAfterAction.filter((e) => e === "onBeforeConnect")
+					eventsAfterAction.filter(
+						(e: string) => e === "onBeforeConnect",
+					).length,
+				).toBe(1);
+				expect(
+					eventsAfterAction.filter((e: string) => e === "onConnect")
 						.length,
 				).toBe(1);
 				expect(
-					eventsAfterAction.filter((e) => e === "onConnect").length,
-				).toBe(1);
-				expect(
-					eventsAfterAction.filter((e) => e === "onDisconnect")
-						.length,
+					eventsAfterAction.filter(
+						(e: string) => e === "onDisconnect",
+					).length,
 				).toBe(1);
 
 				// Make another Action call
@@ -258,16 +263,18 @@ export function runActorHandleTests(driverTestConfig: DriverTestConfig) {
 				// Each hook should now have count 2
 				expect(
 					eventsAfterSecondAction.filter(
-						(e) => e === "onBeforeConnect",
+						(e: string) => e === "onBeforeConnect",
 					).length,
 				).toBe(2);
 				expect(
-					eventsAfterSecondAction.filter((e) => e === "onConnect")
-						.length,
+					eventsAfterSecondAction.filter(
+						(e: string) => e === "onConnect",
+					).length,
 				).toBe(2);
 				expect(
-					eventsAfterSecondAction.filter((e) => e === "onDisconnect")
-						.length,
+					eventsAfterSecondAction.filter(
+						(e: string) => e === "onDisconnect",
+					).length,
 				).toBe(2);
 			});
 
@@ -298,14 +305,19 @@ export function runActorHandleTests(driverTestConfig: DriverTestConfig) {
 				const events = await viewHandle.getEvents();
 
 				// Should have 1 onWake, 2 each of onBeforeConnect, onConnect, and onDisconnect
-				expect(events.filter((e) => e === "onWake").length).toBe(1);
 				expect(
-					events.filter((e) => e === "onBeforeConnect").length,
+					events.filter((e: string) => e === "onWake").length,
+				).toBe(1);
+				expect(
+					events.filter((e: string) => e === "onBeforeConnect")
+						.length,
 				).toBe(2);
-				expect(events.filter((e) => e === "onConnect").length).toBe(2);
-				expect(events.filter((e) => e === "onDisconnect").length).toBe(
-					2,
-				);
+				expect(
+					events.filter((e: string) => e === "onConnect").length,
+				).toBe(2);
+				expect(
+					events.filter((e: string) => e === "onDisconnect").length,
+				).toBe(2);
 			});
 		});
 	});

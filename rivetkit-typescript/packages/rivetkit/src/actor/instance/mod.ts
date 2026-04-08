@@ -9,12 +9,12 @@ import {
 import type { ISqliteVfs } from "@rivetkit/sqlite-vfs";
 import { ActorMetrics, type StartupTimingKey } from "@/actor/metrics";
 import invariant from "invariant";
-import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
 import { getBaseLogger, getIncludeTarget, type Logger } from "@/common/log";
 import { stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import { ActorInspector } from "@/inspector/actor-inspector";
+import type { ActorKey } from "@/manager/protocol/query";
 import type { Registry } from "@/mod";
 import {
 	ACTOR_VERSIONED,
@@ -24,7 +24,10 @@ import { EXTRA_ERROR_LOG } from "@/utils";
 import { getRivetExperimentalOtel } from "@/utils/env-vars";
 import { promiseWithResolvers } from "@/utils";
 import {
+	type Actions,
 	type ActorConfig,
+	type ActorConfigInput,
+	ActorConfigSchema,
 	DEFAULT_ON_SLEEP_TIMEOUT,
 	DEFAULT_SLEEP_GRACE_PERIOD,
 	DEFAULT_WAIT_UNTIL_TIMEOUT,
@@ -33,8 +36,13 @@ import {
 import type { ConnDriver } from "../conn/driver";
 import { createHttpDriver } from "../conn/drivers/http";
 import {
+	HibernatableWebSocketAckState,
+	handleInboundHibernatableWebSocketMessage as applyInboundHibernatableWebSocketMessage,
+} from "../conn/hibernatable-websocket-ack-state";
+import {
 	CONN_DRIVER_SYMBOL,
 	CONN_STATE_MANAGER_SYMBOL,
+	type AnyConn,
 	type Conn,
 	type ConnId,
 } from "../conn/mod";
@@ -50,10 +58,12 @@ import {
 } from "../contexts";
 
 import type { AnyDatabaseProvider, InferDatabaseClient } from "../database";
+import { ActorDefinition } from "../definition";
 import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
 import { serializeActorKey } from "../keys";
-import { processMessage } from "../protocol/old";
+import { getValueLength, processMessage } from "../protocol/old";
+import type { InputData } from "../protocol/serde";
 import { Schedule } from "../schedule";
 import {
 	type EventSchemaConfig,
@@ -96,6 +106,70 @@ export const WARN_UNEXPECTED_KV_ROUND_TRIP = Symbol(
 	"warnUnexpectedKvRoundTrip",
 );
 
+export function actor<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+	TActions extends Actions<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	> = Actions<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	>,
+>(
+	input: ActorConfigInput<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues,
+		TActions
+	>,
+): ActorDefinition<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues,
+	TActions
+> {
+	const config = ActorConfigSchema.parse(input) as ActorConfig<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	>;
+	return new ActorDefinition(config);
+}
+
 enum CanSleep {
 	Yes,
 	NotReady,
@@ -136,9 +210,39 @@ const ACTIVE_ASYNC_REGION_ERROR_MESSAGES: Record<
 		"active websocket callback count went below 0, this is a RivetKit bug",
 };
 
+/**
+ * Minimal lifecycle contract shared by static and dynamic actor instances.
+ *
+ * Runtime internals (connections, inspector, queue manager, etc) are exposed
+ * only on `ActorInstance`.
+ */
+export interface BaseActorInstance<
+	S = any,
+	CP = any,
+	CS = any,
+	V = any,
+	I = any,
+	DB extends AnyDatabaseProvider = AnyDatabaseProvider,
+	E extends EventSchemaConfig = Record<never, never>,
+	Q extends QueueSchemaConfig = Record<never, never>,
+> {
+	readonly id: string;
+	readonly isStopping: boolean;
+	onStop(mode: "sleep" | "destroy"): Promise<void>;
+	onAlarm(): Promise<void>;
+	cleanupPersistedConnections?(reason?: string): Promise<number>;
+	getHibernatingWebSocketMetadata?(): Array<{
+		gatewayId: ArrayBuffer;
+		requestId: ArrayBuffer;
+		serverMessageIndex: number;
+		clientMessageIndex: number;
+		path: string;
+		headers: Record<string, string>;
+	}>;
+}
 
-/** Actor type alias with all `any` types. Used for `extends` in classes referencing this actor. */
-export type AnyActorInstance = ActorInstance<
+/** Actor type alias with all `any` types. */
+export type AnyActorInstance = BaseActorInstance<
 	any,
 	any,
 	any,
@@ -148,6 +252,39 @@ export type AnyActorInstance = ActorInstance<
 	any,
 	any
 >;
+
+/** Static actor type alias with all `any` types. */
+export type AnyStaticActorInstance = ActorInstance<
+	any,
+	any,
+	any,
+	any,
+	any,
+	any,
+	any,
+	any
+>;
+
+export function isStaticActorInstance(
+	actor: AnyActorInstance,
+): actor is AnyStaticActorInstance {
+	if (actor instanceof ActorInstance) {
+		return true;
+	}
+
+	if (!actor || typeof actor !== "object") {
+		return false;
+	}
+
+	const candidate = actor as Partial<AnyStaticActorInstance>;
+	return (
+		typeof candidate.executeAction === "function" &&
+		typeof candidate.beginHonoHttpRequest === "function" &&
+		typeof candidate.endHonoHttpRequest === "function" &&
+		typeof candidate.connectionManager === "object" &&
+		candidate.connectionManager !== null
+	);
+}
 
 export type ExtractActorState<A extends AnyActorInstance> =
 	A extends ActorInstance<infer State, any, any, any, any, any, any, any>
@@ -174,7 +311,8 @@ export class ActorInstance<
 	DB extends AnyDatabaseProvider,
 	E extends EventSchemaConfig = Record<never, never>,
 	Q extends QueueSchemaConfig = Record<never, never>,
-> {
+> implements BaseActorInstance<S, CP, CS, V, I, DB, E, Q>
+{
 	// MARK: - Core Properties
 	actorContext: ActorContext<S, CP, CS, V, I, DB, E, Q>;
 	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q>;
@@ -250,6 +388,9 @@ export class ActorInstance<
 
 	// MARK: - Deprecated (kept for compatibility)
 	#schedule!: Schedule;
+
+	// MARK: - Hibernatable WebSocket State
+	#hibernatableWebSocketAckState = new HibernatableWebSocketAckState();
 
 	// MARK: - Inspector
 	#inspectorToken?: string;
@@ -446,6 +587,114 @@ export class ActorInstance<
 
 	get conns(): Map<ConnId, Conn<S, CP, CS, V, I, DB, E, Q>> {
 		return this.connectionManager.connections;
+	}
+
+	/**
+	 * Records delivery of an inbound indexed hibernatable websocket message and
+	 * schedules persistence so the index is only acked after a durable write.
+	 */
+	handleInboundHibernatableWebSocketMessage(
+		conn: AnyConn | undefined,
+		payload: InputData,
+		rivetMessageIndex: number | undefined,
+	): void {
+		if (!conn?.isHibernatable) {
+			return;
+		}
+
+		const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
+		const hibernatable = connStateManager.hibernatableData;
+		if (!hibernatable) {
+			return;
+		}
+
+		invariant(
+			typeof rivetMessageIndex === "number",
+			"missing rivetMessageIndex for hibernatable websocket message",
+		);
+
+		applyInboundHibernatableWebSocketMessage({
+			connId: conn.id,
+			hibernatable,
+			messageLength: getValueLength(payload),
+			rivetMessageIndex,
+			ackState: this.#hibernatableWebSocketAckState,
+			saveState: (opts) => {
+				void this.stateManager.saveState(opts).catch((error) => {
+					this.#rLog.error({
+						msg: "failed to schedule hibernatable websocket persistence",
+						connId: conn.id,
+						error: stringifyError(error),
+					});
+				});
+			},
+		});
+	}
+
+	onCreateHibernatableConn(conn: AnyConn): void {
+		const hibernatable = conn[CONN_STATE_MANAGER_SYMBOL].hibernatableData;
+		if (!hibernatable) {
+			return;
+		}
+
+		this.#hibernatableWebSocketAckState.createConnEntry(
+			conn.id,
+			hibernatable.serverMessageIndex,
+		);
+	}
+
+	onDestroyHibernatableConn(conn: AnyConn): void {
+		this.#hibernatableWebSocketAckState.deleteConnEntry(conn.id);
+	}
+
+	onBeforePersistHibernatableConn(conn: AnyConn): void {
+		const hibernatable =
+			conn[CONN_STATE_MANAGER_SYMBOL].hibernatableDataOrError();
+		this.#hibernatableWebSocketAckState.onBeforePersist(
+			conn.id,
+			hibernatable.serverMessageIndex,
+		);
+	}
+
+	onAfterPersistHibernatableConn(conn: AnyConn): void {
+		const hibernatable =
+			conn[CONN_STATE_MANAGER_SYMBOL].hibernatableDataOrError();
+		const ackServerMessageIndex =
+			this.#hibernatableWebSocketAckState.consumeAck(conn.id);
+		if (ackServerMessageIndex === undefined) {
+			return;
+		}
+
+		this.driver.ackHibernatableWebSocketMessage?.(
+			hibernatable.gatewayId,
+			hibernatable.requestId,
+			ackServerMessageIndex,
+		);
+	}
+
+	getHibernatingWebSocketMetadata(): Array<{
+		gatewayId: ArrayBuffer;
+		requestId: ArrayBuffer;
+		serverMessageIndex: number;
+		clientMessageIndex: number;
+		path: string;
+		headers: Record<string, string>;
+	}> {
+		return Array.from(this.conns.values(), (conn) => {
+			const hibernatable =
+				conn[CONN_STATE_MANAGER_SYMBOL].hibernatableData;
+			if (!hibernatable) {
+				return undefined;
+			}
+			return {
+				gatewayId: hibernatable.gatewayId.slice(0),
+				requestId: hibernatable.requestId.slice(0),
+				serverMessageIndex: hibernatable.serverMessageIndex,
+				clientMessageIndex: hibernatable.clientMessageIndex,
+				path: hibernatable.requestPath,
+				headers: { ...hibernatable.requestHeaders },
+			};
+		}).filter((entry) => entry !== undefined);
 	}
 
 	get schedule(): Schedule {

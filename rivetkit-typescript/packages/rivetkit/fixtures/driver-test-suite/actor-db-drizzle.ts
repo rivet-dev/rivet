@@ -2,6 +2,7 @@ import { actor } from "rivetkit";
 import { db } from "rivetkit/db/drizzle";
 import { migrations } from "./db/migrations";
 import { schema } from "./db/schema";
+import { scheduleActorSleep } from "./schedule-sleep";
 
 function firstRowValue(row: Record<string, unknown> | undefined): unknown {
 	if (!row) {
@@ -270,7 +271,7 @@ export const dbActorDrizzle = actor({
 			return results[0]?.value ?? null;
 		},
 		triggerSleep: (c) => {
-			c.sleep();
+			scheduleActorSleep(c);
 		},
 	},
 	options: {

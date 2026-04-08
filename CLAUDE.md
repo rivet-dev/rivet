@@ -104,13 +104,23 @@ git commit -m "chore(my-pkg): foo bar"
 - Prefer the Tokio-shaped APIs from `antiox` for concurrency needs. For example, use `antiox/sync/mpsc` for `tx` and `rx` channels, `antiox/task` for spawning tasks, and the matching sync and time modules as needed.
 - Treat `antiox` as the default choice for any TypeScript concurrency work because it mirrors Rust and Tokio APIs used elsewhere in the codebase.
 
+### RivetKit Type Build Troubleshooting
+- If `rivetkit` type or DTS builds fail with missing `@rivetkit/*` declarations, run `pnpm build -F rivetkit` from repo root (Turbo build path) before changing TypeScript `paths`.
+- Do not add temporary `@rivetkit/*` path aliases in `rivetkit-typescript/packages/rivetkit/tsconfig.json` to work around stale or missing built declarations.
+
+### RivetKit Driver Registry Variants
+- Keep `rivetkit-typescript/packages/rivetkit/fixtures/driver-test-suite/registry.ts` as the canonical type anchor for fixtures and test typing.
+- Run driver runtime suites through `registry-static.ts` and `registry-dynamic.ts` instead of executing `registry.ts` directly.
+- Load static fixture actors with dynamic ESM `import()` from the `fixtures/driver-test-suite/actors/` directory.
+- Skip dynamic registry parity only for the explicit nested dynamic harness gate or missing secure-exec dist, and still treat full static and dynamic compatibility as the target for all normal driver suites.
+
 ### SQLite Package
 - Use `@rivetkit/sqlite` for SQLite WebAssembly support.
 - Do not use the legacy upstream package directly. `@rivetkit/sqlite` is the maintained fork used in this repository and is sourced from `rivet-dev/wa-sqlite`.
 - The native SQLite addon (`@rivetkit/sqlite-native`) statically links SQLite via `libsqlite3-sys` with the `bundled` feature. The bundled SQLite version must match the version used by `@rivetkit/sqlite` (WASM). When upgrading either, upgrade both.
 
 ### RivetKit Package Resolutions
-The root `/package.json` contains `resolutions` that map RivetKit packages to their local workspace versions:
+- The root `/package.json` contains `resolutions` that map RivetKit packages to local workspace versions:
 
 ```json
 {
@@ -123,7 +133,7 @@ The root `/package.json` contains `resolutions` that map RivetKit packages to th
 }
 ```
 
-When adding RivetKit dependencies to examples in `/examples/`, use `*` as the version. The root resolutions will automatically resolve these to the local workspace packages:
+- Use `*` as the dependency version when adding RivetKit packages to `/examples/`, because root resolutions map them to local workspace packages:
 
 ```json
 {
@@ -134,7 +144,19 @@ When adding RivetKit dependencies to examples in `/examples/`, use `*` as the ve
 }
 ```
 
-If you need to add a new `@rivetkit/*` package that isn't already in the root resolutions, add it to the `resolutions` object in `/package.json` with `"workspace:*"` as the value. Internal packages like `@rivetkit/workflow-engine` should be re-exported from `rivetkit` subpaths (e.g., `rivetkit/workflow`) rather than added as direct dependencies.
+- Add new internal `@rivetkit/*` packages to root `resolutions` with `"workspace:*"` if missing, and prefer re-exporting internal packages (for example `@rivetkit/workflow-engine`) from `rivetkit` subpaths like `rivetkit/workflow` instead of direct dependencies.
+
+### Dynamic Import Pattern
+- For runtime-only dependencies, use dynamic loading so bundlers do not eagerly include them.
+- Build the module specifier from string parts (for example with `["pkg", "name"].join("-")` or `["@scope", "pkg"].join("/")`) instead of a single string literal.
+- Prefer this pattern for modules like `@rivetkit/sqlite-vfs`, `sandboxed-node`, and `isolated-vm`.
+- If loading by resolved file path, resolve first and then import via `pathToFileURL(...).href`.
+
+### Fail-By-Default Runtime Behavior
+- Avoid silent no-ops for required runtime behavior.
+- Do not use optional chaining for required lifecycle and bridge operations (for example sleep, destroy, alarm dispatch, ack, and websocket dispatch paths).
+- If a capability is required, validate it and throw an explicit error with actionable context instead of returning early.
+- Optional chaining is acceptable only for best-effort diagnostics and cleanup paths (for example logging hooks and dispose/release cleanup).
 
 ### Rust Dependencies
 
@@ -154,7 +176,7 @@ If you need to add a new `@rivetkit/*` package that isn't already in the root re
 
 ### Docs (`website/src/content/docs/**/*.mdx`)
 
-Required frontmatter fields:
+- Required frontmatter fields:
 
 - `title` (string)
 - `description` (string)
@@ -162,7 +184,7 @@ Required frontmatter fields:
 
 ### Blog + Changelog (`website/src/content/posts/**/page.mdx`)
 
-Required frontmatter fields:
+- Required frontmatter fields:
 
 - `title` (string)
 - `description` (string)
@@ -170,13 +192,13 @@ Required frontmatter fields:
 - `published` (date string)
 - `category` (enum: `changelog`, `monthly-update`, `launch-week`, `technical`, `guide`, `frogs`)
 
-Optional frontmatter fields:
+- Optional frontmatter fields:
 
 - `keywords` (string array)
 
 ## Examples
 
-All example READMEs in `/examples/` should follow the format defined in `.claude/resources/EXAMPLE_TEMPLATE.md`.
+- All example READMEs in `/examples/` should follow the format defined in `.claude/resources/EXAMPLE_TEMPLATE.md`.
 
 ## Agent Working Directory
 
@@ -188,11 +210,12 @@ All agent working files live in `.agent/` at the repo root.
 - **Notes**: `.agent/notes/` -- general notes and tracking.
 
 When the user asks to track something in a note, store it in `.agent/notes/` by default. When something is identified as "do later", add it to `.agent/todo/`. Design documents and interface specs go in `.agent/specs/`.
+- When the user asks to update any `CLAUDE.md`, add one-line bullet points only, or add a new section containing one-line bullet points.
 
 ## Architecture
 
 ### Monorepo Structure
-This is a Rust workspace-based monorepo for Rivet. Key packages and components:
+- This is a Rust workspace-based monorepo for Rivet with the following key packages and components:
 
 - **Core Engine** (`packages/core/engine/`) - Main orchestration service that coordinates all operations
 - **Workflow Engine** (`packages/common/gasoline/`) - Handles complex multi-step operations with reliability and observability
@@ -208,7 +231,7 @@ This is a Rust workspace-based monorepo for Rivet. Key packages and components:
 - Custom error system at `packages/common/error/`
 - Uses derive macros with struct-based error definitions
 
-To use custom errors:
+- Use this pattern for custom errors:
 
 ```rust
 use rivet_error::*;
@@ -237,13 +260,13 @@ let error = AuthInvalidToken.build();
 let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build();
 ```
 
-Key points:
+- Key points:
 - Use `#[derive(RivetError)]` on struct definitions
 - Use `#[error(group, code, description)]` or `#[error(group, code, description, formatted_message)]` attribute
 - Group errors by module/domain (e.g., "auth", "actor", "namespace")
 - Add `Serialize, Deserialize` derives for errors with metadata fields
 - Always return anyhow errors from failable functions
-	- For example: `fn foo() -> Result<i64> { /* ... */ }`
+- For example: `fn foo() -> Result<i64> { /* ... */ }`
 - Do not glob import (`::*`) from anyhow. Instead, import individual types and traits
 - Prefer anyhow's `.context()` over `anyhow!` macro
 
@@ -283,7 +306,7 @@ Key points:
 
 ## Naming Conventions
 
-Data structures often include:
+- Data structures often include:
 
 - `id` (uuid)
 - `name` (machine-readable name, must be valid DNS subdomain, convention is using kebab case)
@@ -320,6 +343,7 @@ Data structures often include:
 - **Never use `vi.mock`, `jest.mock`, or module-level mocking.** Write tests against real infrastructure (Docker containers, real databases, real filesystems). For LLM calls, use `@copilotkit/llmock` to run a mock LLM server. For protocol-level test doubles (e.g., ACP adapters), write hand-written scripts that run as real processes. If you need callback tracking, `vi.fn()` for simple callbacks is acceptable.
 - When running tests, always pipe the test to a file in /tmp/ then grep it in a second step. You can grep test logs multiple times to search for different log lines.
 - For RivetKit TypeScript tests, run from `rivetkit-typescript/packages/rivetkit` and use `pnpm test <filter>` with `-t` to narrow to specific suites. For example: `pnpm test driver-file-system -t ".*Actor KV.*"`.
+- When RivetKit tests need a local engine instance, start the RocksDB engine in the background with `./scripts/run/engine-rocksdb.sh >/tmp/rivet-engine-startup.log 2>&1 &`.
 - For frontend testing, use the `agent-browser` skill to interact with and test web UIs in examples. This allows automated browser-based testing of frontend applications.
 - If you modify frontend UI, automatically use the Agent Browser CLI to take updated screenshots and post them to the PR with a short comment before wrapping up the task.
 
@@ -332,7 +356,7 @@ Data structures often include:
 - When talking about "Rivet Actors" make sure to capitalize "Rivet Actor" as a proper noun and lowercase "actor" as a generic noun
 
 ### Documentation Sync
-When making changes to the engine or RivetKit, ensure the corresponding documentation is updated:
+- Ensure corresponding documentation is updated when making engine or RivetKit changes:
 - **Limits changes** (e.g., max message sizes, timeouts): Update `website/src/content/docs/actors/limits.mdx`
 - **Config changes** (e.g., new config options in `engine/packages/config/`): Update `website/src/content/docs/self-hosting/configuration.mdx`
 - **RivetKit config changes** (e.g., `rivetkit-typescript/packages/rivetkit/src/registry/config/index.ts` or `rivetkit-typescript/packages/rivetkit/src/actor/config.ts`): Update `website/src/content/docs/actors/limits.mdx` if they affect limits/timeouts
@@ -359,8 +383,8 @@ When making changes to the engine or RivetKit, ensure the corresponding document
 
 #### Common Vercel Example Errors
 
-After regenerating Vercel examples, you may see type check errors like:
+- You may see type-check errors like the following after regenerating Vercel examples:
 ```
 error TS2688: Cannot find type definition file for 'vite/client'.
 ```
-with warnings about `node_modules missing`. This happens because the regenerated examples need their dependencies reinstalled. Fix by running `pnpm install` before running type checks.
+- You may also see `node_modules missing` warnings; fix this by running `pnpm install` before type checks because regenerated examples need dependencies reinstalled.

@@ -139,11 +139,24 @@ export class FileSystemActorDriver implements ActorDriver {
 		await this.#state.hardCrashActor(actorId);
 	}
 
-	async startDestroy(actorId: string): Promise<void> {
-		await this.#state.destroyActor(actorId);
+	startSleep(actorId: string): void {
+		// Spawns the sleepActor promise
+		this.#state.sleepActor(actorId);
 	}
 
-	async onBeforeActorStart(actor: AnyActorInstance): Promise<void> {
-		await actor.cleanupPersistedConnections("file-system-driver.start");
+	ackHibernatableWebSocketMessage(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		serverMessageIndex: number,
+	): void {
+		this.#state.ackHibernatableWebSocketMessage(
+			gatewayId,
+			requestId,
+			serverMessageIndex,
+		);
+	}
+
+	async startDestroy(actorId: string): Promise<void> {
+		await this.#state.destroyActor(actorId);
 	}
 }

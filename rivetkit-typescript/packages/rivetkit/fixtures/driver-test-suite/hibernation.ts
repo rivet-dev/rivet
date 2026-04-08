@@ -1,4 +1,5 @@
 import { actor, event } from "rivetkit";
+import { scheduleActorSleep } from "./schedule-sleep";
 
 export const HIBERNATION_SLEEP_TIMEOUT = 500;
 
@@ -69,7 +70,7 @@ export const hibernationActor = actor({
 		},
 		// Trigger sleep
 		triggerSleep: (c) => {
-			c.sleep();
+			scheduleActorSleep(c);
 		},
 	},
 	options: {

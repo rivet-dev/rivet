@@ -2,7 +2,8 @@
 
 ## Platform Support
 
-Only target the latest Swift and OS versions. Do not add backwards compatibility for older versions. This allows us to use the latest language features (e.g., `@Observable` macro, Swift concurrency) without workarounds.
+- Target only the latest Swift and OS versions, and do not add backwards compatibility for older versions.
+- Prefer latest-language features (for example `@Observable` and Swift concurrency) instead of compatibility workarounds.
 
 ## API Surface
 
@@ -16,7 +17,7 @@ Only target the latest Swift and OS versions. Do not add backwards compatibility
 
 ### Parameter Packs (Swift 5.9+)
 
-We use Swift parameter packs to support variadic typed arguments:
+- Use Swift parameter packs to support variadic typed arguments.
 
 ```swift
 // Supports 0-N typed arguments
@@ -24,7 +25,6 @@ try await actor.action("myAction", arg1, arg2, arg3)
 actor.send("myAction", arg1, arg2)
 ```
 
-When working with parameter packs:
 - Always add `& Sendable` constraint for async contexts
 - Shadow parameters before capturing in closures to avoid inference issues
 
@@ -61,7 +61,7 @@ let ok: Bool = try await handle.action("setScore", "user-1", 42)
 let result: Data = try await handle.action("complex", arg1, arg2, arg3, arg4, arg5, arg6)
 ```
 
-If a raw JSON value is unavoidable (e.g., debugging or passthrough), keep it in a clearly labeled escape hatch API.
+- Keep unavoidable raw JSON usage (for example debugging or passthrough) in clearly labeled escape-hatch APIs.
 
 ### Intentional JSON Exposure (Escape Hatches)
 
@@ -103,11 +103,11 @@ let unsubscribe = await conn.on("event") { args in
 - **TypeScript (framework-base):** Uses `setTimeout(0)` (0ms async delay)
 - **Swift:** Uses `Task.sleep(for: .seconds(5))` (5 second delay)
 
-The longer delay is needed because SwiftUI's `@StateObject` inside property wrappers may not preserve state correctly across view re-evaluations, and `deinit` is dispatched asynchronously via Task. The 5-second delay ensures connections survive SwiftUI's view lifecycle churn.
+- The longer delay is required because SwiftUI `@StateObject` in property wrappers may not preserve state across view re-evaluations and `deinit` is dispatched asynchronously via `Task`, so 5 seconds protects connection continuity.
 
 ## Logging
 
-Use the `dev.rivet.*` subsystem prefix for all OSLog categories:
+- Use the `dev.rivet.*` subsystem prefix for all OSLog categories.
 
 ```swift
 import os
@@ -116,7 +116,7 @@ let logger = Logger(subsystem: "dev.rivet.client", category: "myCategory")
 logger.debug("message with \(value, privacy: .public)")
 ```
 
-Available categories in `RivetLogger`:
+- Available categories in `RivetLogger`:
 - `client` - RivetKitClient operations
 - `connection` - ActorConnection WebSocket lifecycle
 - `handle` - ActorHandle HTTP operations
@@ -124,21 +124,19 @@ Available categories in `RivetLogger`:
 
 ## Debugging
 
-When you cannot figure out an issue through code inspection alone, add temporary log statements to trace execution flow. Use `print()` with a clear prefix:
+- Add temporary log statements with `print()` and a clear prefix when code inspection alone is insufficient.
 
 ```swift
 print("[DEBUG] someFunction called, value=\(value)")
 ```
 
-If you cannot run the app yourself, add the logs and ask the user to test and share the output. Remove all temporary logs once the issue is resolved.
+- If you cannot run the app yourself, add logs, ask the user to test and share output, and remove temporary logs after resolution.
 
 ## Testing Multiple App Instances
 
-When testing features like shared actor connections, you may need to run multiple instances of the same app simultaneously.
-
-Run the app again while it's already running. When Xcode prompts "Replace?", click **"Add"** instead of "Replace" to launch an additional instance.
-
-If Xcode automatically kills the first instance without prompting, you may have suppressed the dialog. Reset it with:
+- Run multiple instances of the same app when testing features like shared actor connections.
+- Launch an additional app instance by running again and clicking **"Add"** instead of "Replace" in Xcode.
+- If Xcode kills the first instance without prompting, reset the suppressed dialog with:
 
 ```bash
 defaults delete com.apple.dt.Xcode IDESuppressStopExecutionWarning
