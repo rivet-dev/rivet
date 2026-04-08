@@ -158,6 +158,10 @@ async fn handle_message_mk2(
 			protocol::mk2::ToClient::ToClientAckEvents(x)
 		}
 		protocol::mk2::ToRunner::ToClientTunnelMessage(x) => {
+			let _ = conn
+				.authorized_tunnel_routes
+				.insert_async((x.message_id.gateway_id, x.message_id.request_id), ())
+				.await;
 			protocol::mk2::ToClient::ToClientTunnelMessage(x)
 		}
 	};
@@ -250,6 +254,10 @@ async fn handle_message_mk1(
 		protocol::ToRunner::ToClientAckEvents(x) => protocol::ToClient::ToClientAckEvents(x),
 		protocol::ToRunner::ToClientKvResponse(x) => protocol::ToClient::ToClientKvResponse(x),
 		protocol::ToRunner::ToClientTunnelMessage(x) => {
+			let _ = conn
+				.authorized_tunnel_routes
+				.insert_async((x.message_id.gateway_id, x.message_id.request_id), ())
+				.await;
 			protocol::ToClient::ToClientTunnelMessage(x)
 		}
 	};
