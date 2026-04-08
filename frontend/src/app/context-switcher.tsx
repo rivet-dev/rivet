@@ -34,6 +34,7 @@ import {
 import { SafeHover } from "@/components/safe-hover";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 import { authClient } from "@/lib/auth";
+import { features } from "@/lib/features";
 import { LazyBillingPlanBadge } from "./billing/billing-plan-badge";
 
 export function ContextSwitcher({ inline }: { inline?: boolean }) {
@@ -62,7 +63,7 @@ function ContextSwitcherInner({
 }) {
 	const [isOpen, setIsOpen] = useState(false);
 
-	if (__APP_TYPE__ === "cloud") {
+	if (features.multitenancy) {
 		// biome-ignore lint/correctness/useHookAtTopLevel: guaranteed by build condition
 		usePrefetchInfiniteQuery({
 			// biome-ignore lint/correctness/useHookAtTopLevel: guaranteed by build condition

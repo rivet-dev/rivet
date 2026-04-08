@@ -1,6 +1,5 @@
 import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { match } from "ts-pattern";
 import { getConfig } from "@/components";
 import {
 	useCloudNamespaceDataProvider,
@@ -8,26 +7,21 @@ import {
 	useEngineNamespaceDataProvider,
 } from "@/components/actors";
 import { cloudEnv } from "@/lib/env";
+import { features } from "@/lib/features";
 
 export function usePublishableToken() {
-	return match(__APP_TYPE__)
-		.with("cloud", () => {
-			// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
-			return useSuspenseQuery(
-				// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
-				useCloudNamespaceDataProvider().publishableTokenQueryOptions() as UseSuspenseQueryOptions<string>,
-			).data;
-		})
-		.with("engine", () => {
-			// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
-			return useSuspenseQuery(
-				// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
-				useEngineNamespaceDataProvider().engineAdminTokenQueryOptions() as UseSuspenseQueryOptions<string>,
-			).data;
-		})
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
+	if (features.multitenancy) {
+		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
+		return useSuspenseQuery(
+			// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
+			useCloudNamespaceDataProvider().publishableTokenQueryOptions() as UseSuspenseQueryOptions<string>,
+		).data;
+	}
+	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
+	return useSuspenseQuery(
+		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
+		useEngineNamespaceDataProvider().engineAdminTokenQueryOptions() as UseSuspenseQueryOptions<string>,
+	).data;
 }
 
 export function useAdminToken() {
@@ -37,14 +31,8 @@ export function useAdminToken() {
 }
 
 export const useEndpoint = () => {
-	return match(__APP_TYPE__)
-		.with("cloud", () => {
-			return cloudEnv().VITE_APP_API_URL;
-		})
-		.with("engine", () => {
-			return getConfig().apiUrl;
-		})
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
+	if (features.multitenancy) {
+		return cloudEnv().VITE_APP_API_URL;
+	}
+	return getConfig().apiUrl;
 };

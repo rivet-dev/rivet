@@ -1,11 +1,11 @@
 import { faActorsBorderless, Icon, type IconProp } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Fragment, type LazyExoticComponent, type ReactNode, Suspense, lazy } from "react";
-import { match } from "ts-pattern";
+import { Fragment, type LazyExoticComponent, lazy, Suspense, use } from "react";
 import { Button, cn, Skeleton } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
+import { features } from "@/lib/features";
 import { RECORDS_PER_PAGE } from "./data-providers/default-data-provider";
 
 const emojiRegex =
@@ -30,17 +30,26 @@ const iconModules = import.meta.glob<Record<string, IconProp>>(
 	"../../packages/icons/dist/icons/*.js",
 );
 
-const lazyIconCache = new Map<string, LazyExoticComponent<(props: { className?: string }) => ReactNode>>();
+const lazyIconCache = new Map<
+	string,
+	LazyExoticComponent<(props: { className?: string }) => ReactNode>
+>();
 
-function getLazyIcon(iconName: string): LazyExoticComponent<(props: { className?: string }) => ReactNode> {
+function getLazyIcon(
+	iconName: string,
+): LazyExoticComponent<(props: { className?: string }) => ReactNode> {
 	let component = lazyIconCache.get(iconName);
 	if (!component) {
-		const loader = iconModules[`../../packages/icons/dist/icons/${iconName}.js`];
+		const loader =
+			iconModules[`../../packages/icons/dist/icons/${iconName}.js`];
 		component = lazy(() =>
 			(loader ? loader() : Promise.reject())
 				.then((mod) => ({
 					default: ({ className }: { className?: string }) => (
-						<Icon icon={mod[iconName] ?? faActorsBorderless} className={className} />
+						<Icon
+							icon={mod[iconName] ?? faActorsBorderless}
+							className={className}
+						/>
 					),
 				}))
 				.catch(() => ({
@@ -55,14 +64,11 @@ function getLazyIcon(iconName: string): LazyExoticComponent<(props: { className?
 }
 
 function ActorIcon({ iconValue }: { iconValue: string | null }) {
-	const className = "opacity-80 group-hover:opacity-100 group-data-active:opacity-100";
+	const className =
+		"opacity-80 group-hover:opacity-100 group-data-active:opacity-100";
 
 	if (iconValue && isEmoji(iconValue)) {
-		return (
-			<span className={`${className} text-sm`}>
-				{iconValue}
-			</span>
-		);
+		return <span className={`${className} text-sm`}>{iconValue}</span>;
 	}
 
 	const iconName = iconValue ? `fa${toPascalCase(iconValue)}` : null;
@@ -125,15 +131,10 @@ export function ActorBuildsList() {
 							size="sm"
 							onClick={() => {
 								return navigate({
-									to: match(__APP_TYPE__)
-										.with("engine", () => "/ns/$namespace")
-										.with(
-											"cloud",
-											() =>
-												"/orgs/$organization/projects/$project/ns/$namespace",
-										)
-										.otherwise(() => "/"),
-
+									// eslint-disable-next-line @typescript-eslint/no-explicit-any
+									to: (features.multitenancy
+										? "/orgs/$organization/projects/$project/ns/$namespace"
+										: "/ns/$namespace") as any,
 									search: (old) => ({
 										...old,
 										actorId: undefined,

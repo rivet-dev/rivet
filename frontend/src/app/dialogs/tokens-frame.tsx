@@ -2,7 +2,6 @@ import { faQuestionCircle, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { match } from "ts-pattern";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
 import {
@@ -17,6 +16,7 @@ import {
 } from "@/components";
 import { RegionSelect } from "@/components/actors/region-select";
 import { cloudEnv } from "@/lib/env";
+import { features } from "@/lib/features";
 
 interface TokensFrameContentProps extends DialogContentProps {}
 
@@ -77,15 +77,12 @@ function SecretToken() {
 
 	const namespace = dataProvider.engineNamespace;
 
-	const endpoint = match(__APP_TYPE__)
-		.with("cloud", () => {
+	const endpoint = features.multitenancy
+		? (() => {
 			const region = regions.find((r) => r.name === selectedDatacenter);
 			return region?.url || cloudEnv().VITE_APP_API_URL;
-		})
-		.with("engine", () => getConfig().apiUrl)
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
+		})()
+		: getConfig().apiUrl;
 
 	const envVars = `RIVET_ENDPOINT=${endpoint}
 RIVET_NAMESPACE=${namespace}
@@ -140,12 +137,9 @@ function PublishableToken() {
 
 	const namespace = dataProvider.engineNamespace;
 
-	const endpoint = match(__APP_TYPE__)
-		.with("cloud", () => cloudEnv().VITE_APP_API_URL)
-		.with("engine", () => getConfig().apiUrl)
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
+	const endpoint = features.multitenancy
+		? cloudEnv().VITE_APP_API_URL
+		: getConfig().apiUrl;
 
 	return (
 		<div className="space-y-4">

@@ -4,7 +4,6 @@ import {
 	useMatchRoute,
 	useRouteContext,
 } from "@tanstack/react-router";
-import { match } from "ts-pattern";
 import type {
 	createGlobalContext as createGlobalCloudContext,
 	createNamespaceContext as createNamespaceCloudContext,
@@ -15,7 +14,7 @@ import type {
 	createGlobalContext as createGlobalEngineContext,
 	createNamespaceContext as createNamespaceEngineContext,
 } from "@/app/data-providers/engine-data-provider";
-import type { createGlobalContext as createGlobalInspectorContext } from "@/app/data-providers/inspector-data-provider";
+import { features } from "@/lib/features";
 
 type EngineDataProvider = ReturnType<typeof createNamespaceEngineContext> &
 	ReturnType<typeof createGlobalEngineContext>;
@@ -25,77 +24,27 @@ type CloudDataProvider = ReturnType<typeof createNamespaceCloudContext> &
 	ReturnType<typeof createOrganizationCloudContext> &
 	ReturnType<typeof createGlobalCloudContext>;
 
-type InspectorDataProvider = ReturnType<typeof createGlobalInspectorContext>;
-
-type RootContext =
-	| {
-			__type: "engine";
-			dataProvider: EngineDataProvider;
-	  }
-	| {
-			__type: "cloud";
-			dataProvider: CloudDataProvider;
-	  }
-	| {
-			__type: "inspector";
-			dataProvider: InspectorDataProvider;
-	  };
-
-export const useDataProvider = ():
-	| EngineDataProvider
-	| CloudDataProvider
-	| InspectorDataProvider => {
-	return match(__APP_TYPE__)
-		.with("cloud", () => {
-			// biome-ignore lint/correctness/useHookAtTopLevel: runs only once
-			return useRouteContext({
-				from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
-				select: (ctx) => ctx.dataProvider,
-			});
-		})
-		.with("engine", () => {
-			// biome-ignore lint/correctness/useHookAtTopLevel: runs only once
-			return useRouteContext({
-				from: "/_context/_engine/ns/$namespace",
-			}).dataProvider;
-		})
-		.with("inspector", () => {
-			// we need to narrow down the context for inspector, because inspector does not have a unique route prefix
-			return match(
-				// biome-ignore lint/correctness/useHookAtTopLevel: runs only once
-				useRouteContext({
-					from: "/_context",
-				}) as RootContext,
-			)
-				.with({ __type: "inspector" }, (ctx) => ctx.dataProvider)
-				.otherwise(() => {
-					throw new Error("Not in an inspector-like context");
-				});
-		})
-		.exhaustive() as
-		| EngineDataProvider
-		| CloudDataProvider
-		| InspectorDataProvider;
+export const useDataProvider = (): EngineDataProvider | CloudDataProvider => {
+	if (features.multitenancy) {
+		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
+		return useRouteContext({
+			from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
+			select: (ctx) => ctx.dataProvider,
+		}) as CloudDataProvider;
+	}
+	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
+	return useRouteContext({
+		from: "/_context/_engine/ns/$namespace",
+	}).dataProvider as EngineDataProvider;
 };
 
 export const useDataProviderCheck = () => {
 	const matchRoute = useMatchRoute();
-
 	return matchRoute({
 		fuzzy: true,
-		to: match(__APP_TYPE__)
-			.with("cloud", () => {
-				return "/orgs/$organization/projects/$project/ns/$namespace" as const;
-			})
-			.with("engine", () => {
-				return "/ns/$namespace" as const;
-			})
-			.with("inspector", () => {
-				return "/" as const;
-			})
-			.otherwise(() => {
-				throw new Error("Not in a valid context");
-			}),
+		to: features.multitenancy
+			? "/orgs/$organization/projects/$project/ns/$namespace"
+			: "/ns/$namespace",
 	});
 };
 
@@ -109,18 +58,6 @@ export const useEngineNamespaceDataProvider = () => {
 	return useRouteContext({
 		from: "/_context/_engine/ns/$namespace",
 	}).dataProvider;
-};
-
-export const useInspectorDataProvider = () => {
-	const context = useRouteContext({
-		from: "/_context",
-	}) as RootContext;
-
-	return match(context)
-		.with({ __type: "inspector" }, (c) => c.dataProvider)
-		.otherwise(() => {
-			throw new Error("Not in an inspector-like context");
-		});
 };
 
 type OnlyCloudRouteIds = Extract<
@@ -151,24 +88,11 @@ export const useCloudNamespaceDataProvider = () => {
 };
 
 export const useEngineCompatDataProvider = () => {
-	const routePath = match(__APP_TYPE__)
-		.with("cloud", () => {
-			return "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace" as const;
-		})
-		.with("engine", () => {
-			return "/_context/_engine/ns/$namespace" as const;
-		})
-		.with("inspector", () => {
-			return "/_context" as const;
-		})
-		.otherwise(() => {
-			throw new Error("Not in an engine-like context");
-		});
+	const routePath = features.multitenancy
+		? ("/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace" as const)
+		: ("/_context/_engine/ns/$namespace" as const);
 
 	return useRouteContext({
 		from: routePath,
-	}).dataProvider as
-		| EngineDataProvider
-		| CloudDataProvider
-		| InspectorDataProvider;
+	}).dataProvider as EngineDataProvider | CloudDataProvider;
 };

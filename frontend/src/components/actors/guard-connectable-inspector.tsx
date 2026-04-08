@@ -26,6 +26,7 @@ import { match, P } from "ts-pattern";
 import { useLocalStorage } from "usehooks-ts";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { isRivetApiError } from "@/lib/errors";
+import { features } from "@/lib/features";
 import { DiscreteCopyButton } from "../copy-area";
 import { getConfig, useConfig } from "../lib/config";
 import { ls } from "../lib/utils";
@@ -528,7 +529,7 @@ function useActorRunner({ actorId }: { actorId: ActorId }) {
 }
 
 function useEngineToken() {
-	if (__APP_TYPE__ === "cloud") {
+	if (features.multitenancy) {
 		const { data } = useQuery(
 			useRouteContext({
 				from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
