@@ -76,9 +76,6 @@ export default defineConfig(({ mode }) => {
 		preview: {
 			port: 43708,
 		},
-		define: {
-			__APP_TYPE__: JSON.stringify(env.APP_TYPE || "engine"),
-		},
 		build: {
 			sourcemap: true,
 			commonjsOptions: {

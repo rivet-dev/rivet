@@ -8,7 +8,6 @@ export function baseViteConfig(): UserConfig {
 	return {
 		plugins: [tsconfigPaths()],
 		define: {
-			__APP_TYPE__: JSON.stringify(process.env.APP_TYPE || "engine"),
 			__APP_BUILD_ID__: JSON.stringify(
 				`${new Date().toISOString()}@${crypto.randomUUID()}`,
 			),
