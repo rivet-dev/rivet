@@ -216,7 +216,10 @@ export class StateManager<
 	async saveState(opts: SaveStateOptions): Promise<void> {
 		this.#actor.assertReady();
 
-		if (this.#persistChanged) {
+		const hasChanges =
+			this.#persistChanged ||
+			this.#actor.connectionManager.connsWithPersistChanged.size > 0;
+		if (hasChanges) {
 			if (opts.immediate) {
 				await this.#savePersistInner();
 			} else {
