@@ -138,19 +138,15 @@ export class WebSocketTunnelAdapter {
 
 			const expectedIndex = wrappingAddU16(previousIndex, 1);
 			if (serverMessageIndex !== expectedIndex) {
-				const closeReason = "ws.message_index_skip";
 				this.#log?.warn({
-					msg: "hibernatable websocket message index out of sequence, closing connection",
+					msg: "hibernatable websocket message index out of sequence",
 					requestId,
 					actorId: this.#actorId,
 					previousIndex,
 					expectedIndex,
 					receivedIndex: serverMessageIndex,
-					closeReason,
 					gap: wrappingSubU16(wrappingSubU16(serverMessageIndex, previousIndex), 1),
 				});
-				this.#close(1008, closeReason, true);
-				return true;
 			}
 
 			this.#serverMessageIndex = serverMessageIndex;

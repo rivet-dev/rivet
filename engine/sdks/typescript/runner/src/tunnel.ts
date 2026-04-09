@@ -1124,6 +1124,26 @@ export class Tunnel {
 		if (actor) {
 			const adapter = actor.getWebSocket(gatewayId, requestId);
 			if (adapter) {
+				// For hibernatable connections that receive a downstream
+				// close (e.g. tunnel ping timeout during migration), skip
+				// the user-facing close event so the connection state stays
+				// persisted in KV. The next runner will restore it.
+				if (
+					adapter[HIBERNATABLE_SYMBOL] &&
+					close.reason === "ws.downstream_closed"
+				) {
+					this.log?.info({
+						msg: "skipping close for hibernatable connection with downstream_closed, preserving KV",
+						requestId: idToStr(requestId),
+						code: close.code,
+						reason: close.reason,
+					});
+					actor.deleteWebSocket(gatewayId, requestId);
+					actor.deletePendingRequest(gatewayId, requestId);
+					this.#removeRequestToActor(gatewayId, requestId);
+					return;
+				}
+
 				// We don't need to send a close response
 				adapter._handleClose(
 					requestId,
