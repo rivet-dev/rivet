@@ -1,4 +1,9 @@
-import { isRedirect, Link, useNavigate, useSearch } from "@tanstack/react-router";
+import {
+	isRedirect,
+	Link,
+	useNavigate,
+	useSearch,
+} from "@tanstack/react-router";
 import { attemptAsync } from "es-toolkit";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -46,7 +51,9 @@ export function ResetPassword() {
 			return;
 		}
 
-		toast.success("Password updated. You can now sign in.");
+		toast.success("Password updated. You can now sign in.", {
+			position: "top-center",
+		});
 
 		const [error] = await attemptAsync(
 			async () => await redirectToOrganization(),

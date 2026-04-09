@@ -54,14 +54,14 @@ export function Login() {
 		);
 
 		if (result.error) {
-			const code = result.error.code;
-			if (code === "EMAIL_NOT_VERIFIED" || code === "VERIFY_YOUR_EMAIL") {
-				return navigate({ to: "/verify-email-pending" });
-			}
 			form.setError("root", {
 				message: result.error.message ?? "Invalid credentials",
 			});
 			return;
+		}
+
+		if (result.data?.user.emailVerified === false) {
+			return navigate({ to: "/verify-email-pending", search: { email } });
 		}
 
 		setTurnstileToken(null);

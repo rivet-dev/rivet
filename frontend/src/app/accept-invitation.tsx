@@ -1,7 +1,7 @@
 import { faGoogle, Icon } from "@rivet-gg/icons";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { isRedirect, useNavigate, useSearch } from "@tanstack/react-router";
 import { attemptAsync } from "es-toolkit";
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -13,7 +13,14 @@ import {
 } from "@/components/ui/card";
 import { authClient, redirectToOrganization } from "@/lib/auth";
 
-type Status = "loading" | "ready" | "accepting" | "error";
+type InvitationDetails = {
+	id: string;
+	email: string;
+	role: string;
+	organizationName: string;
+	status: string;
+	expiresAt: string;
+};
 
 export function AcceptInvitation() {
 	const navigate = useNavigate();
@@ -27,54 +34,66 @@ export function AcceptInvitation() {
 	});
 	const { data: session, isPending: sessionPending } =
 		authClient.useSession();
-	const [status, setStatus] = useState<Status>("loading");
-	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-	// The invitation ID may arrive as ?invitationId= or ?token= depending on server config.
 	const resolvedInvitationId = invitationId ?? token;
 
-	useEffect(() => {
-		if (sessionPending) return;
-		if (!resolvedInvitationId) {
-			setStatus("error");
-			setErrorMessage("No invitation ID found in this link.");
-			return;
-		}
-		setStatus("ready");
-	}, [sessionPending, resolvedInvitationId]);
+	const {
+		data: invitation,
+		isPending: invitationPending,
+		error: invitationError,
+	} = useQuery({
+		queryKey: ["invitation", resolvedInvitationId],
+		queryFn: async () => {
+			const result = await authClient.organization.getInvitation({
+				query: { id: resolvedInvitationId! },
+			});
+			if (result.error || !result.data) {
+				throw new Error(
+					result.error?.message ??
+						"This invitation link is invalid, expired, or has already been used.",
+				);
+			}
+			const data = result.data as unknown as InvitationDetails;
+			if (data.status !== "pending") {
+				throw new Error(
+					data.status === "accepted"
+						? "This invitation has already been accepted."
+						: "This invitation has expired or is no longer valid.",
+				);
+			}
+			return data;
+		},
+		enabled: !!resolvedInvitationId,
+		retry: false,
+	});
 
-	const handleAccept = async () => {
-		if (!resolvedInvitationId) return;
-		setStatus("accepting");
-
-		const result = await authClient.organization.acceptInvitation({
-			invitationId: resolvedInvitationId,
-		});
-
-		if (result.error) {
-			setStatus("error");
-			setErrorMessage(
-				result.error.message ?? "Failed to accept invitation",
+	const acceptMutation = useMutation({
+		mutationFn: async () => {
+			const result = await authClient.organization.acceptInvitation({
+				invitationId: resolvedInvitationId!,
+			});
+			if (result.error) {
+				throw new Error(
+					result.error.message ?? "Failed to accept invitation",
+				);
+			}
+			const [error] = await attemptAsync(
+				async () => await redirectToOrganization(),
 			);
-			return;
-		}
+			if (error && isRedirect(error)) {
+				navigate(error.options);
+			}
+		},
+	});
 
-		const [error] = await attemptAsync(
-			async () => await redirectToOrganization(),
-		);
-
-		if (error && isRedirect(error)) {
-			navigate(error.options);
-		}
-	};
-
-	const handleReject = async () => {
-		if (!resolvedInvitationId) return;
-		await authClient.organization.rejectInvitation({
-			invitationId: resolvedInvitationId,
-		});
-		navigate({ to: "/" });
-	};
+	const rejectMutation = useMutation({
+		mutationFn: async () => {
+			await authClient.organization.rejectInvitation({
+				invitationId: resolvedInvitationId!,
+			});
+		},
+		onSuccess: () => navigate({ to: "/" }),
+	});
 
 	const handleGoogleSignIn = async () => {
 		await authClient.signIn.social({
@@ -83,7 +102,7 @@ export function AcceptInvitation() {
 		});
 	};
 
-	if (sessionPending || status === "loading") {
+	if (sessionPending || invitationPending) {
 		return (
 			<div className="flex min-h-screen items-center justify-center bg-background">
 				<p className="text-muted-foreground text-sm">Loading…</p>
@@ -91,15 +110,15 @@ export function AcceptInvitation() {
 		);
 	}
 
-	if (status === "error") {
+	if (!resolvedInvitationId || invitationError) {
 		return (
 			<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4 px-4">
 				<Card className="w-full max-w-md">
 					<CardHeader>
 						<CardTitle>Invitation unavailable</CardTitle>
 						<CardDescription>
-							{errorMessage ??
-								"This invitation link is invalid, expired, or has already been used."}
+							{invitationError?.message ??
+								"No invitation ID found in this link."}
 						</CardDescription>
 					</CardHeader>
 					<CardFooter>
@@ -122,8 +141,9 @@ export function AcceptInvitation() {
 					<CardHeader>
 						<CardTitle>You've been invited</CardTitle>
 						<CardDescription>
-							Sign in or create an account to accept this
-							invitation.
+							{invitation
+								? `Sign in or create an account to join ${invitation.organizationName}.`
+								: "Sign in or create an account to accept this invitation."}
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="grid gap-y-3">
@@ -173,17 +193,30 @@ export function AcceptInvitation() {
 				<CardHeader>
 					<CardTitle>You've been invited</CardTitle>
 					<CardDescription>
-						Accept the invitation to join the organization.
+						{invitation
+							? `You've been invited to join ${invitation.organizationName} as ${invitation.role}.`
+							: "Accept the invitation to join the organization."}
 					</CardDescription>
 				</CardHeader>
+				{acceptMutation.error && (
+					<CardContent>
+						<p className="text-sm text-destructive">
+							{acceptMutation.error.message}
+						</p>
+					</CardContent>
+				)}
 				<CardFooter className="gap-2">
 					<Button
-						onClick={handleAccept}
-						isLoading={status === "accepting"}
+						onClick={() => acceptMutation.mutate()}
+						isLoading={acceptMutation.isPending}
 					>
 						Accept invitation
 					</Button>
-					<Button variant="outline" onClick={handleReject}>
+					<Button
+						variant="outline"
+						onClick={() => rejectMutation.mutate()}
+						isLoading={rejectMutation.isPending}
+					>
 						Decline
 					</Button>
 				</CardFooter>

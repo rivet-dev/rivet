@@ -1,12 +1,6 @@
 "use client";
 import { faGoogle, Icon } from "@rivet-gg/icons";
-import {
-	isRedirect,
-	Link,
-	useNavigate,
-	useSearch,
-} from "@tanstack/react-router";
-import { attemptAsync } from "es-toolkit";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import {
@@ -28,7 +22,7 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { TurnstileWidget } from "@/components/ui/turnstile";
-import { authClient, redirectToOrganization } from "@/lib/auth";
+import { authClient } from "@/lib/auth";
 import { cloudEnv } from "@/lib/env";
 import { features } from "@/lib/features";
 
@@ -50,7 +44,7 @@ export function SignUp() {
 		}
 
 		const result = await authClient.signUp.email(
-			{ email, password, name, callbackURL: window.location.origin },
+			{ email, password, name, callbackURL: `${window.location.origin}/?emailVerified=1` },
 			features.captcha && turnstileToken
 				? { headers: { "x-captcha-response": turnstileToken } }
 				: undefined,
@@ -64,16 +58,7 @@ export function SignUp() {
 		}
 
 		setTurnstileToken(null);
-
-		// redirectToOrganization redirects into _context, which gates on emailVerified.
-		// Unverified users land on /verify-email-pending automatically.
-		const [error] = await attemptAsync(
-			async () => await redirectToOrganization(),
-		);
-
-		if (error && isRedirect(error)) {
-			return navigate(error.options);
-		}
+		navigate({ to: "/verify-email-pending", search: { email } });
 	};
 
 	const handleGoogleSignUp = async () => {

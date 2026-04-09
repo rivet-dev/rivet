@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useTimeout } from "usehooks-ts";
 import { RelativeTime } from "@/components/relative-time";
@@ -16,7 +16,8 @@ import { isAuthError, isDate } from "@/lib/utils";
 
 export function VerifyEmailPending() {
 	const { data: session } = authClient.useSession();
-	const email = session?.user.email;
+	const searchEmail = useSearch({ strict: false, select: (s: { email?: string }) => s?.email });
+	const email = session?.user.email ?? searchEmail;
 	const navigate = useNavigate();
 
 	const handleBackToSignIn = async () => {
@@ -30,7 +31,7 @@ export function VerifyEmailPending() {
 			let retryAfter: Date | null = null;
 			const result = await authClient.sendVerificationEmail({
 				email,
-				callbackURL: window.location.origin,
+				callbackURL: `${window.location.origin}/?emailVerified=1`,
 				fetchOptions: {
 					onError: async (context) => {
 						const { response } = context;
@@ -58,7 +59,9 @@ export function VerifyEmailPending() {
 			return result.data;
 		},
 		onSuccess: () => {
-			toast.success("Verification email resent");
+			toast.success("Verification email sent", {
+				position: "top-center",
+			});
 		},
 	});
 

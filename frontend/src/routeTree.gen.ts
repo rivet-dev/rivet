@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VerifyEmailPendingRouteImport } from './routes/verify-email-pending'
-import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
@@ -45,11 +44,6 @@ import { Route as ContextOrgsOrganizationProjectsProjectNsNamespaceBillingRouteI
 const VerifyEmailPendingRoute = VerifyEmailPendingRouteImport.update({
   id: '/verify-email-pending',
   path: '/verify-email-pending',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const VerifyEmailRoute = VerifyEmailRouteImport.update({
-  id: '/verify-email',
-  path: '/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -238,7 +232,6 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/verify-email': typeof VerifyEmailRoute
   '/verify-email-pending': typeof VerifyEmailPendingRoute
   '/ns/$namespace': typeof ContextNsNamespaceRouteWithChildren
   '/orgs/$organization': typeof ContextOrgsOrganizationRouteWithChildren
@@ -270,7 +263,6 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/verify-email': typeof VerifyEmailRoute
   '/verify-email-pending': typeof VerifyEmailPendingRoute
   '/': typeof ContextIndexRoute
   '/new': typeof ContextNewIndexRoute
@@ -301,7 +293,6 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/verify-email': typeof VerifyEmailRoute
   '/verify-email-pending': typeof VerifyEmailPendingRoute
   '/_context/': typeof ContextIndexRoute
   '/_context/ns/$namespace': typeof ContextNsNamespaceRouteWithChildren
@@ -337,7 +328,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/reset-password'
-    | '/verify-email'
     | '/verify-email-pending'
     | '/ns/$namespace'
     | '/orgs/$organization'
@@ -369,7 +359,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/reset-password'
-    | '/verify-email'
     | '/verify-email-pending'
     | '/'
     | '/new'
@@ -399,7 +388,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/reset-password'
-    | '/verify-email'
     | '/verify-email-pending'
     | '/_context/'
     | '/_context/ns/$namespace'
@@ -434,7 +422,6 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
-  VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyEmailPendingRoute: typeof VerifyEmailPendingRoute
 }
 
@@ -445,13 +432,6 @@ declare module '@tanstack/react-router' {
       path: '/verify-email-pending'
       fullPath: '/verify-email-pending'
       preLoaderRoute: typeof VerifyEmailPendingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/verify-email': {
-      id: '/verify-email'
-      path: '/verify-email'
-      fullPath: '/verify-email'
-      preLoaderRoute: typeof VerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -790,7 +770,6 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
   ResetPasswordRoute: ResetPasswordRoute,
-  VerifyEmailRoute: VerifyEmailRoute,
   VerifyEmailPendingRoute: VerifyEmailPendingRoute,
 }
 export const routeTree = rootRouteImport

@@ -1,5 +1,7 @@
-import { faTrash, Icon } from "@rivet-gg/icons";
-import { useState } from "react";
+import { faPaperPlaneTop, faTrash, Icon } from "@rivet-gg/icons";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import * as InviteMemberForm from "@/app/forms/invite-member-form";
 import {
 	Avatar,
 	AvatarFallback,
@@ -14,56 +16,131 @@ import {
 	TableHead,
 	TableHeader,
 	TableRow,
+	WithTooltip,
 } from "@/components";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth";
+
+function RemoveMemberButton({
+	organizationId,
+	userId,
+}: {
+	organizationId: string;
+	userId: string;
+}) {
+	const { mutate, isPending } = useMutation({
+		mutationFn: async () => {
+			const result = await authClient.organization.removeMember({
+				memberIdOrEmail: userId,
+				organizationId,
+			});
+			if (result.error) throw result.error;
+		},
+		onSuccess: () => toast.success("Member removed."),
+	});
+
+	return (
+		<WithTooltip
+			content="Remove member"
+			delayDuration={0}
+			trigger={
+				<Button
+					variant="ghost"
+					size="icon"
+					isLoading={isPending}
+					onClick={() => mutate()}
+				>
+					<Icon icon={faTrash} className="size-4 text-destructive" />
+				</Button>
+			}
+		/>
+	);
+}
+
+function InvitationActions({
+	organizationId,
+	invitationId,
+	email,
+}: {
+	organizationId: string;
+	invitationId: string;
+	email: string;
+}) {
+	const { mutate: resend, isPending: isResendPending } = useMutation({
+		mutationFn: async () => {
+			const result = await authClient.organization.inviteMember({
+				email,
+				role: "owner",
+				organizationId,
+				resend: true,
+			});
+			if (result.error) throw result.error;
+		},
+		onSuccess: () => toast.success("Invitation resent."),
+	});
+
+	const { mutate: revoke, isPending: isRevokePending } = useMutation({
+		mutationFn: async () => {
+			const result = await authClient.organization.cancelInvitation({
+				invitationId,
+			});
+			if (result.error) throw result.error;
+		},
+		onSuccess: () => toast.success("Invitation revoked."),
+	});
+
+	return (
+		<div className="flex gap-1">
+			<WithTooltip
+				content="Resend"
+				delayDuration={0}
+				trigger={
+					<Button
+						variant="ghost"
+						size="icon"
+						isLoading={isResendPending}
+						onClick={() => resend()}
+					>
+						<Icon icon={faPaperPlaneTop} />
+					</Button>
+				}
+			/>
+			<WithTooltip
+				content="Revoke"
+				delayDuration={0}
+				trigger={
+					<Button
+						variant="ghost"
+						size="icon"
+						isLoading={isRevokePending}
+						onClick={() => revoke()}
+					>
+						<Icon icon={faTrash} className="text-destructive" />
+					</Button>
+				}
+			/>
+		</div>
+	);
+}
 
 interface OrgMembersFrameContentProps extends DialogContentProps {}
 
-export default function OrgMembersFrameContent({
-	onClose,
-}: OrgMembersFrameContentProps) {
+export default function OrgMembersFrameContent(_: OrgMembersFrameContentProps) {
 	const { data: org, isPending } = authClient.useActiveOrganization();
 	const { data: session } = authClient.useSession();
 
-	const [inviteEmail, setInviteEmail] = useState("");
-	const [inviteError, setInviteError] = useState<string | null>(null);
-	const [invitePending, setInvitePending] = useState(false);
-
-	const handleInvite = async () => {
-		if (!org || !inviteEmail.trim()) return;
-		setInviteError(null);
-		setInvitePending(true);
-
-		const result = await authClient.organization.inviteMember({
-			email: inviteEmail.trim(),
-			role: "member",
-			organizationId: org.id,
-		});
-
-		setInvitePending(false);
-
-		if (result.error) {
-			setInviteError(result.error.message ?? "Failed to send invitation");
-			return;
-		}
-
-		setInviteEmail("");
-	};
-
-	const handleRemoveMember = async (userId: string) => {
-		if (!org) return;
-		await authClient.organization.removeMember({
-			memberIdOrEmail: userId,
-			organizationId: org.id,
-		});
-	};
-
-	const handleCancelInvitation = async (invitationId: string) => {
-		await authClient.organization.cancelInvitation({ invitationId });
-	};
+	const { mutateAsync: inviteMember } = useMutation({
+		mutationFn: async (email: string) => {
+			if (!org) return;
+			const result = await authClient.organization.inviteMember({
+				email,
+				role: "owner",
+				organizationId: org.id,
+			});
+			if (result.error) throw result.error;
+		},
+		onSuccess: () => toast.success("Invitation sent."),
+	});
 
 	return (
 		<>
@@ -82,39 +159,22 @@ export default function OrgMembersFrameContent({
 					</div>
 				) : (
 					<>
-						<div className="max-h-[35vh] overflow-y-auto space-y-4">
-						<Table>
-							<TableHeader>
-								<TableRow>
-									<TableHead>Member</TableHead>
-									<TableHead className="w-min" />
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{org?.members.length === 0 ? (
+						<div className="max-h-[35vh] overflow-y-auto">
+							<Table>
+								<TableHeader>
 									<TableRow>
-										<TableCell
-											colSpan={2}
-											className="text-center py-8 text-muted-foreground"
-										>
-											No members yet.
-										</TableCell>
+										<TableHead className="w-full">
+											Member
+										</TableHead>
+										<TableHead className="w-min" />
 									</TableRow>
-								) : (
-									org?.members.map((member) => {
-										const user = (
-											member as unknown as {
-												user: {
-													id: string;
-													name: string;
-													email: string;
-													image?: string | null;
-												};
-											}
-										).user;
+								</TableHeader>
+								<TableBody>
+									{org?.members.map((member) => {
+										const user = member.user;
 										return (
 											<TableRow key={member.id}>
-												<TableCell>
+												<TableCell className="w-full">
 													<div className="flex items-center gap-2">
 														<Avatar className="size-6">
 															<AvatarImage
@@ -124,11 +184,9 @@ export default function OrgMembersFrameContent({
 																}
 															/>
 															<AvatarFallback>
-																{(
-																	user?.name ??
+																{(user?.name ??
 																	user?.email ??
-																	"?"
-																)[0].toUpperCase()}
+																	"?")[0].toUpperCase()}
 															</AvatarFallback>
 														</Avatar>
 														<div className="text-sm">
@@ -136,14 +194,15 @@ export default function OrgMembersFrameContent({
 																<p className="font-medium">
 																	{user?.name}
 																</p>
-																{member.userId === session?.user.id && (
-																	<Badge variant="outline" className="text-xs py-0">
+																{member.userId ===
+																	session
+																		?.user
+																		.id && (
+																	<Badge
+																		variant="outline"
+																		className="text-xs py-0"
+																	>
 																		You
-																	</Badge>
-																)}
-																{member.role === "owner" && (
-																	<Badge variant="secondary" className="text-xs py-0">
-																		owner
 																	</Badge>
 																)}
 															</div>
@@ -154,118 +213,111 @@ export default function OrgMembersFrameContent({
 													</div>
 												</TableCell>
 												<TableCell>
-													{member.userId !==
-														session?.user.id && (
-														<Button
-															variant="ghost"
-															size="icon"
-															onClick={() =>
-																handleRemoveMember(
-																	member.userId,
-																)
-															}
-														>
-															<Icon
-																icon={faTrash}
-																className="size-4 text-destructive"
-															/>
-														</Button>
-													)}
+													<div className="flex justify-end">
+														{member.userId !==
+															session?.user.id &&
+															org && (
+																<RemoveMemberButton
+																	organizationId={
+																		org.id
+																	}
+																	userId={
+																		member.userId
+																	}
+																/>
+															)}
+													</div>
 												</TableCell>
 											</TableRow>
 										);
-									})
-								)}
-							</TableBody>
-						</Table>
-
-						{(org?.invitations?.length ?? 0) > 0 && (
-							<div className="space-y-2">
-								<p className="text-sm font-medium text-muted-foreground">
-									Pending invitations
-								</p>
-								<Table>
-									<TableHeader>
-										<TableRow>
-											<TableHead>Email</TableHead>
-											<TableHead className="w-min" />
-										</TableRow>
-									</TableHeader>
-									<TableBody>
-										{org?.invitations.map((inv) => (
+									})}
+									{org?.invitations
+										.filter(
+											(inv) => inv.status === "pending",
+										)
+										.map((inv) => (
 											<TableRow key={inv.id}>
-												<TableCell className="text-sm">
-													{inv.email}
+												<TableCell className="w-full">
+													<div className="flex items-center gap-2">
+														<Avatar className="size-6">
+															<AvatarFallback>
+																{inv.email[0].toUpperCase()}
+															</AvatarFallback>
+														</Avatar>
+														<div className="text-sm">
+															<p className="text-muted-foreground">
+																{inv.email}
+															</p>
+															<p className="text-xs text-muted-foreground">
+																Invitation sent
+															</p>
+														</div>
+													</div>
 												</TableCell>
 												<TableCell>
-													<Button
-														variant="ghost"
-														size="sm"
-														onClick={() =>
-															handleCancelInvitation(
-																inv.id,
-															)
-														}
-													>
-														Revoke
-													</Button>
+													{org && (
+														<InvitationActions
+															organizationId={
+																org.id
+															}
+															invitationId={
+																inv.id
+															}
+															email={inv.email}
+														/>
+													)}
 												</TableCell>
 											</TableRow>
 										))}
-									</TableBody>
-								</Table>
-							</div>
-						)}
+									{!org?.members.length &&
+										!org?.invitations.filter(
+											(inv) => inv.status === "pending",
+										).length && (
+											<TableRow>
+												<TableCell
+													colSpan={2}
+													className="text-center py-8 text-muted-foreground"
+												>
+													No members yet.
+												</TableCell>
+											</TableRow>
+										)}
+								</TableBody>
+							</Table>
 						</div>
 
-						<form
-							className="space-y-3 pt-2 border-t"
-							onSubmit={(e) => {
-								e.preventDefault();
-								handleInvite();
-							}}
-						>
-							<p className="text-sm font-medium">Invite a member</p>
-							<div className="flex gap-2">
-								<div className="flex-1">
-									<Label
-										htmlFor="invite-email"
-										className="sr-only"
-									>
-										Email address
-									</Label>
-									<Input
-										id="invite-email"
-										type="email"
-										placeholder="colleague@company.com"
-										value={inviteEmail}
-										onChange={(e) =>
-											setInviteEmail(e.target.value)
-										}
-									/>
+						<div className="space-y-3">
+							<p className="text-sm font-medium mb-2 mt-4">
+								Invite a member
+							</p>
+							<InviteMemberForm.Form
+								defaultValues={{ email: "" }}
+								onSubmit={async ({ email }, form) => {
+									try {
+										await inviteMember(email);
+										form.reset();
+									} catch {
+										form.setError("root", {
+											message:
+												"Failed to send invitation.",
+										});
+									}
+								}}
+							>
+								<div className="flex gap-2">
+									<div className="flex-1">
+										<InviteMemberForm.EmailField />
+									</div>
+									<InviteMemberForm.Submit>
+										Invite
+									</InviteMemberForm.Submit>
 								</div>
-								<Button
-									type="submit"
-									isLoading={invitePending}
-									disabled={!inviteEmail.trim()}
-								>
-									Invite
-								</Button>
-							</div>
-							{inviteError && (
-								<p className="text-sm text-destructive">
-									{inviteError}
-								</p>
-							)}
-						</form>
+								<InviteMemberForm.RootError />
+							</InviteMemberForm.Form>
+						</div>
 					</>
 				)}
 			</Frame.Content>
-			<Frame.Footer>
-				<Button variant="secondary" onClick={onClose}>
-					Close
-				</Button>
-			</Frame.Footer>
 		</>
 	);
 }
