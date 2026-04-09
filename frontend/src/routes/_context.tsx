@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react";
 import {
 	createFileRoute,
 	Outlet,
@@ -6,6 +7,8 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
+import posthog from "posthog-js";
+import { useEffect } from "react";
 import z from "zod";
 import { getConfig, ls } from "@/components";
 import { useDialog } from "@/app/use-dialog";
@@ -73,9 +76,24 @@ export const Route = createFileRoute("/_context")({
 	},
 });
 
+function IdentifyUser() {
+	const { data: session } = authClient.useSession();
+
+	useEffect(() => {
+		const user = session?.user;
+		if (!user) return;
+
+		Sentry.setUser({ id: user.id, email: user.email });
+		posthog.setPersonProperties({ id: user.id, email: user.email });
+	}, [session?.user]);
+
+	return null;
+}
+
 function RouteComponent() {
 	return (
 		<>
+			{features.auth && <IdentifyUser />}
 			<Outlet />
 			<ModalRenderer />
 			<Modals />
