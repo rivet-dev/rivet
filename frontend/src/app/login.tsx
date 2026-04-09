@@ -53,6 +53,14 @@ export function Login() {
 		);
 
 		if (result.error) {
+			const code = result.error.code;
+			if (
+				code === "EMAIL_NOT_VERIFIED" ||
+				code === "VERIFY_YOUR_EMAIL"
+			) {
+				navigate({ to: "/verify-email-pending" });
+				return;
+			}
 			form.setError("root", {
 				message: result.error.message ?? "Invalid credentials",
 			});

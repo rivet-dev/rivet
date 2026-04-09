@@ -64,6 +64,10 @@ export const Route = createFileRoute("/_context")({
 					}),
 				});
 			}
+
+			if (!session.data.user.emailVerified) {
+				throw redirect({ to: "/verify-email-pending" });
+			}
 		}
 	},
 });
