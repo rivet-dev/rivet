@@ -19,10 +19,32 @@ export function VerifyEmailPending() {
 	const handleResend = async () => {
 		if (!email) return;
 		setIsPending(true);
-		const result = await authClient.sendVerificationEmail({ email });
+
+		let retryAfter: string | null = null;
+		const result = await authClient.sendVerificationEmail(
+			{ email },
+			{
+				onError(ctx) {
+					retryAfter = ctx.response.headers.get("x-retry-after");
+				},
+			},
+		);
+
 		setIsPending(false);
+
 		if (result.error) {
-			toast.error("Failed to resend verification email. Please try again.");
+			if (result.error.status === 429) {
+				const seconds = retryAfter ? Number.parseInt(retryAfter, 10) : null;
+				const wait =
+					seconds && !Number.isNaN(seconds)
+						? seconds >= 60
+							? `${Math.ceil(seconds / 60)} minute${Math.ceil(seconds / 60) === 1 ? "" : "s"}`
+							: `${seconds} second${seconds === 1 ? "" : "s"}`
+						: "a moment";
+				toast.error(`Too many requests. Please try again in ${wait}.`);
+			} else {
+				toast.error("Failed to resend verification email. Please try again.");
+			}
 		} else {
 			toast.success("Verification email sent. Check your inbox.");
 		}
