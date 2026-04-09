@@ -87,9 +87,25 @@ jobs:
             echo "Placed $filename -> npm/${platform}/"
           done
 
-      - name: Prepare native package for publish
+      - name: Add optionalDependencies to native package
         working-directory: rivetkit-typescript/packages/rivetkit-native
-        run: npx napi prepublish -t npm
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            const npmDirs = fs.readdirSync('npm').filter(d =>
+              fs.statSync(path.join('npm', d)).isDirectory() &&
+              fs.existsSync(path.join('npm', d, 'package.json'))
+            );
+            pkg.optionalDependencies = {};
+            for (const dir of npmDirs) {
+              const platPkg = JSON.parse(fs.readFileSync(path.join('npm', dir, 'package.json'), 'utf8'));
+              pkg.optionalDependencies[platPkg.name] = platPkg.version;
+            }
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, '\t') + '\n');
+            console.log('Added optionalDependencies:', pkg.optionalDependencies);
+          "
 
       - run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub'
       - run: npx turbo build:pack-inspector -F rivetkit
