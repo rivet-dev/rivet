@@ -183,7 +183,6 @@ export default function OrgMembersFrameContent({
 									<TableHeader>
 										<TableRow>
 											<TableHead>Email</TableHead>
-											<TableHead>Role</TableHead>
 											<TableHead className="w-min" />
 										</TableRow>
 									</TableHeader>
@@ -192,11 +191,6 @@ export default function OrgMembersFrameContent({
 											<TableRow key={inv.id}>
 												<TableCell className="text-sm">
 													{inv.email}
-												</TableCell>
-												<TableCell>
-													<Badge variant="outline">
-														{inv.role}
-													</Badge>
 												</TableCell>
 												<TableCell>
 													<Button
