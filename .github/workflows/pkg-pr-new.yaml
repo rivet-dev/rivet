@@ -107,7 +107,7 @@ jobs:
             console.log('Added optionalDependencies:', pkg.optionalDependencies);
           "
 
-      - run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub'
+      - run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/sqlite-native' -F '!@rivetkit/rivetkit-native'
       - run: npx turbo build:pack-inspector -F rivetkit
       # Strip sourcemaps from inspector tarball to stay under pkg-pr-new 20MB limit
       - run: |
