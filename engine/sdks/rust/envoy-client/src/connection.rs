@@ -81,6 +81,12 @@ async fn single_connection(
 		p
 	};
 
+	// Initialize with a default CryptoProvider for rustls
+	let provider = rustls::crypto::ring::default_provider();
+	if provider.install_default().is_err() {
+		tracing::debug!("crypto provider already installed in this process");
+	}
+
 	let request = tungstenite::http::Request::builder()
 		.uri(&url)
 		.header("Sec-WebSocket-Protocol", protocols.join(", "))

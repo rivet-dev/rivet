@@ -264,7 +264,8 @@ pub async fn handle_init(
 				// Update the pool's protocol version. This is required for serverful pools because normally
 				// the pool's protocol version is updated via the metadata_poller wf but that only runs for
 				// serverless pools.
-				tx.write(
+				let ns_tx = tx.with_subspace(namespace::keys::subspace());
+				ns_tx.write(
 					&pegboard::keys::runner_config::ProtocolVersionKey::new(
 						namespace_id,
 						pool_name.clone(),

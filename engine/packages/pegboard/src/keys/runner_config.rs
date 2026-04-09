@@ -244,9 +244,9 @@ impl TuplePack for ProtocolVersionKey {
 			RUNNER,
 			CONFIG,
 			DATA,
-			PROTOCOL_VERSION,
 			self.namespace_id,
 			&self.name,
+			PROTOCOL_VERSION,
 		);
 		t.pack(w, tuple_depth)
 	}
@@ -254,8 +254,8 @@ impl TuplePack for ProtocolVersionKey {
 
 impl<'de> TupleUnpack<'de> for ProtocolVersionKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, _, _, namespace_id, name)) =
-			<(usize, usize, usize, usize, Id, String)>::unpack(input, tuple_depth)?;
+		let (input, (_, _, _, namespace_id, name, _)) =
+			<(usize, usize, usize, Id, String, usize)>::unpack(input, tuple_depth)?;
 
 		let v = ProtocolVersionKey { namespace_id, name };
 

@@ -12,6 +12,7 @@ hex.workspace = true
 rand.workspace = true
 rivet-envoy-protocol.workspace = true
 rivet-util-serde.workspace = true
+rustls.workspace = true
 scc.workspace = true
 serde.workspace = true
 serde_bare.workspace = true

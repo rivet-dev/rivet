@@ -135,7 +135,6 @@ members = [
   tokio-cron-scheduler = "0.13.0"
   tokio-native-tls = "0.3.1"
   tokio-stream = "0.1.15"
-  tokio-tungstenite = "0.26.0"
   tokio-util = "0.7"
   tower = "0.5"
   tracing = "0.1.40"
@@ -176,6 +175,10 @@ members = [
 
     [workspace.dependencies.pest]
     version = "2.7"
+
+    [workspace.dependencies.tokio-tungstenite]
+    version = "0.26.0"
+    features = ["rustls-tls-native-roots"]
 
     [workspace.dependencies.rocksdb]
     version = "0.24"
@@ -489,9 +492,6 @@ members = [
     [workspace.dependencies.util]
     package = "rivet-util"
     path = "engine/packages/util"
-
-    [workspace.dependencies.rivet-util-serde]
-    path = "engine/packages/util-serde"
 
     [workspace.dependencies.rivet-util-id]
     path = "engine/packages/util-id"
