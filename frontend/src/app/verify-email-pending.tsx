@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
+import { formatDuration } from "@/components/lib/formatter";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -37,9 +38,7 @@ export function VerifyEmailPending() {
 				const seconds = retryAfter ? Number.parseInt(retryAfter, 10) : null;
 				const wait =
 					seconds && !Number.isNaN(seconds)
-						? seconds >= 60
-							? `${Math.ceil(seconds / 60)} minute${Math.ceil(seconds / 60) === 1 ? "" : "s"}`
-							: `${seconds} second${seconds === 1 ? "" : "s"}`
+						? formatDuration(seconds * 1000, { showSeconds: true })
 						: "a moment";
 				toast.error(`Too many requests. Please try again in ${wait}.`);
 			} else {
