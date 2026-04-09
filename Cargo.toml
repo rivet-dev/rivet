@@ -148,6 +148,10 @@ members = [
     version = "0.26.0"
     features = [ "rustls-tls-native-roots" ]
 
+    [workspace.dependencies.rdkafka]
+    version = "0.38.0"
+    features = [ "ssl" ]
+
     [workspace.dependencies.vergen]
     version = "9.0.4"
     features = [ "build", "cargo", "rustc" ]
@@ -346,6 +350,11 @@ members = [
 
     [workspace.dependencies.vbare-compiler]
     version = "0.0.4"
+
+    [workspace.dependencies.raw-foundationdb]
+    package = "foundationdb"
+    version = "0.9.2"
+    features = [ "fdb-7_3", "embedded-fdb-include" ]
 
     [workspace.dependencies.rivet-api-builder]
     path = "engine/packages/api-builder"

@@ -115,6 +115,9 @@ import { inlineClientActor } from "./actors/testing/inline-client.ts";
 import { testCounter } from "./actors/testing/test-counter.ts";
 import { testCounterSqlite } from "./actors/testing/test-counter-sqlite.ts";
 import { testSqliteLoad } from "./actors/testing/test-sqlite-load.ts";
+import { testWake } from "./actors/testing/test-wake.ts";
+import { testSqliteBench } from "./actors/testing/test-sqlite-bench.ts";
+import { testThroughput } from "./actors/testing/test-throughput.ts";
 // AI
 import { aiAgent } from "./actors/ai/ai-agent.ts";
 
@@ -210,6 +213,9 @@ export const registry = setup({
 		testCounter,
 		testCounterSqlite,
 		testSqliteLoad,
+		testWake,
+		testSqliteBench,
+		testThroughput,
 		// AI
 		aiAgent,
 	},

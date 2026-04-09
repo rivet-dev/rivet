@@ -19,5 +19,7 @@ export default defineConfig({
 	plugins: [react(), sqlRawPlugin(), ...srvx({ entry: "src/server.ts" })],
 	ssr: {
 		noExternal: true,
+		// Native addon can't be bundled by vite - must remain a runtime require().
+		external: ["@rivetkit/rivetkit-native", "@rivetkit/rivetkit-native/wrapper"],
 	},
 });

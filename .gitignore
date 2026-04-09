@@ -25,12 +25,19 @@ pnpm-debug.log*
 
 # pnpm workspace
 .pnpm-store/
+platform/.platform-dev-token
 
 # TypeScript
 *.tsbuildinfo
 dist/
 frontend/build/
 !frontend/packages/icons/dist/
+platform/api/openapi.json
+platform/api/.env
+platform/api/.env.*
+!platform/api/.env.example
+!platform/api/.env.*.example
+platform/vercel-health-check/.next/
 
 # IDE
 .vscode/
@@ -44,8 +51,10 @@ Thumbs.db
 
 secrets/**/*
 
-tf/.terraform/**/*
-tf/.terraform.lock.hcl
+*.tfstate*
+**/.terraform/**/*
+**/.terraform.lock.hcl
+platform/tf/terraform.tfvars
 
 # Frontend
 frontend/.env.*
@@ -81,3 +90,6 @@ examples/*/public/
 
 # Native addon binaries
 *.node
+
+# Sandbox deploy bundle (built by scripts/docker/build-sandbox.sh)
+.sandbox-deploy/

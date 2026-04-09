@@ -10,14 +10,14 @@ overrides:
   '@rivetkit/next-js': workspace:*
   '@rivetkit/db': workspace:*
   '@rivetkit/sqlite-wasm': workspace:*
-  '@rivetkit/engine-api-full': workspace:*
+  '@rivetkit/engine-api-full': https://pkg.pr.new/rivet-dev/engine-ee/@rivetkit/engine-api-full@011e389
   '@rivetkit/rivetkit-native': workspace:*
   '@types/react': ^19
   '@types/react-dom': ^19
   '@clerk/shared': 3.27.1
   react: 19.1.0
   react-dom: 19.1.0
-  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c
+  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@715f221
   '@codemirror/state': 6.5.2
   '@codemirror/view': 6.38.2
   '@codemirror/autocomplete': 6.18.7
@@ -313,7 +313,7 @@ importers:
         version: 0.0.260331072558
       '@rivet-dev/agent-os-pi':
         specifier: ^0.1.1
-        version: 0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
+        version: 0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13))(pyodide@0.28.3)(ws@8.19.0)(zod@4.1.13)
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
@@ -438,11 +438,11 @@ importers:
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@715f221
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@715f221
       '@rivetkit/engine-api-full':
-        specifier: workspace:*
-        version: link:../../engine/sdks/typescript/api-full
+        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivetkit/engine-api-full@011e389
+        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivetkit/engine-api-full@011e389
       dotenv:
         specifier: ^17.2.2
         version: 17.2.3
@@ -3532,14 +3532,14 @@ importers:
         specifier: ^1.2.3
         version: 1.2.3(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@715f221
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@715f221
       '@rivet-gg/icons':
         specifier: workspace:*
         version: link:packages/icons
       '@rivetkit/engine-api-full':
-        specifier: workspace:*
-        version: link:../engine/sdks/typescript/api-full
+        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivetkit/engine-api-full@011e389
+        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivetkit/engine-api-full@011e389
       '@rivetkit/shared-data':
         specifier: workspace:*
         version: link:packages/shared-data
@@ -4777,8 +4777,8 @@ importers:
         specifier: 25.5.3
         version: 25.5.3
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@715f221
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@715f221
       '@rivet-gg/components':
         specifier: workspace:*
         version: link:../frontend/packages/components
@@ -9584,13 +9584,17 @@ packages:
   '@rivet-gg/api@25.5.3':
     resolution: {integrity: sha512-pj8xYQ+I/aQDbThmicPxvR+TWAzGoLSE53mbJi4QZHF8VH2oMvU7CMWqy7OTFH30DIRyVzsnHHRJZKGwtmQL3g==}
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c':
-    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c}
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@715f221':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@715f221}
     version: 0.0.0
 
   '@rivetkit/bare-ts@0.6.2':
     resolution: {integrity: sha512-3qndQUQXLdwafMEqfhz24hUtDPcsf1Bu3q52Kb8MqeH8JUh3h6R4HYW3ZJXiQsLcyYyFM68PuIwlLRlg1xDEpg==}
     engines: {node: ^14.18.0 || >=16.0.0}
+
+  '@rivetkit/engine-api-full@https://pkg.pr.new/rivet-dev/engine-ee/@rivetkit/engine-api-full@011e389':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/engine-ee/@rivetkit/engine-api-full@011e389}
+    version: 2.0.33
 
   '@rivetkit/fast-json-patch@3.1.2':
     resolution: {integrity: sha512-CtA50xgsSSzICQduF/NDShPRzvucnNvsW/lQO0WgMTT1XAj9Lfae4pm7r3llFwilgG+9iq76Hv1LUqNy72v6yw==}
@@ -19573,10 +19577,6 @@ snapshots:
 
   '@adraffy/ens-normalize@1.11.1': {}
 
-  '@agentclientprotocol/sdk@0.16.1(zod@3.25.76)':
-    dependencies:
-      zod: 3.25.76
-
   '@agentclientprotocol/sdk@0.16.1(zod@4.1.13)':
     dependencies:
       zod: 4.1.13
@@ -19717,12 +19717,6 @@ snapshots:
     dependencies:
       package-manager-detector: 1.6.0
       tinyexec: 1.0.2
-
-  '@anthropic-ai/sdk@0.73.0(zod@3.25.76)':
-    dependencies:
-      json-schema-to-ts: 3.1.1
-    optionalDependencies:
-      zod: 3.25.76
 
   '@anthropic-ai/sdk@0.73.0(zod@4.1.13)':
     dependencies:
@@ -22649,19 +22643,6 @@ snapshots:
       '@fortawesome/fontawesome-svg-core': 7.1.0
       react: 19.1.0
 
-  '@google/genai@1.48.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))':
-    dependencies:
-      google-auth-library: 10.6.2
-      p-retry: 4.6.2
-      protobufjs: 7.5.4
-      ws: 8.19.0
-    optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.25.3(hono@4.11.9)(zod@3.25.76)
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-
   '@google/genai@1.48.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13))':
     dependencies:
       google-auth-library: 10.6.2
@@ -23329,45 +23310,9 @@ snapshots:
       std-env: 3.10.0
       yoctocolors: 2.1.2
 
-  '@mariozechner/pi-agent-core@0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)':
-    dependencies:
-      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
-    transitivePeerDependencies:
-      - '@modelcontextprotocol/sdk'
-      - aws-crt
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-      - ws
-      - zod
-
   '@mariozechner/pi-agent-core@0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)':
     dependencies:
       '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
-    transitivePeerDependencies:
-      - '@modelcontextprotocol/sdk'
-      - aws-crt
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@mariozechner/pi-ai@0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)':
-    dependencies:
-      '@anthropic-ai/sdk': 0.73.0(zod@3.25.76)
-      '@aws-sdk/client-bedrock-runtime': 3.1024.0
-      '@google/genai': 1.48.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))
-      '@mistralai/mistralai': 1.14.1
-      '@sinclair/typebox': 0.34.41
-      ajv: 8.17.1
-      ajv-formats: 3.0.1(ajv@8.17.1)
-      chalk: 5.6.2
-      openai: 6.26.0(ws@8.19.0)(zod@3.25.76)
-      partial-json: 0.1.7
-      proxy-agent: 6.5.0
-      undici: 7.24.7
-      zod-to-json-schema: 3.25.1(zod@3.25.76)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - aws-crt
@@ -23392,38 +23337,6 @@ snapshots:
       proxy-agent: 6.5.0
       undici: 7.24.7
       zod-to-json-schema: 3.25.1(zod@4.1.13)
-    transitivePeerDependencies:
-      - '@modelcontextprotocol/sdk'
-      - aws-crt
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@mariozechner/pi-coding-agent@0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)':
-    dependencies:
-      '@mariozechner/jiti': 2.6.5
-      '@mariozechner/pi-agent-core': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
-      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
-      '@mariozechner/pi-tui': 0.60.0
-      '@silvia-odwyer/photon-node': 0.3.4
-      chalk: 5.6.2
-      cli-highlight: 2.1.11
-      diff: 8.0.3
-      extract-zip: 2.0.1
-      file-type: 21.3.4
-      glob: 13.0.6
-      hosted-git-info: 9.0.2
-      ignore: 7.0.5
-      marked: 15.0.12
-      minimatch: 10.2.5
-      proper-lockfile: 4.1.2
-      strip-ansi: 7.1.2
-      undici: 7.24.7
-      yaml: 2.8.2
-    optionalDependencies:
-      '@mariozechner/clipboard': 0.3.2
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - aws-crt
@@ -25462,22 +25375,6 @@ snapshots:
 
   '@rivet-dev/agent-os-gzip@0.0.260331072558': {}
 
-  '@rivet-dev/agent-os-pi@0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)':
-    dependencies:
-      '@agentclientprotocol/sdk': 0.16.1(zod@3.25.76)
-      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
-      '@mariozechner/pi-coding-agent': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
-      '@rivet-dev/agent-os-core': 0.1.1(pyodide@0.28.3)
-    transitivePeerDependencies:
-      - '@modelcontextprotocol/sdk'
-      - aws-crt
-      - bufferutil
-      - pyodide
-      - supports-color
-      - utf-8-validate
-      - ws
-      - zod
-
   '@rivet-dev/agent-os-pi@0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13))(pyodide@0.28.3)(ws@8.19.0)(zod@4.1.13)':
     dependencies:
       '@agentclientprotocol/sdk': 0.16.1(zod@4.1.13)
@@ -25519,7 +25416,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c':
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@715f221':
     dependencies:
       cross-fetch: 4.1.0
       form-data: 4.0.5
@@ -25533,6 +25430,17 @@ snapshots:
       - encoding
 
   '@rivetkit/bare-ts@0.6.2': {}
+
+  '@rivetkit/engine-api-full@https://pkg.pr.new/rivet-dev/engine-ee/@rivetkit/engine-api-full@011e389':
+    dependencies:
+      form-data: 4.0.5
+      js-base64: 3.7.8
+      node-fetch: 2.7.0
+      qs: 6.14.1
+      readable-stream: 4.7.0
+      url-join: 5.0.0
+    transitivePeerDependencies:
+      - encoding
 
   '@rivetkit/fast-json-patch@3.1.2': {}
 
@@ -33987,11 +33895,6 @@ snapshots:
       zod: 3.25.76
     transitivePeerDependencies:
       - encoding
-
-  openai@6.26.0(ws@8.19.0)(zod@3.25.76):
-    optionalDependencies:
-      ws: 8.19.0
-      zod: 3.25.76
 
   openai@6.26.0(ws@8.19.0)(zod@4.1.13):
     optionalDependencies:
