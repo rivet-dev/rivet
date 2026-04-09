@@ -56,7 +56,9 @@ members = [
   "engine/sdks/rust/envoy-protocol",
   "engine/sdks/rust/epoxy-protocol",
   "engine/sdks/rust/test-envoy",
-  "engine/sdks/rust/ups-protocol"
+  "engine/sdks/rust/ups-protocol",
+  "rivetkit-typescript/packages/rivetkit-native",
+  "rivetkit-typescript/packages/sqlite-native"
 ]
 
   [workspace.package]
@@ -135,6 +137,7 @@ members = [
   tokio-cron-scheduler = "0.13.0"
   tokio-native-tls = "0.3.1"
   tokio-stream = "0.1.15"
+  tokio-tungstenite = { version = "0.26.0", features = ["rustls-tls-native-roots"] }
   tokio-util = "0.7"
   tower = "0.5"
   tracing = "0.1.40"
@@ -143,6 +146,10 @@ members = [
   tracing-slog = "0.2"
   vergen-gitcl = "1.0.0"
   reqwest-eventsource = "0.6.0"
+
+    [workspace.dependencies.rdkafka]
+    version = "0.38.0"
+    features = [ "ssl" ]
 
     [workspace.dependencies.vergen]
     version = "9.0.4"
@@ -175,10 +182,6 @@ members = [
 
     [workspace.dependencies.pest]
     version = "2.7"
-
-    [workspace.dependencies.tokio-tungstenite]
-    version = "0.26.0"
-    features = ["rustls-tls-native-roots"]
 
     [workspace.dependencies.rocksdb]
     version = "0.24"
@@ -346,6 +349,11 @@ members = [
 
     [workspace.dependencies.vbare-compiler]
     version = "0.0.4"
+
+    [workspace.dependencies.raw-foundationdb]
+    package = "foundationdb"
+    version = "0.9.2"
+    features = [ "fdb-7_3", "embedded-fdb-include" ]
 
     [workspace.dependencies.rivet-api-builder]
     path = "engine/packages/api-builder"
@@ -522,6 +530,9 @@ members = [
 
     [workspace.dependencies.rivet-ups-protocol]
     path = "engine/sdks/rust/ups-protocol"
+
+    [workspace.dependencies.rivetkit-sqlite-native]
+    path = "rivetkit-typescript/packages/sqlite-native"
 
 [profile.dev]
 overflow-checks = false
