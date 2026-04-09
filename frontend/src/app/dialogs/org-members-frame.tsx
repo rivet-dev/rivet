@@ -87,7 +87,6 @@ export default function OrgMembersFrameContent({
 							<TableHeader>
 								<TableRow>
 									<TableHead>Member</TableHead>
-									<TableHead>Role</TableHead>
 									<TableHead className="w-min" />
 								</TableRow>
 							</TableHeader>
@@ -95,7 +94,7 @@ export default function OrgMembersFrameContent({
 								{org?.members.length === 0 ? (
 									<TableRow>
 										<TableCell
-											colSpan={3}
+											colSpan={2}
 											className="text-center py-8 text-muted-foreground"
 										>
 											No members yet.
@@ -133,19 +132,21 @@ export default function OrgMembersFrameContent({
 															</AvatarFallback>
 														</Avatar>
 														<div className="text-sm">
-															<p className="font-medium">
-																{user?.name}
-															</p>
+															<div className="flex items-center gap-1.5">
+																<p className="font-medium">
+																	{user?.name}
+																</p>
+																{member.role === "owner" && (
+																	<Badge variant="secondary" className="text-xs py-0">
+																		owner
+																	</Badge>
+																)}
+															</div>
 															<p className="text-muted-foreground">
 																{user?.email}
 															</p>
 														</div>
 													</div>
-												</TableCell>
-												<TableCell>
-													<Badge variant="secondary">
-														{member.role}
-													</Badge>
 												</TableCell>
 												<TableCell>
 													{member.userId !==
