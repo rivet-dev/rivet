@@ -7,6 +7,7 @@ import { features } from "./features";
 const createClient = () =>
 	createAuthClient({
 		baseURL: cloudEnv().VITE_APP_CLOUD_API_URL,
+		fetchOptions: { credentials: "include" },
 		plugins: [organizationClient()],
 	});
 

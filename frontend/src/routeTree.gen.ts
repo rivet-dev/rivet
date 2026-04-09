@@ -9,9 +9,14 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VerifyEmailPendingRouteImport } from './routes/verify-email-pending'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as JoinRouteImport } from './routes/join'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as AcceptInvitationRouteImport } from './routes/accept-invitation'
 import { Route as ContextRouteImport } from './routes/_context'
 import { Route as ContextIndexRouteImport } from './routes/_context/index'
 import { Route as ContextNewIndexRouteImport } from './routes/_context/new/index'
@@ -37,6 +42,21 @@ import { Route as ContextOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRo
 import { Route as ContextOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport } from './routes/_context/orgs.$organization/projects.$project/ns.$namespace/connect'
 import { Route as ContextOrgsOrganizationProjectsProjectNsNamespaceBillingRouteImport } from './routes/_context/orgs.$organization/projects.$project/ns.$namespace/billing'
 
+const VerifyEmailPendingRoute = VerifyEmailPendingRouteImport.update({
+  id: '/verify-email-pending',
+  path: '/verify-email-pending',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OnboardingRoute = OnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
@@ -50,6 +70,16 @@ const LoginRoute = LoginRouteImport.update({
 const JoinRoute = JoinRouteImport.update({
   id: '/join',
   path: '/join',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcceptInvitationRoute = AcceptInvitationRouteImport.update({
+  id: '/accept-invitation',
+  path: '/accept-invitation',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContextRoute = ContextRouteImport.update({
@@ -202,9 +232,14 @@ const ContextOrgsOrganizationProjectsProjectNsNamespaceBillingRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof ContextIndexRoute
+  '/accept-invitation': typeof AcceptInvitationRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/verify-email': typeof VerifyEmailRoute
+  '/verify-email-pending': typeof VerifyEmailPendingRoute
   '/ns/$namespace': typeof ContextNsNamespaceRouteWithChildren
   '/orgs/$organization': typeof ContextOrgsOrganizationRouteWithChildren
   '/new/': typeof ContextNewIndexRoute
@@ -229,9 +264,14 @@ export interface FileRoutesByFullPath {
   '/orgs/$organization/projects/$project/ns/$namespace/': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
 export interface FileRoutesByTo {
+  '/accept-invitation': typeof AcceptInvitationRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/verify-email': typeof VerifyEmailRoute
+  '/verify-email-pending': typeof VerifyEmailPendingRoute
   '/': typeof ContextIndexRoute
   '/new': typeof ContextNewIndexRoute
   '/ns/$namespace/settings': typeof ContextNsNamespaceSettingsRoute
@@ -255,9 +295,14 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_context': typeof ContextRouteWithChildren
+  '/accept-invitation': typeof AcceptInvitationRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/verify-email': typeof VerifyEmailRoute
+  '/verify-email-pending': typeof VerifyEmailPendingRoute
   '/_context/': typeof ContextIndexRoute
   '/_context/ns/$namespace': typeof ContextNsNamespaceRouteWithChildren
   '/_context/orgs/$organization': typeof ContextOrgsOrganizationRouteWithChildren
@@ -286,9 +331,14 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/accept-invitation'
+    | '/forgot-password'
     | '/join'
     | '/login'
     | '/onboarding'
+    | '/reset-password'
+    | '/verify-email'
+    | '/verify-email-pending'
     | '/ns/$namespace'
     | '/orgs/$organization'
     | '/new/'
@@ -313,9 +363,14 @@ export interface FileRouteTypes {
     | '/orgs/$organization/projects/$project/ns/$namespace/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/accept-invitation'
+    | '/forgot-password'
     | '/join'
     | '/login'
     | '/onboarding'
+    | '/reset-password'
+    | '/verify-email'
+    | '/verify-email-pending'
     | '/'
     | '/new'
     | '/ns/$namespace/settings'
@@ -338,9 +393,14 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_context'
+    | '/accept-invitation'
+    | '/forgot-password'
     | '/join'
     | '/login'
     | '/onboarding'
+    | '/reset-password'
+    | '/verify-email'
+    | '/verify-email-pending'
     | '/_context/'
     | '/_context/ns/$namespace'
     | '/_context/orgs/$organization'
@@ -368,13 +428,39 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   ContextRoute: typeof ContextRouteWithChildren
+  AcceptInvitationRoute: typeof AcceptInvitationRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   JoinRoute: typeof JoinRoute
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
+  VerifyEmailPendingRoute: typeof VerifyEmailPendingRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/verify-email-pending': {
+      id: '/verify-email-pending'
+      path: '/verify-email-pending'
+      fullPath: '/verify-email-pending'
+      preLoaderRoute: typeof VerifyEmailPendingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/onboarding': {
       id: '/onboarding'
       path: '/onboarding'
@@ -394,6 +480,20 @@ declare module '@tanstack/react-router' {
       path: '/join'
       fullPath: '/join'
       preLoaderRoute: typeof JoinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/accept-invitation': {
+      id: '/accept-invitation'
+      path: '/accept-invitation'
+      fullPath: '/accept-invitation'
+      preLoaderRoute: typeof AcceptInvitationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_context': {
@@ -684,9 +784,14 @@ const ContextRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   ContextRoute: ContextRouteWithChildren,
+  AcceptInvitationRoute: AcceptInvitationRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   JoinRoute: JoinRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
+  VerifyEmailPendingRoute: VerifyEmailPendingRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

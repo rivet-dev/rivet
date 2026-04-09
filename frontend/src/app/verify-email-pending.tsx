@@ -1,8 +1,7 @@
+import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
 import { toast } from "sonner";
-import { useInterval } from "@/components/hooks/use-interval";
-import { formatDuration } from "@/components/lib/formatter";
+import { useTimeout } from "usehooks-ts";
 import { RelativeTime } from "@/components/relative-time";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,65 +12,67 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { authClient } from "@/lib/auth";
+import { isAuthError, isDate } from "@/lib/utils";
 
 export function VerifyEmailPending() {
 	const { data: session } = authClient.useSession();
 	const email = session?.user.email;
-	const [isPending, setIsPending] = useState(false);
-	const [retryUntil, setRetryUntil] = useState<Date | null>(null);
 
-	useInterval(
-		() => {
-			setRetryUntil((prev) => {
-				if (!prev || Date.now() >= prev.getTime()) return null;
-				// New object with same timestamp forces RelativeTime's useMemo to recompute.
-				return new Date(prev.getTime());
-			});
-		},
-		retryUntil ? 1000 : null,
-	);
-
-	const handleResend = async () => {
-		if (!email) return;
-		setIsPending(true);
-		try {
-			let retryAfter: string | null = null;
-			const result = await authClient.sendVerificationEmail(
-				{ email },
-				{
-					onError(ctx) {
-						retryAfter = ctx.response.headers.get("x-retry-after");
+	const { mutate, isPending, isError, error, reset } = useMutation({
+		mutationFn: async () => {
+			if (!email) return;
+			let retryAfter: Date | null = null;
+			const result = await authClient.sendVerificationEmail({
+				email,
+				callbackURL: window.location.origin,
+				fetchOptions: {
+					onError: async (context) => {
+						const { response } = context;
+						if (response.status === 429) {
+							const retryAfterHeader =
+								response.headers.get("X-Retry-After");
+							retryAfter = retryAfterHeader
+								? new Date(
+										Date.now() +
+											Number.parseInt(
+												retryAfterHeader,
+												10,
+											) *
+												1000,
+									)
+								: null;
+						}
 					},
 				},
-			);
+			});
 
 			if (result.error) {
-				if (result.error.status === 429) {
-					const seconds = retryAfter
-						? Number.parseInt(retryAfter, 10)
-						: null;
-					if (seconds && !Number.isNaN(seconds)) {
-						setRetryUntil(new Date(Date.now() + seconds * 1000));
-						toast.error(
-							`Too many requests. Please try again in ${formatDuration(seconds * 1000, { showSeconds: true })}.`,
-						);
-					} else {
-						toast.error("Too many requests. Please try again later.");
-					}
-				} else {
-					toast.error(
-						"Failed to resend verification email. Please try again.",
-					);
-				}
-			} else {
-				toast.success("Verification email sent. Check your inbox.");
+				throw { ...result.error, retryAfter };
 			}
-		} finally {
-			setIsPending(false);
-		}
-	};
+			return result.data;
+		},
+		onSuccess: () => {
+			toast.success("Verification email resent");
+		},
+	});
 
-	const isRateLimited = retryUntil !== null;
+	const retryAfter =
+		isError && isAuthError(error) && isDate(error.retryAfter)
+			? error.retryAfter
+			: null;
+	const rateLimited = isError && isAuthError(error) && error.status === 429;
+
+	useTimeout(
+		() => {
+			reset();
+		},
+		retryAfter ? retryAfter.getTime() - Date.now() : null,
+	);
+
+	const handleResend = () => {
+		if (!email) return;
+		mutate();
+	};
 
 	return (
 		<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4 px-4">
@@ -96,11 +97,11 @@ export function VerifyEmailPending() {
 							variant="outline"
 							onClick={handleResend}
 							isLoading={isPending}
-							disabled={isRateLimited}
+							disabled={rateLimited}
 						>
-							{isRateLimited && retryUntil ? (
+							{rateLimited && retryAfter ? (
 								<>
-									Retry <RelativeTime time={retryUntil} />
+									Retry <RelativeTime time={retryAfter} />
 								</>
 							) : (
 								"Resend email"

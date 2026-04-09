@@ -43,13 +43,14 @@ export function SignUp() {
 	) => {
 		if (features.captcha && !turnstileToken) {
 			form.setError("root", {
-				message: "Captcha verification is still loading, please try again",
+				message:
+					"Captcha verification is still loading, please try again",
 			});
 			return;
 		}
 
 		const result = await authClient.signUp.email(
-			{ email, password, name },
+			{ email, password, name, callbackURL: window.location.origin },
 			features.captcha && turnstileToken
 				? { headers: { "x-captcha-response": turnstileToken } }
 				: undefined,

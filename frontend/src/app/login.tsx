@@ -40,7 +40,8 @@ export function Login() {
 	const handleSubmit: SubmitHandler = async ({ email, password }, form) => {
 		if (features.captcha && !turnstileToken) {
 			form.setError("root", {
-				message: "Captcha verification is still loading, please try again",
+				message:
+					"Captcha verification is still loading, please try again",
 			});
 			return;
 		}
@@ -54,12 +55,8 @@ export function Login() {
 
 		if (result.error) {
 			const code = result.error.code;
-			if (
-				code === "EMAIL_NOT_VERIFIED" ||
-				code === "VERIFY_YOUR_EMAIL"
-			) {
-				navigate({ to: "/verify-email-pending" });
-				return;
+			if (code === "EMAIL_NOT_VERIFIED" || code === "VERIFY_YOUR_EMAIL") {
+				return navigate({ to: "/verify-email-pending" });
 			}
 			form.setError("root", {
 				message: result.error.message ?? "Invalid credentials",
@@ -103,31 +100,36 @@ export function Login() {
 					defaultValues={{ email: "", password: "" }}
 					onSubmit={handleSubmit}
 				>
-					<CardContent className="grid gap-y-4">
-						<div className="grid grid-cols-1 gap-x-4">
-							<Button
-								variant="outline"
-								type="button"
-								onClick={handleGoogleSignIn}
-							>
-								<Icon icon={faGoogle} className="mr-2 size-4" />
-								Google
-							</Button>
+					<CardContent>
+						<div className="grid gap-y-4">
+							<div className="grid grid-cols-1 gap-x-4">
+								<Button
+									variant="outline"
+									type="button"
+									onClick={handleGoogleSignIn}
+								>
+									<Icon
+										icon={faGoogle}
+										className="mr-2 size-4"
+									/>
+									Google
+								</Button>
+							</div>
+							<p className="flex items-center gap-x-3 text-sm text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
+								or
+							</p>
+							<EmailField />
+							<PasswordField />
+							<div className="flex justify-end">
+								<Link
+									to="/forgot-password"
+									className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+								>
+									Forgot password?
+								</Link>
+							</div>
+							<RootError />
 						</div>
-						<p className="flex items-center gap-x-3 text-sm text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
-							or
-						</p>
-						<EmailField />
-						<PasswordField />
-						<div className="flex justify-end">
-							<Link
-								to="/forgot-password"
-								className="text-xs text-muted-foreground underline-offset-4 hover:underline"
-							>
-								Forgot password?
-							</Link>
-						</div>
-						<RootError />
 						{features.captcha && turnstileSiteKey && (
 							<TurnstileWidget
 								siteKey={turnstileSiteKey}

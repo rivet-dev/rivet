@@ -82,16 +82,16 @@ export const RelativeTime = forwardRef<HTMLTimeElement, RelativeTimeProps>(
 			const { years, days, hours, minutes, seconds } =
 				decompose(duration);
 
-			if (Math.abs(years) > 0) {
+			if (Math.trunc(years) > 0) {
 				return relativeTimeFormat.format(-years, "years");
 			}
-			if (Math.abs(days) > 0) {
+			if (Math.trunc(days) > 0) {
 				return relativeTimeFormat.format(-days, "days");
 			}
-			if (Math.abs(hours) > 0) {
+			if (Math.trunc(hours) > 0) {
 				return relativeTimeFormat.format(-hours, "hours");
 			}
-			if (Math.abs(minutes) > 0) {
+			if (Math.trunc(minutes) > 0) {
 				return relativeTimeFormat.format(-minutes, "minutes");
 			}
 			return relativeTimeFormat.format(-seconds, "seconds");
