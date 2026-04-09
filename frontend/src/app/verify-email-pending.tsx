@@ -1,4 +1,6 @@
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -12,10 +14,18 @@ import { authClient } from "@/lib/auth";
 export function VerifyEmailPending() {
 	const { data: session } = authClient.useSession();
 	const email = session?.user.email;
+	const [isPending, setIsPending] = useState(false);
 
 	const handleResend = async () => {
 		if (!email) return;
-		await authClient.sendVerificationEmail({ email });
+		setIsPending(true);
+		const result = await authClient.sendVerificationEmail({ email });
+		setIsPending(false);
+		if (result.error) {
+			toast.error("Failed to resend verification email. Please try again.");
+		} else {
+			toast.success("Verification email sent. Check your inbox.");
+		}
 	};
 
 	return (
@@ -37,7 +47,11 @@ export function VerifyEmailPending() {
 				</CardHeader>
 				<CardFooter>
 					<div className="grid w-full gap-y-4">
-						<Button variant="outline" onClick={handleResend}>
+						<Button
+							variant="outline"
+							onClick={handleResend}
+							isLoading={isPending}
+						>
 							Resend email
 						</Button>
 						<Button
