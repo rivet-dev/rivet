@@ -1,0 +1,13 @@
+{
+	"name": "@rivetkit/rivetkit-native-linux-x64-gnu",
+	"version": "2.2.1",
+	"description": "Native N-API addon for RivetKit - Linux x64 GNU",
+	"license": "Apache-2.0",
+	"os": ["linux"],
+	"cpu": ["x64"],
+	"main": "rivetkit-native.linux-x64-gnu.node",
+	"files": ["rivetkit-native.linux-x64-gnu.node"],
+	"engines": {
+		"node": ">= 20.0.0"
+	}
+}
