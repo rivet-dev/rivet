@@ -18,18 +18,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { authClient } from "@/lib/auth";
 
 interface OrgMembersFrameContentProps extends DialogContentProps {}
-
-type Role = "member" | "admin" | "owner";
 
 export default function OrgMembersFrameContent({
 	onClose,
@@ -38,7 +29,6 @@ export default function OrgMembersFrameContent({
 	const { data: session } = authClient.useSession();
 
 	const [inviteEmail, setInviteEmail] = useState("");
-	const [inviteRole, setInviteRole] = useState<Role>("member");
 	const [inviteError, setInviteError] = useState<string | null>(null);
 	const [invitePending, setInvitePending] = useState(false);
 
@@ -49,7 +39,7 @@ export default function OrgMembersFrameContent({
 
 		const result = await authClient.organization.inviteMember({
 			email: inviteEmail.trim(),
-			role: inviteRole,
+			role: "member",
 			organizationId: org.id,
 		});
 
@@ -83,7 +73,7 @@ export default function OrgMembersFrameContent({
 					View members and invite people to your organization.
 				</Frame.Description>
 			</Frame.Header>
-			<Frame.Content className="space-y-6 max-h-[60vh] overflow-y-auto">
+			<Frame.Content className="space-y-4">
 				{isPending ? (
 					<div className="space-y-2">
 						<Skeleton className="w-full h-10" />
@@ -92,6 +82,7 @@ export default function OrgMembersFrameContent({
 					</div>
 				) : (
 					<>
+						<div className="max-h-[35vh] overflow-y-auto space-y-4">
 						<Table>
 							<TableHeader>
 								<TableRow>
@@ -225,6 +216,7 @@ export default function OrgMembersFrameContent({
 								</Table>
 							</div>
 						)}
+						</div>
 
 						<div className="space-y-3 pt-2 border-t">
 							<p className="text-sm font-medium">Invite a member</p>
@@ -246,27 +238,6 @@ export default function OrgMembersFrameContent({
 										}
 									/>
 								</div>
-								<Select
-									value={inviteRole}
-									onValueChange={(v) =>
-										setInviteRole(v as Role)
-									}
-								>
-									<SelectTrigger className="w-28">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="member">
-											Member
-										</SelectItem>
-										<SelectItem value="admin">
-											Admin
-										</SelectItem>
-										<SelectItem value="owner">
-											Owner
-										</SelectItem>
-									</SelectContent>
-								</Select>
 								<Button
 									onClick={handleInvite}
 									isLoading={invitePending}
