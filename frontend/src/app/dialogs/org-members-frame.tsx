@@ -136,6 +136,11 @@ export default function OrgMembersFrameContent({
 																<p className="font-medium">
 																	{user?.name}
 																</p>
+																{member.userId === session?.user.id && (
+																	<Badge variant="outline" className="text-xs py-0">
+																		You
+																	</Badge>
+																)}
 																{member.role === "owner" && (
 																	<Badge variant="secondary" className="text-xs py-0">
 																		owner
