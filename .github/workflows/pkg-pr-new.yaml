@@ -117,4 +117,6 @@ jobs:
           find /tmp/inspector-repack -name '*.map' -delete
           tar czf inspector.tar.gz -C /tmp/inspector-repack .
           rm -rf /tmp/inspector-repack
-      - run: pnpm dlx pkg-pr-new publish 'shared/typescript/*' 'engine/sdks/typescript/envoy-client/' 'engine/sdks/typescript/envoy-protocol/' 'rivetkit-typescript/packages/*' 'rivetkit-typescript/packages/rivetkit-native/npm/*' --packageManager pnpm --template './examples/*'
+      # Native platform packages (npm/*) are excluded because .node binaries exceed
+      # pkg-pr-new's 20MB size limit (~120MB each). They are published via the release flow.
+      - run: pnpm dlx pkg-pr-new publish 'shared/typescript/*' 'engine/sdks/typescript/envoy-client/' 'engine/sdks/typescript/envoy-protocol/' 'rivetkit-typescript/packages/*' --packageManager pnpm --template './examples/*'
