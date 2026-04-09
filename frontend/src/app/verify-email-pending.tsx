@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useTimeout } from "usehooks-ts";
 import { RelativeTime } from "@/components/relative-time";
@@ -17,6 +17,12 @@ import { isAuthError, isDate } from "@/lib/utils";
 export function VerifyEmailPending() {
 	const { data: session } = authClient.useSession();
 	const email = session?.user.email;
+	const navigate = useNavigate();
+
+	const handleBackToSignIn = async () => {
+		await authClient.signOut();
+		navigate({ to: "/login" });
+	};
 
 	const { mutate, isPending, isError, error, reset } = useMutation({
 		mutationFn: async () => {
@@ -111,9 +117,9 @@ export function VerifyEmailPending() {
 							variant="link"
 							className="text-primary-foreground"
 							size="sm"
-							asChild
+							onClick={handleBackToSignIn}
 						>
-							<Link to="/login">Back to sign in</Link>
+							Back to sign in
 						</Button>
 					</div>
 				</CardFooter>
