@@ -41,6 +41,7 @@ pub struct ActorEntry {
 	pub name: String,
 	pub event_history: Vec<protocol::EventWrapper>,
 	pub last_command_idx: i64,
+	pub received_stop: bool,
 }
 
 pub enum ToEnvoyMessage {

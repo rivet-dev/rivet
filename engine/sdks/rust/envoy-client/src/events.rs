@@ -10,6 +10,18 @@ pub async fn handle_send_events(ctx: &mut EnvoyContext, events: Vec<protocol::Ev
 			ctx.get_actor_entry_mut(&event.checkpoint.actor_id, event.checkpoint.generation);
 		if let Some(entry) = entry {
 			entry.event_history.push(event.clone());
+
+			if let protocol::Event::EventActorStateUpdate(ref state_update) = event.inner {
+				if matches!(
+					state_update.state,
+					protocol::ActorState::ActorStateStopped(_)
+				) {
+					// If the actor is being stopped by rivet, we don't need the entry anymore
+					if entry.received_stop {
+						ctx.actors.remove(&event.checkpoint.actor_id);
+					}
+				}
+			}
 		}
 	}
 
@@ -19,30 +31,17 @@ pub async fn handle_send_events(ctx: &mut EnvoyContext, events: Vec<protocol::Ev
 
 pub fn handle_ack_events(ctx: &mut EnvoyContext, ack: protocol::ToEnvoyAckEvents) {
 	for checkpoint in &ack.last_event_checkpoints {
-		let actor_entry = ctx.actors.get_mut(&checkpoint.actor_id);
-		if let Some(actor_entry) = actor_entry {
-			let gen_entry = actor_entry.get_mut(&checkpoint.generation);
-			let remove = if let Some(gen_entry) = gen_entry {
-				gen_entry
-					.event_history
-					.retain(|event| event.checkpoint.index > checkpoint.index);
-
-				gen_entry.event_history.is_empty() && gen_entry.handle.is_closed()
-			} else {
-				false
-			};
-
-			// Clean up fully acked stopped actors
-			if remove {
-				actor_entry.remove(&checkpoint.generation);
-				if actor_entry.is_empty() {
-					ctx.actors.remove(&checkpoint.actor_id);
-				}
-			}
+		let entry = ctx.get_actor_entry_mut(&checkpoint.actor_id, checkpoint.generation);
+		if let Some(entry) = entry {
+			entry
+				.event_history
+				.retain(|event| event.checkpoint.index > checkpoint.index);
 		}
 	}
 }
 
+// TODO: If the envoy disconnects, actor stops, then envoy reconnects, we will send the stop event but there
+// is no mechanism to remove the actor entry afterwards. We only remove the actor entry if rivet stops the actor.
 pub async fn resend_unacknowledged_events(ctx: &EnvoyContext) {
 	let mut events: Vec<protocol::EventWrapper> = Vec::new();
 
