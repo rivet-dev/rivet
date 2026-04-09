@@ -1,0 +1,13 @@
+{
+	"name": "@rivetkit/rivetkit-native-darwin-x64",
+	"version": "2.2.1",
+	"description": "Native N-API addon for RivetKit - macOS x64",
+	"license": "Apache-2.0",
+	"os": ["darwin"],
+	"cpu": ["x64"],
+	"main": "rivetkit-native.darwin-x64.node",
+	"files": ["rivetkit-native.darwin-x64.node"],
+	"engines": {
+		"node": ">= 20.0.0"
+	}
+}
