@@ -17,16 +17,30 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { TurnstileWidget } from "@/components/ui/turnstile";
 import { authClient } from "@/lib/auth";
+import { cloudEnv } from "@/lib/env";
+import { features } from "@/lib/features";
 
 export function ForgotPassword() {
 	const [sent, setSent] = useState(false);
+	const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+	const turnstileSiteKey = cloudEnv().VITE_APP_TURNSTILE_SITE_KEY;
 
 	const handleSubmit: SubmitHandler = async ({ email }, form) => {
-		const result = await authClient.requestPasswordReset({
-			email,
-			redirectTo: `${window.location.origin}/reset-password`,
-		});
+		if (features.captcha && !turnstileToken) {
+			form.setError("root", {
+				message: "Captcha verification is still loading, please try again",
+			});
+			return;
+		}
+
+		const result = await authClient.requestPasswordReset(
+			{ email, redirectTo: `${window.location.origin}/reset-password` },
+			features.captcha && turnstileToken
+				? { headers: { "x-captcha-response": turnstileToken } }
+				: undefined,
+		);
 
 		if (result.error) {
 			form.setError("root", {
@@ -35,6 +49,7 @@ export function ForgotPassword() {
 			return;
 		}
 
+		setTurnstileToken(null);
 		setSent(true);
 	};
 
@@ -87,6 +102,15 @@ export function ForgotPassword() {
 					<CardContent className="grid gap-y-4">
 						<EmailField />
 						<RootError />
+						{features.captcha && turnstileSiteKey && (
+							<TurnstileWidget
+								siteKey={turnstileSiteKey}
+								onSuccess={setTurnstileToken}
+								onExpire={() => setTurnstileToken(null)}
+								onError={() => setTurnstileToken(null)}
+								onTimeout={() => setTurnstileToken(null)}
+							/>
+						)}
 					</CardContent>
 					<CardFooter>
 						<div className="grid w-full gap-y-4">
