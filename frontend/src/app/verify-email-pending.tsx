@@ -1,7 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useInterval } from "@/components/hooks/use-interval";
 import { formatDuration } from "@/components/lib/formatter";
+import { RelativeTime } from "@/components/relative-time";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -16,38 +18,60 @@ export function VerifyEmailPending() {
 	const { data: session } = authClient.useSession();
 	const email = session?.user.email;
 	const [isPending, setIsPending] = useState(false);
+	const [retryUntil, setRetryUntil] = useState<Date | null>(null);
+
+	useInterval(
+		() => {
+			setRetryUntil((prev) => {
+				if (!prev || Date.now() >= prev.getTime()) return null;
+				// New object with same timestamp forces RelativeTime's useMemo to recompute.
+				return new Date(prev.getTime());
+			});
+		},
+		retryUntil ? 1000 : null,
+	);
 
 	const handleResend = async () => {
 		if (!email) return;
 		setIsPending(true);
-
-		let retryAfter: string | null = null;
-		const result = await authClient.sendVerificationEmail(
-			{ email },
-			{
-				onError(ctx) {
-					retryAfter = ctx.response.headers.get("x-retry-after");
+		try {
+			let retryAfter: string | null = null;
+			const result = await authClient.sendVerificationEmail(
+				{ email },
+				{
+					onError(ctx) {
+						retryAfter = ctx.response.headers.get("x-retry-after");
+					},
 				},
-			},
-		);
+			);
 
-		setIsPending(false);
-
-		if (result.error) {
-			if (result.error.status === 429) {
-				const seconds = retryAfter ? Number.parseInt(retryAfter, 10) : null;
-				const wait =
-					seconds && !Number.isNaN(seconds)
-						? formatDuration(seconds * 1000, { showSeconds: true })
-						: "a moment";
-				toast.error(`Too many requests. Please try again in ${wait}.`);
+			if (result.error) {
+				if (result.error.status === 429) {
+					const seconds = retryAfter
+						? Number.parseInt(retryAfter, 10)
+						: null;
+					if (seconds && !Number.isNaN(seconds)) {
+						setRetryUntil(new Date(Date.now() + seconds * 1000));
+						toast.error(
+							`Too many requests. Please try again in ${formatDuration(seconds * 1000, { showSeconds: true })}.`,
+						);
+					} else {
+						toast.error("Too many requests. Please try again later.");
+					}
+				} else {
+					toast.error(
+						"Failed to resend verification email. Please try again.",
+					);
+				}
 			} else {
-				toast.error("Failed to resend verification email. Please try again.");
+				toast.success("Verification email sent. Check your inbox.");
 			}
-		} else {
-			toast.success("Verification email sent. Check your inbox.");
+		} finally {
+			setIsPending(false);
 		}
 	};
+
+	const isRateLimited = retryUntil !== null;
 
 	return (
 		<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4 px-4">
@@ -72,8 +96,15 @@ export function VerifyEmailPending() {
 							variant="outline"
 							onClick={handleResend}
 							isLoading={isPending}
+							disabled={isRateLimited}
 						>
-							Resend email
+							{isRateLimited && retryUntil ? (
+								<>
+									Retry <RelativeTime time={retryUntil} />
+								</>
+							) : (
+								"Resend email"
+							)}
 						</Button>
 						<Button
 							variant="link"
