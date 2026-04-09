@@ -46,11 +46,5 @@
 	"dependencies": {
 		"@napi-rs/cli": "^2.18.4",
 		"@rivetkit/engine-envoy-protocol": "workspace:*"
-	},
-	"optionalDependencies": {
-		"@rivetkit/rivetkit-native-linux-x64-gnu": "2.2.1",
-		"@rivetkit/rivetkit-native-darwin-arm64": "2.2.1",
-		"@rivetkit/rivetkit-native-darwin-x64": "2.2.1",
-		"@rivetkit/rivetkit-native-win32-x64-msvc": "2.2.1"
 	}
 }

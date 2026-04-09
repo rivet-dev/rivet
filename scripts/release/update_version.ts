@@ -55,11 +55,6 @@ export async function updateVersion(opts: ReleaseOpts) {
 			required: false,
 		},
 		{
-			path: "rivetkit-typescript/packages/rivetkit-native/package.json",
-			find: /("@rivetkit\/rivetkit-native-[^"]+": )"[^"]+"/g,
-			replace: `$1"${opts.version}"`,
-		},
-		{
 			path: "examples/**/package.json",
 			find: /"(@rivetkit\/[^"]+|rivetkit)": "\^?[0-9]+\.[0-9]+\.[0-9]+(?:-[^"]+)?"/g,
 			replace: `"$1": "^${opts.version}"`,
