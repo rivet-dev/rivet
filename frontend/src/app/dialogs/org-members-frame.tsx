@@ -218,7 +218,13 @@ export default function OrgMembersFrameContent({
 						)}
 						</div>
 
-						<div className="space-y-3 pt-2 border-t">
+						<form
+							className="space-y-3 pt-2 border-t"
+							onSubmit={(e) => {
+								e.preventDefault();
+								handleInvite();
+							}}
+						>
 							<p className="text-sm font-medium">Invite a member</p>
 							<div className="flex gap-2">
 								<div className="flex-1">
@@ -239,7 +245,7 @@ export default function OrgMembersFrameContent({
 									/>
 								</div>
 								<Button
-									onClick={handleInvite}
+									type="submit"
 									isLoading={invitePending}
 									disabled={!inviteEmail.trim()}
 								>
@@ -251,7 +257,7 @@ export default function OrgMembersFrameContent({
 									{inviteError}
 								</p>
 							)}
-						</div>
+						</form>
 					</>
 				)}
 			</Frame.Content>
