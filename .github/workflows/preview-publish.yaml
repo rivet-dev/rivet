@@ -206,6 +206,12 @@ jobs:
 
       - uses: depot/setup-action@v1
 
+      # depot build's remote builder needs auth to pull from ghcr.io.
+      # docker login here puts creds in ~/.docker/config.json which depot
+      # propagates to the remote builder.
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
       - name: Build via depot
         run: |
           # The DEPOT_TOKEN is exported by depot/setup-action@v1 after OIDC auth.

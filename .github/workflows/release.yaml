@@ -146,6 +146,9 @@ jobs:
 
       - uses: depot/setup-action@v1
 
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
       - name: Build engine binary via depot
         run: |
           depot build \
