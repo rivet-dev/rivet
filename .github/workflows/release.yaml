@@ -145,6 +145,8 @@ jobs:
           lfs: 'true'
 
       - uses: depot/setup-action@v1
+        with:
+          oidc: true
 
       - name: Log in to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
