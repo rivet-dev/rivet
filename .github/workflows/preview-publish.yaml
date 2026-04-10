@@ -482,19 +482,24 @@ jobs:
 
           PASS=0
           FAIL=0
-          while IFS='|' read -r name dir; do
+          # Read into an array first so the while loop's stdin is closed and
+          # npm can't consume lines from PKG_LIST on errors.
+          mapfile -t LINES < "$PKG_LIST"
+          for line in "${LINES[@]}"; do
+            name="${line%%|*}"
+            dir="${line#*|}"
             [ -z "$name" ] && continue
             printf '  %-50s ' "$name"
-            if (cd "$dir" && npm publish --access public --tag "$NPM_TAG") >/tmp/publish.log 2>&1; then
+            if (cd "$dir" && npm publish --access public --tag "$NPM_TAG" </dev/null) >/tmp/publish.log 2>&1; then
               echo "✓"
               PASS=$((PASS + 1))
             else
               # Extract the actual error message (last meaningful line).
-              ERR=$(grep -E "npm error (code|E|[0-9]{3})" /tmp/publish.log | head -2 | tr '\n' ' ')
+              ERR=$(grep -E "npm error (code|E|[0-9]{3})" /tmp/publish.log | head -2 | tr '\n' ' ' || true)
               echo "✗ $ERR"
               FAIL=$((FAIL + 1))
             fi
-          done < "$PKG_LIST"
+          done
 
           rm -f "$PKG_LIST" /tmp/publish.log
           echo ""
