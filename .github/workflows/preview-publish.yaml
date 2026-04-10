@@ -1,15 +1,20 @@
-# Publish all packages to npm as pre-release versions on every PR and push to main.
+# Preview publish: builds and publishes all packages to npm as pre-release versions.
+# Triggered on every PR and push to main.
+#
 # Version format: {base}-pr.{pr_number}.{sha} (PRs) or {base}-main.{sha} (main)
 # Install with: npm install rivetkit@pr-{number}
 #
 # Reference: swc uses a similar napi-rs cross-compile + npm pre-release pattern
 # https://github.com/swc-project/swc/blob/main/.github/workflows/publish-npm-package.yml
 
+name: Preview Publish
+
 on:
   pull_request:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build-native:
@@ -66,9 +71,72 @@ jobs:
           path: artifacts/${{ matrix.settings.artifact }}
           if-no-files-found: error
 
+  build-engine:
+    name: "Build engine (${{ matrix.settings.target }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - target: x86_64-unknown-linux-musl
+            host: ubuntu-latest
+            docker: engine/docker/engine/linux-x86_64.Dockerfile
+            stage: x86_64-builder
+            artifact: rivet-engine-x86_64-unknown-linux-musl
+          - target: aarch64-apple-darwin
+            host: ubuntu-latest
+            docker: engine/docker/engine/macos-aarch64.Dockerfile
+            stage: aarch64-builder
+            artifact: rivet-engine-aarch64-apple-darwin
+          - target: x86_64-apple-darwin
+            host: ubuntu-latest
+            docker: engine/docker/engine/macos-x86_64.Dockerfile
+            stage: x86_64-builder
+            artifact: rivet-engine-x86_64-apple-darwin
+          - target: x86_64-pc-windows-gnu
+            host: ubuntu-latest
+            docker: engine/docker/engine/windows.Dockerfile
+            stage: ""
+            artifact: rivet-engine-x86_64-pc-windows-gnu.exe
+    runs-on: ${{ matrix.settings.host }}
+    permissions:
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build engine binary via Docker
+        run: |
+          BUILD_ARGS=""
+          if [ -n "${{ matrix.settings.stage }}" ]; then
+            BUILD_ARGS="--target ${{ matrix.settings.stage }}"
+          fi
+          DOCKER_BUILDKIT=1 docker build \
+            $BUILD_ARGS \
+            -f ${{ matrix.settings.docker }} \
+            -t engine-builder-${{ matrix.settings.target }} \
+            .
+          CONTAINER_ID=$(docker create engine-builder-${{ matrix.settings.target }})
+          mkdir -p artifacts
+          docker cp "$CONTAINER_ID:/artifacts/${{ matrix.settings.artifact }}" artifacts/
+          docker rm "$CONTAINER_ID"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-${{ matrix.settings.target }}
+          path: artifacts/${{ matrix.settings.artifact }}
+          if-no-files-found: error
+
   publish:
     name: "Publish"
-    needs: build-native
+    needs: [build-native, build-engine]
     if: ${{ !cancelled() && needs.build-native.result != 'failure' }}
     runs-on: ubuntu-latest
     permissions:
@@ -103,6 +171,13 @@ jobs:
           pattern: bindings-*
           merge-multiple: true
 
+      - name: Download engine artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: engine-artifacts
+          pattern: engine-*
+          merge-multiple: true
+
       - name: Place native binaries in platform packages
         run: |
           NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
@@ -113,6 +188,17 @@ jobs:
             mkdir -p "${NATIVE_DIR}/npm/${platform}"
             cp "$f" "${NATIVE_DIR}/npm/${platform}/"
             echo "Placed $filename -> npm/${platform}/"
+          done
+
+      - name: Place engine binaries in engine package
+        run: |
+          ENGINE_DIR=rivetkit-typescript/packages/engine/bin
+          mkdir -p "$ENGINE_DIR"
+          for f in engine-artifacts/rivet-engine-*; do
+            filename=$(basename "$f")
+            cp "$f" "$ENGINE_DIR/"
+            chmod +x "$ENGINE_DIR/$filename"
+            echo "Placed engine: $filename"
           done
 
       - name: Compute pre-release version
@@ -142,10 +228,8 @@ jobs:
             const path = require('path');
             const { execSync } = require('child_process');
 
-            // Get all workspace packages
             const pkgs = JSON.parse(execSync('pnpm -r list --json').toString());
 
-            // Packages to skip
             const SKIP = new Set([
               '@rivetkit/shared-data',
               '@rivetkit/engine-frontend',
@@ -161,7 +245,6 @@ jobs:
               const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
               pkgJson.version = '${VERSION}';
 
-              // Rewrite workspace:* deps to the pre-release version
               for (const depType of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
                 if (!pkgJson[depType]) continue;
                 for (const [dep, ver] of Object.entries(pkgJson[depType])) {
@@ -176,7 +259,7 @@ jobs:
             }
           "
 
-          # Also update native platform packages and add optionalDependencies
+          # Update native platform packages and add optionalDependencies
           NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
           for dir in ${NATIVE_DIR}/npm/*/; do
             if [ -f "${dir}package.json" ]; then
@@ -189,7 +272,6 @@ jobs:
             fi
           done
 
-          # Add optionalDependencies to main native package
           node -e "
             const fs = require('fs');
             const path = require('path');
@@ -206,7 +288,7 @@ jobs:
             fs.writeFileSync('${NATIVE_DIR}/package.json', JSON.stringify(pkg, null, '\t') + '\n');
           "
 
-          # Also update engine SDK packages
+          # Update engine SDK packages
           for dir in engine/sdks/typescript/*/; do
             if [ -f "${dir}package.json" ]; then
               node -e "
@@ -260,7 +342,6 @@ jobs:
           done
 
           # Publish all workspace packages
-          # Use pnpm publish which handles workspace protocol resolution
           PACKAGES=$(node -e "
             const { execSync } = require('child_process');
             const pkgs = JSON.parse(execSync('pnpm -r list --json').toString());
@@ -314,7 +395,13 @@ jobs:
           NPM_TAG="${{ steps.version.outputs.tag }}"
           PR_NUMBER="${{ github.event.pull_request.number }}"
 
-          BODY="## 📦 Preview packages published to npm
+          # Check which engine binaries were built
+          ENGINE_BINS=""
+          for f in engine-artifacts/rivet-engine-*; do
+            [ -f "$f" ] && ENGINE_BINS="${ENGINE_BINS}\n- \`$(basename $f)\`"
+          done
+
+          BODY="## Preview packages published to npm
 
           Install with:
           \`\`\`sh
@@ -333,6 +420,14 @@ jobs:
           npm install @rivetkit/sqlite-wasm@${NPM_TAG}
           npm install @rivetkit/workflow-engine@${NPM_TAG}
           \`\`\`
+
+          </details>
+
+          <details>
+          <summary>Engine binaries (GitHub Artifacts)</summary>
+
+          Engine binaries are available as downloadable GitHub Actions artifacts on this workflow run.
+          $(echo -e "$ENGINE_BINS")
 
           </details>"
 

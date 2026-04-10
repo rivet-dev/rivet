@@ -40,8 +40,7 @@
 	],
 	"scripts": {
 		"build": "napi build --platform",
-		"build:release": "napi build --platform --release",
-		"prepublishOnly": "napi prepublish -t npm"
+		"build:release": "napi build --platform --release"
 	},
 	"dependencies": {
 		"@napi-rs/cli": "^2.18.4",
