@@ -38,9 +38,9 @@ RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
         fi; \
     fi
 
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/build/target \
+RUN --mount=type=cache,id=cargo-registry-darwin-arm64,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=cargo-git-darwin-arm64,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=cargo-target-darwin-arm64,target=/build/target,sharing=locked \
     set -e && \
     if [ "$BUILD_MODE" = "release" ]; then \
         CARGO_FLAG="--release"; \
