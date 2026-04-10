@@ -1,7 +1,6 @@
-# Continuous preview releases for every PR and push to main.
-# TypeScript packages go through pkg-pr-new; native platform packages are
-# published to npm as pre-release versions because they exceed pkg-pr-new's
-# 20 MB total-payload limit.
+# Publish all packages to npm as pre-release versions on every PR and push to main.
+# Version format: {base}-pr.{pr_number}.{sha} (PRs) or {base}-main.{sha} (main)
+# Install with: npm install rivetkit@pr-{number}
 #
 # Reference: swc uses a similar napi-rs cross-compile + npm pre-release pattern
 # https://github.com/swc-project/swc/blob/main/.github/workflows/publish-npm-package.yml
@@ -23,22 +22,18 @@ jobs:
             host: ubuntu-latest
             docker: rivetkit-typescript/packages/rivetkit-native/docker/linux-x64.Dockerfile
             artifact: rivetkit-native.linux-x64-gnu.node
-            npm_dir: linux-x64-gnu
           - target: aarch64-apple-darwin
             host: ubuntu-latest
             docker: rivetkit-typescript/packages/rivetkit-native/docker/macos-arm64.Dockerfile
             artifact: rivetkit-native.darwin-arm64.node
-            npm_dir: darwin-arm64
           - target: x86_64-apple-darwin
             host: ubuntu-latest
             docker: rivetkit-typescript/packages/rivetkit-native/docker/macos-x64.Dockerfile
             artifact: rivetkit-native.darwin-x64.node
-            npm_dir: darwin-x64
           - target: x86_64-pc-windows-msvc
             host: ubuntu-latest
             docker: rivetkit-typescript/packages/rivetkit-native/docker/windows-x64.Dockerfile
             artifact: rivetkit-native.win32-x64-msvc.node
-            npm_dir: win32-x64-msvc
     runs-on: ${{ matrix.settings.host }}
     permissions:
       packages: read
@@ -88,6 +83,19 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - run: pnpm install
 
+      - name: Build TypeScript packages
+        run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/sqlite-native' -F '!@rivetkit/rivetkit-native'
+
+      - run: npx turbo build:pack-inspector -F rivetkit
+      - name: Strip inspector sourcemaps
+        run: |
+          cd rivetkit-typescript/packages/rivetkit/dist
+          mkdir -p /tmp/inspector-repack
+          tar xzf inspector.tar.gz -C /tmp/inspector-repack
+          find /tmp/inspector-repack -name '*.map' -delete
+          tar czf inspector.tar.gz -C /tmp/inspector-repack .
+          rm -rf /tmp/inspector-repack
+
       - name: Download native artifacts
         uses: actions/download-artifact@v4
         with:
@@ -122,14 +130,54 @@ jobs:
           fi
           echo "version=${PRE_VERSION}" >> $GITHUB_OUTPUT
           echo "tag=${NPM_TAG}" >> $GITHUB_OUTPUT
-          echo "Publishing native packages as ${PRE_VERSION} with tag ${NPM_TAG}"
+          echo "Publishing all packages as ${PRE_VERSION} with tag ${NPM_TAG}"
 
-      - name: Set pre-release versions on native packages
+      - name: Set pre-release version on all packages
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
 
-          # Update platform packages
+          # Update all workspace packages
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const { execSync } = require('child_process');
+
+            // Get all workspace packages
+            const pkgs = JSON.parse(execSync('pnpm -r list --json').toString());
+
+            // Packages to skip
+            const SKIP = new Set([
+              '@rivetkit/shared-data',
+              '@rivetkit/engine-frontend',
+              '@rivetkit/mcp-hub',
+            ]);
+
+            for (const pkg of pkgs) {
+              if (pkg.private) continue;
+              if (SKIP.has(pkg.name)) continue;
+              if (!pkg.name.startsWith('@rivetkit/') && pkg.name !== 'rivetkit') continue;
+
+              const pkgJsonPath = path.join(pkg.path, 'package.json');
+              const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+              pkgJson.version = '${VERSION}';
+
+              // Rewrite workspace:* deps to the pre-release version
+              for (const depType of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+                if (!pkgJson[depType]) continue;
+                for (const [dep, ver] of Object.entries(pkgJson[depType])) {
+                  if (ver === 'workspace:*' && (dep.startsWith('@rivetkit/') || dep === 'rivetkit')) {
+                    pkgJson[depType][dep] = '${VERSION}';
+                  }
+                }
+              }
+
+              fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, '\t') + '\n');
+              console.log('Updated', pkg.name, '->', '${VERSION}');
+            }
+          "
+
+          # Also update native platform packages and add optionalDependencies
+          NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
           for dir in ${NATIVE_DIR}/npm/*/; do
             if [ -f "${dir}package.json" ]; then
               node -e "
@@ -138,57 +186,160 @@ jobs:
                 pkg.version = '${VERSION}';
                 fs.writeFileSync('${dir}package.json', JSON.stringify(pkg, null, '\t') + '\n');
               "
-              echo "Set ${dir}package.json version to ${VERSION}"
             fi
           done
 
-          # Update main package and add optionalDependencies
+          # Add optionalDependencies to main native package
           node -e "
             const fs = require('fs');
             const path = require('path');
             const pkg = JSON.parse(fs.readFileSync('${NATIVE_DIR}/package.json', 'utf8'));
-            pkg.version = '${VERSION}';
             const npmDirs = fs.readdirSync('${NATIVE_DIR}/npm').filter(d =>
               fs.statSync(path.join('${NATIVE_DIR}/npm', d)).isDirectory() &&
               fs.existsSync(path.join('${NATIVE_DIR}/npm', d, 'package.json'))
             );
-            pkg.optionalDependencies = {};
+            pkg.optionalDependencies = pkg.optionalDependencies || {};
             for (const dir of npmDirs) {
               const platPkg = JSON.parse(fs.readFileSync(path.join('${NATIVE_DIR}/npm', dir, 'package.json'), 'utf8'));
               pkg.optionalDependencies[platPkg.name] = '${VERSION}';
             }
             fs.writeFileSync('${NATIVE_DIR}/package.json', JSON.stringify(pkg, null, '\t') + '\n');
-            console.log('Main package version:', pkg.version);
-            console.log('optionalDependencies:', pkg.optionalDependencies);
           "
 
-      - name: Publish native platform packages to npm
+          # Also update engine SDK packages
+          for dir in engine/sdks/typescript/*/; do
+            if [ -f "${dir}package.json" ]; then
+              node -e "
+                const fs = require('fs');
+                const pkg = JSON.parse(fs.readFileSync('${dir}package.json', 'utf8'));
+                if (pkg.private) process.exit(0);
+                pkg.version = '${VERSION}';
+                for (const depType of ['dependencies', 'devDependencies', 'peerDependencies']) {
+                  if (!pkg[depType]) continue;
+                  for (const [dep, ver] of Object.entries(pkg[depType])) {
+                    if (String(ver) === 'workspace:*' && (dep.startsWith('@rivetkit/') || dep === 'rivetkit')) {
+                      pkg[depType][dep] = '${VERSION}';
+                    }
+                  }
+                }
+                fs.writeFileSync('${dir}package.json', JSON.stringify(pkg, null, '\t') + '\n');
+                console.log('Updated', pkg.name, '->', '${VERSION}');
+              "
+            fi
+          done
+
+          # Update shared/typescript packages
+          for dir in shared/typescript/*/; do
+            if [ -f "${dir}package.json" ]; then
+              node -e "
+                const fs = require('fs');
+                const pkg = JSON.parse(fs.readFileSync('${dir}package.json', 'utf8'));
+                if (pkg.private) process.exit(0);
+                pkg.version = '${VERSION}';
+                fs.writeFileSync('${dir}package.json', JSON.stringify(pkg, null, '\t') + '\n');
+                console.log('Updated', pkg.name, '->', '${VERSION}');
+              "
+            fi
+          done
+
+      - name: Publish all packages to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           NPM_TAG="${{ steps.version.outputs.tag }}"
-          NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
+          VERSION="${{ steps.version.outputs.version }}"
 
-          # Publish each platform package
+          # Publish native platform packages first (they are optionalDependencies)
+          NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
           for dir in ${NATIVE_DIR}/npm/*/; do
             if [ -f "${dir}package.json" ]; then
-              echo "Publishing $(node -e "console.log(require('./${dir}package.json').name)")..."
+              NAME=$(node -e "console.log(require('./${dir}package.json').name)")
+              echo "Publishing ${NAME}@${VERSION}..."
               (cd "$dir" && npm publish --access public --tag "$NPM_TAG") || true
             fi
           done
 
-          # Publish main native package
-          echo "Publishing @rivetkit/rivetkit-native..."
-          (cd "$NATIVE_DIR" && npm publish --access public --tag "$NPM_TAG") || true
+          # Publish all workspace packages
+          # Use pnpm publish which handles workspace protocol resolution
+          PACKAGES=$(node -e "
+            const { execSync } = require('child_process');
+            const pkgs = JSON.parse(execSync('pnpm -r list --json').toString());
+            const SKIP = new Set([
+              '@rivetkit/shared-data',
+              '@rivetkit/engine-frontend',
+              '@rivetkit/mcp-hub',
+            ]);
+            const names = pkgs
+              .filter(p => !p.private && !SKIP.has(p.name))
+              .filter(p => p.name.startsWith('@rivetkit/') || p.name === 'rivetkit')
+              .map(p => p.name);
+            console.log(names.join('\n'));
+          ")
 
-      - run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/sqlite-native' -F '!@rivetkit/rivetkit-native'
-      - run: npx turbo build:pack-inspector -F rivetkit
-      # Strip sourcemaps from inspector tarball to stay under pkg-pr-new 20MB limit
-      - run: |
-          cd rivetkit-typescript/packages/rivetkit/dist
-          mkdir -p /tmp/inspector-repack
-          tar xzf inspector.tar.gz -C /tmp/inspector-repack
-          find /tmp/inspector-repack -name '*.map' -delete
-          tar czf inspector.tar.gz -C /tmp/inspector-repack .
-          rm -rf /tmp/inspector-repack
-      - run: pnpm dlx pkg-pr-new publish 'shared/typescript/*' 'engine/sdks/typescript/envoy-client/' 'engine/sdks/typescript/envoy-protocol/' 'rivetkit-typescript/packages/*' --packageManager pnpm --template './examples/*'
+          for name in $PACKAGES; do
+            echo "Publishing ${name}@${VERSION}..."
+            pnpm --filter "$name" publish --access public --tag "$NPM_TAG" --no-git-checks || true
+          done
+
+          # Publish engine SDK packages
+          for dir in engine/sdks/typescript/*/; do
+            if [ -f "${dir}package.json" ]; then
+              IS_PRIVATE=$(node -e "console.log(require('./${dir}package.json').private || false)")
+              if [ "$IS_PRIVATE" = "false" ]; then
+                NAME=$(node -e "console.log(require('./${dir}package.json').name)")
+                echo "Publishing ${NAME}@${VERSION}..."
+                (cd "$dir" && npm publish --access public --tag "$NPM_TAG") || true
+              fi
+            fi
+          done
+
+          # Publish shared typescript packages
+          for dir in shared/typescript/*/; do
+            if [ -f "${dir}package.json" ]; then
+              IS_PRIVATE=$(node -e "console.log(require('./${dir}package.json').private || false)")
+              if [ "$IS_PRIVATE" = "false" ]; then
+                NAME=$(node -e "console.log(require('./${dir}package.json').name)")
+                echo "Publishing ${NAME}@${VERSION}..."
+                (cd "$dir" && npm publish --access public --tag "$NPM_TAG") || true
+              fi
+            fi
+          done
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          NPM_TAG="${{ steps.version.outputs.tag }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          BODY="## 📦 Preview packages published to npm
+
+          Install with:
+          \`\`\`sh
+          npm install rivetkit@${NPM_TAG}
+          \`\`\`
+
+          All packages published as \`${VERSION}\` with tag \`${NPM_TAG}\`.
+
+          <details>
+          <summary>Individual packages</summary>
+
+          \`\`\`sh
+          npm install rivetkit@${NPM_TAG}
+          npm install @rivetkit/react@${NPM_TAG}
+          npm install @rivetkit/rivetkit-native@${NPM_TAG}
+          npm install @rivetkit/sqlite-wasm@${NPM_TAG}
+          npm install @rivetkit/workflow-engine@${NPM_TAG}
+          \`\`\`
+
+          </details>"
+
+          # Update existing comment or create new one
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${PR_NUMBER}/comments --jq '.[] | select(.body | contains("Preview packages published to npm")) | .id' | head -1)
+          if [ -n "$COMMENT_ID" ]; then
+            gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} -X PATCH -f body="$BODY"
+          else
+            gh pr comment "$PR_NUMBER" --body "$BODY"
+          fi
