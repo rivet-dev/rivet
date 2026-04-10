@@ -429,35 +429,22 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          set +e
           NPM_TAG="${{ steps.version.outputs.tag }}"
           VERSION="${{ steps.version.outputs.version }}"
           MAX_PARALLEL=8
 
-          # Helper: run publish in background, respecting MAX_PARALLEL.
-          publish_pkg() {
-            local dir="$1"
-            local name="$2"
-            echo "Publishing ${name}@${VERSION}..."
-            (cd "$dir" && npm publish --access public --tag "$NPM_TAG") \
-              && echo "✓ ${name}" \
-              || echo "✗ ${name} (already exists or error, ignored)"
-          }
-          export -f publish_pkg
-          export VERSION NPM_TAG
+          # Collect list of package directories as a newline-separated list.
+          # One path per line. The name is derived from the package.json inside.
+          PKG_DIRS=$(mktemp)
 
-          # Collect publish tasks as "dir\tname" pairs.
-          TASKS=$(mktemp)
-
-          # Native platform packages (must publish first as they are optionalDependencies).
-          NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
-          for dir in ${NATIVE_DIR}/npm/*/; do
-            if [ -f "${dir}package.json" ]; then
-              NAME=$(node -e "console.log(require('./${dir}package.json').name)")
-              printf '%s\t%s\n' "$dir" "$NAME" >> "$TASKS"
-            fi
+          # Native platform packages (must publish first — they are the
+          # optionalDependencies of the main @rivetkit/rivetkit-native meta).
+          for dir in rivetkit-typescript/packages/rivetkit-native/npm/*/; do
+            [ -f "${dir}package.json" ] && echo "$dir" >> "$PKG_DIRS"
           done
 
-          # Workspace packages.
+          # Workspace packages via pnpm.
           node -e "
             const { execSync } = require('child_process');
             const pkgs = JSON.parse(execSync('pnpm -r list --json').toString());
@@ -466,36 +453,46 @@ jobs:
               if (p.private) continue;
               if (SKIP.has(p.name)) continue;
               if (!p.name.startsWith('@rivetkit/') && p.name !== 'rivetkit') continue;
-              console.log(p.path + '\t' + p.name);
+              console.log(p.path);
             }
-          " >> "$TASKS"
+          " >> "$PKG_DIRS"
 
-          # Engine SDK packages.
-          for dir in engine/sdks/typescript/*/; do
+          # Engine SDK + shared typescript packages.
+          for dir in engine/sdks/typescript/*/ shared/typescript/*/; do
             if [ -f "${dir}package.json" ]; then
               IS_PRIVATE=$(node -e "console.log(require('./${dir}package.json').private || false)")
-              if [ "$IS_PRIVATE" = "false" ]; then
-                NAME=$(node -e "console.log(require('./${dir}package.json').name)")
-                printf '%s\t%s\n' "$dir" "$NAME" >> "$TASKS"
-              fi
+              [ "$IS_PRIVATE" = "false" ] && echo "$dir" >> "$PKG_DIRS"
             fi
           done
 
-          # Shared typescript packages.
-          for dir in shared/typescript/*/; do
-            if [ -f "${dir}package.json" ]; then
-              IS_PRIVATE=$(node -e "console.log(require('./${dir}package.json').private || false)")
-              if [ "$IS_PRIVATE" = "false" ]; then
-                NAME=$(node -e "console.log(require('./${dir}package.json').name)")
-                printf '%s\t%s\n' "$dir" "$NAME" >> "$TASKS"
-              fi
-            fi
-          done
+          TOTAL=$(wc -l < "$PKG_DIRS")
+          echo "Publishing ${TOTAL} packages with up to ${MAX_PARALLEL} parallel uploads..."
 
-          echo "Publishing $(wc -l < "$TASKS") packages with up to $MAX_PARALLEL parallel uploads..."
-          # xargs -P runs up to N parallel bash invocations
-          cat "$TASKS" | xargs -P "$MAX_PARALLEL" -I {} bash -c 'IFS=$"\t" read -r dir name <<< "$1"; publish_pkg "$dir" "$name"' _ {}
-          rm -f "$TASKS"
+          # Launch up to MAX_PARALLEL background publishes, waiting for slots
+          # to free up. Failures are logged but do not fail the step — a 403
+          # "you cannot publish over the previously published versions" is
+          # expected when re-running on the same SHA.
+          RUNNING=0
+          while IFS= read -r dir; do
+            (
+              name=$(node -e "console.log(require('./${dir}package.json').name)" 2>/dev/null)
+              cd "$dir" || { echo "✗ ${dir} (cd failed)"; exit 0; }
+              if npm publish --access public --tag "$NPM_TAG" >/tmp/publish-$$.log 2>&1; then
+                echo "✓ ${name}"
+              else
+                echo "✗ ${name}: $(tail -2 /tmp/publish-$$.log | tr '\n' ' ')"
+              fi
+              rm -f /tmp/publish-$$.log
+            ) &
+            RUNNING=$((RUNNING + 1))
+            if [ "$RUNNING" -ge "$MAX_PARALLEL" ]; then
+              wait -n
+              RUNNING=$((RUNNING - 1))
+            fi
+          done < "$PKG_DIRS"
+          wait
+          rm -f "$PKG_DIRS"
+          echo "All publish jobs finished."
 
       - name: Comment on PR
         if: github.event_name == 'pull_request'
