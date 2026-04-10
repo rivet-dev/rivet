@@ -2,7 +2,7 @@
 # Unified build for linux-arm64-musl (fully static, cross-compiled).
 # See linux-x64-gnu.Dockerfile for build arg documentation.
 #
-# Base image: engine/docker/builder-base/linux-musl.Dockerfile
+# Base image: docker/builder-base/linux-musl.Dockerfile
 ARG BASE_TAG=latest
 FROM ghcr.io/rivet-dev/rivet/builder-base-linux-musl:${BASE_TAG}
 
@@ -11,8 +11,7 @@ ARG BUILD_MODE=release
 ARG BUILD_FRONTEND=false
 ARG VITE_APP_API_URL=__SAME__
 
-ENV RUSTFLAGS="--cfg tokio_unstable -C target-feature=+crt-static -C link-arg=-static-libgcc" \
-    OPENSSL_DIR=/musl-aarch64 \
+ENV OPENSSL_DIR=/musl-aarch64 \
     OPENSSL_INCLUDE_DIR=/musl-aarch64/include \
     OPENSSL_LIB_DIR=/musl-aarch64/lib \
     OPENSSL_STATIC=1 \
@@ -44,11 +43,13 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     fi && \
     mkdir -p /artifacts && \
     if [ "$BUILD_TARGET" = "engine" ]; then \
-        cargo build --bin rivet-engine $CARGO_FLAG --target aarch64-unknown-linux-musl && \
+        RUSTFLAGS="--cfg tokio_unstable -C target-feature=+crt-static -C link-arg=-static-libgcc" \
+            cargo build --bin rivet-engine $CARGO_FLAG --target aarch64-unknown-linux-musl && \
         cp target/aarch64-unknown-linux-musl/$PROFILE_DIR/rivet-engine /artifacts/rivet-engine-aarch64-unknown-linux-musl; \
     elif [ "$BUILD_TARGET" = "rivetkit-native" ]; then \
         cd rivetkit-typescript/packages/rivetkit-native && \
-        napi build --platform $CARGO_FLAG --target aarch64-unknown-linux-musl && \
+        RUSTFLAGS="--cfg tokio_unstable -C target-feature=-crt-static" \
+            napi build --platform $CARGO_FLAG --target aarch64-unknown-linux-musl && \
         cp rivetkit-native.linux-arm64-musl.node /artifacts/; \
     else \
         echo "Unknown BUILD_TARGET: $BUILD_TARGET" && exit 1; \

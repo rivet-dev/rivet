@@ -9,18 +9,17 @@ set -e
 #   ./build-push.sh linux-musl          # Build only (no push)
 #   ./build-push.sh all --push          # Build and push all bases (parallel)
 #
-# Available bases: osxcross, linux-musl, linux-gnu, windows-mingw, windows-msvc
+# Available bases: osxcross, linux-musl, linux-gnu, windows-mingw
 #
 # Images are tagged with the git commit SHA that built them:
 #   ghcr.io/rivet-dev/rivet/builder-base-osxcross:<sha>
 #
-# After pushing, update the FROM lines in the consuming Dockerfiles
-# (engine/docker/engine/*.Dockerfile, rivetkit-typescript/packages/rivetkit-native/docker/*.Dockerfile)
-# to reference the new tag.
+# After pushing, update BASE_TAG in .github/workflows/preview-publish.yaml
+# and .github/workflows/release.yaml to reference the new tag.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-DOCKERFILE_DIR="$REPO_ROOT/engine/docker/builder-base"
+DOCKERFILE_DIR="$REPO_ROOT/docker/builder-base"
 REGISTRY="ghcr.io/rivet-dev/rivet"
 TAG="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 

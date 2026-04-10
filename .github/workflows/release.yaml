@@ -95,7 +95,7 @@ jobs:
           - platform: linux
             runner: depot-ubuntu-24.04-8
             target: x86_64-unknown-linux-musl
-            dockerfile: engine/docker/build/linux-x64-musl.Dockerfile
+            dockerfile: docker/build/linux-x64-musl.Dockerfile
             binary_name: rivet-engine-x86_64-unknown-linux-musl
             binary_ext: ""
             arch: x86_64
@@ -103,14 +103,14 @@ jobs:
           # - platform: linux
           #   runner: depot-ubuntu-24.04-arm-8
           #   target: aarch64-unknown-linux-musl
-          #   dockerfile: engine/docker/build/linux-arm64-musl.Dockerfile
+          #   dockerfile: docker/build/linux-arm64-musl.Dockerfile
           #   binary_name: rivet-engine-aarch64-unknown-linux-musl
           #   binary_ext: ""
           #   arch: aarch64
           - platform: windows
             runner: depot-ubuntu-24.04-8
             target: x86_64-pc-windows-gnu
-            dockerfile: engine/docker/build/windows-x64.Dockerfile
+            dockerfile: docker/build/windows-x64.Dockerfile
             binary_name: rivet-engine-x86_64-pc-windows-gnu.exe
             binary_ext: ".exe"
             arch: x86_64
@@ -118,7 +118,7 @@ jobs:
             # Use Linux instead of macOS builders since macOS does not support Docker
             runner: depot-ubuntu-24.04-8
             target: x86_64-apple-darwin
-            dockerfile: engine/docker/build/darwin-x64.Dockerfile
+            dockerfile: docker/build/darwin-x64.Dockerfile
             binary_name: rivet-engine-x86_64-apple-darwin
             binary_ext: ""
             arch: x86_64
@@ -126,7 +126,7 @@ jobs:
             # Use Linux instead of macOS builders since macOS does not support Docker
             runner: depot-ubuntu-24.04-8
             target: aarch64-apple-darwin
-            dockerfile: engine/docker/build/darwin-arm64.Dockerfile
+            dockerfile: docker/build/darwin-arm64.Dockerfile
             binary_name: rivet-engine-aarch64-apple-darwin
             binary_ext: ""
             arch: aarch64
@@ -234,7 +234,7 @@ jobs:
           context: .
           push: true
           tags: rivetdev/engine:full-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
-          file: engine/docker/universal/Dockerfile
+          file: docker/engine/Dockerfile
           target: engine-full
           platforms: ${{ matrix.platform }}
           build-args: |
@@ -251,7 +251,7 @@ jobs:
           context: .
           push: true
           tags: rivetdev/engine:slim-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
-          file: engine/docker/universal/Dockerfile
+          file: docker/engine/Dockerfile
           target: engine-slim
           platforms: ${{ matrix.platform }}
           build-args: |

@@ -108,7 +108,7 @@ services:
   rivet-shell-dc-a:
     build:
       context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
+      dockerfile: docker/engine/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -121,8 +121,7 @@ services:
       postgres-dc-a:
         condition: service_healthy
     volumes:
-      - >-
-        ./datacenters/dc-a/rivet-engine/0/config.jsonc:/etc/rivet/config.jsonc:ro
+      - ./datacenters/dc-a/rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
     networks:
       - rivet-network-dc-a
       - rivet-network-dc-a-to-core
@@ -172,10 +171,10 @@ services:
       - rivet-network-dc-a-to-core
     ports:
       - '4317:4317'
-  rivet-engine-dc-a-0:
+  rivet-engine-dc-a:
     build:
       context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
+      dockerfile: docker/engine/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -195,8 +194,7 @@ services:
       postgres-dc-a:
         condition: service_healthy
     volumes:
-      - >-
-        ./datacenters/dc-a/rivet-engine/0/config.jsonc:/etc/rivet/config.jsonc:ro
+      - ./datacenters/dc-a/rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
     networks:
       - rivet-network-dc-a
       - rivet-network-dc-a-to-core
@@ -215,96 +213,14 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
-  rivet-engine-dc-a-1:
-    build:
-      context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
-      target: engine-full
-      args:
-        BUILD_FRONTEND: 'true'
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RUST_LOG_ANSI_COLOR=1
-      - RIVET_OTEL_ENABLED=1
-      - RIVET_OTEL_SAMPLER_RATIO=1
-      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-a:4317
-    stop_grace_period: 0s
-    depends_on:
-      vector-client-dc-a:
-        condition: service_started
-      otel-collector-dc-a:
-        condition: service_started
-      postgres-dc-a:
-        condition: service_healthy
-    volumes:
-      - >-
-        ./datacenters/dc-a/rivet-engine/1/config.jsonc:/etc/rivet/config.jsonc:ro
-    networks:
-      - rivet-network-dc-a
-      - rivet-network-dc-a-to-core
-      - rivet-network-dc-a-engine-peer
-      - rivet-network-dc-b-engine-peer
-      - rivet-network-dc-c-engine-peer
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - '-f'
-        - http://127.0.0.1:6420/health
-      interval: 2s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-  rivet-engine-dc-a-2:
-    build:
-      context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
-      target: engine-full
-      args:
-        BUILD_FRONTEND: 'true'
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RUST_LOG_ANSI_COLOR=1
-      - RIVET_OTEL_ENABLED=1
-      - RIVET_OTEL_SAMPLER_RATIO=1
-      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-a:4317
-    stop_grace_period: 0s
-    depends_on:
-      vector-client-dc-a:
-        condition: service_started
-      otel-collector-dc-a:
-        condition: service_started
-      postgres-dc-a:
-        condition: service_healthy
-    volumes:
-      - >-
-        ./datacenters/dc-a/rivet-engine/2/config.jsonc:/etc/rivet/config.jsonc:ro
-    networks:
-      - rivet-network-dc-a
-      - rivet-network-dc-a-to-core
-      - rivet-network-dc-a-engine-peer
-      - rivet-network-dc-b-engine-peer
-      - rivet-network-dc-c-engine-peer
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - '-f'
-        - http://127.0.0.1:6420/health
-      interval: 2s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-  runner-dc-a-0:
+  runner-dc-a:
     build:
       context: ../../..
       dockerfile: engine/sdks/rust/test-envoy/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
-      - RIVET_ENDPOINT=http://rivet-engine-dc-a-0:6420
+      - RIVET_ENDPOINT=http://rivet-engine-dc-a:6420
       - INTERNAL_SERVER_PORT=5050
       - RIVET_POOL_NAME=test-envoy
       - AUTOSTART_ENVOY=1
@@ -313,43 +229,7 @@ services:
     ports:
       - '5050:5050'
     depends_on:
-      rivet-engine-dc-a-0:
-        condition: service_healthy
-    networks:
-      - rivet-network-dc-a
-  runner-dc-a-1:
-    build:
-      context: ../../..
-      dockerfile: engine/sdks/rust/test-envoy/Dockerfile
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RIVET_ENDPOINT=http://rivet-engine-dc-a-0:6420
-      - INTERNAL_SERVER_PORT=5050
-      - RIVET_POOL_NAME=test-envoy
-      - AUTOSTART_ENVOY=1
-      - AUTOCONFIGURE_SERVERLESS=0
-    stop_grace_period: 4s
-    depends_on:
-      rivet-engine-dc-a-0:
-        condition: service_healthy
-    networks:
-      - rivet-network-dc-a
-  runner-dc-a-2:
-    build:
-      context: ../../..
-      dockerfile: engine/sdks/rust/test-envoy/Dockerfile
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RIVET_ENDPOINT=http://rivet-engine-dc-a-0:6420
-      - INTERNAL_SERVER_PORT=5050
-      - RIVET_POOL_NAME=test-envoy
-      - AUTOSTART_ENVOY=1
-      - AUTOCONFIGURE_SERVERLESS=0
-    stop_grace_period: 4s
-    depends_on:
-      rivet-engine-dc-a-0:
+      rivet-engine-dc-a:
         condition: service_healthy
     networks:
       - rivet-network-dc-a
@@ -376,7 +256,7 @@ services:
   rivet-shell-dc-b:
     build:
       context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
+      dockerfile: docker/engine/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -389,8 +269,7 @@ services:
       postgres-dc-b:
         condition: service_healthy
     volumes:
-      - >-
-        ./datacenters/dc-b/rivet-engine/0/config.jsonc:/etc/rivet/config.jsonc:ro
+      - ./datacenters/dc-b/rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
     networks:
       - rivet-network-dc-b
       - rivet-network-dc-b-to-core
@@ -438,10 +317,10 @@ services:
     networks:
       - rivet-network-dc-b
       - rivet-network-dc-b-to-core
-  rivet-engine-dc-b-0:
+  rivet-engine-dc-b:
     build:
       context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
+      dockerfile: docker/engine/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -461,8 +340,7 @@ services:
       postgres-dc-b:
         condition: service_healthy
     volumes:
-      - >-
-        ./datacenters/dc-b/rivet-engine/0/config.jsonc:/etc/rivet/config.jsonc:ro
+      - ./datacenters/dc-b/rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
     networks:
       - rivet-network-dc-b
       - rivet-network-dc-b-to-core
@@ -479,139 +357,21 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
-  rivet-engine-dc-b-1:
-    build:
-      context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
-      target: engine-full
-      args:
-        BUILD_FRONTEND: 'true'
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RUST_LOG_ANSI_COLOR=1
-      - RIVET_OTEL_ENABLED=1
-      - RIVET_OTEL_SAMPLER_RATIO=1
-      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-b:4317
-    stop_grace_period: 0s
-    depends_on:
-      vector-client-dc-b:
-        condition: service_started
-      otel-collector-dc-b:
-        condition: service_started
-      postgres-dc-b:
-        condition: service_healthy
-    volumes:
-      - >-
-        ./datacenters/dc-b/rivet-engine/1/config.jsonc:/etc/rivet/config.jsonc:ro
-    networks:
-      - rivet-network-dc-b
-      - rivet-network-dc-b-to-core
-      - rivet-network-dc-a-engine-peer
-      - rivet-network-dc-b-engine-peer
-      - rivet-network-dc-c-engine-peer
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - '-f'
-        - http://127.0.0.1:6420/health
-      interval: 2s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-  rivet-engine-dc-b-2:
-    build:
-      context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
-      target: engine-full
-      args:
-        BUILD_FRONTEND: 'true'
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RUST_LOG_ANSI_COLOR=1
-      - RIVET_OTEL_ENABLED=1
-      - RIVET_OTEL_SAMPLER_RATIO=1
-      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-b:4317
-    stop_grace_period: 0s
-    depends_on:
-      vector-client-dc-b:
-        condition: service_started
-      otel-collector-dc-b:
-        condition: service_started
-      postgres-dc-b:
-        condition: service_healthy
-    volumes:
-      - >-
-        ./datacenters/dc-b/rivet-engine/2/config.jsonc:/etc/rivet/config.jsonc:ro
-    networks:
-      - rivet-network-dc-b
-      - rivet-network-dc-b-to-core
-      - rivet-network-dc-a-engine-peer
-      - rivet-network-dc-b-engine-peer
-      - rivet-network-dc-c-engine-peer
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - '-f'
-        - http://127.0.0.1:6420/health
-      interval: 2s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-  runner-dc-b-0:
+  runner-dc-b:
     build:
       context: ../../..
       dockerfile: engine/sdks/rust/test-envoy/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
-      - RIVET_ENDPOINT=http://rivet-engine-dc-b-0:6420
+      - RIVET_ENDPOINT=http://rivet-engine-dc-b:6420
       - INTERNAL_SERVER_PORT=5050
       - RIVET_POOL_NAME=test-envoy
       - AUTOSTART_ENVOY=1
       - AUTOCONFIGURE_SERVERLESS=0
     stop_grace_period: 4s
     depends_on:
-      rivet-engine-dc-b-0:
-        condition: service_healthy
-    networks:
-      - rivet-network-dc-b
-  runner-dc-b-1:
-    build:
-      context: ../../..
-      dockerfile: engine/sdks/rust/test-envoy/Dockerfile
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RIVET_ENDPOINT=http://rivet-engine-dc-b-0:6420
-      - INTERNAL_SERVER_PORT=5050
-      - RIVET_POOL_NAME=test-envoy
-      - AUTOSTART_ENVOY=1
-      - AUTOCONFIGURE_SERVERLESS=0
-    stop_grace_period: 4s
-    depends_on:
-      rivet-engine-dc-b-0:
-        condition: service_healthy
-    networks:
-      - rivet-network-dc-b
-  runner-dc-b-2:
-    build:
-      context: ../../..
-      dockerfile: engine/sdks/rust/test-envoy/Dockerfile
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RIVET_ENDPOINT=http://rivet-engine-dc-b-0:6420
-      - INTERNAL_SERVER_PORT=5050
-      - RIVET_POOL_NAME=test-envoy
-      - AUTOSTART_ENVOY=1
-      - AUTOCONFIGURE_SERVERLESS=0
-    stop_grace_period: 4s
-    depends_on:
-      rivet-engine-dc-b-0:
+      rivet-engine-dc-b:
         condition: service_healthy
     networks:
       - rivet-network-dc-b
@@ -638,7 +398,7 @@ services:
   rivet-shell-dc-c:
     build:
       context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
+      dockerfile: docker/engine/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -651,8 +411,7 @@ services:
       postgres-dc-c:
         condition: service_healthy
     volumes:
-      - >-
-        ./datacenters/dc-c/rivet-engine/0/config.jsonc:/etc/rivet/config.jsonc:ro
+      - ./datacenters/dc-c/rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
     networks:
       - rivet-network-dc-c
       - rivet-network-dc-c-to-core
@@ -700,10 +459,10 @@ services:
     networks:
       - rivet-network-dc-c
       - rivet-network-dc-c-to-core
-  rivet-engine-dc-c-0:
+  rivet-engine-dc-c:
     build:
       context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
+      dockerfile: docker/engine/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -723,8 +482,7 @@ services:
       postgres-dc-c:
         condition: service_healthy
     volumes:
-      - >-
-        ./datacenters/dc-c/rivet-engine/0/config.jsonc:/etc/rivet/config.jsonc:ro
+      - ./datacenters/dc-c/rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
     networks:
       - rivet-network-dc-c
       - rivet-network-dc-c-to-core
@@ -741,139 +499,21 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
-  rivet-engine-dc-c-1:
-    build:
-      context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
-      target: engine-full
-      args:
-        BUILD_FRONTEND: 'true'
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RUST_LOG_ANSI_COLOR=1
-      - RIVET_OTEL_ENABLED=1
-      - RIVET_OTEL_SAMPLER_RATIO=1
-      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-c:4317
-    stop_grace_period: 0s
-    depends_on:
-      vector-client-dc-c:
-        condition: service_started
-      otel-collector-dc-c:
-        condition: service_started
-      postgres-dc-c:
-        condition: service_healthy
-    volumes:
-      - >-
-        ./datacenters/dc-c/rivet-engine/1/config.jsonc:/etc/rivet/config.jsonc:ro
-    networks:
-      - rivet-network-dc-c
-      - rivet-network-dc-c-to-core
-      - rivet-network-dc-a-engine-peer
-      - rivet-network-dc-b-engine-peer
-      - rivet-network-dc-c-engine-peer
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - '-f'
-        - http://127.0.0.1:6420/health
-      interval: 2s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-  rivet-engine-dc-c-2:
-    build:
-      context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
-      target: engine-full
-      args:
-        BUILD_FRONTEND: 'true'
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RUST_LOG_ANSI_COLOR=1
-      - RIVET_OTEL_ENABLED=1
-      - RIVET_OTEL_SAMPLER_RATIO=1
-      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-c:4317
-    stop_grace_period: 0s
-    depends_on:
-      vector-client-dc-c:
-        condition: service_started
-      otel-collector-dc-c:
-        condition: service_started
-      postgres-dc-c:
-        condition: service_healthy
-    volumes:
-      - >-
-        ./datacenters/dc-c/rivet-engine/2/config.jsonc:/etc/rivet/config.jsonc:ro
-    networks:
-      - rivet-network-dc-c
-      - rivet-network-dc-c-to-core
-      - rivet-network-dc-a-engine-peer
-      - rivet-network-dc-b-engine-peer
-      - rivet-network-dc-c-engine-peer
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - '-f'
-        - http://127.0.0.1:6420/health
-      interval: 2s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-  runner-dc-c-0:
+  runner-dc-c:
     build:
       context: ../../..
       dockerfile: engine/sdks/rust/test-envoy/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
-      - RIVET_ENDPOINT=http://rivet-engine-dc-c-0:6420
+      - RIVET_ENDPOINT=http://rivet-engine-dc-c:6420
       - INTERNAL_SERVER_PORT=5050
       - RIVET_POOL_NAME=test-envoy
       - AUTOSTART_ENVOY=1
       - AUTOCONFIGURE_SERVERLESS=0
     stop_grace_period: 4s
     depends_on:
-      rivet-engine-dc-c-0:
-        condition: service_healthy
-    networks:
-      - rivet-network-dc-c
-  runner-dc-c-1:
-    build:
-      context: ../../..
-      dockerfile: engine/sdks/rust/test-envoy/Dockerfile
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RIVET_ENDPOINT=http://rivet-engine-dc-c-0:6420
-      - INTERNAL_SERVER_PORT=5050
-      - RIVET_POOL_NAME=test-envoy
-      - AUTOSTART_ENVOY=1
-      - AUTOCONFIGURE_SERVERLESS=0
-    stop_grace_period: 4s
-    depends_on:
-      rivet-engine-dc-c-0:
-        condition: service_healthy
-    networks:
-      - rivet-network-dc-c
-  runner-dc-c-2:
-    build:
-      context: ../../..
-      dockerfile: engine/sdks/rust/test-envoy/Dockerfile
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RIVET_ENDPOINT=http://rivet-engine-dc-c-0:6420
-      - INTERNAL_SERVER_PORT=5050
-      - RIVET_POOL_NAME=test-envoy
-      - AUTOSTART_ENVOY=1
-      - AUTOCONFIGURE_SERVERLESS=0
-    stop_grace_period: 4s
-    depends_on:
-      rivet-engine-dc-c-0:
+      rivet-engine-dc-c:
         condition: service_healthy
     networks:
       - rivet-network-dc-c

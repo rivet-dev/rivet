@@ -177,7 +177,7 @@ USAGE:
 
 PREREQUISITES:
   1. Install k6: https://k6.io/docs/get-started/installation/
-  2. Start/configure engine: --endpoint <url> or cd engine/docker/dev && docker-compose up -d
+  2. Start/configure engine: --endpoint <url> or cd self-host/compose/dev && docker-compose up -d
   3. Start test-runner: cd engine/sdks/typescript/test-runner && pnpm start
 
 OPTIONS:

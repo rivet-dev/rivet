@@ -8,7 +8,7 @@
 # requires cargo-xwin and a separate base image. MinGW-built .node files load
 # into MSVC Node.js in practice as long as we statically link libgcc/libstdc++.
 #
-# Base image: engine/docker/builder-base/windows-mingw.Dockerfile
+# Base image: docker/builder-base/windows-mingw.Dockerfile
 ARG BASE_TAG=latest
 FROM ghcr.io/rivet-dev/rivet/builder-base-windows-mingw:${BASE_TAG}
 

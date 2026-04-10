@@ -103,7 +103,7 @@ services:
   rivet-shell:
     build:
       context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
+      dockerfile: docker/engine/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -116,7 +116,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./rivet-engine/0/config.jsonc:/etc/rivet/config.jsonc:ro
+      - ./rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
     networks:
       - rivet-network
       - rivet-network-to-core
@@ -164,10 +164,10 @@ services:
       - rivet-network-to-core
     ports:
       - '4317:4317'
-  rivet-engine-0:
+  rivet-engine:
     build:
       context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
+      dockerfile: docker/engine/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -187,7 +187,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./rivet-engine/0/config.jsonc:/etc/rivet/config.jsonc:ro
+      - ./rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
     networks:
       - rivet-network
       - rivet-network-to-core
@@ -204,90 +204,14 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
-  rivet-engine-1:
-    build:
-      context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
-      target: engine-full
-      args:
-        BUILD_FRONTEND: 'true'
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RUST_LOG_ANSI_COLOR=1
-      - RIVET_OTEL_ENABLED=1
-      - RIVET_OTEL_SAMPLER_RATIO=1
-      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector:4317
-    stop_grace_period: 0s
-    depends_on:
-      vector-client:
-        condition: service_started
-      otel-collector:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./rivet-engine/1/config.jsonc:/etc/rivet/config.jsonc:ro
-    networks:
-      - rivet-network
-      - rivet-network-to-core
-      - rivet-network-engine-peer
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - '-f'
-        - http://127.0.0.1:6420/health
-      interval: 2s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-  rivet-engine-2:
-    build:
-      context: ../../..
-      dockerfile: engine/docker/universal/Dockerfile
-      target: engine-full
-      args:
-        BUILD_FRONTEND: 'true'
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RUST_LOG_ANSI_COLOR=1
-      - RIVET_OTEL_ENABLED=1
-      - RIVET_OTEL_SAMPLER_RATIO=1
-      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector:4317
-    stop_grace_period: 0s
-    depends_on:
-      vector-client:
-        condition: service_started
-      otel-collector:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./rivet-engine/2/config.jsonc:/etc/rivet/config.jsonc:ro
-    networks:
-      - rivet-network
-      - rivet-network-to-core
-      - rivet-network-engine-peer
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - '-f'
-        - http://127.0.0.1:6420/health
-      interval: 2s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-  runner-0:
+  runner:
     build:
       context: ../../..
       dockerfile: engine/sdks/rust/test-envoy/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
-      - RIVET_ENDPOINT=http://rivet-engine-0:6420
+      - RIVET_ENDPOINT=http://rivet-engine:6420
       - INTERNAL_SERVER_PORT=5050
       - RIVET_POOL_NAME=test-envoy
       - AUTOSTART_ENVOY=1
@@ -296,43 +220,7 @@ services:
     ports:
       - '5050:5050'
     depends_on:
-      rivet-engine-0:
-        condition: service_healthy
-    networks:
-      - rivet-network
-  runner-1:
-    build:
-      context: ../../..
-      dockerfile: engine/sdks/rust/test-envoy/Dockerfile
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RIVET_ENDPOINT=http://rivet-engine-0:6420
-      - INTERNAL_SERVER_PORT=5050
-      - RIVET_POOL_NAME=test-envoy
-      - AUTOSTART_ENVOY=1
-      - AUTOCONFIGURE_SERVERLESS=0
-    stop_grace_period: 4s
-    depends_on:
-      rivet-engine-0:
-        condition: service_healthy
-    networks:
-      - rivet-network
-  runner-2:
-    build:
-      context: ../../..
-      dockerfile: engine/sdks/rust/test-envoy/Dockerfile
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      - RIVET_ENDPOINT=http://rivet-engine-0:6420
-      - INTERNAL_SERVER_PORT=5050
-      - RIVET_POOL_NAME=test-envoy
-      - AUTOSTART_ENVOY=1
-      - AUTOCONFIGURE_SERVERLESS=0
-    stop_grace_period: 4s
-    depends_on:
-      rivet-engine-0:
+      rivet-engine:
         condition: service_healthy
     networks:
       - rivet-network
