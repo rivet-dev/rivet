@@ -9,7 +9,7 @@ use crate::{
 	utils,
 };
 
-use super::read_value;
+use super::get_local::read_local_value;
 
 #[derive(Debug)]
 pub struct Input {
@@ -50,20 +50,14 @@ pub struct Output {
 /// best-effort lookup.
 #[operation]
 pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Result<Output> {
-	let local_read = read_value::read_local_value(
+	let local_read = read_local_value(
 		ctx,
 		input.replica_id,
-		input.key.clone(),
+		&input.key,
 		input.caching_behavior == protocol::CachingBehavior::Optimistic,
 	)
 	.await?;
-	if local_read.value.is_some() {
-		return Ok(Output {
-			value: local_read.value.map(|value| value.value),
-		});
-	}
-
-	if let Some(value) = local_read.cache_value {
+	if let Some(value) = local_read.value.or(local_read.cache_value) {
 		return Ok(Output {
 			value: Some(value.value),
 		});
@@ -114,22 +108,21 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 	)
 	.await?;
 
-	for response in responses {
-		if let Some(value) = response {
-			let value = CommittedValue {
-				value: value.value,
-				version: value.version,
-				mutable: value.mutable,
-			};
+	// Should only have 1 response
+	if let Some(value) = responses.first().and_then(|r| r.response) {
+		let value = CommittedValue {
+			value: value.value,
+			version: value.version,
+			mutable: value.mutable,
+		};
 
-			if input.caching_behavior == protocol::CachingBehavior::Optimistic {
-				cache_fanout_value(ctx, input.replica_id, input.key.clone(), value.clone()).await?;
-			}
-
-			return Ok(Output {
-				value: Some(value.value),
-			});
+		if input.caching_behavior == protocol::CachingBehavior::Optimistic {
+			cache_fanout_value(ctx, input.replica_id, input.key.clone(), value.clone()).await?;
 		}
+
+		return Ok(Output {
+			value: Some(value.value),
+		});
 	}
 
 	// No value found in any datacenter
