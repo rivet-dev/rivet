@@ -113,9 +113,9 @@ jobs:
 
       - name: Build engine binary via Docker
         run: |
-          BUILD_ARGS=""
+          BUILD_ARGS="--build-arg BUILD_FRONTEND=false"
           if [ -n "${{ matrix.settings.stage }}" ]; then
-            BUILD_ARGS="--target ${{ matrix.settings.stage }}"
+            BUILD_ARGS="$BUILD_ARGS --target ${{ matrix.settings.stage }}"
           fi
           DOCKER_BUILDKIT=1 docker build \
             $BUILD_ARGS \
