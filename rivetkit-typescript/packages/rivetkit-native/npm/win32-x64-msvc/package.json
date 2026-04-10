@@ -1,7 +1,7 @@
 {
 	"name": "@rivetkit/rivetkit-native-win32-x64-msvc",
 	"version": "2.2.1",
-	"description": "Native N-API addon for RivetKit - Windows x64 MSVC",
+	"description": "Native N-API addon for RivetKit - Windows x64 (MinGW-built, loadable by MSVC Node)",
 	"license": "Apache-2.0",
 	"os": ["win32"],
 	"cpu": ["x64"],

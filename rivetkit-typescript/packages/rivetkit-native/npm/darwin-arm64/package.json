@@ -1,13 +1,19 @@
 {
-	"name": "@rivetkit/rivetkit-native-darwin-arm64",
-	"version": "2.2.1",
-	"description": "Native N-API addon for RivetKit - macOS arm64",
-	"license": "Apache-2.0",
-	"os": ["darwin"],
-	"cpu": ["arm64"],
-	"main": "rivetkit-native.darwin-arm64.node",
-	"files": ["rivetkit-native.darwin-arm64.node"],
-	"engines": {
-		"node": ">= 20.0.0"
-	}
+  "name": "@rivetkit/rivetkit-native-darwin-arm64",
+  "version": "2.2.1",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "main": "rivetkit-native.darwin-arm64.node",
+  "files": [
+    "rivetkit-native.darwin-arm64.node"
+  ],
+  "description": "Native N-API addon for RivetKit providing envoy client and SQLite access",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">= 20.0.0"
+  }
 }

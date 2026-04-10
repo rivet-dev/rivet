@@ -1,11 +1,102 @@
-# Preview publish: builds and publishes all packages to npm as pre-release versions.
-# Triggered on every PR and push to main.
+# =============================================================================
+# Preview Publish
+# =============================================================================
 #
-# Version format: {base}-pr.{pr_number}.{sha} (PRs) or {base}-main.{sha} (main)
-# Install with: npm install rivetkit@pr-{number}
+# Builds and publishes preview versions of all packages on every PR and push
+# to main. Builds are performed in DEBUG mode for speed (~5 min vs ~15 min
+# for release). Preview versions are published to npm with a PR-scoped tag:
 #
-# Reference: swc uses a similar napi-rs cross-compile + npm pre-release pattern
-# https://github.com/swc-project/swc/blob/main/.github/workflows/publish-npm-package.yml
+#   Version: {base}-pr.{pr_number}.{sha}  (PRs)
+#            {base}-main.{sha}            (main)
+#   Tag:     pr-{pr_number}               (PRs)
+#            main                         (main)
+#
+# Install with:
+#   npm install rivetkit@pr-4600
+#
+# ============================================================================
+# PRIOR ART
+# ============================================================================
+#
+# This workflow follows conventions from the napi-rs ecosystem. Similar patterns
+# used by:
+#
+# - @next/swc (Next.js):
+#   https://github.com/vercel/next.js/tree/canary/packages/next-swc
+# - swc-project/swc:
+#   https://github.com/swc-project/swc/blob/main/.github/workflows/publish-npm-package.yml
+# - oxc-project/oxc:
+#   https://github.com/oxc-project/oxc/tree/main/.github/workflows
+# - web-infra-dev/rspack:
+#   https://github.com/web-infra-dev/rspack/blob/main/.github/workflows/release.yml
+# - biomejs/biome:
+#   https://github.com/biomejs/biome/tree/main/.github/workflows
+#
+# Standard pattern: N parallel jobs (one per target triple), each producing a
+# platform-specific .node file; final publish job assembles optionalDependencies
+# on the meta package and publishes all platform packages + the meta package to
+# npm under a pre-release dist-tag.
+#
+# ============================================================================
+# ALPINE LINUX & NODE.JS SHARP EDGES
+# ============================================================================
+#
+# Node native addons must match the libc of the Node binary loading them.
+# A glibc-linked .node file cannot be loaded by musl-linked Node (Alpine) and
+# vice versa.
+#
+# - Official Node from nodejs.org: glibc-linked
+# - NodeSource apt packages: glibc-linked
+# - node:22-slim / node:22-bookworm Docker: glibc-linked (glibc 2.36)
+# - node:22-alpine Docker: musl-linked
+# - Alpine Linux `apk add nodejs`: musl-linked
+#
+# To cover both, we ship platform-specific packages:
+#   @rivetkit/rivetkit-native-linux-x64-gnu   (glibc; most Linux distros)
+#   @rivetkit/rivetkit-native-linux-x64-musl  (musl; Alpine, distroless, scratch)
+# The generated index.js loader uses napi-rs's isMusl() heuristic to pick one
+# at runtime. This mirrors what swc, oxc, rspack all do.
+#
+# glibc version:
+# We build the glibc variant on Debian bullseye (glibc 2.31) — binaries built
+# against an older glibc forward-compatible to newer ones. This covers
+# Debian 11+, Ubuntu 20.04+, RHEL 9+, Amazon Linux 2023+.
+#
+# musl version:
+# musl has weaker ABI guarantees than glibc. We build on a pinned musl-cross
+# toolchain (musl.cc aarch64, cross-tools x86_64) and accept that users on
+# very old Alpine (3.17-) or very new edge Alpine may hit occasional mismatches.
+# This is the same tradeoff napi-rs's lts-alpine base image makes.
+#
+# MinGW vs MSVC for Windows:
+# Node.js on Windows is built with MSVC, and the napi-rs convention is MSVC
+# addons. We use MinGW to share a single Docker base image with the engine
+# build. MinGW-built .node files load into MSVC Node.js as long as libgcc,
+# libstdc++, and winpthreads are statically linked (we enforce this via
+# RUSTFLAGS). swc historically shipped MinGW before switching to MSVC;
+# biome ships MSVC. There is a small risk of edge-case unwind/symbol
+# collision issues — we accept it because the alternative (cargo-xwin MSVC
+# base image + duplicate cross-toolchain plumbing) doubles the base image
+# maintenance burden.
+#
+# ============================================================================
+# RELATED FILES
+# ============================================================================
+#
+# Base images (built manually, pushed to ghcr.io):
+#   engine/docker/builder-base/*.Dockerfile
+#   scripts/docker-builder-base/build-push.sh
+#
+# Build Dockerfiles (one per target, used by this workflow):
+#   engine/docker/build/{linux,darwin,windows}-*.Dockerfile
+#
+# Each build Dockerfile takes these args:
+#   BASE_TAG        — ghcr.io tag of the base image
+#   BUILD_TARGET    — "engine" or "rivetkit-native"
+#   BUILD_MODE      — "debug" (fast, default here) or "release"
+#   BUILD_FRONTEND  — "true" or "false" (engine only)
+#
+# ============================================================================
 
 name: Preview Publish
 
@@ -16,30 +107,49 @@ on:
       - main
   workflow_dispatch:
 
+# Base image tag pinned here. Update after rebuilding base images with
+# scripts/docker-builder-base/build-push.sh all --push.
+env:
+  BASE_TAG: 0fafbf10c
+  BUILD_MODE: debug
+
 jobs:
-  build-native:
-    name: "Build native (${{ matrix.settings.target }})"
+  build:
+    name: "Build ${{ matrix.target.name }} (${{ matrix.build_target }})"
     strategy:
       fail-fast: false
       matrix:
-        settings:
-          - target: x86_64-unknown-linux-gnu
-            host: ubuntu-latest
-            docker: rivetkit-typescript/packages/rivetkit-native/docker/linux-x64.Dockerfile
-            artifact: rivetkit-native.linux-x64-gnu.node
-          - target: aarch64-apple-darwin
-            host: ubuntu-latest
-            docker: rivetkit-typescript/packages/rivetkit-native/docker/macos-arm64.Dockerfile
-            artifact: rivetkit-native.darwin-arm64.node
-          - target: x86_64-apple-darwin
-            host: ubuntu-latest
-            docker: rivetkit-typescript/packages/rivetkit-native/docker/macos-x64.Dockerfile
-            artifact: rivetkit-native.darwin-x64.node
-          - target: x86_64-pc-windows-msvc
-            host: ubuntu-latest
-            docker: rivetkit-typescript/packages/rivetkit-native/docker/windows-x64.Dockerfile
-            artifact: rivetkit-native.win32-x64-msvc.node
-    runs-on: ${{ matrix.settings.host }}
+        build_target: [rivetkit-native, engine]
+        target:
+          - name: linux-x64-gnu
+            docker: engine/docker/build/linux-x64-gnu.Dockerfile
+            engine_artifact: rivet-engine-x86_64-unknown-linux-gnu
+            native_artifact: rivetkit-native.linux-x64-gnu.node
+          - name: linux-x64-musl
+            docker: engine/docker/build/linux-x64-musl.Dockerfile
+            engine_artifact: rivet-engine-x86_64-unknown-linux-musl
+            native_artifact: rivetkit-native.linux-x64-musl.node
+          - name: linux-arm64-gnu
+            docker: engine/docker/build/linux-arm64-gnu.Dockerfile
+            engine_artifact: rivet-engine-aarch64-unknown-linux-gnu
+            native_artifact: rivetkit-native.linux-arm64-gnu.node
+          - name: linux-arm64-musl
+            docker: engine/docker/build/linux-arm64-musl.Dockerfile
+            engine_artifact: rivet-engine-aarch64-unknown-linux-musl
+            native_artifact: rivetkit-native.linux-arm64-musl.node
+          - name: darwin-x64
+            docker: engine/docker/build/darwin-x64.Dockerfile
+            engine_artifact: rivet-engine-x86_64-apple-darwin
+            native_artifact: rivetkit-native.darwin-x64.node
+          - name: darwin-arm64
+            docker: engine/docker/build/darwin-arm64.Dockerfile
+            engine_artifact: rivet-engine-aarch64-apple-darwin
+            native_artifact: rivetkit-native.darwin-arm64.node
+          - name: windows-x64
+            docker: engine/docker/build/windows-x64.Dockerfile
+            engine_artifact: rivet-engine-x86_64-pc-windows-gnu.exe
+            native_artifact: rivetkit-native.win32-x64-msvc.node
+    runs-on: ubuntu-latest
     permissions:
       packages: read
     steps:
@@ -53,91 +163,43 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build native binary via Docker
+      - name: Compute artifact path
+        id: artifact
         run: |
-          DOCKER_BUILDKIT=1 docker build \
-            -f ${{ matrix.settings.docker }} \
-            -t rivetkit-native-builder-${{ matrix.settings.target }} \
-            .
-          CONTAINER_ID=$(docker create rivetkit-native-builder-${{ matrix.settings.target }})
-          mkdir -p artifacts
-          docker cp "$CONTAINER_ID:/artifacts/${{ matrix.settings.artifact }}" artifacts/
-          docker rm "$CONTAINER_ID"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bindings-${{ matrix.settings.target }}
-          path: artifacts/${{ matrix.settings.artifact }}
-          if-no-files-found: error
-
-  build-engine:
-    name: "Build engine (${{ matrix.settings.target }})"
-    strategy:
-      fail-fast: false
-      matrix:
-        settings:
-          - target: x86_64-unknown-linux-musl
-            host: ubuntu-latest
-            docker: engine/docker/engine/linux-x86_64.Dockerfile
-            stage: x86_64-builder
-            artifact: rivet-engine-x86_64-unknown-linux-musl
-          - target: aarch64-apple-darwin
-            host: ubuntu-latest
-            docker: engine/docker/engine/macos-aarch64.Dockerfile
-            stage: aarch64-builder
-            artifact: rivet-engine-aarch64-apple-darwin
-          - target: x86_64-apple-darwin
-            host: ubuntu-latest
-            docker: engine/docker/engine/macos-x86_64.Dockerfile
-            stage: x86_64-builder
-            artifact: rivet-engine-x86_64-apple-darwin
-          - target: x86_64-pc-windows-gnu
-            host: ubuntu-latest
-            docker: engine/docker/engine/windows.Dockerfile
-            stage: ""
-            artifact: rivet-engine-x86_64-pc-windows-gnu.exe
-    runs-on: ${{ matrix.settings.host }}
-    permissions:
-      packages: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
-
-      - name: Log in to ghcr.io
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build engine binary via Docker
-        run: |
-          BUILD_ARGS="--build-arg BUILD_FRONTEND=false"
-          if [ -n "${{ matrix.settings.stage }}" ]; then
-            BUILD_ARGS="$BUILD_ARGS --target ${{ matrix.settings.stage }}"
+          if [ "${{ matrix.build_target }}" = "engine" ]; then
+            echo "name=${{ matrix.target.engine_artifact }}" >> $GITHUB_OUTPUT
+            echo "upload_name=engine-${{ matrix.target.name }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${{ matrix.target.native_artifact }}" >> $GITHUB_OUTPUT
+            echo "upload_name=native-${{ matrix.target.name }}" >> $GITHUB_OUTPUT
           fi
+
+      - name: Build via Docker
+        run: |
           DOCKER_BUILDKIT=1 docker build \
-            $BUILD_ARGS \
-            -f ${{ matrix.settings.docker }} \
-            -t engine-builder-${{ matrix.settings.target }} \
+            --build-arg BASE_TAG=${{ env.BASE_TAG }} \
+            --build-arg BUILD_TARGET=${{ matrix.build_target }} \
+            --build-arg BUILD_MODE=${{ env.BUILD_MODE }} \
+            --build-arg BUILD_FRONTEND=false \
+            -f ${{ matrix.target.docker }} \
+            -t builder-${{ matrix.build_target }}-${{ matrix.target.name }} \
             .
-          CONTAINER_ID=$(docker create engine-builder-${{ matrix.settings.target }})
+          CONTAINER_ID=$(docker create builder-${{ matrix.build_target }}-${{ matrix.target.name }})
           mkdir -p artifacts
-          docker cp "$CONTAINER_ID:/artifacts/${{ matrix.settings.artifact }}" artifacts/
+          docker cp "$CONTAINER_ID:/artifacts/${{ steps.artifact.outputs.name }}" artifacts/
           docker rm "$CONTAINER_ID"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: engine-${{ matrix.settings.target }}
-          path: artifacts/${{ matrix.settings.artifact }}
+          name: ${{ steps.artifact.outputs.upload_name }}
+          path: artifacts/${{ steps.artifact.outputs.name }}
           if-no-files-found: error
 
   publish:
     name: "Publish"
-    needs: [build-native, build-engine]
-    if: ${{ !cancelled() && needs.build-native.result != 'failure' }}
+    needs: build
+    if: ${{ !cancelled() && needs.build.result != 'failure' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -155,6 +217,7 @@ jobs:
         run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/sqlite-native' -F '!@rivetkit/rivetkit-native'
 
       - run: npx turbo build:pack-inspector -F rivetkit
+
       - name: Strip inspector sourcemaps
         run: |
           cd rivetkit-typescript/packages/rivetkit/dist
@@ -168,7 +231,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: native-artifacts
-          pattern: bindings-*
+          pattern: native-*
           merge-multiple: true
 
       - name: Download engine artifacts
@@ -183,22 +246,12 @@ jobs:
           NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
           for f in native-artifacts/*.node; do
             filename=$(basename "$f")
+            # Strip "rivetkit-native." prefix and ".node" suffix.
             platform="${filename#rivetkit-native.}"
             platform="${platform%.node}"
             mkdir -p "${NATIVE_DIR}/npm/${platform}"
             cp "$f" "${NATIVE_DIR}/npm/${platform}/"
             echo "Placed $filename -> npm/${platform}/"
-          done
-
-      - name: Place engine binaries in engine package
-        run: |
-          ENGINE_DIR=rivetkit-typescript/packages/engine/bin
-          mkdir -p "$ENGINE_DIR"
-          for f in engine-artifacts/rivet-engine-*; do
-            filename=$(basename "$f")
-            cp "$f" "$ENGINE_DIR/"
-            chmod +x "$ENGINE_DIR/$filename"
-            echo "Placed engine: $filename"
           done
 
       - name: Compute pre-release version
@@ -222,7 +275,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
-          # Update all workspace packages
+          # Update all workspace packages.
           node -e "
             const fs = require('fs');
             const path = require('path');
@@ -259,7 +312,7 @@ jobs:
             }
           "
 
-          # Update native platform packages and add optionalDependencies
+          # Update native platform packages and add optionalDependencies.
           NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
           for dir in ${NATIVE_DIR}/npm/*/; do
             if [ -f "${dir}package.json" ]; then
@@ -288,7 +341,7 @@ jobs:
             fs.writeFileSync('${NATIVE_DIR}/package.json', JSON.stringify(pkg, null, '\t') + '\n');
           "
 
-          # Update engine SDK packages
+          # Update engine SDK packages.
           for dir in engine/sdks/typescript/*/; do
             if [ -f "${dir}package.json" ]; then
               node -e "
@@ -310,7 +363,7 @@ jobs:
             fi
           done
 
-          # Update shared/typescript packages
+          # Update shared/typescript packages.
           for dir in shared/typescript/*/; do
             if [ -f "${dir}package.json" ]; then
               node -e "
@@ -331,7 +384,7 @@ jobs:
           NPM_TAG="${{ steps.version.outputs.tag }}"
           VERSION="${{ steps.version.outputs.version }}"
 
-          # Publish native platform packages first (they are optionalDependencies)
+          # Publish native platform packages first (optionalDependencies of the meta).
           NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
           for dir in ${NATIVE_DIR}/npm/*/; do
             if [ -f "${dir}package.json" ]; then
@@ -341,7 +394,7 @@ jobs:
             fi
           done
 
-          # Publish all workspace packages
+          # Publish workspace packages.
           PACKAGES=$(node -e "
             const { execSync } = require('child_process');
             const pkgs = JSON.parse(execSync('pnpm -r list --json').toString());
@@ -362,7 +415,7 @@ jobs:
             pnpm --filter "$name" publish --access public --tag "$NPM_TAG" --no-git-checks || true
           done
 
-          # Publish engine SDK packages
+          # Publish engine SDK packages.
           for dir in engine/sdks/typescript/*/; do
             if [ -f "${dir}package.json" ]; then
               IS_PRIVATE=$(node -e "console.log(require('./${dir}package.json').private || false)")
@@ -374,7 +427,7 @@ jobs:
             fi
           done
 
-          # Publish shared typescript packages
+          # Publish shared typescript packages.
           for dir in shared/typescript/*/; do
             if [ -f "${dir}package.json" ]; then
               IS_PRIVATE=$(node -e "console.log(require('./${dir}package.json').private || false)")
@@ -395,12 +448,6 @@ jobs:
           NPM_TAG="${{ steps.version.outputs.tag }}"
           PR_NUMBER="${{ github.event.pull_request.number }}"
 
-          # Check which engine binaries were built
-          ENGINE_BINS=""
-          for f in engine-artifacts/rivet-engine-*; do
-            [ -f "$f" ] && ENGINE_BINS="${ENGINE_BINS}\n- \`$(basename $f)\`"
-          done
-
           BODY="## Preview packages published to npm
 
           Install with:
@@ -409,6 +456,10 @@ jobs:
           \`\`\`
 
           All packages published as \`${VERSION}\` with tag \`${NPM_TAG}\`.
+
+          Native platforms: linux-x64-gnu, linux-x64-musl, linux-arm64-gnu, linux-arm64-musl, darwin-x64, darwin-arm64, win32-x64-msvc
+
+          Engine binaries are available as downloadable GitHub Actions artifacts on this workflow run.
 
           <details>
           <summary>Individual packages</summary>
@@ -421,17 +472,9 @@ jobs:
           npm install @rivetkit/workflow-engine@${NPM_TAG}
           \`\`\`
 
-          </details>
-
-          <details>
-          <summary>Engine binaries (GitHub Artifacts)</summary>
-
-          Engine binaries are available as downloadable GitHub Actions artifacts on this workflow run.
-          $(echo -e "$ENGINE_BINS")
-
           </details>"
 
-          # Update existing comment or create new one
+          # Update existing comment or create new one.
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${PR_NUMBER}/comments --jq '.[] | select(.body | contains("Preview packages published to npm")) | .id' | head -1)
           if [ -n "$COMMENT_ID" ]; then
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} -X PATCH -f body="$BODY"

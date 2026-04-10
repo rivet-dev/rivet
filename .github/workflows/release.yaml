@@ -95,48 +95,74 @@ jobs:
           - platform: linux
             runner: depot-ubuntu-24.04-8
             target: x86_64-unknown-linux-musl
+            dockerfile: engine/docker/build/linux-x64-musl.Dockerfile
+            binary_name: rivet-engine-x86_64-unknown-linux-musl
             binary_ext: ""
             arch: x86_64
           # TODO: Add back when working
           # - platform: linux
           #   runner: depot-ubuntu-24.04-arm-8
           #   target: aarch64-unknown-linux-musl
+          #   dockerfile: engine/docker/build/linux-arm64-musl.Dockerfile
+          #   binary_name: rivet-engine-aarch64-unknown-linux-musl
           #   binary_ext: ""
           #   arch: aarch64
           - platform: windows
             runner: depot-ubuntu-24.04-8
             target: x86_64-pc-windows-gnu
+            dockerfile: engine/docker/build/windows-x64.Dockerfile
+            binary_name: rivet-engine-x86_64-pc-windows-gnu.exe
             binary_ext: ".exe"
             arch: x86_64
           - platform: macos
             # Use Linux instead of macOS builders since macOS does not support Docker
             runner: depot-ubuntu-24.04-8
             target: x86_64-apple-darwin
+            dockerfile: engine/docker/build/darwin-x64.Dockerfile
+            binary_name: rivet-engine-x86_64-apple-darwin
             binary_ext: ""
             arch: x86_64
           - platform: macos
             # Use Linux instead of macOS builders since macOS does not support Docker
             runner: depot-ubuntu-24.04-8
             target: aarch64-apple-darwin
+            dockerfile: engine/docker/build/darwin-arm64.Dockerfile
+            binary_name: rivet-engine-aarch64-apple-darwin
             binary_ext: ""
             arch: aarch64
     runs-on: ${{ matrix.runner }}
+    permissions:
+      packages: read
+    env:
+      # Update after rebuilding base images.
+      BASE_TAG: 0fafbf10c
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: 'true'
 
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build using engine Dockerfile
+      - name: Build engine binary via unified Dockerfile
         run: |
-          # Use Docker BuildKit
           export DOCKER_BUILDKIT=1
+          docker build \
+            --build-arg BASE_TAG=${{ env.BASE_TAG }} \
+            --build-arg BUILD_TARGET=engine \
+            --build-arg BUILD_MODE=release \
+            --build-arg BUILD_FRONTEND=true \
+            -f ${{ matrix.dockerfile }} \
+            -t rivet-engine-builder-${{ matrix.target }} \
+            .
+          CONTAINER_ID=$(docker create rivet-engine-builder-${{ matrix.target }})
+          mkdir -p dist
+          docker cp "$CONTAINER_ID:/artifacts/${{ matrix.binary_name }}" dist/
+          docker rm "$CONTAINER_ID"
 
-          # Build the binary using our Dockerfile
-          engine/docker/engine/build.sh ${{ matrix.target }}
-          
           # Make sure dist directory exists and binary is there
           ls -la dist/
 
