@@ -112,6 +112,8 @@ on:
 env:
   BASE_TAG: 0fafbf10c
   BUILD_MODE: debug
+  # Depot project ID (rivet-dev/rivet-engine) — used for remote builds and sccache.
+  DEPOT_PROJECT_ID: 1rcpv5rn8n
 
 jobs:
   build:
@@ -192,29 +194,29 @@ jobs:
             artifact: rivet-engine-x86_64-pc-windows-gnu.exe
             upload_prefix: engine
             platform: windows-x64
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04-8
     permissions:
+      contents: read
+      id-token: write  # required for depot OIDC trust
       packages: read
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: true
 
-      - name: Log in to ghcr.io
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - uses: depot/setup-action@v1
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build via Docker
+      - name: Build via depot
         run: |
-          DOCKER_BUILDKIT=1 docker build \
+          depot build \
+            --project ${{ env.DEPOT_PROJECT_ID }} \
             --build-arg BASE_TAG=${{ env.BASE_TAG }} \
             --build-arg BUILD_TARGET=${{ matrix.build_target }} \
             --build-arg BUILD_MODE=${{ env.BUILD_MODE }} \
             --build-arg BUILD_FRONTEND=false \
             -f ${{ matrix.docker }} \
             -t builder-${{ matrix.build_target }}-${{ matrix.platform }} \
+            --load \
             .
           CONTAINER_ID=$(docker create builder-${{ matrix.build_target }}-${{ matrix.platform }})
           mkdir -p artifacts
@@ -232,9 +234,10 @@ jobs:
     name: "Publish"
     needs: build
     if: ${{ !cancelled() && needs.build.result != 'failure' }}
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04-8
     permissions:
       contents: read
+      id-token: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
@@ -243,7 +246,8 @@ jobs:
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
-      - run: pnpm install
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
 
       - name: Build TypeScript packages
         run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/sqlite-native' -F '!@rivetkit/rivetkit-native'
