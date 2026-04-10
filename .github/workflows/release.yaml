@@ -137,7 +137,7 @@ jobs:
       packages: read
     env:
       # Update after rebuilding base images.
-      BASE_TAG: 0fafbf10c
+      BASE_TAG: 0e33ceb98
       DEPOT_PROJECT_ID: 1rcpv5rn8n
     steps:
       - uses: actions/checkout@v4

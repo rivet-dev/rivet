@@ -110,7 +110,7 @@ on:
 # Base image tag pinned here. Update after rebuilding base images with
 # scripts/docker-builder-base/build-push.sh all --push.
 env:
-  BASE_TAG: 0fafbf10c
+  BASE_TAG: 0e33ceb98
   BUILD_MODE: debug
   # Depot project ID (rivet-dev/rivet-engine) — used for remote builds and sccache.
   DEPOT_PROJECT_ID: 1rcpv5rn8n
