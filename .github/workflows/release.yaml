@@ -132,31 +132,31 @@ jobs:
             arch: aarch64
     runs-on: ${{ matrix.runner }}
     permissions:
+      contents: read
+      id-token: write  # required for depot OIDC trust
       packages: read
     env:
       # Update after rebuilding base images.
       BASE_TAG: 0fafbf10c
+      DEPOT_PROJECT_ID: 1rcpv5rn8n
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: 'true'
 
-      - name: Log in to ghcr.io
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - uses: depot/setup-action@v1
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build engine binary via unified Dockerfile
+      - name: Build engine binary via depot
         run: |
-          export DOCKER_BUILDKIT=1
-          docker build \
+          depot build \
+            --project ${{ env.DEPOT_PROJECT_ID }} \
             --build-arg BASE_TAG=${{ env.BASE_TAG }} \
             --build-arg BUILD_TARGET=engine \
             --build-arg BUILD_MODE=release \
             --build-arg BUILD_FRONTEND=true \
             -f ${{ matrix.dockerfile }} \
             -t rivet-engine-builder-${{ matrix.target }} \
+            --load \
             .
           CONTAINER_ID=$(docker create rivet-engine-builder-${{ matrix.target }})
           mkdir -p dist
