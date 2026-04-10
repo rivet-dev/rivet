@@ -19,6 +19,7 @@ ARG BUILD_FRONTEND=false
 ARG VITE_APP_API_URL=__SAME__
 
 ENV RUSTFLAGS="--cfg tokio_unstable"
+
 WORKDIR /build
 COPY . .
 
@@ -34,9 +35,9 @@ RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
     fi
 
 # Build binary.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/build/target \
+RUN --mount=type=cache,id=cargo-registry-linux-x64-gnu,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=cargo-git-linux-x64-gnu,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=cargo-target-linux-x64-gnu,target=/build/target,sharing=locked \
     set -e && \
     if [ "$BUILD_MODE" = "release" ]; then \
         CARGO_FLAG="--release"; \
@@ -55,6 +56,6 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         cp rivetkit-native.linux-x64-gnu.node /artifacts/; \
     else \
         echo "Unknown BUILD_TARGET: $BUILD_TARGET" && exit 1; \
-    fi && \
+    fi
 
 CMD ["ls", "-la", "/artifacts"]
