@@ -38,6 +38,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/build/target \
     --mount=type=secret,id=DEPOT_TOKEN,env=SCCACHE_WEBDAV_TOKEN \
     set -e && \
+    if [ -z "$SCCACHE_WEBDAV_TOKEN" ]; then echo "[sccache] no DEPOT_TOKEN, disabling sccache"; unset RUSTC_WRAPPER; fi && \
     if [ "$BUILD_MODE" = "release" ]; then \
         CARGO_FLAG="--release"; \
         PROFILE_DIR="release"; \
