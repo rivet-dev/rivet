@@ -1,23 +1,9 @@
 # syntax=docker/dockerfile:1.10.0
-FROM rust:1.89.0-bookworm
-
-# Install Node.js and napi-rs dependencies
-RUN apt-get update && apt-get install -y \
-    git-lfs \
-    clang \
-    llvm-dev \
-    libclang-dev \
-    curl && \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
-    npm install -g @napi-rs/cli && \
-    rm -rf /var/lib/apt/lists/*
-
-ENV CARGO_INCREMENTAL=0 \
-    CARGO_NET_GIT_FETCH_WITH_CLI=true
+# Base image built from: engine/docker/builder-base/linux-gnu.Dockerfile
+# Rebuild base: scripts/docker-builder-base/build-push.sh linux-gnu --push
+FROM ghcr.io/rivet-dev/rivet/builder-base-linux-gnu:TODO
 
 WORKDIR /build
-
 COPY . .
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
