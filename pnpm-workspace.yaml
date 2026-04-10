@@ -1,6 +1,6 @@
 packages:
   - engine
-  - engine/docker/template
+  - self-host/compose/template
   - engine/sdks/typescript/api-full
   - engine/sdks/typescript/envoy-protocol
   - engine/sdks/typescript/test-envoy

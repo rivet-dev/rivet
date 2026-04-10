@@ -19,11 +19,11 @@ engine/sdks/rust/data/** linguist-generated=false
 engine/sdks/rust/*-protocol/** linguist-generated=false
 engine/sdks/rust/envoy-client/** linguist-generated=false
 engine/sdks/schemas/** linguist-generated=false
-engine/docker/dev/** linguist-generated=true
-engine/docker/dev-host/** linguist-generated=true
-engine/docker/dev-multidc/** linguist-generated=true
-engine/docker/dev-multidc-multinode/** linguist-generated=true
-engine/docker/dev-multinode/** linguist-generated=true
+self-host/compose/dev/** linguist-generated=true
+self-host/compose/dev-host/** linguist-generated=true
+self-host/compose/dev-multidc/** linguist-generated=true
+self-host/compose/dev-multidc-multinode/** linguist-generated=true
+self-host/compose/dev-multinode/** linguist-generated=true
 
 website/public/llms.txt linguist-generated=true
 website/public/llms-full.txt linguist-generated=true

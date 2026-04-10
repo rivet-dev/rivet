@@ -84,11 +84,11 @@
 # ============================================================================
 #
 # Base images (built manually, pushed to ghcr.io):
-#   engine/docker/builder-base/*.Dockerfile
+#   docker/builder-base/*.Dockerfile
 #   scripts/docker-builder-base/build-push.sh
 #
 # Build Dockerfiles (one per target, used by this workflow):
-#   engine/docker/build/{linux,darwin,windows}-*.Dockerfile
+#   docker/build/{linux,darwin,windows}-*.Dockerfile
 #
 # Each build Dockerfile takes these args:
 #   BASE_TAG        — ghcr.io tag of the base image
@@ -115,40 +115,83 @@ env:
 
 jobs:
   build:
-    name: "Build ${{ matrix.target.name }} (${{ matrix.build_target }})"
+    name: "Build ${{ matrix.name }}"
     strategy:
       fail-fast: false
       matrix:
-        build_target: [rivetkit-native, engine]
-        target:
-          - name: linux-x64-gnu
-            docker: engine/docker/build/linux-x64-gnu.Dockerfile
-            engine_artifact: rivet-engine-x86_64-unknown-linux-gnu
-            native_artifact: rivetkit-native.linux-x64-gnu.node
-          - name: linux-x64-musl
-            docker: engine/docker/build/linux-x64-musl.Dockerfile
-            engine_artifact: rivet-engine-x86_64-unknown-linux-musl
-            native_artifact: rivetkit-native.linux-x64-musl.node
-          - name: linux-arm64-gnu
-            docker: engine/docker/build/linux-arm64-gnu.Dockerfile
-            engine_artifact: rivet-engine-aarch64-unknown-linux-gnu
-            native_artifact: rivetkit-native.linux-arm64-gnu.node
-          - name: linux-arm64-musl
-            docker: engine/docker/build/linux-arm64-musl.Dockerfile
-            engine_artifact: rivet-engine-aarch64-unknown-linux-musl
-            native_artifact: rivetkit-native.linux-arm64-musl.node
-          - name: darwin-x64
-            docker: engine/docker/build/darwin-x64.Dockerfile
-            engine_artifact: rivet-engine-x86_64-apple-darwin
-            native_artifact: rivetkit-native.darwin-x64.node
-          - name: darwin-arm64
-            docker: engine/docker/build/darwin-arm64.Dockerfile
-            engine_artifact: rivet-engine-aarch64-apple-darwin
-            native_artifact: rivetkit-native.darwin-arm64.node
-          - name: windows-x64
-            docker: engine/docker/build/windows-x64.Dockerfile
-            engine_artifact: rivet-engine-x86_64-pc-windows-gnu.exe
-            native_artifact: rivetkit-native.win32-x64-msvc.node
+        include:
+          # rivetkit-native addon: 6 platforms (gnu + musl + darwin, no windows).
+          # Windows is excluded because napi-rs does not support windows-gnu and
+          # we don't ship a cargo-xwin MSVC base image.
+          - name: rivetkit-native (linux-x64-gnu)
+            build_target: rivetkit-native
+            docker: docker/build/linux-x64-gnu.Dockerfile
+            artifact: rivetkit-native.linux-x64-gnu.node
+            upload_prefix: native
+            platform: linux-x64-gnu
+          - name: rivetkit-native (linux-x64-musl)
+            build_target: rivetkit-native
+            docker: docker/build/linux-x64-musl.Dockerfile
+            artifact: rivetkit-native.linux-x64-musl.node
+            upload_prefix: native
+            platform: linux-x64-musl
+          - name: rivetkit-native (linux-arm64-gnu)
+            build_target: rivetkit-native
+            docker: docker/build/linux-arm64-gnu.Dockerfile
+            artifact: rivetkit-native.linux-arm64-gnu.node
+            upload_prefix: native
+            platform: linux-arm64-gnu
+          - name: rivetkit-native (linux-arm64-musl)
+            build_target: rivetkit-native
+            docker: docker/build/linux-arm64-musl.Dockerfile
+            artifact: rivetkit-native.linux-arm64-musl.node
+            upload_prefix: native
+            platform: linux-arm64-musl
+          - name: rivetkit-native (darwin-x64)
+            build_target: rivetkit-native
+            docker: docker/build/darwin-x64.Dockerfile
+            artifact: rivetkit-native.darwin-x64.node
+            upload_prefix: native
+            platform: darwin-x64
+          - name: rivetkit-native (darwin-arm64)
+            build_target: rivetkit-native
+            docker: docker/build/darwin-arm64.Dockerfile
+            artifact: rivetkit-native.darwin-arm64.node
+            upload_prefix: native
+            platform: darwin-arm64
+          # engine binary: 5 platforms (musl for Linux, darwin, windows-gnu).
+          # linux-arm64-gnu is skipped because the base image does not have
+          # aarch64 OpenSSL; use linux-arm64-musl for ARM Linux engine.
+          - name: engine (linux-x64-musl)
+            build_target: engine
+            docker: docker/build/linux-x64-musl.Dockerfile
+            artifact: rivet-engine-x86_64-unknown-linux-musl
+            upload_prefix: engine
+            platform: linux-x64-musl
+          - name: engine (linux-arm64-musl)
+            build_target: engine
+            docker: docker/build/linux-arm64-musl.Dockerfile
+            artifact: rivet-engine-aarch64-unknown-linux-musl
+            upload_prefix: engine
+            platform: linux-arm64-musl
+          - name: engine (darwin-x64)
+            build_target: engine
+            docker: docker/build/darwin-x64.Dockerfile
+            artifact: rivet-engine-x86_64-apple-darwin
+            upload_prefix: engine
+            platform: darwin-x64
+          - name: engine (darwin-arm64)
+            build_target: engine
+            docker: docker/build/darwin-arm64.Dockerfile
+            artifact: rivet-engine-aarch64-apple-darwin
+            upload_prefix: engine
+            platform: darwin-arm64
+          - name: engine (windows-x64)
+            build_target: engine
+            docker: docker/build/windows-x64.Dockerfile
+            artifact: rivet-engine-x86_64-pc-windows-gnu.exe
+            upload_prefix: engine
+            platform: windows-x64
     runs-on: ubuntu-latest
     permissions:
       packages: read
@@ -163,17 +206,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Compute artifact path
-        id: artifact
-        run: |
-          if [ "${{ matrix.build_target }}" = "engine" ]; then
-            echo "name=${{ matrix.target.engine_artifact }}" >> $GITHUB_OUTPUT
-            echo "upload_name=engine-${{ matrix.target.name }}" >> $GITHUB_OUTPUT
-          else
-            echo "name=${{ matrix.target.native_artifact }}" >> $GITHUB_OUTPUT
-            echo "upload_name=native-${{ matrix.target.name }}" >> $GITHUB_OUTPUT
-          fi
-
       - name: Build via Docker
         run: |
           DOCKER_BUILDKIT=1 docker build \
@@ -181,19 +213,19 @@ jobs:
             --build-arg BUILD_TARGET=${{ matrix.build_target }} \
             --build-arg BUILD_MODE=${{ env.BUILD_MODE }} \
             --build-arg BUILD_FRONTEND=false \
-            -f ${{ matrix.target.docker }} \
-            -t builder-${{ matrix.build_target }}-${{ matrix.target.name }} \
+            -f ${{ matrix.docker }} \
+            -t builder-${{ matrix.build_target }}-${{ matrix.platform }} \
             .
-          CONTAINER_ID=$(docker create builder-${{ matrix.build_target }}-${{ matrix.target.name }})
+          CONTAINER_ID=$(docker create builder-${{ matrix.build_target }}-${{ matrix.platform }})
           mkdir -p artifacts
-          docker cp "$CONTAINER_ID:/artifacts/${{ steps.artifact.outputs.name }}" artifacts/
+          docker cp "$CONTAINER_ID:/artifacts/${{ matrix.artifact }}" artifacts/
           docker rm "$CONTAINER_ID"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.artifact.outputs.upload_name }}
-          path: artifacts/${{ steps.artifact.outputs.name }}
+          name: ${{ matrix.upload_prefix }}-${{ matrix.platform }}
+          path: artifacts/${{ matrix.artifact }}
           if-no-files-found: error
 
   publish:

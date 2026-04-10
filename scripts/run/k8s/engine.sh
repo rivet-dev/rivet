@@ -29,7 +29,7 @@ fi
 # Build image
 echo "Building image..."
 cd "${REPO_ROOT}"
-docker build -f engine/docker/universal/Dockerfile -t "${IMAGE_NAME}" .
+docker build -f docker/engine/Dockerfile -t "${IMAGE_NAME}" .
 
 # Load image into k3d
 echo "Loading image into k3d..."

@@ -1,15 +1,8 @@
 # syntax=docker/dockerfile:1.10.0
-# Unified build for linux-x64-gnu.
-# Builds either rivet-engine or rivetkit-native based on BUILD_TARGET.
+# Unified build for linux-arm64-gnu (cross-compiled from x86_64).
+# See linux-x64-gnu.Dockerfile for build arg documentation.
 #
-# Build args:
-#   BASE_TAG        - base image tag (set by build-push script)
-#   BUILD_TARGET    - "engine" or "rivetkit-native"
-#   BUILD_MODE      - "debug" (fast) or "release" (optimized)
-#   BUILD_FRONTEND  - "true" or "false" (engine only)
-#
-# Base image: engine/docker/builder-base/linux-gnu.Dockerfile
-# Rebuild base: scripts/docker-builder-base/build-push.sh linux-gnu --push
+# Base image: docker/builder-base/linux-gnu.Dockerfile
 ARG BASE_TAG=latest
 FROM ghcr.io/rivet-dev/rivet/builder-base-linux-gnu:${BASE_TAG}
 
@@ -23,7 +16,6 @@ ENV RUSTFLAGS="--cfg tokio_unstable"
 WORKDIR /build
 COPY . .
 
-# Build frontend if building engine with frontend enabled.
 RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \
         pnpm install && \
@@ -34,7 +26,6 @@ RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
         fi; \
     fi
 
-# Build binary.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \
@@ -48,12 +39,12 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     fi && \
     mkdir -p /artifacts && \
     if [ "$BUILD_TARGET" = "engine" ]; then \
-        cargo build --bin rivet-engine $CARGO_FLAG --target x86_64-unknown-linux-gnu && \
-        cp target/x86_64-unknown-linux-gnu/$PROFILE_DIR/rivet-engine /artifacts/rivet-engine-x86_64-unknown-linux-gnu; \
+        cargo build --bin rivet-engine $CARGO_FLAG --target aarch64-unknown-linux-gnu && \
+        cp target/aarch64-unknown-linux-gnu/$PROFILE_DIR/rivet-engine /artifacts/rivet-engine-aarch64-unknown-linux-gnu; \
     elif [ "$BUILD_TARGET" = "rivetkit-native" ]; then \
         cd rivetkit-typescript/packages/rivetkit-native && \
-        napi build --platform $CARGO_FLAG --target x86_64-unknown-linux-gnu && \
-        cp rivetkit-native.linux-x64-gnu.node /artifacts/; \
+        napi build --platform $CARGO_FLAG --target aarch64-unknown-linux-gnu && \
+        cp rivetkit-native.linux-arm64-gnu.node /artifacts/; \
     else \
         echo "Unknown BUILD_TARGET: $BUILD_TARGET" && exit 1; \
     fi

@@ -69,7 +69,7 @@ cargo clippy -- -W warnings
 ### Docker Development Environment
 ```bash
 # Start the development environment with all services
-cd docker/dev
+cd self-host/compose/dev
 docker-compose up -d
 ```
 
@@ -333,7 +333,7 @@ let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build(
 ## Configuration Management
 
 ### Docker Development Configuration
-- Do not make changes to docker/dev* configs. Instead, edit the template in docker/template/ and rerun (cd docker/template && pnpm start). This will regenerate the docker compose config for you.
+- Do not make changes to self-host/compose/dev* configs. Instead, edit the template in self-host/compose/template/ and rerun (cd self-host/compose/template && pnpm start). This will regenerate the docker compose config for you.
 
 ## Development Warnings
 
