@@ -41,6 +41,14 @@ RUN wget -q https://musl.cc/aarch64-linux-musl-cross.tgz && \
 
 RUN rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 
+# Install sccache (prebuilt musl binary).
+RUN SCCACHE_VERSION=v0.8.2 && \
+    wget -q https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz && \
+    tar -xzf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz && \
+    mv sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache && \
+    chmod +x /usr/local/bin/sccache && \
+    rm -rf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl*
+
 # PATH must be set before building OpenSSL so the cross-compilers are found.
 ENV PATH="/opt/x86_64-unknown-linux-musl/bin:/opt/aarch64-linux-musl-cross/bin:$PATH"
 

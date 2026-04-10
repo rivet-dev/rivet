@@ -42,6 +42,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
 
+# Install sccache (prebuilt musl binary, runs on glibc too).
+RUN SCCACHE_VERSION=v0.8.2 && \
+    wget -q https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz && \
+    tar -xzf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz && \
+    mv sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache && \
+    chmod +x /usr/local/bin/sccache && \
+    rm -rf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl*
+
 ENV LIBCLANG_PATH=/usr/lib/llvm-14/lib \
     CLANG_PATH=/usr/bin/clang-14 \
     CARGO_INCREMENTAL=0 \

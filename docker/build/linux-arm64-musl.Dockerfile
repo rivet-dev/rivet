@@ -17,6 +17,9 @@ ENV OPENSSL_DIR=/musl-aarch64 \
     OPENSSL_STATIC=1 \
     PKG_CONFIG_ALLOW_CROSS=1
 
+ENV RUSTC_WRAPPER=sccache \
+    SCCACHE_WEBDAV_ENDPOINT=https://cache.depot.dev
+
 WORKDIR /build
 COPY . .
 
@@ -33,6 +36,7 @@ RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \
+    --mount=type=secret,id=DEPOT_TOKEN,env=SCCACHE_WEBDAV_TOKEN \
     set -e && \
     if [ "$BUILD_MODE" = "release" ]; then \
         CARGO_FLAG="--release"; \

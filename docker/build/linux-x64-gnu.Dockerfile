@@ -18,7 +18,9 @@ ARG BUILD_MODE=release
 ARG BUILD_FRONTEND=false
 ARG VITE_APP_API_URL=__SAME__
 
-ENV RUSTFLAGS="--cfg tokio_unstable"
+ENV RUSTFLAGS="--cfg tokio_unstable" \
+    RUSTC_WRAPPER=sccache \
+    SCCACHE_WEBDAV_ENDPOINT=https://cache.depot.dev
 
 WORKDIR /build
 COPY . .
@@ -34,10 +36,14 @@ RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
         fi; \
     fi
 
-# Build binary.
+# Build binary. The DEPOT_TOKEN secret (mounted as SCCACHE_WEBDAV_TOKEN)
+# enables remote sccache via https://cache.depot.dev. If the secret isn't
+# provided (e.g. local build without depot), sccache silently falls back
+# to a local disk cache and the build still works.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \
+    --mount=type=secret,id=DEPOT_TOKEN,env=SCCACHE_WEBDAV_TOKEN \
     set -e && \
     if [ "$BUILD_MODE" = "release" ]; then \
         CARGO_FLAG="--release"; \
@@ -56,6 +62,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         cp rivetkit-native.linux-x64-gnu.node /artifacts/; \
     else \
         echo "Unknown BUILD_TARGET: $BUILD_TARGET" && exit 1; \
-    fi
+    fi && \
+    sccache --show-stats || true
 
 CMD ["ls", "-la", "/artifacts"]
