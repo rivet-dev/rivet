@@ -144,6 +144,10 @@ members = [
   vergen-gitcl = "1.0.0"
   reqwest-eventsource = "0.6.0"
 
+    [workspace.dependencies.tokio-tungstenite]
+    version = "0.26.0"
+    features = [ "rustls-tls-native-roots" ]
+
     [workspace.dependencies.vergen]
     version = "9.0.4"
     features = [ "build", "cargo", "rustc" ]
@@ -175,10 +179,6 @@ members = [
 
     [workspace.dependencies.pest]
     version = "2.7"
-
-    [workspace.dependencies.tokio-tungstenite]
-    version = "0.26.0"
-    features = ["rustls-tls-native-roots"]
 
     [workspace.dependencies.rocksdb]
     version = "0.24"

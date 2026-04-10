@@ -8,6 +8,7 @@ pub struct UrlData {
 	pub namespace: String,
 	pub pool_name: String,
 	pub envoy_key: String,
+	pub version: u32,
 }
 
 impl UrlData {
@@ -58,11 +59,19 @@ impl UrlData {
 			);
 		}
 
+		let version = url
+			.query_pairs()
+			.find_map(|(n, v)| (n == "version").then_some(v))
+			.context("missing `version` query parameter")?
+			.parse::<u32>()
+			.context("invalid `version` query parameter")?;
+
 		Ok(UrlData {
 			protocol_version,
 			namespace,
 			pool_name,
 			envoy_key,
+			version,
 		})
 	}
 }

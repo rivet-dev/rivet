@@ -1,4 +1,3 @@
-use anyhow::ensure;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use rand::Rng;
@@ -8,7 +7,7 @@ use std::time::Duration;
 use tokio::sync::watch;
 use vbare::OwnedVersionedData;
 
-use crate::{LifecycleResult, conn::Conn};
+use crate::{LifecycleResult, conn::Conn, errors::WsError};
 
 #[tracing::instrument(name="ping_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), envoy_key=%conn.envoy_key, protocol_version=%conn.protocol_version))]
 pub async fn task(
@@ -33,10 +32,9 @@ pub async fn task(
 		// Check if the last ping is past the timeout threshold
 		let last_ping_ts = conn.last_ping_ts.load(Ordering::SeqCst);
 		let now = util::timestamp::now();
-		ensure!(
-			now - last_ping_ts <= ping_timeout_ms,
-			"envoy ws ping timed out"
-		);
+		if now - last_ping_ts > ping_timeout_ms {
+			return Err(WsError::TimedOut.build());
+		}
 
 		// Update ping
 		ctx.op(pegboard::ops::envoy::update_ping::Input {
