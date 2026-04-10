@@ -24,6 +24,9 @@ ENV BINDGEN_EXTRA_CLANG_ARGS_x86_64_apple_darwin="--sysroot=/root/osxcross/targe
 RUN mkdir -p /root/.cargo && \
     echo '[target.x86_64-apple-darwin]\nlinker = "x86_64-apple-darwin20.4-clang"\nar = "x86_64-apple-darwin20.4-ar"\n' > /root/.cargo/config.toml
 
+ENV RUSTC_WRAPPER=sccache \
+    SCCACHE_WEBDAV_ENDPOINT=https://cache.depot.dev
+
 WORKDIR /build
 COPY . .
 
@@ -40,6 +43,7 @@ RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \
+    --mount=type=secret,id=DEPOT_TOKEN,env=SCCACHE_WEBDAV_TOKEN \
     set -e && \
     if [ "$BUILD_MODE" = "release" ]; then \
         CARGO_FLAG="--release"; \

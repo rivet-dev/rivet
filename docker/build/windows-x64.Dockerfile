@@ -17,8 +17,15 @@ ARG BUILD_MODE=release
 ARG BUILD_FRONTEND=false
 ARG VITE_APP_API_URL=__SAME__
 
-# Static libgcc/libstdc++ so the resulting binary has no runtime DLL deps.
-ENV RUSTFLAGS="--cfg tokio_unstable -C target-feature=+crt-static -C link-arg=-static-libgcc -C link-arg=-static-libstdc++"
+# Windows-specific build flags:
+# - lld linker is ~5x faster than MinGW's default ld for big Rust binaries.
+# - static-libgcc avoids runtime libgcc_s_seh-1.dll dependency.
+# - static-libstdc++ dropped: our code has no C++ (only Rust + C), and static
+#   libstdc++ adds 1-2 min of link time for no benefit.
+ENV RUSTFLAGS="--cfg tokio_unstable -C target-feature=+crt-static -C link-arg=-static-libgcc -C link-arg=-fuse-ld=lld"
+
+ENV RUSTC_WRAPPER=sccache \
+    SCCACHE_WEBDAV_ENDPOINT=https://cache.depot.dev
 
 WORKDIR /build
 COPY . .
@@ -36,6 +43,7 @@ RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \
+    --mount=type=secret,id=DEPOT_TOKEN,env=SCCACHE_WEBDAV_TOKEN \
     set -e && \
     if [ "$BUILD_MODE" = "release" ]; then \
         CARGO_FLAG="--release"; \

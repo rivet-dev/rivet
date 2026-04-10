@@ -10,11 +10,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     llvm-14-dev \
     libclang-14-dev \
     clang-14 \
+    lld \
     git-lfs \
     gcc-mingw-w64-x86-64 \
     g++-mingw-w64-x86-64 \
     binutils-mingw-w64-x86-64 \
     ca-certificates \
+    wget \
     curl && \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
@@ -27,6 +29,14 @@ RUN update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32
     update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
 
 RUN rustup target add x86_64-pc-windows-gnu
+
+# Install sccache (prebuilt musl binary).
+RUN SCCACHE_VERSION=v0.8.2 && \
+    wget -q https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz && \
+    tar -xzf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz && \
+    mv sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache && \
+    chmod +x /usr/local/bin/sccache && \
+    rm -rf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl*
 
 RUN mkdir -p /root/.cargo && \
     echo '[target.x86_64-pc-windows-gnu]\nlinker = "x86_64-w64-mingw32-gcc"\n' > /root/.cargo/config.toml
