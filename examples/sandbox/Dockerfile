@@ -11,6 +11,7 @@ COPY shared/typescript/ ./shared/typescript/
 
 RUN pnpm install --frozen-lockfile
 RUN mkdir -p rivetkit-openapi rivetkit-asyncapi
+RUN pnpm build --filter=rivetkit...
 
 WORKDIR /app/examples/sandbox
 
