@@ -432,67 +432,74 @@ jobs:
           set +e
           NPM_TAG="${{ steps.version.outputs.tag }}"
           VERSION="${{ steps.version.outputs.version }}"
-          MAX_PARALLEL=8
 
-          # Collect list of package directories as a newline-separated list.
-          # One path per line. The name is derived from the package.json inside.
-          PKG_DIRS=$(mktemp)
+          # Build the publish list by reading each package.json. Stored as
+          # `<name>|<abs_dir>` lines. We read names via node before cd-ing
+          # (which avoids issues with require resolving absolute paths).
+          PKG_LIST=$(mktemp)
 
-          # Native platform packages (must publish first — they are the
-          # optionalDependencies of the main @rivetkit/rivetkit-native meta).
-          for dir in rivetkit-typescript/packages/rivetkit-native/npm/*/; do
-            [ -f "${dir}package.json" ] && echo "$dir" >> "$PKG_DIRS"
+          add_pkg() {
+            local dir="$1"
+            [ -f "${dir}/package.json" ] || return
+            local info
+            info=$(node -e "
+              const p = require('$PWD/${dir}/package.json');
+              if (p.private) process.exit(1);
+              process.stdout.write(p.name + '|' + '${dir}');
+            ") || return
+            echo "$info" >> "$PKG_LIST"
+          }
+
+          # Native platform packages (must publish before the meta package).
+          for d in rivetkit-typescript/packages/rivetkit-native/npm/*/; do
+            add_pkg "${d%/}"
           done
 
           # Workspace packages via pnpm.
           node -e "
             const { execSync } = require('child_process');
+            const path = require('path');
             const pkgs = JSON.parse(execSync('pnpm -r list --json').toString());
             const SKIP = new Set(['@rivetkit/shared-data','@rivetkit/engine-frontend','@rivetkit/mcp-hub']);
             for (const p of pkgs) {
               if (p.private) continue;
               if (SKIP.has(p.name)) continue;
               if (!p.name.startsWith('@rivetkit/') && p.name !== 'rivetkit') continue;
-              console.log(p.path);
+              // Relative path from repo root.
+              const rel = path.relative('$PWD', p.path);
+              console.log(p.name + '|' + rel);
             }
-          " >> "$PKG_DIRS"
+          " >> "$PKG_LIST"
 
           # Engine SDK + shared typescript packages.
-          for dir in engine/sdks/typescript/*/ shared/typescript/*/; do
-            if [ -f "${dir}package.json" ]; then
-              IS_PRIVATE=$(node -e "console.log(require('./${dir}package.json').private || false)")
-              [ "$IS_PRIVATE" = "false" ] && echo "$dir" >> "$PKG_DIRS"
-            fi
+          for d in engine/sdks/typescript/*/ shared/typescript/*/; do
+            add_pkg "${d%/}"
           done
 
-          TOTAL=$(wc -l < "$PKG_DIRS")
-          echo "Publishing ${TOTAL} packages with up to ${MAX_PARALLEL} parallel uploads..."
+          TOTAL=$(wc -l < "$PKG_LIST")
+          echo "==> Publishing ${TOTAL} packages serially as ${VERSION}"
+          echo ""
 
-          # Launch up to MAX_PARALLEL background publishes, waiting for slots
-          # to free up. Failures are logged but do not fail the step — a 403
-          # "you cannot publish over the previously published versions" is
-          # expected when re-running on the same SHA.
-          RUNNING=0
-          while IFS= read -r dir; do
-            (
-              name=$(node -e "console.log(require('./${dir}package.json').name)" 2>/dev/null)
-              cd "$dir" || { echo "✗ ${dir} (cd failed)"; exit 0; }
-              if npm publish --access public --tag "$NPM_TAG" >/tmp/publish-$$.log 2>&1; then
-                echo "✓ ${name}"
-              else
-                echo "✗ ${name}: $(tail -2 /tmp/publish-$$.log | tr '\n' ' ')"
-              fi
-              rm -f /tmp/publish-$$.log
-            ) &
-            RUNNING=$((RUNNING + 1))
-            if [ "$RUNNING" -ge "$MAX_PARALLEL" ]; then
-              wait -n
-              RUNNING=$((RUNNING - 1))
+          PASS=0
+          FAIL=0
+          while IFS='|' read -r name dir; do
+            [ -z "$name" ] && continue
+            printf '  %-50s ' "$name"
+            if (cd "$dir" && npm publish --access public --tag "$NPM_TAG") >/tmp/publish.log 2>&1; then
+              echo "✓"
+              PASS=$((PASS + 1))
+            else
+              # Extract the actual error message (last meaningful line).
+              ERR=$(grep -E "npm error (code|E|[0-9]{3})" /tmp/publish.log | head -2 | tr '\n' ' ')
+              echo "✗ $ERR"
+              FAIL=$((FAIL + 1))
             fi
-          done < "$PKG_DIRS"
-          wait
-          rm -f "$PKG_DIRS"
-          echo "All publish jobs finished."
+          done < "$PKG_LIST"
+
+          rm -f "$PKG_LIST" /tmp/publish.log
+          echo ""
+          echo "==> ${PASS} succeeded, ${FAIL} failed"
+          # Don't fail the step on individual publish errors (e.g. already-published)
 
       - name: Comment on PR
         if: github.event_name == 'pull_request'
