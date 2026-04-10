@@ -1,11 +1,12 @@
+# syntax=docker/dockerfile:1.10.0
 # Base image for Windows (MinGW) cross-compilation.
-# Pre-bakes MinGW-w64 toolchain, Rust target, and Node.js.
+# Used for both rivet-engine and rivetkit-native addon builds.
+# Pre-bakes MinGW-w64, Rust target, Node.js 22, napi-rs CLI.
 #
 # Build & push: scripts/docker-builder-base/build-push.sh windows-mingw
-# syntax=docker/dockerfile:1.10.0
 FROM rust:1.89.0-bookworm
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     llvm-14-dev \
     libclang-14-dev \
     clang-14 \
@@ -16,11 +17,12 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl && \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
+    apt-get install -y --no-install-recommends nodejs && \
     corepack enable && \
+    npm install -g @napi-rs/cli && \
     rm -rf /var/lib/apt/lists/*
 
-# Switch MinGW-w64 to POSIX threading model
+# Use the POSIX MinGW-w64 threading model (required for Rust's std::thread).
 RUN update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix && \
     update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
 

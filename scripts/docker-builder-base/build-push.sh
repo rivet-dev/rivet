@@ -24,7 +24,7 @@ DOCKERFILE_DIR="$REPO_ROOT/engine/docker/builder-base"
 REGISTRY="ghcr.io/rivet-dev/rivet"
 TAG="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 
-BASES="osxcross linux-musl linux-gnu windows-mingw windows-msvc"
+BASES="osxcross linux-musl linux-gnu windows-mingw"
 
 build_one() {
     local name="$1"
