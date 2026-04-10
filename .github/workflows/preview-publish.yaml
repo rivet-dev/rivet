@@ -249,20 +249,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      - name: Build TypeScript packages
-        run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/sqlite-native' -F '!@rivetkit/rivetkit-native'
-
-      - run: npx turbo build:pack-inspector -F rivetkit
-
-      - name: Strip inspector sourcemaps
-        run: |
-          cd rivetkit-typescript/packages/rivetkit/dist
-          mkdir -p /tmp/inspector-repack
-          tar xzf inspector.tar.gz -C /tmp/inspector-repack
-          find /tmp/inspector-repack -name '*.map' -delete
-          tar czf inspector.tar.gz -C /tmp/inspector-repack .
-          rm -rf /tmp/inspector-repack
-
       - name: Download native artifacts
         uses: actions/download-artifact@v4
         with:
@@ -289,6 +275,24 @@ jobs:
             cp "$f" "${NATIVE_DIR}/npm/${platform}/"
             echo "Placed $filename -> npm/${platform}/"
           done
+
+      # Build TypeScript packages. The turbo dep graph transitively runs
+      # rivetkit-native's `build` script (because rivetkit depends on it) —
+      # our smart build.mjs detects the prebuilt .node files placed above
+      # and skips the redundant napi build, saving ~2 min.
+      - name: Build TypeScript packages
+        run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/sqlite-native' -F '!@rivetkit/rivetkit-native'
+
+      - run: npx turbo build:pack-inspector -F rivetkit
+
+      - name: Strip inspector sourcemaps
+        run: |
+          cd rivetkit-typescript/packages/rivetkit/dist
+          mkdir -p /tmp/inspector-repack
+          tar xzf inspector.tar.gz -C /tmp/inspector-repack
+          find /tmp/inspector-repack -name '*.map' -delete
+          tar czf inspector.tar.gz -C /tmp/inspector-repack .
+          rm -rf /tmp/inspector-repack
 
       - name: Compute pre-release version
         id: version
@@ -419,61 +423,71 @@ jobs:
         run: |
           NPM_TAG="${{ steps.version.outputs.tag }}"
           VERSION="${{ steps.version.outputs.version }}"
+          MAX_PARALLEL=8
 
-          # Publish native platform packages first (optionalDependencies of the meta).
+          # Helper: run publish in background, respecting MAX_PARALLEL.
+          publish_pkg() {
+            local dir="$1"
+            local name="$2"
+            echo "Publishing ${name}@${VERSION}..."
+            (cd "$dir" && npm publish --access public --tag "$NPM_TAG") \
+              && echo "✓ ${name}" \
+              || echo "✗ ${name} (already exists or error, ignored)"
+          }
+          export -f publish_pkg
+          export VERSION NPM_TAG
+
+          # Collect publish tasks as "dir\tname" pairs.
+          TASKS=$(mktemp)
+
+          # Native platform packages (must publish first as they are optionalDependencies).
           NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
           for dir in ${NATIVE_DIR}/npm/*/; do
             if [ -f "${dir}package.json" ]; then
               NAME=$(node -e "console.log(require('./${dir}package.json').name)")
-              echo "Publishing ${NAME}@${VERSION}..."
-              (cd "$dir" && npm publish --access public --tag "$NPM_TAG") || true
+              printf '%s\t%s\n' "$dir" "$NAME" >> "$TASKS"
             fi
           done
 
-          # Publish workspace packages.
-          PACKAGES=$(node -e "
+          # Workspace packages.
+          node -e "
             const { execSync } = require('child_process');
             const pkgs = JSON.parse(execSync('pnpm -r list --json').toString());
-            const SKIP = new Set([
-              '@rivetkit/shared-data',
-              '@rivetkit/engine-frontend',
-              '@rivetkit/mcp-hub',
-            ]);
-            const names = pkgs
-              .filter(p => !p.private && !SKIP.has(p.name))
-              .filter(p => p.name.startsWith('@rivetkit/') || p.name === 'rivetkit')
-              .map(p => p.name);
-            console.log(names.join('\n'));
-          ")
+            const SKIP = new Set(['@rivetkit/shared-data','@rivetkit/engine-frontend','@rivetkit/mcp-hub']);
+            for (const p of pkgs) {
+              if (p.private) continue;
+              if (SKIP.has(p.name)) continue;
+              if (!p.name.startsWith('@rivetkit/') && p.name !== 'rivetkit') continue;
+              console.log(p.path + '\t' + p.name);
+            }
+          " >> "$TASKS"
 
-          for name in $PACKAGES; do
-            echo "Publishing ${name}@${VERSION}..."
-            pnpm --filter "$name" publish --access public --tag "$NPM_TAG" --no-git-checks || true
-          done
-
-          # Publish engine SDK packages.
+          # Engine SDK packages.
           for dir in engine/sdks/typescript/*/; do
             if [ -f "${dir}package.json" ]; then
               IS_PRIVATE=$(node -e "console.log(require('./${dir}package.json').private || false)")
               if [ "$IS_PRIVATE" = "false" ]; then
                 NAME=$(node -e "console.log(require('./${dir}package.json').name)")
-                echo "Publishing ${NAME}@${VERSION}..."
-                (cd "$dir" && npm publish --access public --tag "$NPM_TAG") || true
+                printf '%s\t%s\n' "$dir" "$NAME" >> "$TASKS"
               fi
             fi
           done
 
-          # Publish shared typescript packages.
+          # Shared typescript packages.
           for dir in shared/typescript/*/; do
             if [ -f "${dir}package.json" ]; then
               IS_PRIVATE=$(node -e "console.log(require('./${dir}package.json').private || false)")
               if [ "$IS_PRIVATE" = "false" ]; then
                 NAME=$(node -e "console.log(require('./${dir}package.json').name)")
-                echo "Publishing ${NAME}@${VERSION}..."
-                (cd "$dir" && npm publish --access public --tag "$NPM_TAG") || true
+                printf '%s\t%s\n' "$dir" "$NAME" >> "$TASKS"
               fi
             fi
           done
+
+          echo "Publishing $(wc -l < "$TASKS") packages with up to $MAX_PARALLEL parallel uploads..."
+          # xargs -P runs up to N parallel bash invocations
+          cat "$TASKS" | xargs -P "$MAX_PARALLEL" -I {} bash -c 'IFS=$"\t" read -r dir name <<< "$1"; publish_pkg "$dir" "$name"' _ {}
+          rm -f "$TASKS"
 
       - name: Comment on PR
         if: github.event_name == 'pull_request'

@@ -38,11 +38,14 @@
 		"index.d.ts",
 		"wrapper.js",
 		"wrapper.d.ts",
-		"package.json"
+		"package.json",
+		"scripts/build.mjs"
 	],
 	"scripts": {
-		"build": "napi build --platform",
-		"build:release": "napi build --platform --release"
+		"build": "node scripts/build.mjs",
+		"build:release": "node scripts/build.mjs --release",
+		"build:force": "node scripts/build.mjs --force",
+		"build:force:release": "node scripts/build.mjs --force --release"
 	},
 	"dependencies": {
 		"@napi-rs/cli": "^2.18.4",

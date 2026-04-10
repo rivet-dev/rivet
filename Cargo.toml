@@ -525,7 +525,10 @@ members = [
 
 [profile.dev]
 overflow-checks = false
-debug = true
+# "line-tables-only" produces just the line-number DWARF needed for stack
+# traces, skipping variable/type info. Meaningfully faster debug builds
+# (~2 min per engine cross-compile) with no runtime cost.
+debug = "line-tables-only"
 lto = "off"
 
   [profile.dev.build-override]
