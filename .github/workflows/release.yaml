@@ -155,7 +155,6 @@ jobs:
         run: |
           depot build \
             --project ${{ env.DEPOT_PROJECT_ID }} \
-            --secret id=DEPOT_TOKEN,env=DEPOT_TOKEN \
             --build-arg BASE_TAG=${{ env.BASE_TAG }} \
             --build-arg BUILD_TARGET=engine \
             --build-arg BUILD_MODE=release \
