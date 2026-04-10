@@ -208,8 +208,12 @@ jobs:
 
       - name: Build via depot
         run: |
+          # The DEPOT_TOKEN is exported by depot/setup-action@v1 after OIDC auth.
+          # We pass it into the build as a BuildKit secret so sccache can use it
+          # as SCCACHE_WEBDAV_TOKEN inside the Dockerfile RUN step.
           depot build \
             --project ${{ env.DEPOT_PROJECT_ID }} \
+            --secret id=DEPOT_TOKEN,env=DEPOT_TOKEN \
             --build-arg BASE_TAG=${{ env.BASE_TAG }} \
             --build-arg BUILD_TARGET=${{ matrix.build_target }} \
             --build-arg BUILD_MODE=${{ env.BUILD_MODE }} \
