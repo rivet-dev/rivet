@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.10.0
 # Base image built from: engine/docker/builder-base/linux-musl.Dockerfile
 # Rebuild base: scripts/docker-builder-base/build-push.sh linux-musl --push
-FROM ghcr.io/rivet-dev/rivet/builder-base-linux-musl:TODO AS base
+FROM ghcr.io/rivet-dev/rivet/builder-base-linux-musl:9a730d455 AS base
 
 ARG BUILD_FRONTEND=true
 ARG VITE_APP_API_URL=__SAME__

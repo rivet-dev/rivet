@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.10.0
 # Base image built from: engine/docker/builder-base/osxcross.Dockerfile
 # Rebuild base: scripts/docker-builder-base/build-push.sh osxcross --push
-FROM ghcr.io/rivet-dev/rivet/builder-base-osxcross:TODO
+FROM ghcr.io/rivet-dev/rivet/builder-base-osxcross:9a730d455
 
 # aarch64-specific cross-compilation env
 ENV BINDGEN_EXTRA_CLANG_ARGS_aarch64_apple_darwin="--sysroot=/root/osxcross/target/SDK/MacOSX11.3.sdk -isystem /root/osxcross/target/SDK/MacOSX11.3.sdk/usr/include" \

@@ -1,15 +1,15 @@
 # syntax=docker/dockerfile:1.10.0
 # Base image built from: engine/docker/builder-base/linux-musl.Dockerfile
 # Rebuild base: scripts/docker-builder-base/build-push.sh linux-musl --push
-FROM ghcr.io/rivet-dev/rivet/builder-base-linux-musl:TODO AS base
+FROM ghcr.io/rivet-dev/rivet/builder-base-linux-musl:9a730d455 AS base
 
 ARG BUILD_FRONTEND=true
 ARG VITE_APP_API_URL=__SAME__
 
-ENV CC_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-gcc \
-    CXX_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-g++ \
-    AR_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-ar \
-    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-unknown-linux-musl-gcc \
+ENV CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc \
+    CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++ \
+    AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc \
     RUSTFLAGS="--cfg tokio_unstable -C target-feature=+crt-static -C link-arg=-static-libgcc"
 
 WORKDIR /build

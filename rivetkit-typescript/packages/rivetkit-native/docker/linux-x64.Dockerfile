@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.10.0
 # Base image built from: engine/docker/builder-base/linux-gnu.Dockerfile
 # Rebuild base: scripts/docker-builder-base/build-push.sh linux-gnu --push
-FROM ghcr.io/rivet-dev/rivet/builder-base-linux-gnu:TODO
+FROM ghcr.io/rivet-dev/rivet/builder-base-linux-gnu:9a730d455
 
 WORKDIR /build
 COPY . .

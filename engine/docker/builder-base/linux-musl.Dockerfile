@@ -28,9 +28,9 @@ RUN wget -q https://github.com/cross-tools/musl-cross/releases/latest/download/x
     tar -xf x86_64-unknown-linux-musl.tar.xz -C /opt/ && \
     rm x86_64-unknown-linux-musl.tar.xz
 
-RUN wget -q https://github.com/AerynOS/musl-cross/releases/download/toolchains/aarch64-unknown-linux-musl.tar.xz && \
-    tar -xf aarch64-unknown-linux-musl.tar.xz -C /opt/ && \
-    rm aarch64-unknown-linux-musl.tar.xz
+RUN wget -q https://musl.cc/aarch64-linux-musl-cross.tgz && \
+    tar -xzf aarch64-linux-musl-cross.tgz -C /opt/ && \
+    rm aarch64-linux-musl-cross.tgz
 
 RUN rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 
@@ -45,7 +45,7 @@ RUN wget https://www.openssl.org/source/openssl-$SSL_VER.tar.gz \
     && cd .. \
     && rm -rf openssl-$SSL_VER*
 
-ENV PATH="/opt/x86_64-unknown-linux-musl/bin:/opt/aarch64-unknown-linux-musl/bin:$PATH" \
+ENV PATH="/opt/x86_64-unknown-linux-musl/bin:/opt/aarch64-linux-musl-cross/bin:$PATH" \
     LIBCLANG_PATH=/usr/lib/llvm-14/lib \
     CLANG_PATH=/usr/bin/clang-14 \
     CARGO_INCREMENTAL=0 \
