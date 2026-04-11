@@ -1,0 +1,15 @@
+{
+	"name": "preview-publish",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"check-types": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/node": "^24.3.0"
+	},
+	"dependencies": {
+		"execa": "^8.0.1"
+	}
+}

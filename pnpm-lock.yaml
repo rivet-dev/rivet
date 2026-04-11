@@ -71,25 +71,6 @@ importers:
 
   engine: {}
 
-  self-host/compose/template:
-    dependencies:
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
-      js-yaml:
-        specifier: ^4.1.0
-        version: 4.1.1
-      tsx:
-        specifier: ^4.20.5
-        version: 4.21.0
-    devDependencies:
-      '@types/node':
-        specifier: ^20.19.13
-        version: 20.19.13
-      typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
-
   engine/sdks/typescript/api-full:
     dependencies:
       form-data:
@@ -4698,6 +4679,16 @@ importers:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
+  scripts/preview-publish:
+    dependencies:
+      execa:
+        specifier: ^8.0.1
+        version: 8.0.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.7.1
+
   scripts/release:
     dependencies:
       commander:
@@ -4728,6 +4719,25 @@ importers:
       tsx:
         specifier: ^4.20.5
         version: 4.21.0
+
+  self-host/compose/template:
+    dependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.1.1
+      tsx:
+        specifier: ^4.20.5
+        version: 4.21.0
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.13
+        version: 20.19.13
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
 
   shared/typescript/virtual-websocket:
     devDependencies:

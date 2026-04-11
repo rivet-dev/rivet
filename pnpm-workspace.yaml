@@ -14,6 +14,7 @@ packages:
   - frontend/packages/shared-data/
   - rivetkit-typescript/packages/*
   - rivetkit-swift/examples/*/server
+  - scripts/preview-publish
   - scripts/release
   - scripts/tests
   - shared/typescript/*

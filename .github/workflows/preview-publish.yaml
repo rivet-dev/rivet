@@ -188,12 +188,17 @@ jobs:
             artifact: rivet-engine-aarch64-apple-darwin
             upload_prefix: engine
             platform: darwin-arm64
-          - name: engine (windows-x64)
-            build_target: engine
-            docker: docker/build/windows-x64.Dockerfile
-            artifact: rivet-engine-x86_64-pc-windows-gnu.exe
-            upload_prefix: engine
-            platform: windows-x64
+          # TODO: Windows is ~13 min (MinGW ld is slow + lld link-time +
+          # static-libgcc). Disabled for preview publishes since it's the
+          # wall-clock bottleneck. Re-enable once the linker story is faster
+          # (lld-link + cargo-xwin + MSVC base image) or if we specifically
+          # need Windows engine binaries in previews.
+          # - name: engine (windows-x64)
+          #   build_target: engine
+          #   docker: docker/build/windows-x64.Dockerfile
+          #   artifact: rivet-engine-x86_64-pc-windows-gnu.exe
+          #   upload_prefix: engine
+          #   platform: windows-x64
     runs-on: depot-ubuntu-24.04-8
     permissions:
       contents: read
@@ -205,8 +210,6 @@ jobs:
           lfs: true
 
       - uses: depot/setup-action@v1
-        with:
-          oidc: true
 
       # depot build's remote builder needs auth to pull from ghcr.io.
       # docker login here puts creds in ~/.docker/config.json which depot
@@ -215,9 +218,15 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Build via depot
+        env:
+          DEPOT_TOKEN: ${{ secrets.DEPOT_TOKEN }}
         run: |
+          # DEPOT_TOKEN is a depot_project_* token passed as a BuildKit secret.
+          # The build Dockerfiles mount it as SCCACHE_WEBDAV_TOKEN so sccache
+          # can write to https://cache.depot.dev for this project.
           depot build \
             --project ${{ env.DEPOT_PROJECT_ID }} \
+            --secret id=DEPOT_TOKEN,env=DEPOT_TOKEN \
             --build-arg BASE_TAG=${{ env.BASE_TAG }} \
             --build-arg BUILD_TARGET=${{ matrix.build_target }} \
             --build-arg BUILD_MODE=${{ env.BUILD_MODE }} \
@@ -321,198 +330,17 @@ jobs:
 
       - name: Set pre-release version on all packages
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-
-          # Update all workspace packages.
-          node -e "
-            const fs = require('fs');
-            const path = require('path');
-            const { execSync } = require('child_process');
-
-            const pkgs = JSON.parse(execSync('pnpm -r list --json').toString());
-
-            const SKIP = new Set([
-              '@rivetkit/shared-data',
-              '@rivetkit/engine-frontend',
-              '@rivetkit/mcp-hub',
-            ]);
-
-            for (const pkg of pkgs) {
-              if (pkg.private) continue;
-              if (SKIP.has(pkg.name)) continue;
-              if (!pkg.name.startsWith('@rivetkit/') && pkg.name !== 'rivetkit') continue;
-
-              const pkgJsonPath = path.join(pkg.path, 'package.json');
-              const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
-              pkgJson.version = '${VERSION}';
-
-              for (const depType of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
-                if (!pkgJson[depType]) continue;
-                for (const [dep, ver] of Object.entries(pkgJson[depType])) {
-                  if (String(ver).startsWith('workspace:') && (dep.startsWith('@rivetkit/') || dep === 'rivetkit')) {
-                    pkgJson[depType][dep] = '${VERSION}';
-                  }
-                }
-              }
-
-              fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, '\t') + '\n');
-              console.log('Updated', pkg.name, '->', '${VERSION}');
-            }
-          "
-
-          # Update native platform packages and add optionalDependencies.
-          NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
-          for dir in ${NATIVE_DIR}/npm/*/; do
-            if [ -f "${dir}package.json" ]; then
-              node -e "
-                const fs = require('fs');
-                const pkg = JSON.parse(fs.readFileSync('${dir}package.json', 'utf8'));
-                pkg.version = '${VERSION}';
-                fs.writeFileSync('${dir}package.json', JSON.stringify(pkg, null, '\t') + '\n');
-              "
-            fi
-          done
-
-          node -e "
-            const fs = require('fs');
-            const path = require('path');
-            const pkg = JSON.parse(fs.readFileSync('${NATIVE_DIR}/package.json', 'utf8'));
-            const npmDirs = fs.readdirSync('${NATIVE_DIR}/npm').filter(d =>
-              fs.statSync(path.join('${NATIVE_DIR}/npm', d)).isDirectory() &&
-              fs.existsSync(path.join('${NATIVE_DIR}/npm', d, 'package.json'))
-            );
-            pkg.optionalDependencies = pkg.optionalDependencies || {};
-            for (const dir of npmDirs) {
-              const platPkg = JSON.parse(fs.readFileSync(path.join('${NATIVE_DIR}/npm', dir, 'package.json'), 'utf8'));
-              pkg.optionalDependencies[platPkg.name] = '${VERSION}';
-            }
-            fs.writeFileSync('${NATIVE_DIR}/package.json', JSON.stringify(pkg, null, '\t') + '\n');
-          "
-
-          # Update engine SDK packages.
-          for dir in engine/sdks/typescript/*/; do
-            if [ -f "${dir}package.json" ]; then
-              node -e "
-                const fs = require('fs');
-                const pkg = JSON.parse(fs.readFileSync('${dir}package.json', 'utf8'));
-                if (pkg.private) process.exit(0);
-                pkg.version = '${VERSION}';
-                for (const depType of ['dependencies', 'devDependencies', 'peerDependencies']) {
-                  if (!pkg[depType]) continue;
-                  for (const [dep, ver] of Object.entries(pkg[depType])) {
-                    if (String(ver).startsWith('workspace:') && (dep.startsWith('@rivetkit/') || dep === 'rivetkit')) {
-                      pkg[depType][dep] = '${VERSION}';
-                    }
-                  }
-                }
-                fs.writeFileSync('${dir}package.json', JSON.stringify(pkg, null, '\t') + '\n');
-                console.log('Updated', pkg.name, '->', '${VERSION}');
-              "
-            fi
-          done
-
-          # Update shared/typescript packages.
-          for dir in shared/typescript/*/; do
-            if [ -f "${dir}package.json" ]; then
-              node -e "
-                const fs = require('fs');
-                const pkg = JSON.parse(fs.readFileSync('${dir}package.json', 'utf8'));
-                if (pkg.private) process.exit(0);
-                pkg.version = '${VERSION}';
-                for (const depType of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
-                  if (!pkg[depType]) continue;
-                  for (const [dep, ver] of Object.entries(pkg[depType])) {
-                    if (String(ver).startsWith('workspace:') && (dep.startsWith('@rivetkit/') || dep === 'rivetkit')) {
-                      pkg[depType][dep] = '${VERSION}';
-                    }
-                  }
-                }
-                fs.writeFileSync('${dir}package.json', JSON.stringify(pkg, null, '\t') + '\n');
-                console.log('Updated', pkg.name, '->', '${VERSION}');
-              "
-            fi
-          done
+          pnpm exec tsx scripts/preview-publish/bump-versions.ts \
+            --version "${{ steps.version.outputs.version }}"
 
       - name: Publish all packages to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          set +e
-          NPM_TAG="${{ steps.version.outputs.tag }}"
-          VERSION="${{ steps.version.outputs.version }}"
-
-          # Build the publish list by reading each package.json. Stored as
-          # `<name>|<abs_dir>` lines. We read names via node before cd-ing
-          # (which avoids issues with require resolving absolute paths).
-          PKG_LIST=$(mktemp)
-
-          add_pkg() {
-            local dir="$1"
-            [ -f "${dir}/package.json" ] || return
-            local info
-            info=$(node -e "
-              const p = require('$PWD/${dir}/package.json');
-              if (p.private) process.exit(1);
-              process.stdout.write(p.name + '|' + '${dir}');
-            ") || return
-            echo "$info" >> "$PKG_LIST"
-          }
-
-          # Native platform packages (must publish before the meta package).
-          for d in rivetkit-typescript/packages/rivetkit-native/npm/*/; do
-            add_pkg "${d%/}"
-          done
-
-          # Workspace packages via pnpm.
-          node -e "
-            const { execSync } = require('child_process');
-            const path = require('path');
-            const pkgs = JSON.parse(execSync('pnpm -r list --json').toString());
-            const SKIP = new Set(['@rivetkit/shared-data','@rivetkit/engine-frontend','@rivetkit/mcp-hub']);
-            for (const p of pkgs) {
-              if (p.private) continue;
-              if (SKIP.has(p.name)) continue;
-              if (!p.name.startsWith('@rivetkit/') && p.name !== 'rivetkit') continue;
-              // Relative path from repo root.
-              const rel = path.relative('$PWD', p.path);
-              console.log(p.name + '|' + rel);
-            }
-          " >> "$PKG_LIST"
-
-          # Engine SDK + shared typescript packages.
-          for d in engine/sdks/typescript/*/ shared/typescript/*/; do
-            add_pkg "${d%/}"
-          done
-
-          TOTAL=$(wc -l < "$PKG_LIST")
-          echo "==> Publishing ${TOTAL} packages serially as ${VERSION}"
-          echo ""
-
-          PASS=0
-          FAIL=0
-          # Read into an array first so the while loop's stdin is closed and
-          # npm can't consume lines from PKG_LIST on errors.
-          mapfile -t LINES < "$PKG_LIST"
-          for line in "${LINES[@]}"; do
-            name="${line%%|*}"
-            dir="${line#*|}"
-            [ -z "$name" ] && continue
-            printf '  %-50s ' "$name"
-            if (cd "$dir" && npm publish --access public --tag "$NPM_TAG" </dev/null) >/tmp/publish.log 2>&1; then
-              echo "✓"
-              PASS=$((PASS + 1))
-            else
-              # Extract the actual error message (last meaningful line).
-              ERR=$(grep -E "npm error (code|E|[0-9]{3})" /tmp/publish.log | head -2 | tr '\n' ' ' || true)
-              echo "✗ $ERR"
-              FAIL=$((FAIL + 1))
-            fi
-          done
-
-          rm -f "$PKG_LIST" /tmp/publish.log
-          echo ""
-          echo "==> ${PASS} succeeded, ${FAIL} failed"
-          # Don't fail the step on individual publish errors (e.g. already-published)
+          pnpm exec tsx scripts/preview-publish/publish-all.ts \
+            --tag "${{ steps.version.outputs.tag }}" \
+            --parallel 16 \
+            --retries 3
 
       - name: Comment on PR
         if: github.event_name == 'pull_request'
