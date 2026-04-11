@@ -336,6 +336,7 @@ program
 		].join("\n");
 
 		// Find existing comment by marker, update if present, else create.
+		// `gh api -f body=<value>` sends string fields directly (no @file needed).
 		const { stdout: commentsJson } = await $({
 			env: process.env as Record<string, string>,
 		})`gh api repos/${repo}/issues/${String(prNumber)}/comments --paginate`;
@@ -349,15 +350,13 @@ program
 			await $({
 				stdio: "inherit",
 				env: process.env as Record<string, string>,
-				input: body,
-			})`gh api repos/${repo}/issues/comments/${String(existing.id)} -X PATCH -F body=@-`;
+			})`gh api repos/${repo}/issues/comments/${String(existing.id)} -X PATCH -f ${`body=${body}`}`;
 		} else {
 			log.info("creating new PR comment");
 			await $({
 				stdio: "inherit",
 				env: process.env as Record<string, string>,
-				input: body,
-			})`gh api repos/${repo}/issues/${String(prNumber)}/comments -F body=@-`;
+			})`gh api repos/${repo}/issues/${String(prNumber)}/comments -f ${`body=${body}`}`;
 		}
 	});
 

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { $ } from "execa";
@@ -244,6 +244,5 @@ export function writeContextToGithubOutput(ctx: PublishContext): void {
 	];
 	if (ctx.prNumber !== undefined) lines.push(`pr_number=${ctx.prNumber}`);
 	// Append (do not overwrite) in case other steps also wrote to GITHUB_OUTPUT.
-	const { appendFileSync } = require("node:fs") as typeof import("node:fs");
 	appendFileSync(path, `${lines.join("\n")}\n`);
 }
