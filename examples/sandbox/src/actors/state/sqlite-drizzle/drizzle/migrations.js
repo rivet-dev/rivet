@@ -1,10 +1,15 @@
-import journal from './meta/_journal.json';
-import m0000 from './0000_left_wrecking_crew.sql';
+import journal from './meta/_journal.json' with { type: 'json' };
 
-  export default {
-    journal,
-    migrations: {
-      m0000
-    }
+const m0000 = `CREATE TABLE \`todos\` (
+\t\`id\` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+\t\`title\` text NOT NULL,
+\t\`completed\` integer DEFAULT 0,
+\t\`created_at\` integer NOT NULL
+);`;
+
+export default {
+  journal,
+  migrations: {
+    m0000
   }
-  
+}

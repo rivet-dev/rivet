@@ -1078,7 +1078,10 @@ export class EngineActorDriver implements ActorDriver {
 			requestId: idToStr(requestId),
 		});
 		if (path === PATH_CONNECT) {
-			return true;
+			// Temporarily disable HWS for action/event connections.
+			// The gateway tunnel ping is not handled for serverless TS
+			// runners, causing ws.downstream_closed every ~30s.
+			return false;
 		} else if (
 			path === PATH_WEBSOCKET_BASE ||
 			path.startsWith(PATH_WEBSOCKET_PREFIX)

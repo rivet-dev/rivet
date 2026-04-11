@@ -11,10 +11,12 @@ COPY shared/typescript/ ./shared/typescript/
 
 RUN pnpm install --frozen-lockfile
 RUN mkdir -p rivetkit-openapi rivetkit-asyncapi
-RUN pnpm build --filter=sandbox
-COPY examples/sandbox/public ./examples/sandbox/dist/public
+RUN pnpm build --filter=rivetkit...
+RUN pnpm --filter=sandbox run build
 
 WORKDIR /app/examples/sandbox
 
 EXPOSE 8080
-CMD ["pnpm", "start"]
+ENV PORT=8080
+
+CMD ["sh", "-c", "if [ \"$SANDBOX_MODE\" = \"serverless\" ]; then srvx dist/server.js; else tsx src/server-runner.ts; fi"]
