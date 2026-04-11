@@ -5,6 +5,7 @@ pub mod metrics_aggregator;
 pub mod runner;
 pub mod runner2;
 pub mod runner_pool;
+pub mod runner_pool_backfill;
 pub mod runner_pool_error_tracker;
 pub mod runner_pool_metadata_poller;
 pub mod serverless;

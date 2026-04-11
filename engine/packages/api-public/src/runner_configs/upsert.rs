@@ -12,7 +12,6 @@ use rivet_api_util::request_remote_datacenter;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::utils;
 use crate::ctx::ApiCtx;
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -57,34 +56,6 @@ async fn upsert_inner(
 	mut body: UpsertRequest,
 ) -> Result<UpsertResponse> {
 	ctx.auth().await?;
-
-	tracing::debug!(runner_name = ?path.runner_name, datacenters_count = body.datacenters.len(), "starting upsert");
-
-	// Resolve namespace
-	let namespace = ctx
-		.op(namespace::ops::resolve_for_name_global::Input {
-			name: query.namespace.clone(),
-		})
-		.await?
-		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
-
-	// Store serverless config before processing (since we'll remove from body.datacenters)
-	let serverless_config = body
-		.datacenters
-		.iter()
-		.filter_map(|(_dc_name, runner_config)| {
-			if let rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Serverless {
-				url,
-				headers,
-				..
-			} = &runner_config.kind
-			{
-				Some((url.clone(), headers.clone().unwrap_or_default()))
-			} else {
-				None
-			}
-		})
-		.next();
 
 	let dcs = ctx
 		.config()
@@ -161,35 +132,6 @@ async fn upsert_inner(
 		.await?
 		.into_iter()
 		.any(|endpoint_config_changed| endpoint_config_changed);
-
-	// Update runner metadata
-	//
-	// This allows us to populate the actor names immediately upon configuring a serverless runner
-	if let Some((url, metadata_headers)) = serverless_config {
-		if any_endpoint_config_changed {
-			tracing::debug!("endpoint config changed, refreshing metadata");
-			if let Err(err) = utils::refresh_runner_config_metadata(
-				ctx.clone(),
-				namespace.namespace_id,
-				path.runner_name.clone(),
-				url,
-				metadata_headers,
-			)
-			.await
-			{
-				tracing::warn!(?err, runner_name=?path.runner_name, "failed to refresh runner config metadata");
-			}
-		} else {
-			tracing::debug!("endpoint config unchanged, skipping metadata refresh");
-		}
-	}
-
-	pegboard::utils::purge_runner_config_caches(
-		ctx.cache(),
-		namespace.namespace_id,
-		&path.runner_name,
-	)
-	.await?;
 
 	Ok(UpsertResponse {
 		endpoint_config_changed: any_endpoint_config_changed,

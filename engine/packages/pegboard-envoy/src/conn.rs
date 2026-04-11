@@ -68,7 +68,7 @@ pub async fn init_conn(
 		.observe(start.elapsed().as_secs_f64());
 
 	let udb = ctx.udb()?;
-	let (is_serverless, mut missed_commands) = tokio::try_join!(
+	let (is_serverless, mut missed_commands, _) = tokio::try_join!(
 		// Send init packet as soon as possible
 		async {
 			let pool_res = ctx
@@ -279,6 +279,12 @@ pub async fn init_conn(
 			}
 		})
 		.custom_instrument(tracing::info_span!("envoy_init_tx")),
+		ctx.op(
+			pegboard::ops::runner_config::ensure_normal_if_missing::Input {
+				namespace_id: namespace.namespace_id,
+				name: pool_name.clone(),
+			}
+		),
 	)?;
 
 	// Send missed commands (must be after init packet)

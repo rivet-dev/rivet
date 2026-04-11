@@ -150,4 +150,5 @@ define_keys! {
 	(122, CACHE, "cache"),
 	(123, CHANGELOG, "changelog"),
 	(124, EPOXY_V2, "epoxy_v2"),
+	(125, GLOBAL, "global"),
 }

@@ -28,7 +28,7 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 	]
 	.concat();
 
-	let runner_configs = if !runner_names.is_empty() {
+	let (runner_configs, cursor) = if !runner_names.is_empty() {
 		let runner_configs = ctx
 			.op(pegboard::ops::runner_config::get::Input {
 				runners: runner_names
@@ -42,7 +42,7 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 		(
 			runner_configs
 				.into_iter()
-				.map(|c| (c.name, c.config))
+				.map(|c| (c.name, c.config, c.protocol_version))
 				.collect::<Vec<_>>(),
 			None,
 		)
@@ -76,48 +76,49 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 
 		let cursor = runner_configs
 			.last()
-			.map(|(name, config)| format!("{}:{}", runner_config_variant(&config), name));
+			.map(|c| format!("{}:{}", runner_config_variant(&c.config), c.name));
 
-		(runner_configs, cursor)
+		(
+			runner_configs
+				.into_iter()
+				.map(|c| (c.name, c.config, c.protocol_version))
+				.collect::<Vec<_>>(),
+			cursor,
+		)
 	};
 
 	// Fetch pool errors
-	let runner_pool_errors: HashMap<String, _> = if !runner_configs.0.is_empty() {
+	let runner_pool_errors = if !runner_configs.is_empty() {
 		let runners = runner_configs
-			.0
 			.iter()
-			.map(|(name, _)| (namespace.namespace_id, name.clone()))
+			.map(|(name, _, _)| (namespace.namespace_id, name.clone()))
 			.collect();
 		ctx.op(pegboard::ops::runner_config::get_error::Input { runners })
 			.await?
 			.into_iter()
 			.map(|e| (e.runner_name, e.error))
-			.collect()
+			.collect::<HashMap<_, _>>()
 	} else {
 		HashMap::new()
 	};
 
-	// Build response with pool errors
-	let runner_configs_with_errors: HashMap<String, RunnerConfigResponse> = runner_configs
-		.0
-		.into_iter()
-		.map(|(name, config)| {
-			let runner_pool_error = runner_pool_errors.get(&name).cloned();
-			(
-				name,
-				RunnerConfigResponse {
-					config,
-					runner_pool_error,
-				},
-			)
-		})
-		.collect();
-
 	Ok(ListResponse {
-		runner_configs: runner_configs_with_errors,
-		pagination: Pagination {
-			cursor: runner_configs.1,
-		},
+		// Build response with pool errors
+		runner_configs: runner_configs
+			.into_iter()
+			.map(|(name, config, protocol_version)| {
+				let runner_pool_error = runner_pool_errors.get(&name).cloned();
+				(
+					name,
+					RunnerConfigResponse {
+						config,
+						runner_pool_error,
+						protocol_version,
+					},
+				)
+			})
+			.collect(),
+		pagination: Pagination { cursor },
 	})
 }
 

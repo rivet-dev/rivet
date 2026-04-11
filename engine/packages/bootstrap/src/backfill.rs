@@ -28,6 +28,19 @@ pub async fn run(ctx: &StandaloneCtx) -> Result<()> {
 			.await?;
 	}
 
+	// Runner config backfill
+	if !is_complete(
+		ctx,
+		pegboard::workflows::runner_pool_backfill::BACKFILL_NAME,
+	)
+	.await?
+	{
+		ctx.workflow(pegboard::workflows::runner_pool_backfill::Input {})
+			.unique()
+			.dispatch()
+			.await?;
+	}
+
 	Ok(())
 }
 

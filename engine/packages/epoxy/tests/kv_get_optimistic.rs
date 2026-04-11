@@ -31,6 +31,7 @@ async fn get_with_behavior(
 		replica_id,
 		key: key.to_vec(),
 		caching_behavior,
+		save_empty: false,
 	})
 	.await
 	.unwrap()
