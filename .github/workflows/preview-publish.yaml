@@ -116,89 +116,33 @@ env:
   DEPOT_PROJECT_ID: 1rcpv5rn8n
 
 jobs:
-  build:
-    name: "Build ${{ matrix.name }}"
+  # rivetkit-native N-API addon: 6 platforms (gnu + musl + darwin, no windows).
+  # Windows is excluded because napi-rs does not support windows-gnu and we
+  # don't ship a cargo-xwin MSVC base image.
+  build-rivetkit-native:
+    name: "Build rivetkit-native (${{ matrix.platform }})"
     strategy:
       fail-fast: false
       matrix:
         include:
-          # rivetkit-native addon: 6 platforms (gnu + musl + darwin, no windows).
-          # Windows is excluded because napi-rs does not support windows-gnu and
-          # we don't ship a cargo-xwin MSVC base image.
-          - name: rivetkit-native (linux-x64-gnu)
-            build_target: rivetkit-native
+          - platform: linux-x64-gnu
             docker: docker/build/linux-x64-gnu.Dockerfile
             artifact: rivetkit-native.linux-x64-gnu.node
-            upload_prefix: native
-            platform: linux-x64-gnu
-          - name: rivetkit-native (linux-x64-musl)
-            build_target: rivetkit-native
+          - platform: linux-x64-musl
             docker: docker/build/linux-x64-musl.Dockerfile
             artifact: rivetkit-native.linux-x64-musl.node
-            upload_prefix: native
-            platform: linux-x64-musl
-          - name: rivetkit-native (linux-arm64-gnu)
-            build_target: rivetkit-native
+          - platform: linux-arm64-gnu
             docker: docker/build/linux-arm64-gnu.Dockerfile
             artifact: rivetkit-native.linux-arm64-gnu.node
-            upload_prefix: native
-            platform: linux-arm64-gnu
-          - name: rivetkit-native (linux-arm64-musl)
-            build_target: rivetkit-native
+          - platform: linux-arm64-musl
             docker: docker/build/linux-arm64-musl.Dockerfile
             artifact: rivetkit-native.linux-arm64-musl.node
-            upload_prefix: native
-            platform: linux-arm64-musl
-          - name: rivetkit-native (darwin-x64)
-            build_target: rivetkit-native
+          - platform: darwin-x64
             docker: docker/build/darwin-x64.Dockerfile
             artifact: rivetkit-native.darwin-x64.node
-            upload_prefix: native
-            platform: darwin-x64
-          - name: rivetkit-native (darwin-arm64)
-            build_target: rivetkit-native
+          - platform: darwin-arm64
             docker: docker/build/darwin-arm64.Dockerfile
             artifact: rivetkit-native.darwin-arm64.node
-            upload_prefix: native
-            platform: darwin-arm64
-          # engine binary: 5 platforms (musl for Linux, darwin, windows-gnu).
-          # linux-arm64-gnu is skipped because the base image does not have
-          # aarch64 OpenSSL; use linux-arm64-musl for ARM Linux engine.
-          - name: engine (linux-x64-musl)
-            build_target: engine
-            docker: docker/build/linux-x64-musl.Dockerfile
-            artifact: rivet-engine-x86_64-unknown-linux-musl
-            upload_prefix: engine
-            platform: linux-x64-musl
-          - name: engine (linux-arm64-musl)
-            build_target: engine
-            docker: docker/build/linux-arm64-musl.Dockerfile
-            artifact: rivet-engine-aarch64-unknown-linux-musl
-            upload_prefix: engine
-            platform: linux-arm64-musl
-          - name: engine (darwin-x64)
-            build_target: engine
-            docker: docker/build/darwin-x64.Dockerfile
-            artifact: rivet-engine-x86_64-apple-darwin
-            upload_prefix: engine
-            platform: darwin-x64
-          - name: engine (darwin-arm64)
-            build_target: engine
-            docker: docker/build/darwin-arm64.Dockerfile
-            artifact: rivet-engine-aarch64-apple-darwin
-            upload_prefix: engine
-            platform: darwin-arm64
-          # TODO: Windows is ~13 min (MinGW ld is slow + lld link-time +
-          # static-libgcc). Disabled for preview publishes since it's the
-          # wall-clock bottleneck. Re-enable once the linker story is faster
-          # (lld-link + cargo-xwin + MSVC base image) or if we specifically
-          # need Windows engine binaries in previews.
-          # - name: engine (windows-x64)
-          #   build_target: engine
-          #   docker: docker/build/windows-x64.Dockerfile
-          #   artifact: rivet-engine-x86_64-pc-windows-gnu.exe
-          #   upload_prefix: engine
-          #   platform: windows-x64
     runs-on: depot-ubuntu-24.04-8
     permissions:
       contents: read
@@ -228,14 +172,14 @@ jobs:
             --project ${{ env.DEPOT_PROJECT_ID }} \
             --secret id=DEPOT_TOKEN,env=DEPOT_TOKEN \
             --build-arg BASE_TAG=${{ env.BASE_TAG }} \
-            --build-arg BUILD_TARGET=${{ matrix.build_target }} \
+            --build-arg BUILD_TARGET=rivetkit-native \
             --build-arg BUILD_MODE=${{ env.BUILD_MODE }} \
             --build-arg BUILD_FRONTEND=false \
             -f ${{ matrix.docker }} \
-            -t builder-${{ matrix.build_target }}-${{ matrix.platform }} \
+            -t builder-rivetkit-native-${{ matrix.platform }} \
             --load \
             .
-          CONTAINER_ID=$(docker create builder-${{ matrix.build_target }}-${{ matrix.platform }})
+          CONTAINER_ID=$(docker create builder-rivetkit-native-${{ matrix.platform }})
           mkdir -p artifacts
           docker cp "$CONTAINER_ID:/artifacts/${{ matrix.artifact }}" artifacts/
           docker rm "$CONTAINER_ID"
@@ -243,14 +187,83 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.upload_prefix }}-${{ matrix.platform }}
+          name: native-${{ matrix.platform }}
+          path: artifacts/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  # engine binary: 4 platforms (musl for Linux, darwin-x64/arm64).
+  # linux-arm64-gnu is skipped because the base image does not have aarch64
+  # OpenSSL; use linux-arm64-musl for ARM Linux engine. Windows is disabled
+  # because MinGW ld is slow (~13 min) and is the wall-clock bottleneck for
+  # preview publishes. Re-enable windows-x64 when the linker story is faster
+  # (lld-link + cargo-xwin + MSVC base image).
+  build-engine:
+    name: "Build engine (${{ matrix.platform }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64-musl
+            docker: docker/build/linux-x64-musl.Dockerfile
+            artifact: rivet-engine-x86_64-unknown-linux-musl
+          - platform: linux-arm64-musl
+            docker: docker/build/linux-arm64-musl.Dockerfile
+            artifact: rivet-engine-aarch64-unknown-linux-musl
+          - platform: darwin-x64
+            docker: docker/build/darwin-x64.Dockerfile
+            artifact: rivet-engine-x86_64-apple-darwin
+          - platform: darwin-arm64
+            docker: docker/build/darwin-arm64.Dockerfile
+            artifact: rivet-engine-aarch64-apple-darwin
+          # - platform: windows-x64
+          #   docker: docker/build/windows-x64.Dockerfile
+          #   artifact: rivet-engine-x86_64-pc-windows-gnu.exe
+    runs-on: depot-ubuntu-24.04-8
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: depot/setup-action@v1
+
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build via depot
+        env:
+          DEPOT_TOKEN: ${{ secrets.DEPOT_TOKEN }}
+        run: |
+          depot build \
+            --project ${{ env.DEPOT_PROJECT_ID }} \
+            --secret id=DEPOT_TOKEN,env=DEPOT_TOKEN \
+            --build-arg BASE_TAG=${{ env.BASE_TAG }} \
+            --build-arg BUILD_TARGET=engine \
+            --build-arg BUILD_MODE=${{ env.BUILD_MODE }} \
+            --build-arg BUILD_FRONTEND=false \
+            -f ${{ matrix.docker }} \
+            -t builder-engine-${{ matrix.platform }} \
+            --load \
+            .
+          CONTAINER_ID=$(docker create builder-engine-${{ matrix.platform }})
+          mkdir -p artifacts
+          docker cp "$CONTAINER_ID:/artifacts/${{ matrix.artifact }}" artifacts/
+          docker rm "$CONTAINER_ID"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-${{ matrix.platform }}
           path: artifacts/${{ matrix.artifact }}
           if-no-files-found: error
 
   publish:
     name: "Publish"
-    needs: build
-    if: ${{ !cancelled() && needs.build.result != 'failure' }}
+    needs: [build-rivetkit-native, build-engine]
+    if: ${{ !cancelled() && needs.build-rivetkit-native.result == 'success' && needs.build-engine.result == 'success' }}
     runs-on: depot-ubuntu-24.04-8
     permissions:
       contents: read
