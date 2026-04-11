@@ -39,6 +39,7 @@
 		"@rivetkit/sqlite-wasm": "workspace:*",
 		"@rivetkit/engine-api-full": "workspace:*",
 		"@rivetkit/rivetkit-native": "workspace:*",
+		"@rivetkit/engine-cli": "workspace:*",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
 		"@clerk/shared": "3.27.1"

@@ -1,0 +1,21 @@
+{
+	"name": "@rivetkit/engine-cli-linux-arm64-musl",
+	"version": "2.2.1",
+	"description": "Rivet Engine binary for Linux arm64 musl (static)",
+	"license": "Apache-2.0",
+	"os": [
+		"linux"
+	],
+	"cpu": [
+		"arm64"
+	],
+	"libc": [
+		"musl"
+	],
+	"files": [
+		"rivet-engine"
+	],
+	"engines": {
+		"node": ">= 20.0.0"
+	}
+}
