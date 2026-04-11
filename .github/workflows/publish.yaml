@@ -423,7 +423,7 @@ jobs:
         env:
           R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
           R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
-        run: pnpm --filter=publish exec tsx src/ci/bin.ts upload-r2 --source engine-artifacts --sha ${{ needs.context.outputs.sha }}
+        run: pnpm --filter=publish exec tsx src/ci/bin.ts upload-r2 --source "$GITHUB_WORKSPACE/engine-artifacts" --sha ${{ needs.context.outputs.sha }}
 
       - name: Create Docker multi-arch manifests
         run: pnpm --filter=publish exec tsx src/ci/bin.ts docker-manifest --sha ${{ needs.context.outputs.sha }}
@@ -447,7 +447,7 @@ jobs:
           R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
         run: |
           pnpm --filter=publish exec tsx src/ci/bin.ts upload-install-scripts \
-            --scripts-dir scripts/publish/static \
+            --scripts-dir "$GITHUB_WORKSPACE/scripts/publish/static" \
             --version ${{ needs.context.outputs.version }} \
             --latest ${{ needs.context.outputs.latest }}
 
