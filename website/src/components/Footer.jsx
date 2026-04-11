@@ -36,6 +36,7 @@ const footer = {
 		{ name: "Status Page", href: "https://rivet.betteruptime.com/" },
 	],
 	resources: [
+		{ name: "Cookbooks", href: "/cookbook" },
 		{ name: "Blog", href: "/blog" },
 		{ name: "YC & Speedrun Deal", href: "/startups" },
 		{ name: "Open-Source Friends", href: "/oss-friends" },
@@ -138,7 +139,7 @@ function SmallPrint() {
 				<div className="col-span-1 min-[440px]:col-span-2 md:col-span-4 lg:col-span-1 space-y-6">
 					<img className="h-8 w-8" src={imgLogo.src} alt="Rivet" />
 					<p className="text-sm text-zinc-500">
-						The primitive for stateful workloads
+						Infrastructure for software that thinks
 					</p>
 					<div className="flex gap-4">
 						{footer.social.map((item) => (

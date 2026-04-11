@@ -3,15 +3,10 @@ import { getCollection } from 'astro:content';
 import { getImage } from 'astro:assets';
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import { RedesignedHero } from '@/components/marketing/sections/RedesignedHero';
-import { BuiltInFeatures } from '@/components/marketing/sections/BuiltInFeatures';
-import { ProblemSection } from '@/components/marketing/sections/ProblemSection';
-import { BenchmarksSection } from '@/components/marketing/sections/BenchmarksSection';
-import { CodeWalkthrough } from '@/components/marketing/sections/CodeWalkthrough';
-import { DynamicActorsSection } from '@/components/marketing/sections/DynamicActorsSection';
-import { HostingSection } from '@/components/marketing/sections/HostingSection';
-import { AgentOSSection } from '@/components/marketing/sections/AgentOSSection';
-import { IntegrationsSection } from '@/components/marketing/sections/IntegrationsSection';
+import { ProductSplitSection } from '@/components/marketing/sections/ProductSplitSection';
 import { ObservabilitySection } from '@/components/marketing/sections/ObservabilitySection';
+import { IntegrationsSection } from '@/components/marketing/sections/IntegrationsSection';
+import { HostingSection } from '@/components/marketing/sections/HostingSection';
 import { RedesignedCTA } from '@/components/marketing/sections/RedesignedCTA';
 import { ScrollObserver } from '@/components/ScrollObserver';
 
@@ -86,8 +81,8 @@ const latestChangelogTitle = latest?.data.title ?? '';
 ---
 
 <MarketingLayout
-	title="Rivet - The Primitive for Stateful Workloads"
-	description="Rivet Actors are built for AI agents, collaborative apps, and durable execution."
+	title="Rivet - Infrastructure for Software That Thinks"
+	description="Composable stateful compute for AI agents, collaborative apps, and durable execution. Actors and agentOS."
 	canonicalUrl="https://rivet.dev"
 	keywords={["actors", "stateful", "workflows", "websockets", "real-time", "backend infrastructure", "serverless", "open source", "self-hosted", "AI infrastructure", "long-running processes", "state management"]}
 >
@@ -95,14 +90,9 @@ const latestChangelogTitle = latest?.data.title ?? '';
 		<div class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
 			<main>
 				<RedesignedHero latestChangelogTitle={latestChangelogTitle} thinkingImages={thinkingImages} client:load />
-				<BuiltInFeatures client:visible />
-				<ProblemSection client:visible />
-				<!-- <DynamicActorsSection client:visible /> -->
-				<!-- <BenchmarksSection client:visible /> -->
-				<!-- <CodeWalkthrough client:visible /> -->
-				<AgentOSSection client:visible />
-				<IntegrationsSection client:visible />
+				<ProductSplitSection client:visible />
 				<ObservabilitySection client:visible />
+				<IntegrationsSection client:visible />
 				<HostingSection client:visible />
 				<RedesignedCTA client:visible />
 			</main>
