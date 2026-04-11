@@ -47,10 +47,13 @@ WORKDIR /app
 
 COPY . .
 
-# Build frontend
+# Build frontend. Use --ignore-scripts because the root postinstall runs
+# `lefthook install`, which needs a .git directory (excluded by
+# .dockerignore). lefthook is a dev-only git hook manager and has no
+# place inside the Docker build.
 RUN if [ "$BUILD_FRONTEND" = "true" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \
-        pnpm install && \
+        pnpm install --ignore-scripts && \
         if [ -n "$VITE_APP_API_URL" ]; then \
             VITE_APP_API_URL="${VITE_APP_API_URL}" npx turbo build:engine -F @rivetkit/engine-frontend; \
         else \
