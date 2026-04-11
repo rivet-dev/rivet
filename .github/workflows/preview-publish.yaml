@@ -330,14 +330,14 @@ jobs:
 
       - name: Set pre-release version on all packages
         run: |
-          pnpm exec tsx scripts/preview-publish/bump-versions.ts \
+          pnpm --filter=preview-publish exec tsx bump-versions.ts \
             --version "${{ steps.version.outputs.version }}"
 
       - name: Publish all packages to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          pnpm exec tsx scripts/preview-publish/publish-all.ts \
+          pnpm --filter=preview-publish exec tsx publish-all.ts \
             --tag "${{ steps.version.outputs.tag }}" \
             --parallel 16 \
             --retries 3
