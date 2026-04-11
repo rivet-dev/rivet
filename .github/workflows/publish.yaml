@@ -265,8 +265,10 @@ jobs:
         run: |
           if [ "${{ needs.context.outputs.trigger }}" = "release" ]; then
             echo "cargo_build_mode=release" >> $GITHUB_OUTPUT
+            echo "build_frontend=true" >> $GITHUB_OUTPUT
           else
             echo "cargo_build_mode=debug" >> $GITHUB_OUTPUT
+            echo "build_frontend=false" >> $GITHUB_OUTPUT
           fi
       - uses: ./.github/actions/docker-setup
         with:
@@ -283,7 +285,7 @@ jobs:
           target: engine-full
           platforms: ${{ matrix.platform }}
           build-args: |
-            BUILD_FRONTEND=true
+            BUILD_FRONTEND=${{ steps.mode.outputs.build_frontend }}
             CARGO_BUILD_MODE=${{ steps.mode.outputs.cargo_build_mode }}
       - name: Build & Push (rivetdev/engine:slim)
         uses: docker/build-push-action@v4
@@ -295,7 +297,7 @@ jobs:
           target: engine-slim
           platforms: ${{ matrix.platform }}
           build-args: |
-            BUILD_FRONTEND=true
+            BUILD_FRONTEND=${{ steps.mode.outputs.build_frontend }}
             CARGO_BUILD_MODE=${{ steps.mode.outputs.cargo_build_mode }}
 
   # ---------------------------------------------------------------------------
