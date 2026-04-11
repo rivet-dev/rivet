@@ -93,3 +93,4 @@ examples/*/public/
 
 # Sandbox deploy bundle (built by scripts/docker/build-sandbox.sh)
 .sandbox-deploy/
+.claude/scheduled_tasks.lock
