@@ -5,10 +5,10 @@
 	"type": "module",
 	"packageManager": "pnpm@10.13.1",
 	"scripts": {
-		"dev": "tsx --watch src/server.ts",
+		"dev": "vite",
 		"check-types": "echo 'skipped - workflow history types broken'",
-		"build": "echo 'no build step - running via tsx'",
-		"start": "tsx src/server.ts",
+		"build": "vite build --mode server",
+		"start": "tsx src/server-runner.ts",
 		"benchmark": "tsx scripts/benchmark.ts",
 		"db:generate": "find src/actors -name drizzle.config.ts -exec drizzle-kit generate --config {} \\;"
 	},

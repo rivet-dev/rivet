@@ -1,10 +1,11 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import journal from './meta/_journal.json' with { type: 'json' };
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const m0000 = readFileSync(join(__dirname, '0000_left_wrecking_crew.sql'), 'utf-8');
+const m0000 = `CREATE TABLE \`todos\` (
+\t\`id\` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+\t\`title\` text NOT NULL,
+\t\`completed\` integer DEFAULT 0,
+\t\`created_at\` integer NOT NULL
+);`;
 
 export default {
   journal,
