@@ -11,41 +11,19 @@
  *   2. Local `rivet-engine` binary next to this package (dev builds)
  *   3. The platform-specific `@rivetkit/engine-cli-<platform>` npm package
  */
-const { existsSync, readFileSync } = require("node:fs");
+const { existsSync } = require("node:fs");
 const { dirname, join } = require("node:path");
-
-/** Detect if we're on Linux musl or glibc. */
-function isMusl() {
-	if (!process.report || typeof process.report.getReport !== "function") {
-		try {
-			const lddPath = require("node:child_process")
-				.execSync("which ldd")
-				.toString()
-				.trim();
-			return readFileSync(lddPath, "utf8").includes("musl");
-		} catch {
-			return true;
-		}
-	}
-	const { glibcVersionRuntime } = process.report.getReport().header;
-	return !glibcVersionRuntime;
-}
 
 /** Returns the name of the platform-specific npm package for the current host. */
 function getPlatformPackageName() {
 	const { platform, arch } = process;
 	switch (platform) {
 		case "linux":
-			if (arch === "x64") {
-				return isMusl()
-					? "@rivetkit/engine-cli-linux-x64-musl"
-					: "@rivetkit/engine-cli-linux-x64-gnu";
-			}
-			if (arch === "arm64") {
-				return isMusl()
-					? "@rivetkit/engine-cli-linux-arm64-musl"
-					: "@rivetkit/engine-cli-linux-arm64-gnu";
-			}
+			// Engine is statically linked against musl, so the single musl
+			// build runs on both Alpine/musl and glibc hosts. We only publish
+			// the musl variant and every linux host maps to it.
+			if (arch === "x64") return "@rivetkit/engine-cli-linux-x64-musl";
+			if (arch === "arm64") return "@rivetkit/engine-cli-linux-arm64-musl";
 			break;
 		case "darwin":
 			if (arch === "x64") return "@rivetkit/engine-cli-darwin-x64";

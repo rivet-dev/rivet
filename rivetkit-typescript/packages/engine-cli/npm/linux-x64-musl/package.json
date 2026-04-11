@@ -9,9 +9,6 @@
 	"cpu": [
 		"x64"
 	],
-	"libc": [
-		"musl"
-	],
 	"files": [
 		"rivet-engine"
 	],
