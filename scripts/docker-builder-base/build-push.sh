@@ -14,8 +14,8 @@ set -e
 # Images are tagged with the git commit SHA that built them:
 #   ghcr.io/rivet-dev/rivet/builder-base-osxcross:<sha>
 #
-# After pushing, update BASE_TAG in .github/workflows/preview-publish.yaml
-# and .github/workflows/release.yaml to reference the new tag.
+# After pushing, update BASE_TAG in .github/workflows/publish.yaml
+# to reference the new tag.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"

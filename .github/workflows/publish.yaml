@@ -1,0 +1,496 @@
+# =============================================================================
+# Publish
+# =============================================================================
+#
+# Single workflow for preview publish (PRs + main pushes) AND release cuts
+# (workflow_dispatch). The build, npm publish, R2 upload, and Docker manifest
+# steps run identically for all three triggers. Only the npm dist-tag,
+# release-specific retagging, git tag, and GitHub release differ.
+#
+# Triggers and mapping:
+#   pull_request      → trigger=pr      npm_tag=pr-N   build_mode=debug
+#   push: main        → trigger=main    npm_tag=main   build_mode=debug
+#   workflow_dispatch → trigger=release npm_tag=latest build_mode=release
+#                       (npm_tag becomes `rc` if version contains `-rc.`, or
+#                        `next` if `latest=false`)
+#
+# See .agent/specs/publish-flow-unification.md for the design.
+# ============================================================================
+
+name: publish
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 2.5.0 or 2.5.0-rc.1)"
+        required: true
+        type: string
+      latest:
+        description: "Tag as @latest"
+        required: true
+        type: boolean
+        default: true
+
+env:
+  # Base image tag pinned here. Update after rebuilding base images with
+  # scripts/docker-builder-base/build-push.sh all --push.
+  BASE_TAG: 0e33ceb98
+  # Depot project ID (rivet-dev/rivet-engine).
+  DEPOT_PROJECT_ID: 1rcpv5rn8n
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # context — resolve PublishContext once, pin as job outputs
+  # ---------------------------------------------------------------------------
+  context:
+    name: "Context"
+    runs-on: ubuntu-24.04
+    outputs:
+      trigger: ${{ steps.ctx.outputs.trigger }}
+      version: ${{ steps.ctx.outputs.version }}
+      npm_tag: ${{ steps.ctx.outputs.npm_tag }}
+      sha: ${{ steps.ctx.outputs.sha }}
+      latest: ${{ steps.ctx.outputs.latest }}
+      pr_number: ${{ steps.ctx.outputs.pr_number }}
+      is_fork: ${{ steps.ctx.outputs.is_fork }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - name: Install publish scripts
+        run: pnpm install --frozen-lockfile --filter=publish
+      - id: ctx
+        name: Resolve publish context
+        run: pnpm --filter=publish exec tsx src/ci/bin.ts context-output
+      - name: Compute is_fork flag
+        id: fork
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
+            echo "is_fork=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_fork=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ---------------------------------------------------------------------------
+  # build — matrix of 10 native/engine artifacts (11 on release for Windows)
+  # ---------------------------------------------------------------------------
+  build:
+    needs: [context]
+    name: "Build ${{ matrix.name }}"
+    if: needs.context.outputs.is_fork != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # rivetkit-native addon: 7 platforms (gnu + musl Linux, darwin,
+          # windows-msvc is produced via cargo-xwin in the base image).
+          - name: rivetkit-native (linux-x64-gnu)
+            build_target: rivetkit-native
+            docker: docker/build/linux-x64-gnu.Dockerfile
+            artifact: rivetkit-native.linux-x64-gnu.node
+            upload_prefix: native
+            platform: linux-x64-gnu
+            release_only: false
+          - name: rivetkit-native (linux-x64-musl)
+            build_target: rivetkit-native
+            docker: docker/build/linux-x64-musl.Dockerfile
+            artifact: rivetkit-native.linux-x64-musl.node
+            upload_prefix: native
+            platform: linux-x64-musl
+            release_only: false
+          - name: rivetkit-native (linux-arm64-gnu)
+            build_target: rivetkit-native
+            docker: docker/build/linux-arm64-gnu.Dockerfile
+            artifact: rivetkit-native.linux-arm64-gnu.node
+            upload_prefix: native
+            platform: linux-arm64-gnu
+            release_only: false
+          - name: rivetkit-native (linux-arm64-musl)
+            build_target: rivetkit-native
+            docker: docker/build/linux-arm64-musl.Dockerfile
+            artifact: rivetkit-native.linux-arm64-musl.node
+            upload_prefix: native
+            platform: linux-arm64-musl
+            release_only: false
+          - name: rivetkit-native (darwin-x64)
+            build_target: rivetkit-native
+            docker: docker/build/darwin-x64.Dockerfile
+            artifact: rivetkit-native.darwin-x64.node
+            upload_prefix: native
+            platform: darwin-x64
+            release_only: false
+          - name: rivetkit-native (darwin-arm64)
+            build_target: rivetkit-native
+            docker: docker/build/darwin-arm64.Dockerfile
+            artifact: rivetkit-native.darwin-arm64.node
+            upload_prefix: native
+            platform: darwin-arm64
+            release_only: false
+          # engine binary: 4 platforms for preview (musl, darwin), 5 for release
+          # (adds windows-x64). Windows is gated via release_only and skipped
+          # at the step level on preview triggers.
+          - name: engine (linux-x64-musl)
+            build_target: engine
+            docker: docker/build/linux-x64-musl.Dockerfile
+            artifact: rivet-engine-x86_64-unknown-linux-musl
+            upload_prefix: engine
+            platform: linux-x64-musl
+            release_only: false
+          - name: engine (linux-arm64-musl)
+            build_target: engine
+            docker: docker/build/linux-arm64-musl.Dockerfile
+            artifact: rivet-engine-aarch64-unknown-linux-musl
+            upload_prefix: engine
+            platform: linux-arm64-musl
+            release_only: false
+          - name: engine (darwin-x64)
+            build_target: engine
+            docker: docker/build/darwin-x64.Dockerfile
+            artifact: rivet-engine-x86_64-apple-darwin
+            upload_prefix: engine
+            platform: darwin-x64
+            release_only: false
+          - name: engine (darwin-arm64)
+            build_target: engine
+            docker: docker/build/darwin-arm64.Dockerfile
+            artifact: rivet-engine-aarch64-apple-darwin
+            upload_prefix: engine
+            platform: darwin-arm64
+            release_only: false
+          # Windows engine binary. Slow (~13 min due to MinGW ld). Only built
+          # on release triggers so preview publishes stay fast.
+          - name: engine (windows-x64)
+            build_target: engine
+            docker: docker/build/windows-x64.Dockerfile
+            artifact: rivet-engine-x86_64-pc-windows-gnu.exe
+            upload_prefix: engine
+            platform: windows-x64
+            release_only: true
+    runs-on: depot-ubuntu-24.04-8
+    permissions:
+      contents: read
+      id-token: write # required for depot OIDC trust
+      packages: read
+    steps:
+      - name: Skip release-only targets on non-release triggers
+        id: gate
+        run: |
+          if [ "${{ matrix.release_only }}" = "true" ] && [ "${{ needs.context.outputs.trigger }}" != "release" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.skip != 'true'
+        with:
+          lfs: true
+      - uses: depot/setup-action@v1
+        if: steps.gate.outputs.skip != 'true'
+      - name: Log in to ghcr.io
+        if: steps.gate.outputs.skip != 'true'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Compute build mode
+        if: steps.gate.outputs.skip != 'true'
+        id: mode
+        run: |
+          if [ "${{ needs.context.outputs.trigger }}" = "release" ]; then
+            echo "build_mode=release" >> $GITHUB_OUTPUT
+            echo "build_frontend=true" >> $GITHUB_OUTPUT
+          else
+            echo "build_mode=debug" >> $GITHUB_OUTPUT
+            echo "build_frontend=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Build via depot
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          DEPOT_TOKEN: ${{ secrets.DEPOT_TOKEN }}
+        run: |
+          depot build \
+            --project ${{ env.DEPOT_PROJECT_ID }} \
+            --secret id=DEPOT_TOKEN,env=DEPOT_TOKEN \
+            --build-arg BASE_TAG=${{ env.BASE_TAG }} \
+            --build-arg BUILD_TARGET=${{ matrix.build_target }} \
+            --build-arg BUILD_MODE=${{ steps.mode.outputs.build_mode }} \
+            --build-arg BUILD_FRONTEND=${{ steps.mode.outputs.build_frontend }} \
+            -f ${{ matrix.docker }} \
+            -t builder-${{ matrix.build_target }}-${{ matrix.platform }} \
+            --load \
+            .
+          CONTAINER_ID=$(docker create builder-${{ matrix.build_target }}-${{ matrix.platform }})
+          mkdir -p artifacts
+          docker cp "$CONTAINER_ID:/artifacts/${{ matrix.artifact }}" artifacts/
+          docker rm "$CONTAINER_ID"
+      - name: Upload artifact
+        if: steps.gate.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.upload_prefix }}-${{ matrix.platform }}
+          path: artifacts/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # docker-images — per-arch runtime images pushed to Docker Hub
+  # ---------------------------------------------------------------------------
+  docker-images:
+    needs: [context]
+    name: "Docker ${{ matrix.arch_suffix }}"
+    if: needs.context.outputs.is_fork != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/arm64
+            runner: depot-ubuntu-24.04-arm-8
+            arch_suffix: -arm64
+          - platform: linux/x86_64
+            runner: depot-ubuntu-24.04-8
+            arch_suffix: -amd64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Compute build mode
+        id: mode
+        run: |
+          if [ "${{ needs.context.outputs.trigger }}" = "release" ]; then
+            echo "cargo_build_mode=release" >> $GITHUB_OUTPUT
+          else
+            echo "cargo_build_mode=debug" >> $GITHUB_OUTPUT
+          fi
+      - uses: ./.github/actions/docker-setup
+        with:
+          docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
+          docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build & Push (rivetdev/engine:full)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: rivetdev/engine:full-${{ needs.context.outputs.sha }}${{ matrix.arch_suffix }}
+          file: docker/engine/Dockerfile
+          target: engine-full
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            BUILD_FRONTEND=true
+            CARGO_BUILD_MODE=${{ steps.mode.outputs.cargo_build_mode }}
+      - name: Build & Push (rivetdev/engine:slim)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: rivetdev/engine:slim-${{ needs.context.outputs.sha }}${{ matrix.arch_suffix }}
+          file: docker/engine/Dockerfile
+          target: engine-slim
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            BUILD_FRONTEND=true
+            CARGO_BUILD_MODE=${{ steps.mode.outputs.cargo_build_mode }}
+
+  # ---------------------------------------------------------------------------
+  # publish — npm publish + R2 upload + Docker manifest + release tail
+  # ---------------------------------------------------------------------------
+  publish:
+    needs: [context, build, docker-images]
+    name: "Publish"
+    if: |
+      !cancelled() &&
+      needs.context.outputs.is_fork != 'true' &&
+      needs.build.result == 'success' &&
+      needs.docker-images.result == 'success'
+    runs-on: depot-ubuntu-24.04-8
+    permissions:
+      contents: write # git tag + gh release (release only)
+      id-token: write
+      pull-requests: write # PR comment
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need history for tag operations in the release tail.
+          fetch-depth: 0
+          lfs: true
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/docker-setup
+        with:
+          docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
+          docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ---- download + place native + engine artifacts ----
+      - name: Download native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: native-artifacts
+          pattern: native-*
+          merge-multiple: true
+      - name: Download engine artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: engine-artifacts
+          pattern: engine-*
+          merge-multiple: true
+
+      - name: Place native binaries in platform packages
+        run: |
+          NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
+          for f in native-artifacts/*.node; do
+            filename=$(basename "$f")
+            platform="${filename#rivetkit-native.}"
+            platform="${platform%.node}"
+            mkdir -p "${NATIVE_DIR}/npm/${platform}"
+            cp "$f" "${NATIVE_DIR}/npm/${platform}/"
+            echo "Placed $filename -> npm/${platform}/"
+          done
+
+      - name: Place engine binaries in engine-cli platform packages
+        run: |
+          ENGINE_CLI_DIR=rivetkit-typescript/packages/engine-cli/npm
+          declare -A TRIPLE_TO_PLATFORM=(
+            [rivet-engine-x86_64-unknown-linux-musl]=linux-x64-musl
+            [rivet-engine-aarch64-unknown-linux-musl]=linux-arm64-musl
+            [rivet-engine-x86_64-apple-darwin]=darwin-x64
+            [rivet-engine-aarch64-apple-darwin]=darwin-arm64
+          )
+          for f in engine-artifacts/rivet-engine-*; do
+            [ -e "$f" ] || continue
+            filename=$(basename "$f")
+            platform="${TRIPLE_TO_PLATFORM[$filename]:-}"
+            if [ -z "$platform" ]; then
+              echo "Skipping engine artifact not mapped to a platform package: $filename"
+              continue
+            fi
+            dest="${ENGINE_CLI_DIR}/${platform}"
+            if [ ! -d "$dest" ]; then
+              echo "Missing engine-cli platform dir: $dest" >&2
+              exit 1
+            fi
+            cp "$f" "$dest/rivet-engine"
+            chmod +x "$dest/rivet-engine"
+            echo "Placed $filename -> npm/${platform}/rivet-engine"
+          done
+
+      # ---- build TypeScript packages (turbo dep graph picks up native) ----
+      - name: Build TypeScript packages
+        run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/sqlite-native' -F '!@rivetkit/rivetkit-native'
+
+      - name: Pack inspector
+        run: npx turbo build:pack-inspector -F rivetkit
+
+      - name: Strip inspector sourcemaps
+        run: |
+          cd rivetkit-typescript/packages/rivetkit/dist
+          mkdir -p /tmp/inspector-repack
+          tar xzf inspector.tar.gz -C /tmp/inspector-repack
+          find /tmp/inspector-repack -name '*.map' -delete
+          tar czf inspector.tar.gz -C /tmp/inspector-repack .
+          rm -rf /tmp/inspector-repack
+
+      # ---- shared publish (runs for all triggers) ----
+      - name: Bump package versions
+        run: pnpm --filter=publish exec tsx src/ci/bin.ts bump-versions --version ${{ needs.context.outputs.version }}
+
+      - name: Publish npm packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts publish-npm \
+            --tag ${{ needs.context.outputs.npm_tag }} \
+            --parallel 16 \
+            --retries 3 \
+            ${{ needs.context.outputs.trigger == 'release' && '--release-mode' || '' }}
+
+      - name: Upload engine binaries to R2
+        env:
+          R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+        run: pnpm --filter=publish exec tsx src/ci/bin.ts upload-r2 --source engine-artifacts --sha ${{ needs.context.outputs.sha }}
+
+      - name: Create Docker multi-arch manifests
+        run: pnpm --filter=publish exec tsx src/ci/bin.ts docker-manifest --sha ${{ needs.context.outputs.sha }}
+
+      # ---- release-only tail ----
+      - name: Copy R2 artifacts to version path
+        if: needs.context.outputs.trigger == 'release'
+        env:
+          R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts copy-r2 \
+            --sha ${{ needs.context.outputs.sha }} \
+            --version ${{ needs.context.outputs.version }} \
+            --latest ${{ needs.context.outputs.latest }}
+
+      - name: Upload install scripts
+        if: needs.context.outputs.trigger == 'release'
+        env:
+          R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts upload-install-scripts \
+            --scripts-dir scripts/publish/static \
+            --version ${{ needs.context.outputs.version }} \
+            --latest ${{ needs.context.outputs.latest }}
+
+      - name: Upload @rivetkit/devtools to R2
+        if: needs.context.outputs.trigger == 'release'
+        env:
+          R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts upload-devtools \
+            --sha ${{ needs.context.outputs.sha }} \
+            --version ${{ needs.context.outputs.version }} \
+            --latest ${{ needs.context.outputs.latest }}
+
+      - name: Retag Docker manifests to version
+        if: needs.context.outputs.trigger == 'release'
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts docker-retag \
+            --sha ${{ needs.context.outputs.sha }} \
+            --version ${{ needs.context.outputs.version }} \
+            --latest ${{ needs.context.outputs.latest }}
+
+      - name: Create git tag
+        if: needs.context.outputs.trigger == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          pnpm --filter=publish exec tsx src/ci/bin.ts git-tag --version ${{ needs.context.outputs.version }}
+
+      - name: Create GitHub release
+        if: needs.context.outputs.trigger == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm --filter=publish exec tsx src/ci/bin.ts gh-release --version ${{ needs.context.outputs.version }}
+
+      # ---- preview-only tail ----
+      - name: Comment on PR
+        if: needs.context.outputs.trigger == 'pr'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          pnpm --filter=publish exec tsx src/ci/bin.ts comment-pr \
+            --pr-number ${{ needs.context.outputs.pr_number }} \
+            --version ${{ needs.context.outputs.version }} \
+            --tag ${{ needs.context.outputs.npm_tag }}
