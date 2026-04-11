@@ -24,6 +24,10 @@ ARG VITE_APP_API_URL=__SAME__
 #   libstdc++ adds 1-2 min of link time for no benefit.
 ENV RUSTFLAGS="--cfg tokio_unstable -C target-feature=+crt-static -C link-arg=-static-libgcc -C link-arg=-fuse-ld=lld"
 
+ENV RUSTC_WRAPPER=sccache \
+    SCCACHE_WEBDAV_ENDPOINT=https://cache.depot.dev \
+    SCCACHE_IDLE_TIMEOUT=0
+
 
 WORKDIR /build
 COPY . .
@@ -41,7 +45,9 @@ RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
 RUN --mount=type=cache,id=cargo-registry-windows-x64,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=cargo-git-windows-x64,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=cargo-target-windows-x64,target=/build/target,sharing=locked \
+    --mount=type=secret,id=DEPOT_TOKEN,env=SCCACHE_WEBDAV_TOKEN \
     set -e && \
+    if [ -z "$SCCACHE_WEBDAV_TOKEN" ]; then echo "[sccache] no DEPOT_TOKEN, disabling sccache"; unset RUSTC_WRAPPER; else echo "[sccache] enabled"; fi && \
     if [ "$BUILD_MODE" = "release" ]; then \
         CARGO_FLAG="--release"; \
         PROFILE_DIR="release"; \
@@ -65,6 +71,7 @@ RUN --mount=type=cache,id=cargo-registry-windows-x64,target=/usr/local/cargo/reg
         fi; \
     else \
         echo "Unknown BUILD_TARGET: $BUILD_TARGET" && exit 1; \
-    fi
+    fi && \
+    (sccache --show-stats 2>/dev/null || true)
 
 CMD ["ls", "-la", "/artifacts"]
