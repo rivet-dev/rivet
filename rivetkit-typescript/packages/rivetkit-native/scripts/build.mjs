@@ -23,6 +23,15 @@ const force = args.includes("--force");
 const releaseArg = args.find((a) => a === "--release");
 const extraFlags = releaseArg ? ["--release"] : [];
 
+// Explicit skip for environments that don't need the native binary (e.g.
+// Docker engine-frontend build which only consumes TypeScript types).
+if (!force && process.env.SKIP_NAPI_BUILD === "1") {
+	console.log(
+		"[rivetkit-native/build] SKIP_NAPI_BUILD=1 — skipping napi build",
+	);
+	process.exit(0);
+}
+
 function hasPrebuiltArtifact() {
 	// Check for root-level .node files.
 	const rootFiles = readdirSync(packageDir);
