@@ -43,6 +43,23 @@ process.chdir(repoRoot);
 const packages = discoverPackages(repoRoot);
 const packageNames = new Set(packages.map((p) => p.name));
 
+/**
+ * The `@rivetkit/rivetkit-native` meta package needs `optionalDependencies`
+ * pointing to all the platform-specific packages. napi-rs's loader (`index.js`)
+ * does `require('@rivetkit/rivetkit-native-linux-x64-gnu')` at runtime — without
+ * `optionalDependencies`, npm never installs those so the require fails.
+ *
+ * The committed `package.json` deliberately does NOT include these (they'd
+ * pollute non-CI installs with broken version pins), so we inject them here
+ * before publish.
+ */
+const META_NATIVE_PKG = "@rivetkit/rivetkit-native";
+const NATIVE_PLATFORM_PREFIX = "@rivetkit/rivetkit-native-";
+const nativePlatformPkgs = packages
+	.filter((p) => p.name.startsWith(NATIVE_PLATFORM_PREFIX))
+	.map((p) => p.name)
+	.sort();
+
 interface PackageJson {
 	name?: string;
 	version?: string;
@@ -66,6 +83,15 @@ for (const pkg of packages) {
 	const pkgJson: PackageJson = JSON.parse(raw);
 
 	pkgJson.version = VERSION;
+
+	// Inject optionalDependencies on the native meta package so end users
+	// get the right platform-specific .node binary via npm's CPU/OS fields.
+	if (pkg.name === META_NATIVE_PKG) {
+		pkgJson.optionalDependencies = pkgJson.optionalDependencies ?? {};
+		for (const platPkg of nativePlatformPkgs) {
+			pkgJson.optionalDependencies[platPkg] = VERSION;
+		}
+	}
 
 	for (const field of DEP_FIELDS) {
 		const deps = pkgJson[field];
