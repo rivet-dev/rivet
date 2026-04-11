@@ -13,7 +13,7 @@
 				"package.json"
 			],
 			"outputs": ["dist/**"],
-			"env": ["FAST_BUILD"]
+			"env": ["FAST_BUILD", "SKIP_NAPI_BUILD"]
 		},
 		"build:cloud": {
 			"dependsOn": ["^build"],
