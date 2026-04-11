@@ -39,7 +39,15 @@ RUN --mount=type=cache,id=cargo-registry-linux-x64-musl,target=/usr/local/cargo/
     --mount=type=cache,id=cargo-target-linux-x64-musl,target=/build/target,sharing=locked \
     --mount=type=secret,id=DEPOT_TOKEN,env=SCCACHE_WEBDAV_TOKEN \
     set -e && \
-    if [ -z "$SCCACHE_WEBDAV_TOKEN" ]; then echo "[sccache] no DEPOT_TOKEN, disabling sccache"; unset RUSTC_WRAPPER; else echo "[sccache] enabled"; fi && \
+    if [ -z "${SCCACHE_WEBDAV_TOKEN:-}" ]; then \
+        echo "[sccache] no DEPOT_TOKEN, disabling"; unset RUSTC_WRAPPER; \
+    elif ! (sccache --start-server 2>/tmp/sccache-start.err && sccache --show-stats >/dev/null 2>&1); then \
+        echo "[sccache] backend health check failed, disabling:"; cat /tmp/sccache-start.err 2>/dev/null || true; \
+        sccache --stop-server >/dev/null 2>&1 || true; \
+        unset RUSTC_WRAPPER SCCACHE_WEBDAV_ENDPOINT SCCACHE_WEBDAV_TOKEN; \
+    else \
+        echo "[sccache] enabled via ${SCCACHE_WEBDAV_ENDPOINT}"; \
+    fi && \
     if [ "$BUILD_MODE" = "release" ]; then \
         CARGO_FLAG="--release"; \
         PROFILE_DIR="release"; \
