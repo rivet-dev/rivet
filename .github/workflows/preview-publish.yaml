@@ -349,7 +349,7 @@ jobs:
               for (const depType of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
                 if (!pkgJson[depType]) continue;
                 for (const [dep, ver] of Object.entries(pkgJson[depType])) {
-                  if (ver === 'workspace:*' && (dep.startsWith('@rivetkit/') || dep === 'rivetkit')) {
+                  if (String(ver).startsWith('workspace:') && (dep.startsWith('@rivetkit/') || dep === 'rivetkit')) {
                     pkgJson[depType][dep] = '${VERSION}';
                   }
                 }
@@ -400,7 +400,7 @@ jobs:
                 for (const depType of ['dependencies', 'devDependencies', 'peerDependencies']) {
                   if (!pkg[depType]) continue;
                   for (const [dep, ver] of Object.entries(pkg[depType])) {
-                    if (String(ver) === 'workspace:*' && (dep.startsWith('@rivetkit/') || dep === 'rivetkit')) {
+                    if (String(ver).startsWith('workspace:') && (dep.startsWith('@rivetkit/') || dep === 'rivetkit')) {
                       pkg[depType][dep] = '${VERSION}';
                     }
                   }
@@ -419,6 +419,14 @@ jobs:
                 const pkg = JSON.parse(fs.readFileSync('${dir}package.json', 'utf8'));
                 if (pkg.private) process.exit(0);
                 pkg.version = '${VERSION}';
+                for (const depType of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+                  if (!pkg[depType]) continue;
+                  for (const [dep, ver] of Object.entries(pkg[depType])) {
+                    if (String(ver).startsWith('workspace:') && (dep.startsWith('@rivetkit/') || dep === 'rivetkit')) {
+                      pkg[depType][dep] = '${VERSION}';
+                    }
+                  }
+                }
                 fs.writeFileSync('${dir}package.json', JSON.stringify(pkg, null, '\t') + '\n');
                 console.log('Updated', pkg.name, '->', '${VERSION}');
               "
