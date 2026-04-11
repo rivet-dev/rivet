@@ -8,7 +8,7 @@ export const ObservabilitySection = () => {
   const features = [
     {
       title: 'SQLite Viewer',
-      description: 'Browse and query your actor\'s SQLite database in real-time',
+      description: 'Browse and query SQLite databases in real-time across actors and agent sessions',
       icon: <Database className='h-4 w-4' />
     },
     {
@@ -18,13 +18,13 @@ export const ObservabilitySection = () => {
     },
     {
       title: 'Event Monitoring',
-      description: 'See all events happening in your actor in real-time and track every state change and action as it happens',
+      description: 'Track every state change, action, and agent event as it happens in real-time',
       icon: <Activity className='h-4 w-4' />
     },
     {
       title: 'REPL',
       description:
-        'Debug your actor in real-time by calling actions, subscribing to events, and interacting directly with your code',
+        'Debug actors and agent sessions by calling actions, subscribing to events, and interacting directly with your code',
       icon: <Terminal className='h-4 w-4' />
     },
   ];
@@ -69,8 +69,7 @@ export const ObservabilitySection = () => {
               transition={{ duration: 0.5, delay: 0.1 }}
               className='mb-6 max-w-xl text-base leading-relaxed text-zinc-500'
             >
-              Powerful debugging and monitoring tools that work seamlessly from local development to production
-              at scale.
+              Debugging and monitoring for actors and agents, from local development to production at scale.
             </motion.p>
             {/* Feature List */}
             <div className='grid gap-px sm:grid-cols-2'>

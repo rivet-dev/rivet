@@ -1,0 +1,48 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import { BuiltInFeatures } from '@/components/marketing/sections/BuiltInFeatures';
+import { ProblemSection } from '@/components/marketing/sections/ProblemSection';
+import { BenchmarksSection } from '@/components/marketing/sections/BenchmarksSection';
+import { ObservabilitySection } from '@/components/marketing/sections/ObservabilitySection';
+import { RedesignedCTA } from '@/components/marketing/sections/RedesignedCTA';
+import { ScrollObserver } from '@/components/ScrollObserver';
+---
+
+<MarketingLayout
+	title="Rivet Actors - The Primitive for Stateful Workloads"
+	description="In-memory state, WebSockets, workflows, queues, scheduling, and more. One primitive that adapts to agents, collaboration, and durable execution."
+	canonicalUrl="https://rivet.dev/actors"
+	keywords={["actors", "stateful", "workflows", "websockets", "real-time", "backend infrastructure", "serverless", "open source", "self-hosted", "AI infrastructure", "long-running processes", "state management"]}
+>
+	<ScrollObserver client:load>
+		<div class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
+			<main>
+				<!-- Hero -->
+				<section class="relative flex flex-col justify-center px-6 pt-32 pb-16 md:pt-40 md:pb-24 text-center">
+					<div class="mx-auto w-full max-w-3xl">
+						<h1 class="mb-4 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl">
+							The primitive for<br />stateful workloads.
+						</h1>
+						<p class="mb-8 text-lg text-zinc-400 md:text-xl">
+							One Actor per agent, per session, per user. State, storage, and networking included.
+						</p>
+						<div class="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+							<a href="/docs" class="selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200">
+								Start Building
+							</a>
+							<a href="/docs/actors/quickstart" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/20 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/30 hover:text-white">
+								Quickstart Guide
+							</a>
+						</div>
+					</div>
+				</section>
+
+				<BuiltInFeatures client:visible />
+				<ProblemSection client:visible />
+				<BenchmarksSection client:visible />
+				<ObservabilitySection client:visible />
+				<RedesignedCTA client:visible />
+			</main>
+		</div>
+	</ScrollObserver>
+</MarketingLayout>

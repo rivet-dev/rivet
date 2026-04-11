@@ -272,8 +272,8 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               transition={{ duration: 0.5 }}
               className='mb-4 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl'
             >
-              The primitive for <br />
-              stateful workloads.
+              Infrastructure for <br />
+              software that thinks.
             </motion.h1>
 
             <motion.p

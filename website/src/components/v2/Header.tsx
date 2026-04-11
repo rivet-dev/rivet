@@ -76,7 +76,7 @@ function ProductsDropdown({
 	const products = [
 		{
 			label: "Actors",
-			href: "/docs/actors",
+			href: "/actors",
 			logo: actorsLogoUrl,
 			description: "Build stateful backends",
 		},
@@ -445,14 +445,6 @@ export function Header({
 								>
 									Documentation
 								</TextNavItem>
-								{!isLightTheme && (
-									<TextNavItem
-										href="/cookbook"
-										ariaCurrent={active === "cookbook" ? "page" : undefined}
-									>
-										Cookbooks
-									</TextNavItem>
-								)}
 								{isLightTheme && (
 									<>
 										<TextNavItem href="/agent-os/use-cases">
@@ -552,12 +544,6 @@ export function Header({
 						Documentation
 					</TextNavItem>
 					<TextNavItem
-						href="/cookbook"
-						ariaCurrent={active === "cookbook" ? "page" : undefined}
-					>
-						Cookbooks
-					</TextNavItem>
-					<TextNavItem
 						href="/cloud"
 						ariaCurrent={active === "pricing" ? "page" : undefined}
 					>
@@ -608,12 +594,11 @@ function DocsMobileNavigation({
 		: [
 			{ href: "/docs", label: "Documentation" },
 			{ href: "/cloud", label: "Pricing" },
-			{ href: "/cookbook", label: "Cookbooks" },
 		];
 
 	const products = [
 		{ label: "agentOS", href: "/agent-os", logo: agentosLogoUrl },
-		{ label: "Actors", href: "/docs/actors", logo: actorsLogoUrl },
+		{ label: "Actors", href: "/actors", logo: actorsLogoUrl },
 		{
 			label: "Sandbox Agent SDK",
 			href: "https://sandboxagent.dev/",
