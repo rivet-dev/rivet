@@ -44,21 +44,38 @@ const packages = discoverPackages(repoRoot);
 const packageNames = new Set(packages.map((p) => p.name));
 
 /**
- * The `@rivetkit/rivetkit-native` meta package needs `optionalDependencies`
- * pointing to all the platform-specific packages. napi-rs's loader (`index.js`)
- * does `require('@rivetkit/rivetkit-native-linux-x64-gnu')` at runtime — without
- * `optionalDependencies`, npm never installs those so the require fails.
+ * Meta packages that need `optionalDependencies` injected at publish time.
+ * Each meta package's runtime loader requires the platform-specific package
+ * for the current host — without the optionalDependencies, npm never installs
+ * those and the require fails.
  *
- * The committed `package.json` deliberately does NOT include these (they'd
- * pollute non-CI installs with broken version pins), so we inject them here
- * before publish.
+ * The committed `package.json` files deliberately do NOT include these —
+ * they'd pollute non-CI installs with broken version pins — so we inject
+ * them here before publish.
  */
-const META_NATIVE_PKG = "@rivetkit/rivetkit-native";
-const NATIVE_PLATFORM_PREFIX = "@rivetkit/rivetkit-native-";
-const nativePlatformPkgs = packages
-	.filter((p) => p.name.startsWith(NATIVE_PLATFORM_PREFIX))
-	.map((p) => p.name)
-	.sort();
+interface MetaPackageSpec {
+	meta: string;
+	platformPrefix: string;
+}
+const META_PACKAGES: MetaPackageSpec[] = [
+	{
+		meta: "@rivetkit/rivetkit-native",
+		platformPrefix: "@rivetkit/rivetkit-native-",
+	},
+	{
+		meta: "@rivetkit/engine-cli",
+		platformPrefix: "@rivetkit/engine-cli-",
+	},
+];
+const metaPlatformMap = new Map<string, string[]>(
+	META_PACKAGES.map(({ meta, platformPrefix }) => [
+		meta,
+		packages
+			.filter((p) => p.name.startsWith(platformPrefix))
+			.map((p) => p.name)
+			.sort(),
+	]),
+);
 
 interface PackageJson {
 	name?: string;
@@ -84,11 +101,12 @@ for (const pkg of packages) {
 
 	pkgJson.version = VERSION;
 
-	// Inject optionalDependencies on the native meta package so end users
-	// get the right platform-specific .node binary via npm's CPU/OS fields.
-	if (pkg.name === META_NATIVE_PKG) {
+	// Inject optionalDependencies on meta packages so end users get the
+	// right platform-specific binary via npm's os/cpu/libc resolution.
+	const platformPkgs = metaPlatformMap.get(pkg.name);
+	if (platformPkgs && platformPkgs.length > 0) {
 		pkgJson.optionalDependencies = pkgJson.optionalDependencies ?? {};
-		for (const platPkg of nativePlatformPkgs) {
+		for (const platPkg of platformPkgs) {
 			pkgJson.optionalDependencies[platPkg] = VERSION;
 		}
 	}

@@ -1,0 +1,17 @@
+{
+	"name": "@rivetkit/engine-cli",
+	"version": "2.2.1",
+	"description": "Rivet Engine binary distributed as platform-specific npm packages",
+	"license": "Apache-2.0",
+	"main": "index.js",
+	"types": "index.d.ts",
+	"engines": {
+		"node": ">= 20.0.0"
+	},
+	"files": [
+		"index.js",
+		"index.d.ts",
+		"package.json",
+		"README.md"
+	]
+}

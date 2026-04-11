@@ -12,6 +12,7 @@ overrides:
   '@rivetkit/sqlite-wasm': workspace:*
   '@rivetkit/engine-api-full': https://pkg.pr.new/rivet-dev/engine-ee/@rivetkit/engine-api-full@011e389
   '@rivetkit/rivetkit-native': workspace:*
+  '@rivetkit/engine-cli': workspace:*
   '@types/react': ^19
   '@types/react-dom': ^19
   '@clerk/shared': 3.27.1
@@ -4167,6 +4168,8 @@ importers:
         specifier: ^5.5.2
         version: 5.9.3
 
+  rivetkit-typescript/packages/engine-cli: {}
+
   rivetkit-typescript/packages/engine-runner:
     dependencies:
       '@rivetkit/engine-runner-protocol':
@@ -4358,6 +4361,9 @@ importers:
       '@rivetkit/bare-ts':
         specifier: ^0.6.2
         version: 0.6.2
+      '@rivetkit/engine-cli':
+        specifier: workspace:*
+        version: link:../engine-cli
       '@rivetkit/engine-envoy-protocol':
         specifier: workspace:*
         version: link:../../../engine/sdks/typescript/envoy-protocol

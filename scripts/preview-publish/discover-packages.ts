@@ -71,17 +71,19 @@ export function discoverPackages(repoRoot: string): Package[] {
 		});
 	};
 
-	// 1. rivetkit-native platform packages first. They are optionalDependencies
-	//    of the meta `@rivetkit/rivetkit-native` and must exist on npm before
-	//    the meta package resolves at install time.
-	const nativeNpmDir = join(
-		repoRoot,
+	// 1. Platform-specific packages first. These are optionalDependencies of
+	//    their meta packages and must exist on npm before the meta package
+	//    resolves at install time.
+	//    - rivetkit-native: the N-API addon (.node files)
+	//    - engine-cli: the rivet-engine binary
+	for (const metaRelDir of [
 		"rivetkit-typescript/packages/rivetkit-native/npm",
-	);
-	if (existsSync(nativeNpmDir)) {
-		const entries = readdirSync(nativeNpmDir).sort();
-		for (const entry of entries) {
-			const platDir = join(nativeNpmDir, entry);
+		"rivetkit-typescript/packages/engine-cli/npm",
+	]) {
+		const npmDir = join(repoRoot, metaRelDir);
+		if (!existsSync(npmDir)) continue;
+		for (const entry of readdirSync(npmDir).sort()) {
+			const platDir = join(npmDir, entry);
 			if (!statSync(platDir).isDirectory()) continue;
 			add(platDir);
 		}
