@@ -16,9 +16,20 @@
  *   tsx scripts/preview-publish/publish-all.ts --tag pr-4600 --parallel 16 --retries 4
  */
 import { spawn } from "node:child_process";
-import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { discoverPackages, type Package } from "./discover-packages.js";
+
+function findRepoRoot(): string {
+	let dir = dirname(fileURLToPath(import.meta.url));
+	for (let i = 0; i < 10; i++) {
+		if (existsSync(join(dir, "pnpm-workspace.yaml"))) return dir;
+		dir = dirname(dir);
+	}
+	throw new Error("Could not locate repo root (no pnpm-workspace.yaml)");
+}
 
 const { values } = parseArgs({
 	options: {
@@ -38,7 +49,8 @@ const MAX_PARALLEL = Number(values.parallel);
 const MAX_RETRIES = Number(values.retries);
 const INITIAL_BACKOFF_MS = Number(values["initial-backoff-ms"]);
 
-const repoRoot = resolve(process.cwd());
+const repoRoot = findRepoRoot();
+process.chdir(repoRoot);
 const packages = discoverPackages(repoRoot);
 
 console.log(

@@ -8,10 +8,21 @@
  *   tsx scripts/preview-publish/bump-versions.ts --version 2.2.1-pr.4600.abc1234
  *   tsx scripts/preview-publish/bump-versions.ts --version 2.2.1-pr.4600.abc1234 --dry-run
  */
-import { readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { discoverPackages } from "./discover-packages.js";
+
+/** Walk up from this file to find the repo root (contains pnpm-workspace.yaml). */
+function findRepoRoot(): string {
+	let dir = dirname(fileURLToPath(import.meta.url));
+	for (let i = 0; i < 10; i++) {
+		if (existsSync(join(dir, "pnpm-workspace.yaml"))) return dir;
+		dir = dirname(dir);
+	}
+	throw new Error("Could not locate repo root (no pnpm-workspace.yaml)");
+}
 
 const { values } = parseArgs({
 	options: {
@@ -27,7 +38,8 @@ if (!values.version) {
 const VERSION = values.version;
 const DRY_RUN = values["dry-run"] ?? false;
 
-const repoRoot = resolve(process.cwd());
+const repoRoot = findRepoRoot();
+process.chdir(repoRoot);
 const packages = discoverPackages(repoRoot);
 const packageNames = new Set(packages.map((p) => p.name));
 

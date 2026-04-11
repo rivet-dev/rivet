@@ -4674,14 +4674,16 @@ importers:
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
   scripts/preview-publish:
-    dependencies:
-      execa:
-        specifier: ^8.0.1
-        version: 8.0.1
     devDependencies:
       '@types/node':
         specifier: ^24.3.0
         version: 24.7.1
+      tsx:
+        specifier: ^4.0.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
 
   scripts/release:
     dependencies:
