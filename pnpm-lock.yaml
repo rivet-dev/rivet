@@ -4215,7 +4215,7 @@ importers:
         version: 5.0.1
       tsup:
         specifier: ^8.5.0
-        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.15))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.15))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
       tsx:
         specifier: ^4.20.5
         version: 4.21.0
@@ -4237,7 +4237,7 @@ importers:
         version: 20.19.13
       tsup:
         specifier: ^8.5.0
-        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@20.19.13))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@20.19.13))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -36501,7 +36501,7 @@ snapshots:
       - tsx
       - yaml
 
-  tsup@8.5.1(@microsoft/api-extractor@7.53.2(@types/node@25.0.7))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2):
+  tsup@8.5.1(@microsoft/api-extractor@7.53.2(@types/node@25.0.7))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2):
     dependencies:
       bundle-require: 5.1.0(esbuild@0.27.3)
       cac: 6.7.14
