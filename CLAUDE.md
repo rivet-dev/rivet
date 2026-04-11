@@ -338,7 +338,7 @@ let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build(
 ## Development Warnings
 
 - Do not run ./scripts/cargo/fix.sh. Do not format the code yourself.
-- When adding or changing any version value in the repo, verify `scripts/release/update_version.ts` updates that location so release bumps cannot leave stale versions behind.
+- When adding or changing any version value in the repo, verify `scripts/publish/src/lib/version.ts` (`bumpPackageJsons` for package.json files, `updateSourceFiles` for Cargo.toml + examples) updates that location so release bumps cannot leave stale versions behind.
 
 ## Testing Guidelines
 - **Never use `vi.mock`, `jest.mock`, or module-level mocking.** Write tests against real infrastructure (Docker containers, real databases, real filesystems). For LLM calls, use `@copilotkit/llmock` to run a mock LLM server. For protocol-level test doubles (e.g., ACP adapters), write hand-written scripts that run as real processes. If you need callback tracking, `vi.fn()` for simple callbacks is acceptable.

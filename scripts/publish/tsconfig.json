@@ -8,7 +8,10 @@
 		"noEmit": true,
 		"esModuleInterop": true,
 		"skipLibCheck": true,
-		"types": ["node"]
+		"resolveJsonModule": true,
+		"types": ["node"],
+		"rootDir": "src"
 	},
-	"include": ["*.ts"]
+	"include": ["src/**/*.ts"],
+	"exclude": ["node_modules"]
 }

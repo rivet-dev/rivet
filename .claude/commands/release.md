@@ -23,10 +23,6 @@ If no prior RC tags exist for that base version, use `rc.1`. Otherwise, incremen
 
 The final RC version string is `<base_version>-rc.<number>` (e.g., `2.1.6-rc.1`).
 
-Also ask if they want to **reuse engine artifacts** from a previous version. This is common for RC releases or SDK-only changes where the engine hasn't changed. The `--reuse-engine-version` flag accepts either:
-- A version string (e.g., `2.1.6`) to reuse artifacts from that tagged release
-- A short commit hash (e.g., `bb7f292`) to reuse artifacts from that specific commit
-
 If the user has already provided all these details in their initial message, skip the questions and proceed directly.
 
 ## Step 2: Confirm Release Details
@@ -37,53 +33,40 @@ Before proceeding, display the release details to the user and ask for explicit 
 - New version
 - Current branch
 - Whether it will be tagged as "latest" (RC releases are never tagged as latest)
-- Whether engine artifacts are being reused (and from which version)
 
 Do NOT proceed without user confirmation.
 
-## Step 3: Run the Release Script (Setup Local)
+## Step 3: Run the Release Script
 
-The release script handles version bumping, local checks, committing, pushing, and triggering the workflow.
+The release script (`scripts/publish/src/local/cut-release.ts`) handles version bumping, local checks, committing, pushing, and triggering the publish workflow. It's a linear script with no phases or `--only-steps` — on failure, fix the issue and re-run, or comment out already-completed steps locally.
 
 For **major**, **minor**, or **patch** releases:
 
 ```bash
-echo "yes" | ./scripts/release/main.ts --<type> --phase setup-local
+pnpm --filter=publish release --<type> --yes
 ```
 
 For **rc** releases (using explicit version):
 
 ```bash
-echo "yes" | ./scripts/release/main.ts --version <version> --phase setup-local
-```
-
-To **reuse engine artifacts**, add the flag:
-
-```bash
-echo "yes" | ./scripts/release/main.ts --version <version> --reuse-engine-version <reuse_version> --phase setup-local
+pnpm --filter=publish release --version <version> --no-latest --yes
 ```
 
 Where `<type>` is `major`, `minor`, or `patch`, and `<version>` is the full version string like `2.1.6-rc.1`.
 
-The `--phase setup-local` runs these steps in order:
-1. Confirms release details (interactive prompt - piping "yes" handles this)
-2. Updates version in all files (Cargo.toml, package.json files)
-3. Generates Fern API specs
-4. Runs local checks (type checks, cargo check)
-5. Git commits with message `chore(release): update version to X.Y.Z`
-6. Git pushes
-7. Triggers the GitHub Actions workflow
+The release script runs these steps in order:
+1. Resolves target version and auto-detects the `latest` flag
+2. Prints the release plan and requires confirmation (`--yes` skips the prompt)
+3. Validates git working tree is clean
+4. Updates Cargo.toml + example dependency specs via `updateSourceFiles`
+5. Rewrites every publishable `package.json` version via `bumpPackageJsons`
+6. Runs `./scripts/fern/gen.sh`
+7. Runs local build + type-check fail-fast (skip with `--skip-checks`)
+8. Commits with `chore(release): update version to X.Y.Z`
+9. Pushes (or `gt submit` on a non-main branch)
+10. Triggers `.github/workflows/publish.yaml` via `gh workflow run`
 
-If local checks fail at step 4, fix the issues in the codebase, then re-run using `--only-steps` to avoid re-running already-completed steps:
-
-```bash
-echo "yes" | ./scripts/release/main.ts --version <version> --only-steps run-local-build-and-checks,git-commit,git-push,trigger-workflow
-```
-
-If reusing engine, include the flag in retries too:
-```bash
-echo "yes" | ./scripts/release/main.ts --version <version> --reuse-engine-version <reuse_version> --only-steps run-local-build-and-checks,git-commit,git-push,trigger-workflow
-```
+If a step fails, fix the underlying issue and re-run the command. The script is idempotent with respect to already-bumped versions.
 
 ## Step 4: Monitor the GitHub Actions Workflow
 
@@ -92,7 +75,7 @@ After the workflow is triggered, wait 5 seconds for it to register, then begin p
 ### Find the workflow run
 
 ```bash
-gh run list --workflow=release.yaml --limit=1 --json databaseId,status,conclusion,createdAt,url
+gh run list --workflow=publish.yaml --limit=1 --json databaseId,status,conclusion,createdAt,url
 ```
 
 Verify the run was created recently (within the last 2 minutes) to confirm you are monitoring the correct run. Save the `databaseId` as the run ID.
@@ -132,7 +115,6 @@ Read the failure logs carefully. Common failure categories:
 - **Test failures** - Fix the failing tests
 - **Publishing failures** (crates.io, npm) - These may be transient; check if retry will help
 - **Docker build failures** - Check Dockerfile or build script issues
-- **Reuse validation failures** - The reuse version's artifacts may not exist; check Docker manifests and S3 paths
 - **Infrastructure/transient failures** (network timeouts, rate limits) - Just re-trigger without code changes
 
 ### 5c. Fix and re-push
@@ -152,14 +134,13 @@ IMPORTANT: Use `--force-with-lease` (not `--force`) for safety. Amend the commit
 3. Re-trigger the workflow:
 
 ```bash
-gh workflow run .github/workflows/release.yaml \
+gh workflow run .github/workflows/publish.yaml \
   -f version=<version> \
   -f latest=<true|false> \
-  -f reuse_engine_version=<reuse_version> \
   --ref <branch>
 ```
 
-Where `<branch>` is the current branch (usually `main`). Set `latest` to `false` for RC releases, `true` for stable releases that are newer than the current latest tag. Only include `-f reuse_engine_version` if reusing engine artifacts.
+Where `<branch>` is the current branch (usually `main`). Set `latest` to `false` for RC releases, `true` for stable releases that are newer than the current latest tag.
 
 4. Return to Step 4 to monitor the new run.
 
@@ -174,7 +155,6 @@ If the workflow has failed **5 times**, stop and report all errors to the user. 
 When the workflow completes successfully:
 1. Print the GitHub Actions run URL
 2. Print the new version number
-3. Note whether engine artifacts were reused and from which version
 
 ## Important Notes
 
@@ -182,7 +162,6 @@ When the workflow completes successfully:
 - Do not include co-authors in any commit messages.
 - Use conventional commits style (e.g., `chore(release): update version to X.Y.Z`).
 - Keep commit messages to a single line.
-- The release script requires `tsx` to run (it's a TypeScript file with a shebang).
 - Always work on the current branch. Releases are typically cut from `main`.
 - Never push to `main` unless the user explicitly confirms.
 - Do not run `cargo fmt` or `./scripts/cargo/fix.sh` automatically.

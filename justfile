@@ -1,6 +1,6 @@
 [group('release')]
 release *ARGS:
-	./scripts/release/main.ts --phase setup-local {{ ARGS }}
+	pnpm --filter=publish release {{ ARGS }}
 
 [group('docker')]
 docker-build:
