@@ -156,6 +156,19 @@ When the workflow completes successfully:
 1. Print the GitHub Actions run URL
 2. Print the new version number
 
+## Step 7: Sanity Check
+
+After reporting success, run the sanity check skill against the just-published version to verify the packages actually work end-to-end.
+
+Determine the correct npm tag for the version:
+- RC releases: `rc`
+- Stable releases tagged as latest: `latest`
+- Stable releases not tagged as latest: the exact version string (e.g., `2.3.0`)
+
+Then invoke the `/sanity-check` skill with that version/tag. For example, for an RC release of `2.3.0-rc.1`, sanity check `rivetkit@rc`. For a stable `2.3.0` release, sanity check `rivetkit@latest`.
+
+If the sanity check fails, report the failure to the user with the error details. The release is already published at this point, so a sanity check failure means something is wrong with the published artifacts.
+
 ## Important Notes
 
 - The product name is "Rivet". The domain is always `rivet.dev`, never `rivet.gg`.
