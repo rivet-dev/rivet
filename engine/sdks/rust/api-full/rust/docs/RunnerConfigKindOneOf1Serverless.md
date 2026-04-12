@@ -5,6 +5,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **headers** | Option<**std::collections::HashMap<String, String>**> |  | [optional]
+**max_concurrent_actors** | Option<**i64**> |  | [optional]
 **max_runners** | **i32** |  | 
 **metadata_poll_interval** | Option<**i64**> | Milliseconds between metadata polling. If not set, uses the global default. | [optional]
 **min_runners** | Option<**i32**> |  | [optional]

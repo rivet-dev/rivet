@@ -11,6 +11,7 @@ export const RunnerConfigKindServerlessServerless: core.serialization.ObjectSche
     Rivet.RunnerConfigKindServerlessServerless
 > = core.serialization.object({
     headers: core.serialization.record(core.serialization.string(), core.serialization.string()).optional(),
+    maxConcurrentActors: core.serialization.property("max_concurrent_actors", core.serialization.number().optional()),
     maxRunners: core.serialization.property("max_runners", core.serialization.number()),
     metadataPollInterval: core.serialization.property("metadata_poll_interval", core.serialization.number().optional()),
     minRunners: core.serialization.property("min_runners", core.serialization.number().optional()),
@@ -23,6 +24,7 @@ export const RunnerConfigKindServerlessServerless: core.serialization.ObjectSche
 export declare namespace RunnerConfigKindServerlessServerless {
     export interface Raw {
         headers?: Record<string, string> | null;
+        max_concurrent_actors?: number | null;
         max_runners: number;
         metadata_poll_interval?: number | null;
         min_runners?: number | null;

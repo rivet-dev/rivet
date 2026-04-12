@@ -30,6 +30,8 @@ export interface PublishAllOptions {
 	 * "you forgot to bump the version" error.
 	 */
 	releaseMode?: boolean;
+	/** Include release-only packages like Windows engine-cli artifacts. */
+	includeReleaseOnlyPackages?: boolean;
 }
 
 export type PublishStatus =
@@ -178,7 +180,9 @@ export async function publishAll(
 	const initialBackoffMs = opts.initialBackoffMs ?? 2000;
 	const tag = opts.tag;
 
-	const packages = discoverPackages(repoRoot);
+	const packages = discoverPackages(repoRoot, {
+		includeReleaseOnly: opts.includeReleaseOnlyPackages,
+	});
 	assertDiscoverySanity(packages);
 
 	log.info(

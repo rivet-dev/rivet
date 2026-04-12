@@ -8,6 +8,7 @@ import * as serializers from "./serialization/index";
 import urlJoin from "url-join";
 import * as errors from "./errors/index";
 import { Datacenters } from "./api/resources/datacenters/client/Client";
+import { Envoys } from "./api/resources/envoys/client/Client";
 import { Health } from "./api/resources/health/client/Client";
 import { Metadata } from "./api/resources/metadata/client/Client";
 import { Namespaces } from "./api/resources/namespaces/client/Client";
@@ -36,6 +37,7 @@ export declare namespace RivetClient {
 
 export class RivetClient {
     protected _datacenters: Datacenters | undefined;
+    protected _envoys: Envoys | undefined;
     protected _health: Health | undefined;
     protected _metadata: Metadata | undefined;
     protected _namespaces: Namespaces | undefined;
@@ -45,6 +47,10 @@ export class RivetClient {
 
     public get datacenters(): Datacenters {
         return (this._datacenters ??= new Datacenters(this._options));
+    }
+
+    public get envoys(): Envoys {
+        return (this._envoys ??= new Envoys(this._options));
     }
 
     public get health(): Health {
@@ -605,6 +611,156 @@ export class RivetClient {
                 throw new errors.RivetTimeoutError(
                     "Timeout exceeded when calling GET /actors/{actor_id}/kv/keys/{key}.",
                 );
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * @param {Rivet.RivetId} actorId
+     * @param {Rivet.ActorsRescheduleRequest} request
+     * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.actorsReschedule("actor_id", {
+     *         namespace: "namespace",
+     *         body: {
+     *             "key": "value"
+     *         }
+     *     })
+     */
+    public async actorsReschedule(
+        actorId: Rivet.RivetId,
+        request: Rivet.ActorsRescheduleRequest,
+        requestOptions?: RivetClient.RequestOptions,
+    ): Promise<Rivet.ActorsRescheduleResponse> {
+        const { namespace, body: _body } = request;
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
+        _queryParams["namespace"] = namespace;
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)),
+                `actors/${encodeURIComponent(serializers.RivetId.jsonOrThrow(actorId))}/reschedule`,
+            ),
+            method: "POST",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            queryParameters: _queryParams,
+            requestType: "json",
+            body: serializers.ActorsRescheduleRequestBody.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.ActorsRescheduleResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            throw new errors.RivetError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.body,
+            });
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /actors/{actor_id}/reschedule.");
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * @param {Rivet.RivetId} actorId
+     * @param {Rivet.ActorsSleepRequest} request
+     * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.actorsSleep("actor_id", {
+     *         namespace: "namespace",
+     *         body: {
+     *             "key": "value"
+     *         }
+     *     })
+     */
+    public async actorsSleep(
+        actorId: Rivet.RivetId,
+        request: Rivet.ActorsSleepRequest,
+        requestOptions?: RivetClient.RequestOptions,
+    ): Promise<Rivet.ActorsSleepResponse> {
+        const { namespace, body: _body } = request;
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
+        _queryParams["namespace"] = namespace;
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)),
+                `actors/${encodeURIComponent(serializers.RivetId.jsonOrThrow(actorId))}/sleep`,
+            ),
+            method: "POST",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            queryParameters: _queryParams,
+            requestType: "json",
+            body: serializers.ActorsSleepRequestBody.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.ActorsSleepResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            throw new errors.RivetError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.body,
+            });
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /actors/{actor_id}/sleep.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,

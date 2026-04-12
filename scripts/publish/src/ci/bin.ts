@@ -98,10 +98,11 @@ program
 	.option("--dry-run", "Do not write, only report")
 	.action(async (opts) => {
 		const repoRoot = findRepoRoot();
-		const version =
-			opts.version ?? (await resolveContext()).version;
+		const ctx = await resolveContext();
+		const version = opts.version ?? ctx.version;
 		await bumpPackageJsons(repoRoot, version, {
 			dryRun: !!opts.dryRun,
+			includeReleaseOnlyPackages: ctx.trigger === "release",
 			versionOnly: !!opts.versionOnly,
 		});
 	});
@@ -119,7 +120,7 @@ program
 	.action(async (opts) => {
 		const repoRoot = findRepoRoot();
 		let tag: string = opts.tag;
-		let releaseMode = !!opts.releaseMode;
+		let releaseMode: boolean | undefined = opts.releaseMode;
 		if (!tag || releaseMode === undefined) {
 			const ctx = await resolveContext();
 			tag = tag ?? ctx.npmTag;
@@ -129,6 +130,7 @@ program
 		}
 		await publishAll(repoRoot, {
 			tag,
+			includeReleaseOnlyPackages: releaseMode,
 			parallel: Number(opts.parallel),
 			retries: Number(opts.retries),
 			releaseMode,
@@ -320,7 +322,7 @@ program
 			"",
 			`All packages published as \`${version}\` with tag \`${tag}\`.`,
 			"",
-			"Engine binary is shipped via `@rivetkit/engine-cli` (platforms: linux-x64-musl, linux-arm64-musl, darwin-x64, darwin-arm64). `rivetkit` resolves it automatically at runtime.",
+			"Engine binary is shipped via `@rivetkit/engine-cli` on linux-x64-musl, linux-arm64-musl, darwin-x64, and darwin-arm64. Windows users should use the release installer or set `RIVET_ENGINE_BINARY`.",
 			"",
 			"Docker images:",
 			"```sh",

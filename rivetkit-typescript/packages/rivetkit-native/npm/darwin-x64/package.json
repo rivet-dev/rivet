@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/rivetkit-native-darwin-x64",
-	"version": "2.3.0-rc.1",
+	"version": "2.3.0-rc.4",
 	"os": [
 		"darwin"
 	],

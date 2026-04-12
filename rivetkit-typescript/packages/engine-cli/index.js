@@ -64,6 +64,13 @@ function getEnginePath() {
 	// 3) Platform-specific npm package.
 	const platformPkg = getPlatformPackageName();
 	if (!platformPkg) {
+		if (process.platform === "win32" && process.arch === "x64") {
+			throw new Error(
+				"@rivetkit/engine-cli: Windows x64 is not yet supported via npm platform packages.\n" +
+					"Use the PowerShell installer from releases.rivet.dev or set RIVET_ENGINE_BINARY\n" +
+					"to a local rivet-engine.exe binary.",
+			);
+		}
 		throw new Error(
 			`@rivetkit/engine-cli: unsupported platform ${process.platform}/${process.arch}`,
 		);
@@ -72,6 +79,19 @@ function getEnginePath() {
 	try {
 		pkgJsonPath = require.resolve(`${platformPkg}/package.json`);
 	} catch {
+		if (process.platform === "win32" && process.arch === "x64") {
+			const version = require("./package.json").version;
+			if (
+				typeof version === "string" &&
+				(version.includes("-pr.") || version.includes("-main."))
+			) {
+				throw new Error(
+					"@rivetkit/engine-cli: Windows x64 binaries are only published for release versions.\n" +
+						`The current package version (${version}) is a preview build, so @rivetkit/engine-cli-win32-x64 was intentionally not published.\n` +
+						"Use a proper release, the PowerShell installer from releases.rivet.dev, or set RIVET_ENGINE_BINARY to a local rivet-engine.exe binary.",
+				);
+			}
+		}
 		throw new Error(
 			`@rivetkit/engine-cli: platform package ${platformPkg} is not installed.\n` +
 				`This usually means the platform is not supported or optionalDependencies\n` +

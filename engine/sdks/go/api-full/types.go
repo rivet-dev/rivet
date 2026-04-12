@@ -9,13 +9,14 @@ import (
 )
 
 type ActorsCreateRequest struct {
-	Namespace          string      `json:"-"`
-	CrashPolicy        CrashPolicy `json:"crash_policy,omitempty"`
-	Datacenter         *string     `json:"datacenter,omitempty"`
-	Input              *string     `json:"input,omitempty"`
-	Key                *string     `json:"key,omitempty"`
-	Name               string      `json:"name"`
-	RunnerNameSelector string      `json:"runner_name_selector"`
+	Namespace   string      `json:"-"`
+	CrashPolicy CrashPolicy `json:"crash_policy,omitempty"`
+	Datacenter  *string     `json:"datacenter,omitempty"`
+	// Arbitrary base64 encoded binary data.
+	Input              *string `json:"input,omitempty"`
+	Key                *string `json:"key,omitempty"`
+	Name               string  `json:"name"`
+	RunnerNameSelector string  `json:"runner_name_selector"`
 }
 
 type ActorsDeleteRequest struct {
@@ -52,6 +53,42 @@ type ActorsListNamesRequest struct {
 	Namespace string  `json:"-"`
 	Limit     *int    `json:"-"`
 	Cursor    *string `json:"-"`
+}
+
+type ActorsRescheduleRequest struct {
+	Namespace string                      `json:"-"`
+	Body      ActorsRescheduleRequestBody `json:"-"`
+}
+
+func (a *ActorsRescheduleRequest) UnmarshalJSON(data []byte) error {
+	var body ActorsRescheduleRequestBody
+	if err := json.Unmarshal(data, &body); err != nil {
+		return err
+	}
+	a.Body = body
+	return nil
+}
+
+func (a *ActorsRescheduleRequest) MarshalJSON() ([]byte, error) {
+	return json.Marshal(a.Body)
+}
+
+type ActorsSleepRequest struct {
+	Namespace string                 `json:"-"`
+	Body      ActorsSleepRequestBody `json:"-"`
+}
+
+func (a *ActorsSleepRequest) UnmarshalJSON(data []byte) error {
+	var body ActorsSleepRequestBody
+	if err := json.Unmarshal(data, &body); err != nil {
+		return err
+	}
+	a.Body = body
+	return nil
+}
+
+func (a *ActorsSleepRequest) MarshalJSON() ([]byte, error) {
+	return json.Marshal(a.Body)
 }
 
 type RunnerConfigsDeleteRequest struct {
@@ -329,6 +366,14 @@ func (a *ActorsListResponse) String() string {
 	return fmt.Sprintf("%#v", a)
 }
 
+type ActorsRescheduleRequestBody = map[string]interface{}
+
+type ActorsRescheduleResponse = map[string]interface{}
+
+type ActorsSleepRequestBody = map[string]interface{}
+
+type ActorsSleepResponse = map[string]interface{}
+
 type CrashPolicy string
 
 const (
@@ -447,6 +492,76 @@ func (d *DatacentersListResponse) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", d)
+}
+
+type Envoy struct {
+	CreateTs        int64                  `json:"create_ts"`
+	Datacenter      string                 `json:"datacenter"`
+	EnvoyKey        string                 `json:"envoy_key"`
+	LastConnectedTs *int64                 `json:"last_connected_ts,omitempty"`
+	LastPingTs      int64                  `json:"last_ping_ts"`
+	LastRtt         int                    `json:"last_rtt"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	NamespaceId     RivetId                `json:"namespace_id"`
+	PoolName        string                 `json:"pool_name"`
+	Slots           int64                  `json:"slots"`
+	StopTs          *int64                 `json:"stop_ts,omitempty"`
+	Version         int                    `json:"version"`
+
+	_rawJSON json.RawMessage
+}
+
+func (e *Envoy) UnmarshalJSON(data []byte) error {
+	type unmarshaler Envoy
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*e = Envoy(value)
+	e._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (e *Envoy) String() string {
+	if len(e._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(e._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(e); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", e)
+}
+
+type EnvoysListResponse struct {
+	Envoys     []*Envoy    `json:"envoys,omitempty"`
+	Pagination *Pagination `json:"pagination,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (e *EnvoysListResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler EnvoysListResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*e = EnvoysListResponse(value)
+	e._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (e *EnvoysListResponse) String() string {
+	if len(e._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(e._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(e); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", e)
 }
 
 type HealthFanoutResponse struct {
@@ -880,8 +995,9 @@ func (r *RunnerConfigKindServerless) String() string {
 }
 
 type RunnerConfigKindServerlessServerless struct {
-	Headers    map[string]string `json:"headers,omitempty"`
-	MaxRunners int               `json:"max_runners"`
+	Headers             map[string]string `json:"headers,omitempty"`
+	MaxConcurrentActors *int64            `json:"max_concurrent_actors,omitempty"`
+	MaxRunners          int               `json:"max_runners"`
 	// Milliseconds between metadata polling. If not set, uses the global default.
 	MetadataPollInterval *int64 `json:"metadata_poll_interval,omitempty"`
 	MinRunners           *int   `json:"min_runners,omitempty"`
@@ -951,8 +1067,9 @@ func (r *RunnerConfigResponse) String() string {
 }
 
 type RunnerConfigServerless struct {
-	Headers    map[string]string `json:"headers,omitempty"`
-	MaxRunners int               `json:"max_runners"`
+	Headers             map[string]string `json:"headers,omitempty"`
+	MaxConcurrentActors *int64            `json:"max_concurrent_actors,omitempty"`
+	MaxRunners          int               `json:"max_runners"`
 	// Milliseconds between metadata polling. If not set, uses the global default.
 	MetadataPollInterval *int64 `json:"metadata_poll_interval,omitempty"`
 	MinRunners           *int   `json:"min_runners,omitempty"`

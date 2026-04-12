@@ -27,6 +27,10 @@ export interface Package {
 	relDir: string;
 }
 
+export interface DiscoverPackagesOptions {
+	includeReleaseOnly?: boolean;
+}
+
 /**
  * Packages excluded from discovery (private, built separately, or otherwise
  * not publishable). Single source of truth — referenced by `bumpPackageJsons`,
@@ -69,6 +73,10 @@ export const META_PACKAGES: readonly MetaPackageSpec[] = [
 	},
 ];
 
+export const RELEASE_ONLY_PACKAGES = new Set<string>([
+	"@rivetkit/engine-cli-win32-x64",
+]);
+
 function isPublishable(pkg: { name?: string; private?: boolean }): boolean {
 	if (!pkg.name) return false;
 	if (pkg.private) return false;
@@ -88,7 +96,11 @@ function readPackageJson(
 	}
 }
 
-export function discoverPackages(repoRoot: string): Package[] {
+export function discoverPackages(
+	repoRoot: string,
+	opts: DiscoverPackagesOptions = {},
+): Package[] {
+	const includeReleaseOnly = opts.includeReleaseOnly ?? true;
 	const packages: Package[] = [];
 	const seen = new Set<string>();
 
@@ -98,6 +110,7 @@ export function discoverPackages(repoRoot: string): Package[] {
 		if (!pkg) return;
 		if (!pkg.name) return;
 		if (!isPublishable(pkg)) return;
+		if (!includeReleaseOnly && RELEASE_ONLY_PACKAGES.has(pkg.name)) return;
 		if (seen.has(pkg.name)) return;
 		seen.add(pkg.name);
 		packages.push({

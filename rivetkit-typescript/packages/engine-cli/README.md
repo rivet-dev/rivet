@@ -11,9 +11,11 @@ path to the binary for the current host.
 - `linux-arm64-musl` — Linux aarch64 (static)
 - `darwin-x64` — macOS Intel
 - `darwin-arm64` — macOS Apple Silicon
+- `win32-x64` — Windows x64 on release versions only
 
-Windows is not currently published via this package — engine Windows builds
-are handled separately via the release workflow.
+Preview tags do not publish the Windows platform package. On preview builds,
+use the PowerShell installer from `https://releases.rivet.dev` or point
+`RIVET_ENGINE_BINARY` at a local `rivet-engine.exe`.
 
 ## Usage
 

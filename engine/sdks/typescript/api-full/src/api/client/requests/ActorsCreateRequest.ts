@@ -17,6 +17,7 @@ export interface ActorsCreateRequest {
     namespace: string;
     crashPolicy: Rivet.CrashPolicy;
     datacenter?: string;
+    /** Arbitrary base64 encoded binary data. */
     input?: string;
     key?: string;
     name: string;

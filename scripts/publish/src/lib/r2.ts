@@ -63,16 +63,39 @@ export interface ListEntry {
 	Size?: number;
 }
 export interface ListResult {
-	Contents?: ListEntry[];
+	Contents: ListEntry[];
 }
 
 export async function listObjects(prefix: string): Promise<ListResult> {
 	const env = await getR2Env();
-	const { stdout } = await $({
-		env,
-	})`aws s3api list-objects --bucket ${BUCKET} --prefix ${prefix} --endpoint-url ${ENDPOINT_URL}`;
-	if (!stdout.trim()) return {};
-	return JSON.parse(stdout);
+	const contents: ListEntry[] = [];
+	let continuationToken: string | undefined;
+
+	while (true) {
+		const { stdout } = continuationToken
+			? await $({
+					env,
+				})`aws s3api list-objects-v2 --bucket ${BUCKET} --prefix ${prefix} --continuation-token ${continuationToken} --endpoint-url ${ENDPOINT_URL}`
+			: await $({
+					env,
+				})`aws s3api list-objects-v2 --bucket ${BUCKET} --prefix ${prefix} --endpoint-url ${ENDPOINT_URL}`;
+		if (!stdout.trim()) break;
+
+		const page = JSON.parse(stdout) as {
+			Contents?: ListEntry[];
+			IsTruncated?: boolean;
+			NextContinuationToken?: string;
+		};
+		if (Array.isArray(page.Contents)) {
+			contents.push(...page.Contents);
+		}
+		if (!page.IsTruncated || !page.NextContinuationToken) {
+			break;
+		}
+		continuationToken = page.NextContinuationToken;
+	}
+
+	return { Contents: contents };
 }
 
 /** Upload a single file to R2. */
@@ -137,8 +160,11 @@ export async function copyPrefix(
 	log.info(`copying ${sourcePrefix} -> ${targetPrefix}`);
 
 	const list = await listObjects(sourcePrefix);
-	if (!Array.isArray(list.Contents) || list.Contents.length === 0) {
-		throw new Error(`no objects found under ${sourcePrefix}`);
+	if (list.Contents.length === 0) {
+		log.warn(
+			`source prefix ${sourcePrefix} is empty. Skipping copy to ${targetPrefix}.`,
+		);
+		return;
 	}
 
 	// Delete the target first so stale files from a prior publish are cleaned.

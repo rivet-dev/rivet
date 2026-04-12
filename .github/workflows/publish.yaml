@@ -57,7 +57,7 @@ jobs:
       sha: ${{ steps.ctx.outputs.sha }}
       latest: ${{ steps.ctx.outputs.latest }}
       pr_number: ${{ steps.ctx.outputs.pr_number }}
-      is_fork: ${{ steps.ctx.outputs.is_fork }}
+      is_fork: ${{ steps.fork.outputs.is_fork }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -368,6 +368,7 @@ jobs:
             [rivet-engine-aarch64-unknown-linux-musl]=linux-arm64-musl
             [rivet-engine-x86_64-apple-darwin]=darwin-x64
             [rivet-engine-aarch64-apple-darwin]=darwin-arm64
+            [rivet-engine-x86_64-pc-windows-gnu.exe]=win32-x64
           )
           for f in engine-artifacts/rivet-engine-*; do
             [ -e "$f" ] || continue
@@ -382,9 +383,14 @@ jobs:
               echo "Missing engine-cli platform dir: $dest" >&2
               exit 1
             fi
-            cp "$f" "$dest/rivet-engine"
-            chmod +x "$dest/rivet-engine"
-            echo "Placed $filename -> npm/${platform}/rivet-engine"
+            if [ "$platform" = "win32-x64" ]; then
+              cp "$f" "$dest/rivet-engine.exe"
+              echo "Placed $filename -> npm/${platform}/rivet-engine.exe"
+            else
+              cp "$f" "$dest/rivet-engine"
+              chmod +x "$dest/rivet-engine"
+              echo "Placed $filename -> npm/${platform}/rivet-engine"
+            fi
           done
 
       - name: Bump package versions for build

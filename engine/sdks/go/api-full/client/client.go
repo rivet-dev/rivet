@@ -10,6 +10,7 @@ import (
 	sdk "sdk"
 	core "sdk/core"
 	datacenters "sdk/datacenters"
+	envoys "sdk/envoys"
 	health "sdk/health"
 	metadata "sdk/metadata"
 	namespaces "sdk/namespaces"
@@ -22,6 +23,7 @@ type Client struct {
 	header  http.Header
 
 	Datacenters *datacenters.Client
+	Envoys      *envoys.Client
 	Health      *health.Client
 	Metadata    *metadata.Client
 	Namespaces  *namespaces.Client
@@ -38,6 +40,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 		caller:      core.NewCaller(options.HTTPClient),
 		header:      options.ToHeader(),
 		Datacenters: datacenters.NewClient(opts...),
+		Envoys:      envoys.NewClient(opts...),
 		Health:      health.NewClient(opts...),
 		Metadata:    metadata.NewClient(opts...),
 		Namespaces:  namespaces.NewClient(opts...),
@@ -305,6 +308,64 @@ func (c *Client) ActorsKvGet(ctx context.Context, actorId sdk.RivetId, key strin
 			URL:      endpointURL,
 			Method:   http.MethodGet,
 			Headers:  c.header,
+			Response: &response,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (c *Client) ActorsReschedule(ctx context.Context, actorId sdk.RivetId, request *sdk.ActorsRescheduleRequest) (sdk.ActorsRescheduleResponse, error) {
+	baseURL := ""
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v/reschedule", actorId)
+
+	queryParams := make(url.Values)
+	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
+
+	var response sdk.ActorsRescheduleResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:      endpointURL,
+			Method:   http.MethodPost,
+			Headers:  c.header,
+			Request:  request,
+			Response: &response,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (c *Client) ActorsSleep(ctx context.Context, actorId sdk.RivetId, request *sdk.ActorsSleepRequest) (sdk.ActorsSleepResponse, error) {
+	baseURL := ""
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v/sleep", actorId)
+
+	queryParams := make(url.Values)
+	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
+
+	var response sdk.ActorsSleepResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:      endpointURL,
+			Method:   http.MethodPost,
+			Headers:  c.header,
+			Request:  request,
 			Response: &response,
 		},
 	); err != nil {

@@ -48,6 +48,8 @@ const DEP_FIELDS = [
 export interface BumpOptions {
 	/** If true, report actions but do not write. */
 	dryRun?: boolean;
+	/** Include release-only packages like Windows engine-cli artifacts. */
+	includeReleaseOnlyPackages?: boolean;
 	/**
 	 * When true, only rewrite the `version` field. Does not touch dependency
 	 * references or inject `optionalDependencies`. Safe to commit to git
@@ -81,7 +83,9 @@ export async function bumpPackageJsons(
 	version: string,
 	opts: BumpOptions = {},
 ): Promise<number> {
-	const packages = discoverPackages(repoRoot);
+	const packages = discoverPackages(repoRoot, {
+		includeReleaseOnly: opts.includeReleaseOnlyPackages,
+	});
 	const packageNames = new Set(packages.map((p) => p.name));
 	const metaPlatformMap = buildMetaPlatformMap(packages);
 	const versionOnly = opts.versionOnly ?? false;
