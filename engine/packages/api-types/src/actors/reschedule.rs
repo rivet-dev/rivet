@@ -17,7 +17,7 @@ pub struct ReschedulePath {
 
 #[derive(Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-#[schema(as = ActorsRescheduleRequest)]
+#[schema(as = ActorsRescheduleBody)]
 pub struct RescheduleRequest {}
 
 #[derive(Serialize, ToSchema)]
