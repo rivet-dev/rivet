@@ -16,6 +16,7 @@
  *
  * Debugging: comment out any step. No `--only-steps`, no phases.
  */
+import { existsSync } from "node:fs";
 import * as readline from "node:readline";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,13 +38,8 @@ const log = scoped("release");
 function findRepoRoot(): string {
 	let dir = dirname(fileURLToPath(import.meta.url));
 	for (let i = 0; i < 10; i++) {
-		try {
-			const ws = join(dir, "pnpm-workspace.yaml");
-			require("node:fs").statSync(ws);
-			return dir;
-		} catch {
-			dir = dirname(dir);
-		}
+		if (existsSync(join(dir, "pnpm-workspace.yaml"))) return dir;
+		dir = dirname(dir);
 	}
 	throw new Error("could not locate repo root");
 }
