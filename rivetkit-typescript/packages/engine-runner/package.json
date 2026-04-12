@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/engine-runner",
-	"version": "2.2.1",
+	"version": "2.3.0-rc.1",
 	"type": "module",
 	"files": [
 		"dist",

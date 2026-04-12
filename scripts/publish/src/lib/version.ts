@@ -48,14 +48,31 @@ const DEP_FIELDS = [
 export interface BumpOptions {
 	/** If true, report actions but do not write. */
 	dryRun?: boolean;
+	/**
+	 * When true, only rewrite the `version` field. Does not touch dependency
+	 * references or inject `optionalDependencies`. Safe to commit to git
+	 * because it preserves `workspace:*` dep specs that the lockfile expects.
+	 *
+	 * When false (default), also rewrites `workspace:*` deps to the literal
+	 * version and injects `optionalDependencies` on meta packages. This is
+	 * the publish-time mode used by CI — never committed.
+	 */
+	versionOnly?: boolean;
 }
 
 /**
- * Rewrite every discovered package's `version` to the given string and inject
- * `optionalDependencies` on meta packages. Also rewrite any `workspace:*` or
- * `workspace:^`/`~` dependency references among discovered packages to the
- * literal target version so published artifacts resolve cleanly without
- * relying on pnpm's publish-time rewrite.
+ * Rewrite every discovered package's `version` to the given string.
+ *
+ * In full mode (default, `versionOnly: false`): also injects
+ * `optionalDependencies` on meta packages and rewrites `workspace:*`
+ * dependency references to the literal version. This is the publish-time
+ * mode used by CI and must NOT be committed — it breaks
+ * `pnpm install --frozen-lockfile` because the lockfile expects
+ * `workspace:*`, not literal versions.
+ *
+ * In version-only mode (`versionOnly: true`): only rewrites the `version`
+ * field. Safe to commit. Used by `cut-release.ts` so the repo records the
+ * new version in package.jsons without breaking the lockfile.
  *
  * Returns the number of files written.
  */
@@ -67,6 +84,7 @@ export async function bumpPackageJsons(
 	const packages = discoverPackages(repoRoot);
 	const packageNames = new Set(packages.map((p) => p.name));
 	const metaPlatformMap = buildMetaPlatformMap(packages);
+	const versionOnly = opts.versionOnly ?? false;
 
 	let updated = 0;
 	for (const pkg of packages) {
@@ -76,31 +94,31 @@ export async function bumpPackageJsons(
 
 		pkgJson.version = version;
 
-		// Inject optionalDependencies on meta packages so end users get the
-		// correct platform-specific binary via npm's os/cpu/libc resolution.
-		const platformPkgs = metaPlatformMap.get(pkg.name);
-		if (platformPkgs && platformPkgs.length > 0) {
-			pkgJson.optionalDependencies = pkgJson.optionalDependencies ?? {};
-			for (const platPkg of platformPkgs) {
-				pkgJson.optionalDependencies[platPkg] = version;
+		if (!versionOnly) {
+			// Inject optionalDependencies on meta packages so end users get the
+			// correct platform-specific binary via npm's os/cpu/libc resolution.
+			const platformPkgs = metaPlatformMap.get(pkg.name);
+			if (platformPkgs && platformPkgs.length > 0) {
+				pkgJson.optionalDependencies = pkgJson.optionalDependencies ?? {};
+				for (const platPkg of platformPkgs) {
+					pkgJson.optionalDependencies[platPkg] = version;
+				}
 			}
-		}
 
-		for (const field of DEP_FIELDS) {
-			const deps = pkgJson[field];
-			if (!deps) continue;
-			for (const [dep, spec] of Object.entries(deps)) {
-				const isWorkspace =
-					typeof spec === "string" && spec.startsWith("workspace:");
-				if (!isWorkspace) continue;
-				// Only rewrite deps that are in the published set so we don't
-				// accidentally point an internal-only dep at a non-existent version.
-				const isOurPkg =
-					packageNames.has(dep) ||
-					dep.startsWith("@rivetkit/") ||
-					dep === "rivetkit";
-				if (!isOurPkg) continue;
-				deps[dep] = version;
+			for (const field of DEP_FIELDS) {
+				const deps = pkgJson[field];
+				if (!deps) continue;
+				for (const [dep, spec] of Object.entries(deps)) {
+					const isWorkspace =
+						typeof spec === "string" && spec.startsWith("workspace:");
+					if (!isWorkspace) continue;
+					const isOurPkg =
+						packageNames.has(dep) ||
+						dep.startsWith("@rivetkit/") ||
+						dep === "rivetkit";
+					if (!isOurPkg) continue;
+					deps[dep] = version;
+				}
 			}
 		}
 

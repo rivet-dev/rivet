@@ -34,7 +34,8 @@ COPY . .
 
 RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \
-        pnpm install && \
+        export SKIP_NAPI_BUILD=1 && \
+        pnpm install --ignore-scripts && \
         if [ -n "$VITE_APP_API_URL" ]; then \
             VITE_APP_API_URL="${VITE_APP_API_URL}" npx turbo build:engine -F @rivetkit/engine-frontend; \
         else \
