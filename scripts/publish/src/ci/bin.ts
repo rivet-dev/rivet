@@ -91,12 +91,19 @@ program
 	.command("bump-versions")
 	.description("Rewrite every publishable package.json to the given version")
 	.option("--version <version>", "Version to write (defaults to resolved context)")
+	.option(
+		"--version-only",
+		"Only rewrite package.json version fields without publish-time dependency injection",
+	)
 	.option("--dry-run", "Do not write, only report")
 	.action(async (opts) => {
 		const repoRoot = findRepoRoot();
 		const version =
 			opts.version ?? (await resolveContext()).version;
-		await bumpPackageJsons(repoRoot, version, { dryRun: !!opts.dryRun });
+		await bumpPackageJsons(repoRoot, version, {
+			dryRun: !!opts.dryRun,
+			versionOnly: !!opts.versionOnly,
+		});
 	});
 
 // ---------------------------------------------------------------------------
