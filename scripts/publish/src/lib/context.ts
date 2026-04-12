@@ -46,24 +46,13 @@ function findRepoRoot(): string {
 }
 
 /**
- * Source of truth for the base version used when computing preview
- * pre-release strings. Deliberately read from `rivetkit-native`'s committed
- * `package.json`. The committed value is expected to be a plain semver (e.g.
- * `2.5.0`), not a bumped preview version — `bumpPackageJsons` writes
- * previews to disk but CI runs it after context resolution, so the read
- * always sees the pristine committed value.
+ * Base for all preview pre-release strings. Hardcoded to `0.0.0` so preview
+ * versions like `0.0.0-pr.4600.abc1234` never look like real releases and
+ * always sort below any published `X.Y.Z`. Using a committed `package.json`
+ * version as the base would just embed whatever stale number happened to be
+ * committed there — it has no semantic relationship to the PR being previewed.
  */
-function readBaseVersion(repoRoot: string): string {
-	const pkgPath = join(
-		repoRoot,
-		"rivetkit-typescript/packages/rivetkit-native/package.json",
-	);
-	const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as { version: string };
-	// Strip any trailing prerelease so previews keyed off an rc base still
-	// compose cleanly as `{base-without-prerelease}-pr.N.sha`.
-	const idx = pkg.version.indexOf("-");
-	return idx === -1 ? pkg.version : pkg.version.slice(0, idx);
-}
+const PREVIEW_BASE_VERSION = "0.0.0";
 
 async function readShortSha(repoRoot: string): Promise<string> {
 	const envSha = process.env.GITHUB_SHA;
@@ -190,7 +179,7 @@ export async function resolveContext(
 	if (trigger !== "release") {
 		version = computeVersion(
 			trigger,
-			readBaseVersion(repoRoot),
+			PREVIEW_BASE_VERSION,
 			sha,
 			prNumber,
 			version,
