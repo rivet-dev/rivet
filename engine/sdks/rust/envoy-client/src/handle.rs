@@ -17,6 +17,7 @@ pub struct EnvoyHandle {
 impl EnvoyHandle {
 	pub fn shutdown(&self, immediate: bool) {
 		self.shared.shutting_down.store(true, Ordering::Release);
+
 		if immediate {
 			let _ = self.shared.envoy_tx.send(ToEnvoyMessage::Stop);
 		} else {
