@@ -1,5 +1,8 @@
-import { AgentOs, createInMemoryFileSystem } from "@rivet-dev/agent-os-core";
-import type { AgentOsOptions, MountConfig } from "@rivet-dev/agent-os-core";
+import type {
+	AgentOs,
+	AgentOsOptions,
+	MountConfig,
+} from "@rivet-dev/agent-os-core";
 import type { DatabaseProvider } from "@/actor/database";
 import { actor, event } from "@/actor/mod";
 import type { RawAccess } from "@/db/config";
@@ -36,6 +39,33 @@ import {
 } from "./session";
 import { buildShellActions } from "./shell";
 
+// Lazy-load @rivet-dev/agent-os-core to avoid triggering its eager
+// require("node:sqlite") side-effect at import time. This keeps
+// rivetkit/agent-os importable on runtimes that lack node:sqlite (e.g. Bun).
+let agentOsCorePromise: Promise<
+	typeof import("@rivet-dev/agent-os-core")
+> | null = null;
+
+async function loadAgentOsCore() {
+	if (agentOsCorePromise !== null) return agentOsCorePromise;
+	// Use Array.join() to prevent Turbopack from tracing into the module
+	// graph at compile time (same technique as sqlite-pool.ts).
+	const specifier = ["@rivet-dev", "agent-os-core"].join("/");
+	const promise = import(specifier) as Promise<
+		typeof import("@rivet-dev/agent-os-core")
+	>;
+	// Clear the cache on failure so subsequent calls retry instead of
+	// returning a permanently rejected promise.
+	agentOsCorePromise = promise.catch((err) => {
+		agentOsCorePromise = null;
+		throw new Error(
+			`failed to load @rivet-dev/agent-os-core: ${err instanceof Error ? err.message : String(err)}`,
+			{ cause: err },
+		);
+	});
+	return agentOsCorePromise;
+}
+
 // --- VM lifecycle helpers ---
 
 async function ensureVm<TConnParams>(
@@ -48,10 +78,15 @@ async function ensureVm<TConnParams>(
 
 	const start = Date.now();
 
-	// Build options with in-memory VFS as default working directory mount.
-	const options = buildVmOptions(config.options);
+	const core = await loadAgentOsCore();
 
-	const agentOs = await AgentOs.create(options);
+	// Build options with in-memory VFS as default working directory mount.
+	const options = buildVmOptions(
+		config.options,
+		core.createInMemoryFileSystem,
+	);
+
+	const agentOs = await core.AgentOs.create(options);
 	c.vars.agentOs = agentOs;
 
 	// Wire cron events to actor events.
@@ -68,8 +103,12 @@ async function ensureVm<TConnParams>(
 	return agentOs;
 }
 
+type CreateMemFs =
+	typeof import("@rivet-dev/agent-os-core")["createInMemoryFileSystem"];
+
 function buildVmOptions(
-	userOptions?: AgentOsOptions,
+	userOptions: AgentOsOptions | undefined,
+	createMemFs: CreateMemFs,
 ): AgentOsOptions {
 	const userMounts = userOptions?.mounts ?? [];
 
@@ -87,7 +126,7 @@ function buildVmOptions(
 	// actor storage-backed blocks) so VM filesystem state survives sleep/wake.
 	const memMount: MountConfig = {
 		path: "/home/user",
-		driver: createInMemoryFileSystem(),
+		driver: createMemFs(),
 	};
 
 	return {
