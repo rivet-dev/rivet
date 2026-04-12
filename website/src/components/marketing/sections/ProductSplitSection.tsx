@@ -40,7 +40,7 @@ const actorFeatures = [
 const agentOSFeatures = [
 	{
 		icon: Clock,
-		title: '~6ms coldstart, 22 KB RAM',
+		title: '~6ms coldstart, 22 MB RAM',
 		description: 'Near-zero cold start with minimal overhead.',
 	},
 	{
