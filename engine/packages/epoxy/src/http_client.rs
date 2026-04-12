@@ -23,6 +23,15 @@ fn find_replica_address(
 		.map(|r| r.api_peer_url.clone())
 }
 
+/// Fans out a best-effort request to remote replicas and returns only the successful responses.
+///
+/// This helper never returns an error just because one or more replicas could not be reached,
+/// timed out, or returned an error. Those failures are logged and dropped, and the caller gets
+/// whatever successful responses arrived before the fanout quorum target was met or the pending
+/// requests were exhausted.
+///
+/// This is intentional. Quorum-sensitive consensus paths must enforce quorum separately instead of
+/// relying on this helper to fail fast on an individual replica miss.
 #[tracing::instrument(skip_all, fields(%from_replica_id, ?replica_ids, ?quorum_type))]
 pub async fn fanout_to_replicas<F, Fut, T>(
 	from_replica_id: ReplicaId,
