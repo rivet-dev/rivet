@@ -18,6 +18,13 @@ pub struct Input {
 	pub replica_id: ReplicaId,
 	pub key: Vec<u8>,
 	pub caching_behavior: protocol::CachingBehavior,
+	/// Optional active-replica scope for this proposal.
+	///
+	/// Epoxy only validates that the supplied replicas are active and include the local
+	/// replica. Callers are responsible for ensuring a given key stays on a stable scope over
+	/// time, or that any scope change is handled as an explicit reconfiguration at a higher
+	/// layer.
+	pub target_replicas: Option<Vec<ReplicaId>>,
 	// Whether or not to write an empty value into cache if it did not exist on read.
 	pub save_empty: bool,
 }
@@ -73,7 +80,12 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 		.await?
 		.config;
 
-	let quorum_members: Vec<ReplicaId> = utils::get_quorum_members(&config);
+	let replica_id = ctx.config().epoxy_replica_id();
+	let quorum_members = utils::resolve_active_quorum_members(
+		&config,
+		replica_id,
+		input.target_replicas.as_deref(),
+	)?;
 
 	if quorum_members.len() == 1 {
 		return Ok(Output { value: None });

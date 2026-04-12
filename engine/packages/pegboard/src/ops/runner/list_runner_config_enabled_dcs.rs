@@ -71,6 +71,7 @@ async fn list_runner_config_enabled_dcs_inner(
 					replica_id: ctx.config().epoxy_replica_id(),
 					key: namespace::keys::subspace().pack(&runner_config_key),
 					caching_behavior: CachingBehavior::Optimistic,
+					target_replicas: None,
 					save_empty: true,
 				})
 				.await?;
