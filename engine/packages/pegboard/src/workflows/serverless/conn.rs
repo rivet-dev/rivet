@@ -156,16 +156,13 @@ enum OutboundReqOutput {
 #[timeout = u64::MAX]
 async fn outbound_req(ctx: &ActivityCtx, input: &OutboundReqInput) -> Result<OutboundReqOutput> {
 	let mut term_signal = TermSignal::get();
-	let mut drain_sub = ctx
-		.subscribe::<Drain>(("workflow_id", ctx.workflow_id()))
-		.await?;
 
 	loop {
 		metrics::SERVERLESS_OUTBOUND_REQ_ACTIVE
 			.with_label_values(&[&input.namespace_id.to_string(), &input.runner_name])
 			.inc();
 
-		let res = outbound_req_inner(ctx, input, &mut term_signal, &mut drain_sub).await;
+		let res = outbound_req_inner(ctx, input, &mut term_signal).await;
 
 		metrics::SERVERLESS_OUTBOUND_REQ_ACTIVE
 			.with_label_values(&[&input.namespace_id.to_string(), &input.runner_name])
@@ -203,7 +200,6 @@ async fn outbound_req_inner(
 	ctx: &ActivityCtx,
 	input: &OutboundReqInput,
 	term_signal: &mut TermSignal,
-	drain_sub: &mut message::SubscriptionHandle<Drain>,
 ) -> Result<OutboundReqOutput> {
 	if is_runner_draining(ctx, input.receiver_wf_id).await? {
 		return Ok(OutboundReqOutput::Draining { drain_sent: false });
@@ -438,7 +434,6 @@ async fn outbound_req_inner(
 			}
 		},
 		_ = tokio::time::sleep(sleep_until_drain) => {}
-		_ = drain_sub.next() => {}
 		_ = term_signal.recv() => {}
 	};
 
