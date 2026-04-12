@@ -14,6 +14,11 @@ pub enum WsError {
 		"The Rivet Engine is migrating. The websocket should attempt to reconnect as soon as possible."
 	)]
 	GoingAway,
+	#[error(
+		"no_runner_config",
+		"Must create a runner config before connecting an envoy with pool name {pool_name:?}."
+	)]
+	NoRunnerConfig { pool_name: String },
 	#[error("timed_out", "Ping timed out.")]
 	TimedOut,
 	#[error(
