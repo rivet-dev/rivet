@@ -1,19 +1,19 @@
 {
-  "name": "@rivetkit/rivetkit-native-darwin-x64",
-  "version": "2.2.1",
-  "os": [
-    "darwin"
-  ],
-  "cpu": [
-    "x64"
-  ],
-  "main": "rivetkit-native.darwin-x64.node",
-  "files": [
-    "rivetkit-native.darwin-x64.node"
-  ],
-  "description": "Native N-API addon for RivetKit providing envoy client and SQLite access",
-  "license": "Apache-2.0",
-  "engines": {
-    "node": ">= 20.0.0"
-  }
+	"name": "@rivetkit/rivetkit-native-darwin-x64",
+	"version": "2.3.0-rc.1",
+	"os": [
+		"darwin"
+	],
+	"cpu": [
+		"x64"
+	],
+	"main": "rivetkit-native.darwin-x64.node",
+	"files": [
+		"rivetkit-native.darwin-x64.node"
+	],
+	"description": "Native N-API addon for RivetKit providing envoy client and SQLite access",
+	"license": "Apache-2.0",
+	"engines": {
+		"node": ">= 20.0.0"
+	}
 }

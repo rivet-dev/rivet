@@ -137,9 +137,12 @@ async function main() {
 	log.info("updating source files (Cargo.toml, examples, sqlite-native)");
 	await updateSourceFiles(repoRoot, version);
 
-	// 6. Rewrite package.jsons via discovery.
+	// 6. Rewrite package.json version fields via discovery. Uses versionOnly
+	// mode so `workspace:*` dep specs are preserved — the lockfile depends on
+	// them. CI runs the full publish-time bump (with dep rewriting +
+	// optionalDependencies injection) after `pnpm install --frozen-lockfile`.
 	log.info("rewriting package.json versions");
-	await bumpPackageJsons(repoRoot, version);
+	await bumpPackageJsons(repoRoot, version, { versionOnly: true });
 
 	// 7. Fern gen.
 	log.info("running fern gen");

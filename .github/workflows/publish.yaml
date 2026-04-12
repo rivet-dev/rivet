@@ -205,10 +205,8 @@ jobs:
         run: |
           if [ "${{ needs.context.outputs.trigger }}" = "release" ]; then
             echo "build_mode=release" >> $GITHUB_OUTPUT
-            echo "build_frontend=true" >> $GITHUB_OUTPUT
           else
             echo "build_mode=debug" >> $GITHUB_OUTPUT
-            echo "build_frontend=false" >> $GITHUB_OUTPUT
           fi
       - name: Build via depot
         if: steps.gate.outputs.skip != 'true'
@@ -221,7 +219,7 @@ jobs:
             --build-arg BASE_TAG=${{ env.BASE_TAG }} \
             --build-arg BUILD_TARGET=${{ matrix.build_target }} \
             --build-arg BUILD_MODE=${{ steps.mode.outputs.build_mode }} \
-            --build-arg BUILD_FRONTEND=${{ steps.mode.outputs.build_frontend }} \
+            --build-arg BUILD_FRONTEND=false \
             -f ${{ matrix.docker }} \
             -t builder-${{ matrix.build_target }}-${{ matrix.platform }} \
             --load \
