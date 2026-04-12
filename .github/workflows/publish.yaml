@@ -315,7 +315,6 @@ jobs:
       id-token: write
       pull-requests: write # PR comment
       packages: read
-      workflows: write # required when tag commit touches .github/workflows/
     steps:
       - uses: actions/checkout@v4
         with:
