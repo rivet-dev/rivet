@@ -36,11 +36,8 @@ enum URLUtils {
         }
 
         var components = URLComponents(url: baseUrl, resolvingAgainstBaseURL: false)
-        // `fullPath` is built from already percent-encoded segments (see
-        // buildActorGatewayUrl and the action callers in RemoteManager), so use
-        // percentEncodedPath here. Assigning to .path would re-encode `%` and
-        // turn `%3A` into `%253A`, which breaks /gateway/{actorId} routing for
-        // actor IDs that contain `:` (e.g. Cloudflare Workers).
+        // fullPath is already percent-encoded (see buildActorGatewayUrl); .path would
+        // re-encode `%` and break actor IDs containing `:` (e.g. Cloudflare Workers).
         components?.percentEncodedPath = fullPath
         components?.percentEncodedQuery = queryParts.isEmpty ? nil : queryParts.joined(separator: "&")
         components?.fragment = nil
