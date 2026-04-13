@@ -145,6 +145,8 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 	.await?;
 
 	// We still have to write locally for listing
+	// TODO: non-transactional. Epoxy propose and the local UDB write can diverge if we crash or
+	// error between them.
 	ctx.udb()?
 		.run(|tx| {
 			let config = &config;
