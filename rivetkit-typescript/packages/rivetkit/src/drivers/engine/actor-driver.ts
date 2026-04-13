@@ -580,10 +580,14 @@ export class EngineActorDriver implements ActorDriver {
 
 			const envoy = this.#envoy;
 			return {
-				open: async (actorId: string) => {
+				open: async (
+					actorId: string,
+					preloadedEntries?: [Uint8Array, Uint8Array][],
+				) => {
 					return await nativeMod.openRawDatabaseFromEnvoy(
 						envoy,
 						actorId,
+						preloadedEntries,
 					);
 				},
 			};
