@@ -308,11 +308,11 @@ impl VfsContext {
 
 	fn delete_file(&self, file_tag: u8) -> Result<(), String> {
 		let meta_key = kv::get_meta_key(file_tag);
+		self.kv_delete(vec![meta_key.to_vec()])?;
 		self.kv_delete_range(
 			kv::get_chunk_key(file_tag, 0).to_vec(),
 			kv::get_chunk_key_range_end(file_tag).to_vec(),
-		)?;
-		self.kv_delete(vec![meta_key.to_vec()])
+		)
 	}
 }
 
