@@ -1,0 +1,5 @@
+{
+  "code": "no_runner_config",
+  "group": "ws",
+  "message": "Must create a runner config before connecting an envoy with pool name {pool_name:?}."
+}
