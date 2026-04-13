@@ -574,6 +574,7 @@ unsafe extern "C" fn kv_io_write(
 			chunk_offset: usize,
 			write_start: usize,
 			write_end: usize,
+			cached_chunk: Option<Vec<u8>>,
 			existing_chunk_index: Option<usize>,
 		}
 
@@ -590,7 +591,13 @@ unsafe extern "C" fn kv_io_write(
 			};
 			let needs_existing = write_start > 0 || existing_bytes_in_chunk > write_end;
 			let chunk_key = kv::get_chunk_key(file.file_tag, chunk_idx as u32).to_vec();
-			let existing_chunk_index = if needs_existing {
+			let cached_chunk = if needs_existing && ctx.read_cache_enabled {
+				let state = get_file_state(file.state);
+				state.read_cache.get(chunk_key.as_slice()).cloned()
+			} else {
+				None
+			};
+			let existing_chunk_index = if needs_existing && cached_chunk.is_none() {
 				let idx = chunk_keys_to_fetch.len();
 				chunk_keys_to_fetch.push(chunk_key.clone());
 				Some(idx)
@@ -603,6 +610,7 @@ unsafe extern "C" fn kv_io_write(
 				chunk_offset,
 				write_start,
 				write_end,
+				cached_chunk,
 				existing_chunk_index,
 			});
 		}
@@ -625,9 +633,14 @@ unsafe extern "C" fn kv_io_write(
 		let mut entries_to_write = Vec::with_capacity(plans.len() + 1);
 		for plan in &plans {
 			let existing_chunk = plan
-				.existing_chunk_index
-				.and_then(|idx| existing_chunks.get(idx))
-				.and_then(|value| value.as_ref());
+				.cached_chunk
+				.as_deref()
+				.or_else(|| {
+					plan
+						.existing_chunk_index
+						.and_then(|idx| existing_chunks.get(idx))
+						.and_then(|value| value.as_ref())
+				});
 
 			let mut new_chunk = if let Some(existing_chunk) = existing_chunk {
 				let mut chunk = vec![0u8; std::cmp::max(existing_chunk.len(), plan.write_end)];
