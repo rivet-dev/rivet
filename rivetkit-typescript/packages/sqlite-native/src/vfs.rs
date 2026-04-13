@@ -837,15 +837,14 @@ unsafe extern "C" fn kv_io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int
 			}
 		}
 
-		let mut keys_to_delete = Vec::new();
-		let mut chunk_idx = last_chunk_to_keep + 1;
-		while chunk_idx <= last_existing_chunk {
-			keys_to_delete.push(kv::get_chunk_key(file.file_tag, chunk_idx as u32).to_vec());
-			chunk_idx += 1;
-		}
-
-		for chunk in keys_to_delete.chunks(KV_MAX_BATCH_KEYS) {
-			if ctx.kv_delete(chunk.to_vec()).is_err() {
+		if last_chunk_to_keep < last_existing_chunk {
+			if ctx
+				.kv_delete_range(
+					kv::get_chunk_key(file.file_tag, (last_chunk_to_keep + 1) as u32).to_vec(),
+					kv::get_chunk_key_range_end(file.file_tag).to_vec(),
+				)
+				.is_err()
+			{
 				return SQLITE_IOERR_TRUNCATE;
 			}
 		}
