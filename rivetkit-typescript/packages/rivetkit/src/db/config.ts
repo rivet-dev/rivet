@@ -1,26 +1,29 @@
-import type { ISqliteVfs } from "@rivetkit/sqlite-wasm";
 import type { ActorMetrics } from "@/actor/metrics";
 
 export type AnyDatabaseProvider = DatabaseProvider<any> | undefined;
 
-/**
- * @deprecated Use nativeDatabaseProvider instead.
- */
-export interface NativeSqliteConfig {
-	endpoint: string;
-	token?: string;
-	namespace: string;
+export type SqliteBindings = unknown[] | Record<string, unknown>;
+
+export interface SqliteQueryResult {
+	columns: string[];
+	rows: unknown[][];
+}
+
+export interface SqliteDatabase {
+	exec(
+		sql: string,
+		callback?: (row: unknown[], columns: string[]) => void,
+	): Promise<void>;
+	run(sql: string, params?: SqliteBindings): Promise<void>;
+	query(sql: string, params?: SqliteBindings): Promise<SqliteQueryResult>;
+	close(): Promise<void>;
 }
 
 /**
- * Provider for opening native databases from a live runtime handle.
- * Replaces the transport-config-based NativeSqliteConfig seam.
+ * Provider for opening native databases from the active runtime.
  */
 export interface NativeDatabaseProvider {
-	open(
-		actorId: string,
-		preloadedEntries?: [Uint8Array, Uint8Array][],
-	): Promise<RawAccess>;
+	open(actorId: string): Promise<SqliteDatabase>;
 }
 
 /**
@@ -46,9 +49,7 @@ export interface DatabaseProviderContext {
 		DrizzleDatabaseClient | undefined
 	>;
 
-	/**
-	 * KV operations for constructing KV-backed database clients
-	 */
+	/** KV operations exposed for custom database providers. */
 	kv: {
 		batchPut: (entries: [Uint8Array, Uint8Array][]) => Promise<void>;
 		batchGet: (keys: Uint8Array[]) => Promise<(Uint8Array | null)[]>;
@@ -57,22 +58,9 @@ export interface DatabaseProviderContext {
 	};
 
 	/**
-	 * SQLite VFS handle for creating KV-backed databases.
-	 * May be a standalone VFS or a pooled handle from SqliteVfsPool.
-	 */
-	sqliteVfs?: ISqliteVfs;
-
-	/**
 	 * Actor metrics instance. When provided, KV and SQL operations are tracked.
 	 */
 	metrics?: ActorMetrics;
-
-	/**
-	 * Preloaded SQLite KV entries for VFS read optimization during startup.
-	 * When provided, database reads check these sorted entries via binary
-	 * search before falling back to KV.
-	 */
-	preloadedEntries?: [Uint8Array, Uint8Array][];
 
 	/**
 	 * Logger for debug output. When provided, SQL queries are logged with
@@ -81,15 +69,7 @@ export interface DatabaseProviderContext {
 	log?: { debug(obj: Record<string, unknown>): void };
 
 	/**
-	 * @deprecated Use nativeDatabaseProvider instead.
-	 * Native SQLite channel configuration. When provided, the native addon
-	 * connects to this explicit endpoint instead of reading process env.
-	 */
-	nativeSqliteConfig?: NativeSqliteConfig;
-
-	/**
-	 * Provider for opening native databases from a live runtime handle.
-	 * When provided, takes precedence over nativeSqliteConfig.
+	 * Provider for opening native databases from the active runtime.
 	 */
 	nativeDatabaseProvider?: NativeDatabaseProvider;
 }

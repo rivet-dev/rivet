@@ -1,7 +1,10 @@
 // Database migration
 export { migrateAgentOsTables } from "./actor/db";
-// SQLite-backed VFS
-export { createSqliteVfs, type SqliteVfsOptions } from "./fs/sqlite-vfs";
+// Database-backed VFS
+export {
+	createDatabaseVfs,
+	type DatabaseVfsOptions,
+} from "./fs/database-vfs";
 // Filesystem actions
 export { buildFilesystemActions } from "./actor/filesystem";
 // Actor factory and VM lifecycle helpers

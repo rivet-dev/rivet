@@ -18,6 +18,7 @@ import { deconstructError, stringifyError } from "@/common/utils";
 import { setIndexedWebSocketTestSender } from "@/common/websocket-test-hooks";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { AnyClient } from "@/client/client";
+import type { SqliteDatabase } from "@/db/config";
 import type { RegistryConfig } from "@/registry/config";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
@@ -343,6 +344,11 @@ interface MaterializedDynamicSource {
 	sourceFormat: DynamicSourceFormat;
 }
 
+interface NativeExecBridgeResult {
+	columns: string[];
+	rows: unknown[][];
+}
+
 export interface DynamicWebSocketOpenOptions {
 	headers?: Record<string, string>;
 	gatewayId?: ArrayBuffer;
@@ -366,6 +372,7 @@ export class DynamicActorIsolateRuntime {
 	#refs: DynamicRuntimeRefs | undefined;
 
 	#referenceHandles: Array<{ release?: () => void }> = [];
+	#nativeDatabases = new Map<string, Promise<SqliteDatabase>>();
 	#webSocketSessions = new Map<number, HostWebSocketSession>();
 	#sessionIdsByWebSocket = new WeakMap<UniversalWebSocket, number>();
 	#nextWebSocketSessionId = 1;
@@ -763,6 +770,13 @@ export class DynamicActorIsolateRuntime {
 			} catch {}
 		}
 		this.#referenceHandles = [];
+		for (const databasePromise of this.#nativeDatabases.values()) {
+			try {
+				const database = await databasePromise;
+				await database.close();
+			} catch {}
+		}
+		this.#nativeDatabases.clear();
 
 		try {
 			this.#context?.release();
@@ -886,6 +900,29 @@ export class DynamicActorIsolateRuntime {
 		const makeExternalCopy = <T>(value: T): { copy(): T } => {
 			return new ivm.ExternalCopy(value);
 		};
+		const getNativeDatabase = (
+			actorId: string,
+		): Promise<SqliteDatabase> => {
+			const existing = this.#nativeDatabases.get(actorId);
+			if (existing) {
+				return existing;
+			}
+			const provider =
+				this.#config.actorDriver.getNativeDatabaseProvider?.();
+			if (!provider) {
+				throw new Error(
+					"dynamic runtime requires a native database provider",
+				);
+			}
+			const databasePromise = provider.open(actorId).catch((error) => {
+				if (this.#nativeDatabases.get(actorId) === databasePromise) {
+					this.#nativeDatabases.delete(actorId);
+				}
+				throw error;
+			});
+			this.#nativeDatabases.set(actorId, databasePromise);
+			return databasePromise;
+		};
 
 		const kvBatchPutRef = makeRef(
 			async (
@@ -986,6 +1023,50 @@ export class DynamicActorIsolateRuntime {
 				);
 			},
 		);
+		const dbExecRef = makeRef(
+			async (
+				actorId: string,
+				sql: string,
+			): Promise<{ copy(): NativeExecBridgeResult }> => {
+				const rows: unknown[][] = [];
+				let columns: string[] = [];
+				const database = await getNativeDatabase(actorId);
+				await database.exec(sql, (row, rowColumns) => {
+					columns = rowColumns;
+					rows.push(row);
+				});
+				return makeExternalCopy({ columns, rows });
+			},
+		);
+		const dbQueryRef = makeRef(
+			async (
+				actorId: string,
+				sql: string,
+				params?: unknown[] | Record<string, unknown>,
+			): Promise<{ copy(): NativeExecBridgeResult }> => {
+				const database = await getNativeDatabase(actorId);
+				return makeExternalCopy(await database.query(sql, params));
+			},
+		);
+		const dbRunRef = makeRef(
+			async (
+				actorId: string,
+				sql: string,
+				params?: unknown[] | Record<string, unknown>,
+			): Promise<void> => {
+				const database = await getNativeDatabase(actorId);
+				await database.run(sql, params);
+			},
+		);
+		const dbCloseRef = makeRef(async (actorId: string): Promise<void> => {
+			const databasePromise = this.#nativeDatabases.get(actorId);
+			this.#nativeDatabases.delete(actorId);
+			if (!databasePromise) {
+				return;
+			}
+			const database = await databasePromise;
+			await database.close();
+		});
 		const setAlarmRef = makeRef(
 			async (actorId: string, timestamp: number): Promise<void> => {
 				await this.#config.actorDriver.setAlarm(
@@ -1110,6 +1191,22 @@ export class DynamicActorIsolateRuntime {
 		await context.global.set(
 			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvListRange,
 			kvListRangeRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.dbExec,
+			dbExecRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.dbQuery,
+			dbQueryRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.dbRun,
+			dbRunRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.dbClose,
+			dbCloseRef,
 		);
 		await context.global.set(
 			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.setAlarm,

@@ -35,5 +35,4 @@ export type {
 } from "@/engine-client/driver";
 export { buildRuntimeRouter } from "@/runtime-router/router";
 export { resolveGatewayTarget } from "./resolve-gateway-target";
-export { SqliteVfsPoolManager } from "./sqlite-pool";
 export { getInitialActorKvState } from "./utils";

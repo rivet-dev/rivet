@@ -1,16 +1,13 @@
 //! KV key layout for SQLite-over-KV storage.
 //!
-//! This module must produce byte-identical keys to the TypeScript implementation
-//! in `rivetkit-typescript/packages/sqlite-wasm/src/kv.ts`.
-//!
 //! Key layout:
 //!   Meta key:  [SQLITE_PREFIX, SCHEMA_VERSION, META_PREFIX, file_tag]       (4 bytes)
 //!   Chunk key: [SQLITE_PREFIX, SCHEMA_VERSION, CHUNK_PREFIX, file_tag, chunk_index_u32_be] (8 bytes)
 
-/// Size of each file chunk stored in KV. Matches CHUNK_SIZE in kv.ts.
+/// Size of each file chunk stored in KV.
 pub const CHUNK_SIZE: usize = 4096;
 
-/// Top-level SQLite prefix byte. Matches SQLITE_PREFIX in kv.ts.
+/// Top-level SQLite prefix byte.
 pub const SQLITE_PREFIX: u8 = 0x08;
 
 /// Schema version namespace byte after SQLITE_PREFIX.
@@ -64,7 +61,7 @@ pub fn get_chunk_key(file_tag: u8, chunk_index: u32) -> [u8; 8] {
 ///
 /// Chunk indices are u32, so the maximum addressable byte is
 /// (u32::MAX as u64 + 1) * CHUNK_SIZE. Writes or truncates beyond this would
-/// wrap the chunk index. This matches MAX_FILE_SIZE_BYTES in the WASM VFS.
+/// wrap the chunk index.
 pub const MAX_FILE_SIZE: u64 = (u32::MAX as u64 + 1) * CHUNK_SIZE as u64;
 
 /// Returns a 4-byte key that is lexicographically just past all chunk keys for
@@ -88,7 +85,7 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn constants_match_typescript() {
+	fn constants_match_expected_layout() {
 		assert_eq!(CHUNK_SIZE, 4096);
 		assert_eq!(SQLITE_PREFIX, 8);
 		assert_eq!(SQLITE_SCHEMA_VERSION, 1);
@@ -102,13 +99,11 @@ mod tests {
 
 	#[test]
 	fn meta_key_main() {
-		// TypeScript: getMetaKey(FILE_TAG_MAIN) => [8, 1, 0, 0]
 		assert_eq!(get_meta_key(FILE_TAG_MAIN), [0x08, 0x01, 0x00, 0x00]);
 	}
 
 	#[test]
 	fn meta_key_journal() {
-		// TypeScript: getMetaKey(FILE_TAG_JOURNAL) => [8, 1, 0, 1]
 		assert_eq!(get_meta_key(FILE_TAG_JOURNAL), [0x08, 0x01, 0x00, 0x01]);
 	}
 
@@ -124,7 +119,6 @@ mod tests {
 
 	#[test]
 	fn chunk_key_zero_index() {
-		// TypeScript: getChunkKey(FILE_TAG_MAIN, 0) => [8, 1, 1, 0, 0, 0, 0, 0]
 		assert_eq!(
 			get_chunk_key(FILE_TAG_MAIN, 0),
 			[0x08, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]
@@ -133,7 +127,6 @@ mod tests {
 
 	#[test]
 	fn chunk_key_index_one() {
-		// TypeScript: getChunkKey(FILE_TAG_MAIN, 1) => [8, 1, 1, 0, 0, 0, 0, 1]
 		assert_eq!(
 			get_chunk_key(FILE_TAG_MAIN, 1),
 			[0x08, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01]

@@ -1,14 +1,11 @@
 import { createRequire } from "node:module";
-import type { IDatabase } from "@rivetkit/sqlite-wasm";
 import {
 	drizzle as proxyDrizzle,
 	type SqliteRemoteDatabase,
 } from "drizzle-orm/sqlite-proxy";
-import type { DatabaseProvider, RawAccess } from "../config";
-import { openActorDatabase } from "../open-database";
+import type { DatabaseProvider, RawAccess, SqliteDatabase } from "../config";
 import {
 	AsyncMutex,
-	createActorKvStore,
 	isSqliteBindingObject,
 	toSqliteBindings,
 } from "../shared";
@@ -83,10 +80,10 @@ interface DatabaseFactoryConfig<
 }
 
 /**
- * Create a sqlite-proxy async callback from a @rivetkit/sqlite Database
+ * Create a sqlite-proxy async callback from a native SQLite database handle.
  */
 function createProxyCallback(
-	waDb: IDatabase,
+	db: SqliteDatabase,
 	mutex: AsyncMutex,
 	isClosed: () => boolean,
 	metrics?: import("@/actor/metrics").ActorMetrics,
@@ -110,14 +107,10 @@ function createProxyCallback(
 
 			let result: { rows: any };
 			if (method === "run") {
-				await waDb.run(sql, toSqliteBindings(params));
+				await db.run(sql, toSqliteBindings(params));
 				result = { rows: [] };
 			} else {
-				// For all/get/values, use parameterized query
-				const queryResult = await waDb.query(
-					sql,
-					toSqliteBindings(params),
-				);
+				const queryResult = await db.query(sql, toSqliteBindings(params));
 
 				// drizzle's mapResultRow accesses rows by column index (positional arrays)
 				// so we return raw arrays for all methods
@@ -147,15 +140,13 @@ function createProxyCallback(
 }
 
 /**
- * Run inline migrations via the @rivetkit/sqlite Database.
- * Migrations use the same embedded format as drizzle-orm's durable-sqlite.
+ * Run inline migrations via the native SQLite database handle.
  */
 async function runInlineMigrations(
-	waDb: IDatabase,
+	db: SqliteDatabase,
 	migrations: any,
 ): Promise<void> {
-	// Create migrations table
-	await waDb.exec(`
+	await db.exec(`
 		CREATE TABLE IF NOT EXISTS __drizzle_migrations (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			hash TEXT NOT NULL,
@@ -165,7 +156,7 @@ async function runInlineMigrations(
 
 	// Get the last applied migration
 	let lastCreatedAt = 0;
-	await waDb.exec(
+	await db.exec(
 		"SELECT id, hash, created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1",
 		(row) => {
 			lastCreatedAt = Number(row[2]) || 0;
@@ -185,11 +176,9 @@ async function runInlineMigrations(
 		const sql = migrations.migrations[migrationKey];
 		if (!sql) continue;
 
-		// Execute migration SQL
-		await waDb.exec(sql);
+		await db.exec(sql);
 
-		// Record migration
-		await waDb.run(
+		await db.run(
 			"INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
 			[entry.tag, entry.when],
 		);
@@ -203,24 +192,23 @@ export function db<
 ): DatabaseProvider<SqliteRemoteDatabase<TSchema> & RawAccess> {
 	checkDrizzleVersion();
 
-	// Map from drizzle client to the underlying @rivetkit/sqlite Database.
-	// Uses WeakMap so entries are garbage-collected when the client is.
-	// This replaces the previous shared `waDbInstance` variable which caused
-	// a race when multiple actors of the same type created databases
-	// concurrently: the last writer won, and earlier actors' migrations
-	// ran on the wrong database.
-	const clientToRawDb = new WeakMap<object, IDatabase>();
-	const clientToKvStore = new WeakMap<
-		object,
-		ReturnType<typeof createActorKvStore>
-	>();
+	const clientToRawDb = new WeakMap<object, SqliteDatabase>();
 
 	return {
 		createClient: async (ctx) => {
-			const { database: waDb, kvStore } = await openActorDatabase(ctx);
-			// Per-client mutex so actors of the same type do not serialize
-			// against each other. Each actor has its own database handle and
-			// its own closed flag, so there is no shared state to guard.
+			const override = ctx.overrideDrizzleDatabaseClient
+				? await ctx.overrideDrizzleDatabaseClient()
+				: undefined;
+			if (override) {
+				return override as SqliteRemoteDatabase<TSchema> & RawAccess;
+			}
+			if (!ctx.nativeDatabaseProvider) {
+				throw new Error(
+					"native SQLite is required, but the current runtime did not provide a native database provider",
+				);
+			}
+
+			const db = await ctx.nativeDatabaseProvider.open(ctx.actorId);
 			const mutex = new AsyncMutex();
 			let closed = false;
 			const ensureOpen = () => {
@@ -233,7 +221,7 @@ export function db<
 
 			// Create the async proxy callback
 			const callback = createProxyCallback(
-				waDb,
+				db,
 				mutex,
 				() => closed,
 				ctx.metrics,
@@ -267,7 +255,7 @@ export function db<
 								isSqliteBindingObject(args[0])
 									? toSqliteBindings(args[0])
 									: toSqliteBindings(args);
-							const result = await waDb.query(
+							const result = await db.query(
 								query,
 								bindings,
 							);
@@ -283,11 +271,9 @@ export function db<
 								return obj;
 							}) as TRow[];
 						} else {
-							// Use exec for non-parameterized queries since
-							// @rivetkit/sqlite's query() can crash on some statements.
 							const results: Record<string, unknown>[] = [];
 							let columnNames: string[] | null = null;
-							await waDb.exec(
+							await db.exec(
 								query,
 								(row: unknown[], columns: string[]) => {
 									if (!columnNames) {
@@ -327,25 +313,18 @@ export function db<
 						return true;
 					});
 					if (shouldClose) {
-						await waDb.close();
+						await db.close();
 					}
 				},
 			} satisfies RawAccess);
 
-			clientToRawDb.set(result, waDb);
-			if (kvStore) {
-				clientToKvStore.set(result, kvStore);
-			}
+			clientToRawDb.set(result, db);
 			return result;
 		},
 		onMigrate: async (client) => {
-			// Clear preloaded entries before migrations run. Migrations may
-			// write and re-read pages, and stale preload data would be
-			// served instead of the freshly written values.
-			clientToKvStore.get(client as object)?.clearPreload();
-			const waDb = clientToRawDb.get(client as object);
-			if (config?.migrations && waDb) {
-				await runInlineMigrations(waDb, config.migrations);
+			const db = clientToRawDb.get(client as object);
+			if (config?.migrations && db) {
+				await runInlineMigrations(db, config.migrations);
 			}
 		},
 		onDestroy: async (client) => {

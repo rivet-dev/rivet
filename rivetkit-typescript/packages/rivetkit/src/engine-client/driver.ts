@@ -1,6 +1,5 @@
 import type { Hono, Context as HonoContext } from "hono";
 import type { ActorKey, Encoding, UniversalWebSocket } from "@/actor/mod";
-import type { NativeSqliteConfig } from "@/db/config";
 import type { RegistryConfig } from "@/registry/config";
 import type { GetUpgradeWebSocket } from "@/utils";
 import type { ActorQuery, CrashPolicy } from "@/client/query";
@@ -49,7 +48,6 @@ export interface EngineControlClient {
 	 * Test-only helper that simulates an abrupt actor crash.
 	 */
 	hardCrashActor?(actorId: string): Promise<void>;
-	setNativeSqliteConfig?(config: NativeSqliteConfig): void;
 	kvGet(actorId: string, key: Uint8Array): Promise<string | null>;
 	kvBatchGet(
 		actorId: string,

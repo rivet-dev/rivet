@@ -17,7 +17,7 @@ import { createActorRouter } from "../../src/actor/router";
 import { routeWebSocket } from "../../src/actor/router-websocket-endpoints";
 import { HEADER_CONN_PARAMS } from "../../src/common/actor-router-consts";
 import { InlineWebSocketAdapter } from "../../src/common/inline-websocket-adapter";
-import type { ISqliteVfs } from "@rivetkit/sqlite-wasm";
+import type { NativeDatabaseProvider, SqliteDatabase } from "../../src/db/config";
 import {
 	DYNAMIC_BOOTSTRAP_CONFIG_GLOBAL_KEY,
 	DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS,
@@ -33,8 +33,6 @@ import {
 	type WebSocketSendEnvelopeInput,
 } from "../../src/dynamic/runtime-bridge";
 import { RegistryConfigSchema } from "../../src/registry/config";
-
-const { SqliteVfsPool } = require("@rivetkit/sqlite-wasm") as typeof import("@rivetkit/sqlite-wasm");
 
 interface IsolateReferenceLike {
 	applySyncPromise(
@@ -60,6 +58,10 @@ interface DynamicHostBridge {
 	kvDeleteRange: IsolateReferenceLike;
 	kvListPrefix: IsolateReferenceLike;
 	kvListRange: IsolateReferenceLike;
+	dbExec: IsolateReferenceLike;
+	dbQuery: IsolateReferenceLike;
+	dbRun: IsolateReferenceLike;
+	dbClose: IsolateReferenceLike;
 	setAlarm: IsolateReferenceLike;
 	clientCall: IsolateReferenceLike;
 	ackHibernatableWebSocketMessage: IsolateReferenceLike;
@@ -108,7 +110,7 @@ interface DynamicActorDriver {
 		},
 	): Promise<Array<[Uint8Array, Uint8Array]>>;
 	setAlarm(actor: { id: string }, timestamp: number): Promise<void>;
-	createSqliteVfs(actorId: string): Promise<ISqliteVfs>;
+	getNativeDatabaseProvider(): NativeDatabaseProvider;
 	startSleep(actorId: string): void;
 	ackHibernatableWebSocketMessage(
 		gatewayId: ArrayBuffer,
@@ -282,12 +284,7 @@ const webSocketSessions = new Map<
 	}
 >();
 const CLIENT_ACCESSOR_METHODS = new Set(["get", "getOrCreate", "getForId", "create"]);
-let sqliteVfsPoolPromise:
-	| Promise<{
-			acquire(actorId: string): Promise<ISqliteVfs>;
-			shutdown(): Promise<void>;
-	  }>
-	| undefined;
+const nativeDatabaseCache = new Map<string, SqliteDatabase>();
 
 type DynamicActorRouter = ReturnType<typeof createActorRouter>;
 
@@ -371,6 +368,10 @@ function readHostBridge(): DynamicHostBridge {
 		kvListRange: getRequiredHostRef(
 			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvListRange,
 		),
+		dbExec: getRequiredHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.dbExec),
+		dbQuery: getRequiredHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.dbQuery),
+		dbRun: getRequiredHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.dbRun),
+		dbClose: getRequiredHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.dbClose),
 		setAlarm: getRequiredHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.setAlarm),
 		clientCall: getRequiredHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.clientCall),
 		ackHibernatableWebSocketMessage: getRequiredHostRef(
@@ -452,23 +453,6 @@ async function getRuntimeState(): Promise<DynamicRuntimeState> {
 	return await runtimeStatePromise;
 }
 
-async function loadSqliteVfsPool(): Promise<{
-	acquire(actorId: string): Promise<ISqliteVfs>;
-	shutdown(): Promise<void>;
-}> {
-	if (!sqliteVfsPoolPromise) {
-		sqliteVfsPoolPromise = Promise.resolve().then(
-			() =>
-				new SqliteVfsPool({
-					actorsPerInstance: 50,
-					idleDestroyMs: 30_000,
-				}),
-		);
-	}
-
-	return await sqliteVfsPoolPromise;
-}
-
 function dynamicHostLog(level: "debug" | "warn", message: string): void {
 	if (!hostBridge.log) {
 		return;
@@ -510,6 +494,45 @@ function bridgeCallSync<T>(ref: IsolateReferenceLike, args: unknown[]): T {
 			copy: true,
 		},
 	}) as T;
+}
+
+function createNativeDatabaseBridge(actorIdValue: string): SqliteDatabase {
+	return {
+		async exec(
+			sql: string,
+			callback?: (row: unknown[], columns: string[]) => void,
+		): Promise<void> {
+			const result = await bridgeCall<{
+				columns: string[];
+				rows: unknown[][];
+			}>(hostBridge.dbExec, [actorIdValue, sql]);
+			if (!callback) {
+				return;
+			}
+			for (const row of result.rows) {
+				callback(row, result.columns);
+			}
+		},
+		async run(
+			sql: string,
+			params?: unknown[] | Record<string, unknown>,
+		): Promise<void> {
+			await bridgeCall(hostBridge.dbRun, [actorIdValue, sql, params]);
+		},
+		async query(
+			sql: string,
+			params?: unknown[] | Record<string, unknown>,
+		): Promise<{ rows: unknown[][]; columns: string[] }> {
+			return await bridgeCall(hostBridge.dbQuery, [actorIdValue, sql, params]);
+		},
+		async close(): Promise<void> {
+			try {
+				await bridgeCall(hostBridge.dbClose, [actorIdValue]);
+			} finally {
+				nativeDatabaseCache.delete(actorIdValue);
+			}
+		},
+	};
 }
 
 function toArrayBuffer(input: Uint8Array | ArrayBuffer): ArrayBuffer {
@@ -851,9 +874,18 @@ const actorDriver: DynamicActorDriver = {
 	async setAlarm(actor, timestamp: number): Promise<void> {
 		await bridgeCall(hostBridge.setAlarm, [actor.id, timestamp]);
 	},
-	async createSqliteVfs(actorIdValue: string): Promise<ISqliteVfs> {
-		const pool = await loadSqliteVfsPool();
-		return await pool.acquire(actorIdValue);
+	getNativeDatabaseProvider(): NativeDatabaseProvider {
+		return {
+			open: async (actorIdValue: string): Promise<SqliteDatabase> => {
+				const existing = nativeDatabaseCache.get(actorIdValue);
+				if (existing) {
+					return existing;
+				}
+				const database = createNativeDatabaseBridge(actorIdValue);
+				nativeDatabaseCache.set(actorIdValue, database);
+				return database;
+			},
+		};
 	},
 	startSleep(requestActorId: string): void {
 		bridgeCallSync(hostBridge.startSleep, [requestActorId]);
@@ -1306,10 +1338,13 @@ async function dynamicDisposeEnvelope(): Promise<boolean> {
 	}
 	webSocketSessions.clear();
 	runtimeStopMode = undefined;
-	if (sqliteVfsPoolPromise) {
-		const sqliteVfsPool = await sqliteVfsPoolPromise;
-		await sqliteVfsPool.shutdown();
-		sqliteVfsPoolPromise = undefined;
+	for (const [actorId, database] of nativeDatabaseCache.entries()) {
+		try {
+			await database.close();
+		} catch {
+			// noop
+		}
+		nativeDatabaseCache.delete(actorId);
 	}
 	return true;
 }

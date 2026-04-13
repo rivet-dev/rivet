@@ -1,8 +1,6 @@
 import type { DatabaseProvider, RawAccess } from "./config";
-import { openActorDatabase } from "./open-database";
 import {
 	AsyncMutex,
-	createActorKvStore,
 	isSqliteBindingObject,
 	toSqliteBindings,
 } from "./shared";
@@ -16,11 +14,6 @@ interface DatabaseFactoryConfig {
 export function db({
 	onMigrate,
 }: DatabaseFactoryConfig = {}): DatabaseProvider<RawAccess> {
-	const clientToKvStore = new WeakMap<
-		object,
-		ReturnType<typeof createActorKvStore>
-	>();
-
 	return {
 		createClient: async (ctx) => {
 			// Check if override is provided
@@ -48,23 +41,14 @@ export function db({
 				} satisfies RawAccess;
 			}
 
-			// Use native database provider when available. This is the new
-			// path where databases are opened from a live runtime handle
-			// (e.g., the native envoy client).
-			if (ctx.nativeDatabaseProvider) {
-				return await ctx.nativeDatabaseProvider.open(
-					ctx.actorId,
-					ctx.preloadedEntries,
+			const nativeDatabaseProvider = ctx.nativeDatabaseProvider;
+			if (!nativeDatabaseProvider) {
+				throw new Error(
+					"native SQLite is required, but the current runtime did not provide a native database provider",
 				);
 			}
 
-			const { database: db, kvStore } = await openActorDatabase(ctx);
-			let lastVfsError: unknown = null;
-			if (kvStore) {
-				kvStore.onError = (error: unknown) => {
-					lastVfsError = error;
-				};
-			}
+			const db = await nativeDatabaseProvider.open(ctx.actorId);
 			let closed = false;
 			const mutex = new AsyncMutex();
 			const ensureOpen = () => {
@@ -98,77 +82,55 @@ export function db({
 						// Keep using `db.exec` for non-parameterized SQL because it
 						// supports multi-statement migrations.
 						let result: TRow[];
-						try {
-							if (args.length > 0) {
-								const bindings =
-									args.length === 1 &&
-									isSqliteBindingObject(args[0])
-										? toSqliteBindings(args[0])
-										: toSqliteBindings(args);
-								const token = query
-									.trimStart()
-									.slice(0, 16)
-									.toUpperCase();
-								const returnsRows =
-									token.startsWith("SELECT") ||
-									token.startsWith("PRAGMA") ||
-									token.startsWith("WITH") ||
-									/\bRETURNING\b/i.test(query);
+						if (args.length > 0) {
+							const bindings =
+								args.length === 1 &&
+								isSqliteBindingObject(args[0])
+									? toSqliteBindings(args[0])
+									: toSqliteBindings(args);
+							const token = query
+								.trimStart()
+								.slice(0, 16)
+								.toUpperCase();
+							const returnsRows =
+								token.startsWith("SELECT") ||
+								token.startsWith("PRAGMA") ||
+								token.startsWith("WITH") ||
+								/\bRETURNING\b/i.test(query);
 
-								if (returnsRows) {
-									const { rows, columns } = await db.query(
-										query,
-										bindings,
-									);
-									result = rows.map((row: unknown[]) => {
-										const rowObj: Record<
-											string,
-											unknown
-										> = {};
-										for (
-											let i = 0;
-											i < columns.length;
-											i++
-										) {
-											rowObj[columns[i]] = row[i];
-										}
-										return rowObj;
-									}) as TRow[];
-								} else {
-									await db.run(query, bindings);
-									result = [] as TRow[];
-								}
-							} else {
-								const results: Record<string, unknown>[] = [];
-								let columnNames: string[] | null = null;
-								await db.exec(
+							if (returnsRows) {
+								const { rows, columns } = await db.query(
 									query,
-									(row: unknown[], columns: string[]) => {
-										if (!columnNames) {
-											columnNames = columns;
-										}
-										const rowObj: Record<
-											string,
-											unknown
-										> = {};
-										for (let i = 0; i < row.length; i++) {
-											rowObj[columnNames[i]] = row[i];
-										}
-										results.push(rowObj);
-									},
+									bindings,
 								);
-								result = results as TRow[];
+								result = rows.map((row: unknown[]) => {
+									const rowObj: Record<string, unknown> = {};
+									for (let i = 0; i < columns.length; i++) {
+										rowObj[columns[i]] = row[i];
+									}
+									return rowObj;
+								}) as TRow[];
+							} else {
+								await db.run(query, bindings);
+								result = [] as TRow[];
 							}
-						} catch (error) {
-							if (lastVfsError != null) {
-								const cause = lastVfsError;
-								lastVfsError = null;
-								throw new Error(
-									`Database query failed because the underlying storage is no longer available (${cause instanceof Error ? cause.message : String(cause)}). This usually means the actor is stopping. Use c.abortSignal to cancel long-running work before the actor shuts down.`,
-									{ cause: cause instanceof Error ? cause : undefined },
-								);
-							}
-							throw error;
+						} else {
+							const results: Record<string, unknown>[] = [];
+							let columnNames: string[] | null = null;
+							await db.exec(
+								query,
+								(row: unknown[], columns: string[]) => {
+									if (!columnNames) {
+										columnNames = columns;
+									}
+									const rowObj: Record<string, unknown> = {};
+									for (let i = 0; i < row.length; i++) {
+										rowObj[columnNames[i]] = row[i];
+									}
+									results.push(rowObj);
+								},
+							);
+							result = results as TRow[];
 						}
 
 						const durationMs = performance.now() - start;
@@ -190,13 +152,6 @@ export function db({
 					});
 				},
 				close: async () => {
-					// Poison the KV store before acquiring the mutex. If a
-					// query is in-flight (holding the mutex), its next VFS
-					// page read/write will fail immediately with a
-					// descriptive error instead of hanging or producing a
-					// cryptic "disk I/O error".
-					kvStore?.poison();
-
 					const shouldClose = await mutex.run(async () => {
 						if (closed) return false;
 						closed = true;
@@ -207,16 +162,9 @@ export function db({
 					}
 				},
 			} satisfies RawAccess;
-			if (kvStore) {
-				clientToKvStore.set(client, kvStore);
-			}
 			return client;
 		},
 		onMigrate: async (client) => {
-			// Clear preloaded entries before migrations run. Migrations may
-			// write and re-read pages, and stale preload data would be
-			// served instead of the freshly written values.
-			clientToKvStore.get(client as object)?.clearPreload();
 			if (onMigrate) {
 				await onMigrate(client);
 			}

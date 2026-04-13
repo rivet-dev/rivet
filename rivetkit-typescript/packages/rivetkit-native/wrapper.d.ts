@@ -128,19 +128,4 @@ export declare function openDatabaseFromEnvoy(
 	actorId: string,
 	preloadedEntries?: readonly [Uint8Array, Uint8Array][] | null,
 ): Promise<JsNativeDatabase>;
-
-export interface NativeRawDatabase {
-	execute: <TRow extends Record<string, unknown> = Record<string, unknown>>(
-		query: string,
-		...args: unknown[]
-	) => Promise<TRow[]>;
-	close: () => Promise<void>;
-}
-
-export declare function openRawDatabaseFromEnvoy(
-	handle: EnvoyHandle,
-	actorId: string,
-	preloadedEntries?: readonly [Uint8Array, Uint8Array][] | null,
-): Promise<NativeRawDatabase>;
-
 export declare const utils: {};
