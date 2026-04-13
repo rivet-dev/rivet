@@ -5,7 +5,6 @@ use gas::prelude::*;
 use rand::Rng;
 use rivet_api_builder::ApiCtx;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, HashSet};
 use std::time::{Duration, Instant};
 
 use crate::{
@@ -218,8 +217,11 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 		.await
 		.context("failed reading config")?;
 
-	let quorum_members =
-		resolve_quorum_members(&config, replica_id, input.target_replicas.as_deref())?;
+	let quorum_members = utils::resolve_active_quorum_members(
+		&config,
+		replica_id,
+		input.target_replicas.as_deref(),
+	)?;
 	tracing::debug!(
 		?quorum_members,
 		quorum_size = quorum_members.len(),
@@ -1005,122 +1007,11 @@ fn prepare_retry_base_delay_ms(retry_count: usize) -> u64 {
 		.min(PREPARE_RETRY_MAX_DELAY_MS)
 }
 
-/// Returns the quorum members to use for this proposal. This supports scoped proposals because
-/// runner configs are often only enabled in a couple of explicitly coupled regions. If
-/// `target_replicas` is provided, it validates that the scope is non-empty, includes the local
-/// replica, and only contains active replicas. Otherwise it falls back to the full active quorum
-/// from the cluster config.
-///
-/// Scoped proposals rely on a caller-side invariant: the same key must continue using the same
-/// replica scope unless some higher-level reconfiguration step coordinates the membership change.
-/// This function does not persist or enforce that per-key scope stability.
-fn resolve_quorum_members(
-	config: &protocol::ClusterConfig,
-	replica_id: ReplicaId,
-	target_replicas: Option<&[ReplicaId]>,
-) -> Result<Vec<ReplicaId>> {
-	match target_replicas {
-		Some(target_replicas) => {
-			let active = utils::get_quorum_members(config)
-				.into_iter()
-				.collect::<HashSet<_>>();
-			let validated = target_replicas.iter().copied().collect::<BTreeSet<_>>();
-
-			if validated.is_empty() {
-				bail!("target_replicas cannot be empty");
-			}
-
-			if !validated.contains(&replica_id) {
-				bail!("target_replicas must include the local replica");
-			}
-
-			if !validated.iter().all(|replica| active.contains(replica)) {
-				bail!("target_replicas contains an inactive or unknown replica");
-			}
-
-			Ok(validated.into_iter().collect())
-		}
-		None => {
-			let replicas = utils::get_quorum_members(config);
-			if !replicas.contains(&replica_id) {
-				bail!("local replica is not active in the current epoxy config");
-			}
-			Ok(replicas)
-		}
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use epoxy_protocol::protocol::{ClusterConfig, ReplicaConfig, ReplicaStatus};
 	use rand::{SeedableRng, rngs::StdRng};
-
-	fn make_config(replicas: &[(ReplicaId, ReplicaStatus)]) -> ClusterConfig {
-		ClusterConfig {
-			coordinator_replica_id: replicas[0].0,
-			epoch: 1,
-			replicas: replicas
-				.iter()
-				.map(|(replica_id, status)| ReplicaConfig {
-					replica_id: *replica_id,
-					status: status.clone(),
-					api_peer_url: String::new(),
-					guard_url: String::new(),
-				})
-				.collect(),
-		}
-	}
-
-	#[test]
-	fn resolve_quorum_members_none_uses_all_active() {
-		let config = make_config(&[
-			(1, ReplicaStatus::Active),
-			(2, ReplicaStatus::Active),
-			(3, ReplicaStatus::Joining),
-		]);
-		let result = resolve_quorum_members(&config, 1, None).unwrap();
-		assert_eq!(result, vec![1, 2]);
-	}
-
-	#[test]
-	fn resolve_quorum_members_requires_local_replica_to_be_active() {
-		let config = make_config(&[(1, ReplicaStatus::Learning), (2, ReplicaStatus::Active)]);
-		let result = resolve_quorum_members(&config, 1, None);
-		assert!(result.is_err());
-	}
-
-	#[test]
-	fn resolve_quorum_members_scoped_subset() {
-		let config = make_config(&[
-			(1, ReplicaStatus::Active),
-			(2, ReplicaStatus::Active),
-			(3, ReplicaStatus::Active),
-		]);
-		let result = resolve_quorum_members(&config, 1, Some(&[1, 2])).unwrap();
-		assert_eq!(result, vec![1, 2]);
-	}
-
-	#[test]
-	fn resolve_quorum_members_empty_target_errors() {
-		let config = make_config(&[(1, ReplicaStatus::Active)]);
-		let result = resolve_quorum_members(&config, 1, Some(&[]));
-		assert!(result.is_err());
-	}
-
-	#[test]
-	fn resolve_quorum_members_missing_local_errors() {
-		let config = make_config(&[(1, ReplicaStatus::Active), (2, ReplicaStatus::Active)]);
-		let result = resolve_quorum_members(&config, 1, Some(&[2]));
-		assert!(result.is_err());
-	}
-
-	#[test]
-	fn resolve_quorum_members_inactive_replica_errors() {
-		let config = make_config(&[(1, ReplicaStatus::Active), (2, ReplicaStatus::Learning)]);
-		let result = resolve_quorum_members(&config, 1, Some(&[1, 2]));
-		assert!(result.is_err());
-	}
 
 	#[test]
 	fn parses_set_command_as_set_proposal() {

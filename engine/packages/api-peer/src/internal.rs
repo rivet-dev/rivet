@@ -523,6 +523,7 @@ pub async fn get_epoxy_kv_optimistic(
 			replica_id,
 			key: key_bytes,
 			caching_behavior: epoxy::protocol::CachingBehavior::Optimistic,
+			target_replicas: None,
 			save_empty: false,
 		})
 		.await?;

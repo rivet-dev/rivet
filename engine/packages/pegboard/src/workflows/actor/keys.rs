@@ -174,6 +174,7 @@ pub async fn lookup_key_optimistic(
 			replica_id: ctx.config().epoxy_replica_id(),
 			key: keys::subspace().pack(&reservation_key),
 			caching_behavior: epoxy::protocol::CachingBehavior::Optimistic,
+			target_replicas: None,
 			save_empty: false,
 		})
 		.await?

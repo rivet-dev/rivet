@@ -27,94 +27,88 @@ pub async fn reserve_key(
 	actor_id: Id,
 	pool_name: &str,
 ) -> Result<ReserveKeyOutput> {
-	let optimistic_reservation_id = ctx
+	let optimistic_reservation = ctx
 		.activity(LookupKeyOptimisticInput {
 			namespace_id,
 			name: name.to_string(),
 			key: key.to_string(),
+			pool_name: pool_name.to_string(),
 		})
 		.await?;
 
-	if let Some(reservation_id) = optimistic_reservation_id {
+	match optimistic_reservation {
 		// Key found optimistically
-
-		handle_existing_reservation(ctx, reservation_id, namespace_id, name, key, actor_id).await
-	} else {
-		// Key not found optimistically
-
-		let new_reservation_id = ctx.activity(GenerateReservationIdInput {}).await?;
-		let target_replicas = ctx
-			.v(2)
-			.activity(ResolveTargetReplicasInput {
-				namespace_id,
-				pool_name: pool_name.to_string(),
-			})
-			.await?;
-
-		if !target_replicas.contains(&ctx.config().epoxy_replica_id()) {
-			let replica_id = target_replicas
-				.first()
-				.copied()
-				.ok_or_else(|| anyhow::anyhow!("target_replicas is empty"))?;
-			let dc_label = u16::try_from(replica_id)?;
-
-			return Ok(ReserveKeyOutput::ForwardToDatacenter { dc_label });
+		LookupKeyOptimisticOutput::Found(reservation_id) => {
+			handle_existing_reservation(ctx, reservation_id, namespace_id, name, key, actor_id)
+				.await
 		}
+		// Key not found optimistically
+		LookupKeyOptimisticOutput::NotFound(new_reservation_id, target_replicas) => {
+			if !target_replicas.contains(&ctx.config().epoxy_replica_id()) {
+				let replica_id = target_replicas
+					.into_iter()
+					.next()
+					.context("target_replicas is empty")?;
+				let dc_label = u16::try_from(replica_id)?;
 
-		let proposal_result = ctx
-			.activity(ProposeInput {
-				namespace_id,
-				name: name.to_string(),
-				key: key.to_string(),
-				new_reservation_id,
-				actor_id,
-				target_replicas,
-			})
-			.await?;
+				return Ok(ReserveKeyOutput::ForwardToDatacenter { dc_label });
+			}
 
-		match proposal_result {
-			ProposalResult::Committed => {
-				let output = ctx
-					.activity(ReserveActorKeyInput {
-						namespace_id,
-						name: name.to_string(),
-						key: key.to_string(),
-						actor_id,
-						create_ts: ctx.create_ts(),
-					})
-					.await?;
-				match output {
-					ReserveActorKeyOutput::Success => Ok(ReserveKeyOutput::Success),
-					ReserveActorKeyOutput::ExistingActor { existing_actor_id } => {
-						Ok(ReserveKeyOutput::KeyExists { existing_actor_id })
+			let proposal_result = ctx
+				.activity(ProposeInput {
+					namespace_id,
+					name: name.to_string(),
+					key: key.to_string(),
+					new_reservation_id,
+					actor_id,
+					target_replicas,
+				})
+				.await?;
+
+			match proposal_result {
+				ProposalResult::Committed => {
+					let output = ctx
+						.activity(ReserveActorKeyInput {
+							namespace_id,
+							name: name.to_string(),
+							key: key.to_string(),
+							actor_id,
+							create_ts: ctx.create_ts(),
+						})
+						.await?;
+					match output {
+						ReserveActorKeyOutput::Success => Ok(ReserveKeyOutput::Success),
+						ReserveActorKeyOutput::ExistingActor { existing_actor_id } => {
+							Ok(ReserveKeyOutput::KeyExists { existing_actor_id })
+						}
 					}
 				}
-			}
-			ProposalResult::ConsensusFailed => {
-				bail!("consensus failed")
-			}
-			ProposalResult::CommandError(CommandError::ExpectedValueDoesNotMatch {
-				current_value,
-			}) => {
-				if let Some(current_value) = current_value {
-					let existing_reservation_id = keys::epoxy::ns::ReservationByKeyKey::new(
-						namespace_id,
-						name.to_string(),
-						key.to_string(),
-					)
-					.deserialize(&current_value)?;
+				ProposalResult::ConsensusFailed => {
+					bail!("consensus failed")
+				}
+				ProposalResult::CommandError(CommandError::ExpectedValueDoesNotMatch {
+					current_value,
+				}) => {
+					if let Some(current_value) = current_value {
+						let existing_reservation_id = keys::epoxy::ns::ReservationByKeyKey::new(
+							namespace_id,
+							name.to_string(),
+							key.to_string(),
+						)
+						.deserialize(&current_value)?;
 
-					handle_existing_reservation(
-						ctx,
-						existing_reservation_id,
-						namespace_id,
-						name,
-						key,
-						actor_id,
-					)
-					.await
-				} else {
-					bail!("unreachable: current_value should exist")
+						handle_existing_reservation(
+							ctx,
+							existing_reservation_id,
+							namespace_id,
+							name,
+							key,
+							actor_id,
+						)
+						.await
+					} else {
+						bail!("unreachable: current_value should exist")
+					}
 				}
 			}
 		}
@@ -157,13 +151,31 @@ pub struct LookupKeyOptimisticInput {
 	namespace_id: Id,
 	name: String,
 	key: String,
+	pool_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum LookupKeyOptimisticOutput {
+	Found(Id),
+	NotFound(Id, Vec<ReplicaId>),
 }
 
 #[activity(LookupKeyOptimistic)]
 pub async fn lookup_key_optimistic(
 	ctx: &ActivityCtx,
 	input: &LookupKeyOptimisticInput,
-) -> Result<Option<Id>> {
+) -> Result<LookupKeyOptimisticOutput> {
+	let replicas = ctx
+		.op(
+			crate::ops::runner::list_runner_config_epoxy_replica_ids::Input {
+				namespace_id: input.namespace_id,
+				runner_name: input.pool_name.clone(),
+			},
+		)
+		.await?
+		.replicas;
+
 	let reservation_key = keys::epoxy::ns::ReservationByKeyKey::new(
 		input.namespace_id,
 		input.name.clone(),
@@ -174,56 +186,21 @@ pub async fn lookup_key_optimistic(
 			replica_id: ctx.config().epoxy_replica_id(),
 			key: keys::subspace().pack(&reservation_key),
 			caching_behavior: epoxy::protocol::CachingBehavior::Optimistic,
+			target_replicas: Some(replicas.clone()),
 			save_empty: false,
 		})
 		.await?
 		.value;
 	if let Some(value) = value {
 		let reservation_id = reservation_key.deserialize(&value)?;
-		Ok(Some(reservation_id))
+		Ok(LookupKeyOptimisticOutput::Found(reservation_id))
 	} else {
-		Ok(None)
+		let new_reservation_id = Id::new_v1(ctx.config().dc_label());
+		Ok(LookupKeyOptimisticOutput::NotFound(
+			new_reservation_id,
+			replicas,
+		))
 	}
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct GenerateReservationIdInput {}
-
-#[activity(GenerateReservationId)]
-pub async fn generate_reservation_id(
-	ctx: &ActivityCtx,
-	input: &GenerateReservationIdInput,
-) -> Result<Id> {
-	Ok(Id::new_v1(ctx.config().dc_label()))
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct ResolveTargetReplicasInput {
-	namespace_id: Id,
-	pool_name: String,
-}
-
-#[activity(ResolveTargetReplicas)]
-pub async fn resolve_target_replicas(
-	ctx: &ActivityCtx,
-	input: &ResolveTargetReplicasInput,
-) -> Result<Vec<ReplicaId>> {
-	let start = std::time::Instant::now();
-	let replicas = ctx
-		.op(
-			crate::ops::runner::list_runner_config_epoxy_replica_ids::Input {
-				namespace_id: input.namespace_id,
-				runner_name: input.pool_name.clone(),
-			},
-		)
-		.await?
-		.replicas;
-	tracing::debug!(
-		op_duration_ms = %start.elapsed().as_millis(),
-		?replicas,
-		"resolve_target_replicas op completed"
-	);
-	Ok(replicas)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
