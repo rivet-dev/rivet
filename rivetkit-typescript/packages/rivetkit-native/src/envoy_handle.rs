@@ -55,6 +55,7 @@ impl JsEnvoyHandle {
 		self.runtime
 			.spawn(async move { handle.started().await })
 			.await
+			.map_err(|e| napi::Error::from_reason(e.to_string()))?
 			.map_err(|e| napi::Error::from_reason(e.to_string()))
 	}
 
