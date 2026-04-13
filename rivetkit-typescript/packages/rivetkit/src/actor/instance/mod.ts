@@ -2436,6 +2436,10 @@ export class ActorInstance<
 
 		if (timeoutMs !== undefined) {
 			this.#sleepTimeout = setTimeout(() => {
+				if (this.#canSleep() !== CanSleep.Yes) {
+					this.resetSleepTimer();
+					return;
+				}
 				this.startSleep();
 			}, timeoutMs);
 		}
