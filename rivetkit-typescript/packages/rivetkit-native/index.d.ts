@@ -27,6 +27,7 @@ export interface JsEnvoyConfig {
   poolName: string
   version: number
   metadata?: any
+  notGlobal: boolean
   /**
    * Log level for the Rust tracing subscriber (e.g. "trace", "debug", "info", "warn", "error").
    * Falls back to RIVET_LOG_LEVEL, then LOG_LEVEL, then RUST_LOG env vars. Defaults to "warn".
@@ -59,6 +60,7 @@ export declare function startEnvoySyncJs(config: JsEnvoyConfig, eventCallback: (
 export declare function startEnvoyJs(config: JsEnvoyConfig, eventCallback: (event: any) => void): JsEnvoyHandle
 /** Native SQLite database handle exposed to JavaScript. */
 export declare class JsNativeDatabase {
+  takeLastKvError(): string | null
   run(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<ExecuteResult>
   query(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<QueryResult>
   exec(sql: string): Promise<QueryResult>

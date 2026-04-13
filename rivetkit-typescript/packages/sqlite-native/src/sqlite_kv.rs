@@ -68,6 +68,10 @@ pub struct KvGetResult {
 /// at a higher level.
 #[async_trait]
 pub trait SqliteKv: Send + Sync {
+	/// Called when a KV operation fails inside a VFS callback before the
+	/// original error is collapsed into a generic SQLite IO error code.
+	fn on_error(&self, _actor_id: &str, _error: &SqliteKvError) {}
+
 	/// Called when an actor's database is opened.
 	async fn on_open(&self, _actor_id: &str) -> Result<(), SqliteKvError> {
 		Ok(())
