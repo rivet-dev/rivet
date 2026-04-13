@@ -9,7 +9,7 @@ overrides:
   '@rivetkit/react': workspace:*
   '@rivetkit/next-js': workspace:*
   '@rivetkit/db': workspace:*
-  '@rivetkit/engine-api-full': https://pkg.pr.new/rivet-dev/engine-ee/@rivetkit/engine-api-full@011e389
+  '@rivetkit/engine-api-full': workspace:*
   '@rivetkit/rivetkit-native': workspace:*
   '@rivetkit/engine-cli': workspace:*
   '@types/react': ^19
@@ -4551,6 +4551,40 @@ importers:
       '@napi-rs/cli':
         specifier: ^2.18.0
         version: 2.18.4
+
+  rivetkit-typescript/packages/sqlite-vfs:
+    dependencies:
+      '@rivetkit/bare-ts':
+        specifier: ^0.6.2
+        version: 0.6.2
+      '@rivetkit/sqlite':
+        specifier: ^0.1.1
+        version: 0.1.1
+      vbare:
+        specifier: ^0.0.4
+        version: 0.0.4
+    devDependencies:
+      '@bare-ts/tools':
+        specifier: ^0.13.0
+        version: 0.13.0(@bare-ts/lib@0.6.0)
+      '@types/node':
+        specifier: ^22.13.1
+        version: 22.19.15
+      commander:
+        specifier: ^12.0.0
+        version: 12.1.0
+      tsup:
+        specifier: ^8.4.0
+        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.15))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.15)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.15)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
   rivetkit-typescript/packages/traces:
     dependencies:
@@ -9557,6 +9591,9 @@ packages:
   '@rivetkit/on-change@6.0.2-rc.1':
     resolution: {integrity: sha512-5RC9Ze/wTKqSlJvopdCgr+EfyV93+iiH8Thog0QXrl8PT1unuBNw/jadXNMtwgAxrIaCJL+JLaHQH9w7rqpMDw==}
     engines: {node: '>=20'}
+
+  '@rivetkit/sqlite@0.1.1':
+    resolution: {integrity: sha512-NE7ZBy/hQhOrWzMZFjkHX9SoXxf+ILcDvVV+mNbUYPgiy/fsDzlXdK0+JDTGnko5f4Xl6/KVCoCozz9gkwkq8A==}
 
   '@rolldown/pluginutils@1.0.0-beta.27':
     resolution: {integrity: sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA==}
@@ -25470,6 +25507,8 @@ snapshots:
   '@rivetkit/fast-json-patch@3.1.2': {}
 
   '@rivetkit/on-change@6.0.2-rc.1': {}
+
+  '@rivetkit/sqlite@0.1.1': {}
 
   '@rolldown/pluginutils@1.0.0-beta.27': {}
 
