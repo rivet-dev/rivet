@@ -99,6 +99,14 @@ async fn backfill_chunk(ctx: &ActivityCtx, input: &BackfillChunkInput) -> Result
 				};
 
 				new_last_key = [entry.key(), &[0xff]].concat();
+
+				if tx
+					.unpack::<keys::runner_config::ProtocolVersionKey>(entry.key())
+					.is_ok()
+				{
+					continue;
+				}
+
 				entries.push(tx.read_entry::<keys::runner_config::DataKey>(&entry)?);
 			}
 
