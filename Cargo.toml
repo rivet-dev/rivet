@@ -531,9 +531,6 @@ members = [
     [workspace.dependencies.rivet-ups-protocol]
     path = "engine/sdks/rust/ups-protocol"
 
-    [workspace.dependencies.rivetkit-sqlite-native]
-    path = "rivetkit-typescript/packages/sqlite-native"
-
 [profile.dev]
 overflow-checks = false
 # "line-tables-only" produces just the line-number DWARF needed for stack

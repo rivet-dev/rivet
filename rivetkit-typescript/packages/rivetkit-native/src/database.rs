@@ -520,7 +520,7 @@ pub async fn open_database_from_envoy(
 			rt_handle,
 			preloaded_entries,
 		)
-			.map_err(|e| napi::Error::from_reason(format!("failed to register VFS: {}", e)))?;
+		.map_err(|e| napi::Error::from_reason(format!("failed to register VFS: {}", e)))?;
 
 		rivetkit_sqlite_native::vfs::open_database(vfs, &actor_id)
 			.map_err(|e| napi::Error::from_reason(format!("failed to open database: {}", e)))
