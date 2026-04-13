@@ -1,7 +1,6 @@
 //! Custom SQLite VFS backed by KV operations over the KV channel.
 //!
-//! Keep this file behaviorally aligned with
-//! `rivetkit-typescript/packages/sqlite-wasm/src/vfs.ts`.
+//! This crate now owns the KV-backed SQLite behavior used by `rivetkit-native`.
 
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
@@ -42,7 +41,7 @@ macro_rules! vfs_catch_unwind {
 
 // MARK: Constants
 
-/// File metadata version. Must match CURRENT_VERSION in the WASM VFS schema.
+/// File metadata version for KV-backed SQLite storage.
 const META_VERSION: u16 = 1;
 
 /// Encoded metadata size. This is 2 bytes of version plus 8 bytes of size.
@@ -59,8 +58,7 @@ const READ_CACHE_ENV_VAR: &str = "RIVETKIT_SQLITE_NATIVE_READ_CACHE";
 
 /// First 108 bytes of a valid empty page-1 SQLite database.
 ///
-/// This must match `HEADER_PREFIX` in
-/// `rivetkit-typescript/packages/sqlite-vfs/src/generated/empty-db-page.ts`.
+/// This is the canonical empty page-1 header for the KV-backed SQLite VFS.
 const EMPTY_DB_PAGE_HEADER_PREFIX: [u8; 108] = [
 	83, 81, 76, 105, 116, 101, 32, 102, 111, 114, 109, 97, 116, 32, 51, 0, 16, 0, 1, 1, 0, 64, 32,
 	32, 0, 0, 0, 3, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -124,17 +122,11 @@ fn sort_startup_preload(entries: &mut StartupPreloadEntries) {
 	entries.sort_by(|a, b| a.0.cmp(&b.0));
 }
 
-fn startup_preload_search(
-	entries: &StartupPreloadEntries,
-	key: &[u8],
-) -> Result<usize, usize> {
+fn startup_preload_search(entries: &StartupPreloadEntries, key: &[u8]) -> Result<usize, usize> {
 	entries.binary_search_by(|(candidate, _)| candidate.as_slice().cmp(key))
 }
 
-fn startup_preload_get<'a>(
-	entries: &'a StartupPreloadEntries,
-	key: &[u8],
-) -> Option<&'a [u8]> {
+fn startup_preload_get<'a>(entries: &'a StartupPreloadEntries, key: &[u8]) -> Option<&'a [u8]> {
 	startup_preload_search(entries, key)
 		.ok()
 		.map(|idx| entries[idx].1.as_slice())
@@ -152,17 +144,13 @@ fn startup_preload_delete(entries: &mut StartupPreloadEntries, key: &[u8]) {
 	}
 }
 
-fn startup_preload_delete_range(
-	entries: &mut StartupPreloadEntries,
-	start: &[u8],
-	end: &[u8],
-) {
+fn startup_preload_delete_range(entries: &mut StartupPreloadEntries, start: &[u8], end: &[u8]) {
 	entries.retain(|(key, _)| key.as_slice() < start || key.as_slice() >= end);
 }
 
 // MARK: VFS Metrics
 
-/// Per-VFS-callback operation metrics for diagnosing native vs WASM performance.
+/// Per-VFS-callback operation metrics for diagnosing native SQLite VFS performance.
 pub struct VfsMetrics {
 	pub xread_count: AtomicU64,
 	pub xread_us: AtomicU64,
@@ -275,10 +263,7 @@ impl VfsContext {
 		}
 	}
 
-	fn update_startup_preload(
-		&self,
-		f: impl FnOnce(&mut StartupPreloadEntries),
-	) {
+	fn update_startup_preload(&self, f: impl FnOnce(&mut StartupPreloadEntries)) {
 		if let Ok(mut guard) = self.startup_preload.lock() {
 			if let Some(entries) = guard.as_mut() {
 				f(entries);
@@ -289,36 +274,34 @@ impl VfsContext {
 	fn kv_get(&self, keys: Vec<Vec<u8>>) -> Result<KvGetResult, String> {
 		let key_count = keys.len();
 		let start = std::time::Instant::now();
-		let (preloaded_keys, preloaded_values, miss_keys) = if let Ok(guard) =
-			self.startup_preload.lock()
-		{
-			if let Some(entries) = guard.as_ref() {
-				let mut hit_keys = Vec::new();
-				let mut hit_values = Vec::new();
-				let mut misses = Vec::new();
-				for key in keys {
-					if let Some(value) = startup_preload_get(entries, key.as_slice()) {
-						hit_keys.push(key);
-						hit_values.push(value.to_vec());
-					} else {
-						misses.push(key);
+		let (preloaded_keys, preloaded_values, miss_keys) =
+			if let Ok(guard) = self.startup_preload.lock() {
+				if let Some(entries) = guard.as_ref() {
+					let mut hit_keys = Vec::new();
+					let mut hit_values = Vec::new();
+					let mut misses = Vec::new();
+					for key in keys {
+						if let Some(value) = startup_preload_get(entries, key.as_slice()) {
+							hit_keys.push(key);
+							hit_values.push(value.to_vec());
+						} else {
+							misses.push(key);
+						}
 					}
+					(hit_keys, hit_values, misses)
+				} else {
+					(Vec::new(), Vec::new(), keys)
 				}
-				(hit_keys, hit_values, misses)
 			} else {
 				(Vec::new(), Vec::new(), keys)
-			}
-		} else {
-			(Vec::new(), Vec::new(), keys)
-		};
+			};
 		let result = if miss_keys.is_empty() {
 			Ok(KvGetResult {
 				keys: preloaded_keys,
 				values: preloaded_values,
 			})
 		} else {
-			self
-				.rt_handle
+			self.rt_handle
 				.block_on(self.kv.batch_get(&self.actor_id, miss_keys))
 				.map(|mut result| {
 					result.keys.extend(preloaded_keys);
@@ -344,7 +327,10 @@ impl VfsContext {
 		let start = std::time::Instant::now();
 		let result = self
 			.rt_handle
-			.block_on(self.kv.batch_put(&self.actor_id, keys.clone(), values.clone()))
+			.block_on(
+				self.kv
+					.batch_put(&self.actor_id, keys.clone(), values.clone()),
+			)
 			.map_err(|err| self.report_kv_error(err));
 		if result.is_ok() {
 			self.clear_last_error();
@@ -929,10 +915,7 @@ unsafe extern "C" fn kv_io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int
 				if last_chunk_data.len() > truncated_len {
 					let truncated_chunk = last_chunk_data[..truncated_len].to_vec();
 					if ctx
-						.kv_put(
-							vec![last_chunk_key.to_vec()],
-							vec![truncated_chunk.clone()],
-						)
+						.kv_put(vec![last_chunk_key.to_vec()], vec![truncated_chunk.clone()])
 						.is_err()
 					{
 						return SQLITE_IOERR_TRUNCATE;

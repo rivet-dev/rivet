@@ -23,7 +23,6 @@
 		"fixtures/**/*",
 		"scripts/**/*",
 		"dist/schemas/**/*",
-		"runtime/index.ts",
-		"../sqlite-wasm/src/wasm.d.ts"
+		"runtime/index.ts"
 	]
 }

@@ -30,6 +30,10 @@ export const DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS = {
 	kvDeleteRange: "__rivetkitDynamicHostKvDeleteRange",
 	kvListPrefix: "__rivetkitDynamicHostKvListPrefix",
 	kvListRange: "__rivetkitDynamicHostKvListRange",
+	dbExec: "__rivetkitDynamicHostDbExec",
+	dbQuery: "__rivetkitDynamicHostDbQuery",
+	dbRun: "__rivetkitDynamicHostDbRun",
+	dbClose: "__rivetkitDynamicHostDbClose",
 	setAlarm: "__rivetkitDynamicHostSetAlarm",
 	clientCall: "__rivetkitDynamicHostClientCall",
 	ackHibernatableWebSocketMessage:

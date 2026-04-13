@@ -332,8 +332,6 @@
 		"@rivetkit/engine-runner": "workspace:*",
 		"@rivetkit/fast-json-patch": "^3.1.2",
 		"@rivetkit/on-change": "^6.0.2-rc.1",
-		"@rivetkit/sqlite": "^0.1.1",
-		"@rivetkit/sqlite-wasm": "workspace:*",
 		"@rivetkit/traces": "workspace:*",
 		"@rivetkit/virtual-websocket": "workspace:*",
 		"@rivetkit/workflow-engine": "workspace:*",
