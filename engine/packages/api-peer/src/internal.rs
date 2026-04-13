@@ -352,7 +352,6 @@ pub async fn get_epoxy_key_debug(
 		.await?;
 
 	let instances = local_value
-		.value
 		.map(|_| {
 			vec![EpoxyKeyInstance {
 				replica_id,
@@ -499,10 +498,8 @@ pub async fn get_epoxy_kv_local(
 		.await?;
 
 	Ok(GetEpoxyKvResponse {
-		exists: output.value.is_some(),
-		value: output
-			.value
-			.map(|v| base64::engine::general_purpose::STANDARD.encode(&v)),
+		exists: output.is_some(),
+		value: output.map(|v| base64::engine::general_purpose::STANDARD.encode(&v.value)),
 	})
 }
 
@@ -526,6 +523,7 @@ pub async fn get_epoxy_kv_optimistic(
 			replica_id,
 			key: key_bytes,
 			caching_behavior: epoxy::protocol::CachingBehavior::Optimistic,
+			save_empty: false,
 		})
 		.await?;
 

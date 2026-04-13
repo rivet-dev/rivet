@@ -25,9 +25,13 @@ pub enum RunnerConfigKind {
 		max_concurrent_actors: Option<u64>,
 		/// Seconds.
 		drain_grace_period: Option<u32>,
+		/// Deprecated.
 		slots_per_runner: u32,
+		/// Deprecated.
 		min_runners: Option<u32>,
+		/// Deprecated.
 		max_runners: u32,
+		/// Deprecated.
 		runners_margin: Option<u32>,
 		/// Milliseconds between metadata polling. If not set, uses the global default.
 		metadata_poll_interval: Option<u64>,

@@ -2,6 +2,7 @@ use anyhow::*;
 use epoxy_protocol::protocol::{self, ReplicaId};
 use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
+use universaldb::prelude::*;
 
 use crate::{
 	http_client,
@@ -11,11 +12,14 @@ use crate::{
 
 use super::get_local::read_local_value;
 
+// TODO: Allow multiple keys
 #[derive(Debug)]
 pub struct Input {
 	pub replica_id: ReplicaId,
 	pub key: Vec<u8>,
 	pub caching_behavior: protocol::CachingBehavior,
+	// Whether or not to write an empty value into cache if it did not exist on read.
+	pub save_empty: bool,
 }
 
 #[derive(Debug)]
@@ -80,6 +84,7 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 		&quorum_members,
 		utils::QuorumType::Any,
 		|replica_id| {
+			let ctx = ctx.clone();
 			let config = config.clone();
 			let key = input.key.clone();
 			let from_replica_id = input.replica_id;
@@ -109,7 +114,7 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 	.await?;
 
 	// Should only have 1 response
-	if let Some(value) = responses.first().and_then(|r| r.response) {
+	if let Some(value) = responses.into_iter().flatten().next() {
 		let value = CommittedValue {
 			value: value.value,
 			version: value.version,
@@ -117,12 +122,14 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 		};
 
 		if input.caching_behavior == protocol::CachingBehavior::Optimistic {
-			cache_fanout_value(ctx, input.replica_id, input.key.clone(), value.clone()).await?;
+			cache_fanout_value(ctx, input.replica_id, &input.key, &value).await?;
 		}
 
 		return Ok(Output {
 			value: Some(value.value),
 		});
+	} else if input.save_empty {
+		cache_empty_value(ctx, input.replica_id, &input.key).await?;
 	}
 
 	// No value found in any datacenter
@@ -132,50 +139,53 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 async fn cache_fanout_value(
 	ctx: &OperationCtx,
 	replica_id: ReplicaId,
-	key: Vec<u8>,
-	value_to_cache: CommittedValue,
+	key: &[u8],
+	value_to_cache: &CommittedValue,
 ) -> Result<()> {
 	ctx.udb()?
 		.run(|tx| {
-			let value_to_cache = value_to_cache.clone();
-			let key = key.clone();
-
 			async move {
 				let tx = tx.with_subspace(keys::subspace(replica_id));
-				let committed_key = keys::KvValueKey::new(key);
-				let cache_key = keys::KvOptimisticCacheKey::new(committed_key.key().to_vec());
-
-				// Skip caching if a committed value exists with an equal or newer version.
-				// This covers the race where a commit lands between the fanout read and
-				// the cache write.
-				if let Some(committed_value) = tx
-					.read_opt(
-						&committed_key,
-						universaldb::utils::IsolationLevel::Serializable,
-					)
-					.await?
-				{
-					if committed_value.version >= value_to_cache.version {
-						return Ok(());
-					}
-				}
+				let cache_key = keys::KvOptimisticCacheKey::new(key.to_vec());
 
 				// Skip caching if the existing cache entry is strictly newer. This
 				// prevents a slow fanout response from overwriting a fresher cache entry
 				// written by a concurrent request.
-				if let Some(existing_cache) = tx
-					.read_opt(&cache_key, universaldb::utils::IsolationLevel::Serializable)
-					.await?
-				{
+				if let Some(existing_cache) = tx.read_opt(&cache_key, Serializable).await? {
 					if existing_cache.version > value_to_cache.version {
 						return Ok(());
 					}
 				}
 
-				tx.write(&cache_key, value_to_cache)?;
+				tx.write(&cache_key, value_to_cache.clone())?;
 				Ok(())
 			}
 		})
 		.custom_instrument(tracing::info_span!("cache_value_tx"))
+		.await
+}
+
+async fn cache_empty_value(ctx: &OperationCtx, replica_id: ReplicaId, key: &[u8]) -> Result<()> {
+	ctx.udb()?
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace(replica_id));
+			let cache_key = keys::KvOptimisticCacheKey::new(key.to_vec());
+
+			if tx.exists(&cache_key, Serializable).await? {
+				return Ok(());
+			}
+
+			tx.write(
+				&cache_key,
+				CommittedValue {
+					value: Vec::new(),
+					version: 0,
+					// TODO: What should this be set to?
+					mutable: true,
+				},
+			)?;
+			Ok(())
+		})
+		.custom_instrument(tracing::info_span!("cache_empty_value_tx"))
 		.await
 }

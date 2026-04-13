@@ -124,6 +124,34 @@ impl<'a> IntoIterator for &'a DatacentersRepr {
 	}
 }
 
+pub enum DatacentersIntoIter {
+	Map(std::collections::hash_map::IntoValues<String, Datacenter>),
+	List(std::vec::IntoIter<Datacenter>),
+}
+
+impl Iterator for DatacentersIntoIter {
+	type Item = Datacenter;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		match self {
+			DatacentersIntoIter::Map(iter) => iter.next(),
+			DatacentersIntoIter::List(iter) => iter.next(),
+		}
+	}
+}
+
+impl IntoIterator for DatacentersRepr {
+	type Item = Datacenter;
+	type IntoIter = DatacentersIntoIter;
+
+	fn into_iter(self) -> Self::IntoIter {
+		match self {
+			DatacentersRepr::Map(map) => DatacentersIntoIter::Map(map.into_values()),
+			DatacentersRepr::List(vec) => DatacentersIntoIter::List(vec.into_iter()),
+		}
+	}
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Datacenter {

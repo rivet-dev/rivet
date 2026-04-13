@@ -93,6 +93,16 @@ pub(crate) async fn read_local_value(
 				}
 
 				if let Some(value) = cache_value {
+					let cache_value = cache_key.deserialize(&value)?;
+
+					// Special case with empty values. These are inserted in kv_get_optimistic with `save_empty`
+					if cache_value.value.is_empty() {
+						return Ok(LocalValueRead {
+							value: None,
+							cache_value: None,
+						});
+					}
+
 					return Ok(LocalValueRead {
 						value: None,
 						cache_value: Some(cache_key.deserialize(&value)?),

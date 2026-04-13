@@ -1,6 +1,7 @@
+use epoxy::ops::propose::{Command, CommandKind, Proposal, SetCommand};
 use gas::prelude::*;
 use rivet_types::runner_configs::{RunnerConfig, RunnerConfigKind};
-use universaldb::{options::MutationType, utils::IsolationLevel::*};
+use universaldb::prelude::*;
 
 use crate::{errors, keys, utils::runner_config_variant};
 
@@ -11,162 +12,175 @@ pub struct Input {
 	pub config: RunnerConfig,
 }
 
-struct UpsertOutput {
-	endpoint_config_changed: bool,
-	pool_created: bool,
-}
-
 #[operation]
 pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) -> Result<bool> {
 	let config = input.config.clone();
 	let config_affects_pool = config.affects_pool();
-	let config_is_serverless = matches!(&config.kind, RunnerConfigKind::Serverless { .. });
+	let serverless_config =
+		if let RunnerConfigKind::Serverless { url, headers, .. } = &input.config.kind {
+			Some((url.clone(), headers.clone()))
+		} else {
+			None
+		};
 
-	let res = ctx
-		.udb()?
+	// Validation
+	match &config.kind {
+		RunnerConfigKind::Normal { .. } => {}
+		RunnerConfigKind::Serverless {
+			url,
+			headers,
+			slots_per_runner,
+			..
+		} => {
+			if let Err(err) = url::Url::parse(url) {
+				return Err(errors::RunnerConfig::Invalid {
+					reason: format!("invalid serverless url: {err}"),
+				}
+				.build());
+			}
+
+			if headers.len() > 16 {
+				return Err(errors::RunnerConfig::Invalid {
+					reason: "too many headers (max 16)".to_string(),
+				}
+				.build());
+			}
+
+			for (n, v) in headers {
+				if n.len() > 128 {
+					return Err(errors::RunnerConfig::Invalid {
+						reason: format!("invalid header name: too long (max 128)"),
+					}
+					.build());
+				}
+				if let Err(err) = n.parse::<reqwest::header::HeaderName>() {
+					return Err(errors::RunnerConfig::Invalid {
+						reason: format!("invalid header name: {err}"),
+					}
+					.build());
+				}
+				if v.len() > 4096 {
+					return Err(errors::RunnerConfig::Invalid {
+						reason: format!("invalid header value: too long (max 4096)"),
+					}
+					.build());
+				}
+				if let Err(err) = v.parse::<reqwest::header::HeaderValue>() {
+					return Err(errors::RunnerConfig::Invalid {
+						reason: format!("invalid header value: {err}"),
+					}
+					.build());
+				}
+			}
+
+			if *slots_per_runner == 0 {
+				return Err(errors::RunnerConfig::Invalid {
+					reason: "`slots_per_runner` cannot be 0".to_string(),
+				}
+				.build());
+			}
+		}
+	}
+
+	// TODO: Race
+	let existing_config = ctx
+		.op(crate::ops::runner_config::get::Input {
+			runners: vec![(input.namespace_id, input.name.clone())],
+			bypass_cache: true,
+		})
+		.await?
+		.into_iter()
+		.next()
+		.map(|c| c.config);
+
+	// Check if config changed (for serverless, compare URL and headers)
+	let (endpoint_config_changed, pool_created) = if let Some(existing_config) = &existing_config {
+		// Check if serverless endpoint config changed
+		match (&existing_config.kind, &config.kind) {
+			(
+				RunnerConfigKind::Serverless {
+					url: old_url,
+					headers: old_headers,
+					..
+				},
+				RunnerConfigKind::Serverless {
+					url: new_url,
+					headers: new_headers,
+					..
+				},
+			) => (old_url != new_url || old_headers != new_headers, false),
+			(RunnerConfigKind::Normal { .. }, RunnerConfigKind::Serverless { .. }) => {
+				// Config type changed to serverless
+				(true, true)
+			}
+			_ => {
+				// Not serverless
+				(true, false)
+			}
+		}
+	} else {
+		// New config
+		(true, serverless_config.is_some())
+	};
+
+	// Save to epoxy
+	let global_runner_config_key = keys::runner_config::GlobalDataKey::new(
+		ctx.config().dc_label(),
+		input.namespace_id,
+		input.name.clone(),
+	);
+	ctx.op(epoxy::ops::propose::Input {
+		proposal: Proposal {
+			commands: vec![Command {
+				kind: CommandKind::SetCommand(SetCommand {
+					key: namespace::keys::subspace().pack(&global_runner_config_key),
+					value: Some(global_runner_config_key.serialize(config.clone())?),
+				}),
+			}],
+		},
+		purge_cache: true,
+		mutable: true,
+		target_replicas: None,
+	})
+	.await?;
+
+	// We still have to write locally for listing
+	ctx.udb()?
 		.run(|tx| {
-			let config = config.clone();
+			let config = &config;
+			let existing_config = &existing_config;
 			async move {
 				let tx = tx.with_subspace(namespace::keys::subspace());
 
-				let runner_config_key =
-					keys::runner_config::DataKey::new(input.namespace_id, input.name.clone());
-
-				// Check if config changed (for serverless, compare URL and headers)
-				let output = if let Some(existing_config) =
-					tx.read_opt(&runner_config_key, Serializable).await?
-				{
-					// Delete previous index
+				// Delete previous index
+				if let Some(existing_config) = &existing_config {
 					tx.delete(&keys::runner_config::ByVariantKey::new(
 						input.namespace_id,
 						runner_config_variant(&existing_config),
 						input.name.clone(),
 					));
-
-					// Check if serverless endpoint config changed
-					match (&existing_config.kind, &config.kind) {
-						(
-							RunnerConfigKind::Serverless {
-								url: old_url,
-								headers: old_headers,
-								..
-							},
-							RunnerConfigKind::Serverless {
-								url: new_url,
-								headers: new_headers,
-								..
-							},
-						) => UpsertOutput {
-							endpoint_config_changed: old_url != new_url
-								|| old_headers != new_headers,
-							pool_created: false,
-						},
-						(RunnerConfigKind::Normal { .. }, RunnerConfigKind::Serverless { .. }) => {
-							// Config type changed to serverless
-							UpsertOutput {
-								endpoint_config_changed: true,
-								pool_created: true,
-							}
-						}
-						_ => {
-							// Not serverless
-							UpsertOutput {
-								endpoint_config_changed: true,
-								pool_created: false,
-							}
-						}
-					}
-				} else {
-					// New config
-					UpsertOutput {
-						endpoint_config_changed: true,
-						pool_created: config_is_serverless,
-					}
-				};
+				}
 
 				// Write new config
+				let runner_config_key =
+					keys::runner_config::DataKey::new(input.namespace_id, input.name.clone());
 				tx.write(&runner_config_key, config.clone())?;
 				tx.write(
 					&keys::runner_config::ByVariantKey::new(
 						input.namespace_id,
-						runner_config_variant(&config),
+						runner_config_variant(config),
 						input.name.clone(),
 					),
 					config.clone(),
 				)?;
 
-				match &config.kind {
-					RunnerConfigKind::Normal { .. } => {}
-					RunnerConfigKind::Serverless {
-						url,
-						headers,
-						slots_per_runner,
-						..
-					} => {
-						// Validate url
-						if let Err(err) = url::Url::parse(url) {
-							return Ok(Err(errors::RunnerConfig::Invalid {
-								reason: format!("invalid serverless url: {err}"),
-							}));
-						}
-
-						if headers.len() > 16 {
-							return Ok(Err(errors::RunnerConfig::Invalid {
-								reason: "too many headers (max 16)".to_string(),
-							}));
-						}
-
-						for (n, v) in headers {
-							if n.len() > 128 {
-								return Ok(Err(errors::RunnerConfig::Invalid {
-									reason: format!("invalid header name: too long (max 128)"),
-								}));
-							}
-							if let Err(err) = n.parse::<reqwest::header::HeaderName>() {
-								return Ok(Err(errors::RunnerConfig::Invalid {
-									reason: format!("invalid header name: {err}"),
-								}));
-							}
-							if v.len() > 4096 {
-								return Ok(Err(errors::RunnerConfig::Invalid {
-									reason: format!("invalid header value: too long (max 4096)"),
-								}));
-							}
-							if let Err(err) = v.parse::<reqwest::header::HeaderValue>() {
-								return Ok(Err(errors::RunnerConfig::Invalid {
-									reason: format!("invalid header value: {err}"),
-								}));
-							}
-						}
-
-						// Validate slots per runner
-						if *slots_per_runner == 0 {
-							return Ok(Err(errors::RunnerConfig::Invalid {
-								reason: "`slots_per_runner` cannot be 0".to_string(),
-							}));
-						}
-
-						// Sets desired count to 0 if it doesn't exist
-						let tx = tx.with_subspace(rivet_types::keys::pegboard::subspace());
-						tx.atomic_op(
-							&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
-								input.namespace_id,
-								input.name.clone(),
-							),
-							&0i64.to_le_bytes(),
-							MutationType::Add,
-						);
-					}
-				}
-
-				Ok(Ok(output))
+				Ok(())
 			}
 		})
 		.custom_instrument(tracing::info_span!("runner_config_upsert_tx"))
-		.await?
-		.map_err(|err| err.build())?;
+		.await?;
 
-	if res.pool_created {
+	if pool_created {
 		ctx.workflow(crate::workflows::runner_pool::Input {
 			namespace_id: input.namespace_id,
 			runner_name: input.name.clone(),
@@ -179,7 +193,7 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 	} else if config_affects_pool {
 		let signal_res = ctx
 			.signal(crate::workflows::runner_pool::Bump {
-				endpoint_config_changed: res.endpoint_config_changed,
+				endpoint_config_changed,
 			})
 			.to_workflow::<crate::workflows::runner_pool::Workflow>()
 			.tag("namespace_id", input.namespace_id)
@@ -202,5 +216,28 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 		}
 	}
 
-	Ok(res.endpoint_config_changed)
+	if endpoint_config_changed {
+		crate::utils::purge_runner_config_caches(ctx.cache(), input.namespace_id, &input.name)
+			.await?;
+
+		// Update runner metadata
+		//
+		// This allows us to populate the actor names immediately upon configuring a serverless runner
+		if let Some((url, headers)) = serverless_config {
+			tracing::debug!("endpoint config changed, refreshing metadata");
+			if let Err(err) = ctx
+				.op(crate::ops::runner_config::refresh_metadata::Input {
+					namespace_id: input.namespace_id,
+					runner_name: input.name.clone(),
+					url,
+					headers,
+				})
+				.await
+			{
+				tracing::warn!(?err, runner_name=?input.name, "failed to refresh runner config metadata");
+			}
+		}
+	}
+
+	Ok(endpoint_config_changed)
 }

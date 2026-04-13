@@ -1890,6 +1890,15 @@
                   "max_runners"
                 ],
                 "properties": {
+                  "drain_grace_period": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "format": "int32",
+                    "description": "Seconds.",
+                    "minimum": 0
+                  },
                   "headers": {
                     "type": [
                       "object",
@@ -1913,6 +1922,7 @@
                   "max_runners": {
                     "type": "integer",
                     "format": "int32",
+                    "description": "Deprecated.",
                     "minimum": 0
                   },
                   "metadata_poll_interval": {
@@ -1930,6 +1940,7 @@
                       "null"
                     ],
                     "format": "int32",
+                    "description": "Deprecated.",
                     "minimum": 0
                   },
                   "request_lifespan": {
@@ -1944,11 +1955,13 @@
                       "null"
                     ],
                     "format": "int32",
+                    "description": "Deprecated.",
                     "minimum": 0
                   },
                   "slots_per_runner": {
                     "type": "integer",
                     "format": "int32",
+                    "description": "Deprecated.",
                     "minimum": 0
                   },
                   "url": {
@@ -1968,6 +1981,14 @@
           {
             "type": "object",
             "properties": {
+              "protocol_version": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32",
+                "minimum": 0
+              },
               "runner_pool_error": {
                 "type": [
                   "object",

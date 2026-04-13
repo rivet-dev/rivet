@@ -6,6 +6,8 @@ use universaldb::tuple::Versionstamp;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct CommittedValue {
+	// NOTE: An empty value may exist for cached entries to denote the value was not found on any datacenter
+	// and cached as such.
 	pub value: Vec<u8>,
 	pub version: u64,
 	pub mutable: bool,

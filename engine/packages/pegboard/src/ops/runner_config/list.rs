@@ -1,7 +1,6 @@
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_types::keys::namespace::runner_config::RunnerConfigVariant;
-use rivet_types::runner_configs::RunnerConfig;
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
 
@@ -15,12 +14,19 @@ pub struct Input {
 	pub limit: usize,
 }
 
-// TODO: Needs to return default configs if they exist (currently no way to list from epoxy)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RunnerConfig {
+	pub name: String,
+	pub config: rivet_types::runner_configs::RunnerConfig,
+	/// Unset if the runner's metadata endpoint has never returned `envoyProtocolVersion``
+	pub protocol_version: Option<u16>,
+}
+
 #[operation]
 pub async fn pegboard_runner_config_list(
 	ctx: &OperationCtx,
 	input: &Input,
-) -> Result<Vec<(String, RunnerConfig)>> {
+) -> Result<Vec<RunnerConfig>> {
 	let runner_configs = ctx
 		.udb()?
 		.run(|tx| async move {
@@ -71,20 +77,54 @@ pub async fn pegboard_runner_config_list(
 				},
 				Serializable,
 			)
-			.map(|res| match res {
-				Ok(entry) => {
-					if input.variant.is_some() {
-						let (key, config) =
-							tx.read_entry::<keys::runner_config::ByVariantKey>(&entry)?;
-						Ok((key.name, config))
-					} else {
-						let (key, config) =
-							tx.read_entry::<keys::runner_config::DataKey>(&entry)?;
-						Ok((key.name, config))
+			.map(|res| {
+				let tx = tx.clone();
+				async move {
+					match res {
+						Ok(entry) => {
+							if input.variant.is_some() {
+								let (key, config) =
+									tx.read_entry::<keys::runner_config::ByVariantKey>(&entry)?;
+								let protocol_version = tx
+									.read_opt(
+										&keys::runner_config::ProtocolVersionKey::new(
+											input.namespace_id,
+											key.name.clone(),
+										),
+										Serializable,
+									)
+									.await?;
+
+								Ok(RunnerConfig {
+									name: key.name,
+									config,
+									protocol_version,
+								})
+							} else {
+								let (key, config) =
+									tx.read_entry::<keys::runner_config::DataKey>(&entry)?;
+								let protocol_version = tx
+									.read_opt(
+										&keys::runner_config::ProtocolVersionKey::new(
+											input.namespace_id,
+											key.name.clone(),
+										),
+										Serializable,
+									)
+									.await?;
+
+								Ok(RunnerConfig {
+									name: key.name,
+									config,
+									protocol_version,
+								})
+							}
+						}
+						Err(err) => Err(err.into()),
 					}
 				}
-				Err(err) => Err(err.into()),
 			})
+			.buffer_unordered(512)
 			.try_collect()
 			.await
 		})

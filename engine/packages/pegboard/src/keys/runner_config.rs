@@ -25,6 +25,10 @@ impl DataKey {
 	pub fn subspace(namespace_id: Id) -> DataSubspaceKey {
 		DataSubspaceKey::new(namespace_id)
 	}
+
+	pub fn entire_subspace() -> DataSubspaceKey {
+		DataSubspaceKey::entire()
+	}
 }
 
 impl FormalKey for DataKey {
@@ -66,12 +70,18 @@ impl<'de> TupleUnpack<'de> for DataKey {
 }
 
 pub struct DataSubspaceKey {
-	pub namespace_id: Id,
+	pub namespace_id: Option<Id>,
 }
 
 impl DataSubspaceKey {
 	pub fn new(namespace_id: Id) -> Self {
-		DataSubspaceKey { namespace_id }
+		DataSubspaceKey {
+			namespace_id: Some(namespace_id),
+		}
+	}
+
+	pub fn entire() -> Self {
+		DataSubspaceKey { namespace_id: None }
 	}
 }
 
@@ -83,8 +93,12 @@ impl TuplePack for DataSubspaceKey {
 	) -> std::io::Result<VersionstampOffset> {
 		let mut offset = VersionstampOffset::None { size: 0 };
 
-		let t = (RUNNER, CONFIG, DATA, self.namespace_id);
+		let t = (RUNNER, CONFIG, DATA);
 		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(namespace_id) = self.namespace_id {
+			offset += namespace_id.pack(w, tuple_depth)?;
+		}
 
 		Ok(offset)
 	}
@@ -258,6 +272,73 @@ impl<'de> TupleUnpack<'de> for ProtocolVersionKey {
 			<(usize, usize, usize, Id, String, usize)>::unpack(input, tuple_depth)?;
 
 		let v = ProtocolVersionKey { namespace_id, name };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct GlobalDataKey {
+	pub dc_label: u16,
+	pub namespace_id: Id,
+	pub name: String,
+}
+
+impl GlobalDataKey {
+	pub fn new(dc_label: u16, namespace_id: Id, name: String) -> Self {
+		GlobalDataKey {
+			dc_label,
+			namespace_id,
+			name,
+		}
+	}
+}
+
+impl FormalKey for GlobalDataKey {
+	type Value = rivet_types::runner_configs::RunnerConfig;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(
+			rivet_data::versioned::NamespaceRunnerConfig::deserialize_with_embedded_version(raw)?
+				.into(),
+		)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		rivet_data::versioned::NamespaceRunnerConfig::wrap_latest(value.into())
+			.serialize_with_embedded_version(rivet_data::PEGBOARD_NAMESPACE_RUNNER_CONFIG_VERSION)
+	}
+}
+
+impl TuplePack for GlobalDataKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			RUNNER,
+			CONFIG,
+			GLOBAL,
+			DATA,
+			self.dc_label,
+			self.namespace_id,
+			&self.name,
+		);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for GlobalDataKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, _, dc_label, namespace_id, name)) =
+			<(usize, usize, usize, u16, Id, String)>::unpack(input, tuple_depth)?;
+
+		let v = GlobalDataKey {
+			dc_label,
+			namespace_id,
+			name,
+		};
 
 		Ok((input, v))
 	}

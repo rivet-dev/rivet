@@ -81,8 +81,8 @@ macro_rules! join_signal {
 				)else*
 				else {
 					unreachable!(
-						"received signal that wasn't queried for: {}, expected {:?}",
-						name, &[$(<$just_types as gas::signal::Signal>::NAME),*]
+						"received signal that wasn't queried for: {}, expected {:?} (body: {:?})",
+						name, &[$(<$just_types as gas::signal::Signal>::NAME),*], body,
 					);
 				}
 			}
