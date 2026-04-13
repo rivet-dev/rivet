@@ -129,10 +129,10 @@ async fn message_request_inner(
 				.await?;
 
 			protocol::ResponseKind::KvGetResponse(protocol::KvGetResponse {
-				value: result.value.map(|value| protocol::CommittedValue {
-					value,
-					version: result.version.unwrap_or(0),
-					mutable: result.mutable,
+				value: result.map(|value| protocol::CommittedValue {
+					value: value.value,
+					version: value.version,
+					mutable: value.mutable,
 				}),
 			})
 		}
