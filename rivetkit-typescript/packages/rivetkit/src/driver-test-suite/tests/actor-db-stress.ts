@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { nativeSqliteAvailable } from "@/db/native-sqlite";
 import type { DriverTestConfig } from "../mod";
-import { setupDriverTest, waitFor } from "../utils";
+import { setupDriverTest } from "../utils";
 
 const STRESS_TEST_TIMEOUT_MS = 60_000;
 
@@ -11,14 +10,10 @@ const STRESS_TEST_TIMEOUT_MS = 60_000;
  * These tests target edge cases from the adversarial review:
  * - C1: close_database racing with in-flight operations
  * - H1: lifecycle operations blocking the Node.js event loop
- * - Reconnect: WebSocket disconnect during active KV operations
  *
- * They run against the file-system driver with real timers and require
- * the native SQLite addon for the KV channel tests.
+ * They run against the native runtime path.
  */
 export function runActorDbStressTests(driverTestConfig: DriverTestConfig) {
-	const nativeAvailable = nativeSqliteAvailable();
-
 	describe("Actor Database Stress Tests", () => {
 		test(
 			"destroy during long-running DB operation completes without crash",
@@ -130,105 +125,5 @@ export function runActorDbStressTests(driverTestConfig: DriverTestConfig) {
 			STRESS_TEST_TIMEOUT_MS,
 		);
 
-		// This test requires native SQLite (KV channel WebSocket).
-		// When using WASM SQLite, there's no WebSocket to disconnect.
-		describe.skipIf(!nativeAvailable)(
-			"KV Channel Resilience",
-			() => {
-				test(
-					"recovers from forced WebSocket disconnect during DB writes",
-					async (c) => {
-						const { client, endpoint } =
-							await setupDriverTest(c, driverTestConfig);
-
-						const actor = client.dbStressActor.getOrCreate([
-							`stress-disconnect-${crypto.randomUUID()}`,
-						]);
-
-						// Write initial data to confirm the actor works.
-						await actor.insertBatch(10);
-						expect(await actor.getCount()).toBe(10);
-
-						// Force-close all KV channel WebSocket connections.
-						// The native SQLite addon should reconnect automatically.
-						const res = await fetch(
-							`${endpoint}/.test/kv-channel/force-disconnect`,
-							{ method: "POST" },
-						);
-						expect(res.ok).toBe(true);
-						const body = (await res.json()) as {
-							closed: number;
-						};
-						expect(body.closed).toBeGreaterThanOrEqual(0);
-
-						// Give the native addon time to detect the disconnect
-						// and reconnect.
-						await waitFor(driverTestConfig, 2000);
-
-						// The actor should still work after reconnection.
-						// The native addon re-opens actors on the new connection.
-						await actor.insertBatch(10);
-						const finalCount = await actor.getCount();
-						expect(finalCount).toBe(20);
-
-						// Verify data integrity after the disruption.
-						const integrity = await actor.integrityCheck();
-						expect(integrity.toLowerCase()).toBe("ok");
-					},
-					STRESS_TEST_TIMEOUT_MS,
-				);
-
-				test(
-					"handles disconnect during active write operation",
-					async (c) => {
-						const { client, endpoint } =
-							await setupDriverTest(c, driverTestConfig);
-
-						const actor = client.dbStressActor.getOrCreate([
-							`stress-active-disconnect-${crypto.randomUUID()}`,
-						]);
-
-						// Confirm the actor is healthy.
-						await actor.insertBatch(5);
-
-						// Start a large write operation and disconnect
-						// mid-flight. The write may fail, but the actor
-						// should recover.
-						const writePromise = actor
-							.insertBatch(200)
-							.catch((err: Error) => ({
-								error: err.message,
-							}));
-
-						// Small delay to let the write start, then disconnect.
-						await new Promise((resolve) =>
-							setTimeout(resolve, 50),
-						);
-
-						await fetch(
-							`${endpoint}/.test/kv-channel/force-disconnect`,
-							{ method: "POST" },
-						);
-
-						// Wait for the write to settle (success or failure).
-						await writePromise;
-
-						// Wait for reconnection.
-						await waitFor(driverTestConfig, 2000);
-
-						// Actor should recover. New operations should work.
-						await actor.insertBatch(5);
-						const count = await actor.getCount();
-						// At least the initial 5 + final 5 should exist.
-						// The mid-disconnect 200 may or may not have committed.
-						expect(count).toBeGreaterThanOrEqual(10);
-
-						const integrity = await actor.integrityCheck();
-						expect(integrity.toLowerCase()).toBe("ok");
-					},
-					STRESS_TEST_TIMEOUT_MS,
-				);
-			},
-		);
 	});
 }

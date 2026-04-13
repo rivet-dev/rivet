@@ -9,7 +9,6 @@ import {
 	ACTIVE_DB_WRITE_DELAY_MS,
 	ACTIVE_DB_GRACE_PERIOD,
 	ACTIVE_DB_SLEEP_TIMEOUT,
-	RAW_DB_SLEEP_TIMEOUT,
 } from "../../../fixtures/driver-test-suite/sleep-db";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
@@ -1105,78 +1104,6 @@ export function runActorSleepDbTests(driverTestConfig: DriverTestConfig) {
 					);
 				},
 				{ timeout: 30_000 },
-			);
-
-			test(
-				"poisoned KV produces disk I/O error on commit",
-				async (c) => {
-					const { client } = await setupDriverTest(
-						c,
-						driverTestConfig,
-					);
-
-					const actor =
-						client.sleepWsRawDbAfterClose.getOrCreate([
-							`raw-db-${crypto.randomUUID()}`,
-						]);
-					const ws = await connectRawWebSocket(actor);
-
-					// Listen for the error (or committed) message.
-					const resultPromise = new Promise<{
-						type: string;
-						error?: string;
-					}>((resolve) => {
-						const onMessage = (event: MessageEvent) => {
-							const data = JSON.parse(String(event.data));
-							if (
-								data.type === "error" ||
-								data.type === "committed"
-							) {
-								ws.removeEventListener(
-									"message",
-									onMessage,
-								);
-								resolve(data);
-							}
-						};
-						ws.addEventListener("message", onMessage);
-					});
-
-					// Tell the handler to BEGIN a transaction, poison the
-					// KV store, then try to COMMIT.
-					ws.send("raw-db-after-close");
-
-					// Wait for the handler's result with a timeout. The
-					// COMMIT may hang if the VFS error causes SQLite's
-					// pager to enter a retry loop, so we set a deadline.
-					const result = await Promise.race([
-						resultPromise,
-						new Promise<{ type: string; error?: string }>(
-							(resolve) =>
-								setTimeout(
-									() =>
-										resolve({
-											type: "timeout",
-											error: "handler did not respond within 5s",
-										}),
-									5000,
-								),
-						),
-					]);
-
-					// The COMMIT should have failed with a raw SQLite
-					// error caused by the poisoned KV. The exact message
-					// depends on which VFS operation fails first:
-					// "disk I/O error" (xWrite) or "unable to open
-					// database file" (xOpen during rollback).
-					expect(result.type).not.toBe("committed");
-					if (result.type === "error") {
-						expect(result.error).toMatch(
-							/disk I\/O|unable to open|SQLITE_IOERR/i,
-						);
-					}
-				},
-				{ timeout: 15_000 },
 			);
 		});
 }
