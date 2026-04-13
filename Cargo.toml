@@ -515,6 +515,9 @@ members = [
     [workspace.dependencies.rivet-envoy-protocol]
     path = "engine/sdks/rust/envoy-protocol"
 
+    [workspace.dependencies.rivetkit-sqlite-native]
+    path = "rivetkit-typescript/packages/sqlite-native"
+
     [workspace.dependencies.epoxy-protocol]
     path = "engine/sdks/rust/epoxy-protocol"
 

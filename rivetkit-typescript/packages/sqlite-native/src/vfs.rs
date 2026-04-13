@@ -8,13 +8,13 @@ use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::ptr;
 use std::slice;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use libsqlite3_sys::*;
 use tokio::runtime::Handle;
 
 use crate::kv;
-use crate::sqlite_kv::{KvGetResult, SqliteKv};
+use crate::sqlite_kv::{KvGetResult, SqliteKv, SqliteKvError};
 
 // MARK: Panic Guard
 
@@ -158,12 +158,62 @@ struct VfsContext {
 	actor_id: String,
 	main_file_name: String,
 	read_cache_enabled: bool,
+	last_error: Mutex<Option<String>>,
 	rt_handle: Handle,
 	io_methods: Box<sqlite3_io_methods>,
 	vfs_metrics: Arc<VfsMetrics>,
 }
 
 impl VfsContext {
+	fn clear_last_error(&self) {
+		match self.last_error.lock() {
+			Ok(mut last_error) => {
+				*last_error = None;
+			}
+			Err(err) => {
+				tracing::warn!(%err, "native sqlite last_error mutex poisoned");
+			}
+		}
+	}
+
+	fn set_last_error(&self, message: String) {
+		match self.last_error.lock() {
+			Ok(mut last_error) => {
+				*last_error = Some(message);
+			}
+			Err(err) => {
+				tracing::warn!(%err, "native sqlite last_error mutex poisoned");
+			}
+		}
+	}
+
+	fn clone_last_error(&self) -> Option<String> {
+		match self.last_error.lock() {
+			Ok(last_error) => last_error.clone(),
+			Err(err) => {
+				tracing::warn!(%err, "native sqlite last_error mutex poisoned");
+				None
+			}
+		}
+	}
+
+	fn take_last_error(&self) -> Option<String> {
+		match self.last_error.lock() {
+			Ok(mut last_error) => last_error.take(),
+			Err(err) => {
+				tracing::warn!(%err, "native sqlite last_error mutex poisoned");
+				None
+			}
+		}
+	}
+
+	fn report_kv_error(&self, err: SqliteKvError) -> String {
+		let message = err.to_string();
+		self.set_last_error(message.clone());
+		self.kv.on_error(&self.actor_id, &err);
+		message
+	}
+
 	fn resolve_file_tag(&self, path: &str) -> Option<u8> {
 		if path == self.main_file_name {
 			return Some(kv::FILE_TAG_MAIN);
@@ -187,7 +237,10 @@ impl VfsContext {
 		let result = self
 			.rt_handle
 			.block_on(self.kv.batch_get(&self.actor_id, keys))
-			.map_err(|e| e.to_string());
+			.map_err(|err| self.report_kv_error(err));
+		if result.is_ok() {
+			self.clear_last_error();
+		}
 		let elapsed = start.elapsed();
 		tracing::debug!(
 			op = %format_args!("get({key_count}keys)"),
@@ -203,7 +256,10 @@ impl VfsContext {
 		let result = self
 			.rt_handle
 			.block_on(self.kv.batch_put(&self.actor_id, keys, values))
-			.map_err(|e| e.to_string());
+			.map_err(|err| self.report_kv_error(err));
+		if result.is_ok() {
+			self.clear_last_error();
+		}
 		let elapsed = start.elapsed();
 		tracing::debug!(
 			op = %format_args!("put({key_count}keys)"),
@@ -219,7 +275,10 @@ impl VfsContext {
 		let result = self
 			.rt_handle
 			.block_on(self.kv.batch_delete(&self.actor_id, keys))
-			.map_err(|e| e.to_string());
+			.map_err(|err| self.report_kv_error(err));
+		if result.is_ok() {
+			self.clear_last_error();
+		}
 		let elapsed = start.elapsed();
 		tracing::debug!(
 			op = %format_args!("del({key_count}keys)"),
@@ -234,7 +293,10 @@ impl VfsContext {
 		let result = self
 			.rt_handle
 			.block_on(self.kv.delete_range(&self.actor_id, start, end))
-			.map_err(|e| e.to_string());
+			.map_err(|err| self.report_kv_error(err));
+		if result.is_ok() {
+			self.clear_last_error();
+		}
 		let elapsed = start_time.elapsed();
 		tracing::debug!(
 			op = "delRange",
@@ -574,7 +636,10 @@ unsafe extern "C" fn kv_io_write(
 			let chunk_key = kv::get_chunk_key(file.file_tag, chunk_idx as u32).to_vec();
 			let cached_chunk = if needs_existing && ctx.read_cache_enabled {
 				let state = get_file_state(file.state);
-				state.read_cache.get(chunk_key.as_slice()).cloned()
+				state
+					.read_cache
+					.as_ref()
+					.and_then(|read_cache| read_cache.get(chunk_key.as_slice()).cloned())
 			} else {
 				None
 			};
@@ -616,7 +681,7 @@ unsafe extern "C" fn kv_io_write(
 			let existing_chunk = plan.cached_chunk.as_deref().or_else(|| {
 				plan.existing_chunk_index
 					.and_then(|idx| existing_chunks.get(idx))
-					.and_then(|value| value.as_ref())
+					.and_then(|value| value.as_deref())
 			});
 
 			let mut new_chunk = if let Some(existing_chunk) = existing_chunk {
@@ -1164,11 +1229,30 @@ unsafe extern "C" fn kv_vfs_current_time(_p_vfs: *mut sqlite3_vfs, p_time_out: *
 }
 
 unsafe extern "C" fn kv_vfs_get_last_error(
-	_p_vfs: *mut sqlite3_vfs,
-	_n_byte: c_int,
-	_z_err_msg: *mut c_char,
+	p_vfs: *mut sqlite3_vfs,
+	n_byte: c_int,
+	z_err_msg: *mut c_char,
 ) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR, SQLITE_OK)
+	vfs_catch_unwind!(SQLITE_IOERR, {
+		if n_byte <= 0 || z_err_msg.is_null() {
+			return 0;
+		}
+
+		let ctx = get_vfs_ctx(p_vfs);
+		let last_error = ctx.clone_last_error();
+		let Some(message) = last_error else {
+			*z_err_msg = 0;
+			return 0;
+		};
+
+		let bytes = message.as_bytes();
+		let max_len = (n_byte as usize).saturating_sub(1);
+		let copy_len = bytes.len().min(max_len);
+		let dst = z_err_msg.cast::<u8>();
+		ptr::copy_nonoverlapping(bytes.as_ptr(), dst, copy_len);
+		*dst.add(copy_len) = 0u8;
+		0
+	})
 }
 
 // MARK: KvVfs
@@ -1183,6 +1267,10 @@ unsafe impl Send for KvVfs {}
 unsafe impl Sync for KvVfs {}
 
 impl KvVfs {
+	fn take_last_kv_error(&self) -> Option<String> {
+		unsafe { (*self.ctx_ptr).take_last_error() }
+	}
+
 	pub fn register(
 		name: &str,
 		kv: Arc<dyn SqliteKv>,
@@ -1210,6 +1298,7 @@ impl KvVfs {
 			actor_id: actor_id.clone(),
 			main_file_name: actor_id,
 			read_cache_enabled: read_cache_enabled(),
+			last_error: Mutex::new(None),
 			rt_handle,
 			io_methods: Box::new(io_methods),
 			vfs_metrics,
@@ -1279,6 +1368,10 @@ impl NativeDatabase {
 	pub fn as_ptr(&self) -> *mut sqlite3 {
 		self.db
 	}
+
+	pub fn take_last_kv_error(&self) -> Option<String> {
+		self._vfs.take_last_kv_error()
+	}
 }
 
 impl Drop for NativeDatabase {
@@ -1287,6 +1380,18 @@ impl Drop for NativeDatabase {
 			unsafe {
 				sqlite3_close(self.db);
 			}
+		}
+	}
+}
+
+fn sqlite_error_message(db: *mut sqlite3) -> String {
+	unsafe {
+		if db.is_null() {
+			"unknown sqlite error".to_string()
+		} else {
+			CStr::from_ptr(sqlite3_errmsg(db))
+				.to_string_lossy()
+				.into_owned()
 		}
 	}
 }
@@ -1304,12 +1409,13 @@ pub fn open_database(vfs: KvVfs, file_name: &str) -> Result<NativeDatabase, Stri
 		)
 	};
 	if rc != SQLITE_OK {
+		let message = sqlite_error_message(db);
 		if !db.is_null() {
 			unsafe {
 				sqlite3_close(db);
 			}
 		}
-		return Err(format!("sqlite3_open_v2 failed with code {rc}"));
+		return Err(format!("sqlite3_open_v2 failed with code {rc}: {message}"));
 	}
 
 	for pragma in &[
@@ -1324,10 +1430,11 @@ pub fn open_database(vfs: KvVfs, file_name: &str) -> Result<NativeDatabase, Stri
 		let rc =
 			unsafe { sqlite3_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) };
 		if rc != SQLITE_OK {
+			let message = sqlite_error_message(db);
 			unsafe {
 				sqlite3_close(db);
 			}
-			return Err(format!("{pragma} failed with code {rc}"));
+			return Err(format!("{pragma} failed with code {rc}: {message}"));
 		}
 	}
 

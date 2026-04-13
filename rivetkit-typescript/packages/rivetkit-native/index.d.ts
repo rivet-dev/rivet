@@ -60,6 +60,7 @@ export declare function startEnvoySyncJs(config: JsEnvoyConfig, eventCallback: (
 export declare function startEnvoyJs(config: JsEnvoyConfig, eventCallback: (event: any) => void): JsEnvoyHandle
 /** Native SQLite database handle exposed to JavaScript. */
 export declare class JsNativeDatabase {
+  takeLastKvError(): string | null
   run(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<ExecuteResult>
   query(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<QueryResult>
   exec(sql: string): Promise<QueryResult>

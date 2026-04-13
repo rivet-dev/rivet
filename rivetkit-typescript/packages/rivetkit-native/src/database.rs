@@ -34,6 +34,10 @@ impl EnvoyKv {
 
 #[async_trait]
 impl SqliteKv for EnvoyKv {
+	fn on_error(&self, actor_id: &str, error: &SqliteKvError) {
+		tracing::error!(%actor_id, %error, "native sqlite kv operation failed");
+	}
+
 	async fn on_open(&self, _actor_id: &str) -> Result<(), SqliteKvError> {
 		Ok(())
 	}
@@ -115,6 +119,13 @@ impl JsNativeDatabase {
 			.and_then(|guard| guard.as_ref().map(NativeDatabase::as_ptr))
 			.unwrap_or(ptr::null_mut())
 	}
+
+	fn take_last_kv_error_inner(&self) -> Option<String> {
+		self.db
+			.lock()
+			.ok()
+			.and_then(|guard| guard.as_ref().and_then(NativeDatabase::take_last_kv_error))
+	}
 }
 
 #[napi(object)]
@@ -139,6 +150,11 @@ pub struct QueryResult {
 
 #[napi]
 impl JsNativeDatabase {
+	#[napi]
+	pub fn take_last_kv_error(&self) -> Option<String> {
+		self.take_last_kv_error_inner()
+	}
+
 	#[napi]
 	pub async fn run(
 		&self,

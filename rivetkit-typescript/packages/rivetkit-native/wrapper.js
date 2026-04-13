@@ -134,7 +134,7 @@ function startEnvoySync(config) {
 			poolName: config.poolName,
 			version: config.version,
 			metadata: config.metadata || null,
-			notGlobal: config.notGlobal,
+			notGlobal: config.notGlobal ?? false,
 		},
 		(event) => {
 			handleEvent(event, config, wrappedHandle);
@@ -264,6 +264,20 @@ function mapRows(rows, columns) {
 	});
 }
 
+function wrapNativeStorageError(nativeDb, error) {
+	const lastKvError =
+		typeof nativeDb.takeLastKvError === "function"
+			? nativeDb.takeLastKvError()
+			: null;
+	if (!lastKvError) {
+		throw error;
+	}
+	throw new Error(
+		`Database query failed because the underlying storage is no longer available (${lastKvError}). This usually means the actor is stopping. Use c.abortSignal to cancel long-running work before the actor shuts down.`,
+		{ cause: error },
+	);
+}
+
 async function openRawDatabaseFromEnvoy(handle, actorId) {
 	const nativeDb = await openDatabaseFromEnvoy(handle, actorId);
 	let closed = false;
@@ -288,16 +302,28 @@ async function openRawDatabaseFromEnvoy(handle, actorId) {
 					/\bRETURNING\b/i.test(query);
 
 				if (returnsRows) {
-					const result = await nativeDb.query(query, bindings);
-					return mapRows(result.rows, result.columns);
+					try {
+						const result = await nativeDb.query(query, bindings);
+						return mapRows(result.rows, result.columns);
+					} catch (error) {
+						wrapNativeStorageError(nativeDb, error);
+					}
 				}
 
-				await nativeDb.run(query, bindings);
+				try {
+					await nativeDb.run(query, bindings);
+				} catch (error) {
+					wrapNativeStorageError(nativeDb, error);
+				}
 				return [];
 			}
 
-			const result = await nativeDb.exec(query);
-			return mapRows(result.rows, result.columns);
+			try {
+				const result = await nativeDb.exec(query);
+				return mapRows(result.rows, result.columns);
+			} catch (error) {
+				wrapNativeStorageError(nativeDb, error);
+			}
 		},
 		close: async () => {
 			if (closed) {
