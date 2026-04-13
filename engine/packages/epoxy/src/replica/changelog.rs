@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, bail};
-use epoxy_protocol::protocol;
+use epoxy_protocol::protocol::{self, CommittedValue};
 use futures_util::TryStreamExt;
 use universaldb::{
 	KeySelector, RangeOption, Transaction,
@@ -10,8 +10,7 @@ use universaldb::{
 };
 
 use crate::keys::{
-	self, ChangelogKey, CommittedValue, KvAcceptedKey, KvBallotKey, KvOptimisticCacheKey,
-	KvValueKey,
+	self, ChangelogKey, KvAcceptedKey, KvBallotKey, KvOptimisticCacheKey, KvValueKey,
 };
 use crate::metrics;
 

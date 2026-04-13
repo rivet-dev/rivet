@@ -1,11 +1,9 @@
 use anyhow::Result;
-use epoxy_protocol::protocol::ReplicaId;
+use epoxy_protocol::protocol::{CachedValue, CommittedValue, ReplicaId};
 use gas::prelude::*;
 use universaldb::utils::{FormalKey, IsolationLevel::Serializable};
 
-use crate::keys::{
-	self, CommittedValue, KvOptimisticCacheKey, KvValueKey, LegacyCommittedValueKey,
-};
+use crate::keys::{self, KvOptimisticCacheKey, KvValueKey, LegacyCommittedValueKey};
 
 #[derive(Debug)]
 pub struct Input {
@@ -26,7 +24,7 @@ pub async fn epoxy_kv_get_local(
 #[derive(Debug)]
 pub(crate) struct LocalValueRead {
 	pub value: Option<CommittedValue>,
-	pub cache_value: Option<CommittedValue>,
+	pub cache_value: Option<CachedValue>,
 }
 
 /// Reads a committed value from the local replica with dual-read fallback.
@@ -95,18 +93,12 @@ pub(crate) async fn read_local_value(
 				if let Some(value) = cache_value {
 					let cache_value = cache_key.deserialize(&value)?;
 
-					// Special case with empty values. These are inserted in kv_get_optimistic with `save_empty`
-					if cache_value.value.is_empty() {
+					if let Some(value) = cache_value.value {
 						return Ok(LocalValueRead {
 							value: None,
-							cache_value: None,
+							cache_value: Some(cache_key.deserialize(&value)?),
 						});
 					}
-
-					return Ok(LocalValueRead {
-						value: None,
-						cache_value: Some(cache_key.deserialize(&value)?),
-					});
 				}
 
 				Ok(LocalValueRead {

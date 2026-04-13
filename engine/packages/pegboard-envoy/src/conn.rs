@@ -67,6 +67,7 @@ pub async fn init_conn(
 		}
 		.build());
 	};
+	let is_serverless = matches!(pool.config.kind, RunnerConfigKind::Serverless { .. });
 
 	tracing::debug!(namespace_id=?namespace.namespace_id, "new envoy connection");
 
@@ -81,16 +82,6 @@ pub async fn init_conn(
 		.with_label_values(&[namespace.namespace_id.to_string().as_str(), &pool_name])
 		.observe(start.elapsed().as_secs_f64());
 
-	let serverless_drain_grace_period = if let RunnerConfigKind::Serverless {
-		drain_grace_period,
-		..
-	} = &pool.config.kind
-	{
-		Some(*drain_grace_period as i64)
-	} else {
-		None
-	};
-
 	let udb = ctx.udb()?;
 	let (_, mut missed_commands) = tokio::try_join!(
 		// Send init packet as soon as possible
@@ -103,7 +94,6 @@ pub async fn init_conn(
 					metadata: protocol::ProtocolMetadata {
 						envoy_lost_threshold: pb.envoy_lost_threshold(),
 						actor_stop_threshold: pb.actor_stop_threshold(),
-						serverless_drain_grace_period,
 						max_response_payload_size: pb.envoy_max_response_payload_size() as u64,
 					},
 				},
@@ -316,8 +306,6 @@ pub async fn init_conn(
 			.send(Message::Binary(msg_serialized.into()))
 			.await?;
 	}
-
-	let is_serverless = serverless_drain_grace_period.is_some();
 
 	if is_serverless {
 		report_success(ctx, namespace.namespace_id, &pool_name).await;

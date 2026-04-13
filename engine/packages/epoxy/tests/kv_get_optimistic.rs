@@ -9,7 +9,7 @@ use common::{
 	},
 };
 use epoxy::ops::propose::ProposalResult;
-use epoxy_protocol::protocol::{CachingBehavior, ReplicaId};
+use epoxy_protocol::protocol::{CachingBehavior, CommittedValue, ReplicaId};
 
 static TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
@@ -182,7 +182,7 @@ async fn test_kv_get_optimistic_paths() {
 			test_ctx.get_ctx(writer_replica_id),
 			writer_replica_id,
 			key,
-			epoxy::keys::CommittedValue {
+			CommittedValue {
 				value: b"remote-value".to_vec(),
 				version: 2,
 				mutable: true,
@@ -194,7 +194,7 @@ async fn test_kv_get_optimistic_paths() {
 			test_ctx.get_ctx(reader_replica_id),
 			reader_replica_id,
 			key,
-			epoxy::keys::CommittedValue {
+			CommittedValue {
 				value: b"stale-cache".to_vec(),
 				version: 1,
 				mutable: true,
@@ -221,7 +221,7 @@ async fn test_kv_get_optimistic_paths() {
 			)
 			.await
 			.unwrap(),
-			Some(epoxy::keys::CommittedValue {
+			Some(CommittedValue {
 				value: b"stale-cache".to_vec(),
 				version: 1,
 				mutable: true,
@@ -247,7 +247,7 @@ async fn test_kv_get_optimistic_paths() {
 			follower_ctx,
 			follower_replica_id,
 			key,
-			epoxy::keys::CommittedValue {
+			CommittedValue {
 				value: b"value1".to_vec(),
 				version: 1,
 				mutable: true,

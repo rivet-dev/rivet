@@ -8,6 +8,7 @@ pub type ReplicaConfig = raw::ReplicaConfig;
 pub type ClusterConfig = raw::ClusterConfig;
 pub type Ballot = raw::Ballot;
 pub type CommittedValue = raw::CommittedValue;
+pub type CachedValue = raw::CachedValue;
 
 pub type UpdateConfigRequest = raw::UpdateConfigRequest;
 pub type UpdateConfigResponse = raw::UpdateConfigResponse;

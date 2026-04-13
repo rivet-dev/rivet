@@ -5,8 +5,8 @@ pub mod keys;
 pub mod replica;
 
 pub use self::keys::{
-	ChangelogKey, CommittedValue, KvAcceptedKey, KvAcceptedValue, KvBallotKey,
-	KvOptimisticCacheKey, KvValueKey, LegacyCommittedValueKey,
+	ChangelogKey, KvAcceptedKey, KvAcceptedValue, KvBallotKey, KvOptimisticCacheKey, KvValueKey,
+	LegacyCommittedValueKey,
 };
 pub use self::replica::ConfigKey;
 

@@ -1,17 +1,9 @@
 use anyhow::Result;
-use epoxy_protocol::protocol;
+use epoxy_protocol::{PROTOCOL_VERSION, protocol, versioned};
 use serde::{Deserialize, Serialize};
 use universaldb::prelude::*;
 use universaldb::tuple::Versionstamp;
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct CommittedValue {
-	// NOTE: An empty value may exist for cached entries to denote the value was not found on any datacenter
-	// and cached as such.
-	pub value: Vec<u8>,
-	pub version: u64,
-	pub mutable: bool,
-}
+use vbare::OwnedVersionedData;
 
 /// In-flight accepted proposal state stored under `kv/{key}/accepted`.
 ///
@@ -44,14 +36,15 @@ impl KvValueKey {
 }
 
 impl FormalKey for KvValueKey {
-	type Value = CommittedValue;
+	type Value = protocol::CommittedValue;
 
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
-		serde_bare::from_slice(raw).map_err(Into::into)
+		versioned::CommittedValue::deserialize_with_embedded_version(raw)
 	}
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		serde_bare::to_vec(&value).map_err(Into::into)
+		versioned::CommittedValue::wrap_latest(value)
+			.serialize_with_embedded_version(PROTOCOL_VERSION)
 	}
 }
 
@@ -260,14 +253,14 @@ impl KvOptimisticCacheKey {
 }
 
 impl FormalKey for KvOptimisticCacheKey {
-	type Value = CommittedValue;
+	type Value = protocol::CachedValue;
 
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
-		serde_bare::from_slice(raw).map_err(Into::into)
+		versioned::CachedValue::deserialize_with_embedded_version(raw)
 	}
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		serde_bare::to_vec(&value).map_err(Into::into)
+		versioned::CachedValue::wrap_latest(value).serialize_with_embedded_version(PROTOCOL_VERSION)
 	}
 }
 

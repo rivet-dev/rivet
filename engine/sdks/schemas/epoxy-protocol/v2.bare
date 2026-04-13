@@ -12,6 +12,11 @@ type CommittedValue struct {
 	mutable: bool
 }
 
+type CachedValue struct {
+	value: optional<data>
+	version: u64
+}
+
 # MARK: Cluster config
 type ReplicaStatus enum {
 	# Receives nothing

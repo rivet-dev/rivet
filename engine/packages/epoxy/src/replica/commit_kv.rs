@@ -1,9 +1,9 @@
 use anyhow::Result;
-use epoxy_protocol::protocol;
+use epoxy_protocol::protocol::{self, CommittedValue};
 use universaldb::{Transaction, utils::IsolationLevel::Serializable};
 
 use crate::{
-	keys::{self, CommittedValue, KvAcceptedKey, KvBallotKey, KvOptimisticCacheKey, KvValueKey},
+	keys::{self, KvAcceptedKey, KvBallotKey, KvOptimisticCacheKey, KvValueKey},
 	replica::ballot::Ballot,
 };
 

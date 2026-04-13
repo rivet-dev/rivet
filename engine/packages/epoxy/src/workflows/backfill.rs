@@ -1,5 +1,5 @@
 use anyhow::Result;
-use epoxy_protocol::protocol;
+use epoxy_protocol::protocol::{self, CommittedValue};
 use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ use universaldb::{
 	},
 };
 
-use crate::keys::{self, CommittedValue, KvValueKey, LegacyCommittedValueKey};
+use crate::keys::{self, KvValueKey, LegacyCommittedValueKey};
 
 const DEFAULT_CHUNK_SIZE: usize = 500;
 

@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
-use epoxy_protocol::protocol;
+use epoxy_protocol::protocol::{self, CommittedValue};
 use std::cmp::Ordering;
 use universaldb::Transaction;
 use universaldb::utils::{FormalKey, IsolationLevel::Serializable};
 
-use crate::keys::{self, CommittedValue, KvBallotKey, KvValueKey, LegacyCommittedValueKey};
+use crate::keys::{self, KvBallotKey, KvValueKey, LegacyCommittedValueKey};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ballot {
