@@ -126,6 +126,7 @@ export declare function startEnvoy(config: EnvoyConfig): Promise<EnvoyHandle>;
 export declare function openDatabaseFromEnvoy(
 	handle: EnvoyHandle,
 	actorId: string,
+	preloadedEntries?: readonly [Uint8Array, Uint8Array][] | null,
 ): Promise<JsNativeDatabase>;
 
 export interface NativeRawDatabase {
@@ -139,6 +140,7 @@ export interface NativeRawDatabase {
 export declare function openRawDatabaseFromEnvoy(
 	handle: EnvoyHandle,
 	actorId: string,
+	preloadedEntries?: readonly [Uint8Array, Uint8Array][] | null,
 ): Promise<NativeRawDatabase>;
 
 export declare const utils: {};
