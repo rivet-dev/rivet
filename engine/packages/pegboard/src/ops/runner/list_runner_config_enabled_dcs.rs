@@ -1,6 +1,6 @@
 use anyhow::Result;
 use epoxy_protocol::generated::v2::CachingBehavior;
-use futures_util::{StreamExt, TryStreamExt};
+use futures_util::StreamExt;
 use gas::prelude::*;
 
 use crate::keys;
@@ -74,12 +74,24 @@ async fn list_runner_config_enabled_dcs_inner(
 					target_replicas: None,
 					save_empty: true,
 				})
-				.await?;
+				.await;
 
-			Ok(res.value.map(|_| dc.datacenter_label))
+			match res {
+				Ok(res) => res.value.map(|_| dc.datacenter_label),
+				Err(err) => {
+					tracing::warn!(
+						?err,
+						namespace_id=?input.namespace_id,
+						runner_name=%input.runner_name,
+						dc_label=dc.datacenter_label,
+						"failed to read runner config from dc"
+					);
+					None
+				}
+			}
 		})
 		.buffer_unordered(512)
-		.try_filter_map(|x| std::future::ready(Ok(x)))
-		.try_collect::<Vec<_>>()
+		.filter_map(std::future::ready)
+		.collect::<Vec<_>>()
 		.await
 }
