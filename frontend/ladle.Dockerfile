@@ -26,9 +26,6 @@ COPY rivetkit-typescript/packages/engine-runner-protocol/ rivetkit-typescript/pa
 COPY rivetkit-typescript/packages/rivetkit/ rivetkit-typescript/packages/rivetkit/
 COPY rivetkit-typescript/packages/traces/ rivetkit-typescript/packages/traces/
 COPY rivetkit-typescript/packages/workflow-engine/ rivetkit-typescript/packages/workflow-engine/
-COPY rivetkit-typescript/packages/sqlite-vfs/ rivetkit-typescript/packages/sqlite-vfs/
-COPY rivetkit-typescript/packages/sqlite-vfs-linux-arm64/ rivetkit-typescript/packages/sqlite-vfs-linux-arm64/
-COPY rivetkit-typescript/packages/sqlite-vfs-linux-x64/ rivetkit-typescript/packages/sqlite-vfs-linux-x64/
 
 # Copy shared libraries
 COPY shared/typescript/virtual-websocket/ shared/typescript/virtual-websocket/
