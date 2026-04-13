@@ -404,30 +404,20 @@ async fn handle_shutdown(ctx: &mut EnvoyContext) {
 
 	ws_send(&ctx.shared, protocol::ToRivet::ToRivetStopping).await;
 
-	// Check if any actors are still active
-	let has_actors = ctx
+	// Wait for all actors to finish. The process manager (Docker,
+	// k8s, etc.) provides the ultimate shutdown deadline.
+	let actor_handles: Vec<mpsc::UnboundedSender<ToActor>> = ctx
 		.actors
 		.values()
-		.any(|gens| gens.values().any(|entry| !entry.handle.is_closed()));
+		.flat_map(|gens| gens.values())
+		.filter(|entry| !entry.handle.is_closed())
+		.map(|entry| entry.handle.clone())
+		.collect();
 
-	if !has_actors {
-		let _ = ctx.shared.envoy_tx.send(ToEnvoyMessage::Stop);
-	} else {
-		// Wait for all actors to finish. The process manager (Docker,
-		// k8s, etc.) provides the ultimate shutdown deadline.
-		let actor_handles: Vec<mpsc::UnboundedSender<ToActor>> = ctx
-			.actors
-			.values()
-			.flat_map(|gens| gens.values())
-			.filter(|entry| !entry.handle.is_closed())
-			.map(|entry| entry.handle.clone())
-			.collect();
-
-		let envoy_tx = ctx.shared.envoy_tx.clone();
-		tokio::spawn(async move {
-			futures_util::future::join_all(actor_handles.iter().map(|h| h.closed())).await;
-			tracing::debug!("all actors stopped during graceful shutdown");
-			let _ = envoy_tx.send(ToEnvoyMessage::Stop);
-		});
-	}
+	let envoy_tx = ctx.shared.envoy_tx.clone();
+	tokio::spawn(async move {
+		futures_util::future::join_all(actor_handles.iter().map(|h| h.closed())).await;
+		tracing::debug!("all actors stopped during graceful shutdown");
+		let _ = envoy_tx.send(ToEnvoyMessage::Stop);
+	});
 }
