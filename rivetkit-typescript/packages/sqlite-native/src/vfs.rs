@@ -108,7 +108,12 @@ fn read_cache_enabled() -> bool {
 
 	*READ_CACHE_ENABLED.get_or_init(|| {
 		std::env::var(READ_CACHE_ENV_VAR)
-			.map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+			.map(|value| {
+				matches!(
+					value.to_ascii_lowercase().as_str(),
+					"1" | "true" | "yes" | "on"
+				)
+			})
 			.unwrap_or(false)
 	})
 }
@@ -177,22 +182,15 @@ impl VfsContext {
 	}
 
 	fn kv_get(&self, keys: Vec<Vec<u8>>) -> Result<KvGetResult, String> {
-		let op_name = format!("get({}keys)", keys.len());
+		let key_count = keys.len();
 		let start = std::time::Instant::now();
 		let result = self
 			.rt_handle
 			.block_on(self.kv.batch_get(&self.actor_id, keys))
 			.map_err(|e| e.to_string());
 		let elapsed = start.elapsed();
-		if std::env::var("RIVET_TRACE_SQL").is_ok() {
-			eprintln!(
-				"[sql-trace]   kv_roundtrip op={} duration={}us",
-				op_name,
-				elapsed.as_micros()
-			);
-		}
 		tracing::debug!(
-			op = %op_name,
+			op = %format_args!("get({key_count}keys)"),
 			duration_us = elapsed.as_micros() as u64,
 			"kv round-trip"
 		);
@@ -200,22 +198,15 @@ impl VfsContext {
 	}
 
 	fn kv_put(&self, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<(), String> {
-		let op_name = format!("put({}keys)", keys.len());
+		let key_count = keys.len();
 		let start = std::time::Instant::now();
 		let result = self
 			.rt_handle
 			.block_on(self.kv.batch_put(&self.actor_id, keys, values))
 			.map_err(|e| e.to_string());
 		let elapsed = start.elapsed();
-		if std::env::var("RIVET_TRACE_SQL").is_ok() {
-			eprintln!(
-				"[sql-trace]   kv_roundtrip op={} duration={}us",
-				op_name,
-				elapsed.as_micros()
-			);
-		}
 		tracing::debug!(
-			op = %op_name,
+			op = %format_args!("put({key_count}keys)"),
 			duration_us = elapsed.as_micros() as u64,
 			"kv round-trip"
 		);
@@ -223,22 +214,15 @@ impl VfsContext {
 	}
 
 	fn kv_delete(&self, keys: Vec<Vec<u8>>) -> Result<(), String> {
-		let op_name = format!("del({}keys)", keys.len());
+		let key_count = keys.len();
 		let start = std::time::Instant::now();
 		let result = self
 			.rt_handle
 			.block_on(self.kv.batch_delete(&self.actor_id, keys))
 			.map_err(|e| e.to_string());
 		let elapsed = start.elapsed();
-		if std::env::var("RIVET_TRACE_SQL").is_ok() {
-			eprintln!(
-				"[sql-trace]   kv_roundtrip op={} duration={}us",
-				op_name,
-				elapsed.as_micros()
-			);
-		}
 		tracing::debug!(
-			op = %op_name,
+			op = %format_args!("del({key_count}keys)"),
 			duration_us = elapsed.as_micros() as u64,
 			"kv round-trip"
 		);
@@ -246,22 +230,14 @@ impl VfsContext {
 	}
 
 	fn kv_delete_range(&self, start: Vec<u8>, end: Vec<u8>) -> Result<(), String> {
-		let op_name = "delRange";
 		let start_time = std::time::Instant::now();
 		let result = self
 			.rt_handle
 			.block_on(self.kv.delete_range(&self.actor_id, start, end))
 			.map_err(|e| e.to_string());
 		let elapsed = start_time.elapsed();
-		if std::env::var("RIVET_TRACE_SQL").is_ok() {
-			eprintln!(
-				"[sql-trace]   kv_roundtrip op={} duration={}us",
-				op_name,
-				elapsed.as_micros()
-			);
-		}
 		tracing::debug!(
-			op = %op_name,
+			op = "delRange",
 			duration_us = elapsed.as_micros() as u64,
 			"kv round-trip"
 		);
@@ -632,15 +608,11 @@ unsafe extern "C" fn kv_io_write(
 
 		let mut entries_to_write = Vec::with_capacity(plans.len() + 1);
 		for plan in &plans {
-			let existing_chunk = plan
-				.cached_chunk
-				.as_deref()
-				.or_else(|| {
-					plan
-						.existing_chunk_index
-						.and_then(|idx| existing_chunks.get(idx))
-						.and_then(|value| value.as_ref())
-				});
+			let existing_chunk = plan.cached_chunk.as_deref().or_else(|| {
+				plan.existing_chunk_index
+					.and_then(|idx| existing_chunks.get(idx))
+					.and_then(|value| value.as_ref())
+			});
 
 			let mut new_chunk = if let Some(existing_chunk) = existing_chunk {
 				let mut chunk = vec![0u8; std::cmp::max(existing_chunk.len(), plan.write_end)];
@@ -924,7 +896,9 @@ unsafe extern "C" fn kv_io_file_control(
 
 				// Move dirty buffer entries into the read cache so subsequent
 				// reads can serve them without a KV round-trip.
-				let flushed: Vec<_> = std::mem::take(&mut state.dirty_buffer).into_iter().collect();
+				let flushed: Vec<_> = std::mem::take(&mut state.dirty_buffer)
+					.into_iter()
+					.collect();
 				if let Some(read_cache) = state.read_cache.as_mut() {
 					// Only chunk pages belong in the read cache. The metadata write above
 					// still goes through KV, but should not be cached as a page.
