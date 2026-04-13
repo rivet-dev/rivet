@@ -99,10 +99,10 @@ async fn backfill_chunk(ctx: &ActivityCtx, input: &BackfillChunkInput) -> Result
 				};
 
 				new_last_key = [entry.key(), &[0xff]].concat();
-				if let Ok((_, (_, _, leaf))) =
+				if let Ok((_, _, leaf)) =
 					runner_config_subspace.unpack::<(Id, String, usize)>(entry.key())
 				{
-					if leaf == keys::runner_config::PROTOCOL_VERSION {
+					if leaf == universaldb::utils::keys::PROTOCOL_VERSION {
 						continue;
 					}
 				}
