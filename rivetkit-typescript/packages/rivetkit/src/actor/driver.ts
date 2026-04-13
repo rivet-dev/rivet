@@ -6,10 +6,8 @@ import type { RegistryConfig } from "@/registry/config";
 import type {
 	RawDatabaseClient,
 	DrizzleDatabaseClient,
-	NativeSqliteConfig,
 	NativeDatabaseProvider,
 } from "@/db/config";
-import type { ISqliteVfs } from "@rivetkit/sqlite-wasm";
 
 export type ActorDriverBuilder = (
 	config: RegistryConfig,
@@ -95,27 +93,7 @@ export interface ActorDriver {
 	): Promise<DrizzleDatabaseClient | undefined>;
 
 	/**
-	 * Creates a SQLite VFS instance for creating KV-backed databases.
-	 * If not provided, the database provider will need an override.
-	 *
-	 * Drivers may use the actorId for pool-based instance assignment.
-	 *
-	 * This is a method (not a property) so drivers can use dynamic imports,
-	 * keeping the core driver tree-shakeable from @rivetkit/sqlite.
-	 */
-	createSqliteVfs?(actorId: string): ISqliteVfs | Promise<ISqliteVfs>;
-
-	/**
-	 * @deprecated Use getNativeDatabaseProvider instead.
-	 * Returns native SQLite channel configuration for this actor.
-	 */
-	getNativeSqliteConfig?(
-		actorId: string,
-	): NativeSqliteConfig | undefined;
-
-	/**
 	 * Returns a provider for opening native databases from a live runtime handle.
-	 * When provided, takes precedence over getNativeSqliteConfig.
 	 */
 	getNativeDatabaseProvider?(): NativeDatabaseProvider | undefined;
 

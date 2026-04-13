@@ -6,7 +6,6 @@ import {
 	type SpanStatusInput,
 	type Traces,
 } from "@rivetkit/traces";
-import type { ISqliteVfs } from "@rivetkit/sqlite-wasm";
 import { ActorMetrics, type StartupTimingKey } from "@/actor/metrics";
 import invariant from "invariant";
 import type { Client } from "@/client/client";
@@ -79,7 +78,7 @@ import {
 } from "../utils";
 import { ConnectionManager } from "./connection-manager";
 import { EventManager } from "./event-manager";
-import { KEYS, sqliteStoragePrefix, workflowStoragePrefix } from "./keys";
+import { KEYS, workflowStoragePrefix } from "./keys";
 import {
 	type PreloadedEntries,
 	type PreloadHit,
@@ -361,7 +360,6 @@ export class ActorInstance<
 	// MARK: - Variables & Database
 	#vars?: V;
 	#db?: InferDatabaseClient<DB>;
-	#sqliteVfs?: ISqliteVfs;
 	#metrics = new ActorMetrics();
 
 	// MARK: - Preload
@@ -2142,20 +2140,10 @@ export class ActorInstance<
 			return;
 		}
 
-		// Extract SQLite preload entries for VFS read optimization.
-		const sqlitePreloadEntries = preload?.listPrefix(sqliteStoragePrefix());
 		const dbProvider = this.#config.db;
 
 		let client: InferDatabaseClient<DB> | undefined;
 		try {
-			// Acquire a SQLite VFS handle for this actor. The driver may return a
-			// standalone VFS or a pooled handle that shares a WASM instance.
-			if (!this.#sqliteVfs && this.driver.createSqliteVfs) {
-				this.#sqliteVfs = await this.driver.createSqliteVfs(
-					this.#actorId,
-				);
-			}
-
 			client = await this.#measureStartup("setupDatabaseClientMs", () =>
 				dbProvider.createClient({
 					actorId: this.#actorId,
@@ -2183,13 +2171,8 @@ export class ActorInstance<
 						deleteRange: (start: Uint8Array, end: Uint8Array) =>
 							this.driver.kvDeleteRange(this.#actorId, start, end),
 					},
-					sqliteVfs: this.#sqliteVfs,
 					metrics: this.#metrics,
-					preloadedEntries: sqlitePreloadEntries,
 					log: this.#rLog,
-					nativeSqliteConfig: this.driver.getNativeSqliteConfig?.(
-						this.#actorId,
-					),
 					nativeDatabaseProvider:
 						this.driver.getNativeDatabaseProvider?.(),
 				}),
@@ -2211,17 +2194,6 @@ export class ActorInstance<
 					});
 				}
 			}
-			if (this.#sqliteVfs) {
-				try {
-					await this.#sqliteVfs.destroy();
-				} catch (cleanupError) {
-					this.#rLog.error({
-						msg: "sqlite vfs teardown after setup failure failed",
-						error: stringifyError(cleanupError),
-					});
-				}
-			}
-			this.#sqliteVfs = undefined;
 			if (error instanceof Error) {
 				this.#rLog.error({
 					msg: "database setup failed",
@@ -2243,10 +2215,8 @@ export class ActorInstance<
 
 	async #cleanupDatabase() {
 		const client = this.#db;
-		const sqliteVfs = this.#sqliteVfs;
 		const dbConfig = "db" in this.#config ? this.#config.db : undefined;
 		this.#db = undefined;
-		this.#sqliteVfs = undefined;
 
 		if (client && dbConfig) {
 			try {
@@ -2254,17 +2224,6 @@ export class ActorInstance<
 			} catch (error) {
 				this.#rLog.error({
 					msg: "database cleanup failed",
-					error: stringifyError(error),
-				});
-			}
-		}
-
-		if (sqliteVfs) {
-			try {
-				await sqliteVfs.destroy();
-			} catch (error) {
-				this.#rLog.error({
-					msg: "sqlite vfs cleanup failed",
 					error: stringifyError(error),
 				});
 			}

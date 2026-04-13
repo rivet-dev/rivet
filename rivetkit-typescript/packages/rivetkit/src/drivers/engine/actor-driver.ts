@@ -1,8 +1,11 @@
 import type { EnvoyConfig } from "@rivetkit/rivetkit-native/wrapper";
-import type { ISqliteVfs } from "@rivetkit/sqlite-wasm";
-import { SqliteVfsPoolManager } from "@/driver-helpers/sqlite-pool";
-import type { HibernatingWebSocketMetadata, EnvoyHandle } from "@rivetkit/rivetkit-native/wrapper";
-import type * as protocol from "@rivetkit/engine-envoy-protocol";
+import {
+	type HibernatingWebSocketMetadata,
+	type EnvoyHandle,
+	openDatabaseFromEnvoy,
+	protocol,
+	startEnvoySync,
+} from "@rivetkit/rivetkit-native/wrapper";
 import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -68,7 +71,7 @@ import {
 	stringifyError,
 	VERSION,
 } from "@/utils";
-import { getRequireFn } from "@/utils/node";
+import { wrapJsNativeDatabase, type JsNativeDatabaseLike } from "@/db/native-database";
 import { logger } from "./log";
 
 const ENVOY_SSE_PING_INTERVAL = 1000;
@@ -129,7 +132,6 @@ export class EngineActorDriver implements ActorDriver {
 		}
 	>();
 	#actorRouter: ActorRouter;
-	#sqlitePool: SqliteVfsPoolManager;
 
 	#envoyStarted: PromiseWithResolvers<void> = promiseWithResolvers(
 		(reason) =>
@@ -161,7 +163,6 @@ export class EngineActorDriver implements ActorDriver {
 		this.#config = config;
 		this.#engineClient = engineClient;
 		this.#inlineClient = inlineClient;
-		this.#sqlitePool = new SqliteVfsPoolManager(config);
 
 		// HACK: Override inspector token (which are likely to be
 		// removed later on) with token from x-rivet-token header
@@ -206,9 +207,6 @@ export class EngineActorDriver implements ActorDriver {
 		};
 
 		// Create and start envoy
-		const { startEnvoySync } = getRequireFn()(
-			/* webpackIgnore: true */ "@rivetkit/rivetkit-native/wrapper",
-		) as typeof import("@rivetkit/rivetkit-native/wrapper");
 		const envoy = startEnvoySync(envoyConfig);
 
 		this.#envoy = envoy;
@@ -554,7 +552,7 @@ export class EngineActorDriver implements ActorDriver {
 		this.#envoy.setAlarm(actor.id, timestamp);
 	}
 
-	// No database overrides - will use KV-backed implementation from rivetkit/db
+	// Engine drivers expose the native SQLite provider directly.
 
 	getInitialSleepTimeoutMs(
 		_actor: AnyActorInstance,
@@ -563,41 +561,15 @@ export class EngineActorDriver implements ActorDriver {
 		return Math.max(defaultTimeoutMs, INITIAL_SLEEP_TIMEOUT_MS);
 	}
 
-	getNativeSqliteConfig() {
-		return {
-			endpoint: getEndpoint(this.#config),
-			token: this.#config.token,
-			namespace: this.#config.namespace,
-		};
-	}
-
 	getNativeDatabaseProvider() {
-		// Try to load the native package. If available, return a provider
-		// that opens databases from the live envoy handle.
-		try {
-			const requireFn = getRequireFn();
-
-			const nativeMod = requireFn(
-				/* webpackIgnore: true */ "@rivetkit/rivetkit-native/wrapper",
-			);
-			if (!nativeMod?.openRawDatabaseFromEnvoy) return undefined;
-
-			const envoy = this.#envoy;
-			return {
-				open: async (
-					actorId: string,
-					preloadedEntries?: [Uint8Array, Uint8Array][],
-				) => {
-					return await nativeMod.openRawDatabaseFromEnvoy(
-						envoy,
-						actorId,
-						preloadedEntries,
-					);
-				},
-			};
-		} catch {
-			return undefined;
-		}
+		const envoy = this.#envoy;
+		return {
+			open: async (actorId: string) => {
+				const database: JsNativeDatabaseLike =
+					await openDatabaseFromEnvoy(envoy, actorId);
+				return wrapJsNativeDatabase(database);
+			},
+		};
 	}
 
 	// MARK: - Batch KV operations
@@ -694,11 +666,6 @@ export class EngineActorDriver implements ActorDriver {
 		);
 	}
 
-	/** Creates a SQLite VFS instance for creating KV-backed databases */
-	async createSqliteVfs(actorId: string): Promise<ISqliteVfs> {
-		return await this.#sqlitePool.acquire(actorId);
-	}
-
 	// MARK: - Actor Lifecycle
 	async loadActor(actorId: string): Promise<AnyActorInstance> {
 		const handler = await this.#loadActorHandler(actorId);
@@ -774,8 +741,6 @@ export class EngineActorDriver implements ActorDriver {
 				});
 			}
 		}
-
-		await this.#sqlitePool.shutdown();
 
 		try {
 			await this.#envoy.shutdown(immediate);

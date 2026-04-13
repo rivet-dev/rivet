@@ -127,7 +127,7 @@ function rowToStat(row: FsRow): VirtualStat {
 	};
 }
 
-export interface SqliteVfsOptions {
+export interface DatabaseVfsOptions {
 	/** The RawAccess database handle from the actor's db provider. */
 	db: RawAccess;
 }
@@ -139,7 +139,9 @@ export interface SqliteVfsOptions {
  * `agent_os_fs_entries` table. The table must be created beforehand
  * via `migrateAgentOsTables()`.
  */
-export function createSqliteVfs(options: SqliteVfsOptions): VirtualFileSystem {
+export function createDatabaseVfs(
+	options: DatabaseVfsOptions,
+): VirtualFileSystem {
 	const { db } = options;
 
 	async function getEntry(path: string): Promise<FsRow | undefined> {

@@ -244,8 +244,6 @@ const InstanceActorOptionsBaseSchema = z
 		sleepTimeout: z.number().positive().default(30_000),
 		maxQueueSize: z.number().positive().default(1000),
 		maxQueueMessageSize: z.number().positive().default(64 * 1024),
-		/** Override RivetKit's SQLite preload budget for this actor. Set to 0 to disable SQLite preloading. */
-		preloadMaxSqliteBytes: z.number().nonnegative().optional(),
 		/** Override RivetKit's workflow preload budget for this actor. Set to 0 to disable workflow preloading. */
 		preloadMaxWorkflowBytes: z.number().nonnegative().optional(),
 		/** Override RivetKit's connections preload budget for this actor. Set to 0 to disable connections preloading. */
@@ -1164,12 +1162,6 @@ export const DocActorOptionsSchema = z
 			.optional()
 			.describe(
 				"Whether WebSockets using onWebSocket can be hibernated. WebSockets using actions/events are hibernatable by default. Default: false",
-			),
-		preloadMaxSqliteBytes: z
-			.number()
-			.optional()
-			.describe(
-				"Override RivetKit's SQLite preload budget for this actor. Set to 0 to disable SQLite preloading.",
 			),
 		preloadMaxWorkflowBytes: z
 			.number()

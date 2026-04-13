@@ -4,7 +4,6 @@ import type { BaseActorDefinition, AnyActorDefinition } from "@/actor/definition
 import {
 	KEYS,
 	queueMetadataKey,
-	sqliteStoragePrefix,
 	workflowStoragePrefix,
 } from "@/actor/instance/keys";
 import { type Logger, LogLevelSchema } from "@/common/log";
@@ -45,31 +44,6 @@ export const RegistryConfigSchema = z
 		 * @internal
 		 **/
 		test: TestConfigSchema.optional().default({ enabled: false }),
-
-		// MARK: Database
-		/**
-		 * @experimental
-		 *
-		 * Configuration for the SQLite VFS pool that shares WASM instances across actors.
-		 */
-		sqlitePool: z
-			.object({
-				/**
-				 * Number of actors per WASM SQLite instance.
-				 */
-				actorsPerInstance: z
-					.number()
-					.int()
-					.min(1)
-					.optional()
-					.default(50),
-				/**
-				 * Milliseconds before an idle instance (no actors, no in-flight ops) is destroyed.
-				 */
-				idleDestroyMs: z.number().optional().default(30_000),
-			})
-			.optional()
-			.default(() => ({ actorsPerInstance: 50, idleDestroyMs: 30_000 })),
 
 		// MARK: Networking
 		/** @experimental */
@@ -317,11 +291,6 @@ export function buildActorNames(
 				],
 				prefixes: [
 					{
-						prefix: Array.from(sqliteStoragePrefix()),
-						maxBytes: options.preloadMaxSqliteBytes ?? 786_432,
-						partial: true,
-					},
-					{
 						prefix: Array.from(workflowStoragePrefix()),
 						maxBytes: options.preloadMaxWorkflowBytes ?? 131_072,
 						partial: false,
@@ -479,25 +448,6 @@ export const DocRegistryConfigSchema = z
 			.record(z.string(), z.unknown())
 			.describe(
 				"Actor definitions. Keys are actor names, values are actor definitions.",
-			),
-		sqlitePool: z
-			.object({
-				actorsPerInstance: z
-					.number()
-					.optional()
-					.describe(
-						"Number of actors per WASM SQLite instance. Default: 50",
-					),
-				idleDestroyMs: z
-					.number()
-					.optional()
-					.describe(
-						"Milliseconds before an idle WASM instance is destroyed. Default: 30000",
-					),
-			})
-			.optional()
-			.describe(
-				"Configuration for the SQLite VFS pool that shares WASM instances across actors.",
 			),
 		maxIncomingMessageSize: z
 			.number()

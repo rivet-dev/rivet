@@ -6,21 +6,18 @@ export const KEYS = {
 	QUEUE_PREFIX: Uint8Array.from([5]), // Prefix for queue storage
 	WORKFLOW_PREFIX: Uint8Array.from([6]), // Prefix for workflow storage
 	TRACES_PREFIX: Uint8Array.from([7]), // Prefix for traces storage
-	SQLITE_PREFIX: Uint8Array.from([8]), // Prefix for SQLite VFS data
 };
 
 export const STORAGE_VERSION = {
 	QUEUE: 1,
 	WORKFLOW: 1,
 	TRACES: 1,
-	SQLITE: 1,
 } as const;
 
 const STORAGE_VERSION_BYTES = {
 	QUEUE: Uint8Array.from([STORAGE_VERSION.QUEUE]),
 	WORKFLOW: Uint8Array.from([STORAGE_VERSION.WORKFLOW]),
 	TRACES: Uint8Array.from([STORAGE_VERSION.TRACES]),
-	SQLITE: Uint8Array.from([STORAGE_VERSION.SQLITE]),
 } as const;
 
 const QUEUE_NAMESPACE = {
@@ -57,10 +54,6 @@ const TRACES_STORAGE_PREFIX = concatPrefix(
 	KEYS.TRACES_PREFIX,
 	STORAGE_VERSION_BYTES.TRACES,
 );
-const SQLITE_STORAGE_PREFIX = concatPrefix(
-	KEYS.SQLITE_PREFIX,
-	STORAGE_VERSION_BYTES.SQLITE,
-);
 
 // Helper to create a prefixed key for user-facing KV storage
 export function makePrefixedKey(key: Uint8Array): Uint8Array {
@@ -89,10 +82,6 @@ export function workflowStoragePrefix(): Uint8Array {
 
 export function tracesStoragePrefix(): Uint8Array {
 	return Uint8Array.from(TRACES_STORAGE_PREFIX);
-}
-
-export function sqliteStoragePrefix(): Uint8Array {
-	return Uint8Array.from(SQLITE_STORAGE_PREFIX);
 }
 
 export function queueStoragePrefix(): Uint8Array {
