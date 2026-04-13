@@ -19,5 +19,12 @@ export const counter = actor({
 		getCount: (c) => {
 			return c.state.count;
 		},
+		noop: (_c) => {
+			return { ok: true };
+		},
+		goToSleep: (c) => {
+			c.sleep();
+			return { ok: true };
+		},
 	},
 });

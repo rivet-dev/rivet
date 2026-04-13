@@ -27,6 +27,7 @@ export interface JsEnvoyConfig {
   poolName: string
   version: number
   metadata?: any
+  notGlobal: boolean
   /**
    * Log level for the Rust tracing subscriber (e.g. "trace", "debug", "info", "warn", "error").
    * Falls back to RIVET_LOG_LEVEL, then LOG_LEVEL, then RUST_LOG env vars. Defaults to "warn".
