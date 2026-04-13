@@ -118,38 +118,37 @@ async fn single_connection(
 		"websocket connected"
 	);
 
-	// Build prepopulate actor names map
-	let mut prepopulate_map = HashableMap::new();
-	for (name, actor) in &shared.config.prepopulate_actor_names {
-		prepopulate_map.insert(
-			name.clone(),
-			protocol::ActorName {
-				metadata: actor.metadata.clone(),
-			},
-		);
-	}
-
-	// Serialize metadata HashMap to JSON string for the protocol
-	let metadata_json = shared
-		.config
-		.metadata
-		.as_ref()
-		.map(|m| serde_json::to_string(m).unwrap_or_else(|_| "{}".to_string()));
-
-	// Send init
-	ws_send(
-		shared,
-		protocol::ToRivet::ToRivetInit(protocol::ToRivetInit {
-			envoy_key: shared.envoy_key.clone(),
-			version: shared.config.version,
-			prepopulate_actor_names: Some(prepopulate_map),
-			metadata: metadata_json,
-		}),
-	)
-	.await;
-
 	// Spawn write task
+	let shared2 = shared.clone();
 	let write_handle = tokio::spawn(async move {
+		// Build prepopulate actor names map
+		let mut prepopulate_map = HashableMap::new();
+		for (name, actor) in &shared2.config.prepopulate_actor_names {
+			prepopulate_map.insert(
+				name.clone(),
+				protocol::ActorName {
+					metadata: actor.metadata.clone(),
+				},
+			);
+		}
+
+		// Serialize metadata HashMap to JSON string for the protocol
+		let metadata_json = shared2
+			.config
+			.metadata
+			.as_ref()
+			.map(|m| serde_json::to_string(m).unwrap_or_else(|_| "{}".to_string()));
+
+		// Send metadata
+		ws_send(
+			&shared2,
+			protocol::ToRivet::ToRivetMetadata(protocol::ToRivetMetadata {
+				prepopulate_actor_names: Some(prepopulate_map),
+				metadata: metadata_json,
+			}),
+		)
+		.await;
+
 		while let Some(msg) = ws_rx.recv().await {
 			match msg {
 				WsTxMessage::Send(data) => {
@@ -269,11 +268,12 @@ fn ws_url(shared: &SharedContext) -> String {
 	let base_url = ws_endpoint.trim_end_matches('/');
 
 	format!(
-		"{}/envoys/connect?protocol_version={}&namespace={}&envoy_key={}&pool_name={}",
+		"{}/envoys/connect?protocol_version={}&namespace={}&envoy_key={}&version={}&pool_name={}",
 		base_url,
 		protocol::PROTOCOL_VERSION,
 		urlencoding::encode(&shared.config.namespace),
 		urlencoding::encode(&shared.envoy_key),
+		urlencoding::encode(&shared.config.version.to_string()),
 		urlencoding::encode(&shared.config.pool_name),
 	)
 }

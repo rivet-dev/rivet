@@ -138,6 +138,8 @@ pub struct Pegboard {
 	pub envoy_eligible_threshold: Option<i64>,
 
 	// === Serverless Settings ===
+	/// **Deprecated** Configure the drain period in the runner config.
+	///
 	/// Drain grace period for serverless runners.
 	///
 	/// This time is subtracted from the configured request duration. Once `duration - grace` is reached, the

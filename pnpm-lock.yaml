@@ -914,9 +914,15 @@ importers:
 
   examples/cursors:
     dependencies:
+      '@hono/node-server':
+        specifier: ^1.19.13
+        version: 1.19.13(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
+      hono:
+        specifier: ^4.7.0
+        version: 4.11.9
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -7420,6 +7426,12 @@ packages:
 
   '@hono/node-server@1.14.2':
     resolution: {integrity: sha512-GHjpOeHYbr9d1vkID2sNUYkl5IxumyhDrUJB7wBp7jvqYwPFt+oNKsAPBRcdSbV7kIrXhouLE199ks1QcK4r7A==}
+    engines: {node: '>=18.14.1'}
+    peerDependencies:
+      hono: ^4
+
+  '@hono/node-server@1.19.13':
+    resolution: {integrity: sha512-TsQLe4i2gvoTtrHje625ngThGBySOgSK3Xo2XRYOdqGN1teR8+I7vchQC46uLJi8OF62YTYA3AhSpumtkhsaKQ==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: ^4
@@ -22702,6 +22714,10 @@ snapshots:
     dependencies:
       hono: 4.11.9
 
+  '@hono/node-server@1.19.13(hono@4.11.9)':
+    dependencies:
+      hono: 4.11.9
+
   '@hono/node-server@1.19.9(hono@4.11.9)':
     dependencies:
       hono: 4.11.9
@@ -23756,7 +23772,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76)':
     dependencies:
-      '@hono/node-server': 1.19.9(hono@4.11.9)
+      '@hono/node-server': 1.19.13(hono@4.11.9)
       ajv: 8.17.1
       ajv-formats: 3.0.1(ajv@8.17.1)
       content-type: 1.0.5
@@ -23778,7 +23794,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13)':
     dependencies:
-      '@hono/node-server': 1.19.9(hono@4.11.9)
+      '@hono/node-server': 1.19.13(hono@4.11.9)
       ajv: 8.17.1
       ajv-formats: 3.0.1(ajv@8.17.1)
       content-type: 1.0.5

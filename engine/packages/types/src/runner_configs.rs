@@ -23,6 +23,8 @@ pub enum RunnerConfigKind {
 		/// Seconds.
 		request_lifespan: u32,
 		max_concurrent_actors: u64,
+		/// Seconds.
+		drain_grace_period: u32,
 		/// Deprecated.
 		slots_per_runner: u32,
 		/// Deprecated.
@@ -60,6 +62,7 @@ impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v5::R
 					headers,
 					request_lifespan,
 					max_concurrent_actors,
+					drain_grace_period,
 					slots_per_runner,
 					min_runners,
 					max_runners,
@@ -72,6 +75,7 @@ impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v5::R
 							headers: headers.into(),
 							request_lifespan,
 							max_concurrent_actors,
+							drain_grace_period,
 							slots_per_runner,
 							min_runners,
 							max_runners,
@@ -106,6 +110,7 @@ impl From<rivet_data::generated::namespace_runner_config_v5::RunnerConfig> for R
 					headers: o.headers.into(),
 					request_lifespan: o.request_lifespan,
 					max_concurrent_actors: o.max_concurrent_actors,
+					drain_grace_period: o.drain_grace_period,
 					slots_per_runner: o.slots_per_runner,
 					min_runners: o.min_runners,
 					max_runners: o.max_runners,

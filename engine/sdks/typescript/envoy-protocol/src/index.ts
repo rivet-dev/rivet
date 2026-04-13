@@ -1696,25 +1696,19 @@ function write15(bc: bare.ByteCursor, x: Json | null): void {
 /**
  * MARK: To Rivet
  */
-export type ToRivetInit = {
-    readonly envoyKey: string
-    readonly version: u32
+export type ToRivetMetadata = {
     readonly prepopulateActorNames: ReadonlyMap<string, ActorName> | null
     readonly metadata: Json | null
 }
 
-export function readToRivetInit(bc: bare.ByteCursor): ToRivetInit {
+export function readToRivetMetadata(bc: bare.ByteCursor): ToRivetMetadata {
     return {
-        envoyKey: bare.readString(bc),
-        version: bare.readU32(bc),
         prepopulateActorNames: read14(bc),
         metadata: read15(bc),
     }
 }
 
-export function writeToRivetInit(bc: bare.ByteCursor, x: ToRivetInit): void {
-    bare.writeString(bc, x.envoyKey)
-    bare.writeU32(bc, x.version)
+export function writeToRivetMetadata(bc: bare.ByteCursor, x: ToRivetMetadata): void {
     write14(bc, x.prepopulateActorNames)
     write15(bc, x.metadata)
 }
@@ -1810,7 +1804,7 @@ export function writeToRivetKvRequest(bc: bare.ByteCursor, x: ToRivetKvRequest):
 }
 
 export type ToRivet =
-    | { readonly tag: "ToRivetInit"; readonly val: ToRivetInit }
+    | { readonly tag: "ToRivetMetadata"; readonly val: ToRivetMetadata }
     | { readonly tag: "ToRivetEvents"; readonly val: ToRivetEvents }
     | { readonly tag: "ToRivetAckCommands"; readonly val: ToRivetAckCommands }
     | { readonly tag: "ToRivetStopping"; readonly val: ToRivetStopping }
@@ -1823,7 +1817,7 @@ export function readToRivet(bc: bare.ByteCursor): ToRivet {
     const tag = bare.readU8(bc)
     switch (tag) {
         case 0:
-            return { tag: "ToRivetInit", val: readToRivetInit(bc) }
+            return { tag: "ToRivetMetadata", val: readToRivetMetadata(bc) }
         case 1:
             return { tag: "ToRivetEvents", val: readToRivetEvents(bc) }
         case 2:
@@ -1845,9 +1839,9 @@ export function readToRivet(bc: bare.ByteCursor): ToRivet {
 
 export function writeToRivet(bc: bare.ByteCursor, x: ToRivet): void {
     switch (x.tag) {
-        case "ToRivetInit": {
+        case "ToRivetMetadata": {
             bare.writeU8(bc, 0)
-            writeToRivetInit(bc, x.val)
+            writeToRivetMetadata(bc, x.val)
             break
         }
         case "ToRivetEvents": {

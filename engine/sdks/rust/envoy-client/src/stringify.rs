@@ -233,12 +233,7 @@ pub fn stringify_event_wrapper(wrapper: &protocol::EventWrapper) -> String {
 
 pub fn stringify_to_rivet(message: &protocol::ToRivet) -> String {
 	match message {
-		protocol::ToRivet::ToRivetInit(val) => {
-			format!(
-				"ToRivetInit{{envoyKey: \"{}\", version: {}}}",
-				val.envoy_key, val.version
-			)
-		}
+		protocol::ToRivet::ToRivetMetadata(_) => "ToRivetMetadata".to_string(),
 		protocol::ToRivet::ToRivetEvents(events) => {
 			let event_strs: Vec<String> = events.iter().map(stringify_event_wrapper).collect();
 			format!(

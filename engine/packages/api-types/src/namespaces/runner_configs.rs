@@ -23,6 +23,8 @@ pub enum RunnerConfigKind {
 		/// Seconds.
 		request_lifespan: u32,
 		max_concurrent_actors: Option<u64>,
+		/// Seconds.
+		drain_grace_period: Option<u32>,
 		slots_per_runner: u32,
 		min_runners: Option<u32>,
 		max_runners: u32,
@@ -50,6 +52,7 @@ impl Into<rivet_types::runner_configs::RunnerConfig> for RunnerConfig {
 				headers,
 				request_lifespan,
 				max_concurrent_actors,
+				drain_grace_period,
 				slots_per_runner,
 				min_runners,
 				max_runners,
@@ -60,6 +63,8 @@ impl Into<rivet_types::runner_configs::RunnerConfig> for RunnerConfig {
 				headers: headers.unwrap_or_default(),
 				request_lifespan,
 				max_concurrent_actors: max_concurrent_actors.unwrap_or(max_runners as u64),
+				// Default to deprecated config value (config.pegboard.serverless_drain_grace_period)
+				drain_grace_period: drain_grace_period.unwrap_or(10_000),
 				slots_per_runner,
 				min_runners: min_runners.unwrap_or_default(),
 				max_runners,

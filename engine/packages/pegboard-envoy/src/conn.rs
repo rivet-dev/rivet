@@ -3,7 +3,7 @@ use std::{
 		Arc,
 		atomic::{AtomicI64, AtomicU32},
 	},
-	time::{Duration, Instant},
+	time::Instant,
 };
 
 use anyhow::Context;
@@ -11,7 +11,6 @@ use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
-use rivet_data::converted::{ActorNameKeyData, MetadataKeyData};
 use rivet_envoy_protocol::{self as protocol, versioned};
 use rivet_guard_core::WebSocketHandle;
 use rivet_types::runner_configs::RunnerConfigKind;
@@ -19,7 +18,7 @@ use scc::HashMap;
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
 
-use crate::{errors::WsError, metrics, utils::UrlData};
+use crate::{metrics, utils::UrlData};
 
 pub struct Conn {
 	pub namespace_id: Id,
@@ -43,6 +42,7 @@ pub async fn init_conn(
 		namespace,
 		pool_name,
 		envoy_key,
+		version,
 	}: UrlData,
 ) -> Result<Arc<Conn>> {
 	let start = Instant::now();
@@ -56,36 +56,6 @@ pub async fn init_conn(
 
 	tracing::debug!(namespace_id=?namespace.namespace_id, "new envoy connection");
 
-	let ws_rx = ws_handle.recv();
-	let mut ws_rx = ws_rx.lock().await;
-
-	// Receive init packet
-	let Ok(msg) = tokio::time::timeout(Duration::from_secs(5), ws_rx.next()).await else {
-		return Err(WsError::TimedOutWaitingForInit.build());
-	};
-
-	let Some(msg) = msg else {
-		return Err(WsError::ConnectionClosed.build());
-	};
-
-	let buf = match msg? {
-		Message::Binary(buf) => buf,
-		Message::Close(_) => return Err(WsError::ConnectionClosed.build()),
-		msg => {
-			tracing::debug!(?msg, "invalid initial message");
-			return Err(WsError::InvalidInitialPacket("must be a binary blob").build());
-		}
-	};
-
-	let init = versioned::ToRivet::deserialize(&buf, protocol_version)
-		.map_err(|err| WsError::InvalidPacket(err.to_string()).build())
-		.context("failed to deserialize initial packet from client")?;
-
-	let protocol::ToRivet::ToRivetInit(init) = init else {
-		tracing::debug!(?init, "invalid initial packet");
-		return Err(WsError::InvalidInitialPacket("must be `ToRivet::Init`").build());
-	};
-
 	metrics::CONNECTION_TOTAL
 		.with_label_values(&[
 			namespace.namespace_id.to_string().as_str(),
@@ -97,54 +67,60 @@ pub async fn init_conn(
 		.with_label_values(&[namespace.namespace_id.to_string().as_str(), &pool_name])
 		.observe(start.elapsed().as_secs_f64());
 
-	let mut conn = Conn {
-		namespace_id: namespace.namespace_id,
-		pool_name,
-		envoy_key,
-		protocol_version,
-		ws_handle,
-		authorized_tunnel_routes: HashMap::new(),
-		is_serverless: false,
-		last_rtt: AtomicU32::new(0),
-		last_ping_ts: AtomicI64::new(util::timestamp::now()),
-	};
-
-	handle_init(ctx, &mut conn, init).await?;
-
-	if conn.is_serverless {
-		report_success(ctx, namespace.namespace_id, &conn.pool_name).await;
-	}
-
-	Ok(Arc::new(conn))
-}
-#[tracing::instrument(skip_all)]
-pub async fn handle_init(
-	ctx: &StandaloneCtx,
-	conn: &mut Conn,
-	init: protocol::ToRivetInit,
-) -> Result<()> {
 	let udb = ctx.udb()?;
-	let namespace_id = conn.namespace_id;
-	let envoy_key = &conn.envoy_key;
-	let pool_name = &conn.pool_name;
-	let protocol_version = conn.protocol_version;
-	let (pool_res, mut missed_commands) = tokio::try_join!(
-		ctx.op(pegboard::ops::runner_config::get::Input {
-			runners: vec![(namespace_id, pool_name.clone())],
-			bypass_cache: false,
-		}),
-		// TODO: Move to op
+	let (is_serverless, mut missed_commands) = tokio::try_join!(
+		// Send init packet as soon as possible
+		async {
+			let pool_res = ctx
+				.op(pegboard::ops::runner_config::get::Input {
+					runners: vec![(namespace.namespace_id, pool_name.clone())],
+					bypass_cache: false,
+				})
+				.await?;
+
+			let serverless_drain_grace_period = pool_res.first().and_then(|c| {
+				if let RunnerConfigKind::Serverless {
+					drain_grace_period, ..
+				} = &c.config.kind
+				{
+					Some(*drain_grace_period as i64)
+				} else {
+					None
+				}
+			});
+			let pb = ctx.config().pegboard();
+
+			// Send init packet
+			let init_msg = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyInit(
+				protocol::ToEnvoyInit {
+					metadata: protocol::ProtocolMetadata {
+						envoy_lost_threshold: pb.envoy_lost_threshold(),
+						actor_stop_threshold: pb.actor_stop_threshold(),
+						serverless_drain_grace_period,
+						max_response_payload_size: pb.envoy_max_response_payload_size() as u64,
+					},
+				},
+			));
+			let init_msg_serialized = init_msg.serialize(protocol_version)?;
+			ws_handle
+				.send(Message::Binary(init_msg_serialized.into()))
+				.await?;
+
+			anyhow::Ok(serverless_drain_grace_period.is_some())
+		},
 		udb.run(|tx| {
-			let init = init.clone();
+			let namespace_id = namespace.namespace_id;
+			let envoy_key = &envoy_key;
+			let pool_name = &pool_name;
 			async move {
 				let tx = tx.with_subspace(pegboard::keys::subspace());
 
 				let create_ts_key =
-					pegboard::keys::envoy::CreateTsKey::new(namespace_id, envoy_key.clone());
+					pegboard::keys::envoy::CreateTsKey::new(namespace_id, envoy_key.to_string());
 				let last_ping_ts_key =
-					pegboard::keys::envoy::LastPingTsKey::new(namespace_id, envoy_key.clone());
+					pegboard::keys::envoy::LastPingTsKey::new(namespace_id, envoy_key.to_string());
 				let version_key =
-					pegboard::keys::envoy::VersionKey::new(namespace_id, envoy_key.clone());
+					pegboard::keys::envoy::VersionKey::new(namespace_id, envoy_key.to_string());
 
 				// Read existing data
 				let (create_ts_entry, old_last_ping_ts_entry, version_entry) = tokio::try_join!(
@@ -155,15 +131,15 @@ pub async fn handle_init(
 
 				// Write init data
 				tx.write(
-					&pegboard::keys::envoy::PoolNameKey::new(namespace_id, envoy_key.clone()),
-					pool_name.clone(),
+					&pegboard::keys::envoy::PoolNameKey::new(namespace_id, envoy_key.to_string()),
+					pool_name.to_string(),
 				)?;
 				tx.write(
-					&pegboard::keys::envoy::VersionKey::new(namespace_id, envoy_key.clone()),
-					init.version,
+					&pegboard::keys::envoy::VersionKey::new(namespace_id, envoy_key.to_string()),
+					version,
 				)?;
 				tx.atomic_op(
-					&pegboard::keys::envoy::SlotsKey::new(namespace_id, envoy_key.clone()),
+					&pegboard::keys::envoy::SlotsKey::new(namespace_id, envoy_key.to_string()),
 					&0i64.to_le_bytes(),
 					MutationType::Add,
 				);
@@ -176,13 +152,13 @@ pub async fn handle_init(
 					create_ts
 				};
 				tx.write(
-					&pegboard::keys::envoy::LastPingTsKey::new(namespace_id, envoy_key.clone()),
+					&pegboard::keys::envoy::LastPingTsKey::new(namespace_id, envoy_key.to_string()),
 					util::timestamp::now(),
 				)?;
 				tx.write(
 					&pegboard::keys::envoy::ProtocolVersionKey::new(
 						namespace_id,
-						envoy_key.clone(),
+						envoy_key.to_string(),
 					),
 					protocol_version,
 				)?;
@@ -195,16 +171,16 @@ pub async fn handle_init(
 					&pegboard::keys::ns::ActiveEnvoyKey::new(
 						namespace_id,
 						create_ts,
-						envoy_key.clone(),
+						envoy_key.to_string(),
 					),
 					(),
 				)?;
 				tx.write(
 					&pegboard::keys::ns::ActiveEnvoyByNameKey::new(
 						namespace_id,
-						pool_name.clone(),
+						pool_name.to_string(),
 						create_ts,
-						envoy_key.clone(),
+						envoy_key.to_string(),
 					),
 					(),
 				)?;
@@ -213,7 +189,7 @@ pub async fn handle_init(
 				if create_ts_entry.is_some() {
 					tx.delete(&pegboard::keys::envoy::ExpiredTsKey::new(
 						namespace_id,
-						envoy_key.clone(),
+						envoy_key.to_string(),
 					));
 				}
 
@@ -223,10 +199,10 @@ pub async fn handle_init(
 				{
 					let old_lb_key = pegboard::keys::ns::EnvoyLoadBalancerIdxKey::new(
 						namespace_id,
-						pool_name.clone(),
+						pool_name.to_string(),
 						version,
 						old_last_ping_ts,
-						envoy_key.clone(),
+						envoy_key.to_string(),
 					);
 
 					tx.add_conflict_key(&old_lb_key, ConflictRangeType::Read)?;
@@ -237,29 +213,13 @@ pub async fn handle_init(
 				tx.write(
 					&pegboard::keys::ns::EnvoyLoadBalancerIdxKey::new(
 						namespace_id,
-						pool_name.clone(),
-						init.version,
+						pool_name.to_string(),
+						version,
 						last_ping_ts,
-						envoy_key.clone(),
+						envoy_key.to_string(),
 					),
 					(),
 				)?;
-
-				// Populate actor names if provided
-				if let Some(actor_names) = &init.prepopulate_actor_names {
-					// Write each actor name into the namespace actor names list
-					for (name, data) in actor_names {
-						let metadata = serde_json::from_str::<
-							serde_json::Map<String, serde_json::Value>,
-						>(&data.metadata)
-						.unwrap_or_default();
-
-						tx.write(
-							&pegboard::keys::ns::ActorNameKey::new(namespace_id, name.clone()),
-							ActorNameKeyData { metadata },
-						)?;
-					}
-				}
 
 				// Update the pool's protocol version. This is required for serverful pools because normally
 				// the pool's protocol version is updated via the metadata_poller wf but that only runs for
@@ -273,34 +233,10 @@ pub async fn handle_init(
 					protocol_version,
 				)?;
 
-				// Write envoy metadata
-				if let Some(metadata) = &init.metadata {
-					let metadata = MetadataKeyData {
-						metadata:
-							serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(
-								&metadata,
-							)
-							.unwrap_or_default(),
-					};
-
-					let metadata_key =
-						pegboard::keys::envoy::MetadataKey::new(namespace_id, envoy_key.clone());
-
-					// Clear old metadata
-					tx.delete_key_subspace(&metadata_key);
-
-					// Write metadata
-					for (i, chunk) in metadata_key.split(metadata)?.into_iter().enumerate() {
-						let chunk_key = metadata_key.chunk(i);
-
-						tx.set(&tx.pack(&chunk_key), &chunk);
-					}
-				}
-
 				let envoy_actor_commands_subspace = pegboard::keys::subspace().subspace(
 					&pegboard::keys::envoy::ActorCommandKey::subspace(
 						namespace_id,
-						envoy_key.clone(),
+						envoy_key.to_string(),
 					),
 				);
 
@@ -342,32 +278,10 @@ pub async fn handle_init(
 				.await
 			}
 		})
-		.custom_instrument(tracing::info_span!("envoy_process_init_tx")),
+		.custom_instrument(tracing::info_span!("envoy_init_tx")),
 	)?;
 
-	conn.is_serverless = pool_res.first().map_or(false, |c| {
-		matches!(c.config.kind, RunnerConfigKind::Serverless { .. })
-	});
-	let pb = ctx.config().pegboard();
-
-	// Send init packet
-	let init_msg =
-		versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyInit(protocol::ToEnvoyInit {
-			metadata: protocol::ProtocolMetadata {
-				envoy_lost_threshold: pb.envoy_lost_threshold(),
-				actor_stop_threshold: pb.actor_stop_threshold(),
-				serverless_drain_grace_period: conn
-					.is_serverless
-					.then(|| pb.serverless_drain_grace_period() as i64),
-				max_response_payload_size: pb.envoy_max_response_payload_size() as u64,
-			},
-		}));
-	let init_msg_serialized = init_msg.serialize(conn.protocol_version)?;
-	conn.ws_handle
-		.send(Message::Binary(init_msg_serialized.into()))
-		.await?;
-
-	// Send missed commands
+	// Send missed commands (must be after init packet)
 	if !missed_commands.is_empty() {
 		let db = ctx.udb()?;
 		let msg = {
@@ -380,9 +294,9 @@ pub async fn handle_init(
 						.context("failed to parse actor_id from missed envoy command")?;
 					let preloaded = pegboard::actor_kv::preload::fetch_preloaded_kv(
 						&db,
-						pb,
+						ctx.config().pegboard(),
 						actor_id,
-						conn.namespace_id,
+						namespace.namespace_id,
 						&start.config.name,
 					)
 					.await?;
@@ -392,13 +306,27 @@ pub async fn handle_init(
 
 			versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(missed_commands))
 		};
-		let msg_serialized = msg.serialize(conn.protocol_version)?;
-		conn.ws_handle
+		let msg_serialized = msg.serialize(protocol_version)?;
+		ws_handle
 			.send(Message::Binary(msg_serialized.into()))
 			.await?;
 	}
 
-	Ok(())
+	if is_serverless {
+		report_success(ctx, namespace.namespace_id, &pool_name).await;
+	}
+
+	Ok(Arc::new(Conn {
+		namespace_id: namespace.namespace_id,
+		pool_name,
+		envoy_key,
+		protocol_version,
+		ws_handle,
+		authorized_tunnel_routes: HashMap::new(),
+		is_serverless: false,
+		last_rtt: AtomicU32::new(0),
+		last_ping_ts: AtomicI64::new(util::timestamp::now()),
+	}))
 }
 
 /// Report success to the error tracker workflow.

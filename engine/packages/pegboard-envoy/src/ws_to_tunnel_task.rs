@@ -6,11 +6,13 @@ use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::actor_kv;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
+use rivet_data::converted::{ActorNameKeyData, MetadataKeyData};
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use scc::HashMap;
 use std::sync::{Arc, atomic::Ordering};
 use tokio::sync::{Mutex, MutexGuard, watch};
+use universaldb::prelude::*;
 use universaldb::utils::end_of_key_range;
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
@@ -371,9 +373,8 @@ async fn handle_message(
 				.await
 				.context("failed to handle tunnel message")?;
 		}
-		// NOTE: Init event is processed in `conn::init_conn`
-		protocol::ToRivet::ToRivetInit(_) => {
-			tracing::debug!("received additional init packet, ignoring");
+		protocol::ToRivet::ToRivetMetadata(metadata) => {
+			handle_metadata(&ctx, conn.namespace_id, &conn.envoy_key, metadata).await?;
 		}
 		// Forward to demuxer which forwards to actor wf
 		protocol::ToRivet::ToRivetEvents(events) => {
@@ -412,33 +413,90 @@ async fn ack_commands(
 	envoy_key: &str,
 	ack: protocol::ToRivetAckCommands,
 ) -> Result<()> {
+	let ack = &ack;
+	ctx.udb()?
+		.run(|tx| async move {
+			let tx = tx.with_subspace(pegboard::keys::subspace());
+
+			for checkpoint in &ack.last_command_checkpoints {
+				let start = tx.pack(
+					&pegboard::keys::envoy::ActorCommandKey::subspace_with_actor(
+						namespace_id,
+						envoy_key.to_string(),
+						Id::parse(&checkpoint.actor_id)?,
+						checkpoint.generation,
+					),
+				);
+				let end = end_of_key_range(&tx.pack(
+					&pegboard::keys::envoy::ActorCommandKey::subspace_with_index(
+						namespace_id,
+						envoy_key.to_string(),
+						Id::parse(&checkpoint.actor_id)?,
+						checkpoint.generation,
+						checkpoint.index,
+					),
+				));
+				tx.clear_range(&start, &end);
+			}
+
+			Ok(())
+		})
+		.await
+}
+
+async fn handle_metadata(
+	ctx: &StandaloneCtx,
+	namespace_id: Id,
+	envoy_key: &str,
+	metadata: protocol::ToRivetMetadata,
+) -> Result<()> {
+	let metadata = &metadata;
 	ctx.udb()?
 		.run(|tx| {
-			let ack = ack.clone();
 			async move {
 				let tx = tx.with_subspace(pegboard::keys::subspace());
 
-				for checkpoint in &ack.last_command_checkpoints {
-					let start = tx.pack(
-						&pegboard::keys::envoy::ActorCommandKey::subspace_with_actor(
-							namespace_id,
-							envoy_key.to_string(),
-							Id::parse(&checkpoint.actor_id)?,
-							checkpoint.generation,
-						),
-					);
-					let end = end_of_key_range(&tx.pack(
-						&pegboard::keys::envoy::ActorCommandKey::subspace_with_index(
-							namespace_id,
-							envoy_key.to_string(),
-							Id::parse(&checkpoint.actor_id)?,
-							checkpoint.generation,
-							checkpoint.index,
-						),
-					));
-					tx.clear_range(&start, &end);
+				// Populate actor names if provided
+				if let Some(actor_names) = &metadata.prepopulate_actor_names {
+					// Write each actor name into the namespace actor names list
+					for (name, data) in actor_names {
+						let metadata = serde_json::from_str::<
+							serde_json::Map<String, serde_json::Value>,
+						>(&data.metadata)
+						.unwrap_or_default();
+
+						tx.write(
+							&pegboard::keys::ns::ActorNameKey::new(namespace_id, name.clone()),
+							ActorNameKeyData { metadata },
+						)?;
+					}
 				}
 
+				// Write envoy metadata
+				if let Some(metadata) = &metadata.metadata {
+					let metadata = MetadataKeyData {
+						metadata:
+							serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(
+								&metadata,
+							)
+							.unwrap_or_default(),
+					};
+
+					let metadata_key = pegboard::keys::envoy::MetadataKey::new(
+						namespace_id,
+						envoy_key.to_string(),
+					);
+
+					// Clear old metadata
+					tx.delete_key_subspace(&metadata_key);
+
+					// Write metadata
+					for (i, chunk) in metadata_key.split(metadata)?.into_iter().enumerate() {
+						let chunk_key = metadata_key.chunk(i);
+
+						tx.set(&tx.pack(&chunk_key), &chunk);
+					}
+				}
 				Ok(())
 			}
 		})

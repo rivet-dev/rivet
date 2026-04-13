@@ -4,8 +4,6 @@ use serde::Serialize;
 #[derive(RivetError, Debug)]
 #[error("ws")]
 pub enum WsError {
-	#[error("connection_closed", "Normal connection close.")]
-	ConnectionClosed,
 	#[error(
 		"eviction",
 		"The websocket has been evicted and should not attempt to reconnect."
@@ -16,11 +14,8 @@ pub enum WsError {
 		"The Rivet Engine is migrating. The websocket should attempt to reconnect as soon as possible."
 	)]
 	GoingAway,
-	#[error(
-		"timed_out_waiting_for_init",
-		"Timed out waiting for the init packet to be sent."
-	)]
-	TimedOutWaitingForInit,
+	#[error("timed_out", "Ping timed out.")]
+	TimedOut,
 	#[error(
 		"invalid_initial_packet",
 		"The websocket could not process the initial packet.",

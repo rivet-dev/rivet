@@ -351,9 +351,7 @@ type ToEnvoyPing struct {
 }
 
 # MARK: To Rivet
-type ToRivetInit struct {
-	envoyKey: str
-	version: u32
+type ToRivetMetadata struct {
 	prepopulateActorNames: optional<map<str><ActorName>>
 	metadata: optional<Json>
 }
@@ -377,7 +375,7 @@ type ToRivetKvRequest struct {
 }
 
 type ToRivet union {
-	ToRivetInit |
+	ToRivetMetadata |
 	ToRivetEvents |
 	ToRivetAckCommands |
 	ToRivetStopping |

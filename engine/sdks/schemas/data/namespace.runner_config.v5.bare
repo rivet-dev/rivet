@@ -3,13 +3,14 @@ type Json str
 type Serverless struct {
 	url: str
 	headers: map<str><str>
-	request_lifespan: u32
-	max_concurrent_actors: u64
-	slots_per_runner: u32
-	min_runners: u32
-	max_runners: u32
-	runners_margin: u32
-	metadata_poll_interval: optional<u64>
+	requestLifespan: u32
+	maxConcurrentActors: u64
+	drainGracePeriod: u32
+	slotsPerRunner: u32
+	minRunners: u32
+	maxRunners: u32
+	runnersMargin: u32
+	metadataPollInterval: optional<u64>
 }
 
 type Normal void
@@ -22,5 +23,5 @@ type RunnerConfigKind union {
 type RunnerConfig struct {
 	kind: RunnerConfigKind
 	metadata: optional<Json>
-	drain_on_version_upgrade: bool
+	drainOnVersionUpgrade: bool
 }
