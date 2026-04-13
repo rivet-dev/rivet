@@ -767,25 +767,6 @@ unsafe extern "C" fn kv_io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int
 			return SQLITE_OK;
 		}
 
-		if let Some(read_cache) = get_file_state(file.state).read_cache.as_mut() {
-			let truncate_from_chunk = if size == 0 {
-				0u32
-			} else {
-				(size as u32 / kv::CHUNK_SIZE as u32) + 1
-			};
-			// The read cache stores only chunk keys. Keep entries strictly before
-			// the truncation boundary so reads cannot serve bytes from removed chunks.
-			read_cache.retain(|key, _| {
-				// Chunk keys are 8 bytes: [prefix, version, CHUNK_PREFIX, file_tag, idx_be32]
-				if key.len() == 8 && key[3] == file.file_tag {
-					let chunk_idx = u32::from_be_bytes([key[4], key[5], key[6], key[7]]);
-					chunk_idx < truncate_from_chunk
-				} else {
-					true
-				}
-			});
-		}
-
 		let last_chunk_to_keep = if size == 0 {
 			-1
 		} else {
@@ -796,6 +777,20 @@ unsafe extern "C" fn kv_io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int
 		} else {
 			(file.size - 1) / kv::CHUNK_SIZE as i64
 		};
+
+		if let Some(read_cache) = get_file_state(file.state).read_cache.as_mut() {
+			// The read cache stores only chunk keys. Keep entries strictly before
+			// the truncation boundary so reads cannot serve bytes from removed chunks.
+			read_cache.retain(|key, _| {
+				// Chunk keys are 8 bytes: [prefix, version, CHUNK_PREFIX, file_tag, idx_be32]
+				if key.len() == 8 && key[3] == file.file_tag {
+					let chunk_idx = u32::from_be_bytes([key[4], key[5], key[6], key[7]]);
+					(chunk_idx as i64) <= last_chunk_to_keep
+				} else {
+					true
+				}
+			});
+		}
 
 		let previous_size = file.size;
 		let previous_meta_dirty = file.meta_dirty;
@@ -824,14 +819,18 @@ unsafe extern "C" fn kv_io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int
 			if let Some(last_chunk_data) = value_map.get(last_chunk_key.as_slice()) {
 				let truncated_len = size as usize % kv::CHUNK_SIZE;
 				if last_chunk_data.len() > truncated_len {
+					let truncated_chunk = last_chunk_data[..truncated_len].to_vec();
 					if ctx
 						.kv_put(
 							vec![last_chunk_key.to_vec()],
-							vec![last_chunk_data[..truncated_len].to_vec()],
+							vec![truncated_chunk.clone()],
 						)
 						.is_err()
 					{
 						return SQLITE_IOERR_TRUNCATE;
+					}
+					if let Some(read_cache) = get_file_state(file.state).read_cache.as_mut() {
+						read_cache.insert(last_chunk_key.to_vec(), truncated_chunk);
 					}
 				}
 			}
