@@ -103,9 +103,7 @@ git commit -m "chore(my-pkg): foo bar"
 - Prefer targeted integration tests under `rivetkit-typescript/packages/rivetkit/tests/` over shared multi-driver matrices.
 
 ### SQLite Package
-- Use `@rivetkit/sqlite` for SQLite WebAssembly support.
-- Do not use the legacy upstream package directly. `@rivetkit/sqlite` is the maintained fork used in this repository and is sourced from `rivet-dev/wa-sqlite`.
-- The native SQLite addon (`@rivetkit/sqlite-native`) statically links SQLite via `libsqlite3-sys` with the `bundled` feature. The bundled SQLite version must match the version used by `@rivetkit/sqlite` (WASM). When upgrading either, upgrade both.
+- RivetKit SQLite runtime is native-only. Use `@rivetkit/rivetkit-native` and do not add `@rivetkit/sqlite`, `@rivetkit/sqlite-vfs`, or other WebAssembly SQLite fallbacks.
 
 ### RivetKit Package Resolutions
 - The root `/package.json` contains `resolutions` that map RivetKit packages to local workspace versions:
@@ -137,7 +135,7 @@ git commit -m "chore(my-pkg): foo bar"
 ### Dynamic Import Pattern
 - For runtime-only dependencies, use dynamic loading so bundlers do not eagerly include them.
 - Build the module specifier from string parts (for example with `["pkg", "name"].join("-")` or `["@scope", "pkg"].join("/")`) instead of a single string literal.
-- Prefer this pattern for modules like `@rivetkit/sqlite-wasm`, `sandboxed-node`, and `isolated-vm`.
+- Prefer this pattern for modules like `@rivetkit/rivetkit-native/wrapper`, `sandboxed-node`, and `isolated-vm`.
 - If loading by resolved file path, resolve first and then import via `pathToFileURL(...).href`.
 
 ### Fail-By-Default Runtime Behavior
@@ -277,10 +275,8 @@ let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build(
 - If you need to add a dependency and can't find it in the Cargo.toml of the workspace, add it to the workspace dependencies in Cargo.toml (`[workspace.dependencies]`) and then add it to the package you need with `{dependency}.workspace = true`
 
 **Native SQLite & KV Channel**
-- The native VFS uses the same 4 KiB chunk layout and KV key encoding as the WASM VFS. Data is compatible between backends.
-- **The native Rust VFS and the WASM TypeScript VFS must match 1:1.** This includes: KV key layout and encoding, chunk size, PRAGMA settings, VFS callback-to-KV-operation mapping, delete/truncate strategy (both must use `deleteRange`), and journal mode. When changing any VFS behavior in one implementation, update the other. The relevant files are:
-  - Native: `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `kv.rs`
-  - WASM: `rivetkit-typescript/packages/sqlite-wasm/src/vfs.ts`, `kv.ts`
+- RivetKit SQLite is served by `@rivetkit/rivetkit-native`. Do not reintroduce SQLite-over-KV or WebAssembly SQLite paths in the TypeScript runtime.
+- The Rust KV-backed SQLite implementation still lives in `rivetkit-typescript/packages/sqlite-native/src/`. When changing its on-disk or KV layout, update the internal data-channel spec in the same change.
 - Full spec: `docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md`
 
 **Inspector HTTP API**

@@ -98,7 +98,6 @@ When an actor starts, the engine can pre-fetch KV data declared in the actor nam
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
 | Max total preload size | 1 MiB | — | Maximum total size of all preloaded KV data sent with the start command. Configurable via `pegboard.preload_max_total_bytes`. Setting to 0 disables all preloading. |
-| Max SQLite preload size | 768 KiB | — | Default maximum size of preloaded SQLite VFS data for RivetKit actors. Configurable per actor via `options.preloadMaxSqliteBytes`. Setting to 0 disables SQLite preloading for that actor. |
 | Max workflow preload size | 128 KiB | — | Default maximum size of preloaded workflow data for RivetKit actors. Configurable per actor via `options.preloadMaxWorkflowBytes`. Setting to 0 disables workflow preloading for that actor. |
 | Max connections preload size | 64 KiB | — | Default maximum size of preloaded connection data for RivetKit actors. Configurable per actor via `options.preloadMaxConnectionsBytes`. Setting to 0 disables connections preloading for that actor. |
 

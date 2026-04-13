@@ -37,12 +37,10 @@ import { runActorSandboxTests } from "./tests/actor-sandbox";
 import { runActorStatelessTests } from "./tests/actor-stateless";
 import { runActorVarsTests } from "./tests/actor-vars";
 import { runActorWorkflowTests } from "./tests/actor-workflow";
-import { runCrossBackendVfsTests } from "./tests/cross-backend-vfs";
 import { runManagerDriverTests } from "./tests/manager-driver";
 import { runRawHttpTests } from "./tests/raw-http";
 import { runRawHttpRequestPropertiesTests } from "./tests/raw-http-request-properties";
 import { runRawWebSocketTests } from "./tests/raw-websocket";
-import { runActorDbKvStatsTests } from "./tests/actor-db-kv-stats";
 import { runActorDbPragmaMigrationTests } from "./tests/actor-db-pragma-migration";
 import { runActorStateZodCoercionTests } from "./tests/actor-state-zod-coercion";
 import { runActorAgentOsTests } from "./tests/actor-agent-os";
@@ -213,8 +211,6 @@ export function runDriverTests(
 
 						runActorDbRawTests(driverTestConfig);
 
-						runActorDbKvStatsTests(driverTestConfig);
-
 						runActorDbPragmaMigrationTests(driverTestConfig);
 
 						runActorStateZodCoercionTests(driverTestConfig);
@@ -225,16 +221,8 @@ export function runDriverTests(
 			});
 		}
 
-		// Cross-backend VFS compatibility runs once, independent of
-		// client type and encoding. Skips when native SQLite is unavailable.
-		runCrossBackendVfsTests({
-			...driverTestConfigPartial,
-			clientType: "http",
-			encoding: "bare",
-		});
-
 		// Stress tests for DB lifecycle races, event loop blocking, and
-		// KV channel resilience. Run once, not per-encoding.
+		// native database behavior. Run once, not per-encoding.
 		runActorDbStressTests({
 			...driverTestConfigPartial,
 			clientType: "http",
@@ -353,29 +341,10 @@ export async function createTestRuntime(
 		);
 		const port = address.port;
 		const serverEndpoint = `http://127.0.0.1:${port}`;
-		managerDriver.setNativeSqliteConfig?.({
-			endpoint: serverEndpoint,
-			namespace: "default",
-		});
-
 		logger().info({ msg: "test serer listening", port });
 
 		// Cleanup
 		const cleanup = async () => {
-			// Disconnect only the current test runtime's native KV channel so
-			// concurrent local runtimes do not shut down each other's channel.
-			try {
-				const { disconnectKvChannelForCurrentConfig } = await import(
-					"@/db/native-sqlite"
-				);
-				await disconnectKvChannelForCurrentConfig({
-					endpoint: serverEndpoint,
-					namespace: "default",
-				});
-			} catch {
-				// Native module may not be available.
-			}
-
 			// Stop server
 			await new Promise((resolve) =>
 				server.close(() => resolve(undefined)),

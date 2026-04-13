@@ -28,7 +28,6 @@ import { connStateActor } from "./conn-state";
 // Import actors from individual files
 import { counter } from "./counter";
 import { counterConn } from "./counter-conn";
-import { dbKvStatsActor } from "./db-kv-stats";
 import {
 	dbLifecycle,
 	dbLifecycleFailing,
@@ -114,7 +113,6 @@ import {
 	sleepWaitUntilState,
 	sleepWithRawWs,
 	sleepWsActiveDbExceedsGrace,
-	sleepWsRawDbAfterClose,
 } from "./sleep-db";
 import { lifecycleObserver, startStopRaceActor } from "./start-stop-race";
 import { statelessActor } from "./stateless";
@@ -211,7 +209,6 @@ export const registry = setup({
 		sleepWsMessageExceedsGrace,
 		sleepWsConcurrentDbExceedsGrace,
 		sleepWsActiveDbExceedsGrace,
-		sleepWsRawDbAfterClose,
 		// From error-handling.ts
 		errorHandlingActor,
 		customTimeoutActor,
@@ -319,8 +316,6 @@ export const registry = setup({
 		lifecycleObserver,
 		// From conn-error-serialization.ts
 		connErrorSerializationActor,
-		// From db-kv-stats.ts
-		dbKvStatsActor,
 		// From db-pragma-migration.ts
 		dbPragmaMigrationActor,
 		// From state-zod-coercion.ts
