@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "generated_at": 1776064053803,
+  "source_cluster": null,
+  "source_namespace_id": "57gkbnf8rnr9jobipp4xq85jlrcl00",
+  "source_namespace_name": "sqlite-snapshot-8688608a",
+  "selector": {
+    "actor_names": {
+      "names": [
+        "sqliteCounter"
+      ]
+    }
+  },
+  "actor_count": 1
+}

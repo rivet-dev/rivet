@@ -12,6 +12,8 @@ pub struct Input {
 	pub runner_name_selector: String,
 	pub crash_policy: CrashPolicy,
 	pub input: Option<String>,
+	pub start_immediately: bool,
+	pub create_ts: Option<i64>,
 	/// If true, will handle ForwardToDatacenter errors by forwarding the request to the correct datacenter.
 	/// Used by api-public. api-peer should set this to false.
 	pub forward_request: bool,
@@ -66,6 +68,8 @@ pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<
 			namespace_id: input.namespace_id,
 			input: input.input.clone(),
 			from_v1: false,
+			start_immediately: input.start_immediately,
+			create_ts: input.create_ts,
 		})
 		.tag("actor_id", input.actor_id)
 		.dispatch()
@@ -116,6 +120,8 @@ pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<
 			namespace_id: input.namespace_id,
 			crash_policy: input.crash_policy,
 			input: input.input.clone(),
+			start_immediately: input.start_immediately,
+			create_ts: input.create_ts,
 		})
 		.tag("actor_id", input.actor_id)
 		.dispatch()

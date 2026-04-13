@@ -1,6 +1,7 @@
 use gas::prelude::*;
 
 pub mod actor_kv;
+pub mod actor_sqlite_v2;
 pub mod errors;
 pub mod keys;
 pub mod metrics;

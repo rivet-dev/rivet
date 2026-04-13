@@ -11,7 +11,7 @@ const DELTA_PATH: &[u8] = b"/DELTA/";
 const PIDX_DELTA_PATH: &[u8] = b"/PIDX/delta/";
 
 /// Build the common actor-scoped prefix: `[0x02, actor_id_bytes]`.
-pub(crate) fn actor_prefix(actor_id: &str) -> Vec<u8> {
+pub fn actor_prefix(actor_id: &str) -> Vec<u8> {
 	let actor_bytes = actor_id.as_bytes();
 	let mut key = Vec::with_capacity(1 + actor_bytes.len());
 	key.push(SQLITE_SUBSPACE_PREFIX);

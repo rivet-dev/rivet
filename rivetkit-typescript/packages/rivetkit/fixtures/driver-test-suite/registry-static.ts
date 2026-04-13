@@ -74,6 +74,7 @@ import {
 import { scheduled } from "./scheduled";
 import { dbStressActor } from "./db-stress";
 import { scheduledDb } from "./scheduled-db";
+import { sqliteCounter } from "./sqlite-import-snapshot";
 import {
 	sleep,
 	sleepRawWsAddEventListenerClose,
@@ -168,6 +169,8 @@ export const registry = setup({
 		dbStressActor,
 		// From scheduled-db.ts
 		scheduledDb,
+		// From sqlite-import-snapshot.ts
+		sqliteCounter,
 		// From sleep.ts
 		sleep,
 		sleepWithLongRpc,

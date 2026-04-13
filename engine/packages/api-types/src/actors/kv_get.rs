@@ -16,7 +16,7 @@ pub struct KvGetPath {
 	pub key: String,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[schema(as = ActorsKvGetResponse)]
 #[serde(deny_unknown_fields)]
 pub struct KvGetResponse {

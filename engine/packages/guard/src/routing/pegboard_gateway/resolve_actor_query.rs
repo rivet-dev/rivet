@@ -128,6 +128,8 @@ async fn resolve_query_get_or_create_actor_id(
 				runner_name_selector: runner_name.to_string(),
 				crash_policy,
 				input: encoded_input,
+				start_immediately: true,
+				create_ts: None,
 				forward_request: true,
 				datacenter_name: None,
 			})

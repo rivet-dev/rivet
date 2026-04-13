@@ -25,7 +25,7 @@ const REPO_ENGINE_BINARY = join(
 	TEST_DIR,
 	"../../../../target/debug/rivet-engine",
 );
-const TOKEN = "dev";
+export const TOKEN = "dev";
 const TIMING_ENABLED = process.env.RIVETKIT_DRIVER_TEST_TIMING === "1";
 const ENGINE_STATE_ID = createHash("sha256")
 	.update(TEST_DIR)

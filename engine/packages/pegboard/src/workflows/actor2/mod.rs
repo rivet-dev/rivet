@@ -30,6 +30,14 @@ pub struct Input {
 	/// Arbitrary user-provided binary data encoded in base64.
 	pub input: Option<String>,
 	pub from_v1: bool,
+	#[serde(default = "default_true")]
+	pub start_immediately: bool,
+	#[serde(default)]
+	pub create_ts: Option<i64>,
+}
+
+fn default_true() -> bool {
+	true
 }
 
 #[derive(Deserialize, Serialize)]
@@ -119,7 +127,7 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 		pool_name: input.pool_name.clone(),
 		key: input.key.clone(),
 		namespace_id: input.namespace_id,
-		create_ts: ctx.create_ts(),
+		create_ts: input.create_ts.unwrap_or_else(|| ctx.create_ts()),
 		from_v1: input.from_v1,
 	})
 	.await?;
@@ -172,11 +180,6 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 		}
 
 		ctx.activity(PopulateIndexesInput {}).await?;
-
-		ctx.msg(CreateComplete {})
-			.topic(("actor_id", input.actor_id))
-			.send()
-			.await?;
 	}
 
 	// Spawn adjacent workflows
@@ -190,10 +193,29 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 		.dispatch()
 		.await?;
 
-	let mut lifecycle_state = runtime::LifecycleState::new();
+	let mut lifecycle_state = if input.start_immediately {
+		runtime::LifecycleState::new()
+	} else {
+		ctx.activity(runtime::SetSleepingInput {}).await?;
+		runtime::LifecycleState {
+			generation: 0,
+			transition: runtime::Transition::Sleeping,
+			alarm_ts: None,
+			retry_backoff_state: runtime::RetryBackoffState::default(),
+		}
+	};
 
-	// Attempt initial allocation
-	runtime::reschedule_actor(ctx, input, &mut lifecycle_state, metrics_workflow_id).await?;
+	if !input.from_v1 {
+		ctx.msg(CreateComplete {})
+			.topic(("actor_id", input.actor_id))
+			.send()
+			.await?;
+	}
+
+	if input.start_immediately {
+		// Attempt initial allocation
+		runtime::reschedule_actor(ctx, input, &mut lifecycle_state, metrics_workflow_id).await?;
+	}
 
 	ctx.loope(lifecycle_state, |ctx, state| {
 		let input = input.clone();

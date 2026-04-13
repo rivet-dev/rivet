@@ -43,6 +43,8 @@ impl Scenario for PbActorV1PreMigration {
 			runner_name_selector: "default".to_string(),
 			input: None,
 			crash_policy: CrashPolicy::Sleep,
+			start_immediately: true,
+			create_ts: None,
 			forward_request: false,
 			datacenter_name: None,
 		})
