@@ -20,7 +20,7 @@ pub async fn pegboard_runner_config_ensure_normal_if_missing(
 		})
 		.await?;
 
-	if !pool_res.is_empty() {
+	if pool_res.is_empty() {
 		ctx.op(crate::ops::runner_config::upsert::Input {
 			namespace_id: input.namespace_id,
 			name: input.name.clone(),
