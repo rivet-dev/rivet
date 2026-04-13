@@ -334,8 +334,8 @@ impl TuplePack for GlobalDataKey {
 
 impl<'de> TupleUnpack<'de> for GlobalDataKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, _, dc_label, namespace_id, name)) =
-			<(usize, usize, usize, u16, Id, String)>::unpack(input, tuple_depth)?;
+		let (input, (_, _, _, _, dc_label, namespace_id, name)) =
+			<(usize, usize, usize, usize, u16, Id, String)>::unpack(input, tuple_depth)?;
 
 		let v = GlobalDataKey {
 			dc_label,
