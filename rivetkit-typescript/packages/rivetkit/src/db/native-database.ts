@@ -26,7 +26,28 @@ export interface JsNativeDatabaseLike {
 	exec(sql: string): Promise<NativeExecResult>;
 	query(sql: string, params?: NativeBindParam[] | null): Promise<NativeQueryResult>;
 	run(sql: string, params?: NativeBindParam[] | null): Promise<NativeRunResult>;
+	takeLastKvError?(): string | null;
 	close(): Promise<void>;
+}
+
+function shouldAttachNativeKvError(message: string): boolean {
+	return /i\/o error|unable to open database file/i.test(message);
+}
+
+function enrichNativeDatabaseError(
+	database: JsNativeDatabaseLike,
+	error: unknown,
+): never {
+	const kvError = database.takeLastKvError?.();
+	if (
+		error instanceof Error &&
+		kvError &&
+		shouldAttachNativeKvError(error.message) &&
+		!error.message.includes(kvError)
+	) {
+		error.message = `${error.message} (native sqlite kv error: ${kvError})`;
+	}
+	throw error;
 }
 
 function toNativeBinding(arg: unknown): NativeBindParam {
@@ -126,7 +147,12 @@ export function wrapJsNativeDatabase(
 			sql: string,
 			callback?: (row: unknown[], columns: string[]) => void,
 		): Promise<void> {
-			const result = await database.exec(sql);
+			let result: NativeExecResult;
+			try {
+				result = await database.exec(sql);
+			} catch (error) {
+				enrichNativeDatabaseError(database, error);
+			}
 			if (!callback) {
 				return;
 			}
@@ -135,10 +161,18 @@ export function wrapJsNativeDatabase(
 			}
 		},
 		async run(sql: string, params?: SqliteBindings): Promise<void> {
-			await database.run(sql, toNativeBindings(sql, params));
+			try {
+				await database.run(sql, toNativeBindings(sql, params));
+			} catch (error) {
+				enrichNativeDatabaseError(database, error);
+			}
 		},
 		async query(sql: string, params?: SqliteBindings) {
-			return await database.query(sql, toNativeBindings(sql, params));
+			try {
+				return await database.query(sql, toNativeBindings(sql, params));
+			} catch (error) {
+				enrichNativeDatabaseError(database, error);
+			}
 		},
 		async close(): Promise<void> {
 			await database.close();
