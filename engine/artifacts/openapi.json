@@ -443,6 +443,78 @@
         ]
       }
     },
+    "/admin/actors/export": {
+      "post": {
+        "tags": [
+          "actors::import_export"
+        ],
+        "summary": "Dangerous and intended for operational use.",
+        "operationId": "admin_actors_export",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/admin/actors/import": {
+      "post": {
+        "tags": [
+          "actors::import_export"
+        ],
+        "summary": "Dangerous and intended for operational use.",
+        "operationId": "admin_actors_import",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/datacenters": {
       "get": {
         "tags": [
@@ -1588,6 +1660,101 @@
         },
         "additionalProperties": false
       },
+      "ExportActorIdsSelector": {
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExportActorNamesSelector": {
+        "type": "object",
+        "required": [
+          "names"
+        ],
+        "properties": {
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExportRequest": {
+        "type": "object",
+        "required": [
+          "namespace",
+          "selector"
+        ],
+        "properties": {
+          "namespace": {
+            "type": "string"
+          },
+          "selector": {
+            "$ref": "#/components/schemas/ExportSelector"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExportResponse": {
+        "type": "object",
+        "required": [
+          "archive_path",
+          "actor_count"
+        ],
+        "properties": {
+          "actor_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "archive_path": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExportSelector": {
+        "type": "object",
+        "properties": {
+          "actor_ids": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExportActorIdsSelector"
+              }
+            ]
+          },
+          "actor_names": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExportActorNamesSelector"
+              }
+            ]
+          },
+          "all": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "HealthFanoutResponse": {
         "type": "object",
         "required": [
@@ -1627,6 +1794,47 @@
           "ok",
           "error"
         ]
+      },
+      "ImportRequest": {
+        "type": "object",
+        "required": [
+          "target_namespace",
+          "archive_path"
+        ],
+        "properties": {
+          "archive_path": {
+            "type": "string"
+          },
+          "target_namespace": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ImportResponse": {
+        "type": "object",
+        "required": [
+          "imported_actors",
+          "skipped_actors",
+          "warnings"
+        ],
+        "properties": {
+          "imported_actors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "skipped_actors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "MetadataGetResponse": {
         "type": "object",
