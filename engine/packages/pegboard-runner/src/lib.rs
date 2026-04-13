@@ -240,6 +240,8 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		}
 		// Clear alloc idx if not evicted
 		else {
+			// Eviction implies the replacement connection reused the same runner_id and already
+			// rewrote the alloc idx, so clearing here would race the new connection.
 			// Make runner immediately ineligible when it disconnects
 			let update_alloc_res = self
 				.ctx
