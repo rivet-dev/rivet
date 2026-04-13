@@ -1,14 +1,10 @@
 use anyhow::*;
-use epoxy_protocol::protocol::{self, ReplicaId};
+use epoxy_protocol::protocol::{self, CachedValue, CommittedValue, ReplicaId};
 use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
 use universaldb::prelude::*;
 
-use crate::{
-	http_client,
-	keys::{self, CommittedValue},
-	utils,
-};
+use crate::{http_client, keys, utils};
 
 use super::get_local::read_local_value;
 
@@ -68,10 +64,12 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 		input.caching_behavior == protocol::CachingBehavior::Optimistic,
 	)
 	.await?;
-	if let Some(value) = local_read.value.or(local_read.cache_value) {
-		return Ok(Output {
-			value: Some(value.value),
-		});
+	if let Some(value) = local_read
+		.value
+		.map(|v| v.value)
+		.or(local_read.cache_value.and_then(|v| v.value))
+	{
+		return Ok(Output { value: Some(value) });
 	}
 
 	// Request fanout to other datacenters, return first datacenter with any non-none value
@@ -169,7 +167,13 @@ async fn cache_fanout_value(
 					}
 				}
 
-				tx.write(&cache_key, value_to_cache.clone())?;
+				tx.write(
+					&cache_key,
+					CachedValue {
+						value: Some(value_to_cache.value.clone()),
+						version: value_to_cache.version,
+					},
+				)?;
 				Ok(())
 			}
 		})
@@ -189,11 +193,9 @@ async fn cache_empty_value(ctx: &OperationCtx, replica_id: ReplicaId, key: &[u8]
 
 			tx.write(
 				&cache_key,
-				CommittedValue {
-					value: Vec::new(),
+				CachedValue {
+					value: None,
 					version: 0,
-					// TODO: What should this be set to?
-					mutable: true,
 				},
 			)?;
 			Ok(())

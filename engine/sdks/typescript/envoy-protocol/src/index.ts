@@ -1901,7 +1901,6 @@ export function decodeToRivet(bytes: Uint8Array): ToRivet {
 export type ProtocolMetadata = {
     readonly envoyLostThreshold: i64
     readonly actorStopThreshold: i64
-    readonly serverlessDrainGracePeriod: i64 | null
     readonly maxResponsePayloadSize: u64
 }
 
@@ -1909,7 +1908,6 @@ export function readProtocolMetadata(bc: bare.ByteCursor): ProtocolMetadata {
     return {
         envoyLostThreshold: bare.readI64(bc),
         actorStopThreshold: bare.readI64(bc),
-        serverlessDrainGracePeriod: read7(bc),
         maxResponsePayloadSize: bare.readU64(bc),
     }
 }
@@ -1917,7 +1915,6 @@ export function readProtocolMetadata(bc: bare.ByteCursor): ProtocolMetadata {
 export function writeProtocolMetadata(bc: bare.ByteCursor, x: ProtocolMetadata): void {
     bare.writeI64(bc, x.envoyLostThreshold)
     bare.writeI64(bc, x.actorStopThreshold)
-    write7(bc, x.serverlessDrainGracePeriod)
     bare.writeU64(bc, x.maxResponsePayloadSize)
 }
 

@@ -16,6 +16,7 @@ pub struct Input {
 	pub version: u32,
 }
 
+// NOTE: Only applies to serverless
 #[operation]
 pub async fn pegboard_envoy_drain_older_versions(ctx: &OperationCtx, input: &Input) -> Result<()> {
 	let pool_res = ctx

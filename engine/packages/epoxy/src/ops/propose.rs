@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, bail};
-use epoxy_protocol::protocol::{self, ReplicaId};
+use epoxy_protocol::protocol::{self, CommittedValue, ReplicaId};
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use gas::prelude::*;
 use rand::Rng;
@@ -8,9 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
 use crate::{
-	http_client,
-	keys::CommittedValue,
-	metrics,
+	http_client, metrics,
 	replica::{
 		ballot::{self, Ballot, BallotSelection},
 		commit_kv::{self, CommitKvOutcome},

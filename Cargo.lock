@@ -1484,6 +1484,7 @@ dependencies = [
  "universaldb",
  "url",
  "uuid",
+ "vbare",
 ]
 
 [[package]]
@@ -1494,6 +1495,7 @@ dependencies = [
  "rivet-util",
  "serde",
  "serde_bare",
+ "vbare",
  "vbare-compiler",
 ]
 

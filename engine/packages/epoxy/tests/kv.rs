@@ -1,6 +1,7 @@
 mod common;
 
 use epoxy::ops::propose::{CommandError, ProposalResult};
+use epoxy_protocol::protocol::CommittedValue;
 
 use common::{
 	THREE_REPLICAS, TestCtx,
@@ -80,7 +81,7 @@ async fn test_kv_operations() {
 	assert!(matches!(first_result, ProposalResult::Committed));
 	assert_eq!(
 		read_v2_committed_value(ctx, replica_id, key).await.unwrap(),
-		Some(epoxy::keys::CommittedValue {
+		Some(CommittedValue {
 			value: b"value1".to_vec(),
 			version: 1,
 			mutable: true,
@@ -92,7 +93,7 @@ async fn test_kv_operations() {
 	assert!(matches!(second_result, ProposalResult::Committed));
 	assert_eq!(
 		read_v2_committed_value(ctx, replica_id, key).await.unwrap(),
-		Some(epoxy::keys::CommittedValue {
+		Some(CommittedValue {
 			value: b"value2".to_vec(),
 			version: 2,
 			mutable: true,
