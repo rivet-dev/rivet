@@ -860,6 +860,14 @@ async fn handle_tunnel_message_mk2(
 	authorized_tunnel_routes: &HashMap<(protocol::mk2::GatewayId, protocol::mk2::RequestId), ()>,
 	msg: protocol::mk2::ToServerTunnelMessage,
 ) -> Result<()> {
+	let route = (msg.message_id.gateway_id, msg.message_id.request_id);
+	let clear_route = matches!(
+		msg.message_kind,
+		protocol::mk2::ToServerTunnelMessageKind::ToServerResponseStart(_)
+			| protocol::mk2::ToServerTunnelMessageKind::ToServerResponseAbort
+			| protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketClose(_)
+	);
+
 	// Extract inner data length before consuming msg
 	let inner_data_len = tunnel_message_inner_data_len_mk2(&msg.message_kind);
 
@@ -868,10 +876,7 @@ async fn handle_tunnel_message_mk2(
 		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
 	}
 
-	if !authorized_tunnel_routes
-		.contains_async(&(msg.message_id.gateway_id, msg.message_id.request_id))
-		.await
-	{
+	if !authorized_tunnel_routes.contains_async(&route).await {
 		return Err(
 			errors::WsError::InvalidPacket("unauthorized tunnel message".to_string()).build(),
 		);
@@ -899,6 +904,10 @@ async fn handle_tunnel_message_mk2(
 			)
 		})?;
 
+	if clear_route {
+		authorized_tunnel_routes.remove_async(&route).await;
+	}
+
 	Ok(())
 }
 
@@ -909,6 +918,14 @@ async fn handle_tunnel_message_mk1(
 	authorized_tunnel_routes: &HashMap<(protocol::mk2::GatewayId, protocol::mk2::RequestId), ()>,
 	msg: protocol::ToServerTunnelMessage,
 ) -> Result<()> {
+	let route = (msg.message_id.gateway_id, msg.message_id.request_id);
+	let clear_route = matches!(
+		msg.message_kind,
+		protocol::ToServerTunnelMessageKind::ToServerResponseStart(_)
+			| protocol::ToServerTunnelMessageKind::ToServerResponseAbort
+			| protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(_)
+	);
+
 	// Ignore DeprecatedTunnelAck messages (used only for backwards compatibility)
 	if matches!(
 		msg.message_kind,
@@ -925,10 +942,7 @@ async fn handle_tunnel_message_mk1(
 		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
 	}
 
-	if !authorized_tunnel_routes
-		.contains_async(&(msg.message_id.gateway_id, msg.message_id.request_id))
-		.await
-	{
+	if !authorized_tunnel_routes.contains_async(&route).await {
 		return Err(
 			errors::WsError::InvalidPacket("unauthorized tunnel message".to_string()).build(),
 		);
@@ -949,6 +963,10 @@ async fn handle_tunnel_message_mk1(
 				gateway_reply_to
 			)
 		})?;
+
+	if clear_route {
+		authorized_tunnel_routes.remove_async(&route).await;
+	}
 
 	Ok(())
 }
