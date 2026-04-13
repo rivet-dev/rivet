@@ -70,7 +70,7 @@ impl EnvoyCallbacks for BridgeCallbacks {
 		actor_id: String,
 		generation: u32,
 		config: protocol::ActorConfig,
-		_preloaded_kv: Option<protocol::PreloadedKv>,
+		preloaded_kv: Option<protocol::PreloadedKv>,
 	) -> BoxFuture<anyhow::Result<()>> {
 		let response_map = self.response_map.clone();
 		let event_cb = self.event_cb.clone();
@@ -85,6 +85,7 @@ impl EnvoyCallbacks for BridgeCallbacks {
 				"key": config.key,
 				"createTs": config.create_ts,
 				"input": config.input.map(|v| base64_encode(&v)),
+				"preloadedKv": preloaded_kv.as_ref().map(encode_preloaded_kv),
 				"responseId": response_id,
 			});
 
@@ -358,4 +359,21 @@ fn base64_encode(data: &[u8]) -> String {
 fn base64_decode(data: &str) -> Option<Vec<u8>> {
 	use base64::Engine;
 	base64::engine::general_purpose::STANDARD.decode(data).ok()
+}
+
+fn encode_preloaded_kv(preloaded_kv: &protocol::PreloadedKv) -> serde_json::Value {
+	serde_json::json!({
+		"entries": preloaded_kv.entries.iter().map(|entry| {
+			serde_json::json!({
+				"key": base64_encode(&entry.key),
+				"value": base64_encode(&entry.value),
+				"metadata": {
+					"version": base64_encode(&entry.metadata.version),
+					"updateTs": entry.metadata.update_ts,
+				},
+			})
+		}).collect::<Vec<_>>(),
+		"requestedGetKeys": preloaded_kv.requested_get_keys.iter().map(|key| base64_encode(key)).collect::<Vec<_>>(),
+		"requestedPrefixes": preloaded_kv.requested_prefixes.iter().map(|key| base64_encode(key)).collect::<Vec<_>>(),
+	})
 }

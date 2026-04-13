@@ -118,6 +118,48 @@ fn read_cache_enabled() -> bool {
 	})
 }
 
+type StartupPreloadEntries = Vec<(Vec<u8>, Vec<u8>)>;
+
+fn sort_startup_preload(entries: &mut StartupPreloadEntries) {
+	entries.sort_by(|a, b| a.0.cmp(&b.0));
+}
+
+fn startup_preload_search(
+	entries: &StartupPreloadEntries,
+	key: &[u8],
+) -> Result<usize, usize> {
+	entries.binary_search_by(|(candidate, _)| candidate.as_slice().cmp(key))
+}
+
+fn startup_preload_get<'a>(
+	entries: &'a StartupPreloadEntries,
+	key: &[u8],
+) -> Option<&'a [u8]> {
+	startup_preload_search(entries, key)
+		.ok()
+		.map(|idx| entries[idx].1.as_slice())
+}
+
+fn startup_preload_put(entries: &mut StartupPreloadEntries, key: &[u8], value: &[u8]) {
+	if let Ok(idx) = startup_preload_search(entries, key) {
+		entries[idx].1 = value.to_vec();
+	}
+}
+
+fn startup_preload_delete(entries: &mut StartupPreloadEntries, key: &[u8]) {
+	if let Ok(idx) = startup_preload_search(entries, key) {
+		entries.remove(idx);
+	}
+}
+
+fn startup_preload_delete_range(
+	entries: &mut StartupPreloadEntries,
+	start: &[u8],
+	end: &[u8],
+) {
+	entries.retain(|(key, _)| key.as_slice() < start || key.as_slice() >= end);
+}
+
 // MARK: VFS Metrics
 
 /// Per-VFS-callback operation metrics for diagnosing native vs WASM performance.
@@ -157,6 +199,8 @@ struct VfsContext {
 	kv: Arc<dyn SqliteKv>,
 	actor_id: String,
 	main_file_name: String,
+	// Bounded startup entries shipped with actor start. This is not the opt-in read cache.
+	startup_preload: Mutex<Option<StartupPreloadEntries>>,
 	read_cache_enabled: bool,
 	last_error: Mutex<Option<String>>,
 	rt_handle: Handle,
@@ -231,13 +275,58 @@ impl VfsContext {
 		}
 	}
 
+	fn update_startup_preload(
+		&self,
+		f: impl FnOnce(&mut StartupPreloadEntries),
+	) {
+		if let Ok(mut guard) = self.startup_preload.lock() {
+			if let Some(entries) = guard.as_mut() {
+				f(entries);
+			}
+		}
+	}
+
 	fn kv_get(&self, keys: Vec<Vec<u8>>) -> Result<KvGetResult, String> {
 		let key_count = keys.len();
 		let start = std::time::Instant::now();
-		let result = self
-			.rt_handle
-			.block_on(self.kv.batch_get(&self.actor_id, keys))
-			.map_err(|err| self.report_kv_error(err));
+		let (preloaded_keys, preloaded_values, miss_keys) = if let Ok(guard) =
+			self.startup_preload.lock()
+		{
+			if let Some(entries) = guard.as_ref() {
+				let mut hit_keys = Vec::new();
+				let mut hit_values = Vec::new();
+				let mut misses = Vec::new();
+				for key in keys {
+					if let Some(value) = startup_preload_get(entries, key.as_slice()) {
+						hit_keys.push(key);
+						hit_values.push(value.to_vec());
+					} else {
+						misses.push(key);
+					}
+				}
+				(hit_keys, hit_values, misses)
+			} else {
+				(Vec::new(), Vec::new(), keys)
+			}
+		} else {
+			(Vec::new(), Vec::new(), keys)
+		};
+		let result = if miss_keys.is_empty() {
+			Ok(KvGetResult {
+				keys: preloaded_keys,
+				values: preloaded_values,
+			})
+		} else {
+			self
+				.rt_handle
+				.block_on(self.kv.batch_get(&self.actor_id, miss_keys))
+				.map(|mut result| {
+					result.keys.extend(preloaded_keys);
+					result.values.extend(preloaded_values);
+					result
+				})
+				.map_err(|err| self.report_kv_error(err))
+		};
 		if result.is_ok() {
 			self.clear_last_error();
 		}
@@ -255,10 +344,15 @@ impl VfsContext {
 		let start = std::time::Instant::now();
 		let result = self
 			.rt_handle
-			.block_on(self.kv.batch_put(&self.actor_id, keys, values))
+			.block_on(self.kv.batch_put(&self.actor_id, keys.clone(), values.clone()))
 			.map_err(|err| self.report_kv_error(err));
 		if result.is_ok() {
 			self.clear_last_error();
+			self.update_startup_preload(|entries| {
+				for (key, value) in keys.iter().zip(values.iter()) {
+					startup_preload_put(entries, key.as_slice(), value.as_slice());
+				}
+			});
 		}
 		let elapsed = start.elapsed();
 		tracing::debug!(
@@ -274,10 +368,15 @@ impl VfsContext {
 		let start = std::time::Instant::now();
 		let result = self
 			.rt_handle
-			.block_on(self.kv.batch_delete(&self.actor_id, keys))
+			.block_on(self.kv.batch_delete(&self.actor_id, keys.clone()))
 			.map_err(|err| self.report_kv_error(err));
 		if result.is_ok() {
 			self.clear_last_error();
+			self.update_startup_preload(|entries| {
+				for key in &keys {
+					startup_preload_delete(entries, key.as_slice());
+				}
+			});
 		}
 		let elapsed = start.elapsed();
 		tracing::debug!(
@@ -290,12 +389,21 @@ impl VfsContext {
 
 	fn kv_delete_range(&self, start: Vec<u8>, end: Vec<u8>) -> Result<(), String> {
 		let start_time = std::time::Instant::now();
+		let preload_start = start.clone();
+		let preload_end = end.clone();
 		let result = self
 			.rt_handle
 			.block_on(self.kv.delete_range(&self.actor_id, start, end))
 			.map_err(|err| self.report_kv_error(err));
 		if result.is_ok() {
 			self.clear_last_error();
+			self.update_startup_preload(|entries| {
+				startup_preload_delete_range(
+					entries,
+					preload_start.as_slice(),
+					preload_end.as_slice(),
+				);
+			});
 		}
 		let elapsed = start_time.elapsed();
 		tracing::debug!(
@@ -1274,6 +1382,7 @@ impl KvVfs {
 		kv: Arc<dyn SqliteKv>,
 		actor_id: String,
 		rt_handle: Handle,
+		mut startup_preload: StartupPreloadEntries,
 	) -> Result<Self, String> {
 		let mut io_methods: sqlite3_io_methods = unsafe { std::mem::zeroed() };
 		io_methods.iVersion = 1;
@@ -1291,10 +1400,12 @@ impl KvVfs {
 		io_methods.xDeviceCharacteristics = Some(kv_io_device_characteristics);
 
 		let vfs_metrics = Arc::new(VfsMetrics::new());
+		sort_startup_preload(&mut startup_preload);
 		let ctx = Box::new(VfsContext {
 			kv,
 			actor_id: actor_id.clone(),
 			main_file_name: actor_id,
+			startup_preload: Mutex::new((!startup_preload.is_empty()).then_some(startup_preload)),
 			read_cache_enabled: read_cache_enabled(),
 			last_error: Mutex::new(None),
 			rt_handle,
@@ -1519,5 +1630,47 @@ mod tests {
 		assert!(page[EMPTY_DB_PAGE_HEADER_PREFIX.len()..]
 			.iter()
 			.all(|byte| *byte == 0));
+	}
+
+	#[test]
+	fn startup_preload_helpers_use_exact_key_matches() {
+		let mut entries = vec![
+			(vec![3], vec![30]),
+			(vec![1], vec![10]),
+			(vec![2], vec![20]),
+		];
+		sort_startup_preload(&mut entries);
+
+		assert_eq!(startup_preload_get(&entries, &[1]), Some(&[10][..]));
+		assert_eq!(startup_preload_get(&entries, &[2]), Some(&[20][..]));
+		assert_eq!(startup_preload_get(&entries, &[4]), None);
+	}
+
+	#[test]
+	fn startup_preload_helpers_update_without_growing() {
+		let mut entries = vec![(vec![1], vec![10]), (vec![2], vec![20])];
+		sort_startup_preload(&mut entries);
+
+		startup_preload_put(&mut entries, &[2], &[99]);
+		startup_preload_put(&mut entries, &[3], &[30]);
+		startup_preload_delete(&mut entries, &[1]);
+		startup_preload_delete(&mut entries, &[7]);
+
+		assert_eq!(entries, vec![(vec![2], vec![99])]);
+	}
+
+	#[test]
+	fn startup_preload_helpers_delete_range_is_half_open() {
+		let mut entries = vec![
+			(vec![1], vec![10]),
+			(vec![2], vec![20]),
+			(vec![3], vec![30]),
+			(vec![4], vec![40]),
+		];
+		sort_startup_preload(&mut entries);
+
+		startup_preload_delete_range(&mut entries, &[2], &[4]);
+
+		assert_eq!(entries, vec![(vec![1], vec![10]), (vec![4], vec![40])]);
 	}
 }

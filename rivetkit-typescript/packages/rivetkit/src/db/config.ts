@@ -17,7 +17,10 @@ export interface NativeSqliteConfig {
  * Replaces the transport-config-based NativeSqliteConfig seam.
  */
 export interface NativeDatabaseProvider {
-	open(actorId: string): Promise<RawAccess>;
+	open(
+		actorId: string,
+		preloadedEntries?: [Uint8Array, Uint8Array][],
+	): Promise<RawAccess>;
 }
 
 /**

@@ -159,9 +159,40 @@ async function startEnvoy(config) {
 /**
  * Open a native database backed by envoy KV.
  */
-async function openDatabaseFromEnvoy(handle, actorId) {
+async function openDatabaseFromEnvoy(handle, actorId, preloadedEntries) {
 	const rawHandle = handle._raw || handle;
-	return native.openDatabaseFromEnvoy(rawHandle, actorId);
+	const nativePreloadedEntries = preloadedEntries
+		? preloadedEntries.map(([key, value]) => ({
+				key: Buffer.from(key),
+				value: Buffer.from(value),
+			}))
+		: null;
+	return native.openDatabaseFromEnvoy(
+		rawHandle,
+		actorId,
+		nativePreloadedEntries,
+	);
+}
+
+function decodePreloadedKv(preloadedKv) {
+	if (!preloadedKv) {
+		return null;
+	}
+
+	const decodeBytes = (value) => Uint8Array.from(Buffer.from(value, "base64"));
+
+	return {
+		entries: (preloadedKv.entries || []).map((entry) => ({
+			key: decodeBytes(entry.key),
+			value: decodeBytes(entry.value),
+			metadata: {
+				version: decodeBytes(entry.metadata.version),
+				updateTs: entry.metadata.updateTs,
+			},
+		})),
+		requestedGetKeys: (preloadedKv.requestedGetKeys || []).map(decodeBytes),
+		requestedPrefixes: (preloadedKv.requestedPrefixes || []).map(decodeBytes),
+	};
 }
 
 function isPlainObject(value) {
@@ -279,8 +310,12 @@ function wrapNativeStorageError(nativeDb, error) {
 	);
 }
 
-async function openRawDatabaseFromEnvoy(handle, actorId) {
-	const nativeDb = await openDatabaseFromEnvoy(handle, actorId);
+async function openRawDatabaseFromEnvoy(handle, actorId, preloadedEntries) {
+	const nativeDb = await openDatabaseFromEnvoy(
+		handle,
+		actorId,
+		preloadedEntries,
+	);
 	let closed = false;
 
 	const ensureOpen = () => {
@@ -357,7 +392,7 @@ function handleEvent(event, config, wrappedHandle) {
 					event.actorId,
 					event.generation,
 					actorConfig,
-					null, // preloadedKv
+					decodePreloadedKv(event.preloadedKv),
 				),
 			).then(
 				async () => {

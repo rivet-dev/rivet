@@ -18,7 +18,7 @@ export interface QueryResult {
   rows: Array<Array<any>>
 }
 /** Open a native SQLite database backed by the envoy's KV channel. */
-export declare function openDatabaseFromEnvoy(jsHandle: JsEnvoyHandle, actorId: string): Promise<JsNativeDatabase>
+export declare function openDatabaseFromEnvoy(jsHandle: JsEnvoyHandle, actorId: string, preloadedEntries?: Array<JsKvEntry> | undefined | null): Promise<JsNativeDatabase>
 /** Configuration for starting the native envoy client. */
 export interface JsEnvoyConfig {
   endpoint: string

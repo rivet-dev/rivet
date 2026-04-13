@@ -19,6 +19,7 @@ use rivetkit_sqlite_native::vfs::{KvVfs, NativeDatabase};
 use tokio::runtime::Handle;
 
 use crate::envoy_handle::JsEnvoyHandle;
+use crate::types::JsKvEntry;
 
 /// SqliteKv adapter that routes operations through the envoy handle's KV methods.
 pub struct EnvoyKv {
@@ -501,12 +502,24 @@ fn exec_statements(db: *mut sqlite3, sql: &str) -> napi::Result<QueryResult> {
 pub async fn open_database_from_envoy(
 	js_handle: &JsEnvoyHandle,
 	actor_id: String,
+	preloaded_entries: Option<Vec<JsKvEntry>>,
 ) -> napi::Result<JsNativeDatabase> {
 	let envoy_kv = Arc::new(EnvoyKv::new(js_handle.handle.clone(), actor_id.clone()));
+	let preloaded_entries = preloaded_entries
+		.unwrap_or_default()
+		.into_iter()
+		.map(|entry| (entry.key.to_vec(), entry.value.to_vec()))
+		.collect();
 	let rt_handle = Handle::current();
 	let db = tokio::task::spawn_blocking(move || {
 		let vfs_name = format!("envoy-kv-{}", actor_id);
-		let vfs = KvVfs::register(&vfs_name, envoy_kv, actor_id.clone(), rt_handle)
+		let vfs = KvVfs::register(
+			&vfs_name,
+			envoy_kv,
+			actor_id.clone(),
+			rt_handle,
+			preloaded_entries,
+		)
 			.map_err(|e| napi::Error::from_reason(format!("failed to register VFS: {}", e)))?;
 
 		rivetkit_sqlite_native::vfs::open_database(vfs, &actor_id)

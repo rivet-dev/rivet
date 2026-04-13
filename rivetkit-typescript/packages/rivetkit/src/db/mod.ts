@@ -52,7 +52,10 @@ export function db({
 			// path where databases are opened from a live runtime handle
 			// (e.g., the native envoy client).
 			if (ctx.nativeDatabaseProvider) {
-				return await ctx.nativeDatabaseProvider.open(ctx.actorId);
+				return await ctx.nativeDatabaseProvider.open(
+					ctx.actorId,
+					ctx.preloadedEntries,
+				);
 			}
 
 			const { database: db, kvStore } = await openActorDatabase(ctx);
