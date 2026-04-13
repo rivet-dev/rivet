@@ -335,6 +335,7 @@ export class ConnectionManager<
 
 		this.#actor.inspector.emitter.emit("connectionsUpdated");
 		this.#pendingDisconnectCount += 1;
+		this.#actor.resetSleepTimer();
 
 		const attributes = {
 			"rivet.conn.id": conn.id,
