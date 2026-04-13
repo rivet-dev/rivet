@@ -1324,15 +1324,10 @@ class SqliteSystem implements SqliteVfsRegistration {
 				}
 			}
 
-			// Delete chunks beyond the new size
-			const keysToDelete: Uint8Array[] = [];
-			for (let i = lastChunkToKeep + 1; i <= lastExistingChunk; i++) {
-				keysToDelete.push(this.#chunkKey(file, i));
-			}
-
-			for (let b = 0; b < keysToDelete.length; b += KV_MAX_BATCH_KEYS) {
-				await options.deleteBatch(
-					keysToDelete.slice(b, b + KV_MAX_BATCH_KEYS),
+			if (lastChunkToKeep < lastExistingChunk) {
+				await options.deleteRange(
+					this.#chunkKey(file, lastChunkToKeep + 1),
+					getChunkKeyRangeEnd(file.fileTag),
 				);
 			}
 		} catch (error) {
