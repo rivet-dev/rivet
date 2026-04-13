@@ -667,47 +667,12 @@ async function main(): Promise<void> {
 	writeFileSync(jsonFile, JSON.stringify(entries, null, 2));
 	console.log(`\nResults written to ${jsonFile}`);
 
-	// Print KV channel metrics if native SQLite is available.
+	// Native database metrics moved into rivetkit-native. The old
+	// sqlite-native channel inspection path is gone.
 	try {
-		// Access the internal native-sqlite module to get KV channel metrics.
-		// Uses createRequire for CJS compat with the napi addon.
-		const { createRequire } = await import("node:module");
-		const require = createRequire(import.meta.url);
-		const native = require("@rivetkit/sqlite-native");
-		// The kvChannel handle is stored as a module-level singleton in native-sqlite.ts.
-		// We can't access it directly, but we exported getKvChannelMetrics.
-		// For the bench, we'll try the direct path.
-		const nativeSqlite = await import(
-			// @ts-ignore
-			"../../../rivetkit-typescript/packages/rivetkit/src/db/native-sqlite.ts"
-		);
-		const m = nativeSqlite.getKvChannelMetrics?.();
-		if (m) {
-			console.log("\n--- KV Channel Metrics ---");
-			const ops: [string, any][] = [
-				["get", m.get],
-				["put", m.put],
-				["delete", m.delete],
-				["deleteRange", m.deleteRange],
-				["actorOpen", m.actorOpen],
-				["actorClose", m.actorClose],
-			];
-			const nameWidth = 14;
-			const colWidth = 12;
-			console.log(
-				`${"Op".padEnd(nameWidth)}  ${"Count".padStart(colWidth)}  ${"Avg (us)".padStart(colWidth)}  ${"Min (us)".padStart(colWidth)}  ${"Max (us)".padStart(colWidth)}  ${"Total (ms)".padStart(colWidth)}`,
-			);
-			console.log("-".repeat(nameWidth + colWidth * 5 + 10));
-			for (const [name, s] of ops) {
-				if (s && s.count > 0) {
-					console.log(
-						`${name.padEnd(nameWidth)}  ${String(s.count).padStart(colWidth)}  ${s.avgDurationUs.toFixed(0).padStart(colWidth)}  ${String(s.minDurationUs).padStart(colWidth)}  ${String(s.maxDurationUs).padStart(colWidth)}  ${(s.totalDurationUs / 1000).toFixed(1).padStart(colWidth)}`,
-					);
-				}
-			}
-		}
+		console.log("\nKV channel metrics are no longer exposed by this benchmark.");
 	} catch {
-		// Native module or metrics not available, skip.
+		// Metrics are optional.
 	}
 
 	process.exit(0);

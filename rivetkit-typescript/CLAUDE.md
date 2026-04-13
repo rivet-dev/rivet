@@ -3,9 +3,9 @@
 ## Tree-Shaking Boundaries
 
 - Do not import `@rivetkit/workflow-engine` outside the `rivetkit/workflow` entrypoint so it remains tree-shakeable.
-- Do not import SQLite VFS or `@rivetkit/sqlite` outside the `rivetkit/db` (or `@rivetkit/sqlite-wasm`) entrypoint so SQLite support remains tree-shakeable.
-- Importing `rivetkit/db` (or `@rivetkit/sqlite-wasm`) is the explicit opt-in for SQLite. Do not lazily load SQLite from `rivetkit/db`; it may be imported eagerly inside that entrypoint.
-- Core drivers must remain SQLite-agnostic. Any SQLite-specific wiring belongs behind the `rivetkit/db` or `@rivetkit/sqlite-wasm` boundary.
+- Keep SQLite runtime code on the native `@rivetkit/rivetkit-native` path. Do not reintroduce WebAssembly SQLite or KV-backed VFS fallbacks.
+- Importing `rivetkit/db` is the explicit opt-in for SQLite. Do not lazily load extra SQLite runtimes from that entrypoint.
+- Core drivers must remain SQLite-agnostic. Any SQLite-specific wiring belongs behind the native database provider boundary.
 
 ## Context Types Sync
 
