@@ -135,7 +135,10 @@ impl EnvoyContext {
 
 pub async fn start_envoy(config: EnvoyConfig) -> EnvoyHandle {
 	let handle = start_envoy_sync(config);
-	handle.started().await;
+	handle
+		.started()
+		.await
+		.expect("envoy failed to start before returning handle");
 	handle
 }
 

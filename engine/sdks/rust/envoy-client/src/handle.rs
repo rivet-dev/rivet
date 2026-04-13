@@ -33,8 +33,13 @@ impl EnvoyHandle {
 		&self.shared.envoy_key
 	}
 
-	pub async fn started(&self) {
-		let _ = self.started_rx.clone().changed().await;
+	pub async fn started(&self) -> anyhow::Result<()> {
+		self.started_rx
+			.clone()
+			.changed()
+			.await
+			.map_err(|_| anyhow::anyhow!("envoy stopped before startup completed"))?;
+		Ok(())
 	}
 
 	pub fn sleep_actor(&self, actor_id: String, generation: Option<u32>) {
@@ -310,7 +315,7 @@ impl EnvoyHandle {
 		}
 
 		// Wait for envoy to be started before injecting
-		self.started().await;
+		self.started().await?;
 
 		tracing::debug!(
 			data = crate::stringify::stringify_to_envoy(&message),
