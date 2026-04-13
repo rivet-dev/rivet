@@ -171,10 +171,10 @@ impl VfsContext {
 			.map_err(|e| e.to_string());
 		let elapsed = start.elapsed();
 		if std::env::var("RIVET_TRACE_SQL").is_ok() {
-			eprintln!(
-				"[sql-trace]   kv_roundtrip op={} duration={}us",
-				op_name,
-				elapsed.as_micros()
+			tracing::trace!(
+				op = %op_name,
+				duration_us = elapsed.as_micros() as u64,
+				"sql trace kv round-trip"
 			);
 		}
 		tracing::debug!(
@@ -194,10 +194,10 @@ impl VfsContext {
 			.map_err(|e| e.to_string());
 		let elapsed = start.elapsed();
 		if std::env::var("RIVET_TRACE_SQL").is_ok() {
-			eprintln!(
-				"[sql-trace]   kv_roundtrip op={} duration={}us",
-				op_name,
-				elapsed.as_micros()
+			tracing::trace!(
+				op = %op_name,
+				duration_us = elapsed.as_micros() as u64,
+				"sql trace kv round-trip"
 			);
 		}
 		tracing::debug!(
@@ -217,10 +217,10 @@ impl VfsContext {
 			.map_err(|e| e.to_string());
 		let elapsed = start.elapsed();
 		if std::env::var("RIVET_TRACE_SQL").is_ok() {
-			eprintln!(
-				"[sql-trace]   kv_roundtrip op={} duration={}us",
-				op_name,
-				elapsed.as_micros()
+			tracing::trace!(
+				op = %op_name,
+				duration_us = elapsed.as_micros() as u64,
+				"sql trace kv round-trip"
 			);
 		}
 		tracing::debug!(
@@ -240,10 +240,10 @@ impl VfsContext {
 			.map_err(|e| e.to_string());
 		let elapsed = start_time.elapsed();
 		if std::env::var("RIVET_TRACE_SQL").is_ok() {
-			eprintln!(
-				"[sql-trace]   kv_roundtrip op={} duration={}us",
-				op_name,
-				elapsed.as_micros()
+			tracing::trace!(
+				op = %op_name,
+				duration_us = elapsed.as_micros() as u64,
+				"sql trace kv round-trip"
 			);
 		}
 		tracing::debug!(
