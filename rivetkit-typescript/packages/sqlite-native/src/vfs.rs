@@ -270,12 +270,6 @@ impl VfsContext {
 
 	fn delete_file(&self, file_tag: u8) -> Result<(), String> {
 		let meta_key = kv::get_meta_key(file_tag);
-		let resp = self.kv_get(vec![meta_key.to_vec()])?;
-		let value_map = build_value_map(&resp);
-		if !value_map.contains_key(meta_key.as_slice()) {
-			return Ok(());
-		}
-
 		self.kv_delete_range(
 			kv::get_chunk_key(file_tag, 0).to_vec(),
 			kv::get_chunk_key_range_end(file_tag).to_vec(),
