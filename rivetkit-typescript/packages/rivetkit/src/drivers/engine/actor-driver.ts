@@ -185,6 +185,7 @@ export class EngineActorDriver implements ActorDriver {
 			token: config.token,
 			namespace: config.namespace,
 			poolName: config.envoy.poolName,
+			notGlobal: true,
 			metadata: {
 				rivetkit: { version: VERSION },
 			},
@@ -211,9 +212,14 @@ export class EngineActorDriver implements ActorDriver {
 
 		this.#envoy = envoy;
 
-		envoy.started().then(() => {
-			this.#envoyStarted.resolve();
-		});
+		envoy.started().then(
+			() => {
+				this.#envoyStarted.resolve();
+			},
+			(error) => {
+				this.#envoyStarted.reject(error);
+			},
+		);
 
 		logger().debug({
 			msg: "envoy client started",
