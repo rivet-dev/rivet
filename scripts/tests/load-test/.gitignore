@@ -1,6 +1,0 @@
-# k6 output files
-results.json
-*.log
-
-# k6 cloud results
-.k6cloud/

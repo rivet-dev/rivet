@@ -8,6 +8,18 @@
 
 const native = require("./index");
 
+// CloseEvent was added to Node.js in v22. Polyfill for older versions.
+if (typeof CloseEvent === "undefined") {
+	global.CloseEvent = class CloseEvent extends Event {
+		constructor(type, init = {}) {
+			super(type);
+			this.code = init.code ?? 0;
+			this.reason = init.reason ?? "";
+			this.wasClean = init.wasClean ?? false;
+		}
+	};
+}
+
 // Re-export protocol for consumers that need protocol types at runtime
 let _protocol;
 try {

@@ -75,7 +75,7 @@ export function buildServerlessRouter(config: RegistryConfig) {
 			};
 			const runnerConfig: RegistryConfig = {
 				...sharedConfig,
-				token,
+				token: config.token ?? token,
 			};
 			const clientConfig: RegistryConfig = {
 				...sharedConfig,

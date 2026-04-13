@@ -34,6 +34,7 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 						name: actor_name,
 						event_history: Vec::new(),
 						last_command_idx: checkpoint.index,
+						received_stop: false,
 					},
 				);
 			}
@@ -41,6 +42,7 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 				let entry = ctx.get_actor_entry_mut(&checkpoint.actor_id, checkpoint.generation);
 
 				if let Some(entry) = entry {
+					entry.received_stop = true;
 					entry.last_command_idx = checkpoint.index;
 					let _ = entry.handle.send(crate::actor::ToActor::Stop {
 						command_idx: checkpoint.index,
