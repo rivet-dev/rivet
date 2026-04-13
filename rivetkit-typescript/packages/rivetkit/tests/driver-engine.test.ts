@@ -3,12 +3,37 @@ import { RemoteEngineControlClient } from "@/engine-client/mod";
 import { EngineActorDriver } from "@/drivers/engine/mod";
 import { convertRegistryConfigToClientConfig } from "@/client/config";
 import { createClientWithDriver } from "@/client/client";
+import { handleHealthRequest, handleMetadataRequest } from "@/common/router";
 import { updateRunnerConfig } from "@/engine-client/api-endpoints";
 import { serve as honoServe } from "@hono/node-server";
 import { Hono } from "hono";
 import invariant from "invariant";
 import { describe } from "vitest";
 import { getDriverRegistryVariants } from "./driver-registry-variants";
+
+async function refreshRunnerMetadata(
+	endpoint: string,
+	namespace: string,
+	token: string,
+	poolName: string,
+): Promise<void> {
+	const response = await fetch(
+		`${endpoint}/runner-configs/${encodeURIComponent(poolName)}/refresh-metadata?namespace=${encodeURIComponent(namespace)}`,
+		{
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${token}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({}),
+		},
+	);
+	if (!response.ok) {
+		throw new Error(
+			`refresh runner metadata failed: ${response.status} ${await response.text()}`,
+		);
+	}
+}
 
 for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 	const describeVariant = registryVariant.skip
@@ -37,7 +62,8 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 							"http://127.0.0.1:6420";
 						const namespace = `test-${crypto.randomUUID().slice(0, 8)}`;
 						const poolName =
-							process.env.RIVET_POOL_NAME || "test-driver";
+							process.env.RIVET_POOL_NAME ||
+							`test-driver-${crypto.randomUUID().slice(0, 8)}`;
 						const token =
 							process.env.RIVET_TOKEN || "dev";
 
@@ -67,21 +93,23 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 						const clientConfig = convertRegistryConfigToClientConfig(parsedConfig);
 						const engineClient = new RemoteEngineControlClient(clientConfig);
 						const inlineClient = createClientWithDriver(engineClient, clientConfig);
-
-						// Start the EngineActorDriver
-						const actorDriver = new EngineActorDriver(
-							parsedConfig,
-							engineClient,
-							inlineClient,
-						);
+						let actorDriver: EngineActorDriver | undefined;
 
 						// Start serverless HTTP server
 						const app = new Hono();
-						app.get("/health", (c) => c.text("ok"));
+						app.get("/health", (c) => handleHealthRequest(c));
 						app.get("/metadata", (c) =>
-							c.json({ runtime: "rivetkit", version: "1", envoyProtocolVersion: 1 }),
+							handleMetadataRequest(
+								c,
+								parsedConfig,
+								{ serverless: {} },
+								parsedConfig.publicEndpoint,
+								parsedConfig.publicNamespace,
+								parsedConfig.publicToken,
+							),
 						);
 						app.post("/start", async (c) => {
+							invariant(actorDriver, "missing actor driver");
 							return actorDriver.serverlessHandleStart(c);
 						});
 
@@ -119,8 +147,23 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 							},
 						});
 
+						// Start the EngineActorDriver after the serverless pool exists so the
+						// envoy connection is classified as serverless on first connect.
+						actorDriver = new EngineActorDriver(
+							parsedConfig,
+							engineClient,
+							inlineClient,
+						);
+
 						// Wait for envoy to connect
 						await actorDriver.waitForReady();
+
+						await refreshRunnerMetadata(
+							endpoint,
+							namespace,
+							token,
+							poolName,
+						);
 
 						return {
 							rivetEngine: {
@@ -132,7 +175,7 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 							engineClient,
 							hardCrashActor: actorDriver.hardCrashActor.bind(actorDriver),
 							cleanup: async () => {
-								await actorDriver.shutdown(true);
+								await actorDriver.shutdown(false);
 								await new Promise((resolve) =>
 									server.close(() => resolve(undefined)),
 								);

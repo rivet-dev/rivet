@@ -57,7 +57,7 @@ export interface EnvoyHandle {
 		requestId: ArrayBuffer,
 		clientMessageIndex: number,
 	): void;
-	startServerlessActor(payload: ArrayBuffer): void;
+	startServerlessActor(payload: ArrayBuffer): Promise<void>;
 }
 
 /** Matches the TS EnvoyConfig interface from @rivetkit/engine-envoy-client */
@@ -127,5 +127,18 @@ export declare function openDatabaseFromEnvoy(
 	handle: EnvoyHandle,
 	actorId: string,
 ): Promise<JsNativeDatabase>;
+
+export interface NativeRawDatabase {
+	execute: <TRow extends Record<string, unknown> = Record<string, unknown>>(
+		query: string,
+		...args: unknown[]
+	) => Promise<TRow[]>;
+	close: () => Promise<void>;
+}
+
+export declare function openRawDatabaseFromEnvoy(
+	handle: EnvoyHandle,
+	actorId: string,
+): Promise<NativeRawDatabase>;
 
 export declare const utils: {};

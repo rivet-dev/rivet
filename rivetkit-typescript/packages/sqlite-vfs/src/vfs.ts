@@ -26,6 +26,8 @@ import {
 } from "@rivetkit/sqlite";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
 	CHUNK_SIZE,
 	FILE_TAG_JOURNAL,
@@ -44,6 +46,12 @@ import {
 } from "../schemas/file-meta/versioned";
 import type { FileMeta } from "../schemas/file-meta/mod";
 import type { KvVfsOptions } from "./types";
+
+function createNodeRequire(): NodeJS.Require {
+	return createRequire(
+		path.join(process.cwd(), "__rivetkit_sqlite_require__.cjs"),
+	);
+}
 
 /**
  * Common interface for database handles returned by ISqliteVfs.open().
@@ -197,15 +205,13 @@ function isSQLiteModule(value: unknown): value is SQLiteModule {
 async function loadSqliteRuntime(
 	wasmModule?: WebAssembly.Module,
 ): Promise<LoadedSqliteRuntime> {
-	// Keep the module specifier assembled at runtime so TypeScript declaration
-	// generation does not try to typecheck this deep dist import path.
-	// Uses Array.join() instead of string concatenation to prevent esbuild/tsup
-	// from constant-folding the expression at build time, which would allow
-	// Turbopack to trace into the WASM package.
-	const specifier = ["@rivetkit/sqlite", "dist", "wa-sqlite-async.mjs"].join(
-		"/",
+	const require = createNodeRequire();
+	const sqliteModulePath = require.resolve(
+		["@rivetkit/sqlite", "dist", "wa-sqlite-async.mjs"].join("/"),
 	);
-	const sqliteModule = await import(specifier);
+	const sqliteModule = await nativeDynamicImport<{ default?: unknown }>(
+		pathToFileURL(sqliteModulePath).href,
+	);
 	if (!isSqliteEsmFactory(sqliteModule.default)) {
 		throw new Error("Invalid SQLite ESM factory export");
 	}
@@ -230,7 +236,6 @@ async function loadSqliteRuntime(
 			},
 		});
 	} else {
-		const require = createRequire(import.meta.url);
 		const sqliteDistPath = "@rivetkit/sqlite/dist/";
 		const wasmPath = require.resolve(
 			sqliteDistPath + "wa-sqlite-async.wasm",
@@ -246,6 +251,22 @@ async function loadSqliteRuntime(
 		sqlite3: Factory(module),
 		module,
 	};
+}
+
+async function nativeDynamicImport<T>(specifier: string): Promise<T> {
+	try {
+		return (await import(specifier)) as T;
+	} catch (directError) {
+		const importer = new Function(
+			"moduleSpecifier",
+			"return import(moduleSpecifier);",
+		) as (moduleSpecifier: string) => Promise<T>;
+		try {
+			return await importer(specifier);
+		} catch {
+			throw directError;
+		}
+	}
 }
 
 /**

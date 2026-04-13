@@ -2,6 +2,12 @@ import { describe, expect, test } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";
 
+function buildGatewayInspectorUrl(gatewayUrl: string, path: string): URL {
+	const url = new URL(gatewayUrl);
+	url.pathname = `${url.pathname.replace(/\/$/, "")}${path}`;
+	return url;
+}
+
 export function runGatewayQueryUrlTests(driverTestConfig: DriverTestConfig) {
 	describe("Gateway Query URLs", () => {
 		const httpOnlyTest =
@@ -21,9 +27,12 @@ export function runGatewayQueryUrlTests(driverTestConfig: DriverTestConfig) {
 				expect(parsedUrl.searchParams.get("rvt-method")).toBe("getOrCreate");
 				expect(parsedUrl.searchParams.get("rvt-crash-policy")).toBe("sleep");
 
-				const response = await fetch(`${gatewayUrl}/inspector/state`, {
+				const response = await fetch(
+					buildGatewayInspectorUrl(gatewayUrl, "/inspector/state"),
+					{
 					headers: { Authorization: "Bearer token" },
-				});
+					},
+				);
 
 				expect(response.status).toBe(200);
 				await expect(response.json()).resolves.toEqual({
@@ -49,9 +58,12 @@ export function runGatewayQueryUrlTests(driverTestConfig: DriverTestConfig) {
 				expect(parsedUrl.searchParams.get("rvt-namespace")).toBeTruthy();
 				expect(parsedUrl.searchParams.get("rvt-method")).toBe("get");
 
-				const response = await fetch(`${gatewayUrl}/inspector/state`, {
+				const response = await fetch(
+					buildGatewayInspectorUrl(gatewayUrl, "/inspector/state"),
+					{
 					headers: { Authorization: "Bearer token" },
-				});
+					},
+				);
 
 				expect(response.status).toBe(200);
 				await expect(response.json()).resolves.toEqual({

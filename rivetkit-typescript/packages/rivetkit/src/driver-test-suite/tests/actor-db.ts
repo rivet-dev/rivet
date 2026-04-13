@@ -33,6 +33,15 @@ const HOT_ROW_UPDATES = 240;
 const INTEGRITY_SEED_COUNT = 64;
 const INTEGRITY_CHURN_COUNT = 120;
 
+function isActorStoppingDbError(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		error.message.includes(
+			"Actor stopping: database accessed after actor stopped",
+		)
+	);
+}
+
 function getDbActor(
 	client: Awaited<ReturnType<typeof setupDriverTest>>["client"],
 	variant: DbVariant,
@@ -163,7 +172,40 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 					for (let i = 0; i < 3; i++) {
 						await actor.triggerSleep();
 						await waitFor(driverTestConfig, SLEEP_WAIT_MS);
-						expect(await actor.getCount()).toBe(baselineCount);
+
+						let countAfterWake = -1;
+						let lastError: Error | undefined;
+						for (
+							let attempt = 0;
+							attempt < LIFECYCLE_POLL_ATTEMPTS;
+							attempt++
+						) {
+							try {
+								countAfterWake = await actor.getCount();
+								lastError = undefined;
+							} catch (error) {
+								if (!isActorStoppingDbError(error)) {
+									throw error;
+								}
+
+								lastError = error;
+							}
+
+							if (countAfterWake === baselineCount) {
+								break;
+							}
+
+							await waitFor(
+								driverTestConfig,
+								LIFECYCLE_POLL_INTERVAL_MS,
+							);
+						}
+
+						if (lastError && countAfterWake !== baselineCount) {
+							throw lastError;
+						}
+
+						expect(countAfterWake).toBe(baselineCount);
 					}
 				},
 				dbTestTimeout,

@@ -7,9 +7,16 @@
 
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import path from "node:path";
 import { SqliteVfs } from "./vfs";
 import type { ISqliteVfs, IDatabase } from "./vfs";
 import type { KvVfsOptions } from "./types";
+
+function createNodeRequire(): NodeJS.Require {
+	return createRequire(
+		path.join(process.cwd(), "__rivetkit_sqlite_require__.cjs"),
+	);
+}
 
 export interface SqliteVfsPoolConfig {
 	actorsPerInstance: number;
@@ -71,7 +78,7 @@ export class SqliteVfsPool {
 	#getModule(): Promise<WebAssembly.Module> {
 		if (!this.#modulePromise) {
 			this.#modulePromise = (async () => {
-				const require = createRequire(import.meta.url);
+				const require = createNodeRequire();
 				const wasmPath = require.resolve(
 					"@rivetkit/sqlite/dist/wa-sqlite-async.wasm",
 				);

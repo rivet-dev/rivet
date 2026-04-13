@@ -128,7 +128,13 @@ export class ConnectionManager<
 				{
 					"rivet.conn.type": driver.type,
 				},
-				() => this.#actor.config.onBeforeConnect!(ctx, params),
+				() =>
+					deadline(
+						Promise.resolve(
+							this.#actor.config.onBeforeConnect!(ctx, params),
+						),
+						this.#actor.config.options.onBeforeConnectTimeout,
+					),
 			);
 		}
 

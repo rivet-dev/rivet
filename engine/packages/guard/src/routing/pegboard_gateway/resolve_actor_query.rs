@@ -207,7 +207,27 @@ async fn resolve_query_target_dc_label(
 }
 
 fn serialize_actor_key(key: &[String]) -> Result<String> {
-	serde_json::to_string(key).context("failed to serialize actor key")
+	const EMPTY_KEY: &str = "/";
+	const KEY_SEPARATOR: char = '/';
+
+	if key.is_empty() {
+		return Ok(EMPTY_KEY.to_string());
+	}
+
+	let mut escaped_parts = Vec::with_capacity(key.len());
+	for part in key {
+		if part.is_empty() {
+			escaped_parts.push(String::from("\\0"));
+			continue;
+		}
+
+		let escaped = part
+			.replace('\\', "\\\\")
+			.replace(KEY_SEPARATOR, "\\/");
+		escaped_parts.push(escaped);
+	}
+
+	Ok(escaped_parts.join(EMPTY_KEY))
 }
 
 fn is_duplicate_key_error(err: &anyhow::Error) -> bool {

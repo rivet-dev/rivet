@@ -3,7 +3,7 @@ import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";
 
 export function runActorLifecycleTests(driverTestConfig: DriverTestConfig) {
-	describe("Actor Lifecycle Tests", () => {
+	describe.sequential("Actor Lifecycle Tests", () => {
 		test("actor stop during start waits for start to complete", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 

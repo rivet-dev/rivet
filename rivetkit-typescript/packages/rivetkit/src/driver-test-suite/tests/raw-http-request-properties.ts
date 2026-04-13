@@ -283,7 +283,7 @@ export function runRawHttpRequestPropertiesTests(
 			expect(data.search.length).toBeGreaterThan(1000);
 		});
 
-		test.skip("should handle large request bodies", async (c) => {
+		test("should handle large request bodies", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.rawHttpRequestPropertiesActor.getOrCreate([
 				"test",
