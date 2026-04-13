@@ -1,0 +1,23 @@
+{
+	"name": "publish",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"ci": "tsx src/ci/bin.ts",
+		"release": "tsx src/local/cut-release.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"commander": "^12.1.0",
+		"execa": "^8.0.1",
+		"glob": "^10.3.10",
+		"semver": "^7.6.0"
+	},
+	"devDependencies": {
+		"@types/node": "^24.3.0",
+		"@types/semver": "^7.5.8",
+		"tsx": "^4.0.0",
+		"typescript": "^5.5.2"
+	}
+}

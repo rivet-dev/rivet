@@ -1,6 +1,6 @@
 packages:
   - engine
-  - engine/docker/template
+  - self-host/compose/template
   - engine/sdks/typescript/api-full
   - engine/sdks/typescript/envoy-protocol
   - engine/sdks/typescript/test-envoy
@@ -14,7 +14,7 @@ packages:
   - frontend/packages/shared-data/
   - rivetkit-typescript/packages/*
   - rivetkit-swift/examples/*/server
-  - scripts/release
+  - scripts/publish
   - scripts/tests
   - shared/typescript/*
   - website

@@ -17,7 +17,7 @@ pub struct SleepPath {
 
 #[derive(Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-#[schema(as = ActorsSleepRequest)]
+#[schema(as = ActorsSleepRequestBody)]
 pub struct SleepRequest {}
 
 #[derive(Serialize, ToSchema)]

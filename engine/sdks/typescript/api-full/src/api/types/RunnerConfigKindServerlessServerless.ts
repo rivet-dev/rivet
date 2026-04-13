@@ -4,6 +4,7 @@
 
 export interface RunnerConfigKindServerlessServerless {
     headers?: Record<string, string>;
+    maxConcurrentActors?: number;
     maxRunners: number;
     /** Milliseconds between metadata polling. If not set, uses the global default. */
     metadataPollInterval?: number;

@@ -11,7 +11,7 @@
       "name": "Apache-2.0",
       "identifier": "Apache-2.0"
     },
-    "version": "2.2.1"
+    "version": "2.3.0-rc.4"
   },
   "paths": {
     "/actors": {
@@ -365,7 +365,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ActorsRescheduleRequest"
+                "$ref": "#/components/schemas/ActorsRescheduleRequestBody"
               }
             }
           },
@@ -418,7 +418,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ActorsSleepRequest"
+                "$ref": "#/components/schemas/ActorsSleepRequestBody"
               }
             }
           },
@@ -1384,7 +1384,7 @@
         },
         "additionalProperties": false
       },
-      "ActorsRescheduleRequest": {
+      "ActorsRescheduleRequestBody": {
         "type": "object",
         "additionalProperties": false
       },
@@ -1392,7 +1392,7 @@
         "type": "object",
         "additionalProperties": false
       },
-      "ActorsSleepRequest": {
+      "ActorsSleepRequestBody": {
         "type": "object",
         "additionalProperties": false
       },

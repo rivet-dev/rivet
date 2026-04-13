@@ -1,6 +1,6 @@
 [package]
 name = "rivetkit-sqlite-native"
-version = "2.1.6"
+version = "2.3.0-rc.4"
 edition = "2021"
 license = "Apache-2.0"
 description = "Native SQLite VFS for RivetKit backed by a transport-agnostic KV trait"

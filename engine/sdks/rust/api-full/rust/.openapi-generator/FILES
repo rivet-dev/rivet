@@ -18,11 +18,16 @@ docs/ActorsListApi.md
 docs/ActorsListNamesApi.md
 docs/ActorsListNamesResponse.md
 docs/ActorsListResponse.md
+docs/ActorsRescheduleApi.md
+docs/ActorsSleepApi.md
 docs/CrashPolicy.md
 docs/Datacenter.md
 docs/DatacenterHealth.md
 docs/DatacentersApi.md
 docs/DatacentersListResponse.md
+docs/Envoy.md
+docs/EnvoysApi.md
+docs/EnvoysListResponse.md
 docs/HealthApi.md
 docs/HealthFanoutResponse.md
 docs/HealthResponse.md
@@ -78,8 +83,11 @@ src/apis/actors_get_or_create_api.rs
 src/apis/actors_kv_get_api.rs
 src/apis/actors_list_api.rs
 src/apis/actors_list_names_api.rs
+src/apis/actors_reschedule_api.rs
+src/apis/actors_sleep_api.rs
 src/apis/configuration.rs
 src/apis/datacenters_api.rs
+src/apis/envoys_api.rs
 src/apis/health_api.rs
 src/apis/metadata_api.rs
 src/apis/mod.rs
@@ -104,6 +112,8 @@ src/models/crash_policy.rs
 src/models/datacenter.rs
 src/models/datacenter_health.rs
 src/models/datacenters_list_response.rs
+src/models/envoy.rs
+src/models/envoys_list_response.rs
 src/models/health_fanout_response.rs
 src/models/health_response.rs
 src/models/health_status.rs
