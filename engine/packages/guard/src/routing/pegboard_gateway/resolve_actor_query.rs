@@ -221,9 +221,7 @@ fn serialize_actor_key(key: &[String]) -> Result<String> {
 			continue;
 		}
 
-		let escaped = part
-			.replace('\\', "\\\\")
-			.replace(KEY_SEPARATOR, "\\/");
+		let escaped = part.replace('\\', "\\\\").replace(KEY_SEPARATOR, "\\/");
 		escaped_parts.push(escaped);
 	}
 
