@@ -96,7 +96,10 @@ pub(crate) async fn read_local_value(
 					if let Some(value) = cache_value.value {
 						return Ok(LocalValueRead {
 							value: None,
-							cache_value: Some(cache_key.deserialize(&value)?),
+							cache_value: Some(CachedValue {
+								value: Some(value),
+								version: cache_value.version,
+							}),
 						});
 					}
 				}
