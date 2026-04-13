@@ -18,6 +18,7 @@ COPY frontend/public/examples/ frontend/public/examples/
 
 # Copy engine SDK dependencies
 COPY engine/sdks/typescript/api-full/ engine/sdks/typescript/api-full/
+COPY engine/sdks/typescript/envoy-protocol/ engine/sdks/typescript/envoy-protocol/
 COPY rivetkit-typescript/packages/engine-runner/ rivetkit-typescript/packages/engine-runner/
 COPY rivetkit-typescript/packages/engine-runner-protocol/ rivetkit-typescript/packages/engine-runner-protocol/
 

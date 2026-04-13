@@ -1,1 +1,0 @@
-../../../.codex/skills/graphite-is-being-a-piece-of-shit-just-merge-my-stack/SKILL.md

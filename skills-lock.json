@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "graphite": {
+      "source": "withgraphite/agent-skills",
+      "sourceType": "github",
+      "computedHash": "9315b842df6de2a23216a2e72033fa99337398a8d62c11d6c320e55a6b810339"
+    }
+  }
+}

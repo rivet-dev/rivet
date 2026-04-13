@@ -1,6 +1,5 @@
 import {
 	faBooks,
-	faComments,
 	faDiscord,
 	faGithub,
 	faMessageSmile,
@@ -59,16 +58,6 @@ export const HelpDropdown = ({ children }: { children: ReactNode }) => {
 				>
 					Feedback
 				</DropdownMenuItem>
-				{__APP_TYPE__ === "cloud" ? (
-					<DropdownMenuItem
-						indicator={<Icon icon={faComments} />}
-						onSelect={() => {
-							Plain.open();
-						}}
-					>
-						Live Chat
-					</DropdownMenuItem>
-				) : null}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);

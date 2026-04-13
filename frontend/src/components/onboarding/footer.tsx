@@ -1,6 +1,5 @@
 import { faArrowUpRight, Icon } from "@rivet-gg/icons";
 import { Link } from "@tanstack/react-router";
-import { match } from "ts-pattern";
 import { Button } from "../ui/button";
 
 export function OnboardingFooter() {
@@ -20,43 +19,25 @@ export function OnboardingFooter() {
 					Documentation
 				</a>
 			</Button>
-			{match(__APP_TYPE__)
-				.with("cloud", () => (
-					<Button
-						className="text-muted-foreground"
-						variant="link"
-						size="xs"
-						onClick={() => {
-							Plain.open();
-						}}
-						endIcon={
-							<Icon icon={faArrowUpRight} className="ms-1" />
-						}
-					>
-						Support
-					</Button>
-				))
-				.otherwise(() => (
-					<Button
-						className="text-muted-foreground"
-						variant="link"
-						size="xs"
-						asChild
-						endIcon={
-							<Icon icon={faArrowUpRight} className="ms-1" />
-						}
-					>
-						<Link
-							to="."
-							search={(old) => ({
-								...old,
-								modal: "feedback",
-							})}
-						>
-							Feedback
-						</Link>
-					</Button>
-				))}
+			<Button
+				className="text-muted-foreground"
+				variant="link"
+				size="xs"
+				asChild
+				endIcon={
+					<Icon icon={faArrowUpRight} className="ms-1" />
+				}
+			>
+				<Link
+					to="."
+					search={(old) => ({
+						...old,
+						modal: "feedback",
+					})}
+				>
+					Feedback
+				</Link>
+			</Button>
 			<Button
 				variant="link"
 				size="xs"
