@@ -25,6 +25,74 @@ fn response_abort_message_mk2(
 	}
 }
 
+fn response_start_message_mk2(
+	gateway_id: protocol::mk2::GatewayId,
+	request_id: protocol::mk2::RequestId,
+) -> protocol::mk2::ToServerTunnelMessage {
+	response_start_message_mk2_with_stream(gateway_id, request_id, false)
+}
+
+fn response_start_message_mk2_with_stream(
+	gateway_id: protocol::mk2::GatewayId,
+	request_id: protocol::mk2::RequestId,
+	stream: bool,
+) -> protocol::mk2::ToServerTunnelMessage {
+	protocol::mk2::ToServerTunnelMessage {
+		message_id: protocol::mk2::MessageId {
+			gateway_id,
+			request_id,
+			message_index: 0,
+		},
+		message_kind: protocol::mk2::ToServerTunnelMessageKind::ToServerResponseStart(
+			protocol::mk2::ToServerResponseStart {
+				status: 200,
+				headers: Default::default(),
+				body: None,
+				stream,
+			},
+		),
+	}
+}
+
+fn response_chunk_message_mk2(
+	gateway_id: protocol::mk2::GatewayId,
+	request_id: protocol::mk2::RequestId,
+	finish: bool,
+) -> protocol::mk2::ToServerTunnelMessage {
+	protocol::mk2::ToServerTunnelMessage {
+		message_id: protocol::mk2::MessageId {
+			gateway_id,
+			request_id,
+			message_index: 0,
+		},
+		message_kind: protocol::mk2::ToServerTunnelMessageKind::ToServerResponseChunk(
+			protocol::mk2::ToServerResponseChunk {
+				body: b"chunk".to_vec(),
+				finish,
+			},
+		),
+	}
+}
+
+fn websocket_message_mk2(
+	gateway_id: protocol::mk2::GatewayId,
+	request_id: protocol::mk2::RequestId,
+) -> protocol::mk2::ToServerTunnelMessage {
+	protocol::mk2::ToServerTunnelMessage {
+		message_id: protocol::mk2::MessageId {
+			gateway_id,
+			request_id,
+			message_index: 0,
+		},
+		message_kind: protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketMessage(
+			protocol::mk2::ToServerWebSocketMessage {
+				data: b"ping".to_vec(),
+				binary: false,
+			},
+		),
+	}
+}
+
 fn response_abort_message_mk1(
 	gateway_id: protocol::mk2::GatewayId,
 	request_id: protocol::mk2::RequestId,
@@ -36,6 +104,74 @@ fn response_abort_message_mk1(
 			message_index: 0,
 		},
 		message_kind: protocol::ToServerTunnelMessageKind::ToServerResponseAbort,
+	}
+}
+
+fn websocket_message_mk1(
+	gateway_id: protocol::mk2::GatewayId,
+	request_id: protocol::mk2::RequestId,
+) -> protocol::ToServerTunnelMessage {
+	protocol::ToServerTunnelMessage {
+		message_id: protocol::MessageId {
+			gateway_id,
+			request_id,
+			message_index: 0,
+		},
+		message_kind: protocol::ToServerTunnelMessageKind::ToServerWebSocketMessage(
+			protocol::ToServerWebSocketMessage {
+				data: b"ping".to_vec(),
+				binary: false,
+			},
+		),
+	}
+}
+
+fn response_start_message_mk1(
+	gateway_id: protocol::mk2::GatewayId,
+	request_id: protocol::mk2::RequestId,
+) -> protocol::ToServerTunnelMessage {
+	response_start_message_mk1_with_stream(gateway_id, request_id, false)
+}
+
+fn response_start_message_mk1_with_stream(
+	gateway_id: protocol::mk2::GatewayId,
+	request_id: protocol::mk2::RequestId,
+	stream: bool,
+) -> protocol::ToServerTunnelMessage {
+	protocol::ToServerTunnelMessage {
+		message_id: protocol::MessageId {
+			gateway_id,
+			request_id,
+			message_index: 0,
+		},
+		message_kind: protocol::ToServerTunnelMessageKind::ToServerResponseStart(
+			protocol::ToServerResponseStart {
+				status: 200,
+				headers: Default::default(),
+				body: None,
+				stream,
+			},
+		),
+	}
+}
+
+fn response_chunk_message_mk1(
+	gateway_id: protocol::mk2::GatewayId,
+	request_id: protocol::mk2::RequestId,
+	finish: bool,
+) -> protocol::ToServerTunnelMessage {
+	protocol::ToServerTunnelMessage {
+		message_id: protocol::MessageId {
+			gateway_id,
+			request_id,
+			message_index: 0,
+		},
+		message_kind: protocol::ToServerTunnelMessageKind::ToServerResponseChunk(
+			protocol::ToServerResponseChunk {
+				body: b"chunk".to_vec(),
+				finish,
+			},
+		),
 	}
 }
 
@@ -82,7 +218,7 @@ async fn republishes_issued_mk2_tunnel_message_pairs() {
 		&pubsub,
 		1024,
 		&authorized_tunnel_routes,
-		response_abort_message_mk2(gateway_id, request_id),
+		websocket_message_mk2(gateway_id, request_id),
 	)
 	.await
 	.unwrap();
@@ -92,6 +228,11 @@ async fn republishes_issued_mk2_tunnel_message_pairs() {
 		.unwrap()
 		.unwrap();
 	assert!(matches!(msg, NextOutput::Message(_)));
+	assert!(
+		authorized_tunnel_routes
+			.contains_async(&(gateway_id, request_id))
+			.await
+	);
 }
 
 #[tokio::test]
@@ -137,7 +278,7 @@ async fn republishes_issued_mk1_tunnel_message_pairs() {
 		&pubsub,
 		1024,
 		&authorized_tunnel_routes,
-		response_abort_message_mk1(gateway_id, request_id),
+		websocket_message_mk1(gateway_id, request_id),
 	)
 	.await
 	.unwrap();
@@ -147,4 +288,9 @@ async fn republishes_issued_mk1_tunnel_message_pairs() {
 		.unwrap()
 		.unwrap();
 	assert!(matches!(msg, NextOutput::Message(_)));
+	assert!(
+		authorized_tunnel_routes
+			.contains_async(&(gateway_id, request_id))
+			.await
+	);
 }
