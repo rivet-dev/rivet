@@ -27,7 +27,7 @@ use tokio_tungstenite::tungstenite::{
 };
 use universaldb::utils::IsolationLevel::*;
 
-use crate::shared_state::{InFlightRequestHandle, SharedState};
+use crate::shared_state::{InFlightRequestHandle, InFlightRequestState, SharedState};
 
 mod keepalive_task;
 mod metrics;
@@ -178,7 +178,12 @@ impl PegboardGateway {
 			..
 		} = self
 			.shared_state
-			.start_in_flight_request(tunnel_subject, runner_protocol_version, request_id)
+			.start_in_flight_request(
+				tunnel_subject,
+				runner_protocol_version,
+				request_id,
+				InFlightRequestState::AwaitingHttpResponseStart,
+			)
 			.await;
 
 		// Start request
@@ -304,7 +309,16 @@ impl PegboardGateway {
 			new,
 		} = self
 			.shared_state
-			.start_in_flight_request(tunnel_subject.clone(), runner_protocol_version, request_id)
+			.start_in_flight_request(
+				tunnel_subject.clone(),
+				runner_protocol_version,
+				request_id,
+				if after_hibernation {
+					InFlightRequestState::ActiveWebSocket
+				} else {
+					InFlightRequestState::AwaitingWebSocketOpen
+				},
+			)
 			.await;
 
 		ensure!(
