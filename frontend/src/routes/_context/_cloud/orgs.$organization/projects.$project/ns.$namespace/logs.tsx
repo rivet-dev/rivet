@@ -1,4 +1,4 @@
-import type { RivetSse } from "@rivet-gg/cloud";
+import type { Rivet } from "@rivet-gg/cloud";
 import {
 	faCopy,
 	faDownload,
@@ -9,7 +9,7 @@ import {
 } from "@rivet-gg/icons";
 import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { startTransition, useCallback, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useRef, useState } from "react";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { Content } from "@/app/layout";
 import { SidebarToggle } from "@/app/sidebar-toggle";
@@ -61,15 +61,12 @@ function RouteComponent() {
 	const [search, setSearch] = useState("");
 	const [isPaused, setIsPaused] = useState(false);
 	const [region, setRegion] = useState<string>("all");
-	const logsRef = useRef<RivetSse.LogStreamEvent.Log[]>([]);
+	const logsRef = useRef<Rivet.LogHistoryResponseItem[]>([]);
 
 	const getLogsText = useCallback(
 		() =>
 			logsRef.current
-				.map(
-					(e) =>
-						`${e.data.timestamp}\t${e.data.region}\t${e.data.message}`,
-				)
+				.map((e) => `${e.timestamp}\t${e.region}\t${e.message}`)
 				.join("\n"),
 		[],
 	);
@@ -172,7 +169,6 @@ function RouteComponent() {
 					{pool ? (
 						<div className="flex-1 min-h-0 overflow-hidden">
 							<DeploymentLogs
-								namespace={namespace}
 								pool="default"
 								filter={search || undefined}
 								region={region === "all" ? undefined : region}
