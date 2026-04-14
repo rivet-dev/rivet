@@ -60,6 +60,10 @@ export interface JsKvEntry {
 export interface HibernatingRequestEntry {
   gatewayId: Buffer
   requestId: Buffer
+  envoyMessageIndex: number
+  rivetMessageIndex: number
+  path: string
+  headers?: Record<string, string>
 }
 /**
  * Start the native envoy client synchronously.
