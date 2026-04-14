@@ -19,7 +19,6 @@ export const runWithTicks = actor({
 		while (!c.aborted) {
 			c.state.tickCount += 1;
 			c.state.lastTickAt = Date.now();
-			c.log.info({ msg: "tick", tickCount: c.state.tickCount });
 
 			// Wait 50ms between ticks, or exit early if aborted
 			await new Promise<void>((resolve) => {
@@ -88,9 +87,7 @@ export const runWithQueueConsumer = actor({
 			wakeCount: c.state.wakeCount,
 		}),
 		sendMessage: async (c, body: unknown) => {
-			const client = c.client<typeof registry>();
-			const handle = client.runWithQueueConsumer.getForId(c.actorId);
-			await handle.send("messages", body);
+			await c.queue.send("messages", body);
 			return true;
 		},
 	},
