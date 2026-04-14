@@ -8,8 +8,8 @@ export function runLifecycleHooksTests(driverTestConfig: DriverTestConfig) {
 			test("rejects connection with UserError", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 				const conn = client.beforeConnectRejectActor
-					.getOrCreate()
-					.connect({ shouldReject: true });
+					.getOrCreate(undefined, { params: { shouldReject: true } })
+					.connect();
 
 				await expect(conn.ping()).rejects.toThrow();
 
@@ -19,8 +19,8 @@ export function runLifecycleHooksTests(driverTestConfig: DriverTestConfig) {
 			test("allows connection when onBeforeConnect succeeds", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 				const conn = client.beforeConnectRejectActor
-					.getOrCreate()
-					.connect({ shouldReject: false });
+					.getOrCreate(undefined, { params: { shouldReject: false } })
+					.connect();
 
 				const result = await conn.ping();
 				expect(result).toBe("pong");
@@ -31,8 +31,8 @@ export function runLifecycleHooksTests(driverTestConfig: DriverTestConfig) {
 			test("rejects connection with generic error", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 				const conn = client.beforeConnectGenericErrorActor
-					.getOrCreate()
-					.connect({ shouldFail: true });
+					.getOrCreate(undefined, { params: { shouldFail: true } })
+					.connect();
 
 				await expect(conn.ping()).rejects.toThrow();
 
@@ -42,8 +42,8 @@ export function runLifecycleHooksTests(driverTestConfig: DriverTestConfig) {
 			test("allows connection when generic error actor succeeds", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 				const conn = client.beforeConnectGenericErrorActor
-					.getOrCreate()
-					.connect({ shouldFail: false });
+					.getOrCreate(undefined, { params: { shouldFail: false } })
+					.connect();
 
 				const result = await conn.ping();
 				expect(result).toBe("pong");

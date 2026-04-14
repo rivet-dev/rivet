@@ -375,10 +375,7 @@ export function getRequestEncoding(req: HonoRequest): Encoding {
  * Returns true if RIVET_EXPOSE_ERRORS=1 or NODE_ENV=development.
  */
 export function getRequestExposeInternalError(_req: Request): boolean {
-	return (
-		getEnvUniversal("RIVET_EXPOSE_ERRORS") === "1" ||
-		getEnvUniversal("NODE_ENV") === "development"
-	);
+	return getEnvUniversal("RIVET_EXPOSE_ERRORS") === "1";
 }
 
 export function getRequestQuery(c: HonoContext): unknown {

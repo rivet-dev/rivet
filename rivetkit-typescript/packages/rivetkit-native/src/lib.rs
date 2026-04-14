@@ -51,7 +51,7 @@ pub fn start_envoy_sync_js(
 		.map_err(|e| napi::Error::from_reason(format!("failed to create tokio runtime: {}", e)))?;
 	let runtime = Arc::new(runtime);
 
-	let response_map: ResponseMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+	let response_map: ResponseMap = Arc::new(std::sync::Mutex::new(HashMap::new()));
 	let ws_sender_map: WsSenderMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 
 	// Create threadsafe callback for bridging events to JS

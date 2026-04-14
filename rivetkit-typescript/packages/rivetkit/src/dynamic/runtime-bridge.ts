@@ -36,6 +36,7 @@ export const DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS = {
 	dbClose: "__rivetkitDynamicHostDbClose",
 	setAlarm: "__rivetkitDynamicHostSetAlarm",
 	clientCall: "__rivetkitDynamicHostClientCall",
+	rawDatabaseExecute: "__rivetkitDynamicHostRawDatabaseExecute",
 	ackHibernatableWebSocketMessage:
 		"__rivetkitDynamicHostAckHibernatableWebSocketMessage",
 	startSleep: "__rivetkitDynamicHostStartSleep",
@@ -75,6 +76,12 @@ export interface DynamicBootstrapConfig {
 	actorName: string;
 	/** Actor key used for actor startup and request routing. */
 	actorKey: ActorKey;
+	/** Engine endpoint for native SQLite fallback inside the isolate. */
+	endpoint: string;
+	/** Namespace for native SQLite fallback inside the isolate. */
+	namespace: string;
+	/** Auth token for native SQLite fallback inside the isolate. */
+	token?: string;
 	/** Runtime source module file name written under the actor runtime dir. */
 	sourceEntry: string;
 	/** Module format for the runtime source file entrypoint. */

@@ -25,7 +25,7 @@ export function runGatewayRoutingTests(driverTestConfig: DriverTestConfig) {
 
 					// Make a direct request using header-based routing
 					const response = await fetch(
-						`${endpoint}/api/hello`,
+						`${endpoint}/request/api/hello`,
 						{
 							headers: {
 								"x-rivet-target": "actor",
@@ -49,7 +49,7 @@ export function runGatewayRoutingTests(driverTestConfig: DriverTestConfig) {
 					);
 
 					const response = await fetch(
-						`${endpoint}/api/hello`,
+						`${endpoint}/request/api/hello`,
 						{
 							headers: {
 								"x-rivet-target": "actor",
@@ -86,7 +86,7 @@ export function runGatewayRoutingTests(driverTestConfig: DriverTestConfig) {
 
 					// Build a manual query-routed URL
 					const queryUrl = new URL(
-						`${endpoint}/gateway/rawHttpActor/api/hello`,
+						`${endpoint}/gateway/rawHttpActor/request/api/hello`,
 					);
 					queryUrl.searchParams.set("rvt-namespace", namespace);
 					queryUrl.searchParams.set("rvt-method", "getOrCreate");
@@ -121,7 +121,7 @@ export function runGatewayRoutingTests(driverTestConfig: DriverTestConfig) {
 
 					// Build a get-only query URL
 					const queryUrl = new URL(
-						`${endpoint}/gateway/rawHttpActor/api/hello`,
+						`${endpoint}/gateway/rawHttpActor/request/api/hello`,
 					);
 					queryUrl.searchParams.set("rvt-namespace", namespace);
 					queryUrl.searchParams.set("rvt-method", "get");
@@ -154,7 +154,7 @@ export function runGatewayRoutingTests(driverTestConfig: DriverTestConfig) {
 					const runner = parsedUrl.searchParams.get("rvt-runner")!;
 
 					const queryUrl = new URL(
-						`${endpoint}/gateway/rawHttpActor/api/hello`,
+						`${endpoint}/gateway/rawHttpActor/request/api/hello`,
 					);
 					queryUrl.searchParams.set("rvt-namespace", namespace);
 					queryUrl.searchParams.set("rvt-method", "getOrCreate");
@@ -176,7 +176,7 @@ export function runGatewayRoutingTests(driverTestConfig: DriverTestConfig) {
 					);
 
 					// Manually build URL with duplicate rvt-namespace
-					const url = `${endpoint}/gateway/rawHttpActor/api/hello?rvt-namespace=a&rvt-namespace=b&rvt-method=get&rvt-key=dup`;
+					const url = `${endpoint}/gateway/rawHttpActor/request/api/hello?rvt-namespace=a&rvt-namespace=b&rvt-method=get&rvt-key=dup`;
 
 					const response = await fetch(url);
 					expect(response.ok).toBe(false);
@@ -207,7 +207,7 @@ export function runGatewayRoutingTests(driverTestConfig: DriverTestConfig) {
 
 					// Build URL with rvt-* params and an actor query param
 					const queryUrl = new URL(
-						`${endpoint}/gateway/rawHttpRequestPropertiesActor/test-path`,
+						`${endpoint}/gateway/rawHttpRequestPropertiesActor/request/test-path`,
 					);
 					queryUrl.searchParams.set("rvt-namespace", namespace);
 					queryUrl.searchParams.set("rvt-method", "getOrCreate");
@@ -252,7 +252,7 @@ export function runGatewayRoutingTests(driverTestConfig: DriverTestConfig) {
 					const runner = parsedUrl.searchParams.get("rvt-runner")!;
 
 					const queryUrl = new URL(
-						`${endpoint}/gateway/rawHttpActor/api/hello`,
+						`${endpoint}/gateway/rawHttpActor/request/api/hello`,
 					);
 					queryUrl.searchParams.set("rvt-namespace", namespace);
 					queryUrl.searchParams.set("rvt-method", "getOrCreate");

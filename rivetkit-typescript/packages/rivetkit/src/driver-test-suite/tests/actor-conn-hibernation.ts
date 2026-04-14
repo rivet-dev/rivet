@@ -3,12 +3,18 @@ import { HIBERNATION_SLEEP_TIMEOUT } from "../../../fixtures/driver-test-suite/h
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
+async function waitForHibernatableRegistration(
+	driverTestConfig: DriverTestConfig,
+): Promise<void> {
+	await waitFor(driverTestConfig, 100);
+}
+
 export function runActorConnHibernationTests(
 	driverTestConfig: DriverTestConfig,
 ) {
-	describe.skipIf(driverTestConfig.skip?.hibernation)(
-		"Connection Hibernation",
-		() => {
+	describe
+		.skipIf(driverTestConfig.skip?.hibernation)
+		.sequential("Connection Hibernation", () => {
 			test("basic conn hibernation", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 
@@ -20,6 +26,7 @@ export function runActorConnHibernationTests(
 				// Initial RPC call
 				const ping1 = await hibernatingActor.ping();
 				expect(ping1).toBe("pong");
+				await waitForHibernatableRegistration(driverTestConfig);
 
 				// Trigger sleep
 				await hibernatingActor.triggerSleep();
@@ -64,6 +71,7 @@ export function runActorConnHibernationTests(
 					await hibernatingActor.getActorCounts();
 				expect(initialActorCounts.wakeCount).toBe(1);
 				expect(initialActorCounts.sleepCount).toBe(0);
+				await waitForHibernatableRegistration(driverTestConfig);
 
 				// Trigger sleep
 				await hibernatingActor.triggerSleep();
@@ -113,6 +121,7 @@ export function runActorConnHibernationTests(
 				});
 
 				for (let i = 0; i < 2; i++) {
+					await waitForHibernatableRegistration(driverTestConfig);
 					await hibernatingActor.triggerSleep();
 					await waitFor(
 						driverTestConfig,
@@ -140,6 +149,7 @@ export function runActorConnHibernationTests(
 
 				// Initial RPC call
 				await conn1.ping();
+				await waitForHibernatableRegistration(driverTestConfig);
 
 				// Get connection ID
 				const connectionIds = await conn1.getConnectionIds();
@@ -196,6 +206,7 @@ export function runActorConnHibernationTests(
 					await vi.waitFor(async () => {
 						expect(connection.isConnected).toBe(true);
 					});
+					await waitForHibernatableRegistration(driverTestConfig);
 
 					const sleepingPromise = new Promise<void>((resolve) => {
 						connection.once("sleeping", () => {
@@ -241,6 +252,5 @@ export function runActorConnHibernationTests(
 					await connection.dispose();
 				}
 			});
-		},
-	);
+		});
 }

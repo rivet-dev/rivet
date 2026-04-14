@@ -28,10 +28,17 @@ export const destroyActor = actor({
 	onRequest: (c, request) => {
 		const url = new URL(request.url);
 		if (url.pathname === "/state") {
-			return Response.json({
-				key: c.state.key,
-				value: c.state.value,
-			});
+			return new Response(
+				JSON.stringify({
+					key: c.state.key,
+					value: c.state.value,
+				}),
+				{
+					headers: {
+						"content-type": "application/json",
+					},
+				},
+			);
 		}
 
 		return new Response("Not Found", { status: 404 });

@@ -96,6 +96,8 @@ function getDynamicVariantSkipReason(): string | undefined {
 }
 
 export function getDriverRegistryVariants(currentDir: string): DriverRegistryVariant[] {
+	const dynamicSkipReason = getDynamicVariantSkipReason();
+
 	return [
 		{
 			name: "static",
@@ -105,17 +107,14 @@ export function getDriverRegistryVariants(currentDir: string): DriverRegistryVar
 			),
 			skip: false,
 		},
-		// TODO: Re-enable the dynamic registry variant after the static driver
-		// suite is fully stabilized. Keep the dynamic files and skip-reason
-		// plumbing in place so we can restore this entry cleanly later.
-		// {
-		// 	name: "dynamic",
-		// 	registryPath: join(
-		// 		currentDir,
-		// 		"../fixtures/driver-test-suite/registry-dynamic.ts",
-		// 	),
-		// 	skip: dynamicSkipReason !== undefined,
-		// 	skipReason: dynamicSkipReason,
-		// },
+		{
+			name: "dynamic",
+			registryPath: join(
+				currentDir,
+				"../fixtures/driver-test-suite/registry-dynamic.ts",
+			),
+			skip: dynamicSkipReason !== undefined,
+			skipReason: dynamicSkipReason,
+		},
 	];
 }

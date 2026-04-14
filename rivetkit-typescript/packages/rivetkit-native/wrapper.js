@@ -98,6 +98,10 @@ function wrapHandle(jsHandle) {
 			const requests = (metaEntries || []).map((e) => ({
 				gatewayId: Buffer.from(e.gatewayId),
 				requestId: Buffer.from(e.requestId),
+				envoyMessageIndex: e.envoyMessageIndex ?? 0,
+				rivetMessageIndex: e.rivetMessageIndex ?? 0,
+				path: e.path ?? "",
+				headers: e.headers ?? {},
 			}));
 			jsHandle.restoreHibernatingRequests(actorId, requests);
 		},
@@ -302,6 +306,46 @@ function handleEvent(event, config, wrappedHandle) {
 							status: 500,
 							headers: { "content-type": "text/plain" },
 							body: Buffer.from(String(err)).toString("base64"),
+						});
+					}
+				},
+			);
+			break;
+		}
+		case "websocket_can_hibernate": {
+			const gatewayId = Buffer.from(event.gatewayId);
+			const requestId = Buffer.from(event.requestId);
+			const headers = new Headers(event.headers || {});
+			headers.set("Upgrade", "websocket");
+			headers.set("Connection", "Upgrade");
+			const request = new Request(`http://actor${event.path}`, {
+				method: event.method,
+				headers,
+			});
+
+			Promise.resolve(
+				config.hibernatableWebSocket
+					? config.hibernatableWebSocket.canHibernate(
+						event.actorId,
+						gatewayId,
+						requestId,
+						request,
+					)
+					: false,
+			).then(
+				async (canHibernate) => {
+					if (handle._raw) {
+						await handle._raw.respondCallback(event.responseId, {
+							canHibernate: Boolean(canHibernate),
+						});
+					}
+				},
+				async (err) => {
+					console.error("canHibernate error:", err);
+					if (handle._raw) {
+						await handle._raw.respondCallback(event.responseId, {
+							canHibernate: false,
+							error: String(err),
 						});
 					}
 				},

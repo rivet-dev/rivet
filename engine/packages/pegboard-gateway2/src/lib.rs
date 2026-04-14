@@ -832,7 +832,7 @@ impl PegboardGateway2 {
 			})
 			.await?
 		{
-			if actor.envoy_key.is_some() {
+			if !actor.sleeping && actor.envoy_key.is_some() {
 				tracing::debug!("actor became ready during hibernation");
 
 				return Ok(HibernationResult::Continue);

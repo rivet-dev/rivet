@@ -57,7 +57,8 @@ members = [
   "engine/sdks/rust/epoxy-protocol",
   "engine/sdks/rust/test-envoy",
   "engine/sdks/rust/ups-protocol",
-  "rivetkit-typescript/packages/rivetkit-native"
+  "rivetkit-typescript/packages/rivetkit-native",
+  "rivetkit-typescript/packages/sqlite-native"
 ]
 
   [workspace.package]

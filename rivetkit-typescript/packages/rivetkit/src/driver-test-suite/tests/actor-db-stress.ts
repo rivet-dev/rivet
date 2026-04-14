@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
+import { engineActorDriverNativeDatabaseAvailable } from "@/drivers/engine/actor-driver";
 import type { DriverTestConfig } from "../mod";
-import { setupDriverTest } from "../utils";
+import { setupDriverTest, waitFor } from "../utils";
 
 const STRESS_TEST_TIMEOUT_MS = 60_000;
 
@@ -14,6 +15,7 @@ const STRESS_TEST_TIMEOUT_MS = 60_000;
  * They run against the native runtime path.
  */
 export function runActorDbStressTests(driverTestConfig: DriverTestConfig) {
+	const nativeAvailable = engineActorDriverNativeDatabaseAvailable();
 	describe("Actor Database Stress Tests", () => {
 		test(
 			"destroy during long-running DB operation completes without crash",
@@ -125,5 +127,102 @@ export function runActorDbStressTests(driverTestConfig: DriverTestConfig) {
 			STRESS_TEST_TIMEOUT_MS,
 		);
 
+		// This test requires the engine driver's native database transport reset
+		// hook. Dynamic isolates manage their own database transport separately.
+		describe.skipIf(!nativeAvailable || driverTestConfig.isDynamic)(
+			"Native Database Transport Resilience",
+			() => {
+				test(
+					"recovers from forced native transport disconnect during DB writes",
+					async (c) => {
+						const { client, testEndpoint } =
+							await setupDriverTest(c, driverTestConfig);
+
+						const actor = client.dbStressActor.getOrCreate([
+							`stress-disconnect-${crypto.randomUUID()}`,
+						]);
+
+						// Write initial data to confirm the actor works.
+						await actor.insertBatch(10);
+						expect(await actor.getCount()).toBe(10);
+
+						// Force-close the native database transport handle.
+						const res = await fetch(
+							`${testEndpoint}/.test/native-db/force-disconnect`,
+							{ method: "POST" },
+						);
+						expect(res.ok).toBe(true);
+						const body = (await res.json()) as {
+							closed: number;
+						};
+						expect(body.closed).toBeGreaterThanOrEqual(0);
+
+						// Give the runtime a moment to reopen the transport.
+						await waitFor(driverTestConfig, 2000);
+
+						// The actor should still work after reconnection.
+						await actor.insertBatch(10);
+						const finalCount = await actor.getCount();
+						expect(finalCount).toBe(20);
+
+						// Verify data integrity after the disruption.
+						const integrity = await actor.integrityCheck();
+						expect(integrity.toLowerCase()).toBe("ok");
+					},
+					STRESS_TEST_TIMEOUT_MS,
+				);
+
+				test(
+					"handles native transport disconnect during active write operation",
+					async (c) => {
+						const { client, testEndpoint } =
+							await setupDriverTest(c, driverTestConfig);
+
+						const actor = client.dbStressActor.getOrCreate([
+							`stress-active-disconnect-${crypto.randomUUID()}`,
+						]);
+
+						// Confirm the actor is healthy.
+						await actor.insertBatch(5);
+
+						// Start a large write operation and disconnect
+						// mid-flight. The write may fail, but the actor
+						// should recover.
+						const writePromise = actor
+							.insertBatch(200)
+							.catch((err: Error) => ({
+								error: err.message,
+							}));
+
+						// Small delay to let the write start, then disconnect.
+						await new Promise((resolve) =>
+							setTimeout(resolve, 50),
+						);
+
+						await fetch(
+							`${testEndpoint}/.test/native-db/force-disconnect`,
+							{ method: "POST" },
+						);
+
+						// Wait for the write to settle (success or failure).
+						await writePromise;
+
+						// Wait for reconnection.
+						await waitFor(driverTestConfig, 2000);
+
+						// Actor should recover. New operations should work.
+						await actor.insertBatch(5);
+						const count = await actor.getCount();
+						// At least the initial 5 + final 5 should exist.
+						// The mid-disconnect 200 may or may not have committed.
+						expect(count).toBeGreaterThanOrEqual(10);
+
+						const integrity = await actor.integrityCheck();
+						expect(integrity.toLowerCase()).toBe("ok");
+					},
+					STRESS_TEST_TIMEOUT_MS,
+				);
+			},
+		);
 	});
 }

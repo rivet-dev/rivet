@@ -826,7 +826,7 @@ impl PegboardGateway {
 			})
 			.await?
 		{
-			if actor.runner_id.is_some() {
+			if !actor.sleeping && actor.runner_id.is_some() {
 				tracing::debug!("actor became ready during hibernation");
 
 				return Ok(HibernationResult::Continue);

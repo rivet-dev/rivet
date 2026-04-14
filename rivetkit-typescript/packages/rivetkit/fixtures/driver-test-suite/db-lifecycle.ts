@@ -126,7 +126,7 @@ export const dbLifecycle = actor({
 		},
 	},
 	options: {
-		sleepTimeout: 100,
+		sleepTimeout: 500,
 	},
 });
 

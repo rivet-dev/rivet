@@ -3,7 +3,12 @@ import {
 	drizzle as proxyDrizzle,
 	type SqliteRemoteDatabase,
 } from "drizzle-orm/sqlite-proxy";
-import type { DatabaseProvider, RawAccess, SqliteDatabase } from "../config";
+import type {
+	DatabaseProvider,
+	RawAccess,
+	RawDatabaseClient,
+	SqliteDatabase,
+} from "../config";
 import {
 	AsyncMutex,
 	isSqliteBindingObject,
@@ -139,6 +144,62 @@ function createProxyCallback(
 	};
 }
 
+function createProxyCallbackFromRawExecutor(
+	rawDb: RawDatabaseClient,
+	mutex: AsyncMutex,
+	isClosed: () => boolean,
+	metrics?: import("@/actor/metrics").ActorMetrics,
+	log?: { debug(obj: Record<string, unknown>): void },
+) {
+	return async (
+		sql: string,
+		params: any[],
+		method: "run" | "all" | "values" | "get",
+	): Promise<{ rows: any }> => {
+		return await mutex.run(async () => {
+			if (isClosed()) {
+				throw new Error(
+					"Database is closed. This usually means a background timer (setInterval, setTimeout) or a stray promise is still running after the actor stopped. Use c.abortSignal to clean up timers before the actor shuts down.",
+				);
+			}
+
+			const kvReadsBefore = metrics?.totalKvReads ?? 0;
+			const kvWritesBefore = metrics?.totalKvWrites ?? 0;
+			const start = performance.now();
+
+			const rows = await rawDb.exec<Record<string, unknown>>(
+				sql,
+				...params,
+			);
+			const positionalRows = rows.map((row) => Object.values(row));
+
+			const durationMs = performance.now() - start;
+			metrics?.trackSql(sql, durationMs);
+			if (metrics && log) {
+				const kvReads = metrics.totalKvReads - kvReadsBefore;
+				const kvWrites = metrics.totalKvWrites - kvWritesBefore;
+				log.debug({
+					msg: "sql query",
+					query: sql.slice(0, 120),
+					durationMs,
+					kvReads,
+					kvWrites,
+				});
+			}
+
+			if (method === "run") {
+				return { rows: [] };
+			}
+
+			if (method === "get") {
+				return { rows: positionalRows[0] };
+			}
+
+			return { rows: positionalRows };
+		});
+	};
+}
+
 /**
  * Run inline migrations via the native SQLite database handle.
  */
@@ -185,6 +246,46 @@ async function runInlineMigrations(
 	}
 }
 
+async function runInlineMigrationsWithRawExecutor(
+	rawDb: RawDatabaseClient,
+	migrations: any,
+): Promise<void> {
+	await rawDb.exec(`
+		CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			hash TEXT NOT NULL,
+			created_at INTEGER
+		)
+	`);
+
+	const lastRows = await rawDb.exec<{
+		id: number;
+		hash: string;
+		created_at: number | null;
+	}>(
+		"SELECT id, hash, created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1",
+	);
+	const lastCreatedAt = Number(lastRows[0]?.created_at ?? 0) || 0;
+
+	const journal = migrations.journal;
+	if (!journal?.entries) return;
+
+	for (const entry of journal.entries) {
+		if (entry.when <= lastCreatedAt) continue;
+
+		const migrationKey = `m${String(entry.idx).padStart(4, "0")}`;
+		const sql = migrations.migrations[migrationKey];
+		if (!sql) continue;
+
+		await rawDb.exec(sql);
+		await rawDb.exec(
+			"INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+			entry.tag,
+			entry.when,
+		);
+	}
+}
+
 export function db<
 	TSchema extends Record<string, unknown> = Record<string, never>,
 >(
@@ -193,15 +294,52 @@ export function db<
 	checkDrizzleVersion();
 
 	const clientToRawDb = new WeakMap<object, SqliteDatabase>();
+	const clientToRawExecutor = new WeakMap<object, RawDatabaseClient>();
 
 	return {
 		createClient: async (ctx) => {
-			const override = ctx.overrideDrizzleDatabaseClient
+			const drizzleOverride = ctx.overrideDrizzleDatabaseClient
 				? await ctx.overrideDrizzleDatabaseClient()
 				: undefined;
-			if (override) {
-				return override as SqliteRemoteDatabase<TSchema> & RawAccess;
+			if (drizzleOverride) {
+				return drizzleOverride as SqliteRemoteDatabase<TSchema> &
+					RawAccess;
 			}
+
+			const rawOverride = ctx.overrideRawDatabaseClient
+				? await ctx.overrideRawDatabaseClient()
+				: undefined;
+			if (rawOverride) {
+				const mutex = new AsyncMutex();
+				let closed = false;
+				const callback = createProxyCallbackFromRawExecutor(
+					rawOverride,
+					mutex,
+					() => closed,
+					ctx.metrics,
+					ctx.log,
+				);
+				const client = proxyDrizzle<TSchema>(callback, config);
+				const result = Object.assign(client, {
+					execute: async <
+						TRow extends Record<string, unknown> = Record<
+							string,
+							unknown
+						>,
+					>(
+						query: string,
+						...args: unknown[]
+					): Promise<TRow[]> => {
+						return await rawOverride.exec<TRow>(query, ...args);
+					},
+					close: async () => {
+						closed = true;
+					},
+				} satisfies RawAccess);
+				clientToRawExecutor.set(result, rawOverride);
+				return result;
+			}
+
 			if (!ctx.nativeDatabaseProvider) {
 				throw new Error(
 					"native SQLite is required, but the current runtime did not provide a native database provider",
@@ -325,6 +463,14 @@ export function db<
 			const db = clientToRawDb.get(client as object);
 			if (config?.migrations && db) {
 				await runInlineMigrations(db, config.migrations);
+				return;
+			}
+			const rawExecutor = clientToRawExecutor.get(client as object);
+			if (config?.migrations && rawExecutor) {
+				await runInlineMigrationsWithRawExecutor(
+					rawExecutor,
+					config.migrations,
+				);
 			}
 		},
 		onDestroy: async (client) => {

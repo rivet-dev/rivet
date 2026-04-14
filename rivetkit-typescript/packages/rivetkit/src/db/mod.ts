@@ -15,6 +15,7 @@ export function db({
 	onMigrate,
 }: DatabaseFactoryConfig = {}): DatabaseProvider<RawAccess> {
 	return {
+		requiresSqliteVfs: false,
 		createClient: async (ctx) => {
 			// Check if override is provided
 			const override = ctx.overrideRawDatabaseClient

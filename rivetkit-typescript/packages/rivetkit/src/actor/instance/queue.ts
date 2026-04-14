@@ -289,7 +289,12 @@ export class ActorQueue<
 					TCompletable
 				>;
 			} catch (error) {
-				if (error instanceof errors.ActorAborted) {
+				if (
+					error instanceof errors.ActorAborted ||
+					(errors.ActorError.isActorError(error) &&
+						error.group === "actor" &&
+						error.code === "aborted")
+				) {
 					return;
 				}
 				throw error;

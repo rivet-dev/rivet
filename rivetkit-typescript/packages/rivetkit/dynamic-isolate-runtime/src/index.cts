@@ -13,11 +13,19 @@
  */
 import { CONN_STATE_MANAGER_SYMBOL } from "../../src/actor/conn/mod";
 import { createRawRequestDriver } from "../../src/actor/conn/drivers/raw-request";
+import * as errors from "../../src/actor/errors";
+import type { Encoding } from "../../src/actor/protocol/serde";
 import { createActorRouter } from "../../src/actor/router";
 import { routeWebSocket } from "../../src/actor/router-websocket-endpoints";
-import { HEADER_CONN_PARAMS } from "../../src/common/actor-router-consts";
+import {
+	HEADER_CONN_PARAMS,
+	HEADER_ENCODING,
+} from "../../src/common/actor-router-consts";
+import { getLogger } from "../../src/common/log";
 import { InlineWebSocketAdapter } from "../../src/common/inline-websocket-adapter";
 import type { NativeDatabaseProvider, SqliteDatabase } from "../../src/db/config";
+import { deconstructError, stringifyError } from "../../src/common/utils";
+import * as cbor from "cbor-x";
 import {
 	DYNAMIC_BOOTSTRAP_CONFIG_GLOBAL_KEY,
 	DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS,
@@ -33,7 +41,21 @@ import {
 	type WebSocketSendEnvelopeInput,
 } from "../../src/dynamic/runtime-bridge";
 import { RegistryConfigSchema } from "../../src/registry/config";
+import {
+	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
+	HTTP_RESPONSE_ERROR_VERSIONED,
+} from "../../src/schemas/client-protocol/versioned";
+import type * as protocol from "../../src/schemas/client-protocol/mod";
+import {
+	type HttpResponseError as HttpResponseErrorJson,
+	HttpResponseErrorSchema,
+} from "../../src/schemas/client-protocol-zod/mod";
+import { contentTypeForEncoding, serializeWithEncoding } from "../../src/serde";
+import { getEnvUniversal } from "../../src/utils";
 
+function logger() {
+	return getLogger("dynamic-actor");
+}
 interface IsolateReferenceLike {
 	applySyncPromise(
 		receiver: unknown,
@@ -64,6 +86,7 @@ interface DynamicHostBridge {
 	dbClose: IsolateReferenceLike;
 	setAlarm: IsolateReferenceLike;
 	clientCall: IsolateReferenceLike;
+	rawDatabaseExecute: IsolateReferenceLike;
 	ackHibernatableWebSocketMessage: IsolateReferenceLike;
 	startSleep: IsolateReferenceLike;
 	startDestroy: IsolateReferenceLike;
@@ -92,6 +115,20 @@ interface DynamicConnStateManagerLike {
 interface DynamicActorDriver {
 	loadActor(actorId: string): Promise<DynamicActorInstanceLike>;
 	getContext(actorId: string): unknown;
+	overrideRawDatabaseClient(actorId: string): Promise<{
+		exec: <
+			TRow extends Record<string, unknown> = Record<string, unknown>,
+		>(
+			query: string,
+			...args: unknown[]
+		) => Promise<TRow[]>;
+	}>;
+	getNativeSqliteConfig(): {
+		endpoint: string;
+		namespace: string;
+		token?: string;
+	};
+	getNativeDatabaseProvider(): NativeDatabaseProvider;
 	kvBatchPut(actorId: string, entries: Array<[Uint8Array, Uint8Array]>): Promise<void>;
 	kvBatchGet(actorId: string, keys: Uint8Array[]): Promise<Array<Uint8Array | null>>;
 	kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void>;
@@ -110,7 +147,6 @@ interface DynamicActorDriver {
 		},
 	): Promise<Array<[Uint8Array, Uint8Array]>>;
 	setAlarm(actor: { id: string }, timestamp: number): Promise<void>;
-	getNativeDatabaseProvider(): NativeDatabaseProvider;
 	startSleep(actorId: string): void;
 	ackHibernatableWebSocketMessage(
 		gatewayId: ArrayBuffer,
@@ -374,6 +410,9 @@ function readHostBridge(): DynamicHostBridge {
 		dbClose: getRequiredHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.dbClose),
 		setAlarm: getRequiredHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.setAlarm),
 		clientCall: getRequiredHostRef(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.clientCall),
+		rawDatabaseExecute: getRequiredHostRef(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.rawDatabaseExecute,
+		),
 		ackHibernatableWebSocketMessage: getRequiredHostRef(
 			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.ackHibernatableWebSocketMessage,
 		),
@@ -704,6 +743,10 @@ async function loadActor(requestActorId: string): Promise<DynamicActorInstanceLi
 		const { actorDefinition } = await getRuntimeState();
 		const actor = actorDefinition.instantiate();
 		try {
+			dynamicHostLog(
+				"debug",
+				`loadActor actor.start begin actorId=${bootstrapConfig.actorId}`,
+			);
 			await actor.start(
 				actorDriver,
 				inlineClient,
@@ -711,6 +754,10 @@ async function loadActor(requestActorId: string): Promise<DynamicActorInstanceLi
 				bootstrapConfig.actorName,
 				bootstrapConfig.actorKey,
 				"unknown",
+			);
+			dynamicHostLog(
+				"debug",
+				`loadActor actor.start complete actorId=${bootstrapConfig.actorId}`,
 			);
 			loadedActor = actor;
 		} catch (error) {
@@ -747,18 +794,63 @@ function createClientHandleProxy(
 				if (typeof operation !== "string") {
 					return undefined;
 				}
-				return (...operationArgs: unknown[]) =>
-					bridgeCall(hostBridge.clientCall, [
-						{
-							actorName,
-							accessorMethod,
-							accessorArgs,
-							operation,
-							operationArgs,
-						} satisfies DynamicClientCallInput,
-					]);
+				return (...operationArgs: unknown[]) => {
+					const input = {
+						actorName,
+						accessorMethod,
+						accessorArgs,
+						operation,
+						operationArgs,
+					} satisfies DynamicClientCallInput;
+					if (shouldHandleLocalClientCall(input)) {
+						return handleLocalClientCall(input);
+					}
+					return bridgeCall(hostBridge.clientCall, [input]);
+				};
 			},
 		},
+	);
+}
+
+function shouldHandleLocalClientCall(input: DynamicClientCallInput): boolean {
+	if (input.actorName !== bootstrapConfig.actorName) {
+		return false;
+	}
+
+	if (input.accessorMethod !== "getForId") {
+		return false;
+	}
+
+	if (input.accessorArgs[0] !== bootstrapConfig.actorId) {
+		return false;
+	}
+
+	return input.operation === "send";
+}
+
+async function handleLocalClientCall(
+	input: DynamicClientCallInput,
+): Promise<unknown> {
+	if (input.operation !== "send") {
+		throw new Error(
+			`unsupported local dynamic client operation: ${input.operation}`,
+		);
+	}
+
+	const [queueName, body, options] = input.operationArgs as [
+		string,
+		unknown,
+		{ wait?: boolean; timeout?: number } | undefined,
+	];
+	const actor = (await loadActor(bootstrapConfig.actorId)) as any;
+	if (!options?.wait) {
+		await actor.queueManager.enqueue(queueName, body);
+		return undefined;
+	}
+	return await actor.queueManager.enqueueAndWait(
+		queueName,
+		body,
+		options.timeout,
 	);
 }
 
@@ -798,6 +890,52 @@ const actorDriver: DynamicActorDriver = {
 	},
 	getContext(_actorId: string): Record<string, never> {
 		return {};
+	},
+	async overrideRawDatabaseClient(actorIdValue: string) {
+		return {
+			exec: async <
+				TRow extends Record<string, unknown> = Record<string, unknown>,
+			>(
+				query: string,
+				...args: unknown[]
+			): Promise<TRow[]> => {
+				return await bridgeCall<TRow[]>(hostBridge.rawDatabaseExecute, [
+					actorIdValue,
+					query,
+					args,
+				]);
+			},
+		};
+	},
+	getNativeSqliteConfig() {
+		return {
+			endpoint: bootstrapConfig.endpoint,
+			namespace: bootstrapConfig.namespace,
+			token: bootstrapConfig.token,
+		};
+	},
+	getNativeDatabaseProvider() {
+		return {
+			open: async (actorIdValue: string) => {
+				dynamicHostLog(
+					"debug",
+					`openRawDatabaseFromEnvoy begin actorId=${actorIdValue}`,
+				);
+				const nativeWrapper = loadNativeWrapper();
+				const handle = await getOrCreateNativeDatabaseEnvoyHandle();
+				const database = await nativeWrapper.openRawDatabaseFromEnvoy(
+					handle as Parameters<
+						typeof nativeWrapper.openRawDatabaseFromEnvoy
+					>[0],
+					actorIdValue,
+				);
+				dynamicHostLog(
+					"debug",
+					`openRawDatabaseFromEnvoy complete actorId=${actorIdValue}`,
+				);
+				return database;
+			},
+		};
 	},
 	async kvBatchPut(
 		actorIdValue: string,
@@ -896,8 +1034,8 @@ const actorDriver: DynamicActorDriver = {
 		serverMessageIndex: number,
 	): void {
 		bridgeCallSync(hostBridge.ackHibernatableWebSocketMessage, [
-			gatewayId,
-			requestId,
+			toArrayBuffer(gatewayId as ArrayBuffer | Uint8Array),
+			toArrayBuffer(requestId as ArrayBuffer | Uint8Array),
 			serverMessageIndex,
 		]);
 	},
@@ -956,7 +1094,154 @@ function parseRequestConnParams(request: Request): unknown {
 		return null;
 	}
 
-	return JSON.parse(paramsParam);
+	try {
+		return JSON.parse(paramsParam);
+	} catch (error) {
+		throw new errors.InvalidParams(
+			`Invalid params JSON: ${stringifyError(error)}`,
+		);
+	}
+}
+
+function getRequestExposeInternalError(): boolean {
+	return getEnvUniversal("RIVET_EXPOSE_ERRORS") === "1";
+}
+
+function getRequestEncoding(request: Request): Encoding {
+	const encodingParam = request.headers.get(HEADER_ENCODING);
+	if (!encodingParam) {
+		return "json";
+	}
+
+	switch (encodingParam) {
+		case "json":
+		case "cbor":
+		case "bare":
+			return encodingParam;
+		default:
+			throw new errors.InvalidEncoding(encodingParam);
+	}
+}
+
+let nativeDatabaseEnvoyHandlePromise: Promise<unknown> | undefined;
+
+function ensureProcessReportHeader() {
+	const report = process.report as
+		| {
+				getReport?: () => { header?: Record<string, unknown> };
+		  }
+		| undefined;
+	if (!report || typeof report.getReport !== "function") {
+		return;
+	}
+
+	const originalGetReport = report.getReport.bind(report);
+	try {
+		const current = originalGetReport();
+		if (current?.header) {
+			return;
+		}
+	} catch {
+		// Fall through and install the compatibility wrapper below.
+	}
+
+	report.getReport = () => {
+		const current = originalGetReport();
+		return {
+			...current,
+			header: current?.header ?? {
+				glibcVersionRuntime: "2.31",
+			},
+		};
+	};
+}
+
+function loadNativeWrapper() {
+	ensureProcessReportHeader();
+	const specifier = ["@rivetkit", "rivetkit-native", "wrapper"].join("/");
+	return require(specifier) as typeof import("@rivetkit/rivetkit-native/wrapper");
+}
+
+async function getOrCreateNativeDatabaseEnvoyHandle(): Promise<unknown> {
+	if (nativeDatabaseEnvoyHandlePromise) {
+		return await nativeDatabaseEnvoyHandlePromise;
+	}
+
+	nativeDatabaseEnvoyHandlePromise = (async () => {
+		const nativeWrapper = loadNativeWrapper();
+		const handle = nativeWrapper.startEnvoySync({
+			endpoint: bootstrapConfig.endpoint,
+			token: bootstrapConfig.token,
+			namespace: bootstrapConfig.namespace,
+			poolName: `rivetkit-dynamic-native-db-${process.pid}`,
+			version: nativeWrapper.protocol.VERSION,
+			prepopulateActorNames: {},
+			fetch: async () => new Response(null, { status: 500 }),
+			websocket: async () => {},
+			hibernatableWebSocket: {
+				canHibernate: () => false,
+			},
+			onActorStart: async () => {},
+			onActorStop: async () => {},
+			onShutdown: () => {},
+		});
+		await handle.started();
+		return handle;
+	})().catch((error) => {
+		nativeDatabaseEnvoyHandlePromise = undefined;
+		throw error;
+	});
+
+	return await nativeDatabaseEnvoyHandlePromise;
+}
+
+function buildErrorResponse(request: Request, error: unknown): Response {
+	const { statusCode, group, code, message, metadata } = deconstructError(
+		error,
+		logger(),
+		{
+			method: request.method,
+			path: new URL(request.url).pathname,
+		},
+		getRequestExposeInternalError(),
+	);
+
+	let encoding: Encoding;
+	try {
+		encoding = getRequestEncoding(request);
+	} catch {
+		encoding = "json";
+	}
+
+	const output = serializeWithEncoding(
+		encoding,
+		{ group, code, message, metadata },
+		HTTP_RESPONSE_ERROR_VERSIONED,
+		CLIENT_PROTOCOL_CURRENT_VERSION,
+		HttpResponseErrorSchema,
+		(value): HttpResponseErrorJson => ({
+			group: value.group,
+			code: value.code,
+			message: value.message,
+			metadata: value.metadata,
+		}),
+		(value): protocol.HttpResponseError => ({
+			group: value.group,
+			code: value.code,
+			message: value.message,
+			metadata: value.metadata
+				? toExactArrayBuffer(cbor.encode(value.metadata))
+				: null,
+		}),
+	);
+
+	// biome-ignore lint/suspicious/noExplicitAny: serializeWithEncoding returns string | Uint8Array, both valid for Response
+	return new Response(output as any, {
+		status: statusCode,
+		headers: {
+			"Content-Type": contentTypeForEncoding(encoding),
+		},
+	});
 }
 
 async function handleDynamicRawRequest(request: Request): Promise<Response> {
@@ -969,7 +1254,9 @@ async function handleDynamicRawRequest(request: Request): Promise<Response> {
 		requestUrl.origin,
 	);
 	const requestBody =
-		request.method !== "GET" && request.method !== "HEAD"
+		request.method !== "GET" &&
+		request.method !== "HEAD" &&
+		request.body !== null
 			? new Uint8Array(await request.arrayBuffer())
 			: undefined;
 	const correctedRequest = new Request(correctedUrl, {
@@ -1018,11 +1305,16 @@ async function dynamicFetchEnvelope(
 	});
 	patchRequestBodyReaders(request, toExactArrayBuffer(requestBody));
 	const requestUrl = new URL(request.url);
-	const response = requestUrl.pathname.startsWith("/request/")
-		? await handleDynamicRawRequest(request)
-		: await (await getRuntimeState()).actorRouter.fetch(request, {
-				actorId: bootstrapConfig.actorId,
-			});
+	let response: Response;
+	try {
+		response = requestUrl.pathname.startsWith("/request/")
+			? await handleDynamicRawRequest(request)
+			: await (await getRuntimeState()).actorRouter.fetch(request, {
+					actorId: bootstrapConfig.actorId,
+				});
+	} catch (error) {
+		response = buildErrorResponse(request, error);
+	}
 	const status = typeof response.status === "number" ? response.status : 200;
 	const body = await responseBodyToBinary(response);
 	if (status >= 500) {

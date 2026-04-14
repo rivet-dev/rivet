@@ -74,7 +74,7 @@ async fn single_connection(
 ) -> anyhow::Result<Option<crate::utils::ParsedCloseReason>> {
 	let url = ws_url(shared);
 	let protocols = {
-		let mut p = vec!["rivet".to_string()];
+		let mut p = vec!["rivet".to_string(), "rivet_target.envoy".to_string()];
 		if let Some(token) = &shared.config.token {
 			p.push(format!("rivet_token.{token}"));
 		}

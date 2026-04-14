@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 use rivet_envoy_client::config::{
@@ -8,7 +9,7 @@ use rivet_envoy_client::config::{
 };
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_protocol as protocol;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::oneshot;
 
 use crate::types;
 
@@ -22,7 +23,7 @@ pub type EventCallback = napi::threadsafe_function::ThreadsafeFunction<
 pub type ResponseMap = Arc<Mutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>;
 
 /// Map of open WebSocket senders, keyed by concatenated gateway_id + request_id (8 bytes).
-pub type WsSenderMap = Arc<Mutex<HashMap<[u8; 8], WebSocketSender>>>;
+pub type WsSenderMap = Arc<tokio::sync::Mutex<HashMap<[u8; 8], WebSocketSender>>>;
 
 fn make_ws_key(gateway_id: &protocol::GatewayId, request_id: &protocol::RequestId) -> [u8; 8] {
 	let mut key = [0u8; 8];
@@ -85,7 +86,7 @@ impl EnvoyCallbacks for BridgeCallbacks {
 
 			let (tx, rx) = oneshot::channel();
 			{
-				let mut map = response_map.lock().await;
+				let mut map = response_map.lock().expect("response_map poisoned");
 				map.insert(response_id, tx);
 			}
 
@@ -123,7 +124,7 @@ impl EnvoyCallbacks for BridgeCallbacks {
 
 			let (tx, rx) = oneshot::channel();
 			{
-				let mut map = response_map.lock().await;
+				let mut map = response_map.lock().expect("response_map poisoned");
 				map.insert(response_id, tx);
 			}
 
@@ -177,7 +178,7 @@ impl EnvoyCallbacks for BridgeCallbacks {
 
 			let (tx, rx) = oneshot::channel();
 			{
-				let mut map = response_map.lock().await;
+				let mut map = response_map.lock().expect("response_map poisoned");
 				map.insert(response_id, tx);
 			}
 
@@ -301,12 +302,39 @@ impl EnvoyCallbacks for BridgeCallbacks {
 
 	fn can_hibernate(
 		&self,
-		_actor_id: &str,
-		_gateway_id: &protocol::GatewayId,
-		_request_id: &protocol::RequestId,
-		_request: &HttpRequest,
+		actor_id: &str,
+		gateway_id: &protocol::GatewayId,
+		request_id: &protocol::RequestId,
+		request: &HttpRequest,
 	) -> bool {
-		false
+		let response_id = uuid::Uuid::new_v4().to_string();
+		let envelope = serde_json::json!({
+			"kind": "websocket_can_hibernate",
+			"actorId": actor_id,
+			"gatewayId": gateway_id,
+			"requestId": request_id,
+			"method": request.method,
+			"path": request.path,
+			"headers": request.headers,
+			"responseId": response_id,
+		});
+
+		let (tx, rx) = oneshot::channel();
+		{
+			let mut map = self.response_map.lock().expect("response_map poisoned");
+			map.insert(response_id, tx);
+		}
+
+		self.event_cb
+			.call(envelope, ThreadsafeFunctionCallMode::Blocking);
+
+		match tokio::task::block_in_place(|| rx.blocking_recv()) {
+			Ok(response) => response
+				.get("canHibernate")
+				.and_then(|value| value.as_bool())
+				.unwrap_or(false),
+			Err(_) => false,
+		}
 	}
 }
 

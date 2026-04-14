@@ -35,6 +35,10 @@ pub struct JsKvEntry {
 pub struct HibernatingRequestEntry {
 	pub gateway_id: Buffer,
 	pub request_id: Buffer,
+	pub envoy_message_index: u16,
+	pub rivet_message_index: u16,
+	pub path: String,
+	pub headers: Option<std::collections::HashMap<String, String>>,
 }
 
 /// Encode a protocol MessageId into a 10-byte buffer.

@@ -277,10 +277,10 @@ impl JsEnvoyHandle {
 				rivet_envoy_client::tunnel::HibernatingWebSocketMetadata {
 					gateway_id,
 					request_id,
-					envoy_message_index: 0,
-					rivet_message_index: 0,
-					path: String::new(),
-					headers: HashMap::new(),
+					envoy_message_index: r.envoy_message_index,
+					rivet_message_index: r.rivet_message_index,
+					path: r.path,
+					headers: r.headers.unwrap_or_else(HashMap::new),
 				}
 			})
 			.collect();
@@ -371,7 +371,10 @@ impl JsEnvoyHandle {
 		response_id: String,
 		data: serde_json::Value,
 	) -> napi::Result<()> {
-		let mut map = self.response_map.lock().await;
+		let mut map = self
+			.response_map
+			.lock()
+			.map_err(|_| napi::Error::from_reason("response_map poisoned"))?;
 		if let Some(tx) = map.remove(&response_id) {
 			let _ = tx.send(data);
 		}

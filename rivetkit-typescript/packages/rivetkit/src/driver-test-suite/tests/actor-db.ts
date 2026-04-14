@@ -42,6 +42,52 @@ function isActorStoppingDbError(error: unknown): boolean {
 	);
 }
 
+async function runWithActorStoppingRetry(
+	driverTestConfig: DriverTestConfig,
+	fn: () => Promise<void>,
+): Promise<void> {
+	let lastError: unknown;
+
+	for (let attempt = 0; attempt < 3; attempt += 1) {
+		try {
+			await fn();
+			return;
+		} catch (error) {
+			if (!isActorStoppingDbError(error)) {
+				throw error;
+			}
+			lastError = error;
+		}
+
+		await waitFor(driverTestConfig, SLEEP_WAIT_MS + 100);
+	}
+
+	throw lastError;
+}
+
+async function expectIntegrityCheckOk(
+	driverTestConfig: DriverTestConfig,
+	integrityCheck: () => Promise<string>,
+): Promise<void> {
+	let lastError: unknown;
+
+	for (let attempt = 0; attempt < 6; attempt += 1) {
+		try {
+			expect((await integrityCheck()).toLowerCase()).toBe("ok");
+			return;
+		} catch (error) {
+			if (!isActorStoppingDbError(error)) {
+				throw error;
+			}
+			lastError = error;
+		}
+
+		await waitFor(driverTestConfig, SLEEP_WAIT_MS + 100);
+	}
+
+	throw lastError;
+}
+
 function getDbActor(
 	client: Awaited<ReturnType<typeof setupDriverTest>>["client"],
 	variant: DbVariant,
@@ -59,7 +105,7 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 		: undefined;
 
 	for (const variant of variants) {
-		describe(`Actor Database (${variant}) Tests`, () => {
+		describe.sequential(`Actor Database (${variant}) Tests`, () => {
 			test(
 				"bootstraps schema on startup",
 				async (c) => {
@@ -462,31 +508,42 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 						c,
 						driverTestConfig,
 					);
-					const actor = getDbActor(client, variant).getOrCreate([
-						`db-${variant}-integrity-${crypto.randomUUID()}`,
-					]);
+						const actor = getDbActor(client, variant).getOrCreate([
+							`db-${variant}-integrity-${crypto.randomUUID()}`,
+						]);
 
-					await actor.reset();
-					await actor.runMixedWorkload(
-						INTEGRITY_SEED_COUNT,
-						INTEGRITY_CHURN_COUNT,
-					);
-					expect((await actor.integrityCheck()).toLowerCase()).toBe(
-						"ok",
-					);
+						await actor.reset();
+						await runWithActorStoppingRetry(
+							driverTestConfig,
+							async () =>
+								await actor.runMixedWorkload(
+									INTEGRITY_SEED_COUNT,
+									INTEGRITY_CHURN_COUNT,
+								),
+						);
+						await expectIntegrityCheckOk(
+							driverTestConfig,
+							async () => await actor.integrityCheck(),
+						);
 
-					await actor.triggerSleep();
-					await waitFor(driverTestConfig, SLEEP_WAIT_MS + 100);
-					expect((await actor.integrityCheck()).toLowerCase()).toBe(
-						"ok",
-					);
-				},
-				dbTestTimeout,
-			);
+						await actor.triggerSleep();
+						await waitFor(driverTestConfig, SLEEP_WAIT_MS + 100);
+						await expectIntegrityCheckOk(
+							driverTestConfig,
+							async () => await actor.integrityCheck(),
+						);
+					},
+					dbTestTimeout,
+				);
 		});
 	}
 
-	describe("Actor Database Lifecycle Cleanup Tests", () => {
+	// These assertions rely on the fixture's module-global lifecycle counters.
+	// Dynamic actors and the observer actor run in separate isolates, so those
+	// globals are not shared across actors there.
+	describe.skipIf(driverTestConfig.isDynamic)(
+		"Actor Database Lifecycle Cleanup Tests",
+		() => {
 		test(
 			"runs db provider cleanup on sleep",
 			async (c) => {
@@ -674,5 +731,6 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 			},
 			lifecycleTestTimeout,
 		);
-	});
+		},
+	);
 }

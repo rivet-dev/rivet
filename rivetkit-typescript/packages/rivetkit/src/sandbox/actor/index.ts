@@ -486,16 +486,10 @@ export function sandboxActor<TConnParams = undefined>(
 
 				const provider = await resolveProvider(c, parsedConfig);
 
-				// Ensure the sandbox exists so we have a sandbox ID.
+				// Direct URL access should only provision the sandbox. It should not
+				// require the sandbox-agent server to be running or connect the SDK.
 				if (!c.state.sandboxId) {
-					const agent = await ensureAgent(
-						c,
-						parsedConfig,
-						parsedConfig.persistRawEvents ?? false,
-					);
-					if (!c.state.sandboxId && agent.sandboxId) {
-						c.state.sandboxId = agent.sandboxId;
-					}
+					c.state.sandboxId = await provider.create();
 				}
 
 				if (!c.state.sandboxId) {

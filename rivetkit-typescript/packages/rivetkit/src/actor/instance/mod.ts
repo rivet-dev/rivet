@@ -2143,6 +2143,8 @@ export class ActorInstance<
 		const dbProvider = this.#config.db;
 
 		let client: InferDatabaseClient<DB> | undefined;
+		const nativeDatabaseProvider =
+			this.driver.getNativeDatabaseProvider?.();
 		try {
 			client = await this.#measureStartup("setupDatabaseClientMs", () =>
 				dbProvider.createClient({
@@ -2173,8 +2175,7 @@ export class ActorInstance<
 					},
 					metrics: this.#metrics,
 					log: this.#rLog,
-					nativeDatabaseProvider:
-						this.driver.getNativeDatabaseProvider?.(),
+					nativeDatabaseProvider,
 				}),
 			);
 			this.#rLog.info({ msg: "database migration starting" });

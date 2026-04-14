@@ -352,6 +352,18 @@ pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Resu
 				.await?;
 		}
 		Allocation::Serverful { envoy_key } => {
+			let hibernating_requests = ctx
+				.op(crate::ops::actor::hibernating_request::list::Input {
+					actor_id: state.actor_id,
+				})
+				.await?
+				.into_iter()
+				.map(|req| protocol::HibernatingRequest {
+					gateway_id: req.gateway_id,
+					request_id: req.request_id,
+				})
+				.collect();
+
 			let command = protocol::Command::CommandStartActor(protocol::CommandStartActor {
 				config: protocol::ActorConfig {
 					name: state.name.clone(),
@@ -362,9 +374,7 @@ pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Resu
 						.as_ref()
 						.and_then(|x| BASE64_STANDARD.decode(x).ok()),
 				},
-				// Empty because request ids are ephemeral. This is intercepted by guard and
-				// populated before it reaches the runner
-				hibernating_requests: Vec::new(),
+				hibernating_requests,
 				preloaded_kv: None,
 			});
 
@@ -901,45 +911,67 @@ pub async fn insert_and_send_commands(
 	let old_last_command_idx = state.envoy_last_command_idx;
 	let namespace_id = state.namespace_id;
 	let actor_id = state.actor_id;
-	ctx.udb()?
-		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::subspace());
+	let mut commands = input.commands.clone();
 
-			for (i, command) in input.commands.iter().enumerate() {
+	for command in &mut commands {
+		if let protocol::Command::CommandStartActor(start) = command {
+			start.hibernating_requests = ctx
+				.op(crate::ops::actor::hibernating_request::list::Input { actor_id })
+				.await?
+				.into_iter()
+				.map(|req| protocol::HibernatingRequest {
+					gateway_id: req.gateway_id,
+					request_id: req.request_id,
+				})
+				.collect();
+		}
+	}
+
+	let commands_for_tx = commands.clone();
+
+	ctx.udb()?
+		.run(|tx| {
+			let commands_for_tx = commands_for_tx.clone();
+
+			async move {
+				let tx = tx.with_subspace(keys::subspace());
+
+				for (i, command) in commands_for_tx.iter().enumerate() {
+					tx.write(
+						&keys::envoy::ActorCommandKey::new(
+							namespace_id,
+							input.envoy_key.clone(),
+							actor_id,
+							input.generation,
+							old_last_command_idx + i as i64 + 1,
+						),
+						match command {
+							protocol::Command::CommandStartActor(x) => {
+								protocol::ActorCommandKeyData::CommandStartActor(x.clone())
+							}
+							protocol::Command::CommandStopActor(x) => {
+								protocol::ActorCommandKeyData::CommandStopActor(x.clone())
+							}
+						},
+					)?;
+				}
+
 				tx.write(
-					&keys::envoy::ActorCommandKey::new(
+					&keys::envoy::ActorLastCommandIdxKey::new(
 						namespace_id,
 						input.envoy_key.clone(),
 						actor_id,
 						input.generation,
-						old_last_command_idx + i as i64 + 1,
 					),
-					match command {
-						protocol::Command::CommandStartActor(x) => {
-							protocol::ActorCommandKeyData::CommandStartActor(x.clone())
-						}
-						protocol::Command::CommandStopActor(x) => {
-							protocol::ActorCommandKeyData::CommandStopActor(x.clone())
-						}
-					},
+					old_last_command_idx + commands_for_tx.len() as i64,
 				)?;
+
+				Ok(())
 			}
-
-			tx.write(
-				&keys::envoy::ActorLastCommandIdxKey::new(
-					namespace_id,
-					input.envoy_key.clone(),
-					actor_id,
-					input.generation,
-				),
-				old_last_command_idx + input.commands.len() as i64,
-			)?;
-
-			Ok(())
 		})
 		.await?;
 
-	state.envoy_last_command_idx += input.commands.len() as i64;
+	state.envoy_last_command_idx += commands.len() as i64;
 
 	let receiver_subject = crate::pubsub_subjects::EnvoyReceiverSubject::new(
 		state.namespace_id,
@@ -949,8 +981,7 @@ pub async fn insert_and_send_commands(
 
 	let message_serialized =
 		versioned::ToEnvoyConn::wrap_latest(protocol::ToEnvoyConn::ToEnvoyCommands(
-			input
-				.commands
+			commands
 				.iter()
 				.enumerate()
 				.map(|(i, command)| protocol::CommandWrapper {

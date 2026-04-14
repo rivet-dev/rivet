@@ -61,7 +61,8 @@ describe("agentOS session lifecycle", () => {
 
 		const response = await actor.sendPrompt(session.sessionId, "Say hello");
 		expect(response).toBeTruthy();
-		expect(response.result).toBeTruthy();
+		expect(response.response).toBeTruthy();
+		expect(response.text).toBeTypeOf("string");
 
 		await actor.closeSession(session.sessionId);
 	}, 120_000);

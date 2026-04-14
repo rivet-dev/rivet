@@ -98,6 +98,12 @@ export interface ActorDriver {
 	getNativeDatabaseProvider?(): NativeDatabaseProvider | undefined;
 
 	/**
+	 * Test-only helper that forcefully disconnects the native database
+	 * transport for the current runtime.
+	 */
+	forceDisconnectNativeDatabaseTransportForTests?(): Promise<number>;
+
+	/**
 	 * Requests the actor to go to sleep.
 	 *
 	 * This will call `ActorInstance.onStop` independently.

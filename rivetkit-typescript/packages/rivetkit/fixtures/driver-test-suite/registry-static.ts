@@ -145,6 +145,7 @@ import {
 	workflowStopTeardownActor,
 	workflowTryActor,
 } from "./workflow";
+import { warmupActor } from "./warmup";
 
 let agentOsTestActor:
 	| (Awaited<typeof import("./agent-os")>["agentOsTestActor"])
@@ -289,6 +290,7 @@ export const registry = setup({
 		workflowReplayActor,
 		workflowSleepActor,
 		workflowTryActor,
+		warmupActor,
 		workflowStopTeardownActor,
 		workflowErrorHookActor,
 		workflowErrorHookEffectsActor,

@@ -76,6 +76,15 @@ export interface DatabaseProviderContext {
 
 export type DatabaseProvider<DB extends RawAccess> = {
 	/**
+	 * When true, ActorInstance must provide a sqliteVfs handle even if the
+	 * driver also exposes raw or native database overrides.
+	 *
+	 * Use this for custom providers that open KV-backed SQLite directly from
+	 * ctx.sqliteVfs instead of delegating to rivetkit/db.
+	 */
+	requiresSqliteVfs?: boolean;
+
+	/**
 	 * Creates a new database client for the actor.
 	 * The result is passed to the actor context as `c.db`.
 	 * @experimental

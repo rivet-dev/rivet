@@ -102,10 +102,7 @@ function getRequestConnParams(request: Request): unknown {
 }
 
 function getRequestExposeInternalError(): boolean {
-	return (
-		getEnvUniversal("RIVET_EXPOSE_ERRORS") === "1" ||
-		getEnvUniversal("NODE_ENV") === "development"
-	);
+	return getEnvUniversal("RIVET_EXPOSE_ERRORS") === "1";
 }
 
 function buildErrorResponse(request: Request, error: unknown): Response {
@@ -292,6 +289,9 @@ interface DynamicActorIsolateRuntimeConfig {
 	actorId: string;
 	actorName: string;
 	actorKey: ActorKey;
+	endpoint: string;
+	namespace: string;
+	token?: string;
 	input: unknown;
 	region: string;
 	loader: DynamicActorLoader;
@@ -375,6 +375,18 @@ export class DynamicActorIsolateRuntime {
 	#nativeDatabases = new Map<string, Promise<SqliteDatabase>>();
 	#webSocketSessions = new Map<number, HostWebSocketSession>();
 	#sessionIdsByWebSocket = new WeakMap<UniversalWebSocket, number>();
+	#rawDatabaseHandles = new Map<
+		string,
+		{
+			execute: <
+				TRow extends Record<string, unknown> = Record<string, unknown>,
+			>(
+				query: string,
+				...args: unknown[]
+			) => Promise<TRow[]>;
+			close: () => Promise<void>;
+		}
+	>();
 	#nextWebSocketSessionId = 1;
 	#started = false;
 	#disposed = false;
@@ -476,7 +488,11 @@ export class DynamicActorIsolateRuntime {
 					XDG_DATA_HOME: `${DYNAMIC_SANDBOX_APP_ROOT}/.local/share`,
 					XDG_CACHE_HOME: `${DYNAMIC_SANDBOX_APP_ROOT}/.cache`,
 					TMPDIR: DYNAMIC_SANDBOX_TMP_ROOT,
-					RIVET_EXPOSE_ERRORS: "1",
+					...(process.env.RIVET_EXPOSE_ERRORS
+						? {
+								RIVET_EXPOSE_ERRORS: process.env.RIVET_EXPOSE_ERRORS,
+							}
+						: {}),
 					...(process.env.RIVETKIT_TEST_DOCKER_HELPER_URL
 						? {
 								RIVETKIT_TEST_DOCKER_HELPER_URL:
@@ -746,6 +762,12 @@ export class DynamicActorIsolateRuntime {
 		}
 		this.#webSocketSessions.clear();
 		this.#sessionIdsByWebSocket = new WeakMap<UniversalWebSocket, number>();
+		for (const database of this.#rawDatabaseHandles.values()) {
+			try {
+				await database.close();
+			} catch {}
+		}
+		this.#rawDatabaseHandles.clear();
 
 		if (this.#refs && this.#stopMode !== "sleep") {
 			try {
@@ -1117,6 +1139,29 @@ export class DynamicActorIsolateRuntime {
 				return makeExternalCopy(result);
 			},
 		);
+		const rawDatabaseExecuteRef = makeRef(
+			async (
+				actorId: string,
+				query: string,
+				args: unknown[],
+			): Promise<{ copy(): unknown[] }> => {
+				let database = this.#rawDatabaseHandles.get(actorId);
+				if (!database) {
+					const provider =
+						this.#config.actorDriver.getNativeDatabaseProvider?.();
+					if (!provider) {
+						throw new Error(
+							"driver does not implement getNativeDatabaseProvider",
+						);
+					}
+					database = await provider.open(actorId);
+					this.#rawDatabaseHandles.set(actorId, database);
+				}
+
+				const result = await database.execute(query, ...(args ?? []));
+				return makeExternalCopy(result);
+			},
+		);
 		const ackHibernatableWebSocketMessageRef = makeRef(
 			(
 				gatewayId: ArrayBuffer,
@@ -1217,6 +1262,10 @@ export class DynamicActorIsolateRuntime {
 			clientCallRef,
 		);
 		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.rawDatabaseExecute,
+			rawDatabaseExecuteRef,
+		);
+		await context.global.set(
 			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.ackHibernatableWebSocketMessage,
 			ackHibernatableWebSocketMessageRef,
 		);
@@ -1239,6 +1288,9 @@ export class DynamicActorIsolateRuntime {
 				actorId: this.#config.actorId,
 				actorName: this.#config.actorName,
 				actorKey: this.#config.actorKey,
+				endpoint: this.#config.endpoint,
+				namespace: this.#config.namespace,
+				token: this.#config.token,
 				sourceEntry: source.sourceEntry,
 				sourceFormat: source.sourceFormat,
 			},
@@ -1246,6 +1298,33 @@ export class DynamicActorIsolateRuntime {
 				copy: true,
 			},
 		);
+
+		const hostBridgePresence = Object.fromEntries(
+			await Promise.all(
+				Object.entries(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS).map(
+					async ([name, key]) => {
+						const isDefined = await context.eval(
+							`typeof globalThis[${JSON.stringify(key)}] !== "undefined"`,
+							{ copy: true },
+						);
+						return [name, isDefined] as const;
+					},
+				),
+			),
+		);
+		logger().debug({
+			msg: "dynamic runtime host bridge keys ready",
+			actorId: this.#config.actorId,
+			hostBridgePresence,
+		});
+
+		for (const [name, isDefined] of Object.entries(hostBridgePresence)) {
+			if (!isDefined) {
+				throw new Error(
+					`dynamic runtime host bridge ref is missing before bootstrap: ${name}`,
+				);
+			}
+		}
 	}
 
 	async #loadBootstrap(bootstrapPath: string): Promise<void> {

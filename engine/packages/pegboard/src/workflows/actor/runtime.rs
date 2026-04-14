@@ -1319,46 +1319,68 @@ pub async fn insert_and_send_commands(
 	input: &InsertAndSendCommandsInput,
 ) -> Result<()> {
 	let mut state = ctx.state::<State>()?;
+	let mut commands = input.commands.clone();
+
+	for command in &mut commands {
+		if let protocol::mk2::Command::CommandStartActor(start) = command {
+			start.hibernating_requests = ctx
+				.op(crate::ops::actor::hibernating_request::list::Input {
+					actor_id: input.actor_id,
+				})
+				.await?
+				.into_iter()
+				.map(|req| protocol::mk2::HibernatingRequest {
+					gateway_id: req.gateway_id,
+					request_id: req.request_id,
+				})
+				.collect();
+		}
+	}
 
 	let runner_state = state.runner_state.get_or_insert_default();
 	let old_last_command_idx = runner_state.last_command_idx;
-	runner_state.last_command_idx += input.commands.len() as i64;
+	runner_state.last_command_idx += commands.len() as i64;
 
 	// This does not have to be part of its own activity because the txn is idempotent
 	let last_command_idx = runner_state.last_command_idx;
+	let commands_for_tx = commands.clone();
 	ctx.udb()?
-		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::subspace());
+		.run(|tx| {
+			let commands_for_tx = commands_for_tx.clone();
 
-			tx.write(
-				&keys::runner::ActorLastCommandIdxKey::new(
-					input.runner_id,
-					input.actor_id,
-					input.generation,
-				),
-				last_command_idx,
-			)?;
+			async move {
+				let tx = tx.with_subspace(keys::subspace());
 
-			for (i, command) in input.commands.iter().enumerate() {
 				tx.write(
-					&keys::runner::ActorCommandKey::new(
+					&keys::runner::ActorLastCommandIdxKey::new(
 						input.runner_id,
 						input.actor_id,
 						input.generation,
-						old_last_command_idx + i as i64 + 1,
 					),
-					match command {
-						protocol::mk2::Command::CommandStartActor(x) => {
-							protocol::mk2::ActorCommandKeyData::CommandStartActor(x.clone())
-						}
-						protocol::mk2::Command::CommandStopActor => {
-							protocol::mk2::ActorCommandKeyData::CommandStopActor
-						}
-					},
+					last_command_idx,
 				)?;
-			}
 
-			Ok(())
+				for (i, command) in commands_for_tx.iter().enumerate() {
+					tx.write(
+						&keys::runner::ActorCommandKey::new(
+							input.runner_id,
+							input.actor_id,
+							input.generation,
+							old_last_command_idx + i as i64 + 1,
+						),
+						match command {
+							protocol::mk2::Command::CommandStartActor(x) => {
+								protocol::mk2::ActorCommandKeyData::CommandStartActor(x.clone())
+							}
+							protocol::mk2::Command::CommandStopActor => {
+								protocol::mk2::ActorCommandKeyData::CommandStopActor
+							}
+						},
+					)?;
+				}
+
+				Ok(())
+			}
 		})
 		.await?;
 
@@ -1367,8 +1389,7 @@ pub async fn insert_and_send_commands(
 
 	let message_serialized =
 		versioned::ToRunnerMk2::wrap_latest(protocol::mk2::ToRunner::ToClientCommands(
-			input
-				.commands
+			commands
 				.iter()
 				.enumerate()
 				.map(|(i, command)| protocol::mk2::CommandWrapper {
