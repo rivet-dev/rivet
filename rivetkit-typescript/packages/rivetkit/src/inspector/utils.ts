@@ -22,11 +22,18 @@ export const secureInspector = (config: RegistryConfig) =>
 
 export function getInspectorUrl(
 	config: RegistryConfig,
-	managerPort: number,
+	httpPort: number,
 ): string | undefined {
 	if (!config.inspector.enabled) return undefined;
 
+	// Prefer the engine endpoint for the inspector URL when we know the engine
+	// serves the UI locally. The engine always hosts `/ui/` on its own port
+	// (6420 by default) so pointing users at the engine URL keeps the
+	// inspector discoverable at the standard Rivet port even when the
+	// local RivetKit HTTP server runs on a different port (e.g. 8080).
 	const base =
-		config.inspector.defaultEndpoint ?? `http://127.0.0.1:${managerPort}`;
+		config.inspector.defaultEndpoint ??
+		config.endpoint ??
+		`http://127.0.0.1:${httpPort}`;
 	return new URL("/ui/", base).href;
 }

@@ -19,7 +19,7 @@ import {
 	isDev,
 } from "@/utils/env-vars";
 import { EnvoyConfigSchema } from "./envoy";
-import { ServerlessConfigSchema } from "./serverless";
+import { ConfigurePoolSchema, ServerlessConfigSchema } from "./serverless";
 
 export const ActorsSchema = z.record(
 	z.string(),
@@ -106,16 +106,16 @@ export const RegistryConfigSchema = z
 		// TODO:
 		// client: ClientConfigSchema.optional(),
 
-		// MARK: Manager
+		// MARK: HTTP server
 		/**
-		 * Whether to start the local RivetKit server.
+		 * Whether to start the local RivetKit HTTP server.
 		 * Auto-determined based on endpoint and NODE_ENV if not specified.
 		 */
-		serveManager: z.boolean().optional(),
+		serveHttp: z.boolean().optional(),
 		/**
 		 * Directory to serve static files from.
 		 *
-		 * When set, the local RivetKit server will serve static files from this
+		 * When set, the local RivetKit HTTP server will serve static files from this
 		 * directory. This is used by `registry.start()` to serve a frontend
 		 * alongside the actor API.
 		 */
@@ -127,33 +127,85 @@ export const RegistryConfigSchema = z
 		 * For example, if the base path is `/foo`, then the route `/actors`
 		 * will be available at `/foo/actors`.
 		 */
-		managerBasePath: z.string().optional().default("/"),
+		httpBasePath: z.string().optional().default("/"),
 		/**
 		 * @experimental
 		 *
-		 * What port to run the manager on.
+		 * Port for the local RivetKit HTTP server. Defaults to 8080 so it never
+		 * collides with the local engine (fixed on 6420).
 		 */
-		managerPort: z.number().optional().default(6420),
+		httpPort: z.number().optional().default(8080),
 		/**
 		 * @experimental
 		 *
-		 * What host to bind the local RivetKit server to.
+		 * What host to bind the local RivetKit HTTP server to.
 		 */
-		managerHost: z.string().optional(),
+		httpHost: z.string().optional(),
 
 		/** @experimental */
 		inspector: InspectorConfigSchema,
 
+		// MARK: Runtime mode
+		/**
+		 * Deployment mode for this registry. Governs whether the user app
+		 * runs an HTTP server (`serverless`) or connects out to the engine
+		 * as an envoy (`envoy`).
+		 *
+		 * When omitted the mode is derived from the environment via the
+		 * decision matrix:
+		 *
+		 *                 | Default | NODE_ENV=prod | RIVET_ENDPOINT≠null | mode=envoy override
+		 *   spawn_engine  |   y     | error if no   |         n            |         n
+		 *                 |         | RIVET_ENDPOINT|                      |
+		 *   mode          | envoy   | serverless    |     serverless       |       envoy
+		 *
+		 * Mode-specific options (e.g. `configurePool`, `publicEndpoint`)
+		 * live inside this block and are type-narrowed per mode.
+		 */
+		runtime: z
+			.discriminatedUnion("mode", [
+				z.object({
+					mode: z.literal("envoy"),
+					/**
+					 * When set, `registry.start()` spawns a local engine on the
+					 * default port. Defaults are derived from the mode matrix.
+					 */
+					spawnEngine: z.boolean().optional(),
+					engineVersion: z.string().optional(),
+					poolName: z.string().optional(),
+					envoyKey: z.string().optional(),
+					version: z.number().optional(),
+				}),
+				z.object({
+					mode: z.literal("serverless"),
+					spawnEngine: z.boolean().optional(),
+					engineVersion: z.string().optional(),
+					poolName: z.string().optional(),
+					envoyKey: z.string().optional(),
+					version: z.number().optional(),
+					configurePool: ConfigurePoolSchema,
+					basePath: z.string().optional(),
+					publicEndpoint: z.string().optional(),
+					publicToken: z.string().optional(),
+				}),
+			])
+			.optional(),
+
 		// MARK: Runtime-specific
+		/** @deprecated Use `runtime` with `mode: "serverless"` instead. */
 		serverless: ServerlessConfigSchema.optional().default(() =>
 			ServerlessConfigSchema.parse({}),
 		),
+		/** @deprecated Use `runtime` with `mode: "envoy"` instead. */
 		envoy: EnvoyConfigSchema.optional().default(() =>
 			EnvoyConfigSchema.parse({}),
 		),
 	})
 	.transform((config, ctx) => {
 		const isDevEnv = isDev();
+		const isProduction =
+			typeof process !== "undefined" &&
+			process.env.NODE_ENV === "production";
 
 		// Parse endpoint string (env var fallback is applied via transform above)
 		const parsedEndpoint = config.endpoint
@@ -165,10 +217,44 @@ export const RegistryConfigSchema = z
 			})
 			: undefined;
 
-		if (parsedEndpoint && config.serveManager) {
+		// Resolve runtime mode when the user didn't explicitly set
+		// `runtime`. Localdev Just-Works as envoy (engine spawns locally);
+		// only `NODE_ENV=production` flips the auto-default to serverless.
+		// `RIVET_ENDPOINT` alone does NOT force serverless — an envoy-mode
+		// app can still connect to a remote engine. Users who want
+		// serverless in dev must pass `runtime: { mode: "serverless" }`.
+		if (config.runtime === undefined) {
+			if (isProduction && !parsedEndpoint) {
+				ctx.addIssue({
+					code: "custom",
+					path: ["runtime"],
+					message:
+						"rivetkit: NODE_ENV=production requires RIVET_ENDPOINT " +
+						"(or an explicit `endpoint` config) to connect to a " +
+						"hosted engine. Set the env var, or pass " +
+						"`runtime: { mode: \"envoy\" }` to opt out of the " +
+						"prod serverless default.",
+				});
+			}
+			config.runtime = isProduction
+				? { mode: "serverless", configurePool: undefined }
+				: { mode: "envoy" };
+		}
+
+		// Normalize spawnEngine: `runtime.spawnEngine` is the canonical
+		// location. Fall through to the legacy `serverless.spawnEngine`
+		// field for back-compat so existing callers keep working during
+		// the migration away from rooting spawn config under `serverless`.
+		const spawnEngine =
+			config.runtime.spawnEngine ?? config.serverless.spawnEngine;
+		if (spawnEngine !== undefined) {
+			config.serverless.spawnEngine = spawnEngine;
+		}
+
+		if (parsedEndpoint && config.serveHttp) {
 			ctx.addIssue({
 				code: "custom",
-				message: "cannot specify both endpoint and serveManager",
+				message: "cannot specify both endpoint and serveHttp",
 			});
 		}
 
@@ -224,14 +310,14 @@ export const RegistryConfigSchema = z
 			});
 		}
 
-		// Determine serveManager: default to true in dev mode without endpoint, false otherwise
-		const serveManager = config.serveManager ?? (isDevEnv && !endpoint);
+		// Determine serveHttp: default to true in dev mode without endpoint, false otherwise
+		const serveHttp = config.serveHttp ?? (isDevEnv && !endpoint);
 
-		// In dev mode, fall back to 127.0.0.1 if serving manager
+		// In dev mode, fall back to 127.0.0.1 if serving the local HTTP server
 		const publicEndpoint =
 			parsedPublicEndpoint?.endpoint ??
-			(isDevEnv && (serveManager || config.serverless.spawnEngine)
-				? `http://127.0.0.1:${config.managerPort}`
+			(isDevEnv && (serveHttp || config.serverless.spawnEngine)
+				? `http://127.0.0.1:${config.httpPort}`
 				: undefined);
 		// We extract publicNamespace to validate that it matches the backend
 		// namespace (see validation above), not for functional use.
@@ -239,7 +325,7 @@ export const RegistryConfigSchema = z
 		const publicToken =
 			parsedPublicEndpoint?.token ?? config.serverless.publicToken;
 
-		// If endpoint is set or spawning engine, we'll use engine driver - disable manager inspector
+		// If endpoint is set or spawning engine, we'll use engine driver - disable HTTP server inspector
 		const willUseEngine = !!endpoint || config.serverless.spawnEngine;
 		const inspector = willUseEngine
 			? {
@@ -253,7 +339,7 @@ export const RegistryConfigSchema = z
 			endpoint,
 			namespace,
 			token,
-			serveManager,
+			serveHttp,
 			publicEndpoint,
 			publicNamespace,
 			publicToken,
@@ -497,26 +583,26 @@ export const DocRegistryConfigSchema = z
 			.describe(
 				"Additional headers to include in requests to Rivet Engine.",
 			),
-		serveManager: z
+		serveHttp: z
 			.boolean()
 			.optional()
 			.describe(
-				"Whether to start the local RivetKit server. Auto-determined based on endpoint and NODE_ENV if not specified.",
+				"Whether to start the local RivetKit HTTP server. Auto-determined based on endpoint and NODE_ENV if not specified.",
 			),
 		publicDir: z
 			.string()
 			.optional()
 			.describe(
-				"Directory to serve static files from. When set, the local RivetKit server serves static files alongside the actor API. Used by registry.start().",
+				"Directory to serve static files from. When set, the local RivetKit HTTP server serves static files alongside the actor API. Used by registry.start().",
 			),
-		managerBasePath: z
+		httpBasePath: z
 			.string()
 			.optional()
 			.describe("Base path for the local RivetKit API. Default: '/'"),
-		managerPort: z
+		httpPort: z
 			.number()
 			.optional()
-			.describe("Port to run the manager on. Default: 6420"),
+			.describe("Port for the local RivetKit HTTP server. Default: 8080"),
 		inspector: DocInspectorConfigSchema,
 		serverless: DocServerlessConfigSchema.optional(),
 		envoy: DocEnvoyConfigSchema.optional(),

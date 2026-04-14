@@ -42,17 +42,27 @@ async function ensureLocalRunnerConfig(config: RegistryConfig): Promise<void> {
 	const clientConfig = convertRegistryConfigToClientConfig(config);
 	const dcsRes = await getDatacenters(clientConfig);
 
-	await updateRunnerConfig(clientConfig, config.envoy.poolName, {
-		datacenters: Object.fromEntries(
-			dcsRes.datacenters.map((dc) => [
-				dc.name,
-				{
-					normal: {},
-					drain_on_version_upgrade: true,
-				},
-			]),
-		),
-	});
+	const datacenters = Object.fromEntries(
+		dcsRes.datacenters.map((dc) => [
+			dc.name,
+			{
+				normal: {},
+				drain_on_version_upgrade: true,
+			},
+		]),
+	);
+
+	// Register the main pool as well as the native database pool. The native
+	// database envoy (used by any actor that opens `rivetkit/db`) registers
+	// under `${poolName}-native-db` via EngineActorDriver, so the engine must
+	// have a runner config for that pool or envoy registration fails with
+	// `no_runner_config`.
+	await Promise.all([
+		updateRunnerConfig(clientConfig, config.envoy.poolName, { datacenters }),
+		updateRunnerConfig(clientConfig, `${config.envoy.poolName}-native-db`, {
+			datacenters,
+		}),
+	]);
 }
 
 export class Runtime<A extends RegistryActors> {
@@ -62,7 +72,7 @@ export class Runtime<A extends RegistryActors> {
 	#actorDriver?: EngineActorDriver;
 	#startKind?: StartKind;
 
-	managerPort?: number;
+	httpPort?: number;
 	#serverlessRouter?: ReturnType<typeof buildServerlessRouter>["router"];
 
 	get config() {
@@ -77,12 +87,12 @@ export class Runtime<A extends RegistryActors> {
 		registry: Registry<A>,
 		config: RegistryConfig,
 		engineClient: EngineControlClient,
-		managerPort?: number,
+		httpPort?: number,
 	) {
 		this.#registry = registry;
 		this.#config = config;
 		this.#engineClient = engineClient;
-		this.managerPort = managerPort;
+		this.httpPort = httpPort;
 	}
 
 	static async create<A extends RegistryActors>(
@@ -99,7 +109,7 @@ export class Runtime<A extends RegistryActors> {
 		}
 
 		const shouldSpawnEngine =
-			config.serverless.spawnEngine || (config.serveManager && !config.endpoint);
+			config.serverless.spawnEngine || (config.serveHttp && !config.endpoint);
 		if (shouldSpawnEngine) {
 			config.endpoint = ENGINE_ENDPOINT;
 
@@ -117,9 +127,9 @@ export class Runtime<A extends RegistryActors> {
 		);
 		await ensureLocalRunnerConfig(config);
 
-		let managerPort: number | undefined;
-		if (config.serveManager) {
-			const configuredManagerPort = config.managerPort;
+		let httpPort: number | undefined;
+		if (config.serveHttp) {
+			const configuredHttpPort = config.httpPort;
 			const serveRuntime = detectRuntime();
 			let upgradeWebSocket: any;
 			const getUpgradeWebSocket: GetUpgradeWebSocket = () =>
@@ -133,27 +143,27 @@ export class Runtime<A extends RegistryActors> {
 				serveRuntime,
 			);
 
-			managerPort = await findFreePort(config.managerPort);
+			httpPort = await findFreePort(config.httpPort);
 
-			if (managerPort !== configuredManagerPort) {
+			if (httpPort !== configuredHttpPort) {
 				logger().warn({
-					msg: `port ${configuredManagerPort} is in use, using ${managerPort}`,
+					msg: `port ${configuredHttpPort} is in use, using ${httpPort}`,
 				});
 			}
 
 			logger().debug({
-				msg: "serving runtime router",
-				port: managerPort,
+				msg: "serving HTTP router",
+				port: httpPort,
 			});
 
 			if (
 				config.publicEndpoint ===
-				`http://127.0.0.1:${configuredManagerPort}`
+				`http://127.0.0.1:${configuredHttpPort}`
 			) {
-				config.publicEndpoint = `http://127.0.0.1:${managerPort}`;
+				config.publicEndpoint = `http://127.0.0.1:${httpPort}`;
 				config.serverless.publicEndpoint = config.publicEndpoint;
 			}
-			config.managerPort = managerPort;
+			config.httpPort = httpPort;
 
 			let serverApp = runtimeRouter;
 			if (config.publicDir) {
@@ -181,7 +191,7 @@ export class Runtime<A extends RegistryActors> {
 
 			const out = await crossPlatformServe(
 				config,
-				managerPort,
+				httpPort,
 				serverApp,
 				serveRuntime,
 			);
@@ -196,7 +206,7 @@ export class Runtime<A extends RegistryActors> {
 			}
 		}
 
-		const runtime = new Runtime(registry, config, engineClient, managerPort);
+		const runtime = new Runtime(registry, config, engineClient, httpPort);
 
 		logger().info({
 			msg: "rivetkit ready",
@@ -247,9 +257,11 @@ export class Runtime<A extends RegistryActors> {
 	#printWelcome(): void {
 		if (this.#config.noWelcome) return;
 
-		const inspectorUrl = this.managerPort
-			? getInspectorUrl(this.#config, this.managerPort)
-			: undefined;
+		// Inspector URL falls back through getInspectorUrl's own chain
+		// (inspector.defaultEndpoint → config.endpoint → HTTP port). In
+		// envoy mode there is no HTTP port, but the engine serves `/ui/`
+		// on its endpoint so the inspector stays reachable.
+		const inspectorUrl = getInspectorUrl(this.#config, this.httpPort ?? 0);
 
 		console.log();
 		console.log(

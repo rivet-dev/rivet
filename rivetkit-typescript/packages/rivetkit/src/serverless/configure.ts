@@ -64,11 +64,21 @@ export async function configureServerlessPool(
 				customConfig.drainOnVersionUpgrade ?? true,
 			metadataPollInterval: customConfig.metadataPollInterval ?? 1000,
 		};
-		await updateRunnerConfig(clientConfig, poolName, {
-			datacenters: Object.fromEntries(
-				dcsRes.datacenters.map((dc) => [dc.name, serverlessConfig]),
-			),
-		});
+		const datacenters = Object.fromEntries(
+			dcsRes.datacenters.map((dc) => [dc.name, serverlessConfig]),
+		);
+
+		// Register both the main pool and the native database pool so the
+		// `rivetkit/db` native envoy (pool name `${poolName}-native-db`) can
+		// register with the engine. Without the second config the engine
+		// rejects the native envoy's registration with `no_runner_config`
+		// and every DB-backed actor times out waiting to become ready.
+		await Promise.all([
+			updateRunnerConfig(clientConfig, poolName, { datacenters }),
+			updateRunnerConfig(clientConfig, `${poolName}-native-db`, {
+				datacenters,
+			}),
+		]);
 
 		logger().info({
 			msg: "serverless pool configured successfully",

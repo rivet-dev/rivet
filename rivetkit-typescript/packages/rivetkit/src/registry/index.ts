@@ -5,6 +5,7 @@ import {
 	type RegistryConfigInput,
 	RegistryConfigSchema,
 } from "./config";
+import { logger } from "./log";
 
 export type FetchHandler = (
 	request: Request,
@@ -33,16 +34,24 @@ export class Registry<A extends RegistryActors> {
 	constructor(config: RegistryConfigInput<A>) {
 		this.#config = config;
 
-		// Start the local runtime or engine before /api/rivet is hit so clients can
-		// reach the public endpoint preemptively. This waits one tick because some
-		// integrations mutate registry config immediately after setup() returns.
-		if (config.serverless?.spawnEngine || config.serveManager) {
+		// Start the local runtime or engine before /api/rivet is hit so
+		// clients can reach the public endpoint preemptively. This waits
+		// one tick because some integrations mutate registry config
+		// immediately after setup() returns.
+		//
+		// Check both the canonical `runtime.spawnEngine` location and
+		// the legacy `serverless.spawnEngine` so either config shape
+		// triggers the preemptive runtime.
+		const willSpawnEngine = !!(
+			config.runtime?.spawnEngine ?? config.serverless?.spawnEngine
+		);
+		if (willSpawnEngine || config.serveHttp) {
 			setTimeout(() => {
 				const parsedConfig = this.parseConfig();
 
 				if (
 					parsedConfig.serverless.spawnEngine ||
-					parsedConfig.serveManager
+					parsedConfig.serveHttp
 				) {
 					// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
 					this.#ensureRuntime();
@@ -121,21 +130,81 @@ export class Registry<A extends RegistryActors> {
 			this.#config.publicDir = "public";
 		}
 
-		// Force serveManager when there's no remote endpoint so the
-		// local runtime starts and serves the API + static files.
-		// When an endpoint IS configured, the config transform handles
-		// the mode (serveManager defaults to false, spawnEngine may be
-		// true, etc.) and we just start the envoy.
-		if (this.#config.serveManager === undefined) {
-			const hasEndpoint = !!(
-				this.#config.endpoint ||
-				(typeof process !== "undefined" &&
-					(process.env.RIVET_ENGINE || process.env.RIVET_ENDPOINT))
-			);
-			const willSpawnEngine = !!this.#config.serverless?.spawnEngine;
-			if (!hasEndpoint && !willSpawnEngine) {
-				this.#config.serveManager = true;
+		// Resolve the runtime mode + spawn-engine decision via this matrix:
+		//
+		//                 | Default | NODE_ENV=prod | RIVET_ENDPOINT!=null | mode=envoy override
+		//   spawn_engine  |   y     | error if no   |         n            |        n
+		//                 |         | RIVET_ENDPOINT|                      |
+		//   mode          | envoy   | serverless    |     serverless       |      envoy
+		//
+		// The user can override the mode explicitly by passing
+		// `runtime: { mode: "envoy" }` (or `"serverless"`) to `setup()`.
+		// `start()` drives the envoy path today; serverless deployments
+		// still call `registry.handler()` directly.
+		//
+		// TODO (pending upstream refactors):
+		//   - dispatch `start()` to startServerless when mode=serverless
+		//   - drop "runner" terminology
+		//   - migrate existing `serverless.spawnEngine` callers to
+		//     top-level `runtime.spawnEngine` (field already exists)
+		const runtimeCfg = this.#config.runtime;
+		const hasEndpoint = !!(
+			this.#config.endpoint ||
+			(typeof process !== "undefined" &&
+				(process.env.RIVET_ENGINE || process.env.RIVET_ENDPOINT))
+		);
+		const isProduction =
+			typeof process !== "undefined" &&
+			process.env.NODE_ENV === "production";
+
+		// Resolve mode: explicit override wins, otherwise fall back to the
+		// matrix — envoy by default, only NODE_ENV=production flips the
+		// auto-default to serverless. RIVET_ENDPOINT alone does NOT force
+		// serverless; envoy mode can still connect to a remote engine.
+		const resolvedMode: "envoy" | "serverless" =
+			runtimeCfg?.mode ?? (isProduction ? "serverless" : "envoy");
+
+		// Resolve spawnEngine. Explicit `runtime.spawnEngine` and the
+		// legacy `serverless.spawnEngine` both win when set. Otherwise the
+		// matrix decides. In envoy mode without an endpoint we auto-spawn
+		// the local engine; in serverless or with an endpoint we don't.
+		const explicitSpawn =
+			runtimeCfg?.spawnEngine ?? this.#config.serverless?.spawnEngine;
+		if (explicitSpawn === undefined) {
+			if (resolvedMode === "serverless" && isProduction && !hasEndpoint) {
+				throw new Error(
+					"rivetkit: NODE_ENV=production requires RIVET_ENDPOINT " +
+						"(or an explicit `endpoint` config) to connect to a " +
+						"hosted engine.",
+				);
 			}
+			if (resolvedMode === "envoy" && !hasEndpoint) {
+				// Envoy-mode dev default: spawn the engine locally so the
+				// registry boots with zero config. The user app runs no
+				// HTTP server — the engine on 6420 is the public surface.
+				// Write to the canonical `runtime.spawnEngine` location;
+				// the schema transform normalizes it into the legacy
+				// `serverless.spawnEngine` field that downstream code
+				// still reads.
+				this.#config.runtime = {
+					...(this.#config.runtime ?? { mode: "envoy" as const }),
+					spawnEngine: true,
+				};
+			}
+			// All other cells leave spawnEngine undefined → schema default
+			// resolves to `false` (connect to remote without spawning).
+		}
+
+		// `start()` drives the envoy path. When the user explicitly picks
+		// `mode: "serverless"` but still calls `start()`, log a hint so the
+		// mis-wiring is obvious — they should use `registry.handler()`.
+		if (resolvedMode === "serverless") {
+			logger().warn({
+				msg: "registry.start() called with runtime.mode=serverless; " +
+					"serverless deployments should use `registry.handler()` " +
+					"to mount the /api/rivet/* fetch handler in your HTTP " +
+					"server instead.",
+			});
 		}
 
 		// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
