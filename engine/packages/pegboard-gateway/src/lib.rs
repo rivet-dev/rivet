@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::TryStreamExt;
@@ -677,7 +677,7 @@ impl CustomServeTrait for PegboardGateway {
 
 		// Start keepalive task
 		let (keepalive_abort_tx, keepalive_abort_rx) = watch::channel(());
-		let keepalive_handle = tokio::spawn(keepalive_task::task(
+		let mut keepalive_handle = tokio::spawn(keepalive_task::task(
 			self.shared_state.clone(),
 			ctx.clone(),
 			self.actor_id,
@@ -687,7 +687,37 @@ impl CustomServeTrait for PegboardGateway {
 		));
 
 		let (res, metrics_res) = tokio::join!(
-			self.handle_websocket_hibernation_inner(client_ws),
+			async {
+				tokio::select! {
+					res = self.handle_websocket_hibernation_inner(client_ws) => {
+						let _ = keepalive_abort_tx.send(());
+						match (&mut keepalive_handle).await {
+							Ok(Ok(LifecycleResult::Aborted)) => res,
+							Ok(Ok(other)) => {
+								tracing::debug!(?other, "hibernating request keepalive task completed");
+								res
+							}
+							// Surface keepalive errors only if hibernation itself
+							// succeeded; otherwise prefer the original error so the
+							// delete cleanup downstream still runs unconditionally.
+							Ok(Err(err)) => res.and(Err(err).context("hibernating request keepalive task failed")),
+							Err(err) => res.and(Err::<_, anyhow::Error>(err.into()).context(
+								"hibernating request keepalive task join failed",
+							)),
+						}
+					}
+					keepalive_res = &mut keepalive_handle => {
+						match keepalive_res {
+							Ok(Ok(res)) => Err(anyhow::Error::msg(format!(
+								"hibernating request keepalive task completed before hibernation ended: {res:?}"
+							))),
+							Ok(Err(err)) => Err(err).context("hibernating request keepalive task failed"),
+							Err(err) => Err::<_, anyhow::Error>(err.into())
+								.context("hibernating request keepalive task join failed"),
+						}
+					}
+				}
+			},
 			record_req_metrics(
 				&ctx,
 				self.runner_id,
@@ -696,23 +726,19 @@ impl CustomServeTrait for PegboardGateway {
 			)
 		);
 
-		let _ = keepalive_abort_tx.send(());
-		let _ = keepalive_handle.await;
-
+		// Always delete the persisted entry on hibernation exit. Continue
+		// means the WS resumed normally so the request is no longer
+		// hibernating; Close/Err means it's gone outright. Leaving the entry
+		// would cause `pegboard-envoy` to replay a phantom request_id on the
+		// next outbound start.
 		let (delete_res, _) = tokio::join!(
 			async {
-				match &res {
-					Ok(HibernationResult::Continue) => {}
-					Ok(HibernationResult::Close) | Err(_) => {
-						// No longer an active hibernating request, delete entry
-						ctx.op(pegboard::ops::actor::hibernating_request::delete::Input {
-							actor_id: self.actor_id,
-							gateway_id: self.shared_state.gateway_id(),
-							request_id,
-						})
-						.await?;
-					}
-				}
+				ctx.op(pegboard::ops::actor::hibernating_request::delete::Input {
+					actor_id: self.actor_id,
+					gateway_id: self.shared_state.gateway_id(),
+					request_id,
+				})
+				.await?;
 
 				anyhow::Ok(())
 			},
@@ -762,7 +788,7 @@ impl PegboardGateway {
 			})
 			.await?
 		{
-			if actor.runner_id.is_some() {
+			if !actor.sleeping && actor.runner_id.is_some() {
 				tracing::debug!("actor became ready during hibernation");
 
 				return Ok(HibernationResult::Continue);

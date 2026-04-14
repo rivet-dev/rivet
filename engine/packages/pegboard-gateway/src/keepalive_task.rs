@@ -20,13 +20,14 @@ pub async fn task(
 	request_id: protocol::RequestId,
 	mut keepalive_abort_rx: watch::Receiver<()>,
 ) -> Result<LifecycleResult> {
-	let mut ping_interval = tokio::time::interval(Duration::from_millis(
-		(ctx.config()
-			.pegboard()
-			.hibernating_request_eligible_threshold()
-			/ 2)
-		.try_into()?,
-	));
+	let ping_interval_ms = (ctx
+		.config()
+		.pegboard()
+		.hibernating_request_eligible_threshold()
+		/ 2)
+	.max(1);
+	let mut ping_interval =
+		tokio::time::interval(Duration::from_millis(ping_interval_ms.try_into()?));
 	ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 	loop {

@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use bytes::Bytes;
 use gas::prelude::*;
@@ -801,22 +801,26 @@ impl CustomServeTrait for PegboardGateway2 {
 			},
 		};
 
+		// Always delete the persisted entry on hibernation exit. Continue
+		// means the WS resumed normally so the request is no longer
+		// hibernating; Close/Err means it's gone outright. Leaving the entry
+		// would cause `pegboard-envoy` to replay a phantom request_id on the
+		// next outbound start.
 		let (delete_res, _) = tokio::join!(
 			async {
 				match &res {
 					Ok(HibernationResult::Continue) => {}
 					Ok(HibernationResult::Close) | Err(_) => {
 						in_flight_req.stop().await;
-
-						// No longer an active hibernating request, delete entry
-						ctx.op(pegboard::ops::actor::hibernating_request::delete::Input {
-							actor_id: self.actor_id,
-							gateway_id: self.shared_state.gateway_id(),
-							request_id,
-						})
-						.await?;
 					}
 				}
+
+				ctx.op(pegboard::ops::actor::hibernating_request::delete::Input {
+					actor_id: self.actor_id,
+					gateway_id: self.shared_state.gateway_id(),
+					request_id,
+				})
+				.await?;
 
 				anyhow::Ok(())
 			},
