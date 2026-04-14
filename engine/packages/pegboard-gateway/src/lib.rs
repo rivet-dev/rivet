@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::TryStreamExt;
@@ -677,7 +677,7 @@ impl CustomServeTrait for PegboardGateway {
 
 		// Start keepalive task
 		let (keepalive_abort_tx, keepalive_abort_rx) = watch::channel(());
-		let keepalive_handle = tokio::spawn(keepalive_task::task(
+		let mut keepalive_handle = tokio::spawn(keepalive_task::task(
 			self.shared_state.clone(),
 			ctx.clone(),
 			self.actor_id,
@@ -686,25 +686,51 @@ impl CustomServeTrait for PegboardGateway {
 			keepalive_abort_rx,
 		));
 
-		let (res, metrics_res) = tokio::join!(
-			self.handle_websocket_hibernation_inner(client_ws),
-			record_req_metrics(
-				&ctx,
-				self.runner_id,
-				self.actor_id,
-				Metric::WebsocketHibernate
-			)
-		);
+		let metrics_ctx = ctx.clone();
+		let runner_id = self.runner_id;
+		let actor_id = self.actor_id;
+		let metrics_handle = tokio::spawn(async move {
+			record_req_metrics(&metrics_ctx, runner_id, actor_id, Metric::WebsocketHibernate)
+				.await
+		});
 
-		let _ = keepalive_abort_tx.send(());
-		let _ = keepalive_handle.await;
+		let res = tokio::select! {
+			res = self.handle_websocket_hibernation_inner(client_ws) => {
+				let _ = keepalive_abort_tx.send(());
+				match (&mut keepalive_handle).await.context("hibernating request keepalive task join failed")? {
+					Ok(LifecycleResult::Aborted) => {}
+					Ok(res) => {
+						tracing::debug!(?res, "hibernating request keepalive task completed");
+					}
+					Err(err) => {
+						return Err(err).context("hibernating request keepalive task failed");
+					}
+				}
+				res
+			}
+			keepalive_res = &mut keepalive_handle => {
+				match keepalive_res.context("hibernating request keepalive task join failed")? {
+					Ok(res) => {
+						Err(anyhow::Error::msg(format!(
+							"hibernating request keepalive task completed before hibernation ended: {res:?}"
+						)))
+					}
+					Err(err) => {
+						Err(err).context("hibernating request keepalive task failed")
+					}
+				}
+			}
+		};
+
+		let metrics_res = metrics_handle
+			.await
+			.context("ws hibernate metrics task join failed")?;
 
 		let (delete_res, _) = tokio::join!(
 			async {
 				match &res {
 					Ok(HibernationResult::Continue) => {}
 					Ok(HibernationResult::Close) | Err(_) => {
-						// No longer an active hibernating request, delete entry
 						ctx.op(pegboard::ops::actor::hibernating_request::delete::Input {
 							actor_id: self.actor_id,
 							gateway_id: self.shared_state.gateway_id(),
@@ -762,7 +788,7 @@ impl PegboardGateway {
 			})
 			.await?
 		{
-			if actor.runner_id.is_some() {
+			if !actor.sleeping && actor.runner_id.is_some() {
 				tracing::debug!("actor became ready during hibernation");
 
 				return Ok(HibernationResult::Continue);
