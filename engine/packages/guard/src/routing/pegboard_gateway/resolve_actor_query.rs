@@ -216,7 +216,8 @@ async fn resolve_query_target_dc_label(
 
 fn serialize_actor_key(key: &[String]) -> Result<String> {
 	const EMPTY_KEY: &str = "/";
-	const KEY_SEPARATOR: char = '/';
+	const KEY_SEPARATOR: &str = "/";
+	const KEY_SEPARATOR_CHAR: char = '/';
 
 	if key.is_empty() {
 		return Ok(EMPTY_KEY.to_string());
@@ -229,11 +230,13 @@ fn serialize_actor_key(key: &[String]) -> Result<String> {
 			continue;
 		}
 
-		let escaped = part.replace('\\', "\\\\").replace(KEY_SEPARATOR, "\\/");
+		let escaped = part
+			.replace('\\', "\\\\")
+			.replace(KEY_SEPARATOR_CHAR, "\\/");
 		escaped_parts.push(escaped);
 	}
 
-	Ok(escaped_parts.join(EMPTY_KEY))
+	Ok(escaped_parts.join(KEY_SEPARATOR))
 }
 
 fn is_duplicate_key_error(err: &anyhow::Error) -> bool {
