@@ -1,5 +1,4 @@
-import { actor } from "rivetkit";
-import type { registry } from "./registry-static";
+import { actor, queue } from "rivetkit";
 
 export const RUN_SLEEP_TIMEOUT = 1000;
 
@@ -18,7 +17,6 @@ export const runWithTicks = actor({
 		while (!c.aborted) {
 			c.state.tickCount += 1;
 			c.state.lastTickAt = Date.now();
-			c.log.info({ msg: "tick", tickCount: c.state.tickCount });
 
 			// Wait 50ms between ticks, or exit early if aborted
 			await new Promise<void>((resolve) => {
@@ -58,6 +56,9 @@ export const runWithQueueConsumer = actor({
 		runStarted: false,
 		wakeCount: 0,
 	},
+	queues: {
+		messages: queue<unknown>(),
+	},
 	onWake: (c) => {
 		c.state.wakeCount += 1;
 	},
@@ -85,9 +86,7 @@ export const runWithQueueConsumer = actor({
 			wakeCount: c.state.wakeCount,
 		}),
 		sendMessage: async (c, body: unknown) => {
-			const client = c.client<typeof registry>();
-			const handle = client.runWithQueueConsumer.getForId(c.actorId);
-			await handle.send("messages", body);
+			await c.queue.send("messages", body);
 			return true;
 		},
 	},

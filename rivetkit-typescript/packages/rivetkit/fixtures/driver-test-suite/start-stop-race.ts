@@ -1,4 +1,5 @@
 import { actor } from "rivetkit";
+import type { registry } from "./registry-static";
 
 /**
  * Actor designed to test start/stop race conditions.
@@ -19,10 +20,23 @@ export const startStopRaceActor = actor({
 
 		c.state.initialized = true;
 		c.state.startCompleted = true;
+
+		const client = c.client<typeof registry>();
+		const observer = client.lifecycleObserver.getOrCreate(["observer"]);
+		await observer.recordEvent({
+			actorKey: c.key.join("/"),
+			event: "started",
+		});
 	},
-	onDestroy: (c) => {
+	onDestroy: async (c) => {
 		c.state.destroyCalled = true;
-		// Don't save state here - the actor framework will save it automatically
+
+		const client = c.client<typeof registry>();
+		const observer = client.lifecycleObserver.getOrCreate(["observer"]);
+		await observer.recordEvent({
+			actorKey: c.key.join("/"),
+			event: "destroy",
+		});
 	},
 	actions: {
 		getState: (c) => {

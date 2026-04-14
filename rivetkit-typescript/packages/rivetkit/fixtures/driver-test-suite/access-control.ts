@@ -60,7 +60,11 @@ export const accessControlActor = actor({
 	onRequest(_c, request) {
 		const url = new URL(request.url);
 		if (url.pathname === "/status") {
-			return Response.json({ ok: true });
+			return new Response(JSON.stringify({ ok: true }), {
+				headers: {
+					"content-type": "application/json",
+				},
+			});
 		}
 		return new Response("Not Found", { status: 404 });
 	},

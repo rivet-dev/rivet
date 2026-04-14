@@ -4,7 +4,9 @@ import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
 export function runActorRunTests(driverTestConfig: DriverTestConfig) {
-	describe.skipIf(driverTestConfig.skip?.sleep)("Actor Run Tests", () => {
+	describe
+		.skipIf(driverTestConfig.skip?.sleep)
+		.sequential("Actor Run Tests", () => {
 		test("run handler starts after actor startup", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
@@ -181,5 +183,5 @@ export function runActorRunTests(driverTestConfig: DriverTestConfig) {
 				expect(state2.wakeCount).toBeGreaterThan(1);
 			}
 		});
-	});
+		});
 }
