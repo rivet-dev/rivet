@@ -97,15 +97,6 @@ pub async fn create(
 ) -> Result<CreateResponse> {
 	let namespace_id = Id::new_v1(ctx.config().dc_label());
 
-	ctx.workflow(namespace::workflows::namespace::Input {
-		namespace_id,
-		name: body.name.clone(),
-		display_name: body.display_name.clone(),
-	})
-	.tag("namespace_id", namespace_id)
-	.dispatch()
-	.await?;
-
 	let mut create_sub = ctx
 		.subscribe::<namespace::workflows::namespace::CreateComplete>((
 			"namespace_id",
@@ -115,6 +106,15 @@ pub async fn create(
 	let mut fail_sub = ctx
 		.subscribe::<namespace::workflows::namespace::Failed>(("namespace_id", namespace_id))
 		.await?;
+
+	ctx.workflow(namespace::workflows::namespace::Input {
+		namespace_id,
+		name: body.name.clone(),
+		display_name: body.display_name.clone(),
+	})
+	.tag("namespace_id", namespace_id)
+	.dispatch()
+	.await?;
 
 	tokio::select! {
 		res = create_sub.next() => { res?; },
