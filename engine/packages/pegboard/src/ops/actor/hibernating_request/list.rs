@@ -27,7 +27,8 @@ pub async fn pegboard_actor_hibernating_request_list(
 		.pegboard()
 		.hibernating_request_eligible_threshold();
 
-	ctx.udb()?
+	let res = ctx
+		.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
@@ -61,5 +62,13 @@ pub async fn pegboard_actor_hibernating_request_list(
 			.await
 		})
 		.custom_instrument(tracing::info_span!("hibernating_request_list_tx"))
-		.await
+		.await?;
+
+	tracing::debug!(
+		actor_id=%input.actor_id,
+		count=res.len(),
+		"listed hibernating requests"
+	);
+
+	Ok(res)
 }

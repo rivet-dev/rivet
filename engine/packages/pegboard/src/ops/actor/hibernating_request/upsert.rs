@@ -16,6 +16,13 @@ pub async fn pegboard_actor_hibernating_request_upsert(
 	ctx: &OperationCtx,
 	input: &Input,
 ) -> Result<()> {
+	tracing::debug!(
+		actor_id=%input.actor_id,
+		gateway_id=%protocol::util::id_to_string(&input.gateway_id),
+		request_id=%protocol::util::id_to_string(&input.request_id),
+		"upserting hibernating request"
+	);
+
 	ctx.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());

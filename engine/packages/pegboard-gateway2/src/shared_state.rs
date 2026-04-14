@@ -98,7 +98,7 @@ impl SharedState {
 			gateway_id,
 			receiver_subject,
 			in_flight_requests: HashMap::new(),
-			hibernation_timeout: pegboard_config.hibernating_request_eligible_threshold(),
+			hibernation_timeout: pegboard_config.hibernating_request_eligible_threshold().max(1),
 			gc_interval: Duration::from_millis(pegboard_config.gateway_gc_interval_ms()),
 			tunnel_ping_timeout: pegboard_config.gateway_tunnel_ping_timeout_ms(),
 			hws_message_ack_timeout: Duration::from_millis(
