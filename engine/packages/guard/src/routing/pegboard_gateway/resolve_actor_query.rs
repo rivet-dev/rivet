@@ -216,7 +216,8 @@ async fn resolve_query_target_dc_label(
 
 fn serialize_actor_key(key: &[String]) -> Result<String> {
 	const EMPTY_KEY: &str = "/";
-	const KEY_SEPARATOR: char = '/';
+	const KEY_SEPARATOR: &str = "/";
+	const KEY_SEPARATOR_CHAR: char = '/';
 
 	if key.is_empty() {
 		return Ok(EMPTY_KEY.to_string());
@@ -229,11 +230,13 @@ fn serialize_actor_key(key: &[String]) -> Result<String> {
 			continue;
 		}
 
-		let escaped = part.replace('\\', "\\\\").replace(KEY_SEPARATOR, "\\/");
+		let escaped = part
+			.replace('\\', "\\\\")
+			.replace(KEY_SEPARATOR_CHAR, "\\/");
 		escaped_parts.push(escaped);
 	}
 
-	Ok(escaped_parts.join(EMPTY_KEY))
+	Ok(escaped_parts.join(KEY_SEPARATOR))
 }
 
 fn is_duplicate_key_error(err: &anyhow::Error) -> bool {
@@ -241,4 +244,79 @@ fn is_duplicate_key_error(err: &anyhow::Error) -> bool {
 		.find_map(|x| x.downcast_ref::<rivet_error::RivetError>())
 		.map(|err| err.group() == "actor" && err.code() == "duplicate_key")
 		.unwrap_or(false)
+}
+
+// Tests are inline because `serialize_actor_key` is a private function and
+// cannot be reached from the integration `tests/` directory without widening
+// visibility. Keep these in sync with the TypeScript suite at
+// `rivetkit-typescript/packages/rivetkit/src/actor/keys.test.ts`.
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn s(parts: &[&str]) -> Vec<String> {
+		parts.iter().map(|p| (*p).to_string()).collect()
+	}
+
+	#[test]
+	fn serializes_empty_array_as_empty_key_sentinel() {
+		assert_eq!(serialize_actor_key(&[]).unwrap(), "/");
+	}
+
+	#[test]
+	fn serializes_single_part_unchanged() {
+		assert_eq!(serialize_actor_key(&s(&["test"])).unwrap(), "test");
+	}
+
+	#[test]
+	fn serializes_multiple_parts_separated_by_slash() {
+		assert_eq!(
+			serialize_actor_key(&s(&["a", "b", "c"])).unwrap(),
+			"a/b/c"
+		);
+	}
+
+	#[test]
+	fn escapes_slash_in_part() {
+		assert_eq!(serialize_actor_key(&s(&["a/b"])).unwrap(), "a\\/b");
+	}
+
+	#[test]
+	fn escapes_slash_in_part_with_neighbors() {
+		assert_eq!(
+			serialize_actor_key(&s(&["a/b", "c"])).unwrap(),
+			"a\\/b/c"
+		);
+	}
+
+	#[test]
+	fn escapes_part_equal_to_separator() {
+		assert_eq!(serialize_actor_key(&s(&["/"])).unwrap(), "\\/");
+	}
+
+	#[test]
+	fn handles_empty_string_part_with_marker() {
+		assert_eq!(serialize_actor_key(&s(&[""])).unwrap(), "\\0");
+	}
+
+	#[test]
+	fn empty_string_marker_is_distinct_from_empty_key_sentinel() {
+		assert_ne!(serialize_actor_key(&[]).unwrap(), serialize_actor_key(&s(&[""])).unwrap());
+	}
+
+	#[test]
+	fn escapes_backslash_before_separator() {
+		assert_eq!(
+			serialize_actor_key(&s(&["a\\b"])).unwrap(),
+			"a\\\\b"
+		);
+	}
+
+	#[test]
+	fn handles_mixed_empty_and_escaped_parts() {
+		assert_eq!(
+			serialize_actor_key(&s(&["a/b", "", "c/d"])).unwrap(),
+			"a\\/b/\\0/c\\/d"
+		);
+	}
 }
