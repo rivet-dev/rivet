@@ -136,13 +136,24 @@ export const queueActor = actor({
 		iterWithSignalAbort: async (c) => {
 			const controller = new AbortController();
 			controller.abort();
-			for await (const _message of c.queue.iter({
-				names: ["abort"],
-				signal: controller.signal,
-			})) {
-				return { ok: false };
+			try {
+				for await (const _message of c.queue.iter({
+					names: ["abort"],
+					signal: controller.signal,
+				})) {
+					return { ok: false };
+				}
+				return { ok: true };
+			} catch (error) {
+				const actorError = error as { group?: string; code?: string };
+				if (
+					actorError.group === "actor" &&
+					actorError.code === "aborted"
+				) {
+					return { ok: true };
+				}
+				throw error;
 			}
-			return { ok: true };
 		},
 		receiveAndComplete: async (c, name: "tasks") => {
 			const message = await c.queue.next({
