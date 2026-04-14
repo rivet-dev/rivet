@@ -5,7 +5,11 @@ import { useActorInspector } from "./actor-inspector-context";
 import { ActorRegion } from "./actor-region";
 import { QueriedActorStatus } from "./actor-status";
 import { QueriedActorStatusAdditionalInfo } from "./actor-status-label";
-import { ActorStopButton } from "./actor-stop-button";
+import {
+	ActorRescheduleButton,
+	ActorSleepButton,
+	ActorStopButton,
+} from "./actor-stop-button";
 import { ActorObjectInspector } from "./console/actor-inspector";
 import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
@@ -24,7 +28,6 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 			connectableTs,
 			pendingAllocationTs,
 			sleepTs,
-			crashPolicy,
 			runner,
 		} = {},
 	} = useQuery(useDataProvider().actorGeneralQueryOptions(actorId));
@@ -86,14 +89,6 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 						})}
 					>
 						{runner || "n/a"}
-					</Dd>
-					<Dt>Crash Policy</Dt>
-					<Dd
-						className={cn({
-							"text-muted-foreground": !crashPolicy,
-						})}
-					>
-						{crashPolicy || "n/a"}
 					</Dd>
 					<Dt>Created</Dt>
 					<Dd className={cn({ "text-muted-foreground": !createTs })}>
@@ -173,7 +168,9 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 					) : null}
 					<Versions actorId={actorId} />
 				</Dl>
-				<div className="border-t mt-2 pt-4">
+				<div className="border-t mt-2 pt-4 flex gap-2">
+					<ActorSleepButton actorId={actorId} />
+					<ActorRescheduleButton actorId={actorId} />
 					<ActorStopButton actorId={actorId} />
 				</div>
 			</Flex>

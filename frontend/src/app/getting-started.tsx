@@ -175,12 +175,9 @@ export function GettingStarted({
 
 	const defaultValues = {
 		runnerName: "default",
-		slotsPerRunner: 1,
-		maxRunners: 1_000,
-		minRunners: 1,
-		runnerMargin: 0,
 		headers: [],
 		requestLifespan: 900,
+		drainGracePeriod: 0,
 		provider: provider || "",
 		datacenters: {},
 		...(initialRunnerConfig || {}),
@@ -1275,11 +1272,8 @@ function BackendSetup() {
 								runnerName={false}
 								datacenters
 								headers={false}
-								slotsPerRunner={false}
-								minRunners={false}
-								maxRunners={false}
-								runnerMargin={false}
 								requestLifespan={false}
+								drainGracePeriod={false}
 							/>
 							<ConnectServerlessForm.Endpoint
 								placeholder={match(provider)

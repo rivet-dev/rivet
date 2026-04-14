@@ -1,4 +1,3 @@
-import { Rivet } from "@rivetkit/engine-api-full";
 import {
 	useInfiniteQuery,
 	useSuspenseInfiniteQuery,
@@ -19,7 +18,6 @@ import {
 } from "../../ui/form";
 import { AllRunnerSelect } from "../all-runner-select";
 import { BuildSelect } from "../build-select";
-import { CrashPolicySelect } from "../crash-policy-select";
 import { useEngineCompatDataProvider } from "../data-provider";
 import { RegionSelect } from "../region-select";
 
@@ -46,9 +44,8 @@ export const formSchema = z
 
 		datacenter: z.string(),
 		runnerNameSelector: z.string(),
-		crashPolicy: z.nativeEnum(Rivet.CrashPolicy),
 	})
-	.partial({ datacenter: true, runnerNameSelector: true, crashPolicy: true });
+	.partial({ datacenter: true, runnerNameSelector: true });
 
 export type FormValues = z.infer<typeof formSchema>;
 export type SubmitHandler = (
@@ -76,32 +73,6 @@ export const Build = () => {
 					</FormControl>
 					<FormDescription>
 						Used to differentiate between different actor types.
-					</FormDescription>
-					<FormMessage />
-				</FormItem>
-			)}
-		/>
-	);
-};
-
-export const CrashPolicy = () => {
-	const { control } = useFormContext<FormValues>();
-
-	return (
-		<FormField
-			control={control}
-			name="crashPolicy"
-			render={({ field }) => (
-				<FormItem>
-					<FormLabel>Crash Policy</FormLabel>
-					<FormControl>
-						<CrashPolicySelect
-							onValueChange={field.onChange}
-							value={field.value || "destroy"}
-						/>
-					</FormControl>
-					<FormDescription>
-						Determines the behavior of the actor on crash.
 					</FormDescription>
 					<FormMessage />
 				</FormItem>

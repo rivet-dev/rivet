@@ -23,17 +23,21 @@ import {
 	FormMessage,
 	Input,
 	Label,
+	Switch,
 } from "@/components";
 import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 
 export const formSchema = z.object({
 	url: z.string().url(),
-	maxRunners: z.coerce.number().positive(),
-	minRunners: z.coerce.number().min(0),
+	maxRunners: z.coerce.number().positive().optional(),
+	minRunners: z.coerce.number().min(0).optional(),
 	requestLifespan: z.coerce.number().positive(),
-	runnersMargin: z.coerce.number().min(0),
-	slotsPerRunner: z.coerce.number().positive(),
+	runnersMargin: z.coerce.number().min(0).optional(),
+	slotsPerRunner: z.coerce.number().positive().optional(),
+	maxConcurrentActors: z.coerce.number().positive().optional(),
+	drainGracePeriod: z.coerce.number().min(0).optional(),
+	autoUpgrade: z.boolean().optional().default(false),
 	headers: z.array(z.array(z.string())).default([]),
 	regions: z
 		.record(z.string(), z.boolean().optional())
@@ -369,6 +373,103 @@ col-span-full flex-1"
 				Add a header
 			</Button>
 		</div>
+	);
+};
+
+export const MaxConcurrentActors = <
+	TValues extends Record<string, any> = FormValues,
+>({
+	name = "maxConcurrentActors" as FieldPath<TValues>,
+	className,
+}: {
+	name?: FieldPath<TValues>;
+	className?: string;
+}) => {
+	const { control } = useFormContext<TValues>();
+	return (
+		<FormField
+			control={control}
+			name={name}
+			render={({ field }) => (
+				<FormItem className={className}>
+					<FormLabel className="col-span-1">
+						Max Concurrent Actors
+					</FormLabel>
+					<FormControl className="row-start-2">
+						<Input type="number" {...field} value={field.value ?? ""} />
+					</FormControl>
+					<FormDescription className="col-span-1">
+						Maximum actors allowed to run concurrently per runner.
+					</FormDescription>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
+	);
+};
+
+export const DrainGracePeriod = <
+	TValues extends Record<string, any> = FormValues,
+>({
+	name = "drainGracePeriod" as FieldPath<TValues>,
+	className,
+}: {
+	name?: FieldPath<TValues>;
+	className?: string;
+}) => {
+	const { control } = useFormContext<TValues>();
+	return (
+		<FormField
+			control={control}
+			name={name}
+			render={({ field }) => (
+				<FormItem className={className}>
+					<FormLabel className="col-span-1">
+						Drain Grace Period (s)
+					</FormLabel>
+					<FormControl className="row-start-2">
+						<Input type="number" {...field} value={field.value ?? ""} />
+					</FormControl>
+					<FormDescription className="col-span-1">
+						Time to wait for actors to finish before forcefully
+						stopping.
+					</FormDescription>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
+	);
+};
+
+export const AutoUpgrade = <TValues extends Record<string, any> = FormValues>({
+	name = "autoUpgrade" as FieldPath<TValues>,
+}: {
+	name?: FieldPath<TValues>;
+}) => {
+	const { control } = useFormContext<TValues>();
+	return (
+		<FormField
+			control={control}
+			name={name}
+			render={({ field }) => (
+				<FormItem className="flex flex-row items-center gap-3">
+					<FormControl>
+						<Switch
+							checked={field.value ?? false}
+							onCheckedChange={field.onChange}
+						/>
+					</FormControl>
+					<div>
+						<FormLabel>Auto Upgrade Actors</FormLabel>
+						<FormDescription>
+							Automatically upgrade actors when a new runner version
+							is available.
+						</FormDescription>
+					</div>
+					<FormMessage />
+				</FormItem>
+			)}
+		/>
 	);
 };
 

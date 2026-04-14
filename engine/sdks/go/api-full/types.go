@@ -995,17 +995,23 @@ func (r *RunnerConfigKindServerless) String() string {
 }
 
 type RunnerConfigKindServerlessServerless struct {
+	// Seconds.
+	DrainGracePeriod    *int              `json:"drain_grace_period,omitempty"`
 	Headers             map[string]string `json:"headers,omitempty"`
 	MaxConcurrentActors *int64            `json:"max_concurrent_actors,omitempty"`
-	MaxRunners          int               `json:"max_runners"`
+	// Deprecated.
+	MaxRunners int `json:"max_runners"`
 	// Milliseconds between metadata polling. If not set, uses the global default.
 	MetadataPollInterval *int64 `json:"metadata_poll_interval,omitempty"`
-	MinRunners           *int   `json:"min_runners,omitempty"`
+	// Deprecated.
+	MinRunners *int `json:"min_runners,omitempty"`
 	// Seconds.
-	RequestLifespan int    `json:"request_lifespan"`
-	RunnersMargin   *int   `json:"runners_margin,omitempty"`
-	SlotsPerRunner  int    `json:"slots_per_runner"`
-	Url             string `json:"url"`
+	RequestLifespan int `json:"request_lifespan"`
+	// Deprecated.
+	RunnersMargin *int `json:"runners_margin,omitempty"`
+	// Deprecated.
+	SlotsPerRunner int    `json:"slots_per_runner"`
+	Url            string `json:"url"`
 
 	_rawJSON json.RawMessage
 }
@@ -1038,6 +1044,7 @@ type RunnerConfigResponse struct {
 	Serverless            *RunnerConfigServerless `json:"serverless,omitempty"`
 	DrainOnVersionUpgrade *bool                   `json:"drain_on_version_upgrade,omitempty"`
 	Metadata              interface{}             `json:"metadata,omitempty"`
+	ProtocolVersion       *int                    `json:"protocol_version,omitempty"`
 	RunnerPoolError       map[string]interface{}  `json:"runner_pool_error,omitempty"`
 
 	_rawJSON json.RawMessage
@@ -1067,17 +1074,23 @@ func (r *RunnerConfigResponse) String() string {
 }
 
 type RunnerConfigServerless struct {
+	// Seconds.
+	DrainGracePeriod    *int              `json:"drain_grace_period,omitempty"`
 	Headers             map[string]string `json:"headers,omitempty"`
 	MaxConcurrentActors *int64            `json:"max_concurrent_actors,omitempty"`
-	MaxRunners          int               `json:"max_runners"`
+	// Deprecated.
+	MaxRunners int `json:"max_runners"`
 	// Milliseconds between metadata polling. If not set, uses the global default.
 	MetadataPollInterval *int64 `json:"metadata_poll_interval,omitempty"`
-	MinRunners           *int   `json:"min_runners,omitempty"`
+	// Deprecated.
+	MinRunners *int `json:"min_runners,omitempty"`
 	// Seconds.
-	RequestLifespan int    `json:"request_lifespan"`
-	RunnersMargin   *int   `json:"runners_margin,omitempty"`
-	SlotsPerRunner  int    `json:"slots_per_runner"`
-	Url             string `json:"url"`
+	RequestLifespan int `json:"request_lifespan"`
+	// Deprecated.
+	RunnersMargin *int `json:"runners_margin,omitempty"`
+	// Deprecated.
+	SlotsPerRunner int    `json:"slots_per_runner"`
+	Url            string `json:"url"`
 
 	_rawJSON json.RawMessage
 }

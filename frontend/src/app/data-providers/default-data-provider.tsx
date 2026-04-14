@@ -51,6 +51,8 @@ const defaultContext = {
 	features: {
 		canCreateActors: true,
 		canDeleteActors: false,
+		canSleepActors: false,
+		canRescheduleActors: false,
 	},
 	actorsQueryOptions(opts: ActorQueryOptions) {
 		return infiniteQueryOptions({
@@ -236,7 +238,6 @@ const defaultContext = {
 				sleepTs: data.sleepTs ? new Date(data.sleepTs) : null,
 				datacenter: data.datacenter,
 				runner: data.runnerNameSelector,
-				crashPolicy: data.crashPolicy,
 			}),
 		});
 	},
@@ -264,6 +265,42 @@ const defaultContext = {
 	actorDestroyMutationOptions(actorId: ActorId) {
 		return mutationOptions({
 			mutationKey: ["actor", actorId, "destroy"] as QueryKey,
+			mutationFn: async () => {
+				return;
+			},
+			onSuccess: () => {
+				const keys = this.actorQueryOptions(actorId).queryKey.filter(
+					(k) => typeof k === "string",
+				);
+				queryClient.invalidateQueries({
+					predicate: (query) => {
+						return keys.every((k) => query.queryKey.includes(k));
+					},
+				});
+			},
+		});
+	},
+	actorSleepMutationOptions(actorId: ActorId) {
+		return mutationOptions({
+			mutationKey: ["actor", actorId, "sleep"] as QueryKey,
+			mutationFn: async () => {
+				return;
+			},
+			onSuccess: () => {
+				const keys = this.actorQueryOptions(actorId).queryKey.filter(
+					(k) => typeof k === "string",
+				);
+				queryClient.invalidateQueries({
+					predicate: (query) => {
+						return keys.every((k) => query.queryKey.includes(k));
+					},
+				});
+			},
+		});
+	},
+	actorRescheduleAfterSleepMutationOptions(actorId: ActorId) {
+		return mutationOptions({
+			mutationKey: ["actor", actorId, "reschedule"] as QueryKey,
 			mutationFn: async () => {
 				return;
 			},
