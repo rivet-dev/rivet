@@ -86,7 +86,8 @@ describeDriverMatrix("Actor Handle", (driverTestConfig) => {
 				const key = ["duplicate-create-handle", crypto.randomUUID()];
 
 				// First create should succeed
-				await client.counter.create(key);
+				const handle = await client.counter.create(key);
+				await handle.increment(0);
 
 				// Second create with same key should throw ActorAlreadyExists
 				try {
