@@ -17,8 +17,8 @@ set -e
 #   ghcr.io/rivet-dev/rivet/builder-base-osxcross:<sha>
 #   ghcr.io/rivet-dev/rivet/engine-base-builder:<sha>
 #
-# After pushing shared builder bases, update BASE_TAG in
-# .github/workflows/publish.yaml to reference the new tag.
+# After pushing all bases, this script updates the pinned GHCR tags in the
+# consumer Dockerfiles.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -66,6 +66,69 @@ ensure_multiarch_builder() {
         docker buildx create --name "$MULTIARCH_BUILDER" --driver docker-container --use >/dev/null
     fi
     docker buildx inspect "$MULTIARCH_BUILDER" --bootstrap >/dev/null
+}
+
+update_from_line() {
+    local file="$1"
+    local pattern="$2"
+    local replacement="$3"
+
+    if ! grep -Eq "^FROM ${pattern}\$" "$file"; then
+        echo "ERROR: Failed to find pinned base image reference in $file"
+        return 1
+    fi
+
+    perl -0pi -e "s#^FROM ${pattern}\$#FROM ${replacement}#m" "$file"
+
+    if ! grep -Fqx "FROM ${replacement}" "$file"; then
+        echo "ERROR: Failed to update pinned base image reference in $file"
+        return 1
+    fi
+}
+
+pin_consumer_dockerfiles() {
+    echo "==> Updating pinned base image references to tag: $TAG"
+
+    update_from_line \
+        "$REPO_ROOT/docker/build/linux-x64-gnu.Dockerfile" \
+        'ghcr\\.io/rivet-dev/rivet/builder-base-linux-gnu:[^[:space:]]+' \
+        "ghcr.io/rivet-dev/rivet/builder-base-linux-gnu:${TAG}"
+    update_from_line \
+        "$REPO_ROOT/docker/build/linux-arm64-gnu.Dockerfile" \
+        'ghcr\\.io/rivet-dev/rivet/builder-base-linux-gnu:[^[:space:]]+' \
+        "ghcr.io/rivet-dev/rivet/builder-base-linux-gnu:${TAG}"
+    update_from_line \
+        "$REPO_ROOT/docker/build/linux-x64-musl.Dockerfile" \
+        'ghcr\\.io/rivet-dev/rivet/builder-base-linux-musl:[^[:space:]]+' \
+        "ghcr.io/rivet-dev/rivet/builder-base-linux-musl:${TAG}"
+    update_from_line \
+        "$REPO_ROOT/docker/build/linux-arm64-musl.Dockerfile" \
+        'ghcr\\.io/rivet-dev/rivet/builder-base-linux-musl:[^[:space:]]+' \
+        "ghcr.io/rivet-dev/rivet/builder-base-linux-musl:${TAG}"
+    update_from_line \
+        "$REPO_ROOT/docker/build/darwin-x64.Dockerfile" \
+        'ghcr\\.io/rivet-dev/rivet/builder-base-osxcross:[^[:space:]]+' \
+        "ghcr.io/rivet-dev/rivet/builder-base-osxcross:${TAG}"
+    update_from_line \
+        "$REPO_ROOT/docker/build/darwin-arm64.Dockerfile" \
+        'ghcr\\.io/rivet-dev/rivet/builder-base-osxcross:[^[:space:]]+' \
+        "ghcr.io/rivet-dev/rivet/builder-base-osxcross:${TAG}"
+    update_from_line \
+        "$REPO_ROOT/docker/build/windows-x64.Dockerfile" \
+        'ghcr\\.io/rivet-dev/rivet/builder-base-windows-mingw:[^[:space:]]+' \
+        "ghcr.io/rivet-dev/rivet/builder-base-windows-mingw:${TAG}"
+    update_from_line \
+        "$REPO_ROOT/docker/engine/Dockerfile" \
+        'ghcr\\.io/rivet-dev/rivet/engine-base-builder:[^[:space:]]+ AS builder' \
+        "ghcr.io/rivet-dev/rivet/engine-base-builder:${TAG} AS builder"
+    update_from_line \
+        "$REPO_ROOT/docker/engine/Dockerfile" \
+        'ghcr\\.io/rivet-dev/rivet/engine-base-runtime-full:[^[:space:]]+ AS engine-full-base' \
+        "ghcr.io/rivet-dev/rivet/engine-base-runtime-full:${TAG} AS engine-full-base"
+    update_from_line \
+        "$REPO_ROOT/docker/engine/Dockerfile" \
+        'ghcr\\.io/rivet-dev/rivet/engine-base-runtime-slim:[^[:space:]]+' \
+        "ghcr.io/rivet-dev/rivet/engine-base-runtime-slim:${TAG}"
 }
 
 build_one() {
@@ -158,6 +221,7 @@ if [ "$BASE_NAME" = "all" ]; then
         for base in $BASES; do
             push_one "$base"
         done
+        pin_consumer_dockerfiles
     fi
 else
     build_one "$BASE_NAME"
@@ -169,4 +233,8 @@ fi
 echo ""
 echo "Done. Tag: $TAG"
 echo ""
-echo "Update BASE_TAG to use tag: $TAG if you rebuilt shared builder bases"
+if [ "$BASE_NAME" = "all" ] && [ "$PUSH" = "true" ]; then
+    echo "Pinned consumer Dockerfiles to tag: $TAG"
+else
+    echo "Consumer Dockerfiles were not updated. Run ./scripts/docker-builder-base/build-push.sh all --push to pin them to this tag."
+fi

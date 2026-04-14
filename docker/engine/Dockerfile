@@ -1,10 +1,8 @@
 # syntax=docker/dockerfile:1.10.0
 
-ARG ENGINE_BASE_TAG=latest
-
 # MARK: Builder
 # TODO(RVT-4168): Compile libfdb from scratch for ARM
-FROM ghcr.io/rivet-dev/rivet/engine-base-builder:${ENGINE_BASE_TAG} AS builder
+FROM ghcr.io/rivet-dev/rivet/engine-base-builder:a36b881 AS builder
 
 # Docker automatically provides TARGETARCH
 ARG TARGETARCH
@@ -51,7 +49,7 @@ RUN \
     cp target/$CARGO_BUILD_MODE/rivet-engine /app/dist/
 
 # MARK: Engine (full, base)
-FROM ghcr.io/rivet-dev/rivet/engine-base-runtime-full:${ENGINE_BASE_TAG} AS engine-full-base
+FROM ghcr.io/rivet-dev/rivet/engine-base-runtime-full:a36b881 AS engine-full-base
 
 # MARK: Engine (Full)
 FROM engine-full-base AS engine-full
@@ -64,7 +62,7 @@ ENTRYPOINT ["/usr/bin/rivet-engine"]
 CMD ["start"]
 
 # MARK: Engine (Slim)
-FROM ghcr.io/rivet-dev/rivet/engine-base-runtime-slim:${ENGINE_BASE_TAG} AS engine-slim
+FROM ghcr.io/rivet-dev/rivet/engine-base-runtime-slim:a36b881 AS engine-slim
 
 LABEL org.opencontainers.image.source=https://github.com/rivet-dev/rivet
 

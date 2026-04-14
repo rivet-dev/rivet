@@ -3,15 +3,13 @@
 # Builds either rivet-engine or rivetkit-native based on BUILD_TARGET.
 #
 # Build args:
-#   BASE_TAG        - base image tag (set by build-push script)
 #   BUILD_TARGET    - "engine" or "rivetkit-native"
 #   BUILD_MODE      - "debug" (fast) or "release" (optimized)
 #   BUILD_FRONTEND  - "true" or "false" (engine only)
 #
 # Base image: docker/builder-base/linux-gnu.Dockerfile
 # Rebuild base: scripts/docker-builder-base/build-push.sh linux-gnu --push
-ARG BASE_TAG=latest
-FROM ghcr.io/rivet-dev/rivet/builder-base-linux-gnu:${BASE_TAG}
+FROM ghcr.io/rivet-dev/rivet/builder-base-linux-gnu:0e33ceb98
 
 ARG BUILD_TARGET=engine
 ARG BUILD_MODE=release
