@@ -237,10 +237,42 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
+  # engine-base-images — publish engine-specific GHCR bases for this commit SHA
+  # ---------------------------------------------------------------------------
+  engine-base-images:
+    needs: [context]
+    name: "Engine Base ${{ matrix.base }}"
+    if: needs.context.outputs.is_fork != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - base: engine-builder
+          - base: engine-runtime-full
+          - base: engine-runtime-slim
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build & Push Engine Base
+        run: |
+          TAG_OVERRIDE=${{ needs.context.outputs.sha }} \
+            ./scripts/docker-builder-base/build-push.sh ${{ matrix.base }} --push
+
+  # ---------------------------------------------------------------------------
   # docker-images — per-arch runtime images pushed to Docker Hub
   # ---------------------------------------------------------------------------
   docker-images:
-    needs: [context]
+    needs: [context, engine-base-images]
     name: "Docker ${{ matrix.arch_suffix }}"
     if: needs.context.outputs.is_fork != 'true'
     strategy:
@@ -283,6 +315,7 @@ jobs:
           target: engine-full
           platforms: ${{ matrix.platform }}
           build-args: |
+            ENGINE_BASE_TAG=${{ needs.context.outputs.sha }}
             BUILD_FRONTEND=${{ steps.mode.outputs.build_frontend }}
             CARGO_BUILD_MODE=${{ steps.mode.outputs.cargo_build_mode }}
       - name: Build & Push (rivetdev/engine:slim)
@@ -295,6 +328,7 @@ jobs:
           target: engine-slim
           platforms: ${{ matrix.platform }}
           build-args: |
+            ENGINE_BASE_TAG=${{ needs.context.outputs.sha }}
             BUILD_FRONTEND=${{ steps.mode.outputs.build_frontend }}
             CARGO_BUILD_MODE=${{ steps.mode.outputs.cargo_build_mode }}
 
