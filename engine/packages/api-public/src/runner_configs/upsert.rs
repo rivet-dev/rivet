@@ -133,6 +133,23 @@ async fn upsert_inner(
 		.into_iter()
 		.any(|endpoint_config_changed| endpoint_config_changed);
 
+	// Resolve namespace
+	let namespace = ctx
+		.op(namespace::ops::resolve_for_name_global::Input {
+			name: query.namespace.clone(),
+		})
+		.await?
+		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+
+	// Fetch enabled dcs to prewarm epoxy cache
+	ctx.op(
+		pegboard::ops::runner::list_runner_config_enabled_dcs::Input {
+			namespace_id: namespace.namespace_id,
+			runner_name: path.runner_name.clone(),
+		},
+	)
+	.await?;
+
 	Ok(UpsertResponse {
 		endpoint_config_changed: any_endpoint_config_changed,
 	})

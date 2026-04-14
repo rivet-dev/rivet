@@ -64,12 +64,12 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 		input.caching_behavior == protocol::CachingBehavior::Optimistic,
 	)
 	.await?;
-	if let Some(value) = local_read
-		.value
-		.map(|v| v.value)
-		.or(local_read.cache_value.and_then(|v| v.value))
-	{
-		return Ok(Output { value: Some(value) });
+	if let Some(value) = local_read.value {
+		return Ok(Output {
+			value: Some(value.value),
+		});
+	} else if let Some(value) = local_read.cache_value {
+		return Ok(Output { value: value.value });
 	}
 
 	// Request fanout to other datacenters, return first datacenter with any non-none value

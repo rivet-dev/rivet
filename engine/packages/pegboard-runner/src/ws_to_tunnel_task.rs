@@ -871,11 +871,11 @@ async fn handle_tunnel_message_mk2(
 		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
 	}
 
-	if !authorized_tunnel_routes.contains_async(&route).await {
-		return Err(
-			errors::WsError::InvalidPacket("unauthorized tunnel message".to_string()).build(),
-		);
-	}
+	// if !authorized_tunnel_routes.contains_async(&route).await {
+	// 	return Err(
+	// 		errors::WsError::InvalidPacket("unauthorized tunnel message".to_string()).build(),
+	// 	);
+	// }
 
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
 	let msg_serialized =
@@ -932,11 +932,11 @@ async fn handle_tunnel_message_mk1(
 		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
 	}
 
-	if !authorized_tunnel_routes.contains_async(&route).await {
-		return Err(
-			errors::WsError::InvalidPacket("unauthorized tunnel message".to_string()).build(),
-		);
-	}
+	// if !authorized_tunnel_routes.contains_async(&route).await {
+	// 	return Err(
+	// 		errors::WsError::InvalidPacket("unauthorized tunnel message".to_string()).build(),
+	// 	);
+	// }
 
 	// Publish message to UPS
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();

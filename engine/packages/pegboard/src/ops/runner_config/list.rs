@@ -95,12 +95,20 @@ pub async fn pegboard_runner_config_list(
 									)
 									.await?;
 
-								Ok(RunnerConfig {
+								Ok(Some(RunnerConfig {
 									name: key.name,
 									config,
 									protocol_version,
-								})
+								}))
 							} else {
+								// Skip protocol_version data keys
+								if tx
+									.unpack::<keys::runner_config::ProtocolVersionKey>(entry.key())
+									.is_ok()
+								{
+									return Ok(None);
+								}
+
 								let (key, config) =
 									tx.read_entry::<keys::runner_config::DataKey>(&entry)?;
 								let protocol_version = tx
@@ -113,11 +121,11 @@ pub async fn pegboard_runner_config_list(
 									)
 									.await?;
 
-								Ok(RunnerConfig {
+								Ok(Some(RunnerConfig {
 									name: key.name,
 									config,
 									protocol_version,
-								})
+								}))
 							}
 						}
 						Err(err) => Err(err.into()),
@@ -125,6 +133,7 @@ pub async fn pegboard_runner_config_list(
 				}
 			})
 			.buffer_unordered(512)
+			.try_filter_map(|x| std::future::ready(Ok(x)))
 			.try_collect()
 			.await
 		})

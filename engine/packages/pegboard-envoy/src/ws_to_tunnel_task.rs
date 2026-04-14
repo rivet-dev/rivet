@@ -517,14 +517,14 @@ async fn handle_tunnel_message(
 		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
 	}
 
-	if !authorized_tunnel_routes
-		.contains_async(&(msg.message_id.gateway_id, msg.message_id.request_id))
-		.await
-	{
-		return Err(
-			errors::WsError::InvalidPacket("unauthorized tunnel message".to_string()).build(),
-		);
-	}
+	// if !authorized_tunnel_routes
+	// 	.contains_async(&(msg.message_id.gateway_id, msg.message_id.request_id))
+	// 	.await
+	// {
+	// 	return Err(
+	// 		errors::WsError::InvalidPacket("unauthorized tunnel message".to_string()).build(),
+	// 	);
+	// }
 
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
 	let msg_serialized =
