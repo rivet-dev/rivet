@@ -486,7 +486,7 @@ export class InvalidCanPublishResponse extends ActorError {
 	}
 }
 
-// Manager-specific errors
+// HTTP server specific errors
 export class MissingActorHeader extends ActorError {
 	constructor() {
 		super(

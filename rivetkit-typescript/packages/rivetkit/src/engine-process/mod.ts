@@ -204,6 +204,28 @@ export async function ensureEngineProcess(
 		stderrStream.end();
 	});
 
+	// Terminate child when parent exits so tsx --watch restarts and
+	// Ctrl+C don't leave orphaned engine processes holding port 6420.
+	let cleanedUp = false;
+	const terminateChild = (parentSignal?: NodeJS.Signals) => {
+		if (cleanedUp) return;
+		cleanedUp = true;
+		try {
+			if (child.exitCode === null && !child.killed) {
+				child.kill(parentSignal ?? "SIGTERM");
+			}
+		} catch {
+			// Best effort; child may already be gone.
+		}
+	};
+	process.once("exit", () => terminateChild());
+	for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+		process.once(sig, () => {
+			terminateChild(sig);
+			process.exit(sig === "SIGINT" ? 130 : sig === "SIGTERM" ? 143 : 129);
+		});
+	}
+
 	// Wait for engine to be ready
 	await waitForEngineHealth();
 

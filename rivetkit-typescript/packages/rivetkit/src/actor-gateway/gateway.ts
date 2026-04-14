@@ -151,10 +151,10 @@ export async function actorGateway(
 	// Strip basePath from the request path
 	let strippedPath = c.req.path;
 	if (
-		config.managerBasePath &&
-		strippedPath.startsWith(config.managerBasePath)
+		config.httpBasePath &&
+		strippedPath.startsWith(config.httpBasePath)
 	) {
-		strippedPath = strippedPath.slice(config.managerBasePath.length);
+		strippedPath = strippedPath.slice(config.httpBasePath.length);
 		// Ensure the path starts with /
 		if (!strippedPath.startsWith("/")) {
 			strippedPath = `/${strippedPath}`;

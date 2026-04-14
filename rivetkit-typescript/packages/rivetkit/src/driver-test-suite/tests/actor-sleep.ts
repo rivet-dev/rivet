@@ -123,7 +123,7 @@ async function readAfterSleepCycle<T extends SleepSnapshot>(
 // `getCounts`
 //
 // To fix this, we need to imeplment some event system to be able to check for
-// when an actor has slept. OR we can expose an HTTP endpoint on the manager
+// when an actor has slept. OR we can expose an HTTP endpoint on the HTTP router
 // for `.test` that checks if na actor is sleeping that we can poll.
 export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 	const describeSleepTests = driverTestConfig.skip?.sleep

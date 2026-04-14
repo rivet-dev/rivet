@@ -18,7 +18,7 @@ export const HEADER_ACTOR_ID = "x-rivet-actor";
 
 export const HEADER_RIVET_TOKEN = "x-rivet-token";
 
-// MARK: Manager Gateway Headers
+// MARK: HTTP Server Gateway Headers
 export const HEADER_RIVET_TARGET = "x-rivet-target";
 export const HEADER_RIVET_ACTOR = "x-rivet-actor";
 export const HEADER_RIVET_NAMESPACE = "x-rivet-namespace";

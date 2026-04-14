@@ -55,7 +55,7 @@ export function buildRuntimeRouter(
 	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 	runtime: Runtime = "node",
 ) {
-	return createRouter(config.managerBasePath, (router) => {
+	return createRouter(config.httpBasePath, (router) => {
 		// Actor gateway
 		router.use(
 			"*",
@@ -70,7 +70,7 @@ export function buildRuntimeRouter(
 		// GET /
 		router.get("/", (c) => {
 			return c.text(
-				"This is a RivetKit server.\n\nLearn more at https://rivet.dev",
+				"This is a RivetKit HTTP server.\n\nLearn more at https://rivet.dev",
 			);
 		});
 

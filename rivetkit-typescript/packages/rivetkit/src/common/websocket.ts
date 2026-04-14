@@ -20,7 +20,9 @@ export async function importWebSocket(): Promise<typeof WebSocket> {
 			// Node.js environment
 			try {
 				const moduleName = "ws";
-				const ws = await import(/* webpackIgnore: true */ moduleName);
+				const ws = await import(
+					/* webpackIgnore: true */ /* @vite-ignore */ moduleName
+				);
 				_WebSocket = ws.default as unknown as typeof WebSocket;
 				logger().debug("using websocket from npm");
 			} catch {

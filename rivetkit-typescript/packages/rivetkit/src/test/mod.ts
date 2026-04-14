@@ -54,8 +54,12 @@ async function closeNodeServer(
 			resolve();
 		});
 
-		server.closeIdleConnections?.();
-		server.closeAllConnections?.();
+		const closable = server as {
+			closeIdleConnections?: () => void;
+			closeAllConnections?: () => void;
+		};
+		closable.closeIdleConnections?.();
+		closable.closeAllConnections?.();
 	});
 }
 
