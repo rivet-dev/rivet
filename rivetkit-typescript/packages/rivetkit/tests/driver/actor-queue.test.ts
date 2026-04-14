@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { describeDriverMatrix } from "./shared-matrix";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import type { ActorError } from "@/client/mod";
 import { MANY_QUEUE_NAMES } from "../../fixtures/driver-test-suite/queue";
 import { setupDriverTest, waitFor } from "./shared-utils";
@@ -274,37 +274,54 @@ describeDriverMatrix("Actor Queue", (driverTestConfig) => {
 			expect(result.status).toBe("timedOut");
 		});
 
-		test("drains many-queue child actors created from actions while connected", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
-			const parent = client.manyQueueActionParentActor.getOrCreate([
-				"many-action-parent",
-			]);
+		test(
+			"drains many-queue child actors created from actions while connected",
+			{ timeout: MANY_QUEUE_CHILD_READY_TIMEOUT_MS },
+			async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const parent = client.manyQueueActionParentActor.getOrCreate([
+					"many-action-parent",
+				]);
 
-			expect(await parent.spawnChild("many-action-child")).toEqual({
-				key: "many-action-child",
-			});
+				expect(await parent.spawnChild("many-action-child")).toEqual({
+					key: "many-action-child",
+				});
 
-			await expectManyQueueChildToDrain(
-				client.manyQueueChildActor,
-				"many-action-child",
-			);
-		});
+				await expectManyQueueChildToDrain(
+					client.manyQueueChildActor,
+					"many-action-child",
+				);
+			},
+		);
 
-		test("drains many-queue child actors created from run handlers while connected", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
-			const parent = client.manyQueueRunParentActor.getOrCreate([
-				"many-run-parent",
-			]);
+		test(
+			"drains many-queue child actors created from run handlers while connected",
+			{ timeout: MANY_QUEUE_CHILD_READY_TIMEOUT_MS },
+			async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const parent = client.manyQueueRunParentActor.getOrCreate([
+					"many-run-parent",
+				]);
 
-			expect(await parent.queueSpawn("many-run-child")).toEqual({
-				queued: true,
-			});
+				expect(await parent.queueSpawn("many-run-child")).toEqual({
+					queued: true,
+				});
 
-			await expectManyQueueChildToDrain(
-				client.manyQueueChildActor,
-				"many-run-child",
-			);
-		});
+				// Wait for the queued spawn to land in the parent's `spawned`
+				// list. The parent does not expose an event the test can
+				// subscribe to, so we poll the read-only `getSpawned` action
+				// rather than retry the original `queueSpawn` mutation.
+				await vi.waitFor(async () => {
+					const spawned = await parent.getSpawned();
+					expect(spawned).toContain("many-run-child");
+				});
+
+				await expectManyQueueChildToDrain(
+					client.manyQueueChildActor,
+					"many-run-child",
+				);
+			},
+		);
 
 		test("manual receive retries message when not completed", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);

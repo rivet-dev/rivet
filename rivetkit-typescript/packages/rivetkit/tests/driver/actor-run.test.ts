@@ -6,7 +6,9 @@ import { setupDriverTest, waitFor } from "./shared-utils";
 const RUN_HANDLER_TIMEOUT_MS = 60_000;
 
 describeDriverMatrix("Actor Run", (driverTestConfig) => {
-	describe.skipIf(driverTestConfig.skip?.sleep)("Actor Run Tests", () => {
+	const describeRunTests = driverTestConfig.skip?.sleep ? describe.skip : describe;
+
+	describeRunTests("Actor Run Tests", () => {
 		test("run handler starts after actor startup", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
