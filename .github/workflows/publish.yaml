@@ -435,7 +435,7 @@ jobs:
 
       # ---- build TypeScript packages (turbo dep graph picks up native) ----
       - name: Build TypeScript packages
-        run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/sqlite-native' -F '!@rivetkit/rivetkit-native'
+        run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/sqlite-native' -F '!@rivetkit/sqlite-wasm' -F '!@rivetkit/rivetkit-native'
 
       - name: Pack inspector
         run: npx turbo build:pack-inspector -F rivetkit

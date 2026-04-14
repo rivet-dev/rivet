@@ -337,7 +337,6 @@ program
 			`npm install rivetkit@${tag}`,
 			`npm install @rivetkit/react@${tag}`,
 			`npm install @rivetkit/rivetkit-native@${tag}`,
-			`npm install @rivetkit/sqlite-wasm@${tag}`,
 			`npm install @rivetkit/workflow-engine@${tag}`,
 			"```",
 			"",
