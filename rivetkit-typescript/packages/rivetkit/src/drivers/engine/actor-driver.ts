@@ -112,6 +112,34 @@ interface HibernatableWebSocketAckState {
 	ackWaiters: Map<number, Array<() => void>>;
 }
 
+interface HibernatableConnectBinding {
+	actorId: string;
+	websocket: UniversalWebSocket;
+	request: Request;
+	requestPath: string;
+	requestHeaders: Record<string, string>;
+	encoding: Encoding;
+	connParams: unknown;
+	gatewayId: ArrayBuffer;
+	requestId: ArrayBuffer;
+	remoteAckHookToken?: string;
+	detach?: () => void;
+}
+
+interface HibernatableRunnerWebSocketBinding {
+	actorId: string;
+	websocket: UniversalWebSocket;
+	requestPath: string;
+	requestHeaders: Record<string, string>;
+	encoding: Encoding;
+	connParams: unknown;
+	gatewayId: ArrayBuffer;
+	requestId: ArrayBuffer;
+	remoteAckHookToken?: string;
+	proxyToActorWs?: UniversalWebSocket;
+	detach?: () => void;
+}
+
 export type DriverContext = {};
 
 export class EngineActorDriver implements ActorDriver {
@@ -124,6 +152,14 @@ export class EngineActorDriver implements ActorDriver {
 	#hibernatableWebSocketAcks = new Map<
 		string,
 		HibernatableWebSocketAckState
+	>();
+	#hibernatableConnectBindings = new Map<
+		string,
+		HibernatableConnectBinding
+	>();
+	#hibernatableRunnerWebSocketBindings = new Map<
+		string,
+		HibernatableRunnerWebSocketBinding
 	>();
 	#hwsMessageIndex = new Map<
 		string,
@@ -292,6 +328,95 @@ export class EngineActorDriver implements ActorDriver {
 	): void {
 		this.#hibernatableWebSocketAcks.delete(
 			this.#hibernatableWebSocketAckKey(gatewayId, requestId),
+		);
+	}
+
+	#detachHibernatableConnectBinding(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+	): void {
+		const key = this.#hibernatableWebSocketAckKey(gatewayId, requestId);
+		const binding = this.#hibernatableConnectBindings.get(key);
+		if (!binding) {
+			return;
+		}
+		binding.detach?.();
+		binding.detach = undefined;
+	}
+
+	#deleteHibernatableConnectBinding(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+	): void {
+		const key = this.#hibernatableWebSocketAckKey(gatewayId, requestId);
+		const binding = this.#hibernatableConnectBindings.get(key);
+		binding?.detach?.();
+		this.#hibernatableConnectBindings.delete(key);
+	}
+
+	#cleanupFailedHibernatableConnectBinding(
+		binding: HibernatableConnectBinding,
+	): void {
+		this.#deleteHibernatableWebSocketAckState(
+			binding.gatewayId,
+			binding.requestId,
+		);
+		unregisterRemoteHibernatableWebSocketAckHooks(
+			binding.remoteAckHookToken,
+			this.#config.test.enabled,
+		);
+		this.#deleteHibernatableConnectBinding(
+			binding.gatewayId,
+			binding.requestId,
+		);
+	}
+
+	#detachHibernatableRunnerWebSocketBinding(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+	): void {
+		const key = this.#hibernatableWebSocketAckKey(gatewayId, requestId);
+		const binding =
+			this.#hibernatableRunnerWebSocketBindings.get(key);
+		if (!binding) {
+			return;
+		}
+		binding.detach?.();
+		binding.detach = undefined;
+	}
+
+	#deleteHibernatableRunnerWebSocketBinding(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+	): void {
+		const key = this.#hibernatableWebSocketAckKey(gatewayId, requestId);
+		const binding =
+			this.#hibernatableRunnerWebSocketBindings.get(key);
+		binding?.detach?.();
+		this.#hibernatableRunnerWebSocketBindings.delete(key);
+	}
+
+	#cleanupFailedHibernatableRunnerWebSocketBinding(
+		binding: HibernatableRunnerWebSocketBinding,
+	): void {
+		const proxyToActorWs = binding.proxyToActorWs;
+		if (
+			proxyToActorWs &&
+			proxyToActorWs.readyState !== proxyToActorWs.CLOSED
+		) {
+			proxyToActorWs.close(1011, "dynamic.bind_failed");
+		}
+		this.#deleteHibernatableWebSocketAckState(
+			binding.gatewayId,
+			binding.requestId,
+		);
+		unregisterRemoteHibernatableWebSocketAckHooks(
+			binding.remoteAckHookToken,
+			this.#config.test.enabled,
+		);
+		this.#deleteHibernatableRunnerWebSocketBinding(
+			binding.gatewayId,
+			binding.requestId,
 		);
 	}
 
@@ -740,6 +865,17 @@ export class EngineActorDriver implements ActorDriver {
 					remainingActors: this.#actors.size,
 					waitMs: ENVOY_STOP_WAIT_MS,
 				});
+				for (const actorId of this.#actors.keys()) {
+					logger().warn({
+						msg: "force stopping actor during driver shutdown",
+						actorId,
+					});
+					this.#envoy.stopActor(
+						actorId,
+						undefined,
+						"driver shutdown after sleep timeout",
+					);
+				}
 			} else {
 				logger().debug({
 					msg: "all actors stopped before envoy drain",
@@ -777,15 +913,438 @@ export class EngineActorDriver implements ActorDriver {
 			});
 		}
 
-		this.#dynamicRuntimes.clear();
+		await this.#disposeAllDynamicRuntimes("driver shutdown");
 	}
 
 	async waitForReady(): Promise<void> {
 		await this.#envoy.started();
 	}
 
+	async #bindHibernatableConnectSocket(
+		binding: HibernatableConnectBinding,
+		isRestoringHibernatable: boolean,
+	): Promise<void> {
+		this.#detachHibernatableConnectBinding(
+			binding.gatewayId,
+			binding.requestId,
+		);
+		this.#hibernatableConnectBindings.set(
+			this.#hibernatableWebSocketAckKey(
+				binding.gatewayId,
+				binding.requestId,
+			),
+			binding,
+		);
+
+		if (this.#isDynamicActor(binding.actorId)) {
+			try {
+				await this.#bindDynamicHibernatableConnectSocket(
+					binding,
+					isRestoringHibernatable,
+				);
+			} catch (error) {
+				this.#cleanupFailedHibernatableConnectBinding(binding);
+				throw error;
+			}
+			return;
+		}
+
+		const wsHandler = await routeWebSocket(
+			binding.request,
+			binding.requestPath,
+			binding.requestHeaders,
+			this.#config,
+			this,
+			binding.actorId,
+			binding.encoding,
+			binding.connParams,
+			binding.gatewayId,
+			binding.requestId,
+			true,
+			isRestoringHibernatable,
+		).catch((error) => {
+			this.#cleanupFailedHibernatableConnectBinding(binding);
+			throw error;
+		});
+
+		(binding.websocket as WSContextInit).raw = binding.websocket;
+		const wsContext = new WSContext(binding.websocket);
+
+		const onOpen = (event: Event) => {
+			wsHandler.onOpen(event, wsContext);
+		};
+		const onMessage = (event: RivetMessageEvent) => {
+			if (
+				this.#maybeRespondToHibernatableAckStateProbe(
+					binding.websocket,
+					event.data,
+					binding.gatewayId,
+					binding.requestId,
+				)
+			) {
+				return;
+			}
+
+			wsHandler.onMessage(event, wsContext);
+
+			const actor = this.#actors.get(binding.actorId)?.actor;
+			if (!actor || !isStaticActorInstance(actor) || !wsHandler.conn) {
+				return;
+			}
+
+			const conn = actor.connectionManager.findHibernatableConn(
+				binding.gatewayId,
+				binding.requestId,
+			);
+			if (!conn) {
+				return;
+			}
+
+			if (typeof event.rivetMessageIndex === "number") {
+				this.#recordInboundHibernatableWebSocketMessage(
+					binding.gatewayId,
+					binding.requestId,
+					event.rivetMessageIndex,
+				);
+			}
+			actor.handleInboundHibernatableWebSocketMessage(
+				conn,
+				event.data,
+				event.rivetMessageIndex,
+			);
+		};
+		const onClose = (event: CloseEvent) => {
+			wsHandler.onClose(event, wsContext);
+			this.#deleteHibernatableWebSocketAckState(
+				binding.gatewayId,
+				binding.requestId,
+			);
+			unregisterRemoteHibernatableWebSocketAckHooks(
+				binding.remoteAckHookToken,
+				this.#config.test.enabled,
+			);
+			this.#deleteHibernatableConnectBinding(
+				binding.gatewayId,
+				binding.requestId,
+			);
+		};
+		const onError = (event: Event) => {
+			wsHandler.onError(event, wsContext);
+		};
+
+		binding.websocket.addEventListener("message", onMessage);
+		binding.websocket.addEventListener("close", onClose);
+		binding.websocket.addEventListener("error", onError);
+		if (isRestoringHibernatable) {
+			wsHandler.onRestore?.(wsContext);
+		} else {
+			binding.websocket.addEventListener("open", onOpen);
+		}
+
+		binding.detach = () => {
+			binding.websocket.removeEventListener("message", onMessage);
+			binding.websocket.removeEventListener("close", onClose);
+			binding.websocket.removeEventListener("error", onError);
+			if (!isRestoringHibernatable) {
+				binding.websocket.removeEventListener("open", onOpen);
+			}
+		};
+	}
+
+	async #bindDynamicHibernatableConnectSocket(
+		binding: HibernatableConnectBinding,
+		isRestoringHibernatable: boolean,
+	): Promise<void> {
+		const runtime = this.#requireDynamicRuntime(binding.actorId);
+		const proxyToActorWs = await runtime.openWebSocket(
+			binding.requestPath,
+			binding.encoding,
+			binding.connParams,
+			{
+				headers: binding.requestHeaders,
+				gatewayId: binding.gatewayId,
+				requestId: binding.requestId,
+				isHibernatable: true,
+				isRestoringHibernatable,
+			},
+		);
+
+		const onProxyMessage = (event: RivetMessageEvent) => {
+			if (binding.websocket.readyState !== binding.websocket.OPEN) {
+				return;
+			}
+			binding.websocket.send(event.data as any);
+		};
+		const onProxyClose = (event: CloseEvent) => {
+			if (event.reason === "dynamic.runtime.disposed") {
+				return;
+			}
+			if (binding.websocket.readyState !== binding.websocket.CLOSED) {
+				binding.websocket.close(event.code, event.reason);
+			}
+		};
+		const onProxyError = () => {
+			if (binding.websocket.readyState !== binding.websocket.CLOSED) {
+				binding.websocket.close(1011, "dynamic.websocket_error");
+			}
+		};
+		const onMessage = (event: RivetMessageEvent) => {
+			if (
+				this.#maybeRespondToHibernatableAckStateProbe(
+					binding.websocket,
+					event.data,
+					binding.gatewayId,
+					binding.requestId,
+				)
+			) {
+				return;
+			}
+
+			if (typeof event.rivetMessageIndex === "number") {
+				this.#recordInboundHibernatableWebSocketMessage(
+					binding.gatewayId,
+					binding.requestId,
+					event.rivetMessageIndex,
+				);
+			}
+
+			void runtime
+				.forwardIncomingWebSocketMessage(
+					proxyToActorWs,
+					event.data as any,
+					event.rivetMessageIndex,
+				)
+				.catch((error) => {
+					logger().error({
+						msg: "failed forwarding websocket message to dynamic actor",
+						actorId: binding.actorId,
+						error: stringifyError(error),
+					});
+					binding.websocket.close(1011, "dynamic.websocket_forward_failed");
+				});
+		};
+		const onClose = (event: CloseEvent) => {
+			if (proxyToActorWs.readyState !== proxyToActorWs.CLOSED) {
+				proxyToActorWs.close(event.code, event.reason);
+			}
+			this.#deleteHibernatableWebSocketAckState(
+				binding.gatewayId,
+				binding.requestId,
+			);
+			unregisterRemoteHibernatableWebSocketAckHooks(
+				binding.remoteAckHookToken,
+				this.#config.test.enabled,
+			);
+			this.#deleteHibernatableConnectBinding(
+				binding.gatewayId,
+				binding.requestId,
+			);
+		};
+		const onError = () => {
+			if (proxyToActorWs.readyState !== proxyToActorWs.CLOSED) {
+				proxyToActorWs.close(1011, "dynamic.gateway_error");
+			}
+		};
+
+		proxyToActorWs.addEventListener("message", onProxyMessage);
+		proxyToActorWs.addEventListener("close", onProxyClose);
+		proxyToActorWs.addEventListener("error", onProxyError);
+		binding.websocket.addEventListener("message", onMessage);
+		binding.websocket.addEventListener("close", onClose);
+		binding.websocket.addEventListener("error", onError);
+
+		binding.detach = () => {
+			proxyToActorWs.removeEventListener("message", onProxyMessage);
+			proxyToActorWs.removeEventListener("close", onProxyClose);
+			proxyToActorWs.removeEventListener("error", onProxyError);
+			binding.websocket.removeEventListener("message", onMessage);
+			binding.websocket.removeEventListener("close", onClose);
+			binding.websocket.removeEventListener("error", onError);
+			if (proxyToActorWs.readyState !== proxyToActorWs.CLOSED) {
+				proxyToActorWs.close(1011, "dynamic.rebind");
+			}
+		};
+	}
+
+	async #bindDynamicHibernatableRunnerWebSocket(
+		binding: HibernatableRunnerWebSocketBinding,
+		isRestoringHibernatable: boolean,
+	): Promise<void> {
+		this.#detachHibernatableRunnerWebSocketBinding(
+			binding.gatewayId,
+			binding.requestId,
+		);
+		this.#hibernatableRunnerWebSocketBindings.set(
+			this.#hibernatableWebSocketAckKey(
+				binding.gatewayId,
+				binding.requestId,
+			),
+			binding,
+		);
+
+		let runtime: DynamicActorIsolateRuntime;
+		let proxyToActorWs: UniversalWebSocket;
+		try {
+			runtime = this.#requireDynamicRuntime(binding.actorId);
+			proxyToActorWs = await runtime.openWebSocket(
+				binding.requestPath,
+				binding.encoding,
+				binding.connParams,
+				{
+					headers: binding.requestHeaders,
+					gatewayId: binding.gatewayId,
+					requestId: binding.requestId,
+					isHibernatable: true,
+					isRestoringHibernatable,
+				},
+			);
+		} catch (error) {
+			this.#cleanupFailedHibernatableRunnerWebSocketBinding(binding);
+			throw error;
+		}
+		binding.proxyToActorWs = proxyToActorWs;
+
+		const onProxyMessage = (event: RivetMessageEvent) => {
+			if (binding.websocket.readyState !== binding.websocket.OPEN) {
+				return;
+			}
+			binding.websocket.send(event.data as any);
+		};
+		const onProxyClose = (event: CloseEvent) => {
+			if (event.reason === "dynamic.runtime.disposed") {
+				return;
+			}
+			if (binding.websocket.readyState !== binding.websocket.CLOSED) {
+				binding.websocket.close(event.code, event.reason);
+			}
+		};
+		const onProxyError = () => {
+			if (binding.websocket.readyState !== binding.websocket.CLOSED) {
+				binding.websocket.close(1011, "dynamic.websocket_error");
+			}
+		};
+		const onMessage = (event: RivetMessageEvent) => {
+			if (
+				this.#maybeRespondToHibernatableAckStateProbe(
+					binding.websocket,
+					event.data,
+					binding.gatewayId,
+					binding.requestId,
+				)
+			) {
+				return;
+			}
+
+			if (typeof event.rivetMessageIndex === "number") {
+				this.#recordInboundHibernatableWebSocketMessage(
+					binding.gatewayId,
+					binding.requestId,
+					event.rivetMessageIndex,
+				);
+			}
+
+			const currentRuntime = this.#dynamicRuntimes.get(binding.actorId);
+			const currentProxyToActorWs = binding.proxyToActorWs;
+			if (!currentRuntime || !currentProxyToActorWs) {
+				logger().error({
+					msg: "dynamic runtime websocket binding is missing after restore",
+					actorId: binding.actorId,
+				});
+				binding.websocket.close(1011, "dynamic.websocket_forward_failed");
+				return;
+			}
+
+			void currentRuntime
+				.forwardIncomingWebSocketMessage(
+					currentProxyToActorWs,
+					event.data as any,
+					event.rivetMessageIndex,
+				)
+				.catch((error) => {
+					logger().error({
+						msg: "failed forwarding websocket message to dynamic actor",
+						actorId: binding.actorId,
+						error: stringifyError(error),
+					});
+					binding.websocket.close(1011, "dynamic.websocket_forward_failed");
+				});
+		};
+		const onClose = (event: CloseEvent) => {
+			const currentProxyToActorWs = binding.proxyToActorWs;
+			if (
+				currentProxyToActorWs &&
+				currentProxyToActorWs.readyState !==
+					currentProxyToActorWs.CLOSED
+			) {
+				currentProxyToActorWs.close(event.code, event.reason);
+			}
+			this.#deleteHibernatableWebSocketAckState(
+				binding.gatewayId,
+				binding.requestId,
+			);
+			unregisterRemoteHibernatableWebSocketAckHooks(
+				binding.remoteAckHookToken,
+				this.#config.test.enabled,
+			);
+			this.#deleteHibernatableRunnerWebSocketBinding(
+				binding.gatewayId,
+				binding.requestId,
+			);
+		};
+		const onError = () => {
+			const currentProxyToActorWs = binding.proxyToActorWs;
+			if (
+				currentProxyToActorWs &&
+				currentProxyToActorWs.readyState !==
+					currentProxyToActorWs.CLOSED
+			) {
+				currentProxyToActorWs.close(1011, "dynamic.gateway_error");
+			}
+		};
+
+		proxyToActorWs.addEventListener("message", onProxyMessage);
+		proxyToActorWs.addEventListener("close", onProxyClose);
+		proxyToActorWs.addEventListener("error", onProxyError);
+		binding.websocket.addEventListener("message", onMessage);
+		binding.websocket.addEventListener("close", onClose);
+		binding.websocket.addEventListener("error", onError);
+
+		binding.detach = () => {
+			proxyToActorWs.removeEventListener("message", onProxyMessage);
+			proxyToActorWs.removeEventListener("close", onProxyClose);
+			proxyToActorWs.removeEventListener("error", onProxyError);
+			binding.websocket.removeEventListener("message", onMessage);
+			binding.websocket.removeEventListener("close", onClose);
+			binding.websocket.removeEventListener("error", onError);
+		};
+	}
+
+	async #rebindDynamicHibernatableRunnerWebSockets(
+		actorId: string,
+	): Promise<void> {
+		const bindings = Array.from(
+			this.#hibernatableRunnerWebSocketBindings.values(),
+		).filter((binding) => binding.actorId === actorId);
+		for (const binding of bindings) {
+			await this.#bindDynamicHibernatableRunnerWebSocket(
+				binding,
+				true,
+			);
+		}
+	}
+
+	async #rebindHibernatableConnectSockets(actorId: string): Promise<void> {
+		const bindings = Array.from(
+			this.#hibernatableConnectBindings.values(),
+		).filter((binding) => binding.actorId === actorId);
+
+		for (const binding of bindings) {
+			await this.#bindHibernatableConnectSocket(binding, true);
+		}
+	}
+
 	async serverlessHandleStart(c: HonoContext): Promise<Response> {
-		let payload = await c.req.arrayBuffer();
+		const payload = await c.req.arrayBuffer();
 
 		return streamSSE(c, async (stream) => {
 			// NOTE: onAbort does not work reliably
@@ -1015,20 +1574,32 @@ export class EngineActorDriver implements ActorDriver {
 				handler.actorStartPromise?.resolve();
 				handler.actorStartPromise = undefined;
 
-				const rawMetaEntries =
-					await dynamicActor.getHibernatingWebSockets();
-				const metaEntries = rawMetaEntries.map((entry) => ({
-					gatewayId: entry.gatewayId,
-					requestId: entry.requestId,
-					rivetMessageIndex: entry.serverMessageIndex,
-					envoyMessageIndex: entry.clientMessageIndex,
-					path: entry.path,
-					headers: entry.headers,
-				}));
-				await this.#envoy.restoreHibernatingRequests(
-					actorId,
-					metaEntries,
-				);
+				try {
+					await this.#rebindHibernatableConnectSockets(actorId);
+					await this.#rebindDynamicHibernatableRunnerWebSockets(
+						actorId,
+					);
+					const rawMetaEntries =
+						await dynamicActor.getHibernatingWebSockets();
+					const metaEntries = rawMetaEntries.map((entry) => ({
+						gatewayId: entry.gatewayId,
+						requestId: entry.requestId,
+						rivetMessageIndex: entry.serverMessageIndex,
+						envoyMessageIndex: entry.clientMessageIndex,
+						path: entry.path,
+						headers: entry.headers,
+					}));
+					await this.#envoy.restoreHibernatingRequests(
+						actorId,
+						metaEntries,
+					);
+				} catch (error) {
+					logger().warn({
+						msg: "failed to restore dynamic hibernating requests after actor start",
+						actorId,
+						err: stringifyError(error),
+					});
+				}
 			} else if (isStaticActorDefinition(definition)) {
 				const instantiateStart = performance.now();
 				const staticActor =
@@ -1194,7 +1765,7 @@ export class EngineActorDriver implements ActorDriver {
 				});
 			}
 		}
-		this.#dynamicRuntimes.delete(actorId);
+		await this.#disposeDynamicRuntime(actorId, "actor stop");
 
 		if (handler.alarmTimeout) {
 			handler.alarmTimeout.abort();
@@ -1204,6 +1775,37 @@ export class EngineActorDriver implements ActorDriver {
 		this.#actors.delete(actorId);
 
 		logger().debug({ msg: "engine actor stopped", actorId, reason });
+	}
+
+	async #disposeDynamicRuntime(
+		actorId: string,
+		reason: string,
+	): Promise<void> {
+		const runtime = this.#dynamicRuntimes.get(actorId);
+		if (!runtime) {
+			return;
+		}
+
+		try {
+			await runtime.dispose();
+		} catch (error) {
+			logger().warn({
+				msg: "failed to dispose dynamic runtime",
+				actorId,
+				reason,
+				error: stringifyError(error),
+			});
+		} finally {
+			this.#dynamicRuntimes.delete(actorId);
+		}
+	}
+
+	async #disposeAllDynamicRuntimes(reason: string): Promise<void> {
+		await Promise.all(
+			Array.from(this.#dynamicRuntimes.keys(), (actorId) =>
+				this.#disposeDynamicRuntime(actorId, reason),
+			),
+		);
 	}
 
 	// MARK: - Envoy Networking
@@ -1273,6 +1875,41 @@ export class EngineActorDriver implements ActorDriver {
 				REMOTE_ACK_HOOK_QUERY_PARAM,
 			) ??
 			undefined;
+		const requestPathWithoutQuery = requestPath.split("?")[0];
+
+		if (isHibernatable && requestPathWithoutQuery === PATH_CONNECT) {
+			this.#registerHibernatableWebSocketAckTestHooks(
+				websocket,
+				gatewayIdBuf,
+				requestIdBuf,
+				remoteAckHookToken,
+			);
+			try {
+				await this.#bindHibernatableConnectSocket(
+					{
+						actorId,
+						websocket,
+						request,
+						requestPath,
+						requestHeaders,
+						encoding,
+						connParams,
+						gatewayId: gatewayIdBuf,
+						requestId: requestIdBuf,
+						remoteAckHookToken,
+					},
+					isRestoringHibernatable,
+				);
+			} catch (error) {
+				logger().error({
+					msg: "failed to bind hibernatable connect websocket",
+					actorId,
+					error: stringifyError(error),
+				});
+				websocket.close(1011, "ws.route_error");
+			}
+			return;
+		}
 
 		if (this.#isDynamicActor(actorId)) {
 			await this.#runnerDynamicWebSocket(
@@ -1362,11 +1999,25 @@ export class EngineActorDriver implements ActorDriver {
 				return;
 			}
 
-			if (actor?.isStopping) {
+			const currentActor = this.#actors.get(actorId)?.actor;
+			const actorForDispatch =
+				currentActor &&
+				isStaticActorInstance(currentActor)
+					? currentActor
+					: actor;
+			const connForDispatch =
+				isHibernatable && actorForDispatch
+					? actorForDispatch.connectionManager.findHibernatableConn(
+							gatewayIdBuf,
+							requestIdBuf,
+						) ?? conn
+					: conn;
+
+			if (actorForDispatch?.isStopping) {
 				logger().debug({
 					msg: "ignoring ws message, actor is stopping",
-					connId: conn?.id,
-					actorId: actor?.id,
+					connId: connForDispatch?.id,
+					actorId: actorForDispatch?.id,
 					messageIndex: event.rivetMessageIndex,
 				});
 				if (!isRawWebSocketPath && websocket.readyState !== websocket.CLOSED) {
@@ -1391,17 +2042,17 @@ export class EngineActorDriver implements ActorDriver {
 
 				// Runtime-owned hibernatable websocket bookkeeping lives on the
 				// actor instance so static and dynamic paths share the same logic.
-				if (conn && actor && isStaticActorInstance(actor)) {
-					actor.handleInboundHibernatableWebSocketMessage(
-						conn,
+				if (connForDispatch && actorForDispatch) {
+					actorForDispatch.handleInboundHibernatableWebSocketMessage(
+						connForDispatch,
 						event.data,
 						event.rivetMessageIndex,
 					);
 				}
 			};
 
-			if (isRawWebSocketPath && actor) {
-				void actor.internalKeepAwake(run);
+			if (isRawWebSocketPath && actorForDispatch) {
+				void actorForDispatch.internalKeepAwake(run);
 			} else {
 				void run();
 			}
@@ -1484,6 +2135,45 @@ export class EngineActorDriver implements ActorDriver {
 				REMOTE_ACK_HOOK_QUERY_PARAM,
 			) ??
 			undefined;
+		if (isHibernatable) {
+			this.#registerHibernatableWebSocketAckTestHooks(
+				websocket,
+				gatewayIdBuf,
+				requestIdBuf,
+				remoteAckHookToken,
+			);
+			try {
+				await this.#bindDynamicHibernatableRunnerWebSocket(
+					{
+						actorId,
+						websocket,
+						requestPath,
+						requestHeaders,
+						encoding,
+						connParams,
+						gatewayId: gatewayIdBuf,
+						requestId: requestIdBuf,
+						remoteAckHookToken,
+					},
+					isRestoringHibernatable,
+				);
+			} catch (error) {
+				const { group, code } = deconstructError(
+					error,
+					logger(),
+					{},
+					false,
+				);
+				logger().error({
+					msg: "failed to bind dynamic hibernatable websocket",
+					actorId,
+					error: stringifyError(error),
+				});
+				websocket.close(1011, `${group}.${code}`);
+			}
+			return;
+		}
+
 		try {
 			runtime = this.#requireDynamicRuntime(actorId);
 		} catch (error) {
@@ -1524,15 +2214,6 @@ export class EngineActorDriver implements ActorDriver {
 			});
 			websocket.close(1011, `${group}.${code}`);
 			return;
-		}
-
-		if (isHibernatable) {
-			this.#registerHibernatableWebSocketAckTestHooks(
-				websocket,
-				gatewayIdBuf,
-				requestIdBuf,
-				remoteAckHookToken,
-			);
 		}
 
 		proxyToActorWs.addEventListener(
@@ -1607,16 +2288,6 @@ export class EngineActorDriver implements ActorDriver {
 		});
 
 		websocket.addEventListener("close", (event) => {
-			if (isHibernatable) {
-				this.#deleteHibernatableWebSocketAckState(
-					gatewayIdBuf,
-					requestIdBuf,
-				);
-				unregisterRemoteHibernatableWebSocketAckHooks(
-					remoteAckHookToken,
-					this.#config.test.enabled,
-				);
-			}
 			if (proxyToActorWs.readyState !== proxyToActorWs.CLOSED) {
 				proxyToActorWs.close(event.code, event.reason);
 			}
@@ -1757,6 +2428,8 @@ export class EngineActorDriver implements ActorDriver {
 		handler.actorStartError = undefined;
 		handler.actorStartPromise?.resolve();
 		handler.actorStartPromise = undefined;
+
+		await this.#rebindHibernatableConnectSockets(actor.id);
 
 		// Restore hibernating requests
 		const metaEntries = await this.#hwsLoadAll(actor.id);
