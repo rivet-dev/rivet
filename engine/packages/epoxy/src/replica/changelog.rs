@@ -102,7 +102,7 @@ pub async fn apply_entry(
 		}
 
 		if !existing_value.mutable && existing_value.value != entry.value {
-			bail!(
+			tracing::warn!(
 				"changelog catch-up saw conflicting committed value for immutable key {:?}",
 				value_key.key()
 			);

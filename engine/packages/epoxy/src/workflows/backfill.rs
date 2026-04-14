@@ -15,7 +15,7 @@ use universaldb::{
 
 use crate::keys::{self, KvValueKey, LegacyCommittedValueKey};
 
-const DEFAULT_CHUNK_SIZE: usize = 500;
+const DEFAULT_CHUNK_SIZE: usize = 2000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Input {

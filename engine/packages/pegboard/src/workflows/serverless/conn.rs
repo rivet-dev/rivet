@@ -215,7 +215,11 @@ async fn outbound_req_inner(
 		})
 	)?;
 	let Some(runner_config) = runner_config_res.into_iter().next() else {
-		tracing::debug!("runner config does not exist, ending outbound req");
+		tracing::warn!(
+			namespace_id = %input.namespace_id,
+			runner_name = %input.runner_name,
+			"runner config does not exist, ending outbound req"
+		);
 		return Ok(OutboundReqOutput::Draining { drain_sent: false });
 	};
 
@@ -227,7 +231,11 @@ async fn outbound_req_inner(
 		..
 	} = runner_config.config.kind
 	else {
-		tracing::debug!("runner config is not serverless, ending outbound req");
+		tracing::warn!(
+			namespace_id = %input.namespace_id,
+			runner_name = %input.runner_name,
+			"runner config is not serverless, ending outbound req"
+		);
 		return Ok(OutboundReqOutput::Draining { drain_sent: false });
 	};
 
@@ -296,6 +304,7 @@ async fn outbound_req_inner(
 	let client = rivet_pools::reqwest::client_no_timeout().await?;
 	let req = client.get(endpoint_url).headers(headers);
 
+	let conn_started = Instant::now();
 	let mut source = sse::EventSource::new(req).context("failed creating event source")?;
 	let mut runner_id = None;
 	let mut runner_protocol_version = None;
@@ -341,7 +350,16 @@ async fn outbound_req_inner(
 					}
 				}
 				Err(sse::Error::StreamEnded) => {
-					tracing::debug!("outbound req stopped early");
+					let init_received = runner_id.is_some();
+					let elapsed_ms = conn_started.elapsed().as_millis() as u64;
+
+					tracing::warn!(
+						namespace_id = %input.namespace_id,
+						runner_name = %input.runner_name,
+						init_received,
+						elapsed_ms,
+						"serverless SSE stream ended"
+					);
 
 					report_error(
 						ctx,

@@ -11,7 +11,8 @@ use crate::keys;
 use crate::workflows::actor_runner_name_selector_backfill::MarkCompleteInput;
 
 const EARLY_TXN_TIMEOUT: Duration = Duration::from_millis(2500);
-pub const BACKFILL_NAME: &str = "epoxy_runner_pools";
+pub const BACKFILL_NAME: &str = "runner_pool_backfill";
+const MAX_ENTRIES: usize = 50;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {}
@@ -108,6 +109,10 @@ async fn backfill_chunk(ctx: &ActivityCtx, input: &BackfillChunkInput) -> Result
 				}
 
 				entries.push(tx.read_entry::<keys::runner_config::DataKey>(&entry)?);
+
+				if entries.len() > MAX_ENTRIES {
+					break;
+				}
 			}
 
 			Ok((entries, new_last_key))

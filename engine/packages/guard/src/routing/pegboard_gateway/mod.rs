@@ -562,7 +562,12 @@ async fn check_runner_pool_error_loop(
 			.await?;
 
 		if let Some(entry) = errors.into_iter().next() {
-			tracing::debug!(?entry.error, "runner pool has active error, failing fast");
+			tracing::warn!(
+				%namespace_id,
+				%runner_name,
+				error = ?entry.error,
+				"runner pool has active error, fast-failing request"
+			);
 			return Ok(true);
 		}
 

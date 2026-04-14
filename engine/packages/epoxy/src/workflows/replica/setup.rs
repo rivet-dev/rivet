@@ -61,7 +61,9 @@ pub struct CatchUpReplicaInput {
 	pub config: crate::types::ClusterConfig,
 }
 
+// TODO: Migrate to chunked catch up
 #[activity(CatchUpReplica)]
+#[timeout = 18000]
 pub async fn catch_up_replica(ctx: &ActivityCtx, input: &CatchUpReplicaInput) -> Result<()> {
 	let replica_id = ctx.config().epoxy_replica_id();
 	let config: protocol::ClusterConfig = input.config.clone().into();
