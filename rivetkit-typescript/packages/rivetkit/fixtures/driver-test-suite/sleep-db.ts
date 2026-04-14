@@ -46,6 +46,10 @@ export const sleepWithDb = actor({
 		triggerSleep: (c) => {
 			c.sleep();
 		},
+		triggerSleepTwice: (c) => {
+			c.sleep();
+			c.sleep();
+		},
 		getCounts: (c) => {
 			return {
 				startCount: c.state.startCount,
@@ -193,6 +197,10 @@ export const sleepWithDbConn = actor({
 		triggerSleep: (c) => {
 			c.sleep();
 		},
+		triggerSleepTwice: (c) => {
+			c.sleep();
+			c.sleep();
+		},
 		getCounts: (c) => {
 			return {
 				startCount: c.state.startCount,
@@ -264,6 +272,10 @@ export const sleepWithDbAction = actor({
 	},
 	actions: {
 		triggerSleep: (c) => {
+			c.sleep();
+		},
+		triggerSleepTwice: (c) => {
+			c.sleep();
 			c.sleep();
 		},
 		getCounts: (c) => {
