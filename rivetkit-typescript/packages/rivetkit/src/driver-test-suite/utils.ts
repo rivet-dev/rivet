@@ -9,6 +9,32 @@ import { createTestInlineClientDriver } from "./test-inline-client-driver";
 import { ClientConfigSchema } from "@/client/config";
 
 export const FAKE_TIME = new Date("2024-01-01T00:00:00.000Z");
+const CLIENT_WARMUP_ATTEMPTS = 6;
+const CLIENT_WARMUP_RETRY_MS = 1_000;
+
+async function waitForClientWarmup(
+	client: Client<typeof registry>,
+	driverTestConfig: DriverTestConfig,
+): Promise<void> {
+	let lastError: unknown;
+
+	for (let attempt = 0; attempt < CLIENT_WARMUP_ATTEMPTS; attempt += 1) {
+		try {
+			await client.warmupActor
+				.getOrCreate(["driver-test-warmup"])
+				.ping();
+			return;
+		} catch (error) {
+			lastError = error;
+		}
+
+		if (attempt < CLIENT_WARMUP_ATTEMPTS - 1) {
+			await waitFor(driverTestConfig, CLIENT_WARMUP_RETRY_MS);
+		}
+	}
+
+	throw lastError;
+}
 
 // Must use `TestContext` since global hooks do not work when running concurrently
 export async function setupDriverTest(
@@ -63,6 +89,8 @@ export async function setupDriverTest(
 	} else {
 		assertUnreachable(driverTestConfig.clientType);
 	}
+
+	await waitForClientWarmup(client, driverTestConfig);
 
 	c.onTestFinished(async () => {
 		if (!driverTestConfig.HACK_skipCleanupNet) {

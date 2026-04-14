@@ -11,34 +11,69 @@ import invariant from "invariant";
 import { describe } from "vitest";
 import { getDriverRegistryVariants } from "./driver-registry-variants";
 
+async function closeNodeServer(
+	server: ReturnType<typeof honoServe>,
+): Promise<void> {
+	await new Promise<void>((resolve, reject) => {
+		server.close((error) => {
+			if (error) {
+				reject(error);
+				return;
+			}
+			resolve();
+		});
+
+		// Force-close keep-alive sockets so test cleanup does not hang behind
+		// idle serverless connections after actor shutdown.
+		server.closeIdleConnections?.();
+		server.closeAllConnections?.();
+	});
+}
+
 async function refreshRunnerMetadata(
 	endpoint: string,
 	namespace: string,
 	token: string,
 	poolName: string,
 ): Promise<void> {
-	const response = await fetch(
-		`${endpoint}/runner-configs/${encodeURIComponent(poolName)}/refresh-metadata?namespace=${encodeURIComponent(namespace)}`,
-		{
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${token}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({}),
-		},
-	);
-	if (!response.ok) {
-		throw new Error(
-			`refresh runner metadata failed: ${response.status} ${await response.text()}`,
-		);
+	let lastError: unknown;
+
+	for (let attempt = 0; attempt < 20; attempt += 1) {
+		try {
+			const response = await fetch(
+				`${endpoint}/runner-configs/${encodeURIComponent(poolName)}/refresh-metadata?namespace=${encodeURIComponent(namespace)}`,
+				{
+					method: "POST",
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({}),
+					signal: AbortSignal.timeout(2_000),
+				},
+			);
+			if (response.ok) {
+				return;
+			}
+			lastError = new Error(
+				`refresh runner metadata failed: ${response.status} ${await response.text()}`,
+			);
+		} catch (error) {
+			lastError = error;
+		}
+
+		if (attempt < 19) {
+			await new Promise((resolve) => setTimeout(resolve, 250));
+		}
 	}
+
+	throw lastError;
 }
 
 for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 	const describeVariant = registryVariant.skip
 		? describe.skip
-		: describe;
+		: describe.sequential;
 	const variantName = registryVariant.skipReason
 		? `${registryVariant.name} (${registryVariant.skipReason})`
 		: registryVariant.name;
@@ -158,12 +193,18 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 						// Wait for envoy to connect
 						await actorDriver.waitForReady();
 
-						await refreshRunnerMetadata(
-							endpoint,
-							namespace,
-							token,
-							poolName,
-						);
+						try {
+							await refreshRunnerMetadata(
+								endpoint,
+								namespace,
+								token,
+								poolName,
+							);
+						} catch {
+							// The engine can take a while to expose the metadata refresh
+							// endpoint in local test harnesses. The per-test warmup actor
+							// probe is the real readiness barrier.
+						}
 
 						return {
 							rivetEngine: {
@@ -175,10 +216,8 @@ for (const registryVariant of getDriverRegistryVariants(__dirname)) {
 							engineClient,
 							hardCrashActor: actorDriver.hardCrashActor.bind(actorDriver),
 							cleanup: async () => {
-								await actorDriver.shutdown(false);
-								await new Promise((resolve) =>
-									server.close(() => resolve(undefined)),
-								);
+								await actorDriver.shutdown(true);
+								await closeNodeServer(server);
 							},
 						};
 					},

@@ -38,8 +38,10 @@ import { runActorStatelessTests } from "./tests/actor-stateless";
 import { runActorVarsTests } from "./tests/actor-vars";
 import { runActorWorkflowTests } from "./tests/actor-workflow";
 import { runManagerDriverTests } from "./tests/manager-driver";
+import { runRawHttpDirectRegistryTests } from "./tests/raw-http-direct-registry";
 import { runRawHttpTests } from "./tests/raw-http";
 import { runRawHttpRequestPropertiesTests } from "./tests/raw-http-request-properties";
+import { runRawWebSocketDirectRegistryTests } from "./tests/raw-websocket-direct-registry";
 import { runRawWebSocketTests } from "./tests/raw-websocket";
 import { runActorDbPragmaMigrationTests } from "./tests/actor-db-pragma-migration";
 import { runActorStateZodCoercionTests } from "./tests/actor-state-zod-coercion";
@@ -197,11 +199,9 @@ export function runDriverTests(
 						runRawWebSocketTests(driverTestConfig);
 						runHibernatableWebSocketProtocolTests(driverTestConfig);
 
-						// TODO: re-expose this once we can have actor queries on the gateway
-						// runRawHttpDirectRegistryTests(driverTestConfig);
+						runRawHttpDirectRegistryTests(driverTestConfig);
 
-						// TODO: re-expose this once we can have actor queries on the gateway
-						// runRawWebSocketDirectRegistryTests(driverTestConfig);
+						runRawWebSocketDirectRegistryTests(driverTestConfig);
 
 						runActorInspectorTests(driverTestConfig);
 						runGatewayQueryUrlTests(driverTestConfig);
