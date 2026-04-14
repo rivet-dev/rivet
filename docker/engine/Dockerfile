@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1.10.0
 
+ARG ENGINE_BASE_TAG=latest
+
 # MARK: Builder
 # TODO(RVT-4168): Compile libfdb from scratch for ARM
-FROM rust:1.91.0-trixie AS builder
+FROM ghcr.io/rivet-dev/rivet/engine-base-builder:${ENGINE_BASE_TAG} AS builder
 
 # Docker automatically provides TARGETARCH
 ARG TARGETARCH
@@ -11,37 +13,6 @@ ARG BUILD_FRONTEND=false
 ARG CARGO_BUILD_MODE=debug
 ARG VITE_APP_API_URL=__SAME__
 ARG OVERRIDE_GIT_SHA
-
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update -y && \
-    apt-get install -y \
-    curl \
-    g++ \
-    git \
-    libclang-dev \
-    libpq-dev \
-    libssl-dev \
-    pkg-config \
-    ca-certificates \
-    gpg \
-    openssl \
-    wget \
-    cmake \
-    make && \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
-    corepack enable && \
-    if [ "$TARGETARCH" = "arm64" ]; then \
-        curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.3.68/libfdb_c.aarch64.so"; \
-    else \
-        curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.3.68/libfdb_c.x86_64.so"; \
-    fi
-
-# Disable interactive prompt
-ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-
-# Pull via Git CLI to improve reliability in CI
-ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
 WORKDIR /app
 
@@ -83,27 +54,7 @@ RUN \
     cp target/$CARGO_BUILD_MODE/rivet-engine /app/dist/
 
 # MARK: Engine (full, base)
-FROM debian:13.1-slim AS engine-full-base
-
-# Docker automatically provides TARGETARCH
-ARG TARGETARCH
-
-ENV DEBIAN_FRONTEND=noninteractive
-# - Install curl for health checks
-RUN apt-get update -y && \
-    apt-get install -y \
-    ca-certificates \
-    openssl \
-    curl \
-    gpg \
-    dirmngr && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    if [ "$TARGETARCH" = "arm64" ]; then \
-        curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.3.68/libfdb_c.aarch64.so"; \
-    else \
-        curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.3.68/libfdb_c.x86_64.so"; \
-    fi
+FROM ghcr.io/rivet-dev/rivet/engine-base-runtime-full:${ENGINE_BASE_TAG} AS engine-full-base
 
 # MARK: Engine (Full)
 FROM engine-full-base AS engine-full
@@ -116,26 +67,11 @@ ENTRYPOINT ["/usr/bin/rivet-engine"]
 CMD ["start"]
 
 # MARK: Engine (Slim)
-FROM debian:13.1-slim AS engine-slim
+FROM ghcr.io/rivet-dev/rivet/engine-base-runtime-slim:${ENGINE_BASE_TAG} AS engine-slim
 
 LABEL org.opencontainers.image.source=https://github.com/rivet-dev/rivet
-
-# Docker automatically provides TARGETARCH
-ARG TARGETARCH
-
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update -y && \
-    apt-get install -y ca-certificates openssl curl && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    if [ "$TARGETARCH" = "arm64" ]; then \
-        curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.3.68/libfdb_c.aarch64.so"; \
-    else \
-        curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.3.68/libfdb_c.x86_64.so"; \
-    fi
 
 COPY --from=builder /app/dist/rivet-engine /usr/bin/rivet-engine
 
 ENTRYPOINT ["/usr/bin/rivet-engine"]
 CMD ["start"]
-

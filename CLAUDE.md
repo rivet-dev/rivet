@@ -73,6 +73,8 @@ cd self-host/compose/dev
 docker-compose up -d
 ```
 
+- Rebuild publish base images with `scripts/docker-builder-base/build-push.sh <base-name|all> --push`; update `BASE_TAG` when rebuilding shared builder bases, while engine bases are published per commit in `publish.yaml`.
+
 ### Git Commands
 ```bash
 # Use conventional commits with a single-line commit message, no co-author
