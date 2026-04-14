@@ -9,8 +9,7 @@
 # into MSVC Node.js in practice as long as we statically link libgcc/libstdc++.
 #
 # Base image: docker/builder-base/windows-mingw.Dockerfile
-ARG BASE_TAG=latest
-FROM ghcr.io/rivet-dev/rivet/builder-base-windows-mingw:${BASE_TAG}
+FROM ghcr.io/rivet-dev/rivet/builder-base-windows-mingw:0e33ceb98
 
 ARG BUILD_TARGET=engine
 ARG BUILD_MODE=release

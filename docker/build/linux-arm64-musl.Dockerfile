@@ -3,8 +3,7 @@
 # See linux-x64-gnu.Dockerfile for build arg documentation.
 #
 # Base image: docker/builder-base/linux-musl.Dockerfile
-ARG BASE_TAG=latest
-FROM ghcr.io/rivet-dev/rivet/builder-base-linux-musl:${BASE_TAG}
+FROM ghcr.io/rivet-dev/rivet/builder-base-linux-musl:0e33ceb98
 
 ARG BUILD_TARGET=engine
 ARG BUILD_MODE=release
