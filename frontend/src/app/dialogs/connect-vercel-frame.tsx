@@ -107,10 +107,7 @@ function FormStepper({
 			defaultValues={{
 				plan: "hobby",
 				runnerName: "default",
-				slotsPerRunner: 1,
-				minRunners: 1,
-				maxRunners: 100_000,
-				runnerMargin: 0,
+				drainGracePeriod: 0,
 				headers: [],
 				datacenters: Object.fromEntries(
 					datacenters.map((dc) => [dc.name, true]),

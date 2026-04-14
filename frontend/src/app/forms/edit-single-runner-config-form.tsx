@@ -81,3 +81,8 @@ export const RequestLifespan =
 export const RunnersMargin = SingleRunnerConfigForm.RunnersMargin<FormValues>;
 export const SlotsPerRunner = SingleRunnerConfigForm.SlotsPerRunner<FormValues>;
 export const Headers = SingleRunnerConfigForm.Headers<FormValues>;
+export const MaxConcurrentActors =
+	SingleRunnerConfigForm.MaxConcurrentActors<FormValues>;
+export const DrainGracePeriod =
+	SingleRunnerConfigForm.DrainGracePeriod<FormValues>;
+export const AutoUpgrade = SingleRunnerConfigForm.AutoUpgrade<FormValues>;

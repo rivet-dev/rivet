@@ -12,6 +12,7 @@ export const RunnerConfigResponse: core.serialization.ObjectSchema<
     Rivet.RunnerConfigResponse
 > = core.serialization
     .object({
+        protocolVersion: core.serialization.property("protocol_version", core.serialization.number().optional()),
         runnerPoolError: core.serialization.property(
             "runner_pool_error",
             core.serialization.record(core.serialization.string(), core.serialization.unknown()).optional(),
@@ -21,6 +22,7 @@ export const RunnerConfigResponse: core.serialization.ObjectSchema<
 
 export declare namespace RunnerConfigResponse {
     export interface Raw extends RunnerConfig.Raw {
+        protocol_version?: number | null;
         runner_pool_error?: Record<string, unknown> | null;
     }
 }

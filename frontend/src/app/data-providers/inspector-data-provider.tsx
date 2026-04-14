@@ -27,6 +27,8 @@ export const createGlobalContext = (opts: { url?: string; token?: string }) => {
 		features: {
 			canCreateActors: true,
 			canDeleteActors: false,
+			canSleepActors: false,
+			canRescheduleActors: false,
 		},
 		...createGlobalEngineContext({
 			engineToken: () => opts.token!,

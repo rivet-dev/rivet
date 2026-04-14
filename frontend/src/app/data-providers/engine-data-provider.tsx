@@ -158,6 +158,8 @@ export const createNamespaceContext = ({
 		features: {
 			canCreateActors: true,
 			canDeleteActors: true,
+			canSleepActors: true,
+			canRescheduleActors: true,
 		},
 		datacentersQueryOptions() {
 			return infiniteQueryOptions({
@@ -391,8 +393,8 @@ export const createNamespaceContext = ({
 						name: data.name,
 						key: data.key,
 						datacenter: data.datacenter,
-						crashPolicy: data.crashPolicy,
 						runnerNameSelector: data.runnerNameSelector,
+						crashPolicy: "destroy",
 						// encode input as CBOR then base64
 						input: data.input
 							? btoa(
@@ -421,6 +423,33 @@ export const createNamespaceContext = ({
 				},
 				mutationFn: async () => {
 					await client.actorsDelete(actorId, { namespace });
+				},
+			});
+		},
+		actorSleepMutationOptions(actorId: ActorId) {
+			return mutationOptions({
+				...def.actorSleepMutationOptions(actorId),
+				throwOnError: noThrow,
+				meta: {
+					mightRequireAuth,
+				},
+				mutationFn: async () => {
+					await client.actorsSleep(actorId, { namespace, body: {} });
+				},
+			});
+		},
+		actorRescheduleAfterSleepMutationOptions(actorId: ActorId) {
+			return mutationOptions({
+				...def.actorRescheduleAfterSleepMutationOptions(actorId),
+				throwOnError: noThrow,
+				meta: {
+					mightRequireAuth,
+				},
+				mutationFn: async () => {
+					await client.actorsReschedule(actorId, {
+						namespace,
+						body: {},
+					});
 				},
 			});
 		},
