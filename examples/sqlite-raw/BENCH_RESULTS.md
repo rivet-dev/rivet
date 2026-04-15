@@ -20,6 +20,10 @@ This file is generated from `bench-results.json` by
 | Fresh engine | Pending | Pending | Pending | Pending |
 | Payload | Pending | Pending | Pending | Pending |
 | Rows | Pending | Pending | Pending | Pending |
+| Atomic write coverage | Pending | Pending | Pending | Pending |
+| Buffered dirty pages | Pending | Pending | Pending | Pending |
+| Immediate kv_put writes | Pending | Pending | Pending | Pending |
+| Batch-cap failures | Pending | Pending | Pending | Pending |
 | Actor DB insert | Pending | Pending | Pending | Pending |
 | Actor DB verify | Pending | Pending | Pending | Pending |
 | End-to-end action | Pending | Pending | Pending | Pending |

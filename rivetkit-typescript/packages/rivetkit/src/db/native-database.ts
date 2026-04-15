@@ -1,4 +1,8 @@
-import type { SqliteBindings, SqliteDatabase } from "./config";
+import type {
+	SqliteBindings,
+	SqliteDatabase,
+	SqliteVfsTelemetry,
+} from "./config";
 
 interface NativeBindParam {
 	kind: "null" | "int" | "float" | "text" | "blob";
@@ -32,6 +36,10 @@ export interface JsNativeDatabaseLike {
 		sql: string,
 		params?: NativeBindParam[] | null,
 	): Promise<NativeRunResult>;
+	resetVfsTelemetry?(): void | Promise<void>;
+	snapshotVfsTelemetry?():
+		| SqliteVfsTelemetry
+		| Promise<SqliteVfsTelemetry>;
 	takeLastKvError?(): string | null;
 	close(): Promise<void>;
 }
@@ -148,6 +156,9 @@ function toNativeBindings(
 export function wrapJsNativeDatabase(
 	database: JsNativeDatabaseLike,
 ): SqliteDatabase {
+	const resetVfsTelemetry = database.resetVfsTelemetry?.bind(database);
+	const snapshotVfsTelemetry = database.snapshotVfsTelemetry?.bind(database);
+
 	return {
 		async exec(
 			sql: string,
@@ -180,6 +191,16 @@ export function wrapJsNativeDatabase(
 				enrichNativeDatabaseError(database, error);
 			}
 		},
+		resetVfsTelemetry: resetVfsTelemetry
+			? async () => {
+					await resetVfsTelemetry();
+				}
+			: undefined,
+		snapshotVfsTelemetry: snapshotVfsTelemetry
+			? async () => {
+					return await snapshotVfsTelemetry();
+				}
+			: undefined,
 		async close(): Promise<void> {
 			await database.close();
 		},

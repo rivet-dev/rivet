@@ -9,6 +9,68 @@ export interface SqliteQueryResult {
 	rows: unknown[][];
 }
 
+export interface SqliteVfsReadTelemetry {
+	count: number;
+	durationUs: number;
+	requestedBytes: number;
+	returnedBytes: number;
+	shortReadCount: number;
+}
+
+export interface SqliteVfsWriteTelemetry {
+	count: number;
+	durationUs: number;
+	inputBytes: number;
+	bufferedCount: number;
+	bufferedBytes: number;
+	immediateKvPutCount: number;
+	immediateKvPutBytes: number;
+}
+
+export interface SqliteVfsSyncTelemetry {
+	count: number;
+	durationUs: number;
+	metadataFlushCount: number;
+	metadataFlushBytes: number;
+}
+
+export interface SqliteVfsAtomicWriteTelemetry {
+	beginCount: number;
+	commitAttemptCount: number;
+	commitSuccessCount: number;
+	commitDurationUs: number;
+	committedDirtyPagesTotal: number;
+	maxCommittedDirtyPages: number;
+	committedBufferedBytesTotal: number;
+	rollbackCount: number;
+	batchCapFailureCount: number;
+	commitKvPutFailureCount: number;
+}
+
+export interface SqliteVfsKvTelemetry {
+	getCount: number;
+	getDurationUs: number;
+	getKeyCount: number;
+	getBytes: number;
+	putCount: number;
+	putDurationUs: number;
+	putKeyCount: number;
+	putBytes: number;
+	deleteCount: number;
+	deleteDurationUs: number;
+	deleteKeyCount: number;
+	deleteRangeCount: number;
+	deleteRangeDurationUs: number;
+}
+
+export interface SqliteVfsTelemetry {
+	reads: SqliteVfsReadTelemetry;
+	writes: SqliteVfsWriteTelemetry;
+	syncs: SqliteVfsSyncTelemetry;
+	atomicWrite: SqliteVfsAtomicWriteTelemetry;
+	kv: SqliteVfsKvTelemetry;
+}
+
 export interface SqliteDatabase {
 	exec(
 		sql: string,
@@ -16,6 +78,8 @@ export interface SqliteDatabase {
 	): Promise<void>;
 	run(sql: string, params?: SqliteBindings): Promise<void>;
 	query(sql: string, params?: SqliteBindings): Promise<SqliteQueryResult>;
+	resetVfsTelemetry?(): Promise<void>;
+	snapshotVfsTelemetry?(): Promise<SqliteVfsTelemetry>;
 	close(): Promise<void>;
 }
 
@@ -125,6 +189,8 @@ export type RawAccess = {
 	 * Executes a raw SQL query.
 	 */
 	execute: ExecuteFunction;
+	resetVfsTelemetry?: () => Promise<void>;
+	snapshotVfsTelemetry?: () => Promise<SqliteVfsTelemetry>;
 	/**
 	 * Closes the database connection and releases resources.
 	 */

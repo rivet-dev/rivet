@@ -1,5 +1,5 @@
 import { actor, setup } from "rivetkit";
-import { db } from "rivetkit/db";
+import { db, type SqliteVfsTelemetry } from "rivetkit/db";
 
 export const todoList = actor({
 	options: {
@@ -62,6 +62,11 @@ export const todoList = actor({
 			payloadBytes: number,
 			rowCount: number = 1,
 		) => {
+			if (!c.db.resetVfsTelemetry || !c.db.snapshotVfsTelemetry) {
+				throw new Error("native SQLite VFS telemetry is unavailable");
+			}
+
+			await c.db.resetVfsTelemetry();
 			const payload = "x".repeat(payloadBytes);
 			const createdAt = Date.now();
 			const insertStart = performance.now();
@@ -85,6 +90,8 @@ export const todoList = actor({
 				label,
 			)) as { totalBytes: number; storedRows: number }[];
 			const verifyElapsedMs = performance.now() - verifyStart;
+			const vfsTelemetry: SqliteVfsTelemetry =
+				await c.db.snapshotVfsTelemetry();
 
 			return {
 				label,
@@ -94,6 +101,7 @@ export const todoList = actor({
 				storedRows,
 				insertElapsedMs,
 				verifyElapsedMs,
+				vfsTelemetry,
 			};
 		},
 	},

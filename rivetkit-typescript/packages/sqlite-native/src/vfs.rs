@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use libsqlite3_sys::*;
+use serde::Serialize;
 use tokio::runtime::Handle;
 
 use crate::kv;
@@ -150,18 +151,135 @@ fn startup_preload_delete_range(entries: &mut StartupPreloadEntries, start: &[u8
 
 // MARK: VFS Metrics
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VfsReadTelemetry {
+	pub count: u64,
+	pub duration_us: u64,
+	pub requested_bytes: u64,
+	pub returned_bytes: u64,
+	pub short_read_count: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VfsWriteTelemetry {
+	pub count: u64,
+	pub duration_us: u64,
+	pub input_bytes: u64,
+	pub buffered_count: u64,
+	pub buffered_bytes: u64,
+	pub immediate_kv_put_count: u64,
+	pub immediate_kv_put_bytes: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VfsSyncTelemetry {
+	pub count: u64,
+	pub duration_us: u64,
+	pub metadata_flush_count: u64,
+	pub metadata_flush_bytes: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VfsAtomicWriteTelemetry {
+	pub begin_count: u64,
+	pub commit_attempt_count: u64,
+	pub commit_success_count: u64,
+	pub commit_duration_us: u64,
+	pub committed_dirty_pages_total: u64,
+	pub max_committed_dirty_pages: u64,
+	pub committed_buffered_bytes_total: u64,
+	pub rollback_count: u64,
+	pub batch_cap_failure_count: u64,
+	pub commit_kv_put_failure_count: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VfsKvTelemetry {
+	pub get_count: u64,
+	pub get_duration_us: u64,
+	pub get_key_count: u64,
+	pub get_bytes: u64,
+	pub put_count: u64,
+	pub put_duration_us: u64,
+	pub put_key_count: u64,
+	pub put_bytes: u64,
+	pub delete_count: u64,
+	pub delete_duration_us: u64,
+	pub delete_key_count: u64,
+	pub delete_range_count: u64,
+	pub delete_range_duration_us: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VfsTelemetrySnapshot {
+	pub reads: VfsReadTelemetry,
+	pub writes: VfsWriteTelemetry,
+	pub syncs: VfsSyncTelemetry,
+	pub atomic_write: VfsAtomicWriteTelemetry,
+	pub kv: VfsKvTelemetry,
+}
+
+fn update_max(counter: &AtomicU64, value: u64) {
+	let mut current = counter.load(Ordering::Relaxed);
+	while value > current {
+		match counter.compare_exchange(current, value, Ordering::Relaxed, Ordering::Relaxed) {
+			Ok(_) => break,
+			Err(previous) => current = previous,
+		}
+	}
+}
+
+fn reset_counter(counter: &AtomicU64) {
+	counter.store(0, Ordering::Relaxed);
+}
+
 /// Per-VFS-callback operation metrics for diagnosing native SQLite VFS performance.
 pub struct VfsMetrics {
 	pub xread_count: AtomicU64,
 	pub xread_us: AtomicU64,
+	pub xread_requested_bytes: AtomicU64,
+	pub xread_returned_bytes: AtomicU64,
+	pub xread_short_read_count: AtomicU64,
 	pub xwrite_count: AtomicU64,
 	pub xwrite_us: AtomicU64,
+	pub xwrite_input_bytes: AtomicU64,
 	pub xwrite_buffered_count: AtomicU64,
+	pub xwrite_buffered_bytes: AtomicU64,
+	pub xwrite_immediate_kv_put_count: AtomicU64,
+	pub xwrite_immediate_kv_put_bytes: AtomicU64,
 	pub xsync_count: AtomicU64,
 	pub xsync_us: AtomicU64,
-	pub commit_atomic_count: AtomicU64,
+	pub xsync_metadata_flush_count: AtomicU64,
+	pub xsync_metadata_flush_bytes: AtomicU64,
+	pub begin_atomic_count: AtomicU64,
+	pub commit_atomic_attempt_count: AtomicU64,
+	pub commit_atomic_success_count: AtomicU64,
 	pub commit_atomic_us: AtomicU64,
 	pub commit_atomic_pages: AtomicU64,
+	pub commit_atomic_max_pages: AtomicU64,
+	pub commit_atomic_bytes: AtomicU64,
+	pub rollback_atomic_count: AtomicU64,
+	pub commit_atomic_batch_cap_failure_count: AtomicU64,
+	pub commit_atomic_kv_put_failure_count: AtomicU64,
+	pub kv_get_count: AtomicU64,
+	pub kv_get_us: AtomicU64,
+	pub kv_get_keys: AtomicU64,
+	pub kv_get_bytes: AtomicU64,
+	pub kv_put_count: AtomicU64,
+	pub kv_put_us: AtomicU64,
+	pub kv_put_keys: AtomicU64,
+	pub kv_put_bytes: AtomicU64,
+	pub kv_delete_count: AtomicU64,
+	pub kv_delete_us: AtomicU64,
+	pub kv_delete_keys: AtomicU64,
+	pub kv_delete_range_count: AtomicU64,
+	pub kv_delete_range_us: AtomicU64,
 }
 
 impl VfsMetrics {
@@ -169,15 +287,144 @@ impl VfsMetrics {
 		Self {
 			xread_count: AtomicU64::new(0),
 			xread_us: AtomicU64::new(0),
+			xread_requested_bytes: AtomicU64::new(0),
+			xread_returned_bytes: AtomicU64::new(0),
+			xread_short_read_count: AtomicU64::new(0),
 			xwrite_count: AtomicU64::new(0),
 			xwrite_us: AtomicU64::new(0),
+			xwrite_input_bytes: AtomicU64::new(0),
 			xwrite_buffered_count: AtomicU64::new(0),
+			xwrite_buffered_bytes: AtomicU64::new(0),
+			xwrite_immediate_kv_put_count: AtomicU64::new(0),
+			xwrite_immediate_kv_put_bytes: AtomicU64::new(0),
 			xsync_count: AtomicU64::new(0),
 			xsync_us: AtomicU64::new(0),
-			commit_atomic_count: AtomicU64::new(0),
+			xsync_metadata_flush_count: AtomicU64::new(0),
+			xsync_metadata_flush_bytes: AtomicU64::new(0),
+			begin_atomic_count: AtomicU64::new(0),
+			commit_atomic_attempt_count: AtomicU64::new(0),
+			commit_atomic_success_count: AtomicU64::new(0),
 			commit_atomic_us: AtomicU64::new(0),
 			commit_atomic_pages: AtomicU64::new(0),
+			commit_atomic_max_pages: AtomicU64::new(0),
+			commit_atomic_bytes: AtomicU64::new(0),
+			rollback_atomic_count: AtomicU64::new(0),
+			commit_atomic_batch_cap_failure_count: AtomicU64::new(0),
+			commit_atomic_kv_put_failure_count: AtomicU64::new(0),
+			kv_get_count: AtomicU64::new(0),
+			kv_get_us: AtomicU64::new(0),
+			kv_get_keys: AtomicU64::new(0),
+			kv_get_bytes: AtomicU64::new(0),
+			kv_put_count: AtomicU64::new(0),
+			kv_put_us: AtomicU64::new(0),
+			kv_put_keys: AtomicU64::new(0),
+			kv_put_bytes: AtomicU64::new(0),
+			kv_delete_count: AtomicU64::new(0),
+			kv_delete_us: AtomicU64::new(0),
+			kv_delete_keys: AtomicU64::new(0),
+			kv_delete_range_count: AtomicU64::new(0),
+			kv_delete_range_us: AtomicU64::new(0),
 		}
+	}
+
+	pub fn snapshot(&self) -> VfsTelemetrySnapshot {
+		VfsTelemetrySnapshot {
+			reads: VfsReadTelemetry {
+				count: self.xread_count.load(Ordering::Relaxed),
+				duration_us: self.xread_us.load(Ordering::Relaxed),
+				requested_bytes: self.xread_requested_bytes.load(Ordering::Relaxed),
+				returned_bytes: self.xread_returned_bytes.load(Ordering::Relaxed),
+				short_read_count: self.xread_short_read_count.load(Ordering::Relaxed),
+			},
+			writes: VfsWriteTelemetry {
+				count: self.xwrite_count.load(Ordering::Relaxed),
+				duration_us: self.xwrite_us.load(Ordering::Relaxed),
+				input_bytes: self.xwrite_input_bytes.load(Ordering::Relaxed),
+				buffered_count: self.xwrite_buffered_count.load(Ordering::Relaxed),
+				buffered_bytes: self.xwrite_buffered_bytes.load(Ordering::Relaxed),
+				immediate_kv_put_count: self.xwrite_immediate_kv_put_count.load(Ordering::Relaxed),
+				immediate_kv_put_bytes: self.xwrite_immediate_kv_put_bytes.load(Ordering::Relaxed),
+			},
+			syncs: VfsSyncTelemetry {
+				count: self.xsync_count.load(Ordering::Relaxed),
+				duration_us: self.xsync_us.load(Ordering::Relaxed),
+				metadata_flush_count: self.xsync_metadata_flush_count.load(Ordering::Relaxed),
+				metadata_flush_bytes: self.xsync_metadata_flush_bytes.load(Ordering::Relaxed),
+			},
+			atomic_write: VfsAtomicWriteTelemetry {
+				begin_count: self.begin_atomic_count.load(Ordering::Relaxed),
+				commit_attempt_count: self.commit_atomic_attempt_count.load(Ordering::Relaxed),
+				commit_success_count: self.commit_atomic_success_count.load(Ordering::Relaxed),
+				commit_duration_us: self.commit_atomic_us.load(Ordering::Relaxed),
+				committed_dirty_pages_total: self.commit_atomic_pages.load(Ordering::Relaxed),
+				max_committed_dirty_pages: self.commit_atomic_max_pages.load(Ordering::Relaxed),
+				committed_buffered_bytes_total: self.commit_atomic_bytes.load(Ordering::Relaxed),
+				rollback_count: self.rollback_atomic_count.load(Ordering::Relaxed),
+				batch_cap_failure_count: self
+					.commit_atomic_batch_cap_failure_count
+					.load(Ordering::Relaxed),
+				commit_kv_put_failure_count: self
+					.commit_atomic_kv_put_failure_count
+					.load(Ordering::Relaxed),
+			},
+			kv: VfsKvTelemetry {
+				get_count: self.kv_get_count.load(Ordering::Relaxed),
+				get_duration_us: self.kv_get_us.load(Ordering::Relaxed),
+				get_key_count: self.kv_get_keys.load(Ordering::Relaxed),
+				get_bytes: self.kv_get_bytes.load(Ordering::Relaxed),
+				put_count: self.kv_put_count.load(Ordering::Relaxed),
+				put_duration_us: self.kv_put_us.load(Ordering::Relaxed),
+				put_key_count: self.kv_put_keys.load(Ordering::Relaxed),
+				put_bytes: self.kv_put_bytes.load(Ordering::Relaxed),
+				delete_count: self.kv_delete_count.load(Ordering::Relaxed),
+				delete_duration_us: self.kv_delete_us.load(Ordering::Relaxed),
+				delete_key_count: self.kv_delete_keys.load(Ordering::Relaxed),
+				delete_range_count: self.kv_delete_range_count.load(Ordering::Relaxed),
+				delete_range_duration_us: self.kv_delete_range_us.load(Ordering::Relaxed),
+			},
+		}
+	}
+
+	pub fn reset(&self) {
+		reset_counter(&self.xread_count);
+		reset_counter(&self.xread_us);
+		reset_counter(&self.xread_requested_bytes);
+		reset_counter(&self.xread_returned_bytes);
+		reset_counter(&self.xread_short_read_count);
+		reset_counter(&self.xwrite_count);
+		reset_counter(&self.xwrite_us);
+		reset_counter(&self.xwrite_input_bytes);
+		reset_counter(&self.xwrite_buffered_count);
+		reset_counter(&self.xwrite_buffered_bytes);
+		reset_counter(&self.xwrite_immediate_kv_put_count);
+		reset_counter(&self.xwrite_immediate_kv_put_bytes);
+		reset_counter(&self.xsync_count);
+		reset_counter(&self.xsync_us);
+		reset_counter(&self.xsync_metadata_flush_count);
+		reset_counter(&self.xsync_metadata_flush_bytes);
+		reset_counter(&self.begin_atomic_count);
+		reset_counter(&self.commit_atomic_attempt_count);
+		reset_counter(&self.commit_atomic_success_count);
+		reset_counter(&self.commit_atomic_us);
+		reset_counter(&self.commit_atomic_pages);
+		reset_counter(&self.commit_atomic_max_pages);
+		reset_counter(&self.commit_atomic_bytes);
+		reset_counter(&self.rollback_atomic_count);
+		reset_counter(&self.commit_atomic_batch_cap_failure_count);
+		reset_counter(&self.commit_atomic_kv_put_failure_count);
+		reset_counter(&self.kv_get_count);
+		reset_counter(&self.kv_get_us);
+		reset_counter(&self.kv_get_keys);
+		reset_counter(&self.kv_get_bytes);
+		reset_counter(&self.kv_put_count);
+		reset_counter(&self.kv_put_us);
+		reset_counter(&self.kv_put_keys);
+		reset_counter(&self.kv_put_bytes);
+		reset_counter(&self.kv_delete_count);
+		reset_counter(&self.kv_delete_us);
+		reset_counter(&self.kv_delete_keys);
+		reset_counter(&self.kv_delete_range_count);
+		reset_counter(&self.kv_delete_range_us);
 	}
 }
 
@@ -246,6 +493,15 @@ impl VfsContext {
 		message
 	}
 
+	fn snapshot_vfs_telemetry(&self) -> VfsTelemetrySnapshot {
+		self.vfs_metrics.snapshot()
+	}
+
+	fn reset_vfs_telemetry(&self) {
+		self.vfs_metrics.reset();
+		self.clear_last_error();
+	}
+
 	fn resolve_file_tag(&self, path: &str) -> Option<u8> {
 		if path == self.main_file_name {
 			return Some(kv::FILE_TAG_MAIN);
@@ -295,6 +551,16 @@ impl VfsContext {
 			} else {
 				(Vec::new(), Vec::new(), keys)
 			};
+		let remote_fetch = !miss_keys.is_empty();
+		let remote_key_count = miss_keys.len() as u64;
+		if remote_fetch {
+			self.vfs_metrics
+				.kv_get_count
+				.fetch_add(1, Ordering::Relaxed);
+			self.vfs_metrics
+				.kv_get_keys
+				.fetch_add(remote_key_count, Ordering::Relaxed);
+		}
 		let result = if miss_keys.is_empty() {
 			Ok(KvGetResult {
 				keys: preloaded_keys,
@@ -304,6 +570,14 @@ impl VfsContext {
 			self.rt_handle
 				.block_on(self.kv.batch_get(&self.actor_id, miss_keys))
 				.map(|mut result| {
+					let fetched_bytes = result
+						.values
+						.iter()
+						.map(|value| value.len() as u64)
+						.sum::<u64>();
+					self.vfs_metrics
+						.kv_get_bytes
+						.fetch_add(fetched_bytes, Ordering::Relaxed);
 					result.keys.extend(preloaded_keys);
 					result.values.extend(preloaded_values);
 					result
@@ -314,6 +588,11 @@ impl VfsContext {
 			self.clear_last_error();
 		}
 		let elapsed = start.elapsed();
+		if remote_fetch {
+			self.vfs_metrics
+				.kv_get_us
+				.fetch_add(elapsed.as_micros() as u64, Ordering::Relaxed);
+		}
 		tracing::debug!(
 			op = %format_args!("get({key_count}keys)"),
 			duration_us = elapsed.as_micros() as u64,
@@ -325,6 +604,16 @@ impl VfsContext {
 	fn kv_put(&self, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<(), String> {
 		let key_count = keys.len();
 		let start = std::time::Instant::now();
+		let put_bytes = values.iter().map(|value| value.len() as u64).sum::<u64>();
+		self.vfs_metrics
+			.kv_put_count
+			.fetch_add(1, Ordering::Relaxed);
+		self.vfs_metrics
+			.kv_put_keys
+			.fetch_add(key_count as u64, Ordering::Relaxed);
+		self.vfs_metrics
+			.kv_put_bytes
+			.fetch_add(put_bytes, Ordering::Relaxed);
 		let result = self
 			.rt_handle
 			.block_on(
@@ -341,6 +630,9 @@ impl VfsContext {
 			});
 		}
 		let elapsed = start.elapsed();
+		self.vfs_metrics
+			.kv_put_us
+			.fetch_add(elapsed.as_micros() as u64, Ordering::Relaxed);
 		tracing::debug!(
 			op = %format_args!("put({key_count}keys)"),
 			duration_us = elapsed.as_micros() as u64,
@@ -352,6 +644,12 @@ impl VfsContext {
 	fn kv_delete(&self, keys: Vec<Vec<u8>>) -> Result<(), String> {
 		let key_count = keys.len();
 		let start = std::time::Instant::now();
+		self.vfs_metrics
+			.kv_delete_count
+			.fetch_add(1, Ordering::Relaxed);
+		self.vfs_metrics
+			.kv_delete_keys
+			.fetch_add(key_count as u64, Ordering::Relaxed);
 		let result = self
 			.rt_handle
 			.block_on(self.kv.batch_delete(&self.actor_id, keys.clone()))
@@ -365,6 +663,9 @@ impl VfsContext {
 			});
 		}
 		let elapsed = start.elapsed();
+		self.vfs_metrics
+			.kv_delete_us
+			.fetch_add(elapsed.as_micros() as u64, Ordering::Relaxed);
 		tracing::debug!(
 			op = %format_args!("del({key_count}keys)"),
 			duration_us = elapsed.as_micros() as u64,
@@ -377,6 +678,9 @@ impl VfsContext {
 		let start_time = std::time::Instant::now();
 		let preload_start = start.clone();
 		let preload_end = end.clone();
+		self.vfs_metrics
+			.kv_delete_range_count
+			.fetch_add(1, Ordering::Relaxed);
 		let result = self
 			.rt_handle
 			.block_on(self.kv.delete_range(&self.actor_id, start, end))
@@ -392,6 +696,9 @@ impl VfsContext {
 			});
 		}
 		let elapsed = start_time.elapsed();
+		self.vfs_metrics
+			.kv_delete_range_us
+			.fetch_add(elapsed.as_micros() as u64, Ordering::Relaxed);
 		tracing::debug!(
 			op = "delRange",
 			duration_us = elapsed.as_micros() as u64,
@@ -532,6 +839,9 @@ unsafe extern "C" fn kv_io_read(
 		let read_start = std::time::Instant::now();
 		ctx.vfs_metrics.xread_count.fetch_add(1, Ordering::Relaxed);
 		let requested_length = i_amt as usize;
+		ctx.vfs_metrics
+			.xread_requested_bytes
+			.fetch_add(requested_length as u64, Ordering::Relaxed);
 		let buf = slice::from_raw_parts_mut(p_buf as *mut u8, requested_length);
 
 		if i_offset < 0 {
@@ -542,6 +852,12 @@ unsafe extern "C" fn kv_io_read(
 		let file_size = file.size as usize;
 		if offset >= file_size {
 			buf.fill(0);
+			ctx.vfs_metrics
+				.xread_short_read_count
+				.fetch_add(1, Ordering::Relaxed);
+			ctx.vfs_metrics
+				.xread_us
+				.fetch_add(read_start.elapsed().as_micros() as u64, Ordering::Relaxed);
 			return SQLITE_IOERR_SHORT_READ;
 		}
 
@@ -627,8 +943,14 @@ unsafe extern "C" fn kv_io_read(
 		}
 
 		let actual_bytes = std::cmp::min(requested_length, file_size - offset);
+		ctx.vfs_metrics
+			.xread_returned_bytes
+			.fetch_add(actual_bytes as u64, Ordering::Relaxed);
 		if actual_bytes < requested_length {
 			buf[actual_bytes..].fill(0);
+			ctx.vfs_metrics
+				.xread_short_read_count
+				.fetch_add(1, Ordering::Relaxed);
 			ctx.vfs_metrics
 				.xread_us
 				.fetch_add(read_start.elapsed().as_micros() as u64, Ordering::Relaxed);
@@ -658,6 +980,9 @@ unsafe extern "C" fn kv_io_write(
 		let write_start = std::time::Instant::now();
 		ctx.vfs_metrics.xwrite_count.fetch_add(1, Ordering::Relaxed);
 		let data = slice::from_raw_parts(p_buf as *const u8, i_amt as usize);
+		ctx.vfs_metrics
+			.xwrite_input_bytes
+			.fetch_add(data.len() as u64, Ordering::Relaxed);
 
 		if i_offset < 0 {
 			return SQLITE_IOERR_WRITE;
@@ -699,6 +1024,9 @@ unsafe extern "C" fn kv_io_write(
 				ctx.vfs_metrics
 					.xwrite_buffered_count
 					.fetch_add(1, Ordering::Relaxed);
+				ctx.vfs_metrics
+					.xwrite_buffered_bytes
+					.fetch_add(data.len() as u64, Ordering::Relaxed);
 				ctx.vfs_metrics
 					.xwrite_us
 					.fetch_add(write_start.elapsed().as_micros() as u64, Ordering::Relaxed);
@@ -816,6 +1144,12 @@ unsafe extern "C" fn kv_io_write(
 		}
 
 		let (keys, values) = split_entries(entries_to_write);
+		ctx.vfs_metrics
+			.xwrite_immediate_kv_put_count
+			.fetch_add(1, Ordering::Relaxed);
+		ctx.vfs_metrics
+			.xwrite_immediate_kv_put_bytes
+			.fetch_add(data.len() as u64, Ordering::Relaxed);
 		if ctx.kv_put(keys, values).is_err() {
 			file.size = previous_size;
 			file.meta_dirty = previous_meta_dirty;
@@ -946,11 +1280,22 @@ unsafe extern "C" fn kv_io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int
 unsafe extern "C" fn kv_io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_int {
 	vfs_catch_unwind!(SQLITE_IOERR_FSYNC, {
 		let file = get_file(p_file);
+		let ctx = &*file.ctx;
+		let sync_start = std::time::Instant::now();
+		ctx.vfs_metrics.xsync_count.fetch_add(1, Ordering::Relaxed);
 		if !file.meta_dirty {
+			ctx.vfs_metrics
+				.xsync_us
+				.fetch_add(sync_start.elapsed().as_micros() as u64, Ordering::Relaxed);
 			return SQLITE_OK;
 		}
 
-		let ctx = &*file.ctx;
+		ctx.vfs_metrics
+			.xsync_metadata_flush_count
+			.fetch_add(1, Ordering::Relaxed);
+		ctx.vfs_metrics
+			.xsync_metadata_flush_bytes
+			.fetch_add(META_ENCODED_SIZE as u64, Ordering::Relaxed);
 		if ctx
 			.kv_put(
 				vec![file.meta_key.to_vec()],
@@ -958,9 +1303,15 @@ unsafe extern "C" fn kv_io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_i
 			)
 			.is_err()
 		{
+			ctx.vfs_metrics
+				.xsync_us
+				.fetch_add(sync_start.elapsed().as_micros() as u64, Ordering::Relaxed);
 			return SQLITE_IOERR_FSYNC;
 		}
 		file.meta_dirty = false;
+		ctx.vfs_metrics
+			.xsync_us
+			.fetch_add(sync_start.elapsed().as_micros() as u64, Ordering::Relaxed);
 
 		SQLITE_OK
 	})
@@ -1009,6 +1360,10 @@ unsafe extern "C" fn kv_io_file_control(
 
 		match op {
 			SQLITE_FCNTL_BEGIN_ATOMIC_WRITE => {
+				let ctx = &*file.ctx;
+				ctx.vfs_metrics
+					.begin_atomic_count
+					.fetch_add(1, Ordering::Relaxed);
 				state.saved_file_size = file.size;
 				state.batch_mode = true;
 				file.meta_dirty = false;
@@ -1018,7 +1373,15 @@ unsafe extern "C" fn kv_io_file_control(
 			SQLITE_FCNTL_COMMIT_ATOMIC_WRITE => {
 				let ctx = &*file.ctx;
 				let commit_start = std::time::Instant::now();
+				ctx.vfs_metrics
+					.commit_atomic_attempt_count
+					.fetch_add(1, Ordering::Relaxed);
 				let dirty_page_count = state.dirty_buffer.len() as u64;
+				let dirty_buffer_bytes = state
+					.dirty_buffer
+					.values()
+					.map(|value| value.len() as u64)
+					.sum::<u64>();
 				let max_dirty_pages = if file.meta_dirty {
 					KV_MAX_BATCH_KEYS - 1
 				} else {
@@ -1026,6 +1389,12 @@ unsafe extern "C" fn kv_io_file_control(
 				};
 
 				if state.dirty_buffer.len() > max_dirty_pages {
+					ctx.vfs_metrics
+						.commit_atomic_batch_cap_failure_count
+						.fetch_add(1, Ordering::Relaxed);
+					ctx.vfs_metrics
+						.commit_atomic_us
+						.fetch_add(commit_start.elapsed().as_micros() as u64, Ordering::Relaxed);
 					state.dirty_buffer.clear();
 					file.size = state.saved_file_size;
 					file.meta_dirty = false;
@@ -1046,6 +1415,12 @@ unsafe extern "C" fn kv_io_file_control(
 
 				let (keys, values) = split_entries(entries);
 				if ctx.kv_put(keys, values).is_err() {
+					ctx.vfs_metrics
+						.commit_atomic_kv_put_failure_count
+						.fetch_add(1, Ordering::Relaxed);
+					ctx.vfs_metrics
+						.commit_atomic_us
+						.fetch_add(commit_start.elapsed().as_micros() as u64, Ordering::Relaxed);
 					state.dirty_buffer.clear();
 					file.size = state.saved_file_size;
 					file.meta_dirty = false;
@@ -1069,11 +1444,15 @@ unsafe extern "C" fn kv_io_file_control(
 				file.meta_dirty = false;
 				state.batch_mode = false;
 				ctx.vfs_metrics
-					.commit_atomic_count
+					.commit_atomic_success_count
 					.fetch_add(1, Ordering::Relaxed);
 				ctx.vfs_metrics
 					.commit_atomic_pages
 					.fetch_add(dirty_page_count, Ordering::Relaxed);
+				update_max(&ctx.vfs_metrics.commit_atomic_max_pages, dirty_page_count);
+				ctx.vfs_metrics
+					.commit_atomic_bytes
+					.fetch_add(dirty_buffer_bytes, Ordering::Relaxed);
 				ctx.vfs_metrics
 					.commit_atomic_us
 					.fetch_add(commit_start.elapsed().as_micros() as u64, Ordering::Relaxed);
@@ -1083,6 +1462,10 @@ unsafe extern "C" fn kv_io_file_control(
 				if !state.batch_mode {
 					return SQLITE_OK;
 				}
+				let ctx = &*file.ctx;
+				ctx.vfs_metrics
+					.rollback_atomic_count
+					.fetch_add(1, Ordering::Relaxed);
 				state.dirty_buffer.clear();
 				file.size = state.saved_file_size;
 				file.meta_dirty = false;
@@ -1360,6 +1743,16 @@ impl KvVfs {
 		unsafe { (*self.ctx_ptr).take_last_error() }
 	}
 
+	pub fn snapshot_vfs_telemetry(&self) -> VfsTelemetrySnapshot {
+		unsafe { (*self.ctx_ptr).snapshot_vfs_telemetry() }
+	}
+
+	pub fn reset_vfs_telemetry(&self) {
+		unsafe {
+			(*self.ctx_ptr).reset_vfs_telemetry();
+		}
+	}
+
 	pub fn register(
 		name: &str,
 		kv: Arc<dyn SqliteKv>,
@@ -1463,6 +1856,14 @@ impl NativeDatabase {
 
 	pub fn take_last_kv_error(&self) -> Option<String> {
 		self._vfs.take_last_kv_error()
+	}
+
+	pub fn snapshot_vfs_telemetry(&self) -> VfsTelemetrySnapshot {
+		self._vfs.snapshot_vfs_telemetry()
+	}
+
+	pub fn reset_vfs_telemetry(&self) {
+		self._vfs.reset_vfs_telemetry();
 	}
 }
 

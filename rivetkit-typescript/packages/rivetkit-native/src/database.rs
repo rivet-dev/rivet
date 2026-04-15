@@ -157,6 +157,32 @@ impl JsNativeDatabase {
 	}
 
 	#[napi]
+	pub fn reset_vfs_telemetry(&self) -> napi::Result<()> {
+		let guard = self
+			.db
+			.lock()
+			.map_err(|_| napi::Error::from_reason("database mutex poisoned"))?;
+		let native_db = guard
+			.as_ref()
+			.ok_or_else(|| napi::Error::from_reason("database is closed"))?;
+		native_db.reset_vfs_telemetry();
+		Ok(())
+	}
+
+	#[napi]
+	pub fn snapshot_vfs_telemetry(&self) -> napi::Result<serde_json::Value> {
+		let guard = self
+			.db
+			.lock()
+			.map_err(|_| napi::Error::from_reason("database mutex poisoned"))?;
+		let native_db = guard
+			.as_ref()
+			.ok_or_else(|| napi::Error::from_reason("database is closed"))?;
+		serde_json::to_value(native_db.snapshot_vfs_telemetry())
+			.map_err(|err| napi::Error::from_reason(err.to_string()))
+	}
+
+	#[napi]
 	pub async fn run(
 		&self,
 		sql: String,

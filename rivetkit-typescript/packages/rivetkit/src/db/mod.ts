@@ -1,7 +1,7 @@
 import type { DatabaseProvider, RawAccess } from "./config";
 import { AsyncMutex, isSqliteBindingObject, toSqliteBindings } from "./shared";
 
-export type { RawAccess } from "./config";
+export type { RawAccess, SqliteVfsTelemetry } from "./config";
 
 interface DatabaseFactoryConfig {
 	onMigrate?: (db: RawAccess) => Promise<void> | void;
@@ -45,6 +45,8 @@ export function db({
 			}
 
 			const db = await nativeDatabaseProvider.open(ctx.actorId);
+			const resetVfsTelemetry = db.resetVfsTelemetry?.bind(db);
+			const snapshotVfsTelemetry = db.snapshotVfsTelemetry?.bind(db);
 			let closed = false;
 			const mutex = new AsyncMutex();
 			const ensureOpen = () => {
@@ -147,6 +149,22 @@ export function db({
 						return result;
 					});
 				},
+				resetVfsTelemetry: resetVfsTelemetry
+					? async () => {
+							await mutex.run(async () => {
+								ensureOpen();
+								await resetVfsTelemetry();
+							});
+						}
+					: undefined,
+				snapshotVfsTelemetry: snapshotVfsTelemetry
+					? async () => {
+							return await mutex.run(async () => {
+								ensureOpen();
+								return await snapshotVfsTelemetry();
+							});
+						}
+					: undefined,
 				close: async () => {
 					const shouldClose = await mutex.run(async () => {
 						if (closed) return false;

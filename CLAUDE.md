@@ -106,6 +106,7 @@ git commit -m "chore(my-pkg): foo bar"
 
 ### SQLite Package
 - RivetKit SQLite runtime is native-only. Use `@rivetkit/rivetkit-native` and do not add `@rivetkit/sqlite`, `@rivetkit/sqlite-vfs`, or other WebAssembly SQLite fallbacks.
+- Use `c.db.resetVfsTelemetry()` and `c.db.snapshotVfsTelemetry()` around measured actor-side SQLite work when benchmarking VFS behavior.
 
 ### RivetKit Package Resolutions
 - The root `/package.json` contains `resolutions` that map RivetKit packages to local workspace versions:

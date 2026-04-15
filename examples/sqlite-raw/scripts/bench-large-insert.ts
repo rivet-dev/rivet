@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { createClient } from "rivetkit/client";
+import type { SqliteVfsTelemetry } from "rivetkit/db";
 import { registry } from "../src/index.ts";
 
 const DEFAULT_MB = Number(process.env.BENCH_MB ?? "10");
@@ -20,12 +21,16 @@ interface BenchmarkInsertResult {
 	verifyElapsedMs: number;
 }
 
+interface ActorBenchmarkInsertResult extends BenchmarkInsertResult {
+	vfsTelemetry: SqliteVfsTelemetry;
+}
+
 interface LargeInsertBenchmarkResult {
 	endpoint: string;
 	payloadMiB: number;
 	totalBytes: number;
 	rowCount: number;
-	actor: BenchmarkInsertResult;
+	actor: ActorBenchmarkInsertResult;
 	native: BenchmarkInsertResult;
 	delta: {
 		endToEndElapsedMs: number;

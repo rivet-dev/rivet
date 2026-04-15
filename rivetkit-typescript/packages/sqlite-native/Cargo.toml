@@ -14,3 +14,4 @@ tokio = { version = "1", features = ["rt"] }
 tracing = "0.1"
 async-trait = "0.1"
 getrandom = "0.2"
+serde.workspace = true

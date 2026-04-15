@@ -5215,6 +5215,7 @@ dependencies = [
  "async-trait",
  "getrandom 0.2.16",
  "libsqlite3-sys",
+ "serde",
  "tokio",
  "tracing",
 ]

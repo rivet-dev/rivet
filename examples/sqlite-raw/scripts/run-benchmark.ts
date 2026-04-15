@@ -34,33 +34,94 @@ interface CliOptions {
 	renderOnly: boolean;
 }
 
+interface BenchmarkInsertResult {
+	payloadBytes: number;
+	rowCount: number;
+	totalBytes: number;
+	storedRows: number;
+	insertElapsedMs: number;
+	verifyElapsedMs: number;
+}
+
+interface ActorLargeInsertBenchmarkResult extends BenchmarkInsertResult {
+	vfsTelemetry: SqliteVfsTelemetry;
+}
+
 interface LargeInsertBenchmarkResult {
 	endpoint: string;
 	payloadMiB: number;
 	totalBytes: number;
 	rowCount: number;
-	actor: {
-		payloadBytes: number;
-		rowCount: number;
-		totalBytes: number;
-		storedRows: number;
-		insertElapsedMs: number;
-		verifyElapsedMs: number;
-	};
-	native: {
-		payloadBytes: number;
-		rowCount: number;
-		totalBytes: number;
-		storedRows: number;
-		insertElapsedMs: number;
-		verifyElapsedMs: number;
-	};
+	actor: ActorLargeInsertBenchmarkResult;
+	native: BenchmarkInsertResult;
 	delta: {
 		endToEndElapsedMs: number;
 		overheadOutsideDbInsertMs: number;
 		actorDbVsNativeMultiplier: number;
 		endToEndVsNativeMultiplier: number;
 	};
+}
+
+interface SqliteVfsReadTelemetry {
+	count: number;
+	durationUs: number;
+	requestedBytes: number;
+	returnedBytes: number;
+	shortReadCount: number;
+}
+
+interface SqliteVfsWriteTelemetry {
+	count: number;
+	durationUs: number;
+	inputBytes: number;
+	bufferedCount: number;
+	bufferedBytes: number;
+	immediateKvPutCount: number;
+	immediateKvPutBytes: number;
+}
+
+interface SqliteVfsSyncTelemetry {
+	count: number;
+	durationUs: number;
+	metadataFlushCount: number;
+	metadataFlushBytes: number;
+}
+
+interface SqliteVfsAtomicWriteTelemetry {
+	beginCount: number;
+	commitAttemptCount: number;
+	commitSuccessCount: number;
+	commitDurationUs: number;
+	committedDirtyPagesTotal: number;
+	maxCommittedDirtyPages: number;
+	committedBufferedBytesTotal: number;
+	rollbackCount: number;
+	batchCapFailureCount: number;
+	commitKvPutFailureCount: number;
+}
+
+interface SqliteVfsKvTelemetry {
+	getCount: number;
+	getDurationUs: number;
+	getKeyCount: number;
+	getBytes: number;
+	putCount: number;
+	putDurationUs: number;
+	putKeyCount: number;
+	putBytes: number;
+	deleteCount: number;
+	deleteDurationUs: number;
+	deleteKeyCount: number;
+	deleteRangeCount: number;
+	deleteRangeDurationUs: number;
+}
+
+interface SqliteVfsTelemetry {
+	reads: SqliteVfsReadTelemetry;
+	writes: SqliteVfsWriteTelemetry;
+	syncs: SqliteVfsSyncTelemetry;
+	atomicWrite: SqliteVfsAtomicWriteTelemetry;
+	kv: SqliteVfsKvTelemetry;
 }
 
 interface BuildProvenance {
@@ -158,6 +219,25 @@ function formatMultiplier(value: number): string {
 function formatBytes(bytes: number): string {
 	const mb = bytes / (1024 * 1024);
 	return `${mb.toFixed(2)} MiB`;
+}
+
+function formatUs(us: number): string {
+	return formatMs(us / 1000);
+}
+
+function formatAtomicCoverage(telemetry: SqliteVfsTelemetry): string {
+	return [
+		`begin ${telemetry.atomicWrite.beginCount}`,
+		`commit ${telemetry.atomicWrite.commitAttemptCount}`,
+		`ok ${telemetry.atomicWrite.commitSuccessCount}`,
+	].join(" / ");
+}
+
+function formatDirtyPages(telemetry: SqliteVfsTelemetry): string {
+	return [
+		`total ${telemetry.atomicWrite.committedDirtyPagesTotal}`,
+		`max ${telemetry.atomicWrite.maxCommittedDirtyPages}`,
+	].join(" / ");
 }
 
 function canonicalWorkflowCommand(options: CliOptions): string {
@@ -542,6 +622,44 @@ function renderMarkdown(store: BenchResultsStore): string {
 			),
 		],
 		[
+			"Atomic write coverage",
+			...phaseOrder.map((phase) =>
+				renderSummaryCell(latest.get(phase), (run) =>
+					formatAtomicCoverage(run.benchmark.actor.vfsTelemetry),
+				),
+			),
+		],
+		[
+			"Buffered dirty pages",
+			...phaseOrder.map((phase) =>
+				renderSummaryCell(latest.get(phase), (run) =>
+					formatDirtyPages(run.benchmark.actor.vfsTelemetry),
+				),
+			),
+		],
+		[
+			"Immediate kv_put writes",
+			...phaseOrder.map((phase) =>
+				renderSummaryCell(latest.get(phase), (run) =>
+					String(
+						run.benchmark.actor.vfsTelemetry.writes
+							.immediateKvPutCount,
+					),
+				),
+			),
+		],
+		[
+			"Batch-cap failures",
+			...phaseOrder.map((phase) =>
+				renderSummaryCell(latest.get(phase), (run) =>
+					String(
+						run.benchmark.actor.vfsTelemetry.atomicWrite
+							.batchCapFailureCount,
+					),
+				),
+			),
+		],
+		[
 			"Actor DB insert",
 			...phaseOrder.map((phase) =>
 				renderSummaryCell(latest.get(phase), (run) =>
@@ -618,6 +736,18 @@ function renderMarkdown(store: BenchResultsStore): string {
 - Native SQLite insert: \`${formatMs(run.benchmark.native.insertElapsedMs)}\`
 - Actor DB vs native: \`${formatMultiplier(run.benchmark.delta.actorDbVsNativeMultiplier)}\`
 - End-to-end vs native: \`${formatMultiplier(run.benchmark.delta.endToEndVsNativeMultiplier)}\`
+
+#### VFS Telemetry
+
+- Reads: \`${run.benchmark.actor.vfsTelemetry.reads.count}\` calls, \`${formatBytes(run.benchmark.actor.vfsTelemetry.reads.returnedBytes)}\` returned, \`${run.benchmark.actor.vfsTelemetry.reads.shortReadCount}\` short reads, \`${formatUs(run.benchmark.actor.vfsTelemetry.reads.durationUs)}\` total
+- Writes: \`${run.benchmark.actor.vfsTelemetry.writes.count}\` calls, \`${formatBytes(run.benchmark.actor.vfsTelemetry.writes.inputBytes)}\` input, \`${run.benchmark.actor.vfsTelemetry.writes.bufferedCount}\` buffered calls, \`${run.benchmark.actor.vfsTelemetry.writes.immediateKvPutCount}\` immediate \`kv_put\` fallbacks
+- Syncs: \`${run.benchmark.actor.vfsTelemetry.syncs.count}\` calls, \`${run.benchmark.actor.vfsTelemetry.syncs.metadataFlushCount}\` metadata flushes, \`${formatUs(run.benchmark.actor.vfsTelemetry.syncs.durationUs)}\` total
+- Atomic write coverage: \`${formatAtomicCoverage(run.benchmark.actor.vfsTelemetry)}\`
+- Atomic write pages: \`${formatDirtyPages(run.benchmark.actor.vfsTelemetry)}\`
+- Atomic write bytes: \`${formatBytes(run.benchmark.actor.vfsTelemetry.atomicWrite.committedBufferedBytesTotal)}\`
+- Atomic write failures: \`${run.benchmark.actor.vfsTelemetry.atomicWrite.batchCapFailureCount}\` batch-cap, \`${run.benchmark.actor.vfsTelemetry.atomicWrite.commitKvPutFailureCount}\` KV put
+- KV round-trips: \`get ${run.benchmark.actor.vfsTelemetry.kv.getCount}\` / \`put ${run.benchmark.actor.vfsTelemetry.kv.putCount}\` / \`delete ${run.benchmark.actor.vfsTelemetry.kv.deleteCount}\` / \`deleteRange ${run.benchmark.actor.vfsTelemetry.kv.deleteRangeCount}\`
+- KV payload bytes: \`${formatBytes(run.benchmark.actor.vfsTelemetry.kv.getBytes)}\` read, \`${formatBytes(run.benchmark.actor.vfsTelemetry.kv.putBytes)}\` written
 
 #### Engine Build Provenance
 
