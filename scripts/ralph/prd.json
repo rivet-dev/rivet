@@ -298,6 +298,145 @@
       "priority": 19,
       "passes": true,
       "notes": "The direct PTY-backed benchmark completed reliably, but the canonical final-phase recorder path could still wedge after the measurement landed."
+    },
+    {
+      "id": "US-020",
+      "title": "Enable the native SQLite read cache on the default path",
+      "description": "As a developer, I need the native SQLite VFS read cache enabled by default so bulk-insert verify queries stop re-fetching every page over the KV bridge after commit.",
+      "acceptanceCriteria": [
+        "Change the read-cache gate in rivetkit-typescript/packages/sqlite-native/src/vfs.rs so the feature is on by default, while still allowing RIVETKIT_SQLITE_NATIVE_READ_CACHE=0 to force-disable it for comparison runs",
+        "Confirm apply_flush_to_read_cache still promotes dirty pages into read_cache on every successful buffered flush",
+        "Confirm trim_read_cache_for_truncate invalidation still fires on the new default path",
+        "Add a focused test that inserts a multi-MiB payload and verifies the subsequent verify query issues zero kv_get calls",
+        "Re-run the sqlite-raw bench on a fresh engine and record the new verify timing alongside prior Final and Phase 2/3 samples",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "The promotion hook already exists at vfs.rs:1064-1092. This story flips a bad default, not a new feature."
+    },
+    {
+      "id": "US-021",
+      "title": "Give SQLite enough page cache to cover representative working sets",
+      "description": "As a developer, I need the SQLite pager to hold enough pages in memory that large-row verify scans do not re-enter the VFS for every overflow-chain page.",
+      "acceptanceCriteria": [
+        "Pick a default PRAGMA cache_size sized to cover the sqlite-raw 10 MiB benchmark with headroom and set it at database open in sqlite-native",
+        "Make the cache size overrideable per-database for callers that need a smaller or larger pager cache",
+        "Document the per-actor memory footprint change and update website/src/content/docs/actors/limits.mdx if any user-visible limit shifts",
+        "Add a focused test that executes a verify query for a 10 MiB bulk insert with the pager cache hot and asserts no VFS thrashing",
+        "Re-run the sqlite-raw bench and record the new numbers alongside prior phases",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "rivetkit-typescript/packages/sqlite-native/src/vfs.rs sets every pragma except cache_size. SQLite's default pager cache is too small to cover the benchmark."
+    },
+    {
+      "id": "US-022",
+      "title": "Diagnose and stabilize the verify-time variance on Final canonical runs",
+      "description": "As a developer, I need the roughly one-second verify-time swing between canonical Final reruns explained so further optimization work is not measured on noise.",
+      "acceptanceCriteria": [
+        "Run the canonical sqlite-raw Final bench enough times on fresh engines to characterize the verify variance band with at least five samples",
+        "Use existing VFS read telemetry plus any new counters needed to attribute the swing to a specific source",
+        "If the swing is environmental noise, document the expected band in BENCH_RESULTS.md and update the regression review methodology",
+        "If the swing is a real runtime regression, land a fix or file an explicit follow-up story and re-measure",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "BENCH_RESULTS.md:59-66 flags the swing but does not attribute it. Do not stack new optimizations on unexplained variance."
+    },
+    {
+      "id": "US-023",
+      "title": "Broaden the SQLite bulk-insert benchmark beyond one 10 MiB blob",
+      "description": "As a developer, I need representative bulk-insert benchmark shapes so SQLite remediation work is not tuned exclusively to a single large-blob workload.",
+      "acceptanceCriteria": [
+        "Add benchmark shapes for many small rows in one transaction, many small rows one per transaction, and a realistic chat-log shape around 100 MiB in addition to the current single 10 MiB row shape",
+        "Record each shape in bench-results.json with the same VFS and server telemetry fields used today without breaking existing records",
+        "Document which shape pressures which part of the system, write fast path, read path, or per-transaction overhead, in BENCH_RESULTS.md",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": "Sandbox bench data at .agent/notes/sandbox-bench-results-2026-04-15.md shows production-shaped workloads the current bench does not cover."
+    },
+    {
+      "id": "US-024",
+      "title": "Research remote-SQLite prior art and propose re-architecture direction",
+      "description": "As a developer, I need a documented comparison of how other remote-SQLite systems architect page storage, replication, and durability so the Rivet SQLite path can be evaluated for re-architecture rather than incremental patching.",
+      "acceptanceCriteria": [
+        "Write a research doc at .agent/research/remote-sqlite-prior-art.md summarizing LiteFS, Cloudflare Durable Objects SQLite, and libSQL or Turso storage, replication, durability, and protocol models",
+        "Compare each system against the current Rivet sqlite-over-KV architecture with explicit tradeoffs instead of a generic feature matrix",
+        "Propose one or more re-architecture directions with clear scope, risk, and expected wins for Rivet's bulk-insert and real-world workload profiles",
+        "Do not append implementation stories until the user picks a direction based on the research doc",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "This is the look-before-you-leap story. The research itself produces the decision material, not implementation code."
+    },
+    {
+      "id": "US-025",
+      "title": "Hydrate the actor SQLite page cache at resume time",
+      "description": "As a developer, I need the native SQLite VFS to bulk-load every page of the actor's database at resume time so steady-state reads serve from the in-process cache instead of re-entering the KV bridge on every miss.",
+      "acceptanceCriteria": [
+        "On VFS file open for an actor SQLite file, issue a bounded parallel bulk fetch of the whole file from the KV store and populate the existing read_cache structure before the first SQL statement executes",
+        "Make the hydration budget configurable per database, with a safe default that matches the sqlite-raw benchmark shape and a clear fall-through to lazy hydration for oversized databases",
+        "Preserve the existing fast-path write behavior and the transaction-scoped dirty buffer; hydration only touches the read cache",
+        "Emit telemetry for hydrated byte count, duration, batch count, and memory footprint so benchmark and production observability can compare hot-start vs cold-start cost",
+        "Re-run the sqlite-raw benchmark and show verify time dropping to the pager cache ceiling on a hydrated cache",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "This is the cold-start analogue of Turso embedded replica hydrate-on-open. The cache is transient, in-memory, and single-writer-owned, so it does not violate the 'no local file' constraint."
+    },
+    {
+      "id": "US-026",
+      "title": "Add sqlite_read_many server op and VFS client wire-up",
+      "description": "As a developer, I need a batched page-range read server operation so the VFS can fetch many pages per round-trip on hydration and prefetch paths.",
+      "acceptanceCriteria": [
+        "Add a new envoy-protocol operation sqlite_read_many(actor_id, file_tag, ranges) returning page bodies for the requested chunk ranges in one response under a new versioned schema, without mutating an existing published bare schema version",
+        "Route hydration and prefetch paths in rivetkit-typescript/packages/sqlite-native/src/vfs.rs through sqlite_read_many when the server advertises support, with clean fallback to existing batch_get when it does not",
+        "Preserve fencing and replay-safety semantics consistent with the existing sqlite_write_batch fast path",
+        "Emit server-side and client-side telemetry that distinguishes batched page reads from the per-page path, so BENCH_RESULTS.md can compare request counts, byte volumes, and round-trip latency",
+        "Add focused tests for correctness and mixed-version fallback, including stale ranges and partial results",
+        "Typecheck passes"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "Writes already have a batched server op. Reads need the same treatment so hydration and prefetch do not devolve to per-page gets."
+    },
+    {
+      "id": "US-027",
+      "title": "Add a VFS stride-detecting read prefetch predictor",
+      "description": "As a developer, I need the VFS to predict sequential and strided read patterns so SQLite full-table or range scans pull ahead of the pager instead of serializing one xRead at a time.",
+      "acceptanceCriteria": [
+        "Implement a stride detector or equivalent lightweight predictor at the VFS read path in rivetkit-typescript/packages/sqlite-native/src/vfs.rs that, on cache miss, fires a bounded sqlite_read_many for predicted follow-on pages",
+        "Store predicted pages in the existing read_cache so subsequent xRead calls hit the cache without further network operations",
+        "Add telemetry for prefetch issued count, prefetch hit count, prefetch miss count, prefetch byte overhead, and predictor confidence so accuracy can be evaluated",
+        "Cap predictor aggressiveness with explicit thresholds so pathological workloads cannot amplify bandwidth use unboundedly",
+        "Re-run the sqlite-raw benchmark and a broader workload mix to verify the predictor helps sequential scans without regressing random-access workloads",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "mvSQLite uses a predictor on top of its read_many op. Rivet needs the same shape but simpler because single-writer eliminates MVCC-driven cache invalidation."
+    },
+    {
+      "id": "US-028",
+      "title": "Write the single-writer pure-VFS SQLite spec (Option F)",
+      "description": "As a developer, I need a dedicated spec for the Option F single-writer pure-VFS SQLite design so implementation stories share one reference instead of drifting from the research doc.",
+      "acceptanceCriteria": [
+        "Write .agent/specs/sqlite-vfs-single-writer-plan.md based on Option F in .agent/research/remote-sqlite-prior-art.md",
+        "Cover: the actor-resume hydration path and its memory budget, the sqlite_read_many protocol surface and fallback story, the VFS stride predictor, client cache sizing and invalidation rules, fencing semantics, failure modes and recovery, and the rollout order relative to US-020 and US-021",
+        "Include an explicit non-goals list naming each retired option (A, B, C, D, E) and why the constraint set kills them",
+        "Include a measurement plan that reuses the existing sqlite-raw benchmark harness from US-001 and references the broadened benchmark shapes from US-023",
+        "Typecheck passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "The research doc is a survey. This story produces the implementation spec that US-025, US-026, and US-027 are built against."
     }
   ]
 }

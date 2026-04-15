@@ -5,6 +5,7 @@
 ## SQLite Benchmarks
 
 - Run `examples/sqlite-raw` `bench:record --fresh-engine` with `RUST_LOG=error` so the engine child stays quiet while the recorder still saves `/tmp/sqlite-raw-bench-engine.log` for debugging.
+- Fresh `examples/sqlite-raw` recorder runs should pin short `RIVET_RUNTIME__*SHUTDOWN_DURATION` values and still force-kill on timeout. The engine defaults let guard shutdown drag for about an hour, which makes post-benchmark cleanup look hung.
 - Keep `examples/sqlite-raw/scripts/run-benchmark.ts` backward-compatible with older `bench-results.json` runs by treating newly added telemetry fields as optional in the renderer.
 - Compare phase regressions only with canonical `pnpm --dir examples/sqlite-raw run bench:record -- --phase <phase> --fresh-engine` runs. One-off PTY or manual commands belong in the append-only history, not in the canonical phase comparison.
 - In `examples/sqlite-raw/scripts/bench-large-insert.ts`, keep readiness retries pinned to one `getOrCreate` key and set `disableMetadataLookup: true` for known local endpoints, or warmup retries will keep cold-starting new actors instead of waiting for the same one.
