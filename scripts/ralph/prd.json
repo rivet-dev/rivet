@@ -157,7 +157,7 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "This is the main event on the server side."
     },
     {

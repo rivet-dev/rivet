@@ -27,6 +27,7 @@ pub struct Conn {
 	pub protocol_version: u16,
 	pub ws_handle: WebSocketHandle,
 	pub authorized_tunnel_routes: HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
+	pub sqlite_fast_path_fences: HashMap<(Id, u8), u64>,
 	pub is_serverless: bool,
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the envoy.
@@ -95,7 +96,11 @@ pub async fn init_conn(
 						envoy_lost_threshold: pb.envoy_lost_threshold(),
 						actor_stop_threshold: pb.actor_stop_threshold(),
 						max_response_payload_size: pb.envoy_max_response_payload_size() as u64,
-						sqlite_fast_path: None,
+						sqlite_fast_path: Some(protocol::SqliteFastPathCapability {
+							protocol_version: 1,
+							supports_write_batch: true,
+							supports_truncate: false,
+						}),
 					},
 				},
 			));
@@ -319,6 +324,7 @@ pub async fn init_conn(
 		protocol_version,
 		ws_handle,
 		authorized_tunnel_routes: HashMap::new(),
+		sqlite_fast_path_fences: HashMap::new(),
 		is_serverless,
 		last_rtt: AtomicU32::new(0),
 		last_ping_ts: AtomicI64::new(util::timestamp::now()),

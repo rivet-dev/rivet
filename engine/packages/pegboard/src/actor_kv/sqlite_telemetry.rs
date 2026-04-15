@@ -8,7 +8,8 @@ const SQLITE_PREFIX: u8 = 0x08;
 const SQLITE_SCHEMA_VERSION: u8 = 0x01;
 const SQLITE_META_PREFIX: u8 = 0x00;
 const SQLITE_CHUNK_PREFIX: u8 = 0x01;
-const PATH_GENERIC: &str = "generic";
+pub const PATH_GENERIC: &str = "generic";
+pub const PATH_FAST_PATH: &str = "fast_path";
 const OP_READ: &str = "read";
 const OP_WRITE: &str = "write";
 const OP_TRUNCATE: &str = "truncate";
@@ -128,37 +129,71 @@ pub fn summarize_delete_range(start: &ep::KvKey, end: &ep::KvKey) -> Option<Sqli
 	})
 }
 
+pub fn summarize_write_batch(
+	file_tag: u8,
+	meta_value: &[u8],
+	page_updates: &[ep::SqlitePageUpdate],
+) -> SqliteOpSummary {
+	let page_request_bytes = page_updates.iter().fold(0_u64, |acc, update| {
+		acc + sqlite_chunk_key(file_tag, update.chunk_index).len() as u64 + update.data.len() as u64
+	});
+	let payload_bytes = meta_value.len() as u64
+		+ page_updates
+			.iter()
+			.map(|update| update.data.len() as u64)
+			.sum::<u64>();
+
+	SqliteOpSummary {
+		matched: true,
+		page_count: page_updates.len() as u64,
+		metadata_count: 1,
+		request_bytes: sqlite_meta_key(file_tag).len() as u64
+			+ meta_value.len() as u64
+			+ page_request_bytes,
+		payload_bytes,
+	}
+}
+
 pub fn record_operation(op: OperationKind, summary: SqliteOpSummary, duration: Duration) {
+	record_operation_for_path(PATH_GENERIC, op, summary, duration);
+}
+
+pub fn record_operation_for_path(
+	path: &'static str,
+	op: OperationKind,
+	summary: SqliteOpSummary,
+	duration: Duration,
+) {
 	if !summary.matched() {
 		return;
 	}
 
 	let op = op.as_str();
 	metrics::ACTOR_KV_SQLITE_STORAGE_REQUEST_TOTAL
-		.with_label_values(&[PATH_GENERIC, op])
+		.with_label_values(&[path, op])
 		.inc();
 	if summary.page_count > 0 {
 		metrics::ACTOR_KV_SQLITE_STORAGE_ENTRY_TOTAL
-			.with_label_values(&[PATH_GENERIC, op, ENTRY_PAGE])
+			.with_label_values(&[path, op, ENTRY_PAGE])
 			.inc_by(summary.page_count);
 	}
 	if summary.metadata_count > 0 {
 		metrics::ACTOR_KV_SQLITE_STORAGE_ENTRY_TOTAL
-			.with_label_values(&[PATH_GENERIC, op, ENTRY_METADATA])
+			.with_label_values(&[path, op, ENTRY_METADATA])
 			.inc_by(summary.metadata_count);
 	}
 	if summary.request_bytes > 0 {
 		metrics::ACTOR_KV_SQLITE_STORAGE_BYTES_TOTAL
-			.with_label_values(&[PATH_GENERIC, op, BYTE_REQUEST])
+			.with_label_values(&[path, op, BYTE_REQUEST])
 			.inc_by(summary.request_bytes);
 	}
 	if summary.payload_bytes > 0 {
 		metrics::ACTOR_KV_SQLITE_STORAGE_BYTES_TOTAL
-			.with_label_values(&[PATH_GENERIC, op, BYTE_PAYLOAD])
+			.with_label_values(&[path, op, BYTE_PAYLOAD])
 			.inc_by(summary.payload_bytes);
 	}
 	metrics::ACTOR_KV_SQLITE_STORAGE_DURATION_SECONDS_TOTAL
-		.with_label_values(&[PATH_GENERIC, op])
+		.with_label_values(&[path, op])
 		.inc_by(duration.as_secs_f64());
 }
 
@@ -173,22 +208,34 @@ pub fn record_response_bytes(bytes: u64) {
 }
 
 pub fn record_phase_duration(phase: PhaseKind, duration: Duration) {
+	record_phase_duration_for_path(PATH_GENERIC, phase, duration);
+}
+
+pub fn record_phase_duration_for_path(path: &'static str, phase: PhaseKind, duration: Duration) {
 	metrics::ACTOR_KV_SQLITE_STORAGE_PHASE_DURATION_SECONDS_TOTAL
-		.with_label_values(&[PATH_GENERIC, phase.as_str()])
+		.with_label_values(&[path, phase.as_str()])
 		.inc_by(duration.as_secs_f64());
 }
 
 pub fn record_clear_subspace(count: u64) {
+	record_clear_subspace_for_path(PATH_GENERIC, count);
+}
+
+pub fn record_clear_subspace_for_path(path: &'static str, count: u64) {
 	if count == 0 {
 		return;
 	}
 
 	metrics::ACTOR_KV_SQLITE_STORAGE_CLEAR_SUBSPACE_TOTAL
-		.with_label_values(&[PATH_GENERIC])
+		.with_label_values(&[path])
 		.inc_by(count);
 }
 
 pub fn record_validation(kind: Option<EntryValidationErrorKind>) {
+	record_validation_for_path(PATH_GENERIC, kind);
+}
+
+pub fn record_validation_for_path(path: &'static str, kind: Option<EntryValidationErrorKind>) {
 	let result = match kind {
 		None => VALIDATION_OK,
 		Some(EntryValidationErrorKind::LengthMismatch) => VALIDATION_LENGTH_MISMATCH,
@@ -200,7 +247,7 @@ pub fn record_validation(kind: Option<EntryValidationErrorKind>) {
 	};
 
 	metrics::ACTOR_KV_SQLITE_STORAGE_VALIDATION_TOTAL
-		.with_label_values(&[PATH_GENERIC, result])
+		.with_label_values(&[path, result])
 		.inc();
 }
 
@@ -254,13 +301,13 @@ enum DeleteRangeEnd {
 	ChunkRangeEnd(u8),
 }
 
-fn classify_key(key: &[u8]) -> Option<EntryKind> {
+pub fn sqlite_file_tag_for_key(key: &[u8]) -> Option<u8> {
 	if key.len() == 8
 		&& key[0] == SQLITE_PREFIX
 		&& key[1] == SQLITE_SCHEMA_VERSION
 		&& key[2] == SQLITE_CHUNK_PREFIX
 	{
-		return Some(EntryKind::Page);
+		return Some(key[3]);
 	}
 
 	if key.len() == 4
@@ -268,6 +315,32 @@ fn classify_key(key: &[u8]) -> Option<EntryKind> {
 		&& key[1] == SQLITE_SCHEMA_VERSION
 		&& key[2] == SQLITE_META_PREFIX
 	{
+		return Some(key[3]);
+	}
+
+	None
+}
+
+pub fn sqlite_file_tag_for_delete_range(start: &[u8], end: &[u8]) -> Option<u8> {
+	let start_chunk = parse_chunk_key(start)?;
+	let end_kind = parse_delete_range_end(end)?;
+	let file_tag = start_chunk.file_tag;
+
+	match end_kind {
+		DeleteRangeEnd::Chunk(end_chunk) if end_chunk.file_tag == file_tag => Some(file_tag),
+		DeleteRangeEnd::ChunkRangeEnd(end_file_tag) if end_file_tag == file_tag + 1 => {
+			Some(file_tag)
+		}
+		_ => None,
+	}
+}
+
+fn classify_key(key: &[u8]) -> Option<EntryKind> {
+	if key.len() == 8 && sqlite_file_tag_for_key(key).is_some() {
+		return Some(EntryKind::Page);
+	}
+
+	if key.len() == 4 && sqlite_file_tag_for_key(key).is_some() {
 		return Some(EntryKind::Metadata);
 	}
 
@@ -303,6 +376,26 @@ fn parse_delete_range_end(key: &[u8]) -> Option<DeleteRangeEnd> {
 	}
 
 	None
+}
+
+fn sqlite_meta_key(file_tag: u8) -> ep::KvKey {
+	vec![
+		SQLITE_PREFIX,
+		SQLITE_SCHEMA_VERSION,
+		SQLITE_META_PREFIX,
+		file_tag,
+	]
+}
+
+fn sqlite_chunk_key(file_tag: u8, chunk_index: u32) -> ep::KvKey {
+	let mut key = vec![
+		SQLITE_PREFIX,
+		SQLITE_SCHEMA_VERSION,
+		SQLITE_CHUNK_PREFIX,
+		file_tag,
+	];
+	key.extend_from_slice(&chunk_index.to_be_bytes());
+	key
 }
 
 #[cfg(test)]

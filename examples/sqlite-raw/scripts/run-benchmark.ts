@@ -160,7 +160,7 @@ interface SqliteServerWriteTelemetry extends SqliteServerOperationTelemetry {
 
 interface SqliteServerTelemetry {
 	metricsEndpoint: string;
-	path: "generic";
+	path: "generic" | "fast_path";
 	reads: SqliteServerOperationTelemetry;
 	writes: SqliteServerWriteTelemetry;
 	truncates: SqliteServerOperationTelemetry;
@@ -409,7 +409,7 @@ function renderServerTelemetryDetails(
 - Path label: \`${telemetry.path}\`
 - Reads: \`${telemetry.reads.requestCount}\` requests, \`${telemetry.reads.pageEntryCount}\` page keys, \`${telemetry.reads.metadataEntryCount}\` metadata keys, \`${formatDataSize(telemetry.reads.requestBytes)}\` request bytes, \`${formatDataSize(telemetry.reads.responseBytes)}\` response bytes, \`${formatUs(telemetry.reads.durationUs)}\` total
 - Writes: \`${telemetry.writes.requestCount}\` requests, \`${telemetry.writes.dirtyPageCount}\` dirty pages, \`${telemetry.writes.metadataEntryCount}\` metadata keys, \`${formatDataSize(telemetry.writes.requestBytes)}\` request bytes, \`${formatDataSize(telemetry.writes.payloadBytes)}\` payload bytes, \`${formatUs(telemetry.writes.durationUs)}\` total
-- Generic overhead: \`${formatUs(telemetry.writes.estimateKvSizeDurationUs)}\` in \`estimate_kv_size\`, \`${formatUs(telemetry.writes.clearAndRewriteDurationUs)}\` in clear-and-rewrite, \`${telemetry.writes.clearSubspaceCount}\` \`clear_subspace_range\` calls
+- Path overhead: \`${formatUs(telemetry.writes.estimateKvSizeDurationUs)}\` in \`estimate_kv_size\`, \`${formatUs(telemetry.writes.clearAndRewriteDurationUs)}\` in clear-and-rewrite, \`${telemetry.writes.clearSubspaceCount}\` \`clear_subspace_range\` calls
 - Truncates: \`${telemetry.truncates.requestCount}\` requests, \`${formatDataSize(telemetry.truncates.requestBytes)}\` request bytes, \`${formatUs(telemetry.truncates.durationUs)}\` total
 - Validation outcomes: \`ok ${telemetry.writes.validation.ok}\` / \`quota ${telemetry.writes.validation.storageQuotaExceeded}\` / \`payload ${telemetry.writes.validation.payloadTooLarge}\` / \`count ${telemetry.writes.validation.tooManyEntries}\` / \`key ${telemetry.writes.validation.keyTooLarge}\` / \`value ${telemetry.writes.validation.valueTooLarge}\` / \`length ${telemetry.writes.validation.lengthMismatch}\``;
 }

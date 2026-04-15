@@ -9,6 +9,7 @@
 - Run `examples/sqlite-raw` `bench:record --fresh-engine` with `RUST_LOG=error` so the engine child keeps writing to `/tmp/sqlite-raw-bench-engine.log` without flooding the recorder stdout.
 - For envoy protocol changes, add a new `engine/sdks/schemas/envoy-protocol/vN.bare`, append new union variants instead of reordering old ones, update `engine/sdks/rust/envoy-protocol/src/versioned.rs`, regenerate `engine/sdks/typescript/envoy-protocol`, and keep the `envoy-client` pre-init downgrade fallback in sync.
 - Route SQLite fast-path write batches from `packages/sqlite-native/src/vfs.rs`, not from the transport adapter, because only the VFS owns the full buffered page set and per-file fence sequence.
+- Keep pegboard-envoy SQLite fast-path fences connection-scoped, and clear the VFS tracker whenever a generic SQLite fallback commit succeeds so stale retries fail closed instead of replaying old page sets.
 
 Started: Wed Apr 15 04:03:14 AM PDT 2026
 ---
@@ -90,4 +91,13 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - Fast-path routing belongs in `packages/sqlite-native/src/vfs.rs`, because the transport adapter only sees generic KV calls and cannot reconstruct one atomic buffered page set or its fence state.
   - Keep benchmark renderers tolerant of missing telemetry keys so older `bench-results.json` entries still render after new counters land.
   - `cargo test -p rivetkit-sqlite-native`, `cargo test -p rivetkit-native`, `cargo test -p rivet-envoy-client`, `pnpm --dir rivetkit-typescript/packages/rivetkit test native-database`, and `pnpm --dir examples/sqlite-raw run check-types` cover the touched surface for this client-side fast-path story.
+---
+## 2026-04-15 07:51:50 PDT - US-010
+- Implemented pegboard-side `sqlite_write_batch` so SQLite page batches write exact page keys and file metadata directly without the generic clear-subspace rewrite path, and exposed the new `fast_path` server telemetry plus capability advertisement from pegboard-envoy.
+- Added connection-scoped fast-path fence validation in pegboard-envoy, cleared fence state on successful generic SQLite fallback mutations, and cleared the VFS-side fence tracker after generic fallback sync commits so stale retries fail closed.
+- Files changed: `engine/CLAUDE.md`, `engine/packages/pegboard/Cargo.toml`, `engine/packages/pegboard/src/actor_kv/mod.rs`, `engine/packages/pegboard/src/actor_kv/sqlite_telemetry.rs`, `engine/packages/pegboard/tests/sqlite_fast_path.rs`, `engine/packages/pegboard-envoy/src/conn.rs`, `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`, `engine/packages/pegboard-envoy/tests/support/ws_to_tunnel_task.rs`, `examples/sqlite-raw/scripts/bench-large-insert.ts`, `examples/sqlite-raw/scripts/run-benchmark.ts`, `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Pegboard-envoy fast-path fencing should stay connection-scoped. Persisting that fence in actor storage would break legitimate reopen flows because the VFS fence tracker is process-local.
+  - Any successful generic SQLite fallback commit must clear the VFS fast-path fence tracker and the pegboard-envoy fence entry for that file, or the next fast-path request will either fail spuriously or allow stale retries to replay old pages.
+  - `cargo test -p pegboard --test sqlite_fast_path`, `cargo test -p pegboard-envoy sqlite_fast_path_fence`, `cargo test -p rivetkit-sqlite-native`, and `pnpm --dir examples/sqlite-raw run check-types` cover the new server write path, fence validation, native fallback behavior, and benchmark type surfaces.
 ---

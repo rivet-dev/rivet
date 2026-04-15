@@ -37,3 +37,7 @@ When changing a versioned VBARE schema, follow the existing migration pattern.
 ## Test snapshots
 
 Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB KV store for migration and integration tests. Scenarios produce per-replica RocksDB checkpoints stored under `engine/packages/test-snapshot-gen/snapshots/` (git LFS tracked). In tests, use `test_snapshot::SnapshotTestCtx::from_snapshot("scenario-name")` to boot a cluster from snapshot data. See `docs-internal/engine/TEST_SNAPSHOTS.md` for the full guide.
+
+## SQLite Fast Path
+
+- Keep pegboard-envoy SQLite fast-path fences connection-scoped, and invalidate that fence state whenever a successful generic SQLite KV mutation replaces the fast path for the same file.

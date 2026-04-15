@@ -80,3 +80,22 @@
 // 		.unwrap();
 // 	assert!(matches!(msg, NextOutput::Message(_)));
 // }
+
+use super::validate_sqlite_fast_path_fence_value;
+
+#[test]
+fn sqlite_fast_path_fence_validation_accepts_monotonic_progress() {
+	validate_sqlite_fast_path_fence_value(Some(7), Some(7), 8)
+		.expect("next fence should be accepted");
+}
+
+#[test]
+fn sqlite_fast_path_fence_validation_rejects_stale_or_missing_state() {
+	let stale_err = validate_sqlite_fast_path_fence_value(Some(7), Some(7), 7)
+		.expect_err("reused request fence should fail");
+	assert!(stale_err.to_string().contains("stale"));
+
+	let missing_err = validate_sqlite_fast_path_fence_value(None, Some(7), 8)
+		.expect_err("missing server fence should reject a stale retry");
+	assert!(missing_err.to_string().contains("mismatch"));
+}

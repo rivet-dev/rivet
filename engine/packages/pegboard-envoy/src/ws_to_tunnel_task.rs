@@ -9,7 +9,7 @@ use pegboard::pubsub_subjects::GatewayReceiverSubject;
 use rivet_data::converted::{ActorNameKeyData, MetadataKeyData};
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
-use scc::HashMap;
+use scc::{HashMap, hash_map::Entry};
 use std::sync::{Arc, atomic::Ordering};
 use tokio::sync::{Mutex, MutexGuard, watch};
 use universaldb::prelude::*;
@@ -265,7 +265,11 @@ async fn handle_message(
 						.context("failed to send KV list response to client")?;
 				}
 				protocol::KvRequestData::KvPutRequest(body) => {
+					let sqlite_file_tags = actor_kv::sqlite_file_tags_for_keys(&body.keys);
 					let res = actor_kv::put(&*ctx.udb()?, &recipient, body.keys, body.values).await;
+					if res.is_ok() {
+						clear_sqlite_fast_path_fences(conn, actor_id, &sqlite_file_tags).await;
+					}
 
 					let res_msg = versioned::ToEnvoy::wrap_latest(
 						protocol::ToEnvoy::ToEnvoyKvResponse(protocol::ToEnvoyKvResponse {
@@ -290,7 +294,11 @@ async fn handle_message(
 						.context("failed to send KV put response to client")?;
 				}
 				protocol::KvRequestData::KvDeleteRequest(body) => {
+					let sqlite_file_tags = actor_kv::sqlite_file_tags_for_keys(&body.keys);
 					let res = actor_kv::delete(&*ctx.udb()?, &recipient, body.keys).await;
+					if res.is_ok() {
+						clear_sqlite_fast_path_fences(conn, actor_id, &sqlite_file_tags).await;
+					}
 
 					let res_msg = versioned::ToEnvoy::wrap_latest(
 						protocol::ToEnvoy::ToEnvoyKvResponse(protocol::ToEnvoyKvResponse {
@@ -315,9 +323,16 @@ async fn handle_message(
 						.context("failed to send KV delete response to client")?;
 				}
 				protocol::KvRequestData::KvDeleteRangeRequest(body) => {
+					let sqlite_file_tag =
+						actor_kv::sqlite_file_tag_for_delete_range(&body.start, &body.end);
 					let res =
 						actor_kv::delete_range(&*ctx.udb()?, &recipient, body.start, body.end)
 							.await;
+					if res.is_ok() {
+						if let Some(file_tag) = sqlite_file_tag {
+							clear_sqlite_fast_path_fence(conn, actor_id, file_tag).await;
+						}
+					}
 
 					let res_msg = versioned::ToEnvoy::wrap_latest(
 						protocol::ToEnvoy::ToEnvoyKvResponse(protocol::ToEnvoyKvResponse {
@@ -341,13 +356,56 @@ async fn handle_message(
 						.await
 						.context("failed to send KV delete range response to client")?;
 				}
-				protocol::KvRequestData::KvSqliteWriteBatchRequest(_) => {
-					send_actor_kv_error(
+				protocol::KvRequestData::KvSqliteWriteBatchRequest(body) => {
+					let res = match validate_sqlite_fast_path_fence(
 						conn,
-						req.request_id,
-						"sqlite fast path is not supported by this server",
+						actor_id,
+						body.file_tag,
+						body.fence.expected_fence,
+						body.fence.request_fence,
 					)
-					.await?;
+					.await
+					{
+						Ok(()) => {
+							let request_fence = body.fence.request_fence;
+							let file_tag = body.file_tag;
+							let res =
+								actor_kv::sqlite_write_batch(&*ctx.udb()?, &recipient, body).await;
+							if res.is_ok() {
+								commit_sqlite_fast_path_fence(
+									conn,
+									actor_id,
+									file_tag,
+									request_fence,
+								)
+								.await;
+							}
+							res
+						}
+						Err(err) => Err(err),
+					};
+
+					let res_msg = versioned::ToEnvoy::wrap_latest(
+						protocol::ToEnvoy::ToEnvoyKvResponse(protocol::ToEnvoyKvResponse {
+							request_id: req.request_id,
+							data: match res {
+								Ok(()) => protocol::KvResponseData::KvPutResponse,
+								Err(err) => protocol::KvResponseData::KvErrorResponse(
+									protocol::KvErrorResponse {
+										message: err.to_string(),
+									},
+								),
+							},
+						}),
+					);
+
+					let res_msg_serialized = res_msg
+						.serialize(conn.protocol_version)
+						.context("failed to serialize KV sqlite write batch response")?;
+					conn.ws_handle
+						.send(Message::Binary(res_msg_serialized.into()))
+						.await
+						.context("failed to send KV sqlite write batch response to client")?;
 				}
 				protocol::KvRequestData::KvSqliteTruncateRequest(_) => {
 					send_actor_kv_error(
@@ -359,6 +417,9 @@ async fn handle_message(
 				}
 				protocol::KvRequestData::KvDropRequest => {
 					let res = actor_kv::delete_all(&*ctx.udb()?, &recipient).await;
+					if res.is_ok() {
+						clear_actor_sqlite_fast_path_fences(conn, actor_id).await;
+					}
 
 					let res_msg = versioned::ToEnvoy::wrap_latest(
 						protocol::ToEnvoy::ToEnvoyKvResponse(protocol::ToEnvoyKvResponse {
@@ -417,6 +478,99 @@ async fn handle_message(
 				envoy_key: conn.envoy_key.to_string(),
 			})
 			.await?;
+		}
+	}
+
+	Ok(())
+}
+
+async fn validate_sqlite_fast_path_fence(
+	conn: &Conn,
+	actor_id: Id,
+	file_tag: u8,
+	expected_fence: Option<u64>,
+	request_fence: u64,
+) -> Result<()> {
+	let current_fence = conn
+		.sqlite_fast_path_fences
+		.get_async(&(actor_id, file_tag))
+		.await
+		.map(|entry| *entry.get());
+
+	validate_sqlite_fast_path_fence_value(current_fence, expected_fence, request_fence)
+}
+
+async fn commit_sqlite_fast_path_fence(
+	conn: &Conn,
+	actor_id: Id,
+	file_tag: u8,
+	request_fence: u64,
+) {
+	match conn
+		.sqlite_fast_path_fences
+		.entry_async((actor_id, file_tag))
+		.await
+	{
+		Entry::Occupied(mut entry) => {
+			*entry.get_mut() = request_fence;
+		}
+		Entry::Vacant(entry) => {
+			entry.insert_entry(request_fence);
+		}
+	}
+}
+
+async fn clear_sqlite_fast_path_fences(conn: &Conn, actor_id: Id, file_tags: &[u8]) {
+	for file_tag in file_tags {
+		clear_sqlite_fast_path_fence(conn, actor_id, *file_tag).await;
+	}
+}
+
+async fn clear_sqlite_fast_path_fence(conn: &Conn, actor_id: Id, file_tag: u8) {
+	conn.sqlite_fast_path_fences
+		.remove_async(&(actor_id, file_tag))
+		.await;
+}
+
+async fn clear_actor_sqlite_fast_path_fences(conn: &Conn, actor_id: Id) {
+	conn.sqlite_fast_path_fences
+		.retain_async(|(entry_actor_id, _), _| *entry_actor_id != actor_id)
+		.await;
+}
+
+fn validate_sqlite_fast_path_fence_value(
+	current_fence: Option<u64>,
+	expected_fence: Option<u64>,
+	request_fence: u64,
+) -> Result<()> {
+	if request_fence == 0 {
+		bail!("sqlite fast path fence must be non-zero");
+	}
+
+	match current_fence {
+		Some(current) => {
+			if expected_fence != Some(current) {
+				bail!(
+					"sqlite fast path fence mismatch: expected {:?}, current {}",
+					expected_fence,
+					current
+				);
+			}
+			if request_fence <= current {
+				bail!(
+					"sqlite fast path request fence {} is stale; current is {}",
+					request_fence,
+					current
+				);
+			}
+		}
+		None => {
+			if expected_fence.is_some() {
+				bail!(
+					"sqlite fast path fence mismatch: expected {:?}, current is empty",
+					expected_fence
+				);
+			}
 		}
 	}
 

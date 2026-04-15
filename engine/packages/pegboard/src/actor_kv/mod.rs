@@ -9,6 +9,7 @@ use universaldb::tuple::Subspace;
 use utils::{validate_entries_with_details, validate_keys, validate_range};
 
 use crate::keys;
+use crate::keys::actor_kv::KeyWrapper;
 
 mod entry;
 mod metrics;
@@ -442,6 +443,158 @@ pub async fn put(
 	result
 }
 
+/// Writes a SQLite page batch through the server fast path.
+#[tracing::instrument(skip_all)]
+pub async fn sqlite_write_batch(
+	db: &universaldb::Database,
+	recipient: &Recipient,
+	request: ep::KvSqliteWriteBatchRequest,
+) -> Result<()> {
+	let start = std::time::Instant::now();
+	let meta_value = Arc::new(request.meta_value);
+	let page_updates = Arc::new(request.page_updates);
+	let sqlite_summary = sqlite_telemetry::summarize_write_batch(
+		request.file_tag,
+		meta_value.as_slice(),
+		page_updates.as_slice(),
+	);
+	let sqlite_observation = Arc::new(Mutex::new(SqliteWriteObservation::default()));
+
+	metrics::ACTOR_KV_KEYS_PER_OP
+		.with_label_values(&["sqlite_write_batch"])
+		.observe((page_updates.len() + 1) as f64);
+
+	let meta_value_clone = Arc::clone(&meta_value);
+	let page_updates_clone = Arc::clone(&page_updates);
+	let sqlite_observation_clone = Arc::clone(&sqlite_observation);
+	let file_tag = request.file_tag;
+	let result = db
+		.run(|tx| {
+			let meta_value = Arc::clone(&meta_value_clone);
+			let page_updates = Arc::clone(&page_updates_clone);
+			let sqlite_observation = Arc::clone(&sqlite_observation_clone);
+			async move {
+				let estimate_start = std::time::Instant::now();
+				let total_size = estimate_kv_size(&tx, recipient.actor_id).await;
+				observe_sqlite_write(
+					|observation| {
+						observation.estimate_kv_size_duration = estimate_start.elapsed();
+						observation.estimate_kv_size_recorded = true;
+					},
+					&sqlite_observation,
+				);
+				let total_size = total_size? as usize;
+
+				match validate_sqlite_write_batch_request(
+					file_tag,
+					meta_value.as_slice(),
+					page_updates.as_slice(),
+					total_size,
+				) {
+					Ok(()) => {
+						observe_sqlite_write(
+							|observation| {
+								observation.validation_checked = true;
+								observation.validation_result = None;
+							},
+							&sqlite_observation,
+						);
+					}
+					Err(error) => {
+						observe_sqlite_write(
+							|observation| {
+								observation.validation_checked = true;
+								observation.validation_result = Some(error.kind);
+							},
+							&sqlite_observation,
+						);
+						return Err(error.into_anyhow());
+					}
+				}
+
+				let total_size_chunked = (sqlite_write_batch_request_bytes(
+					file_tag,
+					meta_value.as_slice(),
+					page_updates.as_slice(),
+				) as u64)
+					.div_ceil(util::metric::KV_BILLABLE_CHUNK)
+					* util::metric::KV_BILLABLE_CHUNK;
+				namespace::keys::metric::inc(
+					&tx.with_subspace(namespace::keys::subspace()),
+					recipient.namespace_id,
+					namespace::keys::metric::Metric::KvWrite(recipient.name.clone()),
+					total_size_chunked.try_into().unwrap_or_default(),
+				);
+
+				let actor_kv_tx = tx.with_subspace(keys::actor_kv::subspace(recipient.actor_id));
+				let now = util::timestamp::now();
+				let metadata = ep::KvMetadata {
+					version: VERSION.as_bytes().to_vec(),
+					update_ts: now,
+				};
+
+				let meta_key = keys::actor_kv::KeyWrapper(sqlite_meta_key(file_tag));
+				actor_kv_tx.write(
+					&keys::actor_kv::EntryMetadataKey::new(meta_key.clone()),
+					metadata.clone(),
+				)?;
+				actor_kv_tx.set(
+					&actor_kv_tx.pack(&keys::actor_kv::EntryValueChunkKey::new(meta_key, 0)),
+					meta_value.as_slice(),
+				);
+
+				for page in page_updates.iter() {
+					let page_key =
+						keys::actor_kv::KeyWrapper(sqlite_page_key(file_tag, page.chunk_index));
+					actor_kv_tx.write(
+						&keys::actor_kv::EntryMetadataKey::new(page_key.clone()),
+						metadata.clone(),
+					)?;
+					actor_kv_tx.set(
+						&actor_kv_tx.pack(&keys::actor_kv::EntryValueChunkKey::new(page_key, 0)),
+						&page.data,
+					);
+				}
+
+				Ok(())
+			}
+		})
+		.custom_instrument(tracing::info_span!("kv_sqlite_write_batch_tx"))
+		.await
+		.map_err(Into::into);
+
+	metrics::ACTOR_KV_OPERATION_DURATION
+		.with_label_values(&["sqlite_write_batch"])
+		.observe(start.elapsed().as_secs_f64());
+
+	let observation = sqlite_observation
+		.lock()
+		.ok()
+		.map(|guard| *guard)
+		.unwrap_or_default();
+	if observation.validation_checked {
+		sqlite_telemetry::record_validation_for_path(
+			sqlite_telemetry::PATH_FAST_PATH,
+			observation.validation_result,
+		);
+	}
+	if observation.estimate_kv_size_recorded {
+		sqlite_telemetry::record_phase_duration_for_path(
+			sqlite_telemetry::PATH_FAST_PATH,
+			sqlite_telemetry::PhaseKind::EstimateKvSize,
+			observation.estimate_kv_size_duration,
+		);
+	}
+	sqlite_telemetry::record_operation_for_path(
+		sqlite_telemetry::PATH_FAST_PATH,
+		sqlite_telemetry::OperationKind::Write,
+		sqlite_summary,
+		start.elapsed(),
+	);
+
+	result
+}
+
 /// Deletes keys from the KV store. Cannot be undone.
 #[tracing::instrument(skip_all)]
 pub async fn delete(
@@ -582,6 +735,44 @@ fn observe_sqlite_write(
 	}
 }
 
+#[derive(Clone, Copy, Debug)]
+struct SqliteWriteBatchValidationError {
+	kind: utils::EntryValidationErrorKind,
+	remaining: Option<usize>,
+	payload_size: Option<usize>,
+}
+
+impl SqliteWriteBatchValidationError {
+	fn into_anyhow(self) -> anyhow::Error {
+		match self.kind {
+			utils::EntryValidationErrorKind::LengthMismatch => {
+				anyhow::Error::msg("Keys list length != values list length")
+			}
+			utils::EntryValidationErrorKind::TooManyEntries => {
+				anyhow::Error::msg("A maximum of 128 key-value entries is allowed")
+			}
+			utils::EntryValidationErrorKind::PayloadTooLarge => {
+				anyhow::Error::msg("total payload is too large (max 976 KiB)")
+			}
+			utils::EntryValidationErrorKind::StorageQuotaExceeded => {
+				crate::errors::Actor::KvStorageQuotaExceeded {
+					remaining: self.remaining.unwrap_or_default(),
+					payload_size: self.payload_size.unwrap_or_default(),
+				}
+				.build()
+				.into()
+			}
+			utils::EntryValidationErrorKind::KeyTooLarge => {
+				anyhow::Error::msg("key is too long (max 2048 bytes)")
+			}
+			utils::EntryValidationErrorKind::ValueTooLarge => anyhow::Error::msg(format!(
+				"value is too large (max {} KiB)",
+				MAX_VALUE_SIZE / 1024
+			)),
+		}
+	}
+}
+
 /// Deletes all keys from the KV store. Cannot be undone.
 #[tracing::instrument(skip_all)]
 pub async fn delete_all(db: &universaldb::Database, recipient: &Recipient) -> Result<()> {
@@ -603,6 +794,97 @@ pub async fn delete_all(db: &universaldb::Database, recipient: &Recipient) -> Re
 	.custom_instrument(tracing::info_span!("kv_delete_all_tx"))
 	.await
 	.map_err(Into::into)
+}
+
+fn sqlite_meta_key(file_tag: u8) -> ep::KvKey {
+	vec![0x08, 0x01, 0x00, file_tag]
+}
+
+fn sqlite_page_key(file_tag: u8, chunk_index: u32) -> ep::KvKey {
+	let mut key = vec![0x08, 0x01, 0x01, file_tag];
+	key.extend_from_slice(&chunk_index.to_be_bytes());
+	key
+}
+
+fn sqlite_write_batch_request_bytes(
+	file_tag: u8,
+	meta_value: &[u8],
+	page_updates: &[ep::SqlitePageUpdate],
+) -> usize {
+	let meta_key = sqlite_meta_key(file_tag);
+	KeyWrapper::tuple_len(&meta_key)
+		+ meta_value.len()
+		+ page_updates.iter().fold(0, |acc, update| {
+			let key = sqlite_page_key(file_tag, update.chunk_index);
+			acc + KeyWrapper::tuple_len(&key) + update.data.len()
+		})
+}
+
+pub fn sqlite_file_tags_for_keys(keys: &[ep::KvKey]) -> Vec<u8> {
+	let mut tags = std::collections::BTreeSet::new();
+	for key in keys {
+		if let Some(file_tag) = sqlite_telemetry::sqlite_file_tag_for_key(key) {
+			tags.insert(file_tag);
+		}
+	}
+	tags.into_iter().collect()
+}
+
+pub fn sqlite_file_tag_for_delete_range(start: &ep::KvKey, end: &ep::KvKey) -> Option<u8> {
+	sqlite_telemetry::sqlite_file_tag_for_delete_range(start, end)
+}
+
+fn validate_sqlite_write_batch_request(
+	file_tag: u8,
+	meta_value: &[u8],
+	page_updates: &[ep::SqlitePageUpdate],
+	total_size: usize,
+) -> std::result::Result<(), SqliteWriteBatchValidationError> {
+	let meta_key = sqlite_meta_key(file_tag);
+	if KeyWrapper::tuple_len(&meta_key) > MAX_KEY_SIZE {
+		return Err(SqliteWriteBatchValidationError {
+			kind: utils::EntryValidationErrorKind::KeyTooLarge,
+			remaining: None,
+			payload_size: None,
+		});
+	}
+	if meta_value.len() > MAX_VALUE_SIZE {
+		return Err(SqliteWriteBatchValidationError {
+			kind: utils::EntryValidationErrorKind::ValueTooLarge,
+			remaining: None,
+			payload_size: None,
+		});
+	}
+
+	for page in page_updates {
+		let page_key = sqlite_page_key(file_tag, page.chunk_index);
+		if KeyWrapper::tuple_len(&page_key) > MAX_KEY_SIZE {
+			return Err(SqliteWriteBatchValidationError {
+				kind: utils::EntryValidationErrorKind::KeyTooLarge,
+				remaining: None,
+				payload_size: None,
+			});
+		}
+		if page.data.len() > MAX_VALUE_SIZE {
+			return Err(SqliteWriteBatchValidationError {
+				kind: utils::EntryValidationErrorKind::ValueTooLarge,
+				remaining: None,
+				payload_size: None,
+			});
+		}
+	}
+
+	let payload_size = sqlite_write_batch_request_bytes(file_tag, meta_value, page_updates);
+	let storage_remaining = MAX_STORAGE_SIZE.saturating_sub(total_size);
+	if payload_size > storage_remaining {
+		return Err(SqliteWriteBatchValidationError {
+			kind: utils::EntryValidationErrorKind::StorageQuotaExceeded,
+			remaining: Some(storage_remaining),
+			payload_size: Some(payload_size),
+		});
+	}
+
+	Ok(())
 }
 
 fn list_query_range(query: ep::KvListQuery, subspace: &Subspace) -> (Vec<u8>, Vec<u8>) {

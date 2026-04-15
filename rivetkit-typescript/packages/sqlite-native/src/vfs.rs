@@ -1129,6 +1129,8 @@ fn flush_buffered_file(
 		)?;
 	}
 
+	ctx.clear_sqlite_fast_path_fence(file.file_tag);
+
 	Ok(finish_buffered_flush(
 		file,
 		state,

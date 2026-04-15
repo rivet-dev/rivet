@@ -78,7 +78,7 @@ interface SqliteServerWriteTelemetry extends SqliteServerOperationTelemetry {
 
 interface SqliteServerTelemetry {
 	metricsEndpoint: string;
-	path: "generic";
+	path: "generic" | "fast_path";
 	reads: SqliteServerOperationTelemetry;
 	writes: SqliteServerWriteTelemetry;
 	truncates: SqliteServerOperationTelemetry;
@@ -329,15 +329,16 @@ async function waitForActorRuntimeReady(client: RegistryClient): Promise<void> {
 function buildOperationTelemetry(
 	before: MetricsSnapshot,
 	after: MetricsSnapshot,
+	path: "generic" | "fast_path",
 	op: "read" | "write" | "truncate",
 ): SqliteServerOperationTelemetry {
 	return {
 		requestCount: metricDelta(before, after, "actor_kv_sqlite_storage_request_total", {
-			path: "generic",
+			path,
 			op,
 		}),
 		pageEntryCount: metricDelta(before, after, "actor_kv_sqlite_storage_entry_total", {
-			path: "generic",
+			path,
 			op,
 			entry_kind: "page",
 		}),
@@ -346,23 +347,23 @@ function buildOperationTelemetry(
 			after,
 			"actor_kv_sqlite_storage_entry_total",
 			{
-				path: "generic",
+				path,
 				op,
 				entry_kind: "metadata",
 			},
 		),
 		requestBytes: metricDelta(before, after, "actor_kv_sqlite_storage_bytes_total", {
-			path: "generic",
+			path,
 			op,
 			byte_kind: "request",
 		}),
 		payloadBytes: metricDelta(before, after, "actor_kv_sqlite_storage_bytes_total", {
-			path: "generic",
+			path,
 			op,
 			byte_kind: "payload",
 		}),
 		responseBytes: metricDelta(before, after, "actor_kv_sqlite_storage_bytes_total", {
-			path: "generic",
+			path,
 			op,
 			byte_kind: "response",
 		}),
@@ -372,7 +373,7 @@ function buildOperationTelemetry(
 				after,
 				"actor_kv_sqlite_storage_duration_seconds_total",
 				{
-					path: "generic",
+					path,
 					op,
 				},
 			),
@@ -380,17 +381,46 @@ function buildOperationTelemetry(
 	};
 }
 
+function selectServerPath(
+	before: MetricsSnapshot,
+	after: MetricsSnapshot,
+): "generic" | "fast_path" {
+	const fastPathWrites = metricDelta(
+		before,
+		after,
+		"actor_kv_sqlite_storage_request_total",
+		{
+			path: "fast_path",
+			op: "write",
+		},
+	);
+	const fastPathTruncates = metricDelta(
+		before,
+		after,
+		"actor_kv_sqlite_storage_request_total",
+		{
+			path: "fast_path",
+			op: "truncate",
+		},
+	);
+	if (fastPathWrites > 0 || fastPathTruncates > 0) {
+		return "fast_path";
+	}
+	return "generic";
+}
+
 function buildServerTelemetry(
 	before: MetricsSnapshot,
 	after: MetricsSnapshot,
 	metricsEndpoint: string,
 ): SqliteServerTelemetry {
-	const writes = buildOperationTelemetry(before, after, "write");
+	const path = selectServerPath(before, after);
+	const writes = buildOperationTelemetry(before, after, path, "write");
 
 	return {
 		metricsEndpoint,
-		path: "generic",
-		reads: buildOperationTelemetry(before, after, "read"),
+		path,
+		reads: buildOperationTelemetry(before, after, path, "read"),
 		writes: {
 			...writes,
 			dirtyPageCount: writes.pageEntryCount,
@@ -400,7 +430,7 @@ function buildServerTelemetry(
 					after,
 					"actor_kv_sqlite_storage_phase_duration_seconds_total",
 					{
-						path: "generic",
+						path,
 						phase: "estimate_kv_size",
 					},
 				),
@@ -411,7 +441,7 @@ function buildServerTelemetry(
 					after,
 					"actor_kv_sqlite_storage_phase_duration_seconds_total",
 					{
-						path: "generic",
+						path,
 						phase: "clear_and_rewrite",
 					},
 				),
@@ -421,7 +451,7 @@ function buildServerTelemetry(
 				after,
 				"actor_kv_sqlite_storage_clear_subspace_total",
 				{
-					path: "generic",
+					path,
 				},
 			),
 			validation: {
@@ -430,7 +460,7 @@ function buildServerTelemetry(
 					after,
 					"actor_kv_sqlite_storage_validation_total",
 					{
-						path: "generic",
+						path,
 						result: "ok",
 					},
 				),
@@ -439,7 +469,7 @@ function buildServerTelemetry(
 					after,
 					"actor_kv_sqlite_storage_validation_total",
 					{
-						path: "generic",
+						path,
 						result: "length_mismatch",
 					},
 				),
@@ -448,7 +478,7 @@ function buildServerTelemetry(
 					after,
 					"actor_kv_sqlite_storage_validation_total",
 					{
-						path: "generic",
+						path,
 						result: "too_many_entries",
 					},
 				),
@@ -457,7 +487,7 @@ function buildServerTelemetry(
 					after,
 					"actor_kv_sqlite_storage_validation_total",
 					{
-						path: "generic",
+						path,
 						result: "payload_too_large",
 					},
 				),
@@ -466,7 +496,7 @@ function buildServerTelemetry(
 					after,
 					"actor_kv_sqlite_storage_validation_total",
 					{
-						path: "generic",
+						path,
 						result: "storage_quota_exceeded",
 					},
 				),
@@ -475,7 +505,7 @@ function buildServerTelemetry(
 					after,
 					"actor_kv_sqlite_storage_validation_total",
 					{
-						path: "generic",
+						path,
 						result: "key_too_large",
 					},
 				),
@@ -484,13 +514,13 @@ function buildServerTelemetry(
 					after,
 					"actor_kv_sqlite_storage_validation_total",
 					{
-						path: "generic",
+						path,
 						result: "value_too_large",
 					},
 				),
 			},
 		},
-		truncates: buildOperationTelemetry(before, after, "truncate"),
+		truncates: buildOperationTelemetry(before, after, path, "truncate"),
 	};
 }
 
