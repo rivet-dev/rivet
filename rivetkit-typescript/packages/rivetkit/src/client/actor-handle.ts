@@ -39,6 +39,7 @@ import {
 } from "./actor-query";
 import { type ClientRaw, CREATE_ACTOR_CONN_PROXY } from "./client";
 import { ActorError, isSchedulingError } from "./errors";
+import { retryOnLifecycleBoundary } from "./lifecycle-errors";
 import { logger } from "./log";
 import {
 	createQueueSender,
@@ -233,7 +234,12 @@ export class ActorHandleRaw {
 				`Invalid action call: expected an options object { name, args }, got ${typeof opts}. Use handle.actionName(...args) for the shorthand API.`,
 			);
 		}
-		return (await this.#sendActionNow(opts)) as Response;
+		const run = async () => (await this.#sendActionNow(opts)) as Response;
+		if (opts.name === "destroy") {
+			return await run();
+		}
+
+		return await retryOnLifecycleBoundary(run, { signal: opts.signal });
 	}
 
 	async #sendActionNow(opts: {

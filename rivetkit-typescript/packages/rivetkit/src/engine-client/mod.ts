@@ -289,7 +289,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 
 		const gatewayUrl = this.#buildGatewayUrlForTarget(
 			{ directId: actorId },
-			requestPath(actorRequest),
+			rawHttpProxyPath(actorRequest),
 		);
 
 		return sendHttpRequestToGateway(this.#config, gatewayUrl, actorRequest);
@@ -431,6 +431,18 @@ export class RemoteEngineControlClient implements EngineControlClient {
 function requestPath(req: Request): string {
 	const url = new URL(req.url);
 	return `${url.pathname}${url.search}`;
+}
+
+function rawHttpProxyPath(req: Request): string {
+	const url = new URL(req.url);
+	if (url.pathname === "/request" || url.pathname.startsWith("/request/")) {
+		return `${url.pathname}${url.search}`;
+	}
+
+	const normalizedPath = url.pathname.startsWith("/")
+		? url.pathname.slice(1)
+		: url.pathname;
+	return `/request/${normalizedPath}${url.search}`;
 }
 
 function apiActorToOutput(actor: ApiActor): ActorOutput {

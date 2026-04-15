@@ -1227,10 +1227,15 @@ export class EngineActorDriver implements ActorDriver {
 			return overlayResponse;
 		}
 
+		const normalizedRequest =
+			this.#normalizeEnvoyHttpRequestForActorRouter(request);
+
 		if (this.#isDynamicActor(actorId)) {
-			return await this.#requireDynamicRuntime(actorId).fetch(request);
+			return await this.#requireDynamicRuntime(actorId).fetch(
+				normalizedRequest,
+			);
 		}
-		return await this.#actorRouter.fetch(request, { actorId });
+		return await this.#actorRouter.fetch(normalizedRequest, { actorId });
 	}
 
 	#routeOverlayRequest(actorId: string, request: Request): Response | null {
@@ -1241,6 +1246,34 @@ export class EngineActorDriver implements ActorDriver {
 			default:
 				return null;
 		}
+	}
+
+	#normalizeEnvoyHttpRequestForActorRouter(request: Request): Request {
+		const url = new URL(request.url);
+		if (
+			url.pathname === "/" ||
+			url.pathname === "/health" ||
+			url.pathname === "/metadata" ||
+			url.pathname.startsWith("/action/") ||
+			url.pathname === "/queue" ||
+			url.pathname.startsWith("/queue/") ||
+			url.pathname === "/connect" ||
+			url.pathname.startsWith("/websocket/") ||
+			url.pathname.startsWith("/inspector/") ||
+			url.pathname === "/request" ||
+			url.pathname.startsWith("/request/") ||
+			url.pathname.startsWith("/.test/")
+		) {
+			return request;
+		}
+
+		const normalizedPath = url.pathname.startsWith("/")
+			? url.pathname.slice(1)
+			: url.pathname;
+		const normalizedUrl = new URL(
+			`http://actor/request/${normalizedPath}${url.search}`,
+		);
+		return new Request(normalizedUrl, request);
 	}
 
 	#handleDynamicReloadOverlay(actorId: string): Response {
@@ -1453,9 +1486,11 @@ export class EngineActorDriver implements ActorDriver {
 				attachMessageListener();
 			}
 
-			wsHandler.onOpen(event, wsContext);
-
+			// Attach close and error listeners before onOpen so an actor that
+			// immediately rejects the connection does not lose its close event.
 			attachPostOpenListeners();
+
+			wsHandler.onOpen(event, wsContext);
 		});
 
 		if (!isRawWebSocketPath) {
