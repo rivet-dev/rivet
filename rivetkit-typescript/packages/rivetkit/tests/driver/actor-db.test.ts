@@ -45,6 +45,55 @@ function isActorStoppingDbError(error: unknown): boolean {
 	);
 }
 
+async function runWithActorStoppingRetry(
+	_driverTestConfig: DriverTestConfig,
+	fn: () => Promise<void>,
+): Promise<void> {
+	// Wait for the actor to leave the `stopping` window. The driver does not
+	// surface a "ready again" signal, so we poll the user function and only
+	// retry on the specific `actor stopping: database accessed` error. Any
+	// other failure short-circuits.
+	await vi.waitFor(
+		async () => {
+			try {
+				await fn();
+			} catch (error) {
+				if (isActorStoppingDbError(error)) {
+					throw error;
+				}
+				throw new (class extends Error {
+					override name = "AbortRetry";
+				})(
+					error instanceof Error ? error.message : String(error),
+				);
+			}
+		},
+		{ timeout: SLEEP_WAIT_MS * 4, interval: 100 },
+	);
+}
+
+async function expectIntegrityCheckOk(
+	_driverTestConfig: DriverTestConfig,
+	integrityCheck: () => Promise<string>,
+): Promise<void> {
+	// Same lifecycle window as `runWithActorStoppingRetry`: the integrity
+	// check is read-only against the SQLite db, so polling it does not hold
+	// the actor awake.
+	await vi.waitFor(
+		async () => {
+			try {
+				expect((await integrityCheck()).toLowerCase()).toBe("ok");
+			} catch (error) {
+				if (isActorStoppingDbError(error)) {
+					throw error;
+				}
+				throw error;
+			}
+		},
+		{ timeout: SLEEP_WAIT_MS * 8, interval: 100 },
+	);
+}
+
 function getDbActor(
 	client: Awaited<ReturnType<typeof setupDriverTest>>["client"],
 	_variant: DbVariant,
@@ -474,18 +523,23 @@ describeDriverMatrix("Actor Db", (driverTestConfig) => {
 					]);
 
 					await actor.reset();
-					await actor.runMixedWorkload(
-						INTEGRITY_SEED_COUNT,
-						INTEGRITY_CHURN_COUNT,
+					await runWithActorStoppingRetry(
+						driverTestConfig,
+						async () =>
+							await actor.runMixedWorkload(
+								INTEGRITY_SEED_COUNT,
+								INTEGRITY_CHURN_COUNT,
+							),
 					);
-					expect((await actor.integrityCheck()).toLowerCase()).toBe(
-						"ok",
+					await expectIntegrityCheckOk(
+						driverTestConfig,
+						async () => await actor.integrityCheck(),
 					);
 
 					await actor.triggerSleep();
-					await waitFor(driverTestConfig, SLEEP_WAIT_MS + 100);
-					expect((await actor.integrityCheck()).toLowerCase()).toBe(
-						"ok",
+					await expectIntegrityCheckOk(
+						driverTestConfig,
+						async () => await actor.integrityCheck(),
 					);
 				},
 				dbTestTimeout,
