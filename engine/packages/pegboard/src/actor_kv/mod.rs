@@ -3,15 +3,17 @@ use entry::EntryBuilder;
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_envoy_protocol as ep;
+use std::sync::{Arc, Mutex};
 use universaldb::prelude::*;
 use universaldb::tuple::Subspace;
-use utils::{validate_entries, validate_keys, validate_range};
+use utils::{validate_entries_with_details, validate_keys, validate_range};
 
 use crate::keys;
 
 mod entry;
 mod metrics;
 pub mod preload;
+mod sqlite_telemetry;
 mod utils;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -49,6 +51,7 @@ pub async fn get(
 	keys: Vec<ep::KvKey>,
 ) -> Result<(Vec<ep::KvKey>, Vec<ep::KvValue>, Vec<ep::KvMetadata>)> {
 	let start = std::time::Instant::now();
+	let sqlite_summary = sqlite_telemetry::summarize_get(&keys);
 	metrics::ACTOR_KV_KEYS_PER_OP
 		.with_label_values(&["get"])
 		.observe(keys.len() as f64);
@@ -151,6 +154,18 @@ pub async fn get(
 	metrics::ACTOR_KV_OPERATION_DURATION
 		.with_label_values(&["get"])
 		.observe(start.elapsed().as_secs_f64());
+	if let Some(summary) = sqlite_summary {
+		let response_bytes = result
+			.as_ref()
+			.map(|(keys, values, _)| sqlite_telemetry::summarize_response(keys, values))
+			.unwrap_or_default();
+		sqlite_telemetry::record_response_bytes(response_bytes);
+		sqlite_telemetry::record_operation(
+			sqlite_telemetry::OperationKind::Read,
+			summary,
+			start.elapsed(),
+		);
+	}
 	result
 }
 
@@ -275,17 +290,50 @@ pub async fn put(
 	values: Vec<ep::KvValue>,
 ) -> Result<()> {
 	let start = std::time::Instant::now();
+	let sqlite_summary = sqlite_telemetry::summarize_put(&keys, &values);
+	let sqlite_observation = Arc::new(Mutex::new(SqliteWriteObservation::default()));
 	metrics::ACTOR_KV_KEYS_PER_OP
 		.with_label_values(&["put"])
 		.observe(keys.len() as f64);
 	let keys = &keys;
 	let values = &values;
+	let sqlite_observation_clone = Arc::clone(&sqlite_observation);
 	let result = db
 		.run(|tx| {
+			let sqlite_observation = Arc::clone(&sqlite_observation_clone);
 			async move {
-				let total_size = estimate_kv_size(&tx, recipient.actor_id).await? as usize;
+				let estimate_start = std::time::Instant::now();
+				let total_size = estimate_kv_size(&tx, recipient.actor_id).await;
+				observe_sqlite_write(
+					|observation| {
+						observation.estimate_kv_size_duration = estimate_start.elapsed();
+						observation.estimate_kv_size_recorded = true;
+					},
+					&sqlite_observation,
+				);
+				let total_size = total_size? as usize;
 
-				validate_entries(&keys, &values, total_size)?;
+				match validate_entries_with_details(&keys, &values, total_size) {
+					Ok(()) => {
+						observe_sqlite_write(
+							|observation| {
+								observation.validation_checked = true;
+								observation.validation_result = None;
+							},
+							&sqlite_observation,
+						);
+					}
+					Err(error) => {
+						observe_sqlite_write(
+							|observation| {
+								observation.validation_checked = true;
+								observation.validation_result = Some(error.kind());
+							},
+							&sqlite_observation,
+						);
+						return Err(error.into_anyhow());
+					}
+				}
 
 				let subspace = &keys::actor_kv::subspace(recipient.actor_id);
 				let tx = tx.with_subspace(subspace.clone());
@@ -305,7 +353,8 @@ pub async fn put(
 					total_size_chunked.try_into().unwrap_or_default(),
 				);
 
-				futures_util::stream::iter(0..keys.len())
+				let rewrite_start = std::time::Instant::now();
+				let write_result = futures_util::stream::iter(0..keys.len())
 					.map(|i| {
 						let tx = tx.clone();
 						async move {
@@ -345,7 +394,15 @@ pub async fn put(
 					})
 					.buffer_unordered(32)
 					.try_collect()
-					.await
+					.await;
+				observe_sqlite_write(
+					|observation| {
+						observation.clear_and_rewrite_duration = rewrite_start.elapsed();
+						observation.clear_and_rewrite_recorded = true;
+					},
+					&sqlite_observation,
+				);
+				write_result
 			}
 		})
 		.custom_instrument(tracing::info_span!("kv_put_tx"))
@@ -354,6 +411,34 @@ pub async fn put(
 	metrics::ACTOR_KV_OPERATION_DURATION
 		.with_label_values(&["put"])
 		.observe(start.elapsed().as_secs_f64());
+	if let Some(summary) = sqlite_summary {
+		let observation = sqlite_observation
+			.lock()
+			.ok()
+			.map(|guard| *guard)
+			.unwrap_or_default();
+		if observation.validation_checked {
+			sqlite_telemetry::record_validation(observation.validation_result);
+		}
+		if observation.estimate_kv_size_recorded {
+			sqlite_telemetry::record_phase_duration(
+				sqlite_telemetry::PhaseKind::EstimateKvSize,
+				observation.estimate_kv_size_duration,
+			);
+		}
+		if observation.clear_and_rewrite_recorded {
+			sqlite_telemetry::record_phase_duration(
+				sqlite_telemetry::PhaseKind::ClearAndRewrite,
+				observation.clear_and_rewrite_duration,
+			);
+			sqlite_telemetry::record_clear_subspace(summary.entry_count());
+		}
+		sqlite_telemetry::record_operation(
+			sqlite_telemetry::OperationKind::Write,
+			summary,
+			start.elapsed(),
+		);
+	}
 	result
 }
 
@@ -415,11 +500,19 @@ pub async fn delete_range(
 	end: ep::KvKey,
 ) -> Result<()> {
 	let timer = std::time::Instant::now();
+	let sqlite_summary = sqlite_telemetry::summarize_delete_range(&start, &end);
 	validate_range(&start, &end)?;
 	if start >= end {
 		metrics::ACTOR_KV_OPERATION_DURATION
 			.with_label_values(&["delete_range"])
 			.observe(timer.elapsed().as_secs_f64());
+		if let Some(summary) = sqlite_summary {
+			sqlite_telemetry::record_operation(
+				sqlite_telemetry::OperationKind::Truncate,
+				summary,
+				timer.elapsed(),
+			);
+		}
 		return Ok(());
 	}
 
@@ -460,7 +553,33 @@ pub async fn delete_range(
 	metrics::ACTOR_KV_OPERATION_DURATION
 		.with_label_values(&["delete_range"])
 		.observe(timer.elapsed().as_secs_f64());
+	if let Some(summary) = sqlite_summary {
+		sqlite_telemetry::record_operation(
+			sqlite_telemetry::OperationKind::Truncate,
+			summary,
+			timer.elapsed(),
+		);
+	}
 	result
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct SqliteWriteObservation {
+	estimate_kv_size_duration: std::time::Duration,
+	estimate_kv_size_recorded: bool,
+	clear_and_rewrite_duration: std::time::Duration,
+	clear_and_rewrite_recorded: bool,
+	validation_checked: bool,
+	validation_result: Option<utils::EntryValidationErrorKind>,
+}
+
+fn observe_sqlite_write(
+	update: impl FnOnce(&mut SqliteWriteObservation),
+	observation: &Arc<Mutex<SqliteWriteObservation>>,
+) {
+	if let Ok(mut guard) = observation.lock() {
+		update(&mut guard);
+	}
 }
 
 /// Deletes all keys from the KV store. Cannot be undone.

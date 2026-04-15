@@ -24,6 +24,11 @@ This file is generated from `bench-results.json` by
 | Buffered dirty pages | Pending | Pending | Pending | Pending |
 | Immediate kv_put writes | Pending | Pending | Pending | Pending |
 | Batch-cap failures | Pending | Pending | Pending | Pending |
+| Server request counts | Pending | Pending | Pending | Pending |
+| Server dirty pages | Pending | Pending | Pending | Pending |
+| Server request bytes | Pending | Pending | Pending | Pending |
+| Server overhead timing | Pending | Pending | Pending | Pending |
+| Server validation | Pending | Pending | Pending | Pending |
 | Actor DB insert | Pending | Pending | Pending | Pending |
 | Actor DB verify | Pending | Pending | Pending | Pending |
 | End-to-end action | Pending | Pending | Pending | Pending |

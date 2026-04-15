@@ -9,6 +9,9 @@ import { registry } from "../src/index.ts";
 const DEFAULT_MB = Number(process.env.BENCH_MB ?? "10");
 const DEFAULT_ROWS = Number(process.env.BENCH_ROWS ?? "1");
 const DEFAULT_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
+const DEFAULT_METRICS_ENDPOINT =
+	process.env.RIVET_METRICS_ENDPOINT ??
+	deriveMetricsEndpoint(DEFAULT_ENDPOINT);
 const JSON_OUTPUT =
 	process.argv.includes("--json") || process.env.BENCH_OUTPUT === "json";
 
@@ -25,13 +28,51 @@ interface ActorBenchmarkInsertResult extends BenchmarkInsertResult {
 	vfsTelemetry: SqliteVfsTelemetry;
 }
 
+interface SqliteServerOperationTelemetry {
+	requestCount: number;
+	pageEntryCount: number;
+	metadataEntryCount: number;
+	requestBytes: number;
+	payloadBytes: number;
+	responseBytes: number;
+	durationUs: number;
+}
+
+interface SqliteServerWriteValidationTelemetry {
+	ok: number;
+	lengthMismatch: number;
+	tooManyEntries: number;
+	payloadTooLarge: number;
+	storageQuotaExceeded: number;
+	keyTooLarge: number;
+	valueTooLarge: number;
+}
+
+interface SqliteServerWriteTelemetry extends SqliteServerOperationTelemetry {
+	dirtyPageCount: number;
+	estimateKvSizeDurationUs: number;
+	clearAndRewriteDurationUs: number;
+	clearSubspaceCount: number;
+	validation: SqliteServerWriteValidationTelemetry;
+}
+
+interface SqliteServerTelemetry {
+	metricsEndpoint: string;
+	path: "generic";
+	reads: SqliteServerOperationTelemetry;
+	writes: SqliteServerWriteTelemetry;
+	truncates: SqliteServerOperationTelemetry;
+}
+
 interface LargeInsertBenchmarkResult {
 	endpoint: string;
+	metricsEndpoint: string;
 	payloadMiB: number;
 	totalBytes: number;
 	rowCount: number;
 	actor: ActorBenchmarkInsertResult;
 	native: BenchmarkInsertResult;
+	serverTelemetry: SqliteServerTelemetry;
 	delta: {
 		endToEndElapsedMs: number;
 		overheadOutsideDbInsertMs: number;
@@ -47,6 +88,298 @@ function formatMs(ms: number): string {
 function formatBytes(bytes: number): string {
 	const mb = bytes / (1024 * 1024);
 	return `${mb.toFixed(2)} MiB`;
+}
+
+type MetricsSnapshot = Map<string, number>;
+
+const SQLITE_METRIC_NAMES = new Set([
+	"actor_kv_sqlite_storage_request_total",
+	"actor_kv_sqlite_storage_entry_total",
+	"actor_kv_sqlite_storage_bytes_total",
+	"actor_kv_sqlite_storage_duration_seconds_total",
+	"actor_kv_sqlite_storage_phase_duration_seconds_total",
+	"actor_kv_sqlite_storage_clear_subspace_total",
+	"actor_kv_sqlite_storage_validation_total",
+]);
+
+function deriveMetricsEndpoint(endpoint: string): string {
+	const url = new URL(endpoint.endsWith("/") ? endpoint : `${endpoint}/`);
+	url.port = process.env.RIVET_METRICS_PORT ?? "6430";
+	url.pathname = "/metrics";
+	url.search = "";
+	url.hash = "";
+	return url.toString();
+}
+
+function metricKey(name: string, labels: Record<string, string>): string {
+	const serializedLabels = Object.entries(labels)
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([key, value]) => `${key}=${value}`)
+		.join(",");
+	return `${name}|${serializedLabels}`;
+}
+
+function parseMetricLabels(raw: string): Record<string, string> {
+	if (!raw) {
+		return {};
+	}
+
+	const labels: Record<string, string> = {};
+	for (const pair of raw.split(",")) {
+		if (!pair) {
+			continue;
+		}
+
+		const [key, value] = pair.split("=");
+		if (!key || value === undefined) {
+			continue;
+		}
+
+		labels[key.trim()] = value.trim().replace(/^"|"$/g, "");
+	}
+	return labels;
+}
+
+function parsePrometheusMetrics(text: string): MetricsSnapshot {
+	const snapshot: MetricsSnapshot = new Map();
+
+	for (const line of text.split("\n")) {
+		const trimmed = line.trim();
+		if (!trimmed || trimmed.startsWith("#")) {
+			continue;
+		}
+
+		const match =
+			/^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{([^}]*)\})?\s+([^\s]+)(?:\s+.*)?$/.exec(
+				trimmed,
+			);
+		if (!match) {
+			continue;
+		}
+
+		const [, name, rawLabels = "", rawValue] = match;
+		if (!SQLITE_METRIC_NAMES.has(name)) {
+			continue;
+		}
+
+		const value = Number(rawValue);
+		if (!Number.isFinite(value)) {
+			continue;
+		}
+
+		snapshot.set(metricKey(name, parseMetricLabels(rawLabels)), value);
+	}
+
+	return snapshot;
+}
+
+async function fetchMetricsSnapshot(
+	metricsEndpoint: string,
+): Promise<MetricsSnapshot> {
+	let lastError: unknown;
+	for (let attempt = 0; attempt < 20; attempt += 1) {
+		try {
+			const response = await fetch(metricsEndpoint, {
+				signal: AbortSignal.timeout(5000),
+			});
+			if (!response.ok) {
+				throw new Error(
+					`Metrics endpoint ${metricsEndpoint} returned ${response.status}.`,
+				);
+			}
+
+			return parsePrometheusMetrics(await response.text());
+		} catch (error) {
+			lastError = error;
+			await new Promise((resolve) => setTimeout(resolve, 100));
+		}
+	}
+
+	throw new Error(
+		`Failed to fetch metrics from ${metricsEndpoint}: ${String(lastError)}`,
+	);
+}
+
+function metricDelta(
+	before: MetricsSnapshot,
+	after: MetricsSnapshot,
+	name: string,
+	labels: Record<string, string>,
+): number {
+	const key = metricKey(name, labels);
+	return Math.max(0, (after.get(key) ?? 0) - (before.get(key) ?? 0));
+}
+
+function secondsToUs(seconds: number): number {
+	return Math.round(seconds * 1_000_000);
+}
+
+function buildOperationTelemetry(
+	before: MetricsSnapshot,
+	after: MetricsSnapshot,
+	op: "read" | "write" | "truncate",
+): SqliteServerOperationTelemetry {
+	return {
+		requestCount: metricDelta(before, after, "actor_kv_sqlite_storage_request_total", {
+			path: "generic",
+			op,
+		}),
+		pageEntryCount: metricDelta(before, after, "actor_kv_sqlite_storage_entry_total", {
+			path: "generic",
+			op,
+			entry_kind: "page",
+		}),
+		metadataEntryCount: metricDelta(
+			before,
+			after,
+			"actor_kv_sqlite_storage_entry_total",
+			{
+				path: "generic",
+				op,
+				entry_kind: "metadata",
+			},
+		),
+		requestBytes: metricDelta(before, after, "actor_kv_sqlite_storage_bytes_total", {
+			path: "generic",
+			op,
+			byte_kind: "request",
+		}),
+		payloadBytes: metricDelta(before, after, "actor_kv_sqlite_storage_bytes_total", {
+			path: "generic",
+			op,
+			byte_kind: "payload",
+		}),
+		responseBytes: metricDelta(before, after, "actor_kv_sqlite_storage_bytes_total", {
+			path: "generic",
+			op,
+			byte_kind: "response",
+		}),
+		durationUs: secondsToUs(
+			metricDelta(
+				before,
+				after,
+				"actor_kv_sqlite_storage_duration_seconds_total",
+				{
+					path: "generic",
+					op,
+				},
+			),
+		),
+	};
+}
+
+function buildServerTelemetry(
+	before: MetricsSnapshot,
+	after: MetricsSnapshot,
+	metricsEndpoint: string,
+): SqliteServerTelemetry {
+	const writes = buildOperationTelemetry(before, after, "write");
+
+	return {
+		metricsEndpoint,
+		path: "generic",
+		reads: buildOperationTelemetry(before, after, "read"),
+		writes: {
+			...writes,
+			dirtyPageCount: writes.pageEntryCount,
+			estimateKvSizeDurationUs: secondsToUs(
+				metricDelta(
+					before,
+					after,
+					"actor_kv_sqlite_storage_phase_duration_seconds_total",
+					{
+						path: "generic",
+						phase: "estimate_kv_size",
+					},
+				),
+			),
+			clearAndRewriteDurationUs: secondsToUs(
+				metricDelta(
+					before,
+					after,
+					"actor_kv_sqlite_storage_phase_duration_seconds_total",
+					{
+						path: "generic",
+						phase: "clear_and_rewrite",
+					},
+				),
+			),
+			clearSubspaceCount: metricDelta(
+				before,
+				after,
+				"actor_kv_sqlite_storage_clear_subspace_total",
+				{
+					path: "generic",
+				},
+			),
+			validation: {
+				ok: metricDelta(
+					before,
+					after,
+					"actor_kv_sqlite_storage_validation_total",
+					{
+						path: "generic",
+						result: "ok",
+					},
+				),
+				lengthMismatch: metricDelta(
+					before,
+					after,
+					"actor_kv_sqlite_storage_validation_total",
+					{
+						path: "generic",
+						result: "length_mismatch",
+					},
+				),
+				tooManyEntries: metricDelta(
+					before,
+					after,
+					"actor_kv_sqlite_storage_validation_total",
+					{
+						path: "generic",
+						result: "too_many_entries",
+					},
+				),
+				payloadTooLarge: metricDelta(
+					before,
+					after,
+					"actor_kv_sqlite_storage_validation_total",
+					{
+						path: "generic",
+						result: "payload_too_large",
+					},
+				),
+				storageQuotaExceeded: metricDelta(
+					before,
+					after,
+					"actor_kv_sqlite_storage_validation_total",
+					{
+						path: "generic",
+						result: "storage_quota_exceeded",
+					},
+				),
+				keyTooLarge: metricDelta(
+					before,
+					after,
+					"actor_kv_sqlite_storage_validation_total",
+					{
+						path: "generic",
+						result: "key_too_large",
+					},
+				),
+				valueTooLarge: metricDelta(
+					before,
+					after,
+					"actor_kv_sqlite_storage_validation_total",
+					{
+						path: "generic",
+						result: "value_too_large",
+					},
+				),
+			},
+		},
+		truncates: buildOperationTelemetry(before, after, "truncate"),
+	};
 }
 
 function runNativeInsert(
@@ -116,6 +449,7 @@ async function runLargeInsertBenchmark(): Promise<LargeInsertBenchmarkResult> {
 	});
 	const actor = client.todoList.getOrCreate([`bench-${Date.now()}`]);
 	const label = `payload-${crypto.randomUUID()}`;
+	const metricsBefore = await fetchMetricsSnapshot(DEFAULT_METRICS_ENDPOINT);
 
 	const endToEndStart = performance.now();
 	const actorResult = await actor.benchInsertPayload(
@@ -124,16 +458,23 @@ async function runLargeInsertBenchmark(): Promise<LargeInsertBenchmarkResult> {
 		rowCount,
 	);
 	const endToEndElapsedMs = performance.now() - endToEndStart;
+	const metricsAfter = await fetchMetricsSnapshot(DEFAULT_METRICS_ENDPOINT);
 
 	const nativeResult = runNativeInsert(totalBytes, rowCount);
 
 	return {
 		endpoint: DEFAULT_ENDPOINT,
+		metricsEndpoint: DEFAULT_METRICS_ENDPOINT,
 		payloadMiB: DEFAULT_MB,
 		totalBytes,
 		rowCount,
 		actor: actorResult,
 		native: nativeResult,
+		serverTelemetry: buildServerTelemetry(
+			metricsBefore,
+			metricsAfter,
+			DEFAULT_METRICS_ENDPOINT,
+		),
 		delta: {
 			endToEndElapsedMs,
 			overheadOutsideDbInsertMs:
@@ -158,6 +499,7 @@ async function main() {
 		`Benchmarking SQLite insert for ${formatBytes(result.totalBytes)} across ${result.rowCount} row(s)`,
 	);
 	console.log(`Endpoint: ${result.endpoint}`);
+	console.log(`Metrics endpoint: ${result.metricsEndpoint}`);
 
 	console.log("");
 	console.log("RivetKit actor path");
@@ -171,6 +513,12 @@ async function main() {
 	);
 	console.log(
 		`  overhead outside db insert: ${formatMs(result.delta.overheadOutsideDbInsertMs)}`,
+	);
+	console.log(
+		`  server write requests: ${result.serverTelemetry.writes.requestCount}, dirty pages: ${result.serverTelemetry.writes.dirtyPageCount}, request bytes: ${formatBytes(result.serverTelemetry.writes.requestBytes)}`,
+	);
+	console.log(
+		`  server estimate_kv_size: ${formatMs(result.serverTelemetry.writes.estimateKvSizeDurationUs / 1000)}, clear-and-rewrite: ${formatMs(result.serverTelemetry.writes.clearAndRewriteDurationUs / 1000)}`,
 	);
 
 	console.log("");

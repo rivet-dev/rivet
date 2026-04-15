@@ -49,11 +49,13 @@ interface ActorLargeInsertBenchmarkResult extends BenchmarkInsertResult {
 
 interface LargeInsertBenchmarkResult {
 	endpoint: string;
+	metricsEndpoint?: string;
 	payloadMiB: number;
 	totalBytes: number;
 	rowCount: number;
 	actor: ActorLargeInsertBenchmarkResult;
 	native: BenchmarkInsertResult;
+	serverTelemetry?: SqliteServerTelemetry;
 	delta: {
 		endToEndElapsedMs: number;
 		overheadOutsideDbInsertMs: number;
@@ -122,6 +124,42 @@ interface SqliteVfsTelemetry {
 	syncs: SqliteVfsSyncTelemetry;
 	atomicWrite: SqliteVfsAtomicWriteTelemetry;
 	kv: SqliteVfsKvTelemetry;
+}
+
+interface SqliteServerOperationTelemetry {
+	requestCount: number;
+	pageEntryCount: number;
+	metadataEntryCount: number;
+	requestBytes: number;
+	payloadBytes: number;
+	responseBytes: number;
+	durationUs: number;
+}
+
+interface SqliteServerWriteValidationTelemetry {
+	ok: number;
+	lengthMismatch: number;
+	tooManyEntries: number;
+	payloadTooLarge: number;
+	storageQuotaExceeded: number;
+	keyTooLarge: number;
+	valueTooLarge: number;
+}
+
+interface SqliteServerWriteTelemetry extends SqliteServerOperationTelemetry {
+	dirtyPageCount: number;
+	estimateKvSizeDurationUs: number;
+	clearAndRewriteDurationUs: number;
+	clearSubspaceCount: number;
+	validation: SqliteServerWriteValidationTelemetry;
+}
+
+interface SqliteServerTelemetry {
+	metricsEndpoint: string;
+	path: "generic";
+	reads: SqliteServerOperationTelemetry;
+	writes: SqliteServerWriteTelemetry;
+	truncates: SqliteServerOperationTelemetry;
 }
 
 interface BuildProvenance {
@@ -221,6 +259,16 @@ function formatBytes(bytes: number): string {
 	return `${mb.toFixed(2)} MiB`;
 }
 
+function formatDataSize(bytes: number): string {
+	if (bytes < 1024) {
+		return `${bytes} B`;
+	}
+	if (bytes < 1024 * 1024) {
+		return `${(bytes / 1024).toFixed(2)} KiB`;
+	}
+	return formatBytes(bytes);
+}
+
 function formatUs(us: number): string {
 	return formatMs(us / 1000);
 }
@@ -238,6 +286,88 @@ function formatDirtyPages(telemetry: SqliteVfsTelemetry): string {
 		`total ${telemetry.atomicWrite.committedDirtyPagesTotal}`,
 		`max ${telemetry.atomicWrite.maxCommittedDirtyPages}`,
 	].join(" / ");
+}
+
+function formatServerRequestCounts(
+	telemetry: SqliteServerTelemetry | undefined,
+): string {
+	if (!telemetry) {
+		return "N/A";
+	}
+
+	return [
+		`write ${telemetry.writes.requestCount}`,
+		`read ${telemetry.reads.requestCount}`,
+		`truncate ${telemetry.truncates.requestCount}`,
+	].join(" / ");
+}
+
+function formatServerDirtyPages(
+	telemetry: SqliteServerTelemetry | undefined,
+): string {
+	if (!telemetry) {
+		return "N/A";
+	}
+
+	return String(telemetry.writes.dirtyPageCount);
+}
+
+function formatServerRequestBytes(
+	telemetry: SqliteServerTelemetry | undefined,
+): string {
+	if (!telemetry) {
+		return "N/A";
+	}
+
+	return [
+		`write ${formatDataSize(telemetry.writes.requestBytes)}`,
+		`read ${formatDataSize(telemetry.reads.requestBytes)}`,
+		`truncate ${formatDataSize(telemetry.truncates.requestBytes)}`,
+	].join(" / ");
+}
+
+function formatServerPhaseTiming(
+	telemetry: SqliteServerTelemetry | undefined,
+): string {
+	if (!telemetry) {
+		return "N/A";
+	}
+
+	return [
+		`estimate ${formatUs(telemetry.writes.estimateKvSizeDurationUs)}`,
+		`rewrite ${formatUs(telemetry.writes.clearAndRewriteDurationUs)}`,
+	].join(" / ");
+}
+
+function formatServerValidation(
+	telemetry: SqliteServerTelemetry | undefined,
+): string {
+	if (!telemetry) {
+		return "N/A";
+	}
+
+	return [
+		`ok ${telemetry.writes.validation.ok}`,
+		`quota ${telemetry.writes.validation.storageQuotaExceeded}`,
+		`payload ${telemetry.writes.validation.payloadTooLarge}`,
+		`count ${telemetry.writes.validation.tooManyEntries}`,
+	].join(" / ");
+}
+
+function renderServerTelemetryDetails(
+	telemetry: SqliteServerTelemetry | undefined,
+): string {
+	if (!telemetry) {
+		return "- Server telemetry: unavailable for this run. Re-record it with the current benchmark script.";
+	}
+
+	return `- Metrics endpoint: \`${telemetry.metricsEndpoint}\`
+- Path label: \`${telemetry.path}\`
+- Reads: \`${telemetry.reads.requestCount}\` requests, \`${telemetry.reads.pageEntryCount}\` page keys, \`${telemetry.reads.metadataEntryCount}\` metadata keys, \`${formatDataSize(telemetry.reads.requestBytes)}\` request bytes, \`${formatDataSize(telemetry.reads.responseBytes)}\` response bytes, \`${formatUs(telemetry.reads.durationUs)}\` total
+- Writes: \`${telemetry.writes.requestCount}\` requests, \`${telemetry.writes.dirtyPageCount}\` dirty pages, \`${telemetry.writes.metadataEntryCount}\` metadata keys, \`${formatDataSize(telemetry.writes.requestBytes)}\` request bytes, \`${formatDataSize(telemetry.writes.payloadBytes)}\` payload bytes, \`${formatUs(telemetry.writes.durationUs)}\` total
+- Generic overhead: \`${formatUs(telemetry.writes.estimateKvSizeDurationUs)}\` in \`estimate_kv_size\`, \`${formatUs(telemetry.writes.clearAndRewriteDurationUs)}\` in clear-and-rewrite, \`${telemetry.writes.clearSubspaceCount}\` \`clear_subspace_range\` calls
+- Truncates: \`${telemetry.truncates.requestCount}\` requests, \`${formatDataSize(telemetry.truncates.requestBytes)}\` request bytes, \`${formatUs(telemetry.truncates.durationUs)}\` total
+- Validation outcomes: \`ok ${telemetry.writes.validation.ok}\` / \`quota ${telemetry.writes.validation.storageQuotaExceeded}\` / \`payload ${telemetry.writes.validation.payloadTooLarge}\` / \`count ${telemetry.writes.validation.tooManyEntries}\` / \`key ${telemetry.writes.validation.keyTooLarge}\` / \`value ${telemetry.writes.validation.valueTooLarge}\` / \`length ${telemetry.writes.validation.lengthMismatch}\``;
 }
 
 function canonicalWorkflowCommand(options: CliOptions): string {
@@ -660,6 +790,46 @@ function renderMarkdown(store: BenchResultsStore): string {
 			),
 		],
 		[
+			"Server request counts",
+			...phaseOrder.map((phase) =>
+				renderSummaryCell(latest.get(phase), (run) =>
+					formatServerRequestCounts(run.benchmark.serverTelemetry),
+				),
+			),
+		],
+		[
+			"Server dirty pages",
+			...phaseOrder.map((phase) =>
+				renderSummaryCell(latest.get(phase), (run) =>
+					formatServerDirtyPages(run.benchmark.serverTelemetry),
+				),
+			),
+		],
+		[
+			"Server request bytes",
+			...phaseOrder.map((phase) =>
+				renderSummaryCell(latest.get(phase), (run) =>
+					formatServerRequestBytes(run.benchmark.serverTelemetry),
+				),
+			),
+		],
+		[
+			"Server overhead timing",
+			...phaseOrder.map((phase) =>
+				renderSummaryCell(latest.get(phase), (run) =>
+					formatServerPhaseTiming(run.benchmark.serverTelemetry),
+				),
+			),
+		],
+		[
+			"Server validation",
+			...phaseOrder.map((phase) =>
+				renderSummaryCell(latest.get(phase), (run) =>
+					formatServerValidation(run.benchmark.serverTelemetry),
+				),
+			),
+		],
+		[
 			"Actor DB insert",
 			...phaseOrder.map((phase) =>
 				renderSummaryCell(latest.get(phase), (run) =>
@@ -748,6 +918,10 @@ function renderMarkdown(store: BenchResultsStore): string {
 - Atomic write failures: \`${run.benchmark.actor.vfsTelemetry.atomicWrite.batchCapFailureCount}\` batch-cap, \`${run.benchmark.actor.vfsTelemetry.atomicWrite.commitKvPutFailureCount}\` KV put
 - KV round-trips: \`get ${run.benchmark.actor.vfsTelemetry.kv.getCount}\` / \`put ${run.benchmark.actor.vfsTelemetry.kv.putCount}\` / \`delete ${run.benchmark.actor.vfsTelemetry.kv.deleteCount}\` / \`deleteRange ${run.benchmark.actor.vfsTelemetry.kv.deleteRangeCount}\`
 - KV payload bytes: \`${formatBytes(run.benchmark.actor.vfsTelemetry.kv.getBytes)}\` read, \`${formatBytes(run.benchmark.actor.vfsTelemetry.kv.putBytes)}\` written
+
+#### Server Telemetry
+
+${renderServerTelemetryDetails(run.benchmark.serverTelemetry)}
 
 #### Engine Build Provenance
 

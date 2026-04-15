@@ -1,6 +1,8 @@
 # Ralph Progress Log
 ## Codebase Patterns
 - Use `examples/sqlite-raw/bench-results.json` as the append-only benchmark source of truth, and regenerate `examples/sqlite-raw/BENCH_RESULTS.md` from it with `pnpm --dir examples/sqlite-raw run bench:record -- --render-only`.
+- Use `c.db.resetVfsTelemetry()` and `c.db.snapshotVfsTelemetry()` inside the measured actor action so SQLite benchmark telemetry excludes startup migrations and open-time noise.
+- Scrape pegboard metrics from `RIVET_METRICS_ENDPOINT` or the default `:6430` metrics server immediately before and after `bench:large-insert` so server telemetry lands in the same structured benchmark result as the actor-side VFS telemetry.
 
 Started: Wed Apr 15 04:03:14 AM PDT 2026
 ---
@@ -11,4 +13,22 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - `scripts/bench-large-insert.ts` now supports `--json`, so later telemetry stories can feed the recorder without scraping human-readable output.
   - Use `pnpm --dir examples/sqlite-raw run bench:record -- --phase phase-0 --fresh-engine` for measured phase runs so the build provenance and fresh-engine flag land in the shared log automatically.
   - The old exploratory numbers from 2026-04-15 were preserved in `BENCH_RESULTS.md` as historical reference, but all new phase runs should append through the structured scaffold instead.
+---
+## 2026-04-15 04:37:57 PDT - US-002
+- Implemented native SQLite VFS telemetry for reads, writes, syncs, KV round-trips, atomic-write begin or commit coverage, immediate `kv_put` fallback counts, dirty-page totals, and batch-cap failures.
+- Wired the telemetry through `@rivetkit/rivetkit-native`, exposed it on `rivetkit/db`, reset and snapshotted it inside `examples/sqlite-raw`, and rendered the new telemetry fields in `BENCH_RESULTS.md`.
+- Files changed: `CLAUDE.md`, `Cargo.lock`, `examples/sqlite-raw/BENCH_RESULTS.md`, `examples/sqlite-raw/scripts/bench-large-insert.ts`, `examples/sqlite-raw/scripts/run-benchmark.ts`, `examples/sqlite-raw/src/index.ts`, `rivetkit-typescript/packages/rivetkit-native/index.d.ts`, `rivetkit-typescript/packages/rivetkit-native/src/database.rs`, `rivetkit-typescript/packages/rivetkit/src/db/config.ts`, `rivetkit-typescript/packages/rivetkit/src/db/mod.ts`, `rivetkit-typescript/packages/rivetkit/src/db/native-database.ts`, `rivetkit-typescript/packages/rivetkit/src/db/native-database.test.ts`, `rivetkit-typescript/packages/sqlite-native/Cargo.toml`, `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`
+- **Learnings for future iterations:**
+  - `rivetkit-native` exposes the VFS telemetry synchronously, but `rivetkit/db` should wrap it as async helpers so actor code can use the same DB mutex path as normal queries.
+  - The benchmark scaffold now expects `actor.vfsTelemetry`, so later baseline stories can append telemetry without inventing a second reporting format.
+  - `pnpm --dir examples/sqlite-raw run check-types` is the fast sanity check that proves the rebuilt `rivetkit/db` surface is visible to the example after changing SQLite telemetry types.
+---
+## 2026-04-15 04:57:10 PDT - US-003
+- Implemented pegboard-side SQLite storage telemetry for page-store reads, writes, truncates, request and payload bytes, validation outcomes, and the generic `estimate_kv_size` plus clear-and-rewrite phases.
+- Wired `examples/sqlite-raw/scripts/bench-large-insert.ts` to scrape the engine metrics endpoint before and after the measured actor write, then rendered the server telemetry in `BENCH_RESULTS.md` beside the existing VFS telemetry.
+- Files changed: `AGENTS.md`, `engine/packages/pegboard/src/actor_kv/metrics.rs`, `engine/packages/pegboard/src/actor_kv/mod.rs`, `engine/packages/pegboard/src/actor_kv/sqlite_telemetry.rs`, `engine/packages/pegboard/src/actor_kv/utils.rs`, `examples/sqlite-raw/BENCH_RESULTS.md`, `examples/sqlite-raw/scripts/bench-large-insert.ts`, `examples/sqlite-raw/scripts/run-benchmark.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The server telemetry is exported through Prometheus counters on pegboard, so per-run benchmark numbers must be computed as a before-and-after scrape delta instead of reading raw absolute totals.
+  - `actor_kv` validation now exposes machine-readable failure reasons through `validate_entries_with_details`, which is the right hook if future SQLite paths need to distinguish quota failures from request-shape failures.
+  - `pnpm --dir examples/sqlite-raw run bench:record -- --render-only` is a cheap runtime check that the benchmark markdown renderer still accepts older stored runs without `serverTelemetry`.
 ---

@@ -31,7 +31,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Do not add vague debug logs. Add counters and timings that make the benchmark output useful."
     },
     {
@@ -47,7 +47,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "This story is about hard numbers, not vibes. If a metric cannot guide a decision, it probably does not belong."
     },
     {
