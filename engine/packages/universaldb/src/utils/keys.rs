@@ -151,4 +151,6 @@ define_keys! {
 	(123, CHANGELOG, "changelog"),
 	(124, EPOXY_V2, "epoxy_v2"),
 	(125, GLOBAL, "global"),
+	(126, DATACENTER, "datacenter"),
+	(127, ACCEPTED2, "accepted2"),
 }

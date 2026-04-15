@@ -49,6 +49,9 @@ async fn message_request_inner(
 				.await?;
 			protocol::ResponseKind::PrepareResponse(response)
 		}
+		protocol::RequestKind::PreAcceptRequest(_) => {
+			bail!("unreachable: pre accept is not sent over the wire")
+		}
 		protocol::RequestKind::AcceptRequest(req) => {
 			let response = ctx
 				.udb()?

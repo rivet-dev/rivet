@@ -1,5 +1,6 @@
+use epoxy::ops::propose::{Command, CommandKind, Proposal, SetCommand};
 use gas::prelude::*;
-use universaldb::utils::IsolationLevel::*;
+use universaldb::prelude::*;
 
 use crate::{keys, utils::runner_config_variant};
 
@@ -41,6 +42,26 @@ pub async fn pegboard_runner_config_delete(ctx: &OperationCtx, input: &Input) ->
 		})
 		.custom_instrument(tracing::info_span!("runner_config_delete_tx"))
 		.await?;
+
+	let global_runner_config_key = keys::runner_config::GlobalDataKey::new(
+		ctx.config().dc_label(),
+		input.namespace_id,
+		input.name.clone(),
+	);
+	ctx.op(epoxy::ops::propose::Input {
+		proposal: Proposal {
+			commands: vec![Command {
+				kind: CommandKind::SetCommand(SetCommand {
+					key: namespace::keys::subspace().pack(&global_runner_config_key),
+					value: None,
+				}),
+			}],
+		},
+		purge_cache: true,
+		mutable: true,
+		target_replicas: None,
+	})
+	.await?;
 
 	// Bump pool when a serverless config is modified
 	if delete_pool {

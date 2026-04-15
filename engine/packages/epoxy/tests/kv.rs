@@ -82,7 +82,7 @@ async fn test_kv_operations() {
 	assert_eq!(
 		read_v2_committed_value(ctx, replica_id, key).await.unwrap(),
 		Some(CommittedValue {
-			value: b"value1".to_vec(),
+			value: Some(b"value1".to_vec()),
 			version: 1,
 			mutable: true,
 		}),
@@ -94,7 +94,7 @@ async fn test_kv_operations() {
 	assert_eq!(
 		read_v2_committed_value(ctx, replica_id, key).await.unwrap(),
 		Some(CommittedValue {
-			value: b"value2".to_vec(),
+			value: Some(b"value2".to_vec()),
 			version: 2,
 			mutable: true,
 		}),
@@ -113,7 +113,7 @@ async fn test_kv_operations() {
 	assert!(
 		changelog_entries.contains(&epoxy::protocol::ChangelogEntry {
 			key: key.to_vec(),
-			value: b"value1".to_vec(),
+			value: Some(b"value1".to_vec()),
 			version: 1,
 			mutable: true,
 		})
@@ -121,7 +121,7 @@ async fn test_kv_operations() {
 	assert!(
 		changelog_entries.contains(&epoxy::protocol::ChangelogEntry {
 			key: key.to_vec(),
-			value: b"value2".to_vec(),
+			value: Some(b"value2".to_vec()),
 			version: 2,
 			mutable: true,
 		})
@@ -144,6 +144,95 @@ async fn test_kv_operations() {
 
 		tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 	}
+
+	test_ctx.shutdown().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_none_value_deletes_mutable_key() {
+	let _guard = TEST_LOCK.lock().await;
+	let mut test_ctx = TestCtx::new_with(THREE_REPLICAS).await.unwrap();
+	let replica_id = THREE_REPLICAS[0];
+	let ctx = test_ctx.get_ctx(replica_id);
+
+	let key = b"delete-mutable-key";
+
+	let write_result = set_mutable(ctx, key, b"initial").await.unwrap();
+	assert!(matches!(write_result, ProposalResult::Committed));
+	assert_eq!(
+		read_v2_committed_value(ctx, replica_id, key).await.unwrap(),
+		Some(CommittedValue {
+			value: Some(b"initial".to_vec()),
+			version: 1,
+			mutable: true,
+		}),
+	);
+
+	// Propose None — this is the new v3 deletion path.
+	let delete_result = delete_mutable(ctx, key).await.unwrap();
+	assert!(matches!(delete_result, ProposalResult::Committed));
+
+	// The key record remains in the store as a tombstone with value=None.
+	assert_eq!(
+		read_v2_committed_value(ctx, replica_id, key).await.unwrap(),
+		Some(CommittedValue {
+			value: None,
+			version: 2,
+			mutable: true,
+		}),
+	);
+
+	// The changelog records both the write and the deletion.
+	let entries = read_changelog_entries(ctx, replica_id).await.unwrap();
+	assert!(entries.contains(&epoxy::protocol::ChangelogEntry {
+		key: key.to_vec(),
+		value: Some(b"initial".to_vec()),
+		version: 1,
+		mutable: true,
+	}));
+	assert!(entries.contains(&epoxy::protocol::ChangelogEntry {
+		key: key.to_vec(),
+		value: None,
+		version: 2,
+		mutable: true,
+	}));
+
+	test_ctx.shutdown().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_none_value_on_fresh_key() {
+	let _guard = TEST_LOCK.lock().await;
+	let mut test_ctx = TestCtx::new_with(THREE_REPLICAS).await.unwrap();
+	let replica_id = THREE_REPLICAS[0];
+	let ctx = test_ctx.get_ctx(replica_id);
+
+	let key = b"delete-fresh-key";
+
+	// Proposing None on a key that was never written should commit as a version-1 tombstone.
+	let delete_result = delete_mutable(ctx, key).await.unwrap();
+	assert!(matches!(delete_result, ProposalResult::Committed));
+
+	assert_eq!(
+		read_v2_committed_value(ctx, replica_id, key).await.unwrap(),
+		Some(CommittedValue {
+			value: None,
+			version: 1,
+			mutable: true,
+		}),
+	);
+
+	// A subsequent mutable write should succeed and bump the version.
+	let write_result = set_mutable(ctx, key, b"after-delete").await.unwrap();
+	assert!(matches!(write_result, ProposalResult::Committed));
+	assert_eq!(
+		read_v2_committed_value(ctx, replica_id, key).await.unwrap(),
+		Some(CommittedValue {
+			value: Some(b"after-delete".to_vec()),
+			version: 2,
+			mutable: true,
+		}),
+	);
 
 	test_ctx.shutdown().await.unwrap();
 }

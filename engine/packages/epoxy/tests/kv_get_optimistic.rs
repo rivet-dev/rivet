@@ -3,13 +3,13 @@ mod common;
 use common::{
 	DEFAULT_REPLICA_IDS, THREE_REPLICAS, TestCtx,
 	utils::{
-		get_local, read_cache_committed_value, read_cache_value, read_v2_value, set_if_absent,
-		set_mutable, write_cache_committed_value, write_legacy_value, write_v2_committed_value,
+		get_local, read_cached_value, read_raw_cached_value, read_v2_value, set_if_absent,
+		set_mutable, write_cached_value, write_legacy_value, write_v2_committed_value,
 		write_v2_value,
 	},
 };
 use epoxy::ops::propose::ProposalResult;
-use epoxy_protocol::protocol::{CachingBehavior, CommittedValue, ReplicaId};
+use epoxy_protocol::protocol::{CachedValue, CachingBehavior, CommittedValue, ReplicaId};
 
 static TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
@@ -105,7 +105,7 @@ async fn test_kv_get_optimistic_paths() {
 			Some(remote_value.to_vec()),
 		);
 		assert_eq!(
-			read_cache_value(
+			read_raw_cached_value(
 				test_ctx.get_ctx(reader_replica_id),
 				reader_replica_id,
 				remote_key,
@@ -183,21 +183,20 @@ async fn test_kv_get_optimistic_paths() {
 			writer_replica_id,
 			key,
 			CommittedValue {
-				value: b"remote-value".to_vec(),
+				value: Some(b"remote-value".to_vec()),
 				version: 2,
 				mutable: true,
 			},
 		)
 		.await
 		.unwrap();
-		write_cache_committed_value(
+		write_cached_value(
 			test_ctx.get_ctx(reader_replica_id),
 			reader_replica_id,
 			key,
-			CommittedValue {
-				value: b"stale-cache".to_vec(),
+			CachedValue {
+				value: Some(Some(b"stale-cache".to_vec())),
 				version: 1,
-				mutable: true,
 			},
 		)
 		.await
@@ -214,17 +213,12 @@ async fn test_kv_get_optimistic_paths() {
 			Some(b"remote-value".to_vec()),
 		);
 		assert_eq!(
-			read_cache_committed_value(
-				test_ctx.get_ctx(reader_replica_id),
-				reader_replica_id,
-				key,
-			)
-			.await
-			.unwrap(),
-			Some(CommittedValue {
-				value: b"stale-cache".to_vec(),
+			read_cached_value(test_ctx.get_ctx(reader_replica_id), reader_replica_id, key,)
+				.await
+				.unwrap(),
+			Some(CachedValue {
+				value: Some(Some(b"stale-cache".to_vec())),
 				version: 1,
-				mutable: true,
 			}),
 		);
 
@@ -243,14 +237,13 @@ async fn test_kv_get_optimistic_paths() {
 			set_mutable(leader_ctx, key, b"value1").await.unwrap(),
 			ProposalResult::Committed
 		));
-		write_cache_committed_value(
+		write_cached_value(
 			follower_ctx,
 			follower_replica_id,
 			key,
-			CommittedValue {
-				value: b"value1".to_vec(),
+			CachedValue {
+				value: Some(Some(b"value1".to_vec())),
 				version: 1,
-				mutable: true,
 			},
 		)
 		.await
@@ -262,7 +255,7 @@ async fn test_kv_get_optimistic_paths() {
 		));
 
 		for _ in 0..20 {
-			if read_cache_value(follower_ctx, follower_replica_id, key)
+			if read_raw_cached_value(follower_ctx, follower_replica_id, key)
 				.await
 				.unwrap()
 				.is_none() && read_v2_value(follower_ctx, follower_replica_id, key)

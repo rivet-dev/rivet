@@ -3,7 +3,7 @@ use epoxy_protocol::protocol;
 use universaldb::{Transaction, utils::IsolationLevel::Serializable};
 
 use crate::{
-	keys::{self, KvAcceptedKey, KvAcceptedValue, KvBallotKey, KvValueKey},
+	keys::{self, KvAccepted2Key, KvAcceptedKey, KvBallotKey, KvValueKey},
 	replica::ballot::Ballot,
 };
 
@@ -24,13 +24,15 @@ pub async fn accept(
 
 	let value_key = KvValueKey::new(key.clone());
 	let ballot_key = KvBallotKey::new(key.clone());
-	let accepted_key = KvAcceptedKey::new(key);
+	let accepted_key = KvAcceptedKey::new(key.clone());
+	let accepted2_key = KvAccepted2Key::new(key);
 	let request_ballot = Ballot::from(ballot.clone());
 
-	let (committed_value, current_ballot, accepted_value) = tokio::try_join!(
+	let (committed_value, current_ballot, accepted_value, accepted2_value) = tokio::try_join!(
 		tx.read_opt(&value_key, Serializable),
 		tx.read_opt(&ballot_key, Serializable),
 		tx.read_opt(&accepted_key, Serializable),
+		tx.read_opt(&accepted2_key, Serializable),
 	)?;
 
 	if let Some(committed_value) = committed_value {
@@ -53,7 +55,7 @@ pub async fn accept(
 		}
 	}
 
-	if let Some(existing_accepted) = accepted_value {
+	if let Some(existing_accepted) = accepted2_value {
 		let existing_ballot = Ballot::from(existing_accepted.ballot.clone());
 		if existing_ballot == request_ballot {
 			let same_value = existing_accepted.value == value;
@@ -74,10 +76,32 @@ pub async fn accept(
 		}
 	}
 
+	// Legacy value
+	if let Some(existing_accepted) = accepted_value {
+		let existing_ballot = Ballot::from(existing_accepted.ballot.clone());
+		if existing_ballot == request_ballot {
+			let same_value = Some(existing_accepted.value) == value;
+			let same_version = existing_accepted.version == version;
+			let same_mutability = existing_accepted.mutable == mutable;
+			if same_value && same_version && same_mutability {
+				tx.write(&ballot_key, ballot.clone())?;
+				return Ok(protocol::AcceptResponse::AcceptResponseOk(
+					protocol::AcceptResponseOk { ballot },
+				));
+			}
+
+			return Ok(protocol::AcceptResponse::AcceptResponseHigherBallot(
+				protocol::AcceptResponseHigherBallot {
+					ballot: existing_ballot.into(),
+				},
+			));
+		}
+	}
+
 	tx.write(&ballot_key, ballot.clone())?;
 	tx.write(
-		&accepted_key,
-		KvAcceptedValue {
+		&accepted2_key,
+		protocol::AcceptedValue {
 			value,
 			ballot: ballot.clone(),
 			version,

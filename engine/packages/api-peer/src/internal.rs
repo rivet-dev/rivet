@@ -317,7 +317,7 @@ pub struct EpoxyKeyState {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EpoxyCommittedValue {
 	/// Base64-encoded value bytes.
-	pub value: String,
+	pub value: Option<String>,
 	pub version: u64,
 	pub mutable: bool,
 }
@@ -325,7 +325,7 @@ pub struct EpoxyCommittedValue {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EpoxyAcceptedValue {
 	/// Base64-encoded value bytes.
-	pub value: String,
+	pub value: Option<String>,
 	pub ballot: EpoxyBallot,
 	pub version: u64,
 	pub mutable: bool,
@@ -342,7 +342,7 @@ pub struct EpoxyCachedValue {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EpoxyChangelogEntry {
 	/// Base64-encoded value bytes.
-	pub value: String,
+	pub value: Option<String>,
 	/// Base64-encoded raw versionstamp bytes.
 	pub versionstamp: String,
 	pub version: u64,
@@ -472,20 +472,28 @@ async fn read_epoxy_key_state(
 				let value_key = epoxy::keys::KvValueKey::new(key.clone());
 				let ballot_key = epoxy::keys::KvBallotKey::new(key.clone());
 				let accepted_key = epoxy::keys::KvAcceptedKey::new(key.clone());
+				let accepted2_key = epoxy::keys::KvAccepted2Key::new(key.clone());
 				let cache_key = epoxy::keys::KvOptimisticCacheKey::new(key.clone());
 				let legacy_value_key = epoxy::keys::LegacyCommittedValueKey::new(key.clone());
 
 				let v2_tx = tx.with_subspace(replica_subspace.clone());
 				let legacy_tx = tx.with_subspace(legacy_subspace);
 
-				let (committed, current_ballot, accepted, optimistic_cache, legacy_committed) =
-					tokio::try_join!(
-						v2_tx.read_opt(&value_key, Serializable),
-						v2_tx.read_opt(&ballot_key, Serializable),
-						v2_tx.read_opt(&accepted_key, Serializable),
-						v2_tx.read_opt(&cache_key, Serializable),
-						legacy_tx.read_opt(&legacy_value_key, Serializable),
-					)?;
+				let (
+					committed,
+					current_ballot,
+					accepted,
+					accepted2,
+					optimistic_cache,
+					legacy_committed,
+				) = tokio::try_join!(
+					v2_tx.read_opt(&value_key, Serializable),
+					v2_tx.read_opt(&ballot_key, Serializable),
+					v2_tx.read_opt(&accepted_key, Serializable),
+					v2_tx.read_opt(&accepted2_key, Serializable),
+					v2_tx.read_opt(&cache_key, Serializable),
+					legacy_tx.read_opt(&legacy_value_key, Serializable),
+				)?;
 
 				let changelog_subspace = replica_subspace.subspace(&(CHANGELOG,));
 				let mut range: RangeOption<'static> = (&changelog_subspace).into();
@@ -494,7 +502,8 @@ async fn read_epoxy_key_state(
 				let mut changelog = Vec::new();
 				let mut stream = tx.get_ranges_keyvalues(range, Serializable);
 				while let Some(entry) = stream.try_next().await? {
-					let changelog_key = replica_subspace.unpack::<epoxy::keys::ChangelogKey>(entry.key())?;
+					let changelog_key =
+						replica_subspace.unpack::<epoxy::keys::ChangelogKey>(entry.key())?;
 					let changelog_entry = changelog_key.deserialize(entry.value())?;
 
 					if changelog_entry.key != key {
@@ -502,7 +511,10 @@ async fn read_epoxy_key_state(
 					}
 
 					changelog.push(EpoxyChangelogEntry {
-						value: base64::engine::general_purpose::STANDARD.encode(&changelog_entry.value),
+						value: changelog_entry
+							.value
+							.as_ref()
+							.map(|x| base64::engine::general_purpose::STANDARD.encode(x)),
 						versionstamp: base64::engine::general_purpose::STANDARD
 							.encode(changelog_key.versionstamp().as_bytes()),
 						version: changelog_entry.version,
@@ -512,21 +524,40 @@ async fn read_epoxy_key_state(
 
 				Ok(EpoxyKeyState {
 					current_ballot: current_ballot.map(debug_ballot),
-					accepted: accepted.map(|accepted| EpoxyAcceptedValue {
-						value: base64::engine::general_purpose::STANDARD.encode(&accepted.value),
-						ballot: debug_ballot(accepted.ballot),
-						version: accepted.version,
-						mutable: accepted.mutable,
-					}),
+					accepted: accepted2
+						.map(|accepted| EpoxyAcceptedValue {
+							value: accepted
+								.value
+								.as_ref()
+								.map(|x| base64::engine::general_purpose::STANDARD.encode(x)),
+							ballot: debug_ballot(accepted.ballot),
+							version: accepted.version,
+							mutable: accepted.mutable,
+						})
+						.or_else(|| {
+							accepted.map(|accepted| EpoxyAcceptedValue {
+								value: Some(
+									base64::engine::general_purpose::STANDARD
+										.encode(accepted.value),
+								),
+								ballot: debug_ballot(accepted.ballot),
+								version: accepted.version,
+								mutable: accepted.mutable,
+							})
+						}),
 					committed: committed.map(|value| EpoxyCommittedValue {
-						value: base64::engine::general_purpose::STANDARD.encode(&value.value),
+						value: value
+							.value
+							.as_ref()
+							.map(|x| base64::engine::general_purpose::STANDARD.encode(x)),
 						version: value.version,
 						mutable: value.mutable,
 					}),
 					optimistic_cache: optimistic_cache.map(|value| EpoxyCachedValue {
-						value: value.value.map(|value| {
-							base64::engine::general_purpose::STANDARD.encode(&value)
-						}),
+						value: value
+							.value
+							.flatten()
+							.map(|value| base64::engine::general_purpose::STANDARD.encode(&value)),
 						version: value.version,
 					}),
 					legacy_committed: legacy_committed
@@ -570,7 +601,9 @@ pub async fn get_epoxy_kv_local(
 
 	Ok(GetEpoxyKvResponse {
 		exists: output.is_some(),
-		value: output.map(|v| base64::engine::general_purpose::STANDARD.encode(&v.value)),
+		value: output
+			.and_then(|v| v.value)
+			.map(|v| base64::engine::general_purpose::STANDARD.encode(&v)),
 	})
 }
 

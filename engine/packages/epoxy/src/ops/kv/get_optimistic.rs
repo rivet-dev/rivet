@@ -65,11 +65,11 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 	)
 	.await?;
 	if let Some(value) = local_read.value {
-		return Ok(Output {
-			value: Some(value.value),
-		});
-	} else if let Some(value) = local_read.cache_value {
 		return Ok(Output { value: value.value });
+	} else if let Some(value) = local_read.cache_value {
+		return Ok(Output {
+			value: value.value.flatten(),
+		});
 	}
 
 	// Request fanout to other datacenters, return first datacenter with any non-none value
@@ -135,9 +135,7 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 			cache_fanout_value(ctx, input.replica_id, &input.key, &value).await?;
 		}
 
-		return Ok(Output {
-			value: Some(value.value),
-		});
+		return Ok(Output { value: value.value });
 	} else if input.save_empty {
 		cache_empty_value(ctx, input.replica_id, &input.key).await?;
 	}

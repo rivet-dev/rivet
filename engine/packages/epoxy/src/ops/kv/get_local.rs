@@ -82,7 +82,7 @@ pub(crate) async fn read_local_value(
 				if let Some(value) = legacy_value {
 					return Ok(LocalValueRead {
 						value: Some(CommittedValue {
-							value: legacy_value_key.deserialize(&value)?,
+							value: Some(legacy_value_key.deserialize(&value)?),
 							version: 0,
 							mutable: false,
 						}),

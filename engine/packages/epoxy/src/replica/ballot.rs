@@ -60,7 +60,7 @@ impl From<Ballot> for protocol::Ballot {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BallotSelection {
-	AlreadyCommitted(Vec<u8>),
+	AlreadyCommitted(Option<Vec<u8>>),
 	AlreadyCommittedMutable {
 		value: CommittedValue,
 		ballot: Ballot,
@@ -94,33 +94,33 @@ pub async fn ballot_selection(
 		async {
 			let value = tx.get(&packed_value_key, Serializable).await?;
 			if let Some(bytes) = value {
-				Ok::<_, anyhow::Error>(Some(value_key.deserialize(&bytes)?))
+				anyhow::Ok(Some(value_key.deserialize(&bytes)?))
 			} else {
-				Ok::<_, anyhow::Error>(None)
+				anyhow::Ok(None)
 			}
 		},
 		async {
 			let value = tx.get(&packed_legacy_value_key, Serializable).await?;
 			if let Some(bytes) = value {
-				Ok::<_, anyhow::Error>(Some(legacy_value_key.deserialize(&bytes)?))
+				anyhow::Ok(Some(legacy_value_key.deserialize(&bytes)?))
 			} else {
-				Ok::<_, anyhow::Error>(None)
+				anyhow::Ok(None)
 			}
 		},
 		async {
 			let value = tx.get(&packed_legacy_v2_value_key, Serializable).await?;
 			if let Some(bytes) = value {
-				Ok::<_, anyhow::Error>(Some(legacy_v2_value_key.deserialize(&bytes)?))
+				anyhow::Ok(Some(legacy_v2_value_key.deserialize(&bytes)?))
 			} else {
-				Ok::<_, anyhow::Error>(None)
+				anyhow::Ok(None)
 			}
 		},
 		async {
 			let ballot = tx.get(&packed_ballot_key, Serializable).await?;
 			if let Some(bytes) = ballot {
-				Ok::<_, anyhow::Error>(Some(Ballot::from(ballot_key.deserialize(&bytes)?)))
+				anyhow::Ok(Some(Ballot::from(ballot_key.deserialize(&bytes)?)))
 			} else {
-				Ok::<_, anyhow::Error>(None)
+				anyhow::Ok(None)
 			}
 		}
 	)?;
@@ -128,7 +128,7 @@ pub async fn ballot_selection(
 	if let Some(value) = committed_value
 		.or_else(|| {
 			legacy_committed_value.map(|value| CommittedValue {
-				value,
+				value: Some(value),
 				version: 0,
 				mutable: false,
 			})

@@ -7,21 +7,22 @@ type Ballot struct {
 }
 
 type CommittedValue struct {
-	value: data
+	value: optional<data>
 	version: u64
 	mutable: bool
 }
 
 type CachedValue struct {
 	# Repr:
-	# None 	  - Value not found on any replica and saved into cache as such
-	# Some(X) - Value set
-	value: optional<data>
+	# None 	        - Value not found on any replica and saved into cache as such
+	# Some(None)    - Value set to None via propose
+	# Some(Some(X)) - Value set
+	value: optional<optional<data>>
 	version: u64
 }
 
 type AcceptedValue struct {
-	value: data
+	value: optional<data>
 	ballot: Ballot
 	version: u64
 	mutable: bool
@@ -72,7 +73,7 @@ type PrepareResponseOk struct {
 }
 
 type PrepareResponseAlreadyCommitted struct {
-	value: data
+	value: optional<data>
 }
 
 type PrepareResponseHigherBallot struct {
@@ -88,7 +89,7 @@ type PrepareResponse union {
 # MARK: Proposal
 type PreAcceptRequest struct {
 	key: data
-	value: data
+	value: optional<data>
 	ballot: Ballot
 	mutable: bool
 	version: u64
@@ -99,7 +100,7 @@ type PreAcceptResponseOk struct {
 }
 
 type PreAcceptResponseAlreadyCommitted struct {
-	value: data
+	value: optional<data>
 }
 
 type PreAcceptResponseHigherBallot struct {
@@ -114,7 +115,7 @@ type PreAcceptResponse union {
 
 type AcceptRequest struct {
 	key: data
-	value: data
+	value: optional<data>
 	ballot: Ballot
 	mutable: bool
 	version: u64
@@ -125,7 +126,7 @@ type AcceptResponseOk struct {
 }
 
 type AcceptResponseAlreadyCommitted struct {
-	value: data
+	value: optional<data>
 }
 
 type AcceptResponseHigherBallot struct {
@@ -140,7 +141,7 @@ type AcceptResponse union {
 
 type CommitRequest struct {
 	key: data
-	value: data
+	value: optional<data>
 	ballot: Ballot
 	mutable: bool
 	version: u64
@@ -149,7 +150,7 @@ type CommitRequest struct {
 type CommitResponseOk void
 
 type CommitResponseAlreadyCommitted struct {
-	value: data
+	value: optional<data>
 }
 
 type CommitResponseStaleCommit void
@@ -195,7 +196,7 @@ type ChangelogReadRequest struct {
 
 type ChangelogEntry struct {
 	key: data
-	value: data
+	value: optional<data>
 	version: u64
 	mutable: bool
 }
@@ -228,6 +229,7 @@ type RequestKind union {
 	UpdateConfigRequest |
 	PrepareRequest |
 	PreAcceptRequest |
+	AcceptRequest |
 	CommitRequest |
 	ChangelogReadRequest |
 	HealthCheckRequest |
@@ -247,6 +249,7 @@ type ResponseKind union {
 	UpdateConfigResponse |
 	PrepareResponse |
 	PreAcceptResponse |
+	AcceptResponse |
 	CommitResponse |
 	ChangelogReadResponse |
 	HealthCheckResponse |

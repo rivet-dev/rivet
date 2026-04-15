@@ -82,7 +82,7 @@ async fn equal_ballot_accepts_do_not_overwrite_accepted_state() {
 		.await
 		.unwrap()
 		.expect("accepted value should exist after first accept");
-	assert_eq!(first_accepted.value, b"value-1".to_vec());
+	assert_eq!(first_accepted.value, Some(b"value-1".to_vec()));
 	assert_eq!(first_accepted.ballot, ballot);
 
 	let second_response = send_accept(
@@ -104,7 +104,7 @@ async fn equal_ballot_accepts_do_not_overwrite_accepted_state() {
 		.await
 		.unwrap()
 		.expect("accepted value should still exist after second accept");
-	assert_eq!(accepted.value, b"value-1".to_vec());
+	assert_eq!(accepted.value, Some(b"value-1".to_vec()));
 	assert_eq!(accepted.ballot, ballot);
 
 	let _ = test_ctx.shutdown().await;
@@ -191,7 +191,7 @@ async fn send_accept(
 			to_replica_id,
 			kind: RequestKind::AcceptRequest(AcceptRequest {
 				key: key.to_vec(),
-				value: value.to_vec(),
+				value: Some(value.to_vec()),
 				ballot,
 				mutable: true,
 				version: 1,
@@ -248,7 +248,7 @@ async fn send_commit(
 			to_replica_id: from_replica_id,
 			kind: RequestKind::CommitRequest(CommitRequest {
 				key: key.to_vec(),
-				value: value.to_vec(),
+				value: Some(value.to_vec()),
 				ballot,
 				mutable: true,
 				version: 1,

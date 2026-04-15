@@ -252,7 +252,7 @@ fn build_legacy_committed_value(
 ) -> Result<Option<CommittedValue>> {
 	if let Some(raw) = legacy_committed_value {
 		return Ok(Some(CommittedValue {
-			value: LegacyCommittedValueKey::new(key).deserialize(&raw)?,
+			value: Some(LegacyCommittedValueKey::new(key).deserialize(&raw)?),
 			version: 0,
 			mutable: false,
 		}));
