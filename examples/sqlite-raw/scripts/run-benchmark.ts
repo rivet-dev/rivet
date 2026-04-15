@@ -254,6 +254,37 @@ function formatMultiplier(value: number): string {
 	return `${value.toFixed(2)}x`;
 }
 
+function formatDelta(value: number, unit = ""): string {
+	if (value === 0) {
+		return `0${unit}`;
+	}
+
+	const sign = value > 0 ? "+" : "";
+	return `${sign}${value.toFixed(1)}${unit}`;
+}
+
+function formatCountDelta(value: number): string {
+	if (value === 0) {
+		return "0";
+	}
+
+	const sign = value > 0 ? "+" : "";
+	return `${sign}${value}`;
+}
+
+function formatPercentDelta(current: number, baseline: number): string {
+	if (baseline === 0) {
+		if (current === 0) {
+			return "0.0%";
+		}
+
+		return current > 0 ? "+inf%" : "-inf%";
+	}
+
+	const delta = ((current - baseline) / baseline) * 100;
+	return `${delta > 0 ? "+" : ""}${delta.toFixed(1)}%`;
+}
+
 function formatBytes(bytes: number): string {
 	const mb = bytes / (1024 * 1024);
 	return `${mb.toFixed(2)} MiB`;
@@ -694,6 +725,38 @@ function renderBuild(build: BuildProvenance): string {
 - Duration: \`${formatMs(build.durationMs)}\``;
 }
 
+function renderPhaseComparison(run: BenchRun, baseline: BenchRun | undefined): string {
+	if (!baseline || baseline.id === run.id) {
+		return "";
+	}
+
+	const currentTelemetry = run.benchmark.actor.vfsTelemetry;
+	const baselineTelemetry = baseline.benchmark.actor.vfsTelemetry;
+	const actorInsertDelta =
+		run.benchmark.actor.insertElapsedMs - baseline.benchmark.actor.insertElapsedMs;
+	const actorVerifyDelta =
+		run.benchmark.actor.verifyElapsedMs - baseline.benchmark.actor.verifyElapsedMs;
+	const endToEndDelta =
+		run.benchmark.delta.endToEndElapsedMs -
+		baseline.benchmark.delta.endToEndElapsedMs;
+	const immediateKvPutDelta =
+		currentTelemetry.writes.immediateKvPutCount -
+		baselineTelemetry.writes.immediateKvPutCount;
+	const batchCapDelta =
+		currentTelemetry.atomicWrite.batchCapFailureCount -
+		baselineTelemetry.atomicWrite.batchCapFailureCount;
+
+	return `#### Compared to ${phaseLabels[baseline.phase]}
+
+- Atomic write coverage: \`${formatAtomicCoverage(baselineTelemetry)}\` -> \`${formatAtomicCoverage(currentTelemetry)}\`
+- Buffered dirty pages: \`${formatDirtyPages(baselineTelemetry)}\` -> \`${formatDirtyPages(currentTelemetry)}\`
+- Immediate \`kv_put\` writes: \`${baselineTelemetry.writes.immediateKvPutCount}\` -> \`${currentTelemetry.writes.immediateKvPutCount}\` (\`${formatCountDelta(immediateKvPutDelta)}\`, \`${formatPercentDelta(currentTelemetry.writes.immediateKvPutCount, baselineTelemetry.writes.immediateKvPutCount)}\`)
+- Batch-cap failures: \`${baselineTelemetry.atomicWrite.batchCapFailureCount}\` -> \`${currentTelemetry.atomicWrite.batchCapFailureCount}\` (\`${formatCountDelta(batchCapDelta)}\`)
+- Actor DB insert: \`${formatMs(baseline.benchmark.actor.insertElapsedMs)}\` -> \`${formatMs(run.benchmark.actor.insertElapsedMs)}\` (\`${formatDelta(actorInsertDelta, "ms")}\`, \`${formatPercentDelta(run.benchmark.actor.insertElapsedMs, baseline.benchmark.actor.insertElapsedMs)}\`)
+- Actor DB verify: \`${formatMs(baseline.benchmark.actor.verifyElapsedMs)}\` -> \`${formatMs(run.benchmark.actor.verifyElapsedMs)}\` (\`${formatDelta(actorVerifyDelta, "ms")}\`, \`${formatPercentDelta(run.benchmark.actor.verifyElapsedMs, baseline.benchmark.actor.verifyElapsedMs)}\`)
+- End-to-end action: \`${formatMs(baseline.benchmark.delta.endToEndElapsedMs)}\` -> \`${formatMs(run.benchmark.delta.endToEndElapsedMs)}\` (\`${formatDelta(endToEndDelta, "ms")}\`, \`${formatPercentDelta(run.benchmark.delta.endToEndElapsedMs, baseline.benchmark.delta.endToEndElapsedMs)}\`)`;
+}
+
 function renderHistoricalReference(): string {
 	return `## Historical Reference
 
@@ -904,6 +967,13 @@ function renderMarkdown(store: BenchResultsStore): string {
 	const runLog = [...store.runs]
 		.reverse()
 		.map((run) => {
+			const phaseZeroRun =
+				run.phase === "phase-0" ? undefined : latest.get("phase-0");
+			const phaseComparison = renderPhaseComparison(run, phaseZeroRun);
+			const phaseComparisonSection = phaseComparison
+				? `\n\n${phaseComparison}`
+				: "";
+
 			return `### ${phaseLabels[run.phase]} · ${run.recordedAt}
 
 - Run ID: \`${run.id}\`
@@ -921,7 +991,7 @@ function renderMarkdown(store: BenchResultsStore): string {
 - End-to-end action: \`${formatMs(run.benchmark.delta.endToEndElapsedMs)}\`
 - Native SQLite insert: \`${formatMs(run.benchmark.native.insertElapsedMs)}\`
 - Actor DB vs native: \`${formatMultiplier(run.benchmark.delta.actorDbVsNativeMultiplier)}\`
-- End-to-end vs native: \`${formatMultiplier(run.benchmark.delta.endToEndVsNativeMultiplier)}\`
+- End-to-end vs native: \`${formatMultiplier(run.benchmark.delta.endToEndVsNativeMultiplier)}\`${phaseComparisonSection}
 
 #### VFS Telemetry
 

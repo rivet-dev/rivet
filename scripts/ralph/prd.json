@@ -110,7 +110,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "If Phase 1 removes most of the pain, that should be obvious here instead of guessed later."
     },
     {

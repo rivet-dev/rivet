@@ -18,9 +18,17 @@ const DEFAULT_READY_TIMEOUT_MS = Number(
 const DEFAULT_READY_RETRY_MS = Number(
 	process.env.BENCH_READY_RETRY_MS ?? "500",
 );
+const DEFAULT_METRICS_TIMEOUT_MS = Number(
+	process.env.BENCH_METRICS_TIMEOUT_MS ?? "1000",
+);
+const DEFAULT_METRICS_ATTEMPTS = Number(
+	process.env.BENCH_METRICS_ATTEMPTS ?? "3",
+);
 const DEFAULT_METRICS_ENDPOINT =
 	process.env.RIVET_METRICS_ENDPOINT ??
 	deriveMetricsEndpoint(DEFAULT_ENDPOINT);
+const REQUIRE_SERVER_TELEMETRY =
+	process.env.BENCH_REQUIRE_SERVER_TELEMETRY === "1";
 const JSON_OUTPUT =
 	process.argv.includes("--json") || process.env.BENCH_OUTPUT === "json";
 const DEBUG_OUTPUT = process.env.BENCH_DEBUG === "1";
@@ -84,7 +92,7 @@ interface LargeInsertBenchmarkResult {
 	rowCount: number;
 	actor: ActorBenchmarkInsertResult;
 	native: BenchmarkInsertResult;
-	serverTelemetry: SqliteServerTelemetry;
+	serverTelemetry?: SqliteServerTelemetry;
 	delta: {
 		endToEndElapsedMs: number;
 		overheadOutsideDbInsertMs: number;
@@ -187,12 +195,12 @@ function parsePrometheusMetrics(text: string): MetricsSnapshot {
 
 async function fetchMetricsSnapshot(
 	metricsEndpoint: string,
-): Promise<MetricsSnapshot> {
+): Promise<MetricsSnapshot | undefined> {
 	let lastError: unknown;
-	for (let attempt = 0; attempt < 20; attempt += 1) {
+	for (let attempt = 0; attempt < DEFAULT_METRICS_ATTEMPTS; attempt += 1) {
 		try {
 			const response = await fetch(metricsEndpoint, {
-				signal: AbortSignal.timeout(5000),
+				signal: AbortSignal.timeout(DEFAULT_METRICS_TIMEOUT_MS),
 			});
 			if (!response.ok) {
 				throw new Error(
@@ -207,9 +215,21 @@ async function fetchMetricsSnapshot(
 		}
 	}
 
-	throw new Error(
-		`Failed to fetch metrics from ${metricsEndpoint}: ${String(lastError)}`,
-	);
+	if (REQUIRE_SERVER_TELEMETRY) {
+		throw new Error(
+			`Failed to fetch metrics from ${metricsEndpoint}: ${String(lastError)}`,
+		);
+	}
+
+	debug("metrics scrape unavailable; continuing without server telemetry", {
+		metricsEndpoint,
+		error:
+			lastError instanceof Error
+				? { name: lastError.name, message: lastError.message }
+				: lastError,
+	});
+
+	return undefined;
 }
 
 function metricDelta(
@@ -578,11 +598,14 @@ async function runLargeInsertBenchmark(): Promise<LargeInsertBenchmarkResult> {
 		rowCount,
 		actor: actorResult,
 		native: nativeResult,
-		serverTelemetry: buildServerTelemetry(
-			metricsBefore,
-			metricsAfter,
-			DEFAULT_METRICS_ENDPOINT,
-		),
+		serverTelemetry:
+			metricsBefore && metricsAfter
+				? buildServerTelemetry(
+						metricsBefore,
+						metricsAfter,
+						DEFAULT_METRICS_ENDPOINT,
+					)
+				: undefined,
 		delta: {
 			endToEndElapsedMs,
 			overheadOutsideDbInsertMs:
@@ -623,10 +646,14 @@ async function main() {
 		`  overhead outside db insert: ${formatMs(result.delta.overheadOutsideDbInsertMs)}`,
 	);
 	console.log(
-		`  server write requests: ${result.serverTelemetry.writes.requestCount}, dirty pages: ${result.serverTelemetry.writes.dirtyPageCount}, request bytes: ${formatBytes(result.serverTelemetry.writes.requestBytes)}`,
+		result.serverTelemetry
+			? `  server write requests: ${result.serverTelemetry.writes.requestCount}, dirty pages: ${result.serverTelemetry.writes.dirtyPageCount}, request bytes: ${formatBytes(result.serverTelemetry.writes.requestBytes)}`
+			: "  server telemetry: unavailable",
 	);
 	console.log(
-		`  server estimate_kv_size: ${formatMs(result.serverTelemetry.writes.estimateKvSizeDurationUs / 1000)}, clear-and-rewrite: ${formatMs(result.serverTelemetry.writes.clearAndRewriteDurationUs / 1000)}`,
+		result.serverTelemetry
+			? `  server estimate_kv_size: ${formatMs(result.serverTelemetry.writes.estimateKvSizeDurationUs / 1000)}, clear-and-rewrite: ${formatMs(result.serverTelemetry.writes.clearAndRewriteDurationUs / 1000)}`
+			: "  server estimate_kv_size: unavailable, clear-and-rewrite: unavailable",
 	);
 
 	console.log("");

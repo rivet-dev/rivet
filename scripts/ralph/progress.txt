@@ -6,6 +6,7 @@
 - When an example needs the registry from scripts, split the shared setup into `src/registry.ts` and keep `src/index.ts` as the autostart entrypoint so benchmarks can import the registry without side effects.
 - When native SQLite buffering defers truncates until sync, keep a logical delete boundary like `pending_delete_start` so reads and partial writes treat truncated chunks as missing before the remote `delete_range` flushes.
 - For native SQLite VFS durability tests, prefer direct `kv_vfs_open` plus `kv_io_sync` or `kv_io_close` coverage when SQL-level commit ordering makes failpoint injection nondeterministic.
+- Run `examples/sqlite-raw` `bench:record --fresh-engine` with `RUST_LOG=error` so the engine child keeps writing to `/tmp/sqlite-raw-bench-engine.log` without flooding the recorder stdout.
 
 Started: Wed Apr 15 04:03:14 AM PDT 2026
 ---
@@ -61,4 +62,12 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - SQL-level commit scheduling is not deterministic enough for commit-failure failpoints in this VFS, so direct `kv_vfs_open` plus `kv_io_sync` tests are the reliable harness for buffered durability failures.
   - Use shared in-memory KV state across multiple `open_database_with_kv` calls to verify graceful stop and crash-style reopen semantics without inventing a separate persistence shim.
   - `cargo test -p rivetkit-sqlite-native` remains the right quality gate for these durability stories because it exercises both the SQL-level reopen paths and the low-level VFS callbacks in one package.
+---
+## 2026-04-15 06:50:36 PDT - US-007
+- Recorded the fresh-engine Phase 1 benchmark in `examples/sqlite-raw/bench-results.json` and regenerated `examples/sqlite-raw/BENCH_RESULTS.md` with an explicit `Compared to Phase 0` delta block.
+- Files changed: `examples/AGENTS.md`, `examples/sqlite-raw/BENCH_RESULTS.md`, `examples/sqlite-raw/bench-results.json`, `examples/sqlite-raw/scripts/bench-large-insert.ts`, `examples/sqlite-raw/scripts/run-benchmark.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `RUST_LOG=error pnpm --dir examples/sqlite-raw run bench:record -- --phase phase-1 --fresh-engine` keeps the recorder output usable while still capturing the engine log at `/tmp/sqlite-raw-bench-engine.log`.
+  - The current branch did not like a temp `RIVET__FILE_SYSTEM__PATH` for fresh benchmark engines. The workflow worker crashed on `ActiveWorkerIdxKey` decoding, so Phase 1 was recorded against the normal local RocksDB path.
+  - Phase 1 on commit `dc5ba87b2410a02a1e64c315156d0bd491ef5785` dropped actor insert from `15875.9ms` to `898.2ms`, verify from `23848.9ms` to `3927.6ms`, end-to-end from `40000.7ms` to `4922.9ms`, and immediate `kv_put` fallbacks from `2589` to `0`.
 ---
