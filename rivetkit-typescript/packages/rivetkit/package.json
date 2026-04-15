@@ -126,6 +126,16 @@
 				"default": "./dist/tsup/inspector/mod.cjs"
 			}
 		},
+		"./inspector-tab": {
+			"import": {
+				"types": "./dist/tsup/inspector-tab/mod.d.ts",
+				"default": "./dist/tsup/inspector-tab/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/inspector-tab/mod.d.cts",
+				"default": "./dist/tsup/inspector-tab/mod.cjs"
+			}
+		},
 		"./inspector/client": {
 			"import": {
 				"types": "./dist/browser/inspector/client.d.ts",
@@ -161,7 +171,7 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/utils.ts src/workflow/mod.ts src/test/mod.ts src/inspector/mod.ts src/db/mod.ts src/db/drizzle.ts src/dynamic/mod.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/utils.ts src/workflow/mod.ts src/test/mod.ts src/inspector/mod.ts src/inspector-tab/mod.ts src/db/mod.ts src/db/drizzle.ts src/dynamic/mod.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
 		"build:browser": "tsup --config tsup.browser.config.ts",
 		"check-types": "tsc --noEmit",
 		"lint": "biome check . && pnpm run check:test-skips && pnpm run check:wait-for-comments",

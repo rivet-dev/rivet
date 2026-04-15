@@ -735,6 +735,88 @@ const RunInspectorConfigSchema = z
 	})
 	.optional();
 
+/**
+ * Built-in inspector tabs the dashboard ships. Used to validate
+ * `hidden: true` entries and reject custom-tab ids that collide with
+ * a built-in.
+ */
+export const BUILTIN_INSPECTOR_TAB_IDS = [
+	"workflow",
+	"database",
+	"state",
+	"queue",
+	"connections",
+	"console",
+] as const;
+
+export const BuiltinInspectorTabIdSchema = z.enum(BUILTIN_INSPECTOR_TAB_IDS);
+
+// Custom tab id grammar — mirrored in Rust at
+// `rivetkit-rust/packages/rivetkit-core/src/inspector/tabs.rs`. Slashes are
+// forbidden because the runtime splits `/inspector/custom-tabs/<id>/<rest>`
+// on the first `/`.
+const CUSTOM_INSPECTOR_TAB_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+export const CustomInspectorTabEntrySchema = z
+	.object({
+		id: z
+			.string()
+			.regex(
+				CUSTOM_INSPECTOR_TAB_ID_RE,
+				"inspector.tabs[].id must contain only letters, digits, underscore, or dash",
+			),
+		label: z.string().min(1),
+		source: z.string().min(1),
+		/**
+		 * Optional icon id. The dashboard maps strings to glyphs (see its
+		 * icon registry); unknown ids fall back to a generic icon.
+		 */
+		icon: z.string().min(1).optional(),
+		hidden: z.literal(false).optional(),
+	})
+	.strict();
+
+export const HideInspectorTabEntrySchema = z
+	.object({
+		id: BuiltinInspectorTabIdSchema,
+		hidden: z.literal(true),
+	})
+	.strict();
+
+export const InspectorTabEntrySchema = z.union([
+	CustomInspectorTabEntrySchema,
+	HideInspectorTabEntrySchema,
+]);
+
+export const ActorInspectorConfigSchema = z
+	.object({
+		tabs: z.array(InspectorTabEntrySchema).default(() => []),
+	})
+	.strict()
+	.refine(
+		(data) => {
+			const ids = data.tabs.map((t) => t.id);
+			return new Set(ids).size === ids.length;
+		},
+		{ message: "Duplicate id in inspector.tabs", path: ["tabs"] },
+	)
+	.refine(
+		(data) => {
+			// A custom entry's id must not collide with a built-in id.
+			const builtinSet = new Set(BUILTIN_INSPECTOR_TAB_IDS);
+			return data.tabs.every(
+				(t) => t.hidden === true || !builtinSet.has(t.id as any),
+			);
+		},
+		{
+			message:
+				"Custom inspector tab id collides with a built-in (use hidden: true to hide a built-in)",
+			path: ["tabs"],
+		},
+	);
+
+export type ActorInspectorConfig = z.input<typeof ActorInspectorConfigSchema>;
+
 // Schema for run handler with metadata
 export const RunConfigSchema = z.object({
 	/** Display name for the actor in the Inspector UI. */
@@ -951,6 +1033,7 @@ export const ActorConfigSchema = z
 		db: z.any().optional(),
 		createVars: zFunction().optional(),
 		options: ActorOptionsSchema,
+		inspector: ActorInspectorConfigSchema.optional(),
 	})
 	.strict()
 	.refine(

@@ -23,7 +23,6 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import z from "zod";
 import { type ConnectionStatus, useWebSocket } from "../hooks/use-websocket";
-import { useActorInspectorData } from "./hooks/use-actor-inspector-data";
 import type { ActorId } from "./queries";
 import { transformWorkflowHistory } from "./workflow/transform-workflow-history";
 import type { WorkflowHistory } from "./workflow/workflow-types";
@@ -47,6 +46,8 @@ export const actorInspectorQueriesKeys = {
 		["actor", actorId, "workflow-history"] as const,
 	actorIsWorkflowEnabled: (actorId: ActorId) =>
 		["actor", actorId, "is-workflow-enabled"] as const,
+	actorTabConfig: (actorId: ActorId) =>
+		["actor", actorId, "tab-config"] as const,
 };
 
 type QueueStatusSummary = {
@@ -97,6 +98,13 @@ export type DatabaseExecuteRequest = {
 	properties?: Record<string, unknown>;
 };
 
+export type InspectorTabConfigEntry = {
+	id: string;
+	label?: string;
+	icon?: string | null;
+	hidden?: boolean;
+};
+
 interface ActorInspectorApi {
 	ping: () => Promise<void>;
 	executeAction: (name: string, args: unknown[]) => Promise<unknown>;
@@ -124,6 +132,7 @@ interface ActorInspectorApi {
 		request: DatabaseExecuteRequest,
 	) => Promise<DatabaseExecuteResult>;
 	getMetadata: () => Promise<{ version: string }>;
+	getTabConfig: () => Promise<{ tabs: InspectorTabConfigEntry[] }>;
 }
 
 type FeatureSupport = {
@@ -172,7 +181,10 @@ function compareSemver(
 	return a.patch - b.patch;
 }
 
-function isVersionAtLeast(version: string | undefined, minVersion: string) {
+export function isVersionAtLeast(
+	version: string | undefined,
+	minVersion: string,
+) {
 	const parsed = parseSemver(version);
 	const minParsed = parseSemver(minVersion);
 	if (!parsed || !minParsed) {
@@ -412,6 +424,14 @@ export const createDefaultActorInspectorContext = ({
 		});
 	},
 
+	actorTabConfigQueryOptions(actorId: ActorId) {
+		return queryOptions({
+			staleTime: Infinity,
+			queryKey: actorInspectorQueriesKeys.actorTabConfig(actorId),
+			queryFn: () => api.getTabConfig(),
+		});
+	},
+
 	actorWorkflowReplayMutation(actorId: ActorId) {
 		return mutationOptions({
 			mutationKey: ["actor", actorId, "workflow", "replay"],
@@ -624,7 +644,7 @@ export type ActorInspectorContext = ReturnType<
 	};
 };
 
-const ActorInspectorContext = createContext({} as ActorInspectorContext);
+export const ActorInspectorContext = createContext({} as ActorInspectorContext);
 
 export const useActorInspector = () => useContext(ActorInspectorContext);
 
@@ -662,9 +682,12 @@ export const ActorInspectorProvider = ({
 		},
 	);
 
-	const { isSuccess: isActorDataSuccess } = useActorInspectorData(actorId);
-
-	const isInspectorAvailable = isActorMetadataSuccess && isActorDataSuccess;
+	// The provider is "available" as soon as the actor's metadata fetch
+	// resolves — that proves the credentials reach the actor and the
+	// inspector protocol version is known. No separate data-provider gate is
+	// needed; callers that need to fetch the inspector token before mounting
+	// this provider do so themselves.
+	const isInspectorAvailable = isActorMetadataSuccess;
 	const rivetkitVersion = actorMetadata?.version;
 	const inspectorProtocolVersion = useMemo(
 		() => getInspectorProtocolVersion(rivetkitVersion),
@@ -994,6 +1017,47 @@ export const ActorInspectorProvider = ({
 
 			getMetadata() {
 				return getActorMetadataProxy.current();
+			},
+
+			getTabConfig: async () => {
+				// Unauthenticated route — descriptors are public.
+				let response: Response;
+				try {
+					response = await fetch(
+						`${computeActorUrl({ ...credentials, actorId })}/inspector/tab-config`,
+						{ signal: AbortSignal.timeout(10_000) },
+					);
+				} catch (err) {
+					if (
+						err instanceof DOMException &&
+						err.name === "TimeoutError"
+					) {
+						throw new Error(
+							"Inspector tab-config request timed out after 10s — the actor may be sleeping or unreachable.",
+						);
+					}
+					throw err;
+				}
+				if (!response.ok) {
+					throw new Error(
+						`Inspector tab-config request failed: ${response.status}`,
+					);
+				}
+				const payload = await response.json();
+				return z
+					.object({
+						tabs: z.array(
+							z.object({
+								id: z.string(),
+								label: z.string().optional(),
+								// Server emits null when not set; tolerate both
+								// and coerce to undefined at the consumer.
+								icon: z.string().nullable().optional(),
+								hidden: z.boolean().optional(),
+							}),
+						),
+					})
+					.parse(payload);
 			},
 		} satisfies ActorInspectorApi;
 	}, [

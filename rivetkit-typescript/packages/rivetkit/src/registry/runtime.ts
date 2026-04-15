@@ -225,6 +225,22 @@ export interface RuntimeActorConfig {
 	preloadMaxWorkflowBytes?: number;
 	preloadMaxConnectionsBytes?: number;
 	actions?: Array<{ name: string }>;
+	inspectorTabs?: Array<RuntimeInspectorTabEntry>;
+}
+
+export interface RuntimeInspectorTabEntry {
+	id: string;
+	/** Required for custom entries; omitted for built-in hides. */
+	label?: string;
+	/**
+	 * Required for custom entries — absolute path to the source directory.
+	 * Resolved on the TS side before being handed to the runtime.
+	 */
+	source?: string;
+	/** Optional icon id for custom entries. */
+	icon?: string;
+	/** Set to true for built-in hide entries. */
+	hidden?: boolean;
 }
 
 export interface RuntimeServeConfig {

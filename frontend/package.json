@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:inspector": "vite build --config vite.inspector-ui.config.ts --watch",
     "check-types": "tsc --noEmit",
     "build": "NODE_OPTIONS='--max-old-space-size=8192' vite build --mode=production",
     "preview": "vite preview",
@@ -12,6 +13,8 @@
     "test:watch": "vitest",
     "dev:ladle": "ladle dev",
     "build:inspector": "NODE_OPTIONS='--max-old-space-size=8192' vite build --config vite.inspector.config.ts --mode=production",
+    "build:inspector-ui": "NODE_OPTIONS='--max-old-space-size=8192' vite build --config vite.inspector-ui.config.ts --mode=production && node scripts/generate-inspector-tab-css.mjs",
+    "build:inspector-tab-css": "node scripts/generate-inspector-tab-css.mjs",
     "build:ladle": "ladle build"
   },
   "dependencies": {

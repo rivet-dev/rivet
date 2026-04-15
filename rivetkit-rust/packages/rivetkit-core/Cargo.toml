@@ -22,6 +22,10 @@ sqlite = ["sqlite-local"]
 sqlite-local = ["native-runtime", "dep:async-trait", "dep:depot-client"]
 sqlite-remote = []
 
+[build-dependencies]
+anyhow.workspace = true
+fs_extra = { workspace = true }
+
 [dependencies]
 anyhow.workspace = true
 async-trait = { workspace = true, optional = true }
@@ -29,6 +33,7 @@ base64.workspace = true
 ciborium.workspace = true
 futures.workspace = true
 http.workspace = true
+include_dir = { workspace = true }
 nix = { workspace = true, optional = true }
 parking_lot.workspace = true
 rand.workspace = true

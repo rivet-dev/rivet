@@ -25,7 +25,7 @@ import {
 import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
 import { ActorIcon } from "@/components/lazy-icon";
 import { VisibilitySensor } from "@/components/visibility-sensor";
-import { cloudEnv } from "@/lib/env";
+import { cloudEnv, getRivetRunUrl } from "@/lib/env";
 import { features } from "@/lib/features";
 import { getRivetRunUrl } from "../lib/env";
 

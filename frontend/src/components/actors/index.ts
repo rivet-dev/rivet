@@ -3,6 +3,7 @@ export * from "./actor-region";
 export * from "./actor-status-indicator";
 export * from "./actor-status-label";
 export * from "./actor-tags";
+export * from "./actor-details-iframe";
 export * from "./actors-actor-details";
 export * from "./actors-layout-context";
 export * from "./actors-list-preview";

@@ -47,6 +47,26 @@ export interface JsQueueSendResult {
 export interface JsActionDefinition {
   name: string
 }
+/**
+ * One entry in the actor's `inspector.tabs[]` declaration. Either a
+ * custom-tab descriptor (id + label + source dir) or a built-in modifier
+ * (id + hidden=true). Validation already happened on the TS side; the
+ * runtime just splits the discriminator.
+ */
+export interface JsInspectorTabEntry {
+  id: string
+  /** Required for custom entries; omitted for HideBuiltin. */
+  label?: string
+  /** Required for custom entries — absolute path to the source directory. */
+  source?: string
+  /**
+   * Optional icon id for custom entries. Dashboard maps strings to
+   * glyphs; unknown ids fall back to a generic icon.
+   */
+  icon?: string
+  /** Set to true for HideBuiltin entries. */
+  hidden?: boolean
+}
 export interface JsActorConfig {
   name?: string
   icon?: string
@@ -78,6 +98,7 @@ export interface JsActorConfig {
   preloadMaxWorkflowBytes?: number
   preloadMaxConnectionsBytes?: number
   actions?: Array<JsActionDefinition>
+  inspectorTabs?: Array<JsInspectorTabEntry>
 }
 export interface JsBindParam {
   kind: string

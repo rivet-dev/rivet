@@ -1,0 +1,212 @@
+/*
+ * Inspector-tab alias layer. Pairs with the dashboard's `theme.css`
+ * (concatenated by `generate-inspector-tab-css.mjs`) to expose every
+ * dashboard token under a `--rivet-` prefix so tab authors can use them
+ * without colliding with their own unprefixed CSS variables.
+ *
+ * When `theme.css` gains a new token, add a matching alias here.
+ *
+ * The dashboard's token values are stored as raw HSL components (e.g.
+ * `240 6% 4%`) so they can be wrapped with alpha modifiers:
+ *
+ *   .overlay { background: hsl(var(--background) / 0.6); }
+ *
+ * The `--rivet-*` aliases below produce pre-wrapped color values for
+ * convenience. Reach for `hsl(var(--rivet-card-raw) / 0.6)` (or just
+ * `hsl(var(--card) / 0.6)`) when you need alpha.
+ */
+
+:root {
+	/* Raw HSL components, mirrored so authors can reach for the
+	 * `--rivet-*-raw` name even if their own code defines `--background`. */
+	--rivet-background-raw: var(--background);
+	--rivet-foreground-raw: var(--foreground);
+	--rivet-card-raw: var(--card);
+	--rivet-card-foreground-raw: var(--card-foreground);
+	--rivet-popover-raw: var(--popover);
+	--rivet-popover-foreground-raw: var(--popover-foreground);
+	--rivet-primary-raw: var(--primary);
+	--rivet-primary-foreground-raw: var(--primary-foreground);
+	--rivet-secondary-raw: var(--secondary);
+	--rivet-secondary-foreground-raw: var(--secondary-foreground);
+	--rivet-muted-raw: var(--muted);
+	--rivet-muted-foreground-raw: var(--muted-foreground);
+	--rivet-accent-raw: var(--accent);
+	--rivet-accent-foreground-raw: var(--accent-foreground);
+	--rivet-destructive-raw: var(--destructive);
+	--rivet-destructive-foreground-raw: var(--destructive-foreground);
+	--rivet-border-raw: var(--border);
+	--rivet-input-raw: var(--input);
+	--rivet-ring-raw: var(--ring);
+
+	/* Pre-wrapped color tokens for direct use. */
+	--rivet-background: hsl(var(--background));
+	--rivet-foreground: hsl(var(--foreground));
+	--rivet-card: hsl(var(--card));
+	--rivet-card-foreground: hsl(var(--card-foreground));
+	--rivet-popover: hsl(var(--popover));
+	--rivet-popover-foreground: hsl(var(--popover-foreground));
+	--rivet-primary: hsl(var(--primary));
+	--rivet-primary-foreground: hsl(var(--primary-foreground));
+	--rivet-secondary: hsl(var(--secondary));
+	--rivet-secondary-foreground: hsl(var(--secondary-foreground));
+	--rivet-muted: hsl(var(--muted));
+	--rivet-muted-foreground: hsl(var(--muted-foreground));
+	--rivet-accent: hsl(var(--accent));
+	--rivet-accent-foreground: hsl(var(--accent-foreground));
+	--rivet-destructive: hsl(var(--destructive));
+	--rivet-destructive-foreground: hsl(var(--destructive-foreground));
+	--rivet-border: hsl(var(--border));
+	--rivet-input: hsl(var(--input));
+	--rivet-ring: hsl(var(--ring));
+
+	--rivet-radius: var(--radius);
+	--rivet-radius-sm: calc(var(--rivet-radius) - 4px);
+	--rivet-radius-md: calc(var(--rivet-radius) - 2px);
+	--rivet-radius-lg: var(--rivet-radius);
+
+	/* Font stacks — match the dashboard's Tailwind preset. */
+	--rivet-font-sans:
+		"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+	--rivet-font-mono:
+		"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	/* Spacing scale — Tailwind's default (4 px base). */
+	--rivet-space-1: 4px;
+	--rivet-space-2: 8px;
+	--rivet-space-3: 12px;
+	--rivet-space-4: 16px;
+	--rivet-space-5: 20px;
+	--rivet-space-6: 24px;
+	--rivet-space-8: 32px;
+	--rivet-space-10: 40px;
+	--rivet-space-12: 48px;
+}
+
+/* Browser color-scheme follows the dashboard's class. */
+:root { color-scheme: light; }
+:root[class~="dark"] { color-scheme: dark; }
+
+/* ============================================================
+ * Reset + sensible defaults so a bare tab looks at home.
+ * Low-specificity — override freely in your own stylesheet.
+ * ============================================================ */
+
+html, body {
+	margin: 0;
+	padding: 0;
+	background: var(--rivet-background);
+	color: var(--rivet-foreground);
+	font-family: var(--rivet-font-sans);
+	font-size: 14px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }
+
+h1, h2, h3, h4, h5, h6 {
+	margin: 0;
+	font-weight: 600;
+	color: var(--rivet-foreground);
+}
+h1 { font-size: 18px; }
+h2 { font-size: 16px; }
+h3 { font-size: 14px; }
+
+a { color: var(--rivet-primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+p { margin: 0; }
+
+code, pre, kbd, samp {
+	font-family: var(--rivet-font-mono);
+	font-size: 0.9em;
+}
+
+hr {
+	border: none;
+	border-top: 1px solid var(--rivet-border);
+	margin: var(--rivet-space-4) 0;
+}
+
+button {
+	font-family: inherit;
+	font-size: 13px;
+	font-weight: 500;
+	padding: var(--rivet-space-2) var(--rivet-space-4);
+	border-radius: var(--rivet-radius-sm);
+	border: 1px solid var(--rivet-border);
+	background: var(--rivet-secondary);
+	color: var(--rivet-foreground);
+	cursor: pointer;
+	transition: background 150ms ease, border-color 150ms ease;
+}
+button:hover:not(:disabled) { background: var(--rivet-muted); }
+button:focus-visible {
+	outline: 2px solid var(--rivet-ring);
+	outline-offset: 2px;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+button.rivet-primary {
+	background: var(--rivet-primary);
+	border-color: var(--rivet-primary);
+	color: var(--rivet-primary-foreground);
+}
+button.rivet-primary:hover:not(:disabled) { filter: brightness(1.1); }
+
+button.rivet-danger {
+	background: var(--rivet-destructive);
+	border-color: var(--rivet-destructive);
+	color: var(--rivet-destructive-foreground);
+}
+
+input, textarea, select {
+	font-family: inherit;
+	font-size: 13px;
+	padding: var(--rivet-space-2) var(--rivet-space-3);
+	border-radius: var(--rivet-radius-sm);
+	border: 1px solid var(--rivet-border);
+	background: var(--rivet-input);
+	color: var(--rivet-foreground);
+}
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+	outline: 2px solid var(--rivet-ring);
+	outline-offset: 2px;
+}
+
+.rivet-card {
+	border: 1px solid var(--rivet-border);
+	border-radius: var(--rivet-radius-md);
+	background: var(--rivet-card);
+	color: var(--rivet-card-foreground);
+}
+
+.rivet-section-header {
+	padding: var(--rivet-space-3) var(--rivet-space-4);
+	border-bottom: 1px solid var(--rivet-border);
+	color: var(--rivet-muted-foreground);
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.rivet-section-body {
+	padding: var(--rivet-space-3) var(--rivet-space-4);
+}
+
+.rivet-muted { color: var(--rivet-muted-foreground); }
+.rivet-mono  { font-family: var(--rivet-font-mono); }
+
+.rivet-error {
+	color: var(--rivet-destructive);
+	background: hsl(var(--destructive) / 0.1);
+	padding: var(--rivet-space-3) var(--rivet-space-4);
+	border-radius: var(--rivet-radius-sm);
+	font-family: var(--rivet-font-mono);
+	font-size: 12px;
+	white-space: pre-wrap;
+}

@@ -332,6 +332,10 @@ export const sitemap = [
 								href: "/docs/actors/debugging",
 							},
 							{
+								title: "Custom Inspector Tabs",
+								href: "/docs/actors/inspector-tabs",
+							},
+							{
 								title: "AI & User-Generated Actors",
 								href: "/docs/actors/ai-and-user-generated-actors",
 							},

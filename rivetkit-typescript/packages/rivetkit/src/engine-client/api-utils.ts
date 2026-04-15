@@ -12,7 +12,7 @@ export { RivetError as EngineApiError };
 export function getEndpoint(config: ClientConfig | RegistryConfig) {
 	// Endpoint is always defined for ClientConfig (has default in schema).
 	// RegistryConfig may not have endpoint before the local runtime is prepared.
-	return config.endpoint ?? "http://127.0.0.1:6423";
+	return config.endpoint ?? "http://127.0.0.1:6420";
 }
 
 // Helper function for making API calls

@@ -6,8 +6,10 @@ use parking_lot::RwLock;
 
 pub mod auth;
 pub(crate) mod protocol;
+pub mod tabs;
 
 pub use auth::{InspectorAuth, init_inspector_token, set_test_inspector_token_override};
+pub use tabs::{BUILTIN_TAB_IDS, InspectorTabEntry, validate_inspector_tabs};
 
 type InspectorListener = Arc<dyn Fn(InspectorSignal) + Send + Sync>;
 
