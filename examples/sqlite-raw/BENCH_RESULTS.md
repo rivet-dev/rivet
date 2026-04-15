@@ -10,6 +10,12 @@ This file is generated from `bench-results.json` by
 - Later phases should append by rerunning `bench:record`, not by inventing a
   new markdown format.
 
+## Recovery
+
+- If a fresh-engine run records the JSON result but cleanup gets interrupted, rerender with
+  `pnpm --dir examples/sqlite-raw run bench:record -- --render-only`.
+- Do not hand-edit `BENCH_RESULTS.md`. The JSON log is the source of truth.
+
 ## Benchmark Modes
 
 - Use `pnpm --dir examples/sqlite-raw run bench:record -- --phase <phase>` for the inline local benchmark path. It is the right tool for actor-side VFS changes and keeps the existing phase history comparable.

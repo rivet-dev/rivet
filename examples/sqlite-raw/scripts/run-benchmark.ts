@@ -30,8 +30,15 @@ const defaultRunnerLogPath = "/tmp/sqlite-raw-bench-runner.log";
 const defaultRemotePayloadMiB = process.env.BENCH_REMOTE_MB ?? "0.05";
 const defaultFreshEngineReadyTimeoutMs =
 	process.env.BENCH_READY_TIMEOUT_MS ?? "300000";
-const defaultRustLog =
-	"opentelemetry_sdk=off,opentelemetry-otlp=info,tower::buffer::worker=info,debug";
+const defaultRustLog = "error";
+const defaultFreshEngineWorkerShutdownSeconds =
+	process.env.RIVET_RUNTIME__WORKER_SHUTDOWN_DURATION ?? "5";
+const defaultFreshEngineGuardShutdownSeconds =
+	process.env.RIVET_RUNTIME__GUARD_SHUTDOWN_DURATION ?? "5";
+const defaultFreshEngineForceShutdownSeconds =
+	process.env.RIVET_RUNTIME__FORCE_SHUTDOWN_DURATION ?? "10";
+const defaultGracefulStopWaitMs = 12_000;
+const defaultForceStopWaitMs = 2_000;
 
 type PhaseKey = (typeof phaseOrder)[number];
 type BenchmarkRunnerMode = "inline" | "remote";
@@ -794,6 +801,15 @@ async function startFreshEngine(endpoint: string): Promise<{
 			RUST_BACKTRACE: "full",
 			RUST_LOG: process.env.RUST_LOG ?? defaultRustLog,
 			RUST_LOG_TARGET: "1",
+			RIVET_RUNTIME__WORKER_SHUTDOWN_DURATION:
+				process.env.RIVET_RUNTIME__WORKER_SHUTDOWN_DURATION ??
+				defaultFreshEngineWorkerShutdownSeconds,
+			RIVET_RUNTIME__GUARD_SHUTDOWN_DURATION:
+				process.env.RIVET_RUNTIME__GUARD_SHUTDOWN_DURATION ??
+				defaultFreshEngineGuardShutdownSeconds,
+			RIVET_RUNTIME__FORCE_SHUTDOWN_DURATION:
+				process.env.RIVET_RUNTIME__FORCE_SHUTDOWN_DURATION ??
+				defaultFreshEngineForceShutdownSeconds,
 		},
 	});
 
@@ -817,17 +833,90 @@ async function startFreshEngine(endpoint: string): Promise<{
 	return { child, logPath: defaultLogPath };
 }
 
-function stopFreshEngine(child: ReturnType<typeof spawn>): Promise<void> {
+function childHasExited(child: ReturnType<typeof spawn>): boolean {
+	return child.exitCode !== null || child.signalCode !== null;
+}
+
+function waitForChildExit(child: ReturnType<typeof spawn>): Promise<void> {
 	return new Promise((resolve, reject) => {
-		if (child.exitCode !== null) {
+		if (childHasExited(child)) {
 			resolve();
 			return;
 		}
 
-		child.once("exit", () => resolve());
-		child.once("error", reject);
-		child.kill("SIGTERM");
+		const handleExit = () => {
+			cleanup();
+			resolve();
+		};
+		const handleError = (error: Error) => {
+			cleanup();
+			reject(error);
+		};
+		const cleanup = () => {
+			child.off("exit", handleExit);
+			child.off("error", handleError);
+		};
+
+		child.once("exit", handleExit);
+		child.once("error", handleError);
 	});
+}
+
+async function stopChildProcess(
+	child: ReturnType<typeof spawn>,
+	label: string,
+): Promise<void> {
+	if (childHasExited(child)) {
+		return;
+	}
+
+	const exitPromise = waitForChildExit(child);
+	try {
+		child.kill("SIGTERM");
+	} catch (error) {
+		if (!childHasExited(child)) {
+			throw error;
+		}
+	}
+
+	const gracefulResult = await Promise.race([
+		exitPromise.then(() => "exited" as const),
+		new Promise<"timeout">((resolve) =>
+			setTimeout(() => resolve("timeout"), defaultGracefulStopWaitMs),
+		),
+	]);
+	if (gracefulResult === "exited") {
+		return;
+	}
+
+	console.warn(
+		`${label} did not exit ${defaultGracefulStopWaitMs}ms after SIGTERM. Sending SIGKILL.`,
+	);
+	try {
+		child.kill("SIGKILL");
+	} catch (error) {
+		if (!childHasExited(child)) {
+			throw error;
+		}
+	}
+
+	const forcedResult = await Promise.race([
+		exitPromise.then(() => "exited" as const),
+		new Promise<"timeout">((resolve) =>
+			setTimeout(() => resolve("timeout"), defaultForceStopWaitMs),
+		),
+	]);
+	if (forcedResult === "exited") {
+		return;
+	}
+
+	throw new Error(
+		`${label} still had not exited ${defaultForceStopWaitMs}ms after SIGKILL.`,
+	);
+}
+
+function stopFreshEngine(child: ReturnType<typeof spawn>): Promise<void> {
+	return stopChildProcess(child, "Fresh engine process");
 }
 
 function buildRemoteRunnerCommand(endpoint: string): string {
@@ -906,16 +995,7 @@ async function startRemoteRunner(endpoint: string): Promise<{
 }
 
 function stopRemoteRunner(child: ReturnType<typeof spawn>): Promise<void> {
-	return new Promise((resolve, reject) => {
-		if (child.exitCode !== null) {
-			resolve();
-			return;
-		}
-
-		child.once("exit", () => resolve());
-		child.once("error", reject);
-		child.kill("SIGTERM");
-	});
+	return stopChildProcess(child, "Remote runner process");
 }
 
 function parseBenchmarkOutput(stdout: string): LargeInsertBenchmarkResult {
@@ -1641,6 +1721,12 @@ This file is generated from \`bench-results.json\` by
 - The rendered summary lives in \`examples/sqlite-raw/BENCH_RESULTS.md\`.
 - Later phases should append by rerunning \`bench:record\`, not by inventing a
   new markdown format.
+
+## Recovery
+
+- If a fresh-engine run records the JSON result but cleanup gets interrupted, rerender with
+  \`pnpm --dir examples/sqlite-raw run bench:record -- --render-only\`.
+- Do not hand-edit \`BENCH_RESULTS.md\`. The JSON log is the source of truth.
 
 ## Benchmark Modes
 

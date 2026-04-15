@@ -296,7 +296,7 @@
         "Typecheck passes"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "The direct PTY-backed benchmark completed reliably, but the canonical final-phase recorder path could still wedge after the measurement landed."
     }
   ]

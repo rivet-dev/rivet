@@ -1,5 +1,6 @@
 # Ralph Progress Log
 ## Codebase Patterns
+- Fresh `examples/sqlite-raw` recorder runs that spawn a local engine need short `RIVET_RUNTIME__WORKER_SHUTDOWN_DURATION`, `RIVET_RUNTIME__GUARD_SHUTDOWN_DURATION`, and `RIVET_RUNTIME__FORCE_SHUTDOWN_DURATION` overrides plus a force-kill fallback. The engine defaults can otherwise spend about an hour draining guard on SIGTERM.
 - Compare sqlite phase regressions only with canonical `pnpm --dir examples/sqlite-raw run bench:record -- --phase <phase> --fresh-engine` runs. The phase label itself is just metadata.
 - If a sqlite benchmark slowdown keeps the same fast-path attempts, request bytes, and sync time but VFS read time jumps, treat it as verify or read noise before blaming the write path.
 - Use `examples/sqlite-raw/bench-results.json` as the append-only benchmark source of truth, and regenerate `examples/sqlite-raw/BENCH_RESULTS.md` from it with `pnpm --dir examples/sqlite-raw run bench:record -- --render-only`.
@@ -183,4 +184,13 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - `bench:record -- --phase <phase> --fresh-engine` is the only comparable inline phase workflow. The older PTY-backed US-015 final command belongs in history, not in canonical variance math.
   - On this branch, the fastest and slowest canonical Final reruns had basically the same fast-path request envelope and sync time. The big delta came from VFS read time during verify, which means the write-path optimization itself stayed stable.
   - `pnpm --dir examples/sqlite-raw run bench:record -- --render-only` plus `pnpm --dir examples/sqlite-raw run check-types` are the right quality gates after changing the benchmark renderer or the append-only report format.
+---
+## 2026-04-15 11:15:39 PDT - US-019
+- Hardened `examples/sqlite-raw/scripts/run-benchmark.ts` so fresh-engine recorder runs pin short runtime shutdown durations, default fresh-engine logs to `RUST_LOG=error`, and escalate from `SIGTERM` to `SIGKILL` when child cleanup still stalls.
+- Documented the recovery path in `examples/sqlite-raw/README.md` and the generated `examples/sqlite-raw/BENCH_RESULTS.md`, then regenerated the markdown from `bench-results.json` instead of hand-editing it.
+- Files changed: `examples/sqlite-raw/BENCH_RESULTS.md`, `examples/sqlite-raw/README.md`, `examples/sqlite-raw/scripts/run-benchmark.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The recorder writes `bench-results.json` before child teardown. If a run gets interrupted after that write, the supported recovery path is `pnpm --dir examples/sqlite-raw run bench:record -- --render-only`, not manual markdown edits.
+  - `rivet-engine start` inherits runtime shutdown defaults that are way too long for benchmark helpers. Override them in the spawned child environment even if you also keep a force-kill fallback.
+  - `pnpm --dir examples/sqlite-raw run check-types` and `pnpm --dir examples/sqlite-raw run bench:record -- --render-only` passed for this story. A tiny-payload fresh-engine smoke run still timed out inside the benchmark body on this branch before reaching cleanup, so it was not a reliable teardown proof.
 ---

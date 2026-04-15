@@ -78,6 +78,15 @@ Structured phase results live in:
 - `examples/sqlite-raw/bench-results.json` for append-only run metadata
 - `examples/sqlite-raw/BENCH_RESULTS.md` for the rendered side-by-side summary
 
+If a fresh-engine recorder run gets interrupted after the JSON append lands,
+recover with:
+
+```bash
+pnpm --dir examples/sqlite-raw run bench:record -- --render-only
+```
+
+Do not hand-edit `BENCH_RESULTS.md`. Regenerate it from `bench-results.json`.
+
 Use the inline `--phase` workflow when iterating on actor-side VFS behavior and
 comparing against the existing Phase 0 through Final history. Use
 `--remote-runner` when you need pegboard-backed validation and non-zero server
