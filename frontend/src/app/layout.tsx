@@ -7,7 +7,7 @@ import {
 	faFileLines,
 	faGift,
 	faGithub,
-	faHome,
+	faLogs,
 	faMessageSmile,
 	faRocket,
 	faWallet,
@@ -639,13 +639,9 @@ function CloudSidebarContentInner() {
 function DeploymentsLink() {
 	const provider = useCloudNamespaceDataProvider();
 
-	const { data } = useSuspenseQuery({
-		...provider.currentNamespaceManagedPoolQueryOptions({
-			pool: "default",
-			safe: true,
-		}),
-		select: (data) => !!data?.config.image,
-	});
+	const { data } = useSuspenseQuery(
+		provider.currentNamespaceHasManagedPoolQueryOptions(),
+	);
 
 	if (!data) {
 		return null;
@@ -663,7 +659,7 @@ function DeploymentsLink() {
 			<HeaderLink
 				to="/orgs/$organization/projects/$project/ns/$namespace/logs"
 				className="font-normal pl-6"
-				icon={faFileLines}
+				icon={faLogs}
 			>
 				Logs
 			</HeaderLink>

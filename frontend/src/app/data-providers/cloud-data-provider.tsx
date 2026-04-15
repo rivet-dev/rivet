@@ -91,6 +91,47 @@ export const createGlobalContext = ({ clerk }: { clerk: Clerk }) => {
 				},
 			});
 		},
+		logsHistoryInfiniteQueryOptions(opts: {
+			organization: string;
+			project: string;
+			namespace: string;
+			pool: string;
+			contains?: string;
+			region?: string;
+		}) {
+			return infiniteQueryOptions({
+				queryKey: [opts, "logs-history"] as const,
+				queryFn: async ({ pageParam }) => {
+					const items = await client.managedPools.getLogsHistory(
+						opts.project,
+						opts.namespace,
+						opts.pool,
+						{
+							before: pageParam ?? undefined,
+							limit: 500,
+							contains: opts.contains || undefined,
+							region: opts.region || undefined,
+							org: opts.organization,
+						},
+					);
+					// API returns newest-first; reverse page to oldest-first.
+					return items.reverse();
+				},
+				initialPageParam: undefined as string | undefined,
+				// Only offer a previous page if the first (oldest) fetched page was full.
+				getPreviousPageParam: (firstPage) =>
+					firstPage.length >= 500
+						? firstPage[0].timestamp
+						: undefined,
+				getNextPageParam: () => undefined,
+				select: (data) => ({
+					pages: data.pages,
+					pageParams: data.pageParams,
+					logs: data.pages.flat(),
+				}),
+				staleTime: Number.POSITIVE_INFINITY,
+			});
+		},
 		managedPoolsQueryOptions(opts: {
 			organization: string;
 			project: string;
@@ -1132,6 +1173,34 @@ export const createNamespaceContext = ({
 				namespace,
 				pool: opts.pool,
 				safe: opts.safe,
+			});
+		},
+
+		currentNamespaceHasManagedPoolQueryOptions(
+			opts: { pool?: string } = {},
+		) {
+			return queryOptions({
+				...parent.currentProjectManagedPoolQueryOptions({
+					namespace,
+					pool: opts.pool ?? "default",
+					safe: true,
+				}),
+				select: (data) => !!data?.config.image,
+			});
+		},
+
+		currentNamespaceLogsHistoryInfiniteQueryOptions(opts: {
+			pool: string;
+			contains?: string;
+			region?: string;
+		}) {
+			return parent.logsHistoryInfiniteQueryOptions({
+				organization: parent.organization,
+				project: parent.project,
+				namespace,
+				pool: opts.pool,
+				contains: opts.contains,
+				region: opts.region,
 			});
 		},
 

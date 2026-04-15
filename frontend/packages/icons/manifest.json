@@ -24428,6 +24428,12 @@
         ]
       },
       {
+        "icon": "faLogs",
+        "aliases": [
+          "faLogs"
+        ]
+      },
+      {
         "icon": "faNetlify",
         "aliases": [
           "faNetlify"
