@@ -10,7 +10,7 @@ and still participate in normal registry routing and actor lifecycle.
 Dynamic actor parity is verified by running the same engine-focused integration
 tests against two fixture registries:
 
-- `examples/sandbox/src/index.ts` for shared actor behavior
+- `examples/kitchen-sink/src/index.ts` for shared actor behavior
 - dedicated static and dynamic registry fixtures in test coverage
 
 The shared actor fixtures keep behavior consistent between static and dynamic

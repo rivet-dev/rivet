@@ -25,6 +25,28 @@ pnpm install
 pnpm dev
 ```
 
+## Large Insert Benchmark
+
+To benchmark a large payload insert against a local RivetKit actor and compare it
+to native SQLite on disk:
+
+```bash
+pnpm bench:large-insert
+```
+
+Environment variables:
+
+- `BENCH_MB`: Total payload size in MiB. Defaults to `10`.
+- `BENCH_ROWS`: Number of rows to split the payload across. Defaults to `1`.
+- `RIVET_ENDPOINT`: Engine endpoint. Defaults to `http://127.0.0.1:6420`.
+
+The benchmark prints:
+
+- Actor-side SQLite insert time
+- End-to-end action latency
+- Native SQLite baseline latency
+- Relative slowdown versus native SQLite
+
 ## Usage
 
 The example creates a `todoList` actor with the following actions:
@@ -36,8 +58,9 @@ The example creates a `todoList` actor with the following actions:
 
 ## Code Structure
 
-- `src/registry.ts` - Actor definition with database configuration
-- `src/server.ts` - Server entry point
+- `src/index.ts` - Actor definition, migrations, and registry startup
+- `scripts/client.ts` - Simple todo client
+- `scripts/bench-large-insert.ts` - Large-payload benchmark runner
 
 ## Database
 

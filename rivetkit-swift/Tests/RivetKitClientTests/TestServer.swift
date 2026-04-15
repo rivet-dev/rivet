@@ -41,11 +41,11 @@ actor TestServer {
             return info
         }
         let repoRoot = try resolveRepoRoot()
-        let scriptPath = repoRoot.appendingPathComponent("examples/sandbox/src/swift-test-server.ts")
+        let scriptPath = repoRoot.appendingPathComponent("examples/kitchen-sink/src/swift-test-server.ts")
         try await ensureBuildArtifacts(in: repoRoot, scriptPath: scriptPath)
 
         let process = Process()
-        process.currentDirectoryURL = repoRoot.appendingPathComponent("examples/sandbox")
+        process.currentDirectoryURL = repoRoot.appendingPathComponent("examples/kitchen-sink")
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["pnpm", "exec", "tsx", "src/swift-test-server.ts"]
 
