@@ -20,7 +20,37 @@ describeDriverMatrix("Gateway Routing", (driverTestConfig) => {
 					await handle.fetch("api/hello");
 					const actorId = await handle.resolve();
 
-					// Make a direct request using header-based routing
+					// Make a direct request using header-based routing.
+					const response = await fetch(
+						`${endpoint}/request/api/hello`,
+						{
+							headers: {
+								"x-rivet-target": "actor",
+								"x-rivet-actor": actorId,
+							},
+						},
+					);
+
+					expect(response.ok).toBe(true);
+					const data = await response.json();
+					expect(data).toEqual({ message: "Hello from actor!" });
+				},
+			);
+
+			test(
+				"does not route non-request HTTP paths to onRequest",
+				async (c) => {
+					const { client, endpoint } = await setupDriverTest(
+						c,
+						driverTestConfig,
+					);
+
+					const handle = client.rawHttpActor.getOrCreate([
+						"header-routing-no-request",
+					]);
+					await handle.fetch("api/hello");
+					const actorId = await handle.resolve();
+
 					const response = await fetch(`${endpoint}/api/hello`, {
 						headers: {
 							"x-rivet-target": "actor",
@@ -28,9 +58,7 @@ describeDriverMatrix("Gateway Routing", (driverTestConfig) => {
 						},
 					});
 
-					expect(response.ok).toBe(true);
-					const data = await response.json();
-					expect(data).toEqual({ message: "Hello from actor!" });
+					expect(response.ok).toBe(false);
 				},
 			);
 
@@ -77,7 +105,7 @@ describeDriverMatrix("Gateway Routing", (driverTestConfig) => {
 
 					// Build a manual query-routed URL
 					const queryUrl = new URL(
-						`${endpoint}/gateway/rawHttpActor/api/hello`,
+						`${endpoint}/gateway/rawHttpActor/request/api/hello`,
 					);
 					queryUrl.searchParams.set("rvt-namespace", namespace);
 					queryUrl.searchParams.set("rvt-method", "getOrCreate");
@@ -112,7 +140,7 @@ describeDriverMatrix("Gateway Routing", (driverTestConfig) => {
 
 					// Build a get-only query URL
 					const queryUrl = new URL(
-						`${endpoint}/gateway/rawHttpActor/api/hello`,
+						`${endpoint}/gateway/rawHttpActor/request/api/hello`,
 					);
 					queryUrl.searchParams.set("rvt-namespace", namespace);
 					queryUrl.searchParams.set("rvt-method", "get");
@@ -142,7 +170,7 @@ describeDriverMatrix("Gateway Routing", (driverTestConfig) => {
 				const runner = parsedUrl.searchParams.get("rvt-runner")!;
 
 				const queryUrl = new URL(
-					`${endpoint}/gateway/rawHttpActor/api/hello`,
+					`${endpoint}/gateway/rawHttpActor/request/api/hello`,
 				);
 				queryUrl.searchParams.set("rvt-namespace", namespace);
 				queryUrl.searchParams.set("rvt-method", "getOrCreate");
@@ -158,7 +186,7 @@ describeDriverMatrix("Gateway Routing", (driverTestConfig) => {
 				const { endpoint } = await setupDriverTest(c, driverTestConfig);
 
 				// Manually build URL with duplicate rvt-namespace
-				const url = `${endpoint}/gateway/rawHttpActor/api/hello?rvt-namespace=a&rvt-namespace=b&rvt-method=get&rvt-key=dup`;
+				const url = `${endpoint}/gateway/rawHttpActor/request/api/hello?rvt-namespace=a&rvt-namespace=b&rvt-method=get&rvt-key=dup`;
 
 				const response = await fetch(url);
 				expect(response.ok).toBe(false);
@@ -188,7 +216,7 @@ describeDriverMatrix("Gateway Routing", (driverTestConfig) => {
 
 					// Build URL with rvt-* params and an actor query param
 					const queryUrl = new URL(
-						`${endpoint}/gateway/rawHttpRequestPropertiesActor/test-path`,
+						`${endpoint}/gateway/rawHttpRequestPropertiesActor/request/test-path`,
 					);
 					queryUrl.searchParams.set("rvt-namespace", namespace);
 					queryUrl.searchParams.set("rvt-method", "getOrCreate");
@@ -233,7 +261,7 @@ describeDriverMatrix("Gateway Routing", (driverTestConfig) => {
 					const runner = parsedUrl.searchParams.get("rvt-runner")!;
 
 					const queryUrl = new URL(
-						`${endpoint}/gateway/rawHttpActor/api/hello`,
+						`${endpoint}/gateway/rawHttpActor/request/api/hello`,
 					);
 					queryUrl.searchParams.set("rvt-namespace", namespace);
 					queryUrl.searchParams.set("rvt-method", "getOrCreate");
