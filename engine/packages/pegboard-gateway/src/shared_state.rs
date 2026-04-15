@@ -11,7 +11,7 @@ use std::{
 	time::{Duration, Instant},
 };
 use tokio::sync::{mpsc, watch};
-use universalpubsub::{NextOutput, PubSub, PublishOpts, Subscriber};
+use universalpubsub::{NextOutput, PubSub, PublishOpts};
 use vbare::OwnedVersionedData;
 
 use crate::{WebsocketPendingLimitReached, metrics};
@@ -167,10 +167,8 @@ impl SharedState {
 
 	#[tracing::instrument(skip_all)]
 	pub async fn start(&self) -> Result<()> {
-		let sub = self.ups.subscribe(&self.receiver_subject).await?;
-
 		let self_clone = self.clone();
-		tokio::spawn(async move { self_clone.receiver(sub).await });
+		tokio::spawn(async move { self_clone.receiver().await });
 
 		let self_clone = self.clone();
 		tokio::spawn(async move { self_clone.gc().await });
@@ -380,78 +378,123 @@ impl SharedState {
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn receiver(&self, mut sub: Subscriber) {
-		while let Ok(NextOutput::Message(msg)) = sub.next().await {
-			tracing::trace!(
-				payload_len = msg.payload.len(),
-				"received message from pubsub"
-			);
-
-			match versioned::ToGateway::deserialize_with_embedded_version(&msg.payload) {
-				Ok(protocol::mk2::ToGateway::ToGatewayPong(pong)) => {
-					let Some(mut in_flight) =
-						self.in_flight_requests.get_async(&pong.request_id).await
-					else {
-						tracing::debug!(
-							request_id=%protocol::util::id_to_string(&pong.request_id),
-							"in flight has already been disconnected, dropping ping"
-						);
-						continue;
-					};
-
-					let now = util::timestamp::now();
-					in_flight.last_pong = now;
-
-					let rtt = now.saturating_sub(pong.ts);
-					metrics::TUNNEL_PING_DURATION.observe(rtt as f64 * 0.001);
-				}
-				Ok(protocol::mk2::ToGateway::ToServerTunnelMessage(msg)) => {
-					let message_id = msg.message_id;
-
-					let Some(mut in_flight) = self
-						.in_flight_requests
-						.get_async(&message_id.request_id)
-						.await
-					else {
-						tracing::warn!(
-							gateway_id=%protocol::util::id_to_string(&message_id.gateway_id),
-							request_id=%protocol::util::id_to_string(&message_id.request_id),
-							message_index=message_id.message_index,
-							"in flight has already been disconnected, dropping message"
-						);
-						continue;
-					};
-
-					if !in_flight.state.accept_message(&msg.message_kind) {
-						tracing::warn!(
-							gateway_id=%protocol::util::id_to_string(&message_id.gateway_id),
-							request_id=%protocol::util::id_to_string(&message_id.request_id),
-							message_index=message_id.message_index,
-							state=?in_flight.state,
-							message_kind=?msg.message_kind,
-							"dropping invalid tunnel message for request state"
-						);
-						continue;
-					}
-
-					// Send message to the request handler to emulate the real network action
-					let inner_size = match &msg.message_kind {
-						protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketMessage(
-							ws_msg,
-						) => ws_msg.data.len(),
-						_ => 0,
-					};
-					tracing::debug!(
-						gateway_id=%protocol::util::id_to_string(&message_id.gateway_id),
-						request_id=%protocol::util::id_to_string(&message_id.request_id),
-						message_index=message_id.message_index,
-						inner_size,
-						"forwarding message to request handler"
-					);
-					let _ = in_flight.msg_tx.send(msg.message_kind.clone()).await;
-				}
+	async fn receiver(&self) {
+		// Automatically resubscribe if unsubscribed
+		loop {
+			tracing::debug!(gateway_id=%protocol::util::id_to_string(&self.gateway_id), "subscribing to gateway receiver");
+			let mut sub = match self.ups.subscribe(&self.receiver_subject).await {
+				Ok(sub) => sub,
 				Err(err) => {
-					tracing::error!(?err, "failed to parse message");
+					tracing::error!(
+						?err,
+						"failed to open gateway subscription, retrying in 2 seconds"
+					);
+					tokio::time::sleep(Duration::from_secs(2)).await;
+					continue;
+				}
+			};
+
+			loop {
+				let msg = match sub.next().await {
+					Ok(NextOutput::Message(msg)) => msg,
+					Ok(NextOutput::Unsubscribed) => {
+						tracing::error!(
+							"gateway subscription unsubscribed, in flight messages may be lost"
+						);
+						break;
+					}
+					Err(err) => {
+						tracing::error!(
+							?err,
+							"gateway subscription errored, in flight messages may be lost"
+						);
+						break;
+					}
+				};
+
+				tracing::trace!(
+					payload_len = msg.payload.len(),
+					"received message from pubsub"
+				);
+
+				match versioned::ToGateway::deserialize_with_embedded_version(&msg.payload) {
+					Ok(protocol::mk2::ToGateway::ToGatewayPong(pong)) => {
+						let Some(mut in_flight) =
+							self.in_flight_requests.get_async(&pong.request_id).await
+						else {
+							tracing::debug!(
+								request_id=%protocol::util::id_to_string(&pong.request_id),
+								"in flight has already been disconnected, dropping ping"
+							);
+							continue;
+						};
+
+						let now = util::timestamp::now();
+						in_flight.last_pong = now;
+
+						let rtt = now.saturating_sub(pong.ts);
+						metrics::TUNNEL_PING_DURATION.observe(rtt as f64 * 0.001);
+					}
+					Ok(protocol::mk2::ToGateway::ToServerTunnelMessage(msg)) => {
+						let message_id = msg.message_id;
+
+						let Some(mut in_flight) = self
+							.in_flight_requests
+							.get_async(&message_id.request_id)
+							.await
+						else {
+							tracing::warn!(
+								gateway_id=%protocol::util::id_to_string(&message_id.gateway_id),
+								request_id=%protocol::util::id_to_string(&message_id.request_id),
+								message_index=message_id.message_index,
+								"in flight has already been disconnected, dropping message"
+							);
+							continue;
+						};
+
+						if !in_flight.state.accept_message(&msg.message_kind) {
+							tracing::warn!(
+								gateway_id=%protocol::util::id_to_string(&message_id.gateway_id),
+								request_id=%protocol::util::id_to_string(&message_id.request_id),
+								message_index=message_id.message_index,
+								state=?in_flight.state,
+								message_kind=?msg.message_kind,
+								"dropping invalid tunnel message for request state"
+							);
+							continue;
+						}
+
+						// Send message to the request handler to emulate the real network action
+						let inner_size = match &msg.message_kind {
+							protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketMessage(
+								ws_msg,
+							) => ws_msg.data.len(),
+							_ => 0,
+						};
+						tracing::debug!(
+							gateway_id=%protocol::util::id_to_string(&message_id.gateway_id),
+							request_id=%protocol::util::id_to_string(&message_id.request_id),
+							message_index=message_id.message_index,
+							inner_size,
+							"forwarding message to request handler"
+						);
+						if in_flight
+							.msg_tx
+							.send(msg.message_kind.clone())
+							.await
+							.is_err()
+						{
+							tracing::warn!(
+								gateway_id=%protocol::util::id_to_string(&message_id.gateway_id),
+								request_id=%protocol::util::id_to_string(&message_id.request_id),
+								receiver_subject=%in_flight.receiver_subject,
+								"message handler channel closed",
+							);
+						}
+					}
+					Err(err) => {
+						tracing::error!(?err, "failed to parse message");
+					}
 				}
 			}
 		}
