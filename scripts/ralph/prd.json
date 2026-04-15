@@ -251,8 +251,53 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "This is the cleanup crew. If there is still shit on the floor, write it down as another story."
+    },
+    {
+      "id": "US-017",
+      "title": "Add pegboard-backed remote SQLite benchmark coverage",
+      "description": "As a developer, I need a benchmark path that exercises the pegboard-backed SQLite storage flow so remote write latency and server telemetry are measured directly instead of inferred from the in-process local path.",
+      "acceptanceCriteria": [
+        "Add a repeatable examples/sqlite-raw benchmark mode that exercises the pegboard-backed SQLite path instead of the in-process local benchmark path",
+        "Record non-zero server telemetry for fast-path reads, writes, truncates, request sizes, dirty pages, and timing when the remote path is used",
+        "Store the remote benchmark output in the shared append-only benchmark log without breaking existing local phase runs",
+        "Document when to use the local VFS-focused benchmark versus the pegboard-backed remote benchmark",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "The current local benchmark proves the client-side VFS story, but the shared phase baselines still show zero pegboard telemetry because that path runs in-process."
+    },
+    {
+      "id": "US-018",
+      "title": "Explain and stabilize the final benchmark regression",
+      "description": "As a developer, I need to explain why the final baseline regressed versus Phase 2/3 so the recorded remediation result reflects real performance instead of one noisy or partially-understood run.",
+      "acceptanceCriteria": [
+        "Re-run the Phase 2/3 and final benchmark shape enough times on fresh builds or fresh engines to quantify variance",
+        "Use the recorded VFS and benchmark telemetry to attribute the final slowdown to environment noise, benchmark harness behavior, or a specific runtime regression",
+        "If the slowdown is a real regression, land a fix or document the remaining cause and the updated expected numbers in the shared benchmark report",
+        "Keep the benchmark log append-only and make the comparison methodology explicit in the review output",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Phase 2/3 landed at about 4.8s end-to-end, while the final run came back at about 7.8s with the same fast-path usage. That spread needs an explanation."
+    },
+    {
+      "id": "US-019",
+      "title": "Harden final fresh-engine bench recording",
+      "description": "As a developer, I need `bench:record -- --phase final --fresh-engine` to exit cleanly after a measured run so final verification stays repeatable and does not require manual recovery steps.",
+      "acceptanceCriteria": [
+        "Reproduce the post-benchmark wedge seen with `pnpm --dir examples/sqlite-raw run bench:record -- --phase final --fresh-engine` on this branch",
+        "Make the recorder exit cleanly after the benchmark while still preserving engine logs and append-only run recording",
+        "Keep render-only regeneration and recorded-run recovery working when the engine emits shutdown noise after the measured payload run",
+        "Document the supported recovery path so future iterations do not hand-edit benchmark markdown",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "The direct PTY-backed benchmark completed reliably, but the canonical final-phase recorder path could still wedge after the measurement landed."
     }
   ]
 }

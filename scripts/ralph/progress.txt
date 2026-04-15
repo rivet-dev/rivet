@@ -1,6 +1,7 @@
 # Ralph Progress Log
 ## Codebase Patterns
 - Use `examples/sqlite-raw/bench-results.json` as the append-only benchmark source of truth, and regenerate `examples/sqlite-raw/BENCH_RESULTS.md` from it with `pnpm --dir examples/sqlite-raw run bench:record -- --render-only`.
+- Local `examples/sqlite-raw` phase baselines can show VFS fast-path success while pegboard server telemetry stays zero because the actor runs in-process. Do not treat those runs as direct remote-path validation.
 - In `examples/sqlite-raw/scripts/bench-large-insert.ts`, keep readiness retries pinned to one `getOrCreate` key and disable metadata lookup when the local engine endpoint is already known, or retries will keep cold-starting new actors instead of waiting for the same warmup actor.
 - Fresh `examples/sqlite-raw` phase benchmarks should keep `BENCH_READY_TIMEOUT_MS=300000` in the recorded command because actor readiness on a newly started local engine can lag far beyond the old 120s default.
 - Re-evaluate the SQLite fast-path page ceiling with `pnpm --dir examples/sqlite-raw run bench:record -- --evaluate-batch-ceiling --chosen-limit-pages <pages> --batch-pages <comma-list> --fresh-engine`; on the local benchmark path, use VFS fast-path telemetry for request bytes and commit latency because pegboard metrics stay zero when the actor runs in-process.
@@ -151,4 +152,13 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - For local benchmark clients that already know `RIVET_ENDPOINT`, `disableMetadataLookup: true` keeps readiness timing focused on the actor path instead of an extra metadata fetch.
   - `pnpm --dir examples/sqlite-raw run bench:record -- --render-only`, `cargo test -p rivet-envoy-protocol -p rivet-envoy-client -p rivetkit-sqlite-native`, `cargo test -p pegboard --test sqlite_fast_path`, `cargo test -p pegboard-envoy sqlite_fast_path`, `pnpm build -F rivetkit`, `pnpm --dir rivetkit-typescript/packages/rivetkit test native-database`, and `pnpm --dir examples/sqlite-raw run check-types` covered the final verification sweep.
   - On this branch, the direct PTY-backed `bench-large-insert.ts -- --json` path completed reliably while the `bench:record -- --phase final --fresh-engine` wrapper could wedge after the benchmark. When that happens, append the structured result to `bench-results.json` and rerender from source of truth instead of hand-editing the markdown.
+---
+## 2026-04-15 10:26:26 PDT - US-016
+- Reviewed the landed SQLite remediation work against the PRD and recorded baselines. The implementation achieved the intended large-write improvement versus Phase 0 with no new correctness regression called out by the final verification sweep, but it still left measurable follow-up work.
+- Appended follow-up stories `US-017`, `US-018`, and `US-019` to capture the remaining gaps: missing pegboard-backed remote benchmark coverage, the unexplained regression from Phase 2/3 to Final, and the final `bench:record -- --phase final --fresh-engine` wedge.
+- Files changed: `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The recorded outcome is still a real win over Phase 0: Final improved actor insert from `15875.9ms` to `1775.8ms` (`-88.8%`), actor verify from `23848.9ms` to `5942.6ms` (`-75.1%`), and end-to-end latency from `40000.7ms` to `7840.1ms` (`-80.4%`).
+  - A final run that is materially worse than the immediately prior fast-path baseline is not "close enough." Treat it as unfinished review work and write a follow-up story until the variance or regression is explained.
+  - Zero pegboard telemetry in the shared phase log is expected on the current local benchmark path, so remote-path claims still need a pegboard-backed benchmark rather than more hand-waving.
 ---
