@@ -367,6 +367,30 @@ export function actorStopping(identifier?: string): RivetError {
 	);
 }
 
+export interface ActorRestartingOptions {
+	phase?: "stopping" | "sleeping" | "waking" | "runner_shutdown";
+	retryAfterMs?: number;
+}
+
+export function actorRestarting(opts?: ActorRestartingOptions): RivetError {
+	return new RivetError(
+		"actor",
+		"restarting",
+		"Actor is restarting. Retry the request.",
+		{
+			public: true,
+			statusCode: 503,
+			metadata: {
+				retryable: true,
+				...(opts?.phase ? { phase: opts.phase } : {}),
+				...(opts?.retryAfterMs !== undefined
+					? { retryAfterMs: opts.retryAfterMs }
+					: {}),
+			},
+		},
+	);
+}
+
 export function forbiddenError(): RivetError {
 	return new RivetError("auth", "forbidden", "Forbidden", {
 		public: true,

@@ -919,7 +919,7 @@ export class ActorInstance<
 	async restartRunHandler(): Promise<void> {
 		this.assertReady();
 		if (this.#stopCalled)
-			throw new errors.InternalError("Actor is stopping");
+			throw errors.actorRestarting({ phase: "stopping" });
 		if (this.#runHandlerActive && this.#runPromise) {
 			await this.#runPromise;
 		}
