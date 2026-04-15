@@ -1,5 +1,22 @@
 [build]
 rustflags = ["--cfg", "tokio_unstable"]
 
+# Target-specific flags must repeat tokio_unstable because target rustflags
+# override [build] rustflags. The link args are required on macOS for native
+# Node.js addons (dynamic_lookup defers symbol resolution to runtime).
+[target.aarch64-apple-darwin]
+rustflags = [
+    "--cfg", "tokio_unstable",
+    "-C", "link-arg=-undefined",
+    "-C", "link-arg=dynamic_lookup",
+]
+
+[target.x86_64-apple-darwin]
+rustflags = [
+    "--cfg", "tokio_unstable",
+    "-C", "link-arg=-undefined",
+    "-C", "link-arg=dynamic_lookup",
+]
+
 [env]
 LIBSQLITE3_FLAGS = "SQLITE_ENABLE_BATCH_ATOMIC_WRITE"

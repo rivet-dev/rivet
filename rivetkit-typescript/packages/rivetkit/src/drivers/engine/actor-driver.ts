@@ -184,6 +184,7 @@ export class EngineActorDriver implements ActorDriver {
 			token: config.token,
 			namespace: config.namespace,
 			poolName: config.envoy.poolName,
+			notGlobal: false,
 			metadata: {
 				rivetkit: { version: VERSION },
 			},

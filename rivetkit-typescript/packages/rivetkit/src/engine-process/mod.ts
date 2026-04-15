@@ -58,7 +58,7 @@ export async function ensureEngineProcess(
 				error,
 			});
 			throw new Error(
-				"Engine process exists but is not healthy. Please manually stop the process on port 6420 and retry.",
+				`Engine process exists but is not healthy. Please manually stop the process on port ${ENGINE_PORT} and retry.`,
 			);
 		}
 	}
@@ -129,6 +129,9 @@ export async function ensureEngineProcess(
 			//
 			// We reduce the timeouts for resetting a runner as healthy in
 			// order to account for this.
+			// Run the engine guard on its internal port so the rivetkit manager
+			// can own the default client port (6420) and serve devtools/inspector.
+			RIVET__GUARD__PORT: String(ENGINE_PORT),
 			RIVET__PEGBOARD__RETRY_RESET_DURATION: "100",
 			RIVET__PEGBOARD__BASE_RETRY_TIMEOUT: "100",
 			// Set max exponent to 1 to have a maximum of base_retry_timeout
@@ -305,11 +308,11 @@ async function checkIfEngineAlreadyRunningOnPort(
 				port,
 			});
 			throw new Error(
-				"RivetKit process already running on port 6420, stop that process and restart this.",
+				`RivetKit process already running on port ${port}, stop that process and restart this.`,
 			);
 		} else {
 			throw new Error(
-				"Unknown process running on port 6420, cannot identify what it is.",
+				`Unknown process running on port ${port}, cannot identify what it is.`,
 			);
 		}
 	}

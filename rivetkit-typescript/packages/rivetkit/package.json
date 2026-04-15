@@ -317,7 +317,8 @@
 		"dump-asyncapi": "tsx scripts/dump-asyncapi.ts",
 		"registry-config-schema-gen": "tsx scripts/registry-config-schema-gen.ts",
 		"actor-config-schema-gen": "tsx scripts/actor-config-schema-gen.ts",
-		"build:pack-inspector": "tsx scripts/pack-inspector.ts"
+		"build:pack-inspector": "tsx scripts/pack-inspector.ts",
+		"build:pack-devtools": "tsx scripts/pack-devtools.ts"
 	},
 	"dependencies": {
 		"@rivet-dev/agent-os-core": "^0.1.1",
