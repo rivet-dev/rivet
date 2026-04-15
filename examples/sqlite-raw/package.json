@@ -7,7 +7,8 @@
 		"dev": "tsx --watch src/index.ts",
 		"check-types": "tsc --noEmit",
 		"start": "tsx src/index.ts",
-		"client": "tsx scripts/client.ts"
+		"client": "tsx scripts/client.ts",
+		"bench:large-insert": "tsx scripts/bench-large-insert.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",

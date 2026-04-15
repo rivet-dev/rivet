@@ -1,11 +1,11 @@
 > **Note:** This is the Vercel-optimized version of the [kitchen-sink](../kitchen-sink) example.
 > It uses the `hono/vercel` adapter and is configured for Vercel deployment.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fkitchen-sink-vercel&project-name=kitchen-sink-vercel)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-dev%2Frivet%2Ftree%2Fmain%2Fexamples%2Fkitchen-sink-vercel&project-name=kitchen-sink-vercel)
 
-# Kitchen Sink Example
+# Kitchen Sink
 
-Example project demonstrating all RivetKit features.
+Unified kitchen-sink showcasing Rivet Actor features with a single registry, grouped navigation, and interactive demos.
 
 ## Getting Started
 
@@ -19,22 +19,27 @@ npm run dev
 
 ## Features
 
-- **Complete feature showcase**: Demonstrates all major RivetKit concepts in one example
-- **Lifecycle hooks**: Use `onWake`, `onSleep`, `onConnect`, and `onDisconnect` for actor lifecycle management
-- **Scheduling**: Schedule delayed actions with `schedule.at()` and `schedule.after()`
-- **HTTP and WebSocket**: Handle both HTTP requests and WebSocket connections in actors
-- **Event broadcasting**: Broadcast events to all connected clients with `c.broadcast()`
-- **Connection management**: Track and manage multiple client connections per actor
+- Unified registry that aggregates actor fixtures and example actors
+- Sidebar navigation grouped by core actor feature areas
+- Action runner and event listener for quick experimentation
+- Raw HTTP and WebSocket demos for handler-based actors
+- Workflow and queue pattern coverage in a single kitchen-sink
+
+## Prerequisites
+
+- OpenAI API key (set `OPENAI_API_KEY`) for the AI actor demo
 
 ## Implementation
 
-This comprehensive example brings together all Rivet Actor features in one place:
+The kitchen-sink registry imports fixtures and example actors into one setup so each page can expose a curated subset.
 
-- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/kitchen-sink/src/backend/registry.ts)): Demonstrates the complete feature set including lifecycle hooks, scheduling, events, state management, and WebSocket handling
+See the registry in [`src/actors.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/kitchen-sink/src/actors.ts) and the UI in [`frontend/App.tsx`](https://github.com/rivet-dev/rivet/tree/main/examples/kitchen-sink/frontend/App.tsx).
 
 ## Resources
 
-Read more about [actions](/docs/actors/actions), [state](/docs/actors/state), [lifecycle hooks](/docs/actors/lifecycle), [scheduling](/docs/actors/scheduling), [events](/docs/actors/events), and [WebSockets](/docs/actors/websockets).
+Read more about [Rivet Actors](https://rivet.dev/docs/actors),
+[actions](https://rivet.dev/docs/actors/actions), and
+[connections](https://rivet.dev/docs/actors/connections).
 
 ## License
 
