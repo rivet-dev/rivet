@@ -1,0 +1,67 @@
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __commonJS = (cb, mod) => function __require() {
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+
+// src/node_modules/@fortawesome/free-solid-svg-icons/faCartFlatbedSuitcase.js
+var require_faCartFlatbedSuitcase = __commonJS({
+  "src/node_modules/@fortawesome/free-solid-svg-icons/faCartFlatbedSuitcase.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var prefix = "fas";
+    var iconName = "cart-flatbed-suitcase";
+    var width = 576;
+    var height = 512;
+    var aliases = ["luggage-cart"];
+    var unicode = "f59d";
+    var svgPathData = "M0 32C0 14.3 14.3 0 32 0L48 0c44.2 0 80 35.8 80 80l0 288c0 8.8 7.2 16 16 16l400 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-34.7 0c1.8 5 2.7 10.4 2.7 16 0 26.5-21.5 48-48 48s-48-21.5-48-48c0-5.6 1-11 2.7-16l-197.5 0c1.8 5 2.7 10.4 2.7 16 0 26.5-21.5 48-48 48s-48-21.5-48-48c0-6 1.1-11.7 3.1-17-38.1-6.2-67.1-39.2-67.1-79L64 80c0-8.8-7.2-16-16-16L32 64C14.3 64 0 49.7 0 32zM176 144c0-26.5 21.5-48 48-48l32 0 0-24c0-30.9 25.1-56 56-56l64 0c30.9 0 56 25.1 56 56l0 24 32 0c26.5 0 48 21.5 48 48l0 144c0 26.5-21.5 48-48 48l-240 0c-26.5 0-48-21.5-48-48l0-144zM384 96l0-24c0-4.4-3.6-8-8-8l-64 0c-4.4 0-8 3.6-8 8l0 24 80 0z";
+    exports.definition = {
+      prefix,
+      iconName,
+      icon: [
+        width,
+        height,
+        aliases,
+        unicode,
+        svgPathData
+      ]
+    };
+    exports.faCartFlatbedSuitcase = exports.definition;
+    exports.prefix = prefix;
+    exports.iconName = iconName;
+    exports.width = width;
+    exports.height = height;
+    exports.ligatures = aliases;
+    exports.unicode = unicode;
+    exports.svgPathData = svgPathData;
+    exports.aliases = aliases;
+  }
+});
+
+// src/_entries/faLuggageCart.js
+var import_faCartFlatbedSuitcase = __toESM(require_faCartFlatbedSuitcase());
+var export_faLuggageCart = import_faCartFlatbedSuitcase.definition;
+export {
+  export_faLuggageCart as faLuggageCart
+};

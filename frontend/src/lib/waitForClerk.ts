@@ -1,6 +1,6 @@
 import type { Clerk } from "@clerk/clerk-js";
 import * as Sentry from "@sentry/react";
-import { posthog } from "posthog-js";
+import { posthog } from "@/lib/posthog";
 
 export function waitForClerk(clerk: Clerk): Promise<void> {
 	if (clerk.status === "ready") {

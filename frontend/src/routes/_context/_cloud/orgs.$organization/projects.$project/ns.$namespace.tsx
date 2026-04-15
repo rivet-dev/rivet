@@ -5,7 +5,7 @@ import {
 	useNavigate,
 	useSearch,
 } from "@tanstack/react-router";
-import { posthog } from "posthog-js";
+import { posthog } from "@/lib/posthog";
 import { GettingStarted } from "@/app/getting-started";
 import { SidebarlessHeader } from "@/app/layout";
 import { NotFoundCard } from "@/app/not-found-card";

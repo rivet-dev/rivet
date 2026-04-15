@@ -253,7 +253,9 @@ function EmptyState({ count }: { count: number }) {
 			) : count === 0 ? (
 				filtersCount === 0 ? (
 					runnerConfigsCount === 0 ? (
-						<NoProvidersAlert />
+						<div className="px-4">
+							<NoProvidersAlert />
+						</div>
 					) : (
 						<div className="gap-2 flex flex-col items-center justify-center">
 							<Icon icon={faActors} className="text-4xl mt-8" />

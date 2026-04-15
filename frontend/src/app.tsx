@@ -22,15 +22,8 @@ import {
 } from "./app/data-providers/cache";
 import { NotFoundCard } from "./app/not-found-card";
 import { RouteLayout } from "./app/route-layout";
-import { clerk } from "./lib/auth";
 import { queryClient } from "./queries/global";
 import { routeTree } from "./routeTree.gen";
-
-declare module "@tanstack/react-router" {
-	interface Register {
-		router: typeof router;
-	}
-}
 
 declare module "@tanstack/react-query" {
 	interface Register {
@@ -42,50 +35,58 @@ declare module "@tanstack/react-query" {
 	}
 }
 
-export const router = createRouter({
-	basepath: import.meta.env.BASE_URL,
-	routeTree,
-	context: {
-		clerk:
-			__APP_TYPE__ === "cloud" ? clerk : (undefined as unknown as Clerk),
-		queryClient: queryClient,
-		getOrCreateCloudContext,
-		getOrCreateEngineContext,
-		getOrCreateOrganizationContext,
-		getOrCreateProjectContext,
-		getOrCreateCloudNamespaceContext,
-		getOrCreateEngineNamespaceContext,
-	},
-	defaultPreloadStaleTime: 0,
-	defaultGcTime: 0,
-	defaultPreloadGcTime: 0,
-	defaultStaleTime: Infinity,
-	scrollRestoration: true,
-	defaultPendingMinMs: 300,
-	defaultPendingComponent: FullscreenLoading,
-	defaultOnCatch: (error) => {
-		console.error("Router caught an error:", error);
-		Sentry.captureException(error);
-	},
-	defaultNotFoundComponent: () => (
-		<RouteLayout>
-			<NotFoundCard />
-		</RouteLayout>
-	),
-});
+export function createAppRouter(clerk: Clerk) {
+	return createRouter({
+		basepath: import.meta.env.BASE_URL,
+		routeTree,
+		context: {
+			clerk:
+				__APP_TYPE__ === "cloud" ? clerk : (undefined as unknown as Clerk),
+			queryClient: queryClient,
+			getOrCreateCloudContext,
+			getOrCreateEngineContext,
+			getOrCreateOrganizationContext,
+			getOrCreateProjectContext,
+			getOrCreateCloudNamespaceContext,
+			getOrCreateEngineNamespaceContext,
+		},
+		defaultPreloadStaleTime: 0,
+		defaultGcTime: 0,
+		defaultPreloadGcTime: 0,
+		defaultStaleTime: Infinity,
+		scrollRestoration: true,
+		defaultPendingMinMs: 300,
+		defaultPendingComponent: FullscreenLoading,
+		defaultOnCatch: (error) => {
+			console.error("Router caught an error:", error);
+			Sentry.captureException(error);
+		},
+		defaultNotFoundComponent: () => (
+			<RouteLayout>
+				<NotFoundCard />
+			</RouteLayout>
+		),
+	});
+}
 
-function InnerApp() {
+declare module "@tanstack/react-router" {
+	interface Register {
+		router: ReturnType<typeof createAppRouter>;
+	}
+}
+
+function InnerApp({ router }: { router: ReturnType<typeof createAppRouter> }) {
 	return <RouterProvider router={router} />;
 }
 
-export function App() {
+export function App({ router }: { router: ReturnType<typeof createAppRouter> }) {
 	return (
 		<QueryClientProvider client={queryClient}>
 			<ConfigProvider value={getConfig()}>
 				<ThirdPartyProviders>
 					<Suspense fallback={<FullscreenLoading />}>
 						<TooltipProvider>
-							<InnerApp />
+							<InnerApp router={router} />
 						</TooltipProvider>
 					</Suspense>
 				</ThirdPartyProviders>

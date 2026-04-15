@@ -5,7 +5,7 @@ import {
 	QueryClient,
 	queryOptions,
 } from "@tanstack/react-query";
-import posthog from "posthog-js";
+import { posthog } from "@/lib/posthog";
 import { toast } from "@/components";
 import { isRivetApiError } from "@/lib/errors";
 import { modal } from "@/utils/modal-utils";

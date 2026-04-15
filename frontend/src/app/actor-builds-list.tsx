@@ -1,7 +1,7 @@
 import { faActorsBorderless, Icon, type IconProp } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Fragment, Suspense, use } from "react";
+import { Fragment, type LazyExoticComponent, type ReactNode, Suspense, lazy } from "react";
 import { match } from "ts-pattern";
 import { Button, cn, Skeleton } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
@@ -26,30 +26,53 @@ function toPascalCase(str: string): string {
 		.join("");
 }
 
-const allIconsPromise = import("@rivet-gg/icons") as unknown as Promise<
-	Record<string, IconProp>
->;
+const iconModules = import.meta.glob<Record<string, IconProp>>(
+	"../../packages/icons/dist/icons/*.js",
+);
+
+const lazyIconCache = new Map<string, LazyExoticComponent<(props: { className?: string }) => ReactNode>>();
+
+function getLazyIcon(iconName: string): LazyExoticComponent<(props: { className?: string }) => ReactNode> {
+	let component = lazyIconCache.get(iconName);
+	if (!component) {
+		const loader = iconModules[`../../packages/icons/dist/icons/${iconName}.js`];
+		component = lazy(() =>
+			(loader ? loader() : Promise.reject())
+				.then((mod) => ({
+					default: ({ className }: { className?: string }) => (
+						<Icon icon={mod[iconName] ?? faActorsBorderless} className={className} />
+					),
+				}))
+				.catch(() => ({
+					default: ({ className }: { className?: string }) => (
+						<Icon icon={faActorsBorderless} className={className} />
+					),
+				})),
+		);
+		lazyIconCache.set(iconName, component);
+	}
+	return component;
+}
 
 function ActorIcon({ iconValue }: { iconValue: string | null }) {
-	const allIcons = use(allIconsPromise);
+	const className = "opacity-80 group-hover:opacity-100 group-data-active:opacity-100";
 
 	if (iconValue && isEmoji(iconValue)) {
 		return (
-			<span className="opacity-80 group-hover:opacity-100 group-data-active:opacity-100 text-sm">
+			<span className={`${className} text-sm`}>
 				{iconValue}
 			</span>
 		);
 	}
 
-	const faIcon = iconValue
-		? (allIcons[`fa${toPascalCase(iconValue)}`] ?? null)
-		: null;
-	return (
-		<Icon
-			icon={faIcon ?? faActorsBorderless}
-			className="opacity-80 group-hover:opacity-100 group-data-active:opacity-100"
-		/>
-	);
+	const iconName = iconValue ? `fa${toPascalCase(iconValue)}` : null;
+
+	if (!iconName) {
+		return <Icon icon={faActorsBorderless} className={className} />;
+	}
+
+	const LazyIcon = getLazyIcon(iconName);
+	return <LazyIcon className={className} />;
 }
 
 export function ActorBuildsList() {

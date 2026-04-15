@@ -36,6 +36,10 @@
 			"types": "./src/index.gen.ts",
 			"import": "./dist/index.js",
 			"default": "./dist/index.js"
+		},
+		"./icons/*.js": {
+			"import": "./dist/icons/*.js",
+			"default": "./dist/icons/*.js"
 		}
 	},
 	"devDependencies": {
