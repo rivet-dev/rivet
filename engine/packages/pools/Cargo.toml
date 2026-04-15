@@ -21,7 +21,6 @@ rivet-util.workspace = true
 serde.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
-tokio-native-tls.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
 tracing-logfmt.workspace = true

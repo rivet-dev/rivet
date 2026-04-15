@@ -361,6 +361,13 @@ let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build(
 
 - Never build a new reqwest client from scratch. Use `rivet_pools::reqwest::client().await?` to access an existing reqwest client instance.
 
+## TLS Trust Roots
+
+- For rustls-based outbound TLS clients (`tokio-tungstenite`, `reqwest`), always enable BOTH `rustls-tls-native-roots` and `rustls-tls-webpki-roots` together so the crates build a union root store — operator-installed corporate CAs work via native, and empty native stores (Distroless / Cloud Run / Alpine without `ca-certificates`) fall through to the bundled Mozilla list.
+- Pinned in workspace `Cargo.toml` (`tokio-tungstenite`) and in `rivetkit-rust/packages/client/Cargo.toml` (`reqwest` + `tokio-tungstenite`). Never enable only one: native-only breaks on Distroless, webpki-only silently breaks corporate CAs.
+- Engine-internal HTTPS clients on `hyper-tls` / `native-tls` (workspace `reqwest`, ClickHouse pool, guard HTTP proxy) intentionally stay on OpenSSL — they run in operator-controlled containers and already honor the system trust store.
+- Bump `webpki-roots` periodically so the bundled Mozilla CA list does not go stale.
+
 ## Documentation
 
 - When talking about "Rivet Actors" make sure to capitalize "Rivet Actor" as a proper noun and lowercase "actor" as a generic noun

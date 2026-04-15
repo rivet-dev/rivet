@@ -776,6 +776,10 @@ export const sitemap = [
 						// icon: faGlobe,
 					},
 					{
+						title: "TLS & Certificates",
+						href: "/docs/self-hosting/tls",
+					},
+					{
 						title: "Production Checklist",
 						href: "/docs/self-hosting/production-checklist",
 					},

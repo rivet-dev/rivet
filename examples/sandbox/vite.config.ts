@@ -19,5 +19,6 @@ export default defineConfig({
 	plugins: [react(), sqlRawPlugin(), ...srvx({ entry: "src/server.ts", clientOutDir: "dist/public" })],
 	ssr: {
 		noExternal: true,
+		external: ["@rivetkit/rivetkit-native", "@rivetkit/rivetkit-native/wrapper"],
 	},
 });

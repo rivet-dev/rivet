@@ -2682,6 +2682,9 @@ importers:
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
+      '@rivetkit/rivetkit-native':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit-native
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@3.25.76)
@@ -13953,9 +13956,11 @@ packages:
 
   freestyle-sandboxes@0.0.66:
     resolution: {integrity: sha512-3rgkjq5bU2pwe2kfX58gcuHtCoP9RfHx3Zbh4BCPxlzJntyPG/VTtXR1e9z12JLt3lnGdUsEqs/sfhMso1Lslw==}
+    deprecated: This package has been deprecated. Please use freestyle instead.
 
   freestyle-sandboxes@0.0.95:
     resolution: {integrity: sha512-Wsw8i8EE6f1vfJVZNsS/5c/Lp5Cx2DUiOy+3HjU3R+mA8296fIQs+6pNMg0T0nNZaEgqTNEDQqMoBckNZz+gWA==}
+    deprecated: This package has been deprecated. Please use freestyle instead.
 
   fresh@0.5.2:
     resolution: {integrity: sha512-zJ2mQYM18rEFOudeV4GShTGIQ7RbzA7ozbU9I/XBpm7kqgMywgmylMwXHxZJmkVoYkna9d2pVXVXPdYTP9ej8Q==}
