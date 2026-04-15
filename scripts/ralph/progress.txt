@@ -1,6 +1,7 @@
 # Ralph Progress Log
 ## Codebase Patterns
 - Use `examples/sqlite-raw/bench-results.json` as the append-only benchmark source of truth, and regenerate `examples/sqlite-raw/BENCH_RESULTS.md` from it with `pnpm --dir examples/sqlite-raw run bench:record -- --render-only`.
+- Fresh `examples/sqlite-raw` phase benchmarks should keep `BENCH_READY_TIMEOUT_MS=300000` in the recorded command because actor readiness on a newly started local engine can lag far beyond the old 120s default.
 - Re-evaluate the SQLite fast-path page ceiling with `pnpm --dir examples/sqlite-raw run bench:record -- --evaluate-batch-ceiling --chosen-limit-pages <pages> --batch-pages <comma-list> --fresh-engine`; on the local benchmark path, use VFS fast-path telemetry for request bytes and commit latency because pegboard metrics stay zero when the actor runs in-process.
 - Use `c.db.resetVfsTelemetry()` and `c.db.snapshotVfsTelemetry()` inside the measured actor action so SQLite benchmark telemetry excludes startup migrations and open-time noise.
 - Scrape pegboard metrics from `RIVET_METRICS_ENDPOINT` or the default `:6430` metrics server immediately before and after `bench:large-insert` so server telemetry lands in the same structured benchmark result as the actor-side VFS telemetry.
@@ -130,4 +131,13 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - `db.checkpoint()` is the clean way to prove RocksDB-backed fast-path state persisted in tests. Reopening the live path in-process just trips the lock.
   - The fast-path retry story splits cleanly by layer: pegboard-envoy fence tests cover stale replay and restart cases, while native VFS tests cover timeout-then-retry with buffered pages still intact.
   - `cargo test -p rivet-envoy-protocol`, `cargo test -p rivet-envoy-client`, `cargo test -p pegboard --test sqlite_fast_path`, `cargo test -p pegboard-envoy sqlite_fast_path`, and `cargo test -p rivetkit-sqlite-native` cover the mixed-version, server, fence, and native retry surface for this story.
+---
+## 2026-04-15 08:52:23 PDT - US-014
+- Recorded the fresh-engine Phase 2/3 benchmark in `examples/sqlite-raw/bench-results.json` and regenerated `examples/sqlite-raw/BENCH_RESULTS.md` with explicit comparisons against both Phase 0 and Phase 1.
+- Extended the benchmark recorder so fresh-engine runs carry and record `BENCH_READY_TIMEOUT_MS=300000`, which made the measured run reproducible on this branch instead of dying during actor warmup.
+- Files changed: `examples/sqlite-raw/BENCH_RESULTS.md`, `examples/sqlite-raw/bench-results.json`, `examples/sqlite-raw/scripts/run-benchmark.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Fresh-engine `examples/sqlite-raw` phase runs on this branch need a longer actor-readiness window than the old 120s default, so keep the recorded benchmark command aligned with the workflow env.
+  - The local Phase 2/3 run on commit `df83e0aafced0efb48a524e54eb7a1c6d2549e35` measured `779.1ms` actor insert, `3844.6ms` actor verify, `4800.3ms` end-to-end, and `attempt 4 / ok 4 / fallback 0 / fail 0` fast-path commit usage.
+  - The benchmark can still be valid even if the fresh engine starts throwing workflow-worker shutdown noise after the recorder prints `Recorded Phase 2/3 benchmark...`; the measurement itself already landed by then.
 ---

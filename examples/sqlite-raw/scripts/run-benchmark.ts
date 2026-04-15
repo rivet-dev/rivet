@@ -26,6 +26,8 @@ const sqlitePageSizeBytes = 4096;
 const sqlitePageOverheadEstimate = 32;
 const defaultEndpoint = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
 const defaultLogPath = "/tmp/sqlite-raw-bench-engine.log";
+const defaultFreshEngineReadyTimeoutMs =
+	process.env.BENCH_READY_TIMEOUT_MS ?? "300000";
 const defaultRustLog =
 	"opentelemetry_sdk=off,opentelemetry-otlp=info,tower::buffer::worker=info,debug";
 
@@ -507,6 +509,11 @@ function buildBenchmarkCommand(
 		`BENCH_ROWS=${rowCount}`,
 		`RIVET_ENDPOINT=${endpoint}`,
 	];
+	const readyTimeoutMs =
+		envOverrides.BENCH_READY_TIMEOUT_MS ?? process.env.BENCH_READY_TIMEOUT_MS;
+	if (readyTimeoutMs) {
+		vars.push(`BENCH_READY_TIMEOUT_MS=${readyTimeoutMs}`);
+	}
 	if (envOverrides.BENCH_REQUIRE_SERVER_TELEMETRY === "1") {
 		vars.push("BENCH_REQUIRE_SERVER_TELEMETRY=1");
 	}
@@ -544,6 +551,21 @@ function canonicalWorkflowCommand(options: CliOptions): string {
 
 function canonicalBenchmarkCommand(endpoint: string): string {
 	return buildBenchmarkCommand(endpoint);
+}
+
+function freshEngineBenchmarkEnv(
+	options: CliOptions,
+	baseEnv: NodeJS.ProcessEnv = {},
+): NodeJS.ProcessEnv {
+	if (!options.freshEngine) {
+		return baseEnv;
+	}
+
+	return {
+		...baseEnv,
+		BENCH_READY_TIMEOUT_MS:
+			baseEnv.BENCH_READY_TIMEOUT_MS ?? defaultFreshEngineReadyTimeoutMs,
+	};
 }
 
 function runCommand(
@@ -884,6 +906,28 @@ function renderPhaseComparison(run: BenchRun, baseline: BenchRun | undefined): s
 - End-to-end action: \`${formatMs(baseline.benchmark.delta.endToEndElapsedMs)}\` -> \`${formatMs(run.benchmark.delta.endToEndElapsedMs)}\` (\`${formatDelta(endToEndDelta, "ms")}\`, \`${formatPercentDelta(run.benchmark.delta.endToEndElapsedMs, baseline.benchmark.delta.endToEndElapsedMs)}\`)`;
 }
 
+function comparisonBaselinesForRun(
+	run: BenchRun,
+	latest: Map<PhaseKey, BenchRun>,
+): BenchRun[] {
+	if (run.phase === "phase-0") {
+		return [];
+	}
+
+	const baselinePhases: PhaseKey[] =
+		run.phase === "phase-1"
+			? ["phase-0"]
+			: run.phase === "phase-2-3"
+				? ["phase-0", "phase-1"]
+				: ["phase-0", "phase-1", "phase-2-3"];
+
+	return baselinePhases
+		.map((phase) => latest.get(phase))
+		.filter((candidate): candidate is BenchRun => {
+			return candidate !== undefined && candidate.id !== run.id;
+		});
+}
+
 function renderHistoricalReference(): string {
 	return `## Historical Reference
 
@@ -1163,11 +1207,12 @@ function renderMarkdown(store: BenchResultsStore): string {
 	const runLog = [...store.runs]
 		.reverse()
 		.map((run) => {
-			const phaseZeroRun =
-				run.phase === "phase-0" ? undefined : latest.get("phase-0");
-			const phaseComparison = renderPhaseComparison(run, phaseZeroRun);
-			const phaseComparisonSection = phaseComparison
-				? `\n\n${phaseComparison}`
+			const phaseComparisons = comparisonBaselinesForRun(run, latest)
+				.map((baseline) => renderPhaseComparison(run, baseline))
+				.filter((comparison) => comparison.length > 0)
+				.join("\n\n");
+			const phaseComparisonSection = phaseComparisons
+				? `\n\n${phaseComparisons}`
 				: "";
 
 			return `### ${phaseLabels[run.phase]} · ${run.recordedAt}
@@ -1323,10 +1368,10 @@ async function main(): Promise<void> {
 			const samples: BatchCeilingSample[] = [];
 			for (const targetDirtyPages of batchPages) {
 				const payloadMiB = payloadMiBForTargetDirtyPages(targetDirtyPages);
-				const benchmarkEnv = {
+				const benchmarkEnv = freshEngineBenchmarkEnv(options, {
 					BENCH_MB: payloadMiB.toFixed(2),
 					BENCH_REQUIRE_SERVER_TELEMETRY: "1",
-				};
+				});
 				samples.push({
 					targetDirtyPages,
 					payloadMiB,
@@ -1360,14 +1405,15 @@ async function main(): Promise<void> {
 			if (!phase) {
 				throw new Error("Missing required phase.");
 			}
-			const benchmark = runBenchmark(endpoint);
+			const benchmarkEnv = freshEngineBenchmarkEnv(options);
+			const benchmark = runBenchmark(endpoint, benchmarkEnv);
 			const run: BenchRun = {
 				id: `${phase}-${Date.now()}`,
 				phase,
 				recordedAt: new Date().toISOString(),
 				gitSha,
 				workflowCommand: canonicalWorkflowCommand(options),
-				benchmarkCommand: canonicalBenchmarkCommand(endpoint),
+				benchmarkCommand: buildBenchmarkCommand(endpoint, benchmarkEnv),
 				endpoint,
 				freshEngineStart: options.freshEngine,
 				engineLogPath,

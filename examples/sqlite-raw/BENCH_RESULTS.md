@@ -14,27 +14,27 @@ This file is generated from `bench-results.json` by
 
 | Metric | Phase 0 | Phase 1 | Phase 2/3 | Final |
 | --- | --- | --- | --- | --- |
-| Status | Recorded | Recorded | Pending | Pending |
-| Recorded at | 2026-04-15T12:46:45.574Z | 2026-04-15T13:49:47.472Z | Pending | Pending |
-| Git SHA | 78c806c541b8 | dc5ba87b2410 | Pending | Pending |
-| Fresh engine | yes | yes | Pending | Pending |
-| Payload | 10 MiB | 10 MiB | Pending | Pending |
-| Rows | 1 | 1 | Pending | Pending |
-| Atomic write coverage | begin 0 / commit 0 / ok 0 | begin 0 / commit 0 / ok 0 | Pending | Pending |
-| Buffered dirty pages | total 0 / max 0 | total 0 / max 0 | Pending | Pending |
-| Immediate kv_put writes | 2589 | 0 | Pending | Pending |
-| Batch-cap failures | 0 | 0 | Pending | Pending |
-| Server request counts | write 0 / read 0 / truncate 0 | write 0 / read 0 / truncate 0 | Pending | Pending |
-| Server dirty pages | 0 | 0 | Pending | Pending |
-| Server request bytes | write 0 B / read 0 B / truncate 0 B | write 0 B / read 0 B / truncate 0 B | Pending | Pending |
-| Server overhead timing | estimate 0.0ms / rewrite 0.0ms | estimate 0.0ms / rewrite 0.0ms | Pending | Pending |
-| Server validation | ok 0 / quota 0 / payload 0 / count 0 | ok 0 / quota 0 / payload 0 / count 0 | Pending | Pending |
-| Actor DB insert | 15875.9ms | 898.2ms | Pending | Pending |
-| Actor DB verify | 23848.9ms | 3927.6ms | Pending | Pending |
-| End-to-end action | 40000.7ms | 4922.9ms | Pending | Pending |
-| Native SQLite insert | 35.7ms | 39.7ms | Pending | Pending |
-| Actor DB vs native | 445.25x | 22.65x | Pending | Pending |
-| End-to-end vs native | 1121.85x | 124.12x | Pending | Pending |
+| Status | Recorded | Recorded | Recorded | Pending |
+| Recorded at | 2026-04-15T12:46:45.574Z | 2026-04-15T13:49:47.472Z | 2026-04-15T15:51:19.124Z | Pending |
+| Git SHA | 78c806c541b8 | dc5ba87b2410 | df83e0aafced | Pending |
+| Fresh engine | yes | yes | yes | Pending |
+| Payload | 10 MiB | 10 MiB | 10 MiB | Pending |
+| Rows | 1 | 1 | 1 | Pending |
+| Atomic write coverage | begin 0 / commit 0 / ok 0 | begin 0 / commit 0 / ok 0 | begin 0 / commit 0 / ok 0 | Pending |
+| Buffered dirty pages | total 0 / max 0 | total 0 / max 0 | total 0 / max 0 | Pending |
+| Immediate kv_put writes | 2589 | 0 | 0 | Pending |
+| Batch-cap failures | 0 | 0 | 0 | Pending |
+| Server request counts | write 0 / read 0 / truncate 0 | write 0 / read 0 / truncate 0 | write 0 / read 0 / truncate 0 | Pending |
+| Server dirty pages | 0 | 0 | 0 | Pending |
+| Server request bytes | write 0 B / read 0 B / truncate 0 B | write 0 B / read 0 B / truncate 0 B | write 0 B / read 0 B / truncate 0 B | Pending |
+| Server overhead timing | estimate 0.0ms / rewrite 0.0ms | estimate 0.0ms / rewrite 0.0ms | estimate 0.0ms / rewrite 0.0ms | Pending |
+| Server validation | ok 0 / quota 0 / payload 0 / count 0 | ok 0 / quota 0 / payload 0 / count 0 | ok 0 / quota 0 / payload 0 / count 0 | Pending |
+| Actor DB insert | 15875.9ms | 898.2ms | 779.1ms | Pending |
+| Actor DB verify | 23848.9ms | 3927.6ms | 3844.6ms | Pending |
+| End-to-end action | 40000.7ms | 4922.9ms | 4800.3ms | Pending |
+| Native SQLite insert | 35.7ms | 39.7ms | 34.9ms | Pending |
+| Actor DB vs native | 445.25x | 22.65x | 22.35x | Pending |
+| End-to-end vs native | 1121.85x | 124.12x | 137.69x | Pending |
 
 ## SQLite Fast-Path Batch Ceiling
 
@@ -78,6 +78,86 @@ This file is generated from `bench-results.json` by
 Older evaluations remain in `bench-results.json`; the latest successful rerun is rendered here.
 
 ## Append-Only Run Log
+
+### Phase 2/3 · 2026-04-15T15:51:19.124Z
+
+- Run ID: `phase-2-3-1776268279124`
+- Git SHA: `df83e0aafced0efb48a524e54eb7a1c6d2549e35`
+- Workflow command: `pnpm --dir examples/sqlite-raw run bench:record -- --phase phase-2-3 --fresh-engine`
+- Benchmark command: `BENCH_MB=10 BENCH_ROWS=1 RIVET_ENDPOINT=http://127.0.0.1:6420 BENCH_READY_TIMEOUT_MS=300000 pnpm --dir examples/sqlite-raw run bench:large-insert -- --json`
+- Endpoint: `http://127.0.0.1:6420`
+- Fresh engine start: `yes`
+- Engine log: `/tmp/sqlite-raw-bench-engine.log`
+- Payload: `10 MiB`
+- Total bytes: `10.00 MiB`
+- Rows: `1`
+- Actor DB insert: `779.1ms`
+- Actor DB verify: `3844.6ms`
+- End-to-end action: `4800.3ms`
+- Native SQLite insert: `34.9ms`
+- Actor DB vs native: `22.35x`
+- End-to-end vs native: `137.69x`
+
+#### Compared to Phase 0
+
+- Atomic write coverage: `begin 0 / commit 0 / ok 0` -> `begin 0 / commit 0 / ok 0`
+- Fast-path commit usage: `attempt 0 / ok 0 / fallback 0 / fail 0` -> `attempt 4 / ok 4 / fallback 0 / fail 0`
+- Buffered dirty pages: `total 0 / max 0` -> `total 0 / max 0`
+- Immediate `kv_put` writes: `2589` -> `0` (`-2589`, `-100.0%`)
+- Batch-cap failures: `0` -> `0` (`0`)
+- Actor DB insert: `15875.9ms` -> `779.1ms` (`-15096.8ms`, `-95.1%`)
+- Actor DB verify: `23848.9ms` -> `3844.6ms` (`-20004.3ms`, `-83.9%`)
+- End-to-end action: `40000.7ms` -> `4800.3ms` (`-35200.4ms`, `-88.0%`)
+
+#### Compared to Phase 1
+
+- Atomic write coverage: `begin 0 / commit 0 / ok 0` -> `begin 0 / commit 0 / ok 0`
+- Fast-path commit usage: `attempt 0 / ok 0 / fallback 0 / fail 0` -> `attempt 4 / ok 4 / fallback 0 / fail 0`
+- Buffered dirty pages: `total 0 / max 0` -> `total 0 / max 0`
+- Immediate `kv_put` writes: `0` -> `0` (`0`, `0.0%`)
+- Batch-cap failures: `0` -> `0` (`0`)
+- Actor DB insert: `898.2ms` -> `779.1ms` (`-119.2ms`, `-13.3%`)
+- Actor DB verify: `3927.6ms` -> `3844.6ms` (`-82.9ms`, `-2.1%`)
+- End-to-end action: `4922.9ms` -> `4800.3ms` (`-122.6ms`, `-2.5%`)
+
+#### VFS Telemetry
+
+- Reads: `2565` calls, `10.01 MiB` returned, `2` short reads, `3839.1ms` total
+- Writes: `2589` calls, `10.05 MiB` input, `2589` buffered calls, `0` immediate `kv_put` fallbacks
+- Syncs: `4` calls, `4` metadata flushes, `743.5ms` total
+- Atomic write coverage: `begin 0 / commit 0 / ok 0`
+- Fast-path commit usage: `attempt 4 / ok 4 / fallback 0 / fail 0`
+- Atomic write pages: `total 0 / max 0`
+- Atomic write bytes: `0.00 MiB`
+- Atomic write failures: `0` batch-cap, `0` KV put
+- KV round-trips: `get 2565` / `put 1` / `delete 0` / `deleteRange 0`
+- KV payload bytes: `10.02 MiB` read, `0.00 MiB` written
+
+#### Server Telemetry
+
+- Metrics endpoint: `http://127.0.0.1:6430/metrics`
+- Path label: `generic`
+- Reads: `0` requests, `0` page keys, `0` metadata keys, `0 B` request bytes, `0 B` response bytes, `0.0ms` total
+- Writes: `0` requests, `0` dirty pages, `0` metadata keys, `0 B` request bytes, `0 B` payload bytes, `0.0ms` total
+- Path overhead: `0.0ms` in `estimate_kv_size`, `0.0ms` in clear-and-rewrite, `0` `clear_subspace_range` calls
+- Truncates: `0` requests, `0 B` request bytes, `0.0ms` total
+- Validation outcomes: `ok 0` / `quota 0` / `payload 0` / `count 0` / `key 0` / `value 0` / `length 0`
+
+#### Engine Build Provenance
+
+- Command: `cargo build --bin rivet-engine`
+- CWD: `.`
+- Artifact: `target/debug/rivet-engine`
+- Artifact mtime: `2026-04-15T15:45:24.929Z`
+- Duration: `249.6ms`
+
+#### Native Build Provenance
+
+- Command: `pnpm --dir rivetkit-typescript/packages/rivetkit-native build:force`
+- CWD: `.`
+- Artifact: `rivetkit-typescript/packages/rivetkit-native/rivetkit-native.linux-x64-gnu.node`
+- Artifact mtime: `2026-04-15T15:50:20.841Z`
+- Duration: `725.7ms`
 
 ### Phase 1 · 2026-04-15T13:49:47.472Z
 

@@ -302,6 +302,166 @@
 					"endToEndVsNativeMultiplier": 124.11974825896806
 				}
 			}
+		},
+		{
+			"id": "phase-2-3-1776268279124",
+			"phase": "phase-2-3",
+			"recordedAt": "2026-04-15T15:51:19.124Z",
+			"gitSha": "df83e0aafced0efb48a524e54eb7a1c6d2549e35",
+			"workflowCommand": "pnpm --dir examples/sqlite-raw run bench:record -- --phase phase-2-3 --fresh-engine",
+			"benchmarkCommand": "BENCH_MB=10 BENCH_ROWS=1 RIVET_ENDPOINT=http://127.0.0.1:6420 BENCH_READY_TIMEOUT_MS=300000 pnpm --dir examples/sqlite-raw run bench:large-insert -- --json",
+			"endpoint": "http://127.0.0.1:6420",
+			"freshEngineStart": true,
+			"engineLogPath": "/tmp/sqlite-raw-bench-engine.log",
+			"engineBuild": {
+				"command": "cargo build --bin rivet-engine",
+				"cwd": ".",
+				"durationMs": 249.576845,
+				"artifact": "target/debug/rivet-engine",
+				"artifactModifiedAt": "2026-04-15T15:45:24.929Z"
+			},
+			"nativeBuild": {
+				"command": "pnpm --dir rivetkit-typescript/packages/rivetkit-native build:force",
+				"cwd": ".",
+				"durationMs": 725.6531809999999,
+				"artifact": "rivetkit-typescript/packages/rivetkit-native/rivetkit-native.linux-x64-gnu.node",
+				"artifactModifiedAt": "2026-04-15T15:50:20.841Z"
+			},
+			"benchmark": {
+				"endpoint": "http://127.0.0.1:6420",
+				"metricsEndpoint": "http://127.0.0.1:6430/metrics",
+				"payloadMiB": 10,
+				"totalBytes": 10485760,
+				"rowCount": 1,
+				"actor": {
+					"label": "payload-3fdeaca5-121b-4ecd-97f1-df3faf9a2997",
+					"payloadBytes": 10485760,
+					"rowCount": 1,
+					"totalBytes": 10485760,
+					"storedRows": 1,
+					"insertElapsedMs": 779.0775510000021,
+					"verifyElapsedMs": 3844.643756000005,
+					"vfsTelemetry": {
+						"atomicWrite": {
+							"batchCapFailureCount": 0,
+							"beginCount": 0,
+							"commitAttemptCount": 0,
+							"commitDurationUs": 0,
+							"commitKvPutFailureCount": 0,
+							"commitSuccessCount": 0,
+							"committedBufferedBytesTotal": 0,
+							"committedDirtyPagesTotal": 0,
+							"fastPathAttemptCount": 4,
+							"fastPathDirtyPagesTotal": 2575,
+							"fastPathDurationUs": 738473,
+							"fastPathFailureCount": 0,
+							"fastPathFallbackCount": 0,
+							"fastPathRequestBytesTotal": 10559696,
+							"fastPathSuccessCount": 4,
+							"maxCommittedDirtyPages": 0,
+							"maxFastPathDirtyPages": 2566,
+							"maxFastPathDurationUs": 732994,
+							"maxFastPathRequestBytes": 10530878,
+							"rollbackCount": 0
+						},
+						"kv": {
+							"deleteCount": 0,
+							"deleteDurationUs": 0,
+							"deleteKeyCount": 0,
+							"deleteRangeCount": 0,
+							"deleteRangeDurationUs": 0,
+							"getBytes": 10502144,
+							"getCount": 2565,
+							"getDurationUs": 3830174,
+							"getKeyCount": 2565,
+							"putBytes": 10,
+							"putCount": 1,
+							"putDurationUs": 1177,
+							"putKeyCount": 1
+						},
+						"reads": {
+							"count": 2565,
+							"durationUs": 3839105,
+							"requestedBytes": 10498064,
+							"returnedBytes": 10498048,
+							"shortReadCount": 2
+						},
+						"syncs": {
+							"count": 4,
+							"durationUs": 743519,
+							"metadataFlushBytes": 40,
+							"metadataFlushCount": 4
+						},
+						"writes": {
+							"bufferedBytes": 10534996,
+							"bufferedCount": 2589,
+							"count": 2589,
+							"durationUs": 7273,
+							"immediateKvPutBytes": 0,
+							"immediateKvPutCount": 0,
+							"inputBytes": 10534996
+						}
+					}
+				},
+				"native": {
+					"payloadBytes": 10485760,
+					"rowCount": 1,
+					"totalBytes": 10485760,
+					"storedRows": 1,
+					"insertElapsedMs": 34.86269500000344,
+					"verifyElapsedMs": 1.2982719999999972
+				},
+				"serverTelemetry": {
+					"metricsEndpoint": "http://127.0.0.1:6430/metrics",
+					"path": "generic",
+					"reads": {
+						"requestCount": 0,
+						"pageEntryCount": 0,
+						"metadataEntryCount": 0,
+						"requestBytes": 0,
+						"payloadBytes": 0,
+						"responseBytes": 0,
+						"durationUs": 0
+					},
+					"writes": {
+						"requestCount": 0,
+						"pageEntryCount": 0,
+						"metadataEntryCount": 0,
+						"requestBytes": 0,
+						"payloadBytes": 0,
+						"responseBytes": 0,
+						"durationUs": 0,
+						"dirtyPageCount": 0,
+						"estimateKvSizeDurationUs": 0,
+						"clearAndRewriteDurationUs": 0,
+						"clearSubspaceCount": 0,
+						"validation": {
+							"ok": 0,
+							"lengthMismatch": 0,
+							"tooManyEntries": 0,
+							"payloadTooLarge": 0,
+							"storageQuotaExceeded": 0,
+							"keyTooLarge": 0,
+							"valueTooLarge": 0
+						}
+					},
+					"truncates": {
+						"requestCount": 0,
+						"pageEntryCount": 0,
+						"metadataEntryCount": 0,
+						"requestBytes": 0,
+						"payloadBytes": 0,
+						"responseBytes": 0,
+						"durationUs": 0
+					}
+				},
+				"delta": {
+					"endToEndElapsedMs": 4800.272753999998,
+					"overheadOutsideDbInsertMs": 4021.1952029999957,
+					"actorDbVsNativeMultiplier": 22.347025982928894,
+					"endToEndVsNativeMultiplier": 137.6908111664782
+				}
+			}
 		}
 	],
 	"batchCeilingEvaluations": [

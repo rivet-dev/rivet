@@ -219,7 +219,7 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "This is the post-surgery scan. If the patient still looks like shit, the numbers should prove it."
     },
     {
