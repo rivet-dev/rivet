@@ -21,7 +21,8 @@ pub struct Input {
 	/// time, or that any scope change is handled as an explicit reconfiguration at a higher
 	/// layer.
 	pub target_replicas: Option<Vec<ReplicaId>>,
-	// Whether or not to write an empty value into cache if it did not exist on read.
+	// Whether or not to write an empty value into cache if it did not exist on read. This short circuits
+	// future get_optimistic calls so they don't fanout.
 	pub save_empty: bool,
 }
 

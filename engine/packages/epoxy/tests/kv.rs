@@ -6,7 +6,7 @@ use epoxy_protocol::protocol::CommittedValue;
 use common::{
 	THREE_REPLICAS, TestCtx,
 	utils::{
-		check_and_set_absent, get_local, read_ballot, read_changelog_entries,
+		check_and_set_absent, delete_mutable, get_local, read_ballot, read_changelog_entries,
 		read_v2_committed_value, read_v2_value, set_if_absent, set_mutable,
 	},
 };

@@ -227,6 +227,77 @@ async fn test_kv_get_optimistic_paths() {
 
 	{
 		let mut test_ctx = TestCtx::new().await.unwrap();
+		let reader_replica_id = DEFAULT_REPLICA_IDS[0];
+		let writer_replica_id = DEFAULT_REPLICA_IDS[1];
+		let key = b"save-empty-true-key";
+
+		// Key doesn't exist anywhere: save_empty=true returns None and writes an empty cache entry.
+		let result = test_ctx
+			.get_ctx(reader_replica_id)
+			.op(epoxy::ops::kv::get_optimistic::Input {
+				replica_id: reader_replica_id,
+				key: key.to_vec(),
+				caching_behavior: CachingBehavior::Optimistic,
+				target_replicas: None,
+				save_empty: true,
+			})
+			.await
+			.unwrap();
+		assert_eq!(result.value, None);
+		assert_eq!(
+			read_cached_value(test_ctx.get_ctx(reader_replica_id), reader_replica_id, key,)
+				.await
+				.unwrap(),
+			Some(CachedValue {
+				value: None,
+				version: 0
+			}),
+		);
+
+		// The empty cache entry short-circuits the fanout: reader returns None even after the
+		// writer goes offline.
+		test_ctx
+			.stop_replica(writer_replica_id, false)
+			.await
+			.unwrap();
+		assert_eq!(
+			optimistic_get(test_ctx.get_ctx(reader_replica_id), reader_replica_id, key,).await,
+			None,
+		);
+
+		test_ctx.shutdown().await.unwrap();
+	}
+
+	{
+		let mut test_ctx = TestCtx::new().await.unwrap();
+		let reader_replica_id = DEFAULT_REPLICA_IDS[0];
+		let key = b"save-empty-false-key";
+
+		// Key doesn't exist anywhere: save_empty=false returns None without writing any cache entry.
+		let result = test_ctx
+			.get_ctx(reader_replica_id)
+			.op(epoxy::ops::kv::get_optimistic::Input {
+				replica_id: reader_replica_id,
+				key: key.to_vec(),
+				caching_behavior: CachingBehavior::Optimistic,
+				target_replicas: None,
+				save_empty: false,
+			})
+			.await
+			.unwrap();
+		assert_eq!(result.value, None);
+		assert_eq!(
+			read_cached_value(test_ctx.get_ctx(reader_replica_id), reader_replica_id, key,)
+				.await
+				.unwrap(),
+			None,
+		);
+
+		test_ctx.shutdown().await.unwrap();
+	}
+
+	{
+		let mut test_ctx = TestCtx::new().await.unwrap();
 		let leader_replica_id = DEFAULT_REPLICA_IDS[0];
 		let follower_replica_id = DEFAULT_REPLICA_IDS[1];
 		let leader_ctx = test_ctx.get_ctx(leader_replica_id);
