@@ -604,10 +604,26 @@ function stopFreshEngine(child: ReturnType<typeof spawn>): Promise<void> {
 	});
 }
 
+function parseBenchmarkOutput(stdout: string): LargeInsertBenchmarkResult {
+	const trimmed = stdout.trim();
+	const jsonStart = trimmed.indexOf("{");
+	const jsonEnd = trimmed.lastIndexOf("}");
+
+	if (jsonStart === -1 || jsonEnd === -1 || jsonEnd < jsonStart) {
+		throw new Error(
+			`bench:large-insert did not emit JSON output. Output was:\n${trimmed}`,
+		);
+	}
+
+	return JSON.parse(
+		trimmed.slice(jsonStart, jsonEnd + 1),
+	) as LargeInsertBenchmarkResult;
+}
+
 function runBenchmark(endpoint: string): LargeInsertBenchmarkResult {
 	const result = spawnSync(
 		"pnpm",
-		["--dir", exampleDir, "run", "bench:large-insert", "--", "--json"],
+		["--dir", exampleDir, "exec", "tsx", "scripts/bench-large-insert.ts", "--", "--json"],
 		{
 			cwd: repoRoot,
 			env: {
@@ -626,7 +642,7 @@ function runBenchmark(endpoint: string): LargeInsertBenchmarkResult {
 		);
 	}
 
-	return JSON.parse(result.stdout) as LargeInsertBenchmarkResult;
+	return parseBenchmarkOutput(result.stdout);
 }
 
 function loadStore(): BenchResultsStore {

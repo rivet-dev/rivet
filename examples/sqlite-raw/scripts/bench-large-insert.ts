@@ -2,18 +2,30 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { createClient } from "rivetkit/client";
+import { ActorError, createClient, type Client } from "rivetkit/client";
 import type { SqliteVfsTelemetry } from "rivetkit/db";
-import { registry } from "../src/index.ts";
+import { registry } from "../src/registry.ts";
 
 const DEFAULT_MB = Number(process.env.BENCH_MB ?? "10");
 const DEFAULT_ROWS = Number(process.env.BENCH_ROWS ?? "1");
 const DEFAULT_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
+const DEFAULT_STARTUP_GRACE_MS = Number(
+	process.env.BENCH_STARTUP_GRACE_MS ?? "5000",
+);
+const DEFAULT_READY_TIMEOUT_MS = Number(
+	process.env.BENCH_READY_TIMEOUT_MS ?? "120000",
+);
+const DEFAULT_READY_RETRY_MS = Number(
+	process.env.BENCH_READY_RETRY_MS ?? "500",
+);
 const DEFAULT_METRICS_ENDPOINT =
 	process.env.RIVET_METRICS_ENDPOINT ??
 	deriveMetricsEndpoint(DEFAULT_ENDPOINT);
 const JSON_OUTPUT =
 	process.argv.includes("--json") || process.env.BENCH_OUTPUT === "json";
+const DEBUG_OUTPUT = process.env.BENCH_DEBUG === "1";
+
+type RegistryClient = Client<typeof registry>;
 
 interface BenchmarkInsertResult {
 	payloadBytes: number;
@@ -212,6 +224,86 @@ function metricDelta(
 
 function secondsToUs(seconds: number): number {
 	return Math.round(seconds * 1_000_000);
+}
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function debug(message: string, ...args: unknown[]): void {
+	if (!DEBUG_OUTPUT) {
+		return;
+	}
+
+	console.error(`[bench-large-insert] ${message}`, ...args);
+}
+
+function isRetryableReadinessError(error: unknown): boolean {
+	if (error instanceof ActorError) {
+		return (
+			(error.group === "guard" &&
+				(error.code === "actor_ready_timeout" ||
+					error.code === "actor_runner_failed")) ||
+			(error.group === "core" && error.code === "internal_error")
+		);
+	}
+
+	if (!(error instanceof Error)) {
+		return false;
+	}
+
+	return (
+		error.message.includes("fetch failed") ||
+		error.message.includes("Request timed out") ||
+		error.message.includes("pegboard_actor_create timed out") ||
+		error.message.includes("Internal Server Error")
+	);
+}
+
+async function waitForActorRuntimeReady(client: RegistryClient): Promise<void> {
+	const deadline = Date.now() + DEFAULT_READY_TIMEOUT_MS;
+	let lastError: unknown;
+	let attempt = 0;
+
+	while (Date.now() < deadline) {
+		try {
+			attempt += 1;
+			debug("warmup attempt starting", {
+				attempt,
+				deadline: new Date(deadline).toISOString(),
+			});
+			const warmupActor = await client.todoList.create([
+				`bench-ready-${crypto.randomUUID()}`,
+			]);
+			debug("warmup actor created", { attempt });
+			await warmupActor.addTodo("benchmark-runtime-ready");
+			debug("warmup action completed", { attempt });
+			return;
+		} catch (error) {
+			lastError = error;
+			debug("warmup attempt failed", {
+				attempt,
+				error:
+					error instanceof Error
+						? {
+								name: error.name,
+								message: error.message,
+							}
+						: error,
+			});
+			if (!isRetryableReadinessError(error)) {
+				throw error;
+			}
+			await sleep(DEFAULT_READY_RETRY_MS);
+		}
+	}
+
+	throw new Error(
+		`Timed out waiting ${DEFAULT_READY_TIMEOUT_MS}ms for benchmark actor readiness.`,
+		{
+			cause: lastError instanceof Error ? lastError : undefined,
+		},
+	);
 }
 
 function buildOperationTelemetry(
@@ -443,23 +535,39 @@ async function runLargeInsertBenchmark(): Promise<LargeInsertBenchmarkResult> {
 	const totalBytes = DEFAULT_MB * 1024 * 1024;
 	const rowCount = DEFAULT_ROWS;
 
+	registry.config.noWelcome = true;
+	registry.config.logging = {
+		...registry.config.logging,
+		level: DEBUG_OUTPUT ? "debug" : "error",
+	};
+	debug("starting registry");
 	registry.start();
+	debug("waiting for startup grace", { ms: DEFAULT_STARTUP_GRACE_MS });
+	await sleep(DEFAULT_STARTUP_GRACE_MS);
+
 	const client = createClient<typeof registry>({
 		endpoint: DEFAULT_ENDPOINT,
 	});
+	debug("waiting for actor runtime readiness");
+	await waitForActorRuntimeReady(client);
+	debug("actor runtime ready");
 	const actor = client.todoList.getOrCreate([`bench-${Date.now()}`]);
 	const label = `payload-${crypto.randomUUID()}`;
+	debug("fetching metrics before benchmark");
 	const metricsBefore = await fetchMetricsSnapshot(DEFAULT_METRICS_ENDPOINT);
 
 	const endToEndStart = performance.now();
+	debug("running measured benchmark action", { label, rowCount, totalBytes });
 	const actorResult = await actor.benchInsertPayload(
 		label,
 		Math.floor(totalBytes / rowCount),
 		rowCount,
 	);
 	const endToEndElapsedMs = performance.now() - endToEndStart;
+	debug("fetching metrics after benchmark");
 	const metricsAfter = await fetchMetricsSnapshot(DEFAULT_METRICS_ENDPOINT);
 
+	debug("running native insert comparison");
 	const nativeResult = runNativeInsert(totalBytes, rowCount);
 
 	return {

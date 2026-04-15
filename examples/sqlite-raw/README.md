@@ -70,7 +70,8 @@ The example creates a `todoList` actor with the following actions:
 
 ## Code Structure
 
-- `src/index.ts` - Actor definition, migrations, and registry startup
+- `src/registry.ts` - Actor definition, migrations, and shared registry
+- `src/index.ts` - Example entrypoint that starts the registry
 - `scripts/client.ts` - Simple todo client
 - `scripts/bench-large-insert.ts` - Large-payload benchmark runner
 - `scripts/run-benchmark.ts` - Rebuilds dependencies, records per-phase runs, and renders `BENCH_RESULTS.md`

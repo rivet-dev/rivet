@@ -14,31 +14,86 @@ This file is generated from `bench-results.json` by
 
 | Metric | Phase 0 | Phase 1 | Phase 2/3 | Final |
 | --- | --- | --- | --- | --- |
-| Status | Pending | Pending | Pending | Pending |
-| Recorded at | Pending | Pending | Pending | Pending |
-| Git SHA | Pending | Pending | Pending | Pending |
-| Fresh engine | Pending | Pending | Pending | Pending |
-| Payload | Pending | Pending | Pending | Pending |
-| Rows | Pending | Pending | Pending | Pending |
-| Atomic write coverage | Pending | Pending | Pending | Pending |
-| Buffered dirty pages | Pending | Pending | Pending | Pending |
-| Immediate kv_put writes | Pending | Pending | Pending | Pending |
-| Batch-cap failures | Pending | Pending | Pending | Pending |
-| Server request counts | Pending | Pending | Pending | Pending |
-| Server dirty pages | Pending | Pending | Pending | Pending |
-| Server request bytes | Pending | Pending | Pending | Pending |
-| Server overhead timing | Pending | Pending | Pending | Pending |
-| Server validation | Pending | Pending | Pending | Pending |
-| Actor DB insert | Pending | Pending | Pending | Pending |
-| Actor DB verify | Pending | Pending | Pending | Pending |
-| End-to-end action | Pending | Pending | Pending | Pending |
-| Native SQLite insert | Pending | Pending | Pending | Pending |
-| Actor DB vs native | Pending | Pending | Pending | Pending |
-| End-to-end vs native | Pending | Pending | Pending | Pending |
+| Status | Recorded | Pending | Pending | Pending |
+| Recorded at | 2026-04-15T12:46:45.574Z | Pending | Pending | Pending |
+| Git SHA | 78c806c541b8 | Pending | Pending | Pending |
+| Fresh engine | yes | Pending | Pending | Pending |
+| Payload | 10 MiB | Pending | Pending | Pending |
+| Rows | 1 | Pending | Pending | Pending |
+| Atomic write coverage | begin 0 / commit 0 / ok 0 | Pending | Pending | Pending |
+| Buffered dirty pages | total 0 / max 0 | Pending | Pending | Pending |
+| Immediate kv_put writes | 2589 | Pending | Pending | Pending |
+| Batch-cap failures | 0 | Pending | Pending | Pending |
+| Server request counts | write 0 / read 0 / truncate 0 | Pending | Pending | Pending |
+| Server dirty pages | 0 | Pending | Pending | Pending |
+| Server request bytes | write 0 B / read 0 B / truncate 0 B | Pending | Pending | Pending |
+| Server overhead timing | estimate 0.0ms / rewrite 0.0ms | Pending | Pending | Pending |
+| Server validation | ok 0 / quota 0 / payload 0 / count 0 | Pending | Pending | Pending |
+| Actor DB insert | 15875.9ms | Pending | Pending | Pending |
+| Actor DB verify | 23848.9ms | Pending | Pending | Pending |
+| End-to-end action | 40000.7ms | Pending | Pending | Pending |
+| Native SQLite insert | 35.7ms | Pending | Pending | Pending |
+| Actor DB vs native | 445.25x | Pending | Pending | Pending |
+| End-to-end vs native | 1121.85x | Pending | Pending | Pending |
 
 ## Append-Only Run Log
 
-No structured runs recorded yet.
+### Phase 0 · 2026-04-15T12:46:45.574Z
+
+- Run ID: `phase-0-1776257205574`
+- Git SHA: `78c806c541b8736ec0525c0971fb94af213bf044`
+- Workflow command: `cargo build --bin rivet-engine && pnpm --dir rivetkit-typescript/packages/rivetkit-native run build:force && setsid env RUST_BACKTRACE=full RUST_LOG='opentelemetry_sdk=off,opentelemetry-otlp=info,tower::buffer::worker=info,debug' RUST_LOG_TARGET=1 ./target/debug/rivet-engine start >/tmp/sqlite-manual-engine.log 2>&1 < /dev/null & BENCH_OUTPUT=json pnpm --dir examples/sqlite-raw exec tsx scripts/bench-large-insert.ts -- --json`
+- Benchmark command: `BENCH_OUTPUT=json RIVET_ENDPOINT=http://127.0.0.1:6420 pnpm --dir examples/sqlite-raw exec tsx scripts/bench-large-insert.ts -- --json`
+- Endpoint: `http://127.0.0.1:6420`
+- Fresh engine start: `yes`
+- Engine log: `/tmp/sqlite-manual-engine.log`
+- Payload: `10 MiB`
+- Total bytes: `10.00 MiB`
+- Rows: `1`
+- Actor DB insert: `15875.9ms`
+- Actor DB verify: `23848.9ms`
+- End-to-end action: `40000.7ms`
+- Native SQLite insert: `35.7ms`
+- Actor DB vs native: `445.25x`
+- End-to-end vs native: `1121.85x`
+
+#### VFS Telemetry
+
+- Reads: `2565` calls, `10.01 MiB` returned, `2` short reads, `23843.6ms` total
+- Writes: `2589` calls, `10.05 MiB` input, `0` buffered calls, `2589` immediate `kv_put` fallbacks
+- Syncs: `4` calls, `0` metadata flushes, `0.0ms` total
+- Atomic write coverage: `begin 0 / commit 0 / ok 0`
+- Atomic write pages: `total 0 / max 0`
+- Atomic write bytes: `0.00 MiB`
+- Atomic write failures: `0` batch-cap, `0` KV put
+- KV round-trips: `get 2584` / `put 2590` / `delete 0` / `deleteRange 0`
+- KV payload bytes: `10.05 MiB` read, `10.11 MiB` written
+
+#### Server Telemetry
+
+- Metrics endpoint: `http://127.0.0.1:6430/metrics`
+- Path label: `generic`
+- Reads: `0` requests, `0` page keys, `0` metadata keys, `0 B` request bytes, `0 B` response bytes, `0.0ms` total
+- Writes: `0` requests, `0` dirty pages, `0` metadata keys, `0 B` request bytes, `0 B` payload bytes, `0.0ms` total
+- Generic overhead: `0.0ms` in `estimate_kv_size`, `0.0ms` in clear-and-rewrite, `0` `clear_subspace_range` calls
+- Truncates: `0` requests, `0 B` request bytes, `0.0ms` total
+- Validation outcomes: `ok 0` / `quota 0` / `payload 0` / `count 0` / `key 0` / `value 0` / `length 0`
+
+#### Engine Build Provenance
+
+- Command: `cargo build --bin rivet-engine`
+- CWD: `.`
+- Artifact: `target/debug/rivet-engine`
+- Artifact mtime: `2026-04-15T05:03:06-07:00`
+- Duration: `284.0ms`
+
+#### Native Build Provenance
+
+- Command: `pnpm --dir rivetkit-typescript/packages/rivetkit-native build:force`
+- CWD: `.`
+- Artifact: `rivetkit-typescript/packages/rivetkit-native/rivetkit-native.linux-x64-gnu.node`
+- Artifact mtime: `2026-04-15T05:44:45-07:00`
+- Duration: `990.0ms`
 
 ## Historical Reference
 

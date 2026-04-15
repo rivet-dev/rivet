@@ -2,5 +2,156 @@
 	"schemaVersion": 1,
 	"sourceFile": "examples/sqlite-raw/bench-results.json",
 	"resultsFile": "examples/sqlite-raw/BENCH_RESULTS.md",
-	"runs": []
+	"runs": [
+		{
+			"id": "phase-0-1776257205574",
+			"phase": "phase-0",
+			"recordedAt": "2026-04-15T12:46:45.574Z",
+			"gitSha": "78c806c541b8736ec0525c0971fb94af213bf044",
+			"workflowCommand": "cargo build --bin rivet-engine && pnpm --dir rivetkit-typescript/packages/rivetkit-native run build:force && setsid env RUST_BACKTRACE=full RUST_LOG='opentelemetry_sdk=off,opentelemetry-otlp=info,tower::buffer::worker=info,debug' RUST_LOG_TARGET=1 ./target/debug/rivet-engine start >/tmp/sqlite-manual-engine.log 2>&1 < /dev/null & BENCH_OUTPUT=json pnpm --dir examples/sqlite-raw exec tsx scripts/bench-large-insert.ts -- --json",
+			"benchmarkCommand": "BENCH_OUTPUT=json RIVET_ENDPOINT=http://127.0.0.1:6420 pnpm --dir examples/sqlite-raw exec tsx scripts/bench-large-insert.ts -- --json",
+			"endpoint": "http://127.0.0.1:6420",
+			"freshEngineStart": true,
+			"engineLogPath": "/tmp/sqlite-manual-engine.log",
+			"engineBuild": {
+				"command": "cargo build --bin rivet-engine",
+				"cwd": ".",
+				"durationMs": 284,
+				"artifact": "target/debug/rivet-engine",
+				"artifactModifiedAt": "2026-04-15T05:03:06-07:00"
+			},
+			"nativeBuild": {
+				"command": "pnpm --dir rivetkit-typescript/packages/rivetkit-native build:force",
+				"cwd": ".",
+				"durationMs": 990,
+				"artifact": "rivetkit-typescript/packages/rivetkit-native/rivetkit-native.linux-x64-gnu.node",
+				"artifactModifiedAt": "2026-04-15T05:44:45-07:00"
+			},
+			"benchmark": {
+				"endpoint": "http://127.0.0.1:6420",
+				"metricsEndpoint": "http://127.0.0.1:6430/metrics",
+				"payloadMiB": 10,
+				"totalBytes": 10485760,
+				"rowCount": 1,
+				"actor": {
+					"label": "payload-2496d41a-1513-4d0f-8f1c-263dfa2109e8",
+					"payloadBytes": 10485760,
+					"rowCount": 1,
+					"totalBytes": 10485760,
+					"storedRows": 1,
+					"insertElapsedMs": 15875.857764,
+					"verifyElapsedMs": 23848.907179,
+					"vfsTelemetry": {
+						"atomicWrite": {
+							"batchCapFailureCount": 0,
+							"beginCount": 0,
+							"commitAttemptCount": 0,
+							"commitDurationUs": 0,
+							"commitKvPutFailureCount": 0,
+							"commitSuccessCount": 0,
+							"committedBufferedBytesTotal": 0,
+							"committedDirtyPagesTotal": 0,
+							"maxCommittedDirtyPages": 0,
+							"rollbackCount": 0
+						},
+						"kv": {
+							"deleteCount": 0,
+							"deleteDurationUs": 0,
+							"deleteKeyCount": 0,
+							"deleteRangeCount": 0,
+							"deleteRangeDurationUs": 0,
+							"getBytes": 10540472,
+							"getCount": 2584,
+							"getDurationUs": 23879378,
+							"getKeyCount": 2584,
+							"putBytes": 10603198,
+							"putCount": 2590,
+							"putDurationUs": 15782312,
+							"putKeyCount": 5177
+						},
+						"reads": {
+							"count": 2565,
+							"durationUs": 23843564,
+							"requestedBytes": 10498064,
+							"returnedBytes": 10498048,
+							"shortReadCount": 2
+						},
+						"syncs": {
+							"count": 4,
+							"durationUs": 0,
+							"metadataFlushBytes": 0,
+							"metadataFlushCount": 0
+						},
+						"writes": {
+							"bufferedBytes": 0,
+							"bufferedCount": 0,
+							"count": 2589,
+							"durationUs": 15841657,
+							"immediateKvPutBytes": 10534996,
+							"immediateKvPutCount": 2589,
+							"inputBytes": 10534996
+						}
+					}
+				},
+				"native": {
+					"payloadBytes": 10485760,
+					"rowCount": 1,
+					"totalBytes": 10485760,
+					"storedRows": 1,
+					"insertElapsedMs": 35.656087000003026,
+					"verifyElapsedMs": 1.767132999993919
+				},
+				"serverTelemetry": {
+					"metricsEndpoint": "http://127.0.0.1:6430/metrics",
+					"path": "generic",
+					"reads": {
+						"requestCount": 0,
+						"pageEntryCount": 0,
+						"metadataEntryCount": 0,
+						"requestBytes": 0,
+						"payloadBytes": 0,
+						"responseBytes": 0,
+						"durationUs": 0
+					},
+					"writes": {
+						"requestCount": 0,
+						"pageEntryCount": 0,
+						"metadataEntryCount": 0,
+						"requestBytes": 0,
+						"payloadBytes": 0,
+						"responseBytes": 0,
+						"durationUs": 0,
+						"dirtyPageCount": 0,
+						"estimateKvSizeDurationUs": 0,
+						"clearAndRewriteDurationUs": 0,
+						"clearSubspaceCount": 0,
+						"validation": {
+							"ok": 0,
+							"lengthMismatch": 0,
+							"tooManyEntries": 0,
+							"payloadTooLarge": 0,
+							"storageQuotaExceeded": 0,
+							"keyTooLarge": 0,
+							"valueTooLarge": 0
+						}
+					},
+					"truncates": {
+						"requestCount": 0,
+						"pageEntryCount": 0,
+						"metadataEntryCount": 0,
+						"requestBytes": 0,
+						"payloadBytes": 0,
+						"responseBytes": 0,
+						"durationUs": 0
+					}
+				},
+				"delta": {
+					"endToEndElapsedMs": 40000.72123,
+					"overheadOutsideDbInsertMs": 24124.863466000003,
+					"actorDbVsNativeMultiplier": 445.2495800786736,
+					"endToEndVsNativeMultiplier": 1121.8483180724966
+				}
+			}
+		}
+	]
 }

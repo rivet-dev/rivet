@@ -1,5 +1,5 @@
 import { createClient } from "rivetkit/client";
-import type { registry } from "../src/index.ts";
+import type { registry } from "../src/registry.ts";
 
 // Get endpoint from environment variable or default to localhost
 const endpoint = process.env.RIVETKIT_ENDPOINT ?? "http://localhost:8080";
