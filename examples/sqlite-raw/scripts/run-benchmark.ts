@@ -98,6 +98,10 @@ interface SqliteVfsAtomicWriteTelemetry {
 	maxCommittedDirtyPages: number;
 	committedBufferedBytesTotal: number;
 	rollbackCount: number;
+	fastPathAttemptCount?: number;
+	fastPathSuccessCount?: number;
+	fastPathFallbackCount?: number;
+	fastPathFailureCount?: number;
 	batchCapFailureCount: number;
 	commitKvPutFailureCount: number;
 }
@@ -316,6 +320,15 @@ function formatDirtyPages(telemetry: SqliteVfsTelemetry): string {
 	return [
 		`total ${telemetry.atomicWrite.committedDirtyPagesTotal}`,
 		`max ${telemetry.atomicWrite.maxCommittedDirtyPages}`,
+	].join(" / ");
+}
+
+function formatFastPathUsage(telemetry: SqliteVfsTelemetry): string {
+	return [
+		`attempt ${telemetry.atomicWrite.fastPathAttemptCount ?? 0}`,
+		`ok ${telemetry.atomicWrite.fastPathSuccessCount ?? 0}`,
+		`fallback ${telemetry.atomicWrite.fastPathFallbackCount ?? 0}`,
+		`fail ${telemetry.atomicWrite.fastPathFailureCount ?? 0}`,
 	].join(" / ");
 }
 
@@ -749,6 +762,7 @@ function renderPhaseComparison(run: BenchRun, baseline: BenchRun | undefined): s
 	return `#### Compared to ${phaseLabels[baseline.phase]}
 
 - Atomic write coverage: \`${formatAtomicCoverage(baselineTelemetry)}\` -> \`${formatAtomicCoverage(currentTelemetry)}\`
+- Fast-path commit usage: \`${formatFastPathUsage(baselineTelemetry)}\` -> \`${formatFastPathUsage(currentTelemetry)}\`
 - Buffered dirty pages: \`${formatDirtyPages(baselineTelemetry)}\` -> \`${formatDirtyPages(currentTelemetry)}\`
 - Immediate \`kv_put\` writes: \`${baselineTelemetry.writes.immediateKvPutCount}\` -> \`${currentTelemetry.writes.immediateKvPutCount}\` (\`${formatCountDelta(immediateKvPutDelta)}\`, \`${formatPercentDelta(currentTelemetry.writes.immediateKvPutCount, baselineTelemetry.writes.immediateKvPutCount)}\`)
 - Batch-cap failures: \`${baselineTelemetry.atomicWrite.batchCapFailureCount}\` -> \`${currentTelemetry.atomicWrite.batchCapFailureCount}\` (\`${formatCountDelta(batchCapDelta)}\`)
@@ -999,6 +1013,7 @@ function renderMarkdown(store: BenchResultsStore): string {
 - Writes: \`${run.benchmark.actor.vfsTelemetry.writes.count}\` calls, \`${formatBytes(run.benchmark.actor.vfsTelemetry.writes.inputBytes)}\` input, \`${run.benchmark.actor.vfsTelemetry.writes.bufferedCount}\` buffered calls, \`${run.benchmark.actor.vfsTelemetry.writes.immediateKvPutCount}\` immediate \`kv_put\` fallbacks
 - Syncs: \`${run.benchmark.actor.vfsTelemetry.syncs.count}\` calls, \`${run.benchmark.actor.vfsTelemetry.syncs.metadataFlushCount}\` metadata flushes, \`${formatUs(run.benchmark.actor.vfsTelemetry.syncs.durationUs)}\` total
 - Atomic write coverage: \`${formatAtomicCoverage(run.benchmark.actor.vfsTelemetry)}\`
+- Fast-path commit usage: \`${formatFastPathUsage(run.benchmark.actor.vfsTelemetry)}\`
 - Atomic write pages: \`${formatDirtyPages(run.benchmark.actor.vfsTelemetry)}\`
 - Atomic write bytes: \`${formatBytes(run.benchmark.actor.vfsTelemetry.atomicWrite.committedBufferedBytesTotal)}\`
 - Atomic write failures: \`${run.benchmark.actor.vfsTelemetry.atomicWrite.batchCapFailureCount}\` batch-cap, \`${run.benchmark.actor.vfsTelemetry.atomicWrite.commitKvPutFailureCount}\` KV put

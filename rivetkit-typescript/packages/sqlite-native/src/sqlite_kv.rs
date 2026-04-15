@@ -59,6 +59,43 @@ pub struct KvGetResult {
 	pub values: Vec<Vec<u8>>,
 }
 
+// MARK: SQLite fast path
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct SqliteFastPathCapability {
+	pub supports_write_batch: bool,
+	pub supports_truncate: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SqliteFastPathFence {
+	pub expected_fence: Option<u64>,
+	pub request_fence: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SqlitePageUpdate {
+	pub chunk_index: u32,
+	pub data: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SqliteWriteBatchRequest {
+	pub file_tag: u8,
+	pub meta_value: Vec<u8>,
+	pub page_updates: Vec<SqlitePageUpdate>,
+	pub fence: SqliteFastPathFence,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SqliteTruncateRequest {
+	pub file_tag: u8,
+	pub meta_value: Vec<u8>,
+	pub delete_chunks_from: u32,
+	pub tail_chunk: Option<SqlitePageUpdate>,
+	pub fence: SqliteFastPathFence,
+}
+
 // MARK: Trait
 
 /// Transport-agnostic KV trait consumed by the native SQLite VFS.
@@ -82,6 +119,14 @@ pub trait SqliteKv: Send + Sync {
 		Ok(())
 	}
 
+	/// Resolve the optional SQLite fast-path capability for this actor.
+	async fn sqlite_fast_path_capability(
+		&self,
+		_actor_id: &str,
+	) -> Result<Option<SqliteFastPathCapability>, SqliteKvError> {
+		Ok(None)
+	}
+
 	/// Fetch multiple keys in one batch.
 	///
 	/// Only existing keys are returned in the result. Missing keys are omitted.
@@ -101,6 +146,17 @@ pub trait SqliteKv: Send + Sync {
 		values: Vec<Vec<u8>>,
 	) -> Result<(), SqliteKvError>;
 
+	/// Write a full SQLite page batch through the transport fast path.
+	async fn sqlite_write_batch(
+		&self,
+		_actor_id: &str,
+		_request: SqliteWriteBatchRequest,
+	) -> Result<(), SqliteKvError> {
+		Err(SqliteKvError::new(
+			"sqlite write batch fast path is unsupported",
+		))
+	}
+
 	/// Delete multiple keys in one batch.
 	async fn batch_delete(&self, actor_id: &str, keys: Vec<Vec<u8>>) -> Result<(), SqliteKvError>;
 
@@ -111,4 +167,15 @@ pub trait SqliteKv: Send + Sync {
 		start: Vec<u8>,
 		end: Vec<u8>,
 	) -> Result<(), SqliteKvError>;
+
+	/// Truncate a SQLite file through the transport fast path.
+	async fn sqlite_truncate(
+		&self,
+		_actor_id: &str,
+		_request: SqliteTruncateRequest,
+	) -> Result<(), SqliteKvError> {
+		Err(SqliteKvError::new(
+			"sqlite truncate fast path is unsupported",
+		))
+	}
 }

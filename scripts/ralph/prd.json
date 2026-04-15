@@ -141,7 +141,7 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "The fallback path must stay boring and correct. Fast path when available, no clown shoes when it is not."
     },
     {

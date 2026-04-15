@@ -8,6 +8,7 @@
 - For native SQLite VFS durability tests, prefer direct `kv_vfs_open` plus `kv_io_sync` or `kv_io_close` coverage when SQL-level commit ordering makes failpoint injection nondeterministic.
 - Run `examples/sqlite-raw` `bench:record --fresh-engine` with `RUST_LOG=error` so the engine child keeps writing to `/tmp/sqlite-raw-bench-engine.log` without flooding the recorder stdout.
 - For envoy protocol changes, add a new `engine/sdks/schemas/envoy-protocol/vN.bare`, append new union variants instead of reordering old ones, update `engine/sdks/rust/envoy-protocol/src/versioned.rs`, regenerate `engine/sdks/typescript/envoy-protocol`, and keep the `envoy-client` pre-init downgrade fallback in sync.
+- Route SQLite fast-path write batches from `packages/sqlite-native/src/vfs.rs`, not from the transport adapter, because only the VFS owns the full buffered page set and per-file fence sequence.
 
 Started: Wed Apr 15 04:03:14 AM PDT 2026
 ---
@@ -80,4 +81,13 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - The SQLite remote bridge goes through the envoy protocol and `pegboard-envoy`, not the runner protocol, so fast-path negotiation has to land in `engine/sdks/rust/envoy-protocol`, `engine/sdks/rust/envoy-client`, and `engine/packages/pegboard-envoy` together.
   - `ToEnvoyInit` is the right mixed-version boundary. If v2 fails before init, `envoy-client` can safely retry v1 and clear cached protocol metadata before reconnecting.
   - Regenerating the Rust envoy protocol bindings also updates `engine/sdks/typescript/envoy-protocol/src/index.ts`, so typecheck that package after the schema bump to catch binding drift.
+---
+## 2026-04-15 07:29:21 PDT - US-009
+- Routed eligible buffered SQLite page-set commits through `sqlite_write_batch`, with per-file monotonic fences in the VFS and fast-path capability or fallback dispatch in the envoy-backed native transport.
+- Added VFS telemetry plus focused tests for fast-path success, generic fallback when capability is missing, and fail-closed write-batch errors, then exposed the new counters in the benchmark markdown renderer.
+- Files changed: `engine/sdks/rust/envoy-client/src/handle.rs`, `examples/AGENTS.md`, `examples/sqlite-raw/scripts/run-benchmark.ts`, `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/rivetkit-native/src/database.rs`, `rivetkit-typescript/packages/rivetkit/src/db/config.ts`, `rivetkit-typescript/packages/sqlite-native/src/sqlite_kv.rs`, `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Fast-path routing belongs in `packages/sqlite-native/src/vfs.rs`, because the transport adapter only sees generic KV calls and cannot reconstruct one atomic buffered page set or its fence state.
+  - Keep benchmark renderers tolerant of missing telemetry keys so older `bench-results.json` entries still render after new counters land.
+  - `cargo test -p rivetkit-sqlite-native`, `cargo test -p rivetkit-native`, `cargo test -p rivet-envoy-client`, `pnpm --dir rivetkit-typescript/packages/rivetkit test native-database`, and `pnpm --dir examples/sqlite-raw run check-types` cover the touched surface for this client-side fast-path story.
 ---

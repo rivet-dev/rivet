@@ -258,6 +258,42 @@ impl EnvoyHandle {
 		}
 	}
 
+	pub async fn kv_sqlite_write_batch(
+		&self,
+		actor_id: String,
+		request: protocol::KvSqliteWriteBatchRequest,
+	) -> anyhow::Result<()> {
+		let response = self
+			.send_kv_request(
+				actor_id,
+				protocol::KvRequestData::KvSqliteWriteBatchRequest(request),
+			)
+			.await?;
+		match response {
+			protocol::KvResponseData::KvPutResponse => Ok(()),
+			protocol::KvResponseData::KvErrorResponse(e) => anyhow::bail!("{}", e.message),
+			_ => anyhow::bail!("unexpected KV response type"),
+		}
+	}
+
+	pub async fn kv_sqlite_truncate(
+		&self,
+		actor_id: String,
+		request: protocol::KvSqliteTruncateRequest,
+	) -> anyhow::Result<()> {
+		let response = self
+			.send_kv_request(
+				actor_id,
+				protocol::KvRequestData::KvSqliteTruncateRequest(request),
+			)
+			.await?;
+		match response {
+			protocol::KvResponseData::KvDeleteResponse => Ok(()),
+			protocol::KvResponseData::KvErrorResponse(e) => anyhow::bail!("{}", e.message),
+			_ => anyhow::bail!("unexpected KV response type"),
+		}
+	}
+
 	pub async fn kv_drop(&self, actor_id: String) -> anyhow::Result<()> {
 		let response = self
 			.send_kv_request(actor_id, protocol::KvRequestData::KvDropRequest)

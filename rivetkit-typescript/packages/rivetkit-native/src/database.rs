@@ -14,7 +14,11 @@ use libsqlite3_sys::{
 use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use rivet_envoy_client::handle::EnvoyHandle;
-use rivetkit_sqlite_native::sqlite_kv::{KvGetResult, SqliteKv, SqliteKvError};
+use rivet_envoy_protocol as protocol;
+use rivetkit_sqlite_native::sqlite_kv::{
+	KvGetResult, SqliteFastPathCapability, SqliteKv, SqliteKvError, SqliteTruncateRequest,
+	SqliteWriteBatchRequest,
+};
 use rivetkit_sqlite_native::vfs::{KvVfs, NativeDatabase};
 use tokio::runtime::Handle;
 
@@ -25,11 +29,16 @@ use crate::types::JsKvEntry;
 pub struct EnvoyKv {
 	handle: EnvoyHandle,
 	actor_id: String,
+	sqlite_fast_path_capability: Mutex<Option<Option<SqliteFastPathCapability>>>,
 }
 
 impl EnvoyKv {
 	pub fn new(handle: EnvoyHandle, actor_id: String) -> Self {
-		Self { handle, actor_id }
+		Self {
+			handle,
+			actor_id,
+			sqlite_fast_path_capability: Mutex::new(None),
+		}
 	}
 }
 
@@ -45,6 +54,36 @@ impl SqliteKv for EnvoyKv {
 
 	async fn on_close(&self, _actor_id: &str) -> Result<(), SqliteKvError> {
 		Ok(())
+	}
+
+	async fn sqlite_fast_path_capability(
+		&self,
+		_actor_id: &str,
+	) -> Result<Option<SqliteFastPathCapability>, SqliteKvError> {
+		let cached = self
+			.sqlite_fast_path_capability
+			.lock()
+			.map_err(|_| SqliteKvError::new("envoy sqlite capability mutex poisoned"))?
+			.clone();
+		if let Some(capability) = cached {
+			return Ok(capability);
+		}
+
+		let capability = self
+			.handle
+			.get_sqlite_fast_path_capability()
+			.await
+			.map(|capability| SqliteFastPathCapability {
+				supports_write_batch: capability.supports_write_batch,
+				supports_truncate: capability.supports_truncate,
+			});
+
+		*self
+			.sqlite_fast_path_capability
+			.lock()
+			.map_err(|_| SqliteKvError::new("envoy sqlite capability mutex poisoned"))? = Some(capability);
+
+		Ok(capability)
 	}
 
 	async fn batch_get(
@@ -86,6 +125,35 @@ impl SqliteKv for EnvoyKv {
 			.map_err(|e| SqliteKvError::new(e.to_string()))
 	}
 
+	async fn sqlite_write_batch(
+		&self,
+		_actor_id: &str,
+		request: SqliteWriteBatchRequest,
+	) -> Result<(), SqliteKvError> {
+		self.handle
+			.kv_sqlite_write_batch(
+				self.actor_id.clone(),
+				protocol::KvSqliteWriteBatchRequest {
+					file_tag: request.file_tag,
+					meta_value: request.meta_value,
+					page_updates: request
+						.page_updates
+						.into_iter()
+						.map(|page| protocol::SqlitePageUpdate {
+							chunk_index: page.chunk_index,
+							data: page.data,
+						})
+						.collect(),
+					fence: protocol::SqliteFastPathFence {
+						expected_fence: request.fence.expected_fence,
+						request_fence: request.fence.request_fence,
+					},
+				},
+			)
+			.await
+			.map_err(|e| SqliteKvError::new(e.to_string()))
+	}
+
 	async fn batch_delete(&self, _actor_id: &str, keys: Vec<Vec<u8>>) -> Result<(), SqliteKvError> {
 		self.handle
 			.kv_delete(self.actor_id.clone(), keys)
@@ -101,6 +169,32 @@ impl SqliteKv for EnvoyKv {
 	) -> Result<(), SqliteKvError> {
 		self.handle
 			.kv_delete_range(self.actor_id.clone(), start, end)
+			.await
+			.map_err(|e| SqliteKvError::new(e.to_string()))
+	}
+
+	async fn sqlite_truncate(
+		&self,
+		_actor_id: &str,
+		request: SqliteTruncateRequest,
+	) -> Result<(), SqliteKvError> {
+		self.handle
+			.kv_sqlite_truncate(
+				self.actor_id.clone(),
+				protocol::KvSqliteTruncateRequest {
+					file_tag: request.file_tag,
+					meta_value: request.meta_value,
+					delete_chunks_from: request.delete_chunks_from,
+					tail_chunk: request.tail_chunk.map(|page| protocol::SqlitePageUpdate {
+						chunk_index: page.chunk_index,
+						data: page.data,
+					}),
+					fence: protocol::SqliteFastPathFence {
+						expected_fence: request.fence.expected_fence,
+						request_fence: request.fence.request_fence,
+					},
+				},
+			)
 			.await
 			.map_err(|e| SqliteKvError::new(e.to_string()))
 	}

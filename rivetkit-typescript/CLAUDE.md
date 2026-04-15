@@ -7,6 +7,7 @@
 - Importing `rivetkit/db` is the explicit opt-in for SQLite. Do not lazily load extra SQLite runtimes from that entrypoint.
 - Core drivers must remain SQLite-agnostic. Any SQLite-specific wiring belongs behind the native database provider boundary.
 - Native SQLite VFS truncate buffering must keep a logical delete boundary for chunks past the pending truncate point so reads and partial writes do not resurrect stale remote pages before the next sync flush.
+- Route SQLite fast-path write batches from `packages/sqlite-native/src/vfs.rs`, not from the transport adapter, because the VFS is the only layer that owns the full buffered page set and per-file fence sequencing.
 
 ## SQLite VFS Testing
 
