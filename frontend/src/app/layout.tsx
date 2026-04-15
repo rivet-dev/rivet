@@ -84,13 +84,23 @@ const Main = ({
 	);
 };
 
-const SidebarDimensionsContext = createContext(0);
+interface SidebarDimensions {
+	minWidth: number;
+	maxWidth: number;
+}
+
+const SidebarDimensionsContext = createContext<SidebarDimensions>({
+	minWidth: 0,
+	maxWidth: 20,
+});
 const SIDEBAR_MIN_WIDTH = 195; /* in px */
+const SIDEBAR_MAX_WIDTH = 280; /* in px */
 
 const VisibleInFull = ({ children }: PropsWithChildren) => {
 	const groupRef = useRef<ImperativePanelGroupHandle>(null);
 
-	const [sidebarMinWidth, setSidebarMinWidth] = useState(0);
+	const [sidebarDimensions, setSidebarDimensions] =
+		useState<SidebarDimensions>({ minWidth: 0, maxWidth: 20 });
 
 	useLayoutEffect(() => {
 		const panelGroup = document.querySelector<HTMLDivElement>(
@@ -111,7 +121,10 @@ const VisibleInFull = ({ children }: PropsWithChildren) => {
 				width -= resizeHandle.offsetWidth;
 			});
 
-			setSidebarMinWidth((SIDEBAR_MIN_WIDTH / width) * 100);
+			setSidebarDimensions({
+				minWidth: (SIDEBAR_MIN_WIDTH / width) * 100,
+				maxWidth: (SIDEBAR_MAX_WIDTH / width) * 100,
+			});
 		});
 		observer.observe(panelGroup);
 		resizeHandles.forEach((resizeHandle) => {
@@ -135,7 +148,7 @@ const VisibleInFull = ({ children }: PropsWithChildren) => {
 			className="relative min-h-screen h-screen"
 			id="root"
 		>
-			<SidebarDimensionsContext.Provider value={sidebarMinWidth}>
+			<SidebarDimensionsContext.Provider value={sidebarDimensions}>
 				{children}
 			</SidebarDimensionsContext.Provider>
 		</ResizablePanelGroup>
@@ -160,14 +173,15 @@ const Sidebar = ({
 }: {
 	ref?: RefObject<ImperativePanelHandle | null>;
 } & ComponentProps<typeof ResizablePanel>) => {
-	const sidebarMinWidth = useContext(SidebarDimensionsContext);
+	const { minWidth: sidebarMinWidth, maxWidth: sidebarMaxWidth } =
+		useContext(SidebarDimensionsContext);
 	const matchRoute = useMatchRoute();
 	return (
 		<>
 			<ResizablePanel
 				ref={ref}
 				minSize={sidebarMinWidth}
-				maxSize={20}
+				maxSize={sidebarMaxWidth}
 				className="bg-background"
 				collapsible
 				{...props}

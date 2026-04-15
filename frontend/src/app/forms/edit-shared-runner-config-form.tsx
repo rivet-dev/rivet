@@ -374,10 +374,11 @@ col-span-full flex-1"
 
 export const Regions = () => {
 	const { control } = useFormContext<FormValues>();
-	const { data, hasNextPage, fetchNextPage } = useInfiniteQuery({
-		...useEngineCompatDataProvider().datacentersQueryOptions(),
-		maxPages: Infinity,
-	});
+	const { data, hasNextPage, fetchNextPage, isFetchingNextPage } =
+		useInfiniteQuery({
+			...useEngineCompatDataProvider().datacentersQueryOptions(),
+			maxPages: Infinity,
+		});
 
 	return (
 		<div className="space-y-2">
@@ -418,7 +419,7 @@ export const Regions = () => {
 						)}
 					/>
 				))}
-				{hasNextPage ? (
+				{hasNextPage && !isFetchingNextPage ? (
 					<VisibilitySensor onChange={fetchNextPage} />
 				) : null}
 			</div>{" "}

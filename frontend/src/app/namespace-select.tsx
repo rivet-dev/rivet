@@ -81,7 +81,7 @@ export function NamespaceSelect({
 							/>
 						</div>
 					) : null}
-					{hasNextPage ? (
+					{hasNextPage && !isFetchingNextPage ? (
 						<VisibilitySensor onChange={fetchNextPage} />
 					) : null}
 				</SelectGroup>

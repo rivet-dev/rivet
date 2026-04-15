@@ -49,9 +49,10 @@ function RouteComponent() {
 }
 
 function ProjectList() {
-	const { data, isLoading, hasNextPage, fetchNextPage } = useInfiniteQuery(
-		Route.useRouteContext().dataProvider.currentOrgProjectsQueryOptions(),
-	);
+	const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
+		useInfiniteQuery(
+			Route.useRouteContext().dataProvider.currentOrgProjectsQueryOptions(),
+		);
 
 	return (
 		<div className="flex flex-col border rounded-md w-full">
@@ -73,7 +74,9 @@ function ProjectList() {
 					<Icon icon={faChevronRight} className="ml-auto" />
 				</Link>
 			))}
-			{hasNextPage ? <VisibilitySensor onChange={fetchNextPage} /> : null}
+			{hasNextPage && !isFetchingNextPage ? (
+				<VisibilitySensor onChange={fetchNextPage} />
+			) : null}
 			<Link
 				from="/orgs/$organization/projects/"
 				to="."

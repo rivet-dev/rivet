@@ -1,13 +1,31 @@
-import { faQuestionSquare, Icon } from "@rivet-gg/icons";
+import {
+	faCubesStacked,
+	faDatabase,
+	faDiagramProject,
+	faInbox,
+	faLogs,
+	faPlug,
+	faQuestionSquare,
+	faTag,
+	faTerminal,
+	Icon,
+} from "@rivet-gg/icons";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { memo, type ReactNode, Suspense } from "react";
+import {
+	memo,
+	type ReactNode,
+	Suspense,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import {
 	cn,
-	Flex,
 	Tabs,
 	TabsContent,
 	TabsList,
 	TabsTrigger,
+	WithTooltip,
 } from "@/components";
 import { DeploymentLogs } from "@/components/deployment-logs";
 import { ActorConfigTab } from "./actor-config-tab";
@@ -18,8 +36,7 @@ import { useActorInspector } from "./actor-inspector-context";
 import { ActorLogsTab } from "./actor-logs-tab";
 import { ActorQueueTab } from "./actor-queue-tab";
 import { ActorStateTab } from "./actor-state-tab";
-import { QueriedActorStatus } from "./actor-status";
-import { ActorStopButton } from "./actor-stop-button";
+import { QueriedActorStatusIndicator } from "./actor-status-indicator";
 import { useActorsView } from "./actors-view-context-provider";
 import { ActorConsoleFull } from "./console/actor-console";
 import { useCloudNamespaceDataProvider } from "./data-provider";
@@ -61,7 +78,6 @@ export const ActorsActorDetails = memo(
 	},
 );
 
-
 export const ActorsActorEmptyDetails = () => {
 	const { copy } = useActorsView();
 	return (
@@ -82,9 +98,9 @@ const TAB_PRIORITY = [
 	"state",
 	"queue",
 	"connections",
-	"metadata",
 	"deployment-logs",
 	"console",
+	"metadata",
 ] as const;
 
 type TabId = (typeof TAB_PRIORITY)[number];
@@ -115,7 +131,8 @@ function useActorTabVisibility(actorId: ActorId) {
 	if (!isDatabaseEnabled) hiddenTabs.add("database");
 	if (!isStateEnabled) hiddenTabs.add("state");
 	if (!isQueueEnabled) hiddenTabs.add("queue");
-	if (__APP_TYPE__ !== "cloud" || !hasManagedPool) hiddenTabs.add("deployment-logs");
+	if (__APP_TYPE__ !== "cloud" || !hasManagedPool)
+		hiddenTabs.add("deployment-logs");
 
 	const firstAvailableTab =
 		TAB_PRIORITY.find((tab) => !hiddenTabs.has(tab)) ?? "connections";
@@ -158,6 +175,25 @@ function ActorTabTriggers({
 	);
 }
 
+const TAB_LABEL_THRESHOLD = 300; /* in px */
+
+function useShowTabLabels() {
+	const ref = useRef<HTMLDivElement>(null);
+	const [showLabels, setShowLabels] = useState(true);
+
+	useLayoutEffect(() => {
+		const el = ref.current;
+		if (!el) return;
+		const observer = new ResizeObserver(() => {
+			setShowLabels(el.offsetWidth >= TAB_LABEL_THRESHOLD);
+		});
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, []);
+
+	return { ref, showLabels };
+}
+
 function ActorTabsShell({
 	actorId,
 	value,
@@ -175,6 +211,8 @@ function ActorTabsShell({
 	hiddenTabs: Set<TabId>;
 	children?: ReactNode;
 }) {
+	const { ref: tabListRef, showLabels } = useShowTabLabels();
+
 	return (
 		<Tabs
 			value={value}
@@ -183,81 +221,231 @@ function ActorTabsShell({
 			className={cn(className, "flex-1 min-h-0 min-w-0 flex flex-col ")}
 		>
 			<div className="flex justify-between items-center border-b h-[45px]">
-				<div className="flex flex-1 items-center h-full w-full ">
-					<TabsList className="overflow-auto border-none h-full items-end">
-						{!hiddenTabs.has("workflow") && (
-							<TabsTrigger
-								value="workflow"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								Workflow
-							</TabsTrigger>
-						)}
-						{!hiddenTabs.has("database") && (
-							<TabsTrigger
-								value="database"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								Database
-							</TabsTrigger>
-						)}
-						{!hiddenTabs.has("state") && (
-							<TabsTrigger
-								value="state"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								State
-							</TabsTrigger>
-						)}
-						{!hiddenTabs.has("queue") && (
-							<TabsTrigger
-								value="queue"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								Queue
-							</TabsTrigger>
-						)}
-						<TabsTrigger
-							value="connections"
-							className="text-xs px-3 py-1 pb-2"
-						>
-							Connections
-						</TabsTrigger>
-						<TabsTrigger
-							value="metadata"
-							className="text-xs px-3 py-1 pb-2"
-						>
-							Metadata
-						</TabsTrigger>
-						{!hiddenTabs.has("deployment-logs") && (
-							<TabsTrigger
-								value="deployment-logs"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								Logs
-							</TabsTrigger>
-						)}
-						{!guardContent && (
-							<TabsTrigger
-								value="console"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								Console
-							</TabsTrigger>
-						)}
-					</TabsList>
-					<Flex
-						gap="2"
-						justify="between"
-						items="center"
-						className="h-[36px] pb-3 pt-2 pr-4"
+				<div className="flex flex-1 items-center h-full w-full min-w-0">
+					<div
+						ref={tabListRef}
+						className="flex-1 min-w-0 overflow-hidden h-full"
 					>
-						<QueriedActorStatus
-							className="text-sm h-auto"
-							actorId={actorId}
-						/>
-						<ActorStopButton actorId={actorId} />
-					</Flex>
+						<TabsList className="flex border-none h-full items-end min-w-0 overflow-hidden w-full">
+							{!hiddenTabs.has("workflow") && (
+								<WithTooltip
+									delayDuration={0}
+									disabled={showLabels}
+									trigger={
+										<TabsTrigger
+											value="workflow"
+											className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										>
+											<Icon
+												icon={faDiagramProject}
+												className="shrink-0"
+											/>
+											<span
+												className={
+													showLabels
+														? "truncate"
+														: "hidden"
+												}
+											>
+												Workflow
+											</span>
+										</TabsTrigger>
+									}
+									content="Workflow"
+								/>
+							)}
+							{!hiddenTabs.has("database") && (
+								<WithTooltip
+									delayDuration={0}
+									disabled={showLabels}
+									trigger={
+										<TabsTrigger
+											value="database"
+											className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										>
+											<Icon
+												icon={faDatabase}
+												className="shrink-0"
+											/>
+											<span
+												className={
+													showLabels
+														? "truncate"
+														: "hidden"
+												}
+											>
+												Database
+											</span>
+										</TabsTrigger>
+									}
+									content="Database"
+								/>
+							)}
+							{!hiddenTabs.has("state") && (
+								<WithTooltip
+									delayDuration={0}
+									disabled={showLabels}
+									trigger={
+										<TabsTrigger
+											value="state"
+											className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										>
+											<Icon
+												icon={faCubesStacked}
+												className="shrink-0"
+											/>
+											<span
+												className={
+													showLabels
+														? "truncate"
+														: "hidden"
+												}
+											>
+												State
+											</span>
+										</TabsTrigger>
+									}
+									content="State"
+								/>
+							)}
+							{!hiddenTabs.has("queue") && (
+								<WithTooltip
+									delayDuration={0}
+									disabled={showLabels}
+									trigger={
+										<TabsTrigger
+											value="queue"
+											className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										>
+											<Icon
+												icon={faInbox}
+												className="shrink-0"
+											/>
+											<span
+												className={
+													showLabels
+														? "truncate"
+														: "hidden"
+												}
+											>
+												Queue
+											</span>
+										</TabsTrigger>
+									}
+									content="Queue"
+								/>
+							)}
+							<WithTooltip
+								delayDuration={0}
+								disabled={showLabels}
+								trigger={
+									<TabsTrigger
+										value="connections"
+										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+									>
+										<Icon
+											icon={faPlug}
+											className="shrink-0"
+										/>
+										<span
+											className={
+												showLabels
+													? "truncate"
+													: "hidden"
+											}
+										>
+											Connections
+										</span>
+									</TabsTrigger>
+								}
+								content="Connections"
+							/>
+
+							{!hiddenTabs.has("deployment-logs") && (
+								<WithTooltip
+									delayDuration={0}
+									disabled={showLabels}
+									trigger={
+										<TabsTrigger
+											value="deployment-logs"
+											className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										>
+											<Icon
+												icon={faLogs}
+												className="shrink-0"
+											/>
+											<span
+												className={
+													showLabels
+														? "truncate"
+														: "hidden"
+												}
+											>
+												Logs
+											</span>
+										</TabsTrigger>
+									}
+									content="Logs"
+								/>
+							)}
+							{!guardContent && (
+								<WithTooltip
+									delayDuration={0}
+									disabled={showLabels}
+									trigger={
+										<TabsTrigger
+											value="console"
+											className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										>
+											<Icon
+												icon={faTerminal}
+												className="shrink-0"
+											/>
+											<span
+												className={
+													showLabels
+														? "truncate"
+														: "hidden"
+												}
+											>
+												Console
+											</span>
+										</TabsTrigger>
+									}
+									content="Console"
+								/>
+							)}
+							<WithTooltip
+								delayDuration={0}
+								disabled={showLabels}
+								trigger={
+									<TabsTrigger
+										value="metadata"
+										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+									>
+										<Icon
+											icon={faTag}
+											className="shrink-0"
+										/>
+										<span
+											className={
+												showLabels
+													? "truncate"
+													: "hidden"
+											}
+										>
+											Metadata
+										</span>
+										<QueriedActorStatusIndicator
+											className="absolute top-0.5 right-0"
+											actorId={actorId}
+										/>
+									</TabsTrigger>
+								}
+								content="Metadata"
+							/>
+						</TabsList>
+					</div>
 				</div>
 			</div>
 			<TabsContent value="logs" className="min-h-0 flex-1 mt-0 h-full">
@@ -292,7 +480,10 @@ function ActorTabsShell({
 			<TabsContent value="state" className="min-h-0 flex-1 mt-0 relative">
 				{guardContent || <ActorStateTab actorId={actorId} />}
 			</TabsContent>
-			<TabsContent value="deployment-logs" className="min-h-0 flex-1 mt-0 h-full">
+			<TabsContent
+				value="deployment-logs"
+				className="min-h-0 flex-1 mt-0 h-full"
+			>
 				<DeploymentLogs pool="default" filter={`actorId=${actorId}`} />
 			</TabsContent>
 			<TabsContent value="console" className="min-h-0 flex-1 mt-0 h-full">
@@ -397,6 +588,8 @@ export function ActorTabs({
 	className?: string;
 	children?: ReactNode;
 }) {
+	const { ref: tabListRef, showLabels } = useShowTabLabels();
+
 	if (actorId) {
 		return (
 			<ActorTabsWithId
@@ -417,50 +610,169 @@ export function ActorTabs({
 		>
 			<div className="flex justify-between items-center border-b h-[45px]">
 				<div className="flex flex-1 items-center h-full w-full ">
-					<TabsList className="overflow-auto border-none h-full items-end">
-						<TabsTrigger
-							disabled={disabled}
-							value="workflow"
-							className="text-xs px-3 py-1 pb-2"
-						>
-							Workflow
-						</TabsTrigger>
-						<TabsTrigger
-							disabled={disabled}
-							value="database"
-							className="text-xs px-3 py-1 pb-2"
-						>
-							Database
-						</TabsTrigger>
-						<TabsTrigger
-							disabled={disabled}
-							value="state"
-							className="text-xs px-3 py-1 pb-2"
-						>
-							State
-						</TabsTrigger>
-						<TabsTrigger
-							disabled={disabled}
-							value="queue"
-							className="text-xs px-3 py-1 pb-2"
-						>
-							Queue
-						</TabsTrigger>
-						<TabsTrigger
-							disabled={disabled}
-							value="connections"
-							className="text-xs px-3 py-1 pb-2"
-						>
-							Connections
-						</TabsTrigger>
-						<TabsTrigger
-							disabled={disabled}
-							value="metadata"
-							className="text-xs px-3 py-1 pb-2"
-						>
-							Metadata
-						</TabsTrigger>
-					</TabsList>
+					<div
+						ref={tabListRef}
+						className="flex-1 min-w-0 overflow-hidden h-full"
+					>
+						<TabsList className="flex border-none h-full items-end min-w-0 overflow-hidden w-full">
+							<WithTooltip
+								delayDuration={0}
+								disabled={showLabels}
+								trigger={
+									<TabsTrigger
+										disabled={disabled}
+										value="workflow"
+										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+									>
+										<Icon
+											icon={faDiagramProject}
+											className="shrink-0"
+										/>
+										<span
+											className={
+												showLabels
+													? "truncate"
+													: "hidden"
+											}
+										>
+											Workflow
+										</span>
+									</TabsTrigger>
+								}
+								content="Workflow"
+							/>
+							<WithTooltip
+								delayDuration={0}
+								disabled={showLabels}
+								trigger={
+									<TabsTrigger
+										disabled={disabled}
+										value="database"
+										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+									>
+										<Icon
+											icon={faDatabase}
+											className="shrink-0"
+										/>
+										<span
+											className={
+												showLabels
+													? "truncate"
+													: "hidden"
+											}
+										>
+											Database
+										</span>
+									</TabsTrigger>
+								}
+								content="Database"
+							/>
+							<WithTooltip
+								delayDuration={0}
+								disabled={showLabels}
+								trigger={
+									<TabsTrigger
+										disabled={disabled}
+										value="state"
+										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+									>
+										<Icon
+											icon={faCubesStacked}
+											className="shrink-0"
+										/>
+										<span
+											className={
+												showLabels
+													? "truncate"
+													: "hidden"
+											}
+										>
+											State
+										</span>
+									</TabsTrigger>
+								}
+								content="State"
+							/>
+							<WithTooltip
+								delayDuration={0}
+								disabled={showLabels}
+								trigger={
+									<TabsTrigger
+										disabled={disabled}
+										value="queue"
+										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+									>
+										<Icon
+											icon={faInbox}
+											className="shrink-0"
+										/>
+										<span
+											className={
+												showLabels
+													? "truncate"
+													: "hidden"
+											}
+										>
+											Queue
+										</span>
+									</TabsTrigger>
+								}
+								content="Queue"
+							/>
+							<WithTooltip
+								delayDuration={0}
+								disabled={showLabels}
+								trigger={
+									<TabsTrigger
+										disabled={disabled}
+										value="connections"
+										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+									>
+										<Icon
+											icon={faPlug}
+											className="shrink-0"
+										/>
+										<span
+											className={
+												showLabels
+													? "truncate"
+													: "hidden"
+											}
+										>
+											Connections
+										</span>
+									</TabsTrigger>
+								}
+								content="Connections"
+							/>
+							<WithTooltip
+								delayDuration={0}
+								disabled={showLabels}
+								trigger={
+									<TabsTrigger
+										disabled={disabled}
+										value="metadata"
+										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+									>
+										<Icon
+											icon={faTag}
+											className="shrink-0"
+										/>
+										<span
+											className={
+												showLabels
+													? "truncate"
+													: "hidden"
+											}
+										>
+											Metadata
+										</span>
+									</TabsTrigger>
+								}
+								content="Metadata"
+							/>
+						</TabsList>
+					</div>
 				</div>
 			</div>
 			{children}

@@ -235,7 +235,7 @@ export const Combobox = <Option extends ComboboxOption>({
 						{isLoading ? (
 							<CommandLoading>Loading...</CommandLoading>
 						) : null}
-						{onLoadMore ? (
+						{onLoadMore && !isLoading ? (
 							<VisibilitySensor onChange={onLoadMore} />
 						) : null}
 					</CommandList>

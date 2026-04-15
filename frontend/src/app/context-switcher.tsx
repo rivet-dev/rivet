@@ -415,7 +415,7 @@ function ProjectList({
 							Create Project
 						</CommandItem>
 
-						{hasNextPage ? (
+						{hasNextPage && !isFetchingNextPage ? (
 							<VisibilitySensor onChange={fetchNextPage} />
 						) : null}
 					</CommandGroup>

@@ -31,14 +31,19 @@ interface WithTooltipProps extends TooltipPrimitive.TooltipProps {
 	trigger: React.ReactNode;
 	content: React.ReactNode;
 	contentProps?: React.ComponentPropsWithoutRef<typeof TooltipContent>;
+	disabled?: boolean;
 }
 
 const WithTooltip = ({
 	trigger,
 	content,
 	contentProps,
+	disabled,
 	...rest
 }: WithTooltipProps) => {
+	if (disabled) {
+		return <>{trigger}</>;
+	}
 	return (
 		<Tooltip {...rest}>
 			<TooltipTrigger asChild>{trigger}</TooltipTrigger>

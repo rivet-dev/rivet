@@ -1,9 +1,11 @@
 import { Outlet } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ImperativePanelHandle } from "react-resizable-panels";
 import { H2, Skeleton } from "@/components";
 import { RootLayoutContextProvider } from "@/components/actors/root-layout-context";
 import * as Layout from "./layout";
+
+const AUTO_COLLAPSE_WIDTH = 1000; /* in px */
 
 export function RouteLayout({
 	children = <Outlet />,
@@ -12,6 +14,27 @@ export function RouteLayout({
 }) {
 	const sidebarRef = useRef<ImperativePanelHandle>(null);
 	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+	const autoCollapsedRef = useRef(false);
+
+	useLayoutEffect(() => {
+		const panelGroup = document.querySelector<HTMLDivElement>(
+			'[data-panel-group-id="root"]',
+		);
+		if (!panelGroup) return;
+
+		const observer = new ResizeObserver(() => {
+			const isTooNarrow = panelGroup.offsetWidth < AUTO_COLLAPSE_WIDTH;
+			if (isTooNarrow && !sidebarRef.current?.isCollapsed()) {
+				autoCollapsedRef.current = true;
+				sidebarRef.current?.collapse();
+			} else if (!isTooNarrow && autoCollapsedRef.current) {
+				autoCollapsedRef.current = false;
+				sidebarRef.current?.expand();
+			}
+		});
+		observer.observe(panelGroup);
+		return () => observer.disconnect();
+	}, []);
 
 	return (
 		<Layout.Root>
@@ -21,7 +44,10 @@ export function RouteLayout({
 					onCollapse={() => {
 						setIsSidebarCollapsed(true);
 					}}
-					onExpand={() => setIsSidebarCollapsed(false)}
+					onExpand={() => {
+						autoCollapsedRef.current = false;
+						setIsSidebarCollapsed(false);
+					}}
 				/>
 				<Layout.Main>
 					<RootLayoutContextProvider

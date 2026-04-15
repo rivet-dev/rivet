@@ -1,7 +1,7 @@
-import { faXmark, Icon } from "@rivet-gg/icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Button, WithTooltip } from "@/components";
+import { Button } from "@/components";
+import { queryClient } from "@/queries/global";
 import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
 
@@ -10,15 +10,21 @@ interface ActorStopButtonProps {
 }
 
 export function ActorStopButton({ actorId }: ActorStopButtonProps) {
+	const provider = useDataProvider();
 	const { data: destroyedAt } = useQuery(
-		useDataProvider().actorDestroyedAtQueryOptions(actorId),
+		provider.actorDestroyedAtQueryOptions(actorId),
 	);
 
-	const { mutate, isPending } = useMutation(
-		useDataProvider().actorDestroyMutationOptions(actorId),
-	);
+	const { mutate, isPending } = useMutation({
+		...provider.actorDestroyMutationOptions(actorId),
+		onSuccess: async () => {
+			await queryClient.invalidateQueries(
+				provider.actorQueryOptions(actorId),
+			);
+		},
+	});
 
-	const { canDeleteActors } = useDataProvider().features;
+	const { canDeleteActors } = provider.features;
 	const [isConfirming, setIsConfirming] = useState(false);
 
 	useEffect(() => {
@@ -40,31 +46,25 @@ export function ActorStopButton({ actorId }: ActorStopButtonProps) {
 	}
 
 	return (
-		<WithTooltip
-			delayDuration={0}
-			trigger={
-				<Button
-					isLoading={isPending}
-					variant="destructive"
-					size={isConfirming && !isPending ? "sm" : "icon-sm"}
-					onClick={(e) => {
-						e?.stopPropagation();
-						if (e?.shiftKey || isConfirming) {
-							mutate();
-							return;
-						}
+		<Button
+			isLoading={isPending}
+			variant="destructive"
+			size="sm"
+			onClick={(e) => {
+				e?.stopPropagation();
+				if (e?.shiftKey || isConfirming) {
+					mutate();
+					return;
+				}
 
-						setIsConfirming(true);
-					}}
-				>
-					{isConfirming && !isPending ? (
-						"Are you sure?"
-					) : (
-						<Icon icon={faXmark} />
-					)}
-				</Button>
-			}
-			content="Stop Actor"
-		/>
+				setIsConfirming(true);
+			}}
+		>
+			{isPending
+				? "Destroying..."
+				: isConfirming
+					? "Are you sure? What's gone is gone."
+					: "Destroy Actor"}
+		</Button>
 	);
 }

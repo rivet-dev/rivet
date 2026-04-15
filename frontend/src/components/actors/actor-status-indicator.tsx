@@ -25,12 +25,17 @@ export const QueriedActorStatusIndicator = ({
 
 interface ActorStatusIndicatorProps extends ComponentPropsWithRef<"span"> {
 	status: ActorStatus | undefined;
+	showOnlyFatal?: boolean;
 }
 
 export const ActorStatusIndicator = ({
 	status,
+	showOnlyFatal = false,
 	...props
 }: ActorStatusIndicatorProps) => {
+	if (showOnlyFatal && status !== "crashed" && status !== "crash-loop") {
+		return null;
+	}
 	if (status === "sleeping") {
 		return <Icon icon={faMoon} className="text-indigo-400" />;
 	}
