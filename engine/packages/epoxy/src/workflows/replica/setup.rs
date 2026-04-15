@@ -1,8 +1,15 @@
 use anyhow::{Context, Result};
 use epoxy_protocol::protocol::{self, ReplicaId};
+use futures_util::FutureExt;
 use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+struct CatchUpState {
+	last_versionstamp: Option<Vec<u8>>,
+	applied_entries: usize,
+}
 
 #[tracing::instrument(skip_all)]
 pub async fn setup_replica(ctx: &mut WorkflowCtx, _input: &super::Input) -> Result<()> {
@@ -20,10 +27,33 @@ pub async fn begin_learning(ctx: &mut WorkflowCtx, signal: &super::BeginLearning
 		config: signal.config.clone(),
 	})
 	.await?;
-	ctx.activity(CatchUpReplicaInput {
-		config: signal.config.clone(),
-	})
-	.await?;
+
+	ctx.removed::<Activity<CatchUpReplica>>().await?;
+
+	ctx.v(2)
+		.loope(CatchUpState::default(), |ctx, state| {
+			let config = signal.config.clone();
+			async move {
+				let res = ctx
+					.activity(CatchUpReplicaInput {
+						config: config.clone(),
+						after_versionstamp: state.last_versionstamp.clone(),
+					})
+					.await?;
+
+				state.last_versionstamp = res.last_versionstamp;
+				state.applied_entries += res.applied_entries;
+
+				if state.last_versionstamp.is_none() {
+					return Ok(Loop::Break(()));
+				}
+
+				Ok(Loop::Continue)
+			}
+			.boxed()
+		})
+		.await?;
+
 	ctx.activity(NotifyCoordinatorReplicaStatusInput {
 		config: signal.config.clone(),
 		status: crate::types::ReplicaStatus::Active,
@@ -33,13 +63,13 @@ pub async fn begin_learning(ctx: &mut WorkflowCtx, signal: &super::BeginLearning
 	Ok(())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct StoreConfigInput {
-	pub config: crate::types::ClusterConfig,
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct StoreConfigInput {
+	config: crate::types::ClusterConfig,
 }
 
 #[activity(StoreConfig)]
-pub async fn store_config(ctx: &ActivityCtx, input: &StoreConfigInput) -> Result<()> {
+async fn store_config(ctx: &ActivityCtx, input: &StoreConfigInput) -> Result<()> {
 	let replica_id = ctx.config().epoxy_replica_id();
 	let update_req = protocol::UpdateConfigRequest {
 		config: input.config.clone().into(),
@@ -56,15 +86,23 @@ pub async fn store_config(ctx: &ActivityCtx, input: &StoreConfigInput) -> Result
 	Ok(())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct CatchUpReplicaInput {
-	pub config: crate::types::ClusterConfig,
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct CatchUpReplicaInput {
+	config: crate::types::ClusterConfig,
+	after_versionstamp: Option<Vec<u8>>,
 }
 
-// TODO: Migrate to chunked catch up
+#[derive(Debug, Serialize, Deserialize)]
+struct CatchUpReplicaOutput {
+	last_versionstamp: Option<Vec<u8>>,
+	applied_entries: usize,
+}
+
 #[activity(CatchUpReplica)]
-#[timeout = 18000]
-pub async fn catch_up_replica(ctx: &ActivityCtx, input: &CatchUpReplicaInput) -> Result<()> {
+async fn catch_up_replica(
+	ctx: &ActivityCtx,
+	input: &CatchUpReplicaInput,
+) -> Result<CatchUpReplicaOutput> {
 	let replica_id = ctx.config().epoxy_replica_id();
 	let config: protocol::ClusterConfig = input.config.clone().into();
 	let api_ctx = ApiCtx::new_from_activity(ctx)?;
@@ -82,63 +120,64 @@ pub async fn catch_up_replica(ctx: &ActivityCtx, input: &CatchUpReplicaInput) ->
 			%replica_id,
 			"skipping changelog catch-up because the cluster has no active source replica yet"
 		);
-		return Ok(());
+		return Ok(CatchUpReplicaOutput {
+			last_versionstamp: None,
+			applied_entries: 0,
+		});
 	}
 	let source_replica_id = source_replica_id.unwrap();
 
 	// Pre-cutover committed values are readable via local dual-read fallback immediately. They only
 	// become available to future learners after the background backfill populates the v2 changelog.
-	let mut after_versionstamp = None;
-	let mut applied_entries = 0usize;
-	loop {
-		let response = read_changelog_page(
-			&api_ctx,
-			&config,
-			replica_id,
-			source_replica_id,
-			after_versionstamp.clone(),
-		)
-		.await?;
+	let response = read_changelog_page(
+		&api_ctx,
+		&config,
+		replica_id,
+		source_replica_id,
+		input.after_versionstamp.clone(),
+	)
+	.await?;
 
-		if response.entries.is_empty() {
-			break;
-		}
-
-		let page_entries = response.entries.len();
-		let last_versionstamp = response.last_versionstamp.clone();
-		for entry in response.entries {
-			ctx.udb()?
-				.run(|tx| {
-					let entry = entry.clone();
-					async move { crate::replica::changelog::apply_entry(&*tx, replica_id, entry).await }
-				})
-				.custom_instrument(tracing::info_span!("apply_changelog_entry_tx"))
-				.await?;
-		}
-
-		applied_entries += page_entries;
-		tracing::info!(
-			%replica_id,
-			%source_replica_id,
-			applied_entries,
-			page_entries,
-			"applied changelog catch-up page"
-		);
-
-		after_versionstamp = Some(last_versionstamp);
+	if response.entries.is_empty() {
+		return Ok(CatchUpReplicaOutput {
+			last_versionstamp: None,
+			applied_entries: 0,
+		});
 	}
 
-	Ok(())
+	let applied_entries = response.entries.len();
+	let last_versionstamp = response.last_versionstamp.clone();
+	for entry in response.entries {
+		ctx.udb()?
+			.run(|tx| {
+				let entry = entry.clone();
+				async move { crate::replica::changelog::apply_entry(&*tx, replica_id, entry).await }
+			})
+			.custom_instrument(tracing::info_span!("apply_changelog_entry_tx"))
+			.await?;
+	}
+
+	tracing::info!(
+		%replica_id,
+		%source_replica_id,
+		applied_entries,
+		"applied changelog catch-up page"
+	);
+
+	Ok(CatchUpReplicaOutput {
+		last_versionstamp: Some(last_versionstamp),
+		applied_entries,
+	})
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct NotifyCoordinatorReplicaStatusInput {
-	pub config: crate::types::ClusterConfig,
-	pub status: crate::types::ReplicaStatus,
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct NotifyCoordinatorReplicaStatusInput {
+	config: crate::types::ClusterConfig,
+	status: crate::types::ReplicaStatus,
 }
 
 #[activity(NotifyCoordinatorReplicaStatus)]
-pub async fn notify_coordinator_replica_status(
+async fn notify_coordinator_replica_status(
 	ctx: &ActivityCtx,
 	input: &NotifyCoordinatorReplicaStatusInput,
 ) -> Result<()> {
@@ -164,6 +203,7 @@ pub async fn notify_coordinator_replica_status(
 	Ok(())
 }
 
+#[tracing::instrument(skip_all, fields(%from_replica_id, %source_replica_id))]
 async fn read_changelog_page(
 	api_ctx: &ApiCtx,
 	config: &protocol::ClusterConfig,

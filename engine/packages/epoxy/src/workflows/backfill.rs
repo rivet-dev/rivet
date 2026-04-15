@@ -15,6 +15,7 @@ use universaldb::{
 
 use crate::keys::{self, KvValueKey, LegacyCommittedValueKey};
 
+pub const BACKFILL_NAME: &str = "epoxy_backfill_v2";
 const DEFAULT_CHUNK_SIZE: usize = 2000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,6 +60,11 @@ pub async fn epoxy_backfill_v2(ctx: &mut WorkflowCtx, input: &Input) -> Result<u
 			.boxed()
 		})
 		.await?;
+
+	ctx.activity(MarkCompleteInput {
+		name: BACKFILL_NAME.to_string(),
+	})
+	.await?;
 
 	Ok(migrated_keys)
 }
@@ -175,6 +181,33 @@ pub async fn backfill_chunk(
 		})
 		.custom_instrument(tracing::info_span!("epoxy_backfill_chunk_tx", %replica_id))
 		.await
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct MarkCompleteInput {
+	pub name: String,
+}
+
+#[activity(MarkComplete)]
+pub async fn mark_complete(ctx: &ActivityCtx, input: &MarkCompleteInput) -> Result<()> {
+	ctx.udb()?
+		.run(|tx| {
+			let name = input.name.clone();
+			async move {
+				let tx = tx.with_subspace(rivet_types::keys::backfill::subspace());
+				tx.write(
+					&rivet_types::keys::backfill::CompleteKey::new(&name),
+					rivet_util::timestamp::now(),
+				)?;
+				Ok(())
+			}
+		})
+		.custom_instrument(tracing::info_span!("mark_backfill_complete_tx"))
+		.await?;
+
+	tracing::info!(name = %input.name, "marked backfill as complete");
+
+	Ok(())
 }
 
 async fn migrate_legacy_key(

@@ -153,6 +153,25 @@ impl<'a> VersionedWorkflowCtx<'a> {
 	}
 
 	#[tracing::instrument(skip_all)]
+	/// Runs workflow steps in a loop with state.
+	#[tracing::instrument(skip_all)]
+	pub async fn loope<S, F, T>(&mut self, state: S, cb: F) -> Result<T>
+	where
+		S: Serialize + DeserializeOwned,
+		F: for<'b> FnMut(&'b mut WorkflowCtx, &'b mut S) -> AsyncResult<'b, Loop<T>>,
+		T: Serialize + DeserializeOwned,
+	{
+		wrap!(self, "loop", {
+			self.inner.loope(state, cb).in_current_span().await
+		})
+	}
+
+	// TODO:
+	// pub fn lupe(&mut self) -> builder::lupe::LoopBuilder<'_, ()> {
+	// 	builder::lupe::LoopBuilder::new(self.inner, self.version, ())
+	// }
+
+	#[tracing::instrument(skip_all)]
 	pub async fn sleep(&mut self, duration: impl DurationToMillis) -> Result<()> {
 		wrap!(self, "sleep", {
 			self.inner.sleep(duration).in_current_span().await

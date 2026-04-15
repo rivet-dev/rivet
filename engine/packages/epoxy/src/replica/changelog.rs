@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use epoxy_protocol::protocol::{self, CommittedValue};
 use futures_util::TryStreamExt;
 use universaldb::{

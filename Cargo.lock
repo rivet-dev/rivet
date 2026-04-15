@@ -1488,6 +1488,7 @@ dependencies = [
  "rivet-pools",
  "rivet-runtime",
  "rivet-test-deps",
+ "rivet-types",
  "rivet-util",
  "serde",
  "serde_bare",

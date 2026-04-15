@@ -18,7 +18,6 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 		async {
 			// Replicas must exist before coordinator
 			setup_epoxy_replica(&ctx).await?;
-			setup_epoxy_backfill(&ctx).await?;
 			setup_epoxy_coordinator(&ctx).await
 		},
 		create_default_namespace(&ctx),
@@ -63,18 +62,6 @@ async fn setup_epoxy_replica(ctx: &StandaloneCtx) -> Result<()> {
 		.dispatch()
 		.await?;
 	tracing::info!(%workflow_id, "created epoxy replica");
-
-	Ok(())
-}
-
-async fn setup_epoxy_backfill(ctx: &StandaloneCtx) -> Result<()> {
-	let workflow_id = ctx
-		.workflow(epoxy::workflows::backfill::Input { chunk_size: None })
-		.tag("replica", ctx.config().epoxy_replica_id())
-		.unique()
-		.dispatch()
-		.await?;
-	tracing::info!(%workflow_id, "created epoxy backfill");
 
 	Ok(())
 }
