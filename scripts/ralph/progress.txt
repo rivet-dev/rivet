@@ -5,6 +5,7 @@
 - Scrape pegboard metrics from `RIVET_METRICS_ENDPOINT` or the default `:6430` metrics server immediately before and after `bench:large-insert` so server telemetry lands in the same structured benchmark result as the actor-side VFS telemetry.
 - When an example needs the registry from scripts, split the shared setup into `src/registry.ts` and keep `src/index.ts` as the autostart entrypoint so benchmarks can import the registry without side effects.
 - When native SQLite buffering defers truncates until sync, keep a logical delete boundary like `pending_delete_start` so reads and partial writes treat truncated chunks as missing before the remote `delete_range` flushes.
+- For native SQLite VFS durability tests, prefer direct `kv_vfs_open` plus `kv_io_sync` or `kv_io_close` coverage when SQL-level commit ordering makes failpoint injection nondeterministic.
 
 Started: Wed Apr 15 04:03:14 AM PDT 2026
 ---
@@ -52,4 +53,12 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - Buffering SQLite writes past a truncate needs a logical delete boundary, not just a smaller `file.size`, or reads and partial overwrites will fetch stale remote pages before the delete-range flush lands.
   - Flush buffered page batches in chunks of `KV_MAX_BATCH_KEYS` at sync time and write metadata last so large transactions stop dribbling per-page puts without reintroducing the 128-entry cap as an all-or-nothing failure.
   - `cargo test -p rivetkit-sqlite-native` is the fast correctness gate for native VFS changes and now covers both buffered-write telemetry and truncate masking behavior.
+---
+## 2026-04-15 06:30:08 PDT - US-006
+- Added focused native SQLite durability coverage for successful commit, rollback before commit, storage failure at the sync boundary, graceful actor stop, process death before or after commit, and retry-after-timeout behavior.
+- Files changed: `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - SQL-level commit scheduling is not deterministic enough for commit-failure failpoints in this VFS, so direct `kv_vfs_open` plus `kv_io_sync` tests are the reliable harness for buffered durability failures.
+  - Use shared in-memory KV state across multiple `open_database_with_kv` calls to verify graceful stop and crash-style reopen semantics without inventing a separate persistence shim.
+  - `cargo test -p rivetkit-sqlite-native` remains the right quality gate for these durability stories because it exercises both the SQL-level reopen paths and the low-level VFS callbacks in one package.
 ---

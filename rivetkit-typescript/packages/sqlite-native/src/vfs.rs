@@ -2052,9 +2052,83 @@ mod tests {
 		assert_eq!(entries, vec![(vec![1], vec![10]), (vec![4], vec![40])]);
 	}
 
+	#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+	enum FailureOperation {
+		BatchPut,
+		BatchDelete,
+		DeleteRange,
+	}
+
+	struct InjectedFailure {
+		op: FailureOperation,
+		file_tag: Option<u8>,
+		message: String,
+	}
+
 	#[derive(Default)]
 	struct MemoryKv {
 		store: Mutex<BTreeMap<Vec<u8>, Vec<u8>>>,
+		failures: Mutex<Vec<InjectedFailure>>,
+	}
+
+	impl MemoryKv {
+		fn fail_next_batch_put(&self, message: impl Into<String>) {
+			self.failures
+				.lock()
+				.expect("memory kv failures mutex poisoned")
+				.push(InjectedFailure {
+					op: FailureOperation::BatchPut,
+					file_tag: None,
+					message: message.into(),
+				});
+		}
+
+		fn maybe_fail_keys(
+			&self,
+			op: FailureOperation,
+			keys: &[Vec<u8>],
+		) -> Result<(), SqliteKvError> {
+			let mut failures = self
+				.failures
+				.lock()
+				.expect("memory kv failures mutex poisoned");
+			if let Some(idx) = failures.iter().position(|failure| {
+				failure.op == op
+					&& failure.file_tag.map_or(true, |file_tag| {
+						keys.iter().any(|key| {
+							key.get(3)
+								.map(|key_file_tag| *key_file_tag == file_tag)
+								.unwrap_or(false)
+						})
+					})
+			}) {
+				return Err(SqliteKvError::new(failures.remove(idx).message));
+			}
+			Ok(())
+		}
+
+		fn maybe_fail_range(
+			&self,
+			op: FailureOperation,
+			start: &[u8],
+		) -> Result<(), SqliteKvError> {
+			let mut failures = self
+				.failures
+				.lock()
+				.expect("memory kv failures mutex poisoned");
+			if let Some(idx) = failures.iter().position(|failure| {
+				failure.op == op
+					&& failure.file_tag.map_or(true, |file_tag| {
+						start
+							.get(3)
+							.map(|start_file_tag| *start_file_tag == file_tag)
+							.unwrap_or(false)
+					})
+			}) {
+				return Err(SqliteKvError::new(failures.remove(idx).message));
+			}
+			Ok(())
+		}
 	}
 
 	#[async_trait]
@@ -2085,6 +2159,7 @@ mod tests {
 			keys: Vec<Vec<u8>>,
 			values: Vec<Vec<u8>>,
 		) -> Result<(), SqliteKvError> {
+			self.maybe_fail_keys(FailureOperation::BatchPut, &keys)?;
 			let mut store = self.store.lock().expect("memory kv mutex poisoned");
 			for (key, value) in keys.into_iter().zip(values.into_iter()) {
 				store.insert(key, value);
@@ -2097,6 +2172,7 @@ mod tests {
 			_actor_id: &str,
 			keys: Vec<Vec<u8>>,
 		) -> Result<(), SqliteKvError> {
+			self.maybe_fail_keys(FailureOperation::BatchDelete, &keys)?;
 			let mut store = self.store.lock().expect("memory kv mutex poisoned");
 			for key in keys {
 				store.remove(&key);
@@ -2110,6 +2186,7 @@ mod tests {
 			start: Vec<u8>,
 			end: Vec<u8>,
 		) -> Result<(), SqliteKvError> {
+			self.maybe_fail_range(FailureOperation::DeleteRange, &start)?;
 			let mut store = self.store.lock().expect("memory kv mutex poisoned");
 			store.retain(|key, _| {
 				key.as_slice() < start.as_slice() || key.as_slice() >= end.as_slice()
@@ -2118,38 +2195,74 @@ mod tests {
 		}
 	}
 
-	fn open_memory_database(
+	static NEXT_TEST_VFS_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+	fn open_database_with_kv(
 		file_name: &str,
-	) -> (tokio::runtime::Runtime, Arc<MemoryKv>, NativeDatabase) {
+		kv: Arc<dyn SqliteKv>,
+	) -> (tokio::runtime::Runtime, NativeDatabase) {
 		let runtime = tokio::runtime::Builder::new_current_thread()
 			.enable_all()
 			.build()
 			.expect("create tokio runtime");
-		let kv = Arc::new(MemoryKv::default());
+		let vfs_id = NEXT_TEST_VFS_ID.fetch_add(1, Ordering::Relaxed);
 		let vfs = KvVfs::register(
-			&format!("test-vfs-{file_name}"),
-			kv.clone(),
+			&format!("test-vfs-{file_name}-{vfs_id}"),
+			kv,
 			file_name.to_string(),
 			runtime.handle().clone(),
 			Vec::new(),
 		)
 		.expect("register test vfs");
 		let db = open_database(vfs, file_name).expect("open test database");
+		(runtime, db)
+	}
+
+	fn open_memory_database(
+		file_name: &str,
+	) -> (tokio::runtime::Runtime, Arc<MemoryKv>, NativeDatabase) {
+		let kv = Arc::new(MemoryKv::default());
+		let (runtime, db) = open_database_with_kv(file_name, kv.clone());
 		(runtime, kv, db)
 	}
 
-	fn exec_sql(db: &NativeDatabase, sql: &str) {
+	fn exec_sql_result(db: &NativeDatabase, sql: &str) -> Result<(), (c_int, String)> {
 		let c_sql = CString::new(sql).expect("sql without nul");
+		let mut err_msg: *mut c_char = ptr::null_mut();
 		let rc = unsafe {
 			sqlite3_exec(
 				db.as_ptr(),
 				c_sql.as_ptr(),
 				None,
 				ptr::null_mut(),
-				ptr::null_mut(),
+				&mut err_msg,
 			)
 		};
-		assert_eq!(rc, SQLITE_OK, "sql failed: {sql}");
+		if rc == SQLITE_OK {
+			return Ok(());
+		}
+
+		let message = if err_msg.is_null() {
+			sqlite_error_message(db.as_ptr())
+		} else {
+			let message = unsafe { CStr::from_ptr(err_msg) }
+				.to_string_lossy()
+				.into_owned();
+			unsafe {
+				sqlite3_free(err_msg.cast());
+			}
+			message
+		};
+		Err((rc, message))
+	}
+
+	fn exec_sql(db: &NativeDatabase, sql: &str) {
+		let result = exec_sql_result(db, sql);
+		assert_eq!(result, Ok(()), "sql failed: {sql}");
+	}
+
+	fn primary_result_code(rc: c_int) -> c_int {
+		rc & 0xff
 	}
 
 	fn query_single_i64(db: &NativeDatabase, sql: &str) -> i64 {
@@ -2166,6 +2279,48 @@ mod tests {
 		let final_rc = unsafe { sqlite3_finalize(stmt) };
 		assert_eq!(final_rc, SQLITE_OK, "finalize failed: {sql}");
 		value
+	}
+
+	fn query_single_text(db: &NativeDatabase, sql: &str) -> String {
+		let c_sql = CString::new(sql).expect("sql without nul");
+		let mut stmt = ptr::null_mut();
+		let rc = unsafe {
+			sqlite3_prepare_v2(db.as_ptr(), c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut())
+		};
+		assert_eq!(rc, SQLITE_OK, "prepare failed: {sql}");
+		assert!(!stmt.is_null(), "statement pointer missing for {sql}");
+		let step_rc = unsafe { sqlite3_step(stmt) };
+		assert_eq!(step_rc, SQLITE_ROW, "query returned no row: {sql}");
+		let value = unsafe {
+			CStr::from_ptr(sqlite3_column_text(stmt, 0).cast())
+				.to_string_lossy()
+				.into_owned()
+		};
+		let final_rc = unsafe { sqlite3_finalize(stmt) };
+		assert_eq!(final_rc, SQLITE_OK, "finalize failed: {sql}");
+		value
+	}
+
+	fn assert_integrity_check_ok(db: &NativeDatabase) {
+		assert_eq!(query_single_text(db, "PRAGMA integrity_check;"), "ok");
+	}
+
+	fn open_raw_main_file(vfs: &KvVfs, file_name: &str) -> (Vec<u8>, *mut sqlite3_file) {
+		let mut file_storage = vec![0u8; unsafe { (*vfs.vfs_ptr).szOsFile as usize }];
+		let p_file = file_storage.as_mut_ptr().cast::<sqlite3_file>();
+		let c_name = CString::new(file_name).expect("file name without nul");
+		let mut out_flags = 0;
+		let rc = unsafe {
+			kv_vfs_open(
+				vfs.vfs_ptr,
+				c_name.as_ptr(),
+				p_file,
+				SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_MAIN_DB,
+				&mut out_flags,
+			)
+		};
+		assert_eq!(rc, SQLITE_OK, "open raw sqlite file");
+		(file_storage, p_file)
 	}
 
 	#[test]
@@ -2194,6 +2349,243 @@ mod tests {
 		assert!(telemetry.syncs.count > 0);
 		assert!(telemetry.kv.put_count > 0);
 		assert_eq!(telemetry.writes.immediate_kv_put_count, 0);
+	}
+
+	#[test]
+	fn committed_rows_survive_reopen_after_commit() {
+		let (runtime, kv, db) = open_memory_database("commit-durable.db");
+
+		exec_sql(
+			&db,
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+		);
+		exec_sql(&db, "BEGIN;");
+		exec_sql(
+			&db,
+			"INSERT INTO items (id, payload) VALUES (1, 'committed');",
+		);
+		exec_sql(&db, "COMMIT;");
+
+		assert_eq!(query_single_i64(&db, "SELECT COUNT(*) FROM items;"), 1);
+		assert_integrity_check_ok(&db);
+
+		drop(db);
+		drop(runtime);
+
+		let (_reopen_runtime, reopened_db) = open_database_with_kv("commit-durable.db", kv);
+		assert_eq!(
+			query_single_i64(&reopened_db, "SELECT COUNT(*) FROM items;"),
+			1
+		);
+		assert_integrity_check_ok(&reopened_db);
+	}
+
+	#[test]
+	fn rollback_discards_buffered_writes_before_commit_boundary() {
+		let (runtime, kv, db) = open_memory_database("rollback-buffered.db");
+
+		exec_sql(
+			&db,
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+		);
+		db.reset_vfs_telemetry();
+		exec_sql(&db, "BEGIN;");
+		exec_sql(
+			&db,
+			"INSERT INTO items (id, payload) VALUES (1, 'rolled-back');",
+		);
+		exec_sql(&db, "ROLLBACK;");
+
+		assert_eq!(query_single_i64(&db, "SELECT COUNT(*) FROM items;"), 0);
+
+		drop(db);
+		drop(runtime);
+
+		let (_reopen_runtime, reopened_db) = open_database_with_kv("rollback-buffered.db", kv);
+		assert_eq!(
+			query_single_i64(&reopened_db, "SELECT COUNT(*) FROM items;"),
+			0
+		);
+		assert_integrity_check_ok(&reopened_db);
+	}
+
+	#[test]
+	fn sync_failure_returns_sqlite_ioerr_without_false_success() {
+		let runtime = tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("create tokio runtime");
+		let kv = Arc::new(MemoryKv::default());
+		let vfs = KvVfs::register(
+			"test-vfs-sync-failure",
+			kv.clone(),
+			"sync-failure.db".to_string(),
+			runtime.handle().clone(),
+			Vec::new(),
+		)
+		.expect("register test vfs");
+		let (_file_storage, p_file) = open_raw_main_file(&vfs, "sync-failure.db");
+		let ctx = unsafe { &*vfs.ctx_ptr };
+		let file = unsafe { get_file(p_file) };
+		let state = unsafe { get_file_state(file.state) };
+
+		let original_page = empty_db_page();
+		let mut updated_page = original_page.clone();
+		updated_page[128] = 0x7f;
+
+		let write_rc = unsafe {
+			kv_io_write(
+				p_file,
+				updated_page.as_ptr().cast(),
+				updated_page.len() as c_int,
+				0,
+			)
+		};
+		assert_eq!(write_rc, SQLITE_OK);
+		kv.fail_next_batch_put("simulated timeout during commit flush");
+
+		let sync_rc = unsafe { kv_io_sync(p_file, 0) };
+		assert_eq!(primary_result_code(sync_rc), SQLITE_IOERR);
+		assert_eq!(
+			ctx.take_last_error().as_deref(),
+			Some("simulated timeout during commit flush")
+		);
+		assert_eq!(state.dirty_buffer.get(&0), Some(&updated_page));
+		assert_eq!(
+			kv.store
+				.lock()
+				.expect("memory kv mutex poisoned")
+				.get(kv::get_chunk_key(kv::FILE_TAG_MAIN, 0).as_slice()),
+			Some(&original_page)
+		);
+	}
+
+	#[test]
+	fn actor_stop_during_buffered_write_rolls_back_uncommitted_pages() {
+		let (runtime, kv, db) = open_memory_database("actor-stop-buffered.db");
+
+		exec_sql(
+			&db,
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+		);
+		exec_sql(&db, "BEGIN;");
+		exec_sql(
+			&db,
+			"INSERT INTO items (id, payload) VALUES (1, 'stopped');",
+		);
+		drop(db);
+		drop(runtime);
+
+		let (_reopen_runtime, reopened_db) = open_database_with_kv("actor-stop-buffered.db", kv);
+		assert_eq!(
+			query_single_i64(&reopened_db, "SELECT COUNT(*) FROM items;"),
+			0
+		);
+		assert_integrity_check_ok(&reopened_db);
+	}
+
+	#[test]
+	fn process_death_before_commit_drops_only_buffered_state() {
+		let (runtime, kv, db) = open_memory_database("process-death-before-commit.db");
+
+		exec_sql(
+			&db,
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+		);
+		exec_sql(&db, "BEGIN;");
+		exec_sql(
+			&db,
+			"INSERT INTO items (id, payload) VALUES (1, 'lost-on-crash');",
+		);
+		assert_eq!(query_single_i64(&db, "SELECT COUNT(*) FROM items;"), 1);
+
+		std::mem::forget(db);
+		std::mem::forget(runtime);
+
+		let (_reopen_runtime, reopened_db) =
+			open_database_with_kv("process-death-before-commit.db", kv);
+		assert_eq!(
+			query_single_i64(&reopened_db, "SELECT COUNT(*) FROM items;"),
+			0
+		);
+		assert_integrity_check_ok(&reopened_db);
+	}
+
+	#[test]
+	fn process_death_after_commit_ack_keeps_rows_durable() {
+		let (runtime, kv, db) = open_memory_database("process-death-after-commit.db");
+
+		exec_sql(
+			&db,
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+		);
+		exec_sql(&db, "BEGIN;");
+		exec_sql(
+			&db,
+			"INSERT INTO items (id, payload) VALUES (1, 'durable');",
+		);
+		exec_sql(&db, "COMMIT;");
+		assert_eq!(query_single_i64(&db, "SELECT COUNT(*) FROM items;"), 1);
+
+		std::mem::forget(db);
+		std::mem::forget(runtime);
+
+		let (_reopen_runtime, reopened_db) =
+			open_database_with_kv("process-death-after-commit.db", kv);
+		assert_eq!(
+			query_single_i64(&reopened_db, "SELECT COUNT(*) FROM items;"),
+			1
+		);
+		assert_integrity_check_ok(&reopened_db);
+	}
+
+	#[test]
+	fn retry_after_timeout_flushes_buffered_pages_on_next_sync() {
+		let runtime = tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("create tokio runtime");
+		let kv = Arc::new(MemoryKv::default());
+		let vfs = KvVfs::register(
+			"test-vfs-sync-retry",
+			kv.clone(),
+			"sync-retry.db".to_string(),
+			runtime.handle().clone(),
+			Vec::new(),
+		)
+		.expect("register test vfs");
+		let (_file_storage, p_file) = open_raw_main_file(&vfs, "sync-retry.db");
+		let file = unsafe { get_file(p_file) };
+		let state = unsafe { get_file_state(file.state) };
+
+		let mut updated_page = empty_db_page();
+		updated_page[256] = 0x55;
+		let write_rc = unsafe {
+			kv_io_write(
+				p_file,
+				updated_page.as_ptr().cast(),
+				updated_page.len() as c_int,
+				0,
+			)
+		};
+		assert_eq!(write_rc, SQLITE_OK);
+		kv.fail_next_batch_put("simulated timeout during commit flush");
+
+		let failed_sync_rc = unsafe { kv_io_sync(p_file, 0) };
+		assert_eq!(primary_result_code(failed_sync_rc), SQLITE_IOERR);
+		assert!(!state.dirty_buffer.is_empty());
+
+		let retry_sync_rc = unsafe { kv_io_sync(p_file, 0) };
+		assert_eq!(retry_sync_rc, SQLITE_OK);
+		assert!(state.dirty_buffer.is_empty());
+		assert_eq!(
+			kv.store
+				.lock()
+				.expect("memory kv mutex poisoned")
+				.get(kv::get_chunk_key(kv::FILE_TAG_MAIN, 0).as_slice()),
+			Some(&updated_page)
+		);
+		assert_eq!(unsafe { kv_io_close(p_file) }, SQLITE_OK);
 	}
 
 	#[test]

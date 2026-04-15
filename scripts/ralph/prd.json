@@ -95,7 +95,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "This is the anti-corruption story. If this fails, the speedup can go to hell."
     },
     {

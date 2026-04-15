@@ -8,6 +8,10 @@
 - Core drivers must remain SQLite-agnostic. Any SQLite-specific wiring belongs behind the native database provider boundary.
 - Native SQLite VFS truncate buffering must keep a logical delete boundary for chunks past the pending truncate point so reads and partial writes do not resurrect stale remote pages before the next sync flush.
 
+## SQLite VFS Testing
+
+- For native SQLite VFS durability tests in `packages/sqlite-native/src/vfs.rs`, prefer `kv_vfs_open` plus direct `kv_io_sync` or `kv_io_close` failpoint coverage when SQL-level commit ordering makes failure injection nondeterministic.
+
 ## Context Types Sync
 
 - Keep the `*ContextOf` types exported from `packages/rivetkit/src/actor/contexts/index.ts` in sync with the two docs locations below when adding, removing, or renaming context types.
