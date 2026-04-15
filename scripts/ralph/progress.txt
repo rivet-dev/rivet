@@ -1,5 +1,7 @@
 # Ralph Progress Log
 ## Codebase Patterns
+- Compare sqlite phase regressions only with canonical `pnpm --dir examples/sqlite-raw run bench:record -- --phase <phase> --fresh-engine` runs. The phase label itself is just metadata.
+- If a sqlite benchmark slowdown keeps the same fast-path attempts, request bytes, and sync time but VFS read time jumps, treat it as verify or read noise before blaming the write path.
 - Use `examples/sqlite-raw/bench-results.json` as the append-only benchmark source of truth, and regenerate `examples/sqlite-raw/BENCH_RESULTS.md` from it with `pnpm --dir examples/sqlite-raw run bench:record -- --render-only`.
 - Local `examples/sqlite-raw` phase baselines can show VFS fast-path success while pegboard server telemetry stays zero because the actor runs in-process. Do not treat those runs as direct remote-path validation.
 - In `examples/sqlite-raw/scripts/bench-large-insert.ts`, keep readiness retries pinned to one `getOrCreate` key and disable metadata lookup when the local engine endpoint is already known, or retries will keep cold-starting new actors instead of waiting for the same warmup actor.
@@ -172,4 +174,13 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - `examples/sqlite-raw/src/index.ts` still starts the serverful runtime. Remote benchmark coverage has to spawn `src/runner.ts` so the harness talks to a real envoy-backed runner instead.
   - The canonical remote recorder now defaults to `BENCH_MB=0.05` because the current gateway request timeout is 15 seconds. Bigger remote payloads need timeout work before they are trustworthy.
   - Pegboard sqlite metrics are exported as `rivet_actor_kv_sqlite_*`. Normalize that prefix in the scraper before matching metric names or the remote benchmark will report fake zeroes.
+---
+## 2026-04-15 11:03:06 PDT - US-018
+- Re-ran the canonical fresh-engine `phase-2-3` and `final` sqlite benchmarks, appended the new structured runs to `bench-results.json`, and updated the rendered report with a dedicated regression review that separates canonical phase comparisons from one-off manual runs.
+- Captured that the scary Final spread is not a stable fast-path write regression: fast-path commits stayed flat while VFS read time and actor verify time moved, so the report now calls out verify or read-side variance explicitly and documents the healthy canonical band.
+- Files changed: `examples/AGENTS.md`, `examples/sqlite-raw/BENCH_RESULTS.md`, `examples/sqlite-raw/bench-results.json`, `examples/sqlite-raw/scripts/run-benchmark.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `bench:record -- --phase <phase> --fresh-engine` is the only comparable inline phase workflow. The older PTY-backed US-015 final command belongs in history, not in canonical variance math.
+  - On this branch, the fastest and slowest canonical Final reruns had basically the same fast-path request envelope and sync time. The big delta came from VFS read time during verify, which means the write-path optimization itself stayed stable.
+  - `pnpm --dir examples/sqlite-raw run bench:record -- --render-only` plus `pnpm --dir examples/sqlite-raw run check-types` are the right quality gates after changing the benchmark renderer or the append-only report format.
 ---

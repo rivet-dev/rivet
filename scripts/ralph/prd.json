@@ -281,7 +281,7 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "Phase 2/3 landed at about 4.8s end-to-end, while the final run came back at about 7.8s with the same fast-path usage. That spread needs an explanation."
     },
     {

@@ -6,7 +6,9 @@
 
 - Run `examples/sqlite-raw` `bench:record --fresh-engine` with `RUST_LOG=error` so the engine child stays quiet while the recorder still saves `/tmp/sqlite-raw-bench-engine.log` for debugging.
 - Keep `examples/sqlite-raw/scripts/run-benchmark.ts` backward-compatible with older `bench-results.json` runs by treating newly added telemetry fields as optional in the renderer.
+- Compare phase regressions only with canonical `pnpm --dir examples/sqlite-raw run bench:record -- --phase <phase> --fresh-engine` runs. One-off PTY or manual commands belong in the append-only history, not in the canonical phase comparison.
 - In `examples/sqlite-raw/scripts/bench-large-insert.ts`, keep readiness retries pinned to one `getOrCreate` key and set `disableMetadataLookup: true` for known local endpoints, or warmup retries will keep cold-starting new actors instead of waiting for the same one.
+- When a sqlite benchmark slowdown shows up, check whether VFS read time moved while fast-path sync and request-byte telemetry stayed flat. That usually means verify or read noise, not a write-path regression.
 - For pegboard-backed sqlite benchmarks, start `examples/sqlite-raw/src/runner.ts` with `registry.startEnvoy()` instead of `src/index.ts`; the serverful entrypoint does not exercise the remote storage path cleanly.
 - Normalize the `rivet_` Prometheus prefix in sqlite benchmark scrapers before matching metric names, or remote server telemetry will look falsely zero.
 

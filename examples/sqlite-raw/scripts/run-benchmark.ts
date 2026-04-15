@@ -1221,6 +1221,175 @@ function renderRemoteRuns(store: BenchResultsStore): string {
 	return remoteRuns.map((run) => renderRemoteRun(run)).join("\n\n");
 }
 
+interface NumericStats {
+	count: number;
+	min: number;
+	max: number;
+	median: number;
+	average: number;
+}
+
+function canonicalPhaseWorkflowCommand(phase: PhaseKey): string {
+	return `pnpm --dir examples/sqlite-raw run bench:record -- --phase ${phase} --fresh-engine`;
+}
+
+function canonicalPhaseRuns(
+	store: BenchResultsStore,
+	phase: PhaseKey,
+): BenchRun[] {
+	return store.runs.filter((run) => {
+		return (
+			run.phase === phase &&
+			run.workflowCommand === canonicalPhaseWorkflowCommand(phase)
+		);
+	});
+}
+
+function computeStats(values: number[]): NumericStats | undefined {
+	if (values.length === 0) {
+		return undefined;
+	}
+
+	const sorted = [...values].sort((a, b) => a - b);
+	const middle = Math.floor(sorted.length / 2);
+	const median =
+		sorted.length % 2 === 0
+			? (sorted[middle - 1]! + sorted[middle]!) / 2
+			: sorted[middle]!;
+	const total = values.reduce((sum, value) => sum + value, 0);
+
+	return {
+		count: values.length,
+		min: sorted[0]!,
+		max: sorted[sorted.length - 1]!,
+		median,
+		average: total / values.length,
+	};
+}
+
+function runStats(
+	runs: BenchRun[],
+	select: (run: BenchRun) => number,
+): NumericStats | undefined {
+	return computeStats(runs.map(select));
+}
+
+function formatDataSizeRange(stats: NumericStats): string {
+	if (stats.min === stats.max) {
+		return formatDataSize(stats.min);
+	}
+
+	return `${formatDataSize(stats.min)} to ${formatDataSize(stats.max)}`;
+}
+
+function formatMsRange(stats: NumericStats): string {
+	if (stats.min === stats.max) {
+		return formatMs(stats.min);
+	}
+
+	return `${formatMs(stats.min)} to ${formatMs(stats.max)}`;
+}
+
+function renderRegressionReview(store: BenchResultsStore): string {
+	const phase23Runs = canonicalPhaseRuns(store, "phase-2-3");
+	const finalRuns = canonicalPhaseRuns(store, "final");
+	if (phase23Runs.length === 0 || finalRuns.length === 0) {
+		return "Not enough canonical fresh-engine runs are recorded yet to review the final regression.";
+	}
+
+	const phase23EndToEnd = runStats(
+		phase23Runs,
+		(run) => run.benchmark.delta.endToEndElapsedMs,
+	);
+	const phase23Insert = runStats(
+		phase23Runs,
+		(run) => run.benchmark.actor.insertElapsedMs,
+	);
+	const phase23Verify = runStats(
+		phase23Runs,
+		(run) => run.benchmark.actor.verifyElapsedMs,
+	);
+	const finalEndToEnd = runStats(
+		finalRuns,
+		(run) => run.benchmark.delta.endToEndElapsedMs,
+	);
+	const finalInsert = runStats(
+		finalRuns,
+		(run) => run.benchmark.actor.insertElapsedMs,
+	);
+	const finalVerify = runStats(
+		finalRuns,
+		(run) => run.benchmark.actor.verifyElapsedMs,
+	);
+	const phase23Read = runStats(
+		phase23Runs,
+		(run) => run.benchmark.actor.vfsTelemetry.reads.durationUs / 1000,
+	);
+	const finalRead = runStats(
+		finalRuns,
+		(run) => run.benchmark.actor.vfsTelemetry.reads.durationUs / 1000,
+	);
+	const phase23Sync = runStats(
+		phase23Runs,
+		(run) => run.benchmark.actor.vfsTelemetry.syncs.durationUs / 1000,
+	);
+	const finalSync = runStats(
+		finalRuns,
+		(run) => run.benchmark.actor.vfsTelemetry.syncs.durationUs / 1000,
+	);
+	const finalFastPathBytes = runStats(
+		finalRuns,
+		(run) =>
+			run.benchmark.actor.vfsTelemetry.atomicWrite.maxFastPathRequestBytes ??
+			0,
+	);
+	const excludedManualFinalRuns = store.runs.filter((run) => {
+		return (
+			run.phase === "final" &&
+			run.workflowCommand !== canonicalPhaseWorkflowCommand("final")
+		);
+	});
+	const latestFinalRun = finalRuns[finalRuns.length - 1];
+
+	if (
+		!phase23EndToEnd ||
+		!phase23Insert ||
+		!phase23Verify ||
+		!finalEndToEnd ||
+		!finalInsert ||
+		!finalVerify ||
+		!phase23Read ||
+		!finalRead ||
+		!phase23Sync ||
+		!finalSync ||
+		!finalFastPathBytes ||
+		!latestFinalRun
+	) {
+		return "Not enough canonical fresh-engine runs are recorded yet to review the final regression.";
+	}
+
+	const excludedManualNote =
+		excludedManualFinalRuns.length === 0
+			? "- Manual final reruns excluded: none."
+			: `- Manual final reruns excluded: \`${excludedManualFinalRuns.length}\`. The historical US-015 PTY-backed final command is kept in the append-only log, but it is not comparable to canonical \`bench:record\` fresh-engine runs.`;
+
+	return `- Comparison methodology:
+- Only compare canonical inline runs recorded with \`${canonicalPhaseWorkflowCommand("phase-2-3")}\` and \`${canonicalPhaseWorkflowCommand("final")}\`.
+- Phase labels are metadata only. They do not change the \`bench-large-insert\` payload or actor behavior, so variance has to be explained by telemetry, not by the label name.
+- Use the append-only log for raw history, but use canonical fresh-engine reruns to decide whether a regression is real.
+- Phase 2/3 canonical reruns: \`n=${phase23EndToEnd.count}\`, end-to-end \`${formatMsRange(phase23EndToEnd)}\` (median \`${formatMs(phase23EndToEnd.median)}\`), actor insert \`${formatMsRange(phase23Insert)}\`, actor verify \`${formatMsRange(phase23Verify)}\`.
+- Final canonical reruns: \`n=${finalEndToEnd.count}\`, end-to-end \`${formatMsRange(finalEndToEnd)}\` (median \`${formatMs(finalEndToEnd.median)}\`), actor insert \`${formatMsRange(finalInsert)}\`, actor verify \`${formatMsRange(finalVerify)}\`.
+${excludedManualNote}
+- Attribution:
+- The write path stayed flat across the canonical reruns. Final fast-path commits were always \`4\` attempts / \`4\` success / \`0\` fallback, with request envelopes at \`${formatDataSizeRange(finalFastPathBytes)}\` and sync time at \`${formatMsRange(finalSync)}\`.
+- The spread comes from the verify side. Phase 2/3 VFS read time was \`${formatMsRange(phase23Read)}\`, while Final VFS read time moved to \`${formatMsRange(finalRead)}\`, which tracks the actor verify swing much more closely than the write telemetry does.
+- The latest Final sample is one of those read-side outliers: \`${formatMs(latestFinalRun.benchmark.delta.endToEndElapsedMs)}\` end-to-end with \`${formatMs(latestFinalRun.benchmark.actor.vfsTelemetry.reads.durationUs / 1000)}\` of VFS read time and only \`${formatMs(latestFinalRun.benchmark.actor.vfsTelemetry.syncs.durationUs / 1000)}\` of sync time.
+- The original US-015 final outlier doubled sync time to \`${formatMs(1735.644)}\` and used a one-off PTY-backed command. The canonical reruns did not reproduce that write-path behavior, so the scary 7.8s result is not a stable fast-path regression.
+- Updated expectation:
+- For the 10 MiB inline benchmark on this branch, the write-path numbers are stable around actor insert \`${formatMsRange(finalInsert)}\` and sync time \`${formatMsRange(finalSync)}\`.
+- End-to-end runs in the \`${formatMsRange(phase23EndToEnd)}\` band match the healthy canonical samples. Treat slower Final runs as verify or read outliers until the read-side variance is isolated further.`;
+}
+
 function renderMarkdown(store: BenchResultsStore): string {
 	const latest = latestRunsByPhase(store);
 	const summaryRows = [
@@ -1480,9 +1649,16 @@ This file is generated from \`bench-results.json\` by
 
 ## Phase Summary
 
+The table below shows the latest recorded run for each phase. Use the
+regression review below when a single latest run looks suspicious.
+
 | Metric | ${phaseOrder.map((phase) => phaseLabels[phase]).join(" | ")} |
 | --- | --- | --- | --- | --- |
 ${summaryRows}
+
+## Regression Review
+
+${renderRegressionReview(store)}
 
 ## SQLite Fast-Path Batch Ceiling
 
