@@ -188,7 +188,7 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "This story is allowed to conclude that the cap should stay put. The requirement is evidence, not machismo."
     },
     {

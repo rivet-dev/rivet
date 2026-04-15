@@ -47,6 +47,12 @@ export interface SqliteVfsAtomicWriteTelemetry {
 	fastPathSuccessCount?: number;
 	fastPathFallbackCount?: number;
 	fastPathFailureCount?: number;
+	fastPathDirtyPagesTotal?: number;
+	maxFastPathDirtyPages?: number;
+	fastPathRequestBytesTotal?: number;
+	maxFastPathRequestBytes?: number;
+	fastPathDurationUs?: number;
+	maxFastPathDurationUs?: number;
 	batchCapFailureCount: number;
 	commitKvPutFailureCount: number;
 }

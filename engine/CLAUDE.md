@@ -41,3 +41,4 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 ## SQLite Fast Path
 
 - Keep pegboard-envoy SQLite fast-path fences connection-scoped, and invalidate that fence state whenever a successful generic SQLite KV mutation replaces the fast path for the same file.
+- Keep the SQLite fast-path page ceiling in `engine/packages/pegboard/src/actor_kv/mod.rs` in sync with the client-side fallback in `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`.

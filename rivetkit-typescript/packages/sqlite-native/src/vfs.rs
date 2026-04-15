@@ -57,6 +57,9 @@ const MAX_PATHNAME: c_int = 64;
 /// Maximum number of keys accepted by a single KV put or delete request.
 const KV_MAX_BATCH_KEYS: usize = 128;
 
+/// Maximum number of SQLite pages sent through a single fast-path write batch.
+const SQLITE_FAST_PATH_MAX_PAGE_UPDATES: usize = 3328;
+
 /// Opt-in flag for the native read cache. Disabled by default to match the WASM VFS.
 const READ_CACHE_ENV_VAR: &str = "RIVETKIT_SQLITE_NATIVE_READ_CACHE";
 
@@ -200,6 +203,12 @@ pub struct VfsAtomicWriteTelemetry {
 	pub fast_path_success_count: u64,
 	pub fast_path_fallback_count: u64,
 	pub fast_path_failure_count: u64,
+	pub fast_path_dirty_pages_total: u64,
+	pub max_fast_path_dirty_pages: u64,
+	pub fast_path_request_bytes_total: u64,
+	pub max_fast_path_request_bytes: u64,
+	pub fast_path_duration_us: u64,
+	pub max_fast_path_duration_us: u64,
 	pub batch_cap_failure_count: u64,
 	pub commit_kv_put_failure_count: u64,
 }
@@ -276,6 +285,12 @@ pub struct VfsMetrics {
 	pub commit_atomic_fast_path_success_count: AtomicU64,
 	pub commit_atomic_fast_path_fallback_count: AtomicU64,
 	pub commit_atomic_fast_path_failure_count: AtomicU64,
+	pub commit_atomic_fast_path_pages: AtomicU64,
+	pub commit_atomic_fast_path_max_pages: AtomicU64,
+	pub commit_atomic_fast_path_request_bytes: AtomicU64,
+	pub commit_atomic_fast_path_max_request_bytes: AtomicU64,
+	pub commit_atomic_fast_path_us: AtomicU64,
+	pub commit_atomic_fast_path_max_us: AtomicU64,
 	pub commit_atomic_batch_cap_failure_count: AtomicU64,
 	pub commit_atomic_kv_put_failure_count: AtomicU64,
 	pub kv_get_count: AtomicU64,
@@ -324,6 +339,12 @@ impl VfsMetrics {
 			commit_atomic_fast_path_success_count: AtomicU64::new(0),
 			commit_atomic_fast_path_fallback_count: AtomicU64::new(0),
 			commit_atomic_fast_path_failure_count: AtomicU64::new(0),
+			commit_atomic_fast_path_pages: AtomicU64::new(0),
+			commit_atomic_fast_path_max_pages: AtomicU64::new(0),
+			commit_atomic_fast_path_request_bytes: AtomicU64::new(0),
+			commit_atomic_fast_path_max_request_bytes: AtomicU64::new(0),
+			commit_atomic_fast_path_us: AtomicU64::new(0),
+			commit_atomic_fast_path_max_us: AtomicU64::new(0),
 			commit_atomic_batch_cap_failure_count: AtomicU64::new(0),
 			commit_atomic_kv_put_failure_count: AtomicU64::new(0),
 			kv_get_count: AtomicU64::new(0),
@@ -387,6 +408,22 @@ impl VfsMetrics {
 				fast_path_failure_count: self
 					.commit_atomic_fast_path_failure_count
 					.load(Ordering::Relaxed),
+				fast_path_dirty_pages_total: self
+					.commit_atomic_fast_path_pages
+					.load(Ordering::Relaxed),
+				max_fast_path_dirty_pages: self
+					.commit_atomic_fast_path_max_pages
+					.load(Ordering::Relaxed),
+				fast_path_request_bytes_total: self
+					.commit_atomic_fast_path_request_bytes
+					.load(Ordering::Relaxed),
+				max_fast_path_request_bytes: self
+					.commit_atomic_fast_path_max_request_bytes
+					.load(Ordering::Relaxed),
+				fast_path_duration_us: self.commit_atomic_fast_path_us.load(Ordering::Relaxed),
+				max_fast_path_duration_us: self
+					.commit_atomic_fast_path_max_us
+					.load(Ordering::Relaxed),
 				batch_cap_failure_count: self
 					.commit_atomic_batch_cap_failure_count
 					.load(Ordering::Relaxed),
@@ -441,6 +478,12 @@ impl VfsMetrics {
 		reset_counter(&self.commit_atomic_fast_path_success_count);
 		reset_counter(&self.commit_atomic_fast_path_fallback_count);
 		reset_counter(&self.commit_atomic_fast_path_failure_count);
+		reset_counter(&self.commit_atomic_fast_path_pages);
+		reset_counter(&self.commit_atomic_fast_path_max_pages);
+		reset_counter(&self.commit_atomic_fast_path_request_bytes);
+		reset_counter(&self.commit_atomic_fast_path_max_request_bytes);
+		reset_counter(&self.commit_atomic_fast_path_us);
+		reset_counter(&self.commit_atomic_fast_path_max_us);
 		reset_counter(&self.commit_atomic_batch_cap_failure_count);
 		reset_counter(&self.commit_atomic_kv_put_failure_count);
 		reset_counter(&self.kv_get_count);
@@ -922,6 +965,20 @@ fn build_sqlite_page_updates(state: &KvFileState) -> Vec<SqlitePageUpdate> {
 		.collect()
 }
 
+fn sqlite_write_batch_request_bytes(
+	file_tag: u8,
+	meta_value: &[u8],
+	page_updates: &[SqlitePageUpdate],
+) -> u64 {
+	let meta_key_len = kv::get_meta_key(file_tag).len() as u64;
+	meta_key_len
+		+ meta_value.len() as u64
+		+ page_updates.iter().fold(0_u64, |acc, update| {
+			acc + kv::get_chunk_key(file_tag, update.chunk_index).len() as u64
+				+ update.data.len() as u64
+		})
+}
+
 fn chunk_is_logically_deleted(state: &KvFileState, chunk_idx: u32) -> bool {
 	state
 		.pending_delete_start
@@ -1081,17 +1138,31 @@ fn try_flush_buffered_file_write_batch_fast_path(
 	{
 		return Ok(None);
 	}
+	if dirty_page_count as usize > SQLITE_FAST_PATH_MAX_PAGE_UPDATES {
+		ctx.vfs_metrics
+			.commit_atomic_batch_cap_failure_count
+			.fetch_add(1, Ordering::Relaxed);
+		return Ok(None);
+	}
 
 	let fence = ctx.reserve_sqlite_fast_path_fence(file.file_tag);
+	let page_updates = build_sqlite_page_updates(state);
+	let meta_value = encode_file_meta(file.size);
+	let request_bytes = sqlite_write_batch_request_bytes(
+		file.file_tag,
+		meta_value.as_slice(),
+		page_updates.as_slice(),
+	);
 	ctx.vfs_metrics
 		.commit_atomic_fast_path_attempt_count
 		.fetch_add(1, Ordering::Relaxed);
 	let request = SqliteWriteBatchRequest {
 		file_tag: file.file_tag,
-		meta_value: encode_file_meta(file.size),
-		page_updates: build_sqlite_page_updates(state),
+		meta_value,
+		page_updates,
 		fence,
 	};
+	let fast_path_start = std::time::Instant::now();
 
 	if let Err(err) = ctx
 		.rt_handle
@@ -1108,6 +1179,28 @@ fn try_flush_buffered_file_write_batch_fast_path(
 	ctx.vfs_metrics
 		.commit_atomic_fast_path_success_count
 		.fetch_add(1, Ordering::Relaxed);
+	ctx.vfs_metrics
+		.commit_atomic_fast_path_pages
+		.fetch_add(dirty_page_count, Ordering::Relaxed);
+	update_max(
+		&ctx.vfs_metrics.commit_atomic_fast_path_max_pages,
+		dirty_page_count,
+	);
+	ctx.vfs_metrics
+		.commit_atomic_fast_path_request_bytes
+		.fetch_add(request_bytes, Ordering::Relaxed);
+	update_max(
+		&ctx.vfs_metrics.commit_atomic_fast_path_max_request_bytes,
+		request_bytes,
+	);
+	let fast_path_duration_us = fast_path_start.elapsed().as_micros() as u64;
+	ctx.vfs_metrics
+		.commit_atomic_fast_path_us
+		.fetch_add(fast_path_duration_us, Ordering::Relaxed);
+	update_max(
+		&ctx.vfs_metrics.commit_atomic_fast_path_max_us,
+		fast_path_duration_us,
+	);
 	Ok(Some(finish_buffered_flush(
 		file,
 		state,
@@ -3021,6 +3114,45 @@ mod tests {
 		assert_eq!(telemetry.atomic_write.fast_path_success_count, 0);
 		assert_eq!(telemetry.atomic_write.fast_path_fallback_count, 1);
 		assert!(telemetry.kv.put_count > 0);
+	}
+
+	#[test]
+	fn oversized_fast_path_page_sets_fall_back_to_generic_sync_flush() {
+		let runtime = tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("create tokio runtime");
+		let kv = Arc::new(MemoryKv::with_sqlite_write_batch_fast_path());
+		let vfs = KvVfs::register(
+			"test-vfs-fast-path-batch-limit",
+			kv.clone(),
+			"fast-path-batch-limit.db".to_string(),
+			runtime.handle().clone(),
+			Vec::new(),
+		)
+		.expect("register test vfs");
+		let (_file_storage, p_file) = open_raw_main_file(&vfs, "fast-path-batch-limit.db");
+		let file = unsafe { get_file(p_file) };
+		let state = unsafe { get_file_state(file.state) };
+
+		for chunk_index in 0..=SQLITE_FAST_PATH_MAX_PAGE_UPDATES {
+			state
+				.dirty_buffer
+				.insert(chunk_index as u32, vec![0xAB; kv::CHUNK_SIZE]);
+		}
+		file.size = ((SQLITE_FAST_PATH_MAX_PAGE_UPDATES + 1) * kv::CHUNK_SIZE) as i64;
+		file.meta_dirty = true;
+
+		let sync_rc = unsafe { kv_io_sync(p_file, 0) };
+		assert_eq!(sync_rc, SQLITE_OK);
+		assert!(kv.recorded_sqlite_write_batches().is_empty());
+
+		let telemetry = vfs.snapshot_vfs_telemetry();
+		assert_eq!(telemetry.atomic_write.fast_path_success_count, 0);
+		assert_eq!(telemetry.atomic_write.fast_path_fallback_count, 1);
+		assert_eq!(telemetry.atomic_write.batch_cap_failure_count, 1);
+		assert!(telemetry.kv.put_count > 0);
+		assert_eq!(unsafe { kv_io_close(p_file) }, SQLITE_OK);
 	}
 
 	#[test]

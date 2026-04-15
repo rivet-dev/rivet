@@ -10,6 +10,7 @@
 - Route SQLite fast-path write batches from `packages/sqlite-native/src/vfs.rs`, not from the transport adapter, because the VFS is the only layer that owns the full buffered page set and per-file fence sequencing.
 - Only use the SQLite truncate fast path for a pure truncate plus optional tail chunk. If other dirty pages are buffered in the same flush, fall back to the generic path because the truncate protocol cannot carry a mixed page set safely.
 - Any successful generic SQLite fallback write in `packages/sqlite-native/src/vfs.rs` must clear the local fast-path fence tracker before the next fast-path request.
+- Keep the SQLite fast-path page ceiling in `packages/sqlite-native/src/vfs.rs` in sync with the server validation in `engine/packages/pegboard/src/actor_kv/mod.rs`.
 
 ## SQLite VFS Testing
 

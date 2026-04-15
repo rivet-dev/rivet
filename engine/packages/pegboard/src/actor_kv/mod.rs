@@ -25,6 +25,7 @@ pub const MAX_KEY_SIZE: usize = 2 * 1024;
 pub const MAX_VALUE_SIZE: usize = 128 * 1024;
 pub const MAX_KEYS: usize = 128;
 pub const MAX_PUT_PAYLOAD_SIZE: usize = 976 * 1024;
+pub const SQLITE_FAST_PATH_MAX_PAGE_UPDATES: usize = 3328;
 const MAX_STORAGE_SIZE: usize = 10 * 1024 * 1024 * 1024; // 10 GiB
 const VALUE_CHUNK_SIZE: usize = 10_000; // 10 KB, not KiB, see https://apple.github.io/foundationdb/blob.html
 
@@ -903,9 +904,9 @@ impl SqliteWriteBatchValidationError {
 			utils::EntryValidationErrorKind::LengthMismatch => {
 				anyhow::Error::msg("Keys list length != values list length")
 			}
-			utils::EntryValidationErrorKind::TooManyEntries => {
-				anyhow::Error::msg("A maximum of 128 key-value entries is allowed")
-			}
+			utils::EntryValidationErrorKind::TooManyEntries => anyhow::Error::msg(format!(
+				"A maximum of {SQLITE_FAST_PATH_MAX_PAGE_UPDATES} SQLite page updates is allowed"
+			)),
 			utils::EntryValidationErrorKind::PayloadTooLarge => {
 				anyhow::Error::msg("total payload is too large (max 976 KiB)")
 			}
@@ -1020,6 +1021,14 @@ fn validate_sqlite_write_batch_request(
 	page_updates: &[ep::SqlitePageUpdate],
 	total_size: usize,
 ) -> std::result::Result<(), SqliteWriteBatchValidationError> {
+	if page_updates.len() > SQLITE_FAST_PATH_MAX_PAGE_UPDATES {
+		return Err(SqliteWriteBatchValidationError {
+			kind: utils::EntryValidationErrorKind::TooManyEntries,
+			remaining: None,
+			payload_size: None,
+		});
+	}
+
 	let meta_key = sqlite_meta_key(file_tag);
 	if KeyWrapper::tuple_len(&meta_key) > MAX_KEY_SIZE {
 		return Err(SqliteWriteBatchValidationError {

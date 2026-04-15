@@ -21,6 +21,9 @@ const phaseLabels = {
 	final: "Final",
 } as const;
 const phaseOrder = ["phase-0", "phase-1", "phase-2-3", "final"] as const;
+const defaultBatchCeilingPages = [128, 512, 1024, 2048, 3328] as const;
+const sqlitePageSizeBytes = 4096;
+const sqlitePageOverheadEstimate = 32;
 const defaultEndpoint = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
 const defaultLogPath = "/tmp/sqlite-raw-bench-engine.log";
 const defaultRustLog =
@@ -30,6 +33,9 @@ type PhaseKey = (typeof phaseOrder)[number];
 
 interface CliOptions {
 	phase?: PhaseKey;
+	evaluateBatchCeiling: boolean;
+	chosenLimitPages?: number;
+	batchPages?: number[];
 	freshEngine: boolean;
 	renderOnly: boolean;
 }
@@ -102,6 +108,12 @@ interface SqliteVfsAtomicWriteTelemetry {
 	fastPathSuccessCount?: number;
 	fastPathFallbackCount?: number;
 	fastPathFailureCount?: number;
+	fastPathDirtyPagesTotal?: number;
+	maxFastPathDirtyPages?: number;
+	fastPathRequestBytesTotal?: number;
+	maxFastPathRequestBytes?: number;
+	fastPathDurationUs?: number;
+	maxFastPathDurationUs?: number;
 	batchCapFailureCount: number;
 	commitKvPutFailureCount: number;
 }
@@ -189,20 +201,48 @@ interface BenchRun {
 	benchmark: LargeInsertBenchmarkResult;
 }
 
+interface BatchCeilingSample {
+	targetDirtyPages: number;
+	payloadMiB: number;
+	benchmarkCommand: string;
+	benchmark: LargeInsertBenchmarkResult;
+}
+
+interface BatchCeilingEvaluation {
+	id: string;
+	recordedAt: string;
+	gitSha: string;
+	workflowCommand: string;
+	endpoint: string;
+	freshEngineStart: boolean;
+	engineLogPath: string | null;
+	engineBuild: BuildProvenance;
+	nativeBuild: BuildProvenance;
+	chosenLimitPages: number;
+	batchPages: number[];
+	notes: string[];
+	samples: BatchCeilingSample[];
+}
+
 interface BenchResultsStore {
 	schemaVersion: 1;
 	sourceFile: string;
 	resultsFile: string;
 	runs: BenchRun[];
+	batchCeilingEvaluations?: BatchCeilingEvaluation[];
 }
 
 function printUsage(): void {
 	console.log(`Usage:
   pnpm --dir examples/sqlite-raw run bench:record -- --phase phase-0 [--fresh-engine]
+  pnpm --dir examples/sqlite-raw run bench:record -- --evaluate-batch-ceiling --chosen-limit-pages 3328 [--batch-pages 128,512,1024,2048,3328] [--fresh-engine]
   pnpm --dir examples/sqlite-raw run bench:record -- --render-only
 
 Options:
   --phase <phase-0|phase-1|phase-2-3|final>
+  --evaluate-batch-ceiling
+  --chosen-limit-pages <pages>
+  --batch-pages <comma-separated pages>
   --fresh-engine   Build and start a fresh local engine before the benchmark
   --render-only    Regenerate BENCH_RESULTS.md from bench-results.json
 
@@ -213,8 +253,20 @@ Environment:
 `);
 }
 
+function parseNumberList(raw: string): number[] {
+	const values = raw
+		.split(",")
+		.map((value) => Number(value.trim()))
+		.filter((value) => Number.isFinite(value) && value > 0);
+	if (values.length === 0) {
+		throw new Error(`Expected a comma-separated list of positive numbers, got "${raw}".`);
+	}
+	return [...new Set(values)].sort((a, b) => a - b);
+}
+
 function parseArgs(argv: string[]): CliOptions {
 	const options: CliOptions = {
+		evaluateBatchCeiling: false,
 		freshEngine: false,
 		renderOnly: false,
 	};
@@ -231,6 +283,23 @@ function parseArgs(argv: string[]): CliOptions {
 			}
 			options.phase = phase as PhaseKey;
 			i += 1;
+		} else if (arg === "--evaluate-batch-ceiling") {
+			options.evaluateBatchCeiling = true;
+		} else if (arg === "--chosen-limit-pages") {
+			const rawValue = argv[i + 1];
+			const value = Number(rawValue);
+			if (!rawValue || !Number.isFinite(value) || value <= 0) {
+				throw new Error(`Invalid page limit "${rawValue ?? ""}".`);
+			}
+			options.chosenLimitPages = value;
+			i += 1;
+		} else if (arg === "--batch-pages") {
+			const rawValue = argv[i + 1];
+			if (!rawValue) {
+				throw new Error("Missing required value for --batch-pages.");
+			}
+			options.batchPages = parseNumberList(rawValue);
+			i += 1;
 		} else if (arg === "--fresh-engine") {
 			options.freshEngine = true;
 		} else if (arg === "--render-only") {
@@ -243,8 +312,21 @@ function parseArgs(argv: string[]): CliOptions {
 		}
 	}
 
-	if (!options.renderOnly && !options.phase) {
-		throw new Error("Missing required --phase argument.");
+	if (options.renderOnly) {
+		if (options.phase || options.evaluateBatchCeiling) {
+			throw new Error("--render-only cannot be combined with benchmark recording options.");
+		}
+		return options;
+	}
+
+	if (options.phase && options.evaluateBatchCeiling) {
+		throw new Error("Choose either --phase or --evaluate-batch-ceiling, not both.");
+	}
+	if (!options.phase && !options.evaluateBatchCeiling) {
+		throw new Error("Missing required --phase or --evaluate-batch-ceiling argument.");
+	}
+	if (options.evaluateBatchCeiling && !options.chosenLimitPages) {
+		throw new Error("--evaluate-batch-ceiling requires --chosen-limit-pages.");
 	}
 
 	return options;
@@ -414,9 +496,42 @@ function renderServerTelemetryDetails(
 - Validation outcomes: \`ok ${telemetry.writes.validation.ok}\` / \`quota ${telemetry.writes.validation.storageQuotaExceeded}\` / \`payload ${telemetry.writes.validation.payloadTooLarge}\` / \`count ${telemetry.writes.validation.tooManyEntries}\` / \`key ${telemetry.writes.validation.keyTooLarge}\` / \`value ${telemetry.writes.validation.valueTooLarge}\` / \`length ${telemetry.writes.validation.lengthMismatch}\``;
 }
 
+function buildBenchmarkCommand(
+	endpoint: string,
+	envOverrides: NodeJS.ProcessEnv = {},
+): string {
+	const payloadMiB = envOverrides.BENCH_MB ?? process.env.BENCH_MB ?? "10";
+	const rowCount = envOverrides.BENCH_ROWS ?? process.env.BENCH_ROWS ?? "1";
+	const vars = [
+		`BENCH_MB=${payloadMiB}`,
+		`BENCH_ROWS=${rowCount}`,
+		`RIVET_ENDPOINT=${endpoint}`,
+	];
+	if (envOverrides.BENCH_REQUIRE_SERVER_TELEMETRY === "1") {
+		vars.push("BENCH_REQUIRE_SERVER_TELEMETRY=1");
+	}
+	return [
+		...vars,
+		"pnpm --dir examples/sqlite-raw run bench:large-insert -- --json",
+	].join(" ");
+}
+
 function canonicalWorkflowCommand(options: CliOptions): string {
 	if (options.renderOnly) {
 		return "pnpm --dir examples/sqlite-raw run bench:record -- --render-only";
+	}
+	if (options.evaluateBatchCeiling) {
+		const args = [
+			"--evaluate-batch-ceiling",
+			`--chosen-limit-pages ${options.chosenLimitPages}`,
+		];
+		if (options.batchPages?.length) {
+			args.push(`--batch-pages ${options.batchPages.join(",")}`);
+		}
+		if (options.freshEngine) {
+			args.push("--fresh-engine");
+		}
+		return `pnpm --dir examples/sqlite-raw run bench:record -- ${args.join(" ")}`;
 	}
 
 	const args = [`--phase ${options.phase}`];
@@ -428,14 +543,7 @@ function canonicalWorkflowCommand(options: CliOptions): string {
 }
 
 function canonicalBenchmarkCommand(endpoint: string): string {
-	const payloadMiB = process.env.BENCH_MB ?? "10";
-	const rowCount = process.env.BENCH_ROWS ?? "1";
-	return [
-		`BENCH_MB=${payloadMiB}`,
-		`BENCH_ROWS=${rowCount}`,
-		`RIVET_ENDPOINT=${endpoint}`,
-		"pnpm --dir examples/sqlite-raw run bench:large-insert -- --json",
-	].join(" ");
+	return buildBenchmarkCommand(endpoint);
 }
 
 function runCommand(
@@ -664,7 +772,10 @@ function parseBenchmarkOutput(stdout: string): LargeInsertBenchmarkResult {
 	) as LargeInsertBenchmarkResult;
 }
 
-function runBenchmark(endpoint: string): LargeInsertBenchmarkResult {
+function runBenchmark(
+	endpoint: string,
+	envOverrides: NodeJS.ProcessEnv = {},
+): LargeInsertBenchmarkResult {
 	const result = spawnSync(
 		"pnpm",
 		["--dir", exampleDir, "exec", "tsx", "scripts/bench-large-insert.ts", "--", "--json"],
@@ -672,6 +783,7 @@ function runBenchmark(endpoint: string): LargeInsertBenchmarkResult {
 			cwd: repoRoot,
 			env: {
 				...process.env,
+				...envOverrides,
 				RIVET_ENDPOINT: endpoint,
 			},
 			encoding: "utf8",
@@ -696,6 +808,7 @@ function loadStore(): BenchResultsStore {
 			sourceFile: "examples/sqlite-raw/bench-results.json",
 			resultsFile: "examples/sqlite-raw/BENCH_RESULTS.md",
 			runs: [],
+			batchCeilingEvaluations: [],
 		};
 	}
 
@@ -794,6 +907,75 @@ phase results through \`bench-results.json\` and \`bench:record\`.
 - Conclusion: the bottleneck already looked like SQLite-over-KV page churn,
   not raw SQLite execution.
 `;
+}
+
+function renderBatchCeilingEvaluation(
+	evaluation: BatchCeilingEvaluation,
+): string {
+	const rows = evaluation.samples
+		.map((sample) => {
+			const path =
+				(sample.benchmark.actor.vfsTelemetry.atomicWrite
+					.fastPathSuccessCount ?? 0) > 0
+					? "fast_path"
+					: sample.benchmark.serverTelemetry?.path ?? "N/A";
+			const dirtyPages =
+				sample.benchmark.actor.vfsTelemetry.atomicWrite
+					.maxFastPathDirtyPages ??
+				sample.benchmark.serverTelemetry?.writes.dirtyPageCount ??
+				sample.benchmark.actor.vfsTelemetry.atomicWrite.maxCommittedDirtyPages;
+			const requestBytes =
+				sample.benchmark.actor.vfsTelemetry.atomicWrite
+					.maxFastPathRequestBytes ??
+				sample.benchmark.serverTelemetry?.writes.requestBytes ?? 0;
+			const commitLatencyUs =
+				sample.benchmark.actor.vfsTelemetry.atomicWrite
+					.maxFastPathDurationUs ??
+				sample.benchmark.serverTelemetry?.writes.durationUs ??
+				sample.benchmark.actor.vfsTelemetry.atomicWrite.commitDurationUs;
+
+			return `| ${sample.targetDirtyPages} | ${sample.payloadMiB.toFixed(2)} MiB | ${path} | ${dirtyPages} | ${formatDataSize(requestBytes)} | ${formatUs(commitLatencyUs)} | ${formatMs(sample.benchmark.actor.insertElapsedMs)} |`;
+		})
+		.join("\n");
+	const notes = evaluation.notes.map((note) => `- ${note}`).join("\n");
+
+	return `### ${evaluation.recordedAt}
+
+- Chosen SQLite fast-path ceiling: \`${evaluation.chosenLimitPages}\` dirty pages
+- Generic actor-KV cap: \`128\` entries
+- Workflow command: \`${evaluation.workflowCommand}\`
+- Endpoint: \`${evaluation.endpoint}\`
+- Fresh engine start: \`${evaluation.freshEngineStart ? "yes" : "no"}\`
+- Engine log: \`${evaluation.engineLogPath ?? "not captured"}\`
+- Notes:
+${notes}
+
+| Target pages | Payload | Path | Actual dirty pages | Request bytes | Commit latency | Actor DB insert |
+| --- | --- | --- | --- | --- | --- | --- |
+${rows}
+
+#### Engine Build Provenance
+
+${renderBuild(evaluation.engineBuild)}
+
+#### Native Build Provenance
+
+${renderBuild(evaluation.nativeBuild)}`;
+}
+
+function renderBatchCeilingEvaluations(store: BenchResultsStore): string {
+	const evaluations = [...(store.batchCeilingEvaluations ?? [])].reverse();
+	if (evaluations.length === 0) {
+		return "No batch ceiling evaluations recorded yet.";
+	}
+
+	const [latestEvaluation] = evaluations;
+	const historicalNote =
+		evaluations.length > 1
+			? "\n\nOlder evaluations remain in `bench-results.json`; the latest successful rerun is rendered here."
+			: "";
+
+	return `${renderBatchCeilingEvaluation(latestEvaluation)}${historicalNote}`;
 }
 
 function renderMarkdown(store: BenchResultsStore): string {
@@ -1052,6 +1234,10 @@ This file is generated from \`bench-results.json\` by
 | --- | --- | --- | --- | --- |
 ${summaryRows}
 
+## SQLite Fast-Path Batch Ceiling
+
+${renderBatchCeilingEvaluations(store)}
+
 ## Append-Only Run Log
 
 ${runLog || "No structured runs recorded yet."}
@@ -1068,6 +1254,26 @@ function recordRun(store: BenchResultsStore, run: BenchRun): BenchResultsStore {
 		...store,
 		runs: [...store.runs, run],
 	};
+}
+
+function recordBatchCeilingEvaluation(
+	store: BenchResultsStore,
+	evaluation: BatchCeilingEvaluation,
+): BenchResultsStore {
+	return {
+		...store,
+		batchCeilingEvaluations: [
+			...(store.batchCeilingEvaluations ?? []),
+			evaluation,
+		],
+	};
+}
+
+function payloadMiBForTargetDirtyPages(targetDirtyPages: number): number {
+	const payloadBytes =
+		Math.max(1, targetDirtyPages - sqlitePageOverheadEstimate) *
+		sqlitePageSizeBytes;
+	return Number((payloadBytes / (1024 * 1024)).toFixed(2));
 }
 
 async function main(): Promise<void> {
@@ -1087,9 +1293,6 @@ async function main(): Promise<void> {
 
 	try {
 		const phase = options.phase;
-		if (!phase) {
-			throw new Error("Missing required phase.");
-		}
 
 		const gitSha = execFileSync("git", ["rev-parse", "HEAD"], {
 			cwd: repoRoot,
@@ -1106,29 +1309,90 @@ async function main(): Promise<void> {
 			await assertEngineHealthy(endpoint);
 		}
 
-		const benchmark = runBenchmark(endpoint);
-		const run: BenchRun = {
-			id: `${phase}-${Date.now()}`,
-			phase,
-			recordedAt: new Date().toISOString(),
-			gitSha,
-			workflowCommand: canonicalWorkflowCommand(options),
-			benchmarkCommand: canonicalBenchmarkCommand(endpoint),
-			endpoint,
-			freshEngineStart: options.freshEngine,
-			engineLogPath,
-			engineBuild,
-			nativeBuild,
-			benchmark,
-		};
+		let nextStore = store;
+		if (options.evaluateBatchCeiling) {
+			const chosenLimitPages = options.chosenLimitPages!;
+			const batchPages = options.batchPages?.length
+				? options.batchPages
+				: [...defaultBatchCeilingPages];
+			if (!batchPages.includes(chosenLimitPages)) {
+				batchPages.push(chosenLimitPages);
+				batchPages.sort((a, b) => a - b);
+			}
 
-		const nextStore = recordRun(store, run);
+			const samples: BatchCeilingSample[] = [];
+			for (const targetDirtyPages of batchPages) {
+				const payloadMiB = payloadMiBForTargetDirtyPages(targetDirtyPages);
+				const benchmarkEnv = {
+					BENCH_MB: payloadMiB.toFixed(2),
+					BENCH_REQUIRE_SERVER_TELEMETRY: "1",
+				};
+				samples.push({
+					targetDirtyPages,
+					payloadMiB,
+					benchmarkCommand: buildBenchmarkCommand(endpoint, benchmarkEnv),
+					benchmark: runBenchmark(endpoint, benchmarkEnv),
+				});
+			}
+
+			const evaluation: BatchCeilingEvaluation = {
+				id: `batch-ceiling-${Date.now()}`,
+				recordedAt: new Date().toISOString(),
+				gitSha,
+				workflowCommand: canonicalWorkflowCommand(options),
+				endpoint,
+				freshEngineStart: options.freshEngine,
+				engineLogPath,
+				engineBuild,
+				nativeBuild,
+				chosenLimitPages,
+				batchPages,
+				notes: [
+					"These samples measure the SQLite fast path above the generic 128-entry actor-KV cap on the local benchmark engine.",
+					"The local benchmark path reports request bytes and commit latency from VFS fast-path telemetry because pegboard metrics stay zero when the actor runs in-process.",
+					"Engine config still defaults envoy tunnel payloads to 20 MiB, so request bytes should stay comfortably below that envelope before raising the ceiling again.",
+				],
+				samples,
+			};
+
+			nextStore = recordBatchCeilingEvaluation(store, evaluation);
+		} else {
+			if (!phase) {
+				throw new Error("Missing required phase.");
+			}
+			const benchmark = runBenchmark(endpoint);
+			const run: BenchRun = {
+				id: `${phase}-${Date.now()}`,
+				phase,
+				recordedAt: new Date().toISOString(),
+				gitSha,
+				workflowCommand: canonicalWorkflowCommand(options),
+				benchmarkCommand: canonicalBenchmarkCommand(endpoint),
+				endpoint,
+				freshEngineStart: options.freshEngine,
+				engineLogPath,
+				engineBuild,
+				nativeBuild,
+				benchmark,
+			};
+
+			nextStore = recordRun(store, run);
+		}
 		saveStore(nextStore);
 		writeMarkdown(nextStore);
 
-		console.log(
-			`Recorded ${phaseLabels[run.phase]} benchmark in ${relative(repoRoot, resultsJsonPath)}.`,
-		);
+		if (options.evaluateBatchCeiling) {
+			console.log(
+				`Recorded SQLite fast-path batch ceiling evaluation in ${relative(repoRoot, resultsJsonPath)}.`,
+			);
+		} else {
+			if (!phase) {
+				throw new Error("Missing required phase.");
+			}
+			console.log(
+				`Recorded ${phaseLabels[phase]} benchmark in ${relative(repoRoot, resultsJsonPath)}.`,
+			);
+		}
 	} finally {
 		if (engineChild) {
 			await stopFreshEngine(engineChild);

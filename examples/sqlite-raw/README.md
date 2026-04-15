@@ -41,6 +41,13 @@ run the benchmark, and append the structured result to the shared phase log:
 pnpm --dir examples/sqlite-raw run bench:record -- --phase phase-0 --fresh-engine
 ```
 
+To re-evaluate the SQLite fast-path batch ceiling against larger page envelopes
+and refresh the rendered ceiling table:
+
+```bash
+pnpm --dir examples/sqlite-raw run bench:record -- --evaluate-batch-ceiling --chosen-limit-pages 3328 --batch-pages 128,512,1024,2048,3328 --fresh-engine
+```
+
 Environment variables:
 
 - `BENCH_MB`: Total payload size in MiB. Defaults to `10`.

@@ -109,6 +109,41 @@ async fn sqlite_write_batch_round_trips_through_generic_get() -> Result<()> {
 }
 
 #[tokio::test]
+async fn sqlite_write_batch_rejects_page_sets_above_fast_path_limit() -> Result<()> {
+	let (db, _temp_dir, recipient) = test_db().await?;
+	let page_updates = (0..=kv::SQLITE_FAST_PATH_MAX_PAGE_UPDATES)
+		.map(|chunk_index| ep::SqlitePageUpdate {
+			chunk_index: chunk_index as u32,
+			data: vec![0xAA],
+		})
+		.collect();
+
+	let error = kv::sqlite_write_batch(
+		&db,
+		&recipient,
+		ep::KvSqliteWriteBatchRequest {
+			file_tag: 0,
+			meta_value: 4096_u64.to_be_bytes().to_vec(),
+			page_updates,
+			fence: ep::SqliteFastPathFence {
+				expected_fence: None,
+				request_fence: 1,
+			},
+		},
+	)
+	.await
+	.expect_err("expected oversized page batch to fail");
+
+	let error_text = format!("{error:#}");
+	assert!(
+		error_text.contains("SQLite page updates is allowed"),
+		"unexpected error: {error_text}"
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
 async fn sqlite_truncate_rewrites_tail_and_metadata() -> Result<()> {
 	let (db, _temp_dir, recipient) = test_db().await?;
 	let original_meta = 12288_u64.to_be_bytes().to_vec();

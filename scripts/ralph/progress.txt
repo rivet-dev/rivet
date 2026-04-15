@@ -1,6 +1,7 @@
 # Ralph Progress Log
 ## Codebase Patterns
 - Use `examples/sqlite-raw/bench-results.json` as the append-only benchmark source of truth, and regenerate `examples/sqlite-raw/BENCH_RESULTS.md` from it with `pnpm --dir examples/sqlite-raw run bench:record -- --render-only`.
+- Re-evaluate the SQLite fast-path page ceiling with `pnpm --dir examples/sqlite-raw run bench:record -- --evaluate-batch-ceiling --chosen-limit-pages <pages> --batch-pages <comma-list> --fresh-engine`; on the local benchmark path, use VFS fast-path telemetry for request bytes and commit latency because pegboard metrics stay zero when the actor runs in-process.
 - Use `c.db.resetVfsTelemetry()` and `c.db.snapshotVfsTelemetry()` inside the measured actor action so SQLite benchmark telemetry excludes startup migrations and open-time noise.
 - Scrape pegboard metrics from `RIVET_METRICS_ENDPOINT` or the default `:6430` metrics server immediately before and after `bench:large-insert` so server telemetry lands in the same structured benchmark result as the actor-side VFS telemetry.
 - When an example needs the registry from scripts, split the shared setup into `src/registry.ts` and keep `src/index.ts` as the autostart entrypoint so benchmarks can import the registry without side effects.
@@ -110,4 +111,12 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - `sqlite_truncate` can safely use the fast path only when the flush is a pure truncate plus an optional partial tail chunk. Any extra dirty pages in the same buffered flush must stay on the generic path.
   - Pegboard should apply fast-path truncate as one transaction that clears the page range, then rewrites the optional tail chunk and metadata before commit so readers never observe half-truncated state.
   - `cargo test -p pegboard --test sqlite_fast_path`, `cargo test -p pegboard-envoy sqlite_fast_path`, and `cargo test -p rivetkit-sqlite-native` cover the truncate server path, fence validation, and native VFS routing for this story.
+---
+## 2026-04-15 08:29:16 PDT - US-012
+- Implemented a SQLite fast-path page ceiling of `3328` pages on both the native VFS and pegboard validation path, added fallback or rejection coverage, and recorded a fresh batch-ceiling evaluation in the shared benchmark log.
+- Files changed: `engine/CLAUDE.md`, `engine/packages/pegboard/src/actor_kv/mod.rs`, `engine/packages/pegboard/tests/sqlite_fast_path.rs`, `examples/sqlite-raw/BENCH_RESULTS.md`, `examples/sqlite-raw/README.md`, `examples/sqlite-raw/bench-results.json`, `examples/sqlite-raw/scripts/run-benchmark.ts`, `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/rivetkit/src/db/config.ts`, `rivetkit-typescript/packages/rivetkit/src/db/native-database.test.ts`, `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Keep the SQLite fast-path page ceiling in sync between `engine/packages/pegboard/src/actor_kv/mod.rs` and `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`; the client falls back while the server rejects oversized direct requests.
+  - The local `examples/sqlite-raw` benchmark path proves fast-path envelopes through VFS telemetry, not pegboard metrics. Use the rendered ceiling table in `BENCH_RESULTS.md` for request bytes, dirty pages, and per-commit latency.
+  - `cargo test -p pegboard --test sqlite_fast_path`, `cargo test -p rivetkit-sqlite-native oversized_fast_path_page_sets_fall_back_to_generic_sync_flush`, `pnpm build -F rivetkit`, `pnpm --dir rivetkit-typescript/packages/rivetkit test native-database`, and `pnpm --dir examples/sqlite-raw run check-types` cover the limit, typings, and benchmark recorder changes for this story.
 ---
