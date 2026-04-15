@@ -446,7 +446,7 @@ export function buildRuntimeRouter(
 				const rewrite = (path: string) =>
 					path.replace(/^\/ui/, "") || "/";
 
-				return serveStatic({
+				const response: Response | undefined = await serveStatic({
 					root,
 					rewriteRequestPath: rewrite,
 					onNotFound: async (_path, c) => {
@@ -456,6 +456,17 @@ export function buildRuntimeRouter(
 						);
 					},
 				})(c, next);
+
+				// Allow the inspector UI to be embedded in iframes from the
+				// same origin (local inspector shell) and the Rivet dashboard.
+				if (response instanceof Response) {
+					response.headers.set(
+						"Content-Security-Policy",
+						"frame-ancestors 'self' https://dashboard.rivet.dev",
+					);
+				}
+
+				return response;
 			});
 
 			router.get("/ui", (c) => c.redirect("/ui/"));

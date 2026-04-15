@@ -622,7 +622,7 @@ export type ActorInspectorContext = ReturnType<
 	};
 };
 
-const ActorInspectorContext = createContext({} as ActorInspectorContext);
+export const ActorInspectorContext = createContext({} as ActorInspectorContext);
 
 export const useActorInspector = () => useContext(ActorInspectorContext);
 

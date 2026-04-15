@@ -29,25 +29,21 @@ import {
 	WithTooltip,
 } from "@/components";
 import { DeploymentLogs } from "@/components/deployment-logs";
-import { ActorConfigTab } from "./actor-config-tab";
-import { ActorConnectionsTab } from "./actor-connections-tab";
-import { ActorDatabaseTab } from "./actor-db-tab";
 import { ActorDetailsSettingsProvider } from "./actor-details-settings";
 import { useActorInspector } from "./actor-inspector-context";
 import { ActorLogsTab } from "./actor-logs-tab";
-import { ActorQueueTab } from "./actor-queue-tab";
-import { ActorStateTab } from "./actor-state-tab";
 import { QueriedActorStatusIndicator } from "./actor-status-indicator";
 import { useActorsView } from "./actors-view-context-provider";
-import { ActorConsoleFull } from "./console/actor-console";
 import { useCloudNamespaceDataProvider } from "./data-provider";
 import {
 	GuardConnectableInspector,
 	useInspectorGuard,
 } from "./guard-connectable-inspector";
+import { ActorConsoleFull } from "./console/actor-console";
+import { IframeTabBridgeProvider } from "./iframe-tab-bridge";
+import { IframeTabContent } from "./iframe-tab-content";
 import type { ActorId } from "./queries";
 import { ActorWorkerContextProvider } from "./worker/actor-worker-context";
-import { ActorWorkflowTab } from "./workflow/actor-workflow-tab";
 
 interface ActorsActorDetailsProps {
 	tab?: string;
@@ -228,8 +224,21 @@ function ActorTabsShell({
 	children?: ReactNode;
 }) {
 	const { ref: tabListRef, showLabels } = useShowTabLabels();
+	const [mountedTabs, setMountedTabs] = useState<Set<string>>(
+		() => new Set([value]),
+	);
+
+	useLayoutEffect(() => {
+		setMountedTabs((prev) => {
+			if (prev.has(value)) return prev;
+			const next = new Set(prev);
+			next.add(value);
+			return next;
+		});
+	}, [value]);
 
 	return (
+		<IframeTabBridgeProvider actorId={actorId}>
 		<Tabs
 			value={value}
 			onValueChange={onValueChange}
@@ -470,39 +479,23 @@ function ActorTabsShell({
 					{guardContent || <ActorLogsTab actorId={actorId} />}
 				</Suspense>
 			</TabsContent>
-			<TabsContent
-				value="metadata"
-				className="min-h-0 flex-1 mt-0 h-full"
-			>
-				<ActorConfigTab actorId={actorId} />
-			</TabsContent>
-			<TabsContent value="connections" className="min-h-0 flex-1 mt-0">
-				{guardContent || <ActorConnectionsTab actorId={actorId} />}
-			</TabsContent>
-			<TabsContent value="queue" className="min-h-0 flex-1 mt-0">
-				{guardContent || <ActorQueueTab actorId={actorId} />}
-			</TabsContent>
-			<TabsContent
-				value="workflow"
-				className="min-h-0 flex-1 mt-0 h-full"
-			>
-				{guardContent || <ActorWorkflowTab actorId={actorId} />}
-			</TabsContent>
-			<TabsContent
-				value="database"
-				className="min-h-0 min-w-0 flex-1 mt-0 h-full"
-			>
-				{guardContent || <ActorDatabaseTab actorId={actorId} />}
-			</TabsContent>
-			<TabsContent value="state" className="min-h-0 flex-1 mt-0 relative">
-				{guardContent || <ActorStateTab actorId={actorId} />}
-			</TabsContent>
-			<TabsContent
-				value="deployment-logs"
-				className="min-h-0 flex-1 mt-0 h-full"
-			>
-				<DeploymentLogs pool="default" filter={`actorId=${actorId}`} />
-			</TabsContent>
+			{/* Iframed tabs: forceMount keeps iframes loaded while hidden. */}
+			{(["workflow", "database", "state", "queue", "connections", "metadata"] as const).map(
+				(tab) => (
+					<TabsContent
+						key={tab}
+						value={tab}
+						forceMount
+						className="min-h-0 flex-1 mt-0 h-full flex flex-col"
+					>
+						{guardContent ||
+							(mountedTabs.has(tab) && (
+								<IframeTabContent tab={tab} actorId={actorId} />
+							))}
+					</TabsContent>
+				),
+			)}
+			{/* console stays inline: ActorWorkerContextProvider uses TanStack Router context unavailable in iframes. */}
 			<TabsContent value="console" className="min-h-0 flex-1 mt-0 h-full">
 				{guardContent || (
 					<div className="flex flex-col h-full">
@@ -512,8 +505,16 @@ function ActorTabsShell({
 					</div>
 				)}
 			</TabsContent>
+			{/* deployment-logs is cloud-only and uses cloud APIs directly. */}
+			<TabsContent
+				value="deployment-logs"
+				className="min-h-0 flex-1 mt-0 h-full"
+			>
+				<DeploymentLogs pool="default" filter={`actorId=${actorId}`} />
+			</TabsContent>
 			{children}
 		</Tabs>
+		</IframeTabBridgeProvider>
 	);
 }
 
