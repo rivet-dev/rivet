@@ -163,6 +163,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		envoy_tx: envoy_tx.clone(),
 		ws_tx: Arc::new(tokio::sync::Mutex::new(None)),
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
+		protocol_version: std::sync::atomic::AtomicU16::new(protocol::PROTOCOL_VERSION),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 	});
 

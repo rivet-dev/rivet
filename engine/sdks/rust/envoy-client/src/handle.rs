@@ -29,6 +29,14 @@ impl EnvoyHandle {
 		self.shared.protocol_metadata.lock().await.clone()
 	}
 
+	pub async fn get_sqlite_fast_path_capability(
+		&self,
+	) -> Option<protocol::SqliteFastPathCapability> {
+		self.get_protocol_metadata()
+			.await
+			.and_then(|metadata| metadata.sqlite_fast_path)
+	}
+
 	pub fn get_envoy_key(&self) -> &str {
 		&self.shared.envoy_key
 	}
@@ -295,9 +303,9 @@ impl EnvoyHandle {
 		}
 
 		let version = u16::from_le_bytes([payload[0], payload[1]]);
-		if version != protocol::PROTOCOL_VERSION {
+		if version == 0 || version > protocol::PROTOCOL_VERSION {
 			anyhow::bail!(
-				"serverless start payload does not match protocol version: {version} vs {}",
+				"serverless start payload uses unsupported protocol version: {version} (latest {})",
 				protocol::PROTOCOL_VERSION
 			);
 		}

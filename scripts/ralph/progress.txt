@@ -7,6 +7,7 @@
 - When native SQLite buffering defers truncates until sync, keep a logical delete boundary like `pending_delete_start` so reads and partial writes treat truncated chunks as missing before the remote `delete_range` flushes.
 - For native SQLite VFS durability tests, prefer direct `kv_vfs_open` plus `kv_io_sync` or `kv_io_close` coverage when SQL-level commit ordering makes failpoint injection nondeterministic.
 - Run `examples/sqlite-raw` `bench:record --fresh-engine` with `RUST_LOG=error` so the engine child keeps writing to `/tmp/sqlite-raw-bench-engine.log` without flooding the recorder stdout.
+- For envoy protocol changes, add a new `engine/sdks/schemas/envoy-protocol/vN.bare`, append new union variants instead of reordering old ones, update `engine/sdks/rust/envoy-protocol/src/versioned.rs`, regenerate `engine/sdks/typescript/envoy-protocol`, and keep the `envoy-client` pre-init downgrade fallback in sync.
 
 Started: Wed Apr 15 04:03:14 AM PDT 2026
 ---
@@ -70,4 +71,13 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - `RUST_LOG=error pnpm --dir examples/sqlite-raw run bench:record -- --phase phase-1 --fresh-engine` keeps the recorder output usable while still capturing the engine log at `/tmp/sqlite-raw-bench-engine.log`.
   - The current branch did not like a temp `RIVET__FILE_SYSTEM__PATH` for fresh benchmark engines. The workflow worker crashed on `ActiveWorkerIdxKey` decoding, so Phase 1 was recorded against the normal local RocksDB path.
   - Phase 1 on commit `dc5ba87b2410a02a1e64c315156d0bd491ef5785` dropped actor insert from `15875.9ms` to `898.2ms`, verify from `23848.9ms` to `3927.6ms`, end-to-end from `40000.7ms` to `4922.9ms`, and immediate `kv_put` fallbacks from `2589` to `0`.
+---
+## 2026-04-15 07:11:58 PDT - US-008
+- Added envoy protocol v2 with fenced SQLite fast-path request shapes for batched page writes and truncates, plus `sqlite_fast_path` capability advertisement in protocol metadata.
+- Implemented mixed-version compatibility in `envoy-protocol` and `envoy-client` so a new client downgrades cleanly to v1 before init, while a new server can reject unsupported fast-path requests explicitly instead of exploding mysteriously.
+- Files changed: `engine/CLAUDE.md`, `engine/packages/pegboard-envoy/src/conn.rs`, `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`, `engine/sdks/rust/envoy-client/src/connection.rs`, `engine/sdks/rust/envoy-client/src/context.rs`, `engine/sdks/rust/envoy-client/src/envoy.rs`, `engine/sdks/rust/envoy-client/src/handle.rs`, `engine/sdks/rust/envoy-protocol/src/lib.rs`, `engine/sdks/rust/envoy-protocol/src/versioned.rs`, `engine/sdks/schemas/envoy-protocol/v2.bare`, `engine/sdks/typescript/envoy-protocol/src/index.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The SQLite remote bridge goes through the envoy protocol and `pegboard-envoy`, not the runner protocol, so fast-path negotiation has to land in `engine/sdks/rust/envoy-protocol`, `engine/sdks/rust/envoy-client`, and `engine/packages/pegboard-envoy` together.
+  - `ToEnvoyInit` is the right mixed-version boundary. If v2 fails before init, `envoy-client` can safely retry v1 and clear cached protocol metadata before reconnecting.
+  - Regenerating the Rust envoy protocol bindings also updates `engine/sdks/typescript/envoy-protocol/src/index.ts`, so typecheck that package after the schema bump to catch binding drift.
 ---

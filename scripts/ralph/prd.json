@@ -125,7 +125,7 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Keep the surface tiny. This is not a license to invent a dozen cute internal ops."
     },
     {

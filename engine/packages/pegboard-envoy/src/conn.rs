@@ -95,6 +95,7 @@ pub async fn init_conn(
 						envoy_lost_threshold: pb.envoy_lost_threshold(),
 						actor_stop_threshold: pb.actor_stop_threshold(),
 						max_response_payload_size: pb.envoy_max_response_payload_size() as u64,
+						sqlite_fast_path: None,
 					},
 				},
 			));

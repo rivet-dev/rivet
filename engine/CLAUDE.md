@@ -26,6 +26,7 @@ When changing a versioned VBARE schema, follow the existing migration pattern.
      - `engine/packages/runner-protocol/src/lib.rs` `PROTOCOL_MK2_VERSION`
      - `rivetkit-typescript/packages/engine-runner/src/mod.ts` `PROTOCOL_VERSION`
    - Update the Rust latest re-export in `engine/packages/runner-protocol/src/lib.rs` to the new generated module.
+   - For the envoy protocol specifically, add a new `engine/sdks/schemas/envoy-protocol/vN.bare`, update `engine/sdks/rust/envoy-protocol/src/lib.rs` and `versioned.rs`, regenerate `engine/sdks/typescript/envoy-protocol`, and keep `engine/sdks/rust/envoy-client` mixed-version fallback aligned with the newest version.
 
 ## Epoxy durable keys
 

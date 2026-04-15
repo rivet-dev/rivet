@@ -11,9 +11,18 @@ use vbare::OwnedVersionedData;
 use crate::context::{SharedContext, WsTxMessage};
 use crate::envoy::ToEnvoyMessage;
 use crate::stringify::{stringify_to_envoy, stringify_to_rivet};
-use crate::utils::{BackoffOptions, calculate_backoff, parse_ws_close_reason};
+use crate::utils::{BackoffOptions, ParsedCloseReason, calculate_backoff, parse_ws_close_reason};
 
 const STABLE_CONNECTION_MS: u64 = 60_000;
+
+enum SingleConnectionResult {
+	Closed(Option<ParsedCloseReason>),
+	RetryLowerProtocol {
+		from: u16,
+		to: u16,
+		reason: &'static str,
+	},
+}
 
 pub fn start_connection(shared: Arc<SharedContext>) {
 	tokio::spawn(connection_loop(shared));
@@ -31,7 +40,7 @@ async fn connection_loop(shared: Arc<SharedContext>) {
 		let connected_at = std::time::Instant::now();
 
 		match single_connection(&shared).await {
-			Ok(close_reason) => {
+			Ok(SingleConnectionResult::Closed(close_reason)) => {
 				if let Some(reason) = &close_reason {
 					if reason.group == "ws" && reason.error == "eviction" {
 						tracing::debug!("connection evicted");
@@ -44,6 +53,16 @@ async fn connection_loop(shared: Arc<SharedContext>) {
 				let _ = shared
 					.envoy_tx
 					.send(ToEnvoyMessage::ConnClose { evict: false });
+			}
+			Ok(SingleConnectionResult::RetryLowerProtocol { from, to, reason }) => {
+				tracing::warn!(
+					from_protocol_version = from,
+					to_protocol_version = to,
+					reason,
+					"retrying envoy connection with lower protocol version"
+				);
+				attempt = 0;
+				continue;
 			}
 			Err(error) => {
 				tracing::error!(?error, "connection failed");
@@ -69,10 +88,9 @@ async fn connection_loop(shared: Arc<SharedContext>) {
 	}
 }
 
-async fn single_connection(
-	shared: &Arc<SharedContext>,
-) -> anyhow::Result<Option<crate::utils::ParsedCloseReason>> {
-	let url = ws_url(shared);
+async fn single_connection(shared: &Arc<SharedContext>) -> anyhow::Result<SingleConnectionResult> {
+	let protocol_version = current_protocol_version(shared);
+	let url = ws_url(shared, protocol_version);
 	let protocols = {
 		let mut p = vec!["rivet".to_string()];
 		if let Some(token) = &shared.config.token {
@@ -81,7 +99,7 @@ async fn single_connection(
 		p
 	};
 
-	// Initialize with a default CryptoProvider for rustls
+	// Initialize with a default CryptoProvider for rustls.
 	let provider = rustls::crypto::ring::default_provider();
 	if provider.install_default().is_err() {
 		tracing::debug!("crypto provider already installed in this process");
@@ -115,13 +133,12 @@ async fn single_connection(
 		namespace = %shared.config.namespace,
 		envoy_key = %shared.envoy_key,
 		has_token = shared.config.token.is_some(),
+		protocol_version,
 		"websocket connected"
 	);
 
-	// Spawn write task
 	let shared2 = shared.clone();
 	let write_handle = tokio::spawn(async move {
-		// Build prepopulate actor names map
 		let mut prepopulate_map = HashableMap::new();
 		for (name, actor) in &shared2.config.prepopulate_actor_names {
 			prepopulate_map.insert(
@@ -132,14 +149,12 @@ async fn single_connection(
 			);
 		}
 
-		// Serialize metadata HashMap to JSON string for the protocol
 		let metadata_json = shared2
 			.config
 			.metadata
 			.as_ref()
 			.map(|m| serde_json::to_string(m).unwrap_or_else(|_| "{}".to_string()));
 
-		// Send metadata
 		ws_send(
 			&shared2,
 			protocol::ToRivet::ToRivetMetadata(protocol::ToRivetMetadata {
@@ -172,8 +187,8 @@ async fn single_connection(
 		}
 	});
 
-	let mut result = None;
-
+	let mut received_init = false;
+	let mut result = SingleConnectionResult::Closed(None);
 	let debug_latency_ms = shared.config.debug_latency_ms;
 
 	while let Some(msg) = read.next().await {
@@ -181,46 +196,120 @@ async fn single_connection(
 			Ok(tungstenite::Message::Binary(data)) => {
 				crate::utils::inject_latency(debug_latency_ms).await;
 
-				let decoded = crate::protocol::versioned::ToEnvoy::deserialize(
-					&data,
-					protocol::PROTOCOL_VERSION,
-				)?;
+				match crate::protocol::versioned::ToEnvoy::deserialize(&data, protocol_version) {
+					Ok(decoded) => {
+						if matches!(decoded, protocol::ToEnvoy::ToEnvoyInit(_)) {
+							received_init = true;
+						}
 
-				if tracing::enabled!(tracing::Level::DEBUG) {
-					tracing::debug!(data = stringify_to_envoy(&decoded), "received message");
+						if tracing::enabled!(tracing::Level::DEBUG) {
+							tracing::debug!(
+								data = stringify_to_envoy(&decoded),
+								"received message"
+							);
+						}
+
+						forward_to_envoy(shared, decoded).await;
+					}
+					Err(error) => {
+						if let Some(fallback) = fallback_protocol_version(
+							shared,
+							protocol_version,
+							received_init,
+							"failed to decode init payload",
+						) {
+							result = fallback;
+							break;
+						}
+
+						return Err(error);
+					}
 				}
-
-				forward_to_envoy(shared, decoded).await;
 			}
 			Ok(tungstenite::Message::Close(frame)) => {
 				if let Some(frame) = frame {
 					let reason_str = frame.reason.to_string();
 					let code: u16 = frame.code.into();
-					tracing::info!(
-						code,
-						reason = %reason_str,
-						"websocket closed"
-					);
-					result = parse_ws_close_reason(&reason_str);
+					tracing::info!(code, reason = %reason_str, "websocket closed");
+					result = if let Some(fallback) = fallback_protocol_version(
+						shared,
+						protocol_version,
+						received_init,
+						"connection closed before init",
+					) {
+						fallback
+					} else {
+						SingleConnectionResult::Closed(parse_ws_close_reason(&reason_str))
+					};
+				} else if let Some(fallback) = fallback_protocol_version(
+					shared,
+					protocol_version,
+					received_init,
+					"connection closed before init",
+				) {
+					result = fallback;
 				}
 				break;
 			}
-			Err(e) => {
-				tracing::error!(?e, "websocket error");
-				break;
+			Err(error) => {
+				if let Some(fallback) = fallback_protocol_version(
+					shared,
+					protocol_version,
+					received_init,
+					"websocket error before init",
+				) {
+					result = fallback;
+					break;
+				}
+
+				return Err(error.into());
 			}
 			_ => {}
 		}
 	}
 
-	// Clean up
 	{
 		let mut guard = shared.ws_tx.lock().await;
 		*guard = None;
 	}
 	write_handle.abort();
 
+	if matches!(result, SingleConnectionResult::RetryLowerProtocol { .. }) {
+		let mut guard = shared.protocol_metadata.lock().await;
+		*guard = None;
+	}
+
 	Ok(result)
+}
+
+fn fallback_protocol_version(
+	shared: &SharedContext,
+	current_version: u16,
+	received_init: bool,
+	reason: &'static str,
+) -> Option<SingleConnectionResult> {
+	if received_init {
+		return None;
+	}
+
+	next_lower_protocol_version(current_version).map(|next_version| {
+		shared
+			.protocol_version
+			.store(next_version, Ordering::Release);
+		SingleConnectionResult::RetryLowerProtocol {
+			from: current_version,
+			to: next_version,
+			reason,
+		}
+	})
+}
+
+fn next_lower_protocol_version(current_version: u16) -> Option<u16> {
+	(current_version > 1).then_some(current_version - 1)
+}
+
+fn current_protocol_version(shared: &SharedContext) -> u16 {
+	shared.protocol_version.load(Ordering::Acquire)
 }
 
 async fn forward_to_envoy(shared: &SharedContext, message: protocol::ToEnvoy) {
@@ -253,13 +342,13 @@ pub async fn ws_send(shared: &SharedContext, message: protocol::ToRivet) -> bool
 	};
 
 	let encoded = crate::protocol::versioned::ToRivet::wrap_latest(message)
-		.serialize(protocol::PROTOCOL_VERSION)
+		.serialize(current_protocol_version(shared))
 		.expect("failed to encode message");
 	let _ = tx.send(WsTxMessage::Send(encoded));
 	false
 }
 
-fn ws_url(shared: &SharedContext) -> String {
+fn ws_url(shared: &SharedContext, protocol_version: u16) -> String {
 	let ws_endpoint = shared
 		.config
 		.endpoint
@@ -270,7 +359,7 @@ fn ws_url(shared: &SharedContext) -> String {
 	format!(
 		"{}/envoys/connect?protocol_version={}&namespace={}&envoy_key={}&version={}&pool_name={}",
 		base_url,
-		protocol::PROTOCOL_VERSION,
+		protocol_version,
 		urlencoding::encode(&shared.config.namespace),
 		urlencoding::encode(&shared.envoy_key),
 		urlencoding::encode(&shared.config.version.to_string()),
@@ -285,4 +374,15 @@ fn extract_host(url: &str) -> String {
 		.next()
 		.unwrap_or("localhost")
 		.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn next_lower_protocol_version_stops_at_v1() {
+		assert_eq!(next_lower_protocol_version(2), Some(1));
+		assert_eq!(next_lower_protocol_version(1), None);
+	}
 }

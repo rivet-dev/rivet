@@ -341,6 +341,22 @@ async fn handle_message(
 						.await
 						.context("failed to send KV delete range response to client")?;
 				}
+				protocol::KvRequestData::KvSqliteWriteBatchRequest(_) => {
+					send_actor_kv_error(
+						conn,
+						req.request_id,
+						"sqlite fast path is not supported by this server",
+					)
+					.await?;
+				}
+				protocol::KvRequestData::KvSqliteTruncateRequest(_) => {
+					send_actor_kv_error(
+						conn,
+						req.request_id,
+						"sqlite fast path is not supported by this server",
+					)
+					.await?;
+				}
 				protocol::KvRequestData::KvDropRequest => {
 					let res = actor_kv::delete_all(&*ctx.udb()?, &recipient).await;
 
