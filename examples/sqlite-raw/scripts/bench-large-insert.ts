@@ -15,6 +15,9 @@ const DEFAULT_STARTUP_GRACE_MS = Number(
 const DEFAULT_READY_TIMEOUT_MS = Number(
 	process.env.BENCH_READY_TIMEOUT_MS ?? "120000",
 );
+const DEFAULT_READY_ATTEMPT_TIMEOUT_MS = Number(
+	process.env.BENCH_READY_ATTEMPT_TIMEOUT_MS ?? "60000",
+);
 const DEFAULT_READY_RETRY_MS = Number(
 	process.env.BENCH_READY_RETRY_MS ?? "500",
 );
@@ -263,7 +266,11 @@ function isRetryableReadinessError(error: unknown): boolean {
 		return (
 			(error.group === "guard" &&
 				(error.code === "actor_ready_timeout" ||
-					error.code === "actor_runner_failed")) ||
+					error.code === "actor_runner_failed" ||
+					error.code === "request_timeout")) ||
+			(error.group === "rivetkit" &&
+				error.code === "internal_error" &&
+				error.message.includes("TimeoutError")) ||
 			(error.group === "core" && error.code === "internal_error")
 		);
 	}
@@ -273,6 +280,8 @@ function isRetryableReadinessError(error: unknown): boolean {
 	}
 
 	return (
+		error.name === "AbortError" ||
+		error.name === "TimeoutError" ||
 		error.message.includes("fetch failed") ||
 		error.message.includes("Request timed out") ||
 		error.message.includes("pegboard_actor_create timed out") ||
@@ -282,6 +291,8 @@ function isRetryableReadinessError(error: unknown): boolean {
 
 async function waitForActorRuntimeReady(client: RegistryClient): Promise<void> {
 	const deadline = Date.now() + DEFAULT_READY_TIMEOUT_MS;
+	const readinessKey = [`bench-ready-${crypto.randomUUID()}`];
+	const warmupActor = client.todoList.getOrCreate(readinessKey);
 	let lastError: unknown;
 	let attempt = 0;
 
@@ -290,13 +301,18 @@ async function waitForActorRuntimeReady(client: RegistryClient): Promise<void> {
 			attempt += 1;
 			debug("warmup attempt starting", {
 				attempt,
+				readinessKey,
 				deadline: new Date(deadline).toISOString(),
 			});
-			const warmupActor = await client.todoList.create([
-				`bench-ready-${crypto.randomUUID()}`,
-			]);
-			debug("warmup actor created", { attempt });
-			await warmupActor.addTodo("benchmark-runtime-ready");
+			debug("warmup actor handle ready", { attempt, readinessKey });
+			const actionSignal = AbortSignal.timeout(
+				DEFAULT_READY_ATTEMPT_TIMEOUT_MS,
+			);
+			await warmupActor.action({
+				name: "addTodo",
+				args: ["benchmark-runtime-ready"],
+				signal: actionSignal,
+			});
 			debug("warmup action completed", { attempt });
 			return;
 		} catch (error) {
@@ -597,6 +613,7 @@ async function runLargeInsertBenchmark(): Promise<LargeInsertBenchmarkResult> {
 
 	const client = createClient<typeof registry>({
 		endpoint: DEFAULT_ENDPOINT,
+		disableMetadataLookup: true,
 	});
 	debug("waiting for actor runtime readiness");
 	await waitForActorRuntimeReady(client);

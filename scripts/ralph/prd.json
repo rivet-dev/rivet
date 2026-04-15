@@ -235,7 +235,7 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "This story is the final answer sheet. Fresh build, fresh engine, no stale bullshit."
     },
     {

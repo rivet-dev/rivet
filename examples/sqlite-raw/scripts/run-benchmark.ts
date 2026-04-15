@@ -514,6 +514,12 @@ function buildBenchmarkCommand(
 	if (readyTimeoutMs) {
 		vars.push(`BENCH_READY_TIMEOUT_MS=${readyTimeoutMs}`);
 	}
+	const readyAttemptTimeoutMs =
+		envOverrides.BENCH_READY_ATTEMPT_TIMEOUT_MS ??
+		process.env.BENCH_READY_ATTEMPT_TIMEOUT_MS;
+	if (readyAttemptTimeoutMs) {
+		vars.push(`BENCH_READY_ATTEMPT_TIMEOUT_MS=${readyAttemptTimeoutMs}`);
+	}
 	if (envOverrides.BENCH_REQUIRE_SERVER_TELEMETRY === "1") {
 		vars.push("BENCH_REQUIRE_SERVER_TELEMETRY=1");
 	}
