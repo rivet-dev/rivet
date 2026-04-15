@@ -34,6 +34,13 @@ to native SQLite on disk:
 pnpm bench:large-insert
 ```
 
+To rebuild the engine and native addon, optionally start a fresh local engine,
+run the benchmark, and append the structured result to the shared phase log:
+
+```bash
+pnpm --dir examples/sqlite-raw run bench:record -- --phase phase-0 --fresh-engine
+```
+
 Environment variables:
 
 - `BENCH_MB`: Total payload size in MiB. Defaults to `10`.
@@ -46,6 +53,11 @@ The benchmark prints:
 - End-to-end action latency
 - Native SQLite baseline latency
 - Relative slowdown versus native SQLite
+
+Structured phase results live in:
+
+- `examples/sqlite-raw/bench-results.json` for append-only run metadata
+- `examples/sqlite-raw/BENCH_RESULTS.md` for the rendered side-by-side summary
 
 ## Usage
 
@@ -61,6 +73,8 @@ The example creates a `todoList` actor with the following actions:
 - `src/index.ts` - Actor definition, migrations, and registry startup
 - `scripts/client.ts` - Simple todo client
 - `scripts/bench-large-insert.ts` - Large-payload benchmark runner
+- `scripts/run-benchmark.ts` - Rebuilds dependencies, records per-phase runs, and renders `BENCH_RESULTS.md`
+- `bench-results.json` - Append-only benchmark run log
 
 ## Database
 

@@ -1,365 +1,258 @@
 {
-  "project": "RivetKit Dynamic Actors",
-  "branchName": "ralph/dynamic-actors-sqlite-ts-reload",
-  "description": "Dynamic actor enhancements: SQLite host-side proxy for db() support, TypeScript source compilation via @secure-exec/typescript, and failed-start reload lifecycle with backoff, authentication, and observability.",
+  "project": "SQLite Remote Performance Remediation",
+  "branchName": "04-15-chore_engine_sqlite_batch_perf_opts",
+  "description": "Reduce large remote SQLite write latency by instrumenting the current path, improving durable transaction buffering, and adding a capability-gated SQLite page-store fast path with baselines after each implementation step and a final review pass.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Add SQLite bridge contract keys and host-side SQLite pool",
-      "description": "As a developer, I need the bridge contract and host-side SQLite infrastructure so dynamic actors can execute SQL on the host.",
+      "title": "Add repeatable SQLite benchmark reporting scaffold",
+      "description": "As a developer, I need a repeatable benchmark and reporting scaffold so every implementation step is measured the same way.",
       "acceptanceCriteria": [
-        "Add sqliteExec and sqliteBatch keys to DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS in src/dynamic/runtime-bridge.ts",
-        "Add #actorAppDatabases map to FileSystemGlobalState in src/drivers/file-system/global-state.ts",
-        "Add #getOrCreateActorAppDatabase(actorId) that opens/creates a SQLite file at <storagePath>/app-databases/<actorId>.db with WAL mode",
-        "Add #closeActorAppDatabase(actorId) for teardown",
-        "Add sqliteExec(actorId, sql, params) method returning { rows: unknown[][], columns: string[] }",
-        "Add sqliteBatch(actorId, statements) method that wraps statements in BEGIN/COMMIT and returns results per statement",
-        "Extend #destroyActorData and actor teardown to close and delete app databases",
+        "Add a repeatable benchmark workflow for examples/sqlite-raw that rebuilds the engine and RivetKit native layer before measured runs",
+        "Record benchmark metadata for each run: date, commit SHA, benchmark command, engine build provenance, native build provenance, and whether the engine was started fresh",
+        "Add a baseline log format that can store Phase 0, Phase 1, Phase 2/3, and final results side by side",
+        "Document where the per-phase benchmark results live so later stories append instead of inventing new formats",
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "App databases are separate from KV databases. Use the same SqliteRuntime (bun:sqlite / better-sqlite3) already loaded. sqliteExec creates the database lazily on first use."
+      "passes": true,
+      "notes": "Keep the reporting output dead simple. The point is comparable numbers, not a fancy benchmark framework."
     },
     {
       "id": "US-002",
-      "title": "Wire SQLite bridge callbacks in isolated-vm and secure-exec runtimes",
-      "description": "As a developer, I need both runtime paths to expose the SQLite bridge so dynamic actors can call sqliteExec/sqliteBatch from inside the isolate.",
+      "title": "Instrument VFS telemetry for large-write analysis",
+      "description": "As a developer, I need detailed SQLite VFS telemetry so I can see where large-write amplification actually comes from.",
       "acceptanceCriteria": [
-        "In src/dynamic/isolate-runtime.ts #setIsolateBridge(), add sqliteExecRef and sqliteBatchRef that JSON-serialize params, call globalState.sqliteExec/sqliteBatch, and return JSON-serialized results via makeExternalCopy",
-        "Set both refs on context.global using DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS",
-        "In src/dynamic/host-runtime.ts #setIsolateBridge(), add equivalent refs using the existing base64/JSON bridge pattern",
-        "Set both refs on context.global as __dynamicHostSqliteExec and __dynamicHostSqliteBatch",
+        "Add end-to-end VFS telemetry for reads, writes, syncs, buffered commits, dirty page counts, and bytes moved",
+        "Track BEGIN_ATOMIC_WRITE and COMMIT_ATOMIC_WRITE coverage on representative SQL shapes",
+        "Track how often kv_io_write falls back to immediate kv_put instead of a buffered commit path",
+        "Track how often KV_MAX_BATCH_KEYS prevents the buffered commit path from succeeding",
+        "Make the telemetry consumable by the benchmark reporting scaffold from US-001",
         "Typecheck passes"
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Follow the exact same pattern used for existing KV bridge callbacks. isolated-vm uses makeExternalCopy; secure-exec returns plain JSON strings."
+      "notes": "Do not add vague debug logs. Add counters and timings that make the benchmark output useful."
     },
     {
       "id": "US-003",
-      "title": "Add overrideRawDatabaseClient to isolate-side actorDriver",
-      "description": "As a developer, I need the isolate-side actorDriver to provide database override hooks so dynamic actors can use db() through the bridge.",
+      "title": "Instrument server-side SQLite storage telemetry",
+      "description": "As a developer, I need pegboard-side telemetry so I can separate generic actor-KV waste from actual page-store work.",
       "acceptanceCriteria": [
-        "In src/dynamic/host-runtime.ts, add overrideRawDatabaseClient(actorId) to the actorDriver object (around line 1767)",
-        "The override returns a RawDatabaseClient whose exec() calls through the bridge to __dynamicHostSqliteExec",
-        "exec() JSON-serializes params, calls bridgeCall, parses the JSON result, and maps column-oriented rows to objects",
-        "Add overrideDrizzleDatabaseClient(actorId) that returns undefined (let raw override handle it)",
+        "Add server telemetry for SQLite page-store reads, writes, truncates, dirty page counts, bytes, and request sizes",
+        "Measure time spent in estimate_kv_size and generic clear-and-rewrite work on the current path",
+        "Track quota-accounting cost and failure points for large SQLite write batches",
+        "Break telemetry down enough to compare generic actor-KV work against the future SQLite fast path",
+        "Make the telemetry consumable by the benchmark reporting scaffold from US-001",
         "Typecheck passes"
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Because overrides are set, DatabaseProvider.createClient() uses them instead of trying to construct KV-backed WASM SQLite."
+      "notes": "This story is about hard numbers, not vibes. If a metric cannot guide a decision, it probably does not belong."
     },
     {
       "id": "US-004",
-      "title": "Add database override checks in drizzle provider",
-      "description": "As a developer, I need the drizzle DatabaseProvider to check for overrides before falling back to KV-backed WASM construction.",
+      "title": "Capture the Phase 0 baseline on a fresh build",
+      "description": "As a developer, I need a trustworthy starting baseline so later optimizations can be compared against the same telemetry and benchmark shape.",
       "acceptanceCriteria": [
-        "In src/db/drizzle/mod.ts createClient(), add override check at the top before existing KV-backed path",
-        "Check for drizzle override first (ctx.overrideDrizzleDatabaseClient), wrap with RawAccess execute/close if present",
-        "Check for raw override second (ctx.overrideRawDatabaseClient), build drizzle sqlite-proxy on top using the async callback pattern",
-        "The sqlite-proxy callback handles 'run', 'get', and 'all' methods correctly",
-        "Existing KV-backed path remains as fallback when no overrides are set",
+        "Rebuild the engine and RivetKit native layer before the measured run",
+        "Run examples/sqlite-raw against a fresh engine instance using the repeatable workflow from US-001",
+        "Record the Phase 0 baseline with the new VFS and server telemetry attached",
+        "Baseline output includes atomic-write coverage, immediate kv_put fallback frequency, batch-cap failures, request sizes, and generic actor-KV overhead timings",
+        "Store the results in the shared baseline log format from US-001",
         "Typecheck passes"
       ],
       "priority": 4,
       "passes": false,
-      "notes": "This lets dynamic actors use db() from rivetkit/db/drizzle with migrations working through the bridge. The host runs the actual SQL; the isolate just sends strings."
+      "notes": "This is the before picture. Do not land behavior changes in the same iteration."
     },
     {
       "id": "US-005",
-      "title": "Add SQLite proxy driver tests and fixture actors",
-      "description": "As a developer, I need tests to verify dynamic actors can use db() and drizzle through the SQLite proxy bridge.",
+      "title": "Improve durable transaction-scoped buffering in the VFS",
+      "description": "As a developer, I need the VFS to coalesce large dirty page sets until SQLite's real commit boundary so large writes stop dribbling remote puts.",
       "acceptanceCriteria": [
-        "Add shared fixture actors that use db() (raw) with a simple schema",
-        "Add fixture actors that use db() from rivetkit/db/drizzle with schema + migrations",
-        "Add an engine-focused integration test that creates a dynamic actor using raw db(), runs migrations, inserts rows, and queries them back",
-        "Test verifies data persists across actor sleep/wake cycles",
-        "Test verifies drizzle queries work through the proxy",
-        "Tests pass",
+        "Keep dirty pages, file-size changes, and metadata changes buffered in memory until SQLite's existing commit or sync boundary wherever correctness allows",
+        "Do not acknowledge commit early, do not introduce write-behind, and do not weaken rollback-journal durability semantics",
+        "Fail closed on buffered commit failure by returning SQLite I/O failure instead of pretending the transaction committed",
+        "Preserve the current journal_mode = DELETE durability ordering assumptions",
+        "Expose enough telemetry to show whether the improved buffering changes dirty-page counts and immediate kv_put frequency",
         "Typecheck passes"
       ],
       "priority": 5,
       "passes": false,
-      "notes": "Tests should run in the shared engine-focused integration suite so the single runtime path executes them."
+      "notes": "This story is only about improving the existing durable buffering behavior. Do not drag protocol changes into it."
     },
     {
       "id": "US-006",
-      "title": "Update secure-exec dependency to 0.1.0",
-      "description": "As a developer, I need secure-exec updated to the published release so we can use @secure-exec/typescript.",
+      "title": "Add buffering durability and failure-path tests",
+      "description": "As a developer, I need correctness coverage around the buffering changes so performance work does not quietly break SQLite durability.",
       "acceptanceCriteria": [
-        "Replace pre-release commit hash URL (pkg.pr.new/rivet-dev/secure-exec@7659aba) with secure-exec@0.1.0 in examples/ai-generated-actor/package.json",
-        "Update any local dist path fallbacks in isolate-runtime.ts that reference old directory structures",
-        "Add @secure-exec/typescript as an optional peer dependency of rivetkit (dynamically loaded)",
+        "Add focused tests for successful commit, rollback before commit, storage failure during commit, process death before commit, and process death after commit acknowledgment",
+        "Add coverage for actor stop during write and reconnect or retry after timeout where the buffering path is involved",
+        "Tests verify that buffered failures surface as SQLite I/O failure instead of false success",
+        "Tests verify that journal-ordering and visible metadata/page-set consistency are preserved",
+        "Tests pass",
         "Typecheck passes"
       ],
       "priority": 6,
       "passes": false,
-      "notes": "secure-exec@0.1.0 and @secure-exec/typescript@0.1.0 were published 2026-03-18."
+      "notes": "This is the anti-corruption story. If this fails, the speedup can go to hell."
     },
     {
       "id": "US-007",
-      "title": "Add compileActorSource implementation",
-      "description": "As a developer, I need a compileActorSource() helper to compile TypeScript source for dynamic actors in a sandboxed environment.",
+      "title": "Capture the Phase 1 baseline after buffering changes",
+      "description": "As a developer, I need a measured post-buffering baseline so I know how much of the large-write problem moved before adding protocol work.",
       "acceptanceCriteria": [
-        "Create new file src/dynamic/compile.ts with compileActorSource function",
-        "Dynamically load @secure-exec/typescript using the build-specifier-from-parts pattern to avoid bundler eager inclusion",
-        "Dynamically load secure-exec for SystemDriver and NodeRuntimeDriverFactory",
-        "Call createTypeScriptTools() then tools.compileSource() with user source and compiler options",
-        "When typecheck is false, use compilerOptions { noCheck: true } for fast type-stripping",
-        "Map SourceCompileResult to CompileActorSourceResult with js, sourceMap, success, and diagnostics fields",
-        "Export CompileActorSourceOptions, CompileActorSourceResult, and TypeScriptDiagnostic types",
+        "Rebuild the engine and RivetKit native layer before the measured run",
+        "Run examples/sqlite-raw against a fresh engine instance after US-005 and US-006 land",
+        "Record the Phase 1 baseline in the shared log next to Phase 0",
+        "Phase 1 results explicitly compare atomic-write coverage, immediate kv_put frequency, batch-cap failures, and end-to-end benchmark timings against Phase 0",
         "Typecheck passes"
       ],
       "priority": 7,
       "passes": false,
-      "notes": "The compiler runs inside a secure-exec isolate with memory/CPU limits. User-provided source never touches the host TypeScript installation."
+      "notes": "If Phase 1 removes most of the pain, that should be obvious here instead of guessed later."
     },
     {
       "id": "US-008",
-      "title": "Add TypeScript source format types, auto-compilation, and exports",
-      "description": "As a developer, I need TS source formats recognized by the runtime and compileActorSource exported from rivetkit/dynamic.",
+      "title": "Add versioned SQLite fast-path protocol and capability negotiation",
+      "description": "As a developer, I need a versioned internal protocol for SQLite page-store operations so the client and server can negotiate a fast path safely.",
       "acceptanceCriteria": [
-        "Extend DynamicSourceFormat in src/dynamic/runtime-bridge.ts with 'esm-ts' and 'commonjs-ts'",
-        "In src/dynamic/isolate-runtime.ts, handle TS formats by calling compileActorSource before writing source to the sandbox filesystem",
-        "Export compileActorSource, CompileActorSourceOptions, CompileActorSourceResult, and TypeScriptDiagnostic from src/dynamic/mod.ts",
-        "Unit test: compileActorSource with valid TS returns JS and success: true",
-        "Unit test: compileActorSource with type errors returns diagnostics and success: false",
-        "Unit test: compileActorSource with typecheck: false strips types without error on invalid types",
-        "Tests pass",
+        "Add new internal SQLite fast-path operations for sqlite_write_batch and sqlite_truncate without mutating an existing published bare schema version in place",
+        "Add capability advertisement so a new client can detect whether the server supports the SQLite fast path",
+        "Preserve clean fallback behavior for new client plus old server and old client plus new server combinations",
+        "Define the request fields needed for fenced replay-safe writes and truncates",
         "Typecheck passes"
       ],
       "priority": 8,
       "passes": false,
-      "notes": "TS formats are a convenience. Loaders can always compile explicitly and return esm-js."
+      "notes": "Keep the surface tiny. This is not a license to invent a dozen cute internal ops."
     },
     {
       "id": "US-009",
-      "title": "Define error subclasses and DynamicStartupOptions types",
-      "description": "As a developer, I need the error types and configuration interfaces for the failed-start lifecycle.",
+      "title": "Route buffered page-set writes through sqlite_write_batch with fenced fallback",
+      "description": "As a developer, I need the client-side SQLite path to use the new fast-path write operation when available and fall back safely when it is not.",
       "acceptanceCriteria": [
-        "Define DynamicStartupFailed ActorError subclass with code 'dynamic_startup_failed' in actor/errors.ts",
-        "Define DynamicLoadTimeout ActorError subclass with code 'dynamic_load_timeout' in actor/errors.ts",
-        "Define DynamicStartupOptions interface with timeoutMs (default 15000), retryInitialDelayMs (default 1000), retryMaxDelayMs (default 30000), retryMultiplier (default 2), retryJitter (default true), maxAttempts (default 20)",
-        "Define DynamicActorOptions extending GlobalActorOptionsInput with startup?: DynamicStartupOptions",
-        "Add canReload callback to DynamicActorConfigInput with DynamicActorReloadContext type (actorId, name, key, request)",
-        "Add options field to DynamicActorConfigInput",
+        "Route eligible buffered page-set commits through sqlite_write_batch when the server advertises support",
+        "Keep the old generic actor-KV path as the fallback when the capability is missing",
+        "Include monotonic commit fencing or compare-and-swap style preconditions so stale timed-out retries cannot overwrite newer committed state",
+        "Do not return success until the fast-path write is durably committed",
+        "Retain telemetry so benchmark output can distinguish fast-path commits from fallback commits",
         "Typecheck passes"
       ],
       "priority": 9,
       "passes": false,
-      "notes": "These types are consumed by subsequent stories. canReload defaults to allowed when auth passes."
+      "notes": "The fallback path must stay boring and correct. Fast path when available, no clown shoes when it is not."
     },
     {
       "id": "US-010",
-      "title": "Implement host-side dynamic runtime status model",
-      "description": "As a developer, I need a shared state model for dynamic actor lifecycle tracking across file-system and engine drivers.",
+      "title": "Implement server-side sqlite_write_batch page-store logic",
+      "description": "As a developer, I need pegboard to apply SQLite page batches directly so large writes stop paying generic actor-KV tax per page.",
       "acceptanceCriteria": [
-        "Create a shared host-side dynamic runtime status type with states: inactive, starting, running, failed_start",
-        "Include metadata fields: lastStartErrorCode, lastStartErrorMessage, lastStartErrorDetails, lastFailureAt, retryAt, retryAttempt, reloadCount, reloadWindowStart, generation, startupPromise",
-        "generation is a per-actor monotonic counter incremented synchronously before each startup attempt",
-        "startupPromise is created via promiseWithResolvers when transitioning to starting",
-        "State is in-memory only, cleared on wrapper removal during sleep/stop",
-        "Model is usable by both file-system and engine drivers",
+        "Implement sqlite_write_batch in pegboard using direct page-key replacement and atomic metadata plus deletion visibility",
+        "Avoid generic actor-KV clear-subspace and metadata rewrite work for the SQLite fast path",
+        "Preserve namespace validation, quota checks, and durable commit semantics",
+        "Reject stale fenced requests instead of letting old retries overwrite newer committed state",
+        "Emit telemetry that can be compared directly against the generic actor-KV path from Phase 0 and Phase 1",
         "Typecheck passes"
       ],
       "priority": 10,
       "passes": false,
-      "notes": "This state is host-side and in-memory only. It must not be written into persisted actor storage. Stale async completions are rejected by comparing captured generation against current."
+      "notes": "This is the main event on the server side."
     },
     {
       "id": "US-011",
-      "title": "Implement startup coalescing and generation tracking",
-      "description": "As a developer, I need concurrent requests to coalesce onto a single startup attempt via a shared promise.",
+      "title": "Implement sqlite_truncate end to end",
+      "description": "As a developer, I need truncate to move size changes and tail-page deletion together so large-write cleanup stops spraying extra round trips.",
       "acceptanceCriteria": [
-        "When startup is needed (from inactive or expired failed_start), synchronously transition to starting, increment generation, create startupPromise via promiseWithResolvers",
-        "Concurrent requests arriving while in starting state await the existing startupPromise instead of creating a new one",
-        "When startup completes, compare captured generation against current generation; discard if they differ",
-        "On success, transition to running and resolve startupPromise",
-        "On failure, transition to failed_start, record retry metadata, and reject startupPromise",
-        "Comment why startupPromise is created synchronously before async work",
-        "Comment how generation invalidation prevents stale completions",
+        "Implement sqlite_truncate in pegboard as one fenced durable storage operation",
+        "Route the client-side truncate path through sqlite_truncate when the capability is available and fall back safely otherwise",
+        "Ensure readers never observe truncated metadata without matching page deletion, or the reverse",
+        "Reject stale truncate retries using the same fencing model as sqlite_write_batch",
+        "Emit telemetry so truncate cost can be compared against the old path",
         "Typecheck passes"
       ],
       "priority": 11,
       "passes": false,
-      "notes": "Only one startup attempt may be in flight at a time. The synchronous transition ensures concurrent requests always join the new attempt."
+      "notes": "Do not hand-wave truncate. Tail cleanup is part of the large-write path."
     },
     {
       "id": "US-012",
-      "title": "Thread AbortController through startup pipeline and implement load timeout",
-      "description": "As a developer, I need startup attempts to be cancellable via AbortController and to timeout after a configurable duration.",
+      "title": "Evaluate and, if safe, raise the SQLite-specific batch ceiling",
+      "description": "As a developer, I need to see whether the SQLite fast path can exceed the generic 128-entry batch cap without walking into backend limit hell.",
       "acceptanceCriteria": [
-        "Pass AbortController signal through DynamicActorIsolateRuntime.start() as a parameter",
-        "Make the signal available to the user-provided loader callback as context.signal",
-        "Thread signal through internal async operations that support cancellation (e.g. fetch calls, file I/O)",
-        "Implement load timeout via setTimeout that aborts the AbortController after startup.timeoutMs",
-        "When timeout fires, abort with DynamicLoadTimeout error",
-        "Timeout failure transitions to failed_start with lastStartErrorCode set to 'dynamic_load_timeout'",
-        "Timeout failure participates in backoff identically to other startup failures",
+        "Measure larger SQLite fast-path request envelopes against real backend transaction size, payload size, timeout, and retry limits",
+        "If the measurements are safe, raise the SQLite-specific batch ceiling beyond the generic actor-KV cap and document the chosen limit",
+        "If the measurements are not safe, document why the limit stays where it is and keep the safer bound",
+        "Benchmark output captures request sizes, dirty page counts, and commit latency at the evaluated limits",
         "Typecheck passes"
       ],
       "priority": 12,
       "passes": false,
-      "notes": "Default timeout is 15 seconds to accommodate cold starts. Operations that don't support cancellation (e.g. isolated-vm context creation) run to completion but stale generation check discards their result."
+      "notes": "This story is allowed to conclude that the cap should stay put. The requirement is evidence, not machismo."
     },
     {
       "id": "US-013",
-      "title": "Implement passive failed-start backoff and maxAttempts exhaustion",
-      "description": "As a developer, I need exponential backoff for failed startups that is passive (no background timers) and a maxAttempts limit.",
+      "title": "Add fast-path compatibility, retry, and correctness tests",
+      "description": "As a developer, I need the new SQLite fast path covered so performance work does not create mixed-version or retry corruption bugs.",
       "acceptanceCriteria": [
-        "Compute backoff delays using formula: min(maxDelay, initialDelay * multiplier^attempt) with optional jitter, matching p-retry algorithm",
-        "Record retryAt timestamp when transitioning to failed_start",
-        "Normal requests during active backoff return stored failed-start error immediately without attempting startup",
-        "Normal requests after backoff expires trigger a fresh startup attempt",
-        "No background retry timers are scheduled; retries only happen from incoming requests or reload",
-        "When retryAttempt exceeds maxAttempts, tear down the host wrapper, transition to inactive",
-        "Next request after maxAttempts exhaustion triggers fresh startup from attempt 0",
-        "Comment why backoff is passive instead of timer-driven",
+        "Add tests for new client plus old server fallback and old client plus new server behavior",
+        "Add tests for duplicate request replay, timeout followed by retry, stale timed-out replay after a newer successful commit, and server restart during an in-flight page batch",
+        "Add tests for truncate correctness, repeated page overwrite, and simulated storage failure on the fast path",
+        "Add tests that prove sqlite_write_batch and sqlite_truncate do not acknowledge success before durable commit",
+        "Tests pass",
         "Typecheck passes"
       ],
       "priority": 13,
       "passes": false,
-      "notes": "Passive backoff prevents failed actors from spinning in memory indefinitely. maxAttempts default is 20; set to 0 for unlimited."
+      "notes": "The fast path is not done until the ugly failure cases are pinned down."
     },
     {
       "id": "US-014",
-      "title": "Implement reload behavior for all states",
-      "description": "As a developer, I need reload to handle running, inactive, starting, and failed_start states correctly.",
+      "title": "Capture the Phase 2 or 3 baseline after the fast path lands",
+      "description": "As a developer, I need a measured post-fast-path baseline so I can tell how much the new protocol and server path actually bought us.",
       "acceptanceCriteria": [
-        "Reload while running: stop actor through normal sleep lifecycle, return 200 (existing behavior preserved)",
-        "Reload while inactive: return 200 without waking the actor (no-op to prevent double-load)",
-        "Reload while starting: abort current AbortController, increment generation, create new startupPromise, begin fresh startup attempt",
-        "Requests awaiting old startupPromise receive rejection, then observe new starting state and join new promise",
-        "Reload while failed_start: reset backoff state (retryAt, retryAttempt), immediately attempt fresh startup, return result",
-        "Comment why reload on inactive is intercepted as a no-op",
-        "Comment why reload bypasses backoff",
+        "Rebuild the engine and RivetKit native layer before the measured run",
+        "Run examples/sqlite-raw against a fresh engine instance after the fast-path implementation and tests land",
+        "Record the Phase 2 or 3 baseline in the shared log next to earlier phases",
+        "Phase 2 or 3 results explicitly compare benchmark timings, request counts, request sizes, generic actor-KV overhead, and fast-path telemetry against Phase 0 and Phase 1",
         "Typecheck passes"
       ],
       "priority": 14,
       "passes": false,
-      "notes": "Reload while running does NOT verify new code loads successfully. Startup failures surface on the next request that wakes the actor."
+      "notes": "This is the post-surgery scan. If the patient still looks like shit, the numbers should prove it."
     },
     {
       "id": "US-015",
-      "title": "Implement reload authentication and rate limiting",
-      "description": "As a developer, I need reload to be authenticated and rate-limited to prevent abuse.",
+      "title": "Run final end-to-end verification and capture the final baseline",
+      "description": "As a developer, I need one final fresh-build verification pass so the finished work is proven, not assumed.",
       "acceptanceCriteria": [
-        "Reload calls existing auth hook first; if it throws, reject with 403",
-        "If auth passes, call canReload callback; if it returns false or throws, reject with 403",
-        "If canReload is not provided, reload defaults to allowed when auth passes",
-        "In development mode without auth or canReload, allow reload with a warning log",
-        "Authentication check happens before any state changes",
-        "Implement reload rate-limit bucket: reloadCount tracks calls in current window, reloadWindowStart tracks window start",
-        "When reloadCount exceeds 10 in 60 seconds, log a warning with actor ID and count",
-        "Rate limiting is warning-only, not enforcement",
+        "Rebuild the engine and RivetKit native layer and run against a fresh engine instance for the final measured run",
+        "Run the full intended verification set for the completed stories, including benchmark runs and correctness tests",
+        "Capture the final baseline in the shared log and compare it against Phase 0, Phase 1, and Phase 2 or 3",
+        "Document whether the finished implementation achieved the intended large-write improvement and whether any correctness regressions were found",
+        "Tests pass",
         "Typecheck passes"
       ],
       "priority": 15,
       "passes": false,
-      "notes": "Auth flow matches existing inspector auth behavior in dev mode."
+      "notes": "This story is the final answer sheet. Fresh build, fresh engine, no stale bullshit."
     },
     {
       "id": "US-016",
-      "title": "Implement error sanitization for production vs development",
-      "description": "As a developer, I need failed-start errors to be sanitized in production but include full details in development.",
+      "title": "Perform final review and append remaining work as PRD stories",
+      "description": "As a developer, I need a final review pass so any gaps or follow-ups are captured explicitly instead of vanishing into the void.",
       "acceptanceCriteria": [
-        "ActorError code (e.g. 'dynamic_startup_failed', 'dynamic_load_timeout') is always returned to clients in both environments",
-        "In production, error message is sanitized to generic string: 'Dynamic actor startup failed. Check server logs for details.'",
-        "In production, lastStartErrorDetails is not included in the response",
-        "In development, full error message and details including stack traces and loader output are included",
-        "Full details are always emitted to logs in all environments",
-        "Failed-start state retains enough structured error data to reconstruct both sanitized and full responses",
-        "Comment why production errors are sanitized while development errors include details",
+        "Review the landed changes against the original SQLite remediation spec and the recorded per-phase baselines",
+        "Identify any unfinished items, regressions, follow-ups, or scope cuts that remain after the final verification pass",
+        "Append each remaining item to scripts/ralph/prd.json as a new passes:false user story with a clear title, description, acceptance criteria, and priority",
+        "Do not silently drop remaining work. If nothing remains, record that explicitly in the final review notes",
+        "Update progress tracking with the final review findings and the resulting remaining stories",
         "Typecheck passes"
       ],
       "priority": 16,
       "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-017",
-      "title": "Add GET /dynamic/status endpoint and client status() method",
-      "description": "As a developer, I need an endpoint to observe dynamic actor runtime state for debugging.",
-      "acceptanceCriteria": [
-        "Add GET /dynamic/status endpoint that returns DynamicActorStatusResponse: state, generation, and failure metadata when in failed_start",
-        "Endpoint uses inspector-style auth: Bearer token via config.inspector.token() with timing-safe comparison",
-        "In development mode without configured token, access is allowed with a warning",
-        "Add status() method to ActorHandleRaw that calls GET /dynamic/status",
-        "Calling status() on a static actor returns { state: 'running', generation: 0 }",
-        "lastStartErrorDetails is only included in response in development mode",
-        "Typecheck passes"
-      ],
-      "priority": 17,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-018",
-      "title": "Implement WebSocket behavior during failed-start and reload",
-      "description": "As a developer, I need WebSocket upgrades rejected cleanly during failed-start and connections closed properly during reload.",
-      "acceptanceCriteria": [
-        "WebSocket upgrade during failed_start is rejected before the handshake completes with the same HTTP error status and body as normal failed-start requests",
-        "WebSocket upgrade must not be accepted and then immediately closed",
-        "WebSocket upgrade during starting state awaits startupPromise; rejected with failed-start error if startup fails, proceeds normally if succeeds",
-        "When reload triggers sleep on a running actor, open WebSocket connections are closed with code 1012 (Service Restart) and reason 'dynamic.reload'",
-        "Comment why WebSocket upgrades are rejected before handshake during failed start",
-        "Typecheck passes"
-      ],
-      "priority": 18,
-      "passes": false,
-      "notes": "Close code 1012 tells clients the closure is intentional and reconnection is appropriate."
-    },
-    {
-      "id": "US-019",
-      "title": "Add failed-start reload driver tests",
-      "description": "As a developer, I need comprehensive tests for the failed-start lifecycle to ensure parity between drivers.",
-      "acceptanceCriteria": [
-        "Tests run in the shared engine-focused integration suite so the single runtime path uses the same cases",
-        "Test: normal request retries startup after backoff expires",
-        "Test: normal request during active backoff returns stored failed-start error",
-        "Test: no background retry loop runs while actor is in failed-start backoff",
-        "Test: reload bypasses backoff and immediately retries startup",
-        "Test: reload on inactive actor is a no-op and does not cause double-load",
-        "Test: concurrent requests coalesce onto one startup via shared startupPromise",
-        "Test: stale startup generation cannot overwrite newer reload-triggered generation",
-        "Test: production response is sanitized (no details, has code)",
-        "Test: development response includes full detail",
-        "Test: dynamic load timeout returns 'dynamic_load_timeout' error code",
-        "Test: maxAttempts exhaustion tears down the wrapper",
-        "Test: request after maxAttempts exhaustion triggers fresh startup from attempt 0",
-        "Test: reload authentication rejects unauthenticated callers with 403",
-        "Test: reload-while-starting aborts old attempt and starts new generation",
-        "Test: GET /dynamic/status returns correct state and metadata",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 19,
-      "passes": false,
-      "notes": "This enforces the parity requirement between file-system and engine drivers."
-    },
-    {
-      "id": "US-020",
-      "title": "Update docs-internal with failed-start and reload lifecycle documentation",
-      "description": "As a developer, I need the architecture documentation updated to describe the new lifecycle behavior.",
-      "acceptanceCriteria": [
-        "Expand docs-internal/rivetkit-typescript/DYNAMIC_ACTORS_ARCHITECTURE.md with a dedicated failed-start and reload lifecycle section",
-        "Document the dynamic actor startup state model (inactive, starting, running, failed_start)",
-        "Document what failed_start means and how normal requests behave during it",
-        "Document how passive backoff works (no autonomous retry loop)",
-        "Document how reload behaves for each state (running, inactive, starting, failed_start)",
-        "Document that reload resets backoff before retrying and why reload on inactive is a no-op",
-        "Document error sanitization in production vs development",
-        "Document the load timeout, retry configuration, and where they are configured",
-        "Document reload authentication via auth and canReload",
-        "Document the GET /dynamic/status endpoint",
-        "Document WebSocket close behavior during reload (1012, 'dynamic.reload')",
-        "Document maxAttempts limit and behavior when exceeded"
-      ],
-      "priority": 20,
-      "passes": false,
-      "notes": "The implementation is not complete until the docs-internal update ships in the same change."
+      "notes": "This is the cleanup crew. If there is still shit on the floor, write it down as another story."
     }
   ]
 }

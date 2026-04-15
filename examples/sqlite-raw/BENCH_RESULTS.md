@@ -1,30 +1,42 @@
 # SQLite Large Insert Results
 
-Captured on **2026-04-15** from `/home/nathan/rivet/examples/sqlite-raw`.
+This file is generated from `bench-results.json` by
+`pnpm --dir examples/sqlite-raw run bench:record -- --render-only`.
 
-## Command
+## Source of Truth
 
-```bash
-pnpm --dir examples/sqlite-raw bench:large-insert
-```
+- Structured runs live in `examples/sqlite-raw/bench-results.json`.
+- The rendered summary lives in `examples/sqlite-raw/BENCH_RESULTS.md`.
+- Later phases should append by rerunning `bench:record`, not by inventing a
+  new markdown format.
 
-Additional runs:
+## Phase Summary
 
-```bash
-BENCH_MB=1 pnpm --dir examples/sqlite-raw bench:large-insert
-BENCH_MB=5 pnpm --dir examples/sqlite-raw bench:large-insert
-BENCH_MB=10 pnpm --dir examples/sqlite-raw bench:large-insert
-RUST_LOG=rivetkit_sqlite_native::vfs=debug BENCH_MB=1 pnpm --dir examples/sqlite-raw bench:large-insert
-```
+| Metric | Phase 0 | Phase 1 | Phase 2/3 | Final |
+| --- | --- | --- | --- | --- |
+| Status | Pending | Pending | Pending | Pending |
+| Recorded at | Pending | Pending | Pending | Pending |
+| Git SHA | Pending | Pending | Pending | Pending |
+| Fresh engine | Pending | Pending | Pending | Pending |
+| Payload | Pending | Pending | Pending | Pending |
+| Rows | Pending | Pending | Pending | Pending |
+| Actor DB insert | Pending | Pending | Pending | Pending |
+| Actor DB verify | Pending | Pending | Pending | Pending |
+| End-to-end action | Pending | Pending | Pending | Pending |
+| Native SQLite insert | Pending | Pending | Pending | Pending |
+| Actor DB vs native | Pending | Pending | Pending | Pending |
+| End-to-end vs native | Pending | Pending | Pending | Pending |
 
-## Environment
+## Append-Only Run Log
 
-- Example: `examples/sqlite-raw`
-- Endpoint: `http://127.0.0.1:6420`
-- Payload shape: one row containing a large `TEXT` payload
-- Comparison baseline: native SQLite on local disk via `node:sqlite`
+No structured runs recorded yet.
 
-## Results
+## Historical Reference
+
+The section below predates this scaffold. Keep it for context, but append new
+phase results through `bench-results.json` and `bench:record`.
+
+### 2026-04-15 Exploratory Large Insert Runs
 
 | Payload | Actor DB Insert | Actor DB Verify | End-to-End Action | Native SQLite Insert | Actor DB vs Native | End-to-End vs Native |
 | ------- | --------------- | --------------- | ----------------- | -------------------- | ------------------ | -------------------- |
@@ -32,25 +44,12 @@ RUST_LOG=rivetkit_sqlite_native::vfs=debug BENCH_MB=1 pnpm --dir examples/sqlite
 | 5 MiB   | 4199.6ms        | 3655.5ms        | 8186.3ms          | 25.3ms               | 166.19x            | 323.96x              |
 | 10 MiB  | 9438.2ms        | 8973.5ms        | 19244.0ms         | 45.5ms               | 207.34x            | 422.75x              |
 
-## Notes
+- Command: `pnpm --dir examples/sqlite-raw bench:large-insert`
+- Additional runs: `BENCH_MB=1`, `BENCH_MB=5`, `BENCH_MB=10`, and one
+  `RUST_LOG=rivetkit_sqlite_native::vfs=debug BENCH_MB=1` trace run.
+- Debug trace clue: 317 total KV round-trips, 30 `get(...)` calls,
+  287 `put(...)` calls, 577 total keys written, 63.1ms traced `get` time,
+  and 856.0ms traced `put` time.
+- Conclusion: the bottleneck already looked like SQLite-over-KV page churn,
+  not raw SQLite execution.
 
-- Local 10 MiB end-to-end latency was **19.2s**.
-- The production number you shared for 10 MiB was **26.2s**.
-- Native SQLite is fast enough that the bottleneck is clearly not SQLite itself.
-- The actor-side DB path is already extremely slow before counting client/action overhead.
-
-## Debug Trace Clue
-
-From the debug run with `RUST_LOG=rivetkit_sqlite_native::vfs=debug` and `BENCH_MB=1`:
-
-- `317` total KV round-trips
-- `30` `get(...)` calls
-- `287` `put(...)` calls
-- `577` total keys written
-- Aggregate traced KV time:
-  - `get`: `63.1ms`
-  - `put`: `856.0ms`
-
-## Likely Bottleneck
-
-The current SQLite-over-KV path is chunking the database into **4 KiB pages** and issuing a large number of KV writes and reads through the tunnel for a single large insert. The evidence points much more strongly at the SQLite VFS / KV channel / engine path than at raw SQLite execution.

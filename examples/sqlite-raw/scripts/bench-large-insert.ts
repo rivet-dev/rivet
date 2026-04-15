@@ -8,6 +8,32 @@ import { registry } from "../src/index.ts";
 const DEFAULT_MB = Number(process.env.BENCH_MB ?? "10");
 const DEFAULT_ROWS = Number(process.env.BENCH_ROWS ?? "1");
 const DEFAULT_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
+const JSON_OUTPUT =
+	process.argv.includes("--json") || process.env.BENCH_OUTPUT === "json";
+
+interface BenchmarkInsertResult {
+	payloadBytes: number;
+	rowCount: number;
+	totalBytes: number;
+	storedRows: number;
+	insertElapsedMs: number;
+	verifyElapsedMs: number;
+}
+
+interface LargeInsertBenchmarkResult {
+	endpoint: string;
+	payloadMiB: number;
+	totalBytes: number;
+	rowCount: number;
+	actor: BenchmarkInsertResult;
+	native: BenchmarkInsertResult;
+	delta: {
+		endToEndElapsedMs: number;
+		overheadOutsideDbInsertMs: number;
+		actorDbVsNativeMultiplier: number;
+		endToEndVsNativeMultiplier: number;
+	};
+}
 
 function formatMs(ms: number): string {
 	return `${ms.toFixed(1)}ms`;
@@ -18,7 +44,10 @@ function formatBytes(bytes: number): string {
 	return `${mb.toFixed(2)} MiB`;
 }
 
-function runNativeInsert(totalBytes: number, rowCount: number) {
+function runNativeInsert(
+	totalBytes: number,
+	rowCount: number,
+): BenchmarkInsertResult {
 	const dir = mkdtempSync(join(tmpdir(), "sqlite-raw-bench-"));
 	const dbPath = join(dir, "bench.db");
 	const db = new DatabaseSync(dbPath);
@@ -72,17 +101,14 @@ function runNativeInsert(totalBytes: number, rowCount: number) {
 	}
 }
 
-async function main() {
+async function runLargeInsertBenchmark(): Promise<LargeInsertBenchmarkResult> {
 	const totalBytes = DEFAULT_MB * 1024 * 1024;
 	const rowCount = DEFAULT_ROWS;
 
-	console.log(
-		`Benchmarking SQLite insert for ${formatBytes(totalBytes)} across ${rowCount} row(s)`,
-	);
-	console.log(`Endpoint: ${DEFAULT_ENDPOINT}`);
-
 	registry.start();
-	const client = createClient<typeof registry>({ endpoint: DEFAULT_ENDPOINT });
+	const client = createClient<typeof registry>({
+		endpoint: DEFAULT_ENDPOINT,
+	});
 	const actor = client.todoList.getOrCreate([`bench-${Date.now()}`]);
 	const label = `payload-${crypto.randomUUID()}`;
 
@@ -96,29 +122,67 @@ async function main() {
 
 	const nativeResult = runNativeInsert(totalBytes, rowCount);
 
+	return {
+		endpoint: DEFAULT_ENDPOINT,
+		payloadMiB: DEFAULT_MB,
+		totalBytes,
+		rowCount,
+		actor: actorResult,
+		native: nativeResult,
+		delta: {
+			endToEndElapsedMs,
+			overheadOutsideDbInsertMs:
+				endToEndElapsedMs - actorResult.insertElapsedMs,
+			actorDbVsNativeMultiplier:
+				actorResult.insertElapsedMs / nativeResult.insertElapsedMs,
+			endToEndVsNativeMultiplier:
+				endToEndElapsedMs / nativeResult.insertElapsedMs,
+		},
+	};
+}
+
+async function main() {
+	const result = await runLargeInsertBenchmark();
+
+	if (JSON_OUTPUT) {
+		console.log(JSON.stringify(result, null, "\t"));
+		process.exit(0);
+	}
+
+	console.log(
+		`Benchmarking SQLite insert for ${formatBytes(result.totalBytes)} across ${result.rowCount} row(s)`,
+	);
+	console.log(`Endpoint: ${result.endpoint}`);
+
 	console.log("");
 	console.log("RivetKit actor path");
-	console.log(`  inserted: ${formatBytes(actorResult.totalBytes)} in ${actorResult.storedRows} row(s)`);
-	console.log(`  db insert time: ${formatMs(actorResult.insertElapsedMs)}`);
-	console.log(`  db verify time: ${formatMs(actorResult.verifyElapsedMs)}`);
-	console.log(`  end-to-end action time: ${formatMs(endToEndElapsedMs)}`);
 	console.log(
-		`  overhead outside db insert: ${formatMs(endToEndElapsedMs - actorResult.insertElapsedMs)}`,
+		`  inserted: ${formatBytes(result.actor.totalBytes)} in ${result.actor.storedRows} row(s)`,
+	);
+	console.log(`  db insert time: ${formatMs(result.actor.insertElapsedMs)}`);
+	console.log(`  db verify time: ${formatMs(result.actor.verifyElapsedMs)}`);
+	console.log(
+		`  end-to-end action time: ${formatMs(result.delta.endToEndElapsedMs)}`,
+	);
+	console.log(
+		`  overhead outside db insert: ${formatMs(result.delta.overheadOutsideDbInsertMs)}`,
 	);
 
 	console.log("");
 	console.log("Native SQLite baseline");
-	console.log(`  inserted: ${formatBytes(nativeResult.totalBytes)} in ${nativeResult.storedRows} row(s)`);
-	console.log(`  db insert time: ${formatMs(nativeResult.insertElapsedMs)}`);
-	console.log(`  db verify time: ${formatMs(nativeResult.verifyElapsedMs)}`);
+	console.log(
+		`  inserted: ${formatBytes(result.native.totalBytes)} in ${result.native.storedRows} row(s)`,
+	);
+	console.log(`  db insert time: ${formatMs(result.native.insertElapsedMs)}`);
+	console.log(`  db verify time: ${formatMs(result.native.verifyElapsedMs)}`);
 
 	console.log("");
 	console.log("Delta");
 	console.log(
-		`  actor db vs native: ${(actorResult.insertElapsedMs / nativeResult.insertElapsedMs).toFixed(2)}x slower`,
+		`  actor db vs native: ${result.delta.actorDbVsNativeMultiplier.toFixed(2)}x slower`,
 	);
 	console.log(
-		`  end-to-end vs native: ${(endToEndElapsedMs / nativeResult.insertElapsedMs).toFixed(2)}x slower`,
+		`  end-to-end vs native: ${result.delta.endToEndVsNativeMultiplier.toFixed(2)}x slower`,
 	);
 
 	process.exit(0);

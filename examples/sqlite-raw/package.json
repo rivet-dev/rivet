@@ -8,7 +8,8 @@
 		"check-types": "tsc --noEmit",
 		"start": "tsx src/index.ts",
 		"client": "tsx scripts/client.ts",
-		"bench:large-insert": "tsx scripts/bench-large-insert.ts"
+		"bench:large-insert": "tsx scripts/bench-large-insert.ts",
+		"bench:record": "tsx scripts/run-benchmark.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",

@@ -1,0 +1,6 @@
+{
+	"schemaVersion": 1,
+	"sourceFile": "examples/sqlite-raw/bench-results.json",
+	"resultsFile": "examples/sqlite-raw/BENCH_RESULTS.md",
+	"runs": []
+}
