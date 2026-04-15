@@ -11,7 +11,7 @@ import { AreaClosed } from "@visx/shape";
 import { extent } from "d3-array";
 import { format } from "date-fns";
 import { useCallback, useMemo, useRef } from "react";
-import { useChartSync } from "./chart-sync-context";
+import { MAX_BRUSH_RANGE_MS, useChartSync } from "./chart-sync-context";
 import type { VisxAreaChartSeries } from "./visx-area-chart";
 
 interface VisxBrushChartProps {
@@ -20,7 +20,7 @@ interface VisxBrushChartProps {
 }
 
 const BRUSH_HEIGHT = 50;
-const MARGIN = { top: 5, right: 10, bottom: 20, left: 70 };
+const MARGIN = { top: 5, right: 10, bottom: 26, left: 70 };
 
 function BrushHandle({ x, height, isBrushActive }: BrushHandleRenderProps) {
 	if (!isBrushActive) return null;
@@ -81,13 +81,16 @@ function BrushChart({
 		});
 	}, [allValues, innerHeight]);
 
-	const initialBrushPosition = useMemo(() => {
-		if (!brushDomain) return undefined;
-		return {
+	// Compute the initial brush position once on first render with valid scale data.
+	// We use a ref so that subsequent xScale changes (from data loading) don't reset
+	// the brush position back to the default.
+	const initialBrushPositionRef = useRef<{ start: { x: number }; end: { x: number } } | undefined>(undefined);
+	if (initialBrushPositionRef.current === undefined && minDate < maxDate) {
+		initialBrushPositionRef.current = {
 			start: { x: xScale(brushDomain[0]) },
 			end: { x: xScale(brushDomain[1]) },
 		};
-	}, [brushDomain, xScale]);
+	}
 
 	const onBrushEnd = useCallback(
 		(domain: { x0: number; x1: number; y0: number; y1: number } | null) => {
@@ -96,23 +99,19 @@ function BrushChart({
 				return;
 			}
 			const { x0, x1 } = domain;
-			const start = new Date(x0);
+			let start = new Date(x0);
 			const end = new Date(x1);
 			if (end.getTime() - start.getTime() < 1000) {
 				setBrushDomain(null);
 				return;
 			}
+			if (end.getTime() - start.getTime() > MAX_BRUSH_RANGE_MS) {
+				start = new Date(end.getTime() - MAX_BRUSH_RANGE_MS);
+			}
 			setBrushDomain([start, end]);
 		},
 		[setBrushDomain],
 	);
-
-	const handleReset = useCallback(() => {
-		if (brushRef.current) {
-			brushRef.current.reset();
-		}
-		setBrushDomain(null);
-	}, [setBrushDomain]);
 
 	if (innerWidth <= 0 || innerHeight <= 0) return null;
 
@@ -144,7 +143,12 @@ function BrushChart({
 					<AxisBottom
 						top={innerHeight}
 						scale={xScale}
-						tickFormat={(d) => format(d as Date, "HH:mm")}
+						tickFormat={(d) => {
+							const date = d as Date;
+							const rangeMs = maxDate.getTime() - minDate.getTime();
+							if (rangeMs > 2 * 24 * 60 * 60 * 1000) return format(date, "MMM d");
+							return format(date, "MMM d HH:mm");
+						}}
 						stroke="transparent"
 						tickStroke="transparent"
 						tickLabelProps={{
@@ -160,12 +164,12 @@ function BrushChart({
 						yScale={yScale}
 						width={innerWidth}
 						height={innerHeight}
-						margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+						margin={MARGIN}
 						handleSize={8}
 						innerRef={brushRef}
 						resizeTriggerAreas={["left", "right"]}
 						brushDirection="horizontal"
-						initialBrushPosition={initialBrushPosition}
+						initialBrushPosition={initialBrushPositionRef.current}
 						onBrushEnd={onBrushEnd}
 						selectedBoxStyle={{
 							fill: "url(#brush-pattern)",
@@ -178,16 +182,6 @@ function BrushChart({
 					/>
 				</Group>
 			</svg>
-
-			{brushDomain && (
-				<button
-					type="button"
-					onClick={handleReset}
-					className="absolute top-0 right-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
-				>
-					Reset zoom
-				</button>
-			)}
 		</div>
 	);
 }
