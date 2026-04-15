@@ -12,6 +12,8 @@
 - Route SQLite fast-path write batches from `packages/sqlite-native/src/vfs.rs`, not from the transport adapter, because only the VFS owns the full buffered page set and per-file fence sequence.
 - Only route `sqlite_truncate` through the fast path when the buffered state is a pure truncate plus an optional tail chunk. If the same flush also carries other dirty pages, fall back to the generic KV path because the truncate protocol cannot represent that mixed state safely.
 - Keep pegboard-envoy SQLite fast-path fences connection-scoped, and clear the VFS tracker whenever a generic SQLite fallback commit succeeds so stale retries fail closed instead of replaying old page sets.
+- For RocksDB-backed `universaldb` persistence tests, snapshot with `db.checkpoint()` into a child path under a temp dir instead of reopening the live DB path in-process. The live path keeps the RocksDB lock.
+- For envoy mixed-version coverage, test downgrade serialization in `engine/sdks/rust/envoy-protocol/src/versioned.rs` and pre-init fallback behavior in `engine/sdks/rust/envoy-client/src/connection.rs`.
 
 Started: Wed Apr 15 04:03:14 AM PDT 2026
 ---
@@ -119,4 +121,13 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - Keep the SQLite fast-path page ceiling in sync between `engine/packages/pegboard/src/actor_kv/mod.rs` and `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`; the client falls back while the server rejects oversized direct requests.
   - The local `examples/sqlite-raw` benchmark path proves fast-path envelopes through VFS telemetry, not pegboard metrics. Use the rendered ceiling table in `BENCH_RESULTS.md` for request bytes, dirty pages, and per-commit latency.
   - `cargo test -p pegboard --test sqlite_fast_path`, `cargo test -p rivetkit-sqlite-native oversized_fast_path_page_sets_fall_back_to_generic_sync_flush`, `pnpm build -F rivetkit`, `pnpm --dir rivetkit-typescript/packages/rivetkit test native-database`, and `pnpm --dir examples/sqlite-raw run check-types` cover the limit, typings, and benchmark recorder changes for this story.
+---
+## 2026-04-15 08:41:39 PDT - US-013
+- Added mixed-version envoy coverage for new-client fallback before init and old-client init downgrade behavior, plus fast-path fence replay and restart validation cases.
+- Added pegboard persistence checks for repeated page overwrites and truncate snapshots, and native SQLite fast-path retry-after-timeout coverage.
+- Files changed: `engine/packages/pegboard-envoy/tests/support/ws_to_tunnel_task.rs`, `engine/packages/pegboard/tests/sqlite_fast_path.rs`, `engine/sdks/rust/envoy-client/src/connection.rs`, `engine/sdks/rust/envoy-protocol/src/versioned.rs`, `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `db.checkpoint()` is the clean way to prove RocksDB-backed fast-path state persisted in tests. Reopening the live path in-process just trips the lock.
+  - The fast-path retry story splits cleanly by layer: pegboard-envoy fence tests cover stale replay and restart cases, while native VFS tests cover timeout-then-retry with buffered pages still intact.
+  - `cargo test -p rivet-envoy-protocol`, `cargo test -p rivet-envoy-client`, `cargo test -p pegboard --test sqlite_fast_path`, `cargo test -p pegboard-envoy sqlite_fast_path`, and `cargo test -p rivetkit-sqlite-native` cover the mixed-version, server, fence, and native retry surface for this story.
 ---

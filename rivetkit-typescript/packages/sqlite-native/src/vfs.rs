@@ -3331,6 +3331,69 @@ mod tests {
 	}
 
 	#[test]
+	fn fast_path_write_batch_retry_after_timeout_succeeds_on_next_sync() {
+		let runtime = tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("create tokio runtime");
+		let kv = Arc::new(MemoryKv::with_sqlite_write_batch_fast_path());
+		let vfs = KvVfs::register(
+			"test-vfs-fast-path-retry",
+			kv.clone(),
+			"fast-path-retry.db".to_string(),
+			runtime.handle().clone(),
+			Vec::new(),
+		)
+		.expect("register test vfs");
+		let (_file_storage, p_file) = open_raw_main_file(&vfs, "fast-path-retry.db");
+		let ctx = unsafe { &*vfs.ctx_ptr };
+		let state = unsafe { get_file_state(get_file(p_file).state) };
+
+		let mut updated_page = empty_db_page();
+		updated_page[640] = 0x5a;
+		let write_rc = unsafe {
+			kv_io_write(
+				p_file,
+				updated_page.as_ptr().cast(),
+				updated_page.len() as c_int,
+				0,
+			)
+		};
+		assert_eq!(write_rc, SQLITE_OK);
+		kv.fail_next_sqlite_write_batch("simulated timeout during fast-path commit");
+
+		let failed_sync_rc = unsafe { kv_io_sync(p_file, 0) };
+		assert_eq!(primary_result_code(failed_sync_rc), SQLITE_IOERR);
+		assert_eq!(
+			ctx.take_last_error().as_deref(),
+			Some("simulated timeout during fast-path commit")
+		);
+		assert_eq!(state.dirty_buffer.get(&0), Some(&updated_page));
+
+		let retry_sync_rc = unsafe { kv_io_sync(p_file, 0) };
+		assert_eq!(retry_sync_rc, SQLITE_OK);
+		assert!(state.dirty_buffer.is_empty());
+		assert_eq!(unsafe { kv_io_close(p_file) }, SQLITE_OK);
+
+		let write_batches = kv.recorded_sqlite_write_batches();
+		assert_eq!(write_batches.len(), 1);
+		assert!(write_batches[0].fence.request_fence > 0);
+		assert_eq!(write_batches[0].fence.expected_fence, None);
+		assert_eq!(
+			kv.store
+				.lock()
+				.expect("memory kv mutex poisoned")
+				.get(kv::get_chunk_key(kv::FILE_TAG_MAIN, 0).as_slice()),
+			Some(&updated_page)
+		);
+
+		let telemetry = vfs.snapshot_vfs_telemetry();
+		assert_eq!(telemetry.atomic_write.fast_path_attempt_count, 2);
+		assert_eq!(telemetry.atomic_write.fast_path_failure_count, 1);
+		assert_eq!(telemetry.atomic_write.fast_path_success_count, 1);
+	}
+
+	#[test]
 	fn supported_fast_path_routes_truncates_through_sqlite_truncate() {
 		let runtime = tokio::runtime::Builder::new_current_thread()
 			.enable_all()

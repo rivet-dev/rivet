@@ -378,11 +378,140 @@ fn extract_host(url: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+	use std::collections::HashMap;
+	use std::sync::Arc;
+	use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+
 	use super::*;
+	use crate::config::{
+		BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse, WebSocketHandler,
+		WebSocketSender,
+	};
+	use crate::context::SharedContext;
+	use crate::envoy::ToEnvoyMessage;
+	use crate::handle::EnvoyHandle;
+
+	struct TestCallbacks;
+
+	impl EnvoyCallbacks for TestCallbacks {
+		fn on_actor_start(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_generation: u32,
+			_config: protocol::ActorConfig,
+			_preloaded_kv: Option<protocol::PreloadedKv>,
+		) -> BoxFuture<anyhow::Result<()>> {
+			Box::pin(async { Ok(()) })
+		}
+
+		fn on_actor_stop(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_generation: u32,
+			_reason: protocol::StopActorReason,
+		) -> BoxFuture<anyhow::Result<()>> {
+			Box::pin(async { Ok(()) })
+		}
+
+		fn on_shutdown(&self) {}
+
+		fn fetch(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_gateway_id: protocol::GatewayId,
+			_request_id: protocol::RequestId,
+			_request: HttpRequest,
+		) -> BoxFuture<anyhow::Result<HttpResponse>> {
+			Box::pin(async { anyhow::bail!("unused in connection tests") })
+		}
+
+		fn websocket(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_gateway_id: protocol::GatewayId,
+			_request_id: protocol::RequestId,
+			_request: HttpRequest,
+			_path: String,
+			_headers: HashMap<String, String>,
+			_is_hibernatable: bool,
+			_is_restoring_hibernatable: bool,
+			_sender: WebSocketSender,
+		) -> BoxFuture<anyhow::Result<WebSocketHandler>> {
+			Box::pin(async { anyhow::bail!("unused in connection tests") })
+		}
+
+		fn can_hibernate(
+			&self,
+			_actor_id: &str,
+			_gateway_id: &protocol::GatewayId,
+			_request_id: &protocol::RequestId,
+			_request: &HttpRequest,
+		) -> bool {
+			false
+		}
+	}
+
+	fn test_shared_context(protocol_version: u16) -> SharedContext {
+		let (envoy_tx, _envoy_rx) = tokio::sync::mpsc::unbounded_channel::<ToEnvoyMessage>();
+
+		SharedContext {
+			config: EnvoyConfig {
+				version: 1,
+				endpoint: "ws://localhost:8080".to_string(),
+				token: None,
+				namespace: "test".to_string(),
+				pool_name: "default".to_string(),
+				prepopulate_actor_names: HashMap::new(),
+				metadata: None,
+				not_global: true,
+				debug_latency_ms: None,
+				callbacks: Arc::new(TestCallbacks),
+			},
+			envoy_key: "test-envoy".to_string(),
+			envoy_tx,
+			ws_tx: Arc::new(tokio::sync::Mutex::new(None)),
+			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
+			protocol_version: AtomicU16::new(protocol_version),
+			shutting_down: AtomicBool::new(false),
+		}
+	}
 
 	#[test]
 	fn next_lower_protocol_version_stops_at_v1() {
 		assert_eq!(next_lower_protocol_version(2), Some(1));
 		assert_eq!(next_lower_protocol_version(1), None);
+	}
+
+	#[test]
+	fn fallback_protocol_version_retries_lower_version_before_init() {
+		let shared = test_shared_context(2);
+
+		let result = fallback_protocol_version(&shared, 2, false, "connection closed before init")
+			.expect("v2 client should retry v1 before init");
+
+		match result {
+			SingleConnectionResult::RetryLowerProtocol { from, to, reason } => {
+				assert_eq!(from, 2);
+				assert_eq!(to, 1);
+				assert_eq!(reason, "connection closed before init");
+			}
+			SingleConnectionResult::Closed(_) => panic!("expected downgrade retry"),
+		}
+
+		assert_eq!(shared.protocol_version.load(Ordering::Acquire), 1);
+	}
+
+	#[test]
+	fn fallback_protocol_version_stops_once_init_has_arrived() {
+		let shared = test_shared_context(2);
+
+		let result = fallback_protocol_version(&shared, 2, true, "connection closed before init");
+
+		assert!(result.is_none());
+		assert_eq!(shared.protocol_version.load(Ordering::Acquire), 2);
 	}
 }

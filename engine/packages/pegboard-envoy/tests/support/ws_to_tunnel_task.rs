@@ -90,12 +90,29 @@ fn sqlite_fast_path_fence_validation_accepts_monotonic_progress() {
 }
 
 #[test]
-fn sqlite_fast_path_fence_validation_rejects_stale_or_missing_state() {
-	let stale_err = validate_sqlite_fast_path_fence_value(Some(7), Some(7), 7)
+fn sqlite_fast_path_fence_validation_rejects_duplicate_request_replay() {
+	let error = validate_sqlite_fast_path_fence_value(Some(7), Some(7), 7)
 		.expect_err("reused request fence should fail");
-	assert!(stale_err.to_string().contains("stale"));
+	assert!(error.to_string().contains("stale"));
+}
 
-	let missing_err = validate_sqlite_fast_path_fence_value(None, Some(7), 8)
+#[test]
+fn sqlite_fast_path_fence_validation_rejects_timed_out_replay_after_newer_commit() {
+	let error = validate_sqlite_fast_path_fence_value(Some(9), Some(7), 8)
+		.expect_err("stale replay should fail after a newer commit");
+	assert!(error.to_string().contains("mismatch"));
+}
+
+#[test]
+fn sqlite_fast_path_fence_validation_rejects_replay_after_server_restart() {
+	let error = validate_sqlite_fast_path_fence_value(None, Some(7), 8)
 		.expect_err("missing server fence should reject a stale retry");
-	assert!(missing_err.to_string().contains("mismatch"));
+	assert!(error.to_string().contains("mismatch"));
+}
+
+#[test]
+fn sqlite_fast_path_fence_validation_rejects_zero_request_fence() {
+	let error = validate_sqlite_fast_path_fence_value(None, None, 0)
+		.expect_err("zero fence should fail closed");
+	assert!(error.to_string().contains("non-zero"));
 }

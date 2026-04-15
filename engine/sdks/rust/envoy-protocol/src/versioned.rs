@@ -555,6 +555,7 @@ fn convert_kv_request_data_v2_to_v1(data: v2::KvRequestData) -> Result<v1::KvReq
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use vbare::OwnedVersionedData;
 
 	#[test]
 	fn v1_protocol_metadata_upgrades_without_sqlite_fast_path() {
@@ -635,5 +636,35 @@ mod tests {
 			result.expect_err("should reject").to_string(),
 			"KvSqliteTruncateRequest requires envoy protocol v2"
 		);
+	}
+
+	#[test]
+	fn to_envoy_init_downgrades_without_sqlite_fast_path_for_v1_clients() {
+		let payload = <ToEnvoy as OwnedVersionedData>::wrap_latest(v2::ToEnvoy::ToEnvoyInit(
+			v2::ToEnvoyInit {
+				metadata: v2::ProtocolMetadata {
+					envoy_lost_threshold: 11,
+					actor_stop_threshold: 22,
+					max_response_payload_size: 33,
+					sqlite_fast_path: Some(v2::SqliteFastPathCapability {
+						protocol_version: 1,
+						supports_write_batch: true,
+						supports_truncate: true,
+					}),
+				},
+			},
+		))
+		.serialize(1)
+		.expect("serialize init for v1 client");
+
+		let decoded = <ToEnvoy as OwnedVersionedData>::deserialize_version(&payload, 1)
+			.expect("deserialize downgraded init");
+		let ToEnvoy::V1(v1::ToEnvoy::ToEnvoyInit(init)) = decoded else {
+			panic!("expected v1 init");
+		};
+
+		assert_eq!(init.metadata.envoy_lost_threshold, 11);
+		assert_eq!(init.metadata.actor_stop_threshold, 22);
+		assert_eq!(init.metadata.max_response_payload_size, 33);
 	}
 }

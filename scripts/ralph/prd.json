@@ -204,7 +204,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "The fast path is not done until the ugly failure cases are pinned down."
     },
     {

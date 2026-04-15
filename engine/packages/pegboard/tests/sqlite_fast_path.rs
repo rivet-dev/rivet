@@ -23,6 +23,14 @@ async fn test_db() -> Result<(Database, TempDir, kv::Recipient)> {
 	Ok((db, temp_dir, recipient))
 }
 
+async fn checkpoint_db(db: &Database) -> Result<(TempDir, Database)> {
+	let checkpoint_dir = tempfile::tempdir()?;
+	let checkpoint_path = checkpoint_dir.path().join("checkpoint");
+	db.checkpoint(&checkpoint_path)?;
+	let driver = universaldb::driver::RocksDbDatabaseDriver::new(checkpoint_path).await?;
+	Ok((checkpoint_dir, Database::new(Arc::new(driver))))
+}
+
 fn sqlite_meta_key(file_tag: u8) -> Vec<u8> {
 	vec![0x08, 0x01, 0x00, file_tag]
 }
@@ -38,6 +46,7 @@ async fn sqlite_write_batch_round_trips_through_generic_get() -> Result<()> {
 	let (db, _temp_dir, recipient) = test_db().await?;
 	let meta_value = 8192_u64.to_be_bytes().to_vec();
 	let page_a = vec![0xAB; 4096];
+	let page_a_updated = vec![0xEF; 4096];
 	let page_b = vec![0xCD; 4096];
 
 	kv::sqlite_write_batch(
@@ -59,6 +68,24 @@ async fn sqlite_write_batch_round_trips_through_generic_get() -> Result<()> {
 			fence: ep::SqliteFastPathFence {
 				expected_fence: None,
 				request_fence: 1,
+			},
+		},
+	)
+	.await?;
+
+	kv::sqlite_write_batch(
+		&db,
+		&recipient,
+		ep::KvSqliteWriteBatchRequest {
+			file_tag: 0,
+			meta_value: meta_value.clone(),
+			page_updates: vec![ep::SqlitePageUpdate {
+				chunk_index: 0,
+				data: page_a_updated.clone(),
+			}],
+			fence: ep::SqliteFastPathFence {
+				expected_fence: Some(1),
+				request_fence: 2,
 			},
 		},
 	)
@@ -89,7 +116,7 @@ async fn sqlite_write_batch_round_trips_through_generic_get() -> Result<()> {
 		.iter()
 		.position(|candidate| candidate == &sqlite_page_key(0, 0))
 		.expect("page 0 should exist");
-	assert_eq!(found_values[page_a_idx], page_a);
+	assert_eq!(found_values[page_a_idx], page_a_updated);
 
 	let page_b_idx = found_keys
 		.iter()
@@ -104,6 +131,36 @@ async fn sqlite_write_batch_round_trips_through_generic_get() -> Result<()> {
 		);
 		assert!(metadata.update_ts > 0);
 	}
+
+	let (_checkpoint_temp_dir, reopened_db) = checkpoint_db(&db).await?;
+	let (reopened_keys, reopened_values, _) = kv::get(
+		&reopened_db,
+		&recipient,
+		vec![
+			sqlite_meta_key(0),
+			sqlite_page_key(0, 0),
+			sqlite_page_key(0, 2),
+		],
+	)
+	.await?;
+
+	let reopened_meta_idx = reopened_keys
+		.iter()
+		.position(|candidate| candidate == &sqlite_meta_key(0))
+		.expect("metadata key should exist after reopen");
+	assert_eq!(reopened_values[reopened_meta_idx], meta_value);
+
+	let reopened_page_a_idx = reopened_keys
+		.iter()
+		.position(|candidate| candidate == &sqlite_page_key(0, 0))
+		.expect("page 0 should exist after reopen");
+	assert_eq!(reopened_values[reopened_page_a_idx], page_a_updated);
+
+	let reopened_page_b_idx = reopened_keys
+		.iter()
+		.position(|candidate| candidate == &sqlite_page_key(0, 2))
+		.expect("page 2 should exist after reopen");
+	assert_eq!(reopened_values[reopened_page_b_idx], page_b);
 
 	Ok(())
 }
@@ -213,6 +270,43 @@ async fn sqlite_truncate_rewrites_tail_and_metadata() -> Result<()> {
 	assert_eq!(found_values[tail_idx], tail);
 	assert!(
 		!found_keys
+			.iter()
+			.any(|candidate| candidate == &sqlite_page_key(0, 2))
+	);
+
+	let (_checkpoint_temp_dir, reopened_db) = checkpoint_db(&db).await?;
+	let (reopened_keys, reopened_values, _) = kv::get(
+		&reopened_db,
+		&recipient,
+		vec![
+			sqlite_meta_key(0),
+			sqlite_page_key(0, 0),
+			sqlite_page_key(0, 1),
+			sqlite_page_key(0, 2),
+		],
+	)
+	.await?;
+
+	assert_eq!(reopened_keys.len(), 3);
+	let reopened_meta_idx = reopened_keys
+		.iter()
+		.position(|candidate| candidate == &sqlite_meta_key(0))
+		.expect("metadata key should exist after reopen");
+	assert_eq!(reopened_values[reopened_meta_idx], truncated_meta);
+
+	let reopened_page_a_idx = reopened_keys
+		.iter()
+		.position(|candidate| candidate == &sqlite_page_key(0, 0))
+		.expect("page 0 should exist after reopen");
+	assert_eq!(reopened_values[reopened_page_a_idx], page_a);
+
+	let reopened_tail_idx = reopened_keys
+		.iter()
+		.position(|candidate| candidate == &sqlite_page_key(0, 1))
+		.expect("tail page should exist after reopen");
+	assert_eq!(reopened_values[reopened_tail_idx], tail);
+	assert!(
+		!reopened_keys
 			.iter()
 			.any(|candidate| candidate == &sqlite_page_key(0, 2))
 	);
