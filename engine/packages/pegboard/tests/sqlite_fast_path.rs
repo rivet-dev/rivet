@@ -107,3 +107,80 @@ async fn sqlite_write_batch_round_trips_through_generic_get() -> Result<()> {
 
 	Ok(())
 }
+
+#[tokio::test]
+async fn sqlite_truncate_rewrites_tail_and_metadata() -> Result<()> {
+	let (db, _temp_dir, recipient) = test_db().await?;
+	let original_meta = 12288_u64.to_be_bytes().to_vec();
+	let truncated_meta = 4608_u64.to_be_bytes().to_vec();
+	let page_a = vec![0xAA; 4096];
+	let page_b = vec![0xBB; 4096];
+	let page_c = vec![0xCC; 4096];
+	let tail = vec![0xDD; 512];
+
+	kv::put(
+		&db,
+		&recipient,
+		vec![
+			sqlite_meta_key(0),
+			sqlite_page_key(0, 0),
+			sqlite_page_key(0, 1),
+			sqlite_page_key(0, 2),
+		],
+		vec![original_meta, page_a.clone(), page_b, page_c],
+	)
+	.await?;
+
+	kv::sqlite_truncate(
+		&db,
+		&recipient,
+		ep::KvSqliteTruncateRequest {
+			file_tag: 0,
+			meta_value: truncated_meta.clone(),
+			delete_chunks_from: 1,
+			tail_chunk: Some(ep::SqlitePageUpdate {
+				chunk_index: 1,
+				data: tail.clone(),
+			}),
+			fence: ep::SqliteFastPathFence {
+				expected_fence: None,
+				request_fence: 1,
+			},
+		},
+	)
+	.await?;
+
+	let keys = vec![
+		sqlite_meta_key(0),
+		sqlite_page_key(0, 0),
+		sqlite_page_key(0, 1),
+		sqlite_page_key(0, 2),
+	];
+	let (found_keys, found_values, _) = kv::get(&db, &recipient, keys).await?;
+
+	assert_eq!(found_keys.len(), 3);
+	let meta_idx = found_keys
+		.iter()
+		.position(|candidate| candidate == &sqlite_meta_key(0))
+		.expect("metadata key should exist");
+	assert_eq!(found_values[meta_idx], truncated_meta);
+
+	let page_a_idx = found_keys
+		.iter()
+		.position(|candidate| candidate == &sqlite_page_key(0, 0))
+		.expect("page 0 should exist");
+	assert_eq!(found_values[page_a_idx], page_a);
+
+	let tail_idx = found_keys
+		.iter()
+		.position(|candidate| candidate == &sqlite_page_key(0, 1))
+		.expect("tail page should exist");
+	assert_eq!(found_values[tail_idx], tail);
+	assert!(
+		!found_keys
+			.iter()
+			.any(|candidate| candidate == &sqlite_page_key(0, 2))
+	);
+
+	Ok(())
+}

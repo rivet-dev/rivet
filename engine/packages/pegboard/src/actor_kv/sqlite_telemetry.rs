@@ -154,6 +154,30 @@ pub fn summarize_write_batch(
 	}
 }
 
+pub fn summarize_truncate(
+	file_tag: u8,
+	meta_value: &[u8],
+	delete_chunks_from: u32,
+	tail_chunk: Option<&ep::SqlitePageUpdate>,
+) -> SqliteOpSummary {
+	let tail_request_bytes = tail_chunk.map_or(0_u64, |tail| {
+		sqlite_chunk_key(file_tag, tail.chunk_index).len() as u64 + tail.data.len() as u64
+	});
+	let tail_payload_bytes = tail_chunk.map_or(0_u64, |tail| tail.data.len() as u64);
+
+	SqliteOpSummary {
+		matched: true,
+		page_count: tail_chunk.map_or(0, |_| 1),
+		metadata_count: 1,
+		request_bytes: sqlite_chunk_key(file_tag, delete_chunks_from).len() as u64
+			+ sqlite_chunk_range_end(file_tag).len() as u64
+			+ sqlite_meta_key(file_tag).len() as u64
+			+ meta_value.len() as u64
+			+ tail_request_bytes,
+		payload_bytes: meta_value.len() as u64 + tail_payload_bytes,
+	}
+}
+
 pub fn record_operation(op: OperationKind, summary: SqliteOpSummary, duration: Duration) {
 	record_operation_for_path(PATH_GENERIC, op, summary, duration);
 }
@@ -398,6 +422,15 @@ fn sqlite_chunk_key(file_tag: u8, chunk_index: u32) -> ep::KvKey {
 	key
 }
 
+fn sqlite_chunk_range_end(file_tag: u8) -> ep::KvKey {
+	vec![
+		SQLITE_PREFIX,
+		SQLITE_SCHEMA_VERSION,
+		SQLITE_CHUNK_PREFIX,
+		file_tag + 1,
+	]
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -462,5 +495,24 @@ mod tests {
 		let values = vec![vec![1; 32], vec![2; 64]];
 
 		assert_eq!(summarize_response(&keys, &values), 32);
+	}
+
+	#[test]
+	fn summarize_sqlite_truncate_counts_meta_and_tail_payload() {
+		let summary = summarize_truncate(
+			0,
+			&vec![9; 10],
+			3,
+			Some(&ep::SqlitePageUpdate {
+				chunk_index: 3,
+				data: vec![7; 128],
+			}),
+		);
+
+		assert!(summary.matched);
+		assert_eq!(summary.page_count, 1);
+		assert_eq!(summary.metadata_count, 1);
+		assert_eq!(summary.payload_bytes, 138);
+		assert_eq!(summary.request_bytes, 162);
 	}
 }

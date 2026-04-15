@@ -595,6 +595,161 @@ pub async fn sqlite_write_batch(
 	result
 }
 
+/// Truncates a SQLite file through the server fast path.
+#[tracing::instrument(skip_all)]
+pub async fn sqlite_truncate(
+	db: &universaldb::Database,
+	recipient: &Recipient,
+	request: ep::KvSqliteTruncateRequest,
+) -> Result<()> {
+	let start = std::time::Instant::now();
+	let meta_value = Arc::new(request.meta_value);
+	let tail_chunk = Arc::new(request.tail_chunk);
+	let sqlite_summary = sqlite_telemetry::summarize_truncate(
+		request.file_tag,
+		meta_value.as_slice(),
+		request.delete_chunks_from,
+		tail_chunk.as_ref().as_ref(),
+	);
+	let sqlite_observation = Arc::new(Mutex::new(SqliteWriteObservation::default()));
+
+	metrics::ACTOR_KV_KEYS_PER_OP
+		.with_label_values(&["sqlite_truncate"])
+		.observe((1 + tail_chunk.as_ref().as_ref().map_or(0, |_| 1)) as f64);
+
+	let meta_value_clone = Arc::clone(&meta_value);
+	let tail_chunk_clone = Arc::clone(&tail_chunk);
+	let sqlite_observation_clone = Arc::clone(&sqlite_observation);
+	let file_tag = request.file_tag;
+	let delete_chunks_from = request.delete_chunks_from;
+	let result = db
+		.run(|tx| {
+			let meta_value = Arc::clone(&meta_value_clone);
+			let tail_chunk = Arc::clone(&tail_chunk_clone);
+			let sqlite_observation = Arc::clone(&sqlite_observation_clone);
+			async move {
+				match validate_sqlite_truncate_request(
+					file_tag,
+					meta_value.as_slice(),
+					delete_chunks_from,
+					tail_chunk.as_ref().as_ref(),
+				) {
+					Ok(()) => {
+						observe_sqlite_write(
+							|observation| {
+								observation.validation_checked = true;
+								observation.validation_result = None;
+							},
+							&sqlite_observation,
+						);
+					}
+					Err(error) => {
+						observe_sqlite_write(
+							|observation| {
+								observation.validation_checked = true;
+								observation.validation_result = Some(error.kind);
+							},
+							&sqlite_observation,
+						);
+						return Err(error.into_anyhow());
+					}
+				}
+
+				let total_size_chunked = (sqlite_truncate_request_bytes(
+					file_tag,
+					meta_value.as_slice(),
+					delete_chunks_from,
+					tail_chunk.as_ref().as_ref(),
+				) as u64)
+					.div_ceil(util::metric::KV_BILLABLE_CHUNK)
+					* util::metric::KV_BILLABLE_CHUNK;
+				namespace::keys::metric::inc(
+					&tx.with_subspace(namespace::keys::subspace()),
+					recipient.namespace_id,
+					namespace::keys::metric::Metric::KvWrite(recipient.name.clone()),
+					total_size_chunked.try_into().unwrap_or_default(),
+				);
+
+				let actor_kv_tx = tx.with_subspace(keys::actor_kv::subspace(recipient.actor_id));
+				let now = util::timestamp::now();
+				let metadata = ep::KvMetadata {
+					version: VERSION.as_bytes().to_vec(),
+					update_ts: now,
+				};
+
+				let subspace = keys::actor_kv::subspace(recipient.actor_id);
+				let start_key = subspace
+					.subspace(&keys::actor_kv::KeyWrapper(sqlite_page_key(
+						file_tag,
+						delete_chunks_from,
+					)))
+					.range()
+					.0;
+				let end_key = subspace
+					.subspace(&keys::actor_kv::KeyWrapper(sqlite_page_key_range_end(
+						file_tag,
+					)))
+					.range()
+					.0;
+				tx.clear_range(&start_key, &end_key);
+
+				if let Some(tail_chunk) = tail_chunk.as_ref() {
+					let page_key = keys::actor_kv::KeyWrapper(sqlite_page_key(
+						file_tag,
+						tail_chunk.chunk_index,
+					));
+					actor_kv_tx.write(
+						&keys::actor_kv::EntryMetadataKey::new(page_key.clone()),
+						metadata.clone(),
+					)?;
+					actor_kv_tx.set(
+						&actor_kv_tx.pack(&keys::actor_kv::EntryValueChunkKey::new(page_key, 0)),
+						&tail_chunk.data,
+					);
+				}
+
+				let meta_key = keys::actor_kv::KeyWrapper(sqlite_meta_key(file_tag));
+				actor_kv_tx.write(
+					&keys::actor_kv::EntryMetadataKey::new(meta_key.clone()),
+					metadata,
+				)?;
+				actor_kv_tx.set(
+					&actor_kv_tx.pack(&keys::actor_kv::EntryValueChunkKey::new(meta_key, 0)),
+					meta_value.as_slice(),
+				);
+
+				Ok(())
+			}
+		})
+		.custom_instrument(tracing::info_span!("kv_sqlite_truncate_tx"))
+		.await
+		.map_err(Into::into);
+
+	metrics::ACTOR_KV_OPERATION_DURATION
+		.with_label_values(&["sqlite_truncate"])
+		.observe(start.elapsed().as_secs_f64());
+
+	let observation = sqlite_observation
+		.lock()
+		.ok()
+		.map(|guard| *guard)
+		.unwrap_or_default();
+	if observation.validation_checked {
+		sqlite_telemetry::record_validation_for_path(
+			sqlite_telemetry::PATH_FAST_PATH,
+			observation.validation_result,
+		);
+	}
+	sqlite_telemetry::record_operation_for_path(
+		sqlite_telemetry::PATH_FAST_PATH,
+		sqlite_telemetry::OperationKind::Truncate,
+		sqlite_summary,
+		start.elapsed(),
+	);
+
+	result
+}
+
 /// Deletes keys from the KV store. Cannot be undone.
 #[tracing::instrument(skip_all)]
 pub async fn delete(
@@ -806,6 +961,10 @@ fn sqlite_page_key(file_tag: u8, chunk_index: u32) -> ep::KvKey {
 	key
 }
 
+fn sqlite_page_key_range_end(file_tag: u8) -> ep::KvKey {
+	vec![0x08, 0x01, 0x01, file_tag + 1]
+}
+
 fn sqlite_write_batch_request_bytes(
 	file_tag: u8,
 	meta_value: &[u8],
@@ -818,6 +977,27 @@ fn sqlite_write_batch_request_bytes(
 			let key = sqlite_page_key(file_tag, update.chunk_index);
 			acc + KeyWrapper::tuple_len(&key) + update.data.len()
 		})
+}
+
+fn sqlite_truncate_request_bytes(
+	file_tag: u8,
+	meta_value: &[u8],
+	delete_chunks_from: u32,
+	tail_chunk: Option<&ep::SqlitePageUpdate>,
+) -> usize {
+	let meta_key = sqlite_meta_key(file_tag);
+	let delete_start_key = sqlite_page_key(file_tag, delete_chunks_from);
+	let delete_end_key = sqlite_page_key_range_end(file_tag);
+	let tail_bytes = tail_chunk.map_or(0, |page| {
+		let key = sqlite_page_key(file_tag, page.chunk_index);
+		KeyWrapper::tuple_len(&key) + page.data.len()
+	});
+
+	KeyWrapper::tuple_len(&meta_key)
+		+ meta_value.len()
+		+ KeyWrapper::tuple_len(&delete_start_key)
+		+ KeyWrapper::tuple_len(&delete_end_key)
+		+ tail_bytes
 }
 
 pub fn sqlite_file_tags_for_keys(keys: &[ep::KvKey]) -> Vec<u8> {
@@ -882,6 +1062,59 @@ fn validate_sqlite_write_batch_request(
 			remaining: Some(storage_remaining),
 			payload_size: Some(payload_size),
 		});
+	}
+
+	Ok(())
+}
+
+fn validate_sqlite_truncate_request(
+	file_tag: u8,
+	meta_value: &[u8],
+	delete_chunks_from: u32,
+	tail_chunk: Option<&ep::SqlitePageUpdate>,
+) -> std::result::Result<(), SqliteWriteBatchValidationError> {
+	let meta_key = sqlite_meta_key(file_tag);
+	if KeyWrapper::tuple_len(&meta_key) > MAX_KEY_SIZE {
+		return Err(SqliteWriteBatchValidationError {
+			kind: utils::EntryValidationErrorKind::KeyTooLarge,
+			remaining: None,
+			payload_size: None,
+		});
+	}
+	if meta_value.len() > MAX_VALUE_SIZE {
+		return Err(SqliteWriteBatchValidationError {
+			kind: utils::EntryValidationErrorKind::ValueTooLarge,
+			remaining: None,
+			payload_size: None,
+		});
+	}
+
+	if let Some(tail_chunk) = tail_chunk {
+		let tail_key = sqlite_page_key(file_tag, tail_chunk.chunk_index);
+		if KeyWrapper::tuple_len(&tail_key) > MAX_KEY_SIZE {
+			return Err(SqliteWriteBatchValidationError {
+				kind: utils::EntryValidationErrorKind::KeyTooLarge,
+				remaining: None,
+				payload_size: None,
+			});
+		}
+		if tail_chunk.data.len() > MAX_VALUE_SIZE {
+			return Err(SqliteWriteBatchValidationError {
+				kind: utils::EntryValidationErrorKind::ValueTooLarge,
+				remaining: None,
+				payload_size: None,
+			});
+		}
+		if tail_chunk.chunk_index != delete_chunks_from
+			|| tail_chunk.data.is_empty()
+			|| tail_chunk.data.len() >= 4096
+		{
+			return Err(SqliteWriteBatchValidationError {
+				kind: utils::EntryValidationErrorKind::LengthMismatch,
+				remaining: None,
+				payload_size: None,
+			});
+		}
 	}
 
 	Ok(())

@@ -9,6 +9,7 @@
 - Run `examples/sqlite-raw` `bench:record --fresh-engine` with `RUST_LOG=error` so the engine child keeps writing to `/tmp/sqlite-raw-bench-engine.log` without flooding the recorder stdout.
 - For envoy protocol changes, add a new `engine/sdks/schemas/envoy-protocol/vN.bare`, append new union variants instead of reordering old ones, update `engine/sdks/rust/envoy-protocol/src/versioned.rs`, regenerate `engine/sdks/typescript/envoy-protocol`, and keep the `envoy-client` pre-init downgrade fallback in sync.
 - Route SQLite fast-path write batches from `packages/sqlite-native/src/vfs.rs`, not from the transport adapter, because only the VFS owns the full buffered page set and per-file fence sequence.
+- Only route `sqlite_truncate` through the fast path when the buffered state is a pure truncate plus an optional tail chunk. If the same flush also carries other dirty pages, fall back to the generic KV path because the truncate protocol cannot represent that mixed state safely.
 - Keep pegboard-envoy SQLite fast-path fences connection-scoped, and clear the VFS tracker whenever a generic SQLite fallback commit succeeds so stale retries fail closed instead of replaying old page sets.
 
 Started: Wed Apr 15 04:03:14 AM PDT 2026
@@ -100,4 +101,13 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - Pegboard-envoy fast-path fencing should stay connection-scoped. Persisting that fence in actor storage would break legitimate reopen flows because the VFS fence tracker is process-local.
   - Any successful generic SQLite fallback commit must clear the VFS fast-path fence tracker and the pegboard-envoy fence entry for that file, or the next fast-path request will either fail spuriously or allow stale retries to replay old pages.
   - `cargo test -p pegboard --test sqlite_fast_path`, `cargo test -p pegboard-envoy sqlite_fast_path_fence`, `cargo test -p rivetkit-sqlite-native`, and `pnpm --dir examples/sqlite-raw run check-types` cover the new server write path, fence validation, native fallback behavior, and benchmark type surfaces.
+---
+## 2026-04-15 08:04:33 PDT - US-011
+- Implemented end-to-end `sqlite_truncate` fast-path handling across pegboard, pegboard-envoy, and the native SQLite VFS, including capability advertisement, fenced truncate dispatch, fast-path telemetry, and fallback for mixed truncate-plus-write flushes.
+- Added focused tests for server-side truncate state, native fast-path truncate success, and fail-closed truncate errors.
+- Files changed: `engine/packages/pegboard-envoy/src/conn.rs`, `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`, `engine/packages/pegboard/src/actor_kv/mod.rs`, `engine/packages/pegboard/src/actor_kv/sqlite_telemetry.rs`, `engine/packages/pegboard/tests/sqlite_fast_path.rs`, `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `sqlite_truncate` can safely use the fast path only when the flush is a pure truncate plus an optional partial tail chunk. Any extra dirty pages in the same buffered flush must stay on the generic path.
+  - Pegboard should apply fast-path truncate as one transaction that clears the page range, then rewrites the optional tail chunk and metadata before commit so readers never observe half-truncated state.
+  - `cargo test -p pegboard --test sqlite_fast_path`, `cargo test -p pegboard-envoy sqlite_fast_path`, and `cargo test -p rivetkit-sqlite-native` cover the truncate server path, fence validation, and native VFS routing for this story.
 ---

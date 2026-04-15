@@ -407,13 +407,56 @@ async fn handle_message(
 						.await
 						.context("failed to send KV sqlite write batch response to client")?;
 				}
-				protocol::KvRequestData::KvSqliteTruncateRequest(_) => {
-					send_actor_kv_error(
+				protocol::KvRequestData::KvSqliteTruncateRequest(body) => {
+					let res = match validate_sqlite_fast_path_fence(
 						conn,
-						req.request_id,
-						"sqlite fast path is not supported by this server",
+						actor_id,
+						body.file_tag,
+						body.fence.expected_fence,
+						body.fence.request_fence,
 					)
-					.await?;
+					.await
+					{
+						Ok(()) => {
+							let request_fence = body.fence.request_fence;
+							let file_tag = body.file_tag;
+							let res =
+								actor_kv::sqlite_truncate(&*ctx.udb()?, &recipient, body).await;
+							if res.is_ok() {
+								commit_sqlite_fast_path_fence(
+									conn,
+									actor_id,
+									file_tag,
+									request_fence,
+								)
+								.await;
+							}
+							res
+						}
+						Err(err) => Err(err),
+					};
+
+					let res_msg = versioned::ToEnvoy::wrap_latest(
+						protocol::ToEnvoy::ToEnvoyKvResponse(protocol::ToEnvoyKvResponse {
+							request_id: req.request_id,
+							data: match res {
+								Ok(()) => protocol::KvResponseData::KvDeleteResponse,
+								Err(err) => protocol::KvResponseData::KvErrorResponse(
+									protocol::KvErrorResponse {
+										message: err.to_string(),
+									},
+								),
+							},
+						}),
+					);
+
+					let res_msg_serialized = res_msg
+						.serialize(conn.protocol_version)
+						.context("failed to serialize KV sqlite truncate response")?;
+					conn.ws_handle
+						.send(Message::Binary(res_msg_serialized.into()))
+						.await
+						.context("failed to send KV sqlite truncate response to client")?;
 				}
 				protocol::KvRequestData::KvDropRequest => {
 					let res = actor_kv::delete_all(&*ctx.udb()?, &recipient).await;

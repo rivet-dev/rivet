@@ -16,7 +16,7 @@ use tokio::runtime::Handle;
 use crate::kv;
 use crate::sqlite_kv::{
 	KvGetResult, SqliteFastPathFence, SqliteKv, SqliteKvError, SqlitePageUpdate,
-	SqliteWriteBatchRequest,
+	SqliteTruncateRequest, SqliteWriteBatchRequest,
 };
 
 // MARK: Panic Guard
@@ -579,6 +579,20 @@ impl VfsContext {
 		}
 	}
 
+	fn sqlite_truncate_fast_path_supported(&self) -> bool {
+		match self
+			.rt_handle
+			.block_on(self.kv.sqlite_fast_path_capability(&self.actor_id))
+		{
+			Ok(Some(capability)) => capability.supports_truncate,
+			Ok(None) => false,
+			Err(err) => {
+				tracing::warn!(%err, "failed to resolve sqlite fast path capability");
+				false
+			}
+		}
+	}
+
 	fn reserve_sqlite_fast_path_fence(&self, file_tag: u8) -> SqliteFastPathFence {
 		let mut fences = self
 			.fast_path_fences
@@ -1035,6 +1049,32 @@ fn try_flush_buffered_file_fast_path(
 	dirty_page_count: u64,
 	dirty_buffer_bytes: u64,
 ) -> Result<Option<BufferedFlushResult>, String> {
+	if let Some(result) = try_flush_buffered_file_truncate_fast_path(
+		file,
+		state,
+		ctx,
+		dirty_page_count,
+		dirty_buffer_bytes,
+	)? {
+		return Ok(Some(result));
+	}
+
+	try_flush_buffered_file_write_batch_fast_path(
+		file,
+		state,
+		ctx,
+		dirty_page_count,
+		dirty_buffer_bytes,
+	)
+}
+
+fn try_flush_buffered_file_write_batch_fast_path(
+	file: &mut KvFile,
+	state: &mut KvFileState,
+	ctx: &VfsContext,
+	dirty_page_count: u64,
+	dirty_buffer_bytes: u64,
+) -> Result<Option<BufferedFlushResult>, String> {
 	if dirty_page_count == 0
 		|| state.pending_delete_start.is_some()
 		|| !ctx.sqlite_write_batch_fast_path_supported()
@@ -1077,6 +1117,73 @@ fn try_flush_buffered_file_fast_path(
 	)))
 }
 
+fn try_flush_buffered_file_truncate_fast_path(
+	file: &mut KvFile,
+	state: &mut KvFileState,
+	ctx: &VfsContext,
+	dirty_page_count: u64,
+	dirty_buffer_bytes: u64,
+) -> Result<Option<BufferedFlushResult>, String> {
+	let Some(delete_start_chunk) = state.pending_delete_start else {
+		return Ok(None);
+	};
+	if !ctx.sqlite_truncate_fast_path_supported() {
+		return Ok(None);
+	}
+
+	let tail_chunk = if state.dirty_buffer.is_empty() {
+		None
+	} else if state.dirty_buffer.len() == 1 {
+		let Some((&chunk_index, data)) = state.dirty_buffer.first_key_value() else {
+			return Ok(None);
+		};
+		if chunk_index != delete_start_chunk || data.is_empty() || data.len() >= kv::CHUNK_SIZE {
+			return Ok(None);
+		}
+		Some(SqlitePageUpdate {
+			chunk_index,
+			data: data.clone(),
+		})
+	} else {
+		return Ok(None);
+	};
+
+	let fence = ctx.reserve_sqlite_fast_path_fence(file.file_tag);
+	ctx.vfs_metrics
+		.commit_atomic_fast_path_attempt_count
+		.fetch_add(1, Ordering::Relaxed);
+	let request = SqliteTruncateRequest {
+		file_tag: file.file_tag,
+		meta_value: encode_file_meta(file.size),
+		delete_chunks_from: delete_start_chunk,
+		tail_chunk,
+		fence,
+	};
+
+	if let Err(err) = ctx
+		.rt_handle
+		.block_on(ctx.kv.sqlite_truncate(&ctx.actor_id, request))
+	{
+		ctx.vfs_metrics
+			.commit_atomic_fast_path_failure_count
+			.fetch_add(1, Ordering::Relaxed);
+		return Err(ctx.report_kv_error(err));
+	}
+
+	ctx.clear_last_error();
+	ctx.mark_sqlite_fast_path_committed(file.file_tag, fence.request_fence);
+	ctx.vfs_metrics
+		.commit_atomic_fast_path_success_count
+		.fetch_add(1, Ordering::Relaxed);
+	Ok(Some(finish_buffered_flush(
+		file,
+		state,
+		ctx,
+		dirty_page_count,
+		dirty_buffer_bytes,
+	)))
+}
+
 fn flush_buffered_file(
 	file: &mut KvFile,
 	state: &mut KvFileState,
@@ -1094,7 +1201,7 @@ fn flush_buffered_file(
 	{
 		return Ok(result);
 	}
-	if dirty_page_count > 0 {
+	if dirty_page_count > 0 || state.pending_delete_start.is_some() {
 		ctx.vfs_metrics
 			.commit_atomic_fast_path_fallback_count
 			.fetch_add(1, Ordering::Relaxed);
@@ -2261,6 +2368,7 @@ mod tests {
 		BatchDelete,
 		DeleteRange,
 		SqliteWriteBatch,
+		SqliteTruncate,
 	}
 
 	struct InjectedFailure {
@@ -2275,6 +2383,7 @@ mod tests {
 		failures: Mutex<Vec<InjectedFailure>>,
 		sqlite_fast_path_capability: Option<crate::sqlite_kv::SqliteFastPathCapability>,
 		sqlite_write_batches: Mutex<Vec<SqliteWriteBatchRequest>>,
+		sqlite_truncates: Mutex<Vec<SqliteTruncateRequest>>,
 	}
 
 	impl MemoryKv {
@@ -2287,6 +2396,20 @@ mod tests {
 					supports_truncate: false,
 				}),
 				sqlite_write_batches: Mutex::new(Vec::new()),
+				sqlite_truncates: Mutex::new(Vec::new()),
+			}
+		}
+
+		fn with_sqlite_fast_path() -> Self {
+			Self {
+				store: Mutex::new(BTreeMap::new()),
+				failures: Mutex::new(Vec::new()),
+				sqlite_fast_path_capability: Some(crate::sqlite_kv::SqliteFastPathCapability {
+					supports_write_batch: true,
+					supports_truncate: true,
+				}),
+				sqlite_write_batches: Mutex::new(Vec::new()),
+				sqlite_truncates: Mutex::new(Vec::new()),
 			}
 		}
 
@@ -2312,10 +2435,28 @@ mod tests {
 				});
 		}
 
+		fn fail_next_sqlite_truncate(&self, message: impl Into<String>) {
+			self.failures
+				.lock()
+				.expect("memory kv failures mutex poisoned")
+				.push(InjectedFailure {
+					op: FailureOperation::SqliteTruncate,
+					file_tag: None,
+					message: message.into(),
+				});
+		}
+
 		fn recorded_sqlite_write_batches(&self) -> Vec<SqliteWriteBatchRequest> {
 			self.sqlite_write_batches
 				.lock()
 				.expect("memory kv write batch mutex poisoned")
+				.clone()
+		}
+
+		fn recorded_sqlite_truncates(&self) -> Vec<SqliteTruncateRequest> {
+			self.sqlite_truncates
+				.lock()
+				.expect("memory kv truncate mutex poisoned")
 				.clone()
 		}
 
@@ -2458,6 +2599,36 @@ mod tests {
 			self.sqlite_write_batches
 				.lock()
 				.expect("memory kv write batch mutex poisoned")
+				.push(request);
+			Ok(())
+		}
+
+		async fn sqlite_truncate(
+			&self,
+			_actor_id: &str,
+			request: SqliteTruncateRequest,
+		) -> Result<(), SqliteKvError> {
+			self.maybe_fail_file_tag(FailureOperation::SqliteTruncate, request.file_tag)?;
+			let mut store = self.store.lock().expect("memory kv mutex poisoned");
+			let start = kv::get_chunk_key(request.file_tag, request.delete_chunks_from);
+			let end = kv::get_chunk_key_range_end(request.file_tag);
+			store.retain(|key, _| {
+				key.as_slice() < start.as_slice() || key.as_slice() >= end.as_slice()
+			});
+			if let Some(tail_chunk) = &request.tail_chunk {
+				store.insert(
+					kv::get_chunk_key(request.file_tag, tail_chunk.chunk_index).to_vec(),
+					tail_chunk.data.clone(),
+				);
+			}
+			store.insert(
+				kv::get_meta_key(request.file_tag).to_vec(),
+				request.meta_value.clone(),
+			);
+			drop(store);
+			self.sqlite_truncates
+				.lock()
+				.expect("memory kv truncate mutex poisoned")
 				.push(request);
 			Ok(())
 		}
@@ -3020,6 +3191,126 @@ mod tests {
 		);
 		assert_eq!(state.dirty_buffer.get(&0), Some(&updated_page));
 		assert!(kv.recorded_sqlite_write_batches().is_empty());
+
+		let telemetry = vfs.snapshot_vfs_telemetry();
+		assert_eq!(telemetry.atomic_write.fast_path_attempt_count, 1);
+		assert_eq!(telemetry.atomic_write.fast_path_failure_count, 1);
+		assert_eq!(telemetry.atomic_write.fast_path_success_count, 0);
+	}
+
+	#[test]
+	fn supported_fast_path_routes_truncates_through_sqlite_truncate() {
+		let runtime = tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("create tokio runtime");
+		let kv = Arc::new(MemoryKv::with_sqlite_fast_path());
+		kv.store.lock().expect("memory kv mutex poisoned").extend([
+			(
+				kv::get_meta_key(kv::FILE_TAG_MAIN).to_vec(),
+				encode_file_meta((kv::CHUNK_SIZE * 2) as i64),
+			),
+			(
+				kv::get_chunk_key(kv::FILE_TAG_MAIN, 0).to_vec(),
+				empty_db_page(),
+			),
+			(
+				kv::get_chunk_key(kv::FILE_TAG_MAIN, 1).to_vec(),
+				vec![0xAB; kv::CHUNK_SIZE],
+			),
+		]);
+		let vfs = KvVfs::register(
+			"test-vfs-fast-path-truncate",
+			kv.clone(),
+			"fast-path-truncate.db".to_string(),
+			runtime.handle().clone(),
+			Vec::new(),
+		)
+		.expect("register test vfs");
+		let (_file_storage, p_file) = open_raw_main_file(&vfs, "fast-path-truncate.db");
+
+		let truncate_rc =
+			unsafe { kv_io_truncate(p_file, (kv::CHUNK_SIZE + 512) as sqlite3_int64) };
+		assert_eq!(truncate_rc, SQLITE_OK);
+		assert_eq!(unsafe { kv_io_sync(p_file, 0) }, SQLITE_OK);
+		assert_eq!(unsafe { kv_io_close(p_file) }, SQLITE_OK);
+
+		let truncates = kv.recorded_sqlite_truncates();
+		assert_eq!(truncates.len(), 1);
+		assert_eq!(truncates[0].delete_chunks_from, 1);
+		assert_eq!(
+			truncates[0]
+				.tail_chunk
+				.as_ref()
+				.map(|page| page.chunk_index),
+			Some(1)
+		);
+		assert_eq!(
+			truncates[0].tail_chunk.as_ref().map(|page| page.data.len()),
+			Some(512)
+		);
+
+		let store = kv.store.lock().expect("memory kv mutex poisoned");
+		assert_eq!(
+			store.get(kv::get_meta_key(kv::FILE_TAG_MAIN).as_slice()),
+			Some(&encode_file_meta((kv::CHUNK_SIZE + 512) as i64))
+		);
+		assert_eq!(
+			store
+				.get(kv::get_chunk_key(kv::FILE_TAG_MAIN, 1).as_slice())
+				.map(Vec::len),
+			Some(512)
+		);
+		let telemetry = vfs.snapshot_vfs_telemetry();
+		assert_eq!(telemetry.atomic_write.fast_path_success_count, 1);
+		assert_eq!(telemetry.atomic_write.fast_path_failure_count, 0);
+	}
+
+	#[test]
+	fn fast_path_truncate_failure_returns_sqlite_ioerr() {
+		let runtime = tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("create tokio runtime");
+		let kv = Arc::new(MemoryKv::with_sqlite_fast_path());
+		kv.store.lock().expect("memory kv mutex poisoned").extend([
+			(
+				kv::get_meta_key(kv::FILE_TAG_MAIN).to_vec(),
+				encode_file_meta((kv::CHUNK_SIZE * 2) as i64),
+			),
+			(
+				kv::get_chunk_key(kv::FILE_TAG_MAIN, 0).to_vec(),
+				empty_db_page(),
+			),
+			(
+				kv::get_chunk_key(kv::FILE_TAG_MAIN, 1).to_vec(),
+				vec![0xAB; kv::CHUNK_SIZE],
+			),
+		]);
+		let vfs = KvVfs::register(
+			"test-vfs-fast-path-truncate-failure",
+			kv.clone(),
+			"fast-path-truncate-failure.db".to_string(),
+			runtime.handle().clone(),
+			Vec::new(),
+		)
+		.expect("register test vfs");
+		let (_file_storage, p_file) = open_raw_main_file(&vfs, "fast-path-truncate-failure.db");
+		let ctx = unsafe { &*vfs.ctx_ptr };
+		let state = unsafe { get_file_state(get_file(p_file).state) };
+
+		let truncate_rc = unsafe { kv_io_truncate(p_file, kv::CHUNK_SIZE as sqlite3_int64) };
+		assert_eq!(truncate_rc, SQLITE_OK);
+		kv.fail_next_sqlite_truncate("simulated truncate fast-path failure");
+
+		let sync_rc = unsafe { kv_io_sync(p_file, 0) };
+		assert_eq!(primary_result_code(sync_rc), SQLITE_IOERR);
+		assert_eq!(
+			ctx.take_last_error().as_deref(),
+			Some("simulated truncate fast-path failure")
+		);
+		assert_eq!(state.pending_delete_start, Some(1));
+		assert!(kv.recorded_sqlite_truncates().is_empty());
 
 		let telemetry = vfs.snapshot_vfs_telemetry();
 		assert_eq!(telemetry.atomic_write.fast_path_attempt_count, 1);

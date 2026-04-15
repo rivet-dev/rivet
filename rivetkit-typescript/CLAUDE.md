@@ -8,6 +8,7 @@
 - Core drivers must remain SQLite-agnostic. Any SQLite-specific wiring belongs behind the native database provider boundary.
 - Native SQLite VFS truncate buffering must keep a logical delete boundary for chunks past the pending truncate point so reads and partial writes do not resurrect stale remote pages before the next sync flush.
 - Route SQLite fast-path write batches from `packages/sqlite-native/src/vfs.rs`, not from the transport adapter, because the VFS is the only layer that owns the full buffered page set and per-file fence sequencing.
+- Only use the SQLite truncate fast path for a pure truncate plus optional tail chunk. If other dirty pages are buffered in the same flush, fall back to the generic path because the truncate protocol cannot carry a mixed page set safely.
 - Any successful generic SQLite fallback write in `packages/sqlite-native/src/vfs.rs` must clear the local fast-path fence tracker before the next fast-path request.
 
 ## SQLite VFS Testing

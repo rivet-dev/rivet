@@ -99,7 +99,7 @@ pub async fn init_conn(
 						sqlite_fast_path: Some(protocol::SqliteFastPathCapability {
 							protocol_version: 1,
 							supports_write_batch: true,
-							supports_truncate: false,
+							supports_truncate: true,
 						}),
 					},
 				},
