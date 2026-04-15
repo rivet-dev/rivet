@@ -69,8 +69,6 @@ importers:
         specifier: ^8.8.5
         version: 8.8.5
 
-  engine: {}
-
   engine/sdks/typescript/api-full:
     dependencies:
       form-data:
@@ -1387,22 +1385,6 @@ importers:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
-  examples/global-smoke-test:
-    dependencies:
-      rivetkit:
-        specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/rivetkit
-    devDependencies:
-      '@types/node':
-        specifier: ^22.13.9
-        version: 22.19.15
-      tsx:
-        specifier: ^4.7.1
-        version: 4.21.0
-      typescript:
-        specifier: ^5.5.2
-        version: 5.9.3
-
   examples/hello-world:
     dependencies:
       '@rivetkit/react':
@@ -2701,6 +2683,9 @@ importers:
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
+      '@rivetkit/rivetkit-native':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit-native
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@3.25.76)
@@ -4545,46 +4530,6 @@ importers:
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
-
-  rivetkit-typescript/packages/sqlite-native:
-    devDependencies:
-      '@napi-rs/cli':
-        specifier: ^2.18.0
-        version: 2.18.4
-
-  rivetkit-typescript/packages/sqlite-vfs:
-    dependencies:
-      '@rivetkit/bare-ts':
-        specifier: ^0.6.2
-        version: 0.6.2
-      '@rivetkit/sqlite':
-        specifier: ^0.1.1
-        version: 0.1.1
-      vbare:
-        specifier: ^0.0.4
-        version: 0.0.4
-    devDependencies:
-      '@bare-ts/tools':
-        specifier: ^0.13.0
-        version: 0.13.0(@bare-ts/lib@0.6.0)
-      '@types/node':
-        specifier: ^22.13.1
-        version: 22.19.15
-      commander:
-        specifier: ^12.0.0
-        version: 12.1.0
-      tsup:
-        specifier: ^8.4.0
-        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.15))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
-      tsx:
-        specifier: ^4.7.0
-        version: 4.21.0
-      typescript:
-        specifier: ^5.7.3
-        version: 5.9.3
-      vitest:
-        specifier: ^3.1.1
-        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.15)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.15)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
   rivetkit-typescript/packages/traces:
     dependencies:
@@ -9592,9 +9537,6 @@ packages:
     resolution: {integrity: sha512-5RC9Ze/wTKqSlJvopdCgr+EfyV93+iiH8Thog0QXrl8PT1unuBNw/jadXNMtwgAxrIaCJL+JLaHQH9w7rqpMDw==}
     engines: {node: '>=20'}
 
-  '@rivetkit/sqlite@0.1.1':
-    resolution: {integrity: sha512-NE7ZBy/hQhOrWzMZFjkHX9SoXxf+ILcDvVV+mNbUYPgiy/fsDzlXdK0+JDTGnko5f4Xl6/KVCoCozz9gkwkq8A==}
-
   '@rolldown/pluginutils@1.0.0-beta.27':
     resolution: {integrity: sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA==}
 
@@ -14130,9 +14072,11 @@ packages:
 
   freestyle-sandboxes@0.0.66:
     resolution: {integrity: sha512-3rgkjq5bU2pwe2kfX58gcuHtCoP9RfHx3Zbh4BCPxlzJntyPG/VTtXR1e9z12JLt3lnGdUsEqs/sfhMso1Lslw==}
+    deprecated: This package has been deprecated. Please use freestyle instead.
 
   freestyle-sandboxes@0.0.95:
     resolution: {integrity: sha512-Wsw8i8EE6f1vfJVZNsS/5c/Lp5Cx2DUiOy+3HjU3R+mA8296fIQs+6pNMg0T0nNZaEgqTNEDQqMoBckNZz+gWA==}
+    deprecated: This package has been deprecated. Please use freestyle instead.
 
   fresh@0.5.2:
     resolution: {integrity: sha512-zJ2mQYM18rEFOudeV4GShTGIQ7RbzA7ozbU9I/XBpm7kqgMywgmylMwXHxZJmkVoYkna9d2pVXVXPdYTP9ej8Q==}
@@ -25507,8 +25451,6 @@ snapshots:
   '@rivetkit/fast-json-patch@3.1.2': {}
 
   '@rivetkit/on-change@6.0.2-rc.1': {}
-
-  '@rivetkit/sqlite@0.1.1': {}
 
   '@rolldown/pluginutils@1.0.0-beta.27': {}
 

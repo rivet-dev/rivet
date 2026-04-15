@@ -20,6 +20,7 @@ use crate::{
 pub struct RemoteManager {
     endpoint: String,
     token: Option<String>,
+    client: reqwest::Client,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -66,14 +67,14 @@ impl RemoteManager {
         Self {
             endpoint: endpoint.to_string(),
             token,
+            client: reqwest::Client::new(),
         }
     }
 
     pub async fn get_for_id(&self, name: &str, actor_id: &str) -> Result<Option<String>> {
         let url = format!("{}/actors?name={}&actor_ids={}", self.endpoint, urlencoding::encode(name), urlencoding::encode(actor_id));
 
-        let client = reqwest::Client::new();
-        let mut req = client.get(&url).header(USER_AGENT, USER_AGENT_VALUE);
+        let mut req = self.client.get(&url).header(USER_AGENT, USER_AGENT_VALUE);
 
         if let Some(token) = &self.token {
             req = req.header(HEADER_RIVET_TOKEN, token);
@@ -102,8 +103,7 @@ impl RemoteManager {
         let key_str = serde_json::to_string(key)?;
         let url = format!("{}/actors?name={}&key={}", self.endpoint, urlencoding::encode(name), urlencoding::encode(&key_str));
 
-        let client = reqwest::Client::new();
-        let mut req = client.get(&url).header(USER_AGENT, USER_AGENT_VALUE);
+        let mut req = self.client.get(&url).header(USER_AGENT, USER_AGENT_VALUE);
 
         if let Some(token) = &self.token {
             req = req.header(HEADER_RIVET_TOKEN, token);
@@ -148,8 +148,8 @@ impl RemoteManager {
             input: input_encoded,
         };
 
-        let client = reqwest::Client::new();
-        let mut req = client
+        let mut req = self
+            .client
             .put(format!("{}/actors", self.endpoint))
             .header(USER_AGENT, USER_AGENT_VALUE)
             .json(&request_body);
@@ -189,8 +189,8 @@ impl RemoteManager {
             input: input_encoded,
         };
 
-        let client = reqwest::Client::new();
-        let mut req = client
+        let mut req = self
+            .client
             .post(format!("{}/actors", self.endpoint))
             .header(USER_AGENT, USER_AGENT_VALUE)
             .json(&request_body);
@@ -246,8 +246,8 @@ impl RemoteManager {
     ) -> Result<reqwest::Response> {
         let url = format!("{}{}", self.endpoint, path);
 
-        let client = reqwest::Client::new();
-        let mut req = client
+        let mut req = self
+            .client
             .request(
                 reqwest::Method::from_bytes(method.as_bytes())?,
                 &url,
