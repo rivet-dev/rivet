@@ -266,7 +266,7 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "The current local benchmark proves the client-side VFS story, but the shared phase baselines still show zero pegboard telemetry because that path runs in-process."
     },
     {

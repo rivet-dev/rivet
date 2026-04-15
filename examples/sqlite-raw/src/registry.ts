@@ -106,6 +106,26 @@ export const todoList = actor({
 				vfsTelemetry,
 			};
 		},
+		benchExerciseStorage: async (c, label: string) => {
+			// Drop cached pages before the verification query so the remote benchmark
+			// can observe page-store reads on the server path.
+			await c.db.execute("PRAGMA shrink_memory");
+			const [{ totalBytes, storedRows }] = (await c.db.execute(
+				"SELECT COALESCE(SUM(payload_bytes), 0) as totalBytes, COUNT(*) as storedRows FROM payload_bench WHERE label = ?",
+				label,
+			)) as { totalBytes: number; storedRows: number }[];
+
+			await c.db.execute(
+				"DELETE FROM payload_bench WHERE label = ?",
+				label,
+			);
+			await c.db.execute("VACUUM");
+
+			return {
+				totalBytes,
+				storedRows,
+			};
+		},
 	},
 });
 

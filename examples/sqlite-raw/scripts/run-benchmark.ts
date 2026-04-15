@@ -26,12 +26,15 @@ const sqlitePageSizeBytes = 4096;
 const sqlitePageOverheadEstimate = 32;
 const defaultEndpoint = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
 const defaultLogPath = "/tmp/sqlite-raw-bench-engine.log";
+const defaultRunnerLogPath = "/tmp/sqlite-raw-bench-runner.log";
+const defaultRemotePayloadMiB = process.env.BENCH_REMOTE_MB ?? "0.05";
 const defaultFreshEngineReadyTimeoutMs =
 	process.env.BENCH_READY_TIMEOUT_MS ?? "300000";
 const defaultRustLog =
 	"opentelemetry_sdk=off,opentelemetry-otlp=info,tower::buffer::worker=info,debug";
 
 type PhaseKey = (typeof phaseOrder)[number];
+type BenchmarkRunnerMode = "inline" | "remote";
 
 interface CliOptions {
 	phase?: PhaseKey;
@@ -39,6 +42,7 @@ interface CliOptions {
 	chosenLimitPages?: number;
 	batchPages?: number[];
 	freshEngine: boolean;
+	remoteRunner: boolean;
 	renderOnly: boolean;
 }
 
@@ -58,6 +62,7 @@ interface ActorLargeInsertBenchmarkResult extends BenchmarkInsertResult {
 interface LargeInsertBenchmarkResult {
 	endpoint: string;
 	metricsEndpoint?: string;
+	runnerMode?: BenchmarkRunnerMode;
 	payloadMiB: number;
 	totalBytes: number;
 	rowCount: number;
@@ -203,6 +208,22 @@ interface BenchRun {
 	benchmark: LargeInsertBenchmarkResult;
 }
 
+interface RemoteBenchRun {
+	id: string;
+	recordedAt: string;
+	gitSha: string;
+	workflowCommand: string;
+	benchmarkCommand: string;
+	endpoint: string;
+	freshEngineStart: boolean;
+	engineLogPath: string | null;
+	runnerCommand: string;
+	runnerLogPath: string | null;
+	engineBuild: BuildProvenance;
+	nativeBuild: BuildProvenance;
+	benchmark: LargeInsertBenchmarkResult;
+}
+
 interface BatchCeilingSample {
 	targetDirtyPages: number;
 	payloadMiB: number;
@@ -231,17 +252,20 @@ interface BenchResultsStore {
 	sourceFile: string;
 	resultsFile: string;
 	runs: BenchRun[];
+	remoteRuns?: RemoteBenchRun[];
 	batchCeilingEvaluations?: BatchCeilingEvaluation[];
 }
 
 function printUsage(): void {
 	console.log(`Usage:
   pnpm --dir examples/sqlite-raw run bench:record -- --phase phase-0 [--fresh-engine]
+  pnpm --dir examples/sqlite-raw run bench:record -- --remote-runner [--fresh-engine]
   pnpm --dir examples/sqlite-raw run bench:record -- --evaluate-batch-ceiling --chosen-limit-pages 3328 [--batch-pages 128,512,1024,2048,3328] [--fresh-engine]
   pnpm --dir examples/sqlite-raw run bench:record -- --render-only
 
 Options:
   --phase <phase-0|phase-1|phase-2-3|final>
+  --remote-runner  Spawn examples/sqlite-raw as a separate runner and record pegboard-backed telemetry
   --evaluate-batch-ceiling
   --chosen-limit-pages <pages>
   --batch-pages <comma-separated pages>
@@ -270,6 +294,7 @@ function parseArgs(argv: string[]): CliOptions {
 	const options: CliOptions = {
 		evaluateBatchCeiling: false,
 		freshEngine: false,
+		remoteRunner: false,
 		renderOnly: false,
 	};
 
@@ -287,6 +312,8 @@ function parseArgs(argv: string[]): CliOptions {
 			i += 1;
 		} else if (arg === "--evaluate-batch-ceiling") {
 			options.evaluateBatchCeiling = true;
+		} else if (arg === "--remote-runner") {
+			options.remoteRunner = true;
 		} else if (arg === "--chosen-limit-pages") {
 			const rawValue = argv[i + 1];
 			const value = Number(rawValue);
@@ -315,17 +342,24 @@ function parseArgs(argv: string[]): CliOptions {
 	}
 
 	if (options.renderOnly) {
-		if (options.phase || options.evaluateBatchCeiling) {
+		if (options.phase || options.evaluateBatchCeiling || options.remoteRunner) {
 			throw new Error("--render-only cannot be combined with benchmark recording options.");
 		}
 		return options;
 	}
 
+	if (options.remoteRunner && (options.phase || options.evaluateBatchCeiling)) {
+		throw new Error(
+			"--remote-runner cannot be combined with --phase or --evaluate-batch-ceiling.",
+		);
+	}
 	if (options.phase && options.evaluateBatchCeiling) {
 		throw new Error("Choose either --phase or --evaluate-batch-ceiling, not both.");
 	}
-	if (!options.phase && !options.evaluateBatchCeiling) {
-		throw new Error("Missing required --phase or --evaluate-batch-ceiling argument.");
+	if (!options.phase && !options.evaluateBatchCeiling && !options.remoteRunner) {
+		throw new Error(
+			"Missing required --phase, --remote-runner, or --evaluate-batch-ceiling argument.",
+		);
 	}
 	if (options.evaluateBatchCeiling && !options.chosenLimitPages) {
 		throw new Error("--evaluate-batch-ceiling requires --chosen-limit-pages.");
@@ -482,6 +516,12 @@ function formatServerValidation(
 	].join(" / ");
 }
 
+function benchmarkRunnerMode(
+	result: LargeInsertBenchmarkResult,
+): BenchmarkRunnerMode {
+	return result.runnerMode ?? "inline";
+}
+
 function renderServerTelemetryDetails(
 	telemetry: SqliteServerTelemetry | undefined,
 ): string {
@@ -523,6 +563,9 @@ function buildBenchmarkCommand(
 	if (envOverrides.BENCH_REQUIRE_SERVER_TELEMETRY === "1") {
 		vars.push("BENCH_REQUIRE_SERVER_TELEMETRY=1");
 	}
+	if (envOverrides.BENCH_RUNNER_MODE === "remote") {
+		vars.push("BENCH_RUNNER_MODE=remote");
+	}
 	return [
 		...vars,
 		"pnpm --dir examples/sqlite-raw run bench:large-insert -- --json",
@@ -532,6 +575,13 @@ function buildBenchmarkCommand(
 function canonicalWorkflowCommand(options: CliOptions): string {
 	if (options.renderOnly) {
 		return "pnpm --dir examples/sqlite-raw run bench:record -- --render-only";
+	}
+	if (options.remoteRunner) {
+		const args = ["--remote-runner"];
+		if (options.freshEngine) {
+			args.push("--fresh-engine");
+		}
+		return `pnpm --dir examples/sqlite-raw run bench:record -- ${args.join(" ")}`;
 	}
 	if (options.evaluateBatchCeiling) {
 		const args = [
@@ -553,10 +603,6 @@ function canonicalWorkflowCommand(options: CliOptions): string {
 	}
 
 	return `pnpm --dir examples/sqlite-raw run bench:record -- ${args.join(" ")}`;
-}
-
-function canonicalBenchmarkCommand(endpoint: string): string {
-	return buildBenchmarkCommand(endpoint);
 }
 
 function freshEngineBenchmarkEnv(
@@ -784,6 +830,94 @@ function stopFreshEngine(child: ReturnType<typeof spawn>): Promise<void> {
 	});
 }
 
+function buildRemoteRunnerCommand(endpoint: string): string {
+	return [
+		`RIVET_ENDPOINT=${endpoint}`,
+		"pnpm --dir examples/sqlite-raw exec tsx src/runner.ts",
+	].join(" ");
+}
+
+async function startRemoteRunner(endpoint: string): Promise<{
+	child: ReturnType<typeof spawn>;
+	command: string;
+	logPath: string;
+}> {
+	const command = buildRemoteRunnerCommand(endpoint);
+	const child = spawn(
+		"pnpm",
+		["--dir", exampleDir, "exec", "tsx", "src/runner.ts"],
+		{
+			cwd: repoRoot,
+			stdio: ["ignore", "pipe", "pipe"],
+			env: {
+				...process.env,
+				RIVET_ENDPOINT: endpoint,
+			},
+		},
+	);
+
+	if (!child.stdout || !child.stderr) {
+		throw new Error(
+			"Remote runner process did not expose stdout/stderr pipes.",
+		);
+	}
+
+	writeFileSync(defaultRunnerLogPath, "");
+	child.stdout.on("data", (chunk) => {
+		process.stdout.write(chunk);
+		writeFileSync(defaultRunnerLogPath, chunk, { flag: "a" });
+	});
+	child.stderr.on("data", (chunk) => {
+		process.stderr.write(chunk);
+		writeFileSync(defaultRunnerLogPath, chunk, { flag: "a" });
+	});
+
+	await new Promise<void>((resolve, reject) => {
+		const timeout = setTimeout(() => {
+			cleanup();
+			resolve();
+		}, 1000);
+
+		const handleExit = (code: number | null, signal: NodeJS.Signals | null) => {
+			cleanup();
+			reject(
+				new Error(
+					`Remote runner exited before the benchmark started (code ${code ?? "null"}, signal ${signal ?? "null"}).`,
+				),
+			);
+		};
+
+		const handleError = (error: Error) => {
+			cleanup();
+			reject(error);
+		};
+
+		const cleanup = () => {
+			clearTimeout(timeout);
+			child.off("exit", handleExit);
+			child.off("error", handleError);
+		};
+
+		child.once("exit", handleExit);
+		child.once("error", handleError);
+	});
+
+	return { child, command, logPath: defaultRunnerLogPath };
+}
+
+function stopRemoteRunner(child: ReturnType<typeof spawn>): Promise<void> {
+	return new Promise((resolve, reject) => {
+		if (child.exitCode !== null) {
+			resolve();
+			return;
+		}
+
+		child.once("exit", () => resolve());
+		child.once("error", reject);
+		child.kill("SIGTERM");
+	});
+}
+
 function parseBenchmarkOutput(stdout: string): LargeInsertBenchmarkResult {
 	const trimmed = stdout.trim();
 	const jsonStart = trimmed.indexOf("{");
@@ -836,6 +970,7 @@ function loadStore(): BenchResultsStore {
 			sourceFile: "examples/sqlite-raw/bench-results.json",
 			resultsFile: "examples/sqlite-raw/BENCH_RESULTS.md",
 			runs: [],
+			remoteRuns: [],
 			batchCeilingEvaluations: [],
 		};
 	}
@@ -1026,6 +1161,64 @@ function renderBatchCeilingEvaluations(store: BenchResultsStore): string {
 			: "";
 
 	return `${renderBatchCeilingEvaluation(latestEvaluation)}${historicalNote}`;
+}
+
+function renderRemoteRun(run: RemoteBenchRun): string {
+	return `### Pegboard Remote · ${run.recordedAt}
+
+- Run ID: \`${run.id}\`
+- Git SHA: \`${run.gitSha}\`
+- Workflow command: \`${run.workflowCommand}\`
+- Benchmark command: \`${run.benchmarkCommand}\`
+- Runner command: \`${run.runnerCommand}\`
+- Endpoint: \`${run.endpoint}\`
+- Runner mode: \`${benchmarkRunnerMode(run.benchmark)}\`
+- Fresh engine start: \`${run.freshEngineStart ? "yes" : "no"}\`
+- Engine log: \`${run.engineLogPath ?? "not captured"}\`
+- Runner log: \`${run.runnerLogPath ?? "not captured"}\`
+- Payload: \`${run.benchmark.payloadMiB} MiB\`
+- Total bytes: \`${formatBytes(run.benchmark.totalBytes)}\`
+- Rows: \`${run.benchmark.rowCount}\`
+- Actor DB insert: \`${formatMs(run.benchmark.actor.insertElapsedMs)}\`
+- Actor DB verify: \`${formatMs(run.benchmark.actor.verifyElapsedMs)}\`
+- End-to-end action: \`${formatMs(run.benchmark.delta.endToEndElapsedMs)}\`
+- Native SQLite insert: \`${formatMs(run.benchmark.native.insertElapsedMs)}\`
+- Actor DB vs native: \`${formatMultiplier(run.benchmark.delta.actorDbVsNativeMultiplier)}\`
+- End-to-end vs native: \`${formatMultiplier(run.benchmark.delta.endToEndVsNativeMultiplier)}\`
+
+#### VFS Telemetry
+
+- Reads: \`${run.benchmark.actor.vfsTelemetry.reads.count}\` calls, \`${formatBytes(run.benchmark.actor.vfsTelemetry.reads.returnedBytes)}\` returned, \`${run.benchmark.actor.vfsTelemetry.reads.shortReadCount}\` short reads, \`${formatUs(run.benchmark.actor.vfsTelemetry.reads.durationUs)}\` total
+- Writes: \`${run.benchmark.actor.vfsTelemetry.writes.count}\` calls, \`${formatBytes(run.benchmark.actor.vfsTelemetry.writes.inputBytes)}\` input, \`${run.benchmark.actor.vfsTelemetry.writes.bufferedCount}\` buffered calls, \`${run.benchmark.actor.vfsTelemetry.writes.immediateKvPutCount}\` immediate \`kv_put\` fallbacks
+- Syncs: \`${run.benchmark.actor.vfsTelemetry.syncs.count}\` calls, \`${run.benchmark.actor.vfsTelemetry.syncs.metadataFlushCount}\` metadata flushes, \`${formatUs(run.benchmark.actor.vfsTelemetry.syncs.durationUs)}\` total
+- Atomic write coverage: \`${formatAtomicCoverage(run.benchmark.actor.vfsTelemetry)}\`
+- Fast-path commit usage: \`${formatFastPathUsage(run.benchmark.actor.vfsTelemetry)}\`
+- Atomic write pages: \`${formatDirtyPages(run.benchmark.actor.vfsTelemetry)}\`
+- Atomic write bytes: \`${formatBytes(run.benchmark.actor.vfsTelemetry.atomicWrite.committedBufferedBytesTotal)}\`
+- Atomic write failures: \`${run.benchmark.actor.vfsTelemetry.atomicWrite.batchCapFailureCount}\` batch-cap, \`${run.benchmark.actor.vfsTelemetry.atomicWrite.commitKvPutFailureCount}\` KV put
+- KV round-trips: \`get ${run.benchmark.actor.vfsTelemetry.kv.getCount}\` / \`put ${run.benchmark.actor.vfsTelemetry.kv.putCount}\` / \`delete ${run.benchmark.actor.vfsTelemetry.kv.deleteCount}\` / \`deleteRange ${run.benchmark.actor.vfsTelemetry.kv.deleteRangeCount}\`
+- KV payload bytes: \`${formatBytes(run.benchmark.actor.vfsTelemetry.kv.getBytes)}\` read, \`${formatBytes(run.benchmark.actor.vfsTelemetry.kv.putBytes)}\` written
+
+#### Server Telemetry
+
+${renderServerTelemetryDetails(run.benchmark.serverTelemetry)}
+
+#### Engine Build Provenance
+
+${renderBuild(run.engineBuild)}
+
+#### Native Build Provenance
+
+${renderBuild(run.nativeBuild)}`;
+}
+
+function renderRemoteRuns(store: BenchResultsStore): string {
+	const remoteRuns = [...(store.remoteRuns ?? [])].reverse();
+	if (remoteRuns.length === 0) {
+		return "No pegboard-backed remote runs recorded yet.";
+	}
+
+	return remoteRuns.map((run) => renderRemoteRun(run)).join("\n\n");
 }
 
 function renderMarkdown(store: BenchResultsStore): string {
@@ -1228,6 +1421,7 @@ function renderMarkdown(store: BenchResultsStore): string {
 - Workflow command: \`${run.workflowCommand}\`
 - Benchmark command: \`${run.benchmarkCommand}\`
 - Endpoint: \`${run.endpoint}\`
+- Runner mode: \`${benchmarkRunnerMode(run.benchmark)}\`
 - Fresh engine start: \`${run.freshEngineStart ? "yes" : "no"}\`
 - Engine log: \`${run.engineLogPath ?? "not captured"}\`
 - Payload: \`${run.benchmark.payloadMiB} MiB\`
@@ -1279,6 +1473,11 @@ This file is generated from \`bench-results.json\` by
 - Later phases should append by rerunning \`bench:record\`, not by inventing a
   new markdown format.
 
+## Benchmark Modes
+
+- Use \`pnpm --dir examples/sqlite-raw run bench:record -- --phase <phase>\` for the inline local benchmark path. It is the right tool for actor-side VFS changes and keeps the existing phase history comparable.
+- Use \`pnpm --dir examples/sqlite-raw run bench:record -- --remote-runner\` for pegboard-backed validation. That path spawns \`examples/sqlite-raw/src/runner.ts\` as a separate runner and defaults to \`${defaultRemotePayloadMiB} MiB\` so it stays under the current 15s gateway timeout while still recording server telemetry.
+
 ## Phase Summary
 
 | Metric | ${phaseOrder.map((phase) => phaseLabels[phase]).join(" | ")} |
@@ -1288,6 +1487,10 @@ ${summaryRows}
 ## SQLite Fast-Path Batch Ceiling
 
 ${renderBatchCeilingEvaluations(store)}
+
+## Pegboard Remote Run Log
+
+${renderRemoteRuns(store)}
 
 ## Append-Only Run Log
 
@@ -1304,6 +1507,16 @@ function recordRun(store: BenchResultsStore, run: BenchRun): BenchResultsStore {
 	return {
 		...store,
 		runs: [...store.runs, run],
+	};
+}
+
+function recordRemoteRun(
+	store: BenchResultsStore,
+	run: RemoteBenchRun,
+): BenchResultsStore {
+	return {
+		...store,
+		remoteRuns: [...(store.remoteRuns ?? []), run],
 	};
 }
 
@@ -1341,6 +1554,9 @@ async function main(): Promise<void> {
 	const endpoint = defaultEndpoint;
 	let engineChild: ReturnType<typeof spawn> | null = null;
 	let engineLogPath: string | null = null;
+	let runnerChild: ReturnType<typeof spawn> | null = null;
+	let runnerCommand: string | null = null;
+	let runnerLogPath: string | null = null;
 
 	try {
 		const phase = options.phase;
@@ -1358,6 +1574,12 @@ async function main(): Promise<void> {
 			engineLogPath = fresh.logPath;
 		} else {
 			await assertEngineHealthy(endpoint);
+		}
+		if (options.remoteRunner) {
+			const remoteRunner = await startRemoteRunner(endpoint);
+			runnerChild = remoteRunner.child;
+			runnerCommand = remoteRunner.command;
+			runnerLogPath = remoteRunner.logPath;
 		}
 
 		let nextStore = store;
@@ -1407,6 +1629,31 @@ async function main(): Promise<void> {
 			};
 
 			nextStore = recordBatchCeilingEvaluation(store, evaluation);
+		} else if (options.remoteRunner) {
+			const benchmarkEnv = freshEngineBenchmarkEnv(options, {
+				BENCH_MB: process.env.BENCH_MB ?? defaultRemotePayloadMiB,
+				BENCH_REQUIRE_SERVER_TELEMETRY: "1",
+				BENCH_RUNNER_MODE: "remote",
+			});
+			const benchmark = runBenchmark(endpoint, benchmarkEnv);
+			const run: RemoteBenchRun = {
+				id: `remote-${Date.now()}`,
+				recordedAt: new Date().toISOString(),
+				gitSha,
+				workflowCommand: canonicalWorkflowCommand(options),
+				benchmarkCommand: buildBenchmarkCommand(endpoint, benchmarkEnv),
+				endpoint,
+				freshEngineStart: options.freshEngine,
+				engineLogPath,
+				runnerCommand:
+					runnerCommand ?? buildRemoteRunnerCommand(endpoint),
+				runnerLogPath,
+				engineBuild,
+				nativeBuild,
+				benchmark,
+			};
+
+			nextStore = recordRemoteRun(store, run);
 		} else {
 			if (!phase) {
 				throw new Error("Missing required phase.");
@@ -1437,6 +1684,10 @@ async function main(): Promise<void> {
 			console.log(
 				`Recorded SQLite fast-path batch ceiling evaluation in ${relative(repoRoot, resultsJsonPath)}.`,
 			);
+		} else if (options.remoteRunner) {
+			console.log(
+				`Recorded pegboard-backed remote benchmark in ${relative(repoRoot, resultsJsonPath)}.`,
+			);
 		} else {
 			if (!phase) {
 				throw new Error("Missing required phase.");
@@ -1446,6 +1697,9 @@ async function main(): Promise<void> {
 			);
 		}
 	} finally {
+		if (runnerChild) {
+			await stopRemoteRunner(runnerChild);
+		}
 		if (engineChild) {
 			await stopFreshEngine(engineChild);
 		}

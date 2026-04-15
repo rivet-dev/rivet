@@ -41,6 +41,18 @@ run the benchmark, and append the structured result to the shared phase log:
 pnpm --dir examples/sqlite-raw run bench:record -- --phase phase-0 --fresh-engine
 ```
 
+To benchmark the pegboard-backed remote path instead of the inline local path,
+spawn the example as a separate runner process and record the result in the same
+append-only log:
+
+```bash
+pnpm --dir examples/sqlite-raw run bench:record -- --remote-runner --fresh-engine
+```
+
+The remote recorder defaults to `BENCH_MB=0.05` so it stays under the current
+15 second gateway timeout while still exercising the pegboard-backed SQLite
+path. Override `BENCH_MB` or `BENCH_REMOTE_MB` if you need a different envelope.
+
 To re-evaluate the SQLite fast-path batch ceiling against larger page envelopes
 and refresh the rendered ceiling table:
 
@@ -66,6 +78,13 @@ Structured phase results live in:
 - `examples/sqlite-raw/bench-results.json` for append-only run metadata
 - `examples/sqlite-raw/BENCH_RESULTS.md` for the rendered side-by-side summary
 
+Use the inline `--phase` workflow when iterating on actor-side VFS behavior and
+comparing against the existing Phase 0 through Final history. Use
+`--remote-runner` when you need pegboard-backed validation and non-zero server
+telemetry from the fast-path storage path. The remote runner uses
+`src/runner.ts`, which starts only the envoy connection instead of the full
+serverful runtime entrypoint.
+
 ## Usage
 
 The example creates a `todoList` actor with the following actions:
@@ -79,6 +98,7 @@ The example creates a `todoList` actor with the following actions:
 
 - `src/registry.ts` - Actor definition, migrations, and shared registry
 - `src/index.ts` - Example entrypoint that starts the registry
+- `src/runner.ts` - Runner-only entrypoint for pegboard-backed remote benchmarks
 - `scripts/client.ts` - Simple todo client
 - `scripts/bench-large-insert.ts` - Large-payload benchmark runner
 - `scripts/run-benchmark.ts` - Rebuilds dependencies, records per-phase runs, and renders `BENCH_RESULTS.md`

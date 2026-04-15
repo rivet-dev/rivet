@@ -10,6 +10,11 @@ This file is generated from `bench-results.json` by
 - Later phases should append by rerunning `bench:record`, not by inventing a
   new markdown format.
 
+## Benchmark Modes
+
+- Use `pnpm --dir examples/sqlite-raw run bench:record -- --phase <phase>` for the inline local benchmark path. It is the right tool for actor-side VFS changes and keeps the existing phase history comparable.
+- Use `pnpm --dir examples/sqlite-raw run bench:record -- --remote-runner` for pegboard-backed validation. That path spawns `examples/sqlite-raw/src/runner.ts` as a separate runner and defaults to `0.05 MiB` so it stays under the current 15s gateway timeout while still recording server telemetry.
+
 ## Phase Summary
 
 | Metric | Phase 0 | Phase 1 | Phase 2/3 | Final |
@@ -77,6 +82,69 @@ This file is generated from `bench-results.json` by
 
 Older evaluations remain in `bench-results.json`; the latest successful rerun is rendered here.
 
+## Pegboard Remote Run Log
+
+### Pegboard Remote · 2026-04-15T17:48:34.121Z
+
+- Run ID: `remote-1776275314121`
+- Git SHA: `2d5663b53af66b3a976816b6509783bf855aeb15`
+- Workflow command: `pnpm --dir examples/sqlite-raw run bench:record -- --remote-runner --fresh-engine`
+- Benchmark command: `BENCH_MB=0.05 BENCH_ROWS=1 RIVET_ENDPOINT=http://127.0.0.1:6420 BENCH_READY_TIMEOUT_MS=300000 BENCH_REQUIRE_SERVER_TELEMETRY=1 BENCH_RUNNER_MODE=remote pnpm --dir examples/sqlite-raw run bench:large-insert -- --json`
+- Runner command: `RIVET_ENDPOINT=http://127.0.0.1:6420 pnpm --dir examples/sqlite-raw exec tsx src/runner.ts`
+- Endpoint: `http://127.0.0.1:6420`
+- Runner mode: `remote`
+- Fresh engine start: `yes`
+- Engine log: `/tmp/sqlite-raw-bench-engine.log`
+- Runner log: `/tmp/sqlite-raw-bench-runner.log`
+- Payload: `0.05 MiB`
+- Total bytes: `0.05 MiB`
+- Rows: `1`
+- Actor DB insert: `7.1ms`
+- Actor DB verify: `0.3ms`
+- End-to-end action: `87.3ms`
+- Native SQLite insert: `0.1ms`
+- Actor DB vs native: `48.04x`
+- End-to-end vs native: `592.35x`
+
+#### VFS Telemetry
+
+- Reads: `0` calls, `0.00 MiB` returned, `0` short reads, `0.0ms` total
+- Writes: `16` calls, `0.06 MiB` input, `16` buffered calls, `0` immediate `kv_put` fallbacks
+- Syncs: `1` calls, `0` metadata flushes, `0.0ms` total
+- Atomic write coverage: `begin 1 / commit 1 / ok 1`
+- Fast-path commit usage: `attempt 1 / ok 1 / fallback 0 / fail 0`
+- Atomic write pages: `total 16 / max 16`
+- Atomic write bytes: `0.06 MiB`
+- Atomic write failures: `0` batch-cap, `0` KV put
+- KV round-trips: `get 0` / `put 0` / `delete 0` / `deleteRange 0`
+- KV payload bytes: `0.00 MiB` read, `0.00 MiB` written
+
+#### Server Telemetry
+
+- Metrics endpoint: `http://127.0.0.1:6430/metrics`
+- Path label: `fast_path`
+- Reads: `0` requests, `0` page keys, `0` metadata keys, `0 B` request bytes, `0 B` response bytes, `0.0ms` total
+- Writes: `6` requests, `32` dirty pages, `6` metadata keys, `128.33 KiB` request bytes, `128.06 KiB` payload bytes, `2.8ms` total
+- Path overhead: `0.4ms` in `estimate_kv_size`, `0.0ms` in clear-and-rewrite, `0` `clear_subspace_range` calls
+- Truncates: `0` requests, `0 B` request bytes, `0.0ms` total
+- Validation outcomes: `ok 6` / `quota 0` / `payload 0` / `count 0` / `key 0` / `value 0` / `length 0`
+
+#### Engine Build Provenance
+
+- Command: `cargo build --bin rivet-engine`
+- CWD: `.`
+- Artifact: `target/debug/rivet-engine`
+- Artifact mtime: `2026-04-15T17:36:09.651Z`
+- Duration: `279.3ms`
+
+#### Native Build Provenance
+
+- Command: `pnpm --dir rivetkit-typescript/packages/rivetkit-native build:force`
+- CWD: `.`
+- Artifact: `rivetkit-typescript/packages/rivetkit-native/rivetkit-native.linux-x64-gnu.node`
+- Artifact mtime: `2026-04-15T17:48:31.235Z`
+- Duration: `783.1ms`
+
 ## Append-Only Run Log
 
 ### Final · 2026-04-15T17:17:43.512Z
@@ -86,6 +154,7 @@ Older evaluations remain in `bench-results.json`; the latest successful rerun is
 - Workflow command: `cargo build --bin rivet-engine && pnpm --dir rivetkit-typescript/packages/rivetkit-native run build:force && RUST_BACKTRACE=full RUST_LOG='opentelemetry_sdk=off,opentelemetry-otlp=info,tower::buffer::worker=info,debug' RUST_LOG_TARGET=1 ./target/debug/rivet-engine start >/tmp/us015-engine.log 2>&1 & script -q -c "BENCH_READY_TIMEOUT_MS=900000 BENCH_READY_ATTEMPT_TIMEOUT_MS=120000 pnpm --dir examples/sqlite-raw exec tsx scripts/bench-large-insert.ts -- --json" /tmp/us015-benchmark.log`
 - Benchmark command: `BENCH_MB=10 BENCH_ROWS=1 RIVET_ENDPOINT=http://127.0.0.1:6420 BENCH_READY_TIMEOUT_MS=900000 BENCH_READY_ATTEMPT_TIMEOUT_MS=120000 pnpm --dir examples/sqlite-raw exec tsx scripts/bench-large-insert.ts -- --json`
 - Endpoint: `http://127.0.0.1:6420`
+- Runner mode: `inline`
 - Fresh engine start: `yes`
 - Engine log: `/tmp/us015-engine.log`
 - Payload: `10 MiB`
@@ -177,6 +246,7 @@ Older evaluations remain in `bench-results.json`; the latest successful rerun is
 - Workflow command: `pnpm --dir examples/sqlite-raw run bench:record -- --phase phase-2-3 --fresh-engine`
 - Benchmark command: `BENCH_MB=10 BENCH_ROWS=1 RIVET_ENDPOINT=http://127.0.0.1:6420 BENCH_READY_TIMEOUT_MS=300000 pnpm --dir examples/sqlite-raw run bench:large-insert -- --json`
 - Endpoint: `http://127.0.0.1:6420`
+- Runner mode: `inline`
 - Fresh engine start: `yes`
 - Engine log: `/tmp/sqlite-raw-bench-engine.log`
 - Payload: `10 MiB`
@@ -257,6 +327,7 @@ Older evaluations remain in `bench-results.json`; the latest successful rerun is
 - Workflow command: `pnpm --dir examples/sqlite-raw run bench:record -- --phase phase-1 --fresh-engine`
 - Benchmark command: `BENCH_MB=10 BENCH_ROWS=1 RIVET_ENDPOINT=http://127.0.0.1:6420 pnpm --dir examples/sqlite-raw run bench:large-insert -- --json`
 - Endpoint: `http://127.0.0.1:6420`
+- Runner mode: `inline`
 - Fresh engine start: `yes`
 - Engine log: `/tmp/sqlite-raw-bench-engine.log`
 - Payload: `10 MiB`
@@ -326,6 +397,7 @@ Older evaluations remain in `bench-results.json`; the latest successful rerun is
 - Workflow command: `cargo build --bin rivet-engine && pnpm --dir rivetkit-typescript/packages/rivetkit-native run build:force && setsid env RUST_BACKTRACE=full RUST_LOG='opentelemetry_sdk=off,opentelemetry-otlp=info,tower::buffer::worker=info,debug' RUST_LOG_TARGET=1 ./target/debug/rivet-engine start >/tmp/sqlite-manual-engine.log 2>&1 < /dev/null & BENCH_OUTPUT=json pnpm --dir examples/sqlite-raw exec tsx scripts/bench-large-insert.ts -- --json`
 - Benchmark command: `BENCH_OUTPUT=json RIVET_ENDPOINT=http://127.0.0.1:6420 pnpm --dir examples/sqlite-raw exec tsx scripts/bench-large-insert.ts -- --json`
 - Endpoint: `http://127.0.0.1:6420`
+- Runner mode: `inline`
 - Fresh engine start: `yes`
 - Engine log: `/tmp/sqlite-manual-engine.log`
 - Payload: `10 MiB`

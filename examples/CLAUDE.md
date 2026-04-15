@@ -2,6 +2,14 @@
 
 - Follow these guidelines when creating and maintaining examples in this repository.
 
+## SQLite Benchmarks
+
+- Run `examples/sqlite-raw` `bench:record --fresh-engine` with `RUST_LOG=error` so the engine child stays quiet while the recorder still saves `/tmp/sqlite-raw-bench-engine.log` for debugging.
+- Keep `examples/sqlite-raw/scripts/run-benchmark.ts` backward-compatible with older `bench-results.json` runs by treating newly added telemetry fields as optional in the renderer.
+- In `examples/sqlite-raw/scripts/bench-large-insert.ts`, keep readiness retries pinned to one `getOrCreate` key and set `disableMetadataLookup: true` for known local endpoints, or warmup retries will keep cold-starting new actors instead of waiting for the same one.
+- For pegboard-backed sqlite benchmarks, start `examples/sqlite-raw/src/runner.ts` with `registry.startEnvoy()` instead of `src/index.ts`; the serverful entrypoint does not exercise the remote storage path cleanly.
+- Normalize the `rivet_` Prometheus prefix in sqlite benchmark scrapers before matching metric names, or remote server telemetry will look falsely zero.
+
 ## README Format
 
 - All example READMEs must follow `.claude/resources/EXAMPLE_TEMPLATE.md` and meet the key requirements below.
@@ -67,6 +75,7 @@ example-name/
 ### Naming Conventions
 
 - Actor definitions go in `src/actors.ts`
+- When scripts or tests need a registry without side effects, export it from a non-autostart module such as `src/registry.ts` and keep the entrypoint responsible for calling `start()`.
 - Server entry point is always `src/server.ts`
 - Frontend entry is `frontend/main.tsx` with main component in `frontend/App.tsx`
 - Test files use `.test.ts` extension in `tests/` directory

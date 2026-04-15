@@ -18,6 +18,11 @@ const DEFAULT_READY_TIMEOUT_MS = Number(
 const DEFAULT_READY_ATTEMPT_TIMEOUT_MS = Number(
 	process.env.BENCH_READY_ATTEMPT_TIMEOUT_MS ?? "60000",
 );
+const DEFAULT_REMOTE_PROBE_TIMEOUT_MS = Number(
+	process.env.BENCH_REMOTE_PROBE_TIMEOUT_MS ??
+		process.env.BENCH_READY_ATTEMPT_TIMEOUT_MS ??
+		"60000",
+);
 const DEFAULT_READY_RETRY_MS = Number(
 	process.env.BENCH_READY_RETRY_MS ?? "500",
 );
@@ -32,6 +37,9 @@ const DEFAULT_METRICS_ENDPOINT =
 	deriveMetricsEndpoint(DEFAULT_ENDPOINT);
 const REQUIRE_SERVER_TELEMETRY =
 	process.env.BENCH_REQUIRE_SERVER_TELEMETRY === "1";
+const BENCH_RUNNER_MODE = parseRunnerMode(
+	process.env.BENCH_RUNNER_MODE ?? "inline",
+);
 const JSON_OUTPUT =
 	process.argv.includes("--json") || process.env.BENCH_OUTPUT === "json";
 const DEBUG_OUTPUT = process.env.BENCH_DEBUG === "1";
@@ -90,6 +98,7 @@ interface SqliteServerTelemetry {
 interface LargeInsertBenchmarkResult {
 	endpoint: string;
 	metricsEndpoint: string;
+	runnerMode: "inline" | "remote";
 	payloadMiB: number;
 	totalBytes: number;
 	rowCount: number;
@@ -113,6 +122,16 @@ function formatBytes(bytes: number): string {
 	return `${mb.toFixed(2)} MiB`;
 }
 
+function parseRunnerMode(value: string): "inline" | "remote" {
+	if (value === "inline" || value === "remote") {
+		return value;
+	}
+
+	throw new Error(
+		`Unsupported BENCH_RUNNER_MODE "${value}". Expected "inline" or "remote".`,
+	);
+}
+
 type MetricsSnapshot = Map<string, number>;
 
 const SQLITE_METRIC_NAMES = new Set([
@@ -124,6 +143,10 @@ const SQLITE_METRIC_NAMES = new Set([
 	"actor_kv_sqlite_storage_clear_subspace_total",
 	"actor_kv_sqlite_storage_validation_total",
 ]);
+
+function normalizeMetricName(name: string): string {
+	return name.startsWith("rivet_") ? name.slice("rivet_".length) : name;
+}
 
 function deriveMetricsEndpoint(endpoint: string): string {
 	const url = new URL(endpoint.endsWith("/") ? endpoint : `${endpoint}/`);
@@ -180,7 +203,8 @@ function parsePrometheusMetrics(text: string): MetricsSnapshot {
 			continue;
 		}
 
-		const [, name, rawLabels = "", rawValue] = match;
+		const [, rawName, rawLabels = "", rawValue] = match;
+		const name = normalizeMetricName(rawName);
 		if (!SQLITE_METRIC_NAMES.has(name)) {
 			continue;
 		}
@@ -540,6 +564,24 @@ function buildServerTelemetry(
 	};
 }
 
+function assertRemoteServerTelemetry(
+	telemetry: SqliteServerTelemetry | undefined,
+): SqliteServerTelemetry {
+	if (!telemetry) {
+		throw new Error(
+			"Remote benchmark mode requires server telemetry, but no metrics delta was captured.",
+		);
+	}
+
+	if (telemetry.writes.requestCount <= 0) {
+		throw new Error(
+			"Remote benchmark mode expected non-zero server write telemetry, but the write request count stayed at zero.",
+		);
+	}
+
+	return telemetry;
+}
+
 function runNativeInsert(
 	totalBytes: number,
 	rowCount: number,
@@ -601,15 +643,19 @@ async function runLargeInsertBenchmark(): Promise<LargeInsertBenchmarkResult> {
 	const totalBytes = DEFAULT_MB * 1024 * 1024;
 	const rowCount = DEFAULT_ROWS;
 
-	registry.config.noWelcome = true;
-	registry.config.logging = {
-		...registry.config.logging,
-		level: DEBUG_OUTPUT ? "debug" : "error",
-	};
-	debug("starting registry");
-	registry.start();
-	debug("waiting for startup grace", { ms: DEFAULT_STARTUP_GRACE_MS });
-	await sleep(DEFAULT_STARTUP_GRACE_MS);
+	if (BENCH_RUNNER_MODE === "inline") {
+		registry.config.noWelcome = true;
+		registry.config.logging = {
+			...registry.config.logging,
+			level: DEBUG_OUTPUT ? "debug" : "error",
+		};
+		debug("starting inline registry");
+		registry.start();
+		debug("waiting for startup grace", { ms: DEFAULT_STARTUP_GRACE_MS });
+		await sleep(DEFAULT_STARTUP_GRACE_MS);
+	} else {
+		debug("skipping inline registry start for remote runner mode");
+	}
 
 	const client = createClient<typeof registry>({
 		endpoint: DEFAULT_ENDPOINT,
@@ -631,8 +677,28 @@ async function runLargeInsertBenchmark(): Promise<LargeInsertBenchmarkResult> {
 		rowCount,
 	);
 	const endToEndElapsedMs = performance.now() - endToEndStart;
+	if (BENCH_RUNNER_MODE === "remote") {
+		debug("running remote storage probe", { label });
+		await actor.action({
+			name: "benchExerciseStorage",
+			args: [label],
+			signal: AbortSignal.timeout(DEFAULT_REMOTE_PROBE_TIMEOUT_MS),
+		});
+	}
 	debug("fetching metrics after benchmark");
 	const metricsAfter = await fetchMetricsSnapshot(DEFAULT_METRICS_ENDPOINT);
+	const serverTelemetry =
+		metricsBefore && metricsAfter
+			? buildServerTelemetry(
+					metricsBefore,
+					metricsAfter,
+					DEFAULT_METRICS_ENDPOINT,
+				)
+			: undefined;
+	const resolvedServerTelemetry =
+		BENCH_RUNNER_MODE === "remote"
+			? assertRemoteServerTelemetry(serverTelemetry)
+			: serverTelemetry;
 
 	debug("running native insert comparison");
 	const nativeResult = runNativeInsert(totalBytes, rowCount);
@@ -640,19 +706,13 @@ async function runLargeInsertBenchmark(): Promise<LargeInsertBenchmarkResult> {
 	return {
 		endpoint: DEFAULT_ENDPOINT,
 		metricsEndpoint: DEFAULT_METRICS_ENDPOINT,
+		runnerMode: BENCH_RUNNER_MODE,
 		payloadMiB: DEFAULT_MB,
 		totalBytes,
 		rowCount,
 		actor: actorResult,
 		native: nativeResult,
-		serverTelemetry:
-			metricsBefore && metricsAfter
-				? buildServerTelemetry(
-						metricsBefore,
-						metricsAfter,
-						DEFAULT_METRICS_ENDPOINT,
-					)
-				: undefined,
+		serverTelemetry: resolvedServerTelemetry,
 		delta: {
 			endToEndElapsedMs,
 			overheadOutsideDbInsertMs:
@@ -678,6 +738,7 @@ async function main() {
 	);
 	console.log(`Endpoint: ${result.endpoint}`);
 	console.log(`Metrics endpoint: ${result.metricsEndpoint}`);
+	console.log(`Runner mode: ${result.runnerMode}`);
 
 	console.log("");
 	console.log("RivetKit actor path");

@@ -17,6 +17,8 @@
 - Keep pegboard-envoy SQLite fast-path fences connection-scoped, and clear the VFS tracker whenever a generic SQLite fallback commit succeeds so stale retries fail closed instead of replaying old page sets.
 - For RocksDB-backed `universaldb` persistence tests, snapshot with `db.checkpoint()` into a child path under a temp dir instead of reopening the live DB path in-process. The live path keeps the RocksDB lock.
 - For envoy mixed-version coverage, test downgrade serialization in `engine/sdks/rust/envoy-protocol/src/versioned.rs` and pre-init fallback behavior in `engine/sdks/rust/envoy-client/src/connection.rs`.
+- For pegboard-backed `examples/sqlite-raw` benchmarks, start `src/runner.ts` with `registry.startEnvoy()` and normalize the `rivet_` Prometheus prefix before matching SQLite storage metrics, or the remote run will look falsely zero.
+- Keep the canonical `--remote-runner` recorder on a tiny payload like `BENCH_REMOTE_MB=0.05` until the 15-second gateway request timeout is addressed; larger remote envelopes time out before the benchmark can finish.
 
 Started: Wed Apr 15 04:03:14 AM PDT 2026
 ---
@@ -161,4 +163,13 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - The recorded outcome is still a real win over Phase 0: Final improved actor insert from `15875.9ms` to `1775.8ms` (`-88.8%`), actor verify from `23848.9ms` to `5942.6ms` (`-75.1%`), and end-to-end latency from `40000.7ms` to `7840.1ms` (`-80.4%`).
   - A final run that is materially worse than the immediately prior fast-path baseline is not "close enough." Treat it as unfinished review work and write a follow-up story until the variance or regression is explained.
   - Zero pegboard telemetry in the shared phase log is expected on the current local benchmark path, so remote-path claims still need a pegboard-backed benchmark rather than more hand-waving.
+---
+## 2026-04-15 10:49:20 PDT - US-017
+- Added a pegboard-backed remote sqlite benchmark path by introducing `examples/sqlite-raw/src/runner.ts`, teaching `bench:record` about `--remote-runner`, and splitting the remote run log out from the existing phase summary.
+- Fixed the benchmark harness to normalize the `rivet_` Prometheus metric prefix, recorded a fresh remote benchmark in `bench-results.json`, and regenerated `BENCH_RESULTS.md` with the new remote section.
+- Files changed: `examples/AGENTS.md`, `examples/sqlite-raw/BENCH_RESULTS.md`, `examples/sqlite-raw/README.md`, `examples/sqlite-raw/bench-results.json`, `examples/sqlite-raw/scripts/bench-large-insert.ts`, `examples/sqlite-raw/scripts/run-benchmark.ts`, `examples/sqlite-raw/src/registry.ts`, `examples/sqlite-raw/src/runner.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `examples/sqlite-raw/src/index.ts` still starts the serverful runtime. Remote benchmark coverage has to spawn `src/runner.ts` so the harness talks to a real envoy-backed runner instead.
+  - The canonical remote recorder now defaults to `BENCH_MB=0.05` because the current gateway request timeout is 15 seconds. Bigger remote payloads need timeout work before they are trustworthy.
+  - Pegboard sqlite metrics are exported as `rivet_actor_kv_sqlite_*`. Normalize that prefix in the scraper before matching metric names or the remote benchmark will report fake zeroes.
 ---
