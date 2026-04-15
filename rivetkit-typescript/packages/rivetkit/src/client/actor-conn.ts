@@ -1,5 +1,5 @@
 import invariant from "invariant";
-import pRetry from "p-retry";
+import pRetry, { AbortError } from "p-retry";
 import type { AnyActorDefinition } from "@/actor/definition";
 import { PATH_CONNECT } from "@/common/actor-router-consts";
 import type * as protocol from "@/common/client-protocol";
@@ -44,6 +44,7 @@ import {
 } from "./actor-query";
 import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
 import * as errors from "./errors";
+import { isRetryableLifecycleReconnectSignal } from "./lifecycle-errors";
 import { logger } from "./log";
 import {
 	createQueueSender,
@@ -441,7 +442,11 @@ export class ActorConnRaw {
 			// Cancel retry if aborted
 			signal: this.#abortController.signal,
 		}).catch((err) => {
-			if ((err as Error).name === "AbortError") {
+			if (
+				err instanceof AbortError ||
+				(err as Error).name === "AbortError" ||
+				!this.#shouldRetryConnectionOpenError(err)
+			) {
 				logger().info({ msg: "connection retry aborted" });
 			} else {
 				logger().error({
@@ -468,9 +473,49 @@ export class ActorConnRaw {
 
 			// Wait for result
 			await this.#onOpenPromise.promise;
+		} catch (error) {
+			if (this.#shouldRetryConnectionOpenError(error)) {
+				throw error;
+			}
+
+			const actorError =
+				error instanceof errors.ActorError
+					? error
+					: new errors.ActorError(
+							"client",
+							"connection_open_failed",
+							`Failed to open connection: ${stringifyError(error)}`,
+							{ error: stringifyError(error) },
+						);
+
+			this.#clearQueuedMessages();
+			this.#rejectPendingPromises(actorError, false);
+			this.#dispatchActorError(actorError);
+			this.#setConnStatus("idle");
+
+			throw new AbortError(
+				error instanceof Error
+					? error
+					: new Error(stringifyError(error)),
+			);
 		} finally {
 			this.#onOpenPromise = undefined;
 		}
+	}
+
+	#shouldRetryConnectionOpenError(error: unknown): boolean {
+		if (error instanceof errors.ActorConnDisposed) {
+			return false;
+		}
+
+		if (
+			error instanceof errors.ActorError &&
+			this.#shouldReconnectForStaleActor(error.group, error.code)
+		) {
+			return true;
+		}
+
+		return isRetryableLifecycleReconnectSignal(error);
 	}
 
 	#clearQueuedMessages() {

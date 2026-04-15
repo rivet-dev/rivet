@@ -1451,9 +1451,11 @@ export class EngineActorDriver implements ActorDriver {
 				attachMessageListener();
 			}
 
-			wsHandler.onOpen(event, wsContext);
-
+			// Attach close and error listeners before onOpen so an actor that
+			// immediately rejects the connection does not lose its close event.
 			attachPostOpenListeners();
+
+			wsHandler.onOpen(event, wsContext);
 		});
 
 		if (!isRawWebSocketPath) {
