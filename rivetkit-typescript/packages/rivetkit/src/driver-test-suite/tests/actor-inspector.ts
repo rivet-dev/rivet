@@ -15,6 +15,8 @@ function buildInspectorUrl(
 	return url.toString();
 }
 
+// TODO(RVT-6193): Sleep and wake routing should hide this transient lifecycle
+// error from callers instead of forcing tests to special case it.
 function isActorStoppingDbError(error: unknown): boolean {
 	return (
 		error instanceof Error &&
@@ -418,6 +420,8 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 					if (!isActorStoppingDbError(error)) {
 						throw error;
 					}
+					// TODO(RVT-6193): This retry delay should not be needed.
+					// The request should wait for the next ready actor generation.
 					await waitFor(driverTestConfig, 25);
 				}
 			}

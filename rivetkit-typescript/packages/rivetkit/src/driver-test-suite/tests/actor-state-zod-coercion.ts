@@ -19,6 +19,8 @@ export function runActorStateZodCoercionTests(
 
 			// Sleep and wake
 			await actor.triggerSleep();
+			// TODO(RVT-6193): This fixed delay should not be needed.
+			// The next request should wait for the woken actor generation.
 			await waitFor(driverTestConfig, SLEEP_WAIT_MS);
 
 			const state = await actor.getState();
@@ -49,6 +51,8 @@ export function runActorStateZodCoercionTests(
 
 			// Sleep
 			await actor.triggerSleep();
+			// TODO(RVT-6193): This fixed delay should not be needed.
+			// The next request should wait for the woken actor generation.
 			await waitFor(driverTestConfig, SLEEP_WAIT_MS);
 
 			// Wake and verify Zod parse preserved values

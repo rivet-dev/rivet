@@ -91,7 +91,8 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 			// Trigger sleep
 			await sleepActor.triggerSleep();
 
-			// HACK: Wait for sleep to finish in background
+			// TODO(RVT-6193): This fixed delay should not be needed.
+			// The next request should wait for the woken actor generation.
 			await waitFor(driverTestConfig, 250);
 
 			// Get sleep count after restore

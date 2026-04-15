@@ -5,6 +5,9 @@ import { setupDriverTest, waitFor } from "../utils";
 
 const HIBERNATABLE_ACK_SETTLE_TIMEOUT_MS = 12_000;
 
+// TODO(RVT-6193): Several tests below use fixed waitFor windows around
+// hibernation handoff. Those waits should go away once requests block until
+// the next ready actor generation instead of probing shutdown timing.
 async function waitForJsonMessage(
 	ws: WebSocket,
 	timeoutMs: number,

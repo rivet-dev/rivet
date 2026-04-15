@@ -7,6 +7,8 @@ import {
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
+// TODO(RVT-6193): Sleep and wake routing should hide this transient lifecycle
+// error from callers instead of forcing tests to special case it.
 function isActorStoppingConnectionError(error: unknown): boolean {
 	return (
 		error instanceof Error &&
@@ -484,6 +486,8 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 				expect(state.wakeCount).toBe(1);
 
 				await actor.triggerSleep();
+				// TODO(RVT-6193): This fixed delay should not be needed.
+				// The follow up request should wait for the next ready generation.
 				await waitFor(driverTestConfig, 250);
 
 				let resumedState = await actor.getErrorState();

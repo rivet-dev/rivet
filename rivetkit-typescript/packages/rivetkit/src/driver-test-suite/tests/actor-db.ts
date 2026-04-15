@@ -33,6 +33,8 @@ const HOT_ROW_UPDATES = 240;
 const INTEGRITY_SEED_COUNT = 64;
 const INTEGRITY_CHURN_COUNT = 120;
 
+// TODO(RVT-6193): Sleep and wake routing should hide this transient lifecycle
+// error from callers instead of forcing tests to special case it.
 function isActorStoppingDbError(error: unknown): boolean {
 	return (
 		error instanceof Error &&
@@ -171,6 +173,9 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 
 					for (let i = 0; i < 3; i++) {
 						await actor.triggerSleep();
+						// TODO(RVT-6193): This fixed delay should not be needed.
+						// Requests after sleep should wait for the next ready
+						// actor generation instead of probing the handoff window.
 						await waitFor(driverTestConfig, SLEEP_WAIT_MS);
 
 						let countAfterWake = -1;
@@ -476,6 +481,8 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 					);
 
 					await actor.triggerSleep();
+					// TODO(RVT-6193): This fixed delay should not be needed.
+					// The post sleep request should route once the actor is ready.
 					await waitFor(driverTestConfig, SLEEP_WAIT_MS + 100);
 					expect((await actor.integrityCheck()).toLowerCase()).toBe(
 						"ok",

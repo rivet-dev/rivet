@@ -3,6 +3,9 @@ import { HIBERNATION_SLEEP_TIMEOUT } from "../../../fixtures/driver-test-suite/h
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
+// TODO(RVT-6193): Several tests below use fixed waitFor windows around
+// hibernation handoff. Those waits should go away once requests block until
+// the next ready actor generation instead of probing shutdown timing.
 export function runActorConnHibernationTests(
 	driverTestConfig: DriverTestConfig,
 ) {

@@ -64,6 +64,9 @@ async function waitForConnected(
 	);
 }
 
+// TODO(RVT-6193): Several tests below use fixed waitFor windows around sleep
+// and wake handoff. Those waits should go away once requests block until the
+// next ready actor generation instead of probing shutdown timing.
 export function runActorSleepDbTests(driverTestConfig: DriverTestConfig) {
 	const describeSleepDbTests = driverTestConfig.skip?.sleep
 		? describe.skip
