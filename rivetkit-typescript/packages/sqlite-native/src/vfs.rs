@@ -719,10 +719,23 @@ impl VfsContext {
 
 // MARK: File State
 
+struct AtomicWriteSnapshot {
+	file_size: i64,
+	meta_dirty: bool,
+	dirty_buffer: BTreeMap<u32, Vec<u8>>,
+	pending_delete_start: Option<u32>,
+}
+
+struct BufferedFlushResult {
+	dirty_page_count: u64,
+	dirty_buffer_bytes: u64,
+}
+
 struct KvFileState {
 	batch_mode: bool,
 	dirty_buffer: BTreeMap<u32, Vec<u8>>,
-	saved_file_size: i64,
+	pending_delete_start: Option<u32>,
+	atomic_snapshot: Option<AtomicWriteSnapshot>,
 	/// Read cache: maps chunk keys to their data. Populated on KV gets,
 	/// updated on writes, cleared on truncate/delete. This avoids
 	/// redundant KV round-trips for pages SQLite reads multiple times.
@@ -734,7 +747,8 @@ impl KvFileState {
 		Self {
 			batch_mode: false,
 			dirty_buffer: BTreeMap::new(),
-			saved_file_size: 0,
+			pending_delete_start: None,
+			atomic_snapshot: None,
 			read_cache: read_cache_enabled.then(HashMap::new),
 		}
 	}
@@ -792,20 +806,153 @@ fn split_entries(entries: Vec<(Vec<u8>, Vec<u8>)>) -> (Vec<Vec<u8>>, Vec<Vec<u8>
 	(keys, values)
 }
 
+fn chunk_is_logically_deleted(state: &KvFileState, chunk_idx: u32) -> bool {
+	state
+		.pending_delete_start
+		.map(|start| chunk_idx >= start)
+		.unwrap_or(false)
+}
+
+fn logical_chunk_len(file: &KvFile, state: &KvFileState, chunk_idx: u32) -> usize {
+	if let Some(buffered) = state.dirty_buffer.get(&chunk_idx) {
+		return buffered.len();
+	}
+	if chunk_is_logically_deleted(state, chunk_idx) {
+		return 0;
+	}
+
+	let chunk_offset = chunk_idx as usize * kv::CHUNK_SIZE;
+	let file_size = file.size.max(0) as usize;
+	if file_size <= chunk_offset {
+		0
+	} else {
+		std::cmp::min(kv::CHUNK_SIZE, file_size - chunk_offset)
+	}
+}
+
+fn trim_read_cache_for_truncate(file: &KvFile, state: &mut KvFileState, delete_start_chunk: u32) {
+	if let Some(read_cache) = state.read_cache.as_mut() {
+		read_cache.retain(|key, _| {
+			if key.len() == 8 && key[3] == file.file_tag {
+				let chunk_idx = u32::from_be_bytes([key[4], key[5], key[6], key[7]]);
+				chunk_idx < delete_start_chunk
+			} else {
+				true
+			}
+		});
+	}
+}
+
+fn load_visible_chunk(
+	file: &KvFile,
+	state: &KvFileState,
+	ctx: &VfsContext,
+	chunk_idx: u32,
+) -> Result<Option<Vec<u8>>, String> {
+	if let Some(buffered) = state.dirty_buffer.get(&chunk_idx) {
+		return Ok(Some(buffered.clone()));
+	}
+	if chunk_is_logically_deleted(state, chunk_idx) {
+		return Ok(None);
+	}
+
+	let chunk_key = kv::get_chunk_key(file.file_tag, chunk_idx);
+	if let Some(read_cache) = state.read_cache.as_ref() {
+		if let Some(cached) = read_cache.get(chunk_key.as_slice()) {
+			return Ok(Some(cached.clone()));
+		}
+	}
+
+	let resp = ctx.kv_get(vec![chunk_key.to_vec()])?;
+	let value_map = build_value_map(&resp);
+	Ok(value_map
+		.get(chunk_key.as_slice())
+		.map(|value| value.to_vec()))
+}
+
+fn flush_buffered_file(
+	file: &mut KvFile,
+	state: &mut KvFileState,
+	ctx: &VfsContext,
+) -> Result<BufferedFlushResult, String> {
+	let dirty_page_count = state.dirty_buffer.len() as u64;
+	let dirty_buffer_bytes = state
+		.dirty_buffer
+		.values()
+		.map(|value| value.len() as u64)
+		.sum::<u64>();
+
+	if let Some(delete_start_chunk) = state.pending_delete_start {
+		ctx.kv_delete_range(
+			kv::get_chunk_key(file.file_tag, delete_start_chunk).to_vec(),
+			kv::get_chunk_key_range_end(file.file_tag).to_vec(),
+		)?;
+	}
+
+	let flushed_entries: Vec<_> = state
+		.dirty_buffer
+		.iter()
+		.map(|(chunk_index, data)| {
+			(
+				kv::get_chunk_key(file.file_tag, *chunk_index).to_vec(),
+				data.clone(),
+			)
+		})
+		.collect();
+	for chunk in flushed_entries.chunks(KV_MAX_BATCH_KEYS) {
+		let (keys, values) = split_entries(chunk.to_vec());
+		ctx.kv_put(keys, values)?;
+	}
+
+	if file.meta_dirty {
+		ctx.kv_put(
+			vec![file.meta_key.to_vec()],
+			vec![encode_file_meta(file.size)],
+		)?;
+	}
+
+	if let Some(read_cache) = state.read_cache.as_mut() {
+		if let Some(delete_start_chunk) = state.pending_delete_start {
+			read_cache.retain(|key, _| {
+				if key.len() == 8 && key[3] == file.file_tag {
+					let chunk_idx = u32::from_be_bytes([key[4], key[5], key[6], key[7]]);
+					chunk_idx < delete_start_chunk
+				} else {
+					true
+				}
+			});
+		}
+		for (chunk_index, data) in &state.dirty_buffer {
+			let key = kv::get_chunk_key(file.file_tag, *chunk_index);
+			read_cache.insert(key.to_vec(), data.clone());
+		}
+	}
+
+	state.dirty_buffer.clear();
+	state.pending_delete_start = None;
+	file.meta_dirty = false;
+
+	Ok(BufferedFlushResult {
+		dirty_page_count,
+		dirty_buffer_bytes,
+	})
+}
+
 // MARK: IO Callbacks
 
 unsafe extern "C" fn kv_io_close(p_file: *mut sqlite3_file) -> c_int {
 	vfs_catch_unwind!(SQLITE_IOERR, {
 		let file = get_file(p_file);
 		let ctx = &*file.ctx;
+		let state = get_file_state(file.state);
 
 		let result = if file.flags & SQLITE_OPEN_DELETEONCLOSE != 0 {
 			ctx.delete_file(file.file_tag)
-		} else if file.meta_dirty {
-			ctx.kv_put(
-				vec![file.meta_key.to_vec()],
-				vec![encode_file_meta(file.size)],
-			)
+		} else if file.meta_dirty
+			|| state.pending_delete_start.is_some()
+			|| !state.dirty_buffer.is_empty()
+		{
+			flush_buffered_file(file, state, ctx).map(|_| ())
 		} else {
 			Ok(())
 		};
@@ -866,12 +1013,14 @@ unsafe extern "C" fn kv_io_read(
 
 		let mut chunk_keys_to_fetch = Vec::new();
 		let mut buffered_chunks: HashMap<usize, &[u8]> = HashMap::new();
-		// Skip fetching chunks already present in the dirty buffer (batch mode) or read cache.
+		// Skip fetching chunks already present in the dirty buffer or read cache.
 		for chunk_idx in start_chunk..=end_chunk {
-			if state.batch_mode {
-				if state.dirty_buffer.contains_key(&(chunk_idx as u32)) {
-					continue;
-				}
+			if let Some(buffered) = state.dirty_buffer.get(&(chunk_idx as u32)) {
+				buffered_chunks.insert(chunk_idx, buffered.as_slice());
+				continue;
+			}
+			if chunk_is_logically_deleted(state, chunk_idx as u32) {
+				continue;
 			}
 			let key = kv::get_chunk_key(file.file_tag, chunk_idx as u32);
 			if let Some(read_cache) = state.read_cache.as_ref() {
@@ -897,16 +1046,7 @@ unsafe extern "C" fn kv_io_read(
 		let value_map = build_value_map(&resp);
 
 		for chunk_idx in start_chunk..=end_chunk {
-			let chunk_data = if state.batch_mode {
-				state
-					.dirty_buffer
-					.get(&(chunk_idx as u32))
-					.map(|buffered| buffered.as_slice())
-			} else {
-				None
-			}
-			.or_else(|| buffered_chunks.get(&chunk_idx).copied())
-			.or_else(|| {
+			let chunk_data = buffered_chunks.get(&chunk_idx).copied().or_else(|| {
 				let chunk_key = kv::get_chunk_key(file.file_tag, chunk_idx as u32);
 				value_map.get(chunk_key.as_slice()).copied()
 			});
@@ -932,7 +1072,8 @@ unsafe extern "C" fn kv_io_read(
 			}
 		}
 
-		// `resp` is empty when every chunk was served from the dirty buffer or read cache.
+		// `resp` is empty when every chunk was served from the dirty buffer,
+		// logical truncate state, or read cache.
 		// In that case this loop is a no-op.
 		if let Some(read_cache) = state.read_cache.as_mut() {
 			for (key, value) in resp.keys.iter().zip(resp.values.iter()) {
@@ -1001,63 +1142,30 @@ unsafe extern "C" fn kv_io_write(
 		let start_chunk = offset / kv::CHUNK_SIZE;
 		let end_chunk = (offset + write_length - 1) / kv::CHUNK_SIZE;
 
-		{
-			let state = get_file_state(file.state);
-			if state.batch_mode {
-				for chunk_idx in start_chunk..=end_chunk {
-					let chunk_offset = chunk_idx * kv::CHUNK_SIZE;
-					let source_start =
-						std::cmp::max(0isize, chunk_offset as isize - offset as isize) as usize;
-					let source_end =
-						std::cmp::min(write_length, chunk_offset + kv::CHUNK_SIZE - offset);
-					state
-						.dirty_buffer
-						.insert(chunk_idx as u32, data[source_start..source_end].to_vec());
-				}
-
-				let new_size = std::cmp::max(file.size, write_end_offset as i64);
-				if new_size != file.size {
-					file.size = new_size;
-					file.meta_dirty = true;
-				}
-
-				ctx.vfs_metrics
-					.xwrite_buffered_count
-					.fetch_add(1, Ordering::Relaxed);
-				ctx.vfs_metrics
-					.xwrite_buffered_bytes
-					.fetch_add(data.len() as u64, Ordering::Relaxed);
-				ctx.vfs_metrics
-					.xwrite_us
-					.fetch_add(write_start.elapsed().as_micros() as u64, Ordering::Relaxed);
-				return SQLITE_OK;
-			}
-		}
-
 		struct WritePlan {
-			chunk_key: Vec<u8>,
+			chunk_index: u32,
 			chunk_offset: usize,
 			write_start: usize,
 			write_end: usize,
+			buffered_chunk: Option<Vec<u8>>,
 			cached_chunk: Option<Vec<u8>>,
 			existing_chunk_index: Option<usize>,
 		}
 
 		let mut plans = Vec::new();
 		let mut chunk_keys_to_fetch = Vec::new();
+		let state = get_file_state(file.state);
 		for chunk_idx in start_chunk..=end_chunk {
 			let chunk_offset = chunk_idx * kv::CHUNK_SIZE;
 			let write_start = offset.saturating_sub(chunk_offset);
 			let write_end = std::cmp::min(kv::CHUNK_SIZE, offset + write_length - chunk_offset);
-			let existing_bytes_in_chunk = if file.size as usize > chunk_offset {
-				std::cmp::min(kv::CHUNK_SIZE, file.size as usize - chunk_offset)
-			} else {
-				0
-			};
+			let chunk_index = chunk_idx as u32;
+			let buffered_chunk = state.dirty_buffer.get(&chunk_index).cloned();
+			let logically_deleted = chunk_is_logically_deleted(state, chunk_index);
+			let existing_bytes_in_chunk = logical_chunk_len(file, state, chunk_index);
 			let needs_existing = write_start > 0 || existing_bytes_in_chunk > write_end;
-			let chunk_key = kv::get_chunk_key(file.file_tag, chunk_idx as u32).to_vec();
-			let cached_chunk = if needs_existing && ctx.read_cache_enabled {
-				let state = get_file_state(file.state);
+			let chunk_key = kv::get_chunk_key(file.file_tag, chunk_index).to_vec();
+			let cached_chunk = if needs_existing && buffered_chunk.is_none() && !logically_deleted {
 				state
 					.read_cache
 					.as_ref()
@@ -1065,7 +1173,11 @@ unsafe extern "C" fn kv_io_write(
 			} else {
 				None
 			};
-			let existing_chunk_index = if needs_existing && cached_chunk.is_none() {
+			let existing_chunk_index = if needs_existing
+				&& buffered_chunk.is_none()
+				&& cached_chunk.is_none()
+				&& !logically_deleted
+			{
 				let idx = chunk_keys_to_fetch.len();
 				chunk_keys_to_fetch.push(chunk_key.clone());
 				Some(idx)
@@ -1074,10 +1186,11 @@ unsafe extern "C" fn kv_io_write(
 			};
 
 			plans.push(WritePlan {
-				chunk_key,
+				chunk_index,
 				chunk_offset,
 				write_start,
 				write_end,
+				buffered_chunk,
 				cached_chunk,
 				existing_chunk_index,
 			});
@@ -1098,13 +1211,17 @@ unsafe extern "C" fn kv_io_write(
 			}
 		};
 
-		let mut entries_to_write = Vec::with_capacity(plans.len() + 1);
+		let mut buffered_writes = Vec::with_capacity(plans.len());
 		for plan in &plans {
-			let existing_chunk = plan.cached_chunk.as_deref().or_else(|| {
-				plan.existing_chunk_index
-					.and_then(|idx| existing_chunks.get(idx))
-					.and_then(|value| value.as_deref())
-			});
+			let existing_chunk = plan
+				.buffered_chunk
+				.as_deref()
+				.or(plan.cached_chunk.as_deref())
+				.or_else(|| {
+					plan.existing_chunk_index
+						.and_then(|idx| existing_chunks.get(idx))
+						.and_then(|value| value.as_deref())
+				});
 
 			let mut new_chunk = if let Some(existing_chunk) = existing_chunk {
 				let mut chunk = vec![0u8; std::cmp::max(existing_chunk.len(), plan.write_end)];
@@ -1119,43 +1236,25 @@ unsafe extern "C" fn kv_io_write(
 			new_chunk[plan.write_start..plan.write_end]
 				.copy_from_slice(&data[source_start..source_end]);
 
-			entries_to_write.push((plan.chunk_key.clone(), new_chunk));
+			buffered_writes.push((plan.chunk_index, new_chunk));
 		}
 
-		let previous_size = file.size;
-		let previous_meta_dirty = file.meta_dirty;
 		let new_size = std::cmp::max(file.size, write_end_offset as i64);
-		if new_size != previous_size {
+		if new_size != file.size {
 			file.size = new_size;
 			file.meta_dirty = true;
 		}
-		if file.meta_dirty {
-			entries_to_write.push((file.meta_key.to_vec(), encode_file_meta(file.size)));
+
+		for (chunk_index, new_chunk) in buffered_writes {
+			state.dirty_buffer.insert(chunk_index, new_chunk);
 		}
 
-		if let Some(read_cache) = get_file_state(file.state).read_cache.as_mut() {
-			for (key, value) in &entries_to_write {
-				// Only cache chunk keys here. Metadata keys are read on open/access
-				// and should not be mixed into the per-page cache.
-				if key.len() == 8 {
-					read_cache.insert(key.clone(), value.clone());
-				}
-			}
-		}
-
-		let (keys, values) = split_entries(entries_to_write);
 		ctx.vfs_metrics
-			.xwrite_immediate_kv_put_count
+			.xwrite_buffered_count
 			.fetch_add(1, Ordering::Relaxed);
 		ctx.vfs_metrics
-			.xwrite_immediate_kv_put_bytes
+			.xwrite_buffered_bytes
 			.fetch_add(data.len() as u64, Ordering::Relaxed);
-		if ctx.kv_put(keys, values).is_err() {
-			file.size = previous_size;
-			file.meta_dirty = previous_meta_dirty;
-			return SQLITE_IOERR_WRITE;
-		}
-		file.meta_dirty = false;
 
 		ctx.vfs_metrics
 			.xwrite_us
@@ -1168,6 +1267,7 @@ unsafe extern "C" fn kv_io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int
 	vfs_catch_unwind!(SQLITE_IOERR_TRUNCATE, {
 		let file = get_file(p_file);
 		let ctx = &*file.ctx;
+		let state = get_file_state(file.state);
 
 		if size < 0 || size as u64 > kv::MAX_FILE_SIZE {
 			return SQLITE_IOERR_TRUNCATE;
@@ -1175,103 +1275,43 @@ unsafe extern "C" fn kv_io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int
 
 		if size >= file.size {
 			if size > file.size {
-				let previous_size = file.size;
-				let previous_meta_dirty = file.meta_dirty;
 				file.size = size;
 				file.meta_dirty = true;
-				if ctx
-					.kv_put(
-						vec![file.meta_key.to_vec()],
-						vec![encode_file_meta(file.size)],
-					)
-					.is_err()
-				{
-					file.size = previous_size;
-					file.meta_dirty = previous_meta_dirty;
-					return SQLITE_IOERR_TRUNCATE;
-				}
-				file.meta_dirty = false;
 			}
 			return SQLITE_OK;
 		}
 
-		let last_chunk_to_keep = if size == 0 {
-			-1
-		} else {
-			(size - 1) / kv::CHUNK_SIZE as i64
-		};
-		let last_existing_chunk = if file.size == 0 {
-			-1
-		} else {
-			(file.size - 1) / kv::CHUNK_SIZE as i64
-		};
-
-		if let Some(read_cache) = get_file_state(file.state).read_cache.as_mut() {
-			// The read cache stores only chunk keys. Keep entries strictly before
-			// the truncation boundary so reads cannot serve bytes from removed chunks.
-			read_cache.retain(|key, _| {
-				// Chunk keys are 8 bytes: [prefix, version, CHUNK_PREFIX, file_tag, idx_be32]
-				if key.len() == 8 && key[3] == file.file_tag {
-					let chunk_idx = u32::from_be_bytes([key[4], key[5], key[6], key[7]]);
-					(chunk_idx as i64) <= last_chunk_to_keep
-				} else {
-					true
+		let delete_start_chunk = (size as usize / kv::CHUNK_SIZE) as u32;
+		let truncated_tail = if size > 0 && size as usize % kv::CHUNK_SIZE != 0 {
+			let truncated_len = size as usize % kv::CHUNK_SIZE;
+			match load_visible_chunk(file, state, ctx, delete_start_chunk) {
+				Ok(existing_chunk) => {
+					let mut truncated_chunk =
+						existing_chunk.unwrap_or_else(|| vec![0u8; truncated_len]);
+					truncated_chunk.truncate(truncated_len);
+					Some((delete_start_chunk, truncated_chunk))
 				}
-			});
-		}
+				Err(_) => return SQLITE_IOERR_TRUNCATE,
+			}
+		} else {
+			None
+		};
 
-		let previous_size = file.size;
-		let previous_meta_dirty = file.meta_dirty;
+		trim_read_cache_for_truncate(file, state, delete_start_chunk);
+		state
+			.dirty_buffer
+			.retain(|chunk_index, _| *chunk_index < delete_start_chunk);
+		if let Some((chunk_index, truncated_chunk)) = truncated_tail {
+			state.dirty_buffer.insert(chunk_index, truncated_chunk);
+		}
+		state.pending_delete_start = Some(
+			state
+				.pending_delete_start
+				.map(|existing| existing.min(delete_start_chunk))
+				.unwrap_or(delete_start_chunk),
+		);
 		file.size = size;
 		file.meta_dirty = true;
-		if ctx
-			.kv_put(
-				vec![file.meta_key.to_vec()],
-				vec![encode_file_meta(file.size)],
-			)
-			.is_err()
-		{
-			file.size = previous_size;
-			file.meta_dirty = previous_meta_dirty;
-			return SQLITE_IOERR_TRUNCATE;
-		}
-		file.meta_dirty = false;
-
-		if size > 0 && size as usize % kv::CHUNK_SIZE != 0 {
-			let last_chunk_key = kv::get_chunk_key(file.file_tag, last_chunk_to_keep as u32);
-			let resp = match ctx.kv_get(vec![last_chunk_key.to_vec()]) {
-				Ok(resp) => resp,
-				Err(_) => return SQLITE_IOERR_TRUNCATE,
-			};
-			let value_map = build_value_map(&resp);
-			if let Some(last_chunk_data) = value_map.get(last_chunk_key.as_slice()) {
-				let truncated_len = size as usize % kv::CHUNK_SIZE;
-				if last_chunk_data.len() > truncated_len {
-					let truncated_chunk = last_chunk_data[..truncated_len].to_vec();
-					if ctx
-						.kv_put(vec![last_chunk_key.to_vec()], vec![truncated_chunk.clone()])
-						.is_err()
-					{
-						return SQLITE_IOERR_TRUNCATE;
-					}
-					if let Some(read_cache) = get_file_state(file.state).read_cache.as_mut() {
-						read_cache.insert(last_chunk_key.to_vec(), truncated_chunk);
-					}
-				}
-			}
-		}
-
-		if last_chunk_to_keep < last_existing_chunk {
-			if ctx
-				.kv_delete_range(
-					kv::get_chunk_key(file.file_tag, (last_chunk_to_keep + 1) as u32).to_vec(),
-					kv::get_chunk_key_range_end(file.file_tag).to_vec(),
-				)
-				.is_err()
-			{
-				return SQLITE_IOERR_TRUNCATE;
-			}
-		}
 
 		SQLITE_OK
 	})
@@ -1281,9 +1321,11 @@ unsafe extern "C" fn kv_io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_i
 	vfs_catch_unwind!(SQLITE_IOERR_FSYNC, {
 		let file = get_file(p_file);
 		let ctx = &*file.ctx;
+		let state = get_file_state(file.state);
 		let sync_start = std::time::Instant::now();
 		ctx.vfs_metrics.xsync_count.fetch_add(1, Ordering::Relaxed);
-		if !file.meta_dirty {
+		if !file.meta_dirty && state.pending_delete_start.is_none() && state.dirty_buffer.is_empty()
+		{
 			ctx.vfs_metrics
 				.xsync_us
 				.fetch_add(sync_start.elapsed().as_micros() as u64, Ordering::Relaxed);
@@ -1296,19 +1338,12 @@ unsafe extern "C" fn kv_io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_i
 		ctx.vfs_metrics
 			.xsync_metadata_flush_bytes
 			.fetch_add(META_ENCODED_SIZE as u64, Ordering::Relaxed);
-		if ctx
-			.kv_put(
-				vec![file.meta_key.to_vec()],
-				vec![encode_file_meta(file.size)],
-			)
-			.is_err()
-		{
+		if flush_buffered_file(file, state, ctx).is_err() {
 			ctx.vfs_metrics
 				.xsync_us
 				.fetch_add(sync_start.elapsed().as_micros() as u64, Ordering::Relaxed);
 			return SQLITE_IOERR_FSYNC;
 		}
-		file.meta_dirty = false;
 		ctx.vfs_metrics
 			.xsync_us
 			.fetch_add(sync_start.elapsed().as_micros() as u64, Ordering::Relaxed);
@@ -1364,10 +1399,13 @@ unsafe extern "C" fn kv_io_file_control(
 				ctx.vfs_metrics
 					.begin_atomic_count
 					.fetch_add(1, Ordering::Relaxed);
-				state.saved_file_size = file.size;
+				state.atomic_snapshot = Some(AtomicWriteSnapshot {
+					file_size: file.size,
+					meta_dirty: file.meta_dirty,
+					dirty_buffer: state.dirty_buffer.clone(),
+					pending_delete_start: state.pending_delete_start,
+				});
 				state.batch_mode = true;
-				file.meta_dirty = false;
-				state.dirty_buffer.clear();
 				SQLITE_OK
 			}
 			SQLITE_FCNTL_COMMIT_ATOMIC_WRITE => {
@@ -1376,73 +1414,25 @@ unsafe extern "C" fn kv_io_file_control(
 				ctx.vfs_metrics
 					.commit_atomic_attempt_count
 					.fetch_add(1, Ordering::Relaxed);
-				let dirty_page_count = state.dirty_buffer.len() as u64;
-				let dirty_buffer_bytes = state
-					.dirty_buffer
-					.values()
-					.map(|value| value.len() as u64)
-					.sum::<u64>();
-				let max_dirty_pages = if file.meta_dirty {
-					KV_MAX_BATCH_KEYS - 1
-				} else {
-					KV_MAX_BATCH_KEYS
-				};
-
-				if state.dirty_buffer.len() > max_dirty_pages {
-					ctx.vfs_metrics
-						.commit_atomic_batch_cap_failure_count
-						.fetch_add(1, Ordering::Relaxed);
-					ctx.vfs_metrics
-						.commit_atomic_us
-						.fetch_add(commit_start.elapsed().as_micros() as u64, Ordering::Relaxed);
-					state.dirty_buffer.clear();
-					file.size = state.saved_file_size;
-					file.meta_dirty = false;
-					state.batch_mode = false;
-					return SQLITE_IOERR;
-				}
-
-				let mut entries = Vec::with_capacity(state.dirty_buffer.len() + 1);
-				for (chunk_index, data) in &state.dirty_buffer {
-					entries.push((
-						kv::get_chunk_key(file.file_tag, *chunk_index).to_vec(),
-						data.clone(),
-					));
-				}
-				if file.meta_dirty {
-					entries.push((file.meta_key.to_vec(), encode_file_meta(file.size)));
-				}
-
-				let (keys, values) = split_entries(entries);
-				if ctx.kv_put(keys, values).is_err() {
-					ctx.vfs_metrics
-						.commit_atomic_kv_put_failure_count
-						.fetch_add(1, Ordering::Relaxed);
-					ctx.vfs_metrics
-						.commit_atomic_us
-						.fetch_add(commit_start.elapsed().as_micros() as u64, Ordering::Relaxed);
-					state.dirty_buffer.clear();
-					file.size = state.saved_file_size;
-					file.meta_dirty = false;
-					state.batch_mode = false;
-					return SQLITE_IOERR;
-				}
-
-				// Move dirty buffer entries into the read cache so subsequent
-				// reads can serve them without a KV round-trip.
-				let flushed: Vec<_> = std::mem::take(&mut state.dirty_buffer)
-					.into_iter()
-					.collect();
-				if let Some(read_cache) = state.read_cache.as_mut() {
-					// Only chunk pages belong in the read cache. The metadata write above
-					// still goes through KV, but should not be cached as a page.
-					for (chunk_index, data) in flushed {
-						let key = kv::get_chunk_key(file.file_tag, chunk_index);
-						read_cache.insert(key.to_vec(), data);
+				let flush_result = flush_buffered_file(file, state, ctx);
+				let BufferedFlushResult {
+					dirty_page_count,
+					dirty_buffer_bytes,
+				} = match flush_result {
+					Ok(result) => result,
+					Err(_) => {
+						ctx.vfs_metrics
+							.commit_atomic_kv_put_failure_count
+							.fetch_add(1, Ordering::Relaxed);
+						ctx.vfs_metrics.commit_atomic_us.fetch_add(
+							commit_start.elapsed().as_micros() as u64,
+							Ordering::Relaxed,
+						);
+						return SQLITE_IOERR;
 					}
-				}
-				file.meta_dirty = false;
+				};
 				state.batch_mode = false;
+				state.atomic_snapshot = None;
 				ctx.vfs_metrics
 					.commit_atomic_success_count
 					.fetch_add(1, Ordering::Relaxed);
@@ -1466,9 +1456,12 @@ unsafe extern "C" fn kv_io_file_control(
 				ctx.vfs_metrics
 					.rollback_atomic_count
 					.fetch_add(1, Ordering::Relaxed);
-				state.dirty_buffer.clear();
-				file.size = state.saved_file_size;
-				file.meta_dirty = false;
+				if let Some(snapshot) = state.atomic_snapshot.take() {
+					state.dirty_buffer = snapshot.dirty_buffer;
+					state.pending_delete_start = snapshot.pending_delete_start;
+					file.size = snapshot.file_size;
+					file.meta_dirty = snapshot.meta_dirty;
+				}
 				state.batch_mode = false;
 				SQLITE_OK
 			}
@@ -1939,6 +1932,7 @@ pub fn open_database(vfs: KvVfs, file_name: &str) -> Result<NativeDatabase, Stri
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use async_trait::async_trait;
 
 	#[test]
 	fn encode_decode_round_trip() {
@@ -2056,5 +2050,193 @@ mod tests {
 		startup_preload_delete_range(&mut entries, &[2], &[4]);
 
 		assert_eq!(entries, vec![(vec![1], vec![10]), (vec![4], vec![40])]);
+	}
+
+	#[derive(Default)]
+	struct MemoryKv {
+		store: Mutex<BTreeMap<Vec<u8>, Vec<u8>>>,
+	}
+
+	#[async_trait]
+	impl SqliteKv for MemoryKv {
+		async fn batch_get(
+			&self,
+			_actor_id: &str,
+			keys: Vec<Vec<u8>>,
+		) -> Result<KvGetResult, SqliteKvError> {
+			let store = self.store.lock().expect("memory kv mutex poisoned");
+			let mut found_keys = Vec::new();
+			let mut found_values = Vec::new();
+			for key in keys {
+				if let Some(value) = store.get(&key) {
+					found_keys.push(key);
+					found_values.push(value.clone());
+				}
+			}
+			Ok(KvGetResult {
+				keys: found_keys,
+				values: found_values,
+			})
+		}
+
+		async fn batch_put(
+			&self,
+			_actor_id: &str,
+			keys: Vec<Vec<u8>>,
+			values: Vec<Vec<u8>>,
+		) -> Result<(), SqliteKvError> {
+			let mut store = self.store.lock().expect("memory kv mutex poisoned");
+			for (key, value) in keys.into_iter().zip(values.into_iter()) {
+				store.insert(key, value);
+			}
+			Ok(())
+		}
+
+		async fn batch_delete(
+			&self,
+			_actor_id: &str,
+			keys: Vec<Vec<u8>>,
+		) -> Result<(), SqliteKvError> {
+			let mut store = self.store.lock().expect("memory kv mutex poisoned");
+			for key in keys {
+				store.remove(&key);
+			}
+			Ok(())
+		}
+
+		async fn delete_range(
+			&self,
+			_actor_id: &str,
+			start: Vec<u8>,
+			end: Vec<u8>,
+		) -> Result<(), SqliteKvError> {
+			let mut store = self.store.lock().expect("memory kv mutex poisoned");
+			store.retain(|key, _| {
+				key.as_slice() < start.as_slice() || key.as_slice() >= end.as_slice()
+			});
+			Ok(())
+		}
+	}
+
+	fn open_memory_database(
+		file_name: &str,
+	) -> (tokio::runtime::Runtime, Arc<MemoryKv>, NativeDatabase) {
+		let runtime = tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("create tokio runtime");
+		let kv = Arc::new(MemoryKv::default());
+		let vfs = KvVfs::register(
+			&format!("test-vfs-{file_name}"),
+			kv.clone(),
+			file_name.to_string(),
+			runtime.handle().clone(),
+			Vec::new(),
+		)
+		.expect("register test vfs");
+		let db = open_database(vfs, file_name).expect("open test database");
+		(runtime, kv, db)
+	}
+
+	fn exec_sql(db: &NativeDatabase, sql: &str) {
+		let c_sql = CString::new(sql).expect("sql without nul");
+		let rc = unsafe {
+			sqlite3_exec(
+				db.as_ptr(),
+				c_sql.as_ptr(),
+				None,
+				ptr::null_mut(),
+				ptr::null_mut(),
+			)
+		};
+		assert_eq!(rc, SQLITE_OK, "sql failed: {sql}");
+	}
+
+	fn query_single_i64(db: &NativeDatabase, sql: &str) -> i64 {
+		let c_sql = CString::new(sql).expect("sql without nul");
+		let mut stmt = ptr::null_mut();
+		let rc = unsafe {
+			sqlite3_prepare_v2(db.as_ptr(), c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut())
+		};
+		assert_eq!(rc, SQLITE_OK, "prepare failed: {sql}");
+		assert!(!stmt.is_null(), "statement pointer missing for {sql}");
+		let step_rc = unsafe { sqlite3_step(stmt) };
+		assert_eq!(step_rc, SQLITE_ROW, "query returned no row: {sql}");
+		let value = unsafe { sqlite3_column_int64(stmt, 0) };
+		let final_rc = unsafe { sqlite3_finalize(stmt) };
+		assert_eq!(final_rc, SQLITE_OK, "finalize failed: {sql}");
+		value
+	}
+
+	#[test]
+	fn transaction_writes_buffer_until_sync_boundary() {
+		let (_runtime, _kv, db) = open_memory_database("buffered-write.db");
+
+		exec_sql(
+			&db,
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+		);
+		db.reset_vfs_telemetry();
+		exec_sql(&db, "BEGIN;");
+		for idx in 0..64 {
+			let payload = format!("item-{idx}-{}", "x".repeat(512));
+			exec_sql(
+				&db,
+				&format!("INSERT INTO items (payload) VALUES ('{payload}');"),
+			);
+		}
+		exec_sql(&db, "COMMIT;");
+
+		assert_eq!(query_single_i64(&db, "SELECT COUNT(*) FROM items;"), 64);
+
+		let telemetry = db.snapshot_vfs_telemetry();
+		assert!(telemetry.writes.buffered_count > 0);
+		assert!(telemetry.syncs.count > 0);
+		assert!(telemetry.kv.put_count > 0);
+		assert_eq!(telemetry.writes.immediate_kv_put_count, 0);
+	}
+
+	#[test]
+	fn load_visible_chunk_skips_remote_chunks_past_pending_delete_boundary() {
+		let runtime = tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("create tokio runtime");
+		let kv = Arc::new(MemoryKv::default());
+		let stale_chunk = vec![7u8; kv::CHUNK_SIZE];
+		kv.store.lock().expect("memory kv mutex poisoned").insert(
+			kv::get_chunk_key(kv::FILE_TAG_MAIN, 1).to_vec(),
+			stale_chunk,
+		);
+
+		let vfs = KvVfs::register(
+			"test-vfs-logical-delete-read",
+			kv,
+			"logical-delete-read.db".to_string(),
+			runtime.handle().clone(),
+			Vec::new(),
+		)
+		.expect("register test vfs");
+		let ctx = unsafe { &*vfs.ctx_ptr };
+		let state = Box::new(KvFileState::new(false));
+		let state_ref = Box::leak(state);
+		state_ref.pending_delete_start = Some(1);
+		let file = KvFile {
+			base: sqlite3_file {
+				pMethods: ctx.io_methods.as_ref() as *const sqlite3_io_methods,
+			},
+			ctx: ctx as *const VfsContext,
+			state: state_ref as *mut KvFileState,
+			file_tag: kv::FILE_TAG_MAIN,
+			meta_key: kv::get_meta_key(kv::FILE_TAG_MAIN),
+			size: (kv::CHUNK_SIZE * 2) as i64,
+			meta_dirty: true,
+			flags: 0,
+		};
+
+		assert_eq!(
+			load_visible_chunk(&file, state_ref, ctx, 1).expect("load visible chunk"),
+			None
+		);
 	}
 }

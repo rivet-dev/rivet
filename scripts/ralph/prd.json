@@ -79,7 +79,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "This story is only about improving the existing durable buffering behavior. Do not drag protocol changes into it."
     },
     {

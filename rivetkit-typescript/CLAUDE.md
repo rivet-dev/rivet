@@ -6,6 +6,7 @@
 - Keep SQLite runtime code on the native `@rivetkit/rivetkit-native` path. Do not reintroduce WebAssembly SQLite or KV-backed VFS fallbacks.
 - Importing `rivetkit/db` is the explicit opt-in for SQLite. Do not lazily load extra SQLite runtimes from that entrypoint.
 - Core drivers must remain SQLite-agnostic. Any SQLite-specific wiring belongs behind the native database provider boundary.
+- Native SQLite VFS truncate buffering must keep a logical delete boundary for chunks past the pending truncate point so reads and partial writes do not resurrect stale remote pages before the next sync flush.
 
 ## Context Types Sync
 

@@ -4,6 +4,7 @@
 - Use `c.db.resetVfsTelemetry()` and `c.db.snapshotVfsTelemetry()` inside the measured actor action so SQLite benchmark telemetry excludes startup migrations and open-time noise.
 - Scrape pegboard metrics from `RIVET_METRICS_ENDPOINT` or the default `:6430` metrics server immediately before and after `bench:large-insert` so server telemetry lands in the same structured benchmark result as the actor-side VFS telemetry.
 - When an example needs the registry from scripts, split the shared setup into `src/registry.ts` and keep `src/index.ts` as the autostart entrypoint so benchmarks can import the registry without side effects.
+- When native SQLite buffering defers truncates until sync, keep a logical delete boundary like `pending_delete_start` so reads and partial writes treat truncated chunks as missing before the remote `delete_range` flushes.
 
 Started: Wed Apr 15 04:03:14 AM PDT 2026
 ---
@@ -42,4 +43,13 @@ Started: Wed Apr 15 04:03:14 AM PDT 2026
   - Fresh-engine Phase 0 runs can stall on the first actor create, so `bench-large-insert.ts` now gives the registry a startup grace period and retries warmup actor creation before the measured payload write.
   - The benchmark CLI can emit non-JSON noise before the result payload, so `run-benchmark.ts` now extracts the JSON object from stdout instead of assuming the whole stream is parseable.
   - The recorded Phase 0 numbers on commit `78c806c541b8736ec0525c0971fb94af213bf044` were roughly `15.9s` actor insert, `23.8s` actor verify, `40.0s` end-to-end, `35.7ms` native insert, `2589` immediate `kv_put` writes, and `0` batch-cap failures.
+---
+## 2026-04-15 06:13:50 PDT - US-005
+- Implemented durable sync-boundary buffering in the native SQLite VFS so `xWrite` and truncate metadata stay in memory until `xSync`, `COMMIT_ATOMIC_WRITE`, or close instead of doing per-write remote `kv_put`s.
+- Added truncate-aware logical delete handling with `pending_delete_start`, batched sync flushes in `KV_MAX_BATCH_KEYS` chunks, and focused Rust tests covering buffered commit telemetry plus stale-page masking after truncate.
+- Files changed: `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Buffering SQLite writes past a truncate needs a logical delete boundary, not just a smaller `file.size`, or reads and partial overwrites will fetch stale remote pages before the delete-range flush lands.
+  - Flush buffered page batches in chunks of `KV_MAX_BATCH_KEYS` at sync time and write metadata last so large transactions stop dribbling per-page puts without reintroducing the 128-entry cap as an all-or-nothing failure.
+  - `cargo test -p rivetkit-sqlite-native` is the fast correctness gate for native VFS changes and now covers both buffered-write telemetry and truncate masking behavior.
 ---
