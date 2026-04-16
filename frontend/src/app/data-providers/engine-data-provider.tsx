@@ -541,6 +541,43 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
+
+		envoysListQueryOptions(opts: {
+			namespace: string;
+			name?: string;
+			envoyKey?: string | string[];
+		}) {
+			return infiniteQueryOptions({
+				queryKey: [
+					{ namespace: opts.namespace },
+					"envoys",
+					opts.name,
+					opts.envoyKey,
+				] as any,
+				initialPageParam: undefined as string | undefined,
+				enabled: !!opts.namespace,
+				queryFn: async ({ pageParam }) => {
+					const data = await client.envoys.list({
+						namespace: opts.namespace,
+						name: opts.name,
+						limit: RECORDS_PER_PAGE,
+						envoyKey:
+							typeof opts.envoyKey === "string"
+								? opts.envoyKey
+								: opts.envoyKey?.join(","),
+						cursor: pageParam ?? undefined,
+					});
+					return data;
+				},
+				select: (data) => data.pages.flatMap((page) => page.envoys),
+				getNextPageParam: (lastPage) => {
+					if (lastPage.envoys.length < RECORDS_PER_PAGE) {
+						return undefined;
+					}
+					return lastPage.pagination.cursor;
+				},
+			});
+		},
 	};
 
 	return {
@@ -815,6 +852,9 @@ export const createNamespaceContext = ({
 					mightRequireAuth,
 				},
 			});
+		},
+		currentNamespaceEnvoyListQueryOptions() {
+			return dataProvider.envoysListQueryOptions({ namespace });
 		},
 	};
 };

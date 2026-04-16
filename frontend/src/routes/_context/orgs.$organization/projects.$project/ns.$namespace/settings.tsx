@@ -57,6 +57,9 @@ export const Route = createFileRoute(
 				dataProvider.runnersQueryOptions(),
 			),
 			context.queryClient.prefetchInfiniteQuery(
+				dataProvider.currentNamespaceEnvoyListQueryOptions(),
+			),
+			context.queryClient.prefetchInfiniteQuery(
 				dataProvider.datacentersQueryOptions(),
 			),
 			context.queryClient.prefetchQuery(
@@ -193,6 +196,19 @@ function Runners() {
 		refetchInterval: 5000,
 	});
 
+	const {
+		isLoading: isLoadingEnvoys,
+		isError: isErrorEnvoys,
+		data: envoys,
+		hasNextPage: hasNextEnvoysPage,
+		fetchNextPage: fetchNextEnvoysPage,
+	} = useInfiniteQuery({
+		...useEngineCompatDataProvider().currentNamespaceEnvoyListQueryOptions(),
+		refetchInterval: 5000,
+	});
+
+	const allRunners = [...(envoys || []), ...(runners || [])];
+
 	return (
 		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 @6xl:border @6xl:rounded-lg ">
 			<div className="flex gap-2 items-center mb-2 mt-6">
@@ -205,11 +221,18 @@ function Runners() {
 			<div className="max-w-5xl mx-auto">
 				<div className="border rounded-md">
 					<RunnersTable
-						isLoading={isLoading}
-						isError={isError}
-						runners={runners || []}
-						fetchNextPage={fetchNextPage}
-						hasNextPage={hasNextPage}
+						isLoading={isLoading || isLoadingEnvoys}
+						isError={isError || isErrorEnvoys}
+						runners={allRunners || []}
+						fetchNextPage={() => {
+							if (hasNextEnvoysPage) {
+								fetchNextEnvoysPage();
+							}
+							if (hasNextPage) {
+								fetchNextPage();
+							}
+						}}
+						hasNextPage={hasNextPage || hasNextEnvoysPage}
 					/>
 				</div>
 			</div>
