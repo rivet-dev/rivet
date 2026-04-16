@@ -640,7 +640,6 @@ pub struct VfsV2Context {
 	config: VfsV2Config,
 	state: RwLock<VfsV2State>,
 	aux_files: RwLock<BTreeMap<String, Arc<AuxFileState>>>,
-	commit_mutex: Mutex<()>,
 	last_error: Mutex<Option<String>>,
 	commit_atomic_count: AtomicU64,
 	io_methods: Box<sqlite3_io_methods>,
@@ -832,6 +831,10 @@ impl VfsV2State {
 		self.page_size = meta.page_size as usize;
 		self.max_delta_bytes = meta.max_delta_bytes;
 	}
+
+	fn update_read_meta(&mut self, meta: &protocol::SqliteMeta) {
+		self.max_delta_bytes = meta.max_delta_bytes;
+	}
 }
 
 impl VfsV2Context {
@@ -850,7 +853,6 @@ impl VfsV2Context {
 			config: config.clone(),
 			state: RwLock::new(VfsV2State::new(&config, &startup)),
 			aux_files: RwLock::new(BTreeMap::new()),
-			commit_mutex: Mutex::new(()),
 			last_error: Mutex::new(None),
 			commit_atomic_count: AtomicU64::new(0),
 			io_methods: Box::new(io_methods),
@@ -983,12 +985,7 @@ impl VfsV2Context {
 			}
 			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) => {
 				let mut state = self.state.write();
-				let should_update_meta = ok.meta.generation > state.generation
-					|| (ok.meta.generation == state.generation
-						&& ok.meta.head_txid >= state.head_txid);
-				if should_update_meta {
-					state.update_meta(&ok.meta);
-				}
+				state.update_read_meta(&ok.meta);
 				for fetched in ok.pages {
 					if let Some(bytes) = &fetched.bytes {
 						state.page_cache.insert(fetched.pgno, bytes.clone());
@@ -1006,7 +1003,6 @@ impl VfsV2Context {
 	fn flush_dirty_pages(
 		&self,
 	) -> std::result::Result<Option<BufferedCommitOutcome>, CommitBufferError> {
-		let _commit_guard = self.commit_mutex.lock();
 		let request = {
 			let state = self.state.read();
 			if state.dead {
@@ -1059,7 +1055,6 @@ impl VfsV2Context {
 	}
 
 	fn commit_atomic_write(&self) -> std::result::Result<(), CommitBufferError> {
-		let _commit_guard = self.commit_mutex.lock();
 		let request = {
 			let mut state = self.state.write();
 			if state.dead {
@@ -3509,6 +3504,7 @@ mod tests {
 				meta: protocol::SqliteMeta {
 					head_txid: 1,
 					db_size_pages: 1,
+					max_delta_bytes: 32 * 1024 * 1024,
 					..sqlite_meta(8 * 1024 * 1024)
 				},
 			});
@@ -3540,6 +3536,74 @@ mod tests {
 		let state = ctx.state.read();
 		assert_eq!(state.head_txid, 3);
 		assert_eq!(state.db_size_pages, 3);
+		assert_eq!(state.max_delta_bytes, 32 * 1024 * 1024);
+	}
+
+	#[test]
+	fn resolve_pages_does_not_shrink_db_size_pages_on_same_head_response() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: vec![protocol::SqliteFetchedPage {
+					pgno: 4,
+					bytes: Some(vec![4; 4096]),
+				}],
+				meta: protocol::SqliteMeta {
+					head_txid: 3,
+					db_size_pages: 1,
+					max_delta_bytes: 16 * 1024 * 1024,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+			});
+		let ctx = VfsV2Context::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(Arc::new(protocol)),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					head_txid: 3,
+					db_size_pages: 4,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: vec![protocol::SqliteFetchedPage {
+					pgno: 1,
+					bytes: Some(vec![1; 4096]),
+				}],
+			},
+			VfsV2Config::default(),
+			unsafe { std::mem::zeroed() },
+		);
+
+		let resolved = ctx
+			.resolve_pages(&[4], false)
+			.expect("missing page should resolve");
+
+		assert_eq!(resolved.get(&4), Some(&Some(vec![4; 4096])));
+		let state = ctx.state.read();
+		assert_eq!(state.head_txid, 3);
+		assert_eq!(state.db_size_pages, 4);
+		assert_eq!(state.max_delta_bytes, 16 * 1024 * 1024);
 	}
 
 	#[test]

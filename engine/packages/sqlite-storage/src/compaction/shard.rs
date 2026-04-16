@@ -84,7 +84,9 @@ impl SqliteEngine {
 		)
 		.await?
 		.context("sqlite meta missing for shard compaction")?;
-		let mut head = decode_db_head(&meta_bytes)?;
+		let head = decode_db_head(&meta_bytes)?;
+		let initial_generation = head.generation;
+		let initial_head_txid = head.head_txid;
 
 		let shard_start_pgno = shard_id * head.shard_size;
 		let shard_end_pgno = shard_start_pgno + head.shard_size.saturating_sub(1);
@@ -203,8 +205,7 @@ impl SqliteEngine {
 				Some(lag_ms as f64 / 1000.0)
 			})
 			.collect::<Vec<_>>();
-		head.materialized_txid =
-			compute_materialized_txid(&head, delta_entries.keys().copied(), &deleted_delta_txids);
+		let remaining_delta_txids = delta_entries.keys().copied().collect::<Vec<_>>();
 
 		let shard_commit_txid = shard_rows
 			.iter()
@@ -216,36 +217,33 @@ impl SqliteEngine {
 			&merged_pages,
 		)
 		.context("encode compacted shard blob")?;
-		let old_meta_size = tracked_storage_entry_size(&meta_key(actor_id), &meta_bytes)
-			.expect("meta key should count toward sqlite quota");
-		let mut usage_without_meta = head.sqlite_storage_used.saturating_sub(old_meta_size);
-		if let Some(existing_shard) = blobs.get(&shard_blob_key).cloned().flatten() {
-			usage_without_meta = usage_without_meta.saturating_sub(
-				tracked_storage_entry_size(&shard_blob_key, &existing_shard)
-					.expect("shard key should count toward sqlite quota"),
-			);
-		}
-		usage_without_meta += tracked_storage_entry_size(&shard_blob_key, &shard_blob)
-			.expect("shard key should count toward sqlite quota");
-		for row in &shard_rows {
-			usage_without_meta = usage_without_meta.saturating_sub(
+		let existing_shard_size = blobs
+			.get(&shard_blob_key)
+			.and_then(|existing_shard| existing_shard.as_ref())
+			.map(|existing_shard| {
+				tracked_storage_entry_size(&shard_blob_key, existing_shard)
+					.expect("shard key should count toward sqlite quota")
+			})
+			.unwrap_or(0);
+		let compacted_pidx_size = shard_rows
+			.iter()
+			.map(|row| {
 				tracked_storage_entry_size(&row.key, &row.txid.to_be_bytes())
-					.expect("pidx key should count toward sqlite quota"),
-			);
-		}
-		for txid in &deleted_delta_txids {
-			if let Some((key, value)) = delta_entries.get(txid) {
-				usage_without_meta = usage_without_meta.saturating_sub(
-					tracked_storage_entry_size(key, value)
-						.expect("delta key should count toward sqlite quota"),
-				);
-			}
-		}
-		let (updated_head, encoded_head) =
-			encode_db_head_with_usage(actor_id, &head, usage_without_meta)?;
-		head = updated_head;
+					.expect("pidx key should count toward sqlite quota")
+			})
+			.sum::<u64>();
+		let deleted_delta_size = deleted_delta_txids
+			.iter()
+			.filter_map(|txid| delta_entries.get(txid))
+			.map(|(key, value)| {
+				tracked_storage_entry_size(key, value)
+					.expect("delta key should count toward sqlite quota")
+			})
+			.sum::<u64>();
+		let new_shard_size = tracked_storage_entry_size(&shard_blob_key, &shard_blob)
+			.expect("shard key should count toward sqlite quota");
 
-		let mut mutations = Vec::with_capacity(2 + shard_rows.len() + deleted_delta_txids.len());
+		let mut mutations = Vec::with_capacity(1 + shard_rows.len() + deleted_delta_txids.len());
 		mutations.push(WriteOp::put(shard_blob_key.clone(), shard_blob));
 		for row in &shard_rows {
 			mutations.push(WriteOp::delete(row.key.clone()));
@@ -255,48 +253,78 @@ impl SqliteEngine {
 				mutations.push(WriteOp::delete(key.clone()));
 			}
 		}
-		mutations.push(WriteOp::put(meta_key(actor_id), encoded_head));
 		#[cfg(test)]
 		test_hooks::maybe_pause_before_commit(actor_id).await;
 
 		let actor_id_for_tx = actor_id.to_string();
 		let meta_key_for_tx = meta_key(actor_id);
-		let meta_bytes_for_tx = meta_bytes.clone();
-		let mutations_applied =
-			udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
-				let actor_id = actor_id_for_tx.clone();
-				let subspace = self.subspace.clone();
-				let meta_key = meta_key_for_tx.clone();
-				let meta_bytes = meta_bytes_for_tx.clone();
-				let mutations = mutations.clone();
-				async move {
-					let current_meta = udb::tx_get_value(&tx, &subspace, &meta_key).await?;
-					if current_meta.as_deref() != Some(meta_bytes.as_slice()) {
-						tracing::debug!(
-							%actor_id,
-							"sqlite compaction skipped after concurrent head change"
-						);
-						return Ok(false);
-					}
-
-					for op in &mutations {
-						match op {
-							WriteOp::Put(key, value) => {
-								udb::tx_write_value(&tx, &subspace, key, value)?
-							}
-							WriteOp::Delete(key) => udb::tx_delete_value(&tx, &subspace, key),
-						}
-					}
-					#[cfg(test)]
-					crate::udb::test_hooks::maybe_fail_apply_write_ops(&mutations)?;
-
-					Ok(true)
+		let deleted_delta_txids_for_tx = deleted_delta_txids.clone();
+		let updated_head = udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+			let actor_id = actor_id_for_tx.clone();
+			let subspace = self.subspace.clone();
+			let meta_key = meta_key_for_tx.clone();
+			let mutations = mutations.clone();
+			let deleted_delta_txids = deleted_delta_txids_for_tx.clone();
+			let remaining_delta_txids = remaining_delta_txids.clone();
+			async move {
+				let current_meta = udb::tx_get_value(&tx, &subspace, &meta_key)
+					.await?
+					.context("sqlite meta missing for shard compaction write")?;
+				let current_head = decode_db_head(&current_meta)?;
+				if current_head.generation != initial_generation
+					|| current_head.head_txid != initial_head_txid
+				{
+					tracing::debug!(
+						%actor_id,
+						initial_generation,
+						initial_head_txid,
+						current_generation = current_head.generation,
+						current_head_txid = current_head.head_txid,
+						"sqlite compaction skipped after concurrent meta change"
+					);
+					return Ok(None);
 				}
-			})
-			.await?;
-		if !mutations_applied {
+
+				let current_meta_size = tracked_storage_entry_size(&meta_key, &current_meta)
+					.expect("meta key should count toward sqlite quota");
+				let usage_without_meta = current_head
+					.sqlite_storage_used
+					.saturating_sub(current_meta_size)
+					.saturating_sub(existing_shard_size)
+					.saturating_sub(compacted_pidx_size)
+					.saturating_sub(deleted_delta_size)
+					.saturating_add(new_shard_size);
+				let updated_head = DBHead {
+					materialized_txid: compute_materialized_txid(
+						&current_head,
+						remaining_delta_txids.iter().copied(),
+						&deleted_delta_txids,
+					),
+					..current_head
+				};
+				let (updated_head, encoded_head) =
+					encode_db_head_with_usage(&actor_id, &updated_head, usage_without_meta)?;
+				let mut mutations = mutations.clone();
+				mutations.push(WriteOp::put(meta_key.clone(), encoded_head));
+
+				for op in &mutations {
+					match op {
+						WriteOp::Put(key, value) => {
+							udb::tx_write_value(&tx, &subspace, key, value)?
+						}
+						WriteOp::Delete(key) => udb::tx_delete_value(&tx, &subspace, key),
+					}
+				}
+				#[cfg(test)]
+				crate::udb::test_hooks::maybe_fail_apply_write_ops(&mutations)?;
+
+				Ok(Some(updated_head))
+			}
+		})
+		.await?;
+		let Some(head) = updated_head else {
 			return Ok(false);
-		}
+		};
 
 		self.metrics.add_compaction_pages_folded(shard_rows.len());
 		self.metrics
@@ -460,10 +488,12 @@ mod tests {
 	use anyhow::Result;
 
 	use super::decode_db_head;
+	use crate::commit::CommitRequest;
 	use crate::engine::SqliteEngine;
 	use crate::keys::{delta_key, meta_key, pidx_delta_key, pidx_delta_prefix, shard_key};
 	use crate::ltx::{LtxHeader, encode_ltx_v3};
 	use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
+	use crate::takeover::TakeoverConfig;
 	use crate::test_utils::{read_value, scan_prefix_values, test_db};
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE,
@@ -491,6 +521,22 @@ mod tests {
 
 	fn page(fill: u8) -> Vec<u8> {
 		vec![fill; SQLITE_PAGE_SIZE as usize]
+	}
+
+	fn commit_request(generation: u64, head_txid: u64, pages: &[(u32, u8)]) -> CommitRequest {
+		CommitRequest {
+			generation,
+			head_txid,
+			db_size_pages: pages.iter().map(|(pgno, _)| *pgno).max().unwrap_or(0),
+			dirty_pages: pages
+				.iter()
+				.map(|(pgno, fill)| DirtyPage {
+					pgno: *pgno,
+					bytes: page(*fill),
+				})
+				.collect(),
+			now_ms: 1_234,
+		}
 	}
 
 	async fn actual_tracked_usage(engine: &SqliteEngine) -> Result<u64> {
@@ -871,6 +917,133 @@ mod tests {
 		assert_eq!(
 			read_value(engine.as_ref(), pidx_delta_key(TEST_ACTOR, 1)).await?,
 			Some(1_u64.to_be_bytes().to_vec())
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn compact_shard_aborts_and_retries_after_concurrent_commit() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let mut head = seeded_head();
+		head.head_txid = 1;
+		head.next_txid = 2;
+		head.db_size_pages = 1;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		let engine = std::sync::Arc::new(engine);
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(delta_key(TEST_ACTOR, 1), encoded_blob(1, 1, &[(1, 0x10)])),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 1_u64.to_be_bytes().to_vec()),
+			],
+		)
+		.await?;
+
+		let (guard, reached, release) = super::test_hooks::pause_before_commit(TEST_ACTOR);
+		let compact_engine = std::sync::Arc::clone(&engine);
+		let compact_task =
+			tokio::spawn(async move { compact_engine.compact_shard(TEST_ACTOR, 0).await });
+
+		reached.notified().await;
+
+		let commit = engine
+			.commit(TEST_ACTOR, commit_request(head.generation, 1, &[(2, 0x22)]))
+			.await?;
+		assert_eq!(commit.txid, 2);
+		release.notify_waiters();
+
+		assert!(!compact_task.await??);
+		let stored_head = decode_db_head(
+			&read_value(engine.as_ref(), meta_key(TEST_ACTOR))
+				.await?
+				.expect("meta should exist after concurrent commit"),
+		)?;
+		assert_eq!(stored_head.head_txid, 2);
+		assert_eq!(stored_head.next_txid, 3);
+		assert_eq!(
+			engine
+				.get_pages(TEST_ACTOR, head.generation, vec![1, 2])
+				.await?,
+			vec![
+				FetchedPage {
+					pgno: 1,
+					bytes: Some(page(0x10)),
+				},
+				FetchedPage {
+					pgno: 2,
+					bytes: Some(page(0x22)),
+				},
+			]
+		);
+
+		drop(guard);
+		assert!(engine.compact_shard(TEST_ACTOR, 0).await?);
+		let stored_head = decode_db_head(
+			&read_value(engine.as_ref(), meta_key(TEST_ACTOR))
+				.await?
+				.expect("meta should exist after retry"),
+		)?;
+		assert_eq!(stored_head.head_txid, 2);
+		assert_eq!(stored_head.materialized_txid, 2);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn takeover_during_inflight_compaction_succeeds_and_fences_compaction() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let mut head = seeded_head();
+		head.head_txid = 1;
+		head.next_txid = 2;
+		head.db_size_pages = 1;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		let engine = std::sync::Arc::new(engine);
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(delta_key(TEST_ACTOR, 1), encoded_blob(1, 1, &[(1, 0x10)])),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 1_u64.to_be_bytes().to_vec()),
+			],
+		)
+		.await?;
+
+		let (_guard, reached, release) = super::test_hooks::pause_before_commit(TEST_ACTOR);
+		let compact_engine = std::sync::Arc::clone(&engine);
+		let compact_task =
+			tokio::spawn(async move { compact_engine.compact_shard(TEST_ACTOR, 0).await });
+
+		reached.notified().await;
+
+		let takeover = engine
+			.takeover(TEST_ACTOR, TakeoverConfig::new(2_345))
+			.await?;
+		release.notify_waiters();
+
+		assert_eq!(takeover.generation, head.generation + 1);
+		assert!(!compact_task.await??);
+		let stored_head = decode_db_head(
+			&read_value(engine.as_ref(), meta_key(TEST_ACTOR))
+				.await?
+				.expect("meta should exist after takeover"),
+		)?;
+		assert_eq!(stored_head.generation, head.generation + 1);
+		assert_eq!(stored_head.head_txid, 1);
+		assert!(
+			read_value(engine.as_ref(), delta_key(TEST_ACTOR, 1))
+				.await?
+				.is_some()
+		);
+		assert!(
+			read_value(engine.as_ref(), shard_key(TEST_ACTOR, 0))
+				.await?
+				.is_none()
 		);
 
 		Ok(())

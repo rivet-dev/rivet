@@ -3,6 +3,7 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
 ---
 
 ## Codebase Patterns
+- `sqlite-native` v2 must treat `head_txid` and `db_size_pages` as connection-local authority. `get_pages(...)` can refresh `max_delta_bytes`, but only commits and local truncate/write paths should mutate those fields.
 - RivetKit sleep shutdown should wait for in-flight HTTP action work and pending disconnect callbacks before running `onSleep`, but it should not treat open hibernatable connections alone as a blocker because existing connection actions may still finish during the shutdown window.
 - `sqlite-storage` owns UniversalDB value chunking in `src/udb.rs`, so `pegboard-envoy` should call `SqliteEngine` directly instead of reintroducing a separate `UdbStore` layer.
 - Actor KV prefix probes should build ranges with `ListKeyWrapper` semantics instead of exact-key packing. SQLite startup now uses a single prefix-`0x08` scan via `pegboard::actor_kv::sqlite_v1_data_exists(...)` to distinguish legacy v1 data.
@@ -319,4 +320,12 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
   - `sqlite-storage` read recovery should treat stale PIDX references as cache corruption, fall back to shard or older delta history, and zero-fill only in-range pages that truly have no source left.
   - The v2 VFS needs a commit-path mutex around `flush_dirty_pages()` and `commit_atomic_write()` so concurrent fence updates do not race the local startup metadata.
   - HTTP actions that land during the sleep handoff should retry stopping-actor errors, while WebSocket action requests sent after shutdown starts need an explicit close/error path instead of being ignored and left hanging forever.
+---
+## 2026-04-16 09:15:28 PDT - US-046
+- What was implemented: Stopped v2 `get_pages(...)` reads from overwriting VFS-owned `head_txid` and `db_size_pages`, limited read-side meta refreshes to `max_delta_bytes`, removed the unnecessary commit-path mutex, and added regressions for stale read metadata with both older and same-head responses.
+- Files changed: `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `get_pages(...)` responses should be treated as cache-fill data plus read-safe tuning knobs like `max_delta_bytes`, not as authority for `head_txid` or `db_size_pages`.
+  - The v2 VFS does not need a separate commit mutex per connection. SQLite already serializes callbacks on a connection, and the stale-meta bug was the real source of the earlier flake.
+  - Regression coverage needs both obviously stale responses and equal-head responses, because the nasty bug was the "same head, smaller `db_size_pages`" case that looked harmless.
 ---

@@ -736,7 +736,7 @@
         "cargo test -p rivetkit-sqlite-native passes"
       ],
       "priority": 35,
-      "passes": false,
+      "passes": true,
       "notes": "The current condition (ok.meta.generation > state.generation || ok.meta.head_txid >= state.head_txid) is too permissive. When head_txid matches, update_meta still runs and overwrites db_size_pages with the server's stale value. Mid-transaction, a get_pages call could shrink db_size_pages relative to in-flight writes. The commit_mutex was added to fix flaky tests but is a red herring — the real cause was the update_meta bug. SQLite's single-threaded callback model means two commits can never race."
     },
     {
