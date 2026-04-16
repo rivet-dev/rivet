@@ -7,6 +7,7 @@ use anyhow::{Context, Result, ensure};
 use scc::hash_map::Entry;
 
 use crate::engine::SqliteEngine;
+use crate::error::SqliteStorageError;
 use crate::keys::{delta_key, delta_prefix, meta_key, pidx_delta_prefix, shard_key};
 use crate::ltx::{DecodedLtx, decode_ltx_v3};
 use crate::page_index::DeltaPageIndex;
@@ -53,14 +54,25 @@ impl SqliteEngine {
 					if let Some(meta_bytes) = udb::tx_get_value(&tx, &subspace, &meta_key).await? {
 						decode_db_head(&meta_bytes)?
 					} else {
-						ensure!(generation == 1, "sqlite meta missing for get_pages");
-						return Err(anyhow::anyhow!("sqlite meta missing for get_pages"));
+						ensure!(
+							generation == 1,
+							SqliteStorageError::MetaMissing {
+								operation: "get_pages",
+							}
+						);
+						return Err(SqliteStorageError::MetaMissing {
+							operation: "get_pages",
+						}
+						.into());
 					};
 				ensure!(
 					head.generation == generation,
-					"sqlite generation fence mismatch: expected {}, got {}",
-					generation,
-					head.generation
+					SqliteStorageError::FenceMismatch {
+						reason: format!(
+							"sqlite generation fence mismatch: expected {}, got {}",
+							generation, head.generation
+						),
+					}
 				);
 
 				let pgnos_in_range = pgnos_in_range
@@ -397,6 +409,7 @@ mod tests {
 
 	use super::decode_db_head;
 	use crate::engine::SqliteEngine;
+	use crate::error::SqliteStorageError;
 	use crate::keys::{delta_key, meta_key, pidx_delta_key, shard_key};
 	use crate::ltx::{LtxHeader, encode_ltx_v3};
 	use crate::test_utils::{assert_op_count, clear_op_count, read_value, test_db};
@@ -498,11 +511,12 @@ mod tests {
 			.get_pages(TEST_ACTOR, 1, vec![1, 2])
 			.await
 			.expect_err("missing meta should require takeover");
-		assert!(error.chain().any(|cause| {
-			cause
-				.to_string()
-				.contains("sqlite meta missing for get_pages")
-		}));
+		assert_eq!(
+			error.downcast_ref::<SqliteStorageError>(),
+			Some(&SqliteStorageError::MetaMissing {
+				operation: "get_pages",
+			})
+		);
 
 		assert!(
 			read_value(&engine, meta_key(TEST_ACTOR)).await?.is_none(),

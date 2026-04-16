@@ -148,9 +148,14 @@ type SqliteGetPagesOk struct {
 	meta: SqliteMeta
 }
 
+type SqliteErrorResponse struct {
+	message: str
+}
+
 type SqliteGetPagesResponse union {
 	SqliteGetPagesOk |
-	SqliteFenceMismatch
+	SqliteFenceMismatch |
+	SqliteErrorResponse
 }
 
 type SqliteCommitRequest struct {
@@ -174,7 +179,8 @@ type SqliteCommitTooLarge struct {
 type SqliteCommitResponse union {
 	SqliteCommitOk |
 	SqliteFenceMismatch |
-	SqliteCommitTooLarge
+	SqliteCommitTooLarge |
+	SqliteErrorResponse
 }
 
 type SqliteCommitStageRequest struct {
@@ -192,7 +198,8 @@ type SqliteCommitStageOk struct {
 
 type SqliteCommitStageResponse union {
 	SqliteCommitStageOk |
-	SqliteFenceMismatch
+	SqliteFenceMismatch |
+	SqliteErrorResponse
 }
 
 type SqliteCommitFinalizeRequest struct {
@@ -215,7 +222,8 @@ type SqliteStageNotFound struct {
 type SqliteCommitFinalizeResponse union {
 	SqliteCommitFinalizeOk |
 	SqliteFenceMismatch |
-	SqliteStageNotFound
+	SqliteStageNotFound |
+	SqliteErrorResponse
 }
 
 type SqliteStartupData struct {

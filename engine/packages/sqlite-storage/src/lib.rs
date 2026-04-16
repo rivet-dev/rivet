@@ -1,6 +1,7 @@
 pub mod commit;
 pub mod compaction;
 pub mod engine;
+pub mod error;
 pub mod keys;
 pub mod ltx;
 pub mod metrics;

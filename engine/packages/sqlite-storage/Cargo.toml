@@ -19,6 +19,7 @@ rivet-metrics.workspace = true
 scc.workspace = true
 serde.workspace = true
 serde_bare.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 universaldb.workspace = true

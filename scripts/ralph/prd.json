@@ -672,7 +672,7 @@
         "cargo check -p pegboard-envoy passes"
       ],
       "priority": 40,
-      "passes": false,
+      "passes": true,
       "notes": "Compounds three related findings: (1) unhandled sqlite errors propagate via ? at ws_to_tunnel_task.rs:374-388 killing all actors on the envoy, (2) error type detection uses fragile string parsing on bail!() messages, (3) no dirty_pages validation at the envoy<->pegboard-envoy trust boundary. The KV path already handles errors correctly with KvErrorResponse — SQLite should follow the same pattern."
     },
     {

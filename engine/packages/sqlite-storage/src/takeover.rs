@@ -5,9 +5,8 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, ensure};
 
-use anyhow::anyhow;
-
 use crate::engine::SqliteEngine;
+use crate::error::SqliteStorageError;
 use crate::keys::{delta_key, delta_prefix, meta_key, pidx_delta_prefix, shard_key, stage_prefix};
 use crate::ltx::decode_ltx_v3;
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
@@ -115,7 +114,7 @@ impl SqliteEngine {
 						actor_id = %actor_id,
 						"meta changed during takeover, concurrent writer detected"
 					);
-					return Err(anyhow!("concurrent takeover detected, disconnecting actor"));
+					return Err(SqliteStorageError::ConcurrentTakeover.into());
 				}
 
 				for op in &takeover_mutations {

@@ -12,7 +12,7 @@ use parking_lot::{Mutex, RwLock};
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_protocol as protocol;
 #[cfg(test)]
-use sqlite_storage::engine::SqliteEngine;
+use sqlite_storage::{engine::SqliteEngine, error::SqliteStorageError};
 use tokio::runtime::Handle;
 #[cfg(test)]
 use tokio::sync::Notify;
@@ -130,19 +130,22 @@ impl SqliteTransport {
 						},
 					)),
 					Err(err) => {
-						let reason = sqlite_error_reason(&err);
-						if is_sqlite_fence_mismatch(&reason) {
+						if let Some(SqliteStorageError::FenceMismatch { reason }) =
+							sqlite_storage_error(&err)
+						{
 							Ok(protocol::SqliteGetPagesResponse::SqliteFenceMismatch(
 								protocol::SqliteFenceMismatch {
 									actual_meta: protocol_sqlite_meta(
 										engine.load_meta(&req.actor_id).await?,
 									),
-									reason,
+									reason: reason.clone(),
 								},
 							))
-						} else if reason.contains("sqlite meta missing for get_pages")
-							&& req.generation == 1
-						{
+						} else if matches!(
+							sqlite_storage_error(&err),
+							Some(SqliteStorageError::MetaMissing { operation })
+								if *operation == "get_pages" && req.generation == 1
+						) {
 							match engine
 								.takeover(
 									&req.actor_id,
@@ -152,25 +155,46 @@ impl SqliteTransport {
 							{
 								Ok(_) => {}
 								Err(takeover_err)
-									if takeover_err.chain().any(|cause| {
-										cause.to_string().contains("concurrent takeover detected")
-									}) => {}
-								Err(takeover_err) => return Err(takeover_err),
+									if matches!(
+										sqlite_storage_error(&takeover_err),
+										Some(SqliteStorageError::ConcurrentTakeover)
+									) => {}
+								Err(takeover_err) => {
+									return Ok(
+										protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+											sqlite_error_response(&takeover_err),
+										),
+									);
+								}
 							}
 
-							let pages = engine
+							match engine
 								.get_pages(&req.actor_id, req.generation, req.pgnos)
-								.await?;
-							Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
-								protocol::SqliteGetPagesOk {
-									pages: pages.into_iter().map(protocol_fetched_page).collect(),
-									meta: protocol_sqlite_meta(
-										engine.load_meta(&req.actor_id).await?,
-									),
-								},
-							))
+								.await
+							{
+								Ok(pages) => {
+									Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+										protocol::SqliteGetPagesOk {
+											pages: pages
+												.into_iter()
+												.map(protocol_fetched_page)
+												.collect(),
+											meta: protocol_sqlite_meta(
+												engine.load_meta(&req.actor_id).await?,
+											),
+										},
+									))
+								}
+								Err(retry_err) => {
+									Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+										sqlite_error_response(&retry_err),
+									))
+								}
+							}
 						} else {
-							Err(err)
+							Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+								sqlite_error_response(&err),
+							))
 						}
 					}
 				}
@@ -216,22 +240,32 @@ impl SqliteTransport {
 						},
 					)),
 					Err(err) => {
-						let reason = sqlite_error_reason(&err);
-						if is_sqlite_fence_mismatch(&reason) {
+						if let Some(SqliteStorageError::FenceMismatch { reason }) =
+							sqlite_storage_error(&err)
+						{
 							Ok(protocol::SqliteCommitResponse::SqliteFenceMismatch(
 								protocol::SqliteFenceMismatch {
 									actual_meta: protocol_sqlite_meta(
 										engine.load_meta(&req.actor_id).await?,
 									),
-									reason,
+									reason: reason.clone(),
 								},
 							))
-						} else if let Some(too_large) = parse_commit_too_large(&reason) {
+						} else if let Some(SqliteStorageError::CommitTooLarge {
+							actual_size_bytes,
+							max_size_bytes,
+						}) = sqlite_storage_error(&err)
+						{
 							Ok(protocol::SqliteCommitResponse::SqliteCommitTooLarge(
-								too_large,
+								protocol::SqliteCommitTooLarge {
+									actual_size_bytes: *actual_size_bytes,
+									max_size_bytes: *max_size_bytes,
+								},
 							))
 						} else {
-							Err(err)
+							Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+								sqlite_error_response(&err),
+							))
 						}
 					}
 				}
@@ -272,18 +306,21 @@ impl SqliteTransport {
 						},
 					)),
 					Err(err) => {
-						let reason = sqlite_error_reason(&err);
-						if is_sqlite_fence_mismatch(&reason) {
+						if let Some(SqliteStorageError::FenceMismatch { reason }) =
+							sqlite_storage_error(&err)
+						{
 							Ok(protocol::SqliteCommitStageResponse::SqliteFenceMismatch(
 								protocol::SqliteFenceMismatch {
 									actual_meta: protocol_sqlite_meta(
 										engine.load_meta(&req.actor_id).await?,
 									),
-									reason,
+									reason: reason.clone(),
 								},
 							))
 						} else {
-							Err(err)
+							Ok(protocol::SqliteCommitStageResponse::SqliteErrorResponse(
+								sqlite_error_response(&err),
+							))
 						}
 					}
 				}
@@ -323,24 +360,29 @@ impl SqliteTransport {
 						),
 					),
 					Err(err) => {
-						let reason = sqlite_error_reason(&err);
-						if is_sqlite_fence_mismatch(&reason) {
+						if let Some(SqliteStorageError::FenceMismatch { reason }) =
+							sqlite_storage_error(&err)
+						{
 							Ok(protocol::SqliteCommitFinalizeResponse::SqliteFenceMismatch(
 								protocol::SqliteFenceMismatch {
 									actual_meta: protocol_sqlite_meta(
 										engine.load_meta(&req.actor_id).await?,
 									),
-									reason,
+									reason: reason.clone(),
 								},
 							))
-						} else if reason.contains("StageNotFound") {
+						} else if let Some(SqliteStorageError::StageNotFound { stage_id }) =
+							sqlite_storage_error(&err)
+						{
 							Ok(protocol::SqliteCommitFinalizeResponse::SqliteStageNotFound(
 								protocol::SqliteStageNotFound {
-									stage_id: req.stage_id,
+									stage_id: *stage_id,
 								},
 							))
 						} else {
-							Err(err)
+							Ok(protocol::SqliteCommitFinalizeResponse::SqliteErrorResponse(
+								sqlite_error_response(&err),
+							))
 						}
 					}
 				}
@@ -399,6 +441,11 @@ fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage::types:
 }
 
 #[cfg(test)]
+fn sqlite_storage_error(err: &anyhow::Error) -> Option<&SqliteStorageError> {
+	err.downcast_ref::<SqliteStorageError>()
+}
+
+#[cfg(test)]
 fn sqlite_error_reason(err: &anyhow::Error) -> String {
 	err.chain()
 		.map(ToString::to_string)
@@ -407,21 +454,10 @@ fn sqlite_error_reason(err: &anyhow::Error) -> String {
 }
 
 #[cfg(test)]
-fn is_sqlite_fence_mismatch(reason: &str) -> bool {
-	reason.contains("FenceMismatch") || reason.to_ascii_lowercase().contains("fence mismatch")
-}
-
-#[cfg(test)]
-fn parse_commit_too_large(reason: &str) -> Option<protocol::SqliteCommitTooLarge> {
-	let reason = reason.strip_prefix("CommitTooLarge: ")?;
-	let (_, sizes) = reason.split_once(" was ")?;
-	let (actual_size_bytes, max_size_bytes) = sizes.split_once(" bytes, limit is ")?;
-	let max_size_bytes = max_size_bytes.strip_suffix(" bytes")?;
-
-	Some(protocol::SqliteCommitTooLarge {
-		actual_size_bytes: actual_size_bytes.parse().ok()?,
-		max_size_bytes: max_size_bytes.parse().ok()?,
-	})
+fn sqlite_error_response(err: &anyhow::Error) -> protocol::SqliteErrorResponse {
+	protocol::SqliteErrorResponse {
+		message: sqlite_error_reason(err),
+	}
 }
 
 #[cfg(test)]
@@ -997,6 +1033,9 @@ impl VfsV2Context {
 				}
 				Ok(resolved)
 			}
+			protocol::SqliteGetPagesResponse::SqliteErrorResponse(error) => {
+				Err(GetPagesError::Other(error.message))
+			}
 		}
 	}
 
@@ -1262,6 +1301,9 @@ async fn commit_buffered_pages(
 				return Err(CommitBufferError::FenceMismatch(mismatch.reason));
 			}
 			protocol::SqliteCommitResponse::SqliteCommitTooLarge(_) => {}
+			protocol::SqliteCommitResponse::SqliteErrorResponse(error) => {
+				return Err(CommitBufferError::Other(error.message));
+			}
 		}
 	}
 
@@ -1290,6 +1332,9 @@ async fn commit_buffered_pages(
 			protocol::SqliteCommitStageResponse::SqliteFenceMismatch(mismatch) => {
 				return Err(CommitBufferError::FenceMismatch(mismatch.reason));
 			}
+			protocol::SqliteCommitStageResponse::SqliteErrorResponse(error) => {
+				return Err(CommitBufferError::Other(error.message));
+			}
 		}
 	}
 
@@ -1316,6 +1361,9 @@ async fn commit_buffered_pages(
 		}
 		protocol::SqliteCommitFinalizeResponse::SqliteStageNotFound(not_found) => {
 			Err(CommitBufferError::StageNotFound(not_found.stage_id))
+		}
+		protocol::SqliteCommitFinalizeResponse::SqliteErrorResponse(error) => {
+			Err(CommitBufferError::Other(error.message))
 		}
 	}
 }

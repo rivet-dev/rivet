@@ -66,4 +66,5 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 ## Pegboard Envoy
 
 - `PegboardEnvoyWs::new(...)` is constructed per websocket request, so shared sqlite dispatch state such as the `SqliteEngine` and `CompactionCoordinator` must live behind a process-wide `OnceCell` instead of per-connection fields.
+- `pegboard-envoy` SQLite websocket handlers must validate page numbers, page sizes, and duplicate dirty pages at the websocket trust boundary and return `SqliteErrorResponse` for unexpected failures instead of bubbling them through the shared connection task.
 - SQLite start-command schema dispatch should probe actor KV prefix `0x08` at startup instead of persisting a schema version in pegboard config or actor workflow state.

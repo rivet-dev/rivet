@@ -763,9 +763,24 @@ export function writeSqliteGetPagesOk(bc: bare.ByteCursor, x: SqliteGetPagesOk):
     writeSqliteMeta(bc, x.meta)
 }
 
+export type SqliteErrorResponse = {
+    readonly message: string
+}
+
+export function readSqliteErrorResponse(bc: bare.ByteCursor): SqliteErrorResponse {
+    return {
+        message: bare.readString(bc),
+    }
+}
+
+export function writeSqliteErrorResponse(bc: bare.ByteCursor, x: SqliteErrorResponse): void {
+    bare.writeString(bc, x.message)
+}
+
 export type SqliteGetPagesResponse =
     | { readonly tag: "SqliteGetPagesOk"; readonly val: SqliteGetPagesOk }
     | { readonly tag: "SqliteFenceMismatch"; readonly val: SqliteFenceMismatch }
+    | { readonly tag: "SqliteErrorResponse"; readonly val: SqliteErrorResponse }
 
 export function readSqliteGetPagesResponse(bc: bare.ByteCursor): SqliteGetPagesResponse {
     const offset = bc.offset
@@ -775,6 +790,8 @@ export function readSqliteGetPagesResponse(bc: bare.ByteCursor): SqliteGetPagesR
             return { tag: "SqliteGetPagesOk", val: readSqliteGetPagesOk(bc) }
         case 1:
             return { tag: "SqliteFenceMismatch", val: readSqliteFenceMismatch(bc) }
+        case 2:
+            return { tag: "SqliteErrorResponse", val: readSqliteErrorResponse(bc) }
         default: {
             bc.offset = offset
             throw new bare.BareError(offset, "invalid tag")
@@ -792,6 +809,11 @@ export function writeSqliteGetPagesResponse(bc: bare.ByteCursor, x: SqliteGetPag
         case "SqliteFenceMismatch": {
             bare.writeU8(bc, 1)
             writeSqliteFenceMismatch(bc, x.val)
+            break
+        }
+        case "SqliteErrorResponse": {
+            bare.writeU8(bc, 2)
+            writeSqliteErrorResponse(bc, x.val)
             break
         }
     }
@@ -880,6 +902,7 @@ export type SqliteCommitResponse =
     | { readonly tag: "SqliteCommitOk"; readonly val: SqliteCommitOk }
     | { readonly tag: "SqliteFenceMismatch"; readonly val: SqliteFenceMismatch }
     | { readonly tag: "SqliteCommitTooLarge"; readonly val: SqliteCommitTooLarge }
+    | { readonly tag: "SqliteErrorResponse"; readonly val: SqliteErrorResponse }
 
 export function readSqliteCommitResponse(bc: bare.ByteCursor): SqliteCommitResponse {
     const offset = bc.offset
@@ -891,6 +914,8 @@ export function readSqliteCommitResponse(bc: bare.ByteCursor): SqliteCommitRespo
             return { tag: "SqliteFenceMismatch", val: readSqliteFenceMismatch(bc) }
         case 2:
             return { tag: "SqliteCommitTooLarge", val: readSqliteCommitTooLarge(bc) }
+        case 3:
+            return { tag: "SqliteErrorResponse", val: readSqliteErrorResponse(bc) }
         default: {
             bc.offset = offset
             throw new bare.BareError(offset, "invalid tag")
@@ -913,6 +938,11 @@ export function writeSqliteCommitResponse(bc: bare.ByteCursor, x: SqliteCommitRe
         case "SqliteCommitTooLarge": {
             bare.writeU8(bc, 2)
             writeSqliteCommitTooLarge(bc, x.val)
+            break
+        }
+        case "SqliteErrorResponse": {
+            bare.writeU8(bc, 3)
+            writeSqliteErrorResponse(bc, x.val)
             break
         }
     }
@@ -964,6 +994,7 @@ export function writeSqliteCommitStageOk(bc: bare.ByteCursor, x: SqliteCommitSta
 export type SqliteCommitStageResponse =
     | { readonly tag: "SqliteCommitStageOk"; readonly val: SqliteCommitStageOk }
     | { readonly tag: "SqliteFenceMismatch"; readonly val: SqliteFenceMismatch }
+    | { readonly tag: "SqliteErrorResponse"; readonly val: SqliteErrorResponse }
 
 export function readSqliteCommitStageResponse(bc: bare.ByteCursor): SqliteCommitStageResponse {
     const offset = bc.offset
@@ -973,6 +1004,8 @@ export function readSqliteCommitStageResponse(bc: bare.ByteCursor): SqliteCommit
             return { tag: "SqliteCommitStageOk", val: readSqliteCommitStageOk(bc) }
         case 1:
             return { tag: "SqliteFenceMismatch", val: readSqliteFenceMismatch(bc) }
+        case 2:
+            return { tag: "SqliteErrorResponse", val: readSqliteErrorResponse(bc) }
         default: {
             bc.offset = offset
             throw new bare.BareError(offset, "invalid tag")
@@ -990,6 +1023,11 @@ export function writeSqliteCommitStageResponse(bc: bare.ByteCursor, x: SqliteCom
         case "SqliteFenceMismatch": {
             bare.writeU8(bc, 1)
             writeSqliteFenceMismatch(bc, x.val)
+            break
+        }
+        case "SqliteErrorResponse": {
+            bare.writeU8(bc, 2)
+            writeSqliteErrorResponse(bc, x.val)
             break
         }
     }
@@ -1056,6 +1094,7 @@ export type SqliteCommitFinalizeResponse =
     | { readonly tag: "SqliteCommitFinalizeOk"; readonly val: SqliteCommitFinalizeOk }
     | { readonly tag: "SqliteFenceMismatch"; readonly val: SqliteFenceMismatch }
     | { readonly tag: "SqliteStageNotFound"; readonly val: SqliteStageNotFound }
+    | { readonly tag: "SqliteErrorResponse"; readonly val: SqliteErrorResponse }
 
 export function readSqliteCommitFinalizeResponse(bc: bare.ByteCursor): SqliteCommitFinalizeResponse {
     const offset = bc.offset
@@ -1067,6 +1106,8 @@ export function readSqliteCommitFinalizeResponse(bc: bare.ByteCursor): SqliteCom
             return { tag: "SqliteFenceMismatch", val: readSqliteFenceMismatch(bc) }
         case 2:
             return { tag: "SqliteStageNotFound", val: readSqliteStageNotFound(bc) }
+        case 3:
+            return { tag: "SqliteErrorResponse", val: readSqliteErrorResponse(bc) }
         default: {
             bc.offset = offset
             throw new bare.BareError(offset, "invalid tag")
@@ -1089,6 +1130,11 @@ export function writeSqliteCommitFinalizeResponse(bc: bare.ByteCursor, x: Sqlite
         case "SqliteStageNotFound": {
             bare.writeU8(bc, 2)
             writeSqliteStageNotFound(bc, x.val)
+            break
+        }
+        case "SqliteErrorResponse": {
+            bare.writeU8(bc, 3)
+            writeSqliteErrorResponse(bc, x.val)
             break
         }
     }

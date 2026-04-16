@@ -3,11 +3,12 @@
 use std::collections::BTreeMap;
 use std::time::Instant;
 
-use anyhow::{Context, Result, anyhow, bail, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use scc::hash_map::Entry;
 use serde::{Deserialize, Serialize};
 
 use crate::engine::SqliteEngine;
+use crate::error::SqliteStorageError;
 use crate::keys::{delta_key, meta_key, pidx_delta_key, stage_chunk_prefix, stage_key};
 use crate::ltx::{LtxHeader, encode_ltx_v3};
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
@@ -70,7 +71,7 @@ struct StagedChunk {
 mod test_hooks {
 	use std::sync::Mutex;
 
-	use anyhow::{Result, bail};
+	use anyhow::{Result, anyhow};
 
 	static FAIL_NEXT_FAST_COMMIT_WRITE_ACTOR: Mutex<Option<String>> = Mutex::new(None);
 
@@ -89,7 +90,9 @@ mod test_hooks {
 			.expect("fast commit failpoint mutex should lock");
 		if fail_actor.as_deref() == Some(actor_id) {
 			*fail_actor = None;
-			bail!("InjectedStoreError: fast commit write transaction failed before commit");
+			return Err(anyhow!(
+				"InjectedStoreError: fast commit write transaction failed before commit"
+			));
 		}
 
 		Ok(())
@@ -117,11 +120,11 @@ impl SqliteEngine {
 		dirty_pgnos.dedup();
 		let raw_dirty_bytes = dirty_pages_raw_bytes(&request.dirty_pages)?;
 		if raw_dirty_bytes > SQLITE_MAX_DELTA_BYTES {
-			bail!(
-				"CommitTooLarge: raw dirty pages were {} bytes, limit is {} bytes",
-				raw_dirty_bytes,
-				SQLITE_MAX_DELTA_BYTES
-			);
+			return Err(SqliteStorageError::CommitTooLarge {
+				actual_size_bytes: raw_dirty_bytes,
+				max_size_bytes: SQLITE_MAX_DELTA_BYTES,
+			}
+			.into());
 		}
 
 		let actor_id = actor_id.to_string();
@@ -149,22 +152,28 @@ impl SqliteEngine {
 					let meta_storage_key = meta_key(&actor_id);
 					let meta_bytes = udb::tx_get_value(&tx, &subspace, &meta_storage_key)
 						.await?
-						.context("sqlite meta missing for commit")?;
+						.ok_or(SqliteStorageError::MetaMissing {
+							operation: "commit",
+						})?;
 					let mut head = decode_db_head(&meta_bytes)?;
 
 					if head.generation != request.generation {
-						bail!(
-							"FenceMismatch: commit generation {} did not match current generation {}",
-							request.generation,
-							head.generation
-						);
+						return Err(SqliteStorageError::FenceMismatch {
+							reason: format!(
+								"commit generation {} did not match current generation {}",
+								request.generation, head.generation
+							),
+						}
+						.into());
 					}
 					if head.head_txid != request.head_txid {
-						bail!(
-							"FenceMismatch: commit head_txid {} did not match current head_txid {}",
-							request.head_txid,
-							head.head_txid
-						);
+						return Err(SqliteStorageError::FenceMismatch {
+							reason: format!(
+								"commit head_txid {} did not match current head_txid {}",
+								request.head_txid, head.head_txid
+							),
+						}
+						.into());
 					}
 
 					let txid = head.next_txid;
@@ -251,7 +260,10 @@ impl SqliteEngine {
 			})
 			.await
 			.map_err(|err| {
-				if err.to_string().contains("FenceMismatch") {
+				if matches!(
+					err.downcast_ref::<SqliteStorageError>(),
+					Some(SqliteStorageError::FenceMismatch { .. })
+				) {
 					self.metrics.inc_fence_mismatch_total();
 				}
 				err
@@ -293,16 +305,20 @@ impl SqliteEngine {
 			meta_key(actor_id),
 		)
 		.await?
-		.context("sqlite meta missing for staged commit")?;
+		.ok_or(SqliteStorageError::MetaMissing {
+			operation: "commit_stage",
+		})?;
 		let head = decode_db_head(&meta_bytes)?;
 
 		if head.generation != request.generation {
 			self.metrics.inc_fence_mismatch_total();
-			bail!(
-				"FenceMismatch: commit_stage generation {} did not match current generation {}",
-				request.generation,
-				head.generation
-			);
+			return Err(SqliteStorageError::FenceMismatch {
+				reason: format!(
+					"commit_stage generation {} did not match current generation {}",
+					request.generation, head.generation
+				),
+			}
+			.into());
 		}
 
 		let staged_chunk = serde_bare::to_vec(&StagedChunk {
@@ -340,24 +356,30 @@ impl SqliteEngine {
 			meta_key(actor_id),
 		)
 		.await?
-		.context("sqlite meta missing for commit finalize")?;
+		.ok_or(SqliteStorageError::MetaMissing {
+			operation: "commit_finalize",
+		})?;
 		let mut head = decode_db_head(&meta_bytes)?;
 
 		if head.generation != request.generation {
 			self.metrics.inc_fence_mismatch_total();
-			bail!(
-				"FenceMismatch: commit_finalize generation {} did not match current generation {}",
-				request.generation,
-				head.generation
-			);
+			return Err(SqliteStorageError::FenceMismatch {
+				reason: format!(
+					"commit_finalize generation {} did not match current generation {}",
+					request.generation, head.generation
+				),
+			}
+			.into());
 		}
 		if head.head_txid != request.expected_head_txid {
 			self.metrics.inc_fence_mismatch_total();
-			bail!(
-				"FenceMismatch: commit_finalize head_txid {} did not match current head_txid {}",
-				request.expected_head_txid,
-				head.head_txid
-			);
+			return Err(SqliteStorageError::FenceMismatch {
+				reason: format!(
+					"commit_finalize head_txid {} did not match current head_txid {}",
+					request.expected_head_txid, head.head_txid
+				),
+			}
+			.into());
 		}
 
 		let staged_entries = udb::scan_prefix_values(
@@ -368,7 +390,10 @@ impl SqliteEngine {
 		)
 		.await?;
 		if staged_entries.is_empty() {
-			bail!("StageNotFound: stage {} missing", request.stage_id);
+			return Err(SqliteStorageError::StageNotFound {
+				stage_id: request.stage_id,
+			}
+			.into());
 		}
 
 		let staged_pages = decode_staged_pages(actor_id, request.stage_id, staged_entries)?;
@@ -454,7 +479,7 @@ impl SqliteEngine {
 				?actor_id,
 				"meta changed during commit finalize, concurrent writer detected"
 			);
-			return Err(anyhow!("concurrent takeover detected, disconnecting actor"));
+			return Err(SqliteStorageError::ConcurrentTakeover.into());
 		}
 
 		udb::apply_write_ops(
@@ -633,6 +658,7 @@ mod tests {
 		CommitFinalizeRequest, CommitRequest, CommitStageRequest, decode_db_head, test_hooks,
 	};
 	use crate::engine::SqliteEngine;
+	use crate::error::SqliteStorageError;
 	use crate::keys::{delta_key, meta_key, stage_chunk_prefix};
 	use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 	use crate::test_utils::{
@@ -1135,9 +1161,10 @@ mod tests {
 			.commit(TEST_ACTOR, request(99, 0))
 			.await
 			.expect_err("stale generation should fail");
-		let error_text = format!("{error:#}");
-
-		assert!(error_text.contains("FenceMismatch"), "{error_text}");
+		assert!(matches!(
+			error.downcast_ref::<SqliteStorageError>(),
+			Some(SqliteStorageError::FenceMismatch { .. })
+		));
 		assert_op_count(&engine, 1);
 		assert!(
 			read_value(&engine, delta_key(TEST_ACTOR, 1))
@@ -1180,9 +1207,10 @@ mod tests {
 			.commit(TEST_ACTOR, request(4, 6))
 			.await
 			.expect_err("stale head txid should fail");
-		let error_text = format!("{error:#}");
-
-		assert!(error_text.contains("FenceMismatch"), "{error_text}");
+		assert!(matches!(
+			error.downcast_ref::<SqliteStorageError>(),
+			Some(SqliteStorageError::FenceMismatch { .. })
+		));
 		assert_op_count(&engine, 1);
 		assert!(
 			read_value(&engine, delta_key(TEST_ACTOR, 8))
@@ -1282,8 +1310,10 @@ mod tests {
 			)
 			.await
 			.expect_err("missing stage should fail");
-
-		assert!(error.to_string().contains("StageNotFound"));
+		assert_eq!(
+			error.downcast_ref::<SqliteStorageError>(),
+			Some(&SqliteStorageError::StageNotFound { stage_id: 999 })
+		);
 		assert_op_count(&engine, 2);
 		assert!(
 			read_value(&engine, delta_key(TEST_ACTOR, 1))

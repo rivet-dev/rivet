@@ -3,6 +3,7 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
 ---
 
 ## Codebase Patterns
+- `pegboard-envoy` SQLite websocket handlers should validate page numbers, page sizes, and duplicate dirty pages at the websocket trust boundary and downgrade unexpected failures to `SqliteErrorResponse` so one bad actor request cannot tear down the shared envoy connection.
 - `sqlite-native` v2 must treat `head_txid` and `db_size_pages` as connection-local authority. `get_pages(...)` can refresh `max_delta_bytes`, but only commits and local truncate/write paths should mutate those fields.
 - RivetKit sleep shutdown should wait for in-flight HTTP action work and pending disconnect callbacks before running `onSleep`, but it should not treat open hibernatable connections alone as a blocker because existing connection actions may still finish during the shutdown window.
 - `sqlite-storage` owns UniversalDB value chunking in `src/udb.rs`, so `pegboard-envoy` should call `SqliteEngine` directly instead of reintroducing a separate `UdbStore` layer.
@@ -337,4 +338,12 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
   - Compaction should treat `generation` and `head_txid` as the fencing fields for META races. Re-reading META inside the final write transaction is safer than comparing an encoded snapshot byte-for-byte.
   - The existing `pause_before_commit` compaction hook is enough to reproduce real commit/takeover races against RocksDB-backed `SqliteEngine` tests without adding new fake transport layers.
   - Retrying compaction after a skipped stale-META pass is fine. Retrying takeover is not, because that only hides the underlying race and bumps generation for no good reason.
+---
+## 2026-04-16 09:43:52 PDT - US-037
+- What was implemented: Hardened SQLite websocket handling in `pegboard-envoy` so actor validation failures, bad dirty-page payloads, and unexpected `sqlite-storage` errors return typed protocol responses instead of bubbling through the shared connection task. Replaced string-parsed fence/size/stage detection with typed `sqlite-storage` errors, added a shared `SqliteErrorResponse` wire variant, and updated the native v2 VFS plus direct transport harness to understand the new response path.
+- Files changed: `engine/CLAUDE.md`, `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`, `engine/packages/sqlite-storage/{Cargo.toml,src/commit.rs,src/error.rs,src/lib.rs,src/read.rs,src/takeover.rs}`, `engine/sdks/schemas/envoy-protocol/v2.bare`, `engine/sdks/typescript/envoy-protocol/src/index.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs`
+- **Learnings for future iterations:**
+  - `sqlite-storage` fence, missing-meta, oversized-commit, stage-missing, and concurrent-takeover cases should stay as typed errors so envoy and direct VFS harnesses can classify them without brittle string parsing.
+  - `pegboard-envoy` should validate SQLite dirty-page shape before dispatch. `pgno == 0`, wrong page byte length, and duplicate page numbers are trust-boundary errors, not storage concerns.
+  - Any shared-connection SQLite failure path needs a protocol error payload fallback. Letting a handler `?` out of `ws_to_tunnel_task` kills unrelated actors on the same envoy connection.
 ---
