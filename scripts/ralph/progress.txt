@@ -3,6 +3,7 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
 ---
 
 ## Codebase Patterns
+- `wrapJsNativeDatabase(...)` must forward new native SQLite introspection hooks like `getSqliteVfsMetrics()`, or `/inspector/metrics` will quietly report zero VFS commit timings even when Rust recorded them.
 - `pegboard-envoy` SQLite websocket handlers should validate page numbers, page sizes, and duplicate dirty pages at the websocket trust boundary and downgrade unexpected failures to `SqliteErrorResponse` so one bad actor request cannot tear down the shared envoy connection.
 - `sqlite-native` v2 should poison the VFS inside `flush_dirty_pages()` and `commit_atomic_write()` for non-fence commit failures; callback wrappers should only translate fence mismatches into SQLite I/O return codes.
 - `sqlite-native` v2 must treat `head_txid` and `db_size_pages` as connection-local authority. `get_pages(...)` can refresh `max_delta_bytes`, but only commits and local truncate/write paths should mutate those fields.
@@ -44,303 +45,51 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
 - `sqlite-native` v2 tests that drive a real `SqliteEngine` through the VFS need a multithread Tokio runtime; `current_thread` is only reliable for mock transport tests.
 - `sqlite-native` batch-atomic callbacks must treat empty atomic-write commits as a no-op, because SQLite can issue zero-dirty-page `COMMIT_ATOMIC_WRITE` cycles during startup PRAGMA setup.
 
-## 2026-04-15 19:59:15 PDT - US-001
-- What was implemented: Added a test-local `MemoryKv` for `SqliteKv` and five end-to-end baseline VFS tests covering create/insert/select, multi-row insert, update, delete, and multi-table schema flows through `open_database(...)`.
-- Files changed: `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - The current `SqliteKv` interface uses `batch_get`, `batch_put`, `batch_delete`, and `delete_range`; the PRD wording still mentions older `kv_*` names.
-  - The rollback journal path can be validated by asserting KV ops touched `kv::FILE_TAG_JOURNAL` and that no journal-tagged keys remain after commit.
-  - `KvVfs::register(...)` needs a live Tokio runtime handle for sync VFS callbacks, so the runtime must outlive the database handle in tests.
+## Completed Stories (Archive)
+
+One-line summary per story. See git log + archived-stories.json for full titles; see this file history for full learnings. Specific reusable learnings have been distilled into the Codebase Patterns section above.
+
+- `2026-04-15` **US-001** — Added a test-local `MemoryKv` for `SqliteKv` and five end-to-end baseline VFS tests covering create/insert/select, multi-row insert, update, delete, and multi-table schema flows...
+- `2026-04-15` **US-002** — Added a repeatable v1 baseline benchmark driver in `rivetkit-sqlite-native`, wired `examples/sqlite-raw` to run it, and captured the measured workload latencies plus KV round-trip...
+- `2026-04-15` **US-003** — Created the `engine/packages/sqlite-storage` crate skeleton, wired it into the root workspace, added the required shared dependency entry for `parking_lot`, and added placeholder...
+- `2026-04-15` **US-004** — Replaced the sqlite-storage type and key stubs with concrete `DBHead`, `DirtyPage`, `FetchedPage`, and `SqliteMeta` structs, added spec-default helpers and `serde_bare` round-trip...
+- `2026-04-15` **US-005** — Added the `SqliteStore` trait plus `Mutation` helpers, then built a reusable `MemoryStore` test backend with latency simulation, operation logging, failure injection,...
+- `2026-04-15` **US-006** — Replaced the sqlite-storage LTX stub with a real V3 encoder that writes the 100-byte header, block-compressed page frames with size prefixes, a sorted varint page index, and a...
+- `2026-04-15` **US-007** — Added an LTX V3 decoder with header parsing, varint page-index decoding, page-frame validation, LZ4 decompression, and random-access helpers, then covered it with round-trip and...
+- `2026-04-15` **US-008** — Added a real `DeltaPageIndex` backed by `scc::HashMap<u32, u64>`, including store loading through `scan_prefix`, sorted range queries, and unit plus MemoryStore-backed integration...
+- `2026-04-15` **US-009** — Added the initial `SqliteEngine<S>` with `Arc<S>` store ownership, per-actor PIDX cache storage, compaction channel construction, a lazy `get_or_load_pidx(...)` helper, and unit...
+- `2026-04-15` **US-010** — Added `SqliteEngine::takeover(...)` with META creation and generation bumping, orphan DELTA/STAGE/PIDX recovery, page-1-first preload handling with optional hints and ranges, and...
+- `2026-04-15` **US-011** — Added `SqliteEngine::get_pages(...)` with META generation fencing, page-0 rejection, one-shot blob batching across DELTA and SHARD sources, LTX decoding, shard fallback, and...
+- `2026-04-15` **US-012** — Added the fast-path `SqliteEngine::commit(...)` handler with generation and head-txid fencing, LTX delta encoding, max-delta enforcement, one-shot `atomic_write` for DELTA plus...
+- `2026-04-15` **US-013** — Added slow-path `commit_stage(...)` and `commit_finalize(...)`, including staged chunk serialization, generation and head-txid fencing, atomic promotion into DELTA plus PIDX plus...
+- `2026-04-15` **US-014** — Added `CompactionCoordinator` with actor-id queue ownership, per-actor worker deduping, periodic finished-worker reaping, a tokio-spawnable `run(...)` entry point, and unit...
+- `2026-04-15` **US-015** — Added the real sqlite-storage compaction path with a default worker, shard-pass folding into SHARD blobs, global DELTA deletion based on remaining PIDX refs, cache cleanup for...
+- `2026-04-15` **US-016** — Added sqlite-storage quota helpers plus persistent `sqlite_storage_used` and `sqlite_max_storage` fields, enforced the quota in commit and finalize paths, updated takeover and...
+- `2026-04-15` **US-017** — Added the full sqlite-storage Prometheus metric set from the spec, then wired commit, read, takeover, compaction worker, and shard compaction paths to update the counters,...
+- `2026-04-16` **US-017b** — Replaced the `SqliteStore`/`MemoryStore` layer with direct UniversalDB access, added a chunking-aware `udb.rs` helper for logical values, rewired sqlite-storage engine handlers...
+- `2026-04-16` **US-026** — Added `envoy-protocol` schema `v2` with SQLite request/response wire types, startup data, and top-level SQLite protocol messages; bumped the Rust and TypeScript protocol SDKs to...
+- `2026-04-16` **US-028** — Added real sqlite websocket dispatch in `pegboard-envoy` for `sqlite_get_pages`, `sqlite_commit`, `sqlite_commit_stage`, and `sqlite_commit_finalize`; introduced a process-wide...
+- `2026-04-16` **US-029** — Extended the actor start command with optional `sqliteStartupData`, populated it in `pegboard-envoy` by reusing internal takeover/preload before actor start, added explicit v1/v2...
+- `2026-04-16` **US-029b** — Ported the UniversalDB simulated-latency hook and added the `sqlite-storage` RTT benchmark example, then updated the benchmark output to report direct actor round trips separately...
+- `2026-04-16` **US-028b** — Switched `sqlite-storage` fast-path commit gating to raw dirty-page bytes, collapsed the fast path into a single UniversalDB transaction, removed the slow-path finalize...
+- `2026-04-16` **US-025b** — Added a startup batch-atomic probe to `open_database(...)` that performs a tiny write transaction, checks `commit_atomic_count`, logs the configured error message, and aborts...
+- `2026-04-16` **US-030** — Added real sqlite request/response plumbing to `rivet-envoy-client`, replaced the v2 VFS protocol trait with direct envoy-handle transport calls, and taught...
+- `2026-04-16` **US-032** — Added explicit `sqliteSchemaVersion` to envoy actor-start commands, threaded it through pegboard actor creation plus the Rust and JavaScript envoy bridges, defaulted fresh actor2...
+- `2026-04-16` **US-018** — Added the missing sqlite-storage integration coverage for direct commit/read cases, multi-actor isolation, explicit preload and orphan cleanup checks, and multi-shard plus...
+- `2026-04-16` **US-045** — Expanded `sqlite-native` v2 coverage with direct-engine RocksDB tests for stale-head cache-miss reads, batch-atomic startup probing, real slow-path staged commits, transport-error...
+- `2026-04-16` **US-021** — Added sqlite-storage quota and failure-path coverage for within-quota commits with unrelated KV data, atomic rollback on injected fast-commit failures, clean compaction retry...
+- `2026-04-16` **US-023** — Collapsed `sqlite-storage` `get_pages(...)` into a single UniversalDB transaction, added stale-PIDX-to-SHARD fallback so reads stay correct during compaction, and added real...
+- `2026-04-16` **US-042** — Added a test-only direct `SqliteEngine` transport for the v2 VFS, wired `sqlite-native` to real RocksDB-backed `sqlite-storage` in tests, and covered create/insert/select,...
+- `2026-04-16` **US-041** — Removed creation-time SQLite schema selection from pegboard config and actor workflow state, then moved v1-vs-v2 dispatch to actor startup by probing the actor KV subspace for...
+- `2026-04-16` **US-027** — Verified that `US-017b` already eliminated the `SqliteStore` abstraction and moved UniversalDB chunking into `engine/packages/sqlite-storage/src/udb.rs`, so `US-027` is satisfied...
+- `2026-04-16` **US-034** — Fixed the remaining v2 E2E regressions in the bare/static driver suites by recovering `get_pages(...)` from stale PIDX and missing source blobs, serializing v2 VFS commit/flush...
+- `2026-04-16` **US-046** — Stopped v2 `get_pages(...)` reads from overwriting VFS-owned `head_txid` and `db_size_pages`, limited read-side meta refreshes to `max_delta_bytes`, removed the unnecessary...
+- `2026-04-16` **US-036** — Fenced shard compaction META writes by re-reading META inside the write transaction, comparing `generation` plus `head_txid`, and recomputing the updated META from the live head...
+
 ---
 
-## 2026-04-15 20:05:23 PDT - US-002
-- What was implemented: Added a repeatable v1 baseline benchmark driver in `rivetkit-sqlite-native`, wired `examples/sqlite-raw` to run it, and captured the measured workload latencies plus KV round-trip counts in `.agent/research/sqlite/v1-baseline-bench.json`.
-- Files changed: `rivetkit-typescript/packages/sqlite-native/examples/v1_baseline_bench.rs`, `examples/sqlite-raw/scripts/benchmark.ts`, `examples/sqlite-raw/package.json`, `examples/AGENTS.md`, `.agent/research/sqlite/v1-baseline-bench.json`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `pnpm-lock.yaml`
-- **Learnings for future iterations:**
-  - The easiest way to benchmark the v1 native VFS is from a Rust example that reuses `KvVfs::register(...)` and `open_database(...)`; the TypeScript example can stay a thin wrapper that writes the JSON artifact.
-  - In a fresh worktree, `examples/sqlite-raw` typechecks only after `pnpm build -F rivetkit` because the workspace package emits declarations during build.
-  - The current in-memory baseline is a zero-RTT measurement, so comparisons against future v2 numbers should use the same harness or explicitly document a different latency model.
----
+## Recent Story Details (last 3)
 
-## 2026-04-15 20:10:47 PDT - US-003
-- What was implemented: Created the `engine/packages/sqlite-storage` crate skeleton, wired it into the root workspace, added the required shared dependency entry for `parking_lot`, and added placeholder module roots for every planned sqlite-storage subsystem.
-- Files changed: `Cargo.toml`, `Cargo.lock`, `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/lib.rs`, `engine/packages/sqlite-storage/src/types.rs`, `engine/packages/sqlite-storage/src/keys.rs`, `engine/packages/sqlite-storage/src/store.rs`, `engine/packages/sqlite-storage/src/ltx.rs`, `engine/packages/sqlite-storage/src/page_index.rs`, `engine/packages/sqlite-storage/src/engine.rs`, `engine/packages/sqlite-storage/src/takeover.rs`, `engine/packages/sqlite-storage/src/read.rs`, `engine/packages/sqlite-storage/src/commit.rs`, `engine/packages/sqlite-storage/src/metrics.rs`, `engine/packages/sqlite-storage/src/compaction/mod.rs`, `engine/packages/sqlite-storage/src/test_utils/mod.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - A new engine crate is cheap to land as empty module files as long as `src/lib.rs` declares the final module graph up front and `Cargo.toml` sticks to workspace metadata and dependency wiring.
-  - `cargo check -p sqlite-storage` updated `Cargo.lock`, so later sqlite-storage stories should expect the lockfile to move even for Rust-only crate additions.
-  - The current skeleton deliberately avoids any dependency on `pegboard-envoy`, `universaldb`, `nats`, or websocket crates, matching the storage-layer boundary in the PRD.
----
-
-## 2026-04-15 20:14:38 PDT - US-004
-- What was implemented: Replaced the sqlite-storage type and key stubs with concrete `DBHead`, `DirtyPage`, `FetchedPage`, and `SqliteMeta` structs, added spec-default helpers and `serde_bare` round-trip coverage for `DBHead`, and implemented the `0x02` META/SHARD/DELTA/PIDX/STAGE key builders with ordering tests.
-- Files changed: `CLAUDE.md`, `Cargo.lock`, `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/types.rs`, `engine/packages/sqlite-storage/src/keys.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `sqlite-storage` needs `serde.workspace = true` plus `serde_bare.workspace = true` as soon as core storage structs become real data models instead of placeholders.
-  - The v2 keyspace is easiest to keep readable and spec-aligned by using ASCII path segments like `/DELTA/` after the `0x02` prefix, then appending big-endian numeric bytes for sortable suffixes.
-  - Converting `DBHead` into the actor-facing `SqliteMeta` is already a useful seam, because later protocol handlers will need to attach runtime-only fields like `max_delta_bytes` without mutating persisted META.
----
-
-## 2026-04-15 20:19:51 PDT - US-005
-- What was implemented: Added the `SqliteStore` trait plus `Mutation` helpers, then built a reusable `MemoryStore` test backend with latency simulation, operation logging, failure injection, partial-write simulation, snapshot/restore, and unit coverage for ordered reads and prefix scans.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/store.rs`, `engine/packages/sqlite-storage/src/test_utils/mod.rs`, `engine/packages/sqlite-storage/src/test_utils/memory_store.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `SqliteStore::batch_get` is modeled as `Vec<Option<Vec<u8>>>`, so callers can preserve request order without rejoining a map.
-  - `MemoryStore` records attempted ops before enforcing `fail_after_ops`, which keeps RTT accounting honest but means every later store call will keep failing once the budget is exceeded.
-  - `simulate_partial_write` intentionally applies only a subset of mutations before erroring, so crash-simulation tests can validate cleanup and recovery paths against genuinely torn state.
----
-
-## 2026-04-15 20:25:00 PDT - US-006
-- What was implemented: Replaced the sqlite-storage LTX stub with a real V3 encoder that writes the 100-byte header, block-compressed page frames with size prefixes, a sorted varint page index, and a zeroed trailer for no-checksum mode.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/ltx.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - The V3 page section ends with a zeroed 6-byte page-header sentinel before the page index, even though the index itself also uses a zero-`pgno` sentinel.
-  - Page-index offsets and sizes should point at the full encoded page frame starting at the page header, not just the compressed payload bytes.
-  - `HeaderFlagNoChecksum` means both the header pre-apply checksum and the 16-byte trailer checksums stay zeroed for our sqlite-storage blobs.
----
-
-## 2026-04-15 20:29:04 PDT - US-007
-- What was implemented: Added an LTX V3 decoder with header parsing, varint page-index decoding, page-frame validation, LZ4 decompression, and random-access helpers, then covered it with round-trip and corruption tests.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/ltx.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - The decoder should reject blobs whose footer page index disagrees with the actual page-frame offsets or sizes, because later read paths will rely on those offsets for random access.
-  - The zeroed 6-byte page-header sentinel must be the final bytes of the page section; if any bytes appear after it before the page index, the blob is malformed.
-  - Trailer validation is still required in no-checksum mode, because a non-zero 16-byte trailer indicates the blob no longer matches our current encoder contract.
----
-
-## 2026-04-15 20:33:11 PDT - US-008
-- What was implemented: Added a real `DeltaPageIndex` backed by `scc::HashMap<u32, u64>`, including store loading through `scan_prefix`, sorted range queries, and unit plus MemoryStore-backed integration coverage.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/page_index.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `DeltaPageIndex::load_from_store(...)` should trust `scan_prefix` for ordering but still validate that each returned key and value has the exact big-endian `u32` and `u64` widths expected by PIDX.
-  - `scc::HashMap` iteration order is not stable, so any page-range API built on top of it needs an explicit sort before returning deterministic results.
-  - Using `upsert_sync` keeps PIDX inserts idempotent for reloads and later commit paths that may touch the same page number multiple times.
----
-## 2026-04-15 20:39:06 PDT - US-009
-- What was implemented: Added the initial `SqliteEngine<S>` with `Arc<S>` store ownership, per-actor PIDX cache storage, compaction channel construction, a lazy `get_or_load_pidx(...)` helper, and unit tests covering cache reuse plus the returned compaction receiver.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/engine.rs`, `engine/packages/sqlite-storage/src/keys.rs`, `engine/packages/sqlite-storage/src/metrics.rs`, `engine/packages/sqlite-storage/src/page_index.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `SqliteEngine::get_or_load_pidx(...)` must not hold an `scc::HashMap` vacant entry across an `.await`; load from the store first, then re-check `entry_async(...)` before inserting.
-  - A dedicated `pidx_delta_prefix()` helper is cleaner and less error-prone than rebuilding scan prefixes by truncating `pidx_delta_key(0)` in every caller.
-  - The constructor can stay generic over `S: SqliteStore` while still supporting shared test inspection by exposing a `from_arc(...)` helper for pre-wrapped stores.
----
-
-## 2026-04-15 20:45:09 PDT - US-010
-- What was implemented: Added `SqliteEngine::takeover(...)` with META creation and generation bumping, orphan DELTA/STAGE/PIDX recovery, page-1-first preload handling with optional hints and ranges, and compaction enqueueing once the live delta count crosses the threshold.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/keys.rs`, `engine/packages/sqlite-storage/src/takeover.rs`, `engine/packages/sqlite-storage/src/types.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Takeover recovery is cleaner if it builds one mutation list for orphan cleanup and appends the bumped META write to the same `atomic_write`, rather than trying to recover and fence in separate store calls.
-  - Preload should always include page 1, then treat extra hint pages as best-effort within the byte budget instead of dropping schema warmup when the configured limit is tight.
-  - After takeover mutates PIDX-backed state, evict the actor's cached PIDX entry so later read and commit paths do not reuse stale in-memory mappings.
----
-## 2026-04-15 20:51:30 PDT - US-011
-- What was implemented: Added `SqliteEngine::get_pages(...)` with META generation fencing, page-0 rejection, one-shot blob batching across DELTA and SHARD sources, LTX decoding, shard fallback, and coverage for committed-delta reads, post-compaction shard reads, cached PIDX hits, and negative fence checks.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/read.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - The read path should gather unique DELTA and SHARD blob keys up front and issue exactly one `batch_get`, even when a single request mixes cached PIDX hits with shard fallback pages.
-  - `get_pages(...)` can skip PIDX loading entirely when every requested page is already beyond `db_size_pages`, but it must reject page 0 before touching storage.
-  - Re-reading through the same `actor_id` should hit the cached `DeltaPageIndex` and avoid another `scan_prefix`, so tests should clear the `MemoryStore` op log after the warm-up call before asserting the hot path.
----
-## 2026-04-15 20:56:16 PDT - US-012
-- What was implemented: Added the fast-path `SqliteEngine::commit(...)` handler with generation and head-txid fencing, LTX delta encoding, max-delta enforcement, one-shot `atomic_write` for DELTA plus PIDX plus META, cached PIDX refresh, compaction enqueueing, and coverage for success plus stale-fence failures.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/commit.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Fast-path commit can keep the 1-RTT behavior by updating the in-memory PIDX only when the actor already has a cached index entry; if the cache is absent, rely on the stored PIDX rows instead of scanning during commit.
-  - The simplest fence behavior for this crate today is to read META once, reject mismatched `generation` or `head_txid`, then perform a single `atomic_write`; tests should assert the failure path only touched the META read.
-  - Clearing the `MemoryStore` op log after a cache warm-up makes it easy to prove commit refreshed the cached PIDX, because the follow-up `get_pages(...)` hot path should skip `scan_prefix` and go straight to `batch_get`.
----
-## 2026-04-15 21:02:40 PDT - US-013
-- What was implemented: Added slow-path `commit_stage(...)` and `commit_finalize(...)`, including staged chunk serialization, generation and head-txid fencing, atomic promotion into DELTA plus PIDX plus META, staged-key cleanup, and integration coverage for finalize success plus missing-stage failure.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/commit.rs`, `engine/packages/sqlite-storage/src/keys.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Slow-path finalize should scan a per-stage prefix such as `stage_chunk_prefix(stage_id)` so it only assembles and deletes the chunk set for one staged commit.
-  - Keeping STAGE cleanup in the same `atomic_write` as DELTA plus PIDX plus META promotion preserves the staged-data invisibility guarantee if finalize fails halfway through.
-  - Persisting an `is_last` marker per staged chunk gives finalize enough information to reject missing middle or trailing chunks instead of silently promoting partial data.
----
-## 2026-04-15 21:07:57 PDT - US-014
-- What was implemented: Added `CompactionCoordinator` with actor-id queue ownership, per-actor worker deduping, periodic finished-worker reaping, a tokio-spawnable `run(...)` entry point, and unit coverage for duplicate notifications plus restart-after-finish behavior.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/compaction/mod.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - The coordinator can stay focused on queueing and worker lifecycle by injecting the worker future, which keeps US-014 independent from the real shard-folding logic in US-015.
-  - Checking `JoinHandle::is_finished()` before deduping avoids dropping a new notification just because a completed worker has not been reaped yet.
-  - A short reap interval plus `Notify`-driven test workers is enough to exercise coordinator behavior deterministically without sleeps all over the damn place.
----
-## 2026-04-15 21:15:18 PDT - US-015
-- What was implemented: Added the real sqlite-storage compaction path with a default worker, shard-pass folding into SHARD blobs, global DELTA deletion based on remaining PIDX refs, cache cleanup for compacted pages, and coverage for five-delta folding, latest-wins merges, multi-shard deltas, batch limiting, and idempotent reruns.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/compaction/mod.rs`, `engine/packages/sqlite-storage/src/compaction/worker.rs`, `engine/packages/sqlite-storage/src/compaction/shard.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Compaction needs the full DELTA key scan in addition to PIDX rows, because overwritten deltas can already be unreferenced before their shard is compacted and should be deleted once no PIDX rows point at them.
-  - Clearing compacted pages out of the cached `DeltaPageIndex` lets the same `SqliteEngine` keep serving reads from SHARD blobs without forcing a cache reload.
-  - Driving multi-shard compaction through `compact_worker(..., shards_per_batch)` makes it easy to test staged progress and the default eight-shard batch limit without a real background task.
----
-## 2026-04-15 21:26:37 PDT - US-016
-- What was implemented: Added sqlite-storage quota helpers plus persistent `sqlite_storage_used` and `sqlite_max_storage` fields, enforced the quota in commit and finalize paths, updated takeover and compaction to keep the counter synchronized, and added quota-focused tests.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/commit.rs`, `engine/packages/sqlite-storage/src/compaction/shard.rs`, `engine/packages/sqlite-storage/src/compaction/worker.rs`, `engine/packages/sqlite-storage/src/keys.rs`, `engine/packages/sqlite-storage/src/lib.rs`, `engine/packages/sqlite-storage/src/quota.rs`, `engine/packages/sqlite-storage/src/read.rs`, `engine/packages/sqlite-storage/src/takeover.rs`, `engine/packages/sqlite-storage/src/types.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `sqlite_storage_used` must be encoded with a fixed-point helper because changing the stored usage changes the serialized META size too.
-  - SQLite quota enforcement should ignore STAGE and unrelated KV keys, so tests should compare the stored counter against a filtered scan rather than total raw store bytes.
-  - Quota tests are cleaner if seeded META is rewritten with the actual tracked usage after seeding extra DELTA and PIDX rows, otherwise the counter starts inconsistent and every assertion gets noisy.
----
-## 2026-04-15 21:42:11 PDT - US-017
-- What was implemented: Added the full sqlite-storage Prometheus metric set from the spec, then wired commit, read, takeover, compaction worker, and shard compaction paths to update the counters, histograms, and delta gauge from real engine state changes.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/metrics.rs`, `engine/packages/sqlite-storage/src/commit.rs`, `engine/packages/sqlite-storage/src/read.rs`, `engine/packages/sqlite-storage/src/takeover.rs`, `engine/packages/sqlite-storage/src/compaction/worker.rs`, `engine/packages/sqlite-storage/src/compaction/shard.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Compaction pass duration and total belong in `compaction/worker.rs`, but shard-specific results such as folded pages, deleted deltas, gauge updates, and lag belong in `compaction/shard.rs` or the metrics will double count.
-  - Fence mismatch metrics need to be incremented immediately before returning the mismatch error, because `ensure!` and `bail!` short-circuit the handler.
-  - The delta gauge can be derived from `head_txid - materialized_txid`, which keeps commit, takeover, and compaction instrumentation cheap and deterministic.
----
-## 2026-04-16 02:38:08 PDT - US-017b
-- What was implemented: Replaced the `SqliteStore`/`MemoryStore` layer with direct UniversalDB access, added a chunking-aware `udb.rs` helper for logical values, rewired sqlite-storage engine handlers and compaction onto `Arc<Database> + Subspace`, and moved sqlite-storage tests onto temp RocksDB-backed UDB instances with transaction counting.
-- Files changed: `Cargo.lock`, `engine/CLAUDE.md`, `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/{commit.rs,compaction/mod.rs,compaction/shard.rs,compaction/worker.rs,engine.rs,keys.rs,lib.rs,page_index.rs,read.rs,takeover.rs,udb.rs}`, `engine/packages/sqlite-storage/src/test_utils/{helpers.rs,mod.rs}`, deleted `engine/packages/sqlite-storage/src/store.rs`, deleted `engine/packages/sqlite-storage/src/test_utils/memory_store.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Direct UDB refactors are safer if you centralize logical-value encoding in one helper module and keep the engine methods focused on fence and quota logic.
-  - Temp RocksDB UDB tests need a unique subspace per test, otherwise actor-key collisions make the results look cursed.
-  - Replacing MemoryStore op logs with a simple per-transaction counter preserves the RTT assertions without reintroducing a fake backend.
----
-## 2026-04-16 02:47:08 PDT - US-026
-- What was implemented: Added `envoy-protocol` schema `v2` with SQLite request/response wire types, startup data, and top-level SQLite protocol messages; bumped the Rust and TypeScript protocol SDKs to `v2`; and updated immediate Rust consumers to recognize the new variants without implementing dispatch yet.
-- Files changed: `engine/CLAUDE.md`, `engine/sdks/schemas/envoy-protocol/v2.bare`, `engine/sdks/rust/envoy-protocol/src/{lib.rs,versioned.rs}`, `engine/sdks/typescript/envoy-protocol/src/index.ts`, `engine/sdks/rust/envoy-client/src/{envoy.rs,stringify.rs}`, `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Envoy-protocol version bumps can deserialize `v1` payloads directly into the new generated `v2` type when shared union variants keep the same tag ordering, which means new variants must be appended rather than inserted.
-  - `v1` compatibility for a new protocol version should explicitly reject SQLite-only `v2` variants on `v1` links instead of trying to byte-transcode or silently degrade them.
-  - Adding protocol variants usually breaks exhaustive `match`es in `envoy-client` and `pegboard-envoy` immediately, so check those consumers right after the schema crate builds.
----
-## 2026-04-16 02:59:09 PDT - US-028
-- What was implemented: Added real sqlite websocket dispatch in `pegboard-envoy` for `sqlite_get_pages`, `sqlite_commit`, `sqlite_commit_stage`, and `sqlite_commit_finalize`; introduced a process-wide shared sqlite runtime that initializes one `SqliteEngine` plus `CompactionCoordinator`; and added reusable sqlite meta-loading helpers so dispatch can return protocol fence metadata without duplicating storage reads everywhere.
-- Files changed: `Cargo.lock`, `Cargo.toml`, `engine/CLAUDE.md`, `engine/packages/pegboard-envoy/Cargo.toml`, `engine/packages/pegboard-envoy/src/{conn.rs,lib.rs,sqlite_runtime.rs,ws_to_tunnel_task.rs}`, `engine/packages/sqlite-storage/src/{compaction/worker.rs,engine.rs}`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `PegboardEnvoyWs::new(...)` is constructed per websocket request, so any sqlite dispatch state that should survive across connections needs a process-wide `OnceCell` instead of living on the request-scoped service instance.
-  - The sqlite websocket glue still has to enforce actor ownership checks at `pegboard-envoy`, because envoy-originated actor IDs are untrusted input even if the actual storage work is delegated to `sqlite-storage`.
-  - `sqlite-storage` already had a compaction-only `load_head` helper, so adding a shared engine-level meta loader required collapsing that duplicate instead of layering a second method with the same name.
----
-## 2026-04-16 03:18:16 PDT - US-029
-- What was implemented: Extended the actor start command with optional `sqliteStartupData`, populated it in `pegboard-envoy` by reusing internal takeover/preload before actor start, added explicit v1/v2 protocol migrations for the changed start payload, and threaded the new field through the Rust and JavaScript envoy bridges into the actor driver.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/pegboard-envoy/src/{conn.rs,sqlite_runtime.rs,tunnel_to_ws_task.rs,ws_to_tunnel_task.rs}`, `engine/packages/pegboard-outbound/src/lib.rs`, `engine/packages/pegboard/src/workflows/actor2/runtime.rs`, `engine/sdks/rust/envoy-client/src/{actor.rs,commands.rs,config.rs}`, `engine/sdks/rust/envoy-protocol/src/versioned.rs`, `engine/sdks/rust/test-envoy/src/behaviors.rs`, `engine/sdks/schemas/envoy-protocol/v2.bare`, `engine/sdks/typescript/envoy-protocol/src/index.ts`, `rivetkit-typescript/packages/rivetkit-native/{src/bridge_actor.rs,wrapper.d.ts,wrapper.js}`, `rivetkit-typescript/packages/rivetkit/src/drivers/engine/actor-driver.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Adding a field to `CommandStartActor` breaks same-bytes compatibility for queued command payloads even if the outer protocol version already exists, so `versioned.rs` needs explicit v1<->v2 conversions for both `ToEnvoy` and `ActorCommandKeyData`.
-  - `pegboard-envoy` startup hydration is the right place to combine KV preload and SQLite takeover because both missed commands and live websocket commands need the same actor-start mutation path.
-  - SQLite startup takeover should be gated on the actor's stored sqlite META existing first, otherwise fresh actors would eagerly create v2 state before schema-version dispatch is in place.
----
-## 2026-04-16 03:25:39 PDT - US-029b
-- What was implemented: Ported the UniversalDB simulated-latency hook and added the `sqlite-storage` RTT benchmark example, then updated the benchmark output to report direct actor round trips separately from engine-local UDB transaction count and wall-clock time.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/universaldb/src/database.rs`, `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/examples/bench_rtt.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `UDB_SIMULATED_LATENCY_MS` is read once per process through `OnceLock`, so benchmark jobs need the env var set before startup rather than toggling it mid-process.
-  - The direct `sqlite-storage` benchmark should hardcode `actor_rts=1` and keep `udb_txs` separate, because projected network latency comes from actor-engine messages, not engine-local UniversalDB calls.
-  - `SqliteEngine::op_counter` already tracks `db.run()` calls through `udb::run_db_op(...)`, which makes it the right source for UDB transaction counts in engine-only benchmarks.
----
-## 2026-04-16 03:51:49 PDT - US-028b
-- What was implemented: Switched `sqlite-storage` fast-path commit gating to raw dirty-page bytes, collapsed the fast path into a single UniversalDB transaction, removed the slow-path finalize encoded-size rejection, and added a small `sqlite-native` v2 write helper that queues all `commit_stage` messages before awaiting `commit_finalize`.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/{commit.rs,udb.rs}`, `rivetkit-typescript/packages/sqlite-native/{Cargo.toml,examples/v1_baseline_bench.rs,src/lib.rs,src/v2/mod.rs,src/v2/vfs.rs,src/vfs.rs}`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - The one-RTT sqlite-storage fast path is easiest to preserve by doing fence reads, quota accounting, and DELTA/PIDX/META writes inside one `db.run(...)` instead of bouncing through separate helper transactions.
-  - Raw dirty-byte sizing belongs on the actor-side fast/slow path decision and the engine-side fast-path guard; slow-path finalize should not re-apply the 8 MiB encoded limit because UniversalDB already chunks large logical values.
-  - `rivetkit-sqlite-native` examples and tests that still call `KvVfs::register(...)` need an explicit startup preload vector argument now, even when the caller has no preload data.
----
-## 2026-04-16 03:56:48 PDT - US-025b
-- What was implemented: Added a startup batch-atomic probe to `open_database(...)` that performs a tiny write transaction, checks `commit_atomic_count`, logs the configured error message, and aborts database startup if SQLite never invokes `COMMIT_ATOMIC_WRITE`.
-- Files changed: `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - The safest place to assert `SQLITE_ENABLE_BATCH_ATOMIC_WRITE` is active is immediately after `sqlite3_open_v2(...)` and PRAGMA setup, because the VFS still owns the live metrics and can fail actor startup before any real user data is touched.
-  - `commit_atomic_count` is the cleanest runtime signal for this check. A tiny `BEGIN IMMEDIATE ... COMMIT` probe proves SQLite is using the atomic-write path without leaving a journal or a probe table behind.
-  - `rivetkit-sqlite-native` package tests are fast enough that a focused startup-probe test plus the full crate suite is a reasonable verification loop for VFS startup changes.
----
-## 2026-04-16 04:18:06 PDT - US-030
-- What was implemented: Added real sqlite request/response plumbing to `rivet-envoy-client`, replaced the v2 VFS protocol trait with direct envoy-handle transport calls, and taught `open_database_from_envoy(...)` to select the v2 VFS automatically from `SqliteStartupData` cached on the Rust `JsEnvoyHandle`.
-- Files changed: `engine/sdks/rust/envoy-client/src/{envoy.rs,handle.rs,lib.rs,sqlite.rs}`, `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/rivetkit-native/src/{bridge_actor.rs,database.rs,envoy_handle.rs,lib.rs}`, `rivetkit-typescript/packages/sqlite-native/{Cargo.toml,src/v2/vfs.rs}`, `Cargo.lock`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - The envoy client's sqlite RPCs should reuse the same pending-request, reconnect-resend, and timeout cleanup pattern as KV requests instead of inventing a second websocket transport path.
-  - `SqliteStartupData` is better cached on the native Rust envoy handle than in the TypeScript driver, because native database open already happens inside `rivetkit-native` and can switch VFS implementations without extra JS plumbing.
-  - The v2 VFS tests can stay self-contained without a public transport trait by using a test-only mock transport enum branch inside `src/v2/vfs.rs`.
----
-## 2026-04-16 04:50:15 PDT - US-032
-- What was implemented: Added explicit `sqliteSchemaVersion` to envoy actor-start commands, threaded it through pegboard actor creation plus the Rust and JavaScript envoy bridges, defaulted fresh actor2 launches to schema version 2 behind `pegboard.sqlite_vfs_v2_default`, and made `open_database_from_envoy(...)` dispatch strictly on schema version while failing closed when v2 startup data is missing.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/config/src/config/pegboard.rs`, `engine/packages/pegboard-envoy/src/sqlite_runtime.rs`, `engine/packages/pegboard-outbound/src/lib.rs`, `engine/packages/pegboard/src/{ops/actor/create.rs,workflows/actor/mod.rs,workflows/actor2/mod.rs,workflows/actor2/runtime.rs}`, `engine/sdks/rust/envoy-client/src/{actor.rs,commands.rs,config.rs}`, `engine/sdks/rust/envoy-protocol/src/versioned.rs`, `engine/sdks/rust/test-envoy/src/behaviors.rs`, `engine/sdks/schemas/envoy-protocol/v2.bare`, `engine/sdks/typescript/envoy-protocol/src/index.ts`, `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/rivetkit-native/src/{bridge_actor.rs,database.rs,envoy_handle.rs,lib.rs}`, `rivetkit-typescript/packages/rivetkit-native/{wrapper.d.ts,wrapper.js}`, `rivetkit-typescript/packages/rivetkit/src/drivers/engine/actor-driver.ts`, `website/src/content/docs/self-hosting/configuration.mdx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Actor-side sqlite VFS selection must key off `sqliteSchemaVersion` rather than `SqliteStartupData` presence, because fresh v2 actors still need an explicit version signal even when startup metadata is synthesized later.
-  - When a manual `vbare::OwnedVersionedData` latest version is greater than `1`, return `vec![Ok]` from both converter hooks or versioned serialization can silently act like the type is still version `1`.
-  - Full `pnpm --dir rivetkit-typescript/packages/rivetkit run check-types` is currently failing on unrelated fixture and standalone test issues, so targeted validation for this path came from `engine-envoy-protocol` TypeScript checks plus `rivetkit-native` cargo and N-API builds.
----
-## 2026-04-16 04:59:30 PDT - US-018
-- What was implemented: Added the missing sqlite-storage integration coverage for direct commit/read cases, multi-actor isolation, explicit preload and orphan cleanup checks, and multi-shard plus idempotent compaction behavior so the acceptance list is covered by real RocksDB-backed engine tests.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/commit.rs`, `engine/packages/sqlite-storage/src/takeover.rs`, `engine/packages/sqlite-storage/src/compaction/shard.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Keep sqlite-storage acceptance tests close to the handler they validate. `commit.rs`, `takeover.rs`, and `compaction/shard.rs` already have the right helper scaffolding and avoid a separate integration-test maze.
-  - Multi-shard compaction regressions are easiest to catch by asserting the shared DELTA blob survives the first shard passes and disappears only after the last PIDX reference is folded.
-  - Explicit preload tests should seed both DELTA-backed and SHARD-backed pages in the same actor so takeover ordering and page-source selection are validated together.
----
-
-## 2026-04-16 09:10:54 PDT - US-045
-- What was implemented: Expanded `sqlite-native` v2 coverage with direct-engine RocksDB tests for stale-head cache-miss reads, batch-atomic startup probing, real slow-path staged commits, transport-error death semantics, multi-thread churn, shared-engine actor isolation, mixed-workload sleep/wake integrity, hot-row reopen persistence, migration-failure reopen cleanup, and read safety while compaction runs. Fixed the v2 VFS to run the startup batch-atomic probe, count atomic commits, and mark the VFS dead on transport and commit errors instead of leaving it half-alive.
-- Files changed: `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`, `engine/packages/pegboard-outbound/Cargo.toml`, `engine/packages/sqlite-storage/src/compaction/shard.rs`, `engine/packages/sqlite-storage/src/takeover.rs`, `engine/sdks/rust/envoy-client/src/handle.rs`, `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/rivetkit-native/src/database.rs`, `rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - The sqlite v2 startup path should prove batch-atomic support with a real write probe during `open_database(...)`, because a VFS that advertises `SQLITE_IOCAP_BATCH_ATOMIC` but never sees `COMMIT_ATOMIC_WRITE` is broken from the first page write.
-  - Direct-engine regression tests are more useful if they inspect the live `VfsV2Context` for `head_txid`, dead-state, and cache invalidation instead of approximating those behaviors through mocked protocol responses.
-  - Transport failures during v2 commit or read paths must poison the VFS instance and be surfaced through `take_last_kv_error()`; trying to keep using the same handle after an ambiguous write is how you get cursed dirty-page limbo.
----
-## 2026-04-16 05:11:09 PDT - US-021
-- What was implemented: Added sqlite-storage quota and failure-path coverage for within-quota commits with unrelated KV data, atomic rollback on injected fast-commit failures, clean compaction retry after injected write errors, and takeover recovery after reopening a checkpointed mid-commit RocksDB snapshot.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/test_utils/{helpers.rs,mod.rs}`, `engine/packages/sqlite-storage/src/{udb.rs,commit.rs,takeover.rs}`, `engine/packages/sqlite-storage/src/compaction/shard.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Scope sqlite-storage write failpoints to actor-specific keys or actor IDs. Parallel Rust tests will absolutely stomp a global unscoped failpoint.
-  - For restart coverage, checkpoint the RocksDB-backed UniversalDB after writing staged state, reopen it in a new engine instance, and let `takeover(...)` do the recovery cleanup for real.
-  - Quota assertions are more stable when they compare `sqlite_storage_used` against recomputed tracked usage instead of hard-coding serialized byte counts.
----
-## 2026-04-16 05:20:49 PDT - US-023
-- What was implemented: Collapsed `sqlite-storage` `get_pages(...)` into a single UniversalDB transaction, added stale-PIDX-to-SHARD fallback so reads stay correct during compaction, and added real RocksDB-backed latency plus concurrency integration coverage for the merged US-023/US-024 acceptance set.
-- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/src/read.rs`, `engine/packages/sqlite-storage/src/commit.rs`, `engine/packages/sqlite-storage/tests/latency.rs`, `engine/packages/sqlite-storage/tests/concurrency.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `get_pages(...)` can stay at one simulated RTT even on a cold PIDX cache if META, PIDX scan, and blob fetches all happen inside one `db.run(...)`.
-  - Reads racing compaction need to treat missing DELTA blobs as a stale cache signal and fall back to SHARD while evicting the bad in-memory PIDX rows.
-  - Latency assertions against `UDB_SIMULATED_LATENCY_MS=20` belong in their own integration-test process, or `OnceLock` will poison the run with whatever value the first UDB caller saw.
----
-## 2026-04-16 06:59:26 PDT - US-042
-- What was implemented: Added a test-only direct `SqliteEngine` transport for the v2 VFS, wired `sqlite-native` to real RocksDB-backed `sqlite-storage` in tests, and covered create/insert/select, large-row page growth, `PRAGMA user_version`, reopen-after-takeover persistence, aux-file flows, batch-atomic file control, and truncate-then-regrow behavior.
-- Files changed: `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/sqlite-native/Cargo.toml`, `rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - The direct `SqliteEngine` test path can reuse the same request/response conversions as `pegboard-envoy`, but it needs to synthesize `SqliteStartupData` from a real `takeover(...)` before each open.
-  - Real-engine VFS tests need a multithread Tokio runtime; the mock-path `current_thread` runtime stalled once `get_pages(...)` hit actual async engine work.
-  - `commit_atomic_write()` must return early when SQLite closes an empty atomic-write batch, or startup pragmas like `locking_mode = EXCLUSIVE` can wedge the direct engine path on a zero-page commit.
----
-## 2026-04-16 07:06:11 PDT - US-041
-- What was implemented: Removed creation-time SQLite schema selection from pegboard config and actor workflow state, then moved v1-vs-v2 dispatch to actor startup by probing the actor KV subspace for legacy prefix `0x08` data in both `pegboard-envoy` and `pegboard-outbound`.
-- Files changed: `engine/CLAUDE.md`, `engine/artifacts/config-schema.json`, `engine/packages/config/src/config/pegboard.rs`, `engine/packages/pegboard/src/{actor_kv/mod.rs,ops/actor/create.rs,workflows/actor/mod.rs,workflows/actor2/mod.rs,workflows/actor2/runtime.rs}`, `engine/packages/pegboard-envoy/src/sqlite_runtime.rs`, `engine/packages/pegboard-outbound/src/lib.rs`, `website/src/content/docs/self-hosting/configuration.mdx`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - SQLite schema version selection belongs in start-command population, not in pegboard config or persisted actor workflow state, because the right answer depends on whether legacy actor KV data already exists.
-  - The v1 detection path is intentionally cheap: one actor-KV prefix scan with `limit: 1` on raw prefix `0x08`, exposed as `pegboard::actor_kv::sqlite_v1_data_exists(...)`.
-  - The wire protocol and actor-side bridge do not need to change for this migration. Only the authority that sets `sqlite_schema_version` and `sqlite_startup_data` moved.
----
-
-## 2026-04-16 08:01:17 PDT - US-027
-- What was implemented: Verified that `US-017b` already eliminated the `SqliteStore` abstraction and moved UniversalDB chunking into `engine/packages/sqlite-storage/src/udb.rs`, so `US-027` is satisfied by the shipped direct-`SqliteEngine` design rather than a separate `UdbStore` in `pegboard-envoy`.
-- Files changed: `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Do not add a `pegboard-envoy`-local SQLite store wrapper on top of UniversalDB. The storage boundary already lives in `sqlite-storage`, and duplicating chunking logic there would be dead weight.
-  - When a later PRD story is explicitly superseded by an earlier architectural change, validate the replacement path in code and close the story instead of rebuilding the obsolete abstraction.
----
-## 2026-04-16 08:59:51 PDT - US-034
-- What was implemented: Fixed the remaining v2 E2E regressions in the bare/static driver suites by recovering `get_pages(...)` from stale PIDX and missing source blobs, serializing v2 VFS commit/flush paths, tightening the raw and drizzle fixture SQL plus raw DB query classification to use explicit transactions and correct parameterized execution paths, waiting for in-flight HTTP work and disconnect callbacks before `onSleep`, retrying HTTP actions that race a stopping actor, and closing connection-style WebSockets that would otherwise black-hole action requests after shutdown starts.
-- Files changed: `engine/packages/sqlite-storage/src/read.rs`, `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/rivetkit/fixtures/driver-test-suite/actor-db-drizzle.ts`, `rivetkit-typescript/packages/rivetkit/fixtures/driver-test-suite/actor-db-raw.ts`, `rivetkit-typescript/packages/rivetkit/src/actor/instance/mod.ts`, `rivetkit-typescript/packages/rivetkit/src/actor/router-endpoints.ts`, `rivetkit-typescript/packages/rivetkit/src/db/mod.ts`, `rivetkit-typescript/packages/rivetkit/src/drivers/engine/actor-driver.ts`, `rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `sqlite-storage` read recovery should treat stale PIDX references as cache corruption, fall back to shard or older delta history, and zero-fill only in-range pages that truly have no source left.
-  - The v2 VFS needs a commit-path mutex around `flush_dirty_pages()` and `commit_atomic_write()` so concurrent fence updates do not race the local startup metadata.
-  - HTTP actions that land during the sleep handoff should retry stopping-actor errors, while WebSocket action requests sent after shutdown starts need an explicit close/error path instead of being ignored and left hanging forever.
----
-## 2026-04-16 09:15:28 PDT - US-046
-- What was implemented: Stopped v2 `get_pages(...)` reads from overwriting VFS-owned `head_txid` and `db_size_pages`, limited read-side meta refreshes to `max_delta_bytes`, removed the unnecessary commit-path mutex, and added regressions for stale read metadata with both older and same-head responses.
-- Files changed: `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `get_pages(...)` responses should be treated as cache-fill data plus read-safe tuning knobs like `max_delta_bytes`, not as authority for `head_txid` or `db_size_pages`.
-  - The v2 VFS does not need a separate commit mutex per connection. SQLite already serializes callbacks on a connection, and the stale-meta bug was the real source of the earlier flake.
-  - Regression coverage needs both obviously stale responses and equal-head responses, because the nasty bug was the "same head, smaller `db_size_pages`" case that looked harmless.
----
-## 2026-04-16 09:24:33 PDT - US-036
-- What was implemented: Fenced shard compaction META writes by re-reading META inside the write transaction, comparing `generation` plus `head_txid`, and recomputing the updated META from the live head before applying quota and `materialized_txid` changes. Added real RocksDB race tests covering concurrent commit vs compaction retry and takeover vs in-flight compaction.
-- Files changed: `engine/packages/sqlite-storage/src/compaction/shard.rs`, `engine/CLAUDE.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Compaction should treat `generation` and `head_txid` as the fencing fields for META races. Re-reading META inside the final write transaction is safer than comparing an encoded snapshot byte-for-byte.
-  - The existing `pause_before_commit` compaction hook is enough to reproduce real commit/takeover races against RocksDB-backed `SqliteEngine` tests without adding new fake transport layers.
-  - Retrying compaction after a skipped stale-META pass is fine. Retrying takeover is not, because that only hides the underlying race and bumps generation for no good reason.
----
 ## 2026-04-16 09:43:52 PDT - US-037
 - What was implemented: Hardened SQLite websocket handling in `pegboard-envoy` so actor validation failures, bad dirty-page payloads, and unexpected `sqlite-storage` errors return typed protocol responses instead of bubbling through the shared connection task. Replaced string-parsed fence/size/stage detection with typed `sqlite-storage` errors, added a shared `SqliteErrorResponse` wire variant, and updated the native v2 VFS plus direct transport harness to understand the new response path.
 - Files changed: `engine/CLAUDE.md`, `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`, `engine/packages/sqlite-storage/{Cargo.toml,src/commit.rs,src/error.rs,src/lib.rs,src/read.rs,src/takeover.rs}`, `engine/sdks/schemas/envoy-protocol/v2.bare`, `engine/sdks/typescript/envoy-protocol/src/index.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs`
@@ -365,4 +114,12 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
   - Slow-path sqlite v2 commits should enqueue `commit_stage` messages immediately and rely on FIFO transport ordering, then surface any staged-write rejection through the final `commit_finalize` response.
   - `MockProtocol` is the right place to prove transport behavior like "queued versus awaited" stage requests; the direct-engine transport should stay conservative because it bypasses websocket ordering semantics.
   - `EnvoyHandle` fire-and-forget SQLite sends can safely drop the oneshot receiver after enqueueing, because the envoy side still tracks and clears the in-flight request when the response arrives.
+---
+## 2026-04-16 14:55:53 PDT - US-059
+- What was implemented: Added phase-level SQLite commit observability across all three surfaces from the story: engine-side Prometheus histograms for fast, stage, and finalize phases plus commit payload sizes; envoy-side dispatch and response histograms plus debug spans around commit handling; and sqlite-native v2 VFS phase counters wired through `rivetkit-native` into RivetKit inspector metrics as `sqlite_commit_phases`. Added coverage for engine metric registration, native VFS counters, and `/inspector/metrics`, plus internal metric docs.
+- Files changed: `docs-internal/engine/SQLITE_METRICS.md`, `engine/packages/pegboard-envoy/src/{metrics.rs,ws_to_tunnel_task.rs}`, `engine/packages/sqlite-storage/src/{commit.rs,metrics.rs}`, `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/rivetkit-native/{index.d.ts,src/database.rs}`, `rivetkit-typescript/packages/rivetkit/src/{actor/metrics.ts,db/config.ts,db/drizzle/mod.ts,db/mod.ts,db/native-database.ts,driver-test-suite/tests/actor-inspector.ts}`, `rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `rivetkit-native` prebuilt `.node` artifacts can hide Rust-side SQLite changes during TypeScript tests. If inspector metrics still look stale after a Rust change, run `pnpm -C rivetkit-typescript/packages/rivetkit-native build -- --force` before chasing ghosts.
+  - New native SQLite getters are not enough on their own. The wrapper in `rivetkit-typescript/packages/rivetkit/src/db/native-database.ts` must forward them, and the DB open path in `src/db/mod.ts` or `src/db/drizzle/mod.ts` must register them with `ActorMetrics`.
+  - Prometheus scrape-text assertions should check metric family names and label fragments, not a single exact serialized label order, because exposition order is not stable enough for brittle tests.
 ---

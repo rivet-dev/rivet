@@ -4,6 +4,7 @@ use std::ptr;
 use std::slice;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
 use anyhow::Result;
 use libsqlite3_sys::*;
@@ -696,6 +697,22 @@ pub enum CommitBufferError {
 	Other(String),
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SqliteVfsMetricsSnapshot {
+	pub request_build_ns: u64,
+	pub serialize_ns: u64,
+	pub transport_ns: u64,
+	pub state_update_ns: u64,
+	pub total_ns: u64,
+	pub commit_count: u64,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct CommitTransportMetrics {
+	serialize_ns: u64,
+	transport_ns: u64,
+}
+
 pub struct VfsV2Context {
 	actor_id: String,
 	runtime: Handle,
@@ -713,6 +730,11 @@ pub struct VfsV2Context {
 	pub pages_fetched_total: AtomicU64,
 	pub prefetch_pages_total: AtomicU64,
 	pub commit_total: AtomicU64,
+	pub commit_request_build_ns: AtomicU64,
+	pub commit_serialize_ns: AtomicU64,
+	pub commit_transport_ns: AtomicU64,
+	pub commit_state_update_ns: AtomicU64,
+	pub commit_duration_ns_total: AtomicU64,
 }
 
 #[derive(Debug, Clone)]
@@ -932,6 +954,11 @@ impl VfsV2Context {
 			pages_fetched_total: AtomicU64::new(0),
 			prefetch_pages_total: AtomicU64::new(0),
 			commit_total: AtomicU64::new(0),
+			commit_request_build_ns: AtomicU64::new(0),
+			commit_serialize_ns: AtomicU64::new(0),
+			commit_transport_ns: AtomicU64::new(0),
+			commit_state_update_ns: AtomicU64::new(0),
+			commit_duration_ns_total: AtomicU64::new(0),
 		}
 	}
 
@@ -949,6 +976,36 @@ impl VfsV2Context {
 
 	fn take_last_error(&self) -> Option<String> {
 		self.last_error.lock().take()
+	}
+
+	fn add_commit_phase_metrics(
+		&self,
+		request_build_ns: u64,
+		transport_metrics: CommitTransportMetrics,
+		state_update_ns: u64,
+		total_ns: u64,
+	) {
+		self.commit_request_build_ns
+			.fetch_add(request_build_ns, Ordering::Relaxed);
+		self.commit_serialize_ns
+			.fetch_add(transport_metrics.serialize_ns, Ordering::Relaxed);
+		self.commit_transport_ns
+			.fetch_add(transport_metrics.transport_ns, Ordering::Relaxed);
+		self.commit_state_update_ns
+			.fetch_add(state_update_ns, Ordering::Relaxed);
+		self.commit_duration_ns_total
+			.fetch_add(total_ns, Ordering::Relaxed);
+	}
+
+	fn sqlite_vfs_metrics(&self) -> SqliteVfsMetricsSnapshot {
+		SqliteVfsMetricsSnapshot {
+			request_build_ns: self.commit_request_build_ns.load(Ordering::Relaxed),
+			serialize_ns: self.commit_serialize_ns.load(Ordering::Relaxed),
+			transport_ns: self.commit_transport_ns.load(Ordering::Relaxed),
+			state_update_ns: self.commit_state_update_ns.load(Ordering::Relaxed),
+			total_ns: self.commit_duration_ns_total.load(Ordering::Relaxed),
+			commit_count: self.commit_total.load(Ordering::Relaxed),
+		}
 	}
 
 	fn page_size(&self) -> usize {
@@ -1104,6 +1161,8 @@ impl VfsV2Context {
 	fn flush_dirty_pages(
 		&self,
 	) -> std::result::Result<Option<BufferedCommitOutcome>, CommitBufferError> {
+		let total_start = Instant::now();
+		let request_build_start = Instant::now();
 		let request = {
 			let state = self.state.read();
 			if state.dead {
@@ -1133,8 +1192,9 @@ impl VfsV2Context {
 					.collect(),
 			}
 		};
+		let request_build_ns = request_build_start.elapsed().as_nanos() as u64;
 
-		let outcome = match self
+		let (outcome, transport_metrics) = match self
 			.runtime
 			.block_on(commit_buffered_pages(&self.transport, request.clone()))
 		{
@@ -1150,8 +1210,12 @@ impl VfsV2Context {
 			dirty_pages = request.dirty_pages.len(),
 			path = ?outcome.path,
 			new_head_txid = outcome.new_head_txid,
+			request_build_ns,
+			serialize_ns = transport_metrics.serialize_ns,
+			transport_ns = transport_metrics.transport_ns,
 			"vfs commit complete (flush)"
 		);
+		let state_update_start = Instant::now();
 		let mut state = self.state.write();
 		state.update_meta(&outcome.meta);
 		state.db_size_pages = request.new_db_size_pages;
@@ -1161,10 +1225,19 @@ impl VfsV2Context {
 				.insert(dirty_page.pgno, dirty_page.bytes.clone());
 		}
 		state.write_buffer.dirty.clear();
+		let state_update_ns = state_update_start.elapsed().as_nanos() as u64;
+		self.add_commit_phase_metrics(
+			request_build_ns,
+			transport_metrics,
+			state_update_ns,
+			total_start.elapsed().as_nanos() as u64,
+		);
 		Ok(Some(outcome))
 	}
 
 	fn commit_atomic_write(&self) -> std::result::Result<(), CommitBufferError> {
+		let total_start = Instant::now();
+		let request_build_start = Instant::now();
 		let request = {
 			let mut state = self.state.write();
 			if state.dead {
@@ -1198,8 +1271,9 @@ impl VfsV2Context {
 					.collect(),
 			}
 		};
+		let request_build_ns = request_build_start.elapsed().as_nanos() as u64;
 
-		let outcome = match self
+		let (outcome, transport_metrics) = match self
 			.runtime
 			.block_on(commit_buffered_pages(&self.transport, request.clone()))
 		{
@@ -1215,6 +1289,9 @@ impl VfsV2Context {
 			dirty_pages = request.dirty_pages.len(),
 			path = ?outcome.path,
 			new_head_txid = outcome.new_head_txid,
+			request_build_ns,
+			serialize_ns = transport_metrics.serialize_ns,
+			transport_ns = transport_metrics.transport_ns,
 			"vfs commit complete (atomic)"
 		);
 		self.set_last_error(format!(
@@ -1223,6 +1300,7 @@ impl VfsV2Context {
 			outcome.meta.db_size_pages,
 			outcome.meta.head_txid,
 		));
+		let state_update_start = Instant::now();
 		let mut state = self.state.write();
 		state.update_meta(&outcome.meta);
 		state.db_size_pages = request.new_db_size_pages;
@@ -1233,6 +1311,13 @@ impl VfsV2Context {
 		}
 		state.write_buffer.dirty.clear();
 		state.write_buffer.in_atomic_write = false;
+		let state_update_ns = state_update_start.elapsed().as_nanos() as u64;
+		self.add_commit_phase_metrics(
+			request_build_ns,
+			transport_metrics,
+			state_update_ns,
+			total_start.elapsed().as_nanos() as u64,
+		);
 		Ok(())
 	}
 
@@ -1366,33 +1451,44 @@ unsafe fn get_aux_state(file: &VfsV2File) -> Option<&AuxFileHandle> {
 async fn commit_buffered_pages(
 	transport: &SqliteTransport,
 	request: BufferedCommitRequest,
-) -> std::result::Result<BufferedCommitOutcome, CommitBufferError> {
+) -> std::result::Result<(BufferedCommitOutcome, CommitTransportMetrics), CommitBufferError> {
 	let raw_dirty_bytes = dirty_pages_raw_bytes(&request.dirty_pages)
 		.map_err(|err| CommitBufferError::Other(err.to_string()))?;
+	let mut metrics = CommitTransportMetrics::default();
 
 	if raw_dirty_bytes <= request.max_delta_bytes {
+		let serialize_start = Instant::now();
+		let fast_request = protocol::SqliteCommitRequest {
+			actor_id: request.actor_id.clone(),
+			generation: request.generation,
+			expected_head_txid: request.expected_head_txid,
+			dirty_pages: request.dirty_pages.clone(),
+			new_db_size_pages: request.new_db_size_pages,
+		};
+		metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
+		let transport_start = Instant::now();
 		match transport
-			.commit(protocol::SqliteCommitRequest {
-				actor_id: request.actor_id.clone(),
-				generation: request.generation,
-				expected_head_txid: request.expected_head_txid,
-				dirty_pages: request.dirty_pages.clone(),
-				new_db_size_pages: request.new_db_size_pages,
-			})
+			.commit(fast_request)
 			.await
 			.map_err(|err| CommitBufferError::Other(err.to_string()))?
 		{
 			protocol::SqliteCommitResponse::SqliteCommitOk(ok) => {
-				return Ok(BufferedCommitOutcome {
-					path: CommitPath::Fast,
-					new_head_txid: ok.new_head_txid,
-					meta: ok.meta,
-				});
+				metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
+				return Ok((
+					BufferedCommitOutcome {
+						path: CommitPath::Fast,
+						new_head_txid: ok.new_head_txid,
+						meta: ok.meta,
+					},
+					metrics,
+				));
 			}
 			protocol::SqliteCommitResponse::SqliteFenceMismatch(mismatch) => {
 				return Err(CommitBufferError::FenceMismatch(mismatch.reason));
 			}
-			protocol::SqliteCommitResponse::SqliteCommitTooLarge(_) => {}
+			protocol::SqliteCommitResponse::SqliteCommitTooLarge(_) => {
+				metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
+			}
 			protocol::SqliteCommitResponse::SqliteErrorResponse(error) => {
 				return Err(CommitBufferError::Other(error.message));
 			}
@@ -1408,6 +1504,7 @@ async fn commit_buffered_pages(
 	.map_err(|err| CommitBufferError::Other(err.to_string()))?;
 
 	for (chunk_idx, dirty_pages) in staged_chunks.iter().enumerate() {
+		let serialize_start = Instant::now();
 		let stage_request = protocol::SqliteCommitStageRequest {
 			actor_id: request.actor_id.clone(),
 			generation: request.generation,
@@ -1416,6 +1513,7 @@ async fn commit_buffered_pages(
 			dirty_pages: dirty_pages.clone(),
 			is_last: chunk_idx + 1 == staged_chunks.len(),
 		};
+		metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
 		if transport
 			.queue_commit_stage(stage_request.clone())
 			.map_err(|err| CommitBufferError::Other(err.to_string()))?
@@ -1423,12 +1521,15 @@ async fn commit_buffered_pages(
 			continue;
 		}
 
+		let transport_start = Instant::now();
 		match transport
 			.commit_stage(stage_request)
 			.await
 			.map_err(|err| CommitBufferError::Other(err.to_string()))?
 		{
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(_) => {}
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(_) => {
+				metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
+			}
 			protocol::SqliteCommitStageResponse::SqliteFenceMismatch(mismatch) => {
 				return Err(CommitBufferError::FenceMismatch(mismatch.reason));
 			}
@@ -1438,23 +1539,31 @@ async fn commit_buffered_pages(
 		}
 	}
 
+	let serialize_start = Instant::now();
+	let finalize_request = protocol::SqliteCommitFinalizeRequest {
+		actor_id: request.actor_id,
+		generation: request.generation,
+		expected_head_txid: request.expected_head_txid,
+		stage_id,
+		new_db_size_pages: request.new_db_size_pages,
+	};
+	metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
+	let transport_start = Instant::now();
 	match transport
-		.commit_finalize(protocol::SqliteCommitFinalizeRequest {
-			actor_id: request.actor_id,
-			generation: request.generation,
-			expected_head_txid: request.expected_head_txid,
-			stage_id,
-			new_db_size_pages: request.new_db_size_pages,
-		})
+		.commit_finalize(finalize_request)
 		.await
 		.map_err(|err| CommitBufferError::Other(err.to_string()))?
 	{
 		protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(ok) => {
-			Ok(BufferedCommitOutcome {
-				path: CommitPath::Slow,
-				new_head_txid: ok.new_head_txid,
-				meta: ok.meta,
-			})
+			metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
+			Ok((
+				BufferedCommitOutcome {
+					path: CommitPath::Slow,
+					new_head_txid: ok.new_head_txid,
+					meta: ok.meta,
+				},
+				metrics,
+			))
 		}
 		protocol::SqliteCommitFinalizeResponse::SqliteFenceMismatch(mismatch) => {
 			Err(CommitBufferError::FenceMismatch(mismatch.reason))
@@ -2231,6 +2340,10 @@ impl NativeDatabaseV2 {
 	pub fn take_last_kv_error(&self) -> Option<String> {
 		self._vfs.take_last_error()
 	}
+
+	pub fn sqlite_vfs_metrics(&self) -> SqliteVfsMetricsSnapshot {
+		unsafe { (*self._vfs.ctx_ptr).sqlite_vfs_metrics() }
+	}
 }
 
 impl Drop for NativeDatabaseV2 {
@@ -2842,9 +2955,12 @@ mod tests {
 				},
 			))
 			.expect("slow-path direct commit should succeed");
+		let (outcome, metrics) = outcome;
 
 		assert_eq!(outcome.path, CommitPath::Slow);
 		assert_eq!(outcome.new_head_txid, startup.meta.head_txid + 1);
+		assert!(metrics.serialize_ns > 0);
+		assert!(metrics.transport_ns > 0);
 
 		let pages = runtime
 			.block_on(engine.get_pages(&harness.actor_id, startup.generation, vec![1, 1024, 2300]))
@@ -3927,9 +4043,12 @@ mod tests {
 				},
 			))
 			.expect("fast-path commit should succeed");
+		let (outcome, metrics) = outcome;
 
 		assert_eq!(outcome.path, CommitPath::Fast);
 		assert_eq!(outcome.new_head_txid, 13);
+		assert!(metrics.serialize_ns > 0);
+		assert!(metrics.transport_ns > 0);
 		assert_eq!(protocol.commit_requests().len(), 1);
 		assert!(protocol.stage_requests().is_empty());
 		assert!(protocol.finalize_requests().is_empty());
@@ -3986,15 +4105,55 @@ mod tests {
 				},
 			))
 			.expect("slow-path commit should succeed");
+		let (outcome, metrics) = outcome;
 
 		release.join().expect("release thread should finish");
 
 		assert_eq!(outcome.path, CommitPath::Slow);
 		assert_eq!(outcome.new_head_txid, 14);
+		assert!(metrics.serialize_ns > 0);
+		assert!(metrics.transport_ns > 0);
 		assert!(protocol.commit_requests().is_empty());
 		assert_eq!(protocol.stage_requests().len(), 3);
 		assert_eq!(protocol.awaited_stage_responses(), 0);
 		assert_eq!(protocol.finalize_requests().len(), 1);
+	}
+
+	#[test]
+	fn vfs_records_commit_phase_durations() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE metrics_test (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("create table should succeed");
+
+		let relaxed = std::sync::atomic::Ordering::Relaxed;
+		ctx.commit_request_build_ns.store(0, relaxed);
+		ctx.commit_serialize_ns.store(0, relaxed);
+		ctx.commit_transport_ns.store(0, relaxed);
+		ctx.commit_state_update_ns.store(0, relaxed);
+		ctx.commit_duration_ns_total.store(0, relaxed);
+		ctx.commit_total.store(0, relaxed);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO metrics_test (id, value) VALUES (1, 'hello');",
+		)
+		.expect("insert should succeed");
+
+		let metrics = db.sqlite_vfs_metrics();
+		assert_eq!(metrics.commit_count, 1);
+		assert!(metrics.request_build_ns > 0);
+		assert!(metrics.serialize_ns > 0);
+		assert!(metrics.transport_ns > 0);
+		assert!(metrics.state_update_ns > 0);
+		assert!(metrics.total_ns >= metrics.request_build_ns);
+		assert!(metrics.request_build_ns + metrics.transport_ns + metrics.state_update_ns > 0);
 	}
 
 	#[test]

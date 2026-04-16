@@ -14,8 +14,10 @@ use sqlite_storage::error::SqliteStorageError;
 use std::{
 	collections::BTreeSet,
 	sync::{Arc, atomic::Ordering},
+	time::Instant,
 };
 use tokio::sync::{Mutex, MutexGuard, watch};
+use tracing::Instrument;
 use universaldb::prelude::*;
 use universaldb::utils::end_of_key_range;
 use universalpubsub::PublishOpts;
@@ -379,8 +381,18 @@ async fn handle_message(
 			send_sqlite_get_pages_response(conn, req.request_id, response).await?;
 		}
 		protocol::ToRivet::ToRivetSqliteCommitRequest(req) => {
-			let response = handle_sqlite_commit_response(ctx, conn, req.data).await;
-			send_sqlite_commit_response(conn, req.request_id, response).await?;
+			let actor_id = req.data.actor_id.clone();
+			let request_id = req.request_id;
+			let timed_response = async { handle_sqlite_commit_response(ctx, conn, req.data).await }
+				.instrument(tracing::debug_span!(
+					"handle_sqlite_commit",
+					actor_id = %actor_id,
+					request_id = ?request_id
+				))
+				.await;
+			send_sqlite_commit_response(conn, request_id, timed_response.response).await?;
+			crate::metrics::SQLITE_COMMIT_ENVOY_RESPONSE_DURATION
+				.observe(timed_response.commit_completed_at.elapsed().as_secs_f64());
 		}
 		protocol::ToRivet::ToRivetSqliteCommitStageRequest(req) => {
 			let response = handle_sqlite_commit_stage_response(ctx, conn, req.data).await;
@@ -429,6 +441,11 @@ async fn handle_message(
 	Ok(())
 }
 
+struct TimedSqliteCommitResponse {
+	response: protocol::SqliteCommitResponse,
+	commit_completed_at: Instant,
+}
+
 async fn handle_sqlite_get_pages_response(
 	ctx: &StandaloneCtx,
 	conn: &Conn,
@@ -448,14 +465,18 @@ async fn handle_sqlite_commit_response(
 	ctx: &StandaloneCtx,
 	conn: &Conn,
 	request: protocol::SqliteCommitRequest,
-) -> protocol::SqliteCommitResponse {
+) -> TimedSqliteCommitResponse {
 	let actor_id = request.actor_id.clone();
-	match handle_sqlite_commit(ctx, conn, request).await {
+	let response = match handle_sqlite_commit(ctx, conn, request).await {
 		Ok(response) => response,
 		Err(err) => {
 			tracing::error!(actor_id = %actor_id, ?err, "sqlite commit request failed");
 			protocol::SqliteCommitResponse::SqliteErrorResponse(sqlite_error_response(&err))
 		}
+	};
+	TimedSqliteCommitResponse {
+		response,
+		commit_completed_at: Instant::now(),
 	}
 }
 
@@ -720,10 +741,19 @@ async fn handle_sqlite_commit(
 	conn: &Conn,
 	request: protocol::SqliteCommitRequest,
 ) -> Result<protocol::SqliteCommitResponse> {
+	let decode_request_start = Instant::now();
 	validate_sqlite_dirty_pages("sqlite commit", &request.dirty_pages)?;
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
+	let decode_request_duration = decode_request_start.elapsed();
+	conn.sqlite_engine.metrics().observe_commit_phase(
+		"fast",
+		"decode_request",
+		decode_request_duration,
+	);
+	crate::metrics::SQLITE_COMMIT_ENVOY_DISPATCH_DURATION
+		.observe(decode_request_duration.as_secs_f64());
 
-	match conn
+	let engine_result = conn
 		.sqlite_engine
 		.commit(
 			&request.actor_id,
@@ -739,8 +769,9 @@ async fn handle_sqlite_commit(
 				now_ms: util::timestamp::now(),
 			},
 		)
-		.await
-	{
+		.await;
+	let response_build_start = Instant::now();
+	let response = match engine_result {
 		Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
 			protocol::SqliteCommitOk {
 				new_head_txid: result.txid,
@@ -764,7 +795,13 @@ async fn handle_sqlite_commit(
 			)),
 			_ => Err(err),
 		},
-	}
+	}?;
+	conn.sqlite_engine.metrics().observe_commit_phase(
+		"fast",
+		"response_build",
+		response_build_start.elapsed(),
+	);
+	Ok(response)
 }
 
 async fn handle_sqlite_commit_stage(
@@ -814,9 +851,15 @@ async fn handle_sqlite_commit_finalize(
 	conn: &Conn,
 	request: protocol::SqliteCommitFinalizeRequest,
 ) -> Result<protocol::SqliteCommitFinalizeResponse> {
+	let decode_request_start = Instant::now();
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
+	conn.sqlite_engine.metrics().observe_commit_phase(
+		"slow",
+		"decode_request",
+		decode_request_start.elapsed(),
+	);
 
-	match conn
+	let engine_result = conn
 		.sqlite_engine
 		.commit_finalize(
 			&request.actor_id,
@@ -828,8 +871,9 @@ async fn handle_sqlite_commit_finalize(
 				now_ms: util::timestamp::now(),
 			},
 		)
-		.await
-	{
+		.await;
+	let response_build_start = Instant::now();
+	let response = match engine_result {
 		Ok(result) => Ok(
 			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
 				protocol::SqliteCommitFinalizeOk {
@@ -853,7 +897,13 @@ async fn handle_sqlite_commit_finalize(
 			}
 			_ => Err(err),
 		},
-	}
+	}?;
+	conn.sqlite_engine.metrics().observe_commit_phase(
+		"slow",
+		"response_build",
+		response_build_start.elapsed(),
+	);
+	Ok(response)
 }
 
 async fn validate_sqlite_actor(ctx: &StandaloneCtx, conn: &Conn, actor_id: &str) -> Result<()> {

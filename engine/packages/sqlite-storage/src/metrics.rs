@@ -7,6 +7,54 @@ use rivet_metrics::{BUCKETS, REGISTRY, prometheus::*};
 use crate::types::DBHead;
 
 lazy_static::lazy_static! {
+	pub static ref SQLITE_COMMIT_PHASE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_commit_phase_duration_seconds",
+		"Phase duration for sqlite commit requests.",
+		&["phase", "path"],
+		vec![0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_COMMIT_STAGE_PHASE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_commit_stage_phase_duration_seconds",
+		"Phase duration for sqlite commit_stage requests.",
+		&["phase"],
+		vec![0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_COMMIT_FINALIZE_PHASE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_commit_finalize_phase_duration_seconds",
+		"Phase duration for sqlite commit_finalize requests.",
+		&["phase"],
+		vec![0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_COMMIT_DIRTY_PAGE_COUNT: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_commit_dirty_page_count",
+		"Number of dirty pages written per sqlite commit path.",
+		&["path"],
+		vec![1.0, 4.0, 16.0, 64.0, 256.0, 1024.0, 4096.0, 8192.0],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_COMMIT_DIRTY_BYTES: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_commit_dirty_bytes",
+		"Raw dirty-page bytes written per sqlite commit path.",
+		&["path"],
+		vec![4096.0, 16_384.0, 65_536.0, 262_144.0, 1_048_576.0, 4_194_304.0, 16_777_216.0],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_UDB_OPS_PER_COMMIT: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_udb_ops_per_commit",
+		"UniversalDB operations per sqlite commit path.",
+		&["path"],
+		vec![1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0],
+		*REGISTRY
+	).unwrap();
+
 	pub static ref SQLITE_COMMIT_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"sqlite_v2_commit_duration_seconds",
 		"Duration of sqlite v2 commit operations.",
@@ -117,6 +165,47 @@ lazy_static::lazy_static! {
 pub struct SqliteStorageMetrics;
 
 impl SqliteStorageMetrics {
+	pub fn observe_commit_phase(
+		&self,
+		path: &'static str,
+		phase: &'static str,
+		duration: Duration,
+	) {
+		SQLITE_COMMIT_PHASE_DURATION
+			.with_label_values(&[phase, path])
+			.observe(duration.as_secs_f64());
+	}
+
+	pub fn observe_commit_stage_phase(&self, phase: &'static str, duration: Duration) {
+		SQLITE_COMMIT_STAGE_PHASE_DURATION
+			.with_label_values(&[phase])
+			.observe(duration.as_secs_f64());
+	}
+
+	pub fn observe_commit_finalize_phase(&self, phase: &'static str, duration: Duration) {
+		SQLITE_COMMIT_FINALIZE_PHASE_DURATION
+			.with_label_values(&[phase])
+			.observe(duration.as_secs_f64());
+	}
+
+	pub fn observe_commit_payload(
+		&self,
+		path: &'static str,
+		dirty_pages: usize,
+		dirty_bytes: u64,
+		udb_ops: usize,
+	) {
+		SQLITE_COMMIT_DIRTY_PAGE_COUNT
+			.with_label_values(&[path])
+			.observe(dirty_pages as f64);
+		SQLITE_COMMIT_DIRTY_BYTES
+			.with_label_values(&[path])
+			.observe(dirty_bytes as f64);
+		SQLITE_UDB_OPS_PER_COMMIT
+			.with_label_values(&[path])
+			.observe(udb_ops as f64);
+	}
+
 	pub fn observe_commit(&self, path: &'static str, dirty_pages: usize, duration: Duration) {
 		SQLITE_COMMIT_DURATION
 			.with_label_values(&[path])

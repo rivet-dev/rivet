@@ -1,711 +1,8 @@
 {
   "project": "SQLite VFS v2",
   "branchName": "feat/sqlite-vfs-v2",
-  "description": "Replace per-page KV storage layout (v1) with sharded LTX + delta log architecture. Engine-side sqlite-storage crate owns storage layout, CAS-fenced commits, PIDX cache, and compaction. Actor-side VFS speaks a semantic sqlite_* protocol over envoy-protocol. Background compaction folds deltas into immutable shards. See docs-internal/rivetkit-typescript/sqlite-ltx/SPEC.md for canonical specification.",
+  "description": "Replace per-page KV storage layout (v1) with sharded LTX + delta log architecture. Engine-side sqlite-storage crate owns storage layout, CAS-fenced commits, PIDX cache, and compaction. Actor-side VFS speaks a semantic sqlite_* protocol over envoy-protocol. Background compaction folds deltas into immutable shards. See docs-internal/rivetkit-typescript/sqlite-ltx/SPEC.md for canonical specification.\n\nDesign decisions (recorded for context \u2014 do not change without revisiting):\n\n- COMMIT SIZE CAP = 16 MB (US-054). Rejected alternatives:\n  - 6 MB (original Cloudflare-matching proposal): unnecessarily restrictive after US-048 moves DELTA bytes out of the commit txn.\n  - 32 MB: adversarial review flagged 50 concurrent \u00d7 32 MB = 1.6 GB pressure on 2 GB runner pods, and FDB's 5 s txn age under cross-region replication leaves only ~3 s real write budget.\n  - 512 MB (for schema migrations / restore): such workloads belong in a streaming import path, not a single atomic commit.\n  - 16 MB matches Cloudflare Durable Objects' internal batch ceiling. With US-048 in place, PIDX for 4,096 pages \u2248 120 KB, well under FDB's 1 MB recommended size.\n\n- HARD CAP vs SILENT SPLITTING. We reject oversize commits with a clear error (CommitExceedsLimit) rather than transparently splitting across FDB transactions. Silent splitting breaks atomicity; users expecting SQLite ACID semantics must not see partial commits.\n\n- NO TRANSPARENT ROW-LEVEL SPLITTING. The 16 MB commit cap (US-054) naturally bounds single-row inserts at ~15 MB (headroom for other dirty pages in the same commit). SQLite's native overflow-page handling already chunks large values across 4 KB pages internally \u2014 our VFS sees just pages, not rows. A separate 'transparent row splitting' feature would either duplicate SQLite's native overflow handling OR violate SQL semantics (a single logical row spanning multiple physical rows breaks SELECT/COUNT/indexes/atomicity). Users needing giant BLOBs should store references to object storage \u2014 matches Cloudflare DO's actual production pattern. No separate row-size cap: the 16 MB commit cap (US-054) naturally bounds single-row inserts at ~15 MB. A tighter row cap (e.g. 2 MB like Cloudflare DO) would be redundant \u2014 the commit cap catches oversize rows anyway, with a less precise but still actionable error.\n\n- 100 KB STATEMENT / 10 GB DB. Matches Cloudflare Durable Objects. Bound-parameter cap (100) and column-count cap (100) were explicitly REJECTED \u2014 too restrictive for bulk inserts (ORMs easily hit 100 parameters) and arbitrary (SQLite's 2000-column default is fine). SQLite defaults retained for those.\n\n- DELTA STORAGE LAYOUT = per-txid chunk prefix (US-048). Rewritten cleanly because v2 has not shipped \u2014 no dual-path migration code. Old single-blob delta_key helpers removed entirely.\n",
   "userStories": [
-    {
-      "id": "US-001",
-      "title": "Create v1 SQLite VFS baseline test suite",
-      "description": "As a developer, I need a baseline test suite exercising the current v1 VFS through real SQL operations so that I can verify v2 does not regress existing behavior.",
-      "acceptanceCriteria": [
-        "Tests exercise CREATE TABLE, INSERT, SELECT, UPDATE, DELETE through the v1 VFS code path in rivetkit-typescript/packages/sqlite-native/src/vfs.rs",
-        "Tests use the existing SqliteKv trait with a new in-memory implementation (MemoryKv) that stores pages in a HashMap",
-        "MemoryKv implements all SqliteKv methods: kv_get, kv_put, kv_delete, kv_list",
-        "At least 5 test cases: single insert+select, multi-row insert, update existing row, delete row, schema with multiple tables",
-        "Tests confirm journal-mode write path is used (consistent with v1-journal-fallback-verification.md findings)",
-        "All tests pass with cargo test"
-      ],
-      "priority": 1,
-      "passes": true,
-      "notes": "Reference rivetkit-typescript/packages/sqlite-native/src/vfs.rs and sqlite_kv.rs for the v1 VFS trait interface. SQLITE_ENABLE_BATCH_ATOMIC_WRITE IS enabled via .cargo/config.toml. The v1 VFS atomic-write handlers are active. Transactions exceeding 128 dirty pages trigger SQLITE_IOERR fallback to journal mode. These tests establish the v1 behavioral baseline."
-    },
-    {
-      "id": "US-002",
-      "title": "Capture v1 benchmark baseline",
-      "description": "As a developer, I need v1 benchmark numbers captured in a structured format so that v2 performance can be compared against them.",
-      "acceptanceCriteria": [
-        "Run the existing examples/sqlite-raw benchmark against the v1 VFS",
-        "Capture results in a structured JSON file at .agent/research/sqlite/v1-baseline-bench.json",
-        "Results include: round-trip counts per workload, latency per workload (ms), workload names",
-        "Workloads covered: 1 MiB insert, 10 MiB insert, hot-row update, cold read, mixed read/write",
-        "Document the test environment (RTT, page size, hardware summary) in the JSON"
-      ],
-      "priority": 2,
-      "passes": true,
-      "notes": "Use the existing examples/sqlite-raw benchmark harness. Results are the comparison target for US-031. If the benchmark cannot run in CI, capture numbers from a local run and document the environment."
-    },
-    {
-      "id": "US-003",
-      "title": "Create sqlite-storage crate skeleton",
-      "description": "As a developer, I need the engine/packages/sqlite-storage/ crate created with proper Cargo.toml, module structure, and workspace integration so that subsequent stories have a place to land code.",
-      "acceptanceCriteria": [
-        "engine/packages/sqlite-storage/Cargo.toml exists with package name sqlite-storage",
-        "Crate is added to workspace members in the root Cargo.toml",
-        "Workspace dependencies added for: tokio, tracing, scc, lz4_flex, parking_lot, async-trait, anyhow, bytes, rand, moka",
-        "src/lib.rs exists with pub mod declarations for: types, keys, store, ltx, page_index, engine, takeover, read, commit, compaction, metrics, test_utils",
-        "src/compaction/mod.rs and src/test_utils/mod.rs exist as module roots",
-        "cargo check -p sqlite-storage passes (modules can contain placeholder code)"
-      ],
-      "priority": 3,
-      "passes": true,
-      "notes": "SPEC section 6.1 and 15. The crate must NOT depend on pegboard-envoy, universaldb, nats, or any WebSocket crate. Follow existing engine crate patterns (see engine/packages/pegboard/Cargo.toml for reference). Use workspace dependencies where available per CLAUDE.md conventions."
-    },
-    {
-      "id": "US-004",
-      "title": "Implement types, key builders, and DBHead",
-      "description": "As a developer, I need the core type definitions and key builder functions so that all other modules can reference them.",
-      "acceptanceCriteria": [
-        "src/types.rs contains DBHead (all 9 fields from SPEC 3.2), DirtyPage, FetchedPage, and SqliteMeta (SPEC 4.1) structs",
-        "DBHead has BARE-compatible serialization with round-trip unit tests",
-        "src/keys.rs contains builder functions: meta_key(), shard_key(shard_id), delta_key(txid), pidx_delta_key(pgno), stage_key(stage_id, chunk_idx) with prefix byte 0x02",
-        "Keys use big-endian encoding so lexicographic ordering matches numeric ordering; shard_id = pgno / 64",
-        "Unit tests for key builders verify correct byte layout and ordering",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 4,
-      "passes": true,
-      "notes": "SPEC sections 3.1, 3.2, 4.1. Keys must sort correctly in BTreeMap for MemoryStore scan_prefix to work. Use big-endian encoding for numeric key components so lexicographic ordering matches numeric ordering."
-    },
-    {
-      "id": "US-005",
-      "title": "Implement SqliteStore trait and MemoryStore",
-      "description": "As a developer, I need the SqliteStore trait and an in-memory implementation so that all engine logic can be tested without UDB.",
-      "acceptanceCriteria": [
-        "src/store.rs contains Mutation struct and SqliteStore trait with 4 async methods: get, batch_get, scan_prefix, atomic_write (SPEC 6.2)",
-        "src/test_utils/memory_store.rs contains MemoryStore backed by BTreeMap with MemoryStoreConfig (latency_ms, jitter_ms, fail_after_ops, simulate_partial_write)",
-        "MemoryStore has 3 constructors: new_fast() (zero latency), new_with_latency() (20 ms + 5 ms jitter), new(config)",
-        "MemoryStore has op_log/op_count/clear_op_log/assert_ops_contain/assert_op_count methods and snapshot/restore for crash simulation",
-        "Unit tests verify MemoryStore features including latency simulation, failure injection, and sorted scan_prefix",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 5,
-      "passes": true,
-      "notes": "SPEC sections 6.2, 12.1, 12.2. The trait is object-safe with no generic bounds or boxed futures. No StoreTx sub-trait. CAS fencing is handled externally by callers. See test-proposal.md section B for full MemoryStore design."
-    },
-    {
-      "id": "US-006",
-      "title": "Implement LTX V3 encoder",
-      "description": "As a developer, I need an LTX V3 encoder to write page data into the delta and shard blob format.",
-      "acceptanceCriteria": [
-        "src/ltx.rs contains an LtxEncoder struct or encode function",
-        "Encoder writes 100-byte V3 header with HeaderFlagNoChecksum set (checksums zeroed)",
-        "Encoder writes 6-byte page headers per page: 4-byte pgno (big-endian) + 2-byte flags with PageHeaderFlagSize set",
-        "Encoder writes 4-byte LZ4 compressed size prefix before each compressed page body",
-        "Encoder uses lz4_flex::block::compress for per-page LZ4 block compression",
-        "Encoder writes varint-encoded page index after the last page: sorted (pgno, offset, size) entries, zero-pgno sentinel, u64 total index size",
-        "Encoder writes 16-byte trailer with zeroed checksums",
-        "Encoder accepts a list of (pgno, page_bytes) pairs and returns a complete LTX blob as Vec<u8>",
-        "Unit tests verify encoder output byte layout matches V3 format"
-      ],
-      "priority": 6,
-      "passes": true,
-      "notes": "See ltx-v3-plan.md for the 5-phase plan. Port from Go superfly/ltx encoder.go. Use lz4_flex for block compression. The existing litetx Rust crate is V1-only and cannot be used directly. Set HeaderFlagNoChecksum because we do not track rolling checksums (SPEC section 3.3). Estimated ~200-250 lines."
-    },
-    {
-      "id": "US-007",
-      "title": "Implement LTX V3 decoder",
-      "description": "As a developer, I need an LTX V3 decoder to read page data from delta and shard blobs.",
-      "acceptanceCriteria": [
-        "src/ltx.rs contains an LtxDecoder or decode function that reads V3 header, iterates 6-byte page headers with LZ4 block decompression, and handles the 16-byte trailer",
-        "Decoder returns Vec of (pgno, page_bytes) pairs, with optional random-access via page index",
-        "Encode-then-decode round-trip test: encode N pages, decode, verify all pages match",
-        "Unit tests with varying page sizes and multi-page blobs",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 7,
-      "passes": true,
-      "notes": "See ltx-v3-plan.md. Port from Go superfly/ltx decoder.go. ~200-250 lines. The page index enables random-access reads but sequential scan is acceptable for v2 launch."
-    },
-    {
-      "id": "US-008",
-      "title": "Implement DeltaPageIndex",
-      "description": "As a developer, I need the per-actor in-memory page index (PIDX) cache so that get_pages can efficiently locate which delta contains the latest version of each page.",
-      "acceptanceCriteria": [
-        "src/page_index.rs contains DeltaPageIndex wrapping scc::HashMap<u32, u64> (pgno -> txid)",
-        "Methods: new(), load_from_store(store, prefix) via scan_prefix, get(pgno), insert(pgno, txid), remove(pgno), range(start, end)",
-        "Unit tests for insert/get/remove/range operations",
-        "Integration test: load_from_store with MemoryStore pre-populated with PIDX entries",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 8,
-      "passes": true,
-      "notes": "SPEC section 6.3. Uses scc::HashMap per CLAUDE.md performance guidelines (never Mutex<HashMap>). The PIDX is loaded lazily on first access for each actor. PIDX entries are keyed by pgno because hot-path operations query by pgno."
-    },
-    {
-      "id": "US-009",
-      "title": "Implement SqliteEngine struct and constructor",
-      "description": "As a developer, I need the SqliteEngine struct that ties together the store, page indices, compaction channel, and metrics.",
-      "acceptanceCriteria": [
-        "src/engine.rs contains SqliteEngine<S: SqliteStore> struct with fields: store (Arc<S>), page_indices (scc::HashMap<String, DeltaPageIndex>), compaction_tx (mpsc::UnboundedSender<String>), metrics (SqliteStorageMetrics)",
-        "SqliteEngine::new(store) constructor creates the engine with a new compaction channel",
-        "SqliteEngine::new(store) returns (SqliteEngine, mpsc::UnboundedReceiver<String>) so the compaction coordinator can own the receiver",
-        "SqliteEngine provides internal helper get_or_load_pidx(actor_id) that lazily loads the PIDX from store on first access",
-        "cargo check -p sqlite-storage passes"
-      ],
-      "priority": 9,
-      "passes": true,
-      "notes": "SPEC section 6.3. SqliteEngine is generic over S: SqliteStore. In production it is SqliteEngine<UdbStore>, in tests SqliteEngine<MemoryStore>. The compaction channel receiver is returned separately so the coordinator task can own it."
-    },
-    {
-      "id": "US-010",
-      "title": "Implement takeover handler",
-      "description": "As a developer, I need the takeover handler so that actors can safely acquire exclusive write access with generation fencing.",
-      "acceptanceCriteria": [
-        "src/takeover.rs contains takeover logic as a method on SqliteEngine",
-        "Creates META if absent (new actor); bumps generation to current+1 on existing META",
-        "Scans for and deletes orphan DELTA/ (txid > head_txid), STAGE/, and stale PIDX entries",
-        "Uses CAS on META via atomic_write; returns new generation, meta, and preloaded pages (page 1 minimum)",
-        "Schedules compaction if delta_count >= 32",
-        "Tests: takeover on empty store (gen=1), second takeover (gen=2), orphan cleanup",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": "SPEC sections 4.2, 4.3, 7.6. Takeover is NOT a protocol op. It is handled internally by pegboard-envoy before the actor starts. The preload fetches page 1 (SQLite schema page) plus any configured hints up to max_total_bytes=1 MiB."
-    },
-    {
-      "id": "US-011",
-      "title": "Implement get_pages handler",
-      "description": "As a developer, I need the get_pages handler so that actor-side VFS cache misses can fetch pages from the engine.",
-      "acceptanceCriteria": [
-        "src/read.rs contains get_pages logic as a method on SqliteEngine",
-        "For each pgno: check PIDX cache (delta path) or fall back to SHARD/<pgno/64>; batch all into one batch_get call",
-        "LTX-decode blobs, extract requested pages, return uncompressed FetchedPage structs (None for pages beyond db_size_pages, error for page 0)",
-        "Generation fencing check against META",
-        "Integration tests: commit-then-read, read from SHARD after compaction, PIDX hit tracking",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "SPEC sections 4.4, 6.5. Key performance requirement: one batch_get call total regardless of how many pages are requested or whether they come from deltas or shards. The PIDX lookup is nanoseconds (in-memory scc::HashMap)."
-    },
-    {
-      "id": "US-012",
-      "title": "Implement commit handler (fast path)",
-      "description": "As a developer, I need the fast-path commit handler so that small writes land in a single round-trip.",
-      "acceptanceCriteria": [
-        "src/commit.rs contains commit logic as a method on SqliteEngine",
-        "CAS-checks (generation, head_txid) against META; encodes dirty pages as LTX delta; returns CommitTooLarge if > MAX_DELTA_BYTES (8 MiB)",
-        "One atomic_write: DELTA/<new_txid> + PIDX entries + META update; then updates in-memory PIDX and sends actor_id to compaction channel",
-        "Integration tests: commit 1 page (verify DELTA key exists), commit with wrong generation (FenceMismatch), commit with wrong head_txid (FenceMismatch)",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": "SPEC sections 4.5, 6.4. The fast path is the common case. One atomic_write call = one store round-trip. MAX_DELTA_BYTES = 8 MiB to leave headroom for chunking overhead within FDB's 10 MB transaction limit (SPEC section 3.5)."
-    },
-    {
-      "id": "US-013",
-      "title": "Implement commit_stage and commit_finalize (slow path)",
-      "description": "As a developer, I need the slow-path commit handlers so that large writes exceeding MAX_DELTA_BYTES can be staged in chunks and finalized atomically.",
-      "acceptanceCriteria": [
-        "src/commit.rs contains commit_stage and commit_finalize methods on SqliteEngine",
-        "commit_stage writes chunks to STAGE/<stage_id>/<chunk_idx> with generation fencing, returns committed chunk_idx",
-        "commit_finalize CAS-checks, reads STAGE entries, assembles into one DELTA, atomic_write (DELTA + PIDX + META + delete STAGE entries); returns StageNotFound if missing",
-        "Integration tests: stage 3 chunks + finalize (read back via get_pages), finalize with wrong stage_id (StageNotFound)",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": "SPEC sections 4.6, 4.7. The stage_id is a random u64 generated by the actor. Staged entries are invisible to readers until commit_finalize promotes them. The slow path is used when raw dirty pages exceed MAX_DELTA_BYTES."
-    },
-    {
-      "id": "US-014",
-      "title": "Implement compaction coordinator",
-      "description": "As a developer, I need the compaction coordinator that receives actor_id notifications and spawns per-actor compaction workers.",
-      "acceptanceCriteria": [
-        "src/compaction/mod.rs contains CompactionCoordinator struct",
-        "Coordinator owns mpsc::UnboundedReceiver<String> for actor_id notifications",
-        "Coordinator tracks running workers in HashMap<String, JoinHandle<()>>",
-        "Coordinator deduplicates: if a worker is already running for an actor_id, skip spawning a new one",
-        "Coordinator periodically reaps completed workers (workers.retain where handle.is_finished())",
-        "CompactionCoordinator::run(rx, store, ...) is an async task suitable for tokio::spawn",
-        "Unit test: sending the same actor_id twice only spawns one worker",
-        "Unit test: after worker completes, sending the actor_id again spawns a new worker",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 14,
-      "passes": true,
-      "notes": "SPEC section 7.1. Uses tokio::select! to multiplex recv and reap_interval.tick(). No DeltaStats map, no scc::HashSet, no antiox (TypeScript-only). See test-proposal.md section D.2 compaction tests for coordinator dedup test."
-    },
-    {
-      "id": "US-015",
-      "title": "Implement compaction worker and shard pass",
-      "description": "As a developer, I need the per-actor compaction worker that folds deltas into shards.",
-      "acceptanceCriteria": [
-        "src/compaction/worker.rs contains compact_worker that reads PIDX scan, runs up to shards_per_batch (default 8) shard passes",
-        "src/compaction/shard.rs contains compact_shard: CAS-check generation, PIDX range scan, batch_get old SHARD + DELTAs, LTX decode, merge latest-txid-wins, LTX encode, atomic_write (new SHARD, delete consumed PIDX, delete fully-consumed DELTAs, advance materialized_txid)",
-        "Delta deleted only when no PIDX entries reference it (multi-shard lifecycle per SPEC 7.4)",
-        "Integration tests: fold 5 deltas into shard, latest-wins merge, multi-shard delta across 3 passes, idempotent compaction",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 15,
-      "passes": true,
-      "notes": "SPEC sections 7.2, 7.3, 7.4. Cost per shard pass: ~5 ms wall-clock, ~700 us CPU. A delta spanning N shards is consumed across N passes. The delta is deleted only when all its pages have been folded into their respective shards."
-    },
-    {
-      "id": "US-016",
-      "title": "Implement quota tracking and enforcement",
-      "description": "As a developer, I need SQLite storage quota tracked and enforced separately from general KV quota.",
-      "acceptanceCriteria": [
-        "sqlite_storage_used tracked per actor (SHARDs + DELTAs + PIDX + META); commit handler rejects writes exceeding sqlite_max_storage (default 10 GiB)",
-        "Quota is separate from general KV quota; compaction is roughly quota-neutral",
-        "Integration tests: commit within quota succeeds, commit exceeding quota fails, compaction does not inflate quota",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 16,
-      "passes": true,
-      "notes": "SPEC section 3.6. The quota prevents a large SQLite database from crowding out c.kv.* state. Default 10 GiB. Compaction replaces DELTA bytes with SHARD bytes, so quota stays roughly constant."
-    },
-    {
-      "id": "US-017",
-      "title": "Add Prometheus metrics",
-      "description": "As a developer, I need all 16 Prometheus metrics from the spec so that the system is observable from day 1.",
-      "acceptanceCriteria": [
-        "src/metrics.rs contains all 16 metrics from SPEC section 11 using lazy_static!, rivet_metrics::REGISTRY, and BUCKETS (follow engine/packages/pegboard/src/actor_kv/metrics.rs pattern)",
-        "Commit metrics: duration (HistogramVec path=fast/slow), pages (HistogramVec), total (IntCounter)",
-        "Read metrics: get_pages duration/count (Histogram), pidx hit/miss (IntCounter)",
-        "Compaction metrics: pass duration/total, pages_folded, deltas_deleted, delta_count (IntGauge), lag (Histogram)",
-        "Lifecycle metrics: takeover duration, recovery_orphans_cleaned, fence_mismatch_total",
-        "Metrics recorded at instrumentation points in commit.rs, read.rs, takeover.rs, compaction/worker.rs",
-        "cargo check -p sqlite-storage passes"
-      ],
-      "priority": 17,
-      "passes": true,
-      "notes": "SPEC section 11 and test-proposal.md section F. All logging via tracing macros, never println! or eprintln!. Use structured fields, lowercase messages per CLAUDE.md logging patterns."
-    },
-    {
-      "id": "US-017b",
-      "title": "Refactor: drop SqliteStore trait, use UDB directly",
-      "description": "As a developer, I need SqliteEngine to talk to universaldb directly instead of through a SqliteStore trait so that tests exercise real storage and there is no fake MemoryStore to maintain.",
-      "acceptanceCriteria": [
-        "Delete src/store.rs (SqliteStore trait and Mutation struct)",
-        "Delete src/test_utils/memory_store.rs (MemoryStore)",
-        "SqliteEngine takes Arc<universaldb::Database> + universaldb::utils::Subspace directly instead of Arc<dyn SqliteStore>",
-        "All engine methods (takeover, get_pages, commit, commit_stage, commit_finalize) call db.run(|tx| async { ... }) directly for atomic operations",
-        "Value chunking for FDB 100 KB limit is handled inline (split values > 100 KB into 10 KB chunks on write, reassemble on read) using the same VALUE_CHUNK_SIZE=10000 pattern as actor_kv/mod.rs",
-        "Add universaldb as a workspace dependency in sqlite-storage/Cargo.toml",
-        "Tests create a temp RocksDB-backed UDB via universaldb::Database::open_rocksdb(temp_dir()) with a random subspace per test for isolation",
-        "Add a test helper: fn test_db() -> (Arc<Database>, Subspace) that creates a temp RocksDB + random UUID subspace",
-        "All existing tests pass against real UDB instead of MemoryStore \u2014 no behavioral changes, just backend swap",
-        "Add an op_count() wrapper or tracing-based counter so tests can still assert RTT counts (e.g., 'this commit issued exactly 2 UDB transactions')",
-        "cargo test -p sqlite-storage passes with all tests running against real RocksDB"
-      ],
-      "priority": 18,
-      "passes": true,
-      "notes": "Level 2 simplification per design discussion. The SqliteStore trait existed solely to enable MemoryStore for tests. With tests running on real UDB (RocksDB temp dir), the trait is pure indirection. This story touches every file in the crate but is mechanical: replace store.get/batch_get/scan_prefix/atomic_write with direct db.run calls. The chunking pattern is in engine/packages/pegboard/src/actor_kv/mod.rs lines 330-341. Keep the op counter for RTT assertions but implement it as a wrapper around the Database rather than a separate trait."
-    },
-    {
-      "id": "US-026",
-      "title": "Add sqlite_* types to envoy-protocol schema",
-      "description": "As a developer, I need the sqlite_* request/response types added to the envoy-protocol schema so that the actor and engine can communicate over the wire.",
-      "acceptanceCriteria": [
-        "Four new ops added to envoy-protocol: sqlite_get_pages, sqlite_commit, sqlite_commit_stage, sqlite_commit_finalize",
-        "Common types added: SqliteGeneration, SqliteTxid, SqlitePgno, SqliteStageId, SqlitePageBytes, SqliteMeta, SqliteFenceMismatch, SqliteDirtyPage, SqliteFetchedPage",
-        "Request/response types match SPEC sections 4.4-4.7 exactly",
-        "SqliteStartupData type added for the actor start message (SPEC section 4.8)",
-        "Envoy-protocol version is bumped appropriately",
-        "Protocol schema compiles and generates Rust/TypeScript types successfully",
-        "No existing published protocol version is modified (new version added per CLAUDE.md conventions)"
-      ],
-      "priority": 19,
-      "passes": true,
-      "notes": "SPEC section 4. The envoy-protocol (not runner-protocol) carries sqlite_* ops. See engine/sdks/rust/envoy-protocol/ for existing schema location. Pages are sent uncompressed over the wire; compression happens engine-side. Per CLAUDE.md: never modify an existing published .bare runner protocol version."
-    },
-    {
-      "id": "US-028",
-      "title": "Add WebSocket dispatch for sqlite_* ops in pegboard-envoy",
-      "description": "As a developer, I need the pegboard-envoy WebSocket handler to route sqlite_* ops to SqliteEngine<UdbStore>.",
-      "acceptanceCriteria": [
-        "engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs has dispatch arms for: sqlite_get_pages, sqlite_commit, sqlite_commit_stage, sqlite_commit_finalize",
-        "Each dispatch arm deserializes the request, calls the corresponding SqliteEngine method, serializes the response",
-        "CompactionCoordinator task is spawned at envoy startup alongside existing tunnel/ping tasks",
-        "SqliteEngine<UdbStore> is created at envoy startup and shared across connections",
-        "cargo check -p pegboard-envoy passes"
-      ],
-      "priority": 20,
-      "passes": true,
-      "notes": "SPEC section 15 items 31-33. The dispatch is thin glue: deserialize -> call engine method -> serialize. No business logic in the dispatch layer. See test-proposal.md section E for the mapping."
-    },
-    {
-      "id": "US-029b",
-      "title": "Port UDB latency injection and RTT benchmark from measurement worktree",
-      "description": "As a developer, I need the UDB latency injection and the RTT benchmark ported from the measurement worktree so they are available on the main branch for CI and ongoing performance validation.",
-      "acceptanceCriteria": [
-        "Cherry-pick or replicate the changes from commit a1e249bc23 in .agent/worktrees/sqlite-v2-bench/ onto the current branch",
-        "engine/packages/universaldb/src/database.rs has the UDB_SIMULATED_LATENCY_MS env var support (OnceLock, sleep at top of txn())",
-        "engine/packages/sqlite-storage/examples/bench_rtt.rs exists with 4 benchmark scenarios (10 pages, 256 pages, 2560 pages, get_pages)",
-        "The benchmark reports THREE separate metrics per scenario: (1) actor-engine round trips (hardcoded to 1 for direct engine calls, with a TODO for end-to-end measurement once VFS+envoy exists), (2) UDB transaction count (number of db.run() calls within the handler), (3) wall-clock time in milliseconds",
-        "Output format clearly separates the three levels, e.g.: 'scenario | actor_rts: 1 | udb_txs: 3 | wall_ms: 0.4 | projected_ms: 20'",
-        "Projected latency uses actor_rts * 20ms (NOT udb_txs * 20ms, since UDB is engine-local)",
-        "cargo check -p universaldb passes",
-        "cargo run -p sqlite-storage --example bench_rtt runs successfully",
-        "UDB_SIMULATED_LATENCY_MS=20 cargo run -p sqlite-storage --example bench_rtt runs successfully with simulated latency"
-      ],
-      "priority": 21,
-      "passes": true,
-      "notes": "Port from .agent/worktrees/sqlite-v2-bench/ commit a1e249bc23. IMPORTANT: the benchmark must distinguish actor-engine round trips (WebSocket messages, what determines user-visible latency at 20ms RTT) from UDB transactions (db.run() calls, microseconds locally). The projected latency should use actor RTs, not UDB txs. Current engine-only bench hardcodes actor_rts=1 since it calls engine methods directly."
-    },
-    {
-      "id": "US-029",
-      "title": "Add SqliteStartupData to actor start message",
-      "description": "As a developer, I need the actor start message to include SQLite startup data so that v2 actors can initialize their VFS without additional round-trips.",
-      "acceptanceCriteria": [
-        "Envoy-protocol actor start message extended with optional SqliteStartupData field",
-        "Pegboard-envoy runs takeover + preload internally before actor start (not as protocol ops)",
-        "Takeover results (generation, meta, preloaded pages) are included in the start message",
-        "For v1 actors, SqliteStartupData is None/absent",
-        "For v2 actors, SqliteStartupData contains generation, meta, and preloaded pages",
-        "Preload always includes page 1 (SQLite schema page) plus configured hints up to max_total_bytes=1 MiB",
-        "cargo check passes for pegboard-envoy and envoy-protocol"
-      ],
-      "priority": 22,
-      "passes": true,
-      "notes": "SPEC sections 4.2, 4.3, 4.8. The key insight: takeover and preload are NOT protocol ops. They run engine-local in pegboard-envoy before the actor starts. Zero additional RTTs for cold start."
-    },
-    {
-      "id": "US-028b",
-      "title": "Keep MAX_DELTA_BYTES at 8 MiB and pipeline slow-path stages",
-      "description": "As a developer, I need the fast path to cover 10 MiB inserts (1 RTT) and the slow path to pipeline stages (1 effective RTT) so that all commits are effectively single-round-trip.",
-      "acceptanceCriteria": [
-        "SQLITE_MAX_DELTA_BYTES stays at 8*1024*1024 in types.rs (no change from current value)",
-        "The commit handler checks raw page bytes against MAX_DELTA_BYTES. Commits <= 8 MiB raw take the fast path (1 RTT). Commits > 8 MiB take the slow path.",
-        "The VFS slow-path code sends all commit_stage calls without awaiting individual responses \u2014 fire-and-forget via the WebSocket, relying on FIFO ordering",
-        "The VFS only awaits the commit_finalize response (1 effective RTT for the slow path regardless of chunk count)",
-        "Test: a 4 MiB commit (1024 pages) goes through the fast path in 1 store operation",
-        "Test: a 12 MiB commit (3072 pages) uses the slow path but the VFS pipelines stages",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 23,
-      "passes": true,
-      "notes": "MAX_DELTA_BYTES stays at 8 MiB to guarantee safety at worst-case 1:1 LZ4 compression ratio (incompressible blob data). The 10 MB FDB tx limit must never be exceeded regardless of page content. The pipelining fix is the important part: slow-path stages fire without individual ack waits, making the effective cost 1 RTT for any commit size."
-    },
-    {
-      "id": "US-025b",
-      "title": "Assert batch-atomic writes are active at VFS startup",
-      "description": "As a developer, I need a runtime assertion that SQLITE_ENABLE_BATCH_ATOMIC_WRITE is actually working so that a misconfigured build fails loudly instead of silently falling back to the slow journal path.",
-      "acceptanceCriteria": [
-        "After opening a v2 SQLite connection, the VFS performs a small probe write (e.g., CREATE TABLE IF NOT EXISTS __rivet_batch_probe(x); INSERT INTO __rivet_batch_probe VALUES(1); DELETE FROM __rivet_batch_probe;)",
-        "The probe checks whether COMMIT_ATOMIC_WRITE was called by inspecting the VFS metrics commit_atomic_count",
-        "If commit_atomic_count is 0 after the probe, the VFS logs tracing::error!(\"batch atomic writes not active, SQLITE_ENABLE_BATCH_ATOMIC_WRITE may be missing\") and returns an error that prevents the actor from starting",
-        "If commit_atomic_count > 0, the probe succeeds silently and the VFS proceeds normally",
-        "The probe table is cleaned up (DROP TABLE IF EXISTS __rivet_batch_probe) after the check",
-        "A test verifies the assertion passes under normal conditions (with the flag enabled via .cargo/config.toml)"
-      ],
-      "priority": 24,
-      "passes": true,
-      "notes": "SQLITE_ENABLE_BATCH_ATOMIC_WRITE is set in .cargo/config.toml via LIBSQLITE3_FLAGS. This assertion catches misconfigured builds at runtime. The probe write is tiny and runs once per actor startup. See v1-journal-fallback-verification.md for context on why this flag matters."
-    },
-    {
-      "id": "US-030",
-      "title": "Implement actor-side v2 VFS",
-      "description": "As a developer, I need the actor-side v2 VFS that encodes envoy-protocol sqlite_* messages and sends them directly over the existing WebSocket channel to pegboard-envoy.",
-      "acceptanceCriteria": [
-        "rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs exists with v2 VFS encoding envoy-protocol sqlite_* messages directly (no SqliteProtocol trait, no napi glue layer)",
-        "VFS encodes/decodes envoy-protocol v2 types (from US-026) and sends them over the existing WebSocket channel to pegboard-envoy",
-        "Three-layer read path: write_buffer -> moka page_cache -> engine fetch with prefetch predictor (Markov + stride, prefetch_depth=16)",
-        "Write path: xWrite buffers dirty pages; COMMIT_ATOMIC_WRITE uses fast path (commit) or slow path fallback (commit_stage + commit_finalize)",
-        "xDeviceCharacteristics returns SQLITE_IOCAP_BATCH_ATOMIC; xSync flushes non-atomic writes as single delta; xLock/xUnlock no-ops",
-        "VFS initializes from SqliteStartupData (zero additional RTTs)",
-        "cargo check passes for the sqlite-native and rivetkit-native crates"
-      ],
-      "priority": 25,
-      "passes": true,
-      "notes": "SPEC section 5. Absorbs US-031 (envoy::Protocol). No SqliteProtocol trait needed. The VFS encodes envoy-protocol messages directly and sends over WebSocket. JS never parses sqlite messages, it just relays binary frames. The prefetch predictor is ported from mvSQLite (Apache-2.0, attribution required). Page cache default: 50,000 pages (~200 MiB)."
-    },
-    {
-      "id": "US-025",
-      "title": "Enable SQLITE_ENABLE_BATCH_ATOMIC_WRITE in bundled SQLite build",
-      "description": "As a developer, I need SQLITE_ENABLE_BATCH_ATOMIC_WRITE defined in the SQLite build so that the batch-atomic VFS handlers are actually invoked by SQLite.",
-      "acceptanceCriteria": [
-        "SQLITE_ENABLE_BATCH_ATOMIC_WRITE is defined in the libsqlite3-sys build configuration used by the sqlite-native crate",
-        "After enabling the flag, SQLite actually calls FCNTL_BEGIN_ATOMIC_WRITE and FCNTL_COMMIT_ATOMIC_WRITE file controls",
-        "A test confirms batch-atomic writes are active by intercepting the FCNTL calls or observing that the journal path is NOT used",
-        "The existing v1 VFS behavior is NOT broken (v1 actors still work with journal mode since they do not report SQLITE_IOCAP_BATCH_ATOMIC)",
-        "The build flag is added via Cargo.toml or build.rs in the sqlite-native crate",
-        "cargo test passes for the sqlite-native crate"
-      ],
-      "priority": 25,
-      "passes": true,
-      "notes": "ALREADY ENABLED. SQLITE_ENABLE_BATCH_ATOMIC_WRITE is set in .cargo/config.toml via LIBSQLITE3_FLAGS. No code change needed. Verified via build fingerprints in target/debug/."
-    },
-    {
-      "id": "US-031",
-      "title": "Implement envoy::Protocol production impl",
-      "description": "FOLDED INTO US-030. No separate SqliteProtocol trait or napi glue needed. The VFS encodes envoy-protocol messages directly and sends over WebSocket. JS never parses sqlite messages.",
-      "acceptanceCriteria": [
-        "Absorbed by US-030"
-      ],
-      "priority": 26,
-      "passes": true,
-      "notes": "FOLDED INTO US-030. The SqliteProtocol trait was unnecessary indirection (same pattern as dropping SqliteStore in US-017b). The Rust VFS encodes envoy-protocol messages directly and sends them over the existing WebSocket. JS just relays binary frames."
-    },
-    {
-      "id": "US-032",
-      "title": "Implement schema-version dispatch",
-      "description": "As a developer, I need v1/v2 VFS dispatch so that existing v1 actors continue to work while new actors use v2.",
-      "acceptanceCriteria": [
-        "Actor startup payload carries a schema version flag (v1 or v2)",
-        "Version is assigned at actor creation time based on engine config flag (default: v2 for new actors, behind a config flag for gradual rollout)",
-        "VFS registration branches on the version: v1 actors get vfs.rs + SqliteKv, v2 actors get v2/vfs.rs + SqliteProtocol",
-        "v1 actors use KV API with prefix 0x08 in UDB, v2 actors use sqlite_* API with prefix 0x02",
-        "Existing v1 actors stay v1 forever (no migration)",
-        "New actors after the flag flip are v2",
-        "cargo check passes for rivetkit-native and sqlite-native crates"
-      ],
-      "priority": 27,
-      "passes": true,
-      "notes": "SPEC section 8. The dispatch decision is made in the actor process (VFS registration happens actor-side). The actor knows its version from creation-time config, not from probing UDB. No runtime probing, no migration."
-    },
-    {
-      "id": "US-033",
-      "title": "v2 benchmark via kitchen-sink bench",
-      "description": "As a developer, I need to run the existing kitchen-sink SQLite benchmark locally against v2 to capture before/after numbers.",
-      "acceptanceCriteria": [
-        "Start local RocksDB engine with ./scripts/run/engine-rocksdb.sh",
-        "Run kitchen-sink bench scoped to SQLite: cd examples/kitchen-sink && npx tsx scripts/bench.ts '<endpoint>' --filter sqlite",
-        "Capture v2 results to .agent/research/sqlite/v2-bench-results.json",
-        "Compare against v1 baseline from US-002 (.agent/research/sqlite/v1-baseline-bench.json)",
-        "v2 shows improvement for write-heavy workloads"
-      ],
-      "priority": 38,
-      "passes": true,
-      "notes": "Use the existing kitchen-sink bench.ts (26 SQLite workloads + chat log insert/read + concurrency). No new benchmark harness needed. Run locally against the engine. Moved after US-034 (driver test suite) since bench requires the full stack working first. CANNOT be completed by Ralph/Codex — requires a running engine and deployed kitchen-sink. Must be run manually."
-    },
-    {
-      "id": "US-042",
-      "title": "Add Direct SqliteEngine integration tests in sqlite-native",
-      "description": "As a developer, I need VFS integration tests that wire the v2 VFS to a real SqliteEngine (temp RocksDB) so that edge cases caught only in full E2E tests are covered by fast, isolated Rust tests.",
-      "acceptanceCriteria": [
-        "Add a Direct(Arc<SqliteEngine>) variant to SqliteTransportInner in rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs that delegates get_pages/commit/commit_stage/commit_finalize to SqliteEngine methods, converting between envoy-protocol and sqlite-storage types",
-        "Add sqlite-storage and universaldb as dev-dependencies of sqlite-native",
-        "Add integration tests that open a real SQLite database through the v2 VFS backed by a real SqliteEngine with temp RocksDB",
-        "Test coverage: CREATE TABLE + INSERT + SELECT, multi-page growth (page splits), PRAGMA user_version read/write, large insert exceeding single page, data survives VFS close and reopen (simulating actor restart via new takeover), aux file handling (journal/temp files), batch atomic write probe passes, truncate then regrow",
-        "All tests use real RocksDB temp dirs with random subspace per test for isolation",
-        "cargo test -p rivetkit-sqlite-native passes"
-      ],
-      "priority": 33,
-      "passes": true,
-      "notes": "Fills the gap between sqlite-storage unit tests (real engine, no VFS) and VFS unit tests (mock engine, real VFS). The Direct variant is ~50 lines converting envoy-protocol types to sqlite-storage types, same conversions as pegboard-envoy/ws_to_tunnel_task.rs. This catches the class of bugs Ralph hit in US-034: page growth I/O errors, aux file rejection, empty db initialization, PRAGMA routing — all of which passed mock tests but failed with a real engine."
-    },
-    {
-      "id": "US-041",
-      "title": "Move schema version dispatch from creation-time config to startup-time UDB probe",
-      "description": "As a developer, I need the SQLite VFS version (v1 vs v2) determined at actor startup by probing UDB for existing v1 KV data, instead of being set at actor creation time via a config flag.",
-      "acceptanceCriteria": [
-        "Remove the sqlite_vfs_v2_default config flag from engine/packages/config/src/config/pegboard.rs",
-        "Remove sqlite_schema_version from actor2::Input, actor2::State, InitStateAndUdbInput in engine/packages/pegboard/src/workflows/actor2/mod.rs (add #[serde(default)] for migration safety)",
-        "Remove creation-time version selection from engine/packages/pegboard/src/ops/actor/create.rs",
-        "Modify populate_start_command in engine/packages/pegboard-envoy/src/sqlite_runtime.rs to probe the actor's KV subspace for v1 data (prefix 0x08). If v1 data found: set schema_version=1, startup_data=None. If no v1 data: set schema_version=2, load startup data via maybe_load_sqlite_startup_data",
-        "Modify engine/packages/pegboard-outbound/src/lib.rs to use the same UDB probe instead of reading from workflow state",
-        "Remove sqlite_schema_version from v1-to-v2 migration paths in engine/packages/pegboard/src/workflows/actor/mod.rs",
-        "Keep protocol schema (v2.bare), versioned.rs, envoy callbacks, bridge_actor.rs, database.rs dispatch, actor-driver.ts all as-is",
-        "Actors with existing v1 KV data continue to use v1. New actors with no data use v2.",
-        "cargo check passes for pegboard, pegboard-envoy, pegboard-outbound"
-      ],
-      "priority": 36,
-      "passes": true,
-      "notes": "See .agent/specs/sqlite-vfs-version-probe-at-startup.md for full change spec. The current approach stores version at creation time via config flag, which is wrong. The probe approach is simpler (no workflow state), automatic (no config flag to flip), and handles migration naturally (v1 actors keep v1, new actors get v2). The probe is a single get_range with limit 1 on the actor's KV subspace prefix 0x08."
-    },
-    {
-      "id": "US-034",
-      "title": "E2E validation via driver test suite",
-      "description": "As a developer, I need the existing driver test suite's SQLite tests to pass end-to-end through the v2 VFS path, proving the full stack works without writing bespoke E2E tests.",
-      "acceptanceCriteria": [
-        "Start local RocksDB engine with ./scripts/run/engine-rocksdb.sh",
-        "Run driver test suite scoped to bare encoding, static registry, and DB test suites with: cd rivetkit-typescript/packages/rivetkit && pnpm test driver-engine -t 'static.*bare.*(Actor Database|Actor Sleep Database|Actor Database Stress)'",
-        "All scoped tests pass through the v2 VFS path (schema-version dispatch routes new actors to v2)",
-        "Data persists across actor restart (already covered by actor-sleep-db tests)",
-        "No new bespoke test files needed. If any existing test needs minor adaptation for v2, modify in place."
-      ],
-      "priority": 37,
-      "passes": true,
-      "notes": "Use the existing driver test suite. Test suites covered: Actor Database Tests (actor-db.ts), Actor Database (Raw) Tests (actor-db-raw.ts), Actor Database Stress Tests (actor-db-stress.ts), Actor Database PRAGMA Migration Tests (actor-db-pragma-migration.ts), Actor Sleep Database Tests (actor-sleep-db.ts), Actor Database Lifecycle Cleanup Tests (actor-db.ts). The -t regex scopes to static registry, bare encoding, and DB-related describe blocks."
-    },
-    {
-      "id": "US-027",
-      "title": "Implement UdbStore in pegboard-envoy",
-      "description": "As a developer, I need the UdbStore production implementation of SqliteStore that wraps universaldb with FDB value chunking.",
-      "acceptanceCriteria": [
-        "engine/packages/pegboard-envoy/src/sqlite_bridge.rs contains UdbStore wrapping universaldb::Database with actor_subspace prefix",
-        "UdbStore implements SqliteStore (get, batch_get, scan_prefix, atomic_write) with transparent FDB value chunking (VALUE_CHUNK_SIZE=10,000 bytes for values > 100 KB)",
-        "Chunking follows existing actor_kv pattern: get/batch_get reassemble, atomic_write splits, scan_prefix handles chunks",
-        "SqliteStore trait surface is chunk-unaware from caller's perspective",
-        "cargo check -p pegboard-envoy passes"
-      ],
-      "priority": 29,
-      "passes": true,
-      "notes": "REDUNDANT. US-017b (drop SqliteStore trait, use UDB directly) eliminates the need for a separate UdbStore. The engine talks to UDB directly with inline chunking. No separate store implementation needed."
-    },
-    {
-      "id": "US-018",
-      "title": "Core sqlite-storage tests: commit/read, fencing, compaction",
-      "description": "As a developer, I need core integration tests covering the happy path, CAS fencing, slow-path staging, and compaction folding.",
-      "acceptanceCriteria": [
-        "Commit/read tests: commit_and_read_back, commit_multiple_pages (100), commit_overwrites_previous, read_nonexistent_page_returns_none, multiple_actors_isolated, commit_updates_db_size_pages, preload_returns_requested_pages",
-        "Fencing tests: takeover_bumps_generation, fence_mismatch_on_stale_generation, fence_mismatch_on_stale_txid, get_pages_with_stale_generation_returns_fence_mismatch",
-        "Slow path tests: slow_path_commit_stage_finalize (stage 3 chunks + finalize, read back), slow_path_missing_stage (StageNotFound)",
-        "Compaction tests: folds_deltas_into_shard, preserves_latest_wins, multi_shard_delta (3 passes), idempotent, coordinator deduplicates, cleans_orphan_deltas, cleans_orphan_stages",
-        "All tests use real RocksDB temp dirs (no MemoryStore)",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 30,
-      "passes": true,
-      "notes": "Merged from US-018 + US-019 + US-020. Tests run against temp RocksDB-backed UDB per US-017b. Each test gets a fresh DB + random subspace for isolation."
-    },
-    {
-      "id": "US-021",
-      "title": "Quota and failure injection tests",
-      "description": "As a developer, I need tests verifying quota enforcement and clean failure recovery under store errors.",
-      "acceptanceCriteria": [
-        "Quota tests: commit_within_quota, commit_exceeds_quota (1 MiB limit), compaction_does_not_inflate_quota, quota_separate_from_kv",
-        "Failure tests: store_error_mid_commit (no partial state), store_error_during_compaction (next pass retries cleanly), takeover_after_crash (snapshot mid-commit, restore, takeover recovers)",
-        "All tests use real RocksDB temp dirs",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 31,
-      "passes": true,
-      "notes": "Merged from US-021 + US-022. Quota tests validate SPEC section 3.6 (10 GiB default). Failure tests use crash simulation where applicable."
-    },
-    {
-      "id": "US-023",
-      "title": "Latency and concurrency tests",
-      "description": "As a developer, I need tests validating RTT assumptions and concurrent access correctness.",
-      "acceptanceCriteria": [
-        "Latency tests: small_commit_is_one_rtt (4 pages, ~20 ms not 2x+), get_pages_is_one_rtt (10 pages), commit_does_not_block_on_compaction",
-        "Concurrency tests: concurrent_commits_to_different_actors (10 actors), interleaved_commit_compaction_read, concurrent_reads_during_compaction",
-        "Latency tests use UDB_SIMULATED_LATENCY_MS=20",
-        "All tests use real RocksDB temp dirs",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 32,
-      "passes": true,
-      "notes": "Merged from US-023 + US-024. Latency tests validate SPEC constraint C6. Concurrency tests verify scc::HashMap and PIDX cache handle concurrent access correctly."
-    },
-    {
-      "id": "US-044",
-      "title": "Delete mock transport VFS tests",
-      "description": "As a developer, I need the MockProtocol-based VFS tests removed since the Direct SqliteEngine tests (US-042) cover everything they cover plus the bugs they miss.",
-      "acceptanceCriteria": [
-        "Delete MockProtocol struct and all #[cfg(test)] Test variant code from rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs",
-        "Delete all tests that use MockProtocol (commit_buffered_pages_uses_fast_path, commit_buffered_pages_falls_back_to_slow_path, startup_data_populates_cache_without_protocol_calls, etc.)",
-        "Remove the Test(Arc<MockProtocol>) variant from SqliteTransportInner",
-        "Keep the Direct(Arc<SqliteEngine>) variant and all Direct engine tests",
-        "Keep v1 VFS baseline tests (MemoryKv-based)",
-        "Migrate any error-path coverage (FenceMismatch handling, CommitTooLarge routing) to Direct engine tests using sqlite-storage failure injection",
-        "cargo test -p rivetkit-sqlite-native passes"
-      ],
-      "priority": 45,
-      "passes": false,
-      "notes": "Mock tests give false confidence. Every bug Ralph hit in US-034 (FenceMismatch from stale meta, page growth I/O errors) passed mock tests because MockProtocol returns hardcoded responses that don't model real engine behavior. The Direct transport catches all the same cases plus integration bugs."
-    },
-    {
-      "id": "US-045",
-      "title": "Expand Direct engine VFS test coverage and fix discovered bugs",
-      "description": "As a developer, I need comprehensive Direct engine tests covering edge cases that mock tests miss. Any bugs found by the new tests must be fixed in the same story.",
-      "acceptanceCriteria": [
-        "Port the stale head_txid reproduction test from .claude/worktrees/agent-af7406b0 into the main test suite as a Direct engine test",
-        "Add: interleaved commits and reads that exercise page cache misses after commits (FenceMismatch trigger)",
-        "Add: PRAGMA user_version set then read across close/reopen (sleep/wake cycle with new takeover)",
-        "Add: slow-path commit with data exceeding MAX_DELTA_BYTES (8 MiB) through Direct engine",
-        "Add: empty database first write (new actor, no data, first CREATE TABLE)",
-        "Add: batch atomic write probe verification with real engine",
-        "Add: VFS marks dead after transport error, subsequent ops fail cleanly",
-        "Add: concurrent SQLite statements from multiple threads through Direct engine",
-        "Add: two actors on the same SqliteEngine verify data isolation",
-        "Add: compaction during active reads (>32 deltas, read while compaction runs)",
-        "Add: repeated updates to the same row 100+ times (hot row churn, flaky in driver suite)",
-        "Add: DB writes during disconnect callback then sleep, verify writes persist after takeover",
-        "Add: mixed workload (insert 50, update 20, delete 10) then sleep/wake, verify integrity",
-        "Add: actor destroy triggers cleanup, migration failure triggers cleanup",
-        "Fix any bugs the new tests expose (e.g. stale head_txid from update_meta, dirty page limbo on transport error)",
-        "All tests use Direct(Arc<SqliteEngine>) with real RocksDB, not MockProtocol",
-        "All new tests pass: cargo test -p rivetkit-sqlite-native passes"
-      ],
-      "priority": 34,
-      "passes": true,
-      "notes": "See .agent/specs/sqlite-native-test-coverage-gaps.md for full gap analysis with 14 missing test scenarios (10 original + 4 from driver test suite failures). The existing Direct engine tests cover happy-path CRUD, page growth, aux files, and data persistence. This story adds edge cases from adversarial review and US-034 debugging. The stale head_txid test was reproduced and confirmed failing in worktree agent-af7406b0. Any bugs found must be fixed, not just tested. Tracking table in the spec tracks which driver suite failures have been reproduced."
-    },
-    {
-      "id": "US-043",
-      "title": "Make SQLite preload max bytes configurable in engine config",
-      "description": "As a developer, I need the SQLite page preload byte cap to be configurable in the engine config, following the same pattern as KV preload.",
-      "acceptanceCriteria": [
-        "Add sqlite_preload_max_total_bytes: Option<u64> field to Pegboard config in engine/packages/config/src/config/pegboard.rs, following the same pattern as preload_max_total_bytes",
-        "Add accessor fn sqlite_preload_max_total_bytes(&self) -> usize that defaults to DEFAULT_PRELOAD_MAX_BYTES (1 MiB)",
-        "Pass the config value through to TakeoverConfig::max_total_bytes in populate_start_command (sqlite_runtime.rs) and pegboard-outbound instead of using the hardcoded default",
-        "Update website/src/content/docs/self-hosting/configuration.mdx with the new config option",
-        "cargo check passes for pegboard-envoy, pegboard-outbound, config"
-      ],
-      "priority": 44,
-      "passes": false,
-      "notes": "Follow the existing preload_max_total_bytes pattern for KV. DEFAULT_PRELOAD_MAX_BYTES (1 MiB) stays as the default. The config allows operators to tune preload size for their deployment. At 4 KiB/page, 1 MiB preloads ~256 pages. Larger preloads reduce cold-start cache misses but increase start command size."
-    },
-    {
-      "id": "US-036",
-      "title": "Fix compaction-takeover META race and remove takeover retry",
-      "description": "As a developer, I need compaction META writes to be fenced against stale snapshots, and the takeover retry that masks this bug must be removed.",
-      "acceptanceCriteria": [
-        "Remove the retry loop Ralph added to takeover. Restore the original Err(anyhow!('concurrent takeover detected, disconnecting actor')) behavior in engine/packages/sqlite-storage/src/takeover.rs",
-        "compact_shard reads META and writes META inside a single run_db_op transaction, or validates head_txid+generation have not changed before writing",
-        "If META changed between read and write, compaction aborts the pass and retries (not a fatal error)",
-        "Compaction only writes the fields it modifies (materialized_txid, sqlite_storage_used, shard-related fields) rather than overwriting the full META record, OR reads META inside the write transaction",
-        "Test: concurrent commit during compaction does not revert head_txid",
-        "Test: compaction pass that detects a concurrent META change aborts cleanly and retries",
-        "Test: takeover during in-flight compaction does not hit concurrent takeover error (compaction fencing prevents the recheck from firing)",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 39,
-      "passes": true,
-      "notes": "See .agent/specs/compaction-takeover-race.md for full analysis. The CompactionCoordinator is process-global and outlives actor connections. When an actor disconnects and takeover runs, in-flight compaction workers are not cancelled. Compaction writes full META (including head_txid) in a separate transaction from its read, overwriting takeover's META. Ralph added a retry to takeover that masks this, which must be removed. The retry is wrong because it bumps generation unnecessarily and hides a useful error signal."
-    },
-    {
-      "id": "US-037",
-      "title": "Harden pegboard-envoy SQLite error handling",
-      "description": "As a developer, I need SQLite errors to be handled gracefully so that one actor's bad operation does not crash the shared WebSocket connection.",
-      "acceptanceCriteria": [
-        "Unexpected sqlite-storage errors in handle_sqlite_commit, handle_sqlite_get_pages, handle_sqlite_commit_stage, handle_sqlite_commit_finalize are caught and returned as typed error responses instead of propagating via ? and killing the connection",
-        "Add a catch-all error response variant to the SQLite protocol responses (or reuse an existing error variant)",
-        "Replace string-based error detection (is_sqlite_fence_mismatch, parse_commit_too_large, StageNotFound contains check) with typed error variants from sqlite-storage",
-        "Add input validation at the trust boundary before passing to sqlite-storage: reject pgno==0, reject pages where bytes.len() != page_size, reject duplicate pgnos in a single commit",
-        "validate_sqlite_actor errors return an error response instead of crashing the connection",
-        "cargo check -p pegboard-envoy passes"
-      ],
-      "priority": 40,
-      "passes": true,
-      "notes": "Compounds three related findings: (1) unhandled sqlite errors propagate via ? at ws_to_tunnel_task.rs:374-388 killing all actors on the envoy, (2) error type detection uses fragile string parsing on bail!() messages, (3) no dirty_pages validation at the envoy<->pegboard-envoy trust boundary. The KV path already handles errors correctly with KvErrorResponse — SQLite should follow the same pattern."
-    },
-    {
-      "id": "US-038",
-      "title": "Fix VFS v2 error recovery and add batch-atomic probe",
-      "description": "As a developer, I need the v2 VFS to properly handle commit failures and verify batch-atomic writes at startup.",
-      "acceptanceCriteria": [
-        "On any non-fence commit error in flush_dirty_pages (transport error, timeout), mark the VFS dead via mark_dead() so no further operations proceed with ambiguous state",
-        "On any non-fence commit error in commit_atomic_write, mark the VFS dead (SQLite's ROLLBACK_ATOMIC_WRITE will still fire but subsequent ops will fail cleanly)",
-        "v2 open_database calls assert_batch_atomic_probe (same as v1) to verify SQLITE_ENABLE_BATCH_ATOMIC_WRITE is active at runtime",
-        "Test: transport error during non-atomic flush marks VFS dead",
-        "Test: v2 open_database probe detects batch-atomic writes are active",
-        "cargo test -p rivetkit-sqlite-native passes"
-      ],
-      "priority": 41,
-      "passes": true,
-      "notes": "Two related VFS safety findings: (1) flush_dirty_pages leaves dirty buffer in limbo after transport errors without marking VFS dead (vfs.rs:601-647), creating ambiguous commit state with no recovery path. (2) v2 open_database lacks the batch-atomic probe that v1 has (vfs.rs:1587 vs v2/vfs.rs:1396-1438). Without the probe, a misconfigured build silently falls back to journal mode which is incompatible with v2 VFS."
-    },
-    {
-      "id": "US-039",
-      "title": "Implement slow-path commit pipelining",
-      "description": "As a developer, I need the slow-path commit to pipeline stage uploads so that large commits complete in 1 effective RTT instead of N+1.",
-      "acceptanceCriteria": [
-        "commit_buffered_pages slow path sends all commit_stage messages without awaiting individual responses (fire-and-forget over WebSocket, relying on FIFO ordering)",
-        "Only the final commit_finalize response is awaited (1 effective RTT regardless of chunk count)",
-        "If any staged chunk is rejected (FenceMismatch), the finalize will also fail, which is the error the caller sees",
-        "Test: a large commit (>8 MiB) uses the slow path and completes with only 1 awaited response (commit_finalize)",
-        "cargo test -p rivetkit-sqlite-native passes"
-      ],
-      "priority": 42,
-      "passes": true,
-      "notes": "US-028b acceptance criteria specified pipelining but the implementation at v2/vfs.rs:783-801 awaits each commit_stage individually in a for loop. This makes slow-path commits N+1 RTTs instead of 1 effective RTT. The fix: send all stages without awaiting, only await commit_finalize."
-    },
     {
       "id": "US-040",
       "title": "Fix compaction performance: hoist scans and share engine",
@@ -717,27 +14,46 @@
         "Test: compaction batch of 8 shards performs 1 PIDX scan total (not 9)",
         "cargo test -p sqlite-storage passes"
       ],
-      "priority": 43,
-      "passes": false,
+      "priority": 6,
+      "passes": true,
       "notes": "Two compounding performance findings: (1) compact_worker calls compact_shard up to 8 times, each doing its own full PIDX scan + delta scan = 9 PIDX scans + 8 delta scans per batch. (2) default_compaction_worker creates a new SqliteEngine with empty page_indices on every invocation (compaction/mod.rs:131-147), so every scan is a cold load and cache updates are discarded."
     },
     {
-      "id": "US-046",
-      "title": "Fix update_meta: never overwrite VFS-owned fields from get_pages response",
-      "description": "As a developer, I need the VFS to never overwrite head_txid or db_size_pages from a get_pages response, since the VFS is the authority on these fields.",
+      "id": "US-043",
+      "title": "Make SQLite preload max bytes configurable; align naming with kv preload",
+      "description": "As a developer, I need the SQLite startup page preload byte budget to be configurable via engine config so that operators can tune it per deployment. Also align naming with the existing kv preload config to avoid operator confusion: existing preload_max_total_bytes (KV) should become kv_preload_max_total_bytes, and the new SQLite option is sqlite_preload_max_total_bytes. Document the rename prominently.",
       "acceptanceCriteria": [
-        "Remove the update_meta call from the get_pages response handler in resolve_pages (v2/vfs.rs)",
-        "Instead, selectively update only max_delta_bytes from the get_pages response meta (the only field the server can legitimately change during reads)",
-        "head_txid is only updated from commit responses (SqliteCommitOk, SqliteCommitFinalizeOk), never from read responses",
-        "db_size_pages is only updated from commit responses and local xWrite/xTruncate, never from read responses",
-        "Remove the commit_mutex (parking_lot::Mutex<()>) since SQLite is single-threaded per connection and two commits can never race",
-        "Test: get_pages response with stale head_txid does not affect VFS state (port from worktree agent-af7406b0)",
-        "Test: get_pages response with smaller db_size_pages does not shrink the VFS's db_size_pages mid-transaction",
-        "cargo test -p rivetkit-sqlite-native passes"
+        "Add sqlite_preload_max_total_bytes: Option<u64> field to Pegboard config in engine/packages/config/src/config/pegboard.rs, following the same pattern as preload_max_total_bytes",
+        "Add accessor fn sqlite_preload_max_total_bytes(&self) -> usize that defaults to DEFAULT_PRELOAD_MAX_BYTES (1 MiB)",
+        "Pass the config value through to TakeoverConfig::max_total_bytes in populate_start_command (sqlite_runtime.rs) and pegboard-outbound instead of using the hardcoded default",
+        "Update website/src/content/docs/self-hosting/configuration.mdx with the new config option",
+        "cargo check passes for pegboard-envoy, pegboard-outbound, config",
+        "RENAME existing preload_max_total_bytes -> kv_preload_max_total_bytes in the engine config surface. Keep a backwards-compat alias that reads the old name and logs a deprecation warning; remove the alias after one release.",
+        "ADD sqlite_preload_max_total_bytes as the new SQLite-specific config. Default = same as today's hardcoded value.",
+        "Document both in website/src/content/docs/self-hosting/configuration.mdx with a clear note: 'preload_max_total_bytes was renamed to kv_preload_max_total_bytes in version X. The old name still works but logs a warning.'",
+        "Update any internal references (pegboard, pegboard-envoy, test fixtures) to the new name",
+        "cargo test affected crates pass"
       ],
-      "priority": 35,
-      "passes": true,
-      "notes": "The current condition (ok.meta.generation > state.generation || ok.meta.head_txid >= state.head_txid) is too permissive. When head_txid matches, update_meta still runs and overwrites db_size_pages with the server's stale value. Mid-transaction, a get_pages call could shrink db_size_pages relative to in-flight writes. The commit_mutex was added to fix flaky tests but is a red herring — the real cause was the update_meta bug. SQLite's single-threaded callback model means two commits can never race."
+      "priority": 11,
+      "passes": false,
+      "notes": "Review agent flagged that having preload_max_total_bytes (KV) alongside sqlite_preload_max_total_bytes would confuse operators. Rename the existing one with a deprecation alias. Small churn, big clarity win."
+    },
+    {
+      "id": "US-044",
+      "title": "Delete mock transport VFS tests",
+      "description": "As a developer, I need the MockProtocol-based VFS tests removed since the Direct SqliteEngine tests (US-042) cover everything they cover plus the bugs they miss.",
+      "acceptanceCriteria": [
+        "Inventory all tests in rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs that use MockProtocol / Test transport. Grep: 'SqliteTransportInner::Test', 'MockProtocol', 'protocol.commit_requests()'. Enumerate each test by function name in this story's notes before deleting.",
+        "For each MockProtocol test, classify as: (a) COVERED by an existing Direct engine test \u2192 delete, (b) NOT COVERED \u2192 port to Direct engine harness first, THEN delete the mock, (c) Tests behavior that only a controllable mock can exercise (e.g., fence mismatch injection, transport failure injection) \u2192 keep the mock but migrate to a smaller, documented MockTransport that lives under #[cfg(test)] with a comment explaining why the Direct harness cannot cover it.",
+        "Specifically preserve coverage for: FenceMismatch handling in commit paths, transport errors mid-commit, stale_meta edge cases, death semantics, multi-thread statement churn, slow-path fallback behavior",
+        "After deletion, run: cargo test -p rivetkit-sqlite-native and confirm all non-mock tests still pass",
+        "Measure test surface before/after (count of #[test] functions) \u2014 report in the PR description so we can see we did not silently drop coverage",
+        "cargo test -p rivetkit-sqlite-native passes with the same or greater count of assert!/assert_eq! as before the change",
+        "cargo test -p sqlite-storage passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Review agent flagged that naively deleting mock tests could lose coverage for 10+ error paths (FenceMismatch, transport errors, multi-thread churn). This story is explicitly not 'delete all mock tests' \u2014 it's 'replace mocks with Direct engine tests where possible, and keep the rest with justification.' Do the inventory BEFORE deleting."
     },
     {
       "id": "US-047",
@@ -747,15 +63,167 @@
         "Remove recover_page_from_delta_history from engine/packages/sqlite-storage/src/read.rs",
         "If a page is not found in its PIDX-indicated delta and not in the shard, return an error with diagnostic context (actor_id, pgno, source_key, delta txid) instead of silently scanning all deltas",
         "Delete or convert the test get_pages_recovers_from_older_delta_when_latest_source_is_wrong to verify the error is returned",
-        "In truncate_main_file (v2/vfs.rs), replace page_cache.invalidate_all() with page_cache.invalidate_entries_if(|pgno, _| *pgno > truncated_pages)",
+        "When PIDX-indicated delta lookup fails, emit a counter metric sqlite_get_pages_pidx_miss_total (engine /metrics endpoint) alongside the returned error. If this metric ever increments in production, it indicates a real PIDX bug and should page oncall.",
+        "In truncate_main_file (v2/vfs.rs), replace page_cache.invalidate_all() with page_cache.invalidate_entries_if(|pgno, _| *pgno > truncated_pages) where truncated_pages = ceil_div(new_size_bytes, page_size). Truncating to size=0 sets truncated_pages=0, so the predicate evicts everything (matches old behavior for that edge case). Use strict > so pgno=truncated_pages survives.",
         "Test: after truncate, pages below the boundary are still in cache (no unnecessary cache miss)",
         "Test: after truncate + regrow, old pages beyond boundary are not served from stale cache",
+        "Add boundary tests: (1) truncate to size=0 evicts all pages, (2) truncate to an exact page boundary keeps pgno<=truncated_pages, evicts pgno>truncated_pages, (3) truncate mid-page keeps pgno<=truncated_pages (the partial page is evicted).",
         "cargo test -p sqlite-storage passes",
         "cargo test -p rivetkit-sqlite-native passes"
       ],
-      "priority": 46,
+      "priority": 8,
       "passes": false,
-      "notes": "Two fixes from adversarial review verification. (1) recover_page_from_delta_history scans ALL deltas (up to 256 MB) when PIDX points to wrong delta. This cannot happen in normal operation (commit writes delta + PIDX atomically). The function masks bugs and has no logging/metrics. (2) truncate invalidate_all() nukes the entire page cache including valid pages below the boundary. After VACUUM on a large DB, every read becomes a cache miss. moka's invalidate_entries_if supports selective eviction."
+      "notes": "Two fixes from adversarial review verification. (1) recover_page_from_delta_history scans ALL deltas (up to 256 MB) when PIDX points to wrong delta. This cannot happen in normal operation (commit writes delta + PIDX atomically). The function masks bugs and has no logging/metrics. (2) truncate invalidate_all() nukes the entire page cache including valid pages below the boundary. After VACUUM on a large DB, every read becomes a cache miss. moka's invalidate_entries_if supports selective eviction. \n\nStaged-rollout concern (review agent): normally we'd want to emit a counter for N days to confirm recover_page_from_delta_history is never hit before removing it. BECAUSE v2 HAS NOT SHIPPED, that precaution is unnecessary \u2014 remove directly. If that assumption changes (e.g., v2 beta goes out with this function still present), revisit."
+    },
+    {
+      "id": "US-048",
+      "title": "Replace single-blob DELTA layout with per-txid chunk prefix",
+      "description": "As a developer, I need commit_finalize to stop building a single giant DELTA blob so that commits up to the 16 MB cap (US-054) do not exceed FoundationDB's 10 MB per-transaction hard limit or its 5 s transaction age limit (error codes 2101, 1007). Because v2 has not shipped, we do this as a clean rewrite with an IN-PLACE PROMOTION strategy: stage chunks are written directly under a txid-scoped prefix the FIRST time, and finalize merely flips a manifest pointer in META. NO copying of bytes in the finalize transaction. This is what makes the <1 MB finalize-txn claim achievable.",
+      "acceptanceCriteria": [
+        "Add new subspace helpers in engine/packages/sqlite-storage/src/keys.rs: delta_chunk_prefix(actor_id, txid) and delta_chunk_key(actor_id, txid, chunk_idx: u32). Use a subspace distinct from stage_prefix so takeover can cleanly distinguish.",
+        "DELETE delta_key(actor_id, txid) and every call site across engine/packages/sqlite-storage/src/{read,commit,compaction/shard,quota,takeover}.rs and tests (~20 call sites). Replace with the new delta_chunk layout.",
+        "PROMOTION STRATEGY (confirmed): 'persist at stage start'. Add new engine RPC commit_stage_begin(actor_id, generation) -> Result<StageBeginResult { txid }>. Inside one FDB txn: tx_get_value_serializable(META), fence-check generation matches, increment head.next_txid, tx_write_value(META), return the allocated txid. FenceMismatch on generation bumps a dedicated metric.",
+        "Stage chunks write DIRECTLY to delta_chunk_key(actor_id, txid, chunk_idx) using the txid returned by commit_stage_begin. NO stage_key intermediate layer.",
+        "commit_finalize becomes METADATA-ONLY. Reads META, asserts: (a) head.generation == request.generation, (b) head.head_txid == request.expected_head_txid, (c) request.txid == head.next_txid - 1 (the reserved txid matches what META last allocated). Flips head_txid = request.txid, updates db_size_pages, writes META. Does NOT read, rewrite, or delete chunk bytes.",
+        "Assert in a test that a 16 MiB commit's finalize FDB txn writes fewer than 2 KB of mutations. This is the concrete guard that the metadata-only claim holds.",
+        "read.rs get_pages: replace every get_value(delta_key(...)) with scan_prefix_values(delta_chunk_prefix(actor_id, txid)), decode chunks in chunk_idx order, LTX-decode the concatenated buffer.",
+        "Extend takeover.rs build_recovery_plan to scan the new delta_chunk_prefix namespace for any chunks where txid > head_txid and delete them as orphans. Keep the existing stage_prefix cleanup removed (dead under the new scheme) or repurposed. Aborted stages (commit_stage_begin allocated a txid but no finalize arrived) naturally become orphans with txid > head_txid.",
+        "Assert in a test that after N aborted commit_stage_begin calls (each leaving orphan chunks), takeover cleans them all up on the next actor start, and head_txid does not regress.",
+        "Because finalize is metadata-only, chunk writes in commit_stage bill against sqlite_storage_used incrementally. Add quota enforcement to commit_stage: if adding this chunk would exceed sqlite_max_storage, return QuotaExceeded and leave orphan bytes for takeover to reap. Emit metric sqlite_orphan_chunk_bytes_reclaimed_total so operators can see orphan accumulation.",
+        "Concurrent-read safety: if get_pages runs while a finalize is mid-flight, it sees either the pre-finalize state (old head_txid) or the post-finalize state (new head_txid); never a torn chunk set. This is guaranteed automatically: chunks exist at txid > head_txid before finalize (invisible to get_pages), head_txid flip is atomic (single META write), chunks become visible at txid == head_txid afterwards. Add an interleaved test that verifies no torn reads across 1000 concurrent reads during a finalize.",
+        "Compaction (compaction/shard.rs) uses head_txid as the visibility boundary. A pending txid > head_txid is invisible to compaction; compaction only folds txids <= head_txid. No new chunk_count field needed \u2014 the head_txid flip is the atomic boundary.",
+        "Aborted stages leak a txid number (next_txid advanced but head_txid never caught up). This is benign: next_txid is monotonic, gaps are irrelevant to reads or compaction. u64 gives effectively infinite headroom. Document this invariant in types.rs alongside DBHead.",
+        "Update DBHead doc comment in types.rs to state: 'head_txid is the latest committed txid (visible). next_txid is the next txid allocatable by commit_stage_begin. head_txid == next_txid - 1 immediately after a clean commit; head_txid < next_txid - 1 during or after aborted stages.'",
+        "Add bench_large_tx_insert_10mb, bench_large_tx_insert_16mb, bench_large_tx_insert_commit_finalize_metadata_only_under_2kb tests to rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs. Run via Direct engine harness AND envoy transport harness.",
+        "Assert that a commit of 17 MiB is rejected cleanly with CommitExceedsLimit (depends on US-054; surface the test here too).",
+        "After landing, run local bench and compare phase histograms from US-059 against the pre-US-048 baseline in progress.txt. No phase should regress > 10% on 1 MB commits. 10 MB and 16 MB commits should work cleanly (previously failed).",
+        "Does NOT reintroduce FDB error codes 2101 or 1007 \u2014 regression assertion in bench test that no FenceMismatch or TransactionTooOld errors are logged.",
+        "Staging bench examples/kitchen-sink/scripts/bench.ts --filter 'Large TX insert 10MB' passes with p95 < 3 s, 16MB < 5 s.",
+        "dependsOn: US-059 (need phase histograms to measure no-regression; tests should scrape them).",
+        "cargo test -p sqlite-storage passes",
+        "cargo test -p rivetkit-sqlite-native passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Two adversarial agents decided the design. TXID allocation: 'persist at stage start' (Option A). New commit_stage_begin RPC atomically allocates next_txid in one FDB txn. Chunks written directly to delta_chunk_key(actor, txid, chunk_idx); no intermediate stage_key. commit_finalize becomes metadata-only: reads META, verifies txid == next_txid - 1, flips head_txid. Abandoned stages leak txid numbers (benign on u64, orphan chunks cleaned by takeover's existing 'txid > head_txid' scan). Quota bills at stage time since finalize is metadata-only. Concurrent read safety follows automatically from the head_txid flip being the atomic boundary. No chunk_count field needed \u2014 head_txid IS the boundary.",
+      "dependsOn": [
+        "US-059"
+      ]
+    },
+    {
+      "id": "US-050",
+      "title": "Enforce 100 KB max SQL statement length via sqlite3_limit",
+      "description": "As a developer, I need SQLite statements longer than 100 KB to be rejected at parse time so that accidental RPC-to-SQL payload abuse is bounded and the contract matches Cloudflare Durable Objects.",
+      "acceptanceCriteria": [
+        "Call sqlite3_limit(db, SQLITE_LIMIT_SQL_LENGTH, 100_000) after opening the database",
+        "Running a 200 KB SQL statement returns SQLITE_TOOBIG",
+        "Running a 50 KB SQL statement succeeds",
+        "Add test in rivetkit-sqlite-native",
+        "Document in website/src/content/docs/actors/limits.mdx",
+        "cargo test -p rivetkit-sqlite-native passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Matches Cloudflare DO (100 KB). Free because SQLite enforces natively via SQLITE_LIMIT_SQL_LENGTH."
+    },
+    {
+      "id": "US-053",
+      "title": "Enforce 10 GiB max database size via quota",
+      "description": "As a developer, I need the SQLite storage to reject commits once the actor's database has reached 10 GiB (= 10 * 1024 * 1024 * 1024 = 10,737,418,240 bytes) so that per-actor storage is bounded, matches Cloudflare Durable Objects, and keeps FDB shard rebalancing tractable. Use GiB (binary) consistently everywhere \u2014 engine constants, docs, error messages \u2014 to avoid drift with GB (decimal).",
+      "acceptanceCriteria": [
+        "In engine/packages/sqlite-storage/src/types.rs, set SQLITE_DEFAULT_MAX_STORAGE_BYTES = 10 * 1024 * 1024 * 1024 (= 10,737,418,240 bytes = 10 GiB)",
+        "commit() returns SqliteStorageQuotaExceeded when usage would exceed 10 GiB (already has this code path; just verify limit is set)",
+        "Update test that seeds a quota-exceeded commit to use the 10 GiB boundary",
+        "Document the 10 GiB DB size limit in website/src/content/docs/actors/limits.mdx",
+        "cargo test -p sqlite-storage passes",
+        "website/src/content/docs/actors/limits.mdx uses 'GiB' (binary) consistently for SQLite DB size; rendered limit table says '10 GiB', not '10 GB'"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Matches Cloudflare DO (10 GB). The quota enforcement already exists; this story just sets the default limit and documents it. Smaller cap is easier to migrate across FDB shards; raise later once compaction proves itself at scale."
+    },
+    {
+      "id": "US-054",
+      "title": "Enforce 16 MB max commit size (reject, do not silently split)",
+      "description": "As a developer, I need commits whose dirty_pages exceed 16 MB to fail with a clear actionable error. 16 MB is chosen as the hard cap: it matches Cloudflare Durable Objects' internal commit batch size, is comfortably under FoundationDB's 10 MB per-txn hard limit after US-048 removes DELTA bytes from the commit txn (PIDX for 4,096 pages \u2248 120 KB), fits in one WebSocket frame in tokio-tungstenite, and bounds memory pressure on shared runner pods (50 concurrent 16 MB commits = 800 MB vs a 2 GB container budget).",
+      "acceptanceCriteria": [
+        "Add SQLITE_MAX_COMMIT_BYTES = 16 * 1024 * 1024 constant in engine/packages/sqlite-storage/src/types.rs (16 MiB in binary units). Align terminology with SQLITE_MAX_DELTA_BYTES already there.",
+        "DEFINITION: 'commit size' is the sum of dirty_page.bytes.len() over all DirtyPage in the CommitRequest. Explicitly does NOT include LTX header/trailer/index, LZ4 compression, BARE envelope, pgno encoding overhead, or actor_id/generation metadata. The check is evaluated BEFORE any encoding, serialization, or staging split.",
+        "commit() (fast path): reject when dirty_pages_raw_bytes(&request.dirty_pages) > SQLITE_MAX_COMMIT_BYTES with SqliteStorageError::CommitExceedsLimit { actual_size_bytes, max_size_bytes }. Error message must reference 'dirty page bytes' so users know what to measure.",
+        "commit_stage_begin() and commit_stage() (slow path): cap the CUMULATIVE raw bytes across all stage chunks for a single commit at SQLITE_MAX_COMMIT_BYTES. Track accumulated bytes per (actor_id, txid) in an engine-side in-memory state keyed by txid. If stage would push cumulative past the cap, return CommitExceedsLimit and abort the stage. This prevents a malicious/buggy client from bypassing the cap by chunking their own commit.",
+        "commit_finalize does NOT re-check the size (txid is already past the go/no-go point) \u2014 rely on commit_stage's accumulator.",
+        "VFS (rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs): when transport returns CommitExceedsLimit, surface as SQLITE_TOOBIG or equivalent so SQLite returns a clean transaction rollback (not a silent retry). Add a rivetkit-sqlite-native test that INSERTs a 20 MiB blob, catches the error at the JS surface, and asserts the actor remains usable for subsequent commits.",
+        "Emit sqlite_commit_exceeds_limit_total counter with label path={fast, slow}. No other labels (cardinality).",
+        "Test (fast path): a commit with 4097 * 4 KiB pages (16 MiB + 4 KiB raw) is REJECTED even when pages are all zeros (LZ4 would crush to ~KB). This locks Definition 1 against accidental drift to 'post-compression bytes'.",
+        "Test (fast path): a commit with exactly 4096 * 4 KiB pages (16 MiB) SUCCEEDS.",
+        "Test (slow path): two stages of 10 MiB raw each (total 20 MiB) is REJECTED at the second stage's commit_stage call, not just finalize.",
+        "Test: wire envelope overhead (BARE pgno varints, length prefixes) does NOT push a 16 MiB-raw commit over the cap.",
+        "Document in website/src/content/docs/actors/limits.mdx: '16 MiB max raw dirty-page bytes per commit. Counts uncompressed page bytes only; compression ratios do not affect this limit. For larger atomic operations, split into multiple BEGIN/COMMIT blocks.'",
+        "Update website/src/content/docs/actors/troubleshooting.mdx with the new CommitExceedsLimit error shape and its actionable guidance.",
+        "dependsOn: US-048 (commit txn sizing math only works after DELTA bytes leave the commit txn)",
+        "cargo test -p sqlite-storage passes",
+        "cargo test -p rivetkit-sqlite-native passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Adversarial agent decided Definition 1 (raw dirty page bytes). Reasons: (1) user-predictable ('my 5 MiB blob \u2248 5 MiB of dirty pages'), (2) post-compression definition would let 64 MiB of zeros through a 16 MiB LZ4-bytes cap, defeating memory/wire pressure goals, (3) matches existing dirty_pages_raw_bytes invariant used elsewhere in commit.rs. LZ4 interaction is a FEATURE under Definition 1: a 16 MiB text commit still compresses to a small DELTA on disk, but the commit is still capped at 16 MiB of raw uncompressed data. Slow path must mirror-check accumulated raw bytes across stages to prevent bypass via chunking.",
+      "dependsOn": [
+        "US-048"
+      ]
+    },
+    {
+      "id": "US-055",
+      "title": "Enable WebSocket permessage-deflate on hyper-tungstenite server + all client tungstenites",
+      "description": "As a developer, I need WebSocket traffic between Cloud Run runners and the Rivet engine to be compressed so that large SQLite commit payloads use less wire bandwidth. The pegboard-envoy server uses hyper-tungstenite 0.17 (NOT tokio-tungstenite); any client that initiates a WebSocket to the engine uses tokio-tungstenite. Both sides must negotiate permessage-deflate via Sec-WebSocket-Extensions.",
+      "acceptanceCriteria": [
+        "Enumerate every WebSocket entry/exit point on the actor<->engine path: engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs (server, hyper-tungstenite), engine/sdks/rust/envoy-client/src/ (client, tokio-tungstenite), any rivetkit-typescript/packages/engine-runner usage",
+        "Enable deflate on hyper-tungstenite: verify the 0.17 release exposes a DeflateConfig / permessage-deflate feature; if not, bump hyper-tungstenite to a version that does",
+        "Enable deflate on tokio-tungstenite clients: in root Cargo.toml [workspace.dependencies.tokio-tungstenite] add 'deflate' to features",
+        "Configure both sides with server_no_context_takeover = true, client_no_context_takeover = true, server_max_window_bits = 15, client_max_window_bits = 15 (bounds per-connection memory to ~4 KB instead of 32 KB)",
+        "Add an integration test in engine/packages/pegboard-envoy/tests/ (new file: ws_compression_handshake.rs, or the nearest existing integration test dir under pegboard-envoy) that spins up a real pegboard-envoy server, opens a WebSocket client with permessage-deflate negotiation, and asserts the handshake response includes 'Sec-WebSocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover'. Use tokio-tungstenite as the test client since that is the same stack actor-side clients use.",
+        "Bench a 5 MB commit with non-random compressible data (e.g., repeated text payload) and assert wire bytes drop 2-5x vs uncompressed baseline. Use the US-059 histograms to measure transport duration",
+        "Random-blob benchmarks show no improvement (expected); document this explicitly in the story notes",
+        "Document the feature in website/src/content/docs/self-hosting/configuration.mdx if operators need to disable it (and in CLAUDE.md for WebSocket conventions)",
+        "cargo test for affected crates passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Review agent flagged: pegboard-envoy uses hyper-tungstenite 0.17, not tokio-tungstenite. Both paths must be covered. If hyper-tungstenite 0.17 does not support deflate, we need to upgrade (verify compatibility with hyper version first). Keep no_context_takeover on both sides to bound memory \u2014 each active connection otherwise holds ~32 KB zlib state. For large actor fleets this matters."
+    },
+    {
+      "id": "US-059",
+      "title": "Add phase-level commit instrumentation (Prometheus + VFS counters)",
+      "description": "As a developer, I need three complementary observability surfaces on the SQLite commit path so that subsequent performance work has real data: (1) aggregated Prometheus histograms on the engine /metrics endpoint (port 6430) for dashboards, (2) per-actor VFS counters flowing through the existing ActorMetrics /inspector/metrics endpoint for per-actor debugging, and (3) tracing spans at debug level on both engine and VFS sides so that flipping RUST_LOG gives us per-request breakdowns correlatable by ray_id. Must land before US-048 so we can detect regressions from the DELTA layout rewrite.",
+      "acceptanceCriteria": [
+        "Engine-side Prometheus histograms in SqliteStorageMetrics (engine/packages/sqlite-storage/src/metrics.rs): sqlite_commit_phase_duration_seconds with labels phase={decode_request, meta_read, ltx_encode, pidx_read, udb_write, response_build} and path={fast, slow}. Buckets: [.0005, .001, .0025, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10]",
+        "Engine-side: sqlite_commit_stage_phase_duration_seconds{phase=decode|stage_encode|udb_write}",
+        "Engine-side: sqlite_commit_finalize_phase_duration_seconds{phase=stage_promote|pidx_write|meta_write}",
+        "Engine-side: sqlite_commit_dirty_page_count{path}, sqlite_commit_dirty_bytes{path}, sqlite_udb_ops_per_commit{path} histograms",
+        "Envoy-side Prometheus histograms (same /metrics endpoint): sqlite_commit_envoy_dispatch_duration_seconds (WS frame arrival -> engine.commit() call), sqlite_commit_envoy_response_duration_seconds (engine.commit() return -> WS frame sent)",
+        "Verify engine /metrics endpoint returns these new metrics after running a commit. Curl port 6430 in a test.",
+        "Engine-side tracing spans via #[tracing::instrument(level = \"debug\", skip(...), fields(path, dirty_pages))] on commit(), commit_stage(), commit_finalize()",
+        "Inside each, open tracing::debug_span!(\"phase_name\", phase_specific_fields) for sub-phases (meta_read, ltx_encode, udb_write, etc.) so span enter/exit durations are captured",
+        "Envoy side: tracing span around handle_sqlite_commit() with actor_id, request_id fields for cross-component correlation",
+        "All spans at debug level \u2014 verify they are compiled out / zero cost when RUST_LOG=info by running a simple benchmark and confirming throughput does not regress",
+        "Document in docs-internal/engine/SQLITE_METRICS.md: 'set RUST_LOG=sqlite_storage=debug,pegboard_envoy=debug to see per-commit phase breakdowns'",
+        "Client-side VFS (rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs VfsV2Context): add AtomicU64 fields commit_request_build_ns, commit_serialize_ns, commit_transport_ns, commit_state_update_ns, plus commit_duration_ns_total for total commit time. Record via Instant::now() differences in flush_dirty_pages() and commit_atomic_write()",
+        "Add a NAPI-exposed method get_sqlite_vfs_metrics() -> {request_build_ns, serialize_ns, transport_ns, state_update_ns, total_ns, commit_count} in rivetkit-typescript/packages/rivetkit-native/ that reads the AtomicU64 values",
+        "Extend rivetkit-typescript/packages/rivetkit/src/actor/metrics.ts ActorMetrics: call the NAPI method during snapshot() and add a new labeled_timing metric 'sqlite_commit_phases' with values {request_build, serialize, transport, state_update}. Populate from the NAPI return values. Reset on actor wake alongside other ActorMetrics fields",
+        "Verify /inspector/metrics returns the new sqlite_commit_phases metric after a commit. Add a rivetkit test that runs an INSERT, hits /inspector/metrics, and asserts the new fields exist with non-zero values",
+        "Client-side VFS: tracing::debug!(target: \"sqlite_v2_vfs\", phase, elapsed_ms, dirty_pages, bytes, \"vfs commit phase\") log lines in flush_dirty_pages and commit_atomic_write after each phase",
+        "No Prometheus metric includes actor_id or namespace_id as a label (cardinality)",
+        "Path label ({fast, slow}) is the only dimension added beyond phase names",
+        "Add sqlite-storage test commit_instruments_all_phases: runs a 1 MB commit, scrapes engine /metrics, asserts each phase histogram has >=1 observation, and asserts observations sum within ~10% of total commit duration",
+        "Add rivetkit-sqlite-native test vfs_records_commit_phase_durations: runs a commit, reads the NAPI counters, asserts request_build_ns + transport_ns + state_update_ns > 0",
+        "Run examples/kitchen-sink/scripts/bench.ts --filter 'Large TX insert 5MB' locally, scrape /metrics on engine port 6430, AND hit /inspector/metrics on the actor, paste both outputs into progress.txt as baseline data",
+        "Add docs-internal/engine/SQLITE_METRICS.md documenting every new metric: name, labels, type (histogram/counter/timing), layer (engine/envoy/vfs), where to scrape it, and how to interpret for common diagnosis scenarios",
+        "cargo test -p sqlite-storage passes",
+        "cargo test -p rivetkit-sqlite-native passes",
+        "pnpm test -F rivetkit (if applicable driver tests exist) passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Three complementary surfaces: (1) Prometheus histograms on the engine /metrics endpoint at port 6430 \u2014 aggregated across all actors, bounded cardinality, for dashboards; (2) per-actor VFS counters exposed via the EXISTING /inspector/metrics endpoint (not a new surface \u2014 extend ActorMetrics.snapshot()) for per-actor debugging; (3) tracing spans at debug level on both engine and VFS sides, zero cost at info level, flip RUST_LOG to debug for per-request phase breakdowns correlatable via ray_id. These three are not redundant: Prometheus catches aggregate regressions, inspector metrics diagnose one actor, tracing spans debug specific slow commits. The NAPI bridge for VFS counters is new; design it to match how rivetkit-native already exposes other native state to TypeScript."
     }
   ]
 }

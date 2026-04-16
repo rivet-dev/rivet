@@ -1,11 +1,13 @@
 //! Commit paths for fast-path and staged writes.
 
 use std::collections::BTreeMap;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail, ensure};
 use scc::hash_map::Entry;
 use serde::{Deserialize, Serialize};
+use tracing::Instrument;
 
 use crate::engine::SqliteEngine;
 use crate::error::SqliteStorageError;
@@ -108,9 +110,15 @@ mod test_hooks {
 }
 
 impl SqliteEngine {
+	#[tracing::instrument(
+		level = "debug",
+		skip(self, request),
+		fields(path = "fast", dirty_pages = tracing::field::Empty)
+	)]
 	pub async fn commit(&self, actor_id: &str, request: CommitRequest) -> Result<CommitResult> {
 		let start = Instant::now();
 		let dirty_page_count = request.dirty_pages.len();
+		tracing::Span::current().record("dirty_pages", dirty_page_count);
 		let mut dirty_pgnos = request
 			.dirty_pages
 			.iter()
@@ -130,6 +138,7 @@ impl SqliteEngine {
 		let actor_id = actor_id.to_string();
 		let actor_id_for_tx = actor_id.clone();
 		let subspace = self.subspace.clone();
+		let op_count_before = self.op_counter.load(Ordering::Relaxed);
 		let cached_existing_pidx = match self.page_indices.get_async(&actor_id).await {
 			Some(index) => Some(
 				dirty_pgnos
@@ -141,7 +150,8 @@ impl SqliteEngine {
 		};
 		let request = request.clone();
 		let dirty_pgnos_for_tx = dirty_pgnos.clone();
-		let (txid, head, delta_bytes) =
+		let run_db_op_start = Instant::now();
+		let (txid, head, delta_bytes, meta_read_duration, ltx_encode_duration, pidx_read_duration) =
 			udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
 				let actor_id = actor_id_for_tx.clone();
 				let request = request.clone();
@@ -149,14 +159,18 @@ impl SqliteEngine {
 				let subspace = subspace.clone();
 				let cached_existing_pidx = cached_existing_pidx.clone();
 				async move {
+					let meta_read_start = Instant::now();
 					let meta_storage_key = meta_key(&actor_id);
-					let meta_bytes =
-						udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key)
-							.await?
-							.ok_or(SqliteStorageError::MetaMissing {
-								operation: "commit",
-							})?;
+					let meta_bytes = async {
+						udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await
+					}
+					.instrument(tracing::debug_span!("meta_read"))
+					.await?
+					.ok_or(SqliteStorageError::MetaMissing {
+						operation: "commit",
+					})?;
 					let mut head = decode_db_head(&meta_bytes)?;
+					let meta_read_duration = meta_read_start.elapsed();
 
 					if head.generation != request.generation {
 						return Err(SqliteStorageError::FenceMismatch {
@@ -185,11 +199,16 @@ impl SqliteEngine {
 						head.head_txid
 					);
 
-					let delta = encode_ltx_v3(
-						LtxHeader::delta(txid, request.db_size_pages, request.now_ms),
-						&request.dirty_pages,
-					)
-					.context("encode commit delta")?;
+					let ltx_encode_start = Instant::now();
+					let delta = {
+						let _ltx_encode_span = tracing::debug_span!("ltx_encode").entered();
+						encode_ltx_v3(
+							LtxHeader::delta(txid, request.db_size_pages, request.now_ms),
+							&request.dirty_pages,
+						)
+						.context("encode commit delta")?
+					};
+					let ltx_encode_duration = ltx_encode_start.elapsed();
 					let delta_bytes = delta.len() as u64;
 
 					head.head_txid = txid;
@@ -204,6 +223,7 @@ impl SqliteEngine {
 					usage_without_meta +=
 						tracked_storage_entry_size(&delta_key(&actor_id, txid), &delta)
 							.expect("delta key should count toward sqlite quota");
+					let pidx_read_start = Instant::now();
 					let existing_pidx = match cached_existing_pidx {
 						Some(ref existing) => existing.clone(),
 						None => {
@@ -223,6 +243,7 @@ impl SqliteEngine {
 							existing
 						}
 					};
+					let pidx_read_duration = pidx_read_start.elapsed();
 					for pgno in &dirty_pgnos {
 						if !existing_pidx.get(pgno).copied().unwrap_or(false) {
 							usage_without_meta += tracked_storage_entry_size(
@@ -256,7 +277,14 @@ impl SqliteEngine {
 					#[cfg(test)]
 					test_hooks::maybe_fail_fast_commit_write(&actor_id)?;
 
-					Ok((txid, updated_head, delta_bytes))
+					Ok((
+						txid,
+						updated_head,
+						delta_bytes,
+						meta_read_duration,
+						ltx_encode_duration,
+						pidx_read_duration,
+					))
 				}
 			})
 			.await
@@ -269,6 +297,11 @@ impl SqliteEngine {
 				}
 				err
 			})?;
+		let run_db_op_duration = run_db_op_start.elapsed();
+		let udb_write_duration = run_db_op_duration
+			.saturating_sub(meta_read_duration)
+			.saturating_sub(ltx_encode_duration)
+			.saturating_sub(pidx_read_duration);
 
 		match self.page_indices.entry_async(actor_id.to_string()).await {
 			Entry::Occupied(entry) => {
@@ -282,34 +315,60 @@ impl SqliteEngine {
 		}
 
 		let _ = self.compaction_tx.send(actor_id.to_string());
-		self.metrics
-			.observe_commit("fast", dirty_page_count, start.elapsed());
-		self.metrics.inc_commit_total();
 		self.metrics.set_delta_count_from_head(&head);
-
-		Ok(CommitResult {
+		let result = CommitResult {
 			txid,
 			meta: SqliteMeta::from((head, SQLITE_MAX_DELTA_BYTES)),
 			delta_bytes,
-		})
+		};
+		let op_count_after = self.op_counter.load(Ordering::Relaxed);
+		let udb_ops = op_count_after.saturating_sub(op_count_before);
+		self.metrics
+			.observe_commit_phase("fast", "meta_read", meta_read_duration);
+		self.metrics
+			.observe_commit_phase("fast", "ltx_encode", ltx_encode_duration);
+		self.metrics
+			.observe_commit_phase("fast", "pidx_read", pidx_read_duration);
+		self.metrics
+			.observe_commit_phase("fast", "udb_write", udb_write_duration);
+		self.metrics
+			.observe_commit_payload("fast", dirty_page_count, raw_dirty_bytes, udb_ops);
+		self.metrics
+			.observe_commit("fast", dirty_page_count, start.elapsed());
+		self.metrics.inc_commit_total();
+
+		Ok(result)
 	}
 
+	#[tracing::instrument(
+		level = "debug",
+		skip(self, request),
+		fields(stage_id = request.stage_id, dirty_pages = tracing::field::Empty)
+	)]
 	pub async fn commit_stage(
 		&self,
 		actor_id: &str,
 		request: CommitStageRequest,
 	) -> Result<CommitStageResult> {
-		let meta_bytes = udb::get_value(
-			self.db.as_ref(),
-			&self.subspace,
-			self.op_counter.as_ref(),
-			meta_key(actor_id),
-		)
+		let dirty_page_count = request.dirty_pages.len();
+		tracing::Span::current().record("dirty_pages", dirty_page_count);
+		let decode_start = Instant::now();
+		let meta_bytes = async {
+			udb::get_value(
+				self.db.as_ref(),
+				&self.subspace,
+				self.op_counter.as_ref(),
+				meta_key(actor_id),
+			)
+			.await
+		}
+		.instrument(tracing::debug_span!("decode"))
 		.await?
 		.ok_or(SqliteStorageError::MetaMissing {
 			operation: "commit_stage",
 		})?;
 		let head = decode_db_head(&meta_bytes)?;
+		let decode_duration = decode_start.elapsed();
 
 		if head.generation != request.generation {
 			self.metrics.inc_fence_mismatch_total();
@@ -322,12 +381,18 @@ impl SqliteEngine {
 			.into());
 		}
 
-		let staged_chunk = serde_bare::to_vec(&StagedChunk {
-			dirty_pages: request.dirty_pages,
-			is_last: request.is_last,
-		})
-		.context("serialize staged chunk")?;
+		let stage_encode_start = Instant::now();
+		let staged_chunk = {
+			let _stage_encode_span = tracing::debug_span!("stage_encode").entered();
+			serde_bare::to_vec(&StagedChunk {
+				dirty_pages: request.dirty_pages,
+				is_last: request.is_last,
+			})
+			.context("serialize staged chunk")?
+		};
+		let stage_encode_duration = stage_encode_start.elapsed();
 
+		let udb_write_start = Instant::now();
 		udb::apply_write_ops(
 			self.db.as_ref(),
 			&self.subspace,
@@ -338,18 +403,32 @@ impl SqliteEngine {
 			)],
 		)
 		.await?;
+		let udb_write_duration = udb_write_start.elapsed();
+		self.metrics
+			.observe_commit_stage_phase("decode", decode_duration);
+		self.metrics
+			.observe_commit_stage_phase("stage_encode", stage_encode_duration);
+		self.metrics
+			.observe_commit_stage_phase("udb_write", udb_write_duration);
 
 		Ok(CommitStageResult {
 			chunk_idx_committed: request.chunk_idx,
 		})
 	}
 
+	#[tracing::instrument(
+		level = "debug",
+		skip(self, request),
+		fields(path = "slow", stage_id = request.stage_id, dirty_pages = tracing::field::Empty)
+	)]
 	pub async fn commit_finalize(
 		&self,
 		actor_id: &str,
 		request: CommitFinalizeRequest,
 	) -> Result<CommitFinalizeResult> {
 		let start = Instant::now();
+		let op_count_before = self.op_counter.load(Ordering::Relaxed);
+		let meta_read_start = Instant::now();
 		let meta_bytes = udb::get_value(
 			self.db.as_ref(),
 			&self.subspace,
@@ -361,6 +440,7 @@ impl SqliteEngine {
 			operation: "commit_finalize",
 		})?;
 		let mut head = decode_db_head(&meta_bytes)?;
+		let meta_read_duration = meta_read_start.elapsed();
 
 		if head.generation != request.generation {
 			self.metrics.inc_fence_mismatch_total();
@@ -383,6 +463,7 @@ impl SqliteEngine {
 			.into());
 		}
 
+		let stage_promote_start = Instant::now();
 		let staged_entries = udb::scan_prefix_values(
 			self.db.as_ref(),
 			&self.subspace,
@@ -406,11 +487,14 @@ impl SqliteEngine {
 			head.head_txid
 		);
 
+		let ltx_encode_start = Instant::now();
 		let delta = encode_ltx_v3(
 			LtxHeader::delta(txid, request.new_db_size_pages, request.now_ms),
 			&staged_pages.dirty_pages,
 		)
 		.context("encode finalized staged delta")?;
+		let ltx_encode_duration = ltx_encode_start.elapsed();
+		let stage_promote_duration = stage_promote_start.elapsed();
 		let delta_bytes = delta.len() as u64;
 
 		head.head_txid = txid;
@@ -425,6 +509,8 @@ impl SqliteEngine {
 		dirty_pgnos.sort_unstable();
 		dirty_pgnos.dedup();
 		let dirty_page_count = dirty_pgnos.len();
+		tracing::Span::current().record("dirty_pages", dirty_page_count);
+		let raw_dirty_bytes = dirty_pages_raw_bytes(&staged_pages.dirty_pages)?;
 
 		let txid_bytes = txid.to_be_bytes();
 		let mut usage_without_meta = head.sqlite_storage_used.saturating_sub(
@@ -433,6 +519,7 @@ impl SqliteEngine {
 		);
 		usage_without_meta += tracked_storage_entry_size(&delta_key(actor_id, txid), &delta)
 			.expect("delta key should count toward sqlite quota");
+		let pidx_write_start = Instant::now();
 		let existing_pidx = existing_pidx_entries(self, actor_id, &dirty_pgnos).await?;
 		for pgno in &dirty_pgnos {
 			if !existing_pidx.get(pgno).copied().unwrap_or(false) {
@@ -441,6 +528,7 @@ impl SqliteEngine {
 						.expect("pidx key should count toward sqlite quota");
 			}
 		}
+		let pidx_write_duration = pidx_write_start.elapsed();
 
 		let mut mutations = Vec::with_capacity(2 + dirty_pgnos.len());
 		mutations.push(WriteOp::put(delta_key(actor_id, txid), delta));
@@ -483,6 +571,7 @@ impl SqliteEngine {
 			return Err(SqliteStorageError::ConcurrentTakeover.into());
 		}
 
+		let meta_write_start = Instant::now();
 		udb::apply_write_ops(
 			self.db.as_ref(),
 			&self.subspace,
@@ -490,6 +579,7 @@ impl SqliteEngine {
 			mutations,
 		)
 		.await?;
+		let meta_write_duration = meta_write_start.elapsed();
 
 		match self.page_indices.entry_async(actor_id.to_string()).await {
 			Entry::Occupied(entry) => {
@@ -503,16 +593,35 @@ impl SqliteEngine {
 		}
 
 		let _ = self.compaction_tx.send(actor_id.to_string());
-		self.metrics
-			.observe_commit("slow", dirty_page_count, start.elapsed());
-		self.metrics.inc_commit_total();
 		self.metrics.set_delta_count_from_head(&head);
-
-		Ok(CommitFinalizeResult {
+		let result = CommitFinalizeResult {
 			new_head_txid: txid,
 			meta: SqliteMeta::from((head, SQLITE_MAX_DELTA_BYTES)),
 			delta_bytes,
-		})
+		};
+		let op_count_after = self.op_counter.load(Ordering::Relaxed);
+		let udb_ops = op_count_after.saturating_sub(op_count_before);
+		self.metrics
+			.observe_commit_finalize_phase("stage_promote", stage_promote_duration);
+		self.metrics
+			.observe_commit_finalize_phase("pidx_write", pidx_write_duration);
+		self.metrics
+			.observe_commit_finalize_phase("meta_write", meta_write_duration);
+		self.metrics
+			.observe_commit_phase("slow", "meta_read", meta_read_duration);
+		self.metrics
+			.observe_commit_phase("slow", "ltx_encode", ltx_encode_duration);
+		self.metrics
+			.observe_commit_phase("slow", "pidx_read", pidx_write_duration);
+		self.metrics
+			.observe_commit_phase("slow", "udb_write", meta_write_duration);
+		self.metrics
+			.observe_commit_payload("slow", dirty_page_count, raw_dirty_bytes, udb_ops);
+		self.metrics
+			.observe_commit("slow", dirty_page_count, start.elapsed());
+		self.metrics.inc_commit_total();
+
+		Ok(result)
 	}
 }
 
@@ -653,6 +762,8 @@ fn decode_stage_chunk_idx(actor_id: &str, stage_id: u64, key: &[u8]) -> Result<u
 #[cfg(test)]
 mod tests {
 	use anyhow::Result;
+	use rivet_metrics::REGISTRY;
+	use rivet_metrics::prometheus::{Encoder, TextEncoder};
 	use tokio::sync::mpsc::error::TryRecvError;
 
 	use super::{
@@ -794,6 +905,16 @@ mod tests {
 				.collect(),
 			is_last,
 		}
+	}
+
+	fn registry_text() -> String {
+		let encoder = TextEncoder::new();
+		let metric_families = REGISTRY.gather();
+		let mut buffer = Vec::new();
+		encoder
+			.encode(&metric_families, &mut buffer)
+			.expect("encode metrics");
+		String::from_utf8(buffer).expect("prometheus output should be utf8")
 	}
 
 	#[tokio::test]
@@ -1389,6 +1510,52 @@ mod tests {
 				},
 			]
 		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn commit_registers_phase_metrics() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		write_seeded_meta(&engine, TEST_ACTOR, seeded_head()).await?;
+
+		engine.commit(TEST_ACTOR, request(4, 0)).await?;
+		engine
+			.commit_stage(TEST_ACTOR, stage_request(4, 99, 0, &[(1, 0x11)], true))
+			.await?;
+		engine
+			.commit_finalize(
+				TEST_ACTOR,
+				CommitFinalizeRequest {
+					generation: 4,
+					expected_head_txid: 1,
+					stage_id: 99,
+					new_db_size_pages: 1,
+					now_ms: 2_000,
+				},
+			)
+			.await?;
+
+		let metrics = registry_text();
+		assert!(metrics.contains("sqlite_commit_phase_duration_seconds"));
+		assert!(metrics.contains("phase=\"meta_read\""));
+		assert!(metrics.contains("phase=\"ltx_encode\""));
+		assert!(metrics.contains("phase=\"pidx_read\""));
+		assert!(metrics.contains("phase=\"udb_write\""));
+		assert!(metrics.contains("path=\"fast\""));
+		assert!(metrics.contains("sqlite_commit_stage_phase_duration_seconds"));
+		assert!(metrics.contains("phase=\"decode\""));
+		assert!(metrics.contains("phase=\"stage_encode\""));
+		assert!(metrics.contains("phase=\"udb_write\""));
+		assert!(metrics.contains("sqlite_commit_finalize_phase_duration_seconds"));
+		assert!(metrics.contains("phase=\"stage_promote\""));
+		assert!(metrics.contains("phase=\"pidx_write\""));
+		assert!(metrics.contains("phase=\"meta_write\""));
+		assert!(metrics.contains("path=\"slow\""));
+		assert!(metrics.contains("sqlite_commit_dirty_page_count"));
+		assert!(metrics.contains("sqlite_commit_dirty_bytes"));
+		assert!(metrics.contains("sqlite_udb_ops_per_commit"));
 
 		Ok(())
 	}

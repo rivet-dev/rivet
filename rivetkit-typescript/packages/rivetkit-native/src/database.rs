@@ -15,7 +15,9 @@ use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivetkit_sqlite_native::sqlite_kv::{KvGetResult, SqliteKv, SqliteKvError};
-use rivetkit_sqlite_native::v2::vfs::{NativeDatabaseV2, SqliteVfsV2, VfsV2Config};
+use rivetkit_sqlite_native::v2::vfs::{
+	NativeDatabaseV2, SqliteVfsMetricsSnapshot, SqliteVfsV2, VfsV2Config,
+};
 use rivetkit_sqlite_native::vfs::{KvVfs, NativeDatabase};
 use tokio::runtime::Handle;
 
@@ -127,6 +129,13 @@ impl NativeDatabaseHandle {
 			Self::V2(db) => db.take_last_kv_error(),
 		}
 	}
+
+	fn sqlite_vfs_metrics(&self) -> Option<SqliteVfsMetricsSnapshot> {
+		match self {
+			Self::V1(_) => None,
+			Self::V2(db) => Some(db.sqlite_vfs_metrics()),
+		}
+	}
 }
 
 #[napi]
@@ -172,11 +181,38 @@ pub struct QueryResult {
 	pub rows: Vec<Vec<serde_json::Value>>,
 }
 
+#[napi(object)]
+pub struct JsSqliteVfsMetrics {
+	pub request_build_ns: i64,
+	pub serialize_ns: i64,
+	pub transport_ns: i64,
+	pub state_update_ns: i64,
+	pub total_ns: i64,
+	pub commit_count: i64,
+}
+
 #[napi]
 impl JsNativeDatabase {
 	#[napi]
 	pub fn take_last_kv_error(&self) -> Option<String> {
 		self.take_last_kv_error_inner()
+	}
+
+	#[napi]
+	pub fn get_sqlite_vfs_metrics(&self) -> Option<JsSqliteVfsMetrics> {
+		self.db.lock().ok().and_then(|guard| {
+			guard
+				.as_ref()
+				.and_then(NativeDatabaseHandle::sqlite_vfs_metrics)
+				.map(|metrics| JsSqliteVfsMetrics {
+					request_build_ns: u64_to_i64(metrics.request_build_ns),
+					serialize_ns: u64_to_i64(metrics.serialize_ns),
+					transport_ns: u64_to_i64(metrics.transport_ns),
+					state_update_ns: u64_to_i64(metrics.state_update_ns),
+					total_ns: u64_to_i64(metrics.total_ns),
+					commit_count: u64_to_i64(metrics.commit_count),
+				})
+		})
 	}
 
 	#[napi]
@@ -261,6 +297,10 @@ fn sqlite_error(db: *mut sqlite3, context: &str) -> napi::Error {
 		}
 	};
 	napi::Error::from_reason(format!("{context}: {message}"))
+}
+
+fn u64_to_i64(value: u64) -> i64 {
+	value.min(i64::MAX as u64) as i64
 }
 
 fn bind_params(

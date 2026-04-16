@@ -16,6 +16,7 @@ export interface SqliteDatabase {
 	): Promise<void>;
 	run(sql: string, params?: SqliteBindings): Promise<void>;
 	query(sql: string, params?: SqliteBindings): Promise<SqliteQueryResult>;
+	getSqliteVfsMetrics?: () => import("./native-database").SqliteVfsMetrics | null;
 	close(): Promise<void>;
 }
 

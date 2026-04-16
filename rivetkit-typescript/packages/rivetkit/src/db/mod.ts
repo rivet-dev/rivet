@@ -66,6 +66,9 @@ export function db({
 			}
 
 			const db = await nativeDatabaseProvider.open(ctx.actorId);
+			ctx.metrics?.setSqliteVfsMetricsSource(() => {
+				return db.getSqliteVfsMetrics?.() ?? null;
+			});
 			let closed = false;
 			const mutex = new AsyncMutex();
 			const ensureOpen = () => {

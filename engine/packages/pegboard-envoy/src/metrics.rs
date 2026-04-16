@@ -41,4 +41,18 @@ lazy_static::lazy_static! {
 		"Count of actor events.",
 		*REGISTRY
 	).unwrap();
+
+	pub static ref SQLITE_COMMIT_ENVOY_DISPATCH_DURATION: Histogram = register_histogram_with_registry!(
+		"sqlite_commit_envoy_dispatch_duration_seconds",
+		"Duration from sqlite commit frame arrival until sqlite-storage dispatch.",
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_COMMIT_ENVOY_RESPONSE_DURATION: Histogram = register_histogram_with_registry!(
+		"sqlite_commit_envoy_response_duration_seconds",
+		"Duration from sqlite-storage commit return until the websocket response frame is sent.",
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
 }
