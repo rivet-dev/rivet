@@ -12,6 +12,7 @@ export { ENGINE_ENDPOINT, ENGINE_PORT };
 
 interface EnsureEngineProcessOptions {
 	version: string;
+	managerPort?: number;
 }
 
 async function ensureDirectoryExists(pathname: string): Promise<void> {
@@ -27,7 +28,7 @@ function getStoragePath(): string {
 
 export async function ensureEngineProcess(
 	options: EnsureEngineProcessOptions,
-): Promise<void> {
+): Promise<import("node:child_process").ChildProcess | undefined> {
 	importNodeDependencies();
 
 	logger().debug({
@@ -50,7 +51,7 @@ export async function ensureEngineProcess(
 				msg: "engine already running and healthy",
 				version: health.version,
 			});
-			return;
+			return undefined;
 		} catch (error) {
 			logger().warn({
 				msg: "existing engine process not healthy, cannot restart automatically",
@@ -61,6 +62,24 @@ export async function ensureEngineProcess(
 			);
 		}
 	}
+
+	// Detect stale engine processes that are still running on the manager port.
+	// This can happen when upgrading from an older version of RivetKit where the
+	// engine ran on the same port as the manager (6420). The manager cannot bind
+	// to its port if a stale engine is already occupying it.
+	const { managerPort } = options;
+	if (managerPort !== undefined && managerPort !== ENGINE_PORT) {
+		const staleEngineOnManagerPort =
+			await checkIfEngineAlreadyRunningOnPort(managerPort).catch(() => false);
+		if (staleEngineOnManagerPort) {
+			throw new Error(
+				`A stale engine process was found on port ${managerPort} (the manager port). ` +
+				`This is likely left over from an older version of RivetKit. ` +
+				`Please stop the process on port ${managerPort} and retry.`,
+			);
+		}
+	}
+
 
 	// Resolve the engine binary via the @rivetkit/engine-cli meta package.
 	// It returns an absolute path to the rivet-engine binary shipped in a
@@ -216,6 +235,8 @@ export async function ensureEngineProcess(
 			stderr: stderrLogPath,
 		},
 	});
+
+	return child;
 }
 
 async function resolveEngineBinary(): Promise<string> {

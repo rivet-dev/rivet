@@ -100,6 +100,7 @@ export class Runtime<A extends RegistryActors> {
 
 		const shouldSpawnEngine =
 			config.serverless.spawnEngine || (config.serveManager && !config.endpoint);
+		let engineChildProcess: import("node:child_process").ChildProcess | undefined;
 		if (shouldSpawnEngine) {
 			config.endpoint = ENGINE_ENDPOINT;
 
@@ -107,8 +108,9 @@ export class Runtime<A extends RegistryActors> {
 				msg: "spawning engine",
 				version: config.serverless.engineVersion,
 			});
-			await ensureEngineProcess({
+			engineChildProcess = await ensureEngineProcess({
 				version: config.serverless.engineVersion,
+				managerPort: config.managerPort,
 			});
 		}
 
@@ -190,10 +192,17 @@ export class Runtime<A extends RegistryActors> {
 			if (out.closeServer && process.env.NODE_ENV !== "production") {
 				const shutdown = () => {
 					out.closeServer!();
+					engineChildProcess?.kill("SIGTERM");
 				};
 				process.on("SIGTERM", shutdown);
 				process.on("SIGINT", shutdown);
 			}
+		} else if (engineChildProcess && process.env.NODE_ENV !== "production") {
+			const shutdown = () => {
+				engineChildProcess.kill("SIGTERM");
+			};
+			process.on("SIGTERM", shutdown);
+			process.on("SIGINT", shutdown);
 		}
 
 		const runtime = new Runtime(registry, config, engineClient, managerPort);
@@ -238,7 +247,14 @@ export class Runtime<A extends RegistryActors> {
 				this.#engineClient,
 				inlineClient,
 			);
-			await this.#actorDriver.waitForReady();
+			logger().info({ msg: "connecting to engine" });
+			try {
+				await this.#actorDriver.waitForReady();
+				logger().info({ msg: "connected to engine" });
+			} catch (err) {
+				logger().error({ msg: "failed to connect to engine", err });
+				throw err;
+			}
 		}
 
 		this.#printWelcome();

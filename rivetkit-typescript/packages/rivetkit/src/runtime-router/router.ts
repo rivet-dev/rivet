@@ -5,6 +5,10 @@ import invariant from "invariant";
 import { z } from "zod/v4";
 import { Forbidden, RestrictedFeature } from "@/actor/errors";
 import { deserializeActorKey, serializeActorKey } from "@/actor/keys";
+import {
+	actorGateway,
+	createTestWebSocketProxy,
+} from "@/actor-gateway/gateway";
 import type { Encoding } from "@/client/mod";
 import {
 	HEADER_RIVET_TOKEN,
@@ -15,8 +19,8 @@ import {
 } from "@/common/actor-router-consts";
 import { handleHealthRequest, handleMetadataRequest } from "@/common/router";
 import { deconstructError, noopNext, stringifyError } from "@/common/utils";
+
 import { HEADER_ACTOR_ID } from "@/driver-helpers/mod";
-import { getInspectorDir } from "@/inspector/serve-ui";
 import {
 	ActorsCreateRequestSchema,
 	type ActorsCreateResponse,
@@ -32,8 +36,9 @@ import {
 	ActorsListResponseSchema,
 	type Actor as ApiActor,
 } from "@/engine-api/actors";
+import type { ActorOutput, EngineControlClient } from "@/engine-client/driver";
+import { getInspectorDir } from "@/inspector/serve-ui";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
-import { loadRuntimeServeStatic } from "@/utils/serve";
 import type { GetUpgradeWebSocket, Runtime } from "@/utils";
 import { timingSafeEqual } from "@/utils/crypto";
 import { isDev } from "@/utils/env-vars";
@@ -42,11 +47,7 @@ import {
 	buildOpenApiResponses,
 	createRouter,
 } from "@/utils/router";
-import type { ActorOutput, EngineControlClient } from "@/engine-client/driver";
-import {
-	actorGateway,
-	createTestWebSocketProxy,
-} from "@/actor-gateway/gateway";
+import { loadRuntimeServeStatic } from "@/utils/serve";
 import { logger } from "./log";
 
 export function buildRuntimeRouter(
@@ -153,12 +154,13 @@ export function buildRuntimeRouter(
 							// If no name is provided, try all registered actor types
 							// Actor IDs are globally unique, so we'll find it in one of them
 							for (const actorName of Object.keys(config.use)) {
-								const actorOutput =
-									await engineClient.getForId({
+								const actorOutput = await engineClient.getForId(
+									{
 										c,
 										name: actorName,
 										actorId,
-									});
+									},
+								);
 								if (actorOutput) {
 									actors.push(actorOutput);
 									break; // Found the actor, no need to check other names
@@ -425,7 +427,6 @@ export function buildRuntimeRouter(
 					return c.text(`Error: ${error}`, 500);
 				}
 			});
-
 		}
 
 		if (config.inspector.enabled) {
