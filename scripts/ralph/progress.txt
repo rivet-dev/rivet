@@ -4,6 +4,7 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
 
 ## Codebase Patterns
 - `pegboard-envoy` SQLite websocket handlers should validate page numbers, page sizes, and duplicate dirty pages at the websocket trust boundary and downgrade unexpected failures to `SqliteErrorResponse` so one bad actor request cannot tear down the shared envoy connection.
+- `sqlite-native` v2 should poison the VFS inside `flush_dirty_pages()` and `commit_atomic_write()` for non-fence commit failures; callback wrappers should only translate fence mismatches into SQLite I/O return codes.
 - `sqlite-native` v2 must treat `head_txid` and `db_size_pages` as connection-local authority. `get_pages(...)` can refresh `max_delta_bytes`, but only commits and local truncate/write paths should mutate those fields.
 - RivetKit sleep shutdown should wait for in-flight HTTP action work and pending disconnect callbacks before running `onSleep`, but it should not treat open hibernatable connections alone as a blocker because existing connection actions may still finish during the shutdown window.
 - `sqlite-storage` owns UniversalDB value chunking in `src/udb.rs`, so `pegboard-envoy` should call `SqliteEngine` directly instead of reintroducing a separate `UdbStore` layer.
@@ -346,4 +347,12 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
   - `sqlite-storage` fence, missing-meta, oversized-commit, stage-missing, and concurrent-takeover cases should stay as typed errors so envoy and direct VFS harnesses can classify them without brittle string parsing.
   - `pegboard-envoy` should validate SQLite dirty-page shape before dispatch. `pgno == 0`, wrong page byte length, and duplicate page numbers are trust-boundary errors, not storage concerns.
   - Any shared-connection SQLite failure path needs a protocol error payload fallback. Letting a handler `?` out of `ws_to_tunnel_task` kills unrelated actors on the same envoy connection.
+---
+## 2026-04-16 09:50:37 PDT - US-038
+- What was implemented: Moved sqlite v2 non-fence commit failure poisoning into `flush_dirty_pages()` and `commit_atomic_write()` themselves, kept callback wrappers focused on fence-mismatch translation, and added direct regressions for flush failure, atomic-write failure, and the startup batch-atomic probe.
+- Files changed: `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `flush_dirty_pages()` and `commit_atomic_write()` need to own fatal transport/staging cleanup directly. Leaving that responsibility in outer sqlite callback wrappers makes direct callers and future refactors easy to get wrong.
+  - Batch-atomic startup verification is worth keeping as a real open-path test. If `SQLITE_ENABLE_BATCH_ATOMIC_WRITE` disappears, v2 should fail fast instead of quietly pretending journal fallback is acceptable.
+  - Fence mismatches are a separate path from ambiguous transport failures. The VFS should still surface them cleanly, but the "poison this connection" side effect for non-fence failures belongs at the commit helper layer.
 ---

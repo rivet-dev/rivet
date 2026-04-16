@@ -1072,9 +1072,16 @@ impl VfsV2Context {
 			}
 		};
 
-		let outcome = self
+		let outcome = match self
 			.runtime
-			.block_on(commit_buffered_pages(&self.transport, request.clone()))?;
+			.block_on(commit_buffered_pages(&self.transport, request.clone()))
+		{
+			Ok(outcome) => outcome,
+			Err(err) => {
+				mark_dead_for_non_fence_commit_error(self, &err);
+				return Err(err);
+			}
+		};
 		self.set_last_error(format!(
 			"post-commit flush succeeded: requested_db_size_pages={}, returned_db_size_pages={}, returned_head_txid={}",
 			request.new_db_size_pages,
@@ -1128,9 +1135,16 @@ impl VfsV2Context {
 			}
 		};
 
-		let outcome = self
+		let outcome = match self
 			.runtime
-			.block_on(commit_buffered_pages(&self.transport, request.clone()))?;
+			.block_on(commit_buffered_pages(&self.transport, request.clone()))
+		{
+			Ok(outcome) => outcome,
+			Err(err) => {
+				mark_dead_for_non_fence_commit_error(self, &err);
+				return Err(err);
+			}
+		};
 		self.set_last_error(format!(
 			"post-commit atomic write succeeded: requested_db_size_pages={}, returned_db_size_pages={}, returned_head_txid={}",
 			request.new_db_size_pages,
@@ -1203,15 +1217,21 @@ fn assert_batch_atomic_probe(
 	Ok(())
 }
 
-fn mark_dead_from_commit_error(ctx: &VfsV2Context, err: CommitBufferError) {
+fn mark_dead_for_non_fence_commit_error(ctx: &VfsV2Context, err: &CommitBufferError) {
 	match err {
-		CommitBufferError::FenceMismatch(reason) => ctx.mark_dead(reason),
+		CommitBufferError::FenceMismatch(_) => {}
 		CommitBufferError::StageNotFound(stage_id) => {
 			ctx.mark_dead(format!(
 				"sqlite v2 stage {stage_id} missing during commit finalize"
 			));
 		}
-		CommitBufferError::Other(message) => ctx.mark_dead(message),
+		CommitBufferError::Other(message) => ctx.mark_dead(message.clone()),
+	}
+}
+
+fn mark_dead_from_fence_commit_error(ctx: &VfsV2Context, err: &CommitBufferError) {
+	if let CommitBufferError::FenceMismatch(reason) = err {
+		ctx.mark_dead(reason.clone());
 	}
 }
 
@@ -1483,7 +1503,7 @@ unsafe extern "C" fn v2_io_close(p_file: *mut sqlite3_file) -> c_int {
 			Ok(()) => SQLITE_OK,
 			Err(err) => {
 				let ctx = &*file.ctx;
-				mark_dead_from_commit_error(ctx, err);
+				mark_dead_from_fence_commit_error(ctx, &err);
 				SQLITE_IOERR
 			}
 		}
@@ -1697,7 +1717,7 @@ unsafe extern "C" fn v2_io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_i
 		match ctx.flush_dirty_pages() {
 			Ok(_) => SQLITE_OK,
 			Err(err) => {
-				mark_dead_from_commit_error(ctx, err);
+				mark_dead_from_fence_commit_error(ctx, &err);
 				SQLITE_IOERR_FSYNC
 			}
 		}
@@ -1765,7 +1785,7 @@ unsafe extern "C" fn v2_io_file_control(
 					SQLITE_OK
 				}
 				Err(err) => {
-					mark_dead_from_commit_error(ctx, err);
+					mark_dead_from_fence_commit_error(ctx, &err);
 					SQLITE_IOERR
 				}
 			},
@@ -2767,6 +2787,102 @@ mod tests {
 		assert!(
 			sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;").is_err(),
 			"subsequent reads should fail once the VFS is dead",
+		);
+	}
+
+	#[test]
+	fn flush_dirty_pages_marks_vfs_dead_after_transport_error() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data(&engine));
+		let transport = SqliteTransport::from_direct(engine);
+		let hooks = transport
+			.direct_hooks()
+			.expect("direct transport should expose test hooks");
+		let vfs = SqliteVfsV2::register_with_transport(
+			&next_test_name("sqlite-v2-direct-vfs"),
+			transport,
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsV2Config::default(),
+		)
+		.expect("v2 vfs should register");
+		let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
+		let ctx = direct_vfs_ctx(&db);
+
+		{
+			let mut state = ctx.state.write();
+			state.write_buffer.dirty.insert(1, vec![0x7a; 4096]);
+			state.db_size_pages = 1;
+		}
+
+		hooks.fail_next_commit("InjectedTransportError: flush transport dropped");
+		let err = ctx
+			.flush_dirty_pages()
+			.expect_err("transport failure should bubble out of flush_dirty_pages");
+
+		assert!(
+			matches!(err, CommitBufferError::Other(ref message) if message.contains("InjectedTransportError")),
+			"flush failure should surface as a transport error: {err:?}",
+		);
+		assert!(
+			ctx.is_dead(),
+			"flush transport failure should poison the VFS"
+		);
+		assert_eq!(
+			db.take_last_kv_error().as_deref(),
+			Some("InjectedTransportError: flush transport dropped"),
+		);
+	}
+
+	#[test]
+	fn commit_atomic_write_marks_vfs_dead_after_transport_error() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data(&engine));
+		let transport = SqliteTransport::from_direct(engine);
+		let hooks = transport
+			.direct_hooks()
+			.expect("direct transport should expose test hooks");
+		let vfs = SqliteVfsV2::register_with_transport(
+			&next_test_name("sqlite-v2-direct-vfs"),
+			transport,
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsV2Config::default(),
+		)
+		.expect("v2 vfs should register");
+		let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
+		let ctx = direct_vfs_ctx(&db);
+
+		{
+			let mut state = ctx.state.write();
+			state.write_buffer.in_atomic_write = true;
+			state.write_buffer.saved_db_size = state.db_size_pages;
+			state.write_buffer.dirty.insert(1, vec![0x5c; 4096]);
+			state.db_size_pages = 1;
+		}
+
+		hooks.fail_next_commit("InjectedTransportError: atomic transport dropped");
+		let err = ctx
+			.commit_atomic_write()
+			.expect_err("transport failure should bubble out of commit_atomic_write");
+
+		assert!(
+			matches!(err, CommitBufferError::Other(ref message) if message.contains("InjectedTransportError")),
+			"atomic-write failure should surface as a transport error: {err:?}",
+		);
+		assert!(
+			ctx.is_dead(),
+			"commit_atomic_write transport failure should poison the VFS",
+		);
+		assert_eq!(
+			db.take_last_kv_error().as_deref(),
+			Some("InjectedTransportError: atomic transport dropped"),
 		);
 	}
 

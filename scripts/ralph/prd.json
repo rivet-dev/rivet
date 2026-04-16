@@ -688,7 +688,7 @@
         "cargo test -p rivetkit-sqlite-native passes"
       ],
       "priority": 41,
-      "passes": false,
+      "passes": true,
       "notes": "Two related VFS safety findings: (1) flush_dirty_pages leaves dirty buffer in limbo after transport errors without marking VFS dead (vfs.rs:601-647), creating ambiguous commit state with no recovery path. (2) v2 open_database lacks the batch-atomic probe that v1 has (vfs.rs:1587 vs v2/vfs.rs:1396-1438). Without the probe, a misconfigured build silently falls back to journal mode which is incompatible with v2 VFS."
     },
     {

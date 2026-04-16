@@ -15,6 +15,7 @@
 - `open_database_from_envoy(...)` must dispatch on `sqliteSchemaVersion`, not on whether startup data happens to be present. Schema version `2` should fail closed if startup data is missing.
 - Real `sqlite-native` tests that drive the v2 VFS through a direct `SqliteEngine` need a multithread Tokio runtime; `current_thread` is fine for mock transport tests but can stall real engine callbacks.
 - Treat any sqlite v2 transport or commit error as fatal for that VFS instance: mark it dead, surface it through `take_last_kv_error()`, and rely on reopen plus takeover instead of trying to limp forward with dirty pages still buffered.
+- Keep sqlite v2 fatal commit cleanup in `flush_dirty_pages` and `commit_atomic_write`; callback wrappers should only translate fence mismatches into SQLite I/O return codes.
 
 ## Context Types Sync
 
