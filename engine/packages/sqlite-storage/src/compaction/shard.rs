@@ -7,13 +7,15 @@ use anyhow::{Context, Result, ensure};
 use scc::hash_map::Entry;
 
 use crate::engine::SqliteEngine;
-use crate::keys::{delta_prefix, meta_key, pidx_delta_prefix, shard_key};
+use crate::keys::{
+	decode_delta_chunk_txid, delta_chunk_prefix, delta_prefix, meta_key, pidx_delta_prefix,
+	shard_key,
+};
 use crate::ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3};
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 use crate::types::{DBHead, DirtyPage, SQLITE_PAGE_SIZE};
 use crate::udb::{self, WriteOp};
 
-const DELTA_TXID_BYTES: usize = std::mem::size_of::<u64>();
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
 const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
 
@@ -22,6 +24,14 @@ struct PidxRow {
 	key: Vec<u8>,
 	pgno: u32,
 	txid: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DeltaEntry {
+	key_prefix: Vec<u8>,
+	chunk_keys: Vec<Vec<u8>>,
+	blob: Vec<u8>,
+	tracked_size: u64,
 }
 
 #[cfg(test)]
@@ -122,42 +132,45 @@ impl SqliteEngine {
 		)
 		.await?
 		.into_iter()
-		.map(|(key, value)| {
-			let txid = decode_delta_txid(actor_id, &key)?;
-			Ok((txid, (key, value)))
-		})
-		.collect::<Result<BTreeMap<_, _>>>()?;
+		.try_fold(
+			BTreeMap::<u64, DeltaEntry>::new(),
+			|mut entries, (key, value)| {
+				let txid = decode_delta_chunk_txid(actor_id, &key)?;
+				let entry = entries.entry(txid).or_insert_with(|| DeltaEntry {
+					key_prefix: delta_chunk_prefix(actor_id, txid),
+					chunk_keys: Vec::new(),
+					blob: Vec::new(),
+					tracked_size: 0,
+				});
+				entry.tracked_size += tracked_storage_entry_size(&key, &value)
+					.expect("delta chunk key should count toward sqlite quota");
+				entry.chunk_keys.push(key);
+				entry.blob.extend_from_slice(&value);
 
-		let shard_txids = shard_rows
+				Ok::<BTreeMap<u64, DeltaEntry>, anyhow::Error>(entries)
+			},
+		)?;
+
+		let _shard_txids = shard_rows
 			.iter()
 			.map(|row| row.txid)
 			.collect::<BTreeSet<_>>();
-		let mut blob_keys = Vec::with_capacity(shard_txids.len() + 1);
 		let shard_blob_key = shard_key(actor_id, shard_id);
-		blob_keys.push(shard_blob_key.clone());
-		for txid in &shard_txids {
-			blob_keys.push(
-				delta_entries
-					.get(txid)
-					.map(|(key, _)| key.clone())
-					.with_context(|| format!("missing delta key for txid {txid}"))?,
-			);
-		}
-
-		let blob_values = udb::batch_get_values(
+		let shard_blob = udb::get_value(
 			self.db.as_ref(),
 			&self.subspace,
 			self.op_counter.as_ref(),
-			blob_keys.clone(),
+			shard_blob_key.clone(),
 		)
 		.await?;
-		let blobs = blob_keys
-			.into_iter()
-			.zip(blob_values)
-			.collect::<BTreeMap<_, _>>();
+		let mut blobs = BTreeMap::new();
+		blobs.insert(shard_blob_key.clone(), shard_blob);
+		for entry in delta_entries.values() {
+			blobs.insert(entry.key_prefix.clone(), Some(entry.blob.clone()));
+		}
 		let delta_keys = delta_entries
 			.iter()
-			.map(|(txid, (key, _))| (*txid, key.clone()))
+			.map(|(txid, entry)| (*txid, entry.key_prefix.clone()))
 			.collect::<BTreeMap<_, _>>();
 		let merged_pages = merge_shard_pages(
 			&head,
@@ -199,7 +212,7 @@ impl SqliteEngine {
 		let compaction_lags = deleted_delta_txids
 			.iter()
 			.filter_map(|txid| delta_entries.get(txid))
-			.filter_map(|(_, value)| decode_ltx_v3(value).ok())
+			.filter_map(|entry| decode_ltx_v3(&entry.blob).ok())
 			.filter_map(|decoded| {
 				let lag_ms = now_ms.checked_sub(decoded.header.timestamp_ms)?;
 				Some(lag_ms as f64 / 1000.0)
@@ -235,10 +248,7 @@ impl SqliteEngine {
 		let deleted_delta_size = deleted_delta_txids
 			.iter()
 			.filter_map(|txid| delta_entries.get(txid))
-			.map(|(key, value)| {
-				tracked_storage_entry_size(key, value)
-					.expect("delta key should count toward sqlite quota")
-			})
+			.map(|entry| entry.tracked_size)
 			.sum::<u64>();
 		let new_shard_size = tracked_storage_entry_size(&shard_blob_key, &shard_blob)
 			.expect("shard key should count toward sqlite quota");
@@ -249,8 +259,10 @@ impl SqliteEngine {
 			mutations.push(WriteOp::delete(row.key.clone()));
 		}
 		for txid in &deleted_delta_txids {
-			if let Some((key, _)) = delta_entries.get(txid) {
-				mutations.push(WriteOp::delete(key.clone()));
+			if let Some(entry) = delta_entries.get(txid) {
+				for chunk_key in &entry.chunk_keys {
+					mutations.push(WriteOp::delete(chunk_key.clone()));
+				}
 			}
 		}
 		#[cfg(test)]
@@ -424,28 +436,6 @@ fn decode_db_head(bytes: &[u8]) -> Result<DBHead> {
 	serde_bare::from_slice(bytes).context("decode sqlite db head")
 }
 
-fn decode_delta_txid(actor_id: &str, key: &[u8]) -> Result<u64> {
-	let prefix = delta_prefix(actor_id);
-	ensure!(
-		key.starts_with(&prefix),
-		"delta key did not start with expected prefix"
-	);
-
-	let suffix = &key[prefix.len()..];
-	ensure!(
-		suffix.len() == DELTA_TXID_BYTES,
-		"delta key suffix had {} bytes, expected {}",
-		suffix.len(),
-		DELTA_TXID_BYTES
-	);
-
-	Ok(u64::from_be_bytes(
-		suffix
-			.try_into()
-			.context("delta key suffix should decode as u64")?,
-	))
-}
-
 fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
 	let prefix = pidx_delta_prefix(actor_id);
 	ensure!(
@@ -490,7 +480,7 @@ mod tests {
 	use super::decode_db_head;
 	use crate::commit::CommitRequest;
 	use crate::engine::SqliteEngine;
-	use crate::keys::{delta_key, meta_key, pidx_delta_key, pidx_delta_prefix, shard_key};
+	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, pidx_delta_prefix, shard_key};
 	use crate::ltx::{LtxHeader, encode_ltx_v3};
 	use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 	use crate::takeover::TakeoverConfig;
@@ -521,6 +511,10 @@ mod tests {
 
 	fn page(fill: u8) -> Vec<u8> {
 		vec![fill; SQLITE_PAGE_SIZE as usize]
+	}
+
+	fn delta_blob_key(actor_id: &str, txid: u64) -> Vec<u8> {
+		delta_chunk_key(actor_id, txid, 0)
 	}
 
 	fn commit_request(generation: u64, head_txid: u64, pages: &[(u32, u8)]) -> CommitRequest {
@@ -596,11 +590,26 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
-				WriteOp::put(delta_key(TEST_ACTOR, 1), encoded_blob(1, 5, &[(1, 0x11)])),
-				WriteOp::put(delta_key(TEST_ACTOR, 2), encoded_blob(2, 5, &[(2, 0x22)])),
-				WriteOp::put(delta_key(TEST_ACTOR, 3), encoded_blob(3, 5, &[(3, 0x33)])),
-				WriteOp::put(delta_key(TEST_ACTOR, 4), encoded_blob(4, 5, &[(4, 0x44)])),
-				WriteOp::put(delta_key(TEST_ACTOR, 5), encoded_blob(5, 5, &[(5, 0x55)])),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 1),
+					encoded_blob(1, 5, &[(1, 0x11)]),
+				),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 2),
+					encoded_blob(2, 5, &[(2, 0x22)]),
+				),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 3),
+					encoded_blob(3, 5, &[(3, 0x33)]),
+				),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 4),
+					encoded_blob(4, 5, &[(4, 0x44)]),
+				),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 5),
+					encoded_blob(5, 5, &[(5, 0x55)]),
+				),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 1_u64.to_be_bytes().to_vec()),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 2), 2_u64.to_be_bytes().to_vec()),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 3), 3_u64.to_be_bytes().to_vec()),
@@ -613,12 +622,12 @@ mod tests {
 
 		assert_eq!(engine.compact_worker(TEST_ACTOR, 8).await?, 1);
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 1))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 1))
 				.await?
 				.is_none()
 		);
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 5))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 5))
 				.await?
 				.is_none()
 		);
@@ -682,9 +691,12 @@ mod tests {
 					shard_key(TEST_ACTOR, 0),
 					encoded_blob(0.max(1), 2, &[(1, 0x10), (2, 0x20)]),
 				),
-				WriteOp::put(delta_key(TEST_ACTOR, 1), encoded_blob(1, 2, &[(1, 0x11)])),
 				WriteOp::put(
-					delta_key(TEST_ACTOR, 2),
+					delta_blob_key(TEST_ACTOR, 1),
+					encoded_blob(1, 2, &[(1, 0x11)]),
+				),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 2),
 					encoded_blob(2, 2, &[(1, 0x22), (2, 0x33)]),
 				),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 2_u64.to_be_bytes().to_vec()),
@@ -694,12 +706,12 @@ mod tests {
 		.await?;
 		assert_eq!(engine.compact_worker(TEST_ACTOR, 8).await?, 1);
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 1))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 1))
 				.await?
 				.is_none()
 		);
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 2))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 2))
 				.await?
 				.is_none()
 		);
@@ -734,8 +746,14 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
-				WriteOp::put(delta_key(TEST_ACTOR, 4), encoded_blob(4, 2, &[(1, 0x10)])),
-				WriteOp::put(delta_key(TEST_ACTOR, 5), encoded_blob(5, 2, &[(2, 0x20)])),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 4),
+					encoded_blob(4, 2, &[(1, 0x10)]),
+				),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 5),
+					encoded_blob(5, 2, &[(2, 0x20)]),
+				),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 4_u64.to_be_bytes().to_vec()),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 2), 5_u64.to_be_bytes().to_vec()),
 			],
@@ -773,8 +791,14 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(FAIL_ACTOR), serde_bare::to_vec(&head)?),
-				WriteOp::put(delta_key(FAIL_ACTOR, 4), encoded_blob(4, 2, &[(1, 0x10)])),
-				WriteOp::put(delta_key(FAIL_ACTOR, 5), encoded_blob(5, 2, &[(2, 0x20)])),
+				WriteOp::put(
+					delta_blob_key(FAIL_ACTOR, 4),
+					encoded_blob(4, 2, &[(1, 0x10)]),
+				),
+				WriteOp::put(
+					delta_blob_key(FAIL_ACTOR, 5),
+					encoded_blob(5, 2, &[(2, 0x20)]),
+				),
 				WriteOp::put(pidx_delta_key(FAIL_ACTOR, 1), 4_u64.to_be_bytes().to_vec()),
 				WriteOp::put(pidx_delta_key(FAIL_ACTOR, 2), 5_u64.to_be_bytes().to_vec()),
 			],
@@ -814,12 +838,12 @@ mod tests {
 		assert!(error_text.contains("InjectedStoreError"), "{error_text}");
 		assert_eq!(actual_tracked_usage(&engine).await?, before_usage);
 		assert!(
-			read_value(&engine, delta_key(FAIL_ACTOR, 4))
+			read_value(&engine, delta_blob_key(FAIL_ACTOR, 4))
 				.await?
 				.is_some()
 		);
 		assert!(
-			read_value(&engine, delta_key(FAIL_ACTOR, 5))
+			read_value(&engine, delta_blob_key(FAIL_ACTOR, 5))
 				.await?
 				.is_some()
 		);
@@ -863,7 +887,10 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
-				WriteOp::put(delta_key(TEST_ACTOR, 1), encoded_blob(1, 1, &[(1, 0x10)])),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 1),
+					encoded_blob(1, 1, &[(1, 0x10)]),
+				),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 1_u64.to_be_bytes().to_vec()),
 			],
 		)
@@ -910,7 +937,7 @@ mod tests {
 				.is_none()
 		);
 		assert!(
-			read_value(engine.as_ref(), delta_key(TEST_ACTOR, 1))
+			read_value(engine.as_ref(), delta_blob_key(TEST_ACTOR, 1))
 				.await?
 				.is_some()
 		);
@@ -937,7 +964,10 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
-				WriteOp::put(delta_key(TEST_ACTOR, 1), encoded_blob(1, 1, &[(1, 0x10)])),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 1),
+					encoded_blob(1, 1, &[(1, 0x10)]),
+				),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 1_u64.to_be_bytes().to_vec()),
 			],
 		)
@@ -1008,7 +1038,10 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
-				WriteOp::put(delta_key(TEST_ACTOR, 1), encoded_blob(1, 1, &[(1, 0x10)])),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 1),
+					encoded_blob(1, 1, &[(1, 0x10)]),
+				),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 1_u64.to_be_bytes().to_vec()),
 			],
 		)
@@ -1036,7 +1069,7 @@ mod tests {
 		assert_eq!(stored_head.generation, head.generation + 1);
 		assert_eq!(stored_head.head_txid, 1);
 		assert!(
-			read_value(engine.as_ref(), delta_key(TEST_ACTOR, 1))
+			read_value(engine.as_ref(), delta_blob_key(TEST_ACTOR, 1))
 				.await?
 				.is_some()
 		);
@@ -1064,7 +1097,7 @@ mod tests {
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
 				WriteOp::put(
-					delta_key(TEST_ACTOR, 1),
+					delta_blob_key(TEST_ACTOR, 1),
 					encoded_blob(1, 129, &[(1, 0x11), (65, 0x65), (129, 0x81)]),
 				),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 1_u64.to_be_bytes().to_vec()),
@@ -1079,21 +1112,21 @@ mod tests {
 
 		assert!(engine.compact_shard(TEST_ACTOR, 0).await?);
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 1))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 1))
 				.await?
 				.is_some()
 		);
 
 		assert!(engine.compact_shard(TEST_ACTOR, 1).await?);
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 1))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 1))
 				.await?
 				.is_some()
 		);
 
 		assert!(engine.compact_shard(TEST_ACTOR, 2).await?);
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 1))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 1))
 				.await?
 				.is_none()
 		);
@@ -1135,8 +1168,14 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
-				WriteOp::put(delta_key(TEST_ACTOR, 4), encoded_blob(4, 2, &[(1, 0x10)])),
-				WriteOp::put(delta_key(TEST_ACTOR, 5), encoded_blob(5, 2, &[(2, 0x20)])),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 4),
+					encoded_blob(4, 2, &[(1, 0x10)]),
+				),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 5),
+					encoded_blob(5, 2, &[(2, 0x20)]),
+				),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 4_u64.to_be_bytes().to_vec()),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 2), 5_u64.to_be_bytes().to_vec()),
 			],

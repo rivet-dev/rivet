@@ -8,7 +8,10 @@ use scc::hash_map::Entry;
 
 use crate::engine::SqliteEngine;
 use crate::error::SqliteStorageError;
-use crate::keys::{delta_key, delta_prefix, meta_key, pidx_delta_prefix, shard_key};
+use crate::keys::{
+	decode_delta_chunk_txid, delta_chunk_prefix, delta_prefix, meta_key, pidx_delta_prefix,
+	shard_key,
+};
 use crate::ltx::{DecodedLtx, decode_ltx_v3};
 use crate::page_index::DeltaPageIndex;
 use crate::types::{DBHead, FetchedPage};
@@ -128,7 +131,7 @@ impl SqliteEngine {
 				for pgno in &pgnos_in_range {
 					let preferred_delta_key = pidx_by_pgno.get(pgno).copied().map(|txid| {
 						pidx_hits += 1;
-						delta_key(&actor_id, txid)
+						delta_chunk_prefix(&actor_id, txid)
 					});
 					if preferred_delta_key.is_none() {
 						pidx_misses += 1;
@@ -146,7 +149,11 @@ impl SqliteEngine {
 					}
 
 					if !source_blobs.contains_key(&source_key) {
-						let mut blob = udb::tx_get_value(&tx, &subspace, &source_key).await?;
+						let mut blob = if source_key.starts_with(&delta_prefix(&actor_id)) {
+							load_delta_blob_tx(&tx, &subspace, &source_key).await?
+						} else {
+							udb::tx_get_value(&tx, &subspace, &source_key).await?
+						};
 						if blob.is_none() {
 							if let Some(delta_key) = preferred_delta_key.as_ref() {
 								missing_delta_keys.insert(delta_key.clone());
@@ -217,7 +224,7 @@ impl SqliteEngine {
 				}
 			}
 		}
-		if page_sources.is_empty() {
+		if page_sources.is_empty() && head.head_txid == 0 {
 			self.metrics
 				.observe_get_pages(requested_page_count, start.elapsed());
 			return Ok(pgnos
@@ -233,6 +240,7 @@ impl SqliteEngine {
 				.collect());
 		}
 		let mut decoded_blobs = BTreeMap::new();
+		let mut historical_delta_blobs = None;
 		let mut pages = Vec::with_capacity(pgnos.len());
 
 		for pgno in pgnos {
@@ -288,8 +296,17 @@ impl SqliteEngine {
 			}
 			if bytes.is_none() {
 				stale_pidx_pgnos.insert(pgno);
-				bytes = recover_page_from_delta_history(self, &actor_id, pgno, &mut decoded_blobs)
-					.await?;
+				if historical_delta_blobs.is_none() {
+					historical_delta_blobs = Some(load_delta_history_blobs(self, &actor_id).await?);
+				}
+				bytes = recover_page_from_delta_history(
+					&actor_id,
+					pgno,
+					&mut decoded_blobs,
+					historical_delta_blobs
+						.as_ref()
+						.expect("historical delta blobs should load before recovery"),
+				)?;
 			}
 			let bytes = bytes.unwrap_or_else(|| vec![0; head.page_size as usize]);
 
@@ -333,21 +350,37 @@ fn decode_db_head(bytes: &[u8]) -> Result<DBHead> {
 	serde_bare::from_slice(bytes).context("decode sqlite db head")
 }
 
-async fn recover_page_from_delta_history(
+async fn load_delta_history_blobs(
 	engine: &SqliteEngine,
 	actor_id: &str,
-	pgno: u32,
-	decoded_blobs: &mut BTreeMap<Vec<u8>, DecodedLtx>,
-) -> Result<Option<Vec<u8>>> {
-	let delta_blobs = udb::scan_prefix_values(
+) -> Result<BTreeMap<u64, Vec<u8>>> {
+	let delta_chunks = udb::scan_prefix_values(
 		engine.db.as_ref(),
 		&engine.subspace,
 		engine.op_counter.as_ref(),
 		delta_prefix(actor_id),
 	)
 	.await?;
+	let mut delta_blobs = BTreeMap::<u64, Vec<u8>>::new();
+	for (delta_key, delta_chunk) in delta_chunks {
+		let txid = decode_delta_chunk_txid(actor_id, &delta_key)?;
+		delta_blobs
+			.entry(txid)
+			.or_default()
+			.extend_from_slice(&delta_chunk);
+	}
 
-	for (delta_key, delta_blob) in delta_blobs.into_iter().rev() {
+	Ok(delta_blobs)
+}
+
+fn recover_page_from_delta_history(
+	actor_id: &str,
+	pgno: u32,
+	decoded_blobs: &mut BTreeMap<Vec<u8>, DecodedLtx>,
+	delta_blobs: &BTreeMap<u64, Vec<u8>>,
+) -> Result<Option<Vec<u8>>> {
+	for (txid, delta_blob) in delta_blobs.iter().rev() {
+		let delta_key = delta_chunk_prefix(actor_id, *txid);
 		if !decoded_blobs.contains_key(&delta_key) {
 			let decoded = decode_ltx_v3(&delta_blob)
 				.with_context(|| format!("decode historical delta blob for page {pgno}"))?;
@@ -364,6 +397,24 @@ async fn recover_page_from_delta_history(
 	}
 
 	Ok(None)
+}
+
+async fn load_delta_blob_tx(
+	tx: &universaldb::Transaction,
+	subspace: &universaldb::Subspace,
+	delta_prefix: &[u8],
+) -> Result<Option<Vec<u8>>> {
+	let delta_chunks = udb::tx_scan_prefix_values(tx, subspace, delta_prefix).await?;
+	if delta_chunks.is_empty() {
+		return Ok(None);
+	}
+
+	let mut delta_blob = Vec::new();
+	for (_, chunk) in delta_chunks {
+		delta_blob.extend_from_slice(&chunk);
+	}
+
+	Ok(Some(delta_blob))
 }
 
 fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
@@ -410,7 +461,7 @@ mod tests {
 	use super::decode_db_head;
 	use crate::engine::SqliteEngine;
 	use crate::error::SqliteStorageError;
-	use crate::keys::{delta_key, meta_key, pidx_delta_key, shard_key};
+	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, shard_key};
 	use crate::ltx::{LtxHeader, encode_ltx_v3};
 	use crate::test_utils::{assert_op_count, clear_op_count, read_value, test_db};
 	use crate::types::{
@@ -441,6 +492,10 @@ mod tests {
 		vec![fill; SQLITE_PAGE_SIZE as usize]
 	}
 
+	fn delta_blob_key(actor_id: &str, txid: u64) -> Vec<u8> {
+		delta_chunk_key(actor_id, txid, 0)
+	}
+
 	fn encoded_blob(txid: u64, commit: u32, pages: &[(u32, u8)]) -> Vec<u8> {
 		let pages = pages
 			.iter()
@@ -469,7 +524,7 @@ mod tests {
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
 				WriteOp::put(
-					delta_key(TEST_ACTOR, 5),
+					delta_blob_key(TEST_ACTOR, 5),
 					encoded_blob(5, 3, &[(1, 0x11), (2, 0x22), (3, 0x33)]),
 				),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 5_u64.to_be_bytes().to_vec()),
@@ -537,7 +592,10 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
-				WriteOp::put(delta_key(TEST_ACTOR, 9), encoded_blob(9, 80, &[(2, 0x24)])),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 9),
+					encoded_blob(9, 80, &[(2, 0x24)]),
+				),
 				WriteOp::put(
 					shard_key(TEST_ACTOR, 1),
 					encoded_blob(8, 80, &[(65, 0x65), (70, 0x70)]),
@@ -582,7 +640,10 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
-				WriteOp::put(delta_key(TEST_ACTOR, 4), encoded_blob(4, 3, &[(3, 0x33)])),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 4),
+					encoded_blob(4, 3, &[(3, 0x33)]),
+				),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 3), 4_u64.to_be_bytes().to_vec()),
 			],
 		)
@@ -627,7 +688,10 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
-				WriteOp::put(delta_key(TEST_ACTOR, 4), encoded_blob(4, 3, &[(3, 0x33)])),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 4),
+					encoded_blob(4, 3, &[(3, 0x33)]),
+				),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 3), 4_u64.to_be_bytes().to_vec()),
 			],
 		)
@@ -646,7 +710,7 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(shard_key(TEST_ACTOR, 0), encoded_blob(4, 3, &[(3, 0x44)])),
-				WriteOp::delete(delta_key(TEST_ACTOR, 4)),
+				WriteOp::delete(delta_blob_key(TEST_ACTOR, 4)),
 				WriteOp::delete(pidx_delta_key(TEST_ACTOR, 3)),
 			],
 		)
@@ -680,7 +744,10 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
-				WriteOp::put(delta_key(TEST_ACTOR, 4), encoded_blob(4, 3, &[(3, 0x33)])),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 4),
+					encoded_blob(4, 3, &[(3, 0x33)]),
+				),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 3), 4_u64.to_be_bytes().to_vec()),
 			],
 		)
@@ -699,7 +766,10 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(shard_key(TEST_ACTOR, 0), encoded_blob(4, 3, &[(3, 0x44)])),
-				WriteOp::put(delta_key(TEST_ACTOR, 4), encoded_blob(4, 3, &[(2, 0x22)])),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 4),
+					encoded_blob(4, 3, &[(2, 0x22)]),
+				),
 			],
 		)
 		.await?;
@@ -741,8 +811,14 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
-				WriteOp::put(delta_key(TEST_ACTOR, 4), encoded_blob(4, 3, &[(3, 0x22)])),
-				WriteOp::put(delta_key(TEST_ACTOR, 5), encoded_blob(5, 3, &[(3, 0x33)])),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 4),
+					encoded_blob(4, 3, &[(3, 0x22)]),
+				),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 5),
+					encoded_blob(5, 3, &[(3, 0x33)]),
+				),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 3), 5_u64.to_be_bytes().to_vec()),
 			],
 		)
@@ -761,7 +837,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![WriteOp::put(
-				delta_key(TEST_ACTOR, 5),
+				delta_blob_key(TEST_ACTOR, 5),
 				encoded_blob(5, 3, &[(2, 0x55)]),
 			)],
 		)

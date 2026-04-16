@@ -12,6 +12,7 @@ use moka::sync::Cache;
 use parking_lot::{Mutex, RwLock};
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_protocol as protocol;
+use sqlite_storage::ltx::{encode_ltx_v3, LtxHeader};
 #[cfg(test)]
 use sqlite_storage::{engine::SqliteEngine, error::SqliteStorageError};
 use tokio::runtime::Handle;
@@ -276,6 +277,57 @@ impl SqliteTransport {
 		}
 	}
 
+	async fn commit_stage_begin(
+		&self,
+		req: protocol::SqliteCommitStageBeginRequest,
+	) -> Result<protocol::SqliteCommitStageBeginResponse> {
+		match &*self.inner {
+			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit_stage_begin(req).await,
+			#[cfg(test)]
+			SqliteTransportInner::Direct { engine, .. } => {
+				match engine
+					.commit_stage_begin(
+						&req.actor_id,
+						sqlite_storage::commit::CommitStageBeginRequest {
+							generation: req.generation,
+						},
+					)
+					.await
+				{
+					Ok(result) => Ok(
+						protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(
+							protocol::SqliteCommitStageBeginOk { txid: result.txid },
+						),
+					),
+					Err(err) => {
+						if let Some(SqliteStorageError::FenceMismatch { reason }) =
+							sqlite_storage_error(&err)
+						{
+							Ok(
+								protocol::SqliteCommitStageBeginResponse::SqliteFenceMismatch(
+									protocol::SqliteFenceMismatch {
+										actual_meta: protocol_sqlite_meta(
+											engine.load_meta(&req.actor_id).await?,
+										),
+										reason: reason.clone(),
+									},
+								),
+							)
+						} else {
+							Ok(
+								protocol::SqliteCommitStageBeginResponse::SqliteErrorResponse(
+									sqlite_error_response(&err),
+								),
+							)
+						}
+					}
+				}
+			}
+			#[cfg(test)]
+			SqliteTransportInner::Test(protocol) => protocol.commit_stage_begin(req).await,
+		}
+	}
+
 	async fn commit_stage(
 		&self,
 		req: protocol::SqliteCommitStageRequest,
@@ -289,13 +341,9 @@ impl SqliteTransport {
 						&req.actor_id,
 						sqlite_storage::commit::CommitStageRequest {
 							generation: req.generation,
-							stage_id: req.stage_id,
+							txid: req.txid,
 							chunk_idx: req.chunk_idx,
-							dirty_pages: req
-								.dirty_pages
-								.into_iter()
-								.map(storage_dirty_page)
-								.collect(),
+							bytes: req.bytes,
 							is_last: req.is_last,
 						},
 					)
@@ -303,7 +351,9 @@ impl SqliteTransport {
 				{
 					Ok(result) => Ok(protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
 						protocol::SqliteCommitStageOk {
-							chunk_idx_committed: result.chunk_idx_committed,
+							chunk_idx_committed: result.chunk_idx_committed.try_into().map_err(
+								|_| anyhow::anyhow!("sqlite stage chunk idx exceeded u16"),
+							)?,
 						},
 					)),
 					Err(err) => {
@@ -361,7 +411,7 @@ impl SqliteTransport {
 						sqlite_storage::commit::CommitFinalizeRequest {
 							generation: req.generation,
 							expected_head_txid: req.expected_head_txid,
-							stage_id: req.stage_id,
+							txid: req.txid,
 							new_db_size_pages: req.new_db_size_pages,
 							now_ms: sqlite_now_ms()?,
 						},
@@ -477,7 +527,6 @@ fn sqlite_error_response(err: &anyhow::Error) -> protocol::SqliteErrorResponse {
 	}
 }
 
-#[cfg(test)]
 fn sqlite_now_ms() -> Result<i64> {
 	use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -593,6 +642,19 @@ impl MockProtocol {
 			}
 		}
 		Ok(self.commit_response.clone())
+	}
+
+	async fn commit_stage_begin(
+		&self,
+		_req: protocol::SqliteCommitStageBeginRequest,
+	) -> Result<protocol::SqliteCommitStageBeginResponse> {
+		Ok(
+			protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(
+				protocol::SqliteCommitStageBeginOk {
+					txid: next_stage_id(),
+				},
+			),
+		)
 	}
 
 	async fn commit_stage(
@@ -1399,38 +1461,15 @@ fn dirty_pages_raw_bytes(dirty_pages: &[protocol::SqliteDirtyPage]) -> Result<u6
 	})
 }
 
-fn split_dirty_pages_by_size(
-	dirty_pages: &[protocol::SqliteDirtyPage],
-	max_delta_bytes: u64,
-	max_pages_per_stage: usize,
-) -> Result<Vec<Vec<protocol::SqliteDirtyPage>>> {
-	let mut chunks = Vec::new();
-	let mut chunk = Vec::new();
-	let mut chunk_bytes = 0u64;
-
-	for dirty_page in dirty_pages {
-		let page_len = u64::try_from(dirty_page.bytes.len())?;
-		let would_overflow_bytes = !chunk.is_empty() && chunk_bytes + page_len > max_delta_bytes;
-		let would_overflow_pages = !chunk.is_empty() && chunk.len() >= max_pages_per_stage;
-		if would_overflow_bytes || would_overflow_pages {
-			chunks.push(chunk);
-			chunk = Vec::new();
-			chunk_bytes = 0;
-		}
-
-		chunk_bytes += page_len;
-		chunk.push(dirty_page.clone());
+fn split_bytes(bytes: &[u8], max_chunk_bytes: usize) -> Vec<Vec<u8>> {
+	if bytes.is_empty() || max_chunk_bytes == 0 {
+		return vec![bytes.to_vec()];
 	}
 
-	if !chunk.is_empty() {
-		chunks.push(chunk);
-	}
-
-	if chunks.is_empty() {
-		chunks.push(Vec::new());
-	}
-
-	Ok(chunks)
+	bytes
+		.chunks(max_chunk_bytes)
+		.map(|chunk| chunk.to_vec())
+		.collect()
 }
 
 fn next_stage_id() -> u64 {
@@ -1495,22 +1534,63 @@ async fn commit_buffered_pages(
 		}
 	}
 
-	let stage_id = next_stage_id();
-	let staged_chunks = split_dirty_pages_by_size(
-		&request.dirty_pages,
-		request.max_delta_bytes,
-		request.max_pages_per_stage,
+	let serialize_start = Instant::now();
+	let stage_begin_request = protocol::SqliteCommitStageBeginRequest {
+		actor_id: request.actor_id.clone(),
+		generation: request.generation,
+	};
+	metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
+	let transport_start = Instant::now();
+	let txid = match transport
+		.commit_stage_begin(stage_begin_request)
+		.await
+		.map_err(|err| CommitBufferError::Other(err.to_string()))?
+	{
+		protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(ok) => {
+			metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
+			ok.txid
+		}
+		protocol::SqliteCommitStageBeginResponse::SqliteFenceMismatch(mismatch) => {
+			return Err(CommitBufferError::FenceMismatch(mismatch.reason));
+		}
+		protocol::SqliteCommitStageBeginResponse::SqliteErrorResponse(error) => {
+			return Err(CommitBufferError::Other(error.message));
+		}
+	};
+
+	let serialize_start = Instant::now();
+	let encoded_delta = encode_ltx_v3(
+		LtxHeader::delta(
+			txid,
+			request.new_db_size_pages,
+			sqlite_now_ms().map_err(|err| CommitBufferError::Other(err.to_string()))?,
+		),
+		&request
+			.dirty_pages
+			.iter()
+			.map(|dirty_page| sqlite_storage::types::DirtyPage {
+				pgno: dirty_page.pgno,
+				bytes: dirty_page.bytes.clone(),
+			})
+			.collect::<Vec<_>>(),
 	)
 	.map_err(|err| CommitBufferError::Other(err.to_string()))?;
+	let staged_chunks = split_bytes(
+		&encoded_delta,
+		request.max_delta_bytes.try_into().map_err(|_| {
+			CommitBufferError::Other("sqlite max_delta_bytes exceeded usize".to_string())
+		})?,
+	);
+	metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
 
-	for (chunk_idx, dirty_pages) in staged_chunks.iter().enumerate() {
+	for (chunk_idx, chunk_bytes) in staged_chunks.iter().enumerate() {
 		let serialize_start = Instant::now();
 		let stage_request = protocol::SqliteCommitStageRequest {
 			actor_id: request.actor_id.clone(),
 			generation: request.generation,
-			stage_id,
-			chunk_idx: chunk_idx as u16,
-			dirty_pages: dirty_pages.clone(),
+			txid,
+			chunk_idx: chunk_idx as u32,
+			bytes: chunk_bytes.clone(),
 			is_last: chunk_idx + 1 == staged_chunks.len(),
 		};
 		metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
@@ -1544,7 +1624,7 @@ async fn commit_buffered_pages(
 		actor_id: request.actor_id,
 		generation: request.generation,
 		expected_head_txid: request.expected_head_txid,
-		stage_id,
+		txid,
 		new_db_size_pages: request.new_db_size_pages,
 	};
 	metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
@@ -4082,7 +4162,6 @@ mod tests {
 		let release = std::thread::spawn(move || {
 			runtime.block_on(async {
 				protocol_for_release.finalize_started.notified().await;
-				assert_eq!(protocol_for_release.stage_requests().len(), 3);
 				assert_eq!(protocol_for_release.awaited_stage_responses(), 0);
 				protocol_for_release.release_finalize.notify_one();
 			});
@@ -4114,7 +4193,16 @@ mod tests {
 		assert!(metrics.serialize_ns > 0);
 		assert!(metrics.transport_ns > 0);
 		assert!(protocol.commit_requests().is_empty());
-		assert_eq!(protocol.stage_requests().len(), 3);
+		assert!(!protocol.stage_requests().is_empty());
+		assert!(protocol
+			.stage_requests()
+			.iter()
+			.enumerate()
+			.all(|(chunk_idx, request)| request.chunk_idx as usize == chunk_idx));
+		assert!(protocol
+			.stage_requests()
+			.last()
+			.is_some_and(|request| request.is_last));
 		assert_eq!(protocol.awaited_stage_responses(), 0);
 		assert_eq!(protocol.finalize_requests().len(), 1);
 	}

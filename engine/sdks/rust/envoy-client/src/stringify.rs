@@ -275,6 +275,12 @@ pub fn stringify_to_rivet(message: &protocol::ToRivet) -> String {
 				val.request_id
 			)
 		}
+		protocol::ToRivet::ToRivetSqliteCommitStageBeginRequest(val) => {
+			format!(
+				"ToRivetSqliteCommitStageBeginRequest{{requestId: {}}}",
+				val.request_id
+			)
+		}
 		protocol::ToRivet::ToRivetSqliteCommitStageRequest(val) => {
 			format!(
 				"ToRivetSqliteCommitStageRequest{{requestId: {}}}",
@@ -336,6 +342,12 @@ pub fn stringify_to_envoy(message: &protocol::ToEnvoy) -> String {
 		protocol::ToEnvoy::ToEnvoySqliteCommitResponse(val) => {
 			format!(
 				"ToEnvoySqliteCommitResponse{{requestId: {}}}",
+				val.request_id
+			)
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitStageBeginResponse(val) => {
+			format!(
+				"ToEnvoySqliteCommitStageBeginResponse{{requestId: {}}}",
 				val.request_id
 			)
 		}

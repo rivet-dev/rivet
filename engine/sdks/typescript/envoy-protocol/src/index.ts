@@ -948,12 +948,85 @@ export function writeSqliteCommitResponse(bc: bare.ByteCursor, x: SqliteCommitRe
     }
 }
 
+export type SqliteCommitStageBeginRequest = {
+    readonly actorId: Id
+    readonly generation: SqliteGeneration
+}
+
+export function readSqliteCommitStageBeginRequest(bc: bare.ByteCursor): SqliteCommitStageBeginRequest {
+    return {
+        actorId: readId(bc),
+        generation: readSqliteGeneration(bc),
+    }
+}
+
+export function writeSqliteCommitStageBeginRequest(bc: bare.ByteCursor, x: SqliteCommitStageBeginRequest): void {
+    writeId(bc, x.actorId)
+    writeSqliteGeneration(bc, x.generation)
+}
+
+export type SqliteCommitStageBeginOk = {
+    readonly txid: SqliteTxid
+}
+
+export function readSqliteCommitStageBeginOk(bc: bare.ByteCursor): SqliteCommitStageBeginOk {
+    return {
+        txid: readSqliteTxid(bc),
+    }
+}
+
+export function writeSqliteCommitStageBeginOk(bc: bare.ByteCursor, x: SqliteCommitStageBeginOk): void {
+    writeSqliteTxid(bc, x.txid)
+}
+
+export type SqliteCommitStageBeginResponse =
+    | { readonly tag: "SqliteCommitStageBeginOk"; readonly val: SqliteCommitStageBeginOk }
+    | { readonly tag: "SqliteFenceMismatch"; readonly val: SqliteFenceMismatch }
+    | { readonly tag: "SqliteErrorResponse"; readonly val: SqliteErrorResponse }
+
+export function readSqliteCommitStageBeginResponse(bc: bare.ByteCursor): SqliteCommitStageBeginResponse {
+    const offset = bc.offset
+    const tag = bare.readU8(bc)
+    switch (tag) {
+        case 0:
+            return { tag: "SqliteCommitStageBeginOk", val: readSqliteCommitStageBeginOk(bc) }
+        case 1:
+            return { tag: "SqliteFenceMismatch", val: readSqliteFenceMismatch(bc) }
+        case 2:
+            return { tag: "SqliteErrorResponse", val: readSqliteErrorResponse(bc) }
+        default: {
+            bc.offset = offset
+            throw new bare.BareError(offset, "invalid tag")
+        }
+    }
+}
+
+export function writeSqliteCommitStageBeginResponse(bc: bare.ByteCursor, x: SqliteCommitStageBeginResponse): void {
+    switch (x.tag) {
+        case "SqliteCommitStageBeginOk": {
+            bare.writeU8(bc, 0)
+            writeSqliteCommitStageBeginOk(bc, x.val)
+            break
+        }
+        case "SqliteFenceMismatch": {
+            bare.writeU8(bc, 1)
+            writeSqliteFenceMismatch(bc, x.val)
+            break
+        }
+        case "SqliteErrorResponse": {
+            bare.writeU8(bc, 2)
+            writeSqliteErrorResponse(bc, x.val)
+            break
+        }
+    }
+}
+
 export type SqliteCommitStageRequest = {
     readonly actorId: Id
     readonly generation: SqliteGeneration
-    readonly stageId: SqliteStageId
-    readonly chunkIdx: u16
-    readonly dirtyPages: readonly SqliteDirtyPage[]
+    readonly txid: SqliteTxid
+    readonly chunkIdx: u32
+    readonly bytes: ArrayBuffer
     readonly isLast: boolean
 }
 
@@ -961,9 +1034,9 @@ export function readSqliteCommitStageRequest(bc: bare.ByteCursor): SqliteCommitS
     return {
         actorId: readId(bc),
         generation: readSqliteGeneration(bc),
-        stageId: readSqliteStageId(bc),
-        chunkIdx: bare.readU16(bc),
-        dirtyPages: read8(bc),
+        txid: readSqliteTxid(bc),
+        chunkIdx: bare.readU32(bc),
+        bytes: bare.readData(bc),
         isLast: bare.readBool(bc),
     }
 }
@@ -971,9 +1044,9 @@ export function readSqliteCommitStageRequest(bc: bare.ByteCursor): SqliteCommitS
 export function writeSqliteCommitStageRequest(bc: bare.ByteCursor, x: SqliteCommitStageRequest): void {
     writeId(bc, x.actorId)
     writeSqliteGeneration(bc, x.generation)
-    writeSqliteStageId(bc, x.stageId)
-    bare.writeU16(bc, x.chunkIdx)
-    write8(bc, x.dirtyPages)
+    writeSqliteTxid(bc, x.txid)
+    bare.writeU32(bc, x.chunkIdx)
+    bare.writeData(bc, x.bytes)
     bare.writeBool(bc, x.isLast)
 }
 
@@ -1037,7 +1110,7 @@ export type SqliteCommitFinalizeRequest = {
     readonly actorId: Id
     readonly generation: SqliteGeneration
     readonly expectedHeadTxid: SqliteTxid
-    readonly stageId: SqliteStageId
+    readonly txid: SqliteTxid
     readonly newDbSizePages: u32
 }
 
@@ -1046,7 +1119,7 @@ export function readSqliteCommitFinalizeRequest(bc: bare.ByteCursor): SqliteComm
         actorId: readId(bc),
         generation: readSqliteGeneration(bc),
         expectedHeadTxid: readSqliteTxid(bc),
-        stageId: readSqliteStageId(bc),
+        txid: readSqliteTxid(bc),
         newDbSizePages: bare.readU32(bc),
     }
 }
@@ -1055,7 +1128,7 @@ export function writeSqliteCommitFinalizeRequest(bc: bare.ByteCursor, x: SqliteC
     writeId(bc, x.actorId)
     writeSqliteGeneration(bc, x.generation)
     writeSqliteTxid(bc, x.expectedHeadTxid)
-    writeSqliteStageId(bc, x.stageId)
+    writeSqliteTxid(bc, x.txid)
     bare.writeU32(bc, x.newDbSizePages)
 }
 
@@ -2473,6 +2546,23 @@ export function writeToRivetSqliteCommitRequest(bc: bare.ByteCursor, x: ToRivetS
     writeSqliteCommitRequest(bc, x.data)
 }
 
+export type ToRivetSqliteCommitStageBeginRequest = {
+    readonly requestId: u32
+    readonly data: SqliteCommitStageBeginRequest
+}
+
+export function readToRivetSqliteCommitStageBeginRequest(bc: bare.ByteCursor): ToRivetSqliteCommitStageBeginRequest {
+    return {
+        requestId: bare.readU32(bc),
+        data: readSqliteCommitStageBeginRequest(bc),
+    }
+}
+
+export function writeToRivetSqliteCommitStageBeginRequest(bc: bare.ByteCursor, x: ToRivetSqliteCommitStageBeginRequest): void {
+    bare.writeU32(bc, x.requestId)
+    writeSqliteCommitStageBeginRequest(bc, x.data)
+}
+
 export type ToRivetSqliteCommitStageRequest = {
     readonly requestId: u32
     readonly data: SqliteCommitStageRequest
@@ -2517,6 +2607,7 @@ export type ToRivet =
     | { readonly tag: "ToRivetTunnelMessage"; readonly val: ToRivetTunnelMessage }
     | { readonly tag: "ToRivetSqliteGetPagesRequest"; readonly val: ToRivetSqliteGetPagesRequest }
     | { readonly tag: "ToRivetSqliteCommitRequest"; readonly val: ToRivetSqliteCommitRequest }
+    | { readonly tag: "ToRivetSqliteCommitStageBeginRequest"; readonly val: ToRivetSqliteCommitStageBeginRequest }
     | { readonly tag: "ToRivetSqliteCommitStageRequest"; readonly val: ToRivetSqliteCommitStageRequest }
     | { readonly tag: "ToRivetSqliteCommitFinalizeRequest"; readonly val: ToRivetSqliteCommitFinalizeRequest }
 
@@ -2543,8 +2634,10 @@ export function readToRivet(bc: bare.ByteCursor): ToRivet {
         case 8:
             return { tag: "ToRivetSqliteCommitRequest", val: readToRivetSqliteCommitRequest(bc) }
         case 9:
-            return { tag: "ToRivetSqliteCommitStageRequest", val: readToRivetSqliteCommitStageRequest(bc) }
+            return { tag: "ToRivetSqliteCommitStageBeginRequest", val: readToRivetSqliteCommitStageBeginRequest(bc) }
         case 10:
+            return { tag: "ToRivetSqliteCommitStageRequest", val: readToRivetSqliteCommitStageRequest(bc) }
+        case 11:
             return { tag: "ToRivetSqliteCommitFinalizeRequest", val: readToRivetSqliteCommitFinalizeRequest(bc) }
         default: {
             bc.offset = offset
@@ -2599,13 +2692,18 @@ export function writeToRivet(bc: bare.ByteCursor, x: ToRivet): void {
             writeToRivetSqliteCommitRequest(bc, x.val)
             break
         }
-        case "ToRivetSqliteCommitStageRequest": {
+        case "ToRivetSqliteCommitStageBeginRequest": {
             bare.writeU8(bc, 9)
+            writeToRivetSqliteCommitStageBeginRequest(bc, x.val)
+            break
+        }
+        case "ToRivetSqliteCommitStageRequest": {
+            bare.writeU8(bc, 10)
             writeToRivetSqliteCommitStageRequest(bc, x.val)
             break
         }
         case "ToRivetSqliteCommitFinalizeRequest": {
-            bare.writeU8(bc, 10)
+            bare.writeU8(bc, 11)
             writeToRivetSqliteCommitFinalizeRequest(bc, x.val)
             break
         }
@@ -2754,6 +2852,23 @@ export function writeToEnvoySqliteCommitResponse(bc: bare.ByteCursor, x: ToEnvoy
     writeSqliteCommitResponse(bc, x.data)
 }
 
+export type ToEnvoySqliteCommitStageBeginResponse = {
+    readonly requestId: u32
+    readonly data: SqliteCommitStageBeginResponse
+}
+
+export function readToEnvoySqliteCommitStageBeginResponse(bc: bare.ByteCursor): ToEnvoySqliteCommitStageBeginResponse {
+    return {
+        requestId: bare.readU32(bc),
+        data: readSqliteCommitStageBeginResponse(bc),
+    }
+}
+
+export function writeToEnvoySqliteCommitStageBeginResponse(bc: bare.ByteCursor, x: ToEnvoySqliteCommitStageBeginResponse): void {
+    bare.writeU32(bc, x.requestId)
+    writeSqliteCommitStageBeginResponse(bc, x.data)
+}
+
 export type ToEnvoySqliteCommitStageResponse = {
     readonly requestId: u32
     readonly data: SqliteCommitStageResponse
@@ -2797,6 +2912,7 @@ export type ToEnvoy =
     | { readonly tag: "ToEnvoyPing"; readonly val: ToEnvoyPing }
     | { readonly tag: "ToEnvoySqliteGetPagesResponse"; readonly val: ToEnvoySqliteGetPagesResponse }
     | { readonly tag: "ToEnvoySqliteCommitResponse"; readonly val: ToEnvoySqliteCommitResponse }
+    | { readonly tag: "ToEnvoySqliteCommitStageBeginResponse"; readonly val: ToEnvoySqliteCommitStageBeginResponse }
     | { readonly tag: "ToEnvoySqliteCommitStageResponse"; readonly val: ToEnvoySqliteCommitStageResponse }
     | { readonly tag: "ToEnvoySqliteCommitFinalizeResponse"; readonly val: ToEnvoySqliteCommitFinalizeResponse }
 
@@ -2821,8 +2937,10 @@ export function readToEnvoy(bc: bare.ByteCursor): ToEnvoy {
         case 7:
             return { tag: "ToEnvoySqliteCommitResponse", val: readToEnvoySqliteCommitResponse(bc) }
         case 8:
-            return { tag: "ToEnvoySqliteCommitStageResponse", val: readToEnvoySqliteCommitStageResponse(bc) }
+            return { tag: "ToEnvoySqliteCommitStageBeginResponse", val: readToEnvoySqliteCommitStageBeginResponse(bc) }
         case 9:
+            return { tag: "ToEnvoySqliteCommitStageResponse", val: readToEnvoySqliteCommitStageResponse(bc) }
+        case 10:
             return { tag: "ToEnvoySqliteCommitFinalizeResponse", val: readToEnvoySqliteCommitFinalizeResponse(bc) }
         default: {
             bc.offset = offset
@@ -2873,13 +2991,18 @@ export function writeToEnvoy(bc: bare.ByteCursor, x: ToEnvoy): void {
             writeToEnvoySqliteCommitResponse(bc, x.val)
             break
         }
-        case "ToEnvoySqliteCommitStageResponse": {
+        case "ToEnvoySqliteCommitStageBeginResponse": {
             bare.writeU8(bc, 8)
+            writeToEnvoySqliteCommitStageBeginResponse(bc, x.val)
+            break
+        }
+        case "ToEnvoySqliteCommitStageResponse": {
+            bare.writeU8(bc, 9)
             writeToEnvoySqliteCommitStageResponse(bc, x.val)
             break
         }
         case "ToEnvoySqliteCommitFinalizeResponse": {
-            bare.writeU8(bc, 9)
+            bare.writeU8(bc, 10)
             writeToEnvoySqliteCommitFinalizeResponse(bc, x.val)
             break
         }

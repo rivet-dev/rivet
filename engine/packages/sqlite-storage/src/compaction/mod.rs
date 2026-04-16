@@ -138,6 +138,7 @@ async fn default_compaction_worker(
 		subspace,
 		op_counter: Arc::new(AtomicUsize::new(0)),
 		page_indices: Default::default(),
+		pending_stages: Default::default(),
 		compaction_tx: mpsc::unbounded_channel().0,
 		metrics: crate::metrics::SqliteStorageMetrics,
 	};

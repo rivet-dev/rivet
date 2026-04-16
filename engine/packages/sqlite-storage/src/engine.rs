@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
 use anyhow::{Context, Result};
+use parking_lot::Mutex;
 use scc::{HashMap, hash_map::Entry};
 use tokio::sync::mpsc;
 use universaldb::Subspace;
@@ -19,8 +20,16 @@ pub struct SqliteEngine {
 	pub subspace: Subspace,
 	pub op_counter: Arc<AtomicUsize>,
 	pub page_indices: HashMap<String, DeltaPageIndex>,
+	pub pending_stages: HashMap<(String, u64), Arc<Mutex<PendingStage>>>,
 	pub compaction_tx: mpsc::UnboundedSender<String>,
 	pub metrics: SqliteStorageMetrics,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingStage {
+	pub next_chunk_idx: u32,
+	pub saw_last_chunk: bool,
+	pub error_message: Option<String>,
 }
 
 impl SqliteEngine {
@@ -34,6 +43,7 @@ impl SqliteEngine {
 			subspace,
 			op_counter: Arc::new(AtomicUsize::new(0)),
 			page_indices: HashMap::default(),
+			pending_stages: HashMap::default(),
 			compaction_tx,
 			metrics: SqliteStorageMetrics,
 		};

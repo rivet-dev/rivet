@@ -60,17 +60,21 @@ mod tests {
 	use anyhow::Result;
 
 	use super::{encode_db_head_with_usage, tracked_storage_entry_size};
-	use crate::keys::{delta_key, meta_key, pidx_delta_key, shard_key, stage_key};
+	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, shard_key, stage_key};
 	use crate::types::{
 		DBHead, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE,
 	};
 
 	const TEST_ACTOR: &str = "test-actor";
 
+	fn delta_blob_key(actor_id: &str, txid: u64) -> Vec<u8> {
+		delta_chunk_key(actor_id, txid, 0)
+	}
+
 	#[test]
 	fn tracked_storage_only_counts_sqlite_persistent_keys() {
 		assert!(tracked_storage_entry_size(&meta_key(TEST_ACTOR), b"meta").is_some());
-		assert!(tracked_storage_entry_size(&delta_key(TEST_ACTOR, 3), b"delta").is_some());
+		assert!(tracked_storage_entry_size(&delta_blob_key(TEST_ACTOR, 3), b"delta").is_some());
 		assert!(tracked_storage_entry_size(&shard_key(TEST_ACTOR, 7), b"shard").is_some());
 		assert!(
 			tracked_storage_entry_size(&pidx_delta_key(TEST_ACTOR, 11), &7_u64.to_be_bytes())

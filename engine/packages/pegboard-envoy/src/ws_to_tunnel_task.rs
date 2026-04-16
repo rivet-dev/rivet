@@ -394,6 +394,10 @@ async fn handle_message(
 			crate::metrics::SQLITE_COMMIT_ENVOY_RESPONSE_DURATION
 				.observe(timed_response.commit_completed_at.elapsed().as_secs_f64());
 		}
+		protocol::ToRivet::ToRivetSqliteCommitStageBeginRequest(req) => {
+			let response = handle_sqlite_commit_stage_begin_response(ctx, conn, req.data).await;
+			send_sqlite_commit_stage_begin_response(conn, req.request_id, response).await?;
+		}
 		protocol::ToRivet::ToRivetSqliteCommitStageRequest(req) => {
 			let response = handle_sqlite_commit_stage_response(ctx, conn, req.data).await;
 			send_sqlite_commit_stage_response(conn, req.request_id, response).await?;
@@ -491,6 +495,23 @@ async fn handle_sqlite_commit_stage_response(
 		Err(err) => {
 			tracing::error!(actor_id = %actor_id, ?err, "sqlite commit_stage request failed");
 			protocol::SqliteCommitStageResponse::SqliteErrorResponse(sqlite_error_response(&err))
+		}
+	}
+}
+
+async fn handle_sqlite_commit_stage_begin_response(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteCommitStageBeginRequest,
+) -> protocol::SqliteCommitStageBeginResponse {
+	let actor_id = request.actor_id.clone();
+	match handle_sqlite_commit_stage_begin(ctx, conn, request).await {
+		Ok(response) => response,
+		Err(err) => {
+			tracing::error!(actor_id = %actor_id, ?err, "sqlite commit_stage_begin request failed");
+			protocol::SqliteCommitStageBeginResponse::SqliteErrorResponse(sqlite_error_response(
+				&err,
+			))
 		}
 	}
 }
@@ -809,7 +830,6 @@ async fn handle_sqlite_commit_stage(
 	conn: &Conn,
 	request: protocol::SqliteCommitStageRequest,
 ) -> Result<protocol::SqliteCommitStageResponse> {
-	validate_sqlite_dirty_pages("sqlite commit_stage", &request.dirty_pages)?;
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
 
 	match conn
@@ -818,13 +838,9 @@ async fn handle_sqlite_commit_stage(
 			&request.actor_id,
 			sqlite_storage::commit::CommitStageRequest {
 				generation: request.generation,
-				stage_id: request.stage_id,
+				txid: request.txid,
 				chunk_idx: request.chunk_idx,
-				dirty_pages: request
-					.dirty_pages
-					.into_iter()
-					.map(storage_dirty_page)
-					.collect(),
+				bytes: request.bytes,
 				is_last: request.is_last,
 			},
 		)
@@ -832,7 +848,10 @@ async fn handle_sqlite_commit_stage(
 	{
 		Ok(result) => Ok(protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
 			protocol::SqliteCommitStageOk {
-				chunk_idx_committed: result.chunk_idx_committed,
+				chunk_idx_committed: result
+					.chunk_idx_committed
+					.try_into()
+					.context("sqlite stage chunk index exceeded u16")?,
 			},
 		)),
 		Err(err) => match sqlite_storage_error(&err) {
@@ -841,6 +860,39 @@ async fn handle_sqlite_commit_stage(
 					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
 				))
 			}
+			_ => Err(err),
+		},
+	}
+}
+
+async fn handle_sqlite_commit_stage_begin(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteCommitStageBeginRequest,
+) -> Result<protocol::SqliteCommitStageBeginResponse> {
+	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
+
+	match conn
+		.sqlite_engine
+		.commit_stage_begin(
+			&request.actor_id,
+			sqlite_storage::commit::CommitStageBeginRequest {
+				generation: request.generation,
+			},
+		)
+		.await
+	{
+		Ok(result) => Ok(
+			protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(
+				protocol::SqliteCommitStageBeginOk { txid: result.txid },
+			),
+		),
+		Err(err) => match sqlite_storage_error(&err) {
+			Some(SqliteStorageError::FenceMismatch { reason }) => Ok(
+				protocol::SqliteCommitStageBeginResponse::SqliteFenceMismatch(
+					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
+				),
+			),
 			_ => Err(err),
 		},
 	}
@@ -866,7 +918,7 @@ async fn handle_sqlite_commit_finalize(
 			sqlite_storage::commit::CommitFinalizeRequest {
 				generation: request.generation,
 				expected_head_txid: request.expected_head_txid,
-				stage_id: request.stage_id,
+				txid: request.txid,
 				new_db_size_pages: request.new_db_size_pages,
 				now_ms: util::timestamp::now(),
 			},
@@ -1073,6 +1125,21 @@ async fn send_sqlite_commit_stage_response(
 			protocol::ToEnvoySqliteCommitStageResponse { request_id, data },
 		),
 		"sqlite commit_stage response",
+	)
+	.await
+}
+
+async fn send_sqlite_commit_stage_begin_response(
+	conn: &Conn,
+	request_id: u32,
+	data: protocol::SqliteCommitStageBeginResponse,
+) -> Result<()> {
+	send_to_envoy(
+		conn,
+		protocol::ToEnvoy::ToEnvoySqliteCommitStageBeginResponse(
+			protocol::ToEnvoySqliteCommitStageBeginResponse { request_id, data },
+		),
+		"sqlite commit_stage_begin response",
 	)
 	.await
 }

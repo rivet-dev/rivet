@@ -16,7 +16,7 @@
       ],
       "priority": 6,
       "passes": true,
-      "notes": "Two compounding performance findings: (1) compact_worker calls compact_shard up to 8 times, each doing its own full PIDX scan + delta scan = 9 PIDX scans + 8 delta scans per batch. (2) default_compaction_worker creates a new SqliteEngine with empty page_indices on every invocation (compaction/mod.rs:131-147), so every scan is a cold load and cache updates are discarded."
+      "notes": "Two compounding performance findings: (1) compact_worker calls compact_shard up to 8 times, each doing its own full PIDX scan + delta scan = 9 PIDX scans + 8 delta scans per batch. (2) default_compaction_worker creates a new SqliteEngine with empty page_indices on every invocation (compaction/mod.rs:131-147), so every scan is a cold load and cache updates are discarded. REVERTED passes=true flip on 2026-04-16: review agent (see reviews/US-040-review.txt) confirmed no implementing commit exists and both bugs are still present in the code. Ralph must actually implement this before flipping the flag."
     },
     {
       "id": "US-043",
@@ -223,7 +223,7 @@
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Three complementary surfaces: (1) Prometheus histograms on the engine /metrics endpoint at port 6430 \u2014 aggregated across all actors, bounded cardinality, for dashboards; (2) per-actor VFS counters exposed via the EXISTING /inspector/metrics endpoint (not a new surface \u2014 extend ActorMetrics.snapshot()) for per-actor debugging; (3) tracing spans at debug level on both engine and VFS sides, zero cost at info level, flip RUST_LOG to debug for per-request phase breakdowns correlatable via ray_id. These three are not redundant: Prometheus catches aggregate regressions, inspector metrics diagnose one actor, tracing spans debug specific slow commits. The NAPI bridge for VFS counters is new; design it to match how rivetkit-native already exposes other native state to TypeScript."
+      "notes": "Three complementary surfaces: Prometheus histograms on engine /metrics (port 6430), per-actor VFS counters on /inspector/metrics, and debug-level tracing spans. Baseline captured in commit 514007256a: 5 MB commit at 717 ms info-level (~6.97 MB/s), udb_write 45.7% + pidx_read 36.3% of server wall time, transport 98.5% of VFS-side time. Use these numbers as the regression floor for US-048."
     }
   ]
 }

@@ -29,7 +29,7 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
 - `sqlite-storage` takeover should delete orphan DELTA/STAGE/PIDX entries in the same `atomic_write` that bumps META, then evict the actor's cached PIDX so later reads reload the cleaned index.
 - `sqlite-storage` `get_pages(...)` should resolve requested pages to unique DELTA or SHARD blobs first, issue one `batch_get`, then decode each blob once and map pages back into request order.
 - `sqlite-storage` fast-path commits should update an already-cached PIDX after `atomic_write`, but should not trigger a fresh PIDX load just to mutate the cache because that burns the 1-RTT fast path.
-- `sqlite-storage` staged commits should scan a stage-specific prefix helper, then delete the staged chunk keys in the same `atomic_write` that promotes DELTA, PIDX, and META.
+- `sqlite-storage` staged commits reserve a txid with `commit_stage_begin`, write encoded LTX chunks directly under `delta_chunk_key(...)`, and rely on the `head_txid` META flip plus takeover cleanup of `txid > head_txid` orphans instead of `/STAGE` keys.
 - `sqlite-storage` coordinator tests should inject a worker future and drive it with explicit notifiers so dedup and restart behavior can be verified without the real compaction worker.
 - `sqlite-storage` shard compaction should derive candidate shards from the live PIDX scan and delete DELTA blobs only after comparing global remaining PIDX refs, which keeps multi-shard and overwritten deltas alive until every page ref is folded.
 - `sqlite-storage` compaction must re-read META inside its write transaction and fence on `generation` plus `head_txid` before updating `materialized_txid` or quota fields, so takeover and commits cannot rewind the head.
@@ -215,4 +215,13 @@ VFS-side ratio (native counters, 10-commit actor slice):
 So the bench is bottlenecked on `transport` (native-to-envoy round trip) and, on the engine side, on `udb_write` + `pidx_read`. This matches US-048's expected attack surface: commit pipelining + PIDX cache will show up as a drop in both `transport` (VFS side) and `pidx_read` (engine side) without moving `udb_write` much.
 
 Raw captures retained at `/tmp/us-059-metrics-full.txt` (engine /metrics, all families), `/tmp/us-059-metrics-info.txt` (filtered US-059 only), `/tmp/us-059-inspector-info.json` (full inspector snapshot), and `/tmp/us-059-bench-baseline.log` (one bench run stdout).
+---
+## 2026-04-16 15:31:34 PDT - US-048
+- What was implemented: Finished the per-txid DELTA chunk rewrite by fixing staged-commit reads to fall back to historical DELTA scans when no PIDX rows exist yet, updating sqlite-storage takeover/finalize tests to the new orphan-chunk model, and syncing sqlite-native mock slow-path tests with the new `commit_stage_begin` RPC plus byte-chunk staging.
+- Files changed: `AGENTS.md`, `engine/packages/sqlite-storage/src/{commit.rs,read.rs,takeover.rs,compaction/shard.rs}`, `rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs`, `scripts/ralph/{prd.json,progress.txt}`
+- **Learnings for future iterations:**
+  - Slow-path SQLite v2 commits do not materialize `/STAGE` keys anymore. Recovery and tests must treat `delta_chunk_key(actor_id, txid, chunk_idx)` with `txid > head_txid` as the orphaned state.
+  - `get_pages(...)` still has to recover committed staged data when PIDX is absent, so the read path cannot early-return zero-filled pages just because no shard or PIDX source was found in the first pass.
+  - sqlite-native mock slow-path tests cannot assume a fixed stage-request count anymore. The VFS chunks the fully encoded LTX bytes, not the original dirty-page list.
+  - Quality checks run clean with `cargo test -p sqlite-storage` and `cargo test -p rivetkit-sqlite-native`.
 ---

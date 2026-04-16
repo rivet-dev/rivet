@@ -7,7 +7,10 @@ use anyhow::{Context, Result, ensure};
 
 use crate::engine::SqliteEngine;
 use crate::error::SqliteStorageError;
-use crate::keys::{delta_key, delta_prefix, meta_key, pidx_delta_prefix, shard_key, stage_prefix};
+use crate::keys::{
+	decode_delta_chunk_txid, delta_chunk_prefix, delta_prefix, meta_key, pidx_delta_prefix,
+	shard_key,
+};
 use crate::ltx::decode_ltx_v3;
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 use crate::types::{DBHead, FetchedPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta};
@@ -15,7 +18,6 @@ use crate::udb::{self, WriteOp};
 
 pub const DEFAULT_PRELOAD_MAX_BYTES: usize = 1024 * 1024;
 
-const DELTA_TXID_BYTES: usize = std::mem::size_of::<u64>();
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
 const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
 
@@ -165,13 +167,6 @@ impl SqliteEngine {
 			delta_prefix(actor_id),
 		)
 		.await?;
-		let stage_rows = udb::scan_prefix_values(
-			self.db.as_ref(),
-			&self.subspace,
-			self.op_counter.as_ref(),
-			stage_prefix(actor_id),
-		)
-		.await?;
 		let pidx_rows = udb::scan_prefix_values(
 			self.db.as_ref(),
 			&self.subspace,
@@ -185,7 +180,7 @@ impl SqliteEngine {
 		let mut tracked_deleted_bytes = 0u64;
 
 		for (key, value) in delta_rows {
-			let txid = decode_delta_txid(actor_id, &key)?;
+			let txid = decode_delta_chunk_txid(actor_id, &key)?;
 			if txid > head.head_txid {
 				tracked_deleted_bytes += tracked_storage_entry_size(&key, &value)
 					.expect("delta key should count toward sqlite quota");
@@ -193,10 +188,6 @@ impl SqliteEngine {
 			} else {
 				live_delta_txids.insert(txid);
 			}
-		}
-
-		for (key, _) in stage_rows {
-			mutations.push(WriteOp::delete(key));
 		}
 
 		for (key, value) in pidx_rows {
@@ -237,7 +228,7 @@ impl SqliteEngine {
 			}
 
 			let key = if let Some(txid) = live_pidx.get(pgno) {
-				delta_key(actor_id, *txid)
+				delta_chunk_prefix(actor_id, *txid)
 			} else {
 				shard_key(actor_id, *pgno / head.shard_size)
 			};
@@ -246,14 +237,24 @@ impl SqliteEngine {
 
 		if !sources.is_empty() {
 			let keys = sources.keys().cloned().collect::<Vec<_>>();
-			let values = udb::batch_get_values(
-				self.db.as_ref(),
-				&self.subspace,
-				self.op_counter.as_ref(),
-				keys.clone(),
-			)
-			.await?;
-			for (key, value) in keys.into_iter().zip(values) {
+			for key in keys {
+				let value = if key.starts_with(&delta_prefix(actor_id)) {
+					load_delta_blob(
+						self.db.as_ref(),
+						&self.subspace,
+						self.op_counter.as_ref(),
+						key.as_slice(),
+					)
+					.await?
+				} else {
+					udb::get_value(
+						self.db.as_ref(),
+						&self.subspace,
+						self.op_counter.as_ref(),
+						key.clone(),
+					)
+					.await?
+				};
 				sources.insert(key, value);
 			}
 		}
@@ -269,7 +270,7 @@ impl SqliteEngine {
 			}
 
 			let source_key = if let Some(txid) = live_pidx.get(&pgno) {
-				delta_key(actor_id, *txid)
+				delta_chunk_prefix(actor_id, *txid)
 			} else {
 				shard_key(actor_id, pgno / head.shard_size)
 			};
@@ -342,28 +343,6 @@ fn decode_db_head(bytes: &[u8]) -> Result<DBHead> {
 	serde_bare::from_slice(bytes).context("decode sqlite db head")
 }
 
-fn decode_delta_txid(actor_id: &str, key: &[u8]) -> Result<u64> {
-	let prefix = delta_prefix(actor_id);
-	ensure!(
-		key.starts_with(&prefix),
-		"delta key did not start with expected prefix"
-	);
-
-	let suffix = &key[prefix.len()..];
-	ensure!(
-		suffix.len() == DELTA_TXID_BYTES,
-		"delta key suffix had {} bytes, expected {}",
-		suffix.len(),
-		DELTA_TXID_BYTES
-	);
-
-	Ok(u64::from_be_bytes(
-		suffix
-			.try_into()
-			.context("delta key suffix should decode as u64")?,
-	))
-}
-
 fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
 	let prefix = pidx_delta_prefix(actor_id);
 	ensure!(
@@ -401,6 +380,26 @@ fn decode_pidx_txid(value: &[u8]) -> Result<u64> {
 	))
 }
 
+async fn load_delta_blob(
+	db: &universaldb::Database,
+	subspace: &universaldb::Subspace,
+	op_counter: &std::sync::atomic::AtomicUsize,
+	delta_prefix: &[u8],
+) -> Result<Option<Vec<u8>>> {
+	let delta_chunks =
+		udb::scan_prefix_values(db, subspace, op_counter, delta_prefix.to_vec()).await?;
+	if delta_chunks.is_empty() {
+		return Ok(None);
+	}
+
+	let mut delta_blob = Vec::new();
+	for (_, chunk) in delta_chunks {
+		delta_blob.extend_from_slice(&chunk);
+	}
+
+	Ok(Some(delta_blob))
+}
+
 #[cfg(test)]
 mod tests {
 	use anyhow::Result;
@@ -409,11 +408,10 @@ mod tests {
 	use super::{PgnoRange, TakeoverConfig};
 	use crate::commit::CommitStageRequest;
 	use crate::engine::SqliteEngine;
-	use crate::keys::{delta_key, meta_key, pidx_delta_key, shard_key, stage_key, stage_prefix};
+	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, shard_key};
 	use crate::ltx::{LtxHeader, encode_ltx_v3};
 	use crate::test_utils::{
-		checkpoint_test_db, read_value, reopen_test_db, scan_prefix_values, test_db,
-		test_db_with_path,
+		checkpoint_test_db, read_value, reopen_test_db, test_db, test_db_with_path,
 	};
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_MAX_DELTA_BYTES,
@@ -441,6 +439,10 @@ mod tests {
 
 	fn page(fill: u8) -> Vec<u8> {
 		vec![fill; SQLITE_PAGE_SIZE as usize]
+	}
+
+	fn delta_blob_key(actor_id: &str, txid: u64) -> Vec<u8> {
+		delta_chunk_key(actor_id, txid, 0)
 	}
 
 	fn encoded_blob(txid: u64, pgno: u32, fill: u8) -> Vec<u8> {
@@ -533,7 +535,7 @@ mod tests {
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
 				WriteOp::put(
-					delta_key(TEST_ACTOR, 7),
+					delta_blob_key(TEST_ACTOR, 7),
 					encode_ltx_v3(
 						LtxHeader::delta(7, 70, 999),
 						&[
@@ -627,13 +629,11 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&seeded_head())?),
-				WriteOp::put(delta_key(TEST_ACTOR, 2), encoded_blob(2, 1, 0x11)),
-				WriteOp::put(delta_key(TEST_ACTOR, 5), encoded_blob(5, 2, 0x55)),
+				WriteOp::put(delta_blob_key(TEST_ACTOR, 2), encoded_blob(2, 1, 0x11)),
+				WriteOp::put(delta_blob_key(TEST_ACTOR, 5), encoded_blob(5, 2, 0x55)),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 2_u64.to_be_bytes().to_vec()),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 2), 5_u64.to_be_bytes().to_vec()),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 3), 99_u64.to_be_bytes().to_vec()),
-				WriteOp::put(stage_key(TEST_ACTOR, 42, 0), vec![1, 2, 3]),
-				WriteOp::put(stage_key(TEST_ACTOR, 42, 1), vec![4, 5, 6]),
 			],
 		)
 		.await?;
@@ -650,12 +650,12 @@ mod tests {
 			}]
 		);
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 2))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 2))
 				.await?
 				.is_some()
 		);
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 5))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 5))
 				.await?
 				.is_none()
 		);
@@ -674,11 +674,6 @@ mod tests {
 				.await?
 				.is_none()
 		);
-		assert!(
-			scan_prefix_values(&engine, stage_prefix(TEST_ACTOR))
-				.await?
-				.is_empty()
-		);
 
 		Ok(())
 	}
@@ -693,8 +688,8 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&seeded_head())?),
-				WriteOp::put(delta_key(TEST_ACTOR, 2), encoded_blob(2, 1, 0x11)),
-				WriteOp::put(delta_key(TEST_ACTOR, 5), encoded_blob(5, 2, 0x55)),
+				WriteOp::put(delta_blob_key(TEST_ACTOR, 2), encoded_blob(2, 1, 0x11)),
+				WriteOp::put(delta_blob_key(TEST_ACTOR, 5), encoded_blob(5, 2, 0x55)),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 2_u64.to_be_bytes().to_vec()),
 			],
 		)
@@ -705,12 +700,12 @@ mod tests {
 			.await?;
 
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 2))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 2))
 				.await?
 				.is_some()
 		);
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 5))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 5))
 				.await?
 				.is_none()
 		);
@@ -719,7 +714,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn takeover_cleans_orphan_stages() -> Result<()> {
+	async fn takeover_cleans_orphan_staged_delta_chunks() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
@@ -728,8 +723,8 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![
 				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&seeded_head())?),
-				WriteOp::put(stage_key(TEST_ACTOR, 42, 0), vec![1, 2, 3]),
-				WriteOp::put(stage_key(TEST_ACTOR, 42, 1), vec![4, 5, 6]),
+				WriteOp::put(delta_chunk_key(TEST_ACTOR, 42, 0), vec![1, 2, 3]),
+				WriteOp::put(delta_chunk_key(TEST_ACTOR, 42, 1), vec![4, 5, 6]),
 			],
 		)
 		.await?;
@@ -739,9 +734,14 @@ mod tests {
 			.await?;
 
 		assert!(
-			scan_prefix_values(&engine, stage_prefix(TEST_ACTOR))
+			read_value(&engine, delta_chunk_key(TEST_ACTOR, 42, 0))
 				.await?
-				.is_empty()
+				.is_none()
+		);
+		assert!(
+			read_value(&engine, delta_chunk_key(TEST_ACTOR, 42, 1))
+				.await?
+				.is_none()
 		);
 
 		Ok(())
@@ -767,17 +767,28 @@ mod tests {
 			)],
 		)
 		.await?;
+		let stage = engine
+			.commit_stage_begin(
+				TEST_ACTOR,
+				crate::commit::CommitStageBeginRequest {
+					generation: head.generation,
+				},
+			)
+			.await?;
 		engine
 			.commit_stage(
 				TEST_ACTOR,
 				CommitStageRequest {
 					generation: head.generation,
-					stage_id: 77,
+					txid: stage.txid,
 					chunk_idx: 0,
-					dirty_pages: vec![DirtyPage {
-						pgno: 1,
-						bytes: page(0x44),
-					}],
+					bytes: encode_ltx_v3(
+						LtxHeader::delta(stage.txid, 1, 999),
+						&[DirtyPage {
+							pgno: 1,
+							bytes: page(0x44),
+						}],
+					)?,
 					is_last: true,
 				},
 			)
@@ -800,7 +811,7 @@ mod tests {
 		assert_eq!(result.generation, head.generation + 1);
 		assert_eq!(result.meta.head_txid, 0);
 		assert_eq!(stored_head.head_txid, 0);
-		assert_eq!(stored_head.next_txid, 1);
+		assert_eq!(stored_head.next_txid, 2);
 		assert_eq!(
 			result.preloaded_pages,
 			vec![FetchedPage {
@@ -809,12 +820,7 @@ mod tests {
 			}]
 		);
 		assert!(
-			scan_prefix_values(&recovered_engine, stage_prefix(TEST_ACTOR))
-				.await?
-				.is_empty()
-		);
-		assert!(
-			read_value(&recovered_engine, delta_key(TEST_ACTOR, 1))
+			read_value(&recovered_engine, delta_blob_key(TEST_ACTOR, 1))
 				.await?
 				.is_none()
 		);
@@ -834,7 +840,10 @@ mod tests {
 			serde_bare::to_vec(&head)?,
 		)];
 		for txid in 1..=32_u64 {
-			mutations.push(WriteOp::put(delta_key(TEST_ACTOR, txid), vec![txid as u8]));
+			mutations.push(WriteOp::put(
+				delta_blob_key(TEST_ACTOR, txid),
+				vec![txid as u8],
+			));
 		}
 		apply_write_ops(
 			engine.db.as_ref(),

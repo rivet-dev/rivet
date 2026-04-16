@@ -183,12 +183,27 @@ type SqliteCommitResponse union {
 	SqliteErrorResponse
 }
 
+type SqliteCommitStageBeginRequest struct {
+	actorId: Id
+	generation: SqliteGeneration
+}
+
+type SqliteCommitStageBeginOk struct {
+	txid: SqliteTxid
+}
+
+type SqliteCommitStageBeginResponse union {
+	SqliteCommitStageBeginOk |
+	SqliteFenceMismatch |
+	SqliteErrorResponse
+}
+
 type SqliteCommitStageRequest struct {
 	actorId: Id
 	generation: SqliteGeneration
-	stageId: SqliteStageId
-	chunkIdx: u16
-	dirtyPages: list<SqliteDirtyPage>
+	txid: SqliteTxid
+	chunkIdx: u32
+	bytes: data
 	isLast: bool
 }
 
@@ -206,7 +221,7 @@ type SqliteCommitFinalizeRequest struct {
 	actorId: Id
 	generation: SqliteGeneration
 	expectedHeadTxid: SqliteTxid
-	stageId: SqliteStageId
+	txid: SqliteTxid
 	newDbSizePages: u32
 }
 
@@ -516,6 +531,11 @@ type ToRivetSqliteCommitRequest struct {
 	data: SqliteCommitRequest
 }
 
+type ToRivetSqliteCommitStageBeginRequest struct {
+	requestId: u32
+	data: SqliteCommitStageBeginRequest
+}
+
 type ToRivetSqliteCommitStageRequest struct {
 	requestId: u32
 	data: SqliteCommitStageRequest
@@ -536,6 +556,7 @@ type ToRivet union {
 	ToRivetTunnelMessage |
 	ToRivetSqliteGetPagesRequest |
 	ToRivetSqliteCommitRequest |
+	ToRivetSqliteCommitStageBeginRequest |
 	ToRivetSqliteCommitStageRequest |
 	ToRivetSqliteCommitFinalizeRequest
 }
@@ -572,6 +593,11 @@ type ToEnvoySqliteCommitResponse struct {
 	data: SqliteCommitResponse
 }
 
+type ToEnvoySqliteCommitStageBeginResponse struct {
+	requestId: u32
+	data: SqliteCommitStageBeginResponse
+}
+
 type ToEnvoySqliteCommitStageResponse struct {
 	requestId: u32
 	data: SqliteCommitStageResponse
@@ -591,6 +617,7 @@ type ToEnvoy union {
 	ToEnvoyPing |
 	ToEnvoySqliteGetPagesResponse |
 	ToEnvoySqliteCommitResponse |
+	ToEnvoySqliteCommitStageBeginResponse |
 	ToEnvoySqliteCommitStageResponse |
 	ToEnvoySqliteCommitFinalizeResponse
 }

@@ -16,8 +16,11 @@ use anyhow::{Context, Result};
 use tempfile::Builder;
 use uuid::Uuid;
 
-use sqlite_storage::commit::{CommitFinalizeRequest, CommitRequest, CommitStageRequest};
+use sqlite_storage::commit::{
+	CommitFinalizeRequest, CommitRequest, CommitStageBeginRequest, CommitStageRequest,
+};
 use sqlite_storage::engine::SqliteEngine;
+use sqlite_storage::ltx::{LtxHeader, encode_ltx_v3};
 use sqlite_storage::takeover::TakeoverConfig;
 use sqlite_storage::types::{DirtyPage, SQLITE_PAGE_SIZE};
 use universaldb::Subspace;
@@ -161,28 +164,33 @@ async fn main() -> Result<()> {
 			.context("takeover for large commit")?;
 		clear_ops(&engine);
 
-		let start = Instant::now();
-		let stage_id = 1_u64;
-		let chunk_size = 128_u32;
 		let total_pages = 2560_u32;
-		let chunks = total_pages / chunk_size;
-		for chunk_idx in 0..chunks {
-			let start_pgno = chunk_idx * chunk_size + 1;
-			let pages = (start_pgno..start_pgno + chunk_size)
-				.map(|pgno| DirtyPage {
-					pgno,
-					bytes: vec![0xCC; SQLITE_PAGE_SIZE as usize],
-				})
-				.collect();
+		let stage = engine
+			.commit_stage_begin(
+				"bench-large",
+				CommitStageBeginRequest {
+					generation: takeover.generation,
+				},
+			)
+			.await
+			.context("large commit stage begin")?;
+		let encoded = encode_ltx_v3(
+			LtxHeader::delta(stage.txid, total_pages, 300),
+			&make_pages(total_pages, 0xCC),
+		)?;
+		let chunk_bytes = 128_usize * SQLITE_PAGE_SIZE as usize;
+		let chunks = encoded.chunks(chunk_bytes).count();
+		let start = Instant::now();
+		for (chunk_idx, chunk) in encoded.chunks(chunk_bytes).enumerate() {
 			let is_last = chunk_idx == chunks - 1;
 			engine
 				.commit_stage(
 					"bench-large",
 					CommitStageRequest {
 						generation: takeover.generation,
-						stage_id,
-						chunk_idx: chunk_idx as u16,
-						dirty_pages: pages,
+						txid: stage.txid,
+						chunk_idx: chunk_idx as u32,
+						bytes: chunk.to_vec(),
 						is_last,
 					},
 				)
@@ -195,7 +203,7 @@ async fn main() -> Result<()> {
 				CommitFinalizeRequest {
 					generation: takeover.generation,
 					expected_head_txid: takeover.meta.head_txid,
-					stage_id,
+					txid: stage.txid,
 					new_db_size_pages: total_pages,
 					now_ms: 300,
 				},

@@ -6,16 +6,15 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, bail, ensure};
 use scc::hash_map::Entry;
-use serde::{Deserialize, Serialize};
 use tracing::Instrument;
 
-use crate::engine::SqliteEngine;
+use crate::engine::{PendingStage, SqliteEngine};
 use crate::error::SqliteStorageError;
-use crate::keys::{delta_key, meta_key, pidx_delta_key, stage_chunk_prefix, stage_key};
+use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key};
 use crate::ltx::{LtxHeader, encode_ltx_v3};
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 use crate::types::{DBHead, DirtyPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta};
-use crate::udb::{self, WriteOp};
+use crate::udb;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitRequest {
@@ -34,24 +33,34 @@ pub struct CommitResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitStageBeginRequest {
+	pub generation: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitStageBeginResult {
+	pub txid: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitStageRequest {
 	pub generation: u64,
-	pub stage_id: u64,
-	pub chunk_idx: u16,
-	pub dirty_pages: Vec<DirtyPage>,
+	pub txid: u64,
+	pub chunk_idx: u32,
+	pub bytes: Vec<u8>,
 	pub is_last: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitStageResult {
-	pub chunk_idx_committed: u16,
+	pub chunk_idx_committed: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitFinalizeRequest {
 	pub generation: u64,
 	pub expected_head_txid: u64,
-	pub stage_id: u64,
+	pub txid: u64,
 	pub new_db_size_pages: u32,
 	pub now_ms: i64,
 }
@@ -61,12 +70,6 @@ pub struct CommitFinalizeResult {
 	pub new_head_txid: u64,
 	pub meta: SqliteMeta,
 	pub delta_bytes: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct StagedChunk {
-	dirty_pages: Vec<DirtyPage>,
-	is_last: bool,
 }
 
 #[cfg(test)]
@@ -221,8 +224,8 @@ impl SqliteEngine {
 							.expect("meta key should count toward sqlite quota"),
 					);
 					usage_without_meta +=
-						tracked_storage_entry_size(&delta_key(&actor_id, txid), &delta)
-							.expect("delta key should count toward sqlite quota");
+						tracked_storage_entry_size(&delta_chunk_key(&actor_id, txid, 0), &delta)
+							.expect("delta chunk key should count toward sqlite quota");
 					let pidx_read_start = Instant::now();
 					let existing_pidx = match cached_existing_pidx {
 						Some(ref existing) => existing.clone(),
@@ -254,7 +257,12 @@ impl SqliteEngine {
 						}
 					}
 
-					udb::tx_write_value(&tx, &subspace, &delta_key(&actor_id, txid), &delta)?;
+					udb::tx_write_value(
+						&tx,
+						&subspace,
+						&delta_chunk_key(&actor_id, txid, 0),
+						&delta,
+					)?;
 					for pgno in &dirty_pgnos {
 						udb::tx_write_value(
 							&tx,
@@ -340,74 +348,216 @@ impl SqliteEngine {
 		Ok(result)
 	}
 
+	#[tracing::instrument(level = "debug", skip(self, request))]
+	pub async fn commit_stage_begin(
+		&self,
+		actor_id: &str,
+		request: CommitStageBeginRequest,
+	) -> Result<CommitStageBeginResult> {
+		let actor_id = actor_id.to_string();
+		let actor_id_for_tx = actor_id.clone();
+		let subspace = self.subspace.clone();
+		let request = request.clone();
+		let txid = udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+			let actor_id = actor_id_for_tx.clone();
+			let subspace = subspace.clone();
+			let request = request.clone();
+			async move {
+				let meta_storage_key = meta_key(&actor_id);
+				let meta_bytes = udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key)
+					.await?
+					.ok_or(SqliteStorageError::MetaMissing {
+						operation: "commit_stage_begin",
+					})?;
+				let mut head = decode_db_head(&meta_bytes)?;
+				if head.generation != request.generation {
+					return Err(SqliteStorageError::FenceMismatch {
+						reason: format!(
+							"commit_stage_begin generation {} did not match current generation {}",
+							request.generation, head.generation
+						),
+					}
+					.into());
+				}
+
+				let txid = head.next_txid;
+				ensure!(
+					txid > head.head_txid,
+					"next txid {} must advance past head txid {}",
+					txid,
+					head.head_txid
+				);
+				head.next_txid += 1;
+				let usage_without_meta = head.sqlite_storage_used.saturating_sub(
+					tracked_storage_entry_size(&meta_storage_key, &meta_bytes)
+						.expect("meta key should count toward sqlite quota"),
+				);
+				let (_, encoded_head) =
+					encode_db_head_with_usage(&actor_id, &head, usage_without_meta)?;
+				udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
+
+				Ok(txid)
+			}
+		})
+		.await
+		.map_err(|err| {
+			if matches!(
+				err.downcast_ref::<SqliteStorageError>(),
+				Some(SqliteStorageError::FenceMismatch { .. })
+			) {
+				self.metrics.inc_fence_mismatch_total();
+			}
+			err
+		})?;
+		let _ = self.pending_stages.insert_sync(
+			(actor_id, txid),
+			std::sync::Arc::new(parking_lot::Mutex::new(PendingStage {
+				next_chunk_idx: 0,
+				saw_last_chunk: false,
+				error_message: None,
+			})),
+		);
+
+		Ok(CommitStageBeginResult { txid })
+	}
+
 	#[tracing::instrument(
 		level = "debug",
 		skip(self, request),
-		fields(stage_id = request.stage_id, dirty_pages = tracing::field::Empty)
+		fields(txid = request.txid, chunk_idx = request.chunk_idx, chunk_bytes = request.bytes.len())
 	)]
 	pub async fn commit_stage(
 		&self,
 		actor_id: &str,
 		request: CommitStageRequest,
 	) -> Result<CommitStageResult> {
-		let dirty_page_count = request.dirty_pages.len();
-		tracing::Span::current().record("dirty_pages", dirty_page_count);
 		let decode_start = Instant::now();
-		let meta_bytes = async {
-			udb::get_value(
-				self.db.as_ref(),
-				&self.subspace,
-				self.op_counter.as_ref(),
-				meta_key(actor_id),
-			)
+		let stage_key = (actor_id.to_string(), request.txid);
+		let pending_stage = self
+			.pending_stages
+			.get_async(&stage_key)
 			.await
+			.map(|entry| std::sync::Arc::clone(entry.get()))
+			.ok_or(SqliteStorageError::StageNotFound {
+				stage_id: request.txid,
+			})?;
+		{
+			let stage = pending_stage.lock();
+			if let Some(error_message) = stage.error_message.as_ref() {
+				return Err(anyhow::anyhow!(error_message.clone()));
+			}
+			ensure!(
+				!stage.saw_last_chunk,
+				"commit_stage txid {} received chunk {} after final chunk",
+				request.txid,
+				request.chunk_idx
+			);
+			ensure!(
+				stage.next_chunk_idx == request.chunk_idx,
+				"commit_stage txid {} expected chunk {}, got {}",
+				request.txid,
+				stage.next_chunk_idx,
+				request.chunk_idx
+			);
 		}
-		.instrument(tracing::debug_span!("decode"))
-		.await?
-		.ok_or(SqliteStorageError::MetaMissing {
-			operation: "commit_stage",
-		})?;
-		let head = decode_db_head(&meta_bytes)?;
 		let decode_duration = decode_start.elapsed();
 
-		if head.generation != request.generation {
-			self.metrics.inc_fence_mismatch_total();
-			return Err(SqliteStorageError::FenceMismatch {
-				reason: format!(
-					"commit_stage generation {} did not match current generation {}",
-					request.generation, head.generation
-				),
+		let actor_id = actor_id.to_string();
+		let actor_id_for_tx = actor_id.clone();
+		let subspace = self.subspace.clone();
+		let request_for_tx = request.clone();
+		let chunk_write_result =
+			udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+				let actor_id = actor_id_for_tx.clone();
+				let subspace = subspace.clone();
+				let request = request_for_tx.clone();
+				async move {
+					let meta_storage_key = meta_key(&actor_id);
+					let meta_bytes =
+						udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key)
+							.await?
+							.ok_or(SqliteStorageError::MetaMissing {
+								operation: "commit_stage",
+							})?;
+					let head = decode_db_head(&meta_bytes)?;
+					if head.generation != request.generation {
+						return Err(SqliteStorageError::FenceMismatch {
+							reason: format!(
+								"commit_stage generation {} did not match current generation {}",
+								request.generation, head.generation
+							),
+						}
+						.into());
+					}
+					if request.txid != head.next_txid.saturating_sub(1) {
+						return Err(SqliteStorageError::StageNotFound {
+							stage_id: request.txid,
+						}
+						.into());
+					}
+					ensure!(
+						request.txid > head.head_txid,
+						"commit_stage txid {} must be greater than current head txid {}",
+						request.txid,
+						head.head_txid
+					);
+
+					let chunk_key = delta_chunk_key(&actor_id, request.txid, request.chunk_idx);
+					let existing_chunk = udb::tx_get_value(&tx, &subspace, &chunk_key).await?;
+					let mut usage_without_meta = head.sqlite_storage_used.saturating_sub(
+						tracked_storage_entry_size(&meta_storage_key, &meta_bytes)
+							.expect("meta key should count toward sqlite quota"),
+					);
+					if let Some(existing_chunk) = existing_chunk.as_ref() {
+						usage_without_meta = usage_without_meta.saturating_sub(
+							tracked_storage_entry_size(&chunk_key, existing_chunk)
+								.expect("delta chunk key should count toward sqlite quota"),
+						);
+					}
+					usage_without_meta = usage_without_meta.saturating_add(
+						tracked_storage_entry_size(&chunk_key, &request.bytes)
+							.expect("delta chunk key should count toward sqlite quota"),
+					);
+					let (updated_head, encoded_head) =
+						encode_db_head_with_usage(&actor_id, &head, usage_without_meta)?;
+					if updated_head.sqlite_storage_used > updated_head.sqlite_max_storage {
+						bail!(
+							"SqliteStorageQuotaExceeded: sqlite storage used {} would exceed max {}",
+							updated_head.sqlite_storage_used,
+							updated_head.sqlite_max_storage
+						);
+					}
+					udb::tx_write_value(&tx, &subspace, &chunk_key, &request.bytes)?;
+					udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
+
+					Ok(())
+				}
+			})
+			.await;
+		let udb_write_duration = decode_start.elapsed().saturating_sub(decode_duration);
+
+		match chunk_write_result {
+			Ok(()) => {
+				let mut stage = pending_stage.lock();
+				stage.next_chunk_idx += 1;
+				stage.saw_last_chunk = request.is_last;
 			}
-			.into());
+			Err(err) => {
+				if matches!(
+					err.downcast_ref::<SqliteStorageError>(),
+					Some(SqliteStorageError::FenceMismatch { .. })
+				) {
+					self.metrics.inc_fence_mismatch_total();
+				}
+				pending_stage.lock().error_message = Some(err.to_string());
+				return Err(err);
+			}
 		}
 
-		let stage_encode_start = Instant::now();
-		let staged_chunk = {
-			let _stage_encode_span = tracing::debug_span!("stage_encode").entered();
-			serde_bare::to_vec(&StagedChunk {
-				dirty_pages: request.dirty_pages,
-				is_last: request.is_last,
-			})
-			.context("serialize staged chunk")?
-		};
-		let stage_encode_duration = stage_encode_start.elapsed();
-
-		let udb_write_start = Instant::now();
-		udb::apply_write_ops(
-			self.db.as_ref(),
-			&self.subspace,
-			self.op_counter.as_ref(),
-			vec![WriteOp::put(
-				stage_key(actor_id, request.stage_id, request.chunk_idx),
-				staged_chunk,
-			)],
-		)
-		.await?;
-		let udb_write_duration = udb_write_start.elapsed();
 		self.metrics
 			.observe_commit_stage_phase("decode", decode_duration);
 		self.metrics
-			.observe_commit_stage_phase("stage_encode", stage_encode_duration);
+			.observe_commit_stage_phase("stage_encode", Default::default());
 		self.metrics
 			.observe_commit_stage_phase("udb_write", udb_write_duration);
 
@@ -419,7 +569,7 @@ impl SqliteEngine {
 	#[tracing::instrument(
 		level = "debug",
 		skip(self, request),
-		fields(path = "slow", stage_id = request.stage_id, dirty_pages = tracing::field::Empty)
+		fields(path = "slow", txid = request.txid)
 	)]
 	pub async fn commit_finalize(
 		&self,
@@ -427,201 +577,125 @@ impl SqliteEngine {
 		request: CommitFinalizeRequest,
 	) -> Result<CommitFinalizeResult> {
 		let start = Instant::now();
-		let op_count_before = self.op_counter.load(Ordering::Relaxed);
-		let meta_read_start = Instant::now();
-		let meta_bytes = udb::get_value(
-			self.db.as_ref(),
-			&self.subspace,
-			self.op_counter.as_ref(),
-			meta_key(actor_id),
-		)
-		.await?
-		.ok_or(SqliteStorageError::MetaMissing {
-			operation: "commit_finalize",
-		})?;
-		let mut head = decode_db_head(&meta_bytes)?;
-		let meta_read_duration = meta_read_start.elapsed();
-
-		if head.generation != request.generation {
-			self.metrics.inc_fence_mismatch_total();
-			return Err(SqliteStorageError::FenceMismatch {
-				reason: format!(
-					"commit_finalize generation {} did not match current generation {}",
-					request.generation, head.generation
-				),
+		let stage_key = (actor_id.to_string(), request.txid);
+		let pending_stage = self
+			.pending_stages
+			.get_async(&stage_key)
+			.await
+			.map(|entry| std::sync::Arc::clone(entry.get()))
+			.ok_or(SqliteStorageError::StageNotFound {
+				stage_id: request.txid,
+			})?;
+		{
+			let stage = pending_stage.lock();
+			if let Some(error_message) = stage.error_message.as_ref() {
+				return Err(anyhow::anyhow!(error_message.clone()));
 			}
-			.into());
-		}
-		if head.head_txid != request.expected_head_txid {
-			self.metrics.inc_fence_mismatch_total();
-			return Err(SqliteStorageError::FenceMismatch {
-				reason: format!(
-					"commit_finalize head_txid {} did not match current head_txid {}",
-					request.expected_head_txid, head.head_txid
-				),
-			}
-			.into());
-		}
-
-		let stage_promote_start = Instant::now();
-		let staged_entries = udb::scan_prefix_values(
-			self.db.as_ref(),
-			&self.subspace,
-			self.op_counter.as_ref(),
-			stage_chunk_prefix(actor_id, request.stage_id),
-		)
-		.await?;
-		if staged_entries.is_empty() {
-			return Err(SqliteStorageError::StageNotFound {
-				stage_id: request.stage_id,
-			}
-			.into());
-		}
-
-		let staged_pages = decode_staged_pages(actor_id, request.stage_id, staged_entries)?;
-		let txid = head.next_txid;
-		ensure!(
-			txid > head.head_txid,
-			"next txid {} must advance past head txid {}",
-			txid,
-			head.head_txid
-		);
-
-		let ltx_encode_start = Instant::now();
-		let delta = encode_ltx_v3(
-			LtxHeader::delta(txid, request.new_db_size_pages, request.now_ms),
-			&staged_pages.dirty_pages,
-		)
-		.context("encode finalized staged delta")?;
-		let ltx_encode_duration = ltx_encode_start.elapsed();
-		let stage_promote_duration = stage_promote_start.elapsed();
-		let delta_bytes = delta.len() as u64;
-
-		head.head_txid = txid;
-		head.next_txid += 1;
-		head.db_size_pages = request.new_db_size_pages;
-
-		let mut dirty_pgnos = staged_pages
-			.dirty_pages
-			.iter()
-			.map(|page| page.pgno)
-			.collect::<Vec<_>>();
-		dirty_pgnos.sort_unstable();
-		dirty_pgnos.dedup();
-		let dirty_page_count = dirty_pgnos.len();
-		tracing::Span::current().record("dirty_pages", dirty_page_count);
-		let raw_dirty_bytes = dirty_pages_raw_bytes(&staged_pages.dirty_pages)?;
-
-		let txid_bytes = txid.to_be_bytes();
-		let mut usage_without_meta = head.sqlite_storage_used.saturating_sub(
-			tracked_storage_entry_size(&meta_key(actor_id), &meta_bytes)
-				.expect("meta key should count toward sqlite quota"),
-		);
-		usage_without_meta += tracked_storage_entry_size(&delta_key(actor_id, txid), &delta)
-			.expect("delta key should count toward sqlite quota");
-		let pidx_write_start = Instant::now();
-		let existing_pidx = existing_pidx_entries(self, actor_id, &dirty_pgnos).await?;
-		for pgno in &dirty_pgnos {
-			if !existing_pidx.get(pgno).copied().unwrap_or(false) {
-				usage_without_meta +=
-					tracked_storage_entry_size(&pidx_delta_key(actor_id, *pgno), &txid_bytes)
-						.expect("pidx key should count toward sqlite quota");
-			}
-		}
-		let pidx_write_duration = pidx_write_start.elapsed();
-
-		let mut mutations = Vec::with_capacity(2 + dirty_pgnos.len());
-		mutations.push(WriteOp::put(delta_key(actor_id, txid), delta));
-		for pgno in &dirty_pgnos {
-			mutations.push(WriteOp::put(
-				pidx_delta_key(actor_id, *pgno),
-				txid_bytes.to_vec(),
-			));
-		}
-		for key in staged_pages.stage_keys {
-			mutations.push(WriteOp::delete(key));
-		}
-		let (updated_head, encoded_head) =
-			encode_db_head_with_usage(actor_id, &head, usage_without_meta)?;
-		if updated_head.sqlite_storage_used > updated_head.sqlite_max_storage {
-			bail!(
-				"SqliteStorageQuotaExceeded: sqlite storage used {} would exceed max {}",
-				updated_head.sqlite_storage_used,
-				updated_head.sqlite_max_storage
-			);
-		}
-		head = updated_head;
-		mutations.push(WriteOp::put(meta_key(actor_id), encoded_head));
-
-		// Best-effort defense against concurrent writers. The real protection comes from
-		// pegboard-envoy serializing actor lifecycle, but we re-read META here to detect
-		// races that slip past the outer layer.
-		let recheck_meta = udb::get_value(
-			self.db.as_ref(),
-			&self.subspace,
-			self.op_counter.as_ref(),
-			meta_key(actor_id),
-		)
-		.await?;
-		if recheck_meta.as_deref() != Some(meta_bytes.as_slice()) {
-			tracing::error!(
-				?actor_id,
-				"meta changed during commit finalize, concurrent writer detected"
-			);
-			return Err(SqliteStorageError::ConcurrentTakeover.into());
-		}
-
-		let meta_write_start = Instant::now();
-		udb::apply_write_ops(
-			self.db.as_ref(),
-			&self.subspace,
-			self.op_counter.as_ref(),
-			mutations,
-		)
-		.await?;
-		let meta_write_duration = meta_write_start.elapsed();
-
-		match self.page_indices.entry_async(actor_id.to_string()).await {
-			Entry::Occupied(entry) => {
-				for pgno in dirty_pgnos {
-					entry.get().insert(pgno, txid);
+			if !stage.saw_last_chunk {
+				return Err(SqliteStorageError::StageNotFound {
+					stage_id: request.txid,
 				}
-			}
-			Entry::Vacant(entry) => {
-				drop(entry);
+				.into());
 			}
 		}
 
-		let _ = self.compaction_tx.send(actor_id.to_string());
+		let actor_id = actor_id.to_string();
+		let actor_id_for_tx = actor_id.clone();
+		let subspace = self.subspace.clone();
+		let request_for_tx = request.clone();
+		let (head, meta_read_duration, meta_write_duration) =
+			udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+				let actor_id = actor_id_for_tx.clone();
+				let subspace = subspace.clone();
+				let request = request_for_tx.clone();
+				async move {
+					let meta_storage_key = meta_key(&actor_id);
+					let meta_read_start = Instant::now();
+					let meta_bytes =
+						udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key)
+							.await?
+							.ok_or(SqliteStorageError::MetaMissing {
+								operation: "commit_finalize",
+							})?;
+					let mut head = decode_db_head(&meta_bytes)?;
+					let meta_read_duration = meta_read_start.elapsed();
+					if head.generation != request.generation {
+						return Err(SqliteStorageError::FenceMismatch {
+							reason: format!(
+								"commit_finalize generation {} did not match current generation {}",
+								request.generation, head.generation
+							),
+						}
+						.into());
+					}
+					if head.head_txid != request.expected_head_txid {
+						return Err(SqliteStorageError::FenceMismatch {
+							reason: format!(
+								"commit_finalize head_txid {} did not match current head_txid {}",
+								request.expected_head_txid, head.head_txid
+							),
+						}
+						.into());
+					}
+					if request.txid != head.next_txid.saturating_sub(1) {
+						return Err(SqliteStorageError::StageNotFound {
+							stage_id: request.txid,
+						}
+						.into());
+					}
+
+					head.head_txid = request.txid;
+					head.db_size_pages = request.new_db_size_pages;
+					let usage_without_meta = head.sqlite_storage_used.saturating_sub(
+						tracked_storage_entry_size(&meta_storage_key, &meta_bytes)
+							.expect("meta key should count toward sqlite quota"),
+					);
+					let (updated_head, encoded_head) =
+						encode_db_head_with_usage(&actor_id, &head, usage_without_meta)?;
+					let meta_write_start = Instant::now();
+					udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
+					let meta_write_duration = meta_write_start.elapsed();
+
+					Ok((updated_head, meta_read_duration, meta_write_duration))
+				}
+			})
+			.await
+			.map_err(|err| {
+				if matches!(
+					err.downcast_ref::<SqliteStorageError>(),
+					Some(SqliteStorageError::FenceMismatch { .. })
+				) {
+					self.metrics.inc_fence_mismatch_total();
+				}
+				err
+			})?;
+
+		let _ = self.pending_stages.remove_async(&stage_key).await;
+		let _ = self.compaction_tx.send(actor_id.clone());
 		self.metrics.set_delta_count_from_head(&head);
-		let result = CommitFinalizeResult {
-			new_head_txid: txid,
-			meta: SqliteMeta::from((head, SQLITE_MAX_DELTA_BYTES)),
-			delta_bytes,
-		};
-		let op_count_after = self.op_counter.load(Ordering::Relaxed);
-		let udb_ops = op_count_after.saturating_sub(op_count_before);
 		self.metrics
-			.observe_commit_finalize_phase("stage_promote", stage_promote_duration);
+			.observe_commit_finalize_phase("stage_promote", Default::default());
 		self.metrics
-			.observe_commit_finalize_phase("pidx_write", pidx_write_duration);
+			.observe_commit_finalize_phase("pidx_write", Default::default());
 		self.metrics
 			.observe_commit_finalize_phase("meta_write", meta_write_duration);
 		self.metrics
 			.observe_commit_phase("slow", "meta_read", meta_read_duration);
 		self.metrics
-			.observe_commit_phase("slow", "ltx_encode", ltx_encode_duration);
+			.observe_commit_phase("slow", "ltx_encode", Default::default());
 		self.metrics
-			.observe_commit_phase("slow", "pidx_read", pidx_write_duration);
+			.observe_commit_phase("slow", "pidx_read", Default::default());
 		self.metrics
 			.observe_commit_phase("slow", "udb_write", meta_write_duration);
-		self.metrics
-			.observe_commit_payload("slow", dirty_page_count, raw_dirty_bytes, udb_ops);
-		self.metrics
-			.observe_commit("slow", dirty_page_count, start.elapsed());
+		self.metrics.observe_commit_payload("slow", 0, 0, 1);
+		self.metrics.observe_commit("slow", 0, start.elapsed());
 		self.metrics.inc_commit_total();
 
-		Ok(result)
+		Ok(CommitFinalizeResult {
+			new_head_txid: request.txid,
+			meta: SqliteMeta::from((head, SQLITE_MAX_DELTA_BYTES)),
+			delta_bytes: 0,
+		})
 	}
 }
 
@@ -639,126 +713,6 @@ fn dirty_pages_raw_bytes(dirty_pages: &[DirtyPage]) -> Result<u64> {
 	})
 }
 
-async fn existing_pidx_entries(
-	engine: &SqliteEngine,
-	actor_id: &str,
-	dirty_pgnos: &[u32],
-) -> Result<BTreeMap<u32, bool>> {
-	let actor_id = actor_id.to_string();
-	if let Some(index) = engine.page_indices.get_async(&actor_id).await {
-		let existing = dirty_pgnos
-			.iter()
-			.map(|pgno| (*pgno, index.get().get(*pgno).is_some()))
-			.collect::<BTreeMap<_, _>>();
-		return Ok(existing);
-	}
-
-	let keys = dirty_pgnos
-		.iter()
-		.map(|pgno| pidx_delta_key(&actor_id, *pgno))
-		.collect::<Vec<_>>();
-	let values = udb::batch_get_values(
-		engine.db.as_ref(),
-		&engine.subspace,
-		engine.op_counter.as_ref(),
-		keys,
-	)
-	.await?;
-
-	Ok(dirty_pgnos
-		.iter()
-		.copied()
-		.zip(values.into_iter().map(|value| value.is_some()))
-		.collect())
-}
-
-struct DecodedStagedPages {
-	dirty_pages: Vec<DirtyPage>,
-	stage_keys: Vec<Vec<u8>>,
-}
-
-fn decode_staged_pages(
-	actor_id: &str,
-	stage_id: u64,
-	staged_entries: Vec<(Vec<u8>, Vec<u8>)>,
-) -> Result<DecodedStagedPages> {
-	let mut chunks = staged_entries
-		.into_iter()
-		.map(|(key, value)| {
-			let chunk_idx = decode_stage_chunk_idx(actor_id, stage_id, &key)?;
-			let chunk: StagedChunk =
-				serde_bare::from_slice(&value).context("decode staged commit chunk")?;
-			Ok((chunk_idx, key, chunk))
-		})
-		.collect::<Result<Vec<_>>>()?;
-	chunks.sort_by_key(|(chunk_idx, _, _)| *chunk_idx);
-
-	let mut expected_chunk_idx = 0u16;
-	let mut saw_last_chunk = false;
-	let mut pages_by_pgno = std::collections::BTreeMap::new();
-	let mut stage_keys = Vec::with_capacity(chunks.len());
-	for (chunk_idx, key, chunk) in chunks {
-		ensure!(
-			chunk_idx == expected_chunk_idx,
-			"stage {} missing chunk {}, found chunk {} instead",
-			stage_id,
-			expected_chunk_idx,
-			chunk_idx
-		);
-		ensure!(
-			!saw_last_chunk,
-			"stage {} had chunks after the last chunk marker",
-			stage_id
-		);
-
-		stage_keys.push(key);
-		for dirty_page in chunk.dirty_pages {
-			pages_by_pgno.insert(dirty_page.pgno, dirty_page.bytes);
-		}
-
-		saw_last_chunk = chunk.is_last;
-		expected_chunk_idx = expected_chunk_idx
-			.checked_add(1)
-			.context("stage chunk index overflow")?;
-	}
-
-	ensure!(
-		saw_last_chunk,
-		"stage {} did not include a last chunk marker",
-		stage_id
-	);
-
-	Ok(DecodedStagedPages {
-		dirty_pages: pages_by_pgno
-			.into_iter()
-			.map(|(pgno, bytes)| DirtyPage { pgno, bytes })
-			.collect(),
-		stage_keys,
-	})
-}
-
-fn decode_stage_chunk_idx(actor_id: &str, stage_id: u64, key: &[u8]) -> Result<u16> {
-	let prefix = stage_chunk_prefix(actor_id, stage_id);
-	ensure!(
-		key.starts_with(&prefix),
-		"stage key {:?} did not match stage {}",
-		key,
-		stage_id
-	);
-	ensure!(
-		key.len() == prefix.len() + std::mem::size_of::<u16>(),
-		"stage key for stage {} had invalid length {}",
-		stage_id,
-		key.len()
-	);
-
-	Ok(u16::from_be_bytes(
-		key[prefix.len()..]
-			.try_into()
-			.expect("stage chunk suffix should be two bytes"),
-	))
-}
-
 #[cfg(test)]
 mod tests {
 	use anyhow::Result;
@@ -771,7 +725,8 @@ mod tests {
 	};
 	use crate::engine::SqliteEngine;
 	use crate::error::SqliteStorageError;
-	use crate::keys::{delta_key, meta_key, stage_chunk_prefix};
+	use crate::keys::{delta_chunk_key, delta_chunk_prefix, meta_key};
+	use crate::ltx::{LtxHeader, encode_ltx_v3};
 	use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 	use crate::test_utils::{
 		assert_op_count, clear_op_count, read_value, scan_prefix_values, test_db,
@@ -802,6 +757,73 @@ mod tests {
 
 	fn page(fill: u8) -> Vec<u8> {
 		vec![fill; SQLITE_PAGE_SIZE as usize]
+	}
+
+	fn delta_blob_key(actor_id: &str, txid: u64) -> Vec<u8> {
+		delta_chunk_key(actor_id, txid, 0)
+	}
+
+	async fn read_delta_blob(
+		engine: &SqliteEngine,
+		actor_id: &str,
+		txid: u64,
+	) -> Result<Option<Vec<u8>>> {
+		let chunks = scan_prefix_values(engine, delta_chunk_prefix(actor_id, txid)).await?;
+		if chunks.is_empty() {
+			return Ok(None);
+		}
+
+		let mut blob = Vec::new();
+		for (_, chunk) in chunks {
+			blob.extend_from_slice(&chunk);
+		}
+		Ok(Some(blob))
+	}
+
+	async fn stage_encoded_delta(
+		engine: &SqliteEngine,
+		actor_id: &str,
+		generation: u64,
+		expected_head_txid: u64,
+		new_db_size_pages: u32,
+		now_ms: i64,
+		pages: Vec<DirtyPage>,
+		max_chunk_bytes: usize,
+	) -> Result<u64> {
+		let stage_begin = engine
+			.commit_stage_begin(actor_id, super::CommitStageBeginRequest { generation })
+			.await?;
+		let encoded = encode_ltx_v3(
+			LtxHeader::delta(stage_begin.txid, new_db_size_pages, now_ms),
+			&pages,
+		)?;
+		for (chunk_idx, chunk) in encoded.chunks(max_chunk_bytes).enumerate() {
+			engine
+				.commit_stage(
+					actor_id,
+					CommitStageRequest {
+						generation,
+						txid: stage_begin.txid,
+						chunk_idx: chunk_idx as u32,
+						bytes: chunk.to_vec(),
+						is_last: chunk_idx + 1 == encoded.chunks(max_chunk_bytes).count(),
+					},
+				)
+				.await?;
+		}
+		engine
+			.commit_finalize(
+				actor_id,
+				CommitFinalizeRequest {
+					generation,
+					expected_head_txid,
+					txid: stage_begin.txid,
+					new_db_size_pages,
+					now_ms,
+				},
+			)
+			.await?;
+		Ok(stage_begin.txid)
 	}
 
 	async fn write_seeded_meta(
@@ -841,28 +863,6 @@ mod tests {
 		}
 	}
 
-	fn stage_request(
-		generation: u64,
-		stage_id: u64,
-		chunk_idx: u16,
-		pages: &[(u32, u8)],
-		is_last: bool,
-	) -> CommitStageRequest {
-		CommitStageRequest {
-			generation,
-			stage_id,
-			chunk_idx,
-			dirty_pages: pages
-				.iter()
-				.map(|(pgno, fill)| DirtyPage {
-					pgno: *pgno,
-					bytes: page(*fill),
-				})
-				.collect(),
-			is_last,
-		}
-	}
-
 	fn bulk_request(
 		generation: u64,
 		head_txid: u64,
@@ -884,27 +884,13 @@ mod tests {
 		}
 	}
 
-	fn bulk_stage_request(
-		generation: u64,
-		stage_id: u64,
-		chunk_idx: u16,
-		start_pgno: u32,
-		page_count: u32,
-		fill: u8,
-		is_last: bool,
-	) -> CommitStageRequest {
-		CommitStageRequest {
-			generation,
-			stage_id,
-			chunk_idx,
-			dirty_pages: (0..page_count)
-				.map(|offset| DirtyPage {
-					pgno: start_pgno + offset,
-					bytes: page(fill),
-				})
-				.collect(),
-			is_last,
-		}
+	fn pages_slice(start_pgno: u32, page_count: u32, fill: u8) -> Vec<DirtyPage> {
+		(0..page_count)
+			.map(|offset| DirtyPage {
+				pgno: start_pgno + offset,
+				bytes: page(fill),
+			})
+			.collect()
 	}
 
 	fn registry_text() -> String {
@@ -930,7 +916,7 @@ mod tests {
 		assert_eq!(compaction_rx.recv().await, Some(TEST_ACTOR.to_string()));
 		assert_op_count(&engine, 1);
 
-		let stored_delta = read_value(&engine, delta_key(TEST_ACTOR, 1))
+		let stored_delta = read_delta_blob(&engine, TEST_ACTOR, 1)
 			.await?
 			.expect("delta should be stored");
 		assert_eq!(stored_delta.len() as u64, result.delta_bytes);
@@ -1229,7 +1215,7 @@ mod tests {
 			"{error_text}"
 		);
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 1))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 1))
 				.await?
 				.is_none()
 		);
@@ -1255,7 +1241,7 @@ mod tests {
 
 		assert!(error_text.contains("InjectedStoreError"), "{error_text}");
 		assert!(
-			read_value(&engine, delta_key(FAIL_ACTOR, 1))
+			read_value(&engine, delta_blob_key(FAIL_ACTOR, 1))
 				.await?
 				.is_none()
 		);
@@ -1289,7 +1275,7 @@ mod tests {
 		));
 		assert_op_count(&engine, 1);
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 1))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 1))
 				.await?
 				.is_none()
 		);
@@ -1335,7 +1321,7 @@ mod tests {
 		));
 		assert_op_count(&engine, 1);
 		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 8))
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 8))
 				.await?
 				.is_none()
 		);
@@ -1351,36 +1337,33 @@ mod tests {
 		write_seeded_meta(&engine, TEST_ACTOR, seeded_head()).await?;
 		clear_op_count(&engine);
 
-		engine
-			.commit_stage(TEST_ACTOR, stage_request(4, 77, 0, &[(1, 0x11)], false))
-			.await?;
-		engine
-			.commit_stage(TEST_ACTOR, stage_request(4, 77, 1, &[(2, 0x22)], false))
-			.await?;
-		engine
-			.commit_stage(TEST_ACTOR, stage_request(4, 77, 2, &[(70, 0x70)], true))
-			.await?;
-
-		let result = engine
-			.commit_finalize(
-				TEST_ACTOR,
-				CommitFinalizeRequest {
-					generation: 4,
-					expected_head_txid: 0,
-					stage_id: 77,
-					new_db_size_pages: 70,
-					now_ms: 1_234,
+		let txid = stage_encoded_delta(
+			&engine,
+			TEST_ACTOR,
+			4,
+			0,
+			70,
+			1_234,
+			vec![
+				DirtyPage {
+					pgno: 1,
+					bytes: page(0x11),
 				},
-			)
-			.await?;
+				DirtyPage {
+					pgno: 2,
+					bytes: page(0x22),
+				},
+				DirtyPage {
+					pgno: 70,
+					bytes: page(0x70),
+				},
+			],
+			32,
+		)
+		.await?;
 
-		assert_eq!(result.new_head_txid, 1);
+		assert_eq!(txid, 1);
 		assert_eq!(compaction_rx.recv().await, Some(TEST_ACTOR.to_string()));
-		assert!(
-			scan_prefix_values(&engine, stage_chunk_prefix(TEST_ACTOR, 77))
-				.await?
-				.is_empty()
-		);
 		let stored_head = decode_db_head(
 			&read_value(&engine, meta_key(TEST_ACTOR))
 				.await?
@@ -1425,7 +1408,7 @@ mod tests {
 				CommitFinalizeRequest {
 					generation: 4,
 					expected_head_txid: 0,
-					stage_id: 999,
+					txid: 999,
 					new_db_size_pages: 1,
 					now_ms: 777,
 				},
@@ -1436,12 +1419,8 @@ mod tests {
 			error.downcast_ref::<SqliteStorageError>(),
 			Some(&SqliteStorageError::StageNotFound { stage_id: 999 })
 		);
-		assert_op_count(&engine, 2);
-		assert!(
-			read_value(&engine, delta_key(TEST_ACTOR, 1))
-				.await?
-				.is_none()
-		);
+		assert_op_count(&engine, 0);
+		assert!(read_delta_blob(&engine, TEST_ACTOR, 1).await?.is_none());
 		assert!(matches!(compaction_rx.try_recv(), Err(TryRecvError::Empty)));
 
 		Ok(())
@@ -1454,45 +1433,25 @@ mod tests {
 		write_seeded_meta(&engine, TEST_ACTOR, seeded_head()).await?;
 		clear_op_count(&engine);
 
-		engine
-			.commit_stage(
-				TEST_ACTOR,
-				bulk_stage_request(4, 88, 0, 1, 1024, 0x21, false),
-			)
-			.await?;
-		engine
-			.commit_stage(
-				TEST_ACTOR,
-				bulk_stage_request(4, 88, 1, 1025, 1024, 0x42, false),
-			)
-			.await?;
-		engine
-			.commit_stage(
-				TEST_ACTOR,
-				bulk_stage_request(4, 88, 2, 2049, 1024, 0x63, true),
-			)
-			.await?;
+		let txid = stage_encoded_delta(
+			&engine,
+			TEST_ACTOR,
+			4,
+			0,
+			3072,
+			2_468,
+			[
+				pages_slice(1, 1024, 0x21),
+				pages_slice(1025, 1024, 0x42),
+				pages_slice(2049, 1024, 0x63),
+			]
+			.concat(),
+			256 * 1024,
+		)
+		.await?;
 
-		let result = engine
-			.commit_finalize(
-				TEST_ACTOR,
-				CommitFinalizeRequest {
-					generation: 4,
-					expected_head_txid: 0,
-					stage_id: 88,
-					new_db_size_pages: 3072,
-					now_ms: 2_468,
-				},
-			)
-			.await?;
-
-		assert_eq!(result.new_head_txid, 1);
+		assert_eq!(txid, 1);
 		assert_eq!(compaction_rx.recv().await, Some(TEST_ACTOR.to_string()));
-		assert!(
-			scan_prefix_values(&engine, stage_chunk_prefix(TEST_ACTOR, 88))
-				.await?
-				.is_empty()
-		);
 		assert_eq!(
 			engine.get_pages(TEST_ACTOR, 4, vec![1, 1025, 3072]).await?,
 			vec![
@@ -1521,21 +1480,20 @@ mod tests {
 		write_seeded_meta(&engine, TEST_ACTOR, seeded_head()).await?;
 
 		engine.commit(TEST_ACTOR, request(4, 0)).await?;
-		engine
-			.commit_stage(TEST_ACTOR, stage_request(4, 99, 0, &[(1, 0x11)], true))
-			.await?;
-		engine
-			.commit_finalize(
-				TEST_ACTOR,
-				CommitFinalizeRequest {
-					generation: 4,
-					expected_head_txid: 1,
-					stage_id: 99,
-					new_db_size_pages: 1,
-					now_ms: 2_000,
-				},
-			)
-			.await?;
+		stage_encoded_delta(
+			&engine,
+			TEST_ACTOR,
+			4,
+			1,
+			1,
+			2_000,
+			vec![DirtyPage {
+				pgno: 1,
+				bytes: page(0x11),
+			}],
+			64,
+		)
+		.await?;
 
 		let metrics = registry_text();
 		assert!(metrics.contains("sqlite_commit_phase_duration_seconds"));

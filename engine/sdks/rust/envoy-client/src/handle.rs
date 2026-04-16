@@ -288,6 +288,19 @@ impl EnvoyHandle {
 		}
 	}
 
+	pub async fn sqlite_commit_stage_begin(
+		&self,
+		request: protocol::SqliteCommitStageBeginRequest,
+	) -> anyhow::Result<protocol::SqliteCommitStageBeginResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::CommitStageBegin(request))
+			.await?
+		{
+			SqliteResponse::CommitStageBegin(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite commit_stage_begin response type"),
+		}
+	}
+
 	pub async fn sqlite_commit_stage(
 		&self,
 		request: protocol::SqliteCommitStageRequest,

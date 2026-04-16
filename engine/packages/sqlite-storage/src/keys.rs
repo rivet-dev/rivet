@@ -1,5 +1,7 @@
 //! Key builders for sqlite-storage blobs and indexes.
 
+use anyhow::{Context, Result, ensure};
+
 pub const SQLITE_SUBSPACE_PREFIX: u8 = 0x02;
 
 const META_PATH: &[u8] = b"/META";
@@ -42,20 +44,30 @@ pub fn shard_prefix(actor_id: &str) -> Vec<u8> {
 	key
 }
 
-pub fn delta_key(actor_id: &str, txid: u64) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
-	let mut key = Vec::with_capacity(prefix.len() + DELTA_PATH.len() + std::mem::size_of::<u64>());
-	key.extend_from_slice(&prefix);
-	key.extend_from_slice(DELTA_PATH);
-	key.extend_from_slice(&txid.to_be_bytes());
-	key
-}
-
 pub fn delta_prefix(actor_id: &str) -> Vec<u8> {
 	let prefix = actor_prefix(actor_id);
 	let mut key = Vec::with_capacity(prefix.len() + DELTA_PATH.len());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(DELTA_PATH);
+	key
+}
+
+pub fn delta_chunk_prefix(actor_id: &str, txid: u64) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key =
+		Vec::with_capacity(prefix.len() + DELTA_PATH.len() + std::mem::size_of::<u64>() + 1);
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(DELTA_PATH);
+	key.extend_from_slice(&txid.to_be_bytes());
+	key.push(b'/');
+	key
+}
+
+pub fn delta_chunk_key(actor_id: &str, txid: u64, chunk_idx: u32) -> Vec<u8> {
+	let prefix = delta_chunk_prefix(actor_id, txid);
+	let mut key = Vec::with_capacity(prefix.len() + std::mem::size_of::<u32>());
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(&chunk_idx.to_be_bytes());
 	key
 }
 
@@ -104,12 +116,59 @@ pub fn stage_chunk_prefix(actor_id: &str, stage_id: u64) -> Vec<u8> {
 	key
 }
 
+pub fn decode_delta_chunk_txid(actor_id: &str, key: &[u8]) -> Result<u64> {
+	let prefix = delta_prefix(actor_id);
+	ensure!(
+		key.starts_with(&prefix),
+		"delta key did not start with expected prefix"
+	);
+	let suffix = &key[prefix.len()..];
+	ensure!(
+		suffix.len() >= std::mem::size_of::<u64>() + 1,
+		"delta key suffix had {} bytes, expected at least {}",
+		suffix.len(),
+		std::mem::size_of::<u64>() + 1
+	);
+	ensure!(
+		suffix[std::mem::size_of::<u64>()] == b'/',
+		"delta key missing txid/chunk separator"
+	);
+
+	Ok(u64::from_be_bytes(
+		suffix[..std::mem::size_of::<u64>()]
+			.try_into()
+			.context("delta txid suffix should decode as u64")?,
+	))
+}
+
+pub fn decode_delta_chunk_idx(actor_id: &str, txid: u64, key: &[u8]) -> Result<u32> {
+	let prefix = delta_chunk_prefix(actor_id, txid);
+	ensure!(
+		key.starts_with(&prefix),
+		"delta chunk key did not start with expected prefix"
+	);
+	let suffix = &key[prefix.len()..];
+	ensure!(
+		suffix.len() == std::mem::size_of::<u32>(),
+		"delta chunk key suffix had {} bytes, expected {}",
+		suffix.len(),
+		std::mem::size_of::<u32>()
+	);
+
+	Ok(u32::from_be_bytes(
+		suffix
+			.try_into()
+			.context("delta chunk suffix should decode as u32")?,
+	))
+}
+
 #[cfg(test)]
 mod tests {
 	use super::{
 		DELTA_PATH, META_PATH, SHARD_PATH, SQLITE_SUBSPACE_PREFIX, STAGE_PATH, actor_prefix,
-		delta_key, delta_prefix, meta_key, pidx_delta_key, pidx_delta_prefix, shard_key,
-		shard_prefix, stage_chunk_prefix, stage_key, stage_prefix,
+		decode_delta_chunk_idx, decode_delta_chunk_txid, delta_chunk_key, delta_chunk_prefix,
+		delta_prefix, meta_key, pidx_delta_key, pidx_delta_prefix, shard_key, shard_prefix,
+		stage_chunk_prefix, stage_key, stage_prefix,
 	};
 
 	const TEST_ACTOR: &str = "test-actor";
@@ -125,7 +184,7 @@ mod tests {
 	#[test]
 	fn shard_and_delta_keys_use_big_endian_numeric_suffixes() {
 		let shard = shard_key(TEST_ACTOR, 0x0102_0304);
-		let delta = delta_key(TEST_ACTOR, 0x0102_0304_0506_0708);
+		let delta = delta_chunk_key(TEST_ACTOR, 0x0102_0304_0506_0708, 0x090a_0b0c);
 		let ap = actor_prefix(TEST_ACTOR);
 
 		assert!(shard.starts_with(&ap));
@@ -136,7 +195,10 @@ mod tests {
 		assert!(delta.starts_with(&ap));
 		let after_actor = &delta[ap.len()..];
 		assert!(after_actor.starts_with(DELTA_PATH));
-		assert_eq!(&after_actor[DELTA_PATH.len()..], &[1, 2, 3, 4, 5, 6, 7, 8]);
+		assert_eq!(
+			&after_actor[DELTA_PATH.len()..],
+			&[1, 2, 3, 4, 5, 6, 7, 8, b'/', 9, 10, 11, 12]
+		);
 	}
 
 	#[test]
@@ -152,9 +214,18 @@ mod tests {
 
 	#[test]
 	fn delta_and_stage_prefixes_match_full_keys() {
-		assert!(delta_key(TEST_ACTOR, 7).starts_with(&delta_prefix(TEST_ACTOR)));
+		assert!(delta_chunk_key(TEST_ACTOR, 7, 1).starts_with(&delta_prefix(TEST_ACTOR)));
 		assert!(shard_key(TEST_ACTOR, 3).starts_with(&shard_prefix(TEST_ACTOR)));
 		assert!(stage_key(TEST_ACTOR, 9, 1).starts_with(&stage_prefix(TEST_ACTOR)));
+	}
+
+	#[test]
+	fn delta_chunk_prefix_matches_full_key() {
+		let prefix = delta_chunk_prefix(TEST_ACTOR, 0x0102_0304_0506_0708);
+		let key = delta_chunk_key(TEST_ACTOR, 0x0102_0304_0506_0708, 0x090a_0b0c);
+
+		assert!(key.starts_with(&prefix));
+		assert_eq!(key.len() - prefix.len(), std::mem::size_of::<u32>());
 	}
 
 	#[test]
@@ -198,9 +269,9 @@ mod tests {
 			shard_key(TEST_ACTOR, 42),
 		];
 		let mut delta_keys = vec![
-			delta_key(TEST_ACTOR, 99),
-			delta_key(TEST_ACTOR, 7),
-			delta_key(TEST_ACTOR, 42),
+			delta_chunk_key(TEST_ACTOR, 99, 0),
+			delta_chunk_key(TEST_ACTOR, 7, 0),
+			delta_chunk_key(TEST_ACTOR, 42, 0),
 		];
 
 		shard_keys.sort();
@@ -217,9 +288,9 @@ mod tests {
 		assert_eq!(
 			delta_keys,
 			vec![
-				delta_key(TEST_ACTOR, 7),
-				delta_key(TEST_ACTOR, 42),
-				delta_key(TEST_ACTOR, 99)
+				delta_chunk_key(TEST_ACTOR, 7, 0),
+				delta_chunk_key(TEST_ACTOR, 42, 0),
+				delta_chunk_key(TEST_ACTOR, 99, 0)
 			]
 		);
 	}
@@ -227,7 +298,18 @@ mod tests {
 	#[test]
 	fn different_actors_produce_different_keys() {
 		assert_ne!(meta_key("actor-a"), meta_key("actor-b"));
-		assert_ne!(delta_key("actor-a", 1), delta_key("actor-b", 1));
+		assert_ne!(
+			delta_chunk_key("actor-a", 1, 0),
+			delta_chunk_key("actor-b", 1, 0)
+		);
 		assert_ne!(shard_key("actor-a", 0), shard_key("actor-b", 0));
+	}
+
+	#[test]
+	fn delta_chunk_decoders_round_trip() {
+		let key = delta_chunk_key(TEST_ACTOR, 77, 9);
+
+		assert_eq!(decode_delta_chunk_txid(TEST_ACTOR, &key).unwrap(), 77);
+		assert_eq!(decode_delta_chunk_idx(TEST_ACTOR, 77, &key).unwrap(), 9);
 	}
 }

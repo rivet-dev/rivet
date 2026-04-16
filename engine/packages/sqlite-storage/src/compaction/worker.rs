@@ -79,7 +79,7 @@ mod tests {
 	use anyhow::Result;
 
 	use crate::engine::SqliteEngine;
-	use crate::keys::{delta_key, meta_key, pidx_delta_key};
+	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key};
 	use crate::ltx::{LtxHeader, encode_ltx_v3};
 	use crate::test_utils::{scan_prefix_values, test_db};
 	use crate::types::{
@@ -110,6 +110,10 @@ mod tests {
 		vec![fill; SQLITE_PAGE_SIZE as usize]
 	}
 
+	fn delta_blob_key(actor_id: &str, txid: u64) -> Vec<u8> {
+		delta_chunk_key(actor_id, txid, 0)
+	}
+
 	fn encoded_blob(txid: u64, commit: u32, pages: &[(u32, u8)]) -> Vec<u8> {
 		let pages = pages
 			.iter()
@@ -135,7 +139,7 @@ mod tests {
 			let pgno = shard_id * SQLITE_SHARD_SIZE + 1;
 			let txid = u64::from(shard_id) + 1;
 			mutations.push(WriteOp::put(
-				delta_key(TEST_ACTOR, txid),
+				delta_blob_key(TEST_ACTOR, txid),
 				encoded_blob(txid, head.db_size_pages, &[(pgno, txid as u8)]),
 			));
 			mutations.push(WriteOp::put(

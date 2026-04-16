@@ -23,6 +23,7 @@ fn ensure_to_envoy_v1_compatible(message: &v2::ToEnvoy) -> Result<()> {
 		}
 		v2::ToEnvoy::ToEnvoySqliteGetPagesResponse(_)
 		| v2::ToEnvoy::ToEnvoySqliteCommitResponse(_)
+		| v2::ToEnvoy::ToEnvoySqliteCommitStageBeginResponse(_)
 		| v2::ToEnvoy::ToEnvoySqliteCommitStageResponse(_)
 		| v2::ToEnvoy::ToEnvoySqliteCommitFinalizeResponse(_) => {
 			bail!("sqlite responses require envoy-protocol v2")
@@ -35,6 +36,7 @@ fn ensure_to_rivet_v1_compatible(message: &v2::ToRivet) -> Result<()> {
 	match message {
 		v2::ToRivet::ToRivetSqliteGetPagesRequest(_)
 		| v2::ToRivet::ToRivetSqliteCommitRequest(_)
+		| v2::ToRivet::ToRivetSqliteCommitStageBeginRequest(_)
 		| v2::ToRivet::ToRivetSqliteCommitStageRequest(_)
 		| v2::ToRivet::ToRivetSqliteCommitFinalizeRequest(_) => {
 			bail!("sqlite requests require envoy-protocol v2")

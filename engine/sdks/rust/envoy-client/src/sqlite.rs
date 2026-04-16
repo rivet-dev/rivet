@@ -9,6 +9,7 @@ use crate::kv::KV_EXPIRE_MS;
 pub enum SqliteRequest {
 	GetPages(protocol::SqliteGetPagesRequest),
 	Commit(protocol::SqliteCommitRequest),
+	CommitStageBegin(protocol::SqliteCommitStageBeginRequest),
 	CommitStage(protocol::SqliteCommitStageRequest),
 	CommitFinalize(protocol::SqliteCommitFinalizeRequest),
 }
@@ -16,6 +17,7 @@ pub enum SqliteRequest {
 pub enum SqliteResponse {
 	GetPages(protocol::SqliteGetPagesResponse),
 	Commit(protocol::SqliteCommitResponse),
+	CommitStageBegin(protocol::SqliteCommitStageBeginResponse),
 	CommitStage(protocol::SqliteCommitStageResponse),
 	CommitFinalize(protocol::SqliteCommitFinalizeResponse),
 }
@@ -78,6 +80,18 @@ pub async fn handle_sqlite_commit_response(
 	);
 }
 
+pub async fn handle_sqlite_commit_stage_begin_response(
+	ctx: &mut EnvoyContext,
+	response: protocol::ToEnvoySqliteCommitStageBeginResponse,
+) {
+	handle_sqlite_response(
+		ctx,
+		response.request_id,
+		SqliteResponse::CommitStageBegin(response.data),
+		"sqlite_commit_stage_begin",
+	);
+}
+
 pub async fn handle_sqlite_commit_stage_response(
 	ctx: &mut EnvoyContext,
 	response: protocol::ToEnvoySqliteCommitStageResponse,
@@ -136,6 +150,11 @@ pub async fn send_single_sqlite_request(ctx: &mut EnvoyContext, request_id: u32)
 			SqliteRequest::Commit(data) => protocol::ToRivet::ToRivetSqliteCommitRequest(
 				protocol::ToRivetSqliteCommitRequest { request_id, data },
 			),
+			SqliteRequest::CommitStageBegin(data) => {
+				protocol::ToRivet::ToRivetSqliteCommitStageBeginRequest(
+					protocol::ToRivetSqliteCommitStageBeginRequest { request_id, data },
+				)
+			}
 			SqliteRequest::CommitStage(data) => protocol::ToRivet::ToRivetSqliteCommitStageRequest(
 				protocol::ToRivetSqliteCommitStageRequest { request_id, data },
 			),

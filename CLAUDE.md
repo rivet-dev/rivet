@@ -283,6 +283,7 @@ let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build(
 **Native SQLite & KV Channel**
 - RivetKit SQLite is served by `@rivetkit/rivetkit-native`. Do not reintroduce SQLite-over-KV or WebAssembly SQLite paths in the TypeScript runtime.
 - The Rust KV-backed SQLite implementation still lives in `rivetkit-typescript/packages/sqlite-native/src/`. When changing its on-disk or KV layout, update the internal data-channel spec in the same change.
+- SQLite v2 slow-path staging writes encoded LTX bytes directly under DELTA chunk keys. Do not expect `/STAGE` keys or a fixed one-chunk-per-page mapping in tests or recovery code.
 - The native VFS uses the same 4 KiB chunk layout and KV key encoding as the WASM VFS. Data is compatible between backends.
 - **The native Rust VFS and the WASM TypeScript VFS must match 1:1.** This includes: KV key layout and encoding, chunk size, PRAGMA settings, VFS callback-to-KV-operation mapping, delete/truncate strategy (both must use `deleteRange`), and journal mode. When changing any VFS behavior in one implementation, update the other. The relevant files are:
   - Native: `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `kv.rs`
