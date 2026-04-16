@@ -222,7 +222,7 @@
         "pnpm test -F rivetkit (if applicable driver tests exist) passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Three complementary surfaces: (1) Prometheus histograms on the engine /metrics endpoint at port 6430 \u2014 aggregated across all actors, bounded cardinality, for dashboards; (2) per-actor VFS counters exposed via the EXISTING /inspector/metrics endpoint (not a new surface \u2014 extend ActorMetrics.snapshot()) for per-actor debugging; (3) tracing spans at debug level on both engine and VFS sides, zero cost at info level, flip RUST_LOG to debug for per-request phase breakdowns correlatable via ray_id. These three are not redundant: Prometheus catches aggregate regressions, inspector metrics diagnose one actor, tracing spans debug specific slow commits. The NAPI bridge for VFS counters is new; design it to match how rivetkit-native already exposes other native state to TypeScript."
     }
   ]

@@ -3,6 +3,7 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
 ---
 
 ## Codebase Patterns
+- `rivetkit` package-level `vitest run` only discovers `*.test.*` and `*.spec.*` files. `src/driver-test-suite/tests/*.ts` coverage lives outside that glob, so validate those stories through the driver-suite harness or another explicit entrypoint instead of assuming a direct file filter will run them.
 - `wrapJsNativeDatabase(...)` must forward new native SQLite introspection hooks like `getSqliteVfsMetrics()`, or `/inspector/metrics` will quietly report zero VFS commit timings even when Rust recorded them.
 - `pegboard-envoy` SQLite websocket handlers should validate page numbers, page sizes, and duplicate dirty pages at the websocket trust boundary and downgrade unexpected failures to `SqliteErrorResponse` so one bad actor request cannot tear down the shared envoy connection.
 - `sqlite-native` v2 should poison the VFS inside `flush_dirty_pages()` and `commit_atomic_write()` for non-fence commit failures; callback wrappers should only translate fence mismatches into SQLite I/O return codes.
@@ -122,4 +123,12 @@ One-line summary per story. See git log + archived-stories.json for full titles;
   - `rivetkit-native` prebuilt `.node` artifacts can hide Rust-side SQLite changes during TypeScript tests. If inspector metrics still look stale after a Rust change, run `pnpm -C rivetkit-typescript/packages/rivetkit-native build -- --force` before chasing ghosts.
   - New native SQLite getters are not enough on their own. The wrapper in `rivetkit-typescript/packages/rivetkit/src/db/native-database.ts` must forward them, and the DB open path in `src/db/mod.ts` or `src/db/drizzle/mod.ts` must register them with `ActorMetrics`.
   - Prometheus scrape-text assertions should check metric family names and label fragments, not a single exact serialized label order, because exposition order is not stable enough for brittle tests.
+---
+## 2026-04-16 15:02:53 PDT - US-059
+- What was implemented: Re-validated the US-059 instrumentation surfaces that were already in the tree, then synced the Ralph bookkeeping by marking the story complete in `prd.json`.
+- Files changed: `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `cargo test -p sqlite-storage commit_registers_phase_metrics` and `cargo test -p rivetkit-sqlite-native vfs_records_commit_phase_durations` are the fastest story-specific smoke checks for the engine and native VFS halves of US-059.
+  - Direct `pnpm test ...` invocation from the `rivetkit` package will not discover `src/driver-test-suite/tests/*.ts` files, so those inspector assertions need the driver-suite harness rather than a naive Vitest file filter.
+  - If `progress.txt` says a story landed but `prd.json` still has `passes: false`, fix the bookkeeping immediately or Ralph will waste the next iteration rediscovering the same damn story.
 ---
