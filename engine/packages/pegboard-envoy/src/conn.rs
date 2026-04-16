@@ -15,10 +15,11 @@ use rivet_envoy_protocol::{self as protocol, versioned};
 use rivet_guard_core::WebSocketHandle;
 use rivet_types::runner_configs::RunnerConfigKind;
 use scc::HashMap;
+use sqlite_storage::engine::SqliteEngine;
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
 
-use crate::{errors, metrics, utils::UrlData};
+use crate::{errors, metrics, sqlite_runtime, utils::UrlData};
 
 pub struct Conn {
 	pub namespace_id: Id,
@@ -27,6 +28,7 @@ pub struct Conn {
 	pub protocol_version: u16,
 	pub ws_handle: WebSocketHandle,
 	pub authorized_tunnel_routes: HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
+	pub sqlite_engine: Arc<SqliteEngine>,
 	pub is_serverless: bool,
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the envoy.
@@ -37,6 +39,7 @@ pub struct Conn {
 pub async fn init_conn(
 	ctx: &StandaloneCtx,
 	ws_handle: WebSocketHandle,
+	sqlite_engine: Arc<SqliteEngine>,
 	UrlData {
 		protocol_version,
 		namespace,
@@ -278,7 +281,6 @@ pub async fn init_conn(
 
 	// Send missed commands (must be after init packet)
 	if !missed_commands.is_empty() {
-		let db = ctx.udb()?;
 		let msg = {
 			for cmd_wrapper in &mut missed_commands {
 				if let protocol::Command::CommandStartActor(ref mut start) = cmd_wrapper.inner {
@@ -287,15 +289,15 @@ pub async fn init_conn(
 						.actor_id
 						.parse::<Id>()
 						.context("failed to parse actor_id from missed envoy command")?;
-					let preloaded = pegboard::actor_kv::preload::fetch_preloaded_kv(
-						&db,
-						ctx.config().pegboard(),
-						actor_id,
+					sqlite_runtime::populate_start_command(
+						ctx,
+						sqlite_engine.as_ref(),
+						protocol_version,
 						namespace.namespace_id,
-						&start.config.name,
+						actor_id,
+						start,
 					)
 					.await?;
-					start.preloaded_kv = preloaded;
 				}
 			}
 
@@ -318,6 +320,7 @@ pub async fn init_conn(
 		protocol_version,
 		ws_handle,
 		authorized_tunnel_routes: HashMap::new(),
+		sqlite_engine,
 		is_serverless,
 		last_rtt: AtomicU32::new(0),
 		last_ping_ts: AtomicI64::new(util::timestamp::now()),

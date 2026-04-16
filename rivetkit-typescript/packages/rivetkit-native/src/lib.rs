@@ -32,7 +32,9 @@ fn init_tracing(log_level: Option<&str>) {
 	});
 }
 
-use crate::bridge_actor::{BridgeCallbacks, ResponseMap, WsSenderMap};
+use crate::bridge_actor::{
+	BridgeCallbacks, ResponseMap, SqliteSchemaVersionMap, SqliteStartupMap, WsSenderMap,
+};
 use crate::envoy_handle::JsEnvoyHandle;
 use crate::types::JsEnvoyConfig;
 
@@ -53,6 +55,9 @@ pub fn start_envoy_sync_js(
 
 	let response_map: ResponseMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 	let ws_sender_map: WsSenderMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+	let sqlite_startup_map: SqliteStartupMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+	let sqlite_schema_version_map: SqliteSchemaVersionMap =
+		Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 
 	// Create threadsafe callback for bridging events to JS
 	let tsfn: bridge_actor::EventCallback = event_callback.create_threadsafe_function(
@@ -68,6 +73,8 @@ pub fn start_envoy_sync_js(
 		tsfn.clone(),
 		response_map.clone(),
 		ws_sender_map.clone(),
+		sqlite_startup_map.clone(),
+		sqlite_schema_version_map.clone(),
 	));
 
 	let metadata: Option<HashMap<String, String>> = config.metadata.and_then(|v| {
@@ -99,6 +106,8 @@ pub fn start_envoy_sync_js(
 		handle,
 		response_map,
 		ws_sender_map,
+		sqlite_startup_map,
+		sqlite_schema_version_map,
 	))
 }
 

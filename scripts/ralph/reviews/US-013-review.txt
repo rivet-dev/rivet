@@ -1,0 +1,29 @@
+US-013 Review: Implement commit_stage and commit_finalize (slow path)
+Commit: 0091604120
+
+== Acceptance Criteria ==
+
+1. src/commit.rs contains commit_stage and commit_finalize methods on SqliteEngine
+   PASS. Both methods are implemented on `SqliteEngine<S: SqliteStore>` in commit.rs.
+
+2. commit_stage writes chunks to STAGE/<stage_id>/<chunk_idx> with generation fencing, returns committed chunk_idx
+   PASS. commit_stage reads META, checks generation matches, serializes a StagedChunk (dirty_pages + is_last), writes it via atomic_write to stage_key(stage_id, chunk_idx), and returns chunk_idx_committed.
+
+3. commit_finalize CAS-checks, reads STAGE entries, assembles into one DELTA, atomic_write (DELTA + PIDX + META + delete STAGE entries); returns StageNotFound if missing
+   PASS. commit_finalize checks both generation and head_txid (CAS). It scans STAGE entries via scan_prefix(stage_chunk_prefix(stage_id)), bails with "StageNotFound" if empty. decode_staged_pages sorts chunks by index, validates contiguity, validates the is_last marker, and deduplicates pages by pgno into a BTreeMap. The finalize path then encodes a single LTX delta, builds mutations for DELTA + all PIDX entries + META update + STAGE deletions (value=None), and writes them in one atomic_write call.
+
+4. Integration tests: stage 3 chunks + finalize (read back via get_pages), finalize with wrong stage_id (StageNotFound)
+   PASS. commit_stage_and_finalize_promotes_staged_delta stages 3 chunks (pages 1, 2, 70), finalizes, verifies the result, confirms STAGE keys are deleted, reads pages back via get_pages and asserts correct content. commit_finalize_rejects_missing_stage uses stage_id 999 with no staged data, asserts "StageNotFound" error and no delta written.
+
+5. cargo test -p sqlite-storage passes
+   PASS. All 48 tests pass, 0 failures.
+
+== Additional Observations ==
+
+Finalize assembles ALL staged chunks into a single DELTA: confirmed. decode_staged_pages collects every chunk's dirty pages into a BTreeMap keyed by pgno (later pages overwrite earlier ones for the same pgno), then produces one merged DirtyPage vec. The single DELTA is encoded from this merged set.
+
+STAGE cleanup occurs in the same atomic_write: confirmed. The mutations vec includes Mutation::delete for each stage key alongside the DELTA put, PIDX puts, and META put. The test explicitly verifies each stage_key(77, 0/1/2) has value=None in the atomic write and that get() returns None afterward.
+
+Chunk validation is thorough: contiguous indices starting at 0, exactly one is_last marker, overflow protection on chunk_idx. The stage_chunk_prefix was extracted from stage_key into its own function in keys.rs with a dedicated unit test.
+
+VERDICT: PASS

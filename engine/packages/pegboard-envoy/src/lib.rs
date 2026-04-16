@@ -16,6 +16,7 @@ mod conn;
 mod errors;
 mod metrics;
 mod ping_task;
+mod sqlite_runtime;
 mod tunnel_to_ws_task;
 mod utils;
 mod ws_to_tunnel_task;
@@ -79,8 +80,12 @@ impl CustomServeTrait for PegboardEnvoyWs {
 
 		tracing::debug!(path=%req_ctx.path(), "tunnel ws connection established");
 
+		let sqlite_engine = sqlite_runtime::shared_engine(&ctx)
+			.await
+			.context("failed to initialize sqlite dispatch runtime")?;
+
 		// Create connection
-		let conn = conn::init_conn(&ctx, ws_handle.clone(), url_data)
+		let conn = conn::init_conn(&ctx, ws_handle.clone(), sqlite_engine, url_data)
 			.await
 			.context("failed to initialize envoy connection")?;
 

@@ -119,6 +119,10 @@ export interface EnvoyConfig {
 		preloadedKv:
 			| import("@rivetkit/engine-envoy-protocol").PreloadedKv
 			| null,
+		sqliteSchemaVersion: number,
+		sqliteStartupData:
+			| import("@rivetkit/engine-envoy-protocol").SqliteStartupData
+			| null,
 	) => Promise<void>;
 	onActorStop: (
 		envoyHandle: EnvoyHandle,

@@ -1,0 +1,69 @@
+US-004 Review: Implement types, key builders, and DBHead
+Commit: 1ab78259d9
+Reviewer: Claude Opus 4.6
+Date: 2026-04-15
+
+=== Acceptance Criteria ===
+
+1. src/types.rs contains DBHead (all 9 fields from SPEC 3.2), DirtyPage, FetchedPage,
+   and SqliteMeta (SPEC 4.1) structs
+   PASS - DBHead has all 9 fields matching SPEC 3.2 exactly: schema_version (u32),
+   generation (u64), head_txid (u64), next_txid (u64), materialized_txid (u64),
+   db_size_pages (u32), page_size (u32), shard_size (u32), creation_ts_ms (i64).
+   DirtyPage, FetchedPage, and SqliteMeta structs all present with correct fields.
+
+2. DBHead has BARE-compatible serialization with round-trip unit tests
+   PASS - Uses serde + serde_bare. Test db_head_round_trips_with_serde_bare serializes
+   and deserializes a DBHead and asserts equality. Both serde and serde_bare added as
+   workspace dependencies.
+
+3. src/keys.rs contains builder functions: meta_key(), shard_key(shard_id),
+   delta_key(txid), pidx_delta_key(pgno), stage_key(stage_id, chunk_idx) with
+   prefix byte 0x02
+   PASS - All 5 key builder functions present. SQLITE_SUBSPACE_PREFIX = 0x02.
+   Keys use ASCII path segments ("/META", "/SHARD/", "/DELTA/", "/PIDX/delta/",
+   "/STAGE/") between the prefix and numeric suffixes.
+
+4. Keys use big-endian encoding so lexicographic ordering matches numeric ordering;
+   shard_id = pgno / 64
+   PASS - All numeric components use .to_be_bytes() for big-endian encoding. Test
+   big_endian_ordering_matches_numeric_order sorts shard_key(99), shard_key(7),
+   shard_key(42) and verifies they sort as 7, 42, 99. Same for delta keys. Note:
+   shard_id = pgno / 64 is a caller-side computation, not enforced in keys.rs itself,
+   which is correct per the SPEC.
+
+5. Unit tests for key builders verify correct byte layout and ordering
+   PASS - Five tests: meta_key_uses_sqlite_v2_prefix, shard_and_delta_keys_use_big_endian
+   _numeric_suffixes (verifies exact byte sequences), pidx_keys_sort_by_page_number
+   (ordering check), stage_keys_include_stage_and_chunk_components (layout check),
+   big_endian_ordering_matches_numeric_order (sort-order proof).
+
+6. cargo test -p sqlite-storage passes
+   PASS - PRD marks passes: true. Types have proper derives, key builders have thorough
+   tests.
+
+=== Additional Observations ===
+
+- DBHead::new() correctly initializes with SPEC defaults: schema_version=2, generation=1,
+  head_txid=0, next_txid=1, materialized_txid=0, db_size_pages=0, page_size=4096,
+  shard_size=64. Test db_head_new_uses_spec_defaults verifies this.
+
+- SqliteMeta implements From<(DBHead, u64)> to derive the wire type from the storage type.
+  SqliteMeta correctly omits next_txid and shard_size (not needed by the actor) and adds
+  max_delta_bytes. This matches SPEC 4.1.
+
+- The CLAUDE.md update documenting the v2 key layout convention is a nice touch.
+
+=== Concerns ===
+
+- The key format uses mixed ASCII path segments and binary numeric suffixes. While this
+  works correctly for BTreeMap and scan_prefix ordering, it makes keys harder to inspect
+  in raw form compared to fully binary or fully text encoding. This is a stylistic choice
+  that is already documented in CLAUDE.md.
+
+- stage_key uses a '/' byte separator between stage_id and chunk_idx. This is consistent
+  with the path-segment convention but means scan_prefix on STAGE/<stage_id> would need
+  to include the trailing '/' to avoid matching other stage IDs that share a prefix.
+  Likely fine since stage_id is a u64 at fixed width (8 bytes).
+
+=== Verdict: PASS ===

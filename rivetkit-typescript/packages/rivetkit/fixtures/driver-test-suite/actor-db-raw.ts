@@ -66,7 +66,10 @@ export const dbActorRaw = actor({
 		}
 
 		await c.db.execute(
-			`INSERT INTO test_data (value, payload, created_at) VALUES ('__disconnect__', '', ${Date.now()})`,
+			"INSERT INTO test_data (value, payload, created_at) VALUES (?, ?, ?)",
+			"__disconnect__",
+			"",
+			Date.now(),
 		);
 	},
 	actions: {
@@ -85,7 +88,10 @@ export const dbActorRaw = actor({
 		},
 		insertValue: async (c, value: string) => {
 			await c.db.execute(
-				`INSERT INTO test_data (value, payload, created_at) VALUES ('${value}', '', ${Date.now()})`,
+				"INSERT INTO test_data (value, payload, created_at) VALUES (?, ?, ?)",
+				value,
+				"",
+				Date.now(),
 			);
 			const results = await c.db.execute<{ id: number }>(
 				`SELECT last_insert_rowid() as id`,
@@ -103,7 +109,8 @@ export const dbActorRaw = actor({
 		},
 		getValue: async (c, id: number) => {
 			const results = await c.db.execute<{ value: string }>(
-				`SELECT value FROM test_data WHERE id = ${id}`,
+				"SELECT value FROM test_data WHERE id = ?",
+				id,
 			);
 			return results[0]?.value ?? null;
 		},
@@ -135,12 +142,14 @@ export const dbActorRaw = actor({
 		},
 		updateValue: async (c, id: number, value: string) => {
 			await c.db.execute(
-				`UPDATE test_data SET value = '${value}' WHERE id = ${id}`,
+				"UPDATE test_data SET value = ? WHERE id = ?",
+				value,
+				id,
 			);
 			return { success: true };
 		},
 		deleteValue: async (c, id: number) => {
-			await c.db.execute(`DELETE FROM test_data WHERE id = ${id}`);
+			await c.db.execute("DELETE FROM test_data WHERE id = ?", id);
 		},
 		transactionCommit: async (c, value: string) => {
 			await c.db.execute(
@@ -155,7 +164,10 @@ export const dbActorRaw = actor({
 		insertPayloadOfSize: async (c, size: number) => {
 			const payload = "x".repeat(size);
 			await c.db.execute(
-				`INSERT INTO test_data (value, payload, created_at) VALUES ('payload', '${payload}', ${Date.now()})`,
+				"INSERT INTO test_data (value, payload, created_at) VALUES (?, ?, ?)",
+				"payload",
+				payload,
+				Date.now(),
 			);
 			const results = await c.db.execute<{ id: number }>(
 				`SELECT last_insert_rowid() as id`,
@@ -164,7 +176,8 @@ export const dbActorRaw = actor({
 		},
 		getPayloadSize: async (c, id: number) => {
 			const results = await c.db.execute<{ size: number }>(
-				`SELECT length(payload) as size FROM test_data WHERE id = ${id}`,
+				"SELECT length(payload) as size FROM test_data WHERE id = ?",
+				id,
 			);
 			return results[0]?.size ?? 0;
 		},
@@ -178,7 +191,10 @@ export const dbActorRaw = actor({
 			const now = Date.now();
 			for (let i = 0; i < normalizedCount; i++) {
 				await c.db.execute(
-					`INSERT INTO test_data (value, payload, created_at) VALUES ('bulk-${i}', '${payload}', ${now})`,
+					"INSERT INTO test_data (value, payload, created_at) VALUES (?, ?, ?)",
+					`bulk-${i}`,
+					payload,
+					now,
 				);
 			}
 
@@ -196,12 +212,21 @@ export const dbActorRaw = actor({
 				return emptyRows;
 			}
 
-			for (let i = 0; i < normalizedIterations; i++) {
-				const rowId =
-					normalizedRowIds[i % normalizedRowIds.length] ?? 0;
-				await c.db.execute(
-					`UPDATE test_data SET value = 'v-${i}' WHERE id = ${rowId}`,
-				);
+			await c.db.execute("BEGIN");
+			try {
+				for (let i = 0; i < normalizedIterations; i++) {
+					const rowId =
+						normalizedRowIds[i % normalizedRowIds.length] ?? 0;
+					await c.db.execute(
+						"UPDATE test_data SET value = ? WHERE id = ?",
+						`v-${i}`,
+						rowId,
+					);
+				}
+				await c.db.execute("COMMIT");
+			} catch (error) {
+				await c.db.execute("ROLLBACK");
+				throw error;
 			}
 
 			return await c.db.execute<{ id: number; value: string }>(
@@ -230,25 +255,42 @@ export const dbActorRaw = actor({
 			const normalizedChurnCount = Math.max(0, Math.trunc(churnCount));
 			const now = Date.now();
 
-			for (let i = 0; i < normalizedSeedCount; i++) {
-				const payload = makePayload(1024 + (i % 5) * 128);
-				await c.db.execute(
-					`INSERT OR REPLACE INTO test_data (id, value, payload, created_at) VALUES (${i + 1}, 'seed-${i}', '${payload}', ${now})`,
-				);
-			}
-
-			for (let i = 0; i < normalizedChurnCount; i++) {
-				const id = (i % normalizedSeedCount) + 1;
-				if (i % 9 === 0) {
+			await c.db.execute("BEGIN");
+			try {
+				for (let i = 0; i < normalizedSeedCount; i++) {
+					const payload = makePayload(1024 + (i % 5) * 128);
 					await c.db.execute(
-						`DELETE FROM test_data WHERE id = ${id}`,
-					);
-				} else {
-					const payload = makePayload(768 + (i % 7) * 96);
-					await c.db.execute(
-						`INSERT OR REPLACE INTO test_data (id, value, payload, created_at) VALUES (${id}, 'upd-${i}', '${payload}', ${now + i})`,
+						"INSERT OR REPLACE INTO test_data (id, value, payload, created_at) VALUES (?, ?, ?, ?)",
+						i + 1,
+						`seed-${i}`,
+						payload,
+						now,
 					);
 				}
+
+				for (let i = 0; i < normalizedChurnCount; i++) {
+					const id = (i % normalizedSeedCount) + 1;
+					if (i % 9 === 0) {
+						await c.db.execute(
+							"DELETE FROM test_data WHERE id = ?",
+							id,
+						);
+					} else {
+						const payload = makePayload(768 + (i % 7) * 96);
+						await c.db.execute(
+							"INSERT OR REPLACE INTO test_data (id, value, payload, created_at) VALUES (?, ?, ?, ?)",
+							id,
+							`upd-${i}`,
+							payload,
+							now + i,
+						);
+					}
+				}
+
+				await c.db.execute("COMMIT");
+			} catch (error) {
+				await c.db.execute("ROLLBACK");
+				throw error;
 			}
 		},
 		repeatUpdate: async (c, id: number, count: number) => {

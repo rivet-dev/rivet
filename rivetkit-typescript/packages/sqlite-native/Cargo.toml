@@ -9,8 +9,18 @@ description = "Native SQLite VFS for RivetKit backed by a transport-agnostic KV 
 crate-type = ["lib"]
 
 [dependencies]
+anyhow.workspace = true
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
-tokio = { version = "1", features = ["rt"] }
+rivet-envoy-client.workspace = true
+tokio = { version = "1", features = ["rt", "sync"] }
 tracing = "0.1"
 async-trait = "0.1"
 getrandom = "0.2"
+rivet-envoy-protocol.workspace = true
+moka = { version = "0.12", default-features = false, features = ["sync"] }
+parking_lot = "0.12"
+
+[dev-dependencies]
+sqlite-storage.workspace = true
+tempfile.workspace = true
+universaldb.workspace = true

@@ -24,6 +24,11 @@ pub type ResponseMap = Arc<Mutex<HashMap<String, oneshot::Sender<serde_json::Val
 /// Map of open WebSocket senders, keyed by concatenated gateway_id + request_id (8 bytes).
 pub type WsSenderMap = Arc<Mutex<HashMap<[u8; 8], WebSocketSender>>>;
 
+/// Map of sqlite startup payloads keyed by actor ID.
+pub type SqliteStartupMap = Arc<Mutex<HashMap<String, protocol::SqliteStartupData>>>;
+/// Map of sqlite schema versions keyed by actor ID.
+pub type SqliteSchemaVersionMap = Arc<Mutex<HashMap<String, u32>>>;
+
 fn make_ws_key(gateway_id: &protocol::GatewayId, request_id: &protocol::RequestId) -> [u8; 8] {
 	let mut key = [0u8; 8];
 	key[..4].copy_from_slice(gateway_id);
@@ -36,6 +41,8 @@ pub struct BridgeCallbacks {
 	event_cb: EventCallback,
 	response_map: ResponseMap,
 	ws_sender_map: WsSenderMap,
+	sqlite_startup_map: SqliteStartupMap,
+	sqlite_schema_version_map: SqliteSchemaVersionMap,
 }
 
 impl BridgeCallbacks {
@@ -43,11 +50,15 @@ impl BridgeCallbacks {
 		event_cb: EventCallback,
 		response_map: ResponseMap,
 		ws_sender_map: WsSenderMap,
+		sqlite_startup_map: SqliteStartupMap,
+		sqlite_schema_version_map: SqliteSchemaVersionMap,
 	) -> Self {
 		Self {
 			event_cb,
 			response_map,
 			ws_sender_map,
+			sqlite_startup_map,
+			sqlite_schema_version_map,
 		}
 	}
 
@@ -65,11 +76,28 @@ impl EnvoyCallbacks for BridgeCallbacks {
 		generation: u32,
 		config: protocol::ActorConfig,
 		preloaded_kv: Option<protocol::PreloadedKv>,
+		sqlite_schema_version: u32,
+		sqlite_startup_data: Option<protocol::SqliteStartupData>,
 	) -> BoxFuture<anyhow::Result<()>> {
 		let response_map = self.response_map.clone();
 		let event_cb = self.event_cb.clone();
+		let sqlite_startup_map = self.sqlite_startup_map.clone();
+		let sqlite_schema_version_map = self.sqlite_schema_version_map.clone();
 
 		Box::pin(async move {
+			{
+				sqlite_schema_version_map
+					.lock()
+					.await
+					.insert(actor_id.clone(), sqlite_schema_version);
+				let mut map = sqlite_startup_map.lock().await;
+				if let Some(startup) = sqlite_startup_data.clone() {
+					map.insert(actor_id.clone(), startup);
+				} else {
+					map.remove(&actor_id);
+				}
+			}
+
 			let response_id = uuid::Uuid::new_v4().to_string();
 			let envelope = serde_json::json!({
 				"kind": "actor_start",
@@ -80,6 +108,8 @@ impl EnvoyCallbacks for BridgeCallbacks {
 				"createTs": config.create_ts,
 				"input": config.input.map(|v| base64_encode(&v)),
 				"preloadedKv": preloaded_kv.as_ref().map(encode_preloaded_kv),
+				"sqliteSchemaVersion": sqlite_schema_version,
+				"sqliteStartupData": sqlite_startup_data.as_ref().map(encode_sqlite_startup_data),
 				"responseId": response_id,
 			});
 
@@ -110,8 +140,13 @@ impl EnvoyCallbacks for BridgeCallbacks {
 	) -> BoxFuture<anyhow::Result<()>> {
 		let response_map = self.response_map.clone();
 		let event_cb = self.event_cb.clone();
+		let sqlite_startup_map = self.sqlite_startup_map.clone();
+		let sqlite_schema_version_map = self.sqlite_schema_version_map.clone();
 
 		Box::pin(async move {
+			sqlite_schema_version_map.lock().await.remove(&actor_id);
+			sqlite_startup_map.lock().await.remove(&actor_id);
+
 			let response_id = uuid::Uuid::new_v4().to_string();
 			let envelope = serde_json::json!({
 				"kind": "actor_stop",
@@ -334,5 +369,27 @@ fn encode_preloaded_kv(preloaded_kv: &protocol::PreloadedKv) -> serde_json::Valu
 		}).collect::<Vec<_>>(),
 		"requestedGetKeys": preloaded_kv.requested_get_keys.iter().map(|key| base64_encode(key)).collect::<Vec<_>>(),
 		"requestedPrefixes": preloaded_kv.requested_prefixes.iter().map(|key| base64_encode(key)).collect::<Vec<_>>(),
+	})
+}
+
+fn encode_sqlite_startup_data(startup: &protocol::SqliteStartupData) -> serde_json::Value {
+	serde_json::json!({
+		"generation": startup.generation,
+		"meta": {
+			"schemaVersion": startup.meta.schema_version,
+			"generation": startup.meta.generation,
+			"headTxid": startup.meta.head_txid,
+			"materializedTxid": startup.meta.materialized_txid,
+			"dbSizePages": startup.meta.db_size_pages,
+			"pageSize": startup.meta.page_size,
+			"creationTsMs": startup.meta.creation_ts_ms,
+			"maxDeltaBytes": startup.meta.max_delta_bytes,
+		},
+		"preloadedPages": startup.preloaded_pages.iter().map(|page| {
+			serde_json::json!({
+				"pgno": page.pgno,
+				"bytes": page.bytes.as_ref().map(|bytes| base64_encode(bytes)),
+			})
+		}).collect::<Vec<_>>(),
 	})
 }

@@ -1,0 +1,69 @@
+US-010 Review: Implement takeover handler
+Commit: df6357373d
+File: engine/packages/sqlite-storage/src/takeover.rs (486 lines)
+
+== Acceptance Criteria ==
+
+1. Creates META if absent (new actor); bumps generation on existing
+   PASS. Empty-store path calls DBHead::new(now_ms) with generation=1.
+   Existing path does DBHead { generation: head.generation + 1, ..head }.
+   Test: takeover_on_empty_store_creates_meta_and_page_one_placeholder (gen=1),
+   takeover_on_existing_meta_bumps_generation_and_preloads_page_one (gen=2).
+
+2. Scans for and deletes orphan DELTA/ (txid > head_txid), STAGE/, stale PIDX
+   PASS. build_recovery_plan scans delta_prefix, stage_prefix, pidx_delta_prefix.
+   Deletes deltas with txid > head_txid, all stages unconditionally, and PIDX
+   entries whose txid > head_txid or whose txid has no matching live delta.
+   Matches SPEC 7.6 exactly. Test: takeover_cleans_orphans_and_stale_pidx_entries
+   verifies delta(5) deleted, delta(2) kept, pidx(2->5) and pidx(3->99) deleted,
+   pidx(1->2) kept, all stages deleted.
+
+3. Uses CAS on META via atomic_write
+   PARTIAL PASS. atomic_write is used to write the new META alongside recovery
+   mutations. However, there is no true CAS (compare-and-swap) guard. The
+   atomic_write call does not include an expected-value condition on the old META.
+   A concurrent takeover could race. The SPEC says "CAS fencing is handled
+   externally by callers" (US-005 notes), so this may be by design, but the AC
+   text says "Uses CAS on META via atomic_write" which is not literally met.
+
+4. Returns new generation, meta, and preloaded pages (page 1 minimum)
+   PASS. TakeoverResult contains generation, meta (via SqliteMeta::from), and
+   preloaded_pages. collect_preload_pgnos always inserts page 1 into the
+   BTreeSet. Page 1 is always included in the result even when bytes=None
+   (empty store) or beyond db_size_pages.
+
+5. Schedules compaction if delta_count >= 32
+   PASS. live_delta_count >= 32 triggers compaction_tx.send(actor_id).
+   Test: takeover_schedules_compaction_when_delta_threshold_is_met seeds 32
+   deltas and asserts compaction_rx receives "actor-z".
+
+6. Tests: takeover on empty store (gen=1), second takeover (gen=2), orphan cleanup
+   PASS. Three dedicated tests cover all three scenarios plus a fourth for
+   compaction scheduling. Tests are thorough with assertions on both return
+   values and persisted store state.
+
+== Additional Observations ==
+
+- Error handling: Good use of anyhow context annotations. Key decoding functions
+  use ensure! with descriptive messages. No panics or unwraps in production code.
+
+- Page 1 preload: collect_preload_pgnos correctly always includes page 1.
+  preload_pages skips pgno=0 and pgno > db_size_pages, returning bytes=None.
+  Page 1 bypasses the max_total_bytes budget (line: "pgno == 1 || total_bytes +
+  bytes.len() <= config.max_total_bytes"), ensuring it is always returned.
+
+- PIDX cache invalidation: page_indices.remove_async is called after
+  atomic_write, which correctly invalidates any stale in-memory PIDX for the
+  actor. Subsequent get_or_load_pidx will reload from store.
+
+- Minor: The three scan_prefix calls in build_recovery_plan are sequential, not
+  batched. This is 3 RTTs during takeover instead of 1. Acceptable for a
+  non-hot-path operation but worth noting for future optimization.
+
+== Verdict ==
+
+PASS with one caveat: the "CAS on META" criterion is not literally implemented
+as a compare-and-swap. The atomic_write is unconditional. If the SPEC intends
+external fencing (e.g., pegboard-envoy ensures only one takeover runs at a
+time), this is acceptable. If true CAS is required, an expected_value guard
+on the META key should be added to atomic_write.

@@ -3507,6 +3507,7 @@ dependencies = [
  "serde",
  "serde_bare",
  "serde_json",
+ "sqlite-storage",
  "tokio",
  "tokio-tungstenite",
  "tracing",
@@ -5212,9 +5213,14 @@ dependencies = [
 name = "rivetkit-sqlite-native"
 version = "2.3.0-rc.4"
 dependencies = [
+ "anyhow",
  "async-trait",
  "getrandom 0.2.16",
  "libsqlite3-sys",
+ "moka",
+ "parking_lot",
+ "rivet-envoy-client",
+ "rivet-envoy-protocol",
  "tokio",
  "tracing",
 ]
@@ -6027,6 +6033,31 @@ checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der",
+]
+
+[[package]]
+name = "sqlite-storage"
+version = "2.3.0-rc.4"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "futures-util",
+ "lazy_static",
+ "lz4_flex",
+ "moka",
+ "parking_lot",
+ "rand 0.8.5",
+ "rivet-metrics",
+ "scc",
+ "serde",
+ "serde_bare",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "universaldb",
+ "uuid",
 ]
 
 [[package]]

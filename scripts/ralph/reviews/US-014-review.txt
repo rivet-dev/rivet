@@ -1,0 +1,62 @@
+US-014 Review: Implement compaction coordinator
+Commit: a83731b7b8
+File: engine/packages/sqlite-storage/src/compaction/mod.rs (219 lines)
+
+=== Acceptance Criteria ===
+
+1. CompactionCoordinator struct exists
+   PASS. Generic struct CompactionCoordinator<S: SqliteStore> at line 20 with rx, store,
+   workers, spawn_worker, and reap_interval fields.
+
+2. Owns mpsc::UnboundedReceiver<String>
+   PASS. Field `rx: mpsc::UnboundedReceiver<String>` at line 21. Uses tokio::sync::mpsc.
+
+3. Tracks workers in HashMap<String, JoinHandle<()>>
+   PASS. Field `workers: HashMap<String, JoinHandle<()>>` at line 23. Uses std::collections::HashMap.
+
+4. Deduplicates (skip if worker already running)
+   PASS. spawn_worker_if_needed (line 78) checks is_some_and(|handle| !handle.is_finished())
+   and returns early if the worker is still running. Also removes a finished entry before
+   spawning a replacement.
+
+5. Periodically reaps completed workers (retain where !is_finished)
+   PASS. reap_finished_workers (line 94) calls self.workers.retain(|_, handle| !handle.is_finished()).
+   Invoked on every reap_interval tick via tokio::select! in run_loop.
+
+6. run() is async task suitable for tokio::spawn
+   PASS. CompactionCoordinator::run(rx, store) is pub async fn returning () (line 35).
+   Internally calls Self::new(rx, store).run_loop().await. Suitable for tokio::spawn.
+
+7. Test: same actor_id twice spawns one worker
+   PASS. Test sending_same_actor_id_twice_only_spawns_one_worker (line 119). Sends "actor-a"
+   twice, asserts the second send times out with no new spawn. Uses Notify gate to hold
+   the first worker open.
+
+8. Test: after worker completes, sending again spawns new worker
+   PASS. Test sending_actor_again_after_worker_completes_spawns_new_worker (line 158). Uses
+   per-invocation Notify gates from a VecDeque, releases first worker, confirms second send
+   spawns a new worker via spawned_rx.
+
+9. cargo test passes
+   PASS. Both compaction tests pass. 4 related tests total (2 compaction + 2 from other
+   modules) ran successfully.
+
+=== Critical Pattern Check ===
+
+Uses simple channel + HashMap: YES.
+No DeltaStats: Confirmed (grep negative).
+No scc::HashSet: Confirmed (grep negative).
+No antiox: Confirmed (grep negative).
+Uses tokio::sync::mpsc + std::collections::HashMap + tokio::task::JoinHandle exactly as
+specified in the PRD notes.
+
+=== Minor Observations ===
+
+- abort_workers() on channel close is a good cleanup touch not in the AC but harmless.
+- with_worker() constructor enables worker injection for tests, clean pattern per engine
+  CLAUDE.md guidance on injecting worker futures.
+- DEFAULT_REAP_INTERVAL of 100ms is reasonable; tests override to 10ms for speed.
+
+=== Verdict ===
+
+PASS. All 9 acceptance criteria met. Correct pattern used.

@@ -1,0 +1,64 @@
+US-006 Review: Implement LTX V3 encoder
+Commit: d2a0bc118a
+File: engine/packages/sqlite-storage/src/ltx.rs (479 lines at commit)
+
+CRITERIA:
+
+1. src/ltx.rs contains LtxEncoder struct or encode function
+   PASS - LtxEncoder struct with encode() and encode_with_index() methods, plus
+   a free function encode_ltx_v3().
+
+2. Writes 100-byte V3 header with HeaderFlagNoChecksum set
+   PASS - LtxHeader::encode() writes into [u8; LTX_HEADER_SIZE] where
+   LTX_HEADER_SIZE=100. LtxHeader::delta() sets flags=LTX_HEADER_FLAG_NO_CHECKSUM
+   (bit 1). Remaining bytes are zeroed. Test verifies magic, flags, field offsets,
+   and reserved region.
+
+3. Writes 6-byte page headers: 4-byte pgno BE + 2-byte flags with PageHeaderFlagSize
+   PASS - Lines 163-164 write pgno.to_be_bytes() (4B) then
+   LTX_PAGE_HEADER_FLAG_SIZE.to_be_bytes() (2B). Test decodes both fields at the
+   expected offsets.
+
+4. Writes 4-byte LZ4 compressed size prefix per page
+   PASS - Line 165 writes (compressed.len() as u32).to_be_bytes() before the
+   compressed body. Test reads back the prefix and uses it to slice the compressed
+   data for decompression.
+
+5. Uses lz4_flex::block::compress
+   PASS - Line 161: lz4_flex::block::compress(&page.bytes). Test round-trips
+   through lz4_flex::block::decompress to verify.
+
+6. Writes varint page index (sorted pgno, offset, size + zero sentinel + u64 total)
+   PASS - Lines 181-188: varint entries for each page, zero sentinel via
+   append_uvarint(0), then u64 index_size in big-endian. Test
+   writes_sorted_page_index_with_zero_pgno_sentinel verifies varint decoding,
+   sort order [2,17,33], sentinel, and 6-byte zeroed page-header sentinel.
+
+7. Writes 16-byte trailer with zeroed checksums
+   PASS - Line 191: extends with [0u8; LTX_TRAILER_SIZE] where LTX_TRAILER_SIZE=16.
+   Test asserts trailing 16 bytes are all zero.
+
+8. Accepts (pgno, page_bytes) pairs, returns Vec<u8>
+   PASS - encode() takes &[DirtyPage] (pgno + bytes) and returns Result<Vec<u8>>.
+   encode_with_index() returns EncodedLtx { bytes, page_index }.
+
+9. Unit tests verify byte layout
+   PASS - 6 tests: header defaults, header+trailer bytes, page header + LZ4 prefix
+   round-trip, sorted page index with sentinel, invalid page rejection, free
+   function smoke test. All 6 pass.
+
+SIZE: 479 lines (encoder + tests). PRD estimated 200-250 for encoder only. The
+encoder logic is ~90 lines (LtxEncoder::encode_with_index + append_uvarint). The
+remainder is the LtxHeader struct, validation, constants, and 270 lines of tests.
+Reasonable for the scope.
+
+NOTES:
+- LTX_RESERVED_HEADER_BYTES=28 overlaps node_id (bytes 72-79) rather than covering
+  only the true reserved region (80-99=20 bytes). Works because node_id is zero, but
+  the constant name is misleading. Minor, not a blocker.
+- LTX_VERSION=3 is defined but never written into the output. This matches Go
+  behavior where the version is implicit in the magic + feature flags, not a
+  discrete field.
+- Pages are sorted internally, so callers need not pre-sort. Good defensive design.
+
+VERDICT: PASS - All 9 acceptance criteria met.

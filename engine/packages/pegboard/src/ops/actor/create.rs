@@ -56,7 +56,6 @@ pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<
 		.next()
 		.map(|p| p.protocol_version.is_some())
 		.unwrap_or_default();
-
 	if actor_v2 {
 		// Dispatch actor workflow
 		ctx.workflow(crate::workflows::actor2::Input {

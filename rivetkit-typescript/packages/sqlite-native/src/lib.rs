@@ -27,3 +27,6 @@ pub mod sqlite_kv;
 
 /// Custom SQLite VFS that maps VFS callbacks to KV operations via the trait.
 pub mod vfs;
+
+/// Building blocks for the upcoming SQLite v2 actor-side VFS.
+pub mod v2;

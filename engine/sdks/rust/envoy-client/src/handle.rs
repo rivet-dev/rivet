@@ -5,6 +5,7 @@ use rivet_envoy_protocol as protocol;
 
 use crate::context::SharedContext;
 use crate::envoy::{ActorInfo, ToEnvoyMessage};
+use crate::sqlite::{SqliteRequest, SqliteResponse};
 use crate::tunnel::HibernatingWebSocketMetadata;
 
 /// Handle for interacting with the envoy from callbacks.
@@ -261,6 +262,58 @@ impl EnvoyHandle {
 		}
 	}
 
+	pub async fn sqlite_get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::GetPages(request))
+			.await?
+		{
+			SqliteResponse::GetPages(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite get_pages response type"),
+		}
+	}
+
+	pub async fn sqlite_commit(
+		&self,
+		request: protocol::SqliteCommitRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::Commit(request))
+			.await?
+		{
+			SqliteResponse::Commit(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite commit response type"),
+		}
+	}
+
+	pub async fn sqlite_commit_stage(
+		&self,
+		request: protocol::SqliteCommitStageRequest,
+	) -> anyhow::Result<protocol::SqliteCommitStageResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::CommitStage(request))
+			.await?
+		{
+			SqliteResponse::CommitStage(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite commit_stage response type"),
+		}
+	}
+
+	pub async fn sqlite_commit_finalize(
+		&self,
+		request: protocol::SqliteCommitFinalizeRequest,
+	) -> anyhow::Result<protocol::SqliteCommitFinalizeResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::CommitFinalize(request))
+			.await?
+		{
+			SqliteResponse::CommitFinalize(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite commit_finalize response type"),
+		}
+	}
+
 	pub fn restore_hibernating_requests(
 		&self,
 		actor_id: String,
@@ -345,6 +398,19 @@ impl EnvoyHandle {
 			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
 		rx.await
 			.map_err(|_| anyhow::anyhow!("kv response channel closed"))?
+	}
+
+	async fn send_sqlite_request(&self, request: SqliteRequest) -> anyhow::Result<SqliteResponse> {
+		let (tx, rx) = tokio::sync::oneshot::channel();
+		self.shared
+			.envoy_tx
+			.send(ToEnvoyMessage::SqliteRequest {
+				request,
+				response_tx: tx,
+			})
+			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
+		rx.await
+			.map_err(|_| anyhow::anyhow!("sqlite response channel closed"))?
 	}
 }
 

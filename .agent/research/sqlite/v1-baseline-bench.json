@@ -1,0 +1,44 @@
+{
+  "capturedAt": "2026-04-16T03:05:23.184Z",
+  "vfsVersion": "v1",
+  "source": "examples/sqlite-raw/scripts/benchmark.ts",
+  "pageSizeBytes": 4096,
+  "environment": {
+    "benchmarkHarness": "examples/sqlite-raw wrapper over rivetkit-sqlite-native/examples/v1_baseline_bench.rs",
+    "rttMs": 0,
+    "storage": "in-memory SqliteKv benchmark driver exercising the v1 native VFS",
+    "platform": "linux",
+    "release": "6.1.0-41-amd64",
+    "arch": "x64",
+    "cpuModel": "12th Gen Intel(R) Core(TM) i7-12700KF",
+    "cpuCount": 20,
+    "totalMemoryGiB": 62.56
+  },
+  "workloads": [
+    {
+      "name": "1 MiB insert",
+      "latencyMs": 3.614,
+      "roundTrips": 298
+    },
+    {
+      "name": "10 MiB insert",
+      "latencyMs": 25.892,
+      "roundTrips": 2606
+    },
+    {
+      "name": "hot-row update",
+      "latencyMs": 1.036,
+      "roundTrips": 109
+    },
+    {
+      "name": "cold read",
+      "latencyMs": 1.729,
+      "roundTrips": 228
+    },
+    {
+      "name": "mixed read/write",
+      "latencyMs": 0.824,
+      "roundTrips": 62
+    }
+  ]
+}

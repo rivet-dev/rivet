@@ -1,5 +1,6 @@
 use std::path::Path;
-use std::time::Instant;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 use std::{
 	future::Future,
 	sync::atomic::{AtomicUsize, Ordering},
@@ -16,6 +17,22 @@ use crate::{
 	options::DatabaseOption,
 	transaction::{RetryableTransaction, Transaction},
 };
+
+/// Returns the simulated latency duration read from UDB_SIMULATED_LATENCY_MS at startup.
+fn simulated_latency() -> Option<Duration> {
+	static LATENCY: OnceLock<Option<Duration>> = OnceLock::new();
+	*LATENCY.get_or_init(|| {
+		let ms: u64 = std::env::var("UDB_SIMULATED_LATENCY_MS")
+			.ok()?
+			.parse()
+			.ok()?;
+		if ms == 0 {
+			return None;
+		}
+		tracing::debug!(latency_ms = ms, "udb simulated latency enabled");
+		Some(Duration::from_millis(ms))
+	})
+}
 
 #[derive(Clone)]
 pub struct Database {
@@ -46,6 +63,10 @@ impl Database {
 		Fut: Future<Output = Result<T>> + Send,
 		T: Send + 'a + 'static,
 	{
+		if let Some(delay) = simulated_latency() {
+			tokio::time::sleep(delay).await;
+		}
+
 		let start = Instant::now();
 		let attempts = AtomicUsize::new(0);
 		metrics::TRANSACTION_TOTAL.with_label_values(&[name]).inc();

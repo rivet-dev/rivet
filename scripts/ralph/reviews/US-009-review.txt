@@ -1,0 +1,47 @@
+US-009 Review: Implement SqliteEngine struct and constructor
+Commit: 65329084c8
+
+== Criterion 1: SqliteEngine<S: SqliteStore> struct with store, page_indices, compaction_tx, metrics ==
+PASS. The struct at engine.rs:15-20 has all four fields with the correct types:
+store (Arc<S>), page_indices (scc::HashMap<String, DeltaPageIndex>),
+compaction_tx (mpsc::UnboundedSender<String>), metrics (SqliteStorageMetrics).
+
+== Criterion 2: Constructor returns (SqliteEngine, UnboundedReceiver<String>) ==
+PASS. SqliteEngine::new(store) creates the unbounded channel internally and returns
+the (engine, compaction_rx) tuple. A bonus from_arc(Arc<S>) constructor is also
+provided for test convenience.
+
+== Criterion 3: get_or_load_pidx helper that lazily loads PIDX from store ==
+PASS with issue. The helper exists at engine.rs:43-64. It uses
+scc::HashMap::entry_async correctly, drops the vacant entry before the async store
+load, and re-checks entry_async before inserting (matching the CLAUDE.md pattern).
+
+BUG: get_or_load_pidx calls pidx_delta_prefix() (a global, actor-agnostic prefix)
+regardless of which actor_id is passed. In production, each actor's PIDX keys live
+in an actor-scoped subspace. The current implementation loads the same global set
+of PIDX entries for every actor. The test at line 95 masks this because it
+pre-populates the global prefix and only verifies cache-hit behavior, not
+actor-scoped isolation. This will need to be fixed before commit/read handlers
+use it (US-011/US-012), but the acceptance criteria for US-009 only say
+"lazily loads the PIDX from store" without specifying actor-scoped keys, so
+this is a design gap rather than a strict criterion failure.
+
+== Criterion 4: cargo check -p sqlite-storage passes ==
+PASS. Verified: cargo check completes with no errors on this commit.
+
+== Supporting changes ==
+- keys.rs: Added pidx_delta_prefix() builder with test confirming it matches
+  the key prefix of pidx_delta_key(). Clean.
+- metrics.rs: SqliteStorageMetrics is a placeholder unit struct with Debug+Default.
+  Acceptable for now; US-017 will populate it with real Prometheus metrics.
+- page_index.rs: Refactored tests to use the new pidx_delta_prefix() instead of
+  an inline pidx_prefix() helper. Good cleanup.
+- Tests cover constructor, compaction channel send/recv, and PIDX lazy-load with
+  op_log verification (scan_prefix called once per actor, not on cache hit).
+
+== Summary ==
+PASS. All four acceptance criteria are met. One design concern: get_or_load_pidx
+does not incorporate actor_id into the store prefix, meaning all actors would load
+the same PIDX entries. This must be addressed in US-011/US-012 when the helper is
+actually called with real per-actor data. The commit is well-structured, tests are
+meaningful, and cargo check passes cleanly.
