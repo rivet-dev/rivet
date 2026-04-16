@@ -108,7 +108,8 @@ impl SqliteEngine {
 			let takeover_mutations = takeover_mutations.clone();
 			let subspace = subspace.clone();
 			async move {
-				let current_meta = udb::tx_get_value(&tx, &subspace, &meta_key(&actor_id)).await?;
+				let current_meta =
+					udb::tx_get_value_serializable(&tx, &subspace, &meta_key(&actor_id)).await?;
 				if current_meta != expected_meta_bytes {
 					tracing::error!(
 						actor_id = %actor_id,

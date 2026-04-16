@@ -150,11 +150,12 @@ impl SqliteEngine {
 				let cached_existing_pidx = cached_existing_pidx.clone();
 				async move {
 					let meta_storage_key = meta_key(&actor_id);
-					let meta_bytes = udb::tx_get_value(&tx, &subspace, &meta_storage_key)
-						.await?
-						.ok_or(SqliteStorageError::MetaMissing {
-							operation: "commit",
-						})?;
+					let meta_bytes =
+						udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key)
+							.await?
+							.ok_or(SqliteStorageError::MetaMissing {
+								operation: "commit",
+							})?;
 					let mut head = decode_db_head(&meta_bytes)?;
 
 					if head.generation != request.generation {

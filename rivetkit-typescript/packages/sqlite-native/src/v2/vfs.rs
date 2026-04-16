@@ -1064,18 +1064,8 @@ impl VfsV2Context {
 				missing = missing.len(),
 				prefetch = prefetch_count,
 				total_fetch = to_fetch.len(),
-				pages = ?to_fetch,
 				"vfs get_pages fetch"
 			);
-			if std::env::var("VFS_TRACE_PAGES").is_ok() {
-				eprintln!(
-					"[vfs fetch] missing={} prefetch={} total={} pages={:?}",
-					missing.len(),
-					prefetch_count,
-					to_fetch.len(),
-					to_fetch
-				);
-			}
 		}
 
 		let response = self
@@ -4321,5 +4311,187 @@ mod tests {
 		let count = sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM bench;")
 			.expect("count should succeed");
 		assert_eq!(count, 256);
+	}
+
+	// Regression test for fence mismatch during rapid autocommit inserts.
+	// Each autocommit INSERT is its own transaction. This test drives many
+	// sequential commits through the VFS and verifies they all succeed.
+	#[test]
+	fn autocommit_inserts_maintain_head_txid_consistency() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER NOT NULL);",
+		)
+		.expect("create table should succeed");
+
+		let relaxed = std::sync::atomic::Ordering::Relaxed;
+		ctx.commit_total.store(0, relaxed);
+
+		// 100 sequential autocommit inserts. If fence mismatch is the bug,
+		// this will fail partway through with "commit head_txid X did not
+		// match current head_txid X-1".
+		for i in 0..100 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("INSERT INTO t (id, v) VALUES ({i}, {});", i * 2),
+			)
+			.expect("autocommit insert should not fence-mismatch");
+		}
+
+		let commits = ctx.commit_total.load(relaxed);
+		// Each autocommit INSERT = 1 commit. CREATE TABLE was 1 more.
+		// We reset commit_total after CREATE, so expect 100.
+		assert_eq!(commits, 100, "expected exactly 100 commits");
+
+		let count =
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM t;").expect("count should succeed");
+		assert_eq!(count, 100);
+
+		// Verify the sum to make sure data is correct and not corrupted
+		let sum =
+			sqlite_query_i64(db.as_ptr(), "SELECT SUM(v) FROM t;").expect("sum should succeed");
+		assert_eq!(sum, (0..100).map(|i| i * 2).sum::<i64>());
+	}
+
+	// Regression test: 5 actors run 200 autocommits each on the same engine.
+	// Compaction is triggered via the mpsc channel after each commit, so this
+	// also exercises the commit-vs-compaction race that caused fence rewinds
+	// before the tx_get_value_serializable fix.
+	#[test]
+	fn stress_concurrent_multi_actor_autocommits() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+
+		let mut dbs = Vec::new();
+		for i in 0..5 {
+			let actor_id = format!("{}-stress-{}", harness.actor_id, i);
+			let db = harness.open_db_on_engine(
+				&runtime,
+				engine.clone(),
+				&actor_id,
+				VfsV2Config::default(),
+			);
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER NOT NULL);",
+			)
+			.expect("create");
+			dbs.push(db);
+		}
+
+		// Interleave 200 autocommit inserts across all 5 actors
+		for i in 0..200 {
+			for db in &dbs {
+				sqlite_exec(
+					db.as_ptr(),
+					&format!("INSERT INTO t (id, v) VALUES ({i}, {i});"),
+				)
+				.expect("insert");
+			}
+		}
+
+		for db in &dbs {
+			let count = sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM t;").expect("count");
+			assert_eq!(count, 200);
+		}
+	}
+
+	// Regression test: two actors run autocommits concurrently on the same
+	// SqliteEngine. If anything in the engine (e.g., compaction) cross-contaminates
+	// actors or races on shared state, we'd see fence mismatches.
+	#[test]
+	fn concurrent_multi_actor_autocommits() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+
+		let actor_a = format!("{}-a", harness.actor_id);
+		let actor_b = format!("{}-b", harness.actor_id);
+
+		let db_a =
+			harness.open_db_on_engine(&runtime, engine.clone(), &actor_a, VfsV2Config::default());
+		let db_b =
+			harness.open_db_on_engine(&runtime, engine.clone(), &actor_b, VfsV2Config::default());
+
+		sqlite_exec(
+			db_a.as_ptr(),
+			"CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER NOT NULL);",
+		)
+		.expect("create a");
+		sqlite_exec(
+			db_b.as_ptr(),
+			"CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER NOT NULL);",
+		)
+		.expect("create b");
+
+		// Run 100 autocommits on each actor, interleaved.
+		for i in 0..100 {
+			sqlite_exec(
+				db_a.as_ptr(),
+				&format!("INSERT INTO t (id, v) VALUES ({i}, {i});"),
+			)
+			.expect("insert a");
+			sqlite_exec(
+				db_b.as_ptr(),
+				&format!("INSERT INTO t (id, v) VALUES ({i}, {i});"),
+			)
+			.expect("insert b");
+		}
+
+		let count_a = sqlite_query_i64(db_a.as_ptr(), "SELECT COUNT(*) FROM t;").expect("count a");
+		assert_eq!(count_a, 100);
+		let count_b = sqlite_query_i64(db_b.as_ptr(), "SELECT COUNT(*) FROM t;").expect("count b");
+		assert_eq!(count_b, 100);
+	}
+
+	// Same as above but across a close/reopen cycle to exercise takeover.
+	#[test]
+	fn autocommit_survives_close_reopen() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let actor_id = &harness.actor_id;
+
+		{
+			let db = harness.open_db_on_engine(
+				&runtime,
+				engine.clone(),
+				actor_id,
+				VfsV2Config::default(),
+			);
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER NOT NULL);",
+			)
+			.expect("create table");
+			for i in 0..50 {
+				sqlite_exec(
+					db.as_ptr(),
+					&format!("INSERT INTO t (id, v) VALUES ({i}, {});", i),
+				)
+				.expect("insert");
+			}
+		}
+
+		// Reopen (triggers takeover which bumps generation)
+		let db2 =
+			harness.open_db_on_engine(&runtime, engine.clone(), actor_id, VfsV2Config::default());
+		for i in 50..100 {
+			sqlite_exec(
+				db2.as_ptr(),
+				&format!("INSERT INTO t (id, v) VALUES ({i}, {});", i),
+			)
+			.expect("insert after reopen");
+		}
+
+		let count = sqlite_query_i64(db2.as_ptr(), "SELECT COUNT(*) FROM t;")
+			.expect("count should succeed");
+		assert_eq!(count, 100);
 	}
 }

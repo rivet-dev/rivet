@@ -267,7 +267,7 @@ impl SqliteEngine {
 			let deleted_delta_txids = deleted_delta_txids_for_tx.clone();
 			let remaining_delta_txids = remaining_delta_txids.clone();
 			async move {
-				let current_meta = udb::tx_get_value(&tx, &subspace, &meta_key)
+				let current_meta = udb::tx_get_value_serializable(&tx, &subspace, &meta_key)
 					.await?
 					.context("sqlite meta missing for shard compaction write")?;
 				let current_head = decode_db_head(&current_meta)?;

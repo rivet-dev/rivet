@@ -4,7 +4,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::{Context, Result, ensure};
 use futures_util::TryStreamExt;
-use universaldb::utils::{IsolationLevel::Snapshot, Subspace, end_of_key_range};
+use universaldb::utils::{
+	IsolationLevel::{Serializable, Snapshot},
+	Subspace, end_of_key_range,
+};
 
 const CHUNK_KEY_PREFIX: u8 = 0x03;
 const INLINE_VALUE_MARKER: u8 = 0x00;
@@ -123,6 +126,29 @@ pub(crate) async fn tx_get_value(
 	key: &[u8],
 ) -> Result<Option<Vec<u8>>> {
 	let Some(metadata) = tx.get(&physical_key(subspace, key), Snapshot).await? else {
+		return Ok(None);
+	};
+
+	Ok(Some(
+		decode_value(tx, subspace, key, metadata.as_slice()).await?,
+	))
+}
+
+/// Like tx_get_value, but registers the key in the transaction's read conflict
+/// range so concurrent writes to the same key by other transactions cause this
+/// transaction to abort and retry.
+///
+/// Use this for reads whose result is used to make a decision that depends on
+/// the value not having changed (e.g. fence checks on META). Snapshot reads do
+/// NOT register conflict ranges, so two transactions can both read the same
+/// value at snapshot, both write, and FDB silently accepts both writes with
+/// last-write-wins semantics — rewinding state.
+pub(crate) async fn tx_get_value_serializable(
+	tx: &universaldb::Transaction,
+	subspace: &Subspace,
+	key: &[u8],
+) -> Result<Option<Vec<u8>>> {
+	let Some(metadata) = tx.get(&physical_key(subspace, key), Serializable).await? else {
 		return Ok(None);
 	};
 
