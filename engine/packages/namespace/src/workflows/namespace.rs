@@ -119,13 +119,13 @@ pub async fn validate(
 		}));
 	}
 
-	if input.display_name.len() > util::check::MAX_DISPLAY_NAME_LONG_LEN {
+	if input.display_name.len() > util::check::MAX_DISPLAY_NAME_LEN {
 		return Ok(Err(errors::Namespace::FailedToCreate {
 			reason: "display name too long".to_string(),
 		}));
 	}
 
-	if !util::check::display_name_long(&input.display_name) {
+	if !util::check::display_name(&input.display_name) {
 		return Ok(Err(errors::Namespace::FailedToCreate {
 			reason: "invalid display name".to_string(),
 		}));

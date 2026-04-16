@@ -6,7 +6,6 @@ pub mod billing;
 pub mod build_meta;
 pub mod check;
 pub mod duration;
-pub mod faker;
 pub mod format;
 pub mod future;
 pub mod geo;

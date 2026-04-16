@@ -1,0 +1,5 @@
+{
+  "code": "invalid_request",
+  "group": "ws",
+  "message": "The websocket could not open due to an invalid request."
+}

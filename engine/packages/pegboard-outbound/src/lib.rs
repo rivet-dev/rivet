@@ -159,6 +159,12 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 			actor_config,
 		}) => (namespace_id, pool_name, checkpoint, actor_config),
 	};
+
+	let current_span = tracing::Span::current();
+	current_span.record("namespace_id", &namespace_id);
+	current_span.record("pool_name", &pool_name);
+	current_span.record("actor_id", &checkpoint.actor_id);
+
 	let namespace_id = Id::parse(&namespace_id)?;
 	let actor_id = Id::parse(&checkpoint.actor_id)?;
 	let generation = checkpoint.generation;
