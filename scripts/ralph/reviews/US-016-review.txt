@@ -1,0 +1,50 @@
+US-016 Review: Implement quota tracking and enforcement
+Commit: 693d035c5b
+
+=== Criterion 1: sqlite_storage_used tracked per actor (SHARDs + DELTAs + PIDX + META) ===
+PASS. New fields sqlite_storage_used and sqlite_max_storage added to DBHead in types.rs.
+quota.rs::tracked_storage_entry_size filters keys by prefix, counting only meta_key,
+delta_prefix, shard_prefix, and pidx_delta_prefix. Stage keys and unrelated KV keys
+are explicitly excluded (returns None). Commit, compaction, and takeover all update the
+counter through encode_db_head_with_usage. Unit test
+tracked_storage_only_counts_sqlite_persistent_keys validates the filter.
+
+=== Criterion 2: Commit handler rejects writes exceeding sqlite_max_storage (default 10 GiB) ===
+PASS. SQLITE_DEFAULT_MAX_STORAGE_BYTES = 10 * 1024 * 1024 * 1024 (10 GiB). Both
+commit (fast path) and commit_finalize (slow path) call encode_db_head_with_usage then
+bail with "SqliteStorageQuotaExceeded" if sqlite_storage_used > sqlite_max_storage.
+The bail happens before the atomic_write, so no partial state is persisted. Test
+commit_rejects_when_sqlite_quota_would_be_exceeded sets max to 256 bytes and confirms
+the error string and that no delta or atomic_write was issued.
+
+=== Criterion 3: Quota is separate from general KV quota; compaction is roughly quota-neutral ===
+PASS. tracked_storage_entry_size only matches the 0x02-subspace SQLite keys. KV keys
+(e.g. b"/kv/untracked") return None and are never counted. Test
+commit_tracks_sqlite_usage_without_counting_unrelated_keys seeds an untracked KV key
+and verifies it does not affect sqlite_storage_used. Compaction in shard.rs subtracts
+deleted delta and pidx bytes, adds new shard bytes, and rewrites META. Test
+compact_shard_keeps_quota_usage_in_sync asserts after_usage <= before_usage and that
+the stored counter matches a full rescan.
+
+=== Criterion 4: Integration tests ===
+PASS. Three targeted tests added: commit within quota succeeds
+(commit_tracks_sqlite_usage_without_counting_unrelated_keys), commit exceeding quota
+fails (commit_rejects_when_sqlite_quota_would_be_exceeded), compaction does not inflate
+quota (compact_shard_keeps_quota_usage_in_sync).
+
+=== How is sqlite_storage_used calculated? ===
+Byte-accurate. tracked_storage_entry_size returns (key.len() + value.len()) as u64 for
+every matching key. The META entry itself is handled by a fixed-point loop in
+encode_db_head_with_usage: it iterates until the serialized head size stabilizes, since
+the sqlite_storage_used field is part of the serialized bytes. Takeover also tracks
+deleted bytes via tracked_deleted_bytes on the RecoveryPlan struct.
+
+=== Minor observations ===
+- The fixed-point loop in encode_db_head_with_usage could theoretically not converge if
+  varint encoding of the usage field oscillates, but in practice BARE uses fixed-width
+  u64 for the field so it always converges in one iteration. No concern.
+- existing_pidx_entries adds a batch_get call in the commit hot path for pages not in
+  the cached PIDX. This is correct for accurate counting (avoids double-counting
+  existing pidx entries) but adds latency for cold-PIDX actors. Acceptable tradeoff.
+
+VERDICT: PASS (all 4 criteria met)

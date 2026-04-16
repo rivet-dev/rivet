@@ -7,6 +7,27 @@ interface DatabaseFactoryConfig {
 	onMigrate?: (db: RawAccess) => Promise<void> | void;
 }
 
+function sqlReturnsRows(query: string): boolean {
+	const token = query.trimStart().slice(0, 16).toUpperCase();
+	if (token.startsWith("PRAGMA")) {
+		return !/^PRAGMA\b[\s\S]*=/.test(query.trim());
+	}
+	return (
+		token.startsWith("SELECT") ||
+		token.startsWith("WITH") ||
+		/\bRETURNING\b/i.test(query)
+	);
+}
+
+function hasMultipleStatements(query: string): boolean {
+	const trimmed = query.trim().replace(/;+$/, "").trimEnd();
+	return trimmed.includes(";");
+}
+
+function isPragmaAssignment(query: string): boolean {
+	return /^PRAGMA\b[\s\S]*=/.test(query.trim());
+}
+
 export function db({
 	onMigrate,
 }: DatabaseFactoryConfig = {}): DatabaseProvider<RawAccess> {
@@ -45,6 +66,9 @@ export function db({
 			}
 
 			const db = await nativeDatabaseProvider.open(ctx.actorId);
+			ctx.metrics?.setSqliteVfsMetricsSource(() => {
+				return db.getSqliteVfsMetrics?.() ?? null;
+			});
 			let closed = false;
 			const mutex = new AsyncMutex();
 			const ensureOpen = () => {
@@ -84,15 +108,7 @@ export function db({
 								isSqliteBindingObject(args[0])
 									? toSqliteBindings(args[0])
 									: toSqliteBindings(args);
-							const token = query
-								.trimStart()
-								.slice(0, 16)
-								.toUpperCase();
-							const returnsRows =
-								token.startsWith("SELECT") ||
-								token.startsWith("PRAGMA") ||
-								token.startsWith("WITH") ||
-								/\bRETURNING\b/i.test(query);
+							const returnsRows = sqlReturnsRows(query);
 
 							if (returnsRows) {
 								const { rows, columns } = await db.query(
@@ -111,22 +127,58 @@ export function db({
 								result = [] as TRow[];
 							}
 						} else {
-							const results: Record<string, unknown>[] = [];
-							let columnNames: string[] | null = null;
-							await db.exec(
-								query,
-								(row: unknown[], columns: string[]) => {
-									if (!columnNames) {
-										columnNames = columns;
-									}
-									const rowObj: Record<string, unknown> = {};
-									for (let i = 0; i < row.length; i++) {
-										rowObj[columnNames[i]] = row[i];
-									}
-									results.push(rowObj);
-								},
-							);
-							result = results as TRow[];
+							const returnsRows = sqlReturnsRows(query);
+							if (!hasMultipleStatements(query)) {
+								if (returnsRows) {
+									const { rows, columns } = await db.query(
+										query,
+									);
+									result = rows.map((row: unknown[]) => {
+										const rowObj: Record<string, unknown> = {};
+										for (let i = 0; i < columns.length; i++) {
+											rowObj[columns[i]] = row[i];
+										}
+										return rowObj;
+									}) as TRow[];
+								} else if (isPragmaAssignment(query)) {
+									await db.run(query);
+									result = [] as TRow[];
+								} else {
+									const results: Record<string, unknown>[] = [];
+									let columnNames: string[] | null = null;
+									await db.exec(
+										query,
+										(row: unknown[], columns: string[]) => {
+											if (!columnNames) {
+												columnNames = columns;
+											}
+											const rowObj: Record<string, unknown> = {};
+											for (let i = 0; i < row.length; i++) {
+												rowObj[columnNames[i]] = row[i];
+											}
+											results.push(rowObj);
+										},
+									);
+									result = results as TRow[];
+								}
+							} else {
+								const results: Record<string, unknown>[] = [];
+								let columnNames: string[] | null = null;
+								await db.exec(
+									query,
+									(row: unknown[], columns: string[]) => {
+										if (!columnNames) {
+											columnNames = columns;
+										}
+										const rowObj: Record<string, unknown> = {};
+										for (let i = 0; i < row.length; i++) {
+											rowObj[columnNames[i]] = row[i];
+										}
+										results.push(rowObj);
+									},
+								);
+								result = results as TRow[];
+							}
 						}
 
 						const durationMs = performance.now() - start;

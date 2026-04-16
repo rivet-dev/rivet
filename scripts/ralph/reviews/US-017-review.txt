@@ -1,0 +1,61 @@
+US-017 Review: Add Prometheus metrics
+Commit: 77648a209c
+Reviewer: automated
+
+== Criterion 1: All 16 metrics from SPEC section 11 defined ==
+PASS. metrics.rs declares exactly 16 lazy_static metrics matching
+the SPEC table one-to-one. Names, types, and labels all match:
+  commit: duration (HistogramVec path), pages (HistogramVec path), total (IntCounter)
+  read: get_pages duration (Histogram), get_pages count (Histogram),
+        pidx hit (IntCounter), pidx miss (IntCounter)
+  compaction: pass duration (Histogram), pass total (IntCounter),
+              pages_folded (IntCounter), deltas_deleted (IntCounter),
+              delta_count (IntGauge), lag (Histogram)
+  lifecycle: takeover duration (Histogram), recovery_orphans (IntCounter),
+             fence_mismatch (IntCounter)
+
+== Criterion 2: Correct metric types ==
+PASS. Types match SPEC exactly. HistogramVec with label "path" for
+commit duration and pages. IntGauge for delta_count. All others as
+specified.
+
+== Criterion 3: Metrics recorded at instrumentation points ==
+PASS.
+  - commit.rs: observe_commit("fast"/slow"), inc_commit_total(),
+    set_delta_count_from_head(), inc_fence_mismatch_total() on both
+    fast path (commit) and slow path (commit_finalize). commit_stage
+    also records fence mismatch.
+  - read.rs: add_pidx_hits(), add_pidx_misses(), observe_get_pages(),
+    inc_fence_mismatch_total().
+  - takeover.rs: observe_takeover(), add_recovery_orphans_cleaned(),
+    set_delta_count_from_head().
+  - compaction/worker.rs: observe_compaction_pass(),
+    inc_compaction_pass_total() per shard pass.
+  - compaction/shard.rs: add_compaction_pages_folded(),
+    add_compaction_deltas_deleted(), set_delta_count_from_head(),
+    observe_compaction_lag_seconds().
+
+== Criterion 4: Uses tracing, not println/eprintln ==
+PASS. No println!/eprintln! found anywhere in the sqlite-storage
+crate source.
+
+== Criterion 5: cargo check passes ==
+PASS. `cargo check -p sqlite-storage` succeeds with zero errors.
+
+== Criterion 6: Metric names follow engine conventions ==
+PASS. Names use snake_case with _seconds/_total suffixes matching
+the actor_kv pattern in pegboard/src/actor_kv/metrics.rs. Uses
+lazy_static!, rivet_metrics::REGISTRY, BUCKETS, and the same
+register_*_with_registry! macros. The sqlite_v2_ prefix clearly
+namespaces the new metrics.
+
+== Minor observations (non-blocking) ==
+- SqliteStorageMetrics is a zero-sized struct (#[derive(Default,
+  Copy)]). All methods are thin wrappers around the static metrics.
+  This is fine but could be simplified to free functions. No action
+  needed.
+- Compaction lag is computed from decoded LTX header timestamp_ms
+  vs SystemTime::now(). This is correct but relies on wall-clock
+  agreement. Acceptable for operational dashboards.
+
+VERDICT: PASS -- all 6 criteria satisfied.

@@ -5,6 +5,15 @@
  * when the actor sleeps and wakes again.
  */
 
+export interface SqliteVfsMetricsSnapshot {
+	requestBuildNs: number;
+	serializeNs: number;
+	transportNs: number;
+	stateUpdateNs: number;
+	totalNs: number;
+	commitCount: number;
+}
+
 /** Keys of `ActorMetrics["startup"]` whose values are `number`. */
 export type StartupTimingKey = {
 	[K in keyof ActorMetrics["startup"]]: ActorMetrics["startup"][K] extends number
@@ -45,6 +54,8 @@ export type Metric =
 export type MetricsSnapshot = Record<string, Metric>;
 
 export class ActorMetrics {
+	#sqliteVfsMetricsSource?: () => SqliteVfsMetricsSnapshot | null;
+
 	// KV operations
 	kvGet = { calls: 0, keys: 0, totalMs: 0 };
 	kvGetBatch = { calls: 0, keys: 0, totalMs: 0 };
@@ -130,8 +141,24 @@ export class ActorMetrics {
 		this.sqlTotalMs += durationMs;
 	}
 
+	setSqliteVfsMetricsSource(
+		source?: () => SqliteVfsMetricsSnapshot | null,
+	): void {
+		this.#sqliteVfsMetricsSource = source;
+	}
+
 	snapshot(): MetricsSnapshot {
 		const s = this.startup;
+		const sqliteVfsMetrics = this.#sqliteVfsMetricsSource?.() ?? {
+			requestBuildNs: 0,
+			serializeNs: 0,
+			transportNs: 0,
+			stateUpdateNs: 0,
+			totalNs: 0,
+			commitCount: 0,
+		};
+		const commitCalls = sqliteVfsMetrics.commitCount;
+		const nsToMs = (ns: number) => ns / 1_000_000;
 		return {
 			kv_operations: {
 				type: "labeled_timing",
@@ -159,6 +186,32 @@ export class ActorMetrics {
 				type: "counter",
 				help: "Total SQL execution time in milliseconds",
 				value: this.sqlTotalMs,
+			},
+			sqlite_commit_phases: {
+				type: "labeled_timing",
+				help: "SQLite VFS commit phase totals captured by the native VFS",
+				values: {
+					request_build: {
+						calls: commitCalls,
+						totalMs: nsToMs(sqliteVfsMetrics.requestBuildNs),
+						keys: 0,
+					},
+					serialize: {
+						calls: commitCalls,
+						totalMs: nsToMs(sqliteVfsMetrics.serializeNs),
+						keys: 0,
+					},
+					transport: {
+						calls: commitCalls,
+						totalMs: nsToMs(sqliteVfsMetrics.transportNs),
+						keys: 0,
+					},
+					state_update: {
+						calls: commitCalls,
+						totalMs: nsToMs(sqliteVfsMetrics.stateUpdateNs),
+						keys: 0,
+					},
+				},
 			},
 			action_calls: {
 				type: "counter",

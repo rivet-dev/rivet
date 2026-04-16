@@ -1360,6 +1360,14 @@ impl KvVfs {
 		unsafe { (*self.ctx_ptr).take_last_error() }
 	}
 
+	fn commit_atomic_count(&self) -> u64 {
+		unsafe {
+			(&(*self.ctx_ptr).vfs_metrics)
+				.commit_atomic_count
+				.load(Ordering::Relaxed)
+		}
+	}
+
 	pub fn register(
 		name: &str,
 		kv: Arc<dyn SqliteKv>,
@@ -1488,6 +1496,56 @@ fn sqlite_error_message(db: *mut sqlite3) -> String {
 	}
 }
 
+fn sqlite_exec(db: *mut sqlite3, sql: &str) -> Result<(), String> {
+	let c_sql = CString::new(sql).map_err(|err| err.to_string())?;
+	let rc = unsafe { sqlite3_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) };
+	if rc != SQLITE_OK {
+		return Err(format!(
+			"`{sql}` failed with code {rc}: {}",
+			sqlite_error_message(db)
+		));
+	}
+
+	Ok(())
+}
+
+fn cleanup_batch_atomic_probe(db: *mut sqlite3) {
+	if let Err(err) = sqlite_exec(db, "DROP TABLE IF EXISTS __rivet_batch_probe;") {
+		tracing::warn!(%err, "failed to clean up batch atomic probe table");
+	}
+}
+
+fn assert_batch_atomic_probe(db: *mut sqlite3, vfs: &KvVfs) -> Result<(), String> {
+	let commit_atomic_before = vfs.commit_atomic_count();
+	let probe_sql = "\
+		BEGIN IMMEDIATE;\
+		CREATE TABLE IF NOT EXISTS __rivet_batch_probe(x INTEGER);\
+		INSERT INTO __rivet_batch_probe VALUES(1);\
+		DELETE FROM __rivet_batch_probe;\
+		DROP TABLE IF EXISTS __rivet_batch_probe;\
+		COMMIT;\
+	";
+
+	if let Err(err) = sqlite_exec(db, probe_sql) {
+		cleanup_batch_atomic_probe(db);
+		return Err(format!("batch atomic probe failed: {err}"));
+	}
+
+	let commit_atomic_after = vfs.commit_atomic_count();
+	if commit_atomic_after == commit_atomic_before {
+		tracing::error!(
+			"batch atomic writes not active, SQLITE_ENABLE_BATCH_ATOMIC_WRITE may be missing"
+		);
+		cleanup_batch_atomic_probe(db);
+		return Err(
+			"batch atomic writes not active, SQLITE_ENABLE_BATCH_ATOMIC_WRITE may be missing"
+				.to_string(),
+		);
+	}
+
+	Ok(())
+}
+
 pub fn open_database(vfs: KvVfs, file_name: &str) -> Result<NativeDatabase, String> {
 	let c_name = CString::new(file_name).map_err(|err| err.to_string())?;
 	let mut db: *mut sqlite3 = ptr::null_mut();
@@ -1518,16 +1576,19 @@ pub fn open_database(vfs: KvVfs, file_name: &str) -> Result<NativeDatabase, Stri
 		"PRAGMA auto_vacuum = NONE;",
 		"PRAGMA locking_mode = EXCLUSIVE;",
 	] {
-		let c_sql = CString::new(*pragma).map_err(|err| err.to_string())?;
-		let rc =
-			unsafe { sqlite3_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) };
-		if rc != SQLITE_OK {
-			let message = sqlite_error_message(db);
+		if let Err(err) = sqlite_exec(db, pragma) {
 			unsafe {
 				sqlite3_close(db);
 			}
-			return Err(format!("{pragma} failed with code {rc}: {message}"));
+			return Err(err);
 		}
+	}
+
+	if let Err(err) = assert_batch_atomic_probe(db, &vfs) {
+		unsafe {
+			sqlite3_close(db);
+		}
+		return Err(err);
 	}
 
 	Ok(NativeDatabase { db, _vfs: vfs })
@@ -1538,6 +1599,280 @@ pub fn open_database(vfs: KvVfs, file_name: &str) -> Result<NativeDatabase, Stri
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::collections::HashMap;
+	use std::ffi::{CStr, CString};
+	use std::ptr;
+	use std::sync::atomic::{AtomicU64, Ordering};
+	use std::sync::{Arc, Mutex};
+
+	use crate::sqlite_kv::{KvGetResult, SqliteKv, SqliteKvError};
+
+	static TEST_ID: AtomicU64 = AtomicU64::new(1);
+
+	#[derive(Clone, Debug)]
+	enum KvOp {
+		Get { keys: Vec<Vec<u8>> },
+		Put { keys: Vec<Vec<u8>> },
+		Delete { keys: Vec<Vec<u8>> },
+		DeleteRange { start: Vec<u8>, end: Vec<u8> },
+	}
+
+	#[derive(Default)]
+	struct MemoryKv {
+		stores: Mutex<HashMap<String, HashMap<Vec<u8>, Vec<u8>>>>,
+		op_log: Mutex<HashMap<String, Vec<KvOp>>>,
+	}
+
+	impl MemoryKv {
+		fn new() -> Self {
+			Self::default()
+		}
+
+		fn record_op(&self, actor_id: &str, op: KvOp) {
+			let mut op_log = self.op_log.lock().unwrap();
+			op_log.entry(actor_id.to_string()).or_default().push(op);
+		}
+
+		fn snapshot_actor(&self, actor_id: &str) -> HashMap<Vec<u8>, Vec<u8>> {
+			self.stores
+				.lock()
+				.unwrap()
+				.get(actor_id)
+				.cloned()
+				.unwrap_or_default()
+		}
+
+		fn op_log(&self, actor_id: &str) -> Vec<KvOp> {
+			self.op_log
+				.lock()
+				.unwrap()
+				.get(actor_id)
+				.cloned()
+				.unwrap_or_default()
+		}
+
+		fn journal_was_used(&self, actor_id: &str) -> bool {
+			self.op_log(actor_id).iter().any(|op| match op {
+				KvOp::Get { keys } | KvOp::Put { keys } | KvOp::Delete { keys } => keys
+					.iter()
+					.any(|key| key_file_tag(key.as_slice()) == Some(kv::FILE_TAG_JOURNAL)),
+				KvOp::DeleteRange { start, end } => {
+					key_file_tag(start.as_slice()) == Some(kv::FILE_TAG_JOURNAL)
+						|| key_file_tag(end.as_slice()) == Some(kv::FILE_TAG_JOURNAL)
+				}
+			})
+		}
+	}
+
+	#[async_trait::async_trait]
+	impl SqliteKv for MemoryKv {
+		async fn batch_get(
+			&self,
+			actor_id: &str,
+			keys: Vec<Vec<u8>>,
+		) -> Result<KvGetResult, SqliteKvError> {
+			self.record_op(actor_id, KvOp::Get { keys: keys.clone() });
+
+			let store_guard = self.stores.lock().unwrap();
+			let actor_store = store_guard.get(actor_id);
+			let mut found_keys = Vec::new();
+			let mut found_values = Vec::new();
+			for key in keys {
+				if let Some(value) = actor_store.and_then(|store| store.get(&key)) {
+					found_keys.push(key);
+					found_values.push(value.clone());
+				}
+			}
+
+			Ok(KvGetResult {
+				keys: found_keys,
+				values: found_values,
+			})
+		}
+
+		async fn batch_put(
+			&self,
+			actor_id: &str,
+			keys: Vec<Vec<u8>>,
+			values: Vec<Vec<u8>>,
+		) -> Result<(), SqliteKvError> {
+			if keys.len() != values.len() {
+				return Err(SqliteKvError::new("keys and values length mismatch"));
+			}
+
+			self.record_op(actor_id, KvOp::Put { keys: keys.clone() });
+
+			let mut stores = self.stores.lock().unwrap();
+			let actor_store = stores.entry(actor_id.to_string()).or_default();
+			for (key, value) in keys.into_iter().zip(values.into_iter()) {
+				actor_store.insert(key, value);
+			}
+
+			Ok(())
+		}
+
+		async fn batch_delete(
+			&self,
+			actor_id: &str,
+			keys: Vec<Vec<u8>>,
+		) -> Result<(), SqliteKvError> {
+			self.record_op(actor_id, KvOp::Delete { keys: keys.clone() });
+
+			let mut stores = self.stores.lock().unwrap();
+			let actor_store = stores.entry(actor_id.to_string()).or_default();
+			for key in keys {
+				actor_store.remove(&key);
+			}
+
+			Ok(())
+		}
+
+		async fn delete_range(
+			&self,
+			actor_id: &str,
+			start: Vec<u8>,
+			end: Vec<u8>,
+		) -> Result<(), SqliteKvError> {
+			self.record_op(
+				actor_id,
+				KvOp::DeleteRange {
+					start: start.clone(),
+					end: end.clone(),
+				},
+			);
+
+			let mut stores = self.stores.lock().unwrap();
+			let actor_store = stores.entry(actor_id.to_string()).or_default();
+			actor_store.retain(|key, _| {
+				!(key.as_slice() >= start.as_slice() && key.as_slice() < end.as_slice())
+			});
+
+			Ok(())
+		}
+	}
+
+	fn next_test_name(prefix: &str) -> String {
+		let id = TEST_ID.fetch_add(1, Ordering::Relaxed);
+		format!("{prefix}-{id}")
+	}
+
+	fn with_test_db(test_fn: impl FnOnce(*mut sqlite3, Arc<MemoryKv>, &str)) {
+		let runtime = tokio::runtime::Builder::new_current_thread()
+			.build()
+			.unwrap();
+		let kv = Arc::new(MemoryKv::new());
+		let actor_id = next_test_name("sqlite-native-test");
+		let vfs_name = next_test_name("sqlite-native-vfs");
+		let vfs = KvVfs::register(
+			&vfs_name,
+			kv.clone(),
+			actor_id.clone(),
+			runtime.handle().clone(),
+			Vec::new(),
+		)
+		.unwrap();
+		let db = open_database(vfs, &actor_id).unwrap();
+
+		test_fn(db.as_ptr(), kv, &actor_id);
+
+		drop(db);
+		drop(runtime);
+	}
+
+	fn exec_sql(db: *mut sqlite3, sql: &str) {
+		let c_sql = CString::new(sql).unwrap();
+		let mut err_msg = ptr::null_mut();
+		let rc = unsafe { sqlite3_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), &mut err_msg) };
+		if rc != SQLITE_OK {
+			let message = if err_msg.is_null() {
+				format!("sqlite error {rc}")
+			} else {
+				let message = unsafe { CStr::from_ptr(err_msg) }
+					.to_string_lossy()
+					.into_owned();
+				unsafe { sqlite3_free(err_msg as *mut c_void) };
+				message
+			};
+			panic!("sqlite3_exec failed for `{sql}`: {message}");
+		}
+	}
+
+	fn query_i64(db: *mut sqlite3, sql: &str) -> i64 {
+		let c_sql = CString::new(sql).unwrap();
+		let mut stmt = ptr::null_mut();
+		let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
+		assert_eq!(rc, SQLITE_OK, "failed to prepare `{sql}`");
+		assert!(
+			!stmt.is_null(),
+			"sqlite returned a null statement for `{sql}`"
+		);
+
+		let step_rc = unsafe { sqlite3_step(stmt) };
+		assert_eq!(step_rc, SQLITE_ROW, "expected a row from `{sql}`");
+		let value = unsafe { sqlite3_column_int64(stmt, 0) };
+		let done_rc = unsafe { sqlite3_step(stmt) };
+		assert_eq!(done_rc, SQLITE_DONE, "expected SQLITE_DONE after `{sql}`");
+
+		unsafe {
+			sqlite3_finalize(stmt);
+		}
+
+		value
+	}
+
+	fn query_texts(db: *mut sqlite3, sql: &str) -> Vec<String> {
+		let c_sql = CString::new(sql).unwrap();
+		let mut stmt = ptr::null_mut();
+		let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
+		assert_eq!(rc, SQLITE_OK, "failed to prepare `{sql}`");
+		assert!(
+			!stmt.is_null(),
+			"sqlite returned a null statement for `{sql}`"
+		);
+
+		let mut values = Vec::new();
+		loop {
+			let step_rc = unsafe { sqlite3_step(stmt) };
+			if step_rc == SQLITE_DONE {
+				break;
+			}
+			assert_eq!(
+				step_rc, SQLITE_ROW,
+				"expected SQLITE_ROW or SQLITE_DONE for `{sql}`"
+			);
+			let text_ptr = unsafe { sqlite3_column_text(stmt, 0) };
+			assert!(!text_ptr.is_null(), "expected text result for `{sql}`");
+			values.push(
+				unsafe { CStr::from_ptr(text_ptr as *const c_char) }
+					.to_string_lossy()
+					.into_owned(),
+			);
+		}
+
+		unsafe {
+			sqlite3_finalize(stmt);
+		}
+
+		values
+	}
+
+	fn key_file_tag(key: &[u8]) -> Option<u8> {
+		(key.len() >= 4 && key[0] == kv::SQLITE_PREFIX && key[1] == kv::SQLITE_SCHEMA_VERSION)
+			.then_some(key[3])
+	}
+
+	fn assert_journal_round_trip(kv: &MemoryKv, actor_id: &str) {
+		assert!(
+			kv.journal_was_used(actor_id),
+			"expected rollback journal KV operations for actor {actor_id}"
+		);
+		assert!(
+			kv.snapshot_actor(actor_id)
+				.keys()
+				.all(|key| key_file_tag(key.as_slice()) != Some(kv::FILE_TAG_JOURNAL)),
+			"expected rollback journal keys to be deleted after commit for actor {actor_id}"
+		);
+	}
 
 	#[test]
 	fn encode_decode_round_trip() {
@@ -1548,6 +1883,31 @@ mod tests {
 			let decoded = decode_file_meta(&encoded).unwrap();
 			assert_eq!(decoded, size);
 		}
+	}
+
+	#[test]
+	fn startup_probe_asserts_batch_atomic_writes_are_active() {
+		let runtime = tokio::runtime::Builder::new_current_thread()
+			.build()
+			.unwrap();
+		let kv = Arc::new(MemoryKv::new());
+		let actor_id = next_test_name("sqlite-native-probe");
+		let vfs_name = next_test_name("sqlite-native-probe-vfs");
+		let vfs = KvVfs::register(
+			&vfs_name,
+			kv,
+			actor_id.clone(),
+			runtime.handle().clone(),
+			Vec::new(),
+		)
+		.unwrap();
+		let db = open_database(vfs, &actor_id).unwrap();
+		assert!(
+			db._vfs.commit_atomic_count() > 0,
+			"expected startup probe to trigger COMMIT_ATOMIC_WRITE"
+		);
+		drop(db);
+		drop(runtime);
 	}
 
 	#[test]
@@ -1655,5 +2015,107 @@ mod tests {
 		startup_preload_delete_range(&mut entries, &[2], &[4]);
 
 		assert_eq!(entries, vec![(vec![1], vec![10]), (vec![4], vec![40])]);
+	}
+
+	#[test]
+	fn v1_vfs_single_insert_and_select() {
+		with_test_db(|db, kv, actor_id| {
+			exec_sql(
+				db,
+				"CREATE TABLE users (id INTEGER PRIMARY KEY, value INTEGER NOT NULL);",
+			);
+			exec_sql(db, "INSERT INTO users (value) VALUES (42);");
+
+			assert_eq!(query_i64(db, "SELECT value FROM users WHERE id = 1;"), 42);
+			assert_journal_round_trip(kv.as_ref(), actor_id);
+		});
+	}
+
+	#[test]
+	fn v1_vfs_multi_row_insert() {
+		with_test_db(|db, kv, actor_id| {
+			exec_sql(
+				db,
+				"CREATE TABLE metrics (id INTEGER PRIMARY KEY, value INTEGER NOT NULL);",
+			);
+			exec_sql(
+				db,
+				"INSERT INTO metrics (value) VALUES (5), (7), (11), (13), (17);",
+			);
+
+			assert_eq!(query_i64(db, "SELECT COUNT(*) FROM metrics;"), 5);
+			assert_eq!(query_i64(db, "SELECT SUM(value) FROM metrics;"), 53);
+			assert_journal_round_trip(kv.as_ref(), actor_id);
+		});
+	}
+
+	#[test]
+	fn v1_vfs_update_existing_row() {
+		with_test_db(|db, kv, actor_id| {
+			exec_sql(
+				db,
+				"CREATE TABLE docs (id INTEGER PRIMARY KEY, title TEXT NOT NULL);",
+			);
+			exec_sql(db, "INSERT INTO docs (title) VALUES ('draft');");
+			exec_sql(db, "UPDATE docs SET title = 'published' WHERE id = 1;");
+
+			assert_eq!(
+				query_texts(db, "SELECT title FROM docs WHERE id = 1;"),
+				vec!["published".to_string()]
+			);
+			assert_journal_round_trip(kv.as_ref(), actor_id);
+		});
+	}
+
+	#[test]
+	fn v1_vfs_delete_row() {
+		with_test_db(|db, kv, actor_id| {
+			exec_sql(
+				db,
+				"CREATE TABLE events (id INTEGER PRIMARY KEY, name TEXT NOT NULL);",
+			);
+			exec_sql(
+				db,
+				"INSERT INTO events (name) VALUES ('open'), ('close'), ('archive');",
+			);
+			exec_sql(db, "DELETE FROM events WHERE name = 'close';");
+
+			assert_eq!(query_i64(db, "SELECT COUNT(*) FROM events;"), 2);
+			assert_eq!(
+				query_texts(db, "SELECT name FROM events ORDER BY id;"),
+				vec!["open".to_string(), "archive".to_string()]
+			);
+			assert_journal_round_trip(kv.as_ref(), actor_id);
+		});
+	}
+
+	#[test]
+	fn v1_vfs_multiple_tables_schema() {
+		with_test_db(|db, kv, actor_id| {
+			exec_sql(
+				db,
+				"
+				CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+				CREATE TABLE tasks (
+					id INTEGER PRIMARY KEY,
+					project_id INTEGER NOT NULL,
+					title TEXT NOT NULL
+				);
+				INSERT INTO projects (name) VALUES ('sqlite-vfs');
+				INSERT INTO tasks (project_id, title) VALUES (1, 'baseline'), (1, 'verify');
+				",
+			);
+
+			assert_eq!(query_i64(db, "SELECT COUNT(*) FROM projects;"), 1);
+			assert_eq!(query_i64(db, "SELECT COUNT(*) FROM tasks;"), 2);
+			assert_eq!(
+				query_texts(
+					db,
+					"SELECT title FROM tasks WHERE project_id = 1 ORDER BY id;",
+				),
+				vec!["baseline".to_string(), "verify".to_string()]
+			);
+			assert_journal_round_trip(kv.as_ref(), actor_id);
+		});
 	}
 }

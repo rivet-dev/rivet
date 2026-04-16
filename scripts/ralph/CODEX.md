@@ -2,11 +2,24 @@
 
 You are an autonomous coding agent working on a software project.
 
+## CRITICAL: Branch Safety
+
+**NEVER switch away from the branch specified in `prd.json` `branchName`.**
+
+Before doing ANY work:
+1. Read `prd.json` and note the `branchName` field.
+2. Run `git branch --show-current` to verify you are on that branch.
+3. If you are NOT on the correct branch, run `git checkout <branchName>` to switch to it.
+4. If the branch does not exist, create it from main: `git checkout -b <branchName> main`.
+5. **Do NOT use worktrees. Work directly on the branch in the current directory.**
+6. **Do NOT checkout any other branch at any point during your session.** If a tool or script tries to switch branches, abort that operation.
+7. After completing a story and before committing, verify you are still on the correct branch with `git branch --show-current`. If the branch changed, switch back before committing.
+
 ## Your Task
 
 1. Read the PRD at `prd.json` (in the same directory as this file)
 2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
-3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
+3. **Verify you are on the correct branch** (see Branch Safety above)
 4. Pick the **highest priority** user story where `passes: false`
 5. Implement that single user story
 6. Run quality checks (e.g., typecheck, lint, test - use whatever your project requires)

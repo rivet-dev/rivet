@@ -985,6 +985,7 @@ export class ActorInstance<
 
 			// Call onStop lifecycle
 			if (mode === "sleep") {
+				await this.#waitForIdleSleepWindow(shutdownTaskDeadlineTs);
 				await this.#callOnSleep(shutdownTaskDeadlineTs);
 			} else if (mode === "destroy") {
 				await this.#callOnDestroy();
@@ -2307,6 +2308,49 @@ export class ActorInstance<
 			if (deadlineTs - Date.now() <= 0) {
 				break;
 			}
+		}
+	}
+
+	#sleepWindowBlocker():
+		| "activeHonoHttpRequests"
+		| "keepAwake"
+		| "internalKeepAwake"
+		| "pendingDisconnectCallbacks"
+		| null {
+		if (this.#activeHonoHttpRequests > 0) {
+			return "activeHonoHttpRequests";
+		}
+		if (this.#activeAsyncRegionCounts.keepAwake > 0) {
+			return "keepAwake";
+		}
+		if (this.#activeAsyncRegionCounts.internalKeepAwake > 0) {
+			return "internalKeepAwake";
+		}
+		if (this.connectionManager.pendingDisconnectCount > 0) {
+			return "pendingDisconnectCallbacks";
+		}
+		return null;
+	}
+
+	async #waitForIdleSleepWindow(deadlineTs: number) {
+		while (true) {
+			const blocker = this.#sleepWindowBlocker();
+			if (!blocker) {
+				return;
+			}
+
+			const remaining = deadlineTs - Date.now();
+			if (remaining <= 0) {
+				this.#rLog.warn({
+					msg: "timed out waiting for actor to become idle before onSleep",
+					blocker,
+				});
+				return;
+			}
+
+			await new Promise<void>((resolve) =>
+				setTimeout(resolve, Math.min(25, remaining)),
+			);
 		}
 	}
 

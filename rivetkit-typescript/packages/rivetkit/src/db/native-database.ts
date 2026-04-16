@@ -22,6 +22,15 @@ interface NativeRunResult {
 	changes: number;
 }
 
+export interface SqliteVfsMetrics {
+	requestBuildNs: number;
+	serializeNs: number;
+	transportNs: number;
+	stateUpdateNs: number;
+	totalNs: number;
+	commitCount: number;
+}
+
 export interface JsNativeDatabaseLike {
 	exec(sql: string): Promise<NativeExecResult>;
 	query(
@@ -32,6 +41,7 @@ export interface JsNativeDatabaseLike {
 		sql: string,
 		params?: NativeBindParam[] | null,
 	): Promise<NativeRunResult>;
+	getSqliteVfsMetrics?(): SqliteVfsMetrics | null;
 	takeLastKvError?(): string | null;
 	close(): Promise<void>;
 }
@@ -179,6 +189,9 @@ export function wrapJsNativeDatabase(
 			} catch (error) {
 				enrichNativeDatabaseError(database, error);
 			}
+		},
+		getSqliteVfsMetrics() {
+			return database.getSqliteVfsMetrics?.() ?? null;
 		},
 		async close(): Promise<void> {
 			await database.close();

@@ -1,0 +1,36 @@
+US-005 Review: Implement SqliteStore trait and MemoryStore
+Commit: d99d0da8b5
+Reviewed: 2026-04-15
+
+CRITERIA EVALUATION
+---
+
+1. store.rs has Mutation + SqliteStore with 4 async methods (get, batch_get, scan_prefix, atomic_write) per SPEC 6.2:
+   PASS. Trait uses async_trait, has all 4 methods with correct signatures. Mutation has put/delete helpers.
+
+2. MemoryStore backed by BTreeMap with MemoryStoreConfig (latency_ms, jitter_ms, fail_after_ops, simulate_partial_write):
+   PASS. Config struct has all 4 fields. BTreeMap backs the data store inside MemoryStoreState.
+
+3. Three constructors: new_fast(), new_with_latency() (20ms + 5ms jitter), new(config):
+   PASS. new_fast uses default (zero latency), new_with_latency sets 20ms + 5ms jitter, new takes config.
+
+4. op_log/op_count/clear_op_log/assert_ops_contain/assert_op_count + snapshot/restore:
+   PASS. All methods present. snapshot captures data + op_log + op_count. restore replaces full state.
+
+5. Unit tests verify latency simulation, failure injection, sorted scan_prefix:
+   PASS. Five async tests cover: batch_get ordering, scan_prefix sorting, latency delay, fail_after_ops, partial write. snapshot/restore also tested.
+
+6. cargo test -p sqlite-storage passes:
+   PASS. All 17 tests pass (includes tests from US-003/US-004).
+
+ADDITIONAL OBSERVATIONS
+---
+
+- Object safety: Explicitly tested via assert_object_safe fn accepting &dyn SqliteStore. Good.
+- Mutex<BTreeMap> in MemoryStore: Acceptable for test utility. Not a production concurrent map.
+- fail_after_ops logs the op before checking the budget, so failed ops are counted. Intentional per progress notes and documented in engine/CLAUDE.md.
+- simulate_partial_write applies floor(len/2) mutations (min 1) before erroring. Deterministic partial state enables reproducible crash tests.
+- Minor: latency test asserts >= 10ms for a 15ms configured delay (no jitter). Conservative bound avoids CI flake. Acceptable.
+
+VERDICT: PASS
+All 6 acceptance criteria satisfied. Clean, well-tested implementation.

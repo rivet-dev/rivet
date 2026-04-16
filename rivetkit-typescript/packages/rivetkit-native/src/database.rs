@@ -15,6 +15,9 @@ use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivetkit_sqlite_native::sqlite_kv::{KvGetResult, SqliteKv, SqliteKvError};
+use rivetkit_sqlite_native::v2::vfs::{
+	NativeDatabaseV2, SqliteVfsMetricsSnapshot, SqliteVfsV2, VfsV2Config,
+};
 use rivetkit_sqlite_native::vfs::{KvVfs, NativeDatabase};
 use tokio::runtime::Handle;
 
@@ -107,9 +110,37 @@ impl SqliteKv for EnvoyKv {
 }
 
 /// Native SQLite database handle exposed to JavaScript.
+enum NativeDatabaseHandle {
+	V1(NativeDatabase),
+	V2(NativeDatabaseV2),
+}
+
+impl NativeDatabaseHandle {
+	fn as_ptr(&self) -> *mut sqlite3 {
+		match self {
+			Self::V1(db) => db.as_ptr(),
+			Self::V2(db) => db.as_ptr(),
+		}
+	}
+
+	fn take_last_kv_error(&self) -> Option<String> {
+		match self {
+			Self::V1(db) => db.take_last_kv_error(),
+			Self::V2(db) => db.take_last_kv_error(),
+		}
+	}
+
+	fn sqlite_vfs_metrics(&self) -> Option<SqliteVfsMetricsSnapshot> {
+		match self {
+			Self::V1(_) => None,
+			Self::V2(db) => Some(db.sqlite_vfs_metrics()),
+		}
+	}
+}
+
 #[napi]
 pub struct JsNativeDatabase {
-	db: Arc<Mutex<Option<NativeDatabase>>>,
+	db: Arc<Mutex<Option<NativeDatabaseHandle>>>,
 }
 
 impl JsNativeDatabase {
@@ -117,15 +148,16 @@ impl JsNativeDatabase {
 		self.db
 			.lock()
 			.ok()
-			.and_then(|guard| guard.as_ref().map(NativeDatabase::as_ptr))
+			.and_then(|guard| guard.as_ref().map(NativeDatabaseHandle::as_ptr))
 			.unwrap_or(ptr::null_mut())
 	}
 
 	fn take_last_kv_error_inner(&self) -> Option<String> {
-		self.db
-			.lock()
-			.ok()
-			.and_then(|guard| guard.as_ref().and_then(NativeDatabase::take_last_kv_error))
+		self.db.lock().ok().and_then(|guard| {
+			guard
+				.as_ref()
+				.and_then(NativeDatabaseHandle::take_last_kv_error)
+		})
 	}
 }
 
@@ -149,11 +181,38 @@ pub struct QueryResult {
 	pub rows: Vec<Vec<serde_json::Value>>,
 }
 
+#[napi(object)]
+pub struct JsSqliteVfsMetrics {
+	pub request_build_ns: i64,
+	pub serialize_ns: i64,
+	pub transport_ns: i64,
+	pub state_update_ns: i64,
+	pub total_ns: i64,
+	pub commit_count: i64,
+}
+
 #[napi]
 impl JsNativeDatabase {
 	#[napi]
 	pub fn take_last_kv_error(&self) -> Option<String> {
 		self.take_last_kv_error_inner()
+	}
+
+	#[napi]
+	pub fn get_sqlite_vfs_metrics(&self) -> Option<JsSqliteVfsMetrics> {
+		self.db.lock().ok().and_then(|guard| {
+			guard
+				.as_ref()
+				.and_then(NativeDatabaseHandle::sqlite_vfs_metrics)
+				.map(|metrics| JsSqliteVfsMetrics {
+					request_build_ns: u64_to_i64(metrics.request_build_ns),
+					serialize_ns: u64_to_i64(metrics.serialize_ns),
+					transport_ns: u64_to_i64(metrics.transport_ns),
+					state_update_ns: u64_to_i64(metrics.state_update_ns),
+					total_ns: u64_to_i64(metrics.total_ns),
+					commit_count: u64_to_i64(metrics.commit_count),
+				})
+		})
 	}
 
 	#[napi]
@@ -238,6 +297,10 @@ fn sqlite_error(db: *mut sqlite3, context: &str) -> napi::Error {
 		}
 	};
 	napi::Error::from_reason(format!("{context}: {message}"))
+}
+
+fn u64_to_i64(value: u64) -> i64 {
+	value.min(i64::MAX as u64) as i64
 }
 
 fn bind_params(
@@ -504,26 +567,59 @@ pub async fn open_database_from_envoy(
 	actor_id: String,
 	preloaded_entries: Option<Vec<JsKvEntry>>,
 ) -> napi::Result<JsNativeDatabase> {
-	let envoy_kv = Arc::new(EnvoyKv::new(js_handle.handle.clone(), actor_id.clone()));
+	let handle = js_handle.handle.clone();
+	let sqlite_schema_version = js_handle.clone_sqlite_schema_version(&actor_id).await;
+	let sqlite_startup_data = js_handle.clone_sqlite_startup_data(&actor_id).await;
+	let envoy_kv = Arc::new(EnvoyKv::new(handle.clone(), actor_id.clone()));
 	let preloaded_entries = preloaded_entries
 		.unwrap_or_default()
 		.into_iter()
 		.map(|entry| (entry.key.to_vec(), entry.value.to_vec()))
 		.collect();
 	let rt_handle = Handle::current();
-	let db = tokio::task::spawn_blocking(move || {
-		let vfs_name = format!("envoy-kv-{}", actor_id);
-		let vfs = KvVfs::register(
-			&vfs_name,
-			envoy_kv,
-			actor_id.clone(),
-			rt_handle,
-			preloaded_entries,
-		)
-		.map_err(|e| napi::Error::from_reason(format!("failed to register VFS: {}", e)))?;
+	let db = tokio::task::spawn_blocking(move || match sqlite_schema_version {
+		Some(1) => {
+			let vfs_name = format!("envoy-kv-{}", actor_id);
+			let vfs = KvVfs::register(
+				&vfs_name,
+				envoy_kv,
+				actor_id.clone(),
+				rt_handle,
+				preloaded_entries,
+			)
+			.map_err(|e| napi::Error::from_reason(format!("failed to register VFS: {}", e)))?;
 
-		rivetkit_sqlite_native::vfs::open_database(vfs, &actor_id)
-			.map_err(|e| napi::Error::from_reason(format!("failed to open database: {}", e)))
+			rivetkit_sqlite_native::vfs::open_database(vfs, &actor_id)
+				.map(NativeDatabaseHandle::V1)
+				.map_err(|e| napi::Error::from_reason(format!("failed to open database: {}", e)))
+		}
+		Some(2) => {
+			let startup = sqlite_startup_data.ok_or_else(|| {
+				napi::Error::from_reason(format!(
+					"missing sqlite startup data for actor {actor_id} using schema version 2"
+				))
+			})?;
+			let vfs_name = format!("envoy-sqlite-v2-{}", actor_id);
+			let vfs = SqliteVfsV2::register(
+				&vfs_name,
+				handle,
+				actor_id.clone(),
+				rt_handle,
+				startup,
+				VfsV2Config::default(),
+			)
+			.map_err(|e| napi::Error::from_reason(format!("failed to register V2 VFS: {}", e)))?;
+
+			rivetkit_sqlite_native::v2::vfs::open_database(vfs, &actor_id)
+				.map(NativeDatabaseHandle::V2)
+				.map_err(|e| napi::Error::from_reason(format!("failed to open V2 database: {}", e)))
+		}
+		Some(version) => Err(napi::Error::from_reason(format!(
+			"unsupported sqlite schema version {version} for actor {actor_id}"
+		))),
+		None => Err(napi::Error::from_reason(format!(
+			"missing sqlite schema version for actor {actor_id}"
+		))),
 	})
 	.await
 	.map_err(|err| napi::Error::from_reason(err.to_string()))??;

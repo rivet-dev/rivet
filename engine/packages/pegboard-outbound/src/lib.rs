@@ -1,5 +1,6 @@
 use anyhow::Result;
 use futures_util::{StreamExt, stream::FuturesUnordered};
+use gas::prelude::util::timestamp;
 use gas::prelude::*;
 use pegboard::pubsub_subjects::ServerlessOutboundSubject;
 use reqwest::header::{HeaderName, HeaderValue};
@@ -8,9 +9,16 @@ use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_runtime::TermSignal;
 use rivet_types::actor::RunnerPoolError;
 use rivet_types::runner_configs::RunnerConfigKind;
+use sqlite_storage::{
+	compaction::CompactionCoordinator,
+	engine::SqliteEngine,
+	takeover::TakeoverConfig,
+	types::{FetchedPage, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteMeta},
+};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::task::JoinHandle;
+use tokio::{sync::OnceCell, task::JoinHandle};
 use universalpubsub::NextOutput;
 use vbare::OwnedVersionedData;
 
@@ -20,6 +28,73 @@ const X_RIVET_ENDPOINT: HeaderName = HeaderName::from_static("x-rivet-endpoint")
 const X_RIVET_POOL_NAME: HeaderName = HeaderName::from_static("x-rivet-pool-name");
 const X_RIVET_NAMESPACE_NAME: HeaderName = HeaderName::from_static("x-rivet-namespace-name");
 const SHUTDOWN_PROGRESS_INTERVAL: Duration = Duration::from_secs(7);
+static SQLITE_ENGINE: OnceCell<Arc<SqliteEngine>> = OnceCell::const_new();
+
+async fn shared_sqlite_engine(ctx: &StandaloneCtx) -> Result<Arc<SqliteEngine>> {
+	let db = Arc::new((*ctx.udb()?).clone());
+	let subspace = pegboard::keys::subspace().subspace(&("sqlite-storage",));
+
+	SQLITE_ENGINE
+		.get_or_try_init(|| async move {
+			let (engine, compaction_rx) = SqliteEngine::new(Arc::clone(&db), subspace.clone());
+			let engine = Arc::new(engine);
+			tokio::spawn(CompactionCoordinator::run(
+				compaction_rx,
+				Arc::clone(&engine),
+			));
+
+			Ok(engine)
+		})
+		.await
+		.cloned()
+}
+
+async fn maybe_load_sqlite_startup_data(
+	sqlite_engine: &SqliteEngine,
+	protocol_version: u16,
+	actor_id: Id,
+	sqlite_schema_version: u32,
+) -> Result<Option<protocol::SqliteStartupData>> {
+	if sqlite_schema_version != SQLITE_VFS_V2_SCHEMA_VERSION || protocol_version < PROTOCOL_VERSION
+	{
+		return Ok(None);
+	}
+
+	let actor_id = actor_id.to_string();
+	let startup = sqlite_engine
+		.takeover(&actor_id, TakeoverConfig::new(timestamp::now()))
+		.await?;
+
+	Ok(Some(protocol::SqliteStartupData {
+		generation: startup.generation,
+		meta: protocol_sqlite_meta(startup.meta),
+		preloaded_pages: startup
+			.preloaded_pages
+			.into_iter()
+			.map(protocol_sqlite_fetched_page)
+			.collect(),
+	}))
+}
+
+fn protocol_sqlite_meta(meta: SqliteMeta) -> protocol::SqliteMeta {
+	protocol::SqliteMeta {
+		schema_version: meta.schema_version,
+		generation: meta.generation,
+		head_txid: meta.head_txid,
+		materialized_txid: meta.materialized_txid,
+		db_size_pages: meta.db_size_pages,
+		page_size: meta.page_size,
+		creation_ts_ms: meta.creation_ts_ms,
+		max_delta_bytes: meta.max_delta_bytes,
+	}
+}
+
+fn protocol_sqlite_fetched_page(page: FetchedPage) -> protocol::SqliteFetchedPage {
+	protocol::SqliteFetchedPage {
+		pgno: page.pgno,
+		bytes: page.bytes,
+	}
+}
 
 #[tracing::instrument(skip_all)]
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
@@ -218,7 +293,24 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		);
 		return Ok(());
 	};
-
+	let protocol_version = pool.protocol_version.unwrap_or(PROTOCOL_VERSION);
+	let sqlite_schema_version =
+		if pegboard::actor_kv::sqlite_v1_data_exists(&*ctx.udb()?, actor_id).await? {
+			pegboard::workflows::actor2::SQLITE_SCHEMA_VERSION_V1
+		} else {
+			SQLITE_VFS_V2_SCHEMA_VERSION
+		};
+	let sqlite_startup_data = if sqlite_schema_version == SQLITE_VFS_V2_SCHEMA_VERSION {
+		maybe_load_sqlite_startup_data(
+			shared_sqlite_engine(ctx).await?.as_ref(),
+			protocol_version,
+			actor_id,
+			sqlite_schema_version,
+		)
+		.await?
+	} else {
+		None
+	};
 	let payload = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(vec![
 		protocol::CommandWrapper {
 			checkpoint,
@@ -232,10 +324,12 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 					})
 					.collect(),
 				preloaded_kv,
+				sqlite_schema_version,
+				sqlite_startup_data,
 			}),
 		},
 	]))
-	.serialize_with_embedded_version(pool.protocol_version.unwrap_or(PROTOCOL_VERSION))?;
+	.serialize_with_embedded_version(protocol_version)?;
 
 	// Send ack to actor wf before starting an outbound req
 	ctx.signal(pegboard::workflows::actor2::Allocated { generation })

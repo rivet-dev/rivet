@@ -7,6 +7,17 @@
 - Importing `rivetkit/db` is the explicit opt-in for SQLite. Do not lazily load extra SQLite runtimes from that entrypoint.
 - Core drivers must remain SQLite-agnostic. Any SQLite-specific wiring belongs behind the native database provider boundary.
 
+## Native SQLite v2
+
+- The v2 SQLite VFS must reconstruct full 4 KiB pages for partial `xRead` and `xWrite` callbacks because SQLite can issue sub-page header I/O even when commits stay page-based.
+- Treat `head_txid` and `db_size_pages` as VFS-owned state. Read-side `get_pages(...)` responses may refresh `max_delta_bytes`, but commit responses plus local `xWrite` or `xTruncate` paths are the only things allowed to advance or shrink those fields.
+- Keep `SqliteStartupData` cached on the Rust `JsEnvoyHandle` and let `open_database_from_envoy(...)` select the v2 VFS there instead of threading extra JS-only startup plumbing through the driver.
+- `open_database_from_envoy(...)` must dispatch on `sqliteSchemaVersion`, not on whether startup data happens to be present. Schema version `2` should fail closed if startup data is missing.
+- Real `sqlite-native` tests that drive the v2 VFS through a direct `SqliteEngine` need a multithread Tokio runtime; `current_thread` is fine for mock transport tests but can stall real engine callbacks.
+- Treat any sqlite v2 transport or commit error as fatal for that VFS instance: mark it dead, surface it through `take_last_kv_error()`, and rely on reopen plus takeover instead of trying to limp forward with dirty pages still buffered.
+- Keep sqlite v2 fatal commit cleanup in `flush_dirty_pages` and `commit_atomic_write`; callback wrappers should only translate fence mismatches into SQLite I/O return codes.
+- If the native SQLite layer exposes new introspection or metrics getters, forward them through `wrapJsNativeDatabase(...)` or actor inspector metrics will silently lose that data.
+
 ## Context Types Sync
 
 - Keep the `*ContextOf` types exported from `packages/rivetkit/src/actor/contexts/index.ts` in sync with the two docs locations below when adding, removing, or renaming context types.
@@ -57,6 +68,10 @@ DEBUG perf user: dbMigrateMs              durationMs=...
 ```
 
 The log name matches the key in `ActorMetrics.startup`. Internal phases use `perf internal:`, user-code callbacks use `perf user:`. This convention keeps startup logs greppable and makes it easy to separate framework overhead from user-code time. When adding a new startup phase, always add a corresponding log with the appropriate prefix and update the `#userStartupKeys` set in `ActorInstance` if the phase runs user code.
+
+## Sleep Shutdown
+
+- Sleep shutdown should wait for in-flight HTTP action work and pending disconnect callbacks before `onSleep`, but should not block on open hibernatable connections alone because existing connection actions may still complete during the graceful shutdown window.
 
 ## Drizzle Compatibility Testing
 

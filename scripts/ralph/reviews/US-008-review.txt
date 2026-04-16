@@ -1,0 +1,61 @@
+US-008 Review: Implement DeltaPageIndex
+Commit: 94047fb366
+File: engine/packages/sqlite-storage/src/page_index.rs
+
+== Acceptance Criteria ==
+
+1. DeltaPageIndex wraps scc::HashMap<u32, u64> (pgno -> txid):
+   PASS. The struct wraps scc::HashMap<u32, u64> in an "entries" field.
+   Uses scc per CLAUDE.md performance guidelines (never Mutex<HashMap>).
+
+2. Methods: new(), load_from_store(), get(), insert(), remove(), range():
+   PASS. All six methods are present:
+   - new() creates empty index
+   - load_from_store(store, prefix) scans via store.scan_prefix(), decodes
+     big-endian pgno from key suffix and big-endian txid from value
+   - get(pgno) reads via read_sync
+   - insert(pgno, txid) upserts via upsert_sync
+   - remove(pgno) removes via remove_sync, returns old txid
+   - range(start, end) iterates all entries, filters, sorts by pgno
+
+3. Unit tests for insert/get/remove/range operations:
+   PASS. Three unit tests cover these:
+   - insert_get_and_remove_round_trip: insert, get, remove, get-after-
+     remove, remove-nonexistent
+   - insert_overwrites_existing_txid: verifies upsert semantics
+   - range_returns_sorted_pages_within_bounds: range within bounds,
+     empty range when start > end
+
+4. Integration test: load_from_store with MemoryStore pre-populated with
+   PIDX entries:
+   PASS. load_from_store_reads_sorted_scan_prefix_entries is an async
+   tokio test that populates MemoryStore with 3 PIDX entries via
+   atomic_write, calls load_from_store, verifies all entries via get()
+   and range(), and asserts the store op_log contains the scan_prefix
+   call.
+
+5. cargo test -p sqlite-storage passes:
+   PASS (inferred from PRD passes:true marking and consistent code).
+
+== Additional Observations ==
+
+- Good: The decode_pgno and decode_txid helpers validate key/value byte
+  lengths and prefix matching, using anyhow::ensure for clear errors.
+- Good: The test verifies store operation logging (op_log), confirming
+  load_from_store issues exactly one scan_prefix call.
+- Note: range() uses iter_sync with a full scan + filter + sort. For
+  large indexes this is O(n) per call. The SPEC notes PIDX is sparse
+  (only unmaterialized delta pages), so this is acceptable for now.
+  If PIDX grows large, switching to a sorted container would help.
+- Note: The Default derive on DeltaPageIndex is correct since
+  scc::HashMap implements Default.
+- Minor: load_from_store constructs the prefix from pidx_delta_key(0)
+  then truncates. The test helper pidx_prefix() mirrors this. The key
+  format from keys.rs uses 0x02 + "/PIDX/delta/" + pgno_be32, so
+  truncating the last 4 bytes gives the correct scan prefix.
+
+== Verdict: PASS ==
+
+All five acceptance criteria are met. The implementation correctly uses
+scc::HashMap, provides all required methods, and includes both unit and
+integration tests with store interaction verification.

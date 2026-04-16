@@ -9,7 +9,7 @@ use universalpubsub as ups;
 use universalpubsub::{NextOutput, PublishOpts, Subscriber};
 use vbare::OwnedVersionedData;
 
-use crate::{LifecycleResult, conn::Conn, metrics};
+use crate::{LifecycleResult, conn::Conn, metrics, sqlite_runtime};
 
 #[tracing::instrument(name="tunnel_to_ws_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), envoy_key=%conn.envoy_key, protocol_version=%conn.protocol_version))]
 pub async fn task(
@@ -128,7 +128,6 @@ async fn handle_message(
 			for command_wrapper in &mut command_wrappers {
 				if let protocol::Command::CommandStartActor(start) = &mut command_wrapper.inner {
 					let actor_id = Id::parse(&command_wrapper.checkpoint.actor_id)?;
-					let actor_name = start.config.name.clone();
 					let hibernating_requests = ctx
 						.op(pegboard::ops::actor::hibernating_request::list::Input { actor_id })
 						.await?;
@@ -142,17 +141,15 @@ async fn handle_message(
 						})
 						.collect();
 
-					if start.preloaded_kv.is_none() {
-						let db = ctx.udb()?;
-						start.preloaded_kv = pegboard::actor_kv::preload::fetch_preloaded_kv(
-							&db,
-							ctx.config().pegboard(),
-							actor_id,
-							conn.namespace_id,
-							&actor_name,
-						)
-						.await?;
-					}
+					sqlite_runtime::populate_start_command(
+						ctx,
+						conn.sqlite_engine.as_ref(),
+						conn.protocol_version,
+						conn.namespace_id,
+						actor_id,
+						start,
+					)
+					.await?;
 				}
 			}
 

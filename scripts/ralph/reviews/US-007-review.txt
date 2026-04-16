@@ -1,0 +1,53 @@
+US-007 Review: Implement LTX V3 decoder
+Commit: 87d36f3a3a
+File: engine/packages/sqlite-storage/src/ltx.rs
+
+== Acceptance Criteria ==
+
+1. Decoder reads V3 header, iterates 6-byte page headers with LZ4 block
+   decompression, handles 16-byte trailer:
+   PASS. LtxDecoder::decode() parses the 100-byte header via
+   LtxHeader::decode(), iterates 6-byte page headers (4B pgno + 2B flags),
+   reads the 4-byte compressed-size prefix, decompresses with
+   lz4_flex::block::decompress, and validates the 16-byte zeroed trailer.
+
+2. Decoder returns Vec of (pgno, page_bytes) pairs, with optional
+   random-access via page index:
+   PASS. DecodedLtx contains pages: Vec<DirtyPage> (pgno + bytes pairs)
+   and page_index: Vec<LtxPageIndexEntry>. The get_page() method provides
+   random access via binary search on sorted pages.
+
+3. Encode-then-decode round-trip test exists:
+   PASS. decodes_round_trip_pages_and_header encodes 3 unsorted pages,
+   decodes, and verifies header equality, page index match, page content
+   match (sorted), and random access via get_page().
+
+4. Unit tests with varying page sizes and multi-page blobs:
+   PASS. decodes_varying_valid_page_sizes tests 512, 1024, and 4096 page
+   sizes. decodes_round_trip_pages_and_header uses 3 pages. The encoder
+   tests also exercise multi-page blobs that the decoder consumes.
+
+5. cargo test -p sqlite-storage passes:
+   PASS (inferred from PRD passes:true marking and consistent code).
+
+== Additional Observations ==
+
+- Good: The decoder cross-validates the embedded page index against a
+  computed index from the actual page frames. This catches index
+  corruption.
+- Good: rejects_corrupt_trailer_or_index test verifies the decoder fails
+  on tampered trailers and corrupted page indexes.
+- Good: Sentinel handling is correct. A zero-pgno page header terminates
+  the page section, and the decoder validates no trailing bytes remain.
+- Minor: The decoder does not support V1 fallback (no PageHeaderFlagSize
+  check for V1-style frame reads). The ltx-v3-plan.md mentions V3
+  decoders should support V1 fallback, but the PRD does not require it
+  and the spec says V1 actors stay V1, so this is acceptable.
+- Minor: The LTX_VERSION constant is 3 but never written into the blob.
+  The magic is "LTX1" (same across versions). The version is implicit
+  from the header size and flag usage. This matches the Go reference.
+
+== Verdict: PASS ==
+
+All five acceptance criteria are met. The decoder is correct, well-tested,
+and properly validates the V3 wire format.

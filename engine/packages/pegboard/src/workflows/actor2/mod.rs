@@ -14,6 +14,8 @@ use runtime::{StoppedResult, Transition};
 
 /// Batch size of how many events to ack.
 const EVENT_ACK_BATCH_SIZE: i64 = 250;
+pub const SQLITE_SCHEMA_VERSION_V1: u32 = 1;
+pub const SQLITE_SCHEMA_VERSION_V2: u32 = 2;
 
 // NOTE: Assumes input is validated.
 #[derive(Clone, Debug, Serialize, Deserialize, Hash)]

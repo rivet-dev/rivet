@@ -66,6 +66,8 @@ pub trait EnvoyCallbacks: Send + Sync + 'static {
 		generation: u32,
 		config: protocol::ActorConfig,
 		preloaded_kv: Option<protocol::PreloadedKv>,
+		sqlite_schema_version: u32,
+		sqlite_startup_data: Option<protocol::SqliteStartupData>,
 	) -> BoxFuture<anyhow::Result<()>>;
 
 	fn on_actor_stop(

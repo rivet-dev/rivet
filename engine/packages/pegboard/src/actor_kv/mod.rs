@@ -15,6 +15,7 @@ pub mod preload;
 mod utils;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const SQLITE_V1_PREFIX: u8 = 0x08;
 
 // Keep the KV validation limits below in sync with
 // rivetkit-typescript/packages/rivetkit/src/drivers/file-system/kv-limits.ts.
@@ -39,6 +40,34 @@ pub async fn estimate_kv_size(tx: &universaldb::Transaction, actor_id: Id) -> Re
 	let (start, end) = subspace.range();
 
 	tx.get_estimated_range_size_bytes(&start, &end).await
+}
+
+#[tracing::instrument(skip_all)]
+pub async fn sqlite_v1_data_exists(db: &universaldb::Database, actor_id: Id) -> Result<bool> {
+	let subspace = keys::actor_kv::subspace(actor_id);
+	let prefix = vec![SQLITE_V1_PREFIX];
+
+	db.run(|tx| {
+		let subspace = subspace.clone();
+		let prefix = prefix.clone();
+
+		async move {
+			let tx = tx.with_subspace(subspace.clone());
+			let mut stream = tx.get_ranges_keyvalues(
+				universaldb::RangeOption {
+					limit: Some(1),
+					mode: universaldb::options::StreamingMode::Small,
+					..prefix_range(&prefix, &subspace).into()
+				},
+				Snapshot,
+			);
+
+			Ok(stream.try_next().await?.is_some())
+		}
+	})
+	.custom_instrument(tracing::info_span!("kv_sqlite_v1_probe_tx"))
+	.await
+	.map_err(Into::into)
 }
 
 /// Gets keys from the KV store.
@@ -506,25 +535,17 @@ fn list_query_range(query: ep::KvListQuery, subspace: &Subspace) -> (Vec<u8>, Ve
 					.1
 			},
 		),
-		ep::KvListQuery::KvListPrefixQuery(prefix) => {
-			// For prefix queries, we need to create a range that matches all keys
-			// that start with the given prefix bytes. The tuple encoding adds a
-			// terminating 0 byte to strings, which would make the range too narrow.
-			//
-			// Instead, we construct the range manually:
-			// - Start: the prefix bytes within the subspace
-			// - End: the prefix bytes + 0xFF (next possible byte)
-
-			let mut start = subspace.pack(&keys::actor_kv::ListKeyWrapper(prefix.key.clone()));
-			// Remove the trailing 0 byte that tuple encoding adds to strings
-			if let Some(&0) = start.last() {
-				start.pop();
-			}
-
-			let mut end = start.clone();
-			end.push(0xFF);
-
-			(start, end)
-		}
+		ep::KvListQuery::KvListPrefixQuery(prefix) => prefix_range(&prefix.key, subspace),
 	}
+}
+
+fn prefix_range(prefix: &ep::KvKey, subspace: &Subspace) -> (Vec<u8>, Vec<u8>) {
+	let mut start = subspace.pack(&keys::actor_kv::ListKeyWrapper(prefix.clone()));
+	if let Some(&0) = start.last() {
+		start.pop();
+	}
+
+	let mut end = start.clone();
+	end.push(0xFF);
+	(start, end)
 }

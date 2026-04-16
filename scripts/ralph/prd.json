@@ -1,365 +1,285 @@
 {
-  "project": "RivetKit Dynamic Actors",
-  "branchName": "ralph/dynamic-actors-sqlite-ts-reload",
-  "description": "Dynamic actor enhancements: SQLite host-side proxy for db() support, TypeScript source compilation via @secure-exec/typescript, and failed-start reload lifecycle with backoff, authentication, and observability.",
+  "project": "SQLite VFS v2",
+  "branchName": "feat/sqlite-vfs-v2",
+  "description": "Replace per-page KV storage layout (v1) with sharded LTX + delta log architecture. Engine-side sqlite-storage crate owns storage layout, CAS-fenced commits, PIDX cache, and compaction. Actor-side VFS speaks a semantic sqlite_* protocol over envoy-protocol. Background compaction folds deltas into immutable shards. See docs-internal/rivetkit-typescript/sqlite-ltx/SPEC.md for canonical specification.\n\nDesign decisions (recorded for context \u2014 do not change without revisiting):\n\n- COMMIT SIZE CAP = 16 MB (US-054). Rejected alternatives:\n  - 6 MB (original Cloudflare-matching proposal): unnecessarily restrictive after US-048 moves DELTA bytes out of the commit txn.\n  - 32 MB: adversarial review flagged 50 concurrent \u00d7 32 MB = 1.6 GB pressure on 2 GB runner pods, and FDB's 5 s txn age under cross-region replication leaves only ~3 s real write budget.\n  - 512 MB (for schema migrations / restore): such workloads belong in a streaming import path, not a single atomic commit.\n  - 16 MB matches Cloudflare Durable Objects' internal batch ceiling. With US-048 in place, PIDX for 4,096 pages \u2248 120 KB, well under FDB's 1 MB recommended size.\n\n- HARD CAP vs SILENT SPLITTING. We reject oversize commits with a clear error (CommitExceedsLimit) rather than transparently splitting across FDB transactions. Silent splitting breaks atomicity; users expecting SQLite ACID semantics must not see partial commits.\n\n- NO TRANSPARENT ROW-LEVEL SPLITTING. The 16 MB commit cap (US-054) naturally bounds single-row inserts at ~15 MB (headroom for other dirty pages in the same commit). SQLite's native overflow-page handling already chunks large values across 4 KB pages internally \u2014 our VFS sees just pages, not rows. A separate 'transparent row splitting' feature would either duplicate SQLite's native overflow handling OR violate SQL semantics (a single logical row spanning multiple physical rows breaks SELECT/COUNT/indexes/atomicity). Users needing giant BLOBs should store references to object storage \u2014 matches Cloudflare DO's actual production pattern. No separate row-size cap: the 16 MB commit cap (US-054) naturally bounds single-row inserts at ~15 MB. A tighter row cap (e.g. 2 MB like Cloudflare DO) would be redundant \u2014 the commit cap catches oversize rows anyway, with a less precise but still actionable error.\n\n- 100 KB STATEMENT / 10 GB DB. Matches Cloudflare Durable Objects. Bound-parameter cap (100) and column-count cap (100) were explicitly REJECTED \u2014 too restrictive for bulk inserts (ORMs easily hit 100 parameters) and arbitrary (SQLite's 2000-column default is fine). SQLite defaults retained for those.\n\n- DELTA STORAGE LAYOUT = per-txid chunk prefix (US-048). Rewritten cleanly because v2 has not shipped \u2014 no dual-path migration code. Old single-blob delta_key helpers removed entirely.\n",
   "userStories": [
     {
-      "id": "US-001",
-      "title": "Add SQLite bridge contract keys and host-side SQLite pool",
-      "description": "As a developer, I need the bridge contract and host-side SQLite infrastructure so dynamic actors can execute SQL on the host.",
+      "id": "US-040",
+      "title": "Fix compaction performance: hoist scans and share engine",
+      "description": "As a developer, I need compaction to avoid redundant I/O by hoisting PIDX/delta scans to the worker level and sharing the main SqliteEngine.",
       "acceptanceCriteria": [
-        "Add sqliteExec and sqliteBatch keys to DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS in src/dynamic/runtime-bridge.ts",
-        "Add #actorAppDatabases map to FileSystemGlobalState in src/drivers/file-system/global-state.ts",
-        "Add #getOrCreateActorAppDatabase(actorId) that opens/creates a SQLite file at <storagePath>/app-databases/<actorId>.db with WAL mode",
-        "Add #closeActorAppDatabase(actorId) for teardown",
-        "Add sqliteExec(actorId, sql, params) method returning { rows: unknown[][], columns: string[] }",
-        "Add sqliteBatch(actorId, statements) method that wraps statements in BEGIN/COMMIT and returns results per statement",
-        "Extend #destroyActorData and actor teardown to close and delete app databases",
-        "Typecheck passes"
-      ],
-      "priority": 1,
-      "passes": false,
-      "notes": "App databases are separate from KV databases. Use the same SqliteRuntime (bun:sqlite / better-sqlite3) already loaded. sqliteExec creates the database lazily on first use."
-    },
-    {
-      "id": "US-002",
-      "title": "Wire SQLite bridge callbacks in isolated-vm and secure-exec runtimes",
-      "description": "As a developer, I need both runtime paths to expose the SQLite bridge so dynamic actors can call sqliteExec/sqliteBatch from inside the isolate.",
-      "acceptanceCriteria": [
-        "In src/dynamic/isolate-runtime.ts #setIsolateBridge(), add sqliteExecRef and sqliteBatchRef that JSON-serialize params, call globalState.sqliteExec/sqliteBatch, and return JSON-serialized results via makeExternalCopy",
-        "Set both refs on context.global using DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS",
-        "In src/dynamic/host-runtime.ts #setIsolateBridge(), add equivalent refs using the existing base64/JSON bridge pattern",
-        "Set both refs on context.global as __dynamicHostSqliteExec and __dynamicHostSqliteBatch",
-        "Typecheck passes"
-      ],
-      "priority": 2,
-      "passes": false,
-      "notes": "Follow the exact same pattern used for existing KV bridge callbacks. isolated-vm uses makeExternalCopy; secure-exec returns plain JSON strings."
-    },
-    {
-      "id": "US-003",
-      "title": "Add overrideRawDatabaseClient to isolate-side actorDriver",
-      "description": "As a developer, I need the isolate-side actorDriver to provide database override hooks so dynamic actors can use db() through the bridge.",
-      "acceptanceCriteria": [
-        "In src/dynamic/host-runtime.ts, add overrideRawDatabaseClient(actorId) to the actorDriver object (around line 1767)",
-        "The override returns a RawDatabaseClient whose exec() calls through the bridge to __dynamicHostSqliteExec",
-        "exec() JSON-serializes params, calls bridgeCall, parses the JSON result, and maps column-oriented rows to objects",
-        "Add overrideDrizzleDatabaseClient(actorId) that returns undefined (let raw override handle it)",
-        "Typecheck passes"
-      ],
-      "priority": 3,
-      "passes": false,
-      "notes": "Because overrides are set, DatabaseProvider.createClient() uses them instead of trying to construct KV-backed WASM SQLite."
-    },
-    {
-      "id": "US-004",
-      "title": "Add database override checks in drizzle provider",
-      "description": "As a developer, I need the drizzle DatabaseProvider to check for overrides before falling back to KV-backed WASM construction.",
-      "acceptanceCriteria": [
-        "In src/db/drizzle/mod.ts createClient(), add override check at the top before existing KV-backed path",
-        "Check for drizzle override first (ctx.overrideDrizzleDatabaseClient), wrap with RawAccess execute/close if present",
-        "Check for raw override second (ctx.overrideRawDatabaseClient), build drizzle sqlite-proxy on top using the async callback pattern",
-        "The sqlite-proxy callback handles 'run', 'get', and 'all' methods correctly",
-        "Existing KV-backed path remains as fallback when no overrides are set",
-        "Typecheck passes"
-      ],
-      "priority": 4,
-      "passes": false,
-      "notes": "This lets dynamic actors use db() from rivetkit/db/drizzle with migrations working through the bridge. The host runs the actual SQL; the isolate just sends strings."
-    },
-    {
-      "id": "US-005",
-      "title": "Add SQLite proxy driver tests and fixture actors",
-      "description": "As a developer, I need tests to verify dynamic actors can use db() and drizzle through the SQLite proxy bridge.",
-      "acceptanceCriteria": [
-        "Add shared fixture actors that use db() (raw) with a simple schema",
-        "Add fixture actors that use db() from rivetkit/db/drizzle with schema + migrations",
-        "Add an engine-focused integration test that creates a dynamic actor using raw db(), runs migrations, inserts rows, and queries them back",
-        "Test verifies data persists across actor sleep/wake cycles",
-        "Test verifies drizzle queries work through the proxy",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 5,
-      "passes": false,
-      "notes": "Tests should run in the shared engine-focused integration suite so the single runtime path executes them."
-    },
-    {
-      "id": "US-006",
-      "title": "Update secure-exec dependency to 0.1.0",
-      "description": "As a developer, I need secure-exec updated to the published release so we can use @secure-exec/typescript.",
-      "acceptanceCriteria": [
-        "Replace pre-release commit hash URL (pkg.pr.new/rivet-dev/secure-exec@7659aba) with secure-exec@0.1.0 in examples/ai-generated-actor/package.json",
-        "Update any local dist path fallbacks in isolate-runtime.ts that reference old directory structures",
-        "Add @secure-exec/typescript as an optional peer dependency of rivetkit (dynamically loaded)",
-        "Typecheck passes"
+        "compact_worker scans PIDX and delta entries once, passes results to each compact_shard call instead of each shard doing its own full rescan",
+        "CompactionCoordinator passes a reference to the shared SqliteEngine (or its db+subspace+page_indices) to the worker instead of constructing a throwaway SqliteEngine per invocation",
+        "Compaction PIDX updates are reflected in the shared engine's page_indices cache (not discarded with a throwaway engine)",
+        "Test: compaction batch of 8 shards performs 1 PIDX scan total (not 9)",
+        "cargo test -p sqlite-storage passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "secure-exec@0.1.0 and @secure-exec/typescript@0.1.0 were published 2026-03-18."
+      "passes": true,
+      "notes": "Two compounding performance findings: (1) compact_worker calls compact_shard up to 8 times, each doing its own full PIDX scan + delta scan = 9 PIDX scans + 8 delta scans per batch. (2) default_compaction_worker creates a new SqliteEngine with empty page_indices on every invocation (compaction/mod.rs:131-147), so every scan is a cold load and cache updates are discarded. REVERTED passes=true flip on 2026-04-16: review agent (see reviews/US-040-review.txt) confirmed no implementing commit exists and both bugs are still present in the code. Ralph must actually implement this before flipping the flag."
     },
     {
-      "id": "US-007",
-      "title": "Add compileActorSource implementation",
-      "description": "As a developer, I need a compileActorSource() helper to compile TypeScript source for dynamic actors in a sandboxed environment.",
+      "id": "US-043",
+      "title": "Make SQLite preload max bytes configurable; align naming with kv preload",
+      "description": "As a developer, I need the SQLite startup page preload byte budget to be configurable via engine config so that operators can tune it per deployment. Also align naming with the existing kv preload config to avoid operator confusion: existing preload_max_total_bytes (KV) should become kv_preload_max_total_bytes, and the new SQLite option is sqlite_preload_max_total_bytes. Document the rename prominently.",
       "acceptanceCriteria": [
-        "Create new file src/dynamic/compile.ts with compileActorSource function",
-        "Dynamically load @secure-exec/typescript using the build-specifier-from-parts pattern to avoid bundler eager inclusion",
-        "Dynamically load secure-exec for SystemDriver and NodeRuntimeDriverFactory",
-        "Call createTypeScriptTools() then tools.compileSource() with user source and compiler options",
-        "When typecheck is false, use compilerOptions { noCheck: true } for fast type-stripping",
-        "Map SourceCompileResult to CompileActorSourceResult with js, sourceMap, success, and diagnostics fields",
-        "Export CompileActorSourceOptions, CompileActorSourceResult, and TypeScriptDiagnostic types",
-        "Typecheck passes"
-      ],
-      "priority": 7,
-      "passes": false,
-      "notes": "The compiler runs inside a secure-exec isolate with memory/CPU limits. User-provided source never touches the host TypeScript installation."
-    },
-    {
-      "id": "US-008",
-      "title": "Add TypeScript source format types, auto-compilation, and exports",
-      "description": "As a developer, I need TS source formats recognized by the runtime and compileActorSource exported from rivetkit/dynamic.",
-      "acceptanceCriteria": [
-        "Extend DynamicSourceFormat in src/dynamic/runtime-bridge.ts with 'esm-ts' and 'commonjs-ts'",
-        "In src/dynamic/isolate-runtime.ts, handle TS formats by calling compileActorSource before writing source to the sandbox filesystem",
-        "Export compileActorSource, CompileActorSourceOptions, CompileActorSourceResult, and TypeScriptDiagnostic from src/dynamic/mod.ts",
-        "Unit test: compileActorSource with valid TS returns JS and success: true",
-        "Unit test: compileActorSource with type errors returns diagnostics and success: false",
-        "Unit test: compileActorSource with typecheck: false strips types without error on invalid types",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 8,
-      "passes": false,
-      "notes": "TS formats are a convenience. Loaders can always compile explicitly and return esm-js."
-    },
-    {
-      "id": "US-009",
-      "title": "Define error subclasses and DynamicStartupOptions types",
-      "description": "As a developer, I need the error types and configuration interfaces for the failed-start lifecycle.",
-      "acceptanceCriteria": [
-        "Define DynamicStartupFailed ActorError subclass with code 'dynamic_startup_failed' in actor/errors.ts",
-        "Define DynamicLoadTimeout ActorError subclass with code 'dynamic_load_timeout' in actor/errors.ts",
-        "Define DynamicStartupOptions interface with timeoutMs (default 15000), retryInitialDelayMs (default 1000), retryMaxDelayMs (default 30000), retryMultiplier (default 2), retryJitter (default true), maxAttempts (default 20)",
-        "Define DynamicActorOptions extending GlobalActorOptionsInput with startup?: DynamicStartupOptions",
-        "Add canReload callback to DynamicActorConfigInput with DynamicActorReloadContext type (actorId, name, key, request)",
-        "Add options field to DynamicActorConfigInput",
-        "Typecheck passes"
-      ],
-      "priority": 9,
-      "passes": false,
-      "notes": "These types are consumed by subsequent stories. canReload defaults to allowed when auth passes."
-    },
-    {
-      "id": "US-010",
-      "title": "Implement host-side dynamic runtime status model",
-      "description": "As a developer, I need a shared state model for dynamic actor lifecycle tracking across file-system and engine drivers.",
-      "acceptanceCriteria": [
-        "Create a shared host-side dynamic runtime status type with states: inactive, starting, running, failed_start",
-        "Include metadata fields: lastStartErrorCode, lastStartErrorMessage, lastStartErrorDetails, lastFailureAt, retryAt, retryAttempt, reloadCount, reloadWindowStart, generation, startupPromise",
-        "generation is a per-actor monotonic counter incremented synchronously before each startup attempt",
-        "startupPromise is created via promiseWithResolvers when transitioning to starting",
-        "State is in-memory only, cleared on wrapper removal during sleep/stop",
-        "Model is usable by both file-system and engine drivers",
-        "Typecheck passes"
-      ],
-      "priority": 10,
-      "passes": false,
-      "notes": "This state is host-side and in-memory only. It must not be written into persisted actor storage. Stale async completions are rejected by comparing captured generation against current."
-    },
-    {
-      "id": "US-011",
-      "title": "Implement startup coalescing and generation tracking",
-      "description": "As a developer, I need concurrent requests to coalesce onto a single startup attempt via a shared promise.",
-      "acceptanceCriteria": [
-        "When startup is needed (from inactive or expired failed_start), synchronously transition to starting, increment generation, create startupPromise via promiseWithResolvers",
-        "Concurrent requests arriving while in starting state await the existing startupPromise instead of creating a new one",
-        "When startup completes, compare captured generation against current generation; discard if they differ",
-        "On success, transition to running and resolve startupPromise",
-        "On failure, transition to failed_start, record retry metadata, and reject startupPromise",
-        "Comment why startupPromise is created synchronously before async work",
-        "Comment how generation invalidation prevents stale completions",
-        "Typecheck passes"
+        "Add sqlite_preload_max_total_bytes: Option<u64> field to Pegboard config in engine/packages/config/src/config/pegboard.rs, following the same pattern as preload_max_total_bytes",
+        "Add accessor fn sqlite_preload_max_total_bytes(&self) -> usize that defaults to DEFAULT_PRELOAD_MAX_BYTES (1 MiB)",
+        "Pass the config value through to TakeoverConfig::max_total_bytes in populate_start_command (sqlite_runtime.rs) and pegboard-outbound instead of using the hardcoded default",
+        "Update website/src/content/docs/self-hosting/configuration.mdx with the new config option",
+        "cargo check passes for pegboard-envoy, pegboard-outbound, config",
+        "RENAME existing preload_max_total_bytes -> kv_preload_max_total_bytes in the engine config surface. Keep a backwards-compat alias that reads the old name and logs a deprecation warning; remove the alias after one release.",
+        "ADD sqlite_preload_max_total_bytes as the new SQLite-specific config. Default = same as today's hardcoded value.",
+        "Document both in website/src/content/docs/self-hosting/configuration.mdx with a clear note: 'preload_max_total_bytes was renamed to kv_preload_max_total_bytes in version X. The old name still works but logs a warning.'",
+        "Update any internal references (pegboard, pegboard-envoy, test fixtures) to the new name",
+        "cargo test affected crates pass"
       ],
       "priority": 11,
       "passes": false,
-      "notes": "Only one startup attempt may be in flight at a time. The synchronous transition ensures concurrent requests always join the new attempt."
+      "notes": "Review agent flagged that having preload_max_total_bytes (KV) alongside sqlite_preload_max_total_bytes would confuse operators. Rename the existing one with a deprecation alias. Small churn, big clarity win."
     },
     {
-      "id": "US-012",
-      "title": "Thread AbortController through startup pipeline and implement load timeout",
-      "description": "As a developer, I need startup attempts to be cancellable via AbortController and to timeout after a configurable duration.",
+      "id": "US-044",
+      "title": "Delete mock transport VFS tests",
+      "description": "As a developer, I need the MockProtocol-based VFS tests removed since the Direct SqliteEngine tests (US-042) cover everything they cover plus the bugs they miss.",
       "acceptanceCriteria": [
-        "Pass AbortController signal through DynamicActorIsolateRuntime.start() as a parameter",
-        "Make the signal available to the user-provided loader callback as context.signal",
-        "Thread signal through internal async operations that support cancellation (e.g. fetch calls, file I/O)",
-        "Implement load timeout via setTimeout that aborts the AbortController after startup.timeoutMs",
-        "When timeout fires, abort with DynamicLoadTimeout error",
-        "Timeout failure transitions to failed_start with lastStartErrorCode set to 'dynamic_load_timeout'",
-        "Timeout failure participates in backoff identically to other startup failures",
-        "Typecheck passes"
+        "Inventory all tests in rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs that use MockProtocol / Test transport. Grep: 'SqliteTransportInner::Test', 'MockProtocol', 'protocol.commit_requests()'. Enumerate each test by function name in this story's notes before deleting.",
+        "For each MockProtocol test, classify as: (a) COVERED by an existing Direct engine test \u2192 delete, (b) NOT COVERED \u2192 port to Direct engine harness first, THEN delete the mock, (c) Tests behavior that only a controllable mock can exercise (e.g., fence mismatch injection, transport failure injection) \u2192 keep the mock but migrate to a smaller, documented MockTransport that lives under #[cfg(test)] with a comment explaining why the Direct harness cannot cover it.",
+        "Specifically preserve coverage for: FenceMismatch handling in commit paths, transport errors mid-commit, stale_meta edge cases, death semantics, multi-thread statement churn, slow-path fallback behavior",
+        "After deletion, run: cargo test -p rivetkit-sqlite-native and confirm all non-mock tests still pass",
+        "Measure test surface before/after (count of #[test] functions) \u2014 report in the PR description so we can see we did not silently drop coverage",
+        "cargo test -p rivetkit-sqlite-native passes with the same or greater count of assert!/assert_eq! as before the change",
+        "cargo test -p sqlite-storage passes"
       ],
       "priority": 12,
       "passes": false,
-      "notes": "Default timeout is 15 seconds to accommodate cold starts. Operations that don't support cancellation (e.g. isolated-vm context creation) run to completion but stale generation check discards their result."
+      "notes": "Review agent flagged that naively deleting mock tests could lose coverage for 10+ error paths (FenceMismatch, transport errors, multi-thread churn). This story is explicitly not 'delete all mock tests' \u2014 it's 'replace mocks with Direct engine tests where possible, and keep the rest with justification.' Do the inventory BEFORE deleting."
     },
     {
-      "id": "US-013",
-      "title": "Implement passive failed-start backoff and maxAttempts exhaustion",
-      "description": "As a developer, I need exponential backoff for failed startups that is passive (no background timers) and a maxAttempts limit.",
+      "id": "US-047",
+      "title": "Remove recover_page_from_delta_history and fix truncate cache invalidation",
+      "description": "As a developer, I need the read fallback path removed (it masks PIDX bugs) and the truncate cache invalidation scoped to only evict pages beyond the boundary.",
       "acceptanceCriteria": [
-        "Compute backoff delays using formula: min(maxDelay, initialDelay * multiplier^attempt) with optional jitter, matching p-retry algorithm",
-        "Record retryAt timestamp when transitioning to failed_start",
-        "Normal requests during active backoff return stored failed-start error immediately without attempting startup",
-        "Normal requests after backoff expires trigger a fresh startup attempt",
-        "No background retry timers are scheduled; retries only happen from incoming requests or reload",
-        "When retryAttempt exceeds maxAttempts, tear down the host wrapper, transition to inactive",
-        "Next request after maxAttempts exhaustion triggers fresh startup from attempt 0",
-        "Comment why backoff is passive instead of timer-driven",
-        "Typecheck passes"
+        "Remove recover_page_from_delta_history from engine/packages/sqlite-storage/src/read.rs",
+        "If a page is not found in its PIDX-indicated delta and not in the shard, return an error with diagnostic context (actor_id, pgno, source_key, delta txid) instead of silently scanning all deltas",
+        "Delete or convert the test get_pages_recovers_from_older_delta_when_latest_source_is_wrong to verify the error is returned",
+        "When PIDX-indicated delta lookup fails, emit a counter metric sqlite_get_pages_pidx_miss_total (engine /metrics endpoint) alongside the returned error. If this metric ever increments in production, it indicates a real PIDX bug and should page oncall.",
+        "In truncate_main_file (v2/vfs.rs), replace page_cache.invalidate_all() with page_cache.invalidate_entries_if(|pgno, _| *pgno > truncated_pages) where truncated_pages = ceil_div(new_size_bytes, page_size). Truncating to size=0 sets truncated_pages=0, so the predicate evicts everything (matches old behavior for that edge case). Use strict > so pgno=truncated_pages survives.",
+        "Test: after truncate, pages below the boundary are still in cache (no unnecessary cache miss)",
+        "Test: after truncate + regrow, old pages beyond boundary are not served from stale cache",
+        "Add boundary tests: (1) truncate to size=0 evicts all pages, (2) truncate to an exact page boundary keeps pgno<=truncated_pages, evicts pgno>truncated_pages, (3) truncate mid-page keeps pgno<=truncated_pages (the partial page is evicted).",
+        "cargo test -p sqlite-storage passes",
+        "cargo test -p rivetkit-sqlite-native passes"
       ],
-      "priority": 13,
+      "priority": 8,
       "passes": false,
-      "notes": "Passive backoff prevents failed actors from spinning in memory indefinitely. maxAttempts default is 20; set to 0 for unlimited."
+      "notes": "Two fixes from adversarial review verification. (1) recover_page_from_delta_history scans ALL deltas (up to 256 MB) when PIDX points to wrong delta. This cannot happen in normal operation (commit writes delta + PIDX atomically). The function masks bugs and has no logging/metrics. (2) truncate invalidate_all() nukes the entire page cache including valid pages below the boundary. After VACUUM on a large DB, every read becomes a cache miss. moka's invalidate_entries_if supports selective eviction. \n\nStaged-rollout concern (review agent): normally we'd want to emit a counter for N days to confirm recover_page_from_delta_history is never hit before removing it. BECAUSE v2 HAS NOT SHIPPED, that precaution is unnecessary \u2014 remove directly. If that assumption changes (e.g., v2 beta goes out with this function still present), revisit."
     },
     {
-      "id": "US-014",
-      "title": "Implement reload behavior for all states",
-      "description": "As a developer, I need reload to handle running, inactive, starting, and failed_start states correctly.",
+      "id": "US-048",
+      "title": "Replace single-blob DELTA layout with per-txid chunk prefix",
+      "description": "As a developer, I need commit_finalize to stop building a single giant DELTA blob so that commits up to the 16 MB cap (US-054) do not exceed FoundationDB's 10 MB per-transaction hard limit or its 5 s transaction age limit (error codes 2101, 1007). Because v2 has not shipped, we do this as a clean rewrite with an IN-PLACE PROMOTION strategy: stage chunks are written directly under a txid-scoped prefix the FIRST time, and finalize merely flips a manifest pointer in META. NO copying of bytes in the finalize transaction. This is what makes the <1 MB finalize-txn claim achievable.",
       "acceptanceCriteria": [
-        "Reload while running: stop actor through normal sleep lifecycle, return 200 (existing behavior preserved)",
-        "Reload while inactive: return 200 without waking the actor (no-op to prevent double-load)",
-        "Reload while starting: abort current AbortController, increment generation, create new startupPromise, begin fresh startup attempt",
-        "Requests awaiting old startupPromise receive rejection, then observe new starting state and join new promise",
-        "Reload while failed_start: reset backoff state (retryAt, retryAttempt), immediately attempt fresh startup, return result",
-        "Comment why reload on inactive is intercepted as a no-op",
-        "Comment why reload bypasses backoff",
-        "Typecheck passes"
+        "Add new subspace helpers in engine/packages/sqlite-storage/src/keys.rs: delta_chunk_prefix(actor_id, txid) and delta_chunk_key(actor_id, txid, chunk_idx: u32). Use a subspace distinct from stage_prefix so takeover can cleanly distinguish.",
+        "DELETE delta_key(actor_id, txid) and every call site across engine/packages/sqlite-storage/src/{read,commit,compaction/shard,quota,takeover}.rs and tests (~20 call sites). Replace with the new delta_chunk layout.",
+        "PROMOTION STRATEGY (confirmed): 'persist at stage start'. Add new engine RPC commit_stage_begin(actor_id, generation) -> Result<StageBeginResult { txid }>. Inside one FDB txn: tx_get_value_serializable(META), fence-check generation matches, increment head.next_txid, tx_write_value(META), return the allocated txid. FenceMismatch on generation bumps a dedicated metric.",
+        "Stage chunks write DIRECTLY to delta_chunk_key(actor_id, txid, chunk_idx) using the txid returned by commit_stage_begin. NO stage_key intermediate layer.",
+        "commit_finalize becomes METADATA-ONLY. Reads META, asserts: (a) head.generation == request.generation, (b) head.head_txid == request.expected_head_txid, (c) request.txid == head.next_txid - 1 (the reserved txid matches what META last allocated). Flips head_txid = request.txid, updates db_size_pages, writes META. Does NOT read, rewrite, or delete chunk bytes.",
+        "Assert in a test that a 16 MiB commit's finalize FDB txn writes fewer than 2 KB of mutations. This is the concrete guard that the metadata-only claim holds.",
+        "read.rs get_pages: replace every get_value(delta_key(...)) with scan_prefix_values(delta_chunk_prefix(actor_id, txid)), decode chunks in chunk_idx order, LTX-decode the concatenated buffer.",
+        "Extend takeover.rs build_recovery_plan to scan the new delta_chunk_prefix namespace for any chunks where txid > head_txid and delete them as orphans. Keep the existing stage_prefix cleanup removed (dead under the new scheme) or repurposed. Aborted stages (commit_stage_begin allocated a txid but no finalize arrived) naturally become orphans with txid > head_txid.",
+        "Assert in a test that after N aborted commit_stage_begin calls (each leaving orphan chunks), takeover cleans them all up on the next actor start, and head_txid does not regress.",
+        "Because finalize is metadata-only, chunk writes in commit_stage bill against sqlite_storage_used incrementally. Add quota enforcement to commit_stage: if adding this chunk would exceed sqlite_max_storage, return QuotaExceeded and leave orphan bytes for takeover to reap. Emit metric sqlite_orphan_chunk_bytes_reclaimed_total so operators can see orphan accumulation.",
+        "Concurrent-read safety: if get_pages runs while a finalize is mid-flight, it sees either the pre-finalize state (old head_txid) or the post-finalize state (new head_txid); never a torn chunk set. This is guaranteed automatically: chunks exist at txid > head_txid before finalize (invisible to get_pages), head_txid flip is atomic (single META write), chunks become visible at txid == head_txid afterwards. Add an interleaved test that verifies no torn reads across 1000 concurrent reads during a finalize.",
+        "Compaction (compaction/shard.rs) uses head_txid as the visibility boundary. A pending txid > head_txid is invisible to compaction; compaction only folds txids <= head_txid. No new chunk_count field needed \u2014 the head_txid flip is the atomic boundary.",
+        "Aborted stages leak a txid number (next_txid advanced but head_txid never caught up). This is benign: next_txid is monotonic, gaps are irrelevant to reads or compaction. u64 gives effectively infinite headroom. Document this invariant in types.rs alongside DBHead.",
+        "Update DBHead doc comment in types.rs to state: 'head_txid is the latest committed txid (visible). next_txid is the next txid allocatable by commit_stage_begin. head_txid == next_txid - 1 immediately after a clean commit; head_txid < next_txid - 1 during or after aborted stages.'",
+        "Add bench_large_tx_insert_10mb, bench_large_tx_insert_16mb, bench_large_tx_insert_commit_finalize_metadata_only_under_2kb tests to rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs. Run via Direct engine harness AND envoy transport harness.",
+        "Assert that a commit of 17 MiB is rejected cleanly with CommitExceedsLimit (depends on US-054; surface the test here too).",
+        "After landing, run local bench and compare phase histograms from US-059 against the pre-US-048 baseline in progress.txt. No phase should regress > 10% on 1 MB commits. 10 MB and 16 MB commits should work cleanly (previously failed).",
+        "Does NOT reintroduce FDB error codes 2101 or 1007 \u2014 regression assertion in bench test that no FenceMismatch or TransactionTooOld errors are logged.",
+        "Staging bench examples/kitchen-sink/scripts/bench.ts --filter 'Large TX insert 10MB' passes with p95 < 3 s, 16MB < 5 s.",
+        "dependsOn: US-059 (need phase histograms to measure no-regression; tests should scrape them).",
+        "cargo test -p sqlite-storage passes",
+        "cargo test -p rivetkit-sqlite-native passes"
       ],
-      "priority": 14,
-      "passes": false,
-      "notes": "Reload while running does NOT verify new code loads successfully. Startup failures surface on the next request that wakes the actor."
+      "priority": 2,
+      "passes": true,
+      "notes": "Two adversarial agents decided the design. TXID allocation: 'persist at stage start' (Option A). New commit_stage_begin RPC atomically allocates next_txid in one FDB txn. Chunks written directly to delta_chunk_key(actor, txid, chunk_idx); no intermediate stage_key. commit_finalize becomes metadata-only: reads META, verifies txid == next_txid - 1, flips head_txid. Abandoned stages leak txid numbers (benign on u64, orphan chunks cleaned by takeover's existing 'txid > head_txid' scan). Quota bills at stage time since finalize is metadata-only. Concurrent read safety follows automatically from the head_txid flip being the atomic boundary. No chunk_count field needed \u2014 head_txid IS the boundary.",
+      "dependsOn": [
+        "US-059"
+      ]
     },
     {
-      "id": "US-015",
-      "title": "Implement reload authentication and rate limiting",
-      "description": "As a developer, I need reload to be authenticated and rate-limited to prevent abuse.",
+      "id": "US-050",
+      "title": "Enforce 100 KB max SQL statement length via sqlite3_limit",
+      "description": "As a developer, I need SQLite statements longer than 100 KB to be rejected at parse time so that accidental RPC-to-SQL payload abuse is bounded and the contract matches Cloudflare Durable Objects.",
       "acceptanceCriteria": [
-        "Reload calls existing auth hook first; if it throws, reject with 403",
-        "If auth passes, call canReload callback; if it returns false or throws, reject with 403",
-        "If canReload is not provided, reload defaults to allowed when auth passes",
-        "In development mode without auth or canReload, allow reload with a warning log",
-        "Authentication check happens before any state changes",
-        "Implement reload rate-limit bucket: reloadCount tracks calls in current window, reloadWindowStart tracks window start",
-        "When reloadCount exceeds 10 in 60 seconds, log a warning with actor ID and count",
-        "Rate limiting is warning-only, not enforcement",
-        "Typecheck passes"
+        "Call sqlite3_limit(db, SQLITE_LIMIT_SQL_LENGTH, 100_000) after opening the database",
+        "Running a 200 KB SQL statement returns SQLITE_TOOBIG",
+        "Running a 50 KB SQL statement succeeds",
+        "Add test in rivetkit-sqlite-native",
+        "Document in website/src/content/docs/actors/limits.mdx",
+        "cargo test -p rivetkit-sqlite-native passes"
       ],
-      "priority": 15,
+      "priority": 9,
       "passes": false,
-      "notes": "Auth flow matches existing inspector auth behavior in dev mode."
+      "notes": "Matches Cloudflare DO (100 KB). Free because SQLite enforces natively via SQLITE_LIMIT_SQL_LENGTH."
     },
     {
-      "id": "US-016",
-      "title": "Implement error sanitization for production vs development",
-      "description": "As a developer, I need failed-start errors to be sanitized in production but include full details in development.",
+      "id": "US-053",
+      "title": "Enforce 10 GiB max database size via quota",
+      "description": "As a developer, I need the SQLite storage to reject commits once the actor's database has reached 10 GiB (= 10 * 1024 * 1024 * 1024 = 10,737,418,240 bytes) so that per-actor storage is bounded, matches Cloudflare Durable Objects, and keeps FDB shard rebalancing tractable. Use GiB (binary) consistently everywhere \u2014 engine constants, docs, error messages \u2014 to avoid drift with GB (decimal).",
       "acceptanceCriteria": [
-        "ActorError code (e.g. 'dynamic_startup_failed', 'dynamic_load_timeout') is always returned to clients in both environments",
-        "In production, error message is sanitized to generic string: 'Dynamic actor startup failed. Check server logs for details.'",
-        "In production, lastStartErrorDetails is not included in the response",
-        "In development, full error message and details including stack traces and loader output are included",
-        "Full details are always emitted to logs in all environments",
-        "Failed-start state retains enough structured error data to reconstruct both sanitized and full responses",
-        "Comment why production errors are sanitized while development errors include details",
-        "Typecheck passes"
+        "In engine/packages/sqlite-storage/src/types.rs, set SQLITE_DEFAULT_MAX_STORAGE_BYTES = 10 * 1024 * 1024 * 1024 (= 10,737,418,240 bytes = 10 GiB)",
+        "commit() returns SqliteStorageQuotaExceeded when usage would exceed 10 GiB (already has this code path; just verify limit is set)",
+        "Update test that seeds a quota-exceeded commit to use the 10 GiB boundary",
+        "Document the 10 GiB DB size limit in website/src/content/docs/actors/limits.mdx",
+        "cargo test -p sqlite-storage passes",
+        "website/src/content/docs/actors/limits.mdx uses 'GiB' (binary) consistently for SQLite DB size; rendered limit table says '10 GiB', not '10 GB'"
       ],
-      "priority": 16,
+      "priority": 10,
       "passes": false,
-      "notes": ""
+      "notes": "Matches Cloudflare DO (10 GB). The quota enforcement already exists; this story just sets the default limit and documents it. Smaller cap is easier to migrate across FDB shards; raise later once compaction proves itself at scale."
     },
     {
-      "id": "US-017",
-      "title": "Add GET /dynamic/status endpoint and client status() method",
-      "description": "As a developer, I need an endpoint to observe dynamic actor runtime state for debugging.",
+      "id": "US-054",
+      "title": "Enforce 16 MB max commit size (reject, do not silently split)",
+      "description": "As a developer, I need commits whose dirty_pages exceed 16 MB to fail with a clear actionable error. 16 MB is chosen as the hard cap: it matches Cloudflare Durable Objects' internal commit batch size, is comfortably under FoundationDB's 10 MB per-txn hard limit after US-048 removes DELTA bytes from the commit txn (PIDX for 4,096 pages \u2248 120 KB), fits in one WebSocket frame in tokio-tungstenite, and bounds memory pressure on shared runner pods (50 concurrent 16 MB commits = 800 MB vs a 2 GB container budget).",
       "acceptanceCriteria": [
-        "Add GET /dynamic/status endpoint that returns DynamicActorStatusResponse: state, generation, and failure metadata when in failed_start",
-        "Endpoint uses inspector-style auth: Bearer token via config.inspector.token() with timing-safe comparison",
-        "In development mode without configured token, access is allowed with a warning",
-        "Add status() method to ActorHandleRaw that calls GET /dynamic/status",
-        "Calling status() on a static actor returns { state: 'running', generation: 0 }",
-        "lastStartErrorDetails is only included in response in development mode",
-        "Typecheck passes"
+        "Add SQLITE_MAX_COMMIT_BYTES = 16 * 1024 * 1024 constant in engine/packages/sqlite-storage/src/types.rs (16 MiB in binary units). Align terminology with SQLITE_MAX_DELTA_BYTES already there.",
+        "DEFINITION: 'commit size' is the sum of dirty_page.bytes.len() over all DirtyPage in the CommitRequest. Explicitly does NOT include LTX header/trailer/index, LZ4 compression, BARE envelope, pgno encoding overhead, or actor_id/generation metadata. The check is evaluated BEFORE any encoding, serialization, or staging split.",
+        "commit() (fast path): reject when dirty_pages_raw_bytes(&request.dirty_pages) > SQLITE_MAX_COMMIT_BYTES with SqliteStorageError::CommitExceedsLimit { actual_size_bytes, max_size_bytes }. Error message must reference 'dirty page bytes' so users know what to measure.",
+        "commit_stage_begin() and commit_stage() (slow path): cap the CUMULATIVE raw bytes across all stage chunks for a single commit at SQLITE_MAX_COMMIT_BYTES. Track accumulated bytes per (actor_id, txid) in an engine-side in-memory state keyed by txid. If stage would push cumulative past the cap, return CommitExceedsLimit and abort the stage. This prevents a malicious/buggy client from bypassing the cap by chunking their own commit.",
+        "commit_finalize does NOT re-check the size (txid is already past the go/no-go point) \u2014 rely on commit_stage's accumulator.",
+        "VFS (rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs): when transport returns CommitExceedsLimit, surface as SQLITE_TOOBIG or equivalent so SQLite returns a clean transaction rollback (not a silent retry). Add a rivetkit-sqlite-native test that INSERTs a 20 MiB blob, catches the error at the JS surface, and asserts the actor remains usable for subsequent commits.",
+        "Emit sqlite_commit_exceeds_limit_total counter with label path={fast, slow}. No other labels (cardinality).",
+        "Test (fast path): a commit with 4097 * 4 KiB pages (16 MiB + 4 KiB raw) is REJECTED even when pages are all zeros (LZ4 would crush to ~KB). This locks Definition 1 against accidental drift to 'post-compression bytes'.",
+        "Test (fast path): a commit with exactly 4096 * 4 KiB pages (16 MiB) SUCCEEDS.",
+        "Test (slow path): two stages of 10 MiB raw each (total 20 MiB) is REJECTED at the second stage's commit_stage call, not just finalize.",
+        "Test: wire envelope overhead (BARE pgno varints, length prefixes) does NOT push a 16 MiB-raw commit over the cap.",
+        "Document in website/src/content/docs/actors/limits.mdx: '16 MiB max raw dirty-page bytes per commit. Counts uncompressed page bytes only; compression ratios do not affect this limit. For larger atomic operations, split into multiple BEGIN/COMMIT blocks.'",
+        "Update website/src/content/docs/actors/troubleshooting.mdx with the new CommitExceedsLimit error shape and its actionable guidance.",
+        "dependsOn: US-048 (commit txn sizing math only works after DELTA bytes leave the commit txn)",
+        "cargo test -p sqlite-storage passes",
+        "cargo test -p rivetkit-sqlite-native passes"
       ],
-      "priority": 17,
+      "priority": 5,
       "passes": false,
-      "notes": ""
+      "notes": "Adversarial agent decided Definition 1 (raw dirty page bytes). Reasons: (1) user-predictable ('my 5 MiB blob \u2248 5 MiB of dirty pages'), (2) post-compression definition would let 64 MiB of zeros through a 16 MiB LZ4-bytes cap, defeating memory/wire pressure goals, (3) matches existing dirty_pages_raw_bytes invariant used elsewhere in commit.rs. LZ4 interaction is a FEATURE under Definition 1: a 16 MiB text commit still compresses to a small DELTA on disk, but the commit is still capped at 16 MiB of raw uncompressed data. Slow path must mirror-check accumulated raw bytes across stages to prevent bypass via chunking.",
+      "dependsOn": [
+        "US-048"
+      ]
     },
     {
-      "id": "US-018",
-      "title": "Implement WebSocket behavior during failed-start and reload",
-      "description": "As a developer, I need WebSocket upgrades rejected cleanly during failed-start and connections closed properly during reload.",
+      "id": "US-055",
+      "title": "Enable WebSocket permessage-deflate on hyper-tungstenite server + all client tungstenites",
+      "description": "As a developer, I need WebSocket traffic between Cloud Run runners and the Rivet engine to be compressed so that large SQLite commit payloads use less wire bandwidth. The pegboard-envoy server uses hyper-tungstenite 0.17 (NOT tokio-tungstenite); any client that initiates a WebSocket to the engine uses tokio-tungstenite. Both sides must negotiate permessage-deflate via Sec-WebSocket-Extensions.",
       "acceptanceCriteria": [
-        "WebSocket upgrade during failed_start is rejected before the handshake completes with the same HTTP error status and body as normal failed-start requests",
-        "WebSocket upgrade must not be accepted and then immediately closed",
-        "WebSocket upgrade during starting state awaits startupPromise; rejected with failed-start error if startup fails, proceeds normally if succeeds",
-        "When reload triggers sleep on a running actor, open WebSocket connections are closed with code 1012 (Service Restart) and reason 'dynamic.reload'",
-        "Comment why WebSocket upgrades are rejected before handshake during failed start",
-        "Typecheck passes"
+        "Enumerate every WebSocket entry/exit point on the actor<->engine path: engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs (server, hyper-tungstenite), engine/sdks/rust/envoy-client/src/ (client, tokio-tungstenite), any rivetkit-typescript/packages/engine-runner usage",
+        "Enable deflate on hyper-tungstenite: verify the 0.17 release exposes a DeflateConfig / permessage-deflate feature; if not, bump hyper-tungstenite to a version that does",
+        "Enable deflate on tokio-tungstenite clients: in root Cargo.toml [workspace.dependencies.tokio-tungstenite] add 'deflate' to features",
+        "Configure both sides with server_no_context_takeover = true, client_no_context_takeover = true, server_max_window_bits = 15, client_max_window_bits = 15 (bounds per-connection memory to ~4 KB instead of 32 KB)",
+        "Add an integration test in engine/packages/pegboard-envoy/tests/ (new file: ws_compression_handshake.rs, or the nearest existing integration test dir under pegboard-envoy) that spins up a real pegboard-envoy server, opens a WebSocket client with permessage-deflate negotiation, and asserts the handshake response includes 'Sec-WebSocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover'. Use tokio-tungstenite as the test client since that is the same stack actor-side clients use.",
+        "Bench a 5 MB commit with non-random compressible data (e.g., repeated text payload) and assert wire bytes drop 2-5x vs uncompressed baseline. Use the US-059 histograms to measure transport duration",
+        "Random-blob benchmarks show no improvement (expected); document this explicitly in the story notes",
+        "Document the feature in website/src/content/docs/self-hosting/configuration.mdx if operators need to disable it (and in CLAUDE.md for WebSocket conventions)",
+        "cargo test for affected crates passes"
       ],
-      "priority": 18,
+      "priority": 3,
       "passes": false,
-      "notes": "Close code 1012 tells clients the closure is intentional and reconnection is appropriate."
+      "notes": "Review agent flagged: pegboard-envoy uses hyper-tungstenite 0.17, not tokio-tungstenite. Both paths must be covered. If hyper-tungstenite 0.17 does not support deflate, we need to upgrade (verify compatibility with hyper version first). Keep no_context_takeover on both sides to bound memory \u2014 each active connection otherwise holds ~32 KB zlib state. For large actor fleets this matters. Promoted to priority 3 on 2026-04-16 per user directive \u2014 compression bumped ahead of US-054 (commit cap) to shrink wire bytes sooner."
     },
     {
-      "id": "US-019",
-      "title": "Add failed-start reload driver tests",
-      "description": "As a developer, I need comprehensive tests for the failed-start lifecycle to ensure parity between drivers.",
+      "id": "US-059",
+      "title": "Add phase-level commit instrumentation (Prometheus + VFS counters)",
+      "description": "As a developer, I need three complementary observability surfaces on the SQLite commit path so that subsequent performance work has real data: (1) aggregated Prometheus histograms on the engine /metrics endpoint (port 6430) for dashboards, (2) per-actor VFS counters flowing through the existing ActorMetrics /inspector/metrics endpoint for per-actor debugging, and (3) tracing spans at debug level on both engine and VFS sides so that flipping RUST_LOG gives us per-request breakdowns correlatable by ray_id. Must land before US-048 so we can detect regressions from the DELTA layout rewrite.",
       "acceptanceCriteria": [
-        "Tests run in the shared engine-focused integration suite so the single runtime path uses the same cases",
-        "Test: normal request retries startup after backoff expires",
-        "Test: normal request during active backoff returns stored failed-start error",
-        "Test: no background retry loop runs while actor is in failed-start backoff",
-        "Test: reload bypasses backoff and immediately retries startup",
-        "Test: reload on inactive actor is a no-op and does not cause double-load",
-        "Test: concurrent requests coalesce onto one startup via shared startupPromise",
-        "Test: stale startup generation cannot overwrite newer reload-triggered generation",
-        "Test: production response is sanitized (no details, has code)",
-        "Test: development response includes full detail",
-        "Test: dynamic load timeout returns 'dynamic_load_timeout' error code",
-        "Test: maxAttempts exhaustion tears down the wrapper",
-        "Test: request after maxAttempts exhaustion triggers fresh startup from attempt 0",
-        "Test: reload authentication rejects unauthenticated callers with 403",
-        "Test: reload-while-starting aborts old attempt and starts new generation",
-        "Test: GET /dynamic/status returns correct state and metadata",
-        "Tests pass",
-        "Typecheck passes"
+        "Engine-side Prometheus histograms in SqliteStorageMetrics (engine/packages/sqlite-storage/src/metrics.rs): sqlite_commit_phase_duration_seconds with labels phase={decode_request, meta_read, ltx_encode, pidx_read, udb_write, response_build} and path={fast, slow}. Buckets: [.0005, .001, .0025, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10]",
+        "Engine-side: sqlite_commit_stage_phase_duration_seconds{phase=decode|stage_encode|udb_write}",
+        "Engine-side: sqlite_commit_finalize_phase_duration_seconds{phase=stage_promote|pidx_write|meta_write}",
+        "Engine-side: sqlite_commit_dirty_page_count{path}, sqlite_commit_dirty_bytes{path}, sqlite_udb_ops_per_commit{path} histograms",
+        "Envoy-side Prometheus histograms (same /metrics endpoint): sqlite_commit_envoy_dispatch_duration_seconds (WS frame arrival -> engine.commit() call), sqlite_commit_envoy_response_duration_seconds (engine.commit() return -> WS frame sent)",
+        "Verify engine /metrics endpoint returns these new metrics after running a commit. Curl port 6430 in a test.",
+        "Engine-side tracing spans via #[tracing::instrument(level = \"debug\", skip(...), fields(path, dirty_pages))] on commit(), commit_stage(), commit_finalize()",
+        "Inside each, open tracing::debug_span!(\"phase_name\", phase_specific_fields) for sub-phases (meta_read, ltx_encode, udb_write, etc.) so span enter/exit durations are captured",
+        "Envoy side: tracing span around handle_sqlite_commit() with actor_id, request_id fields for cross-component correlation",
+        "All spans at debug level \u2014 verify they are compiled out / zero cost when RUST_LOG=info by running a simple benchmark and confirming throughput does not regress",
+        "Document in docs-internal/engine/SQLITE_METRICS.md: 'set RUST_LOG=sqlite_storage=debug,pegboard_envoy=debug to see per-commit phase breakdowns'",
+        "Client-side VFS (rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs VfsV2Context): add AtomicU64 fields commit_request_build_ns, commit_serialize_ns, commit_transport_ns, commit_state_update_ns, plus commit_duration_ns_total for total commit time. Record via Instant::now() differences in flush_dirty_pages() and commit_atomic_write()",
+        "Add a NAPI-exposed method get_sqlite_vfs_metrics() -> {request_build_ns, serialize_ns, transport_ns, state_update_ns, total_ns, commit_count} in rivetkit-typescript/packages/rivetkit-native/ that reads the AtomicU64 values",
+        "Extend rivetkit-typescript/packages/rivetkit/src/actor/metrics.ts ActorMetrics: call the NAPI method during snapshot() and add a new labeled_timing metric 'sqlite_commit_phases' with values {request_build, serialize, transport, state_update}. Populate from the NAPI return values. Reset on actor wake alongside other ActorMetrics fields",
+        "Verify /inspector/metrics returns the new sqlite_commit_phases metric after a commit. Add a rivetkit test that runs an INSERT, hits /inspector/metrics, and asserts the new fields exist with non-zero values",
+        "Client-side VFS: tracing::debug!(target: \"sqlite_v2_vfs\", phase, elapsed_ms, dirty_pages, bytes, \"vfs commit phase\") log lines in flush_dirty_pages and commit_atomic_write after each phase",
+        "No Prometheus metric includes actor_id or namespace_id as a label (cardinality)",
+        "Path label ({fast, slow}) is the only dimension added beyond phase names",
+        "Add sqlite-storage test commit_instruments_all_phases: runs a 1 MB commit, scrapes engine /metrics, asserts each phase histogram has >=1 observation, and asserts observations sum within ~10% of total commit duration",
+        "Add rivetkit-sqlite-native test vfs_records_commit_phase_durations: runs a commit, reads the NAPI counters, asserts request_build_ns + transport_ns + state_update_ns > 0",
+        "Run examples/kitchen-sink/scripts/bench.ts --filter 'Large TX insert 5MB' locally, scrape /metrics on engine port 6430, AND hit /inspector/metrics on the actor, paste both outputs into progress.txt as baseline data",
+        "Add docs-internal/engine/SQLITE_METRICS.md documenting every new metric: name, labels, type (histogram/counter/timing), layer (engine/envoy/vfs), where to scrape it, and how to interpret for common diagnosis scenarios",
+        "cargo test -p sqlite-storage passes",
+        "cargo test -p rivetkit-sqlite-native passes",
+        "pnpm test -F rivetkit (if applicable driver tests exist) passes"
       ],
-      "priority": 19,
-      "passes": false,
-      "notes": "This enforces the parity requirement between file-system and engine drivers."
+      "priority": 1,
+      "passes": true,
+      "notes": "Three complementary surfaces: Prometheus histograms on engine /metrics (port 6430), per-actor VFS counters on /inspector/metrics, and debug-level tracing spans. Baseline captured in commit 514007256a: 5 MB commit at 717 ms info-level (~6.97 MB/s), udb_write 45.7% + pidx_read 36.3% of server wall time, transport 98.5% of VFS-side time. Use these numbers as the regression floor for US-048."
     },
     {
-      "id": "US-020",
-      "title": "Update docs-internal with failed-start and reload lifecycle documentation",
-      "description": "As a developer, I need the architecture documentation updated to describe the new lifecycle behavior.",
+      "id": "US-061",
+      "title": "commit_finalize writes PIDX entries so slow-path reads bypass recover_page_from_delta_history",
+      "description": "As a developer, I need commit_finalize to insert or update PIDX entries for the staged delta chunks so that post-finalize reads resolve pages through the normal PIDX -> delta lookup path, not the legacy full-history scan. The US-048 implementation made commit_finalize metadata-only (good for FDB txn size), but it skipped PIDX writes. That leaves get_pages depending on recover_page_from_delta_history for any page whose PIDX entry is missing, which is exactly the scan the US-047 story wants to remove. Fix commit_finalize so the standard read path works and US-047 can remove the fallback cleanly.",
       "acceptanceCriteria": [
-        "Expand docs-internal/rivetkit-typescript/DYNAMIC_ACTORS_ARCHITECTURE.md with a dedicated failed-start and reload lifecycle section",
-        "Document the dynamic actor startup state model (inactive, starting, running, failed_start)",
-        "Document what failed_start means and how normal requests behave during it",
-        "Document how passive backoff works (no autonomous retry loop)",
-        "Document how reload behaves for each state (running, inactive, starting, failed_start)",
-        "Document that reload resets backoff before retrying and why reload on inactive is a no-op",
-        "Document error sanitization in production vs development",
-        "Document the load timeout, retry configuration, and where they are configured",
-        "Document reload authentication via auth and canReload",
-        "Document the GET /dynamic/status endpoint",
-        "Document WebSocket close behavior during reload (1012, 'dynamic.reload')",
-        "Document maxAttempts limit and behavior when exceeded"
+        "commit_finalize writes one PIDX entry per page touched by the staged delta so that post-finalize reads find the correct (actor_id, pgno) -> txid mapping through pidx_delta_key(...) and never fall back to scanning delta history.",
+        "If PIDX writes would exceed the 2 KiB finalize-mutations budget documented by US-048, chunk the PIDX writes across stage chunks at commit_stage time instead of inside finalize. Make finalize strictly metadata-only. Document which option was chosen in the engine/CLAUDE.md sqlite-storage section.",
+        "Update the engine-side `commit_finalize` integration test so it exercises get_pages on each touched page AFTER finalize and asserts zero calls land in recover_page_from_delta_history. Add a counter or test hook in recover_page_from_delta_history to prove it is untouched during this test.",
+        "Add a stress test: N = 4096 dirty pages across 4 chunks, finalize, then read all 4096 pages and assert they match staged payloads AND recover_page_from_delta_history was not invoked.",
+        "No regression on the US-048 'finalize FDB txn writes fewer than 2 KB of mutations' assertion. If chunk-time PIDX writes are used, update the assertion to reflect the new split.",
+        "dependsOn: US-048 (the finalize split it introduced), blocks US-047 (the fallback removal).",
+        "cargo test -p sqlite-storage passes",
+        "cargo test -p rivetkit-sqlite-native passes"
       ],
-      "priority": 20,
+      "priority": 4,
       "passes": false,
-      "notes": "The implementation is not complete until the docs-internal update ships in the same change."
+      "notes": "Coverage gap from the US-048 review (reviews/US-048-review.txt). US-048 shipped commit_finalize as metadata-only, which skipped PIDX writes entirely. Post-finalize reads now depend on recover_page_from_delta_history for any page whose PIDX entry is missing (the full-history scan). US-047 is supposed to remove that fallback; US-047 cannot land until this story does. Order of ops: US-061 first, then US-047 can delete recover_page_from_delta_history cleanly.",
+      "dependsOn": [
+        "US-048"
+      ]
+    },
+    {
+      "id": "US-062",
+      "title": "Actually implement compaction performance fix (US-040 coverage backfill)",
+      "description": "As a developer, I need the compaction performance optimization described in US-040 to actually land in code. US-040 was flipped to passes=true on 2026-04-16 without an implementing commit: the review agent confirmed compact_shard still rescans PIDX+delta per invocation and default_compaction_worker still constructs a throwaway SqliteEngine with empty page_indices (engine/packages/sqlite-storage/src/compaction/{shard.rs,mod.rs}). Deliver the actual optimization and its test.",
+      "acceptanceCriteria": [
+        "compact_worker scans PIDX and delta entries ONCE per batch and passes the pre-scanned set to each compact_shard call. compact_shard accepts them as parameters instead of rescanning.",
+        "CompactionCoordinator passes a reference to the shared SqliteEngine (or its db+subspace+Arc<page_indices>) to default_compaction_worker in engine/packages/sqlite-storage/src/compaction/mod.rs so compaction writes update the live engine cache instead of a throwaway.",
+        "After compaction, the shared page_indices cache reflects updated PIDX entries (not discarded with the throwaway engine).",
+        "Add test compact_worker_performs_single_pidx_scan_per_batch: 8-shard batch triggers exactly 1 PIDX scan total, not 9. Instrument via an op counter increment or a scan-count metric; prefer a dedicated test hook over parsing metrics output.",
+        "Validate that the existing compaction correctness tests still pass after the hoisting: compact_worker_folds_five_deltas_into_one_shard, compact_shard_skips_stale_meta_without_rewinding_head, concurrent_reads_during_compaction_keep_returning_expected_pages.",
+        "Do NOT re-flip the US-040 passes flag. Ship this as US-062.",
+        "cargo test -p sqlite-storage passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "US-040 was marked passes=true without an implementing commit (see reviews/US-040-review.txt). Rather than re-flipping US-040, this story exists so Ralph has a clear target for the real code change. Code sites to edit: engine/packages/sqlite-storage/src/compaction/shard.rs (compact_shard signature + remove redundant scans), engine/packages/sqlite-storage/src/compaction/worker.rs (add scan hoisting), engine/packages/sqlite-storage/src/compaction/mod.rs (CompactionCoordinator engine sharing)."
+    },
+    {
+      "id": "US-060",
+      "title": "Backfill US-048 test, metric, and documentation coverage",
+      "description": "As a developer, I need the acceptance criteria that US-048 skipped to actually ship, so the story's guardrails against regressions exist. The US-048 review (reviews/US-048-review.txt) identified five concrete gaps. These are mechanical follow-ups; no architecture change.",
+      "acceptanceCriteria": [
+        "Add test sqlite-storage::commit::tests::commit_finalize_writes_fewer_than_2kib_of_mutations: issues a 16 MiB staged commit via commit_stage_begin + commit_stage, calls commit_finalize, and asserts the finalize FDB transaction's cumulative write bytes are < 2 KiB. Use the op_counter + raw-write-bytes counter that already exists in UniversalDB, or add a test hook if needed.",
+        "Add bench rivetkit-sqlite-native::v2::vfs::tests::bench_large_tx_insert_16mb: exercises the full commit path on a 16 MiB commit and asserts no FDB error 2101 (TransactionTooLarge) or 1007 (TransactionTooOld) surfaces in the result.",
+        "Add bench rivetkit-sqlite-native::v2::vfs::tests::bench_large_tx_insert_commit_finalize_metadata_only_under_2kb: mirrors the engine-side finalize budget assertion at the VFS layer end-to-end.",
+        "Add an engine-side regression check that neither FDB error 2101 nor 1007 is observed across the new 16 MiB tests. Counter sqlite_commit_fdb_error_total{code} exposed via /metrics, with _sum asserted == 0 at test end.",
+        "Add metric sqlite_orphan_chunk_bytes_reclaimed_total to engine/packages/sqlite-storage/src/metrics.rs. Increment it in takeover's build_recovery_plan whenever a `txid > head_txid` chunk is deleted, by the size of the deleted chunk value. Document in docs-internal/engine/SQLITE_METRICS.md.",
+        "Update the DBHead doc comment in engine/packages/sqlite-storage/src/types.rs to state the head_txid / next_txid invariant from US-048: 'head_txid is the latest committed txid (visible). next_txid is the next txid allocatable by commit_stage_begin. head_txid == next_txid - 1 immediately after a clean commit; head_txid < next_txid - 1 during or after aborted stages.'",
+        "cargo test -p sqlite-storage passes",
+        "cargo test -p rivetkit-sqlite-native passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Mechanical backfill for US-048. Do not touch architecture (commit_stage_begin/commit_finalize/delta_chunk_key are correct per review). Focus on: (1) 2 KiB finalize-budget assertion, (2) the two 16 MiB benches, (3) FDB error 2101/1007 regression counter, (4) orphan-chunk metric, (5) DBHead doc comment. Keep scope tight; resist adding unrelated cleanups here."
     }
   ]
 }

@@ -32,7 +32,10 @@ fn init_tracing(log_level: Option<&str>) {
 	});
 }
 
-use crate::bridge_actor::{BridgeCallbacks, CanHibernateResponseMap, ResponseMap, WsSenderMap};
+use crate::bridge_actor::{
+	BridgeCallbacks, CanHibernateResponseMap, ResponseMap, SqliteSchemaVersionMap, SqliteStartupMap,
+	WsSenderMap,
+};
 use crate::envoy_handle::JsEnvoyHandle;
 use crate::types::JsEnvoyConfig;
 
@@ -55,6 +58,9 @@ pub fn start_envoy_sync_js(
 	let ws_sender_map: WsSenderMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 	let can_hibernate_response_map: CanHibernateResponseMap =
 		Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+	let sqlite_startup_map: SqliteStartupMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+	let sqlite_schema_version_map: SqliteSchemaVersionMap =
+		Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 
 	// Create threadsafe callback for bridging events to JS
 	let tsfn: bridge_actor::EventCallback = event_callback.create_threadsafe_function(
@@ -71,6 +77,8 @@ pub fn start_envoy_sync_js(
 		response_map.clone(),
 		ws_sender_map.clone(),
 		can_hibernate_response_map.clone(),
+		sqlite_startup_map.clone(),
+		sqlite_schema_version_map.clone(),
 	));
 
 	let envoy_config = EnvoyConfig {
@@ -106,6 +114,8 @@ pub fn start_envoy_sync_js(
 		response_map,
 		ws_sender_map,
 		can_hibernate_response_map,
+		sqlite_startup_map,
+		sqlite_schema_version_map,
 	))
 }
 

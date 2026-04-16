@@ -195,6 +195,32 @@ function decodePreloadedKv(preloadedKv) {
 	};
 }
 
+function decodeSqliteStartupData(sqliteStartupData) {
+	if (!sqliteStartupData) {
+		return null;
+	}
+
+	const decodeBytes = (value) => Uint8Array.from(Buffer.from(value, "base64"));
+
+	return {
+		generation: sqliteStartupData.generation,
+		meta: {
+			schemaVersion: sqliteStartupData.meta.schemaVersion,
+			generation: sqliteStartupData.meta.generation,
+			headTxid: sqliteStartupData.meta.headTxid,
+			materializedTxid: sqliteStartupData.meta.materializedTxid,
+			dbSizePages: sqliteStartupData.meta.dbSizePages,
+			pageSize: sqliteStartupData.meta.pageSize,
+			creationTsMs: sqliteStartupData.meta.creationTsMs,
+			maxDeltaBytes: sqliteStartupData.meta.maxDeltaBytes,
+		},
+		preloadedPages: (sqliteStartupData.preloadedPages || []).map((page) => ({
+			pgno: page.pgno,
+			bytes: page.bytes ? decodeBytes(page.bytes) : null,
+		})),
+	};
+}
+
 /**
  * Route callback envelopes from the native addon to EnvoyConfig callbacks.
  */
@@ -217,6 +243,8 @@ function handleEvent(event, config, wrappedHandle) {
 					event.generation,
 					actorConfig,
 					decodePreloadedKv(event.preloadedKv),
+					event.sqliteSchemaVersion,
+					decodeSqliteStartupData(event.sqliteStartupData),
 				),
 			).then(
 				async () => {

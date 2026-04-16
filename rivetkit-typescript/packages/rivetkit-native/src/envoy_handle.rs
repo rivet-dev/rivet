@@ -6,7 +6,11 @@ use napi_derive::napi;
 use rivet_envoy_client::handle::EnvoyHandle;
 use tokio::runtime::Runtime;
 
-use crate::bridge_actor::{CanHibernateResponseMap, ResponseMap, WsSenderMap};
+use rivet_envoy_protocol as protocol;
+
+use crate::bridge_actor::{
+	CanHibernateResponseMap, ResponseMap, SqliteSchemaVersionMap, SqliteStartupMap, WsSenderMap,
+};
 use crate::types::{self, JsKvEntry, JsKvListOptions};
 
 fn make_ws_key(gateway_id: &[u8], request_id: &[u8]) -> [u8; 8] {
@@ -28,6 +32,8 @@ pub struct JsEnvoyHandle {
 	pub(crate) response_map: ResponseMap,
 	pub(crate) ws_sender_map: WsSenderMap,
 	pub(crate) can_hibernate_response_map: CanHibernateResponseMap,
+	pub(crate) sqlite_startup_map: SqliteStartupMap,
+	pub(crate) sqlite_schema_version_map: SqliteSchemaVersionMap,
 }
 
 impl JsEnvoyHandle {
@@ -37,6 +43,8 @@ impl JsEnvoyHandle {
 		response_map: ResponseMap,
 		ws_sender_map: WsSenderMap,
 		can_hibernate_response_map: CanHibernateResponseMap,
+		sqlite_startup_map: SqliteStartupMap,
+		sqlite_schema_version_map: SqliteSchemaVersionMap,
 	) -> Self {
 		Self {
 			runtime,
@@ -44,7 +52,24 @@ impl JsEnvoyHandle {
 			response_map,
 			ws_sender_map,
 			can_hibernate_response_map,
+			sqlite_startup_map,
+			sqlite_schema_version_map,
 		}
+	}
+
+	pub async fn clone_sqlite_schema_version(&self, actor_id: &str) -> Option<u32> {
+		self.sqlite_schema_version_map
+			.lock()
+			.await
+			.get(actor_id)
+			.copied()
+	}
+
+	pub async fn clone_sqlite_startup_data(
+		&self,
+		actor_id: &str,
+	) -> Option<protocol::SqliteStartupData> {
+		self.sqlite_startup_map.lock().await.get(actor_id).cloned()
 	}
 }
 

@@ -263,6 +263,36 @@ pub fn stringify_to_rivet(message: &protocol::ToRivet) -> String {
 				val.actor_id, val.request_id
 			)
 		}
+		protocol::ToRivet::ToRivetSqliteGetPagesRequest(val) => {
+			format!(
+				"ToRivetSqliteGetPagesRequest{{requestId: {}}}",
+				val.request_id
+			)
+		}
+		protocol::ToRivet::ToRivetSqliteCommitRequest(val) => {
+			format!(
+				"ToRivetSqliteCommitRequest{{requestId: {}}}",
+				val.request_id
+			)
+		}
+		protocol::ToRivet::ToRivetSqliteCommitStageBeginRequest(val) => {
+			format!(
+				"ToRivetSqliteCommitStageBeginRequest{{requestId: {}}}",
+				val.request_id
+			)
+		}
+		protocol::ToRivet::ToRivetSqliteCommitStageRequest(val) => {
+			format!(
+				"ToRivetSqliteCommitStageRequest{{requestId: {}}}",
+				val.request_id
+			)
+		}
+		protocol::ToRivet::ToRivetSqliteCommitFinalizeRequest(val) => {
+			format!(
+				"ToRivetSqliteCommitFinalizeRequest{{requestId: {}}}",
+				val.request_id
+			)
+		}
 		protocol::ToRivet::ToRivetTunnelMessage(val) => {
 			format!(
 				"ToRivetTunnelMessage{{messageId: {}, messageKind: {}}}",
@@ -302,6 +332,36 @@ pub fn stringify_to_envoy(message: &protocol::ToEnvoy) -> String {
 		}
 		protocol::ToEnvoy::ToEnvoyKvResponse(val) => {
 			format!("ToEnvoyKvResponse{{requestId: {}}}", val.request_id)
+		}
+		protocol::ToEnvoy::ToEnvoySqliteGetPagesResponse(val) => {
+			format!(
+				"ToEnvoySqliteGetPagesResponse{{requestId: {}}}",
+				val.request_id
+			)
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitResponse(val) => {
+			format!(
+				"ToEnvoySqliteCommitResponse{{requestId: {}}}",
+				val.request_id
+			)
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitStageBeginResponse(val) => {
+			format!(
+				"ToEnvoySqliteCommitStageBeginResponse{{requestId: {}}}",
+				val.request_id
+			)
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitStageResponse(val) => {
+			format!(
+				"ToEnvoySqliteCommitStageResponse{{requestId: {}}}",
+				val.request_id
+			)
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitFinalizeResponse(val) => {
+			format!(
+				"ToEnvoySqliteCommitFinalizeResponse{{requestId: {}}}",
+				val.request_id
+			)
 		}
 		protocol::ToEnvoy::ToEnvoyTunnelMessage(val) => {
 			format!(

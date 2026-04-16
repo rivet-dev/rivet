@@ -881,6 +881,8 @@ export class EngineActorDriver implements ActorDriver {
 		generation: number,
 		actorConfig: protocol.ActorConfig,
 		preloadedKv: protocol.PreloadedKv | null,
+		_sqliteSchemaVersion: number,
+		_sqliteStartupData: protocol.SqliteStartupData | null,
 	): Promise<void> {
 		if (this.#isShuttingDown) {
 			logger().debug({
@@ -902,7 +904,7 @@ export class EngineActorDriver implements ActorDriver {
 
 		// Deserialize input
 		let input: any;
-		if (actorConfig.input) {
+		if (actorConfig.input && actorConfig.input.byteLength > 0) {
 			input = cbor.decode(new Uint8Array(actorConfig.input));
 		}
 
@@ -1370,6 +1372,9 @@ export class EngineActorDriver implements ActorDriver {
 					actorId: actor?.id,
 					messageIndex: event.rivetMessageIndex,
 				});
+				if (!isRawWebSocketPath && websocket.readyState !== websocket.CLOSED) {
+					websocket.close(1011, "actor.stopping");
+				}
 				return;
 			}
 

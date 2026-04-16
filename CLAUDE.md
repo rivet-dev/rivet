@@ -213,12 +213,16 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 
 ## Architecture
 
+### Deprecated Packages
+- `engine/packages/pegboard-runner/` and associated TypeScript "runner" packages (`engine/sdks/typescript/runner`, `rivetkit-typescript/packages/engine-runner/`) and runner workflows are deprecated. All new actor hosting work targets `engine/packages/pegboard-envoy/` exclusively. Do not add features to or fix bugs in the deprecated runner path.
+
 ### Monorepo Structure
 - This is a Rust workspace-based monorepo for Rivet with the following key packages and components:
 
 - **Core Engine** (`packages/core/engine/`) - Main orchestration service that coordinates all operations
 - **Workflow Engine** (`packages/common/gasoline/`) - Handles complex multi-step operations with reliability and observability
 - **Pegboard** (`packages/core/pegboard/`) - Actor/server lifecycle management system
+- **Pegboard Envoy** (`engine/packages/pegboard-envoy/`) - The active actor-to-engine bridge. All new actor hosting work goes here.
 - **Common Packages** (`/packages/common/`) - Foundation utilities, database connections, caching, metrics, logging, health checks, workflow engine core
 - **Core Packages** (`/packages/core/`) - Main engine executable, Pegboard actor orchestration, workflow workers
 - **Shared Libraries** (`shared/{language}/{package}/`) - Libraries shared between the engine and rivetkit (e.g., `shared/typescript/virtual-websocket/`)
@@ -290,6 +294,12 @@ let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build(
 **Native SQLite & KV Channel**
 - RivetKit SQLite is served by `@rivetkit/rivetkit-native`. Do not reintroduce SQLite-over-KV or WebAssembly SQLite paths in the TypeScript runtime.
 - The Rust KV-backed SQLite implementation still lives in `rivetkit-typescript/packages/sqlite-native/src/`. When changing its on-disk or KV layout, update the internal data-channel spec in the same change.
+- SQLite v2 slow-path staging writes encoded LTX bytes directly under DELTA chunk keys. Do not expect `/STAGE` keys or a fixed one-chunk-per-page mapping in tests or recovery code.
+- The native VFS uses the same 4 KiB chunk layout and KV key encoding as the WASM VFS. Data is compatible between backends.
+- **The native Rust VFS and the WASM TypeScript VFS must match 1:1.** This includes: KV key layout and encoding, chunk size, PRAGMA settings, VFS callback-to-KV-operation mapping, delete/truncate strategy (both must use `deleteRange`), and journal mode. When changing any VFS behavior in one implementation, update the other. The relevant files are:
+  - Native: `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `kv.rs`
+  - WASM: `rivetkit-typescript/packages/sqlite-wasm/src/vfs.ts`, `kv.ts`
+- SQLite VFS v2 storage keys use literal ASCII path segments under the `0x02` subspace prefix with big-endian numeric suffixes so `scan_prefix` and `BTreeMap` ordering stay numerically correct.
 - Full spec: `docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md`
 
 **Inspector HTTP API**

@@ -18,6 +18,12 @@ use crate::kv::{
 	KV_CLEANUP_INTERVAL_MS, KvRequestEntry, cleanup_old_kv_requests, handle_kv_request,
 	handle_kv_response, process_unsent_kv_requests,
 };
+use crate::sqlite::{
+	SqliteRequest, SqliteRequestEntry, SqliteResponse, cleanup_old_sqlite_requests,
+	handle_sqlite_commit_finalize_response, handle_sqlite_commit_response,
+	handle_sqlite_commit_stage_begin_response, handle_sqlite_commit_stage_response,
+	handle_sqlite_get_pages_response, handle_sqlite_request, process_unsent_sqlite_requests,
+};
 use crate::tunnel::{
 	HibernatingWebSocketMetadata, handle_tunnel_message, resend_buffered_tunnel_messages,
 	send_hibernatable_ws_message_ack,
@@ -32,6 +38,8 @@ pub struct EnvoyContext {
 	pub actors: HashMap<String, HashMap<u32, ActorEntry>>,
 	pub kv_requests: HashMap<u32, KvRequestEntry>,
 	pub next_kv_request_id: u32,
+	pub sqlite_requests: HashMap<u32, SqliteRequestEntry>,
+	pub next_sqlite_request_id: u32,
 	pub request_to_actor: BufferMap<String>,
 	pub buffered_messages: Vec<protocol::ToRivetTunnelMessage>,
 }
@@ -58,6 +66,10 @@ pub enum ToEnvoyMessage {
 		actor_id: String,
 		data: protocol::KvRequestData,
 		response_tx: oneshot::Sender<anyhow::Result<protocol::KvResponseData>>,
+	},
+	SqliteRequest {
+		request: SqliteRequest,
+		response_tx: oneshot::Sender<anyhow::Result<SqliteResponse>>,
 	},
 	BufferTunnelMsg {
 		msg: protocol::ToRivetTunnelMessage,
@@ -186,6 +198,8 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		actors: HashMap::new(),
 		kv_requests: HashMap::new(),
 		next_kv_request_id: 0,
+		sqlite_requests: HashMap::new(),
+		next_sqlite_request_id: 0,
 		request_to_actor: BufferMap::new(),
 		buffered_messages: Vec::new(),
 	};
@@ -227,6 +241,9 @@ async fn envoy_loop(
 					}
 					ToEnvoyMessage::KvRequest { actor_id, data, response_tx } => {
 						handle_kv_request(&mut ctx, actor_id, data, response_tx).await;
+					}
+					ToEnvoyMessage::SqliteRequest { request, response_tx } => {
+						handle_sqlite_request(&mut ctx, request, response_tx).await;
 					}
 					ToEnvoyMessage::BufferTunnelMsg { msg } => {
 						ctx.buffered_messages.push(msg);
@@ -282,6 +299,7 @@ async fn envoy_loop(
 			}
 			_ = kv_cleanup_interval.tick() => {
 				cleanup_old_kv_requests(&mut ctx);
+				cleanup_old_sqlite_requests(&mut ctx);
 			}
 			_ = async {
 				match lost_timeout.as_mut() {
@@ -291,6 +309,9 @@ async fn envoy_loop(
 			} => {
 				// Lost timeout fired
 				for (_id, request) in ctx.kv_requests.drain() {
+					let _ = request.response_tx.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
+				}
+				for (_id, request) in ctx.sqlite_requests.drain() {
 					let _ = request.response_tx.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
 				}
 
@@ -324,6 +345,11 @@ async fn envoy_loop(
 			.response_tx
 			.send(Err(anyhow::anyhow!("envoy shutting down")));
 	}
+	for (_id, request) in ctx.sqlite_requests.drain() {
+		let _ = request
+			.response_tx
+			.send(Err(anyhow::anyhow!("envoy shutting down")));
+	}
 
 	ctx.actors.clear();
 
@@ -349,6 +375,7 @@ async fn handle_conn_message(
 			lost_timeout = None;
 			resend_unacknowledged_events(ctx).await;
 			process_unsent_kv_requests(ctx).await;
+			process_unsent_sqlite_requests(ctx).await;
 			resend_buffered_tunnel_messages(ctx).await;
 
 			let _ = start_tx.send(());
@@ -361,6 +388,21 @@ async fn handle_conn_message(
 		}
 		protocol::ToEnvoy::ToEnvoyKvResponse(response) => {
 			handle_kv_response(ctx, response).await;
+		}
+		protocol::ToEnvoy::ToEnvoySqliteGetPagesResponse(response) => {
+			handle_sqlite_get_pages_response(ctx, response).await;
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitResponse(response) => {
+			handle_sqlite_commit_response(ctx, response).await;
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitStageBeginResponse(response) => {
+			handle_sqlite_commit_stage_begin_response(ctx, response).await;
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitStageResponse(response) => {
+			handle_sqlite_commit_stage_response(ctx, response).await;
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitFinalizeResponse(response) => {
+			handle_sqlite_commit_finalize_response(ctx, response).await;
 		}
 		protocol::ToEnvoy::ToEnvoyTunnelMessage(tunnel_msg) => {
 			handle_tunnel_message(ctx, tunnel_msg).await;

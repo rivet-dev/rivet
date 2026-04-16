@@ -93,6 +93,14 @@ export interface QueueSendOpts {
 	actorId: string;
 }
 
+function shouldRetryStoppingActor(error: unknown): boolean {
+	return (
+		error instanceof errors.ActorStopping ||
+		(error instanceof errors.InternalError &&
+			error.message === "Actor is stopping")
+	);
+}
+
 /**
  * Creates an action handler
  */
@@ -155,8 +163,7 @@ export async function handleAction(
 			break;
 		} catch (error) {
 			const shouldRetry =
-				error instanceof errors.InternalError &&
-				error.message === "Actor is stopping" &&
+				shouldRetryStoppingActor(error) &&
 				attempt < maxAttempts - 1;
 			if (shouldRetry) {
 				await new Promise((resolve) => setTimeout(resolve, 25));

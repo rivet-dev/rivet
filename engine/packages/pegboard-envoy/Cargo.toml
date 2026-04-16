@@ -31,6 +31,7 @@ scc.workspace = true
 serde_bare.workspace = true
 serde_json.workspace = true
 serde.workspace = true
+sqlite-storage.workspace = true
 tokio-tungstenite.workspace = true
 tokio.workspace = true
 tracing.workspace = true

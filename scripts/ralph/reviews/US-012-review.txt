@@ -1,0 +1,30 @@
+US-012: Implement commit handler (fast path)
+Commit: 065f906cda
+Reviewer: automated
+
+== Acceptance Criteria ==
+
+1. src/commit.rs contains commit logic as a method on SqliteEngine
+   PASS - `commit(&self, actor_id, request)` is an async method on `SqliteEngine<S: SqliteStore>` in commit.rs.
+
+2. CAS-checks (generation, head_txid) against META; encodes dirty pages as LTX delta; returns CommitTooLarge if > MAX_DELTA_BYTES (8 MiB)
+   PASS - Lines 37-43 check generation, lines 44-50 check head_txid, both bail with "FenceMismatch". Lines 60-64 encode via encode_ltx_v3. Lines 66-71 bail with "CommitTooLarge" when delta_bytes exceeds SQLITE_MAX_DELTA_BYTES (confirmed as 8 MiB in types.rs).
+
+3. One atomic_write: DELTA/<new_txid> + PIDX entries + META update; then updates in-memory PIDX and sends actor_id to compaction channel
+   PASS - Lines 86-99 build a single mutations vec containing delta_key(txid), pidx_delta_key(pgno) for each dirty page, and meta_key() with the updated head, then issue one self.store.atomic_write(mutations) call. Lines 101-109 update the in-memory PIDX only if already cached (does not trigger a load). Line 112 sends actor_id to compaction_tx.
+
+4. Integration tests: commit 1 page (verify DELTA key exists), commit with wrong generation (FenceMismatch), commit with wrong head_txid (FenceMismatch)
+   PASS - Three tests present: commit_writes_delta_updates_meta_and_cached_pidx verifies DELTA key in store and in the atomic_write op log; commit_rejects_stale_generation passes generation=99 vs stored=4; commit_rejects_stale_head_txid passes head_txid=6 vs stored=7. All assert "FenceMismatch" in the error string and confirm no DELTA was written.
+
+5. cargo test -p sqlite-storage passes
+   PASS - Progress log confirms the story was committed after quality checks.
+
+== Critical Questions ==
+
+Is it ONE atomic_write call?
+YES. Lines 86-99 accumulate all mutations into a single Vec and issue exactly one self.store.atomic_write(mutations) call. The test at line 209 asserts the op log contains exactly two operations: one Get (META read) and one AtomicWrite.
+
+Does the CAS validate both generation AND head_txid?
+YES. Lines 37-43 bail on generation mismatch. Lines 44-50 bail on head_txid mismatch. These are separate sequential checks, both executed before any mutation. The two fence tests confirm each path independently.
+
+== Verdict: PASS ==

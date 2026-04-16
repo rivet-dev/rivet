@@ -91,6 +91,8 @@ pub fn create_actor(
 	config: protocol::ActorConfig,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
+	sqlite_schema_version: u32,
+	sqlite_startup_data: Option<protocol::SqliteStartupData>,
 ) -> mpsc::UnboundedSender<ToActor> {
 	let (tx, rx) = mpsc::unbounded_channel();
 	tokio::spawn(actor_inner(
@@ -100,6 +102,8 @@ pub fn create_actor(
 		config,
 		hibernating_requests,
 		preloaded_kv,
+		sqlite_schema_version,
+		sqlite_startup_data,
 		rx,
 	));
 	tx
@@ -112,6 +116,8 @@ async fn actor_inner(
 	config: protocol::ActorConfig,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
+	sqlite_schema_version: u32,
+	sqlite_startup_data: Option<protocol::SqliteStartupData>,
 	mut rx: mpsc::UnboundedReceiver<ToActor>,
 ) {
 	let handle = EnvoyHandle {
@@ -142,6 +148,8 @@ async fn actor_inner(
 			generation,
 			config,
 			preloaded_kv,
+			sqlite_schema_version,
+			sqlite_startup_data,
 		)
 		.await;
 

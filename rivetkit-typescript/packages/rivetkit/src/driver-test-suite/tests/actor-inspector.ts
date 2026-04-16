@@ -684,5 +684,36 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 			expect(data.kv_operations).toBeDefined();
 			expect(data.kv_operations.type).toBe("labeled_timing");
 		});
+
+		test("GET /inspector/metrics returns sqlite commit phase metrics", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.dbActorRaw.getOrCreate([
+				`inspector-sqlite-metrics-${crypto.randomUUID()}`,
+			]);
+
+			await handle.insertValue("hello");
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/metrics"),
+				{
+					headers: { Authorization: "Bearer token" },
+				},
+			);
+			expect(response.status).toBe(200);
+			const data: any = await response.json();
+
+			expect(data.sqlite_commit_phases).toBeDefined();
+			expect(data.sqlite_commit_phases.type).toBe("labeled_timing");
+			expect(data.sqlite_commit_phases.values.request_build.calls).toBeGreaterThan(0);
+			expect(
+				data.sqlite_commit_phases.values.request_build.totalMs,
+			).toBeGreaterThan(0);
+			expect(data.sqlite_commit_phases.values.serialize.totalMs).toBeGreaterThan(0);
+			expect(data.sqlite_commit_phases.values.transport.totalMs).toBeGreaterThan(0);
+			expect(
+				data.sqlite_commit_phases.values.state_update.totalMs,
+			).toBeGreaterThan(0);
+		});
 	});
 }

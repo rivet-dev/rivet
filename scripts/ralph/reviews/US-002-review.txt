@@ -1,0 +1,49 @@
+US-002 Review: Capture v1 benchmark baseline
+Commit: c097c27796
+Reviewer: Claude Opus 4.6
+Date: 2026-04-15
+
+=== Acceptance Criteria ===
+
+1. Run the existing examples/sqlite-raw benchmark against the v1 VFS
+   PASS (partial) - A new Rust benchmark binary (v1_baseline_bench.rs) was created rather
+   than using an existing benchmark. The TypeScript wrapper in examples/sqlite-raw/scripts/
+   benchmark.ts invokes it via cargo run. This is acceptable since no existing benchmark
+   binary covered these specific workloads. The approach exercises the real v1 VFS.
+
+2. Capture results in a structured JSON file at .agent/research/sqlite/v1-baseline-bench.json
+   PASS - JSON file exists at the correct path with proper structure.
+
+3. Results include: round-trip counts per workload, latency per workload (ms), workload names
+   PASS - Each workload entry has "name", "latencyMs", and "roundTrips" fields. Example:
+   "1 MiB insert" shows latencyMs: 3.614, roundTrips: 298.
+
+4. Workloads covered: 1 MiB insert, 10 MiB insert, hot-row update, cold read, mixed read/write
+   PASS - All 5 workloads present: "1 MiB insert" (298 RTs), "10 MiB insert" (2606 RTs),
+   "hot-row update" (109 RTs), "cold read" (228 RTs), "mixed read/write" (62 RTs).
+
+5. Document the test environment (RTT, page size, hardware summary) in the JSON
+   PASS - Environment section includes: rttMs (0, in-memory), platform (linux),
+   release, arch, cpuModel, cpuCount (20), totalMemoryGiB (62.56), pageSizeBytes (4096),
+   and storage description.
+
+=== Concerns ===
+
+- The benchmark uses in-memory MemoryKv with 0 ms RTT. This measures raw VFS + SQLite
+  overhead but does not capture realistic network latency. The round-trip counts are the
+  more useful metric for v1/v2 comparison since they show how many network calls v1 would
+  make in production. This is documented in the JSON (rttMs: 0).
+
+- The MemoryKv in the benchmark (v1_baseline_bench.rs) duplicates the one in vfs.rs tests
+  (US-001). A shared test utility would reduce maintenance burden, but since these are in
+  different crates/contexts (test module vs example binary), some duplication is acceptable.
+
+- Round-trip counting treats each batch_get, batch_put, batch_delete, and delete_range as
+  one round-trip. This is a reasonable approximation. The v1 "1 MiB insert" requiring 298
+  round-trips clearly shows the per-page overhead that v2 aims to eliminate.
+
+- The benchmark.ts wrapper runs "cargo run" which includes compilation time in wall clock.
+  The Rust binary correctly uses Instant for its own timing, so the captured latencyMs
+  values are accurate.
+
+=== Verdict: PASS ===
