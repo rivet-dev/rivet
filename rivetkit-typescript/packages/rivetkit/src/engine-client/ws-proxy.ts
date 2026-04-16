@@ -68,6 +68,11 @@ export async function createWebSocketProxy(
 					reject(error);
 				});
 			});
+			// Attach a no-op rejection handler so Node.js does not treat this as
+			// an unhandled rejection if onMessage never runs (e.g. the client
+			// disconnects before sending a message). The rejection still propagates
+			// to any caller that awaits connectPromise directly.
+			state.connectPromise.catch(() => {});
 
 			// Setup bidirectional forwarding
 			state.targetWs.addEventListener("message", (event) => {
