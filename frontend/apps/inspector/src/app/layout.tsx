@@ -173,7 +173,7 @@ const Sidebar = ({
 									rel="noopener"
 								>
 									<span className="relative">
-										Whats new?
+										What's new?
 										<Ping
 											className="-right-4"
 											data-changelog-ping

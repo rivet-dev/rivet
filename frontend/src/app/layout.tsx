@@ -173,8 +173,9 @@ const Sidebar = ({
 }: {
 	ref?: RefObject<ImperativePanelHandle | null>;
 } & ComponentProps<typeof ResizablePanel>) => {
-	const { minWidth: sidebarMinWidth, maxWidth: sidebarMaxWidth } =
-		useContext(SidebarDimensionsContext);
+	const { minWidth: sidebarMinWidth, maxWidth: sidebarMaxWidth } = useContext(
+		SidebarDimensionsContext,
+	);
 	const matchRoute = useMatchRoute();
 	return (
 		<>
@@ -288,7 +289,7 @@ const Sidebar = ({
 														target="_blank"
 														rel="noopener"
 													>
-														Whats new?
+														What's new?
 														<Ping
 															className="relative -right-1"
 															data-changelog-ping
@@ -322,7 +323,7 @@ const Sidebar = ({
 													target="_blank"
 													rel="noopener"
 												>
-													Whats new?
+													What's new?
 													<Ping
 														className="relative -right-1"
 														data-changelog-ping
