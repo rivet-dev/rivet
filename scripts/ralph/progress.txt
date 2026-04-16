@@ -131,4 +131,88 @@ One-line summary per story. See git log + archived-stories.json for full titles;
   - `cargo test -p sqlite-storage commit_registers_phase_metrics` and `cargo test -p rivetkit-sqlite-native vfs_records_commit_phase_durations` are the fastest story-specific smoke checks for the engine and native VFS halves of US-059.
   - Direct `pnpm test ...` invocation from the `rivetkit` package will not discover `src/driver-test-suite/tests/*.ts` files, so those inspector assertions need the driver-suite harness rather than a naive Vitest file filter.
   - If `progress.txt` says a story landed but `prd.json` still has `passes: false`, fix the bookkeeping immediately or Ralph will waste the next iteration rediscovering the same damn story.
+
+### Baseline metrics (captured 2026-04-16)
+
+Bench harness: `examples/kitchen-sink/scripts/bench.ts --filter 'Large TX insert 5MB'`
+Environment: local RocksDB engine at `http://localhost:6420`, kitchen-sink serverless on `:3001`, namespace `fix2`, native sqlite v2 VFS. All runs use the single-commit fast path (`path="fast"`).
+
+Bench result (five iterations):
+  - `RUST_LOG=debug` (engine-rocksdb.sh default): 4 runs captured 1120.8ms, 1140.9ms, 1133.9ms, 1139.3ms. Median 1139.3 ms, throughput ~4.39 MB/s.
+  - `RUST_LOG=info`: 4 runs captured 717.3ms, 740.4ms, 691.8ms, 700.5ms. Median 717.3 ms, throughput ~6.97 MB/s.
+  - Per-op (insert) ~0.9 ms, baseline RTT ~13 ms, server-time ~1124 ms at debug level and ~700 ms at info.
+
+Flag: `RUST_LOG=debug` vs `RUST_LOG=info` swings 5 MB commit throughput by ~37% (well above the 5% threshold). This reflects the pre-existing global engine debug firehose (`pegboard`, `gasoline`, `guard`, envoy ping debug spam seen in `/tmp/rivet-engine.log`), not the US-059 spans themselves; the new spans at US-059 only fire once per commit and are dwarfed by the envoy-wide `ToRivetPong` / workflow debug logs. Keep `RUST_LOG=info` for any future perf baselines so the instrumentation under US-048 does not get misattributed.
+
+Engine `/metrics` scrape (port 6430, info run, 42 commits across the info runs):
+```
+# HELP rivet_sqlite_commit_phase_duration_seconds Phase duration for sqlite commit requests.
+# TYPE rivet_sqlite_commit_phase_duration_seconds histogram
+rivet_sqlite_commit_phase_duration_seconds_sum{path="fast",phase="decode_request"}  0.035501673
+rivet_sqlite_commit_phase_duration_seconds_count{path="fast",phase="decode_request"} 42
+rivet_sqlite_commit_phase_duration_seconds_sum{path="fast",phase="meta_read"}        0.004575840
+rivet_sqlite_commit_phase_duration_seconds_count{path="fast",phase="meta_read"}     42
+rivet_sqlite_commit_phase_duration_seconds_sum{path="fast",phase="pidx_read"}        0.390066439
+rivet_sqlite_commit_phase_duration_seconds_count{path="fast",phase="pidx_read"}     42
+rivet_sqlite_commit_phase_duration_seconds_sum{path="fast",phase="ltx_encode"}       0.152942212
+rivet_sqlite_commit_phase_duration_seconds_count{path="fast",phase="ltx_encode"}    42
+rivet_sqlite_commit_phase_duration_seconds_sum{path="fast",phase="udb_write"}        0.491419846
+rivet_sqlite_commit_phase_duration_seconds_count{path="fast",phase="udb_write"}     42
+rivet_sqlite_commit_phase_duration_seconds_sum{path="fast",phase="response_build"}   0.000048406
+rivet_sqlite_commit_phase_duration_seconds_count{path="fast",phase="response_build"} 42
+
+# HELP rivet_sqlite_commit_envoy_dispatch_duration_seconds Duration from sqlite commit frame arrival until sqlite-storage dispatch.
+# TYPE rivet_sqlite_commit_envoy_dispatch_duration_seconds histogram
+rivet_sqlite_commit_envoy_dispatch_duration_seconds_sum    0.035501673
+rivet_sqlite_commit_envoy_dispatch_duration_seconds_count  42
+
+# HELP rivet_sqlite_commit_envoy_response_duration_seconds Duration from sqlite-storage commit return until the websocket response frame is sent.
+# TYPE rivet_sqlite_commit_envoy_response_duration_seconds histogram
+rivet_sqlite_commit_envoy_response_duration_seconds_sum    0.002669989
+rivet_sqlite_commit_envoy_response_duration_seconds_count  42
+
+# HELP rivet_sqlite_commit_dirty_page_count Number of dirty pages written per sqlite commit path.
+rivet_sqlite_commit_dirty_page_count_sum{path="fast"}    5852
+rivet_sqlite_commit_dirty_page_count_count{path="fast"}  42
+# HELP rivet_sqlite_commit_dirty_bytes Raw dirty-page bytes written per sqlite commit path.
+rivet_sqlite_commit_dirty_bytes_sum{path="fast"}         23969792
+rivet_sqlite_commit_dirty_bytes_count{path="fast"}       42
+# HELP rivet_sqlite_udb_ops_per_commit UniversalDB operations per sqlite commit path.
+rivet_sqlite_udb_ops_per_commit_sum{path="fast"}         42
+rivet_sqlite_udb_ops_per_commit_count{path="fast"}       42
+```
+
+Actor `/inspector/metrics` scrape (Authorization: Bearer <actor.inspectorToken>, 10-commit slice on one actor):
+```
+"sqlite_commit_phases": {
+  "type": "labeled_timing",
+  "help": "SQLite VFS commit phase totals captured by the native VFS",
+  "values": {
+    "request_build":  { "calls": 10, "totalMs":   2.762393, "keys": 0 },
+    "serialize":      { "calls": 10, "totalMs":   2.556633, "keys": 0 },
+    "transport":      { "calls": 10, "totalMs": 607.534296, "keys": 0 },
+    "state_update":   { "calls": 10, "totalMs":   6.369320, "keys": 0 }
+  }
+}
+```
+
+Ratio of each phase's average to total commit (engine fast path, sum-over-count):
+  - decode_request:   0.85 ms /  25.58 ms =  3.3% (trust-boundary validation)
+  - meta_read:        0.11 ms /  25.58 ms =  0.4%
+  - pidx_read:        9.29 ms /  25.58 ms = 36.3% (dominant READ cost)
+  - ltx_encode:       3.64 ms /  25.58 ms = 14.2%
+  - udb_write:       11.70 ms /  25.58 ms = 45.7% (dominant WRITE cost)
+  - response_build:  <0.01 ms /  25.58 ms = ~0%
+  - envoy dispatch:   0.85 ms (envoy trust-boundary decode accounts for ~all of decode_request)
+  - envoy response:   0.06 ms
+
+VFS-side ratio (native counters, 10-commit actor slice):
+  - transport   60.75 ms = 98.5% of per-commit wall time (waiting on envoy RTT)
+  - state_update  0.64 ms =  1.0%
+  - request_build 0.28 ms =  0.4%
+  - serialize     0.26 ms =  0.4%
+
+So the bench is bottlenecked on `transport` (native-to-envoy round trip) and, on the engine side, on `udb_write` + `pidx_read`. This matches US-048's expected attack surface: commit pipelining + PIDX cache will show up as a drop in both `transport` (VFS side) and `pidx_read` (engine side) without moving `udb_write` much.
+
+Raw captures retained at `/tmp/us-059-metrics-full.txt` (engine /metrics, all families), `/tmp/us-059-metrics-info.txt` (filtered US-059 only), `/tmp/us-059-inspector-info.json` (full inspector snapshot), and `/tmp/us-059-bench-baseline.log` (one bench run stdout).
 ---
