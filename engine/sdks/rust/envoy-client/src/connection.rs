@@ -127,7 +127,8 @@ async fn single_connection(
 			prepopulate_map.insert(
 				name.clone(),
 				protocol::ActorName {
-					metadata: actor.metadata.clone(),
+					metadata: serde_json::to_string(&actor.metadata)
+						.unwrap_or_else(|_| "{}".to_string()),
 				},
 			);
 		}

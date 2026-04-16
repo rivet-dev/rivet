@@ -1,5 +1,6 @@
 use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
+use std::collections::HashMap;
 
 /// Configuration for starting the native envoy client.
 #[napi(object)]
@@ -9,11 +10,17 @@ pub struct JsEnvoyConfig {
 	pub namespace: String,
 	pub pool_name: String,
 	pub version: u32,
+	pub prepopulate_actor_names: HashMap<String, JsActorName>,
 	pub metadata: Option<serde_json::Value>,
 	pub not_global: bool,
 	/// Log level for the Rust tracing subscriber (e.g. "trace", "debug", "info", "warn", "error").
 	/// Falls back to RIVET_LOG_LEVEL, then LOG_LEVEL, then RUST_LOG env vars. Defaults to "warn".
 	pub log_level: Option<String>,
+}
+
+#[napi(object)]
+pub struct JsActorName {
+	pub metadata: serde_json::Value,
 }
 
 /// Options for KV list operations.

@@ -41,8 +41,8 @@ pub struct EnvoyConfig {
 	pub token: Option<String>,
 	pub namespace: String,
 	pub pool_name: String,
-	pub prepopulate_actor_names: HashMap<String, PrepopulatedActor>,
-	pub metadata: Option<HashMap<String, String>>,
+	pub prepopulate_actor_names: HashMap<String, ActorName>,
+	pub metadata: Option<serde_json::Value>,
 	/// When `start_envoy` is called, create a new envoy every time instead of using a single global envoy
 	/// instance for the entire runtime.
 	pub not_global: bool,
@@ -53,8 +53,8 @@ pub struct EnvoyConfig {
 	pub callbacks: Arc<dyn EnvoyCallbacks>,
 }
 
-pub struct PrepopulatedActor {
-	pub metadata: String,
+pub struct ActorName {
+	pub metadata: serde_json::Value,
 }
 
 /// Callbacks that the consumer of the envoy client must implement.

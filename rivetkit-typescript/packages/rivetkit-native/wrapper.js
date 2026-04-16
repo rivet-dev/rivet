@@ -133,6 +133,7 @@ function startEnvoySync(config) {
 			namespace: config.namespace,
 			poolName: config.poolName,
 			version: config.version,
+			prepopulateActorNames: config.prepopulateActorNames,
 			metadata: config.metadata || null,
 			notGlobal: config.notGlobal,
 		},

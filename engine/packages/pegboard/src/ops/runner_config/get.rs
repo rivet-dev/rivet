@@ -16,7 +16,7 @@ pub struct RunnerConfig {
 	pub namespace_id: Id,
 	pub name: String,
 	pub config: rivet_types::runner_configs::RunnerConfig,
-	/// Unset if the runner's metadata endpoint has never returned `envoyProtocolVersion``
+	/// Unset if the runner's metadata endpoint has never returned `envoyProtocolVersion`
 	pub protocol_version: Option<u16>,
 }
 

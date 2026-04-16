@@ -21,6 +21,7 @@ pub struct WebSocketHandle {
 }
 
 impl WebSocketHandle {
+	#[tracing::instrument(skip_all)]
 	pub async fn new(websocket: HyperWebsocket) -> Result<Self> {
 		let ws_stream = websocket.await?;
 		let (ws_tx, ws_rx) = ws_stream.split();

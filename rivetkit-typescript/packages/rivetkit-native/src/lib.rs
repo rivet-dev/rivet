@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::sync::Once;
 
 use napi_derive::napi;
-use rivet_envoy_client::config::EnvoyConfig;
+use rivet_envoy_client::config::{ActorName, EnvoyConfig};
 use rivet_envoy_client::envoy::start_envoy_sync;
 use tokio::runtime::Runtime;
 
@@ -70,22 +70,25 @@ pub fn start_envoy_sync_js(
 		ws_sender_map.clone(),
 	));
 
-	let metadata: Option<HashMap<String, String>> = config.metadata.and_then(|v| {
-		if let serde_json::Value::Object(map) = v {
-			Some(map.into_iter().map(|(k, v)| (k, v.to_string())).collect())
-		} else {
-			None
-		}
-	});
-
 	let envoy_config = EnvoyConfig {
 		version: config.version,
 		endpoint: config.endpoint,
 		token: Some(config.token),
 		namespace: config.namespace,
 		pool_name: config.pool_name,
-		prepopulate_actor_names: HashMap::new(),
-		metadata,
+		prepopulate_actor_names: config
+			.prepopulate_actor_names
+			.into_iter()
+			.map(|(name, data)| {
+				(
+					name,
+					ActorName {
+						metadata: data.metadata,
+					},
+				)
+			})
+			.collect(),
+		metadata: config.metadata,
 		not_global: config.not_global,
 		debug_latency_ms: None,
 		callbacks,

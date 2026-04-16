@@ -26,6 +26,7 @@ export interface JsEnvoyConfig {
   namespace: string
   poolName: string
   version: number
+  prepopulateActorNames: Record<string, JsActorName>
   metadata?: any
   notGlobal: boolean
   /**
@@ -33,6 +34,9 @@ export interface JsEnvoyConfig {
    * Falls back to RIVET_LOG_LEVEL, then LOG_LEVEL, then RUST_LOG env vars. Defaults to "warn".
    */
   logLevel?: string
+}
+export interface JsActorName {
+  metadata: any
 }
 /** Options for KV list operations. */
 export interface JsKvListOptions {

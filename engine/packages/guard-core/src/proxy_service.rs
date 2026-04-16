@@ -992,24 +992,26 @@ impl ProxyService {
 
 						// First, wait for the client WebSocket to be ready (do this first to avoid race conditions)
 						tracing::debug!("Waiting for client WebSocket to be ready...");
-						let mut client_ws =
-							match tokio::time::timeout(timeout_duration, client_ws).await {
-								Ok(Ok(ws)) => {
-									tracing::debug!("Client WebSocket is ready");
-									ws
-								}
-								Ok(Err(err)) => {
-									tracing::error!(?err, "Failed to get client WebSocket");
-									return;
-								}
-								Err(_) => {
-									tracing::error!(
-										"Timeout waiting for client WebSocket to be ready after {}s",
-										timeout_duration.as_secs()
-									);
-									return;
-								}
-							};
+						let mut client_ws = match tokio::time::timeout(timeout_duration, client_ws)
+							.instrument(tracing::info_span!("connect_client_ws"))
+							.await
+						{
+							Ok(Ok(ws)) => {
+								tracing::debug!("Client WebSocket is ready");
+								ws
+							}
+							Ok(Err(err)) => {
+								tracing::error!(?err, "Failed to get client WebSocket");
+								return;
+							}
+							Err(_) => {
+								tracing::error!(
+									"Timeout waiting for client WebSocket to be ready after {}s",
+									timeout_duration.as_secs()
+								);
+								return;
+							}
+						};
 
 						// Now attempt to connect to the upstream server
 						tracing::debug!("Attempting connect to upstream WebSocket");
@@ -1087,6 +1089,7 @@ impl ProxyService {
 								Duration::from_secs(5), // 5 second timeout per connection attempt
 								tokio_tungstenite::connect_async(ws_request),
 							)
+							.instrument(tracing::info_span!("connect_upstream_ws"))
 							.await
 							{
 								Ok(Ok((ws_stream, resp))) => {
@@ -1184,7 +1187,9 @@ impl ProxyService {
 								backoff
 							);
 
-							tokio::time::sleep(backoff).await;
+							tokio::time::sleep(backoff)
+								.instrument(tracing::info_span!("backoff_sleep"))
+								.await;
 
 							// Resolve target again, this time ignoring cache. This makes sure
 							// we always re-fetch the route on error
