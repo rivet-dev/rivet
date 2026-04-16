@@ -6,9 +6,7 @@ import {
 	useQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
-import confetti from "canvas-confetti";
 import { useWatch } from "react-hook-form";
-import { match } from "ts-pattern";
 import z from "zod";
 import * as ConnectRailwayForm from "@/app/forms/connect-manual-serverfull-form";
 import type { DialogContentProps } from "@/components";
@@ -190,10 +188,6 @@ function Step2({ provider }: { provider: Provider }) {
 			/>
 		</>
 	);
-}
-
-function Step3() {
-	return <ConnectRailwayForm.ConnectionCheck provider="railway" />;
 }
 
 export const useEndpoint = () => {
