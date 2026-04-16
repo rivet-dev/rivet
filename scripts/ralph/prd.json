@@ -656,7 +656,7 @@
         "cargo test -p sqlite-storage passes"
       ],
       "priority": 39,
-      "passes": false,
+      "passes": true,
       "notes": "See .agent/specs/compaction-takeover-race.md for full analysis. The CompactionCoordinator is process-global and outlives actor connections. When an actor disconnects and takeover runs, in-flight compaction workers are not cancelled. Compaction writes full META (including head_txid) in a separate transaction from its read, overwriting takeover's META. Ralph added a retry to takeover that masks this, which must be removed. The retry is wrong because it bumps generation unnecessarily and hides a useful error signal."
     },
     {

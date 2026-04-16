@@ -27,6 +27,7 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
 - `sqlite-storage` staged commits should scan a stage-specific prefix helper, then delete the staged chunk keys in the same `atomic_write` that promotes DELTA, PIDX, and META.
 - `sqlite-storage` coordinator tests should inject a worker future and drive it with explicit notifiers so dedup and restart behavior can be verified without the real compaction worker.
 - `sqlite-storage` shard compaction should derive candidate shards from the live PIDX scan and delete DELTA blobs only after comparing global remaining PIDX refs, which keeps multi-shard and overwritten deltas alive until every page ref is folded.
+- `sqlite-storage` compaction must re-read META inside its write transaction and fence on `generation` plus `head_txid` before updating `materialized_txid` or quota fields, so takeover and commits cannot rewind the head.
 - `sqlite-storage` metrics should record compaction pass duration and totals in `compaction/worker.rs`, while shard outcome metrics like folded pages, deleted deltas, delta gauge updates, and lag stay in `compaction/shard.rs` to avoid double counting.
 - `sqlite-storage` quota accounting should count only META, SHARD, DELTA, and PIDX keys, and META usage must be recomputed with a fixed-point encode because the serialized head includes `sqlite_storage_used`.
 - UniversalDB low-level `Transaction::get`, `set`, `clear`, and `get_ranges_keyvalues` ignore the transaction subspace, so sqlite-storage helpers must pack subspace bytes manually for exact-key reads/writes and prefix scans.
@@ -328,4 +329,12 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
   - `get_pages(...)` responses should be treated as cache-fill data plus read-safe tuning knobs like `max_delta_bytes`, not as authority for `head_txid` or `db_size_pages`.
   - The v2 VFS does not need a separate commit mutex per connection. SQLite already serializes callbacks on a connection, and the stale-meta bug was the real source of the earlier flake.
   - Regression coverage needs both obviously stale responses and equal-head responses, because the nasty bug was the "same head, smaller `db_size_pages`" case that looked harmless.
+---
+## 2026-04-16 09:24:33 PDT - US-036
+- What was implemented: Fenced shard compaction META writes by re-reading META inside the write transaction, comparing `generation` plus `head_txid`, and recomputing the updated META from the live head before applying quota and `materialized_txid` changes. Added real RocksDB race tests covering concurrent commit vs compaction retry and takeover vs in-flight compaction.
+- Files changed: `engine/packages/sqlite-storage/src/compaction/shard.rs`, `engine/CLAUDE.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Compaction should treat `generation` and `head_txid` as the fencing fields for META races. Re-reading META inside the final write transaction is safer than comparing an encoded snapshot byte-for-byte.
+  - The existing `pause_before_commit` compaction hook is enough to reproduce real commit/takeover races against RocksDB-backed `SqliteEngine` tests without adding new fake transport layers.
+  - Retrying compaction after a skipped stale-META pass is fine. Retrying takeover is not, because that only hides the underlying race and bumps generation for no good reason.
 ---
