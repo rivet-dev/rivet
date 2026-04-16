@@ -355,7 +355,21 @@ impl EnvoyHandle {
 			);
 		}
 
-		let message = crate::protocol::versioned::ToEnvoy::deserialize(&payload[2..], version)?;
+		let message = match crate::protocol::versioned::ToEnvoy::deserialize(&payload[2..], version)
+		{
+			Ok(message) => message,
+			Err(err) if version == protocol::PROTOCOL_VERSION => {
+				tracing::debug!(
+					?err,
+					"serverless start payload failed current-version decode, retrying as v1-compatible body"
+				);
+				crate::protocol::versioned::ToEnvoy::deserialize(
+					&payload[2..],
+					protocol::PROTOCOL_VERSION - 1,
+				)?
+			}
+			Err(err) => return Err(err),
+		};
 
 		let protocol::ToEnvoy::ToEnvoyCommands(ref commands) = message else {
 			anyhow::bail!("invalid serverless payload: expected ToEnvoyCommands");

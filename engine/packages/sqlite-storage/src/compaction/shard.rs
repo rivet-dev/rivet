@@ -24,6 +24,56 @@ struct PidxRow {
 	txid: u64,
 }
 
+#[cfg(test)]
+mod test_hooks {
+	use std::sync::{Arc, Mutex};
+
+	use tokio::sync::Notify;
+
+	static PAUSE_BEFORE_COMMIT: Mutex<Option<(String, Arc<Notify>, Arc<Notify>)>> =
+		Mutex::new(None);
+
+	pub(super) struct PauseBeforeCommitGuard;
+
+	pub(super) fn pause_before_commit(
+		actor_id: &str,
+	) -> (PauseBeforeCommitGuard, Arc<Notify>, Arc<Notify>) {
+		let reached = Arc::new(Notify::new());
+		let release = Arc::new(Notify::new());
+		*PAUSE_BEFORE_COMMIT
+			.lock()
+			.expect("compaction pause hook mutex should lock") = Some((
+			actor_id.to_string(),
+			Arc::clone(&reached),
+			Arc::clone(&release),
+		));
+
+		(PauseBeforeCommitGuard, reached, release)
+	}
+
+	pub(super) async fn maybe_pause_before_commit(actor_id: &str) {
+		let hook = PAUSE_BEFORE_COMMIT
+			.lock()
+			.expect("compaction pause hook mutex should lock")
+			.as_ref()
+			.filter(|(hook_actor_id, _, _)| hook_actor_id == actor_id)
+			.map(|(_, reached, release)| (Arc::clone(reached), Arc::clone(release)));
+
+		if let Some((reached, release)) = hook {
+			reached.notify_waiters();
+			release.notified().await;
+		}
+	}
+
+	impl Drop for PauseBeforeCommitGuard {
+		fn drop(&mut self) {
+			*PAUSE_BEFORE_COMMIT
+				.lock()
+				.expect("compaction pause hook mutex should lock") = None;
+		}
+	}
+}
+
 impl SqliteEngine {
 	pub async fn compact_shard(&self, actor_id: &str, shard_id: u32) -> Result<bool> {
 		let meta_bytes = udb::get_value(
@@ -206,13 +256,48 @@ impl SqliteEngine {
 			}
 		}
 		mutations.push(WriteOp::put(meta_key(actor_id), encoded_head));
-		udb::apply_write_ops(
-			self.db.as_ref(),
-			&self.subspace,
-			self.op_counter.as_ref(),
-			mutations,
-		)
-		.await?;
+		#[cfg(test)]
+		test_hooks::maybe_pause_before_commit(actor_id).await;
+
+		let actor_id_for_tx = actor_id.to_string();
+		let meta_key_for_tx = meta_key(actor_id);
+		let meta_bytes_for_tx = meta_bytes.clone();
+		let mutations_applied =
+			udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+				let actor_id = actor_id_for_tx.clone();
+				let subspace = self.subspace.clone();
+				let meta_key = meta_key_for_tx.clone();
+				let meta_bytes = meta_bytes_for_tx.clone();
+				let mutations = mutations.clone();
+				async move {
+					let current_meta = udb::tx_get_value(&tx, &subspace, &meta_key).await?;
+					if current_meta.as_deref() != Some(meta_bytes.as_slice()) {
+						tracing::debug!(
+							%actor_id,
+							"sqlite compaction skipped after concurrent head change"
+						);
+						return Ok(false);
+					}
+
+					for op in &mutations {
+						match op {
+							WriteOp::Put(key, value) => {
+								udb::tx_write_value(&tx, &subspace, key, value)?
+							}
+							WriteOp::Delete(key) => udb::tx_delete_value(&tx, &subspace, key),
+						}
+					}
+					#[cfg(test)]
+					crate::udb::test_hooks::maybe_fail_apply_write_ops(&mutations)?;
+
+					Ok(true)
+				}
+			})
+			.await?;
+		if !mutations_applied {
+			return Ok(false);
+		}
+
 		self.metrics.add_compaction_pages_folded(shard_rows.len());
 		self.metrics
 			.add_compaction_deltas_deleted(deleted_delta_txids.len());
@@ -712,6 +797,80 @@ mod tests {
 					bytes: Some(page(0x20)),
 				},
 			]
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn compact_shard_skips_stale_meta_without_rewinding_head() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let mut head = seeded_head();
+		head.head_txid = 1;
+		head.next_txid = 2;
+		head.db_size_pages = 1;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		let engine = std::sync::Arc::new(engine);
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(delta_key(TEST_ACTOR, 1), encoded_blob(1, 1, &[(1, 0x10)])),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 1_u64.to_be_bytes().to_vec()),
+			],
+		)
+		.await?;
+		let (_guard, reached, release) = super::test_hooks::pause_before_commit(TEST_ACTOR);
+		let compact_engine = std::sync::Arc::clone(&engine);
+		let compact_task =
+			tokio::spawn(async move { compact_engine.compact_shard(TEST_ACTOR, 0).await });
+
+		reached.notified().await;
+
+		let mut updated_head = decode_db_head(
+			&read_value(engine.as_ref(), meta_key(TEST_ACTOR))
+				.await?
+				.expect("meta should exist before stale compaction check"),
+		)?;
+		updated_head.head_txid = 2;
+		updated_head.next_txid = 3;
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![WriteOp::put(
+				meta_key(TEST_ACTOR),
+				serde_bare::to_vec(&updated_head)?,
+			)],
+		)
+		.await?;
+		release.notify_waiters();
+
+		assert!(!compact_task.await??);
+		assert_eq!(
+			decode_db_head(
+				&read_value(engine.as_ref(), meta_key(TEST_ACTOR))
+					.await?
+					.expect("meta should remain after skipped compaction"),
+			)?
+			.head_txid,
+			2
+		);
+		assert!(
+			read_value(engine.as_ref(), shard_key(TEST_ACTOR, 0))
+				.await?
+				.is_none()
+		);
+		assert!(
+			read_value(engine.as_ref(), delta_key(TEST_ACTOR, 1))
+				.await?
+				.is_some()
+		);
+		assert_eq!(
+			read_value(engine.as_ref(), pidx_delta_key(TEST_ACTOR, 1)).await?,
+			Some(1_u64.to_be_bytes().to_vec())
 		);
 
 		Ok(())

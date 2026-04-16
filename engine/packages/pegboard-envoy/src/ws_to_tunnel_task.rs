@@ -579,31 +579,75 @@ async fn handle_sqlite_get_pages(
 
 	match conn
 		.sqlite_engine
-		.get_pages(&request.actor_id, request.generation, request.pgnos)
+		.get_pages(&request.actor_id, request.generation, request.pgnos.clone())
 		.await
 	{
-		Ok(pages) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
-			protocol::SqliteGetPagesOk {
-				pages: pages
-					.into_iter()
-					.map(sqlite_runtime::protocol_sqlite_fetched_page)
-					.collect(),
-				meta: sqlite_runtime::protocol_sqlite_meta(
-					conn.sqlite_engine.load_meta(&request.actor_id).await?,
-				),
-			},
-		)),
+		Ok(pages) => Ok(sqlite_get_pages_ok(conn, &request.actor_id, pages).await?),
 		Err(err) => {
-			let reason = err.to_string();
+			let reason = sqlite_error_reason(&err);
 			if is_sqlite_fence_mismatch(&reason) {
 				Ok(protocol::SqliteGetPagesResponse::SqliteFenceMismatch(
 					sqlite_fence_mismatch(conn, &request.actor_id, reason).await?,
 				))
+			} else if reason.contains("sqlite meta missing for get_pages")
+				&& request.generation == 1
+			{
+				match conn
+					.sqlite_engine
+					.takeover(
+						&request.actor_id,
+						sqlite_storage::takeover::TakeoverConfig::new(util::timestamp::now()),
+					)
+					.await
+				{
+					Ok(startup) => {
+						tracing::warn!(
+							actor_id = %request.actor_id,
+							generation = startup.generation,
+							"bootstrapped missing sqlite meta during get_pages"
+						);
+					}
+					Err(takeover_err)
+						if takeover_err.chain().any(|cause| {
+							cause.to_string().contains("concurrent takeover detected")
+						}) =>
+					{
+						tracing::warn!(
+							actor_id = %request.actor_id,
+							"sqlite meta was bootstrapped concurrently during get_pages"
+						);
+					}
+					Err(takeover_err) => return Err(takeover_err),
+				}
+
+				let pages = conn
+					.sqlite_engine
+					.get_pages(&request.actor_id, request.generation, request.pgnos)
+					.await?;
+				Ok(sqlite_get_pages_ok(conn, &request.actor_id, pages).await?)
 			} else {
 				Err(err)
 			}
 		}
 	}
+}
+
+async fn sqlite_get_pages_ok(
+	conn: &Conn,
+	actor_id: &str,
+	pages: Vec<sqlite_storage::types::FetchedPage>,
+) -> Result<protocol::SqliteGetPagesResponse> {
+	Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+		protocol::SqliteGetPagesOk {
+			pages: pages
+				.into_iter()
+				.map(sqlite_runtime::protocol_sqlite_fetched_page)
+				.collect(),
+			meta: sqlite_runtime::protocol_sqlite_meta(
+				conn.sqlite_engine.load_meta(actor_id).await?,
+			),
+		},
+	))
 }
 
 async fn handle_sqlite_commit(
@@ -638,7 +682,7 @@ async fn handle_sqlite_commit(
 			},
 		)),
 		Err(err) => {
-			let reason = err.to_string();
+			let reason = sqlite_error_reason(&err);
 			if is_sqlite_fence_mismatch(&reason) {
 				Ok(protocol::SqliteCommitResponse::SqliteFenceMismatch(
 					sqlite_fence_mismatch(conn, &request.actor_id, reason).await?,
@@ -685,7 +729,7 @@ async fn handle_sqlite_commit_stage(
 			},
 		)),
 		Err(err) => {
-			let reason = err.to_string();
+			let reason = sqlite_error_reason(&err);
 			if is_sqlite_fence_mismatch(&reason) {
 				Ok(protocol::SqliteCommitStageResponse::SqliteFenceMismatch(
 					sqlite_fence_mismatch(conn, &request.actor_id, reason).await?,
@@ -727,7 +771,7 @@ async fn handle_sqlite_commit_finalize(
 			),
 		),
 		Err(err) => {
-			let reason = err.to_string();
+			let reason = sqlite_error_reason(&err);
 			if is_sqlite_fence_mismatch(&reason) {
 				Ok(protocol::SqliteCommitFinalizeResponse::SqliteFenceMismatch(
 					sqlite_fence_mismatch(conn, &request.actor_id, reason).await?,
@@ -781,6 +825,13 @@ fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage::types:
 
 fn is_sqlite_fence_mismatch(reason: &str) -> bool {
 	reason.contains("FenceMismatch") || reason.to_ascii_lowercase().contains("fence mismatch")
+}
+
+fn sqlite_error_reason(err: &anyhow::Error) -> String {
+	err.chain()
+		.map(ToString::to_string)
+		.collect::<Vec<_>>()
+		.join(": ")
 }
 
 fn parse_commit_too_large(reason: &str) -> Option<protocol::SqliteCommitTooLarge> {

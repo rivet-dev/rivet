@@ -623,7 +623,7 @@
         "All new tests pass: cargo test -p rivetkit-sqlite-native passes"
       ],
       "priority": 34,
-      "passes": false,
+      "passes": true,
       "notes": "See .agent/specs/sqlite-native-test-coverage-gaps.md for full gap analysis with 14 missing test scenarios (10 original + 4 from driver test suite failures). The existing Direct engine tests cover happy-path CRUD, page growth, aux files, and data persistence. This story adds edge cases from adversarial review and US-034 debugging. The stale head_txid test was reproduced and confirmed failing in worktree agent-af7406b0. Any bugs found must be fixed, not just tested. Tracking table in the spec tracks which driver suite failures have been reproduced."
     },
     {
@@ -720,6 +720,42 @@
       "priority": 43,
       "passes": false,
       "notes": "Two compounding performance findings: (1) compact_worker calls compact_shard up to 8 times, each doing its own full PIDX scan + delta scan = 9 PIDX scans + 8 delta scans per batch. (2) default_compaction_worker creates a new SqliteEngine with empty page_indices on every invocation (compaction/mod.rs:131-147), so every scan is a cold load and cache updates are discarded."
+    },
+    {
+      "id": "US-046",
+      "title": "Fix update_meta: never overwrite VFS-owned fields from get_pages response",
+      "description": "As a developer, I need the VFS to never overwrite head_txid or db_size_pages from a get_pages response, since the VFS is the authority on these fields.",
+      "acceptanceCriteria": [
+        "Remove the update_meta call from the get_pages response handler in resolve_pages (v2/vfs.rs)",
+        "Instead, selectively update only max_delta_bytes from the get_pages response meta (the only field the server can legitimately change during reads)",
+        "head_txid is only updated from commit responses (SqliteCommitOk, SqliteCommitFinalizeOk), never from read responses",
+        "db_size_pages is only updated from commit responses and local xWrite/xTruncate, never from read responses",
+        "Remove the commit_mutex (parking_lot::Mutex<()>) since SQLite is single-threaded per connection and two commits can never race",
+        "Test: get_pages response with stale head_txid does not affect VFS state (port from worktree agent-af7406b0)",
+        "Test: get_pages response with smaller db_size_pages does not shrink the VFS's db_size_pages mid-transaction",
+        "cargo test -p rivetkit-sqlite-native passes"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": "The current condition (ok.meta.generation > state.generation || ok.meta.head_txid >= state.head_txid) is too permissive. When head_txid matches, update_meta still runs and overwrites db_size_pages with the server's stale value. Mid-transaction, a get_pages call could shrink db_size_pages relative to in-flight writes. The commit_mutex was added to fix flaky tests but is a red herring — the real cause was the update_meta bug. SQLite's single-threaded callback model means two commits can never race."
+    },
+    {
+      "id": "US-047",
+      "title": "Remove recover_page_from_delta_history and fix truncate cache invalidation",
+      "description": "As a developer, I need the read fallback path removed (it masks PIDX bugs) and the truncate cache invalidation scoped to only evict pages beyond the boundary.",
+      "acceptanceCriteria": [
+        "Remove recover_page_from_delta_history from engine/packages/sqlite-storage/src/read.rs",
+        "If a page is not found in its PIDX-indicated delta and not in the shard, return an error with diagnostic context (actor_id, pgno, source_key, delta txid) instead of silently scanning all deltas",
+        "Delete or convert the test get_pages_recovers_from_older_delta_when_latest_source_is_wrong to verify the error is returned",
+        "In truncate_main_file (v2/vfs.rs), replace page_cache.invalidate_all() with page_cache.invalidate_entries_if(|pgno, _| *pgno > truncated_pages)",
+        "Test: after truncate, pages below the boundary are still in cache (no unnecessary cache miss)",
+        "Test: after truncate + regrow, old pages beyond boundary are not served from stale cache",
+        "cargo test -p sqlite-storage passes",
+        "cargo test -p rivetkit-sqlite-native passes"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": "Two fixes from adversarial review verification. (1) recover_page_from_delta_history scans ALL deltas (up to 256 MB) when PIDX points to wrong delta. This cannot happen in normal operation (commit writes delta + PIDX atomically). The function masks bugs and has no logging/metrics. (2) truncate invalidate_all() nukes the entire page cache including valid pages below the boundary. After VACUUM on a large DB, every read becomes a cache miss. moka's invalidate_entries_if supports selective eviction."
     }
   ]
 }

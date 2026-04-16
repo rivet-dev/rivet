@@ -6,6 +6,7 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
 - RivetKit sleep shutdown should wait for in-flight HTTP action work and pending disconnect callbacks before running `onSleep`, but it should not treat open hibernatable connections alone as a blocker because existing connection actions may still finish during the shutdown window.
 - `sqlite-storage` owns UniversalDB value chunking in `src/udb.rs`, so `pegboard-envoy` should call `SqliteEngine` directly instead of reintroducing a separate `UdbStore` layer.
 - Actor KV prefix probes should build ranges with `ListKeyWrapper` semantics instead of exact-key packing. SQLite startup now uses a single prefix-`0x08` scan via `pegboard::actor_kv::sqlite_v1_data_exists(...)` to distinguish legacy v1 data.
+- `sqlite-native` v2 edge-case coverage should prefer the direct `SqliteEngine` + RocksDB harness in `src/v2/vfs.rs`; keep `MockProtocol` tests for transport-unit behavior, but use the direct harness for cache-miss, compaction, reopen, and staged-commit regressions.
 - Baseline sqlite-native VFS tests belong in `rivetkit-typescript/packages/sqlite-native/src/vfs.rs` and should use `open_database(...)` with a test-local `SqliteKv` implementation instead of mocking SQLite behavior.
 - Keep `sqlite-storage` acceptance coverage inline in the module test blocks and back it with temp RocksDB UniversalDB instances from `test_db()` so commit, takeover, and compaction assertions exercise the real engine paths.
 - `sqlite-storage` crash-recovery tests should capture a RocksDB checkpoint and reopen it in a fresh `SqliteEngine` rather than faking restart state in memory.
@@ -261,6 +262,15 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
   - Keep sqlite-storage acceptance tests close to the handler they validate. `commit.rs`, `takeover.rs`, and `compaction/shard.rs` already have the right helper scaffolding and avoid a separate integration-test maze.
   - Multi-shard compaction regressions are easiest to catch by asserting the shared DELTA blob survives the first shard passes and disappears only after the last PIDX reference is folded.
   - Explicit preload tests should seed both DELTA-backed and SHARD-backed pages in the same actor so takeover ordering and page-source selection are validated together.
+---
+
+## 2026-04-16 09:10:54 PDT - US-045
+- What was implemented: Expanded `sqlite-native` v2 coverage with direct-engine RocksDB tests for stale-head cache-miss reads, batch-atomic startup probing, real slow-path staged commits, transport-error death semantics, multi-thread churn, shared-engine actor isolation, mixed-workload sleep/wake integrity, hot-row reopen persistence, migration-failure reopen cleanup, and read safety while compaction runs. Fixed the v2 VFS to run the startup batch-atomic probe, count atomic commits, and mark the VFS dead on transport and commit errors instead of leaving it half-alive.
+- Files changed: `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`, `engine/packages/pegboard-outbound/Cargo.toml`, `engine/packages/sqlite-storage/src/compaction/shard.rs`, `engine/packages/sqlite-storage/src/takeover.rs`, `engine/sdks/rust/envoy-client/src/handle.rs`, `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/rivetkit-native/src/database.rs`, `rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The sqlite v2 startup path should prove batch-atomic support with a real write probe during `open_database(...)`, because a VFS that advertises `SQLITE_IOCAP_BATCH_ATOMIC` but never sees `COMMIT_ATOMIC_WRITE` is broken from the first page write.
+  - Direct-engine regression tests are more useful if they inspect the live `VfsV2Context` for `head_txid`, dead-state, and cache invalidation instead of approximating those behaviors through mocked protocol responses.
+  - Transport failures during v2 commit or read paths must poison the VFS instance and be surfaced through `take_last_kv_error()`; trying to keep using the same handle after an ambiguous write is how you get cursed dirty-page limbo.
 ---
 ## 2026-04-16 05:11:09 PDT - US-021
 - What was implemented: Added sqlite-storage quota and failure-path coverage for within-quota commits with unrelated KV data, atomic rollback on injected fast-commit failures, clean compaction retry after injected write errors, and takeover recovery after reopening a checkpointed mid-commit RocksDB snapshot.

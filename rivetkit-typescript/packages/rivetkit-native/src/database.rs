@@ -124,7 +124,7 @@ impl NativeDatabaseHandle {
 	fn take_last_kv_error(&self) -> Option<String> {
 		match self {
 			Self::V1(db) => db.take_last_kv_error(),
-			Self::V2(_) => None,
+			Self::V2(db) => db.take_last_kv_error(),
 		}
 	}
 }

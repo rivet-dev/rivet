@@ -3602,8 +3602,10 @@ dependencies = [
  "rivet-metrics",
  "rivet-runtime",
  "rivet-types",
+ "sqlite-storage",
  "tokio",
  "tracing",
+ "universaldb",
  "universalpubsub",
  "vbare",
 ]
@@ -5221,8 +5223,11 @@ dependencies = [
  "parking_lot",
  "rivet-envoy-client",
  "rivet-envoy-protocol",
+ "sqlite-storage",
+ "tempfile",
  "tokio",
  "tracing",
+ "universaldb",
 ]
 
 [[package]]

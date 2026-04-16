@@ -99,30 +99,37 @@ impl SqliteEngine {
 			encode_db_head_with_usage(actor_id, &head, head.sqlite_storage_used)?;
 		mutations.push(WriteOp::put(meta_key(actor_id), encoded_head));
 
-		// Best-effort defense against concurrent writers. The real protection comes from
-		// pegboard-envoy serializing actor lifecycle, but we re-read META here to detect
-		// races that slip past the outer layer.
-		let recheck_meta = udb::get_value(
-			self.db.as_ref(),
-			&self.subspace,
-			self.op_counter.as_ref(),
-			meta_key(actor_id),
-		)
-		.await?;
-		if recheck_meta != meta_bytes {
-			tracing::error!(
-				?actor_id,
-				"meta changed during takeover, concurrent writer detected"
-			);
-			return Err(anyhow!("concurrent takeover detected, disconnecting actor"));
-		}
+		let actor_id_for_tx = actor_id.to_string();
+		let expected_meta_bytes = meta_bytes.clone();
+		let takeover_mutations = mutations.clone();
+		let subspace = self.subspace.clone();
+		udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+			let actor_id = actor_id_for_tx.clone();
+			let expected_meta_bytes = expected_meta_bytes.clone();
+			let takeover_mutations = takeover_mutations.clone();
+			let subspace = subspace.clone();
+			async move {
+				let current_meta = udb::tx_get_value(&tx, &subspace, &meta_key(&actor_id)).await?;
+				if current_meta != expected_meta_bytes {
+					tracing::error!(
+						actor_id = %actor_id,
+						"meta changed during takeover, concurrent writer detected"
+					);
+					return Err(anyhow!("concurrent takeover detected, disconnecting actor"));
+				}
 
-		udb::apply_write_ops(
-			self.db.as_ref(),
-			&self.subspace,
-			self.op_counter.as_ref(),
-			mutations,
-		)
+				for op in &takeover_mutations {
+					match op {
+						WriteOp::Put(key, value) => {
+							udb::tx_write_value(&tx, &subspace, key, value)?
+						}
+						WriteOp::Delete(key) => udb::tx_delete_value(&tx, &subspace, key),
+					}
+				}
+
+				Ok(())
+			}
+		})
 		.await?;
 		if should_schedule_compaction {
 			let _ = self.compaction_tx.send(actor_id.to_string());

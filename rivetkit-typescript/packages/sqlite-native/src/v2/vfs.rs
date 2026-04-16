@@ -73,7 +73,10 @@ struct SqliteTransport {
 enum SqliteTransportInner {
 	Envoy(EnvoyHandle),
 	#[cfg(test)]
-	Direct(Arc<SqliteEngine>),
+	Direct {
+		engine: Arc<SqliteEngine>,
+		hooks: Arc<DirectTransportHooks>,
+	},
 	#[cfg(test)]
 	Test(Arc<MockProtocol>),
 }
@@ -88,7 +91,10 @@ impl SqliteTransport {
 	#[cfg(test)]
 	fn from_direct(engine: Arc<SqliteEngine>) -> Self {
 		Self {
-			inner: Arc::new(SqliteTransportInner::Direct(engine)),
+			inner: Arc::new(SqliteTransportInner::Direct {
+				engine,
+				hooks: Arc::new(DirectTransportHooks::default()),
+			}),
 		}
 	}
 
@@ -99,6 +105,14 @@ impl SqliteTransport {
 		}
 	}
 
+	#[cfg(test)]
+	fn direct_hooks(&self) -> Option<Arc<DirectTransportHooks>> {
+		match &*self.inner {
+			SqliteTransportInner::Direct { hooks, .. } => Some(Arc::clone(hooks)),
+			_ => None,
+		}
+	}
+
 	async fn get_pages(
 		&self,
 		req: protocol::SqliteGetPagesRequest,
@@ -106,7 +120,7 @@ impl SqliteTransport {
 		match &*self.inner {
 			SqliteTransportInner::Envoy(handle) => handle.sqlite_get_pages(req).await,
 			#[cfg(test)]
-			SqliteTransportInner::Direct(engine) => {
+			SqliteTransportInner::Direct { engine, .. } => {
 				let pgnos = req.pgnos.clone();
 				match engine.get_pages(&req.actor_id, req.generation, pgnos).await {
 					Ok(pages) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
@@ -173,7 +187,11 @@ impl SqliteTransport {
 		match &*self.inner {
 			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit(req).await,
 			#[cfg(test)]
-			SqliteTransportInner::Direct(engine) => {
+			SqliteTransportInner::Direct { engine, hooks } => {
+				if let Some(message) = hooks.take_commit_error() {
+					return Err(anyhow::anyhow!(message));
+				}
+
 				match engine
 					.commit(
 						&req.actor_id,
@@ -230,7 +248,7 @@ impl SqliteTransport {
 		match &*self.inner {
 			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit_stage(req).await,
 			#[cfg(test)]
-			SqliteTransportInner::Direct(engine) => {
+			SqliteTransportInner::Direct { engine, .. } => {
 				match engine
 					.commit_stage(
 						&req.actor_id,
@@ -282,7 +300,7 @@ impl SqliteTransport {
 		match &*self.inner {
 			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit_finalize(req).await,
 			#[cfg(test)]
-			SqliteTransportInner::Direct(engine) => {
+			SqliteTransportInner::Direct { engine, .. } => {
 				match engine
 					.commit_finalize(
 						&req.actor_id,
@@ -330,6 +348,23 @@ impl SqliteTransport {
 			#[cfg(test)]
 			SqliteTransportInner::Test(protocol) => protocol.commit_finalize(req).await,
 		}
+	}
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct DirectTransportHooks {
+	fail_next_commit: Mutex<Option<String>>,
+}
+
+#[cfg(test)]
+impl DirectTransportHooks {
+	fn fail_next_commit(&self, message: impl Into<String>) {
+		*self.fail_next_commit.lock() = Some(message.into());
+	}
+
+	fn take_commit_error(&self) -> Option<String> {
+		self.fail_next_commit.lock().take()
 	}
 }
 
@@ -607,6 +642,7 @@ pub struct VfsV2Context {
 	aux_files: RwLock<BTreeMap<String, Arc<AuxFileState>>>,
 	commit_mutex: Mutex<()>,
 	last_error: Mutex<Option<String>>,
+	commit_atomic_count: AtomicU64,
 	io_methods: Box<sqlite3_io_methods>,
 }
 
@@ -816,6 +852,7 @@ impl VfsV2Context {
 			aux_files: RwLock::new(BTreeMap::new()),
 			commit_mutex: Mutex::new(()),
 			last_error: Mutex::new(None),
+			commit_atomic_count: AtomicU64::new(0),
 			io_methods: Box::new(io_methods),
 		}
 	}
@@ -1092,6 +1129,58 @@ impl VfsV2Context {
 	}
 }
 
+fn cleanup_batch_atomic_probe(db: *mut sqlite3) {
+	if let Err(err) = sqlite_exec(db, "DROP TABLE IF EXISTS __rivet_batch_probe;") {
+		tracing::warn!(%err, "failed to clean up sqlite v2 batch atomic probe table");
+	}
+}
+
+fn assert_batch_atomic_probe(
+	db: *mut sqlite3,
+	vfs: &SqliteVfsV2,
+) -> std::result::Result<(), String> {
+	let commit_atomic_before = vfs.commit_atomic_count();
+	let probe_sql = "\
+		BEGIN IMMEDIATE;\
+		CREATE TABLE IF NOT EXISTS __rivet_batch_probe(x INTEGER);\
+		INSERT INTO __rivet_batch_probe VALUES(1);\
+		DELETE FROM __rivet_batch_probe;\
+		DROP TABLE IF EXISTS __rivet_batch_probe;\
+		COMMIT;\
+	";
+
+	if let Err(err) = sqlite_exec(db, probe_sql) {
+		cleanup_batch_atomic_probe(db);
+		return Err(format!("batch atomic probe failed: {err}"));
+	}
+
+	let commit_atomic_after = vfs.commit_atomic_count();
+	if commit_atomic_after == commit_atomic_before {
+		tracing::error!(
+			"batch atomic writes not active for sqlite v2, SQLITE_ENABLE_BATCH_ATOMIC_WRITE may be missing"
+		);
+		cleanup_batch_atomic_probe(db);
+		return Err(
+			"batch atomic writes not active for sqlite v2, SQLITE_ENABLE_BATCH_ATOMIC_WRITE may be missing"
+				.to_string(),
+		);
+	}
+
+	Ok(())
+}
+
+fn mark_dead_from_commit_error(ctx: &VfsV2Context, err: CommitBufferError) {
+	match err {
+		CommitBufferError::FenceMismatch(reason) => ctx.mark_dead(reason),
+		CommitBufferError::StageNotFound(stage_id) => {
+			ctx.mark_dead(format!(
+				"sqlite v2 stage {stage_id} missing during commit finalize"
+			));
+		}
+		CommitBufferError::Other(message) => ctx.mark_dead(message),
+	}
+}
+
 fn dirty_pages_raw_bytes(dirty_pages: &[protocol::SqliteDirtyPage]) -> Result<u64> {
 	dirty_pages.iter().try_fold(0u64, |total, dirty_page| {
 		let page_len = u64::try_from(dirty_page.bytes.len())?;
@@ -1349,14 +1438,9 @@ unsafe extern "C" fn v2_io_close(p_file: *mut sqlite3_file) -> c_int {
 		file.base.pMethods = ptr::null();
 		match result {
 			Ok(()) => SQLITE_OK,
-			Err(CommitBufferError::FenceMismatch(reason)) => {
-				let ctx = &*file.ctx;
-				ctx.mark_dead(reason);
-				SQLITE_IOERR
-			}
 			Err(err) => {
 				let ctx = &*file.ctx;
-				ctx.set_last_error(format!("{err:?}"));
+				mark_dead_from_commit_error(ctx, err);
 				SQLITE_IOERR
 			}
 		}
@@ -1422,7 +1506,7 @@ unsafe extern "C" fn v2_io_read(
 				return SQLITE_IOERR_READ;
 			}
 			Err(GetPagesError::Other(message)) => {
-				ctx.set_last_error(message);
+				ctx.mark_dead(message);
 				return SQLITE_IOERR_READ;
 			}
 		};
@@ -1501,7 +1585,7 @@ unsafe extern "C" fn v2_io_write(
 				return SQLITE_IOERR_WRITE;
 			}
 			Err(GetPagesError::Other(message)) => {
-				ctx.set_last_error(message);
+				ctx.mark_dead(message);
 				return SQLITE_IOERR_WRITE;
 			}
 		};
@@ -1569,12 +1653,8 @@ unsafe extern "C" fn v2_io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_i
 		let ctx = &*file.ctx;
 		match ctx.flush_dirty_pages() {
 			Ok(_) => SQLITE_OK,
-			Err(CommitBufferError::FenceMismatch(reason)) => {
-				ctx.mark_dead(reason);
-				SQLITE_IOERR_FSYNC
-			}
 			Err(err) => {
-				ctx.set_last_error(format!("{err:?}"));
+				mark_dead_from_commit_error(ctx, err);
 				SQLITE_IOERR_FSYNC
 			}
 		}
@@ -1637,13 +1717,12 @@ unsafe extern "C" fn v2_io_file_control(
 				SQLITE_OK
 			}
 			SQLITE_FCNTL_COMMIT_ATOMIC_WRITE => match ctx.commit_atomic_write() {
-				Ok(()) => SQLITE_OK,
-				Err(CommitBufferError::FenceMismatch(reason)) => {
-					ctx.mark_dead(reason);
-					SQLITE_IOERR
+				Ok(()) => {
+					ctx.commit_atomic_count.fetch_add(1, Ordering::Relaxed);
+					SQLITE_OK
 				}
 				Err(err) => {
-					ctx.set_last_error(format!("{err:?}"));
+					mark_dead_from_commit_error(ctx, err);
 					SQLITE_IOERR
 				}
 			},
@@ -1946,6 +2025,10 @@ impl SqliteVfsV2 {
 	pub fn name_ptr(&self) -> *const c_char {
 		self._name.as_ptr()
 	}
+
+	fn commit_atomic_count(&self) -> u64 {
+		unsafe { (*self.ctx_ptr).commit_atomic_count.load(Ordering::Relaxed) }
+	}
 }
 
 impl Drop for SqliteVfsV2 {
@@ -2019,12 +2102,19 @@ pub fn open_database(
 		}
 	}
 
+	if let Err(err) = assert_batch_atomic_probe(db, &vfs) {
+		unsafe {
+			sqlite3_close(db);
+		}
+		return Err(err);
+	}
+
 	Ok(NativeDatabaseV2 { db, _vfs: vfs })
 }
 
 #[cfg(test)]
 mod tests {
-	use std::sync::atomic::AtomicU64;
+	use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
 	use std::sync::{Arc, Mutex as StdMutex};
 	use std::thread;
 
@@ -2082,10 +2172,14 @@ mod tests {
 			Arc::new(engine)
 		}
 
-		async fn startup_data(&self, engine: &SqliteEngine) -> protocol::SqliteStartupData {
+		async fn startup_data_for(
+			&self,
+			actor_id: &str,
+			engine: &SqliteEngine,
+		) -> protocol::SqliteStartupData {
 			let takeover = engine
 				.takeover(
-					&self.actor_id,
+					actor_id,
 					sqlite_storage::takeover::TakeoverConfig::new(
 						sqlite_now_ms().expect("startup time should resolve"),
 					),
@@ -2104,24 +2198,39 @@ mod tests {
 			}
 		}
 
-		fn open_db(&self, runtime: &tokio::runtime::Runtime) -> NativeDatabaseV2 {
-			let (engine, startup) = runtime.block_on(async {
-				let engine = self.open_engine().await;
-				let startup = self.startup_data(&engine).await;
-				(engine, startup)
-			});
+		async fn startup_data(&self, engine: &SqliteEngine) -> protocol::SqliteStartupData {
+			self.startup_data_for(&self.actor_id, engine).await
+		}
+
+		fn open_db_on_engine(
+			&self,
+			runtime: &tokio::runtime::Runtime,
+			engine: Arc<SqliteEngine>,
+			actor_id: &str,
+			config: VfsV2Config,
+		) -> NativeDatabaseV2 {
+			let startup = runtime.block_on(self.startup_data_for(actor_id, &engine));
 			let vfs = SqliteVfsV2::register_with_transport(
 				&next_test_name("sqlite-v2-direct-vfs"),
 				SqliteTransport::from_direct(engine),
-				self.actor_id.clone(),
+				actor_id.to_string(),
 				runtime.handle().clone(),
 				startup,
-				VfsV2Config::default(),
+				config,
 			)
 			.expect("v2 vfs should register");
 
-			open_database(vfs, &self.actor_id).expect("sqlite database should open")
+			open_database(vfs, actor_id).expect("sqlite database should open")
 		}
+
+		fn open_db(&self, runtime: &tokio::runtime::Runtime) -> NativeDatabaseV2 {
+			let engine = runtime.block_on(self.open_engine());
+			self.open_db_on_engine(runtime, engine, &self.actor_id, VfsV2Config::default())
+		}
+	}
+
+	fn direct_vfs_ctx(db: &NativeDatabaseV2) -> &VfsV2Context {
+		unsafe { &*db._vfs.ctx_ptr }
 	}
 
 	fn sqlite_query_i64(db: *mut sqlite3, sql: &str) -> std::result::Result<i64, String> {
@@ -2446,6 +2555,471 @@ mod tests {
 		let regrown_pages = sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;")
 			.expect("regrown page_count should succeed");
 		assert!(regrown_pages > shrunk_pages);
+	}
+
+	#[test]
+	fn direct_engine_batch_atomic_probe_runs_on_open() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		assert!(
+			db._vfs.commit_atomic_count() > 0,
+			"open_database should run the sqlite v2 batch-atomic probe",
+		);
+	}
+
+	#[test]
+	fn direct_engine_keeps_head_txid_after_cache_miss_reads_between_commits() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let db = harness.open_db_on_engine(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			VfsV2Config {
+				cache_capacity_pages: 2,
+				prefetch_depth: 0,
+				max_prefetch_bytes: 0,
+				..VfsV2Config::default()
+			},
+		);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("create table should succeed");
+		sqlite_exec(db.as_ptr(), "CREATE INDEX items_value_idx ON items(value);")
+			.expect("create index should succeed");
+		for i in 0..120 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO items (id, value) VALUES ({}, 'item-{i:03}');",
+					i + 1
+				),
+			)
+			.expect("seed insert should succeed");
+		}
+
+		let ctx = direct_vfs_ctx(&db);
+		let head_after_first_phase = ctx.state.read().head_txid;
+
+		ctx.state.write().page_cache.invalidate_all();
+		assert_eq!(
+			sqlite_query_text(
+				db.as_ptr(),
+				"SELECT value FROM items WHERE value = 'item-091';",
+			)
+			.expect("cache-miss read should succeed"),
+			"item-091"
+		);
+		let head_after_cache_miss = ctx.state.read().head_txid;
+		assert_eq!(
+			head_after_cache_miss, head_after_first_phase,
+			"cache-miss reads must not rewind head_txid",
+		);
+
+		sqlite_step_statement(
+			db.as_ptr(),
+			"INSERT INTO items (id, value) VALUES (1000, 'after-cache-miss');",
+		)
+		.expect("commit after cache-miss read should succeed");
+		assert!(
+			ctx.state.read().head_txid > head_after_cache_miss,
+			"head_txid should still advance after the follow-up commit",
+		);
+	}
+
+	#[test]
+	fn direct_engine_uses_slow_path_for_large_real_engine_commits() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data(&engine));
+		let dirty_pages = (1..=2300u32)
+			.map(|pgno| protocol::SqliteDirtyPage {
+				pgno,
+				bytes: vec![(pgno % 251) as u8; 4096],
+			})
+			.collect::<Vec<_>>();
+
+		let outcome = runtime
+			.block_on(commit_buffered_pages(
+				&SqliteTransport::from_direct(Arc::clone(&engine)),
+				BufferedCommitRequest {
+					actor_id: harness.actor_id.clone(),
+					generation: startup.generation,
+					expected_head_txid: startup.meta.head_txid,
+					new_db_size_pages: 2300,
+					max_delta_bytes: startup.meta.max_delta_bytes,
+					max_pages_per_stage: 256,
+					dirty_pages,
+				},
+			))
+			.expect("slow-path direct commit should succeed");
+
+		assert_eq!(outcome.path, CommitPath::Slow);
+		assert_eq!(outcome.new_head_txid, startup.meta.head_txid + 1);
+
+		let pages = runtime
+			.block_on(engine.get_pages(&harness.actor_id, startup.generation, vec![1, 1024, 2300]))
+			.expect("pages should read back after slow-path commit");
+		let expected_page_1 = vec![1u8; 4096];
+		let expected_page_1024 = vec![(1024 % 251) as u8; 4096];
+		let expected_page_2300 = vec![(2300 % 251) as u8; 4096];
+		assert_eq!(pages.len(), 3);
+		assert_eq!(pages[0].bytes.as_deref(), Some(expected_page_1.as_slice()));
+		assert_eq!(
+			pages[1].bytes.as_deref(),
+			Some(expected_page_1024.as_slice())
+		);
+		assert_eq!(
+			pages[2].bytes.as_deref(),
+			Some(expected_page_2300.as_slice())
+		);
+	}
+
+	#[test]
+	fn direct_engine_marks_vfs_dead_after_transport_errors() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data(&engine));
+		let transport = SqliteTransport::from_direct(engine);
+		let hooks = transport
+			.direct_hooks()
+			.expect("direct transport should expose test hooks");
+		let vfs = SqliteVfsV2::register_with_transport(
+			&next_test_name("sqlite-v2-direct-vfs"),
+			transport,
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsV2Config::default(),
+		)
+		.expect("v2 vfs should register");
+		let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
+
+		hooks.fail_next_commit("InjectedTransportError: commit transport dropped");
+		let err = sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE broken (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect_err("failing transport commit should surface as an IO error");
+		assert!(
+			err.contains("I/O") || err.contains("disk I/O"),
+			"sqlite should surface transport failure as an IO error: {err}",
+		);
+		assert!(
+			direct_vfs_ctx(&db).is_dead(),
+			"transport error should kill the v2 VFS"
+		);
+		assert_eq!(
+			db.take_last_kv_error().as_deref(),
+			Some("InjectedTransportError: commit transport dropped"),
+		);
+		assert!(
+			sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;").is_err(),
+			"subsequent reads should fail once the VFS is dead",
+		);
+	}
+
+	#[test]
+	fn direct_engine_handles_multithreaded_statement_churn() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = Arc::new(StdMutex::new(harness.open_db(&runtime)));
+
+		{
+			let db = db.lock().expect("db mutex should lock");
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT NOT NULL);",
+			)
+			.expect("create table should succeed");
+		}
+
+		let mut workers = Vec::new();
+		for worker_id in 0..4 {
+			let db = Arc::clone(&db);
+			workers.push(thread::spawn(move || {
+				for idx in 0..40 {
+					let db = db.lock().expect("db mutex should lock");
+					sqlite_step_statement(
+						db.as_ptr(),
+						&format!(
+							"INSERT INTO items (value) VALUES ('worker-{worker_id}-row-{idx}');"
+						),
+					)
+					.expect("threaded insert should succeed");
+				}
+			}));
+		}
+		for worker in workers {
+			worker.join().expect("worker thread should finish");
+		}
+
+		let db = db.lock().expect("db mutex should lock");
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items;")
+				.expect("threaded row count should succeed"),
+			160
+		);
+	}
+
+	#[test]
+	fn direct_engine_isolates_two_actors_on_one_shared_engine() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let actor_a = next_test_name("sqlite-v2-actor-a");
+		let actor_b = next_test_name("sqlite-v2-actor-b");
+		let db_a = harness.open_db_on_engine(
+			&runtime,
+			Arc::clone(&engine),
+			&actor_a,
+			VfsV2Config::default(),
+		);
+		let db_b = harness.open_db_on_engine(&runtime, engine, &actor_b, VfsV2Config::default());
+
+		sqlite_exec(
+			db_a.as_ptr(),
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("actor A create table should succeed");
+		sqlite_exec(
+			db_b.as_ptr(),
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("actor B create table should succeed");
+		sqlite_step_statement(
+			db_a.as_ptr(),
+			"INSERT INTO items (id, value) VALUES (1, 'alpha');",
+		)
+		.expect("actor A insert should succeed");
+		sqlite_step_statement(
+			db_b.as_ptr(),
+			"INSERT INTO items (id, value) VALUES (1, 'beta');",
+		)
+		.expect("actor B insert should succeed");
+
+		assert_eq!(
+			sqlite_query_text(db_a.as_ptr(), "SELECT value FROM items WHERE id = 1;")
+				.expect("actor A select should succeed"),
+			"alpha"
+		);
+		assert_eq!(
+			sqlite_query_text(db_b.as_ptr(), "SELECT value FROM items WHERE id = 1;")
+				.expect("actor B select should succeed"),
+			"beta"
+		);
+	}
+
+	#[test]
+	fn direct_engine_hot_row_updates_survive_reopen() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+
+		{
+			let db = harness.open_db(&runtime);
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE counters (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+			)
+			.expect("create table should succeed");
+			sqlite_step_statement(
+				db.as_ptr(),
+				"INSERT INTO counters (id, value) VALUES (1, 'v-0');",
+			)
+			.expect("seed row should succeed");
+			for i in 1..=150 {
+				sqlite_step_statement(
+					db.as_ptr(),
+					&format!("UPDATE counters SET value = 'v-{i}' WHERE id = 1;"),
+				)
+				.expect("hot-row update should succeed");
+			}
+		}
+
+		let reopened = harness.open_db(&runtime);
+		assert_eq!(
+			sqlite_query_text(
+				reopened.as_ptr(),
+				"SELECT value FROM counters WHERE id = 1;"
+			)
+			.expect("final value should survive reopen"),
+			"v-150"
+		);
+	}
+
+	#[test]
+	fn direct_engine_preserves_mixed_workload_across_sleep_wake() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+
+		{
+			let db = harness.open_db(&runtime);
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL, status TEXT NOT NULL);",
+			)
+			.expect("create table should succeed");
+			for id in 1..=50 {
+				sqlite_step_statement(
+					db.as_ptr(),
+					&format!(
+						"INSERT INTO items (id, value, status) VALUES ({id}, 'item-{id}', 'new');"
+					),
+				)
+				.expect("seed insert should succeed");
+			}
+			for id in 1..=20 {
+				sqlite_step_statement(
+					db.as_ptr(),
+					&format!(
+						"UPDATE items SET status = 'updated', value = 'item-{id}-updated' WHERE id = {id};"
+					),
+				)
+				.expect("update should succeed");
+			}
+			for id in 41..=50 {
+				sqlite_step_statement(db.as_ptr(), &format!("DELETE FROM items WHERE id = {id};"))
+					.expect("delete should succeed");
+			}
+			sqlite_step_statement(
+				db.as_ptr(),
+				"INSERT INTO items (id, value, status) VALUES (1000, 'disconnect-write', 'new');",
+			)
+			.expect("disconnect-style write before close should succeed");
+		}
+
+		let reopened = harness.open_db(&runtime);
+		assert_eq!(
+			sqlite_query_i64(reopened.as_ptr(), "SELECT COUNT(*) FROM items;")
+				.expect("row count after reopen should succeed"),
+			41
+		);
+		assert_eq!(
+			sqlite_query_i64(
+				reopened.as_ptr(),
+				"SELECT COUNT(*) FROM items WHERE status = 'updated';",
+			)
+			.expect("updated row count should succeed"),
+			20
+		);
+		assert_eq!(
+			sqlite_query_text(
+				reopened.as_ptr(),
+				"SELECT value FROM items WHERE id = 1000;",
+			)
+			.expect("disconnect write should survive reopen"),
+			"disconnect-write"
+		);
+	}
+
+	#[test]
+	fn direct_engine_reopens_cleanly_after_failed_migration() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+
+		{
+			let db = harness.open_db(&runtime);
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+			)
+			.expect("create table should succeed");
+			sqlite_exec(db.as_ptr(), "ALTER TABLE items ADD COLUMN;")
+				.expect_err("broken migration should fail");
+		}
+
+		let reopened = harness.open_db(&runtime);
+		sqlite_step_statement(
+			reopened.as_ptr(),
+			"INSERT INTO items (id, value) VALUES (1, 'still-alive');",
+		)
+		.expect("reopened database should still accept writes after migration failure");
+		assert_eq!(
+			sqlite_query_text(reopened.as_ptr(), "SELECT value FROM items WHERE id = 1;")
+				.expect("select after reopen should succeed"),
+			"still-alive"
+		);
+	}
+
+	#[test]
+	fn direct_engine_reads_continue_while_compaction_runs() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let db = Arc::new(StdMutex::new(harness.open_db_on_engine(
+			&runtime,
+			Arc::clone(&engine),
+			&harness.actor_id,
+			VfsV2Config::default(),
+		)));
+
+		{
+			let db = db.lock().expect("db mutex should lock");
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+			)
+			.expect("create table should succeed");
+			for id in 1..=48 {
+				sqlite_step_statement(
+					db.as_ptr(),
+					&format!("INSERT INTO items (id, value) VALUES ({id}, 'row-{id}');"),
+				)
+				.expect("seed insert should succeed");
+			}
+		}
+
+		let keep_reading = Arc::new(AtomicBool::new(true));
+		let read_error = Arc::new(StdMutex::new(None::<String>));
+		let db_for_reader = Arc::clone(&db);
+		let keep_reading_for_thread = Arc::clone(&keep_reading);
+		let read_error_for_thread = Arc::clone(&read_error);
+		let reader = thread::spawn(move || {
+			while keep_reading_for_thread.load(AtomicOrdering::Relaxed) {
+				let db = db_for_reader.lock().expect("db mutex should lock");
+				direct_vfs_ctx(&db)
+					.state
+					.write()
+					.page_cache
+					.invalidate_all();
+				if let Err(err) =
+					sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items WHERE id >= 1;")
+				{
+					*read_error_for_thread
+						.lock()
+						.expect("read error mutex should lock") = Some(err);
+					break;
+				}
+			}
+		});
+
+		runtime
+			.block_on(engine.compact_worker(&harness.actor_id, 8))
+			.expect("compaction should succeed");
+		keep_reading.store(false, AtomicOrdering::Relaxed);
+		reader.join().expect("reader thread should finish");
+
+		assert!(
+			read_error
+				.lock()
+				.expect("read error mutex should lock")
+				.is_none(),
+			"reads should keep working while compaction folds deltas",
+		);
+		let db = db.lock().expect("db mutex should lock");
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items;")
+				.expect("final row count should succeed"),
+			48
+		);
 	}
 
 	#[test]
