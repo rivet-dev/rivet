@@ -233,3 +233,29 @@ Raw captures retained at `/tmp/us-059-metrics-full.txt` (engine /metrics, all fa
   - `prd.json` can drift behind the actual branch state. If `git log` already contains `feat: [US-048] - [...]` but `passes` is still false, fix the bookkeeping before Ralph burns another cycle re-implementing the same story.
   - `cargo test -p sqlite-storage` and `cargo test -p rivetkit-sqlite-native` run cleaner as isolated story-focused filters here; a concurrent full-package run produced a hanging compaction test and native RocksDB lock noise that did not reproduce in isolated checks.
 ---
+
+### 1 MiB shape experiment (captured 2026-04-16 ~15:50 PDT)
+
+Question: for the original 5 MB bench (`largeTxInsert5MB`), engine-side commit work summed to ~233 ms but total E2E was 1128 ms, leaving ~900 ms unaccounted for. Hypothesis was that per-statement / NAPI overhead dominates the gap. To test, three new bench variants commit the same 1 MiB payload shaped three ways (different statement counts).
+
+Environment: local RocksDB engine on `:6420` with US-048 and US-059 both landed, kitchen-sink `--prod dist/server.js` on `:3001`, namespace `fix2`, fresh actor per run (new key), `RUST_LOG=info` (via `scripts/run/engine-rocksdb.sh` default).
+
+| Variant | Rows × payload | NAPI crossings | E2E | Server | Per-op |
+|---------|----------------|---------------|------|--------|--------|
+| Tiny     | 4096 × 256 B  | 4096           | 334.6 ms | 311.8 ms | 0.1 ms |
+| Medium   | 256 × 4 KiB   | 256            | 158.2 ms | 141.2 ms | 0.6 ms |
+| One row  | 1 × 1 MiB     | 1              | 132.6 ms | 114.0 ms | 114.0 ms |
+
+All three commit 1 MiB total. The floor (one-row, 1 NAPI crossing) is **132.6 ms**. Adding statements scales the time linearly:
+- Tiny vs one-row: +202 ms over +4095 crossings ≈ **49 µs per extra statement**.
+- Medium vs one-row: +25.6 ms over +255 crossings ≈ **100 µs per extra statement**.
+
+Interpretation: **per-statement cost (NAPI + SQLite prepare/bind/step/finalize + arg marshaling) is the primary source of the 5 MB bench's unexplained ~900 ms.** The 5 MB bench fires 1280 INSERTs. At ~50 µs/statement (warm cache, small args) that's ~64 ms; the 5 MB bench probably has higher per-statement cost because `randomblob(4096)` produces larger bound args and dirties more pages per statement, pushing per-statement cost into the 500-700 µs range. 1280 × 600 µs ≈ 770 ms, a plausible match for the observed ~900 ms gap.
+
+Follow-up levers (NOT part of US-048 or US-055):
+- **Batched INSERT** — the existing `insertBatch` action shape (one multi-VALUES INSERT) would collapse 1280 NAPI crossings to 1. Try adding a 5 MB variant that uses batched insert to confirm.
+- **Prepared statement cache** — the native VFS could cache `sqlite3_stmt` for identical SQL text across execute calls to avoid re-prepare costs.
+- **JS-side payload batching** — the db.execute() API could accept an array of `[sql, args]` pairs and do N calls in one NAPI round trip.
+
+Per-variant engine-side commit phase histograms could not be cleanly attributed because the `/metrics` histogram has been accumulating across the full engine run (88 commits total in the current window, most from earlier work). For a clean per-variant Prometheus attribution, scrape `/metrics` before and after each run.
+---

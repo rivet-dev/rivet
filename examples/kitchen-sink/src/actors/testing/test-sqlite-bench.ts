@@ -525,6 +525,65 @@ export const testSqliteBench = actor({
 			return { ms: performance.now() - t0, ops: rowCount, bytes: rowCount * rowSize };
 		},
 
+		// 1 MiB total, 4096 × 256 B rows. Max NAPI crossings.
+		largeTxInsert1MBTinyRows: async (c) => {
+			const targetBytes = 1024 * 1024;
+			const rowSize = 256;
+			const rowCount = Math.ceil(targetBytes / rowSize);
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS large_tx (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				payload BLOB NOT NULL
+			)`);
+			const t0 = performance.now();
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < rowCount; i++) {
+				await c.db.execute(
+					"INSERT INTO large_tx (payload) VALUES (randomblob(?))",
+					rowSize,
+				);
+			}
+			await c.db.execute("COMMIT");
+			return { ms: performance.now() - t0, ops: rowCount, bytes: rowCount * rowSize };
+		},
+
+		// 1 MiB total, 256 × 4 KiB rows. Same shape as largeTxInsert1MB; kept as a sanity duplicate.
+		largeTxInsert1MBMediumRows: async (c) => {
+			const targetBytes = 1024 * 1024;
+			const rowSize = 4 * 1024;
+			const rowCount = Math.ceil(targetBytes / rowSize);
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS large_tx (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				payload BLOB NOT NULL
+			)`);
+			const t0 = performance.now();
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < rowCount; i++) {
+				await c.db.execute(
+					"INSERT INTO large_tx (payload) VALUES (randomblob(?))",
+					rowSize,
+				);
+			}
+			await c.db.execute("COMMIT");
+			return { ms: performance.now() - t0, ops: rowCount, bytes: rowCount * rowSize };
+		},
+
+		// 1 MiB total, 1 × 1 MiB row. One NAPI crossing, exercises SQLite overflow-page chain.
+		largeTxInsert1MBOneRow: async (c) => {
+			const rowSize = 1024 * 1024;
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS large_tx (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				payload BLOB NOT NULL
+			)`);
+			const t0 = performance.now();
+			await c.db.execute("BEGIN");
+			await c.db.execute(
+				"INSERT INTO large_tx (payload) VALUES (randomblob(?))",
+				rowSize,
+			);
+			await c.db.execute("COMMIT");
+			return { ms: performance.now() - t0, ops: 1, bytes: rowSize };
+		},
+
 		largeTxInsert5MB: async (c) => {
 			const targetBytes = 5 * 1024 * 1024;
 			const rowSize = 4 * 1024;
