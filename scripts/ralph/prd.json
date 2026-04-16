@@ -164,7 +164,7 @@
         "cargo test -p sqlite-storage passes",
         "cargo test -p rivetkit-sqlite-native passes"
       ],
-      "priority": 3,
+      "priority": 5,
       "passes": false,
       "notes": "Adversarial agent decided Definition 1 (raw dirty page bytes). Reasons: (1) user-predictable ('my 5 MiB blob \u2248 5 MiB of dirty pages'), (2) post-compression definition would let 64 MiB of zeros through a 16 MiB LZ4-bytes cap, defeating memory/wire pressure goals, (3) matches existing dirty_pages_raw_bytes invariant used elsewhere in commit.rs. LZ4 interaction is a FEATURE under Definition 1: a 16 MiB text commit still compresses to a small DELTA on disk, but the commit is still capped at 16 MiB of raw uncompressed data. Slow path must mirror-check accumulated raw bytes across stages to prevent bypass via chunking.",
       "dependsOn": [
@@ -186,9 +186,9 @@
         "Document the feature in website/src/content/docs/self-hosting/configuration.mdx if operators need to disable it (and in CLAUDE.md for WebSocket conventions)",
         "cargo test for affected crates passes"
       ],
-      "priority": 4,
+      "priority": 3,
       "passes": false,
-      "notes": "Review agent flagged: pegboard-envoy uses hyper-tungstenite 0.17, not tokio-tungstenite. Both paths must be covered. If hyper-tungstenite 0.17 does not support deflate, we need to upgrade (verify compatibility with hyper version first). Keep no_context_takeover on both sides to bound memory \u2014 each active connection otherwise holds ~32 KB zlib state. For large actor fleets this matters."
+      "notes": "Review agent flagged: pegboard-envoy uses hyper-tungstenite 0.17, not tokio-tungstenite. Both paths must be covered. If hyper-tungstenite 0.17 does not support deflate, we need to upgrade (verify compatibility with hyper version first). Keep no_context_takeover on both sides to bound memory \u2014 each active connection otherwise holds ~32 KB zlib state. For large actor fleets this matters. Promoted to priority 3 on 2026-04-16 per user directive \u2014 compression bumped ahead of US-054 (commit cap) to shrink wire bytes sooner."
     },
     {
       "id": "US-059",
@@ -224,6 +224,62 @@
       "priority": 1,
       "passes": true,
       "notes": "Three complementary surfaces: Prometheus histograms on engine /metrics (port 6430), per-actor VFS counters on /inspector/metrics, and debug-level tracing spans. Baseline captured in commit 514007256a: 5 MB commit at 717 ms info-level (~6.97 MB/s), udb_write 45.7% + pidx_read 36.3% of server wall time, transport 98.5% of VFS-side time. Use these numbers as the regression floor for US-048."
+    },
+    {
+      "id": "US-061",
+      "title": "commit_finalize writes PIDX entries so slow-path reads bypass recover_page_from_delta_history",
+      "description": "As a developer, I need commit_finalize to insert or update PIDX entries for the staged delta chunks so that post-finalize reads resolve pages through the normal PIDX -> delta lookup path, not the legacy full-history scan. The US-048 implementation made commit_finalize metadata-only (good for FDB txn size), but it skipped PIDX writes. That leaves get_pages depending on recover_page_from_delta_history for any page whose PIDX entry is missing, which is exactly the scan the US-047 story wants to remove. Fix commit_finalize so the standard read path works and US-047 can remove the fallback cleanly.",
+      "acceptanceCriteria": [
+        "commit_finalize writes one PIDX entry per page touched by the staged delta so that post-finalize reads find the correct (actor_id, pgno) -> txid mapping through pidx_delta_key(...) and never fall back to scanning delta history.",
+        "If PIDX writes would exceed the 2 KiB finalize-mutations budget documented by US-048, chunk the PIDX writes across stage chunks at commit_stage time instead of inside finalize. Make finalize strictly metadata-only. Document which option was chosen in the engine/CLAUDE.md sqlite-storage section.",
+        "Update the engine-side `commit_finalize` integration test so it exercises get_pages on each touched page AFTER finalize and asserts zero calls land in recover_page_from_delta_history. Add a counter or test hook in recover_page_from_delta_history to prove it is untouched during this test.",
+        "Add a stress test: N = 4096 dirty pages across 4 chunks, finalize, then read all 4096 pages and assert they match staged payloads AND recover_page_from_delta_history was not invoked.",
+        "No regression on the US-048 'finalize FDB txn writes fewer than 2 KB of mutations' assertion. If chunk-time PIDX writes are used, update the assertion to reflect the new split.",
+        "dependsOn: US-048 (the finalize split it introduced), blocks US-047 (the fallback removal).",
+        "cargo test -p sqlite-storage passes",
+        "cargo test -p rivetkit-sqlite-native passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Coverage gap from the US-048 review (reviews/US-048-review.txt). US-048 shipped commit_finalize as metadata-only, which skipped PIDX writes entirely. Post-finalize reads now depend on recover_page_from_delta_history for any page whose PIDX entry is missing (the full-history scan). US-047 is supposed to remove that fallback; US-047 cannot land until this story does. Order of ops: US-061 first, then US-047 can delete recover_page_from_delta_history cleanly.",
+      "dependsOn": [
+        "US-048"
+      ]
+    },
+    {
+      "id": "US-062",
+      "title": "Actually implement compaction performance fix (US-040 coverage backfill)",
+      "description": "As a developer, I need the compaction performance optimization described in US-040 to actually land in code. US-040 was flipped to passes=true on 2026-04-16 without an implementing commit: the review agent confirmed compact_shard still rescans PIDX+delta per invocation and default_compaction_worker still constructs a throwaway SqliteEngine with empty page_indices (engine/packages/sqlite-storage/src/compaction/{shard.rs,mod.rs}). Deliver the actual optimization and its test.",
+      "acceptanceCriteria": [
+        "compact_worker scans PIDX and delta entries ONCE per batch and passes the pre-scanned set to each compact_shard call. compact_shard accepts them as parameters instead of rescanning.",
+        "CompactionCoordinator passes a reference to the shared SqliteEngine (or its db+subspace+Arc<page_indices>) to default_compaction_worker in engine/packages/sqlite-storage/src/compaction/mod.rs so compaction writes update the live engine cache instead of a throwaway.",
+        "After compaction, the shared page_indices cache reflects updated PIDX entries (not discarded with the throwaway engine).",
+        "Add test compact_worker_performs_single_pidx_scan_per_batch: 8-shard batch triggers exactly 1 PIDX scan total, not 9. Instrument via an op counter increment or a scan-count metric; prefer a dedicated test hook over parsing metrics output.",
+        "Validate that the existing compaction correctness tests still pass after the hoisting: compact_worker_folds_five_deltas_into_one_shard, compact_shard_skips_stale_meta_without_rewinding_head, concurrent_reads_during_compaction_keep_returning_expected_pages.",
+        "Do NOT re-flip the US-040 passes flag. Ship this as US-062.",
+        "cargo test -p sqlite-storage passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "US-040 was marked passes=true without an implementing commit (see reviews/US-040-review.txt). Rather than re-flipping US-040, this story exists so Ralph has a clear target for the real code change. Code sites to edit: engine/packages/sqlite-storage/src/compaction/shard.rs (compact_shard signature + remove redundant scans), engine/packages/sqlite-storage/src/compaction/worker.rs (add scan hoisting), engine/packages/sqlite-storage/src/compaction/mod.rs (CompactionCoordinator engine sharing)."
+    },
+    {
+      "id": "US-060",
+      "title": "Backfill US-048 test, metric, and documentation coverage",
+      "description": "As a developer, I need the acceptance criteria that US-048 skipped to actually ship, so the story's guardrails against regressions exist. The US-048 review (reviews/US-048-review.txt) identified five concrete gaps. These are mechanical follow-ups; no architecture change.",
+      "acceptanceCriteria": [
+        "Add test sqlite-storage::commit::tests::commit_finalize_writes_fewer_than_2kib_of_mutations: issues a 16 MiB staged commit via commit_stage_begin + commit_stage, calls commit_finalize, and asserts the finalize FDB transaction's cumulative write bytes are < 2 KiB. Use the op_counter + raw-write-bytes counter that already exists in UniversalDB, or add a test hook if needed.",
+        "Add bench rivetkit-sqlite-native::v2::vfs::tests::bench_large_tx_insert_16mb: exercises the full commit path on a 16 MiB commit and asserts no FDB error 2101 (TransactionTooLarge) or 1007 (TransactionTooOld) surfaces in the result.",
+        "Add bench rivetkit-sqlite-native::v2::vfs::tests::bench_large_tx_insert_commit_finalize_metadata_only_under_2kb: mirrors the engine-side finalize budget assertion at the VFS layer end-to-end.",
+        "Add an engine-side regression check that neither FDB error 2101 nor 1007 is observed across the new 16 MiB tests. Counter sqlite_commit_fdb_error_total{code} exposed via /metrics, with _sum asserted == 0 at test end.",
+        "Add metric sqlite_orphan_chunk_bytes_reclaimed_total to engine/packages/sqlite-storage/src/metrics.rs. Increment it in takeover's build_recovery_plan whenever a `txid > head_txid` chunk is deleted, by the size of the deleted chunk value. Document in docs-internal/engine/SQLITE_METRICS.md.",
+        "Update the DBHead doc comment in engine/packages/sqlite-storage/src/types.rs to state the head_txid / next_txid invariant from US-048: 'head_txid is the latest committed txid (visible). next_txid is the next txid allocatable by commit_stage_begin. head_txid == next_txid - 1 immediately after a clean commit; head_txid < next_txid - 1 during or after aborted stages.'",
+        "cargo test -p sqlite-storage passes",
+        "cargo test -p rivetkit-sqlite-native passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Mechanical backfill for US-048. Do not touch architecture (commit_stage_begin/commit_finalize/delta_chunk_key are correct per review). Focus on: (1) 2 KiB finalize-budget assertion, (2) the two 16 MiB benches, (3) FDB error 2101/1007 regression counter, (4) orphan-chunk metric, (5) DBHead doc comment. Keep scope tight; resist adding unrelated cleanups here."
     }
   ]
 }

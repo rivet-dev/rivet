@@ -259,3 +259,33 @@ Follow-up levers (NOT part of US-048 or US-055):
 
 Per-variant engine-side commit phase histograms could not be cleanly attributed because the `/metrics` histogram has been accumulating across the full engine run (88 commits total in the current window, most from earlier work). For a clean per-variant Prometheus attribution, scrape `/metrics` before and after each run.
 ---
+
+### Debug vs release build comparison (captured 2026-04-16 ~16:35 PDT)
+
+Both the engine and rivetkit-native's `.node` default to DEBUG builds. Re-ran the exact same bench variants against release builds (`./target/release/rivet-engine start` + `pnpm build:force:release` for rivetkit-native).
+
+| Variant | Debug E2E | Release E2E | Release server | Speedup |
+|---------|-----------|-------------|----------------|---------|
+| Tiny 1 MiB (4096 × 256 B) | 334.6 ms | 97.1 ms  | 92.8 ms  | 3.4x |
+| Medium 1 MiB (256 × 4 KiB) | 158.2 ms | 27.1 ms  | 22.5 ms  | 5.8x |
+| One row 1 MiB (1 × 1 MiB) | 132.6 ms | 20.7 ms  | 16.7 ms  | 6.4x |
+| 5 MiB (1280 × 4 KiB) | 706-1128 ms | 112.9 ms | 107.7 ms | 6.3-10x |
+| Baseline RTT (noop) | 14 ms | 2.5 ms | - | 5.6x |
+
+Engine release per-phase speedup (debug avg / release avg, from `/metrics` sum/count):
+- `decode_request`: 5.7x
+- `meta_read`:      7.3x
+- `ltx_encode`:    **19x**  (CPU-heavy Rust work)
+- `pidx_read`:     **21x**  (tight FDB-read loop in Rust)
+- `udb_write`:      6.1x
+
+Key conclusions:
+- Release builds deliver 3.4-10x across the board. The earlier 30-50% estimate was low by an order of magnitude.
+- `ltx_encode` and `pidx_read` see the biggest gains because they run Rust-heavy loops that the Rust debug profile punishes most.
+- Per-statement NAPI overhead shrinks from ~50-100 µs (debug) to ~18-22 µs (release). Still a real cost proportional to statement count, but much smaller.
+- **A 5 MiB transactional commit now takes ~113 ms E2E on release**, production-viable. Debug numbers made the system look much worse than it is.
+
+IMPORTANT: run all perf baselines and Ralph-level benches against release binaries. Debug numbers will mislead future decisions on where optimization work is warranted. Consider updating `scripts/run/engine-rocksdb.sh` to default to `cargo run --release` when `RIVET_RELEASE=1` is set, or adding a `scripts/run/engine-rocksdb-release.sh` variant.
+
+Also confirmed (earlier assumption corrected): the 5 MB bench does NOT do mid-transaction spills. One `BEGIN...COMMIT` block produces ONE big commit (`le=4096` dirty-page bucket). The 9 extra commits observed in the metrics window are unrelated actor/lifecycle writes (noop warmup, migrations, metadata). SQLite's xSync-at-COMMIT behavior holds.
+---
