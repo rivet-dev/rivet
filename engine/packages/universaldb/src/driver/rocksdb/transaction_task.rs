@@ -14,7 +14,6 @@ use crate::{
 	options::ConflictRangeType,
 	tx_ops::Operation,
 	value::{KeyValue, Slice, Values},
-	versionstamp::substitute_versionstamp_if_incomplete,
 };
 
 pub enum TransactionCommand {
@@ -319,12 +318,15 @@ impl TransactionTask {
 		for op in operations {
 			match op {
 				Operation::Set { key, value } => {
-					// Substitute versionstamp if incomplete
-					// For now, just use the simple substitution - we can improve this later
-					// to ensure all versionstamps in a transaction have the same base timestamp
-					let value = substitute_versionstamp_if_incomplete(value.clone(), 0);
-
-					txn.put(key, &value)
+					// Regular `Set` operations must NOT rewrite the value.
+					// Versionstamp substitution only belongs on SetVersionstampedKey
+					// and SetVersionstampedValue mutation types, which go through
+					// AtomicOp. Applying `substitute_versionstamp_if_incomplete`
+					// here corrupts random data whose trailing 4 bytes happen to
+					// form a plausible offset pointing at a 0x33 byte: the helper
+					// always truncates the last 4 bytes as "offset bytes" before
+					// validating, and silently swallows the validation error.
+					txn.put(key, value)
 						.context("failed to set key in rocksdb")?;
 				}
 				Operation::Clear { key } => {

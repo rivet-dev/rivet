@@ -4494,4 +4494,323 @@ mod tests {
 			.expect("count should succeed");
 		assert_eq!(count, 100);
 	}
+
+	// Bench-parity tests. Each mirrors a workload in
+	// examples/kitchen-sink/src/actors/testing/test-sqlite-bench.ts so
+	// storage-layer regressions surface here without needing the full stack.
+
+	fn open_bench_db(runtime: &tokio::runtime::Runtime) -> NativeDatabaseV2 {
+		let harness = DirectEngineHarness::new();
+		harness.open_db(runtime)
+	}
+
+	#[test]
+	fn bench_insert_tx_x10000() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER);",
+		)
+		.unwrap();
+
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..10_000 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("INSERT INTO t (id, v) VALUES ({i}, {i});"),
+			)
+			.unwrap();
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM t;").unwrap(),
+			10_000
+		);
+	}
+
+	#[test]
+	fn bench_large_tx_insert_500kb() {
+		large_tx_insert(500 * 1024);
+	}
+
+	#[test]
+	fn bench_large_tx_insert_10mb() {
+		large_tx_insert(10 * 1024 * 1024);
+	}
+
+	#[test]
+	fn bench_large_tx_insert_50mb() {
+		// 50MB exercises the slow-path stage/finalize chunking that has
+		// historically hit decode errors under certain transports.
+		large_tx_insert(50 * 1024 * 1024);
+	}
+
+	fn large_tx_insert(target_bytes: usize) {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE large_tx (id INTEGER PRIMARY KEY AUTOINCREMENT, payload BLOB NOT NULL);",
+		)
+		.unwrap();
+
+		let row_size = 4 * 1024;
+		let rows = (target_bytes + row_size - 1) / row_size;
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for _ in 0..rows {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("INSERT INTO large_tx (payload) VALUES (randomblob({row_size}));"),
+			)
+			.unwrap();
+		}
+		if let Err(err) = sqlite_exec(db.as_ptr(), "COMMIT") {
+			let vfs_err = direct_vfs_ctx(&db).clone_last_error();
+			panic!(
+				"COMMIT failed for {} MiB: sqlite={}, vfs_last_error={:?}",
+				target_bytes / (1024 * 1024),
+				err,
+				vfs_err,
+			);
+		}
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM large_tx;").unwrap(),
+			rows as i64
+		);
+	}
+
+	#[test]
+	fn bench_churn_insert_delete_10x1000() {
+		// Tests freelist reuse / space reclamation under heavy churn.
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE churn (id INTEGER PRIMARY KEY AUTOINCREMENT, payload BLOB NOT NULL);",
+		)
+		.unwrap();
+		for _ in 0..10 {
+			sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+			for _ in 0..1000 {
+				sqlite_exec(
+					db.as_ptr(),
+					"INSERT INTO churn (payload) VALUES (randomblob(1024));",
+				)
+				.unwrap();
+			}
+			sqlite_exec(db.as_ptr(), "DELETE FROM churn;").unwrap();
+			sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+		}
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM churn;").unwrap(),
+			0
+		);
+	}
+
+	#[test]
+	fn bench_mixed_oltp_large() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE mixed (id INTEGER PRIMARY KEY, v INTEGER NOT NULL, data BLOB NOT NULL);",
+		)
+		.unwrap();
+
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..500 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO mixed (id, v, data) VALUES ({i}, {}, randomblob(1024));",
+					i * 2
+				),
+			)
+			.unwrap();
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..500 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO mixed (id, v, data) VALUES ({}, {}, randomblob(1024));",
+					500 + i,
+					i * 3
+				),
+			)
+			.unwrap();
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("UPDATE mixed SET v = v + 1 WHERE id = {i};"),
+			)
+			.unwrap();
+			if i % 5 == 0 && i >= 50 {
+				sqlite_exec(
+					db.as_ptr(),
+					&format!("DELETE FROM mixed WHERE id = {};", i - 50),
+				)
+				.unwrap();
+			}
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		let count = sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM mixed;").unwrap();
+		assert!(count > 900 && count < 1000);
+	}
+
+	#[test]
+	fn bench_bulk_update_1000_rows() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE bulk (id INTEGER PRIMARY KEY, v INTEGER);",
+		)
+		.unwrap();
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..1000 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("INSERT INTO bulk (id, v) VALUES ({i}, {i});"),
+			)
+			.unwrap();
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..1000 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("UPDATE bulk SET v = v + 1 WHERE id = {i};"),
+			)
+			.unwrap();
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT SUM(v) FROM bulk;").unwrap(),
+			(0..1000).map(|i| i + 1).sum::<i64>()
+		);
+	}
+
+	#[test]
+	fn bench_truncate_and_regrow() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE regrow (id INTEGER PRIMARY KEY AUTOINCREMENT, payload BLOB NOT NULL);",
+		)
+		.unwrap();
+		for _ in 0..2 {
+			sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+			for _ in 0..500 {
+				sqlite_exec(
+					db.as_ptr(),
+					"INSERT INTO regrow (payload) VALUES (randomblob(1024));",
+				)
+				.unwrap();
+			}
+			sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+			sqlite_exec(db.as_ptr(), "DELETE FROM regrow;").unwrap();
+		}
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM regrow;").unwrap(),
+			0
+		);
+	}
+
+	#[test]
+	fn bench_many_small_tables() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..50 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("CREATE TABLE t_{i} (id INTEGER PRIMARY KEY, v INTEGER);"),
+			)
+			.unwrap();
+			for j in 0..10 {
+				sqlite_exec(
+					db.as_ptr(),
+					&format!("INSERT INTO t_{i} (id, v) VALUES ({j}, {});", i * j),
+				)
+				.unwrap();
+			}
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		let total: i64 = (0..50)
+			.map(|i| {
+				sqlite_query_i64(db.as_ptr(), &format!("SELECT COUNT(*) FROM t_{i};")).unwrap()
+			})
+			.sum();
+		assert_eq!(total, 500);
+	}
+
+	#[test]
+	fn bench_index_creation_on_10k_rows() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE idx_test (id INTEGER PRIMARY KEY AUTOINCREMENT, k TEXT NOT NULL, v INTEGER NOT NULL);",
+		)
+		.unwrap();
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..10_000 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO idx_test (k, v) VALUES ('key-{}-{i}', {i});",
+					i % 1000
+				),
+			)
+			.unwrap();
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		sqlite_exec(db.as_ptr(), "CREATE INDEX idx_test_k ON idx_test(k);").unwrap();
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM idx_test;").unwrap(),
+			10_000
+		);
+	}
+
+	#[test]
+	fn bench_growing_aggregation() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE agg (id INTEGER PRIMARY KEY AUTOINCREMENT, v INTEGER NOT NULL);",
+		)
+		.unwrap();
+
+		let batches = 20;
+		let per_batch = 100;
+		for batch in 0..batches {
+			sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+			for i in 0..per_batch {
+				sqlite_exec(
+					db.as_ptr(),
+					&format!("INSERT INTO agg (v) VALUES ({});", batch * per_batch + i),
+				)
+				.unwrap();
+			}
+			sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+			let expected_sum: i64 = (0..(batch + 1) * per_batch).map(|i| i as i64).sum();
+			assert_eq!(
+				sqlite_query_i64(db.as_ptr(), "SELECT SUM(v) FROM agg;").unwrap(),
+				expected_sum
+			);
+		}
+	}
 }
