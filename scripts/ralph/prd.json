@@ -104,7 +104,7 @@
         "cargo test -p rivetkit-sqlite-native passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Two adversarial agents decided the design. TXID allocation: 'persist at stage start' (Option A). New commit_stage_begin RPC atomically allocates next_txid in one FDB txn. Chunks written directly to delta_chunk_key(actor, txid, chunk_idx); no intermediate stage_key. commit_finalize becomes metadata-only: reads META, verifies txid == next_txid - 1, flips head_txid. Abandoned stages leak txid numbers (benign on u64, orphan chunks cleaned by takeover's existing 'txid > head_txid' scan). Quota bills at stage time since finalize is metadata-only. Concurrent read safety follows automatically from the head_txid flip being the atomic boundary. No chunk_count field needed \u2014 head_txid IS the boundary.",
       "dependsOn": [
         "US-059"

@@ -4,6 +4,7 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
 
 ## Codebase Patterns
 - `rivetkit` package-level `vitest run` only discovers `*.test.*` and `*.spec.*` files. `src/driver-test-suite/tests/*.ts` coverage lives outside that glob, so validate those stories through the driver-suite harness or another explicit entrypoint instead of assuming a direct file filter will run them.
+- `rivetkit-sqlite-native` reopen tests can hit RocksDB `LOCK: No locks available` when they run alongside other heavy Rust suites, so rerun those checks in isolated `cargo test -p rivetkit-sqlite-native <filter> -- --test-threads=1` invocations before calling the branch broken.
 - `wrapJsNativeDatabase(...)` must forward new native SQLite introspection hooks like `getSqliteVfsMetrics()`, or `/inspector/metrics` will quietly report zero VFS commit timings even when Rust recorded them.
 - `pegboard-envoy` SQLite websocket handlers should validate page numbers, page sizes, and duplicate dirty pages at the websocket trust boundary and downgrade unexpected failures to `SqliteErrorResponse` so one bad actor request cannot tear down the shared envoy connection.
 - `sqlite-native` v2 should poison the VFS inside `flush_dirty_pages()` and `commit_atomic_write()` for non-fence commit failures; callback wrappers should only translate fence mismatches into SQLite I/O return codes.
@@ -224,4 +225,11 @@ Raw captures retained at `/tmp/us-059-metrics-full.txt` (engine /metrics, all fa
   - `get_pages(...)` still has to recover committed staged data when PIDX is absent, so the read path cannot early-return zero-filled pages just because no shard or PIDX source was found in the first pass.
   - sqlite-native mock slow-path tests cannot assume a fixed stage-request count anymore. The VFS chunks the fully encoded LTX bytes, not the original dirty-page list.
   - Quality checks run clean with `cargo test -p sqlite-storage` and `cargo test -p rivetkit-sqlite-native`.
+---
+## 2026-04-16 15:42:22 PDT - US-048
+- What was implemented: Corrected the stale Ralph bookkeeping for the already-landed US-048 branch commit by marking the story passing in `prd.json` and re-verifying the critical staged-commit, takeover-recovery, read-path, and reopen tests in isolation.
+- Files changed: `scripts/ralph/{prd.json,progress.txt}`
+- **Learnings for future iterations:**
+  - `prd.json` can drift behind the actual branch state. If `git log` already contains `feat: [US-048] - [...]` but `passes` is still false, fix the bookkeeping before Ralph burns another cycle re-implementing the same story.
+  - `cargo test -p sqlite-storage` and `cargo test -p rivetkit-sqlite-native` run cleaner as isolated story-focused filters here; a concurrent full-package run produced a hanging compaction test and native RocksDB lock noise that did not reproduce in isolated checks.
 ---
