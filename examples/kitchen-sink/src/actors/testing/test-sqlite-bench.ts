@@ -484,5 +484,308 @@ export const testSqliteBench = actor({
 				bytes: seeded.totalBytes,
 			};
 		},
+
+		largeTxInsert500KB: async (c) => {
+			const targetBytes = 500 * 1024;
+			const rowSize = 4 * 1024;
+			const rowCount = Math.ceil(targetBytes / rowSize);
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS large_tx (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				payload BLOB NOT NULL
+			)`);
+			const t0 = performance.now();
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < rowCount; i++) {
+				await c.db.execute(
+					"INSERT INTO large_tx (payload) VALUES (randomblob(?))",
+					rowSize,
+				);
+			}
+			await c.db.execute("COMMIT");
+			return { ms: performance.now() - t0, ops: rowCount, bytes: rowCount * rowSize };
+		},
+
+		largeTxInsert1MB: async (c) => {
+			const targetBytes = 1024 * 1024;
+			const rowSize = 4 * 1024;
+			const rowCount = Math.ceil(targetBytes / rowSize);
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS large_tx (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				payload BLOB NOT NULL
+			)`);
+			const t0 = performance.now();
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < rowCount; i++) {
+				await c.db.execute(
+					"INSERT INTO large_tx (payload) VALUES (randomblob(?))",
+					rowSize,
+				);
+			}
+			await c.db.execute("COMMIT");
+			return { ms: performance.now() - t0, ops: rowCount, bytes: rowCount * rowSize };
+		},
+
+		largeTxInsert5MB: async (c) => {
+			const targetBytes = 5 * 1024 * 1024;
+			const rowSize = 4 * 1024;
+			const rowCount = Math.ceil(targetBytes / rowSize);
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS large_tx (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				payload BLOB NOT NULL
+			)`);
+			const t0 = performance.now();
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < rowCount; i++) {
+				await c.db.execute(
+					"INSERT INTO large_tx (payload) VALUES (randomblob(?))",
+					rowSize,
+				);
+			}
+			await c.db.execute("COMMIT");
+			return { ms: performance.now() - t0, ops: rowCount, bytes: rowCount * rowSize };
+		},
+
+		largeTxInsert10MB: async (c) => {
+			const targetBytes = 10 * 1024 * 1024;
+			const rowSize = 4 * 1024;
+			const rowCount = Math.ceil(targetBytes / rowSize);
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS large_tx (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				payload BLOB NOT NULL
+			)`);
+			const t0 = performance.now();
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < rowCount; i++) {
+				await c.db.execute(
+					"INSERT INTO large_tx (payload) VALUES (randomblob(?))",
+					rowSize,
+				);
+			}
+			await c.db.execute("COMMIT");
+			return { ms: performance.now() - t0, ops: rowCount, bytes: rowCount * rowSize };
+		},
+
+		largeTxInsert50MB: async (c) => {
+			const targetBytes = 50 * 1024 * 1024;
+			const rowSize = 4 * 1024;
+			const rowCount = Math.ceil(targetBytes / rowSize);
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS large_tx (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				payload BLOB NOT NULL
+			)`);
+			const t0 = performance.now();
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < rowCount; i++) {
+				await c.db.execute(
+					"INSERT INTO large_tx (payload) VALUES (randomblob(?))",
+					rowSize,
+				);
+			}
+			await c.db.execute("COMMIT");
+			return { ms: performance.now() - t0, ops: rowCount, bytes: rowCount * rowSize };
+		},
+
+		// Stress test: insert 1000 rows, delete them all, repeat 10 times.
+		// Tests freelist reuse and space reclamation patterns.
+		churnInsertDelete: async (c) => {
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS churn (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				payload BLOB NOT NULL
+			)`);
+			const t0 = performance.now();
+			const cycles = 10;
+			const perCycle = 1000;
+			for (let cycle = 0; cycle < cycles; cycle++) {
+				await c.db.execute("BEGIN");
+				for (let i = 0; i < perCycle; i++) {
+					await c.db.execute(
+						"INSERT INTO churn (payload) VALUES (randomblob(1024))",
+					);
+				}
+				await c.db.execute("DELETE FROM churn");
+				await c.db.execute("COMMIT");
+			}
+			return {
+				ms: performance.now() - t0,
+				ops: cycles * perCycle,
+				cycles,
+			};
+		},
+
+		// Interleave inserts, updates, deletes in same transaction. Tests how
+		// the VFS handles mixed page dirtying patterns.
+		mixedOltpLarge: async (c) => {
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS mixed_oltp (
+				id INTEGER PRIMARY KEY,
+				value INTEGER NOT NULL,
+				data BLOB NOT NULL
+			)`);
+			await c.db.execute("DELETE FROM mixed_oltp");
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < 500; i++) {
+				await c.db.execute(
+					"INSERT INTO mixed_oltp (id, value, data) VALUES (?, ?, randomblob(1024))",
+					i,
+					i * 2,
+				);
+			}
+			await c.db.execute("COMMIT");
+
+			const t0 = performance.now();
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < 500; i++) {
+				await c.db.execute(
+					"INSERT INTO mixed_oltp (id, value, data) VALUES (?, ?, randomblob(1024))",
+					500 + i,
+					i * 3,
+				);
+				await c.db.execute(
+					"UPDATE mixed_oltp SET value = value + 1 WHERE id = ?",
+					i,
+				);
+				if (i % 5 === 0) {
+					await c.db.execute(
+						"DELETE FROM mixed_oltp WHERE id = ?",
+						i - 50 >= 0 ? i - 50 : i,
+					);
+				}
+			}
+			await c.db.execute("COMMIT");
+			return { ms: performance.now() - t0, ops: 500 * 2 + 100 };
+		},
+
+		// Growing aggregation: insert then SELECT SUM after each batch.
+		// Tests cache invalidation and read-after-write patterns.
+		growingAggregation: async (c) => {
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS agg_test (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				value INTEGER NOT NULL
+			)`);
+			await c.db.execute("DELETE FROM agg_test");
+			const t0 = performance.now();
+			const batches = 20;
+			const perBatch = 100;
+			let lastSum = 0;
+			for (let batch = 0; batch < batches; batch++) {
+				await c.db.execute("BEGIN");
+				for (let i = 0; i < perBatch; i++) {
+					await c.db.execute(
+						"INSERT INTO agg_test (value) VALUES (?)",
+						batch * perBatch + i,
+					);
+				}
+				await c.db.execute("COMMIT");
+				const rows = (await c.db.execute(
+					"SELECT SUM(value) AS s FROM agg_test",
+				)) as Array<{ s: number }>;
+				lastSum = rows[0]?.s ?? 0;
+			}
+			return {
+				ms: performance.now() - t0,
+				ops: batches * perBatch,
+				batches,
+				lastSum,
+			};
+		},
+
+		// Create index on already-populated table. Tests large rewrite patterns.
+		indexCreationOnLargeTable: async (c) => {
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS idx_test (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				key TEXT NOT NULL,
+				value INTEGER NOT NULL
+			)`);
+			await c.db.execute("DROP INDEX IF EXISTS idx_test_key");
+			await c.db.execute("DELETE FROM idx_test");
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < 10000; i++) {
+				await c.db.execute(
+					"INSERT INTO idx_test (key, value) VALUES (?, ?)",
+					`key-${i % 1000}-${i}`,
+					i,
+				);
+			}
+			await c.db.execute("COMMIT");
+			const t0 = performance.now();
+			await c.db.execute("CREATE INDEX idx_test_key ON idx_test(key)");
+			return { ms: performance.now() - t0, ops: 10000 };
+		},
+
+		// Update 1000 different rows in separate UPDATEs in one transaction.
+		// Stresses B-tree navigation and page dirtying.
+		bulkUpdate1000Rows: async (c) => {
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS bulk_update (
+				id INTEGER PRIMARY KEY,
+				value INTEGER NOT NULL
+			)`);
+			await c.db.execute("DELETE FROM bulk_update");
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < 1000; i++) {
+				await c.db.execute(
+					"INSERT INTO bulk_update (id, value) VALUES (?, ?)",
+					i,
+					i,
+				);
+			}
+			await c.db.execute("COMMIT");
+
+			const t0 = performance.now();
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < 1000; i++) {
+				await c.db.execute(
+					"UPDATE bulk_update SET value = value + 1 WHERE id = ?",
+					i,
+				);
+			}
+			await c.db.execute("COMMIT");
+			return { ms: performance.now() - t0, ops: 1000 };
+		},
+
+		// Delete everything then re-insert. Tests truncate+regrow cycle.
+		truncateAndRegrow: async (c) => {
+			await c.db.execute(`CREATE TABLE IF NOT EXISTS regrow (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				payload BLOB NOT NULL
+			)`);
+			// Seed
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < 500; i++) {
+				await c.db.execute(
+					"INSERT INTO regrow (payload) VALUES (randomblob(1024))",
+				);
+			}
+			await c.db.execute("COMMIT");
+
+			const t0 = performance.now();
+			await c.db.execute("DELETE FROM regrow");
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < 500; i++) {
+				await c.db.execute(
+					"INSERT INTO regrow (payload) VALUES (randomblob(1024))",
+				);
+			}
+			await c.db.execute("COMMIT");
+			return { ms: performance.now() - t0, ops: 500 };
+		},
+
+		// Many small tables vs one large. Tests schema page growth.
+		manySmallTables: async (c) => {
+			const t0 = performance.now();
+			await c.db.execute("BEGIN");
+			for (let i = 0; i < 50; i++) {
+				await c.db.execute(
+					`CREATE TABLE IF NOT EXISTS small_t_${i} (id INTEGER PRIMARY KEY, value INTEGER)`,
+				);
+				for (let j = 0; j < 10; j++) {
+					await c.db.execute(
+						`INSERT INTO small_t_${i} (id, value) VALUES (?, ?)`,
+						j,
+						i * j,
+					);
+				}
+			}
+			await c.db.execute("COMMIT");
+			return { ms: performance.now() - t0, ops: 50 * 10, tables: 50 };
+		},
 	},
 });

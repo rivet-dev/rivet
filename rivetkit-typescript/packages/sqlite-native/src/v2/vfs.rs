@@ -706,6 +706,13 @@ pub struct VfsV2Context {
 	last_error: Mutex<Option<String>>,
 	commit_atomic_count: AtomicU64,
 	io_methods: Box<sqlite3_io_methods>,
+	// Performance counters
+	pub resolve_pages_total: AtomicU64,
+	pub resolve_pages_cache_hits: AtomicU64,
+	pub resolve_pages_fetches: AtomicU64,
+	pub pages_fetched_total: AtomicU64,
+	pub prefetch_pages_total: AtomicU64,
+	pub commit_total: AtomicU64,
 }
 
 #[derive(Debug, Clone)]
@@ -919,6 +926,12 @@ impl VfsV2Context {
 			last_error: Mutex::new(None),
 			commit_atomic_count: AtomicU64::new(0),
 			io_methods: Box::new(io_methods),
+			resolve_pages_total: AtomicU64::new(0),
+			resolve_pages_cache_hits: AtomicU64::new(0),
+			resolve_pages_fetches: AtomicU64::new(0),
+			pages_fetched_total: AtomicU64::new(0),
+			prefetch_pages_total: AtomicU64::new(0),
+			commit_total: AtomicU64::new(0),
 		}
 	}
 
@@ -976,6 +989,9 @@ impl VfsV2Context {
 		target_pgnos: &[u32],
 		prefetch: bool,
 	) -> std::result::Result<HashMap<u32, Option<Vec<u8>>>, GetPagesError> {
+		use std::sync::atomic::Ordering::Relaxed;
+		self.resolve_pages_total.fetch_add(1, Relaxed);
+
 		let mut resolved = HashMap::new();
 		let mut missing = Vec::new();
 		let mut seen = HashSet::new();
@@ -1005,8 +1021,12 @@ impl VfsV2Context {
 		}
 
 		if missing.is_empty() {
+			self.resolve_pages_cache_hits
+				.fetch_add(target_pgnos.len() as u64, Relaxed);
 			return Ok(resolved);
 		}
+		self.resolve_pages_cache_hits
+			.fetch_add((seen.len() - missing.len()) as u64, Relaxed);
 
 		let (generation, to_fetch) = {
 			let mut state = self.state.write();
@@ -1032,6 +1052,31 @@ impl VfsV2Context {
 			}
 			(state.generation, to_fetch)
 		};
+
+		{
+			let prefetch_count = to_fetch.len() - missing.len();
+			self.resolve_pages_fetches.fetch_add(1, Relaxed);
+			self.pages_fetched_total
+				.fetch_add(to_fetch.len() as u64, Relaxed);
+			self.prefetch_pages_total
+				.fetch_add(prefetch_count as u64, Relaxed);
+			tracing::debug!(
+				missing = missing.len(),
+				prefetch = prefetch_count,
+				total_fetch = to_fetch.len(),
+				pages = ?to_fetch,
+				"vfs get_pages fetch"
+			);
+			if std::env::var("VFS_TRACE_PAGES").is_ok() {
+				eprintln!(
+					"[vfs fetch] missing={} prefetch={} total={} pages={:?}",
+					missing.len(),
+					prefetch_count,
+					to_fetch.len(),
+					to_fetch
+				);
+			}
+		}
 
 		let response = self
 			.runtime
@@ -1109,12 +1154,14 @@ impl VfsV2Context {
 				return Err(err);
 			}
 		};
-		self.set_last_error(format!(
-			"post-commit flush succeeded: requested_db_size_pages={}, returned_db_size_pages={}, returned_head_txid={}",
-			request.new_db_size_pages,
-			outcome.meta.db_size_pages,
-			outcome.meta.head_txid,
-		));
+		self.commit_total
+			.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+		tracing::debug!(
+			dirty_pages = request.dirty_pages.len(),
+			path = ?outcome.path,
+			new_head_txid = outcome.new_head_txid,
+			"vfs commit complete (flush)"
+		);
 		let mut state = self.state.write();
 		state.update_meta(&outcome.meta);
 		state.db_size_pages = request.new_db_size_pages;
@@ -1172,6 +1219,14 @@ impl VfsV2Context {
 				return Err(err);
 			}
 		};
+		self.commit_total
+			.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+		tracing::debug!(
+			dirty_pages = request.dirty_pages.len(),
+			path = ?outcome.path,
+			new_head_txid = outcome.new_head_txid,
+			"vfs commit complete (atomic)"
+		);
 		self.set_last_error(format!(
 			"post-commit atomic write succeeded: requested_db_size_pages={}, returned_db_size_pages={}, returned_head_txid={}",
 			request.new_db_size_pages,
@@ -1676,23 +1731,58 @@ unsafe extern "C" fn v2_io_write(
 			Err(_) => return SQLITE_IOERR_WRITE,
 		};
 
-		let resolved = match ctx.resolve_pages(&target_pages, false) {
-			Ok(pages) => pages,
-			Err(GetPagesError::FenceMismatch(reason)) => {
-				ctx.mark_dead(reason);
-				return SQLITE_IOERR_WRITE;
+		// Fast path: for full-page aligned writes we don't need the existing
+		// page data because we're overwriting every byte. Skip resolve_pages
+		// to eliminate a round trip to the engine per page. Also, for pages
+		// beyond db_size_pages (new allocations), there's nothing to fetch.
+		let offset = i_offset as usize;
+		let amt = i_amt as usize;
+		let is_aligned_full_page = offset % page_size == 0 && amt % page_size == 0;
+
+		let resolved = if is_aligned_full_page {
+			HashMap::new()
+		} else {
+			let (db_size_pages, pages_to_resolve): (u32, Vec<u32>) = {
+				let state = ctx.state.read();
+				let known_max = state.db_size_pages;
+				(
+					known_max,
+					target_pages
+						.iter()
+						.copied()
+						.filter(|pgno| *pgno <= known_max)
+						.collect(),
+				)
+			};
+
+			let mut resolved = if pages_to_resolve.is_empty() {
+				HashMap::new()
+			} else {
+				match ctx.resolve_pages(&pages_to_resolve, false) {
+					Ok(pages) => pages,
+					Err(GetPagesError::FenceMismatch(reason)) => {
+						ctx.mark_dead(reason);
+						return SQLITE_IOERR_WRITE;
+					}
+					Err(GetPagesError::Other(message)) => {
+						ctx.mark_dead(message);
+						return SQLITE_IOERR_WRITE;
+					}
+				}
+			};
+			for pgno in &target_pages {
+				if *pgno > db_size_pages {
+					resolved.entry(*pgno).or_insert(None);
+				}
 			}
-			Err(GetPagesError::Other(message)) => {
-				ctx.mark_dead(message);
-				return SQLITE_IOERR_WRITE;
-			}
+			resolved
 		};
 
 		let mut dirty_pages = BTreeMap::new();
 		for pgno in target_pages {
 			let page_start = (pgno as usize - 1) * page_size;
-			let patch_start = page_start.max(i_offset as usize);
-			let patch_end = (page_start + page_size).min(i_offset as usize + i_amt as usize);
+			let patch_start = page_start.max(offset);
+			let patch_end = (page_start + page_size).min(offset + amt);
 			let Some(copy_len) = patch_end.checked_sub(patch_start) else {
 				continue;
 			};
@@ -1700,16 +1790,20 @@ unsafe extern "C" fn v2_io_write(
 				continue;
 			}
 
-			let mut page = resolved
-				.get(&pgno)
-				.and_then(|bytes| bytes.clone())
-				.unwrap_or_else(|| vec![0; page_size]);
+			let mut page = if is_aligned_full_page {
+				vec![0; page_size]
+			} else {
+				resolved
+					.get(&pgno)
+					.and_then(|bytes| bytes.clone())
+					.unwrap_or_else(|| vec![0; page_size])
+			};
 			if page.len() < page_size {
 				page.resize(page_size, 0);
 			}
 
 			let page_offset = patch_start - page_start;
-			let source_offset = patch_start - i_offset as usize;
+			let source_offset = patch_start - offset;
 			page[page_offset..page_offset + copy_len]
 				.copy_from_slice(&source[source_offset..source_offset + copy_len]);
 			dirty_pages.insert(pgno, page);
@@ -1719,7 +1813,7 @@ unsafe extern "C" fn v2_io_write(
 		for (pgno, bytes) in dirty_pages {
 			state.write_buffer.dirty.insert(pgno, bytes);
 		}
-		let end_page = ((i_offset as usize + i_amt as usize) + page_size - 1) / page_size;
+		let end_page = ((offset + amt) + page_size - 1) / page_size;
 		state.db_size_pages = state.db_size_pages.max(end_page as u32);
 		ctx.clear_last_error();
 		SQLITE_OK
@@ -3911,5 +4005,321 @@ mod tests {
 		assert_eq!(protocol.stage_requests().len(), 3);
 		assert_eq!(protocol.awaited_stage_responses(), 0);
 		assert_eq!(protocol.finalize_requests().len(), 1);
+	}
+
+	#[test]
+	fn profile_large_tx_insert_5mb() {
+		// 5MB = 1280 rows x 4KB blobs in one transaction
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE bench (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+		)
+		.expect("create table should succeed");
+
+		let relaxed = std::sync::atomic::Ordering::Relaxed;
+		ctx.resolve_pages_total.store(0, relaxed);
+		ctx.resolve_pages_cache_hits.store(0, relaxed);
+		ctx.resolve_pages_fetches.store(0, relaxed);
+		ctx.pages_fetched_total.store(0, relaxed);
+		ctx.prefetch_pages_total.store(0, relaxed);
+		ctx.commit_total.store(0, relaxed);
+
+		let start = std::time::Instant::now();
+		sqlite_exec(db.as_ptr(), "BEGIN;").expect("begin");
+		for i in 0..1280 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO bench (id, payload) VALUES ({}, randomblob(4096));",
+					i
+				),
+			)
+			.expect("insert should succeed");
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT;").expect("commit");
+		let elapsed = start.elapsed();
+
+		let resolve_total = ctx.resolve_pages_total.load(relaxed);
+		let cache_hits = ctx.resolve_pages_cache_hits.load(relaxed);
+		let fetches = ctx.resolve_pages_fetches.load(relaxed);
+		let pages_fetched = ctx.pages_fetched_total.load(relaxed);
+		let prefetch = ctx.prefetch_pages_total.load(relaxed);
+		let commits = ctx.commit_total.load(relaxed);
+
+		eprintln!("=== 5MB INSERT PROFILE (1280 rows x 4KB) ===");
+		eprintln!("  wall clock:           {:?}", elapsed);
+		eprintln!("  resolve_pages calls:  {}", resolve_total);
+		eprintln!("  cache hits (pages):   {}", cache_hits);
+		eprintln!("  engine fetches:       {}", fetches);
+		eprintln!("  pages fetched total:  {}", pages_fetched);
+		eprintln!("  prefetch pages:       {}", prefetch);
+		eprintln!("  commits:              {}", commits);
+		eprintln!("============================================");
+
+		// In a single transaction, all 1280 row writes are to new pages.
+		// Only the single commit at the end should hit the engine.
+		assert_eq!(
+			fetches, 0,
+			"expected 0 engine fetches during 5MB insert transaction"
+		);
+		assert_eq!(
+			commits, 1,
+			"expected exactly 1 commit for transactional insert"
+		);
+
+		let count = sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM bench;")
+			.expect("count should succeed");
+		assert_eq!(count, 1280);
+	}
+
+	#[test]
+	fn profile_hot_row_updates() {
+		// 100 updates to the same row - this is the autocommit case
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE counter (id INTEGER PRIMARY KEY, value INTEGER NOT NULL);",
+		)
+		.expect("create");
+		sqlite_exec(db.as_ptr(), "INSERT INTO counter VALUES (1, 0);").expect("insert");
+
+		let relaxed = std::sync::atomic::Ordering::Relaxed;
+		ctx.resolve_pages_total.store(0, relaxed);
+		ctx.resolve_pages_cache_hits.store(0, relaxed);
+		ctx.resolve_pages_fetches.store(0, relaxed);
+		ctx.pages_fetched_total.store(0, relaxed);
+		ctx.prefetch_pages_total.store(0, relaxed);
+		ctx.commit_total.store(0, relaxed);
+
+		let start = std::time::Instant::now();
+		for _ in 0..100 {
+			sqlite_exec(
+				db.as_ptr(),
+				"UPDATE counter SET value = value + 1 WHERE id = 1;",
+			)
+			.expect("update");
+		}
+		let elapsed = start.elapsed();
+
+		let fetches = ctx.resolve_pages_fetches.load(relaxed);
+		let commits = ctx.commit_total.load(relaxed);
+
+		eprintln!("=== 100 HOT ROW UPDATES (autocommit) ===");
+		eprintln!("  wall clock:           {:?}", elapsed);
+		eprintln!(
+			"  resolve_pages calls:  {}",
+			ctx.resolve_pages_total.load(relaxed)
+		);
+		eprintln!(
+			"  cache hits (pages):   {}",
+			ctx.resolve_pages_cache_hits.load(relaxed)
+		);
+		eprintln!("  engine fetches:       {}", fetches);
+		eprintln!(
+			"  pages fetched total:  {}",
+			ctx.pages_fetched_total.load(relaxed)
+		);
+		eprintln!(
+			"  prefetch pages:       {}",
+			ctx.prefetch_pages_total.load(relaxed)
+		);
+		eprintln!("  commits:              {}", commits);
+		eprintln!("=========================================");
+
+		// Hot row updates: each update modifies the same page. Pages already
+		// in write_buffer or cache should not need re-fetching. With the
+		// counter's page(s) already warm, subsequent updates should be
+		// 100% cache hits (0 fetches). Autocommit means 100 separate commits.
+		assert_eq!(
+			fetches, 0,
+			"expected 0 engine fetches for 100 hot row updates"
+		);
+		assert_eq!(
+			commits, 100,
+			"expected 100 commits (autocommit per statement)"
+		);
+	}
+
+	#[test]
+	fn profile_large_tx_insert_1mb_preloaded() {
+		// Same as the 1MB test but preload all pages first to see commit-only cost
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let actor_id = &harness.actor_id;
+
+		// First pass: create and populate the table to generate pages
+		let db1 =
+			harness.open_db_on_engine(&runtime, engine.clone(), actor_id, VfsV2Config::default());
+		sqlite_exec(
+			db1.as_ptr(),
+			"CREATE TABLE bench (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+		)
+		.expect("create table should succeed");
+		sqlite_exec(db1.as_ptr(), "BEGIN;").expect("begin");
+		for i in 0..256 {
+			sqlite_step_statement(
+				db1.as_ptr(),
+				&format!(
+					"INSERT INTO bench (id, payload) VALUES ({}, randomblob(4096));",
+					i
+				),
+			)
+			.expect("insert should succeed");
+		}
+		sqlite_exec(db1.as_ptr(), "COMMIT;").expect("commit");
+		drop(db1);
+
+		// Second pass: reopen with warm cache (takeover preloads page 1, rest from reads)
+		let db2 =
+			harness.open_db_on_engine(&runtime, engine.clone(), actor_id, VfsV2Config::default());
+		let ctx = direct_vfs_ctx(&db2);
+
+		// Warm the cache by reading everything
+		sqlite_exec(db2.as_ptr(), "SELECT COUNT(*) FROM bench;").expect("count");
+
+		// Reset counters
+		let relaxed = std::sync::atomic::Ordering::Relaxed;
+		ctx.resolve_pages_total.store(0, relaxed);
+		ctx.resolve_pages_cache_hits.store(0, relaxed);
+		ctx.resolve_pages_fetches.store(0, relaxed);
+		ctx.pages_fetched_total.store(0, relaxed);
+		ctx.prefetch_pages_total.store(0, relaxed);
+		ctx.commit_total.store(0, relaxed);
+
+		let start = std::time::Instant::now();
+		sqlite_exec(db2.as_ptr(), "BEGIN;").expect("begin");
+		for i in 256..512 {
+			sqlite_step_statement(
+				db2.as_ptr(),
+				&format!(
+					"INSERT INTO bench (id, payload) VALUES ({}, randomblob(4096));",
+					i
+				),
+			)
+			.expect("insert should succeed");
+		}
+		sqlite_exec(db2.as_ptr(), "COMMIT;").expect("commit");
+		let elapsed = start.elapsed();
+
+		let resolve_total = ctx.resolve_pages_total.load(relaxed);
+		let cache_hits = ctx.resolve_pages_cache_hits.load(relaxed);
+		let fetches = ctx.resolve_pages_fetches.load(relaxed);
+		let pages_fetched = ctx.pages_fetched_total.load(relaxed);
+		let prefetch = ctx.prefetch_pages_total.load(relaxed);
+		let commits = ctx.commit_total.load(relaxed);
+
+		eprintln!("=== 1MB INSERT PROFILE (WARM CACHE) ===");
+		eprintln!("  wall clock:           {:?}", elapsed);
+		eprintln!("  resolve_pages calls:  {}", resolve_total);
+		eprintln!("  cache hits (pages):   {}", cache_hits);
+		eprintln!("  engine fetches:       {}", fetches);
+		eprintln!("  pages fetched total:  {}", pages_fetched);
+		eprintln!("  prefetch pages:       {}", prefetch);
+		eprintln!("  commits:              {}", commits);
+		eprintln!("========================================");
+
+		// Second 256-row transaction into the already-populated table.
+		// All new pages are beyond db_size_pages, so no engine fetches.
+		assert_eq!(
+			fetches, 0,
+			"expected 0 engine fetches during warm 1MB insert"
+		);
+		assert_eq!(
+			commits, 1,
+			"expected exactly 1 commit for transactional insert"
+		);
+
+		let count = sqlite_query_i64(db2.as_ptr(), "SELECT COUNT(*) FROM bench;")
+			.expect("count should succeed");
+		assert_eq!(count, 512);
+	}
+
+	#[test]
+	fn profile_large_tx_insert_1mb() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE bench (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+		)
+		.expect("create table should succeed");
+
+		// Reset counters after schema setup
+		ctx.resolve_pages_total
+			.store(0, std::sync::atomic::Ordering::Relaxed);
+		ctx.resolve_pages_cache_hits
+			.store(0, std::sync::atomic::Ordering::Relaxed);
+		ctx.resolve_pages_fetches
+			.store(0, std::sync::atomic::Ordering::Relaxed);
+		ctx.pages_fetched_total
+			.store(0, std::sync::atomic::Ordering::Relaxed);
+		ctx.prefetch_pages_total
+			.store(0, std::sync::atomic::Ordering::Relaxed);
+		ctx.commit_total
+			.store(0, std::sync::atomic::Ordering::Relaxed);
+
+		let start = std::time::Instant::now();
+
+		sqlite_exec(db.as_ptr(), "BEGIN;").expect("begin should succeed");
+		for i in 0..256 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO bench (id, payload) VALUES ({}, randomblob(4096));",
+					i
+				),
+			)
+			.expect("insert should succeed");
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT;").expect("commit should succeed");
+
+		let elapsed = start.elapsed();
+		let relaxed = std::sync::atomic::Ordering::Relaxed;
+
+		let resolve_total = ctx.resolve_pages_total.load(relaxed);
+		let cache_hits = ctx.resolve_pages_cache_hits.load(relaxed);
+		let fetches = ctx.resolve_pages_fetches.load(relaxed);
+		let pages_fetched = ctx.pages_fetched_total.load(relaxed);
+		let prefetch = ctx.prefetch_pages_total.load(relaxed);
+		let commits = ctx.commit_total.load(relaxed);
+
+		eprintln!("=== 1MB INSERT PROFILE (256 rows x 4KB) ===");
+		eprintln!("  wall clock:           {:?}", elapsed);
+		eprintln!("  resolve_pages calls:  {}", resolve_total);
+		eprintln!("  cache hits (pages):   {}", cache_hits);
+		eprintln!("  engine fetches:       {}", fetches);
+		eprintln!("  pages fetched total:  {}", pages_fetched);
+		eprintln!("  prefetch pages:       {}", prefetch);
+		eprintln!("  commits:              {}", commits);
+		eprintln!("============================================");
+
+		// Assert expected zero-fetch behavior: in a single transaction,
+		// all writes are to new pages, so no engine fetches should happen.
+		// Only the single commit at the end should hit the engine.
+		assert_eq!(
+			fetches, 0,
+			"expected 0 engine fetches during 1MB insert transaction"
+		);
+		assert_eq!(
+			commits, 1,
+			"expected exactly 1 commit for transactional insert"
+		);
+
+		let count = sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM bench;")
+			.expect("count should succeed");
+		assert_eq!(count, 256);
 	}
 }
