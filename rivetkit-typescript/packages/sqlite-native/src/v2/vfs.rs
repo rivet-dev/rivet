@@ -330,6 +330,22 @@ impl SqliteTransport {
 		}
 	}
 
+	fn queue_commit_stage(&self, req: protocol::SqliteCommitStageRequest) -> Result<bool> {
+		match &*self.inner {
+			SqliteTransportInner::Envoy(handle) => {
+				handle.sqlite_commit_stage_fire_and_forget(req)?;
+				Ok(true)
+			}
+			#[cfg(test)]
+			SqliteTransportInner::Direct { .. } => Ok(false),
+			#[cfg(test)]
+			SqliteTransportInner::Test(protocol) => {
+				protocol.queue_commit_stage(req);
+				Ok(true)
+			}
+		}
+	}
+
 	async fn commit_finalize(
 		&self,
 		req: protocol::SqliteCommitFinalizeRequest,
@@ -479,6 +495,7 @@ struct MockProtocol {
 	mirror_commit_meta: Mutex<bool>,
 	commit_requests: Mutex<Vec<protocol::SqliteCommitRequest>>,
 	stage_requests: Mutex<Vec<protocol::SqliteCommitStageRequest>>,
+	awaited_stage_responses: Mutex<usize>,
 	finalize_requests: Mutex<Vec<protocol::SqliteCommitFinalizeRequest>>,
 	get_pages_requests: Mutex<Vec<protocol::SqliteGetPagesRequest>>,
 	finalize_started: Notify,
@@ -505,6 +522,7 @@ impl MockProtocol {
 			mirror_commit_meta: Mutex::new(false),
 			commit_requests: Mutex::new(Vec::new()),
 			stage_requests: Mutex::new(Vec::new()),
+			awaited_stage_responses: Mutex::new(0),
 			finalize_requests: Mutex::new(Vec::new()),
 			get_pages_requests: Mutex::new(Vec::new()),
 			finalize_started: Notify::new(),
@@ -522,6 +540,10 @@ impl MockProtocol {
 		self.stage_requests.lock()
 	}
 
+	fn awaited_stage_responses(&self) -> usize {
+		*self.awaited_stage_responses.lock()
+	}
+
 	fn finalize_requests(
 		&self,
 	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteCommitFinalizeRequest>> {
@@ -536,6 +558,10 @@ impl MockProtocol {
 
 	fn set_mirror_commit_meta(&self, enabled: bool) {
 		*self.mirror_commit_meta.lock() = enabled;
+	}
+
+	fn queue_commit_stage(&self, req: protocol::SqliteCommitStageRequest) {
+		self.stage_requests().push(req);
 	}
 
 	async fn get_pages(
@@ -572,6 +598,7 @@ impl MockProtocol {
 		&self,
 		req: protocol::SqliteCommitStageRequest,
 	) -> Result<protocol::SqliteCommitStageResponse> {
+		*self.awaited_stage_responses.lock() += 1;
 		self.stage_requests().push(req);
 		Ok(self.stage_response.clone())
 	}
@@ -1336,15 +1363,23 @@ async fn commit_buffered_pages(
 	.map_err(|err| CommitBufferError::Other(err.to_string()))?;
 
 	for (chunk_idx, dirty_pages) in staged_chunks.iter().enumerate() {
+		let stage_request = protocol::SqliteCommitStageRequest {
+			actor_id: request.actor_id.clone(),
+			generation: request.generation,
+			stage_id,
+			chunk_idx: chunk_idx as u16,
+			dirty_pages: dirty_pages.clone(),
+			is_last: chunk_idx + 1 == staged_chunks.len(),
+		};
+		if transport
+			.queue_commit_stage(stage_request.clone())
+			.map_err(|err| CommitBufferError::Other(err.to_string()))?
+		{
+			continue;
+		}
+
 		match transport
-			.commit_stage(protocol::SqliteCommitStageRequest {
-				actor_id: request.actor_id.clone(),
-				generation: request.generation,
-				stage_id,
-				chunk_idx: chunk_idx as u16,
-				dirty_pages: dirty_pages.clone(),
-				is_last: chunk_idx + 1 == staged_chunks.len(),
-			})
+			.commit_stage(stage_request)
 			.await
 			.map_err(|err| CommitBufferError::Other(err.to_string()))?
 		{
@@ -3844,6 +3879,8 @@ mod tests {
 		let release = std::thread::spawn(move || {
 			runtime.block_on(async {
 				protocol_for_release.finalize_started.notified().await;
+				assert_eq!(protocol_for_release.stage_requests().len(), 3);
+				assert_eq!(protocol_for_release.awaited_stage_responses(), 0);
 				protocol_for_release.release_finalize.notify_one();
 			});
 		});
@@ -3872,6 +3909,7 @@ mod tests {
 		assert_eq!(outcome.new_head_txid, 14);
 		assert!(protocol.commit_requests().is_empty());
 		assert_eq!(protocol.stage_requests().len(), 3);
+		assert_eq!(protocol.awaited_stage_responses(), 0);
 		assert_eq!(protocol.finalize_requests().len(), 1);
 	}
 }

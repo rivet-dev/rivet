@@ -301,6 +301,22 @@ impl EnvoyHandle {
 		}
 	}
 
+	pub fn sqlite_commit_stage_fire_and_forget(
+		&self,
+		request: protocol::SqliteCommitStageRequest,
+	) -> anyhow::Result<()> {
+		let (tx, rx) = tokio::sync::oneshot::channel();
+		drop(rx);
+		self.shared
+			.envoy_tx
+			.send(ToEnvoyMessage::SqliteRequest {
+				request: SqliteRequest::CommitStage(request),
+				response_tx: tx,
+			})
+			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
+		Ok(())
+	}
+
 	pub async fn sqlite_commit_finalize(
 		&self,
 		request: protocol::SqliteCommitFinalizeRequest,

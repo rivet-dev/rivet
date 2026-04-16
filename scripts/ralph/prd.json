@@ -703,7 +703,7 @@
         "cargo test -p rivetkit-sqlite-native passes"
       ],
       "priority": 42,
-      "passes": false,
+      "passes": true,
       "notes": "US-028b acceptance criteria specified pipelining but the implementation at v2/vfs.rs:783-801 awaits each commit_stage individually in a for loop. This makes slow-path commits N+1 RTTs instead of 1 effective RTT. The fix: send all stages without awaiting, only await commit_finalize."
     },
     {

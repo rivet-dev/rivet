@@ -10,6 +10,7 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
 - `sqlite-storage` owns UniversalDB value chunking in `src/udb.rs`, so `pegboard-envoy` should call `SqliteEngine` directly instead of reintroducing a separate `UdbStore` layer.
 - Actor KV prefix probes should build ranges with `ListKeyWrapper` semantics instead of exact-key packing. SQLite startup now uses a single prefix-`0x08` scan via `pegboard::actor_kv::sqlite_v1_data_exists(...)` to distinguish legacy v1 data.
 - `sqlite-native` v2 edge-case coverage should prefer the direct `SqliteEngine` + RocksDB harness in `src/v2/vfs.rs`; keep `MockProtocol` tests for transport-unit behavior, but use the direct harness for cache-miss, compaction, reopen, and staged-commit regressions.
+- `sqlite-native` v2 slow-path commits should queue `commit_stage` requests fire-and-forget and only await `commit_finalize`; if you need per-stage response assertions, keep them in the direct-engine test transport instead of the real envoy path.
 - Baseline sqlite-native VFS tests belong in `rivetkit-typescript/packages/sqlite-native/src/vfs.rs` and should use `open_database(...)` with a test-local `SqliteKv` implementation instead of mocking SQLite behavior.
 - Keep `sqlite-storage` acceptance coverage inline in the module test blocks and back it with temp RocksDB UniversalDB instances from `test_db()` so commit, takeover, and compaction assertions exercise the real engine paths.
 - `sqlite-storage` crash-recovery tests should capture a RocksDB checkpoint and reopen it in a fresh `SqliteEngine` rather than faking restart state in memory.
@@ -355,4 +356,13 @@ Started: Wed Apr 15 07:55:56 PM PDT 2026
   - `flush_dirty_pages()` and `commit_atomic_write()` need to own fatal transport/staging cleanup directly. Leaving that responsibility in outer sqlite callback wrappers makes direct callers and future refactors easy to get wrong.
   - Batch-atomic startup verification is worth keeping as a real open-path test. If `SQLITE_ENABLE_BATCH_ATOMIC_WRITE` disappears, v2 should fail fast instead of quietly pretending journal fallback is acceptable.
   - Fence mismatches are a separate path from ambiguous transport failures. The VFS should still surface them cleanly, but the "poison this connection" side effect for non-fence failures belongs at the commit helper layer.
+---
+
+## 2026-04-16 09:57:20 PDT - US-039
+- What was implemented: Added an envoy-client fire-and-forget `sqlite_commit_stage` send path, switched sqlite-native v2 slow-path commits to queue stage uploads without awaiting per-chunk responses, and tightened the mock transport regression to prove only `commit_finalize` is awaited.
+- Files changed: `engine/sdks/rust/envoy-client/src/handle.rs`, `rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Slow-path sqlite v2 commits should enqueue `commit_stage` messages immediately and rely on FIFO transport ordering, then surface any staged-write rejection through the final `commit_finalize` response.
+  - `MockProtocol` is the right place to prove transport behavior like "queued versus awaited" stage requests; the direct-engine transport should stay conservative because it bypasses websocket ordering semantics.
+  - `EnvoyHandle` fire-and-forget SQLite sends can safely drop the oneshot receiver after enqueueing, because the envoy side still tracks and clears the in-flight request when the response arrives.
 ---
