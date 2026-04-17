@@ -54,12 +54,17 @@ pub(crate) async fn dispatch_websocket(
 		return;
 	};
 
-	if let Err(error) = handler(OnWebSocketRequest {
-		ctx,
-		ws: ws.clone(),
-	})
-	.await
-	{
+	let result = ctx
+		.with_websocket_callback(|| async {
+			handler(OnWebSocketRequest {
+				ctx: ctx.clone(),
+				ws: ws.clone(),
+			})
+			.await
+		})
+		.await;
+
+	if let Err(error) = result {
 		tracing::error!(?error, "error in on_websocket callback");
 		ws.close(Some(1011), Some("Server Error".to_owned()));
 	}

@@ -255,7 +255,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Sleep Readiness (can_sleep())' section. Depends on US-011 for HTTP request count from envoy-client."
     },
     {

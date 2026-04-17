@@ -12,6 +12,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` action/lifecycle surfaces should collapse `anyhow::Error` into serializable `group/code/message` payloads via `rivet_error::RivetError::extract` before returning them across runtime boundaries.
 - `rivetkit-core` schedule mutations should go through one `ActorState` helper so insert/remove stays sorted, then trigger an immediate state flush and envoy alarm resync from the earliest remaining event.
 - `rivetkit-core` transport-edge helpers should translate `on_request` failures into HTTP 500 responses and `on_websocket` failures into logged 1011 closes, while wrapper types keep internal `try_*` methods for explicit misconfiguration errors.
+- `rivetkit-core` sleep readiness should live in `SleepController`, and subsystems like queue waits, scheduled internal work, disconnect callbacks, and websocket callbacks should reset the idle timer through `ActorContext` hooks instead of managing their own timers.
 - `envoy-client` actor-scoped HTTP fetch work should stay in a `JoinSet` plus a shared `Arc<AtomicUsize>` counter so sleep checks can read in-flight request count and shutdown can abort and join the tasks before `Stopped`.
 - `envoy-client` shutdown hooks that need multi-step teardown should override `EnvoyCallbacks::on_actor_stop_with_completion`; the default path still auto-completes after legacy `on_actor_stop` returns.
 
@@ -113,4 +114,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: `EnvoyCallbacks::on_actor_stop_with_completion` is the extension point for multi-step teardown, while the legacy `on_actor_stop` method still works as the immediate-stop fallback.
   - Gotchas encountered: The actor loop must stay alive after the stop command and wait on the completion receiver, otherwise the stop handle is dead code and `Stopped` still races teardown.
   - Useful context: `actor::tests::actor_stop_waits_for_completion_handle_before_stopped_event` is the regression test that proves `Stopped` does not fire before teardown completion.
+---
+## 2026-04-16 23:16:32 PDT - US-013
+- What was implemented: Replaced the sleep stub with a real `SleepController`, wired `ActorContext` to readiness and activity tracking, added queue/schedule/websocket/disconnect hooks that reset the idle timer, and added unit tests covering `can_sleep()` gating plus auto-sleep timer behavior.
+- Files changed: `/home/nathan/r5/AGENTS.md`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/connection.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/event.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/queue.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/sleep.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Sleep readiness should stay centralized in `SleepController`, while subsystems report activity transitions through `ActorContext` hooks so `reset_sleep_timer()` has one source of truth.
+  - Gotchas encountered: Queue wait counters need a synchronous callback path because sleep timer resets happen from both async receive loops and synchronous state checks, so `Queue` cannot stash this config behind Tokio mutexes.
+  - Useful context: `src/actor/sleep.rs` now owns the unit tests for readiness flags, queue-wait exceptions, websocket/disconnect gating, and the idle timer requesting `ctx.sleep()`.
 ---

@@ -4,6 +4,8 @@ use std::sync::Weak;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
+use futures::future::BoxFuture;
+use rivet_envoy_client::handle::EnvoyHandle;
 use tokio::runtime::Handle;
 use tokio_util::sync::CancellationToken;
 
@@ -14,6 +16,7 @@ use crate::actor::connection::{
 use crate::actor::event::EventBroadcaster;
 use crate::actor::queue::Queue;
 use crate::actor::schedule::Schedule;
+use crate::actor::sleep::{CanSleep, SleepController};
 use crate::actor::state::{ActorState, OnStateChangeCallback, PersistedActor};
 use crate::actor::vars::ActorVars;
 use crate::ActorConfig;
@@ -34,6 +37,7 @@ pub(crate) struct ActorContextInner {
 	queue: Queue,
 	broadcaster: EventBroadcaster,
 	connections: ConnectionManager,
+	sleep: SleepController,
 	abort_signal: CancellationToken,
 	prevent_sleep: AtomicBool,
 	sleep_requested: AtomicBool,
@@ -60,15 +64,12 @@ impl ActorContext {
 		let state = ActorState::new(kv.clone(), config.clone());
 		let schedule = Schedule::new(state.clone(), actor_id.clone(), config);
 		let abort_signal = CancellationToken::new();
-		let queue = Queue::new(
-			kv.clone(),
-			ActorConfig::default(),
-			Some(abort_signal.clone()),
-		);
+		let queue = Queue::new(kv.clone(), ActorConfig::default(), Some(abort_signal.clone()));
 		let connections =
 			ConnectionManager::new(actor_id.clone(), kv.clone(), ActorConfig::default());
+		let sleep = SleepController::default();
 
-		Self(Arc::new(ActorContextInner {
+		let ctx = Self(Arc::new(ActorContextInner {
 			state,
 			vars: ActorVars::default(),
 			kv,
@@ -77,6 +78,7 @@ impl ActorContext {
 			queue,
 			broadcaster: EventBroadcaster::default(),
 			connections,
+			sleep,
 			abort_signal,
 			prevent_sleep: AtomicBool::new(false),
 			sleep_requested: AtomicBool::new(false),
@@ -85,7 +87,9 @@ impl ActorContext {
 			name,
 			key,
 			region,
-		}))
+		}));
+		ctx.configure_sleep_hooks();
+		ctx
 	}
 
 	pub fn state(&self) -> Vec<u8> {
@@ -94,6 +98,7 @@ impl ActorContext {
 
 	pub fn set_state(&self, state: Vec<u8>) {
 		self.0.state.set_state(state);
+		self.reset_sleep_timer();
 	}
 
 	pub async fn save_state(&self, opts: SaveStateOpts) -> Result<()> {
@@ -106,6 +111,7 @@ impl ActorContext {
 
 	pub fn set_vars(&self, vars: Vec<u8>) {
 		self.0.vars.set_vars(vars);
+		self.reset_sleep_timer();
 	}
 
 	pub fn kv(&self) -> &Kv {
@@ -125,6 +131,7 @@ impl ActorContext {
 	}
 
 	pub fn sleep(&self) {
+		self.0.sleep.cancel_sleep_timer();
 		if let Ok(runtime) = Handle::try_current() {
 			let ctx = self.clone();
 			runtime.spawn(async move {
@@ -141,6 +148,7 @@ impl ActorContext {
 	}
 
 	pub fn destroy(&self) {
+		self.0.sleep.cancel_sleep_timer();
 		self.0.state.flush_on_shutdown();
 		self.0.destroy_requested.store(true, Ordering::SeqCst);
 		self.0.abort_signal.cancel();
@@ -148,6 +156,7 @@ impl ActorContext {
 
 	pub fn set_prevent_sleep(&self, prevent: bool) {
 		self.0.prevent_sleep.store(prevent, Ordering::SeqCst);
+		self.reset_sleep_timer();
 	}
 
 	pub fn prevent_sleep(&self) -> bool {
@@ -155,7 +164,13 @@ impl ActorContext {
 	}
 
 	pub fn wait_until(&self, future: impl Future<Output = ()> + Send + 'static) {
-		tokio::spawn(future);
+		let Ok(runtime) = Handle::try_current() else {
+			tracing::warn!("skipping wait_until without a tokio runtime");
+			return;
+		};
+
+		let handle = runtime.spawn(future);
+		self.0.sleep.track_shutdown_task(handle);
 	}
 
 	pub fn actor_id(&self) -> &str {
@@ -205,16 +220,22 @@ impl ActorContext {
 
 	pub(crate) fn trigger_throttled_state_save(&self) {
 		self.0.state.trigger_throttled_save();
+		self.reset_sleep_timer();
 	}
 
 	#[allow(dead_code)]
 	pub(crate) fn add_conn(&self, conn: ConnHandle) {
 		self.0.connections.insert_existing(conn);
+		self.reset_sleep_timer();
 	}
 
 	#[allow(dead_code)]
 	pub(crate) fn remove_conn(&self, conn_id: &str) -> Option<ConnHandle> {
-		self.0.connections.remove_existing(conn_id)
+		let removed = self.0.connections.remove_existing(conn_id);
+		if removed.is_some() {
+			self.reset_sleep_timer();
+		}
+		removed
 	}
 
 	#[allow(dead_code)]
@@ -223,7 +244,26 @@ impl ActorContext {
 		config: ActorConfig,
 		callbacks: Arc<ActorInstanceCallbacks>,
 	) {
+		self.0.sleep.configure(config.clone());
 		self.0.connections.configure_runtime(config, callbacks);
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn configure_envoy(
+		&self,
+		envoy_handle: EnvoyHandle,
+		generation: Option<u32>,
+	) {
+		self.0
+			.sleep
+			.configure_envoy(envoy_handle.clone(), generation);
+		self.0.schedule.configure_envoy(envoy_handle, generation);
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn clear_envoy(&self) {
+		self.0.sleep.clear_envoy();
+		self.0.schedule.clear_envoy();
 	}
 
 	#[allow(dead_code)]
@@ -267,6 +307,125 @@ impl ActorContext {
 
 	pub(crate) fn from_weak(weak: &Weak<ActorContextInner>) -> Option<Self> {
 		weak.upgrade().map(Self)
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn set_ready(&self, ready: bool) {
+		self.0.sleep.set_ready(ready);
+		self.reset_sleep_timer();
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn set_started(&self, started: bool) {
+		self.0.sleep.set_started(started);
+		self.reset_sleep_timer();
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn set_run_handler_active(&self, active: bool) {
+		self.0.sleep.set_run_handler_active(active);
+		self.reset_sleep_timer();
+	}
+
+	#[allow(dead_code)]
+	pub(crate) async fn can_sleep(&self) -> CanSleep {
+		self.0.sleep.can_sleep(self).await
+	}
+
+	pub(crate) fn reset_sleep_timer(&self) {
+		self.0.sleep.reset_sleep_timer(self.clone());
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn configure_sleep(&self, config: ActorConfig) {
+		self.0.sleep.configure(config.clone());
+		self.0.queue.configure_sleep(config);
+		self.reset_sleep_timer();
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn sleep_requested(&self) -> bool {
+		self.0.sleep_requested.load(Ordering::SeqCst)
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn begin_keep_awake(&self) {
+		self.0.sleep.begin_keep_awake();
+		self.reset_sleep_timer();
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn end_keep_awake(&self) {
+		self.0.sleep.end_keep_awake();
+		self.reset_sleep_timer();
+	}
+
+	pub(crate) fn begin_internal_keep_awake(&self) {
+		self.0.sleep.begin_internal_keep_awake();
+		self.reset_sleep_timer();
+	}
+
+	pub(crate) fn end_internal_keep_awake(&self) {
+		self.0.sleep.end_internal_keep_awake();
+		self.reset_sleep_timer();
+	}
+
+	pub(crate) async fn internal_keep_awake_task(
+		&self,
+		future: BoxFuture<'static, Result<()>>,
+	) -> Result<()> {
+		self.begin_internal_keep_awake();
+		let result = future.await;
+		self.end_internal_keep_awake();
+		result
+	}
+
+	pub(crate) async fn with_websocket_callback<F, Fut, T>(&self, run: F) -> T
+	where
+		F: FnOnce() -> Fut,
+		Fut: Future<Output = T>,
+	{
+		self.0.sleep.begin_websocket_callback();
+		self.reset_sleep_timer();
+		let result = run().await;
+		self.0.sleep.end_websocket_callback();
+		self.reset_sleep_timer();
+		result
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn begin_websocket_callback(&self) {
+		self.0.sleep.begin_websocket_callback();
+		self.reset_sleep_timer();
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn end_websocket_callback(&self) {
+		self.0.sleep.end_websocket_callback();
+		self.reset_sleep_timer();
+	}
+
+	pub(crate) fn begin_pending_disconnect(&self) {
+		self.0.sleep.begin_pending_disconnect();
+		self.reset_sleep_timer();
+	}
+
+	pub(crate) fn end_pending_disconnect(&self) {
+		self.0.sleep.end_pending_disconnect();
+		self.reset_sleep_timer();
+	}
+
+	fn configure_sleep_hooks(&self) {
+		let internal_keep_awake_ctx = self.clone();
+		self.0.schedule.set_internal_keep_awake(Some(Arc::new(move |future| {
+			let ctx = internal_keep_awake_ctx.clone();
+			Box::pin(async move { ctx.internal_keep_awake_task(future).await })
+		})));
+
+		let queue_ctx = self.clone();
+		self.0.queue.set_wait_activity_callback(Some(Arc::new(move || {
+			queue_ctx.reset_sleep_timer();
+		})));
 	}
 }
 

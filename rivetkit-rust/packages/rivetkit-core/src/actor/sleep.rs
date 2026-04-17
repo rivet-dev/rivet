@@ -1,2 +1,467 @@
-#[derive(Debug, Default)]
-pub struct SleepController;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+
+use rivet_envoy_client::handle::EnvoyHandle;
+use tokio::runtime::Handle;
+use tokio::task::JoinHandle;
+use tokio::time::sleep;
+
+use crate::actor::config::ActorConfig;
+use crate::actor::context::ActorContext;
+
+#[derive(Clone)]
+pub struct SleepController(Arc<SleepControllerInner>);
+
+struct SleepControllerInner {
+	config: Mutex<ActorConfig>,
+	envoy_handle: Mutex<Option<EnvoyHandle>>,
+	generation: Mutex<Option<u32>>,
+	ready: AtomicBool,
+	started: AtomicBool,
+	run_handler_active: AtomicBool,
+	keep_awake_count: AtomicU32,
+	internal_keep_awake_count: AtomicU32,
+	websocket_callback_count: AtomicU32,
+	pending_disconnect_count: AtomicU32,
+	sleep_timer: Mutex<Option<JoinHandle<()>>>,
+	shutdown_tasks: Mutex<Vec<JoinHandle<()>>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CanSleep {
+	Yes,
+	NotReady,
+	PreventSleep,
+	NoSleep,
+	ActiveHttpRequests,
+	ActiveKeepAwake,
+	ActiveInternalKeepAwake,
+	ActiveRun,
+	ActiveConnections,
+	PendingDisconnectCallbacks,
+	ActiveWebSocketCallbacks,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy)]
+enum AsyncRegion {
+	KeepAwake,
+	InternalKeepAwake,
+	WebSocketCallbacks,
+	PendingDisconnectCallbacks,
+}
+
+impl SleepController {
+	pub fn new(config: ActorConfig) -> Self {
+		Self(Arc::new(SleepControllerInner {
+			config: Mutex::new(config),
+			envoy_handle: Mutex::new(None),
+			generation: Mutex::new(None),
+			ready: AtomicBool::new(false),
+			started: AtomicBool::new(false),
+			run_handler_active: AtomicBool::new(false),
+			keep_awake_count: AtomicU32::new(0),
+			internal_keep_awake_count: AtomicU32::new(0),
+			websocket_callback_count: AtomicU32::new(0),
+			pending_disconnect_count: AtomicU32::new(0),
+			sleep_timer: Mutex::new(None),
+			shutdown_tasks: Mutex::new(Vec::new()),
+		}))
+	}
+
+	pub(crate) fn configure(&self, config: ActorConfig) {
+		*self.0.config.lock().expect("sleep config lock poisoned") = config;
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn configure_envoy(
+		&self,
+		envoy_handle: EnvoyHandle,
+		generation: Option<u32>,
+	) {
+		*self
+			.0
+			.envoy_handle
+			.lock()
+			.expect("sleep envoy handle lock poisoned") = Some(envoy_handle);
+		*self
+			.0
+			.generation
+			.lock()
+			.expect("sleep generation lock poisoned") = generation;
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn clear_envoy(&self) {
+		*self
+			.0
+			.envoy_handle
+			.lock()
+			.expect("sleep envoy handle lock poisoned") = None;
+		*self
+			.0
+			.generation
+			.lock()
+			.expect("sleep generation lock poisoned") = None;
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn set_ready(&self, ready: bool) {
+		self.0.ready.store(ready, Ordering::SeqCst);
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn set_started(&self, started: bool) {
+		self.0.started.store(started, Ordering::SeqCst);
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn set_run_handler_active(&self, active: bool) {
+		self.0.run_handler_active.store(active, Ordering::SeqCst);
+	}
+
+	pub(crate) async fn can_sleep(&self, ctx: &ActorContext) -> CanSleep {
+		let config = self.config();
+		if !self.0.ready.load(Ordering::SeqCst) || !self.0.started.load(Ordering::SeqCst) {
+			return CanSleep::NotReady;
+		}
+		if ctx.prevent_sleep() {
+			return CanSleep::PreventSleep;
+		}
+		if config.no_sleep {
+			return CanSleep::NoSleep;
+		}
+		if self.active_http_request_count(ctx).await > 0 {
+			return CanSleep::ActiveHttpRequests;
+		}
+		if self.0.keep_awake_count.load(Ordering::SeqCst) > 0 {
+			return CanSleep::ActiveKeepAwake;
+		}
+		if self.0.internal_keep_awake_count.load(Ordering::SeqCst) > 0 {
+			return CanSleep::ActiveInternalKeepAwake;
+		}
+		if self.0.run_handler_active.load(Ordering::SeqCst)
+			&& ctx.queue().active_queue_wait_count() == 0
+		{
+			return CanSleep::ActiveRun;
+		}
+		if !ctx.conns().is_empty() {
+			return CanSleep::ActiveConnections;
+		}
+		if self.0.pending_disconnect_count.load(Ordering::SeqCst) > 0 {
+			return CanSleep::PendingDisconnectCallbacks;
+		}
+		if self.0.websocket_callback_count.load(Ordering::SeqCst) > 0 {
+			return CanSleep::ActiveWebSocketCallbacks;
+		}
+
+		CanSleep::Yes
+	}
+
+	pub(crate) fn reset_sleep_timer(&self, ctx: ActorContext) {
+		self.cancel_sleep_timer();
+
+		let Ok(runtime) = Handle::try_current() else {
+			return;
+		};
+
+		let controller = self.clone();
+		let task = runtime.spawn(async move {
+			if controller.can_sleep(&ctx).await != CanSleep::Yes {
+				return;
+			}
+
+			let timeout = controller.config().sleep_timeout;
+			sleep(timeout).await;
+
+			if controller.can_sleep(&ctx).await == CanSleep::Yes {
+				ctx.sleep();
+			}
+		});
+
+		*self
+			.0
+			.sleep_timer
+			.lock()
+			.expect("sleep timer lock poisoned") = Some(task);
+	}
+
+	pub(crate) fn cancel_sleep_timer(&self) {
+		let timer = self
+			.0
+			.sleep_timer
+			.lock()
+			.expect("sleep timer lock poisoned")
+			.take();
+		if let Some(timer) = timer {
+			timer.abort();
+		}
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn begin_keep_awake(&self) {
+		self.begin_async_region(AsyncRegion::KeepAwake);
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn end_keep_awake(&self) {
+		self.end_async_region(AsyncRegion::KeepAwake);
+	}
+
+	pub(crate) fn begin_internal_keep_awake(&self) {
+		self.begin_async_region(AsyncRegion::InternalKeepAwake);
+	}
+
+	pub(crate) fn end_internal_keep_awake(&self) {
+		self.end_async_region(AsyncRegion::InternalKeepAwake);
+	}
+
+	pub(crate) fn begin_websocket_callback(&self) {
+		self.begin_async_region(AsyncRegion::WebSocketCallbacks);
+	}
+
+	pub(crate) fn end_websocket_callback(&self) {
+		self.end_async_region(AsyncRegion::WebSocketCallbacks);
+	}
+
+	pub(crate) fn begin_pending_disconnect(&self) {
+		self.begin_async_region(AsyncRegion::PendingDisconnectCallbacks);
+	}
+
+	pub(crate) fn end_pending_disconnect(&self) {
+		self.end_async_region(AsyncRegion::PendingDisconnectCallbacks);
+	}
+
+	pub(crate) fn track_shutdown_task(&self, handle: JoinHandle<()>) {
+		let mut shutdown_tasks = self
+			.0
+			.shutdown_tasks
+			.lock()
+			.expect("shutdown tasks lock poisoned");
+		shutdown_tasks.retain(|task| !task.is_finished());
+		shutdown_tasks.push(handle);
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn shutdown_task_count(&self) -> usize {
+		let mut shutdown_tasks = self
+			.0
+			.shutdown_tasks
+			.lock()
+			.expect("shutdown tasks lock poisoned");
+		shutdown_tasks.retain(|task| !task.is_finished());
+		shutdown_tasks.len()
+	}
+
+	fn begin_async_region(&self, region: AsyncRegion) {
+		counter_for(&self.0, region).fetch_add(1, Ordering::SeqCst);
+	}
+
+	fn end_async_region(&self, region: AsyncRegion) {
+		let counter = counter_for(&self.0, region);
+		let previous = counter.fetch_sub(1, Ordering::SeqCst);
+		if previous == 0 {
+			counter.store(0, Ordering::SeqCst);
+			tracing::warn!(region = region_name(region), "sleep async region count went below 0");
+		}
+	}
+
+	fn config(&self) -> ActorConfig {
+		self.0
+			.config
+			.lock()
+			.expect("sleep config lock poisoned")
+			.clone()
+	}
+
+	async fn active_http_request_count(&self, ctx: &ActorContext) -> usize {
+		let envoy_handle = self
+			.0
+			.envoy_handle
+			.lock()
+			.expect("sleep envoy handle lock poisoned")
+			.clone();
+		let generation = *self
+			.0
+			.generation
+			.lock()
+			.expect("sleep generation lock poisoned");
+		let Some(envoy_handle) = envoy_handle else {
+			return 0;
+		};
+
+		envoy_handle
+			.get_active_http_request_count(ctx.actor_id(), generation)
+			.await
+			.unwrap_or(0)
+	}
+}
+
+impl Default for SleepController {
+	fn default() -> Self {
+		Self::new(ActorConfig::default())
+	}
+}
+
+impl std::fmt::Debug for SleepController {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("SleepController")
+			.field("ready", &self.0.ready.load(Ordering::SeqCst))
+			.field("started", &self.0.started.load(Ordering::SeqCst))
+			.field(
+				"run_handler_active",
+				&self.0.run_handler_active.load(Ordering::SeqCst),
+			)
+			.field(
+				"keep_awake_count",
+				&self.0.keep_awake_count.load(Ordering::SeqCst),
+			)
+			.field(
+				"internal_keep_awake_count",
+				&self.0.internal_keep_awake_count.load(Ordering::SeqCst),
+			)
+			.field(
+				"websocket_callback_count",
+				&self.0.websocket_callback_count.load(Ordering::SeqCst),
+			)
+			.field(
+				"pending_disconnect_count",
+				&self.0.pending_disconnect_count.load(Ordering::SeqCst),
+			)
+			.finish()
+	}
+}
+
+fn counter_for(
+	inner: &SleepControllerInner,
+	region: AsyncRegion,
+) -> &AtomicU32 {
+	match region {
+		AsyncRegion::KeepAwake => &inner.keep_awake_count,
+		AsyncRegion::InternalKeepAwake => &inner.internal_keep_awake_count,
+		AsyncRegion::WebSocketCallbacks => &inner.websocket_callback_count,
+		AsyncRegion::PendingDisconnectCallbacks => &inner.pending_disconnect_count,
+	}
+}
+
+fn region_name(region: AsyncRegion) -> &'static str {
+	match region {
+		AsyncRegion::KeepAwake => "keep_awake",
+		AsyncRegion::InternalKeepAwake => "internal_keep_awake",
+		AsyncRegion::WebSocketCallbacks => "websocket_callbacks",
+		AsyncRegion::PendingDisconnectCallbacks => "pending_disconnect_callbacks",
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::time::Duration;
+
+	use super::{CanSleep, SleepController};
+	use crate::actor::context::ActorContext;
+	use crate::ActorConfig;
+
+	#[tokio::test]
+	async fn can_sleep_requires_ready_and_started() {
+		let ctx = ActorContext::default();
+
+		assert_eq!(ctx.can_sleep().await, CanSleep::NotReady);
+
+		ctx.set_ready(true);
+		assert_eq!(ctx.can_sleep().await, CanSleep::NotReady);
+
+		ctx.set_started(true);
+		assert_eq!(ctx.can_sleep().await, CanSleep::Yes);
+	}
+
+	#[tokio::test]
+	async fn can_sleep_blocks_for_active_regions_and_run_handler() {
+		let ctx = ActorContext::default();
+		ctx.set_ready(true);
+		ctx.set_started(true);
+
+		ctx.begin_keep_awake();
+		assert_eq!(ctx.can_sleep().await, CanSleep::ActiveKeepAwake);
+		ctx.end_keep_awake();
+
+		ctx.begin_internal_keep_awake();
+		assert_eq!(ctx.can_sleep().await, CanSleep::ActiveInternalKeepAwake);
+		ctx.end_internal_keep_awake();
+
+		ctx.set_run_handler_active(true);
+		assert_eq!(ctx.can_sleep().await, CanSleep::ActiveRun);
+		ctx.set_run_handler_active(false);
+
+		assert_eq!(ctx.can_sleep().await, CanSleep::Yes);
+	}
+
+	#[tokio::test]
+	async fn can_sleep_allows_run_handler_when_only_blocked_on_queue_wait() {
+		let ctx = ActorContext::default();
+		ctx.set_ready(true);
+		ctx.set_started(true);
+		ctx.set_run_handler_active(true);
+		ctx.queue().set_wait_activity_callback(None);
+		ctx.queue().begin_sleep_test_wait();
+
+		assert_eq!(ctx.can_sleep().await, CanSleep::Yes);
+
+		ctx.queue().end_sleep_test_wait();
+	}
+
+	#[tokio::test]
+	async fn can_sleep_blocks_for_connections_disconnects_and_websocket_callbacks() {
+		let ctx = ActorContext::default();
+		ctx.set_ready(true);
+		ctx.set_started(true);
+
+		let conn = crate::ConnHandle::new("conn-1", Vec::new(), Vec::new(), false);
+		ctx.add_conn(conn);
+		assert_eq!(ctx.can_sleep().await, CanSleep::ActiveConnections);
+		ctx.remove_conn("conn-1");
+
+		ctx.begin_pending_disconnect();
+		assert_eq!(ctx.can_sleep().await, CanSleep::PendingDisconnectCallbacks);
+		ctx.end_pending_disconnect();
+
+		ctx.begin_websocket_callback();
+		assert_eq!(ctx.can_sleep().await, CanSleep::ActiveWebSocketCallbacks);
+		ctx.end_websocket_callback();
+
+		assert_eq!(ctx.can_sleep().await, CanSleep::Yes);
+	}
+
+	#[tokio::test]
+	async fn reset_sleep_timer_requests_sleep_after_idle_timeout() {
+		let ctx = ActorContext::default();
+		ctx.configure_sleep(ActorConfig {
+			sleep_timeout: Duration::from_millis(10),
+			..ActorConfig::default()
+		});
+		ctx.set_ready(true);
+		ctx.set_started(true);
+
+		ctx.reset_sleep_timer();
+		tokio::time::sleep(Duration::from_millis(25)).await;
+
+		assert!(ctx.sleep_requested());
+	}
+
+	#[test]
+	fn controller_tracks_shutdown_tasks() {
+		let controller = SleepController::default();
+		let runtime = tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+
+		runtime.block_on(async {
+			let handle = tokio::spawn(async {});
+			controller.track_shutdown_task(handle);
+			assert_eq!(controller.shutdown_task_count(), 1);
+			tokio::task::yield_now().await;
+			assert_eq!(controller.shutdown_task_count(), 0);
+		});
+	}
+}

@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::future::pending;
 use std::sync::Arc;
+use std::sync::Mutex as StdMutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -77,7 +78,7 @@ pub struct Queue(Arc<QueueInner>);
 
 struct QueueInner {
 	kv: Kv,
-	config: ActorConfig,
+	config: StdMutex<ActorConfig>,
 	abort_signal: Option<CancellationToken>,
 	initialize: OnceCell<()>,
 	metadata: Mutex<QueueMetadata>,
@@ -85,6 +86,7 @@ struct QueueInner {
 	pending_completable_message_ids: Mutex<BTreeSet<u64>>,
 	notify: Notify,
 	active_queue_wait_count: AtomicU32,
+	wait_activity_callback: StdMutex<Option<Arc<dyn Fn() + Send + Sync>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -193,7 +195,7 @@ impl Queue {
 	) -> Self {
 		Self(Arc::new(QueueInner {
 			kv,
-			config,
+			config: StdMutex::new(config),
 			abort_signal,
 			initialize: OnceCell::new(),
 			metadata: Mutex::new(QueueMetadata::default()),
@@ -201,6 +203,7 @@ impl Queue {
 			pending_completable_message_ids: Mutex::new(BTreeSet::new()),
 			notify: Notify::new(),
 			active_queue_wait_count: AtomicU32::new(0),
+			wait_activity_callback: StdMutex::new(None),
 		}))
 	}
 
@@ -220,19 +223,20 @@ impl Queue {
 		let encoded_message =
 			serde_bare::to_vec(&persisted).context("encode queue message")?;
 
-		if encoded_message.len() > self.0.config.max_queue_message_size as usize {
+		let config = self.config();
+		if encoded_message.len() > config.max_queue_message_size as usize {
 			return Err(QueueMessageTooLarge {
 				size: encoded_message.len(),
-				limit: self.0.config.max_queue_message_size,
+				limit: config.max_queue_message_size,
 			}
 			.build()
 			.into());
 		}
 
 		let mut metadata = self.0.metadata.lock().await;
-		if metadata.size >= self.0.config.max_queue_size {
+		if metadata.size >= config.max_queue_size {
 			return Err(QueueFull {
-				limit: self.0.config.max_queue_size,
+				limit: config.max_queue_size,
 			}
 			.build()
 			.into());
@@ -342,6 +346,42 @@ impl Queue {
 
 	pub(crate) fn active_queue_wait_count(&self) -> u32 {
 		self.0.active_queue_wait_count.load(Ordering::SeqCst)
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn configure_sleep(&self, config: ActorConfig) {
+		*self.0.config.lock().expect("queue config lock poisoned") = config;
+	}
+
+	pub(crate) fn set_wait_activity_callback(
+		&self,
+		callback: Option<Arc<dyn Fn() + Send + Sync>>,
+	) {
+		*self
+			.0
+			.wait_activity_callback
+			.lock()
+			.expect("queue wait activity callback lock poisoned") = callback;
+	}
+
+	#[cfg(test)]
+	pub(crate) fn begin_sleep_test_wait(&self) {
+		self.0
+			.active_queue_wait_count
+			.fetch_add(1, Ordering::SeqCst);
+		self.notify_wait_activity();
+	}
+
+	#[cfg(test)]
+	pub(crate) fn end_sleep_test_wait(&self) {
+		let previous = self
+			.0
+			.active_queue_wait_count
+			.fetch_sub(1, Ordering::SeqCst);
+		if previous == 0 {
+			self.0.active_queue_wait_count.store(0, Ordering::SeqCst);
+		}
+		self.notify_wait_activity();
 	}
 
 	async fn ensure_initialized(&self) -> Result<()> {
@@ -629,6 +669,26 @@ impl Queue {
 				.block_on(future)
 		}
 	}
+
+	fn config(&self) -> ActorConfig {
+		self.0
+			.config
+			.lock()
+			.expect("queue config lock poisoned")
+			.clone()
+	}
+
+	fn notify_wait_activity(&self) {
+		if let Some(callback) = self
+			.0
+			.wait_activity_callback
+			.lock()
+			.expect("queue wait activity callback lock poisoned")
+			.clone()
+		{
+			callback();
+		}
+	}
 }
 
 impl Default for Queue {
@@ -738,17 +798,22 @@ impl<'a> ActiveQueueWaitGuard<'a> {
 			.0
 			.active_queue_wait_count
 			.fetch_add(1, Ordering::SeqCst);
+		queue.notify_wait_activity();
 		Self { queue }
 	}
 }
 
 impl Drop for ActiveQueueWaitGuard<'_> {
 	fn drop(&mut self) {
-		self
+		let previous = self
 			.queue
 			.0
 			.active_queue_wait_count
 			.fetch_sub(1, Ordering::SeqCst);
+		if previous == 0 {
+			self.queue.0.active_queue_wait_count.store(0, Ordering::SeqCst);
+		}
+		self.queue.notify_wait_activity();
 	}
 }
 

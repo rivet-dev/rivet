@@ -600,14 +600,18 @@ impl ConnectionManager {
 		}
 
 		if let Some(callback) = &callbacks.on_disconnect {
-			callback(OnDisconnectRequest {
+			ctx.begin_pending_disconnect();
+			let result = callback(OnDisconnectRequest {
 				ctx: ctx.clone(),
 				conn,
 			})
 			.await
-			.with_context(|| disconnect_message(conn_id, reason.as_deref()))?;
+			.with_context(|| disconnect_message(conn_id, reason.as_deref()));
+			ctx.end_pending_disconnect();
+			result?;
 		}
 
+		ctx.reset_sleep_timer();
 		Ok(())
 	}
 }
