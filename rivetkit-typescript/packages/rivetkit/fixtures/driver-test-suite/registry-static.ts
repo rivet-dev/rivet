@@ -18,7 +18,6 @@ import {
 	promiseActor,
 	syncActionActor,
 } from "./action-types";
-import { dbActorDrizzle } from "./actor-db-drizzle";
 import { dbActorRaw } from "./actor-db-raw";
 import { onStateChangeActor } from "./actor-onstatechange";
 import { connErrorSerializationActor } from "./conn-error-serialization";
@@ -297,8 +296,6 @@ export const registry = setup({
 		workflowSpawnParentActor,
 		// From actor-db-raw.ts
 		dbActorRaw,
-		// From actor-db-drizzle.ts
-		dbActorDrizzle,
 		// From db-lifecycle.ts
 		dbLifecycle,
 		dbLifecycleFailing,

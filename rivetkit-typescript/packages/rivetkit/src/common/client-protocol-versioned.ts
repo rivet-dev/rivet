@@ -1,7 +1,7 @@
 import { createVersionedDataHandler } from "vbare";
-import * as v1 from "../../../dist/schemas/client-protocol/v1";
-import * as v2 from "../../../dist/schemas/client-protocol/v2";
-import * as v3 from "../../../dist/schemas/client-protocol/v3";
+import * as v1 from "../../dist/schemas/client-protocol/v1";
+import * as v2 from "../../dist/schemas/client-protocol/v2";
+import * as v3 from "../../dist/schemas/client-protocol/v3";
 
 export const CURRENT_VERSION = 3;
 

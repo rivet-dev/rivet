@@ -1,9 +1,8 @@
 // @ts-nocheck
 import { ACTOR_CONTEXT_INTERNAL_SYMBOL } from "@/actor/config";
 import type { RunContext } from "@/actor/config";
-import type { AnyDatabaseProvider } from "@/db/config";
+import type { AnyDatabaseProvider } from "@/common/database/config";
 import type {
-	AnyActorInstance,
 	AnyStaticActorInstance,
 } from "@/actor/definition";
 import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
@@ -15,7 +14,6 @@ import {
 	HistoryDivergedError,
 	JoinError,
 	RaceError,
-	replayWorkflowFromStep,
 	RollbackCheckpointError,
 	RollbackError,
 	runWorkflow,
@@ -23,9 +21,8 @@ import {
 	type WorkflowErrorEvent,
 } from "@rivetkit/workflow-engine";
 import invariant from "invariant";
-import { ActorWorkflowControlDriver, ActorWorkflowDriver } from "./driver";
+import { ActorWorkflowDriver } from "./driver";
 import { ActorWorkflowContext } from "./context";
-import { createWorkflowInspectorAdapter } from "./inspector";
 
 export { Loop } from "@rivetkit/workflow-engine";
 export type {
@@ -141,20 +138,6 @@ export function workflow<
 ) => Promise<void> {
 	const onError = options.onError;
 
-	const workflowInspectors = new WeakMap<
-		AnyActorInstance,
-		ReturnType<typeof createWorkflowInspectorAdapter>
-	>();
-
-	function getWorkflowInspector(actor: AnyActorInstance) {
-		let workflowInspector = workflowInspectors.get(actor);
-		if (!workflowInspector) {
-			workflowInspector = createWorkflowInspectorAdapter();
-			workflowInspectors.set(actor, workflowInspector);
-		}
-		return workflowInspector;
-	}
-
 	async function run(
 		runCtx: RunContext<
 			TState,
@@ -173,25 +156,8 @@ export function workflow<
 			}
 		)[ACTOR_CONTEXT_INTERNAL_SYMBOL];
 		invariant(actor, "workflow() requires an actor instance");
-		const workflowInspector = getWorkflowInspector(actor);
 
 		const driver = new ActorWorkflowDriver(actor, runCtx);
-		workflowInspector.setReplayFromStep(async (entryId) => {
-			if (actor.isRunHandlerActive()) {
-				throw new Error(
-					"Cannot replay a workflow while it is currently in flight",
-				);
-			}
-			const snapshot = await replayWorkflowFromStep(
-				actor.id,
-				new ActorWorkflowControlDriver(actor),
-				entryId,
-				{ scheduleAlarm: false },
-			);
-			workflowInspector.update(snapshot);
-			await actor.restartRunHandler();
-			return workflowInspector.adapter.getHistory();
-		});
 
 		const handle = runWorkflow(
 			actor.id,
@@ -201,7 +167,6 @@ export function workflow<
 			{
 				mode: "live",
 				logger: runCtx.log,
-				onHistoryUpdated: workflowInspector.update,
 				onError: onError
 					? async (event) => await onError(runCtx, event)
 					: undefined,
@@ -246,26 +211,10 @@ export function workflow<
 	const runWithConfig = run as typeof run & {
 		[RUN_FUNCTION_CONFIG_SYMBOL]?: {
 			icon?: string;
-			inspectorFactory?: (actor: unknown) =>
-				| {
-						workflow: ReturnType<
-							typeof createWorkflowInspectorAdapter
-						>["adapter"];
-				  }
-				| undefined;
 		};
 	};
 	runWithConfig[RUN_FUNCTION_CONFIG_SYMBOL] = {
 		icon: "diagram-project",
-		inspectorFactory: (actor: unknown) => {
-			if (!actor) {
-				return undefined;
-			}
-			return {
-				workflow: getWorkflowInspector(actor as AnyActorInstance)
-					.adapter,
-			};
-		},
 	};
 
 	return runWithConfig;

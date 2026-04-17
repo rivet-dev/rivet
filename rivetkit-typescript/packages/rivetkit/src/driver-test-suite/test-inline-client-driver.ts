@@ -21,14 +21,14 @@ import {
 	type GetForIdInput,
 	type GetOrCreateWithKeyInput,
 	type GetWithKeyInput,
-	HEADER_ACTOR_ID,
 	type ListActorsInput,
 	type RuntimeDisplayInformation,
 	type EngineControlClient,
-	resolveGatewayTarget,
-} from "@/driver-helpers/mod";
+} from "@/engine-client/driver";
+import { HEADER_ACTOR_ID } from "@/common/actor-router-consts";
 import type { UniversalWebSocket } from "@/mod";
 import type { GetUpgradeWebSocket } from "@/utils";
+import { resolveGatewayTarget } from "@/client/resolve-gateway-target";
 import { logger } from "./log";
 
 export interface TestInlineDriverCallRequest {

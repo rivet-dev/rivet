@@ -97,26 +97,6 @@
 				"default": "./dist/tsup/utils.cjs"
 			}
 		},
-		"./driver-helpers": {
-			"import": {
-				"types": "./dist/tsup/driver-helpers/mod.d.ts",
-				"default": "./dist/tsup/driver-helpers/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/driver-helpers/mod.d.cts",
-				"default": "./dist/tsup/driver-helpers/mod.cjs"
-			}
-		},
-		"./driver-helpers/websocket": {
-			"import": {
-				"types": "./dist/tsup/common/websocket.d.ts",
-				"default": "./dist/tsup/common/websocket.js"
-			},
-			"require": {
-				"types": "./dist/tsup/common/websocket.d.cts",
-				"default": "./dist/tsup/common/websocket.cjs"
-			}
-		},
 		"./topologies/coordinate": {
 			"import": {
 				"types": "./dist/tsup/topologies/coordinate/mod.d.ts",
@@ -135,52 +115,6 @@
 			"require": {
 				"types": "./dist/tsup/topologies/partition/mod.d.cts",
 				"default": "./dist/tsup/topologies/partition/mod.cjs"
-			}
-		},
-		"./test": {
-			"import": {
-				"types": "./dist/tsup/test/mod.d.ts",
-				"default": "./dist/tsup/test/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/test/mod.d.cts",
-				"default": "./dist/tsup/test/mod.cjs"
-			}
-		},
-		"./inspector": {
-			"import": {
-				"types": "./dist/tsup/inspector/mod.d.ts",
-				"default": "./dist/tsup/inspector/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/inspector/mod.d.cts",
-				"default": "./dist/tsup/inspector/mod.cjs"
-			}
-		},
-		"./inspector/client": {
-			"import": {
-				"types": "./dist/browser/inspector/client.d.ts",
-				"default": "./dist/browser/inspector/client.js"
-			}
-		},
-		"./db": {
-			"import": {
-				"types": "./dist/tsup/db/mod.d.ts",
-				"default": "./dist/tsup/db/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/db/mod.d.cts",
-				"default": "./dist/tsup/db/mod.cjs"
-			}
-		},
-		"./db/drizzle": {
-			"import": {
-				"types": "./dist/tsup/db/drizzle/mod.d.ts",
-				"default": "./dist/tsup/db/drizzle/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/db/drizzle/mod.d.cts",
-				"default": "./dist/tsup/db/drizzle/mod.cjs"
 			}
 		},
 		"./agent-os": {
@@ -302,7 +236,7 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts src/dynamic/mod.ts src/db/mod.ts src/db/drizzle/mod.ts src/sandbox/index.ts src/sandbox/client.ts src/sandbox/providers/docker.ts src/sandbox/providers/e2b.ts src/sandbox/providers/daytona.ts src/sandbox/providers/local.ts src/sandbox/providers/vercel.ts src/sandbox/providers/modal.ts src/sandbox/providers/computesdk.ts src/sandbox/providers/sprites.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/workflow/mod.ts src/dynamic/mod.ts src/sandbox/index.ts src/sandbox/client.ts src/sandbox/providers/docker.ts src/sandbox/providers/e2b.ts src/sandbox/providers/daytona.ts src/sandbox/providers/local.ts src/sandbox/providers/vercel.ts src/sandbox/providers/modal.ts src/sandbox/providers/computesdk.ts src/sandbox/providers/sprites.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
 		"build:dynamic-isolate-runtime": "tsup --config tsup.dynamic-isolate-runtime.config.ts",
 		"build:browser": "tsup --config tsup.browser.config.ts",
 		"build:schema": "./scripts/compile-all-bare.ts",
@@ -316,8 +250,7 @@
 		"test:watch": "vitest",
 		"dump-asyncapi": "tsx scripts/dump-asyncapi.ts",
 		"registry-config-schema-gen": "tsx scripts/registry-config-schema-gen.ts",
-		"actor-config-schema-gen": "tsx scripts/actor-config-schema-gen.ts",
-		"build:pack-inspector": "tsx scripts/pack-inspector.ts"
+		"actor-config-schema-gen": "tsx scripts/actor-config-schema-gen.ts"
 	},
 	"dependencies": {
 		"@rivet-dev/agent-os-core": "^0.1.1",

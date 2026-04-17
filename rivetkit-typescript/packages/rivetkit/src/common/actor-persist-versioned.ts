@@ -1,8 +1,8 @@
 import { createVersionedDataHandler } from "vbare";
-import * as v1 from "../../../dist/schemas/actor-persist/v1";
-import * as v2 from "../../../dist/schemas/actor-persist/v2";
-import * as v3 from "../../../dist/schemas/actor-persist/v3";
-import * as v4 from "../../../dist/schemas/actor-persist/v4";
+import * as v1 from "../../dist/schemas/actor-persist/v1";
+import * as v2 from "../../dist/schemas/actor-persist/v2";
+import * as v3 from "../../dist/schemas/actor-persist/v3";
+import * as v4 from "../../dist/schemas/actor-persist/v4";
 
 export const CURRENT_VERSION = 4;
 

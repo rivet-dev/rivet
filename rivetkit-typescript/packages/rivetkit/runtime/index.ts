@@ -6,8 +6,7 @@ import {
 } from "@/engine-client/api-endpoints";
 import type { EngineControlClient } from "@/engine-client/driver";
 import { RemoteEngineControlClient } from "@/engine-client/mod";
-import { ENGINE_ENDPOINT, ensureEngineProcess } from "@/engine-process/mod";
-import { getInspectorUrl } from "@/inspector/utils";
+import { ENGINE_ENDPOINT } from "@/common/engine";
 import type { Registry } from "@/registry";
 import type { RegistryActors, RegistryConfig } from "@/registry/config";
 import { getNodeFsSync } from "@/utils/node";
@@ -89,15 +88,9 @@ export class Runtime<A extends RegistryActors> {
 		}
 
 		if (config.startEngine) {
-			config.endpoint = ENGINE_ENDPOINT;
-
-			logger().debug({
-				msg: "spawning engine",
-				version: config.engineVersion,
-			});
-			await ensureEngineProcess({
-				version: config.engineVersion,
-			});
+			throw new Error(
+				"Runtime.create() can no longer spawn the TypeScript engine process. Use Registry.startEnvoy() with the native rivetkit-core engine path instead.",
+			);
 		}
 
 		const engineClient: EngineControlClient = new RemoteEngineControlClient(
@@ -135,10 +128,6 @@ export class Runtime<A extends RegistryActors> {
 	#printWelcome(): void {
 		if (this.#config.noWelcome) return;
 
-		const inspectorUrl = this.httpPort
-			? getInspectorUrl(this.#config, this.httpPort)
-			: undefined;
-
 		console.log();
 		console.log(
 			`  RivetKit ${pkg.version} (Engine - ${this.#startKind === "serverless" ? "Serverless" : "Serverful"})`,
@@ -169,10 +158,6 @@ export class Runtime<A extends RegistryActors> {
 			} catch {
 				// Node fs not available.
 			}
-		}
-
-		if (inspectorUrl && this.#config.inspector.enabled) {
-			logLine("Inspector", inspectorUrl);
 		}
 
 		logLine("Actors", Object.keys(this.#config.use).length.toString());

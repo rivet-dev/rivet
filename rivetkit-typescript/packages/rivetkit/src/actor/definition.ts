@@ -1,6 +1,6 @@
 import type { RegistryConfig } from "@/registry/config";
 import { ActorConfigSchema, type Actions, type ActorConfig, type ActorConfigInput } from "./config";
-import type { AnyDatabaseProvider } from "@/db/config";
+import type { AnyDatabaseProvider } from "@/common/database/config";
 import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
 
 export interface BaseActorDefinition<

@@ -15,7 +15,7 @@ import type {
 import type {
 	AnyDatabaseProvider,
 	InferDatabaseClient,
-} from "@/db/config";
+} from "@/common/database/config";
 import type {
 	EventSchemaConfig,
 	InferEventArgs,

@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
-type DbVariant = "raw" | "drizzle";
+type DbVariant = "raw";
 
 const CHUNK_SIZE = 4096;
 const LARGE_PAYLOAD_SIZE = 32768;
@@ -47,11 +47,11 @@ function getDbActor(
 	client: Awaited<ReturnType<typeof setupDriverTest>>["client"],
 	variant: DbVariant,
 ) {
-	return variant === "raw" ? client.dbActorRaw : client.dbActorDrizzle;
+	return client.dbActorRaw;
 }
 
 export function runActorDbTests(driverTestConfig: DriverTestConfig) {
-	const variants: DbVariant[] = ["raw", "drizzle"];
+	const variants: DbVariant[] = ["raw"];
 	const dbTestTimeout = driverTestConfig.useRealTimers
 		? REAL_TIMER_DB_TIMEOUT_MS
 		: undefined;

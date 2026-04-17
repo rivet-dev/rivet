@@ -18,17 +18,17 @@ import { deconstructError, stringifyError } from "@/common/utils";
 import { setIndexedWebSocketTestSender } from "@/common/websocket-test-hooks";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { AnyClient } from "@/client/client";
-import type { SqliteDatabase } from "@/db/config";
+import type { SqliteDatabase } from "@/common/database/config";
 import type { RegistryConfig } from "@/registry/config";
-import type * as protocol from "@/schemas/client-protocol/mod";
+import type * as protocol from "@/common/client-protocol";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	HTTP_RESPONSE_ERROR_VERSIONED,
-} from "@/schemas/client-protocol/versioned";
+} from "@/common/client-protocol-versioned";
 import {
 	type HttpResponseError as HttpResponseErrorJson,
 	HttpResponseErrorSchema,
-} from "@/schemas/client-protocol-zod/mod";
+} from "@/common/client-protocol-zod";
 import { contentTypeForEncoding, serializeWithEncoding } from "@/serde";
 import { bufferToArrayBuffer, getEnvUniversal } from "@/utils";
 import {

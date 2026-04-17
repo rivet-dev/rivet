@@ -1,5 +1,5 @@
 import { actor } from "rivetkit";
-import { db } from "rivetkit/db";
+import { db } from "@/common/database/mod";
 
 export const dbPragmaMigrationActor = actor({
 	state: {},

@@ -51,10 +51,10 @@
  * active with idle timers.
  */
 
-import type { DatabaseProvider } from "@/db/config";
+import type { DatabaseProvider } from "@/common/database/config";
 import { actor } from "@/actor/mod";
-import type { RawAccess } from "@/db/config";
-import { db } from "@/db/mod";
+import type { RawAccess } from "@/common/database/config";
+import { db } from "@/common/database/mod";
 import { SandboxAgent, type SandboxProvider } from "sandbox-agent";
 import {
 	type SandboxActorConfig,

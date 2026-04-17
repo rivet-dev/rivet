@@ -1,25 +1,24 @@
 import * as cbor from "cbor-x";
 import type { AnyActorDefinition } from "@/actor/definition";
 import type { Encoding } from "@/common/encoding";
-import { deconstructError } from "@/common/utils";
 import {
 	HEADER_CONN_PARAMS,
 	HEADER_ENCODING,
-	resolveGatewayTarget,
-	type EngineControlClient,
-} from "@/driver-helpers/mod";
-import type * as protocol from "@/schemas/client-protocol/mod";
+} from "@/common/actor-router-consts";
+import type * as protocol from "@/common/client-protocol";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	HTTP_ACTION_REQUEST_VERSIONED,
 	HTTP_ACTION_RESPONSE_VERSIONED,
-} from "@/schemas/client-protocol/versioned";
+} from "@/common/client-protocol-versioned";
 import {
 	type HttpActionRequest as HttpActionRequestJson,
 	HttpActionRequestSchema,
 	type HttpActionResponse as HttpActionResponseJson,
 	HttpActionResponseSchema,
-} from "@/schemas/client-protocol-zod/mod";
+} from "@/common/client-protocol-zod";
+import { deconstructError } from "@/common/utils";
+import type { EngineControlClient } from "@/engine-client/driver";
 import { bufferToArrayBuffer } from "@/utils";
 import type {
 	ActorDefinitionActions,
@@ -42,6 +41,7 @@ import {
 	type QueueSendWaitOptions,
 } from "./queue";
 import { rawHttpFetch, rawWebSocket } from "./raw-utils";
+import { resolveGatewayTarget } from "./resolve-gateway-target";
 import { sendHttpRequest } from "./utils";
 
 /**

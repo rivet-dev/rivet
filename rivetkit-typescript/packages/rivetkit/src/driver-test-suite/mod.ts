@@ -269,10 +269,6 @@ export async function createTestRuntime(
 	// TODO: Find a cleaner way of flagging an registry as test mode (ideally not in the config itself)
 	// Force enable test
 	registry.config.test = { ...registry.config.test, enabled: true };
-	registry.config.inspector = {
-		enabled: true,
-		token: () => "token",
-	};
 
 	// Build drivers
 	const {

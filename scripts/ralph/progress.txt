@@ -9,6 +9,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - N-API callback bridges should pass one request object through `ThreadsafeFunction`, and Promise results coming back into Rust should deserialize into `#[napi(object)]` structs instead of `JsObject` so the future remains `Send`.
 - When deleting legacy TypeScript actor runtime modules, preserve the public authoring types in `src/actor/config.ts` and move shared transport helpers into `src/common/` so client, gateway, and registry code can switch imports without keeping dead runtime directories alive.
 - When deleting deprecated TypeScript routing or serverless modules, delete the old folders outright and leave any surviving public entrypoints as explicit migration errors that point callers at `Registry.startEnvoy()`.
+- When deleting deprecated TypeScript infrastructure folders, move any still-live database or protocol helpers into `src/common/` or client-local modules first, then retarget fixtures so `tsc` does not keep pulling deleted package paths back in.
 - New Rust crates under `rivetkit-rust/packages/` that should use root workspace deps need `[package] workspace = "../../../"` in their `Cargo.toml` and a root `/Cargo.toml` workspace member entry.
 - The high-level `rivetkit` crate should stay a thin typed wrapper over `rivetkit-core`, re-exporting shared transport/config types instead of redefining them.
 - `rivetkit-core` foreign-runtime bridge helpers should stay on `ActorContext` even before a runtime is wired, and they should return explicit configuration errors instead of turning missing bridge support into silent no-ops.
@@ -311,4 +312,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Deprecated TS runtime surfaces should fail loudly at the surviving public boundary instead of staying half-wired, so downstream migrations see `Registry.startEnvoy()` as the only supported path.
   - Gotchas encountered: `pnpm lint` for this package still fails on pre-existing unused-parameter warnings in `fixtures/driver-test-suite/*`, so the meaningful verification for this story was `pnpm check-types`, `pnpm build`, and targeted Biome checks on the touched files.
   - Useful context: `runtime/index.ts`, `src/registry/index.ts`, and `src/driver-test-suite/mod.ts` were the only remaining source-level links to the deleted routing/serverless stack after the folder removals.
+---
+## 2026-04-17 13:05:39 PDT - US-035
+- What was implemented: Deleted the deprecated TypeScript infrastructure folders for `db`, `drivers`, `driver-helpers`, `inspector`, `schemas`, `test`, and `engine-process`, moved the still-live database and protocol helpers into `src/common/` and `src/client/`, removed inspector wiring from the active runtime/config surface, and kept `driver-test-suite` by retargeting its remaining imports plus fixtures away from the deleted package paths.
+- Files changed: `/home/nathan/r5/AGENTS.md`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/{package.json,tsconfig.json,runtime/index.ts,src/actor/config.ts,src/actor/definition.ts,src/actor/driver.ts,src/actor/errors.ts,src/client/**,src/common/**,src/driver-test-suite/**,src/dynamic/**,src/engine-client/mod.ts,src/registry/config/index.ts,src/sandbox/**,src/workflow/mod.ts,fixtures/**,tests/**}`, `/home/nathan/r5/scripts/ralph/{prd.json,progress.txt}`
+- **Learnings for future iterations:**
+  - Patterns discovered: The safe way to delete deprecated TS infrastructure is to move shared database and protocol helpers first, then remove exports and finally retarget fixtures that still compile against those old paths.
+  - Gotchas encountered: `prd.json` now explicitly keeps `driver-test-suite/` for US-039, so the folder itself has to survive even while its imports stop referencing deleted runtime modules.
+  - Useful context: The package now passes `pnpm check-types` and `pnpm build` with the live helper surfaces under `src/common/database/*`, `src/common/client-protocol*`, `src/common/actor-persist*`, `src/common/workflow-transport.ts`, `src/common/engine.ts`, and `src/client/resolve-gateway-target.ts`.
 ---

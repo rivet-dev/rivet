@@ -17,8 +17,6 @@ const TS_CONFIG_PATH = path.join(PACKAGE_ROOT, "tsconfig.json");
 const RIVETKIT_SOURCE_ALIAS = {
 	rivetkit: path.join(PACKAGE_ROOT, "src/mod.ts"),
 	"rivetkit/agent-os": path.join(PACKAGE_ROOT, "src/agent-os/index.ts"),
-	"rivetkit/db": path.join(PACKAGE_ROOT, "src/db/mod.ts"),
-	"rivetkit/db/drizzle": path.join(PACKAGE_ROOT, "src/db/drizzle/mod.ts"),
 	"rivetkit/dynamic": path.join(PACKAGE_ROOT, "src/dynamic/mod.ts"),
 	"rivetkit/errors": path.join(PACKAGE_ROOT, "src/actor/errors.ts"),
 	"rivetkit/sandbox": path.join(PACKAGE_ROOT, "src/sandbox/index.ts"),

@@ -1,4 +1,4 @@
-import type { RawAccess } from "@/db/config";
+import type { RawAccess } from "@/common/database/config";
 
 export async function migrateSandboxTables(db: RawAccess): Promise<void> {
 	// Legacy tables from an earlier naming convention. Safe to drop because

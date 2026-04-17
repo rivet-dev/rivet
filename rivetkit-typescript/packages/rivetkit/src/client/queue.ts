@@ -1,18 +1,18 @@
 import * as cbor from "cbor-x";
 import type { Encoding } from "@/common/encoding";
-import { HEADER_CONN_PARAMS, HEADER_ENCODING } from "@/driver-helpers/mod";
-import type * as protocol from "@/schemas/client-protocol/mod";
+import { HEADER_CONN_PARAMS, HEADER_ENCODING } from "@/common/actor-router-consts";
+import type * as protocol from "@/common/client-protocol";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	HTTP_QUEUE_SEND_REQUEST_VERSIONED,
 	HTTP_QUEUE_SEND_RESPONSE_VERSIONED,
-} from "@/schemas/client-protocol/versioned";
+} from "@/common/client-protocol-versioned";
 import {
 	type HttpQueueSendRequest as HttpQueueSendRequestJson,
 	HttpQueueSendRequestSchema,
 	type HttpQueueSendResponse as HttpQueueSendResponseJson,
 	HttpQueueSendResponseSchema,
-} from "@/schemas/client-protocol-zod/mod";
+} from "@/common/client-protocol-zod";
 import { bufferToArrayBuffer } from "@/utils";
 import { sendHttpRequest } from "./utils";
 

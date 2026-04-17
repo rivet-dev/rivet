@@ -14,7 +14,7 @@ import {
 	type ListActorsInput,
 	type RuntimeDisplayInformation,
 	type EngineControlClient,
-} from "@/driver-helpers/mod";
+} from "@/engine-client/driver";
 import type { ActorQuery } from "@/client/query";
 import type { Actor as ApiActor } from "@/engine-api/actors";
 import type { Encoding, UniversalWebSocket } from "@/mod";

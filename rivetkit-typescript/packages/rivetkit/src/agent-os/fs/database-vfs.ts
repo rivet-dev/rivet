@@ -16,7 +16,7 @@
  */
 
 import * as posixPath from "node:path/posix";
-import type { RawAccess } from "@/db/config";
+import type { RawAccess } from "@/common/database/config";
 
 // Infer VirtualFileSystem from PlainMountConfig.driver since
 // @secure-exec/core is not a direct dependency of this package.

@@ -1,5 +1,5 @@
 import { actor, setup } from "rivetkit";
-import { db } from "rivetkit/db";
+import { db } from "@/common/database/mod";
 
 // Module-level error collector. The orphaned setInterval writes here after
 // the actor is destroyed and state is no longer accessible via actions.

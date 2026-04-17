@@ -11,19 +11,19 @@ import {
 import { PATH_CONNECT } from "@/common/actor-router-consts";
 import { assertUnreachable, stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
-import type { EngineControlClient } from "@/driver-helpers/mod";
-import type * as protocol from "@/schemas/client-protocol/mod";
+import type { EngineControlClient } from "@/engine-client/driver";
+import type * as protocol from "@/common/client-protocol";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	TO_CLIENT_VERSIONED,
 	TO_SERVER_VERSIONED,
-} from "@/schemas/client-protocol/versioned";
+} from "@/common/client-protocol-versioned";
 import {
 	type ToClient as ToClientJson,
 	ToClientSchema,
 	type ToServer as ToServerJson,
 	ToServerSchema,
-} from "@/schemas/client-protocol-zod/mod";
+} from "@/common/client-protocol-zod";
 import { deserializeWithEncoding, serializeWithEncoding } from "@/serde";
 import { bufferToArrayBuffer, promiseWithResolvers } from "@/utils";
 import { getLogMessage } from "@/utils/env-vars";

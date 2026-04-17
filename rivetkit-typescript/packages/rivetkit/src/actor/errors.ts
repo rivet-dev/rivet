@@ -83,7 +83,7 @@ export class WorkflowNotEnabled extends ActorError {
 		super(
 			"actor",
 			"workflow_not_enabled",
-			"Workflow not enabled. The run handler must use `workflow(...)` to expose workflow inspector controls.",
+			"Workflow not enabled. The run handler must use `workflow(...)` to enable workflow history.",
 		);
 	}
 }

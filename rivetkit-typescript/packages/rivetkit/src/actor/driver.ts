@@ -7,7 +7,7 @@ import type {
 	RawDatabaseClient,
 	DrizzleDatabaseClient,
 	NativeDatabaseProvider,
-} from "@/db/config";
+} from "@/common/database/config";
 
 export type ActorDriverBuilder = (
 	config: RegistryConfig,

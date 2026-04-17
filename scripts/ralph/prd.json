@@ -661,18 +661,18 @@
         "Delete db/ (database utilities, replaced by rivetkit-core)",
         "Delete drivers/ (ActorDriver, EngineActorDriver, replaced by CoreRegistry)",
         "Delete driver-helpers/ (driver utilities)",
-        "Delete driver-test-suite/ (driver test framework)",
         "Delete inspector/ (actor inspection, removed completely)",
         "Delete schemas/ (all subdirectories: actor-persist, actor-inspector, persist, client-protocol, client-protocol-zod, transport)",
         "Delete test/ (TS test utilities, tests move to Rust)",
         "Delete engine-process/ (moved to rivetkit-core)",
+        "Do NOT delete driver-test-suite/ \u2014 it is kept for validation (see US-039)",
         "Remove all imports of deleted modules from remaining code",
         "tsc type-check passes",
         "pnpm build succeeds"
       ],
       "priority": 35,
-      "passes": false,
-      "notes": "Bulk infrastructure deletion. Check for any remaining imports carefully. The client library (client/) may import from some of these \u2014 fix or remove those imports."
+      "passes": true,
+      "notes": "Bulk infrastructure deletion. Do NOT delete driver-test-suite \u2014 US-039 will get it passing against the NAPI-backed runtime. Check for remaining imports carefully."
     },
     {
       "id": "US-036",
@@ -728,6 +728,24 @@
       "priority": 38,
       "passes": false,
       "notes": "Final cleanup story. The end state for rivetkit-typescript should be: actor definitions, client library, workflow engine, agent-os, engine-api, engine-client, registry (thin NAPI wrapper), utils, common, devtools-loader."
+    },
+    {
+      "id": "US-039",
+      "title": "Get driver test suite passing for static actors across all 3 encodings",
+      "description": "As a developer, I need the driver test suite passing against the NAPI-backed Rust runtime for static actors with JSON, CBOR, and BARE encoding protocols.",
+      "acceptanceCriteria": [
+        "Update driver-test-suite to run against the NAPI-backed registry (CoreRegistry via NAPI) instead of the old TS ActorDriver",
+        "Comment out all dynamic actor tests (dynamic actors are deleted, will be rewritten with V8 later)",
+        "All static actor tests pass with JSON encoding",
+        "All static actor tests pass with CBOR encoding",
+        "All static actor tests pass with BARE encoding",
+        "Tests cover: actor lifecycle (create, wake, sleep, destroy), state persistence across sleep/wake, KV operations, SQLite operations, action dispatch + response, event broadcast, connections (connect, disconnect, hibernation), queue send/receive with completable messages, schedule (after, at), WebSocket send/receive",
+        "No test modifications that weaken assertions \u2014 fix the runtime, not the tests",
+        "All tests pass: pnpm test driver-test-suite"
+      ],
+      "priority": 39,
+      "passes": false,
+      "notes": "This is the real validation that the Rust migration works correctly. The driver test suite is a comprehensive matrix testing all actor functionality across encoding protocols. Run from rivetkit-typescript/packages/rivetkit. Comment out dynamic actor fixtures and tests but keep the test infrastructure. Fix any NAPI bridge issues discovered here."
     }
   ]
 }

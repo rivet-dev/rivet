@@ -1,4 +1,4 @@
-import type { RawAccess } from "@/db/config";
+import type { RawAccess } from "@/common/database/config";
 import type {
 	ListEventsRequest,
 	ListPage,
