@@ -9,6 +9,8 @@ workspace = "../../../"
 [dependencies]
 anyhow.workspace = true
 ciborium.workspace = true
+futures.workspace = true
+http.workspace = true
 rivet-envoy-client.workspace = true
 scc.workspace = true
 serde.workspace = true

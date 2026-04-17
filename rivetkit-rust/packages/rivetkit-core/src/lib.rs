@@ -5,11 +5,16 @@ pub mod sqlite;
 pub mod types;
 pub mod websocket;
 
-pub use actor::callbacks::ActorInstanceCallbacks;
+pub use actor::callbacks::{
+	ActionRequest, ActorInstanceCallbacks, OnBeforeActionResponseRequest,
+	OnBeforeConnectRequest, OnConnectRequest, OnDestroyRequest, OnDisconnectRequest,
+	OnRequestRequest, OnSleepRequest, OnStateChangeRequest, OnWakeRequest,
+	OnWebSocketRequest, Request, Response, RunRequest,
+};
 pub use actor::config::{ActorConfig, ActorConfigOverrides, CanHibernateWebSocket};
 pub use actor::connection::ConnHandle;
 pub use actor::context::ActorContext;
-pub use actor::factory::ActorFactory;
+pub use actor::factory::{ActorFactory, FactoryRequest};
 pub use actor::queue::Queue;
 pub use actor::schedule::Schedule;
 pub use kv::Kv;

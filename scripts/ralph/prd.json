@@ -103,7 +103,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Two-Phase Actor Construction', 'ActorInstanceCallbacks', and 'Request Types' sections. All request types use named fields (not positional). ActionRequest includes: ctx, conn (ConnHandle), name (String), args (Vec<u8>)."
     },
     {

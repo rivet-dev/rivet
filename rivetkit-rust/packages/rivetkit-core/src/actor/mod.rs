@@ -12,10 +12,15 @@ pub mod sleep;
 pub mod state;
 pub mod vars;
 
-pub use callbacks::ActorInstanceCallbacks;
+pub use callbacks::{
+	ActionRequest, ActorInstanceCallbacks, OnBeforeActionResponseRequest,
+	OnBeforeConnectRequest, OnConnectRequest, OnDestroyRequest, OnDisconnectRequest,
+	OnRequestRequest, OnSleepRequest, OnStateChangeRequest, OnWakeRequest,
+	OnWebSocketRequest, Request, Response, RunRequest,
+};
 pub use config::{ActorConfig, ActorConfigOverrides, CanHibernateWebSocket};
 pub use connection::ConnHandle;
 pub use context::ActorContext;
-pub use factory::ActorFactory;
+pub use factory::{ActorFactory, FactoryRequest};
 pub use queue::Queue;
 pub use schedule::Schedule;

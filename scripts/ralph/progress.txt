@@ -5,6 +5,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - New Rust crates under `rivetkit-rust/packages/` that should use root workspace deps need `[package] workspace = "../../../"` in their `Cargo.toml` and a root `/Cargo.toml` workspace member entry.
 - `rivetkit-core` shared runtime objects should hang off `ActorContext(Arc<ActorContextInner>)`, with service handles stored directly on the inner so context clones can still return borrowed `&Kv` and `&SqliteDb` style accessors.
 - `rivetkit-core` actor-scoped service wrappers should keep `Default` available for scaffolded contexts, but fail with explicit `anyhow!` configuration errors until a real `EnvoyHandle` is wired in.
+- `rivetkit-core` callback/factory APIs should box closures as `BoxFuture<'static, ...>` and use concrete `http::Request<Vec<u8>>` / `http::Response<Vec<u8>>` aliases instead of leaking generics through the runtime surface.
 - `rivetkit-core` actor snapshots should stay BARE-encoded at the single-byte KV key `[1]` so Rust matches the TypeScript actor persist layout.
 
 ---
@@ -41,4 +42,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: `rivetkit-core` actor persistence now uses `serde_bare` directly, with the actor snapshot stored at KV key `[1]` to mirror the TypeScript runtime layout.
   - Gotchas encountered: `set_state` and shutdown flushes only schedule background work when a Tokio runtime exists, so runtime-free construction stays compile-safe while explicit `save_state()` remains the deterministic path.
   - Useful context: `ActorState` now owns persisted actor metadata like `input`, `has_initialized`, and `scheduled_events`, so future schedule and factory work should mutate that handle instead of reintroducing duplicate storage in `ActorContext`.
+---
+## 2026-04-16 22:20:43 PDT - US-005
+- What was implemented: Replaced the `ActorFactory` and `ActorInstanceCallbacks` stubs with the two-phase factory API, all named request payload structs, boxed `'static` callback slots, dynamic action handler storage, and concrete HTTP request/response aliases for network callbacks.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/Cargo.toml`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/callbacks.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/factory.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/mod.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/lib.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`, `/home/nathan/r5/AGENTS.md`
+- **Learnings for future iterations:**
+  - Patterns discovered: `rivetkit-core` callback surfaces are easier to keep stable when HTTP callbacks use local `Request`/`Response` aliases over `Vec<u8>` bodies and every stored closure uses `BoxFuture<'static, ...>`.
+  - Gotchas encountered: These callback containers cannot derive `Debug`, so keep manual debug output limited to presence flags and action names instead of trying to print boxed closures.
+  - Useful context: `FactoryRequest` now carries the already-initialized `ActorContext`, `input`, and `is_new`, and both `actor::mod` and crate root re-export the request/factory types for later core stories.
 ---
