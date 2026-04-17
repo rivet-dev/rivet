@@ -329,7 +329,7 @@
 		"@rivetkit/engine-cli": "workspace:*",
 		"@rivetkit/engine-envoy-protocol": "workspace:*",
 		"@rivetkit/engine-runner": "workspace:*",
-		"@rivetkit/rivetkit-native": "workspace:*",
+		"@rivetkit/rivetkit-napi": "workspace:*",
 		"@rivetkit/fast-json-patch": "^3.1.2",
 		"@rivetkit/on-change": "^6.0.2-rc.1",
 		"@rivetkit/traces": "workspace:*",

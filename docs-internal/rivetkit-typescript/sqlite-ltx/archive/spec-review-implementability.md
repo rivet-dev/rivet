@@ -12,7 +12,7 @@ The sqlite_* ops must be added to the envoy-protocol, not the runner-protocol. T
 
 ## 2. [BLOCKER] v1/v2 dispatch location is wrong
 
-Section 8 says "the probe runs in pegboard-envoy at actor startup, before VFS registration." But the VFS is registered inside the actor process (`rivetkit-typescript/packages/sqlite-native/src/vfs.rs`), not in pegboard-envoy. Pegboard-envoy is an engine-side service; the actor runs in a separate process (or sandbox). The dispatch decision (v1 vs v2) needs to happen actor-side in `rivetkit-typescript/packages/rivetkit-native/src/database.rs`, not engine-side.
+Section 8 says "the probe runs in pegboard-envoy at actor startup, before VFS registration." But the VFS is registered inside the actor process (`rivetkit-typescript/packages/sqlite-native/src/vfs.rs`), not in pegboard-envoy. Pegboard-envoy is an engine-side service; the actor runs in a separate process (or sandbox). The dispatch decision (v1 vs v2) needs to happen actor-side in `rivetkit-typescript/packages/rivetkit-napi/src/database.rs`, not engine-side.
 
 The engine has no mechanism to tell the actor which VFS to register at VFS registration time. The spec needs to define either: (a) a protocol field in the `CommandStartActor` or init handshake that tells the actor which schema version to use, or (b) the actor probes the engine on startup (e.g., via `sqlite_takeover`) and selects the VFS based on the response. Without this, the implementer is stuck.
 
@@ -46,7 +46,7 @@ Section 7.1 uses `HashMap<String, JoinHandle<()>>` for the coordinator's worker 
 
 ## 10. [SUGGESTION] Checklist item 35 path is ambiguous
 
-Item 35 says `EnvoyV2` impl goes in `rivetkit-typescript/packages/rivetkit-native/src/database.rs`. This is where `EnvoyKv` (v1) already lives. The implementer should add the v2 impl alongside it in the same file or a new `database_v2.rs`, but the checklist should be explicit. The napi bindings needed to expose `EnvoyV2` to the TypeScript layer are not mentioned at all.
+Item 35 says `EnvoyV2` impl goes in `rivetkit-typescript/packages/rivetkit-napi/src/database.rs`. This is where `EnvoyKv` (v1) already lives. The implementer should add the v2 impl alongside it in the same file or a new `database_v2.rs`, but the checklist should be explicit. The napi bindings needed to expose `EnvoyV2` to the TypeScript layer are not mentioned at all.
 
 ## 11. [OK] Storage layout and key format
 

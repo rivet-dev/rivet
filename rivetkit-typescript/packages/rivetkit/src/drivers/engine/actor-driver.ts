@@ -1,4 +1,4 @@
-import type { EnvoyConfig } from "@rivetkit/rivetkit-native/wrapper";
+import type { EnvoyConfig } from "@rivetkit/rivetkit-napi/wrapper";
 import {
 	type HibernatingWebSocketMetadata,
 	type EnvoyHandle,
@@ -6,7 +6,7 @@ import {
 	protocol,
 	utils,
 	startEnvoySync,
-} from "@rivetkit/rivetkit-native/wrapper";
+} from "@rivetkit/rivetkit-napi/wrapper";
 import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
 import { streamSSE } from "hono/streaming";

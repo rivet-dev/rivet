@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.10.0
 # Base image for Windows (MinGW) cross-compilation.
-# Used for both rivet-engine and rivetkit-native addon builds.
+# Used for both rivet-engine and rivetkit-napi addon builds.
 # Pre-bakes MinGW-w64, Rust target, Node.js 22, napi-rs CLI.
 #
 # Build & push: scripts/docker-builder-base/build-push.sh windows-mingw

@@ -2,6 +2,8 @@
 Started: Thu Apr 16 10:02:08 PM PDT 2026
 
 ## Codebase Patterns
+- Renaming the RivetKit N-API addon means syncing the package name/path, Cargo workspace member, Docker build targets, publish metadata, example dependencies, and wrapper imports together. The live package is `@rivetkit/rivetkit-napi` at `rivetkit-typescript/packages/rivetkit-napi`.
+- `pnpm build -F @rivetkit/...` goes through Turbo and upstream workspace deps, so if `node_modules` is missing you need `pnpm install` before treating a filtered package build failure as a code bug.
 - New Rust crates under `rivetkit-rust/packages/` that should use root workspace deps need `[package] workspace = "../../../"` in their `Cargo.toml` and a root `/Cargo.toml` workspace member entry.
 - The high-level `rivetkit` crate should stay a thin typed wrapper over `rivetkit-core`, re-exporting shared transport/config types instead of redefining them.
 - `rivetkit-core` foreign-runtime bridge helpers should stay on `ActorContext` even before a runtime is wired, and they should return explicit configuration errors instead of turning missing bridge support into silent no-ops.
@@ -256,4 +258,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Foreign-runtime bridge methods belong on `ActorContext` even before the runtime wiring exists, so future NAPI/V8 work can plug into a stable public surface instead of inventing one ad hoc.
   - Gotchas encountered: The dynamic bridge's `setAlarm` shape is stricter than the existing schedule action API, so the audit needed a separate raw alarm setter instead of pretending `Schedule::at()` was equivalent.
   - Useful context: The new regression coverage lives in `rivetkit-core/src/actor/context.rs` and `rivetkit-core/src/actor/schedule.rs`, and the runtime-only helpers currently raise explicit configuration errors until the foreign runtime bridge is wired.
+---
+## 2026-04-17 11:44:53 PDT - US-029
+- What was implemented: Renamed the N-API bridge package from `rivetkit-native` to `rivetkit-napi` across the live workspace, Docker/publish/example references, and generated addon metadata. Added the first `#[napi]` `ActorContext` class that wraps `rivetkit_core::ActorContext` and exposes state, actor metadata, sleep controls, abort status, and `wait_until` promise tracking.
+- Files changed: `/home/nathan/r5/{AGENTS.md,Cargo.toml,Cargo.lock,package.json,pnpm-lock.yaml,CLAUDE.md}`, `/home/nathan/r5/rivetkit-typescript/{CLAUDE.md,packages/rivetkit-napi/**,packages/rivetkit/package.json,packages/rivetkit/src/drivers/engine/actor-driver.ts,packages/rivetkit/tests/standalone-*.mts,packages/sqlite-native/src/{lib.rs,vfs.rs}}`, `/home/nathan/r5/{docker/**,examples/kitchen-sink*/**,docs-internal/rivetkit-typescript/sqlite-ltx/**,scripts/publish/**}`, `/home/nathan/r5/scripts/ralph/{prd.json,progress.txt}`
+- **Learnings for future iterations:**
+  - Patterns discovered: The N-API addon rename is a repo-wide concern. The package name, Cargo workspace path, Docker build targets, publish metadata, example deps, and wrapper imports all need to move together or the build breaks in weird places.
+  - Gotchas encountered: `pnpm build -F @rivetkit/rivetkit-napi` is a Turbo build, not a standalone package build. If `node_modules` is missing, it fails upstream on workspace deps like `@rivetkit/engine-envoy-protocol` before it even reaches the addon.
+  - Useful context: The new Rust class lives in `rivetkit-typescript/packages/rivetkit-napi/src/actor_context.rs`, `cargo check -p rivetkit-napi` passes, and the generated `index.d.ts` now exports `ActorContext`.
 ---

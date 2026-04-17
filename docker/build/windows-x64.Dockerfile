@@ -2,7 +2,7 @@
 # Unified build for windows-x64 (MinGW cross-compile).
 # See linux-x64-gnu.Dockerfile for build arg documentation.
 #
-# NOTE on MinGW vs MSVC: rivetkit-native and rivet-engine both use MinGW on
+# NOTE on MinGW vs MSVC: rivetkit-napi and rivet-engine both use MinGW on
 # Windows to share a single Docker base image. MSVC would match Node.js's
 # own build toolchain more precisely, but cross-compiling MSVC from Linux
 # requires cargo-xwin and a separate base image. MinGW-built .node files load
@@ -67,15 +67,15 @@ RUN --mount=type=cache,id=cargo-registry-windows-x64,target=/usr/local/cargo/reg
     if [ "$BUILD_TARGET" = "engine" ]; then \
         cargo build --bin rivet-engine $CARGO_FLAG --target x86_64-pc-windows-gnu && \
         cp target/x86_64-pc-windows-gnu/$PROFILE_DIR/rivet-engine.exe /artifacts/rivet-engine-x86_64-pc-windows-gnu.exe; \
-    elif [ "$BUILD_TARGET" = "rivetkit-native" ]; then \
-        cd rivetkit-typescript/packages/rivetkit-native && \
+    elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
+        cd rivetkit-typescript/packages/rivetkit-napi && \
         napi build --platform $CARGO_FLAG --target x86_64-pc-windows-gnu && \
         # napi-rs names the output after the build host's naming convention.
         # The runtime loader expects .win32-x64-msvc.node, so rename if needed.
-        if [ -f rivetkit-native.win32-x64-gnu.node ]; then \
-            cp rivetkit-native.win32-x64-gnu.node /artifacts/rivetkit-native.win32-x64-msvc.node; \
+        if [ -f rivetkit-napi.win32-x64-gnu.node ]; then \
+            cp rivetkit-napi.win32-x64-gnu.node /artifacts/rivetkit-napi.win32-x64-msvc.node; \
         else \
-            cp rivetkit-native.win32-x64-msvc.node /artifacts/; \
+            cp rivetkit-napi.win32-x64-msvc.node /artifacts/; \
         fi; \
     else \
         echo "Unknown BUILD_TARGET: $BUILD_TARGET" && exit 1; \

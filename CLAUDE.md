@@ -105,7 +105,8 @@ git commit -m "chore(my-pkg): foo bar"
 - Prefer targeted integration tests under `rivetkit-typescript/packages/rivetkit/tests/` over shared multi-driver matrices.
 
 ### SQLite Package
-- RivetKit SQLite runtime is native-only. Use `@rivetkit/rivetkit-native` and do not add `@rivetkit/sqlite`, `@rivetkit/sqlite-vfs`, or other WebAssembly SQLite fallbacks.
+- RivetKit SQLite runtime is native-only. Use `@rivetkit/rivetkit-napi` and do not add `@rivetkit/sqlite`, `@rivetkit/sqlite-vfs`, or other WebAssembly SQLite fallbacks.
+- The N-API addon lives at `@rivetkit/rivetkit-napi` in `rivetkit-typescript/packages/rivetkit-napi`; keep Docker build targets, publish metadata, examples, and workspace package references in sync when renaming or moving it.
 
 ### RivetKit Package Resolutions
 - The root `/package.json` contains `resolutions` that map RivetKit packages to local workspace versions:
@@ -137,7 +138,7 @@ git commit -m "chore(my-pkg): foo bar"
 ### Dynamic Import Pattern
 - For runtime-only dependencies, use dynamic loading so bundlers do not eagerly include them.
 - Build the module specifier from string parts (for example with `["pkg", "name"].join("-")` or `["@scope", "pkg"].join("/")`) instead of a single string literal.
-- Prefer this pattern for modules like `@rivetkit/rivetkit-native/wrapper`, `sandboxed-node`, and `isolated-vm`.
+- Prefer this pattern for modules like `@rivetkit/rivetkit-napi/wrapper`, `sandboxed-node`, and `isolated-vm`.
 - If loading by resolved file path, resolve first and then import via `pathToFileURL(...).href`.
 
 ### Fail-By-Default Runtime Behavior
@@ -161,9 +162,12 @@ git commit -m "chore(my-pkg): foo bar"
 - `rivetkit-core` sleep shutdown should wait for the tracked `run` task, poll `SleepController` for the idle window and shutdown-task drains, persist hibernatable connections before disconnecting non-hibernatable ones, and finish with an immediate state save.
 - `rivetkit-core` destroy shutdown should skip the idle-window wait, use `on_destroy_timeout` independently from the shutdown grace period, disconnect every connection, and finish with the same immediate state save and SQLite cleanup path.
 - `envoy-client` graceful actor teardown should flow through `EnvoyCallbacks::on_actor_stop_with_completion`; the default implementation preserves the old immediate `on_actor_stop` behavior by auto-completing the stop handle after the callback returns.
+- `rivetkit` typed contexts should own concrete vars separately from `ActorContext`, cache deserialized actor state behind `Arc<Mutex<Option<Arc<State>>>>`, and always invalidate that cache after `set_state`.
+- `rivetkit` bridge code should treat `type Vars = ()` as a built-in zero-boilerplate case instead of forcing actors to implement a no-op `create_vars`.
 
 ### Rust Dependencies
 - New crates under `rivetkit-rust/packages/` that should inherit repo-wide workspace deps must set `[package] workspace = "../../../"` and be added to the root `/Cargo.toml` workspace members.
+- The high-level `rivetkit` crate should stay a thin typed wrapper over `rivetkit-core` and re-export shared transport/config types instead of redefining them.
 
 ## Documentation
 
@@ -221,6 +225,13 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 
 ### Deprecated Packages
 - `engine/packages/pegboard-runner/` and associated TypeScript "runner" packages (`engine/sdks/typescript/runner`, `rivetkit-typescript/packages/engine-runner/`) and runner workflows are deprecated. All new actor hosting work targets `engine/packages/pegboard-envoy/` exclusively. Do not add features to or fix bugs in the deprecated runner path.
+
+### RivetKit Layers
+- **Engine** (`packages/core/engine/`, includes Pegboard + Pegboard Envoy) — Orchestration. Manages actor lifecycle, routing, KV, SQLite, alarms. In local dev, the engine is spawned alongside RivetKit.
+- **envoy-client** (`engine/sdks/rust/envoy-client/`) — Wire protocol between actors and the engine. BARE serialization, WebSocket transport, KV request/response matching, SQLite protocol dispatch, tunnel routing.
+- **rivetkit-core** (`rivetkit-rust/packages/rivetkit-core/`) — Core RivetKit logic in Rust, built to be language-agnostic. Lifecycle state machine, sleep logic, shutdown sequencing, state persistence, action dispatch, event broadcast, queue management, schedule system. All callbacks are dynamic closures with opaque bytes.
+- **rivetkit (Rust)** (`rivetkit-rust/packages/rivetkit/`) — Rust-friendly typed API. `Actor` trait, `Ctx<A>`, `Registry` builder, CBOR serde at boundaries. Thin wrapper over rivetkit-core.
+- **rivetkit (TypeScript)** (`rivetkit-typescript/packages/rivetkit/`) — TypeScript-friendly API. Calls into rivetkit-core via NAPI for lifecycle logic. Owns workflow engine, sandbox/dynamic isolation, agent-os, and client library.
 
 ### Monorepo Structure
 - This is a Rust workspace-based monorepo for Rivet with the following key packages and components:
@@ -300,7 +311,7 @@ let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build(
 - If you need to add a dependency and can't find it in the Cargo.toml of the workspace, add it to the workspace dependencies in Cargo.toml (`[workspace.dependencies]`) and then add it to the package you need with `{dependency}.workspace = true`
 
 **Native SQLite & KV Channel**
-- RivetKit SQLite is served by `@rivetkit/rivetkit-native`. Do not reintroduce SQLite-over-KV or WebAssembly SQLite paths in the TypeScript runtime.
+- RivetKit SQLite is served by `@rivetkit/rivetkit-napi`. Do not reintroduce SQLite-over-KV or WebAssembly SQLite paths in the TypeScript runtime.
 - The Rust KV-backed SQLite implementation still lives in `rivetkit-typescript/packages/sqlite-native/src/`. When changing its on-disk or KV layout, update the internal data-channel spec in the same change.
 - SQLite v2 slow-path staging writes encoded LTX bytes directly under DELTA chunk keys. Do not expect `/STAGE` keys or a fixed one-chunk-per-page mapping in tests or recovery code.
 - The native VFS uses the same 4 KiB chunk layout and KV key encoding as the WASM VFS. Data is compatible between backends.

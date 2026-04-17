@@ -1,4 +1,4 @@
-// Standalone test for WebSocket and SQLite through rivetkit-native
+// Standalone test for WebSocket and SQLite through rivetkit-napi
 // Run: npx tsx tests/standalone-ws-sqlite.mts
 //
 // Requires: engine running on localhost:6420, test-envoy on port 5051

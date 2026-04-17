@@ -5225,7 +5225,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rivetkit-native"
+name = "rivetkit-napi"
 version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",
@@ -5238,6 +5238,7 @@ dependencies = [
  "napi-derive",
  "rivet-envoy-client",
  "rivet-envoy-protocol",
+ "rivetkit-core",
  "rivetkit-sqlite-native",
  "serde",
  "serde_json",

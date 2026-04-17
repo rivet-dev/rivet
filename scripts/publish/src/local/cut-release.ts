@@ -154,7 +154,7 @@ async function main() {
 		await $({
 			stdio: "inherit",
 			cwd: repoRoot,
-		})`pnpm build -F rivetkit -F @rivetkit/* -F !@rivetkit/shared-data -F !@rivetkit/engine-frontend -F !@rivetkit/mcp-hub -F !@rivetkit/sqlite-native -F !@rivetkit/sqlite-wasm -F !@rivetkit/rivetkit-native`;
+		})`pnpm build -F rivetkit -F @rivetkit/* -F !@rivetkit/shared-data -F !@rivetkit/engine-frontend -F !@rivetkit/mcp-hub -F !@rivetkit/sqlite-native -F !@rivetkit/sqlite-wasm -F !@rivetkit/rivetkit-napi`;
 		await $({
 			stdio: "inherit",
 			cwd: repoRoot,

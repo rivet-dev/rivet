@@ -3,14 +3,14 @@
  *
  * Discovery order matters: platform-specific packages are returned first so
  * they land on npm before their meta packages. `rivetkit` (the meta-meta
- * package users install) depends on `@rivetkit/rivetkit-native` which in turn
+ * package users install) depends on `@rivetkit/rivetkit-napi` which in turn
  * has `optionalDependencies` on the platform packages — npm only resolves
  * those optionals at install time, so they must exist on the registry before
  * anyone installs the meta.
  *
  * NOTE: `@rivetkit/sqlite-native` and `@rivetkit/sqlite-wasm` are deliberately
  * NOT discovered here. The sqlite-native Rust crate is now statically linked
- * into `@rivetkit/rivetkit-native` via `libsqlite3-sys` +
+ * into `@rivetkit/rivetkit-napi` via `libsqlite3-sys` +
  * the `rivetkit-sqlite-native` workspace dep, so the standalone npm package is
  * redundant. The old sqlite-wasm package was removed from the workspace but
  * its package.json remains for compatibility. Both stay on the registry at
@@ -66,8 +66,8 @@ export interface MetaPackageSpec {
 
 export const META_PACKAGES: readonly MetaPackageSpec[] = [
 	{
-		meta: "@rivetkit/rivetkit-native",
-		platformPrefix: "@rivetkit/rivetkit-native-",
+		meta: "@rivetkit/rivetkit-napi",
+		platformPrefix: "@rivetkit/rivetkit-napi-",
 	},
 	{
 		meta: "@rivetkit/engine-cli",
@@ -125,10 +125,10 @@ export function discoverPackages(
 	// 1. Platform-specific packages first. These are `optionalDependencies` of
 	//    their meta packages and must exist on npm before the meta package
 	//    resolves at install time.
-	//    - rivetkit-native: the N-API addon (.node files)
+	//    - rivetkit-napi: the N-API addon (.node files)
 	//    - engine-cli: the rivet-engine binary
 	for (const metaRelDir of [
-		"rivetkit-typescript/packages/rivetkit-native/npm",
+		"rivetkit-typescript/packages/rivetkit-napi/npm",
 		"rivetkit-typescript/packages/engine-cli/npm",
 	]) {
 		const npmDir = join(repoRoot, metaRelDir);
@@ -204,7 +204,7 @@ export function assertDiscoverySanity(packages: Package[]): void {
 	const required = [
 		"rivetkit",
 		"@rivetkit/react",
-		"@rivetkit/rivetkit-native",
+		"@rivetkit/rivetkit-napi",
 		"@rivetkit/engine-cli",
 	];
 	const missing = required.filter((r) => !byName.has(r));

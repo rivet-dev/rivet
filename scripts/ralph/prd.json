@@ -559,7 +559,7 @@
         "`cargo check` passes"
       ],
       "priority": 29,
-      "passes": false,
+      "passes": true,
       "notes": "This is the first NAPI story. Only typecheck can be verified, not runtime behavior. The existing rivetkit-native code (~1430 lines in bridge_actor.rs, envoy_handle.rs, database.rs) is a complete rewrite. Read the existing NAPI code first to understand the current patterns."
     },
     {

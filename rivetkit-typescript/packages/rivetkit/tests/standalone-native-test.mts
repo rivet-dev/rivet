@@ -1,6 +1,6 @@
 // Standalone end-to-end test for the native envoy path.
 // Verifies action calls, actor connections, raw WebSockets, and SQLite
-// persistence through @rivetkit/rivetkit-native.
+// persistence through @rivetkit/rivetkit-napi.
 //
 // Run: npx tsx tests/standalone-native-test.mts
 

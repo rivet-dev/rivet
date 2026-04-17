@@ -7,7 +7,7 @@
 //! This is a pure Rust library. N-API bindings and transport clients
 //! live in separate crates that compose this one.
 //!
-//! The KV-backed SQLite implementation used by `rivetkit-native` is defined in
+//! The KV-backed SQLite implementation used by `rivetkit-napi` is defined in
 //! this crate. Keep its storage layout and behavior in sync with the internal
 //! SQLite data-channel spec.
 //!

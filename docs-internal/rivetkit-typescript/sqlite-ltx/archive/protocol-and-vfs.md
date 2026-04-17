@@ -365,7 +365,7 @@ pub trait SqliteV2Protocol: Send + Sync {
 ```
 
 Concrete impls:
-- `EnvoyV2` in `rivetkit-typescript/packages/rivetkit-native/src/database.rs` — production impl that delegates to napi methods on `EnvoyHandle`, which in turn talks to the engine over WebSocket.
+- `EnvoyV2` in `rivetkit-typescript/packages/rivetkit-napi/src/database.rs` — production impl that delegates to napi methods on `EnvoyHandle`, which in turn talks to the engine over WebSocket.
 - `MemoryV2` in `rivetkit-typescript/packages/sqlite-native/src/memory_v2.rs` (or the test crate) — in-process implementation that runs the entire engine subsystem against an in-memory backing store, for unit tests.
 
 The two share no code with the v1 trait `SqliteKv`. Migration to v2 is by-construction since dispatch happens at the engine schema-version flag at registration time.

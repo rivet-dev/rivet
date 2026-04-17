@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.10.0
 # Unified build for linux-x64-gnu.
-# Builds either rivet-engine or rivetkit-native based on BUILD_TARGET.
+# Builds either rivet-engine or rivetkit-napi based on BUILD_TARGET.
 #
 # Build args:
-#   BUILD_TARGET    - "engine" or "rivetkit-native"
+#   BUILD_TARGET    - "engine" or "rivetkit-napi"
 #   BUILD_MODE      - "debug" (fast) or "release" (optimized)
 #   BUILD_FRONTEND  - "true" or "false" (engine only)
 #
@@ -63,10 +63,10 @@ RUN --mount=type=cache,id=cargo-registry-linux-x64-gnu,target=/usr/local/cargo/r
     if [ "$BUILD_TARGET" = "engine" ]; then \
         cargo build --bin rivet-engine $CARGO_FLAG --target x86_64-unknown-linux-gnu && \
         cp target/x86_64-unknown-linux-gnu/$PROFILE_DIR/rivet-engine /artifacts/rivet-engine-x86_64-unknown-linux-gnu; \
-    elif [ "$BUILD_TARGET" = "rivetkit-native" ]; then \
-        cd rivetkit-typescript/packages/rivetkit-native && \
+    elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
+        cd rivetkit-typescript/packages/rivetkit-napi && \
         napi build --platform $CARGO_FLAG --target x86_64-unknown-linux-gnu && \
-        cp rivetkit-native.linux-x64-gnu.node /artifacts/; \
+        cp rivetkit-napi.linux-x64-gnu.node /artifacts/; \
     else \
         echo "Unknown BUILD_TARGET: $BUILD_TARGET" && exit 1; \
     fi && \

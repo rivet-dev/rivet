@@ -170,7 +170,7 @@ trait SqliteKv {
 }
 ```
 
-`EnvoyKv` (`rivetkit-typescript/packages/rivetkit-native/src/database.rs`) implements them by delegating to new napi methods on `EnvoyHandle`.
+`EnvoyKv` (`rivetkit-typescript/packages/rivetkit-napi/src/database.rs`) implements them by delegating to new napi methods on `EnvoyHandle`.
 
 The in-memory test driver (see [`test-architecture.md`](./test-architecture.md), forthcoming) implements them against an in-process `BTreeMap<Vec<u8>, Vec<u8>>`.
 

@@ -10,7 +10,7 @@ overrides:
   '@rivetkit/next-js': workspace:*
   '@rivetkit/db': workspace:*
   '@rivetkit/engine-api-full': workspace:*
-  '@rivetkit/rivetkit-native': workspace:*
+  '@rivetkit/rivetkit-napi': workspace:*
   '@rivetkit/engine-cli': workspace:*
   '@types/react': ^19
   '@types/react-dom': ^19
@@ -1657,9 +1657,9 @@ importers:
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      '@rivetkit/rivetkit-native':
+      '@rivetkit/rivetkit-napi':
         specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/rivetkit-native
+        version: link:../../rivetkit-typescript/packages/rivetkit-napi
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@3.25.76)
@@ -1739,9 +1739,9 @@ importers:
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
-      '@rivetkit/rivetkit-native':
+      '@rivetkit/rivetkit-napi':
         specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/rivetkit-native
+        version: link:../../rivetkit-typescript/packages/rivetkit-napi
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@3.25.76)
@@ -4290,9 +4290,9 @@ importers:
       '@rivetkit/on-change':
         specifier: ^6.0.2-rc.1
         version: 6.0.2-rc.1
-      '@rivetkit/rivetkit-native':
+      '@rivetkit/rivetkit-napi':
         specifier: workspace:*
-        version: link:../rivetkit-native
+        version: link:../rivetkit-napi
       '@rivetkit/traces':
         specifier: workspace:*
         version: link:../traces
@@ -4430,7 +4430,7 @@ importers:
         specifier: ^3.25.0
         version: 3.25.1(zod@4.1.13)
 
-  rivetkit-typescript/packages/rivetkit-native:
+  rivetkit-typescript/packages/rivetkit-napi:
     dependencies:
       '@napi-rs/cli':
         specifier: ^2.18.4

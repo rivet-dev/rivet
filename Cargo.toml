@@ -60,7 +60,7 @@ members = [
   "engine/sdks/rust/ups-protocol",
   "rivetkit-rust/packages/rivetkit",
   "rivetkit-rust/packages/rivetkit-core",
-  "rivetkit-typescript/packages/rivetkit-native"
+  "rivetkit-typescript/packages/rivetkit-napi"
 ]
 
   [workspace.package]
@@ -523,6 +523,9 @@ members = [
 
     [workspace.dependencies.rivetkit-sqlite-native]
     path = "rivetkit-typescript/packages/sqlite-native"
+
+    [workspace.dependencies.rivetkit-core]
+    path = "rivetkit-rust/packages/rivetkit-core"
 
     [workspace.dependencies.epoxy-protocol]
     path = "engine/sdks/rust/epoxy-protocol"

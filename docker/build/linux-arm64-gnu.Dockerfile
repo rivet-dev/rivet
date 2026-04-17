@@ -54,10 +54,10 @@ RUN --mount=type=cache,id=cargo-registry-linux-arm64-gnu,target=/usr/local/cargo
     if [ "$BUILD_TARGET" = "engine" ]; then \
         cargo build --bin rivet-engine $CARGO_FLAG --target aarch64-unknown-linux-gnu && \
         cp target/aarch64-unknown-linux-gnu/$PROFILE_DIR/rivet-engine /artifacts/rivet-engine-aarch64-unknown-linux-gnu; \
-    elif [ "$BUILD_TARGET" = "rivetkit-native" ]; then \
-        cd rivetkit-typescript/packages/rivetkit-native && \
+    elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
+        cd rivetkit-typescript/packages/rivetkit-napi && \
         napi build --platform $CARGO_FLAG --target aarch64-unknown-linux-gnu && \
-        cp rivetkit-native.linux-arm64-gnu.node /artifacts/; \
+        cp rivetkit-napi.linux-arm64-gnu.node /artifacts/; \
     else \
         echo "Unknown BUILD_TARGET: $BUILD_TARGET" && exit 1; \
     fi && \
