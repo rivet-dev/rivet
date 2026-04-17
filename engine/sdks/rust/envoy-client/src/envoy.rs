@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use rivet_envoy_protocol as protocol;
 use tokio::sync::mpsc;
@@ -46,6 +46,7 @@ pub struct EnvoyContext {
 
 pub struct ActorEntry {
 	pub handle: mpsc::UnboundedSender<ToActor>,
+	pub active_http_request_count: Arc<AtomicUsize>,
 	pub name: String,
 	pub event_history: Vec<protocol::EventWrapper>,
 	pub last_command_idx: i64,
@@ -108,6 +109,7 @@ pub enum ToEnvoyMessage {
 pub struct ActorInfo {
 	pub name: String,
 	pub generation: u32,
+	pub active_http_request_count: usize,
 }
 
 impl EnvoyContext {
@@ -282,6 +284,9 @@ async fn envoy_loop(
 							ActorInfo {
 								name: entry.name.clone(),
 								generation: actor_gen,
+								active_http_request_count: entry
+									.active_http_request_count
+									.load(Ordering::Acquire),
 							}
 						});
 						let _ = response_tx.send(info);

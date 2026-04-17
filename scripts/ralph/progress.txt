@@ -12,6 +12,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` action/lifecycle surfaces should collapse `anyhow::Error` into serializable `group/code/message` payloads via `rivet_error::RivetError::extract` before returning them across runtime boundaries.
 - `rivetkit-core` schedule mutations should go through one `ActorState` helper so insert/remove stays sorted, then trigger an immediate state flush and envoy alarm resync from the earliest remaining event.
 - `rivetkit-core` transport-edge helpers should translate `on_request` failures into HTTP 500 responses and `on_websocket` failures into logged 1011 closes, while wrapper types keep internal `try_*` methods for explicit misconfiguration errors.
+- `envoy-client` actor-scoped HTTP fetch work should stay in a `JoinSet` plus a shared `Arc<AtomicUsize>` counter so sleep checks can read in-flight request count and shutdown can abort and join the tasks before `Stopped`.
 
 ---
 
@@ -95,4 +96,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Queue storage should reuse the TypeScript key layout with metadata at `[5, 1, 1]` and messages under `[5, 1, 2] + u64be(id)` so a plain prefix scan stays FIFO.
   - Gotchas encountered: `try_next` and `try_next_batch` still need KV I/O, so the Rust wrappers have to bridge into async internally instead of pretending the storage layer is synchronous.
   - Useful context: `QueueMessage::complete()` works off an attached completion handle, while `Queue::active_queue_wait_count()` is the counter future sleep logic should consult when `can_sleep()` lands.
+---
+## 2026-04-16 23:01:32 PDT - US-011
+- What was implemented: Reworked `envoy-client` HTTP request handling so actor fetches run in a tracked `JoinSet`, publish a shared in-flight request counter, and get aborted plus joined during actor shutdown before the stopped event is emitted.
+- Files changed: `/home/nathan/r5/engine/sdks/rust/envoy-client/src/actor.rs`, `/home/nathan/r5/engine/sdks/rust/envoy-client/src/commands.rs`, `/home/nathan/r5/engine/sdks/rust/envoy-client/src/envoy.rs`, `/home/nathan/r5/engine/sdks/rust/envoy-client/src/handle.rs`, `/home/nathan/r5/AGENTS.md`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: `envoy-client` should keep actor HTTP fetch tasks in a `JoinSet` while exposing a separate shared `Arc<AtomicUsize>` counter for external sleep-readiness checks.
+  - Gotchas encountered: Counting via `JoinSet::len()` is not enough because completed tasks are not removed until joined, so the live counter needs its own drop guard inside each spawned request future.
+  - Useful context: `EnvoyHandle::get_active_http_request_count()` now wraps the actor metadata lookup, and the new unit tests in `envoy-client/src/actor.rs` cover both in-flight counting and stop-time abort behavior.
 ---

@@ -14,7 +14,7 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 		match command_wrapper.inner {
 			protocol::Command::CommandStartActor(val) => {
 				let actor_name = val.config.name.clone();
-				let handle = create_actor(
+				let (handle, active_http_request_count) = create_actor(
 					ctx.shared.clone(),
 					checkpoint.actor_id.clone(),
 					checkpoint.generation,
@@ -33,6 +33,7 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 					checkpoint.generation,
 					ActorEntry {
 						handle,
+						active_http_request_count,
 						name: actor_name,
 						event_history: Vec::new(),
 						last_command_idx: checkpoint.index,

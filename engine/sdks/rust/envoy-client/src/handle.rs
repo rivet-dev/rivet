@@ -83,6 +83,16 @@ impl EnvoyHandle {
 		rx.await.ok().flatten()
 	}
 
+	pub async fn get_active_http_request_count(
+		&self,
+		actor_id: &str,
+		generation: Option<u32>,
+	) -> Option<usize> {
+		self.get_actor(actor_id, generation)
+			.await
+			.map(|actor| actor.active_http_request_count)
+	}
+
 	pub fn set_alarm(&self, actor_id: String, alarm_ts: Option<i64>, generation: Option<u32>) {
 		let _ = self.shared.envoy_tx.send(ToEnvoyMessage::SetAlarm {
 			actor_id,

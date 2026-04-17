@@ -244,6 +244,7 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 - Custom error system at `packages/common/error/`
 - Uses derive macros with struct-based error definitions
 - `rivetkit-core` should convert callback/action `anyhow::Error` values into transport-safe `group/code/message` payloads with `rivet_error::RivetError::extract` before returning them across runtime boundaries.
+- `envoy-client` actor-scoped HTTP fetch work should stay in a `JoinSet` plus an `Arc<AtomicUsize>` counter so sleep checks can read in-flight request count and shutdown can abort and join the tasks before sending `Stopped`.
 
 - Use this pattern for custom errors:
 

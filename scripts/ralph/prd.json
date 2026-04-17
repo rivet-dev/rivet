@@ -223,7 +223,7 @@
         "`cargo check -p envoy-client` passes"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Envoy-Client Integration' section, blocking changes #1 and #3. This is in engine/sdks/rust/envoy-client/src/actor.rs. The detached tokio::spawn is around the HTTP request handling path. These two changes are tightly coupled (both modify the same spawn/tracking code) so they are combined into one story."
     },
     {
