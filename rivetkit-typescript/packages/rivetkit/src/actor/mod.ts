@@ -1,8 +1,6 @@
-import { event as schemaEvent, queue as schemaQueue } from "./schema";
+export type { ActorKey } from "@/client/query";
+export { ALLOWED_PUBLIC_HEADERS } from "@/common/actor-router-consts";
 export type { Encoding } from "@/common/encoding";
-export {
-	ALLOWED_PUBLIC_HEADERS,
-} from "@/common/actor-router-consts";
 export type {
 	UniversalErrorEvent,
 	UniversalEvent,
@@ -15,20 +13,21 @@ export type {
 	RivetMessageEvent,
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
-export type { ActorKey } from "@/client/query";
 export type * from "./config";
 export type {
-	BaseActorInstance,
-	BaseActorDefinition,
 	AnyActorDefinition,
-	AnyStaticActorDefinition,
 	AnyActorInstance,
+	AnyStaticActorDefinition,
 	AnyStaticActorInstance,
+	BaseActorDefinition,
+	BaseActorInstance,
 } from "./definition";
-export { actor, isStaticActorDefinition, isStaticActorInstance } from "./definition";
-export { ActorDefinition } from "./definition";
-export { lookupInRegistry } from "./definition";
+export {
+	ActorDefinition,
+	actor,
+	isStaticActorDefinition,
+	isStaticActorInstance,
+	lookupInRegistry,
+} from "./definition";
 export { UserError, type UserErrorOptions } from "./errors";
-export type { Type } from "./schema";
-export const event = schemaEvent;
-export const queue = schemaQueue;
+export { event, queue, type Type } from "./schema";

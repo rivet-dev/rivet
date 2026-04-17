@@ -2,6 +2,7 @@
 Started: Thu Apr 16 10:02:08 PM PDT 2026
 
 ## Codebase Patterns
+- When trimming `rivetkit` entrypoints, update `package.json` `exports`, `files`, and `scripts.build` together. `tsup` can still pass while stale export targets point at missing dist files.
 - `ctx.sleep()` and `ctx.destroy()` are not enough if they only flip local flags. The core runtime must also send the matching intent through the configured envoy handle or the engine will never transition the actor.
 - When changing Rust under `packages/rivetkit-napi` or `packages/sqlite-native`, rebuild from `rivetkit-typescript/packages/rivetkit-napi` with `pnpm build:force` so the native `.node` artifact actually refreshes.
 - `packages/rivetkit` should keep any still-live BARE codecs in `src/common/bare/` and import them from source. Do not depend on ephemeral `dist/schemas/**` outputs after removing the schema generator.
@@ -348,4 +349,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: The NAPI registry needs an explicit `/action/:name` HTTP bridge plus write-through state and vars proxies or TS actor actions appear to run but silently drop mutations.
   - Gotchas encountered: SQLite v2 reopen after actor sleep still trips the batch-atomic probe on this path, so this integration validates SQLite before sleep and validates post-wake persistence through state plus KV.
   - Useful context: The meaningful checks for this story were `pnpm build:force` in `packages/rivetkit-napi`, `pnpm test napi-runtime-integration.test.ts`, `cargo check -p rivetkit-core -p rivetkit-napi`, and `pnpm check-types` in `packages/rivetkit`.
+---
+## 2026-04-17 14:28:10 PDT - US-038
+- What was implemented: Trimmed the `rivetkit` TypeScript package surface by removing dead `topologies/*` exports and build entries, deleting clearly unused package dependencies, tightening the root and actor barrel re-exports, and adding a regression test that locks the cleaned package metadata in place.
+- Files changed: `/home/nathan/r5/pnpm-lock.yaml`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/package.json`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/src/actor/mod.ts`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/src/mod.ts`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/tests/package-surface.test.ts`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: `rivetkit` package cleanup needs the export map, `files` list, and `scripts.build` kept in sync or published entrypoints can lie even while `tsup` stays green.
+  - Gotchas encountered: `pnpm test -- --run <file>` still ran unrelated package tests here, so the reliable targeted path was `pnpm exec vitest run <files>` from `packages/rivetkit`.
+  - Useful context: The acceptance checks that mattered were `pnpm check-types`, `pnpm build`, `pnpm exec biome check ...`, and `pnpm exec vitest run tests/package-surface.test.ts tests/registry-constructor.test.ts tests/napi-runtime-integration.test.ts` in `rivetkit-typescript/packages/rivetkit`.
 ---

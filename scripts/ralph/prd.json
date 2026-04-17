@@ -1,7 +1,7 @@
 {
   "project": "RivetKit Rust SDK",
   "branchName": "04-16-chore_rivetkit_to_rust",
-  "description": "Two-layer Rust SDK for writing Rivet Actors. rivetkit-core is the dynamic, language-agnostic lifecycle engine. rivetkit is the typed Rust wrapper with Actor trait, Ctx<A>, and Registry. Includes NAPI bridge and TS migration. See .agent/specs/rivetkit-rust.md for full spec.\n\nInvariants:\n- rivetkit API is mostly identical (zero or minimal breaking changes)\n- All driver test suite tests pass (except dynamic actors)\n- All validation behaves identically\n\nIntentionally deferred: Dynamic actors (V8 rewrite), Inspector system.",
+  "description": "Two-layer Rust SDK for writing Rivet Actors. rivetkit-core is the dynamic, language-agnostic lifecycle engine. rivetkit is the typed Rust wrapper with Actor trait, Ctx<A>, and Registry. Includes NAPI bridge and TS migration. See .agent/specs/rivetkit-rust.md for full spec.\n\nInvariants:\n- rivetkit API is mostly identical (zero or minimal breaking changes)\n- All driver test suite tests pass (except dynamic actors)\n- All validation behaves identically\n\nIntentionally deferred: Dynamic actors (V8 rewrite), ",
   "userStories": [
     {
       "id": "US-001",
@@ -747,8 +747,28 @@
         "No unused exports or dead code warnings"
       ],
       "priority": 39,
-      "passes": false,
+      "passes": true,
       "notes": "Final cleanup story. The end state for rivetkit-typescript should be: actor definitions, client library, workflow engine, agent-os, engine-api, engine-client, registry (thin NAPI wrapper), utils, common, devtools-loader."
+    },
+    {
+      "id": "US-048",
+      "title": "Move config conversion and HTTP parsing helpers from rivetkit-napi to rivetkit-core",
+      "description": "As a developer, I need generic config conversion and HTTP request/response helpers in rivetkit-core so future runtimes (V8) don't duplicate this logic.",
+      "acceptanceCriteria": [
+        "Add FlatActorConfig struct to rivetkit-core with all fields as Option<u32> milliseconds (matching JsActorConfig in rivetkit-napi)",
+        "Add ActorConfig::from_flat(FlatActorConfig) method that converts ms values to Duration and applies defaults",
+        "Add Request::from_parts(method: &str, uri: &str, headers: HashMap<String, String>, body: Vec<u8>) constructor to rivetkit-core",
+        "Add Response::to_parts(&self) -> (u16, HashMap<String, String>, Vec<u8>) method to rivetkit-core",
+        "Update rivetkit-napi actor_factory.rs to use ActorConfig::from_flat() instead of inline actor_config_from_js()",
+        "Update rivetkit-napi actor_factory.rs to use Request::from_parts() and Response::to_parts() instead of inline parsing",
+        "Delete the now-redundant actor_config_from_js(), parse_http_response(), and build_http_request() from rivetkit-napi",
+        "rivetkit-napi actor_factory.rs should shrink by ~100 lines",
+        "cargo check passes for rivetkit-core and rivetkit-napi",
+        "tsc type-check passes"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": "This moves ~100 lines of generic logic from rivetkit-napi to rivetkit-core. The remaining ~586 lines in actor_factory.rs are genuinely NAPI-specific (ThreadsafeFunction wiring, JS object construction). See CLAUDE.md RivetKit Layer Constraints: if code would be duplicated by a future V8 runtime, it belongs in rivetkit-core."
     },
     {
       "id": "US-041",
@@ -766,7 +786,7 @@
         "cargo check passes",
         "tsc type-check passes"
       ],
-      "priority": 40,
+      "priority": 41,
       "passes": false,
       "notes": "rivetkit-core already uses RivetError derive macro from packages/common/error/. ActionDispatchError already has group/code/message. This story is about making it universal and deleting the TS error classes. See CLAUDE.md 'Error Handling' section for the derive pattern."
     },
@@ -785,7 +805,7 @@
         "cargo check passes",
         "tsc type-check passes"
       ],
-      "priority": 41,
+      "priority": 42,
       "passes": false,
       "notes": "Split: Rust actors get type-safe validation from serde for free. TS actors get Zod validation for user-defined schemas. rivetkit-core stays opaque bytes with no validation. All validation errors are RivetError."
     },
@@ -806,7 +826,7 @@
         "cargo check passes for rivetkit-core and rivetkit",
         "tsc type-check passes"
       ],
-      "priority": 42,
+      "priority": 43,
       "passes": false,
       "notes": "Problem: on_create only runs on first boot. Code updates that add ALTER TABLE need migrations on wake too. onMigrate runs every start so actors can use CREATE TABLE IF NOT EXISTS and version-tracked ALTER TABLE. Runs after state load so migrations can read persisted state to decide what to migrate."
     },
@@ -828,7 +848,7 @@
         "cargo check passes",
         "tsc type-check passes"
       ],
-      "priority": 43,
+      "priority": 44,
       "passes": false,
       "notes": "Per-actor registry is important: each actor has its own metrics namespace. When actor stops, the registry is dropped so metrics don't leak. The /metrics endpoint is part of the actor's HTTP handler, not a global endpoint. Inspector token validation prevents unauthorized metrics scraping."
     },
@@ -847,7 +867,7 @@
         "Add to NAPI bridge",
         "cargo check passes"
       ],
-      "priority": 44,
+      "priority": 45,
       "passes": false,
       "notes": "See spec concern #14. Used for coordination patterns where an actor waits for a specific message type."
     },
@@ -866,7 +886,7 @@
         "Add to NAPI bridge",
         "cargo check passes"
       ],
-      "priority": 45,
+      "priority": 46,
       "passes": false,
       "notes": "See spec concern #15. This is a request-response pattern built on queues. The sender enqueues and waits; the receiver processes and calls complete(response); the sender gets the response."
     },
@@ -883,9 +903,112 @@
         "Add futures crate dependency if not already present",
         "cargo check -p rivetkit passes"
       ],
-      "priority": 46,
+      "priority": 47,
       "passes": false,
       "notes": "See spec concern #9. Convenience wrapper \u2014 the loop-based next() already works. This just makes it more idiomatic for Rust users who prefer Stream combinators. Small story."
+    },
+    {
+      "id": "US-049",
+      "title": "Inspector: BARE schema definition with vbare versioning",
+      "description": "As a developer, I need the inspector protocol types defined as Rust structs with BARE serialization and vbare versioned encoding.",
+      "acceptanceCriteria": [
+        "Define all inspector protocol types in rivetkit-core/src/inspector/schema.rs as Rust structs with serde + serde_bare derives",
+        "Types include: InspectorInit, StateUpdated, ConnectionsUpdated, QueueUpdated, ConnectionInfo, QueueStatus, QueueMessageSummary, InspectorMetrics, StartupTiming, DatabaseSchema, DatabaseTable, DatabaseColumn, DatabaseRow, InspectorSummary",
+        "Request/response types: StateRequest, ConnectionsRequest, RpcsListRequest, ActionRequest, PatchStateRequest, QueueRequest, DatabaseSchemaRequest, DatabaseTableRowsRequest, DatabaseExecuteRequest, WorkflowHistoryRequest, WorkflowReplayRequest",
+        "Implement vbare versioned encoding: 2-byte LE version prefix before BARE body, matching the pattern in other *-protocol packages",
+        "Support reading v1-v4 schemas for backward compat, always write latest version",
+        "Traces types stubbed (empty struct, returns no data)",
+        "cargo check -p rivetkit-core passes"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": "Reference: schemas/actor-inspector/v1.bare through v4.bare at commit 959ab9bba. Path: rivetkit-typescript/packages/rivetkit/src/schemas/actor-inspector/. Also see other protocol packages for vbare pattern (e.g., engine/packages/runner-protocol/). Reference commit (pre-deletion): 959ab9bba. Use `git show 959ab9bba:<path>` to read the original TS implementation."
+    },
+    {
+      "id": "US-050",
+      "title": "Inspector: Transport-agnostic core logic module",
+      "description": "As a developer, I need the inspector core logic as pure methods on an Inspector struct with no transport dependencies.",
+      "acceptanceCriteria": [
+        "Create rivetkit-core/src/inspector/mod.rs with Inspector struct",
+        "Token management: generate_token() creates secure random token, store/load from KV at the correct key (same key as TS KEYS.INSPECTOR_TOKEN), verify_token() with timing-safe comparison",
+        "get_traces returns empty/stub response (traces not implemented yet)",
+        "Inspector holds reference to ActorContext for accessing state, KV, SQL, connections, queue, actions",
+        "All methods return the schema types from US-049",
+        "Zero overhead when no inspector client is active \u2014 methods are only called by transport layers",
+        "cargo check -p rivetkit-core passes"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": "Transport-agnostic: no HTTP, no WebSocket, no routing in this module. Just pure logic. HTTP and WS transport layers (US-052, US-054) call these methods. Reference commit (pre-deletion): 959ab9bba. Use `git show 959ab9bba:<path>` to read the original TS implementation. Original: rivetkit-typescript/packages/rivetkit/src/inspector/actor-inspector.ts"
+    },
+    {
+      "id": "US-051",
+      "title": "Inspector: Wire lifecycle events into Inspector",
+      "description": "As a developer, I need state, connection, and queue changes to emit inspector events so connected clients get live updates.",
+      "acceptanceCriteria": [
+        "Emit state_updated event on every set_state / save_state in ActorContext",
+        "Emit connections_updated event on connect, disconnect, restore from hibernation, and cleanup (4 call sites in connection manager)",
+        "Emit queue_updated event on enqueue, dequeue, ack, and metadata change (call sites in queue manager)",
+        "Inspector events stored in Inspector struct state for snapshot on new client connect",
+        "Events are no-ops when Inspector is not initialized (actor started without inspector enabled)",
+        "Zero allocation when no inspector client is connected \u2014 events update internal counters only",
+        "cargo check -p rivetkit-core passes"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": "Integration points in rivetkit-core: actor/state.rs (state saves), actor/connection.rs (connect/disconnect/restore/cleanup), actor/queue.rs (enqueue/dequeue/ack), actor/lifecycle.rs (startup timing). Reference commit (pre-deletion): 959ab9bba. Use `git show 959ab9bba:<path>` to read the original TS implementation. Original integration: grep 'inspector' in actor/instance/mod.ts, state-manager.ts, connection-manager.ts, queue-manager.ts at commit 959ab9bba."
+    },
+    {
+      "id": "US-052",
+      "title": "Inspector: HTTP endpoints",
+      "description": "As a developer, I need HTTP endpoints for the inspector that call the transport-agnostic Inspector methods.",
+      "acceptanceCriteria": [
+        "Add inspector HTTP route handling in rivetkit-core's request dispatch: paths starting with /inspector/ route to inspector handler BEFORE on_request callback",
+        "Auth middleware: all /inspector/* requests require valid inspector token via Authorization: Bearer header. Reject with 401 if invalid. In dev mode with no token configured, log warning but allow access",
+        "Endpoints returning JSON (using serde_json): GET /inspector/state, PATCH /inspector/state, GET /inspector/connections, GET /inspector/rpcs, POST /inspector/action/:name, GET /inspector/queue?limit=N, GET /inspector/traces (stub, returns empty), GET /inspector/database/schema, GET /inspector/database/rows?table=&limit=&offset=, POST /inspector/database/execute, GET /inspector/summary",
+        "Each endpoint is a thin handler: parse request params -> call Inspector method -> serialize JSON response",
+        "Error responses use RivetError format with appropriate HTTP status codes",
+        "cargo check -p rivetkit-core passes"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": "Thin transport layer over Inspector methods from US-050. All logic is in the Inspector struct, HTTP handlers just parse/serialize. Reference commit (pre-deletion): 959ab9bba. Use `git show 959ab9bba:<path>` to read the original TS implementation. Original: rivetkit-typescript/packages/rivetkit/src/actor/router.ts (grep for '/inspector') at commit 959ab9bba."
+    },
+    {
+      "id": "US-053",
+      "title": "Inspector: Workflow bridge via NAPI callbacks",
+      "description": "As a developer, I need workflow inspector data provided lazily via NAPI callbacks so TS workflow code can supply data without unnecessary round-trips.",
+      "acceptanceCriteria": [
+        "Add getWorkflowHistory and replayWorkflow to NAPI CallbackBindings (same pattern as onSleep, etc.)",
+        "Add optional_tsfn entries in CallbackBindings::from_js for 'getWorkflowHistory' and 'replayWorkflow'",
+        "Inspector::get_workflow_history() calls the registered callback via TSFN, returns opaque bytes",
+        "Inspector::replay_workflow(entry_id) calls the registered callback, returns result",
+        "Callbacks are ONLY called when an inspector client requests the data (lazy, zero overhead otherwise)",
+        "HTTP endpoints: GET /inspector/workflow-history and POST /inspector/workflow/replay forward to these callbacks",
+        "If no workflow callback is registered (pure Rust actor, no workflow), endpoints return empty/null response",
+        "cargo check passes, tsc type-check passes"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": "Workflow internals stay in TS. rivetkit-core treats workflow data as opaque bytes. The NAPI callback pattern is identical to existing lifecycle hooks \u2014 just two more entries in the callbacks object. Reference commit (pre-deletion): 959ab9bba. Use `git show 959ab9bba:<path>` to read the original TS implementation. Original: rivetkit-typescript/packages/rivetkit/src/workflow/inspector.ts at commit 959ab9bba."
+    },
+    {
+      "id": "US-054",
+      "title": "Inspector: WebSocket protocol with BARE-encoded versioned messages",
+      "description": "As a developer, I need the WebSocket inspector protocol for live push updates to connected inspector clients.",
+      "acceptanceCriteria": [
+        "WebSocket handler at /inspector/connect path, authenticated via WS protocol header token",
+        "On connect: send Init message with full snapshot (state, connections, rpcs, queue, database flags) using BARE encoding with vbare version prefix",
+        "Push events to connected clients: StateUpdated, ConnectionsUpdated, QueueUpdated, WorkflowHistoryUpdated \u2014 triggered by lifecycle hooks from US-051",
+        "Request/response handling: client sends request with id, server responds with matching rid. Supports: StateRequest, ConnectionsRequest, RpcsListRequest, ActionRequest, PatchStateRequest, QueueRequest, DatabaseSchemaRequest, DatabaseTableRowsRequest, DatabaseExecuteRequest, WorkflowHistoryRequest, WorkflowReplayRequest, TraceQueryRequest (stub)",
+        "All request handlers call the same Inspector methods as HTTP endpoints (shared logic from US-050)",
+        "Multiple simultaneous inspector clients supported",
+        "Client disconnect cleanup (remove from subscriber list)",
+        "cargo check -p rivetkit-core passes"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": "Thin WebSocket transport over the same Inspector methods. BARE encode/decode using schema types from US-049. The vbare versioning should write v4 (latest) and read v1-v4. Reference commit (pre-deletion): 959ab9bba. Use `git show 959ab9bba:<path>` to read the original TS implementation. Original: rivetkit-typescript/packages/rivetkit/src/inspector/handler.ts at commit 959ab9bba. Original protocol: schemas/actor-inspector/v4.bare."
     },
     {
       "id": "US-039",
@@ -901,7 +1024,7 @@
         "No test modifications that weaken assertions \u2014 fix the runtime, not the tests",
         "All tests pass: pnpm test driver-test-suite"
       ],
-      "priority": 47,
+      "priority": 56,
       "passes": false,
       "notes": "This is the real validation that the Rust migration works correctly. The driver test suite is a comprehensive matrix testing all actor functionality across encoding protocols. Run from rivetkit-typescript/packages/rivetkit. Comment out dynamic actor fixtures and tests but keep the test infrastructure. Fix any NAPI bridge issues discovered here."
     }
