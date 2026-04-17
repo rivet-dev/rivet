@@ -166,7 +166,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Events/Broadcast', 'WebSocket', and 'Error Handling' sections. Check envoy-client WebSocket handling at engine/sdks/rust/envoy-client/src/tunnel.rs."
     },
     {

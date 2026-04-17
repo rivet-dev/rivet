@@ -7,6 +7,7 @@ use anyhow::Result;
 use tokio_util::sync::CancellationToken;
 
 use crate::actor::connection::ConnHandle;
+use crate::actor::event::EventBroadcaster;
 use crate::actor::queue::Queue;
 use crate::actor::schedule::Schedule;
 use crate::actor::state::{ActorState, OnStateChangeCallback, PersistedActor};
@@ -27,6 +28,7 @@ struct ActorContextInner {
 	sql: SqliteDb,
 	schedule: Schedule,
 	queue: Queue,
+	broadcaster: EventBroadcaster,
 	conns: RwLock<Vec<ConnHandle>>,
 	abort_signal: CancellationToken,
 	prevent_sleep: AtomicBool,
@@ -62,6 +64,7 @@ impl ActorContext {
 			sql,
 			schedule,
 			queue,
+			broadcaster: EventBroadcaster::default(),
 			conns: RwLock::new(Vec::new()),
 			abort_signal: CancellationToken::new(),
 			prevent_sleep: AtomicBool::new(false),
@@ -156,7 +159,9 @@ impl ActorContext {
 		self.0.abort_signal.is_cancelled()
 	}
 
-	pub fn broadcast(&self, _name: &str, _args: &[u8]) {}
+	pub fn broadcast(&self, name: &str, args: &[u8]) {
+		self.0.broadcaster.broadcast(&self.conns(), name, args);
+	}
 
 	pub fn conns(&self) -> Vec<ConnHandle> {
 		self.0
@@ -181,6 +186,26 @@ impl ActorContext {
 
 	pub(crate) fn trigger_throttled_state_save(&self) {
 		self.0.state.trigger_throttled_save();
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn add_conn(&self, conn: ConnHandle) {
+		self.0
+			.conns
+			.write()
+			.expect("actor connections lock poisoned")
+			.push(conn);
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn remove_conn(&self, conn_id: &str) -> Option<ConnHandle> {
+		let mut conns = self
+			.0
+			.conns
+			.write()
+			.expect("actor connections lock poisoned");
+		let index = conns.iter().position(|conn| conn.id() == conn_id)?;
+		Some(conns.remove(index))
 	}
 }
 

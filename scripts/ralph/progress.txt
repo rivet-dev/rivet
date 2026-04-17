@@ -9,6 +9,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` actor snapshots should stay BARE-encoded at the single-byte KV key `[1]` so Rust matches the TypeScript actor persist layout.
 - `rivetkit-core` action/lifecycle surfaces should collapse `anyhow::Error` into serializable `group/code/message` payloads via `rivet_error::RivetError::extract` before returning them across runtime boundaries.
 - `rivetkit-core` schedule mutations should go through one `ActorState` helper so insert/remove stays sorted, then trigger an immediate state flush and envoy alarm resync from the earliest remaining event.
+- `rivetkit-core` transport-edge helpers should translate `on_request` failures into HTTP 500 responses and `on_websocket` failures into logged 1011 closes, while wrapper types keep internal `try_*` methods for explicit misconfiguration errors.
 
 ---
 
@@ -68,4 +69,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Schedule persistence is piggybacked on the actor snapshot, so schedule insert/remove paths should mutate `ActorState.scheduled_events` directly and then force `save_state(immediate = true)` instead of inventing a second persistence channel.
   - Gotchas encountered: `Schedule` must be constructed from the same `ActorState` instance that `ActorContext` exposes, otherwise scheduled events drift from the persisted actor snapshot and alarm execution reads stale state.
   - Useful context: `Schedule::handle_alarm` and `invoke_action_by_name` are intentionally `pub(crate)` staging hooks for future envoy wiring, and the current unit tests cover ordering, due-event dispatch, error continuation, and keep-awake wrapping.
+---
+## 2026-04-16 22:36:47 PDT - US-008
+- What was implemented: Replaced the event, connection, and websocket stubs with callback-backed runtime wrappers, wired `ActorContext.broadcast()` through subscription-aware fanout, and added HTTP/WebSocket boundary dispatch helpers that turn callback failures into HTTP 500 responses or logged 1011 closes.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/connection.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/event.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/websocket.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`, `/home/nathan/r5/AGENTS.md`
+- **Learnings for future iterations:**
+  - Patterns discovered: Keep public `send()` and `close()` wrappers ergonomic, but preserve explicit failure paths underneath with internal `try_send()` and `try_close()` helpers so future lifecycle wiring can choose whether to log or propagate transport/configuration errors.
+  - Gotchas encountered: `http::Response<Vec<u8>>` aliases do not expose `Response::builder()`, so call `http::Response::builder()` directly when constructing fallback HTTP responses.
+  - Useful context: `dispatch_request()` and `dispatch_websocket()` in `src/actor/event.rs` are `pub(crate)` staging hooks for the future envoy integration, and the new tests cover subscription fanout plus the HTTP 500 and WebSocket 1011 fallback behavior.
 ---
