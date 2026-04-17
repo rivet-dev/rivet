@@ -60,7 +60,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "KV API must be stable with no breaking ABI changes. See spec 'KV' section. Delegate to envoy-client::kv internally. Check existing implementations at engine/sdks/rust/envoy-client/src/kv.rs and engine/sdks/rust/envoy-client/src/sqlite.rs."
     },
     {
