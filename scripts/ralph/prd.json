@@ -474,7 +474,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 24,
-      "passes": false,
+      "passes": true,
       "notes": "Review finding from US-003: Kv requires actor_id in constructor but SqliteDb doesn't. Both are correct per envoy-client API, but the asymmetry is surprising without explanation. Files: rivetkit-rust/packages/rivetkit-core/src/kv.rs and sqlite.rs."
     },
     {

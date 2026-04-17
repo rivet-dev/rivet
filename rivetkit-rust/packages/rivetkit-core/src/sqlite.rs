@@ -8,6 +8,7 @@ pub struct SqliteDb {
 }
 
 impl SqliteDb {
+	/// `actor_id` is not stored here because the SQLite protocol request types already carry it.
 	pub fn new(handle: EnvoyHandle) -> Self {
 		Self { handle: Some(handle) }
 	}

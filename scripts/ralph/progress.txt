@@ -213,3 +213,11 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Gotchas encountered: The sleep-path bug report was stale. `shutdown_for_sleep()` was already calling `ctx.abort_signal().cancel()`, so the real gap was missing proof in tests.
   - Useful context: The relevant coverage lives in `sleep_shutdown_waits_for_idle_window_and_persists_state` and `destroy_shutdown_skips_idle_wait_and_disconnects_all_connections` inside `src/actor/lifecycle.rs`.
 ---
+## 2026-04-17 09:35:57 PDT - US-024
+- What was implemented: Added concise constructor doc comments explaining why `Kv::new()` stores `actor_id` while `SqliteDb::new()` does not.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/kv.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/sqlite.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Small API asymmetries that come from envoy protocol shapes are worth documenting at the constructor boundary, because that is where contributors notice them.
+  - Gotchas encountered: `Kv` passes `actor_id` on every envoy-client call, while SQLite request structs already embed actor identity, so the constructors are intentionally different.
+  - Useful context: The explanation now lives directly on `Kv::new()` and `SqliteDb::new()` in `rivetkit-core`, so future refactors can keep the comment next to the API surface instead of rediscovering it in envoy-client.
+---

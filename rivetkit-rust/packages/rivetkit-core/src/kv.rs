@@ -23,6 +23,7 @@ enum KvBackend {
 }
 
 impl Kv {
+	/// `actor_id` stays on `Kv` because envoy-client KV calls require it on every request.
 	pub fn new(handle: EnvoyHandle, actor_id: impl Into<String>) -> Self {
 		Self {
 			backend: KvBackend::Envoy(handle),
