@@ -8,6 +8,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` callback/factory APIs should box closures as `BoxFuture<'static, ...>` and use concrete `http::Request<Vec<u8>>` / `http::Response<Vec<u8>>` aliases instead of leaking generics through the runtime surface.
 - `rivetkit-core` actor snapshots should stay BARE-encoded at the single-byte KV key `[1]` so Rust matches the TypeScript actor persist layout.
 - `rivetkit-core` action/lifecycle surfaces should collapse `anyhow::Error` into serializable `group/code/message` payloads via `rivet_error::RivetError::extract` before returning them across runtime boundaries.
+- `rivetkit-core` schedule mutations should go through one `ActorState` helper so insert/remove stays sorted, then trigger an immediate state flush and envoy alarm resync from the earliest remaining event.
 
 ---
 
@@ -59,4 +60,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Runtime-facing action errors should be normalized with `rivet_error::RivetError::extract` so later protocol dispatch can forward `group/code/message` without re-parsing arbitrary `anyhow` chains.
   - Gotchas encountered: Post-action state persistence should schedule the existing throttled save path instead of awaiting `save_state()` directly, otherwise action dispatch would block on the persistence delay.
   - Useful context: `ActionInvoker` is now re-exported from both `actor::mod` and crate root, and its unit tests cover success, timeout, missing actions, best-effort response transforms, and structured error extraction.
+---
+## 2026-04-16 22:31:06 PDT - US-007
+- What was implemented: Replaced the schedule stub with a state-backed scheduler that inserts UUID-tagged events in order, immediately persists schedule mutations, resyncs the envoy alarm to the soonest event, and can dispatch due events through `ActionInvoker` with best-effort keep-awake wrapping and at-most-once removal.
+- Files changed: `/home/nathan/r5/Cargo.lock`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/Cargo.toml`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/schedule.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/state.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Schedule persistence is piggybacked on the actor snapshot, so schedule insert/remove paths should mutate `ActorState.scheduled_events` directly and then force `save_state(immediate = true)` instead of inventing a second persistence channel.
+  - Gotchas encountered: `Schedule` must be constructed from the same `ActorState` instance that `ActorContext` exposes, otherwise scheduled events drift from the persisted actor snapshot and alarm execution reads stale state.
+  - Useful context: `Schedule::handle_alarm` and `invoke_action_by_name` are intentionally `pub(crate)` staging hooks for future envoy wiring, and the current unit tests cover ordering, due-event dispatch, error continuation, and keep-awake wrapping.
 ---

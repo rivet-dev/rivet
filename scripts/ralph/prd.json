@@ -145,7 +145,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Schedule' section. Matches TS behavior where schedule only has after() and at() publicly. PersistedScheduleEvent struct is defined in state.rs (US-004)."
     },
     {

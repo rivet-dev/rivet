@@ -45,13 +45,18 @@ impl ActorContext {
 		key: ActorKey,
 		region: impl Into<String>,
 	) -> Self {
+		let actor_id = actor_id.into();
+		let name = name.into();
+		let region = region.into();
+		let config = ActorConfig::default();
 		let kv = Kv::default();
 		let sql = SqliteDb::default();
-		let schedule = Schedule::default();
 		let queue = Queue::default();
+		let state = ActorState::new(kv.clone(), config.clone());
+		let schedule = Schedule::new(state.clone(), actor_id.clone(), config);
 
 		Self(Arc::new(ActorContextInner {
-			state: ActorState::new(kv.clone(), ActorConfig::default()),
+			state,
 			vars: ActorVars::default(),
 			kv,
 			sql,
@@ -62,10 +67,10 @@ impl ActorContext {
 			prevent_sleep: AtomicBool::new(false),
 			sleep_requested: AtomicBool::new(false),
 			destroy_requested: AtomicBool::new(false),
-			actor_id: actor_id.into(),
-			name: name.into(),
+			actor_id,
+			name,
 			key,
-			region: region.into(),
+			region,
 		}))
 	}
 

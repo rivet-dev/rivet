@@ -162,6 +162,24 @@ impl ActorState {
 		self.schedule_save(None);
 	}
 
+	pub(crate) fn update_scheduled_events<R>(
+		&self,
+		update: impl FnOnce(&mut Vec<PersistedScheduleEvent>) -> R,
+	) -> R {
+		let result = {
+			let mut persisted = self
+				.0
+				.persisted
+				.write()
+				.expect("actor persisted state lock poisoned");
+			update(&mut persisted.scheduled_events)
+		};
+
+		self.mark_dirty();
+		self.schedule_save(None);
+		result
+	}
+
 	pub fn set_input(&self, input: Option<Vec<u8>>) {
 		self
 			.0
