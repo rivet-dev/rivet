@@ -183,7 +183,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Connections' and concern #13 (persisted connection format). ConnId = String (UUID). Check envoy-client connection handling at engine/sdks/rust/envoy-client/src/connection.rs."
     },
     {

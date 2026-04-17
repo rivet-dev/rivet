@@ -1,12 +1,16 @@
 use std::future::Future;
 use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::Weak;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
+use tokio::runtime::Handle;
 use tokio_util::sync::CancellationToken;
 
-use crate::actor::connection::ConnHandle;
+use crate::actor::callbacks::ActorInstanceCallbacks;
+use crate::actor::connection::{
+	ConnHandle, ConnectionManager, HibernatableConnectionMetadata,
+};
 use crate::actor::event::EventBroadcaster;
 use crate::actor::queue::Queue;
 use crate::actor::schedule::Schedule;
@@ -21,7 +25,7 @@ use crate::types::{ActorKey, SaveStateOpts};
 pub struct ActorContext(Arc<ActorContextInner>);
 
 #[derive(Debug)]
-struct ActorContextInner {
+pub(crate) struct ActorContextInner {
 	state: ActorState,
 	vars: ActorVars,
 	kv: Kv,
@@ -29,7 +33,7 @@ struct ActorContextInner {
 	schedule: Schedule,
 	queue: Queue,
 	broadcaster: EventBroadcaster,
-	conns: RwLock<Vec<ConnHandle>>,
+	connections: ConnectionManager,
 	abort_signal: CancellationToken,
 	prevent_sleep: AtomicBool,
 	sleep_requested: AtomicBool,
@@ -56,6 +60,8 @@ impl ActorContext {
 		let queue = Queue::default();
 		let state = ActorState::new(kv.clone(), config.clone());
 		let schedule = Schedule::new(state.clone(), actor_id.clone(), config);
+		let connections =
+			ConnectionManager::new(actor_id.clone(), kv.clone(), ActorConfig::default());
 
 		Self(Arc::new(ActorContextInner {
 			state,
@@ -65,7 +71,7 @@ impl ActorContext {
 			schedule,
 			queue,
 			broadcaster: EventBroadcaster::default(),
-			conns: RwLock::new(Vec::new()),
+			connections,
 			abort_signal: CancellationToken::new(),
 			prevent_sleep: AtomicBool::new(false),
 			sleep_requested: AtomicBool::new(false),
@@ -114,6 +120,18 @@ impl ActorContext {
 	}
 
 	pub fn sleep(&self) {
+		if let Ok(runtime) = Handle::try_current() {
+			let ctx = self.clone();
+			runtime.spawn(async move {
+				if let Err(error) = ctx.persist_hibernatable_connections().await {
+					tracing::error!(
+						?error,
+						"failed to persist hibernatable connections on sleep"
+					);
+				}
+			});
+		}
+
 		self.0.sleep_requested.store(true, Ordering::SeqCst);
 	}
 
@@ -164,11 +182,7 @@ impl ActorContext {
 	}
 
 	pub fn conns(&self) -> Vec<ConnHandle> {
-		self.0
-			.conns
-			.read()
-			.expect("actor connections lock poisoned")
-			.clone()
+		self.0.connections.list()
 	}
 
 	#[allow(dead_code)]
@@ -190,22 +204,64 @@ impl ActorContext {
 
 	#[allow(dead_code)]
 	pub(crate) fn add_conn(&self, conn: ConnHandle) {
-		self.0
-			.conns
-			.write()
-			.expect("actor connections lock poisoned")
-			.push(conn);
+		self.0.connections.insert_existing(conn);
 	}
 
 	#[allow(dead_code)]
 	pub(crate) fn remove_conn(&self, conn_id: &str) -> Option<ConnHandle> {
-		let mut conns = self
-			.0
-			.conns
-			.write()
-			.expect("actor connections lock poisoned");
-		let index = conns.iter().position(|conn| conn.id() == conn_id)?;
-		Some(conns.remove(index))
+		self.0.connections.remove_existing(conn_id)
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn configure_connection_runtime(
+		&self,
+		config: ActorConfig,
+		callbacks: Arc<ActorInstanceCallbacks>,
+	) {
+		self.0.connections.configure_runtime(config, callbacks);
+	}
+
+	#[allow(dead_code)]
+	pub(crate) async fn connect_conn<F>(
+		&self,
+		params: Vec<u8>,
+		is_hibernatable: bool,
+		hibernation: Option<HibernatableConnectionMetadata>,
+		create_state: F,
+	) -> Result<ConnHandle>
+	where
+		F: Future<Output = Result<Vec<u8>>> + Send,
+	{
+		self.0
+			.connections
+			.connect_with_state(
+				self,
+				params,
+				is_hibernatable,
+				hibernation,
+				create_state,
+			)
+			.await
+	}
+
+	#[allow(dead_code)]
+	pub(crate) async fn persist_hibernatable_connections(&self) -> Result<()> {
+		self.0.connections.persist_hibernatable().await
+	}
+
+	#[allow(dead_code)]
+	pub(crate) async fn restore_hibernatable_connections(
+		&self,
+	) -> Result<Vec<ConnHandle>> {
+		self.0.connections.restore_persisted(self).await
+	}
+
+	pub(crate) fn downgrade(&self) -> Weak<ActorContextInner> {
+		Arc::downgrade(&self.0)
+	}
+
+	pub(crate) fn from_weak(weak: &Weak<ActorContextInner>) -> Option<Self> {
+		weak.upgrade().map(Self)
 	}
 }
 

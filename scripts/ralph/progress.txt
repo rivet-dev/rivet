@@ -7,6 +7,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` actor-scoped service wrappers should keep `Default` available for scaffolded contexts, but fail with explicit `anyhow!` configuration errors until a real `EnvoyHandle` is wired in.
 - `rivetkit-core` callback/factory APIs should box closures as `BoxFuture<'static, ...>` and use concrete `http::Request<Vec<u8>>` / `http::Response<Vec<u8>>` aliases instead of leaking generics through the runtime surface.
 - `rivetkit-core` actor snapshots should stay BARE-encoded at the single-byte KV key `[1]` so Rust matches the TypeScript actor persist layout.
+- `rivetkit-core` hibernatable websocket connections should persist per-connection BARE payloads under KV keys `[2] + conn_id`, matching the TypeScript v4 connection field order for restore compatibility.
 - `rivetkit-core` action/lifecycle surfaces should collapse `anyhow::Error` into serializable `group/code/message` payloads via `rivet_error::RivetError::extract` before returning them across runtime boundaries.
 - `rivetkit-core` schedule mutations should go through one `ActorState` helper so insert/remove stays sorted, then trigger an immediate state flush and envoy alarm resync from the earliest remaining event.
 - `rivetkit-core` transport-edge helpers should translate `on_request` failures into HTTP 500 responses and `on_websocket` failures into logged 1011 closes, while wrapper types keep internal `try_*` methods for explicit misconfiguration errors.
@@ -77,4 +78,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Keep public `send()` and `close()` wrappers ergonomic, but preserve explicit failure paths underneath with internal `try_send()` and `try_close()` helpers so future lifecycle wiring can choose whether to log or propagate transport/configuration errors.
   - Gotchas encountered: `http::Response<Vec<u8>>` aliases do not expose `Response::builder()`, so call `http::Response::builder()` directly when constructing fallback HTTP responses.
   - Useful context: `dispatch_request()` and `dispatch_websocket()` in `src/actor/event.rs` are `pub(crate)` staging hooks for the future envoy integration, and the new tests cover subscription fanout plus the HTTP 500 and WebSocket 1011 fallback behavior.
+---
+## 2026-04-16 22:43:43 PDT - US-009
+- What was implemented: Added a managed connection lifecycle for `rivetkit-core`, including timed `on_before_connect` and `on_connect` hooks, managed disconnect cleanup with `on_disconnect`, TS-compatible hibernatable connection persistence payloads, KV key generation under `[2] + conn_id`, sleep-triggered persistence, and restore helpers for waking actors.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/connection.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/CLAUDE.md`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Connection lifecycle wiring belongs in a manager layered under `ActorContext`, with `ConnHandle.disconnect()` delegated through weak references so tracked connections do not create Arc cycles back into the actor runtime.
+  - Gotchas encountered: Hibernatable connection persistence must use one KV entry per connection at prefix `[2]` instead of folding connection blobs into the actor snapshot at `[1]`, otherwise it drifts from the TypeScript restore path.
+  - Useful context: `ActorContext::connect_conn`, `persist_hibernatable_connections`, and `restore_hibernatable_connections` are the staging hooks future lifecycle and envoy integration should call rather than reaching into `ConnectionManager` directly.
 ---
