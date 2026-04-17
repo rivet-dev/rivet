@@ -5197,6 +5197,7 @@ dependencies = [
  "rivet-envoy-client",
  "scc",
  "serde",
+ "serde_bare",
  "tokio",
  "tokio-util",
  "tracing",

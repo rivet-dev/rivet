@@ -81,7 +81,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'State Persistence' and 'Vars' sections. PersistedScheduleEvent is defined here because it's part of the PersistedActor struct. The Schedule module (US-007) will use this type."
     },
     {

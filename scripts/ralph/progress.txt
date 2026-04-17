@@ -5,6 +5,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - New Rust crates under `rivetkit-rust/packages/` that should use root workspace deps need `[package] workspace = "../../../"` in their `Cargo.toml` and a root `/Cargo.toml` workspace member entry.
 - `rivetkit-core` shared runtime objects should hang off `ActorContext(Arc<ActorContextInner>)`, with service handles stored directly on the inner so context clones can still return borrowed `&Kv` and `&SqliteDb` style accessors.
 - `rivetkit-core` actor-scoped service wrappers should keep `Default` available for scaffolded contexts, but fail with explicit `anyhow!` configuration errors until a real `EnvoyHandle` is wired in.
+- `rivetkit-core` actor snapshots should stay BARE-encoded at the single-byte KV key `[1]` so Rust matches the TypeScript actor persist layout.
 
 ---
 
@@ -32,4 +33,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: `rivetkit-core::Kv` should stay actor-scoped by storing both the cloned `EnvoyHandle` and the owning actor ID, then convert borrowed byte-slice inputs into owned `Vec<u8>` right before dispatching to `envoy-client`.
   - Gotchas encountered: `SqliteDb` can stay actor-agnostic because the actor identity already lives inside the SQLite protocol request types, unlike KV where every envoy call still needs the actor ID passed separately.
   - Useful context: Leaving `Default` on `Kv` and `SqliteDb` while returning explicit configuration errors keeps `ActorContext` scaffolding compile-safe without adding silent no-op runtime behavior.
+---
+## 2026-04-16 22:17:41 PDT - US-004
+- What was implemented: Replaced the state and vars stubs with Arc-backed managers, added `PersistedActor` and `PersistedScheduleEvent`, wired `ActorContext` to dirty tracking and throttled BARE persistence, and added shutdown flush plus `on_state_change` scaffolding hooks.
+- Files changed: `/home/nathan/r5/Cargo.lock`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/Cargo.toml`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/state.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/vars.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`, `/home/nathan/r5/AGENTS.md`
+- **Learnings for future iterations:**
+  - Patterns discovered: `rivetkit-core` actor persistence now uses `serde_bare` directly, with the actor snapshot stored at KV key `[1]` to mirror the TypeScript runtime layout.
+  - Gotchas encountered: `set_state` and shutdown flushes only schedule background work when a Tokio runtime exists, so runtime-free construction stays compile-safe while explicit `save_state()` remains the deterministic path.
+  - Useful context: `ActorState` now owns persisted actor metadata like `input`, `has_initialized`, and `scheduled_events`, so future schedule and factory work should mutate that handle instead of reintroducing duplicate storage in `ActorContext`.
 ---

@@ -12,6 +12,7 @@ ciborium.workspace = true
 rivet-envoy-client.workspace = true
 scc.workspace = true
 serde.workspace = true
+serde_bare.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true

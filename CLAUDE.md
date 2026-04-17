@@ -146,6 +146,7 @@ git commit -m "chore(my-pkg): foo bar"
 - If a capability is required, validate it and throw an explicit error with actionable context instead of returning early.
 - Optional chaining is acceptable only for best-effort diagnostics and cleanup paths (for example logging hooks and dispose/release cleanup).
 - Keep scaffolded `rivetkit-core` wrappers `Default`-constructible, but return explicit configuration errors until a real `EnvoyHandle` is wired in.
+- `rivetkit-core` actor persistence should keep the BARE snapshot at the single-byte KV key `[1]` so the Rust runtime matches the TypeScript `KEYS.PERSIST_DATA` layout.
 
 ### Rust Dependencies
 - New crates under `rivetkit-rust/packages/` that should inherit repo-wide workspace deps must set `[package] workspace = "../../../"` and be added to the root `/Cargo.toml` workspace members.

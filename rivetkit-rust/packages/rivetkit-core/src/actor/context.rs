@@ -9,6 +9,9 @@ use tokio_util::sync::CancellationToken;
 use crate::actor::connection::ConnHandle;
 use crate::actor::queue::Queue;
 use crate::actor::schedule::Schedule;
+use crate::actor::state::{ActorState, OnStateChangeCallback, PersistedActor};
+use crate::actor::vars::ActorVars;
+use crate::ActorConfig;
 use crate::kv::Kv;
 use crate::sqlite::SqliteDb;
 use crate::types::{ActorKey, SaveStateOpts};
@@ -18,8 +21,8 @@ pub struct ActorContext(Arc<ActorContextInner>);
 
 #[derive(Debug)]
 struct ActorContextInner {
-	state: RwLock<Vec<u8>>,
-	vars: RwLock<Vec<u8>>,
+	state: ActorState,
+	vars: ActorVars,
 	kv: Kv,
 	sql: SqliteDb,
 	schedule: Schedule,
@@ -42,13 +45,18 @@ impl ActorContext {
 		key: ActorKey,
 		region: impl Into<String>,
 	) -> Self {
+		let kv = Kv::default();
+		let sql = SqliteDb::default();
+		let schedule = Schedule::default();
+		let queue = Queue::default();
+
 		Self(Arc::new(ActorContextInner {
-			state: RwLock::new(Vec::new()),
-			vars: RwLock::new(Vec::new()),
-			kv: Kv::default(),
-			sql: SqliteDb::default(),
-			schedule: Schedule::default(),
-			queue: Queue::default(),
+			state: ActorState::new(kv.clone(), ActorConfig::default()),
+			vars: ActorVars::default(),
+			kv,
+			sql,
+			schedule,
+			queue,
 			conns: RwLock::new(Vec::new()),
 			abort_signal: CancellationToken::new(),
 			prevent_sleep: AtomicBool::new(false),
@@ -62,40 +70,23 @@ impl ActorContext {
 	}
 
 	pub fn state(&self) -> Vec<u8> {
-		self.0
-			.state
-			.read()
-			.expect("actor state lock poisoned")
-			.clone()
+		self.0.state.state()
 	}
 
 	pub fn set_state(&self, state: Vec<u8>) {
-		*self
-			.0
-			.state
-			.write()
-			.expect("actor state lock poisoned") = state;
+		self.0.state.set_state(state);
 	}
 
 	pub async fn save_state(&self, opts: SaveStateOpts) -> Result<()> {
-		let _ = opts;
-		Ok(())
+		self.0.state.save_state(opts).await
 	}
 
 	pub fn vars(&self) -> Vec<u8> {
-		self.0
-			.vars
-			.read()
-			.expect("actor vars lock poisoned")
-			.clone()
+		self.0.vars.vars()
 	}
 
 	pub fn set_vars(&self, vars: Vec<u8>) {
-		*self
-			.0
-			.vars
-			.write()
-			.expect("actor vars lock poisoned") = vars;
+		self.0.vars.set_vars(vars);
 	}
 
 	pub fn kv(&self) -> &Kv {
@@ -119,6 +110,7 @@ impl ActorContext {
 	}
 
 	pub fn destroy(&self) {
+		self.0.state.flush_on_shutdown();
 		self.0.destroy_requested.store(true, Ordering::SeqCst);
 		self.0.abort_signal.cancel();
 	}
@@ -167,6 +159,19 @@ impl ActorContext {
 			.read()
 			.expect("actor connections lock poisoned")
 			.clone()
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn load_persisted_actor(&self, persisted: PersistedActor) {
+		self.0.state.load_persisted(persisted);
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn set_on_state_change_callback(
+		&self,
+		callback: Option<OnStateChangeCallback>,
+	) {
+		self.0.state.set_on_state_change_callback(callback);
 	}
 
 }
