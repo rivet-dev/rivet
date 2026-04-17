@@ -9,6 +9,7 @@ export default defineConfig({
 	plugins: [tsconfigPaths()],
 	resolve: {
 		alias: {
+			"@": resolve(__dirname, "./src"),
 			"rivetkit/errors": resolve(__dirname, "./src/actor/errors.ts"),
 		},
 	},

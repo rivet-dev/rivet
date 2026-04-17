@@ -128,7 +128,6 @@
 	"scripts": {
 		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/workflow/mod.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
 		"build:browser": "tsup --config tsup.browser.config.ts",
-		"build:schema": "./scripts/compile-all-bare.ts",
 		"check-types": "tsc --noEmit",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
@@ -149,7 +148,6 @@
 		"@rivetkit/bare-ts": "^0.6.2",
 		"@rivetkit/engine-cli": "workspace:*",
 		"@rivetkit/engine-envoy-protocol": "workspace:*",
-		"@rivetkit/engine-runner": "workspace:*",
 		"@rivetkit/rivetkit-napi": "workspace:*",
 		"@rivetkit/fast-json-patch": "^3.1.2",
 		"@rivetkit/on-change": "^6.0.2-rc.1",
@@ -163,7 +161,6 @@
 		"nanoevents": "^9.1.0",
 		"p-retry": "^6.2.1",
 		"pino": "^9.5.0",
-		"tar": "^7.5.0",
 		"uuid": "^12.0.0",
 		"vbare": "^0.0.4",
 		"zod": "^4.1.0"
@@ -172,7 +169,6 @@
 		"@copilotkit/llmock": "^1.6.0",
 		"@rivet-dev/agent-os-common": "*",
 		"@rivet-dev/agent-os-pi": "^0.1.1",
-		"@bare-ts/tools": "^0.13.0",
 		"@biomejs/biome": "^2.3",
 		"@standard-schema/spec": "^1.0.0",
 		"@types/invariant": "^2",

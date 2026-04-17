@@ -1,1 +1,1 @@
-export * from "../../dist/schemas/transport/v1";
+export * from "./bare/transport/v1";

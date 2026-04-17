@@ -37,7 +37,6 @@ export default defineConfig({
 	shims: false,
 	outDir: "dist/browser/",
 	entry: {
-		"inspector/client": "src/inspector/mod.browser.ts",
 		client: "src/client/mod.browser.ts",
 	},
 	define: {

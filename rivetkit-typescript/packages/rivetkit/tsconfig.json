@@ -14,7 +14,6 @@
 	},
 	"include": [
 		"src/**/*",
-		"dist/schemas/**/*",
 		"runtime/index.ts"
 	]
 }

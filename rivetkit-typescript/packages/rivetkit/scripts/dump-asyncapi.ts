@@ -9,7 +9,7 @@ import {
 	SubscriptionRequestSchema,
 	ToClientSchema,
 	ToServerSchema,
-} from "@/schemas/client-protocol-zod/mod";
+} from "@/common/client-protocol-zod";
 import { VERSION } from "@/utils";
 import { toJsonSchema } from "./schema-utils";
 
