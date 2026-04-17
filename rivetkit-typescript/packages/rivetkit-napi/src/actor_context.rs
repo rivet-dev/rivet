@@ -2,6 +2,7 @@ use napi::bindgen_prelude::{Buffer, Promise};
 use napi_derive::napi;
 use rivetkit_core::{ActorContext as CoreActorContext, SaveStateOpts};
 
+use crate::cancellation_token::CancellationToken;
 use crate::connection::ConnHandle;
 use crate::kv::Kv;
 use crate::queue::Queue;
@@ -112,6 +113,11 @@ impl ActorContext {
 	}
 
 	#[napi]
+	pub fn abort_signal(&self) -> CancellationToken {
+		CancellationToken::new(self.inner.abort_signal().clone())
+	}
+
+	#[napi]
 	pub fn conns(&self) -> Vec<ConnHandle> {
 		self
 			.inner
@@ -121,6 +127,7 @@ impl ActorContext {
 			.collect()
 	}
 
+	#[napi]
 	pub async fn wait_until(
 		&self,
 		promise: Promise<serde_json::Value>,

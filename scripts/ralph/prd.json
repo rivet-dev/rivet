@@ -596,7 +596,7 @@
         "`cargo check` passes"
       ],
       "priority": 31,
-      "passes": false,
+      "passes": true,
       "notes": "This is the most complex NAPI story. ThreadsafeFunction allows Rust to call JS from any thread. Each callback type needs careful lifetime management. The NapiActorFactory is the key piece: it wraps JS functions as ActorInstanceCallbacks closures. See napi-rs ThreadsafeFunction docs."
     },
     {
