@@ -5,6 +5,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - New Rust crates under `rivetkit-rust/packages/` that should use root workspace deps need `[package] workspace = "../../../"` in their `Cargo.toml` and a root `/Cargo.toml` workspace member entry.
 - The high-level `rivetkit` crate should stay a thin typed wrapper over `rivetkit-core`, re-exporting shared transport/config types instead of redefining them.
 - `rivetkit` typed contexts should keep typed vars outside the core context, cache decoded actor state in `Arc<Mutex<Option<Arc<State>>>>`, and invalidate that cache after every `set_state`.
+- `rivetkit` actors with `type Vars = ()` should rely on the bridge's built-in unit-vars fallback instead of adding a no-op `create_vars` implementation.
 - `rivetkit-core` shared runtime objects should hang off `ActorContext(Arc<ActorContextInner>)`, with service handles stored directly on the inner so context clones can still return borrowed `&Kv` and `&SqliteDb` style accessors.
 - `rivetkit-core` actor-scoped service wrappers should keep `Default` available for scaffolded contexts, but fail with explicit `anyhow!` configuration errors until a real `EnvoyHandle` is wired in.
 - `rivetkit-core` callback/factory APIs should box closures as `BoxFuture<'static, ...>` and use concrete `http::Request<Vec<u8>>` / `http::Response<Vec<u8>>` aliases instead of leaking generics through the runtime surface.
@@ -194,4 +195,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: The typed bridge should register actions as erased `Arc` closures that accept raw CBOR bytes, then deserialize arguments and serialize return values at the bridge boundary so the `Actor` trait stays fully typed.
   - Gotchas encountered: `#[derive(Clone)]` on generic typed wrappers like `Ctx<A>` can add bogus `A: Clone` / `Vars: Clone` bounds, so these wrappers need manual `Clone` impls.
   - Useful context: `Ctx<A>` now supports a bootstrap phase with an uninitialized vars slot so `create_state` and `create_vars` can run before the final typed vars are installed, and `bridge.rs` contains the regression test covering callback wiring plus action serde.
+---
+## 2026-04-17 00:19:13 PDT - US-022
+- What was implemented: Added a `counter` example for the public `rivetkit` crate with typed state, request handling, actions, broadcast, and a `run` loop using `abort_signal()` plus a timer. Also patched the typed bridge so actors with `type Vars = ()` work without a useless `create_vars` override, and added a regression test for that path.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit/examples/counter.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/bridge.rs`, `/home/nathan/r5/AGENTS.md`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: The typed bridge should special-case `Vars = ()` so simple actors can stay minimal and still pass through the normal bootstrap path.
+  - Gotchas encountered: The current public SQLite surface is still the low-level envoy page protocol, so examples should isolate schema bootstrap behind one helper instead of pretending there is already a high-level query API.
+  - Useful context: The new example lives at `rivetkit-rust/packages/rivetkit/examples/counter.rs`, and `cargo test -p rivetkit` now covers the unit-vars bridge fallback alongside the existing typed callback wiring test.
 ---

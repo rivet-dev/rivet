@@ -1,3 +1,4 @@
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -73,11 +74,7 @@ where
 		ctx.set_state(&state);
 	}
 
-	let vars = Arc::new(
-		A::create_vars(&ctx)
-			.await
-			.context("create typed actor vars")?,
-	);
+	let vars = Arc::new(create_vars::<A>(&ctx).await?);
 	ctx.initialize_vars(vars);
 
 	let actor = Arc::new(
@@ -218,6 +215,20 @@ where
 	Box::new(move |request| Box::pin(callback(request)))
 }
 
+async fn create_vars<A>(ctx: &Ctx<A>) -> Result<A::Vars>
+where
+	A: Actor,
+{
+	if TypeId::of::<A::Vars>() == TypeId::of::<()>() {
+		return downcast_unit::<A::Vars>()
+			.context("construct unit typed actor vars");
+	}
+
+	A::create_vars(ctx)
+		.await
+		.context("create typed actor vars")
+}
+
 fn deserialize_input<T>(bytes: Option<&[u8]>) -> Result<T>
 where
 	T: DeserializeOwned,
@@ -240,6 +251,16 @@ where
 	T: DeserializeOwned,
 {
 	Ok(from_reader(bytes)?)
+}
+
+fn downcast_unit<T>() -> Result<T>
+where
+	T: 'static,
+{
+	let value: Box<dyn Any> = Box::new(());
+	Ok(*value
+		.downcast::<T>()
+		.map_err(|_| anyhow::anyhow!("failed to downcast unit vars"))?)
 }
 
 #[cfg(test)]
@@ -285,6 +306,8 @@ mod tests {
 	struct TestActor {
 		wake_count: AtomicUsize,
 	}
+
+	struct UnitVarsActor;
 
 	#[async_trait]
 	impl Actor for TestActor {
@@ -384,6 +407,44 @@ mod tests {
 			state.value += amount;
 			ctx.set_state(&state);
 			Ok(state)
+		}
+	}
+
+	#[async_trait]
+	impl Actor for UnitVarsActor {
+		type State = TestState;
+		type ConnParams = ();
+		type ConnState = ();
+		type Input = ();
+		type Vars = ();
+
+		async fn create_state(
+			_ctx: &Ctx<Self>,
+			_input: &Self::Input,
+		) -> Result<Self::State> {
+			Ok(TestState { value: 0 })
+		}
+
+		async fn create_conn_state(
+			self: &Arc<Self>,
+			_ctx: &Ctx<Self>,
+			_params: &Self::ConnParams,
+		) -> Result<Self::ConnState> {
+			let _ = self;
+			Ok(())
+		}
+
+		async fn on_create(_ctx: &Ctx<Self>, _input: &Self::Input) -> Result<Self> {
+			Ok(Self)
+		}
+
+		async fn on_request(
+			self: &Arc<Self>,
+			_ctx: &Ctx<Self>,
+			_request: Request<Vec<u8>>,
+		) -> Result<Response<Vec<u8>>> {
+			let _ = self;
+			Ok(Response::new(b"ok".to_vec()))
 		}
 	}
 
@@ -497,5 +558,31 @@ mod tests {
 		let output = super::deserialize_cbor::<TestState>(&output)
 			.expect("action output should deserialize");
 		assert_eq!(output.value, 12);
+	}
+
+	#[tokio::test]
+	async fn factory_supports_unit_vars_without_create_vars_override() {
+		let factory = build_factory::<UnitVarsActor>(TypedActionMap::new());
+		let ctx = ActorContext::new("actor-id", "unit-vars", Vec::new(), "local");
+		let callbacks = factory
+			.create(FactoryRequest {
+				ctx: ctx.clone(),
+				input: None,
+				is_new: true,
+			})
+			.await
+			.expect("factory should build callbacks for unit vars");
+
+		let response = callbacks
+			.on_request
+			.as_ref()
+			.expect("on_request should be wired")(rivetkit_core::OnRequestRequest {
+			ctx,
+			request: Request::new(Vec::new()),
+		})
+		.await
+		.expect("on_request should succeed");
+
+		assert_eq!(response.body(), b"ok");
 	}
 }

@@ -444,7 +444,7 @@
         "`cargo check` passes for the example"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Usage Example' section for the exact code pattern. This verifies the entire API surface (Actor trait, Ctx<A>, Registry, actions, state, broadcast, SQL, abort_signal) is wired up correctly end-to-end."
     }
   ]
