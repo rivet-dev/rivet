@@ -1,9 +1,9 @@
-export { KEYS, makeConnKey } from "@/actor/keys";
 export type {
-	BaseActorInstance,
 	AnyActorInstance,
 	AnyStaticActorInstance,
+	BaseActorInstance,
 } from "@/actor/definition";
+export { KEYS, makeConnKey } from "@/actor/keys";
 export {
 	ALLOWED_PUBLIC_HEADERS,
 	HEADER_ACTOR_ID,
@@ -32,6 +32,5 @@ export type {
 	ListActorsInput,
 	RuntimeDisplayInformation,
 } from "@/engine-client/driver";
-export { buildRuntimeRouter } from "@/runtime-router/router";
 export { resolveGatewayTarget } from "./resolve-gateway-target";
 export { getInitialActorKvState } from "./utils";

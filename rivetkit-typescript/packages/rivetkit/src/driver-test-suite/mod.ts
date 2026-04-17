@@ -1,53 +1,48 @@
-import { serve as honoServe } from "@hono/node-server";
-import { createNodeWebSocket } from "@hono/node-ws";
-import invariant from "invariant";
 import { describe } from "vitest";
 import type { Encoding } from "@/client/mod";
-import { buildRuntimeRouter } from "@/runtime-router/router";
-import { type Registry } from "@/mod";
 import type { EngineControlClient } from "@/engine-client/driver";
-import { logger } from "./log";
-import { runActionFeaturesTests } from "./tests/action-features";
+import type { Registry } from "@/mod";
 import { runAccessControlTests } from "./tests/access-control";
+import { runActionFeaturesTests } from "./tests/action-features";
+import { runActorAgentOsTests } from "./tests/actor-agent-os";
 import { runActorConnTests } from "./tests/actor-conn";
 import { runActorConnHibernationTests } from "./tests/actor-conn-hibernation";
 import { runActorConnStateTests } from "./tests/actor-conn-state";
+import { runActorConnStatusTests } from "./tests/actor-conn-status";
 import { runActorDbTests } from "./tests/actor-db";
+import { runActorDbPragmaMigrationTests } from "./tests/actor-db-pragma-migration";
 import { runActorDbRawTests } from "./tests/actor-db-raw";
 import { runActorDbStressTests } from "./tests/actor-db-stress";
-import { runConnErrorSerializationTests } from "./tests/conn-error-serialization";
 import { runActorDestroyTests } from "./tests/actor-destroy";
-import { runActorLifecycleTests } from "./tests/actor-lifecycle";
-import { runActorScheduleTests } from "./tests/actor-schedule";
-import { runActorSleepTests } from "./tests/actor-sleep";
-import { runActorSleepDbTests } from "./tests/actor-sleep-db";
-import { runActorStateTests } from "./tests/actor-state";
-import { runActorConnStatusTests } from "./tests/actor-conn-status";
 import { runActorErrorHandlingTests } from "./tests/actor-error-handling";
 import { runActorHandleTests } from "./tests/actor-handle";
 import { runActorInlineClientTests } from "./tests/actor-inline-client";
 import { runActorInspectorTests } from "./tests/actor-inspector";
 import { runActorKvTests } from "./tests/actor-kv";
+import { runActorLifecycleTests } from "./tests/actor-lifecycle";
 import { runActorMetadataTests } from "./tests/actor-metadata";
 import { runActorOnStateChangeTests } from "./tests/actor-onstatechange";
 import { runActorQueueTests } from "./tests/actor-queue";
-import { runDynamicReloadTests } from "./tests/dynamic-reload";
 import { runActorRunTests } from "./tests/actor-run";
 import { runActorSandboxTests } from "./tests/actor-sandbox";
+import { runActorScheduleTests } from "./tests/actor-schedule";
+import { runActorSleepTests } from "./tests/actor-sleep";
+import { runActorSleepDbTests } from "./tests/actor-sleep-db";
+import { runActorStateTests } from "./tests/actor-state";
+import { runActorStateZodCoercionTests } from "./tests/actor-state-zod-coercion";
 import { runActorStatelessTests } from "./tests/actor-stateless";
 import { runActorVarsTests } from "./tests/actor-vars";
 import { runActorWorkflowTests } from "./tests/actor-workflow";
+import { runConnErrorSerializationTests } from "./tests/conn-error-serialization";
+import { runDynamicReloadTests } from "./tests/dynamic-reload";
+import { runGatewayQueryUrlTests } from "./tests/gateway-query-url";
+import { runGatewayRoutingTests } from "./tests/gateway-routing";
+import { runHibernatableWebSocketProtocolTests } from "./tests/hibernatable-websocket-protocol";
+import { runLifecycleHooksTests } from "./tests/lifecycle-hooks";
 import { runManagerDriverTests } from "./tests/manager-driver";
 import { runRawHttpTests } from "./tests/raw-http";
 import { runRawHttpRequestPropertiesTests } from "./tests/raw-http-request-properties";
 import { runRawWebSocketTests } from "./tests/raw-websocket";
-import { runActorDbPragmaMigrationTests } from "./tests/actor-db-pragma-migration";
-import { runActorStateZodCoercionTests } from "./tests/actor-state-zod-coercion";
-import { runActorAgentOsTests } from "./tests/actor-agent-os";
-import { runGatewayQueryUrlTests } from "./tests/gateway-query-url";
-import { runGatewayRoutingTests } from "./tests/gateway-routing";
-import { runLifecycleHooksTests } from "./tests/lifecycle-hooks";
-import { runHibernatableWebSocketProtocolTests } from "./tests/hibernatable-websocket-protocol";
 import { runRequestAccessTests } from "./tests/request-access";
 
 export interface SkipTests {
@@ -305,70 +300,11 @@ export async function createTestRuntime(
 			cleanup,
 		};
 	} else {
-		// Start server for Rivet engine
-
-		// Build driver config
-		// biome-ignore lint/style/useConst: Assigned later
-		let upgradeWebSocket: any;
-
-		// Create router
-		const parsedConfig = registry.parseConfig();
-		const managerDriver = engineClient;
-		const { router } = buildRuntimeRouter(
-			parsedConfig,
-			managerDriver,
-			() => upgradeWebSocket,
+		void registry;
+		void engineClient;
+		await driverCleanup?.();
+		throw new Error(
+			"The legacy in-process TypeScript routing test runtime has been removed. Use an engine-backed driverFactory that returns rivetEngine metadata instead.",
 		);
-
-		// Inject WebSocket
-		const nodeWebSocket = createNodeWebSocket({ app: router });
-		upgradeWebSocket = nodeWebSocket.upgradeWebSocket;
-		managerDriver.setGetUpgradeWebSocket(() => upgradeWebSocket);
-
-		// TODO: I think this whole function is fucked, we should probably switch to calling registry.serve() directly
-		// Start server
-		const server = honoServe({
-			fetch: router.fetch,
-			hostname: "127.0.0.1",
-			port: 0,
-		});
-		if (!server.listening) {
-			await new Promise<void>((resolve) => {
-				server.once("listening", () => resolve());
-			});
-		}
-		invariant(
-			nodeWebSocket.injectWebSocket !== undefined,
-			"should have injectWebSocket",
-		);
-		nodeWebSocket.injectWebSocket(server);
-		const address = server.address();
-		invariant(
-			address && typeof address !== "string",
-			"missing server address",
-		);
-		const port = address.port;
-		const serverEndpoint = `http://127.0.0.1:${port}`;
-		logger().info({ msg: "test serer listening", port });
-
-		// Cleanup
-		const cleanup = async () => {
-			// Stop server
-			await new Promise((resolve) =>
-				server.close(() => resolve(undefined)),
-			);
-
-			// Extra cleanup
-			await driverCleanup?.();
-		};
-
-		return {
-			endpoint: serverEndpoint,
-			namespace: "default",
-			runnerName: "default",
-			hardCrashActor: managerDriver.hardCrashActor?.bind(managerDriver),
-			hardCrashPreservesData: true,
-			cleanup,
-		};
 	}
 }

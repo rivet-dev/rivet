@@ -1,37 +1,27 @@
-import invariant from "invariant";
 import { convertRegistryConfigToClientConfig } from "@/client/config";
-import { createClientWithDriver } from "@/client/client";
 import { configureBaseLogger, configureDefaultLogger } from "@/common/log";
-import {
-	ENGINE_ENDPOINT,
-	ENGINE_PORT,
-	ensureEngineProcess,
-} from "@/engine-process/mod";
 import {
 	getDatacenters,
 	updateRunnerConfig,
 } from "@/engine-client/api-endpoints";
-import { type EngineControlClient } from "@/engine-client/driver";
+import type { EngineControlClient } from "@/engine-client/driver";
 import { RemoteEngineControlClient } from "@/engine-client/mod";
+import { ENGINE_ENDPOINT, ensureEngineProcess } from "@/engine-process/mod";
 import { getInspectorUrl } from "@/inspector/utils";
-import { type RegistryActors, type RegistryConfig } from "@/registry/config";
-import { logger } from "../src/registry/log";
-import { buildRuntimeRouter } from "@/runtime-router/router";
-import { EngineActorDriver } from "@/drivers/engine/mod";
-import { buildServerlessRouter } from "@/serverless/router";
-import { configureServerlessPool } from "@/serverless/configure";
-import { detectRuntime, type GetUpgradeWebSocket } from "@/utils";
-import {
-	crossPlatformServe,
-	findFreePort,
-	loadRuntimeServeStatic,
-} from "@/utils/serve";
 import type { Registry } from "@/registry";
+import type { RegistryActors, RegistryConfig } from "@/registry/config";
 import { getNodeFsSync } from "@/utils/node";
 import pkg from "../package.json" with { type: "json" };
+import { logger } from "../src/registry/log";
 
 /** Tracks whether the runtime was started as serverless or serverful. */
 export type StartKind = "serverless" | "serverful";
+
+function removedLegacyRoutingError(method: string): Error {
+	return new Error(
+		`Runtime.${method}() relied on the removed TypeScript routing/serverless stack. Use Registry.startEnvoy() with the native rivetkit-core path instead.`,
+	);
+}
 
 function logLine(label: string, value: string): void {
 	const padding = " ".repeat(Math.max(0, 13 - label.length));
@@ -60,14 +50,11 @@ async function ensureLocalRunnerConfig(config: RegistryConfig): Promise<void> {
 }
 
 export class Runtime<A extends RegistryActors> {
-	#registry: Registry<A>;
 	#config: RegistryConfig;
 	#engineClient: EngineControlClient;
-	#actorDriver?: EngineActorDriver;
 	#startKind?: StartKind;
 
 	httpPort?: number;
-	#serverlessRouter?: ReturnType<typeof buildServerlessRouter>["router"];
 
 	get config() {
 		return this.#config;
@@ -78,12 +65,11 @@ export class Runtime<A extends RegistryActors> {
 	}
 
 	private constructor(
-		registry: Registry<A>,
+		_registry: Registry<A>,
 		config: RegistryConfig,
 		engineClient: EngineControlClient,
 		httpPort?: number,
 	) {
-		this.#registry = registry;
 		this.#config = config;
 		this.#engineClient = engineClient;
 		this.httpPort = httpPort;
@@ -132,120 +118,16 @@ export class Runtime<A extends RegistryActors> {
 	}
 
 	async ensureHttpServer(): Promise<void> {
-		if (this.httpPort) {
-			return;
-		}
-
-		const configuredHttpPort = this.#config.httpPort;
-		const serveRuntime = detectRuntime();
-		let upgradeWebSocket: any;
-		const getUpgradeWebSocket: GetUpgradeWebSocket = () => upgradeWebSocket;
-		this.#engineClient.setGetUpgradeWebSocket(getUpgradeWebSocket);
-
-		const { router: runtimeRouter } = buildRuntimeRouter(
-			this.#config,
-			this.#engineClient,
-			getUpgradeWebSocket,
-			serveRuntime,
-		);
-
-		const httpPort = await findFreePort(configuredHttpPort);
-		if (httpPort !== configuredHttpPort) {
-			logger().warn({
-				msg: `port ${configuredHttpPort} is in use, using ${httpPort}`,
-			});
-		}
-
-		logger().debug({
-			msg: "serving local HTTP server",
-			port: httpPort,
-		});
-
-		if (
-			this.#config.publicEndpoint ===
-			`http://127.0.0.1:${configuredHttpPort}`
-		) {
-			this.#config.publicEndpoint = `http://127.0.0.1:${httpPort}`;
-			this.#config.serverless.publicEndpoint =
-				this.#config.publicEndpoint;
-		}
-		this.#config.httpPort = httpPort;
-
-		let serverApp = runtimeRouter;
-		if (this.#config.staticDir) {
-			let dirExists = false;
-			try {
-				const fsSync = getNodeFsSync();
-				dirExists = fsSync.existsSync(this.#config.staticDir);
-			} catch {
-				// Node fs not available.
-			}
-
-			if (dirExists) {
-				const { Hono } = await import("hono");
-				const serveStaticFn =
-					await loadRuntimeServeStatic(serveRuntime);
-				const wrapper = new Hono();
-				wrapper.use(
-					"*",
-					serveStaticFn({ root: `./${this.#config.staticDir}` }),
-				);
-				wrapper.route("/", runtimeRouter);
-				serverApp = wrapper;
-			}
-		}
-
-		const out = await crossPlatformServe(
-			this.#config,
-			httpPort,
-			serverApp,
-			serveRuntime,
-		);
-		upgradeWebSocket = out.upgradeWebSocket;
-
-		if (out.closeServer && process.env.NODE_ENV !== "production") {
-			const shutdown = () => {
-				out.closeServer!();
-			};
-			process.on("SIGTERM", shutdown);
-			process.on("SIGINT", shutdown);
-		}
-
-		this.httpPort = httpPort;
+		throw removedLegacyRoutingError("ensureHttpServer");
 	}
 
 	startServerless(): void {
-		if (this.#startKind === "serverless") return;
-		invariant(!this.#startKind, "Runtime already started as serverful");
-		this.#startKind = "serverless";
-
-		this.#serverlessRouter = buildServerlessRouter(this.#config).router;
-
-		this.#printWelcome();
-
-		if (this.#config.configurePool) {
-			// biome-ignore lint/nursery/noFloatingPromises: intentional
-			configureServerlessPool(this.#config);
-		}
+		throw removedLegacyRoutingError("startServerless");
 	}
 
 	async startEnvoy(): Promise<void> {
 		if (this.#startKind === "serverful") return;
-		invariant(!this.#startKind, "Runtime already started as serverless");
 		this.#startKind = "serverful";
-
-		if (this.#config.envoy && !this.#actorDriver) {
-			logger().debug("starting engine actor driver");
-			const inlineClient = createClientWithDriver<Registry<A>>(
-				this.#engineClient,
-			);
-			this.#actorDriver = new EngineActorDriver(
-				this.#config,
-				this.#engineClient,
-				inlineClient,
-			);
-			await this.#actorDriver.waitForReady();
-		}
 
 		this.#printWelcome();
 	}
@@ -304,11 +186,7 @@ export class Runtime<A extends RegistryActors> {
 	}
 
 	handleServerlessRequest(request: Request): Response | Promise<Response> {
-		invariant(
-			this.#startKind === "serverless",
-			"not started as serverless",
-		);
-		invariant(this.#serverlessRouter, "serverless router not initialized");
-		return this.#serverlessRouter.fetch(request);
+		void request;
+		throw removedLegacyRoutingError("handleServerlessRequest");
 	}
 }

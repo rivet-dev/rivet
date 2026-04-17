@@ -1,5 +1,4 @@
 import { Runtime } from "../../runtime";
-import { ENGINE_ENDPOINT } from "@/engine-process/constants";
 import {
 	type RegistryActors,
 	type RegistryConfig,
@@ -17,6 +16,12 @@ export interface ServerlessHandler {
 	fetch: FetchHandler;
 }
 
+function removedLegacyRoutingError(method: string): Error {
+	return new Error(
+		`Registry.${method}() used the removed TypeScript routing/serverless stack. Use Registry.startEnvoy() and route traffic through the engine instead.`,
+	);
+}
+
 export class Registry<A extends RegistryActors> {
 	#config: RegistryConfigInput<A>;
 
@@ -28,8 +33,6 @@ export class Registry<A extends RegistryActors> {
 		return RegistryConfigSchema.parse(this.#config);
 	}
 
-	// Shared runtime instance
-	#runtime?: Runtime<A>;
 	#runtimePromise?: Promise<Runtime<A>>;
 	#nativeServePromise?: Promise<void>;
 
@@ -55,10 +58,6 @@ export class Registry<A extends RegistryActors> {
 	#ensureRuntime(): Promise<Runtime<A>> {
 		if (!this.#runtimePromise) {
 			this.#runtimePromise = Runtime.create(this);
-			// biome-ignore lint/nursery/noFloatingPromises: bg task
-			this.#runtimePromise.then((rt) => {
-				this.#runtime = rt;
-			});
 		}
 		return this.#runtimePromise;
 	}
@@ -74,9 +73,8 @@ export class Registry<A extends RegistryActors> {
 	 * ```
 	 */
 	public async handler(request: Request): Promise<Response> {
-		const runtime = await this.#ensureRuntime();
-		runtime.startServerless();
-		return await runtime.handleServerlessRequest(request);
+		void request;
+		throw removedLegacyRoutingError("handler");
 	}
 
 	/**
@@ -88,7 +86,12 @@ export class Registry<A extends RegistryActors> {
 	 * ```
 	 */
 	public serve(): ServerlessHandler {
-		return { fetch: this.handler.bind(this) };
+		return {
+			fetch: async (request) => {
+				void request;
+				throw removedLegacyRoutingError("serve");
+			},
+		};
 	}
 
 	/**
@@ -96,11 +99,11 @@ export class Registry<A extends RegistryActors> {
 	 */
 	public startEnvoy() {
 		if (!this.#nativeServePromise) {
-			this.#nativeServePromise = buildNativeRegistry(this.parseConfig()).then(
-				async ({ registry, serveConfig }) => {
-					await registry.serve(serveConfig);
-				},
-			);
+			this.#nativeServePromise = buildNativeRegistry(
+				this.parseConfig(),
+			).then(async ({ registry, serveConfig }) => {
+				await registry.serve(serveConfig);
+			});
 		}
 	}
 
@@ -121,22 +124,7 @@ export class Registry<A extends RegistryActors> {
 	 * ```
 	 */
 	public start() {
-		// Default staticDir to "public" if not explicitly set.
-		if (this.#config.staticDir === undefined) {
-			this.#config.staticDir = "public";
-		}
-
-		if (this.#config.serverless === undefined) {
-			this.#config.serverless = {};
-		}
-		if (this.#config.serverless.publicEndpoint === undefined) {
-			this.#config.serverless.publicEndpoint = ENGINE_ENDPOINT;
-		}
-		// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
-		this.#ensureRuntime().then(async (runtime) => {
-			await runtime.ensureHttpServer();
-			this.startEnvoy();
-		});
+		this.startEnvoy();
 	}
 }
 

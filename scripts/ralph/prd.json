@@ -650,7 +650,7 @@
         "pnpm build succeeds"
       ],
       "priority": 34,
-      "passes": false,
+      "passes": true,
       "notes": "All routing is handled by the engine now. These modules are deprecated."
     },
     {
