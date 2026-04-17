@@ -17,6 +17,7 @@ use crate::actor::connection::{
 	ConnHandle, ConnectionManager, HibernatableConnectionMetadata,
 };
 use crate::actor::event::EventBroadcaster;
+use crate::actor::metrics::ActorMetrics;
 use crate::actor::queue::Queue;
 use crate::actor::schedule::Schedule;
 use crate::actor::sleep::{CanSleep, SleepController};
@@ -52,6 +53,7 @@ pub(crate) struct ActorContextInner {
 	prevent_sleep: AtomicBool,
 	sleep_requested: AtomicBool,
 	destroy_requested: AtomicBool,
+	metrics: ActorMetrics,
 	actor_id: String,
 	name: String,
 	key: ActorKey,
@@ -105,12 +107,22 @@ impl ActorContext {
 		kv: Kv,
 		sql: SqliteDb,
 	) -> Self {
+		let metrics = ActorMetrics::new(actor_id.clone(), name.clone());
 		let state = ActorState::new(kv.clone(), config.clone());
 		let schedule = Schedule::new(state.clone(), actor_id.clone(), config);
 		let abort_signal = CancellationToken::new();
-		let queue = Queue::new(kv.clone(), ActorConfig::default(), Some(abort_signal.clone()));
-		let connections =
-			ConnectionManager::new(actor_id.clone(), kv.clone(), ActorConfig::default());
+		let queue = Queue::new(
+			kv.clone(),
+			ActorConfig::default(),
+			Some(abort_signal.clone()),
+			metrics.clone(),
+		);
+		let connections = ConnectionManager::new(
+			actor_id.clone(),
+			kv.clone(),
+			ActorConfig::default(),
+			metrics.clone(),
+		);
 		let sleep = SleepController::default();
 
 		let ctx = Self(Arc::new(ActorContextInner {
@@ -127,6 +139,7 @@ impl ActorContext {
 			prevent_sleep: AtomicBool::new(false),
 			sleep_requested: AtomicBool::new(false),
 			destroy_requested: AtomicBool::new(false),
+			metrics,
 			actor_id,
 			name,
 			key,
@@ -296,6 +309,16 @@ impl ActorContext {
 		self.0.abort_signal.is_cancelled()
 	}
 
+	#[doc(hidden)]
+	pub fn record_startup_create_state(&self, duration: Duration) {
+		self.0.metrics.observe_create_state(duration);
+	}
+
+	#[doc(hidden)]
+	pub fn record_startup_create_vars(&self, duration: Duration) {
+		self.0.metrics.observe_create_vars(duration);
+	}
+
 	pub fn broadcast(&self, name: &str, args: &[u8]) {
 		self.0.broadcaster.broadcast(&self.conns(), name, args);
 	}
@@ -342,6 +365,39 @@ impl ActorContext {
 	pub(crate) fn trigger_throttled_state_save(&self) {
 		self.0.state.trigger_throttled_save();
 		self.reset_sleep_timer();
+	}
+
+	pub(crate) fn record_startup_on_migrate(&self, duration: Duration) {
+		self.0.metrics.observe_on_migrate(duration);
+	}
+
+	pub(crate) fn record_startup_on_wake(&self, duration: Duration) {
+		self.0.metrics.observe_on_wake(duration);
+	}
+
+	pub(crate) fn record_total_startup(&self, duration: Duration) {
+		self.0.metrics.observe_total_startup(duration);
+	}
+
+	pub(crate) fn record_action_call(&self, action_name: &str) {
+		self.0.metrics.observe_action_call(action_name);
+	}
+
+	pub(crate) fn record_action_error(&self, action_name: &str) {
+		self.0.metrics.observe_action_error(action_name);
+	}
+
+	pub(crate) fn record_action_duration(&self, action_name: &str, duration: Duration) {
+		self.0.metrics.observe_action_duration(action_name, duration);
+	}
+
+	#[doc(hidden)]
+	pub fn render_metrics(&self) -> Result<String> {
+		self.0.metrics.render()
+	}
+
+	pub(crate) fn metrics_content_type(&self) -> String {
+		self.0.metrics.metrics_content_type()
 	}
 
 	#[allow(dead_code)]

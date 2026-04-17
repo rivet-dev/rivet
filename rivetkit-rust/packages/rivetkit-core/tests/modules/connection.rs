@@ -18,6 +18,7 @@ use super::*;
 		use crate::actor::callbacks::ActorInstanceCallbacks;
 		use crate::actor::config::ActorConfig;
 		use crate::actor::context::ActorContext;
+		use crate::actor::context::tests::new_with_kv;
 
 		const PERSISTED_CONNECTION_HEX: &str =
 			"040006636f6e6e2d310201020203040107757064617465640401020304040506070809000a00032f77730106782d746573740131";
@@ -265,6 +266,36 @@ use super::*;
 			assert!(disconnected.subscriptions().is_empty());
 			assert!(manager.list().is_empty());
 
+			Ok(())
+		}
+
+		#[tokio::test]
+		async fn connection_lifecycle_updates_prometheus_metrics() -> Result<()> {
+			let ctx = new_with_kv(
+				"actor-1",
+				"conn-metrics",
+				Vec::new(),
+				"local",
+				crate::kv::tests::new_in_memory(),
+			);
+
+			let conn = ctx
+				.connect_conn(Vec::new(), false, None, async { Ok(Vec::new()) })
+				.await?;
+			conn.disconnect(None).await?;
+
+			let metrics = ctx.render_metrics().expect("render metrics");
+			let active_line = metrics
+				.lines()
+				.find(|line| line.starts_with("active_connections"))
+				.expect("active connections metric line");
+			let total_line = metrics
+				.lines()
+				.find(|line| line.starts_with("connections_total"))
+				.expect("connections total metric line");
+
+			assert!(active_line.ends_with(" 0"));
+			assert!(total_line.ends_with(" 1"));
 			Ok(())
 		}
 

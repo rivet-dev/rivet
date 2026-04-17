@@ -45,6 +45,13 @@ mod moved_tests {
 		Box::new(handler)
 	}
 
+	fn metric_line<'a>(metrics: &'a str, name: &str) -> &'a str {
+		metrics
+			.lines()
+			.find(|line| line.starts_with(name))
+			.expect("metric line should exist")
+	}
+
 	#[tokio::test]
 	async fn dispatch_returns_handler_output() {
 		let mut callbacks = ActorInstanceCallbacks::default();
@@ -60,6 +67,32 @@ mod moved_tests {
 			.expect("action should succeed");
 
 		assert_eq!(output, b"ping");
+	}
+
+	#[tokio::test]
+	async fn dispatch_records_prometheus_action_metrics() {
+		let ctx = ActorContext::new("actor-1", "counter", Vec::new(), "local");
+		let mut callbacks = ActorInstanceCallbacks::default();
+		callbacks.actions.insert(
+			"echo".to_owned(),
+			action_handler(|request| Box::pin(async move { Ok(request.args) })),
+		);
+
+		let invoker = ActionInvoker::new(ActorConfig::default(), callbacks);
+		invoker
+			.dispatch(ActionRequest {
+				ctx: ctx.clone(),
+				conn: ConnHandle::default(),
+				name: "echo".to_owned(),
+				args: b"ping".to_vec(),
+			})
+			.await
+			.expect("action should succeed");
+
+		let metrics = ctx.render_metrics().expect("render metrics");
+		assert!(metric_line(&metrics, "action_call_total").contains("action=\"echo\""));
+		assert!(metric_line(&metrics, "action_call_total").ends_with(" 1"));
+		assert!(metric_line(&metrics, "action_duration_seconds_sum").contains("action=\"echo\""));
 	}
 
 	#[tokio::test]
@@ -172,5 +205,30 @@ mod moved_tests {
 		assert_eq!(error.group, "core");
 		assert_eq!(error.code, "internal_error");
 		assert_eq!(error.message, "An internal error occurred");
+	}
+
+	#[tokio::test]
+	async fn dispatch_records_action_error_metrics() {
+		let ctx = ActorContext::new("actor-1", "counter", Vec::new(), "local");
+		let mut callbacks = ActorInstanceCallbacks::default();
+		callbacks.actions.insert(
+			"explode".to_owned(),
+			action_handler(|_| Box::pin(async move { Err(INTERNAL_ERROR.build()) })),
+		);
+
+		let invoker = ActionInvoker::new(ActorConfig::default(), callbacks);
+		let _ = invoker
+			.dispatch(ActionRequest {
+				ctx: ctx.clone(),
+				conn: ConnHandle::default(),
+				name: "explode".to_owned(),
+				args: Vec::new(),
+			})
+			.await
+			.expect_err("action should fail");
+
+		let metrics = ctx.render_metrics().expect("render metrics");
+		assert!(metric_line(&metrics, "action_error_total").contains("action=\"explode\""));
+		assert!(metric_line(&metrics, "action_error_total").ends_with(" 1"));
 	}
 }

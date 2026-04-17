@@ -1,6 +1,7 @@
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use rivet_error::RivetError;
 use serde::{Deserialize, Serialize};
@@ -53,11 +54,15 @@ impl ActionInvoker {
 	) -> std::result::Result<Vec<u8>, ActionDispatchError> {
 		let ctx = request.ctx.clone();
 		let action_name = request.name.clone();
+		let started_at = Instant::now();
+		ctx.record_action_call(&action_name);
 
 		let result = self.dispatch_inner(request).await;
 		ctx.trigger_throttled_state_save();
+		ctx.record_action_duration(&action_name, started_at.elapsed());
 
 		if result.is_err() {
+			ctx.record_action_error(&action_name);
 			tracing::error!(action_name, error = ?result.as_ref().err(), "action dispatch failed");
 		}
 

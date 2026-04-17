@@ -349,6 +349,36 @@ use super::*;
 		}
 
 		#[tokio::test]
+		async fn factory_records_typed_startup_metrics() {
+			let factory = build_factory::<TestActor>(TypedActionMap::new());
+			let ctx = ActorContext::new("actor-id", "metrics", Vec::new(), "local");
+			let input = super::serialize_cbor(&TestInput { start: 3 })
+				.expect("test input should serialize");
+
+			let _callbacks = factory
+				.create(FactoryRequest {
+					ctx: ctx.clone(),
+					input: Some(input),
+					is_new: true,
+				})
+				.await
+				.expect("factory should build typed callbacks");
+
+			let metrics = ctx.render_metrics().expect("render metrics");
+			let create_state_line = metrics
+				.lines()
+				.find(|line: &&str| line.starts_with("create_state_ms"))
+				.expect("create_state_ms line");
+			let create_vars_line = metrics
+				.lines()
+				.find(|line: &&str| line.starts_with("create_vars_ms"))
+				.expect("create_vars_ms line");
+
+			assert!(!create_state_line.ends_with(" 0"));
+			assert!(!create_vars_line.ends_with(" 0"));
+		}
+
+		#[tokio::test]
 		async fn action_deserialization_failures_become_validation_errors() {
 			let mut actions = TypedActionMap::<TestActor>::new();
 			actions.insert(

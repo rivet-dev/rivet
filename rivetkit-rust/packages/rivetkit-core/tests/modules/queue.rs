@@ -28,6 +28,8 @@ mod moved_tests {
 		decode_queue_message_key, decode_queue_metadata, encode_queue_metadata,
 		make_queue_message_key,
 	};
+	use crate::actor::context::tests::new_with_kv;
+	use crate::actor::queue::QueueNextOpts;
 
 	const QUEUE_METADATA_HEX: &str = "04002a0000000000000007000000";
 	const QUEUE_MESSAGE_HEX: &str =
@@ -116,5 +118,46 @@ mod moved_tests {
 		assert_eq!(decoded.name, "job");
 		assert_eq!(decoded.body, vec![0xa1, 0x61, 0x78, 0x18, 0x2a]);
 		assert_eq!(decoded.created_at, 456);
+	}
+
+	#[tokio::test]
+	async fn queue_operations_update_prometheus_metrics() {
+		let ctx = new_with_kv(
+			"actor-1",
+			"queue-metrics",
+			Vec::new(),
+			"local",
+			crate::kv::tests::new_in_memory(),
+		);
+
+		ctx.queue()
+			.send("jobs", b"payload")
+			.await
+			.expect("queue send should succeed");
+		let message = ctx
+			.queue()
+			.next(QueueNextOpts::default())
+			.await
+			.expect("queue next should succeed")
+			.expect("queue message should exist");
+		assert_eq!(message.body, b"payload".to_vec());
+
+		let metrics = ctx.render_metrics().expect("render metrics");
+		let sent_line = metrics
+			.lines()
+			.find(|line| line.starts_with("queue_messages_sent_total"))
+			.expect("sent metric line");
+		let received_line = metrics
+			.lines()
+			.find(|line| line.starts_with("queue_messages_received_total"))
+			.expect("received metric line");
+		let depth_line = metrics
+			.lines()
+			.find(|line| line.starts_with("queue_depth"))
+			.expect("depth metric line");
+
+		assert!(sent_line.ends_with(" 1"));
+		assert!(received_line.ends_with(" 1"));
+		assert!(depth_line.ends_with(" 0"));
 	}
 }

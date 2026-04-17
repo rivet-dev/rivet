@@ -16,6 +16,7 @@ use crate::actor::callbacks::{
 };
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
+use crate::actor::metrics::ActorMetrics;
 use crate::actor::persist::{
 	decode_with_embedded_version, encode_with_embedded_version,
 };
@@ -345,6 +346,7 @@ struct ConnectionManagerInner {
 	config: RwLock<ActorConfig>,
 	callbacks: RwLock<Arc<ActorInstanceCallbacks>>,
 	connections: RwLock<BTreeMap<ConnId, ConnHandle>>,
+	metrics: ActorMetrics,
 }
 
 impl ConnectionManager {
@@ -352,6 +354,7 @@ impl ConnectionManager {
 		actor_id: impl Into<String>,
 		kv: Kv,
 		config: ActorConfig,
+		metrics: ActorMetrics,
 	) -> Self {
 		Self(Arc::new(ConnectionManagerInner {
 			_actor_id: actor_id.into(),
@@ -359,6 +362,7 @@ impl ConnectionManager {
 			config: RwLock::new(config),
 			callbacks: RwLock::new(Arc::new(ActorInstanceCallbacks::default())),
 			connections: RwLock::new(BTreeMap::new()),
+			metrics,
 		}))
 	}
 
@@ -390,19 +394,30 @@ impl ConnectionManager {
 	}
 
 	pub(crate) fn insert_existing(&self, conn: ConnHandle) {
-		self.0
-			.connections
-			.write()
-			.expect("connection manager connections lock poisoned")
-			.insert(conn.id().to_owned(), conn);
+		let active_count = {
+			let mut connections = self
+				.0
+				.connections
+				.write()
+				.expect("connection manager connections lock poisoned");
+			connections.insert(conn.id().to_owned(), conn);
+			connections.len()
+		};
+		self.0.metrics.set_active_connections(active_count);
 	}
 
 	pub(crate) fn remove_existing(&self, conn_id: &str) -> Option<ConnHandle> {
-		self.0
-			.connections
-			.write()
-			.expect("connection manager connections lock poisoned")
-			.remove(conn_id)
+		let (removed, active_count) = {
+			let mut connections = self
+				.0
+				.connections
+				.write()
+				.expect("connection manager connections lock poisoned");
+			let removed = connections.remove(conn_id);
+			(removed, connections.len())
+		};
+		self.0.metrics.set_active_connections(active_count);
+		removed
 	}
 
 	pub(crate) async fn connect_with_state<F>(
@@ -451,6 +466,7 @@ impl ConnectionManager {
 			self.remove_existing(conn.id());
 			return Err(error);
 		}
+		self.0.metrics.inc_connections_total();
 
 		Ok(conn)
 	}
@@ -643,7 +659,12 @@ impl ConnectionManager {
 
 impl Default for ConnectionManager {
 	fn default() -> Self {
-		Self::new("", Kv::default(), ActorConfig::default())
+		Self::new(
+			"",
+			Kv::default(),
+			ActorConfig::default(),
+			ActorMetrics::default(),
+		)
 	}
 }
 

@@ -139,9 +139,21 @@ use super::*;
 		}
 
 		fn dispatcher_for(factory: ActorFactory) -> Arc<RegistryDispatcher> {
+			dispatcher_for_token(factory, None)
+		}
+
+		fn dispatcher_for_token(
+			factory: ActorFactory,
+			inspector_token: Option<&str>,
+		) -> Arc<RegistryDispatcher> {
 			let mut registry = CoreRegistry::new();
 			registry.register("counter", factory);
-			registry.into_dispatcher()
+			Arc::new(RegistryDispatcher {
+				factories: registry.factories,
+				active_instances: scc::HashMap::new(),
+				region: String::new(),
+				inspector_token: inspector_token.map(str::to_owned),
+			})
 		}
 
 		#[tokio::test]
@@ -185,6 +197,98 @@ use super::*;
 
 			assert_eq!(response.status, http::StatusCode::CREATED.as_u16());
 			assert_eq!(response.body, Some(b"ping".to_vec()));
+		}
+
+		#[tokio::test]
+		async fn dispatcher_serves_prometheus_metrics_before_actor_request_callback() {
+			let dispatcher = dispatcher_for_token(
+				factory(|_request| {
+					Box::pin(async move {
+						let mut callbacks = ActorInstanceCallbacks::default();
+						callbacks.on_request = Some(request_callback(|_request| {
+							Box::pin(async move {
+								let response = Response::from(
+									http::Response::builder()
+										.status(http::StatusCode::IM_A_TEAPOT)
+										.body(b"wrong route".to_vec())
+										.expect("build response"),
+								);
+								Ok(response)
+							})
+						}));
+						Ok(callbacks)
+					})
+				}),
+				Some("token"),
+			);
+
+			dispatcher
+				.start_actor_for_test("actor-1", 1, "counter", None)
+				.await
+				.expect("start actor");
+
+			let response = dispatcher
+				.handle_fetch(
+					"actor-1",
+					HttpRequest {
+						method: "GET".to_owned(),
+						path: "/metrics".to_owned(),
+						headers: HashMap::from([(
+							"authorization".to_owned(),
+							"Bearer token".to_owned(),
+						)]),
+						body: None,
+						body_stream: None,
+					},
+				)
+				.await
+				.expect("metrics fetch should succeed");
+
+			assert_eq!(response.status, http::StatusCode::OK.as_u16());
+			assert_eq!(
+				response
+					.headers
+					.get(http::header::CONTENT_TYPE.as_str())
+					.map(String::as_str),
+				Some("text/plain; version=0.0.4")
+			);
+			let body = String::from_utf8(
+				response.body.expect("metrics body should be present"),
+			)
+			.expect("metrics body should be utf-8");
+			assert!(body.contains("total_startup_ms"));
+			assert!(!body.contains("wrong route"));
+		}
+
+		#[tokio::test]
+		async fn dispatcher_rejects_metrics_without_valid_token() {
+			let dispatcher = dispatcher_for_token(
+				factory(|_request| {
+					Box::pin(async move { Ok(ActorInstanceCallbacks::default()) })
+				}),
+				Some("token"),
+			);
+
+			dispatcher
+				.start_actor_for_test("actor-1", 1, "counter", None)
+				.await
+				.expect("start actor");
+
+			let response = dispatcher
+				.handle_fetch(
+					"actor-1",
+					HttpRequest {
+						method: "GET".to_owned(),
+						path: "/metrics".to_owned(),
+						headers: HashMap::new(),
+						body: None,
+						body_stream: None,
+					},
+				)
+				.await
+				.expect("metrics fetch should succeed");
+
+			assert_eq!(response.status, http::StatusCode::UNAUTHORIZED.as_u16());
 		}
 
 		#[tokio::test]

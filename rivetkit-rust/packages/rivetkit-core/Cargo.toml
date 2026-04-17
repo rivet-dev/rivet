@@ -12,6 +12,7 @@ ciborium.workspace = true
 futures.workspace = true
 http.workspace = true
 nix.workspace = true
+prometheus.workspace = true
 reqwest.workspace = true
 rivet-pools.workspace = true
 rivet-error.workspace = true

@@ -54,6 +54,7 @@ struct RegistryDispatcher {
 	factories: HashMap<String, Arc<ActorFactory>>,
 	active_instances: SccHashMap<String, ActiveActorInstance>,
 	region: String,
+	inspector_token: Option<String>,
 }
 
 struct RegistryCallbacks {
@@ -166,6 +167,9 @@ impl CoreRegistry {
 			factories: self.factories,
 			active_instances: SccHashMap::new(),
 			region: env::var("RIVET_REGION").unwrap_or_default(),
+			inspector_token: env::var("RIVET_INSPECTOR_TOKEN")
+				.ok()
+				.filter(|token| !token.is_empty()),
 		})
 	}
 }
@@ -278,6 +282,9 @@ impl RegistryDispatcher {
 		request: HttpRequest,
 	) -> Result<HttpResponse> {
 		let instance = self.active_actor(actor_id).await?;
+		if request.path == "/metrics" {
+			return self.handle_metrics_fetch(&instance, &request);
+		}
 		let Some(callback) = instance.callbacks.on_request.as_ref() else {
 			return Ok(HttpResponse {
 				status: http::StatusCode::NOT_FOUND.as_u16(),
@@ -300,6 +307,35 @@ impl RegistryDispatcher {
 				Ok(internal_server_error_response())
 			}
 		}
+	}
+
+	fn handle_metrics_fetch(
+		&self,
+		instance: &ActiveActorInstance,
+		request: &HttpRequest,
+	) -> Result<HttpResponse> {
+		if !request_has_bearer_token(request, self.inspector_token.as_deref()) {
+			return Ok(unauthorized_response());
+		}
+
+		let mut headers = HashMap::new();
+		headers.insert(
+			http::header::CONTENT_TYPE.to_string(),
+			instance.ctx.metrics_content_type().to_owned(),
+		);
+
+		Ok(HttpResponse {
+			status: http::StatusCode::OK.as_u16(),
+			headers,
+			body: Some(
+				instance
+					.ctx
+					.render_metrics()
+					.context("render actor prometheus metrics")?
+					.into_bytes(),
+			),
+			body_stream: None,
+		})
 	}
 
 	async fn handle_websocket(
@@ -818,6 +854,26 @@ fn internal_server_error_response() -> HttpResponse {
 		body: Some(Vec::new()),
 		body_stream: None,
 	}
+}
+
+fn unauthorized_response() -> HttpResponse {
+	HttpResponse {
+		status: http::StatusCode::UNAUTHORIZED.as_u16(),
+		headers: HashMap::new(),
+		body: Some(Vec::new()),
+		body_stream: None,
+	}
+}
+
+fn request_has_bearer_token(request: &HttpRequest, configured_token: Option<&str>) -> bool {
+	let Some(configured_token) = configured_token else {
+		return false;
+	};
+
+	request.headers.iter().any(|(name, value)| {
+		name.eq_ignore_ascii_case(http::header::AUTHORIZATION.as_str())
+			&& value == &format!("Bearer {configured_token}")
+	})
 }
 
 fn default_websocket_handler() -> WebSocketHandler {

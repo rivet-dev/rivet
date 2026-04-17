@@ -849,7 +849,7 @@
         "tsc type-check passes"
       ],
       "priority": 45,
-      "passes": false,
+      "passes": true,
       "notes": "Per-actor registry is important: each actor has its own metrics namespace. When actor stops, the registry is dropped so metrics don't leak. The /metrics endpoint is part of the actor's HTTP handler, not a global endpoint. Inspector token validation prevents unauthorized metrics scraping."
     },
     {

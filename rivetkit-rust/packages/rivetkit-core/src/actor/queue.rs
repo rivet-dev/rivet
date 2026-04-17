@@ -14,6 +14,7 @@ use tokio::sync::{Mutex, Notify, OnceCell};
 use tokio_util::sync::CancellationToken;
 
 use crate::actor::config::ActorConfig;
+use crate::actor::metrics::ActorMetrics;
 use crate::actor::persist::{
 	decode_with_embedded_version, encode_with_embedded_version,
 };
@@ -92,6 +93,7 @@ struct QueueInner {
 	notify: Notify,
 	active_queue_wait_count: AtomicU32,
 	wait_activity_callback: StdMutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+	metrics: ActorMetrics,
 }
 
 #[derive(Clone, Debug)]
@@ -217,10 +219,11 @@ struct QueueCompleteNotConfigured {
 struct QueueActorAborted;
 
 impl Queue {
-	pub fn new(
+	pub(crate) fn new(
 		kv: Kv,
 		config: ActorConfig,
 		abort_signal: Option<CancellationToken>,
+		metrics: ActorMetrics,
 	) -> Self {
 		Self(Arc::new(QueueInner {
 			kv,
@@ -233,6 +236,7 @@ impl Queue {
 			notify: Notify::new(),
 			active_queue_wait_count: AtomicU32::new(0),
 			wait_activity_callback: StdMutex::new(None),
+			metrics,
 		}))
 	}
 
@@ -292,6 +296,11 @@ impl Queue {
 		}
 
 		drop(metadata);
+		self.0.metrics.add_queue_messages_sent(1);
+		self
+			.0
+			.metrics
+			.set_queue_depth(self.0.metadata.lock().await.size);
 		self.0.notify.notify_waiters();
 
 		Ok(QueueMessage {
@@ -400,6 +409,7 @@ impl Queue {
 				let metadata = self.load_or_create_metadata().await?;
 				let mut state = self.0.metadata.lock().await;
 				*state = metadata;
+				self.0.metrics.set_queue_depth(state.size);
 				Ok(())
 			})
 			.await
@@ -498,6 +508,10 @@ impl Queue {
 		if completable {
 			let mut pending = self.0.pending_completable_message_ids.lock().await;
 			pending.extend(selected.iter().map(|message| message.id));
+			self
+				.0
+				.metrics
+				.add_queue_messages_received(selected.len().try_into().unwrap_or(u64::MAX));
 			return Ok(selected
 				.into_iter()
 				.map(|message| self.attach_completion(message))
@@ -507,6 +521,10 @@ impl Queue {
 		self
 			.remove_messages(selected.iter().map(|message| message.id).collect())
 			.await?;
+		self
+			.0
+			.metrics
+			.add_queue_messages_received(selected.len().try_into().unwrap_or(u64::MAX));
 
 		Ok(selected)
 	}
@@ -599,7 +617,12 @@ impl Queue {
 			.kv
 			.put(&QUEUE_METADATA_KEY, &encoded_metadata)
 			.await
-			.context("persist queue metadata after delete")
+			.context("persist queue metadata after delete")?;
+		self
+			.0
+			.metrics
+			.set_queue_depth(self.0.metadata.lock().await.size);
+		Ok(())
 	}
 
 	async fn complete_message_by_id(
@@ -704,7 +727,12 @@ impl Queue {
 
 impl Default for Queue {
 	fn default() -> Self {
-		Self::new(Kv::default(), ActorConfig::default(), None)
+		Self::new(
+			Kv::default(),
+			ActorConfig::default(),
+			None,
+			ActorMetrics::default(),
+		)
 	}
 }
 

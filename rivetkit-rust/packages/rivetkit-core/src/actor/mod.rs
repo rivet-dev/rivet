@@ -6,6 +6,7 @@ pub mod context;
 pub mod event;
 pub mod factory;
 pub mod lifecycle;
+pub mod metrics;
 pub mod persist;
 pub mod queue;
 pub mod schedule;

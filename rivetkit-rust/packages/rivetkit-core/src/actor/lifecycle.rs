@@ -88,6 +88,7 @@ impl ActorLifecycle {
 		factory: &ActorFactory,
 		options: StartupOptions,
 	) -> std::result::Result<StartupOutcome, StartupError> {
+		let startup_started_at = Instant::now();
 		let persisted = self.load_persisted_actor(&ctx, &options).await?;
 		let is_new = !persisted.has_initialized;
 		ctx.load_persisted_actor(persisted);
@@ -124,6 +125,7 @@ impl ActorLifecycle {
 			.await
 			{
 				Ok(Ok(())) => {
+					ctx.record_startup_on_migrate(started_at.elapsed());
 					tracing::debug!(
 						actor_id = ctx.actor_id(),
 						on_migrate_ms = started_at.elapsed().as_millis() as u64,
@@ -146,9 +148,11 @@ impl ActorLifecycle {
 		}
 
 		if let Some(on_wake) = callbacks.on_wake.as_ref() {
+			let started_at = Instant::now();
 			on_wake(OnWakeRequest { ctx: ctx.clone() })
 				.await
 				.map_err(|source| StartupError::new(StartupStage::Wake, source))?;
+			ctx.record_startup_on_wake(started_at.elapsed());
 		}
 
 		ctx.schedule().sync_alarm_logged();
@@ -178,6 +182,7 @@ impl ActorLifecycle {
 		self.spawn_run_handler(ctx.clone(), callbacks.clone());
 		self.process_overdue_scheduled_events(&ctx, factory, callbacks.clone())
 			.await;
+		ctx.record_total_startup(startup_started_at.elapsed());
 
 		Ok(StartupOutcome { callbacks, is_new })
 	}

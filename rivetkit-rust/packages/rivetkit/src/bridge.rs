@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Instant;
 
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -71,13 +72,17 @@ where
 	let ctx = Ctx::<A>::new_bootstrap(request.ctx.clone());
 
 	if request.is_new {
+		let started_at = Instant::now();
 		let state = A::create_state(&ctx, &input)
 			.await
 			.context("create typed actor state")?;
 		ctx.try_set_state(&state)?;
+		ctx.inner().record_startup_create_state(started_at.elapsed());
 	}
 
+	let started_at = Instant::now();
 	let vars = Arc::new(create_vars::<A>(&ctx).await?);
+	ctx.inner().record_startup_create_vars(started_at.elapsed());
 	ctx.initialize_vars(vars);
 
 	let actor = Arc::new(
