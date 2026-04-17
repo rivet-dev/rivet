@@ -23,6 +23,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` sleep shutdown should wait on the tracked `run` task, use `SleepController` deadline polls for the idle window and shutdown drains, persist hibernatable connections before disconnecting non-hibernatable ones, and finish with an immediate state save.
 - `rivetkit-core` destroy shutdown should skip the idle-window wait, use `on_destroy_timeout` separately from the shutdown grace-period budget, disconnect every connection, and end with the same immediate state save plus SQLite cleanup path.
 - `envoy-client` actor-scoped HTTP fetch work should stay in a `JoinSet` plus a shared `Arc<AtomicUsize>` counter so sleep checks can read in-flight request count and shutdown can abort and join the tasks before `Stopped`.
+- Sleep-gating atomic counters should use a `Release` update on task completion and `Acquire` loads where `can_sleep()` or shutdown logic reads zero, so cross-task completion state is visible when the counter drains.
 - `envoy-client` shutdown hooks that need multi-step teardown should override `EnvoyCallbacks::on_actor_stop_with_completion`; the default path still auto-completes after legacy `on_actor_stop` returns.
 - `rivetkit` generic typed wrappers like `Ctx<A>` and `ConnCtx<A>` should implement `Clone` manually, because derive can accidentally add `A: Clone` or `Vars: Clone` bounds that break actor registration.
 
@@ -220,4 +221,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Small API asymmetries that come from envoy protocol shapes are worth documenting at the constructor boundary, because that is where contributors notice them.
   - Gotchas encountered: `Kv` passes `actor_id` on every envoy-client call, while SQLite request structs already embed actor identity, so the constructors are intentionally different.
   - Useful context: The explanation now lives directly on `Kv::new()` and `SqliteDb::new()` in `rivetkit-core`, so future refactors can keep the comment next to the API surface instead of rediscovering it in envoy-client.
+---
+## 2026-04-17 09:39:35 PDT - US-025
+- What was implemented: Documented the `ActiveHttpRequestGuard` memory-ordering contract and switched the in-flight request counter decrement to `Ordering::Release` so the code matches the cross-task visibility guarantee used by `can_sleep()` and shutdown reads.
+- Files changed: `/home/nathan/r5/engine/sdks/rust/envoy-client/src/actor.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Sleep-gating counters should document their memory-ordering contract at the type or field boundary, because the correctness depends on readers in other tasks.
+  - Gotchas encountered: The PRD check command used the directory name, but the actual Cargo package is `rivet-envoy-client`, so verify the manifest package name before assuming `cargo check -p` targets.
+  - Useful context: The `Acquire` reads already lived in `abort_and_join_http_request_tasks`, `wait_for_count`, and the HTTP request tracker tests. This story only needed the doc comment plus the matching `Release` decrement.
 ---

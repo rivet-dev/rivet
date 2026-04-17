@@ -488,7 +488,7 @@
         "`cargo check -p envoy-client` passes"
       ],
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": "Review finding from US-011: The RAII guard uses Acquire/Release ordering which is correct but the reasoning should be documented for maintainability. File: engine/sdks/rust/envoy-client/src/actor.rs."
     }
   ]

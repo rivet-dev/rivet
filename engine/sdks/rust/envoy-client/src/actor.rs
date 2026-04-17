@@ -89,6 +89,9 @@ struct ActorContext {
 	active_http_request_count: Arc<AtomicUsize>,
 }
 
+/// `can_sleep()` reads this counter from another task. The `Release` decrement
+/// pairs with `Acquire` loads so seeing zero also observes prior writes from
+/// the completed HTTP request task.
 struct ActiveHttpRequestGuard {
 	active_http_request_count: Arc<AtomicUsize>,
 }
@@ -117,7 +120,7 @@ impl Drop for ActiveHttpRequestGuard {
 	fn drop(&mut self) {
 		let previous = self
 			.active_http_request_count
-			.fetch_sub(1, Ordering::Relaxed);
+			.fetch_sub(1, Ordering::Release);
 		debug_assert!(previous > 0, "active HTTP request count underflow");
 	}
 }
