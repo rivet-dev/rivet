@@ -4,6 +4,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 ## Codebase Patterns
 - Renaming the RivetKit N-API addon means syncing the package name/path, Cargo workspace member, Docker build targets, publish metadata, example dependencies, and wrapper imports together. The live package is `@rivetkit/rivetkit-napi` at `rivetkit-typescript/packages/rivetkit-napi`.
 - `pnpm build -F @rivetkit/...` goes through Turbo and upstream workspace deps, so if `node_modules` is missing you need `pnpm install` before treating a filtered package build failure as a code bug.
+- When deleting a deprecated `rivetkit` package surface, remove the matching `package.json` exports, `tsconfig.json` aliases, `turbo.json` task hooks, driver-test entries, and docs imports in the same change so builds stop following dead paths.
 - The TypeScript registry's native envoy path should dynamically import `@rivetkit/rivetkit-napi` and `@rivetkit/engine-cli` so browser and serverless bundles do not eagerly load native-only modules.
 - N-API actor-runtime wrappers should expose `ActorContext` sub-objects as first-class classes, keep raw payloads as `Buffer`, and wrap queue messages as classes so completable receives can call `complete()` back into Rust.
 - N-API callback bridges should pass one request object through `ThreadsafeFunction`, and Promise results coming back into Rust should deserialize into `#[napi(object)]` structs instead of `JsObject` so the future remains `Send`.
@@ -320,4 +321,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: The safe way to delete deprecated TS infrastructure is to move shared database and protocol helpers first, then remove exports and finally retarget fixtures that still compile against those old paths.
   - Gotchas encountered: `prd.json` now explicitly keeps `driver-test-suite/` for US-039, so the folder itself has to survive even while its imports stop referencing deleted runtime modules.
   - Useful context: The package now passes `pnpm check-types` and `pnpm build` with the live helper surfaces under `src/common/database/*`, `src/common/client-protocol*`, `src/common/actor-persist*`, `src/common/workflow-transport.ts`, `src/common/engine.ts`, and `src/client/resolve-gateway-target.ts`.
+---
+## 2026-04-17 13:17:47 PDT - US-036
+- What was implemented: Deleted the remaining TypeScript dynamic actor runtime, sandbox actor/provider surfaces, and the isolate-runtime build hooks. Removed the dead package exports, driver-test-suite entries, legacy driver fixtures, and replaced the sandbox docs page with a removal notice so the docs stop advertising broken imports.
+- Files changed: `/home/nathan/r5/pnpm-lock.yaml`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/{package.json,tsconfig.json,turbo.json,dynamic-isolate-runtime/**,src/dynamic/**,src/sandbox/**,src/driver-test-suite/**,fixtures/driver-test-suite/{registry-static.ts,registry-dynamic.ts,dynamic-registry.ts,sandbox.ts,actors/dockerSandbox*.ts},tests/{driver-registry-variants.ts,sandbox-providers.test.ts},tsup.dynamic-isolate-runtime.config.ts}`, `/home/nathan/r5/website/src/content/docs/actors/sandbox.mdx`, `/home/nathan/r5/scripts/ralph/{prd.json,progress.txt}`
+- **Learnings for future iterations:**
+  - Patterns discovered: Deleting a deprecated `rivetkit` surface means cleaning up package exports, TS path aliases, Turbo task wiring, driver fixtures, and docs in the same sweep or the build keeps chasing dead files.
+  - Gotchas encountered: `pnpm --filter rivetkit test -- --run ...` still surfaced unrelated alias-resolution and engine-runner failures here, so the meaningful acceptance checks for this cleanup story were `pnpm --filter rivetkit check-types` and `pnpm --filter rivetkit build`.
+  - Useful context: The remaining package no longer contains any `src/dynamic/**`, `src/sandbox/**`, or `dynamic-isolate-runtime/**` code, and the docs page at `website/src/content/docs/actors/sandbox.mdx` now explicitly says the legacy TS sandbox actor was removed.
 ---

@@ -71,7 +71,6 @@ import {
 	runWithQueueConsumer,
 	runWithTicks,
 } from "./run";
-import { dockerSandboxActor, dockerSandboxControlActor } from "./sandbox";
 import { scheduled } from "./scheduled";
 import { dbStressActor } from "./db-stress";
 import { scheduledDb } from "./scheduled-db";
@@ -169,9 +168,6 @@ export const registry = setup({
 		dbStressActor,
 		// From scheduled-db.ts
 		scheduledDb,
-		// From sandbox.ts
-		dockerSandboxControlActor,
-		dockerSandboxActor,
 		// From sleep.ts
 		sleep,
 		sleepWithLongRpc,

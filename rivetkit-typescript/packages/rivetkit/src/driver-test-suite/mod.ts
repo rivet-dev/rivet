@@ -24,7 +24,6 @@ import { runActorMetadataTests } from "./tests/actor-metadata";
 import { runActorOnStateChangeTests } from "./tests/actor-onstatechange";
 import { runActorQueueTests } from "./tests/actor-queue";
 import { runActorRunTests } from "./tests/actor-run";
-import { runActorSandboxTests } from "./tests/actor-sandbox";
 import { runActorScheduleTests } from "./tests/actor-schedule";
 import { runActorSleepTests } from "./tests/actor-sleep";
 import { runActorSleepDbTests } from "./tests/actor-sleep-db";
@@ -34,7 +33,6 @@ import { runActorStatelessTests } from "./tests/actor-stateless";
 import { runActorVarsTests } from "./tests/actor-vars";
 import { runActorWorkflowTests } from "./tests/actor-workflow";
 import { runConnErrorSerializationTests } from "./tests/conn-error-serialization";
-import { runDynamicReloadTests } from "./tests/dynamic-reload";
 import { runGatewayQueryUrlTests } from "./tests/gateway-query-url";
 import { runGatewayRoutingTests } from "./tests/gateway-routing";
 import { runHibernatableWebSocketProtocolTests } from "./tests/hibernatable-websocket-protocol";
@@ -50,7 +48,6 @@ export interface SkipTests {
 	sleep?: boolean;
 	hibernation?: boolean;
 	inline?: boolean;
-	sandbox?: boolean;
 	agentOs?: boolean;
 }
 
@@ -82,8 +79,6 @@ export interface DriverTestConfig {
 	clientTypes?: ClientType[];
 
 	encoding?: Encoding;
-
-	isDynamic?: boolean;
 
 	clientType: ClientType;
 
@@ -175,15 +170,6 @@ export function runDriverTests(
 						runActorQueueTests(driverTestConfig);
 
 						runActorRunTests(driverTestConfig);
-
-						runActorSandboxTests(driverTestConfig);
-
-						if (
-							driverTestConfig.isDynamic &&
-							!driverTestConfig.skip?.sleep
-						) {
-							runDynamicReloadTests(driverTestConfig);
-						}
 
 						runActorInlineClientTests(driverTestConfig);
 

@@ -37,23 +37,11 @@
 			"inputs": ["scripts/pack-inspector.ts", "package.json"],
 			"outputs": ["dist/inspector.tar.gz"]
 		},
-		"build:dynamic-isolate-runtime": {
-			"dependsOn": ["^build", "build:schema"],
-			"inputs": [
-				"dynamic-isolate-runtime/src/**",
-				"dynamic-isolate-runtime/tsconfig.json",
-				"src/dynamic/runtime-bridge.ts",
-				"tsup.dynamic-isolate-runtime.config.ts",
-				"package.json"
-			],
-			"outputs": ["dist/dynamic-isolate-runtime/**"]
-		},
 		"build": {
 			"dependsOn": [
 				"^build",
 				"dump-asyncapi",
 				"build:schema",
-				"build:dynamic-isolate-runtime",
 				"build:browser"
 			],
 			"inputs": [
@@ -83,19 +71,8 @@
 			"inputs": ["src/**", "tests/**", "fixtures/**"]
 		},
 		"check-types": {
-			"dependsOn": [
-				"^build",
-				"build:schema",
-				"check-types:dynamic-isolate-runtime"
-			],
+			"dependsOn": ["^build", "build:schema"],
 			"inputs": ["src/**", "schemas/**/*.bare", "tsconfig.json"]
-		},
-		"check-types:dynamic-isolate-runtime": {
-			"inputs": [
-				"dynamic-isolate-runtime/src/**",
-				"dynamic-isolate-runtime/tsconfig.json",
-				"src/dynamic/runtime-bridge.ts"
-			]
 		},
 		"build:publish": {
 			"dependsOn": ["build", "build:pack-inspector"],

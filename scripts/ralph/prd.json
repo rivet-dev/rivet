@@ -687,8 +687,29 @@
         "pnpm build succeeds"
       ],
       "priority": 36,
-      "passes": false,
+      "passes": true,
       "notes": "Dynamic actors will be rewritten using rusty_v8 calling directly into rivetkit-core. The current isolated-vm approach is being replaced. This is intentional feature removal, not migration."
+    },
+    {
+      "id": "US-040",
+      "title": "Purge all duplicated code, redundant files, and simplify TS package structure",
+      "description": "As a developer, I need a thorough sweep of rivetkit-typescript to remove anything that is now handled by rivetkit-core, eliminate dead code, and simplify the package structure.",
+      "acceptanceCriteria": [
+        "Delete rivetkit-typescript/packages/rivetkit/schemas/ directory entirely (BARE schemas now handled by Rust structs)",
+        "Delete rivetkit-typescript/packages/rivetkit/scripts/compile-bare.ts and compile-all-bare.ts",
+        "Search for and remove any remaining imports or references to deleted modules (actor/instance, actor/conn, actor/contexts, drivers, inspector, etc.)",
+        "Identify and remove any utility functions, types, or helpers that only existed to support deleted modules",
+        "Remove any dead re-exports from mod.ts files",
+        "Remove unused dependencies from package.json that were only needed by deleted code",
+        "Verify no duplicate type definitions exist between rivetkit-core Rust types and remaining TS types",
+        "Simplify directory structure if any directories now contain only 1-2 files that could be flattened",
+        "tsc type-check passes with zero errors",
+        "pnpm build succeeds",
+        "No dead code or unused exports remain"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": "This is a thorough cleanup pass after the bulk deletions (US-033 through US-036). US-035 missed deleting schemas/. There may be other stragglers: orphaned types, unused helpers, dead imports, redundant dependencies. Use tsc --noUnusedLocals and review the remaining file tree critically. The goal is a minimal, clean TS package."
     },
     {
       "id": "US-037",
@@ -705,7 +726,7 @@
         "Verify SQLite operations work through the full path",
         "All tests pass"
       ],
-      "priority": 37,
+      "priority": 38,
       "passes": false,
       "notes": "This is the first real runtime validation of the entire migration. Everything before this was typecheck-only. If this fails, debug the NAPI boundary. Run with RUST_LOG=debug for tracing."
     },
@@ -725,7 +746,7 @@
         "pnpm build succeeds",
         "No unused exports or dead code warnings"
       ],
-      "priority": 38,
+      "priority": 39,
       "passes": false,
       "notes": "Final cleanup story. The end state for rivetkit-typescript should be: actor definitions, client library, workflow engine, agent-os, engine-api, engine-client, registry (thin NAPI wrapper), utils, common, devtools-loader."
     },
@@ -743,7 +764,7 @@
         "No test modifications that weaken assertions \u2014 fix the runtime, not the tests",
         "All tests pass: pnpm test driver-test-suite"
       ],
-      "priority": 39,
+      "priority": 40,
       "passes": false,
       "notes": "This is the real validation that the Rust migration works correctly. The driver test suite is a comprehensive matrix testing all actor functionality across encoding protocols. Run from rivetkit-typescript/packages/rivetkit. Comment out dynamic actor fixtures and tests but keep the test infrastructure. Fix any NAPI bridge issues discovered here."
     }
