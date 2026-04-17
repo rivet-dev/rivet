@@ -3,6 +3,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 
 ## Codebase Patterns
 - New Rust crates under `rivetkit-rust/packages/` that should use root workspace deps need `[package] workspace = "../../../"` in their `Cargo.toml` and a root `/Cargo.toml` workspace member entry.
+- The high-level `rivetkit` crate should stay a thin typed wrapper over `rivetkit-core`, re-exporting shared transport/config types instead of redefining them.
 - `rivetkit-core` shared runtime objects should hang off `ActorContext(Arc<ActorContextInner>)`, with service handles stored directly on the inner so context clones can still return borrowed `&Kv` and `&SqliteDb` style accessors.
 - `rivetkit-core` actor-scoped service wrappers should keep `Default` available for scaffolded contexts, but fail with explicit `anyhow!` configuration errors until a real `EnvoyHandle` is wired in.
 - `rivetkit-core` callback/factory APIs should box closures as `BoxFuture<'static, ...>` and use concrete `http::Request<Vec<u8>>` / `http::Response<Vec<u8>>` aliases instead of leaking generics through the runtime surface.
@@ -167,4 +168,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Registry startup needs `ActorContext::new_runtime(...)` instead of the default constructor so state persistence, queue config, and connection runtime inherit the actor config before lifecycle startup mutates anything.
   - Gotchas encountered: `EnvoyCallbacks` cannot be implemented for `Arc<RegistryDispatcher>` because of orphan rules, so the clean pattern is a small local adapter struct that owns `Arc<RegistryDispatcher>` and forwards callback methods.
   - Useful context: `src/registry.rs` now owns the protocol-to-core request/response translation, the env-var-based `serve()` bootstrap, and the regression tests covering the dispatcher surface.
+---
+## 2026-04-17 00:01:52 PDT - US-019
+- What was implemented: Added the new `rivetkit` crate, wired it into the root Cargo workspace, defined the `Actor` trait with the required associated types and default lifecycle hooks, and scaffolded `Ctx`, `ConnCtx`, `Registry`, `prelude`, and the placeholder bridge module so the high-level API compiles cleanly.
+- Files changed: `/home/nathan/r5/AGENTS.md`, `/home/nathan/r5/Cargo.toml`, `/home/nathan/r5/Cargo.lock`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/Cargo.toml`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/lib.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/actor.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/registry.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/prelude.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/bridge.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: The public `rivetkit` crate should mostly re-export `rivetkit-core` transport and config types so the typed layer stays thin and future bridge work only has one runtime source of truth.
+  - Gotchas encountered: `http::Response<Vec<u8>>` only exposes `builder()` on `Response<()>`, so the default 404 response path has to build with `Response::new` plus `status_mut()`.
+  - Useful context: `src/context.rs` currently only wraps `ActorContext` and `ConnHandle` with typed shells; the real typed state/vars/connection serialization work is intentionally deferred to `US-020`.
 ---

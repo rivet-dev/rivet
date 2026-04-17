@@ -384,7 +384,7 @@
         "`cargo check -p rivetkit` passes"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Actor Trait' section. No proc macros in the public API. Use async_trait for Send bounds on trait methods."
     },
     {

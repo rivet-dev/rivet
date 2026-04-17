@@ -1,0 +1,16 @@
+[package]
+name = "rivetkit"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+workspace = "../../../"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+ciborium.workspace = true
+http.workspace = true
+rivetkit-core = { path = "../rivetkit-core" }
+serde.workspace = true
+tokio.workspace = true
