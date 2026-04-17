@@ -393,26 +393,6 @@ impl Queue {
 			.expect("queue wait activity callback lock poisoned") = callback;
 	}
 
-	#[cfg(test)]
-	pub(crate) fn begin_sleep_test_wait(&self) {
-		self.0
-			.active_queue_wait_count
-			.fetch_add(1, Ordering::SeqCst);
-		self.notify_wait_activity();
-	}
-
-	#[cfg(test)]
-	pub(crate) fn end_sleep_test_wait(&self) {
-		let previous = self
-			.0
-			.active_queue_wait_count
-			.fetch_sub(1, Ordering::SeqCst);
-		if previous == 0 {
-			self.0.active_queue_wait_count.store(0, Ordering::SeqCst);
-		}
-		self.notify_wait_activity();
-	}
-
 	async fn ensure_initialized(&self) -> Result<()> {
 		self.0
 			.initialize
@@ -894,99 +874,5 @@ fn current_timestamp_ms() -> Result<i64> {
 }
 
 #[cfg(test)]
-mod tests {
-	use super::{
-		CompletableQueueMessage, QueueMessage, QueueMetadata,
-		decode_queue_message_key, decode_queue_metadata, encode_queue_metadata,
-		make_queue_message_key,
-	};
-
-	const QUEUE_METADATA_HEX: &str = "04002a0000000000000007000000";
-	const QUEUE_MESSAGE_HEX: &str =
-		"0400036a6f6205a16178182ac80100000000000000000000";
-
-	fn hex(bytes: &[u8]) -> String {
-		bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-	}
-
-	#[test]
-	fn queue_message_keys_are_big_endian() {
-		let first = make_queue_message_key(1);
-		let second = make_queue_message_key(2);
-
-		assert!(first < second);
-		assert_eq!(super::QUEUE_METADATA_KEY, [5, 1, 1]);
-		assert_eq!(
-			first,
-			vec![5, 1, 2, 0, 0, 0, 0, 0, 0, 0, 1],
-		);
-		assert_eq!(decode_queue_message_key(&first).expect("decode first"), 1);
-		assert_eq!(decode_queue_message_key(&second).expect("decode second"), 2);
-	}
-
-	#[test]
-	fn queue_metadata_round_trips_with_embedded_version() {
-		let metadata = QueueMetadata {
-			next_id: 42,
-			size: 7,
-		};
-
-		let encoded = encode_queue_metadata(&metadata).expect("encode metadata");
-		assert_eq!(hex(&encoded), QUEUE_METADATA_HEX);
-		let decoded = decode_queue_metadata(&encoded).expect("decode metadata");
-
-		assert_eq!(decoded, metadata);
-	}
-
-	#[test]
-	fn queue_message_into_completable_requires_completion_handle() {
-		let message = QueueMessage {
-			id: 1,
-			name: "tasks".into(),
-			body: vec![1, 2, 3],
-			created_at: 5,
-			completion: None,
-		};
-
-		let error = message
-			.into_completable()
-			.expect_err("message should not be completable");
-
-		assert!(error.to_string().contains("does not support completion"));
-	}
-
-	#[test]
-	fn completable_message_round_trips_back_to_queue_message() {
-		let completion = super::CompletionHandle::new(super::Queue::default(), 9);
-		let message = CompletableQueueMessage {
-			id: 9,
-			name: "jobs".into(),
-			body: vec![9],
-			created_at: 11,
-			completion,
-		};
-
-		let queue_message = message.into_message();
-		assert!(queue_message.is_completable());
-	}
-
-	#[test]
-	fn queue_message_hex_vector() {
-		let encoded = super::encode_queue_message(&super::PersistedQueueMessage {
-			name: "job".into(),
-			body: vec![0xa1, 0x61, 0x78, 0x18, 0x2a],
-			created_at: 456,
-			failure_count: None,
-			available_at: None,
-			in_flight: None,
-			in_flight_at: None,
-		})
-		.expect("encode queue message");
-
-		assert_eq!(hex(&encoded), QUEUE_MESSAGE_HEX);
-		let decoded = super::decode_queue_message(&encoded).expect("decode queue message");
-		assert_eq!(decoded.name, "job");
-		assert_eq!(decoded.body, vec![0xa1, 0x61, 0x78, 0x18, 0x2a]);
-		assert_eq!(decoded.created_at, 456);
-	}
-}
+#[path = "../../tests/modules/queue.rs"]
+pub(crate) mod tests;

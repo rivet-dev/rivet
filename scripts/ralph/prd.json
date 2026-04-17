@@ -1063,7 +1063,7 @@
         "cargo check -p rivetkit passes"
       ],
       "priority": 41,
-      "passes": false,
+      "passes": true,
       "notes": "Inline test modules to move from rivetkit-core: config, action, callbacks, schedule, sleep, context, lifecycle, state, connection, queue, event, kv, registry. From rivetkit: bridge, context. No inline tests exist in rivetkit-napi."
     }
   ]

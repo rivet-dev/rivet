@@ -1,6 +1,4 @@
-#[cfg(test)]
 use std::collections::BTreeMap;
-#[cfg(test)]
 use std::sync::{Arc, RwLock};
 
 use anyhow::{Result, anyhow};
@@ -18,7 +16,7 @@ pub struct Kv {
 enum KvBackend {
 	Unconfigured,
 	Envoy(EnvoyHandle),
-	#[cfg(test)]
+	#[cfg_attr(not(test), allow(dead_code))]
 	InMemory(Arc<RwLock<BTreeMap<Vec<u8>, Vec<u8>>>>),
 }
 
@@ -28,14 +26,6 @@ impl Kv {
 		Self {
 			backend: KvBackend::Envoy(handle),
 			actor_id: actor_id.into(),
-		}
-	}
-
-	#[cfg(test)]
-	pub(crate) fn new_in_memory() -> Self {
-		Self {
-			backend: KvBackend::InMemory(Arc::new(RwLock::new(BTreeMap::new()))),
-			actor_id: String::new(),
 		}
 	}
 
@@ -63,7 +53,6 @@ impl Kv {
 					)
 					.await
 			}
-			#[cfg(test)]
 			KvBackend::InMemory(entries) => {
 				let keys: Vec<Vec<u8>> = entries
 					.read()
@@ -95,7 +84,6 @@ impl Kv {
 					)
 					.await
 			}
-			#[cfg(test)]
 			KvBackend::InMemory(entries) => {
 				let mut listed: Vec<_> = entries
 					.read()
@@ -130,7 +118,6 @@ impl Kv {
 					)
 					.await
 			}
-			#[cfg(test)]
 			KvBackend::InMemory(entries) => {
 				let mut listed: Vec<_> = entries
 					.read()
@@ -155,7 +142,6 @@ impl Kv {
 					)
 					.await
 			}
-			#[cfg(test)]
 			KvBackend::InMemory(entries) => {
 				let entries = entries.read().expect("in-memory kv lock poisoned");
 				Ok(keys
@@ -180,7 +166,6 @@ impl Kv {
 					)
 					.await
 			}
-			#[cfg(test)]
 			KvBackend::InMemory(store) => {
 				let mut store = store.write().expect("in-memory kv lock poisoned");
 				for (key, value) in entries {
@@ -202,7 +187,6 @@ impl Kv {
 					)
 					.await
 			}
-			#[cfg(test)]
 			KvBackend::InMemory(entries) => {
 				let mut entries = entries.write().expect("in-memory kv lock poisoned");
 				for key in keys {
@@ -221,16 +205,7 @@ impl std::fmt::Debug for Kv {
 			.field("configured", &!matches!(self.backend, KvBackend::Unconfigured))
 			.field(
 				"in_memory",
-				&{
-					#[cfg(test)]
-					{
-						matches!(self.backend, KvBackend::InMemory(_))
-					}
-					#[cfg(not(test))]
-					{
-						false
-					}
-				},
+				&matches!(self.backend, KvBackend::InMemory(_)),
 			)
 			.field("actor_id", &self.actor_id)
 			.finish()
@@ -246,7 +221,6 @@ impl Default for Kv {
 	}
 }
 
-#[cfg(test)]
 fn apply_list_opts(entries: &mut Vec<(Vec<u8>, Vec<u8>)>, opts: ListOpts) {
 	if opts.reverse {
 		entries.reverse();
@@ -255,3 +229,7 @@ fn apply_list_opts(entries: &mut Vec<(Vec<u8>, Vec<u8>)>, opts: ListOpts) {
 		entries.truncate(limit as usize);
 	}
 }
+
+#[cfg(test)]
+#[path = "../tests/modules/kv.rs"]
+pub(crate) mod tests;

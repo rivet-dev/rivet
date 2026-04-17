@@ -59,7 +59,7 @@ impl Actor for Counter {
 			.status(StatusCode::OK)
 			.header("content-type", "application/json")
 			.body(body)?;
-		Ok(response)
+		Ok(response.into())
 	}
 
 	async fn run(self: &Arc<Self>, ctx: &Ctx<Self>) -> Result<()> {
