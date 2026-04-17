@@ -26,6 +26,7 @@ uuid.workspace = true
 base64.workspace = true
 hex.workspace = true
 http.workspace = true
+rivet-error.workspace = true
 rivetkit-core.workspace = true
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 

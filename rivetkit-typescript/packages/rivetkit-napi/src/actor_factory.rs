@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use napi::bindgen_prelude::{Buffer, Promise};
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
 use napi::{Env, JsFunction, JsObject};
 use napi_derive::napi;
+use rivet_error::RivetError;
 use rivetkit_core::actor::callbacks::{
 	ActionHandler, BeforeActionResponseCallback, LifecycleCallback, RequestCallback,
 };
@@ -21,7 +22,31 @@ use crate::actor_context::ActorContext;
 use crate::connection::ConnHandle;
 use crate::websocket::WebSocket;
 
-type CallbackTsfn<T> = ThreadsafeFunction<T, ErrorStrategy::Fatal>;
+type CallbackTsfn<T> = ThreadsafeFunction<T, ErrorStrategy::CalleeHandled>;
+
+#[derive(RivetError, serde::Serialize, serde::Deserialize)]
+#[error(
+	"actor",
+	"js_callback_failed",
+	"JavaScript callback failed",
+	"JavaScript callback `{callback}` failed: {reason}"
+)]
+struct JsCallbackFailed {
+	callback: String,
+	reason: String,
+}
+
+#[derive(RivetError, serde::Serialize, serde::Deserialize)]
+#[error(
+	"actor",
+	"js_callback_unavailable",
+	"JavaScript callback unavailable",
+	"JavaScript callback `{callback}` could not be invoked: {reason}"
+)]
+struct JsCallbackUnavailable {
+	callback: String,
+	reason: String,
+}
 
 #[napi(object)]
 pub struct JsHttpResponse {
@@ -229,14 +254,16 @@ impl CallbackBindings {
 		};
 
 		let promise = callback
-			.call_async::<Promise<JsFactoryInitResult>>(FactoryInitPayload {
+			.call_async::<Promise<JsFactoryInitResult>>(Ok(FactoryInitPayload {
 				ctx: request.ctx.clone(),
 				input: request.input.clone(),
 				is_new: request.is_new,
-			})
+			}))
 			.await
-			.map_err(napi_to_anyhow)?;
-		let result = promise.await.map_err(napi_to_anyhow)?;
+			.map_err(|error| callback_error("onInit", error))?;
+		let result = promise
+			.await
+			.map_err(|error| callback_error("onInit", error))?;
 
 		if let Some(state) = result.state {
 			request.ctx.set_state(state.to_vec());
@@ -251,18 +278,23 @@ impl CallbackBindings {
 
 	fn create_callbacks(&self) -> ActorInstanceCallbacks {
 		let mut callbacks = ActorInstanceCallbacks::default();
-		callbacks.on_wake = wrap_void_callback(&self.on_wake, |request: OnWakeRequest| {
-			LifecyclePayload { ctx: request.ctx }
-		});
+		callbacks.on_wake = wrap_void_callback(
+			"onWake",
+			&self.on_wake,
+			|request: OnWakeRequest| LifecyclePayload { ctx: request.ctx },
+		);
 		callbacks.on_sleep =
-			wrap_void_callback(&self.on_sleep, |request: OnSleepRequest| {
+			wrap_void_callback("onSleep", &self.on_sleep, |request: OnSleepRequest| {
 				LifecyclePayload { ctx: request.ctx }
 			});
 		callbacks.on_destroy =
-			wrap_void_callback(&self.on_destroy, |request: OnDestroyRequest| {
-				LifecyclePayload { ctx: request.ctx }
-			});
+			wrap_void_callback(
+				"onDestroy",
+				&self.on_destroy,
+				|request: OnDestroyRequest| LifecyclePayload { ctx: request.ctx },
+			);
 		callbacks.on_state_change = wrap_void_callback(
+			"onStateChange",
 			&self.on_state_change,
 			|request: OnStateChangeRequest| StateChangePayload {
 				ctx: request.ctx,
@@ -270,6 +302,7 @@ impl CallbackBindings {
 			},
 		);
 		callbacks.on_request = wrap_request_callback(
+			"onRequest",
 			&self.on_request,
 			|request: OnRequestRequest| HttpRequestPayload {
 				ctx: request.ctx,
@@ -277,6 +310,7 @@ impl CallbackBindings {
 			},
 		);
 		callbacks.on_websocket = wrap_void_callback(
+			"onWebSocket",
 			&self.on_websocket,
 			|request: OnWebSocketRequest| WebSocketPayload {
 				ctx: request.ctx,
@@ -284,6 +318,7 @@ impl CallbackBindings {
 			},
 		);
 		callbacks.on_before_connect = wrap_void_callback(
+			"onBeforeConnect",
 			&self.on_before_connect,
 			|request: OnBeforeConnectRequest| BeforeConnectPayload {
 				ctx: request.ctx,
@@ -291,6 +326,7 @@ impl CallbackBindings {
 			},
 		);
 		callbacks.on_connect = wrap_void_callback(
+			"onConnect",
 			&self.on_connect,
 			|request: OnConnectRequest| ConnectionPayload {
 				ctx: request.ctx,
@@ -298,6 +334,7 @@ impl CallbackBindings {
 			},
 		);
 		callbacks.on_disconnect = wrap_void_callback(
+			"onDisconnect",
 			&self.on_disconnect,
 			|request: OnDisconnectRequest| ConnectionPayload {
 				ctx: request.ctx,
@@ -310,16 +347,21 @@ impl CallbackBindings {
 			.map(|(name, callback)| {
 				(
 					name.clone(),
-					wrap_action_callback(callback, |request: ActionRequest| ActionPayload {
-						ctx: request.ctx,
-						conn: request.conn,
-						name: request.name,
-						args: request.args,
-					}),
+					wrap_action_callback(
+						format!("action `{name}`"),
+						callback,
+						|request: ActionRequest| ActionPayload {
+							ctx: request.ctx,
+							conn: request.conn,
+							name: request.name,
+							args: request.args,
+						},
+					),
 				)
 			})
 			.collect();
 		callbacks.on_before_action_response = wrap_buffer_callback(
+			"onBeforeActionResponse",
 			&self.on_before_action_response,
 			|request: OnBeforeActionResponseRequest| BeforeActionResponsePayload {
 				ctx: request.ctx,
@@ -328,9 +370,11 @@ impl CallbackBindings {
 				output: request.output,
 			},
 		);
-		callbacks.run = wrap_void_callback(&self.run, |request: RunRequest| {
-			LifecyclePayload { ctx: request.ctx }
-		});
+		callbacks.run = wrap_void_callback(
+			"run",
+			&self.run,
+			|request: RunRequest| LifecyclePayload { ctx: request.ctx },
+		);
 		callbacks
 	}
 }
@@ -366,6 +410,7 @@ where
 }
 
 fn wrap_void_callback<Req, Payload, Map>(
+	callback_name: &'static str,
 	callback: &Option<CallbackTsfn<Payload>>,
 	map: Map,
 ) -> Option<LifecycleCallback<Req>>
@@ -379,11 +424,14 @@ where
 	Some(Box::new(move |request| {
 		let callback = callback.clone();
 		let map = Arc::clone(&map);
-		Box::pin(async move { call_void(&callback, (map.as_ref())(request)).await })
+		Box::pin(async move {
+			call_void(callback_name, &callback, (map.as_ref())(request)).await
+		})
 	}))
 }
 
 fn wrap_request_callback<Map>(
+	callback_name: &'static str,
 	callback: &Option<CallbackTsfn<HttpRequestPayload>>,
 	map: Map,
 ) -> Option<RequestCallback>
@@ -395,11 +443,14 @@ where
 	Some(Box::new(move |request| {
 		let callback = callback.clone();
 		let map = Arc::clone(&map);
-		Box::pin(async move { call_request(&callback, (map.as_ref())(request)).await })
+		Box::pin(async move {
+			call_request(callback_name, &callback, (map.as_ref())(request)).await
+		})
 	}))
 }
 
 fn wrap_action_callback<Map>(
+	callback_name: String,
 	callback: &CallbackTsfn<ActionPayload>,
 	map: Map,
 ) -> ActionHandler
@@ -411,11 +462,15 @@ where
 	Box::new(move |request| {
 		let callback = callback.clone();
 		let map = Arc::clone(&map);
-		Box::pin(async move { call_buffer(&callback, (map.as_ref())(request)).await })
+		let callback_name = callback_name.clone();
+		Box::pin(async move {
+			call_buffer(&callback_name, &callback, (map.as_ref())(request)).await
+		})
 	})
 }
 
 fn wrap_buffer_callback<Payload, Map>(
+	callback_name: &'static str,
 	callback: &Option<CallbackTsfn<Payload>>,
 	map: Map,
 ) -> Option<BeforeActionResponseCallback>
@@ -428,42 +483,59 @@ where
 	Some(Box::new(move |request| {
 		let callback = callback.clone();
 		let map = Arc::clone(&map);
-		Box::pin(async move { call_buffer(&callback, (map.as_ref())(request)).await })
+		Box::pin(async move {
+			call_buffer(callback_name, &callback, (map.as_ref())(request)).await
+		})
 	}))
 }
 
-async fn call_void<T>(callback: &CallbackTsfn<T>, payload: T) -> Result<()>
+async fn call_void<T>(
+	callback_name: &str,
+	callback: &CallbackTsfn<T>,
+	payload: T,
+) -> Result<()>
 where
 	T: Send + 'static,
 {
 	let promise = callback
-		.call_async::<Promise<()>>(payload)
+		.call_async::<Promise<()>>(Ok(payload))
 		.await
-		.map_err(napi_to_anyhow)?;
-	promise.await.map_err(napi_to_anyhow)
+		.map_err(|error| callback_error(callback_name, error))?;
+	promise
+		.await
+		.map_err(|error| callback_error(callback_name, error))
 }
 
-async fn call_buffer<T>(callback: &CallbackTsfn<T>, payload: T) -> Result<Vec<u8>>
+async fn call_buffer<T>(
+	callback_name: &str,
+	callback: &CallbackTsfn<T>,
+	payload: T,
+) -> Result<Vec<u8>>
 where
 	T: Send + 'static,
 {
 	let promise = callback
-		.call_async::<Promise<Buffer>>(payload)
+		.call_async::<Promise<Buffer>>(Ok(payload))
 		.await
-		.map_err(napi_to_anyhow)?;
-	let buffer = promise.await.map_err(napi_to_anyhow)?;
+		.map_err(|error| callback_error(callback_name, error))?;
+	let buffer = promise
+		.await
+		.map_err(|error| callback_error(callback_name, error))?;
 	Ok(buffer.to_vec())
 }
 
 async fn call_request(
+	callback_name: &str,
 	callback: &CallbackTsfn<HttpRequestPayload>,
 	payload: HttpRequestPayload,
 ) -> Result<Response> {
 	let promise = callback
-		.call_async::<Promise<JsHttpResponse>>(payload)
+		.call_async::<Promise<JsHttpResponse>>(Ok(payload))
 		.await
-		.map_err(napi_to_anyhow)?;
-	let response = promise.await.map_err(napi_to_anyhow)?;
+		.map_err(|error| callback_error(callback_name, error))?;
+	let response = promise
+		.await
+		.map_err(|error| callback_error(callback_name, error))?;
 	Response::from_parts(
 		response.status.unwrap_or(200),
 		response.headers.unwrap_or_default(),
@@ -571,8 +643,21 @@ fn build_before_action_response_payload(
 	Ok(vec![object.into_unknown()])
 }
 
-fn napi_to_anyhow(error: napi::Error) -> anyhow::Error {
-	anyhow!(error.to_string())
+fn callback_error(callback_name: &str, error: napi::Error) -> anyhow::Error {
+	let reason = error.reason;
+	if error.status == napi::Status::Closing {
+		return JsCallbackUnavailable {
+			callback: callback_name.to_owned(),
+			reason,
+		}
+		.build();
+	}
+
+	JsCallbackFailed {
+		callback: callback_name.to_owned(),
+		reason,
+	}
+	.build()
 }
 
 impl From<JsActorConfig> for FlatActorConfig {

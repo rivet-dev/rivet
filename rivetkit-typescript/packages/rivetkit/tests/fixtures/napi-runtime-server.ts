@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getEnginePath } from "@rivetkit/engine-cli";
-import { actor, setup } from "../../src/mod";
+import { UserError, actor, setup } from "../../src/mod";
 import { buildNativeRegistry } from "../../src/registry/native";
 
 const textDecoder = new TextDecoder();
@@ -75,6 +75,18 @@ const integrationActor = actor({
 				count: c.state.count,
 				kvCount: kvValue ? Number(textDecoder.decode(kvValue)) : null,
 			};
+		},
+		getCountViaClient: async (c) => {
+			const client = c.client<any>();
+			return await client.integrationActor.getForId(c.actorId).getCount();
+		},
+		throwTypedError: async () => {
+			throw new UserError("native typed error", {
+				code: "boom",
+				metadata: {
+					source: "native",
+				},
+			});
 		},
 		goToSleep: async (c) => {
 			c.sleep();

@@ -25,7 +25,6 @@ export default defineConfig({
 		"@hono/node-server",
 		"@hono/node-server/serve-static",
 		"@hono/node-ws",
-		"tar",
 		"module",
 		// Keep workspace packages external
 		"@rivetkit/traces",

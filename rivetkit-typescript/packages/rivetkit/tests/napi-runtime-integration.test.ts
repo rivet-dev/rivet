@@ -323,9 +323,18 @@ describe.sequential("native NAPI runtime integration", () => {
 			).toEqual({
 				count: 5,
 			});
+			expect(await handle.getCountViaClient()).toBe(5);
 			expect(await handle.stateSnapshot()).toEqual({
 				count: 5,
 				kvCount: 5,
+			});
+			await expect(handle.throwTypedError()).rejects.toMatchObject({
+				group: "user",
+				code: "boom",
+				message: "native typed error",
+				metadata: {
+					source: "native",
+				},
 			});
 
 			await client.dispose();

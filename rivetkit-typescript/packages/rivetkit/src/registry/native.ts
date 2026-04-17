@@ -5,14 +5,25 @@ import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	HTTP_ACTION_REQUEST_VERSIONED,
 	HTTP_ACTION_RESPONSE_VERSIONED,
+	HTTP_RESPONSE_ERROR_VERSIONED,
 } from "@/common/client-protocol-versioned";
 import {
 	HttpActionRequestSchema,
 	HttpActionResponseSchema,
+	type HttpResponseError as HttpResponseErrorJson,
+	HttpResponseErrorSchema,
 } from "@/common/client-protocol-zod";
+import type * as protocol from "@/common/client-protocol";
 import { getRunFunction } from "@/actor/config";
 import type { AnyActorDefinition } from "@/actor/definition";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
+import { deconstructError } from "@/common/utils";
+import {
+	type AnyClient,
+	createClientWithDriver,
+} from "@/client/client";
+import { convertRegistryConfigToClientConfig } from "@/client/config";
+import { RemoteEngineControlClient } from "@/engine-client/mod";
 import type { RegistryConfig } from "@/registry/config";
 import {
 	contentTypeForEncoding,
@@ -82,6 +93,14 @@ function decodeValue<T>(value?: Buffer | Uint8Array | null): T {
 
 function encodeValue(value: unknown): Buffer {
 	return Buffer.from(cbor.encode(value));
+}
+
+function unwrapTsfnPayload<T>(error: unknown, payload: T): T {
+	if (error !== null && error !== undefined) {
+		throw error;
+	}
+
+	return payload;
 }
 
 function decodeArgs(value?: Buffer | Uint8Array | null): unknown[] {
@@ -416,13 +435,16 @@ class NativeWebSocketAdapter {
 class NativeActorContextAdapter {
 	#ctx: NativeActorContext;
 	#abortSignal?: AbortSignal;
+	#client?: AnyClient;
+	#clientFactory?: () => AnyClient;
 	#kv?: NativeKvAdapter;
 	#queue?: NativeQueueAdapter;
 	#schedule?: NativeScheduleAdapter;
 	#sql?: ReturnType<typeof wrapJsNativeDatabase>;
 
-	constructor(ctx: NativeActorContext) {
+	constructor(ctx: NativeActorContext, clientFactory?: () => AnyClient) {
 		this.#ctx = ctx;
+		this.#clientFactory = clientFactory;
 	}
 
 	get kv() {
@@ -565,8 +587,15 @@ class NativeActorContextAdapter {
 		this.#ctx.destroy();
 	}
 
-	client(): never {
-		throw new Error("c.client() is not wired through the NAPI registry yet");
+	client<T = AnyClient>(): T {
+		if (!this.#client) {
+			if (!this.#clientFactory) {
+				throw new Error("native actor client is not configured");
+			}
+			this.#client = this.#clientFactory();
+		}
+
+		return this.#client as T;
 	}
 
 	async dispose(): Promise<void> {
@@ -574,15 +603,65 @@ class NativeActorContextAdapter {
 	}
 }
 
-function withConnContext(ctx: NativeActorContext, conn: NativeConnHandle) {
-	return Object.assign(new NativeActorContextAdapter(ctx), {
+function withConnContext(
+	ctx: NativeActorContext,
+	conn: NativeConnHandle,
+	clientFactory?: () => AnyClient,
+) {
+	return Object.assign(new NativeActorContextAdapter(ctx, clientFactory), {
 		conn: new NativeConnAdapter(conn),
+	});
+}
+
+function buildNativeActionErrorResponse(
+	encoding: Encoding,
+	actionName: string,
+	error: unknown,
+): Response {
+	const { statusCode, group, code, message, metadata } = deconstructError(
+		error,
+		logger(),
+		{
+			actionName,
+			path: `/action/${actionName}`,
+			runtime: "native",
+		},
+		true,
+	);
+	const body = serializeWithEncoding<
+		protocol.HttpResponseError,
+		HttpResponseErrorJson,
+		{ group: string; code: string; message: string; metadata?: unknown }
+	>(
+		encoding,
+		{ group, code, message, metadata },
+		HTTP_RESPONSE_ERROR_VERSIONED,
+		CLIENT_PROTOCOL_CURRENT_VERSION,
+		HttpResponseErrorSchema,
+		(value) => value,
+		(value) => ({
+			group: value.group,
+			code: value.code,
+			message: value.message,
+			metadata:
+				value.metadata === undefined
+					? null
+					: bufferToArrayBuffer(cbor.encode(value.metadata)),
+		}),
+	);
+
+	return new Response(body, {
+		status: statusCode,
+		headers: {
+			"Content-Type": contentTypeForEncoding(encoding),
+		},
 	});
 }
 
 async function maybeHandleNativeActionRequest(
 	ctx: NativeActorContext,
 	request: Request,
+	clientFactory: () => AnyClient,
 	actions: Record<string, (...args: Array<any>) => any>,
 ): Promise<Response | undefined> {
 	if (request.method !== "POST") {
@@ -594,16 +673,23 @@ async function maybeHandleNativeActionRequest(
 		return undefined;
 	}
 
-	const handler = actions[decodeURIComponent(actionMatch[1] ?? "")];
-	if (typeof handler !== "function") {
-		return new Response(null, { status: 404 });
-	}
-
 	const encodingHeader = request.headers.get(HEADER_ENCODING);
 	const encoding: Encoding =
 		encodingHeader === "cbor" || encodingHeader === "bare"
 			? encodingHeader
 			: "json";
+	const actionName = decodeURIComponent(actionMatch[1] ?? "");
+	const handler = actions[actionName];
+	if (typeof handler !== "function") {
+		return buildNativeActionErrorResponse(encoding, actionName, {
+			__type: "ActorError",
+			public: true,
+			statusCode: 404,
+			group: "actor",
+			code: "action_not_found",
+			message: `action \`${actionName}\` was not found`,
+		});
+	}
 	const requestBody = new Uint8Array(await request.arrayBuffer());
 	const args = deserializeWithEncoding(
 		encoding,
@@ -616,10 +702,12 @@ async function maybeHandleNativeActionRequest(
 		(bare) =>
 			bare.args ? (cbor.decode(new Uint8Array(bare.args)) as unknown[]) : [],
 	);
-	const actorCtx = new NativeActorContextAdapter(ctx);
+	const actorCtx = new NativeActorContextAdapter(ctx, clientFactory);
 	let output: unknown;
 	try {
 		output = await handler(actorCtx, ...args);
+	} catch (error) {
+		return buildNativeActionErrorResponse(encoding, actionName, error);
 	} finally {
 		await actorCtx.dispose();
 	}
@@ -684,6 +772,7 @@ function buildActorConfig(definition: AnyActorDefinition): JsActorConfig {
 
 function buildNativeFactory(
 	bindings: NativeBindings,
+	registryConfig: RegistryConfig,
 	definition: AnyActorDefinition,
 ): NativeActorFactory {
 	const config = definition.config as Record<string, any>;
@@ -694,17 +783,24 @@ function buildNativeFactory(
 			>
 		).map(([name, handler]) => [name, handler]),
 	);
+	const createClient = () =>
+		createClientWithDriver(
+			new RemoteEngineControlClient(
+				convertRegistryConfigToClientConfig(registryConfig),
+			),
+			{ encoding: "bare" },
+		);
 	const callbacks = {
-		onInit: async ({
-			ctx,
-			input,
-			isNew,
-		}: {
-			ctx: NativeActorContext;
-			input?: Buffer;
-			isNew: boolean;
-		}): Promise<JsFactoryInitResult> => {
-			const actorCtx = new NativeActorContextAdapter(ctx);
+		onInit: async (
+			error: unknown,
+			payload: {
+				ctx: NativeActorContext;
+				input?: Buffer;
+				isNew: boolean;
+			},
+		): Promise<JsFactoryInitResult> => {
+			const { ctx, input, isNew } = unwrapTsfnPayload(error, payload);
+			const actorCtx = new NativeActorContextAdapter(ctx, createClient);
 			try {
 				const decodedInput = decodeValue(input);
 				const result: JsFactoryInitResult = {};
@@ -746,8 +842,9 @@ function buildNativeFactory(
 		},
 		onWake:
 			typeof config.onWake === "function"
-				? async ({ ctx }: { ctx: NativeActorContext }) => {
-						const actorCtx = new NativeActorContextAdapter(ctx);
+				? async (error: unknown, payload: { ctx: NativeActorContext }) => {
+						const { ctx } = unwrapTsfnPayload(error, payload);
+						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
 						try {
 							await config.onWake(actorCtx);
 						} finally {
@@ -757,8 +854,9 @@ function buildNativeFactory(
 				: undefined,
 		onSleep:
 			typeof config.onSleep === "function"
-				? async ({ ctx }: { ctx: NativeActorContext }) => {
-						const actorCtx = new NativeActorContextAdapter(ctx);
+				? async (error: unknown, payload: { ctx: NativeActorContext }) => {
+						const { ctx } = unwrapTsfnPayload(error, payload);
+						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
 						try {
 							await config.onSleep(actorCtx);
 						} finally {
@@ -768,8 +866,9 @@ function buildNativeFactory(
 				: undefined,
 		onDestroy:
 			typeof config.onDestroy === "function"
-				? async ({ ctx }: { ctx: NativeActorContext }) => {
-						const actorCtx = new NativeActorContextAdapter(ctx);
+				? async (error: unknown, payload: { ctx: NativeActorContext }) => {
+						const { ctx } = unwrapTsfnPayload(error, payload);
+						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
 						try {
 							await config.onDestroy(actorCtx);
 						} finally {
@@ -779,14 +878,15 @@ function buildNativeFactory(
 				: undefined,
 		onStateChange:
 			typeof config.onStateChange === "function"
-				? async ({
-						ctx,
-						newState,
-					}: {
-						ctx: NativeActorContext;
-						newState: Buffer;
-					}) => {
-						const actorCtx = new NativeActorContextAdapter(ctx);
+				? async (
+						error: unknown,
+						payload: {
+							ctx: NativeActorContext;
+							newState: Buffer;
+						},
+					) => {
+						const { ctx, newState } = unwrapTsfnPayload(error, payload);
+						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
 						try {
 							await config.onStateChange(actorCtx, decodeValue(newState));
 						} finally {
@@ -796,14 +896,15 @@ function buildNativeFactory(
 				: undefined,
 		onBeforeConnect:
 			typeof config.onBeforeConnect === "function"
-				? async ({
-						ctx,
-						params,
-					}: {
-						ctx: NativeActorContext;
-						params: Buffer;
-					}) => {
-						const actorCtx = new NativeActorContextAdapter(ctx);
+				? async (
+						error: unknown,
+						payload: {
+							ctx: NativeActorContext;
+							params: Buffer;
+						},
+					) => {
+						const { ctx, params } = unwrapTsfnPayload(error, payload);
+						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
 						try {
 							await config.onBeforeConnect(actorCtx, decodeValue(params));
 						} finally {
@@ -813,14 +914,15 @@ function buildNativeFactory(
 				: undefined,
 		onConnect:
 			typeof config.onConnect === "function"
-				? async ({
-						ctx,
-						conn,
-					}: {
-						ctx: NativeActorContext;
-						conn: NativeConnHandle;
-					}) => {
-						const actorCtx = withConnContext(ctx, conn);
+				? async (
+						error: unknown,
+						payload: {
+							ctx: NativeActorContext;
+							conn: NativeConnHandle;
+						},
+					) => {
+						const { ctx, conn } = unwrapTsfnPayload(error, payload);
+						const actorCtx = withConnContext(ctx, conn, createClient);
 						try {
 							await config.onConnect(actorCtx, new NativeConnAdapter(conn));
 						} finally {
@@ -830,14 +932,15 @@ function buildNativeFactory(
 				: undefined,
 		onDisconnect:
 			typeof config.onDisconnect === "function"
-				? async ({
-						ctx,
-						conn,
-					}: {
-						ctx: NativeActorContext;
-						conn: NativeConnHandle;
-					}) => {
-						const actorCtx = withConnContext(ctx, conn);
+				? async (
+						error: unknown,
+						payload: {
+							ctx: NativeActorContext;
+							conn: NativeConnHandle;
+						},
+					) => {
+						const { ctx, conn } = unwrapTsfnPayload(error, payload);
+						const actorCtx = withConnContext(ctx, conn, createClient);
 						try {
 							await config.onDisconnect(actorCtx, new NativeConnAdapter(conn));
 						} finally {
@@ -847,18 +950,20 @@ function buildNativeFactory(
 				: undefined,
 		onBeforeActionResponse:
 			typeof config.onBeforeActionResponse === "function"
-				? async ({
-						ctx,
-						name,
-						args,
-						output,
-					}: {
-						ctx: NativeActorContext;
-						name: string;
-						args: Buffer;
-						output: Buffer;
-					}) => {
-						const actorCtx = new NativeActorContextAdapter(ctx);
+				? async (
+						error: unknown,
+						payload: {
+							ctx: NativeActorContext;
+							name: string;
+							args: Buffer;
+							output: Buffer;
+						},
+					) => {
+						const { ctx, name, args, output } = unwrapTsfnPayload(
+							error,
+							payload,
+						);
+						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
 						try {
 							return encodeValue(
 								await config.onBeforeActionResponse(
@@ -873,23 +978,25 @@ function buildNativeFactory(
 						}
 					}
 				: undefined,
-		onRequest: async ({
-			ctx,
-			request,
-		}: {
-			ctx: NativeActorContext;
-			request: {
-				method: string;
-				uri: string;
-				headers?: Record<string, string>;
-				body?: Buffer;
-			};
-		}) => {
+		onRequest: async (
+			error: unknown,
+			payload: {
+				ctx: NativeActorContext;
+				request: {
+					method: string;
+					uri: string;
+					headers?: Record<string, string>;
+					body?: Buffer;
+				};
+			},
+		) => {
 			try {
+				const { ctx, request } = unwrapTsfnPayload(error, payload);
 				const jsRequest = buildRequest(request);
 				const actionResponse = await maybeHandleNativeActionRequest(
 					ctx,
 					jsRequest,
+					createClient,
 					actionHandlers,
 				);
 				if (actionResponse) {
@@ -900,9 +1007,12 @@ function buildNativeFactory(
 					return await toJsHttpResponse(new Response(null, { status: 404 }));
 				}
 
-				const requestCtx = Object.assign(new NativeActorContextAdapter(ctx), {
-					request: jsRequest,
-				});
+				const requestCtx = Object.assign(
+					new NativeActorContextAdapter(ctx, createClient),
+					{
+						request: jsRequest,
+					},
+				);
 				try {
 					const response =
 						(await config.onRequest(requestCtx, jsRequest)) ??
@@ -921,14 +1031,15 @@ function buildNativeFactory(
 		},
 		onWebSocket:
 			typeof config.onWebSocket === "function"
-				? async ({
-						ctx,
-						ws,
-					}: {
-						ctx: NativeActorContext;
-						ws: NativeWebSocket;
-					}) => {
-						const actorCtx = new NativeActorContextAdapter(ctx);
+				? async (
+						error: unknown,
+						payload: {
+							ctx: NativeActorContext;
+							ws: NativeWebSocket;
+						},
+					) => {
+						const { ctx, ws } = unwrapTsfnPayload(error, payload);
+						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
 						try {
 							await config.onWebSocket(
 								actorCtx,
@@ -945,8 +1056,9 @@ function buildNativeFactory(
 				return undefined;
 			}
 
-			return async ({ ctx }: { ctx: NativeActorContext }) => {
-				const actorCtx = new NativeActorContextAdapter(ctx);
+			return async (error: unknown, payload: { ctx: NativeActorContext }) => {
+				const { ctx } = unwrapTsfnPayload(error, payload);
+				const actorCtx = new NativeActorContextAdapter(ctx, createClient);
 				try {
 					await run(actorCtx);
 				} finally {
@@ -957,16 +1069,16 @@ function buildNativeFactory(
 			actions: Object.fromEntries(
 				Object.entries(actionHandlers).map(([name, handler]) => [
 					name,
-					async ({
-						ctx,
-						conn,
-						args,
-					}: {
-						ctx: NativeActorContext;
-						conn: NativeConnHandle;
-						args: Buffer;
-					}) => {
-						const actorCtx = withConnContext(ctx, conn);
+					async (
+						error: unknown,
+						payload: {
+							ctx: NativeActorContext;
+							conn: NativeConnHandle;
+							args: Buffer;
+						},
+					) => {
+						const { ctx, conn, args } = unwrapTsfnPayload(error, payload);
+						const actorCtx = withConnContext(ctx, conn, createClient);
 						try {
 							return encodeValue(
 								await handler(actorCtx, ...decodeArgs(args)),
@@ -1011,7 +1123,7 @@ export async function buildNativeRegistry(config: RegistryConfig): Promise<{
 	const registry = new bindings.CoreRegistry();
 
 	for (const [name, definition] of Object.entries(config.use)) {
-		registry.register(name, buildNativeFactory(bindings, definition));
+		registry.register(name, buildNativeFactory(bindings, config, definition));
 	}
 
 	return {

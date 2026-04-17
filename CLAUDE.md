@@ -99,6 +99,7 @@ git commit -m "chore(my-pkg): foo bar"
 ### RivetKit Type Build Troubleshooting
 - If `rivetkit` type or DTS builds fail with missing `@rivetkit/*` declarations, run `pnpm build -F rivetkit` from repo root (Turbo build path) before changing TypeScript `paths`.
 - Do not add temporary `@rivetkit/*` path aliases in `rivetkit-typescript/packages/rivetkit/tsconfig.json` to work around stale or missing built declarations.
+- When trimming `rivetkit` entrypoints, update `package.json` exports, `files`, and `scripts.build` together. `tsup` can still pass while stale exports point at missing dist files.
 
 ### RivetKit Test Fixtures
 - Keep RivetKit test fixtures scoped to the engine-only runtime.
@@ -109,6 +110,7 @@ git commit -m "chore(my-pkg): foo bar"
 - The N-API addon lives at `@rivetkit/rivetkit-napi` in `rivetkit-typescript/packages/rivetkit-napi`; keep Docker build targets, publish metadata, examples, and workspace package references in sync when renaming or moving it.
 - N-API actor-runtime wrappers should expose `ActorContext` sub-objects as first-class classes, keep raw payloads as `Buffer`, and wrap queue messages as classes so completable receives can call `complete()` back into Rust.
 - N-API callback bridges should pass a single request object through `ThreadsafeFunction`, and Promise results that cross back into Rust should deserialize into `#[napi(object)]` structs instead of `JsObject` so the callback future stays `Send`.
+- N-API `ThreadsafeFunction` callbacks using `ErrorStrategy::CalleeHandled` follow Node's error-first JS signature, so internal wrappers must accept `(err, payload)` and rethrow non-null errors explicitly.
 
 ### RivetKit Package Resolutions
 - The root `/package.json` contains `resolutions` that map RivetKit packages to local workspace versions:
@@ -141,6 +143,7 @@ git commit -m "chore(my-pkg): foo bar"
 - For runtime-only dependencies, use dynamic loading so bundlers do not eagerly include them.
 - Build the module specifier from string parts (for example with `["pkg", "name"].join("-")` or `["@scope", "pkg"].join("/")`) instead of a single string literal.
 - Prefer this pattern for modules like `@rivetkit/rivetkit-napi/wrapper`, `sandboxed-node`, and `isolated-vm`.
+- The TypeScript registry's native envoy path should dynamically load `@rivetkit/rivetkit-napi` and `@rivetkit/engine-cli` so browser and serverless bundles do not eagerly pull native-only modules.
 - If loading by resolved file path, resolve first and then import via `pathToFileURL(...).href`.
 
 ### Fail-By-Default Runtime Behavior
@@ -150,7 +153,7 @@ git commit -m "chore(my-pkg): foo bar"
 - Optional chaining is acceptable only for best-effort diagnostics and cleanup paths (for example logging hooks and dispose/release cleanup).
 - Keep scaffolded `rivetkit-core` wrappers `Default`-constructible, but return explicit configuration errors until a real `EnvoyHandle` is wired in.
 - Keep foreign-runtime-only `ActorContext` helpers present on the public surface even before NAPI or V8 wires them, and make them fail with explicit configuration errors instead of silently disappearing.
-- `rivetkit-core` boxed callback APIs should use `futures::future::BoxFuture<'static, ...>` plus local `http::Request<Vec<u8>>` / `http::Response<Vec<u8>>` aliases so actor-owned closures stay object-safe and concrete.
+- `rivetkit-core` boxed callback APIs should use `futures::future::BoxFuture<'static, ...>` plus the shared `actor::callbacks::Request` and `Response` wrappers so config and HTTP parsing helpers stay in core for future runtimes.
 - `rivetkit-core` actor persistence should keep the BARE snapshot at the single-byte KV key `[1]` so the Rust runtime matches the TypeScript `KEYS.PERSIST_DATA` layout.
 - `rivetkit-core` hibernatable websocket connections should persist each connection under KV key prefix `[2] + conn_id` using the TypeScript v4 BARE field order so Rust and TypeScript actors can restore the same connection payloads.
 - `rivetkit-core` queue persistence should keep metadata at KV key `[5, 1, 1]` and messages under `[5, 1, 2] + u64be(id)` so FIFO prefix scans match the TypeScript runtime layout.
@@ -231,9 +234,22 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 ### RivetKit Layers
 - **Engine** (`packages/core/engine/`, includes Pegboard + Pegboard Envoy) — Orchestration. Manages actor lifecycle, routing, KV, SQLite, alarms. In local dev, the engine is spawned alongside RivetKit.
 - **envoy-client** (`engine/sdks/rust/envoy-client/`) — Wire protocol between actors and the engine. BARE serialization, WebSocket transport, KV request/response matching, SQLite protocol dispatch, tunnel routing.
-- **rivetkit-core** (`rivetkit-rust/packages/rivetkit-core/`) — Core RivetKit logic in Rust, built to be language-agnostic. Lifecycle state machine, sleep logic, shutdown sequencing, state persistence, action dispatch, event broadcast, queue management, schedule system. All callbacks are dynamic closures with opaque bytes.
-- **rivetkit (Rust)** (`rivetkit-rust/packages/rivetkit/`) — Rust-friendly typed API. `Actor` trait, `Ctx<A>`, `Registry` builder, CBOR serde at boundaries. Thin wrapper over rivetkit-core.
-- **rivetkit (TypeScript)** (`rivetkit-typescript/packages/rivetkit/`) — TypeScript-friendly API. Calls into rivetkit-core via NAPI for lifecycle logic. Owns workflow engine, sandbox/dynamic isolation, agent-os, and client library.
+- **rivetkit-core** (`rivetkit-rust/packages/rivetkit-core/`) — Core RivetKit logic in Rust, built to be language-agnostic. Lifecycle state machine, sleep logic, shutdown sequencing, state persistence, action dispatch, event broadcast, queue management, schedule system, inspector, metrics. All callbacks are dynamic closures with opaque bytes. All load-bearing logic must live here. Config conversion helpers and HTTP request/response parsing for foreign runtimes belong here.
+- **rivetkit (Rust)** (`rivetkit-rust/packages/rivetkit/`) — Rust-friendly typed API. `Actor` trait, `Ctx<A>`, `Registry` builder, CBOR serde at boundaries. Thin wrapper over rivetkit-core. No load-bearing logic.
+- **rivetkit-napi** (`rivetkit-typescript/packages/rivetkit-napi/`) — NAPI bindings only. ThreadsafeFunction wrappers, JS object construction, Promise-to-Future conversion. No load-bearing logic. Must only translate between JS types and rivetkit-core types.
+- **rivetkit (TypeScript)** (`rivetkit-typescript/packages/rivetkit/`) — TypeScript-friendly API. Calls into rivetkit-core via NAPI for lifecycle logic. Owns workflow engine, agent-os, and client library. Zod validation for user-provided schemas runs here.
+
+### RivetKit Layer Constraints
+- All actor lifecycle logic, state persistence, sleep/shutdown, action dispatch, event broadcast, queue management, schedule, inspector, and metrics must live in rivetkit-core. No lifecycle logic in TS or NAPI.
+- rivetkit-napi must be pure bindings: ThreadsafeFunction wrappers, JS<->Rust type conversion, NAPI class declarations. If code would be duplicated by a future V8 runtime, it belongs in rivetkit-core instead.
+- rivetkit (Rust) is a thin typed wrapper. If it does more than deserialize, delegate to core, and serialize, the logic should move to rivetkit-core.
+- rivetkit (TypeScript) owns only: workflow engine, agent-os, client library, Zod schema validation for user-defined types, and actor definition types.
+- Errors use universal RivetError (group/code/message/metadata) at all boundaries. No custom error classes in TS.
+- CBOR serialization at all cross-language boundaries. JSON only for HTTP inspector endpoints.
+- When removing legacy TypeScript actor runtime internals, keep the public actor context, queue, and connection types in `rivetkit-typescript/packages/rivetkit/src/actor/config.ts`, and move shared wire helpers into `rivetkit-typescript/packages/rivetkit/src/common/` instead of leaving callers tied to deleted runtime paths.
+- When removing deprecated TypeScript routing or serverless surfaces, leave surviving public entrypoints as explicit errors until downstream callers migrate to `Registry.startEnvoy()` and the native rivetkit-core path.
+- When deleting deprecated TypeScript infrastructure folders, move any still-live database or protocol helpers into `src/common/` or client-local modules first, then retarget driver fixtures so `tsc` does not keep pulling deleted package paths back in.
+- When deleting a deprecated `rivetkit` package surface, remove the matching `package.json` exports, `tsconfig.json` aliases, Turbo task hooks, driver-test entries, and docs imports in the same change so builds stop following dead paths.
 
 ### Monorepo Structure
 - This is a Rust workspace-based monorepo for Rivet with the following key packages and components:

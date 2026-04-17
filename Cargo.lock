@@ -5239,6 +5239,7 @@ dependencies = [
  "napi-derive",
  "rivet-envoy-client",
  "rivet-envoy-protocol",
+ "rivet-error",
  "rivetkit-core",
  "rivetkit-sqlite-native",
  "serde",
