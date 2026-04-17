@@ -12,6 +12,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` action/lifecycle surfaces should collapse `anyhow::Error` into serializable `group/code/message` payloads via `rivet_error::RivetError::extract` before returning them across runtime boundaries.
 - `rivetkit-core` schedule mutations should go through one `ActorState` helper so insert/remove stays sorted, then trigger an immediate state flush and envoy alarm resync from the earliest remaining event.
 - `rivetkit-core` transport-edge helpers should translate `on_request` failures into HTTP 500 responses and `on_websocket` failures into logged 1011 closes, while wrapper types keep internal `try_*` methods for explicit misconfiguration errors.
+- `rivetkit-core` registry startup should build `ActorContext`s with `ActorContext::new_runtime(...)` so state, queue, and connection managers inherit the actor config before lifecycle startup runs.
 - `rivetkit-core` sleep readiness should live in `SleepController`, and subsystems like queue waits, scheduled internal work, disconnect callbacks, and websocket callbacks should reset the idle timer through `ActorContext` hooks instead of managing their own timers.
 - `rivetkit-core` startup should load `PersistedActor` into `ActorContext` before factory creation, persist `has_initialized` immediately, set `ready` before the driver hook, and set `started` only after that hook completes.
 - `rivetkit-core` startup should resync persisted alarms and restore hibernatable connections before `ready`, then reset the sleep timer, spawn `run` in a detached panic-catching task, and drain overdue scheduled events after `started`.
@@ -158,4 +159,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Destroy shutdown should share the same final persistence and cleanup path as sleep shutdown, but skip the idle-window wait and disconnect hibernatable connections too.
   - Gotchas encountered: `on_destroy_timeout` is standalone and should not be clipped by the shutdown grace-period budget used for post-callback `wait_until` drains.
   - Useful context: `destroy_shutdown_skips_idle_wait_and_disconnects_all_connections` and `destroy_shutdown_reports_error_when_on_destroy_fails` in `src/actor/lifecycle.rs` cover the key behavior differences from sleep shutdown.
+---
+## 2026-04-16 23:57:13 PDT - US-018
+- What was implemented: Replaced the stubbed `CoreRegistry` with a real envoy dispatcher that registers actor factories, starts runtime-backed actor contexts, stores active instances in `scc::HashMap`, routes fetch/websocket traffic, and shuts actors down through `on_actor_stop_with_completion`. Added registry-focused unit tests for fetch, websocket, stop, and missing-actor behavior.
+- Files changed: `/home/nathan/r5/AGENTS.md`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/registry.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Registry startup needs `ActorContext::new_runtime(...)` instead of the default constructor so state persistence, queue config, and connection runtime inherit the actor config before lifecycle startup mutates anything.
+  - Gotchas encountered: `EnvoyCallbacks` cannot be implemented for `Arc<RegistryDispatcher>` because of orphan rules, so the clean pattern is a small local adapter struct that owns `Arc<RegistryDispatcher>` and forwards callback methods.
+  - Useful context: `src/registry.rs` now owns the protocol-to-core request/response translation, the env-var-based `serve()` bootstrap, and the regression tests covering the dispatcher surface.
 ---

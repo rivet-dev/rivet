@@ -363,7 +363,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Registry (core level)' section. Use scc::HashMap for concurrent actor instance storage. serve() connects to envoy-client and dispatches events."
     },
     {
