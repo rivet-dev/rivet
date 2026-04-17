@@ -7,6 +7,7 @@ pub mod database;
 pub mod envoy_handle;
 pub mod kv;
 pub mod queue;
+pub mod registry;
 pub mod schedule;
 pub mod sqlite_db;
 pub mod types;

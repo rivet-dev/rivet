@@ -1,6 +1,7 @@
 use napi::bindgen_prelude::{Buffer, Promise};
 use napi_derive::napi;
 use rivetkit_core::{ActorContext as CoreActorContext, SaveStateOpts};
+use rivetkit_core::types::ActorKeySegment;
 
 use crate::cancellation_token::CancellationToken;
 use crate::connection::ConnHandle;
@@ -14,6 +15,13 @@ use crate::napi_error;
 #[napi]
 pub struct ActorContext {
 	inner: CoreActorContext,
+}
+
+#[napi(object)]
+pub struct JsActorKeySegment {
+	pub kind: String,
+	pub string_value: Option<String>,
+	pub number_value: Option<f64>,
 }
 
 impl ActorContext {
@@ -40,8 +48,18 @@ impl ActorContext {
 	}
 
 	#[napi]
+	pub fn vars(&self) -> Buffer {
+		Buffer::from(self.inner.vars())
+	}
+
+	#[napi]
 	pub fn set_state(&self, state: Buffer) {
 		self.inner.set_state(state.to_vec());
+	}
+
+	#[napi]
+	pub fn set_vars(&self, vars: Buffer) {
+		self.inner.set_vars(vars.to_vec());
 	}
 
 	#[napi]
@@ -80,6 +98,27 @@ impl ActorContext {
 	#[napi]
 	pub fn name(&self) -> String {
 		self.inner.name().to_owned()
+	}
+
+	#[napi]
+	pub fn key(&self) -> Vec<JsActorKeySegment> {
+		self
+			.inner
+			.key()
+			.iter()
+			.map(|segment| match segment {
+				ActorKeySegment::String(value) => JsActorKeySegment {
+					kind: "string".to_owned(),
+					string_value: Some(value.clone()),
+					number_value: None,
+				},
+				ActorKeySegment::Number(value) => JsActorKeySegment {
+					kind: "number".to_owned(),
+					string_value: None,
+					number_value: Some(*value),
+				},
+			})
+			.collect()
 	}
 
 	#[napi]
@@ -125,6 +164,11 @@ impl ActorContext {
 			.into_iter()
 			.map(ConnHandle::new)
 			.collect()
+	}
+
+	#[napi]
+	pub fn broadcast(&self, name: String, args: Buffer) {
+		self.inner.broadcast(&name, args.as_ref());
 	}
 
 	#[napi]

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use napi::bindgen_prelude::{Buffer, Promise};
@@ -30,9 +31,47 @@ pub struct JsHttpResponse {
 	pub body: Option<Buffer>,
 }
 
+#[napi(object)]
+pub struct JsActorConfig {
+	pub name: Option<String>,
+	pub icon: Option<String>,
+	pub can_hibernate_websocket: Option<bool>,
+	pub state_save_interval_ms: Option<u32>,
+	pub create_vars_timeout_ms: Option<u32>,
+	pub create_conn_state_timeout_ms: Option<u32>,
+	pub on_before_connect_timeout_ms: Option<u32>,
+	pub on_connect_timeout_ms: Option<u32>,
+	pub on_sleep_timeout_ms: Option<u32>,
+	pub on_destroy_timeout_ms: Option<u32>,
+	pub action_timeout_ms: Option<u32>,
+	pub run_stop_timeout_ms: Option<u32>,
+	pub sleep_timeout_ms: Option<u32>,
+	pub no_sleep: Option<bool>,
+	pub sleep_grace_period_ms: Option<u32>,
+	pub connection_liveness_timeout_ms: Option<u32>,
+	pub connection_liveness_interval_ms: Option<u32>,
+	pub max_queue_size: Option<u32>,
+	pub max_queue_message_size: Option<u32>,
+	pub preload_max_workflow_bytes: Option<f64>,
+	pub preload_max_connections_bytes: Option<f64>,
+}
+
+#[napi(object)]
+pub struct JsFactoryInitResult {
+	pub state: Option<Buffer>,
+	pub vars: Option<Buffer>,
+}
+
 #[derive(Clone)]
 struct LifecyclePayload {
 	ctx: rivetkit_core::ActorContext,
+}
+
+#[derive(Clone)]
+struct FactoryInitPayload {
+	ctx: rivetkit_core::ActorContext,
+	input: Option<Vec<u8>>,
+	is_new: bool,
 }
 
 #[derive(Clone)]
@@ -82,6 +121,7 @@ struct BeforeActionResponsePayload {
 }
 
 struct CallbackBindings {
+	on_init: Option<CallbackTsfn<FactoryInitPayload>>,
 	on_wake: Option<CallbackTsfn<LifecyclePayload>>,
 	on_sleep: Option<CallbackTsfn<LifecyclePayload>>,
 	on_destroy: Option<CallbackTsfn<LifecyclePayload>>,
@@ -112,13 +152,19 @@ impl NapiActorFactory {
 #[napi]
 impl NapiActorFactory {
 	#[napi(constructor)]
-	pub fn constructor(callbacks: JsObject) -> napi::Result<Self> {
+	pub fn constructor(
+		callbacks: JsObject,
+		config: Option<JsActorConfig>,
+	) -> napi::Result<Self> {
 		let bindings = Arc::new(CallbackBindings::from_js(callbacks)?);
 		let inner = Arc::new(CoreActorFactory::new(
-			ActorConfig::default(),
-			move |_request: FactoryRequest| {
+			actor_config_from_js(config),
+			move |request: FactoryRequest| {
 				let bindings = Arc::clone(&bindings);
-				Box::pin(async move { Ok(bindings.create_callbacks()) })
+				Box::pin(async move {
+					bindings.initialize(&request).await?;
+					Ok(bindings.create_callbacks())
+				})
 			},
 		));
 
@@ -142,6 +188,7 @@ impl CallbackBindings {
 		};
 
 		Ok(Self {
+			on_init: optional_tsfn(&callbacks, "onInit", build_factory_init_payload)?,
 			on_wake: optional_tsfn(&callbacks, "onWake", build_lifecycle_payload)?,
 			on_sleep: optional_tsfn(&callbacks, "onSleep", build_lifecycle_payload)?,
 			on_destroy: optional_tsfn(&callbacks, "onDestroy", build_lifecycle_payload)?,
@@ -175,6 +222,32 @@ impl CallbackBindings {
 			)?,
 			run: optional_tsfn(&callbacks, "run", build_lifecycle_payload)?,
 		})
+	}
+
+	async fn initialize(&self, request: &FactoryRequest) -> Result<()> {
+		let Some(callback) = &self.on_init else {
+			return Ok(());
+		};
+
+		let promise = callback
+			.call_async::<Promise<JsFactoryInitResult>>(Ok(FactoryInitPayload {
+				ctx: request.ctx.clone(),
+				input: request.input.clone(),
+				is_new: request.is_new,
+			}))
+			.await
+			.map_err(napi_to_anyhow)?;
+		let result = promise.await.map_err(napi_to_anyhow)?;
+
+		if let Some(state) = result.state {
+			request.ctx.set_state(state.to_vec());
+		}
+
+		if let Some(vars) = result.vars {
+			request.ctx.set_vars(vars.to_vec());
+		}
+
+		Ok(())
 	}
 
 	fn create_callbacks(&self) -> ActorInstanceCallbacks {
@@ -291,6 +364,78 @@ where
 		0,
 		move |ctx: ThreadSafeCallContext<T>| build_args(&ctx.env, ctx.value),
 	)
+}
+
+fn actor_config_from_js(config: Option<JsActorConfig>) -> ActorConfig {
+	let mut actor_config = ActorConfig::default();
+	let Some(config) = config else {
+		return actor_config;
+	};
+
+	actor_config.name = config.name;
+	actor_config.icon = config.icon;
+	if let Some(can_hibernate_websocket) = config.can_hibernate_websocket {
+		actor_config.can_hibernate_websocket =
+			rivetkit_core::CanHibernateWebSocket::Bool(can_hibernate_websocket);
+	}
+	if let Some(value) = config.state_save_interval_ms {
+		actor_config.state_save_interval = duration_ms(value);
+	}
+	if let Some(value) = config.create_vars_timeout_ms {
+		actor_config.create_vars_timeout = duration_ms(value);
+	}
+	if let Some(value) = config.create_conn_state_timeout_ms {
+		actor_config.create_conn_state_timeout = duration_ms(value);
+	}
+	if let Some(value) = config.on_before_connect_timeout_ms {
+		actor_config.on_before_connect_timeout = duration_ms(value);
+	}
+	if let Some(value) = config.on_connect_timeout_ms {
+		actor_config.on_connect_timeout = duration_ms(value);
+	}
+	if let Some(value) = config.on_sleep_timeout_ms {
+		actor_config.on_sleep_timeout = duration_ms(value);
+	}
+	if let Some(value) = config.on_destroy_timeout_ms {
+		actor_config.on_destroy_timeout = duration_ms(value);
+	}
+	if let Some(value) = config.action_timeout_ms {
+		actor_config.action_timeout = duration_ms(value);
+	}
+	if let Some(value) = config.run_stop_timeout_ms {
+		actor_config.run_stop_timeout = duration_ms(value);
+	}
+	if let Some(value) = config.sleep_timeout_ms {
+		actor_config.sleep_timeout = duration_ms(value);
+	}
+	if let Some(value) = config.no_sleep {
+		actor_config.no_sleep = value;
+	}
+	if let Some(value) = config.sleep_grace_period_ms {
+		actor_config.sleep_grace_period = Some(duration_ms(value));
+	}
+	if let Some(value) = config.connection_liveness_timeout_ms {
+		actor_config.connection_liveness_timeout = duration_ms(value);
+	}
+	if let Some(value) = config.connection_liveness_interval_ms {
+		actor_config.connection_liveness_interval = duration_ms(value);
+	}
+	if let Some(value) = config.max_queue_size {
+		actor_config.max_queue_size = value;
+	}
+	if let Some(value) = config.max_queue_message_size {
+		actor_config.max_queue_message_size = value;
+	}
+	actor_config.preload_max_workflow_bytes =
+		config.preload_max_workflow_bytes.map(|value| value as u64);
+	actor_config.preload_max_connections_bytes =
+		config.preload_max_connections_bytes.map(|value| value as u64);
+
+	actor_config
+}
+
+fn duration_ms(value: u32) -> Duration {
+	Duration::from_millis(u64::from(value))
 }
 
 fn wrap_void_callback<Req, Payload, Map>(
@@ -425,6 +570,17 @@ fn build_lifecycle_payload(
 ) -> napi::Result<Vec<napi::JsUnknown>> {
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
+	Ok(vec![object.into_unknown()])
+}
+
+fn build_factory_init_payload(
+	env: &Env,
+	payload: FactoryInitPayload,
+) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("input", payload.input.map(Buffer::from))?;
+	object.set("isNew", payload.is_new)?;
 	Ok(vec![object.into_unknown()])
 }
 

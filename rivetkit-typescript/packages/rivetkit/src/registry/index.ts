@@ -6,6 +6,7 @@ import {
 	type RegistryConfigInput,
 	RegistryConfigSchema,
 } from "./config";
+import { buildNativeRegistry } from "./native";
 
 export type FetchHandler = (
 	request: Request,
@@ -30,6 +31,7 @@ export class Registry<A extends RegistryActors> {
 	// Shared runtime instance
 	#runtime?: Runtime<A>;
 	#runtimePromise?: Promise<Runtime<A>>;
+	#nativeServePromise?: Promise<void>;
 
 	constructor(config: RegistryConfigInput<A>) {
 		this.#config = config;
@@ -93,8 +95,13 @@ export class Registry<A extends RegistryActors> {
 	 * Starts an actor envoy for standalone server deployments.
 	 */
 	public startEnvoy() {
-		// biome-ignore lint/nursery/noFloatingPromises: bg task
-		this.#ensureRuntime().then((runtime) => runtime.startEnvoy());
+		if (!this.#nativeServePromise) {
+			this.#nativeServePromise = buildNativeRegistry(this.parseConfig()).then(
+				async ({ registry, serveConfig }) => {
+					await registry.serve(serveConfig);
+				},
+			);
+		}
 	}
 
 	/**
@@ -128,7 +135,7 @@ export class Registry<A extends RegistryActors> {
 		// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
 		this.#ensureRuntime().then(async (runtime) => {
 			await runtime.ensureHttpServer();
-			await runtime.startEnvoy();
+			this.startEnvoy();
 		});
 	}
 }

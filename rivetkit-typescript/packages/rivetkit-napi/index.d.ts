@@ -8,6 +8,38 @@ export interface JsHttpResponse {
   headers?: Record<string, string>
   body?: Buffer
 }
+export interface JsActorConfig {
+  name?: string
+  icon?: string
+  canHibernateWebsocket?: boolean
+  stateSaveIntervalMs?: number
+  createVarsTimeoutMs?: number
+  createConnStateTimeoutMs?: number
+  onBeforeConnectTimeoutMs?: number
+  onConnectTimeoutMs?: number
+  onSleepTimeoutMs?: number
+  onDestroyTimeoutMs?: number
+  actionTimeoutMs?: number
+  runStopTimeoutMs?: number
+  sleepTimeoutMs?: number
+  noSleep?: boolean
+  sleepGracePeriodMs?: number
+  connectionLivenessTimeoutMs?: number
+  connectionLivenessIntervalMs?: number
+  maxQueueSize?: number
+  maxQueueMessageSize?: number
+  preloadMaxWorkflowBytes?: number
+  preloadMaxConnectionsBytes?: number
+}
+export interface JsActorKeySegment {
+  kind: string
+  stringValue?: string
+  numberValue?: number
+}
+export interface JsFactoryInitResult {
+  state?: Buffer
+  vars?: Buffer
+}
 export interface JsBindParam {
   kind: string
   intValue?: number
@@ -82,6 +114,14 @@ export interface HibernatingRequestEntry {
   gatewayId: Buffer
   requestId: Buffer
 }
+export interface JsServeConfig {
+  version: number
+  endpoint: string
+  token?: string
+  namespace: string
+  poolName: string
+  engineBinaryPath?: string
+}
 /**
  * Start the native envoy client synchronously.
  *
@@ -95,7 +135,9 @@ export declare function startEnvoyJs(config: JsEnvoyConfig, eventCallback: (even
 export declare class ActorContext {
   constructor(actorId: string, name: string, region: string)
   state(): Buffer
+  vars(): Buffer
   setState(state: Buffer): void
+  setVars(vars: Buffer): void
   kv(): Kv
   sql(): SqliteDb
   schedule(): Schedule
@@ -103,6 +145,7 @@ export declare class ActorContext {
   saveState(immediate: boolean): Promise<void>
   actorId(): string
   name(): string
+  key(): Array<JsActorKeySegment>
   region(): string
   sleep(): void
   destroy(): void
@@ -111,10 +154,16 @@ export declare class ActorContext {
   aborted(): boolean
   abortSignal(): CancellationToken
   conns(): Array<ConnHandle>
+  broadcast(name: string, args: Buffer): void
   waitUntil(promise: Promise<any>): Promise<void>
 }
 export declare class NapiActorFactory {
-  constructor(callbacks: object)
+  constructor(callbacks: object, config?: JsActorConfig | undefined | null)
+}
+export declare class CoreRegistry {
+  constructor()
+  register(name: string, factory: NapiActorFactory): void
+  serve(config: JsServeConfig): Promise<void>
 }
 export declare class CancellationToken {
   aborted(): boolean

@@ -111,6 +111,10 @@ impl CoreRegistry {
 		self.factories.insert(name.to_owned(), Arc::new(factory));
 	}
 
+	pub fn register_shared(&mut self, name: &str, factory: Arc<ActorFactory>) {
+		self.factories.insert(name.to_owned(), factory);
+	}
+
 	pub async fn serve(self) -> Result<()> {
 		self.serve_with_config(ServeConfig::from_env()).await
 	}

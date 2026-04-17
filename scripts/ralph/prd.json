@@ -615,7 +615,7 @@
         "pnpm build succeeds"
       ],
       "priority": 32,
-      "passes": false,
+      "passes": true,
       "notes": "This is where the TS lifecycle actually stops running and Rust takes over. The TS side becomes a thin translation layer: TS actor definitions \u2192 NAPI \u2192 Rust ActorFactory. Read the existing TS registry at rivetkit-typescript/packages/rivetkit/src/registry/ for the current API surface."
     },
     {
