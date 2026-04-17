@@ -295,7 +295,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Startup Sequence' steps 7-15 and 'Error Handling' section. run handler errors are NOT fatal; panics are caught via catch_unwind. This story completes the startup sequence begun in US-014."
     },
     {

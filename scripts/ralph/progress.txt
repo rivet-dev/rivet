@@ -14,6 +14,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` transport-edge helpers should translate `on_request` failures into HTTP 500 responses and `on_websocket` failures into logged 1011 closes, while wrapper types keep internal `try_*` methods for explicit misconfiguration errors.
 - `rivetkit-core` sleep readiness should live in `SleepController`, and subsystems like queue waits, scheduled internal work, disconnect callbacks, and websocket callbacks should reset the idle timer through `ActorContext` hooks instead of managing their own timers.
 - `rivetkit-core` startup should load `PersistedActor` into `ActorContext` before factory creation, persist `has_initialized` immediately, set `ready` before the driver hook, and set `started` only after that hook completes.
+- `rivetkit-core` startup should resync persisted alarms and restore hibernatable connections before `ready`, then reset the sleep timer, spawn `run` in a detached panic-catching task, and drain overdue scheduled events after `started`.
 - `envoy-client` actor-scoped HTTP fetch work should stay in a `JoinSet` plus a shared `Arc<AtomicUsize>` counter so sleep checks can read in-flight request count and shutdown can abort and join the tasks before `Stopped`.
 - `envoy-client` shutdown hooks that need multi-step teardown should override `EnvoyCallbacks::on_actor_stop_with_completion`; the default path still auto-completes after legacy `on_actor_stop` returns.
 
@@ -131,4 +132,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Startup should materialize `PersistedActor` onto `ActorContext` before factory creation so factory/on-wake code sees restored state and input consistently.
   - Gotchas encountered: The startup path now immediately saves `has_initialized`, so unit tests need a real KV backend. The internal in-memory `Kv` path is the clean way to do that without loosening runtime misconfiguration checks.
   - Useful context: `ActorLifecycleDriverHooks::on_before_actor_start` is the staging hook for the driver layer, and the lifecycle tests in `src/actor/lifecycle.rs` cover the ordering around `ready`, `started`, and persisted initialization.
+---
+## 2026-04-16 23:40:00 PDT - US-015
+- What was implemented: Finished the startup tail in `rivetkit-core` by resyncing persisted alarms, restoring hibernatable connections, resetting idle tracking, spawning the `run` handler as a detached panic-catching task, and immediately draining overdue scheduled events after `started`.
+- Files changed: `/home/nathan/r5/AGENTS.md`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/lifecycle.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/schedule.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: The startup tail belongs in `ActorLifecycle` with pre-ready alarm and connection restore, then post-start sleep timer reset, detached `run`, and overdue schedule dispatch.
+  - Gotchas encountered: The `run` callback must be detached and wrapped in `catch_unwind` so actor startup never blocks on it and panics do not kill the actor task.
+  - Useful context: `startup_restores_connections_and_processes_overdue_events`, `startup_resets_sleep_timer_after_start`, and the two `run` handler lifecycle tests in `src/actor/lifecycle.rs` are the regression coverage for this story.
 ---

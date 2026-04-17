@@ -297,7 +297,7 @@ impl Schedule {
 	}
 
 	#[allow(dead_code)]
-	fn sync_alarm_logged(&self) {
+	pub(crate) fn sync_alarm_logged(&self) {
 		if let Err(error) = self.sync_alarm() {
 			tracing::error!(?error, "failed to sync scheduled actor alarm");
 		}
