@@ -6,6 +6,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use rivet_envoy_protocol as protocol;
 use rivet_util_serde::HashableMap;
 use tokio::sync::mpsc;
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::error::TryRecvError;
 use tokio::task::{JoinError, JoinSet};
 
 use crate::config::{HttpRequest, HttpResponse, WebSocketMessage};
@@ -91,6 +93,17 @@ struct ActiveHttpRequestGuard {
 	active_http_request_count: Arc<AtomicUsize>,
 }
 
+struct PendingStop {
+	completion_rx: oneshot::Receiver<anyhow::Result<()>>,
+	stop_code: protocol::StopCode,
+	stop_message: Option<String>,
+}
+
+enum StopProgress {
+	Stopped,
+	Pending(PendingStop),
+}
+
 impl ActiveHttpRequestGuard {
 	fn new(active_http_request_count: Arc<AtomicUsize>) -> Self {
 		active_http_request_count.fetch_add(1, Ordering::Relaxed);
@@ -167,6 +180,8 @@ async fn actor_inner(
 		active_http_request_count,
 	};
 	let mut http_request_tasks = JoinSet::new();
+	let mut pending_stop: Option<PendingStop> = None;
+	let mut rx_closed = false;
 
 	// Call on_actor_start
 	let start_result = shared
@@ -218,8 +233,18 @@ async fn actor_inner(
 					handle_http_request_task_result(&ctx, result);
 				}
 			}
-			msg = rx.recv() => {
+			msg = async {
+				if rx_closed {
+					std::future::pending::<Option<ToActor>>().await
+				} else {
+					rx.recv().await
+				}
+			} => {
 				let Some(msg) = msg else {
+					if pending_stop.is_some() {
+						rx_closed = true;
+						continue;
+					}
 					break;
 				};
 
@@ -237,23 +262,43 @@ async fn actor_inner(
 						command_idx,
 						reason,
 					} => {
+						if pending_stop.is_some() {
+							tracing::warn!(
+								actor_id = %ctx.actor_id,
+								command_idx,
+								"ignoring duplicate stop while actor teardown is in progress"
+							);
+							continue;
+						}
 						if command_idx <= ctx.command_idx {
 							tracing::warn!(command_idx, "ignoring already seen command");
 							continue;
 						}
 						ctx.command_idx = command_idx;
-						handle_stop(&mut ctx, &handle, &mut http_request_tasks, reason).await;
-						break;
+						match begin_stop(&mut ctx, &handle, &mut http_request_tasks, reason).await {
+							StopProgress::Stopped => break,
+							StopProgress::Pending(stop) => pending_stop = Some(stop),
+						}
 					}
 					ToActor::Lost => {
-						handle_stop(
+						if pending_stop.is_some() {
+							tracing::warn!(
+								actor_id = %ctx.actor_id,
+								"ignoring lost signal while actor teardown is in progress"
+							);
+							continue;
+						}
+						match begin_stop(
 							&mut ctx,
 							&handle,
 							&mut http_request_tasks,
 							protocol::StopActorReason::Lost,
 						)
-						.await;
-						break;
+						.await
+						{
+							StopProgress::Stopped => break,
+							StopProgress::Pending(stop) => pending_stop = Some(stop),
+						}
 					}
 					ToActor::SetAlarm { alarm_ts } => {
 						send_event(
@@ -295,6 +340,18 @@ async fn actor_inner(
 					}
 				}
 			}
+			stop_result = async {
+				let pending = pending_stop
+					.as_mut()
+					.expect("pending stop must exist when waiting for stop completion");
+				(&mut pending.completion_rx).await
+			}, if pending_stop.is_some() => {
+				let pending = pending_stop
+					.take()
+					.expect("pending stop must exist when stop completion resolves");
+				finalize_stop(&mut ctx, pending, stop_result);
+				break;
+			}
 		}
 	}
 
@@ -312,12 +369,12 @@ fn send_event(ctx: &mut ActorContext, inner: protocol::Event) {
 		});
 }
 
-async fn handle_stop(
+async fn begin_stop(
 	ctx: &mut ActorContext,
 	handle: &EnvoyHandle,
 	http_request_tasks: &mut JoinSet<()>,
 	reason: protocol::StopActorReason,
-) {
+) -> StopProgress {
 	abort_and_join_http_request_tasks(ctx, http_request_tasks).await;
 
 	let mut stop_code = if ctx.error.is_some() {
@@ -326,12 +383,19 @@ async fn handle_stop(
 		protocol::StopCode::Ok
 	};
 	let mut stop_message = ctx.error.clone();
+	let (stop_tx, mut stop_rx) = oneshot::channel();
 
 	let stop_result = ctx
 		.shared
 		.config
 		.callbacks
-		.on_actor_stop(handle.clone(), ctx.actor_id.clone(), ctx.generation, reason)
+		.on_actor_stop_with_completion(
+			handle.clone(),
+			ctx.actor_id.clone(),
+			ctx.generation,
+			reason,
+			crate::config::ActorStopHandle::new(stop_tx),
+		)
 		.await;
 
 	if let Err(error) = stop_result {
@@ -340,8 +404,69 @@ async fn handle_stop(
 		if stop_message.is_none() {
 			stop_message = Some(format!("{error:#}"));
 		}
+		send_stopped_event(ctx, stop_code, stop_message);
+		return StopProgress::Stopped;
 	}
 
+	match stop_rx.try_recv() {
+		Ok(stop_result) => {
+			send_stopped_event_for_result(ctx, stop_code, stop_message, stop_result);
+			StopProgress::Stopped
+		}
+		Err(TryRecvError::Empty) => StopProgress::Pending(PendingStop {
+			completion_rx: stop_rx,
+			stop_code,
+			stop_message,
+		}),
+		Err(TryRecvError::Closed) => {
+			send_stopped_event(ctx, stop_code, stop_message);
+			StopProgress::Stopped
+		}
+	}
+}
+
+fn finalize_stop(
+	ctx: &mut ActorContext,
+	pending: PendingStop,
+	stop_result: Result<anyhow::Result<()>, oneshot::error::RecvError>,
+) {
+	match stop_result {
+		Ok(stop_result) => {
+			send_stopped_event_for_result(ctx, pending.stop_code, pending.stop_message, stop_result);
+		}
+		Err(error) => {
+			tracing::warn!(
+				actor_id = %ctx.actor_id,
+				?error,
+				"actor stop completion handle dropped before signaling teardown result"
+			);
+			send_stopped_event(ctx, pending.stop_code, pending.stop_message);
+		}
+	}
+}
+
+fn send_stopped_event_for_result(
+	ctx: &mut ActorContext,
+	mut stop_code: protocol::StopCode,
+	mut stop_message: Option<String>,
+	stop_result: anyhow::Result<()>,
+) {
+	if let Err(error) = stop_result {
+		tracing::error!(actor_id = %ctx.actor_id, ?error, "actor stop completion failed");
+		stop_code = protocol::StopCode::Error;
+		if stop_message.is_none() {
+			stop_message = Some(format!("{error:#}"));
+		}
+	}
+
+	send_stopped_event(ctx, stop_code, stop_message);
+}
+
+fn send_stopped_event(
+	ctx: &mut ActorContext,
+	stop_code: protocol::StopCode,
+	stop_message: Option<String>,
+) {
 	send_event(
 		ctx,
 		protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
@@ -1152,6 +1277,10 @@ mod tests {
 		}
 	}
 
+	struct DeferredStopCallbacks {
+		stop_handle_tx: Mutex<Option<oneshot::Sender<crate::config::ActorStopHandle>>>,
+	}
+
 	impl EnvoyCallbacks for TestCallbacks {
 		fn on_actor_start(
 			&self,
@@ -1241,6 +1370,85 @@ mod tests {
 					on_open: None,
 				})
 			})
+		}
+
+		fn can_hibernate(
+			&self,
+			_actor_id: &str,
+			_gateway_id: &protocol::GatewayId,
+			_request_id: &protocol::RequestId,
+			_request: &HttpRequest,
+		) -> bool {
+			false
+		}
+	}
+
+	impl EnvoyCallbacks for DeferredStopCallbacks {
+		fn on_actor_start(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_generation: u32,
+			_config: protocol::ActorConfig,
+			_preloaded_kv: Option<protocol::PreloadedKv>,
+			_sqlite_schema_version: u32,
+			_sqlite_startup_data: Option<protocol::SqliteStartupData>,
+		) -> BoxFuture<anyhow::Result<()>> {
+			Box::pin(async { Ok(()) })
+		}
+
+		fn on_actor_stop_with_completion(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_generation: u32,
+			_reason: protocol::StopActorReason,
+			stop_handle: crate::config::ActorStopHandle,
+		) -> BoxFuture<anyhow::Result<()>> {
+			let stop_handle_tx = self
+				.stop_handle_tx
+				.lock()
+				.expect("stop handle mutex poisoned")
+				.take();
+
+			Box::pin(async move {
+				let Some(tx) = stop_handle_tx else {
+					anyhow::bail!("stop handle sender missing");
+				};
+
+				tx.send(stop_handle)
+					.map_err(|_| anyhow::anyhow!("failed to publish stop handle"))?;
+				Ok(())
+			})
+		}
+
+		fn on_shutdown(&self) {}
+
+		fn fetch(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_gateway_id: protocol::GatewayId,
+			_request_id: protocol::RequestId,
+			_request: HttpRequest,
+		) -> BoxFuture<anyhow::Result<HttpResponse>> {
+			Box::pin(async { anyhow::bail!("fetch should not be called in deferred stop test") })
+		}
+
+		fn websocket(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_gateway_id: protocol::GatewayId,
+			_request_id: protocol::RequestId,
+			_request: HttpRequest,
+			_path: String,
+			_headers: HashMap<String, String>,
+			_is_hibernatable: bool,
+			_is_restoring_hibernatable: bool,
+			_sender: WebSocketSender,
+		) -> BoxFuture<anyhow::Result<WebSocketHandler>> {
+			Box::pin(async { anyhow::bail!("websocket should not be called in deferred stop test") })
 		}
 
 		fn can_hibernate(
@@ -1347,6 +1555,32 @@ mod tests {
 		.expect("timed out waiting for stopped event");
 	}
 
+	async fn assert_no_stopped_event(envoy_rx: &mut mpsc::UnboundedReceiver<ToEnvoyMessage>) {
+		let result = tokio::time::timeout(Duration::from_millis(100), async {
+			loop {
+				let Some(msg) = envoy_rx.recv().await else {
+					panic!("envoy channel closed while waiting for non-stopped event");
+				};
+
+				if let ToEnvoyMessage::SendEvents { events } = msg {
+					if events.iter().any(|event| {
+						matches!(
+							event.inner,
+							protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
+								state: protocol::ActorState::ActorStateStopped(_),
+							})
+						)
+					}) {
+						panic!("received stopped event before teardown completion");
+					}
+				}
+			}
+		})
+		.await;
+
+		assert!(result.is_err(), "stopped event arrived before teardown completion");
+	}
+
 	#[tokio::test]
 	async fn active_http_request_count_tracks_in_flight_fetches() {
 		let (fetch_started_tx, fetch_started_rx) = oneshot::channel();
@@ -1435,5 +1669,40 @@ mod tests {
 			.expect("fetch drop sender dropped");
 		wait_for_stopped_event(&mut envoy_rx).await;
 		assert_eq!(active_http_request_count.load(Ordering::Acquire), 0);
+	}
+
+	#[tokio::test]
+	async fn actor_stop_waits_for_completion_handle_before_stopped_event() {
+		let (stop_handle_tx, stop_handle_rx) = oneshot::channel();
+		let callbacks = Arc::new(DeferredStopCallbacks {
+			stop_handle_tx: Mutex::new(Some(stop_handle_tx)),
+		});
+		let (shared, mut envoy_rx) = build_shared_context(callbacks);
+		let (actor_tx, _active_http_request_count) = create_actor(
+			shared,
+			"actor-3".to_string(),
+			1,
+			actor_config(),
+			Vec::new(),
+			None,
+			0,
+			None,
+		);
+
+		actor_tx
+			.send(ToActor::Stop {
+				command_idx: 1,
+				reason: protocol::StopActorReason::StopIntent,
+			})
+			.expect("failed to send stop");
+
+		let stop_handle = tokio::time::timeout(Duration::from_secs(2), stop_handle_rx)
+			.await
+			.expect("timed out waiting for stop handle")
+			.expect("stop handle sender dropped");
+		assert_no_stopped_event(&mut envoy_rx).await;
+
+		assert!(stop_handle.complete(), "stop handle should complete once");
+		wait_for_stopped_event(&mut envoy_rx).await;
 	}
 }

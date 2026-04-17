@@ -13,6 +13,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` schedule mutations should go through one `ActorState` helper so insert/remove stays sorted, then trigger an immediate state flush and envoy alarm resync from the earliest remaining event.
 - `rivetkit-core` transport-edge helpers should translate `on_request` failures into HTTP 500 responses and `on_websocket` failures into logged 1011 closes, while wrapper types keep internal `try_*` methods for explicit misconfiguration errors.
 - `envoy-client` actor-scoped HTTP fetch work should stay in a `JoinSet` plus a shared `Arc<AtomicUsize>` counter so sleep checks can read in-flight request count and shutdown can abort and join the tasks before `Stopped`.
+- `envoy-client` shutdown hooks that need multi-step teardown should override `EnvoyCallbacks::on_actor_stop_with_completion`; the default path still auto-completes after legacy `on_actor_stop` returns.
 
 ---
 
@@ -104,4 +105,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: `envoy-client` should keep actor HTTP fetch tasks in a `JoinSet` while exposing a separate shared `Arc<AtomicUsize>` counter for external sleep-readiness checks.
   - Gotchas encountered: Counting via `JoinSet::len()` is not enough because completed tasks are not removed until joined, so the live counter needs its own drop guard inside each spawned request future.
   - Useful context: `EnvoyHandle::get_active_http_request_count()` now wraps the actor metadata lookup, and the new unit tests in `envoy-client/src/actor.rs` cover both in-flight counting and stop-time abort behavior.
+---
+## 2026-04-16 23:07:46 PDT - US-012
+- What was implemented: Added a deferred actor-stop path in `envoy-client` so callbacks can receive a one-shot completion handle, let teardown continue after `on_actor_stop_with_completion` returns, and emit `ActorStateStopped` only once that handle resolves.
+- Files changed: `/home/nathan/r5/engine/sdks/rust/envoy-client/src/actor.rs`, `/home/nathan/r5/engine/sdks/rust/envoy-client/src/config.rs`, `/home/nathan/r5/CLAUDE.md`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: `EnvoyCallbacks::on_actor_stop_with_completion` is the extension point for multi-step teardown, while the legacy `on_actor_stop` method still works as the immediate-stop fallback.
+  - Gotchas encountered: The actor loop must stay alive after the stop command and wait on the completion receiver, otherwise the stop handle is dead code and `Stopped` still races teardown.
+  - Useful context: `actor::tests::actor_stop_waits_for_completion_handle_before_stopped_event` is the regression test that proves `Stopped` does not fire before teardown completion.
 ---

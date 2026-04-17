@@ -239,7 +239,7 @@
         "`cargo check -p envoy-client` passes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Envoy-Client Integration' section, blocking change #2. Currently handle_stop calls on_actor_stop then immediately sends Stopped. The fix: on_actor_stop returns a future or channel, and Stopped is sent only when that future resolves."
     },
     {
