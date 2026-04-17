@@ -4,7 +4,7 @@ use std::sync::Weak;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use futures::future::BoxFuture;
 use rivet_envoy_client::handle::EnvoyHandle;
 use tokio::runtime::Handle;
@@ -25,8 +25,15 @@ use crate::actor::vars::ActorVars;
 use crate::ActorConfig;
 use crate::kv::Kv;
 use crate::sqlite::SqliteDb;
-use crate::types::{ActorKey, SaveStateOpts};
+use crate::types::{ActorKey, ListOpts, SaveStateOpts};
 
+/// Shared actor runtime context.
+///
+/// This public surface is the foreign-runtime contract for `rivetkit-core`.
+/// Native Rust, NAPI-backed TypeScript, and future V8 runtimes should be able
+/// to drive actor behavior through `ActorFactory` plus the methods exposed here
+/// and on the returned runtime objects like `Kv`, `SqliteDb`, `Schedule`,
+/// `Queue`, `ConnHandle`, and `WebSocket`.
 #[derive(Clone, Debug)]
 pub struct ActorContext(Arc<ActorContextInner>);
 
@@ -170,6 +177,39 @@ impl ActorContext {
 		self.reset_sleep_timer();
 	}
 
+	pub async fn kv_batch_get(&self, keys: &[&[u8]]) -> Result<Vec<Option<Vec<u8>>>> {
+		self.0.kv.batch_get(keys).await
+	}
+
+	pub async fn kv_batch_put(&self, entries: &[(&[u8], &[u8])]) -> Result<()> {
+		self.0.kv.batch_put(entries).await
+	}
+
+	pub async fn kv_batch_delete(&self, keys: &[&[u8]]) -> Result<()> {
+		self.0.kv.batch_delete(keys).await
+	}
+
+	pub async fn kv_delete_range(&self, start: &[u8], end: &[u8]) -> Result<()> {
+		self.0.kv.delete_range(start, end).await
+	}
+
+	pub async fn kv_list_prefix(
+		&self,
+		prefix: &[u8],
+		opts: ListOpts,
+	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+		self.0.kv.list_prefix(prefix, opts).await
+	}
+
+	pub async fn kv_list_range(
+		&self,
+		start: &[u8],
+		end: &[u8],
+		opts: ListOpts,
+	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+		self.0.kv.list_range(start, end, opts).await
+	}
+
 	pub fn kv(&self) -> &Kv {
 		&self.0.kv
 	}
@@ -178,8 +218,28 @@ impl ActorContext {
 		&self.0.sql
 	}
 
+	pub async fn db_exec(&self, _sql: &str) -> Result<Vec<u8>> {
+		Err(anyhow!("actor database exec is not configured"))
+	}
+
+	pub async fn db_query(
+		&self,
+		_sql: &str,
+		_params: Option<&[u8]>,
+	) -> Result<Vec<u8>> {
+		Err(anyhow!("actor database query is not configured"))
+	}
+
+	pub async fn db_run(&self, _sql: &str, _params: Option<&[u8]>) -> Result<()> {
+		Err(anyhow!("actor database run is not configured"))
+	}
+
 	pub fn schedule(&self) -> &Schedule {
 		&self.0.schedule
+	}
+
+	pub fn set_alarm(&self, timestamp_ms: Option<i64>) -> Result<()> {
+		self.0.schedule.set_alarm(timestamp_ms)
 	}
 
 	pub fn queue(&self) -> &Queue {
@@ -259,6 +319,19 @@ impl ActorContext {
 
 	pub fn conns(&self) -> Vec<ConnHandle> {
 		self.0.connections.list()
+	}
+
+	pub async fn client_call(&self, _request: &[u8]) -> Result<Vec<u8>> {
+		Err(anyhow!("actor client bridge is not configured"))
+	}
+
+	pub fn ack_hibernatable_websocket_message(
+		&self,
+		_gateway_id: &[u8],
+		_request_id: &[u8],
+		_server_message_index: u16,
+	) -> Result<()> {
+		Err(anyhow!("hibernatable websocket ack is not configured"))
 	}
 
 	#[allow(dead_code)]
@@ -521,5 +594,56 @@ impl ActorContext {
 impl Default for ActorContext {
 	fn default() -> Self {
 		Self::new("", "", Vec::new(), "")
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::ActorContext;
+	use crate::kv::Kv;
+	use crate::types::ListOpts;
+
+	#[tokio::test]
+	async fn kv_helpers_delegate_to_kv_wrapper() {
+		let ctx = ActorContext::new_with_kv("actor-1", "actor", Vec::new(), "local", Kv::new_in_memory());
+
+		ctx.kv_batch_put(&[(b"alpha".as_slice(), b"1".as_slice())])
+			.await
+			.expect("kv batch put should succeed");
+
+		let values = ctx
+			.kv_batch_get(&[b"alpha".as_slice()])
+			.await
+			.expect("kv batch get should succeed");
+		assert_eq!(values, vec![Some(b"1".to_vec())]);
+
+		let listed = ctx
+			.kv_list_prefix(b"alp", ListOpts::default())
+			.await
+			.expect("kv list prefix should succeed");
+		assert_eq!(listed, vec![(b"alpha".to_vec(), b"1".to_vec())]);
+
+		ctx.kv_batch_delete(&[b"alpha".as_slice()])
+			.await
+			.expect("kv batch delete should succeed");
+		let values = ctx
+			.kv_batch_get(&[b"alpha".as_slice()])
+			.await
+			.expect("kv batch get after delete should succeed");
+		assert_eq!(values, vec![None]);
+	}
+
+	#[tokio::test]
+	async fn foreign_runtime_only_helpers_fail_explicitly_when_unconfigured() {
+		let ctx = ActorContext::default();
+
+		assert!(ctx.db_exec("select 1").await.is_err());
+		assert!(ctx.db_query("select 1", None).await.is_err());
+		assert!(ctx.db_run("select 1", None).await.is_err());
+		assert!(ctx.client_call(b"call").await.is_err());
+		assert!(ctx.set_alarm(Some(1)).is_err());
+		assert!(ctx
+			.ack_hibernatable_websocket_message(b"gateway", b"request", 1)
+			.is_err());
 	}
 }

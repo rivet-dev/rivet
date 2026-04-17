@@ -4,6 +4,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 ## Codebase Patterns
 - New Rust crates under `rivetkit-rust/packages/` that should use root workspace deps need `[package] workspace = "../../../"` in their `Cargo.toml` and a root `/Cargo.toml` workspace member entry.
 - The high-level `rivetkit` crate should stay a thin typed wrapper over `rivetkit-core`, re-exporting shared transport/config types instead of redefining them.
+- `rivetkit-core` foreign-runtime bridge helpers should stay on `ActorContext` even before a runtime is wired, and they should return explicit configuration errors instead of turning missing bridge support into silent no-ops.
 - `rivetkit` typed contexts should keep typed vars outside the core context, cache decoded actor state in `Arc<Mutex<Option<Arc<State>>>>`, and invalidate that cache after every `set_state`.
 - `rivetkit` actors with `type Vars = ()` should rely on the bridge's built-in unit-vars fallback instead of adding a no-op `create_vars` implementation.
 - `rivetkit-core` lifecycle shutdown tests should assert `ctx.aborted()` from inside `on_sleep` and `on_destroy` callbacks, not just after shutdown returns.
@@ -247,4 +248,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: RivetKit actor persistence bytes are not raw BARE. They use the vbare `serializeWithEmbeddedVersion(...)` shape: 2-byte little-endian schema version prefix followed by the BARE payload.
   - Gotchas encountered: The Rust side was previously writing undecorated `serde_bare` payloads, which would not decode against TypeScript-preloaded actor, connection, or queue data even though the field order itself matched.
   - Useful context: `src/actor/persist.rs` now centralizes the version-prefix helper, actor/connection accept persisted versions `3` and `4`, and queue payloads currently accept version `4` only because that is the only TS queue schema version on disk.
+---
+## 2026-04-17 11:34:53 PDT - US-028
+- What was implemented: Audited `ActorContext` against the dynamic isolate bridge, documented `ActorContext` and `ActorFactory` as the foreign-runtime extension surface, added direct `ActorContext` helpers for KV batch/list operations plus raw alarm, client-call, database, and hibernatable-websocket-ack bridge hooks, and made the not-yet-wired runtime-only hooks fail explicitly instead of vanishing. Added focused context and schedule tests for the new surface.
+- Files changed: `/home/nathan/r5/AGENTS.md`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/factory.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/schedule.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Foreign-runtime bridge methods belong on `ActorContext` even before the runtime wiring exists, so future NAPI/V8 work can plug into a stable public surface instead of inventing one ad hoc.
+  - Gotchas encountered: The dynamic bridge's `setAlarm` shape is stricter than the existing schedule action API, so the audit needed a separate raw alarm setter instead of pretending `Schedule::at()` was equivalent.
+  - Useful context: The new regression coverage lives in `rivetkit-core/src/actor/context.rs` and `rivetkit-core/src/actor/schedule.rs`, and the runtime-only helpers currently raise explicit configuration errors until the foreign runtime bridge is wired.
 ---

@@ -66,6 +66,23 @@ impl Schedule {
 		}
 	}
 
+	pub fn set_alarm(&self, timestamp_ms: Option<i64>) -> Result<()> {
+		let envoy_handle = self
+			.0
+			.envoy_handle
+			.lock()
+			.expect("schedule envoy handle lock poisoned")
+			.clone()
+			.ok_or_else(|| anyhow!("schedule alarm handle is not configured"))?;
+		let generation = *self
+			.0
+			.generation
+			.lock()
+			.expect("schedule generation lock poisoned");
+		envoy_handle.set_alarm(self.0.actor_id.clone(), timestamp_ms, generation);
+		Ok(())
+	}
+
 	#[allow(dead_code)]
 	pub(crate) fn configure_envoy(
 		&self,
@@ -459,5 +476,19 @@ mod tests {
 		assert_eq!(keep_awake_calls.load(Ordering::SeqCst), 2);
 		assert_eq!(succeeded.load(Ordering::SeqCst), 1);
 		assert!(schedule.all_events().is_empty());
+	}
+
+	#[test]
+	fn set_alarm_requires_envoy_handle() {
+		let schedule = Schedule::default();
+		let error = schedule
+			.set_alarm(Some(123))
+			.expect_err("set_alarm should fail without envoy");
+
+		assert!(
+			error
+				.to_string()
+				.contains("schedule alarm handle is not configured")
+		);
 	}
 }

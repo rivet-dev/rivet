@@ -10,6 +10,11 @@ use crate::ActorConfig;
 pub type ActorFactoryCreateFn =
 	dyn Fn(FactoryRequest) -> BoxFuture<'static, Result<ActorInstanceCallbacks>> + Send + Sync;
 
+/// Runtime extension point for building actor callback tables.
+///
+/// Native Rust, NAPI-backed TypeScript, and future V8 runtimes all plug into
+/// `rivetkit-core` by translating their actor model into an `ActorFactory`
+/// create closure that returns `ActorInstanceCallbacks`.
 pub struct ActorFactory {
 	config: ActorConfig,
 	create: Box<ActorFactoryCreateFn>,

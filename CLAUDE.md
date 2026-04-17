@@ -146,6 +146,7 @@ git commit -m "chore(my-pkg): foo bar"
 - If a capability is required, validate it and throw an explicit error with actionable context instead of returning early.
 - Optional chaining is acceptable only for best-effort diagnostics and cleanup paths (for example logging hooks and dispose/release cleanup).
 - Keep scaffolded `rivetkit-core` wrappers `Default`-constructible, but return explicit configuration errors until a real `EnvoyHandle` is wired in.
+- Keep foreign-runtime-only `ActorContext` helpers present on the public surface even before NAPI or V8 wires them, and make them fail with explicit configuration errors instead of silently disappearing.
 - `rivetkit-core` boxed callback APIs should use `futures::future::BoxFuture<'static, ...>` plus local `http::Request<Vec<u8>>` / `http::Response<Vec<u8>>` aliases so actor-owned closures stay object-safe and concrete.
 - `rivetkit-core` actor persistence should keep the BARE snapshot at the single-byte KV key `[1]` so the Rust runtime matches the TypeScript `KEYS.PERSIST_DATA` layout.
 - `rivetkit-core` hibernatable websocket connections should persist each connection under KV key prefix `[2] + conn_id` using the TypeScript v4 BARE field order so Rust and TypeScript actors can restore the same connection payloads.

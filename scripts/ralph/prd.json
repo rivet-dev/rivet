@@ -541,7 +541,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 28,
-      "passes": false,
+      "passes": true,
       "notes": "Future V8 dynamic actors will call ActorContext methods directly from Rust. The factory closure pattern means any runtime just builds ActorInstanceCallbacks differently. See conversation notes on ActorRuntime design decision: no trait needed, ActorFactory is the interface."
     },
     {
