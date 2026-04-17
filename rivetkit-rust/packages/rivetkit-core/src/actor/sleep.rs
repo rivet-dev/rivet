@@ -1,11 +1,12 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::time::Duration;
 
 use rivet_envoy_client::handle::EnvoyHandle;
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
-use tokio::time::sleep;
+use tokio::time::{Instant, sleep, timeout};
 
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
@@ -25,6 +26,7 @@ struct SleepControllerInner {
 	websocket_callback_count: AtomicU32,
 	pending_disconnect_count: AtomicU32,
 	sleep_timer: Mutex<Option<JoinHandle<()>>>,
+	run_handler: Mutex<Option<JoinHandle<()>>>,
 	shutdown_tasks: Mutex<Vec<JoinHandle<()>>>,
 }
 
@@ -66,6 +68,7 @@ impl SleepController {
 			websocket_callback_count: AtomicU32::new(0),
 			pending_disconnect_count: AtomicU32::new(0),
 			sleep_timer: Mutex::new(None),
+			run_handler: Mutex::new(None),
 			shutdown_tasks: Mutex::new(Vec::new()),
 		}))
 	}
@@ -119,6 +122,18 @@ impl SleepController {
 	#[allow(dead_code)]
 	pub(crate) fn set_run_handler_active(&self, active: bool) {
 		self.0.run_handler_active.store(active, Ordering::SeqCst);
+	}
+
+	pub(crate) fn track_run_handler(&self, handle: JoinHandle<()>) {
+		let existing = self
+			.0
+			.run_handler
+			.lock()
+			.expect("run handler lock poisoned")
+			.replace(handle);
+		if let Some(existing) = existing {
+			existing.abort();
+		}
 	}
 
 	pub(crate) async fn can_sleep(&self, ctx: &ActorContext) -> CanSleep {
@@ -199,6 +214,79 @@ impl SleepController {
 		}
 	}
 
+	pub(crate) async fn wait_for_run_handler(&self, timeout_duration: Duration) -> bool {
+		let Some(mut handle) = self
+			.0
+			.run_handler
+			.lock()
+			.expect("run handler lock poisoned")
+			.take()
+		else {
+			self.0.run_handler_active.store(false, Ordering::SeqCst);
+			return true;
+		};
+
+		let finished = match timeout(timeout_duration, &mut handle).await {
+			Ok(Ok(())) => true,
+			Ok(Err(error)) => {
+				tracing::warn!(?error, "actor run handler join failed during shutdown");
+				true
+			}
+			Err(_) => {
+				tracing::warn!(
+					timeout_ms = timeout_duration.as_millis() as u64,
+					"actor run handler timed out during shutdown"
+				);
+				handle.abort();
+				let _ = handle.await;
+				false
+			}
+		};
+
+		self.0.run_handler_active.store(false, Ordering::SeqCst);
+		finished
+	}
+
+	pub(crate) async fn wait_for_sleep_idle_window(
+		&self,
+		ctx: &ActorContext,
+		deadline: Instant,
+	) -> bool {
+		loop {
+			if self.sleep_shutdown_idle_ready(ctx).await {
+				return true;
+			}
+
+			let now = Instant::now();
+			if now >= deadline {
+				return false;
+			}
+
+			let sleep_for = (deadline - now).min(Duration::from_millis(10));
+			sleep(sleep_for).await;
+		}
+	}
+
+	pub(crate) async fn wait_for_shutdown_tasks(
+		&self,
+		ctx: &ActorContext,
+		deadline: Instant,
+	) -> bool {
+		loop {
+			if self.shutdown_tasks_drained(ctx) {
+				return true;
+			}
+
+			let now = Instant::now();
+			if now >= deadline {
+				return false;
+			}
+
+			let sleep_for = (deadline - now).min(Duration::from_millis(10));
+			sleep(sleep_for).await;
+		}
+	}
+
 	#[allow(dead_code)]
 	pub(crate) fn begin_keep_awake(&self) {
 		self.begin_async_region(AsyncRegion::KeepAwake);
@@ -252,6 +340,21 @@ impl SleepController {
 			.expect("shutdown tasks lock poisoned");
 		shutdown_tasks.retain(|task| !task.is_finished());
 		shutdown_tasks.len()
+	}
+
+	async fn sleep_shutdown_idle_ready(&self, ctx: &ActorContext) -> bool {
+		self.active_http_request_count(ctx).await == 0
+			&& self.0.keep_awake_count.load(Ordering::SeqCst) == 0
+			&& self.0.internal_keep_awake_count.load(Ordering::SeqCst) == 0
+			&& self.0.pending_disconnect_count.load(Ordering::SeqCst) == 0
+			&& self.0.websocket_callback_count.load(Ordering::SeqCst) == 0
+	}
+
+	fn shutdown_tasks_drained(&self, ctx: &ActorContext) -> bool {
+		self.shutdown_task_count() == 0
+			&& self.0.pending_disconnect_count.load(Ordering::SeqCst) == 0
+			&& self.0.websocket_callback_count.load(Ordering::SeqCst) == 0
+			&& !ctx.prevent_sleep()
 	}
 
 	fn begin_async_region(&self, region: AsyncRegion) {

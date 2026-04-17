@@ -321,7 +321,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Graceful Shutdown: Sleep Mode' section. Depends on US-012 (envoy-client graceful shutdown). Key: sleep mode waits for idle window before calling on_sleep."
     },
     {

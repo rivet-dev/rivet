@@ -142,6 +142,9 @@ impl Schedule {
 		self.sync_alarm_logged();
 	}
 
+	pub(crate) fn cancel_local_alarm_timeouts(&self) {
+	}
+
 	#[allow(dead_code)]
 	pub(crate) async fn handle_alarm(
 		&self,

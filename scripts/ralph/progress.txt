@@ -15,6 +15,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` sleep readiness should live in `SleepController`, and subsystems like queue waits, scheduled internal work, disconnect callbacks, and websocket callbacks should reset the idle timer through `ActorContext` hooks instead of managing their own timers.
 - `rivetkit-core` startup should load `PersistedActor` into `ActorContext` before factory creation, persist `has_initialized` immediately, set `ready` before the driver hook, and set `started` only after that hook completes.
 - `rivetkit-core` startup should resync persisted alarms and restore hibernatable connections before `ready`, then reset the sleep timer, spawn `run` in a detached panic-catching task, and drain overdue scheduled events after `started`.
+- `rivetkit-core` sleep shutdown should wait on the tracked `run` task, use `SleepController` deadline polls for the idle window and shutdown drains, persist hibernatable connections before disconnecting non-hibernatable ones, and finish with an immediate state save.
 - `envoy-client` actor-scoped HTTP fetch work should stay in a `JoinSet` plus a shared `Arc<AtomicUsize>` counter so sleep checks can read in-flight request count and shutdown can abort and join the tasks before `Stopped`.
 - `envoy-client` shutdown hooks that need multi-step teardown should override `EnvoyCallbacks::on_actor_stop_with_completion`; the default path still auto-completes after legacy `on_actor_stop` returns.
 
@@ -140,4 +141,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: The startup tail belongs in `ActorLifecycle` with pre-ready alarm and connection restore, then post-start sleep timer reset, detached `run`, and overdue schedule dispatch.
   - Gotchas encountered: The `run` callback must be detached and wrapped in `catch_unwind` so actor startup never blocks on it and panics do not kill the actor task.
   - Useful context: `startup_restores_connections_and_processes_overdue_events`, `startup_resets_sleep_timer_after_start`, and the two `run` handler lifecycle tests in `src/actor/lifecycle.rs` are the regression coverage for this story.
+---
+## 2026-04-16 23:41:25 PDT - US-016
+- What was implemented: Added sleep-mode shutdown in `ActorLifecycle`, including tracked `run` task waiting, grace-deadline idle polling, `on_sleep` timeout/error handling, shutdown-task drains, hibernatable connection persistence, non-hibernatable disconnects, and final immediate state persistence.
+- Files changed: `/home/nathan/r5/CLAUDE.md`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/lifecycle.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/schedule.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/sleep.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/sqlite.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Sleep shutdown now relies on `SleepController` for both tracked `run` task joins and deadline-polled idle/shutdown gates, instead of trying to reuse `can_sleep()` directly.
+  - Gotchas encountered: The idle sleep window is narrower than `can_sleep()`: it ignores active connections and `prevent_sleep`, so shutdown needs separate wait helpers before and after `on_sleep`.
+  - Useful context: `sleep_shutdown_waits_for_idle_window_and_persists_state`, `sleep_shutdown_reports_error_when_on_sleep_fails`, and `sleep_shutdown_times_out_run_handler_and_finishes` in `src/actor/lifecycle.rs` are the regression coverage for this story.
 ---

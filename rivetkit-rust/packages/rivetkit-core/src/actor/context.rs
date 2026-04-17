@@ -2,11 +2,14 @@ use std::future::Future;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use anyhow::Result;
 use futures::future::BoxFuture;
 use rivet_envoy_client::handle::EnvoyHandle;
 use tokio::runtime::Handle;
+use tokio::task::JoinHandle;
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
 use crate::actor::callbacks::ActorInstanceCallbacks;
@@ -369,13 +372,37 @@ impl ActorContext {
 		self.reset_sleep_timer();
 	}
 
+	pub(crate) fn track_run_handler(&self, handle: JoinHandle<()>) {
+		self.0.sleep.track_run_handler(handle);
+	}
+
 	#[allow(dead_code)]
 	pub(crate) async fn can_sleep(&self) -> CanSleep {
 		self.0.sleep.can_sleep(self).await
 	}
 
+	pub(crate) async fn wait_for_run_handler(&self, timeout_duration: Duration) -> bool {
+		self.0.sleep.wait_for_run_handler(timeout_duration).await
+	}
+
+	pub(crate) async fn wait_for_sleep_idle_window(&self, deadline: Instant) -> bool {
+		self.0.sleep.wait_for_sleep_idle_window(self, deadline).await
+	}
+
+	pub(crate) async fn wait_for_shutdown_tasks(&self, deadline: Instant) -> bool {
+		self.0.sleep.wait_for_shutdown_tasks(self, deadline).await
+	}
+
 	pub(crate) fn reset_sleep_timer(&self) {
 		self.0.sleep.reset_sleep_timer(self.clone());
+	}
+
+	pub(crate) fn cancel_sleep_timer(&self) {
+		self.0.sleep.cancel_sleep_timer();
+	}
+
+	pub(crate) fn cancel_local_alarm_timeouts(&self) {
+		self.0.schedule.cancel_local_alarm_timeouts();
 	}
 
 	#[allow(dead_code)]

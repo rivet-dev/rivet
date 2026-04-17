@@ -54,6 +54,10 @@ impl SqliteDb {
 		self.handle()?.sqlite_commit_finalize(request).await
 	}
 
+	pub(crate) async fn cleanup(&self) -> Result<()> {
+		Ok(())
+	}
+
 	fn handle(&self) -> Result<EnvoyHandle> {
 		self.handle
 			.clone()

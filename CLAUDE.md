@@ -155,6 +155,7 @@ git commit -m "chore(my-pkg): foo bar"
 - `rivetkit-core` sleep readiness should stay centralized in `SleepController`, with queue waits, scheduled internal work, disconnect callbacks, and websocket callbacks reporting activity through `ActorContext` hooks so the idle timer stays accurate.
 - `rivetkit-core` startup should load `PersistedActor` into `ActorContext` before factory creation, persist `has_initialized` immediately, set `ready` before the driver hook, and only set `started` after that hook completes.
 - `rivetkit-core` startup should resync persisted alarms and restore hibernatable connections before `ready`, then reset the sleep timer, spawn `run` in a detached panic-catching task, and drain overdue scheduled events after `started`.
+- `rivetkit-core` sleep shutdown should wait for the tracked `run` task, poll `SleepController` for the idle window and shutdown-task drains, persist hibernatable connections before disconnecting non-hibernatable ones, and finish with an immediate state save.
 - `envoy-client` graceful actor teardown should flow through `EnvoyCallbacks::on_actor_stop_with_completion`; the default implementation preserves the old immediate `on_actor_stop` behavior by auto-completing the stop handle after the callback returns.
 
 ### Rust Dependencies
