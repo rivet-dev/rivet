@@ -16,7 +16,10 @@ pub use actor::config::{ActorConfig, ActorConfigOverrides, CanHibernateWebSocket
 pub use actor::connection::ConnHandle;
 pub use actor::context::ActorContext;
 pub use actor::factory::{ActorFactory, FactoryRequest};
-pub use actor::queue::Queue;
+pub use actor::queue::{
+	CompletableQueueMessage, Queue, QueueMessage, QueueNextBatchOpts,
+	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts,
+};
 pub use actor::schedule::Schedule;
 pub use kv::Kv;
 pub use registry::CoreRegistry;

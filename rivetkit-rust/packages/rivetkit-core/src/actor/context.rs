@@ -57,9 +57,14 @@ impl ActorContext {
 		let config = ActorConfig::default();
 		let kv = Kv::default();
 		let sql = SqliteDb::default();
-		let queue = Queue::default();
 		let state = ActorState::new(kv.clone(), config.clone());
 		let schedule = Schedule::new(state.clone(), actor_id.clone(), config);
+		let abort_signal = CancellationToken::new();
+		let queue = Queue::new(
+			kv.clone(),
+			ActorConfig::default(),
+			Some(abort_signal.clone()),
+		);
 		let connections =
 			ConnectionManager::new(actor_id.clone(), kv.clone(), ActorConfig::default());
 
@@ -72,7 +77,7 @@ impl ActorContext {
 			queue,
 			broadcaster: EventBroadcaster::default(),
 			connections,
-			abort_signal: CancellationToken::new(),
+			abort_signal,
 			prevent_sleep: AtomicBool::new(false),
 			sleep_requested: AtomicBool::new(false),
 			destroy_requested: AtomicBool::new(false),

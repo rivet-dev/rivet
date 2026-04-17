@@ -204,7 +204,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Queues' section. Sleep interaction: can_sleep() allows sleep if run handler is only blocked on a queue wait. waitForNames and enqueueAndWait are deferred to a follow-up PRD."
     },
     {

@@ -8,6 +8,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` callback/factory APIs should box closures as `BoxFuture<'static, ...>` and use concrete `http::Request<Vec<u8>>` / `http::Response<Vec<u8>>` aliases instead of leaking generics through the runtime surface.
 - `rivetkit-core` actor snapshots should stay BARE-encoded at the single-byte KV key `[1]` so Rust matches the TypeScript actor persist layout.
 - `rivetkit-core` hibernatable websocket connections should persist per-connection BARE payloads under KV keys `[2] + conn_id`, matching the TypeScript v4 connection field order for restore compatibility.
+- `rivetkit-core` queue persistence should mirror the TypeScript key layout with metadata at `[5, 1, 1]` and message entries at `[5, 1, 2] + u64be(message_id)` so lexicographic scans preserve FIFO order.
 - `rivetkit-core` action/lifecycle surfaces should collapse `anyhow::Error` into serializable `group/code/message` payloads via `rivet_error::RivetError::extract` before returning them across runtime boundaries.
 - `rivetkit-core` schedule mutations should go through one `ActorState` helper so insert/remove stays sorted, then trigger an immediate state flush and envoy alarm resync from the earliest remaining event.
 - `rivetkit-core` transport-edge helpers should translate `on_request` failures into HTTP 500 responses and `on_websocket` failures into logged 1011 closes, while wrapper types keep internal `try_*` methods for explicit misconfiguration errors.
@@ -86,4 +87,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Connection lifecycle wiring belongs in a manager layered under `ActorContext`, with `ConnHandle.disconnect()` delegated through weak references so tracked connections do not create Arc cycles back into the actor runtime.
   - Gotchas encountered: Hibernatable connection persistence must use one KV entry per connection at prefix `[2]` instead of folding connection blobs into the actor snapshot at `[1]`, otherwise it drifts from the TypeScript restore path.
   - Useful context: `ActorContext::connect_conn`, `persist_hibernatable_connections`, and `restore_hibernatable_connections` are the staging hooks future lifecycle and envoy integration should call rather than reaching into `ConnectionManager` directly.
+---
+## 2026-04-16 22:53:05 PDT - US-010
+- What was implemented: Replaced the queue placeholder with a persisted queue manager that supports send, blocking and non-blocking receives, batch reads, completable messages, FIFO key encoding, queue size and message size limits, actor and caller cancellation while waiting, and active queue wait tracking for future sleep checks.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/queue.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/mod.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/lib.rs`, `/home/nathan/r5/AGENTS.md`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Queue storage should reuse the TypeScript key layout with metadata at `[5, 1, 1]` and messages under `[5, 1, 2] + u64be(id)` so a plain prefix scan stays FIFO.
+  - Gotchas encountered: `try_next` and `try_next_batch` still need KV I/O, so the Rust wrappers have to bridge into async internally instead of pretending the storage layer is synchronous.
+  - Useful context: `QueueMessage::complete()` works off an attached completion handle, while `Queue::active_queue_wait_count()` is the counter future sleep logic should consult when `can_sleep()` lands.
 ---

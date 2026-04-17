@@ -149,6 +149,7 @@ git commit -m "chore(my-pkg): foo bar"
 - `rivetkit-core` boxed callback APIs should use `futures::future::BoxFuture<'static, ...>` plus local `http::Request<Vec<u8>>` / `http::Response<Vec<u8>>` aliases so actor-owned closures stay object-safe and concrete.
 - `rivetkit-core` actor persistence should keep the BARE snapshot at the single-byte KV key `[1]` so the Rust runtime matches the TypeScript `KEYS.PERSIST_DATA` layout.
 - `rivetkit-core` hibernatable websocket connections should persist each connection under KV key prefix `[2] + conn_id` using the TypeScript v4 BARE field order so Rust and TypeScript actors can restore the same connection payloads.
+- `rivetkit-core` queue persistence should keep metadata at KV key `[5, 1, 1]` and messages under `[5, 1, 2] + u64be(id)` so FIFO prefix scans match the TypeScript runtime layout.
 - `rivetkit-core` schedule mutations should update `ActorState` through a single helper, then immediately kick `save_state(immediate = true)` and resync the envoy alarm to the earliest event.
 - `rivetkit-core` HTTP and WebSocket staging helpers should keep transport failures at the boundary by turning `on_request` errors into HTTP 500 responses and `on_websocket` errors into logged 1011 closes, while `ConnHandle` and `WebSocket` wrappers surface explicit configuration errors through internal `try_*` helpers.
 
