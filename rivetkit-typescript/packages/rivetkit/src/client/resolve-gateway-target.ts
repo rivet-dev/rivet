@@ -1,4 +1,4 @@
-import { ActorNotFound, InvalidRequest } from "@/actor/errors";
+import { actorNotFound, invalidRequest } from "@/actor/errors";
 import type {
 	GatewayTarget,
 	EngineControlClient,
@@ -28,7 +28,7 @@ export async function resolveGatewayTarget(
 			key: target.getForKey.key,
 		});
 		if (!output) {
-			throw new ActorNotFound(
+			throw actorNotFound(
 				`${target.getForKey.name}:${JSON.stringify(target.getForKey.key)}`,
 			);
 		}
@@ -55,5 +55,5 @@ export async function resolveGatewayTarget(
 		return output.actorId;
 	}
 
-	throw new InvalidRequest("Invalid query format");
+	throw invalidRequest("Invalid query format");
 }

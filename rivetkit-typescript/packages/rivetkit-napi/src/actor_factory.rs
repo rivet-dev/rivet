@@ -6,7 +6,7 @@ use napi::bindgen_prelude::{Buffer, Promise};
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
 use napi::{Env, JsFunction, JsObject};
 use napi_derive::napi;
-use rivet_error::RivetError;
+use rivet_error::{MacroMarker, RivetError, RivetErrorSchema};
 use rivetkit_core::actor::callbacks::{
 	ActionHandler, BeforeActionResponseCallback, LifecycleCallback, RequestCallback,
 };
@@ -20,6 +20,7 @@ use rivetkit_core::{
 
 use crate::actor_context::ActorContext;
 use crate::connection::ConnHandle;
+use crate::BRIDGE_RIVET_ERROR_PREFIX;
 use crate::websocket::WebSocket;
 
 type CallbackTsfn<T> = ThreadsafeFunction<T, ErrorStrategy::CalleeHandled>;
@@ -158,6 +159,14 @@ struct CallbackBindings {
 	actions: HashMap<String, CallbackTsfn<ActionPayload>>,
 	on_before_action_response: Option<CallbackTsfn<BeforeActionResponsePayload>>,
 	run: Option<CallbackTsfn<LifecyclePayload>>,
+}
+
+#[derive(serde::Deserialize)]
+struct BridgeRivetErrorPayload {
+	group: String,
+	code: String,
+	message: String,
+	metadata: Option<serde_json::Value>,
 }
 
 #[napi]
@@ -643,8 +652,36 @@ fn build_before_action_response_payload(
 	Ok(vec![object.into_unknown()])
 }
 
+fn leak_str(value: String) -> &'static str {
+	Box::leak(value.into_boxed_str())
+}
+
+fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
+	let payload = reason.strip_prefix(BRIDGE_RIVET_ERROR_PREFIX)?;
+	let payload: BridgeRivetErrorPayload = serde_json::from_str(payload).ok()?;
+	let schema = Box::leak(Box::new(RivetErrorSchema {
+		group: leak_str(payload.group),
+		code: leak_str(payload.code),
+		default_message: leak_str(payload.message.clone()),
+		meta_type: None,
+		_macro_marker: MacroMarker { _private: () },
+	}));
+	let meta = payload
+		.metadata
+		.as_ref()
+		.and_then(|metadata| serde_json::value::to_raw_value(metadata).ok());
+	Some(anyhow::Error::new(rivet_error::RivetError {
+		schema,
+		meta,
+		message: Some(payload.message),
+	}))
+}
+
 fn callback_error(callback_name: &str, error: napi::Error) -> anyhow::Error {
 	let reason = error.reason;
+	if let Some(error) = parse_bridge_rivet_error(&reason) {
+		return error;
+	}
 	if error.status == napi::Status::Closing {
 		return JsCallbackUnavailable {
 			callback: callback_name.to_owned(),

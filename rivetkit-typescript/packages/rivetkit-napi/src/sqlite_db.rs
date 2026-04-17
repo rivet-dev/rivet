@@ -30,7 +30,10 @@ impl SqliteDb {
 
 		let database = Arc::new(
 			open_database_with_runtime_config(
-				self.ctx.sql().runtime_config().map_err(crate::napi_error)?,
+				self.ctx
+					.sql()
+					.runtime_config()
+					.map_err(crate::napi_anyhow_error)?,
 				Vec::new(),
 			)
 			.await?,

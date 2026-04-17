@@ -787,7 +787,7 @@
         "tsc type-check passes"
       ],
       "priority": 42,
-      "passes": false,
+      "passes": true,
       "notes": "rivetkit-core already uses RivetError derive macro from packages/common/error/. ActionDispatchError already has group/code/message. This story is about making it universal and deleting the TS error classes. See CLAUDE.md 'Error Handling' section for the derive pattern."
     },
     {
@@ -1045,6 +1045,26 @@
       "priority": 40,
       "passes": true,
       "notes": "Issues surfaced by review agents monitoring the Ralph pipeline. ErrorStrategy::Fatal and missing RivetError serialization are the highest priority items. The client() wiring may require engine-client integration work."
+    },
+    {
+      "id": "US-056",
+      "title": "Move all inline #[cfg(test)] modules to tests/ folders for rivetkit-core and rivetkit",
+      "description": "As a developer, I want all unit tests in separate tests/ directories instead of inline #[cfg(test)] modules so source files stay focused on implementation.",
+      "acceptanceCriteria": [
+        "Create rivetkit-rust/packages/rivetkit-core/tests/ directory with one test file per source module that currently has #[cfg(test)]",
+        "Move all #[cfg(test)] mod tests blocks from rivetkit-core/src/**/*.rs into corresponding tests/ files",
+        "Create rivetkit-rust/packages/rivetkit/tests/ directory with test files for bridge.rs and context.rs",
+        "Move all #[cfg(test)] mod tests blocks from rivetkit/src/**/*.rs into corresponding tests/ files",
+        "Remove all #[cfg(test)] blocks and test-only helper functions/impls from source files",
+        "Any test-only pub(crate) visibility added solely for inline tests should be reverted to private, using pub(crate) or re-exports in the test files only if needed",
+        "cargo test -p rivetkit-core passes with all tests still passing",
+        "cargo test -p rivetkit passes with all tests still passing",
+        "cargo check -p rivetkit-core passes",
+        "cargo check -p rivetkit passes"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": "Inline test modules to move from rivetkit-core: config, action, callbacks, schedule, sleep, context, lifecycle, state, connection, queue, event, kv, registry. From rivetkit: bridge, context. No inline tests exist in rivetkit-napi."
     }
   ]
 }

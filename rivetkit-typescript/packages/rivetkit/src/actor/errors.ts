@@ -3,569 +3,301 @@ import type { DeconstructedError } from "@/common/utils";
 export const INTERNAL_ERROR_CODE = "internal_error";
 export const INTERNAL_ERROR_DESCRIPTION =
 	"Internal error. Read the server logs for more details.";
-export type InternalErrorMetadata = {};
+export type InternalErrorMetadata = Record<string, never>;
 
 export const USER_ERROR_CODE = "user_error";
+export const BRIDGE_RIVET_ERROR_PREFIX = "__RIVET_ERROR_JSON__:";
 
-interface ActorErrorOptions extends ErrorOptions {
+export interface RivetErrorOptions extends ErrorOptions {
 	/** Error data can safely be serialized in a response to the client. */
 	public?: boolean;
-	/** Metadata associated with this error. This will be sent to clients. */
+	/** Metadata associated with this error. */
+	metadata?: unknown;
+	/** Explicit HTTP status override for router responses. */
+	statusCode?: number;
+}
+
+export interface RivetErrorLike {
+	__type?: "ActorError" | "RivetError";
+	group: string;
+	code: string;
+	message: string;
+	metadata?: unknown;
+	public?: boolean;
+	statusCode?: number;
+}
+
+export interface UserErrorOptions extends ErrorOptions {
+	/**
+	 * Machine readable code for this error. Useful for catching different types of
+	 * errors in try-catch.
+	 */
+	code?: string;
+	/**
+	 * Additional metadata related to the error. Useful for understanding context
+	 * about the error.
+	 */
 	metadata?: unknown;
 }
 
-export class ActorError extends Error {
-	__type = "ActorError";
+function looksLikeRivetErrorOptions(
+	value: unknown,
+): value is RivetErrorOptions {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		("public" in value ||
+			"metadata" in value ||
+			"statusCode" in value ||
+			"cause" in value)
+	);
+}
+
+function isTypedErrorTag(value: unknown): value is "ActorError" | "RivetError" {
+	return value === "ActorError" || value === "RivetError";
+}
+
+function errorMessage(error: unknown, fallback = String(error)): string {
+	if (
+		error &&
+		typeof error === "object" &&
+		"message" in error &&
+		typeof error.message === "string"
+	) {
+		return error.message;
+	}
+
+	return fallback;
+}
+
+export function isRivetErrorLike(
+	error: unknown,
+): error is RivetError | DeconstructedError | RivetErrorLike {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"group" in error &&
+		typeof error.group === "string" &&
+		"code" in error &&
+		typeof error.code === "string" &&
+		"message" in error &&
+		typeof error.message === "string" &&
+		(!("__type" in error) || isTypedErrorTag(error.__type))
+	);
+}
+
+export class RivetError extends Error {
+	__type = "RivetError" as const;
 
 	public public: boolean;
 	public metadata?: unknown;
-	public statusCode = 500;
+	public statusCode: number;
 	public readonly group: string;
 	public readonly code: string;
 
+	public static isRivetError(
+		error: unknown,
+	): error is RivetError | DeconstructedError {
+		return isRivetErrorLike(error);
+	}
+
 	public static isActorError(
 		error: unknown,
-	): error is ActorError | DeconstructedError {
-		return (
-			typeof error === "object" &&
-			(error as ActorError | DeconstructedError).__type === "ActorError"
-		);
+	): error is RivetError | DeconstructedError {
+		return isRivetErrorLike(error);
 	}
 
 	constructor(
 		group: string,
 		code: string,
 		message: string,
-		opts?: ActorErrorOptions,
+		options?: RivetErrorOptions | unknown,
 	) {
-		super(message, { cause: opts?.cause });
+		const normalized = looksLikeRivetErrorOptions(options)
+			? options
+			: { metadata: options };
+
+		super(message, { cause: normalized.cause });
+		this.name = "RivetError";
 		this.group = group;
 		this.code = code;
-		this.public = opts?.public ?? false;
-		this.metadata = opts?.metadata;
-
-		// Set status code based on error type
-		if (opts?.public) {
-			this.statusCode = 400; // Bad request for public errors
-		}
+		this.public = normalized.public ?? false;
+		this.metadata = normalized.metadata;
+		this.statusCode =
+			normalized.statusCode ?? (this.public ? 400 : 500);
 	}
 
 	toString() {
-		// Force stringify to return the message
 		return this.message;
 	}
 }
 
-export class InternalError extends ActorError {
-	constructor(message: string) {
-		super("actor", INTERNAL_ERROR_CODE, message);
-	}
-}
+export { RivetError as ActorError };
 
-export class Unreachable extends InternalError {
-	constructor(x: never) {
-		super(`Unreachable case: ${x}`);
-	}
-}
-
-export class StateNotEnabled extends ActorError {
-	constructor() {
-		super(
-			"actor",
-			"state_not_enabled",
-			"State not enabled. Must implement `createState` or `state` to use state. (https://www.rivet.dev/docs/actors/state/#initializing-state)",
-		);
-	}
-}
-
-export class WorkflowNotEnabled extends ActorError {
-	constructor() {
-		super(
-			"actor",
-			"workflow_not_enabled",
-			"Workflow not enabled. The run handler must use `workflow(...)` to enable workflow history.",
-		);
-	}
-}
-
-export class ConnStateNotEnabled extends ActorError {
-	constructor() {
-		super(
-			"actor",
-			"conn_state_not_enabled",
-			"Connection state not enabled. Must implement `createConnectionState` or `connectionState` to use connection state. (https://www.rivet.dev/docs/actors/connections/#connection-state)",
-		);
-	}
-}
-
-export class VarsNotEnabled extends ActorError {
-	constructor() {
-		super(
-			"actor",
-			"vars_not_enabled",
-			"Variables not enabled. Must implement `createVars` or `vars` to use state. (https://www.rivet.dev/docs/actors/ephemeral-variables/#initializing-variables)",
-		);
-	}
-}
-
-export class ActionTimedOut extends ActorError {
-	constructor() {
-		super(
-			"action",
-			"timed_out",
-			"Action timed out. This can be increased with: `actor({ options: { action: { timeout: ... } } })`",
-			{ public: true },
-		);
-	}
-}
-
-export class ActionNotFound extends ActorError {
-	constructor(name: string) {
-		super(
-			"action",
-			"not_found",
-			`Action '${name}' not found. Validate the action exists on your actor.`,
-			{ public: true },
-		);
-	}
-}
-
-export class InvalidEncoding extends ActorError {
-	constructor(format?: string) {
-		super(
-			"encoding",
-			"invalid",
-			`Invalid encoding \`${format}\`. (https://www.rivet.dev/docs/clients/javascript)`,
-			{
-				public: true,
-			},
-		);
-	}
-}
-
-export class IncomingMessageTooLong extends ActorError {
-	constructor() {
-		super(
-			"message",
-			"incoming_too_long",
-			"Incoming message too long. This can be configured with: `setup({ maxIncomingMessageSize: ... })`",
-			{ public: true },
-		);
-	}
-}
-
-export class OutgoingMessageTooLong extends ActorError {
-	constructor() {
-		super(
-			"message",
-			"outgoing_too_long",
-			"Outgoing message too long. This can be configured with: `setup({ maxOutgoingMessageSize: ... })`",
-			{ public: true },
-		);
-	}
-}
-
-export class MalformedMessage extends ActorError {
-	constructor(cause?: unknown) {
-		super("message", "malformed", `Malformed message: ${cause}`, {
+export class UserError extends RivetError {
+	constructor(message: string, options?: UserErrorOptions) {
+		super("user", options?.code ?? USER_ERROR_CODE, message, {
 			public: true,
-			cause,
+			metadata: options?.metadata,
+			cause: options?.cause,
 		});
 	}
 }
 
-export interface InvalidStateTypeOptions {
-	path?: unknown;
-}
-
-export class InvalidStateType extends ActorError {
-	constructor(opts?: InvalidStateTypeOptions) {
-		let msg = "";
-		if (opts?.path) {
-			msg += `Attempted to set invalid state at path \`${opts.path}\`.`;
-		} else {
-			msg += "Attempted to set invalid state.";
+export function toRivetError(
+	error: unknown,
+	fallback?: Partial<RivetErrorLike>,
+): RivetError {
+	if (typeof error === "string") {
+		const bridged = decodeBridgeRivetError(error);
+		if (bridged) {
+			return bridged;
 		}
-		msg +=
-			" Valid types include: null, undefined, boolean, string, number, BigInt, Date, RegExp, Error, typed arrays (Uint8Array, Int8Array, Float32Array, etc.), Map, Set, Array, and plain objects. (https://www.rivet.dev/docs/actors/state/#limitations)";
-		super("state", "invalid_type", msg);
 	}
-}
 
-export class Unsupported extends ActorError {
-	constructor(feature: string) {
-		super("feature", "unsupported", `Unsupported feature: ${feature}`);
+	if (error instanceof Error) {
+		const bridged = decodeBridgeRivetError(error.message);
+		if (bridged) {
+			return bridged;
+		}
 	}
-}
 
-export class QueueFull extends ActorError {
-	constructor(limit: number) {
-		super("queue", "full", `Queue is full. Limit is ${limit} messages.`, {
-			public: true,
-			metadata: { limit },
+	if (isRivetErrorLike(error)) {
+		return new RivetError(error.group, error.code, error.message, {
+			public: error.public,
+			statusCode: error.statusCode,
+			metadata: error.metadata,
+			cause: error instanceof Error ? error.cause : undefined,
 		});
 	}
+
+	return new RivetError(
+		fallback?.group ?? "actor",
+		fallback?.code ?? INTERNAL_ERROR_CODE,
+		errorMessage(error, fallback?.message ?? "Unknown error"),
+		{
+			public: fallback?.public,
+			statusCode: fallback?.statusCode,
+			metadata: fallback?.metadata,
+			cause: error instanceof Error ? error : undefined,
+		},
+	);
 }
 
-export class QueueMessageTooLarge extends ActorError {
-	constructor(size: number, limit: number) {
-		super(
-			"queue",
-			"message_too_large",
-			`Queue message too large (${size} bytes). Limit is ${limit} bytes.`,
-			{ public: true, metadata: { size, limit } },
-		);
+export function encodeBridgeRivetError(error: RivetErrorLike): string {
+	return `${BRIDGE_RIVET_ERROR_PREFIX}${JSON.stringify({
+		group: error.group,
+		code: error.code,
+		message: error.message,
+		metadata: error.metadata,
+	})}`;
+}
+
+export function decodeBridgeRivetError(
+	value: string,
+): RivetError | undefined {
+	if (!value.startsWith(BRIDGE_RIVET_ERROR_PREFIX)) {
+		return undefined;
 	}
-}
 
-export class QueueMessageInvalid extends ActorError {
-	constructor(path?: string) {
-		super(
-			"queue",
-			"message_invalid",
-			path
-				? `Queue message body contains unsupported type at ${path}.`
-				: "Queue message body contains unsupported type.",
-			{ public: true, metadata: path ? { path } : undefined },
-		);
-	}
-}
+	try {
+		const payload = JSON.parse(
+			value.slice(BRIDGE_RIVET_ERROR_PREFIX.length),
+		) as RivetErrorLike;
+		if (!isRivetErrorLike(payload)) {
+			return undefined;
+		}
 
-export class EventPayloadInvalid extends ActorError {
-	constructor(name: string, issues?: unknown[]) {
-		super(
-			"event",
-			"invalid_payload",
-			`Event payload failed validation for '${name}'.`,
-			{ public: true, metadata: { name, issues } },
-		);
-	}
-}
-
-export class QueuePayloadInvalid extends ActorError {
-	constructor(name: string, issues?: unknown[]) {
-		super(
-			"queue",
-			"invalid_payload",
-			`Queue payload failed validation for '${name}'.`,
-			{ public: true, metadata: { name, issues } },
-		);
-	}
-}
-
-export class QueueCompletionPayloadInvalid extends ActorError {
-	constructor(name: string, issues?: unknown[]) {
-		super(
-			"queue",
-			"invalid_completion_payload",
-			`Queue completion payload failed validation for '${name}'.`,
-			{ public: true, metadata: { name, issues } },
-		);
-	}
-}
-
-export class QueueAlreadyCompleted extends ActorError {
-	constructor() {
-		super(
-			"queue",
-			"already_completed",
-			"Queue message was already completed.",
-			{
-				public: true,
-			},
-		);
-	}
-}
-
-export class QueuePreviousMessageNotCompleted extends ActorError {
-	constructor() {
-		super(
-			"queue",
-			"previous_message_not_completed",
-			"Previous completable queue message is not completed. Call `message.complete(...)` before receiving the next message.",
-			{ public: true },
-		);
-	}
-}
-
-export class QueueCompleteNotConfigured extends ActorError {
-	constructor(name: string) {
-		super(
-			"queue",
-			"complete_not_configured",
-			`Queue '${name}' does not support completion responses.`,
-			{
-				public: true,
-				metadata: { name },
-			},
-		);
-	}
-}
-
-export class ActorAborted extends ActorError {
-	constructor() {
-		super("actor", "aborted", "Actor aborted.", { public: true });
-	}
-}
-
-/**
- * Options for the UserError class.
- */
-export interface UserErrorOptions extends ErrorOptions {
-	/**
-	 * Machine readable code for this error. Useful for catching different types of errors in try-catch.
-	 */
-	code?: string;
-
-	/**
-	 * Additional metadata related to the error. Useful for understanding context about the error.
-	 */
-	metadata?: unknown;
-}
-
-/** Error that can be safely returned to the user. */
-export class UserError extends ActorError {
-	/**
-	 * Constructs a new UserError instance.
-	 *
-	 * @param message - The error message to be displayed.
-	 * @param opts - Optional parameters for the error, including a machine-readable code and additional metadata.
-	 */
-	constructor(message: string, opts?: UserErrorOptions) {
-		super("user", opts?.code ?? USER_ERROR_CODE, message, {
-			public: true,
-			metadata: opts?.metadata,
+		return new RivetError(payload.group, payload.code, payload.message, {
+			metadata: payload.metadata,
 		});
+	} catch {
+		return undefined;
 	}
 }
 
-export class InvalidQueryJSON extends ActorError {
-	constructor(error?: unknown) {
-		super("request", "invalid_query_json", `Invalid query JSON: ${error}`, {
+export function isRivetErrorCode(
+	error: unknown,
+	group: string,
+	code: string,
+): error is RivetError {
+	return isRivetErrorLike(error) && error.group === group && error.code === code;
+}
+
+export function internalError(
+	message: string,
+	options?: Partial<RivetErrorOptions> & {
+		group?: string;
+		code?: string;
+	},
+): RivetError {
+	return new RivetError(
+		options?.group ?? "actor",
+		options?.code ?? INTERNAL_ERROR_CODE,
+		message,
+		{
+			public: options?.public,
+			statusCode: options?.statusCode,
+			metadata: options?.metadata,
+			cause: options?.cause,
+		},
+	);
+}
+
+export function invalidEncoding(format?: string): RivetError {
+	return new RivetError(
+		"encoding",
+		"invalid",
+		`Invalid encoding \`${format}\`. (https://www.rivet.dev/docs/clients/javascript)`,
+		{
 			public: true,
-			cause: error,
-		});
-	}
+		},
+	);
 }
 
-export class InvalidRequest extends ActorError {
-	constructor(error?: unknown) {
-		super("request", "invalid", `Invalid request: ${error}`, {
+export function invalidRequest(error?: unknown): RivetError {
+	return new RivetError(
+		"request",
+		"invalid",
+		`Invalid request: ${errorMessage(error, String(error))}`,
+		{
 			public: true,
-			cause: error,
-		});
-	}
+			cause: error instanceof Error ? error : undefined,
+		},
+	);
 }
 
-export class ActorNotFound extends ActorError {
-	constructor(identifier?: string) {
-		super(
-			"actor",
-			"not_found",
-			identifier
-				? `Actor not found: ${identifier} (https://www.rivet.dev/docs/clients/javascript)`
-				: "Actor not found (https://www.rivet.dev/docs/clients/javascript)",
-			{ public: true },
-		);
-	}
+export function actorNotFound(identifier?: string): RivetError {
+	return new RivetError(
+		"actor",
+		"not_found",
+		identifier
+			? `Actor not found: ${identifier} (https://www.rivet.dev/docs/clients/javascript)`
+			: "Actor not found (https://www.rivet.dev/docs/clients/javascript)",
+		{ public: true },
+	);
 }
 
-export class ActorDuplicateKey extends ActorError {
-	constructor(name: string, key: string[]) {
-		super(
-			"actor",
-			"duplicate_key",
-			`Actor already exists with name '${name}' and key '${JSON.stringify(key)}' (https://www.rivet.dev/docs/clients/javascript)`,
-			{ public: true },
-		);
-	}
+export function actorStopping(identifier?: string): RivetError {
+	return new RivetError(
+		"actor",
+		"stopping",
+		identifier ? `Actor stopping: ${identifier}` : "Actor stopping",
+		{ public: true },
+	);
 }
 
-export class ActorStopping extends ActorError {
-	constructor(identifier?: string) {
-		super(
-			"actor",
-			"stopping",
-			identifier ? `Actor stopping: ${identifier}` : "Actor stopping",
-			{ public: true },
-		);
-	}
+export function forbiddenError(): RivetError {
+	return new RivetError("auth", "forbidden", "Forbidden", {
+		public: true,
+		statusCode: 403,
+	});
 }
 
-export class ProxyError extends ActorError {
-	constructor(operation: string, error?: unknown) {
-		super(
-			"proxy",
-			"error",
-			`Error proxying ${operation}, this is likely an internal error: ${error}`,
-			{
-				public: true,
-				cause: error,
-			},
-		);
-	}
-}
-
-export class InvalidActionRequest extends ActorError {
-	constructor(message: string) {
-		super("action", "invalid_request", message, { public: true });
-	}
-}
-
-export class InvalidParams extends ActorError {
-	constructor(message: string) {
-		super("params", "invalid", message, { public: true });
-	}
-}
-
-export class DatabaseNotEnabled extends ActorError {
-	constructor() {
-		super(
-			"database",
-			"not_enabled",
-			"Database not enabled. Must implement `database` to use database.",
-		);
-	}
-}
-
-export class RequestHandlerNotDefined extends ActorError {
-	constructor() {
-		super(
-			"handler",
-			"request_not_defined",
-			"Raw request handler not defined. Actor must implement `onRequest` to handle raw HTTP requests. (https://www.rivet.dev/docs/actors/fetch-and-websocket-handler/)",
-			{ public: true },
-		);
-		this.statusCode = 404;
-	}
-}
-
-export class WebSocketHandlerNotDefined extends ActorError {
-	constructor() {
-		super(
-			"handler",
-			"websocket_not_defined",
-			"Raw WebSocket handler not defined. Actor must implement `onWebSocket` to handle raw WebSocket connections. (https://www.rivet.dev/docs/actors/fetch-and-websocket-handler/)",
-			{ public: true },
-		);
-		this.statusCode = 404;
-	}
-}
-
-export class InvalidRequestHandlerResponse extends ActorError {
-	constructor() {
-		super(
-			"handler",
-			"invalid_request_handler_response",
-			"Actor's onRequest handler must return a Response object. Returning void/undefined is not allowed. (https://www.rivet.dev/docs/actors/fetch-and-websocket-handler/)",
-			{ public: true },
-		);
-		this.statusCode = 500;
-	}
-}
-
-export class InvalidCanSubscribeResponse extends ActorError {
-	constructor() {
-		super(
-			"handler",
-			"invalid_can_subscribe_response",
-			"Event canSubscribe hook must return a boolean value.",
-		);
-		this.statusCode = 500;
-	}
-}
-
-export class InvalidCanPublishResponse extends ActorError {
-	constructor() {
-		super(
-			"handler",
-			"invalid_can_publish_response",
-			"Queue canPublish hook must return a boolean value.",
-		);
-		this.statusCode = 500;
-	}
-}
-
-// Manager-specific errors
-export class MissingActorHeader extends ActorError {
-	constructor() {
-		super(
-			"request",
-			"missing_actor_header",
-			"Missing x-rivet-actor header when x-rivet-target=actor",
-			{ public: true },
-		);
-		this.statusCode = 400;
-	}
-}
-
-export class WebSocketsNotEnabled extends ActorError {
-	constructor() {
-		super(
-			"driver",
-			"websockets_not_enabled",
-			"WebSockets are not enabled for this driver",
-			{ public: true },
-		);
-		this.statusCode = 400;
-	}
-}
-
-export class FeatureNotImplemented extends ActorError {
-	constructor(feature: string) {
-		super("feature", "not_implemented", `${feature} is not implemented`, {
-			public: true,
-		});
-		this.statusCode = 501;
-	}
-}
-
-export class RouteNotFound extends ActorError {
-	constructor() {
-		super("route", "not_found", "Route not found", { public: true });
-		this.statusCode = 404;
-	}
-}
-
-export class RestrictedFeature extends ActorError {
-	constructor(feature: string) {
-		super(
-			"feature",
-			"restricted",
-			`Run this actor locally or set the token in run config to use the ${feature}`,
-			{ public: true },
-		);
-		this.statusCode = 403;
-	}
-}
-
-export class Forbidden extends ActorError {
-	constructor() {
-		super("auth", "forbidden", "Forbidden", { public: true });
-		this.statusCode = 403;
-	}
-}
-
-export class EndpointMismatch extends ActorError {
-	constructor(expected: string, received: string) {
-		super(
-			"config",
-			"endpoint_mismatch",
-			`Endpoint mismatch: expected "${expected}", received "${received}"`,
-			{ public: true, metadata: { expected, received } },
-		);
-		this.statusCode = 400;
-	}
-}
-
-export class NamespaceMismatch extends ActorError {
-	constructor(expected: string, received: string) {
-		super(
-			"config",
-			"namespace_mismatch",
-			`Namespace mismatch: expected "${expected}", received "${received}"`,
-			{ public: true, metadata: { expected, received } },
-		);
-		this.statusCode = 400;
-	}
+export function unsupportedFeature(feature: string): RivetError {
+	return new RivetError(
+		"feature",
+		"unsupported",
+		`Unsupported feature: ${feature}`,
+	);
 }

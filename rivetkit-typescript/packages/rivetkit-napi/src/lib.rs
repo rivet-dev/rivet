@@ -18,14 +18,30 @@ use std::sync::Arc;
 use std::sync::Once;
 
 use napi_derive::napi;
+use rivet_error::RivetError as RivetTransportError;
 use rivet_envoy_client::config::EnvoyConfig;
 use rivet_envoy_client::envoy::start_envoy_sync;
 use tokio::runtime::Runtime;
 
 static INIT_TRACING: Once = Once::new();
+pub(crate) const BRIDGE_RIVET_ERROR_PREFIX: &str = "__RIVET_ERROR_JSON__:";
 
 pub(crate) fn napi_error(error: impl std::fmt::Display) -> napi::Error {
 	napi::Error::from_reason(error.to_string())
+}
+
+pub(crate) fn napi_anyhow_error(error: anyhow::Error) -> napi::Error {
+	let error = RivetTransportError::extract(&error);
+	let payload = serde_json::json!({
+		"group": error.group(),
+		"code": error.code(),
+		"message": error.message(),
+		"metadata": error.metadata(),
+	});
+	napi::Error::from_reason(format!(
+		"{BRIDGE_RIVET_ERROR_PREFIX}{}",
+		payload
+	))
 }
 
 fn init_tracing(log_level: Option<&str>) {

@@ -14,9 +14,10 @@ export {
 	ActorClientError,
 	ActorConnDisposed,
 	ActorError,
-	InternalError,
+	RivetError,
 	MalformedResponseMessage,
 	ManagerError,
+	UserError,
 } from "@/client/errors";
 export type { CreateRequest } from "@/client/query";
 export type { ActorActionFunction } from "./actor-common";

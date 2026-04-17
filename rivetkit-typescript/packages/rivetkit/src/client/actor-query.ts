@@ -5,7 +5,7 @@ import {
 	type EngineControlClient,
 } from "@/engine-client/driver";
 import type { ActorQuery } from "@/client/query";
-import { ActorSchedulingError } from "./errors";
+import { actorSchedulingError, type ActorSchedulingError } from "./errors";
 import { logger } from "./log";
 
 /**
@@ -16,7 +16,7 @@ export function getActorNameFromQuery(query: ActorQuery): string {
 	if ("getForKey" in query) return query.getForKey.name;
 	if ("getOrCreateForKey" in query) return query.getOrCreateForKey.name;
 	if ("create" in query) return query.create.name;
-	throw new errors.InvalidRequest("Invalid query format");
+	throw errors.invalidRequest("Invalid query format");
 }
 
 export type ActorResolutionState = ActorQuery;
@@ -35,7 +35,7 @@ export function getGatewayTarget(state: ActorResolutionState): GatewayTarget {
 	}
 
 	if ("create" in state) {
-		throw new errors.InvalidRequest(
+		throw errors.invalidRequest(
 			"create queries cannot be used as gateway targets. Resolve to an actor ID first.",
 		);
 	}
@@ -74,7 +74,7 @@ export async function checkForSchedulingError(
 				actorId,
 				error: actor.error,
 			});
-			return new ActorSchedulingError(group, code, actorId, actor.error);
+			return actorSchedulingError(group, code, actorId, actor.error);
 		}
 	} catch (err) {
 		logger().warn({

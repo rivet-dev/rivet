@@ -1,3 +1,4 @@
+import { decodeBridgeRivetError } from "@/actor/errors";
 import type { SqliteBindings, SqliteDatabase } from "./config";
 
 interface NativeBindParam {
@@ -54,6 +55,16 @@ function enrichNativeDatabaseError(
 	database: JsNativeDatabaseLike,
 	error: unknown,
 ): never {
+	const bridged =
+		typeof error === "string"
+			? decodeBridgeRivetError(error)
+			: error instanceof Error
+				? decodeBridgeRivetError(error.message)
+				: undefined;
+	if (bridged) {
+		throw bridged;
+	}
+
 	const kvError = database.takeLastKvError?.();
 	if (
 		error instanceof Error &&

@@ -7,7 +7,7 @@ export function assertUnreachable(x: never): never {
 		value: `${x}`,
 		stack: new Error().stack,
 	});
-	throw new errors.Unreachable(x);
+	throw errors.internalError(`Unreachable case: ${x}`);
 }
 
 export const throttle = <

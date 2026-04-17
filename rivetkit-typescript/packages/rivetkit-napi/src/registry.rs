@@ -5,7 +5,7 @@ use napi_derive::napi;
 use rivetkit_core::{CoreRegistry as NativeCoreRegistry, ServeConfig};
 
 use crate::actor_factory::NapiActorFactory;
-use crate::napi_error;
+use crate::napi_anyhow_error;
 
 #[napi(object)]
 pub struct JsServeConfig {
@@ -66,6 +66,6 @@ impl CoreRegistry {
 				engine_binary_path: config.engine_binary_path.map(PathBuf::from),
 			})
 			.await
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 }

@@ -9,7 +9,7 @@ use crate::kv::Kv;
 use crate::queue::Queue;
 use crate::schedule::Schedule;
 use crate::sqlite_db::SqliteDb;
-use crate::napi_error;
+use crate::napi_anyhow_error;
 
 /// N-API wrapper around `rivetkit-core::ActorContext`.
 #[napi]
@@ -87,7 +87,7 @@ impl ActorContext {
 		self.inner
 			.save_state(SaveStateOpts { immediate })
 			.await
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]

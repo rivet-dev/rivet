@@ -1,5 +1,5 @@
 import { actor, event, queue } from "rivetkit";
-import { Forbidden } from "rivetkit/errors";
+import { forbiddenError } from "rivetkit/errors";
 
 export interface AccessControlConnParams {
 	allowRequest?: boolean;
@@ -54,7 +54,7 @@ export const accessControlActor = actor({
 			params?.allowRequest === false ||
 			params?.allowWebSocket === false
 		) {
-			throw new Forbidden();
+			throw forbiddenError();
 		}
 	},
 	onRequest(_c, request) {

@@ -1,6 +1,11 @@
-export class ActorClientError extends Error {}
+import {
+	INTERNAL_ERROR_CODE,
+	RivetError,
+	type RivetErrorLike,
+	UserError,
+} from "@/actor/errors";
 
-export class InternalError extends ActorClientError {}
+export class ActorClientError extends Error {}
 
 export class ManagerError extends ActorClientError {
 	constructor(error: string, opts?: ErrorOptions) {
@@ -14,18 +19,9 @@ export class MalformedResponseMessage extends ActorClientError {
 	}
 }
 
-export class ActorError extends ActorClientError {
-	__type = "ActorError";
-
-	constructor(
-		public readonly group: string,
-		public readonly code: string,
-		message: string,
-		public readonly metadata?: unknown,
-	) {
-		super(message);
-	}
-}
+export { RivetError, RivetError as ActorError, UserError };
+export type ActorSchedulingError = RivetError;
+export type { RivetErrorLike };
 
 export class HttpRequestError extends ActorClientError {
 	constructor(message: string, opts?: { cause?: unknown }) {
@@ -49,28 +45,25 @@ export function isSchedulingError(group: string, code: string): boolean {
 	);
 }
 
-/**
- * Error thrown when actor scheduling fails.
- * Provides detailed information about why the actor failed to start.
- */
-export class ActorSchedulingError extends ActorError {
-	public readonly actorId: string;
-	public readonly details: unknown;
+export function actorSchedulingError(
+	group: string,
+	code: string,
+	actorId: string,
+	details: unknown,
+): RivetError {
+	return new RivetError(
+		group,
+		code,
+		`Actor failed to start (${actorId}): ${JSON.stringify(details)}`,
+		{ metadata: { actorId, details } },
+	);
+}
 
-	constructor(
-		group: string,
-		code: string,
-		actorId: string,
-		details: unknown,
-	) {
-		super(
-			group,
-			code,
-			`Actor failed to start (${actorId}): ${JSON.stringify(details)}`,
-			{ actorId, details },
-		);
-		this.name = "ActorSchedulingError";
-		this.actorId = actorId;
-		this.details = details;
-	}
+export function internalClientError(
+	message: string,
+	opts?: ErrorOptions,
+): RivetError {
+	return new RivetError("rivetkit", INTERNAL_ERROR_CODE, message, {
+		cause: opts?.cause,
+	});
 }

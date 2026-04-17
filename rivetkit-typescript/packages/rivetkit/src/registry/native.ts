@@ -16,6 +16,11 @@ import {
 import type * as protocol from "@/common/client-protocol";
 import { getRunFunction } from "@/actor/config";
 import type { AnyActorDefinition } from "@/actor/definition";
+import {
+	decodeBridgeRivetError,
+	encodeBridgeRivetError,
+	toRivetError,
+} from "@/actor/errors";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
 import { deconstructError } from "@/common/utils";
 import {
@@ -101,6 +106,66 @@ function unwrapTsfnPayload<T>(error: unknown, payload: T): T {
 	}
 
 	return payload;
+}
+
+function normalizeNativeBridgeError(error: unknown): unknown {
+	if (typeof error === "string") {
+		return decodeBridgeRivetError(error) ?? error;
+	}
+
+	if (error instanceof Error) {
+		const bridged = decodeBridgeRivetError(error.message);
+		if (bridged) {
+			return bridged;
+		}
+	}
+
+	return error;
+}
+
+function encodeNativeCallbackError(error: unknown): Error {
+	const normalized = toRivetError(error, {
+		group: "actor",
+		code: "internal_error",
+		message:
+			error instanceof Error ? error.message : `Internal error: ${String(error)}`,
+	});
+	const bridgeError = new Error(encodeBridgeRivetError(normalized), {
+		cause: error instanceof Error ? error : undefined,
+	});
+	return Object.assign(bridgeError, {
+		group: normalized.group,
+		code: normalized.code,
+		metadata: normalized.metadata,
+	});
+}
+
+async function callNative<T>(invoke: () => Promise<T>): Promise<T> {
+	try {
+		return await invoke();
+	} catch (error) {
+		throw normalizeNativeBridgeError(error);
+	}
+}
+
+function callNativeSync<T>(invoke: () => T): T {
+	try {
+		return invoke();
+	} catch (error) {
+		throw normalizeNativeBridgeError(error);
+	}
+}
+
+function wrapNativeCallback<Args extends Array<unknown>, Result>(
+	callback: (...args: Args) => Result | Promise<Result>,
+): (...args: Args) => Promise<Result> {
+	return async (...args: Args) => {
+		try {
+			return await callback(...args);
+		} catch (error) {
+			throw encodeNativeCallbackError(error);
+		}
+	};
 }
 
 function decodeArgs(value?: Buffer | Uint8Array | null): unknown[] {
@@ -218,15 +283,15 @@ class NativeConnAdapter {
 	}
 
 	get isHibernatable(): boolean {
-		return this.#conn.isHibernatable();
+		return callNativeSync(() => this.#conn.isHibernatable());
 	}
 
 	send(name: string, ...args: unknown[]): void {
-		this.#conn.send(name, encodeValue(args));
+		callNativeSync(() => this.#conn.send(name, encodeValue(args)));
 	}
 
 	async disconnect(reason?: string): Promise<void> {
-		await this.#conn.disconnect(reason);
+		await callNative(() => this.#conn.disconnect(reason));
 	}
 }
 
@@ -238,11 +303,15 @@ class NativeScheduleAdapter {
 	}
 
 	async after(duration: number, action: string, ...args: unknown[]): Promise<void> {
-		this.#schedule.after(duration, action, encodeValue(args));
+		callNativeSync(() =>
+			this.#schedule.after(duration, action, encodeValue(args)),
+		);
 	}
 
 	async at(timestamp: number, action: string, ...args: unknown[]): Promise<void> {
-		this.#schedule.at(timestamp, action, encodeValue(args));
+		callNativeSync(() =>
+			this.#schedule.at(timestamp, action, encodeValue(args)),
+		);
 	}
 }
 
@@ -254,7 +323,7 @@ class NativeKvAdapter {
 	}
 
 	async get(key: string | Uint8Array): Promise<Uint8Array | null> {
-		const value = await this.#kv.get(toBuffer(key));
+		const value = await callNative(() => this.#kv.get(toBuffer(key)));
 		return value ? new Uint8Array(value) : null;
 	}
 
@@ -262,25 +331,29 @@ class NativeKvAdapter {
 		key: string | Uint8Array,
 		value: string | Uint8Array | ArrayBuffer,
 	): Promise<void> {
-		await this.#kv.put(toBuffer(key), toBuffer(value));
+		await callNative(() => this.#kv.put(toBuffer(key), toBuffer(value)));
 	}
 
 	async delete(key: string | Uint8Array): Promise<void> {
-		await this.#kv.delete(toBuffer(key));
+		await callNative(() => this.#kv.delete(toBuffer(key)));
 	}
 
 	async deleteRange(
 		start: string | Uint8Array,
 		end: string | Uint8Array,
 	): Promise<void> {
-		await this.#kv.deleteRange(toBuffer(start), toBuffer(end));
+		await callNative(() =>
+			this.#kv.deleteRange(toBuffer(start), toBuffer(end)),
+		);
 	}
 
 	async listPrefix(
 		prefix: string | Uint8Array,
 		options?: { reverse?: boolean; limit?: number },
 	): Promise<Array<[Uint8Array, Uint8Array]>> {
-		const entries = await this.#kv.listPrefix(toBuffer(prefix), options);
+		const entries = await callNative(() =>
+			this.#kv.listPrefix(toBuffer(prefix), options),
+		);
 		return entries.map((entry) => [
 			new Uint8Array(entry.key),
 			new Uint8Array(entry.value),
@@ -292,10 +365,8 @@ class NativeKvAdapter {
 		end: string | Uint8Array,
 		options?: { reverse?: boolean; limit?: number },
 	): Promise<Array<[Uint8Array, Uint8Array]>> {
-		const entries = await this.#kv.listRange(
-			toBuffer(start),
-			toBuffer(end),
-			options,
+		const entries = await callNative(() =>
+			this.#kv.listRange(toBuffer(start), toBuffer(end), options),
 		);
 		return entries.map((entry) => [
 			new Uint8Array(entry.key),
@@ -311,34 +382,44 @@ class NativeKvAdapter {
 	}
 
 	async batchGet(keys: Uint8Array[]): Promise<Array<Uint8Array | null>> {
-		const values = await this.#kv.batchGet(keys.map((key) => Buffer.from(key)));
+		const values = await callNative(() =>
+			this.#kv.batchGet(keys.map((key) => Buffer.from(key))),
+		);
 		return values.map((value) => (value ? new Uint8Array(value) : null));
 	}
 
 	async batchPut(entries: [Uint8Array, Uint8Array][]): Promise<void> {
-		await this.#kv.batchPut(
-			entries.map(([key, value]) => ({
-				key: Buffer.from(key),
-				value: Buffer.from(value),
-			})),
+		await callNative(() =>
+			this.#kv.batchPut(
+				entries.map(([key, value]) => ({
+					key: Buffer.from(key),
+					value: Buffer.from(value),
+				})),
+			),
 		);
 	}
 
 	async batchDelete(keys: Uint8Array[]): Promise<void> {
-		await this.#kv.batchDelete(keys.map((key) => Buffer.from(key)));
+		await callNative(() =>
+			this.#kv.batchDelete(keys.map((key) => Buffer.from(key))),
+		);
 	}
 }
 
 function wrapQueueMessage(message: NativeQueueMessage) {
 	return {
-		id: Number(message.id()),
-		name: message.name(),
-		body: decodeValue(message.body()),
-		createdAt: message.createdAt(),
-		complete: message.isCompletable()
+		id: Number(callNativeSync(() => message.id())),
+		name: callNativeSync(() => message.name()),
+		body: decodeValue(callNativeSync(() => message.body())),
+		createdAt: callNativeSync(() => message.createdAt()),
+		complete: callNativeSync(() => message.isCompletable())
 			? async (response?: unknown) =>
-					await message.complete(
-						response === undefined ? undefined : encodeValue(response),
+					await callNative(() =>
+						message.complete(
+							response === undefined
+								? undefined
+								: encodeValue(response),
+						),
 					)
 			: undefined,
 	};
@@ -352,7 +433,9 @@ class NativeQueueAdapter {
 	}
 
 	async send(name: string, body: unknown) {
-		return wrapQueueMessage(await this.#queue.send(name, encodeValue(body)));
+		return wrapQueueMessage(
+			await callNative(() => this.#queue.send(name, encodeValue(body))),
+		);
 	}
 
 	async next(options?: {
@@ -360,11 +443,13 @@ class NativeQueueAdapter {
 		timeout?: number;
 		completable?: boolean;
 	}) {
-		const message = await this.#queue.next({
-			names: options?.names ? [...options.names] : undefined,
-			timeoutMs: options?.timeout,
-			completable: options?.completable,
-		});
+		const message = await callNative(() =>
+			this.#queue.next({
+				names: options?.names ? [...options.names] : undefined,
+				timeoutMs: options?.timeout,
+				completable: options?.completable,
+			}),
+		);
 		return message ? wrapQueueMessage(message) : undefined;
 	}
 
@@ -374,12 +459,14 @@ class NativeQueueAdapter {
 		timeout?: number;
 		completable?: boolean;
 	}) {
-		const messages = await this.#queue.nextBatch({
-			names: options?.names ? [...options.names] : undefined,
-			count: options?.count,
-			timeoutMs: options?.timeout,
-			completable: options?.completable,
-		});
+		const messages = await callNative(() =>
+			this.#queue.nextBatch({
+				names: options?.names ? [...options.names] : undefined,
+				count: options?.count,
+				timeoutMs: options?.timeout,
+				completable: options?.completable,
+			}),
+		);
 		return messages.map(wrapQueueMessage);
 	}
 
@@ -387,10 +474,12 @@ class NativeQueueAdapter {
 		names?: readonly string[];
 		completable?: boolean;
 	}) {
-		const message = this.#queue.tryNext({
-			names: options?.names ? [...options.names] : undefined,
-			completable: options?.completable,
-		});
+		const message = callNativeSync(() =>
+			this.#queue.tryNext({
+				names: options?.names ? [...options.names] : undefined,
+				completable: options?.completable,
+			}),
+		);
 		return message ? wrapQueueMessage(message) : undefined;
 	}
 
@@ -399,11 +488,13 @@ class NativeQueueAdapter {
 		count?: number;
 		completable?: boolean;
 	}) {
-		const messages = this.#queue.tryNextBatch({
-			names: options?.names ? [...options.names] : undefined,
-			count: options?.count,
-			completable: options?.completable,
-		});
+		const messages = callNativeSync(() =>
+			this.#queue.tryNextBatch({
+				names: options?.names ? [...options.names] : undefined,
+				count: options?.count,
+				completable: options?.completable,
+			}),
+		);
 		return messages.map(wrapQueueMessage);
 	}
 }
@@ -417,18 +508,18 @@ class NativeWebSocketAdapter {
 
 	send(data: string | ArrayBuffer | ArrayBufferView): void {
 		if (typeof data === "string") {
-			this.#ws.send(Buffer.from(data), false);
+			callNativeSync(() => this.#ws.send(Buffer.from(data), false));
 			return;
 		}
 
 		const buffer = ArrayBuffer.isView(data)
 			? Buffer.from(data.buffer, data.byteOffset, data.byteLength)
 			: Buffer.from(data);
-		this.#ws.send(buffer, true);
+		callNativeSync(() => this.#ws.send(buffer, true));
 	}
 
 	close(code?: number, reason?: string): void {
-		this.#ws.close(code, reason);
+		callNativeSync(() => this.#ws.close(code, reason));
 	}
 }
 
@@ -456,12 +547,14 @@ class NativeActorContextAdapter {
 
 	get sql() {
 		if (!this.#sql) {
-			const actorId = this.#ctx.actorId();
+			const actorId = callNativeSync(() => this.#ctx.actorId());
 			const cachedDatabase = nativeSqlDatabases.get(actorId);
 			if (cachedDatabase) {
 				this.#sql = cachedDatabase;
 			} else {
-				const database = wrapJsNativeDatabase(this.#ctx.sql());
+				const database = wrapJsNativeDatabase(
+					callNativeSync(() => this.#ctx.sql()),
+				);
 				nativeSqlDatabases.set(actorId, database);
 				this.#sql = database;
 			}
@@ -471,60 +564,65 @@ class NativeActorContextAdapter {
 
 	get state(): unknown {
 		return createWriteThroughProxy(
-			decodeValue(this.#ctx.state()),
-			(nextValue) => this.#ctx.setState(encodeValue(nextValue)),
+			decodeValue(callNativeSync(() => this.#ctx.state())),
+			(nextValue) =>
+				callNativeSync(() => this.#ctx.setState(encodeValue(nextValue))),
 		);
 	}
 
 	set state(value: unknown) {
-		this.#ctx.setState(encodeValue(value));
+		callNativeSync(() => this.#ctx.setState(encodeValue(value)));
 	}
 
 	get vars(): unknown {
 		return createWriteThroughProxy(
-			decodeValue(this.#ctx.vars()),
-			(nextValue) => this.#ctx.setVars(encodeValue(nextValue)),
+			decodeValue(callNativeSync(() => this.#ctx.vars())),
+			(nextValue) =>
+				callNativeSync(() => this.#ctx.setVars(encodeValue(nextValue))),
 		);
 	}
 
 	set vars(value: unknown) {
-		this.#ctx.setVars(encodeValue(value));
+		callNativeSync(() => this.#ctx.setVars(encodeValue(value)));
 	}
 
 	get queue(): NativeQueueAdapter {
 		if (!this.#queue) {
-			this.#queue = new NativeQueueAdapter(this.#ctx.queue());
+			this.#queue = new NativeQueueAdapter(
+				callNativeSync(() => this.#ctx.queue()),
+			);
 		}
 		return this.#queue;
 	}
 
 	get schedule(): NativeScheduleAdapter {
 		if (!this.#schedule) {
-			this.#schedule = new NativeScheduleAdapter(this.#ctx.schedule());
+			this.#schedule = new NativeScheduleAdapter(
+				callNativeSync(() => this.#ctx.schedule()),
+			);
 		}
 		return this.#schedule;
 	}
 
 	get actorId(): string {
-		return this.#ctx.actorId();
+		return callNativeSync(() => this.#ctx.actorId());
 	}
 
 	get name(): string {
-		return this.#ctx.name();
+		return callNativeSync(() => this.#ctx.name());
 	}
 
 	get key(): Array<string | number> {
-		return toActorKey(this.#ctx.key());
+		return toActorKey(callNativeSync(() => this.#ctx.key()));
 	}
 
 	get region(): string {
-		return this.#ctx.region();
+		return callNativeSync(() => this.#ctx.region());
 	}
 
 	get conns(): Map<string, NativeConnAdapter> {
 		return new Map(
-			this.#ctx
-				.conns()
+			callNativeSync(() => this.#ctx.conns())
 				.map((conn) => [conn.id(), new NativeConnAdapter(conn)]),
 		);
 	}
@@ -535,12 +633,14 @@ class NativeActorContextAdapter {
 
 	get abortSignal(): AbortSignal {
 		if (!this.#abortSignal) {
-			const nativeSignal = this.#ctx.abortSignal();
+			const nativeSignal = callNativeSync(() => this.#ctx.abortSignal());
 			const controller = new AbortController();
-			if (nativeSignal.aborted()) {
+			if (callNativeSync(() => nativeSignal.aborted())) {
 				controller.abort();
 			} else {
-				nativeSignal.onCancelled(() => controller.abort());
+				callNativeSync(() =>
+					nativeSignal.onCancelled(() => controller.abort()),
+				);
 			}
 			this.#abortSignal = controller.signal;
 		}
@@ -548,27 +648,27 @@ class NativeActorContextAdapter {
 	}
 
 	get aborted(): boolean {
-		return this.#ctx.aborted();
+		return callNativeSync(() => this.#ctx.aborted());
 	}
 
 	broadcast(name: string, ...args: unknown[]): void {
-		this.#ctx.broadcast(name, encodeValue(args));
+		callNativeSync(() => this.#ctx.broadcast(name, encodeValue(args)));
 	}
 
 	async saveState(opts?: { immediate?: boolean }): Promise<void> {
-		await this.#ctx.saveState(opts?.immediate ?? false);
+		await callNative(() => this.#ctx.saveState(opts?.immediate ?? false));
 	}
 
 	waitUntil(promise: Promise<unknown>): void {
-		void this.#ctx.waitUntil(Promise.resolve(promise));
+		void callNative(() => this.#ctx.waitUntil(Promise.resolve(promise)));
 	}
 
 	setPreventSleep(preventSleep: boolean): void {
-		this.#ctx.setPreventSleep(preventSleep);
+		callNativeSync(() => this.#ctx.setPreventSleep(preventSleep));
 	}
 
 	preventSleep(): boolean {
-		return this.#ctx.preventSleep();
+		return callNativeSync(() => this.#ctx.preventSleep());
 	}
 
 	sleep(): void {
@@ -576,7 +676,7 @@ class NativeActorContextAdapter {
 		if (closeDatabase) {
 			this.waitUntil(closeDatabase);
 		}
-		this.#ctx.sleep();
+		callNativeSync(() => this.#ctx.sleep());
 	}
 
 	destroy(): void {
@@ -584,7 +684,7 @@ class NativeActorContextAdapter {
 		if (closeDatabase) {
 			this.waitUntil(closeDatabase);
 		}
-		this.#ctx.destroy();
+		callNativeSync(() => this.#ctx.destroy());
 	}
 
 	client<T = AnyClient>(): T {
@@ -791,7 +891,7 @@ function buildNativeFactory(
 			{ encoding: "bare" },
 		);
 	const callbacks = {
-		onInit: async (
+		onInit: wrapNativeCallback(async (
 			error: unknown,
 			payload: {
 				ctx: NativeActorContext;
@@ -839,10 +939,13 @@ function buildNativeFactory(
 			} finally {
 				await actorCtx.dispose();
 			}
-		},
+		}),
 		onWake:
 			typeof config.onWake === "function"
-				? async (error: unknown, payload: { ctx: NativeActorContext }) => {
+				? wrapNativeCallback(async (
+						error: unknown,
+						payload: { ctx: NativeActorContext },
+					) => {
 						const { ctx } = unwrapTsfnPayload(error, payload);
 						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
 						try {
@@ -850,11 +953,14 @@ function buildNativeFactory(
 						} finally {
 							await actorCtx.dispose();
 						}
-					}
+					})
 				: undefined,
 		onSleep:
 			typeof config.onSleep === "function"
-				? async (error: unknown, payload: { ctx: NativeActorContext }) => {
+				? wrapNativeCallback(async (
+						error: unknown,
+						payload: { ctx: NativeActorContext },
+					) => {
 						const { ctx } = unwrapTsfnPayload(error, payload);
 						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
 						try {
@@ -862,11 +968,14 @@ function buildNativeFactory(
 						} finally {
 							await actorCtx.dispose();
 						}
-					}
+					})
 				: undefined,
 		onDestroy:
 			typeof config.onDestroy === "function"
-				? async (error: unknown, payload: { ctx: NativeActorContext }) => {
+				? wrapNativeCallback(async (
+						error: unknown,
+						payload: { ctx: NativeActorContext },
+					) => {
 						const { ctx } = unwrapTsfnPayload(error, payload);
 						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
 						try {
@@ -874,11 +983,11 @@ function buildNativeFactory(
 						} finally {
 							await actorCtx.dispose();
 						}
-					}
+					})
 				: undefined,
 		onStateChange:
 			typeof config.onStateChange === "function"
-				? async (
+				? wrapNativeCallback(async (
 						error: unknown,
 						payload: {
 							ctx: NativeActorContext;
@@ -892,11 +1001,11 @@ function buildNativeFactory(
 						} finally {
 							await actorCtx.dispose();
 						}
-					}
+					})
 				: undefined,
 		onBeforeConnect:
 			typeof config.onBeforeConnect === "function"
-				? async (
+				? wrapNativeCallback(async (
 						error: unknown,
 						payload: {
 							ctx: NativeActorContext;
@@ -910,11 +1019,11 @@ function buildNativeFactory(
 						} finally {
 							await actorCtx.dispose();
 						}
-					}
+					})
 				: undefined,
 		onConnect:
 			typeof config.onConnect === "function"
-				? async (
+				? wrapNativeCallback(async (
 						error: unknown,
 						payload: {
 							ctx: NativeActorContext;
@@ -928,11 +1037,11 @@ function buildNativeFactory(
 						} finally {
 							await actorCtx.dispose();
 						}
-					}
+					})
 				: undefined,
 		onDisconnect:
 			typeof config.onDisconnect === "function"
-				? async (
+				? wrapNativeCallback(async (
 						error: unknown,
 						payload: {
 							ctx: NativeActorContext;
@@ -946,11 +1055,11 @@ function buildNativeFactory(
 						} finally {
 							await actorCtx.dispose();
 						}
-					}
+					})
 				: undefined,
 		onBeforeActionResponse:
 			typeof config.onBeforeActionResponse === "function"
-				? async (
+				? wrapNativeCallback(async (
 						error: unknown,
 						payload: {
 							ctx: NativeActorContext;
@@ -976,9 +1085,9 @@ function buildNativeFactory(
 						} finally {
 							await actorCtx.dispose();
 						}
-					}
+					})
 				: undefined,
-		onRequest: async (
+		onRequest: wrapNativeCallback(async (
 			error: unknown,
 			payload: {
 				ctx: NativeActorContext;
@@ -1028,10 +1137,10 @@ function buildNativeFactory(
 				});
 				throw error;
 			}
-		},
+		}),
 		onWebSocket:
 			typeof config.onWebSocket === "function"
-				? async (
+				? wrapNativeCallback(async (
 						error: unknown,
 						payload: {
 							ctx: NativeActorContext;
@@ -1048,7 +1157,7 @@ function buildNativeFactory(
 						} finally {
 							await actorCtx.dispose();
 						}
-					}
+					})
 				: undefined,
 		run: (() => {
 			const run = getRunFunction(config.run);
@@ -1056,7 +1165,10 @@ function buildNativeFactory(
 				return undefined;
 			}
 
-			return async (error: unknown, payload: { ctx: NativeActorContext }) => {
+			return wrapNativeCallback(async (
+				error: unknown,
+				payload: { ctx: NativeActorContext },
+			) => {
 				const { ctx } = unwrapTsfnPayload(error, payload);
 				const actorCtx = new NativeActorContextAdapter(ctx, createClient);
 				try {
@@ -1064,12 +1176,12 @@ function buildNativeFactory(
 				} finally {
 					await actorCtx.dispose();
 				}
-			};
+			});
 			})(),
 			actions: Object.fromEntries(
 				Object.entries(actionHandlers).map(([name, handler]) => [
 					name,
-					async (
+					wrapNativeCallback(async (
 						error: unknown,
 						payload: {
 							ctx: NativeActorContext;
@@ -1086,7 +1198,7 @@ function buildNativeFactory(
 						} finally {
 							await actorCtx.dispose();
 						}
-					},
+					}),
 				]),
 			),
 		};

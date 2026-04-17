@@ -336,6 +336,11 @@ describe.sequential("native NAPI runtime integration", () => {
 					source: "native",
 				},
 			});
+			await expect(handle.throwUntypedError()).rejects.toMatchObject({
+				group: "actor",
+				code: "internal_error",
+				message: "native untyped error",
+			});
 
 			await client.dispose();
 		},

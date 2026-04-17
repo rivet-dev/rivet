@@ -88,6 +88,9 @@ const integrationActor = actor({
 				},
 			});
 		},
+		throwUntypedError: async () => {
+			throw new Error("native untyped error");
+		},
 		goToSleep: async (c) => {
 			c.sleep();
 			return { ok: true };

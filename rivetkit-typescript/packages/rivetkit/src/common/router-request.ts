@@ -12,7 +12,7 @@ export function getRequestEncoding(req: HonoRequest): Encoding {
 
 	const result = EncodingSchema.safeParse(encodingParam);
 	if (!result.success) {
-		throw new errors.InvalidEncoding(encodingParam as string);
+		throw errors.invalidEncoding(encodingParam as string);
 	}
 
 	return result.data;

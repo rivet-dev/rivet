@@ -8,7 +8,7 @@ use rivetkit_core::{
 	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts,
 };
 
-use crate::napi_error;
+use crate::napi_anyhow_error;
 
 #[napi(object)]
 pub struct JsQueueNextOptions {
@@ -80,7 +80,7 @@ impl Queue {
 			.send(&name, body.as_ref())
 			.await
 			.map(QueueMessage::from_core)
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -92,7 +92,7 @@ impl Queue {
 			.next(queue_next_opts(options)?)
 			.await
 			.map(|message| message.map(QueueMessage::from_core))
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -104,7 +104,7 @@ impl Queue {
 			.next_batch(queue_next_batch_opts(options)?)
 			.await
 			.map(|messages| messages.into_iter().map(QueueMessage::from_core).collect())
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -115,7 +115,7 @@ impl Queue {
 		self.inner
 			.try_next(queue_try_next_opts(options))
 			.map(|message| message.map(QueueMessage::from_core))
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -126,7 +126,7 @@ impl Queue {
 		self.inner
 			.try_next_batch(queue_try_next_batch_opts(options))
 			.map(|messages| messages.into_iter().map(QueueMessage::from_core).collect())
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 }
 
@@ -179,7 +179,7 @@ impl QueueMessage {
 				.lock()
 				.map_err(|_| napi::Error::from_reason("queue message mutex poisoned"))?;
 			*guard = Some(message);
-			return Err(napi_error(error));
+			return Err(napi_anyhow_error(error));
 		}
 
 		Ok(())

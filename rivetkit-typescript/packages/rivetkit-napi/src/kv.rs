@@ -2,7 +2,7 @@ use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use rivetkit_core::{Kv as CoreKv, ListOpts};
 
-use crate::napi_error;
+use crate::napi_anyhow_error;
 use crate::types::{JsKvEntry, JsKvListOptions};
 
 #[napi]
@@ -24,7 +24,7 @@ impl Kv {
 			.get(key.as_ref())
 			.await
 			.map(|value| value.map(Buffer::from))
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -32,12 +32,12 @@ impl Kv {
 		self.inner
 			.put(key.as_ref(), value.as_ref())
 			.await
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
 	pub async fn delete(&self, key: Buffer) -> napi::Result<()> {
-		self.inner.delete(key.as_ref()).await.map_err(napi_error)
+		self.inner.delete(key.as_ref()).await.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -45,7 +45,7 @@ impl Kv {
 		self.inner
 			.delete_range(start.as_ref(), end.as_ref())
 			.await
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -66,7 +66,7 @@ impl Kv {
 					})
 					.collect()
 			})
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -88,7 +88,7 @@ impl Kv {
 					})
 					.collect()
 			})
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -98,7 +98,7 @@ impl Kv {
 			.batch_get(&key_refs)
 			.await
 			.map(|values| values.into_iter().map(|value| value.map(Buffer::from)).collect())
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -107,13 +107,13 @@ impl Kv {
 			.iter()
 			.map(|entry| (entry.key.as_ref(), entry.value.as_ref()))
 			.collect();
-		self.inner.batch_put(&entry_refs).await.map_err(napi_error)
+		self.inner.batch_put(&entry_refs).await.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
 	pub async fn batch_delete(&self, keys: Vec<Buffer>) -> napi::Result<()> {
 		let key_refs: Vec<&[u8]> = keys.iter().map(Buffer::as_ref).collect();
-		self.inner.batch_delete(&key_refs).await.map_err(napi_error)
+		self.inner.batch_delete(&key_refs).await.map_err(napi_anyhow_error)
 	}
 }
 

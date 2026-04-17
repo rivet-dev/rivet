@@ -2,7 +2,7 @@ use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use rivetkit_core::ConnHandle as CoreConnHandle;
 
-use crate::napi_error;
+use crate::napi_anyhow_error;
 
 #[napi]
 pub struct ConnHandle {
@@ -52,6 +52,6 @@ impl ConnHandle {
 		self.inner
 			.disconnect(reason.as_deref())
 			.await
-			.map_err(napi_error)
+			.map_err(napi_anyhow_error)
 	}
 }

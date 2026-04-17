@@ -29,5 +29,10 @@ export {
 	isStaticActorInstance,
 	lookupInRegistry,
 } from "./definition";
-export { UserError, type UserErrorOptions } from "./errors";
+export {
+	ActorError,
+	RivetError,
+	UserError,
+	type UserErrorOptions,
+} from "./errors";
 export { event, queue, type Type } from "./schema";

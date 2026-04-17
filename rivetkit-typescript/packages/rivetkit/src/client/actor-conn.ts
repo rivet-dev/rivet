@@ -887,7 +887,7 @@ export class ActorConnRaw {
 					name: action.name,
 				})),
 			});
-			throw new errors.InternalError(`No in flight response for ${id}`);
+			throw errors.internalClientError(`No in flight response for ${id}`);
 		}
 		this.#actionsInFlight.delete(id);
 		logger().debug({
