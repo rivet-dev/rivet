@@ -5,7 +5,7 @@ use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use rivetkit_core::{
 	Queue as CoreQueue, QueueMessage as CoreQueueMessage, QueueNextBatchOpts,
-	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts,
+	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
 };
 
 use crate::napi_anyhow_error;
@@ -21,6 +21,12 @@ pub struct JsQueueNextOptions {
 pub struct JsQueueNextBatchOptions {
 	pub names: Option<Vec<String>>,
 	pub count: Option<u32>,
+	pub timeout_ms: Option<i64>,
+	pub completable: Option<bool>,
+}
+
+#[napi(object)]
+pub struct JsQueueWaitOptions {
 	pub timeout_ms: Option<i64>,
 	pub completable: Option<bool>,
 }
@@ -104,6 +110,19 @@ impl Queue {
 			.next_batch(queue_next_batch_opts(options)?)
 			.await
 			.map(|messages| messages.into_iter().map(QueueMessage::from_core).collect())
+			.map_err(napi_anyhow_error)
+	}
+
+	#[napi]
+	pub async fn wait_for_names(
+		&self,
+		names: Vec<String>,
+		options: Option<JsQueueWaitOptions>,
+	) -> napi::Result<QueueMessage> {
+		self.inner
+			.wait_for_names(names, queue_wait_opts(options)?)
+			.await
+			.map(QueueMessage::from_core)
 			.map_err(napi_anyhow_error)
 	}
 
@@ -214,6 +233,19 @@ fn queue_next_batch_opts(
 	Ok(QueueNextBatchOpts {
 		names: options.names,
 		count: options.count.unwrap_or(1),
+		timeout: timeout_duration(options.timeout_ms)?,
+		signal: None,
+		completable: options.completable.unwrap_or(false),
+	})
+}
+
+fn queue_wait_opts(options: Option<JsQueueWaitOptions>) -> napi::Result<QueueWaitOpts> {
+	let options = options.unwrap_or(JsQueueWaitOptions {
+		timeout_ms: None,
+		completable: None,
+	});
+
+	Ok(QueueWaitOpts {
 		timeout: timeout_duration(options.timeout_ms)?,
 		signal: None,
 		completable: options.completable.unwrap_or(false),

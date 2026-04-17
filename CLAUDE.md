@@ -104,6 +104,7 @@ git commit -m "chore(my-pkg): foo bar"
 ### RivetKit Test Fixtures
 - Keep RivetKit test fixtures scoped to the engine-only runtime.
 - Prefer targeted integration tests under `rivetkit-typescript/packages/rivetkit/tests/` over shared multi-driver matrices.
+- When moving Rust inline tests out of `src/`, keep a tiny source-owned `#[cfg(test)] #[path = "..."] mod tests;` shim so the moved file still has private module access without widening runtime visibility.
 
 ### SQLite Package
 - RivetKit SQLite runtime is native-only. Use `@rivetkit/rivetkit-napi` and do not add `@rivetkit/sqlite`, `@rivetkit/sqlite-vfs`, or other WebAssembly SQLite fallbacks.
@@ -111,6 +112,8 @@ git commit -m "chore(my-pkg): foo bar"
 - N-API actor-runtime wrappers should expose `ActorContext` sub-objects as first-class classes, keep raw payloads as `Buffer`, and wrap queue messages as classes so completable receives can call `complete()` back into Rust.
 - N-API callback bridges should pass a single request object through `ThreadsafeFunction`, and Promise results that cross back into Rust should deserialize into `#[napi(object)]` structs instead of `JsObject` so the callback future stays `Send`.
 - N-API `ThreadsafeFunction` callbacks using `ErrorStrategy::CalleeHandled` follow Node's error-first JS signature, so internal wrappers must accept `(err, payload)` and rethrow non-null errors explicitly.
+- N-API structured errors should cross the JS<->Rust boundary by prefix-encoding `{ group, code, message, metadata }` into `napi::Error.reason`, then normalizing that prefix back into a `RivetError` on the other side.
+- `#[napi(object)]` bridge payloads should stay plain-data only; if TypeScript needs to cancel native work, use primitives or JS-side polling instead of trying to pass a `#[napi]` class instance through an object field.
 
 ### RivetKit Package Resolutions
 - The root `/package.json` contains `resolutions` that map RivetKit packages to local workspace versions:
@@ -144,6 +147,7 @@ git commit -m "chore(my-pkg): foo bar"
 - Build the module specifier from string parts (for example with `["pkg", "name"].join("-")` or `["@scope", "pkg"].join("/")`) instead of a single string literal.
 - Prefer this pattern for modules like `@rivetkit/rivetkit-napi/wrapper`, `sandboxed-node`, and `isolated-vm`.
 - The TypeScript registry's native envoy path should dynamically load `@rivetkit/rivetkit-napi` and `@rivetkit/engine-cli` so browser and serverless bundles do not eagerly pull native-only modules.
+- Native actor runner settings in `rivetkit-typescript/packages/rivetkit/src/registry/native.ts` should come from `definition.config.options`, not top-level actor config fields.
 - If loading by resolved file path, resolve first and then import via `pathToFileURL(...).href`.
 
 ### Fail-By-Default Runtime Behavior

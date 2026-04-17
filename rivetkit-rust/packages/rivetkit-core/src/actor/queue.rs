@@ -35,6 +35,13 @@ pub struct QueueNextOpts {
 	pub completable: bool,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct QueueWaitOpts {
+	pub timeout: Option<Duration>,
+	pub signal: Option<CancellationToken>,
+	pub completable: bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct QueueNextBatchOpts {
 	pub names: Option<Vec<String>>,
@@ -218,6 +225,17 @@ struct QueueCompleteNotConfigured {
 #[error("actor", "aborted", "Actor aborted")]
 struct QueueActorAborted;
 
+#[derive(RivetError, Serialize, Deserialize)]
+#[error(
+	"queue",
+	"timed_out",
+	"Queue wait timed out",
+	"Queue wait timed out after {timeout_ms} ms."
+)]
+struct QueueWaitTimedOut {
+	timeout_ms: u64,
+}
+
 impl Queue {
 	pub(crate) fn new(
 		kv: Kv,
@@ -356,6 +374,59 @@ impl Queue {
 			match result {
 				WaitOutcome::Notified => continue,
 				WaitOutcome::TimedOut => return Ok(Vec::new()),
+				WaitOutcome::Aborted => return Err(QueueActorAborted.build().into()),
+			}
+		}
+	}
+
+	pub async fn wait_for_names(
+		&self,
+		names: Vec<String>,
+		opts: QueueWaitOpts,
+	) -> Result<QueueMessage> {
+		self.ensure_initialized().await?;
+
+		let deadline = opts.timeout.map(|timeout| Instant::now() + timeout);
+		let names = normalize_names(Some(names));
+
+		loop {
+			if let Some(message) = self
+				.try_receive_batch(names.as_ref(), 1, opts.completable)
+				.await?
+				.into_iter()
+				.next()
+			{
+				return Ok(message);
+			}
+
+			let remaining_timeout = deadline.map(|deadline| {
+				deadline.saturating_duration_since(Instant::now())
+			});
+			if let Some(timeout) = remaining_timeout {
+				if timeout.is_zero() {
+					return Err(QueueWaitTimedOut {
+						timeout_ms: opts.timeout.map(duration_ms).unwrap_or(0),
+					}
+					.build()
+					.into());
+				}
+			}
+
+			let wait_guard = ActiveQueueWaitGuard::new(self);
+			let result = self
+				.wait_for_message(remaining_timeout, opts.signal.as_ref())
+				.await;
+			drop(wait_guard);
+
+			match result {
+				WaitOutcome::Notified => continue,
+				WaitOutcome::TimedOut => {
+					return Err(QueueWaitTimedOut {
+						timeout_ms: opts.timeout.map(duration_ms).unwrap_or(0),
+					}
+					.build()
+					.into());
+				}
 				WaitOutcome::Aborted => return Err(QueueActorAborted.build().into()),
 			}
 		}
@@ -899,6 +970,10 @@ fn current_timestamp_ms() -> Result<i64> {
 		.duration_since(UNIX_EPOCH)
 		.context("current time is before unix epoch")?;
 	i64::try_from(now.as_millis()).context("queue timestamp exceeds i64")
+}
+
+fn duration_ms(duration: Duration) -> u64 {
+	duration.as_millis().try_into().unwrap_or(u64::MAX)
 }
 
 #[cfg(test)]

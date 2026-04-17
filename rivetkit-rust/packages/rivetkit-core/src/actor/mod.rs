@@ -31,6 +31,6 @@ pub use lifecycle::{
 };
 pub use queue::{
 	CompletableQueueMessage, Queue, QueueMessage, QueueNextBatchOpts,
-	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts,
+	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
 };
 pub use schedule::Schedule;

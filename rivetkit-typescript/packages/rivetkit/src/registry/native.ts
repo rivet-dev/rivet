@@ -163,6 +163,13 @@ function callNativeSync<T>(invoke: () => T): T {
 	}
 }
 
+function actorAbortedError(): Error & { group: string; code: string } {
+	return Object.assign(new Error("Actor aborted"), {
+		group: "actor",
+		code: "aborted",
+	});
+}
+
 function wrapNativeCallback<Args extends Array<unknown>, Result>(
 	callback: (...args: Args) => Result | Promise<Result>,
 ): (...args: Args) => Promise<Result> {
@@ -498,6 +505,65 @@ class NativeQueueAdapter {
 			}),
 		);
 		return messages.map((message) => wrapQueueMessage(message, this.#schemas));
+	}
+
+	async waitForNames(
+		names: readonly string[],
+		options?: {
+			timeout?: number;
+			signal?: AbortSignal;
+			completable?: boolean;
+		},
+	) {
+		if (!options?.signal) {
+			return wrapQueueMessage(
+				await callNative(() =>
+					this.#queue.waitForNames([...names], {
+						timeoutMs: options?.timeout,
+						completable: options?.completable,
+					}),
+				),
+				this.#schemas,
+			);
+		}
+
+		const deadline =
+			options.timeout === undefined ? undefined : Date.now() + options.timeout;
+
+		for (;;) {
+			if (options.signal.aborted) {
+				throw actorAbortedError();
+			}
+
+			const remainingTimeout =
+				deadline === undefined ? undefined : Math.max(0, deadline - Date.now());
+			const sliceTimeout =
+				remainingTimeout === undefined
+					? 100
+					: Math.min(remainingTimeout, 100);
+
+			try {
+				return wrapQueueMessage(
+					await callNative(() =>
+						this.#queue.waitForNames([...names], {
+							timeoutMs: sliceTimeout,
+							completable: options.completable,
+						}),
+					),
+					this.#schemas,
+				);
+			} catch (error) {
+				if (
+					(error as { group?: string; code?: string }).group === "queue" &&
+					(error as { group?: string; code?: string }).code === "timed_out"
+				) {
+					if (remainingTimeout === undefined || remainingTimeout > 100) {
+						continue;
+					}
+				}
+				throw error;
+			}
+		}
 	}
 
 	async tryNext(options?: {

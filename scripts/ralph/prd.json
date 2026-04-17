@@ -868,7 +868,7 @@
         "cargo check passes"
       ],
       "priority": 46,
-      "passes": false,
+      "passes": true,
       "notes": "See spec concern #14. Used for coordination patterns where an actor waits for a specific message type."
     },
     {

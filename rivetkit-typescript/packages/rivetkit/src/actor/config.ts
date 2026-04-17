@@ -150,6 +150,12 @@ export interface QueueNextBatchOptions<
 	completable?: TCompletable;
 }
 
+export interface QueueWaitOptions<TCompletable extends boolean = boolean> {
+	timeout?: number;
+	signal?: AbortSignal;
+	completable?: TCompletable;
+}
+
 export interface QueueTryNextOptions<
 	TName extends string = string,
 	TCompletable extends boolean = boolean,
@@ -193,6 +199,13 @@ export interface ActorQueue<TQueues extends QueueSchemaConfig = Record<never, ne
 	>(
 		opts?: QueueNextBatchOptions<TName, TCompletable>,
 	): Promise<any[]>;
+	waitForNames<
+		const TName extends QueueFilterName<TQueues>,
+		const TCompletable extends boolean = false,
+	>(
+		names: readonly TName[],
+		opts?: QueueWaitOptions<TCompletable>,
+	): Promise<any>;
 	tryNext<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,

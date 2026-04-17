@@ -29,7 +29,9 @@ mod moved_tests {
 		make_queue_message_key,
 	};
 	use crate::actor::context::tests::new_with_kv;
-	use crate::actor::queue::QueueNextOpts;
+	use crate::actor::queue::{QueueNextOpts, QueueWaitOpts};
+	use tokio::time::{Duration, sleep};
+	use tokio_util::sync::CancellationToken;
 
 	const QUEUE_METADATA_HEX: &str = "04002a0000000000000007000000";
 	const QUEUE_MESSAGE_HEX: &str =
@@ -159,5 +161,115 @@ mod moved_tests {
 		assert!(sent_line.ends_with(" 1"));
 		assert!(received_line.ends_with(" 1"));
 		assert!(depth_line.ends_with(" 0"));
+	}
+
+	#[tokio::test]
+	async fn wait_for_names_skips_non_matching_messages() {
+		let ctx = new_with_kv(
+			"actor-1",
+			"queue-wait-for-names",
+			Vec::new(),
+			"local",
+			crate::kv::tests::new_in_memory(),
+		);
+
+		ctx.queue()
+			.send("ignored", b"first")
+			.await
+			.expect("send ignored message");
+		ctx.queue()
+			.send("target", b"second")
+			.await
+			.expect("send target message");
+
+		let message = ctx
+			.queue()
+			.wait_for_names(vec!["target".into()], QueueWaitOpts::default())
+			.await
+			.expect("wait for names should receive target");
+		assert_eq!(message.name, "target");
+		assert_eq!(message.body, b"second".to_vec());
+
+		let remaining = ctx
+			.queue()
+			.next(QueueNextOpts::default())
+			.await
+			.expect("queue next should succeed")
+			.expect("ignored message should remain in queue");
+		assert_eq!(remaining.name, "ignored");
+		assert_eq!(remaining.body, b"first".to_vec());
+	}
+
+	#[tokio::test]
+	async fn wait_for_names_returns_timeout_error() {
+		let ctx = new_with_kv(
+			"actor-1",
+			"queue-wait-timeout",
+			Vec::new(),
+			"local",
+			crate::kv::tests::new_in_memory(),
+		);
+
+		let error = ctx
+			.queue()
+			.wait_for_names(
+				vec!["missing".into()],
+				QueueWaitOpts {
+					timeout: Some(Duration::from_millis(0)),
+					signal: None,
+					completable: false,
+				},
+			)
+			.await
+			.expect_err("wait for names should time out");
+		let error = rivet_error::RivetError::extract(&error);
+		assert_eq!(error.group(), "queue");
+		assert_eq!(error.code(), "timed_out");
+	}
+
+	#[tokio::test]
+	async fn wait_for_names_tracks_active_waits_until_signal_abort() {
+		let ctx = new_with_kv(
+			"actor-1",
+			"queue-wait-signal-abort",
+			Vec::new(),
+			"local",
+			crate::kv::tests::new_in_memory(),
+		);
+		let signal = CancellationToken::new();
+		let queue = ctx.queue().clone();
+		let signal_for_task = signal.clone();
+
+		let wait_task = tokio::spawn(async move {
+			queue
+				.wait_for_names(
+					vec!["missing".into()],
+					QueueWaitOpts {
+						timeout: Some(Duration::from_secs(5)),
+						signal: Some(signal_for_task),
+						completable: false,
+					},
+				)
+				.await
+		});
+
+		for _ in 0..20 {
+			if ctx.queue().active_queue_wait_count() == 1 {
+				break;
+			}
+			sleep(Duration::from_millis(10)).await;
+		}
+		assert_eq!(ctx.queue().active_queue_wait_count(), 1);
+
+		signal.cancel();
+
+		let error = wait_task
+			.await
+			.expect("wait task should join")
+			.expect_err("wait should abort");
+		let error = rivet_error::RivetError::extract(&error);
+		assert_eq!(error.group(), "actor");
+		assert_eq!(error.code(), "aborted");
+		assert_eq!(ctx.queue().active_queue_wait_count(), 0);
 	}
 }

@@ -76,6 +76,10 @@ export interface JsQueueNextBatchOptions {
   timeoutMs?: number
   completable?: boolean
 }
+export interface JsQueueWaitOptions {
+  timeoutMs?: number
+  completable?: boolean
+}
 export interface JsQueueTryNextOptions {
   names?: Array<string>
   completable?: boolean
@@ -223,6 +227,7 @@ export declare class Queue {
   send(name: string, body: Buffer): Promise<QueueMessage>
   next(options?: JsQueueNextOptions | undefined | null): Promise<QueueMessage | null>
   nextBatch(options?: JsQueueNextBatchOptions | undefined | null): Promise<Array<QueueMessage>>
+  waitForNames(names: Array<string>, options?: JsQueueWaitOptions | undefined | null): Promise<QueueMessage>
   tryNext(options?: JsQueueTryNextOptions | undefined | null): QueueMessage | null
   tryNextBatch(options?: JsQueueTryNextBatchOptions | undefined | null): Array<QueueMessage>
 }

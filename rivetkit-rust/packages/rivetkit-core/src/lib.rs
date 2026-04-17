@@ -24,7 +24,7 @@ pub use actor::lifecycle::{
 };
 pub use actor::queue::{
 	CompletableQueueMessage, Queue, QueueMessage, QueueNextBatchOpts,
-	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts,
+	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
 };
 pub use actor::schedule::Schedule;
 pub use kv::Kv;
