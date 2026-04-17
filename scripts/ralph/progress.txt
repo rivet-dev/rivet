@@ -153,7 +153,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 ---
 ## 2026-04-16 23:45:35 PDT - US-017
 - What was implemented: Added destroy-mode shutdown in `ActorLifecycle`, including abort no-op handling, standalone `on_destroy` timeout/error handling, shutdown-task drains without idle-window waiting, full connection disconnects, and final state persistence plus SQLite cleanup.
-- Files changed: `/home/nathan/r5/AGENTS.md`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/lifecycle.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/lifecycle.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
 - **Learnings for future iterations:**
   - Patterns discovered: Destroy shutdown should share the same final persistence and cleanup path as sleep shutdown, but skip the idle-window wait and disconnect hibernatable connections too.
   - Gotchas encountered: `on_destroy_timeout` is standalone and should not be clipped by the shutdown grace-period budget used for post-callback `wait_until` drains.
