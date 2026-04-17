@@ -6,6 +6,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - The high-level `rivetkit` crate should stay a thin typed wrapper over `rivetkit-core`, re-exporting shared transport/config types instead of redefining them.
 - `rivetkit` typed contexts should keep typed vars outside the core context, cache decoded actor state in `Arc<Mutex<Option<Arc<State>>>>`, and invalidate that cache after every `set_state`.
 - `rivetkit` actors with `type Vars = ()` should rely on the bridge's built-in unit-vars fallback instead of adding a no-op `create_vars` implementation.
+- `rivetkit-core` lifecycle shutdown tests should assert `ctx.aborted()` from inside `on_sleep` and `on_destroy` callbacks, not just after shutdown returns.
 - `rivetkit-core` shared runtime objects should hang off `ActorContext(Arc<ActorContextInner>)`, with service handles stored directly on the inner so context clones can still return borrowed `&Kv` and `&SqliteDb` style accessors.
 - `rivetkit-core` actor-scoped service wrappers should keep `Default` available for scaffolded contexts, but fail with explicit `anyhow!` configuration errors until a real `EnvoyHandle` is wired in.
 - `rivetkit-core` callback/factory APIs should box closures as `BoxFuture<'static, ...>` and use concrete `http::Request<Vec<u8>>` / `http::Response<Vec<u8>>` aliases instead of leaking generics through the runtime surface.
@@ -203,4 +204,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: The typed bridge should special-case `Vars = ()` so simple actors can stay minimal and still pass through the normal bootstrap path.
   - Gotchas encountered: The current public SQLite surface is still the low-level envoy page protocol, so examples should isolate schema bootstrap behind one helper instead of pretending there is already a high-level query API.
   - Useful context: The new example lives at `rivetkit-rust/packages/rivetkit/examples/counter.rs`, and `cargo test -p rivetkit` now covers the unit-vars bridge fallback alongside the existing typed callback wiring test.
+---
+## 2026-04-17 09:32:05 PDT - US-023
+- What was implemented: Verified that sleep shutdown already cancels the abort signal before waiting on the run handler, then tightened the lifecycle regression tests so `on_sleep` and `on_destroy` both assert `ctx.aborted()` while the callback is actively running.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/lifecycle.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Shutdown regression tests in `rivetkit-core` should assert abort state from inside lifecycle callbacks, not only after shutdown returns.
+  - Gotchas encountered: The sleep-path bug report was stale. `shutdown_for_sleep()` was already calling `ctx.abort_signal().cancel()`, so the real gap was missing proof in tests.
+  - Useful context: The relevant coverage lives in `sleep_shutdown_waits_for_idle_window_and_persists_state` and `destroy_shutdown_skips_idle_wait_and_disconnects_all_connections` inside `src/actor/lifecycle.rs`.
 ---

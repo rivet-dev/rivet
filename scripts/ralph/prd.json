@@ -404,7 +404,7 @@
       ],
       "priority": 20,
       "passes": true,
-      "notes": "See spec 'Ctx<A> — Typed Actor Context' section. CBOR (ciborium) at all boundaries. Ctx<A> is a SEPARATE type from ActorContext, not a newtype wrapper."
+      "notes": "See spec 'Ctx<A> \u2014 Typed Actor Context' section. CBOR (ciborium) at all boundaries. Ctx<A> is a SEPARATE type from ActorContext, not a newtype wrapper."
     },
     {
       "id": "US-021",
@@ -446,6 +446,50 @@
       "priority": 22,
       "passes": true,
       "notes": "See spec 'Usage Example' section for the exact code pattern. This verifies the entire API surface (Actor trait, Ctx<A>, Registry, actions, state, broadcast, SQL, abort_signal) is wired up correctly end-to-end."
+    },
+    {
+      "id": "US-023",
+      "title": "Verify abort signal fires in sleep shutdown path",
+      "description": "As a developer, I need to confirm the abort signal fires at the beginning of onStop for BOTH sleep and destroy modes, matching the TypeScript lifecycle 1:1.",
+      "acceptanceCriteria": [
+        "Read `rivetkit-rust/packages/rivetkit-core/src/actor/lifecycle.rs` and verify `shutdown_for_sleep()` calls `ctx.abort_signal().cancel()` (or equivalent) before waiting for the run handler",
+        "If the abort signal is NOT fired in the sleep shutdown path, add `ctx.abort_signal().cancel()` as step 3 of the sleep shutdown sequence, matching the destroy path",
+        "Add or update a test that asserts `ctx.aborted()` returns true during the on_sleep callback",
+        "Verify destroy path still fires abort signal correctly (no regression)",
+        "`cargo check -p rivetkit-core` passes",
+        "`cargo test -p rivetkit-core` passes"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": "Review finding from US-015/US-016: the spec says abort signal fires at beginning of onStop for BOTH modes. US-016 sleep shutdown has step 3 'fire abort signal' but reviewer flagged it may be missing. Verify and fix if needed. See spec 'Startup Sequence' step 14 note and 'Graceful Shutdown: Sleep Mode' step 3."
+    },
+    {
+      "id": "US-024",
+      "title": "Document KV actor_id constructor asymmetry with SqliteDb",
+      "description": "As a developer, I need the Kv/SqliteDb constructor asymmetry documented so future contributors understand why Kv requires actor_id but SqliteDb does not.",
+      "acceptanceCriteria": [
+        "Add a doc comment on `Kv::new()` explaining that actor_id is required because envoy-client KV operations need it passed per-call",
+        "Add a doc comment on `SqliteDb::new()` explaining that actor_id is NOT needed because it is embedded in the SQLite protocol request types",
+        "Comments are concise (1-2 lines each), not paragraphs",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "Review finding from US-003: Kv requires actor_id in constructor but SqliteDb doesn't. Both are correct per envoy-client API, but the asymmetry is surprising without explanation. Files: rivetkit-rust/packages/rivetkit-core/src/kv.rs and sqlite.rs."
+    },
+    {
+      "id": "US-025",
+      "title": "Document RAII guard atomic ordering in HTTP request tracker",
+      "description": "As a developer, I need the atomic ordering choice in ActiveHttpRequestGuard documented so future contributors understand the memory ordering guarantees.",
+      "acceptanceCriteria": [
+        "Add a brief doc comment on `ActiveHttpRequestGuard` (or the counter field) explaining why Acquire/Release ordering is used for the in-flight HTTP request counter",
+        "Comment should note that the counter is read from can_sleep() which may run on a different task, so Release on decrement and Acquire on read ensures visibility",
+        "Comment is concise (1-3 lines)",
+        "`cargo check -p envoy-client` passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "Review finding from US-011: The RAII guard uses Acquire/Release ordering which is correct but the reasoning should be documented for maintainability. File: engine/sdks/rust/envoy-client/src/actor.rs."
     }
   ]
 }

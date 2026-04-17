@@ -967,6 +967,7 @@ mod tests {
 			let idle_gate = idle_gate_for_callback.clone();
 			Box::pin(async move {
 				assert_eq!(idle_gate.load(Ordering::SeqCst), 1);
+				assert!(request.ctx.aborted());
 				assert_eq!(request.ctx.conns().len(), 2);
 				on_sleep_calls.fetch_add(1, Ordering::SeqCst);
 				Ok(())
@@ -1211,6 +1212,7 @@ mod tests {
 			let destroy_gate = destroy_gate_for_callback.clone();
 			Box::pin(async move {
 				assert_eq!(destroy_gate.load(Ordering::SeqCst), 0);
+				assert!(request.ctx.aborted());
 				assert_eq!(request.ctx.conns().len(), 2);
 				on_destroy_calls.fetch_add(1, Ordering::SeqCst);
 				Ok(())
