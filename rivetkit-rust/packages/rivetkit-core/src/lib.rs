@@ -26,7 +26,7 @@ pub use actor::queue::{
 };
 pub use actor::schedule::Schedule;
 pub use kv::Kv;
-pub use registry::CoreRegistry;
+pub use registry::{CoreRegistry, ServeConfig};
 pub use sqlite::SqliteDb;
 pub use types::{ActorKey, ActorKeySegment, ConnId, ListOpts, SaveStateOpts, WsMessage};
 pub use websocket::WebSocket;

@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use anyhow::Result;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use rivetkit_core::CoreRegistry;
+use rivetkit_core::{CoreRegistry, ServeConfig};
 
 use crate::actor::Actor;
 use crate::bridge::{self, TypedActionMap};
@@ -25,6 +25,10 @@ impl Registry {
 
 	pub async fn serve(self) -> Result<()> {
 		self.inner.serve().await
+	}
+
+	pub async fn serve_with_config(self, config: ServeConfig) -> Result<()> {
+		self.inner.serve_with_config(config).await
 	}
 }
 

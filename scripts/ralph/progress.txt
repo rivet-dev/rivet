@@ -26,6 +26,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - Sleep-gating atomic counters should use a `Release` update on task completion and `Acquire` loads where `can_sleep()` or shutdown logic reads zero, so cross-task completion state is visible when the counter drains.
 - `envoy-client` shutdown hooks that need multi-step teardown should override `EnvoyCallbacks::on_actor_stop_with_completion`; the default path still auto-completes after legacy `on_actor_stop` returns.
 - `rivetkit` generic typed wrappers like `Ctx<A>` and `ConnCtx<A>` should implement `Clone` manually, because derive can accidentally add `A: Clone` or `Vars: Clone` bounds that break actor registration.
+- `rivetkit-core` local engine boot should flow through `ServeConfig::engine_binary_path`, wait for `endpoint + "/health"` before starting envoy, and forward child stdout/stderr into tracing so local-dev startup and shutdown stay centralized.
 
 ---
 
@@ -229,4 +230,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Sleep-gating counters should document their memory-ordering contract at the type or field boundary, because the correctness depends on readers in other tasks.
   - Gotchas encountered: The PRD check command used the directory name, but the actual Cargo package is `rivet-envoy-client`, so verify the manifest package name before assuming `cargo check -p` targets.
   - Useful context: The `Acquire` reads already lived in `abort_and_join_http_request_tasks`, `wait_for_count`, and the HTTP request tracker tests. This story only needed the doc comment plus the matching `Release` decrement.
+---
+## 2026-04-17 11:14:29 PDT - US-026
+- What was implemented: Added `ServeConfig` plus optional local engine process management to `rivetkit-core`, including child-process spawn before envoy startup, `/health` retry/backoff gating, stdout/stderr tracing, SIGTERM-based shutdown, and typed-wrapper passthrough in `rivetkit`.
+- Files changed: `/home/nathan/r5/Cargo.lock`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/Cargo.toml`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/lib.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/registry.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/lib.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/registry.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Keep `CoreRegistry::serve()` as the env-driven default, and hang local-dev engine spawning off `serve_with_config(ServeConfig { engine_binary_path, .. })` so the typed `rivetkit` wrapper can re-export the same config without inventing another surface.
+  - Gotchas encountered: Pulling in `rivet_pools::reqwest::client()` for the localhost health probe drags a bigger engine dependency graph into `rivetkit-core`, so expect the first build after this story to be slower than the code diff looks.
+  - Useful context: `registry.rs` now has focused tests for health-check retry behavior and SIGTERM shutdown, and `cargo check -p rivetkit` stays clean aside from the existing `rivet-envoy-protocol` warning about missing `@bare-ts/tools`.
 ---

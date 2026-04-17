@@ -5199,6 +5199,7 @@ dependencies = [
  "rivetkit-core",
  "serde",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -5209,8 +5210,11 @@ dependencies = [
  "ciborium",
  "futures",
  "http 1.3.1",
+ "nix 0.30.1",
+ "reqwest",
  "rivet-envoy-client",
  "rivet-error",
+ "rivet-pools",
  "scc",
  "serde",
  "serde_bare",

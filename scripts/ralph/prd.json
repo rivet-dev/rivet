@@ -1,7 +1,7 @@
 {
   "project": "RivetKit Rust SDK",
   "branchName": "04-16-chore_rivetkit_to_rust",
-  "description": "Two-layer Rust SDK for writing Rivet Actors. rivetkit-core is the dynamic, language-agnostic lifecycle engine. rivetkit is the typed Rust wrapper with Actor trait, Ctx<A>, and Registry. See .agent/specs/rivetkit-rust.md for full spec.\n\nIntentionally deferred (separate PRDs or post-GA): NAPI bridge (rivetkit-napi), Inspector system (spec concern #7), Queue Stream adapter (#9), Schema validation (#10), Database provider system (#11), Metrics/tracing (#12), waitForNames (#14), enqueueAndWait (#15).",
+  "description": "Two-layer Rust SDK for writing Rivet Actors. rivetkit-core is the dynamic, language-agnostic lifecycle engine. rivetkit is the typed Rust wrapper with Actor trait, Ctx<A>, and Registry. Includes NAPI bridge and TS migration. See .agent/specs/rivetkit-rust.md for full spec.\n\nIntentionally deferred: Dynamic actors (V8 rewrite), Inspector system, Queue Stream adapter, Schema validation, Database provider system, Metrics/tracing, waitForNames, enqueueAndWait.",
   "userStories": [
     {
       "id": "US-001",
@@ -490,6 +490,244 @@
       "priority": 25,
       "passes": true,
       "notes": "Review finding from US-011: The RAII guard uses Acquire/Release ordering which is correct but the reasoning should be documented for maintainability. File: engine/sdks/rust/envoy-client/src/actor.rs."
+    },
+    {
+      "id": "US-026",
+      "title": "rivetkit-core: Engine process manager",
+      "description": "As a developer, I need rivetkit-core to optionally spawn and manage the rivet-engine binary for local development.",
+      "acceptanceCriteria": [
+        "Add `engine_binary_path: Option<PathBuf>` to ServeConfig (or similar config passed to CoreRegistry::serve())",
+        "If engine_binary_path is set: spawn the engine binary as a child process before connecting envoy-client",
+        "Health check the engine via HTTP /health endpoint with retry + backoff",
+        "Collect engine stdout/stderr to tracing logs",
+        "Graceful shutdown: send SIGTERM to engine child process when CoreRegistry shuts down",
+        "If engine_binary_path is None: assume engine is already running externally (production mode)",
+        "If engine binary not found at path: return clear error with the path that was tried",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 26,
+      "passes": true,
+      "notes": "Currently in TS at rivetkit-typescript/packages/rivetkit/src/engine-process/mod.ts. Read that file for the health check, log collection, and shutdown patterns. TS side will pass the path from the npm package location. Rust actors pass whatever path they want."
+    },
+    {
+      "id": "US-027",
+      "title": "Backward compat: verify KV key structure and serialization matches TS",
+      "description": "As a developer, I need to verify that rivetkit-core's KV key layout and BARE serialization is byte-identical to the TypeScript runtime so existing sleeping actors wake correctly.",
+      "acceptanceCriteria": [
+        "Verify PersistedActor is stored at KV key [1] matching TS KEYS.PERSIST_DATA",
+        "Verify hibernatable connections are stored under KV key prefix [2] + conn_id matching TS layout",
+        "Verify queue metadata is at KV key [5, 1, 1] and messages under [5, 1, 2] + u64be(id)",
+        "Verify PersistedActor BARE encoding field order matches TS: input, has_initialized, state, scheduled_events",
+        "Verify PersistedScheduleEvent BARE encoding matches TS field order",
+        "Verify hibernatable connection BARE encoding matches TS v4 field order (conn ID, params, state, subscriptions, gateway metadata)",
+        "Add cross-format round-trip tests: encode in Rust, verify bytes match expected TS output for known test vectors",
+        "Document any differences found and fix them",
+        "`cargo test -p rivetkit-core` passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "CRITICAL for production safety. Existing actors have persisted state written by TS. If Rust reads it differently, actors corrupt on wake. Check TS schemas at rivetkit-typescript/packages/rivetkit/src/schemas/actor-persist/ and the BARE schema definitions. CLAUDE.md has notes on key layouts."
+    },
+    {
+      "id": "US-028",
+      "title": "rivetkit-core: ActorContext API audit for dynamic runtime support",
+      "description": "As a developer, I need to verify ActorContext exposes everything a future dynamic actor runtime (V8) would need, and document the extension point.",
+      "acceptanceCriteria": [
+        "Compare ActorContext public API against the dynamic bridge functions in rivetkit-typescript/packages/rivetkit/src/dynamic/isolate-runtime.ts: kvBatchGet, kvBatchPut, kvBatchDelete, kvDeleteRange, kvListPrefix, kvListRange, dbExec, dbQuery, dbRun, setAlarm, startSleep, startDestroy, dispatch, clientCall, ackHibernatableWebSocketMessage",
+        "Identify any bridge functions that have no corresponding ActorContext method and add them",
+        "Add doc comment on ActorFactory explaining it is the extension point for pluggable runtimes (V8, NAPI, native Rust)",
+        "Add doc comment on ActorContext explaining its public API must cover everything a foreign runtime needs",
+        "No new traits or abstractions. Just API completeness check + documentation",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "Future V8 dynamic actors will call ActorContext methods directly from Rust. The factory closure pattern means any runtime just builds ActorInstanceCallbacks differently. See conversation notes on ActorRuntime design decision: no trait needed, ActorFactory is the interface."
+    },
+    {
+      "id": "US-029",
+      "title": "NAPI: Rename package and scaffold ActorContext class",
+      "description": "As a developer, I need the NAPI bridge package renamed and ActorContext exposed as a #[napi] class.",
+      "acceptanceCriteria": [
+        "Rename rivetkit-typescript/packages/rivetkit-native/ to rivetkit-typescript/packages/rivetkit-napi/",
+        "Update all imports and references across the codebase (package.json, tsconfig, CLAUDE.md, etc.)",
+        "Expose ActorContext as a #[napi] class with methods: state() -> Buffer, set_state(Buffer), save_state(immediate: bool)",
+        "Expose actor info methods: actor_id() -> String, name() -> String, region() -> String",
+        "Expose sleep control: sleep(), destroy(), set_prevent_sleep(bool), prevent_sleep() -> bool, aborted() -> bool",
+        "Expose wait_until that accepts a JS Promise and converts to Rust Future",
+        "pnpm build succeeds for rivetkit-napi package",
+        "`cargo check` passes"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "This is the first NAPI story. Only typecheck can be verified, not runtime behavior. The existing rivetkit-native code (~1430 lines in bridge_actor.rs, envoy_handle.rs, database.rs) is a complete rewrite. Read the existing NAPI code first to understand the current patterns."
+    },
+    {
+      "id": "US-030",
+      "title": "NAPI: Sub-object classes (Kv, SqliteDb, Schedule, Queue, ConnHandle, WebSocket)",
+      "description": "As a developer, I need all rivetkit-core sub-objects exposed as #[napi] classes so TS can call KV, SQL, schedule, etc.",
+      "acceptanceCriteria": [
+        "Expose Kv as #[napi] class with all methods: get, put, delete, delete_range, list_prefix, list_range, batch_get, batch_put, batch_delete. All take/return Buffer",
+        "Expose SqliteDb as #[napi] class with exec/query methods",
+        "Expose Schedule as #[napi] class with after(duration_ms, action_name, args_buffer) and at(timestamp_ms, action_name, args_buffer)",
+        "Expose Queue as #[napi] class with send, next, next_batch, try_next, try_next_batch methods",
+        "Expose ConnHandle as #[napi] class with id, params, state, set_state, send, disconnect methods",
+        "Expose WebSocket as #[napi] class with send and close methods",
+        "ActorContext #[napi] class returns these sub-objects via accessor methods: kv(), sql(), schedule(), queue()",
+        "pnpm build succeeds",
+        "`cargo check` passes"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "All data crosses NAPI boundary as Buffer (binary). TS side handles CBOR/JSON encoding. Rust side works with raw bytes. Check napi-rs docs for Buffer handling patterns."
+    },
+    {
+      "id": "US-031",
+      "title": "NAPI: Callback wrappers (ThreadsafeFunction for lifecycle + actions)",
+      "description": "As a developer, I need NAPI callback wrappers so rivetkit-core can call back into TS for lifecycle hooks and action handlers.",
+      "acceptanceCriteria": [
+        "Create ThreadsafeFunction wrappers for all lifecycle callbacks: on_wake, on_sleep, on_destroy, on_state_change, on_request, on_websocket, on_before_connect, on_connect, on_disconnect, run",
+        "Create ThreadsafeFunction wrapper for action dispatch: receives action name + args Buffer, returns result Buffer",
+        "Create ThreadsafeFunction wrapper for on_before_action_response",
+        "CancellationToken bridge: expose abort_signal as a JS-consumable object with on_cancelled(callback) method",
+        "Promise-to-Future conversion: JS callbacks that return Promises are converted to Rust Futures via napi-rs",
+        "Build a NapiActorFactory function that takes JS callback functions and produces a rivetkit-core ActorFactory",
+        "pnpm build succeeds",
+        "`cargo check` passes"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": "This is the most complex NAPI story. ThreadsafeFunction allows Rust to call JS from any thread. Each callback type needs careful lifetime management. The NapiActorFactory is the key piece: it wraps JS functions as ActorInstanceCallbacks closures. See napi-rs ThreadsafeFunction docs."
+    },
+    {
+      "id": "US-032",
+      "title": "Wire TS Registry and actor config to Rust via NAPI",
+      "description": "As a developer, I need the TS rivetkit Registry to delegate to rivetkit-core's CoreRegistry via NAPI so the Rust lifecycle engine runs all actors.",
+      "acceptanceCriteria": [
+        "TS Registry class creates a Rust CoreRegistry instance via NAPI",
+        "TS register() method builds a NapiActorFactory from the TS actor definition and calls Rust registry.register()",
+        "TS actor config (timeouts, sleep behavior, etc.) is passed through to Rust ActorConfig",
+        "TS serve() method calls Rust registry.serve() with ServeConfig including engine_binary_path from the npm package",
+        "Action registration: TS action handlers are wrapped as ThreadsafeFunction callbacks and passed to the Rust factory",
+        "The TS lifecycle hooks (onCreate, onWake, onSleep, etc.) are wired through NAPI callbacks",
+        "Zero breaking changes to the public TS actor definition API (or minimal, documented changes)",
+        "tsc type-check passes",
+        "pnpm build succeeds"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": "This is where the TS lifecycle actually stops running and Rust takes over. The TS side becomes a thin translation layer: TS actor definitions \u2192 NAPI \u2192 Rust ActorFactory. Read the existing TS registry at rivetkit-typescript/packages/rivetkit/src/registry/ for the current API surface."
+    },
+    {
+      "id": "US-033",
+      "title": "Delete TS actor lifecycle code",
+      "description": "As a developer, I need all the TS actor lifecycle code removed since rivetkit-core handles it now.",
+      "acceptanceCriteria": [
+        "Delete actor/contexts/ (all lifecycle context handlers)",
+        "Delete actor/conn/ (connection drivers)",
+        "Delete actor/instance/ (ActorInstance, StateManager, ConnectionManager, QueueManager, EventManager, ScheduleManager)",
+        "Delete actor/protocol/ (server-side serde, old.ts)",
+        "Delete actor/database.ts, actor/metrics.ts, actor/schedule.ts",
+        "Delete actor/router.ts, actor/router-endpoints.ts, actor/router-websocket-endpoints.ts and tests",
+        "Update actor/mod.ts to remove references to deleted modules",
+        "tsc type-check passes (no broken imports in remaining code)",
+        "pnpm build succeeds"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": "This is the biggest deletion. All lifecycle logic is now in rivetkit-core. The remaining actor/ files are: config.ts, definition.ts, errors.ts, keys.ts, schema.ts, mod.ts."
+    },
+    {
+      "id": "US-034",
+      "title": "Delete TS routing and serverless code",
+      "description": "As a developer, I need the deprecated TS routing code removed since the engine handles all routing now.",
+      "acceptanceCriteria": [
+        "Delete actor-gateway/ (HTTP/WS proxy routing)",
+        "Delete runtime-router/ (HTTP management API)",
+        "Delete serverless/ (serverless request handling)",
+        "Remove any imports of these modules from remaining code",
+        "tsc type-check passes",
+        "pnpm build succeeds"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": "All routing is handled by the engine now. These modules are deprecated."
+    },
+    {
+      "id": "US-035",
+      "title": "Delete TS infrastructure (drivers, inspector, schemas, db, test utils)",
+      "description": "As a developer, I need deprecated TS infrastructure modules removed.",
+      "acceptanceCriteria": [
+        "Delete db/ (database utilities, replaced by rivetkit-core)",
+        "Delete drivers/ (ActorDriver, EngineActorDriver, replaced by CoreRegistry)",
+        "Delete driver-helpers/ (driver utilities)",
+        "Delete driver-test-suite/ (driver test framework)",
+        "Delete inspector/ (actor inspection, removed completely)",
+        "Delete schemas/ (all subdirectories: actor-persist, actor-inspector, persist, client-protocol, client-protocol-zod, transport)",
+        "Delete test/ (TS test utilities, tests move to Rust)",
+        "Delete engine-process/ (moved to rivetkit-core)",
+        "Remove all imports of deleted modules from remaining code",
+        "tsc type-check passes",
+        "pnpm build succeeds"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": "Bulk infrastructure deletion. Check for any remaining imports carefully. The client library (client/) may import from some of these \u2014 fix or remove those imports."
+    },
+    {
+      "id": "US-036",
+      "title": "Delete TS dynamic actors and sandbox",
+      "description": "As a developer, I need the dynamic actor and sandbox code removed since it will be rewritten with rusty_v8.",
+      "acceptanceCriteria": [
+        "Delete dynamic/ (isolate-runtime, dynamic actor loading)",
+        "Delete sandbox/ (sandbox providers)",
+        "Remove all imports of dynamic/ and sandbox/ from remaining code",
+        "Remove any dynamic actor registration paths from the registry",
+        "tsc type-check passes",
+        "pnpm build succeeds"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": "Dynamic actors will be rewritten using rusty_v8 calling directly into rivetkit-core. The current isolated-vm approach is being replaced. This is intentional feature removal, not migration."
+    },
+    {
+      "id": "US-037",
+      "title": "Integration test: run actor through full NAPI path",
+      "description": "As a developer, I need to verify the full path works: TS actor definition \u2192 NAPI \u2192 rivetkit-core lifecycle \u2192 envoy-client \u2192 engine.",
+      "acceptanceCriteria": [
+        "Create a simple TS actor (counter or similar) using the standard TS actor definition API",
+        "Register it via the new NAPI-backed Registry",
+        "Start with engine binary (via engine_binary_path in ServeConfig)",
+        "Create the actor via the TS client library",
+        "Call an action and verify the response",
+        "Verify state persistence: call action, sleep actor, wake actor, verify state survived",
+        "Verify KV operations work through the full path",
+        "Verify SQLite operations work through the full path",
+        "All tests pass"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": "This is the first real runtime validation of the entire migration. Everything before this was typecheck-only. If this fails, debug the NAPI boundary. Run with RUST_LOG=debug for tracing."
+    },
+    {
+      "id": "US-038",
+      "title": "Trim TS re-exports and fix remaining imports",
+      "description": "As a developer, I need the remaining TS package cleaned up with correct exports and no broken references.",
+      "acceptanceCriteria": [
+        "Update src/mod.ts to only re-export remaining modules",
+        "Update actor/mod.ts to only re-export remaining actor files",
+        "Update package.json exports map to remove deleted entry points",
+        "Remove any unused dependencies from package.json",
+        "Verify client library works: import rivetkit client, create actor, call action",
+        "Verify workflow engine compiles and has no broken imports",
+        "Verify agent-os compiles and has no broken imports",
+        "Run full tsc type-check across the rivetkit package",
+        "pnpm build succeeds",
+        "No unused exports or dead code warnings"
+      ],
+      "priority": 38,
+      "passes": false,
+      "notes": "Final cleanup story. The end state for rivetkit-typescript should be: actor definitions, client library, workflow engine, agent-os, engine-api, engine-client, registry (thin NAPI wrapper), utils, common, devtools-loader."
     }
   ]
 }

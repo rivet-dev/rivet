@@ -10,5 +10,5 @@ pub use registry::Registry;
 pub use rivetkit_core::{
 	ActorConfig, ActorKey, ActorKeySegment, CanHibernateWebSocket, ConnHandle,
 	ConnId, Kv, ListOpts, Queue, QueueMessage, Request, Response, SaveStateOpts,
-	Schedule, SqliteDb, WebSocket, WsMessage,
+	Schedule, ServeConfig, SqliteDb, WebSocket, WsMessage,
 };

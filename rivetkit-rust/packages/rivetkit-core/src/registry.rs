@@ -1,8 +1,15 @@
 use std::collections::HashMap;
 use std::env;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
+#[cfg(unix)]
+use nix::sys::signal::{self, Signal};
+#[cfg(unix)]
+use nix::unistd::Pid;
 use rivet_envoy_client::config::{
 	ActorStopHandle, BoxFuture as EnvoyBoxFuture, EnvoyCallbacks, HttpRequest,
 	HttpResponse, WebSocketHandler, WebSocketMessage, WebSocketSender,
@@ -11,6 +18,10 @@ use rivet_envoy_client::envoy::start_envoy;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::protocol;
 use scc::HashMap as SccHashMap;
+use serde::Deserialize;
+use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
+use tokio::process::{Child, Command};
+use tokio::task::JoinHandle;
 
 use crate::actor::callbacks::{OnRequestRequest, OnWebSocketRequest, Request, Response};
 use crate::actor::config::CanHibernateWebSocket;
@@ -64,6 +75,31 @@ struct ServeSettings {
 	token: Option<String>,
 	namespace: String,
 	pool_name: String,
+	engine_binary_path: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ServeConfig {
+	pub version: u32,
+	pub endpoint: String,
+	pub token: Option<String>,
+	pub namespace: String,
+	pub pool_name: String,
+	pub engine_binary_path: Option<PathBuf>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EngineHealthResponse {
+	status: Option<String>,
+	runtime: Option<String>,
+	version: Option<String>,
+}
+
+#[derive(Debug)]
+struct EngineProcessManager {
+	child: Child,
+	stdout_task: Option<JoinHandle<()>>,
+	stderr_task: Option<JoinHandle<()>>,
 }
 
 impl CoreRegistry {
@@ -76,18 +112,27 @@ impl CoreRegistry {
 	}
 
 	pub async fn serve(self) -> Result<()> {
-		let settings = ServeSettings::from_env();
+		self.serve_with_config(ServeConfig::from_env()).await
+	}
+
+	pub async fn serve_with_config(self, config: ServeConfig) -> Result<()> {
 		let dispatcher = self.into_dispatcher();
+		let mut engine_process = match config.engine_binary_path.as_ref() {
+			Some(binary_path) => {
+				Some(EngineProcessManager::start(binary_path, &config.endpoint).await?)
+			}
+			None => None,
+		};
 		let callbacks = Arc::new(RegistryCallbacks {
 			dispatcher: dispatcher.clone(),
 		});
 
-		start_envoy(rivet_envoy_client::config::EnvoyConfig {
-			version: settings.version,
-			endpoint: settings.endpoint,
-			token: settings.token,
-			namespace: settings.namespace,
-			pool_name: settings.pool_name,
+		let handle = start_envoy(rivet_envoy_client::config::EnvoyConfig {
+			version: config.version,
+			endpoint: config.endpoint,
+			token: config.token,
+			namespace: config.namespace,
+			pool_name: config.pool_name,
 			prepopulate_actor_names: HashMap::new(),
 			metadata: None,
 			not_global: false,
@@ -96,9 +141,16 @@ impl CoreRegistry {
 		})
 		.await;
 
-		tokio::signal::ctrl_c()
+		let shutdown_signal = tokio::signal::ctrl_c()
 			.await
-			.context("wait for registry shutdown signal")?;
+			.context("wait for registry shutdown signal");
+		handle.shutdown(false);
+
+		if let Some(engine_process) = engine_process.take() {
+			engine_process.shutdown().await?;
+		}
+
+		shutdown_signal?;
 
 		Ok(())
 	}
@@ -511,8 +563,250 @@ impl ServeSettings {
 			namespace: env::var("RIVET_NAMESPACE").unwrap_or_else(|_| "default".to_owned()),
 			pool_name: env::var("RIVET_POOL_NAME")
 				.unwrap_or_else(|_| "rivetkit-rust".to_owned()),
+			engine_binary_path: env::var_os("RIVET_ENGINE_BINARY_PATH").map(PathBuf::from),
 		}
 	}
+}
+
+impl Default for ServeConfig {
+	fn default() -> Self {
+		Self::from_env()
+	}
+}
+
+impl ServeConfig {
+	pub fn from_env() -> Self {
+		let settings = ServeSettings::from_env();
+		Self {
+			version: settings.version,
+			endpoint: settings.endpoint,
+			token: settings.token,
+			namespace: settings.namespace,
+			pool_name: settings.pool_name,
+			engine_binary_path: settings.engine_binary_path,
+		}
+	}
+}
+
+impl EngineProcessManager {
+	async fn start(binary_path: &Path, endpoint: &str) -> Result<Self> {
+		if !binary_path.exists() {
+			anyhow::bail!(
+				"engine binary not found at `{}`",
+				binary_path.display()
+			);
+		}
+
+		let mut command = Command::new(binary_path);
+		command
+			.arg("start")
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped());
+
+		let mut child = command.spawn().with_context(|| {
+			format!(
+				"spawn engine binary `{}`",
+				binary_path.display()
+			)
+		})?;
+		let pid = child
+			.id()
+			.ok_or_else(|| anyhow!("engine process missing pid after spawn"))?;
+		let stdout_task = spawn_engine_log_task(child.stdout.take(), "stdout");
+		let stderr_task = spawn_engine_log_task(child.stderr.take(), "stderr");
+
+		tracing::info!(
+			pid,
+			path = %binary_path.display(),
+			"spawned engine process"
+		);
+
+		let health_url = engine_health_url(endpoint);
+		let health = match wait_for_engine_health(&health_url).await {
+			Ok(health) => health,
+			Err(error) => {
+				let error = match child.try_wait() {
+					Ok(Some(status)) => error.context(format!(
+						"engine process exited before becoming healthy with status {status}"
+					)),
+					Ok(None) => error,
+					Err(wait_error) => error.context(format!(
+						"failed to inspect engine process status: {wait_error:#}"
+					)),
+				};
+				let manager = Self {
+					child,
+					stdout_task,
+					stderr_task,
+				};
+				if let Err(shutdown_error) = manager.shutdown().await {
+					tracing::warn!(
+						?shutdown_error,
+						"failed to clean up unhealthy engine process"
+					);
+				}
+				return Err(error);
+			}
+		};
+
+		tracing::info!(
+			pid,
+			status = ?health.status,
+			runtime = ?health.runtime,
+			version = ?health.version,
+			"engine process is healthy"
+		);
+
+		Ok(Self {
+			child,
+			stdout_task,
+			stderr_task,
+		})
+	}
+
+	async fn shutdown(mut self) -> Result<()> {
+		terminate_engine_process(&mut self.child).await?;
+		join_log_task(self.stdout_task.take()).await;
+		join_log_task(self.stderr_task.take()).await;
+		Ok(())
+	}
+}
+
+fn engine_health_url(endpoint: &str) -> String {
+	format!("{}/health", endpoint.trim_end_matches('/'))
+}
+
+fn spawn_engine_log_task<R>(
+	reader: Option<R>,
+	stream: &'static str,
+) -> Option<JoinHandle<()>>
+where
+	R: AsyncRead + Unpin + Send + 'static,
+{
+	reader.map(|reader| {
+		tokio::spawn(async move {
+			let mut lines = BufReader::new(reader).lines();
+			while let Ok(Some(line)) = lines.next_line().await {
+				match stream {
+					"stderr" => tracing::warn!(stream, line, "engine process output"),
+					_ => tracing::info!(stream, line, "engine process output"),
+				}
+			}
+		})
+	})
+}
+
+async fn join_log_task(task: Option<JoinHandle<()>>) {
+	let Some(task) = task else {
+		return;
+	};
+	if let Err(error) = task.await {
+		tracing::warn!(?error, "engine log task failed");
+	}
+}
+
+async fn wait_for_engine_health(health_url: &str) -> Result<EngineHealthResponse> {
+	const HEALTH_MAX_WAIT: Duration = Duration::from_secs(10);
+	const HEALTH_REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
+	const HEALTH_INITIAL_BACKOFF: Duration = Duration::from_millis(100);
+	const HEALTH_MAX_BACKOFF: Duration = Duration::from_secs(1);
+
+	let client = rivet_pools::reqwest::client()
+		.await
+		.context("build reqwest client for engine health check")?;
+	let deadline = Instant::now() + HEALTH_MAX_WAIT;
+	let mut attempt = 0u32;
+	let mut backoff = HEALTH_INITIAL_BACKOFF;
+
+	loop {
+		attempt += 1;
+
+		let last_error = match client
+			.get(health_url)
+			.timeout(HEALTH_REQUEST_TIMEOUT)
+			.send()
+			.await
+		{
+			Ok(response) if response.status().is_success() => {
+				let health = response
+					.json::<EngineHealthResponse>()
+					.await
+					.context("decode engine health response")?;
+				return Ok(health);
+			}
+			Ok(response) => format!("unexpected status {}", response.status()),
+			Err(error) => error.to_string(),
+		};
+
+		if Instant::now() >= deadline {
+			anyhow::bail!(
+				"engine health check failed after {attempt} attempts: {last_error}"
+			);
+		}
+
+		tokio::time::sleep(backoff).await;
+		backoff = std::cmp::min(backoff * 2, HEALTH_MAX_BACKOFF);
+	}
+}
+
+async fn terminate_engine_process(child: &mut Child) -> Result<()> {
+	const ENGINE_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
+
+	let Some(pid) = child.id() else {
+		return Ok(());
+	};
+
+	if let Some(status) = child.try_wait().context("check engine process status")? {
+		tracing::info!(pid, ?status, "engine process already exited");
+		return Ok(());
+	}
+
+	send_sigterm(child)?;
+	tracing::info!(pid, "sent SIGTERM to engine process");
+
+	match tokio::time::timeout(ENGINE_SHUTDOWN_TIMEOUT, child.wait()).await {
+		Ok(wait_result) => {
+			let status = wait_result.context("wait for engine process to exit")?;
+			tracing::info!(pid, ?status, "engine process exited");
+			Ok(())
+		}
+		Err(_) => {
+			tracing::warn!(
+				pid,
+				"engine process did not exit after SIGTERM, forcing kill"
+			);
+			child
+				.start_kill()
+				.context("force kill engine process after SIGTERM timeout")?;
+			let status = child
+				.wait()
+				.await
+				.context("wait for forced engine process shutdown")?;
+			tracing::warn!(pid, ?status, "engine process killed");
+			Ok(())
+		}
+	}
+}
+
+fn send_sigterm(child: &mut Child) -> Result<()> {
+	let pid = child
+		.id()
+		.ok_or_else(|| anyhow!("engine process missing pid"))?;
+
+	#[cfg(unix)]
+	{
+		signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM)
+			.with_context(|| format!("send SIGTERM to engine process {pid}"))?;
+	}
+
+	#[cfg(not(unix))]
+	{
+		child
+			.start_kill()
+			.with_context(|| format!("terminate engine process {pid}"))?;
+	}
+
+	Ok(())
 }
 
 fn actor_key_from_protocol(key: Option<String>) -> ActorKey {
@@ -605,6 +899,7 @@ fn default_websocket_handler() -> WebSocketHandler {
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
+	use std::process::Stdio;
 	use std::sync::Arc;
 	use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -612,8 +907,14 @@ mod tests {
 	use futures::future::BoxFuture;
 	use rivet_envoy_client::config::HttpRequest;
 	use rivet_envoy_client::protocol;
+	use tokio::io::AsyncWriteExt;
+	use tokio::net::TcpListener;
+	use tokio::process::Command;
 
-	use super::{CoreRegistry, RegistryDispatcher};
+	use super::{
+		CoreRegistry, RegistryDispatcher, engine_health_url, terminate_engine_process,
+		wait_for_engine_health,
+	};
 	use crate::actor::callbacks::{
 		ActorInstanceCallbacks, LifecycleCallback, OnRequestRequest, OnWebSocketRequest,
 		RequestCallback,
@@ -771,5 +1072,63 @@ mod tests {
 		};
 
 		assert!(error.to_string().contains("missing"));
+	}
+
+	#[tokio::test]
+	async fn engine_health_check_retries_until_success() {
+		let listener = TcpListener::bind("127.0.0.1:0")
+			.await
+			.expect("bind health listener");
+		let address = listener.local_addr().expect("health listener addr");
+		let server = tokio::spawn(async move {
+			for attempt in 0..3 {
+				let (mut stream, _) = listener.accept().await.expect("accept health request");
+				let mut request = [0u8; 1024];
+				let _ = stream.readable().await;
+				let _ = stream.try_read(&mut request);
+
+				if attempt < 2 {
+					stream
+						.write_all(
+							b"HTTP/1.1 503 Service Unavailable\r\ncontent-length: 0\r\n\r\n",
+						)
+						.await
+						.expect("write unhealthy response");
+				} else {
+					stream
+						.write_all(
+							b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 51\r\n\r\n{\"status\":\"ok\",\"runtime\":\"engine\",\"version\":\"test\"}",
+						)
+						.await
+						.expect("write healthy response");
+				}
+			}
+		});
+
+		let health = wait_for_engine_health(&engine_health_url(&format!("http://{address}")))
+			.await
+			.expect("wait for engine health");
+		server.await.expect("join health server");
+
+		assert_eq!(health.runtime.as_deref(), Some("engine"));
+		assert_eq!(health.version.as_deref(), Some("test"));
+	}
+
+	#[tokio::test]
+	#[cfg(unix)]
+	async fn terminate_engine_process_prefers_sigterm() {
+		let mut child = Command::new("sh")
+			.arg("-c")
+			.arg("trap 'exit 0' TERM; while true; do sleep 1; done")
+			.stdout(Stdio::null())
+			.stderr(Stdio::null())
+			.spawn()
+			.expect("spawn looping shell");
+
+		terminate_engine_process(&mut child)
+			.await
+			.expect("terminate child process");
+
+		assert!(child.try_wait().expect("inspect child").is_some());
 	}
 }
