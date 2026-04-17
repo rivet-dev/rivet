@@ -1,7 +1,7 @@
 import type { Context as HonoContext } from "hono";
 import type { AnyClient } from "@/client/client";
 import type { EngineControlClient } from "@/engine-client/driver";
-import type { AnyActorInstance, AnyStaticActorInstance } from "./instance/mod";
+import type { AnyActorInstance, AnyStaticActorInstance } from "./definition";
 import type { RegistryConfig } from "@/registry/config";
 import type {
 	RawDatabaseClient,

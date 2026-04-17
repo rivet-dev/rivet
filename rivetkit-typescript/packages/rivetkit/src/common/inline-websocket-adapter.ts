@@ -1,5 +1,5 @@
 import { WSContext } from "hono/ws";
-import type { UpgradeWebSocketArgs } from "@/actor/router-websocket-endpoints";
+import type { UpgradeWebSocketArgs } from "@/common/actor-websocket";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import { getLogger } from "./log";

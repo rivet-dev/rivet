@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, test, vi } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";

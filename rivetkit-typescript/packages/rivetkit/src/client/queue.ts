@@ -1,5 +1,5 @@
 import * as cbor from "cbor-x";
-import type { Encoding } from "@/actor/protocol/serde";
+import type { Encoding } from "@/common/encoding";
 import { HEADER_CONN_PARAMS, HEADER_ENCODING } from "@/driver-helpers/mod";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {

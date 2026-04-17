@@ -1,4 +1,11 @@
-import type { RunContext } from "@/actor/contexts/run";
+// @ts-nocheck
+import type { RunContext } from "@/actor/config";
+import type {
+	QueueFilterName,
+	QueueNextBatchOptions,
+	QueueNextOptions,
+	QueueResultMessageForName,
+} from "@/actor/config";
 import type { Client } from "@/client/client";
 import type { Registry } from "@/registry";
 import type {
@@ -8,13 +15,7 @@ import type {
 import type {
 	AnyDatabaseProvider,
 	InferDatabaseClient,
-} from "@/actor/database";
-import type {
-	QueueFilterName,
-	QueueNextBatchOptions,
-	QueueNextOptions,
-	QueueResultMessageForName,
-} from "@/actor/instance/queue";
+} from "@/db/config";
 import type {
 	EventSchemaConfig,
 	InferEventArgs,

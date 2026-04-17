@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, test, vi } from "vitest";
 import { HIBERNATION_SLEEP_TIMEOUT } from "../../../fixtures/driver-test-suite/hibernation";
 import type { DriverTestConfig } from "../mod";

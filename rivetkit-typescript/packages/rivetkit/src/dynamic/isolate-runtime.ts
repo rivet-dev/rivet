@@ -8,7 +8,7 @@ import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import * as errors from "@/actor/errors";
 import type { ActorDriver } from "@/actor/driver";
 import type { ActorKey } from "@/actor/mod";
-import type { Encoding } from "@/actor/protocol/serde";
+import type { Encoding } from "@/common/encoding";
 import {
 	HEADER_CONN_PARAMS,
 	HEADER_ENCODING,

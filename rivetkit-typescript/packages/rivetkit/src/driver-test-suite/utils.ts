@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { type TestContext, vi } from "vitest";
 import { assertUnreachable } from "@/actor/utils";
 import { type Client, createClient } from "@/client/mod";

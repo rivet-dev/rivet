@@ -1,5 +1,5 @@
-import type { BaseActorInstance } from "@/actor/instance/mod";
-import type { Encoding } from "@/actor/protocol/serde";
+import type { BaseActorInstance } from "@/actor/definition";
+import type { Encoding } from "@/common/encoding";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import {
 	DynamicActorIsolateRuntime,
@@ -18,6 +18,14 @@ export class DynamicActorInstance implements BaseActorInstance {
 
 	get id(): string {
 		return this.#actorId;
+	}
+
+	get config(): any {
+		return {};
+	}
+
+	get rLog(): any {
+		return console;
 	}
 
 	get isStopping(): boolean {

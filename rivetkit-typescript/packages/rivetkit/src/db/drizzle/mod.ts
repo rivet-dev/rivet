@@ -82,7 +82,7 @@ function createProxyCallback(
 	db: SqliteDatabase,
 	mutex: AsyncMutex,
 	isClosed: () => boolean,
-	metrics?: import("@/actor/metrics").ActorMetrics,
+	metrics?: import("@/db/config").ActorMetricsLike,
 	log?: { debug(obj: Record<string, unknown>): void },
 ) {
 	return async (

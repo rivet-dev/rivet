@@ -1,7 +1,7 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
 import invariant from "invariant";
-import type { Encoding } from "@/actor/protocol/serde";
+import type { Encoding } from "@/common/encoding";
 import { assertUnreachable } from "@/actor/utils";
 import { ActorError as ClientActorError } from "@/client/errors";
 import {

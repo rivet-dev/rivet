@@ -1,6 +1,18 @@
-import type { ActorMetrics } from "@/actor/metrics";
-
 export type AnyDatabaseProvider = DatabaseProvider<any> | undefined;
+
+export interface ActorMetricsLike {
+	totalKvReads: number;
+	totalKvWrites: number;
+	trackSql(query: string, durationMs: number): void;
+	setSqliteVfsMetricsSource(
+		source?: () => import("./native-database").SqliteVfsMetrics | null,
+	): void;
+}
+
+export type InferDatabaseClient<DBProvider extends AnyDatabaseProvider> =
+	DBProvider extends DatabaseProvider<any>
+		? Awaited<ReturnType<DBProvider["createClient"]>>
+		: never;
 
 export type SqliteBindings = unknown[] | Record<string, unknown>;
 
@@ -61,7 +73,7 @@ export interface DatabaseProviderContext {
 	/**
 	 * Actor metrics instance. When provided, KV and SQL operations are tracked.
 	 */
-	metrics?: ActorMetrics;
+	metrics?: ActorMetricsLike;
 
 	/**
 	 * Logger for debug output. When provided, SQL queries are logged with

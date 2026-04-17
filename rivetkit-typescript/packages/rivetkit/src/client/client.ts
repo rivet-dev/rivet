@@ -1,5 +1,5 @@
 import type { AnyActorDefinition } from "@/actor/definition";
-import type { Encoding } from "@/actor/protocol/serde";
+import type { Encoding } from "@/common/encoding";
 import {
 	resolveGatewayTarget,
 	type EngineControlClient,

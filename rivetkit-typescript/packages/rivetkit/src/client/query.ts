@@ -1,5 +1,5 @@
 import { z } from "zod/v4";
-import { EncodingSchema } from "@/actor/protocol/serde";
+import { EncodingSchema } from "@/common/encoding";
 import {
 	HEADER_ACTOR_ID,
 	HEADER_ACTOR_QUERY,

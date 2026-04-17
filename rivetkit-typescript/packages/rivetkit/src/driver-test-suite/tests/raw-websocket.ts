@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { HIBERNATABLE_WEBSOCKET_BUFFERED_MESSAGE_SIZE_THRESHOLD } from "@/actor/conn/hibernatable-websocket-ack-state";
+import { HIBERNATABLE_WEBSOCKET_BUFFERED_MESSAGE_SIZE_THRESHOLD } from "@/common/hibernatable-websocket-ack-state";
 import { getHibernatableWebSocketAckState } from "@/common/websocket-test-hooks";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";

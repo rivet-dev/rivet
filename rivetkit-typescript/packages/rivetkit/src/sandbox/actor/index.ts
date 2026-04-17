@@ -51,7 +51,7 @@
  * active with idle timers.
  */
 
-import type { DatabaseProvider } from "@/actor/database";
+import type { DatabaseProvider } from "@/db/config";
 import { actor } from "@/actor/mod";
 import type { RawAccess } from "@/db/config";
 import { db } from "@/db/mod";

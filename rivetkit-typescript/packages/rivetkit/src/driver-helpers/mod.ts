@@ -1,10 +1,9 @@
-export { KEYS, makeConnKey } from "@/actor/instance/keys";
+export { KEYS, makeConnKey } from "@/actor/keys";
 export type {
 	BaseActorInstance,
 	AnyActorInstance,
 	AnyStaticActorInstance,
-} from "@/actor/instance/mod";
-export { ActorInstance } from "@/actor/instance/mod";
+} from "@/actor/definition";
 export {
 	ALLOWED_PUBLIC_HEADERS,
 	HEADER_ACTOR_ID,

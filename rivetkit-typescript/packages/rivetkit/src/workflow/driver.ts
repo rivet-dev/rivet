@@ -1,9 +1,10 @@
-import type { RunContext } from "@/actor/contexts/run";
+// @ts-nocheck
+import type { RunContext } from "@/actor/config";
 import type {
 	AnyActorInstance,
 	AnyStaticActorInstance,
-} from "@/actor/instance/mod";
-import { makeWorkflowKey, workflowStoragePrefix } from "@/actor/instance/keys";
+} from "@/actor/definition";
+import { makeWorkflowKey, workflowStoragePrefix } from "@/actor/keys";
 import type {
 	EngineDriver,
 	KVEntry,

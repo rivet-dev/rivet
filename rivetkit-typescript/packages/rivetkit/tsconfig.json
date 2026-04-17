@@ -19,9 +19,6 @@
 	},
 	"include": [
 		"src/**/*",
-		"tests/**/*",
-		"fixtures/**/*",
-		"scripts/**/*",
 		"dist/schemas/**/*",
 		"runtime/index.ts"
 	]

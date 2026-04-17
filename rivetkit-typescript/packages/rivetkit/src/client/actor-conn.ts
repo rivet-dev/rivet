@@ -3,8 +3,11 @@ import invariant from "invariant";
 import pRetry from "p-retry";
 import type { CloseEvent } from "ws";
 import type { AnyActorDefinition } from "@/actor/definition";
-import { inputDataToBuffer } from "@/actor/protocol/old";
-import { type Encoding, jsonStringifyCompat } from "@/actor/protocol/serde";
+import {
+	type Encoding,
+	inputDataToBuffer,
+	jsonStringifyCompat,
+} from "@/common/encoding";
 import { PATH_CONNECT } from "@/common/actor-router-consts";
 import { assertUnreachable, stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";

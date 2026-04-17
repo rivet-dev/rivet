@@ -8,7 +8,7 @@ import {
 	KEYS,
 	queueMetadataKey,
 	workflowStoragePrefix,
-} from "@/actor/instance/keys";
+} from "@/actor/keys";
 import { type Logger, LogLevelSchema } from "@/common/log";
 import { ENGINE_ENDPOINT } from "@/engine-process/constants";
 import { InspectorConfigSchema } from "@/inspector/config";

@@ -5,7 +5,7 @@ import { MissingActorHeader, WebSocketsNotEnabled } from "@/actor/errors";
 import {
 	parseWebSocketProtocols,
 	type UpgradeWebSocketArgs,
-} from "@/actor/router-websocket-endpoints";
+} from "@/common/actor-websocket";
 import {
 	HEADER_RIVET_ACTOR,
 	HEADER_RIVET_TARGET,

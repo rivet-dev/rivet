@@ -1,5 +1,5 @@
 export * from "@/actor/mod";
-export type * from "@/actor/contexts";
+export type * from "@/actor/config";
 export type {
 	WorkflowBranchContextOf,
 	WorkflowContextOf,

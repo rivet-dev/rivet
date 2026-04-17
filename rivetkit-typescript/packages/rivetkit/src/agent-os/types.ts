@@ -7,7 +7,7 @@ import type {
 	JsonRpcResponse,
 	PermissionRequest,
 } from "@rivet-dev/agent-os-core";
-import type { ActionContext } from "@/actor/contexts";
+import type { ActionContext } from "@/actor/config";
 
 // --- Actor state (persisted across sleep/wake) ---
 

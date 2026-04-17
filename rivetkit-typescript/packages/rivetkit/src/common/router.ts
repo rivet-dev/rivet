@@ -1,11 +1,11 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, Next } from "hono";
-import type { Encoding } from "@/actor/protocol/serde";
 import * as envoyProtocol from "@rivetkit/engine-envoy-protocol";
+import type { Encoding } from "@/common/encoding";
 import {
 	getRequestEncoding,
 	getRequestExposeInternalError,
-} from "@/actor/router-endpoints";
+} from "@/common/router-request";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {

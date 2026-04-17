@@ -1,6 +1,6 @@
 import { AgentOs, createInMemoryFileSystem } from "@rivet-dev/agent-os-core";
 import type { AgentOsOptions, MountConfig } from "@rivet-dev/agent-os-core";
-import type { DatabaseProvider } from "@/actor/database";
+import type { DatabaseProvider } from "@/db/config";
 import { actor, event } from "@/actor/mod";
 import type { RawAccess } from "@/db/config";
 import { db } from "@/db/mod";

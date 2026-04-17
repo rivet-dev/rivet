@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, test, vi } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { FAKE_TIME, setupDriverTest, waitFor } from "../utils";

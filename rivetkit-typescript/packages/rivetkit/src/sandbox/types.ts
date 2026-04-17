@@ -1,5 +1,5 @@
-import type { ActionContext } from "@/actor/contexts";
-import type { DatabaseProvider } from "@/actor/database";
+import type { ActionContext } from "@/actor/config";
+import type { DatabaseProvider } from "@/db/config";
 import type { RawAccess } from "@/db/config";
 import type { SandboxAgent, SandboxProvider } from "sandbox-agent";
 

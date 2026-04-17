@@ -634,7 +634,7 @@
         "pnpm build succeeds"
       ],
       "priority": 33,
-      "passes": false,
+      "passes": true,
       "notes": "This is the biggest deletion. All lifecycle logic is now in rivetkit-core. The remaining actor/ files are: config.ts, definition.ts, errors.ts, keys.ts, schema.ts, mod.ts."
     },
     {

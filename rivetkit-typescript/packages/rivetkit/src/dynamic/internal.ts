@@ -5,7 +5,7 @@ import type {
 	AnyActorDefinition,
 	BaseActorDefinition,
 } from "@/actor/definition";
-import type { AnyDatabaseProvider } from "@/actor/database";
+import type { AnyDatabaseProvider } from "@/db/config";
 import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
 import type { AnyClient, Client } from "@/client/client";
 import type { Registry } from "@/registry";

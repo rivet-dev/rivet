@@ -3,8 +3,8 @@ import invariant from "invariant";
 import type { VersionedDataHandler } from "vbare";
 import type { z } from "zod/v4";
 import { assertUnreachable } from "@/common/utils";
-import type { Encoding } from "@/mod";
-import { jsonParseCompat, jsonStringifyCompat } from "./actor/protocol/serde";
+import type { Encoding } from "@/common/encoding";
+import { jsonParseCompat, jsonStringifyCompat } from "./common/encoding";
 
 export function uint8ArrayToBase64(uint8Array: Uint8Array): string {
 	// Check if Buffer is available (Node.js)

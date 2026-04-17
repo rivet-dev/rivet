@@ -1,5 +1,5 @@
 import * as cbor from "cbor-x";
-import { KEYS } from "@/actor/instance/keys";
+import { KEYS } from "@/actor/keys";
 import type * as persistSchema from "@/schemas/actor-persist/mod";
 import {
 	ACTOR_VERSIONED,

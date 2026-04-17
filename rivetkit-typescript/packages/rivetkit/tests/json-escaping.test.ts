@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { jsonParseCompat, jsonStringifyCompat } from "@/actor/protocol/serde";
+import { jsonParseCompat, jsonStringifyCompat } from "@/common/encoding";
 
 describe("JSON Escaping", () => {
 	describe("BigInt", () => {

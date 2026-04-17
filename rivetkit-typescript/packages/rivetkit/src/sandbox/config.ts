@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
-import type { ActorContext, BeforeConnectContext } from "@/actor/contexts";
-import type { AnyDatabaseProvider } from "@/actor/database";
+import type { ActorContext, BeforeConnectContext } from "@/actor/config";
+import type { AnyDatabaseProvider } from "@/db/config";
 import type {
 	PermissionRequestListener,
 	SessionEventListener,

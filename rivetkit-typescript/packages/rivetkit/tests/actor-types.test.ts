@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from "vitest";
 import { actor, event, queue } from "@/actor/mod";
-import type { ActorContext, ActorContextOf } from "@/actor/contexts";
+import type { ActorContext, ActorContextOf } from "@/actor/config";
 import type { ActorDefinition } from "@/actor/definition";
 import type { ActorConn, ActorHandle } from "@/client/mod";
 import type { DatabaseProviderContext } from "@/db/config";

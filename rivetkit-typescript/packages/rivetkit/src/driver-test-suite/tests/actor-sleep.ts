@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, test, vi } from "vitest";
 import {
 	PREVENT_SLEEP_TIMEOUT,

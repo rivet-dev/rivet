@@ -5,11 +5,7 @@ interface HibernatableWebSocketAckStateEntry {
 	pendingAckFromBufferSize: boolean;
 }
 
-// Message ack deadline is 30s on the gateway, but we persist sooner to keep
-// the pending buffer small and leave margin before the timeout.
 export const HIBERNATABLE_WEBSOCKET_ACK_DEADLINE = 5_000;
-
-// Force persistence once buffered inbound message bytes reach 0.5 MB.
 export const HIBERNATABLE_WEBSOCKET_BUFFERED_MESSAGE_SIZE_THRESHOLD = 500_000;
 
 export class HibernatableWebSocketAckState {
@@ -38,7 +34,9 @@ export class HibernatableWebSocketAckState {
 		bufferSizeThreshold: number,
 	): boolean {
 		const entry = this.#entries.get(connId);
-		if (!entry) return false;
+		if (!entry) {
+			return false;
+		}
 
 		entry.bufferedMessageSize += messageLength;
 		if (entry.bufferedMessageSize < bufferSizeThreshold) {
@@ -52,7 +50,9 @@ export class HibernatableWebSocketAckState {
 
 	onBeforePersist(connId: string, serverMessageIndex: number): boolean {
 		const entry = this.#entries.get(connId);
-		if (!entry) return false;
+		if (!entry) {
+			return false;
+		}
 
 		entry.pendingAckFromMessageIndex =
 			serverMessageIndex > entry.serverMessageIndex;
@@ -62,7 +62,9 @@ export class HibernatableWebSocketAckState {
 
 	consumeAck(connId: string): number | undefined {
 		const entry = this.#entries.get(connId);
-		if (!entry) return undefined;
+		if (!entry) {
+			return undefined;
+		}
 
 		if (
 			!entry.pendingAckFromMessageIndex &&
@@ -74,30 +76,18 @@ export class HibernatableWebSocketAckState {
 		entry.pendingAckFromMessageIndex = false;
 		entry.pendingAckFromBufferSize = false;
 		entry.bufferedMessageSize = 0;
-
 		return entry.serverMessageIndex;
 	}
 }
 
-interface InboundHibernatableWebSocketMessageInput {
+export function handleInboundHibernatableWebSocketMessage(input: {
 	connId: string;
-	hibernatable: {
-		serverMessageIndex: number;
-	};
+	hibernatable: { serverMessageIndex: number };
 	messageLength: number;
 	rivetMessageIndex: number;
 	ackState: HibernatableWebSocketAckState;
 	saveState: (opts: { immediate?: boolean; maxWait?: number }) => void;
-}
-
-/**
- * Updates hibernatable connection durability state for an inbound indexed
- * websocket message and schedules persistence so the index can be acked after
- * a durable write.
- */
-export function handleInboundHibernatableWebSocketMessage(
-	input: InboundHibernatableWebSocketMessageInput,
-): void {
+}): void {
 	const {
 		connId,
 		hibernatable,
@@ -106,6 +96,7 @@ export function handleInboundHibernatableWebSocketMessage(
 		ackState,
 		saveState,
 	} = input;
+
 	hibernatable.serverMessageIndex = rivetMessageIndex;
 
 	if (ackState.hasConnEntry(connId)) {
