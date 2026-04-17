@@ -10,7 +10,9 @@ workspace = "../../../"
 anyhow.workspace = true
 async-trait.workspace = true
 ciborium.workspace = true
+futures.workspace = true
 http.workspace = true
+rivet-error.workspace = true
 rivetkit-core = { path = "../rivetkit-core" }
 serde.workspace = true
 tokio.workspace = true

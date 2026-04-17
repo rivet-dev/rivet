@@ -3,11 +3,11 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use ciborium::{de::from_reader, ser::into_writer};
 use serde::Serialize;
 use tokio_util::sync::CancellationToken;
 
 use crate::actor::Actor;
+use crate::validation::{decode_cbor, encode_cbor, panic_with_error};
 use rivetkit_core::{
 	ActorContext, ActorKey, ConnHandle, Kv, Queue, Schedule, SqliteDb,
 };
@@ -47,31 +47,38 @@ impl<A: Actor> Ctx<A> {
 	}
 
 	pub fn state(&self) -> Arc<A::State> {
+		match self.try_state() {
+			Ok(state) => state,
+			Err(error) => panic_with_error(error),
+		}
+	}
+
+	pub(crate) fn try_state(&self) -> anyhow::Result<Arc<A::State>> {
 		let mut state_cache = self
 			.state_cache
 			.lock()
 			.expect("typed actor state cache lock poisoned");
 		if let Some(state) = state_cache.as_ref() {
-			return Arc::clone(state);
+			return Ok(Arc::clone(state));
 		}
 
 		let state_bytes = self.inner.state();
-		let state = Arc::new(
-			deserialize_cbor(&state_bytes)
-				.expect("failed to deserialize actor state from CBOR"),
-		);
+		let state = Arc::new(decode_cbor(&state_bytes, "actor state")?);
 		*state_cache = Some(Arc::clone(&state));
-		state
+		Ok(state)
 	}
 
 	pub fn set_state(&self, state: &A::State) {
-		let state_bytes = serialize_cbor(state)
-			.expect("failed to serialize actor state to CBOR");
+		if let Err(error) = self.try_set_state(state) {
+			panic_with_error(error);
+		}
+	}
+
+	pub(crate) fn try_set_state(&self, state: &A::State) -> anyhow::Result<()> {
+		let state_bytes = encode_cbor(state, "actor state")?;
 		self.inner.set_state(state_bytes);
-		*self
-			.state_cache
-			.lock()
-			.expect("typed actor state cache lock poisoned") = None;
+		self.invalidate_state_cache();
+		Ok(())
 	}
 
 	pub fn vars(&self) -> &A::Vars {
@@ -211,21 +218,23 @@ impl<A: Actor> ConnCtx<A> {
 	}
 
 	pub fn params(&self) -> A::ConnParams {
-		let params = self.inner.params();
-		deserialize_cbor(&params)
-			.expect("failed to deserialize connection params from CBOR")
+		match self.try_params() {
+			Ok(params) => params,
+			Err(error) => panic_with_error(error),
+		}
 	}
 
 	pub fn state(&self) -> A::ConnState {
-		let state = self.inner.state();
-		deserialize_cbor(&state)
-			.expect("failed to deserialize connection state from CBOR")
+		match self.try_state() {
+			Ok(state) => state,
+			Err(error) => panic_with_error(error),
+		}
 	}
 
 	pub fn set_state(&self, state: &A::ConnState) {
-		let state_bytes = serialize_cbor(state)
-			.expect("failed to serialize connection state to CBOR");
-		self.inner.set_state(state_bytes);
+		if let Err(error) = self.try_set_state(state) {
+			panic_with_error(error);
+		}
 	}
 
 	pub fn is_hibernatable(&self) -> bool {
@@ -240,6 +249,22 @@ impl<A: Actor> ConnCtx<A> {
 
 	pub async fn disconnect(&self, reason: Option<&str>) -> anyhow::Result<()> {
 		self.inner.disconnect(reason).await
+	}
+
+	pub(crate) fn try_params(&self) -> anyhow::Result<A::ConnParams> {
+		let params = self.inner.params();
+		decode_cbor(&params, "connection params")
+	}
+
+	pub(crate) fn try_state(&self) -> anyhow::Result<A::ConnState> {
+		let state = self.inner.state();
+		decode_cbor(&state, "connection state")
+	}
+
+	pub(crate) fn try_set_state(&self, state: &A::ConnState) -> anyhow::Result<()> {
+		let state_bytes = encode_cbor(state, "connection state")?;
+		self.inner.set_state(state_bytes);
+		Ok(())
 	}
 }
 
@@ -275,15 +300,7 @@ impl<A: Actor> Clone for ConnCtx<A> {
 }
 
 fn serialize_cbor<T: Serialize>(value: &T) -> anyhow::Result<Vec<u8>> {
-	let mut bytes = Vec::new();
-	into_writer(value, &mut bytes)?;
-	Ok(bytes)
-}
-
-fn deserialize_cbor<T: serde::de::DeserializeOwned>(
-	bytes: &[u8],
-) -> anyhow::Result<T> {
-	Ok(from_reader(bytes)?)
+	encode_cbor(value, "CBOR value")
 }
 
 #[cfg(test)]

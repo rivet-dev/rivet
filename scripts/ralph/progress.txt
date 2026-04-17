@@ -4,6 +4,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 ## Codebase Patterns
 - When trimming `rivetkit` entrypoints, update `package.json` `exports`, `files`, and `scripts.build` together. `tsup` can still pass while stale export targets point at missing dist files.
 - When moving Rust unit tests out of `src/`, keep a tiny source-owned `#[cfg(test)] #[path = "..."] mod tests;` shim and put the test bodies under `tests/modules/` so the moved tests keep private-module access without widening runtime visibility.
+- Native runtime validation for user-authored action args, event payloads, queue bodies, and connection params should stay centralized in `src/registry/native-validation.ts` so every boundary returns the same `actor/validation_error` RivetError contract.
 - `ctx.sleep()` and `ctx.destroy()` are not enough if they only flip local flags. The core runtime must also send the matching intent through the configured envoy handle or the engine will never transition the actor.
 - When changing Rust under `packages/rivetkit-napi` or `packages/sqlite-native`, rebuild from `rivetkit-typescript/packages/rivetkit-napi` with `pnpm build:force` so the native `.node` artifact actually refreshes.
 - `packages/rivetkit` should keep any still-live BARE codecs in `src/common/bare/` and import them from source. Do not depend on ephemeral `dist/schemas/**` outputs after removing the schema generator.
@@ -46,6 +47,14 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit` generic typed wrappers like `Ctx<A>` and `ConnCtx<A>` should implement `Clone` manually, because derive can accidentally add `A: Clone` or `Vars: Clone` bounds that break actor registration.
 - `rivetkit-core` local engine boot should flow through `ServeConfig::engine_binary_path`, wait for `endpoint + "/health"` before starting envoy, and forward child stdout/stderr into tracing so local-dev startup and shutdown stay centralized.
 
+---
+## 2026-04-17 16:13:47 PDT - US-042
+- What was implemented: Added explicit validation-error normalization to the Rust typed bridge for state, action args, action outputs, actor inputs, and connection params, then centralized native runtime schema validation in TypeScript so action args, broadcast/event payloads, queue bodies, and connection params all fail with the same `actor/validation_error` RivetError shape.
+- Files changed: `/home/nathan/r5/Cargo.lock`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/Cargo.toml`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/lib.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/validation.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/bridge.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/tests/modules/bridge.rs`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/src/actor/config.ts`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/src/registry/native.ts`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/src/registry/native-validation.ts`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/tests/fixtures/napi-runtime-server.ts`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/tests/napi-runtime-integration.test.ts`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/tests/native-validation.test.ts`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Keep native runtime validation in one shared helper module so every N-API boundary normalizes failures to the same RivetError contract instead of drifting per call site.
+  - Gotchas encountered: Direct native action handles in the current integration path do not expose connection params through `c.conn`, so connection-param validation is better covered with focused validation tests than by forcing it through the wrong runtime surface.
+  - Useful context: `pnpm test -- <file>` still drags unrelated suites through the package harness here; `pnpm exec vitest run tests/native-validation.test.ts tests/napi-runtime-integration.test.ts` is the clean targeted path for this area.
 ---
 
 ## 2026-04-16 22:05:35 PDT - US-001

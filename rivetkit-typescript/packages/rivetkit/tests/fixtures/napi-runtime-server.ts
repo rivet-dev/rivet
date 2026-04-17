@@ -2,7 +2,8 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getEnginePath } from "@rivetkit/engine-cli";
-import { UserError, actor, setup } from "../../src/mod";
+import { z } from "zod/v4";
+import { UserError, actor, event, queue, setup } from "../../src/mod";
 import { buildNativeRegistry } from "../../src/registry/native";
 
 const textDecoder = new TextDecoder();
@@ -13,6 +14,20 @@ const repoEngineBinary = resolve(
 );
 
 const endpoint = process.env.RIVETKIT_TEST_ENDPOINT ?? "http://127.0.0.1:6642";
+const connParamsSchema = z.object({
+	userId: z.string().min(1),
+});
+const validatedActionArgsSchema = z.tuple([
+	z.object({
+		amount: z.number().int().nonnegative(),
+	}),
+]);
+const countChangedSchema = z.object({
+	count: z.number().int(),
+});
+const jobSchema = z.object({
+	id: z.string().min(1),
+});
 
 function resolveEngineBinaryPath(): string {
 	if (existsSync(repoEngineBinary)) {
@@ -24,9 +39,36 @@ function resolveEngineBinaryPath(): string {
 
 const integrationActor = actor({
 	state: { count: 0 },
+	connParamsSchema,
+	actionInputSchemas: {
+		validatedAction: validatedActionArgsSchema,
+		emitValidatedEvent: z.tuple([countChangedSchema]),
+		enqueueValidatedJob: z.tuple([jobSchema]),
+	},
+	events: {
+		countChanged: event({ schema: countChangedSchema }),
+	},
+	queues: {
+		jobs: queue({ message: jobSchema }),
+	},
+	onBeforeConnect: async () => {},
 	actions: {
+		ping: async (c) => {
+			return c.conn.params.userId;
+		},
 		getCount: async (c) => {
 			return c.state.count;
+		},
+		validatedAction: async (_c, payload: { amount: number }) => {
+			return payload.amount;
+		},
+		emitValidatedEvent: async (c, payload: { count: number }) => {
+			c.broadcast("countChanged", payload);
+			return payload.count;
+		},
+		enqueueValidatedJob: async (c, payload: { id: string }) => {
+			await c.queue.send("jobs", payload);
+			return payload.id;
 		},
 		increment: async (c, amount: number) => {
 			c.state.count += amount;

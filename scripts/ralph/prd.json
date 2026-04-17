@@ -806,7 +806,7 @@
         "tsc type-check passes"
       ],
       "priority": 43,
-      "passes": false,
+      "passes": true,
       "notes": "Split: Rust actors get type-safe validation from serde for free. TS actors get Zod validation for user-defined schemas. rivetkit-core stays opaque bytes with no validation. All validation errors are RivetError."
     },
     {

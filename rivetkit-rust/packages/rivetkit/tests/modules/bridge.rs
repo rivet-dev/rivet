@@ -6,6 +6,7 @@ use super::*;
 
 		use anyhow::Result;
 		use async_trait::async_trait;
+		use rivet_error::RivetError;
 		use serde::{Deserialize, Serialize};
 
 		use super::{TypedActionMap, build_action, build_factory};
@@ -320,5 +321,83 @@ use super::*;
 			.expect("on_request should succeed");
 
 			assert_eq!(response.body(), b"ok");
+		}
+
+		#[tokio::test]
+		async fn action_deserialization_failures_become_validation_errors() {
+			let mut actions = TypedActionMap::<TestActor>::new();
+			actions.insert(
+				"increment".to_owned(),
+				build_action(TestActor::increment),
+			);
+			let factory = build_factory::<TestActor>(actions);
+			let callbacks = factory
+				.create(FactoryRequest {
+					ctx: ActorContext::new("actor-id", "test", Vec::new(), "local"),
+					input: Some(
+						super::serialize_cbor(&TestInput { start: 1 })
+							.expect("test input should serialize"),
+					),
+					is_new: true,
+				})
+				.await
+				.expect("factory should build typed callbacks");
+			let action = callbacks
+				.actions
+				.get("increment")
+				.expect("increment action should be present");
+			let error = action(ActionRequest {
+				ctx: ActorContext::new("actor-id", "test", Vec::new(), "local"),
+				conn: ConnHandle::default(),
+				name: "increment".to_owned(),
+				args: vec![0xff],
+			})
+			.await
+			.expect_err("invalid CBOR should fail");
+			let error = RivetError::extract(&error);
+
+			assert_eq!(error.group(), "actor");
+			assert_eq!(error.code(), "validation_error");
+			assert!(
+				error.message().contains("action arguments"),
+				"unexpected error message: {}",
+				error.message(),
+			);
+		}
+
+		#[tokio::test]
+		async fn state_decode_failures_become_validation_errors() {
+			let factory = build_factory::<TestActor>(TypedActionMap::new());
+			let ctx = ActorContext::new("actor-id", "test", Vec::new(), "local");
+			ctx.set_state(vec![0xff]);
+			let callbacks = factory
+				.create(FactoryRequest {
+					ctx: ctx.clone(),
+					input: Some(
+						super::serialize_cbor(&TestInput { start: 0 })
+							.expect("test input should serialize"),
+					),
+					is_new: false,
+				})
+				.await
+				.expect("factory should build typed callbacks");
+			let error = callbacks
+				.on_request
+				.as_ref()
+				.expect("on_request should be wired")(rivetkit_core::OnRequestRequest {
+				ctx,
+				request: Request::new(Vec::new()),
+			})
+			.await
+			.expect_err("invalid typed state should fail");
+			let error = RivetError::extract(&error);
+
+			assert_eq!(error.group(), "actor");
+			assert_eq!(error.code(), "validation_error");
+			assert!(
+				error.message().contains("actor state"),
+				"unexpected error message: {}",
+				error.message(),
+			);
 		}
 	}

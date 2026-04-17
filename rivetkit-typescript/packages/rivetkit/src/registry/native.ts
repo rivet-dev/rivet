@@ -37,6 +37,13 @@ import {
 } from "@/serde";
 import { bufferToArrayBuffer } from "@/utils";
 import { logger } from "./log";
+import {
+	type NativeValidationConfig,
+	validateActionArgs,
+	validateConnParams,
+	validateEventArgs,
+	validateQueueBody,
+} from "./native-validation";
 
 import type {
 	ActorContext as NativeActorContext,
@@ -258,9 +265,11 @@ function toActorKey(
 
 class NativeConnAdapter {
 	#conn: NativeConnHandle;
+	#schemas: NativeValidationConfig;
 
-	constructor(conn: NativeConnHandle) {
+	constructor(conn: NativeConnHandle, schemas: NativeValidationConfig = {}) {
 		this.#conn = conn;
+		this.#schemas = schemas;
 	}
 
 	get id(): string {
@@ -268,7 +277,10 @@ class NativeConnAdapter {
 	}
 
 	get params(): unknown {
-		return decodeValue(this.#conn.params());
+		return validateConnParams(
+			this.#schemas.connParamsSchema,
+			decodeValue(this.#conn.params()),
+		);
 	}
 
 	get state(): unknown {
@@ -287,7 +299,8 @@ class NativeConnAdapter {
 	}
 
 	send(name: string, ...args: unknown[]): void {
-		callNativeSync(() => this.#conn.send(name, encodeValue(args)));
+		const validatedArgs = validateEventArgs(this.#schemas.events, name, args);
+		callNativeSync(() => this.#conn.send(name, encodeValue(validatedArgs)));
 	}
 
 	async disconnect(reason?: string): Promise<void> {
@@ -406,11 +419,19 @@ class NativeKvAdapter {
 	}
 }
 
-function wrapQueueMessage(message: NativeQueueMessage) {
+function wrapQueueMessage(
+	message: NativeQueueMessage,
+	schemas: NativeValidationConfig["queues"],
+) {
+	const name = callNativeSync(() => message.name());
 	return {
 		id: Number(callNativeSync(() => message.id())),
-		name: callNativeSync(() => message.name()),
-		body: decodeValue(callNativeSync(() => message.body())),
+		name,
+		body: validateQueueBody(
+			schemas,
+			name,
+			decodeValue(callNativeSync(() => message.body())),
+		),
 		createdAt: callNativeSync(() => message.createdAt()),
 		complete: callNativeSync(() => message.isCompletable())
 			? async (response?: unknown) =>
@@ -427,14 +448,23 @@ function wrapQueueMessage(message: NativeQueueMessage) {
 
 class NativeQueueAdapter {
 	#queue: NativeQueue;
+	#schemas: NativeValidationConfig["queues"];
 
-	constructor(queue: NativeQueue) {
+	constructor(
+		queue: NativeQueue,
+		schemas: NativeValidationConfig["queues"] = undefined,
+	) {
 		this.#queue = queue;
+		this.#schemas = schemas;
 	}
 
 	async send(name: string, body: unknown) {
+		const validatedBody = validateQueueBody(this.#schemas, name, body);
 		return wrapQueueMessage(
-			await callNative(() => this.#queue.send(name, encodeValue(body))),
+			await callNative(() =>
+				this.#queue.send(name, encodeValue(validatedBody)),
+			),
+			this.#schemas,
 		);
 	}
 
@@ -450,7 +480,7 @@ class NativeQueueAdapter {
 				completable: options?.completable,
 			}),
 		);
-		return message ? wrapQueueMessage(message) : undefined;
+		return message ? wrapQueueMessage(message, this.#schemas) : undefined;
 	}
 
 	async nextBatch(options?: {
@@ -467,7 +497,7 @@ class NativeQueueAdapter {
 				completable: options?.completable,
 			}),
 		);
-		return messages.map(wrapQueueMessage);
+		return messages.map((message) => wrapQueueMessage(message, this.#schemas));
 	}
 
 	async tryNext(options?: {
@@ -480,7 +510,7 @@ class NativeQueueAdapter {
 				completable: options?.completable,
 			}),
 		);
-		return message ? wrapQueueMessage(message) : undefined;
+		return message ? wrapQueueMessage(message, this.#schemas) : undefined;
 	}
 
 	async tryNextBatch(options?: {
@@ -495,7 +525,7 @@ class NativeQueueAdapter {
 				completable: options?.completable,
 			}),
 		);
-		return messages.map(wrapQueueMessage);
+		return messages.map((message) => wrapQueueMessage(message, this.#schemas));
 	}
 }
 
@@ -525,6 +555,7 @@ class NativeWebSocketAdapter {
 
 class NativeActorContextAdapter {
 	#ctx: NativeActorContext;
+	#schemas: NativeValidationConfig;
 	#abortSignal?: AbortSignal;
 	#client?: AnyClient;
 	#clientFactory?: () => AnyClient;
@@ -533,9 +564,14 @@ class NativeActorContextAdapter {
 	#schedule?: NativeScheduleAdapter;
 	#sql?: ReturnType<typeof wrapJsNativeDatabase>;
 
-	constructor(ctx: NativeActorContext, clientFactory?: () => AnyClient) {
+	constructor(
+		ctx: NativeActorContext,
+		clientFactory?: () => AnyClient,
+		schemas: NativeValidationConfig = {},
+	) {
 		this.#ctx = ctx;
 		this.#clientFactory = clientFactory;
+		this.#schemas = schemas;
 	}
 
 	get kv() {
@@ -590,6 +626,7 @@ class NativeActorContextAdapter {
 		if (!this.#queue) {
 			this.#queue = new NativeQueueAdapter(
 				callNativeSync(() => this.#ctx.queue()),
+				this.#schemas.queues,
 			);
 		}
 		return this.#queue;
@@ -623,7 +660,7 @@ class NativeActorContextAdapter {
 	get conns(): Map<string, NativeConnAdapter> {
 		return new Map(
 			callNativeSync(() => this.#ctx.conns())
-				.map((conn) => [conn.id(), new NativeConnAdapter(conn)]),
+				.map((conn) => [conn.id(), new NativeConnAdapter(conn, this.#schemas)]),
 		);
 	}
 
@@ -652,7 +689,10 @@ class NativeActorContextAdapter {
 	}
 
 	broadcast(name: string, ...args: unknown[]): void {
-		callNativeSync(() => this.#ctx.broadcast(name, encodeValue(args)));
+		const validatedArgs = validateEventArgs(this.#schemas.events, name, args);
+		callNativeSync(() =>
+			this.#ctx.broadcast(name, encodeValue(validatedArgs)),
+		);
 	}
 
 	async saveState(opts?: { immediate?: boolean }): Promise<void> {
@@ -707,9 +747,10 @@ function withConnContext(
 	ctx: NativeActorContext,
 	conn: NativeConnHandle,
 	clientFactory?: () => AnyClient,
+	schemas: NativeValidationConfig = {},
 ) {
-	return Object.assign(new NativeActorContextAdapter(ctx, clientFactory), {
-		conn: new NativeConnAdapter(conn),
+	return Object.assign(new NativeActorContextAdapter(ctx, clientFactory, schemas), {
+		conn: new NativeConnAdapter(conn, schemas),
 	});
 }
 
@@ -763,6 +804,7 @@ async function maybeHandleNativeActionRequest(
 	request: Request,
 	clientFactory: () => AnyClient,
 	actions: Record<string, (...args: Array<any>) => any>,
+	schemas: NativeValidationConfig,
 ): Promise<Response | undefined> {
 	if (request.method !== "POST") {
 		return undefined;
@@ -802,10 +844,13 @@ async function maybeHandleNativeActionRequest(
 		(bare) =>
 			bare.args ? (cbor.decode(new Uint8Array(bare.args)) as unknown[]) : [],
 	);
-	const actorCtx = new NativeActorContextAdapter(ctx, clientFactory);
+	const actorCtx = new NativeActorContextAdapter(ctx, clientFactory, schemas);
 	let output: unknown;
 	try {
-		output = await handler(actorCtx, ...args);
+		output = await handler(
+			actorCtx,
+			...validateActionArgs(schemas.actionInputSchemas, actionName, args),
+		);
 	} catch (error) {
 		return buildNativeActionErrorResponse(encoding, actionName, error);
 	} finally {
@@ -876,6 +921,12 @@ function buildNativeFactory(
 	definition: AnyActorDefinition,
 ): NativeActorFactory {
 	const config = definition.config as Record<string, any>;
+	const schemaConfig: NativeValidationConfig = {
+		actionInputSchemas: config.actionInputSchemas,
+		connParamsSchema: config.connParamsSchema,
+		events: config.events,
+		queues: config.queues,
+	};
 	const actionHandlers = Object.fromEntries(
 		(
 			Object.entries(config.actions ?? {}) as Array<
@@ -900,7 +951,11 @@ function buildNativeFactory(
 			},
 		): Promise<JsFactoryInitResult> => {
 			const { ctx, input, isNew } = unwrapTsfnPayload(error, payload);
-			const actorCtx = new NativeActorContextAdapter(ctx, createClient);
+			const actorCtx = new NativeActorContextAdapter(
+				ctx,
+				createClient,
+				schemaConfig,
+			);
 			try {
 				const decodedInput = decodeValue(input);
 				const result: JsFactoryInitResult = {};
@@ -947,7 +1002,11 @@ function buildNativeFactory(
 						payload: { ctx: NativeActorContext },
 					) => {
 						const { ctx } = unwrapTsfnPayload(error, payload);
-						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
+						const actorCtx = new NativeActorContextAdapter(
+							ctx,
+							createClient,
+							schemaConfig,
+						);
 						try {
 							await config.onWake(actorCtx);
 						} finally {
@@ -962,7 +1021,11 @@ function buildNativeFactory(
 						payload: { ctx: NativeActorContext },
 					) => {
 						const { ctx } = unwrapTsfnPayload(error, payload);
-						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
+						const actorCtx = new NativeActorContextAdapter(
+							ctx,
+							createClient,
+							schemaConfig,
+						);
 						try {
 							await config.onSleep(actorCtx);
 						} finally {
@@ -977,7 +1040,11 @@ function buildNativeFactory(
 						payload: { ctx: NativeActorContext },
 					) => {
 						const { ctx } = unwrapTsfnPayload(error, payload);
-						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
+						const actorCtx = new NativeActorContextAdapter(
+							ctx,
+							createClient,
+							schemaConfig,
+						);
 						try {
 							await config.onDestroy(actorCtx);
 						} finally {
@@ -995,7 +1062,11 @@ function buildNativeFactory(
 						},
 					) => {
 						const { ctx, newState } = unwrapTsfnPayload(error, payload);
-						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
+						const actorCtx = new NativeActorContextAdapter(
+							ctx,
+							createClient,
+							schemaConfig,
+						);
 						try {
 							await config.onStateChange(actorCtx, decodeValue(newState));
 						} finally {
@@ -1013,9 +1084,19 @@ function buildNativeFactory(
 						},
 					) => {
 						const { ctx, params } = unwrapTsfnPayload(error, payload);
-						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
+						const actorCtx = new NativeActorContextAdapter(
+							ctx,
+							createClient,
+							schemaConfig,
+						);
 						try {
-							await config.onBeforeConnect(actorCtx, decodeValue(params));
+							await config.onBeforeConnect(
+								actorCtx,
+								validateConnParams(
+									schemaConfig.connParamsSchema,
+									decodeValue(params),
+								),
+							);
 						} finally {
 							await actorCtx.dispose();
 						}
@@ -1031,9 +1112,17 @@ function buildNativeFactory(
 						},
 					) => {
 						const { ctx, conn } = unwrapTsfnPayload(error, payload);
-						const actorCtx = withConnContext(ctx, conn, createClient);
+						const actorCtx = withConnContext(
+							ctx,
+							conn,
+							createClient,
+							schemaConfig,
+						);
 						try {
-							await config.onConnect(actorCtx, new NativeConnAdapter(conn));
+							await config.onConnect(
+								actorCtx,
+								new NativeConnAdapter(conn, schemaConfig),
+							);
 						} finally {
 							await actorCtx.dispose();
 						}
@@ -1049,9 +1138,17 @@ function buildNativeFactory(
 						},
 					) => {
 						const { ctx, conn } = unwrapTsfnPayload(error, payload);
-						const actorCtx = withConnContext(ctx, conn, createClient);
+						const actorCtx = withConnContext(
+							ctx,
+							conn,
+							createClient,
+							schemaConfig,
+						);
 						try {
-							await config.onDisconnect(actorCtx, new NativeConnAdapter(conn));
+							await config.onDisconnect(
+								actorCtx,
+								new NativeConnAdapter(conn, schemaConfig),
+							);
 						} finally {
 							await actorCtx.dispose();
 						}
@@ -1072,7 +1169,11 @@ function buildNativeFactory(
 							error,
 							payload,
 						);
-						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
+						const actorCtx = new NativeActorContextAdapter(
+							ctx,
+							createClient,
+							schemaConfig,
+						);
 						try {
 							return encodeValue(
 								await config.onBeforeActionResponse(
@@ -1107,6 +1208,7 @@ function buildNativeFactory(
 					jsRequest,
 					createClient,
 					actionHandlers,
+					schemaConfig,
 				);
 				if (actionResponse) {
 					return await toJsHttpResponse(actionResponse);
@@ -1117,7 +1219,7 @@ function buildNativeFactory(
 				}
 
 				const requestCtx = Object.assign(
-					new NativeActorContextAdapter(ctx, createClient),
+					new NativeActorContextAdapter(ctx, createClient, schemaConfig),
 					{
 						request: jsRequest,
 					},
@@ -1148,7 +1250,11 @@ function buildNativeFactory(
 						},
 					) => {
 						const { ctx, ws } = unwrapTsfnPayload(error, payload);
-						const actorCtx = new NativeActorContextAdapter(ctx, createClient);
+						const actorCtx = new NativeActorContextAdapter(
+							ctx,
+							createClient,
+							schemaConfig,
+						);
 						try {
 							await config.onWebSocket(
 								actorCtx,
@@ -1170,7 +1276,11 @@ function buildNativeFactory(
 				payload: { ctx: NativeActorContext },
 			) => {
 				const { ctx } = unwrapTsfnPayload(error, payload);
-				const actorCtx = new NativeActorContextAdapter(ctx, createClient);
+				const actorCtx = new NativeActorContextAdapter(
+					ctx,
+					createClient,
+					schemaConfig,
+				);
 				try {
 					await run(actorCtx);
 				} finally {
@@ -1190,10 +1300,22 @@ function buildNativeFactory(
 						},
 					) => {
 						const { ctx, conn, args } = unwrapTsfnPayload(error, payload);
-						const actorCtx = withConnContext(ctx, conn, createClient);
+						const actorCtx = withConnContext(
+							ctx,
+							conn,
+							createClient,
+							schemaConfig,
+						);
 						try {
 							return encodeValue(
-								await handler(actorCtx, ...decodeArgs(args)),
+								await handler(
+									actorCtx,
+									...validateActionArgs(
+										schemaConfig.actionInputSchemas,
+										name,
+										decodeArgs(args),
+									),
+								),
 							);
 						} finally {
 							await actorCtx.dispose();

@@ -5,12 +5,12 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use ciborium::{de::from_reader, ser::into_writer};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::actor::Actor;
 use crate::context::{ConnCtx, Ctx};
+use crate::validation::{catch_unwind_result, decode_cbor, encode_cbor};
 use rivetkit_core::{
 	ActionRequest, ActorFactory, ActorInstanceCallbacks, FactoryRequest,
 	OnBeforeConnectRequest, OnConnectRequest, OnDestroyRequest,
@@ -36,12 +36,13 @@ where
 	let handler = Arc::new(handler);
 	Arc::new(move |actor, ctx, raw_args| {
 		let handler = Arc::clone(&handler);
-		Box::pin(async move {
-			let args = deserialize_cbor::<Args>(&raw_args)
+		Box::pin(catch_unwind_result(async move {
+			let args = decode_cbor::<Args>(&raw_args, "action arguments")
 				.context("deserialize action arguments from CBOR")?;
 			let output = handler(actor, ctx, args).await?;
-			serialize_cbor(&output).context("serialize action output to CBOR")
-		})
+			encode_cbor(&output, "action output")
+				.context("serialize action output to CBOR")
+		}))
 	})
 }
 
@@ -53,7 +54,9 @@ where
 
 	ActorFactory::new(A::config(), move |request| {
 		let actions = Arc::clone(&actions);
-		Box::pin(async move { create_callbacks::<A>(request, actions).await })
+		Box::pin(catch_unwind_result(async move {
+			create_callbacks::<A>(request, actions).await
+		}))
 	})
 }
 
@@ -71,7 +74,7 @@ where
 		let state = A::create_state(&ctx, &input)
 			.await
 			.context("create typed actor state")?;
-		ctx.set_state(&state);
+		ctx.try_set_state(&state)?;
 	}
 
 	let vars = Arc::new(create_vars::<A>(&ctx).await?);
@@ -130,7 +133,9 @@ where
 		move |request: OnRequestRequest| {
 			let actor = Arc::clone(&actor);
 			let ctx = ctx.clone();
-			Box::pin(async move { actor.on_request(&ctx, request.request).await })
+			Box::pin(catch_unwind_result(async move {
+				actor.on_request(&ctx, request.request).await
+			}))
 		}
 	}));
 	callbacks.on_websocket = Some(wrap_lifecycle({
@@ -149,7 +154,10 @@ where
 			let actor = Arc::clone(&actor);
 			let ctx = ctx.clone();
 			async move {
-				let params = deserialize_cbor::<A::ConnParams>(&request.params)
+				let params = decode_cbor::<A::ConnParams>(
+					&request.params,
+					"connection params",
+				)
 					.context("deserialize connection params from CBOR")?;
 				actor.on_before_connect(&ctx, &params).await
 			}
@@ -194,10 +202,10 @@ where
 					let actor = Arc::clone(&actor);
 					let ctx = ctx.clone();
 					let action = Arc::clone(&action);
-					Box::pin(async move {
+					Box::pin(catch_unwind_result(async move {
 						let _ = (request.ctx, request.conn, request.name);
 						action(actor, ctx, request.args).await
-					})
+					}))
 				}
 			}),
 		);
@@ -212,7 +220,7 @@ where
 	F: Fn(T) -> Fut + Send + Sync + 'static,
 	Fut: Future<Output = Result<()>> + Send + 'static,
 {
-	Box::new(move |request| Box::pin(callback(request)))
+	Box::new(move |request| Box::pin(catch_unwind_result(callback(request))))
 }
 
 async fn create_vars<A>(ctx: &Ctx<A>) -> Result<A::Vars>
@@ -234,23 +242,23 @@ where
 	T: DeserializeOwned,
 {
 	let bytes = bytes.unwrap_or(CBOR_NULL);
-	deserialize_cbor(bytes).context("deserialize actor input from CBOR")
+	decode_cbor(bytes, "actor input").context("deserialize actor input from CBOR")
 }
 
+#[cfg(test)]
 fn serialize_cbor<T>(value: &T) -> Result<Vec<u8>>
 where
 	T: Serialize,
 {
-	let mut bytes = Vec::new();
-	into_writer(value, &mut bytes)?;
-	Ok(bytes)
+	encode_cbor(value, "CBOR value")
 }
 
+#[cfg(test)]
 fn deserialize_cbor<T>(bytes: &[u8]) -> Result<T>
 where
 	T: DeserializeOwned,
 {
-	Ok(from_reader(bytes)?)
+	decode_cbor(bytes, "CBOR value")
 }
 
 fn downcast_unit<T>() -> Result<T>

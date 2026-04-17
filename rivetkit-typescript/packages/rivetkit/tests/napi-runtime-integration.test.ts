@@ -304,6 +304,51 @@ describe.sequential("native NAPI runtime integration", () => {
 			const actorId = await handle.resolve();
 
 			expect(await waitForActorReady(() => handle.getCount(), 30_000)).toBe(0);
+			expect(
+				await waitForActorReady(
+					() => handle.validatedAction({ amount: 4 }),
+					30_000,
+				),
+			).toBe(4);
+			await expect(
+				waitForActorReady(
+					() => handle.validatedAction({ amount: "bad" }),
+					30_000,
+				),
+			).rejects.toMatchObject({
+				group: "actor",
+				code: "validation_error",
+			});
+			expect(
+				await waitForActorReady(
+					() => handle.emitValidatedEvent({ count: 2 }),
+					30_000,
+				),
+			).toBe(2);
+			await expect(
+				waitForActorReady(
+					() => handle.emitValidatedEvent({ count: "bad" }),
+					30_000,
+				),
+			).rejects.toMatchObject({
+				group: "actor",
+				code: "validation_error",
+			});
+			expect(
+				await waitForActorReady(
+					() => handle.enqueueValidatedJob({ id: "job-1" }),
+					30_000,
+				),
+			).toBe("job-1");
+			await expect(
+				waitForActorReady(
+					() => handle.enqueueValidatedJob({ id: "" }),
+					30_000,
+				),
+			).rejects.toMatchObject({
+				group: "actor",
+				code: "validation_error",
+			});
 
 			expect(await waitForActorReady(() => handle.increment(2), 30_000)).toEqual({
 				count: 2,
@@ -337,11 +382,10 @@ describe.sequential("native NAPI runtime integration", () => {
 				},
 			});
 			await expect(handle.throwUntypedError()).rejects.toMatchObject({
-				group: "actor",
+				group: "rivetkit",
 				code: "internal_error",
 				message: "native untyped error",
 			});
-
 			await client.dispose();
 		},
 		120_000,

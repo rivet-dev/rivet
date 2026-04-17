@@ -8,7 +8,11 @@ import type {
 	NativeDatabaseProvider,
 } from "@/common/database/config";
 import type { BaseActorDefinition } from "./definition";
-import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
+import type {
+	EventSchemaConfig,
+	PrimitiveSchema,
+	QueueSchemaConfig,
+} from "./schema";
 import type {
 	InferEventArgs,
 	InferQueueCompleteMap,
@@ -788,6 +792,8 @@ export const ActorConfigSchema = z
 		onRequest: zFunction().optional(),
 		onWebSocket: zFunction().optional(),
 		actions: z.record(z.string(), zFunction()).default(() => ({})),
+		actionInputSchemas: z.record(z.string(), z.any()).optional(),
+		connParamsSchema: z.any().optional(),
 		events: z.record(z.string(), z.any()).optional(),
 		queues: z.record(z.string(), z.any()).optional(),
 		state: z.any().optional(),
@@ -1290,6 +1296,16 @@ interface BaseActorConfig<
 	) => void | Promise<void>;
 
 	actions?: TActions;
+
+	/**
+	 * Optional schema map for validating action argument tuples in native runtimes.
+	 */
+	actionInputSchemas?: Record<string, PrimitiveSchema>;
+
+	/**
+	 * Optional schema for validating connection params in native runtimes.
+	 */
+	connParamsSchema?: PrimitiveSchema;
 
 	/**
 	 * Schema map for events broadcasted by this actor.
@@ -1796,6 +1812,18 @@ export const DocActorConfigSchema = z
 			.optional()
 			.describe(
 				"Map of action name to handler function. Defaults to an empty object.",
+			),
+		actionInputSchemas: z
+			.record(z.string(), z.unknown())
+			.optional()
+			.describe(
+				"Optional schema map for validating action argument tuples in native runtimes.",
+			),
+		connParamsSchema: z
+			.unknown()
+			.optional()
+			.describe(
+				"Optional schema for validating connection params in native runtimes.",
 			),
 		events: z
 			.record(z.string(), z.unknown())
