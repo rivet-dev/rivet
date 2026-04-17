@@ -882,36 +882,39 @@ async function maybeHandleNativeActionRequest(
 
 function buildActorConfig(definition: AnyActorDefinition): JsActorConfig {
 	const config = definition.config as unknown as Record<string, unknown>;
-	const canHibernate = config.canHibernateWebSocket;
+	const options = (config.options ?? {}) as Record<string, unknown>;
+	const canHibernate = options.canHibernateWebSocket;
 
 	return {
-		name: config.name as string | undefined,
-		icon: config.icon as string | undefined,
+		name: options.name as string | undefined,
+		icon: options.icon as string | undefined,
 		canHibernateWebsocket:
 			typeof canHibernate === "boolean" ? canHibernate : undefined,
-		stateSaveIntervalMs: config.stateSaveInterval as number | undefined,
-		createVarsTimeoutMs: config.createVarsTimeout as number | undefined,
-		createConnStateTimeoutMs: config.createConnStateTimeout as number | undefined,
+		stateSaveIntervalMs: options.stateSaveInterval as number | undefined,
+		createVarsTimeoutMs: options.createVarsTimeout as number | undefined,
+		createConnStateTimeoutMs:
+			options.createConnStateTimeout as number | undefined,
 		onBeforeConnectTimeoutMs:
-			config.onBeforeConnectTimeout as number | undefined,
-		onConnectTimeoutMs: config.onConnectTimeout as number | undefined,
-		onSleepTimeoutMs: config.onSleepTimeout as number | undefined,
-		onDestroyTimeoutMs: config.onDestroyTimeout as number | undefined,
-		actionTimeoutMs: config.actionTimeout as number | undefined,
-		runStopTimeoutMs: config.runStopTimeout as number | undefined,
-		sleepTimeoutMs: config.sleepTimeout as number | undefined,
-		noSleep: config.noSleep as boolean | undefined,
-		sleepGracePeriodMs: config.sleepGracePeriod as number | undefined,
+			options.onBeforeConnectTimeout as number | undefined,
+		onConnectTimeoutMs: options.onConnectTimeout as number | undefined,
+		onMigrateTimeoutMs: options.onMigrateTimeout as number | undefined,
+		onSleepTimeoutMs: options.onSleepTimeout as number | undefined,
+		onDestroyTimeoutMs: options.onDestroyTimeout as number | undefined,
+		actionTimeoutMs: options.actionTimeout as number | undefined,
+		runStopTimeoutMs: options.runStopTimeout as number | undefined,
+		sleepTimeoutMs: options.sleepTimeout as number | undefined,
+		noSleep: options.noSleep as boolean | undefined,
+		sleepGracePeriodMs: options.sleepGracePeriod as number | undefined,
 		connectionLivenessTimeoutMs:
-			config.connectionLivenessTimeout as number | undefined,
+			options.connectionLivenessTimeout as number | undefined,
 		connectionLivenessIntervalMs:
-			config.connectionLivenessInterval as number | undefined,
-		maxQueueSize: config.maxQueueSize as number | undefined,
-		maxQueueMessageSize: config.maxQueueMessageSize as number | undefined,
+			options.connectionLivenessInterval as number | undefined,
+		maxQueueSize: options.maxQueueSize as number | undefined,
+		maxQueueMessageSize: options.maxQueueMessageSize as number | undefined,
 		preloadMaxWorkflowBytes:
-			config.preloadMaxWorkflowBytes as number | undefined,
+			options.preloadMaxWorkflowBytes as number | undefined,
 		preloadMaxConnectionsBytes:
-			config.preloadMaxConnectionsBytes as number | undefined,
+			options.preloadMaxConnectionsBytes as number | undefined,
 	};
 }
 
@@ -1009,6 +1012,28 @@ function buildNativeFactory(
 						);
 						try {
 							await config.onWake(actorCtx);
+						} finally {
+							await actorCtx.dispose();
+						}
+					})
+				: undefined,
+		onMigrate:
+			typeof config.onMigrate === "function"
+				? wrapNativeCallback(async (
+						error: unknown,
+						payload: {
+							ctx: NativeActorContext;
+							isNew: boolean;
+						},
+					) => {
+						const { ctx, isNew } = unwrapTsfnPayload(error, payload);
+						const actorCtx = new NativeActorContextAdapter(
+							ctx,
+							createClient,
+							schemaConfig,
+						);
+						try {
+							await config.onMigrate(actorCtx, isNew);
 						} finally {
 							await actorCtx.dispose();
 						}

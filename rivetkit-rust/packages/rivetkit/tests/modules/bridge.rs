@@ -41,6 +41,7 @@ use super::*;
 		}
 
 		struct TestActor {
+			migrate_count: AtomicUsize,
 			wake_count: AtomicUsize,
 		}
 
@@ -76,8 +77,20 @@ use super::*;
 
 			async fn on_create(_ctx: &Ctx<Self>, _input: &Self::Input) -> Result<Self> {
 				Ok(Self {
+					migrate_count: AtomicUsize::new(0),
 					wake_count: AtomicUsize::new(0),
 				})
+			}
+
+			async fn on_migrate(
+				self: &Arc<Self>,
+				ctx: &Ctx<Self>,
+				is_new: bool,
+			) -> Result<()> {
+				assert_eq!(ctx.vars().label, "vars");
+				assert!(is_new);
+				self.migrate_count.fetch_add(1, Ordering::SeqCst);
+				Ok(())
 			}
 
 			async fn on_wake(self: &Arc<Self>, ctx: &Ctx<Self>) -> Result<()> {
@@ -206,6 +219,7 @@ use super::*;
 				.expect("factory should build typed callbacks");
 
 			assert!(callbacks.on_wake.is_some());
+			assert!(callbacks.on_migrate.is_some());
 			assert!(callbacks.on_sleep.is_some());
 			assert!(callbacks.on_destroy.is_some());
 			assert!(callbacks.on_state_change.is_some());
@@ -215,6 +229,17 @@ use super::*;
 			assert!(callbacks.on_disconnect.is_some());
 			assert!(callbacks.run.is_some());
 			assert!(callbacks.actions.contains_key("increment"));
+
+			let migrate = callbacks
+				.on_migrate
+				.as_ref()
+				.expect("on_migrate should be wired");
+			migrate(rivetkit_core::OnMigrateRequest {
+				ctx: ctx.clone(),
+				is_new: true,
+			})
+			.await
+			.expect("on_migrate should succeed");
 
 			let wake = callbacks
 				.on_wake

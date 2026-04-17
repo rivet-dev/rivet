@@ -9,8 +9,8 @@ pub use actor::action::{ActionDispatchError, ActionInvoker};
 pub use actor::callbacks::{
 	ActionRequest, ActorInstanceCallbacks, OnBeforeActionResponseRequest,
 	OnBeforeConnectRequest, OnConnectRequest, OnDestroyRequest, OnDisconnectRequest,
-	OnRequestRequest, OnSleepRequest, OnStateChangeRequest, OnWakeRequest,
-	OnWebSocketRequest, Request, Response, RunRequest,
+	OnMigrateRequest, OnRequestRequest, OnSleepRequest, OnStateChangeRequest,
+	OnWakeRequest, OnWebSocketRequest, Request, Response, RunRequest,
 };
 pub use actor::config::{
 	ActorConfig, ActorConfigOverrides, CanHibernateWebSocket, FlatActorConfig,

@@ -211,6 +211,12 @@ pub struct OnWakeRequest {
 }
 
 #[derive(Clone, Debug)]
+pub struct OnMigrateRequest {
+	pub ctx: ActorContext,
+	pub is_new: bool,
+}
+
+#[derive(Clone, Debug)]
 pub struct OnSleepRequest {
 	pub ctx: ActorContext,
 }
@@ -279,6 +285,7 @@ pub struct RunRequest {
 
 #[derive(Default)]
 pub struct ActorInstanceCallbacks {
+	pub on_migrate: Option<LifecycleCallback<OnMigrateRequest>>,
 	pub on_wake: Option<LifecycleCallback<OnWakeRequest>>,
 	pub on_sleep: Option<LifecycleCallback<OnSleepRequest>>,
 	pub on_destroy: Option<LifecycleCallback<OnDestroyRequest>>,
@@ -296,6 +303,7 @@ pub struct ActorInstanceCallbacks {
 impl fmt::Debug for ActorInstanceCallbacks {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("ActorInstanceCallbacks")
+			.field("on_migrate", &self.on_migrate.is_some())
 			.field("on_wake", &self.on_wake.is_some())
 			.field("on_sleep", &self.on_sleep.is_some())
 			.field("on_destroy", &self.on_destroy.is_some())

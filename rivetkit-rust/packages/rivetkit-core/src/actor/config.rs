@@ -9,6 +9,7 @@ const DEFAULT_CREATE_VARS_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CREATE_CONN_STATE_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_ON_BEFORE_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_ON_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_ON_MIGRATE_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_ON_SLEEP_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_ON_DESTROY_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_ACTION_TIMEOUT: Duration = Duration::from_secs(60);
@@ -59,6 +60,7 @@ pub struct ActorConfig {
 	pub create_conn_state_timeout: Duration,
 	pub on_before_connect_timeout: Duration,
 	pub on_connect_timeout: Duration,
+	pub on_migrate_timeout: Duration,
 	pub on_sleep_timeout: Duration,
 	pub on_destroy_timeout: Duration,
 	pub action_timeout: Duration,
@@ -85,6 +87,7 @@ pub struct FlatActorConfig {
 	pub create_conn_state_timeout_ms: Option<u32>,
 	pub on_before_connect_timeout_ms: Option<u32>,
 	pub on_connect_timeout_ms: Option<u32>,
+	pub on_migrate_timeout_ms: Option<u32>,
 	pub on_sleep_timeout_ms: Option<u32>,
 	pub on_destroy_timeout_ms: Option<u32>,
 	pub action_timeout_ms: Option<u32>,
@@ -124,6 +127,9 @@ impl ActorConfig {
 		}
 		if let Some(value) = config.on_connect_timeout_ms {
 			actor_config.on_connect_timeout = duration_ms(value);
+		}
+		if let Some(value) = config.on_migrate_timeout_ms {
+			actor_config.on_migrate_timeout = duration_ms(value);
 		}
 		if let Some(value) = config.on_sleep_timeout_ms {
 			actor_config.on_sleep_timeout = duration_ms(value);
@@ -222,6 +228,7 @@ impl Default for ActorConfig {
 			create_conn_state_timeout: DEFAULT_CREATE_CONN_STATE_TIMEOUT,
 			on_before_connect_timeout: DEFAULT_ON_BEFORE_CONNECT_TIMEOUT,
 			on_connect_timeout: DEFAULT_ON_CONNECT_TIMEOUT,
+			on_migrate_timeout: DEFAULT_ON_MIGRATE_TIMEOUT,
 			on_sleep_timeout: DEFAULT_ON_SLEEP_TIMEOUT,
 			on_destroy_timeout: DEFAULT_ON_DESTROY_TIMEOUT,
 			action_timeout: DEFAULT_ACTION_TIMEOUT,

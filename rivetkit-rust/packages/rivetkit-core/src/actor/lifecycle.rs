@@ -12,8 +12,8 @@ use tokio::time::{Instant, timeout};
 
 use crate::actor::action::ActionInvoker;
 use crate::actor::callbacks::{
-	ActorInstanceCallbacks, OnDestroyRequest, OnSleepRequest,
-	OnStateChangeRequest, OnWakeRequest, RunRequest,
+	ActorInstanceCallbacks, OnDestroyRequest, OnMigrateRequest,
+	OnSleepRequest, OnStateChangeRequest, OnWakeRequest, RunRequest,
 };
 use crate::actor::context::ActorContext;
 use crate::actor::factory::{ActorFactory, FactoryRequest};
@@ -55,6 +55,7 @@ pub enum StartupStage {
 	LoadPersisted,
 	Create,
 	PersistInitialization,
+	Migrate,
 	Wake,
 	RestoreConnections,
 	BeforeActorStart,
@@ -110,6 +111,39 @@ impl ActorLifecycle {
 		ctx.save_state(SaveStateOpts { immediate: true })
 			.await
 			.map_err(|source| StartupError::new(StartupStage::PersistInitialization, source))?;
+
+		if let Some(on_migrate) = callbacks.on_migrate.as_ref() {
+			let started_at = Instant::now();
+			match timeout(
+				factory.config().on_migrate_timeout,
+				on_migrate(OnMigrateRequest {
+					ctx: ctx.clone(),
+					is_new,
+				}),
+			)
+			.await
+			{
+				Ok(Ok(())) => {
+					tracing::debug!(
+						actor_id = ctx.actor_id(),
+						on_migrate_ms = started_at.elapsed().as_millis() as u64,
+						"actor on_migrate completed"
+					);
+				}
+				Ok(Err(source)) => {
+					return Err(StartupError::new(StartupStage::Migrate, source));
+				}
+				Err(_) => {
+					return Err(StartupError::new(
+						StartupStage::Migrate,
+						anyhow::Error::msg(format!(
+							"actor on_migrate timed out after {} ms",
+							factory.config().on_migrate_timeout.as_millis()
+						)),
+					));
+				}
+			}
+		}
 
 		if let Some(on_wake) = callbacks.on_wake.as_ref() {
 			on_wake(OnWakeRequest { ctx: ctx.clone() })
@@ -407,6 +441,7 @@ impl fmt::Display for StartupStage {
 			Self::LoadPersisted => "persisted state load",
 			Self::Create => "factory create",
 			Self::PersistInitialization => "initial persistence",
+			Self::Migrate => "on_migrate",
 			Self::Wake => "on_wake",
 			Self::RestoreConnections => "restore connections",
 			Self::BeforeActorStart => "on_before_actor_start",

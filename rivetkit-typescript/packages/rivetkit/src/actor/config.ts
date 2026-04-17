@@ -544,6 +544,26 @@ export type WakeContext<
 	TQueues
 >;
 
+export type MigrateContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = WakeContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
 export type WebSocketContext<
 	TState,
 	TConnParams,
@@ -731,6 +751,7 @@ const InstanceActorOptionsBaseSchema = z
 		createConnStateTimeout: z.number().positive().default(5000),
 		onBeforeConnectTimeout: z.number().positive().default(5000),
 		onConnectTimeout: z.number().positive().default(5000),
+		onMigrateTimeout: z.number().positive().default(30_000),
 		sleepGracePeriod: z.number().positive().optional(),
 		onSleepTimeout: z.number().positive().default(DEFAULT_ON_SLEEP_TIMEOUT),
 		onDestroyTimeout: z.number().positive().default(5000),
@@ -781,6 +802,7 @@ export const ActorConfigSchema = z
 	.object({
 		onCreate: zFunction().optional(),
 		onDestroy: zFunction().optional(),
+		onMigrate: zFunction().optional(),
 		onWake: zFunction().optional(),
 		onSleep: zFunction().optional(),
 		run: zRunHandler,
@@ -1006,6 +1028,26 @@ interface BaseActorConfig<
 			TEvents,
 			TQueues
 		>,
+	) => void | Promise<void>;
+
+	/**
+	 * Called on every actor start after persisted state loads and before onWake.
+	 *
+	 * Use this hook for repeatable schema migrations or other startup work that
+	 * must run on both first boot and wake.
+	 */
+	onMigrate?: (
+		c: MigrateContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
+		isNew: boolean,
 	) => void | Promise<void>;
 
 	/**
@@ -1346,6 +1388,7 @@ export type ActorConfig<
 	| "queues"
 	| "onCreate"
 	| "onDestroy"
+	| "onMigrate"
 	| "onWake"
 	| "onSleep"
 	| "run"
@@ -1452,6 +1495,7 @@ export type ActorConfigInput<
 	| "queues"
 	| "onCreate"
 	| "onDestroy"
+	| "onMigrate"
 	| "onWake"
 	| "onSleep"
 	| "run"
@@ -1594,6 +1638,10 @@ export const DocActorOptionsSchema = z
 			.describe(
 				"Timeout in ms for createConnState handler. Default: 5000",
 			),
+		onMigrateTimeout: z
+			.number()
+			.optional()
+			.describe("Timeout in ms for onMigrate handler. Default: 30000"),
 		onBeforeConnectTimeout: z
 			.number()
 			.optional()
@@ -1751,6 +1799,12 @@ export const DocActorConfigSchema = z
 			.unknown()
 			.optional()
 			.describe("Called when the actor is destroyed."),
+		onMigrate: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called on every actor start after persisted state loads and before onWake. Use for repeatable schema migrations.",
+			),
 		onWake: z
 			.unknown()
 			.optional()

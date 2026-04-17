@@ -14,8 +14,8 @@ use rivetkit_core::{
 	ActionRequest, ActorConfig, ActorFactory as CoreActorFactory, ActorInstanceCallbacks,
 	FactoryRequest, FlatActorConfig, OnBeforeActionResponseRequest,
 	OnBeforeConnectRequest, OnConnectRequest, OnDestroyRequest, OnDisconnectRequest,
-	OnRequestRequest, OnSleepRequest, OnStateChangeRequest, OnWakeRequest,
-	OnWebSocketRequest, Request, Response, RunRequest,
+	OnMigrateRequest, OnRequestRequest, OnSleepRequest, OnStateChangeRequest,
+	OnWakeRequest, OnWebSocketRequest, Request, Response, RunRequest,
 };
 
 use crate::actor_context::ActorContext;
@@ -66,6 +66,7 @@ pub struct JsActorConfig {
 	pub create_conn_state_timeout_ms: Option<u32>,
 	pub on_before_connect_timeout_ms: Option<u32>,
 	pub on_connect_timeout_ms: Option<u32>,
+	pub on_migrate_timeout_ms: Option<u32>,
 	pub on_sleep_timeout_ms: Option<u32>,
 	pub on_destroy_timeout_ms: Option<u32>,
 	pub action_timeout_ms: Option<u32>,
@@ -90,6 +91,12 @@ pub struct JsFactoryInitResult {
 #[derive(Clone)]
 struct LifecyclePayload {
 	ctx: rivetkit_core::ActorContext,
+}
+
+#[derive(Clone)]
+struct MigratePayload {
+	ctx: rivetkit_core::ActorContext,
+	is_new: bool,
 }
 
 #[derive(Clone)]
@@ -147,6 +154,7 @@ struct BeforeActionResponsePayload {
 
 struct CallbackBindings {
 	on_init: Option<CallbackTsfn<FactoryInitPayload>>,
+	on_migrate: Option<CallbackTsfn<MigratePayload>>,
 	on_wake: Option<CallbackTsfn<LifecyclePayload>>,
 	on_sleep: Option<CallbackTsfn<LifecyclePayload>>,
 	on_destroy: Option<CallbackTsfn<LifecyclePayload>>,
@@ -222,6 +230,7 @@ impl CallbackBindings {
 
 		Ok(Self {
 			on_init: optional_tsfn(&callbacks, "onInit", build_factory_init_payload)?,
+			on_migrate: optional_tsfn(&callbacks, "onMigrate", build_migrate_payload)?,
 			on_wake: optional_tsfn(&callbacks, "onWake", build_lifecycle_payload)?,
 			on_sleep: optional_tsfn(&callbacks, "onSleep", build_lifecycle_payload)?,
 			on_destroy: optional_tsfn(&callbacks, "onDestroy", build_lifecycle_payload)?,
@@ -287,6 +296,14 @@ impl CallbackBindings {
 
 	fn create_callbacks(&self) -> ActorInstanceCallbacks {
 		let mut callbacks = ActorInstanceCallbacks::default();
+		callbacks.on_migrate = wrap_void_callback(
+			"onMigrate",
+			&self.on_migrate,
+			|request: OnMigrateRequest| MigratePayload {
+				ctx: request.ctx,
+				is_new: request.is_new,
+			},
+		);
 		callbacks.on_wake = wrap_void_callback(
 			"onWake",
 			&self.on_wake,
@@ -561,6 +578,16 @@ fn build_lifecycle_payload(
 	Ok(vec![object.into_unknown()])
 }
 
+fn build_migrate_payload(
+	env: &Env,
+	payload: MigratePayload,
+) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("isNew", payload.is_new)?;
+	Ok(vec![object.into_unknown()])
+}
+
 fn build_factory_init_payload(
 	env: &Env,
 	payload: FactoryInitPayload,
@@ -708,6 +735,7 @@ impl From<JsActorConfig> for FlatActorConfig {
 			create_conn_state_timeout_ms: value.create_conn_state_timeout_ms,
 			on_before_connect_timeout_ms: value.on_before_connect_timeout_ms,
 			on_connect_timeout_ms: value.on_connect_timeout_ms,
+			on_migrate_timeout_ms: value.on_migrate_timeout_ms,
 			on_sleep_timeout_ms: value.on_sleep_timeout_ms,
 			on_destroy_timeout_ms: value.on_destroy_timeout_ms,
 			action_timeout_ms: value.action_timeout_ms,

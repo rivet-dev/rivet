@@ -827,7 +827,7 @@
         "tsc type-check passes"
       ],
       "priority": 44,
-      "passes": false,
+      "passes": true,
       "notes": "Problem: on_create only runs on first boot. Code updates that add ALTER TABLE need migrations on wake too. onMigrate runs every start so actors can use CREATE TABLE IF NOT EXISTS and version-tracked ALTER TABLE. Runs after state load so migrations can read persisted state to decide what to migrate."
     },
     {

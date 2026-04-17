@@ -9,6 +9,7 @@ mod moved_tests {
 	fn actor_config_from_flat_applies_overrides() {
 		let config = ActorConfig::from_flat(FlatActorConfig {
 			name: Some("demo".to_owned()),
+			on_migrate_timeout_ms: Some(30_000),
 			on_sleep_timeout_ms: Some(9_000),
 			sleep_grace_period_ms: Some(12_000),
 			max_queue_size: Some(42),
@@ -17,6 +18,7 @@ mod moved_tests {
 		});
 
 		assert_eq!(config.name.as_deref(), Some("demo"));
+		assert_eq!(config.on_migrate_timeout, Duration::from_secs(30));
 		assert_eq!(config.on_sleep_timeout, Duration::from_secs(9));
 		assert_eq!(config.sleep_grace_period, Some(Duration::from_secs(12)));
 		assert_eq!(config.max_queue_size, 42);
@@ -41,6 +43,7 @@ mod moved_tests {
 			default.on_before_connect_timeout,
 		);
 		assert_eq!(config.on_connect_timeout, default.on_connect_timeout);
+		assert_eq!(config.on_migrate_timeout, default.on_migrate_timeout);
 		assert_eq!(config.on_sleep_timeout, default.on_sleep_timeout);
 		assert_eq!(config.on_destroy_timeout, default.on_destroy_timeout);
 		assert_eq!(config.action_timeout, default.action_timeout);

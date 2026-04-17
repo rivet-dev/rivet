@@ -39,6 +39,11 @@ pub trait Actor: Send + Sync + Sized + 'static {
 		Ok(())
 	}
 
+	async fn on_migrate(self: &Arc<Self>, ctx: &Ctx<Self>, is_new: bool) -> Result<()> {
+		let _ = (ctx, is_new);
+		Ok(())
+	}
+
 	async fn on_sleep(self: &Arc<Self>, ctx: &Ctx<Self>) -> Result<()> {
 		let _ = ctx;
 		Ok(())

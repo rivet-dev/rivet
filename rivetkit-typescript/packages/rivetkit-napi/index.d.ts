@@ -22,6 +22,7 @@ export interface JsActorConfig {
   createConnStateTimeoutMs?: number
   onBeforeConnectTimeoutMs?: number
   onConnectTimeoutMs?: number
+  onMigrateTimeoutMs?: number
   onSleepTimeoutMs?: number
   onDestroyTimeoutMs?: number
   actionTimeoutMs?: number

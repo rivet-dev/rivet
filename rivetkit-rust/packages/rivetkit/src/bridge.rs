@@ -14,8 +14,8 @@ use crate::validation::{catch_unwind_result, decode_cbor, encode_cbor};
 use rivetkit_core::{
 	ActionRequest, ActorFactory, ActorInstanceCallbacks, FactoryRequest,
 	OnBeforeConnectRequest, OnConnectRequest, OnDestroyRequest,
-	OnDisconnectRequest, OnRequestRequest, OnSleepRequest, OnStateChangeRequest,
-	OnWakeRequest, OnWebSocketRequest, RunRequest,
+	OnDisconnectRequest, OnMigrateRequest, OnRequestRequest, OnSleepRequest,
+	OnStateChangeRequest, OnWakeRequest, OnWebSocketRequest, RunRequest,
 };
 
 type BridgeFuture<T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'static>>;
@@ -87,6 +87,15 @@ where
 	);
 
 	let mut callbacks = ActorInstanceCallbacks::default();
+	callbacks.on_migrate = Some(wrap_lifecycle({
+		let actor = Arc::clone(&actor);
+		let ctx = ctx.clone();
+		move |request: OnMigrateRequest| {
+			let actor = Arc::clone(&actor);
+			let ctx = ctx.clone();
+			async move { actor.on_migrate(&ctx, request.is_new).await }
+		}
+	}));
 	callbacks.on_wake = Some(wrap_lifecycle({
 		let actor = Arc::clone(&actor);
 		let ctx = ctx.clone();

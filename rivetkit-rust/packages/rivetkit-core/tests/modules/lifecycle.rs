@@ -16,8 +16,8 @@ use super::*;
 			ShutdownStatus, StartupError, StartupOptions, StartupStage,
 		};
 		use crate::actor::callbacks::{
-			ActorInstanceCallbacks, OnDestroyRequest, OnSleepRequest, OnWakeRequest,
-			RunRequest,
+			ActorInstanceCallbacks, OnDestroyRequest, OnMigrateRequest,
+			OnSleepRequest, OnWakeRequest, RunRequest,
 		};
 		use crate::actor::connection::{
 			HibernatableConnectionMetadata, PersistedConnection,
@@ -213,6 +213,79 @@ use super::*;
 			assert_eq!(error.stage(), StartupStage::Wake);
 			assert!(ctx.persisted_actor().has_initialized);
 			assert_eq!(ctx.can_sleep().await, CanSleep::NotReady);
+		}
+
+		#[tokio::test]
+		async fn startup_runs_on_migrate_before_on_wake_for_new_and_restored_actors() {
+			let lifecycle = ActorLifecycle;
+			let phases = Arc::new(Mutex::new(Vec::<String>::new()));
+
+			for (index, has_initialized) in [false, true].into_iter().enumerate() {
+				let ctx = crate::actor::context::tests::new_with_kv(
+					&format!("actor-migrate-{index}"),
+					"counter",
+					Vec::new(),
+					"sea",
+					crate::kv::tests::new_in_memory(),
+				);
+				let phases_for_factory = phases.clone();
+				let factory =
+					ActorFactory::new(Default::default(), move |_request| {
+						let phases = phases_for_factory.clone();
+						Box::pin(async move {
+							let mut callbacks = ActorInstanceCallbacks::default();
+							let migrate_phases = phases.clone();
+							callbacks.on_migrate = Some(Box::new(move |request: OnMigrateRequest| {
+								let phases = migrate_phases.clone();
+								Box::pin(async move {
+									assert_eq!(request.is_new, !has_initialized);
+									assert_eq!(request.ctx.state(), vec![index as u8]);
+									let _ = request.ctx.sql();
+									phases
+										.lock()
+										.expect("phases lock poisoned")
+										.push(format!("migrate-{index}"));
+									Ok(())
+								})
+							}));
+							let wake_phases = phases.clone();
+							callbacks.on_wake = Some(Box::new(move |_request: OnWakeRequest| {
+								let phases = wake_phases.clone();
+								Box::pin(async move {
+									phases
+										.lock()
+										.expect("phases lock poisoned")
+										.push(format!("wake-{index}"));
+									Ok(())
+								})
+							}));
+							Ok(callbacks)
+						})
+					});
+
+				lifecycle
+					.startup(
+						ctx,
+						&factory,
+						StartupOptions {
+							preload_persisted_actor: Some(PersistedActor {
+								input: None,
+								has_initialized,
+								state: vec![index as u8],
+								scheduled_events: Vec::new(),
+							}),
+							input: None,
+							driver_hooks: ActorLifecycleDriverHooks::default(),
+						},
+					)
+					.await
+					.expect("startup should succeed");
+			}
+
+			assert_eq!(
+				phases.lock().expect("phases lock poisoned").as_slice(),
+				["migrate-0", "wake-0", "migrate-1", "wake-1"],
+			);
 		}
 
 		#[tokio::test]
@@ -471,6 +544,54 @@ use super::*;
 
 			assert_eq!(panics.load(Ordering::SeqCst), 1);
 			assert_eq!(ctx.can_sleep().await, CanSleep::Yes);
+		}
+
+		#[tokio::test]
+		async fn startup_surfaces_on_migrate_failures_and_timeouts_with_stage() {
+			let error = run_startup_failure(
+				StartupStage::Migrate,
+				|_ctx| {
+					ActorFactory::new(Default::default(), move |_request| {
+						Box::pin(async move {
+							let mut callbacks = ActorInstanceCallbacks::default();
+							callbacks.on_migrate = Some(Box::new(|_request: OnMigrateRequest| {
+								Box::pin(async { Err(anyhow!("migrate exploded")) })
+							}));
+							Ok(callbacks)
+						})
+					})
+				},
+				None,
+			)
+			.await;
+			assert_eq!(error.stage(), StartupStage::Migrate);
+
+			let timeout_error = run_startup_failure(
+				StartupStage::Migrate,
+				|_ctx| {
+					ActorFactory::new(
+						ActorConfig {
+							on_migrate_timeout: Duration::from_millis(10),
+							..ActorConfig::default()
+						},
+						move |_request| {
+							Box::pin(async move {
+								let mut callbacks = ActorInstanceCallbacks::default();
+								callbacks.on_migrate = Some(Box::new(|_request: OnMigrateRequest| {
+									Box::pin(async move {
+										sleep(Duration::from_millis(50)).await;
+										Ok(())
+									})
+								}));
+								Ok(callbacks)
+							})
+						},
+					)
+				},
+				None,
+			)
+			.await;
+			assert_eq!(timeout_error.stage(), StartupStage::Migrate);
 		}
 
 		#[tokio::test]
