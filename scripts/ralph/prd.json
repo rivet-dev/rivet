@@ -345,7 +345,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Graceful Shutdown: Destroy Mode' section. Compare with US-016 (sleep shutdown). The key difference is no idle window wait and on_destroy instead of on_sleep."
     },
     {

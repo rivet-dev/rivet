@@ -12,8 +12,8 @@ use tokio::time::{Instant, timeout};
 
 use crate::actor::action::ActionInvoker;
 use crate::actor::callbacks::{
-	ActorInstanceCallbacks, OnSleepRequest, OnStateChangeRequest, OnWakeRequest,
-	RunRequest,
+	ActorInstanceCallbacks, OnDestroyRequest, OnSleepRequest,
+	OnStateChangeRequest, OnWakeRequest, RunRequest,
 };
 use crate::actor::context::ActorContext;
 use crate::actor::factory::{ActorFactory, FactoryRequest};
@@ -226,6 +226,76 @@ impl ActorLifecycle {
 		Ok(ShutdownOutcome { status })
 	}
 
+	pub async fn shutdown_for_destroy(
+		&self,
+		ctx: ActorContext,
+		factory: &ActorFactory,
+		callbacks: Arc<ActorInstanceCallbacks>,
+	) -> Result<ShutdownOutcome> {
+		let config = factory.config().clone();
+		ctx.cancel_sleep_timer();
+		ctx.cancel_local_alarm_timeouts();
+		if !ctx.aborted() {
+			ctx.abort_signal().cancel();
+		}
+		ctx
+			.wait_for_run_handler(config.effective_run_stop_timeout())
+			.await;
+
+		let mut status = ShutdownStatus::Ok;
+		if let Some(on_destroy) = callbacks.on_destroy.as_ref() {
+			let on_destroy_timeout = config.effective_on_destroy_timeout();
+			match timeout(
+				on_destroy_timeout,
+				on_destroy(OnDestroyRequest { ctx: ctx.clone() }),
+			)
+			.await
+			{
+				Ok(Ok(())) => {}
+				Ok(Err(error)) => {
+					status = ShutdownStatus::Error;
+					tracing::error!(?error, "actor on_destroy failed during destroy shutdown");
+				}
+				Err(_) => {
+					status = ShutdownStatus::Error;
+					tracing::error!(
+						timeout_ms = on_destroy_timeout.as_millis() as u64,
+						"actor on_destroy timed out during destroy shutdown"
+					);
+				}
+			}
+		}
+
+		let shutdown_deadline = Instant::now() + config.effective_sleep_grace_period();
+		if !ctx.wait_for_shutdown_tasks(shutdown_deadline).await {
+			tracing::warn!("destroy shutdown timed out waiting for shutdown tasks");
+		}
+
+		for conn in ctx.conns() {
+			if let Err(error) = conn.disconnect(Some("actor destroyed")).await {
+				tracing::error!(
+					?error,
+					conn_id = conn.id(),
+					"failed to disconnect connection during destroy shutdown"
+				);
+			}
+		}
+
+		if !ctx.wait_for_shutdown_tasks(shutdown_deadline).await {
+			tracing::warn!("destroy shutdown timed out after disconnect callbacks");
+		}
+
+		ctx.save_state(SaveStateOpts { immediate: true })
+			.await
+			.context("persist actor state during destroy shutdown")?;
+		ctx.sql()
+			.cleanup()
+			.await
+			.context("cleanup sqlite during destroy shutdown")?;
+
+		Ok(ShutdownOutcome { status })
+	}
+
 	async fn load_persisted_actor(
 		&self,
 		ctx: &ActorContext,
@@ -417,7 +487,8 @@ mod tests {
 		ShutdownStatus, StartupError, StartupOptions, StartupStage,
 	};
 	use crate::actor::callbacks::{
-		ActorInstanceCallbacks, OnSleepRequest, OnWakeRequest, RunRequest,
+		ActorInstanceCallbacks, OnDestroyRequest, OnSleepRequest, OnWakeRequest,
+		RunRequest,
 	};
 	use crate::actor::connection::{
 		HibernatableConnectionMetadata, PersistedConnection, make_connection_key,
@@ -1109,6 +1180,186 @@ mod tests {
 
 		assert_eq!(shutdown.status, ShutdownStatus::Ok);
 		assert_ne!(ctx.can_sleep().await, CanSleep::ActiveRun);
+	}
+
+	#[tokio::test]
+	async fn destroy_shutdown_skips_idle_wait_and_disconnects_all_connections() {
+		let lifecycle = ActorLifecycle;
+		let config = ActorConfig {
+			sleep_grace_period: Some(Duration::from_millis(100)),
+			on_destroy_timeout: Duration::from_millis(50),
+			run_stop_timeout: Duration::from_millis(50),
+			..ActorConfig::default()
+		};
+		let ctx = ActorContext::new_with_kv(
+			"actor-12",
+			"counter",
+			Vec::new(),
+			"sea",
+			Kv::new_in_memory(),
+		);
+		let on_destroy_calls = Arc::new(AtomicUsize::new(0));
+		let disconnects = Arc::new(Mutex::new(Vec::<String>::new()));
+		let destroy_gate = Arc::new(AtomicUsize::new(0));
+
+		let on_destroy_calls_for_callback = on_destroy_calls.clone();
+		let destroy_gate_for_callback = destroy_gate.clone();
+		let disconnects_for_callback = disconnects.clone();
+		let mut raw_callbacks = ActorInstanceCallbacks::default();
+		raw_callbacks.on_destroy = Some(Box::new(move |request: OnDestroyRequest| {
+			let on_destroy_calls = on_destroy_calls_for_callback.clone();
+			let destroy_gate = destroy_gate_for_callback.clone();
+			Box::pin(async move {
+				assert_eq!(destroy_gate.load(Ordering::SeqCst), 0);
+				assert_eq!(request.ctx.conns().len(), 2);
+				on_destroy_calls.fetch_add(1, Ordering::SeqCst);
+				Ok(())
+			})
+		}));
+		raw_callbacks.on_disconnect = Some(Box::new(move |request| {
+			let disconnects = disconnects_for_callback.clone();
+			Box::pin(async move {
+				disconnects
+					.lock()
+					.expect("disconnects lock poisoned")
+					.push(request.conn.id().to_owned());
+				Ok(())
+			})
+		}));
+		let callbacks = Arc::new(raw_callbacks);
+		let factory =
+			ActorFactory::new(config.clone(), move |_request| Box::pin(async move {
+				Ok(ActorInstanceCallbacks::default())
+			}));
+
+		ctx.configure_sleep(config.clone());
+		ctx.configure_connection_runtime(config, callbacks.clone());
+		ctx.load_persisted_actor(PersistedActor {
+			input: None,
+			has_initialized: true,
+			state: b"initial".to_vec(),
+			scheduled_events: Vec::new(),
+		});
+		ctx.set_state(b"updated".to_vec());
+
+		let normal_conn = ctx
+			.connect_conn(Vec::new(), false, None, async { Ok(Vec::new()) })
+			.await
+			.expect("non-hibernatable connection should connect");
+		let hibernating_conn = ctx
+			.connect_conn(
+				Vec::new(),
+				true,
+				Some(HibernatableConnectionMetadata {
+					gateway_id: b"gateway".to_vec(),
+					request_id: b"request".to_vec(),
+					server_message_index: 1,
+					client_message_index: 2,
+					request_path: "/ws".to_owned(),
+					request_headers: BTreeMap::new(),
+				}),
+				async { Ok(Vec::new()) },
+			)
+			.await
+			.expect("hibernatable connection should connect");
+
+		ctx.begin_internal_keep_awake();
+		ctx.wait_until({
+			let destroy_gate = destroy_gate.clone();
+			async move {
+				sleep(Duration::from_millis(20)).await;
+				destroy_gate.store(1, Ordering::SeqCst);
+			}
+		});
+		ctx.destroy();
+
+		let outcome = lifecycle
+			.shutdown_for_destroy(ctx.clone(), &factory, callbacks)
+			.await
+			.expect("destroy shutdown should succeed");
+
+		assert_eq!(outcome.status, ShutdownStatus::Ok);
+		assert!(ctx.aborted());
+		assert_eq!(on_destroy_calls.load(Ordering::SeqCst), 1);
+		let disconnects = disconnects.lock().expect("disconnects lock poisoned");
+		assert_eq!(disconnects.len(), 2);
+		assert!(disconnects.contains(&normal_conn.id().to_owned()));
+		assert!(disconnects.contains(&hibernating_conn.id().to_owned()));
+		assert!(ctx.conns().is_empty());
+		assert!(
+			ctx.kv()
+				.get(&make_connection_key(hibernating_conn.id()))
+				.await
+				.expect("persisted connection lookup should succeed")
+				.is_none()
+		);
+
+		let persisted_actor = ctx
+			.kv()
+			.get(PERSIST_DATA_KEY)
+			.await
+			.expect("persisted actor lookup should succeed")
+			.expect("persisted actor should exist");
+		let persisted_actor: PersistedActor =
+			serde_bare::from_slice(&persisted_actor).expect("persisted actor should decode");
+		assert_eq!(persisted_actor.state, b"updated");
+	}
+
+	#[tokio::test]
+	async fn destroy_shutdown_reports_error_when_on_destroy_fails() {
+		let lifecycle = ActorLifecycle;
+		let config = ActorConfig {
+			sleep_grace_period: Some(Duration::from_millis(100)),
+			on_destroy_timeout: Duration::from_millis(25),
+			..ActorConfig::default()
+		};
+		let ctx = ActorContext::new_with_kv(
+			"actor-13",
+			"counter",
+			Vec::new(),
+			"sea",
+			Kv::new_in_memory(),
+		);
+		let mut raw_callbacks = ActorInstanceCallbacks::default();
+		raw_callbacks.on_destroy = Some(Box::new(|_request: OnDestroyRequest| {
+			Box::pin(async { Err(anyhow!("destroy exploded")) })
+		}));
+		let callbacks = Arc::new(raw_callbacks);
+		let factory =
+			ActorFactory::new(config.clone(), move |_request| Box::pin(async move {
+				Ok(ActorInstanceCallbacks::default())
+			}));
+
+		ctx.configure_sleep(config.clone());
+		ctx.configure_connection_runtime(config, callbacks.clone());
+		ctx.load_persisted_actor(PersistedActor {
+			input: None,
+			has_initialized: true,
+			state: Vec::new(),
+			scheduled_events: Vec::new(),
+		});
+		ctx.set_state(b"updated".to_vec());
+		ctx.connect_conn(Vec::new(), false, None, async { Ok(Vec::new()) })
+			.await
+			.expect("connection should connect");
+
+		let outcome = lifecycle
+			.shutdown_for_destroy(ctx.clone(), &factory, callbacks)
+			.await
+			.expect("destroy shutdown should continue after on_destroy error");
+
+		assert_eq!(outcome.status, ShutdownStatus::Error);
+		assert!(ctx.aborted());
+		assert!(ctx.conns().is_empty());
+		let persisted_actor = ctx
+			.kv()
+			.get(PERSIST_DATA_KEY)
+			.await
+			.expect("persisted actor lookup should succeed")
+			.expect("persisted actor should exist");
+		let persisted_actor: PersistedActor =
+			serde_bare::from_slice(&persisted_actor).expect("persisted actor should decode");
+		assert_eq!(persisted_actor.state, b"updated");
 	}
 
 	async fn run_startup_failure<F>(

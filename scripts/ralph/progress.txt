@@ -16,6 +16,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` startup should load `PersistedActor` into `ActorContext` before factory creation, persist `has_initialized` immediately, set `ready` before the driver hook, and set `started` only after that hook completes.
 - `rivetkit-core` startup should resync persisted alarms and restore hibernatable connections before `ready`, then reset the sleep timer, spawn `run` in a detached panic-catching task, and drain overdue scheduled events after `started`.
 - `rivetkit-core` sleep shutdown should wait on the tracked `run` task, use `SleepController` deadline polls for the idle window and shutdown drains, persist hibernatable connections before disconnecting non-hibernatable ones, and finish with an immediate state save.
+- `rivetkit-core` destroy shutdown should skip the idle-window wait, use `on_destroy_timeout` separately from the shutdown grace-period budget, disconnect every connection, and end with the same immediate state save plus SQLite cleanup path.
 - `envoy-client` actor-scoped HTTP fetch work should stay in a `JoinSet` plus a shared `Arc<AtomicUsize>` counter so sleep checks can read in-flight request count and shutdown can abort and join the tasks before `Stopped`.
 - `envoy-client` shutdown hooks that need multi-step teardown should override `EnvoyCallbacks::on_actor_stop_with_completion`; the default path still auto-completes after legacy `on_actor_stop` returns.
 
@@ -149,4 +150,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Sleep shutdown now relies on `SleepController` for both tracked `run` task joins and deadline-polled idle/shutdown gates, instead of trying to reuse `can_sleep()` directly.
   - Gotchas encountered: The idle sleep window is narrower than `can_sleep()`: it ignores active connections and `prevent_sleep`, so shutdown needs separate wait helpers before and after `on_sleep`.
   - Useful context: `sleep_shutdown_waits_for_idle_window_and_persists_state`, `sleep_shutdown_reports_error_when_on_sleep_fails`, and `sleep_shutdown_times_out_run_handler_and_finishes` in `src/actor/lifecycle.rs` are the regression coverage for this story.
+---
+## 2026-04-16 23:45:35 PDT - US-017
+- What was implemented: Added destroy-mode shutdown in `ActorLifecycle`, including abort no-op handling, standalone `on_destroy` timeout/error handling, shutdown-task drains without idle-window waiting, full connection disconnects, and final state persistence plus SQLite cleanup.
+- Files changed: `/home/nathan/r5/AGENTS.md`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/lifecycle.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Destroy shutdown should share the same final persistence and cleanup path as sleep shutdown, but skip the idle-window wait and disconnect hibernatable connections too.
+  - Gotchas encountered: `on_destroy_timeout` is standalone and should not be clipped by the shutdown grace-period budget used for post-callback `wait_until` drains.
+  - Useful context: `destroy_shutdown_skips_idle_wait_and_disconnects_all_connections` and `destroy_shutdown_reports_error_when_on_destroy_fails` in `src/actor/lifecycle.rs` cover the key behavior differences from sleep shutdown.
 ---
