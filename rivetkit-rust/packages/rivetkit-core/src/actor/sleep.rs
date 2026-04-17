@@ -109,6 +109,40 @@ impl SleepController {
 			.expect("sleep generation lock poisoned") = None;
 	}
 
+	pub(crate) fn request_sleep(&self, actor_id: &str) {
+		let envoy_handle = self
+			.0
+			.envoy_handle
+			.lock()
+			.expect("sleep envoy handle lock poisoned")
+			.clone();
+		let generation = *self
+			.0
+			.generation
+			.lock()
+			.expect("sleep generation lock poisoned");
+		if let Some(envoy_handle) = envoy_handle {
+			envoy_handle.sleep_actor(actor_id.to_owned(), generation);
+		}
+	}
+
+	pub(crate) fn request_destroy(&self, actor_id: &str) {
+		let envoy_handle = self
+			.0
+			.envoy_handle
+			.lock()
+			.expect("sleep envoy handle lock poisoned")
+			.clone();
+		let generation = *self
+			.0
+			.generation
+			.lock()
+			.expect("sleep generation lock poisoned");
+		if let Some(envoy_handle) = envoy_handle {
+			envoy_handle.destroy_actor(actor_id.to_owned(), generation);
+		}
+	}
+
 	#[allow(dead_code)]
 	pub(crate) fn set_ready(&self, ready: bool) {
 		self.0.ready.store(ready, Ordering::SeqCst);

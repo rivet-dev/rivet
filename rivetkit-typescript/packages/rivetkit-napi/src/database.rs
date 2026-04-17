@@ -14,6 +14,7 @@ use libsqlite3_sys::{
 use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use rivet_envoy_client::handle::EnvoyHandle;
+use rivetkit_core::sqlite::SqliteRuntimeConfig;
 use rivetkit_sqlite_native::sqlite_kv::{KvGetResult, SqliteKv, SqliteKvError};
 use rivetkit_sqlite_native::v2::vfs::{
 	NativeDatabaseV2, SqliteVfsMetricsSnapshot, SqliteVfsV2, VfsV2Config,
@@ -144,6 +145,12 @@ pub struct JsNativeDatabase {
 }
 
 impl JsNativeDatabase {
+	fn from_handle(db: NativeDatabaseHandle) -> Self {
+		Self {
+			db: Arc::new(Mutex::new(Some(db))),
+		}
+	}
+
 	pub fn as_ptr(&self) -> *mut libsqlite3_sys::sqlite3 {
 		self.db
 			.lock()
@@ -560,25 +567,20 @@ fn exec_statements(db: *mut sqlite3, sql: &str) -> napi::Result<QueryResult> {
 	Ok(final_result)
 }
 
-/// Open a native SQLite database backed by the envoy's KV channel.
-#[napi]
-pub async fn open_database_from_envoy(
-	js_handle: &JsEnvoyHandle,
-	actor_id: String,
-	preloaded_entries: Option<Vec<JsKvEntry>>,
+pub(crate) async fn open_database_with_runtime_config(
+	config: SqliteRuntimeConfig,
+	preloaded_entries: Vec<(Vec<u8>, Vec<u8>)>,
 ) -> napi::Result<JsNativeDatabase> {
-	let handle = js_handle.handle.clone();
-	let sqlite_schema_version = js_handle.clone_sqlite_schema_version(&actor_id).await;
-	let sqlite_startup_data = js_handle.clone_sqlite_startup_data(&actor_id).await;
+	let SqliteRuntimeConfig {
+		handle,
+		actor_id,
+		schema_version,
+		startup_data,
+	} = config;
 	let envoy_kv = Arc::new(EnvoyKv::new(handle.clone(), actor_id.clone()));
-	let preloaded_entries = preloaded_entries
-		.unwrap_or_default()
-		.into_iter()
-		.map(|entry| (entry.key.to_vec(), entry.value.to_vec()))
-		.collect();
 	let rt_handle = Handle::current();
-	let db = tokio::task::spawn_blocking(move || match sqlite_schema_version {
-		Some(1) => {
+	let db = tokio::task::spawn_blocking(move || match schema_version {
+		1 => {
 			let vfs_name = format!("envoy-kv-{}", actor_id);
 			let vfs = KvVfs::register(
 				&vfs_name,
@@ -593,8 +595,8 @@ pub async fn open_database_from_envoy(
 				.map(NativeDatabaseHandle::V1)
 				.map_err(|e| napi::Error::from_reason(format!("failed to open database: {}", e)))
 		}
-		Some(2) => {
-			let startup = sqlite_startup_data.ok_or_else(|| {
+		2 => {
+			let startup = startup_data.ok_or_else(|| {
 				napi::Error::from_reason(format!(
 					"missing sqlite startup data for actor {actor_id} using schema version 2"
 				))
@@ -614,17 +616,46 @@ pub async fn open_database_from_envoy(
 				.map(NativeDatabaseHandle::V2)
 				.map_err(|e| napi::Error::from_reason(format!("failed to open V2 database: {}", e)))
 		}
-		Some(version) => Err(napi::Error::from_reason(format!(
+		version => Err(napi::Error::from_reason(format!(
 			"unsupported sqlite schema version {version} for actor {actor_id}"
-		))),
-		None => Err(napi::Error::from_reason(format!(
-			"missing sqlite schema version for actor {actor_id}"
 		))),
 	})
 	.await
 	.map_err(|err| napi::Error::from_reason(err.to_string()))??;
 
-	Ok(JsNativeDatabase {
-		db: Arc::new(Mutex::new(Some(db))),
-	})
+	Ok(JsNativeDatabase::from_handle(db))
+}
+
+/// Open a native SQLite database backed by the envoy's KV channel.
+#[napi]
+pub async fn open_database_from_envoy(
+	js_handle: &JsEnvoyHandle,
+	actor_id: String,
+	preloaded_entries: Option<Vec<JsKvEntry>>,
+) -> napi::Result<JsNativeDatabase> {
+	let schema_version = js_handle
+		.clone_sqlite_schema_version(&actor_id)
+		.await
+		.ok_or_else(|| {
+			napi::Error::from_reason(format!(
+				"missing sqlite schema version for actor {actor_id}"
+			))
+		})?;
+	let startup_data = js_handle.clone_sqlite_startup_data(&actor_id).await;
+	let preloaded_entries = preloaded_entries
+		.unwrap_or_default()
+		.into_iter()
+		.map(|entry| (entry.key.to_vec(), entry.value.to_vec()))
+		.collect();
+
+	open_database_with_runtime_config(
+		SqliteRuntimeConfig {
+			handle: js_handle.handle.clone(),
+			actor_id,
+			schema_version,
+			startup_data,
+		},
+		preloaded_entries,
+	)
+	.await
 }

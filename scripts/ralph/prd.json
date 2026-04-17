@@ -727,7 +727,7 @@
         "All tests pass"
       ],
       "priority": 38,
-      "passes": false,
+      "passes": true,
       "notes": "This is the first real runtime validation of the entire migration. Everything before this was typecheck-only. If this fails, debug the NAPI boundary. Run with RUST_LOG=debug for tracing."
     },
     {

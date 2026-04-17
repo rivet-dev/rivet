@@ -260,12 +260,14 @@ impl ActorContext {
 			});
 		}
 
+		self.0.sleep.request_sleep(self.actor_id());
 		self.0.sleep_requested.store(true, Ordering::SeqCst);
 	}
 
 	pub fn destroy(&self) {
 		self.0.sleep.cancel_sleep_timer();
 		self.0.state.flush_on_shutdown();
+		self.0.sleep.request_destroy(self.actor_id());
 		self.0.destroy_requested.store(true, Ordering::SeqCst);
 		self.0.abort_signal.cancel();
 	}

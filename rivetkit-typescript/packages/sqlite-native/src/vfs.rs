@@ -15,6 +15,10 @@ use tokio::runtime::Handle;
 use crate::kv;
 use crate::sqlite_kv::{KvGetResult, SqliteKv, SqliteKvError};
 
+unsafe extern "C" {
+	fn sqlite3_close_v2(db: *mut sqlite3) -> c_int;
+}
+
 // MARK: Panic Guard
 
 fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
@@ -1477,9 +1481,15 @@ impl NativeDatabase {
 impl Drop for NativeDatabase {
 	fn drop(&mut self) {
 		if !self.db.is_null() {
-			unsafe {
-				sqlite3_close(self.db);
+			let rc = unsafe { sqlite3_close_v2(self.db) };
+			if rc != SQLITE_OK {
+				tracing::warn!(
+					rc,
+					error = sqlite_error_message(self.db),
+					"failed to close sqlite database"
+				);
 			}
+			self.db = ptr::null_mut();
 		}
 	}
 }

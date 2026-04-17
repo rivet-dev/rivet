@@ -37,6 +37,10 @@ const EMPTY_DB_PAGE_HEADER_PREFIX: [u8; 108] = [
 static NEXT_STAGE_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_TEMP_AUX_ID: AtomicU64 = AtomicU64::new(1);
 
+unsafe extern "C" {
+	fn sqlite3_close_v2(db: *mut sqlite3) -> c_int;
+}
+
 fn empty_db_page() -> Vec<u8> {
 	let mut page = vec![0u8; DEFAULT_PAGE_SIZE];
 	page[..EMPTY_DB_PAGE_HEADER_PREFIX.len()].copy_from_slice(&EMPTY_DB_PAGE_HEADER_PREFIX);
@@ -2429,9 +2433,15 @@ impl NativeDatabaseV2 {
 impl Drop for NativeDatabaseV2 {
 	fn drop(&mut self) {
 		if !self.db.is_null() {
-			unsafe {
-				sqlite3_close(self.db);
+			let rc = unsafe { sqlite3_close_v2(self.db) };
+			if rc != SQLITE_OK {
+				tracing::warn!(
+					rc,
+					error = sqlite_error_message(self.db),
+					"failed to close sqlite v2 database"
+				);
 			}
+			self.db = ptr::null_mut();
 		}
 	}
 }

@@ -2,15 +2,35 @@ use anyhow::{Result, anyhow};
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::protocol;
 
+#[derive(Clone)]
+pub struct SqliteRuntimeConfig {
+	pub handle: EnvoyHandle,
+	pub actor_id: String,
+	pub schema_version: u32,
+	pub startup_data: Option<protocol::SqliteStartupData>,
+}
+
 #[derive(Clone, Default)]
 pub struct SqliteDb {
 	handle: Option<EnvoyHandle>,
+	actor_id: Option<String>,
+	schema_version: Option<u32>,
+	startup_data: Option<protocol::SqliteStartupData>,
 }
 
 impl SqliteDb {
-	/// `actor_id` is not stored here because the SQLite protocol request types already carry it.
-	pub fn new(handle: EnvoyHandle) -> Self {
-		Self { handle: Some(handle) }
+	pub fn new(
+		handle: EnvoyHandle,
+		actor_id: impl Into<String>,
+		schema_version: u32,
+		startup_data: Option<protocol::SqliteStartupData>,
+	) -> Self {
+		Self {
+			handle: Some(handle),
+			actor_id: Some(actor_id.into()),
+			schema_version: Some(schema_version),
+			startup_data,
+		}
 	}
 
 	pub async fn get_pages(
@@ -59,6 +79,20 @@ impl SqliteDb {
 		Ok(())
 	}
 
+	pub fn runtime_config(&self) -> Result<SqliteRuntimeConfig> {
+		Ok(SqliteRuntimeConfig {
+			handle: self.handle()?,
+			actor_id: self
+				.actor_id
+				.clone()
+				.ok_or_else(|| anyhow!("sqlite actor id is not configured"))?,
+			schema_version: self
+				.schema_version
+				.ok_or_else(|| anyhow!("sqlite schema version is not configured"))?,
+			startup_data: self.startup_data.clone(),
+		})
+	}
+
 	fn handle(&self) -> Result<EnvoyHandle> {
 		self.handle
 			.clone()
@@ -70,6 +104,8 @@ impl std::fmt::Debug for SqliteDb {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("SqliteDb")
 			.field("configured", &self.handle.is_some())
+			.field("actor_id", &self.actor_id)
+			.field("schema_version", &self.schema_version)
 			.finish()
 	}
 }

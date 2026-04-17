@@ -10,6 +10,7 @@ use anyhow::{Context, Result, anyhow};
 use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
+use reqwest::Url;
 use rivet_envoy_client::config::{
 	ActorStopHandle, BoxFuture as EnvoyBoxFuture, EnvoyCallbacks, HttpRequest,
 	HttpResponse, WebSocketHandler, WebSocketMessage, WebSocketSender,
@@ -22,6 +23,7 @@ use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::{Child, Command};
 use tokio::task::JoinHandle;
+use uuid::Uuid;
 
 use crate::actor::callbacks::{OnRequestRequest, OnWebSocketRequest, Request, Response};
 use crate::actor::config::CanHibernateWebSocket;
@@ -352,6 +354,8 @@ impl RegistryDispatcher {
 		generation: u32,
 		actor_name: &str,
 		key: ActorKey,
+		sqlite_schema_version: u32,
+		sqlite_startup_data: Option<protocol::SqliteStartupData>,
 		factory: &ActorFactory,
 	) -> ActorContext {
 		let ctx = ActorContext::new_runtime(
@@ -361,7 +365,12 @@ impl RegistryDispatcher {
 			self.region.clone(),
 			factory.config().clone(),
 			Kv::new(handle.clone(), actor_id.to_owned()),
-			SqliteDb::new(handle.clone()),
+			SqliteDb::new(
+				handle.clone(),
+				actor_id.to_owned(),
+				sqlite_schema_version,
+				sqlite_startup_data,
+			),
 		);
 		ctx.configure_envoy(handle, Some(generation));
 		ctx
@@ -462,8 +471,8 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		generation: u32,
 		config: protocol::ActorConfig,
 		preloaded_kv: Option<protocol::PreloadedKv>,
-		_sqlite_schema_version: u32,
-		_sqlite_startup_data: Option<protocol::SqliteStartupData>,
+		sqlite_schema_version: u32,
+		sqlite_startup_data: Option<protocol::SqliteStartupData>,
 	) -> EnvoyBoxFuture<anyhow::Result<()>> {
 		let dispatcher = self.dispatcher.clone();
 		let actor_name = config.name.clone();
@@ -481,6 +490,8 @@ impl EnvoyCallbacks for RegistryCallbacks {
 				generation,
 				&actor_name,
 				key,
+				sqlite_schema_version,
+				sqlite_startup_data,
 				factory.as_ref(),
 			);
 
@@ -601,9 +612,35 @@ impl EngineProcessManager {
 			);
 		}
 
+		let endpoint_url = Url::parse(endpoint)
+			.with_context(|| format!("parse engine endpoint `{endpoint}`"))?;
+		let guard_host = endpoint_url
+			.host_str()
+			.ok_or_else(|| anyhow!("engine endpoint `{endpoint}` is missing a host"))?
+			.to_owned();
+		let guard_port = endpoint_url
+			.port_or_known_default()
+			.ok_or_else(|| anyhow!("engine endpoint `{endpoint}` is missing a port"))?;
+		let api_peer_port = guard_port
+			.checked_add(1)
+			.ok_or_else(|| anyhow!("engine endpoint port `{guard_port}` is too large"))?;
+		let metrics_port = guard_port
+			.checked_add(10)
+			.ok_or_else(|| anyhow!("engine endpoint port `{guard_port}` is too large"))?;
+		let db_path = std::env::temp_dir()
+			.join(format!("rivetkit-engine-{}", Uuid::new_v4()))
+			.join("db");
+
 		let mut command = Command::new(binary_path);
 		command
 			.arg("start")
+			.env("RIVET__GUARD__HOST", &guard_host)
+			.env("RIVET__GUARD__PORT", guard_port.to_string())
+			.env("RIVET__API_PEER__HOST", &guard_host)
+			.env("RIVET__API_PEER__PORT", api_peer_port.to_string())
+			.env("RIVET__METRICS__HOST", &guard_host)
+			.env("RIVET__METRICS__PORT", metrics_port.to_string())
+			.env("RIVET__FILE_SYSTEM__PATH", &db_path)
 			.stdout(Stdio::piped())
 			.stderr(Stdio::piped());
 
@@ -622,6 +659,8 @@ impl EngineProcessManager {
 		tracing::info!(
 			pid,
 			path = %binary_path.display(),
+			endpoint = %endpoint,
+			db_path = %db_path.display(),
 			"spawned engine process"
 		);
 

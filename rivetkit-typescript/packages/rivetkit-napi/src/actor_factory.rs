@@ -22,7 +22,7 @@ use crate::actor_context::ActorContext;
 use crate::connection::ConnHandle;
 use crate::websocket::WebSocket;
 
-type CallbackTsfn<T> = ThreadsafeFunction<T, ErrorStrategy::CalleeHandled>;
+type CallbackTsfn<T> = ThreadsafeFunction<T, ErrorStrategy::Fatal>;
 
 #[napi(object)]
 pub struct JsHttpResponse {
@@ -230,11 +230,11 @@ impl CallbackBindings {
 		};
 
 		let promise = callback
-			.call_async::<Promise<JsFactoryInitResult>>(Ok(FactoryInitPayload {
+			.call_async::<Promise<JsFactoryInitResult>>(FactoryInitPayload {
 				ctx: request.ctx.clone(),
 				input: request.input.clone(),
 				is_new: request.is_new,
-			}))
+			})
 			.await
 			.map_err(napi_to_anyhow)?;
 		let result = promise.await.map_err(napi_to_anyhow)?;
@@ -510,7 +510,7 @@ where
 	T: Send + 'static,
 {
 	let promise = callback
-		.call_async::<Promise<()>>(Ok(payload))
+		.call_async::<Promise<()>>(payload)
 		.await
 		.map_err(napi_to_anyhow)?;
 	promise.await.map_err(napi_to_anyhow)
@@ -521,7 +521,7 @@ where
 	T: Send + 'static,
 {
 	let promise = callback
-		.call_async::<Promise<Buffer>>(Ok(payload))
+		.call_async::<Promise<Buffer>>(payload)
 		.await
 		.map_err(napi_to_anyhow)?;
 	let buffer = promise.await.map_err(napi_to_anyhow)?;
@@ -533,7 +533,7 @@ async fn call_request(
 	payload: HttpRequestPayload,
 ) -> Result<Response> {
 	let promise = callback
-		.call_async::<Promise<JsHttpResponse>>(Ok(payload))
+		.call_async::<Promise<JsHttpResponse>>(payload)
 		.await
 		.map_err(napi_to_anyhow)?;
 	let response = promise.await.map_err(napi_to_anyhow)?;
