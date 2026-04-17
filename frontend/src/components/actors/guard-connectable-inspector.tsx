@@ -58,6 +58,11 @@ const RIVET_KIT_MIN_VERSION = "2.0.35";
  * Handles versions like "2.0.35", "2.1.0-rc.2", "2.1.0-alpha.1"
  */
 function isVersionOutdated(version1: string, version2: string): boolean {
+	// Preview builds (e.g. "0.0.0-pr.4673.6d") are never considered outdated.
+	if (version1.startsWith("0.0.0-") || version2.startsWith("0.0.0-")) {
+		return false;
+	}
+
 	// Extract base version and pre-release info
 	const parseVersion = (v: string) => {
 		const [baseStr, prerelease] = v.split("-");
