@@ -3,6 +3,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 
 ## Codebase Patterns
 - New Rust crates under `rivetkit-rust/packages/` that should use root workspace deps need `[package] workspace = "../../../"` in their `Cargo.toml` and a root `/Cargo.toml` workspace member entry.
+- `rivetkit-core` shared runtime objects should hang off `ActorContext(Arc<ActorContextInner>)`, with service handles stored directly on the inner so context clones can still return borrowed `&Kv` and `&SqliteDb` style accessors.
 
 ---
 
@@ -13,4 +14,13 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: `rivetkit-core` is wired into the repo-level Cargo workspace instead of the nested `rivetkit-rust` virtual workspace so it can inherit shared workspace dependencies.
   - Gotchas encountered: `cargo check -p rivetkit-core` updates the root `Cargo.lock`, so include that lockfile in the story diff.
   - Useful context: The only non-placeholder logic in this scaffold is `ActorConfig` defaults plus the `effective_sleep_grace_period` and related capped timeout helpers in `src/actor/config.rs`.
+---
+
+## 2026-04-16 22:08:53 PDT - US-002
+- What was implemented: Replaced the placeholder `ActorContext` with an `Arc`-backed runtime shell that shares state, vars, actor metadata, cancellation state, sleep-prevention flags, and the placeholder KV/SQLite/schedule/queue handles across cheap clones.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: The core context can return borrowed subsystem handles by storing `Kv`, `SqliteDb`, `Schedule`, and `Queue` directly on `ActorContextInner` instead of wrapping each handle in its own `Arc`.
+  - Gotchas encountered: `cargo check -p rivetkit-core` is clean, but the workspace still emits an unrelated `rivet-envoy-protocol` warning if `node_modules/@bare-ts/tools` is missing.
+  - Useful context: `save_state`, `broadcast`, and `wait_until` now exist with compile-safe shells, so later stories can layer in envoy-client behavior without changing the public `ActorContext` signatures again.
 ---

@@ -42,7 +42,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'ActorContext' section. Internal ActorContextInner should hold: state bytes, vars bytes, Arc references to Kv/SqliteDb/Schedule/Queue, CancellationToken for abort, AtomicBool for prevent_sleep, actor metadata (id, name, key, region). Reference envoy-client context at engine/sdks/rust/envoy-client/src/context.rs."
     },
     {
