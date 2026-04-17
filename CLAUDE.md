@@ -147,6 +147,7 @@ git commit -m "chore(my-pkg): foo bar"
 - Optional chaining is acceptable only for best-effort diagnostics and cleanup paths (for example logging hooks and dispose/release cleanup).
 
 ### Rust Dependencies
+- New crates under `rivetkit-rust/packages/` that should inherit repo-wide workspace deps must set `[package] workspace = "../../../"` and be added to the root `/Cargo.toml` workspace members.
 
 ## Documentation
 

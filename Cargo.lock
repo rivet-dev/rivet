@@ -5189,6 +5189,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivetkit-core"
+version = "2.3.0-rc.4"
+dependencies = [
+ "anyhow",
+ "ciborium",
+ "rivet-envoy-client",
+ "scc",
+ "serde",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "rivetkit-native"
 version = "2.3.0-rc.4"
 dependencies = [

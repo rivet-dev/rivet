@@ -1,285 +1,451 @@
 {
-  "project": "SQLite VFS v2",
-  "branchName": "feat/sqlite-vfs-v2",
-  "description": "Replace per-page KV storage layout (v1) with sharded LTX + delta log architecture. Engine-side sqlite-storage crate owns storage layout, CAS-fenced commits, PIDX cache, and compaction. Actor-side VFS speaks a semantic sqlite_* protocol over envoy-protocol. Background compaction folds deltas into immutable shards. See docs-internal/rivetkit-typescript/sqlite-ltx/SPEC.md for canonical specification.\n\nDesign decisions (recorded for context \u2014 do not change without revisiting):\n\n- COMMIT SIZE CAP = 16 MB (US-054). Rejected alternatives:\n  - 6 MB (original Cloudflare-matching proposal): unnecessarily restrictive after US-048 moves DELTA bytes out of the commit txn.\n  - 32 MB: adversarial review flagged 50 concurrent \u00d7 32 MB = 1.6 GB pressure on 2 GB runner pods, and FDB's 5 s txn age under cross-region replication leaves only ~3 s real write budget.\n  - 512 MB (for schema migrations / restore): such workloads belong in a streaming import path, not a single atomic commit.\n  - 16 MB matches Cloudflare Durable Objects' internal batch ceiling. With US-048 in place, PIDX for 4,096 pages \u2248 120 KB, well under FDB's 1 MB recommended size.\n\n- HARD CAP vs SILENT SPLITTING. We reject oversize commits with a clear error (CommitExceedsLimit) rather than transparently splitting across FDB transactions. Silent splitting breaks atomicity; users expecting SQLite ACID semantics must not see partial commits.\n\n- NO TRANSPARENT ROW-LEVEL SPLITTING. The 16 MB commit cap (US-054) naturally bounds single-row inserts at ~15 MB (headroom for other dirty pages in the same commit). SQLite's native overflow-page handling already chunks large values across 4 KB pages internally \u2014 our VFS sees just pages, not rows. A separate 'transparent row splitting' feature would either duplicate SQLite's native overflow handling OR violate SQL semantics (a single logical row spanning multiple physical rows breaks SELECT/COUNT/indexes/atomicity). Users needing giant BLOBs should store references to object storage \u2014 matches Cloudflare DO's actual production pattern. No separate row-size cap: the 16 MB commit cap (US-054) naturally bounds single-row inserts at ~15 MB. A tighter row cap (e.g. 2 MB like Cloudflare DO) would be redundant \u2014 the commit cap catches oversize rows anyway, with a less precise but still actionable error.\n\n- 100 KB STATEMENT / 10 GB DB. Matches Cloudflare Durable Objects. Bound-parameter cap (100) and column-count cap (100) were explicitly REJECTED \u2014 too restrictive for bulk inserts (ORMs easily hit 100 parameters) and arbitrary (SQLite's 2000-column default is fine). SQLite defaults retained for those.\n\n- DELTA STORAGE LAYOUT = per-txid chunk prefix (US-048). Rewritten cleanly because v2 has not shipped \u2014 no dual-path migration code. Old single-blob delta_key helpers removed entirely.\n",
+  "project": "RivetKit Rust SDK",
+  "branchName": "04-16-chore_rivetkit_to_rust",
+  "description": "Two-layer Rust SDK for writing Rivet Actors. rivetkit-core is the dynamic, language-agnostic lifecycle engine. rivetkit is the typed Rust wrapper with Actor trait, Ctx<A>, and Registry. See .agent/specs/rivetkit-rust.md for full spec.\n\nIntentionally deferred (separate PRDs or post-GA): NAPI bridge (rivetkit-napi), Inspector system (spec concern #7), Queue Stream adapter (#9), Schema validation (#10), Database provider system (#11), Metrics/tracing (#12), waitForNames (#14), enqueueAndWait (#15).",
   "userStories": [
     {
-      "id": "US-040",
-      "title": "Fix compaction performance: hoist scans and share engine",
-      "description": "As a developer, I need compaction to avoid redundant I/O by hoisting PIDX/delta scans to the worker level and sharing the main SqliteEngine.",
+      "id": "US-001",
+      "title": "Create rivetkit-core crate with module structure, types, and config",
+      "description": "As a developer, I need the rivetkit-core crate scaffolding with all shared types, placeholder structs, and ActorConfig so subsequent stories can build on top without compilation issues.",
       "acceptanceCriteria": [
-        "compact_worker scans PIDX and delta entries once, passes results to each compact_shard call instead of each shard doing its own full rescan",
-        "CompactionCoordinator passes a reference to the shared SqliteEngine (or its db+subspace+page_indices) to the worker instead of constructing a throwaway SqliteEngine per invocation",
-        "Compaction PIDX updates are reflected in the shared engine's page_indices cache (not discarded with a throwaway engine)",
-        "Test: compaction batch of 8 shards performs 1 PIDX scan total (not 9)",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 6,
-      "passes": true,
-      "notes": "Two compounding performance findings: (1) compact_worker calls compact_shard up to 8 times, each doing its own full PIDX scan + delta scan = 9 PIDX scans + 8 delta scans per batch. (2) default_compaction_worker creates a new SqliteEngine with empty page_indices on every invocation (compaction/mod.rs:131-147), so every scan is a cold load and cache updates are discarded. REVERTED passes=true flip on 2026-04-16: review agent (see reviews/US-040-review.txt) confirmed no implementing commit exists and both bugs are still present in the code. Ralph must actually implement this before flipping the flag."
-    },
-    {
-      "id": "US-043",
-      "title": "Make SQLite preload max bytes configurable; align naming with kv preload",
-      "description": "As a developer, I need the SQLite startup page preload byte budget to be configurable via engine config so that operators can tune it per deployment. Also align naming with the existing kv preload config to avoid operator confusion: existing preload_max_total_bytes (KV) should become kv_preload_max_total_bytes, and the new SQLite option is sqlite_preload_max_total_bytes. Document the rename prominently.",
-      "acceptanceCriteria": [
-        "Add sqlite_preload_max_total_bytes: Option<u64> field to Pegboard config in engine/packages/config/src/config/pegboard.rs, following the same pattern as preload_max_total_bytes",
-        "Add accessor fn sqlite_preload_max_total_bytes(&self) -> usize that defaults to DEFAULT_PRELOAD_MAX_BYTES (1 MiB)",
-        "Pass the config value through to TakeoverConfig::max_total_bytes in populate_start_command (sqlite_runtime.rs) and pegboard-outbound instead of using the hardcoded default",
-        "Update website/src/content/docs/self-hosting/configuration.mdx with the new config option",
-        "cargo check passes for pegboard-envoy, pegboard-outbound, config",
-        "RENAME existing preload_max_total_bytes -> kv_preload_max_total_bytes in the engine config surface. Keep a backwards-compat alias that reads the old name and logs a deprecation warning; remove the alias after one release.",
-        "ADD sqlite_preload_max_total_bytes as the new SQLite-specific config. Default = same as today's hardcoded value.",
-        "Document both in website/src/content/docs/self-hosting/configuration.mdx with a clear note: 'preload_max_total_bytes was renamed to kv_preload_max_total_bytes in version X. The old name still works but logs a warning.'",
-        "Update any internal references (pegboard, pegboard-envoy, test fixtures) to the new name",
-        "cargo test affected crates pass"
-      ],
-      "priority": 11,
-      "passes": false,
-      "notes": "Review agent flagged that having preload_max_total_bytes (KV) alongside sqlite_preload_max_total_bytes would confuse operators. Rename the existing one with a deprecation alias. Small churn, big clarity win."
-    },
-    {
-      "id": "US-044",
-      "title": "Delete mock transport VFS tests",
-      "description": "As a developer, I need the MockProtocol-based VFS tests removed since the Direct SqliteEngine tests (US-042) cover everything they cover plus the bugs they miss.",
-      "acceptanceCriteria": [
-        "Inventory all tests in rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs that use MockProtocol / Test transport. Grep: 'SqliteTransportInner::Test', 'MockProtocol', 'protocol.commit_requests()'. Enumerate each test by function name in this story's notes before deleting.",
-        "For each MockProtocol test, classify as: (a) COVERED by an existing Direct engine test \u2192 delete, (b) NOT COVERED \u2192 port to Direct engine harness first, THEN delete the mock, (c) Tests behavior that only a controllable mock can exercise (e.g., fence mismatch injection, transport failure injection) \u2192 keep the mock but migrate to a smaller, documented MockTransport that lives under #[cfg(test)] with a comment explaining why the Direct harness cannot cover it.",
-        "Specifically preserve coverage for: FenceMismatch handling in commit paths, transport errors mid-commit, stale_meta edge cases, death semantics, multi-thread statement churn, slow-path fallback behavior",
-        "After deletion, run: cargo test -p rivetkit-sqlite-native and confirm all non-mock tests still pass",
-        "Measure test surface before/after (count of #[test] functions) \u2014 report in the PR description so we can see we did not silently drop coverage",
-        "cargo test -p rivetkit-sqlite-native passes with the same or greater count of assert!/assert_eq! as before the change",
-        "cargo test -p sqlite-storage passes"
-      ],
-      "priority": 12,
-      "passes": false,
-      "notes": "Review agent flagged that naively deleting mock tests could lose coverage for 10+ error paths (FenceMismatch, transport errors, multi-thread churn). This story is explicitly not 'delete all mock tests' \u2014 it's 'replace mocks with Direct engine tests where possible, and keep the rest with justification.' Do the inventory BEFORE deleting."
-    },
-    {
-      "id": "US-047",
-      "title": "Remove recover_page_from_delta_history and fix truncate cache invalidation",
-      "description": "As a developer, I need the read fallback path removed (it masks PIDX bugs) and the truncate cache invalidation scoped to only evict pages beyond the boundary.",
-      "acceptanceCriteria": [
-        "Remove recover_page_from_delta_history from engine/packages/sqlite-storage/src/read.rs",
-        "If a page is not found in its PIDX-indicated delta and not in the shard, return an error with diagnostic context (actor_id, pgno, source_key, delta txid) instead of silently scanning all deltas",
-        "Delete or convert the test get_pages_recovers_from_older_delta_when_latest_source_is_wrong to verify the error is returned",
-        "When PIDX-indicated delta lookup fails, emit a counter metric sqlite_get_pages_pidx_miss_total (engine /metrics endpoint) alongside the returned error. If this metric ever increments in production, it indicates a real PIDX bug and should page oncall.",
-        "In truncate_main_file (v2/vfs.rs), replace page_cache.invalidate_all() with page_cache.invalidate_entries_if(|pgno, _| *pgno > truncated_pages) where truncated_pages = ceil_div(new_size_bytes, page_size). Truncating to size=0 sets truncated_pages=0, so the predicate evicts everything (matches old behavior for that edge case). Use strict > so pgno=truncated_pages survives.",
-        "Test: after truncate, pages below the boundary are still in cache (no unnecessary cache miss)",
-        "Test: after truncate + regrow, old pages beyond boundary are not served from stale cache",
-        "Add boundary tests: (1) truncate to size=0 evicts all pages, (2) truncate to an exact page boundary keeps pgno<=truncated_pages, evicts pgno>truncated_pages, (3) truncate mid-page keeps pgno<=truncated_pages (the partial page is evicted).",
-        "cargo test -p sqlite-storage passes",
-        "cargo test -p rivetkit-sqlite-native passes"
-      ],
-      "priority": 8,
-      "passes": false,
-      "notes": "Two fixes from adversarial review verification. (1) recover_page_from_delta_history scans ALL deltas (up to 256 MB) when PIDX points to wrong delta. This cannot happen in normal operation (commit writes delta + PIDX atomically). The function masks bugs and has no logging/metrics. (2) truncate invalidate_all() nukes the entire page cache including valid pages below the boundary. After VACUUM on a large DB, every read becomes a cache miss. moka's invalidate_entries_if supports selective eviction. \n\nStaged-rollout concern (review agent): normally we'd want to emit a counter for N days to confirm recover_page_from_delta_history is never hit before removing it. BECAUSE v2 HAS NOT SHIPPED, that precaution is unnecessary \u2014 remove directly. If that assumption changes (e.g., v2 beta goes out with this function still present), revisit."
-    },
-    {
-      "id": "US-048",
-      "title": "Replace single-blob DELTA layout with per-txid chunk prefix",
-      "description": "As a developer, I need commit_finalize to stop building a single giant DELTA blob so that commits up to the 16 MB cap (US-054) do not exceed FoundationDB's 10 MB per-transaction hard limit or its 5 s transaction age limit (error codes 2101, 1007). Because v2 has not shipped, we do this as a clean rewrite with an IN-PLACE PROMOTION strategy: stage chunks are written directly under a txid-scoped prefix the FIRST time, and finalize merely flips a manifest pointer in META. NO copying of bytes in the finalize transaction. This is what makes the <1 MB finalize-txn claim achievable.",
-      "acceptanceCriteria": [
-        "Add new subspace helpers in engine/packages/sqlite-storage/src/keys.rs: delta_chunk_prefix(actor_id, txid) and delta_chunk_key(actor_id, txid, chunk_idx: u32). Use a subspace distinct from stage_prefix so takeover can cleanly distinguish.",
-        "DELETE delta_key(actor_id, txid) and every call site across engine/packages/sqlite-storage/src/{read,commit,compaction/shard,quota,takeover}.rs and tests (~20 call sites). Replace with the new delta_chunk layout.",
-        "PROMOTION STRATEGY (confirmed): 'persist at stage start'. Add new engine RPC commit_stage_begin(actor_id, generation) -> Result<StageBeginResult { txid }>. Inside one FDB txn: tx_get_value_serializable(META), fence-check generation matches, increment head.next_txid, tx_write_value(META), return the allocated txid. FenceMismatch on generation bumps a dedicated metric.",
-        "Stage chunks write DIRECTLY to delta_chunk_key(actor_id, txid, chunk_idx) using the txid returned by commit_stage_begin. NO stage_key intermediate layer.",
-        "commit_finalize becomes METADATA-ONLY. Reads META, asserts: (a) head.generation == request.generation, (b) head.head_txid == request.expected_head_txid, (c) request.txid == head.next_txid - 1 (the reserved txid matches what META last allocated). Flips head_txid = request.txid, updates db_size_pages, writes META. Does NOT read, rewrite, or delete chunk bytes.",
-        "Assert in a test that a 16 MiB commit's finalize FDB txn writes fewer than 2 KB of mutations. This is the concrete guard that the metadata-only claim holds.",
-        "read.rs get_pages: replace every get_value(delta_key(...)) with scan_prefix_values(delta_chunk_prefix(actor_id, txid)), decode chunks in chunk_idx order, LTX-decode the concatenated buffer.",
-        "Extend takeover.rs build_recovery_plan to scan the new delta_chunk_prefix namespace for any chunks where txid > head_txid and delete them as orphans. Keep the existing stage_prefix cleanup removed (dead under the new scheme) or repurposed. Aborted stages (commit_stage_begin allocated a txid but no finalize arrived) naturally become orphans with txid > head_txid.",
-        "Assert in a test that after N aborted commit_stage_begin calls (each leaving orphan chunks), takeover cleans them all up on the next actor start, and head_txid does not regress.",
-        "Because finalize is metadata-only, chunk writes in commit_stage bill against sqlite_storage_used incrementally. Add quota enforcement to commit_stage: if adding this chunk would exceed sqlite_max_storage, return QuotaExceeded and leave orphan bytes for takeover to reap. Emit metric sqlite_orphan_chunk_bytes_reclaimed_total so operators can see orphan accumulation.",
-        "Concurrent-read safety: if get_pages runs while a finalize is mid-flight, it sees either the pre-finalize state (old head_txid) or the post-finalize state (new head_txid); never a torn chunk set. This is guaranteed automatically: chunks exist at txid > head_txid before finalize (invisible to get_pages), head_txid flip is atomic (single META write), chunks become visible at txid == head_txid afterwards. Add an interleaved test that verifies no torn reads across 1000 concurrent reads during a finalize.",
-        "Compaction (compaction/shard.rs) uses head_txid as the visibility boundary. A pending txid > head_txid is invisible to compaction; compaction only folds txids <= head_txid. No new chunk_count field needed \u2014 the head_txid flip is the atomic boundary.",
-        "Aborted stages leak a txid number (next_txid advanced but head_txid never caught up). This is benign: next_txid is monotonic, gaps are irrelevant to reads or compaction. u64 gives effectively infinite headroom. Document this invariant in types.rs alongside DBHead.",
-        "Update DBHead doc comment in types.rs to state: 'head_txid is the latest committed txid (visible). next_txid is the next txid allocatable by commit_stage_begin. head_txid == next_txid - 1 immediately after a clean commit; head_txid < next_txid - 1 during or after aborted stages.'",
-        "Add bench_large_tx_insert_10mb, bench_large_tx_insert_16mb, bench_large_tx_insert_commit_finalize_metadata_only_under_2kb tests to rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs. Run via Direct engine harness AND envoy transport harness.",
-        "Assert that a commit of 17 MiB is rejected cleanly with CommitExceedsLimit (depends on US-054; surface the test here too).",
-        "After landing, run local bench and compare phase histograms from US-059 against the pre-US-048 baseline in progress.txt. No phase should regress > 10% on 1 MB commits. 10 MB and 16 MB commits should work cleanly (previously failed).",
-        "Does NOT reintroduce FDB error codes 2101 or 1007 \u2014 regression assertion in bench test that no FenceMismatch or TransactionTooOld errors are logged.",
-        "Staging bench examples/kitchen-sink/scripts/bench.ts --filter 'Large TX insert 10MB' passes with p95 < 3 s, 16MB < 5 s.",
-        "dependsOn: US-059 (need phase histograms to measure no-regression; tests should scrape them).",
-        "cargo test -p sqlite-storage passes",
-        "cargo test -p rivetkit-sqlite-native passes"
-      ],
-      "priority": 2,
-      "passes": true,
-      "notes": "Two adversarial agents decided the design. TXID allocation: 'persist at stage start' (Option A). New commit_stage_begin RPC atomically allocates next_txid in one FDB txn. Chunks written directly to delta_chunk_key(actor, txid, chunk_idx); no intermediate stage_key. commit_finalize becomes metadata-only: reads META, verifies txid == next_txid - 1, flips head_txid. Abandoned stages leak txid numbers (benign on u64, orphan chunks cleaned by takeover's existing 'txid > head_txid' scan). Quota bills at stage time since finalize is metadata-only. Concurrent read safety follows automatically from the head_txid flip being the atomic boundary. No chunk_count field needed \u2014 head_txid IS the boundary.",
-      "dependsOn": [
-        "US-059"
-      ]
-    },
-    {
-      "id": "US-050",
-      "title": "Enforce 100 KB max SQL statement length via sqlite3_limit",
-      "description": "As a developer, I need SQLite statements longer than 100 KB to be rejected at parse time so that accidental RPC-to-SQL payload abuse is bounded and the contract matches Cloudflare Durable Objects.",
-      "acceptanceCriteria": [
-        "Call sqlite3_limit(db, SQLITE_LIMIT_SQL_LENGTH, 100_000) after opening the database",
-        "Running a 200 KB SQL statement returns SQLITE_TOOBIG",
-        "Running a 50 KB SQL statement succeeds",
-        "Add test in rivetkit-sqlite-native",
-        "Document in website/src/content/docs/actors/limits.mdx",
-        "cargo test -p rivetkit-sqlite-native passes"
-      ],
-      "priority": 9,
-      "passes": false,
-      "notes": "Matches Cloudflare DO (100 KB). Free because SQLite enforces natively via SQLITE_LIMIT_SQL_LENGTH."
-    },
-    {
-      "id": "US-053",
-      "title": "Enforce 10 GiB max database size via quota",
-      "description": "As a developer, I need the SQLite storage to reject commits once the actor's database has reached 10 GiB (= 10 * 1024 * 1024 * 1024 = 10,737,418,240 bytes) so that per-actor storage is bounded, matches Cloudflare Durable Objects, and keeps FDB shard rebalancing tractable. Use GiB (binary) consistently everywhere \u2014 engine constants, docs, error messages \u2014 to avoid drift with GB (decimal).",
-      "acceptanceCriteria": [
-        "In engine/packages/sqlite-storage/src/types.rs, set SQLITE_DEFAULT_MAX_STORAGE_BYTES = 10 * 1024 * 1024 * 1024 (= 10,737,418,240 bytes = 10 GiB)",
-        "commit() returns SqliteStorageQuotaExceeded when usage would exceed 10 GiB (already has this code path; just verify limit is set)",
-        "Update test that seeds a quota-exceeded commit to use the 10 GiB boundary",
-        "Document the 10 GiB DB size limit in website/src/content/docs/actors/limits.mdx",
-        "cargo test -p sqlite-storage passes",
-        "website/src/content/docs/actors/limits.mdx uses 'GiB' (binary) consistently for SQLite DB size; rendered limit table says '10 GiB', not '10 GB'"
-      ],
-      "priority": 10,
-      "passes": false,
-      "notes": "Matches Cloudflare DO (10 GB). The quota enforcement already exists; this story just sets the default limit and documents it. Smaller cap is easier to migrate across FDB shards; raise later once compaction proves itself at scale."
-    },
-    {
-      "id": "US-054",
-      "title": "Enforce 16 MB max commit size (reject, do not silently split)",
-      "description": "As a developer, I need commits whose dirty_pages exceed 16 MB to fail with a clear actionable error. 16 MB is chosen as the hard cap: it matches Cloudflare Durable Objects' internal commit batch size, is comfortably under FoundationDB's 10 MB per-txn hard limit after US-048 removes DELTA bytes from the commit txn (PIDX for 4,096 pages \u2248 120 KB), fits in one WebSocket frame in tokio-tungstenite, and bounds memory pressure on shared runner pods (50 concurrent 16 MB commits = 800 MB vs a 2 GB container budget).",
-      "acceptanceCriteria": [
-        "Add SQLITE_MAX_COMMIT_BYTES = 16 * 1024 * 1024 constant in engine/packages/sqlite-storage/src/types.rs (16 MiB in binary units). Align terminology with SQLITE_MAX_DELTA_BYTES already there.",
-        "DEFINITION: 'commit size' is the sum of dirty_page.bytes.len() over all DirtyPage in the CommitRequest. Explicitly does NOT include LTX header/trailer/index, LZ4 compression, BARE envelope, pgno encoding overhead, or actor_id/generation metadata. The check is evaluated BEFORE any encoding, serialization, or staging split.",
-        "commit() (fast path): reject when dirty_pages_raw_bytes(&request.dirty_pages) > SQLITE_MAX_COMMIT_BYTES with SqliteStorageError::CommitExceedsLimit { actual_size_bytes, max_size_bytes }. Error message must reference 'dirty page bytes' so users know what to measure.",
-        "commit_stage_begin() and commit_stage() (slow path): cap the CUMULATIVE raw bytes across all stage chunks for a single commit at SQLITE_MAX_COMMIT_BYTES. Track accumulated bytes per (actor_id, txid) in an engine-side in-memory state keyed by txid. If stage would push cumulative past the cap, return CommitExceedsLimit and abort the stage. This prevents a malicious/buggy client from bypassing the cap by chunking their own commit.",
-        "commit_finalize does NOT re-check the size (txid is already past the go/no-go point) \u2014 rely on commit_stage's accumulator.",
-        "VFS (rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs): when transport returns CommitExceedsLimit, surface as SQLITE_TOOBIG or equivalent so SQLite returns a clean transaction rollback (not a silent retry). Add a rivetkit-sqlite-native test that INSERTs a 20 MiB blob, catches the error at the JS surface, and asserts the actor remains usable for subsequent commits.",
-        "Emit sqlite_commit_exceeds_limit_total counter with label path={fast, slow}. No other labels (cardinality).",
-        "Test (fast path): a commit with 4097 * 4 KiB pages (16 MiB + 4 KiB raw) is REJECTED even when pages are all zeros (LZ4 would crush to ~KB). This locks Definition 1 against accidental drift to 'post-compression bytes'.",
-        "Test (fast path): a commit with exactly 4096 * 4 KiB pages (16 MiB) SUCCEEDS.",
-        "Test (slow path): two stages of 10 MiB raw each (total 20 MiB) is REJECTED at the second stage's commit_stage call, not just finalize.",
-        "Test: wire envelope overhead (BARE pgno varints, length prefixes) does NOT push a 16 MiB-raw commit over the cap.",
-        "Document in website/src/content/docs/actors/limits.mdx: '16 MiB max raw dirty-page bytes per commit. Counts uncompressed page bytes only; compression ratios do not affect this limit. For larger atomic operations, split into multiple BEGIN/COMMIT blocks.'",
-        "Update website/src/content/docs/actors/troubleshooting.mdx with the new CommitExceedsLimit error shape and its actionable guidance.",
-        "dependsOn: US-048 (commit txn sizing math only works after DELTA bytes leave the commit txn)",
-        "cargo test -p sqlite-storage passes",
-        "cargo test -p rivetkit-sqlite-native passes"
-      ],
-      "priority": 5,
-      "passes": false,
-      "notes": "Adversarial agent decided Definition 1 (raw dirty page bytes). Reasons: (1) user-predictable ('my 5 MiB blob \u2248 5 MiB of dirty pages'), (2) post-compression definition would let 64 MiB of zeros through a 16 MiB LZ4-bytes cap, defeating memory/wire pressure goals, (3) matches existing dirty_pages_raw_bytes invariant used elsewhere in commit.rs. LZ4 interaction is a FEATURE under Definition 1: a 16 MiB text commit still compresses to a small DELTA on disk, but the commit is still capped at 16 MiB of raw uncompressed data. Slow path must mirror-check accumulated raw bytes across stages to prevent bypass via chunking.",
-      "dependsOn": [
-        "US-048"
-      ]
-    },
-    {
-      "id": "US-055",
-      "title": "Enable WebSocket permessage-deflate on hyper-tungstenite server + all client tungstenites",
-      "description": "As a developer, I need WebSocket traffic between Cloud Run runners and the Rivet engine to be compressed so that large SQLite commit payloads use less wire bandwidth. The pegboard-envoy server uses hyper-tungstenite 0.17 (NOT tokio-tungstenite); any client that initiates a WebSocket to the engine uses tokio-tungstenite. Both sides must negotiate permessage-deflate via Sec-WebSocket-Extensions.",
-      "acceptanceCriteria": [
-        "Enumerate every WebSocket entry/exit point on the actor<->engine path: engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs (server, hyper-tungstenite), engine/sdks/rust/envoy-client/src/ (client, tokio-tungstenite), any rivetkit-typescript/packages/engine-runner usage",
-        "Enable deflate on hyper-tungstenite: verify the 0.17 release exposes a DeflateConfig / permessage-deflate feature; if not, bump hyper-tungstenite to a version that does",
-        "Enable deflate on tokio-tungstenite clients: in root Cargo.toml [workspace.dependencies.tokio-tungstenite] add 'deflate' to features",
-        "Configure both sides with server_no_context_takeover = true, client_no_context_takeover = true, server_max_window_bits = 15, client_max_window_bits = 15 (bounds per-connection memory to ~4 KB instead of 32 KB)",
-        "Add an integration test in engine/packages/pegboard-envoy/tests/ (new file: ws_compression_handshake.rs, or the nearest existing integration test dir under pegboard-envoy) that spins up a real pegboard-envoy server, opens a WebSocket client with permessage-deflate negotiation, and asserts the handshake response includes 'Sec-WebSocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover'. Use tokio-tungstenite as the test client since that is the same stack actor-side clients use.",
-        "Bench a 5 MB commit with non-random compressible data (e.g., repeated text payload) and assert wire bytes drop 2-5x vs uncompressed baseline. Use the US-059 histograms to measure transport duration",
-        "Random-blob benchmarks show no improvement (expected); document this explicitly in the story notes",
-        "Document the feature in website/src/content/docs/self-hosting/configuration.mdx if operators need to disable it (and in CLAUDE.md for WebSocket conventions)",
-        "cargo test for affected crates passes"
-      ],
-      "priority": 3,
-      "passes": false,
-      "notes": "Review agent flagged: pegboard-envoy uses hyper-tungstenite 0.17, not tokio-tungstenite. Both paths must be covered. If hyper-tungstenite 0.17 does not support deflate, we need to upgrade (verify compatibility with hyper version first). Keep no_context_takeover on both sides to bound memory \u2014 each active connection otherwise holds ~32 KB zlib state. For large actor fleets this matters. Promoted to priority 3 on 2026-04-16 per user directive \u2014 compression bumped ahead of US-054 (commit cap) to shrink wire bytes sooner."
-    },
-    {
-      "id": "US-059",
-      "title": "Add phase-level commit instrumentation (Prometheus + VFS counters)",
-      "description": "As a developer, I need three complementary observability surfaces on the SQLite commit path so that subsequent performance work has real data: (1) aggregated Prometheus histograms on the engine /metrics endpoint (port 6430) for dashboards, (2) per-actor VFS counters flowing through the existing ActorMetrics /inspector/metrics endpoint for per-actor debugging, and (3) tracing spans at debug level on both engine and VFS sides so that flipping RUST_LOG gives us per-request breakdowns correlatable by ray_id. Must land before US-048 so we can detect regressions from the DELTA layout rewrite.",
-      "acceptanceCriteria": [
-        "Engine-side Prometheus histograms in SqliteStorageMetrics (engine/packages/sqlite-storage/src/metrics.rs): sqlite_commit_phase_duration_seconds with labels phase={decode_request, meta_read, ltx_encode, pidx_read, udb_write, response_build} and path={fast, slow}. Buckets: [.0005, .001, .0025, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10]",
-        "Engine-side: sqlite_commit_stage_phase_duration_seconds{phase=decode|stage_encode|udb_write}",
-        "Engine-side: sqlite_commit_finalize_phase_duration_seconds{phase=stage_promote|pidx_write|meta_write}",
-        "Engine-side: sqlite_commit_dirty_page_count{path}, sqlite_commit_dirty_bytes{path}, sqlite_udb_ops_per_commit{path} histograms",
-        "Envoy-side Prometheus histograms (same /metrics endpoint): sqlite_commit_envoy_dispatch_duration_seconds (WS frame arrival -> engine.commit() call), sqlite_commit_envoy_response_duration_seconds (engine.commit() return -> WS frame sent)",
-        "Verify engine /metrics endpoint returns these new metrics after running a commit. Curl port 6430 in a test.",
-        "Engine-side tracing spans via #[tracing::instrument(level = \"debug\", skip(...), fields(path, dirty_pages))] on commit(), commit_stage(), commit_finalize()",
-        "Inside each, open tracing::debug_span!(\"phase_name\", phase_specific_fields) for sub-phases (meta_read, ltx_encode, udb_write, etc.) so span enter/exit durations are captured",
-        "Envoy side: tracing span around handle_sqlite_commit() with actor_id, request_id fields for cross-component correlation",
-        "All spans at debug level \u2014 verify they are compiled out / zero cost when RUST_LOG=info by running a simple benchmark and confirming throughput does not regress",
-        "Document in docs-internal/engine/SQLITE_METRICS.md: 'set RUST_LOG=sqlite_storage=debug,pegboard_envoy=debug to see per-commit phase breakdowns'",
-        "Client-side VFS (rivetkit-typescript/packages/sqlite-native/src/v2/vfs.rs VfsV2Context): add AtomicU64 fields commit_request_build_ns, commit_serialize_ns, commit_transport_ns, commit_state_update_ns, plus commit_duration_ns_total for total commit time. Record via Instant::now() differences in flush_dirty_pages() and commit_atomic_write()",
-        "Add a NAPI-exposed method get_sqlite_vfs_metrics() -> {request_build_ns, serialize_ns, transport_ns, state_update_ns, total_ns, commit_count} in rivetkit-typescript/packages/rivetkit-native/ that reads the AtomicU64 values",
-        "Extend rivetkit-typescript/packages/rivetkit/src/actor/metrics.ts ActorMetrics: call the NAPI method during snapshot() and add a new labeled_timing metric 'sqlite_commit_phases' with values {request_build, serialize, transport, state_update}. Populate from the NAPI return values. Reset on actor wake alongside other ActorMetrics fields",
-        "Verify /inspector/metrics returns the new sqlite_commit_phases metric after a commit. Add a rivetkit test that runs an INSERT, hits /inspector/metrics, and asserts the new fields exist with non-zero values",
-        "Client-side VFS: tracing::debug!(target: \"sqlite_v2_vfs\", phase, elapsed_ms, dirty_pages, bytes, \"vfs commit phase\") log lines in flush_dirty_pages and commit_atomic_write after each phase",
-        "No Prometheus metric includes actor_id or namespace_id as a label (cardinality)",
-        "Path label ({fast, slow}) is the only dimension added beyond phase names",
-        "Add sqlite-storage test commit_instruments_all_phases: runs a 1 MB commit, scrapes engine /metrics, asserts each phase histogram has >=1 observation, and asserts observations sum within ~10% of total commit duration",
-        "Add rivetkit-sqlite-native test vfs_records_commit_phase_durations: runs a commit, reads the NAPI counters, asserts request_build_ns + transport_ns + state_update_ns > 0",
-        "Run examples/kitchen-sink/scripts/bench.ts --filter 'Large TX insert 5MB' locally, scrape /metrics on engine port 6430, AND hit /inspector/metrics on the actor, paste both outputs into progress.txt as baseline data",
-        "Add docs-internal/engine/SQLITE_METRICS.md documenting every new metric: name, labels, type (histogram/counter/timing), layer (engine/envoy/vfs), where to scrape it, and how to interpret for common diagnosis scenarios",
-        "cargo test -p sqlite-storage passes",
-        "cargo test -p rivetkit-sqlite-native passes",
-        "pnpm test -F rivetkit (if applicable driver tests exist) passes"
+        "Create `rivetkit-rust/packages/rivetkit-core/Cargo.toml` with dependencies: envoy-client (workspace), serde, ciborium, tokio, anyhow, tracing, scc, tokio-util (for CancellationToken)",
+        "Add rivetkit-core to workspace members in root Cargo.toml",
+        "Create `src/lib.rs` with public module declarations for: actor, kv, sqlite, websocket, registry, types",
+        "Create `src/types.rs` with: ActorKey (Vec<ActorKeySegment>), ActorKeySegment enum (String/Number), ConnId (String type alias), WsMessage enum (Text/Binary), SaveStateOpts { immediate: bool }, ListOpts { reverse: bool, limit: Option<u32> }",
+        "Create `src/actor/mod.rs` with submodule declarations: factory, callbacks, config, context, lifecycle, state, vars, sleep, schedule, action, connection, event, queue",
+        "Create `src/actor/config.rs` with ActorConfig struct (all fields from spec with defaults), ActorConfigOverrides, CanHibernateWebSocket enum, sleep_grace_period fallback logic",
+        "Create placeholder structs (empty or minimal) in each submodule so all types exist for compilation: Kv, SqliteDb, Schedule, Queue, ConnHandle, WebSocket, ActorContext, ActorFactory, ActorInstanceCallbacks",
+        "Create empty `src/registry.rs` with placeholder CoreRegistry struct",
+        "`cargo check -p rivetkit-core` passes with no errors",
+        "Use hard tabs for Rust formatting per rustfmt.toml"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Three complementary surfaces: Prometheus histograms on engine /metrics (port 6430), per-actor VFS counters on /inspector/metrics, and debug-level tracing spans. Baseline captured in commit 514007256a: 5 MB commit at 717 ms info-level (~6.97 MB/s), udb_write 45.7% + pidx_read 36.3% of server wall time, transport 98.5% of VFS-side time. Use these numbers as the regression floor for US-048."
+      "notes": "Spec: .agent/specs/rivetkit-rust.md. See 'Proposed Module Structure' and 'Actor Config' sections. All placeholder structs will be filled in by subsequent stories. The key goal is that the crate compiles so later stories can incrementally add functionality."
     },
     {
-      "id": "US-061",
-      "title": "commit_finalize writes PIDX entries so slow-path reads bypass recover_page_from_delta_history",
-      "description": "As a developer, I need commit_finalize to insert or update PIDX entries for the staged delta chunks so that post-finalize reads resolve pages through the normal PIDX -> delta lookup path, not the legacy full-history scan. The US-048 implementation made commit_finalize metadata-only (good for FDB txn size), but it skipped PIDX writes. That leaves get_pages depending on recover_page_from_delta_history for any page whose PIDX entry is missing, which is exactly the scan the US-047 story wants to remove. Fix commit_finalize so the standard read path works and US-047 can remove the fallback cleanly.",
+      "id": "US-002",
+      "title": "rivetkit-core: ActorContext with Arc internals",
+      "description": "As a developer, I need the core ActorContext type that all actor callbacks receive, providing access to state, vars, KV, SQLite, and control methods.",
       "acceptanceCriteria": [
-        "commit_finalize writes one PIDX entry per page touched by the staged delta so that post-finalize reads find the correct (actor_id, pgno) -> txid mapping through pidx_delta_key(...) and never fall back to scanning delta history.",
-        "If PIDX writes would exceed the 2 KiB finalize-mutations budget documented by US-048, chunk the PIDX writes across stage chunks at commit_stage time instead of inside finalize. Make finalize strictly metadata-only. Document which option was chosen in the engine/CLAUDE.md sqlite-storage section.",
-        "Update the engine-side `commit_finalize` integration test so it exercises get_pages on each touched page AFTER finalize and asserts zero calls land in recover_page_from_delta_history. Add a counter or test hook in recover_page_from_delta_history to prove it is untouched during this test.",
-        "Add a stress test: N = 4096 dirty pages across 4 chunks, finalize, then read all 4096 pages and assert they match staged payloads AND recover_page_from_delta_history was not invoked.",
-        "No regression on the US-048 'finalize FDB txn writes fewer than 2 KB of mutations' assertion. If chunk-time PIDX writes are used, update the assertion to reflect the new split.",
-        "dependsOn: US-048 (the finalize split it introduced), blocks US-047 (the fallback removal).",
-        "cargo test -p sqlite-storage passes",
-        "cargo test -p rivetkit-sqlite-native passes"
+        "Implement ActorContext in `src/actor/context.rs` as an Arc-backed struct (Clone is cheap, all clones share state). Use `struct ActorContext(Arc<ActorContextInner>)` pattern",
+        "State methods: `state() -> Vec<u8>`, `set_state(Vec<u8>)`, `save_state(SaveStateOpts) -> Result<()>` (async)",
+        "Vars methods: `vars() -> Vec<u8>`, `set_vars(Vec<u8>)`",
+        "Accessor methods: `kv() -> &Kv`, `sql() -> &SqliteDb`, `schedule() -> &Schedule`, `queue() -> &Queue`",
+        "Sleep control: `sleep()`, `destroy()`, `set_prevent_sleep(bool)`, `prevent_sleep() -> bool`",
+        "Background work: `wait_until(impl Future<Output = ()> + Send + 'static)`",
+        "Actor info: `actor_id() -> &str`, `name() -> &str`, `key() -> &ActorKey`, `region() -> &str`",
+        "Shutdown: `abort_signal() -> &CancellationToken`, `aborted() -> bool`",
+        "Broadcast: `broadcast(name: &str, args: &[u8])`",
+        "Connections: `conns() -> Vec<ConnHandle>`",
+        "Methods that need envoy-client integration can use todo!() stubs initially. The struct must compile",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "See spec 'ActorContext' section. Internal ActorContextInner should hold: state bytes, vars bytes, Arc references to Kv/SqliteDb/Schedule/Queue, CancellationToken for abort, AtomicBool for prevent_sleep, actor metadata (id, name, key, region). Reference envoy-client context at engine/sdks/rust/envoy-client/src/context.rs."
+    },
+    {
+      "id": "US-003",
+      "title": "rivetkit-core: KV and SQLite wrappers",
+      "description": "As a developer, I need stable KV and SQLite wrappers that delegate to envoy-client.",
+      "acceptanceCriteria": [
+        "Implement Kv struct in `src/kv.rs` wrapping envoy-client KV operations",
+        "Kv methods: get, put, delete, delete_range, list_prefix, list_range (all async, all take &[u8] keys/values)",
+        "Kv batch methods: batch_get, batch_put, batch_delete",
+        "Use ListOpts struct from types.rs (reverse: bool, limit: Option<u32>)",
+        "Implement SqliteDb struct in `src/sqlite.rs` wrapping envoy-client SQLite",
+        "Re-export Kv and SqliteDb from lib.rs",
+        "No breaking changes to existing KV API signatures",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "KV API must be stable with no breaking ABI changes. See spec 'KV' section. Delegate to envoy-client::kv internally. Check existing implementations at engine/sdks/rust/envoy-client/src/kv.rs and engine/sdks/rust/envoy-client/src/sqlite.rs."
+    },
+    {
+      "id": "US-004",
+      "title": "rivetkit-core: State persistence with dirty tracking",
+      "description": "As a developer, I need state persistence with dirty tracking and throttled saves so actor state survives sleep/wake cycles.",
+      "acceptanceCriteria": [
+        "Implement state persistence logic in `src/actor/state.rs`",
+        "Define PersistedScheduleEvent struct: event_id (String UUID), timestamp_ms (i64), action (String), args (Vec<u8> CBOR-encoded). This is a shared data struct used by both state and schedule modules",
+        "Define PersistedActor struct: input (Option<Vec<u8>>), has_initialized (bool), state (Vec<u8>), scheduled_events (Vec<PersistedScheduleEvent>). BARE-encoded for KV storage",
+        "set_state marks state as dirty and schedules a throttled save",
+        "Throttle formula: max(0, save_interval - time_since_last_save)",
+        "save_state with immediate=true bypasses throttle",
+        "On shutdown: flush all pending saves",
+        "on_state_change callback fires after set_state (not during init, not recursively). Errors logged, not fatal",
+        "Default state_save_interval: 1 second (from ActorConfig)",
+        "Implement vars in `src/actor/vars.rs`: vars() -> Vec<u8>, set_vars(Vec<u8>). Vars are transient, not persisted, recreated every start",
+        "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 4,
       "passes": false,
-      "notes": "Coverage gap from the US-048 review (reviews/US-048-review.txt). US-048 shipped commit_finalize as metadata-only, which skipped PIDX writes entirely. Post-finalize reads now depend on recover_page_from_delta_history for any page whose PIDX entry is missing (the full-history scan). US-047 is supposed to remove that fallback; US-047 cannot land until this story does. Order of ops: US-061 first, then US-047 can delete recover_page_from_delta_history cleanly.",
-      "dependsOn": [
-        "US-048"
-      ]
+      "notes": "See spec 'State Persistence' and 'Vars' sections. PersistedScheduleEvent is defined here because it's part of the PersistedActor struct. The Schedule module (US-007) will use this type."
     },
     {
-      "id": "US-062",
-      "title": "Actually implement compaction performance fix (US-040 coverage backfill)",
-      "description": "As a developer, I need the compaction performance optimization described in US-040 to actually land in code. US-040 was flipped to passes=true on 2026-04-16 without an implementing commit: the review agent confirmed compact_shard still rescans PIDX+delta per invocation and default_compaction_worker still constructs a throwaway SqliteEngine with empty page_indices (engine/packages/sqlite-storage/src/compaction/{shard.rs,mod.rs}). Deliver the actual optimization and its test.",
+      "id": "US-005",
+      "title": "rivetkit-core: ActorFactory and ActorInstanceCallbacks",
+      "description": "As a developer, I need the two-phase actor construction system: factory creates instances, instances provide callbacks.",
       "acceptanceCriteria": [
-        "compact_worker scans PIDX and delta entries ONCE per batch and passes the pre-scanned set to each compact_shard call. compact_shard accepts them as parameters instead of rescanning.",
-        "CompactionCoordinator passes a reference to the shared SqliteEngine (or its db+subspace+Arc<page_indices>) to default_compaction_worker in engine/packages/sqlite-storage/src/compaction/mod.rs so compaction writes update the live engine cache instead of a throwaway.",
-        "After compaction, the shared page_indices cache reflects updated PIDX entries (not discarded with the throwaway engine).",
-        "Add test compact_worker_performs_single_pidx_scan_per_batch: 8-shard batch triggers exactly 1 PIDX scan total, not 9. Instrument via an op counter increment or a scan-count metric; prefer a dedicated test hook over parsing metrics output.",
-        "Validate that the existing compaction correctness tests still pass after the hoisting: compact_worker_folds_five_deltas_into_one_shard, compact_shard_skips_stale_meta_without_rewinding_head, concurrent_reads_during_compaction_keep_returning_expected_pages.",
-        "Do NOT re-flip the US-040 passes flag. Ship this as US-062.",
-        "cargo test -p sqlite-storage passes"
+        "Implement ActorFactory in `src/actor/factory.rs`: config (ActorConfig), create closure (Box<dyn Fn(FactoryRequest) -> BoxFuture<'static, Result<ActorInstanceCallbacks>> + Send + Sync>)",
+        "Implement FactoryRequest with named fields: ctx (ActorContext), input (Option<Vec<u8>>), is_new (bool)",
+        "Implement ActorInstanceCallbacks in `src/actor/callbacks.rs` with all callback slots as Option<Box<dyn Fn(...) -> BoxFuture<...> + Send + Sync>>",
+        "Lifecycle callbacks: on_wake, on_sleep, on_destroy, on_state_change",
+        "Network callbacks: on_request (returns Result<Response>), on_websocket",
+        "Connection callbacks: on_before_connect, on_connect, on_disconnect",
+        "Actions field: HashMap<String, Box<dyn Fn(ActionRequest) -> BoxFuture<'static, Result<Vec<u8>>> + Send + Sync>>",
+        "on_before_action_response callback slot",
+        "Background: run callback",
+        "All request types with named fields: OnWakeRequest, OnSleepRequest, OnDestroyRequest, OnStateChangeRequest, OnRequestRequest, OnWebSocketRequest, OnBeforeConnectRequest, OnConnectRequest, OnDisconnectRequest, ActionRequest (with conn, name, args fields), OnBeforeActionResponseRequest, RunRequest",
+        "All closures produce 'static futures (enforced by type bounds)",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "See spec 'Two-Phase Actor Construction', 'ActorInstanceCallbacks', and 'Request Types' sections. All request types use named fields (not positional). ActionRequest includes: ctx, conn (ConnHandle), name (String), args (Vec<u8>)."
+    },
+    {
+      "id": "US-006",
+      "title": "rivetkit-core: Action dispatch with timeout",
+      "description": "As a developer, I need action dispatch that looks up handlers by name, wraps with timeout, and returns CBOR responses.",
+      "acceptanceCriteria": [
+        "Implement action dispatch logic in `src/actor/action.rs`",
+        "Dispatch flow: receive ActionRequest, look up handler by name in ActorInstanceCallbacks.actions HashMap",
+        "Wrap handler invocation with action_timeout deadline (default 60s from ActorConfig)",
+        "On success: return serialized output bytes",
+        "If on_before_action_response callback is set, call it to transform output before returning",
+        "On on_before_action_response error: log error, send original output as-is (not fatal)",
+        "On action error: return error with group/code/message fields",
+        "On action name not found: return specific 'action not found' error",
+        "After completion: trigger throttled state save",
+        "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 6,
       "passes": false,
-      "notes": "US-040 was marked passes=true without an implementing commit (see reviews/US-040-review.txt). Rather than re-flipping US-040, this story exists so Ralph has a clear target for the real code change. Code sites to edit: engine/packages/sqlite-storage/src/compaction/shard.rs (compact_shard signature + remove redundant scans), engine/packages/sqlite-storage/src/compaction/worker.rs (add scan hoisting), engine/packages/sqlite-storage/src/compaction/mod.rs (CompactionCoordinator engine sharing)."
+      "notes": "See spec 'Actions' and 'Error Handling' sections. Actions are string-keyed. Args and return values are CBOR-encoded bytes."
     },
     {
-      "id": "US-060",
-      "title": "Backfill US-048 test, metric, and documentation coverage",
-      "description": "As a developer, I need the acceptance criteria that US-048 skipped to actually ship, so the story's guardrails against regressions exist. The US-048 review (reviews/US-048-review.txt) identified five concrete gaps. These are mechanical follow-ups; no architecture change.",
+      "id": "US-007",
+      "title": "rivetkit-core: Schedule API with alarm sync",
+      "description": "As a developer, I need the schedule API that dispatches timed events to actions.",
       "acceptanceCriteria": [
-        "Add test sqlite-storage::commit::tests::commit_finalize_writes_fewer_than_2kib_of_mutations: issues a 16 MiB staged commit via commit_stage_begin + commit_stage, calls commit_finalize, and asserts the finalize FDB transaction's cumulative write bytes are < 2 KiB. Use the op_counter + raw-write-bytes counter that already exists in UniversalDB, or add a test hook if needed.",
-        "Add bench rivetkit-sqlite-native::v2::vfs::tests::bench_large_tx_insert_16mb: exercises the full commit path on a 16 MiB commit and asserts no FDB error 2101 (TransactionTooLarge) or 1007 (TransactionTooOld) surfaces in the result.",
-        "Add bench rivetkit-sqlite-native::v2::vfs::tests::bench_large_tx_insert_commit_finalize_metadata_only_under_2kb: mirrors the engine-side finalize budget assertion at the VFS layer end-to-end.",
-        "Add an engine-side regression check that neither FDB error 2101 nor 1007 is observed across the new 16 MiB tests. Counter sqlite_commit_fdb_error_total{code} exposed via /metrics, with _sum asserted == 0 at test end.",
-        "Add metric sqlite_orphan_chunk_bytes_reclaimed_total to engine/packages/sqlite-storage/src/metrics.rs. Increment it in takeover's build_recovery_plan whenever a `txid > head_txid` chunk is deleted, by the size of the deleted chunk value. Document in docs-internal/engine/SQLITE_METRICS.md.",
-        "Update the DBHead doc comment in engine/packages/sqlite-storage/src/types.rs to state the head_txid / next_txid invariant from US-048: 'head_txid is the latest committed txid (visible). next_txid is the next txid allocatable by commit_stage_begin. head_txid == next_txid - 1 immediately after a clean commit; head_txid < next_txid - 1 during or after aborted stages.'",
-        "cargo test -p sqlite-storage passes",
-        "cargo test -p rivetkit-sqlite-native passes"
+        "Implement Schedule struct in `src/actor/schedule.rs`",
+        "Public methods: after(duration: Duration, action_name: &str, args: &[u8]) and at(timestamp_ms: i64, action_name: &str, args: &[u8]). Both fire-and-forget (void return)",
+        "Use PersistedScheduleEvent from state.rs (event_id UUID, timestamp_ms, action, args)",
+        "On schedule: create event, insert sorted, persist to KV",
+        "Send EventActorSetAlarm with soonest timestamp to engine",
+        "On alarm fire: find events where timestamp_ms <= now, execute each via invoke_action_by_name",
+        "Each alarm execution wrapped in internal_keep_awake",
+        "Events removed after execution (at-most-once semantics)",
+        "On schedule event execution error: log error, remove event, continue with subsequent events",
+        "Events survive sleep/wake (persisted in PersistedActor)",
+        "Internal-only methods (not on public API): cancel, next_event, all_events, clear_all",
+        "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 7,
       "passes": false,
-      "notes": "Mechanical backfill for US-048. Do not touch architecture (commit_stage_begin/commit_finalize/delta_chunk_key are correct per review). Focus on: (1) 2 KiB finalize-budget assertion, (2) the two 16 MiB benches, (3) FDB error 2101/1007 regression counter, (4) orphan-chunk metric, (5) DBHead doc comment. Keep scope tight; resist adding unrelated cleanups here."
+      "notes": "See spec 'Schedule' section. Matches TS behavior where schedule only has after() and at() publicly. PersistedScheduleEvent struct is defined in state.rs (US-004)."
+    },
+    {
+      "id": "US-008",
+      "title": "rivetkit-core: Events/broadcast and WebSocket",
+      "description": "As a developer, I need event broadcast to all connections and a callback-based WebSocket API.",
+      "acceptanceCriteria": [
+        "Implement event broadcast in `src/actor/event.rs`",
+        "ActorContext.broadcast(name: &str, args: &[u8]) sends event to all subscribed connections",
+        "ConnHandle.send(name: &str, args: &[u8]) sends event to single connection",
+        "Track event subscriptions per connection",
+        "Implement WebSocket struct in `src/websocket.rs` matching envoy-client's WebSocketHandler pattern",
+        "WebSocket methods: send(msg: WsMessage), close(code: Option<u16>, reason: Option<String>)",
+        "WsMessage enum already defined in types.rs: Text(String), Binary(Vec<u8>)",
+        "On on_request error: return HTTP 500 to caller",
+        "On on_websocket error: log error, close connection",
+        "Re-export WebSocket from lib.rs",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "See spec 'Events/Broadcast', 'WebSocket', and 'Error Handling' sections. Check envoy-client WebSocket handling at engine/sdks/rust/envoy-client/src/tunnel.rs."
+    },
+    {
+      "id": "US-009",
+      "title": "rivetkit-core: ConnHandle and connection lifecycle",
+      "description": "As a developer, I need connection handling with lifecycle hooks and hibernation persistence.",
+      "acceptanceCriteria": [
+        "Implement ConnHandle in `src/actor/connection.rs` with methods: id() -> &str, params() -> Vec<u8>, state() -> Vec<u8>, set_state(Vec<u8>), is_hibernatable() -> bool, send(name: &str, args: &[u8]), disconnect(reason: Option<&str>) -> Result<()> (async)",
+        "Connection lifecycle: on_before_connect(params) for validation/rejection on error, on_connect(conn) after creation, on_disconnect(conn) on removal",
+        "On disconnect: remove from tracking, clear subscriptions, call on_disconnect callback",
+        "Hibernatable connections: persist to KV on sleep with BARE-encoded format (conn ID, params, state, subscriptions, gateway metadata), restore on wake",
+        "Track all active connections, expose via ActorContext.conns()",
+        "Config timeouts honored: on_before_connect_timeout (5s), on_connect_timeout (5s), create_conn_state_timeout (5s)",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "See spec 'Connections' and concern #13 (persisted connection format). ConnId = String (UUID). Check envoy-client connection handling at engine/sdks/rust/envoy-client/src/connection.rs."
+    },
+    {
+      "id": "US-010",
+      "title": "rivetkit-core: Queue with completable messages",
+      "description": "As a developer, I need a queue system with send/receive, batch operations, and completable messages.",
+      "acceptanceCriteria": [
+        "Implement Queue struct in `src/actor/queue.rs`",
+        "Methods: send(name: &str, body: &[u8]) async, next(QueueNextOpts) async -> Option<QueueMessage>, next_batch(QueueNextBatchOpts) async -> Vec<QueueMessage>",
+        "Non-blocking: try_next(QueueTryNextOpts) -> Option<QueueMessage>, try_next_batch(QueueTryNextBatchOpts) -> Vec<QueueMessage>",
+        "QueueNextOpts: names (Option<Vec<String>>), timeout (Option<Duration>), signal (Option<CancellationToken>), completable (bool)",
+        "QueueNextBatchOpts: same as QueueNextOpts plus count (u32). QueueTryNextBatchOpts: names, count, completable",
+        "QueueMessage: id (u64), name (String), body (Vec<u8> CBOR-encoded), created_at (i64)",
+        "CompletableQueueMessage: same fields as QueueMessage plus complete(self, response: Option<Vec<u8>>) -> Result<()>. Must call complete() before next receive (runtime enforced)",
+        "Queue persistence: messages stored in KV with auto-incrementing IDs. Metadata (next_id, size) stored separately",
+        "Config limits: max_queue_size (default 1000), max_queue_message_size (default 65536)",
+        "active_queue_wait_count tracking: increment when blocked on next(), decrement when unblocked. Used by can_sleep()",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "See spec 'Queues' section. Sleep interaction: can_sleep() allows sleep if run handler is only blocked on a queue wait. waitForNames and enqueueAndWait are deferred to a follow-up PRD."
+    },
+    {
+      "id": "US-011",
+      "title": "Envoy-client: In-flight HTTP request tracking and lifecycle",
+      "description": "As a developer, I need envoy-client to track in-flight HTTP requests with proper JoinHandle management so rivetkit-core can check can_sleep() and tasks don't outlive actors.",
+      "acceptanceCriteria": [
+        "Fix detached `tokio::spawn` in actor.rs that drops JoinHandle for HTTP requests",
+        "Add JoinSet or equivalent per actor to store all HTTP request task JoinHandles",
+        "Expose method to query active HTTP request count (for can_sleep())",
+        "Counter increments when HTTP request task spawns, decrements when task completes",
+        "On actor shutdown: abort all in-flight HTTP tasks via JoinHandle::abort()",
+        "Wait for aborted tasks to complete (join) before signaling shutdown complete",
+        "No orphaned tasks after actor stops",
+        "Existing HTTP request handling behavior unchanged (no regression)",
+        "`cargo check -p envoy-client` passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "See spec 'Envoy-Client Integration' section, blocking changes #1 and #3. This is in engine/sdks/rust/envoy-client/src/actor.rs. The detached tokio::spawn is around the HTTP request handling path. These two changes are tightly coupled (both modify the same spawn/tracking code) so they are combined into one story."
+    },
+    {
+      "id": "US-012",
+      "title": "Envoy-client: Graceful shutdown sequencing",
+      "description": "As a developer, I need envoy-client to support multi-step shutdown so rivetkit-core can run teardown logic before Stopped is sent.",
+      "acceptanceCriteria": [
+        "Modify handle_stop in actor.rs to not immediately send Stopped and break",
+        "Allow the event loop to continue processing during teardown phase",
+        "Stopped message sent only after core signals completion via a callback or oneshot channel",
+        "Add on_actor_stop callback that receives a completion handle. Core calls the handle when teardown is done",
+        "Existing stop behavior preserved when no callback is registered (backward compatible)",
+        "`cargo check -p envoy-client` passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "See spec 'Envoy-Client Integration' section, blocking change #2. Currently handle_stop calls on_actor_stop then immediately sends Stopped. The fix: on_actor_stop returns a future or channel, and Stopped is sent only when that future resolves."
+    },
+    {
+      "id": "US-013",
+      "title": "rivetkit-core: Sleep readiness and auto-sleep timer",
+      "description": "As a developer, I need the can_sleep() check and auto-sleep timer that puts actors to sleep when idle.",
+      "acceptanceCriteria": [
+        "Implement can_sleep() in `src/actor/sleep.rs` checking ALL conditions: ready AND started, prevent_sleep is false, no_sleep config is false, no active HTTP requests (from envoy-client counter), no active keep_awake/internal_keep_awake regions, run handler not active (exception: allowed if only blocked on queue wait via active_queue_wait_count), no active connections, no pending disconnect callbacks, no active WebSocket callbacks",
+        "Implement auto-sleep timer: reset on activity, fires sleep when can_sleep() returns true for sleep_timeout duration (default 30s from ActorConfig)",
+        "prevent_sleep flag with set_prevent_sleep(bool) / prevent_sleep() -> bool",
+        "keep_awake and internal_keep_awake region tracking via atomic increment/decrement counters",
+        "wait_until future tracking: store spawned JoinHandles for shutdown task management",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "See spec 'Sleep Readiness (can_sleep())' section. Depends on US-011 for HTTP request count from envoy-client."
+    },
+    {
+      "id": "US-014",
+      "title": "rivetkit-core: Startup sequence (load, factory, ready)",
+      "description": "As a developer, I need the first half of the startup sequence: loading persisted state, creating the actor via factory, and reaching ready state.",
+      "acceptanceCriteria": [
+        "Implement startup sequence in `src/actor/lifecycle.rs`",
+        "Step 1: Load persisted data from KV (PersistedActor with state, scheduled events) or from preload",
+        "Step 2: Determine create-vs-wake by checking has_initialized flag in persisted data",
+        "Step 3: Call ActorFactory::create(FactoryRequest { is_new, input, ctx })",
+        "Step 4: On factory/on_create failure: report ActorStateStopped(Error). Actor is dead",
+        "Step 5: Set has_initialized = true in persisted data, save to KV",
+        "Step 6: Call on_wake callback (always, for both new and restored actors)",
+        "Step 7: On on_wake error: report ActorStateStopped(Error). Actor is dead",
+        "Step 8: Mark ready = true",
+        "Step 9: Driver hook point for onBeforeActorStart (can be a no-op initially)",
+        "Step 10: Mark started = true",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "See spec 'Startup Sequence' steps 1-11 and 'Error Handling' section. This is the first half; US-015 handles post-startup initialization (alarms, connections, run handler)."
+    },
+    {
+      "id": "US-015",
+      "title": "rivetkit-core: Startup sequence (post-start initialization)",
+      "description": "As a developer, I need the second half of startup: syncing alarms, restoring connections, starting run handler, and processing overdue events.",
+      "acceptanceCriteria": [
+        "Continue startup in `src/actor/lifecycle.rs` after ready+started flags are set",
+        "Resync schedule alarms with engine via EventActorSetAlarm (find soonest persisted event, send alarm)",
+        "Restore hibernating connections from KV (deserialize BARE-encoded connection data)",
+        "Reset sleep timer to begin idle tracking",
+        "Start run handler in background tokio task. On run handler error/panic: log error, actor stays alive. Catch panics via catch_unwind",
+        "Process overdue scheduled events immediately (events where timestamp_ms <= now)",
+        "Abort signal fires at the beginning of onStop for BOTH sleep and destroy modes",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "See spec 'Startup Sequence' steps 7-15 and 'Error Handling' section. run handler errors are NOT fatal; panics are caught via catch_unwind. This story completes the startup sequence begun in US-014."
+    },
+    {
+      "id": "US-016",
+      "title": "rivetkit-core: Shutdown sleep mode",
+      "description": "As a developer, I need the sleep shutdown sequence with idle window waiting and connection hibernation.",
+      "acceptanceCriteria": [
+        "Implement sleep shutdown in `src/actor/lifecycle.rs`",
+        "Step 1: Clear sleep timeout timer",
+        "Step 2: Cancel local alarm timeouts (persisted events remain in KV)",
+        "Step 3: Fire abort signal (if not already fired)",
+        "Step 4: Wait for run handler to finish (with run_stop_timeout, default 15s)",
+        "Step 5: Calculate shutdown_deadline from effective sleep_grace_period",
+        "Step 6: Wait for idle sleep window with deadline. Idle means: no active HTTP requests, no active keep_awake/internal_keep_awake, no pending disconnect callbacks, no active WebSocket callbacks",
+        "Step 7: Call on_sleep callback (with remaining deadline budget). On error: log, continue shutdown",
+        "Step 8: Wait for shutdown tasks (wait_until futures, WebSocket callback futures, prevent_sleep to clear)",
+        "Step 9: Disconnect all non-hibernatable connections. Persist hibernatable connections to KV",
+        "Step 10: Wait for shutdown tasks again",
+        "Step 11: Save state immediately. Wait for all pending KV/SQLite writes to complete",
+        "Step 12: Cleanup database connections",
+        "Step 13: Report ActorStateStopped(Ok) on success, ActorStateStopped(Error) if on_sleep errored",
+        "sleep_grace_period fallback: if explicitly set use it (capped by override), if on_sleep_timeout was customized then effective_on_sleep_timeout + 15s, otherwise 15s (DEFAULT_SLEEP_GRACE_PERIOD)",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "See spec 'Graceful Shutdown: Sleep Mode' section. Depends on US-012 (envoy-client graceful shutdown). Key: sleep mode waits for idle window before calling on_sleep."
+    },
+    {
+      "id": "US-017",
+      "title": "rivetkit-core: Shutdown destroy mode",
+      "description": "As a developer, I need the destroy shutdown sequence that skips idle waiting and disconnects all connections.",
+      "acceptanceCriteria": [
+        "Implement destroy shutdown in `src/actor/lifecycle.rs`",
+        "Step 1: Clear sleep timeout timer",
+        "Step 2: Cancel local alarm timeouts",
+        "Step 3: Fire abort signal (already fired on destroy() call, so this is a no-op check)",
+        "Step 4: Wait for run handler to finish (with run_stop_timeout, default 15s)",
+        "Step 5: Call on_destroy callback (with standalone on_destroy_timeout, default 5s). On error: log, continue",
+        "Step 6: Wait for shutdown tasks (wait_until futures)",
+        "Step 7: Disconnect ALL connections (not just non-hibernatable)",
+        "Step 8: Wait for shutdown tasks again",
+        "Step 9: Save state immediately. Wait for all pending KV/SQLite writes",
+        "Step 10: Cleanup database connections",
+        "Step 11: Report ActorStateStopped(Ok) on success, ActorStateStopped(Error) if on_destroy errored",
+        "KEY DIFFERENCE from sleep: destroy does NOT wait for idle sleep window",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "See spec 'Graceful Shutdown: Destroy Mode' section. Compare with US-016 (sleep shutdown). The key difference is no idle window wait and on_destroy instead of on_sleep."
+    },
+    {
+      "id": "US-018",
+      "title": "rivetkit-core: CoreRegistry and EnvoyCallbacks dispatcher",
+      "description": "As a developer, I need the registry that stores actor factories and dispatches envoy events to the correct actor instance.",
+      "acceptanceCriteria": [
+        "Implement CoreRegistry in `src/registry.rs` with: new(), register(name: &str, factory: ActorFactory), serve(self) -> Result<()>",
+        "serve() creates EnvoyCallbacks dispatcher that routes events to correct actor instances",
+        "On on_actor_start: extract actor name from protocol::ActorConfig, look up ActorFactory by name, call factory.create(), store ActorInstanceCallbacks",
+        "Store active actor instances in scc::HashMap keyed by actor_id (not Mutex<HashMap>)",
+        "Route fetch, websocket, action, and other events to correct instance callbacks by actor_id",
+        "Handle actor not found errors gracefully (log + return error)",
+        "Multiple actors per process supported (different actor types registered under different names)",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "See spec 'Registry (core level)' section. Use scc::HashMap for concurrent actor instance storage. serve() connects to envoy-client and dispatches events."
+    },
+    {
+      "id": "US-019",
+      "title": "Create rivetkit crate with Actor trait and prelude",
+      "description": "As a developer, I need the high-level rivetkit crate with the Actor trait that provides an ergonomic API for writing actors in Rust.",
+      "acceptanceCriteria": [
+        "Create `rivetkit-rust/packages/rivetkit/Cargo.toml` depending on rivetkit-core, serde, ciborium, async-trait, tokio, anyhow",
+        "Add rivetkit to workspace members in root Cargo.toml",
+        "Implement Actor trait in `src/actor.rs` with #[async_trait]",
+        "Associated types: State (Serialize+DeserializeOwned+Send+Sync+Clone+'static), ConnParams (DeserializeOwned+Send+Sync+'static), ConnState (Serialize+DeserializeOwned+Send+Sync+'static), Input (DeserializeOwned+Send+Sync+'static), Vars (Send+Sync+'static)",
+        "Required methods: create_state(ctx: &Ctx<Self>, input: &Self::Input) -> Result<Self::State>, on_create(ctx: &Ctx<Self>, input: &Self::Input) -> Result<Self>, create_conn_state(self: &Arc<Self>, ctx: &Ctx<Self>, params: &Self::ConnParams) -> Result<Self::ConnState>",
+        "Optional methods with defaults: create_vars, on_wake, on_sleep, on_destroy, on_state_change, on_request, on_websocket, on_before_connect, on_connect, on_disconnect, run, config",
+        "All async methods with actor instance take self: &Arc<Self>. create_state and on_create are static (no self)",
+        "All methods receive &Ctx<Self> for typed context access",
+        "Actor trait bound: Send + Sync + Sized + 'static",
+        "Create `src/prelude.rs` re-exporting: Actor, Ctx, ConnCtx, Registry, ActorConfig, serde::{Serialize, Deserialize}, async_trait, anyhow::Result, Arc",
+        "`cargo check -p rivetkit` passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "See spec 'Actor Trait' section. No proc macros in the public API. Use async_trait for Send bounds on trait methods."
+    },
+    {
+      "id": "US-020",
+      "title": "rivetkit: Ctx<A> and ConnCtx<A> typed context",
+      "description": "As a developer, I need typed context wrappers that provide cached state deserialization and typed accessors.",
+      "acceptanceCriteria": [
+        "Implement Ctx<A> in `src/context.rs` with fields: inner (ActorContext), state_cache (Arc<Mutex<Option<Arc<A::State>>>>), vars (Arc<A::Vars>)",
+        "Ctx<A>.state() -> Arc<A::State>: returns cached deserialized state. Cache populated on first access by deserializing CBOR bytes from inner.state(). Cache invalidated by set_state",
+        "Ctx<A>.set_state(&A::State): serializes state to CBOR via ciborium, calls inner.set_state(bytes), invalidates cache",
+        "Ctx<A>.vars() -> &A::Vars: returns reference to typed vars",
+        "Delegate methods to inner ActorContext: kv, sql, schedule, queue, actor_id, name, key, region, abort_signal, aborted, sleep, destroy, set_prevent_sleep, prevent_sleep, wait_until",
+        "Typed broadcast: fn broadcast<E: Serialize>(&self, name: &str, event: &E) serializes E to CBOR then calls inner.broadcast",
+        "Typed connections: fn conns(&self) -> Vec<ConnCtx<A>> wrapping each inner ConnHandle",
+        "Implement ConnCtx<A> wrapping ConnHandle with PhantomData<A>: id() -> &str, params() -> A::ConnParams (CBOR deserialize), state() -> A::ConnState (CBOR deserialize), set_state(&A::ConnState) (CBOR serialize), is_hibernatable() -> bool, send<E: Serialize>(name, event), disconnect(reason) -> Result<()>",
+        "`cargo check -p rivetkit` passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "See spec 'Ctx<A> — Typed Actor Context' section. CBOR (ciborium) at all boundaries. Ctx<A> is a SEPARATE type from ActorContext, not a newtype wrapper."
+    },
+    {
+      "id": "US-021",
+      "title": "rivetkit: Registry, action builder, and bridge",
+      "description": "As a developer, I need the high-level Registry with action builder that constructs ActorFactory from Actor trait impls.",
+      "acceptanceCriteria": [
+        "Implement Registry in `src/registry.rs` wrapping CoreRegistry: new(), register<A: Actor>(name: &str) -> ActorRegistration<A>, serve(self) -> Result<()>",
+        "Implement ActorRegistration<'a, A> with method: action<Args, Ret, F, Fut>(name: &str, handler: F) -> &mut Self where Args: DeserializeOwned+Send+'static, Ret: Serialize+Send+'static, F: Fn(Arc<A>, Ctx<A>, Args) -> Fut + Send+Sync+'static, Fut: Future<Output=Result<Ret>> + Send+'static",
+        "ActorRegistration.done() -> &mut Registry to finish registration and return to registry builder",
+        "Implement bridge in `src/bridge.rs`: construct ActorFactory from Actor impl",
+        "Bridge construction flow on FactoryRequest: create ActorContext -> build Ctx<A> -> call A::create_state if is_new -> call A::create_vars -> call A::on_create if is_new -> wrap actor in Arc<A> -> build ActorInstanceCallbacks with closures capturing Arc<A> and Ctx<A>",
+        "Each lifecycle callback closure: clone Arc<A>, clone Ctx<A>, call the corresponding Actor trait method",
+        "Action closures: deserialize Args from CBOR bytes, call handler(arc_actor, ctx, args), serialize Ret to CBOR",
+        "All lifecycle callbacks wired: on_wake, on_sleep, on_destroy, on_state_change, on_request, on_websocket, on_before_connect, on_connect, on_disconnect, run",
+        "`cargo check -p rivetkit` passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "See spec 'Action Registration', 'Registry', and usage example. No macros. The bridge is the key piece that converts typed Actor impls into dynamic ActorFactory+ActorInstanceCallbacks for rivetkit-core."
+    },
+    {
+      "id": "US-022",
+      "title": "Counter actor integration test",
+      "description": "As a developer, I need a working Counter actor example to verify the full stack compiles and the API is ergonomic.",
+      "acceptanceCriteria": [
+        "Create example Counter actor using rivetkit crate (in rivetkit-rust/packages/rivetkit/examples/ or tests/)",
+        "Counter struct with request_count: AtomicU64 field",
+        "Associated types: State = CounterState { count: i64 }, Input = (), ConnParams = (), ConnState = (), Vars = ()",
+        "Implements create_state returning CounterState { count: 0 }",
+        "Implements on_create with SQL table creation: CREATE TABLE IF NOT EXISTS log (id INTEGER PRIMARY KEY, action TEXT)",
+        "Implements on_request: increments request_count, reads state, returns JSON { count: state.count }",
+        "Has increment action method: fn increment(self: Arc<Self>, ctx: Ctx<Self>, args: (i64,)) -> Result<CounterState>. Clones state, increments by args.0, calls set_state, broadcasts 'count_changed', returns new state",
+        "Has get_count action method: fn get_count(self: Arc<Self>, ctx: Ctx<Self>, _args: ()) -> Result<i64>. Returns ctx.state().count",
+        "main() creates Registry, registers Counter as 'counter' with both actions, calls serve()",
+        "run handler with tokio::select! on abort_signal().cancelled() and a timer (demonstrates background work pattern)",
+        "Full example compiles with `cargo check`",
+        "`cargo check` passes for the example"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "See spec 'Usage Example' section for the exact code pattern. This verifies the entire API surface (Actor trait, Ctx<A>, Registry, actions, state, broadcast, SQL, abort_signal) is wired up correctly end-to-end."
     }
   ]
 }
