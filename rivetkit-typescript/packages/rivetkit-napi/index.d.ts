@@ -27,6 +27,26 @@ export interface JsSqliteVfsMetrics {
 }
 /** Open a native SQLite database backed by the envoy's KV channel. */
 export declare function openDatabaseFromEnvoy(jsHandle: JsEnvoyHandle, actorId: string, preloadedEntries?: Array<JsKvEntry> | undefined | null): Promise<JsNativeDatabase>
+export interface JsQueueNextOptions {
+  names?: Array<string>
+  timeoutMs?: number
+  completable?: boolean
+}
+export interface JsQueueNextBatchOptions {
+  names?: Array<string>
+  count?: number
+  timeoutMs?: number
+  completable?: boolean
+}
+export interface JsQueueTryNextOptions {
+  names?: Array<string>
+  completable?: boolean
+}
+export interface JsQueueTryNextBatchOptions {
+  names?: Array<string>
+  count?: number
+  completable?: boolean
+}
 /** Configuration for starting the native envoy client. */
 export interface JsEnvoyConfig {
   endpoint: string
@@ -71,6 +91,10 @@ export declare class ActorContext {
   constructor(actorId: string, name: string, region: string)
   state(): Buffer
   setState(state: Buffer): void
+  kv(): Kv
+  sql(): SqliteDb
+  schedule(): Schedule
+  queue(): Queue
   saveState(immediate: boolean): Promise<void>
   actorId(): string
   name(): string
@@ -80,6 +104,16 @@ export declare class ActorContext {
   setPreventSleep(preventSleep: boolean): void
   preventSleep(): boolean
   aborted(): boolean
+  conns(): Array<ConnHandle>
+}
+export declare class ConnHandle {
+  id(): string
+  params(): Buffer
+  state(): Buffer
+  setState(state: Buffer): void
+  isHibernatable(): boolean
+  send(name: string, args: Buffer): void
+  disconnect(reason?: string | undefined | null): Promise<void>
 }
 export declare class JsNativeDatabase {
   takeLastKvError(): string | null
@@ -114,4 +148,42 @@ export declare class JsEnvoyHandle {
   closeWebsocket(gatewayId: Buffer, requestId: Buffer, code?: number | undefined | null, reason?: string | undefined | null): Promise<void>
   startServerless(payload: Buffer): Promise<void>
   respondCallback(responseId: string, data: any): Promise<void>
+}
+export declare class Kv {
+  get(key: Buffer): Promise<Buffer | null>
+  put(key: Buffer, value: Buffer): Promise<void>
+  delete(key: Buffer): Promise<void>
+  deleteRange(start: Buffer, end: Buffer): Promise<void>
+  listPrefix(prefix: Buffer, options?: JsKvListOptions | undefined | null): Promise<Array<JsKvEntry>>
+  listRange(start: Buffer, end: Buffer, options?: JsKvListOptions | undefined | null): Promise<Array<JsKvEntry>>
+  batchGet(keys: Array<Buffer>): Promise<Array<Buffer | undefined | null>>
+  batchPut(entries: Array<JsKvEntry>): Promise<void>
+  batchDelete(keys: Array<Buffer>): Promise<void>
+}
+export declare class Queue {
+  send(name: string, body: Buffer): Promise<QueueMessage>
+  next(options?: JsQueueNextOptions | undefined | null): Promise<QueueMessage | null>
+  nextBatch(options?: JsQueueNextBatchOptions | undefined | null): Promise<Array<QueueMessage>>
+  tryNext(options?: JsQueueTryNextOptions | undefined | null): QueueMessage | null
+  tryNextBatch(options?: JsQueueTryNextBatchOptions | undefined | null): Array<QueueMessage>
+}
+export declare class QueueMessage {
+  id(): bigint
+  name(): string
+  body(): Buffer
+  createdAt(): number
+  isCompletable(): boolean
+  complete(response?: Buffer | undefined | null): Promise<void>
+}
+export declare class Schedule {
+  after(durationMs: number, actionName: string, args: Buffer): void
+  at(timestampMs: number, actionName: string, args: Buffer): void
+}
+export declare class SqliteDb {
+  exec(sql: string): Promise<Buffer>
+  query(sql: string, params?: Buffer | undefined | null): Promise<Buffer>
+}
+export declare class WebSocket {
+  send(data: Buffer, binary: boolean): void
+  close(code?: number | undefined | null, reason?: string | undefined | null): void
 }

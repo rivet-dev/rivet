@@ -2,9 +2,12 @@ use napi::bindgen_prelude::{Buffer, Promise};
 use napi_derive::napi;
 use rivetkit_core::{ActorContext as CoreActorContext, SaveStateOpts};
 
-fn napi_error(error: impl std::fmt::Display) -> napi::Error {
-	napi::Error::from_reason(error.to_string())
-}
+use crate::connection::ConnHandle;
+use crate::kv::Kv;
+use crate::queue::Queue;
+use crate::schedule::Schedule;
+use crate::sqlite_db::SqliteDb;
+use crate::napi_error;
 
 /// N-API wrapper around `rivetkit-core::ActorContext`.
 #[napi]
@@ -38,6 +41,26 @@ impl ActorContext {
 	#[napi]
 	pub fn set_state(&self, state: Buffer) {
 		self.inner.set_state(state.to_vec());
+	}
+
+	#[napi]
+	pub fn kv(&self) -> Kv {
+		Kv::new(self.inner.kv().clone())
+	}
+
+	#[napi]
+	pub fn sql(&self) -> SqliteDb {
+		SqliteDb::new(self.inner.clone())
+	}
+
+	#[napi]
+	pub fn schedule(&self) -> Schedule {
+		Schedule::new(self.inner.schedule().clone())
+	}
+
+	#[napi]
+	pub fn queue(&self) -> Queue {
+		Queue::new(self.inner.queue().clone())
 	}
 
 	#[napi]
@@ -86,6 +109,16 @@ impl ActorContext {
 	#[napi]
 	pub fn aborted(&self) -> bool {
 		self.inner.aborted()
+	}
+
+	#[napi]
+	pub fn conns(&self) -> Vec<ConnHandle> {
+		self
+			.inner
+			.conns()
+			.into_iter()
+			.map(ConnHandle::new)
+			.collect()
 	}
 
 	pub async fn wait_until(

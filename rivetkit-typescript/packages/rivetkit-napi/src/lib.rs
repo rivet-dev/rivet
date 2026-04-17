@@ -1,8 +1,14 @@
 pub mod actor_context;
 pub mod bridge_actor;
+pub mod connection;
 pub mod database;
 pub mod envoy_handle;
+pub mod kv;
+pub mod queue;
+pub mod schedule;
+pub mod sqlite_db;
 pub mod types;
+pub mod websocket;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -14,6 +20,10 @@ use rivet_envoy_client::envoy::start_envoy_sync;
 use tokio::runtime::Runtime;
 
 static INIT_TRACING: Once = Once::new();
+
+pub(crate) fn napi_error(error: impl std::fmt::Display) -> napi::Error {
+	napi::Error::from_reason(error.to_string())
+}
 
 fn init_tracing(log_level: Option<&str>) {
 	INIT_TRACING.call_once(|| {

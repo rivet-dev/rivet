@@ -578,7 +578,7 @@
         "`cargo check` passes"
       ],
       "priority": 30,
-      "passes": false,
+      "passes": true,
       "notes": "All data crosses NAPI boundary as Buffer (binary). TS side handles CBOR/JSON encoding. Rust side works with raw bytes. Check napi-rs docs for Buffer handling patterns."
     },
     {
