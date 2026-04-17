@@ -1,21 +1,21 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, Next } from "hono";
-import type { Encoding } from "@/actor/protocol/serde";
 import * as envoyProtocol from "@rivetkit/engine-envoy-protocol";
+import type { Encoding } from "@/common/encoding";
 import {
 	getRequestEncoding,
 	getRequestExposeInternalError,
-} from "@/actor/router-endpoints";
+} from "@/common/router-request";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
-import type * as protocol from "@/schemas/client-protocol/mod";
+import type * as protocol from "@/common/client-protocol";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	HTTP_RESPONSE_ERROR_VERSIONED,
-} from "@/schemas/client-protocol/versioned";
+} from "@/common/client-protocol-versioned";
 import {
 	type HttpResponseError as HttpResponseErrorJson,
 	HttpResponseErrorSchema,
-} from "@/schemas/client-protocol-zod/mod";
+} from "@/common/client-protocol-zod";
 import { encodingIsBinary, serializeWithEncoding } from "@/serde";
 import { bufferToArrayBuffer, VERSION } from "@/utils";
 import { getLogHeaders } from "@/utils/env-vars";

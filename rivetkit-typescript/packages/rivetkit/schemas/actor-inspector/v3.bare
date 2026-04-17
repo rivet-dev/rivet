@@ -1,4 +1,7 @@
-# MARK: Message To Server
+# Actor Inspector BARE Schema v3
+
+type State data
+type WorkflowHistory data
 
 type PatchStateRequest struct {
 	state: data
@@ -42,7 +45,6 @@ type DatabaseSchemaRequest struct {
 	id: uint
 }
 
-# Fetches rows from a specific table with a row limit and offset.
 type DatabaseTableRowsRequest struct {
 	id: uint
 	table: str
@@ -67,17 +69,10 @@ type ToServer struct {
 	body: ToServerBody
 }
 
-# MARK: Message To Client
-
-type State data
-
 type Connection struct {
 	id: str
 	details: data
 }
-
-# Workflow history is encoded using schemas/transport.
-type WorkflowHistory data
 
 type Init struct {
 	connections: list<Connection>
@@ -135,13 +130,11 @@ type WorkflowHistoryResponse struct {
 	isWorkflowEnabled: bool
 }
 
-# Database schema is CBOR-encoded with table metadata.
 type DatabaseSchemaResponse struct {
 	rid: uint
 	schema: data
 }
 
-# Database table rows result is CBOR-encoded rows.
 type DatabaseTableRowsResponse struct {
 	rid: uint
 	result: data

@@ -11,9 +11,9 @@ import type {
 	WorkflowHistorySnapshot,
 	WorkflowEntryMetadataSnapshot,
 } from "@rivetkit/workflow-engine";
-import { encodeWorkflowHistoryTransport } from "@/inspector/transport";
-import type * as inspectorSchema from "@/schemas/actor-inspector/mod";
-import * as transport from "@/schemas/transport/mod";
+import { encodeWorkflowHistoryTransport } from "@/common/inspector-transport";
+import type * as inspectorSchema from "@/common/bare/inspector/v4";
+import * as transport from "@/common/bare/transport/v1";
 import { assertUnreachable, bufferToArrayBuffer } from "@/utils";
 
 export interface WorkflowInspectorAdapter {
@@ -248,6 +248,17 @@ function toWorkflowBranchStatusMap(
 function toWorkflowEntryMetadata(
 	metadata: WorkflowEntryMetadataSnapshot,
 ): transport.WorkflowEntryMetadata {
+	const rollbackCompletedAt = (
+		metadata as WorkflowEntryMetadataSnapshot & {
+			rollbackCompletedAt?: number;
+		}
+	).rollbackCompletedAt;
+	const rollbackError = (
+		metadata as WorkflowEntryMetadataSnapshot & {
+			rollbackError?: string | null;
+		}
+	).rollbackError;
+
 	return {
 		status: toWorkflowEntryStatus(metadata.status),
 		error: metadata.error ?? null,
@@ -259,10 +270,10 @@ function toWorkflowEntryMetadata(
 				? null
 				: toU64(metadata.completedAt),
 		rollbackCompletedAt:
-			metadata.rollbackCompletedAt === undefined
+			rollbackCompletedAt === undefined
 				? null
-				: toU64(metadata.rollbackCompletedAt),
-		rollbackError: metadata.rollbackError ?? null,
+				: toU64(rollbackCompletedAt),
+		rollbackError: rollbackError ?? null,
 	};
 }
 
@@ -275,8 +286,8 @@ function toWorkflowHistory(
 	}
 
 	return {
-		nameRegistry: snapshot.nameRegistry,
-		entries: snapshot.entries.map((entry) => toWorkflowEntry(entry)),
+		nameRegistry: [...snapshot.nameRegistry],
+		entries: snapshot.entries.map(toWorkflowEntry),
 		entryMetadata,
 	};
 }

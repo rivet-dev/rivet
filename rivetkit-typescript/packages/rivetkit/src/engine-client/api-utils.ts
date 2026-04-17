@@ -1,21 +1,12 @@
 import { z } from "zod/v4";
 import type { ClientConfig } from "@/client/config";
 import { sendHttpRequest } from "@/client/utils";
+import { RivetError } from "@/actor/errors";
 import { combineUrlPath } from "@/utils";
 import { logger } from "./log";
 import { RegistryConfig } from "@/registry/config";
 
-// Error class for Engine API errors
-export class EngineApiError extends Error {
-	constructor(
-		public readonly group: string,
-		public readonly code: string,
-		message?: string,
-	) {
-		super(message || `Engine API error: ${group}/${code}`);
-		this.name = "EngineApiError";
-	}
-}
+export { RivetError as EngineApiError };
 
 // TODO: Remove getEndpoint, but it's used in a lot of places
 export function getEndpoint(config: ClientConfig | RegistryConfig) {

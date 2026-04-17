@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.10.0
-# Base image for Linux GNU builds (rivetkit-native addon + rivet-engine).
+# Base image for Linux GNU builds (rivetkit-napi addon + rivet-engine).
 # Uses Debian bullseye (glibc 2.31) for broad compatibility:
 #   Debian 11+, Ubuntu 20.04+, RHEL 9+, Fedora 34+, Amazon Linux 2023+
 #

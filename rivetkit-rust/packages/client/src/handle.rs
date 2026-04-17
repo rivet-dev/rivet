@@ -1,19 +1,28 @@
-use std::{cell::RefCell, ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::{Arc, Mutex}};
 use serde_json::Value as JsonValue;
 use anyhow::{anyhow, Result};
-use serde_cbor;
 use crate::{
     common::{EncodingKind, TransportKind, HEADER_ENCODING, HEADER_CONN_PARAMS},
     connection::{start_connection, ActorConnection, ActorConnectionInner},
-    protocol::query::*,
+    protocol::{codec, query::*},
     remote_manager::RemoteManager,
 };
+
+pub use crate::protocol::codec::{QueueSendResult, QueueSendStatus};
+
+#[derive(Default)]
+pub struct QueueSendOptions {
+    pub timeout: Option<u64>,
+}
 
 pub struct ActorHandleStateless {
     remote_manager: RemoteManager,
     params: Option<JsonValue>,
     encoding_kind: EncodingKind,
-    query: RefCell<ActorQuery>,
+    // Mutex (not RefCell) so the handle is `Sync` and `&handle` futures
+    // remain `Send` — required to call `.action(...)` from within axum
+    // middleware that needs `Send` futures.
+    query: Mutex<ActorQuery>,
 }
 
 impl ActorHandleStateless {
@@ -27,25 +36,24 @@ impl ActorHandleStateless {
             remote_manager,
             params,
             encoding_kind,
-            query: RefCell::new(query)
+            query: Mutex::new(query)
         }
     }
 
     pub async fn action(&self, name: &str, args: Vec<JsonValue>) -> Result<JsonValue> {
         // Resolve actor ID
-        let query = self.query.borrow().clone();
+        let query = self.query.lock().expect("query lock poisoned").clone();
         let actor_id = self.remote_manager.resolve_actor_id(&query).await?;
 
-        // Encode args as CBOR
-        let args_cbor = serde_cbor::to_vec(&args)?;
+        let body = codec::encode_http_action_request(self.encoding_kind, &args)?;
 
         // Build headers
         let mut headers = vec![
-            (HEADER_ENCODING, self.encoding_kind.to_string()),
+            (HEADER_ENCODING.to_string(), self.encoding_kind.to_string()),
         ];
 
         if let Some(params) = &self.params {
-            headers.push((HEADER_CONN_PARAMS, serde_json::to_string(params)?));
+            headers.push((HEADER_CONN_PARAMS.to_string(), serde_json::to_string(params)?));
         }
 
         // Send request via gateway
@@ -55,24 +63,151 @@ impl ActorHandleStateless {
             &path,
             "POST",
             headers,
-            Some(args_cbor),
+            Some(body),
         ).await?;
 
         if !res.status().is_success() {
-            return Err(anyhow!("action failed: {}", res.status()));
+            let status = res.status();
+            let body = res.bytes().await?;
+            if let Ok((group, code, message, metadata)) =
+                codec::decode_http_error(self.encoding_kind, &body)
+            {
+                return Err(anyhow!(
+                    "action failed ({group}/{code}): {message}, metadata={metadata:?}"
+                ));
+            }
+            return Err(anyhow!("action failed: {status}"));
         }
 
         // Decode response
-        let output_cbor = res.bytes().await?;
-        let output: JsonValue = serde_cbor::from_slice(&output_cbor)?;
+        let output = res.bytes().await?;
+        codec::decode_http_action_response(self.encoding_kind, &output)
+    }
 
-        Ok(output)
+    pub async fn send(&self, name: &str, body: JsonValue) -> Result<()> {
+        self.send_queue(name, body, false, None).await.map(|_| ())
+    }
+
+    pub async fn send_and_wait(
+        &self,
+        name: &str,
+        body: JsonValue,
+        opts: QueueSendOptions,
+    ) -> Result<QueueSendResult> {
+        let result = self.send_queue(name, body, true, opts.timeout).await?;
+        result.ok_or_else(|| anyhow!("queue wait response missing"))
+    }
+
+    async fn send_queue(
+        &self,
+        name: &str,
+        body: JsonValue,
+        wait: bool,
+        timeout: Option<u64>,
+    ) -> Result<Option<QueueSendResult>> {
+        let query = self.query.lock().expect("query lock poisoned").clone();
+        let actor_id = self.remote_manager.resolve_actor_id(&query).await?;
+        let request_body = codec::encode_http_queue_request(
+            self.encoding_kind,
+            name,
+            &body,
+            wait,
+            timeout,
+        )?;
+
+        let mut headers = vec![
+            (HEADER_ENCODING.to_string(), self.encoding_kind.to_string()),
+        ];
+
+        if let Some(params) = &self.params {
+            headers.push((HEADER_CONN_PARAMS.to_string(), serde_json::to_string(params)?));
+        }
+
+        let path = format!("/queue/{}", urlencoding::encode(name));
+        let res = self.remote_manager.send_request(
+            &actor_id,
+            &path,
+            "POST",
+            headers,
+            Some(request_body),
+        ).await?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let body = res.bytes().await?;
+            if let Ok((group, code, message, metadata)) =
+                codec::decode_http_error(self.encoding_kind, &body)
+            {
+                return Err(anyhow!(
+                    "queue send failed ({group}/{code}): {message}, metadata={metadata:?}"
+                ));
+            }
+            return Err(anyhow!("queue send failed: {status}"));
+        }
+
+        let body = res.bytes().await?;
+        let result = codec::decode_http_queue_response(self.encoding_kind, &body)?;
+        Ok(wait.then_some(result))
+    }
+
+    pub async fn fetch(
+        &self,
+        path: &str,
+        method: &str,
+        headers: Vec<(String, String)>,
+        body: Option<Vec<u8>>,
+    ) -> Result<reqwest::Response> {
+        let query = self.query.lock().expect("query lock poisoned").clone();
+        let actor_id = self.remote_manager.resolve_actor_id(&query).await?;
+        let path = normalize_fetch_path(path);
+        self.remote_manager
+            .send_request(&actor_id, &path, method, headers, body)
+            .await
+    }
+
+    pub async fn web_socket(
+        &self,
+        path: &str,
+        protocols: Vec<String>,
+    ) -> Result<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>> {
+        let query = self.query.lock().expect("query lock poisoned").clone();
+        let actor_id = self.remote_manager.resolve_actor_id(&query).await?;
+        self.remote_manager
+            .open_raw_websocket(&actor_id, path, self.params.clone(), protocols)
+            .await
+    }
+
+    pub fn gateway_url(&self) -> Result<String> {
+        let query = self.query.lock().expect("query lock poisoned").clone();
+        self.remote_manager.gateway_url(&query)
+    }
+
+    pub fn get_gateway_url(&self) -> Result<String> {
+        self.gateway_url()
+    }
+
+    pub async fn reload(&self) -> Result<()> {
+        let query = self.query.lock().expect("query lock poisoned").clone();
+        let actor_id = self.remote_manager.resolve_actor_id(&query).await?;
+        let res = self.remote_manager.send_request(
+            &actor_id,
+            "/dynamic/reload",
+            "PUT",
+            Vec::new(),
+            None,
+        ).await?;
+        if !res.status().is_success() {
+            let status = res.status();
+            let body = res.text().await.unwrap_or_default();
+            return Err(anyhow!("reload failed with status {status}: {body}"));
+        }
+        Ok(())
     }
 
     pub async fn resolve(&self) -> Result<String> {
         let query = {
-            let Ok(query) = self.query.try_borrow() else {
-                return Err(anyhow!("Failed to borrow actor query"));
+            let Ok(query) = self.query.lock() else {
+                return Err(anyhow!("Failed to lock actor query"));
             };
             query.clone()
         };
@@ -95,8 +230,8 @@ impl ActorHandleStateless {
                 };
 
                 {
-                    let Ok(mut query_mut) = self.query.try_borrow_mut() else {
-                        return Err(anyhow!("Failed to borrow actor query mutably"));
+                    let Ok(mut query_mut) = self.query.lock() else {
+                        return Err(anyhow!("Failed to lock actor query mutably"));
                     };
 
                     *query_mut = ActorQuery::GetForId {
@@ -110,6 +245,15 @@ impl ActorHandleStateless {
                 Ok(actor_id)
             }
         }
+    }
+}
+
+fn normalize_fetch_path(path: &str) -> String {
+    let path = path.trim_start_matches('/');
+    if path.is_empty() {
+        "/request".to_string()
+    } else {
+        format!("/request/{path}")
     }
 }
 

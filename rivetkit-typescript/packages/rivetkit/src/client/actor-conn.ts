@@ -3,24 +3,27 @@ import invariant from "invariant";
 import pRetry from "p-retry";
 import type { CloseEvent } from "ws";
 import type { AnyActorDefinition } from "@/actor/definition";
-import { inputDataToBuffer } from "@/actor/protocol/old";
-import { type Encoding, jsonStringifyCompat } from "@/actor/protocol/serde";
+import {
+	type Encoding,
+	inputDataToBuffer,
+	jsonStringifyCompat,
+} from "@/common/encoding";
 import { PATH_CONNECT } from "@/common/actor-router-consts";
 import { assertUnreachable, stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
-import type { EngineControlClient } from "@/driver-helpers/mod";
-import type * as protocol from "@/schemas/client-protocol/mod";
+import type { EngineControlClient } from "@/engine-client/driver";
+import type * as protocol from "@/common/client-protocol";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	TO_CLIENT_VERSIONED,
 	TO_SERVER_VERSIONED,
-} from "@/schemas/client-protocol/versioned";
+} from "@/common/client-protocol-versioned";
 import {
 	type ToClient as ToClientJson,
 	ToClientSchema,
 	type ToServer as ToServerJson,
 	ToServerSchema,
-} from "@/schemas/client-protocol-zod/mod";
+} from "@/common/client-protocol-zod";
 import { deserializeWithEncoding, serializeWithEncoding } from "@/serde";
 import { bufferToArrayBuffer, promiseWithResolvers } from "@/utils";
 import { getLogMessage } from "@/utils/env-vars";
@@ -884,7 +887,7 @@ export class ActorConnRaw {
 					name: action.name,
 				})),
 			});
-			throw new errors.InternalError(`No in flight response for ${id}`);
+			throw errors.internalClientError(`No in flight response for ${id}`);
 		}
 		this.#actionsInFlight.delete(id);
 		logger().debug({

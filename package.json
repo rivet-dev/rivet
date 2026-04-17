@@ -37,7 +37,7 @@
 		"@rivetkit/next-js": "workspace:*",
 		"@rivetkit/db": "workspace:*",
 		"@rivetkit/engine-api-full": "workspace:*",
-		"@rivetkit/rivetkit-native": "workspace:*",
+		"@rivetkit/rivetkit-napi": "workspace:*",
 		"@rivetkit/engine-cli": "workspace:*",
 		"@types/react": "^19",
 		"@types/react-dom": "^19"

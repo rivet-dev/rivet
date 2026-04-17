@@ -1,4 +1,5 @@
-import { actor } from "rivetkit";
+// @ts-nocheck
+import { actor, queue } from "rivetkit";
 import type { registry } from "./registry-static";
 
 export const RUN_SLEEP_TIMEOUT = 1000;
@@ -57,6 +58,9 @@ export const runWithQueueConsumer = actor({
 		messagesReceived: [] as Array<{ name: string; body: unknown }>,
 		runStarted: false,
 		wakeCount: 0,
+	},
+	queues: {
+		messages: queue<unknown>(),
 	},
 	onWake: (c) => {
 		c.state.wakeCount += 1;

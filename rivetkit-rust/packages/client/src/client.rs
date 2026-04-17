@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::collections::HashMap;
 
 use anyhow::Result;
 use serde_json::{Value as JsonValue};
@@ -34,6 +35,84 @@ pub struct CreateOptions {
     pub input: Option<JsonValue>,
 }
 
+pub struct ClientConfig {
+    pub endpoint: String,
+    pub token: Option<String>,
+    pub namespace: String,
+    pub pool_name: String,
+    pub encoding: EncodingKind,
+    pub transport: TransportKind,
+    pub headers: HashMap<String, String>,
+    pub max_input_size: usize,
+    pub disable_metadata_lookup: bool,
+}
+
+impl ClientConfig {
+    pub fn new(endpoint: impl Into<String>) -> Self {
+        Self {
+            endpoint: endpoint.into(),
+            token: None,
+            namespace: "default".to_string(),
+            pool_name: "default".to_string(),
+            encoding: EncodingKind::Bare,
+            transport: TransportKind::WebSocket,
+            headers: HashMap::new(),
+            max_input_size: 4 * 1024,
+            disable_metadata_lookup: false,
+        }
+    }
+
+    pub fn token(mut self, token: impl Into<String>) -> Self {
+        self.token = Some(token.into());
+        self
+    }
+
+    pub fn token_opt(mut self, token: Option<String>) -> Self {
+        self.token = token;
+        self
+    }
+
+    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.namespace = namespace.into();
+        self
+    }
+
+    pub fn pool_name(mut self, pool_name: impl Into<String>) -> Self {
+        self.pool_name = pool_name.into();
+        self
+    }
+
+    pub fn encoding(mut self, encoding: EncodingKind) -> Self {
+        self.encoding = encoding;
+        self
+    }
+
+    pub fn transport(mut self, transport: TransportKind) -> Self {
+        self.transport = transport;
+        self
+    }
+
+    pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.insert(key.into(), value.into());
+        self
+    }
+
+    pub fn headers(mut self, headers: HashMap<String, String>) -> Self {
+        self.headers = headers;
+        self
+    }
+
+    pub fn max_input_size(mut self, max_input_size: usize) -> Self {
+        self.max_input_size = max_input_size;
+        self
+    }
+
+    pub fn disable_metadata_lookup(mut self, disable: bool) -> Self {
+        self.disable_metadata_lookup = disable;
+        self
+    }
+}
+
 
 pub struct Client {
     remote_manager: RemoteManager,
@@ -43,6 +122,25 @@ pub struct Client {
 }
 
 impl Client {
+    pub fn from_config(config: ClientConfig) -> Self {
+        let remote_manager = RemoteManager::from_config(
+            config.endpoint,
+            config.token,
+            config.namespace,
+            config.pool_name,
+            config.headers,
+            config.max_input_size,
+            config.disable_metadata_lookup,
+        );
+
+        Self {
+            remote_manager,
+            encoding_kind: config.encoding,
+            transport_kind: config.transport,
+            shutdown_tx: Arc::new(tokio::sync::broadcast::channel(1).0)
+        }
+    }
+
     pub fn new(
         manager_endpoint: &str,
         transport_kind: TransportKind,
@@ -187,6 +285,10 @@ impl Client {
 
     pub fn disconnect(self) {
         drop(self)
+    }
+
+    pub fn dispose(self) {
+        self.disconnect()
     }
 }
 

@@ -2,9 +2,9 @@ import { PATH_WEBSOCKET_PREFIX } from "@/common/actor-router-consts";
 import { deconstructError } from "@/common/utils";
 import {
 	type GatewayTarget,
-	HEADER_CONN_PARAMS,
 	type EngineControlClient,
-} from "@/driver-helpers/mod";
+} from "@/engine-client/driver";
+import { HEADER_CONN_PARAMS } from "@/common/actor-router-consts";
 import { ActorError } from "./errors";
 import { logger } from "./log";
 

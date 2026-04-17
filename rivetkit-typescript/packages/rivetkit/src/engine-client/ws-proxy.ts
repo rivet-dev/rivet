@@ -1,6 +1,6 @@
 import type { Context as HonoContext } from "hono";
 import type { WSContext } from "hono/ws";
-import type { UpgradeWebSocketArgs } from "@/actor/router-websocket-endpoints";
+import type { UpgradeWebSocketArgs } from "@/common/actor-websocket";
 import { stringifyError } from "@/common/utils";
 import { importWebSocket } from "@/common/websocket";
 import { logger } from "./log";

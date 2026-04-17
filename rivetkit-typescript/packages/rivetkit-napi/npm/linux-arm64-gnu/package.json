@@ -1,0 +1,22 @@
+{
+	"name": "@rivetkit/rivetkit-napi-linux-arm64-gnu",
+	"version": "2.3.0-rc.4",
+	"os": [
+		"linux"
+	],
+	"cpu": [
+		"arm64"
+	],
+	"main": "rivetkit-napi.linux-arm64-gnu.node",
+	"files": [
+		"rivetkit-napi.linux-arm64-gnu.node"
+	],
+	"description": "Native N-API addon for RivetKit providing envoy client and SQLite access",
+	"license": "Apache-2.0",
+	"engines": {
+		"node": ">= 20.0.0"
+	},
+	"libc": [
+		"glibc"
+	]
+}

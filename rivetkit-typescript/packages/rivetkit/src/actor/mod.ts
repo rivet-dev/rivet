@@ -1,10 +1,6 @@
-import { event as schemaEvent, queue as schemaQueue } from "./schema";
-export type { Encoding } from "@/actor/protocol/serde";
-export {
-	ALLOWED_PUBLIC_HEADERS,
-	PATH_CONNECT,
-	PATH_WEBSOCKET_PREFIX,
-} from "@/common/actor-router-consts";
+export type { ActorKey } from "@/client/query";
+export { ALLOWED_PUBLIC_HEADERS } from "@/common/actor-router-consts";
+export type { Encoding } from "@/common/encoding";
 export type {
 	UniversalErrorEvent,
 	UniversalEvent,
@@ -17,28 +13,26 @@ export type {
 	RivetMessageEvent,
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
-export type { ActorKey } from "@/client/query";
 export type * from "./config";
-export { CONN_STATE_MANAGER_SYMBOL } from "./conn/mod";
-export type { AnyConn, Conn } from "./conn/mod";
 export type {
-	BaseActorDefinition,
 	AnyActorDefinition,
+	AnyActorInstance,
 	AnyStaticActorDefinition,
+	AnyStaticActorInstance,
+	BaseActorDefinition,
+	BaseActorInstance,
 } from "./definition";
-export { isStaticActorDefinition } from "./definition";
-export { ActorDefinition } from "./definition";
-export { lookupInRegistry } from "./definition";
-export { UserError, type UserErrorOptions } from "./errors";
-export { KEYS as KV_KEYS } from "./instance/keys";
-export { ActorKv } from "./instance/kv";
-export type { BaseActorInstance, AnyActorInstance } from "./instance/mod";
-export { actor, ActorInstance } from "./instance/mod";
 export {
-	type ActorRouter,
-	createActorRouter,
-} from "./router";
-export { routeWebSocket } from "./router-websocket-endpoints";
-export type { Type } from "./schema";
-export const event = schemaEvent;
-export const queue = schemaQueue;
+	ActorDefinition,
+	actor,
+	isStaticActorDefinition,
+	isStaticActorInstance,
+	lookupInRegistry,
+} from "./definition";
+export {
+	ActorError,
+	RivetError,
+	UserError,
+	type UserErrorOptions,
+} from "./errors";
+export { event, queue, type Type } from "./schema";

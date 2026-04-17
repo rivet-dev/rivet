@@ -1,30 +1,644 @@
 import { z } from "zod/v4";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
-import type { Conn } from "./conn/mod";
 import type {
-	ActionContext,
-	ActorContext,
-	BeforeActionResponseContext,
-	BeforeConnectContext,
-	ConnectContext,
-	CreateConnStateContext,
-	CreateContext,
-	CreateVarsContext,
-	DestroyContext,
-	DisconnectContext,
-	RequestContext,
-	RunContext,
-	SleepContext,
-	StateChangeContext,
-	WakeContext,
-	WebSocketContext,
-} from "./contexts";
-import type { AnyDatabaseProvider } from "./database";
-import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
+	AnyDatabaseProvider,
+	InferDatabaseClient,
+	RawDatabaseClient,
+	DrizzleDatabaseClient,
+	NativeDatabaseProvider,
+} from "@/common/database/config";
+import type { BaseActorDefinition } from "./definition";
+import type {
+	EventSchemaConfig,
+	PrimitiveSchema,
+	QueueSchemaConfig,
+} from "./schema";
+import type {
+	InferEventArgs,
+	InferQueueCompleteMap,
+	InferSchemaMap,
+} from "./schema";
 
 export const DEFAULT_ON_SLEEP_TIMEOUT = 5_000;
 export const DEFAULT_WAIT_UNTIL_TIMEOUT = 15_000;
 export const DEFAULT_SLEEP_GRACE_PERIOD = 15_000;
+
+export const ACTOR_CONTEXT_INTERNAL_SYMBOL = Symbol(
+	"rivetkit.actor_context_internal",
+);
+export const CONN_DRIVER_SYMBOL = Symbol("rivetkit.conn_driver");
+export const CONN_STATE_MANAGER_SYMBOL = Symbol("rivetkit.conn_state_manager");
+
+export interface ActorLogger {
+	level: any;
+	fatal: any;
+	trace: any;
+	silent: any;
+	msgPrefix: any;
+	debug: any;
+	info: any;
+	warn: any;
+	error: any;
+	[key: string]: any;
+}
+
+export interface ActorKv {
+	get(key: Uint8Array | string): Promise<Uint8Array | null>;
+	put(key: Uint8Array | string, value: Uint8Array | string): Promise<void>;
+	delete(key: Uint8Array | string): Promise<void>;
+	batchPut(entries: [Uint8Array, Uint8Array][]): Promise<void>;
+	batchGet(keys: Uint8Array[]): Promise<(Uint8Array | null)[]>;
+	batchDelete(keys: Uint8Array[]): Promise<void>;
+	deleteRange(start: Uint8Array, end: Uint8Array): Promise<void>;
+	listPrefix(
+		prefix: Uint8Array,
+		options?: { reverse?: boolean; limit?: number },
+	): Promise<[Uint8Array, Uint8Array][]>;
+	listRange(
+		start: Uint8Array,
+		end: Uint8Array,
+		options?: { reverse?: boolean; limit?: number },
+	): Promise<[Uint8Array, Uint8Array][]>;
+	[key: string]: any;
+}
+
+export interface ActorSql {
+	exec(sql: string, callback?: (row: unknown[], columns: string[]) => void): Promise<void>;
+	run(sql: string, params?: unknown[] | Record<string, unknown>): Promise<void>;
+	query(
+		sql: string,
+		params?: unknown[] | Record<string, unknown>,
+	): Promise<{ columns: string[]; rows: unknown[][] }>;
+	[key: string]: any;
+}
+
+export interface ActorSchedule {
+	after(duration: number, action: string, ...args: unknown[]): Promise<void>;
+	at(timestamp: number, action: string, ...args: unknown[]): Promise<void>;
+	[key: string]: any;
+}
+
+export type QueueMessageOf<Name extends string, Body> = {
+	id: number | bigint;
+	name: Name;
+	body: Body;
+	createdAt: number;
+	[key: string]: unknown;
+};
+
+export type QueueName<TQueues extends QueueSchemaConfig> = keyof TQueues & string;
+export type QueueFilterName<TQueues extends QueueSchemaConfig> =
+	keyof TQueues extends never ? string : QueueName<TQueues>;
+
+type QueueMessageForName<
+	TQueues extends QueueSchemaConfig,
+	TName extends QueueFilterName<TQueues>,
+> = keyof TQueues extends never
+	? QueueMessageOf<string, unknown>
+	: TName extends QueueName<TQueues>
+		? QueueMessageOf<TName, InferSchemaMap<TQueues>[TName]>
+		: never;
+
+type QueueCompleteArgs<T> = undefined extends T
+	? [response?: T]
+	: [response: T];
+
+type QueueCompleteArgsForName<
+	TQueues extends QueueSchemaConfig,
+	TName extends QueueFilterName<TQueues>,
+> = keyof TQueues extends never
+	? [response?: unknown]
+	: TName extends QueueName<TQueues>
+		? [InferQueueCompleteMap<TQueues>[TName]] extends [never]
+			? [response?: unknown]
+			: QueueCompleteArgs<InferQueueCompleteMap<TQueues>[TName]>
+		: [response?: unknown];
+
+type QueueCompletableMessageForName<
+	TQueues extends QueueSchemaConfig,
+	TName extends QueueFilterName<TQueues>,
+> = QueueMessageForName<TQueues, TName> & {
+	complete(...args: QueueCompleteArgsForName<TQueues, TName>): Promise<void>;
+};
+
+type QueueCompletionResultForName<
+	TQueues extends QueueSchemaConfig,
+	TName extends QueueFilterName<TQueues>,
+> = keyof TQueues extends never
+	? unknown | undefined
+	: TName extends QueueName<TQueues>
+		? InferQueueCompleteMap<TQueues>[TName] | undefined
+		: unknown | undefined;
+
+export type QueueResultMessageForName<
+	TQueues extends QueueSchemaConfig,
+	TName extends QueueFilterName<TQueues>,
+	TCompletable extends boolean,
+> = TCompletable extends true
+	? QueueCompletableMessageForName<TQueues, TName>
+	: QueueMessageForName<TQueues, TName>;
+
+export interface QueueNextOptions<
+	TName extends string = string,
+	TCompletable extends boolean = boolean,
+> {
+	names?: readonly TName[];
+	timeout?: number;
+	signal?: AbortSignal;
+	completable?: TCompletable;
+}
+
+export interface QueueNextBatchOptions<
+	TName extends string = string,
+	TCompletable extends boolean = boolean,
+> {
+	names?: readonly TName[];
+	count?: number;
+	timeout?: number;
+	signal?: AbortSignal;
+	completable?: TCompletable;
+}
+
+export interface QueueWaitOptions<TCompletable extends boolean = boolean> {
+	timeout?: number;
+	signal?: AbortSignal;
+	completable?: TCompletable;
+}
+
+export interface QueueEnqueueAndWaitOptions {
+	timeout?: number;
+	signal?: AbortSignal;
+}
+
+export interface QueueTryNextOptions<
+	TName extends string = string,
+	TCompletable extends boolean = boolean,
+> {
+	names?: readonly TName[];
+	completable?: TCompletable;
+}
+
+export interface QueueTryNextBatchOptions<
+	TName extends string = string,
+	TCompletable extends boolean = boolean,
+> {
+	names?: readonly TName[];
+	count?: number;
+	completable?: TCompletable;
+}
+
+export interface QueueIterOptions<
+	TName extends string = string,
+	TCompletable extends boolean = boolean,
+> {
+	names?: readonly TName[];
+	signal?: AbortSignal;
+	completable?: TCompletable;
+}
+
+export interface ActorQueue<TQueues extends QueueSchemaConfig = Record<never, never>> {
+	send<TName extends QueueFilterName<TQueues>>(
+		name: TName,
+		body: QueueMessageForName<TQueues, TName>["body"],
+	): Promise<any>;
+	next<
+		const TName extends QueueFilterName<TQueues>,
+		const TCompletable extends boolean = false,
+	>(
+		opts?: QueueNextOptions<TName, TCompletable>,
+	): Promise<any>;
+	nextBatch<
+		const TName extends QueueFilterName<TQueues>,
+		const TCompletable extends boolean = false,
+	>(
+		opts?: QueueNextBatchOptions<TName, TCompletable>,
+	): Promise<any[]>;
+	waitForNames<
+		const TName extends QueueFilterName<TQueues>,
+		const TCompletable extends boolean = false,
+	>(
+		names: readonly TName[],
+		opts?: QueueWaitOptions<TCompletable>,
+	): Promise<any>;
+	enqueueAndWait<const TName extends QueueFilterName<TQueues>>(
+		name: TName,
+		body: QueueMessageForName<TQueues, TName>["body"],
+		opts?: QueueEnqueueAndWaitOptions,
+	): Promise<QueueCompletionResultForName<TQueues, TName>>;
+	tryNext<
+		const TName extends QueueFilterName<TQueues>,
+		const TCompletable extends boolean = false,
+	>(
+		opts?: QueueTryNextOptions<TName, TCompletable>,
+	): Promise<any>;
+	tryNextBatch<
+		const TName extends QueueFilterName<TQueues>,
+		const TCompletable extends boolean = false,
+	>(
+		opts?: QueueTryNextBatchOptions<TName, TCompletable>,
+	): Promise<any[]>;
+	iter<
+		const TName extends QueueFilterName<TQueues>,
+		const TCompletable extends boolean = false,
+	>(
+		opts?: QueueIterOptions<TName, TCompletable>,
+	): AsyncIterable<any>;
+	[key: string]: any;
+}
+
+export interface Conn<
+	TState = unknown,
+	TConnParams = unknown,
+	TConnState = unknown,
+	TVars = unknown,
+	TInput = unknown,
+	TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> {
+	id: string;
+	params: TConnParams;
+	state: TConnState;
+	isHibernatable: boolean;
+	send(name: string, ...args: any[]): void;
+	disconnect(reason?: string): Promise<void>;
+	[key: string]: any;
+}
+
+export type AnyConn = Conn<any, any, any, any, any, any, any, any>;
+
+export interface ActorContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> {
+	[ACTOR_CONTEXT_INTERNAL_SYMBOL]?: unknown;
+	state: TState;
+	vars: TVars;
+	readonly kv: ActorKv;
+	readonly sql: ActorSql;
+	readonly db: InferDatabaseClient<TDatabase>;
+	readonly schedule: ActorSchedule;
+	readonly queue: ActorQueue<TQueues>;
+	readonly actorId: string;
+	readonly name: string;
+	readonly key: Array<string | number>;
+	readonly region: string;
+	readonly conns: Map<string, Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase, TEvents, TQueues>>;
+	readonly log: ActorLogger;
+	readonly abortSignal: AbortSignal;
+	readonly aborted: boolean;
+	readonly preventSleep: boolean;
+	broadcast(name: string, ...args: any[]): void;
+	saveState(opts?: { immediate?: boolean }): Promise<void>;
+	waitUntil(promise: Promise<unknown>): void;
+	setPreventSleep(preventSleep: boolean): void;
+	sleep(): void;
+	destroy(): void;
+	client<T = any>(): T;
+	[key: string]: any;
+}
+
+export type ActionContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = ActorContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+> & {
+	conn: Conn<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	>;
+};
+
+export type BeforeActionResponseContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = ActionContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type BeforeConnectContext<
+	TState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = ActorContext<
+	TState,
+	unknown,
+	unknown,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type ConnectContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = ActionContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type CreateConnStateContext<
+	TState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = ActorContext<
+	TState,
+	unknown,
+	unknown,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type CreateContext<
+	TState,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = ActorContext<
+	TState,
+	unknown,
+	unknown,
+	unknown,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type CreateVarsContext<
+	TState,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = CreateContext<TState, TInput, TDatabase, TEvents, TQueues>;
+
+export type DestroyContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = ActorContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type DisconnectContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = ActionContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type RequestContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = ActionContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type RunContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = ActorContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type SleepContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = RunContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type StateChangeContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = RunContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type WakeContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = RunContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type MigrateContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = WakeContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type WebSocketContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = ActionContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+>;
+
+export type ActorContextOf<AD extends BaseActorDefinition<any, any, any, any, any, any, any, any, any>> =
+	AD extends BaseActorDefinition<
+		infer TState,
+		infer TConnParams,
+		infer TConnState,
+		infer TVars,
+		infer TInput,
+		infer TDatabase,
+		infer TEvents,
+		infer TQueues,
+		any
+	>
+		? ActorContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase,
+				TEvents,
+				TQueues
+			>
+		: never;
 
 export interface ActorTypes<
 	TState,
@@ -222,6 +836,7 @@ const InstanceActorOptionsBaseSchema = z
 		createConnStateTimeout: z.number().positive().default(5000),
 		onBeforeConnectTimeout: z.number().positive().default(5000),
 		onConnectTimeout: z.number().positive().default(5000),
+		onMigrateTimeout: z.number().positive().default(30_000),
 		sleepGracePeriod: z.number().positive().optional(),
 		onSleepTimeout: z.number().positive().default(DEFAULT_ON_SLEEP_TIMEOUT),
 		onDestroyTimeout: z.number().positive().default(5000),
@@ -272,6 +887,7 @@ export const ActorConfigSchema = z
 	.object({
 		onCreate: zFunction().optional(),
 		onDestroy: zFunction().optional(),
+		onMigrate: zFunction().optional(),
 		onWake: zFunction().optional(),
 		onSleep: zFunction().optional(),
 		run: zRunHandler,
@@ -283,6 +899,8 @@ export const ActorConfigSchema = z
 		onRequest: zFunction().optional(),
 		onWebSocket: zFunction().optional(),
 		actions: z.record(z.string(), zFunction()).default(() => ({})),
+		actionInputSchemas: z.record(z.string(), z.any()).optional(),
+		connParamsSchema: z.any().optional(),
 		events: z.record(z.string(), z.any()).optional(),
 		queues: z.record(z.string(), z.any()).optional(),
 		state: z.any().optional(),
@@ -495,6 +1113,26 @@ interface BaseActorConfig<
 			TEvents,
 			TQueues
 		>,
+	) => void | Promise<void>;
+
+	/**
+	 * Called on every actor start after persisted state loads and before onWake.
+	 *
+	 * Use this hook for repeatable schema migrations or other startup work that
+	 * must run on both first boot and wake.
+	 */
+	onMigrate?: (
+		c: MigrateContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
+		isNew: boolean,
 	) => void | Promise<void>;
 
 	/**
@@ -787,6 +1425,16 @@ interface BaseActorConfig<
 	actions?: TActions;
 
 	/**
+	 * Optional schema map for validating action argument tuples in native runtimes.
+	 */
+	actionInputSchemas?: Record<string, PrimitiveSchema>;
+
+	/**
+	 * Optional schema for validating connection params in native runtimes.
+	 */
+	connParamsSchema?: PrimitiveSchema;
+
+	/**
 	 * Schema map for events broadcasted by this actor.
 	 */
 	events?: TEvents;
@@ -825,6 +1473,7 @@ export type ActorConfig<
 	| "queues"
 	| "onCreate"
 	| "onDestroy"
+	| "onMigrate"
 	| "onWake"
 	| "onSleep"
 	| "run"
@@ -931,6 +1580,7 @@ export type ActorConfigInput<
 	| "queues"
 	| "onCreate"
 	| "onDestroy"
+	| "onMigrate"
 	| "onWake"
 	| "onSleep"
 	| "run"
@@ -1073,6 +1723,10 @@ export const DocActorOptionsSchema = z
 			.describe(
 				"Timeout in ms for createConnState handler. Default: 5000",
 			),
+		onMigrateTimeout: z
+			.number()
+			.optional()
+			.describe("Timeout in ms for onMigrate handler. Default: 30000"),
 		onBeforeConnectTimeout: z
 			.number()
 			.optional()
@@ -1230,6 +1884,12 @@ export const DocActorConfigSchema = z
 			.unknown()
 			.optional()
 			.describe("Called when the actor is destroyed."),
+		onMigrate: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called on every actor start after persisted state loads and before onWake. Use for repeatable schema migrations.",
+			),
 		onWake: z
 			.unknown()
 			.optional()
@@ -1291,6 +1951,18 @@ export const DocActorConfigSchema = z
 			.optional()
 			.describe(
 				"Map of action name to handler function. Defaults to an empty object.",
+			),
+		actionInputSchemas: z
+			.record(z.string(), z.unknown())
+			.optional()
+			.describe(
+				"Optional schema map for validating action argument tuples in native runtimes.",
+			),
+		connParamsSchema: z
+			.unknown()
+			.optional()
+			.describe(
+				"Optional schema for validating connection params in native runtimes.",
 			),
 		events: z
 			.record(z.string(), z.unknown())

@@ -5,9 +5,12 @@
 		"dump-asyncapi": {
 			"inputs": [
 				"package.json",
-				"packages/rivetkit/src/runtime-router/router.ts"
+				"scripts/dump-asyncapi.ts",
+				"scripts/schema-utils.ts",
+				"src/common/client-protocol-zod.ts",
+				"src/utils.ts"
 			],
-			"dependsOn": ["build:schema"]
+			"dependsOn": []
 		},
 		"registry-config-schema-gen": {
 			"inputs": [
@@ -27,33 +30,10 @@
 			],
 			"dependsOn": []
 		},
-		"build:schema": {
-			"dependsOn": ["^build"],
-			"inputs": ["schemas/**/*.bare", "scripts/compile-bare.ts"],
-			"outputs": ["dist/schemas/**/*.ts"]
-		},
-		"build:pack-inspector": {
-			"dependsOn": ["@rivetkit/engine-frontend#build:inspector"],
-			"inputs": ["scripts/pack-inspector.ts", "package.json"],
-			"outputs": ["dist/inspector.tar.gz"]
-		},
-		"build:dynamic-isolate-runtime": {
-			"dependsOn": ["^build", "build:schema"],
-			"inputs": [
-				"dynamic-isolate-runtime/src/**",
-				"dynamic-isolate-runtime/tsconfig.json",
-				"src/dynamic/runtime-bridge.ts",
-				"tsup.dynamic-isolate-runtime.config.ts",
-				"package.json"
-			],
-			"outputs": ["dist/dynamic-isolate-runtime/**"]
-		},
 		"build": {
 			"dependsOn": [
 				"^build",
 				"dump-asyncapi",
-				"build:schema",
-				"build:dynamic-isolate-runtime",
 				"build:browser"
 			],
 			"inputs": [
@@ -66,10 +46,8 @@
 			"env": ["FAST_BUILD", "CUSTOM_RIVETKIT_DEVTOOLS_URL"]
 		},
 		"build:browser": {
-			"dependsOn": ["build:schema"],
 			"inputs": [
 				"src/client/mod.browser.ts",
-				"src/inspector/mod.browser.ts",
 				"src/**",
 				"tsconfig.json",
 				"tsup.browser.config.ts",
@@ -83,22 +61,11 @@
 			"inputs": ["src/**", "tests/**", "fixtures/**"]
 		},
 		"check-types": {
-			"dependsOn": [
-				"^build",
-				"build:schema",
-				"check-types:dynamic-isolate-runtime"
-			],
-			"inputs": ["src/**", "schemas/**/*.bare", "tsconfig.json"]
-		},
-		"check-types:dynamic-isolate-runtime": {
-			"inputs": [
-				"dynamic-isolate-runtime/src/**",
-				"dynamic-isolate-runtime/tsconfig.json",
-				"src/dynamic/runtime-bridge.ts"
-			]
+			"dependsOn": ["^build"],
+			"inputs": ["src/**", "tsconfig.json"]
 		},
 		"build:publish": {
-			"dependsOn": ["build", "build:pack-inspector"],
+			"dependsOn": ["build"],
 			"outputs": []
 		}
 	}

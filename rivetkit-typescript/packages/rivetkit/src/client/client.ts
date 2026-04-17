@@ -1,9 +1,6 @@
 import type { AnyActorDefinition } from "@/actor/definition";
-import type { Encoding } from "@/actor/protocol/serde";
-import {
-	resolveGatewayTarget,
-	type EngineControlClient,
-} from "@/driver-helpers/mod";
+import type { Encoding } from "@/common/encoding";
+import type { EngineControlClient } from "@/engine-client/driver";
 import type { ActorQuery } from "@/client/query";
 import type { Registry } from "@/registry";
 import type { ActorActionFunction } from "./actor-common";
@@ -14,6 +11,7 @@ import {
 } from "./actor-conn";
 import { type ActorHandle, ActorHandleRaw } from "./actor-handle";
 import { logger } from "./log";
+import { resolveGatewayTarget } from "./resolve-gateway-target";
 
 export type { ClientConfig, ClientConfigInput } from "./config";
 

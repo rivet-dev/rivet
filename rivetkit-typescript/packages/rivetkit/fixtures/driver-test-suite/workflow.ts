@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Loop } from "@rivetkit/workflow-engine";
 import { actor, event, queue } from "@/actor/mod";
-import { db } from "@/db/mod";
+import { db } from "@/common/database/mod";
 import { WORKFLOW_GUARD_KV_KEY } from "@/workflow/constants";
 import {
 	type WorkflowErrorEvent,

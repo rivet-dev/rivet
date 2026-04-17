@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.10.0
-# Base image for Linux static (musl) builds (rivetkit-native addon + rivet-engine).
+# Base image for Linux static (musl) builds (rivetkit-napi addon + rivet-engine).
 # Produces fully static binaries that run on any Linux distro:
 #   Alpine, scratch, distroless, Debian, Ubuntu, RHEL, etc.
 #

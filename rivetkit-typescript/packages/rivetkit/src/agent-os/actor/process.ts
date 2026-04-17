@@ -3,7 +3,7 @@ import type {
 	ProcessTreeNode,
 	SpawnedProcessInfo,
 } from "@rivet-dev/agent-os-core";
-import { ActorStopping } from "@/actor/errors";
+import { isRivetErrorCode } from "@/actor/errors";
 import type { AgentOsActorConfig } from "../config";
 import type { AgentOsActionContext } from "../types";
 import { ensureVm, syncPreventSleep } from "./index";
@@ -27,7 +27,7 @@ function broadcastProcessEvent<TConnParams>(
 	try {
 		c.broadcast(name, payload);
 	} catch (error) {
-		if (error instanceof ActorStopping) {
+		if (isRivetErrorCode(error, "actor", "stopping")) {
 			return;
 		}
 		throw error;

@@ -1,5 +1,5 @@
 import { actor } from "rivetkit";
-import { db } from "rivetkit/db";
+import { db } from "@/common/database/mod";
 import { scheduleActorSleep } from "./schedule-sleep";
 
 type LifecycleCounts = {
@@ -126,7 +126,7 @@ export const dbLifecycle = actor({
 		},
 	},
 	options: {
-		sleepTimeout: 100,
+		sleepTimeout: 1000,
 	},
 });
 

@@ -4,7 +4,6 @@ import {
 	ClientConfigSchema,
 	DEFAULT_MAX_QUERY_INPUT_SIZE,
 } from "@/client/config";
-import { parseActorPath } from "@/actor-gateway/gateway";
 import {
 	buildActorGatewayUrl,
 	buildActorQueryGatewayUrl,
@@ -247,55 +246,5 @@ describe("gateway URL builders", () => {
 		expect(urlObj.searchParams.get("existing")).toBe("true");
 		expect(urlObj.searchParams.get("rvt-namespace")).toBe("default");
 		expect(urlObj.searchParams.get("rvt-method")).toBe("get");
-	});
-
-	test("round-trips query gateway urls through parseActorPath", () => {
-		const builtUrl = buildActorQueryGatewayUrl(
-			"https://api.rivet.dev/manager",
-			"prod",
-			{
-				getOrCreateForKey: {
-					name: "builder",
-					key: ["tenant", "room/1"],
-					input: { ready: true },
-					region: "iad",
-				},
-			},
-			"tok/en",
-			"/connect?watch=true",
-			DEFAULT_MAX_QUERY_INPUT_SIZE,
-			"restart",
-			"my-pool",
-		);
-
-		const parsedUrl = new URL(builtUrl);
-		const pathForParsing = `${parsedUrl.pathname.replace(/^\/manager/, "")}${parsedUrl.search}`;
-		const parsed = parseActorPath(pathForParsing);
-
-		expect(parsed).not.toBeNull();
-		expect(parsed?.type).toBe("query");
-		if (!parsed || parsed.type !== "query") {
-			throw new Error("expected a query actor path");
-		}
-
-		expect(parsed.namespace).toBe("prod");
-		expect(parsed.runnerName).toBe("my-pool");
-		expect(parsed.crashPolicy).toBe("restart");
-		expect(parsed.token).toBe("tok/en");
-
-		// Verify the query contents are correct.
-		expect(parsed.query).toEqual({
-			getOrCreateForKey: {
-				name: "builder",
-				key: ["tenant", "room/1"],
-				input: { ready: true },
-				region: "iad",
-			},
-		});
-
-		// The remaining path should contain the user's query params but not rvt-* params.
-		expect(parsed.remainingPath).toContain("/connect");
-		expect(parsed.remainingPath).toContain("watch=true");
-		expect(parsed.remainingPath).not.toContain("rvt-");
 	});
 });

@@ -44,7 +44,7 @@ Before we design anything new, note what is already in the tree.
 
 ### 2.1 `SqliteKv` impls
 
-There is exactly one production impl: `EnvoyKv` at `rivetkit-typescript/packages/rivetkit-native/src/database.rs:37`. It wraps `EnvoyHandle` and delegates each method to a napi-exposed websocket round trip. **There is no in-tree in-memory impl** — neither a `MockKv` nor a `TestKv` nor a `#[cfg(test)]` helper inside `sqlite_kv.rs` or `vfs.rs`. This is the first gap we fill.
+There is exactly one production impl: `EnvoyKv` at `rivetkit-typescript/packages/rivetkit-napi/src/database.rs:37`. It wraps `EnvoyHandle` and delegates each method to a napi-exposed websocket round trip. **There is no in-tree in-memory impl** — neither a `MockKv` nor a `TestKv` nor a `#[cfg(test)]` helper inside `sqlite_kv.rs` or `vfs.rs`. This is the first gap we fill.
 
 ### 2.2 Existing Rust tests in `sqlite-native`
 
@@ -815,7 +815,7 @@ In order. Each item is one small commit.
 
 ### Phase 6 — EnvoyKv delegation
 
-17. Modify `rivetkit-typescript/packages/rivetkit-native/src/database.rs` `EnvoyKv` impl to implement the v2 methods. Each delegates to a new napi method on `EnvoyHandle` (which in turn speaks the new runner-protocol ops). This is the production path — out of scope for the test architecture doc, but the test changes depend on this existing.
+17. Modify `rivetkit-typescript/packages/rivetkit-napi/src/database.rs` `EnvoyKv` impl to implement the v2 methods. Each delegates to a new napi method on `EnvoyHandle` (which in turn speaks the new runner-protocol ops). This is the production path — out of scope for the test architecture doc, but the test changes depend on this existing.
 
 ### Phase 7 — bench harness extension
 
@@ -856,7 +856,7 @@ In order. Each item is one small commit.
 - `rivetkit-typescript/packages/sqlite-native/src/lib.rs` — add `pub mod memory_kv;` and `pub mod test_harness;`. (Phases 1 and 2)
 - `rivetkit-typescript/packages/sqlite-native/src/sqlite_kv.rs` — add v2 trait methods, `KvSqliteError` enum, op structs. (Phase 3)
 - `rivetkit-typescript/packages/sqlite-native/Cargo.toml` — add `anyhow`, `tokio` sync, `futures-util`, `rand` dev-dep. (Phases 1 and 5)
-- `rivetkit-typescript/packages/rivetkit-native/src/database.rs` — implement v2 trait methods on `EnvoyKv`. (Phase 6)
+- `rivetkit-typescript/packages/rivetkit-napi/src/database.rs` — implement v2 trait methods on `EnvoyKv`. (Phase 6)
 - `examples/sqlite-raw/src/index.ts` — expose `vfsVersion` and telemetry action. (Phase 7)
 - `examples/sqlite-raw/scripts/bench-large-insert.ts` — honor `VFS_VERSION`, emit BENCH_RESULT JSON. (Phase 7)
 - `examples/sqlite-raw/BENCH_RESULTS.md` — add v2 columns. (Phase 7)

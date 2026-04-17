@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import { Unsupported } from "./errors";
+import { unsupportedFeature } from "./errors";
 
 export type SchemaHookResult = boolean | Promise<boolean>;
 
@@ -268,7 +268,7 @@ export function validateSchemaSync<T extends AnySchemaConfig>(
 	if (isStandardSchema(schema)) {
 		const result = schema["~standard"].validate(data);
 		if (isPromiseLike(result)) {
-			throw new Unsupported("async schema validation");
+			throw unsupportedFeature("async schema validation");
 		}
 		if (result.issues) {
 			return { success: false, issues: [...result.issues] };

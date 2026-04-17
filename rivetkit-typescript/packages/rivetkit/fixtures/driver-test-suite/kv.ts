@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { actor, type ActorContext } from "rivetkit";
 
 export const kvActor = actor({

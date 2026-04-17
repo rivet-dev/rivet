@@ -1,0 +1,33 @@
+[package]
+name = "rivetkit-core"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+workspace = "../../../"
+
+[features]
+default = []
+sqlite = ["dep:rivetkit-sqlite"]
+
+[dependencies]
+anyhow.workspace = true
+ciborium.workspace = true
+futures.workspace = true
+http.workspace = true
+nix.workspace = true
+prometheus.workspace = true
+reqwest.workspace = true
+rivet-pools.workspace = true
+rivet-error.workspace = true
+rivet-envoy-client.workspace = true
+rivetkit-sqlite = { workspace = true, optional = true }
+scc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_bare.workspace = true
+serde_bytes.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+uuid.workspace = true

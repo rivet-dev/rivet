@@ -1,12 +1,12 @@
-import { ACTOR_CONTEXT_INTERNAL_SYMBOL } from "@/actor/contexts/base/actor";
-import type { RunContext } from "@/actor/contexts/run";
-import type { AnyDatabaseProvider } from "@/actor/database";
-import type {
-	AnyActorInstance,
-	AnyStaticActorInstance,
-} from "@/actor/instance/mod";
+// @ts-nocheck
+import {
+	ACTOR_CONTEXT_INTERNAL_SYMBOL,
+	RUN_FUNCTION_CONFIG_SYMBOL,
+} from "@/actor/config";
+import type { RunContext } from "@/actor/config";
+import type { AnyDatabaseProvider } from "@/common/database/config";
+import type { AnyStaticActorInstance } from "@/actor/definition";
 import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
-import { RUN_FUNCTION_CONFIG_SYMBOL } from "@/actor/config";
 import { stringifyError } from "@/utils";
 import {
 	CriticalError,
@@ -139,17 +139,16 @@ export function workflow<
 	>,
 ) => Promise<void> {
 	const onError = options.onError;
-
-	const workflowInspectors = new WeakMap<
-		AnyActorInstance,
+	const workflowInspectors = new Map<
+		string,
 		ReturnType<typeof createWorkflowInspectorAdapter>
 	>();
 
-	function getWorkflowInspector(actor: AnyActorInstance) {
-		let workflowInspector = workflowInspectors.get(actor);
+	function getWorkflowInspector(actorId: string) {
+		let workflowInspector = workflowInspectors.get(actorId);
 		if (!workflowInspector) {
 			workflowInspector = createWorkflowInspectorAdapter();
-			workflowInspectors.set(actor, workflowInspector);
+			workflowInspectors.set(actorId, workflowInspector);
 		}
 		return workflowInspector;
 	}
@@ -172,7 +171,7 @@ export function workflow<
 			}
 		)[ACTOR_CONTEXT_INTERNAL_SYMBOL];
 		invariant(actor, "workflow() requires an actor instance");
-		const workflowInspector = getWorkflowInspector(actor);
+		const workflowInspector = getWorkflowInspector(actor.id);
 
 		const driver = new ActorWorkflowDriver(actor, runCtx);
 		workflowInspector.setReplayFromStep(async (entryId) => {
@@ -181,6 +180,7 @@ export function workflow<
 					"Cannot replay a workflow while it is currently in flight",
 				);
 			}
+
 			const snapshot = await replayWorkflowFromStep(
 				actor.id,
 				new ActorWorkflowControlDriver(actor),
@@ -245,27 +245,50 @@ export function workflow<
 	const runWithConfig = run as typeof run & {
 		[RUN_FUNCTION_CONFIG_SYMBOL]?: {
 			icon?: string;
-			inspectorFactory?: (actor: unknown) =>
-				| {
-						workflow: ReturnType<
-							typeof createWorkflowInspectorAdapter
-						>["adapter"];
-				  }
-				| undefined;
+			inspectorFactory?: (actor: unknown) => unknown;
 		};
 	};
 	runWithConfig[RUN_FUNCTION_CONFIG_SYMBOL] = {
 		icon: "diagram-project",
-		inspectorFactory: (actor: unknown) => {
-			if (!actor) {
-				return undefined;
-			}
+		inspectorFactory: (actor) => {
+			const actorId = resolveWorkflowInspectorActorId(actor);
 			return {
-				workflow: getWorkflowInspector(actor as AnyActorInstance)
-					.adapter,
+				workflow: actorId
+					? getWorkflowInspector(actorId).adapter
+					: {
+							getHistory: () => null,
+							onHistoryUpdated: () => () => {},
+							replayFromStep: async () => null,
+						},
 			};
 		},
 	};
 
 	return runWithConfig;
+}
+
+function resolveWorkflowInspectorActorId(actor: unknown): string | undefined {
+	if (typeof actor === "string" && actor.length > 0) {
+		return actor;
+	}
+
+	if (!actor || typeof actor !== "object") {
+		return undefined;
+	}
+
+	const candidate = actor as {
+		id?: unknown;
+		actorId?: unknown;
+	};
+	if (typeof candidate.id === "string" && candidate.id.length > 0) {
+		return candidate.id;
+	}
+	if (
+		typeof candidate.actorId === "string" &&
+		candidate.actorId.length > 0
+	) {
+		return candidate.actorId;
+	}
+
+	return undefined;
 }

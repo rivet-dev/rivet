@@ -21,7 +21,7 @@ COPY . .
 # `lefthook install`, which needs a .git directory (excluded by
 # .dockerignore). lefthook is a dev-only git hook manager and has no
 # place inside the Docker build. SKIP_NAPI_BUILD=1 tells
-# @rivetkit/rivetkit-native to skip its napi build — the frontend only
+# @rivetkit/rivetkit-napi to skip its napi build — the frontend only
 # consumes the TypeScript surface, not the runtime .node binary.
 RUN if [ -n "$VITE_FEATURE_FLAGS" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \

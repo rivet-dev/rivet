@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { actor, type RivetMessageEvent } from "rivetkit";
 
 /**

@@ -1,0 +1,25 @@
+[package]
+name = "rivetkit"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+workspace = "../../../"
+
+[features]
+default = ["sqlite"]
+sqlite = ["rivetkit-core/sqlite"]
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+ciborium.workspace = true
+futures.workspace = true
+http.workspace = true
+rivet-error.workspace = true
+rivetkit-core = { path = "../rivetkit-core" }
+rivetkit-client = { path = "../client" }
+serde.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true

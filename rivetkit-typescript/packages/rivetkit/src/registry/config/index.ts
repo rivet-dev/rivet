@@ -8,10 +8,9 @@ import {
 	KEYS,
 	queueMetadataKey,
 	workflowStoragePrefix,
-} from "@/actor/instance/keys";
+} from "@/actor/keys";
+import { ENGINE_ENDPOINT } from "@/common/engine";
 import { type Logger, LogLevelSchema } from "@/common/log";
-import { ENGINE_ENDPOINT } from "@/engine-process/constants";
-import { InspectorConfigSchema } from "@/inspector/config";
 import { DeepReadonly, VERSION } from "@/utils";
 import { tryParseEndpoint } from "@/utils/endpoint-parser";
 import {
@@ -142,9 +141,6 @@ export const RegistryConfigSchema = z
 		 * What host to bind the local HTTP server to.
 		 */
 		httpHost: z.string().optional(),
-
-		/** @experimental */
-		inspector: InspectorConfigSchema,
 
 		// MARK: Engine
 		/**
@@ -309,28 +305,6 @@ export function buildActorNames(
 // These schemas are JSON-serializable versions used for documentation generation.
 // They exclude runtime-only fields (transforms, custom types, Logger instances).
 
-export const DocInspectorConfigSchema = z
-	.object({
-		enabled: z
-			.boolean()
-			.optional()
-			.describe(
-				"Whether to enable the Rivet Inspector. Defaults to true in development mode.",
-			),
-		token: z
-			.string()
-			.optional()
-			.describe("Token used to access the Inspector."),
-		defaultEndpoint: z
-			.string()
-			.optional()
-			.describe(
-				"Default RivetKit server endpoint for Rivet Inspector to connect to.",
-			),
-	})
-	.optional()
-	.describe("Inspector configuration for debugging and development.");
-
 export const DocConfigurePoolSchema = z
 	.object({
 		name: z.string().optional().describe("Name of the runner pool."),
@@ -485,7 +459,6 @@ export const DocRegistryConfigSchema = z
 			.string()
 			.optional()
 			.describe("Host to bind the local HTTP server to."),
-		inspector: DocInspectorConfigSchema,
 		startEngine: z
 			.boolean()
 			.optional()

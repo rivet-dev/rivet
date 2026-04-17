@@ -2,14 +2,14 @@ import * as cbor from "cbor-x";
 import invariant from "invariant";
 import type { VersionedDataHandler } from "vbare";
 import type { z } from "zod/v4";
-import type { Encoding } from "@/actor/protocol/serde";
+import type { Encoding } from "@/common/encoding";
 import { assertUnreachable } from "@/common/utils";
-import type { HttpResponseError } from "@/schemas/client-protocol/mod";
-import { HTTP_RESPONSE_ERROR_VERSIONED } from "@/schemas/client-protocol/versioned";
+import type { HttpResponseError } from "@/common/client-protocol";
+import { HTTP_RESPONSE_ERROR_VERSIONED } from "@/common/client-protocol-versioned";
 import {
 	type HttpResponseError as HttpResponseErrorJson,
 	HttpResponseErrorSchema,
-} from "@/schemas/client-protocol-zod/mod";
+} from "@/common/client-protocol-zod";
 import {
 	contentTypeForEncoding,
 	deserializeWithEncoding,

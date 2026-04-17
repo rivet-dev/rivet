@@ -9,17 +9,17 @@ import {
 import { ClientConfigSchema } from "./config";
 
 export type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
-export type { Encoding } from "@/actor/protocol/serde";
+export type { Encoding } from "@/common/encoding";
 export {
 	ActorClientError,
 	ActorConnDisposed,
 	ActorError,
-	InternalError,
+	RivetError,
 	MalformedResponseMessage,
 	ManagerError,
+	UserError,
 } from "@/client/errors";
 export type { CreateRequest } from "@/client/query";
-export { KEYS as KV_KEYS } from "../actor/instance/keys";
 export type { ActorActionFunction } from "./actor-common";
 export type {
 	ActorConn,

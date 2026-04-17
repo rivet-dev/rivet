@@ -1,5 +1,5 @@
 import { actor } from "rivetkit";
-import { db } from "rivetkit/db";
+import { db } from "@/common/database/mod";
 import { scheduleActorSleep } from "./schedule-sleep";
 
 function firstRowValue(row: Record<string, unknown> | undefined): unknown {

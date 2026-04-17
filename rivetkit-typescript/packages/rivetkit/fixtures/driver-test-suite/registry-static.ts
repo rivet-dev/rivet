@@ -18,7 +18,6 @@ import {
 	promiseActor,
 	syncActionActor,
 } from "./action-types";
-import { dbActorDrizzle } from "./actor-db-drizzle";
 import { dbActorRaw } from "./actor-db-raw";
 import { onStateChangeActor } from "./actor-onstatechange";
 import { connErrorSerializationActor } from "./conn-error-serialization";
@@ -37,7 +36,6 @@ import { destroyActor, destroyObserver } from "./destroy";
 import { customTimeoutActor, errorHandlingActor } from "./error-handling";
 import { fileSystemHibernationCleanupActor } from "./file-system-hibernation-cleanup";
 import { hibernationActor, hibernationSleepWindowActor } from "./hibernation";
-import { inlineClientActor } from "./inline-client";
 import {
 	beforeConnectTimeoutActor,
 	beforeConnectRejectActor,
@@ -72,7 +70,6 @@ import {
 	runWithQueueConsumer,
 	runWithTicks,
 } from "./run";
-import { dockerSandboxActor, dockerSandboxControlActor } from "./sandbox";
 import { scheduled } from "./scheduled";
 import { dbStressActor } from "./db-stress";
 import { scheduledDb } from "./scheduled-db";
@@ -170,9 +167,6 @@ export const registry = setup({
 		dbStressActor,
 		// From scheduled-db.ts
 		scheduledDb,
-		// From sandbox.ts
-		dockerSandboxControlActor,
-		dockerSandboxActor,
 		// From sleep.ts
 		sleep,
 		sleepWithLongRpc,
@@ -209,8 +203,6 @@ export const registry = setup({
 		// From error-handling.ts
 		errorHandlingActor,
 		customTimeoutActor,
-		// From inline-client.ts
-		inlineClientActor,
 		// From kv.ts
 		kvActor,
 		// From queue.ts
@@ -297,8 +289,6 @@ export const registry = setup({
 		workflowSpawnParentActor,
 		// From actor-db-raw.ts
 		dbActorRaw,
-		// From actor-db-drizzle.ts
-		dbActorDrizzle,
 		// From db-lifecycle.ts
 		dbLifecycle,
 		dbLifecycleFailing,

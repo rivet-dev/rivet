@@ -67,10 +67,10 @@ RUN --mount=type=cache,id=cargo-registry-darwin-arm64,target=/usr/local/cargo/re
     if [ "$BUILD_TARGET" = "engine" ]; then \
         cargo build --bin rivet-engine $CARGO_FLAG --target aarch64-apple-darwin && \
         cp target/aarch64-apple-darwin/$PROFILE_DIR/rivet-engine /artifacts/rivet-engine-aarch64-apple-darwin; \
-    elif [ "$BUILD_TARGET" = "rivetkit-native" ]; then \
-        cd rivetkit-typescript/packages/rivetkit-native && \
+    elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
+        cd rivetkit-typescript/packages/rivetkit-napi && \
         NAPI_RS_CROSS_COMPILE=1 napi build --platform $CARGO_FLAG --target aarch64-apple-darwin && \
-        cp rivetkit-native.darwin-arm64.node /artifacts/; \
+        cp rivetkit-napi.darwin-arm64.node /artifacts/; \
     else \
         echo "Unknown BUILD_TARGET: $BUILD_TARGET" && exit 1; \
     fi && \

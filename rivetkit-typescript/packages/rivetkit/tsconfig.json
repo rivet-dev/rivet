@@ -8,21 +8,12 @@
 			// Used for test fixtures
 			"rivetkit": ["./src/mod.ts"],
 			"rivetkit/errors": ["./src/actor/errors.ts"],
-			"rivetkit/dynamic": ["./src/dynamic/mod.ts"],
 			"rivetkit/utils": ["./src/utils.ts"],
-			"rivetkit/sandbox": ["./src/sandbox/index.ts"],
-			"rivetkit/sandbox/docker": ["./src/sandbox/providers/docker.ts"],
-			"rivetkit/db": ["./src/db/mod.ts"],
-			"rivetkit/db/drizzle": ["./src/db/drizzle/mod.ts"],
 			"rivetkit/agent-os": ["./src/agent-os/index.ts"]
 		}
 	},
 	"include": [
 		"src/**/*",
-		"tests/**/*",
-		"fixtures/**/*",
-		"scripts/**/*",
-		"dist/schemas/**/*",
 		"runtime/index.ts"
 	]
 }

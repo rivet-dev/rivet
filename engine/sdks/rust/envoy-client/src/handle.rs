@@ -34,6 +34,22 @@ impl EnvoyHandle {
 		&self.shared.envoy_key
 	}
 
+	pub fn endpoint(&self) -> &str {
+		&self.shared.config.endpoint
+	}
+
+	pub fn token(&self) -> Option<&str> {
+		self.shared.config.token.as_deref()
+	}
+
+	pub fn namespace(&self) -> &str {
+		&self.shared.config.namespace
+	}
+
+	pub fn pool_name(&self) -> &str {
+		&self.shared.config.pool_name
+	}
+
 	pub async fn started(&self) -> anyhow::Result<()> {
 		self.started_rx
 			.clone()
@@ -81,6 +97,16 @@ impl EnvoyHandle {
 			})
 			.ok()?;
 		rx.await.ok().flatten()
+	}
+
+	pub async fn get_active_http_request_count(
+		&self,
+		actor_id: &str,
+		generation: Option<u32>,
+	) -> Option<usize> {
+		self.get_actor(actor_id, generation)
+			.await
+			.map(|actor| actor.active_http_request_count)
 	}
 
 	pub fn set_alarm(&self, actor_id: String, alarm_ts: Option<i64>, generation: Option<u32>) {

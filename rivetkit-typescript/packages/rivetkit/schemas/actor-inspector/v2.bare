@@ -1,4 +1,7 @@
-# MARK: Message To Server
+# Actor Inspector BARE Schema v2
+
+type State data
+type WorkflowHistory data
 
 type PatchStateRequest struct {
 	state: data
@@ -53,17 +56,10 @@ type ToServer struct {
 	body: ToServerBody
 }
 
-# MARK: Message To Client
-
-type State data
-
 type Connection struct {
 	id: str
 	details: data
 }
-
-# Workflow history is encoded using schemas/transport.
-type WorkflowHistory data
 
 type Init struct {
 	connections: list<Connection>

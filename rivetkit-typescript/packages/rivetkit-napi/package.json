@@ -1,0 +1,55 @@
+{
+	"name": "@rivetkit/rivetkit-napi",
+	"version": "2.3.0-rc.4",
+	"description": "Native N-API addon for RivetKit providing envoy client and SQLite access",
+	"license": "Apache-2.0",
+	"main": "index.js",
+	"types": "index.d.ts",
+	"exports": {
+		".": {
+			"types": "./index.d.ts",
+			"default": "./index.js"
+		},
+		"./wrapper": {
+			"types": "./wrapper.d.ts",
+			"require": "./wrapper.js",
+			"default": "./wrapper.js"
+		}
+	},
+	"engines": {
+		"node": ">= 20.0.0"
+	},
+	"napi": {
+		"name": "rivetkit-napi",
+		"triples": {
+			"defaults": false,
+			"additional": [
+				"x86_64-unknown-linux-gnu",
+				"aarch64-unknown-linux-gnu",
+				"x86_64-unknown-linux-musl",
+				"aarch64-unknown-linux-musl",
+				"x86_64-apple-darwin",
+				"aarch64-apple-darwin",
+				"x86_64-pc-windows-msvc"
+			]
+		}
+	},
+	"files": [
+		"index.js",
+		"index.d.ts",
+		"wrapper.js",
+		"wrapper.d.ts",
+		"package.json",
+		"scripts/build.mjs"
+	],
+	"scripts": {
+		"build": "node scripts/build.mjs",
+		"build:release": "node scripts/build.mjs --release",
+		"build:force": "node scripts/build.mjs --force",
+		"build:force:release": "node scripts/build.mjs --force --release"
+	},
+	"dependencies": {
+		"@napi-rs/cli": "^2.18.4",
+		"@rivetkit/engine-envoy-protocol": "workspace:*"
+	}
+}

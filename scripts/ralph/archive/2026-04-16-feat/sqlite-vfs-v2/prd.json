@@ -1,0 +1,451 @@
+{
+  "project": "RivetKit Rust SDK",
+  "branchName": "04-16-chore_rivetkit_to_rust",
+  "description": "Two-layer Rust SDK for writing Rivet Actors. rivetkit-core is the dynamic, language-agnostic lifecycle engine. rivetkit is the typed Rust wrapper with Actor trait, Ctx<A>, and Registry. See .agent/specs/rivetkit-rust.md for full spec.\n\nIntentionally deferred (separate PRDs or post-GA): NAPI bridge (rivetkit-napi), Inspector system (spec concern #7), Queue Stream adapter (#9), Schema validation (#10), Database provider system (#11), Metrics/tracing (#12), waitForNames (#14), enqueueAndWait (#15).",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create rivetkit-core crate with module structure, types, and config",
+      "description": "As a developer, I need the rivetkit-core crate scaffolding with all shared types, placeholder structs, and ActorConfig so subsequent stories can build on top without compilation issues.",
+      "acceptanceCriteria": [
+        "Create `rivetkit-rust/packages/rivetkit-core/Cargo.toml` with dependencies: envoy-client (workspace), serde, ciborium, tokio, anyhow, tracing, scc, tokio-util (for CancellationToken)",
+        "Add rivetkit-core to workspace members in root Cargo.toml",
+        "Create `src/lib.rs` with public module declarations for: actor, kv, sqlite, websocket, registry, types",
+        "Create `src/types.rs` with: ActorKey (Vec<ActorKeySegment>), ActorKeySegment enum (String/Number), ConnId (String type alias), WsMessage enum (Text/Binary), SaveStateOpts { immediate: bool }, ListOpts { reverse: bool, limit: Option<u32> }",
+        "Create `src/actor/mod.rs` with submodule declarations: factory, callbacks, config, context, lifecycle, state, vars, sleep, schedule, action, connection, event, queue",
+        "Create `src/actor/config.rs` with ActorConfig struct (all fields from spec with defaults), ActorConfigOverrides, CanHibernateWebSocket enum, sleep_grace_period fallback logic",
+        "Create placeholder structs (empty or minimal) in each submodule so all types exist for compilation: Kv, SqliteDb, Schedule, Queue, ConnHandle, WebSocket, ActorContext, ActorFactory, ActorInstanceCallbacks",
+        "Create empty `src/registry.rs` with placeholder CoreRegistry struct",
+        "`cargo check -p rivetkit-core` passes with no errors",
+        "Use hard tabs for Rust formatting per rustfmt.toml"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Spec: .agent/specs/rivetkit-rust.md. See 'Proposed Module Structure' and 'Actor Config' sections. All placeholder structs will be filled in by subsequent stories. The key goal is that the crate compiles so later stories can incrementally add functionality."
+    },
+    {
+      "id": "US-002",
+      "title": "rivetkit-core: ActorContext with Arc internals",
+      "description": "As a developer, I need the core ActorContext type that all actor callbacks receive, providing access to state, vars, KV, SQLite, and control methods.",
+      "acceptanceCriteria": [
+        "Implement ActorContext in `src/actor/context.rs` as an Arc-backed struct (Clone is cheap, all clones share state). Use `struct ActorContext(Arc<ActorContextInner>)` pattern",
+        "State methods: `state() -> Vec<u8>`, `set_state(Vec<u8>)`, `save_state(SaveStateOpts) -> Result<()>` (async)",
+        "Vars methods: `vars() -> Vec<u8>`, `set_vars(Vec<u8>)`",
+        "Accessor methods: `kv() -> &Kv`, `sql() -> &SqliteDb`, `schedule() -> &Schedule`, `queue() -> &Queue`",
+        "Sleep control: `sleep()`, `destroy()`, `set_prevent_sleep(bool)`, `prevent_sleep() -> bool`",
+        "Background work: `wait_until(impl Future<Output = ()> + Send + 'static)`",
+        "Actor info: `actor_id() -> &str`, `name() -> &str`, `key() -> &ActorKey`, `region() -> &str`",
+        "Shutdown: `abort_signal() -> &CancellationToken`, `aborted() -> bool`",
+        "Broadcast: `broadcast(name: &str, args: &[u8])`",
+        "Connections: `conns() -> Vec<ConnHandle>`",
+        "Methods that need envoy-client integration can use todo!() stubs initially. The struct must compile",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "See spec 'ActorContext' section. Internal ActorContextInner should hold: state bytes, vars bytes, Arc references to Kv/SqliteDb/Schedule/Queue, CancellationToken for abort, AtomicBool for prevent_sleep, actor metadata (id, name, key, region). Reference envoy-client context at engine/sdks/rust/envoy-client/src/context.rs."
+    },
+    {
+      "id": "US-003",
+      "title": "rivetkit-core: KV and SQLite wrappers",
+      "description": "As a developer, I need stable KV and SQLite wrappers that delegate to envoy-client.",
+      "acceptanceCriteria": [
+        "Implement Kv struct in `src/kv.rs` wrapping envoy-client KV operations",
+        "Kv methods: get, put, delete, delete_range, list_prefix, list_range (all async, all take &[u8] keys/values)",
+        "Kv batch methods: batch_get, batch_put, batch_delete",
+        "Use ListOpts struct from types.rs (reverse: bool, limit: Option<u32>)",
+        "Implement SqliteDb struct in `src/sqlite.rs` wrapping envoy-client SQLite",
+        "Re-export Kv and SqliteDb from lib.rs",
+        "No breaking changes to existing KV API signatures",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "KV API must be stable with no breaking ABI changes. See spec 'KV' section. Delegate to envoy-client::kv internally. Check existing implementations at engine/sdks/rust/envoy-client/src/kv.rs and engine/sdks/rust/envoy-client/src/sqlite.rs."
+    },
+    {
+      "id": "US-004",
+      "title": "rivetkit-core: State persistence with dirty tracking",
+      "description": "As a developer, I need state persistence with dirty tracking and throttled saves so actor state survives sleep/wake cycles.",
+      "acceptanceCriteria": [
+        "Implement state persistence logic in `src/actor/state.rs`",
+        "Define PersistedScheduleEvent struct: event_id (String UUID), timestamp_ms (i64), action (String), args (Vec<u8> CBOR-encoded). This is a shared data struct used by both state and schedule modules",
+        "Define PersistedActor struct: input (Option<Vec<u8>>), has_initialized (bool), state (Vec<u8>), scheduled_events (Vec<PersistedScheduleEvent>). BARE-encoded for KV storage",
+        "set_state marks state as dirty and schedules a throttled save",
+        "Throttle formula: max(0, save_interval - time_since_last_save)",
+        "save_state with immediate=true bypasses throttle",
+        "On shutdown: flush all pending saves",
+        "on_state_change callback fires after set_state (not during init, not recursively). Errors logged, not fatal",
+        "Default state_save_interval: 1 second (from ActorConfig)",
+        "Implement vars in `src/actor/vars.rs`: vars() -> Vec<u8>, set_vars(Vec<u8>). Vars are transient, not persisted, recreated every start",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "See spec 'State Persistence' and 'Vars' sections. PersistedScheduleEvent is defined here because it's part of the PersistedActor struct. The Schedule module (US-007) will use this type."
+    },
+    {
+      "id": "US-005",
+      "title": "rivetkit-core: ActorFactory and ActorInstanceCallbacks",
+      "description": "As a developer, I need the two-phase actor construction system: factory creates instances, instances provide callbacks.",
+      "acceptanceCriteria": [
+        "Implement ActorFactory in `src/actor/factory.rs`: config (ActorConfig), create closure (Box<dyn Fn(FactoryRequest) -> BoxFuture<'static, Result<ActorInstanceCallbacks>> + Send + Sync>)",
+        "Implement FactoryRequest with named fields: ctx (ActorContext), input (Option<Vec<u8>>), is_new (bool)",
+        "Implement ActorInstanceCallbacks in `src/actor/callbacks.rs` with all callback slots as Option<Box<dyn Fn(...) -> BoxFuture<...> + Send + Sync>>",
+        "Lifecycle callbacks: on_wake, on_sleep, on_destroy, on_state_change",
+        "Network callbacks: on_request (returns Result<Response>), on_websocket",
+        "Connection callbacks: on_before_connect, on_connect, on_disconnect",
+        "Actions field: HashMap<String, Box<dyn Fn(ActionRequest) -> BoxFuture<'static, Result<Vec<u8>>> + Send + Sync>>",
+        "on_before_action_response callback slot",
+        "Background: run callback",
+        "All request types with named fields: OnWakeRequest, OnSleepRequest, OnDestroyRequest, OnStateChangeRequest, OnRequestRequest, OnWebSocketRequest, OnBeforeConnectRequest, OnConnectRequest, OnDisconnectRequest, ActionRequest (with conn, name, args fields), OnBeforeActionResponseRequest, RunRequest",
+        "All closures produce 'static futures (enforced by type bounds)",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "See spec 'Two-Phase Actor Construction', 'ActorInstanceCallbacks', and 'Request Types' sections. All request types use named fields (not positional). ActionRequest includes: ctx, conn (ConnHandle), name (String), args (Vec<u8>)."
+    },
+    {
+      "id": "US-006",
+      "title": "rivetkit-core: Action dispatch with timeout",
+      "description": "As a developer, I need action dispatch that looks up handlers by name, wraps with timeout, and returns CBOR responses.",
+      "acceptanceCriteria": [
+        "Implement action dispatch logic in `src/actor/action.rs`",
+        "Dispatch flow: receive ActionRequest, look up handler by name in ActorInstanceCallbacks.actions HashMap",
+        "Wrap handler invocation with action_timeout deadline (default 60s from ActorConfig)",
+        "On success: return serialized output bytes",
+        "If on_before_action_response callback is set, call it to transform output before returning",
+        "On on_before_action_response error: log error, send original output as-is (not fatal)",
+        "On action error: return error with group/code/message fields",
+        "On action name not found: return specific 'action not found' error",
+        "After completion: trigger throttled state save",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "See spec 'Actions' and 'Error Handling' sections. Actions are string-keyed. Args and return values are CBOR-encoded bytes."
+    },
+    {
+      "id": "US-007",
+      "title": "rivetkit-core: Schedule API with alarm sync",
+      "description": "As a developer, I need the schedule API that dispatches timed events to actions.",
+      "acceptanceCriteria": [
+        "Implement Schedule struct in `src/actor/schedule.rs`",
+        "Public methods: after(duration: Duration, action_name: &str, args: &[u8]) and at(timestamp_ms: i64, action_name: &str, args: &[u8]). Both fire-and-forget (void return)",
+        "Use PersistedScheduleEvent from state.rs (event_id UUID, timestamp_ms, action, args)",
+        "On schedule: create event, insert sorted, persist to KV",
+        "Send EventActorSetAlarm with soonest timestamp to engine",
+        "On alarm fire: find events where timestamp_ms <= now, execute each via invoke_action_by_name",
+        "Each alarm execution wrapped in internal_keep_awake",
+        "Events removed after execution (at-most-once semantics)",
+        "On schedule event execution error: log error, remove event, continue with subsequent events",
+        "Events survive sleep/wake (persisted in PersistedActor)",
+        "Internal-only methods (not on public API): cancel, next_event, all_events, clear_all",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "See spec 'Schedule' section. Matches TS behavior where schedule only has after() and at() publicly. PersistedScheduleEvent struct is defined in state.rs (US-004)."
+    },
+    {
+      "id": "US-008",
+      "title": "rivetkit-core: Events/broadcast and WebSocket",
+      "description": "As a developer, I need event broadcast to all connections and a callback-based WebSocket API.",
+      "acceptanceCriteria": [
+        "Implement event broadcast in `src/actor/event.rs`",
+        "ActorContext.broadcast(name: &str, args: &[u8]) sends event to all subscribed connections",
+        "ConnHandle.send(name: &str, args: &[u8]) sends event to single connection",
+        "Track event subscriptions per connection",
+        "Implement WebSocket struct in `src/websocket.rs` matching envoy-client's WebSocketHandler pattern",
+        "WebSocket methods: send(msg: WsMessage), close(code: Option<u16>, reason: Option<String>)",
+        "WsMessage enum already defined in types.rs: Text(String), Binary(Vec<u8>)",
+        "On on_request error: return HTTP 500 to caller",
+        "On on_websocket error: log error, close connection",
+        "Re-export WebSocket from lib.rs",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "See spec 'Events/Broadcast', 'WebSocket', and 'Error Handling' sections. Check envoy-client WebSocket handling at engine/sdks/rust/envoy-client/src/tunnel.rs."
+    },
+    {
+      "id": "US-009",
+      "title": "rivetkit-core: ConnHandle and connection lifecycle",
+      "description": "As a developer, I need connection handling with lifecycle hooks and hibernation persistence.",
+      "acceptanceCriteria": [
+        "Implement ConnHandle in `src/actor/connection.rs` with methods: id() -> &str, params() -> Vec<u8>, state() -> Vec<u8>, set_state(Vec<u8>), is_hibernatable() -> bool, send(name: &str, args: &[u8]), disconnect(reason: Option<&str>) -> Result<()> (async)",
+        "Connection lifecycle: on_before_connect(params) for validation/rejection on error, on_connect(conn) after creation, on_disconnect(conn) on removal",
+        "On disconnect: remove from tracking, clear subscriptions, call on_disconnect callback",
+        "Hibernatable connections: persist to KV on sleep with BARE-encoded format (conn ID, params, state, subscriptions, gateway metadata), restore on wake",
+        "Track all active connections, expose via ActorContext.conns()",
+        "Config timeouts honored: on_before_connect_timeout (5s), on_connect_timeout (5s), create_conn_state_timeout (5s)",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "See spec 'Connections' and concern #13 (persisted connection format). ConnId = String (UUID). Check envoy-client connection handling at engine/sdks/rust/envoy-client/src/connection.rs."
+    },
+    {
+      "id": "US-010",
+      "title": "rivetkit-core: Queue with completable messages",
+      "description": "As a developer, I need a queue system with send/receive, batch operations, and completable messages.",
+      "acceptanceCriteria": [
+        "Implement Queue struct in `src/actor/queue.rs`",
+        "Methods: send(name: &str, body: &[u8]) async, next(QueueNextOpts) async -> Option<QueueMessage>, next_batch(QueueNextBatchOpts) async -> Vec<QueueMessage>",
+        "Non-blocking: try_next(QueueTryNextOpts) -> Option<QueueMessage>, try_next_batch(QueueTryNextBatchOpts) -> Vec<QueueMessage>",
+        "QueueNextOpts: names (Option<Vec<String>>), timeout (Option<Duration>), signal (Option<CancellationToken>), completable (bool)",
+        "QueueNextBatchOpts: same as QueueNextOpts plus count (u32). QueueTryNextBatchOpts: names, count, completable",
+        "QueueMessage: id (u64), name (String), body (Vec<u8> CBOR-encoded), created_at (i64)",
+        "CompletableQueueMessage: same fields as QueueMessage plus complete(self, response: Option<Vec<u8>>) -> Result<()>. Must call complete() before next receive (runtime enforced)",
+        "Queue persistence: messages stored in KV with auto-incrementing IDs. Metadata (next_id, size) stored separately",
+        "Config limits: max_queue_size (default 1000), max_queue_message_size (default 65536)",
+        "active_queue_wait_count tracking: increment when blocked on next(), decrement when unblocked. Used by can_sleep()",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "See spec 'Queues' section. Sleep interaction: can_sleep() allows sleep if run handler is only blocked on a queue wait. waitForNames and enqueueAndWait are deferred to a follow-up PRD."
+    },
+    {
+      "id": "US-011",
+      "title": "Envoy-client: In-flight HTTP request tracking and lifecycle",
+      "description": "As a developer, I need envoy-client to track in-flight HTTP requests with proper JoinHandle management so rivetkit-core can check can_sleep() and tasks don't outlive actors.",
+      "acceptanceCriteria": [
+        "Fix detached `tokio::spawn` in actor.rs that drops JoinHandle for HTTP requests",
+        "Add JoinSet or equivalent per actor to store all HTTP request task JoinHandles",
+        "Expose method to query active HTTP request count (for can_sleep())",
+        "Counter increments when HTTP request task spawns, decrements when task completes",
+        "On actor shutdown: abort all in-flight HTTP tasks via JoinHandle::abort()",
+        "Wait for aborted tasks to complete (join) before signaling shutdown complete",
+        "No orphaned tasks after actor stops",
+        "Existing HTTP request handling behavior unchanged (no regression)",
+        "`cargo check -p envoy-client` passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "See spec 'Envoy-Client Integration' section, blocking changes #1 and #3. This is in engine/sdks/rust/envoy-client/src/actor.rs. The detached tokio::spawn is around the HTTP request handling path. These two changes are tightly coupled (both modify the same spawn/tracking code) so they are combined into one story."
+    },
+    {
+      "id": "US-012",
+      "title": "Envoy-client: Graceful shutdown sequencing",
+      "description": "As a developer, I need envoy-client to support multi-step shutdown so rivetkit-core can run teardown logic before Stopped is sent.",
+      "acceptanceCriteria": [
+        "Modify handle_stop in actor.rs to not immediately send Stopped and break",
+        "Allow the event loop to continue processing during teardown phase",
+        "Stopped message sent only after core signals completion via a callback or oneshot channel",
+        "Add on_actor_stop callback that receives a completion handle. Core calls the handle when teardown is done",
+        "Existing stop behavior preserved when no callback is registered (backward compatible)",
+        "`cargo check -p envoy-client` passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "See spec 'Envoy-Client Integration' section, blocking change #2. Currently handle_stop calls on_actor_stop then immediately sends Stopped. The fix: on_actor_stop returns a future or channel, and Stopped is sent only when that future resolves."
+    },
+    {
+      "id": "US-013",
+      "title": "rivetkit-core: Sleep readiness and auto-sleep timer",
+      "description": "As a developer, I need the can_sleep() check and auto-sleep timer that puts actors to sleep when idle.",
+      "acceptanceCriteria": [
+        "Implement can_sleep() in `src/actor/sleep.rs` checking ALL conditions: ready AND started, prevent_sleep is false, no_sleep config is false, no active HTTP requests (from envoy-client counter), no active keep_awake/internal_keep_awake regions, run handler not active (exception: allowed if only blocked on queue wait via active_queue_wait_count), no active connections, no pending disconnect callbacks, no active WebSocket callbacks",
+        "Implement auto-sleep timer: reset on activity, fires sleep when can_sleep() returns true for sleep_timeout duration (default 30s from ActorConfig)",
+        "prevent_sleep flag with set_prevent_sleep(bool) / prevent_sleep() -> bool",
+        "keep_awake and internal_keep_awake region tracking via atomic increment/decrement counters",
+        "wait_until future tracking: store spawned JoinHandles for shutdown task management",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "See spec 'Sleep Readiness (can_sleep())' section. Depends on US-011 for HTTP request count from envoy-client."
+    },
+    {
+      "id": "US-014",
+      "title": "rivetkit-core: Startup sequence (load, factory, ready)",
+      "description": "As a developer, I need the first half of the startup sequence: loading persisted state, creating the actor via factory, and reaching ready state.",
+      "acceptanceCriteria": [
+        "Implement startup sequence in `src/actor/lifecycle.rs`",
+        "Step 1: Load persisted data from KV (PersistedActor with state, scheduled events) or from preload",
+        "Step 2: Determine create-vs-wake by checking has_initialized flag in persisted data",
+        "Step 3: Call ActorFactory::create(FactoryRequest { is_new, input, ctx })",
+        "Step 4: On factory/on_create failure: report ActorStateStopped(Error). Actor is dead",
+        "Step 5: Set has_initialized = true in persisted data, save to KV",
+        "Step 6: Call on_wake callback (always, for both new and restored actors)",
+        "Step 7: On on_wake error: report ActorStateStopped(Error). Actor is dead",
+        "Step 8: Mark ready = true",
+        "Step 9: Driver hook point for onBeforeActorStart (can be a no-op initially)",
+        "Step 10: Mark started = true",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "See spec 'Startup Sequence' steps 1-11 and 'Error Handling' section. This is the first half; US-015 handles post-startup initialization (alarms, connections, run handler)."
+    },
+    {
+      "id": "US-015",
+      "title": "rivetkit-core: Startup sequence (post-start initialization)",
+      "description": "As a developer, I need the second half of startup: syncing alarms, restoring connections, starting run handler, and processing overdue events.",
+      "acceptanceCriteria": [
+        "Continue startup in `src/actor/lifecycle.rs` after ready+started flags are set",
+        "Resync schedule alarms with engine via EventActorSetAlarm (find soonest persisted event, send alarm)",
+        "Restore hibernating connections from KV (deserialize BARE-encoded connection data)",
+        "Reset sleep timer to begin idle tracking",
+        "Start run handler in background tokio task. On run handler error/panic: log error, actor stays alive. Catch panics via catch_unwind",
+        "Process overdue scheduled events immediately (events where timestamp_ms <= now)",
+        "Abort signal fires at the beginning of onStop for BOTH sleep and destroy modes",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "See spec 'Startup Sequence' steps 7-15 and 'Error Handling' section. run handler errors are NOT fatal; panics are caught via catch_unwind. This story completes the startup sequence begun in US-014."
+    },
+    {
+      "id": "US-016",
+      "title": "rivetkit-core: Shutdown sleep mode",
+      "description": "As a developer, I need the sleep shutdown sequence with idle window waiting and connection hibernation.",
+      "acceptanceCriteria": [
+        "Implement sleep shutdown in `src/actor/lifecycle.rs`",
+        "Step 1: Clear sleep timeout timer",
+        "Step 2: Cancel local alarm timeouts (persisted events remain in KV)",
+        "Step 3: Fire abort signal (if not already fired)",
+        "Step 4: Wait for run handler to finish (with run_stop_timeout, default 15s)",
+        "Step 5: Calculate shutdown_deadline from effective sleep_grace_period",
+        "Step 6: Wait for idle sleep window with deadline. Idle means: no active HTTP requests, no active keep_awake/internal_keep_awake, no pending disconnect callbacks, no active WebSocket callbacks",
+        "Step 7: Call on_sleep callback (with remaining deadline budget). On error: log, continue shutdown",
+        "Step 8: Wait for shutdown tasks (wait_until futures, WebSocket callback futures, prevent_sleep to clear)",
+        "Step 9: Disconnect all non-hibernatable connections. Persist hibernatable connections to KV",
+        "Step 10: Wait for shutdown tasks again",
+        "Step 11: Save state immediately. Wait for all pending KV/SQLite writes to complete",
+        "Step 12: Cleanup database connections",
+        "Step 13: Report ActorStateStopped(Ok) on success, ActorStateStopped(Error) if on_sleep errored",
+        "sleep_grace_period fallback: if explicitly set use it (capped by override), if on_sleep_timeout was customized then effective_on_sleep_timeout + 15s, otherwise 15s (DEFAULT_SLEEP_GRACE_PERIOD)",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "See spec 'Graceful Shutdown: Sleep Mode' section. Depends on US-012 (envoy-client graceful shutdown). Key: sleep mode waits for idle window before calling on_sleep."
+    },
+    {
+      "id": "US-017",
+      "title": "rivetkit-core: Shutdown destroy mode",
+      "description": "As a developer, I need the destroy shutdown sequence that skips idle waiting and disconnects all connections.",
+      "acceptanceCriteria": [
+        "Implement destroy shutdown in `src/actor/lifecycle.rs`",
+        "Step 1: Clear sleep timeout timer",
+        "Step 2: Cancel local alarm timeouts",
+        "Step 3: Fire abort signal (already fired on destroy() call, so this is a no-op check)",
+        "Step 4: Wait for run handler to finish (with run_stop_timeout, default 15s)",
+        "Step 5: Call on_destroy callback (with standalone on_destroy_timeout, default 5s). On error: log, continue",
+        "Step 6: Wait for shutdown tasks (wait_until futures)",
+        "Step 7: Disconnect ALL connections (not just non-hibernatable)",
+        "Step 8: Wait for shutdown tasks again",
+        "Step 9: Save state immediately. Wait for all pending KV/SQLite writes",
+        "Step 10: Cleanup database connections",
+        "Step 11: Report ActorStateStopped(Ok) on success, ActorStateStopped(Error) if on_destroy errored",
+        "KEY DIFFERENCE from sleep: destroy does NOT wait for idle sleep window",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "See spec 'Graceful Shutdown: Destroy Mode' section. Compare with US-016 (sleep shutdown). The key difference is no idle window wait and on_destroy instead of on_sleep."
+    },
+    {
+      "id": "US-018",
+      "title": "rivetkit-core: CoreRegistry and EnvoyCallbacks dispatcher",
+      "description": "As a developer, I need the registry that stores actor factories and dispatches envoy events to the correct actor instance.",
+      "acceptanceCriteria": [
+        "Implement CoreRegistry in `src/registry.rs` with: new(), register(name: &str, factory: ActorFactory), serve(self) -> Result<()>",
+        "serve() creates EnvoyCallbacks dispatcher that routes events to correct actor instances",
+        "On on_actor_start: extract actor name from protocol::ActorConfig, look up ActorFactory by name, call factory.create(), store ActorInstanceCallbacks",
+        "Store active actor instances in scc::HashMap keyed by actor_id (not Mutex<HashMap>)",
+        "Route fetch, websocket, action, and other events to correct instance callbacks by actor_id",
+        "Handle actor not found errors gracefully (log + return error)",
+        "Multiple actors per process supported (different actor types registered under different names)",
+        "`cargo check -p rivetkit-core` passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "See spec 'Registry (core level)' section. Use scc::HashMap for concurrent actor instance storage. serve() connects to envoy-client and dispatches events."
+    },
+    {
+      "id": "US-019",
+      "title": "Create rivetkit crate with Actor trait and prelude",
+      "description": "As a developer, I need the high-level rivetkit crate with the Actor trait that provides an ergonomic API for writing actors in Rust.",
+      "acceptanceCriteria": [
+        "Create `rivetkit-rust/packages/rivetkit/Cargo.toml` depending on rivetkit-core, serde, ciborium, async-trait, tokio, anyhow",
+        "Add rivetkit to workspace members in root Cargo.toml",
+        "Implement Actor trait in `src/actor.rs` with #[async_trait]",
+        "Associated types: State (Serialize+DeserializeOwned+Send+Sync+Clone+'static), ConnParams (DeserializeOwned+Send+Sync+'static), ConnState (Serialize+DeserializeOwned+Send+Sync+'static), Input (DeserializeOwned+Send+Sync+'static), Vars (Send+Sync+'static)",
+        "Required methods: create_state(ctx: &Ctx<Self>, input: &Self::Input) -> Result<Self::State>, on_create(ctx: &Ctx<Self>, input: &Self::Input) -> Result<Self>, create_conn_state(self: &Arc<Self>, ctx: &Ctx<Self>, params: &Self::ConnParams) -> Result<Self::ConnState>",
+        "Optional methods with defaults: create_vars, on_wake, on_sleep, on_destroy, on_state_change, on_request, on_websocket, on_before_connect, on_connect, on_disconnect, run, config",
+        "All async methods with actor instance take self: &Arc<Self>. create_state and on_create are static (no self)",
+        "All methods receive &Ctx<Self> for typed context access",
+        "Actor trait bound: Send + Sync + Sized + 'static",
+        "Create `src/prelude.rs` re-exporting: Actor, Ctx, ConnCtx, Registry, ActorConfig, serde::{Serialize, Deserialize}, async_trait, anyhow::Result, Arc",
+        "`cargo check -p rivetkit` passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "See spec 'Actor Trait' section. No proc macros in the public API. Use async_trait for Send bounds on trait methods."
+    },
+    {
+      "id": "US-020",
+      "title": "rivetkit: Ctx<A> and ConnCtx<A> typed context",
+      "description": "As a developer, I need typed context wrappers that provide cached state deserialization and typed accessors.",
+      "acceptanceCriteria": [
+        "Implement Ctx<A> in `src/context.rs` with fields: inner (ActorContext), state_cache (Arc<Mutex<Option<Arc<A::State>>>>), vars (Arc<A::Vars>)",
+        "Ctx<A>.state() -> Arc<A::State>: returns cached deserialized state. Cache populated on first access by deserializing CBOR bytes from inner.state(). Cache invalidated by set_state",
+        "Ctx<A>.set_state(&A::State): serializes state to CBOR via ciborium, calls inner.set_state(bytes), invalidates cache",
+        "Ctx<A>.vars() -> &A::Vars: returns reference to typed vars",
+        "Delegate methods to inner ActorContext: kv, sql, schedule, queue, actor_id, name, key, region, abort_signal, aborted, sleep, destroy, set_prevent_sleep, prevent_sleep, wait_until",
+        "Typed broadcast: fn broadcast<E: Serialize>(&self, name: &str, event: &E) serializes E to CBOR then calls inner.broadcast",
+        "Typed connections: fn conns(&self) -> Vec<ConnCtx<A>> wrapping each inner ConnHandle",
+        "Implement ConnCtx<A> wrapping ConnHandle with PhantomData<A>: id() -> &str, params() -> A::ConnParams (CBOR deserialize), state() -> A::ConnState (CBOR deserialize), set_state(&A::ConnState) (CBOR serialize), is_hibernatable() -> bool, send<E: Serialize>(name, event), disconnect(reason) -> Result<()>",
+        "`cargo check -p rivetkit` passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "See spec 'Ctx<A> — Typed Actor Context' section. CBOR (ciborium) at all boundaries. Ctx<A> is a SEPARATE type from ActorContext, not a newtype wrapper."
+    },
+    {
+      "id": "US-021",
+      "title": "rivetkit: Registry, action builder, and bridge",
+      "description": "As a developer, I need the high-level Registry with action builder that constructs ActorFactory from Actor trait impls.",
+      "acceptanceCriteria": [
+        "Implement Registry in `src/registry.rs` wrapping CoreRegistry: new(), register<A: Actor>(name: &str) -> ActorRegistration<A>, serve(self) -> Result<()>",
+        "Implement ActorRegistration<'a, A> with method: action<Args, Ret, F, Fut>(name: &str, handler: F) -> &mut Self where Args: DeserializeOwned+Send+'static, Ret: Serialize+Send+'static, F: Fn(Arc<A>, Ctx<A>, Args) -> Fut + Send+Sync+'static, Fut: Future<Output=Result<Ret>> + Send+'static",
+        "ActorRegistration.done() -> &mut Registry to finish registration and return to registry builder",
+        "Implement bridge in `src/bridge.rs`: construct ActorFactory from Actor impl",
+        "Bridge construction flow on FactoryRequest: create ActorContext -> build Ctx<A> -> call A::create_state if is_new -> call A::create_vars -> call A::on_create if is_new -> wrap actor in Arc<A> -> build ActorInstanceCallbacks with closures capturing Arc<A> and Ctx<A>",
+        "Each lifecycle callback closure: clone Arc<A>, clone Ctx<A>, call the corresponding Actor trait method",
+        "Action closures: deserialize Args from CBOR bytes, call handler(arc_actor, ctx, args), serialize Ret to CBOR",
+        "All lifecycle callbacks wired: on_wake, on_sleep, on_destroy, on_state_change, on_request, on_websocket, on_before_connect, on_connect, on_disconnect, run",
+        "`cargo check -p rivetkit` passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "See spec 'Action Registration', 'Registry', and usage example. No macros. The bridge is the key piece that converts typed Actor impls into dynamic ActorFactory+ActorInstanceCallbacks for rivetkit-core."
+    },
+    {
+      "id": "US-022",
+      "title": "Counter actor integration test",
+      "description": "As a developer, I need a working Counter actor example to verify the full stack compiles and the API is ergonomic.",
+      "acceptanceCriteria": [
+        "Create example Counter actor using rivetkit crate (in rivetkit-rust/packages/rivetkit/examples/ or tests/)",
+        "Counter struct with request_count: AtomicU64 field",
+        "Associated types: State = CounterState { count: i64 }, Input = (), ConnParams = (), ConnState = (), Vars = ()",
+        "Implements create_state returning CounterState { count: 0 }",
+        "Implements on_create with SQL table creation: CREATE TABLE IF NOT EXISTS log (id INTEGER PRIMARY KEY, action TEXT)",
+        "Implements on_request: increments request_count, reads state, returns JSON { count: state.count }",
+        "Has increment action method: fn increment(self: Arc<Self>, ctx: Ctx<Self>, args: (i64,)) -> Result<CounterState>. Clones state, increments by args.0, calls set_state, broadcasts 'count_changed', returns new state",
+        "Has get_count action method: fn get_count(self: Arc<Self>, ctx: Ctx<Self>, _args: ()) -> Result<i64>. Returns ctx.state().count",
+        "main() creates Registry, registers Counter as 'counter' with both actions, calls serve()",
+        "run handler with tokio::select! on abort_signal().cancelled() and a timer (demonstrates background work pattern)",
+        "Full example compiles with `cargo check`",
+        "`cargo check` passes for the example"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "See spec 'Usage Example' section for the exact code pattern. This verifies the entire API surface (Actor trait, Ctx<A>, Registry, actions, state, broadcast, SQL, abort_signal) is wired up correctly end-to-end."
+    }
+  ]
+}

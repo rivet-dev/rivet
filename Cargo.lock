@@ -5212,30 +5212,59 @@ dependencies = [
 ]
 
 [[package]]
-name = "rivetkit-native"
+name = "rivetkit-core"
+version = "2.3.0-rc.4"
+dependencies = [
+ "anyhow",
+ "ciborium",
+ "futures",
+ "http 1.3.1",
+ "nix 0.30.1",
+ "prometheus",
+ "reqwest",
+ "rivet-envoy-client",
+ "rivet-error",
+ "rivet-pools",
+ "rivetkit-sqlite",
+ "scc",
+ "serde",
+ "serde_bare",
+ "serde_bytes",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "rivetkit-napi"
 version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
  "hex",
- "libsqlite3-sys",
+ "http 1.3.1",
  "napi",
  "napi-build",
  "napi-derive",
  "rivet-envoy-client",
  "rivet-envoy-protocol",
- "rivetkit-sqlite-native",
+ "rivet-error",
+ "rivetkit-core",
+ "rivetkit-sqlite",
  "serde",
  "serde_json",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "uuid",
 ]
 
 [[package]]
-name = "rivetkit-sqlite-native"
+name = "rivetkit-sqlite"
 version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",
@@ -5749,6 +5778,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51c55386eed0f1ae957b091dc2ca8122f287b60c79c774cbe3d5f2b69fded660"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
+dependencies = [
+ "serde",
+ "serde_core",
 ]
 
 [[package]]

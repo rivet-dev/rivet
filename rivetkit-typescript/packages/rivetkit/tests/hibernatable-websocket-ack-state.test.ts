@@ -4,7 +4,7 @@ import {
 	HibernatableWebSocketAckState,
 	HIBERNATABLE_WEBSOCKET_ACK_DEADLINE,
 	HIBERNATABLE_WEBSOCKET_BUFFERED_MESSAGE_SIZE_THRESHOLD,
-} from "@/actor/conn/hibernatable-websocket-ack-state";
+} from "@/common/hibernatable-websocket-ack-state";
 
 describe("hibernatable websocket ack state", () => {
 	test("schedules persistence for indexed messages without extra actor writes", () => {

@@ -1,7 +1,9 @@
-# MARK: Message To Server
+# Actor Inspector BARE Schema v1
+
+type State data
 
 type PatchStateRequest struct {
- 	state: data
+	state: data
 }
 
 type ActionRequest struct {
@@ -44,10 +46,6 @@ type ToServer struct {
 	body: ToServerBody
 }
 
-# MARK: Message To Client
-
-type State data
-
 type Connection struct {
 	id: str
 	details: data
@@ -89,8 +87,6 @@ type EventBody union {
 }
 
 type Event struct {
-	id: str
-	timestamp: uint
 	body: EventBody
 }
 
@@ -137,9 +133,6 @@ type RpcsListResponse struct {
 	rpcs: list<str>
 }
 
-type ConnectionsUpdated struct {
-	connections: list<Connection>
-}
 type Error struct {
 	message: str
 }
@@ -149,12 +142,16 @@ type ToClientBody union {
 	ConnectionsResponse |
 	EventsResponse |
 	ActionResponse |
+	RpcsListResponse |
 	ConnectionsUpdated |
 	EventsUpdated |
 	StateUpdated |
-	RpcsListResponse |
 	Error |
 	Init
+}
+
+type ConnectionsUpdated struct {
+	connections: list<Connection>
 }
 
 type ToClient struct {

@@ -16,9 +16,8 @@
 	],
 	"files": [
 		"dist",
+		"schemas",
 		"src",
-		"deno.json",
-		"bun.json",
 		"package.json"
 	],
 	"type": "module",
@@ -41,16 +40,6 @@
 			"require": {
 				"types": "./dist/tsup/workflow/mod.d.cts",
 				"default": "./dist/tsup/workflow/mod.cjs"
-			}
-		},
-		"./dynamic": {
-			"import": {
-				"types": "./dist/tsup/dynamic/mod.d.ts",
-				"default": "./dist/tsup/dynamic/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/dynamic/mod.d.cts",
-				"default": "./dist/tsup/dynamic/mod.cjs"
 			}
 		},
 		"./client": {
@@ -97,92 +86,6 @@
 				"default": "./dist/tsup/utils.cjs"
 			}
 		},
-		"./driver-helpers": {
-			"import": {
-				"types": "./dist/tsup/driver-helpers/mod.d.ts",
-				"default": "./dist/tsup/driver-helpers/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/driver-helpers/mod.d.cts",
-				"default": "./dist/tsup/driver-helpers/mod.cjs"
-			}
-		},
-		"./driver-helpers/websocket": {
-			"import": {
-				"types": "./dist/tsup/common/websocket.d.ts",
-				"default": "./dist/tsup/common/websocket.js"
-			},
-			"require": {
-				"types": "./dist/tsup/common/websocket.d.cts",
-				"default": "./dist/tsup/common/websocket.cjs"
-			}
-		},
-		"./topologies/coordinate": {
-			"import": {
-				"types": "./dist/tsup/topologies/coordinate/mod.d.ts",
-				"default": "./dist/tsup/topologies/coordinate/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/topologies/coordinate/mod.d.cts",
-				"default": "./dist/tsup/topologies/coordinate/mod.cjs"
-			}
-		},
-		"./topologies/partition": {
-			"import": {
-				"types": "./dist/tsup/topologies/partition/mod.d.ts",
-				"default": "./dist/tsup/topologies/partition/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/topologies/partition/mod.d.cts",
-				"default": "./dist/tsup/topologies/partition/mod.cjs"
-			}
-		},
-		"./test": {
-			"import": {
-				"types": "./dist/tsup/test/mod.d.ts",
-				"default": "./dist/tsup/test/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/test/mod.d.cts",
-				"default": "./dist/tsup/test/mod.cjs"
-			}
-		},
-		"./inspector": {
-			"import": {
-				"types": "./dist/tsup/inspector/mod.d.ts",
-				"default": "./dist/tsup/inspector/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/inspector/mod.d.cts",
-				"default": "./dist/tsup/inspector/mod.cjs"
-			}
-		},
-		"./inspector/client": {
-			"import": {
-				"types": "./dist/browser/inspector/client.d.ts",
-				"default": "./dist/browser/inspector/client.js"
-			}
-		},
-		"./db": {
-			"import": {
-				"types": "./dist/tsup/db/mod.d.ts",
-				"default": "./dist/tsup/db/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/db/mod.d.cts",
-				"default": "./dist/tsup/db/mod.cjs"
-			}
-		},
-		"./db/drizzle": {
-			"import": {
-				"types": "./dist/tsup/db/drizzle/mod.d.ts",
-				"default": "./dist/tsup/db/drizzle/mod.js"
-			},
-			"require": {
-				"types": "./dist/tsup/db/drizzle/mod.d.cts",
-				"default": "./dist/tsup/db/drizzle/mod.cjs"
-			}
-		},
 		"./agent-os": {
 			"import": {
 				"types": "./dist/tsup/agent-os/index.d.ts",
@@ -191,106 +94,6 @@
 			"require": {
 				"types": "./dist/tsup/agent-os/index.d.cts",
 				"default": "./dist/tsup/agent-os/index.cjs"
-			}
-		},
-		"./sandbox": {
-			"import": {
-				"types": "./dist/tsup/sandbox/index.d.ts",
-				"default": "./dist/tsup/sandbox/index.js"
-			},
-			"require": {
-				"types": "./dist/tsup/sandbox/index.d.cts",
-				"default": "./dist/tsup/sandbox/index.cjs"
-			}
-		},
-		"./sandbox/client": {
-			"import": {
-				"types": "./dist/tsup/sandbox/client.d.ts",
-				"default": "./dist/tsup/sandbox/client.js"
-			},
-			"require": {
-				"types": "./dist/tsup/sandbox/client.d.cts",
-				"default": "./dist/tsup/sandbox/client.cjs"
-			}
-		},
-		"./sandbox/docker": {
-			"import": {
-				"types": "./dist/tsup/sandbox/providers/docker.d.ts",
-				"default": "./dist/tsup/sandbox/providers/docker.js"
-			},
-			"require": {
-				"types": "./dist/tsup/sandbox/providers/docker.d.cts",
-				"default": "./dist/tsup/sandbox/providers/docker.cjs"
-			}
-		},
-		"./sandbox/e2b": {
-			"import": {
-				"types": "./dist/tsup/sandbox/providers/e2b.d.ts",
-				"default": "./dist/tsup/sandbox/providers/e2b.js"
-			},
-			"require": {
-				"types": "./dist/tsup/sandbox/providers/e2b.d.cts",
-				"default": "./dist/tsup/sandbox/providers/e2b.cjs"
-			}
-		},
-		"./sandbox/daytona": {
-			"import": {
-				"types": "./dist/tsup/sandbox/providers/daytona.d.ts",
-				"default": "./dist/tsup/sandbox/providers/daytona.js"
-			},
-			"require": {
-				"types": "./dist/tsup/sandbox/providers/daytona.d.cts",
-				"default": "./dist/tsup/sandbox/providers/daytona.cjs"
-			}
-		},
-		"./sandbox/local": {
-			"import": {
-				"types": "./dist/tsup/sandbox/providers/local.d.ts",
-				"default": "./dist/tsup/sandbox/providers/local.js"
-			},
-			"require": {
-				"types": "./dist/tsup/sandbox/providers/local.d.cts",
-				"default": "./dist/tsup/sandbox/providers/local.cjs"
-			}
-		},
-		"./sandbox/vercel": {
-			"import": {
-				"types": "./dist/tsup/sandbox/providers/vercel.d.ts",
-				"default": "./dist/tsup/sandbox/providers/vercel.js"
-			},
-			"require": {
-				"types": "./dist/tsup/sandbox/providers/vercel.d.cts",
-				"default": "./dist/tsup/sandbox/providers/vercel.cjs"
-			}
-		},
-		"./sandbox/modal": {
-			"import": {
-				"types": "./dist/tsup/sandbox/providers/modal.d.ts",
-				"default": "./dist/tsup/sandbox/providers/modal.js"
-			},
-			"require": {
-				"types": "./dist/tsup/sandbox/providers/modal.d.cts",
-				"default": "./dist/tsup/sandbox/providers/modal.cjs"
-			}
-		},
-		"./sandbox/computesdk": {
-			"import": {
-				"types": "./dist/tsup/sandbox/providers/computesdk.d.ts",
-				"default": "./dist/tsup/sandbox/providers/computesdk.js"
-			},
-			"require": {
-				"types": "./dist/tsup/sandbox/providers/computesdk.d.cts",
-				"default": "./dist/tsup/sandbox/providers/computesdk.cjs"
-			}
-		},
-		"./sandbox/sprites": {
-			"import": {
-				"types": "./dist/tsup/sandbox/providers/sprites.d.ts",
-				"default": "./dist/tsup/sandbox/providers/sprites.js"
-			},
-			"require": {
-				"types": "./dist/tsup/sandbox/providers/sprites.d.cts",
-				"default": "./dist/tsup/sandbox/providers/sprites.cjs"
 			}
 		}
 	},
@@ -302,12 +105,9 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts src/dynamic/mod.ts src/db/mod.ts src/db/drizzle/mod.ts src/sandbox/index.ts src/sandbox/client.ts src/sandbox/providers/docker.ts src/sandbox/providers/e2b.ts src/sandbox/providers/daytona.ts src/sandbox/providers/local.ts src/sandbox/providers/vercel.ts src/sandbox/providers/modal.ts src/sandbox/providers/computesdk.ts src/sandbox/providers/sprites.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
-		"build:dynamic-isolate-runtime": "tsup --config tsup.dynamic-isolate-runtime.config.ts",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/utils.ts src/workflow/mod.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
 		"build:browser": "tsup --config tsup.browser.config.ts",
-		"build:schema": "./scripts/compile-all-bare.ts",
 		"check-types": "tsc --noEmit",
-		"check-types:dynamic-isolate-runtime": "tsc --noEmit -p dynamic-isolate-runtime/tsconfig.json",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"format": "biome format .",
@@ -316,22 +116,17 @@
 		"test:watch": "vitest",
 		"dump-asyncapi": "tsx scripts/dump-asyncapi.ts",
 		"registry-config-schema-gen": "tsx scripts/registry-config-schema-gen.ts",
-		"actor-config-schema-gen": "tsx scripts/actor-config-schema-gen.ts",
-		"build:pack-inspector": "tsx scripts/pack-inspector.ts"
+		"actor-config-schema-gen": "tsx scripts/actor-config-schema-gen.ts"
 	},
 	"dependencies": {
 		"@rivet-dev/agent-os-core": "^0.1.1",
 		"@hono/node-server": "^1.18.2",
 		"@hono/node-ws": "^1.1.1",
-		"@hono/standard-validator": "^0.1.3",
 		"@hono/zod-openapi": "^1.1.5",
 		"@rivetkit/bare-ts": "^0.6.2",
 		"@rivetkit/engine-cli": "workspace:*",
 		"@rivetkit/engine-envoy-protocol": "workspace:*",
-		"@rivetkit/engine-runner": "workspace:*",
-		"@rivetkit/rivetkit-native": "workspace:*",
-		"@rivetkit/fast-json-patch": "^3.1.2",
-		"@rivetkit/on-change": "^6.0.2-rc.1",
+		"@rivetkit/rivetkit-napi": "workspace:*",
 		"@rivetkit/traces": "workspace:*",
 		"@rivetkit/virtual-websocket": "workspace:*",
 		"@rivetkit/workflow-engine": "workspace:*",
@@ -339,11 +134,8 @@
 		"get-port": "^7.1.0",
 		"hono": "^4.7.0",
 		"invariant": "^2.2.4",
-		"nanoevents": "^9.1.0",
 		"p-retry": "^6.2.1",
 		"pino": "^9.5.0",
-		"sandbox-agent": "^0.4.2",
-		"tar": "^7.5.0",
 		"uuid": "^12.0.0",
 		"vbare": "^0.0.4",
 		"zod": "^4.1.0"
@@ -352,68 +144,29 @@
 		"@copilotkit/llmock": "^1.6.0",
 		"@rivet-dev/agent-os-common": "*",
 		"@rivet-dev/agent-os-pi": "^0.1.1",
-		"@bare-ts/tools": "^0.13.0",
 		"@biomejs/biome": "^2.3",
-		"@daytonaio/sdk": "^0.150.0",
-		"@e2b/code-interpreter": "^2.3.3",
 		"@standard-schema/spec": "^1.0.0",
-		"@types/dockerode": "^3.3.39",
 		"@types/invariant": "^2",
 		"@types/node": "^22.13.1",
-		"@types/ws": "^8",
-		"@vitest/ui": "3.1.1",
-		"cli-table3": "^0.6.5",
-		"commander": "^12.1.0",
-		"dockerode": "^4.0.9",
 		"drizzle-orm": "^0.44.2",
 		"eventsource": "^4.0.0",
-		"local-pkg": "^0.5.1",
 		"tsup": "^8.4.0",
 		"tsx": "^4.19.4",
 		"typescript": "^5.7.3",
 		"vite-tsconfig-paths": "^5.1.4",
 		"vitest": "^3.1.1",
-		"ws": "^8.18.1",
-		"zod-to-json-schema": "^3.25.0"
+		"ws": "^8.18.1"
 	},
 	"peerDependencies": {
-		"@fly/sprites": ">=0.0.1",
-		"@vercel/sandbox": ">=0.1.0",
-		"@daytonaio/sdk": "^0.150.0",
-		"@e2b/code-interpreter": "^2.3.3",
-		"computesdk": ">=0.1.0",
-		"dockerode": "^4.0.9",
 		"drizzle-kit": "^0.31.2",
 		"eventsource": "^4.0.0",
-		"modal": ">=0.1.0",
 		"ws": "^8.0.0"
 	},
 	"peerDependenciesMeta": {
-		"@fly/sprites": {
-			"optional": true
-		},
-		"@vercel/sandbox": {
-			"optional": true
-		},
-		"@daytonaio/sdk": {
-			"optional": true
-		},
-		"@e2b/code-interpreter": {
-			"optional": true
-		},
-		"computesdk": {
-			"optional": true
-		},
-		"dockerode": {
-			"optional": true
-		},
 		"drizzle-kit": {
 			"optional": true
 		},
 		"eventsource": {
-			"optional": true
-		},
-		"modal": {
 			"optional": true
 		},
 		"ws": {

@@ -7,5 +7,9 @@ pub mod connection;
 pub mod handle;
 pub mod protocol;
 
-pub use client::{Client, CreateOptions, GetOptions, GetOrCreateOptions, GetWithIdOptions};
+pub use client::{
+    Client, ClientConfig, CreateOptions, GetOptions, GetOrCreateOptions, GetWithIdOptions,
+};
 pub use common::{TransportKind, EncodingKind};
+pub use connection::ConnectionStatus;
+pub use handle::{QueueSendOptions, QueueSendResult, QueueSendStatus};

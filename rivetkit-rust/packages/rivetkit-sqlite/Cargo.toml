@@ -1,0 +1,28 @@
+[package]
+name = "rivetkit-sqlite"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+workspace = "../../../"
+description = "Native SQLite VFS for RivetKit backed by a transport-agnostic KV trait"
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+rivet-envoy-client.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+getrandom = "0.2"
+rivet-envoy-protocol.workspace = true
+moka = { version = "0.12", default-features = false, features = ["sync"] }
+parking_lot.workspace = true
+sqlite-storage.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+universaldb.workspace = true

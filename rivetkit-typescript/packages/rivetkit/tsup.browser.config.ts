@@ -25,7 +25,6 @@ export default defineConfig({
 		"@hono/node-server",
 		"@hono/node-server/serve-static",
 		"@hono/node-ws",
-		"tar",
 		"module",
 		// Keep workspace packages external
 		"@rivetkit/traces",
@@ -37,7 +36,6 @@ export default defineConfig({
 	shims: false,
 	outDir: "dist/browser/",
 	entry: {
-		"inspector/client": "src/inspector/mod.browser.ts",
 		client: "src/client/mod.browser.ts",
 	},
 	define: {

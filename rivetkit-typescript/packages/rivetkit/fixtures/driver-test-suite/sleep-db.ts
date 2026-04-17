@@ -1,6 +1,6 @@
 import type { UniversalWebSocket } from "rivetkit";
 import { actor, event, queue } from "rivetkit";
-import { db } from "rivetkit/db";
+import { db } from "@/common/database/mod";
 import { RAW_WS_HANDLER_DELAY, RAW_WS_HANDLER_SLEEP_TIMEOUT } from "./sleep";
 
 export const SLEEP_DB_TIMEOUT = 1000;

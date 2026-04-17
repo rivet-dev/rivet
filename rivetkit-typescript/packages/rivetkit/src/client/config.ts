@@ -1,5 +1,5 @@
 import z from "zod/v4";
-import { EncodingSchema } from "@/actor/protocol/serde";
+import { EncodingSchema } from "@/common/encoding";
 import type { RegistryConfig } from "@/registry/config";
 import type { GetUpgradeWebSocket } from "@/utils";
 import { tryParseEndpoint } from "@/utils/endpoint-parser";

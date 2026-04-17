@@ -732,7 +732,7 @@ Ordered by dependency. Create files in this order.
 ### Envoy-client glue (actor-side Rust)
 
 29. `engine/sdks/rust/envoy-client/` -- add 6 new methods: `sqlite_takeover`, `sqlite_get_pages`, `sqlite_commit`, `sqlite_commit_stage`, `sqlite_commit_finalize`, `sqlite_preload`. These wrap the envoy-protocol serialization/deserialization.
-30. `rivetkit-typescript/packages/rivetkit-native/src/database.rs` -- napi bindings exposing the 6 methods to the VFS.
+30. `rivetkit-typescript/packages/rivetkit-napi/src/database.rs` -- napi bindings exposing the 6 methods to the VFS.
 
 ### Pegboard-envoy integration
 
@@ -743,10 +743,10 @@ Ordered by dependency. Create files in this order.
 ### Actor-side dispatch
 
 34. Actor startup payload or WebSocket handshake carries the schema version (v1 or v2), set at actor creation time.
-35. VFS registration in `rivetkit-typescript/packages/rivetkit-native/src/database.rs` branches on the version flag.
+35. VFS registration in `rivetkit-typescript/packages/rivetkit-napi/src/database.rs` branches on the version flag.
 
 ### Actor-side VFS
 
 34. `rivetkit-typescript/packages/sqlite-native/src/vfs_v2.rs` -- new VFS implementation.
-35. `EnvoyV2` impl in `rivetkit-typescript/packages/rivetkit-native/src/database.rs` -- napi bindings.
+35. `EnvoyV2` impl in `rivetkit-typescript/packages/rivetkit-napi/src/database.rs` -- napi bindings.
 36. v1/v2 branch in actor startup code (VFS registration).

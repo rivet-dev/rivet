@@ -1,123 +1,322 @@
 import * as cbor from "cbor-x";
-import { createNanoEvents } from "nanoevents";
-import { createHttpDriver } from "@/actor/conn/drivers/http";
-import { Lock } from "@/actor/utils";
-import {
-	CONN_DRIVER_SYMBOL,
-	CONN_STATE_MANAGER_SYMBOL,
-} from "@/actor/conn/mod";
-import { getRunInspectorConfig } from "@/actor/config";
-import { ActionContext } from "@/actor/contexts/action";
-import * as actorErrors from "@/actor/errors";
-import type { AnyStaticActorInstance } from "@/actor/instance/mod";
-import type * as schema from "@/schemas/actor-inspector/mod";
-import { bufferToArrayBuffer } from "@/utils";
-import { serializeWorkflowHistoryForJson } from "./workflow-history-json";
+import { CONN_DRIVER_SYMBOL, CONN_STATE_MANAGER_SYMBOL } from "@/actor/config";
+import { RivetError } from "@/actor/errors";
+import { KEYS } from "@/actor/keys";
+import { generateSecureToken, Lock } from "@/actor/utils";
+import type * as schema from "@/common/bare/inspector/v4";
+import { bufferToArrayBuffer, toUint8Array } from "@/utils";
+import { timingSafeEqual } from "@/utils/crypto";
 
-interface ActorInspectorEmitterEvents {
-	stateUpdated: (state: unknown) => void;
-	connectionsUpdated: () => void;
-	queueUpdated: () => void;
-	workflowHistoryUpdated: (history: schema.WorkflowHistory) => void;
+export interface ActorInspectorWorkflowAdapter {
+	getHistory: () => schema.WorkflowHistory | null;
+	replayFromStep?: (
+		entryId?: string,
+	) => Promise<schema.WorkflowHistory | null>;
 }
 
-export type Connection = Omit<schema.Connection, "details"> & {
-	details: unknown;
+interface InspectorKv {
+	get(key: string | Uint8Array): Promise<Uint8Array | null>;
+	put(
+		key: string | Uint8Array,
+		value: string | Uint8Array | ArrayBuffer,
+	): Promise<void>;
+}
+
+interface InspectorDb {
+	execute(sql: string, ...args: Array<unknown>): Promise<unknown>;
+}
+
+interface InspectorQueueMessage {
+	id: bigint | number;
+	name: string;
+	createdAt: bigint | number;
+}
+
+interface InspectorQueueManager {
+	size?: number;
+	getMessages(): Promise<Array<InspectorQueueMessage>>;
+}
+
+interface InspectorConnStateManager {
+	stateEnabled: boolean;
+	state?: unknown;
+}
+
+type InspectorConnStateSymbolCarrier = {
+	[CONN_STATE_MANAGER_SYMBOL]?: InspectorConnStateManager;
 };
 
-/**
- * Provides a unified interface for inspecting actor external and internal state.
- */
-export class ActorInspector {
-	public readonly emitter = createNanoEvents<ActorInspectorEmitterEvents>();
+type InspectorConnDriverSymbolCarrier = {
+	[CONN_DRIVER_SYMBOL]?: { type?: string };
+};
 
+interface InspectorConnection
+	extends InspectorConnStateSymbolCarrier,
+		InspectorConnDriverSymbolCarrier {
+	params?: unknown;
+	subscriptions?: { size: number };
+	isHibernatable?: boolean;
+	disconnect(reason?: string): Promise<void> | void;
+}
+
+interface InspectorConnectionManager {
+	connections: Map<string, InspectorConnection>;
+	prepareAndConnectConn(
+		driver: Record<string, never>,
+		param1?: unknown,
+		param2?: unknown,
+		param3?: unknown,
+		param4?: unknown,
+	): Promise<InspectorConnection>;
+}
+
+interface InspectorStateManager {
+	persistRaw: { state: unknown };
+	state: unknown;
+	saveState(opts: { immediate: boolean }): Promise<void>;
+}
+
+interface InspectorConfig {
+	options?: {
+		maxQueueSize?: number;
+	};
+}
+
+export interface ActorInspectorActor {
+	config: InspectorConfig;
+	kv: InspectorKv;
+	stateEnabled: boolean;
+	stateManager: InspectorStateManager;
+	connectionManager: InspectorConnectionManager;
+	queueManager: InspectorQueueManager;
+	actions: Record<string, unknown>;
+	db?: InspectorDb;
+	executeAction(
+		context: { actor: ActorInspectorActor; conn: InspectorConnection },
+		name: string,
+		args: unknown[],
+	): Promise<unknown>;
+}
+
+function createHttpDriver(): Record<string, never> {
+	return {};
+}
+
+function stateNotEnabledError(): RivetError {
+	return new RivetError(
+		"actor",
+		"state_not_enabled",
+		"State not enabled. Must implement `createState` or `state` to use state. (https://www.rivet.dev/docs/actors/state/#initializing-state)",
+	);
+}
+
+function workflowNotEnabledError(): RivetError {
+	return new RivetError(
+		"actor",
+		"workflow_not_enabled",
+		"Workflow not enabled. The run handler must use `workflow(...)` to expose workflow inspector controls.",
+	);
+}
+
+function databaseNotEnabledError(): RivetError {
+	return new RivetError(
+		"database",
+		"not_enabled",
+		"Database not enabled. Must implement `database` to use database.",
+	);
+}
+
+function encodeCbor(value: unknown): ArrayBuffer {
+	return bufferToArrayBuffer(cbor.encode(value));
+}
+
+function escapeDoubleQuotes(value: string): string {
+	return value.replace(/"/g, '""');
+}
+
+function toInspectorU64(value: number | bigint): bigint {
+	return typeof value === "bigint"
+		? value
+		: BigInt(Math.max(0, Math.floor(value)));
+}
+
+export class ActorInspector {
 	#lastQueueSize = 0;
 	#databaseLock = new Lock<void>(undefined);
-	#workflowInspector?: NonNullable<
-		ReturnType<typeof getRunInspectorConfig>
-	>["workflow"];
+	#workflow?: ActorInspectorWorkflowAdapter;
 
-	constructor(private readonly actor: AnyStaticActorInstance) {
-		this.#lastQueueSize = actor.queueManager?.size ?? 0;
-		const runInspector = getRunInspectorConfig(actor.config.run, actor);
-		this.#workflowInspector = runInspector?.workflow;
-		if (this.#workflowInspector?.onHistoryUpdated) {
-			this.#workflowInspector.onHistoryUpdated((history) => {
-				this.emitter.emit(
-					"workflowHistoryUpdated",
-					history as schema.WorkflowHistory,
-				);
-			});
-		}
+	constructor(
+		private readonly actor: ActorInspectorActor,
+		options?: {
+			workflow?: ActorInspectorWorkflowAdapter;
+		},
+	) {
+		this.#lastQueueSize = actor.queueManager.size ?? 0;
+		this.#workflow = options?.workflow;
 	}
 
-	getQueueSize() {
+	async loadToken(): Promise<string | null> {
+		const raw = await this.actor.kv.get(KEYS.INSPECTOR_TOKEN);
+		if (!raw) {
+			return null;
+		}
+
+		return new TextDecoder().decode(raw);
+	}
+
+	async generateToken(): Promise<string> {
+		const token = generateSecureToken();
+		await this.actor.kv.put(
+			KEYS.INSPECTOR_TOKEN,
+			new TextEncoder().encode(token),
+		);
+		return token;
+	}
+
+	async verifyToken(token: string): Promise<boolean> {
+		const current = await this.loadToken();
+		if (!current) {
+			return false;
+		}
+
+		return timingSafeEqual(token, current);
+	}
+
+	getQueueSize(): number {
 		return this.#lastQueueSize;
 	}
 
-	async getQueueStatus(limit: number): Promise<schema.QueueStatus> {
-		const maxSize = this.actor.config.options.maxQueueSize;
-		const safeLimit = Math.max(0, Math.floor(limit));
-		const messages = await this.actor.queueManager.getMessages();
-		const sorted = messages.sort((a, b) => a.createdAt - b.createdAt);
-		const limited = safeLimit > 0 ? sorted.slice(0, safeLimit) : [];
-		return {
-			size: BigInt(this.#lastQueueSize),
-			maxSize: BigInt(maxSize),
-			truncated: sorted.length > limited.length,
-			messages: limited.map((message) => ({
-				id: message.id,
-				name: message.name,
-				createdAtMs: BigInt(message.createdAt),
-			})),
-		};
-	}
-
-	updateQueueSize(size: number) {
-		if (this.#lastQueueSize === size) {
-			return;
-		}
+	updateQueueSize(size: number): void {
 		this.#lastQueueSize = size;
-		this.emitter.emit("queueUpdated");
 	}
 
-	isWorkflowEnabled() {
-		return this.#workflowInspector !== undefined;
+	isWorkflowEnabled(): boolean {
+		return this.#workflow !== undefined;
 	}
 
 	getWorkflowHistory(): schema.WorkflowHistory | null {
-		if (!this.#workflowInspector) {
+		if (!this.#workflow) {
 			return null;
 		}
-		const history = this.#workflowInspector.getHistory();
-		return (history ?? null) as schema.WorkflowHistory | null;
+
+		return this.#workflow.getHistory() ?? null;
 	}
 
 	async replayWorkflowFromStep(
 		entryId?: string,
 	): Promise<schema.WorkflowHistory | null> {
-		if (!this.#workflowInspector?.replayFromStep) {
-			throw new actorErrors.WorkflowNotEnabled();
+		if (!this.#workflow?.replayFromStep) {
+			throw workflowNotEnabledError();
 		}
-		const history = await this.#workflowInspector.replayFromStep(entryId);
-		return (history ?? null) as schema.WorkflowHistory | null;
+
+		return (await this.#workflow.replayFromStep(entryId)) ?? null;
 	}
 
-	// actor accessor methods
+	isDatabaseEnabled(): boolean {
+		return this.actor.db !== undefined;
+	}
 
-	isDatabaseEnabled() {
-		try {
-			return this.actor.db !== undefined;
-		} catch {
-			return false;
+	isStateEnabled(): boolean {
+		return this.actor.stateEnabled;
+	}
+
+	getState(): ArrayBuffer {
+		if (!this.actor.stateEnabled) {
+			throw stateNotEnabledError();
 		}
+
+		return encodeCbor(this.actor.stateManager.persistRaw.state);
+	}
+
+	getRpcs(): Array<string> {
+		return Object.keys(this.actor.actions);
+	}
+
+	getConnections(): Array<schema.Connection> {
+		return Array.from(
+			this.actor.connectionManager.connections.entries(),
+		).map(([id, conn]) => {
+			const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
+			return {
+				type: conn[CONN_DRIVER_SYMBOL]?.type ?? null,
+				id,
+				details: encodeCbor({
+					type: conn[CONN_DRIVER_SYMBOL]?.type,
+					params: conn.params,
+					stateEnabled: connStateManager?.stateEnabled ?? false,
+					state: connStateManager?.stateEnabled
+						? connStateManager.state
+						: undefined,
+					subscriptions: conn.subscriptions?.size ?? 0,
+					isHibernatable: conn.isHibernatable ?? false,
+				}),
+			};
+		});
+	}
+
+	async patchState(state: ArrayBuffer | ArrayBufferView): Promise<void> {
+		if (!this.actor.stateEnabled) {
+			throw stateNotEnabledError();
+		}
+
+		this.actor.stateManager.state = cbor.decode(toUint8Array(state));
+		await this.actor.stateManager.saveState({ immediate: true });
+	}
+
+	async executeAction(
+		name: string,
+		args: ArrayBuffer | ArrayBufferView,
+	): Promise<ArrayBuffer> {
+		const conn = await this.actor.connectionManager.prepareAndConnectConn(
+			createHttpDriver(),
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+		);
+
+		try {
+			const decodedArgs = cbor.decode(toUint8Array(args));
+			const normalizedArgs = Array.isArray(decodedArgs)
+				? decodedArgs
+				: [];
+			const result = await this.actor.executeAction(
+				{ actor: this.actor, conn },
+				name,
+				normalizedArgs,
+			);
+			return encodeCbor(result);
+		} finally {
+			await conn.disconnect();
+		}
+	}
+
+	async getQueueStatus(limit: number): Promise<schema.QueueStatus> {
+		const maxSize = this.actor.config.options?.maxQueueSize ?? 0;
+		const safeLimit = Math.max(0, Math.floor(limit));
+		const messages = await this.actor.queueManager.getMessages();
+		const sorted = [...messages].sort((a, b) =>
+			Number(toInspectorU64(a.createdAt) - toInspectorU64(b.createdAt)),
+		);
+		const limited = safeLimit > 0 ? sorted.slice(0, safeLimit) : [];
+
+		return {
+			size: BigInt(this.#lastQueueSize),
+			maxSize: BigInt(maxSize),
+			truncated: sorted.length > limited.length,
+			messages: limited.map((message) => ({
+				id: toInspectorU64(message.id),
+				name: message.name,
+				createdAtMs: toInspectorU64(message.createdAt),
+			})),
+		};
 	}
 
 	async getDatabaseSchema(): Promise<ArrayBuffer> {
-		return this.#withDatabase(async (db) => {
+		return await this.#withDatabase(async (db) => {
 			const tables = (await db.execute(
 				"SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle_%'",
-			)) as { name: string; type: string }[];
+			)) as Array<{ name: string; type: string }>;
 
 			const tableInfos = [];
 			for (const table of tables) {
@@ -142,7 +341,7 @@ export class ActorInspector {
 				}>;
 				const countResult = (await db.execute(
 					`SELECT COUNT(*) as count FROM ${quoted}`,
-				)) as { count: number }[];
+				)) as Array<{ count: number }>;
 
 				tableInfos.push({
 					table: {
@@ -164,11 +363,11 @@ export class ActorInspector {
 						from: foreignKey.from,
 						to: foreignKey.to,
 					})),
-					records: countResult?.[0]?.count ?? 0,
+					records: countResult.at(0)?.count ?? 0,
 				});
 			}
 
-			return bufferToArrayBuffer(cbor.encode({ tables: tableInfos }));
+			return encodeCbor({ tables: tableInfos });
 		});
 	}
 
@@ -177,7 +376,7 @@ export class ActorInspector {
 		limit: number,
 		offset: number,
 	): Promise<ArrayBuffer> {
-		return this.#withDatabase(async (db) => {
+		return await this.#withDatabase(async (db) => {
 			const safeLimit = Math.max(0, Math.min(Math.floor(limit), 500));
 			const safeOffset = Math.max(0, Math.floor(offset));
 			const quoted = `"${escapeDoubleQuotes(table)}"`;
@@ -186,284 +385,124 @@ export class ActorInspector {
 				safeLimit,
 				safeOffset,
 			);
-			return bufferToArrayBuffer(cbor.encode(result));
+			return encodeCbor(result);
 		});
 	}
 
-	isStateEnabled() {
-		return this.actor.stateEnabled;
+	async getInit(): Promise<schema.Init> {
+		return {
+			connections: this.getConnections(),
+			state: this.actor.stateEnabled ? this.getState() : null,
+			isStateEnabled: this.actor.stateEnabled,
+			rpcs: this.getRpcs(),
+			isDatabaseEnabled: this.isDatabaseEnabled(),
+			queueSize: BigInt(this.#lastQueueSize),
+			workflowHistory: this.getWorkflowHistory(),
+			isWorkflowEnabled: this.isWorkflowEnabled(),
+		};
 	}
 
-	getState() {
-		if (!this.actor.stateEnabled) {
-			throw new actorErrors.StateNotEnabled();
-		}
-		return bufferToArrayBuffer(
-			cbor.encode(this.actor.stateManager.persistRaw.state),
-		);
+	async getStateResponse(rid: bigint): Promise<schema.StateResponse> {
+		return {
+			rid,
+			state: this.actor.stateEnabled ? this.getState() : null,
+			isStateEnabled: this.actor.stateEnabled,
+		};
 	}
 
-	getRpcs() {
-		return this.actor.actions;
+	getConnectionsResponse(rid: bigint): schema.ConnectionsResponse {
+		return {
+			rid,
+			connections: this.getConnections(),
+		};
 	}
 
-	getConnections() {
-		return Array.from(
-			this.actor.connectionManager.connections.entries(),
-		).map(([id, conn]) => {
-			const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
-			return {
-				type: conn[CONN_DRIVER_SYMBOL]?.type,
-				id,
-				details: bufferToArrayBuffer(
-					cbor.encode({
-						type: conn[CONN_DRIVER_SYMBOL]?.type,
-						params: conn.params as any,
-						stateEnabled: connStateManager.stateEnabled,
-						state: connStateManager.stateEnabled
-							? connStateManager.state
-							: undefined,
-						subscriptions: conn.subscriptions.size,
-						isHibernatable: conn.isHibernatable,
-						// TODO: Include underlying hibernatable metadata +
-						// path + headers
-					}),
-				),
-			};
-		});
-	}
-	async setState(state: ArrayBuffer) {
-		if (!this.actor.stateEnabled) {
-			throw new actorErrors.StateNotEnabled();
-		}
-		this.actor.stateManager.state = cbor.decode(Buffer.from(state));
-		await this.actor.stateManager.saveState({ immediate: true });
+	getRpcsListResponse(rid: bigint): schema.RpcsListResponse {
+		return {
+			rid,
+			rpcs: this.getRpcs(),
+		};
 	}
 
-	async executeAction(name: string, params: ArrayBuffer) {
-		const conn = await this.actor.connectionManager.prepareAndConnectConn(
-			createHttpDriver(),
-			// TODO: This may cause issues
-			undefined,
-			undefined,
-			undefined,
-			undefined,
-		);
-
-		try {
-			return bufferToArrayBuffer(
-				cbor.encode(
-					await this.actor.executeAction(
-						new ActionContext(this.actor, conn),
-						name,
-						cbor.decode(Buffer.from(params)),
-					),
-				),
-			);
-		} finally {
-			conn.disconnect();
-		}
+	async getActionResponse(
+		rid: bigint,
+		name: string,
+		args: ArrayBuffer | ArrayBufferView,
+	): Promise<schema.ActionResponse> {
+		return {
+			rid,
+			output: await this.executeAction(name, args),
+		};
 	}
 
-	// JSON-native methods for the HTTP inspector API. These return raw JS
-	// objects suitable for JSON serialization instead of CBOR-encoded buffers.
-
-	getStateJson(): unknown {
-		if (!this.actor.stateEnabled) {
-			throw new actorErrors.StateNotEnabled();
-		}
-		return this.actor.stateManager.persistRaw.state;
+	async getTraceQueryResponse(
+		rid: bigint,
+	): Promise<schema.TraceQueryResponse> {
+		return {
+			rid,
+			payload: new ArrayBuffer(0),
+		};
 	}
 
-	async setStateJson(state: unknown): Promise<void> {
-		if (!this.actor.stateEnabled) {
-			throw new actorErrors.StateNotEnabled();
-		}
-		this.actor.stateManager.state = state;
-		await this.actor.stateManager.saveState({ immediate: true });
+	async getQueueResponse(
+		rid: bigint,
+		limit: number,
+	): Promise<schema.QueueResponse> {
+		return {
+			rid,
+			status: await this.getQueueStatus(limit),
+		};
 	}
 
-	async getDatabaseSchemaJson(): Promise<unknown> {
-		return toHttpJsonCompatible(
-			cbor.decode(Buffer.from(await this.getDatabaseSchema())),
-		);
+	getWorkflowHistoryResponse(rid: bigint): schema.WorkflowHistoryResponse {
+		return {
+			rid,
+			history: this.getWorkflowHistory(),
+			isWorkflowEnabled: this.isWorkflowEnabled(),
+		};
 	}
 
-	async getDatabaseTableRowsJson(
+	async getWorkflowReplayResponse(
+		rid: bigint,
+		entryId?: string,
+	): Promise<schema.WorkflowReplayResponse> {
+		return {
+			rid,
+			history: await this.replayWorkflowFromStep(entryId),
+			isWorkflowEnabled: this.isWorkflowEnabled(),
+		};
+	}
+
+	async getDatabaseSchemaResponse(
+		rid: bigint,
+	): Promise<schema.DatabaseSchemaResponse> {
+		return {
+			rid,
+			schema: await this.getDatabaseSchema(),
+		};
+	}
+
+	async getDatabaseTableRowsResponse(
+		rid: bigint,
 		table: string,
 		limit: number,
 		offset: number,
-	): Promise<unknown[]> {
-		return toHttpJsonCompatible(
-			cbor.decode(
-				Buffer.from(
-					await this.getDatabaseTableRows(table, limit, offset),
-				),
-			),
-		) as unknown[];
-	}
-
-	getConnectionsJson(): { id: string; details: unknown }[] {
-		return Array.from(
-			this.actor.connectionManager.connections.entries(),
-		).map(([id, conn]) => {
-			const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
-			return {
-				type: conn[CONN_DRIVER_SYMBOL]?.type,
-				id,
-				details: {
-					type: conn[CONN_DRIVER_SYMBOL]?.type,
-					params: conn.params as any,
-					stateEnabled: connStateManager.stateEnabled,
-					state: connStateManager.stateEnabled
-						? connStateManager.state
-						: undefined,
-					subscriptions: conn.subscriptions.size,
-					isHibernatable: conn.isHibernatable,
-				},
-			};
-		});
-	}
-
-	async executeActionJson(name: string, args: unknown[]): Promise<unknown> {
-		const conn = await this.actor.connectionManager.prepareAndConnectConn(
-			createHttpDriver(),
-			undefined,
-			undefined,
-			undefined,
-			undefined,
-		);
-
-		try {
-			return await this.actor.executeAction(
-				new ActionContext(this.actor, conn),
-				name,
-				args,
-			);
-		} finally {
-			conn.disconnect();
-		}
-	}
-
-	async getTracesJson(options: {
-		startMs: number;
-		endMs: number;
-		limit: number;
-	}): Promise<{ otlp: unknown; clamped: boolean }> {
-		const result = await this.actor.traces.readRange(options);
-		return result;
-	}
-
-	getWorkflowHistoryJson(): {
-		history: ReturnType<typeof serializeWorkflowHistoryForJson>;
-		isWorkflowEnabled: boolean;
-	} {
+	): Promise<schema.DatabaseTableRowsResponse> {
 		return {
-			history: serializeWorkflowHistoryForJson(this.getWorkflowHistory()),
-			isWorkflowEnabled: this.isWorkflowEnabled(),
+			rid,
+			result: await this.getDatabaseTableRows(table, limit, offset),
 		};
 	}
 
-	async replayWorkflowFromStepJson(entryId?: string): Promise<{
-		history: ReturnType<typeof serializeWorkflowHistoryForJson>;
-		isWorkflowEnabled: boolean;
-	}> {
-		const history = await this.replayWorkflowFromStep(entryId);
-		return {
-			history: serializeWorkflowHistoryForJson(history),
-			isWorkflowEnabled: this.isWorkflowEnabled(),
-		};
-	}
-
-	async executeDatabaseSqlJson(
-		sql: string,
-		args: unknown[],
-		properties?: Record<string, unknown>,
-	): Promise<{ rows: unknown[] }> {
-		const rows = await this.#withDatabase(async (db) => {
-			if (properties && Object.keys(properties).length > 0) {
-				return (await db.execute(
-					sql,
-					normalizeSqlitePropertyBindings(properties),
-				)) as Record<string, unknown>[];
-			}
-			return (await db.execute(sql, ...args)) as Record<
-				string,
-				unknown
-			>[];
-		});
-		return {
-			rows: jsonSafe(rows),
-		};
-	}
-
-	getQueueStatusJson(limit: number): Promise<{
-		size: number;
-		maxSize: number;
-		truncated: boolean;
-		messages: { id: number; name: string; createdAtMs: number }[];
-	}> {
-		return this.getQueueStatus(limit).then((status) => ({
-			size: Number(status.size),
-			maxSize: Number(status.maxSize),
-			truncated: status.truncated,
-			messages: status.messages.map((m) => ({
-				id: Number(m.id),
-				name: m.name,
-				createdAtMs: Number(m.createdAtMs),
-			})),
-		}));
-	}
-
-	async #withDatabase<T>(
-		fn: (db: NonNullable<AnyStaticActorInstance["db"]>) => Promise<T>,
-	): Promise<T> {
-		if (!this.isDatabaseEnabled()) {
-			throw new actorErrors.DatabaseNotEnabled();
+	async #withDatabase<T>(fn: (db: InspectorDb) => Promise<T>): Promise<T> {
+		if (!this.actor.db) {
+			throw databaseNotEnabledError();
 		}
 
-		const db = this.actor.db;
 		let result: T | undefined;
 		await this.#databaseLock.lock(async () => {
-			result = await fn(db);
+			result = await fn(this.actor.db as InspectorDb);
 		});
 		return result as T;
 	}
-}
-
-function escapeDoubleQuotes(value: string): string {
-	return value.replace(/"/g, '""');
-}
-
-function toHttpJsonCompatible<T>(value: T): T {
-	return JSON.parse(
-		JSON.stringify(value, (_key, nestedValue) =>
-			typeof nestedValue === "bigint"
-				? Number(nestedValue)
-				: nestedValue instanceof Uint8Array
-					? Array.from(nestedValue)
-					: nestedValue,
-		),
-	) as T;
-}
-
-function jsonSafe<T>(value: T): T {
-	return toHttpJsonCompatible(value);
-}
-
-function normalizeSqlitePropertyBindings(
-	properties: Record<string, unknown>,
-): Record<string, unknown> {
-	const normalized: Record<string, unknown> = {};
-	for (const [key, value] of Object.entries(properties)) {
-		if (/^[:@$]/.test(key)) {
-			normalized[key] = value;
-			continue;
-		}
-
-		normalized[`:${key}`] = value;
-		normalized[`@${key}`] = value;
-		normalized[`$${key}`] = value;
-	}
-	return normalized;
 }

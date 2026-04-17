@@ -3,7 +3,7 @@ import type {
 	JsonRpcNotification,
 	PermissionRequest,
 } from "@rivet-dev/agent-os-core";
-import type { ActorContext, BeforeConnectContext } from "@/actor/contexts";
+import type { ActorContext, BeforeConnectContext } from "@/actor/config";
 import { z } from "zod/v4";
 import type { AgentOsActorState, AgentOsActorVars } from "./types";
 
