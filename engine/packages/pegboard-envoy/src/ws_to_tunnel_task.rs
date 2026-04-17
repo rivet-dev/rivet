@@ -848,10 +848,7 @@ async fn handle_sqlite_commit_stage(
 	{
 		Ok(result) => Ok(protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
 			protocol::SqliteCommitStageOk {
-				chunk_idx_committed: result
-					.chunk_idx_committed
-					.try_into()
-					.context("sqlite stage chunk index exceeded u16")?,
+				chunk_idx_committed: result.chunk_idx_committed,
 			},
 		)),
 		Err(err) => match sqlite_storage_error(&err) {

@@ -154,6 +154,12 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
+	pub static ref SQLITE_ORPHAN_CHUNK_BYTES_RECLAIMED: IntCounter = register_int_counter_with_registry!(
+		"sqlite_orphan_chunk_bytes_reclaimed_total",
+		"Total bytes of orphan DELTA and PIDX entries reclaimed by takeover recovery.",
+		*REGISTRY
+	).unwrap();
+
 	pub static ref SQLITE_FENCE_MISMATCH_TOTAL: IntCounter = register_int_counter_with_registry!(
 		"sqlite_v2_fence_mismatch_total",
 		"Total fence mismatch errors returned.",
@@ -274,6 +280,12 @@ impl SqliteStorageMetrics {
 	pub fn add_recovery_orphans_cleaned(&self, count: usize) {
 		if count > 0 {
 			SQLITE_RECOVERY_ORPHANS_CLEANED.inc_by(count as u64);
+		}
+	}
+
+	pub fn add_orphan_chunk_bytes_reclaimed(&self, bytes: u64) {
+		if bytes > 0 {
+			SQLITE_ORPHAN_CHUNK_BYTES_RECLAIMED.inc_by(bytes);
 		}
 	}
 

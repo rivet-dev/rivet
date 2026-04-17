@@ -60,7 +60,7 @@ mod tests {
 	use anyhow::Result;
 
 	use super::{encode_db_head_with_usage, tracked_storage_entry_size};
-	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, shard_key, stage_key};
+	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, shard_key};
 	use crate::types::{
 		DBHead, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE,
 	};
@@ -80,7 +80,6 @@ mod tests {
 			tracked_storage_entry_size(&pidx_delta_key(TEST_ACTOR, 11), &7_u64.to_be_bytes())
 				.is_some()
 		);
-		assert!(tracked_storage_entry_size(&stage_key(TEST_ACTOR, 9, 1), b"stage").is_none());
 		assert!(tracked_storage_entry_size(b"/other", b"value").is_none());
 	}
 

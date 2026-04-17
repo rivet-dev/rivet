@@ -10,8 +10,8 @@ use tracing::Instrument;
 
 use crate::engine::{PendingStage, SqliteEngine};
 use crate::error::SqliteStorageError;
-use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key};
-use crate::ltx::{LtxHeader, encode_ltx_v3};
+use crate::keys::{delta_chunk_key, delta_chunk_prefix, meta_key, pidx_delta_key};
+use crate::ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3};
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 use crate::types::{DBHead, DirtyPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta};
 use crate::udb;
@@ -603,80 +603,175 @@ impl SqliteEngine {
 		let actor_id_for_tx = actor_id.clone();
 		let subspace = self.subspace.clone();
 		let request_for_tx = request.clone();
-		let (head, meta_read_duration, meta_write_duration) =
-			udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
-				let actor_id = actor_id_for_tx.clone();
-				let subspace = subspace.clone();
-				let request = request_for_tx.clone();
-				async move {
-					let meta_storage_key = meta_key(&actor_id);
-					let meta_read_start = Instant::now();
-					let meta_bytes =
-						udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key)
+		let (
+			head,
+			staged_pgnos,
+			meta_read_duration,
+			stage_load_duration,
+			pidx_read_duration,
+			pidx_write_duration,
+			meta_write_duration,
+		) = udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+			let actor_id = actor_id_for_tx.clone();
+			let subspace = subspace.clone();
+			let request = request_for_tx.clone();
+			async move {
+				let meta_storage_key = meta_key(&actor_id);
+				let meta_read_start = Instant::now();
+				let meta_bytes = udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key)
+					.await?
+					.ok_or(SqliteStorageError::MetaMissing {
+						operation: "commit_finalize",
+					})?;
+				let mut head = decode_db_head(&meta_bytes)?;
+				let meta_read_duration = meta_read_start.elapsed();
+				if head.generation != request.generation {
+					return Err(SqliteStorageError::FenceMismatch {
+						reason: format!(
+							"commit_finalize generation {} did not match current generation {}",
+							request.generation, head.generation
+						),
+					}
+					.into());
+				}
+				if head.head_txid != request.expected_head_txid {
+					return Err(SqliteStorageError::FenceMismatch {
+						reason: format!(
+							"commit_finalize head_txid {} did not match current head_txid {}",
+							request.expected_head_txid, head.head_txid
+						),
+					}
+					.into());
+				}
+				if request.txid != head.next_txid.saturating_sub(1) {
+					return Err(SqliteStorageError::StageNotFound {
+						stage_id: request.txid,
+					}
+					.into());
+				}
+
+				// Read staged DELTA chunks and decode LTX to recover the page list for
+				// this txid. Without writing PIDX entries here, reads after finalize
+				// fall through `recover_page_from_delta_history` (full delta scan)
+				// until compaction folds the delta.
+				let stage_load_start = Instant::now();
+				let delta_chunks = udb::tx_scan_prefix_values(
+					&tx,
+					&subspace,
+					&delta_chunk_prefix(&actor_id, request.txid),
+				)
+				.await?;
+				ensure!(
+					!delta_chunks.is_empty(),
+					"commit_finalize found no staged DELTA chunks for txid {}",
+					request.txid,
+				);
+				let mut delta_blob = Vec::new();
+				for (_, chunk) in &delta_chunks {
+					delta_blob.extend_from_slice(chunk);
+				}
+				let decoded = decode_ltx_v3(&delta_blob)
+					.context("decode staged delta for commit_finalize")?;
+				let staged_pgnos: Vec<u32> =
+					decoded.page_index.iter().map(|entry| entry.pgno).collect();
+				let stage_load_duration = stage_load_start.elapsed();
+
+				// Check which PIDX entries already exist so we only add quota for new ones.
+				let pidx_read_start = Instant::now();
+				let mut existing_pidx = BTreeMap::<u32, bool>::new();
+				for pgno in &staged_pgnos {
+					existing_pidx.insert(
+						*pgno,
+						udb::tx_get_value(&tx, &subspace, &pidx_delta_key(&actor_id, *pgno))
 							.await?
-							.ok_or(SqliteStorageError::MetaMissing {
-								operation: "commit_finalize",
-							})?;
-					let mut head = decode_db_head(&meta_bytes)?;
-					let meta_read_duration = meta_read_start.elapsed();
-					if head.generation != request.generation {
-						return Err(SqliteStorageError::FenceMismatch {
-							reason: format!(
-								"commit_finalize generation {} did not match current generation {}",
-								request.generation, head.generation
-							),
-						}
-						.into());
-					}
-					if head.head_txid != request.expected_head_txid {
-						return Err(SqliteStorageError::FenceMismatch {
-							reason: format!(
-								"commit_finalize head_txid {} did not match current head_txid {}",
-								request.expected_head_txid, head.head_txid
-							),
-						}
-						.into());
-					}
-					if request.txid != head.next_txid.saturating_sub(1) {
-						return Err(SqliteStorageError::StageNotFound {
-							stage_id: request.txid,
-						}
-						.into());
-					}
-
-					head.head_txid = request.txid;
-					head.db_size_pages = request.new_db_size_pages;
-					let usage_without_meta = head.sqlite_storage_used.saturating_sub(
-						tracked_storage_entry_size(&meta_storage_key, &meta_bytes)
-							.expect("meta key should count toward sqlite quota"),
+							.is_some(),
 					);
-					let (updated_head, encoded_head) =
-						encode_db_head_with_usage(&actor_id, &head, usage_without_meta)?;
-					let meta_write_start = Instant::now();
-					udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
-					let meta_write_duration = meta_write_start.elapsed();
+				}
+				let pidx_read_duration = pidx_read_start.elapsed();
 
-					Ok((updated_head, meta_read_duration, meta_write_duration))
+				head.head_txid = request.txid;
+				head.db_size_pages = request.new_db_size_pages;
+
+				let txid_bytes = request.txid.to_be_bytes();
+				let mut usage_without_meta = head.sqlite_storage_used.saturating_sub(
+					tracked_storage_entry_size(&meta_storage_key, &meta_bytes)
+						.expect("meta key should count toward sqlite quota"),
+				);
+				for pgno in &staged_pgnos {
+					if !existing_pidx.get(pgno).copied().unwrap_or(false) {
+						usage_without_meta += tracked_storage_entry_size(
+							&pidx_delta_key(&actor_id, *pgno),
+							&txid_bytes,
+						)
+						.expect("pidx key should count toward sqlite quota");
+					}
 				}
-			})
-			.await
-			.map_err(|err| {
-				if matches!(
-					err.downcast_ref::<SqliteStorageError>(),
-					Some(SqliteStorageError::FenceMismatch { .. })
-				) {
-					self.metrics.inc_fence_mismatch_total();
+
+				let pidx_write_start = Instant::now();
+				for pgno in &staged_pgnos {
+					udb::tx_write_value(
+						&tx,
+						&subspace,
+						&pidx_delta_key(&actor_id, *pgno),
+						&txid_bytes,
+					)?;
 				}
-				err
-			})?;
+				let pidx_write_duration = pidx_write_start.elapsed();
+
+				let (updated_head, encoded_head) =
+					encode_db_head_with_usage(&actor_id, &head, usage_without_meta)?;
+				if updated_head.sqlite_storage_used > updated_head.sqlite_max_storage {
+					bail!(
+						"SqliteStorageQuotaExceeded: sqlite storage used {} would exceed max {}",
+						updated_head.sqlite_storage_used,
+						updated_head.sqlite_max_storage
+					);
+				}
+				let meta_write_start = Instant::now();
+				udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
+				let meta_write_duration = meta_write_start.elapsed();
+
+				Ok((
+					updated_head,
+					staged_pgnos,
+					meta_read_duration,
+					stage_load_duration,
+					pidx_read_duration,
+					pidx_write_duration,
+					meta_write_duration,
+				))
+			}
+		})
+		.await
+		.map_err(|err| {
+			if matches!(
+				err.downcast_ref::<SqliteStorageError>(),
+				Some(SqliteStorageError::FenceMismatch { .. })
+			) {
+				self.metrics.inc_fence_mismatch_total();
+			}
+			err
+		})?;
+
+		// Update the in-memory PIDX cache so subsequent reads skip the store scan.
+		match self.page_indices.entry_async(actor_id.to_string()).await {
+			Entry::Occupied(entry) => {
+				for pgno in &staged_pgnos {
+					entry.get().insert(*pgno, request.txid);
+				}
+			}
+			Entry::Vacant(entry) => {
+				drop(entry);
+			}
+		}
 
 		let _ = self.pending_stages.remove_async(&stage_key).await;
 		let _ = self.compaction_tx.send(actor_id.clone());
 		self.metrics.set_delta_count_from_head(&head);
 		self.metrics
-			.observe_commit_finalize_phase("stage_promote", Default::default());
+			.observe_commit_finalize_phase("stage_promote", stage_load_duration);
 		self.metrics
-			.observe_commit_finalize_phase("pidx_write", Default::default());
+			.observe_commit_finalize_phase("pidx_write", pidx_write_duration);
 		self.metrics
 			.observe_commit_finalize_phase("meta_write", meta_write_duration);
 		self.metrics
@@ -684,11 +779,16 @@ impl SqliteEngine {
 		self.metrics
 			.observe_commit_phase("slow", "ltx_encode", Default::default());
 		self.metrics
-			.observe_commit_phase("slow", "pidx_read", Default::default());
+			.observe_commit_phase("slow", "pidx_read", pidx_read_duration);
+		self.metrics.observe_commit_phase(
+			"slow",
+			"udb_write",
+			pidx_write_duration.saturating_add(meta_write_duration),
+		);
 		self.metrics
-			.observe_commit_phase("slow", "udb_write", meta_write_duration);
-		self.metrics.observe_commit_payload("slow", 0, 0, 1);
-		self.metrics.observe_commit("slow", 0, start.elapsed());
+			.observe_commit_payload("slow", staged_pgnos.len(), 0, 1);
+		self.metrics
+			.observe_commit("slow", staged_pgnos.len(), start.elapsed());
 		self.metrics.inc_commit_total();
 
 		Ok(CommitFinalizeResult {
@@ -725,7 +825,9 @@ mod tests {
 	};
 	use crate::engine::SqliteEngine;
 	use crate::error::SqliteStorageError;
-	use crate::keys::{delta_chunk_key, delta_chunk_prefix, meta_key};
+	use crate::keys::{
+		delta_chunk_key, delta_chunk_prefix, meta_key, pidx_delta_key, pidx_delta_prefix,
+	};
 	use crate::ltx::{LtxHeader, encode_ltx_v3};
 	use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 	use crate::test_utils::{
@@ -1422,6 +1524,135 @@ mod tests {
 		assert_op_count(&engine, 0);
 		assert!(read_delta_blob(&engine, TEST_ACTOR, 1).await?.is_none());
 		assert!(matches!(compaction_rx.try_recv(), Err(TryRecvError::Empty)));
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn commit_finalize_writes_pidx_entries_for_staged_pages() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		write_seeded_meta(&engine, TEST_ACTOR, seeded_head()).await?;
+		clear_op_count(&engine);
+
+		let staged_pgnos = vec![1u32, 17, 4096];
+		let pages = staged_pgnos
+			.iter()
+			.enumerate()
+			.map(|(i, pgno)| DirtyPage {
+				pgno: *pgno,
+				bytes: page(0x30 + i as u8),
+			})
+			.collect::<Vec<_>>();
+		let txid = stage_encoded_delta(&engine, TEST_ACTOR, 4, 0, 4096, 9_000, pages, 128).await?;
+		assert_eq!(txid, 1);
+
+		// After finalize, every staged pgno must have a PIDX entry pointing at txid.
+		let pidx_rows = scan_prefix_values(&engine, pidx_delta_prefix(TEST_ACTOR)).await?;
+		assert_eq!(pidx_rows.len(), staged_pgnos.len());
+		let expected_txid_bytes = txid.to_be_bytes();
+		for pgno in &staged_pgnos {
+			let value = read_value(&engine, pidx_delta_key(TEST_ACTOR, *pgno))
+				.await?
+				.expect("pidx entry should exist after finalize");
+			assert_eq!(
+				value.as_slice(),
+				&expected_txid_bytes,
+				"pidx entry for pgno {} should point at finalize txid",
+				pgno
+			);
+		}
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn commit_finalize_only_mutates_meta_and_pidx() -> Result<()> {
+		// Finalize should not delete or rewrite staged DELTA chunks. The DELTA blob
+		// stays in place after finalize and is consumed later by compaction. This
+		// keeps finalize mutations proportional to the page count, not the blob size.
+		let (db, subspace) = test_db().await?;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		write_seeded_meta(&engine, TEST_ACTOR, seeded_head()).await?;
+
+		let pages = vec![
+			DirtyPage {
+				pgno: 1,
+				bytes: page(0xAA),
+			},
+			DirtyPage {
+				pgno: 7,
+				bytes: page(0xBB),
+			},
+			DirtyPage {
+				pgno: 42,
+				bytes: page(0xCC),
+			},
+		];
+		let txid =
+			stage_encoded_delta(&engine, TEST_ACTOR, 4, 0, 42, 8_000, pages.clone(), 64).await?;
+
+		// Staged DELTA chunks must survive finalize so compaction can fold them later.
+		let delta_chunks =
+			scan_prefix_values(&engine, delta_chunk_prefix(TEST_ACTOR, txid)).await?;
+		assert!(
+			!delta_chunks.is_empty(),
+			"finalize must not delete staged DELTA chunks"
+		);
+
+		// PIDX rows must exactly cover the staged pgnos.
+		let mut pidx_rows = scan_prefix_values(&engine, pidx_delta_prefix(TEST_ACTOR)).await?;
+		pidx_rows.sort_by(|a, b| a.0.cmp(&b.0));
+		assert_eq!(pidx_rows.len(), pages.len());
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn commit_finalize_keeps_pidx_entries_that_already_existed() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		write_seeded_meta(&engine, TEST_ACTOR, seeded_head()).await?;
+
+		// Fast-path commit to seed PIDX entries for pgno 1 at txid 1.
+		engine.commit(TEST_ACTOR, request(4, 0)).await?;
+
+		// Slow-path commit updates pgno 1 and adds pgno 2 at txid 2.
+		clear_op_count(&engine);
+		let txid = stage_encoded_delta(
+			&engine,
+			TEST_ACTOR,
+			4,
+			1,
+			2,
+			5_000,
+			vec![
+				DirtyPage {
+					pgno: 1,
+					bytes: page(0xAA),
+				},
+				DirtyPage {
+					pgno: 2,
+					bytes: page(0xBB),
+				},
+			],
+			64,
+		)
+		.await?;
+		assert_eq!(txid, 2);
+
+		let txid_bytes = txid.to_be_bytes();
+		for pgno in [1u32, 2u32] {
+			let value = read_value(&engine, pidx_delta_key(TEST_ACTOR, pgno))
+				.await?
+				.expect("pidx entry should exist after finalize");
+			assert_eq!(
+				value.as_slice(),
+				&txid_bytes,
+				"pidx entry for pgno {} should point at latest txid",
+				pgno
+			);
+		}
 
 		Ok(())
 	}

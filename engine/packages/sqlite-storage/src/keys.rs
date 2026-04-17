@@ -8,7 +8,6 @@ const META_PATH: &[u8] = b"/META";
 const SHARD_PATH: &[u8] = b"/SHARD/";
 const DELTA_PATH: &[u8] = b"/DELTA/";
 const PIDX_DELTA_PATH: &[u8] = b"/PIDX/delta/";
-const STAGE_PATH: &[u8] = b"/STAGE/";
 
 /// Build the common actor-scoped prefix: `[0x02, actor_id_bytes]`.
 pub(crate) fn actor_prefix(actor_id: &str) -> Vec<u8> {
@@ -89,33 +88,6 @@ pub fn pidx_delta_prefix(actor_id: &str) -> Vec<u8> {
 	key
 }
 
-pub fn stage_key(actor_id: &str, stage_id: u64, chunk_idx: u16) -> Vec<u8> {
-	let chunk_prefix = stage_chunk_prefix(actor_id, stage_id);
-	let mut key = Vec::with_capacity(chunk_prefix.len() + std::mem::size_of::<u16>());
-	key.extend_from_slice(&chunk_prefix);
-	key.extend_from_slice(&chunk_idx.to_be_bytes());
-	key
-}
-
-pub fn stage_prefix(actor_id: &str) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
-	let mut key = Vec::with_capacity(prefix.len() + STAGE_PATH.len());
-	key.extend_from_slice(&prefix);
-	key.extend_from_slice(STAGE_PATH);
-	key
-}
-
-pub fn stage_chunk_prefix(actor_id: &str, stage_id: u64) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
-	let mut key =
-		Vec::with_capacity(prefix.len() + STAGE_PATH.len() + std::mem::size_of::<u64>() + 1);
-	key.extend_from_slice(&prefix);
-	key.extend_from_slice(STAGE_PATH);
-	key.extend_from_slice(&stage_id.to_be_bytes());
-	key.push(b'/');
-	key
-}
-
 pub fn decode_delta_chunk_txid(actor_id: &str, key: &[u8]) -> Result<u64> {
 	let prefix = delta_prefix(actor_id);
 	ensure!(
@@ -165,10 +137,9 @@ pub fn decode_delta_chunk_idx(actor_id: &str, txid: u64, key: &[u8]) -> Result<u
 #[cfg(test)]
 mod tests {
 	use super::{
-		DELTA_PATH, META_PATH, SHARD_PATH, SQLITE_SUBSPACE_PREFIX, STAGE_PATH, actor_prefix,
+		DELTA_PATH, META_PATH, SHARD_PATH, SQLITE_SUBSPACE_PREFIX, actor_prefix,
 		decode_delta_chunk_idx, decode_delta_chunk_txid, delta_chunk_key, delta_chunk_prefix,
 		delta_prefix, meta_key, pidx_delta_key, pidx_delta_prefix, shard_key, shard_prefix,
-		stage_chunk_prefix, stage_key, stage_prefix,
 	};
 
 	const TEST_ACTOR: &str = "test-actor";
@@ -213,10 +184,9 @@ mod tests {
 	}
 
 	#[test]
-	fn delta_and_stage_prefixes_match_full_keys() {
+	fn delta_prefixes_match_full_keys() {
 		assert!(delta_chunk_key(TEST_ACTOR, 7, 1).starts_with(&delta_prefix(TEST_ACTOR)));
 		assert!(shard_key(TEST_ACTOR, 3).starts_with(&shard_prefix(TEST_ACTOR)));
-		assert!(stage_key(TEST_ACTOR, 9, 1).starts_with(&stage_prefix(TEST_ACTOR)));
 	}
 
 	#[test]
@@ -229,15 +199,6 @@ mod tests {
 	}
 
 	#[test]
-	fn stage_chunk_prefix_matches_full_stage_key() {
-		let prefix = stage_chunk_prefix(TEST_ACTOR, 0x0102_0304_0506_0708);
-		let key = stage_key(TEST_ACTOR, 0x0102_0304_0506_0708, 0x090a);
-
-		assert!(key.starts_with(&prefix));
-		assert_eq!(key.len() - prefix.len(), std::mem::size_of::<u16>());
-	}
-
-	#[test]
 	fn pidx_prefix_matches_key_prefix() {
 		let prefix = pidx_delta_prefix(TEST_ACTOR);
 		let key = pidx_delta_key(TEST_ACTOR, 12);
@@ -245,20 +206,6 @@ mod tests {
 		assert_eq!(prefix[0], SQLITE_SUBSPACE_PREFIX);
 		assert!(key.starts_with(&prefix));
 		assert_eq!(key.len() - prefix.len(), std::mem::size_of::<u32>());
-	}
-
-	#[test]
-	fn stage_keys_include_actor_stage_and_chunk_components() {
-		let key = stage_key(TEST_ACTOR, 0x0102_0304_0506_0708, 0x090a);
-		let ap = actor_prefix(TEST_ACTOR);
-
-		assert!(key.starts_with(&ap));
-		let after_actor = &key[ap.len()..];
-		assert!(after_actor.starts_with(STAGE_PATH));
-		let after_stage_path = &after_actor[STAGE_PATH.len()..];
-		assert_eq!(&after_stage_path[..8], &[1, 2, 3, 4, 5, 6, 7, 8]);
-		assert_eq!(after_stage_path[8], b'/');
-		assert_eq!(&after_stage_path[9..], &[9, 10]);
 	}
 
 	#[test]

@@ -8,6 +8,18 @@ pub const SQLITE_SHARD_SIZE: u32 = 64;
 pub const SQLITE_MAX_DELTA_BYTES: u64 = 8 * 1024 * 1024;
 pub const SQLITE_DEFAULT_MAX_STORAGE_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 
+/// Persistent head-of-log record for a SQLite v2 actor.
+///
+/// Invariants:
+/// - `head_txid < next_txid` always. `next_txid` reserves the txid of the *next* commit, so
+///   `next_txid - head_txid` is the number of txids that have been allocated but not yet
+///   promoted to head. In practice this gap is at most 1 on the fast path (commit both
+///   allocates and promotes) and exactly 1 in the middle of a slow-path staged commit
+///   (`commit_stage_begin` bumps `next_txid`; `commit_finalize` advances `head_txid` to match).
+/// - `materialized_txid <= head_txid`. Compaction folds DELTA records into SHARD blobs and
+///   advances `materialized_txid` to the highest txid whose pages have all been merged.
+/// - `generation` is bumped by takeover. Every commit and compaction writes a fence check on
+///   `generation` so a takeover cleanly invalidates an in-flight commit from the previous owner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DBHead {
 	pub schema_version: u32,

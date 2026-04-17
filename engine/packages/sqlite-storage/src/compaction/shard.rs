@@ -20,18 +20,24 @@ const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
 const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct PidxRow {
-	key: Vec<u8>,
-	pgno: u32,
-	txid: u64,
+pub(super) struct PidxRow {
+	pub key: Vec<u8>,
+	pub pgno: u32,
+	pub txid: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct DeltaEntry {
-	key_prefix: Vec<u8>,
-	chunk_keys: Vec<Vec<u8>>,
-	blob: Vec<u8>,
-	tracked_size: u64,
+pub(super) struct DeltaEntry {
+	pub key_prefix: Vec<u8>,
+	pub chunk_keys: Vec<Vec<u8>>,
+	pub blob: Vec<u8>,
+	pub tracked_size: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(super) struct ShardCompactionOutcome {
+	pub consumed_pidx_pgnos: BTreeSet<u32>,
+	pub deleted_delta_txids: BTreeSet<u64>,
 }
 
 #[cfg(test)]
@@ -95,61 +101,37 @@ impl SqliteEngine {
 		.await?
 		.context("sqlite meta missing for shard compaction")?;
 		let head = decode_db_head(&meta_bytes)?;
+		let all_pidx_rows = load_pidx_rows(self, actor_id).await?;
+		let delta_entries = load_delta_entries(self, actor_id).await?;
+
+		Ok(self
+			.compact_shard_preloaded(actor_id, shard_id, &head, &all_pidx_rows, &delta_entries)
+			.await?
+			.is_some())
+	}
+
+	pub(super) async fn compact_shard_preloaded(
+		&self,
+		actor_id: &str,
+		shard_id: u32,
+		head: &DBHead,
+		all_pidx_rows: &[PidxRow],
+		delta_entries: &BTreeMap<u64, DeltaEntry>,
+	) -> Result<Option<ShardCompactionOutcome>> {
 		let initial_generation = head.generation;
 		let initial_head_txid = head.head_txid;
 
 		let shard_start_pgno = shard_id * head.shard_size;
 		let shard_end_pgno = shard_start_pgno + head.shard_size.saturating_sub(1);
 
-		let all_pidx_rows = udb::scan_prefix_values(
-			self.db.as_ref(),
-			&self.subspace,
-			self.op_counter.as_ref(),
-			pidx_delta_prefix(actor_id),
-		)
-		.await?
-		.into_iter()
-		.map(|(key, value)| {
-			let pgno = decode_pidx_pgno(actor_id, &key)?;
-			let txid = decode_pidx_txid(&value)?;
-			Ok(PidxRow { key, pgno, txid })
-		})
-		.collect::<Result<Vec<_>>>()?;
 		let shard_rows = all_pidx_rows
 			.iter()
 			.filter(|row| row.pgno >= shard_start_pgno && row.pgno <= shard_end_pgno)
 			.cloned()
 			.collect::<Vec<_>>();
 		if shard_rows.is_empty() {
-			return Ok(false);
+			return Ok(None);
 		}
-
-		let delta_entries = udb::scan_prefix_values(
-			self.db.as_ref(),
-			&self.subspace,
-			self.op_counter.as_ref(),
-			delta_prefix(actor_id),
-		)
-		.await?
-		.into_iter()
-		.try_fold(
-			BTreeMap::<u64, DeltaEntry>::new(),
-			|mut entries, (key, value)| {
-				let txid = decode_delta_chunk_txid(actor_id, &key)?;
-				let entry = entries.entry(txid).or_insert_with(|| DeltaEntry {
-					key_prefix: delta_chunk_prefix(actor_id, txid),
-					chunk_keys: Vec::new(),
-					blob: Vec::new(),
-					tracked_size: 0,
-				});
-				entry.tracked_size += tracked_storage_entry_size(&key, &value)
-					.expect("delta chunk key should count toward sqlite quota");
-				entry.chunk_keys.push(key);
-				entry.blob.extend_from_slice(&value);
-
-				Ok::<BTreeMap<u64, DeltaEntry>, anyhow::Error>(entries)
-			},
-		)?;
 
 		let _shard_txids = shard_rows
 			.iter()
@@ -173,7 +155,7 @@ impl SqliteEngine {
 			.map(|(txid, entry)| (*txid, entry.key_prefix.clone()))
 			.collect::<BTreeMap<_, _>>();
 		let merged_pages = merge_shard_pages(
-			&head,
+			head,
 			shard_start_pgno,
 			shard_end_pgno,
 			&shard_blob_key,
@@ -188,7 +170,7 @@ impl SqliteEngine {
 		);
 
 		let mut total_refs_by_txid = BTreeMap::<u64, usize>::new();
-		for row in &all_pidx_rows {
+		for row in all_pidx_rows {
 			*total_refs_by_txid.entry(row.txid).or_default() += 1;
 		}
 		let mut consumed_refs_by_txid = BTreeMap::<u64, usize>::new();
@@ -334,22 +316,23 @@ impl SqliteEngine {
 			}
 		})
 		.await?;
-		let Some(head) = updated_head else {
-			return Ok(false);
+		let Some(updated_head) = updated_head else {
+			return Ok(None);
 		};
 
 		self.metrics.add_compaction_pages_folded(shard_rows.len());
 		self.metrics
 			.add_compaction_deltas_deleted(deleted_delta_txids.len());
-		self.metrics.set_delta_count_from_head(&head);
+		self.metrics.set_delta_count_from_head(&updated_head);
 		for lag_seconds in compaction_lags {
 			self.metrics.observe_compaction_lag_seconds(lag_seconds);
 		}
 
+		let consumed_pidx_pgnos: BTreeSet<u32> = shard_rows.iter().map(|row| row.pgno).collect();
 		match self.page_indices.entry_async(actor_id.to_string()).await {
 			Entry::Occupied(entry) => {
-				for row in shard_rows {
-					entry.get().remove(row.pgno);
+				for pgno in &consumed_pidx_pgnos {
+					entry.get().remove(*pgno);
 				}
 			}
 			Entry::Vacant(entry) => {
@@ -357,8 +340,60 @@ impl SqliteEngine {
 			}
 		}
 
-		Ok(true)
+		Ok(Some(ShardCompactionOutcome {
+			consumed_pidx_pgnos,
+			deleted_delta_txids,
+		}))
 	}
+}
+
+pub(super) async fn load_pidx_rows(engine: &SqliteEngine, actor_id: &str) -> Result<Vec<PidxRow>> {
+	udb::scan_prefix_values(
+		engine.db.as_ref(),
+		&engine.subspace,
+		engine.op_counter.as_ref(),
+		pidx_delta_prefix(actor_id),
+	)
+	.await?
+	.into_iter()
+	.map(|(key, value)| {
+		let pgno = decode_pidx_pgno(actor_id, &key)?;
+		let txid = decode_pidx_txid(&value)?;
+		Ok(PidxRow { key, pgno, txid })
+	})
+	.collect()
+}
+
+pub(super) async fn load_delta_entries(
+	engine: &SqliteEngine,
+	actor_id: &str,
+) -> Result<BTreeMap<u64, DeltaEntry>> {
+	udb::scan_prefix_values(
+		engine.db.as_ref(),
+		&engine.subspace,
+		engine.op_counter.as_ref(),
+		delta_prefix(actor_id),
+	)
+	.await?
+	.into_iter()
+	.try_fold(
+		BTreeMap::<u64, DeltaEntry>::new(),
+		|mut entries, (key, value)| {
+			let txid = decode_delta_chunk_txid(actor_id, &key)?;
+			let entry = entries.entry(txid).or_insert_with(|| DeltaEntry {
+				key_prefix: delta_chunk_prefix(actor_id, txid),
+				chunk_keys: Vec::new(),
+				blob: Vec::new(),
+				tracked_size: 0,
+			});
+			entry.tracked_size += tracked_storage_entry_size(&key, &value)
+				.expect("delta chunk key should count toward sqlite quota");
+			entry.chunk_keys.push(key);
+			entry.blob.extend_from_slice(&value);
+
+			Ok::<BTreeMap<u64, DeltaEntry>, anyhow::Error>(entries)
+		},
+	)
 }
 
 fn merge_shard_pages(

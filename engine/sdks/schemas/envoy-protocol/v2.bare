@@ -208,7 +208,7 @@ type SqliteCommitStageRequest struct {
 }
 
 type SqliteCommitStageOk struct {
-	chunkIdxCommitted: u16
+	chunkIdxCommitted: u32
 }
 
 type SqliteCommitStageResponse union {

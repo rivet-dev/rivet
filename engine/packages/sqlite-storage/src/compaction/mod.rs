@@ -7,69 +7,50 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::{self, MissedTickBehavior};
-use universaldb::Subspace;
 
 use crate::engine::SqliteEngine;
 
 type WorkerFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
-type SpawnWorker = Arc<
-	dyn Fn(String, Arc<universaldb::Database>, Subspace) -> WorkerFuture + Send + Sync + 'static,
->;
+type SpawnWorker = Arc<dyn Fn(String, Arc<SqliteEngine>) -> WorkerFuture + Send + Sync + 'static>;
 
 const DEFAULT_REAP_INTERVAL: Duration = Duration::from_millis(100);
 
 pub struct CompactionCoordinator {
 	rx: mpsc::UnboundedReceiver<String>,
-	db: Arc<universaldb::Database>,
-	subspace: Subspace,
+	engine: Arc<SqliteEngine>,
 	workers: HashMap<String, JoinHandle<()>>,
 	spawn_worker: SpawnWorker,
 	reap_interval: Duration,
 }
 
 impl CompactionCoordinator {
-	pub fn new(
-		rx: mpsc::UnboundedReceiver<String>,
-		db: Arc<universaldb::Database>,
-		subspace: Subspace,
-	) -> Self {
-		Self::with_worker(
-			rx,
-			db,
-			subspace,
-			DEFAULT_REAP_INTERVAL,
-			|actor_id, db, subspace| Box::pin(default_compaction_worker(actor_id, db, subspace)),
-		)
+	pub fn new(rx: mpsc::UnboundedReceiver<String>, engine: Arc<SqliteEngine>) -> Self {
+		Self::with_worker(rx, engine, DEFAULT_REAP_INTERVAL, |actor_id, engine| {
+			Box::pin(default_compaction_worker(actor_id, engine))
+		})
 	}
 
-	pub async fn run(
-		rx: mpsc::UnboundedReceiver<String>,
-		db: Arc<universaldb::Database>,
-		subspace: Subspace,
-	) {
-		Self::new(rx, db, subspace).run_loop().await;
+	pub async fn run(rx: mpsc::UnboundedReceiver<String>, engine: Arc<SqliteEngine>) {
+		Self::new(rx, engine).run_loop().await;
 	}
 
 	fn with_worker<F>(
 		rx: mpsc::UnboundedReceiver<String>,
-		db: Arc<universaldb::Database>,
-		subspace: Subspace,
+		engine: Arc<SqliteEngine>,
 		reap_interval: Duration,
 		spawn_worker: F,
 	) -> Self
 	where
-		F: Fn(String, Arc<universaldb::Database>, Subspace) -> WorkerFuture + Send + Sync + 'static,
+		F: Fn(String, Arc<SqliteEngine>) -> WorkerFuture + Send + Sync + 'static,
 	{
 		Self {
 			rx,
-			db,
-			subspace,
+			engine,
 			workers: HashMap::new(),
 			spawn_worker: Arc::new(spawn_worker),
 			reap_interval,
@@ -108,11 +89,7 @@ impl CompactionCoordinator {
 
 		self.workers.remove(&actor_id);
 
-		let worker = (self.spawn_worker)(
-			actor_id.clone(),
-			Arc::clone(&self.db),
-			self.subspace.clone(),
-		);
+		let worker = (self.spawn_worker)(actor_id.clone(), Arc::clone(&self.engine));
 		let handle = tokio::spawn(worker);
 		self.workers.insert(actor_id, handle);
 	}
@@ -128,20 +105,7 @@ impl CompactionCoordinator {
 	}
 }
 
-async fn default_compaction_worker(
-	actor_id: String,
-	db: Arc<universaldb::Database>,
-	subspace: Subspace,
-) {
-	let engine = SqliteEngine {
-		db,
-		subspace,
-		op_counter: Arc::new(AtomicUsize::new(0)),
-		page_indices: Default::default(),
-		pending_stages: Default::default(),
-		compaction_tx: mpsc::unbounded_channel().0,
-		metrics: crate::metrics::SqliteStorageMetrics,
-	};
+async fn default_compaction_worker(actor_id: String, engine: Arc<SqliteEngine>) {
 	if let Err(err) = engine.compact_default_batch(&actor_id).await {
 		tracing::warn!(?err, %actor_id, "sqlite compaction worker failed");
 	}
@@ -156,19 +120,22 @@ mod tests {
 	use tokio::time::{Duration, timeout};
 
 	use super::CompactionCoordinator;
+	use crate::engine::SqliteEngine;
 	use crate::test_utils::test_db;
 
 	#[tokio::test]
 	async fn sending_same_actor_id_twice_only_spawns_one_worker() -> Result<()> {
 		let (db, subspace) = test_db().await?;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		let engine = std::sync::Arc::new(engine);
 		let (tx, rx) = mpsc::unbounded_channel();
 		let (spawned_tx, mut spawned_rx) = mpsc::unbounded_channel();
 		let release = std::sync::Arc::new(Notify::new());
 
 		let coordinator = tokio::spawn(
-			CompactionCoordinator::with_worker(rx, db, subspace, Duration::from_millis(10), {
+			CompactionCoordinator::with_worker(rx, engine, Duration::from_millis(10), {
 				let release = std::sync::Arc::clone(&release);
-				move |actor_id, _db, _subspace| {
+				move |actor_id, _engine| {
 					let spawned_tx = spawned_tx.clone();
 					let release = std::sync::Arc::clone(&release);
 					Box::pin(async move {
@@ -200,6 +167,8 @@ mod tests {
 	#[tokio::test]
 	async fn sending_actor_again_after_worker_completes_spawns_new_worker() -> Result<()> {
 		let (db, subspace) = test_db().await?;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		let engine = std::sync::Arc::new(engine);
 		let (tx, rx) = mpsc::unbounded_channel();
 		let (spawned_tx, mut spawned_rx) = mpsc::unbounded_channel();
 		let (completed_tx, mut completed_rx) = mpsc::unbounded_channel();
@@ -218,9 +187,9 @@ mod tests {
 		};
 
 		let coordinator = tokio::spawn(
-			CompactionCoordinator::with_worker(rx, db, subspace, Duration::from_millis(10), {
+			CompactionCoordinator::with_worker(rx, engine, Duration::from_millis(10), {
 				let releases = std::sync::Arc::clone(&releases);
-				move |actor_id, _db, _subspace| {
+				move |actor_id, _engine| {
 					let spawned_tx = spawned_tx.clone();
 					let completed_tx = completed_tx.clone();
 					let release = releases

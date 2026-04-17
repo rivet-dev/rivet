@@ -1051,17 +1051,17 @@ export function writeSqliteCommitStageRequest(bc: bare.ByteCursor, x: SqliteComm
 }
 
 export type SqliteCommitStageOk = {
-    readonly chunkIdxCommitted: u16
+    readonly chunkIdxCommitted: u32
 }
 
 export function readSqliteCommitStageOk(bc: bare.ByteCursor): SqliteCommitStageOk {
     return {
-        chunkIdxCommitted: bare.readU16(bc),
+        chunkIdxCommitted: bare.readU32(bc),
     }
 }
 
 export function writeSqliteCommitStageOk(bc: bare.ByteCursor, x: SqliteCommitStageOk): void {
-    bare.writeU16(bc, x.chunkIdxCommitted)
+    bare.writeU32(bc, x.chunkIdxCommitted)
 }
 
 export type SqliteCommitStageResponse =

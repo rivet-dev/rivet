@@ -351,9 +351,7 @@ impl SqliteTransport {
 				{
 					Ok(result) => Ok(protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
 						protocol::SqliteCommitStageOk {
-							chunk_idx_committed: result.chunk_idx_committed.try_into().map_err(
-								|_| anyhow::anyhow!("sqlite stage chunk idx exceeded u16"),
-							)?,
+							chunk_idx_committed: result.chunk_idx_committed,
 						},
 					)),
 					Err(err) => {

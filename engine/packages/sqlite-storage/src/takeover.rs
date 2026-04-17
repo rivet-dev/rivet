@@ -67,6 +67,7 @@ impl SqliteEngine {
 		let mut mutations = Vec::new();
 		let mut should_schedule_compaction = false;
 		let mut recovered_orphans = 0usize;
+		let mut recovered_orphan_bytes = 0u64;
 		let usage_without_meta = if let Some(meta_bytes) = meta_bytes.as_ref() {
 			let head = decode_db_head(meta_bytes)?;
 			head.sqlite_storage_used.saturating_sub(
@@ -85,6 +86,7 @@ impl SqliteEngine {
 			should_schedule_compaction = recovery_plan.live_delta_count >= 32;
 			let tracked_deleted_bytes = recovery_plan.tracked_deleted_bytes;
 			recovered_orphans = recovery_plan.orphan_count;
+			recovered_orphan_bytes = tracked_deleted_bytes;
 			mutations.extend(recovery_plan.mutations);
 			let mut head = DBHead {
 				generation: head.generation + 1,
@@ -137,6 +139,8 @@ impl SqliteEngine {
 			let _ = self.compaction_tx.send(actor_id.to_string());
 		}
 		self.metrics.add_recovery_orphans_cleaned(recovered_orphans);
+		self.metrics
+			.add_orphan_chunk_bytes_reclaimed(recovered_orphan_bytes);
 		self.metrics.set_delta_count_from_head(&head);
 
 		self.page_indices.remove_async(&actor_id.to_string()).await;
@@ -405,6 +409,9 @@ mod tests {
 	use anyhow::Result;
 	use tokio::sync::mpsc::error::TryRecvError;
 
+	use rivet_metrics::REGISTRY;
+	use rivet_metrics::prometheus::{Encoder, TextEncoder};
+
 	use super::{PgnoRange, TakeoverConfig};
 	use crate::commit::CommitStageRequest;
 	use crate::engine::SqliteEngine;
@@ -413,6 +420,14 @@ mod tests {
 	use crate::test_utils::{
 		checkpoint_test_db, read_value, reopen_test_db, test_db, test_db_with_path,
 	};
+
+	fn registry_text() -> String {
+		let mut buffer = Vec::new();
+		TextEncoder::new()
+			.encode(&REGISTRY.gather(), &mut buffer)
+			.expect("metrics encode");
+		String::from_utf8(buffer).expect("metrics utf8")
+	}
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_MAX_DELTA_BYTES,
 		SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION,
@@ -742,6 +757,68 @@ mod tests {
 			read_value(&engine, delta_chunk_key(TEST_ACTOR, 42, 1))
 				.await?
 				.is_none()
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn takeover_cleans_multiple_aborted_stages() -> Result<()> {
+		// Multiple partial commit_stage blobs (N>1 distinct orphan txids beyond head_txid)
+		// should all be deleted in a single takeover pass along with any dangling PIDX entries.
+		let (db, subspace) = test_db().await?;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		let head = DBHead {
+			head_txid: 5,
+			next_txid: 9,
+			db_size_pages: 1,
+			..seeded_head()
+		};
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				// Three orphan staged txids (> head_txid).
+				WriteOp::put(delta_chunk_key(TEST_ACTOR, 6, 0), vec![0; 256]),
+				WriteOp::put(delta_chunk_key(TEST_ACTOR, 6, 1), vec![0; 256]),
+				WriteOp::put(delta_chunk_key(TEST_ACTOR, 7, 0), vec![0; 512]),
+				WriteOp::put(delta_chunk_key(TEST_ACTOR, 8, 0), vec![0; 1024]),
+				WriteOp::put(delta_chunk_key(TEST_ACTOR, 8, 1), vec![0; 1024]),
+				WriteOp::put(delta_chunk_key(TEST_ACTOR, 8, 2), vec![0; 1024]),
+				// Dangling PIDX pointing at an orphan txid.
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 10), 8_u64.to_be_bytes().to_vec()),
+			],
+		)
+		.await?;
+
+		engine
+			.takeover(TEST_ACTOR, TakeoverConfig::new(1_111))
+			.await?;
+
+		for (txid, chunk_idx) in [(6, 0), (6, 1), (7, 0), (8, 0), (8, 1), (8, 2)] {
+			assert!(
+				read_value(&engine, delta_chunk_key(TEST_ACTOR, txid, chunk_idx))
+					.await?
+					.is_none(),
+				"chunk {txid}/{chunk_idx} should be reclaimed",
+			);
+		}
+		assert!(
+			read_value(&engine, pidx_delta_key(TEST_ACTOR, 10))
+				.await?
+				.is_none(),
+			"dangling PIDX should be reclaimed",
+		);
+		let metrics_output = registry_text();
+		assert!(
+			metrics_output.contains("sqlite_v2_recovery_orphans_cleaned_total"),
+			"recovery orphan count metric should be emitted",
+		);
+		assert!(
+			metrics_output.contains("sqlite_orphan_chunk_bytes_reclaimed_total"),
+			"orphan bytes metric should be emitted",
 		);
 
 		Ok(())

@@ -37,9 +37,13 @@ async fn shared_sqlite_engine(ctx: &StandaloneCtx) -> Result<Arc<SqliteEngine>> 
 	SQLITE_ENGINE
 		.get_or_try_init(|| async move {
 			let (engine, compaction_rx) = SqliteEngine::new(Arc::clone(&db), subspace.clone());
-			tokio::spawn(CompactionCoordinator::run(compaction_rx, db, subspace));
+			let engine = Arc::new(engine);
+			tokio::spawn(CompactionCoordinator::run(
+				compaction_rx,
+				Arc::clone(&engine),
+			));
 
-			Ok(Arc::new(engine))
+			Ok(engine)
 		})
 		.await
 		.cloned()

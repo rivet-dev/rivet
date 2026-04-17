@@ -3,13 +3,11 @@
 use std::collections::BTreeSet;
 use std::time::Instant;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
+use super::shard::{load_delta_entries, load_pidx_rows};
 use crate::engine::SqliteEngine;
-use crate::keys::pidx_delta_prefix;
-use crate::udb;
 
-const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
 const DEFAULT_SHARDS_PER_BATCH: usize = 8;
 
 impl SqliteEngine {
@@ -18,30 +16,38 @@ impl SqliteEngine {
 			.await
 	}
 
+	/// Schedules shard passes from the PIDX and DELTA tables.
+	///
+	/// Scans PIDX and DELTA once and shares the results with every per-shard pass so an
+	/// N-shard batch performs a single PIDX scan plus a single DELTA scan. When a shard
+	/// pass succeeds its consumed PIDX rows and deleted DELTA txids are removed from the
+	/// in-memory view so subsequent shards compute correct ref counts and do not try to
+	/// delete DELTA chunks another shard already removed.
 	pub async fn compact_worker(&self, actor_id: &str, shards_per_batch: usize) -> Result<usize> {
 		if shards_per_batch == 0 {
 			return Ok(0);
 		}
 
 		let head = self.load_head(actor_id).await?;
-		let pidx_rows = udb::scan_prefix_values(
-			self.db.as_ref(),
-			&self.subspace,
-			self.op_counter.as_ref(),
-			pidx_delta_prefix(actor_id),
-		)
-		.await?;
-		let mut shard_ids = BTreeSet::new();
+		let mut pidx_rows = load_pidx_rows(self, actor_id).await?;
+		let mut delta_entries = load_delta_entries(self, actor_id).await?;
 
-		for (key, _) in pidx_rows {
-			let pgno = decode_pidx_pgno(actor_id, &key)?;
-			shard_ids.insert(pgno / head.shard_size);
-		}
+		let shard_ids = pidx_rows
+			.iter()
+			.map(|row| row.pgno / head.shard_size)
+			.collect::<BTreeSet<_>>();
 
 		let mut compacted = 0usize;
 		for shard_id in shard_ids.into_iter().take(shards_per_batch) {
 			let start = Instant::now();
-			if self.compact_shard(actor_id, shard_id).await? {
+			if let Some(outcome) = self
+				.compact_shard_preloaded(actor_id, shard_id, &head, &pidx_rows, &delta_entries)
+				.await?
+			{
+				pidx_rows.retain(|row| !outcome.consumed_pidx_pgnos.contains(&row.pgno));
+				for txid in &outcome.deleted_delta_txids {
+					delta_entries.remove(txid);
+				}
 				self.metrics.observe_compaction_pass(start.elapsed());
 				self.metrics.inc_compaction_pass_total();
 				compacted += 1;
@@ -52,28 +58,6 @@ impl SqliteEngine {
 	}
 }
 
-fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
-	let prefix = pidx_delta_prefix(actor_id);
-	anyhow::ensure!(
-		key.starts_with(&prefix),
-		"pidx key did not start with expected prefix"
-	);
-
-	let suffix = &key[prefix.len()..];
-	anyhow::ensure!(
-		suffix.len() == PIDX_PGNO_BYTES,
-		"pidx key suffix had {} bytes, expected {}",
-		suffix.len(),
-		PIDX_PGNO_BYTES
-	);
-
-	Ok(u32::from_be_bytes(
-		suffix
-			.try_into()
-			.context("pidx key suffix should decode as u32")?,
-	))
-}
-
 #[cfg(test)]
 mod tests {
 	use anyhow::Result;
@@ -81,12 +65,12 @@ mod tests {
 	use crate::engine::SqliteEngine;
 	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key};
 	use crate::ltx::{LtxHeader, encode_ltx_v3};
-	use crate::test_utils::{scan_prefix_values, test_db};
+	use crate::test_utils::{clear_op_count, scan_prefix_values, test_db};
 	use crate::types::{
 		DBHead, DirtyPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE,
 		SQLITE_VFS_V2_SCHEMA_VERSION,
 	};
-	use crate::udb::{WriteOp, apply_write_ops};
+	use crate::udb::{self, WriteOp, apply_write_ops};
 
 	const TEST_ACTOR: &str = "test-actor";
 
@@ -160,6 +144,57 @@ mod tests {
 			scan_prefix_values(&engine, crate::keys::pidx_delta_prefix(TEST_ACTOR)).await?;
 		assert_eq!(remaining_pidx.len(), 1);
 
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn compact_worker_scans_pidx_and_delta_once_per_batch() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let head = seeded_head();
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		let mut mutations = vec![WriteOp::put(
+			meta_key(TEST_ACTOR),
+			serde_bare::to_vec(&head)?,
+		)];
+
+		// Seed 8 single-page shards so one compact_worker call triggers all 8 shard passes.
+		for shard_id in 0..8u32 {
+			let pgno = shard_id * SQLITE_SHARD_SIZE + 1;
+			let txid = u64::from(shard_id) + 1;
+			mutations.push(WriteOp::put(
+				delta_blob_key(TEST_ACTOR, txid),
+				encoded_blob(txid, head.db_size_pages, &[(pgno, txid as u8)]),
+			));
+			mutations.push(WriteOp::put(
+				pidx_delta_key(TEST_ACTOR, pgno),
+				txid.to_be_bytes().to_vec(),
+			));
+		}
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			mutations,
+		)
+		.await?;
+
+		clear_op_count(&engine);
+		assert_eq!(engine.compact_worker(TEST_ACTOR, 8).await?, 8);
+
+		// Worker structure after US-062:
+		//   1 load_head (META get_value)
+		//   1 PIDX scan for the whole batch
+		//   1 DELTA scan for the whole batch
+		//   N shards × (shard blob get_value + atomic write) = 2 ops per shard
+		//
+		// Before US-062 this was 1 + N × (PIDX scan + DELTA scan + shard get_value +
+		// atomic write) = 1 + 4N ops, with N full PIDX and N full DELTA scans per batch.
+		let final_ops = udb::op_count(&engine.op_counter);
+		assert_eq!(
+			final_ops,
+			3 + 2 * 8,
+			"compact_worker should do 1 load_head + 1 PIDX scan + 1 DELTA scan + 2N per-shard ops"
+		);
 		Ok(())
 	}
 }
