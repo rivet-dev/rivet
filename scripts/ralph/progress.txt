@@ -23,7 +23,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` lifecycle shutdown tests should assert `ctx.aborted()` from inside `on_sleep` and `on_destroy` callbacks, not just after shutdown returns.
 - `rivetkit-core` shared runtime objects should hang off `ActorContext(Arc<ActorContextInner>)`, with service handles stored directly on the inner so context clones can still return borrowed `&Kv` and `&SqliteDb` style accessors.
 - `rivetkit-core` actor-scoped service wrappers should keep `Default` available for scaffolded contexts, but fail with explicit `anyhow!` configuration errors until a real `EnvoyHandle` is wired in.
-- `rivetkit-core` callback/factory APIs should box closures as `BoxFuture<'static, ...>` and use concrete `http::Request<Vec<u8>>` / `http::Response<Vec<u8>>` aliases instead of leaking generics through the runtime surface.
+- `rivetkit-core` callback/factory APIs should box closures as `BoxFuture<'static, ...>` and use the shared `actor::callbacks::Request` and `Response` wrappers so HTTP and config conversion helpers stay reusable across runtimes.
 - `rivetkit-core` actor snapshots should stay BARE-encoded at the single-byte KV key `[1]` so Rust matches the TypeScript actor persist layout.
 - `rivetkit-core` hibernatable websocket connections should persist per-connection BARE payloads under KV keys `[2] + conn_id`, matching the TypeScript v4 connection field order for restore compatibility.
 - `rivetkit-core` queue persistence should mirror the TypeScript key layout with metadata at `[5, 1, 1]` and message entries at `[5, 1, 2] + u64be(message_id)` so lexicographic scans preserve FIFO order.
@@ -357,4 +357,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: `rivetkit` package cleanup needs the export map, `files` list, and `scripts.build` kept in sync or published entrypoints can lie even while `tsup` stays green.
   - Gotchas encountered: `pnpm test -- --run <file>` still ran unrelated package tests here, so the reliable targeted path was `pnpm exec vitest run <files>` from `packages/rivetkit`.
   - Useful context: The acceptance checks that mattered were `pnpm check-types`, `pnpm build`, `pnpm exec biome check ...`, and `pnpm exec vitest run tests/package-surface.test.ts tests/registry-constructor.test.ts tests/napi-runtime-integration.test.ts` in `rivetkit-typescript/packages/rivetkit`.
+---
+## 2026-04-17 14:34:38 PDT - US-048
+- What was implemented: Moved the generic NAPI actor config flattening plus HTTP request/response conversion into `rivetkit-core`, added `FlatActorConfig` and shared `Request`/`Response` helpers, deleted the duplicated parsing code from `rivetkit-napi`, and added unit tests covering the new shared surface.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/{lib.rs,registry.rs}`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/{callbacks.rs,config.rs,event.rs}`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/bridge.rs`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit-napi/src/actor_factory.rs`, `/home/nathan/r5/scripts/ralph/{prd.json,progress.txt}`
+- **Learnings for future iterations:**
+  - Patterns discovered: Generic foreign-runtime glue like flat config conversion and HTTP request/response serialization belongs in `rivetkit-core`, while `rivetkit-napi` should stay focused on JS object wiring and `ThreadsafeFunction` plumbing.
+  - Gotchas encountered: `http::Request` and `http::Response` cannot grow inherent helper methods through a type alias, so the reusable core surface needs thin wrapper types if you want `Request::from_parts(...)` style APIs.
+  - Useful context: The meaningful checks for this story were `cargo check -p rivetkit-core`, `cargo check -p rivetkit-napi`, `cargo test -p rivetkit-core --lib`, and `pnpm check-types` in `rivetkit-typescript/packages/rivetkit`.
 ---

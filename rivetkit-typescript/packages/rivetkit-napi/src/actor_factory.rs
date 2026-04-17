@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use napi::bindgen_prelude::{Buffer, Promise};
@@ -12,10 +11,10 @@ use rivetkit_core::actor::callbacks::{
 };
 use rivetkit_core::{
 	ActionRequest, ActorConfig, ActorFactory as CoreActorFactory, ActorInstanceCallbacks,
-	FactoryRequest, OnBeforeActionResponseRequest, OnBeforeConnectRequest,
-	OnConnectRequest, OnDestroyRequest, OnDisconnectRequest, OnRequestRequest,
-	OnSleepRequest, OnStateChangeRequest, OnWakeRequest, OnWebSocketRequest,
-	Request, Response, RunRequest,
+	FactoryRequest, FlatActorConfig, OnBeforeActionResponseRequest,
+	OnBeforeConnectRequest, OnConnectRequest, OnDestroyRequest, OnDisconnectRequest,
+	OnRequestRequest, OnSleepRequest, OnStateChangeRequest, OnWakeRequest,
+	OnWebSocketRequest, Request, Response, RunRequest,
 };
 
 use crate::actor_context::ActorContext;
@@ -158,7 +157,7 @@ impl NapiActorFactory {
 	) -> napi::Result<Self> {
 		let bindings = Arc::new(CallbackBindings::from_js(callbacks)?);
 		let inner = Arc::new(CoreActorFactory::new(
-			actor_config_from_js(config),
+			ActorConfig::from_flat(config.map(FlatActorConfig::from).unwrap_or_default()),
 			move |request: FactoryRequest| {
 				let bindings = Arc::clone(&bindings);
 				Box::pin(async move {
@@ -366,78 +365,6 @@ where
 	)
 }
 
-fn actor_config_from_js(config: Option<JsActorConfig>) -> ActorConfig {
-	let mut actor_config = ActorConfig::default();
-	let Some(config) = config else {
-		return actor_config;
-	};
-
-	actor_config.name = config.name;
-	actor_config.icon = config.icon;
-	if let Some(can_hibernate_websocket) = config.can_hibernate_websocket {
-		actor_config.can_hibernate_websocket =
-			rivetkit_core::CanHibernateWebSocket::Bool(can_hibernate_websocket);
-	}
-	if let Some(value) = config.state_save_interval_ms {
-		actor_config.state_save_interval = duration_ms(value);
-	}
-	if let Some(value) = config.create_vars_timeout_ms {
-		actor_config.create_vars_timeout = duration_ms(value);
-	}
-	if let Some(value) = config.create_conn_state_timeout_ms {
-		actor_config.create_conn_state_timeout = duration_ms(value);
-	}
-	if let Some(value) = config.on_before_connect_timeout_ms {
-		actor_config.on_before_connect_timeout = duration_ms(value);
-	}
-	if let Some(value) = config.on_connect_timeout_ms {
-		actor_config.on_connect_timeout = duration_ms(value);
-	}
-	if let Some(value) = config.on_sleep_timeout_ms {
-		actor_config.on_sleep_timeout = duration_ms(value);
-	}
-	if let Some(value) = config.on_destroy_timeout_ms {
-		actor_config.on_destroy_timeout = duration_ms(value);
-	}
-	if let Some(value) = config.action_timeout_ms {
-		actor_config.action_timeout = duration_ms(value);
-	}
-	if let Some(value) = config.run_stop_timeout_ms {
-		actor_config.run_stop_timeout = duration_ms(value);
-	}
-	if let Some(value) = config.sleep_timeout_ms {
-		actor_config.sleep_timeout = duration_ms(value);
-	}
-	if let Some(value) = config.no_sleep {
-		actor_config.no_sleep = value;
-	}
-	if let Some(value) = config.sleep_grace_period_ms {
-		actor_config.sleep_grace_period = Some(duration_ms(value));
-	}
-	if let Some(value) = config.connection_liveness_timeout_ms {
-		actor_config.connection_liveness_timeout = duration_ms(value);
-	}
-	if let Some(value) = config.connection_liveness_interval_ms {
-		actor_config.connection_liveness_interval = duration_ms(value);
-	}
-	if let Some(value) = config.max_queue_size {
-		actor_config.max_queue_size = value;
-	}
-	if let Some(value) = config.max_queue_message_size {
-		actor_config.max_queue_message_size = value;
-	}
-	actor_config.preload_max_workflow_bytes =
-		config.preload_max_workflow_bytes.map(|value| value as u64);
-	actor_config.preload_max_connections_bytes =
-		config.preload_max_connections_bytes.map(|value| value as u64);
-
-	actor_config
-}
-
-fn duration_ms(value: u32) -> Duration {
-	Duration::from_millis(u64::from(value))
-}
-
 fn wrap_void_callback<Req, Payload, Map>(
 	callback: &Option<CallbackTsfn<Payload>>,
 	map: Map,
@@ -537,31 +464,11 @@ async fn call_request(
 		.await
 		.map_err(napi_to_anyhow)?;
 	let response = promise.await.map_err(napi_to_anyhow)?;
-	parse_http_response(response)
-}
-
-fn parse_http_response(response: JsHttpResponse) -> Result<Response> {
-	let mut parsed = Response::new(response.body.unwrap_or_else(|| Buffer::from(Vec::new())).to_vec());
-	let status = response.status.unwrap_or(200);
-	*parsed.status_mut() = status
-		.try_into()
-		.map_err(|error| anyhow!("invalid http response status `{status}`: {error}"))?;
-
-	if let Some(headers) = response.headers {
-		for (name, value) in headers {
-			let header_name: http::header::HeaderName = name
-				.parse()
-				.map_err(|error| anyhow!("invalid response header name `{name}`: {error}"))?;
-			let header_value: http::header::HeaderValue = value
-				.parse()
-				.map_err(|error| anyhow!("invalid response header `{name}` value: {error}"))?;
-			parsed
-				.headers_mut()
-				.insert(header_name, header_value);
-		}
-	}
-
-	Ok(parsed)
+	Response::from_parts(
+		response.status.unwrap_or(200),
+		response.headers.unwrap_or_default(),
+		response.body.unwrap_or_else(|| Buffer::from(Vec::new())).to_vec(),
+	)
 }
 
 fn build_lifecycle_payload(
@@ -598,9 +505,15 @@ fn build_http_request_payload(
 	env: &Env,
 	payload: HttpRequestPayload,
 ) -> napi::Result<Vec<napi::JsUnknown>> {
+	let (method, uri, headers, body) = payload.request.to_parts();
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
-	object.set("request", build_http_request(env, &payload.request)?)?;
+	let mut request = env.create_object()?;
+	request.set("method", method)?;
+	request.set("uri", uri)?;
+	request.set("headers", headers)?;
+	request.set("body", Buffer::from(body))?;
+	object.set("request", request)?;
 	Ok(vec![object.into_unknown()])
 }
 
@@ -658,28 +571,34 @@ fn build_before_action_response_payload(
 	Ok(vec![object.into_unknown()])
 }
 
-fn build_http_request(env: &Env, request: &Request) -> napi::Result<JsObject> {
-	let mut object = env.create_object()?;
-	object.set("method", request.method().to_string())?;
-	object.set("uri", request.uri().to_string())?;
-	object.set("headers", request_headers(request))?;
-	object.set("body", Buffer::from(request.body().clone()))?;
-	Ok(object)
-}
-
-fn request_headers(request: &Request) -> HashMap<String, String> {
-	request
-		.headers()
-		.iter()
-		.map(|(name, value)| {
-			(
-				name.to_string(),
-				String::from_utf8_lossy(value.as_bytes()).into_owned(),
-			)
-		})
-		.collect()
-}
-
 fn napi_to_anyhow(error: napi::Error) -> anyhow::Error {
 	anyhow!(error.to_string())
+}
+
+impl From<JsActorConfig> for FlatActorConfig {
+	fn from(value: JsActorConfig) -> Self {
+		Self {
+			name: value.name,
+			icon: value.icon,
+			can_hibernate_websocket: value.can_hibernate_websocket,
+			state_save_interval_ms: value.state_save_interval_ms,
+			create_vars_timeout_ms: value.create_vars_timeout_ms,
+			create_conn_state_timeout_ms: value.create_conn_state_timeout_ms,
+			on_before_connect_timeout_ms: value.on_before_connect_timeout_ms,
+			on_connect_timeout_ms: value.on_connect_timeout_ms,
+			on_sleep_timeout_ms: value.on_sleep_timeout_ms,
+			on_destroy_timeout_ms: value.on_destroy_timeout_ms,
+			action_timeout_ms: value.action_timeout_ms,
+			run_stop_timeout_ms: value.run_stop_timeout_ms,
+			sleep_timeout_ms: value.sleep_timeout_ms,
+			no_sleep: value.no_sleep,
+			sleep_grace_period_ms: value.sleep_grace_period_ms,
+			connection_liveness_timeout_ms: value.connection_liveness_timeout_ms,
+			connection_liveness_interval_ms: value.connection_liveness_interval_ms,
+			max_queue_size: value.max_queue_size,
+			max_queue_message_size: value.max_queue_message_size,
+			preload_max_workflow_bytes: value.preload_max_workflow_bytes,
+			preload_max_connections_bytes: value.preload_max_connections_bytes,
+		}
+	}
 }

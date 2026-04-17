@@ -12,7 +12,9 @@ pub use actor::callbacks::{
 	OnRequestRequest, OnSleepRequest, OnStateChangeRequest, OnWakeRequest,
 	OnWebSocketRequest, Request, Response, RunRequest,
 };
-pub use actor::config::{ActorConfig, ActorConfigOverrides, CanHibernateWebSocket};
+pub use actor::config::{
+	ActorConfig, ActorConfigOverrides, CanHibernateWebSocket, FlatActorConfig,
+};
 pub use actor::connection::ConnHandle;
 pub use actor::context::ActorContext;
 pub use actor::factory::{ActorFactory, FactoryRequest};

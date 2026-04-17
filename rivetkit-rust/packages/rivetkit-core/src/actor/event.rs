@@ -25,20 +25,24 @@ pub(crate) async fn dispatch_request(
 	request: Request,
 ) -> Response {
 	let Some(handler) = &callbacks.on_request else {
-		return http::Response::builder()
-			.status(StatusCode::NOT_FOUND)
-			.body(b"not found".to_vec())
-			.expect("404 response should be valid");
+		return Response::from(
+			http::Response::builder()
+				.status(StatusCode::NOT_FOUND)
+				.body(b"not found".to_vec())
+				.expect("404 response should be valid"),
+		);
 	};
 
 	match handler(OnRequestRequest { ctx, request }).await {
 		Ok(response) => response,
 		Err(error) => {
 			tracing::error!(?error, "error in on_request callback");
-			http::Response::builder()
-				.status(StatusCode::INTERNAL_SERVER_ERROR)
-				.body(b"internal server error".to_vec())
-				.expect("500 response should be valid")
+			Response::from(
+				http::Response::builder()
+					.status(StatusCode::INTERNAL_SERVER_ERROR)
+					.body(b"internal server error".to_vec())
+					.expect("500 response should be valid"),
+			)
 		}
 	}
 }
@@ -80,7 +84,7 @@ mod tests {
 	use rivet_error::INTERNAL_ERROR;
 
 	use super::{EventBroadcaster, dispatch_request, dispatch_websocket};
-	use crate::actor::callbacks::{ActorInstanceCallbacks, RequestCallback};
+	use crate::actor::callbacks::{ActorInstanceCallbacks, Request, RequestCallback, Response};
 	use crate::actor::connection::{ConnHandle, EventSendCallback, OutgoingEvent};
 	use crate::actor::context::ActorContext;
 	use crate::websocket::{WebSocket, WebSocketCloseCallback};
@@ -135,22 +139,24 @@ mod tests {
 		callbacks.on_request = Some(request_callback(|request| {
 			Box::pin(async move {
 				assert_eq!(request.request.uri().path(), "/ok");
-				Ok(
+				Ok(Response::from(
 					http::Response::builder()
 						.status(http::StatusCode::ACCEPTED)
 						.body(b"ok".to_vec())
 						.expect("accepted response should build"),
-				)
+				))
 			})
 		}));
 
 		let response = dispatch_request(
 			&callbacks,
 			ActorContext::default(),
-			http::Request::builder()
-				.uri("/ok")
-				.body(Vec::new())
-				.expect("request should build"),
+			Request::from(
+				http::Request::builder()
+					.uri("/ok")
+					.body(Vec::new())
+					.expect("request should build"),
+			),
 		)
 		.await;
 
@@ -168,10 +174,12 @@ mod tests {
 		let response = dispatch_request(
 			&callbacks,
 			ActorContext::default(),
-			http::Request::builder()
-				.uri("/boom")
-				.body(Vec::new())
-				.expect("request should build"),
+			Request::from(
+				http::Request::builder()
+					.uri("/boom")
+					.body(Vec::new())
+					.expect("request should build"),
+			),
 		)
 		.await;
 

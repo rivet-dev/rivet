@@ -881,43 +881,17 @@ async fn build_http_request(request: HttpRequest) -> Result<Request> {
 		}
 	}
 
-	let mut builder = http::Request::builder()
-		.method(
-			request
-				.method
-				.parse::<http::Method>()
-				.with_context(|| format!("parse request method `{}`", request.method))?,
-		)
-		.uri(
-			request
-				.path
-				.parse::<http::Uri>()
-				.with_context(|| format!("parse request path `{}`", request.path))?,
-		);
-	for (name, value) in request.headers {
-		builder = builder.header(name, value);
-	}
-
-	builder.body(body).context("build actor request")
+	Request::from_parts(&request.method, &request.path, request.headers, body)
+		.with_context(|| format!("build actor request for `{}`", request.path))
 }
 
 fn build_envoy_response(response: Response) -> Result<HttpResponse> {
-	let status = response.status().as_u16();
-	let mut headers = HashMap::new();
-	for (name, value) in response.headers() {
-		headers.insert(
-			name.to_string(),
-			value
-				.to_str()
-				.context("convert response header to utf-8")?
-				.to_owned(),
-		);
-	}
+	let (status, headers, body) = response.to_parts();
 
 	Ok(HttpResponse {
 		status,
 		headers,
-		body: Some(response.into_body()),
+		body: Some(body),
 		body_stream: None,
 	})
 }
@@ -960,7 +934,7 @@ mod tests {
 	};
 	use crate::actor::callbacks::{
 		ActorInstanceCallbacks, LifecycleCallback, OnRequestRequest, OnWebSocketRequest,
-		RequestCallback,
+		RequestCallback, Response,
 	};
 	use crate::actor::factory::{ActorFactory, FactoryRequest};
 	use crate::ActorConfig;
@@ -1006,10 +980,12 @@ mod tests {
 				let mut callbacks = ActorInstanceCallbacks::default();
 				callbacks.on_request = Some(request_callback(|request| {
 					Box::pin(async move {
-						let response = http::Response::builder()
-							.status(http::StatusCode::CREATED)
-							.body(request.request.into_body())
-							.expect("build response");
+						let response = Response::from(
+							http::Response::builder()
+								.status(http::StatusCode::CREATED)
+								.body(request.request.into_body())
+								.expect("build response"),
+						);
 						Ok(response)
 					})
 				}));

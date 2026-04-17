@@ -270,7 +270,6 @@ mod tests {
 
 	use anyhow::Result;
 	use async_trait::async_trait;
-	use http::{Request, Response};
 	use serde::{Deserialize, Serialize};
 
 	use super::{TypedActionMap, build_action, build_factory};
@@ -358,8 +357,8 @@ mod tests {
 		async fn on_request(
 			self: &Arc<Self>,
 			ctx: &Ctx<Self>,
-			_request: Request<Vec<u8>>,
-		) -> Result<Response<Vec<u8>>> {
+			_request: Request,
+		) -> Result<Response> {
 			let _ = self;
 			Ok(Response::new(ctx.state().value.to_string().into_bytes()))
 		}
@@ -441,8 +440,8 @@ mod tests {
 		async fn on_request(
 			self: &Arc<Self>,
 			_ctx: &Ctx<Self>,
-			_request: Request<Vec<u8>>,
-		) -> Result<Response<Vec<u8>>> {
+			_request: Request,
+		) -> Result<Response> {
 			let _ = self;
 			Ok(Response::new(b"ok".to_vec()))
 		}

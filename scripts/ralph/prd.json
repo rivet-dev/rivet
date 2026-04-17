@@ -767,7 +767,7 @@
         "tsc type-check passes"
       ],
       "priority": 40,
-      "passes": false,
+      "passes": true,
       "notes": "This moves ~100 lines of generic logic from rivetkit-napi to rivetkit-core. The remaining ~586 lines in actor_factory.rs are genuinely NAPI-specific (ThreadsafeFunction wiring, JS object construction). See CLAUDE.md RivetKit Layer Constraints: if code would be duplicated by a future V8 runtime, it belongs in rivetkit-core."
     },
     {

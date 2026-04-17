@@ -1,15 +1,199 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::ops::{Deref, DerefMut};
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use futures::future::BoxFuture;
 
 use crate::actor::connection::ConnHandle;
 use crate::actor::context::ActorContext;
 use crate::websocket::WebSocket;
 
-pub type Request = http::Request<Vec<u8>>;
-pub type Response = http::Response<Vec<u8>>;
+#[derive(Clone, Debug)]
+pub struct Request(http::Request<Vec<u8>>);
+
+impl Request {
+	pub fn new(body: Vec<u8>) -> Self {
+		Self(http::Request::new(body))
+	}
+
+	pub fn from_parts(
+		method: &str,
+		uri: &str,
+		headers: HashMap<String, String>,
+		body: Vec<u8>,
+	) -> Result<Self> {
+		let method = method
+			.parse::<http::Method>()
+			.map_err(|error| anyhow!("invalid request method `{method}`: {error}"))?;
+		let uri = uri
+			.parse::<http::Uri>()
+			.map_err(|error| anyhow!("invalid request uri `{uri}`: {error}"))?;
+		let mut request = http::Request::builder()
+			.method(method)
+			.uri(uri)
+			.body(body)?;
+
+		for (name, value) in headers {
+			let header_name: http::header::HeaderName = name
+				.parse()
+				.map_err(|error| anyhow!("invalid request header name `{name}`: {error}"))?;
+			let header_value: http::header::HeaderValue = value
+				.parse()
+				.map_err(|error| anyhow!("invalid request header `{name}` value: {error}"))?;
+			request.headers_mut().insert(header_name, header_value);
+		}
+
+		Ok(Self(request))
+	}
+
+	pub fn to_parts(&self) -> (String, String, HashMap<String, String>, Vec<u8>) {
+		(
+			self.method().to_string(),
+			self.uri().to_string(),
+			self
+				.headers()
+				.iter()
+				.map(|(name, value)| {
+					(
+						name.to_string(),
+						String::from_utf8_lossy(value.as_bytes()).into_owned(),
+					)
+				})
+				.collect(),
+			self.body().clone(),
+		)
+	}
+
+	pub fn into_inner(self) -> http::Request<Vec<u8>> {
+		self.0
+	}
+
+	pub fn into_body(self) -> Vec<u8> {
+		self.0.into_body()
+	}
+}
+
+impl Default for Request {
+	fn default() -> Self {
+		Self::new(Vec::new())
+	}
+}
+
+impl Deref for Request {
+	type Target = http::Request<Vec<u8>>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl DerefMut for Request {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
+
+impl From<http::Request<Vec<u8>>> for Request {
+	fn from(value: http::Request<Vec<u8>>) -> Self {
+		Self(value)
+	}
+}
+
+impl From<Request> for http::Request<Vec<u8>> {
+	fn from(value: Request) -> Self {
+		value.0
+	}
+}
+
+#[derive(Clone, Debug)]
+pub struct Response(http::Response<Vec<u8>>);
+
+impl Response {
+	pub fn new(body: Vec<u8>) -> Self {
+		Self(http::Response::new(body))
+	}
+
+	pub fn from_parts(
+		status: u16,
+		headers: HashMap<String, String>,
+		body: Vec<u8>,
+	) -> Result<Self> {
+		let mut response = http::Response::new(body);
+		*response.status_mut() = status
+			.try_into()
+			.map_err(|error| anyhow!("invalid http response status `{status}`: {error}"))?;
+
+		for (name, value) in headers {
+			let header_name: http::header::HeaderName = name
+				.parse()
+				.map_err(|error| anyhow!("invalid response header name `{name}`: {error}"))?;
+			let header_value: http::header::HeaderValue = value
+				.parse()
+				.map_err(|error| anyhow!("invalid response header `{name}` value: {error}"))?;
+			response.headers_mut().insert(header_name, header_value);
+		}
+
+		Ok(Self(response))
+	}
+
+	pub fn to_parts(&self) -> (u16, HashMap<String, String>, Vec<u8>) {
+		(
+			self.status().as_u16(),
+			self
+				.headers()
+				.iter()
+				.map(|(name, value)| {
+					(
+						name.to_string(),
+						String::from_utf8_lossy(value.as_bytes()).into_owned(),
+					)
+				})
+				.collect(),
+			self.body().clone(),
+		)
+	}
+
+	pub fn into_inner(self) -> http::Response<Vec<u8>> {
+		self.0
+	}
+
+	pub fn into_body(self) -> Vec<u8> {
+		self.0.into_body()
+	}
+}
+
+impl Default for Response {
+	fn default() -> Self {
+		Self::new(Vec::new())
+	}
+}
+
+impl Deref for Response {
+	type Target = http::Response<Vec<u8>>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl DerefMut for Response {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
+
+impl From<http::Response<Vec<u8>>> for Response {
+	fn from(value: http::Response<Vec<u8>>) -> Self {
+		Self(value)
+	}
+}
+
+impl From<Response> for http::Response<Vec<u8>> {
+	fn from(value: Response) -> Self {
+		value.0
+	}
+}
 
 pub type LifecycleCallback<T> =
 	Box<dyn Fn(T) -> BoxFuture<'static, Result<()>> + Send + Sync>;
@@ -128,5 +312,56 @@ impl fmt::Debug for ActorInstanceCallbacks {
 			)
 			.field("run", &self.run.is_some())
 			.finish()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::collections::HashMap;
+
+	use http::StatusCode;
+
+	use super::{Request, Response};
+
+	#[test]
+	fn request_from_parts_round_trips() {
+		let request = Request::from_parts(
+			"POST",
+			"/actors?id=1",
+			HashMap::from([("content-type".to_owned(), "application/cbor".to_owned())]),
+			vec![1, 2, 3],
+		)
+		.expect("request should build");
+
+		assert_eq!(request.method(), http::Method::POST);
+		assert_eq!(request.uri(), &"/actors?id=1");
+		assert_eq!(request.headers()["content-type"], "application/cbor");
+
+		let (method, uri, headers, body) = request.to_parts();
+		assert_eq!(method, "POST");
+		assert_eq!(uri, "/actors?id=1");
+		assert_eq!(
+			headers.get("content-type"),
+			Some(&"application/cbor".to_owned())
+		);
+		assert_eq!(body, vec![1, 2, 3]);
+	}
+
+	#[test]
+	fn response_from_parts_round_trips() {
+		let response = Response::from_parts(
+			StatusCode::CREATED.as_u16(),
+			HashMap::from([("x-test".to_owned(), "ok".to_owned())]),
+			b"done".to_vec(),
+		)
+		.expect("response should build");
+
+		assert_eq!(response.status(), StatusCode::CREATED);
+		assert_eq!(response.headers()["x-test"], "ok");
+
+		let (status, headers, body) = response.to_parts();
+		assert_eq!(status, StatusCode::CREATED.as_u16());
+		assert_eq!(headers.get("x-test"), Some(&"ok".to_owned()));
+		assert_eq!(body, b"done");
 	}
 }
