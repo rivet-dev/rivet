@@ -403,7 +403,7 @@
         "`cargo check -p rivetkit` passes"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Ctx<A> — Typed Actor Context' section. CBOR (ciborium) at all boundaries. Ctx<A> is a SEPARATE type from ActorContext, not a newtype wrapper."
     },
     {

@@ -4,6 +4,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 ## Codebase Patterns
 - New Rust crates under `rivetkit-rust/packages/` that should use root workspace deps need `[package] workspace = "../../../"` in their `Cargo.toml` and a root `/Cargo.toml` workspace member entry.
 - The high-level `rivetkit` crate should stay a thin typed wrapper over `rivetkit-core`, re-exporting shared transport/config types instead of redefining them.
+- `rivetkit` typed contexts should keep typed vars outside the core context, cache decoded actor state in `Arc<Mutex<Option<Arc<State>>>>`, and invalidate that cache after every `set_state`.
 - `rivetkit-core` shared runtime objects should hang off `ActorContext(Arc<ActorContextInner>)`, with service handles stored directly on the inner so context clones can still return borrowed `&Kv` and `&SqliteDb` style accessors.
 - `rivetkit-core` actor-scoped service wrappers should keep `Default` available for scaffolded contexts, but fail with explicit `anyhow!` configuration errors until a real `EnvoyHandle` is wired in.
 - `rivetkit-core` callback/factory APIs should box closures as `BoxFuture<'static, ...>` and use concrete `http::Request<Vec<u8>>` / `http::Response<Vec<u8>>` aliases instead of leaking generics through the runtime surface.
@@ -176,4 +177,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: The public `rivetkit` crate should mostly re-export `rivetkit-core` transport and config types so the typed layer stays thin and future bridge work only has one runtime source of truth.
   - Gotchas encountered: `http::Response<Vec<u8>>` only exposes `builder()` on `Response<()>`, so the default 404 response path has to build with `Response::new` plus `status_mut()`.
   - Useful context: `src/context.rs` currently only wraps `ActorContext` and `ConnHandle` with typed shells; the real typed state/vars/connection serialization work is intentionally deferred to `US-020`.
+---
+## 2026-04-17 00:06:24 PDT - US-020
+- What was implemented: Replaced the placeholder typed context wrappers with real `Ctx<A>` and `ConnCtx<A>` implementations that cache decoded actor state, carry typed vars, CBOR-serialize state/events/connection payloads, and delegate the core actor controls through to `ActorContext`.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit/Cargo.toml`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/context.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: `Ctx<A>` should hold the typed vars separately from the core context and share the decoded state cache across clones so repeated `state()` calls stay cheap.
+  - Gotchas encountered: Exposing `abort_signal()` from the typed layer requires `tokio-util` in the `rivetkit` crate too, not just `rivetkit-core`.
+  - Useful context: `rivetkit/src/context.rs` now has unit coverage for state-cache invalidation, typed vars access, and CBOR connection serialization, so `US-021` can build the bridge on top of a tested typed context surface.
 ---
