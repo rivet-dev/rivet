@@ -13,6 +13,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` schedule mutations should go through one `ActorState` helper so insert/remove stays sorted, then trigger an immediate state flush and envoy alarm resync from the earliest remaining event.
 - `rivetkit-core` transport-edge helpers should translate `on_request` failures into HTTP 500 responses and `on_websocket` failures into logged 1011 closes, while wrapper types keep internal `try_*` methods for explicit misconfiguration errors.
 - `rivetkit-core` sleep readiness should live in `SleepController`, and subsystems like queue waits, scheduled internal work, disconnect callbacks, and websocket callbacks should reset the idle timer through `ActorContext` hooks instead of managing their own timers.
+- `rivetkit-core` startup should load `PersistedActor` into `ActorContext` before factory creation, persist `has_initialized` immediately, set `ready` before the driver hook, and set `started` only after that hook completes.
 - `envoy-client` actor-scoped HTTP fetch work should stay in a `JoinSet` plus a shared `Arc<AtomicUsize>` counter so sleep checks can read in-flight request count and shutdown can abort and join the tasks before `Stopped`.
 - `envoy-client` shutdown hooks that need multi-step teardown should override `EnvoyCallbacks::on_actor_stop_with_completion`; the default path still auto-completes after legacy `on_actor_stop` returns.
 
@@ -122,4 +123,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Sleep readiness should stay centralized in `SleepController`, while subsystems report activity transitions through `ActorContext` hooks so `reset_sleep_timer()` has one source of truth.
   - Gotchas encountered: Queue wait counters need a synchronous callback path because sleep timer resets happen from both async receive loops and synchronous state checks, so `Queue` cannot stash this config behind Tokio mutexes.
   - Useful context: `src/actor/sleep.rs` now owns the unit tests for readiness flags, queue-wait exceptions, websocket/disconnect gating, and the idle timer requesting `ctx.sleep()`.
+---
+## 2026-04-16 23:25:57 PDT - US-014
+- What was implemented: Added the first half of `rivetkit-core` startup in `src/actor/lifecycle.rs`, including persisted-state load from preload or KV, create-vs-wake detection, factory invocation, immediate `has_initialized` persistence, `on_wake`, and the ready-before-driver-hook / started-after-hook ordering. Added an internal in-memory `Kv` backend plus `ActorContext::new_with_kv` so lifecycle tests can exercise the real persistence path without weakening runtime behavior.
+- Files changed: `/home/nathan/r5/CLAUDE.md`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/lifecycle.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/mod.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/kv.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/lib.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Startup should materialize `PersistedActor` onto `ActorContext` before factory creation so factory/on-wake code sees restored state and input consistently.
+  - Gotchas encountered: The startup path now immediately saves `has_initialized`, so unit tests need a real KV backend. The internal in-memory `Kv` path is the clean way to do that without loosening runtime misconfiguration checks.
+  - Useful context: `ActorLifecycleDriverHooks::on_before_actor_start` is the staging hook for the driver layer, and the lifecycle tests in `src/actor/lifecycle.rs` cover the ordering around `ready`, `started`, and persisted initialization.
 ---

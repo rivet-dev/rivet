@@ -16,6 +16,10 @@ pub use actor::config::{ActorConfig, ActorConfigOverrides, CanHibernateWebSocket
 pub use actor::connection::ConnHandle;
 pub use actor::context::ActorContext;
 pub use actor::factory::{ActorFactory, FactoryRequest};
+pub use actor::lifecycle::{
+	ActorLifecycle, ActorLifecycleDriverHooks, BeforeActorStartRequest,
+	StartupError, StartupOptions, StartupOutcome, StartupStage,
+};
 pub use actor::queue::{
 	CompletableQueueMessage, Queue, QueueMessage, QueueNextBatchOpts,
 	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts,

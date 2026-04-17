@@ -55,12 +55,45 @@ impl ActorContext {
 		key: ActorKey,
 		region: impl Into<String>,
 	) -> Self {
-		let actor_id = actor_id.into();
-		let name = name.into();
-		let region = region.into();
-		let config = ActorConfig::default();
-		let kv = Kv::default();
-		let sql = SqliteDb::default();
+		Self::build(
+			actor_id.into(),
+			name.into(),
+			key,
+			region.into(),
+			ActorConfig::default(),
+			Kv::default(),
+			SqliteDb::default(),
+		)
+	}
+
+	#[cfg(test)]
+	pub(crate) fn new_with_kv(
+		actor_id: impl Into<String>,
+		name: impl Into<String>,
+		key: ActorKey,
+		region: impl Into<String>,
+		kv: Kv,
+	) -> Self {
+		Self::build(
+			actor_id.into(),
+			name.into(),
+			key,
+			region.into(),
+			ActorConfig::default(),
+			kv,
+			SqliteDb::default(),
+		)
+	}
+
+	fn build(
+		actor_id: String,
+		name: String,
+		key: ActorKey,
+		region: String,
+		config: ActorConfig,
+		kv: Kv,
+		sql: SqliteDb,
+	) -> Self {
 		let state = ActorState::new(kv.clone(), config.clone());
 		let schedule = Schedule::new(state.clone(), actor_id.clone(), config);
 		let abort_signal = CancellationToken::new();
@@ -208,6 +241,15 @@ impl ActorContext {
 	#[allow(dead_code)]
 	pub(crate) fn load_persisted_actor(&self, persisted: PersistedActor) {
 		self.0.state.load_persisted(persisted);
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn persisted_actor(&self) -> PersistedActor {
+		self.0.state.persisted()
+	}
+
+	pub(crate) fn set_has_initialized(&self, has_initialized: bool) {
+		self.0.state.set_has_initialized(has_initialized);
 	}
 
 	#[allow(dead_code)]

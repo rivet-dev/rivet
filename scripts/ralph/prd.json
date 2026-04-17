@@ -277,7 +277,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Startup Sequence' steps 1-11 and 'Error Handling' section. This is the first half; US-015 handles post-startup initialization (alarms, connections, run handler)."
     },
     {
