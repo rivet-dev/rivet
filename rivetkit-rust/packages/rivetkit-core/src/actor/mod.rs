@@ -12,6 +12,7 @@ pub mod sleep;
 pub mod state;
 pub mod vars;
 
+pub use action::{ActionDispatchError, ActionInvoker};
 pub use callbacks::{
 	ActionRequest, ActorInstanceCallbacks, OnBeforeActionResponseRequest,
 	OnBeforeConnectRequest, OnConnectRequest, OnDestroyRequest, OnDisconnectRequest,

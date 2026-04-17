@@ -123,7 +123,7 @@
         "`cargo check -p rivetkit-core` passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Actions' and 'Error Handling' sections. Actions are string-keyed. Args and return values are CBOR-encoded bytes."
     },
     {

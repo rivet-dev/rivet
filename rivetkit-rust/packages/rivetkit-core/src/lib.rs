@@ -5,6 +5,7 @@ pub mod sqlite;
 pub mod types;
 pub mod websocket;
 
+pub use actor::action::{ActionDispatchError, ActionInvoker};
 pub use actor::callbacks::{
 	ActionRequest, ActorInstanceCallbacks, OnBeforeActionResponseRequest,
 	OnBeforeConnectRequest, OnConnectRequest, OnDestroyRequest, OnDisconnectRequest,

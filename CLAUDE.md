@@ -239,6 +239,7 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 **Error Handling**
 - Custom error system at `packages/common/error/`
 - Uses derive macros with struct-based error definitions
+- `rivetkit-core` should convert callback/action `anyhow::Error` values into transport-safe `group/code/message` payloads with `rivet_error::RivetError::extract` before returning them across runtime boundaries.
 
 - Use this pattern for custom errors:
 

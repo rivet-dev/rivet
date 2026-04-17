@@ -7,6 +7,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` actor-scoped service wrappers should keep `Default` available for scaffolded contexts, but fail with explicit `anyhow!` configuration errors until a real `EnvoyHandle` is wired in.
 - `rivetkit-core` callback/factory APIs should box closures as `BoxFuture<'static, ...>` and use concrete `http::Request<Vec<u8>>` / `http::Response<Vec<u8>>` aliases instead of leaking generics through the runtime surface.
 - `rivetkit-core` actor snapshots should stay BARE-encoded at the single-byte KV key `[1]` so Rust matches the TypeScript actor persist layout.
+- `rivetkit-core` action/lifecycle surfaces should collapse `anyhow::Error` into serializable `group/code/message` payloads via `rivet_error::RivetError::extract` before returning them across runtime boundaries.
 
 ---
 
@@ -50,4 +51,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: `rivetkit-core` callback surfaces are easier to keep stable when HTTP callbacks use local `Request`/`Response` aliases over `Vec<u8>` bodies and every stored closure uses `BoxFuture<'static, ...>`.
   - Gotchas encountered: These callback containers cannot derive `Debug`, so keep manual debug output limited to presence flags and action names instead of trying to print boxed closures.
   - Useful context: `FactoryRequest` now carries the already-initialized `ActorContext`, `input`, and `is_new`, and both `actor::mod` and crate root re-export the request/factory types for later core stories.
+---
+## 2026-04-16 22:25:49 PDT - US-006
+- What was implemented: Replaced the placeholder action invoker with real action dispatch that looks up handlers by name, enforces `action_timeout`, preserves structured `group/code/message` errors, runs `on_before_action_response` as a best-effort output transform, and re-triggers throttled state persistence after each dispatch.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/Cargo.toml`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/action.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/mod.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/state.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/lib.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`, `/home/nathan/r5/AGENTS.md`
+- **Learnings for future iterations:**
+  - Patterns discovered: Runtime-facing action errors should be normalized with `rivet_error::RivetError::extract` so later protocol dispatch can forward `group/code/message` without re-parsing arbitrary `anyhow` chains.
+  - Gotchas encountered: Post-action state persistence should schedule the existing throttled save path instead of awaiting `save_state()` directly, otherwise action dispatch would block on the persistence delay.
+  - Useful context: `ActionInvoker` is now re-exported from both `actor::mod` and crate root, and its unit tests cover success, timeout, missing actions, best-effort response transforms, and structured error extraction.
 ---

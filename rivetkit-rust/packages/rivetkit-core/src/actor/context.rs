@@ -174,6 +174,9 @@ impl ActorContext {
 		self.0.state.set_on_state_change_callback(callback);
 	}
 
+	pub(crate) fn trigger_throttled_state_save(&self) {
+		self.0.state.trigger_throttled_save();
+	}
 }
 
 impl Default for ActorContext {

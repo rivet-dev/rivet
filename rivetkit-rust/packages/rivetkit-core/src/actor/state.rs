@@ -217,6 +217,10 @@ impl ActorState {
 		}
 	}
 
+	pub(crate) fn trigger_throttled_save(&self) {
+		self.schedule_save(None);
+	}
+
 	#[allow(dead_code)]
 	pub(crate) fn set_on_state_change_callback(
 		&self,

@@ -5197,6 +5197,7 @@ dependencies = [
  "futures",
  "http 1.3.1",
  "rivet-envoy-client",
+ "rivet-error",
  "scc",
  "serde",
  "serde_bare",
