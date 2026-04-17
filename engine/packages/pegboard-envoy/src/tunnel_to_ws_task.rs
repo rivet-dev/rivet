@@ -129,12 +129,12 @@ async fn handle_message(
 				if let protocol::Command::CommandStartActor(start) = &mut command_wrapper.inner {
 					let actor_id = Id::parse(&command_wrapper.checkpoint.actor_id)?;
 					let actor_name = start.config.name.clone();
-					let ids = ctx
+					let hibernating_requests = ctx
 						.op(pegboard::ops::actor::hibernating_request::list::Input { actor_id })
 						.await?;
 
 					// Dynamically populate hibernating request ids
-					start.hibernating_requests = ids
+					start.hibernating_requests = hibernating_requests
 						.into_iter()
 						.map(|x| protocol::HibernatingRequest {
 							gateway_id: x.gateway_id,

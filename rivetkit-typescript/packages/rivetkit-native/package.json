@@ -12,6 +12,7 @@
 		},
 		"./wrapper": {
 			"types": "./wrapper.d.ts",
+			"require": "./wrapper.js",
 			"default": "./wrapper.js"
 		}
 	},

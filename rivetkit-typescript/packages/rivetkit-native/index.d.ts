@@ -93,5 +93,6 @@ export declare class JsEnvoyHandle {
   /** Close an open WebSocket connection. */
   closeWebsocket(gatewayId: Buffer, requestId: Buffer, code?: number | undefined | null, reason?: string | undefined | null): Promise<void>
   startServerless(payload: Buffer): Promise<void>
+  respondCanHibernate(responseId: string, canHibernate: boolean): Promise<void>
   respondCallback(responseId: string, data: any): Promise<void>
 }

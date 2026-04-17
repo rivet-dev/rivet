@@ -24,6 +24,9 @@ pub type ResponseMap = Arc<Mutex<HashMap<String, oneshot::Sender<serde_json::Val
 /// Map of open WebSocket senders, keyed by concatenated gateway_id + request_id (8 bytes).
 pub type WsSenderMap = Arc<Mutex<HashMap<[u8; 8], WebSocketSender>>>;
 
+/// Map of pending can_hibernate response channels, keyed by response ID.
+pub type CanHibernateResponseMap = Arc<Mutex<HashMap<uuid::Uuid, oneshot::Sender<bool>>>>;
+
 fn make_ws_key(gateway_id: &protocol::GatewayId, request_id: &protocol::RequestId) -> [u8; 8] {
 	let mut key = [0u8; 8];
 	key[..4].copy_from_slice(gateway_id);
@@ -36,6 +39,7 @@ pub struct BridgeCallbacks {
 	event_cb: EventCallback,
 	response_map: ResponseMap,
 	ws_sender_map: WsSenderMap,
+	can_hibernate_response_map: CanHibernateResponseMap,
 }
 
 impl BridgeCallbacks {
@@ -43,11 +47,13 @@ impl BridgeCallbacks {
 		event_cb: EventCallback,
 		response_map: ResponseMap,
 		ws_sender_map: WsSenderMap,
+		can_hibernate_response_map: CanHibernateResponseMap,
 	) -> Self {
 		Self {
 			event_cb,
 			response_map,
 			ws_sender_map,
+			can_hibernate_response_map,
 		}
 	}
 
@@ -217,8 +223,8 @@ impl EnvoyCallbacks for BridgeCallbacks {
 		_request: HttpRequest,
 		path: String,
 		headers: HashMap<String, String>,
-		_is_hibernatable: bool,
-		_is_restoring_hibernatable: bool,
+		is_hibernatable: bool,
+		is_restoring_hibernatable: bool,
 		_sender: WebSocketSender,
 	) -> BoxFuture<anyhow::Result<WebSocketHandler>> {
 		let event_cb = self.event_cb.clone();
@@ -286,6 +292,8 @@ impl EnvoyCallbacks for BridgeCallbacks {
 						"messageId": msg_id_bytes,
 						"path": path,
 						"headers": headers,
+						"isHibernatable": is_hibernatable,
+						"isRestoringHibernatable": is_restoring_hibernatable,
 					});
 					event_cb_open.call(envelope, ThreadsafeFunctionCallMode::NonBlocking);
 
@@ -300,12 +308,45 @@ impl EnvoyCallbacks for BridgeCallbacks {
 
 	fn can_hibernate(
 		&self,
-		_actor_id: &str,
-		_gateway_id: &protocol::GatewayId,
-		_request_id: &protocol::RequestId,
-		_request: &HttpRequest,
-	) -> bool {
-		false
+		actor_id: &str,
+		gateway_id: &protocol::GatewayId,
+		request_id: &protocol::RequestId,
+		request: &HttpRequest,
+	) -> rivet_envoy_client::config::BoxFuture<anyhow::Result<bool>> {
+		let can_hibernate_response_map = self.can_hibernate_response_map.clone();
+		let event_cb = self.event_cb.clone();
+		let actor_id = actor_id.to_string();
+		let gateway_id = *gateway_id;
+		let request_id = *request_id;
+		let path = request.path.clone();
+		let headers = request.headers.clone();
+
+		Box::pin(async move {
+			let response_id = uuid::Uuid::new_v4();
+			let msg_id = protocol::MessageId {
+				gateway_id,
+				request_id,
+				message_index: 0,
+			};
+			let envelope = serde_json::json!({
+				"kind": "can_hibernate",
+				"actorId": actor_id,
+				"messageId": types::encode_message_id(&msg_id),
+				"path": path,
+				"headers": headers,
+				"responseId": response_id.to_string(),
+			});
+
+			let (tx, rx) = oneshot::channel();
+			{
+				let mut map = can_hibernate_response_map.lock().await;
+				map.insert(response_id, tx);
+			}
+
+			event_cb.call(envelope, ThreadsafeFunctionCallMode::NonBlocking);
+
+			Ok(rx.await.unwrap_or(false))
+		})
 	}
 }
 

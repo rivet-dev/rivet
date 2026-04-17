@@ -32,7 +32,7 @@ fn init_tracing(log_level: Option<&str>) {
 	});
 }
 
-use crate::bridge_actor::{BridgeCallbacks, ResponseMap, WsSenderMap};
+use crate::bridge_actor::{BridgeCallbacks, CanHibernateResponseMap, ResponseMap, WsSenderMap};
 use crate::envoy_handle::JsEnvoyHandle;
 use crate::types::JsEnvoyConfig;
 
@@ -53,6 +53,8 @@ pub fn start_envoy_sync_js(
 
 	let response_map: ResponseMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 	let ws_sender_map: WsSenderMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+	let can_hibernate_response_map: CanHibernateResponseMap =
+		Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 
 	// Create threadsafe callback for bridging events to JS
 	let tsfn: bridge_actor::EventCallback = event_callback.create_threadsafe_function(
@@ -68,6 +70,7 @@ pub fn start_envoy_sync_js(
 		tsfn.clone(),
 		response_map.clone(),
 		ws_sender_map.clone(),
+		can_hibernate_response_map.clone(),
 	));
 
 	let envoy_config = EnvoyConfig {
@@ -102,6 +105,7 @@ pub fn start_envoy_sync_js(
 		handle,
 		response_map,
 		ws_sender_map,
+		can_hibernate_response_map,
 	))
 }
 

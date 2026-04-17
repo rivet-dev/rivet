@@ -188,8 +188,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -240,8 +240,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -271,8 +271,8 @@ importers:
   examples/agent-os:
     dependencies:
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       zod:
         specifier: ^3.25.0
         version: 3.25.76
@@ -296,8 +296,8 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -327,8 +327,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -385,8 +385,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -440,8 +440,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -507,8 +507,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       secure-exec:
         specifier: https://pkg.pr.new/rivet-dev/secure-exec@7659aba
         version: https://pkg.pr.new/rivet-dev/secure-exec@7659aba
@@ -559,8 +559,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -617,8 +617,8 @@ importers:
         specifier: github:R4ph-t/DDS#v0.8.6
         version: https://codeload.github.com/R4ph-t/DDS/tar.gz/9d48aa53aff50f4a1994920d07a706d1b7d9f0b1(@tailwindcss/typography@0.5.19(tailwindcss@4.2.2))(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(tailwindcss@4.2.2)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       tailwindcss:
         specifier: ^4.2.2
         version: 4.2.2
@@ -669,8 +669,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -709,8 +709,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       y-protocols:
         specifier: ^1.0.6
         version: 1.0.7(yjs@13.6.29)
@@ -767,8 +767,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       y-protocols:
         specifier: ^1.0.6
         version: 1.0.7(yjs@13.6.29)
@@ -813,8 +813,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -865,8 +865,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -905,8 +905,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -948,8 +948,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1000,8 +1000,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1049,8 +1049,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1080,8 +1080,8 @@ importers:
   examples/custom-serverless:
     dependencies:
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1114,8 +1114,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       srvx:
         specifier: ^0.10.0
         version: 0.10.0
@@ -1154,8 +1154,8 @@ importers:
         specifier: ^1.4.0
         version: 1.4.12(@sinclair/typebox@0.34.41)(exact-mirror@0.2.2(@sinclair/typebox@0.34.41))(file-type@21.3.4)(openapi-types@12.1.3)(typescript@5.9.3)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1194,8 +1194,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       zod:
         specifier: ^4.1.0
         version: 4.1.13
@@ -1264,8 +1264,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       zod:
         specifier: ^4.1.0
         version: 4.1.13
@@ -1307,8 +1307,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1359,8 +1359,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1399,8 +1399,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1451,8 +1451,8 @@ importers:
         specifier: github:R4ph-t/DDS#v0.8.6
         version: https://codeload.github.com/R4ph-t/DDS/tar.gz/9d48aa53aff50f4a1994920d07a706d1b7d9f0b1(@tailwindcss/typography@0.5.19(tailwindcss@4.2.2))(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(tailwindcss@4.2.2)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       tailwindcss:
         specifier: ^4.2.2
         version: 4.2.2
@@ -1503,8 +1503,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1537,8 +1537,8 @@ importers:
         specifier: ^4.7.0
         version: 4.11.9
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1565,8 +1565,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1617,8 +1617,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1657,8 +1657,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1706,8 +1706,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1752,8 +1752,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1792,8 +1792,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1841,8 +1841,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       three:
         specifier: ^0.171.0
         version: 0.171.0
@@ -1905,8 +1905,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       three:
         specifier: ^0.171.0
         version: 0.171.0
@@ -1957,8 +1957,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -1997,8 +1997,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2055,8 +2055,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2141,8 +2141,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2193,8 +2193,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2236,8 +2236,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.10.6
@@ -2288,8 +2288,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.10.6
@@ -2328,8 +2328,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -2380,8 +2380,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       ws:
         specifier: ^8.18.0
         version: 8.19.0
@@ -2438,8 +2438,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       ws:
         specifier: ^8.18.0
         version: 8.19.0
@@ -2493,8 +2493,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -2533,8 +2533,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2591,8 +2591,8 @@ importers:
         specifier: github:R4ph-t/DDS#v0.8.6
         version: https://codeload.github.com/R4ph-t/DDS/tar.gz/9d48aa53aff50f4a1994920d07a706d1b7d9f0b1(@tailwindcss/typography@0.5.19(tailwindcss@4.2.2))(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(tailwindcss@4.2.2)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       tailwindcss:
         specifier: ^4.2.2
         version: 4.2.2
@@ -2643,8 +2643,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2716,8 +2716,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       srvx:
         specifier: ^0.10.0
         version: 0.10.0
@@ -2765,8 +2765,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2817,8 +2817,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2887,8 +2887,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       zod:
         specifier: ^3.25.69
         version: 3.25.76
@@ -2930,8 +2930,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -2982,8 +2982,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -3023,8 +3023,8 @@ importers:
         specifier: ^22.13.9
         version: 22.19.10
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -3038,8 +3038,8 @@ importers:
         specifier: ^22.13.9
         version: 22.19.10
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       tsx:
         specifier: ^3.12.7
         version: 3.14.0
@@ -3059,8 +3059,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -3117,8 +3117,8 @@ importers:
         specifier: github:R4ph-t/DDS#v0.8.6
         version: https://codeload.github.com/R4ph-t/DDS/tar.gz/9d48aa53aff50f4a1994920d07a706d1b7d9f0b1(@tailwindcss/typography@0.5.19(tailwindcss@4.2.2))(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(tailwindcss@4.2.2)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       tailwindcss:
         specifier: ^4.2.2
         version: 4.2.2
@@ -3169,8 +3169,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -3209,8 +3209,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -3267,8 +3267,8 @@ importers:
         specifier: github:R4ph-t/DDS#v0.8.6
         version: https://codeload.github.com/R4ph-t/DDS/tar.gz/9d48aa53aff50f4a1994920d07a706d1b7d9f0b1(@tailwindcss/typography@0.5.19(tailwindcss@4.2.2))(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(tailwindcss@4.2.2)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       tailwindcss:
         specifier: ^4.2.2
         version: 4.2.2
@@ -3319,8 +3319,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -3362,8 +3362,8 @@ importers:
         specifier: ^4.7.11
         version: 4.11.9
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -3658,7 +3658,7 @@ importers:
         version: 12.10.0(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       actor-core:
         specifier: ^0.6.3
-        version: 0.6.3(eventsource@3.0.7)(ws@8.19.0)
+        version: 0.6.3(eventsource@3.0.7)(ws@8.18.3)
       autoprefixer:
         specifier: ^10.4.21
         version: 10.4.22(postcss@8.5.6)
@@ -3759,8 +3759,8 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(ws@8.18.3)
+        specifier: workspace:*
+        version: link:../rivetkit-typescript/packages/rivetkit
       shiki:
         specifier: ^3.12.2
         version: 3.21.0
@@ -4167,8 +4167,8 @@ importers:
         specifier: workspace:*
         version: link:../db
       '@rivetkit/engine-api-full':
-        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivetkit/engine-api-full@011e389
-        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivetkit/engine-api-full@011e389
+        specifier: workspace:*
+        version: link:../../engine/sdks/typescript/api-full
       '@rivetkit/sqlite-vfs':
         specifier: 2.0.4-rc.1
         version: 2.0.4-rc.1
@@ -4239,8 +4239,8 @@ importers:
         specifier: ^4.5.2
         version: 4.8.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       stripe:
         specifier: ^18.5.0
         version: 18.5.0(@types/node@25.5.2)
@@ -4359,8 +4359,8 @@ importers:
         specifier: ^4.7.0
         version: 4.11.9
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -4417,8 +4417,8 @@ importers:
         specifier: ^13.1.1
         version: 13.1.1
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
       zod:
         specifier: ^4.1.5
         version: 4.1.12
@@ -4506,8 +4506,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       '@types/node':
         specifier: ^20
@@ -4534,8 +4534,8 @@ importers:
         specifier: ^1.3.0
         version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       srvx:
         specifier: ^0.10.0
@@ -4553,8 +4553,8 @@ importers:
         specifier: ^1.3.0
         version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../../../../rivetkit-typescript/packages/rivetkit
     devDependencies:
       srvx:
         specifier: ^0.10.0
@@ -4588,8 +4588,8 @@ importers:
         specifier: ^9.2.1
         version: 9.2.1
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../rivetkit
       serve:
         specifier: ^14.2.5
         version: 14.2.5
@@ -4667,8 +4667,8 @@ importers:
         specifier: ^3.1.3
         version: 3.1.3
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../rivetkit
     devDependencies:
       tsup:
         specifier: ^8.4.0
@@ -4720,8 +4720,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../rivetkit
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -4754,8 +4754,8 @@ importers:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       rivetkit:
-        specifier: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce
-        version: https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0)
+        specifier: workspace:*
+        version: link:../rivetkit
     devDependencies:
       '@types/react':
         specifier: ^19
@@ -9915,8 +9915,178 @@ packages:
     resolution: {integrity: sha512-5RC9Ze/wTKqSlJvopdCgr+EfyV93+iiH8Thog0QXrl8PT1unuBNw/jadXNMtwgAxrIaCJL+JLaHQH9w7rqpMDw==}
     engines: {node: '>=20'}
 
+  '@rivetkit/sqlite-vfs@2.0.4-rc.1':
+    resolution: {integrity: sha512-qOOubTa3j1cDceWfb3HlwF0u+2Nc3n6EPQBt0oSCFGuz/6WsREytk7mUIeH7Tlav59bbeg5K4TKODngItYN8aA==}
+    engines: {node: '>=20.0.0'}
+
   '@rivetkit/sqlite@0.1.1':
     resolution: {integrity: sha512-NE7ZBy/hQhOrWzMZFjkHX9SoXxf+ILcDvVV+mNbUYPgiy/fsDzlXdK0+JDTGnko5f4Xl6/KVCoCozz9gkwkq8A==}
+
+  '@rolldown/binding-android-arm64@1.0.0-rc.12':
+    resolution: {integrity: sha512-pv1y2Fv0JybcykuiiD3qBOBdz6RteYojRFY1d+b95WVuzx211CRh+ytI/+9iVyWQ6koTh5dawe4S/yRfOFjgaA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [android]
+
+  '@rolldown/binding-android-arm64@1.0.0-rc.3':
+    resolution: {integrity: sha512-0T1k9FinuBZ/t7rZ8jN6OpUKPnUjNdYHoj/cESWrQ3ZraAJ4OMm6z7QjSfCxqj8mOp9kTKc1zHK3kGz5vMu+nQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [android]
+
+  '@rolldown/binding-darwin-arm64@1.0.0-rc.12':
+    resolution: {integrity: sha512-cFYr6zTG/3PXXF3pUO+umXxt1wkRK/0AYT8lDwuqvRC+LuKYWSAQAQZjCWDQpAH172ZV6ieYrNnFzVVcnSflAg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@rolldown/binding-darwin-arm64@1.0.0-rc.3':
+    resolution: {integrity: sha512-JWWLzvcmc/3pe7qdJqPpuPk91SoE/N+f3PcWx/6ZwuyDVyungAEJPvKm/eEldiDdwTmaEzWfIR+HORxYWrCi1A==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@rolldown/binding-darwin-x64@1.0.0-rc.12':
+    resolution: {integrity: sha512-ZCsYknnHzeXYps0lGBz8JrF37GpE9bFVefrlmDrAQhOEi4IOIlcoU1+FwHEtyXGx2VkYAvhu7dyBf75EJQffBw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [darwin]
+
+  '@rolldown/binding-darwin-x64@1.0.0-rc.3':
+    resolution: {integrity: sha512-MTakBxfx3tde5WSmbHxuqlDsIW0EzQym+PJYGF4P6lG2NmKzi128OGynoFUqoD5ryCySEY85dug4v+LWGBElIw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [darwin]
+
+  '@rolldown/binding-freebsd-x64@1.0.0-rc.12':
+    resolution: {integrity: sha512-dMLeprcVsyJsKolRXyoTH3NL6qtsT0Y2xeuEA8WQJquWFXkEC4bcu1rLZZSnZRMtAqwtrF/Ib9Ddtpa/Gkge9Q==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@rolldown/binding-freebsd-x64@1.0.0-rc.3':
+    resolution: {integrity: sha512-jje3oopyOLs7IwfvXoS6Lxnmie5JJO7vW29fdGFu5YGY1EDbVDhD+P9vDihqS5X6fFiqL3ZQZCMBg6jyHkSVww==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@rolldown/binding-linux-arm-gnueabihf@1.0.0-rc.12':
+    resolution: {integrity: sha512-YqWjAgGC/9M1lz3GR1r1rP79nMgo3mQiiA+Hfo+pvKFK1fAJ1bCi0ZQVh8noOqNacuY1qIcfyVfP6HoyBRZ85Q==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [linux]
+
+  '@rolldown/binding-linux-arm-gnueabihf@1.0.0-rc.3':
+    resolution: {integrity: sha512-A0n8P3hdLAaqzSFrQoA42p23ZKBYQOw+8EH5r15Sa9X1kD9/JXe0YT2gph2QTWvdr0CVK2BOXiK6ENfy6DXOag==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [linux]
+
+  '@rolldown/binding-linux-arm64-gnu@1.0.0-rc.12':
+    resolution: {integrity: sha512-/I5AS4cIroLpslsmzXfwbe5OmWvSsrFuEw3mwvbQ1kDxJ822hFHIx+vsN/TAzNVyepI/j/GSzrtCIwQPeKCLIg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+
+  '@rolldown/binding-linux-arm64-gnu@1.0.0-rc.3':
+    resolution: {integrity: sha512-kWXkoxxarYISBJ4bLNf5vFkEbb4JvccOwxWDxuK9yee8lg5XA7OpvlTptfRuwEvYcOZf+7VS69Uenpmpyo5Bjw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+
+  '@rolldown/binding-linux-arm64-musl@1.0.0-rc.12':
+    resolution: {integrity: sha512-V6/wZztnBqlx5hJQqNWwFdxIKN0m38p8Jas+VoSfgH54HSj9tKTt1dZvG6JRHcjh6D7TvrJPWFGaY9UBVOaWPw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+
+  '@rolldown/binding-linux-arm64-musl@1.0.0-rc.3':
+    resolution: {integrity: sha512-Z03/wrqau9Bicfgb3Dbs6SYTHliELk2PM2LpG2nFd+cGupTMF5kanLEcj2vuuJLLhptNyS61rtk7SOZ+lPsTUA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+
+  '@rolldown/binding-linux-ppc64-gnu@1.0.0-rc.12':
+    resolution: {integrity: sha512-AP3E9BpcUYliZCxa3w5Kwj9OtEVDYK6sVoUzy4vTOJsjPOgdaJZKFmN4oOlX0Wp0RPV2ETfmIra9x1xuayFB7g==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [ppc64]
+    os: [linux]
+
+  '@rolldown/binding-linux-s390x-gnu@1.0.0-rc.12':
+    resolution: {integrity: sha512-nWwpvUSPkoFmZo0kQazZYOrT7J5DGOJ/+QHHzjvNlooDZED8oH82Yg67HvehPPLAg5fUff7TfWFHQS8IV1n3og==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [s390x]
+    os: [linux]
+
+  '@rolldown/binding-linux-x64-gnu@1.0.0-rc.12':
+    resolution: {integrity: sha512-RNrafz5bcwRy+O9e6P8Z/OCAJW/A+qtBczIqVYwTs14pf4iV1/+eKEjdOUta93q2TsT/FI0XYDP3TCky38LMAg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+
+  '@rolldown/binding-linux-x64-gnu@1.0.0-rc.3':
+    resolution: {integrity: sha512-iSXXZsQp08CSilff/DCTFZHSVEpEwdicV3W8idHyrByrcsRDVh9sGC3sev6d8BygSGj3vt8GvUKBPCoyMA4tgQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+
+  '@rolldown/binding-linux-x64-musl@1.0.0-rc.12':
+    resolution: {integrity: sha512-Jpw/0iwoKWx3LJ2rc1yjFrj+T7iHZn2JDg1Yny1ma0luviFS4mhAIcd1LFNxK3EYu3DHWCps0ydXQ5i/rrJ2ig==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+
+  '@rolldown/binding-linux-x64-musl@1.0.0-rc.3':
+    resolution: {integrity: sha512-qaj+MFudtdCv9xZo9znFvkgoajLdc+vwf0Kz5N44g+LU5XMe+IsACgn3UG7uTRlCCvhMAGXm1XlpEA5bZBrOcw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+
+  '@rolldown/binding-openharmony-arm64@1.0.0-rc.12':
+    resolution: {integrity: sha512-vRugONE4yMfVn0+7lUKdKvN4D5YusEiPilaoO2sgUWpCvrncvWgPMzK00ZFFJuiPgLwgFNP5eSiUlv2tfc+lpA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [openharmony]
+
+  '@rolldown/binding-openharmony-arm64@1.0.0-rc.3':
+    resolution: {integrity: sha512-U662UnMETyjT65gFmG9ma+XziENrs7BBnENi/27swZPYagubfHRirXHG2oMl+pEax2WvO7Kb9gHZmMakpYqBHQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [openharmony]
+
+  '@rolldown/binding-wasm32-wasi@1.0.0-rc.12':
+    resolution: {integrity: sha512-ykGiLr/6kkiHc0XnBfmFJuCjr5ZYKKofkx+chJWDjitX+KsJuAmrzWhwyOMSHzPhzOHOy7u9HlFoa5MoAOJ/Zg==}
+    engines: {node: '>=14.0.0'}
+    cpu: [wasm32]
+
+  '@rolldown/binding-wasm32-wasi@1.0.0-rc.3':
+    resolution: {integrity: sha512-gekrQ3Q2HiC1T5njGyuUJoGpK/l6B/TNXKed3fZXNf9YRTJn3L5MOZsFBn4bN2+UX+8+7hgdlTcEsexX988G4g==}
+    engines: {node: '>=14.0.0'}
+    cpu: [wasm32]
+
+  '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.12':
+    resolution: {integrity: sha512-5eOND4duWkwx1AzCxadcOrNeighiLwMInEADT0YM7xeEOOFcovWZCq8dadXgcRHSf3Ulh1kFo/qvzoFiCLOL1Q==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [win32]
+
+  '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.3':
+    resolution: {integrity: sha512-85y5JifyMgs8m5K2XzR/VDsapKbiFiohl7s5lEj7nmNGO0pkTXE7q6TQScei96BNAsoK7JC3pA7ukA8WRHVJpg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [win32]
+
+  '@rolldown/binding-win32-x64-msvc@1.0.0-rc.12':
+    resolution: {integrity: sha512-PyqoipaswDLAZtot351MLhrlrh6lcZPo2LSYE+VDxbVk24LVKAGOuE4hb8xZQmrPAuEtTZW8E6D2zc5EUZX4Lw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [win32]
+
+  '@rolldown/binding-win32-x64-msvc@1.0.0-rc.3':
+    resolution: {integrity: sha512-a4VUQZH7LxGbUJ3qJ/TzQG8HxdHvf+jOnqf7B7oFx1TEBm+j2KNL2zr5SQ7wHkNAcaPevF6gf9tQnVBnC4mD+A==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [win32]
 
   '@rolldown/pluginutils@1.0.0-beta.27':
     resolution: {integrity: sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA==}
@@ -22779,16 +22949,6 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9)':
-    dependencies:
-      '@hono/node-server': 1.19.13(hono@4.11.9)
-      hono: 4.11.9
-      ws: 8.19.0
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-    optional: true
-
   '@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)':
     dependencies:
       '@hono/node-server': 1.19.9(hono@4.11.9)
@@ -25562,26 +25722,113 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c':
-    dependencies:
-      cross-fetch: 4.1.0
-      form-data: 4.0.5
-      js-base64: 3.7.8
-      node-fetch: 2.7.0
-      pino-pretty: 13.1.2
-      qs: 6.14.1
-      readable-stream: 4.7.0
-      url-join: 5.0.0
-    transitivePeerDependencies:
-      - encoding
-
   '@rivetkit/bare-ts@0.6.2': {}
 
   '@rivetkit/fast-json-patch@3.1.2': {}
 
   '@rivetkit/on-change@6.0.2-rc.1': {}
 
+  '@rivetkit/sqlite-vfs@2.0.4-rc.1':
+    dependencies:
+      '@rivetkit/bare-ts': 0.6.2
+      '@rivetkit/sqlite': 0.1.1
+      vbare: 0.0.4
+
   '@rivetkit/sqlite@0.1.1': {}
+
+  '@rolldown/binding-android-arm64@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-android-arm64@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-darwin-arm64@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-darwin-arm64@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-darwin-x64@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-darwin-x64@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-freebsd-x64@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-freebsd-x64@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-linux-arm-gnueabihf@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-arm-gnueabihf@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-linux-arm64-gnu@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-arm64-gnu@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-linux-arm64-musl@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-arm64-musl@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-linux-ppc64-gnu@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-s390x-gnu@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-x64-gnu@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-x64-gnu@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-linux-x64-musl@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-x64-musl@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-openharmony-arm64@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-openharmony-arm64@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-wasm32-wasi@1.0.0-rc.12(@emnapi/core@1.9.2)(@emnapi/runtime@1.7.1)':
+    dependencies:
+      '@napi-rs/wasm-runtime': 1.1.2(@emnapi/core@1.9.2)(@emnapi/runtime@1.7.1)
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
+    optional: true
+
+  '@rolldown/binding-wasm32-wasi@1.0.0-rc.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.7.1)':
+    dependencies:
+      '@napi-rs/wasm-runtime': 1.1.2(@emnapi/core@1.9.2)(@emnapi/runtime@1.7.1)
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
+    optional: true
+
+  '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-win32-x64-msvc@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-win32-x64-msvc@1.0.0-rc.3':
+    optional: true
 
   '@rolldown/pluginutils@1.0.0-beta.27': {}
 
@@ -28415,7 +28662,7 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  actor-core@0.6.3(eventsource@3.0.7)(ws@8.19.0):
+  actor-core@0.6.3(eventsource@3.0.7)(ws@8.18.3):
     dependencies:
       cbor-x: 1.6.0
       hono: 4.11.9
@@ -28424,7 +28671,7 @@ snapshots:
       zod: 3.25.76
     optionalDependencies:
       eventsource: 3.0.7
-      ws: 8.19.0
+      ws: 8.18.3
 
   agent-base@6.0.2:
     dependencies:
@@ -35344,185 +35591,6 @@ snapshots:
     dependencies:
       hash-base: 3.1.2
       inherits: 2.0.4
-
-  rivetkit@https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.14.2(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.14.2(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251106.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0):
-    dependencies:
-      '@hono/standard-validator': 0.1.5(@standard-schema/spec@1.1.0)(hono@4.11.9)
-      '@hono/zod-openapi': 1.1.5(hono@4.11.9)(zod@4.1.12)
-      '@rivetkit/bare-ts': 0.6.2
-      '@rivetkit/engine-runner': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/engine-runner@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/fast-json-patch': 3.1.2
-      '@rivetkit/on-change': 6.0.2-rc.1
-      '@rivetkit/sqlite': 0.1.1
-      '@rivetkit/sqlite-vfs': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/sqlite-vfs@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/traces': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/traces@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/virtual-websocket': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/virtual-websocket@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/workflow-engine': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/workflow-engine@bcab9ce08aee398aa397b4a325b462337aa20062
-      cbor-x: 1.6.0
-      get-port: 7.1.0
-      hono: 4.11.9
-      invariant: 2.2.4
-      nanoevents: 9.1.0
-      p-retry: 6.2.1
-      pino: 9.9.5
-      tar: 7.5.11
-      uuid: 12.0.0
-      vbare: 0.0.4
-      zod: 4.1.12
-    optionalDependencies:
-      '@hono/node-server': 1.14.2(hono@4.11.9)
-      '@hono/node-ws': 1.3.0(@hono/node-server@1.14.2(hono@4.11.9))(hono@4.11.9)
-      drizzle-kit: 0.31.6
-      drizzle-orm: 0.44.6(@cloudflare/workers-types@4.20251106.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0)
-      eventsource: 4.0.0
-      ws: 8.19.0
-    transitivePeerDependencies:
-      - '@standard-schema/spec'
-      - bufferutil
-      - utf-8-validate
-
-  rivetkit@https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0):
-    dependencies:
-      '@hono/standard-validator': 0.1.5(@standard-schema/spec@1.1.0)(hono@4.11.9)
-      '@hono/zod-openapi': 1.1.5(hono@4.11.9)(zod@4.1.12)
-      '@rivetkit/bare-ts': 0.6.2
-      '@rivetkit/engine-runner': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/engine-runner@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/fast-json-patch': 3.1.2
-      '@rivetkit/on-change': 6.0.2-rc.1
-      '@rivetkit/sqlite': 0.1.1
-      '@rivetkit/sqlite-vfs': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/sqlite-vfs@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/traces': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/traces@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/virtual-websocket': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/virtual-websocket@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/workflow-engine': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/workflow-engine@bcab9ce08aee398aa397b4a325b462337aa20062
-      cbor-x: 1.6.4
-      get-port: 7.1.0
-      hono: 4.11.9
-      invariant: 2.2.4
-      nanoevents: 9.1.0
-      p-retry: 6.2.1
-      pino: 9.9.5
-      tar: 7.5.11
-      uuid: 12.0.0
-      vbare: 0.0.4
-      zod: 4.1.12
-    optionalDependencies:
-      '@hono/node-server': 1.19.13(hono@4.11.9)
-      '@hono/node-ws': 1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9)
-      drizzle-kit: 0.31.6
-      drizzle-orm: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0)
-      eventsource: 4.0.0
-      ws: 8.19.0
-    transitivePeerDependencies:
-      - '@standard-schema/spec'
-      - bufferutil
-      - utf-8-validate
-
-  rivetkit@https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.13(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(ws@8.18.3):
-    dependencies:
-      '@hono/standard-validator': 0.1.5(@standard-schema/spec@1.1.0)(hono@4.11.9)
-      '@hono/zod-openapi': 1.1.5(hono@4.11.9)(zod@4.1.12)
-      '@rivetkit/bare-ts': 0.6.2
-      '@rivetkit/engine-runner': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/engine-runner@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/fast-json-patch': 3.1.2
-      '@rivetkit/on-change': 6.0.2-rc.1
-      '@rivetkit/sqlite': 0.1.1
-      '@rivetkit/sqlite-vfs': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/sqlite-vfs@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/traces': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/traces@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/virtual-websocket': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/virtual-websocket@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/workflow-engine': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/workflow-engine@bcab9ce08aee398aa397b4a325b462337aa20062
-      cbor-x: 1.6.4
-      get-port: 7.1.0
-      hono: 4.11.9
-      invariant: 2.2.4
-      nanoevents: 9.1.0
-      p-retry: 6.2.1
-      pino: 9.9.5
-      tar: 7.5.11
-      uuid: 12.0.0
-      vbare: 0.0.4
-      zod: 4.1.12
-    optionalDependencies:
-      '@hono/node-server': 1.19.13(hono@4.11.9)
-      '@hono/node-ws': 1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9)
-      drizzle-kit: 0.31.6
-      drizzle-orm: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0)
-      ws: 8.18.3
-    transitivePeerDependencies:
-      - '@standard-schema/spec'
-      - bufferutil
-      - utf-8-validate
-
-  rivetkit@https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.38.4(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/react@19.2.13)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(react@19.1.0)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0):
-    dependencies:
-      '@hono/standard-validator': 0.1.5(@standard-schema/spec@1.1.0)(hono@4.11.9)
-      '@hono/zod-openapi': 1.1.5(hono@4.11.9)(zod@4.1.12)
-      '@rivetkit/bare-ts': 0.6.2
-      '@rivetkit/engine-runner': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/engine-runner@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/fast-json-patch': 3.1.2
-      '@rivetkit/on-change': 6.0.2-rc.1
-      '@rivetkit/sqlite': 0.1.1
-      '@rivetkit/sqlite-vfs': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/sqlite-vfs@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/traces': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/traces@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/virtual-websocket': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/virtual-websocket@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/workflow-engine': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/workflow-engine@bcab9ce08aee398aa397b4a325b462337aa20062
-      cbor-x: 1.6.0
-      get-port: 7.1.0
-      hono: 4.11.9
-      invariant: 2.2.4
-      nanoevents: 9.1.0
-      p-retry: 6.2.1
-      pino: 9.9.5
-      tar: 7.5.11
-      uuid: 12.0.0
-      vbare: 0.0.4
-      zod: 4.1.12
-    optionalDependencies:
-      '@hono/node-server': 1.19.9(hono@4.11.9)
-      '@hono/node-ws': 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
-      drizzle-kit: 0.31.6
-      drizzle-orm: 0.38.4(@cloudflare/workers-types@4.20251106.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/react@19.2.13)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(react@19.1.0)(sql.js@1.13.0)
-      eventsource: 4.0.0
-      ws: 8.19.0
-    transitivePeerDependencies:
-      - '@standard-schema/spec'
-      - bufferutil
-      - utf-8-validate
-
-  rivetkit@https://pkg.pr.new/rivet-dev/rivet/rivetkit@bcab9ce(@hono/node-server@1.19.9(hono@4.11.9))(@hono/node-ws@1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9))(@standard-schema/spec@1.1.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(eventsource@4.0.0)(ws@8.19.0):
-    dependencies:
-      '@hono/standard-validator': 0.1.5(@standard-schema/spec@1.1.0)(hono@4.11.9)
-      '@hono/zod-openapi': 1.1.5(hono@4.11.9)(zod@4.1.12)
-      '@rivetkit/bare-ts': 0.6.2
-      '@rivetkit/engine-runner': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/engine-runner@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/fast-json-patch': 3.1.2
-      '@rivetkit/on-change': 6.0.2-rc.1
-      '@rivetkit/sqlite': 0.1.1
-      '@rivetkit/sqlite-vfs': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/sqlite-vfs@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/traces': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/traces@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/virtual-websocket': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/virtual-websocket@bcab9ce08aee398aa397b4a325b462337aa20062
-      '@rivetkit/workflow-engine': https://pkg.pr.new/rivet-dev/rivet/@rivetkit/workflow-engine@bcab9ce08aee398aa397b4a325b462337aa20062
-      cbor-x: 1.6.0
-      get-port: 7.1.0
-      hono: 4.11.9
-      invariant: 2.2.4
-      nanoevents: 9.1.0
-      p-retry: 6.2.1
-      pino: 9.9.5
-      tar: 7.5.11
-      uuid: 12.0.0
-      vbare: 0.0.4
-      zod: 4.1.12
-    optionalDependencies:
-      '@hono/node-server': 1.19.9(hono@4.11.9)
-      '@hono/node-ws': 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
-      drizzle-kit: 0.31.6
-      drizzle-orm: 0.44.6(@cloudflare/workers-types@4.20251106.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0)
-      eventsource: 4.0.0
-      ws: 8.19.0
-    transitivePeerDependencies:
-      - '@standard-schema/spec'
-      - bufferutil
-      - utf-8-validate
 
   robust-predicates@3.0.2: {}
 

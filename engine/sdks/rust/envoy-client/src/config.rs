@@ -107,7 +107,7 @@ pub trait EnvoyCallbacks: Send + Sync + 'static {
 		gateway_id: &protocol::GatewayId,
 		request_id: &protocol::RequestId,
 		request: &HttpRequest,
-	) -> bool;
+	) -> BoxFuture<anyhow::Result<bool>>;
 }
 
 /// Handler returned by the websocket callback for receiving WebSocket events.

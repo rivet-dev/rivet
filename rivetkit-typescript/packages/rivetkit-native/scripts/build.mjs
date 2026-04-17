@@ -61,6 +61,6 @@ if (!force && hasPrebuiltArtifact()) {
 	process.exit(0);
 }
 
-const cmd = ["napi", "build", "--platform", ...extraFlags].join(" ");
+const cmd = ["napi", "build", "--platform", "--dts", "index.d.ts", ...extraFlags].join(" ");
 console.log(`[rivetkit-native/build] running: ${cmd}`);
 execSync(cmd, { stdio: "inherit", cwd: packageDir });

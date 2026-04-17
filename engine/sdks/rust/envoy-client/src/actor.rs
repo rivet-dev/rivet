@@ -412,12 +412,18 @@ async fn handle_ws_open(
 		body_stream: None,
 	};
 
-	let is_hibernatable = ctx.shared.config.callbacks.can_hibernate(
-		&ctx.actor_id,
-		&message_id.gateway_id,
-		&message_id.request_id,
-		&request,
-	);
+	let is_hibernatable = ctx
+		.shared
+		.config
+		.callbacks
+		.can_hibernate(
+			&ctx.actor_id,
+			&message_id.gateway_id,
+			&message_id.request_id,
+			&request,
+		)
+		.await
+		.unwrap_or(false);
 
 	// Create outgoing channel BEFORE calling websocket() so the sender is available immediately
 	let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded_channel::<crate::config::WsOutgoing>();

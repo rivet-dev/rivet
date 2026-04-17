@@ -135,7 +135,7 @@ impl EnvoyCallbacks for DefaultTestCallbacks {
 		_gateway_id: &protocol::GatewayId,
 		_request_id: &protocol::RequestId,
 		_request: &HttpRequest,
-	) -> bool {
-		false
+	) -> rivet_envoy_client::config::BoxFuture<anyhow::Result<bool>> {
+		Box::pin(async { Ok(false) })
 	}
 }

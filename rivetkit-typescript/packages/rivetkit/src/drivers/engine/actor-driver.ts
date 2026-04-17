@@ -1,7 +1,8 @@
 import type { EnvoyConfig } from "@rivetkit/rivetkit-native/wrapper";
 import type { ISqliteVfs } from "@rivetkit/sqlite-wasm";
 import { SqliteVfsPoolManager } from "@/driver-helpers/sqlite-pool";
-import { type HibernatingWebSocketMetadata, type EnvoyHandle, protocol, utils, startEnvoySync } from "@rivetkit/rivetkit-native/wrapper";
+import type { HibernatingWebSocketMetadata, EnvoyHandle } from "@rivetkit/rivetkit-native/wrapper";
+import type * as protocol from "@rivetkit/engine-envoy-protocol";
 import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -205,6 +206,9 @@ export class EngineActorDriver implements ActorDriver {
 		};
 
 		// Create and start envoy
+		const { startEnvoySync } = getRequireFn()(
+			/* webpackIgnore: true */ "@rivetkit/rivetkit-native/wrapper",
+		) as typeof import("@rivetkit/rivetkit-native/wrapper");
 		const envoy = startEnvoySync(envoyConfig);
 
 		this.#envoy = envoy;
