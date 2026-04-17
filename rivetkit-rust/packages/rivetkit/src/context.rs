@@ -1,7 +1,7 @@
 use std::fmt;
 use std::future::Future;
 use std::marker::PhantomData;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use ciborium::{de::from_reader, ser::into_writer};
 use serde::Serialize;
@@ -12,19 +12,29 @@ use rivetkit_core::{
 	ActorContext, ActorKey, ConnHandle, Kv, Queue, Schedule, SqliteDb,
 };
 
-#[derive(Clone)]
 pub struct Ctx<A: Actor> {
 	inner: ActorContext,
 	state_cache: Arc<Mutex<Option<Arc<A::State>>>>,
-	vars: Arc<A::Vars>,
+	vars: Arc<OnceLock<Arc<A::Vars>>>,
 }
 
 impl<A: Actor> Ctx<A> {
 	pub fn new(inner: ActorContext, vars: Arc<A::Vars>) -> Self {
+		let vars_slot = OnceLock::new();
+		let _ = vars_slot.set(vars);
+
 		Self {
 			inner,
 			state_cache: Arc::new(Mutex::new(None)),
-			vars,
+			vars: Arc::new(vars_slot),
+		}
+	}
+
+	pub(crate) fn new_bootstrap(inner: ActorContext) -> Self {
+		Self {
+			inner,
+			state_cache: Arc::new(Mutex::new(None)),
+			vars: Arc::new(OnceLock::new()),
 		}
 	}
 
@@ -65,7 +75,11 @@ impl<A: Actor> Ctx<A> {
 	}
 
 	pub fn vars(&self) -> &A::Vars {
-		self.vars.as_ref()
+		self
+			.vars
+			.get()
+			.expect("typed actor vars accessed before initialization")
+			.as_ref()
 	}
 
 	pub fn kv(&self) -> &Kv {
@@ -142,6 +156,17 @@ impl<A: Actor> Ctx<A> {
 			.map(ConnCtx::new)
 			.collect()
 	}
+
+	pub(crate) fn initialize_vars(&self, vars: Arc<A::Vars>) {
+		let _ = self.vars.set(vars);
+	}
+
+	pub(crate) fn invalidate_state_cache(&self) {
+		*self
+			.state_cache
+			.lock()
+			.expect("typed actor state cache lock poisoned") = None;
+	}
 }
 
 impl<A: Actor> fmt::Debug for Ctx<A> {
@@ -151,14 +176,15 @@ impl<A: Actor> fmt::Debug for Ctx<A> {
 			.lock()
 			.expect("typed actor state cache lock poisoned")
 			.is_some();
+		let vars_initialized = self.vars.get().is_some();
 		f.debug_struct("Ctx")
 			.field("inner", &self.inner)
 			.field("state_cached", &state_cached)
+			.field("vars_initialized", &vars_initialized)
 			.finish()
 	}
 }
 
-#[derive(Clone)]
 pub struct ConnCtx<A: Actor> {
 	inner: ConnHandle,
 	_phantom: PhantomData<fn() -> A>,
@@ -226,6 +252,25 @@ impl<A: Actor> From<ConnHandle> for ConnCtx<A> {
 impl<A: Actor> fmt::Debug for ConnCtx<A> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("ConnCtx").field("inner", &self.inner).finish()
+	}
+}
+
+impl<A: Actor> Clone for Ctx<A> {
+	fn clone(&self) -> Self {
+		Self {
+			inner: self.inner.clone(),
+			state_cache: Arc::clone(&self.state_cache),
+			vars: Arc::clone(&self.vars),
+		}
+	}
+}
+
+impl<A: Actor> Clone for ConnCtx<A> {
+	fn clone(&self) -> Self {
+		Self {
+			inner: self.inner.clone(),
+			_phantom: PhantomData,
+		}
 	}
 }
 

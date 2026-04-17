@@ -422,7 +422,7 @@
         "`cargo check -p rivetkit` passes"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": "See spec 'Action Registration', 'Registry', and usage example. No macros. The bridge is the key piece that converts typed Actor impls into dynamic ActorFactory+ActorInstanceCallbacks for rivetkit-core."
     },
     {
