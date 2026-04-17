@@ -13,6 +13,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` actor snapshots should stay BARE-encoded at the single-byte KV key `[1]` so Rust matches the TypeScript actor persist layout.
 - `rivetkit-core` hibernatable websocket connections should persist per-connection BARE payloads under KV keys `[2] + conn_id`, matching the TypeScript v4 connection field order for restore compatibility.
 - `rivetkit-core` queue persistence should mirror the TypeScript key layout with metadata at `[5, 1, 1]` and message entries at `[5, 1, 2] + u64be(message_id)` so lexicographic scans preserve FIFO order.
+- `rivetkit-core` persisted actor, connection, and queue payloads should include the vbare 2-byte little-endian embedded version prefix before the BARE body so Rust matches TypeScript `serializeWithEmbeddedVersion(...)` bytes.
 - `rivetkit-core` action/lifecycle surfaces should collapse `anyhow::Error` into serializable `group/code/message` payloads via `rivet_error::RivetError::extract` before returning them across runtime boundaries.
 - `rivetkit-core` schedule mutations should go through one `ActorState` helper so insert/remove stays sorted, then trigger an immediate state flush and envoy alarm resync from the earliest remaining event.
 - `rivetkit-core` transport-edge helpers should translate `on_request` failures into HTTP 500 responses and `on_websocket` failures into logged 1011 closes, while wrapper types keep internal `try_*` methods for explicit misconfiguration errors.
@@ -238,4 +239,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Keep `CoreRegistry::serve()` as the env-driven default, and hang local-dev engine spawning off `serve_with_config(ServeConfig { engine_binary_path, .. })` so the typed `rivetkit` wrapper can re-export the same config without inventing another surface.
   - Gotchas encountered: Pulling in `rivet_pools::reqwest::client()` for the localhost health probe drags a bigger engine dependency graph into `rivetkit-core`, so expect the first build after this story to be slower than the code diff looks.
   - Useful context: `registry.rs` now has focused tests for health-check retry behavior and SIGTERM shutdown, and `cargo check -p rivetkit` stays clean aside from the existing `rivet-envoy-protocol` warning about missing `@bare-ts/tools`.
+---
+## 2026-04-17 11:25:20 PDT - US-027
+- What was implemented: Replaced raw `serde_bare` persistence with a shared embedded-version codec for actor state, hibernatable connections, and queue payloads so Rust reads and writes the same bytes as the TypeScript runtime. Added exact key-layout and hex-vector tests for persisted actor, connection, queue metadata, and queue message payloads.
+- Files changed: `/home/nathan/r5/AGENTS.md`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/connection.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/lifecycle.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/mod.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/persist.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/queue.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/state.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/registry.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: RivetKit actor persistence bytes are not raw BARE. They use the vbare `serializeWithEmbeddedVersion(...)` shape: 2-byte little-endian schema version prefix followed by the BARE payload.
+  - Gotchas encountered: The Rust side was previously writing undecorated `serde_bare` payloads, which would not decode against TypeScript-preloaded actor, connection, or queue data even though the field order itself matched.
+  - Useful context: `src/actor/persist.rs` now centralizes the version-prefix helper, actor/connection accept persisted versions `3` and `4`, and queue payloads currently accept version `4` only because that is the only TS queue schema version on disk.
 ---

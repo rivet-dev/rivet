@@ -525,7 +525,7 @@
         "`cargo test -p rivetkit-core` passes"
       ],
       "priority": 27,
-      "passes": false,
+      "passes": true,
       "notes": "CRITICAL for production safety. Existing actors have persisted state written by TS. If Rust reads it differently, actors corrupt on wake. Check TS schemas at rivetkit-typescript/packages/rivetkit/src/schemas/actor-persist/ and the BARE schema definitions. CLAUDE.md has notes on key layouts."
     },
     {

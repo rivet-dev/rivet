@@ -28,7 +28,7 @@ use crate::actor::config::CanHibernateWebSocket;
 use crate::actor::context::ActorContext;
 use crate::actor::factory::ActorFactory;
 use crate::actor::lifecycle::{ActorLifecycle, StartupOptions};
-use crate::actor::state::{PERSIST_DATA_KEY, PersistedActor};
+use crate::actor::state::{PERSIST_DATA_KEY, PersistedActor, decode_persisted_actor};
 use crate::kv::Kv;
 use crate::sqlite::SqliteDb;
 use crate::types::{ActorKey, ActorKeySegment};
@@ -825,7 +825,7 @@ fn decode_preloaded_persisted_actor(
 		return Ok(None);
 	};
 
-	serde_bare::from_slice(&entry.value)
+	decode_persisted_actor(&entry.value)
 		.map(Some)
 		.context("decode preloaded persisted actor")
 }

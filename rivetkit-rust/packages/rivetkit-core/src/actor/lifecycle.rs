@@ -17,7 +17,9 @@ use crate::actor::callbacks::{
 };
 use crate::actor::context::ActorContext;
 use crate::actor::factory::{ActorFactory, FactoryRequest};
-use crate::actor::state::{OnStateChangeCallback, PersistedActor, PERSIST_DATA_KEY};
+use crate::actor::state::{
+	OnStateChangeCallback, PERSIST_DATA_KEY, PersistedActor, decode_persisted_actor,
+};
 use crate::types::SaveStateOpts;
 
 pub type BeforeActorStartFn =
@@ -311,7 +313,7 @@ impl ActorLifecycle {
 			.await
 			.map_err(|source| StartupError::new(StartupStage::LoadPersisted, source))?
 		{
-			Some(bytes) => serde_bare::from_slice(&bytes)
+			Some(bytes) => decode_persisted_actor(&bytes)
 				.context("decode persisted actor startup data")
 				.map_err(|source| StartupError::new(StartupStage::LoadPersisted, source)),
 			None => Ok(PersistedActor {
@@ -491,10 +493,13 @@ mod tests {
 		RunRequest,
 	};
 	use crate::actor::connection::{
-		HibernatableConnectionMetadata, PersistedConnection, make_connection_key,
+		HibernatableConnectionMetadata, PersistedConnection,
+		encode_persisted_connection, make_connection_key,
 	};
 	use crate::actor::factory::ActorFactory;
-	use crate::actor::state::{PERSIST_DATA_KEY, PersistedScheduleEvent};
+	use crate::actor::state::{
+		PERSIST_DATA_KEY, PersistedScheduleEvent, decode_persisted_actor,
+	};
 	use crate::actor::sleep::CanSleep;
 	use crate::actor::state::PersistedActor;
 	use crate::{ActorConfig, ActorContext, Kv};
@@ -711,7 +716,8 @@ mod tests {
 			)]),
 		};
 		let restored_bytes =
-			serde_bare::to_vec(&restored_conn).expect("persisted connection should encode");
+			encode_persisted_connection(&restored_conn)
+				.expect("persisted connection should encode");
 		ctx.kv()
 			.put(&make_connection_key("conn-restored"), &restored_bytes)
 			.await
@@ -1060,8 +1066,8 @@ mod tests {
 			.await
 			.expect("persisted actor lookup should succeed")
 			.expect("persisted actor should exist");
-		let persisted_actor: PersistedActor =
-			serde_bare::from_slice(&persisted_actor).expect("persisted actor should decode");
+		let persisted_actor =
+			decode_persisted_actor(&persisted_actor).expect("persisted actor should decode");
 		assert_eq!(persisted_actor.state, b"updated");
 	}
 
@@ -1117,8 +1123,8 @@ mod tests {
 			.await
 			.expect("persisted actor lookup should succeed")
 			.expect("persisted actor should exist");
-		let persisted_actor: PersistedActor =
-			serde_bare::from_slice(&persisted_actor).expect("persisted actor should decode");
+		let persisted_actor =
+			decode_persisted_actor(&persisted_actor).expect("persisted actor should decode");
 		assert_eq!(persisted_actor.state, b"updated");
 		assert_ne!(normal_conn.id(), "");
 	}
@@ -1302,8 +1308,8 @@ mod tests {
 			.await
 			.expect("persisted actor lookup should succeed")
 			.expect("persisted actor should exist");
-		let persisted_actor: PersistedActor =
-			serde_bare::from_slice(&persisted_actor).expect("persisted actor should decode");
+		let persisted_actor =
+			decode_persisted_actor(&persisted_actor).expect("persisted actor should decode");
 		assert_eq!(persisted_actor.state, b"updated");
 	}
 
@@ -1359,8 +1365,8 @@ mod tests {
 			.await
 			.expect("persisted actor lookup should succeed")
 			.expect("persisted actor should exist");
-		let persisted_actor: PersistedActor =
-			serde_bare::from_slice(&persisted_actor).expect("persisted actor should decode");
+		let persisted_actor =
+			decode_persisted_actor(&persisted_actor).expect("persisted actor should decode");
 		assert_eq!(persisted_actor.state, b"updated");
 	}
 

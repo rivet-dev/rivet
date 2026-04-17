@@ -16,6 +16,9 @@ use crate::actor::callbacks::{
 };
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
+use crate::actor::persist::{
+	decode_with_embedded_version, encode_with_embedded_version,
+};
 use crate::kv::Kv;
 use crate::types::ListOpts;
 use crate::types::ConnId;
@@ -26,6 +29,8 @@ pub(crate) type DisconnectCallback =
 	Arc<dyn Fn(Option<String>) -> BoxFuture<'static, Result<()>> + Send + Sync>;
 
 const CONNECTION_KEY_PREFIX: &[u8] = &[2];
+const CONNECTION_PERSIST_VERSION: u16 = 4;
+const CONNECTION_PERSIST_COMPATIBLE_VERSIONS: &[u16] = &[3, 4];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct OutgoingEvent {
@@ -60,6 +65,26 @@ pub(crate) struct PersistedConnection {
 	pub client_message_index: u16,
 	pub request_path: String,
 	pub request_headers: BTreeMap<String, String>,
+}
+
+pub(crate) fn encode_persisted_connection(
+	connection: &PersistedConnection,
+) -> Result<Vec<u8>> {
+	encode_with_embedded_version(
+		connection,
+		CONNECTION_PERSIST_VERSION,
+		"persisted connection",
+	)
+}
+
+pub(crate) fn decode_persisted_connection(
+	payload: &[u8],
+) -> Result<PersistedConnection> {
+	decode_with_embedded_version(
+		payload,
+		CONNECTION_PERSIST_COMPATIBLE_VERSIONS,
+		"persisted connection",
+	)
 }
 
 #[derive(Clone)]
@@ -436,8 +461,8 @@ impl ConnectionManager {
 				continue;
 			};
 
-			let encoded =
-				serde_bare::to_vec(&persisted).context("encode persisted connection")?;
+			let encoded = encode_persisted_connection(&persisted)
+				.context("encode persisted connection")?;
 			let key = make_connection_key(conn.id());
 			self.0
 				.kv
@@ -467,7 +492,7 @@ impl ConnectionManager {
 		let mut restored = Vec::new();
 
 		for (_key, value) in entries {
-			match serde_bare::from_slice::<PersistedConnection>(&value) {
+			match decode_persisted_connection(&value) {
 				Ok(persisted) => {
 					let conn = ConnHandle::from_persisted(persisted);
 					self.prepare_managed_conn(ctx, &conn);
@@ -657,11 +682,18 @@ mod tests {
 	use super::{
 		ConnHandle, ConnectionManager, EventSendCallback,
 		HibernatableConnectionMetadata, OutgoingEvent, PersistedConnection,
-		make_connection_key,
+		decode_persisted_connection, encode_persisted_connection, make_connection_key,
 	};
 	use crate::actor::callbacks::ActorInstanceCallbacks;
 	use crate::actor::config::ActorConfig;
 	use crate::actor::context::ActorContext;
+
+	const PERSISTED_CONNECTION_HEX: &str =
+		"040006636f6e6e2d310201020203040107757064617465640401020304040506070809000a00032f77730106782d746573740131";
+
+	fn hex(bytes: &[u8]) -> String {
+		bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+	}
 
 	#[test]
 	fn send_uses_configured_event_sender() {
@@ -720,7 +752,7 @@ mod tests {
 	}
 
 	#[test]
-	fn persisted_connection_round_trips_with_bare() {
+	fn persisted_connection_round_trips_with_embedded_version() {
 		let mut headers = BTreeMap::new();
 		headers.insert("x-test".to_owned(), "1".to_owned());
 		let persisted = PersistedConnection {
@@ -739,9 +771,10 @@ mod tests {
 		};
 
 		let encoded =
-			serde_bare::to_vec(&persisted).expect("persisted connection should encode");
-		let decoded: PersistedConnection =
-			serde_bare::from_slice(&encoded).expect("persisted connection should decode");
+			encode_persisted_connection(&persisted).expect("persisted connection should encode");
+		assert_eq!(hex(&encoded), PERSISTED_CONNECTION_HEX);
+		let decoded =
+			decode_persisted_connection(&encoded).expect("persisted connection should decode");
 
 		assert_eq!(decoded, persisted);
 	}

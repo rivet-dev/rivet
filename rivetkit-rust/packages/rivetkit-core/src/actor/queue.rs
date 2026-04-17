@@ -14,12 +14,17 @@ use tokio::sync::{Mutex, Notify, OnceCell};
 use tokio_util::sync::CancellationToken;
 
 use crate::actor::config::ActorConfig;
+use crate::actor::persist::{
+	decode_with_embedded_version, encode_with_embedded_version,
+};
 use crate::kv::Kv;
 use crate::types::ListOpts;
 
 const QUEUE_STORAGE_VERSION: u8 = 1;
 const QUEUE_METADATA_KEY: [u8; 3] = [5, QUEUE_STORAGE_VERSION, 1];
 const QUEUE_MESSAGES_PREFIX: [u8; 3] = [5, QUEUE_STORAGE_VERSION, 2];
+const QUEUE_PAYLOAD_VERSION: u16 = 4;
+const QUEUE_PAYLOAD_COMPATIBLE_VERSIONS: &[u16] = &[4];
 
 #[derive(Clone, Debug, Default)]
 pub struct QueueNextOpts {
@@ -133,6 +138,30 @@ struct PersistedQueueMessage {
 	in_flight_at: Option<i64>,
 }
 
+fn encode_queue_metadata(metadata: &QueueMetadata) -> Result<Vec<u8>> {
+	encode_with_embedded_version(metadata, QUEUE_PAYLOAD_VERSION, "queue metadata")
+}
+
+fn decode_queue_metadata(payload: &[u8]) -> Result<QueueMetadata> {
+	decode_with_embedded_version(
+		payload,
+		QUEUE_PAYLOAD_COMPATIBLE_VERSIONS,
+		"queue metadata",
+	)
+}
+
+fn encode_queue_message(message: &PersistedQueueMessage) -> Result<Vec<u8>> {
+	encode_with_embedded_version(message, QUEUE_PAYLOAD_VERSION, "queue message")
+}
+
+fn decode_queue_message(payload: &[u8]) -> Result<PersistedQueueMessage> {
+	decode_with_embedded_version(
+		payload,
+		QUEUE_PAYLOAD_COMPATIBLE_VERSIONS,
+		"queue message",
+	)
+}
+
 #[derive(RivetError, Serialize, Deserialize)]
 #[error(
 	"queue",
@@ -221,7 +250,7 @@ impl Queue {
 			in_flight_at: None,
 		};
 		let encoded_message =
-			serde_bare::to_vec(&persisted).context("encode queue message")?;
+			encode_queue_message(&persisted).context("encode queue message")?;
 
 		let config = self.config();
 		if encoded_message.len() > config.max_queue_message_size as usize {
@@ -246,7 +275,7 @@ impl Queue {
 		metadata.next_id = id.saturating_add(1);
 		metadata.size = metadata.size.saturating_add(1);
 		let encoded_metadata =
-			serde_bare::to_vec(&*metadata).context("encode queue metadata")?;
+			encode_queue_metadata(&metadata).context("encode queue metadata")?;
 
 		if let Err(error) = self
 			.0
@@ -407,14 +436,15 @@ impl Queue {
 				.kv
 				.put(
 					&QUEUE_METADATA_KEY,
-					&serde_bare::to_vec(&metadata).context("encode default queue metadata")?,
+					&encode_queue_metadata(&metadata)
+						.context("encode default queue metadata")?,
 				)
 				.await
 				.context("persist default queue metadata")?;
 			return Ok(metadata);
 		};
 
-		match serde_bare::from_slice(&encoded) {
+		match decode_queue_metadata(&encoded) {
 			Ok(metadata) => Ok(metadata),
 			Err(error) => {
 				tracing::warn!(?error, "failed to decode queue metadata, rebuilding");
@@ -440,7 +470,7 @@ impl Queue {
 	}
 
 	async fn persist_metadata(&self, metadata: &QueueMetadata) -> Result<()> {
-		let encoded = serde_bare::to_vec(metadata).context("encode queue metadata")?;
+		let encoded = encode_queue_metadata(metadata).context("encode queue metadata")?;
 		self.0
 			.kv
 			.put(&QUEUE_METADATA_KEY, &encoded)
@@ -525,7 +555,7 @@ impl Queue {
 				}
 			};
 
-			match serde_bare::from_slice::<PersistedQueueMessage>(&value) {
+			match decode_queue_message(&value) {
 				Ok(message) => messages.push(QueueMessage {
 					id,
 					name: message.name,
@@ -581,7 +611,8 @@ impl Queue {
 		let encoded_metadata = {
 			let mut metadata = self.0.metadata.lock().await;
 			metadata.size = metadata.size.saturating_sub(key_refs.len() as u32);
-			serde_bare::to_vec(&*metadata).context("encode queue metadata after delete")?
+			encode_queue_metadata(&metadata)
+				.context("encode queue metadata after delete")?
 		};
 
 		self.0
@@ -865,9 +896,18 @@ fn current_timestamp_ms() -> Result<i64> {
 #[cfg(test)]
 mod tests {
 	use super::{
-		CompletableQueueMessage, QueueMessage, QueueMetadata, decode_queue_message_key,
+		CompletableQueueMessage, QueueMessage, QueueMetadata,
+		decode_queue_message_key, decode_queue_metadata, encode_queue_metadata,
 		make_queue_message_key,
 	};
+
+	const QUEUE_METADATA_HEX: &str = "04002a0000000000000007000000";
+	const QUEUE_MESSAGE_HEX: &str =
+		"0400036a6f6205a16178182ac80100000000000000000000";
+
+	fn hex(bytes: &[u8]) -> String {
+		bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+	}
 
 	#[test]
 	fn queue_message_keys_are_big_endian() {
@@ -875,20 +915,25 @@ mod tests {
 		let second = make_queue_message_key(2);
 
 		assert!(first < second);
+		assert_eq!(super::QUEUE_METADATA_KEY, [5, 1, 1]);
+		assert_eq!(
+			first,
+			vec![5, 1, 2, 0, 0, 0, 0, 0, 0, 0, 1],
+		);
 		assert_eq!(decode_queue_message_key(&first).expect("decode first"), 1);
 		assert_eq!(decode_queue_message_key(&second).expect("decode second"), 2);
 	}
 
 	#[test]
-	fn queue_metadata_round_trips_with_bare() {
+	fn queue_metadata_round_trips_with_embedded_version() {
 		let metadata = QueueMetadata {
 			next_id: 42,
 			size: 7,
 		};
 
-		let encoded = serde_bare::to_vec(&metadata).expect("encode metadata");
-		let decoded: QueueMetadata =
-			serde_bare::from_slice(&encoded).expect("decode metadata");
+		let encoded = encode_queue_metadata(&metadata).expect("encode metadata");
+		assert_eq!(hex(&encoded), QUEUE_METADATA_HEX);
+		let decoded = decode_queue_metadata(&encoded).expect("decode metadata");
 
 		assert_eq!(decoded, metadata);
 	}
@@ -923,5 +968,25 @@ mod tests {
 
 		let queue_message = message.into_message();
 		assert!(queue_message.is_completable());
+	}
+
+	#[test]
+	fn queue_message_hex_vector() {
+		let encoded = super::encode_queue_message(&super::PersistedQueueMessage {
+			name: "job".into(),
+			body: vec![0xa1, 0x61, 0x78, 0x18, 0x2a],
+			created_at: 456,
+			failure_count: None,
+			available_at: None,
+			in_flight: None,
+			in_flight_at: None,
+		})
+		.expect("encode queue message");
+
+		assert_eq!(hex(&encoded), QUEUE_MESSAGE_HEX);
+		let decoded = super::decode_queue_message(&encoded).expect("decode queue message");
+		assert_eq!(decoded.name, "job");
+		assert_eq!(decoded.body, vec![0xa1, 0x61, 0x78, 0x18, 0x2a]);
+		assert_eq!(decoded.created_at, 456);
 	}
 }

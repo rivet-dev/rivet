@@ -13,10 +13,15 @@ use tokio::sync::Mutex as AsyncMutex;
 use tokio::task::JoinHandle;
 
 use crate::actor::config::ActorConfig;
+use crate::actor::persist::{
+	decode_with_embedded_version, encode_with_embedded_version,
+};
 use crate::kv::Kv;
 use crate::types::SaveStateOpts;
 
 pub const PERSIST_DATA_KEY: &[u8] = &[1];
+const ACTOR_PERSIST_VERSION: u16 = 4;
+const ACTOR_PERSIST_COMPATIBLE_VERSIONS: &[u16] = &[3, 4];
 
 pub type StateCallbackFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 pub type OnStateChangeCallback = Arc<dyn Fn() -> StateCallbackFuture + Send + Sync>;
@@ -35,6 +40,18 @@ pub struct PersistedActor {
 	pub has_initialized: bool,
 	pub state: Vec<u8>,
 	pub scheduled_events: Vec<PersistedScheduleEvent>,
+}
+
+pub(crate) fn encode_persisted_actor(actor: &PersistedActor) -> Result<Vec<u8>> {
+	encode_with_embedded_version(actor, ACTOR_PERSIST_VERSION, "persisted actor")
+}
+
+pub(crate) fn decode_persisted_actor(payload: &[u8]) -> Result<PersistedActor> {
+	decode_with_embedded_version(
+		payload,
+		ACTOR_PERSIST_COMPATIBLE_VERSIONS,
+		"persisted actor",
+	)
 }
 
 #[derive(Clone)]
@@ -383,7 +400,8 @@ impl ActorState {
 
 		let revision = self.0.revision.load(Ordering::SeqCst);
 		let persisted = self.persisted();
-		let encoded = serde_bare::to_vec(&persisted).context("encode persisted actor state")?;
+		let encoded = encode_persisted_actor(&persisted)
+			.context("encode persisted actor state")?;
 
 		*self
 			.0
@@ -435,11 +453,21 @@ fn throttled_save_delay(
 
 #[cfg(test)]
 mod tests {
-	use super::{PersistedActor, PersistedScheduleEvent, throttled_save_delay};
+	use super::{
+		PersistedActor, PersistedScheduleEvent, decode_persisted_actor,
+		encode_persisted_actor, throttled_save_delay,
+	};
 	use std::time::Duration;
 
+	const PERSISTED_ACTOR_HEX: &str =
+		"04000103010203010304050601076576656e742d312a000000000000000470696e67020708";
+
+	fn hex(bytes: &[u8]) -> String {
+		bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+	}
+
 	#[test]
-	fn persisted_actor_round_trips_with_bare() {
+	fn persisted_actor_round_trips_with_embedded_version() {
 		let actor = PersistedActor {
 			input: Some(vec![1, 2, 3]),
 			has_initialized: true,
@@ -452,11 +480,17 @@ mod tests {
 			}],
 		};
 
-		let encoded = serde_bare::to_vec(&actor).expect("persisted actor should encode");
-		let decoded: PersistedActor =
-			serde_bare::from_slice(&encoded).expect("persisted actor should decode");
+		let encoded = encode_persisted_actor(&actor).expect("persisted actor should encode");
+		assert_eq!(hex(&encoded), PERSISTED_ACTOR_HEX);
+		let decoded =
+			decode_persisted_actor(&encoded).expect("persisted actor should decode");
 
 		assert_eq!(decoded, actor);
+	}
+
+	#[test]
+	fn persist_data_key_matches_typescript_layout() {
+		assert_eq!(super::PERSIST_DATA_KEY, &[1]);
 	}
 
 	#[test]
