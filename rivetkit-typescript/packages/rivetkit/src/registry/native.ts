@@ -43,10 +43,12 @@ import {
 	validateConnParams,
 	validateEventArgs,
 	validateQueueBody,
+	validateQueueComplete,
 } from "./native-validation";
 
 import type {
 	ActorContext as NativeActorContext,
+	CancellationToken as NativeCancellationToken,
 	ConnHandle as NativeConnHandle,
 	CoreRegistry as NativeCoreRegistry,
 	JsActorConfig,
@@ -168,6 +170,30 @@ function actorAbortedError(): Error & { group: string; code: string } {
 		group: "actor",
 		code: "aborted",
 	});
+}
+
+async function createNativeCancellationToken(signal?: AbortSignal): Promise<{
+	token?: NativeCancellationToken;
+	cleanup?: () => void;
+}> {
+	if (!signal) {
+		return {};
+	}
+
+	const bindings = await loadNativeBindings();
+	const token = new bindings.CancellationToken();
+
+	if (signal.aborted) {
+		token.cancel();
+		return { token };
+	}
+
+	const abort = () => token.cancel();
+	signal.addEventListener("abort", abort, { once: true });
+	return {
+		token,
+		cleanup: () => signal.removeEventListener("abort", abort),
+	};
 }
 
 function wrapNativeCallback<Args extends Array<unknown>, Result>(
@@ -446,7 +472,9 @@ function wrapQueueMessage(
 						message.complete(
 							response === undefined
 								? undefined
-								: encodeValue(response),
+								: encodeValue(
+										validateQueueComplete(schemas, name, response),
+									),
 						),
 					)
 			: undefined,
@@ -563,6 +591,42 @@ class NativeQueueAdapter {
 				}
 				throw error;
 			}
+		}
+	}
+
+	async enqueueAndWait(
+		name: string,
+		body: unknown,
+		options?: {
+			timeout?: number;
+			signal?: AbortSignal;
+		},
+	) {
+		const validatedBody = validateQueueBody(this.#schemas, name, body);
+		const { token, cleanup } = await createNativeCancellationToken(
+			options?.signal,
+		);
+
+		try {
+			const response = await callNative(() =>
+				this.#queue.enqueueAndWait(
+					name,
+					encodeValue(validatedBody),
+					{
+						timeoutMs: options?.timeout,
+					},
+					token,
+				),
+			);
+			return response === undefined || response === null
+				? undefined
+				: validateQueueComplete(
+						this.#schemas,
+						name,
+						decodeValue(response),
+					);
+		} finally {
+			cleanup?.();
 		}
 	}
 

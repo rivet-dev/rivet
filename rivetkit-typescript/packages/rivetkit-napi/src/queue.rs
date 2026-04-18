@@ -4,10 +4,12 @@ use std::time::Duration;
 use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use rivetkit_core::{
-	Queue as CoreQueue, QueueMessage as CoreQueueMessage, QueueNextBatchOpts,
-	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
+	EnqueueAndWaitOpts, Queue as CoreQueue, QueueMessage as CoreQueueMessage,
+	QueueNextBatchOpts, QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts,
+	QueueWaitOpts,
 };
 
+use crate::cancellation_token::CancellationToken;
 use crate::napi_anyhow_error;
 
 #[napi(object)]
@@ -29,6 +31,11 @@ pub struct JsQueueNextBatchOptions {
 pub struct JsQueueWaitOptions {
 	pub timeout_ms: Option<i64>,
 	pub completable: Option<bool>,
+}
+
+#[napi(object)]
+pub struct JsQueueEnqueueAndWaitOptions {
+	pub timeout_ms: Option<i64>,
 }
 
 #[napi(object)]
@@ -123,6 +130,21 @@ impl Queue {
 			.wait_for_names(names, queue_wait_opts(options)?)
 			.await
 			.map(QueueMessage::from_core)
+			.map_err(napi_anyhow_error)
+	}
+
+	#[napi]
+	pub async fn enqueue_and_wait(
+		&self,
+		name: String,
+		body: Buffer,
+		options: Option<JsQueueEnqueueAndWaitOptions>,
+		signal: Option<&CancellationToken>,
+	) -> napi::Result<Option<Buffer>> {
+		self.inner
+			.enqueue_and_wait(&name, body.as_ref(), enqueue_and_wait_opts(options, signal)?)
+			.await
+			.map(|response| response.map(Buffer::from))
 			.map_err(napi_anyhow_error)
 	}
 
@@ -249,6 +271,20 @@ fn queue_wait_opts(options: Option<JsQueueWaitOptions>) -> napi::Result<QueueWai
 		timeout: timeout_duration(options.timeout_ms)?,
 		signal: None,
 		completable: options.completable.unwrap_or(false),
+	})
+}
+
+fn enqueue_and_wait_opts(
+	options: Option<JsQueueEnqueueAndWaitOptions>,
+	signal: Option<&CancellationToken>,
+) -> napi::Result<EnqueueAndWaitOpts> {
+	let options = options.unwrap_or(JsQueueEnqueueAndWaitOptions {
+		timeout_ms: None,
+	});
+
+	Ok(EnqueueAndWaitOpts {
+		timeout: timeout_duration(options.timeout_ms)?,
+		signal: signal.map(|signal| signal.inner().clone()),
 	})
 }
 

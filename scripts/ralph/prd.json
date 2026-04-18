@@ -887,7 +887,7 @@
         "cargo check passes"
       ],
       "priority": 47,
-      "passes": false,
+      "passes": true,
       "notes": "See spec concern #15. This is a request-response pattern built on queues. The sender enqueues and waits; the receiver processes and calls complete(response); the sender gets the response."
     },
     {

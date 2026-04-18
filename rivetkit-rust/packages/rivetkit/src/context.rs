@@ -4,12 +4,14 @@ use std::marker::PhantomData;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use tokio_util::sync::CancellationToken;
 
 use crate::actor::Actor;
 use crate::validation::{decode_cbor, encode_cbor, panic_with_error};
 use rivetkit_core::{
-	ActorContext, ActorKey, ConnHandle, Kv, Queue, Schedule, SqliteDb,
+	ActorContext, ActorKey, ConnHandle, EnqueueAndWaitOpts, Kv, Queue,
+	Schedule, SqliteDb,
 };
 
 pub struct Ctx<A: Actor> {
@@ -103,6 +105,30 @@ impl<A: Actor> Ctx<A> {
 
 	pub fn queue(&self) -> &Queue {
 		self.inner.queue()
+	}
+
+	pub async fn enqueue_and_wait<Req, Res>(
+		&self,
+		name: &str,
+		body: &Req,
+		opts: EnqueueAndWaitOpts,
+	) -> anyhow::Result<Option<Res>>
+	where
+		Req: Serialize,
+		Res: DeserializeOwned,
+	{
+		let request_bytes = encode_cbor(body, "queue message body")?;
+		let response_bytes = self
+			.inner
+			.queue()
+			.enqueue_and_wait(name, &request_bytes, opts)
+			.await?;
+
+		response_bytes
+			.map(|response_bytes| {
+				decode_cbor(&response_bytes, "queue completion response")
+			})
+			.transpose()
 	}
 
 	pub fn actor_id(&self) -> &str {

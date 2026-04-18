@@ -29,7 +29,7 @@ mod moved_tests {
 		make_queue_message_key,
 	};
 	use crate::actor::context::tests::new_with_kv;
-	use crate::actor::queue::{QueueNextOpts, QueueWaitOpts};
+	use crate::actor::queue::{EnqueueAndWaitOpts, QueueNextOpts, QueueWaitOpts};
 	use tokio::time::{Duration, sleep};
 	use tokio_util::sync::CancellationToken;
 
@@ -271,5 +271,106 @@ mod moved_tests {
 		assert_eq!(error.group(), "actor");
 		assert_eq!(error.code(), "aborted");
 		assert_eq!(ctx.queue().active_queue_wait_count(), 0);
+	}
+
+	#[tokio::test]
+	async fn enqueue_and_wait_returns_completion_response() {
+		let ctx = new_with_kv(
+			"actor-1",
+			"queue-enqueue-and-wait",
+			Vec::new(),
+			"local",
+			crate::kv::tests::new_in_memory(),
+		);
+
+		let consumer_queue = ctx.queue().clone();
+		let consumer = tokio::spawn(async move {
+			let message = consumer_queue
+				.next(QueueNextOpts {
+					names: Some(vec!["jobs".into()]),
+					timeout: Some(Duration::from_secs(1)),
+					signal: None,
+					completable: true,
+				})
+				.await
+				.expect("receive completable queue message")
+				.expect("queue message should exist");
+			message
+				.complete(Some(b"done".to_vec()))
+				.await
+				.expect("complete message");
+		});
+
+		let response = ctx
+			.queue()
+			.enqueue_and_wait(
+				"jobs",
+				b"payload",
+				EnqueueAndWaitOpts {
+					timeout: Some(Duration::from_secs(1)),
+					signal: None,
+				},
+			)
+			.await
+			.expect("enqueue_and_wait should succeed");
+
+		consumer.await.expect("consumer join");
+		assert_eq!(response, Some(b"done".to_vec()));
+	}
+
+	#[tokio::test]
+	async fn enqueue_and_wait_returns_timeout_error() {
+		let ctx = new_with_kv(
+			"actor-1",
+			"queue-enqueue-and-wait-timeout",
+			Vec::new(),
+			"local",
+			crate::kv::tests::new_in_memory(),
+		);
+
+		let error = ctx
+			.queue()
+			.enqueue_and_wait(
+				"jobs",
+				b"payload",
+				EnqueueAndWaitOpts {
+					timeout: Some(Duration::from_millis(0)),
+					signal: None,
+				},
+			)
+			.await
+			.expect_err("enqueue_and_wait should time out");
+		let error = rivet_error::RivetError::extract(&error);
+		assert_eq!(error.group(), "queue");
+		assert_eq!(error.code(), "timed_out");
+	}
+
+	#[tokio::test]
+	async fn enqueue_and_wait_returns_abort_error_when_signal_is_cancelled() {
+		let ctx = new_with_kv(
+			"actor-1",
+			"queue-enqueue-and-wait-abort",
+			Vec::new(),
+			"local",
+			crate::kv::tests::new_in_memory(),
+		);
+		let signal = CancellationToken::new();
+		signal.cancel();
+
+		let error = ctx
+			.queue()
+			.enqueue_and_wait(
+				"jobs",
+				b"payload",
+				EnqueueAndWaitOpts {
+					timeout: Some(Duration::from_secs(1)),
+					signal: Some(signal),
+				},
+			)
+			.await
+			.expect_err("enqueue_and_wait should abort");
+		let error = rivet_error::RivetError::extract(&error);
+		assert_eq!(error.group(), "actor");
+		assert_eq!(error.code(), "aborted");
 	}
 }

@@ -23,8 +23,9 @@ pub use actor::lifecycle::{
 	StartupError, StartupOptions, StartupOutcome, StartupStage,
 };
 pub use actor::queue::{
-	CompletableQueueMessage, Queue, QueueMessage, QueueNextBatchOpts,
-	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
+	CompletableQueueMessage, EnqueueAndWaitOpts, Queue, QueueMessage,
+	QueueNextBatchOpts, QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts,
+	QueueWaitOpts,
 };
 pub use actor::schedule::Schedule;
 pub use kv::Kv;

@@ -121,6 +121,15 @@ type QueueCompletableMessageForName<
 	complete(...args: QueueCompleteArgsForName<TQueues, TName>): Promise<void>;
 };
 
+type QueueCompletionResultForName<
+	TQueues extends QueueSchemaConfig,
+	TName extends QueueFilterName<TQueues>,
+> = keyof TQueues extends never
+	? unknown | undefined
+	: TName extends QueueName<TQueues>
+		? InferQueueCompleteMap<TQueues>[TName] | undefined
+		: unknown | undefined;
+
 export type QueueResultMessageForName<
 	TQueues extends QueueSchemaConfig,
 	TName extends QueueFilterName<TQueues>,
@@ -154,6 +163,11 @@ export interface QueueWaitOptions<TCompletable extends boolean = boolean> {
 	timeout?: number;
 	signal?: AbortSignal;
 	completable?: TCompletable;
+}
+
+export interface QueueEnqueueAndWaitOptions {
+	timeout?: number;
+	signal?: AbortSignal;
 }
 
 export interface QueueTryNextOptions<
@@ -206,6 +220,11 @@ export interface ActorQueue<TQueues extends QueueSchemaConfig = Record<never, ne
 		names: readonly TName[],
 		opts?: QueueWaitOptions<TCompletable>,
 	): Promise<any>;
+	enqueueAndWait<const TName extends QueueFilterName<TQueues>>(
+		name: TName,
+		body: QueueMessageForName<TQueues, TName>["body"],
+		opts?: QueueEnqueueAndWaitOptions,
+	): Promise<QueueCompletionResultForName<TQueues, TName>>;
 	tryNext<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,

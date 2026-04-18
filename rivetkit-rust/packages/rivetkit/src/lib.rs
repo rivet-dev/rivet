@@ -10,7 +10,7 @@ pub use context::{ConnCtx, Ctx};
 pub use registry::Registry;
 pub use rivetkit_core::{
 	ActorConfig, ActorKey, ActorKeySegment, CanHibernateWebSocket, ConnHandle,
-	ConnId, Kv, ListOpts, Queue, QueueMessage, QueueWaitOpts, Request,
-	Response, SaveStateOpts, Schedule, ServeConfig, SqliteDb, WebSocket,
-	WsMessage,
+	ConnId, EnqueueAndWaitOpts, Kv, ListOpts, Queue, QueueMessage,
+	QueueWaitOpts, Request, Response, SaveStateOpts, Schedule, ServeConfig,
+	SqliteDb, WebSocket, WsMessage,
 };

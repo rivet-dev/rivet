@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::future::pending;
 use std::sync::Arc;
@@ -10,7 +10,7 @@ use anyhow::{Context, Result, anyhow};
 use rivet_error::RivetError;
 use serde::{Deserialize, Serialize};
 use tokio::runtime::{Builder, Handle};
-use tokio::sync::{Mutex, Notify, OnceCell};
+use tokio::sync::{Mutex, Notify, OnceCell, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use crate::actor::config::ActorConfig;
@@ -40,6 +40,12 @@ pub struct QueueWaitOpts {
 	pub timeout: Option<Duration>,
 	pub signal: Option<CancellationToken>,
 	pub completable: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct EnqueueAndWaitOpts {
+	pub timeout: Option<Duration>,
+	pub signal: Option<CancellationToken>,
 }
 
 #[derive(Clone, Debug)]
@@ -97,6 +103,7 @@ struct QueueInner {
 	metadata: Mutex<QueueMetadata>,
 	receive_lock: Mutex<()>,
 	pending_completable_message_ids: Mutex<BTreeSet<u64>>,
+	completion_waiters: Mutex<HashMap<u64, oneshot::Sender<Option<Vec<u8>>>>>,
 	notify: Notify,
 	active_queue_wait_count: AtomicU32,
 	wait_activity_callback: StdMutex<Option<Arc<dyn Fn() + Send + Sync>>>,
@@ -251,6 +258,7 @@ impl Queue {
 			metadata: Mutex::new(QueueMetadata::default()),
 			receive_lock: Mutex::new(()),
 			pending_completable_message_ids: Mutex::new(BTreeSet::new()),
+			completion_waiters: Mutex::new(HashMap::new()),
 			notify: Notify::new(),
 			active_queue_wait_count: AtomicU32::new(0),
 			wait_activity_callback: StdMutex::new(None),
@@ -259,6 +267,32 @@ impl Queue {
 	}
 
 	pub async fn send(&self, name: &str, body: &[u8]) -> Result<QueueMessage> {
+		self.enqueue_message(name, body, None).await
+	}
+
+	pub async fn enqueue_and_wait(
+		&self,
+		name: &str,
+		body: &[u8],
+		opts: EnqueueAndWaitOpts,
+	) -> Result<Option<Vec<u8>>> {
+		let (sender, receiver) = oneshot::channel();
+		let message = self
+			.enqueue_message(name, body, Some(sender))
+			.await?;
+		let result = self
+			.wait_for_completion_response(message.id, receiver, opts.timeout, opts.signal.as_ref())
+			.await;
+		self.remove_completion_waiter(message.id).await;
+		result
+	}
+
+	async fn enqueue_message(
+		&self,
+		name: &str,
+		body: &[u8],
+		completion_waiter: Option<oneshot::Sender<Option<Vec<u8>>>>,
+	) -> Result<QueueMessage> {
 		self.ensure_initialized().await?;
 
 		let created_at = current_timestamp_ms()?;
@@ -311,6 +345,10 @@ impl Queue {
 			metadata.next_id = id;
 			metadata.size = metadata.size.saturating_sub(1);
 			return Err(error).context("persist queue message");
+		}
+
+		if let Some(waiter) = completion_waiter {
+			self.0.completion_waiters.lock().await.insert(id, waiter);
 		}
 
 		drop(metadata);
@@ -699,7 +737,7 @@ impl Queue {
 	async fn complete_message_by_id(
 		&self,
 		message_id: u64,
-		_response: Option<Vec<u8>>,
+		response: Option<Vec<u8>>,
 	) -> Result<()> {
 		self.remove_messages(vec![message_id]).await?;
 		self
@@ -708,7 +746,17 @@ impl Queue {
 			.lock()
 			.await
 			.remove(&message_id);
+		if let Some(waiter) = self.remove_completion_waiter(message_id).await {
+			let _ = waiter.send(response);
+		}
 		Ok(())
+	}
+
+	async fn remove_completion_waiter(
+		&self,
+		message_id: u64,
+	) -> Option<oneshot::Sender<Option<Vec<u8>>>> {
+		self.0.completion_waiters.lock().await.remove(&message_id)
 	}
 
 	async fn wait_for_message(
@@ -760,6 +808,73 @@ impl Queue {
 					_ = external_aborted => WaitOutcome::Aborted,
 				}
 			}
+		}
+	}
+
+	async fn wait_for_completion_response(
+		&self,
+		message_id: u64,
+		mut receiver: oneshot::Receiver<Option<Vec<u8>>>,
+		timeout: Option<Duration>,
+		signal: Option<&CancellationToken>,
+	) -> Result<Option<Vec<u8>>> {
+		if signal.is_some_and(CancellationToken::is_cancelled) {
+			return Err(QueueActorAborted.build().into());
+		}
+		if self
+			.0
+			.abort_signal
+			.as_ref()
+			.is_some_and(CancellationToken::is_cancelled)
+		{
+			return Err(QueueActorAborted.build().into());
+		}
+
+		let actor_aborted = async {
+			if let Some(signal) = &self.0.abort_signal {
+				signal.cancelled().await;
+			} else {
+				pending::<()>().await;
+			}
+		};
+		let external_aborted = async {
+			if let Some(signal) = signal {
+				signal.cancelled().await;
+			} else {
+				pending::<()>().await;
+			}
+		};
+
+		let wait_result = match timeout {
+			Some(timeout) => {
+				tokio::select! {
+					response = &mut receiver => CompletionWaitOutcome::Response(response),
+					_ = actor_aborted => CompletionWaitOutcome::Aborted,
+					_ = external_aborted => CompletionWaitOutcome::Aborted,
+					_ = tokio::time::sleep(timeout) => CompletionWaitOutcome::TimedOut,
+				}
+			}
+			None => {
+				tokio::select! {
+					response = &mut receiver => CompletionWaitOutcome::Response(response),
+					_ = actor_aborted => CompletionWaitOutcome::Aborted,
+					_ = external_aborted => CompletionWaitOutcome::Aborted,
+				}
+			}
+		};
+
+		match wait_result {
+			CompletionWaitOutcome::Response(Ok(response)) => Ok(response),
+			CompletionWaitOutcome::Response(Err(_)) => {
+				Err(anyhow!("queue completion waiter dropped before response"))
+					.context(format!("wait for queue completion on message {message_id}"))
+			}
+			CompletionWaitOutcome::TimedOut => Err(QueueWaitTimedOut {
+				timeout_ms: timeout.map(duration_ms).unwrap_or(0),
+			}
+			.build()
+			.into()),
+			CompletionWaitOutcome::Aborted => Err(QueueActorAborted.build().into()),
 		}
 	}
 
@@ -929,6 +1044,12 @@ impl Drop for ActiveQueueWaitGuard<'_> {
 
 enum WaitOutcome {
 	Notified,
+	TimedOut,
+	Aborted,
+}
+
+enum CompletionWaitOutcome {
+	Response(Result<Option<Vec<u8>>, oneshot::error::RecvError>),
 	TimedOut,
 	Aborted,
 }

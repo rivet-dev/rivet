@@ -80,6 +80,9 @@ export interface JsQueueWaitOptions {
   timeoutMs?: number
   completable?: boolean
 }
+export interface JsQueueEnqueueAndWaitOptions {
+  timeoutMs?: number
+}
 export interface JsQueueTryNextOptions {
   names?: Array<string>
   completable?: boolean
@@ -166,7 +169,9 @@ export declare class NapiActorFactory {
   constructor(callbacks: object, config?: JsActorConfig | undefined | null)
 }
 export declare class CancellationToken {
+  constructor()
   aborted(): boolean
+  cancel(): void
   onCancelled(callback: (...args: any[]) => any): void
 }
 export declare class ConnHandle {
@@ -228,6 +233,7 @@ export declare class Queue {
   next(options?: JsQueueNextOptions | undefined | null): Promise<QueueMessage | null>
   nextBatch(options?: JsQueueNextBatchOptions | undefined | null): Promise<Array<QueueMessage>>
   waitForNames(names: Array<string>, options?: JsQueueWaitOptions | undefined | null): Promise<QueueMessage>
+  enqueueAndWait(name: string, body: Buffer, options?: JsQueueEnqueueAndWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<Buffer | null>
   tryNext(options?: JsQueueTryNextOptions | undefined | null): QueueMessage | null
   tryNextBatch(options?: JsQueueTryNextBatchOptions | undefined | null): Array<QueueMessage>
 }

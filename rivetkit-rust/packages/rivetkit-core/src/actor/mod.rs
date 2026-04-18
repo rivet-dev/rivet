@@ -30,7 +30,8 @@ pub use lifecycle::{
 	StartupError, StartupOptions, StartupOutcome, StartupStage,
 };
 pub use queue::{
-	CompletableQueueMessage, Queue, QueueMessage, QueueNextBatchOpts,
-	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
+	CompletableQueueMessage, EnqueueAndWaitOpts, Queue, QueueMessage,
+	QueueNextBatchOpts, QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts,
+	QueueWaitOpts,
 };
 pub use schedule::Schedule;

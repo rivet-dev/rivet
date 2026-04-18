@@ -15,13 +15,27 @@ impl CancellationToken {
 	pub(crate) fn new(inner: CoreCancellationToken) -> Self {
 		Self { inner }
 	}
+
+	pub(crate) fn inner(&self) -> &CoreCancellationToken {
+		&self.inner
+	}
 }
 
 #[napi]
 impl CancellationToken {
+	#[napi(constructor)]
+	pub fn constructor() -> Self {
+		Self::new(CoreCancellationToken::new())
+	}
+
 	#[napi]
 	pub fn aborted(&self) -> bool {
 		self.inner.is_cancelled()
+	}
+
+	#[napi]
+	pub fn cancel(&self) {
+		self.inner.cancel();
 	}
 
 	#[napi]
