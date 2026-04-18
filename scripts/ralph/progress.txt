@@ -4,6 +4,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 ## Codebase Patterns
 - Inspector core helpers should keep schema payloads as opaque `ArrayBuffer`s and only CBOR encode/decode at the inspector boundary, so HTTP and WebSocket transports can reuse the same logic.
 - Inspector wire-protocol downgrades should turn unsupported responses into explicit `Error` payloads with `inspector.*_dropped` messages, and only throw on request downgrades that cannot be represented.
+- `rivetkit-core` inspector HTTP routes belong in `RegistryDispatcher` ahead of user `on_request` callbacks, and endpoint failures should be translated into JSON RivetError payloads at that boundary instead of leaking raw transport errors.
 - When trimming `rivetkit` entrypoints, update `package.json` `exports`, `files`, and `scripts.build` together. `tsup` can still pass while stale export targets point at missing dist files.
 - `rivetkit-core` per-actor Prometheus metrics should hang off `ActorContext`, with queue/connection/action/lifecycle call sites updating shared metric handles directly and the registry serving `/metrics` before user `on_request` callbacks.
 - When moving Rust unit tests out of `src/`, keep a tiny source-owned `#[cfg(test)] #[path = "..."] mod tests;` shim and put the test bodies under `tests/modules/` so the moved tests keep private-module access without widening runtime visibility.
@@ -470,4 +471,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Cross-cutting inspector wiring is easiest to keep honest when `ActorContext` owns the inspector handle and subsystems only expose tiny update hooks instead of growing direct inspector dependencies.
   - Gotchas encountered: Completable queue receives need their own inspector bump even before `complete()`, because the queue metadata size does not change on receive but the inspector still needs to reflect the in-flight dequeue transition.
   - Useful context: Coverage for this story lives in `rivetkit-core/tests/modules/inspector.rs`, and the meaningful checks that passed were `cargo test -p rivetkit-core inspector` and `cargo check -p rivetkit-core`; the only remaining warning was the existing `rivet-envoy-protocol` note about missing `@bare-ts/tools`.
+---
+## 2026-04-17 18:05:33 PDT - US-052
+- What was implemented: Added inspector HTTP routing in `RegistryDispatcher` ahead of user `on_request`, with bearer-token auth, JSON endpoints for state, connections, RPCs, actions, queue, traces, summary, and staged SQLite inspector handlers that normalize failures into JSON RivetError responses.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/Cargo.toml`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/action.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/queue.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/registry.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/tests/modules/registry.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Inspector HTTP should keep using the existing CBOR payload boundary and only decode to JSON at the registry transport layer, so state/action/queue payloads stay aligned with the WebSocket inspector contract.
+  - Gotchas encountered: Letting inspector handlers bubble raw `?` errors breaks the HTTP API shape; `RegistryDispatcher` needs to catch those failures and convert them into JSON RivetError payloads before returning.
+  - Useful context: The new regression coverage lives in `rivetkit-core/tests/modules/registry.rs` and proves inspector routes beat `on_request`, auth failures stay JSON, and the state/action/queue/summary endpoints return the expected HTTP shapes.
 ---

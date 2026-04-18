@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -6,6 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
+use http::StatusCode;
 #[cfg(unix)]
 use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
@@ -18,14 +20,17 @@ use rivet_envoy_client::config::{
 use rivet_envoy_client::envoy::start_envoy;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::protocol;
+use rivet_error::RivetError;
 use scc::HashMap as SccHashMap;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value as JsonValue, json};
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::{Child, Command};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-use crate::actor::callbacks::{OnRequestRequest, OnWebSocketRequest, Request, Response};
+use crate::actor::action::{ActionDispatchError, ActionInvoker};
+use crate::actor::callbacks::{ActionRequest, OnRequestRequest, OnWebSocketRequest, Request, Response};
 use crate::actor::config::CanHibernateWebSocket;
 use crate::actor::context::ActorContext;
 use crate::actor::factory::ActorFactory;
@@ -33,7 +38,7 @@ use crate::actor::lifecycle::{ActorLifecycle, StartupOptions};
 use crate::actor::state::{PERSIST_DATA_KEY, PersistedActor, decode_persisted_actor};
 use crate::kv::Kv;
 use crate::sqlite::SqliteDb;
-use crate::types::{ActorKey, ActorKeySegment};
+use crate::types::{ActorKey, ActorKeySegment, SaveStateOpts};
 use crate::websocket::WebSocket;
 
 #[derive(Debug, Default)]
@@ -103,6 +108,68 @@ struct EngineProcessManager {
 	child: Child,
 	stdout_task: Option<JoinHandle<()>>,
 	stderr_task: Option<JoinHandle<()>>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct InspectorPatchStateBody {
+	state: JsonValue,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct InspectorActionBody {
+	args: Vec<JsonValue>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct InspectorDatabaseExecuteBody {
+	sql: String,
+	args: Vec<JsonValue>,
+	properties: Option<JsonValue>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InspectorQueueMessageJson {
+	id: u64,
+	name: String,
+	created_at_ms: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InspectorQueueResponseJson {
+	size: u32,
+	max_size: u32,
+	truncated: bool,
+	messages: Vec<InspectorQueueMessageJson>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InspectorConnectionJson {
+	#[serde(rename = "type")]
+	connection_type: Option<String>,
+	id: String,
+	params: JsonValue,
+	state: JsonValue,
+	subscriptions: usize,
+	is_hibernatable: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InspectorSummaryJson {
+	state: JsonValue,
+	is_state_enabled: bool,
+	connections: Vec<InspectorConnectionJson>,
+	rpcs: Vec<String>,
+	queue_size: u32,
+	is_database_enabled: bool,
+	is_workflow_enabled: bool,
+	workflow_history: Option<JsonValue>,
 }
 
 impl CoreRegistry {
@@ -285,16 +352,14 @@ impl RegistryDispatcher {
 		if request.path == "/metrics" {
 			return self.handle_metrics_fetch(&instance, &request);
 		}
+		let request = build_http_request(request).await?;
+		if let Some(response) = self.handle_inspector_fetch(&instance, &request).await? {
+			return Ok(response);
+		}
 		let Some(callback) = instance.callbacks.on_request.as_ref() else {
-			return Ok(HttpResponse {
-				status: http::StatusCode::NOT_FOUND.as_u16(),
-				headers: HashMap::new(),
-				body: Some(Vec::new()),
-				body_stream: None,
-			});
+			return Ok(not_found_response());
 		};
 
-		let request = build_http_request(request).await?;
 		match callback(OnRequestRequest {
 			ctx: instance.ctx.clone(),
 			request,
@@ -307,6 +372,359 @@ impl RegistryDispatcher {
 				Ok(internal_server_error_response())
 			}
 		}
+	}
+
+	async fn handle_inspector_fetch(
+		&self,
+		instance: &ActiveActorInstance,
+		request: &Request,
+	) -> Result<Option<HttpResponse>> {
+		let url = inspector_request_url(request)?;
+		if !url.path().starts_with("/inspector/") {
+			return Ok(None);
+		}
+		if !request_has_inspector_access(request, self.inspector_token.as_deref()) {
+			return Ok(Some(inspector_unauthorized_response()));
+		}
+
+		let method = request.method().clone();
+		let path = url.path();
+		let response = match (method, path) {
+			(http::Method::GET, "/inspector/state") => json_http_response(
+				StatusCode::OK,
+				&json!({
+					"state": decode_cbor_json_or_null(&instance.ctx.state()),
+					"isStateEnabled": true,
+				}),
+			),
+			(http::Method::PATCH, "/inspector/state") => {
+				let body: InspectorPatchStateBody = match parse_json_body(request) {
+					Ok(body) => body,
+					Err(response) => return Ok(Some(response)),
+				};
+				instance.ctx.set_state(encode_json_as_cbor(&body.state)?);
+				match instance
+					.ctx
+					.save_state(SaveStateOpts { immediate: true })
+					.await
+				{
+					Ok(_) => json_http_response(StatusCode::OK, &json!({ "ok": true })),
+					Err(error) => Err(error).context("save inspector state patch"),
+				}
+			}
+			(http::Method::GET, "/inspector/connections") => json_http_response(
+				StatusCode::OK,
+				&json!({
+					"connections": inspector_connections(&instance.ctx),
+				}),
+			),
+			(http::Method::GET, "/inspector/rpcs") => json_http_response(
+				StatusCode::OK,
+				&json!({
+					"rpcs": inspector_rpcs(instance),
+				}),
+			),
+			(http::Method::POST, action_path) if action_path.starts_with("/inspector/action/") => {
+				let action_name = action_path
+					.trim_start_matches("/inspector/action/")
+					.to_owned();
+				let body: InspectorActionBody = match parse_json_body(request) {
+					Ok(body) => body,
+					Err(response) => return Ok(Some(response)),
+				};
+				match self
+					.execute_inspector_action(instance, &action_name, body.args)
+					.await
+				{
+					Ok(output) => json_http_response(
+						StatusCode::OK,
+						&json!({
+							"output": output,
+						}),
+					),
+					Err(error) => Ok(action_error_response(error)),
+				}
+			}
+			(http::Method::GET, "/inspector/queue") => {
+				let limit = match parse_u32_query_param(&url, "limit", 100) {
+					Ok(limit) => limit,
+					Err(response) => return Ok(Some(response)),
+				};
+				let messages = match instance
+					.ctx
+					.queue()
+					.inspect_messages()
+					.await
+				{
+					Ok(messages) => messages,
+					Err(error) => {
+						return Ok(Some(inspector_anyhow_response(
+							error.context("list inspector queue messages"),
+						)));
+					}
+				};
+				let queue_size = messages.len().try_into().unwrap_or(u32::MAX);
+				let truncated = messages.len() > limit as usize;
+				let messages = messages
+					.into_iter()
+					.take(limit as usize)
+					.map(|message| InspectorQueueMessageJson {
+						id: message.id,
+						name: message.name,
+						created_at_ms: message.created_at,
+					})
+					.collect();
+				let payload = InspectorQueueResponseJson {
+					size: queue_size,
+					max_size: instance.ctx.queue().max_size(),
+					truncated,
+					messages,
+				};
+				json_http_response(StatusCode::OK, &payload)
+			}
+			(http::Method::GET, "/inspector/traces") => json_http_response(
+				StatusCode::OK,
+				&json!({
+					"otlp": Vec::<u8>::new(),
+					"clamped": false,
+				}),
+			),
+			(http::Method::GET, "/inspector/database/schema") => {
+				self
+					.inspector_database_schema(&instance.ctx)
+					.await
+					.context("load inspector database schema")
+					.and_then(|payload| {
+						json_http_response(StatusCode::OK, &json!({ "schema": payload }))
+					})
+			}
+			(http::Method::GET, "/inspector/database/rows") => {
+				let table = match required_query_param(&url, "table") {
+					Ok(table) => table,
+					Err(response) => return Ok(Some(response)),
+				};
+				let limit = match parse_u32_query_param(&url, "limit", 100) {
+					Ok(limit) => limit,
+					Err(response) => return Ok(Some(response)),
+				};
+				let offset = match parse_u32_query_param(&url, "offset", 0) {
+					Ok(offset) => offset,
+					Err(response) => return Ok(Some(response)),
+				};
+				self
+					.inspector_database_rows(&instance.ctx, &table, limit, offset)
+					.await
+					.context("load inspector database rows")
+					.and_then(|rows| {
+						json_http_response(StatusCode::OK, &json!({ "rows": rows }))
+					})
+			}
+			(http::Method::POST, "/inspector/database/execute") => {
+				let body: InspectorDatabaseExecuteBody = match parse_json_body(request) {
+					Ok(body) => body,
+					Err(response) => return Ok(Some(response)),
+				};
+				self
+					.inspector_database_execute(&instance.ctx, body)
+					.await
+					.context("execute inspector database query")
+					.and_then(|rows| {
+						json_http_response(StatusCode::OK, &json!({ "rows": rows }))
+					})
+			}
+			(http::Method::GET, "/inspector/summary") => {
+				self
+					.inspector_summary(instance)
+					.await
+					.and_then(|summary| json_http_response(StatusCode::OK, &summary))
+			}
+			_ => Ok(inspector_error_response(
+				StatusCode::NOT_FOUND,
+				"actor",
+				"not_found",
+				"Inspector route was not found",
+			)),
+		};
+
+		Ok(Some(match response {
+			Ok(response) => response,
+			Err(error) => inspector_anyhow_response(error),
+		}))
+	}
+
+	async fn execute_inspector_action(
+		&self,
+		instance: &ActiveActorInstance,
+		action_name: &str,
+		args: Vec<JsonValue>,
+	) -> std::result::Result<JsonValue, ActionDispatchError> {
+		let conn = match instance
+			.ctx
+			.connect_conn(Vec::new(), false, None, async { Ok(Vec::new()) })
+			.await
+		{
+			Ok(conn) => conn,
+			Err(error) => return Err(ActionDispatchError::from_anyhow(error)),
+		};
+		let invoker = ActionInvoker::with_shared_callbacks(
+			instance.factory.config().clone(),
+			instance.callbacks.clone(),
+		);
+		let output = invoker
+			.dispatch(ActionRequest {
+				ctx: instance.ctx.clone(),
+				conn: conn.clone(),
+				name: action_name.to_owned(),
+				args: encode_json_as_cbor(&args).map_err(ActionDispatchError::from_anyhow)?,
+			})
+			.await;
+		if let Err(error) = conn.disconnect(None).await {
+			tracing::warn!(?error, action_name, "failed to disconnect inspector action connection");
+		}
+		output.map(|payload| decode_cbor_json_or_null(&payload))
+	}
+
+	async fn inspector_summary(
+		&self,
+		instance: &ActiveActorInstance,
+	) -> Result<InspectorSummaryJson> {
+		let queue_messages = instance
+			.ctx
+			.queue()
+			.inspect_messages()
+			.await
+			.context("list queue messages for inspector summary")?;
+		Ok(InspectorSummaryJson {
+			state: decode_cbor_json_or_null(&instance.ctx.state()),
+			is_state_enabled: true,
+			connections: inspector_connections(&instance.ctx),
+			rpcs: inspector_rpcs(instance),
+			queue_size: queue_messages.len().try_into().unwrap_or(u32::MAX),
+			is_database_enabled: instance.ctx.sql().runtime_config().is_ok(),
+			is_workflow_enabled: false,
+			workflow_history: None,
+		})
+	}
+
+	async fn inspector_database_schema(&self, ctx: &ActorContext) -> Result<JsonValue> {
+		let tables = decode_cbor_json_or_null(
+			&ctx
+				.db_query(
+					"SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle_%' ORDER BY name",
+					None,
+				)
+				.await
+				.context("query sqlite master tables")?,
+		);
+		let JsonValue::Array(tables) = tables else {
+			return Ok(json!({ "tables": [] }));
+		};
+
+		let mut inspector_tables = Vec::with_capacity(tables.len());
+		for table in tables {
+			let name = table
+				.get("name")
+				.and_then(JsonValue::as_str)
+				.ok_or_else(|| anyhow!("sqlite schema row missing table name"))?;
+			let table_type = table
+				.get("type")
+				.and_then(JsonValue::as_str)
+				.unwrap_or("table");
+			let quoted = quote_sql_identifier(name);
+
+			let columns = decode_cbor_json_or_null(
+				&ctx
+					.db_query(&format!("PRAGMA table_info({quoted})"), None)
+					.await
+					.with_context(|| format!("query pragma table_info for `{name}`"))?,
+			);
+			let foreign_keys = decode_cbor_json_or_null(
+				&ctx
+					.db_query(&format!("PRAGMA foreign_key_list({quoted})"), None)
+					.await
+					.with_context(|| format!("query pragma foreign_key_list for `{name}`"))?,
+			);
+			let count_rows = decode_cbor_json_or_null(
+				&ctx
+					.db_query(
+						&format!("SELECT COUNT(*) as count FROM {quoted}"),
+						None,
+					)
+					.await
+					.with_context(|| format!("count rows for `{name}`"))?,
+			);
+			let records = count_rows
+				.as_array()
+				.and_then(|rows| rows.first())
+				.and_then(|row| row.get("count"))
+				.and_then(JsonValue::as_u64)
+				.unwrap_or(0);
+
+			inspector_tables.push(json!({
+				"table": {
+					"schema": "main",
+					"name": name,
+					"type": table_type,
+				},
+				"columns": columns,
+				"foreignKeys": foreign_keys,
+				"records": records,
+			}));
+		}
+
+		Ok(json!({ "tables": inspector_tables }))
+	}
+
+	async fn inspector_database_rows(
+		&self,
+		ctx: &ActorContext,
+		table: &str,
+		limit: u32,
+		offset: u32,
+	) -> Result<JsonValue> {
+		let params = encode_json_as_cbor(&vec![json!(limit.min(500)), json!(offset)])?;
+		let rows = ctx
+			.db_query(
+				&format!(
+					"SELECT * FROM {} LIMIT ? OFFSET ?",
+					quote_sql_identifier(table)
+				),
+				Some(&params),
+			)
+			.await
+			.with_context(|| format!("query rows for `{table}`"))?;
+		Ok(decode_cbor_json_or_null(&rows))
+	}
+
+	async fn inspector_database_execute(
+		&self,
+		ctx: &ActorContext,
+		body: InspectorDatabaseExecuteBody,
+	) -> Result<JsonValue> {
+		if body.sql.trim().is_empty() {
+			anyhow::bail!("inspector database execute requires non-empty sql");
+		}
+
+		let params = if let Some(properties) = body.properties {
+			Some(encode_json_as_cbor(&properties)?)
+		} else if body.args.is_empty() {
+			None
+		} else {
+			Some(encode_json_as_cbor(&body.args)?)
+		};
+
+		if is_read_only_sql(&body.sql) {
+			let rows = ctx
+				.db_query(&body.sql, params.as_deref())
+				.await
+				.context("run inspector read-only database query")?;
+			return Ok(decode_cbor_json_or_null(&rows));
+		}
+
+		ctx.db_run(&body.sql, params.as_deref())
+			.await
+			.context("run inspector database mutation")?;
+		Ok(JsonValue::Array(Vec::new()))
 	}
 
 	fn handle_metrics_fetch(
@@ -822,6 +1240,208 @@ fn decode_preloaded_persisted_actor(
 	decode_persisted_actor(&entry.value)
 		.map(Some)
 		.context("decode preloaded persisted actor")
+}
+
+fn inspector_connections(ctx: &ActorContext) -> Vec<InspectorConnectionJson> {
+	ctx
+		.conns()
+		.into_iter()
+		.map(|conn| InspectorConnectionJson {
+			connection_type: None,
+			id: conn.id().to_owned(),
+			params: decode_cbor_json_or_null(&conn.params()),
+			state: decode_cbor_json_or_null(&conn.state()),
+			subscriptions: conn.subscriptions().len(),
+			is_hibernatable: conn.is_hibernatable(),
+		})
+		.collect()
+}
+
+fn inspector_rpcs(instance: &ActiveActorInstance) -> Vec<String> {
+	let mut rpcs: Vec<String> = instance.callbacks.actions.keys().cloned().collect();
+	rpcs.sort();
+	rpcs
+}
+
+fn inspector_request_url(request: &Request) -> Result<Url> {
+	Url::parse(&format!("http://inspector{}", request.uri()))
+		.context("parse inspector request url")
+}
+
+fn decode_cbor_json_or_null(payload: &[u8]) -> JsonValue {
+	if payload.is_empty() {
+		return JsonValue::Null;
+	}
+
+	ciborium::from_reader::<JsonValue, _>(Cursor::new(payload))
+		.unwrap_or(JsonValue::Null)
+}
+
+fn encode_json_as_cbor(value: &impl Serialize) -> Result<Vec<u8>> {
+	let mut encoded = Vec::new();
+	ciborium::into_writer(value, &mut encoded).context("encode inspector payload as cbor")?;
+	Ok(encoded)
+}
+
+fn quote_sql_identifier(identifier: &str) -> String {
+	format!("\"{}\"", identifier.replace('"', "\"\""))
+}
+
+fn is_read_only_sql(sql: &str) -> bool {
+	let statement = sql.trim_start().to_ascii_uppercase();
+	matches!(
+		statement.split_whitespace().next(),
+		Some("SELECT" | "PRAGMA" | "WITH" | "EXPLAIN")
+	)
+}
+
+fn json_http_response(status: StatusCode, payload: &impl Serialize) -> Result<HttpResponse> {
+	let mut headers = HashMap::new();
+	headers.insert(
+		http::header::CONTENT_TYPE.to_string(),
+		"application/json".to_owned(),
+	);
+	Ok(HttpResponse {
+		status: status.as_u16(),
+		headers,
+		body: Some(
+			serde_json::to_vec(payload).context("serialize inspector json response")?,
+		),
+		body_stream: None,
+	})
+}
+
+fn not_found_response() -> HttpResponse {
+	HttpResponse {
+		status: StatusCode::NOT_FOUND.as_u16(),
+		headers: HashMap::new(),
+		body: Some(Vec::new()),
+		body_stream: None,
+	}
+}
+
+fn inspector_unauthorized_response() -> HttpResponse {
+	inspector_error_response(
+		StatusCode::UNAUTHORIZED,
+		"auth",
+		"unauthorized",
+		"Inspector request requires a valid bearer token",
+	)
+}
+
+fn action_error_response(error: ActionDispatchError) -> HttpResponse {
+	let status = if error.code == "action_not_found" {
+		StatusCode::NOT_FOUND
+	} else {
+		StatusCode::INTERNAL_SERVER_ERROR
+	};
+	inspector_error_response(status, &error.group, &error.code, &error.message)
+}
+
+fn inspector_anyhow_response(error: anyhow::Error) -> HttpResponse {
+	let error = RivetError::extract(&error);
+	let status = inspector_error_status(error.group(), error.code());
+	inspector_error_response(status, error.group(), error.code(), error.message())
+}
+
+fn inspector_error_response(
+	status: StatusCode,
+	group: &str,
+	code: &str,
+	message: &str,
+) -> HttpResponse {
+	json_http_response(
+		status,
+		&json!({
+			"group": group,
+			"code": code,
+			"message": message,
+			"metadata": JsonValue::Null,
+		}),
+	)
+	.expect("inspector error payload should serialize")
+}
+
+fn inspector_error_status(group: &str, code: &str) -> StatusCode {
+	match (group, code) {
+		("auth", "unauthorized") => StatusCode::UNAUTHORIZED,
+		(_, "action_not_found") => StatusCode::NOT_FOUND,
+		(_, "invalid_request") | (_, "state_not_enabled") | ("database", "not_enabled") => {
+			StatusCode::BAD_REQUEST
+		}
+		_ => StatusCode::INTERNAL_SERVER_ERROR,
+	}
+}
+
+fn parse_json_body<T>(request: &Request) -> std::result::Result<T, HttpResponse>
+where
+	T: serde::de::DeserializeOwned,
+{
+	serde_json::from_slice(request.body()).map_err(|error| {
+		inspector_error_response(
+			StatusCode::BAD_REQUEST,
+			"actor",
+			"invalid_request",
+			&format!("Invalid inspector JSON body: {error}"),
+		)
+	})
+}
+
+fn required_query_param(url: &Url, key: &str) -> std::result::Result<String, HttpResponse> {
+	url
+		.query_pairs()
+		.find(|(name, _)| name == key)
+		.map(|(_, value)| value.into_owned())
+		.ok_or_else(|| {
+			inspector_error_response(
+				StatusCode::BAD_REQUEST,
+				"actor",
+				"invalid_request",
+				&format!("Missing required query parameter `{key}`"),
+			)
+		})
+}
+
+fn parse_u32_query_param(
+	url: &Url,
+	key: &str,
+	default: u32,
+) -> std::result::Result<u32, HttpResponse> {
+	let Some(value) = url.query_pairs().find(|(name, _)| name == key).map(|(_, value)| value)
+	else {
+		return Ok(default);
+	};
+	value.parse::<u32>().map_err(|error| {
+		inspector_error_response(
+			StatusCode::BAD_REQUEST,
+			"actor",
+			"invalid_request",
+			&format!("Invalid query parameter `{key}`: {error}"),
+		)
+	})
+}
+
+fn request_has_inspector_access(
+	request: &Request,
+	configured_token: Option<&str>,
+) -> bool {
+	let provided_token = request
+		.headers()
+		.get(http::header::AUTHORIZATION)
+		.and_then(|value| value.to_str().ok())
+		.and_then(|value| value.strip_prefix("Bearer "));
+
+	match configured_token {
+		Some(configured_token) => provided_token == Some(configured_token),
+		None if env::var("NODE_ENV").unwrap_or_else(|_| "development".to_owned()) != "production" => {
+			tracing::warn!(
+				path = %request.uri(),
+				"allowing inspector request without configured token in development mode"
+			);
+			true
+		}
+		None => false,
+	}
 }
 
 async fn build_http_request(request: HttpRequest) -> Result<Request> {

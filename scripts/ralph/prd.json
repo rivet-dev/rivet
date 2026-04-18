@@ -971,7 +971,7 @@
         "cargo check -p rivetkit-core passes"
       ],
       "priority": 53,
-      "passes": false,
+      "passes": true,
       "notes": "Thin transport layer over Inspector methods from US-050. All logic is in the Inspector struct, HTTP handlers just parse/serialize. Reference commit (pre-deletion): 959ab9bba. Use `git show 959ab9bba:<path>` to read the original TS implementation. Original: rivetkit-typescript/packages/rivetkit/src/actor/router.ts (grep for '/inspector') at commit 959ab9bba."
     },
     {

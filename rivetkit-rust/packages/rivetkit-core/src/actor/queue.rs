@@ -499,6 +499,15 @@ impl Queue {
 		self.0.active_queue_wait_count.load(Ordering::SeqCst)
 	}
 
+	pub(crate) async fn inspect_messages(&self) -> Result<Vec<QueueMessage>> {
+		self.ensure_initialized().await?;
+		self.list_messages().await
+	}
+
+	pub(crate) fn max_size(&self) -> u32 {
+		self.config().max_queue_size
+	}
+
 	#[allow(dead_code)]
 	pub(crate) fn configure_sleep(&self, config: ActorConfig) {
 		*self.0.config.lock().expect("queue config lock poisoned") = config;

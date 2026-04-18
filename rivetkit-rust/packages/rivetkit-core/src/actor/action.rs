@@ -144,7 +144,7 @@ impl ActionDispatchError {
 		}
 	}
 
-	fn from_anyhow(error: anyhow::Error) -> Self {
+	pub(crate) fn from_anyhow(error: anyhow::Error) -> Self {
 		let error = RivetError::extract(&error);
 		Self {
 			group: error.group().to_owned(),

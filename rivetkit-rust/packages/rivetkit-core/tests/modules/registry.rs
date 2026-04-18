@@ -87,14 +87,17 @@ use super::*;
 
 	mod moved_tests {
 		use std::collections::HashMap;
+		use std::io::Cursor;
 		use std::process::Stdio;
 		use std::sync::Arc;
 		use std::sync::atomic::{AtomicBool, Ordering};
 
 		use anyhow::Result;
+		use ciborium::{from_reader, into_writer};
 		use futures::future::BoxFuture;
-		use rivet_envoy_client::config::HttpRequest;
+		use rivet_envoy_client::config::{HttpRequest, HttpResponse};
 		use rivet_envoy_client::protocol;
+		use serde_json::{Value as JsonValue, json};
 		use tokio::io::AsyncWriteExt;
 		use tokio::net::TcpListener;
 		use tokio::process::Command;
@@ -153,6 +156,67 @@ use super::*;
 				active_instances: scc::HashMap::new(),
 				region: String::new(),
 				inspector_token: inspector_token.map(str::to_owned),
+			})
+		}
+
+		fn encode_cbor(value: &impl serde::Serialize) -> Vec<u8> {
+			let mut encoded = Vec::new();
+			into_writer(value, &mut encoded).expect("encode test cbor");
+			encoded
+		}
+
+		fn decode_json_body(response: &HttpResponse) -> JsonValue {
+			serde_json::from_slice(
+				response.body.as_ref().expect("response body should exist"),
+			)
+			.expect("response body should be valid json")
+		}
+
+		fn inspector_fixture_factory() -> ActorFactory {
+			factory(|request| {
+				Box::pin(async move {
+					request.ctx.set_state(encode_cbor(&json!({ "count": 5 })));
+					request
+						.ctx
+						.queue()
+						.send("job", &encode_cbor(&json!({ "work": 1 })))
+						.await?;
+
+					let mut callbacks = ActorInstanceCallbacks::default();
+					callbacks.on_request = Some(request_callback(|_request| {
+						Box::pin(async move {
+							let response = Response::from(
+								http::Response::builder()
+									.status(http::StatusCode::IM_A_TEAPOT)
+									.body(b"wrong route".to_vec())
+									.expect("build response"),
+							);
+							Ok(response)
+						})
+					}));
+					callbacks.actions.insert(
+						"increment".to_owned(),
+						Box::new(|request| {
+							Box::pin(async move {
+								let args: Vec<i64> = from_reader(Cursor::new(request.args))
+									.expect("decode action args");
+								let state: JsonValue =
+									from_reader(Cursor::new(request.ctx.state()))
+										.expect("decode actor state");
+								let next = state
+									.get("count")
+									.and_then(JsonValue::as_i64)
+									.unwrap_or_default()
+									+ args.first().copied().unwrap_or_default();
+								request
+									.ctx
+									.set_state(encode_cbor(&json!({ "count": next })));
+								Ok(encode_cbor(&json!(next)))
+							})
+						}),
+					);
+					Ok(callbacks)
+				})
 			})
 		}
 
@@ -289,6 +353,201 @@ use super::*;
 				.expect("metrics fetch should succeed");
 
 			assert_eq!(response.status, http::StatusCode::UNAUTHORIZED.as_u16());
+		}
+
+		#[tokio::test]
+		async fn dispatcher_routes_inspector_state_before_actor_request_callback() {
+			let dispatcher = dispatcher_for_token(inspector_fixture_factory(), Some("token"));
+
+			dispatcher
+				.start_actor_for_test("actor-1", 1, "counter", None)
+				.await
+				.expect("start actor");
+
+			let response = dispatcher
+				.handle_fetch(
+					"actor-1",
+					HttpRequest {
+						method: "GET".to_owned(),
+						path: "/inspector/state".to_owned(),
+						headers: HashMap::from([(
+							"authorization".to_owned(),
+							"Bearer token".to_owned(),
+						)]),
+						body: None,
+						body_stream: None,
+					},
+				)
+				.await
+				.expect("inspector state should succeed");
+
+			assert_eq!(response.status, http::StatusCode::OK.as_u16());
+			assert_eq!(
+				decode_json_body(&response),
+				json!({
+					"state": { "count": 5 },
+					"isStateEnabled": true,
+				})
+			);
+		}
+
+		#[tokio::test]
+		async fn dispatcher_rejects_inspector_without_valid_token() {
+			let dispatcher = dispatcher_for_token(inspector_fixture_factory(), Some("token"));
+
+			dispatcher
+				.start_actor_for_test("actor-1", 1, "counter", None)
+				.await
+				.expect("start actor");
+
+			let response = dispatcher
+				.handle_fetch(
+					"actor-1",
+					HttpRequest {
+						method: "GET".to_owned(),
+						path: "/inspector/state".to_owned(),
+						headers: HashMap::from([(
+							"authorization".to_owned(),
+							"Bearer wrong-token".to_owned(),
+						)]),
+						body: None,
+						body_stream: None,
+					},
+				)
+				.await
+				.expect("inspector auth response should succeed");
+
+			assert_eq!(response.status, http::StatusCode::UNAUTHORIZED.as_u16());
+			assert_eq!(
+				decode_json_body(&response)
+					.get("code")
+					.and_then(JsonValue::as_str),
+				Some("unauthorized")
+			);
+		}
+
+		#[tokio::test]
+		async fn dispatcher_patches_inspector_state_and_executes_action() {
+			let dispatcher = dispatcher_for_token(inspector_fixture_factory(), Some("token"));
+
+			dispatcher
+				.start_actor_for_test("actor-1", 1, "counter", None)
+				.await
+				.expect("start actor");
+
+			let patch_response = dispatcher
+				.handle_fetch(
+					"actor-1",
+					HttpRequest {
+						method: "PATCH".to_owned(),
+						path: "/inspector/state".to_owned(),
+						headers: HashMap::from([
+							("authorization".to_owned(), "Bearer token".to_owned()),
+							(
+								"content-type".to_owned(),
+								"application/json".to_owned(),
+							),
+						]),
+						body: Some(br#"{"state":{"count":42}}"#.to_vec()),
+						body_stream: None,
+					},
+				)
+				.await
+				.expect("inspector patch should succeed");
+			assert_eq!(patch_response.status, http::StatusCode::OK.as_u16());
+			assert_eq!(decode_json_body(&patch_response), json!({ "ok": true }));
+
+			let action_response = dispatcher
+				.handle_fetch(
+					"actor-1",
+					HttpRequest {
+						method: "POST".to_owned(),
+						path: "/inspector/action/increment".to_owned(),
+						headers: HashMap::from([
+							("authorization".to_owned(), "Bearer token".to_owned()),
+							(
+								"content-type".to_owned(),
+								"application/json".to_owned(),
+							),
+						]),
+						body: Some(br#"{"args":[5]}"#.to_vec()),
+						body_stream: None,
+					},
+				)
+				.await
+				.expect("inspector action should succeed");
+
+			assert_eq!(action_response.status, http::StatusCode::OK.as_u16());
+			assert_eq!(
+				decode_json_body(&action_response),
+				json!({ "output": 47 })
+			);
+		}
+
+		#[tokio::test]
+		async fn dispatcher_returns_inspector_queue_and_summary_json() {
+			let dispatcher = dispatcher_for_token(inspector_fixture_factory(), Some("token"));
+
+			dispatcher
+				.start_actor_for_test("actor-1", 1, "counter", None)
+				.await
+				.expect("start actor");
+
+			let queue_response = dispatcher
+				.handle_fetch(
+					"actor-1",
+					HttpRequest {
+						method: "GET".to_owned(),
+						path: "/inspector/queue?limit=10".to_owned(),
+						headers: HashMap::from([(
+							"authorization".to_owned(),
+							"Bearer token".to_owned(),
+						)]),
+						body: None,
+						body_stream: None,
+					},
+				)
+				.await
+				.expect("inspector queue should succeed");
+			assert_eq!(queue_response.status, http::StatusCode::OK.as_u16());
+			let queue_json = decode_json_body(&queue_response);
+			assert_eq!(queue_json["size"], json!(1));
+			assert_eq!(queue_json["maxSize"], json!(1000));
+			assert_eq!(queue_json["truncated"], json!(false));
+			assert_eq!(queue_json["messages"][0]["id"], json!(1));
+			assert_eq!(queue_json["messages"][0]["name"], json!("job"));
+			assert!(queue_json["messages"][0]["createdAtMs"].is_number());
+
+			let summary_response = dispatcher
+				.handle_fetch(
+					"actor-1",
+					HttpRequest {
+						method: "GET".to_owned(),
+						path: "/inspector/summary".to_owned(),
+						headers: HashMap::from([(
+							"authorization".to_owned(),
+							"Bearer token".to_owned(),
+						)]),
+						body: None,
+						body_stream: None,
+					},
+				)
+				.await
+				.expect("inspector summary should succeed");
+			assert_eq!(summary_response.status, http::StatusCode::OK.as_u16());
+			assert_eq!(
+				decode_json_body(&summary_response),
+				json!({
+					"state": { "count": 5 },
+					"isStateEnabled": true,
+					"connections": [],
+					"rpcs": ["increment"],
+					"queueSize": 1,
+					"isDatabaseEnabled": false,
+					"isWorkflowEnabled": false,
+					"workflowHistory": null,
+				})
+			);
 		}
 
 		#[tokio::test]
