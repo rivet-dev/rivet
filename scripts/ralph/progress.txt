@@ -2,6 +2,7 @@
 Started: Thu Apr 16 10:02:08 PM PDT 2026
 
 ## Codebase Patterns
+- Inspector core helpers should keep schema payloads as opaque `ArrayBuffer`s and only CBOR encode/decode at the inspector boundary, so HTTP and WebSocket transports can reuse the same logic.
 - Inspector wire-protocol downgrades should turn unsupported responses into explicit `Error` payloads with `inspector.*_dropped` messages, and only throw on request downgrades that cannot be represented.
 - When trimming `rivetkit` entrypoints, update `package.json` `exports`, `files`, and `scripts.build` together. `tsup` can still pass while stale export targets point at missing dist files.
 - `rivetkit-core` per-actor Prometheus metrics should hang off `ActorContext`, with queue/connection/action/lifecycle call sites updating shared metric handles directly and the registry serving `/metrics` before user `on_request` callbacks.
@@ -452,4 +453,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Inspector protocol downgrades should map unsupported response payloads to explicit `Error` messages like `inspector.events_dropped` instead of silently dropping fields, while unsupported request downgrades should throw.
   - Gotchas encountered: The preserved browser inspector bundle still carries the deleted schema sources in `dist/browser/inspector/client.js.map`, which is the safest way to recover the exact generated v1-v4 codecs when source files disappear.
   - Useful context: Verification passed with `pnpm check-types` and `pnpm test tests/inspector-versioned.test.ts tests/package-surface.test.ts` in `rivetkit-typescript/packages/rivetkit`.
+---
+## 2026-04-17 17:42:08 PDT - US-050
+- What was implemented: Restored the inspector core as a transport-agnostic TypeScript module at `src/inspector/actor-inspector.ts`, covering inspector token persistence/verification, snapshot/state/action/queue/database/workflow helpers, and a stub trace response that already returns the shared v4 schema shapes for later HTTP and WebSocket transports.
+- Files changed: `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/src/inspector/actor-inspector.ts`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/tests/actor-inspector.test.ts`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Inspector helpers should return the shared inspector schema objects directly and keep opaque payloads as `ArrayBuffer`s, with CBOR only at the module boundary.
+  - Gotchas encountered: `pnpm lint` in `packages/rivetkit` expands to `biome check .`, so verifying a focused change needs `pnpm exec biome check <files>` when the package already has unrelated lint debt.
+  - Useful context: `tests/actor-inspector.test.ts` now covers token storage at `KEYS.INSPECTOR_TOKEN`, queue snapshot ordering/truncation, state patching, action execution through the synthetic inspector connection, and SQLite schema/row serialization.
 ---

@@ -938,7 +938,7 @@
         "cargo check -p rivetkit-core passes"
       ],
       "priority": 51,
-      "passes": false,
+      "passes": true,
       "notes": "Transport-agnostic: no HTTP, no WebSocket, no routing in this module. Just pure logic. HTTP and WS transport layers (US-052, US-054) call these methods. Reference commit (pre-deletion): 959ab9bba. Use `git show 959ab9bba:<path>` to read the original TS implementation. Original: rivetkit-typescript/packages/rivetkit/src/inspector/actor-inspector.ts"
     },
     {
