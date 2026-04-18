@@ -14,7 +14,7 @@ napi-derive = "2"
 rivet-envoy-client.workspace = true
 rivet-envoy-protocol.workspace = true
 async-trait.workspace = true
-rivetkit-sqlite-native.workspace = true
+rivetkit-sqlite.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 anyhow.workspace = true
@@ -27,8 +27,7 @@ base64.workspace = true
 hex.workspace = true
 http.workspace = true
 rivet-error.workspace = true
-rivetkit-core.workspace = true
-libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+rivetkit-core = { workspace = true, features = ["sqlite"] }
 
 [build-dependencies]
 napi-build = "2"

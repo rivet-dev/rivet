@@ -108,7 +108,7 @@ git commit -m "chore(my-pkg): foo bar"
 - For RivetKit runtime or parity bugs, use `rivetkit-typescript/packages/rivetkit` driver tests as the primary oracle: reproduce with the TypeScript driver suite first, compare behavior against the original TypeScript implementation at ref `feat/sqlite-vfs-v2`, patch native/Rust to match, then rerun the same TypeScript driver test before adding lower-level native tests.
 
 ### SQLite Package
-- RivetKit SQLite runtime is native-only. Use `@rivetkit/rivetkit-napi` and do not add `@rivetkit/sqlite`, `@rivetkit/sqlite-vfs`, or other WebAssembly SQLite fallbacks.
+- RivetKit SQLite is native-only: VFS and query execution live in `rivetkit-rust/packages/rivetkit-sqlite/`, core owns lifecycle, and NAPI only marshals JS types.
 - The N-API addon lives at `@rivetkit/rivetkit-napi` in `rivetkit-typescript/packages/rivetkit-napi`; keep Docker build targets, publish metadata, examples, and workspace package references in sync when renaming or moving it.
 - N-API actor-runtime wrappers should expose `ActorContext` sub-objects as first-class classes, keep raw payloads as `Buffer`, and wrap queue messages as classes so completable receives can call `complete()` back into Rust.
 - N-API callback bridges should pass a single request object through `ThreadsafeFunction`, and Promise results that cross back into Rust should deserialize into `#[napi(object)]` structs instead of `JsObject` so the callback future stays `Send`.
@@ -245,7 +245,7 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 - **envoy-client** (`engine/sdks/rust/envoy-client/`) — Wire protocol between actors and the engine. BARE serialization, WebSocket transport, KV request/response matching, SQLite protocol dispatch, tunnel routing.
 - **rivetkit-core** (`rivetkit-rust/packages/rivetkit-core/`) — Core RivetKit logic in Rust, built to be language-agnostic. Lifecycle state machine, sleep logic, shutdown sequencing, state persistence, action dispatch, event broadcast, queue management, schedule system, inspector, metrics. All callbacks are dynamic closures with opaque bytes. All load-bearing logic must live here. Config conversion helpers and HTTP request/response parsing for foreign runtimes belong here.
 - **rivetkit (Rust)** (`rivetkit-rust/packages/rivetkit/`) — Rust-friendly typed API. `Actor` trait, `Ctx<A>`, `Registry` builder, CBOR serde at boundaries. Thin wrapper over rivetkit-core. No load-bearing logic.
-- **rivetkit-napi** (`rivetkit-typescript/packages/rivetkit-napi/`) — NAPI bindings only. ThreadsafeFunction wrappers, JS object construction, Promise-to-Future conversion. No load-bearing logic. Must only translate between JS types and rivetkit-core types.
+- **rivetkit-napi** (`rivetkit-typescript/packages/rivetkit-napi/`) — NAPI bindings only. ThreadsafeFunction wrappers, JS object construction, Promise-to-Future conversion. No load-bearing logic. Must only translate between JS types and rivetkit-core types. Only consumed by `rivetkit-typescript/packages/rivetkit/`; do not design its API for external embedders.
 - **rivetkit (TypeScript)** (`rivetkit-typescript/packages/rivetkit/`) — TypeScript-friendly API. Calls into rivetkit-core via NAPI for lifecycle logic. Owns workflow engine, agent-os, and client library. Zod validation for user-provided schemas runs here.
 
 ### RivetKit Layer Constraints
@@ -338,12 +338,12 @@ let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build(
 - If you need to add a dependency and can't find it in the Cargo.toml of the workspace, add it to the workspace dependencies in Cargo.toml (`[workspace.dependencies]`) and then add it to the package you need with `{dependency}.workspace = true`
 
 **Native SQLite & KV Channel**
-- RivetKit SQLite is served by `@rivetkit/rivetkit-napi`. Do not reintroduce SQLite-over-KV or WebAssembly SQLite paths in the TypeScript runtime.
-- The Rust KV-backed SQLite implementation still lives in `rivetkit-typescript/packages/sqlite-native/src/`. When changing its on-disk or KV layout, update the internal data-channel spec in the same change.
+- RivetKit TypeScript SQLite is exposed through `@rivetkit/rivetkit-napi`, but runtime behavior must stay in `rivetkit-rust/packages/rivetkit-sqlite/` and `rivetkit-core`.
+- The Rust KV-backed SQLite implementation lives in `rivetkit-rust/packages/rivetkit-sqlite/src/`; when changing its on-disk or KV layout, update the internal data-channel spec in the same change.
 - SQLite v2 slow-path staging writes encoded LTX bytes directly under DELTA chunk keys. Do not expect `/STAGE` keys or a fixed one-chunk-per-page mapping in tests or recovery code.
 - The native VFS uses the same 4 KiB chunk layout and KV key encoding as the WASM VFS. Data is compatible between backends.
 - **The native Rust VFS and the WASM TypeScript VFS must match 1:1.** This includes: KV key layout and encoding, chunk size, PRAGMA settings, VFS callback-to-KV-operation mapping, delete/truncate strategy (both must use `deleteRange`), and journal mode. When changing any VFS behavior in one implementation, update the other. The relevant files are:
-  - Native: `rivetkit-typescript/packages/sqlite-native/src/vfs.rs`, `kv.rs`
+  - Native: `rivetkit-rust/packages/rivetkit-sqlite/src/vfs.rs`, `kv.rs`
   - WASM: `rivetkit-typescript/packages/sqlite-wasm/src/vfs.ts`, `kv.ts`
 - SQLite VFS v2 storage keys use literal ASCII path segments under the `0x02` subspace prefix with big-endian numeric suffixes so `scan_prefix` and `BTreeMap` ordering stay numerically correct.
 - Full spec: `docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md`

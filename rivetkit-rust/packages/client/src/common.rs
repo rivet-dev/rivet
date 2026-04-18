@@ -19,9 +19,11 @@ pub const HEADER_CONN_TOKEN: &str = "x-rivet-conn-token";
 pub const HEADER_RIVET_TARGET: &str = "x-rivet-target";
 pub const HEADER_RIVET_ACTOR: &str = "x-rivet-actor";
 pub const HEADER_RIVET_TOKEN: &str = "x-rivet-token";
+pub const HEADER_RIVET_NAMESPACE: &str = "x-rivet-namespace";
 
 // Paths
 pub const PATH_CONNECT_WEBSOCKET: &str = "/connect";
+pub const PATH_WEBSOCKET_PREFIX: &str = "/websocket/";
 
 // WebSocket protocol prefixes
 pub const WS_PROTOCOL_STANDARD: &str = "rivet";
@@ -43,6 +45,7 @@ pub enum TransportKind {
 pub enum EncodingKind {
     Json,
     Cbor,
+    Bare,
 }
 
 impl EncodingKind {
@@ -50,6 +53,7 @@ impl EncodingKind {
         match self {
             EncodingKind::Json => "json",
             EncodingKind::Cbor => "cbor",
+            EncodingKind::Bare => "bare",
         }
     }
 }

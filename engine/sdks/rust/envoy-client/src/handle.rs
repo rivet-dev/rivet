@@ -34,6 +34,22 @@ impl EnvoyHandle {
 		&self.shared.envoy_key
 	}
 
+	pub fn endpoint(&self) -> &str {
+		&self.shared.config.endpoint
+	}
+
+	pub fn token(&self) -> Option<&str> {
+		self.shared.config.token.as_deref()
+	}
+
+	pub fn namespace(&self) -> &str {
+		&self.shared.config.namespace
+	}
+
+	pub fn pool_name(&self) -> &str {
+		&self.shared.config.pool_name
+	}
+
 	pub async fn started(&self) -> anyhow::Result<()> {
 		self.started_rx
 			.clone()

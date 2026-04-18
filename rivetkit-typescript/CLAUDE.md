@@ -12,7 +12,6 @@
 - If `packages/rivetkit` still needs a BARE codec after schema-generator removal, vendor only the live generated modules under `src/common/bare/` and import them from source instead of `dist/schemas/**`.
 - The v2 SQLite VFS must reconstruct full 4 KiB pages for partial `xRead` and `xWrite` callbacks because SQLite can issue sub-page header I/O even when commits stay page-based.
 - Treat `head_txid` and `db_size_pages` as VFS-owned state. Read-side `get_pages(...)` responses may refresh `max_delta_bytes`, but commit responses plus local `xWrite` or `xTruncate` paths are the only things allowed to advance or shrink those fields.
-- Keep `SqliteStartupData` cached on the Rust `JsEnvoyHandle` and let `open_database_from_envoy(...)` select the v2 VFS there instead of threading extra JS-only startup plumbing through the driver.
 - `open_database_from_envoy(...)` must dispatch on `sqliteSchemaVersion`, not on whether startup data happens to be present. Schema version `2` should fail closed if startup data is missing.
 - When changing Rust under `packages/rivetkit-napi` or `packages/sqlite-native`, rebuild from `packages/rivetkit-napi` with `pnpm build:force` so the native `.node` artifact refreshes.
 - Real `sqlite-native` tests that drive the v2 VFS through a direct `SqliteEngine` need a multithread Tokio runtime; `current_thread` is fine for mock transport tests but can stall real engine callbacks.

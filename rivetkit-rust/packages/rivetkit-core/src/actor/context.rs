@@ -251,20 +251,21 @@ impl ActorContext {
 		&self.0.sql
 	}
 
-	pub async fn db_exec(&self, _sql: &str) -> Result<Vec<u8>> {
-		Err(anyhow!("actor database exec is not configured"))
+	pub async fn db_exec(&self, sql: &str) -> Result<Vec<u8>> {
+		self.0.sql.exec_rows_cbor(sql).await
 	}
 
 	pub async fn db_query(
 		&self,
-		_sql: &str,
-		_params: Option<&[u8]>,
+		sql: &str,
+		params: Option<&[u8]>,
 	) -> Result<Vec<u8>> {
-		Err(anyhow!("actor database query is not configured"))
+		self.0.sql.query_rows_cbor(sql, params).await
 	}
 
-	pub async fn db_run(&self, _sql: &str, _params: Option<&[u8]>) -> Result<()> {
-		Err(anyhow!("actor database run is not configured"))
+	pub async fn db_run(&self, sql: &str, params: Option<&[u8]>) -> Result<()> {
+		self.0.sql.run_cbor(sql, params).await?;
+		Ok(())
 	}
 
 	pub fn schedule(&self) -> &Schedule {
@@ -386,6 +387,42 @@ impl ActorContext {
 
 	pub async fn client_call(&self, _request: &[u8]) -> Result<Vec<u8>> {
 		Err(anyhow!("actor client bridge is not configured"))
+	}
+
+	pub fn client_endpoint(&self) -> Result<String> {
+		self
+			.0
+			.sleep
+			.envoy_handle()
+			.map(|handle| handle.endpoint().to_owned())
+			.ok_or_else(|| anyhow!("actor client endpoint is not configured"))
+	}
+
+	pub fn client_token(&self) -> Result<Option<String>> {
+		self
+			.0
+			.sleep
+			.envoy_handle()
+			.map(|handle| handle.token().map(ToOwned::to_owned))
+			.ok_or_else(|| anyhow!("actor client token is not configured"))
+	}
+
+	pub fn client_namespace(&self) -> Result<String> {
+		self
+			.0
+			.sleep
+			.envoy_handle()
+			.map(|handle| handle.namespace().to_owned())
+			.ok_or_else(|| anyhow!("actor client namespace is not configured"))
+	}
+
+	pub fn client_pool_name(&self) -> Result<String> {
+		self
+			.0
+			.sleep
+			.envoy_handle()
+			.map(|handle| handle.pool_name().to_owned())
+			.ok_or_else(|| anyhow!("actor client pool name is not configured"))
 	}
 
 	pub fn ack_hibernatable_websocket_message(

@@ -1,9 +1,49 @@
+import type {
+	JsActorConfig,
+	JsFactoryInitResult,
+	JsHttpResponse,
+	JsServeConfig,
+	ActorContext as NativeActorContext,
+	NapiActorFactory as NativeActorFactory,
+	CancellationToken as NativeCancellationToken,
+	ConnHandle as NativeConnHandle,
+	CoreRegistry as NativeCoreRegistry,
+	Queue as NativeQueue,
+	QueueMessage as NativeQueueMessage,
+	Schedule as NativeSchedule,
+	WebSocket as NativeWebSocket,
+} from "@rivetkit/rivetkit-napi";
+import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import * as cbor from "cbor-x";
-import type { Encoding } from "@/common/encoding";
+import {
+	ACTOR_CONTEXT_INTERNAL_SYMBOL,
+	getRunFunction,
+	getRunInspectorConfig,
+} from "@/actor/config";
+import type { AnyActorDefinition } from "@/actor/definition";
+import {
+	decodeBridgeRivetError,
+	encodeBridgeRivetError,
+	forbiddenError,
+	INTERNAL_ERROR_CODE,
+	INTERNAL_ERROR_DESCRIPTION,
+	isRivetErrorLike,
+	RivetError,
+	toRivetError,
+} from "@/actor/errors";
+import { makePrefixedKey, removePrefixFromKey } from "@/actor/keys";
+import {
+	getEventCanSubscribe,
+	getQueueCanPublish,
+	hasSchemaConfigKey,
+} from "@/actor/schema";
+import { type AnyClient, createClientWithDriver } from "@/client/client";
+import { convertRegistryConfigToClientConfig } from "@/client/config";
 import {
 	HEADER_CONN_PARAMS,
 	HEADER_ENCODING,
 } from "@/common/actor-router-consts";
+import type * as protocol from "@/common/client-protocol";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	HTTP_ACTION_REQUEST_VERSIONED,
@@ -13,41 +53,20 @@ import {
 	HTTP_RESPONSE_ERROR_VERSIONED,
 } from "@/common/client-protocol-versioned";
 import {
+	HttpActionRequestSchema,
+	HttpActionResponseSchema,
 	type HttpQueueSendRequest as HttpQueueSendRequestJson,
 	HttpQueueSendRequestSchema,
 	type HttpQueueSendResponse as HttpQueueSendResponseJson,
 	HttpQueueSendResponseSchema,
-	HttpActionRequestSchema,
-	HttpActionResponseSchema,
 	type HttpResponseError as HttpResponseErrorJson,
 	HttpResponseErrorSchema,
 } from "@/common/client-protocol-zod";
-import type * as protocol from "@/common/client-protocol";
-import {
-	ACTOR_CONTEXT_INTERNAL_SYMBOL,
-	getRunFunction,
-	getRunInspectorConfig,
-} from "@/actor/config";
-import type { AnyActorDefinition } from "@/actor/definition";
-import {
-	INTERNAL_ERROR_CODE,
-	INTERNAL_ERROR_DESCRIPTION,
-	decodeBridgeRivetError,
-	encodeBridgeRivetError,
-	forbiddenError,
-	isRivetErrorLike,
-	RivetError,
-	toRivetError,
-} from "@/actor/errors";
-import {
-	getEventCanSubscribe,
-	getQueueCanPublish,
-	hasSchemaConfigKey,
-} from "@/actor/schema";
-import { makePrefixedKey, removePrefixFromKey } from "@/actor/keys";
 import type { AnyDatabaseProvider } from "@/common/database/config";
-import { AsyncMutex } from "@/common/database/shared";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
+import { AsyncMutex } from "@/common/database/shared";
+import type { Encoding } from "@/common/encoding";
+import { decodeWorkflowHistoryTransport } from "@/common/inspector-transport";
 import { deconstructError } from "@/common/utils";
 import type {
 	RivetCloseEvent,
@@ -55,11 +74,6 @@ import type {
 	RivetMessageEvent,
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
-import {
-	type AnyClient,
-	createClientWithDriver,
-} from "@/client/client";
-import { convertRegistryConfigToClientConfig } from "@/client/config";
 import { RemoteEngineControlClient } from "@/engine-client/mod";
 import type { RegistryConfig } from "@/registry/config";
 import {
@@ -67,7 +81,6 @@ import {
 	deserializeWithEncoding,
 	serializeWithEncoding,
 } from "@/serde";
-import { decodeWorkflowHistoryTransport } from "@/common/inspector-transport";
 import { bufferToArrayBuffer } from "@/utils";
 import { logger } from "./log";
 import {
@@ -78,23 +91,6 @@ import {
 	validateQueueBody,
 	validateQueueComplete,
 } from "./native-validation";
-import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
-
-import type {
-	ActorContext as NativeActorContext,
-	CancellationToken as NativeCancellationToken,
-	ConnHandle as NativeConnHandle,
-	CoreRegistry as NativeCoreRegistry,
-	JsActorConfig,
-	JsFactoryInitResult,
-	JsHttpResponse,
-	JsServeConfig,
-	NapiActorFactory as NativeActorFactory,
-	Queue as NativeQueue,
-	QueueMessage as NativeQueueMessage,
-	Schedule as NativeSchedule,
-	WebSocket as NativeWebSocket,
-} from "@rivetkit/rivetkit-napi";
 
 type NativeBindings = typeof import("@rivetkit/rivetkit-napi");
 type NativeWebSocketEvent =
@@ -175,10 +171,6 @@ function closeNativeSqlDatabase(actorId: string): Promise<void> | undefined {
 
 	nativeSqlDatabases.delete(actorId);
 	return database.close();
-}
-
-function dropNativeSqlDatabase(actorId: string): void {
-	nativeSqlDatabases.delete(actorId);
 }
 
 async function closeNativeDatabaseClient(
@@ -545,7 +537,9 @@ function decodeWorkflowCbor(data: ArrayBuffer | null): unknown | null {
 }
 
 function serializeWorkflowLocation(
-	location: ReturnType<typeof decodeWorkflowHistoryTransport>["entries"][number]["location"],
+	location: ReturnType<
+		typeof decodeWorkflowHistoryTransport
+	>["entries"][number]["location"],
 ): Array<
 	| { tag: "WorkflowNameIndex"; val: number }
 	| {
@@ -574,19 +568,27 @@ function serializeWorkflowLocation(
 function serializeWorkflowBranches(
 	branches: ReadonlyMap<
 		string,
-		ReturnType<typeof decodeWorkflowHistoryTransport>["entries"][number]["kind"] extends infer T
+		ReturnType<
+			typeof decodeWorkflowHistoryTransport
+		>["entries"][number]["kind"] extends infer T
 			? T extends { tag: "WorkflowJoinEntry"; val: { branches: infer B } }
 				? B extends ReadonlyMap<string, infer V>
 					? V
 					: never
-				: T extends { tag: "WorkflowRaceEntry"; val: { branches: infer B } }
+				: T extends {
+							tag: "WorkflowRaceEntry";
+							val: { branches: infer B };
+						}
 					? B extends ReadonlyMap<string, infer V>
 						? V
 						: never
 					: never
 			: never
 	>,
-): Record<string, { status: string; output: unknown | null; error: string | null }> {
+): Record<
+	string,
+	{ status: string; output: unknown | null; error: string | null }
+> {
 	return Object.fromEntries(
 		Array.from(branches.entries()).map(([name, branch]) => [
 			name,
@@ -600,22 +602,38 @@ function serializeWorkflowBranches(
 }
 
 function serializeWorkflowEntryKind(
-	kind: ReturnType<typeof decodeWorkflowHistoryTransport>["entries"][number]["kind"],
+	kind: ReturnType<
+		typeof decodeWorkflowHistoryTransport
+	>["entries"][number]["kind"],
 ):
-	| { tag: "WorkflowStepEntry"; val: { output: unknown | null; error: string | null } }
+	| {
+			tag: "WorkflowStepEntry";
+			val: { output: unknown | null; error: string | null };
+	  }
 	| {
 			tag: "WorkflowLoopEntry";
-			val: { state: unknown | null; iteration: number; output: unknown | null };
+			val: {
+				state: unknown | null;
+				iteration: number;
+				output: unknown | null;
+			};
 	  }
 	| { tag: "WorkflowSleepEntry"; val: { deadline: number; state: string } }
-	| { tag: "WorkflowMessageEntry"; val: { name: string; messageData: unknown | null } }
+	| {
+			tag: "WorkflowMessageEntry";
+			val: { name: string; messageData: unknown | null };
+	  }
 	| { tag: "WorkflowRollbackCheckpointEntry"; val: { name: string } }
 	| {
 			tag: "WorkflowJoinEntry";
 			val: {
 				branches: Record<
 					string,
-					{ status: string; output: unknown | null; error: string | null }
+					{
+						status: string;
+						output: unknown | null;
+						error: string | null;
+					}
 				>;
 			};
 	  }
@@ -625,7 +643,11 @@ function serializeWorkflowEntryKind(
 				winner: string | null;
 				branches: Record<
 					string,
-					{ status: string; output: unknown | null; error: string | null }
+					{
+						status: string;
+						output: unknown | null;
+						error: string | null;
+					}
 				>;
 			};
 	  }
@@ -741,23 +763,27 @@ function serializeWorkflowHistoryForJson(data: ArrayBuffer | null): {
 			kind: serializeWorkflowEntryKind(entry.kind),
 		})),
 		entryMetadata: Object.fromEntries(
-			Array.from(history.entryMetadata.entries()).map(([entryId, meta]) => [
-				entryId,
-				{
-					status: meta.status,
-					error: meta.error,
-					attempts: meta.attempts,
-					lastAttemptAt: Number(meta.lastAttemptAt),
-					createdAt: Number(meta.createdAt),
-					completedAt:
-						meta.completedAt === null ? null : Number(meta.completedAt),
-					rollbackCompletedAt:
-						meta.rollbackCompletedAt === null
-							? null
-							: Number(meta.rollbackCompletedAt),
-					rollbackError: meta.rollbackError,
-				},
-			]),
+			Array.from(history.entryMetadata.entries()).map(
+				([entryId, meta]) => [
+					entryId,
+					{
+						status: meta.status,
+						error: meta.error,
+						attempts: meta.attempts,
+						lastAttemptAt: Number(meta.lastAttemptAt),
+						createdAt: Number(meta.createdAt),
+						completedAt:
+							meta.completedAt === null
+								? null
+								: Number(meta.completedAt),
+						rollbackCompletedAt:
+							meta.rollbackCompletedAt === null
+								? null
+								: Number(meta.rollbackCompletedAt),
+						rollbackError: meta.rollbackError,
+					},
+				],
+			),
 		),
 	};
 }
@@ -809,7 +835,9 @@ function queryRows(result: unknown): Array<Record<string, unknown>> {
 	) {
 		const columns = (result as { columns: string[] }).columns;
 		return ((result as { rows: unknown[][] }).rows ?? []).map((row) =>
-			Object.fromEntries(columns.map((column, index) => [column, row[index]])),
+			Object.fromEntries(
+				columns.map((column, index) => [column, row[index]]),
+			),
 		);
 	}
 	return [];
@@ -829,13 +857,14 @@ function wrapNativeCallback<Args extends Array<unknown>, Result>(
 
 function decodeArgs(value?: Buffer | Uint8Array | null): unknown[] {
 	const decoded = decodeValue<unknown>(value);
-	return Array.isArray(decoded) ? decoded : decoded === undefined ? [] : [decoded];
+	return Array.isArray(decoded)
+		? decoded
+		: decoded === undefined
+			? []
+			: [decoded];
 }
 
-function createWriteThroughProxy<T>(
-	value: T,
-	commit: (next: T) => void,
-): T {
+function createWriteThroughProxy<T>(value: T, commit: (next: T) => void): T {
 	if (!value || typeof value !== "object") {
 		return value;
 	}
@@ -906,7 +935,11 @@ async function toJsHttpResponse(response: Response): Promise<JsHttpResponse> {
 }
 
 function toActorKey(
-	segments: Array<{ kind: string; stringValue?: string; numberValue?: number }>,
+	segments: Array<{
+		kind: string;
+		stringValue?: string;
+		numberValue?: number;
+	}>,
 ): Array<string | number> {
 	return segments.map((segment) =>
 		segment.kind === "number"
@@ -951,7 +984,11 @@ class NativeConnAdapter {
 	}
 
 	send(name: string, ...args: unknown[]): void {
-		const validatedArgs = validateEventArgs(this.#schemas.events, name, args);
+		const validatedArgs = validateEventArgs(
+			this.#schemas.events,
+			name,
+			args,
+		);
 		callNativeSync(() => this.#conn.send(name, encodeValue(validatedArgs)));
 	}
 
@@ -967,13 +1004,21 @@ class NativeScheduleAdapter {
 		this.#schedule = schedule;
 	}
 
-	async after(duration: number, action: string, ...args: unknown[]): Promise<void> {
+	async after(
+		duration: number,
+		action: string,
+		...args: unknown[]
+	): Promise<void> {
 		callNativeSync(() =>
 			this.#schedule.after(duration, action, encodeValue(args)),
 		);
 	}
 
-	async at(timestamp: number, action: string, ...args: unknown[]): Promise<void> {
+	async at(
+		timestamp: number,
+		action: string,
+		...args: unknown[]
+	): Promise<void> {
 		callNativeSync(() =>
 			this.#schedule.at(timestamp, action, encodeValue(args)),
 		);
@@ -992,9 +1037,13 @@ class NativeKvAdapter {
 		options?: NativeKvValueOptions<T>,
 	): Promise<NativeKvValueTypeMap[T] | null> {
 		const value = await callNative(() =>
-			this.#kv.get(Buffer.from(makePrefixedKey(encodeNativeKvUserKey(key)))),
+			this.#kv.get(
+				Buffer.from(makePrefixedKey(encodeNativeKvUserKey(key))),
+			),
 		);
-		return value ? decodeNativeKvValue(new Uint8Array(value), options) : null;
+		return value
+			? decodeNativeKvValue(new Uint8Array(value), options)
+			: null;
 	}
 
 	async put(
@@ -1012,7 +1061,9 @@ class NativeKvAdapter {
 
 	async delete(key: string | Uint8Array): Promise<void> {
 		await callNative(() =>
-			this.#kv.delete(Buffer.from(makePrefixedKey(encodeNativeKvUserKey(key)))),
+			this.#kv.delete(
+				Buffer.from(makePrefixedKey(encodeNativeKvUserKey(key))),
+			),
 		);
 	}
 
@@ -1039,12 +1090,15 @@ class NativeKvAdapter {
 			this.#kv.listPrefix(
 				Buffer.from(
 					makePrefixedKey(
-						encodeNativeKvUserKey(prefix as NativeKvKeyTypeMap[K], options?.keyType),
+						encodeNativeKvUserKey(
+							prefix as NativeKvKeyTypeMap[K],
+							options?.keyType,
+						),
 					),
 				),
 				{
-				reverse: options?.reverse,
-				limit: options?.limit,
+					reverse: options?.reverse,
+					limit: options?.limit,
 				},
 			),
 		);
@@ -1069,12 +1123,18 @@ class NativeKvAdapter {
 			this.#kv.listRange(
 				Buffer.from(
 					makePrefixedKey(
-						encodeNativeKvUserKey(start as NativeKvKeyTypeMap[K], options?.keyType),
+						encodeNativeKvUserKey(
+							start as NativeKvKeyTypeMap[K],
+							options?.keyType,
+						),
 					),
 				),
 				Buffer.from(
 					makePrefixedKey(
-						encodeNativeKvUserKey(end as NativeKvKeyTypeMap[K], options?.keyType),
+						encodeNativeKvUserKey(
+							end as NativeKvKeyTypeMap[K],
+							options?.keyType,
+						),
 					),
 				),
 				{
@@ -1148,7 +1208,11 @@ function wrapQueueMessage(
 							response === undefined
 								? undefined
 								: encodeValue(
-										validateQueueComplete(schemas, name, response),
+										validateQueueComplete(
+											schemas,
+											name,
+											response,
+										),
 									),
 						),
 					)
@@ -1235,7 +1299,9 @@ class NativeQueueAdapter {
 				wrapQueueMessage(message, this.#schemas),
 			);
 			return completable
-				? wrapped.map((message) => this.#makeCompletableMessage(message))
+				? wrapped.map((message) =>
+						this.#makeCompletableMessage(message),
+					)
 				: wrapped;
 		} finally {
 			cleanup?.();
@@ -1263,7 +1329,9 @@ class NativeQueueAdapter {
 		}
 
 		const deadline =
-			options.timeout === undefined ? undefined : Date.now() + options.timeout;
+			options.timeout === undefined
+				? undefined
+				: Date.now() + options.timeout;
 
 		for (;;) {
 			if (options.signal.aborted) {
@@ -1271,7 +1339,9 @@ class NativeQueueAdapter {
 			}
 
 			const remainingTimeout =
-				deadline === undefined ? undefined : Math.max(0, deadline - Date.now());
+				deadline === undefined
+					? undefined
+					: Math.max(0, deadline - Date.now());
 			const sliceTimeout =
 				remainingTimeout === undefined
 					? 100
@@ -1289,10 +1359,15 @@ class NativeQueueAdapter {
 				);
 			} catch (error) {
 				if (
-					(error as { group?: string; code?: string }).group === "queue" &&
-					(error as { group?: string; code?: string }).code === "timed_out"
+					(error as { group?: string; code?: string }).group ===
+						"queue" &&
+					(error as { group?: string; code?: string }).code ===
+						"timed_out"
 				) {
-					if (remainingTimeout === undefined || remainingTimeout > 100) {
+					if (
+						remainingTimeout === undefined ||
+						remainingTimeout > 100
+					) {
 						continue;
 					}
 				}
@@ -1318,7 +1393,9 @@ class NativeQueueAdapter {
 		}
 
 		const deadline =
-			options.timeout === undefined ? undefined : Date.now() + options.timeout;
+			options.timeout === undefined
+				? undefined
+				: Date.now() + options.timeout;
 
 		for (;;) {
 			if (options.signal.aborted) {
@@ -1326,7 +1403,9 @@ class NativeQueueAdapter {
 			}
 
 			const remainingTimeout =
-				deadline === undefined ? undefined : Math.max(0, deadline - Date.now());
+				deadline === undefined
+					? undefined
+					: Math.max(0, deadline - Date.now());
 			const sliceTimeout =
 				remainingTimeout === undefined
 					? 100
@@ -1341,10 +1420,15 @@ class NativeQueueAdapter {
 				return;
 			} catch (error) {
 				if (
-					(error as { group?: string; code?: string }).group === "queue" &&
-					(error as { group?: string; code?: string }).code === "timed_out"
+					(error as { group?: string; code?: string }).group ===
+						"queue" &&
+					(error as { group?: string; code?: string }).code ===
+						"timed_out"
 				) {
-					if (remainingTimeout === undefined || remainingTimeout > 100) {
+					if (
+						remainingTimeout === undefined ||
+						remainingTimeout > 100
+					) {
 						continue;
 					}
 				}
@@ -1422,7 +1506,9 @@ class NativeQueueAdapter {
 				completable: false,
 			}),
 		);
-		return messages.map((message) => wrapQueueMessage(message, this.#schemas));
+		return messages.map((message) =>
+			wrapQueueMessage(message, this.#schemas),
+		);
 	}
 
 	async *iter(options?: {
@@ -1452,7 +1538,9 @@ class NativeQueueAdapter {
 		}
 	}
 
-	#normalizeNames(names: readonly string[] | undefined): string[] | undefined {
+	#normalizeNames(
+		names: readonly string[] | undefined,
+	): string[] | undefined {
 		if (!names || names.length === 0) {
 			return undefined;
 		}
@@ -1516,7 +1604,9 @@ class NativeWebSocketAdapter {
 			getReadyState: () => this.#readyState,
 			onSend: (data) => {
 				if (typeof data === "string") {
-					callNativeSync(() => this.#ws.send(Buffer.from(data), false));
+					callNativeSync(() =>
+						this.#ws.send(Buffer.from(data), false),
+					);
 					return;
 				}
 
@@ -1746,7 +1836,10 @@ class TrackedNativeWebSocketAdapter implements UniversalWebSocket {
 		this.#listeners.get(type)!.push(listener);
 	}
 
-	removeEventListener(type: string, listener: TrackedWebSocketListener): void {
+	removeEventListener(
+		type: string,
+		listener: TrackedWebSocketListener,
+	): void {
 		const listeners = this.#listeners.get(type);
 		if (!listeners) {
 			return;
@@ -1793,9 +1886,9 @@ class TrackedNativeWebSocketAdapter implements UniversalWebSocket {
 		return this.#onmessage;
 	}
 
-	set onmessage(
-		fn: ((event: RivetMessageEvent) => void | Promise<void>) | null,
-	) {
+	set onmessage(fn:
+		| ((event: RivetMessageEvent) => void | Promise<void>)
+		| null,) {
 		this.#onmessage = fn;
 	}
 
@@ -1846,10 +1939,12 @@ class TrackedNativeWebSocketAdapter implements UniversalWebSocket {
 				if (this.#onopen) this.#callHandler(type, this.#onopen, event);
 				break;
 			case "close":
-				if (this.#onclose) this.#callHandler(type, this.#onclose, event);
+				if (this.#onclose)
+					this.#callHandler(type, this.#onclose, event);
 				break;
 			case "error":
-				if (this.#onerror) this.#callHandler(type, this.#onerror, event);
+				if (this.#onerror)
+					this.#callHandler(type, this.#onerror, event);
 				break;
 			case "message":
 				if (this.#onmessage)
@@ -1870,15 +1965,17 @@ class TrackedNativeWebSocketAdapter implements UniversalWebSocket {
 			}
 			this.#ctx.beginWebSocketCallback();
 			this.#ctx.waitUntil(
-				Promise.resolve(result).catch((error) => {
-					logger().error({
-						msg: "async websocket handler failed",
-						eventType: type,
-						error,
-					});
-				}).finally(() => {
-					this.#ctx.endWebSocketCallback();
-				}),
+				Promise.resolve(result)
+					.catch((error) => {
+						logger().error({
+							msg: "async websocket handler failed",
+							eventType: type,
+							error,
+						});
+					})
+					.finally(() => {
+						this.#ctx.endWebSocketCallback();
+					}),
 			);
 		} catch (error) {
 			logger().error({
@@ -1938,7 +2035,9 @@ class NativeActorContextAdapter {
 			this as NativeActorContextAdapter & {
 				[ACTOR_CONTEXT_INTERNAL_SYMBOL]?: unknown;
 			}
-		)[ACTOR_CONTEXT_INTERNAL_SYMBOL] = new NativeWorkflowRuntimeAdapter(this);
+		)[ACTOR_CONTEXT_INTERNAL_SYMBOL] = new NativeWorkflowRuntimeAdapter(
+			this,
+		);
 	}
 
 	get kv() {
@@ -1972,7 +2071,10 @@ class NativeActorContextAdapter {
 
 						return async (...args: Array<unknown>) => {
 							const client = await this.ensureDatabaseClient();
-							const value = Reflect.get(client as object, property);
+							const value = Reflect.get(
+								client as object,
+								property,
+							);
 							if (typeof value !== "function") {
 								return value;
 							}
@@ -1995,7 +2097,9 @@ class NativeActorContextAdapter {
 		return createWriteThroughProxy(
 			decodeValue(callNativeSync(() => this.#ctx.state())),
 			(nextValue) =>
-				callNativeSync(() => this.#ctx.setState(encodeValue(nextValue))),
+				callNativeSync(() =>
+					this.#ctx.setState(encodeValue(nextValue)),
+				),
 		);
 	}
 
@@ -2065,8 +2169,10 @@ class NativeActorContextAdapter {
 
 	get conns(): Map<string, NativeConnAdapter> {
 		return new Map(
-			callNativeSync(() => this.#ctx.conns())
-				.map((conn) => [conn.id(), new NativeConnAdapter(conn, this.#schemas)]),
+			callNativeSync(() => this.#ctx.conns()).map((conn) => [
+				conn.id(),
+				new NativeConnAdapter(conn, this.#schemas),
+			]),
 		);
 	}
 
@@ -2118,7 +2224,9 @@ class NativeActorContextAdapter {
 			actorId,
 			kv: {
 				batchPut: async (entries) => {
-					await this.kv.batchPut(entries.map(([key, value]) => [key, value]));
+					await this.kv.batchPut(
+						entries.map(([key, value]) => [key, value]),
+					);
 				},
 				batchGet: async (keys) => {
 					return await this.kv.batchGet([...keys]);
@@ -2135,7 +2243,10 @@ class NativeActorContextAdapter {
 			},
 			nativeDatabaseProvider: {
 				open: async (requestedActorId) => {
-					return getOrCreateNativeSqlDatabase(this.#ctx, requestedActorId);
+					return getOrCreateNativeSqlDatabase(
+						this.#ctx,
+						requestedActorId,
+					);
 				},
 			},
 		});
@@ -2169,11 +2280,15 @@ class NativeActorContextAdapter {
 		this.#db = undefined;
 		this.#sql = undefined;
 		await closeNativeDatabaseClient(this.actorId, destroy);
-		dropNativeSqlDatabase(this.actorId);
+		await closeNativeSqlDatabase(this.actorId);
 	}
 
 	broadcast(name: string, ...args: unknown[]): void {
-		const validatedArgs = validateEventArgs(this.#schemas.events, name, args);
+		const validatedArgs = validateEventArgs(
+			this.#schemas.events,
+			name,
+			args,
+		);
 		callNativeSync(() =>
 			this.#ctx.broadcast(name, encodeValue(validatedArgs)),
 		);
@@ -2260,7 +2375,10 @@ class NativeWorkflowRuntimeAdapter {
 
 	readonly id: string;
 	readonly driver: {
-		kvBatchGet: (actorId: string, keys: Uint8Array[]) => Promise<Array<Uint8Array | null>>;
+		kvBatchGet: (
+			actorId: string,
+			keys: Uint8Array[],
+		) => Promise<Array<Uint8Array | null>>;
 		kvBatchPut: (
 			actorId: string,
 			entries: Array<[Uint8Array, Uint8Array]>,
@@ -2285,13 +2403,15 @@ class NativeWorkflowRuntimeAdapter {
 			timeout?: number,
 			_abortSignal?: AbortSignal,
 			completable?: boolean,
-		) => Promise<Array<{
-			id: bigint;
-			name: string;
-			body: unknown;
-			createdAt: number;
-			complete?: (response?: unknown) => Promise<void>;
-		}>>;
+		) => Promise<
+			Array<{
+				id: bigint;
+				name: string;
+				body: unknown;
+				createdAt: number;
+				complete?: (response?: unknown) => Promise<void>;
+			}>
+		>;
 		completeMessage: (
 			message: {
 				id: bigint;
@@ -2299,7 +2419,10 @@ class NativeWorkflowRuntimeAdapter {
 			},
 			response?: unknown,
 		) => Promise<void>;
-		completeMessageById: (messageId: bigint, response?: unknown) => Promise<void>;
+		completeMessageById: (
+			messageId: bigint,
+			response?: unknown,
+		) => Promise<void>;
 		waitForNames: (
 			names: readonly string[] | undefined,
 			abortSignal?: AbortSignal,
@@ -2339,16 +2462,26 @@ class NativeWorkflowRuntimeAdapter {
 		};
 		this.queueManager = {
 			enqueue: async (name, body) => {
-				return this.#wrapQueueMessage(await this.#ctx.queue.send(name, body));
+				return this.#wrapQueueMessage(
+					await this.#ctx.queue.send(name, body),
+				);
 			},
-			receive: async (names, count, timeout, _abortSignal, completable) => {
+			receive: async (
+				names,
+				count,
+				timeout,
+				_abortSignal,
+				completable,
+			) => {
 				const messages = await this.#ctx.queue.nextBatch({
 					names,
 					count,
 					timeout: timeout ?? 0,
 					completable,
 				});
-				return messages.map((message) => this.#wrapQueueMessage(message));
+				return messages.map((message) =>
+					this.#wrapQueueMessage(message),
+				);
 			},
 			completeMessage: async (message, response) => {
 				await message.complete?.(response);
@@ -2428,8 +2561,7 @@ function buildNativeHttpRequest(
 		method: request.method,
 		uri: request.url,
 		headers: Object.fromEntries(request.headers.entries()),
-		body:
-			body && body.byteLength > 0 ? Buffer.from(body) : undefined,
+		body: body && body.byteLength > 0 ? Buffer.from(body) : undefined,
 	};
 }
 
@@ -2540,7 +2672,9 @@ async function maybeHandleNativeActionRequest(
 		return undefined;
 	}
 
-	const actionMatch = /^\/action\/([^/]+)$/.exec(new URL(request.url).pathname);
+	const actionMatch = /^\/action\/([^/]+)$/.exec(
+		new URL(request.url).pathname,
+	);
 	if (!actionMatch) {
 		return undefined;
 	}
@@ -2557,11 +2691,11 @@ async function maybeHandleNativeActionRequest(
 			encoding,
 			`/action/${actionName}`,
 			{
-			__type: "ActorError",
-			public: true,
-			statusCode: 404,
-			group: "actor",
-			code: "action_not_found",
+				__type: "ActorError",
+				public: true,
+				statusCode: 404,
+				group: "actor",
+				code: "action_not_found",
 				message: `action \`${actionName}\` was not found`,
 			},
 		);
@@ -2571,14 +2705,18 @@ async function maybeHandleNativeActionRequest(
 		options.maxIncomingMessageSize !== undefined &&
 		requestBody.byteLength > options.maxIncomingMessageSize
 	) {
-		return buildNativeRequestErrorResponse(encoding, `/action/${actionName}`, {
-			__type: "ActorError",
-			public: true,
-			statusCode: 400,
-			group: "message",
-			code: "incoming_too_long",
-			message: "Incoming message too long",
-		});
+		return buildNativeRequestErrorResponse(
+			encoding,
+			`/action/${actionName}`,
+			{
+				__type: "ActorError",
+				public: true,
+				statusCode: 400,
+				group: "message",
+				code: "incoming_too_long",
+				message: "Incoming message too long",
+			},
+		);
 	}
 	const args = deserializeWithEncoding(
 		encoding,
@@ -2589,7 +2727,9 @@ async function maybeHandleNativeActionRequest(
 		HttpActionRequestSchema,
 		(json) => (Array.isArray(json.args) ? json.args : []),
 		(bare) =>
-			bare.args ? (cbor.decode(new Uint8Array(bare.args)) as unknown[]) : [],
+			bare.args
+				? (cbor.decode(new Uint8Array(bare.args)) as unknown[])
+				: [],
 	);
 	const rawConnParams = request.headers.get(HEADER_CONN_PARAMS);
 	const gate = getNativeActionGate(ctx);
@@ -2637,7 +2777,10 @@ async function maybeHandleNativeActionRequest(
 				return await withTimeout(
 					Promise.resolve(handler(actorCtx, ...validatedArgs)).then(
 						async (result) => {
-							if (typeof options.onBeforeActionResponse !== "function") {
+							if (
+								typeof options.onBeforeActionResponse !==
+								"function"
+							) {
 								return result;
 							}
 
@@ -2705,14 +2848,18 @@ async function maybeHandleNativeActionRequest(
 		options.maxOutgoingMessageSize !== undefined &&
 		responseSize > options.maxOutgoingMessageSize
 	) {
-		return buildNativeRequestErrorResponse(encoding, `/action/${actionName}`, {
-			__type: "ActorError",
-			public: true,
-			statusCode: 400,
-			group: "message",
-			code: "outgoing_too_long",
-			message: "Outgoing message too long",
-		});
+		return buildNativeRequestErrorResponse(
+			encoding,
+			`/action/${actionName}`,
+			{
+				__type: "ActorError",
+				public: true,
+				statusCode: 400,
+				group: "message",
+				code: "outgoing_too_long",
+				message: "Outgoing message too long",
+			},
+		);
 	}
 
 	return new Response(responseBody, {
@@ -2837,8 +2984,10 @@ async function maybeHandleNativeQueueRequest(
 				);
 			} catch (error) {
 				if (
-					(error as { group?: string; code?: string }).group === "queue" &&
-					(error as { group?: string; code?: string }).code === "timed_out"
+					(error as { group?: string; code?: string }).group ===
+						"queue" &&
+					(error as { group?: string; code?: string }).code ===
+						"timed_out"
 				) {
 					status = "timedOut";
 				} else {
@@ -2906,10 +3055,12 @@ function buildActorConfig(
 			typeof canHibernate === "boolean" ? canHibernate : undefined,
 		stateSaveIntervalMs: options.stateSaveInterval as number | undefined,
 		createVarsTimeoutMs: options.createVarsTimeout as number | undefined,
-		createConnStateTimeoutMs:
-			options.createConnStateTimeout as number | undefined,
-		onBeforeConnectTimeoutMs:
-			options.onBeforeConnectTimeout as number | undefined,
+		createConnStateTimeoutMs: options.createConnStateTimeout as
+			| number
+			| undefined,
+		onBeforeConnectTimeoutMs: options.onBeforeConnectTimeout as
+			| number
+			| undefined,
 		onConnectTimeoutMs: options.onConnectTimeout as number | undefined,
 		onMigrateTimeoutMs: options.onMigrateTimeout as number | undefined,
 		onSleepTimeoutMs: options.onSleepTimeout as number | undefined,
@@ -2919,20 +3070,26 @@ function buildActorConfig(
 		sleepTimeoutMs: options.sleepTimeout as number | undefined,
 		noSleep: options.noSleep as boolean | undefined,
 		sleepGracePeriodMs: options.sleepGracePeriod as number | undefined,
-		connectionLivenessTimeoutMs:
-			options.connectionLivenessTimeout as number | undefined,
-		connectionLivenessIntervalMs:
-			options.connectionLivenessInterval as number | undefined,
+		connectionLivenessTimeoutMs: options.connectionLivenessTimeout as
+			| number
+			| undefined,
+		connectionLivenessIntervalMs: options.connectionLivenessInterval as
+			| number
+			| undefined,
 		maxQueueSize: options.maxQueueSize as number | undefined,
 		maxQueueMessageSize: options.maxQueueMessageSize as number | undefined,
-		maxIncomingMessageSize:
-			registryConfig.maxIncomingMessageSize as number | undefined,
-		maxOutgoingMessageSize:
-			registryConfig.maxOutgoingMessageSize as number | undefined,
-		preloadMaxWorkflowBytes:
-			options.preloadMaxWorkflowBytes as number | undefined,
-		preloadMaxConnectionsBytes:
-			options.preloadMaxConnectionsBytes as number | undefined,
+		maxIncomingMessageSize: registryConfig.maxIncomingMessageSize as
+			| number
+			| undefined,
+		maxOutgoingMessageSize: registryConfig.maxOutgoingMessageSize as
+			| number
+			| undefined,
+		preloadMaxWorkflowBytes: options.preloadMaxWorkflowBytes as
+			| number
+			| undefined,
+		preloadMaxConnectionsBytes: options.preloadMaxConnectionsBytes as
+			| number
+			| undefined,
 	};
 }
 
@@ -2965,14 +3122,16 @@ function buildNativeFactory(
 		);
 	const nativeRunHandlerActiveByActorId = new Map<string, boolean>();
 	const isNativeRunHandlerActive = (ctx: NativeActorContext) =>
-		nativeRunHandlerActiveByActorId.get(callNativeSync(() => ctx.actorId())) ??
-		false;
+		nativeRunHandlerActiveByActorId.get(
+			callNativeSync(() => ctx.actorId()),
+		) ?? false;
 	const getNativeWorkflowInspector = (ctx: NativeActorContext) =>
-		getRunInspectorConfig(config.run, callNativeSync(() => ctx.actorId()))
-			?.workflow;
+		getRunInspectorConfig(
+			config.run,
+			callNativeSync(() => ctx.actorId()),
+		)?.workflow;
 	const stateEnabled =
-		config.state !== undefined ||
-		typeof config.createState === "function";
+		config.state !== undefined || typeof config.createState === "function";
 	const makeActorCtx = (ctx: NativeActorContext, request?: Request) =>
 		new NativeActorContextAdapter(
 			ctx,
@@ -3047,7 +3206,8 @@ function buildNativeFactory(
 					{
 						group: "auth",
 						code: "unauthorized",
-						message: "Inspector request requires a valid bearer token",
+						message:
+							"Inspector request requires a valid bearer token",
 						metadata: null,
 					},
 					{ status: 401 },
@@ -3072,7 +3232,7 @@ function buildNativeFactory(
 		const metricsResponse = (actorCtx: NativeActorContextAdapter) => {
 			const sqliteMetrics =
 				databaseProvider !== undefined
-					? actorCtx.sql.getSqliteVfsMetrics?.() ?? null
+					? (actorCtx.sql.getSqliteVfsMetrics?.() ?? null)
 					: null;
 			const commitCount =
 				databaseProvider === undefined
@@ -3099,7 +3259,9 @@ function buildNativeFactory(
 					values: {
 						request_build: {
 							calls: commitCount,
-							totalMs: phaseMs(sqliteMetrics?.requestBuildNs ?? 0),
+							totalMs: phaseMs(
+								sqliteMetrics?.requestBuildNs ?? 0,
+							),
 							keys: 0,
 						},
 						serialize: {
@@ -3169,45 +3331,69 @@ function buildNativeFactory(
 
 		const actorCtx = makeActorCtx(ctx, jsRequest);
 		try {
-			if (url.pathname === "/inspector/state" && jsRequest.method === "GET") {
+			if (
+				url.pathname === "/inspector/state" &&
+				jsRequest.method === "GET"
+			) {
 				return jsonResponse({
 					state: stateEnabled ? actorCtx.state : undefined,
 					isStateEnabled: stateEnabled,
 				});
 			}
-			if (url.pathname === "/inspector/state" && jsRequest.method === "PATCH") {
+			if (
+				url.pathname === "/inspector/state" &&
+				jsRequest.method === "PATCH"
+			) {
 				const body = (await jsRequest.json()) as { state?: unknown };
 				actorCtx.state = body.state;
 				await callNative(() => ctx.saveState(true));
 				return jsonResponse({ ok: true });
 			}
-			if (url.pathname === "/inspector/connections" && jsRequest.method === "GET") {
+			if (
+				url.pathname === "/inspector/connections" &&
+				jsRequest.method === "GET"
+			) {
 				return jsonResponse({
-					connections: Array.from(actorCtx.conns.values()).map((conn) => ({
-						id: conn.id,
-						details: {
-							type: undefined,
-							params: conn.params,
-							stateEnabled: true,
-							state: conn.state,
-							subscriptions: 0,
-							isHibernatable: conn.isHibernatable,
-						},
-					})),
+					connections: Array.from(actorCtx.conns.values()).map(
+						(conn) => ({
+							id: conn.id,
+							details: {
+								type: undefined,
+								params: conn.params,
+								stateEnabled: true,
+								state: conn.state,
+								subscriptions: 0,
+								isHibernatable: conn.isHibernatable,
+							},
+						}),
+					),
 				});
 			}
-			if (url.pathname === "/inspector/rpcs" && jsRequest.method === "GET") {
-				return jsonResponse({ rpcs: Object.keys(actionHandlers).sort() });
+			if (
+				url.pathname === "/inspector/rpcs" &&
+				jsRequest.method === "GET"
+			) {
+				return jsonResponse({
+					rpcs: Object.keys(actionHandlers).sort(),
+				});
 			}
-			if (url.pathname === "/inspector/queue" && jsRequest.method === "GET") {
+			if (
+				url.pathname === "/inspector/queue" &&
+				jsRequest.method === "GET"
+			) {
 				return jsonResponse({
 					size: 0,
-					maxSize: (config.options.maxQueueSize as number | undefined) ?? 1000,
+					maxSize:
+						(config.options.maxQueueSize as number | undefined) ??
+						1000,
 					truncated: false,
 					messages: [],
 				});
 			}
-			if (url.pathname === "/inspector/traces" && jsRequest.method === "GET") {
+			if (
+				url.pathname === "/inspector/traces" &&
+				jsRequest.method === "GET"
+			) {
 				return jsonResponse({ otlp: [], clamped: false });
 			}
 			if (
@@ -3216,7 +3402,8 @@ function buildNativeFactory(
 			) {
 				return jsonResponse({
 					history: workflowHistory(),
-					isWorkflowEnabled: getNativeWorkflowInspector(ctx) !== undefined,
+					isWorkflowEnabled:
+						getNativeWorkflowInspector(ctx) !== undefined,
 				});
 			}
 			if (
@@ -3229,12 +3416,16 @@ function buildNativeFactory(
 							"Cannot replay a workflow while it is currently in flight",
 						);
 					}
-					const body = (await jsRequest.json()) as { entryId?: string };
+					const body = (await jsRequest.json()) as {
+						entryId?: string;
+					};
 					const history = await getNativeWorkflowInspector(
 						ctx,
 					)?.replayFromStep?.(body.entryId);
 					return jsonResponse({
-						history: serializeWorkflowHistoryForJson(history ?? null),
+						history: serializeWorkflowHistoryForJson(
+							history ?? null,
+						),
 						isWorkflowEnabled:
 							getNativeWorkflowInspector(ctx) !== undefined,
 					});
@@ -3247,21 +3438,31 @@ function buildNativeFactory(
 				jsRequest.method === "GET"
 			) {
 				const db = actorCtx.sql;
-				const tables = queryRows(await db.query(
-					"SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle_%' ORDER BY name",
-				)) as Array<{ name: string; type: string }>;
+				const tables = queryRows(
+					await db.query(
+						"SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle_%' ORDER BY name",
+					),
+				) as Array<{ name: string; type: string }>;
 				const tableInfos = [];
 				for (const table of tables) {
-					const quoted = `"${table.name.replace(/\"/g, '""')}"`;
-					const columns = queryRows(await db.query(`PRAGMA table_info(${quoted})`));
-					const foreignKeys = queryRows(await db.query(
-						`PRAGMA foreign_key_list(${quoted})`,
-					));
-					const countResult = queryRows(await db.query(
-						`SELECT COUNT(*) as count FROM ${quoted}`,
-					)) as Array<{ count?: number }>;
+					const quoted = `"${table.name.replace(/"/g, '""')}"`;
+					const columns = queryRows(
+						await db.query(`PRAGMA table_info(${quoted})`),
+					);
+					const foreignKeys = queryRows(
+						await db.query(`PRAGMA foreign_key_list(${quoted})`),
+					);
+					const countResult = queryRows(
+						await db.query(
+							`SELECT COUNT(*) as count FROM ${quoted}`,
+						),
+					) as Array<{ count?: number }>;
 					tableInfos.push({
-						table: { schema: "main", name: table.name, type: table.type },
+						table: {
+							schema: "main",
+							name: table.name,
+							type: table.type,
+						},
 						columns: jsonSafe(columns),
 						foreignKeys: jsonSafe(foreignKeys),
 						records: countResult[0]?.count ?? 0,
@@ -3280,13 +3481,24 @@ function buildNativeFactory(
 						{ status: 400 },
 					);
 				}
-				const limit = Number.parseInt(url.searchParams.get("limit") ?? "100", 10);
-				const offset = Number.parseInt(url.searchParams.get("offset") ?? "0", 10);
-				const quoted = `"${table.replace(/\"/g, '""')}"`;
-				const rows = queryRows(await actorCtx.sql.query(
-					`SELECT * FROM ${quoted} LIMIT ? OFFSET ?`,
-					[Math.max(0, Math.min(limit, 500)), Math.max(0, offset)],
-				));
+				const limit = Number.parseInt(
+					url.searchParams.get("limit") ?? "100",
+					10,
+				);
+				const offset = Number.parseInt(
+					url.searchParams.get("offset") ?? "0",
+					10,
+				);
+				const quoted = `"${table.replace(/"/g, '""')}"`;
+				const rows = queryRows(
+					await actorCtx.sql.query(
+						`SELECT * FROM ${quoted} LIMIT ? OFFSET ?`,
+						[
+							Math.max(0, Math.min(limit, 500)),
+							Math.max(0, offset),
+						],
+					),
+				);
 				return jsonResponse({ rows: jsonSafe(rows) });
 			}
 			if (
@@ -3299,7 +3511,10 @@ function buildNativeFactory(
 					properties?: unknown;
 				};
 				if (typeof body.sql !== "string" || body.sql.trim() === "") {
-					return jsonResponse({ error: "sql is required" }, { status: 400 });
+					return jsonResponse(
+						{ error: "sql is required" },
+						{ status: 400 },
+					);
 				}
 				if (
 					Array.isArray(body.args) &&
@@ -3311,7 +3526,9 @@ function buildNativeFactory(
 						{ status: 400 },
 					);
 				}
-				const readOnly = /^\s*(SELECT|PRAGMA|WITH|EXPLAIN)\b/i.test(body.sql);
+				const readOnly = /^\s*(SELECT|PRAGMA|WITH|EXPLAIN)\b/i.test(
+					body.sql,
+				);
 				if (
 					body.properties &&
 					typeof body.properties === "object" &&
@@ -3321,7 +3538,9 @@ function buildNativeFactory(
 						body.properties as Record<string, unknown>,
 					);
 					if (readOnly) {
-						const rows = queryRows(await actorCtx.sql.query(body.sql, bindings));
+						const rows = queryRows(
+							await actorCtx.sql.query(body.sql, bindings),
+						);
 						return jsonResponse({ rows: jsonSafe(rows) });
 					}
 					await actorCtx.sql.run(body.sql, bindings);
@@ -3329,42 +3548,56 @@ function buildNativeFactory(
 				}
 				const args = Array.isArray(body.args) ? body.args : [];
 				if (readOnly) {
-					const rows = queryRows(await actorCtx.sql.query(body.sql, args));
+					const rows = queryRows(
+						await actorCtx.sql.query(body.sql, args),
+					);
 					return jsonResponse({ rows: jsonSafe(rows) });
 				}
 				await actorCtx.sql.run(body.sql, args);
 				return jsonResponse({ rows: [] });
 			}
-			if (url.pathname === "/inspector/summary" && jsRequest.method === "GET") {
+			if (
+				url.pathname === "/inspector/summary" &&
+				jsRequest.method === "GET"
+			) {
 				return jsonResponse({
 					state: stateEnabled ? actorCtx.state : undefined,
-					connections: Array.from(actorCtx.conns.values()).map((conn) => ({
-						id: conn.id,
-						details: {
-							type: undefined,
-							params: conn.params,
-							stateEnabled: true,
-							state: conn.state,
-							subscriptions: 0,
-							isHibernatable: conn.isHibernatable,
-						},
-					})),
+					connections: Array.from(actorCtx.conns.values()).map(
+						(conn) => ({
+							id: conn.id,
+							details: {
+								type: undefined,
+								params: conn.params,
+								stateEnabled: true,
+								state: conn.state,
+								subscriptions: 0,
+								isHibernatable: conn.isHibernatable,
+							},
+						}),
+					),
 					rpcs: Object.keys(actionHandlers).sort(),
 					queueSize: 0,
 					isStateEnabled: stateEnabled,
 					isDatabaseEnabled: databaseProvider !== undefined,
-					isWorkflowEnabled: getNativeWorkflowInspector(ctx) !== undefined,
+					isWorkflowEnabled:
+						getNativeWorkflowInspector(ctx) !== undefined,
 					workflowHistory: workflowHistory(),
 				});
 			}
-			if (url.pathname === "/inspector/metrics" && jsRequest.method === "GET") {
+			if (
+				url.pathname === "/inspector/metrics" &&
+				jsRequest.method === "GET"
+			) {
 				return jsonResponse(metricsResponse(actorCtx));
 			}
 			if (
 				jsRequest.method === "POST" &&
 				url.pathname.startsWith("/inspector/action/")
 			) {
-				const actionName = url.pathname.replace("/inspector/action/", "");
+				const actionName = url.pathname.replace(
+					"/inspector/action/",
+					"",
+				);
 				const action = actionHandlers[actionName];
 				if (!action) {
 					return errorResponse(
@@ -3408,500 +3641,593 @@ function buildNativeFactory(
 		}
 	};
 	const callbacks = {
-		onInit: wrapNativeCallback(async (
-			error: unknown,
-			payload: {
-				ctx: NativeActorContext;
-				input?: Buffer;
-				isNew: boolean;
+		onInit: wrapNativeCallback(
+			async (
+				error: unknown,
+				payload: {
+					ctx: NativeActorContext;
+					input?: Buffer;
+					isNew: boolean;
+				},
+			): Promise<JsFactoryInitResult> => {
+				const { ctx, input, isNew } = unwrapTsfnPayload(error, payload);
+				const actorCtx = makeActorCtx(ctx);
+				try {
+					const decodedInput = decodeValue(input);
+					const result: JsFactoryInitResult = {};
+
+					if (isNew) {
+						if ("state" in config) {
+							result.state = encodeValue(config.state);
+							actorCtx.state = config.state;
+						} else if (typeof config.createState === "function") {
+							const state = await config.createState(
+								actorCtx,
+								decodedInput,
+							);
+							result.state = encodeValue(state);
+							actorCtx.state = state;
+						}
+					}
+
+					if ("vars" in config) {
+						const vars = structuredClone(config.vars);
+						result.vars = encodeActorVarsForCore(vars);
+						actorCtx.vars = vars;
+					} else if (typeof config.createVars === "function") {
+						const vars = await config.createVars(
+							actorCtx,
+							undefined,
+						);
+						result.vars = encodeActorVarsForCore(vars);
+						actorCtx.vars = vars;
+					}
+
+					if (isNew && typeof config.onCreate === "function") {
+						await config.onCreate(actorCtx, decodedInput);
+						if (actorCtx.state !== undefined) {
+							result.state = encodeValue(actorCtx.state);
+						}
+						if (actorCtx.vars !== undefined) {
+							result.vars = encodeActorVarsForCore(actorCtx.vars);
+						}
+					}
+
+					return result;
+				} finally {
+					await actorCtx.dispose();
+				}
 			},
-		): Promise<JsFactoryInitResult> => {
-			const { ctx, input, isNew } = unwrapTsfnPayload(error, payload);
-			const actorCtx = makeActorCtx(ctx);
-			try {
-				const decodedInput = decodeValue(input);
-				const result: JsFactoryInitResult = {};
-
-				if (isNew) {
-					if ("state" in config) {
-						result.state = encodeValue(config.state);
-						actorCtx.state = config.state;
-					} else if (typeof config.createState === "function") {
-						const state = await config.createState(actorCtx, decodedInput);
-						result.state = encodeValue(state);
-						actorCtx.state = state;
-					}
-				}
-
-				if ("vars" in config) {
-					const vars = structuredClone(config.vars);
-					result.vars = encodeActorVarsForCore(vars);
-					actorCtx.vars = vars;
-				} else if (typeof config.createVars === "function") {
-					const vars = await config.createVars(actorCtx, undefined);
-					result.vars = encodeActorVarsForCore(vars);
-					actorCtx.vars = vars;
-				}
-
-				if (isNew && typeof config.onCreate === "function") {
-					await config.onCreate(actorCtx, decodedInput);
-					if (actorCtx.state !== undefined) {
-						result.state = encodeValue(actorCtx.state);
-					}
-					if (actorCtx.vars !== undefined) {
-						result.vars = encodeActorVarsForCore(actorCtx.vars);
-					}
-				}
-
-				return result;
-			} finally {
-				await actorCtx.dispose();
-			}
-		}),
+		),
 		onWake:
 			typeof config.onWake === "function"
-				? wrapNativeCallback(async (
-						error: unknown,
-						payload: { ctx: NativeActorContext },
-					) => {
-						const { ctx } = unwrapTsfnPayload(error, payload);
-						const actorCtx = makeActorCtx(ctx);
-						try {
-							await config.onWake(actorCtx);
-						} finally {
-							await actorCtx.dispose();
-						}
-					})
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: { ctx: NativeActorContext },
+						) => {
+							const { ctx } = unwrapTsfnPayload(error, payload);
+							const actorCtx = makeActorCtx(ctx);
+							try {
+								await config.onWake(actorCtx);
+							} finally {
+								await actorCtx.dispose();
+							}
+						},
+					)
 				: undefined,
 		onMigrate:
-			typeof config.onMigrate === "function" || databaseProvider !== undefined
-				? wrapNativeCallback(async (
-						error: unknown,
-						payload: {
-							ctx: NativeActorContext;
-							isNew: boolean;
+			typeof config.onMigrate === "function" ||
+			databaseProvider !== undefined
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: {
+								ctx: NativeActorContext;
+								isNew: boolean;
+							},
+						) => {
+							const { ctx, isNew } = unwrapTsfnPayload(
+								error,
+								payload,
+							);
+							const actorCtx = makeActorCtx(ctx);
+							try {
+								if (!isNew) {
+									await actorCtx.closeDatabase(false);
+								}
+								await actorCtx.runDatabaseMigrations();
+								if (typeof config.onMigrate === "function") {
+									await config.onMigrate(actorCtx, isNew);
+								}
+							} catch (error) {
+								await actorCtx.closeDatabase(true);
+								throw error;
+							} finally {
+								await actorCtx.dispose();
+							}
 						},
-					) => {
-						const { ctx, isNew } = unwrapTsfnPayload(error, payload);
-						const actorCtx = makeActorCtx(ctx);
-						try {
-							if (!isNew) {
-								await actorCtx.closeDatabase(false);
-							}
-							await actorCtx.runDatabaseMigrations();
-							if (typeof config.onMigrate === "function") {
-								await config.onMigrate(actorCtx, isNew);
-							}
-						} catch (error) {
-							await actorCtx.closeDatabase(true);
-							throw error;
-						} finally {
-							await actorCtx.dispose();
-						}
-					})
+					)
 				: undefined,
 		onSleep:
-			typeof config.onSleep === "function" || databaseProvider !== undefined
-				? wrapNativeCallback(async (
-						error: unknown,
-						payload: { ctx: NativeActorContext },
-					) => {
-						const { ctx } = unwrapTsfnPayload(error, payload);
-						const actorCtx = makeActorCtx(ctx);
-						try {
-							if (typeof config.onSleep === "function") {
-								await config.onSleep(actorCtx);
+			typeof config.onSleep === "function" ||
+			databaseProvider !== undefined
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: { ctx: NativeActorContext },
+						) => {
+							const { ctx } = unwrapTsfnPayload(error, payload);
+							const actorCtx = makeActorCtx(ctx);
+							try {
+								if (typeof config.onSleep === "function") {
+									await config.onSleep(actorCtx);
+								}
+							} finally {
+								await actorCtx.dispose();
 							}
-						} finally {
-							await actorCtx.dispose();
-						}
-					})
+						},
+					)
 				: undefined,
-		onDestroy: wrapNativeCallback(async (
-			error: unknown,
-			payload: { ctx: NativeActorContext },
-		) => {
-			const { ctx } = unwrapTsfnPayload(error, payload);
-			const actorCtx = makeActorCtx(ctx);
-			try {
-				if (typeof config.onDestroy === "function") {
-					await config.onDestroy(actorCtx);
+		onDestroy: wrapNativeCallback(
+			async (error: unknown, payload: { ctx: NativeActorContext }) => {
+				const { ctx } = unwrapTsfnPayload(error, payload);
+				const actorCtx = makeActorCtx(ctx);
+				try {
+					if (typeof config.onDestroy === "function") {
+						await config.onDestroy(actorCtx);
+					}
+				} finally {
+					resolveNativeDestroy(ctx);
+					await actorCtx.closeDatabase(true);
+					await actorCtx.dispose();
 				}
-			} finally {
-				resolveNativeDestroy(ctx);
-				await actorCtx.dispose();
-			}
-		}),
+			},
+		),
 		onStateChange:
 			typeof config.onStateChange === "function"
-				? wrapNativeCallback(async (
-						error: unknown,
-						payload: {
-							ctx: NativeActorContext;
-							newState: Buffer;
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: {
+								ctx: NativeActorContext;
+								newState: Buffer;
+							},
+						) => {
+							const { ctx, newState } = unwrapTsfnPayload(
+								error,
+								payload,
+							);
+							const actorCtx = makeActorCtx(ctx);
+							try {
+								actorCtx.setInOnStateChangeCallback(true);
+								await config.onStateChange(
+									actorCtx,
+									decodeValue(newState),
+								);
+							} finally {
+								actorCtx.setInOnStateChangeCallback(false);
+								await actorCtx.dispose();
+							}
 						},
-					) => {
-						const { ctx, newState } = unwrapTsfnPayload(error, payload);
-						const actorCtx = makeActorCtx(ctx);
-						try {
-							actorCtx.setInOnStateChangeCallback(true);
-							await config.onStateChange(actorCtx, decodeValue(newState));
-						} finally {
-							actorCtx.setInOnStateChangeCallback(false);
-							await actorCtx.dispose();
-						}
-					})
+					)
 				: undefined,
 		onBeforeConnect:
 			typeof config.onBeforeConnect === "function"
-				? wrapNativeCallback(async (
-						error: unknown,
-						payload: {
-							ctx: NativeActorContext;
-							params: Buffer;
-							request?: {
-								method: string;
-								uri: string;
-								headers?: Record<string, string>;
-								body?: Buffer;
-							};
-						},
-					) => {
-						const { ctx, params, request } = unwrapTsfnPayload(error, payload);
-						const actorCtx = makeActorCtx(
-							ctx,
-							request ? buildRequest(request) : undefined,
-						);
-						try {
-							await config.onBeforeConnect(
-								actorCtx,
-								validateConnParams(
-									schemaConfig.connParamsSchema,
-									decodeValue(params),
-								),
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: {
+								ctx: NativeActorContext;
+								params: Buffer;
+								request?: {
+									method: string;
+									uri: string;
+									headers?: Record<string, string>;
+									body?: Buffer;
+								};
+							},
+						) => {
+							const { ctx, params, request } = unwrapTsfnPayload(
+								error,
+								payload,
 							);
-						} finally {
-							await actorCtx.dispose();
-						}
-					})
+							const actorCtx = makeActorCtx(
+								ctx,
+								request ? buildRequest(request) : undefined,
+							);
+							try {
+								await config.onBeforeConnect(
+									actorCtx,
+									validateConnParams(
+										schemaConfig.connParamsSchema,
+										decodeValue(params),
+									),
+								);
+							} finally {
+								await actorCtx.dispose();
+							}
+						},
+					)
 				: undefined,
 		onConnect:
-			Object.prototype.hasOwnProperty.call(config, "connState") ||
+			Object.hasOwn(config, "connState") ||
 			typeof config.createConnState === "function" ||
 			typeof config.onConnect === "function"
-				? wrapNativeCallback(async (
-						error: unknown,
-						payload: {
-							ctx: NativeActorContext;
-							conn: NativeConnHandle;
-							request?: {
-								method: string;
-								uri: string;
-								headers?: Record<string, string>;
-								body?: Buffer;
-							};
-						},
-					) => {
-						const { ctx, conn, request } = unwrapTsfnPayload(error, payload);
-						const actorCtx = makeActorCtx(
-							ctx,
-							request ? buildRequest(request) : undefined,
-						);
-						const connAdapter = new NativeConnAdapter(
-							conn,
-							schemaConfig,
-						);
-						try {
-							const hasStaticConnState = Object.prototype.hasOwnProperty.call(
-								config,
-								"connState",
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: {
+								ctx: NativeActorContext;
+								conn: NativeConnHandle;
+								request?: {
+									method: string;
+									uri: string;
+									headers?: Record<string, string>;
+									body?: Buffer;
+								};
+							},
+						) => {
+							const { ctx, conn, request } = unwrapTsfnPayload(
+								error,
+								payload,
 							);
-							const hasDynamicConnState =
-								typeof config.createConnState === "function";
-							if (hasStaticConnState || hasDynamicConnState) {
-								const nextConnState = hasStaticConnState
-									? structuredClone(config.connState)
-									: await config.createConnState(
-											actorCtx,
-											connAdapter.params,
-										);
-								connAdapter.state = nextConnState;
-							}
-
-							if (typeof config.onConnect === "function") {
-								await config.onConnect(
-									Object.assign(actorCtx, {
-										conn: connAdapter,
-									}),
-									connAdapter,
+							const actorCtx = makeActorCtx(
+								ctx,
+								request ? buildRequest(request) : undefined,
+							);
+							const connAdapter = new NativeConnAdapter(
+								conn,
+								schemaConfig,
+							);
+							try {
+								const hasStaticConnState = Object.hasOwn(
+									config,
+									"connState",
 								);
+								const hasDynamicConnState =
+									typeof config.createConnState ===
+									"function";
+								if (hasStaticConnState || hasDynamicConnState) {
+									const nextConnState = hasStaticConnState
+										? structuredClone(config.connState)
+										: await config.createConnState(
+												actorCtx,
+												connAdapter.params,
+											);
+									connAdapter.state = nextConnState;
+								}
+
+								if (typeof config.onConnect === "function") {
+									await config.onConnect(
+										Object.assign(actorCtx, {
+											conn: connAdapter,
+										}),
+										connAdapter,
+									);
+								}
+							} finally {
+								await actorCtx.dispose();
 							}
-						} finally {
-							await actorCtx.dispose();
-						}
-					})
+						},
+					)
 				: undefined,
 		onDisconnect:
 			typeof config.onDisconnect === "function"
-				? wrapNativeCallback(async (
-						error: unknown,
-						payload: {
-							ctx: NativeActorContext;
-							conn: NativeConnHandle;
-						},
-					) => {
-						const { ctx, conn } = unwrapTsfnPayload(error, payload);
-						const actorCtx = makeConnCtx(ctx, conn);
-						try {
-							await config.onDisconnect(
-								actorCtx,
-								new NativeConnAdapter(conn, schemaConfig),
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: {
+								ctx: NativeActorContext;
+								conn: NativeConnHandle;
+							},
+						) => {
+							const { ctx, conn } = unwrapTsfnPayload(
+								error,
+								payload,
 							);
-						} finally {
-							await actorCtx.dispose();
-						}
-					})
+							const actorCtx = makeConnCtx(ctx, conn);
+							try {
+								await config.onDisconnect(
+									actorCtx,
+									new NativeConnAdapter(conn, schemaConfig),
+								);
+							} finally {
+								await actorCtx.dispose();
+							}
+						},
+					)
 				: undefined,
 		onBeforeActionResponse:
 			typeof config.onBeforeActionResponse === "function"
-				? wrapNativeCallback(async (
-						error: unknown,
-						payload: {
-							ctx: NativeActorContext;
-							name: string;
-							args: Buffer;
-							output: Buffer;
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: {
+								ctx: NativeActorContext;
+								name: string;
+								args: Buffer;
+								output: Buffer;
+							},
+						) => {
+							const { ctx, name, args, output } =
+								unwrapTsfnPayload(error, payload);
+							const actorCtx = makeActorCtx(ctx);
+							try {
+								return encodeValue(
+									await config.onBeforeActionResponse(
+										actorCtx,
+										name,
+										decodeArgs(args),
+										decodeValue(output),
+									),
+								);
+							} finally {
+								await actorCtx.dispose();
+							}
 						},
-					) => {
-						const { ctx, name, args, output } = unwrapTsfnPayload(
-							error,
-							payload,
-						);
-						const actorCtx = makeActorCtx(ctx);
-						try {
-							return encodeValue(
-								await config.onBeforeActionResponse(
-									actorCtx,
-									name,
-									decodeArgs(args),
-									decodeValue(output),
-								),
-							);
-						} finally {
-							await actorCtx.dispose();
-						}
-					})
+					)
 				: undefined,
-		onRequest: wrapNativeCallback(async (
-			error: unknown,
-			payload: {
-				ctx: NativeActorContext;
-				request: {
-					method: string;
-					uri: string;
-					headers?: Record<string, string>;
-					body?: Buffer;
-				};
-			},
-		) => {
-			try {
-				const { ctx, request } = unwrapTsfnPayload(error, payload);
-				const jsRequest = buildRequest(request);
-				const inspectorResponse = await maybeHandleNativeInspectorRequest(
-					ctx,
-					request,
-					jsRequest,
-				);
-				if (inspectorResponse) {
-					return await toJsHttpResponse(inspectorResponse);
-				}
-				const actionResponse = await maybeHandleNativeActionRequest(
-					ctx,
-					jsRequest,
-					createClient,
-					actionHandlers,
-					schemaConfig,
-					{
-						actionTimeoutMs:
-							(config.options.actionTimeout as number | undefined) ?? 60_000,
-						maxIncomingMessageSize:
-							registryConfig.maxIncomingMessageSize as number | undefined,
-						maxOutgoingMessageSize:
-							registryConfig.maxOutgoingMessageSize as number | undefined,
-						onBeforeActionResponse: config.onBeforeActionResponse,
-						stateEnabled,
-					},
-					databaseProvider,
-				);
-				if (actionResponse) {
-					return await toJsHttpResponse(actionResponse);
-				}
-
-				const queueResponse = await maybeHandleNativeQueueRequest(
-					ctx,
-					jsRequest,
-					createClient,
-					schemaConfig,
-					{
-						stateEnabled,
-					},
-					databaseProvider,
-				);
-				if (queueResponse) {
-					return await toJsHttpResponse(queueResponse);
-				}
-
-				if (typeof config.onRequest !== "function") {
-					return await toJsHttpResponse(new Response(null, { status: 404 }));
-				}
-
-				const rawConnParams = jsRequest.headers.get(HEADER_CONN_PARAMS);
-				let requestCtx: ReturnType<typeof withConnContext> | undefined;
-				let conn: NativeConnHandle | undefined;
+		onRequest: wrapNativeCallback(
+			async (
+				error: unknown,
+				payload: {
+					ctx: NativeActorContext;
+					request: {
+						method: string;
+						uri: string;
+						headers?: Record<string, string>;
+						body?: Buffer;
+					};
+				},
+			) => {
 				try {
-					const connParams = validateConnParams(
-						schemaConfig.connParamsSchema,
-						rawConnParams ? JSON.parse(rawConnParams) : undefined,
+					const { ctx, request } = unwrapTsfnPayload(error, payload);
+					const jsRequest = buildRequest(request);
+					const inspectorResponse =
+						await maybeHandleNativeInspectorRequest(
+							ctx,
+							request,
+							jsRequest,
+						);
+					if (inspectorResponse) {
+						return await toJsHttpResponse(inspectorResponse);
+					}
+					const actionResponse = await maybeHandleNativeActionRequest(
+						ctx,
+						jsRequest,
+						createClient,
+						actionHandlers,
+						schemaConfig,
+						{
+							actionTimeoutMs:
+								(config.options.actionTimeout as
+									| number
+									| undefined) ?? 60_000,
+							maxIncomingMessageSize:
+								registryConfig.maxIncomingMessageSize as
+									| number
+									| undefined,
+							maxOutgoingMessageSize:
+								registryConfig.maxOutgoingMessageSize as
+									| number
+									| undefined,
+							onBeforeActionResponse:
+								config.onBeforeActionResponse,
+							stateEnabled,
+						},
+						databaseProvider,
 					);
-					conn = await callNative(() =>
-						ctx.connectConn(encodeValue(connParams), request),
+					if (actionResponse) {
+						return await toJsHttpResponse(actionResponse);
+					}
+
+					const queueResponse = await maybeHandleNativeQueueRequest(
+						ctx,
+						jsRequest,
+						createClient,
+						schemaConfig,
+						{
+							stateEnabled,
+						},
+						databaseProvider,
 					);
-					requestCtx = makeConnCtx(ctx, conn, jsRequest);
-					const response = await config.onRequest(requestCtx, jsRequest);
-					if (!(response instanceof Response)) {
-						throw new Error(
-							"onRequest handler must return a Response",
+					if (queueResponse) {
+						return await toJsHttpResponse(queueResponse);
+					}
+
+					if (typeof config.onRequest !== "function") {
+						return await toJsHttpResponse(
+							new Response(null, { status: 404 }),
 						);
 					}
-					return await toJsHttpResponse(response);
-				} catch (error) {
-					const encodingHeader = jsRequest.headers.get(HEADER_ENCODING);
-					const encoding: Encoding =
-						encodingHeader === "cbor" || encodingHeader === "bare"
-							? encodingHeader
-							: "json";
-					const path = new URL(jsRequest.url).pathname;
-					return await toJsHttpResponse(
-						buildNativeRequestErrorResponse(encoding, path, error),
-					);
-				} finally {
-					await requestCtx?.dispose();
-					if (conn) {
-						await conn.disconnect();
+
+					const rawConnParams =
+						jsRequest.headers.get(HEADER_CONN_PARAMS);
+					let requestCtx:
+						| ReturnType<typeof withConnContext>
+						| undefined;
+					let conn: NativeConnHandle | undefined;
+					try {
+						const connParams = validateConnParams(
+							schemaConfig.connParamsSchema,
+							rawConnParams
+								? JSON.parse(rawConnParams)
+								: undefined,
+						);
+						conn = await callNative(() =>
+							ctx.connectConn(encodeValue(connParams), request),
+						);
+						requestCtx = makeConnCtx(ctx, conn, jsRequest);
+						const response = await config.onRequest(
+							requestCtx,
+							jsRequest,
+						);
+						if (!(response instanceof Response)) {
+							throw new Error(
+								"onRequest handler must return a Response",
+							);
+						}
+						return await toJsHttpResponse(response);
+					} catch (error) {
+						const encodingHeader =
+							jsRequest.headers.get(HEADER_ENCODING);
+						const encoding: Encoding =
+							encodingHeader === "cbor" ||
+							encodingHeader === "bare"
+								? encodingHeader
+								: "json";
+						const path = new URL(jsRequest.url).pathname;
+						return await toJsHttpResponse(
+							buildNativeRequestErrorResponse(
+								encoding,
+								path,
+								error,
+							),
+						);
+					} finally {
+						await requestCtx?.dispose();
+						if (conn) {
+							await conn.disconnect();
+						}
 					}
+				} catch (error) {
+					logger().error({
+						msg: "native onRequest failed",
+						error,
+					});
+					throw error;
 				}
-			} catch (error) {
-				logger().error({
-					msg: "native onRequest failed",
-					error,
-				});
-				throw error;
-			}
-		}),
+			},
+		),
 		onWebSocket:
 			typeof config.onWebSocket === "function"
-				? wrapNativeCallback(async (
-						error: unknown,
-						payload: {
-							ctx: NativeActorContext;
-							conn?: NativeConnHandle;
-							ws: NativeWebSocket;
-							request?: {
-								method: string;
-								uri: string;
-								headers?: Record<string, string>;
-								body?: Buffer;
-							};
-						},
-					) => {
-						const { ctx, conn, ws, request } = unwrapTsfnPayload(
-							error,
-							payload,
-						);
-						const jsRequest = request ? buildRequest(request) : undefined;
-						const actorCtx = conn
-							? makeConnCtx(ctx, conn, jsRequest)
-							: makeActorCtx(ctx, jsRequest);
-						try {
-							await config.onWebSocket(
-								actorCtx,
-								new TrackedNativeWebSocketAdapter(
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: {
+								ctx: NativeActorContext;
+								conn?: NativeConnHandle;
+								ws: NativeWebSocket;
+								request?: {
+									method: string;
+									uri: string;
+									headers?: Record<string, string>;
+									body?: Buffer;
+								};
+							},
+						) => {
+							const { ctx, conn, ws, request } =
+								unwrapTsfnPayload(error, payload);
+							const jsRequest = request
+								? buildRequest(request)
+								: undefined;
+							const actorCtx = conn
+								? makeConnCtx(ctx, conn, jsRequest)
+								: makeActorCtx(ctx, jsRequest);
+							try {
+								await config.onWebSocket(
 									actorCtx,
-									new NativeWebSocketAdapter(ws),
-								),
-							);
-						} finally {
-							await actorCtx.dispose();
-						}
-					})
+									new TrackedNativeWebSocketAdapter(
+										actorCtx,
+										new NativeWebSocketAdapter(ws),
+									),
+								);
+							} finally {
+								await actorCtx.dispose();
+							}
+						},
+					)
 				: undefined,
 		onBeforeSubscribe:
 			schemaConfig.events &&
 			Object.values(schemaConfig.events).some(
 				(schema) =>
-					typeof (schema as { canSubscribe?: unknown }).canSubscribe ===
-					"function",
+					typeof (schema as { canSubscribe?: unknown })
+						.canSubscribe === "function",
 			)
-				? wrapNativeCallback(async (
-						error: unknown,
-						payload: {
-							ctx: NativeActorContext;
-							conn: NativeConnHandle;
-							eventName: string;
-						},
-					) => {
-						const { ctx, conn, eventName } = unwrapTsfnPayload(error, payload);
-						const actorCtx = makeConnCtx(ctx, conn);
-						try {
-							const canSubscribe = getEventCanSubscribe(
-								schemaConfig.events,
-								eventName,
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: {
+								ctx: NativeActorContext;
+								conn: NativeConnHandle;
+								eventName: string;
+							},
+						) => {
+							const { ctx, conn, eventName } = unwrapTsfnPayload(
+								error,
+								payload,
 							);
-							if (!canSubscribe) {
-								return;
+							const actorCtx = makeConnCtx(ctx, conn);
+							try {
+								const canSubscribe = getEventCanSubscribe(
+									schemaConfig.events,
+									eventName,
+								);
+								if (!canSubscribe) {
+									return;
+								}
+								const result = await canSubscribe(actorCtx);
+								if (typeof result !== "boolean") {
+									throw new Error(
+										"canSubscribe must return a boolean",
+									);
+								}
+								if (!result) {
+									throw forbiddenError();
+								}
+							} finally {
+								await actorCtx.dispose();
 							}
-							const result = await canSubscribe(actorCtx);
-							if (typeof result !== "boolean") {
-								throw new Error("canSubscribe must return a boolean");
-							}
-							if (!result) {
-								throw forbiddenError();
-							}
-						} finally {
-							await actorCtx.dispose();
-						}
-					})
+						},
+					)
 				: undefined,
 		getWorkflowHistory:
 			getRunInspectorConfig(config.run) !== undefined
-				? wrapNativeCallback(async (
-						error: unknown,
-						payload: { ctx: NativeActorContext },
-					) => {
-						const { ctx } = unwrapTsfnPayload(error, payload);
-						const history = getNativeWorkflowInspector(ctx)?.getHistory();
-						return history == null ? undefined : encodeValue(history);
-					})
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: { ctx: NativeActorContext },
+						) => {
+							const { ctx } = unwrapTsfnPayload(error, payload);
+							const history =
+								getNativeWorkflowInspector(ctx)?.getHistory();
+							return history == null
+								? undefined
+								: encodeValue(history);
+						},
+					)
 				: undefined,
 		replayWorkflow:
 			getRunInspectorConfig(config.run) !== undefined
-				? wrapNativeCallback(async (
-						error: unknown,
-						payload: {
-							ctx: NativeActorContext;
-							entryId?: string;
-						},
-					) => {
-						const { ctx, entryId } = unwrapTsfnPayload(error, payload);
-						const workflowInspector = getNativeWorkflowInspector(ctx);
-						if (!workflowInspector?.replayFromStep) {
-							return undefined;
-						}
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: {
+								ctx: NativeActorContext;
+								entryId?: string;
+							},
+						) => {
+							const { ctx, entryId } = unwrapTsfnPayload(
+								error,
+								payload,
+							);
+							const workflowInspector =
+								getNativeWorkflowInspector(ctx);
+							if (!workflowInspector?.replayFromStep) {
+								return undefined;
+							}
 
-						const history =
-							(await workflowInspector.replayFromStep(entryId)) ?? null;
-						return history == null ? undefined : encodeValue(history);
-					})
+							const history =
+								(await workflowInspector.replayFromStep(
+									entryId,
+								)) ?? null;
+							return history == null
+								? undefined
+								: encodeValue(history);
+						},
+					)
 				: undefined,
 		run: (() => {
 			const run = getRunFunction(config.run);
@@ -3909,26 +4235,29 @@ function buildNativeFactory(
 				return undefined;
 			}
 
-			return wrapNativeCallback(async (
-				error: unknown,
-				payload: { ctx: NativeActorContext },
-			) => {
-				const { ctx } = unwrapTsfnPayload(error, payload);
-				const actorId = callNativeSync(() => ctx.actorId());
-				const actorCtx = makeActorCtx(ctx);
-				nativeRunHandlerActiveByActorId.set(actorId, true);
-				try {
-					await run(actorCtx);
-				} finally {
-					nativeRunHandlerActiveByActorId.set(actorId, false);
-					await actorCtx.dispose();
-				}
-			});
-			})(),
-			actions: Object.fromEntries(
-				Object.entries(actionHandlers).map(([name, handler]) => [
-					name,
-					wrapNativeCallback(async (
+			return wrapNativeCallback(
+				async (
+					error: unknown,
+					payload: { ctx: NativeActorContext },
+				) => {
+					const { ctx } = unwrapTsfnPayload(error, payload);
+					const actorId = callNativeSync(() => ctx.actorId());
+					const actorCtx = makeActorCtx(ctx);
+					nativeRunHandlerActiveByActorId.set(actorId, true);
+					try {
+						await run(actorCtx);
+					} finally {
+						nativeRunHandlerActiveByActorId.set(actorId, false);
+						await actorCtx.dispose();
+					}
+				},
+			);
+		})(),
+		actions: Object.fromEntries(
+			Object.entries(actionHandlers).map(([name, handler]) => [
+				name,
+				wrapNativeCallback(
+					async (
 						error: unknown,
 						payload: {
 							ctx: NativeActorContext;
@@ -3936,7 +4265,10 @@ function buildNativeFactory(
 							args: Buffer;
 						},
 					) => {
-						const { ctx, conn, args } = unwrapTsfnPayload(error, payload);
+						const { ctx, conn, args } = unwrapTsfnPayload(
+							error,
+							payload,
+						);
 						const actorCtx = makeConnCtx(ctx, conn);
 						try {
 							return encodeValue(
@@ -3952,10 +4284,11 @@ function buildNativeFactory(
 						} finally {
 							await actorCtx.dispose();
 						}
-					}),
-				]),
-			),
-		};
+					},
+				),
+			]),
+		),
+	};
 
 	return new bindings.NapiActorFactory(
 		callbacks,
@@ -3963,9 +4296,13 @@ function buildNativeFactory(
 	);
 }
 
-async function buildServeConfig(config: RegistryConfig): Promise<JsServeConfig> {
+async function buildServeConfig(
+	config: RegistryConfig,
+): Promise<JsServeConfig> {
 	if (!config.endpoint) {
-		throw new Error("registry endpoint is required for native envoy startup");
+		throw new Error(
+			"registry endpoint is required for native envoy startup",
+		);
 	}
 
 	const serveConfig: JsServeConfig = {
@@ -3993,7 +4330,10 @@ export async function buildNativeRegistry(config: RegistryConfig): Promise<{
 	const registry = new bindings.CoreRegistry();
 
 	for (const [name, definition] of Object.entries(config.use)) {
-		registry.register(name, buildNativeFactory(bindings, config, definition));
+		registry.register(
+			name,
+			buildNativeFactory(bindings, config, definition),
+		);
 	}
 
 	return {

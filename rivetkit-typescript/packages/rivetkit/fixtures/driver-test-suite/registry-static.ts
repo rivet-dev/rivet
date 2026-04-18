@@ -36,7 +36,6 @@ import { destroyActor, destroyObserver } from "./destroy";
 import { customTimeoutActor, errorHandlingActor } from "./error-handling";
 import { fileSystemHibernationCleanupActor } from "./file-system-hibernation-cleanup";
 import { hibernationActor, hibernationSleepWindowActor } from "./hibernation";
-import { inlineClientActor } from "./inline-client";
 import {
 	beforeConnectTimeoutActor,
 	beforeConnectRejectActor,
@@ -204,8 +203,6 @@ export const registry = setup({
 		// From error-handling.ts
 		errorHandlingActor,
 		customTimeoutActor,
-		// From inline-client.ts
-		inlineClientActor,
 		// From kv.ts
 		kvActor,
 		// From queue.ts

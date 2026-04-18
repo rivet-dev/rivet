@@ -33,6 +33,6 @@ pub use actor::schedule::Schedule;
 pub use inspector::{Inspector, InspectorSnapshot};
 pub use kv::Kv;
 pub use registry::{CoreRegistry, ServeConfig};
-pub use sqlite::SqliteDb;
+pub use sqlite::{BindParam, ColumnValue, ExecResult, QueryResult, SqliteDb};
 pub use types::{ActorKey, ActorKeySegment, ConnId, ListOpts, SaveStateOpts, WsMessage};
 pub use websocket::WebSocket;

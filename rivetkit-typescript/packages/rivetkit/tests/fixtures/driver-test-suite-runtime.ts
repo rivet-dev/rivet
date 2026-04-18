@@ -1,23 +1,7 @@
-import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { getEnginePath } from "@rivetkit/engine-cli";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { Registry } from "../../src/registry";
 import { buildNativeRegistry } from "../../src/registry/native";
-
-const fixtureDir = dirname(fileURLToPath(import.meta.url));
-const repoEngineBinary = resolve(
-	fixtureDir,
-	"../../../../../target/debug/rivet-engine",
-);
-
-function resolveEngineBinaryPath(): string {
-	if (existsSync(repoEngineBinary)) {
-		return repoEngineBinary;
-	}
-
-	return getEnginePath();
-}
 
 const registryPath = process.env.RIVETKIT_DRIVER_REGISTRY_PATH;
 const endpoint = process.env.RIVETKIT_TEST_ENDPOINT;
@@ -52,6 +36,5 @@ registry.config.envoy = {
 const { registry: nativeRegistry, serveConfig } = await buildNativeRegistry(
 	registry.parseConfig(),
 );
-serveConfig.engineBinaryPath = resolveEngineBinaryPath();
 
 await nativeRegistry.serve(serveConfig);

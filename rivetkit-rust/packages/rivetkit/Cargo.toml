@@ -6,6 +6,10 @@ license.workspace = true
 edition.workspace = true
 workspace = "../../../"
 
+[features]
+default = ["sqlite"]
+sqlite = ["rivetkit-core/sqlite"]
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
@@ -14,6 +18,7 @@ futures.workspace = true
 http.workspace = true
 rivet-error.workspace = true
 rivetkit-core = { path = "../rivetkit-core" }
+rivetkit-client = { path = "../client" }
 serde.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

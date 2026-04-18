@@ -9,6 +9,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::actor::Actor;
 use crate::validation::{decode_cbor, encode_cbor, panic_with_error};
+use rivetkit_client::{Client, ClientConfig, EncodingKind, TransportKind};
 use rivetkit_core::{
 	ActorContext, ActorKey, ConnHandle, EnqueueAndWaitOpts, Kv, Queue,
 	Schedule, SqliteDb,
@@ -105,6 +106,18 @@ impl<A: Actor> Ctx<A> {
 
 	pub fn queue(&self) -> &Queue {
 		self.inner.queue()
+	}
+
+	pub fn client(&self) -> anyhow::Result<Client> {
+		Ok(Client::from_config(
+			ClientConfig::new(self.inner.client_endpoint()?)
+				.token_opt(self.inner.client_token()?)
+				.namespace(self.inner.client_namespace()?)
+				.pool_name(self.inner.client_pool_name()?)
+				.encoding(EncodingKind::Bare)
+				.transport(TransportKind::WebSocket)
+				.disable_metadata_lookup(true),
+		))
 	}
 
 	pub async fn enqueue_and_wait<Req, Res>(

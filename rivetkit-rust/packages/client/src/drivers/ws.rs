@@ -6,8 +6,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tracing::debug;
 
 use crate::{
-    protocol::to_server,
-    protocol::to_client,
+    protocol::{codec, to_client, to_server},
     EncodingKind
 };
 
@@ -116,6 +115,7 @@ fn get_msg_deserializer(encoding_kind: EncodingKind) -> fn(&Message) -> Result<t
     match encoding_kind {
         EncodingKind::Json => json_msg_deserialize,
         EncodingKind::Cbor => cbor_msg_deserialize,
+        EncodingKind::Bare => bare_msg_deserialize,
     }
 }
 
@@ -123,29 +123,43 @@ fn get_msg_serializer(encoding_kind: EncodingKind) -> fn(&to_server::ToServer) -
     match encoding_kind {
         EncodingKind::Json => json_msg_serialize,
         EncodingKind::Cbor => cbor_msg_serialize,
+        EncodingKind::Bare => bare_msg_serialize,
     }
 }
 
 fn json_msg_deserialize(value: &Message) -> Result<to_client::ToClient> {
     match value {
-        Message::Text(text) => Ok(serde_json::from_str(text)?),
-        Message::Binary(bin) => Ok(serde_json::from_slice(bin)?),
+        Message::Text(text) => codec::decode_to_client(EncodingKind::Json, text.as_bytes()),
+        Message::Binary(bin) => codec::decode_to_client(EncodingKind::Json, bin),
         _ => Err(anyhow::anyhow!("Invalid message type")),
     }
 }
 
 fn cbor_msg_deserialize(value: &Message) -> Result<to_client::ToClient> {
     match value {
-        Message::Binary(bin) => Ok(serde_cbor::from_slice(bin)?),
-        Message::Text(text) => Ok(serde_cbor::from_slice(text.as_bytes())?),
+        Message::Binary(bin) => codec::decode_to_client(EncodingKind::Cbor, bin),
+        Message::Text(text) => codec::decode_to_client(EncodingKind::Cbor, text.as_bytes()),
         _ => Err(anyhow::anyhow!("Invalid message type")),
     }
 }
 
 fn json_msg_serialize(value: &to_server::ToServer) -> Result<Message> {
-    Ok(Message::Text(serde_json::to_string(value)?.into()))
+    let payload = codec::encode_to_server(EncodingKind::Json, value)?;
+    Ok(Message::Text(String::from_utf8(payload)?.into()))
 }
 
 fn cbor_msg_serialize(value: &to_server::ToServer) -> Result<Message> {
-    Ok(Message::Binary(serde_cbor::to_vec(value)?.into()))
+    Ok(Message::Binary(codec::encode_to_server(EncodingKind::Cbor, value)?.into()))
+}
+
+fn bare_msg_deserialize(value: &Message) -> Result<to_client::ToClient> {
+    match value {
+        Message::Binary(bin) => codec::decode_to_client(EncodingKind::Bare, bin),
+        Message::Text(text) => codec::decode_to_client(EncodingKind::Bare, text.as_bytes()),
+        _ => Err(anyhow::anyhow!("Invalid message type")),
+    }
+}
+
+fn bare_msg_serialize(value: &to_server::ToServer) -> Result<Message> {
+    Ok(Message::Binary(codec::encode_to_server(EncodingKind::Bare, value)?.into()))
 }

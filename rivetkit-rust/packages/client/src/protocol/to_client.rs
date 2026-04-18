@@ -7,7 +7,8 @@ pub struct Init {
     #[serde(rename = "connectionId")]
     pub connection_id: String,
     #[serde(rename = "connectionToken")]
-    pub connection_token: String,
+    #[serde(default)]
+    pub connection_token: Option<String>,
 }
 
 // Used for connection errors (both during initialization and afterwards)
