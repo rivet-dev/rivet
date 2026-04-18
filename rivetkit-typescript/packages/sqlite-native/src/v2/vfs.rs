@@ -33,6 +33,7 @@ const EMPTY_DB_PAGE_HEADER_PREFIX: [u8; 108] = [
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 46, 138, 17, 13, 0, 0, 0, 0, 16, 0, 0,
 ];
 
+#[cfg(test)]
 static NEXT_STAGE_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_TEMP_AUX_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -1470,6 +1471,7 @@ fn split_bytes(bytes: &[u8], max_chunk_bytes: usize) -> Vec<Vec<u8>> {
 		.collect()
 }
 
+#[cfg(test)]
 fn next_stage_id() -> u64 {
 	NEXT_STAGE_ID.fetch_add(1, Ordering::Relaxed)
 }
