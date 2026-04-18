@@ -25,7 +25,7 @@ struct RunnerState {
 }
 
 #[workflow]
-pub async fn pegboard_runner_pool(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+pub async fn pegboard_runner_pool2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	// Exit before starting sidecar workflows if there is no serverless runner config to manage.
 	if matches!(
 		ctx.v(4)

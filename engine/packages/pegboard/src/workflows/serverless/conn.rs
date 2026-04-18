@@ -40,7 +40,7 @@ struct RescheduleState {
 }
 
 #[workflow]
-pub async fn pegboard_serverless_conn(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+pub async fn pegboard_serverless_conn2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	// Run the connection activity, which will handle the full lifecycle
 	let drain_sent = ctx
 		.loope(RescheduleState::default(), |ctx, state| {
