@@ -1,9 +1,23 @@
+use std::time::Duration;
+
 use http::StatusCode;
+use tokio::time::sleep;
 
 use crate::actor::callbacks::{ActorInstanceCallbacks, OnRequestRequest, OnWebSocketRequest, Request, Response};
 use crate::actor::connection::ConnHandle;
 use crate::actor::context::ActorContext;
+use crate::actor::sleep::CanSleep;
 use crate::websocket::WebSocket;
+
+fn rearm_sleep_after_http_request(ctx: &ActorContext) {
+	let sleep_ctx = ctx.clone();
+	ctx.wait_until(async move {
+		while sleep_ctx.can_sleep().await == CanSleep::ActiveHttpRequests {
+			sleep(Duration::from_millis(10)).await;
+		}
+		sleep_ctx.reset_sleep_timer();
+	});
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct EventBroadcaster;
@@ -33,10 +47,23 @@ pub(crate) async fn dispatch_request(
 		);
 	};
 
-	match handler(OnRequestRequest { ctx, request }).await {
-		Ok(response) => response,
+	ctx.cancel_sleep_timer();
+
+	match handler(OnRequestRequest {
+		ctx: ctx.clone(),
+		request,
+	})
+	.await
+	{
+		Ok(response) => {
+			rearm_sleep_after_http_request(&ctx);
+			ctx.request_sleep_if_pending();
+			response
+		}
 		Err(error) => {
 			tracing::error!(?error, "error in on_request callback");
+			rearm_sleep_after_http_request(&ctx);
+			ctx.request_sleep_if_pending();
 			Response::from(
 				http::Response::builder()
 					.status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -59,13 +86,15 @@ pub(crate) async fn dispatch_websocket(
 	};
 
 	let result = ctx
-		.with_websocket_callback(|| async {
-			handler(OnWebSocketRequest {
-				ctx: ctx.clone(),
-				ws: ws.clone(),
+			.with_websocket_callback(|| async {
+				handler(OnWebSocketRequest {
+					ctx: ctx.clone(),
+					conn: None,
+					ws: ws.clone(),
+					request: None,
+				})
+				.await
 			})
-			.await
-		})
 		.await;
 
 	if let Err(error) = result {

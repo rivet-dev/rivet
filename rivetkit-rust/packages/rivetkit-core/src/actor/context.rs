@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -6,13 +7,16 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use futures::future::BoxFuture;
+use futures::FutureExt;
+use rivet_envoy_client::tunnel::HibernatingWebSocketMetadata;
 use rivet_envoy_client::handle::EnvoyHandle;
 use tokio::runtime::Handle;
+use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
-use crate::actor::callbacks::ActorInstanceCallbacks;
+use crate::actor::callbacks::{ActorInstanceCallbacks, Request, RunRequest};
 use crate::actor::connection::{
 	ConnHandle, ConnectionManager, HibernatableConnectionMetadata,
 };
@@ -50,11 +54,16 @@ pub(crate) struct ActorContextInner {
 	broadcaster: EventBroadcaster,
 	connections: ConnectionManager,
 	sleep: SleepController,
+	runtime_handle: Option<Handle>,
+	action_lock: tokio::sync::Mutex<()>,
 	abort_signal: CancellationToken,
 	prevent_sleep: AtomicBool,
 	sleep_requested: AtomicBool,
 	destroy_requested: AtomicBool,
+	destroy_completed: AtomicBool,
+	destroy_completion_notify: Notify,
 	inspector: std::sync::RwLock<Option<Inspector>>,
+	callbacks: std::sync::RwLock<Option<Arc<ActorInstanceCallbacks>>>,
 	metrics: ActorMetrics,
 	actor_id: String,
 	name: String,
@@ -144,6 +153,7 @@ impl ActorContext {
 			metrics.clone(),
 		);
 		let sleep = SleepController::default();
+		let runtime_handle = Handle::try_current().ok();
 
 		let ctx = Self(Arc::new(ActorContextInner {
 			state,
@@ -155,11 +165,16 @@ impl ActorContext {
 			broadcaster: EventBroadcaster::default(),
 			connections,
 			sleep,
+			runtime_handle,
+			action_lock: tokio::sync::Mutex::new(()),
 			abort_signal,
 			prevent_sleep: AtomicBool::new(false),
 			sleep_requested: AtomicBool::new(false),
 			destroy_requested: AtomicBool::new(false),
+			destroy_completed: AtomicBool::new(false),
+			destroy_completion_notify: Notify::new(),
 			inspector: std::sync::RwLock::new(None),
+			callbacks: std::sync::RwLock::new(None),
 			metrics,
 			actor_id,
 			name,
@@ -266,27 +281,45 @@ impl ActorContext {
 
 	pub fn sleep(&self) {
 		self.0.sleep.cancel_sleep_timer();
+		self.0.sleep_requested.store(true, Ordering::SeqCst);
 		if let Ok(runtime) = Handle::try_current() {
 			let ctx = self.clone();
 			runtime.spawn(async move {
+				tokio::time::sleep(Duration::from_millis(1)).await;
 				if let Err(error) = ctx.persist_hibernatable_connections().await {
 					tracing::error!(
 						?error,
 						"failed to persist hibernatable connections on sleep"
 					);
 				}
+				ctx.0.sleep.request_sleep(ctx.actor_id());
 			});
+			return;
 		}
 
 		self.0.sleep.request_sleep(self.actor_id());
-		self.0.sleep_requested.store(true, Ordering::SeqCst);
 	}
 
 	pub fn destroy(&self) {
+		self.mark_destroy_requested();
+
+		let actor_id = self.actor_id().to_owned();
+		let sleep = self.0.sleep.clone();
+		if let Ok(runtime) = Handle::try_current() {
+			runtime.spawn(async move {
+				sleep.request_destroy(&actor_id);
+			});
+			return;
+		}
+
+		sleep.request_destroy(&actor_id);
+	}
+
+	pub fn mark_destroy_requested(&self) {
 		self.0.sleep.cancel_sleep_timer();
 		self.0.state.flush_on_shutdown();
-		self.0.sleep.request_destroy(self.actor_id());
 		self.0.destroy_requested.store(true, Ordering::SeqCst);
+		self.0.destroy_completed.store(false, Ordering::SeqCst);
 		self.0.abort_signal.cancel();
 	}
 
@@ -357,11 +390,27 @@ impl ActorContext {
 
 	pub fn ack_hibernatable_websocket_message(
 		&self,
-		_gateway_id: &[u8],
-		_request_id: &[u8],
-		_server_message_index: u16,
+		gateway_id: &[u8],
+		request_id: &[u8],
+		server_message_index: u16,
 	) -> Result<()> {
-		Err(anyhow!("hibernatable websocket ack is not configured"))
+		let envoy_handle = self
+			.0
+			.sleep
+			.envoy_handle()
+			.ok_or_else(|| anyhow!("hibernatable websocket ack is not configured"))?;
+		let gateway_id: [u8; 4] = gateway_id
+			.try_into()
+			.map_err(|_| anyhow!("invalid hibernatable websocket gateway id"))?;
+		let request_id: [u8; 4] = request_id
+			.try_into()
+			.map_err(|_| anyhow!("invalid hibernatable websocket request id"))?;
+		envoy_handle.send_hibernatable_ws_message_ack(
+			gateway_id,
+			request_id,
+			server_message_index,
+		);
+		Ok(())
 	}
 
 	#[allow(dead_code)]
@@ -384,6 +433,14 @@ impl ActorContext {
 		callback: Option<OnStateChangeCallback>,
 	) {
 		self.0.state.set_on_state_change_callback(callback);
+	}
+
+	pub fn set_in_on_state_change_callback(&self, in_callback: bool) {
+		self.0.state.set_in_on_state_change_callback(in_callback);
+	}
+
+	pub(crate) async fn wait_for_on_state_change_idle(&self) {
+		self.0.state.wait_for_on_state_change_idle().await;
 	}
 
 	pub(crate) fn trigger_throttled_state_save(&self) {
@@ -448,7 +505,14 @@ impl ActorContext {
 		callbacks: Arc<ActorInstanceCallbacks>,
 	) {
 		self.0.sleep.configure(config.clone());
-		self.0.connections.configure_runtime(config, callbacks);
+		self.0
+			.connections
+			.configure_runtime(config, callbacks.clone());
+		*self
+			.0
+			.callbacks
+			.write()
+			.expect("actor callbacks lock poisoned") = Some(callbacks);
 	}
 
 	#[allow(dead_code)]
@@ -475,6 +539,7 @@ impl ActorContext {
 		params: Vec<u8>,
 		is_hibernatable: bool,
 		hibernation: Option<HibernatableConnectionMetadata>,
+		request: Option<Request>,
 		create_state: F,
 	) -> Result<ConnHandle>
 	where
@@ -488,11 +553,38 @@ impl ActorContext {
 				params,
 				is_hibernatable,
 				hibernation,
+				request,
 				create_state,
 			)
 			.await?;
 		self.record_connections_updated();
 		Ok(conn)
+	}
+
+	#[allow(dead_code)]
+	pub async fn connect_conn_with_request<F>(
+		&self,
+		params: Vec<u8>,
+		request: Option<Request>,
+		create_state: F,
+	) -> Result<ConnHandle>
+	where
+		F: Future<Output = Result<Vec<u8>>> + Send,
+	{
+		self
+			.connect_conn(params, false, None, request, create_state)
+			.await
+	}
+
+	pub(crate) fn reconnect_hibernatable_conn(
+		&self,
+		gateway_id: &[u8],
+		request_id: &[u8],
+	) -> Result<ConnHandle> {
+		self
+			.0
+			.connections
+			.reconnect_hibernatable(self, gateway_id, request_id)
 	}
 
 	#[allow(dead_code)]
@@ -506,6 +598,24 @@ impl ActorContext {
 	) -> Result<Vec<ConnHandle>> {
 		let restored = self.0.connections.restore_persisted(self).await?;
 		if !restored.is_empty() {
+			if let Some(envoy_handle) = self.0.sleep.envoy_handle() {
+				let meta_entries = restored
+					.iter()
+					.filter_map(|conn| {
+						let hibernation = conn.hibernation()?;
+						Some(HibernatingWebSocketMetadata {
+							gateway_id: hibernation.gateway_id.clone().try_into().ok()?,
+							request_id: hibernation.request_id.clone().try_into().ok()?,
+							envoy_message_index: hibernation.client_message_index,
+							rivet_message_index: hibernation.server_message_index,
+							path: hibernation.request_path,
+							headers: hibernation.request_headers.into_iter().collect(),
+						})
+					})
+					.collect();
+				envoy_handle
+					.restore_hibernating_requests(self.actor_id().to_owned(), meta_entries);
+			}
 			self.record_connections_updated();
 		}
 		Ok(restored)
@@ -543,15 +653,119 @@ impl ActorContext {
 	}
 
 	#[allow(dead_code)]
+	pub(crate) fn ready(&self) -> bool {
+		self.0.sleep.ready()
+	}
+
+	#[allow(dead_code)]
 	pub(crate) fn set_started(&self, started: bool) {
 		self.0.sleep.set_started(started);
 		self.reset_sleep_timer();
 	}
 
 	#[allow(dead_code)]
+	pub(crate) fn started(&self) -> bool {
+		self.0.sleep.started()
+	}
+
+	#[allow(dead_code)]
 	pub(crate) fn set_run_handler_active(&self, active: bool) {
 		self.0.sleep.set_run_handler_active(active);
 		self.reset_sleep_timer();
+	}
+
+	pub fn run_handler_active(&self) -> bool {
+		self.0.sleep.run_handler_active()
+	}
+
+	pub fn restart_run_handler(&self) -> Result<()> {
+		if self.run_handler_active() {
+			return Ok(());
+		}
+
+		let callbacks = self
+			.0
+			.callbacks
+			.read()
+			.expect("actor callbacks lock poisoned")
+			.clone()
+			.ok_or_else(|| anyhow!("actor run handler callbacks are not configured"))?;
+		if callbacks.run.is_none() {
+			return Err(anyhow!("actor run handler is not configured"));
+		}
+
+		let runtime = self
+			.0
+			.runtime_handle
+			.clone()
+			.ok_or_else(|| anyhow!("actor run handler restart requires a tokio runtime"))?;
+		self.set_run_handler_active(true);
+		let task_ctx = self.clone();
+		let handle = runtime.spawn(async move {
+			let run = callbacks
+				.run
+				.as_ref()
+				.expect("run handler presence checked before restart");
+			let result = AssertUnwindSafe(run(RunRequest {
+				ctx: task_ctx.clone(),
+			}))
+			.catch_unwind()
+			.await;
+			task_ctx.set_run_handler_active(false);
+
+			match result {
+				Ok(Ok(())) => {}
+				Ok(Err(error)) => {
+					tracing::error!(?error, "actor run handler failed");
+				}
+				Err(panic) => {
+					tracing::error!(
+						panic = %panic_payload_message(panic.as_ref()),
+						"actor run handler panicked"
+					);
+				}
+			}
+		});
+		self.track_run_handler(handle);
+		Ok(())
+	}
+
+	pub(crate) async fn lock_action_execution(&self) -> tokio::sync::MutexGuard<'_, ()> {
+		self.0.action_lock.lock().await
+	}
+
+	pub(crate) fn destroy_requested(&self) -> bool {
+		self.0.destroy_requested.load(Ordering::SeqCst)
+	}
+
+	pub fn is_destroy_requested(&self) -> bool {
+		self.destroy_requested()
+	}
+
+	pub(crate) async fn wait_for_destroy_completion(&self) {
+		if self.0.destroy_completed.load(Ordering::SeqCst) {
+			return;
+		}
+
+		loop {
+			let notified = self.0.destroy_completion_notify.notified();
+			if self.0.destroy_completed.load(Ordering::SeqCst) {
+				return;
+			}
+			notified.await;
+			if self.0.destroy_completed.load(Ordering::SeqCst) {
+				return;
+			}
+		}
+	}
+
+	pub async fn wait_for_destroy_completion_public(&self) {
+		self.wait_for_destroy_completion().await;
+	}
+
+	pub(crate) fn mark_destroy_completed(&self) {
+		self.0.destroy_completed.store(true, Ordering::SeqCst);
+		self.0.destroy_completion_notify.notify_waiters();
 	}
 
 	pub(crate) fn track_run_handler(&self, handle: JoinHandle<()>) {
@@ -599,6 +813,12 @@ impl ActorContext {
 		self.0.sleep_requested.load(Ordering::SeqCst)
 	}
 
+	pub(crate) fn request_sleep_if_pending(&self) {
+		if self.sleep_requested() {
+			self.0.sleep.request_sleep(self.actor_id());
+		}
+	}
+
 	#[allow(dead_code)]
 	pub(crate) fn begin_keep_awake(&self) {
 		self.0.sleep.begin_keep_awake();
@@ -631,6 +851,26 @@ impl ActorContext {
 		result
 	}
 
+	pub(crate) async fn wait_for_internal_keep_awake_idle(
+		&self,
+		deadline: Instant,
+	) -> bool {
+		self.0
+			.sleep
+			.wait_for_internal_keep_awake_idle(deadline)
+			.await
+	}
+
+	pub(crate) async fn wait_for_http_requests_drained(
+		&self,
+		deadline: Instant,
+	) -> bool {
+		self.0
+			.sleep
+			.wait_for_http_requests_drained(self, deadline)
+			.await
+	}
+
 	pub(crate) async fn with_websocket_callback<F, Fut, T>(&self, run: F) -> T
 	where
 		F: FnOnce() -> Fut,
@@ -645,13 +885,13 @@ impl ActorContext {
 	}
 
 	#[allow(dead_code)]
-	pub(crate) fn begin_websocket_callback(&self) {
+	pub fn begin_websocket_callback(&self) {
 		self.0.sleep.begin_websocket_callback();
 		self.reset_sleep_timer();
 	}
 
 	#[allow(dead_code)]
-	pub(crate) fn end_websocket_callback(&self) {
+	pub fn end_websocket_callback(&self) {
 		self.0.sleep.end_websocket_callback();
 		self.reset_sleep_timer();
 	}
@@ -666,7 +906,7 @@ impl ActorContext {
 		self.reset_sleep_timer();
 	}
 
-	fn configure_sleep_hooks(&self) {
+fn configure_sleep_hooks(&self) {
 		let internal_keep_awake_ctx = self.clone();
 		self.0.schedule.set_internal_keep_awake(Some(Arc::new(move |future| {
 			let ctx = internal_keep_awake_ctx.clone();
@@ -704,6 +944,16 @@ impl ActorContext {
 		if let Some(inspector) = self.inspector() {
 			inspector.record_queue_updated(queue_size);
 		}
+	}
+}
+
+fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
+	if let Some(message) = payload.downcast_ref::<&'static str>() {
+		(*message).to_owned()
+	} else if let Some(message) = payload.downcast_ref::<String>() {
+		message.clone()
+	} else {
+		"unknown panic payload".to_owned()
 	}
 }
 

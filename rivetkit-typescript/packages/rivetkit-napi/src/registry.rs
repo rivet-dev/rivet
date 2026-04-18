@@ -15,6 +15,7 @@ pub struct JsServeConfig {
 	pub namespace: String,
 	pub pool_name: String,
 	pub engine_binary_path: Option<String>,
+	pub handle_inspector_http_in_runtime: Option<bool>,
 }
 
 #[napi]
@@ -64,6 +65,9 @@ impl CoreRegistry {
 				namespace: config.namespace,
 				pool_name: config.pool_name,
 				engine_binary_path: config.engine_binary_path.map(PathBuf::from),
+				handle_inspector_http_in_runtime: config
+					.handle_inspector_http_in_runtime
+					.unwrap_or(false),
 			})
 			.await
 			.map_err(napi_anyhow_error)

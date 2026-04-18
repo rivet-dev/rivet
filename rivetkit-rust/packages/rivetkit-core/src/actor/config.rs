@@ -20,6 +20,8 @@ const DEFAULT_CONNECTION_LIVENESS_TIMEOUT: Duration = Duration::from_millis(2500
 const DEFAULT_CONNECTION_LIVENESS_INTERVAL: Duration = Duration::from_secs(5);
 const DEFAULT_MAX_QUEUE_SIZE: u32 = 1000;
 const DEFAULT_MAX_QUEUE_MESSAGE_SIZE: u32 = 65_536;
+const DEFAULT_MAX_INCOMING_MESSAGE_SIZE: u32 = 65_536;
+const DEFAULT_MAX_OUTGOING_MESSAGE_SIZE: u32 = 1_048_576;
 
 #[derive(Clone)]
 pub enum CanHibernateWebSocket {
@@ -72,6 +74,8 @@ pub struct ActorConfig {
 	pub connection_liveness_interval: Duration,
 	pub max_queue_size: u32,
 	pub max_queue_message_size: u32,
+	pub max_incoming_message_size: u32,
+	pub max_outgoing_message_size: u32,
 	pub preload_max_workflow_bytes: Option<u64>,
 	pub preload_max_connections_bytes: Option<u64>,
 	pub overrides: Option<ActorConfigOverrides>,
@@ -99,6 +103,8 @@ pub struct FlatActorConfig {
 	pub connection_liveness_interval_ms: Option<u32>,
 	pub max_queue_size: Option<u32>,
 	pub max_queue_message_size: Option<u32>,
+	pub max_incoming_message_size: Option<u32>,
+	pub max_outgoing_message_size: Option<u32>,
 	pub preload_max_workflow_bytes: Option<f64>,
 	pub preload_max_connections_bytes: Option<f64>,
 }
@@ -163,6 +169,12 @@ impl ActorConfig {
 		}
 		if let Some(value) = config.max_queue_message_size {
 			actor_config.max_queue_message_size = value;
+		}
+		if let Some(value) = config.max_incoming_message_size {
+			actor_config.max_incoming_message_size = value;
+		}
+		if let Some(value) = config.max_outgoing_message_size {
+			actor_config.max_outgoing_message_size = value;
 		}
 		actor_config.preload_max_workflow_bytes =
 			config.preload_max_workflow_bytes.map(|value| value as u64);
@@ -240,6 +252,8 @@ impl Default for ActorConfig {
 			connection_liveness_interval: DEFAULT_CONNECTION_LIVENESS_INTERVAL,
 			max_queue_size: DEFAULT_MAX_QUEUE_SIZE,
 			max_queue_message_size: DEFAULT_MAX_QUEUE_MESSAGE_SIZE,
+			max_incoming_message_size: DEFAULT_MAX_INCOMING_MESSAGE_SIZE,
+			max_outgoing_message_size: DEFAULT_MAX_OUTGOING_MESSAGE_SIZE,
 			preload_max_workflow_bytes: None,
 			preload_max_connections_bytes: None,
 			overrides: None,

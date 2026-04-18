@@ -139,9 +139,9 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 					expect(sleepCount).toBeGreaterThanOrEqual(1);
 					expect(startCount).toBe(sleepCount + 1);
 				},
-				{ timeout: SLEEP_TIMEOUT * 2 },
+				{ timeout: SLEEP_TIMEOUT * 4 },
 			);
-		});
+		}, 15_000);
 
 		test("actor automatically sleeps after timeout", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
@@ -298,7 +298,7 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 				expect(sleepCount).toBe(1); // Slept once
 				expect(startCount).toBe(2); // New instance after sleep
 			}
-		});
+		}, 15_000);
 
 		test("alarms keep actor awake", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);

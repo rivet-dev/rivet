@@ -1,6 +1,9 @@
+use anyhow::Error;
 use napi::bindgen_prelude::{Buffer, Promise};
 use napi_derive::napi;
-use rivetkit_core::{ActorContext as CoreActorContext, SaveStateOpts};
+use rivetkit_core::{
+	ActorContext as CoreActorContext, Request as CoreRequest, SaveStateOpts,
+};
 use rivetkit_core::types::ActorKeySegment;
 
 use crate::cancellation_token::CancellationToken;
@@ -22,6 +25,14 @@ pub struct JsActorKeySegment {
 	pub kind: String,
 	pub string_value: Option<String>,
 	pub number_value: Option<f64>,
+}
+
+#[napi(object)]
+pub struct JsHttpRequest {
+	pub method: String,
+	pub uri: String,
+	pub headers: Option<std::collections::HashMap<String, String>>,
+	pub body: Option<Buffer>,
 }
 
 impl ActorContext {
@@ -58,6 +69,11 @@ impl ActorContext {
 	}
 
 	#[napi]
+	pub fn set_in_on_state_change_callback(&self, in_callback: bool) {
+		self.inner.set_in_on_state_change_callback(in_callback);
+	}
+
+	#[napi]
 	pub fn set_vars(&self, vars: Buffer) {
 		self.inner.set_vars(vars.to_vec());
 	}
@@ -80,6 +96,14 @@ impl ActorContext {
 	#[napi]
 	pub fn queue(&self) -> Queue {
 		Queue::new(self.inner.queue().clone())
+	}
+
+	#[napi]
+	pub fn set_alarm(&self, timestamp_ms: Option<i64>) -> napi::Result<()> {
+		self
+			.inner
+			.set_alarm(timestamp_ms)
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -137,6 +161,16 @@ impl ActorContext {
 	}
 
 	#[napi]
+	pub fn destroy_requested(&self) -> bool {
+		self.inner.is_destroy_requested()
+	}
+
+	#[napi]
+	pub async fn wait_for_destroy_completion(&self) {
+		self.inner.wait_for_destroy_completion_public().await;
+	}
+
+	#[napi]
 	pub fn set_prevent_sleep(&self, prevent_sleep: bool) {
 		self.inner.set_prevent_sleep(prevent_sleep);
 	}
@@ -152,6 +186,29 @@ impl ActorContext {
 	}
 
 	#[napi]
+	pub fn run_handler_active(&self) -> bool {
+		self.inner.run_handler_active()
+	}
+
+	#[napi]
+	pub fn restart_run_handler(&self) -> napi::Result<()> {
+		self
+			.inner
+			.restart_run_handler()
+			.map_err(napi_anyhow_error)
+	}
+
+	#[napi]
+	pub fn begin_websocket_callback(&self) {
+		self.inner.begin_websocket_callback();
+	}
+
+	#[napi]
+	pub fn end_websocket_callback(&self) {
+		self.inner.end_websocket_callback();
+	}
+
+	#[napi]
 	pub fn abort_signal(&self) -> CancellationToken {
 		CancellationToken::new(self.inner.abort_signal().clone())
 	}
@@ -164,6 +221,27 @@ impl ActorContext {
 			.into_iter()
 			.map(ConnHandle::new)
 			.collect()
+	}
+
+	#[napi]
+	pub async fn connect_conn(
+		&self,
+		params: Buffer,
+		request: Option<JsHttpRequest>,
+	) -> napi::Result<ConnHandle> {
+		let request = request
+			.map(js_http_request_to_core_request)
+			.transpose()?;
+		let conn = self
+			.inner
+			.connect_conn_with_request(
+				params.to_vec(),
+				request,
+				async { Ok::<Vec<u8>, Error>(Vec::new()) },
+			)
+			.await
+			.map_err(napi_anyhow_error)?;
+		Ok(ConnHandle::new(conn))
 	}
 
 	#[napi]
@@ -183,4 +261,14 @@ impl ActorContext {
 		});
 		Ok(())
 	}
+}
+
+fn js_http_request_to_core_request(request: JsHttpRequest) -> napi::Result<CoreRequest> {
+	CoreRequest::from_parts(
+		&request.method,
+		&request.uri,
+		request.headers.unwrap_or_default(),
+		request.body.map(|body| body.to_vec()).unwrap_or_default(),
+	)
+	.map_err(napi_anyhow_error)
 }

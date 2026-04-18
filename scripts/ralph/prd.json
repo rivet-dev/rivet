@@ -1025,7 +1025,7 @@
         "All tests pass: pnpm test driver-test-suite"
       ],
       "priority": 57,
-      "passes": false,
+      "passes": true,
       "notes": "This is the real validation that the Rust migration works correctly. The driver test suite is a comprehensive matrix testing all actor functionality across encoding protocols. Run from rivetkit-typescript/packages/rivetkit. Comment out dynamic actor fixtures and tests but keep the test infrastructure. Fix any NAPI bridge issues discovered here."
     },
     {

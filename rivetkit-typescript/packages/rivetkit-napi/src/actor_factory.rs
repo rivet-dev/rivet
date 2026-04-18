@@ -19,6 +19,7 @@ use rivetkit_core::{
 	OnWakeRequest, OnWebSocketRequest, ReplayWorkflowRequest, Request, Response,
 	RunRequest,
 };
+use rivetkit_core::actor::callbacks::OnBeforeSubscribeRequest;
 
 use crate::actor_context::ActorContext;
 use crate::connection::ConnHandle;
@@ -80,6 +81,8 @@ pub struct JsActorConfig {
 	pub connection_liveness_interval_ms: Option<u32>,
 	pub max_queue_size: Option<u32>,
 	pub max_queue_message_size: Option<u32>,
+	pub max_incoming_message_size: Option<u32>,
+	pub max_outgoing_message_size: Option<u32>,
 	pub preload_max_workflow_bytes: Option<f64>,
 	pub preload_max_connections_bytes: Option<f64>,
 }
@@ -123,19 +126,30 @@ struct HttpRequestPayload {
 #[derive(Clone)]
 struct WebSocketPayload {
 	ctx: rivetkit_core::ActorContext,
+	conn: Option<rivetkit_core::ConnHandle>,
 	ws: rivetkit_core::WebSocket,
+	request: Option<Request>,
+}
+
+#[derive(Clone)]
+struct BeforeSubscribePayload {
+	ctx: rivetkit_core::ActorContext,
+	conn: rivetkit_core::ConnHandle,
+	event_name: String,
 }
 
 #[derive(Clone)]
 struct BeforeConnectPayload {
 	ctx: rivetkit_core::ActorContext,
 	params: Vec<u8>,
+	request: Option<Request>,
 }
 
 #[derive(Clone)]
 struct ConnectionPayload {
 	ctx: rivetkit_core::ActorContext,
 	conn: rivetkit_core::ConnHandle,
+	request: Option<Request>,
 }
 
 #[derive(Clone)]
@@ -174,6 +188,7 @@ struct CallbackBindings {
 	on_state_change: Option<CallbackTsfn<StateChangePayload>>,
 	on_request: Option<CallbackTsfn<HttpRequestPayload>>,
 	on_websocket: Option<CallbackTsfn<WebSocketPayload>>,
+	on_before_subscribe: Option<CallbackTsfn<BeforeSubscribePayload>>,
 	on_before_connect: Option<CallbackTsfn<BeforeConnectPayload>>,
 	on_connect: Option<CallbackTsfn<ConnectionPayload>>,
 	on_disconnect: Option<CallbackTsfn<ConnectionPayload>>,
@@ -190,7 +205,30 @@ struct BridgeRivetErrorPayload {
 	code: String,
 	message: String,
 	metadata: Option<serde_json::Value>,
+	#[serde(rename = "public")]
+	public_: Option<bool>,
+	#[serde(rename = "statusCode")]
+	status_code: Option<u16>,
 }
+
+#[derive(Debug)]
+pub(crate) struct BridgeRivetErrorContext {
+	pub public_: Option<bool>,
+	pub status_code: Option<u16>,
+}
+
+impl std::fmt::Display for BridgeRivetErrorContext {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"bridge rivet error context public={:?} status_code={:?}",
+			self.public_,
+			self.status_code
+		)
+	}
+}
+
+impl std::error::Error for BridgeRivetErrorContext {}
 
 #[napi]
 pub struct NapiActorFactory {
@@ -259,6 +297,11 @@ impl CallbackBindings {
 				&callbacks,
 				"onWebSocket",
 				build_websocket_payload,
+			)?,
+			on_before_subscribe: optional_tsfn(
+				&callbacks,
+				"onBeforeSubscribe",
+				build_before_subscribe_payload,
 			)?,
 			on_before_connect: optional_tsfn(
 				&callbacks,
@@ -360,12 +403,23 @@ impl CallbackBindings {
 				request: request.request,
 			},
 		);
-		callbacks.on_websocket = wrap_void_callback(
-			"onWebSocket",
-			&self.on_websocket,
+			callbacks.on_websocket = wrap_void_callback(
+				"onWebSocket",
+				&self.on_websocket,
 			|request: OnWebSocketRequest| WebSocketPayload {
 				ctx: request.ctx,
+				conn: request.conn,
 				ws: request.ws,
+				request: request.request,
+			},
+		);
+		callbacks.on_before_subscribe = wrap_void_callback(
+			"onBeforeSubscribe",
+			&self.on_before_subscribe,
+			|request: OnBeforeSubscribeRequest| BeforeSubscribePayload {
+				ctx: request.ctx,
+				conn: request.conn,
+				event_name: request.event_name,
 			},
 		);
 		callbacks.on_before_connect = wrap_void_callback(
@@ -374,6 +428,7 @@ impl CallbackBindings {
 			|request: OnBeforeConnectRequest| BeforeConnectPayload {
 				ctx: request.ctx,
 				params: request.params,
+				request: request.request,
 			},
 		);
 		callbacks.on_connect = wrap_void_callback(
@@ -382,16 +437,18 @@ impl CallbackBindings {
 			|request: OnConnectRequest| ConnectionPayload {
 				ctx: request.ctx,
 				conn: request.conn,
+				request: request.request,
 			},
 		);
-		callbacks.on_disconnect = wrap_void_callback(
-			"onDisconnect",
-			&self.on_disconnect,
-			|request: OnDisconnectRequest| ConnectionPayload {
-				ctx: request.ctx,
-				conn: request.conn,
-			},
-		);
+			callbacks.on_disconnect = wrap_void_callback(
+				"onDisconnect",
+				&self.on_disconnect,
+				|request: OnDisconnectRequest| ConnectionPayload {
+					ctx: request.ctx,
+					conn: request.conn,
+					request: None,
+				},
+			);
 		callbacks.actions = self
 			.actions
 			.iter()
@@ -721,7 +778,30 @@ fn build_websocket_payload(
 ) -> napi::Result<Vec<napi::JsUnknown>> {
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
+	if let Some(conn) = payload.conn {
+		object.set("conn", ConnHandle::new(conn))?;
+	}
 	object.set("ws", WebSocket::new(payload.ws))?;
+	if let Some(request) = payload.request {
+		let (method, uri, headers, body) = request.to_parts();
+		let mut request_object = env.create_object()?;
+		request_object.set("method", method)?;
+		request_object.set("uri", uri)?;
+		request_object.set("headers", headers)?;
+		request_object.set("body", Buffer::from(body))?;
+		object.set("request", request_object)?;
+	}
+	Ok(vec![object.into_unknown()])
+}
+
+fn build_before_subscribe_payload(
+	env: &Env,
+	payload: BeforeSubscribePayload,
+) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("conn", ConnHandle::new(payload.conn))?;
+	object.set("eventName", payload.event_name)?;
 	Ok(vec![object.into_unknown()])
 }
 
@@ -732,6 +812,15 @@ fn build_before_connect_payload(
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
 	object.set("params", Buffer::from(payload.params))?;
+	if let Some(request) = payload.request {
+		let (method, uri, headers, body) = request.to_parts();
+		let mut request_object = env.create_object()?;
+		request_object.set("method", method)?;
+		request_object.set("uri", uri)?;
+		request_object.set("headers", headers)?;
+		request_object.set("body", Buffer::from(body))?;
+		object.set("request", request_object)?;
+	}
 	Ok(vec![object.into_unknown()])
 }
 
@@ -742,6 +831,15 @@ fn build_connection_payload(
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
 	object.set("conn", ConnHandle::new(payload.conn))?;
+	if let Some(request) = payload.request {
+		let (method, uri, headers, body) = request.to_parts();
+		let mut request_object = env.create_object()?;
+		request_object.set("method", method)?;
+		request_object.set("uri", uri)?;
+		request_object.set("headers", headers)?;
+		request_object.set("body", Buffer::from(body))?;
+		object.set("request", request_object)?;
+	}
 	Ok(vec![object.into_unknown()])
 }
 
@@ -793,7 +891,8 @@ fn leak_str(value: String) -> &'static str {
 }
 
 fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
-	let payload = reason.strip_prefix(BRIDGE_RIVET_ERROR_PREFIX)?;
+	let prefix_index = reason.find(BRIDGE_RIVET_ERROR_PREFIX)?;
+	let payload = &reason[prefix_index + BRIDGE_RIVET_ERROR_PREFIX.len()..];
 	let payload: BridgeRivetErrorPayload = serde_json::from_str(payload).ok()?;
 	let schema = Box::leak(Box::new(RivetErrorSchema {
 		group: leak_str(payload.group),
@@ -806,10 +905,14 @@ fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 		.metadata
 		.as_ref()
 		.and_then(|metadata| serde_json::value::to_raw_value(metadata).ok());
-	Some(anyhow::Error::new(rivet_error::RivetError {
+	let error = anyhow::Error::new(rivet_error::RivetError {
 		schema,
 		meta,
 		message: Some(payload.message),
+	});
+	Some(error.context(BridgeRivetErrorContext {
+		public_: payload.public_,
+		status_code: payload.status_code,
 	}))
 }
 
@@ -856,6 +959,8 @@ impl From<JsActorConfig> for FlatActorConfig {
 			connection_liveness_interval_ms: value.connection_liveness_interval_ms,
 			max_queue_size: value.max_queue_size,
 			max_queue_message_size: value.max_queue_message_size,
+			max_incoming_message_size: value.max_incoming_message_size,
+			max_outgoing_message_size: value.max_outgoing_message_size,
 			preload_max_workflow_bytes: value.preload_max_workflow_bytes,
 			preload_max_connections_bytes: value.preload_max_connections_bytes,
 		}

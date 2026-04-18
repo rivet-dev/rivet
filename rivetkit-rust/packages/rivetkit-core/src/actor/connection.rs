@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::actor::callbacks::{
 	ActorInstanceCallbacks, OnBeforeConnectRequest, OnConnectRequest,
-	OnDisconnectRequest,
+	OnDisconnectRequest, Request,
 };
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
@@ -246,6 +246,29 @@ impl ConnHandle {
 			.expect("connection hibernation lock poisoned") = hibernation;
 	}
 
+	pub(crate) fn hibernation(&self) -> Option<HibernatableConnectionMetadata> {
+		self
+			.0
+			.hibernation
+			.read()
+			.expect("connection hibernation lock poisoned")
+			.clone()
+	}
+
+	pub(crate) fn set_server_message_index(
+		&self,
+		message_index: u16,
+	) -> Option<HibernatableConnectionMetadata> {
+		let mut hibernation = self
+			.0
+			.hibernation
+			.write()
+			.expect("connection hibernation lock poisoned");
+		let hibernation = hibernation.as_mut()?;
+		hibernation.server_message_index = message_index;
+		Some(hibernation.clone())
+	}
+
 	pub(crate) fn persisted(&self) -> Option<PersistedConnection> {
 		let hibernation = self
 			.0
@@ -317,6 +340,10 @@ impl ConnHandle {
 			.expect("connection disconnect handler lock poisoned")
 			.clone()
 			.ok_or_else(|| anyhow!("connection disconnect handler is not configured"))
+	}
+
+	pub(crate) fn managed_disconnect_handler(&self) -> Result<DisconnectCallback> {
+		self.disconnect_handler()
 	}
 }
 
@@ -437,6 +464,7 @@ impl ConnectionManager {
 		params: Vec<u8>,
 		is_hibernatable: bool,
 		hibernation: Option<HibernatableConnectionMetadata>,
+		request: Option<Request>,
 		create_state: F,
 	) -> Result<ConnHandle>
 	where
@@ -451,6 +479,7 @@ impl ConnectionManager {
 				&callbacks,
 				ctx,
 				params.clone(),
+				request.clone(),
 			)
 			.await?;
 
@@ -473,7 +502,10 @@ impl ConnectionManager {
 		self.prepare_managed_conn(ctx, &conn);
 		self.insert_existing(conn.clone());
 
-		if let Err(error) = self.call_on_connect(&config, &callbacks, ctx, &conn).await {
+		if let Err(error) = self
+			.call_on_connect(&config, &callbacks, ctx, &conn, request)
+			.await
+		{
 			self.remove_existing(conn.id());
 			return Err(error);
 		}
@@ -535,6 +567,33 @@ impl ConnectionManager {
 		Ok(restored)
 	}
 
+	pub(crate) fn reconnect_hibernatable(
+		&self,
+		ctx: &ActorContext,
+		gateway_id: &[u8],
+		request_id: &[u8],
+	) -> Result<ConnHandle> {
+		let Some(conn) = self
+			.list()
+			.into_iter()
+			.find(|conn| match conn.hibernation() {
+				Some(hibernation) => {
+					hibernation.gateway_id == gateway_id
+						&& hibernation.request_id == request_id
+				}
+				None => false,
+			})
+		else {
+			return Err(anyhow!(
+				"cannot find hibernatable connection for restored websocket"
+			));
+		};
+
+		ctx.record_connections_updated();
+		ctx.reset_sleep_timer();
+		Ok(conn)
+	}
+
 	fn prepare_managed_conn(&self, ctx: &ActorContext, conn: &ConnHandle) {
 		let manager = Arc::downgrade(&self.0);
 		let ctx = ctx.downgrade();
@@ -582,6 +641,7 @@ impl ConnectionManager {
 		callbacks: &Arc<ActorInstanceCallbacks>,
 		ctx: &ActorContext,
 		params: Vec<u8>,
+		request: Option<Request>,
 	) -> Result<()> {
 		let Some(callback) = &callbacks.on_before_connect else {
 			return Ok(());
@@ -592,6 +652,7 @@ impl ConnectionManager {
 			callback(OnBeforeConnectRequest {
 				ctx: ctx.clone(),
 				params,
+				request,
 			}),
 		)
 		.await
@@ -611,6 +672,7 @@ impl ConnectionManager {
 		callbacks: &Arc<ActorInstanceCallbacks>,
 		ctx: &ActorContext,
 		conn: &ConnHandle,
+		request: Option<Request>,
 	) -> Result<()> {
 		let Some(callback) = &callbacks.on_connect else {
 			return Ok(());
@@ -621,6 +683,7 @@ impl ConnectionManager {
 			callback(OnConnectRequest {
 				ctx: ctx.clone(),
 				conn: conn.clone(),
+				request,
 			}),
 		)
 		.await

@@ -62,5 +62,27 @@ export function runConnErrorSerializationTests(
 			// Clean up
 			await conn.dispose();
 		});
+
+		test("action errors preserve metadata through WebSocket serialization", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const conn = client.errorHandlingActor.getOrCreate().connect();
+
+			let caughtError: any;
+			try {
+				await conn.throwDetailedError();
+			} catch (err) {
+				caughtError = err;
+			}
+
+			expect(caughtError).toBeDefined();
+			expect(caughtError.message).toBe("Detailed error message");
+			expect(caughtError.code).toBe("detailed_error");
+			expect(caughtError.metadata).toBeDefined();
+			expect(caughtError.metadata.reason).toBe("test");
+			expect(caughtError.metadata.timestamp).toBeDefined();
+
+			await conn.dispose();
+		});
 	});
 }

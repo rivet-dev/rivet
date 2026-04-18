@@ -70,6 +70,81 @@ function errorMessage(error: unknown, fallback = String(error)): string {
 	return fallback;
 }
 
+function normalizeDecodedBridgePayload(
+	payload: RivetErrorLike,
+): RivetErrorLike {
+	if (payload.public !== undefined || payload.statusCode !== undefined) {
+		return payload;
+	}
+
+	if (payload.group === "auth" && payload.code === "forbidden") {
+		return {
+			...payload,
+			public: true,
+			statusCode: 403,
+		};
+	}
+
+	if (payload.group === "actor" && payload.code === "action_not_found") {
+		return {
+			...payload,
+			public: true,
+			statusCode: 404,
+		};
+	}
+
+	if (payload.group === "actor" && payload.code === "action_timed_out") {
+		return {
+			...payload,
+			public: true,
+			statusCode: 408,
+		};
+	}
+
+	if (payload.group === "actor" && payload.code === "aborted") {
+		return {
+			...payload,
+			public: true,
+			statusCode: 400,
+		};
+	}
+
+	if (
+		payload.group === "message" &&
+		(payload.code === "incoming_too_long" ||
+			payload.code === "outgoing_too_long")
+	) {
+		return {
+			...payload,
+			public: true,
+			statusCode: 400,
+		};
+	}
+
+	if (
+		payload.group === "queue" &&
+		[
+			"full",
+			"message_too_large",
+			"message_invalid",
+			"invalid_payload",
+			"invalid_completion_payload",
+			"already_completed",
+			"previous_message_not_completed",
+			"complete_not_configured",
+			"timed_out",
+		].includes(payload.code)
+	) {
+		return {
+			...payload,
+			public: true,
+			statusCode: 400,
+		};
+	}
+
+	return payload;
+}
+
 export function isRivetErrorLike(
 	error: unknown,
 ): error is RivetError | DeconstructedError | RivetErrorLike {
@@ -190,6 +265,8 @@ export function encodeBridgeRivetError(error: RivetErrorLike): string {
 		code: error.code,
 		message: error.message,
 		metadata: error.metadata,
+		public: error.public,
+		statusCode: error.statusCode,
 	})}`;
 }
 
@@ -201,15 +278,19 @@ export function decodeBridgeRivetError(
 	}
 
 	try {
-		const payload = JSON.parse(
+		const payload = normalizeDecodedBridgePayload(
+			JSON.parse(
 			value.slice(BRIDGE_RIVET_ERROR_PREFIX.length),
-		) as RivetErrorLike;
+			) as RivetErrorLike,
+		);
 		if (!isRivetErrorLike(payload)) {
 			return undefined;
 		}
 
 		return new RivetError(payload.group, payload.code, payload.message, {
 			metadata: payload.metadata,
+			public: payload.public,
+			statusCode: payload.statusCode,
 		});
 	} catch {
 		return undefined;

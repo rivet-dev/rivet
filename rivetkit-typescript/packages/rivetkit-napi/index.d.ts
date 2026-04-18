@@ -8,6 +8,12 @@ export interface JsActorKeySegment {
   stringValue?: string
   numberValue?: number
 }
+export interface JsHttpRequest {
+  method: string
+  uri: string
+  headers?: Record<string, string>
+  body?: Buffer
+}
 export interface JsHttpResponse {
   status?: number
   headers?: Record<string, string>
@@ -34,6 +40,8 @@ export interface JsActorConfig {
   connectionLivenessIntervalMs?: number
   maxQueueSize?: number
   maxQueueMessageSize?: number
+  maxIncomingMessageSize?: number
+  maxOutgoingMessageSize?: number
   preloadMaxWorkflowBytes?: number
   preloadMaxConnectionsBytes?: number
 }
@@ -99,6 +107,7 @@ export interface JsServeConfig {
   namespace: string
   poolName: string
   engineBinaryPath?: string
+  handleInspectorHttpInRuntime?: boolean
 }
 /** Configuration for starting the native envoy client. */
 export interface JsEnvoyConfig {
@@ -145,11 +154,13 @@ export declare class ActorContext {
   state(): Buffer
   vars(): Buffer
   setState(state: Buffer): void
+  setInOnStateChangeCallback(inCallback: boolean): void
   setVars(vars: Buffer): void
   kv(): Kv
   sql(): SqliteDb
   schedule(): Schedule
   queue(): Queue
+  setAlarm(timestampMs?: number | undefined | null): void
   saveState(immediate: boolean): Promise<void>
   actorId(): string
   name(): string
@@ -157,11 +168,18 @@ export declare class ActorContext {
   region(): string
   sleep(): void
   destroy(): void
+  destroyRequested(): boolean
+  waitForDestroyCompletion(): Promise<void>
   setPreventSleep(preventSleep: boolean): void
   preventSleep(): boolean
   aborted(): boolean
+  runHandlerActive(): boolean
+  restartRunHandler(): void
+  beginWebsocketCallback(): void
+  endWebsocketCallback(): void
   abortSignal(): CancellationToken
   conns(): Array<ConnHandle>
+  connectConn(params: Buffer, request?: JsHttpRequest | undefined | null): Promise<ConnHandle>
   broadcast(name: string, args: Buffer): void
   waitUntil(promise: Promise<any>): Promise<void>
 }
@@ -230,9 +248,10 @@ export declare class Kv {
 }
 export declare class Queue {
   send(name: string, body: Buffer): Promise<QueueMessage>
-  next(options?: JsQueueNextOptions | undefined | null): Promise<QueueMessage | null>
-  nextBatch(options?: JsQueueNextBatchOptions | undefined | null): Promise<Array<QueueMessage>>
+  next(options?: JsQueueNextOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<QueueMessage | null>
+  nextBatch(options?: JsQueueNextBatchOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<Array<QueueMessage>>
   waitForNames(names: Array<string>, options?: JsQueueWaitOptions | undefined | null): Promise<QueueMessage>
+  waitForNamesAvailable(names: Array<string>, options?: JsQueueWaitOptions | undefined | null): Promise<void>
   enqueueAndWait(name: string, body: Buffer, options?: JsQueueEnqueueAndWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<Buffer | null>
   tryNext(options?: JsQueueTryNextOptions | undefined | null): QueueMessage | null
   tryNextBatch(options?: JsQueueTryNextBatchOptions | undefined | null): Array<QueueMessage>
@@ -263,4 +282,5 @@ export declare class SqliteDb {
 export declare class WebSocket {
   send(data: Buffer, binary: boolean): void
   close(code?: number | undefined | null, reason?: string | undefined | null): void
+  setEventCallback(callback: (...args: any[]) => any): void
 }

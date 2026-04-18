@@ -102,7 +102,6 @@ struct QueueInner {
 	initialize: OnceCell<()>,
 	metadata: Mutex<QueueMetadata>,
 	receive_lock: Mutex<()>,
-	pending_completable_message_ids: Mutex<BTreeSet<u64>>,
 	completion_waiters: Mutex<HashMap<u64, oneshot::Sender<Option<Vec<u8>>>>>,
 	notify: Notify,
 	active_queue_wait_count: AtomicU32,
@@ -210,14 +209,6 @@ struct QueueMessageTooLarge {
 )]
 struct QueueAlreadyCompleted;
 
-#[derive(RivetError)]
-#[error(
-	"queue",
-	"previous_message_not_completed",
-	"Previous completable queue message is not completed. Call `message.complete(...)` before receiving the next message."
-)]
-struct QueuePreviousMessageNotCompleted;
-
 #[derive(RivetError, Serialize, Deserialize)]
 #[error(
 	"queue",
@@ -258,7 +249,6 @@ impl Queue {
 			initialize: OnceCell::new(),
 			metadata: Mutex::new(QueueMetadata::default()),
 			receive_lock: Mutex::new(()),
-			pending_completable_message_ids: Mutex::new(BTreeSet::new()),
 			completion_waiters: Mutex::new(HashMap::new()),
 			notify: Notify::new(),
 			active_queue_wait_count: AtomicU32::new(0),
@@ -474,6 +464,60 @@ impl Queue {
 		}
 	}
 
+	pub async fn wait_for_names_available(
+		&self,
+		names: Vec<String>,
+		opts: QueueWaitOpts,
+	) -> Result<()> {
+		self.ensure_initialized().await?;
+
+		let deadline = opts.timeout.map(|timeout| Instant::now() + timeout);
+		let names = normalize_names(Some(names));
+
+		loop {
+			let messages = self.list_messages().await?;
+			let has_match = if let Some(names) = names.as_ref() {
+				messages.into_iter().any(|message| names.contains(&message.name))
+			} else {
+				!messages.is_empty()
+			};
+			if has_match {
+				return Ok(());
+			}
+
+			let remaining_timeout = deadline.map(|deadline| {
+				deadline.saturating_duration_since(Instant::now())
+			});
+			if let Some(timeout) = remaining_timeout {
+				if timeout.is_zero() {
+					return Err(QueueWaitTimedOut {
+						timeout_ms: opts.timeout.map(duration_ms).unwrap_or(0),
+					}
+					.build()
+					.into());
+				}
+			}
+
+			let wait_guard = ActiveQueueWaitGuard::new(self);
+			let result = self
+				.wait_for_message(remaining_timeout, opts.signal.as_ref())
+				.await;
+			drop(wait_guard);
+
+			match result {
+				WaitOutcome::Notified => continue,
+				WaitOutcome::TimedOut => {
+					return Err(QueueWaitTimedOut {
+						timeout_ms: opts.timeout.map(duration_ms).unwrap_or(0),
+					}
+					.build()
+					.into());
+				}
+				WaitOutcome::Aborted => return Err(QueueActorAborted.build().into()),
+			}
+		}
+	}
+
 	pub fn try_next(&self, opts: QueueTryNextOpts) -> Result<Option<QueueMessage>> {
 		let mut messages = self.try_next_batch(QueueTryNextBatchOpts {
 			names: opts.names,
@@ -611,16 +655,6 @@ impl Queue {
 	) -> Result<Vec<QueueMessage>> {
 		let _receive_guard = self.0.receive_lock.lock().await;
 
-		if !self
-			.0
-			.pending_completable_message_ids
-			.lock()
-			.await
-			.is_empty()
-		{
-			return Err(QueuePreviousMessageNotCompleted.build().into());
-		}
-
 		let messages = self.list_messages().await?;
 		let mut selected = Vec::new();
 		for message in messages {
@@ -642,9 +676,6 @@ impl Queue {
 
 		if completable {
 			let queue_size = self.0.metadata.lock().await.size;
-			let mut pending = self.0.pending_completable_message_ids.lock().await;
-			pending.extend(selected.iter().map(|message| message.id));
-			drop(pending);
 			self
 				.0
 				.metrics
@@ -773,12 +804,6 @@ impl Queue {
 		response: Option<Vec<u8>>,
 	) -> Result<()> {
 		self.remove_messages(vec![message_id]).await?;
-		self
-			.0
-			.pending_completable_message_ids
-			.lock()
-			.await
-			.remove(&message_id);
 		if let Some(waiter) = self.remove_completion_waiter(message_id).await {
 			let _ = waiter.send(response);
 		}

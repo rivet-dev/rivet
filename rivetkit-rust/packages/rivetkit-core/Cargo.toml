@@ -21,6 +21,7 @@ scc.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_bare.workspace = true
+serde_bytes.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true

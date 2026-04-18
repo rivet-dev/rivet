@@ -1,0 +1,5 @@
+{
+  "code": "previous_message_not_completed",
+  "group": "queue",
+  "message": "Previous completable queue message is not completed. Call `message.complete(...)` before receiving the next message."
+}

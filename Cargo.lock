@@ -5222,6 +5222,8 @@ dependencies = [
  "scc",
  "serde",
  "serde_bare",
+ "serde_bytes",
+ "serde_json",
  "tokio",
  "tokio-util",
  "tracing",
@@ -5770,6 +5772,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51c55386eed0f1ae957b091dc2ca8122f287b60c79c774cbe3d5f2b69fded660"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
+dependencies = [
+ "serde",
+ "serde_core",
 ]
 
 [[package]]

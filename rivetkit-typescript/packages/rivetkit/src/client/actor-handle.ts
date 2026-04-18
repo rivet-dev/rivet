@@ -29,6 +29,8 @@ import {
 	type ActorResolutionState,
 	checkForSchedulingError,
 	getGatewayTarget,
+	isDynamicActorQuery,
+	isStaleResolvedActorError,
 } from "./actor-query";
 import { type ClientRaw, CREATE_ACTOR_CONN_PROXY } from "./client";
 import { ActorError, isSchedulingError } from "./errors";
@@ -58,6 +60,8 @@ export class ActorHandleRaw {
 	#params: unknown;
 	#getParams?: () => Promise<unknown>;
 	#queueSender: ReturnType<typeof createQueueSender>;
+	#resolvedActorId?: string;
+	#resolvingActorId?: Promise<string>;
 
 	/**
 	 * Do not call this directly.
@@ -153,89 +157,165 @@ export class ActorHandleRaw {
 				`Invalid action call: expected an options object { name, args }, got ${typeof opts}. Use handle.actionName(...args) for the shorthand API.`,
 			);
 		}
-		const target = getGatewayTarget(this.#actorResolutionState);
-		const actorId = "directId" in target ? target.directId : undefined;
+		return (await this.#sendActionNow(opts)) as Response;
+	}
+
+	async #sendActionNow(opts: {
+		name: string;
+		args: unknown[];
+		signal?: AbortSignal;
+	}): Promise<unknown> {
+		const maxAttempts = isDynamicActorQuery(this.#actorResolutionState) ? 2 : 1;
+
+		for (let attempt = 0; attempt < maxAttempts; attempt++) {
+			let actorId: string | undefined;
+			try {
+				const target = await this.#resolveActionTarget();
+				actorId = "directId" in target ? target.directId : undefined;
+
+				logger().debug(
+					actorId
+						? { msg: "using direct actor gateway target", actorId }
+						: {
+								msg: "using query gateway target for action",
+								query: this.#actorResolutionState,
+							},
+				);
+
+				logger().debug({
+					msg: "handling action",
+					name: opts.name,
+					encoding: this.#encoding,
+				});
+				return await sendHttpRequest<
+					protocol.HttpActionRequest,
+					protocol.HttpActionResponse,
+					HttpActionRequestJson,
+					HttpActionResponseJson,
+					unknown[],
+					Response
+				>({
+					url: `http://actor/action/${encodeURIComponent(opts.name)}`,
+					method: "POST",
+					headers: {
+						[HEADER_ENCODING]: this.#encoding,
+						...(this.#params !== undefined
+							? {
+									[HEADER_CONN_PARAMS]: JSON.stringify(
+										this.#params,
+									),
+								}
+							: {}),
+					},
+					body: opts.args,
+					encoding: this.#encoding,
+					customFetch: this.#driver.sendRequest.bind(
+						this.#driver,
+						target,
+					),
+					signal: opts?.signal,
+					requestVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
+					requestVersionedDataHandler: HTTP_ACTION_REQUEST_VERSIONED,
+					responseVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
+					responseVersionedDataHandler: HTTP_ACTION_RESPONSE_VERSIONED,
+					requestZodSchema: HttpActionRequestSchema,
+					responseZodSchema: HttpActionResponseSchema,
+					requestToJson: (args): HttpActionRequestJson => ({
+						args,
+					}),
+					requestToBare: (args): protocol.HttpActionRequest => ({
+						args: bufferToArrayBuffer(cbor.encode(args)),
+					}),
+					responseFromJson: (json): Response => json.output as Response,
+					responseFromBare: (bare): Response =>
+						cbor.decode(new Uint8Array(bare.output)) as Response,
+				});
+			} catch (err) {
+				const { group, code, message, metadata } = deconstructError(
+					err,
+					logger(),
+					{},
+					true,
+				);
+
+				if (actorId && isSchedulingError(group, code)) {
+					const schedulingError = await checkForSchedulingError(
+						group,
+						code,
+						actorId,
+						this.#actorResolutionState,
+						this.#driver,
+					);
+					if (schedulingError) {
+						throw schedulingError;
+					}
+				}
+
+				if (
+					group === "actor" &&
+					code === "destroyed_while_waiting_for_ready" &&
+					"getForId" in this.#actorResolutionState
+				) {
+					throw new ActorError(
+						"actor",
+						"not_found",
+						"The actor does not exist or was destroyed.",
+						metadata,
+					);
+				}
+
+				const invalidated = this.#invalidateResolvedActorId(group, code);
+				if (invalidated && attempt < maxAttempts - 1) {
+					continue;
+				}
+
+				throw new ActorError(group, code, message, metadata);
+			}
+		}
+
+		throw new Error("unreachable action retry state");
+	}
+
+	#clearResolvedActorId(): void {
+		this.#resolvedActorId = undefined;
+		this.#resolvingActorId = undefined;
+	}
+
+	#invalidateResolvedActorId(group: string, code: string): boolean {
+		if (
+			!isDynamicActorQuery(this.#actorResolutionState) ||
+			!isStaleResolvedActorError(group, code)
+		) {
+			return false;
+		}
+
+		this.#clearResolvedActorId();
+		return true;
+	}
+
+	async #resolveActionTarget() {
+		if ("getForId" in this.#actorResolutionState) {
+			return getGatewayTarget(this.#actorResolutionState);
+		}
+
+		if (this.#resolvedActorId) {
+			return { directId: this.#resolvedActorId } as const;
+		}
+
+		if (!this.#resolvingActorId) {
+			this.#resolvingActorId = resolveGatewayTarget(
+				this.#driver,
+				this.#actorResolutionState,
+			).then((actorId) => {
+				this.#resolvedActorId = actorId;
+				return actorId;
+			});
+		}
 
 		try {
-			logger().debug(
-				actorId
-					? { msg: "using direct actor gateway target", actorId }
-					: {
-							msg: "using query gateway target for action",
-							query: this.#actorResolutionState,
-						},
-			);
-
-			logger().debug({
-				msg: "handling action",
-				name: opts.name,
-				encoding: this.#encoding,
-			});
-			return await sendHttpRequest<
-				protocol.HttpActionRequest,
-				protocol.HttpActionResponse,
-				HttpActionRequestJson,
-				HttpActionResponseJson,
-				unknown[],
-				Response
-			>({
-				url: `http://actor/action/${encodeURIComponent(opts.name)}`,
-				method: "POST",
-				headers: {
-					[HEADER_ENCODING]: this.#encoding,
-					...(this.#params !== undefined
-						? {
-								[HEADER_CONN_PARAMS]: JSON.stringify(
-									this.#params,
-								),
-							}
-						: {}),
-				},
-				body: opts.args,
-				encoding: this.#encoding,
-				customFetch: this.#driver.sendRequest.bind(
-					this.#driver,
-					target,
-				),
-				signal: opts?.signal,
-				requestVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
-				requestVersionedDataHandler: HTTP_ACTION_REQUEST_VERSIONED,
-				responseVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
-				responseVersionedDataHandler: HTTP_ACTION_RESPONSE_VERSIONED,
-				requestZodSchema: HttpActionRequestSchema,
-				responseZodSchema: HttpActionResponseSchema,
-				requestToJson: (args): HttpActionRequestJson => ({
-					args,
-				}),
-				requestToBare: (args): protocol.HttpActionRequest => ({
-					args: bufferToArrayBuffer(cbor.encode(args)),
-				}),
-				responseFromJson: (json): Response => json.output as Response,
-				responseFromBare: (bare): Response =>
-					cbor.decode(new Uint8Array(bare.output)) as Response,
-			});
-		} catch (err) {
-			const { group, code, message, metadata } = deconstructError(
-				err,
-				logger(),
-				{},
-				true,
-			);
-
-			if (actorId && isSchedulingError(group, code)) {
-				const schedulingError = await checkForSchedulingError(
-					group,
-					code,
-					actorId,
-					this.#actorResolutionState,
-					this.#driver,
-				);
-				if (schedulingError) {
-					throw schedulingError;
-				}
-			}
-
-			throw new ActorError(group, code, message, metadata);
+			return { directId: await this.#resolvingActorId } as const;
+		} finally {
+			this.#resolvingActorId = undefined;
 		}
 	}
 
@@ -245,17 +325,20 @@ export class ActorHandleRaw {
 	 * @template AD The actor class that this connection is for.
 	 * @returns {ActorConn<AD>} A connection to the actor.
 	 */
-	connect(): ActorConn<AnyActorDefinition> {
+	connect(params?: unknown): ActorConn<AnyActorDefinition> {
 		logger().debug({
 			msg: "establishing connection from handle",
 			query: this.#actorResolutionState,
 		});
 
+		const connParams = params === undefined ? this.#params : params;
+		const getParams = params === undefined ? this.#getParams : undefined;
+
 		const conn = new ActorConnRaw(
 			this.#client,
 			this.#driver,
-			this.#params,
-			this.#getParams,
+			connParams,
+			getParams,
 			this.#encoding,
 			this.#actorResolutionState,
 		);
@@ -308,10 +391,12 @@ export class ActorHandleRaw {
 			return this.#actorResolutionState.getForId.actorId;
 		}
 
-		return await resolveGatewayTarget(
-			this.#driver,
-			this.#actorResolutionState,
-		);
+		const target = await this.#resolveActionTarget();
+		if ("directId" in target) {
+			return target.directId;
+		}
+
+		throw new Error("dynamic actor resolution did not produce a direct actor id");
 	}
 
 	/**
@@ -362,7 +447,7 @@ export type ActorHandle<AD extends AnyActorDefinition> = Omit<
 	"connect" | "send"
 > & {
 	// Add typed version of ActorConn (instead of using AnyActorDefinition)
-	connect(): ActorConn<AD>;
+	connect(params?: unknown): ActorConn<AD>;
 	// Resolve method returns the actor ID
 	resolve(): Promise<string>;
 } & ActorDefinitionQueueSend<AD> &

@@ -1,11 +1,13 @@
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Result, anyhow};
 use futures::future::BoxFuture;
 use rivet_envoy_client::handle::EnvoyHandle;
 use tokio::runtime::Handle;
+use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 use crate::actor::action::{ActionDispatchError, ActionInvoker};
@@ -19,6 +21,7 @@ use crate::types::SaveStateOpts;
 type InternalKeepAwakeCallback = Arc<
 	dyn Fn(BoxFuture<'static, Result<()>>) -> BoxFuture<'static, Result<()>> + Send + Sync,
 >;
+type LocalAlarmCallback = Arc<dyn Fn() -> BoxFuture<'static, ()> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct Schedule(Arc<ScheduleInner>);
@@ -31,6 +34,10 @@ struct ScheduleInner {
 	envoy_handle: Mutex<Option<EnvoyHandle>>,
 	#[allow(dead_code)]
 	internal_keep_awake: Mutex<Option<InternalKeepAwakeCallback>>,
+	local_alarm_callback: Mutex<Option<LocalAlarmCallback>>,
+	local_alarm_task: Mutex<Option<JoinHandle<()>>>,
+	local_alarm_epoch: AtomicU64,
+	alarm_dispatch_enabled: AtomicBool,
 }
 
 impl Schedule {
@@ -46,6 +53,10 @@ impl Schedule {
 			config,
 			envoy_handle: Mutex::new(None),
 			internal_keep_awake: Mutex::new(None),
+			local_alarm_callback: Mutex::new(None),
+			local_alarm_task: Mutex::new(None),
+			local_alarm_epoch: AtomicU64::new(0),
+			alarm_dispatch_enabled: AtomicBool::new(true),
 		}))
 	}
 
@@ -127,6 +138,18 @@ impl Schedule {
 			.expect("schedule keep-awake lock poisoned") = callback;
 	}
 
+	pub(crate) fn set_local_alarm_callback(
+		&self,
+		callback: Option<LocalAlarmCallback>,
+	) {
+		*self
+			.0
+			.local_alarm_callback
+			.lock()
+			.expect("schedule local alarm callback lock poisoned") = callback;
+		self.sync_alarm_logged();
+	}
+
 	#[allow(dead_code)]
 	pub(crate) fn cancel(&self, event_id: &str) -> bool {
 		let removed = self.0.state.update_scheduled_events(|events| {
@@ -160,6 +183,16 @@ impl Schedule {
 	}
 
 	pub(crate) fn cancel_local_alarm_timeouts(&self) {
+		self.0.local_alarm_epoch.fetch_add(1, Ordering::SeqCst);
+		if let Some(handle) = self
+			.0
+			.local_alarm_task
+			.lock()
+			.expect("schedule local alarm task lock poisoned")
+			.take()
+		{
+			handle.abort();
+		}
 	}
 
 	#[allow(dead_code)]
@@ -168,6 +201,13 @@ impl Schedule {
 		ctx: &ActorContext,
 		invoker: &ActionInvoker,
 	) -> usize {
+		if !self.0.alarm_dispatch_enabled.load(Ordering::SeqCst) {
+			return 0;
+		}
+		if ctx.aborted() || !ctx.ready() || !ctx.started() {
+			return 0;
+		}
+
 		let now_ms = now_timestamp_ms();
 		let due_events: Vec<_> = self
 			.all_events()
@@ -291,6 +331,7 @@ impl Schedule {
 
 	fn sync_alarm(&self) -> Result<()> {
 		let next_alarm = self.next_event().map(|event| event.timestamp_ms);
+		self.arm_local_alarm(next_alarm);
 		let envoy_handle = self
 			.0
 			.envoy_handle
@@ -316,11 +357,103 @@ impl Schedule {
 		Ok(())
 	}
 
+	fn sync_future_alarm(&self) -> Result<()> {
+		let now_ms = now_timestamp_ms();
+		let next_alarm = self
+			.next_event()
+			.and_then(|event| (event.timestamp_ms > now_ms).then_some(event.timestamp_ms));
+		self.arm_local_alarm(next_alarm);
+		let envoy_handle = self
+			.0
+			.envoy_handle
+			.lock()
+			.expect("schedule envoy handle lock poisoned")
+			.clone();
+
+		let Some(envoy_handle) = envoy_handle else {
+			tracing::warn!(
+				actor_id = self.0.actor_id,
+				sleep_timeout_ms = self.0.config.sleep_timeout.as_millis() as u64,
+				"future schedule alarm sync skipped because envoy handle is not configured"
+			);
+			return Ok(());
+		};
+
+		let generation = *self
+			.0
+			.generation
+			.lock()
+			.expect("schedule generation lock poisoned");
+		envoy_handle.set_alarm(self.0.actor_id.clone(), next_alarm, generation);
+		Ok(())
+	}
+
+	fn arm_local_alarm(&self, next_alarm: Option<i64>) {
+		self.cancel_local_alarm_timeouts();
+
+		let Some(next_alarm) = next_alarm else {
+			return;
+		};
+
+		let has_callback = self
+			.0
+			.local_alarm_callback
+			.lock()
+			.expect("schedule local alarm callback lock poisoned")
+			.is_some();
+		if !has_callback {
+			return;
+		}
+
+		let Ok(runtime) = Handle::try_current() else {
+			return;
+		};
+
+		let delay_ms = next_alarm.saturating_sub(now_timestamp_ms()).max(0) as u64;
+		let local_alarm_epoch = self.0.local_alarm_epoch.load(Ordering::SeqCst);
+		let schedule = self.clone();
+		let handle = runtime.spawn(async move {
+			tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+			if schedule.0.local_alarm_epoch.load(Ordering::SeqCst) != local_alarm_epoch {
+				return;
+			}
+			let Some(callback) = schedule
+				.0
+				.local_alarm_callback
+				.lock()
+				.expect("schedule local alarm callback lock poisoned")
+				.clone()
+			else {
+				return;
+			};
+			callback().await;
+		});
+
+		*self
+			.0
+			.local_alarm_task
+			.lock()
+			.expect("schedule local alarm task lock poisoned") = Some(handle);
+	}
+
 	#[allow(dead_code)]
 	pub(crate) fn sync_alarm_logged(&self) {
 		if let Err(error) = self.sync_alarm() {
 			tracing::error!(?error, "failed to sync scheduled actor alarm");
 		}
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn sync_future_alarm_logged(&self) {
+		if let Err(error) = self.sync_future_alarm() {
+			tracing::error!(?error, "failed to sync future scheduled actor alarm");
+		}
+	}
+
+	pub(crate) fn suspend_alarm_dispatch(&self) {
+		self.0
+			.alarm_dispatch_enabled
+			.store(false, Ordering::SeqCst);
 	}
 }
 

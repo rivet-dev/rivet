@@ -1,8 +1,9 @@
 use std::collections::HashMap;
-use std::io::Cursor;
 use std::env;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -23,15 +24,22 @@ use rivet_envoy_client::protocol;
 use rivet_error::RivetError;
 use scc::HashMap as SccHashMap;
 use serde::{Deserialize, Serialize};
+use serde_bytes::ByteBuf;
 use serde_json::{Value as JsonValue, json};
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::{Child, Command};
+use tokio::sync::Notify;
 use tokio::task::JoinHandle;
+use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::actor::action::{ActionDispatchError, ActionInvoker};
-use crate::actor::callbacks::{ActionRequest, OnRequestRequest, OnWebSocketRequest, Request, Response};
+use crate::actor::callbacks::{
+	ActionRequest, OnBeforeSubscribeRequest, OnRequestRequest, OnWebSocketRequest,
+	Request, Response,
+};
 use crate::actor::callbacks::{GetWorkflowHistoryRequest, ReplayWorkflowRequest};
+use crate::actor::connection::{ConnHandle, HibernatableConnectionMetadata};
 use crate::actor::config::CanHibernateWebSocket;
 use crate::actor::context::ActorContext;
 use crate::actor::factory::ActorFactory;
@@ -41,7 +49,7 @@ use crate::inspector::protocol::{self as inspector_protocol, ServerMessage as In
 use crate::inspector::{Inspector, InspectorSignal, InspectorSubscription};
 use crate::kv::Kv;
 use crate::sqlite::SqliteDb;
-use crate::types::{ActorKey, ActorKeySegment, SaveStateOpts};
+use crate::types::{ActorKey, ActorKeySegment, SaveStateOpts, WsMessage};
 use crate::websocket::WebSocket;
 
 #[derive(Debug, Default)]
@@ -59,11 +67,21 @@ struct ActiveActorInstance {
 	inspector: Inspector,
 }
 
+#[derive(Clone)]
+struct PendingStop {
+	reason: protocol::StopActorReason,
+	stop_handle: ActorStopHandle,
+}
+
 struct RegistryDispatcher {
 	factories: HashMap<String, Arc<ActorFactory>>,
 	active_instances: SccHashMap<String, ActiveActorInstance>,
+	stopping_instances: SccHashMap<String, ActiveActorInstance>,
+	starting_instances: SccHashMap<String, Arc<Notify>>,
+	pending_stops: SccHashMap<String, PendingStop>,
 	region: String,
 	inspector_token: Option<String>,
+	handle_inspector_http_in_runtime: bool,
 }
 
 struct RegistryCallbacks {
@@ -88,6 +106,7 @@ struct ServeSettings {
 	namespace: String,
 	pool_name: String,
 	engine_binary_path: Option<PathBuf>,
+	handle_inspector_http_in_runtime: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -98,6 +117,7 @@ pub struct ServeConfig {
 	pub namespace: String,
 	pub pool_name: String,
 	pub engine_binary_path: Option<PathBuf>,
+	pub handle_inspector_http_in_runtime: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -182,6 +202,138 @@ struct InspectorSummaryJson {
 	workflow_history: Option<JsonValue>,
 }
 
+const ACTOR_CONNECT_CURRENT_VERSION: u16 = 3;
+const ACTOR_CONNECT_SUPPORTED_VERSIONS: &[u16] = &[1, 2, 3];
+const WS_PROTOCOL_ENCODING: &str = "rivet_encoding.";
+const WS_PROTOCOL_CONN_PARAMS: &str = "rivet_conn_params.";
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ActorConnectInit {
+	#[serde(rename = "actorId")]
+	actor_id: String,
+	#[serde(rename = "connectionId")]
+	connection_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ActorConnectError {
+	group: String,
+	code: String,
+	message: String,
+	metadata: Option<ByteBuf>,
+	#[serde(rename = "actionId")]
+	action_id: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ActorConnectActionResponse {
+	id: u64,
+	output: ByteBuf,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ActorConnectEvent {
+	name: String,
+	args: ByteBuf,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ActorConnectEncoding {
+	Json,
+	Cbor,
+	Bare,
+}
+
+#[derive(Debug)]
+enum ActorConnectToClient {
+	Init(ActorConnectInit),
+	Error(ActorConnectError),
+	ActionResponse(ActorConnectActionResponse),
+	Event(ActorConnectEvent),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ActorConnectActionRequest {
+	id: u64,
+	name: String,
+	args: ByteBuf,
+}
+
+#[derive(Debug)]
+enum ActorConnectSendError {
+	OutgoingTooLong,
+	Encode(anyhow::Error),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ActorConnectSubscriptionRequest {
+	#[serde(rename = "eventName")]
+	event_name: String,
+	subscribe: bool,
+}
+
+#[derive(Debug)]
+enum ActorConnectToServer {
+	ActionRequest(ActorConnectActionRequest),
+	SubscriptionRequest(ActorConnectSubscriptionRequest),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ActorConnectErrorJson {
+	group: String,
+	code: String,
+	message: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	metadata: Option<JsonValue>,
+	#[serde(rename = "actionId", skip_serializing_if = "Option::is_none")]
+	action_id: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ActorConnectActionResponseJson {
+	id: u64,
+	output: JsonValue,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ActorConnectEventJson {
+	name: String,
+	args: JsonValue,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "tag", content = "val")]
+enum ActorConnectToClientJsonBody {
+	Init(ActorConnectInit),
+	Error(ActorConnectErrorJson),
+	ActionResponse(ActorConnectActionResponseJson),
+	Event(ActorConnectEventJson),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ActorConnectToClientJsonEnvelope {
+	body: ActorConnectToClientJsonBody,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ActorConnectActionRequestJson {
+	id: u64,
+	name: String,
+	args: JsonValue,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "tag", content = "val")]
+enum ActorConnectToServerJsonBody {
+	ActionRequest(ActorConnectActionRequestJson),
+	SubscriptionRequest(ActorConnectSubscriptionRequest),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ActorConnectToServerJsonEnvelope {
+	body: ActorConnectToServerJsonBody,
+}
+
 impl CoreRegistry {
 	pub fn new() -> Self {
 		Self::default()
@@ -200,7 +352,7 @@ impl CoreRegistry {
 	}
 
 	pub async fn serve_with_config(self, config: ServeConfig) -> Result<()> {
-		let dispatcher = self.into_dispatcher();
+		let dispatcher = self.into_dispatcher(&config);
 		let mut engine_process = match config.engine_binary_path.as_ref() {
 			Some(binary_path) => {
 				Some(EngineProcessManager::start(binary_path, &config.endpoint).await?)
@@ -239,27 +391,36 @@ impl CoreRegistry {
 		Ok(())
 	}
 
-	fn into_dispatcher(self) -> Arc<RegistryDispatcher> {
+	fn into_dispatcher(self, config: &ServeConfig) -> Arc<RegistryDispatcher> {
 		Arc::new(RegistryDispatcher {
 			factories: self.factories,
 			active_instances: SccHashMap::new(),
+			stopping_instances: SccHashMap::new(),
+			starting_instances: SccHashMap::new(),
+			pending_stops: SccHashMap::new(),
 			region: env::var("RIVET_REGION").unwrap_or_default(),
 			inspector_token: env::var("RIVET_INSPECTOR_TOKEN")
 				.ok()
 				.filter(|token| !token.is_empty()),
+			handle_inspector_http_in_runtime: config.handle_inspector_http_in_runtime,
 		})
 	}
 }
 
 impl RegistryDispatcher {
-	async fn start_actor(&self, request: StartActorRequest) -> Result<()> {
+	async fn start_actor(self: &Arc<Self>, request: StartActorRequest) -> Result<()> {
+		let startup_notify = Arc::new(Notify::new());
+		let _ = self
+			.starting_instances
+			.insert_async(request.actor_id.clone(), startup_notify.clone())
+			.await;
 		let factory = self
 			.factories
 			.get(&request.actor_name)
 			.cloned()
 			.ok_or_else(|| anyhow!("actor factory `{}` is not registered", request.actor_name))?;
 		let lifecycle = ActorLifecycle;
-		let outcome = lifecycle
+		let startup_result = lifecycle
 			.startup(
 				request.ctx.clone(),
 				factory.as_ref(),
@@ -271,34 +432,101 @@ impl RegistryDispatcher {
 			)
 			.await
 			.map_err(|error| error.into_source())
-			.with_context(|| format!("start actor `{}`", request.actor_id))?;
-		let inspector =
-			build_actor_inspector(request.ctx.clone(), outcome.callbacks.clone());
-		request.ctx.configure_inspector(Some(inspector.clone()));
+			.with_context(|| format!("start actor `{}`", request.actor_id));
 
-		let instance = ActiveActorInstance {
-			actor_name: request.actor_name,
-			generation: request.generation,
-			ctx: request.ctx,
-			factory,
-			callbacks: outcome.callbacks,
-			inspector,
+		let result = match startup_result {
+			Ok(outcome) => {
+				let inspector =
+					build_actor_inspector(request.ctx.clone(), outcome.callbacks.clone());
+				request.ctx.configure_inspector(Some(inspector.clone()));
+
+				let instance = ActiveActorInstance {
+					actor_name: request.actor_name,
+					generation: request.generation,
+					ctx: request.ctx,
+					factory,
+					callbacks: outcome.callbacks,
+					inspector,
+				};
+				Ok(instance)
+			}
+			Err(error) => Err(error),
 		};
-		let _ = self
-			.active_instances
-			.insert_async(request.actor_id.clone(), instance)
-			.await;
 
-		Ok(())
+		match result {
+			Ok(instance) => {
+				let pending_stop = self
+					.pending_stops
+					.remove_async(&request.actor_id.clone())
+					.await
+					.map(|(_, pending_stop)| pending_stop);
+				if let Some(pending_stop) = pending_stop {
+					let actor_id = request.actor_id.clone();
+					if !matches!(pending_stop.reason, protocol::StopActorReason::SleepIntent) {
+						instance.ctx.mark_destroy_requested();
+					}
+					let _ = self
+						.stopping_instances
+						.insert_async(actor_id.clone(), instance.clone())
+						.await;
+					let _ = self
+						.starting_instances
+						.remove_async(&request.actor_id.clone())
+						.await;
+
+					let dispatcher = self.clone();
+					tokio::spawn(async move {
+						if let Err(error) = dispatcher
+							.shutdown_started_instance(
+								&actor_id,
+								instance,
+								pending_stop.reason,
+								pending_stop.stop_handle,
+							)
+							.await
+						{
+							tracing::error!(actor_id, ?error, "failed to stop actor queued during startup");
+						}
+						let _ = dispatcher.stopping_instances.remove_async(&actor_id).await;
+					});
+					startup_notify.notify_waiters();
+
+					Ok(())
+				} else {
+					let _ = self
+						.active_instances
+						.insert_async(request.actor_id.clone(), instance)
+						.await;
+					let _ = self
+						.starting_instances
+						.remove_async(&request.actor_id.clone())
+						.await;
+					startup_notify.notify_waiters();
+					Ok(())
+				}
+			}
+			Err(error) => {
+				let _ = self
+					.starting_instances
+					.remove_async(&request.actor_id.clone())
+					.await;
+				startup_notify.notify_waiters();
+				Err(error)
+			}
+		}
 	}
 
 	async fn active_actor(&self, actor_id: &str) -> Result<ActiveActorInstance> {
-		let Some(instance) = self.active_instances.get_async(&actor_id.to_owned()).await else {
-			tracing::warn!(actor_id, "actor instance not found");
-			return Err(anyhow!("actor instance `{actor_id}` was not found"));
-		};
+		if let Some(instance) = self.active_instances.get_async(&actor_id.to_owned()).await {
+			return Ok(instance.get().clone());
+		}
 
-		Ok(instance.get().clone())
+		if let Some(instance) = self.stopping_instances.get_async(&actor_id.to_owned()).await {
+			return Ok(instance.get().clone());
+		}
+
+		tracing::warn!(actor_id, "actor instance not found");
+		Err(anyhow!("actor instance `{actor_id}` was not found"))
 	}
 
 	async fn stop_actor(
@@ -307,14 +535,64 @@ impl RegistryDispatcher {
 		reason: protocol::StopActorReason,
 		stop_handle: ActorStopHandle,
 	) -> Result<()> {
+		if self
+			.starting_instances
+			.get_async(&actor_id.to_owned())
+			.await
+			.is_some()
+		{
+			let _ = self
+				.pending_stops
+				.insert_async(
+					actor_id.to_owned(),
+					PendingStop {
+						reason,
+						stop_handle,
+					},
+				)
+				.await;
+			return Ok(());
+		}
+
 		let instance = match self.active_actor(actor_id).await {
 			Ok(instance) => instance,
-			Err(error) => {
-				let _ = stop_handle.complete();
-				return Err(error);
+			Err(_) => {
+				let _ = self
+					.pending_stops
+					.insert_async(
+						actor_id.to_owned(),
+						PendingStop {
+							reason,
+							stop_handle,
+						},
+					)
+					.await;
+				return Ok(());
 			}
 		};
 		let _ = self.active_instances.remove_async(&actor_id.to_owned()).await;
+		let _ = self
+			.stopping_instances
+			.insert_async(actor_id.to_owned(), instance.clone())
+			.await;
+		let result = self
+			.shutdown_started_instance(actor_id, instance, reason, stop_handle)
+			.await;
+		let _ = self.stopping_instances.remove_async(&actor_id.to_owned()).await;
+		result
+	}
+
+	async fn shutdown_started_instance(
+		&self,
+		actor_id: &str,
+		instance: ActiveActorInstance,
+		reason: protocol::StopActorReason,
+		stop_handle: ActorStopHandle,
+	) -> Result<()> {
+		if !matches!(reason, protocol::StopActorReason::SleepIntent) {
+			instance.ctx.mark_destroy_requested();
+		}
+
 		tracing::debug!(
 			actor_id,
 			actor_name = %instance.actor_name,
@@ -340,10 +618,29 @@ impl RegistryDispatcher {
 						instance.ctx.clone(),
 						instance.factory.as_ref(),
 						instance.callbacks.clone(),
-					)
+				)
 					.await
 			}
 		};
+		if !matches!(reason, protocol::StopActorReason::SleepIntent) {
+			instance.ctx.mark_destroy_completed();
+			let shutdown_deadline =
+				Instant::now() + instance.factory.config().effective_sleep_grace_period();
+			if !instance
+				.ctx
+				.wait_for_internal_keep_awake_idle(shutdown_deadline.into())
+				.await
+			{
+				tracing::warn!(actor_id, "destroy shutdown timed out waiting for in-flight actions");
+			}
+			if !instance
+				.ctx
+				.wait_for_http_requests_drained(shutdown_deadline.into())
+				.await
+			{
+				tracing::warn!(actor_id, "destroy shutdown timed out waiting for in-flight http requests");
+			}
+		}
 
 		match shutdown_result {
 			Ok(_) => {
@@ -374,15 +671,31 @@ impl RegistryDispatcher {
 			return Ok(not_found_response());
 		};
 
+		instance.ctx.cancel_sleep_timer();
+
+		let rearm_sleep_after_request = |ctx: ActorContext| {
+			let sleep_ctx = ctx.clone();
+			ctx.wait_until(async move {
+				while sleep_ctx.can_sleep().await == crate::actor::sleep::CanSleep::ActiveHttpRequests {
+					sleep(Duration::from_millis(10)).await;
+				}
+				sleep_ctx.reset_sleep_timer();
+			});
+		};
+
 		match callback(OnRequestRequest {
 			ctx: instance.ctx.clone(),
 			request,
 		})
 		.await
 		{
-			Ok(response) => build_envoy_response(response),
+			Ok(response) => {
+				rearm_sleep_after_request(instance.ctx.clone());
+				build_envoy_response(response)
+			}
 			Err(error) => {
 				tracing::error!(actor_id, ?error, "actor request callback failed");
+				rearm_sleep_after_request(instance.ctx.clone());
 				Ok(internal_server_error_response())
 			}
 		}
@@ -395,6 +708,9 @@ impl RegistryDispatcher {
 	) -> Result<Option<HttpResponse>> {
 		let url = inspector_request_url(request)?;
 		if !url.path().starts_with("/inspector/") {
+			return Ok(None);
+		}
+		if self.handle_inspector_http_in_runtime {
 			return Ok(None);
 		}
 		if !request_has_inspector_access(request, self.inspector_token.as_deref()) {
@@ -620,7 +936,7 @@ impl RegistryDispatcher {
 	) -> std::result::Result<Vec<u8>, ActionDispatchError> {
 		let conn = match instance
 			.ctx
-			.connect_conn(Vec::new(), false, None, async { Ok(Vec::new()) })
+			.connect_conn(Vec::new(), false, None, None, async { Ok(Vec::new()) })
 			.await
 		{
 			Ok(conn) => conn,
@@ -918,6 +1234,10 @@ impl RegistryDispatcher {
 		request: &HttpRequest,
 		path: &str,
 		headers: &HashMap<String, String>,
+		gateway_id: &protocol::GatewayId,
+		request_id: &protocol::RequestId,
+		is_hibernatable: bool,
+		is_restoring_hibernatable: bool,
 		sender: WebSocketSender,
 	) -> Result<WebSocketHandler> {
 		let instance = self.active_actor(actor_id).await?;
@@ -926,29 +1246,480 @@ impl RegistryDispatcher {
 				.handle_inspector_websocket(actor_id, instance, request, headers)
 				.await;
 		}
-		let Some(callback) = instance.callbacks.on_websocket.as_ref() else {
+		if is_actor_connect_path(path)? {
+			return self
+				.handle_actor_connect_websocket(
+					actor_id,
+					instance,
+					request,
+					path,
+					headers,
+					gateway_id,
+					request_id,
+					is_hibernatable,
+					is_restoring_hibernatable,
+					sender,
+				)
+				.await;
+		}
+		if instance.callbacks.on_websocket.is_none() {
 			return Ok(default_websocket_handler());
-		};
+		}
 
-		let ws = WebSocket::from_sender(sender);
-		let result = instance
-			.ctx
-			.with_websocket_callback(|| async {
-				callback(OnWebSocketRequest {
-					ctx: instance.ctx.clone(),
-					ws,
-				})
-				.await
-			})
-			.await;
-
-		match result {
-			Ok(()) => Ok(default_websocket_handler()),
+		match self
+			.handle_raw_websocket(actor_id, instance, request, path, headers, sender)
+			.await
+		{
+			Ok(handler) => Ok(handler),
 			Err(error) => {
-				tracing::error!(actor_id, ?error, "actor websocket callback failed");
-				Err(error)
+				let rivet_error = RivetError::extract(&error);
+				tracing::warn!(
+					actor_id,
+					group = rivet_error.group(),
+					code = rivet_error.code(),
+					?error,
+					"failed to establish raw websocket connection"
+				);
+				Ok(closing_websocket_handler(
+					1011,
+					&format!("{}.{}", rivet_error.group(), rivet_error.code()),
+				))
 			}
 		}
+	}
+
+	async fn handle_actor_connect_websocket(
+		self: &Arc<Self>,
+		actor_id: &str,
+		instance: ActiveActorInstance,
+		_request: &HttpRequest,
+		path: &str,
+		headers: &HashMap<String, String>,
+		gateway_id: &protocol::GatewayId,
+		request_id: &protocol::RequestId,
+		is_hibernatable: bool,
+		is_restoring_hibernatable: bool,
+		sender: WebSocketSender,
+	) -> Result<WebSocketHandler> {
+		let encoding = match websocket_encoding(headers) {
+			Ok(encoding) => encoding,
+			Err(error) => {
+				tracing::warn!(actor_id, ?error, "rejecting unsupported actor connect encoding");
+				return Ok(closing_websocket_handler(
+					1003,
+					"actor.unsupported_websocket_encoding",
+				));
+			}
+		};
+
+		let conn_params = websocket_conn_params(headers)?;
+		let connect_request =
+			Request::from_parts("GET", path, headers.clone(), Vec::new())
+				.context("build actor connect request")?;
+		let conn = if is_restoring_hibernatable {
+			match instance
+				.ctx
+				.reconnect_hibernatable_conn(gateway_id, request_id)
+			{
+				Ok(conn) => conn,
+				Err(error) => {
+					let rivet_error = RivetError::extract(&error);
+					tracing::warn!(
+						actor_id,
+						group = rivet_error.group(),
+						code = rivet_error.code(),
+						?error,
+						"failed to restore actor websocket connection"
+					);
+					return Ok(closing_websocket_handler(
+						1011,
+						&format!("{}.{}", rivet_error.group(), rivet_error.code()),
+					));
+				}
+			}
+		} else {
+			let hibernation = is_hibernatable.then(|| HibernatableConnectionMetadata {
+				gateway_id: gateway_id.to_vec(),
+				request_id: request_id.to_vec(),
+				server_message_index: 0,
+				client_message_index: 0,
+				request_path: path.to_owned(),
+				request_headers: headers
+					.iter()
+					.map(|(name, value)| (name.to_ascii_lowercase(), value.clone()))
+					.collect(),
+			});
+
+			match instance
+				.ctx
+				.connect_conn(
+					conn_params,
+					is_hibernatable,
+					hibernation,
+					Some(connect_request),
+					async { Ok(Vec::new()) },
+				)
+				.await
+			{
+				Ok(conn) => conn,
+				Err(error) => {
+					let rivet_error = RivetError::extract(&error);
+					tracing::warn!(
+						actor_id,
+						group = rivet_error.group(),
+						code = rivet_error.code(),
+						?error,
+						"failed to establish actor websocket connection"
+					);
+					return Ok(closing_websocket_handler(
+						1011,
+						&format!("{}.{}", rivet_error.group(), rivet_error.code()),
+					));
+				}
+			}
+		};
+
+		let managed_disconnect = conn
+			.managed_disconnect_handler()
+			.context("get actor websocket disconnect handler")?;
+		let transport_closed = Arc::new(AtomicBool::new(false));
+		let transport_disconnect_sender = sender.clone();
+		conn.configure_disconnect_handler(Some(Arc::new(move |reason| {
+			let managed_disconnect = managed_disconnect.clone();
+			let transport_closed = transport_closed.clone();
+			let transport_disconnect_sender = transport_disconnect_sender.clone();
+			Box::pin(async move {
+				if !transport_closed.swap(true, Ordering::SeqCst) {
+					transport_disconnect_sender.close(Some(1000), reason.clone());
+				}
+				managed_disconnect(reason).await
+			})
+		})));
+
+		let max_incoming_message_size = instance.factory.config().max_incoming_message_size as usize;
+		let max_outgoing_message_size = instance.factory.config().max_outgoing_message_size as usize;
+
+		let event_sender = sender.clone();
+		conn.configure_event_sender(Some(Arc::new(move |event| {
+			match send_actor_connect_message(
+				&event_sender,
+				encoding,
+				&ActorConnectToClient::Event(ActorConnectEvent {
+					name: event.name,
+					args: ByteBuf::from(event.args),
+				}),
+				max_outgoing_message_size,
+			) {
+				Ok(()) => Ok(()),
+				Err(ActorConnectSendError::OutgoingTooLong) => {
+					event_sender.close(
+						Some(1011),
+						Some("message.outgoing_too_long".to_owned()),
+					);
+					Ok(())
+				}
+				Err(ActorConnectSendError::Encode(error)) => Err(error),
+			}
+		})));
+
+		let init_actor_id = instance.ctx.actor_id().to_owned();
+		let init_conn_id = conn.id().to_owned();
+		let on_message_conn = conn.clone();
+		let on_message_ctx = instance.ctx.clone();
+		let on_message_factory = instance.factory.clone();
+		let on_message_callbacks = instance.callbacks.clone();
+
+		let on_open: Option<Box<dyn FnOnce(WebSocketSender) -> futures::future::BoxFuture<'static, ()> + Send>> =
+			if is_restoring_hibernatable {
+			None
+		} else {
+			Some(Box::new(move |sender| {
+				let actor_id = init_actor_id.clone();
+				let conn_id = init_conn_id.clone();
+				Box::pin(async move {
+					if let Err(error) = send_actor_connect_message(
+						&sender,
+						encoding,
+						&ActorConnectToClient::Init(ActorConnectInit {
+							actor_id,
+							connection_id: conn_id,
+						}),
+						max_outgoing_message_size,
+					) {
+						match error {
+							ActorConnectSendError::OutgoingTooLong => {
+								sender.close(
+									Some(1011),
+									Some("message.outgoing_too_long".to_owned()),
+								);
+							}
+							ActorConnectSendError::Encode(error) => {
+								tracing::error!(?error, "failed to send actor websocket init message");
+								sender.close(Some(1011), Some("actor.init_error".to_owned()));
+							}
+						}
+					}
+				})
+			}))
+		};
+
+		Ok(WebSocketHandler {
+			on_message: Box::new(move |message: WebSocketMessage| {
+				let conn = on_message_conn.clone();
+				let ctx = on_message_ctx.clone();
+				let factory = on_message_factory.clone();
+				let callbacks = on_message_callbacks.clone();
+				Box::pin(async move {
+					if message.data.len() > max_incoming_message_size {
+						message.sender.close(
+							Some(1011),
+							Some("message.incoming_too_long".to_owned()),
+						);
+						return;
+					}
+
+					let parsed = match decode_actor_connect_message(&message.data, encoding) {
+						Ok(parsed) => parsed,
+						Err(error) => {
+							tracing::warn!(
+								?error,
+								"failed to decode actor websocket message"
+							);
+							message
+								.sender
+								.close(Some(1011), Some("actor.invalid_request".to_owned()));
+							return;
+						}
+					};
+
+					if conn.is_hibernatable() {
+						if let Err(error) = persist_and_ack_hibernatable_actor_message(
+							&ctx,
+							&conn,
+							message.message_index,
+						)
+						.await
+						{
+							tracing::warn!(
+								?error,
+								conn_id = conn.id(),
+								"failed to persist and ack hibernatable actor websocket message"
+							);
+							message.sender.close(
+								Some(1011),
+								Some("actor.hibernation_persist_failed".to_owned()),
+							);
+							return;
+						}
+					}
+
+					match parsed {
+						ActorConnectToServer::SubscriptionRequest(request) => {
+							if request.subscribe {
+								if let Some(callback) = callbacks.on_before_subscribe.as_ref() {
+									let event_name = request.event_name.clone();
+									let result = ctx
+										.with_websocket_callback(|| async {
+											callback(OnBeforeSubscribeRequest {
+												ctx: ctx.clone(),
+												conn: conn.clone(),
+												event_name,
+											})
+											.await
+										})
+										.await;
+									if let Err(error) = result {
+										let error = RivetError::extract(&error);
+										message.sender.close(
+											Some(1011),
+											Some(format!("{}.{}", error.group(), error.code())),
+										);
+										return;
+									}
+								}
+								conn.subscribe(request.event_name);
+							} else {
+								conn.unsubscribe(&request.event_name);
+							}
+						}
+						ActorConnectToServer::ActionRequest(request) => {
+							let sender = message.sender.clone();
+							let conn = conn.clone();
+							let ctx = ctx.clone();
+							let invoker = ActionInvoker::with_shared_callbacks(
+								factory.config().clone(),
+								callbacks.clone(),
+							);
+							tokio::spawn(async move {
+								let response = match invoker
+									.dispatch(ActionRequest {
+										ctx,
+										conn,
+										name: request.name,
+										args: request.args.into_vec(),
+									})
+									.await
+								{
+									Ok(output) => ActorConnectToClient::ActionResponse(
+										ActorConnectActionResponse {
+											id: request.id,
+											output: ByteBuf::from(output),
+										},
+									),
+									Err(error) => ActorConnectToClient::Error(
+										action_dispatch_error_response(error, request.id),
+									),
+								};
+
+								match send_actor_connect_message(
+									&sender,
+									encoding,
+									&response,
+									max_outgoing_message_size,
+								) {
+									Ok(()) => {}
+									Err(ActorConnectSendError::OutgoingTooLong) => {
+										sender.close(
+											Some(1011),
+											Some("message.outgoing_too_long".to_owned()),
+										);
+									}
+									Err(ActorConnectSendError::Encode(error)) => {
+										tracing::error!(?error, "failed to send actor websocket response");
+										sender.close(
+											Some(1011),
+											Some("actor.send_failed".to_owned()),
+										);
+									}
+								}
+							});
+						}
+					}
+				})
+			}),
+			on_close: Box::new(move |_code, reason| {
+				let conn = conn.clone();
+				Box::pin(async move {
+					if let Err(error) = conn.disconnect(Some(reason.as_str())).await {
+						tracing::warn!(?error, conn_id = conn.id(), "failed to disconnect actor websocket connection");
+					}
+				})
+			}),
+			on_open,
+		})
+	}
+
+	async fn handle_raw_websocket(
+		self: &Arc<Self>,
+		actor_id: &str,
+		instance: ActiveActorInstance,
+		request: &HttpRequest,
+		path: &str,
+		headers: &HashMap<String, String>,
+		_sender: WebSocketSender,
+	) -> Result<WebSocketHandler> {
+		let conn_params = websocket_conn_params(headers)?;
+		let websocket_request = Request::from_parts(
+			&request.method,
+			path,
+			headers.clone(),
+			request.body.clone().unwrap_or_default(),
+		)
+		.context("build actor websocket request")?;
+		let conn = instance
+			.ctx
+			.connect_conn_with_request(
+				conn_params,
+				Some(websocket_request.clone()),
+				async { Ok(Vec::new()) },
+			)
+			.await?;
+		let callbacks = instance.callbacks.clone();
+		let ctx = instance.ctx.clone();
+		let conn_for_open = conn.clone();
+		let conn_for_close = conn.clone();
+		let ctx_for_message = ctx.clone();
+		let ws = WebSocket::new();
+		let ws_for_open = ws.clone();
+		let ws_for_message = ws.clone();
+		let ws_for_close = ws.clone();
+		let request_for_open = websocket_request.clone();
+		let actor_id = actor_id.to_owned();
+		let actor_id_for_close = actor_id.clone();
+		let actor_id_for_open = actor_id.clone();
+
+		Ok(WebSocketHandler {
+			on_message: Box::new(move |message: WebSocketMessage| {
+				let ctx = ctx_for_message.clone();
+				let ws = ws_for_message.clone();
+				Box::pin(async move {
+					ctx.with_websocket_callback(|| async move {
+						let payload = if message.binary {
+							WsMessage::Binary(message.data)
+						} else {
+							match String::from_utf8(message.data) {
+								Ok(text) => WsMessage::Text(text),
+								Err(error) => {
+									tracing::warn!(?error, "raw websocket message was not valid utf-8");
+									ws.close(Some(1007), Some("message.invalid_utf8".to_owned()));
+									return;
+								}
+							}
+						};
+						ws.dispatch_message_event(payload, Some(message.message_index));
+					})
+					.await;
+				})
+			}),
+			on_close: Box::new(move |code, reason| {
+				let conn = conn_for_close.clone();
+				let ws = ws_for_close.clone();
+				let actor_id = actor_id_for_close.clone();
+				Box::pin(async move {
+					ws.close(Some(1000), Some("hack_force_close".to_owned()));
+					tokio::spawn(async move {
+						ws.dispatch_close_event(code, reason.clone(), code == 1000);
+						if let Err(error) = conn.disconnect(Some(reason.as_str())).await {
+							tracing::warn!(actor_id, ?error, conn_id = conn.id(), "failed to disconnect raw websocket connection");
+						}
+					});
+				})
+			}),
+			on_open: Some(Box::new(move |sender| {
+				let callbacks = callbacks.clone();
+				let ctx = ctx.clone();
+				let conn = conn_for_open.clone();
+				let request = request_for_open.clone();
+				let ws = ws_for_open.clone();
+				let actor_id = actor_id_for_open.clone();
+				Box::pin(async move {
+					let Some(callback) = callbacks.on_websocket.as_ref() else {
+						return;
+					};
+					let close_sender = sender.clone();
+					ws.configure_sender(sender);
+					let result = ctx
+						.with_websocket_callback(|| async {
+							callback(OnWebSocketRequest {
+								ctx: ctx.clone(),
+								conn: Some(conn.clone()),
+								ws: ws.clone(),
+								request: Some(request),
+							})
+							.await
+						})
+						.await;
+					if let Err(error) = result {
+						let error = RivetError::extract(&error);
+						tracing::error!(actor_id, ?error, "actor raw websocket callback failed");
+						close_sender.close(
+							Some(1011),
+							Some(format!("{}.{}", error.group(), error.code())),
+						);
+					}
+				})
+			})),
+		})
 	}
 
 	async fn handle_inspector_websocket(
@@ -1318,6 +2089,10 @@ impl RegistryDispatcher {
 	}
 
 	fn can_hibernate(&self, actor_id: &str, request: &HttpRequest) -> bool {
+		if matches!(is_actor_connect_path(&request.path), Ok(true)) {
+			return true;
+		}
+
 		let Some(instance) = self
 			.active_instances
 			.read_sync(actor_id, |_, instance| instance.clone())
@@ -1452,7 +2227,17 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		let dispatcher = self.dispatcher.clone();
 		Box::pin(async move {
 			dispatcher
-				.handle_websocket(&actor_id, &_request, &_path, &_headers, sender)
+				.handle_websocket(
+					&actor_id,
+					&_request,
+					&_path,
+					&_headers,
+					&_gateway_id,
+					&_request_id,
+					_is_hibernatable,
+					_is_restoring_hibernatable,
+					sender,
+				)
 				.await
 		})
 	}
@@ -1482,6 +2267,7 @@ impl ServeSettings {
 			pool_name: env::var("RIVET_POOL_NAME")
 				.unwrap_or_else(|_| "rivetkit-rust".to_owned()),
 			engine_binary_path: env::var_os("RIVET_ENGINE_BINARY_PATH").map(PathBuf::from),
+			handle_inspector_http_in_runtime: false,
 		}
 	}
 }
@@ -1502,6 +2288,7 @@ impl ServeConfig {
 			namespace: settings.namespace,
 			pool_name: settings.pool_name,
 			engine_binary_path: settings.engine_binary_path,
+			handle_inspector_http_in_runtime: settings.handle_inspector_http_in_runtime,
 		}
 	}
 }
@@ -1756,8 +2543,56 @@ fn send_sigterm(child: &mut Child) -> Result<()> {
 }
 
 fn actor_key_from_protocol(key: Option<String>) -> ActorKey {
-	key.map(|value| vec![ActorKeySegment::String(value)])
+	key.as_deref()
+		.map(deserialize_actor_key_from_protocol)
 		.unwrap_or_default()
+}
+
+fn deserialize_actor_key_from_protocol(key: &str) -> ActorKey {
+	const EMPTY_KEY: &str = "/";
+	const KEY_SEPARATOR: char = '/';
+
+	if key.is_empty() || key == EMPTY_KEY {
+		return Vec::new();
+	}
+
+	let mut parts = Vec::new();
+	let mut current_part = String::new();
+	let mut escaping = false;
+	let mut empty_string_marker = false;
+
+	for ch in key.chars() {
+		if escaping {
+			if ch == '0' {
+				empty_string_marker = true;
+			} else {
+				current_part.push(ch);
+			}
+			escaping = false;
+		} else if ch == '\\' {
+			escaping = true;
+		} else if ch == KEY_SEPARATOR {
+			if empty_string_marker {
+				parts.push(String::new());
+				empty_string_marker = false;
+			} else {
+				parts.push(std::mem::take(&mut current_part));
+			}
+		} else {
+			current_part.push(ch);
+		}
+	}
+
+	if escaping {
+		current_part.push('\\');
+		parts.push(current_part);
+	} else if empty_string_marker {
+		parts.push(String::new());
+	} else if !current_part.is_empty() || !parts.is_empty() {
+		parts.push(current_part);
+	}
+
+	parts.into_iter().map(ActorKeySegment::String).collect()
 }
 
 fn decode_preloaded_persisted_actor(
@@ -1876,12 +2711,16 @@ fn inspector_request_url(request: &Request) -> Result<Url> {
 }
 
 fn decode_cbor_json_or_null(payload: &[u8]) -> JsonValue {
+	decode_cbor_json(payload).unwrap_or(JsonValue::Null)
+}
+
+fn decode_cbor_json(payload: &[u8]) -> Result<JsonValue> {
 	if payload.is_empty() {
-		return JsonValue::Null;
+		return Ok(JsonValue::Null);
 	}
 
 	ciborium::from_reader::<JsonValue, _>(Cursor::new(payload))
-		.unwrap_or(JsonValue::Null)
+		.context("decode cbor payload as json")
 }
 
 fn encode_json_as_cbor(value: &impl Serialize) -> Result<Vec<u8>> {
@@ -1916,6 +2755,23 @@ fn json_http_response(status: StatusCode, payload: &impl Serialize) -> Result<Ht
 		),
 		body_stream: None,
 	})
+}
+
+async fn persist_and_ack_hibernatable_actor_message(
+	ctx: &ActorContext,
+	conn: &ConnHandle,
+	message_index: u16,
+) -> Result<()> {
+	let Some(hibernation) = conn.set_server_message_index(message_index) else {
+		return Ok(());
+	};
+	ctx.persist_hibernatable_connections().await?;
+	ctx.ack_hibernatable_websocket_message(
+		&hibernation.gateway_id,
+		&hibernation.request_id,
+		message_index,
+	)?;
+	Ok(())
 }
 
 fn not_found_response() -> HttpResponse {
@@ -2105,8 +2961,24 @@ async fn build_http_request(request: HttpRequest) -> Result<Request> {
 		}
 	}
 
-	Request::from_parts(&request.method, &request.path, request.headers, body)
+	let request_path = normalize_actor_request_path(&request.path);
+	Request::from_parts(&request.method, &request_path, request.headers, body)
 		.with_context(|| format!("build actor request for `{}`", request.path))
+}
+
+fn normalize_actor_request_path(path: &str) -> String {
+	let Some(stripped) = path.strip_prefix("/request") else {
+		return path.to_owned();
+	};
+
+	if stripped.is_empty() {
+		return "/".to_owned();
+	}
+
+	match stripped.as_bytes().first() {
+		Some(b'/') | Some(b'?') => stripped.to_owned(),
+		_ => path.to_owned(),
+	}
 }
 
 fn build_envoy_response(response: Response) -> Result<HttpResponse> {
@@ -2158,6 +3030,41 @@ fn send_inspector_message(
 	Ok(())
 }
 
+fn send_actor_connect_message(
+	sender: &WebSocketSender,
+	encoding: ActorConnectEncoding,
+	message: &ActorConnectToClient,
+	max_outgoing_message_size: usize,
+) -> std::result::Result<(), ActorConnectSendError> {
+	match encoding {
+		ActorConnectEncoding::Json => {
+			let payload = encode_actor_connect_message_json(message)
+				.map_err(ActorConnectSendError::Encode)?;
+			if payload.as_bytes().len() > max_outgoing_message_size {
+				return Err(ActorConnectSendError::OutgoingTooLong);
+			}
+			sender.send_text(&payload);
+		}
+		ActorConnectEncoding::Cbor => {
+			let payload = encode_actor_connect_message_cbor(message)
+				.map_err(ActorConnectSendError::Encode)?;
+			if payload.len() > max_outgoing_message_size {
+				return Err(ActorConnectSendError::OutgoingTooLong);
+			}
+			sender.send(payload, true);
+		}
+		ActorConnectEncoding::Bare => {
+			let payload = encode_actor_connect_message(message)
+				.map_err(ActorConnectSendError::Encode)?;
+			if payload.len() > max_outgoing_message_size {
+				return Err(ActorConnectSendError::OutgoingTooLong);
+			}
+			sender.send(payload, true);
+		}
+	}
+	Ok(())
+}
+
 fn is_inspector_connect_path(path: &str) -> Result<bool> {
 	Ok(
 		Url::parse(&format!("http://inspector{path}"))
@@ -2165,6 +3072,573 @@ fn is_inspector_connect_path(path: &str) -> Result<bool> {
 			.path()
 			== "/inspector/connect",
 	)
+}
+
+fn is_actor_connect_path(path: &str) -> Result<bool> {
+	Ok(
+		Url::parse(&format!("http://actor{path}"))
+			.context("parse actor websocket path")?
+			.path()
+			== "/connect",
+	)
+}
+
+fn websocket_protocols(headers: &HashMap<String, String>) -> impl Iterator<Item = &str> {
+	headers
+		.iter()
+		.find(|(name, _)| name.eq_ignore_ascii_case("sec-websocket-protocol"))
+		.map(|(_, value)| value.split(',').map(str::trim))
+		.into_iter()
+		.flatten()
+}
+
+fn websocket_encoding(headers: &HashMap<String, String>) -> Result<ActorConnectEncoding> {
+	match websocket_protocols(headers)
+		.find_map(|protocol| protocol.strip_prefix(WS_PROTOCOL_ENCODING))
+		.unwrap_or("json")
+	{
+		"json" => Ok(ActorConnectEncoding::Json),
+		"cbor" => Ok(ActorConnectEncoding::Cbor),
+		"bare" => Ok(ActorConnectEncoding::Bare),
+		encoding => Err(anyhow!("unsupported actor websocket encoding `{encoding}`")),
+	}
+}
+
+fn websocket_conn_params(headers: &HashMap<String, String>) -> Result<Vec<u8>> {
+	let Some(encoded_params) = websocket_protocols(headers)
+		.find_map(|protocol| protocol.strip_prefix(WS_PROTOCOL_CONN_PARAMS))
+	else {
+		return Ok(Vec::new());
+	};
+
+	let decoded = Url::parse(&format!("http://actor/?value={encoded_params}"))
+		.context("decode websocket connection parameters")?
+		.query_pairs()
+		.find_map(|(name, value)| (name == "value").then_some(value.into_owned()))
+		.ok_or_else(|| anyhow!("missing decoded websocket connection parameters"))?;
+	let parsed: JsonValue = serde_json::from_str(&decoded)
+		.context("parse websocket connection parameters")?;
+	encode_json_as_cbor(&parsed)
+}
+
+fn encode_actor_connect_message(message: &ActorConnectToClient) -> Result<Vec<u8>> {
+	let mut encoded = Vec::new();
+	encoded.extend_from_slice(&ACTOR_CONNECT_CURRENT_VERSION.to_le_bytes());
+	match message {
+		ActorConnectToClient::Init(payload) => {
+			encoded.push(0);
+			bare_write_string(&mut encoded, &payload.actor_id);
+			bare_write_string(&mut encoded, &payload.connection_id);
+		}
+		ActorConnectToClient::Error(payload) => {
+			encoded.push(1);
+			bare_write_string(&mut encoded, &payload.group);
+			bare_write_string(&mut encoded, &payload.code);
+			bare_write_string(&mut encoded, &payload.message);
+			bare_write_optional_bytes(
+				&mut encoded,
+				payload.metadata.as_ref().map(|metadata| metadata.as_ref()),
+			);
+			bare_write_optional_uint(&mut encoded, payload.action_id);
+		}
+		ActorConnectToClient::ActionResponse(payload) => {
+			encoded.push(2);
+			bare_write_uint(&mut encoded, payload.id);
+			bare_write_bytes(&mut encoded, payload.output.as_ref());
+		}
+		ActorConnectToClient::Event(payload) => {
+			encoded.push(3);
+			bare_write_string(&mut encoded, &payload.name);
+			bare_write_bytes(&mut encoded, payload.args.as_ref());
+		}
+	}
+	Ok(encoded)
+}
+
+fn encode_actor_connect_message_json(message: &ActorConnectToClient) -> Result<String> {
+	serde_json::to_string(&actor_connect_message_json_value(message)?)
+		.context("encode actor websocket message as json")
+}
+
+fn encode_actor_connect_message_cbor(message: &ActorConnectToClient) -> Result<Vec<u8>> {
+	encode_actor_connect_message_cbor_manual(message)
+}
+
+fn actor_connect_message_json_value(message: &ActorConnectToClient) -> Result<JsonValue> {
+	let body = match message {
+		ActorConnectToClient::Init(payload) => json!({
+			"tag": "Init",
+			"val": {
+				"actorId": payload.actor_id.clone(),
+				"connectionId": payload.connection_id.clone(),
+			},
+		}),
+		ActorConnectToClient::Error(payload) => {
+			let mut value = serde_json::Map::from_iter([
+				("group".to_owned(), JsonValue::String(payload.group.clone())),
+				("code".to_owned(), JsonValue::String(payload.code.clone())),
+				("message".to_owned(), JsonValue::String(payload.message.clone())),
+			]);
+			if let Some(metadata) = payload.metadata.as_ref() {
+				value.insert(
+					"metadata".to_owned(),
+					decode_cbor_json(metadata.as_ref())?,
+				);
+			}
+			if let Some(action_id) = payload.action_id {
+				value.insert("actionId".to_owned(), json_compat_bigint(action_id));
+			}
+			JsonValue::Object(serde_json::Map::from_iter([
+				("tag".to_owned(), JsonValue::String("Error".to_owned())),
+				("val".to_owned(), JsonValue::Object(value)),
+			]))
+		}
+		ActorConnectToClient::ActionResponse(payload) => json!({
+			"tag": "ActionResponse",
+			"val": {
+				"id": json_compat_bigint(payload.id),
+				"output": decode_cbor_json(payload.output.as_ref())?,
+			},
+		}),
+		ActorConnectToClient::Event(payload) => json!({
+			"tag": "Event",
+			"val": {
+				"name": payload.name.clone(),
+				"args": decode_cbor_json(payload.args.as_ref())?,
+			},
+		}),
+	};
+	Ok(json!({ "body": body }))
+}
+
+fn decode_actor_connect_message(
+	payload: &[u8],
+	encoding: ActorConnectEncoding,
+) -> Result<ActorConnectToServer> {
+	match encoding {
+		ActorConnectEncoding::Json => {
+			let envelope: JsonValue = serde_json::from_slice(payload)
+				.context("decode actor websocket json request")?;
+			actor_connect_request_from_json_value(&envelope)
+		}
+		ActorConnectEncoding::Cbor => {
+			let envelope: ActorConnectToServerJsonEnvelope =
+				ciborium::from_reader(Cursor::new(payload))
+					.context("decode actor websocket cbor request")?;
+			actor_connect_request_from_json(envelope)
+		}
+		ActorConnectEncoding::Bare => decode_actor_connect_message_bare(payload),
+	}
+}
+
+fn actor_connect_request_from_json(
+	envelope: ActorConnectToServerJsonEnvelope,
+) -> Result<ActorConnectToServer> {
+	match envelope.body {
+		ActorConnectToServerJsonBody::ActionRequest(request) => {
+			Ok(ActorConnectToServer::ActionRequest(ActorConnectActionRequest {
+				id: request.id,
+				name: request.name,
+				args: ByteBuf::from(
+					encode_json_as_cbor(&request.args)
+						.context("encode actor websocket action request args")?,
+				),
+			}))
+		}
+		ActorConnectToServerJsonBody::SubscriptionRequest(request) => {
+			Ok(ActorConnectToServer::SubscriptionRequest(request))
+		}
+	}
+}
+
+fn actor_connect_request_from_json_value(envelope: &JsonValue) -> Result<ActorConnectToServer> {
+	let body = envelope
+		.get("body")
+		.and_then(JsonValue::as_object)
+		.ok_or_else(|| anyhow!("actor websocket json request missing body"))?;
+	let tag = body
+		.get("tag")
+		.and_then(JsonValue::as_str)
+		.ok_or_else(|| anyhow!("actor websocket json request missing tag"))?;
+	let value = body
+		.get("val")
+		.and_then(JsonValue::as_object)
+		.ok_or_else(|| anyhow!("actor websocket json request missing val"))?;
+
+	match tag {
+		"ActionRequest" => Ok(ActorConnectToServer::ActionRequest(
+			ActorConnectActionRequest {
+				id: parse_json_compat_u64(
+					value
+						.get("id")
+						.ok_or_else(|| anyhow!("actor websocket json request missing id"))?,
+				)?,
+				name: value
+					.get("name")
+					.and_then(JsonValue::as_str)
+					.ok_or_else(|| anyhow!("actor websocket json request missing name"))?
+					.to_owned(),
+				args: ByteBuf::from(encode_json_as_cbor(
+					value
+						.get("args")
+						.ok_or_else(|| anyhow!("actor websocket json request missing args"))?,
+				)?),
+			},
+		)),
+		"SubscriptionRequest" => Ok(ActorConnectToServer::SubscriptionRequest(
+			ActorConnectSubscriptionRequest {
+				event_name: value
+					.get("eventName")
+					.and_then(JsonValue::as_str)
+					.ok_or_else(|| anyhow!("actor websocket json request missing eventName"))?
+					.to_owned(),
+				subscribe: value
+					.get("subscribe")
+					.and_then(JsonValue::as_bool)
+					.ok_or_else(|| anyhow!("actor websocket json request missing subscribe"))?,
+			},
+		)),
+		other => Err(anyhow!("unknown actor websocket json request tag `{other}`")),
+	}
+}
+
+fn json_compat_bigint(value: u64) -> JsonValue {
+	JsonValue::Array(vec![
+		JsonValue::String("$BigInt".to_owned()),
+		JsonValue::String(value.to_string()),
+	])
+}
+
+fn parse_json_compat_u64(value: &JsonValue) -> Result<u64> {
+	match value {
+		JsonValue::Number(number) => number
+			.as_u64()
+			.ok_or_else(|| anyhow!("actor websocket json bigint is not an unsigned integer")),
+		JsonValue::Array(values) if values.len() == 2 => {
+			let tag = values[0]
+				.as_str()
+				.ok_or_else(|| anyhow!("actor websocket json bigint tag is not a string"))?;
+			let raw = values[1]
+				.as_str()
+				.ok_or_else(|| anyhow!("actor websocket json bigint value is not a string"))?;
+			if tag != "$BigInt" {
+				return Err(anyhow!("unsupported actor websocket json compat tag `{tag}`"));
+			}
+			raw.parse::<u64>()
+				.context("parse actor websocket json bigint")
+		}
+		_ => Err(anyhow!("invalid actor websocket json bigint value")),
+	}
+}
+
+fn encode_actor_connect_message_cbor_manual(
+	message: &ActorConnectToClient,
+) -> Result<Vec<u8>> {
+	let mut encoded = Vec::new();
+	cbor_write_map_len(&mut encoded, 1);
+	cbor_write_string(&mut encoded, "body");
+
+	match message {
+		ActorConnectToClient::Init(payload) => {
+			cbor_write_map_len(&mut encoded, 2);
+			cbor_write_string(&mut encoded, "tag");
+			cbor_write_string(&mut encoded, "Init");
+			cbor_write_string(&mut encoded, "val");
+			cbor_write_map_len(&mut encoded, 2);
+			cbor_write_string(&mut encoded, "actorId");
+			cbor_write_string(&mut encoded, &payload.actor_id);
+			cbor_write_string(&mut encoded, "connectionId");
+			cbor_write_string(&mut encoded, &payload.connection_id);
+		}
+		ActorConnectToClient::Error(payload) => {
+			cbor_write_map_len(&mut encoded, 2);
+			cbor_write_string(&mut encoded, "tag");
+			cbor_write_string(&mut encoded, "Error");
+			cbor_write_string(&mut encoded, "val");
+			let mut field_count = 3usize;
+			if payload.metadata.is_some() {
+				field_count += 1;
+			}
+			if payload.action_id.is_some() {
+				field_count += 1;
+			}
+			cbor_write_map_len(&mut encoded, field_count);
+			cbor_write_string(&mut encoded, "group");
+			cbor_write_string(&mut encoded, &payload.group);
+			cbor_write_string(&mut encoded, "code");
+			cbor_write_string(&mut encoded, &payload.code);
+			cbor_write_string(&mut encoded, "message");
+			cbor_write_string(&mut encoded, &payload.message);
+			if let Some(metadata) = payload.metadata.as_ref() {
+				cbor_write_string(&mut encoded, "metadata");
+				encoded.extend_from_slice(metadata.as_ref());
+			}
+			if let Some(action_id) = payload.action_id {
+				cbor_write_string(&mut encoded, "actionId");
+				cbor_write_u64_force_64(&mut encoded, action_id);
+			}
+		}
+		ActorConnectToClient::ActionResponse(payload) => {
+			cbor_write_map_len(&mut encoded, 2);
+			cbor_write_string(&mut encoded, "tag");
+			cbor_write_string(&mut encoded, "ActionResponse");
+			cbor_write_string(&mut encoded, "val");
+			cbor_write_map_len(&mut encoded, 2);
+			cbor_write_string(&mut encoded, "id");
+			cbor_write_u64_force_64(&mut encoded, payload.id);
+			cbor_write_string(&mut encoded, "output");
+			encoded.extend_from_slice(payload.output.as_ref());
+		}
+		ActorConnectToClient::Event(payload) => {
+			cbor_write_map_len(&mut encoded, 2);
+			cbor_write_string(&mut encoded, "tag");
+			cbor_write_string(&mut encoded, "Event");
+			cbor_write_string(&mut encoded, "val");
+			cbor_write_map_len(&mut encoded, 2);
+			cbor_write_string(&mut encoded, "name");
+			cbor_write_string(&mut encoded, &payload.name);
+			cbor_write_string(&mut encoded, "args");
+			encoded.extend_from_slice(payload.args.as_ref());
+		}
+	}
+
+	Ok(encoded)
+}
+
+fn decode_actor_connect_message_bare(payload: &[u8]) -> Result<ActorConnectToServer> {
+	if payload.len() < 3 {
+		return Err(anyhow!("actor websocket payload too short for embedded version"));
+	}
+
+	let version = u16::from_le_bytes([payload[0], payload[1]]);
+	if !ACTOR_CONNECT_SUPPORTED_VERSIONS.contains(&version) {
+		return Err(anyhow!(
+			"unsupported actor websocket version {version}; expected one of {:?}",
+			ACTOR_CONNECT_SUPPORTED_VERSIONS
+		));
+	}
+
+	let tag = payload[2];
+	let mut cursor = BareCursor::new(&payload[3..]);
+	match tag {
+		0 => {
+			let request = ActorConnectActionRequest {
+				id: cursor.read_uint().context("decode actor websocket action request id")?,
+				name: cursor
+					.read_string()
+					.context("decode actor websocket action request name")?,
+				args: ByteBuf::from(
+					cursor
+						.read_bytes()
+						.context("decode actor websocket action request args")?,
+				),
+			};
+			cursor.finish().context("decode actor websocket action request")?;
+			Ok(ActorConnectToServer::ActionRequest(request))
+		}
+		1 => {
+			let request = ActorConnectSubscriptionRequest {
+				event_name: cursor
+					.read_string()
+					.context("decode actor websocket subscription request event name")?,
+				subscribe: cursor
+					.read_bool()
+					.context("decode actor websocket subscription request subscribe")?,
+			};
+			cursor
+				.finish()
+				.context("decode actor websocket subscription request")?;
+			Ok(ActorConnectToServer::SubscriptionRequest(request))
+		}
+		_ => Err(anyhow!("unknown actor websocket request tag {tag}")),
+	}
+}
+
+struct BareCursor<'a> {
+	payload: &'a [u8],
+	offset: usize,
+}
+
+impl<'a> BareCursor<'a> {
+	fn new(payload: &'a [u8]) -> Self {
+		Self { payload, offset: 0 }
+	}
+
+	fn finish(&self) -> Result<()> {
+		if self.offset == self.payload.len() {
+			Ok(())
+		} else {
+			Err(anyhow!(
+				"remaining bytes after actor websocket decode: {}",
+				self.payload.len() - self.offset
+			))
+		}
+	}
+
+	fn read_byte(&mut self) -> Result<u8> {
+		let Some(byte) = self.payload.get(self.offset).copied() else {
+			return Err(anyhow!("unexpected end of input"));
+		};
+		self.offset += 1;
+		Ok(byte)
+	}
+
+	fn read_bool(&mut self) -> Result<bool> {
+		match self.read_byte()? {
+			0 => Ok(false),
+			1 => Ok(true),
+			value => Err(anyhow!("invalid bool value {value}")),
+		}
+	}
+
+	fn read_uint(&mut self) -> Result<u64> {
+		let mut result = 0u64;
+		let mut shift = 0u32;
+		let mut byte_count = 0u8;
+
+		loop {
+			let byte = self.read_byte()?;
+			byte_count += 1;
+
+			let value = u64::from(byte & 0x7f);
+			result = result
+				.checked_add(value << shift)
+				.ok_or_else(|| anyhow!("actor websocket uint overflow"))?;
+
+			if byte & 0x80 == 0 {
+				if byte_count > 1 && byte == 0 {
+					return Err(anyhow!("non-canonical actor websocket uint"));
+				}
+				return Ok(result);
+			}
+
+			shift += 7;
+			if shift >= 64 || byte_count >= 10 {
+				return Err(anyhow!("actor websocket uint overflow"));
+			}
+		}
+	}
+
+	fn read_len(&mut self) -> Result<usize> {
+		let len = self.read_uint()?;
+		usize::try_from(len).context("actor websocket length does not fit in usize")
+	}
+
+	fn read_bytes(&mut self) -> Result<Vec<u8>> {
+		let len = self.read_len()?;
+		let end = self
+			.offset
+			.checked_add(len)
+			.ok_or_else(|| anyhow!("actor websocket length overflow"))?;
+		let Some(bytes) = self.payload.get(self.offset..end) else {
+			return Err(anyhow!("unexpected end of input"));
+		};
+		self.offset = end;
+		Ok(bytes.to_vec())
+	}
+
+	fn read_string(&mut self) -> Result<String> {
+		String::from_utf8(self.read_bytes()?).context("actor websocket string is not valid utf-8")
+	}
+}
+
+fn bare_write_uint(buffer: &mut Vec<u8>, mut value: u64) {
+	loop {
+		let mut byte = (value & 0x7f) as u8;
+		value >>= 7;
+		if value != 0 {
+			byte |= 0x80;
+		}
+		buffer.push(byte);
+		if value == 0 {
+			break;
+		}
+	}
+}
+
+fn bare_write_bool(buffer: &mut Vec<u8>, value: bool) {
+	buffer.push(u8::from(value));
+}
+
+fn bare_write_bytes(buffer: &mut Vec<u8>, value: &[u8]) {
+	bare_write_uint(buffer, value.len() as u64);
+	buffer.extend_from_slice(value);
+}
+
+fn bare_write_string(buffer: &mut Vec<u8>, value: &str) {
+	bare_write_bytes(buffer, value.as_bytes());
+}
+
+fn bare_write_optional_bytes(buffer: &mut Vec<u8>, value: Option<&[u8]>) {
+	bare_write_bool(buffer, value.is_some());
+	if let Some(value) = value {
+		bare_write_bytes(buffer, value);
+	}
+}
+
+fn bare_write_optional_uint(buffer: &mut Vec<u8>, value: Option<u64>) {
+	bare_write_bool(buffer, value.is_some());
+	if let Some(value) = value {
+		bare_write_uint(buffer, value);
+	}
+}
+
+fn cbor_write_type_and_len(buffer: &mut Vec<u8>, major: u8, len: usize) {
+	match len {
+		0..=23 => buffer.push((major << 5) | (len as u8)),
+		24..=0xff => {
+			buffer.push((major << 5) | 24);
+			buffer.push(len as u8);
+		}
+		0x100..=0xffff => {
+			buffer.push((major << 5) | 25);
+			buffer.extend_from_slice(&(len as u16).to_be_bytes());
+		}
+		0x1_0000..=0xffff_ffff => {
+			buffer.push((major << 5) | 26);
+			buffer.extend_from_slice(&(len as u32).to_be_bytes());
+		}
+		_ => {
+			buffer.push((major << 5) | 27);
+			buffer.extend_from_slice(&(len as u64).to_be_bytes());
+		}
+	}
+}
+
+fn cbor_write_map_len(buffer: &mut Vec<u8>, len: usize) {
+	cbor_write_type_and_len(buffer, 5, len);
+}
+
+fn cbor_write_bytes(buffer: &mut Vec<u8>, value: &[u8]) {
+	cbor_write_type_and_len(buffer, 2, value.len());
+	buffer.extend_from_slice(value);
+}
+
+fn cbor_write_string(buffer: &mut Vec<u8>, value: &str) {
+	cbor_write_type_and_len(buffer, 3, value.len());
+	buffer.extend_from_slice(value.as_bytes());
+}
+
+fn cbor_write_u64_force_64(buffer: &mut Vec<u8>, value: u64) {
+	buffer.push(0x1b);
+	buffer.extend_from_slice(&value.to_be_bytes());
+}
+
+fn action_dispatch_error_response(
+	error: ActionDispatchError,
+	action_id: u64,
+) -> ActorConnectError {
+	let metadata = error
+		.metadata
+		.as_ref()
+		.and_then(|metadata| encode_json_as_cbor(metadata).ok().map(ByteBuf::from));
+	ActorConnectError {
+		group: error.group,
+		code: error.code,
+		message: error.message,
+		metadata,
+		action_id: Some(action_id),
+	}
 }
 
 fn closing_websocket_handler(code: u16, reason: &str) -> WebSocketHandler {

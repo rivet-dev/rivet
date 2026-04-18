@@ -65,6 +65,14 @@ mod moved_tests {
 			default.max_queue_message_size,
 		);
 		assert_eq!(
+			config.max_incoming_message_size,
+			default.max_incoming_message_size,
+		);
+		assert_eq!(
+			config.max_outgoing_message_size,
+			default.max_outgoing_message_size,
+		);
+		assert_eq!(
 			config.preload_max_workflow_bytes,
 			default.preload_max_workflow_bytes,
 		);

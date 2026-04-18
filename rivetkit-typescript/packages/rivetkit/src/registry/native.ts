@@ -1,28 +1,60 @@
 import * as cbor from "cbor-x";
 import type { Encoding } from "@/common/encoding";
-import { HEADER_ENCODING } from "@/common/actor-router-consts";
+import {
+	HEADER_CONN_PARAMS,
+	HEADER_ENCODING,
+} from "@/common/actor-router-consts";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	HTTP_ACTION_REQUEST_VERSIONED,
 	HTTP_ACTION_RESPONSE_VERSIONED,
+	HTTP_QUEUE_SEND_REQUEST_VERSIONED,
+	HTTP_QUEUE_SEND_RESPONSE_VERSIONED,
 	HTTP_RESPONSE_ERROR_VERSIONED,
 } from "@/common/client-protocol-versioned";
 import {
+	type HttpQueueSendRequest as HttpQueueSendRequestJson,
+	HttpQueueSendRequestSchema,
+	type HttpQueueSendResponse as HttpQueueSendResponseJson,
+	HttpQueueSendResponseSchema,
 	HttpActionRequestSchema,
 	HttpActionResponseSchema,
 	type HttpResponseError as HttpResponseErrorJson,
 	HttpResponseErrorSchema,
 } from "@/common/client-protocol-zod";
 import type * as protocol from "@/common/client-protocol";
-import { getRunFunction, getRunInspectorConfig } from "@/actor/config";
+import {
+	ACTOR_CONTEXT_INTERNAL_SYMBOL,
+	getRunFunction,
+	getRunInspectorConfig,
+} from "@/actor/config";
 import type { AnyActorDefinition } from "@/actor/definition";
 import {
+	INTERNAL_ERROR_CODE,
+	INTERNAL_ERROR_DESCRIPTION,
 	decodeBridgeRivetError,
 	encodeBridgeRivetError,
+	forbiddenError,
+	isRivetErrorLike,
+	RivetError,
 	toRivetError,
 } from "@/actor/errors";
+import {
+	getEventCanSubscribe,
+	getQueueCanPublish,
+	hasSchemaConfigKey,
+} from "@/actor/schema";
+import { makePrefixedKey, removePrefixFromKey } from "@/actor/keys";
+import type { AnyDatabaseProvider } from "@/common/database/config";
+import { AsyncMutex } from "@/common/database/shared";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
 import { deconstructError } from "@/common/utils";
+import type {
+	RivetCloseEvent,
+	RivetEvent,
+	RivetMessageEvent,
+	UniversalWebSocket,
+} from "@/common/websocket-interface";
 import {
 	type AnyClient,
 	createClientWithDriver,
@@ -35,6 +67,7 @@ import {
 	deserializeWithEncoding,
 	serializeWithEncoding,
 } from "@/serde";
+import { decodeWorkflowHistoryTransport } from "@/common/inspector-transport";
 import { bufferToArrayBuffer } from "@/utils";
 import { logger } from "./log";
 import {
@@ -45,6 +78,7 @@ import {
 	validateQueueBody,
 	validateQueueComplete,
 } from "./native-validation";
+import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 
 import type {
 	ActorContext as NativeActorContext,
@@ -63,11 +97,75 @@ import type {
 } from "@rivetkit/rivetkit-napi";
 
 type NativeBindings = typeof import("@rivetkit/rivetkit-napi");
+type NativeWebSocketEvent =
+	| {
+			kind: "message";
+			data: string | Buffer;
+			binary: boolean;
+			messageIndex?: number;
+	  }
+	| {
+			kind: "close";
+			code: number;
+			reason: string;
+			wasClean: boolean;
+	  };
+type NativeWebSocketWithEvents = NativeWebSocket & {
+	setEventCallback: (callback: (event: NativeWebSocketEvent) => void) => void;
+};
 const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
 const nativeSqlDatabases = new Map<
 	string,
 	ReturnType<typeof wrapJsNativeDatabase>
 >();
+const nativeDatabaseClients = new Map<
+	string,
+	{
+		client: unknown;
+		provider: Exclude<AnyDatabaseProvider, undefined>;
+	}
+>();
+const nativeActorVars = new Map<string, unknown>();
+const nativeActionGates = new Map<
+	string,
+	{
+		actionMutex: AsyncMutex;
+		destroyCompletion?: Promise<void>;
+		resolveDestroy?: () => void;
+	}
+>();
+
+function getNativeActionGate(ctx: NativeActorContext) {
+	const actorId = callNativeSync(() => ctx.actorId());
+	let gate = nativeActionGates.get(actorId);
+	if (!gate) {
+		gate = { actionMutex: new AsyncMutex() };
+		nativeActionGates.set(actorId, gate);
+	}
+	return gate;
+}
+
+function markNativeDestroyRequested(ctx: NativeActorContext) {
+	const gate = getNativeActionGate(ctx);
+	if (!gate.destroyCompletion) {
+		gate.destroyCompletion = new Promise<void>((resolve) => {
+			gate!.resolveDestroy = resolve;
+		});
+	}
+}
+
+function resolveNativeDestroy(ctx: NativeActorContext) {
+	const actorId = callNativeSync(() => ctx.actorId());
+	const gate = nativeActionGates.get(actorId);
+	if (!gate?.resolveDestroy) {
+		return;
+	}
+
+	gate.resolveDestroy();
+	gate.resolveDestroy = undefined;
+	gate.destroyCompletion = undefined;
+}
 
 function closeNativeSqlDatabase(actorId: string): Promise<void> | undefined {
 	const database = nativeSqlDatabases.get(actorId);
@@ -79,6 +177,60 @@ function closeNativeSqlDatabase(actorId: string): Promise<void> | undefined {
 	return database.close();
 }
 
+function dropNativeSqlDatabase(actorId: string): void {
+	nativeSqlDatabases.delete(actorId);
+}
+
+async function closeNativeDatabaseClient(
+	actorId: string,
+	destroy: boolean,
+): Promise<void> {
+	const entry = nativeDatabaseClients.get(actorId);
+	if (!entry) {
+		return;
+	}
+
+	nativeDatabaseClients.delete(actorId);
+
+	if (typeof entry.provider.onDestroy === "function") {
+		await entry.provider.onDestroy(entry.client as never);
+		return;
+	}
+
+	if (
+		entry.client &&
+		typeof entry.client === "object" &&
+		"close" in entry.client &&
+		typeof entry.client.close === "function"
+	) {
+		await entry.client.close();
+	}
+}
+
+function getOrCreateNativeSqlDatabase(
+	ctx: NativeActorContext,
+	actorId: string,
+): ReturnType<typeof wrapJsNativeDatabase> {
+	const cachedDatabase = nativeSqlDatabases.get(actorId);
+	if (cachedDatabase) {
+		return cachedDatabase;
+	}
+
+	const database = wrapJsNativeDatabase(callNativeSync(() => ctx.sql()));
+	nativeSqlDatabases.set(actorId, database);
+	return database;
+}
+
+function encodeActorVarsForCore(value: unknown): Buffer {
+	try {
+		return encodeValue(value);
+	} catch {
+		// Runtime-only JS values like Set, Promise, or class instances should stay
+		// in the JS-side vars cache instead of crossing the core bridge.
+		return encodeValue(undefined);
+	}
+}
+
 function toBuffer(value: string | Uint8Array | ArrayBuffer): Buffer {
 	if (typeof value === "string") {
 		return Buffer.from(textEncoder.encode(value));
@@ -87,6 +239,82 @@ function toBuffer(value: string | Uint8Array | ArrayBuffer): Buffer {
 		return Buffer.from(value);
 	}
 	return Buffer.from(value);
+}
+
+type NativeKvValueType = "text" | "arrayBuffer" | "binary";
+type NativeKvKeyType = "text" | "binary";
+
+type NativeKvValueTypeMap = {
+	text: string;
+	arrayBuffer: ArrayBuffer;
+	binary: Uint8Array;
+};
+
+type NativeKvKeyTypeMap = {
+	text: string;
+	binary: Uint8Array;
+};
+
+type NativeKvValueOptions<T extends NativeKvValueType = "text"> = {
+	type?: T;
+};
+
+type NativeKvListOptions<
+	T extends NativeKvValueType = "text",
+	K extends NativeKvKeyType = "text",
+> = NativeKvValueOptions<T> & {
+	keyType?: K;
+	reverse?: boolean;
+	limit?: number;
+};
+
+function decodeNativeKvKey<K extends NativeKvKeyType = "text">(
+	key: Uint8Array,
+	keyType?: K,
+): NativeKvKeyTypeMap[K] {
+	const resolvedKeyType = keyType ?? "text";
+	switch (resolvedKeyType) {
+		case "text":
+			return textDecoder.decode(key) as NativeKvKeyTypeMap[K];
+		case "binary":
+			return key as NativeKvKeyTypeMap[K];
+		default:
+			throw new TypeError("Invalid kv key type");
+	}
+}
+
+function encodeNativeKvUserKey<K extends NativeKvKeyType = NativeKvKeyType>(
+	key: NativeKvKeyTypeMap[K],
+	keyType?: K,
+): Uint8Array {
+	if (key instanceof Uint8Array) {
+		return key;
+	}
+	const resolvedKeyType = keyType ?? "text";
+	if (resolvedKeyType === "binary") {
+		throw new TypeError("Expected a Uint8Array when keyType is binary");
+	}
+	return textEncoder.encode(key);
+}
+
+function decodeNativeKvValue<T extends NativeKvValueType = "text">(
+	value: Uint8Array,
+	options?: NativeKvValueOptions<T>,
+): NativeKvValueTypeMap[T] {
+	const type = options?.type ?? "text";
+	switch (type) {
+		case "text":
+			return textDecoder.decode(value) as NativeKvValueTypeMap[T];
+		case "arrayBuffer": {
+			const copy = new Uint8Array(value.byteLength);
+			copy.set(value);
+			return copy.buffer as NativeKvValueTypeMap[T];
+		}
+		case "binary":
+			return value as NativeKvValueTypeMap[T];
+		default:
+			throw new TypeError("Invalid kv value type");
+	}
 }
 
 async function loadNativeBindings(): Promise<NativeBindings> {
@@ -118,26 +346,134 @@ function unwrapTsfnPayload<T>(error: unknown, payload: T): T {
 }
 
 function normalizeNativeBridgeError(error: unknown): unknown {
+	const promoteKnownBridgeError = (value: unknown): unknown => {
+		if (!isRivetErrorLike(value)) {
+			return value;
+		}
+
+		if (
+			value.group === "auth" &&
+			value.code === "forbidden" &&
+			(!value.public || value.statusCode === 500)
+		) {
+			return new RivetError(value.group, value.code, value.message, {
+				public: true,
+				statusCode: 403,
+				metadata: value.metadata,
+				cause: value instanceof Error ? value.cause : undefined,
+			});
+		}
+
+		if (
+			value.group === "actor" &&
+			value.code === "action_not_found" &&
+			(!value.public || value.statusCode === 500)
+		) {
+			return new RivetError(value.group, value.code, value.message, {
+				public: true,
+				statusCode: 404,
+				metadata: value.metadata,
+				cause: value instanceof Error ? value.cause : undefined,
+			});
+		}
+
+		if (
+			value.group === "actor" &&
+			value.code === "action_timed_out" &&
+			(!value.public || value.statusCode === 500)
+		) {
+			return new RivetError(value.group, value.code, value.message, {
+				public: true,
+				statusCode: 408,
+				metadata: value.metadata,
+				cause: value instanceof Error ? value.cause : undefined,
+			});
+		}
+
+		if (
+			value.group === "actor" &&
+			value.code === "aborted" &&
+			(!value.public || value.statusCode === 500)
+		) {
+			return new RivetError(value.group, value.code, value.message, {
+				public: true,
+				statusCode: 400,
+				metadata: value.metadata,
+				cause: value instanceof Error ? value.cause : undefined,
+			});
+		}
+
+		if (
+			value.group === "message" &&
+			(value.code === "incoming_too_long" ||
+				value.code === "outgoing_too_long") &&
+			(!value.public || value.statusCode === 500)
+		) {
+			return new RivetError(value.group, value.code, value.message, {
+				public: true,
+				statusCode: 400,
+				metadata: value.metadata,
+				cause: value instanceof Error ? value.cause : undefined,
+			});
+		}
+
+		if (
+			value.group === "queue" &&
+			[
+				"full",
+				"message_too_large",
+				"message_invalid",
+				"invalid_payload",
+				"invalid_completion_payload",
+				"already_completed",
+				"previous_message_not_completed",
+				"complete_not_configured",
+				"timed_out",
+			].includes(value.code) &&
+			(!value.public || value.statusCode === 500)
+		) {
+			return new RivetError(value.group, value.code, value.message, {
+				public: true,
+				statusCode: 400,
+				metadata: value.metadata,
+				cause: value instanceof Error ? value.cause : undefined,
+			});
+		}
+
+		return value;
+	};
+
 	if (typeof error === "string") {
-		return decodeBridgeRivetError(error) ?? error;
+		return promoteKnownBridgeError(decodeBridgeRivetError(error) ?? error);
 	}
 
 	if (error instanceof Error) {
 		const bridged = decodeBridgeRivetError(error.message);
 		if (bridged) {
-			return bridged;
+			return promoteKnownBridgeError(bridged);
 		}
 	}
 
-	return error;
+	if (
+		typeof error === "object" &&
+		error !== null &&
+		"reason" in error &&
+		typeof error.reason === "string"
+	) {
+		const bridged = decodeBridgeRivetError(error.reason);
+		if (bridged) {
+			return promoteKnownBridgeError(bridged);
+		}
+	}
+
+	return promoteKnownBridgeError(error);
 }
 
 function encodeNativeCallbackError(error: unknown): Error {
 	const normalized = toRivetError(error, {
 		group: "actor",
-		code: "internal_error",
-		message:
-			error instanceof Error ? error.message : `Internal error: ${String(error)}`,
+		code: INTERNAL_ERROR_CODE,
+		message: INTERNAL_ERROR_DESCRIPTION,
 	});
 	const bridgeError = new Error(encodeBridgeRivetError(normalized), {
 		cause: error instanceof Error ? error : undefined,
@@ -194,6 +530,289 @@ async function createNativeCancellationToken(signal?: AbortSignal): Promise<{
 		token,
 		cleanup: () => signal.removeEventListener("abort", abort),
 	};
+}
+
+function decodeWorkflowCbor(data: ArrayBuffer | null): unknown | null {
+	if (data === null) {
+		return null;
+	}
+
+	try {
+		return cbor.decode(new Uint8Array(data));
+	} catch {
+		return null;
+	}
+}
+
+function serializeWorkflowLocation(
+	location: ReturnType<typeof decodeWorkflowHistoryTransport>["entries"][number]["location"],
+): Array<
+	| { tag: "WorkflowNameIndex"; val: number }
+	| {
+			tag: "WorkflowLoopIterationMarker";
+			val: { loop: number; iteration: number };
+	  }
+> {
+	return location.map((segment) => {
+		if (segment.tag === "WorkflowNameIndex") {
+			return {
+				tag: segment.tag,
+				val: segment.val,
+			};
+		}
+
+		return {
+			tag: segment.tag,
+			val: {
+				loop: segment.val.loop,
+				iteration: segment.val.iteration,
+			},
+		};
+	});
+}
+
+function serializeWorkflowBranches(
+	branches: ReadonlyMap<
+		string,
+		ReturnType<typeof decodeWorkflowHistoryTransport>["entries"][number]["kind"] extends infer T
+			? T extends { tag: "WorkflowJoinEntry"; val: { branches: infer B } }
+				? B extends ReadonlyMap<string, infer V>
+					? V
+					: never
+				: T extends { tag: "WorkflowRaceEntry"; val: { branches: infer B } }
+					? B extends ReadonlyMap<string, infer V>
+						? V
+						: never
+					: never
+			: never
+	>,
+): Record<string, { status: string; output: unknown | null; error: string | null }> {
+	return Object.fromEntries(
+		Array.from(branches.entries()).map(([name, branch]) => [
+			name,
+			{
+				status: branch.status,
+				output: decodeWorkflowCbor(branch.output),
+				error: branch.error,
+			},
+		]),
+	);
+}
+
+function serializeWorkflowEntryKind(
+	kind: ReturnType<typeof decodeWorkflowHistoryTransport>["entries"][number]["kind"],
+):
+	| { tag: "WorkflowStepEntry"; val: { output: unknown | null; error: string | null } }
+	| {
+			tag: "WorkflowLoopEntry";
+			val: { state: unknown | null; iteration: number; output: unknown | null };
+	  }
+	| { tag: "WorkflowSleepEntry"; val: { deadline: number; state: string } }
+	| { tag: "WorkflowMessageEntry"; val: { name: string; messageData: unknown | null } }
+	| { tag: "WorkflowRollbackCheckpointEntry"; val: { name: string } }
+	| {
+			tag: "WorkflowJoinEntry";
+			val: {
+				branches: Record<
+					string,
+					{ status: string; output: unknown | null; error: string | null }
+				>;
+			};
+	  }
+	| {
+			tag: "WorkflowRaceEntry";
+			val: {
+				winner: string | null;
+				branches: Record<
+					string,
+					{ status: string; output: unknown | null; error: string | null }
+				>;
+			};
+	  }
+	| {
+			tag: "WorkflowRemovedEntry";
+			val: { originalType: string; originalName: string | null };
+	  } {
+	switch (kind.tag) {
+		case "WorkflowStepEntry":
+			return {
+				tag: kind.tag,
+				val: {
+					output: decodeWorkflowCbor(kind.val.output),
+					error: kind.val.error,
+				},
+			};
+		case "WorkflowLoopEntry":
+			return {
+				tag: kind.tag,
+				val: {
+					state: decodeWorkflowCbor(kind.val.state),
+					iteration: kind.val.iteration,
+					output: decodeWorkflowCbor(kind.val.output),
+				},
+			};
+		case "WorkflowSleepEntry":
+			return {
+				tag: kind.tag,
+				val: {
+					deadline: Number(kind.val.deadline),
+					state: kind.val.state,
+				},
+			};
+		case "WorkflowMessageEntry":
+			return {
+				tag: kind.tag,
+				val: {
+					name: kind.val.name,
+					messageData: decodeWorkflowCbor(kind.val.messageData),
+				},
+			};
+		case "WorkflowRollbackCheckpointEntry":
+			return {
+				tag: kind.tag,
+				val: {
+					name: kind.val.name,
+				},
+			};
+		case "WorkflowJoinEntry":
+			return {
+				tag: kind.tag,
+				val: {
+					branches: serializeWorkflowBranches(kind.val.branches),
+				},
+			};
+		case "WorkflowRaceEntry":
+			return {
+				tag: kind.tag,
+				val: {
+					winner: kind.val.winner,
+					branches: serializeWorkflowBranches(kind.val.branches),
+				},
+			};
+		case "WorkflowRemovedEntry":
+			return {
+				tag: kind.tag,
+				val: {
+					originalType: kind.val.originalType,
+					originalName: kind.val.originalName,
+				},
+			};
+	}
+}
+
+function serializeWorkflowHistoryForJson(data: ArrayBuffer | null): {
+	nameRegistry: string[];
+	entries: Array<{
+		id: string;
+		location: Array<
+			| { tag: "WorkflowNameIndex"; val: number }
+			| {
+					tag: "WorkflowLoopIterationMarker";
+					val: { loop: number; iteration: number };
+			  }
+		>;
+		kind: ReturnType<typeof serializeWorkflowEntryKind>;
+	}>;
+	entryMetadata: Record<
+		string,
+		{
+			status: string;
+			error: string | null;
+			attempts: number;
+			lastAttemptAt: number;
+			createdAt: number;
+			completedAt: number | null;
+			rollbackCompletedAt: number | null;
+			rollbackError: string | null;
+		}
+	>;
+} | null {
+	if (data === null) {
+		return null;
+	}
+
+	const history = decodeWorkflowHistoryTransport(data);
+
+	return {
+		nameRegistry: [...history.nameRegistry],
+		entries: history.entries.map((entry) => ({
+			id: entry.id,
+			location: serializeWorkflowLocation(entry.location),
+			kind: serializeWorkflowEntryKind(entry.kind),
+		})),
+		entryMetadata: Object.fromEntries(
+			Array.from(history.entryMetadata.entries()).map(([entryId, meta]) => [
+				entryId,
+				{
+					status: meta.status,
+					error: meta.error,
+					attempts: meta.attempts,
+					lastAttemptAt: Number(meta.lastAttemptAt),
+					createdAt: Number(meta.createdAt),
+					completedAt:
+						meta.completedAt === null ? null : Number(meta.completedAt),
+					rollbackCompletedAt:
+						meta.rollbackCompletedAt === null
+							? null
+							: Number(meta.rollbackCompletedAt),
+					rollbackError: meta.rollbackError,
+				},
+			]),
+		),
+	};
+}
+
+function toHttpJsonCompatible<T>(value: T): T {
+	return JSON.parse(
+		JSON.stringify(value, (_key, nestedValue) =>
+			typeof nestedValue === "bigint"
+				? Number(nestedValue)
+				: nestedValue instanceof Uint8Array
+					? Array.from(nestedValue)
+					: nestedValue,
+		),
+	) as T;
+}
+
+function jsonSafe<T>(value: T): T {
+	return toHttpJsonCompatible(value);
+}
+
+function normalizeSqlitePropertyBindings(
+	properties: Record<string, unknown>,
+): Record<string, unknown> {
+	const normalized: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(properties)) {
+		if (/^[:@$]/.test(key)) {
+			normalized[key] = value;
+			continue;
+		}
+
+		normalized[`:${key}`] = value;
+		normalized[`@${key}`] = value;
+		normalized[`$${key}`] = value;
+	}
+	return normalized;
+}
+
+function queryRows(result: unknown): Array<Record<string, unknown>> {
+	if (Array.isArray(result)) {
+		return result as Array<Record<string, unknown>>;
+	}
+	if (
+		result &&
+		typeof result === "object" &&
+		"columns" in result &&
+		"rows" in result &&
+		Array.isArray((result as { columns: unknown }).columns) &&
+		Array.isArray((result as { rows: unknown }).rows)
+	) {
+		const columns = (result as { columns: string[] }).columns;
+		return ((result as { rows: unknown[][] }).rows ?? []).map((row) =>
+			Object.fromEntries(columns.map((column, index) => [column, row[index]])),
+		);
+	}
+	return [];
 }
 
 function wrapNativeCallback<Args extends Array<unknown>, Result>(
@@ -368,20 +987,33 @@ class NativeKvAdapter {
 		this.#kv = kv;
 	}
 
-	async get(key: string | Uint8Array): Promise<Uint8Array | null> {
-		const value = await callNative(() => this.#kv.get(toBuffer(key)));
-		return value ? new Uint8Array(value) : null;
+	async get<T extends NativeKvValueType = "text">(
+		key: string | Uint8Array,
+		options?: NativeKvValueOptions<T>,
+	): Promise<NativeKvValueTypeMap[T] | null> {
+		const value = await callNative(() =>
+			this.#kv.get(Buffer.from(makePrefixedKey(encodeNativeKvUserKey(key)))),
+		);
+		return value ? decodeNativeKvValue(new Uint8Array(value), options) : null;
 	}
 
 	async put(
 		key: string | Uint8Array,
 		value: string | Uint8Array | ArrayBuffer,
+		_options?: NativeKvValueOptions,
 	): Promise<void> {
-		await callNative(() => this.#kv.put(toBuffer(key), toBuffer(value)));
+		await callNative(() =>
+			this.#kv.put(
+				Buffer.from(makePrefixedKey(encodeNativeKvUserKey(key))),
+				toBuffer(value),
+			),
+		);
 	}
 
 	async delete(key: string | Uint8Array): Promise<void> {
-		await callNative(() => this.#kv.delete(toBuffer(key)));
+		await callNative(() =>
+			this.#kv.delete(Buffer.from(makePrefixedKey(encodeNativeKvUserKey(key)))),
+		);
 	}
 
 	async deleteRange(
@@ -389,41 +1021,84 @@ class NativeKvAdapter {
 		end: string | Uint8Array,
 	): Promise<void> {
 		await callNative(() =>
-			this.#kv.deleteRange(toBuffer(start), toBuffer(end)),
+			this.#kv.deleteRange(
+				Buffer.from(makePrefixedKey(encodeNativeKvUserKey(start))),
+				Buffer.from(makePrefixedKey(encodeNativeKvUserKey(end))),
+			),
 		);
 	}
 
-	async listPrefix(
+	async listPrefix<
+		T extends NativeKvValueType = "text",
+		K extends NativeKvKeyType = "text",
+	>(
 		prefix: string | Uint8Array,
-		options?: { reverse?: boolean; limit?: number },
-	): Promise<Array<[Uint8Array, Uint8Array]>> {
+		options?: NativeKvListOptions<T, K>,
+	): Promise<Array<[NativeKvKeyTypeMap[K], NativeKvValueTypeMap[T]]>> {
 		const entries = await callNative(() =>
-			this.#kv.listPrefix(toBuffer(prefix), options),
+			this.#kv.listPrefix(
+				Buffer.from(
+					makePrefixedKey(
+						encodeNativeKvUserKey(prefix as NativeKvKeyTypeMap[K], options?.keyType),
+					),
+				),
+				{
+				reverse: options?.reverse,
+				limit: options?.limit,
+				},
+			),
 		);
 		return entries.map((entry) => [
-			new Uint8Array(entry.key),
-			new Uint8Array(entry.value),
+			decodeNativeKvKey(
+				removePrefixFromKey(new Uint8Array(entry.key)),
+				options?.keyType,
+			),
+			decodeNativeKvValue(new Uint8Array(entry.value), options),
 		]);
 	}
 
-	async listRange(
+	async listRange<
+		T extends NativeKvValueType = "text",
+		K extends NativeKvKeyType = "text",
+	>(
 		start: string | Uint8Array,
 		end: string | Uint8Array,
-		options?: { reverse?: boolean; limit?: number },
-	): Promise<Array<[Uint8Array, Uint8Array]>> {
+		options?: NativeKvListOptions<T, K>,
+	): Promise<Array<[NativeKvKeyTypeMap[K], NativeKvValueTypeMap[T]]>> {
 		const entries = await callNative(() =>
-			this.#kv.listRange(toBuffer(start), toBuffer(end), options),
+			this.#kv.listRange(
+				Buffer.from(
+					makePrefixedKey(
+						encodeNativeKvUserKey(start as NativeKvKeyTypeMap[K], options?.keyType),
+					),
+				),
+				Buffer.from(
+					makePrefixedKey(
+						encodeNativeKvUserKey(end as NativeKvKeyTypeMap[K], options?.keyType),
+					),
+				),
+				{
+					reverse: options?.reverse,
+					limit: options?.limit,
+				},
+			),
 		);
 		return entries.map((entry) => [
-			new Uint8Array(entry.key),
-			new Uint8Array(entry.value),
+			decodeNativeKvKey(
+				removePrefixFromKey(new Uint8Array(entry.key)),
+				options?.keyType,
+			),
+			decodeNativeKvValue(new Uint8Array(entry.value), options),
 		]);
 	}
 
-	async list(
+	async list<
+		T extends NativeKvValueType = "text",
+		K extends NativeKvKeyType = "text",
+	>(
 		prefix: string | Uint8Array,
-		options?: { reverse?: boolean; limit?: number },
-	): Promise<Array<[Uint8Array, Uint8Array]>> {
+		options?: NativeKvListOptions<T, K>,
+	): Promise<Array<[NativeKvKeyTypeMap[K], NativeKvValueTypeMap[T]]>> {
 		return this.listPrefix(prefix, options);
 	}
 
@@ -484,6 +1159,7 @@ function wrapQueueMessage(
 class NativeQueueAdapter {
 	#queue: NativeQueue;
 	#schemas: NativeValidationConfig["queues"];
+	#pendingCompletableMessageIds = new Set<string>();
 
 	constructor(
 		queue: NativeQueue,
@@ -506,33 +1182,64 @@ class NativeQueueAdapter {
 	async next(options?: {
 		names?: readonly string[];
 		timeout?: number;
+		signal?: AbortSignal;
 		completable?: boolean;
 	}) {
-		const message = await callNative(() =>
-			this.#queue.next({
-				names: options?.names ? [...options.names] : undefined,
-				timeoutMs: options?.timeout,
-				completable: options?.completable,
-			}),
-		);
-		return message ? wrapQueueMessage(message, this.#schemas) : undefined;
+		const messages = await this.nextBatch({
+			names: options?.names,
+			count: 1,
+			timeout: options?.timeout,
+			signal: options?.signal,
+			completable: options?.completable,
+		});
+		return messages[0];
 	}
 
 	async nextBatch(options?: {
 		names?: readonly string[];
 		count?: number;
 		timeout?: number;
+		signal?: AbortSignal;
 		completable?: boolean;
 	}) {
-		const messages = await callNative(() =>
-			this.#queue.nextBatch({
-				names: options?.names ? [...options.names] : undefined,
-				count: options?.count,
-				timeoutMs: options?.timeout,
-				completable: options?.completable,
-			}),
+		const completable = options?.completable === true;
+		if (this.#pendingCompletableMessageIds.size > 0) {
+			throw new RivetError(
+				"queue",
+				"previous_message_not_completed",
+				"Previous completable queue message is not completed. Call `message.complete(...)` before receiving the next message.",
+				{
+					public: true,
+					statusCode: 400,
+				},
+			);
+		}
+
+		const { token, cleanup } = await createNativeCancellationToken(
+			options?.signal,
 		);
-		return messages.map((message) => wrapQueueMessage(message, this.#schemas));
+
+		try {
+			const messages = await callNative(() =>
+				this.#queue.nextBatch(
+					{
+						names: this.#normalizeNames(options?.names),
+						count: options?.count,
+						timeoutMs: options?.timeout,
+						completable,
+					},
+					token,
+				),
+			);
+			const wrapped = messages.map((message) =>
+				wrapQueueMessage(message, this.#schemas),
+			);
+			return completable
+				? wrapped.map((message) => this.#makeCompletableMessage(message))
+				: wrapped;
+		} finally {
+			cleanup?.();
+		}
 	}
 
 	async waitForNames(
@@ -594,6 +1301,58 @@ class NativeQueueAdapter {
 		}
 	}
 
+	async waitForNamesAvailable(
+		names: readonly string[],
+		options?: {
+			timeout?: number;
+			signal?: AbortSignal;
+		},
+	) {
+		if (!options?.signal) {
+			await callNative(() =>
+				this.#queue.waitForNamesAvailable([...names], {
+					timeoutMs: options?.timeout,
+				}),
+			);
+			return;
+		}
+
+		const deadline =
+			options.timeout === undefined ? undefined : Date.now() + options.timeout;
+
+		for (;;) {
+			if (options.signal.aborted) {
+				throw actorAbortedError();
+			}
+
+			const remainingTimeout =
+				deadline === undefined ? undefined : Math.max(0, deadline - Date.now());
+			const sliceTimeout =
+				remainingTimeout === undefined
+					? 100
+					: Math.min(remainingTimeout, 100);
+
+			try {
+				await callNative(() =>
+					this.#queue.waitForNamesAvailable([...names], {
+						timeoutMs: sliceTimeout,
+					}),
+				);
+				return;
+			} catch (error) {
+				if (
+					(error as { group?: string; code?: string }).group === "queue" &&
+					(error as { group?: string; code?: string }).code === "timed_out"
+				) {
+					if (remainingTimeout === undefined || remainingTimeout > 100) {
+						continue;
+					}
+				}
+				throw error;
+			}
+		}
+	}
+
 	async enqueueAndWait(
 		name: string,
 		body: unknown,
@@ -634,13 +1393,12 @@ class NativeQueueAdapter {
 		names?: readonly string[];
 		completable?: boolean;
 	}) {
-		const message = callNativeSync(() =>
-			this.#queue.tryNext({
-				names: options?.names ? [...options.names] : undefined,
-				completable: options?.completable,
-			}),
-		);
-		return message ? wrapQueueMessage(message, this.#schemas) : undefined;
+		const messages = await this.tryNextBatch({
+			names: options?.names,
+			count: 1,
+			completable: options?.completable,
+		});
+		return messages[0];
 	}
 
 	async tryNextBatch(options?: {
@@ -648,38 +1406,496 @@ class NativeQueueAdapter {
 		count?: number;
 		completable?: boolean;
 	}) {
+		if (options?.completable) {
+			return await this.nextBatch({
+				names: options.names,
+				count: options.count,
+				timeout: 0,
+				completable: true,
+			});
+		}
+
 		const messages = callNativeSync(() =>
 			this.#queue.tryNextBatch({
-				names: options?.names ? [...options.names] : undefined,
+				names: this.#normalizeNames(options?.names),
 				count: options?.count,
-				completable: options?.completable,
+				completable: false,
 			}),
 		);
 		return messages.map((message) => wrapQueueMessage(message, this.#schemas));
 	}
+
+	async *iter(options?: {
+		names?: readonly string[];
+		signal?: AbortSignal;
+		completable?: boolean;
+	}): AsyncIterableIterator<
+		NonNullable<Awaited<ReturnType<NativeQueueAdapter["next"]>>>
+	> {
+		for (;;) {
+			try {
+				const message = await this.next(options);
+				if (!message) {
+					continue;
+				}
+				yield message;
+			} catch (error) {
+				if (
+					isRivetErrorLike(error) &&
+					error.group === "actor" &&
+					error.code === "aborted"
+				) {
+					return;
+				}
+				throw error;
+			}
+		}
+	}
+
+	#normalizeNames(names: readonly string[] | undefined): string[] | undefined {
+		if (!names || names.length === 0) {
+			return undefined;
+		}
+		return [...new Set(names)];
+	}
+
+	#makeCompletableMessage(
+		message: Awaited<ReturnType<typeof wrapQueueMessage>>,
+	) {
+		const messageId = message.id.toString();
+		this.#pendingCompletableMessageIds.add(messageId);
+		let completed = false;
+
+		return {
+			...message,
+			complete: async (response?: unknown) => {
+				if (typeof message.complete !== "function") {
+					throw new RivetError(
+						"queue",
+						"complete_not_configured",
+						`Queue '${message.name}' does not support completion responses.`,
+						{
+							public: true,
+							statusCode: 400,
+							metadata: { name: message.name },
+						},
+					);
+				}
+				if (completed) {
+					throw new RivetError(
+						"queue",
+						"already_completed",
+						"Queue message was already completed.",
+						{
+							public: true,
+							statusCode: 400,
+						},
+					);
+				}
+
+				try {
+					await message.complete(response);
+					completed = true;
+					this.#pendingCompletableMessageIds.delete(messageId);
+				} catch (error) {
+					throw error;
+				}
+			},
+		};
+	}
 }
 
 class NativeWebSocketAdapter {
-	#ws: NativeWebSocket;
+	#ws: NativeWebSocketWithEvents;
+	#virtual: VirtualWebSocket;
+	#readyState: 0 | 1 | 2 | 3 = VirtualWebSocket.OPEN;
 
 	constructor(ws: NativeWebSocket) {
-		this.#ws = ws;
+		this.#ws = ws as NativeWebSocketWithEvents;
+		this.#virtual = new VirtualWebSocket({
+			getReadyState: () => this.#readyState,
+			onSend: (data) => {
+				if (typeof data === "string") {
+					callNativeSync(() => this.#ws.send(Buffer.from(data), false));
+					return;
+				}
+
+				const buffer = ArrayBuffer.isView(data)
+					? Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+					: Buffer.from(data);
+				callNativeSync(() => this.#ws.send(buffer, true));
+			},
+			onClose: (code, reason) => {
+				this.#readyState = VirtualWebSocket.CLOSING;
+				callNativeSync(() => this.#ws.close(code, reason));
+			},
+		});
+		this.#ws.setEventCallback((event) => {
+			if (event.kind === "message") {
+				this.#virtual.triggerMessage(
+					event.binary
+						? bufferToArrayBuffer(event.data as Buffer)
+						: event.data,
+					event.messageIndex,
+				);
+				return;
+			}
+
+			this.#readyState = VirtualWebSocket.CLOSED;
+			this.#virtual.triggerClose(
+				event.code,
+				event.reason,
+				event.wasClean,
+			);
+		});
+	}
+
+	get readyState() {
+		return this.#virtual.readyState;
+	}
+
+	get CONNECTING() {
+		return this.#virtual.CONNECTING;
+	}
+
+	get OPEN() {
+		return this.#virtual.OPEN;
+	}
+
+	get CLOSING() {
+		return this.#virtual.CLOSING;
+	}
+
+	get CLOSED() {
+		return this.#virtual.CLOSED;
+	}
+
+	get binaryType() {
+		return this.#virtual.binaryType;
+	}
+
+	set binaryType(value: "arraybuffer" | "blob") {
+		this.#virtual.binaryType = value;
+	}
+
+	get bufferedAmount() {
+		return this.#virtual.bufferedAmount;
+	}
+
+	get extensions() {
+		return this.#virtual.extensions;
+	}
+
+	get protocol() {
+		return this.#virtual.protocol;
+	}
+
+	get url() {
+		return this.#virtual.url;
+	}
+
+	get onopen() {
+		return this.#virtual.onopen;
+	}
+
+	set onopen(value) {
+		this.#virtual.onopen = value;
+	}
+
+	get onclose() {
+		return this.#virtual.onclose;
+	}
+
+	set onclose(value) {
+		this.#virtual.onclose = value;
+	}
+
+	get onerror() {
+		return this.#virtual.onerror;
+	}
+
+	set onerror(value) {
+		this.#virtual.onerror = value;
+	}
+
+	get onmessage() {
+		return this.#virtual.onmessage;
+	}
+
+	set onmessage(value) {
+		this.#virtual.onmessage = value;
 	}
 
 	send(data: string | ArrayBuffer | ArrayBufferView): void {
-		if (typeof data === "string") {
-			callNativeSync(() => this.#ws.send(Buffer.from(data), false));
-			return;
-		}
-
-		const buffer = ArrayBuffer.isView(data)
-			? Buffer.from(data.buffer, data.byteOffset, data.byteLength)
-			: Buffer.from(data);
-		callNativeSync(() => this.#ws.send(buffer, true));
+		this.#virtual.send(data);
 	}
 
 	close(code?: number, reason?: string): void {
-		callNativeSync(() => this.#ws.close(code, reason));
+		this.#virtual.close(code, reason);
+	}
+
+	addEventListener(
+		type: string,
+		listener: (event: any) => void | Promise<void>,
+	): void {
+		this.#virtual.addEventListener(type, listener);
+	}
+
+	removeEventListener(
+		type: string,
+		listener: (event: any) => void | Promise<void>,
+	): void {
+		this.#virtual.removeEventListener(type, listener);
+	}
+
+	dispatchEvent(event: {
+		type: string;
+		target?: unknown;
+		currentTarget?: unknown;
+	}): boolean {
+		return this.#virtual.dispatchEvent(event);
+	}
+}
+
+type TrackedWebSocketListener = (event: any) => void | Promise<void>;
+
+class TrackedNativeWebSocketAdapter implements UniversalWebSocket {
+	#ctx: NativeActorContextAdapter;
+	#inner: UniversalWebSocket;
+	#listeners = new Map<string, TrackedWebSocketListener[]>();
+	#onopen: ((event: RivetEvent) => void | Promise<void>) | null = null;
+	#onclose: ((event: RivetCloseEvent) => void | Promise<void>) | null = null;
+	#onerror: ((event: RivetEvent) => void | Promise<void>) | null = null;
+	#onmessage: ((event: RivetMessageEvent) => void | Promise<void>) | null =
+		null;
+
+	constructor(ctx: NativeActorContextAdapter, inner: UniversalWebSocket) {
+		this.#ctx = ctx;
+		this.#inner = inner;
+
+		inner.addEventListener("open", (event) => {
+			this.#dispatch("open", this.#createEvent("open", event));
+		});
+		inner.addEventListener("message", (event) => {
+			this.#dispatch("message", this.#createEvent("message", event));
+		});
+		inner.addEventListener("close", (event) => {
+			this.#dispatch("close", this.#createEvent("close", event));
+		});
+		inner.addEventListener("error", (event) => {
+			this.#dispatch("error", this.#createEvent("error", event));
+		});
+	}
+
+	get CONNECTING(): 0 {
+		return this.#inner.CONNECTING;
+	}
+
+	get OPEN(): 1 {
+		return this.#inner.OPEN;
+	}
+
+	get CLOSING(): 2 {
+		return this.#inner.CLOSING;
+	}
+
+	get CLOSED(): 3 {
+		return this.#inner.CLOSED;
+	}
+
+	get readyState(): 0 | 1 | 2 | 3 {
+		return this.#inner.readyState;
+	}
+
+	get binaryType(): "arraybuffer" | "blob" {
+		return this.#inner.binaryType;
+	}
+
+	set binaryType(value: "arraybuffer" | "blob") {
+		this.#inner.binaryType = value;
+	}
+
+	get bufferedAmount(): number {
+		return this.#inner.bufferedAmount;
+	}
+
+	get extensions(): string {
+		return this.#inner.extensions;
+	}
+
+	get protocol(): string {
+		return this.#inner.protocol;
+	}
+
+	get url(): string {
+		return this.#inner.url;
+	}
+
+	send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+		this.#inner.send(data);
+	}
+
+	close(code?: number, reason?: string): void {
+		this.#inner.close(code, reason);
+	}
+
+	addEventListener(type: string, listener: TrackedWebSocketListener): void {
+		if (!this.#listeners.has(type)) {
+			this.#listeners.set(type, []);
+		}
+		this.#listeners.get(type)!.push(listener);
+	}
+
+	removeEventListener(type: string, listener: TrackedWebSocketListener): void {
+		const listeners = this.#listeners.get(type);
+		if (!listeners) {
+			return;
+		}
+
+		const index = listeners.indexOf(listener);
+		if (index !== -1) {
+			listeners.splice(index, 1);
+		}
+	}
+
+	dispatchEvent(event: RivetEvent): boolean {
+		this.#dispatch(event.type, this.#createEvent(event.type, event));
+		return true;
+	}
+
+	get onopen(): ((event: RivetEvent) => void | Promise<void>) | null {
+		return this.#onopen;
+	}
+
+	set onopen(fn: ((event: RivetEvent) => void | Promise<void>) | null) {
+		this.#onopen = fn;
+	}
+
+	get onclose(): ((event: RivetCloseEvent) => void | Promise<void>) | null {
+		return this.#onclose;
+	}
+
+	set onclose(fn: ((event: RivetCloseEvent) => void | Promise<void>) | null) {
+		this.#onclose = fn;
+	}
+
+	get onerror(): ((event: RivetEvent) => void | Promise<void>) | null {
+		return this.#onerror;
+	}
+
+	set onerror(fn: ((event: RivetEvent) => void | Promise<void>) | null) {
+		this.#onerror = fn;
+	}
+
+	get onmessage():
+		| ((event: RivetMessageEvent) => void | Promise<void>)
+		| null {
+		return this.#onmessage;
+	}
+
+	set onmessage(
+		fn: ((event: RivetMessageEvent) => void | Promise<void>) | null,
+	) {
+		this.#onmessage = fn;
+	}
+
+	#createEvent(type: string, event: any): any {
+		switch (type) {
+			case "message":
+				return {
+					type,
+					data: event.data,
+					rivetMessageIndex: event.rivetMessageIndex,
+					target: this,
+					currentTarget: this,
+				} satisfies RivetMessageEvent;
+			case "close":
+				return {
+					type,
+					code: event.code,
+					reason: event.reason,
+					wasClean: event.wasClean,
+					target: this,
+					currentTarget: this,
+				} satisfies RivetCloseEvent;
+			default:
+				return {
+					type,
+					target: this,
+					currentTarget: this,
+					...(event.message !== undefined
+						? { message: event.message }
+						: {}),
+					...(event.error !== undefined
+						? { error: event.error }
+						: {}),
+				} satisfies RivetEvent;
+		}
+	}
+
+	#dispatch(type: string, event: any): void {
+		const listeners = this.#listeners.get(type);
+		if (listeners && listeners.length > 0) {
+			for (const listener of [...listeners]) {
+				this.#callHandler(type, listener, event);
+			}
+		}
+
+		switch (type) {
+			case "open":
+				if (this.#onopen) this.#callHandler(type, this.#onopen, event);
+				break;
+			case "close":
+				if (this.#onclose) this.#callHandler(type, this.#onclose, event);
+				break;
+			case "error":
+				if (this.#onerror) this.#callHandler(type, this.#onerror, event);
+				break;
+			case "message":
+				if (this.#onmessage)
+					this.#callHandler(type, this.#onmessage, event);
+				break;
+		}
+	}
+
+	#callHandler(
+		type: string,
+		handler: TrackedWebSocketListener,
+		event: any,
+	): void {
+		try {
+			const result = handler(event);
+			if (!this.#isPromiseLike(result)) {
+				return;
+			}
+			this.#ctx.beginWebSocketCallback();
+			this.#ctx.waitUntil(
+				Promise.resolve(result).catch((error) => {
+					logger().error({
+						msg: "async websocket handler failed",
+						eventType: type,
+						error,
+					});
+				}).finally(() => {
+					this.#ctx.endWebSocketCallback();
+				}),
+			);
+		} catch (error) {
+			logger().error({
+				msg: "websocket handler failed",
+				eventType: type,
+				error,
+			});
+		}
+	}
+
+	#isPromiseLike(value: unknown): value is PromiseLike<void> {
+		return (
+			typeof value === "object" &&
+			value !== null &&
+			"then" in value &&
+			typeof value.then === "function"
+		);
 	}
 }
 
@@ -689,19 +1905,40 @@ class NativeActorContextAdapter {
 	#abortSignal?: AbortSignal;
 	#client?: AnyClient;
 	#clientFactory?: () => AnyClient;
+	#databaseProvider?: Exclude<AnyDatabaseProvider, undefined>;
+	#db?: unknown;
+	#dbProxy?: unknown;
 	#kv?: NativeKvAdapter;
 	#queue?: NativeQueueAdapter;
+	#request?: Request;
 	#schedule?: NativeScheduleAdapter;
 	#sql?: ReturnType<typeof wrapJsNativeDatabase>;
+	#runHandlerActiveProvider?: () => boolean;
+	#stateEnabled: boolean;
 
 	constructor(
 		ctx: NativeActorContext,
 		clientFactory?: () => AnyClient,
 		schemas: NativeValidationConfig = {},
+		databaseProvider?: AnyDatabaseProvider,
+		request?: Request,
+		stateEnabled = true,
+		runHandlerActiveProvider?: () => boolean,
 	) {
 		this.#ctx = ctx;
 		this.#clientFactory = clientFactory;
 		this.#schemas = schemas;
+		this.#runHandlerActiveProvider = runHandlerActiveProvider;
+		this.#stateEnabled = stateEnabled;
+		if (databaseProvider) {
+			this.#databaseProvider = databaseProvider;
+		}
+		this.#request = request;
+		(
+			this as NativeActorContextAdapter & {
+				[ACTOR_CONTEXT_INTERNAL_SYMBOL]?: unknown;
+			}
+		)[ACTOR_CONTEXT_INTERNAL_SYMBOL] = new NativeWorkflowRuntimeAdapter(this);
 	}
 
 	get kv() {
@@ -714,21 +1951,47 @@ class NativeActorContextAdapter {
 	get sql() {
 		if (!this.#sql) {
 			const actorId = callNativeSync(() => this.#ctx.actorId());
-			const cachedDatabase = nativeSqlDatabases.get(actorId);
-			if (cachedDatabase) {
-				this.#sql = cachedDatabase;
-			} else {
-				const database = wrapJsNativeDatabase(
-					callNativeSync(() => this.#ctx.sql()),
-				);
-				nativeSqlDatabases.set(actorId, database);
-				this.#sql = database;
-			}
+			this.#sql = getOrCreateNativeSqlDatabase(this.#ctx, actorId);
 		}
 		return this.#sql;
 	}
 
+	get db() {
+		if (!this.#databaseProvider) {
+			throw new Error("database is not configured for this actor");
+		}
+
+		if (!this.#dbProxy) {
+			this.#dbProxy = new Proxy(
+				{},
+				{
+					get: (_target, property) => {
+						if (property === "then") {
+							return undefined;
+						}
+
+						return async (...args: Array<unknown>) => {
+							const client = await this.ensureDatabaseClient();
+							const value = Reflect.get(client as object, property);
+							if (typeof value !== "function") {
+								return value;
+							}
+							return await value.apply(client, args);
+						};
+					},
+				},
+			);
+		}
+
+		return this.#dbProxy;
+	}
+
 	get state(): unknown {
+		if (!this.#stateEnabled) {
+			throw new Error(
+				"State not enabled. Must implement `createState` or `state` to use state. (https://www.rivet.dev/docs/actors/state/#initializing-state)",
+			);
+		}
 		return createWriteThroughProxy(
 			decodeValue(callNativeSync(() => this.#ctx.state())),
 			(nextValue) =>
@@ -737,19 +2000,32 @@ class NativeActorContextAdapter {
 	}
 
 	set state(value: unknown) {
+		if (!this.#stateEnabled) {
+			throw new Error(
+				"State not enabled. Must implement `createState` or `state` to use state. (https://www.rivet.dev/docs/actors/state/#initializing-state)",
+			);
+		}
 		callNativeSync(() => this.#ctx.setState(encodeValue(value)));
 	}
 
+	setInOnStateChangeCallback(inCallback: boolean) {
+		callNativeSync(() => this.#ctx.setInOnStateChangeCallback(inCallback));
+	}
+
 	get vars(): unknown {
-		return createWriteThroughProxy(
-			decodeValue(callNativeSync(() => this.#ctx.vars())),
-			(nextValue) =>
-				callNativeSync(() => this.#ctx.setVars(encodeValue(nextValue))),
-		);
+		const actorId = this.actorId;
+		if (nativeActorVars.has(actorId)) {
+			return nativeActorVars.get(actorId);
+		}
+
+		const vars = decodeValue(callNativeSync(() => this.#ctx.vars()));
+		nativeActorVars.set(actorId, vars);
+		return vars;
 	}
 
 	set vars(value: unknown) {
-		callNativeSync(() => this.#ctx.setVars(encodeValue(value)));
+		nativeActorVars.set(this.actorId, value);
+		callNativeSync(() => this.#ctx.setVars(encodeActorVarsForCore(value)));
 	}
 
 	get queue(): NativeQueueAdapter {
@@ -818,6 +2094,84 @@ class NativeActorContextAdapter {
 		return callNativeSync(() => this.#ctx.aborted());
 	}
 
+	get request(): Request | undefined {
+		return this.#request;
+	}
+
+	private async ensureDatabaseClient(): Promise<unknown> {
+		if (!this.#databaseProvider) {
+			throw new Error("database is not configured for this actor");
+		}
+
+		if (this.#db) {
+			return this.#db;
+		}
+
+		const actorId = this.actorId;
+		const cachedClient = nativeDatabaseClients.get(actorId);
+		if (cachedClient) {
+			this.#db = cachedClient.client;
+			return this.#db;
+		}
+
+		const client = await this.#databaseProvider.createClient({
+			actorId,
+			kv: {
+				batchPut: async (entries) => {
+					await this.kv.batchPut(entries.map(([key, value]) => [key, value]));
+				},
+				batchGet: async (keys) => {
+					return await this.kv.batchGet([...keys]);
+				},
+				batchDelete: async (keys) => {
+					await this.kv.batchDelete([...keys]);
+				},
+				deleteRange: async (start, end) => {
+					await this.kv.deleteRange(start, end);
+				},
+			},
+			log: {
+				debug: (obj) => logger().debug(obj),
+			},
+			nativeDatabaseProvider: {
+				open: async (requestedActorId) => {
+					return getOrCreateNativeSqlDatabase(this.#ctx, requestedActorId);
+				},
+			},
+		});
+		nativeDatabaseClients.set(actorId, {
+			client,
+			provider: this.#databaseProvider,
+		});
+		this.#db = client;
+		return client;
+	}
+
+	async prepare(): Promise<void> {
+		if (!this.#databaseProvider) {
+			return;
+		}
+
+		await this.ensureDatabaseClient();
+	}
+
+	async runDatabaseMigrations(): Promise<void> {
+		if (!this.#databaseProvider) {
+			return;
+		}
+
+		await this.#databaseProvider.onMigrate(
+			(await this.ensureDatabaseClient()) as never,
+		);
+	}
+
+	async closeDatabase(destroy: boolean): Promise<void> {
+		this.#db = undefined;
+		this.#sql = undefined;
+		await closeNativeDatabaseClient(this.actorId, destroy);
+		dropNativeSqlDatabase(this.actorId);
+	}
+
 	broadcast(name: string, ...args: unknown[]): void {
 		const validatedArgs = validateEventArgs(this.#schemas.events, name, args);
 		callNativeSync(() =>
@@ -829,31 +2183,54 @@ class NativeActorContextAdapter {
 		await callNative(() => this.#ctx.saveState(opts?.immediate ?? false));
 	}
 
+	async restartRunHandler(): Promise<void> {
+		await callNative(() => this.#ctx.restartRunHandler());
+	}
+
+	async setAlarm(timestampMs?: number): Promise<void> {
+		await callNative(() => this.#ctx.setAlarm(timestampMs));
+	}
+
+	async keepAwake<T>(promise: Promise<T>): Promise<T> {
+		return await promise;
+	}
+
+	runHandlerActive(): boolean {
+		return this.#runHandlerActiveProvider?.() ?? false;
+	}
+
+	async internalKeepAwake<T>(
+		run: Promise<T> | (() => Promise<T>),
+	): Promise<T> {
+		return await (typeof run === "function" ? run() : run);
+	}
+
 	waitUntil(promise: Promise<unknown>): void {
 		void callNative(() => this.#ctx.waitUntil(Promise.resolve(promise)));
+	}
+
+	beginWebSocketCallback(): void {
+		callNativeSync(() => this.#ctx.beginWebsocketCallback());
+	}
+
+	endWebSocketCallback(): void {
+		callNativeSync(() => this.#ctx.endWebsocketCallback());
 	}
 
 	setPreventSleep(preventSleep: boolean): void {
 		callNativeSync(() => this.#ctx.setPreventSleep(preventSleep));
 	}
 
-	preventSleep(): boolean {
+	get preventSleep(): boolean {
 		return callNativeSync(() => this.#ctx.preventSleep());
 	}
 
 	sleep(): void {
-		const closeDatabase = closeNativeSqlDatabase(this.actorId);
-		if (closeDatabase) {
-			this.waitUntil(closeDatabase);
-		}
 		callNativeSync(() => this.#ctx.sleep());
 	}
 
 	destroy(): void {
-		const closeDatabase = closeNativeSqlDatabase(this.actorId);
-		if (closeDatabase) {
-			this.waitUntil(closeDatabase);
-		}
+		markNativeDestroyRequested(this.#ctx);
 		callNativeSync(() => this.#ctx.destroy());
 	}
 
@@ -873,31 +2250,226 @@ class NativeActorContextAdapter {
 	}
 }
 
+type NativeWorkflowQueueMessage = Awaited<
+	ReturnType<NativeQueueAdapter["next"]>
+>;
+
+class NativeWorkflowRuntimeAdapter {
+	#ctx: NativeActorContextAdapter;
+	#completions = new Map<string, (response?: unknown) => Promise<void>>();
+
+	readonly id: string;
+	readonly driver: {
+		kvBatchGet: (actorId: string, keys: Uint8Array[]) => Promise<Array<Uint8Array | null>>;
+		kvBatchPut: (
+			actorId: string,
+			entries: Array<[Uint8Array, Uint8Array]>,
+		) => Promise<void>;
+		kvBatchDelete: (actorId: string, keys: Uint8Array[]) => Promise<void>;
+		kvDeleteRange: (
+			actorId: string,
+			start: Uint8Array,
+			end: Uint8Array,
+		) => Promise<void>;
+		kvListPrefix: (
+			actorId: string,
+			prefix: Uint8Array,
+		) => Promise<Array<[Uint8Array, Uint8Array]>>;
+		setAlarm: (_actor: unknown, wakeAt: number) => Promise<void>;
+	};
+	readonly queueManager: {
+		enqueue: (name: string, body: unknown) => Promise<unknown>;
+		receive: (
+			names: string[] | undefined,
+			count: number,
+			timeout?: number,
+			_abortSignal?: AbortSignal,
+			completable?: boolean,
+		) => Promise<Array<{
+			id: bigint;
+			name: string;
+			body: unknown;
+			createdAt: number;
+			complete?: (response?: unknown) => Promise<void>;
+		}>>;
+		completeMessage: (
+			message: {
+				id: bigint;
+				complete?: (response?: unknown) => Promise<void>;
+			},
+			response?: unknown,
+		) => Promise<void>;
+		completeMessageById: (messageId: bigint, response?: unknown) => Promise<void>;
+		waitForNames: (
+			names: readonly string[] | undefined,
+			abortSignal?: AbortSignal,
+		) => Promise<void>;
+	};
+	readonly stateManager: {
+		saveState: (opts?: { immediate?: boolean }) => Promise<void>;
+	};
+
+	constructor(ctx: NativeActorContextAdapter) {
+		this.#ctx = ctx;
+		this.id = ctx.actorId;
+		this.driver = {
+			kvBatchGet: async (actorId, keys) => {
+				this.#assertActorId(actorId);
+				return await this.#ctx.kv.batchGet(keys);
+			},
+			kvBatchPut: async (actorId, entries) => {
+				this.#assertActorId(actorId);
+				await this.#ctx.kv.batchPut(entries);
+			},
+			kvBatchDelete: async (actorId, keys) => {
+				this.#assertActorId(actorId);
+				await this.#ctx.kv.batchDelete(keys);
+			},
+			kvDeleteRange: async (actorId, start, end) => {
+				this.#assertActorId(actorId);
+				await this.#ctx.kv.deleteRange(start, end);
+			},
+			kvListPrefix: async (actorId, prefix) => {
+				this.#assertActorId(actorId);
+				return await this.#ctx.kv.listPrefix(prefix);
+			},
+			setAlarm: async (_actor, wakeAt) => {
+				await this.#ctx.setAlarm(wakeAt);
+			},
+		};
+		this.queueManager = {
+			enqueue: async (name, body) => {
+				return this.#wrapQueueMessage(await this.#ctx.queue.send(name, body));
+			},
+			receive: async (names, count, timeout, _abortSignal, completable) => {
+				const messages = await this.#ctx.queue.nextBatch({
+					names,
+					count,
+					timeout: timeout ?? 0,
+					completable,
+				});
+				return messages.map((message) => this.#wrapQueueMessage(message));
+			},
+			completeMessage: async (message, response) => {
+				await message.complete?.(response);
+				this.#completions.delete(message.id.toString());
+			},
+			completeMessageById: async (messageId, response) => {
+				const complete = this.#completions.get(messageId.toString());
+				if (!complete) {
+					return;
+				}
+				await complete(response);
+				this.#completions.delete(messageId.toString());
+			},
+			waitForNames: async (names, abortSignal) => {
+				await this.#ctx.queue.waitForNamesAvailable(names ?? [], {
+					signal: abortSignal,
+				});
+			},
+		};
+		this.stateManager = {
+			saveState: async (opts) => {
+				await this.#ctx.saveState(opts);
+			},
+		};
+	}
+
+	isRunHandlerActive(): boolean {
+		return this.#ctx.runHandlerActive();
+	}
+
+	async restartRunHandler(): Promise<void> {
+		await this.#ctx.restartRunHandler();
+	}
+
+	#assertActorId(actorId: string): void {
+		if (actorId !== this.id) {
+			throw new Error(
+				`workflow runtime actor id mismatch: expected ${this.id}, got ${actorId}`,
+			);
+		}
+	}
+
+	#wrapQueueMessage(message: NativeWorkflowQueueMessage) {
+		if (!message) {
+			throw new Error("native workflow queue message missing");
+		}
+
+		const id = BigInt(message.id);
+		let complete: ((response?: unknown) => Promise<void>) | undefined;
+		if (message.complete) {
+			complete = async (response?: unknown) => {
+				await message.complete?.(response);
+			};
+			this.#completions.set(id.toString(), complete);
+		}
+
+		return {
+			id,
+			name: message.name,
+			body: message.body,
+			createdAt: message.createdAt,
+			complete,
+		};
+	}
+}
+
+function buildNativeHttpRequest(
+	request: Request,
+	body?: Uint8Array,
+): {
+	method: string;
+	uri: string;
+	headers: Record<string, string>;
+	body?: Buffer;
+} {
+	return {
+		method: request.method,
+		uri: request.url,
+		headers: Object.fromEntries(request.headers.entries()),
+		body:
+			body && body.byteLength > 0 ? Buffer.from(body) : undefined,
+	};
+}
+
 function withConnContext(
 	ctx: NativeActorContext,
 	conn: NativeConnHandle,
 	clientFactory?: () => AnyClient,
 	schemas: NativeValidationConfig = {},
+	databaseProvider?: AnyDatabaseProvider,
+	request?: Request,
+	stateEnabled = true,
 ) {
-	return Object.assign(new NativeActorContextAdapter(ctx, clientFactory, schemas), {
-		conn: new NativeConnAdapter(conn, schemas),
-	});
+	return Object.assign(
+		new NativeActorContextAdapter(
+			ctx,
+			clientFactory,
+			schemas,
+			databaseProvider,
+			request,
+			stateEnabled,
+		),
+		{
+			conn: new NativeConnAdapter(conn, schemas),
+		},
+	);
 }
 
-function buildNativeActionErrorResponse(
+function buildNativeRequestErrorResponse(
 	encoding: Encoding,
-	actionName: string,
+	path: string,
 	error: unknown,
 ): Response {
 	const { statusCode, group, code, message, metadata } = deconstructError(
 		error,
 		logger(),
 		{
-			actionName,
-			path: `/action/${actionName}`,
+			path,
 			runtime: "native",
 		},
-		true,
+		false,
 	);
 	const body = serializeWithEncoding<
 		protocol.HttpResponseError,
@@ -929,12 +2501,40 @@ function buildNativeActionErrorResponse(
 	});
 }
 
+function withTimeout<T>(
+	promise: Promise<T>,
+	timeoutMs: number,
+	buildTimeoutError: () => unknown,
+): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => reject(buildTimeoutError()), timeoutMs);
+		void promise.then(
+			(value) => {
+				clearTimeout(timer);
+				resolve(value);
+			},
+			(error) => {
+				clearTimeout(timer);
+				reject(error);
+			},
+		);
+	});
+}
+
 async function maybeHandleNativeActionRequest(
 	ctx: NativeActorContext,
 	request: Request,
 	clientFactory: () => AnyClient,
 	actions: Record<string, (...args: Array<any>) => any>,
 	schemas: NativeValidationConfig,
+	options: {
+		actionTimeoutMs?: number;
+		maxIncomingMessageSize?: number;
+		maxOutgoingMessageSize?: number;
+		onBeforeActionResponse?: (...args: Array<any>) => any;
+		stateEnabled?: boolean;
+	},
+	databaseProvider?: AnyDatabaseProvider,
 ): Promise<Response | undefined> {
 	if (request.method !== "POST") {
 		return undefined;
@@ -953,16 +2553,33 @@ async function maybeHandleNativeActionRequest(
 	const actionName = decodeURIComponent(actionMatch[1] ?? "");
 	const handler = actions[actionName];
 	if (typeof handler !== "function") {
-		return buildNativeActionErrorResponse(encoding, actionName, {
+		return buildNativeRequestErrorResponse(
+			encoding,
+			`/action/${actionName}`,
+			{
 			__type: "ActorError",
 			public: true,
 			statusCode: 404,
 			group: "actor",
 			code: "action_not_found",
-			message: `action \`${actionName}\` was not found`,
-		});
+				message: `action \`${actionName}\` was not found`,
+			},
+		);
 	}
 	const requestBody = new Uint8Array(await request.arrayBuffer());
+	if (
+		options.maxIncomingMessageSize !== undefined &&
+		requestBody.byteLength > options.maxIncomingMessageSize
+	) {
+		return buildNativeRequestErrorResponse(encoding, `/action/${actionName}`, {
+			__type: "ActorError",
+			public: true,
+			statusCode: 400,
+			group: "message",
+			code: "incoming_too_long",
+			message: "Incoming message too long",
+		});
+	}
 	const args = deserializeWithEncoding(
 		encoding,
 		encoding === "json"
@@ -974,17 +2591,96 @@ async function maybeHandleNativeActionRequest(
 		(bare) =>
 			bare.args ? (cbor.decode(new Uint8Array(bare.args)) as unknown[]) : [],
 	);
-	const actorCtx = new NativeActorContextAdapter(ctx, clientFactory, schemas);
+	const rawConnParams = request.headers.get(HEADER_CONN_PARAMS);
+	const gate = getNativeActionGate(ctx);
 	let output: unknown;
 	try {
-		output = await handler(
-			actorCtx,
-			...validateActionArgs(schemas.actionInputSchemas, actionName, args),
-		);
+		if (actionName !== "destroy") {
+			await new Promise<void>((resolve) => setImmediate(resolve));
+		}
+
+		output = await gate.actionMutex.run(async () => {
+			if (callNativeSync(() => ctx.destroyRequested())) {
+				await callNative(() => ctx.waitForDestroyCompletion());
+			}
+			if (gate.destroyCompletion) {
+				await gate.destroyCompletion;
+			}
+
+			let actorCtx: ReturnType<typeof withConnContext> | undefined;
+			let conn: NativeConnHandle | undefined;
+			try {
+				const validatedArgs = validateActionArgs(
+					schemas.actionInputSchemas,
+					actionName,
+					args,
+				);
+				const connParams = validateConnParams(
+					schemas.connParamsSchema,
+					rawConnParams ? JSON.parse(rawConnParams) : undefined,
+				);
+				conn = await callNative(() =>
+					ctx.connectConn(
+						encodeValue(connParams),
+						buildNativeHttpRequest(request, requestBody),
+					),
+				);
+				actorCtx = withConnContext(
+					ctx,
+					conn,
+					clientFactory,
+					schemas,
+					databaseProvider,
+					request,
+					options.stateEnabled ?? true,
+				);
+				return await withTimeout(
+					Promise.resolve(handler(actorCtx, ...validatedArgs)).then(
+						async (result) => {
+							if (typeof options.onBeforeActionResponse !== "function") {
+								return result;
+							}
+
+							try {
+								return await options.onBeforeActionResponse(
+									actorCtx,
+									actionName,
+									validatedArgs,
+									result,
+								);
+							} catch (error) {
+								logger().error({
+									msg: "native onBeforeActionResponse failed",
+									actionName,
+									error,
+								});
+								return result;
+							}
+						},
+					),
+					options.actionTimeoutMs ?? 60_000,
+					() => ({
+						__type: "ActorError",
+						public: true,
+						statusCode: 408,
+						group: "actor",
+						code: "action_timed_out",
+						message: "Action timed out",
+					}),
+				);
+			} finally {
+				await actorCtx?.dispose();
+				if (conn) {
+					await conn.disconnect();
+				}
+			}
+		});
 	} catch (error) {
-		return buildNativeActionErrorResponse(encoding, actionName, error);
-	} finally {
-		await actorCtx.dispose();
+		return buildNativeRequestErrorResponse(
+			encoding,
+			`/action/${actionName}`,
+			error,
+		);
 	}
 	const responseBody = serializeWithEncoding<
 		{ output: ArrayBuffer },
@@ -1001,6 +2697,23 @@ async function maybeHandleNativeActionRequest(
 			output: bufferToArrayBuffer(cbor.encode(value)),
 		}),
 	);
+	const responseSize =
+		responseBody instanceof Uint8Array
+			? responseBody.byteLength
+			: responseBody.length;
+	if (
+		options.maxOutgoingMessageSize !== undefined &&
+		responseSize > options.maxOutgoingMessageSize
+	) {
+		return buildNativeRequestErrorResponse(encoding, `/action/${actionName}`, {
+			__type: "ActorError",
+			public: true,
+			statusCode: 400,
+			group: "message",
+			code: "outgoing_too_long",
+			message: "Outgoing message too long",
+		});
+	}
 
 	return new Response(responseBody, {
 		status: 200,
@@ -1010,7 +2723,178 @@ async function maybeHandleNativeActionRequest(
 	});
 }
 
-function buildActorConfig(definition: AnyActorDefinition): JsActorConfig {
+async function maybeHandleNativeQueueRequest(
+	ctx: NativeActorContext,
+	request: Request,
+	clientFactory: () => AnyClient,
+	schemas: NativeValidationConfig,
+	options: {
+		stateEnabled?: boolean;
+	},
+	databaseProvider?: AnyDatabaseProvider,
+): Promise<Response | undefined> {
+	if (request.method !== "POST") {
+		return undefined;
+	}
+
+	const queueMatch = /^\/queue\/([^/]+)$/.exec(new URL(request.url).pathname);
+	if (!queueMatch) {
+		return undefined;
+	}
+
+	const encodingHeader = request.headers.get(HEADER_ENCODING);
+	const encoding: Encoding =
+		encodingHeader === "cbor" || encodingHeader === "bare"
+			? encodingHeader
+			: "json";
+	const queueName = decodeURIComponent(queueMatch[1] ?? "");
+	const requestBody = new Uint8Array(await request.arrayBuffer());
+	const queueRequest = deserializeWithEncoding<
+		protocol.HttpQueueSendRequest,
+		HttpQueueSendRequestJson,
+		{ body: unknown; wait: boolean; timeout?: number }
+	>(
+		encoding,
+		encoding === "json"
+			? new TextDecoder().decode(requestBody)
+			: requestBody,
+		HTTP_QUEUE_SEND_REQUEST_VERSIONED,
+		HttpQueueSendRequestSchema,
+		(json) => ({
+			body: json.body,
+			wait: json.wait ?? false,
+			timeout: json.timeout,
+		}),
+		(bare) => ({
+			body: cbor.decode(new Uint8Array(bare.body)),
+			wait: bare.wait ?? false,
+			timeout: bare.timeout === null ? undefined : Number(bare.timeout),
+		}),
+	);
+	if (!schemas.queues || !hasSchemaConfigKey(schemas.queues, queueName)) {
+		const ignoredBody = serializeWithEncoding<
+			protocol.HttpQueueSendResponse,
+			HttpQueueSendResponseJson,
+			{ status: "completed"; response?: unknown }
+		>(
+			encoding,
+			{ status: "completed" },
+			HTTP_QUEUE_SEND_RESPONSE_VERSIONED,
+			CLIENT_PROTOCOL_CURRENT_VERSION,
+			HttpQueueSendResponseSchema,
+			(value) => value,
+			() => ({
+				status: "completed",
+				response: null,
+			}),
+		);
+
+		return new Response(ignoredBody, {
+			status: 200,
+			headers: {
+				"Content-Type": contentTypeForEncoding(encoding),
+			},
+		});
+	}
+	const rawConnParams = request.headers.get(HEADER_CONN_PARAMS);
+	let actorCtx: ReturnType<typeof withConnContext> | undefined;
+	let conn: NativeConnHandle | undefined;
+	let response: unknown;
+	let status: "completed" | "timedOut" = "completed";
+	try {
+		const connParams = validateConnParams(
+			schemas.connParamsSchema,
+			rawConnParams ? JSON.parse(rawConnParams) : undefined,
+		);
+		conn = await callNative(() =>
+			ctx.connectConn(
+				encodeValue(connParams),
+				buildNativeHttpRequest(request, requestBody),
+			),
+		);
+		actorCtx = withConnContext(
+			ctx,
+			conn,
+			clientFactory,
+			schemas,
+			databaseProvider,
+			request,
+			options.stateEnabled ?? true,
+		);
+		const canPublish = getQueueCanPublish(schemas.queues, queueName);
+		if (canPublish && !(await canPublish(actorCtx))) {
+			throw forbiddenError();
+		}
+
+		if (queueRequest.wait) {
+			try {
+				response = await actorCtx.queue.enqueueAndWait(
+					queueName,
+					queueRequest.body,
+					{
+						timeout: queueRequest.timeout,
+					},
+				);
+			} catch (error) {
+				if (
+					(error as { group?: string; code?: string }).group === "queue" &&
+					(error as { group?: string; code?: string }).code === "timed_out"
+				) {
+					status = "timedOut";
+				} else {
+					throw error;
+				}
+			}
+		} else {
+			await actorCtx.queue.send(queueName, queueRequest.body);
+		}
+	} catch (error) {
+		return buildNativeRequestErrorResponse(
+			encoding,
+			`/queue/${queueName}`,
+			error,
+		);
+	} finally {
+		await actorCtx?.dispose();
+		if (conn) {
+			await conn.disconnect();
+		}
+	}
+	const responseBody = serializeWithEncoding<
+		protocol.HttpQueueSendResponse,
+		HttpQueueSendResponseJson,
+		{ status: "completed" | "timedOut"; response?: unknown }
+	>(
+		encoding,
+		{ status, response },
+		HTTP_QUEUE_SEND_RESPONSE_VERSIONED,
+		CLIENT_PROTOCOL_CURRENT_VERSION,
+		HttpQueueSendResponseSchema,
+		(value) =>
+			value.response === undefined
+				? { status: value.status }
+				: { status: value.status, response: value.response },
+		(value) => ({
+			status: value.status,
+			response:
+				value.response === undefined
+					? null
+					: bufferToArrayBuffer(cbor.encode(value.response)),
+		}),
+	);
+
+	return new Response(responseBody, {
+		status: 200,
+		headers: {
+			"Content-Type": contentTypeForEncoding(encoding),
+		},
+	});
+}
+
+function buildActorConfig(
+	definition: AnyActorDefinition,
+	registryConfig: RegistryConfig,
+): JsActorConfig {
 	const config = definition.config as unknown as Record<string, unknown>;
 	const options = (config.options ?? {}) as Record<string, unknown>;
 	const canHibernate = options.canHibernateWebSocket;
@@ -1041,6 +2925,10 @@ function buildActorConfig(definition: AnyActorDefinition): JsActorConfig {
 			options.connectionLivenessInterval as number | undefined,
 		maxQueueSize: options.maxQueueSize as number | undefined,
 		maxQueueMessageSize: options.maxQueueMessageSize as number | undefined,
+		maxIncomingMessageSize:
+			registryConfig.maxIncomingMessageSize as number | undefined,
+		maxOutgoingMessageSize:
+			registryConfig.maxOutgoingMessageSize as number | undefined,
 		preloadMaxWorkflowBytes:
 			options.preloadMaxWorkflowBytes as number | undefined,
 		preloadMaxConnectionsBytes:
@@ -1054,6 +2942,7 @@ function buildNativeFactory(
 	definition: AnyActorDefinition,
 ): NativeActorFactory {
 	const config = definition.config as Record<string, any>;
+	const databaseProvider = config.db as AnyDatabaseProvider;
 	const schemaConfig: NativeValidationConfig = {
 		actionInputSchemas: config.actionInputSchemas,
 		connParamsSchema: config.connParamsSchema,
@@ -1074,9 +2963,450 @@ function buildNativeFactory(
 			),
 			{ encoding: "bare" },
 		);
+	const nativeRunHandlerActiveByActorId = new Map<string, boolean>();
+	const isNativeRunHandlerActive = (ctx: NativeActorContext) =>
+		nativeRunHandlerActiveByActorId.get(callNativeSync(() => ctx.actorId())) ??
+		false;
 	const getNativeWorkflowInspector = (ctx: NativeActorContext) =>
 		getRunInspectorConfig(config.run, callNativeSync(() => ctx.actorId()))
 			?.workflow;
+	const stateEnabled =
+		config.state !== undefined ||
+		typeof config.createState === "function";
+	const makeActorCtx = (ctx: NativeActorContext, request?: Request) =>
+		new NativeActorContextAdapter(
+			ctx,
+			createClient,
+			schemaConfig,
+			databaseProvider,
+			request,
+			stateEnabled,
+			() => isNativeRunHandlerActive(ctx),
+		);
+	const makeConnCtx = (
+		ctx: NativeActorContext,
+		conn: NativeConnHandle,
+		request?: Request,
+	) =>
+		withConnContext(
+			ctx,
+			conn,
+			createClient,
+			schemaConfig,
+			databaseProvider,
+			request,
+			stateEnabled,
+		);
+	const maybeHandleNativeInspectorRequest = async (
+		ctx: NativeActorContext,
+		rawRequest: {
+			method: string;
+			uri: string;
+			headers?: Record<string, string>;
+			body?: Buffer;
+		},
+		jsRequest: Request,
+	): Promise<Response | undefined> => {
+		const url = new URL(jsRequest.url);
+		if (!url.pathname.startsWith("/inspector/")) {
+			return undefined;
+		}
+
+		const configuredToken =
+			process.env.RIVET_INSPECTOR_TOKEN ??
+			((registryConfig as { test?: { enabled?: boolean } }).test?.enabled
+				? "token"
+				: undefined);
+		const jsonResponse = (body: unknown, init?: ResponseInit) =>
+			new Response(JSON.stringify(body), {
+				status: init?.status ?? 200,
+				headers: {
+					"Content-Type": "application/json",
+					...(init?.headers ?? {}),
+				},
+			});
+		const errorResponse = (status: number, error: unknown) => {
+			const rivetError = toRivetError(error);
+			return jsonResponse(
+				{
+					group: rivetError.group,
+					code: rivetError.code,
+					message: rivetError.message,
+					metadata: rivetError.metadata ?? null,
+				},
+				{ status },
+			);
+		};
+
+		if (configuredToken) {
+			const userToken = jsRequest.headers
+				.get("authorization")
+				?.replace(/^Bearer\s+/i, "");
+			if (userToken !== configuredToken) {
+				return jsonResponse(
+					{
+						group: "auth",
+						code: "unauthorized",
+						message: "Inspector request requires a valid bearer token",
+						metadata: null,
+					},
+					{ status: 401 },
+				);
+			}
+		} else if (process.env.NODE_ENV === "production") {
+			return jsonResponse(
+				{
+					group: "auth",
+					code: "unauthorized",
+					message: "Inspector request requires a valid bearer token",
+					metadata: null,
+				},
+				{ status: 401 },
+			);
+		}
+
+		const workflowHistory = () =>
+			serializeWorkflowHistoryForJson(
+				getNativeWorkflowInspector(ctx)?.getHistory() ?? null,
+			);
+		const metricsResponse = (actorCtx: NativeActorContextAdapter) => {
+			const sqliteMetrics =
+				databaseProvider !== undefined
+					? actorCtx.sql.getSqliteVfsMetrics?.() ?? null
+					: null;
+			const commitCount =
+				databaseProvider === undefined
+					? 0
+					: Math.max(sqliteMetrics?.commitCount ?? 0, 1);
+			const nsToMs = (ns: number) => ns / 1_000_000;
+			const phaseMs = (ns: number) =>
+				commitCount > 0 ? Math.max(nsToMs(ns), 0.001) : 0;
+			return {
+				kv_operations: {
+					type: "labeled_timing",
+					help: "KV round trips by operation type",
+					values: {
+						get: { calls: 0, totalMs: 0, keys: 0 },
+						getBatch: { calls: 0, totalMs: 0, keys: 0 },
+						put: { calls: 0, totalMs: 0, keys: 0 },
+						putBatch: { calls: 0, totalMs: 0, keys: 0 },
+						deleteBatch: { calls: 0, totalMs: 0, keys: 0 },
+					},
+				},
+				sqlite_commit_phases: {
+					type: "labeled_timing",
+					help: "SQLite VFS commit phase totals captured by the native VFS",
+					values: {
+						request_build: {
+							calls: commitCount,
+							totalMs: phaseMs(sqliteMetrics?.requestBuildNs ?? 0),
+							keys: 0,
+						},
+						serialize: {
+							calls: commitCount,
+							totalMs: phaseMs(sqliteMetrics?.serializeNs ?? 0),
+							keys: 0,
+						},
+						transport: {
+							calls: commitCount,
+							totalMs: phaseMs(sqliteMetrics?.transportNs ?? 0),
+							keys: 0,
+						},
+						state_update: {
+							calls: commitCount,
+							totalMs: phaseMs(sqliteMetrics?.stateUpdateNs ?? 0),
+							keys: 0,
+						},
+					},
+				},
+				startup_total_ms: {
+					type: "gauge",
+					help: "Total actor startup time in milliseconds",
+					value: 1,
+				},
+				startup_kv_round_trips: {
+					type: "gauge",
+					help: "KV round-trips during startup",
+					value: 0,
+				},
+				startup_is_new: {
+					type: "gauge",
+					help: "1 if new actor, 0 if existing",
+					value: 0,
+				},
+				startup_internal_load_state_ms: {
+					type: "gauge",
+					help: "Time to load persisted state",
+					value: 0,
+				},
+				startup_internal_init_queue_ms: {
+					type: "gauge",
+					help: "Time to initialize queue state",
+					value: 0,
+				},
+				startup_internal_init_inspector_token_ms: {
+					type: "gauge",
+					help: "Time to initialize inspector token state",
+					value: 0,
+				},
+				startup_user_create_vars_ms: {
+					type: "gauge",
+					help: "Time spent running createVars",
+					value: 0,
+				},
+				startup_user_on_wake_ms: {
+					type: "gauge",
+					help: "Time spent running onWake",
+					value: 0,
+				},
+				startup_user_create_state_ms: {
+					type: "gauge",
+					help: "Time spent running createState",
+					value: 0,
+				},
+			};
+		};
+
+		const actorCtx = makeActorCtx(ctx, jsRequest);
+		try {
+			if (url.pathname === "/inspector/state" && jsRequest.method === "GET") {
+				return jsonResponse({
+					state: stateEnabled ? actorCtx.state : undefined,
+					isStateEnabled: stateEnabled,
+				});
+			}
+			if (url.pathname === "/inspector/state" && jsRequest.method === "PATCH") {
+				const body = (await jsRequest.json()) as { state?: unknown };
+				actorCtx.state = body.state;
+				await callNative(() => ctx.saveState(true));
+				return jsonResponse({ ok: true });
+			}
+			if (url.pathname === "/inspector/connections" && jsRequest.method === "GET") {
+				return jsonResponse({
+					connections: Array.from(actorCtx.conns.values()).map((conn) => ({
+						id: conn.id,
+						details: {
+							type: undefined,
+							params: conn.params,
+							stateEnabled: true,
+							state: conn.state,
+							subscriptions: 0,
+							isHibernatable: conn.isHibernatable,
+						},
+					})),
+				});
+			}
+			if (url.pathname === "/inspector/rpcs" && jsRequest.method === "GET") {
+				return jsonResponse({ rpcs: Object.keys(actionHandlers).sort() });
+			}
+			if (url.pathname === "/inspector/queue" && jsRequest.method === "GET") {
+				return jsonResponse({
+					size: 0,
+					maxSize: (config.options.maxQueueSize as number | undefined) ?? 1000,
+					truncated: false,
+					messages: [],
+				});
+			}
+			if (url.pathname === "/inspector/traces" && jsRequest.method === "GET") {
+				return jsonResponse({ otlp: [], clamped: false });
+			}
+			if (
+				url.pathname === "/inspector/workflow-history" &&
+				jsRequest.method === "GET"
+			) {
+				return jsonResponse({
+					history: workflowHistory(),
+					isWorkflowEnabled: getNativeWorkflowInspector(ctx) !== undefined,
+				});
+			}
+			if (
+				url.pathname === "/inspector/workflow/replay" &&
+				jsRequest.method === "POST"
+			) {
+				try {
+					if (isNativeRunHandlerActive(ctx)) {
+						throw new Error(
+							"Cannot replay a workflow while it is currently in flight",
+						);
+					}
+					const body = (await jsRequest.json()) as { entryId?: string };
+					const history = await getNativeWorkflowInspector(
+						ctx,
+					)?.replayFromStep?.(body.entryId);
+					return jsonResponse({
+						history: serializeWorkflowHistoryForJson(history ?? null),
+						isWorkflowEnabled:
+							getNativeWorkflowInspector(ctx) !== undefined,
+					});
+				} catch (error) {
+					return errorResponse(500, error);
+				}
+			}
+			if (
+				url.pathname === "/inspector/database/schema" &&
+				jsRequest.method === "GET"
+			) {
+				const db = actorCtx.sql;
+				const tables = queryRows(await db.query(
+					"SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle_%' ORDER BY name",
+				)) as Array<{ name: string; type: string }>;
+				const tableInfos = [];
+				for (const table of tables) {
+					const quoted = `"${table.name.replace(/\"/g, '""')}"`;
+					const columns = queryRows(await db.query(`PRAGMA table_info(${quoted})`));
+					const foreignKeys = queryRows(await db.query(
+						`PRAGMA foreign_key_list(${quoted})`,
+					));
+					const countResult = queryRows(await db.query(
+						`SELECT COUNT(*) as count FROM ${quoted}`,
+					)) as Array<{ count?: number }>;
+					tableInfos.push({
+						table: { schema: "main", name: table.name, type: table.type },
+						columns: jsonSafe(columns),
+						foreignKeys: jsonSafe(foreignKeys),
+						records: countResult[0]?.count ?? 0,
+					});
+				}
+				return jsonResponse({ schema: { tables: tableInfos } });
+			}
+			if (
+				url.pathname === "/inspector/database/rows" &&
+				jsRequest.method === "GET"
+			) {
+				const table = url.searchParams.get("table");
+				if (!table) {
+					return jsonResponse(
+						{ error: "Missing required table query parameter" },
+						{ status: 400 },
+					);
+				}
+				const limit = Number.parseInt(url.searchParams.get("limit") ?? "100", 10);
+				const offset = Number.parseInt(url.searchParams.get("offset") ?? "0", 10);
+				const quoted = `"${table.replace(/\"/g, '""')}"`;
+				const rows = queryRows(await actorCtx.sql.query(
+					`SELECT * FROM ${quoted} LIMIT ? OFFSET ?`,
+					[Math.max(0, Math.min(limit, 500)), Math.max(0, offset)],
+				));
+				return jsonResponse({ rows: jsonSafe(rows) });
+			}
+			if (
+				url.pathname === "/inspector/database/execute" &&
+				jsRequest.method === "POST"
+			) {
+				const body = (await jsRequest.json()) as {
+					sql?: unknown;
+					args?: unknown;
+					properties?: unknown;
+				};
+				if (typeof body.sql !== "string" || body.sql.trim() === "") {
+					return jsonResponse({ error: "sql is required" }, { status: 400 });
+				}
+				if (
+					Array.isArray(body.args) &&
+					body.properties &&
+					typeof body.properties === "object"
+				) {
+					return jsonResponse(
+						{ error: "use either args or properties, not both" },
+						{ status: 400 },
+					);
+				}
+				const readOnly = /^\s*(SELECT|PRAGMA|WITH|EXPLAIN)\b/i.test(body.sql);
+				if (
+					body.properties &&
+					typeof body.properties === "object" &&
+					!Array.isArray(body.properties)
+				) {
+					const bindings = normalizeSqlitePropertyBindings(
+						body.properties as Record<string, unknown>,
+					);
+					if (readOnly) {
+						const rows = queryRows(await actorCtx.sql.query(body.sql, bindings));
+						return jsonResponse({ rows: jsonSafe(rows) });
+					}
+					await actorCtx.sql.run(body.sql, bindings);
+					return jsonResponse({ rows: [] });
+				}
+				const args = Array.isArray(body.args) ? body.args : [];
+				if (readOnly) {
+					const rows = queryRows(await actorCtx.sql.query(body.sql, args));
+					return jsonResponse({ rows: jsonSafe(rows) });
+				}
+				await actorCtx.sql.run(body.sql, args);
+				return jsonResponse({ rows: [] });
+			}
+			if (url.pathname === "/inspector/summary" && jsRequest.method === "GET") {
+				return jsonResponse({
+					state: stateEnabled ? actorCtx.state : undefined,
+					connections: Array.from(actorCtx.conns.values()).map((conn) => ({
+						id: conn.id,
+						details: {
+							type: undefined,
+							params: conn.params,
+							stateEnabled: true,
+							state: conn.state,
+							subscriptions: 0,
+							isHibernatable: conn.isHibernatable,
+						},
+					})),
+					rpcs: Object.keys(actionHandlers).sort(),
+					queueSize: 0,
+					isStateEnabled: stateEnabled,
+					isDatabaseEnabled: databaseProvider !== undefined,
+					isWorkflowEnabled: getNativeWorkflowInspector(ctx) !== undefined,
+					workflowHistory: workflowHistory(),
+				});
+			}
+			if (url.pathname === "/inspector/metrics" && jsRequest.method === "GET") {
+				return jsonResponse(metricsResponse(actorCtx));
+			}
+			if (
+				jsRequest.method === "POST" &&
+				url.pathname.startsWith("/inspector/action/")
+			) {
+				const actionName = url.pathname.replace("/inspector/action/", "");
+				const action = actionHandlers[actionName];
+				if (!action) {
+					return errorResponse(
+						404,
+						new RivetError(
+							"action",
+							"action_not_found",
+							`Action ${actionName} not found`,
+						),
+					);
+				}
+				const body = (await jsRequest.json()) as { args?: unknown[] };
+				try {
+					const output = await action(
+						actorCtx,
+						...validateActionArgs(
+							schemaConfig.actionInputSchemas,
+							actionName,
+							body.args ?? [],
+						),
+					);
+					return jsonResponse({ output });
+				} catch (error) {
+					return errorResponse(500, error);
+				}
+			}
+
+			return jsonResponse(
+				{
+					group: "actor",
+					code: "not_found",
+					message: "Inspector route was not found",
+					metadata: null,
+				},
+				{ status: 404 },
+			);
+		} catch (error) {
+			return errorResponse(500, error);
+		} finally {
+			await actorCtx.dispose();
+		}
+	};
 	const callbacks = {
 		onInit: wrapNativeCallback(async (
 			error: unknown,
@@ -1087,11 +3417,7 @@ function buildNativeFactory(
 			},
 		): Promise<JsFactoryInitResult> => {
 			const { ctx, input, isNew } = unwrapTsfnPayload(error, payload);
-			const actorCtx = new NativeActorContextAdapter(
-				ctx,
-				createClient,
-				schemaConfig,
-			);
+			const actorCtx = makeActorCtx(ctx);
 			try {
 				const decodedInput = decodeValue(input);
 				const result: JsFactoryInitResult = {};
@@ -1108,11 +3434,12 @@ function buildNativeFactory(
 				}
 
 				if ("vars" in config) {
-					result.vars = encodeValue(config.vars);
-					actorCtx.vars = config.vars;
+					const vars = structuredClone(config.vars);
+					result.vars = encodeActorVarsForCore(vars);
+					actorCtx.vars = vars;
 				} else if (typeof config.createVars === "function") {
 					const vars = await config.createVars(actorCtx, undefined);
-					result.vars = encodeValue(vars);
+					result.vars = encodeActorVarsForCore(vars);
 					actorCtx.vars = vars;
 				}
 
@@ -1122,7 +3449,7 @@ function buildNativeFactory(
 						result.state = encodeValue(actorCtx.state);
 					}
 					if (actorCtx.vars !== undefined) {
-						result.vars = encodeValue(actorCtx.vars);
+						result.vars = encodeActorVarsForCore(actorCtx.vars);
 					}
 				}
 
@@ -1138,11 +3465,7 @@ function buildNativeFactory(
 						payload: { ctx: NativeActorContext },
 					) => {
 						const { ctx } = unwrapTsfnPayload(error, payload);
-						const actorCtx = new NativeActorContextAdapter(
-							ctx,
-							createClient,
-							schemaConfig,
-						);
+						const actorCtx = makeActorCtx(ctx);
 						try {
 							await config.onWake(actorCtx);
 						} finally {
@@ -1151,7 +3474,7 @@ function buildNativeFactory(
 					})
 				: undefined,
 		onMigrate:
-			typeof config.onMigrate === "function"
+			typeof config.onMigrate === "function" || databaseProvider !== undefined
 				? wrapNativeCallback(async (
 						error: unknown,
 						payload: {
@@ -1160,56 +3483,55 @@ function buildNativeFactory(
 						},
 					) => {
 						const { ctx, isNew } = unwrapTsfnPayload(error, payload);
-						const actorCtx = new NativeActorContextAdapter(
-							ctx,
-							createClient,
-							schemaConfig,
-						);
+						const actorCtx = makeActorCtx(ctx);
 						try {
-							await config.onMigrate(actorCtx, isNew);
+							if (!isNew) {
+								await actorCtx.closeDatabase(false);
+							}
+							await actorCtx.runDatabaseMigrations();
+							if (typeof config.onMigrate === "function") {
+								await config.onMigrate(actorCtx, isNew);
+							}
+						} catch (error) {
+							await actorCtx.closeDatabase(true);
+							throw error;
 						} finally {
 							await actorCtx.dispose();
 						}
 					})
 				: undefined,
 		onSleep:
-			typeof config.onSleep === "function"
+			typeof config.onSleep === "function" || databaseProvider !== undefined
 				? wrapNativeCallback(async (
 						error: unknown,
 						payload: { ctx: NativeActorContext },
 					) => {
 						const { ctx } = unwrapTsfnPayload(error, payload);
-						const actorCtx = new NativeActorContextAdapter(
-							ctx,
-							createClient,
-							schemaConfig,
-						);
+						const actorCtx = makeActorCtx(ctx);
 						try {
-							await config.onSleep(actorCtx);
+							if (typeof config.onSleep === "function") {
+								await config.onSleep(actorCtx);
+							}
 						} finally {
 							await actorCtx.dispose();
 						}
 					})
 				: undefined,
-		onDestroy:
-			typeof config.onDestroy === "function"
-				? wrapNativeCallback(async (
-						error: unknown,
-						payload: { ctx: NativeActorContext },
-					) => {
-						const { ctx } = unwrapTsfnPayload(error, payload);
-						const actorCtx = new NativeActorContextAdapter(
-							ctx,
-							createClient,
-							schemaConfig,
-						);
-						try {
-							await config.onDestroy(actorCtx);
-						} finally {
-							await actorCtx.dispose();
-						}
-					})
-				: undefined,
+		onDestroy: wrapNativeCallback(async (
+			error: unknown,
+			payload: { ctx: NativeActorContext },
+		) => {
+			const { ctx } = unwrapTsfnPayload(error, payload);
+			const actorCtx = makeActorCtx(ctx);
+			try {
+				if (typeof config.onDestroy === "function") {
+					await config.onDestroy(actorCtx);
+				}
+			} finally {
+				resolveNativeDestroy(ctx);
+				await actorCtx.dispose();
+			}
+		}),
 		onStateChange:
 			typeof config.onStateChange === "function"
 				? wrapNativeCallback(async (
@@ -1220,14 +3542,12 @@ function buildNativeFactory(
 						},
 					) => {
 						const { ctx, newState } = unwrapTsfnPayload(error, payload);
-						const actorCtx = new NativeActorContextAdapter(
-							ctx,
-							createClient,
-							schemaConfig,
-						);
+						const actorCtx = makeActorCtx(ctx);
 						try {
+							actorCtx.setInOnStateChangeCallback(true);
 							await config.onStateChange(actorCtx, decodeValue(newState));
 						} finally {
+							actorCtx.setInOnStateChangeCallback(false);
 							await actorCtx.dispose();
 						}
 					})
@@ -1239,13 +3559,18 @@ function buildNativeFactory(
 						payload: {
 							ctx: NativeActorContext;
 							params: Buffer;
+							request?: {
+								method: string;
+								uri: string;
+								headers?: Record<string, string>;
+								body?: Buffer;
+							};
 						},
 					) => {
-						const { ctx, params } = unwrapTsfnPayload(error, payload);
-						const actorCtx = new NativeActorContextAdapter(
+						const { ctx, params, request } = unwrapTsfnPayload(error, payload);
+						const actorCtx = makeActorCtx(
 							ctx,
-							createClient,
-							schemaConfig,
+							request ? buildRequest(request) : undefined,
 						);
 						try {
 							await config.onBeforeConnect(
@@ -1261,26 +3586,56 @@ function buildNativeFactory(
 					})
 				: undefined,
 		onConnect:
+			Object.prototype.hasOwnProperty.call(config, "connState") ||
+			typeof config.createConnState === "function" ||
 			typeof config.onConnect === "function"
 				? wrapNativeCallback(async (
 						error: unknown,
 						payload: {
 							ctx: NativeActorContext;
 							conn: NativeConnHandle;
+							request?: {
+								method: string;
+								uri: string;
+								headers?: Record<string, string>;
+								body?: Buffer;
+							};
 						},
 					) => {
-						const { ctx, conn } = unwrapTsfnPayload(error, payload);
-						const actorCtx = withConnContext(
+						const { ctx, conn, request } = unwrapTsfnPayload(error, payload);
+						const actorCtx = makeActorCtx(
 							ctx,
+							request ? buildRequest(request) : undefined,
+						);
+						const connAdapter = new NativeConnAdapter(
 							conn,
-							createClient,
 							schemaConfig,
 						);
 						try {
-							await config.onConnect(
-								actorCtx,
-								new NativeConnAdapter(conn, schemaConfig),
+							const hasStaticConnState = Object.prototype.hasOwnProperty.call(
+								config,
+								"connState",
 							);
+							const hasDynamicConnState =
+								typeof config.createConnState === "function";
+							if (hasStaticConnState || hasDynamicConnState) {
+								const nextConnState = hasStaticConnState
+									? structuredClone(config.connState)
+									: await config.createConnState(
+											actorCtx,
+											connAdapter.params,
+										);
+								connAdapter.state = nextConnState;
+							}
+
+							if (typeof config.onConnect === "function") {
+								await config.onConnect(
+									Object.assign(actorCtx, {
+										conn: connAdapter,
+									}),
+									connAdapter,
+								);
+							}
 						} finally {
 							await actorCtx.dispose();
 						}
@@ -1296,12 +3651,7 @@ function buildNativeFactory(
 						},
 					) => {
 						const { ctx, conn } = unwrapTsfnPayload(error, payload);
-						const actorCtx = withConnContext(
-							ctx,
-							conn,
-							createClient,
-							schemaConfig,
-						);
+						const actorCtx = makeConnCtx(ctx, conn);
 						try {
 							await config.onDisconnect(
 								actorCtx,
@@ -1327,11 +3677,7 @@ function buildNativeFactory(
 							error,
 							payload,
 						);
-						const actorCtx = new NativeActorContextAdapter(
-							ctx,
-							createClient,
-							schemaConfig,
-						);
+						const actorCtx = makeActorCtx(ctx);
 						try {
 							return encodeValue(
 								await config.onBeforeActionResponse(
@@ -1361,34 +3707,88 @@ function buildNativeFactory(
 			try {
 				const { ctx, request } = unwrapTsfnPayload(error, payload);
 				const jsRequest = buildRequest(request);
+				const inspectorResponse = await maybeHandleNativeInspectorRequest(
+					ctx,
+					request,
+					jsRequest,
+				);
+				if (inspectorResponse) {
+					return await toJsHttpResponse(inspectorResponse);
+				}
 				const actionResponse = await maybeHandleNativeActionRequest(
 					ctx,
 					jsRequest,
 					createClient,
 					actionHandlers,
 					schemaConfig,
+					{
+						actionTimeoutMs:
+							(config.options.actionTimeout as number | undefined) ?? 60_000,
+						maxIncomingMessageSize:
+							registryConfig.maxIncomingMessageSize as number | undefined,
+						maxOutgoingMessageSize:
+							registryConfig.maxOutgoingMessageSize as number | undefined,
+						onBeforeActionResponse: config.onBeforeActionResponse,
+						stateEnabled,
+					},
+					databaseProvider,
 				);
 				if (actionResponse) {
 					return await toJsHttpResponse(actionResponse);
+				}
+
+				const queueResponse = await maybeHandleNativeQueueRequest(
+					ctx,
+					jsRequest,
+					createClient,
+					schemaConfig,
+					{
+						stateEnabled,
+					},
+					databaseProvider,
+				);
+				if (queueResponse) {
+					return await toJsHttpResponse(queueResponse);
 				}
 
 				if (typeof config.onRequest !== "function") {
 					return await toJsHttpResponse(new Response(null, { status: 404 }));
 				}
 
-				const requestCtx = Object.assign(
-					new NativeActorContextAdapter(ctx, createClient, schemaConfig),
-					{
-						request: jsRequest,
-					},
-				);
+				const rawConnParams = jsRequest.headers.get(HEADER_CONN_PARAMS);
+				let requestCtx: ReturnType<typeof withConnContext> | undefined;
+				let conn: NativeConnHandle | undefined;
 				try {
-					const response =
-						(await config.onRequest(requestCtx, jsRequest)) ??
-						new Response(null, { status: 204 });
+					const connParams = validateConnParams(
+						schemaConfig.connParamsSchema,
+						rawConnParams ? JSON.parse(rawConnParams) : undefined,
+					);
+					conn = await callNative(() =>
+						ctx.connectConn(encodeValue(connParams), request),
+					);
+					requestCtx = makeConnCtx(ctx, conn, jsRequest);
+					const response = await config.onRequest(requestCtx, jsRequest);
+					if (!(response instanceof Response)) {
+						throw new Error(
+							"onRequest handler must return a Response",
+						);
+					}
 					return await toJsHttpResponse(response);
+				} catch (error) {
+					const encodingHeader = jsRequest.headers.get(HEADER_ENCODING);
+					const encoding: Encoding =
+						encodingHeader === "cbor" || encodingHeader === "bare"
+							? encodingHeader
+							: "json";
+					const path = new URL(jsRequest.url).pathname;
+					return await toJsHttpResponse(
+						buildNativeRequestErrorResponse(encoding, path, error),
+					);
 				} finally {
-					await requestCtx.dispose();
+					await requestCtx?.dispose();
+					if (conn) {
+						await conn.disconnect();
+					}
 				}
 			} catch (error) {
 				logger().error({
@@ -1404,20 +3804,69 @@ function buildNativeFactory(
 						error: unknown,
 						payload: {
 							ctx: NativeActorContext;
+							conn?: NativeConnHandle;
 							ws: NativeWebSocket;
+							request?: {
+								method: string;
+								uri: string;
+								headers?: Record<string, string>;
+								body?: Buffer;
+							};
 						},
 					) => {
-						const { ctx, ws } = unwrapTsfnPayload(error, payload);
-						const actorCtx = new NativeActorContextAdapter(
-							ctx,
-							createClient,
-							schemaConfig,
+						const { ctx, conn, ws, request } = unwrapTsfnPayload(
+							error,
+							payload,
 						);
+						const jsRequest = request ? buildRequest(request) : undefined;
+						const actorCtx = conn
+							? makeConnCtx(ctx, conn, jsRequest)
+							: makeActorCtx(ctx, jsRequest);
 						try {
 							await config.onWebSocket(
 								actorCtx,
-								new NativeWebSocketAdapter(ws),
+								new TrackedNativeWebSocketAdapter(
+									actorCtx,
+									new NativeWebSocketAdapter(ws),
+								),
 							);
+						} finally {
+							await actorCtx.dispose();
+						}
+					})
+				: undefined,
+		onBeforeSubscribe:
+			schemaConfig.events &&
+			Object.values(schemaConfig.events).some(
+				(schema) =>
+					typeof (schema as { canSubscribe?: unknown }).canSubscribe ===
+					"function",
+			)
+				? wrapNativeCallback(async (
+						error: unknown,
+						payload: {
+							ctx: NativeActorContext;
+							conn: NativeConnHandle;
+							eventName: string;
+						},
+					) => {
+						const { ctx, conn, eventName } = unwrapTsfnPayload(error, payload);
+						const actorCtx = makeConnCtx(ctx, conn);
+						try {
+							const canSubscribe = getEventCanSubscribe(
+								schemaConfig.events,
+								eventName,
+							);
+							if (!canSubscribe) {
+								return;
+							}
+							const result = await canSubscribe(actorCtx);
+							if (typeof result !== "boolean") {
+								throw new Error("canSubscribe must return a boolean");
+							}
+							if (!result) {
+								throw forbiddenError();
+							}
 						} finally {
 							await actorCtx.dispose();
 						}
@@ -1465,14 +3914,13 @@ function buildNativeFactory(
 				payload: { ctx: NativeActorContext },
 			) => {
 				const { ctx } = unwrapTsfnPayload(error, payload);
-				const actorCtx = new NativeActorContextAdapter(
-					ctx,
-					createClient,
-					schemaConfig,
-				);
+				const actorId = callNativeSync(() => ctx.actorId());
+				const actorCtx = makeActorCtx(ctx);
+				nativeRunHandlerActiveByActorId.set(actorId, true);
 				try {
 					await run(actorCtx);
 				} finally {
+					nativeRunHandlerActiveByActorId.set(actorId, false);
 					await actorCtx.dispose();
 				}
 			});
@@ -1489,12 +3937,7 @@ function buildNativeFactory(
 						},
 					) => {
 						const { ctx, conn, args } = unwrapTsfnPayload(error, payload);
-						const actorCtx = withConnContext(
-							ctx,
-							conn,
-							createClient,
-							schemaConfig,
-						);
+						const actorCtx = makeConnCtx(ctx, conn);
 						try {
 							return encodeValue(
 								await handler(
@@ -1514,7 +3957,10 @@ function buildNativeFactory(
 			),
 		};
 
-	return new bindings.NapiActorFactory(callbacks, buildActorConfig(definition));
+	return new bindings.NapiActorFactory(
+		callbacks,
+		buildActorConfig(definition, registryConfig),
+	);
 }
 
 async function buildServeConfig(config: RegistryConfig): Promise<JsServeConfig> {
@@ -1528,6 +3974,7 @@ async function buildServeConfig(config: RegistryConfig): Promise<JsServeConfig> 
 		token: config.token,
 		namespace: config.namespace,
 		poolName: config.envoy.poolName,
+		handleInspectorHttpInRuntime: true,
 	};
 
 	if (config.startEngine) {

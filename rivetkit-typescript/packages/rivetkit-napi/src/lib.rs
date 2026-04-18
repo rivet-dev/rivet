@@ -31,12 +31,17 @@ pub(crate) fn napi_error(error: impl std::fmt::Display) -> napi::Error {
 }
 
 pub(crate) fn napi_anyhow_error(error: anyhow::Error) -> napi::Error {
+	let bridge_context = error
+		.chain()
+		.find_map(|cause| cause.downcast_ref::<crate::actor_factory::BridgeRivetErrorContext>());
 	let error = RivetTransportError::extract(&error);
 	let payload = serde_json::json!({
 		"group": error.group(),
 		"code": error.code(),
 		"message": error.message(),
 		"metadata": error.metadata(),
+		"public": bridge_context.and_then(|context| context.public_),
+		"statusCode": bridge_context.and_then(|context| context.status_code),
 	});
 	napi::Error::from_reason(format!(
 		"{BRIDGE_RIVET_ERROR_PREFIX}{}",

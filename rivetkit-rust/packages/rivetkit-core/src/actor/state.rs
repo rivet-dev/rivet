@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Handle;
+use tokio::sync::Notify;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::task::JoinHandle;
 
@@ -68,12 +69,20 @@ struct ActorStateInner {
 	pending_save: Mutex<Option<PendingSave>>,
 	save_guard: AsyncMutex<()>,
 	on_state_change: RwLock<Option<OnStateChangeCallback>>,
-	is_in_on_state_change: AtomicBool,
+	on_state_change_control: Mutex<OnStateChangeControl>,
+	on_state_change_notify: Notify,
 }
 
 struct PendingSave {
 	scheduled_at: Instant,
 	handle: JoinHandle<()>,
+}
+
+#[derive(Default)]
+struct OnStateChangeControl {
+	pending: u64,
+	running: bool,
+	in_callback: bool,
 }
 
 impl ActorState {
@@ -89,7 +98,8 @@ impl ActorState {
 			pending_save: Mutex::new(None),
 			save_guard: AsyncMutex::new(()),
 			on_state_change: RwLock::new(None),
-			is_in_on_state_change: AtomicBool::new(false),
+			on_state_change_control: Mutex::new(OnStateChangeControl::default()),
+			on_state_change_notify: Notify::new(),
 		}))
 	}
 
@@ -268,6 +278,39 @@ impl ActorState {
 			.expect("actor on_state_change lock poisoned") = callback;
 	}
 
+	pub(crate) fn set_in_on_state_change_callback(&self, in_callback: bool) {
+		let notify = {
+			let mut control = self
+				.0
+				.on_state_change_control
+				.lock()
+				.expect("actor on_state_change control lock poisoned");
+			control.in_callback = in_callback;
+			!in_callback && !control.running && control.pending == 0
+		};
+		if notify {
+			self.0.on_state_change_notify.notify_waiters();
+		}
+	}
+
+	pub(crate) async fn wait_for_on_state_change_idle(&self) {
+		loop {
+			let notified = self.0.on_state_change_notify.notified();
+			let is_idle = {
+				let control = self
+					.0
+					.on_state_change_control
+					.lock()
+					.expect("actor on_state_change control lock poisoned");
+				!control.running && control.pending == 0 && !control.in_callback
+			};
+			if is_idle {
+				return;
+			}
+			notified.await;
+		}
+	}
+
 	fn is_dirty(&self) -> bool {
 		self.0.dirty.load(Ordering::SeqCst)
 	}
@@ -359,32 +402,60 @@ impl ActorState {
 			return;
 		};
 
-		if self
-			.0
-			.is_in_on_state_change
-			.swap(true, Ordering::SeqCst)
-		{
+		let should_spawn = {
+			let mut control = self
+				.0
+				.on_state_change_control
+				.lock()
+				.expect("actor on_state_change control lock poisoned");
+			if control.in_callback {
+				return;
+			}
+
+			control.pending += 1;
+			if control.running {
+				false
+			} else {
+				control.running = true;
+				true
+			}
+		};
+
+		if !should_spawn {
 			return;
 		}
 
 		let Ok(runtime) = Handle::try_current() else {
 			self
 				.0
-				.is_in_on_state_change
-				.store(false, Ordering::SeqCst);
+				.on_state_change_control
+				.lock()
+				.expect("actor on_state_change control lock poisoned")
+				.running = false;
 			return;
 		};
 
 		let state = self.clone();
 		runtime.spawn(async move {
-			if let Err(error) = callback().await {
-				tracing::error!(?error, "error in on_state_change callback");
-			}
+			loop {
+				{
+					let mut control = state
+						.0
+						.on_state_change_control
+						.lock()
+						.expect("actor on_state_change control lock poisoned");
+					if control.pending == 0 {
+						control.running = false;
+						state.0.on_state_change_notify.notify_waiters();
+						break;
+					}
+					control.pending -= 1;
+				}
 
-			state
-				.0
-				.is_in_on_state_change
-				.store(false, Ordering::SeqCst);
+				if let Err(error) = callback().await {
+					tracing::error!(?error, "error in on_state_change callback");
+				}
+			}
 		});
 	}
 

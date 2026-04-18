@@ -100,9 +100,10 @@ impl Queue {
 	pub async fn next(
 		&self,
 		options: Option<JsQueueNextOptions>,
+		signal: Option<&CancellationToken>,
 	) -> napi::Result<Option<QueueMessage>> {
 		self.inner
-			.next(queue_next_opts(options)?)
+			.next(queue_next_opts(options, signal)?)
 			.await
 			.map(|message| message.map(QueueMessage::from_core))
 			.map_err(napi_anyhow_error)
@@ -112,9 +113,10 @@ impl Queue {
 	pub async fn next_batch(
 		&self,
 		options: Option<JsQueueNextBatchOptions>,
+		signal: Option<&CancellationToken>,
 	) -> napi::Result<Vec<QueueMessage>> {
 		self.inner
-			.next_batch(queue_next_batch_opts(options)?)
+			.next_batch(queue_next_batch_opts(options, signal)?)
 			.await
 			.map(|messages| messages.into_iter().map(QueueMessage::from_core).collect())
 			.map_err(napi_anyhow_error)
@@ -130,6 +132,18 @@ impl Queue {
 			.wait_for_names(names, queue_wait_opts(options)?)
 			.await
 			.map(QueueMessage::from_core)
+			.map_err(napi_anyhow_error)
+	}
+
+	#[napi]
+	pub async fn wait_for_names_available(
+		&self,
+		names: Vec<String>,
+		options: Option<JsQueueWaitOptions>,
+	) -> napi::Result<()> {
+		self.inner
+			.wait_for_names_available(names, queue_wait_opts(options)?)
+			.await
 			.map_err(napi_anyhow_error)
 	}
 
@@ -227,7 +241,10 @@ impl QueueMessage {
 	}
 }
 
-fn queue_next_opts(options: Option<JsQueueNextOptions>) -> napi::Result<QueueNextOpts> {
+fn queue_next_opts(
+	options: Option<JsQueueNextOptions>,
+	signal: Option<&CancellationToken>,
+) -> napi::Result<QueueNextOpts> {
 	let options = options.unwrap_or(JsQueueNextOptions {
 		names: None,
 		timeout_ms: None,
@@ -237,13 +254,14 @@ fn queue_next_opts(options: Option<JsQueueNextOptions>) -> napi::Result<QueueNex
 	Ok(QueueNextOpts {
 		names: options.names,
 		timeout: timeout_duration(options.timeout_ms)?,
-		signal: None,
+		signal: signal.map(|signal| signal.inner().clone()),
 		completable: options.completable.unwrap_or(false),
 	})
 }
 
 fn queue_next_batch_opts(
 	options: Option<JsQueueNextBatchOptions>,
+	signal: Option<&CancellationToken>,
 ) -> napi::Result<QueueNextBatchOpts> {
 	let options = options.unwrap_or(JsQueueNextBatchOptions {
 		names: None,
@@ -256,7 +274,7 @@ fn queue_next_batch_opts(
 		names: options.names,
 		count: options.count.unwrap_or(1),
 		timeout: timeout_duration(options.timeout_ms)?,
-		signal: None,
+		signal: signal.map(|signal| signal.inner().clone()),
 		completable: options.completable.unwrap_or(false),
 	})
 }

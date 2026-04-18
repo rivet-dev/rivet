@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use anyhow::anyhow;
 use rivet_envoy_protocol as protocol;
 use rivet_util_serde::HashableMap;
 use tokio::sync::mpsc;
@@ -352,6 +353,7 @@ async fn actor_inner(
 				let pending = pending_stop
 					.take()
 					.expect("pending stop must exist when stop completion resolves");
+				abort_and_join_http_request_tasks(&mut ctx, &mut http_request_tasks).await;
 				finalize_stop(&mut ctx, pending, stop_result);
 				break;
 			}
@@ -378,8 +380,6 @@ async fn begin_stop(
 	http_request_tasks: &mut JoinSet<()>,
 	reason: protocol::StopActorReason,
 ) -> StopProgress {
-	abort_and_join_http_request_tasks(ctx, http_request_tasks).await;
-
 	let mut stop_code = if ctx.error.is_some() {
 		protocol::StopCode::Error
 	} else {
@@ -615,6 +615,59 @@ fn handle_req_abort(ctx: &mut ActorContext, message_id: protocol::MessageId) {
 		.remove(&[&message_id.gateway_id, &message_id.request_id]);
 }
 
+fn spawn_ws_outgoing_task(
+	shared: Arc<SharedContext>,
+	gateway_id: protocol::GatewayId,
+	request_id: protocol::RequestId,
+	mut outgoing_rx: mpsc::UnboundedReceiver<crate::config::WsOutgoing>,
+) {
+	tokio::spawn(async move {
+		let mut idx: u16 = 0;
+		while let Some(msg) = outgoing_rx.recv().await {
+			idx += 1;
+			match msg {
+				crate::config::WsOutgoing::Message { data, binary } => {
+					ws_send(
+						&shared,
+						protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
+							message_id: protocol::MessageId {
+								gateway_id,
+								request_id,
+								message_index: idx,
+							},
+							message_kind: protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(
+								protocol::ToRivetWebSocketMessage { data, binary },
+							),
+						}),
+					)
+					.await;
+				}
+				crate::config::WsOutgoing::Close { code, reason } => {
+					ws_send(
+						&shared,
+						protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
+							message_id: protocol::MessageId {
+								gateway_id,
+								request_id,
+								message_index: 0,
+							},
+							message_kind: protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
+								protocol::ToRivetWebSocketClose {
+									code,
+									reason,
+									hibernate: false,
+								},
+							),
+						}),
+					)
+					.await;
+					break;
+				}
+			}
+		}
+	});
+}
+
 async fn handle_ws_open(
 	ctx: &mut ActorContext,
 	handle: &EnvoyHandle,
@@ -622,13 +675,23 @@ async fn handle_ws_open(
 	path: String,
 	headers: BTreeMap<String, String>,
 ) {
-	ctx.pending_requests.insert(
-		&[&message_id.gateway_id, &message_id.request_id],
-		PendingRequest {
-			envoy_message_index: 0,
-			body_tx: None,
-		},
-	);
+	let restored_ws = ctx
+		.ws_entries
+		.remove(&[&message_id.gateway_id, &message_id.request_id]);
+	let is_restoring_hibernatable = restored_ws
+		.as_ref()
+		.map(|ws| ws.is_hibernatable)
+		.unwrap_or(false);
+
+	if !is_restoring_hibernatable {
+		ctx.pending_requests.insert(
+			&[&message_id.gateway_id, &message_id.request_id],
+			PendingRequest {
+				envoy_message_index: 0,
+				body_tx: None,
+			},
+		);
+	}
 
 	let mut full_headers: HashMap<String, String> = headers.into_iter().collect();
 	full_headers.insert("Upgrade".to_string(), "websocket".to_string());
@@ -642,12 +705,16 @@ async fn handle_ws_open(
 		body_stream: None,
 	};
 
-	let is_hibernatable = ctx.shared.config.callbacks.can_hibernate(
-		&ctx.actor_id,
-		&message_id.gateway_id,
-		&message_id.request_id,
-		&request,
-	);
+	let is_hibernatable = if is_restoring_hibernatable {
+		true
+	} else {
+		ctx.shared.config.callbacks.can_hibernate(
+			&ctx.actor_id,
+			&message_id.gateway_id,
+			&message_id.request_id,
+			&request,
+		)
+	};
 
 	// Create outgoing channel BEFORE calling websocket() so the sender is available immediately
 	let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded_channel::<crate::config::WsOutgoing>();
@@ -655,23 +722,32 @@ async fn handle_ws_open(
 		tx: outgoing_tx.clone(),
 	};
 
-	let ws_result = ctx
-		.shared
-		.config
-		.callbacks
-		.websocket(
-			handle.clone(),
-			ctx.actor_id.clone(),
-			message_id.gateway_id,
-			message_id.request_id,
-			request,
-			path,
-			full_headers,
-			is_hibernatable,
-			false,
-			sender,
-		)
-		.await;
+	let ws_result = if let Some(mut restored_ws) = restored_ws {
+		match restored_ws.ws_handler.take() {
+			Some(ws_handler) => Ok(ws_handler),
+			None => Err(anyhow!(
+				"missing websocket handler for restored hibernatable websocket"
+			)),
+		}
+	} else {
+		ctx
+			.shared
+			.config
+			.callbacks
+			.websocket(
+				handle.clone(),
+				ctx.actor_id.clone(),
+				message_id.gateway_id,
+				message_id.request_id,
+				request,
+				path,
+				full_headers,
+				is_hibernatable,
+				false,
+				sender,
+			)
+			.await
+	};
 
 	match ws_result {
 		Ok(ws_handler) => {
@@ -685,71 +761,27 @@ async fn handle_ws_open(
 				},
 			);
 
-			// Spawn task to forward outgoing WS messages to the tunnel.
-			// Uses a shared counter so message indices don't conflict with send_actor_message.
-			{
-				let shared = ctx.shared.clone();
-				let gateway_id = message_id.gateway_id;
-				let request_id = message_id.request_id;
-				tokio::spawn(async move {
-					let mut idx: u16 = 0;
-					while let Some(msg) = outgoing_rx.recv().await {
-						idx += 1;
-						match msg {
-							crate::config::WsOutgoing::Message { data, binary } => {
-								ws_send(
-									&shared,
-									protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
-										message_id: protocol::MessageId {
-											gateway_id,
-											request_id,
-											message_index: idx,
-										},
-										message_kind: protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(
-											protocol::ToRivetWebSocketMessage { data, binary },
-										),
-									}),
-								)
-								.await;
-							}
-							crate::config::WsOutgoing::Close { code, reason } => {
-								ws_send(
-									&shared,
-									protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
-										message_id: protocol::MessageId {
-											gateway_id,
-											request_id,
-											message_index: 0,
-										},
-										message_kind: protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
-											protocol::ToRivetWebSocketClose {
-												code,
-												reason,
-												hibernate: false,
-											},
-										),
-									}),
-								)
-								.await;
-								break;
-							}
-						}
-					}
-				});
-			}
-
-			// Send WebSocket open
-			send_actor_message(
-				ctx,
+			spawn_ws_outgoing_task(
+				ctx.shared.clone(),
 				message_id.gateway_id,
 				message_id.request_id,
-				protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(
-					protocol::ToRivetWebSocketOpen {
-						can_hibernate: is_hibernatable,
-					},
-				),
-			)
-			.await;
+				outgoing_rx,
+			);
+
+			if !is_restoring_hibernatable {
+				// Restored hibernatable sockets were already opened before sleep.
+				send_actor_message(
+					ctx,
+					message_id.gateway_id,
+					message_id.request_id,
+					protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(
+						protocol::ToRivetWebSocketOpen {
+							can_hibernate: is_hibernatable,
+						},
+					),
+				)
+				.await;
+			}
 
 			// Call on_open if provided
 			if let Some(ws) = ctx
@@ -911,7 +943,7 @@ async fn handle_hws_restore(
 			ctx.pending_requests.insert(
 				&[&hib_req.gateway_id, &hib_req.request_id],
 				PendingRequest {
-					envoy_message_index: 0,
+					envoy_message_index: meta.envoy_message_index,
 					body_tx: None,
 				},
 			);
@@ -928,7 +960,7 @@ async fn handle_hws_restore(
 				body_stream: None,
 			};
 
-			let (hws_outgoing_tx, _hws_outgoing_rx) = mpsc::unbounded_channel();
+			let (hws_outgoing_tx, hws_outgoing_rx) = mpsc::unbounded_channel();
 			let hws_sender = crate::config::WebSocketSender {
 				tx: hws_outgoing_tx.clone(),
 			};
@@ -953,14 +985,19 @@ async fn handle_hws_restore(
 
 			match ws_result {
 				Ok(ws_handler) => {
-					let (outgoing_tx, _outgoing_rx) = mpsc::unbounded_channel();
+					spawn_ws_outgoing_task(
+						ctx.shared.clone(),
+						hib_req.gateway_id,
+						hib_req.request_id,
+						hws_outgoing_rx,
+					);
 					ctx.ws_entries.insert(
 						&[&hib_req.gateway_id, &hib_req.request_id],
 						WsEntry {
 							is_hibernatable: true,
 							rivet_message_index: meta.rivet_message_index,
 							ws_handler: Some(ws_handler),
-							outgoing_tx,
+							outgoing_tx: hws_outgoing_tx,
 						},
 					);
 					tracing::info!(

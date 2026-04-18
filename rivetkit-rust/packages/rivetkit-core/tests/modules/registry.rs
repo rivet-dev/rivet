@@ -51,11 +51,11 @@ use super::*;
 				.await
 		}
 
-		async fn stop_actor_for_test(
-			&self,
-			actor_id: &str,
-			reason: protocol::StopActorReason,
-		) -> anyhow::Result<()> {
+	async fn stop_actor_for_test(
+		&self,
+		actor_id: &str,
+		reason: protocol::StopActorReason,
+	) -> anyhow::Result<()> {
 			let instance = self.active_actor(actor_id).await?;
 			let _ = self.active_instances.remove_async(actor_id).await;
 
@@ -82,6 +82,52 @@ use super::*;
 			}
 
 			Ok(())
+		}
+	}
+
+	#[test]
+	fn actor_key_from_protocol_decodes_multi_part_keys() {
+		assert_eq!(
+			actor_key_from_protocol(Some("tenant\\/with\\/slash/room".to_owned())),
+			vec![
+				ActorKeySegment::String("tenant/with/slash".to_owned()),
+				ActorKeySegment::String("room".to_owned()),
+			],
+		);
+	}
+
+	#[test]
+	fn actor_key_from_protocol_decodes_empty_arrays_and_segments() {
+		assert_eq!(actor_key_from_protocol(Some("/".to_owned())), Vec::new());
+		assert_eq!(
+			actor_key_from_protocol(Some("\\0/\\//\\0".to_owned())),
+			vec![
+				ActorKeySegment::String(String::new()),
+				ActorKeySegment::String("/".to_owned()),
+				ActorKeySegment::String(String::new()),
+			],
+		);
+	}
+
+	#[test]
+	fn decode_actor_connect_message_accepts_typescript_action_request() {
+		let payload = vec![
+			0x03, 0x00, 0x00, 0x00, 0x09, b'i', b'n', b'c', b'r', b'e', b'm', b'e', b'n',
+			b't', 0x02, 0x81, 0x05,
+		];
+
+		let decoded = decode_actor_connect_message(&payload)
+			.expect("typescript action request should decode");
+
+		match decoded {
+			ActorConnectToServer::ActionRequest(request) => {
+				assert_eq!(request.id, 0);
+				assert_eq!(request.name, "increment");
+				assert_eq!(request.args.as_ref(), &[0x81, 0x05]);
+			}
+			ActorConnectToServer::SubscriptionRequest(_) => {
+				panic!("expected action request");
+			}
 		}
 	}
 

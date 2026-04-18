@@ -6,6 +6,7 @@ use std::time::Duration;
 use rivet_envoy_client::handle::EnvoyHandle;
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
+use tokio::task::yield_now;
 use tokio::time::{Instant, sleep, timeout};
 
 use crate::actor::config::ActorConfig;
@@ -109,6 +110,15 @@ impl SleepController {
 			.expect("sleep generation lock poisoned") = None;
 	}
 
+	pub(crate) fn envoy_handle(&self) -> Option<EnvoyHandle> {
+		self
+			.0
+			.envoy_handle
+			.lock()
+			.expect("sleep envoy handle lock poisoned")
+			.clone()
+	}
+
 	pub(crate) fn request_sleep(&self, actor_id: &str) {
 		let envoy_handle = self
 			.0
@@ -149,13 +159,27 @@ impl SleepController {
 	}
 
 	#[allow(dead_code)]
+	pub(crate) fn ready(&self) -> bool {
+		self.0.ready.load(Ordering::SeqCst)
+	}
+
+	#[allow(dead_code)]
 	pub(crate) fn set_started(&self, started: bool) {
 		self.0.started.store(started, Ordering::SeqCst);
 	}
 
 	#[allow(dead_code)]
+	pub(crate) fn started(&self) -> bool {
+		self.0.started.load(Ordering::SeqCst)
+	}
+
+	#[allow(dead_code)]
 	pub(crate) fn set_run_handler_active(&self, active: bool) {
 		self.0.run_handler_active.store(active, Ordering::SeqCst);
+	}
+
+	pub(crate) fn run_handler_active(&self) -> bool {
+		self.0.run_handler_active.load(Ordering::SeqCst)
 	}
 
 	pub(crate) fn track_run_handler(&self, handle: JoinHandle<()>) {
@@ -308,7 +332,55 @@ impl SleepController {
 	) -> bool {
 		loop {
 			if self.shutdown_tasks_drained(ctx) {
-				return true;
+				yield_now().await;
+				if self.shutdown_tasks_drained(ctx) {
+					return true;
+				}
+			}
+
+			let now = Instant::now();
+			if now >= deadline {
+				return false;
+			}
+
+			let sleep_for = (deadline - now).min(Duration::from_millis(10));
+			sleep(sleep_for).await;
+		}
+	}
+
+	pub(crate) async fn wait_for_internal_keep_awake_idle(
+		&self,
+		deadline: Instant,
+	) -> bool {
+		loop {
+			if self.0.internal_keep_awake_count.load(Ordering::SeqCst) == 0 {
+				yield_now().await;
+				if self.0.internal_keep_awake_count.load(Ordering::SeqCst) == 0 {
+					return true;
+				}
+			}
+
+			let now = Instant::now();
+			if now >= deadline {
+				return false;
+			}
+
+			let sleep_for = (deadline - now).min(Duration::from_millis(10));
+			sleep(sleep_for).await;
+		}
+	}
+
+	pub(crate) async fn wait_for_http_requests_drained(
+		&self,
+		ctx: &ActorContext,
+		deadline: Instant,
+	) -> bool {
+		loop {
+			if self.active_http_request_count(ctx).await == 0 {
+				yield_now().await;
+				if self.active_http_request_count(ctx).await == 0 {
+					return true;
+				}
 			}
 
 			let now = Instant::now();
@@ -381,7 +453,6 @@ impl SleepController {
 			&& self.0.keep_awake_count.load(Ordering::SeqCst) == 0
 			&& self.0.internal_keep_awake_count.load(Ordering::SeqCst) == 0
 			&& self.0.pending_disconnect_count.load(Ordering::SeqCst) == 0
-			&& self.0.websocket_callback_count.load(Ordering::SeqCst) == 0
 	}
 
 	fn shutdown_tasks_drained(&self, ctx: &ActorContext) -> bool {

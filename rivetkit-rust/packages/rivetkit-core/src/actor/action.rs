@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use rivet_error::RivetError;
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use tokio::time::timeout;
 
 use crate::actor::callbacks::{
@@ -18,11 +19,12 @@ pub struct ActionInvoker {
 	callbacks: Arc<ActorInstanceCallbacks>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ActionDispatchError {
 	pub group: String,
 	pub code: String,
 	pub message: String,
+	pub metadata: Option<JsonValue>,
 }
 
 impl ActionInvoker {
@@ -55,9 +57,13 @@ impl ActionInvoker {
 		let ctx = request.ctx.clone();
 		let action_name = request.name.clone();
 		let started_at = Instant::now();
+		let _action_guard = ctx.lock_action_execution().await;
 		ctx.record_action_call(&action_name);
+		ctx.begin_keep_awake();
 
 		let result = self.dispatch_inner(request).await;
+		ctx.end_keep_awake();
+		ctx.request_sleep_if_pending();
 		ctx.trigger_throttled_state_save();
 		ctx.record_action_duration(&action_name, started_at.elapsed());
 
@@ -73,6 +79,10 @@ impl ActionInvoker {
 		&self,
 		request: ActionRequest,
 	) -> std::result::Result<Vec<u8>, ActionDispatchError> {
+		if request.ctx.destroy_requested() {
+			request.ctx.wait_for_destroy_completion().await;
+		}
+
 		let handler = self
 			.callbacks
 			.actions
@@ -83,7 +93,11 @@ impl ActionInvoker {
 		let action_args = request.args.clone();
 		let ctx = request.ctx.clone();
 
-		let output = timeout(self.config.action_timeout, handler(request))
+		let output = timeout(self.config.action_timeout, async {
+			let result = handler(request).await;
+			ctx.wait_for_on_state_change_idle().await;
+			result
+		})
 			.await
 			.map_err(|_| {
 				ActionDispatchError::action_timed_out(&action_name, self.config.action_timeout)
@@ -130,6 +144,7 @@ impl ActionDispatchError {
 			group: "actor".to_owned(),
 			code: "action_not_found".to_owned(),
 			message: format!("action `{action_name}` was not found"),
+			metadata: None,
 		}
 	}
 
@@ -141,6 +156,7 @@ impl ActionDispatchError {
 				"action `{action_name}` timed out after {} ms",
 				timeout.as_millis()
 			),
+			metadata: None,
 		}
 	}
 
@@ -150,6 +166,7 @@ impl ActionDispatchError {
 			group: error.group().to_owned(),
 			code: error.code().to_owned(),
 			message: error.message().to_owned(),
+			metadata: error.metadata(),
 		}
 	}
 }

@@ -119,7 +119,7 @@ impl Kv {
 						self.actor_id.clone(),
 						start.to_vec(),
 						end.to_vec(),
-						false,
+						true,
 						Some(opts.reverse),
 						opts.limit.map(u64::from),
 					)

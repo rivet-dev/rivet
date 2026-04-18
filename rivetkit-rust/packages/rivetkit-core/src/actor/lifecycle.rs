@@ -1,19 +1,15 @@
 use std::error::Error as StdError;
 use std::fmt;
-use std::any::Any;
-use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use futures::future::BoxFuture;
-use futures::FutureExt;
-use tokio::runtime::Handle;
 use tokio::time::{Instant, timeout};
 
 use crate::actor::action::ActionInvoker;
 use crate::actor::callbacks::{
 	ActorInstanceCallbacks, OnDestroyRequest, OnMigrateRequest,
-	OnSleepRequest, OnStateChangeRequest, OnWakeRequest, RunRequest,
+	OnSleepRequest, OnStateChangeRequest, OnWakeRequest,
 };
 use crate::actor::context::ActorContext;
 use crate::actor::factory::{ActorFactory, FactoryRequest};
@@ -155,7 +151,7 @@ impl ActorLifecycle {
 			ctx.record_startup_on_wake(started_at.elapsed());
 		}
 
-		ctx.schedule().sync_alarm_logged();
+		ctx.schedule().sync_future_alarm_logged();
 		ctx.restore_hibernatable_connections()
 			.await
 			.map_err(|source| StartupError::new(StartupStage::RestoreConnections, source))?;
@@ -182,6 +178,23 @@ impl ActorLifecycle {
 		self.spawn_run_handler(ctx.clone(), callbacks.clone());
 		self.process_overdue_scheduled_events(&ctx, factory, callbacks.clone())
 			.await;
+		let alarm_invoker =
+			ActionInvoker::with_shared_callbacks(factory.config().clone(), callbacks.clone());
+		ctx.schedule().set_local_alarm_callback(Some(Arc::new({
+			let ctx = ctx.clone();
+			let invoker = alarm_invoker.clone();
+			move || {
+				let ctx = ctx.clone();
+				let invoker = invoker.clone();
+				Box::pin(async move {
+					if ctx.aborted() {
+						return;
+					}
+					ctx.schedule().handle_alarm(&ctx, &invoker).await;
+				})
+			}
+		})));
+		ctx.schedule().sync_alarm_logged();
 		ctx.record_total_startup(startup_started_at.elapsed());
 
 		Ok(StartupOutcome { callbacks, is_new })
@@ -195,7 +208,11 @@ impl ActorLifecycle {
 	) -> Result<ShutdownOutcome> {
 		let config = factory.config().clone();
 		ctx.cancel_sleep_timer();
+		ctx.schedule().suspend_alarm_dispatch();
 		ctx.cancel_local_alarm_timeouts();
+		ctx.schedule().set_local_alarm_callback(None);
+		ctx.set_ready(false);
+		ctx.set_started(false);
 		ctx.abort_signal().cancel();
 		ctx
 			.wait_for_run_handler(config.effective_run_stop_timeout())
@@ -230,6 +247,10 @@ impl ActorLifecycle {
 			}
 		}
 
+		// on_sleep can schedule fresh local alarms; keep them persisted for wake,
+		// but do not let them fire on the stopping instance.
+		ctx.cancel_local_alarm_timeouts();
+
 		if !ctx.wait_for_shutdown_tasks(shutdown_deadline).await {
 			tracing::warn!("sleep shutdown timed out waiting for shutdown tasks");
 		}
@@ -259,6 +280,7 @@ impl ActorLifecycle {
 		ctx.save_state(SaveStateOpts { immediate: true })
 			.await
 			.context("persist actor state during sleep shutdown")?;
+		ctx.schedule().sync_alarm_logged();
 		ctx.sql()
 			.cleanup()
 			.await
@@ -275,7 +297,11 @@ impl ActorLifecycle {
 	) -> Result<ShutdownOutcome> {
 		let config = factory.config().clone();
 		ctx.cancel_sleep_timer();
+		ctx.schedule().suspend_alarm_dispatch();
 		ctx.cancel_local_alarm_timeouts();
+		ctx.schedule().set_local_alarm_callback(None);
+		ctx.set_ready(false);
+		ctx.set_started(false);
 		if !ctx.aborted() {
 			ctx.abort_signal().cancel();
 		}
@@ -371,38 +397,9 @@ impl ActorLifecycle {
 			return;
 		}
 
-		let Ok(runtime) = Handle::try_current() else {
-			tracing::warn!("skipping actor run handler without a tokio runtime");
-			return;
-		};
-
-		let callbacks = callbacks.clone();
-		ctx.set_run_handler_active(true);
-		let task_ctx = ctx.clone();
-		let handle = runtime.spawn(async move {
-			let run = callbacks
-				.run
-				.as_ref()
-				.expect("run handler presence checked before spawn");
-			let result = AssertUnwindSafe(run(RunRequest {
-				ctx: task_ctx.clone(),
-			}))
-				.catch_unwind()
-				.await;
-			task_ctx.set_run_handler_active(false);
-
-			match result {
-				Ok(Ok(())) => {}
-				Ok(Err(error)) => {
-					tracing::error!(?error, "actor run handler failed");
-				}
-				Err(panic) => {
-					let panic_message = panic_payload_message(panic.as_ref());
-					tracing::error!(panic = %panic_message, "actor run handler panicked");
-				}
-			}
-		});
-		ctx.track_run_handler(handle);
+		if let Err(error) = ctx.restart_run_handler() {
+			tracing::warn!(?error, "skipping actor run handler restart");
+		}
 	}
 
 	async fn process_overdue_scheduled_events(
@@ -492,18 +489,6 @@ fn on_state_change_callback(
 			.await
 		})
 	}))
-}
-
-fn panic_payload_message(payload: &(dyn Any + Send + 'static)) -> String {
-	if let Some(message) = payload.downcast_ref::<&'static str>() {
-		return (*message).to_owned();
-	}
-
-	if let Some(message) = payload.downcast_ref::<String>() {
-		return message.clone();
-	}
-
-	"unknown panic payload".to_owned()
 }
 
 fn remaining_budget(deadline: Instant) -> std::time::Duration {

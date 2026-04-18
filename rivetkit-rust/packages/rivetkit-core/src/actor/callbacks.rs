@@ -249,19 +249,30 @@ pub struct OnRequestRequest {
 #[derive(Clone, Debug)]
 pub struct OnWebSocketRequest {
 	pub ctx: ActorContext,
+	pub conn: Option<ConnHandle>,
 	pub ws: WebSocket,
+	pub request: Option<Request>,
+}
+
+#[derive(Clone, Debug)]
+pub struct OnBeforeSubscribeRequest {
+	pub ctx: ActorContext,
+	pub conn: ConnHandle,
+	pub event_name: String,
 }
 
 #[derive(Clone, Debug)]
 pub struct OnBeforeConnectRequest {
 	pub ctx: ActorContext,
 	pub params: Vec<u8>,
+	pub request: Option<Request>,
 }
 
 #[derive(Clone, Debug)]
 pub struct OnConnectRequest {
 	pub ctx: ActorContext,
 	pub conn: ConnHandle,
+	pub request: Option<Request>,
 }
 
 #[derive(Clone, Debug)]
@@ -311,6 +322,7 @@ pub struct ActorInstanceCallbacks {
 	pub on_state_change: Option<LifecycleCallback<OnStateChangeRequest>>,
 	pub on_request: Option<RequestCallback>,
 	pub on_websocket: Option<LifecycleCallback<OnWebSocketRequest>>,
+	pub on_before_subscribe: Option<LifecycleCallback<OnBeforeSubscribeRequest>>,
 	pub on_before_connect: Option<LifecycleCallback<OnBeforeConnectRequest>>,
 	pub on_connect: Option<LifecycleCallback<OnConnectRequest>>,
 	pub on_disconnect: Option<LifecycleCallback<OnDisconnectRequest>>,
@@ -331,6 +343,7 @@ impl fmt::Debug for ActorInstanceCallbacks {
 			.field("on_state_change", &self.on_state_change.is_some())
 			.field("on_request", &self.on_request.is_some())
 			.field("on_websocket", &self.on_websocket.is_some())
+			.field("on_before_subscribe", &self.on_before_subscribe.is_some())
 			.field("on_before_connect", &self.on_before_connect.is_some())
 			.field("on_connect", &self.on_connect.is_some())
 			.field("on_disconnect", &self.on_disconnect.is_some())
