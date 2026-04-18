@@ -37,7 +37,8 @@ use crate::actor::context::ActorContext;
 use crate::actor::factory::ActorFactory;
 use crate::actor::lifecycle::{ActorLifecycle, StartupOptions};
 use crate::actor::state::{PERSIST_DATA_KEY, PersistedActor, decode_persisted_actor};
-use crate::inspector::Inspector;
+use crate::inspector::protocol::{self as inspector_protocol, ServerMessage as InspectorServerMessage};
+use crate::inspector::{Inspector, InspectorSignal, InspectorSubscription};
 use crate::kv::Kv;
 use crate::sqlite::SqliteDb;
 use crate::types::{ActorKey, ActorKeySegment, SaveStateOpts};
@@ -601,6 +602,22 @@ impl RegistryDispatcher {
 		action_name: &str,
 		args: Vec<JsonValue>,
 	) -> std::result::Result<JsonValue, ActionDispatchError> {
+		self
+			.execute_inspector_action_bytes(
+				instance,
+				action_name,
+				encode_json_as_cbor(&args).map_err(ActionDispatchError::from_anyhow)?,
+			)
+			.await
+			.map(|payload| decode_cbor_json_or_null(&payload))
+	}
+
+	async fn execute_inspector_action_bytes(
+		&self,
+		instance: &ActiveActorInstance,
+		action_name: &str,
+		args: Vec<u8>,
+	) -> std::result::Result<Vec<u8>, ActionDispatchError> {
 		let conn = match instance
 			.ctx
 			.connect_conn(Vec::new(), false, None, async { Ok(Vec::new()) })
@@ -618,13 +635,13 @@ impl RegistryDispatcher {
 				ctx: instance.ctx.clone(),
 				conn: conn.clone(),
 				name: action_name.to_owned(),
-				args: encode_json_as_cbor(&args).map_err(ActionDispatchError::from_anyhow)?,
+				args,
 			})
 			.await;
 		if let Err(error) = conn.disconnect(None).await {
 			tracing::warn!(?error, action_name, "failed to disconnect inspector action connection");
 		}
-		output.map(|payload| decode_cbor_json_or_null(&payload))
+		output
 	}
 
 	async fn inspector_summary(
@@ -657,6 +674,41 @@ impl RegistryDispatcher {
 		&self,
 		instance: &ActiveActorInstance,
 	) -> Result<(bool, Option<JsonValue>)> {
+		self
+			.inspector_workflow_history_bytes(instance)
+			.await
+			.map(|(is_workflow_enabled, history)| {
+				(
+					is_workflow_enabled,
+					history
+						.map(|payload| decode_cbor_json_or_null(&payload))
+						.filter(|value| !value.is_null()),
+				)
+			})
+	}
+
+	async fn inspector_replay_workflow(
+		&self,
+		instance: &ActiveActorInstance,
+		entry_id: Option<String>,
+	) -> Result<(bool, Option<JsonValue>)> {
+		self
+			.inspector_replay_workflow_bytes(instance, entry_id)
+			.await
+			.map(|(is_workflow_enabled, history)| {
+				(
+					is_workflow_enabled,
+					history
+						.map(|payload| decode_cbor_json_or_null(&payload))
+						.filter(|value| !value.is_null()),
+				)
+			})
+	}
+
+	async fn inspector_workflow_history_bytes(
+		&self,
+		instance: &ActiveActorInstance,
+	) -> Result<(bool, Option<Vec<u8>>)> {
 		let is_workflow_enabled = instance.inspector.is_workflow_enabled();
 		if !is_workflow_enabled {
 			return Ok((false, None));
@@ -666,18 +718,16 @@ impl RegistryDispatcher {
 			.inspector
 			.get_workflow_history()
 			.await
-			.context("load inspector workflow history")?
-			.map(|payload| decode_cbor_json_or_null(&payload))
-			.filter(|value| !value.is_null());
+			.context("load inspector workflow history")?;
 
 		Ok((true, history))
 	}
 
-	async fn inspector_replay_workflow(
+	async fn inspector_replay_workflow_bytes(
 		&self,
 		instance: &ActiveActorInstance,
 		entry_id: Option<String>,
-	) -> Result<(bool, Option<JsonValue>)> {
+	) -> Result<(bool, Option<Vec<u8>>)> {
 		let is_workflow_enabled = instance.inspector.is_workflow_enabled();
 		if !is_workflow_enabled {
 			return Ok((false, None));
@@ -687,14 +737,20 @@ impl RegistryDispatcher {
 			.inspector
 			.replay_workflow(entry_id)
 			.await
-			.context("replay inspector workflow history")?
-			.map(|payload| decode_cbor_json_or_null(&payload))
-			.filter(|value| !value.is_null());
+			.context("replay inspector workflow history")?;
+		instance.inspector.record_workflow_history_updated();
 
 		Ok((true, history))
 	}
 
 	async fn inspector_database_schema(&self, ctx: &ActorContext) -> Result<JsonValue> {
+		self
+			.inspector_database_schema_bytes(ctx)
+			.await
+			.map(|payload| decode_cbor_json_or_null(&payload))
+	}
+
+	async fn inspector_database_schema_bytes(&self, ctx: &ActorContext) -> Result<Vec<u8>> {
 		let tables = decode_cbor_json_or_null(
 			&ctx
 				.db_query(
@@ -705,7 +761,7 @@ impl RegistryDispatcher {
 				.context("query sqlite master tables")?,
 		);
 		let JsonValue::Array(tables) = tables else {
-			return Ok(json!({ "tables": [] }));
+			return encode_json_as_cbor(&json!({ "tables": [] }));
 		};
 
 		let mut inspector_tables = Vec::with_capacity(tables.len());
@@ -760,7 +816,7 @@ impl RegistryDispatcher {
 			}));
 		}
 
-		Ok(json!({ "tables": inspector_tables }))
+		encode_json_as_cbor(&json!({ "tables": inspector_tables }))
 	}
 
 	async fn inspector_database_rows(
@@ -770,8 +826,21 @@ impl RegistryDispatcher {
 		limit: u32,
 		offset: u32,
 	) -> Result<JsonValue> {
+		self
+			.inspector_database_rows_bytes(ctx, table, limit, offset)
+			.await
+			.map(|payload| decode_cbor_json_or_null(&payload))
+	}
+
+	async fn inspector_database_rows_bytes(
+		&self,
+		ctx: &ActorContext,
+		table: &str,
+		limit: u32,
+		offset: u32,
+	) -> Result<Vec<u8>> {
 		let params = encode_json_as_cbor(&vec![json!(limit.min(500)), json!(offset)])?;
-		let rows = ctx
+		ctx
 			.db_query(
 				&format!(
 					"SELECT * FROM {} LIMIT ? OFFSET ?",
@@ -780,8 +849,7 @@ impl RegistryDispatcher {
 				Some(&params),
 			)
 			.await
-			.with_context(|| format!("query rows for `{table}`"))?;
-		Ok(decode_cbor_json_or_null(&rows))
+			.with_context(|| format!("query rows for `{table}`"))
 	}
 
 	async fn inspector_database_execute(
@@ -845,11 +913,19 @@ impl RegistryDispatcher {
 	}
 
 	async fn handle_websocket(
-		&self,
+		self: &Arc<Self>,
 		actor_id: &str,
+		request: &HttpRequest,
+		path: &str,
+		headers: &HashMap<String, String>,
 		sender: WebSocketSender,
 	) -> Result<WebSocketHandler> {
 		let instance = self.active_actor(actor_id).await?;
+		if is_inspector_connect_path(path)? {
+			return self
+				.handle_inspector_websocket(actor_id, instance, request, headers)
+				.await;
+		}
 		let Some(callback) = instance.callbacks.on_websocket.as_ref() else {
 			return Ok(default_websocket_handler());
 		};
@@ -871,6 +947,372 @@ impl RegistryDispatcher {
 			Err(error) => {
 				tracing::error!(actor_id, ?error, "actor websocket callback failed");
 				Err(error)
+			}
+		}
+	}
+
+	async fn handle_inspector_websocket(
+		self: &Arc<Self>,
+		actor_id: &str,
+		instance: ActiveActorInstance,
+		_request: &HttpRequest,
+		headers: &HashMap<String, String>,
+	) -> Result<WebSocketHandler> {
+		if !request_has_inspector_websocket_access(headers, self.inspector_token.as_deref()) {
+			tracing::warn!(actor_id, "rejecting inspector websocket without a valid token");
+			return Ok(closing_websocket_handler(1008, "inspector.unauthorized"));
+		}
+
+		let dispatcher = self.clone();
+		let subscription_slot =
+			Arc::new(std::sync::Mutex::new(None::<InspectorSubscription>));
+		let on_open_instance = instance.clone();
+		let on_open_dispatcher = dispatcher.clone();
+		let on_open_slot = subscription_slot.clone();
+		let on_message_instance = instance.clone();
+		let on_message_dispatcher = dispatcher.clone();
+
+		Ok(WebSocketHandler {
+			on_message: Box::new(move |message: WebSocketMessage| {
+				let dispatcher = on_message_dispatcher.clone();
+				let instance = on_message_instance.clone();
+				Box::pin(async move {
+					dispatcher
+						.handle_inspector_websocket_message(&instance, &message.sender, &message.data)
+						.await;
+				})
+			}),
+			on_close: Box::new(move |_code, _reason| {
+				let slot = subscription_slot.clone();
+				Box::pin(async move {
+					let mut guard = match slot.lock() {
+						Ok(guard) => guard,
+						Err(poisoned) => poisoned.into_inner(),
+					};
+					guard.take();
+				})
+			}),
+			on_open: Some(Box::new(move |open_sender| {
+				Box::pin(async move {
+					match on_open_dispatcher.inspector_init_message(&on_open_instance).await {
+						Ok(message) => {
+							if let Err(error) = send_inspector_message(&open_sender, &message) {
+								tracing::error!(?error, "failed to send inspector init message");
+								open_sender.close(Some(1011), Some("inspector.init_error".to_owned()));
+								return;
+							}
+						}
+						Err(error) => {
+							tracing::error!(?error, "failed to build inspector init message");
+							open_sender.close(Some(1011), Some("inspector.init_error".to_owned()));
+							return;
+						}
+					}
+
+					let listener_dispatcher = on_open_dispatcher.clone();
+					let listener_instance = on_open_instance.clone();
+					let listener_sender = open_sender.clone();
+					let subscription = on_open_instance.inspector.subscribe(Arc::new(
+						move |signal| {
+							let dispatcher = listener_dispatcher.clone();
+							let instance = listener_instance.clone();
+							let sender = listener_sender.clone();
+							tokio::spawn(async move {
+								match dispatcher
+									.inspector_push_message_for_signal(&instance, signal)
+									.await
+								{
+									Ok(Some(message)) => {
+										if let Err(error) =
+											send_inspector_message(&sender, &message)
+										{
+											tracing::error!(
+												?error,
+												?signal,
+												"failed to push inspector websocket update"
+											);
+										}
+									}
+									Ok(None) => {}
+									Err(error) => {
+										tracing::error!(
+											?error,
+											?signal,
+											"failed to build inspector websocket update"
+										);
+									}
+								}
+							});
+						},
+					));
+					let mut guard = match on_open_slot.lock() {
+						Ok(guard) => guard,
+						Err(poisoned) => poisoned.into_inner(),
+					};
+					*guard = Some(subscription);
+				})
+			})),
+		})
+	}
+
+	async fn handle_inspector_websocket_message(
+		&self,
+		instance: &ActiveActorInstance,
+		sender: &WebSocketSender,
+		payload: &[u8],
+	) {
+		let response = match inspector_protocol::decode_client_message(payload) {
+			Ok(message) => match self.process_inspector_websocket_message(instance, message).await {
+				Ok(response) => response,
+				Err(error) => Some(InspectorServerMessage::Error(
+					inspector_protocol::ErrorMessage {
+						message: error.to_string(),
+					},
+				)),
+			},
+			Err(error) => Some(InspectorServerMessage::Error(
+				inspector_protocol::ErrorMessage {
+					message: error.to_string(),
+				},
+			)),
+		};
+
+		if let Some(response) = response {
+			if let Err(error) = send_inspector_message(sender, &response) {
+				tracing::error!(?error, "failed to send inspector websocket response");
+			}
+		}
+	}
+
+	async fn process_inspector_websocket_message(
+		&self,
+		instance: &ActiveActorInstance,
+		message: inspector_protocol::ClientMessage,
+	) -> Result<Option<InspectorServerMessage>> {
+		match message {
+			inspector_protocol::ClientMessage::PatchState(request) => {
+				instance.ctx.set_state(request.state);
+				instance
+					.ctx
+					.save_state(SaveStateOpts { immediate: true })
+					.await
+					.context("save inspector websocket state patch")?;
+				Ok(None)
+			}
+			inspector_protocol::ClientMessage::StateRequest(request) => {
+				Ok(Some(InspectorServerMessage::StateResponse(
+					self.inspector_state_response(instance, request.id),
+				)))
+			}
+			inspector_protocol::ClientMessage::ConnectionsRequest(request) => {
+				Ok(Some(InspectorServerMessage::ConnectionsResponse(
+					inspector_protocol::ConnectionsResponse {
+						rid: request.id,
+						connections: inspector_wire_connections(&instance.ctx),
+					},
+				)))
+			}
+			inspector_protocol::ClientMessage::ActionRequest(request) => {
+				let output = self
+					.execute_inspector_action_bytes(instance, &request.name, request.args)
+					.await
+					.map_err(|error| anyhow!(error.message))?;
+				Ok(Some(InspectorServerMessage::ActionResponse(
+					inspector_protocol::ActionResponse {
+						rid: request.id,
+						output,
+					},
+				)))
+			}
+			inspector_protocol::ClientMessage::RpcsListRequest(request) => {
+				Ok(Some(InspectorServerMessage::RpcsListResponse(
+					inspector_protocol::RpcsListResponse {
+						rid: request.id,
+						rpcs: inspector_rpcs(instance),
+					},
+				)))
+			}
+			inspector_protocol::ClientMessage::TraceQueryRequest(request) => {
+				Ok(Some(InspectorServerMessage::TraceQueryResponse(
+					inspector_protocol::TraceQueryResponse {
+						rid: request.id,
+						payload: Vec::new(),
+					},
+				)))
+			}
+			inspector_protocol::ClientMessage::QueueRequest(request) => {
+				let status = self
+					.inspector_queue_status(
+						instance,
+						inspector_protocol::clamp_queue_limit(request.limit),
+					)
+					.await?;
+				Ok(Some(InspectorServerMessage::QueueResponse(
+					inspector_protocol::QueueResponse {
+						rid: request.id,
+						status,
+					},
+				)))
+			}
+			inspector_protocol::ClientMessage::WorkflowHistoryRequest(request) => {
+				let (is_workflow_enabled, history) =
+					self.inspector_workflow_history_bytes(instance).await?;
+				Ok(Some(InspectorServerMessage::WorkflowHistoryResponse(
+					inspector_protocol::WorkflowHistoryResponse {
+						rid: request.id,
+						history,
+						is_workflow_enabled,
+					},
+				)))
+			}
+			inspector_protocol::ClientMessage::WorkflowReplayRequest(request) => {
+				let (is_workflow_enabled, history) = self
+					.inspector_replay_workflow_bytes(instance, request.entry_id)
+					.await?;
+				Ok(Some(InspectorServerMessage::WorkflowReplayResponse(
+					inspector_protocol::WorkflowReplayResponse {
+						rid: request.id,
+						history,
+						is_workflow_enabled,
+					},
+				)))
+			}
+			inspector_protocol::ClientMessage::DatabaseSchemaRequest(request) => {
+				let schema = self.inspector_database_schema_bytes(&instance.ctx).await?;
+				Ok(Some(InspectorServerMessage::DatabaseSchemaResponse(
+					inspector_protocol::DatabaseSchemaResponse {
+						rid: request.id,
+						schema,
+					},
+				)))
+			}
+			inspector_protocol::ClientMessage::DatabaseTableRowsRequest(request) => {
+				let result = self
+					.inspector_database_rows_bytes(
+						&instance.ctx,
+						&request.table,
+						request.limit.min(u64::from(u32::MAX)) as u32,
+						request.offset.min(u64::from(u32::MAX)) as u32,
+					)
+					.await?;
+				Ok(Some(InspectorServerMessage::DatabaseTableRowsResponse(
+					inspector_protocol::DatabaseTableRowsResponse {
+						rid: request.id,
+						result,
+					},
+				)))
+			}
+		}
+	}
+
+	async fn inspector_init_message(
+		&self,
+		instance: &ActiveActorInstance,
+	) -> Result<InspectorServerMessage> {
+		let (is_workflow_enabled, workflow_history) =
+			self.inspector_workflow_history_bytes(instance).await?;
+		let queue_size = self.inspector_current_queue_size(instance).await?;
+		Ok(InspectorServerMessage::Init(
+			inspector_protocol::InitMessage {
+				connections: inspector_wire_connections(&instance.ctx),
+				state: Some(instance.ctx.state()),
+				is_state_enabled: true,
+				rpcs: inspector_rpcs(instance),
+				is_database_enabled: instance.ctx.sql().runtime_config().is_ok(),
+				queue_size,
+				workflow_history,
+				is_workflow_enabled,
+			},
+		))
+	}
+
+	fn inspector_state_response(
+		&self,
+		instance: &ActiveActorInstance,
+		rid: u64,
+	) -> inspector_protocol::StateResponse {
+		inspector_protocol::StateResponse {
+			rid,
+			state: Some(instance.ctx.state()),
+			is_state_enabled: true,
+		}
+	}
+
+	async fn inspector_queue_status(
+		&self,
+		instance: &ActiveActorInstance,
+		limit: u32,
+	) -> Result<inspector_protocol::QueueStatus> {
+		let messages = instance
+			.ctx
+			.queue()
+			.inspect_messages()
+			.await
+			.context("list inspector queue messages")?;
+		let queue_size = messages.len().try_into().unwrap_or(u32::MAX);
+		let truncated = messages.len() > limit as usize;
+		let messages = messages
+			.into_iter()
+			.take(limit as usize)
+			.map(|message| inspector_protocol::QueueMessageSummary {
+				id: message.id,
+				name: message.name,
+				created_at_ms: u64::try_from(message.created_at).unwrap_or_default(),
+			})
+			.collect();
+
+		Ok(inspector_protocol::QueueStatus {
+			size: u64::from(queue_size),
+			max_size: u64::from(instance.ctx.queue().max_size()),
+			messages,
+			truncated,
+		})
+	}
+
+	async fn inspector_current_queue_size(&self, instance: &ActiveActorInstance) -> Result<u64> {
+		Ok(
+			instance
+				.ctx
+				.queue()
+				.inspect_messages()
+				.await
+				.context("list inspector queue messages for queue size")?
+				.len()
+				.try_into()
+				.unwrap_or(u64::MAX),
+		)
+	}
+
+	async fn inspector_push_message_for_signal(
+		&self,
+		instance: &ActiveActorInstance,
+		signal: InspectorSignal,
+	) -> Result<Option<InspectorServerMessage>> {
+		match signal {
+			InspectorSignal::StateUpdated => Ok(Some(InspectorServerMessage::StateUpdated(
+				inspector_protocol::StateUpdated {
+					state: instance.ctx.state(),
+				},
+			))),
+			InspectorSignal::ConnectionsUpdated => Ok(Some(
+				InspectorServerMessage::ConnectionsUpdated(
+					inspector_protocol::ConnectionsUpdated {
+						connections: inspector_wire_connections(&instance.ctx),
+					},
+				),
+			)),
+			InspectorSignal::QueueUpdated => Ok(Some(InspectorServerMessage::QueueUpdated(
+				inspector_protocol::QueueUpdated {
+					queue_size: self.inspector_current_queue_size(instance).await?,
+				},
+			))),
+			InspectorSignal::WorkflowHistoryUpdated => {
+				let (_, history) = self.inspector_workflow_history_bytes(instance).await?;
+				Ok(history.map(|history| {
+					InspectorServerMessage::WorkflowHistoryUpdated(
+						inspector_protocol::WorkflowHistoryUpdated { history },
+					)
+				}))
 			}
 		}
 	}
@@ -1008,7 +1450,11 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		sender: WebSocketSender,
 	) -> EnvoyBoxFuture<anyhow::Result<WebSocketHandler>> {
 		let dispatcher = self.dispatcher.clone();
-		Box::pin(async move { dispatcher.handle_websocket(&actor_id, sender).await })
+		Box::pin(async move {
+			dispatcher
+				.handle_websocket(&actor_id, &_request, &_path, &_headers, sender)
+				.await
+		})
 	}
 
 	fn can_hibernate(
@@ -1345,6 +1791,28 @@ fn inspector_connections(ctx: &ActorContext) -> Vec<InspectorConnectionJson> {
 		.collect()
 }
 
+fn inspector_wire_connections(ctx: &ActorContext) -> Vec<inspector_protocol::ConnectionDetails> {
+	ctx
+		.conns()
+		.into_iter()
+		.map(|conn| {
+			let details = json!({
+				"type": JsonValue::Null,
+				"params": decode_cbor_json_or_null(&conn.params()),
+				"stateEnabled": true,
+				"state": decode_cbor_json_or_null(&conn.state()),
+				"subscriptions": conn.subscriptions().len(),
+				"isHibernatable": conn.is_hibernatable(),
+			});
+			inspector_protocol::ConnectionDetails {
+				id: conn.id().to_owned(),
+				details: encode_json_as_cbor(&details)
+					.expect("inspector connection details should encode to cbor"),
+			}
+		})
+		.collect()
+}
+
 fn build_actor_inspector(
 	ctx: ActorContext,
 	callbacks: Arc<crate::actor::callbacks::ActorInstanceCallbacks>,
@@ -1564,15 +2032,11 @@ fn request_has_inspector_access(
 	request: &Request,
 	configured_token: Option<&str>,
 ) -> bool {
-	let provided_token = request
-		.headers()
-		.get(http::header::AUTHORIZATION)
-		.and_then(|value| value.to_str().ok())
-		.and_then(|value| value.strip_prefix("Bearer "));
-
 	match configured_token {
-		Some(configured_token) => provided_token == Some(configured_token),
-		None if env::var("NODE_ENV").unwrap_or_else(|_| "development".to_owned()) != "production" => {
+		Some(configured_token) => {
+			authorization_bearer_token(request.headers()) == Some(configured_token)
+		}
+		None if inspector_dev_mode_enabled() => {
 			tracing::warn!(
 				path = %request.uri(),
 				"allowing inspector request without configured token in development mode"
@@ -1581,6 +2045,56 @@ fn request_has_inspector_access(
 		}
 		None => false,
 	}
+}
+
+fn request_has_inspector_websocket_access(
+	headers: &HashMap<String, String>,
+	configured_token: Option<&str>,
+) -> bool {
+	match configured_token {
+		Some(configured_token) => websocket_inspector_token(headers)
+			.or_else(|| authorization_bearer_token_map(headers))
+			== Some(configured_token),
+		None if inspector_dev_mode_enabled() => {
+			tracing::warn!(
+				"allowing inspector websocket without configured token in development mode"
+			);
+			true
+		}
+		None => false,
+	}
+}
+
+fn inspector_dev_mode_enabled() -> bool {
+	env::var("NODE_ENV").unwrap_or_else(|_| "development".to_owned()) != "production"
+}
+
+fn authorization_bearer_token(headers: &http::HeaderMap) -> Option<&str> {
+	headers
+		.get(http::header::AUTHORIZATION)
+		.and_then(|value| value.to_str().ok())
+		.and_then(|value| value.strip_prefix("Bearer "))
+}
+
+fn authorization_bearer_token_map<'a>(
+	headers: &'a HashMap<String, String>,
+) -> Option<&'a str> {
+	headers
+		.iter()
+		.find(|(name, _)| name.eq_ignore_ascii_case(http::header::AUTHORIZATION.as_str()))
+		.and_then(|(_, value)| value.strip_prefix("Bearer "))
+}
+
+fn websocket_inspector_token<'a>(headers: &'a HashMap<String, String>) -> Option<&'a str> {
+	headers
+		.iter()
+		.find(|(name, _)| name.eq_ignore_ascii_case("sec-websocket-protocol"))
+		.and_then(|(_, value)| {
+			value
+				.split(',')
+				.map(str::trim)
+				.find_map(|protocol| protocol.strip_prefix("rivet_inspector_token."))
+		})
 }
 
 async fn build_http_request(request: HttpRequest) -> Result<Request> {
@@ -1633,6 +2147,38 @@ fn request_has_bearer_token(request: &HttpRequest, configured_token: Option<&str
 		name.eq_ignore_ascii_case(http::header::AUTHORIZATION.as_str())
 			&& value == &format!("Bearer {configured_token}")
 	})
+}
+
+fn send_inspector_message(
+	sender: &WebSocketSender,
+	message: &InspectorServerMessage,
+) -> Result<()> {
+	let payload = inspector_protocol::encode_server_message(message)?;
+	sender.send(payload, true);
+	Ok(())
+}
+
+fn is_inspector_connect_path(path: &str) -> Result<bool> {
+	Ok(
+		Url::parse(&format!("http://inspector{path}"))
+			.context("parse inspector websocket path")?
+			.path()
+			== "/inspector/connect",
+	)
+}
+
+fn closing_websocket_handler(code: u16, reason: &str) -> WebSocketHandler {
+	let reason = reason.to_owned();
+	WebSocketHandler {
+		on_message: Box::new(|_message: WebSocketMessage| Box::pin(async {})),
+		on_close: Box::new(|_code, _reason| Box::pin(async {})),
+		on_open: Some(Box::new(move |sender| {
+			let reason = reason.clone();
+			Box::pin(async move {
+				sender.close(Some(code), Some(reason));
+			})
+		})),
+	}
 }
 
 fn default_websocket_handler() -> WebSocketHandler {

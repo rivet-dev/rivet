@@ -1007,7 +1007,7 @@
         "cargo check -p rivetkit-core passes"
       ],
       "priority": 55,
-      "passes": false,
+      "passes": true,
       "notes": "Thin WebSocket transport over the same Inspector methods. BARE encode/decode using schema types from US-049. The vbare versioning should write v4 (latest) and read v1-v4. Reference commit (pre-deletion): 959ab9bba. Use `git show 959ab9bba:<path>` to read the original TS implementation. Original: rivetkit-typescript/packages/rivetkit/src/inspector/handler.ts at commit 959ab9bba. Original protocol: schemas/actor-inspector/v4.bare."
     },
     {

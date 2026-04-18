@@ -1,7 +1,7 @@
 use super::*;
 
 mod moved_tests {
-	use super::{Inspector, InspectorSnapshot};
+	use super::{Inspector, InspectorSignal, InspectorSnapshot};
 	use crate::actor::connection::{
 		PersistedConnection, PersistedSubscription, encode_persisted_connection,
 		make_connection_key,
@@ -9,6 +9,8 @@ mod moved_tests {
 	use crate::actor::context::tests::new_with_kv;
 	use crate::{QueueNextOpts, SaveStateOpts};
 	use std::collections::BTreeMap;
+	use std::sync::Arc;
+	use std::sync::atomic::{AtomicUsize, Ordering};
 
 	#[tokio::test]
 	async fn state_updates_increment_inspector_revisions() {
@@ -208,5 +210,39 @@ mod moved_tests {
 				..InspectorSnapshot::default()
 			},
 		);
+	}
+
+	#[test]
+	fn inspector_subscriptions_track_connected_clients_and_cleanup() {
+		let inspector = Inspector::new();
+		let state_updates = Arc::new(AtomicUsize::new(0));
+		let queue_updates = Arc::new(AtomicUsize::new(0));
+		let state_updates_clone = state_updates.clone();
+		let queue_updates_clone = queue_updates.clone();
+
+		let subscription = inspector.subscribe(Arc::new(move |signal| match signal {
+			InspectorSignal::StateUpdated => {
+				state_updates_clone.fetch_add(1, Ordering::SeqCst);
+			}
+			InspectorSignal::QueueUpdated => {
+				queue_updates_clone.fetch_add(1, Ordering::SeqCst);
+			}
+			InspectorSignal::ConnectionsUpdated | InspectorSignal::WorkflowHistoryUpdated => {}
+		}));
+
+		assert_eq!(inspector.snapshot().connected_clients, 1);
+
+		inspector.record_state_updated();
+		inspector.record_queue_updated(3);
+
+		assert_eq!(state_updates.load(Ordering::SeqCst), 1);
+		assert_eq!(queue_updates.load(Ordering::SeqCst), 1);
+
+		drop(subscription);
+
+		assert_eq!(inspector.snapshot().connected_clients, 0);
+
+		inspector.record_state_updated();
+		assert_eq!(state_updates.load(Ordering::SeqCst), 1);
 	}
 }

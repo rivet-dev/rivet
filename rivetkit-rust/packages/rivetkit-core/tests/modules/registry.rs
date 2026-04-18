@@ -111,6 +111,7 @@ use super::*;
 			OnWebSocketRequest, RequestCallback, Response,
 		};
 		use crate::actor::factory::{ActorFactory, FactoryRequest};
+		use crate::inspector::{InspectorSignal, protocol as inspector_protocol};
 		use crate::ActorConfig;
 
 		fn request_callback<F>(callback: F) -> RequestCallback
@@ -170,6 +171,13 @@ use super::*;
 				response.body.as_ref().expect("response body should exist"),
 			)
 			.expect("response body should be valid json")
+		}
+
+		fn decode_cbor<T>(payload: &[u8]) -> T
+		where
+			T: serde::de::DeserializeOwned,
+		{
+			from_reader(Cursor::new(payload)).expect("decode test cbor payload")
 		}
 
 		fn inspector_fixture_factory() -> ActorFactory {
@@ -759,6 +767,250 @@ use super::*;
 					"isWorkflowEnabled": false,
 				})
 			);
+		}
+
+		#[tokio::test]
+		async fn dispatcher_builds_inspector_websocket_init_snapshot() {
+			let dispatcher = dispatcher_for_token(inspector_fixture_factory(), Some("token"));
+
+			dispatcher
+				.start_actor_for_test("actor-1", 1, "counter", None)
+				.await
+				.expect("start actor");
+
+			let instance = dispatcher
+				.active_actor("actor-1")
+				.await
+				.expect("active actor should exist");
+			instance
+				.ctx
+				.connect_conn(encode_cbor(&json!({ "viewer": true })), false, None, async {
+					Ok(encode_cbor(&json!({ "ready": true })))
+				})
+				.await
+				.expect("connect inspector test connection");
+
+			let init = dispatcher
+				.inspector_init_message(&instance)
+				.await
+				.expect("inspector init message");
+
+			let inspector_protocol::ServerMessage::Init(init) = init else {
+				panic!("expected init message");
+			};
+			assert_eq!(init.rpcs, vec!["increment".to_owned()]);
+			assert_eq!(init.queue_size, 1);
+			assert!(!init.is_database_enabled);
+			assert!(!init.is_workflow_enabled);
+			assert_eq!(
+				decode_cbor::<JsonValue>(
+					init.state.as_deref().expect("state bytes should exist"),
+				),
+				json!({ "count": 5 })
+			);
+			assert_eq!(init.connections.len(), 1);
+			assert_eq!(
+				decode_cbor::<JsonValue>(&init.connections[0].details),
+				json!({
+					"type": null,
+					"params": { "viewer": true },
+					"stateEnabled": true,
+					"state": { "ready": true },
+					"subscriptions": 0,
+					"isHibernatable": false,
+				})
+			);
+		}
+
+		#[tokio::test]
+		async fn dispatcher_processes_inspector_websocket_requests_and_push_updates() {
+			let dispatcher = dispatcher_for_token(inspector_fixture_factory(), Some("token"));
+
+			dispatcher
+				.start_actor_for_test("actor-1", 1, "counter", None)
+				.await
+				.expect("start actor");
+
+			let instance = dispatcher
+				.active_actor("actor-1")
+				.await
+				.expect("active actor should exist");
+
+			let patch_response = dispatcher
+				.process_inspector_websocket_message(
+					&instance,
+					inspector_protocol::ClientMessage::PatchState(
+						inspector_protocol::PatchStateRequest {
+							state: encode_cbor(&json!({ "count": 42 })),
+						},
+					),
+				)
+				.await
+				.expect("patch state request should succeed");
+			assert!(patch_response.is_none());
+			assert_eq!(
+				decode_cbor::<JsonValue>(&instance.ctx.state()),
+				json!({ "count": 42 })
+			);
+
+			let action_response = dispatcher
+				.process_inspector_websocket_message(
+					&instance,
+					inspector_protocol::ClientMessage::ActionRequest(
+						inspector_protocol::ActionRequest {
+							id: 7,
+							name: "increment".to_owned(),
+							args: encode_cbor(&vec![5]),
+						},
+					),
+				)
+				.await
+				.expect("action request should succeed")
+				.expect("action response should exist");
+			let inspector_protocol::ServerMessage::ActionResponse(action_response) =
+				action_response
+			else {
+				panic!("expected action response");
+			};
+			assert_eq!(action_response.rid, 7);
+			assert_eq!(decode_cbor::<i64>(&action_response.output), 47);
+
+			let queue_response = dispatcher
+				.process_inspector_websocket_message(
+					&instance,
+					inspector_protocol::ClientMessage::QueueRequest(
+						inspector_protocol::QueueRequest { id: 9, limit: 500 },
+					),
+				)
+				.await
+				.expect("queue request should succeed")
+				.expect("queue response should exist");
+			let inspector_protocol::ServerMessage::QueueResponse(queue_response) =
+				queue_response
+			else {
+				panic!("expected queue response");
+			};
+			assert_eq!(queue_response.rid, 9);
+			assert_eq!(queue_response.status.size, 1);
+			assert_eq!(queue_response.status.max_size, 1000);
+			assert_eq!(queue_response.status.messages.len(), 1);
+
+			let state_update = dispatcher
+				.inspector_push_message_for_signal(&instance, InspectorSignal::StateUpdated)
+				.await
+				.expect("state push should succeed")
+				.expect("state push should exist");
+			let inspector_protocol::ServerMessage::StateUpdated(state_update) = state_update else {
+				panic!("expected state update");
+			};
+			assert_eq!(
+				decode_cbor::<JsonValue>(&state_update.state),
+				json!({ "count": 47 })
+			);
+
+			let queue_update = dispatcher
+				.inspector_push_message_for_signal(&instance, InspectorSignal::QueueUpdated)
+				.await
+				.expect("queue push should succeed")
+				.expect("queue push should exist");
+			let inspector_protocol::ServerMessage::QueueUpdated(queue_update) = queue_update else {
+				panic!("expected queue update");
+			};
+			assert_eq!(queue_update.queue_size, 1);
+		}
+
+		#[tokio::test]
+		async fn dispatcher_processes_inspector_workflow_websocket_requests() {
+			let history_calls = Arc::new(AtomicUsize::new(0));
+			let replay_calls = Arc::new(AtomicUsize::new(0));
+			let dispatcher = dispatcher_for_token(
+				workflow_inspector_fixture_factory(
+					history_calls.clone(),
+					replay_calls.clone(),
+				),
+				Some("token"),
+			);
+
+			dispatcher
+				.start_actor_for_test("actor-1", 1, "counter", None)
+				.await
+				.expect("start actor");
+
+			let instance = dispatcher
+				.active_actor("actor-1")
+				.await
+				.expect("active actor should exist");
+
+			let workflow_response = dispatcher
+				.process_inspector_websocket_message(
+					&instance,
+					inspector_protocol::ClientMessage::WorkflowReplayRequest(
+						inspector_protocol::WorkflowReplayRequest {
+							id: 3,
+							entry_id: Some("entry-9".to_owned()),
+						},
+					),
+				)
+				.await
+				.expect("workflow replay should succeed")
+				.expect("workflow replay response should exist");
+			let inspector_protocol::ServerMessage::WorkflowReplayResponse(workflow_response) =
+				workflow_response
+			else {
+				panic!("expected workflow replay response");
+			};
+			assert_eq!(workflow_response.rid, 3);
+			assert!(workflow_response.is_workflow_enabled);
+			assert_eq!(replay_calls.load(Ordering::SeqCst), 1);
+			assert_eq!(
+				decode_cbor::<JsonValue>(
+					workflow_response
+						.history
+						.as_deref()
+						.expect("workflow replay history bytes should exist"),
+				),
+				json!({
+					"nameRegistry": ["counter"],
+					"entries": [{"id": "entry-9"}],
+					"entryMetadata": {},
+				})
+			);
+
+			let workflow_update = dispatcher
+				.inspector_push_message_for_signal(
+					&instance,
+					InspectorSignal::WorkflowHistoryUpdated,
+				)
+				.await
+				.expect("workflow push should succeed")
+				.expect("workflow push should exist");
+			let inspector_protocol::ServerMessage::WorkflowHistoryUpdated(workflow_update) =
+				workflow_update
+			else {
+				panic!("expected workflow update");
+			};
+			assert_eq!(history_calls.load(Ordering::SeqCst), 1);
+			assert_eq!(
+				decode_cbor::<JsonValue>(&workflow_update.history),
+				json!({
+					"nameRegistry": ["counter"],
+					"entries": [{"id": "entry-1"}],
+					"entryMetadata": {
+						"entry-1": {"status": "completed"}
+					},
+				})
+			);
+
+			let auth_headers = HashMap::from([(
+				"sec-websocket-protocol".to_owned(),
+				"rivet, rivet_inspector_token.token".to_owned(),
+			)]);
+			assert!(super::request_has_inspector_websocket_access(
+				&auth_headers,
+				Some("token"),
+			));
+			assert!(super::is_inspector_connect_path("/inspector/connect?actor=1")
+				.expect("inspector path should parse"));
 		}
 
 		#[tokio::test]

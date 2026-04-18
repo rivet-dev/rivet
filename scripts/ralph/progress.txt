@@ -5,6 +5,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - Workflow inspector data for native actors should stay in TypeScript behind `getRunInspectorConfig(...)` / `RUN_FUNCTION_CONFIG_SYMBOL`, while Rust only requests opaque history bytes lazily for inspector routes.
 - Inspector core helpers should keep schema payloads as opaque `ArrayBuffer`s and only CBOR encode/decode at the inspector boundary, so HTTP and WebSocket transports can reuse the same logic.
 - Inspector wire-protocol downgrades should turn unsupported responses into explicit `Error` payloads with `inspector.*_dropped` messages, and only throw on request downgrades that cannot be represented.
+- Inspector WebSocket push should reuse `InspectorSignal` subscriptions for fanout, but snapshot fields like queue size still need a live read because messages created before the inspector attaches do not backfill the stored counters.
 - `rivetkit-core` inspector HTTP routes belong in `RegistryDispatcher` ahead of user `on_request` callbacks, and endpoint failures should be translated into JSON RivetError payloads at that boundary instead of leaking raw transport errors.
 - When trimming `rivetkit` entrypoints, update `package.json` `exports`, `files`, and `scripts.build` together. `tsup` can still pass while stale export targets point at missing dist files.
 - `rivetkit-core` per-actor Prometheus metrics should hang off `ActorContext`, with queue/connection/action/lifecycle call sites updating shared metric handles directly and the registry serving `/metrics` before user `on_request` callbacks.
@@ -488,4 +489,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Native workflow inspector support should be exposed through run-function inspector config and resolved per actor id, so Rust only asks for opaque bytes when an inspector endpoint actually needs them.
   - Gotchas encountered: The old workflow inspector helper paths (`@/inspector/transport`, `@/schemas/...`) are dead in this repo; the live imports are under `src/common/`.
   - Useful context: The new lazy-path coverage lives in `rivetkit-core/tests/modules/registry.rs`, and the validation run for this story was `cargo check -p rivetkit-core`, `cargo check -p rivetkit-napi`, `pnpm check-types`, plus `cargo test -p rivetkit-core workflow -- --nocapture` captured to `/tmp/rivetkit-core-workflow-inspector.log`.
+---
+## 2026-04-17 18:41:01 PDT - US-054
+- What was implemented: Added the Rust inspector WebSocket transport at `/inspector/connect`, including v4 BARE-encoded outbound frames, v1-v4 inbound request decoding, protocol-header token auth, init snapshot delivery, live push updates via `InspectorSignal` subscriptions, and request/response handling for state, connections, actions, queue, workflow, trace stub, and database schema/rows.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/inspector/{mod.rs,protocol.rs}`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/registry.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/tests/modules/{inspector.rs,registry.rs}`, `/home/nathan/r5/scripts/ralph/{prd.json,progress.txt}`
+- **Learnings for future iterations:**
+  - Patterns discovered: Inspector WebSocket fanout should stay on cheap signal subscriptions and reuse the same CBOR payload boundaries as HTTP, while the transport layer owns BARE version framing and request routing.
+  - Gotchas encountered: Inspector queue counters only track events after the inspector is attached, so WebSocket init and queue push payloads need a live queue read instead of trusting the stored snapshot blindly.
+  - Useful context: Verification passed with `cargo check -p rivetkit-core` and `cargo test -p rivetkit-core`; the only recurring warning left is the existing `rivet-envoy-protocol` note about missing `@bare-ts/tools`.
 ---
