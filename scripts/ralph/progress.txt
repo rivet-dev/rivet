@@ -50,6 +50,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `envoy-client` shutdown hooks that need multi-step teardown should override `EnvoyCallbacks::on_actor_stop_with_completion`; the default path still auto-completes after legacy `on_actor_stop` returns.
 - `rivetkit` generic typed wrappers like `Ctx<A>` and `ConnCtx<A>` should implement `Clone` manually, because derive can accidentally add `A: Clone` or `Vars: Clone` bounds that break actor registration.
 - `rivetkit-core` local engine boot should flow through `ServeConfig::engine_binary_path`, wait for `endpoint + "/health"` before starting envoy, and forward child stdout/stderr into tracing so local-dev startup and shutdown stay centralized.
+- When `rivetkit` adds ergonomic helpers to a `rivetkit-core` type it re-exports, prefer an extension trait plus `prelude` re-export over wrapping the core type and churning `Ctx` signatures.
 
 ## 2026-04-17 16:13:47 PDT - US-042
 - What was implemented: Added explicit validation-error normalization to the Rust typed bridge for state, action args, action outputs, actor inputs, and connection params, then centralized native runtime schema validation in TypeScript so action args, broadcast/event payloads, queue bodies, and connection params all fail with the same `actor/validation_error` RivetError shape.
@@ -434,4 +435,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Non-idempotent native waits need a real cancellation bridge; for `enqueueAndWait`, create a standalone native `CancellationToken` and cancel it from the JS `AbortSignal` instead of retrying short wait slices that would duplicate the enqueue.
   - Gotchas encountered: `napi-rs` still will not deserialize a `#[napi]` class nested inside a `#[napi(object)]` field, so the native token has to travel as a separate queue method argument rather than living inside the options object.
   - Useful context: Core coverage for the new waiter path lives in `rivetkit-core/tests/modules/queue.rs`, and the acceptance checks that passed were `cargo test -p rivetkit-core queue`, `cargo test -p rivetkit context`, `cargo check -p rivetkit-napi`, `pnpm build:force` in `packages/rivetkit-napi`, and `pnpm check-types` in `packages/rivetkit`.
+---
+## 2026-04-17 17:18:59 PDT - US-047
+- What was implemented: Added a typed queue stream adapter in `rivetkit` via `QueueStreamExt::stream(...)`, exported `QueueStreamOpts` through the crate root and prelude, and added queue-stream unit tests covering `StreamExt` combinators, name filtering, and cancellation shutdown.
+- Files changed: `/home/nathan/r5/Cargo.lock`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/kv.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/tests/modules/kv.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/Cargo.toml`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/lib.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/prelude.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/src/queue.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit/tests/modules/queue.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: For typed convenience methods on re-exported core surfaces, use an extension trait and prelude export so method syntax works without replacing the underlying core type.
+  - Gotchas encountered: `ActorContext::new()` keeps KV unconfigured, so queue tests that actually enqueue messages need an in-memory KV-backed context instead of the default constructor.
+  - Useful context: `cargo test -p rivetkit` now covers the queue stream adapter; the only recurring warning in this area is the unrelated missing `@bare-ts/tools` CLI noted by `rivet-envoy-protocol`.
 ---

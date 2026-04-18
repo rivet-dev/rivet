@@ -904,7 +904,7 @@
         "cargo check -p rivetkit passes"
       ],
       "priority": 48,
-      "passes": false,
+      "passes": true,
       "notes": "See spec concern #9. Convenience wrapper \u2014 the loop-based next() already works. This just makes it more idiomatic for Rust users who prefer Stream combinators. Small story."
     },
     {

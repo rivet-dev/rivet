@@ -29,6 +29,13 @@ impl Kv {
 		}
 	}
 
+	pub fn new_in_memory() -> Self {
+		Self {
+			backend: KvBackend::InMemory(Arc::new(RwLock::new(BTreeMap::new()))),
+			actor_id: String::new(),
+		}
+	}
+
 	pub async fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
 		let mut values = self.batch_get(&[key]).await?;
 		Ok(values.pop().flatten())

@@ -78,6 +78,24 @@ impl ActorContext {
 		)
 	}
 
+	pub fn new_with_kv(
+		actor_id: impl Into<String>,
+		name: impl Into<String>,
+		key: ActorKey,
+		region: impl Into<String>,
+		kv: Kv,
+	) -> Self {
+		Self::build(
+			actor_id.into(),
+			name.into(),
+			key,
+			region.into(),
+			ActorConfig::default(),
+			kv,
+			SqliteDb::default(),
+		)
+	}
+
 	pub(crate) fn new_runtime(
 		actor_id: impl Into<String>,
 		name: impl Into<String>,

@@ -1,10 +1,7 @@
 use super::*;
 
 pub(crate) fn new_in_memory() -> Kv {
-	Kv {
-		backend: KvBackend::InMemory(Arc::new(RwLock::new(BTreeMap::new()))),
-		actor_id: String::new(),
-	}
+	Kv::new_in_memory()
 }
 
 mod moved_tests {

@@ -5202,6 +5202,7 @@ dependencies = [
  "serde",
  "tokio",
  "tokio-util",
+ "tracing",
 ]
 
 [[package]]
