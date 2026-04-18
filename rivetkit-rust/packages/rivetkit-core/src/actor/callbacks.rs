@@ -204,6 +204,14 @@ pub type ActionHandler =
 pub type BeforeActionResponseCallback = Box<
 	dyn Fn(OnBeforeActionResponseRequest) -> BoxFuture<'static, Result<Vec<u8>>> + Send + Sync,
 >;
+pub type GetWorkflowHistoryCallback = Box<
+	dyn Fn(GetWorkflowHistoryRequest) -> BoxFuture<'static, Result<Option<Vec<u8>>>>
+		+ Send
+		+ Sync,
+>;
+pub type ReplayWorkflowCallback = Box<
+	dyn Fn(ReplayWorkflowRequest) -> BoxFuture<'static, Result<Option<Vec<u8>>>> + Send + Sync,
+>;
 
 #[derive(Clone, Debug)]
 pub struct OnWakeRequest {
@@ -283,6 +291,17 @@ pub struct RunRequest {
 	pub ctx: ActorContext,
 }
 
+#[derive(Clone, Debug)]
+pub struct GetWorkflowHistoryRequest {
+	pub ctx: ActorContext,
+}
+
+#[derive(Clone, Debug)]
+pub struct ReplayWorkflowRequest {
+	pub ctx: ActorContext,
+	pub entry_id: Option<String>,
+}
+
 #[derive(Default)]
 pub struct ActorInstanceCallbacks {
 	pub on_migrate: Option<LifecycleCallback<OnMigrateRequest>>,
@@ -298,6 +317,8 @@ pub struct ActorInstanceCallbacks {
 	pub actions: HashMap<String, ActionHandler>,
 	pub on_before_action_response: Option<BeforeActionResponseCallback>,
 	pub run: Option<LifecycleCallback<RunRequest>>,
+	pub get_workflow_history: Option<GetWorkflowHistoryCallback>,
+	pub replay_workflow: Option<ReplayWorkflowCallback>,
 }
 
 impl fmt::Debug for ActorInstanceCallbacks {
@@ -319,6 +340,8 @@ impl fmt::Debug for ActorInstanceCallbacks {
 				&self.on_before_action_response.is_some(),
 			)
 			.field("run", &self.run.is_some())
+			.field("get_workflow_history", &self.get_workflow_history.is_some())
+			.field("replay_workflow", &self.replay_workflow.is_some())
 			.finish()
 	}
 }

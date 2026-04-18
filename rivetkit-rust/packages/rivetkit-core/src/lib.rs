@@ -11,7 +11,8 @@ pub use actor::callbacks::{
 	ActionRequest, ActorInstanceCallbacks, OnBeforeActionResponseRequest,
 	OnBeforeConnectRequest, OnConnectRequest, OnDestroyRequest, OnDisconnectRequest,
 	OnMigrateRequest, OnRequestRequest, OnSleepRequest, OnStateChangeRequest,
-	OnWakeRequest, OnWebSocketRequest, Request, Response, RunRequest,
+	OnWakeRequest, OnWebSocketRequest, ReplayWorkflowRequest, Request, Response,
+	RunRequest, GetWorkflowHistoryRequest,
 };
 pub use actor::config::{
 	ActorConfig, ActorConfigOverrides, CanHibernateWebSocket, FlatActorConfig,

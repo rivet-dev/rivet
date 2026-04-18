@@ -90,7 +90,7 @@ use super::*;
 		use std::io::Cursor;
 		use std::process::Stdio;
 		use std::sync::Arc;
-		use std::sync::atomic::{AtomicBool, Ordering};
+		use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 		use anyhow::Result;
 		use ciborium::{from_reader, into_writer};
@@ -215,6 +215,44 @@ use super::*;
 							})
 						}),
 					);
+					Ok(callbacks)
+				})
+			})
+		}
+
+		fn workflow_inspector_fixture_factory(
+			history_calls: Arc<AtomicUsize>,
+			replay_calls: Arc<AtomicUsize>,
+		) -> ActorFactory {
+			factory(move |_request| {
+				let history_calls = history_calls.clone();
+				let replay_calls = replay_calls.clone();
+				Box::pin(async move {
+					let mut callbacks = ActorInstanceCallbacks::default();
+					callbacks.get_workflow_history = Some(Box::new(move |_request| {
+						let history_calls = history_calls.clone();
+						Box::pin(async move {
+							history_calls.fetch_add(1, Ordering::SeqCst);
+							Ok(Some(encode_cbor(&json!({
+								"nameRegistry": ["counter"],
+								"entries": [{"id": "entry-1"}],
+								"entryMetadata": {
+									"entry-1": {"status": "completed"}
+								},
+							}))))
+						})
+					}));
+					callbacks.replay_workflow = Some(Box::new(move |request| {
+						let replay_calls = replay_calls.clone();
+						Box::pin(async move {
+							replay_calls.fetch_add(1, Ordering::SeqCst);
+							Ok(Some(encode_cbor(&json!({
+								"nameRegistry": ["counter"],
+								"entries": [{"id": request.entry_id.unwrap_or_else(|| "root".to_owned())}],
+								"entryMetadata": {},
+							}))))
+						})
+					}));
 					Ok(callbacks)
 				})
 			})
@@ -546,6 +584,179 @@ use super::*;
 					"isDatabaseEnabled": false,
 					"isWorkflowEnabled": false,
 					"workflowHistory": null,
+				})
+			);
+		}
+
+		#[tokio::test]
+		async fn dispatcher_routes_workflow_inspector_requests_lazily() {
+			let history_calls = Arc::new(AtomicUsize::new(0));
+			let replay_calls = Arc::new(AtomicUsize::new(0));
+			let dispatcher = dispatcher_for_token(
+				workflow_inspector_fixture_factory(
+					history_calls.clone(),
+					replay_calls.clone(),
+				),
+				Some("token"),
+			);
+
+			dispatcher
+				.start_actor_for_test("actor-1", 1, "counter", None)
+				.await
+				.expect("start actor");
+			assert_eq!(history_calls.load(Ordering::SeqCst), 0);
+			assert_eq!(replay_calls.load(Ordering::SeqCst), 0);
+
+			let state_response = dispatcher
+				.handle_fetch(
+					"actor-1",
+					HttpRequest {
+						method: "GET".to_owned(),
+						path: "/inspector/state".to_owned(),
+						headers: HashMap::from([(
+							"authorization".to_owned(),
+							"Bearer token".to_owned(),
+						)]),
+						body: None,
+						body_stream: None,
+					},
+				)
+				.await
+				.expect("state request should succeed");
+			assert_eq!(state_response.status, http::StatusCode::OK.as_u16());
+			assert_eq!(history_calls.load(Ordering::SeqCst), 0);
+			assert_eq!(replay_calls.load(Ordering::SeqCst), 0);
+
+			let history_response = dispatcher
+				.handle_fetch(
+					"actor-1",
+					HttpRequest {
+						method: "GET".to_owned(),
+						path: "/inspector/workflow-history".to_owned(),
+						headers: HashMap::from([(
+							"authorization".to_owned(),
+							"Bearer token".to_owned(),
+						)]),
+						body: None,
+						body_stream: None,
+					},
+				)
+				.await
+				.expect("workflow history should succeed");
+			assert_eq!(history_response.status, http::StatusCode::OK.as_u16());
+			assert_eq!(
+				decode_json_body(&history_response),
+				json!({
+					"history": {
+						"nameRegistry": ["counter"],
+						"entries": [{"id": "entry-1"}],
+						"entryMetadata": {
+							"entry-1": {"status": "completed"}
+						},
+					},
+					"isWorkflowEnabled": true,
+				})
+			);
+			assert_eq!(history_calls.load(Ordering::SeqCst), 1);
+			assert_eq!(replay_calls.load(Ordering::SeqCst), 0);
+
+			let replay_response = dispatcher
+				.handle_fetch(
+					"actor-1",
+					HttpRequest {
+						method: "POST".to_owned(),
+						path: "/inspector/workflow/replay".to_owned(),
+						headers: HashMap::from([
+							("authorization".to_owned(), "Bearer token".to_owned()),
+							(
+								"content-type".to_owned(),
+								"application/json".to_owned(),
+							),
+						]),
+						body: Some(br#"{"entryId":"entry-9"}"#.to_vec()),
+						body_stream: None,
+					},
+				)
+				.await
+				.expect("workflow replay should succeed");
+			assert_eq!(replay_response.status, http::StatusCode::OK.as_u16());
+			assert_eq!(
+				decode_json_body(&replay_response),
+				json!({
+					"history": {
+						"nameRegistry": ["counter"],
+						"entries": [{"id": "entry-9"}],
+						"entryMetadata": {},
+					},
+					"isWorkflowEnabled": true,
+				})
+			);
+			assert_eq!(history_calls.load(Ordering::SeqCst), 1);
+			assert_eq!(replay_calls.load(Ordering::SeqCst), 1);
+		}
+
+		#[tokio::test]
+		async fn dispatcher_returns_null_workflow_payloads_without_callbacks() {
+			let dispatcher = dispatcher_for_token(
+				factory(|_request| {
+					Box::pin(async move { Ok(ActorInstanceCallbacks::default()) })
+				}),
+				Some("token"),
+			);
+
+			dispatcher
+				.start_actor_for_test("actor-1", 1, "counter", None)
+				.await
+				.expect("start actor");
+
+			let history_response = dispatcher
+				.handle_fetch(
+					"actor-1",
+					HttpRequest {
+						method: "GET".to_owned(),
+						path: "/inspector/workflow-history".to_owned(),
+						headers: HashMap::from([(
+							"authorization".to_owned(),
+							"Bearer token".to_owned(),
+						)]),
+						body: None,
+						body_stream: None,
+					},
+				)
+				.await
+				.expect("workflow history should succeed");
+			assert_eq!(
+				decode_json_body(&history_response),
+				json!({
+					"history": null,
+					"isWorkflowEnabled": false,
+				})
+			);
+
+			let replay_response = dispatcher
+				.handle_fetch(
+					"actor-1",
+					HttpRequest {
+						method: "POST".to_owned(),
+						path: "/inspector/workflow/replay".to_owned(),
+						headers: HashMap::from([
+							("authorization".to_owned(), "Bearer token".to_owned()),
+							(
+								"content-type".to_owned(),
+								"application/json".to_owned(),
+							),
+						]),
+						body: Some(br#"{}"#.to_vec()),
+						body_stream: None,
+					},
+				)
+				.await
+				.expect("workflow replay should succeed");
+			assert_eq!(
+				decode_json_body(&replay_response),
+				json!({
+					"history": null,
+					"isWorkflowEnabled": false,
 				})
 			);
 		}

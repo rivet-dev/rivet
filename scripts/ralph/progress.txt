@@ -2,6 +2,7 @@
 Started: Thu Apr 16 10:02:08 PM PDT 2026
 
 ## Codebase Patterns
+- Workflow inspector data for native actors should stay in TypeScript behind `getRunInspectorConfig(...)` / `RUN_FUNCTION_CONFIG_SYMBOL`, while Rust only requests opaque history bytes lazily for inspector routes.
 - Inspector core helpers should keep schema payloads as opaque `ArrayBuffer`s and only CBOR encode/decode at the inspector boundary, so HTTP and WebSocket transports can reuse the same logic.
 - Inspector wire-protocol downgrades should turn unsupported responses into explicit `Error` payloads with `inspector.*_dropped` messages, and only throw on request downgrades that cannot be represented.
 - `rivetkit-core` inspector HTTP routes belong in `RegistryDispatcher` ahead of user `on_request` callbacks, and endpoint failures should be translated into JSON RivetError payloads at that boundary instead of leaking raw transport errors.
@@ -479,4 +480,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Inspector HTTP should keep using the existing CBOR payload boundary and only decode to JSON at the registry transport layer, so state/action/queue payloads stay aligned with the WebSocket inspector contract.
   - Gotchas encountered: Letting inspector handlers bubble raw `?` errors breaks the HTTP API shape; `RegistryDispatcher` needs to catch those failures and convert them into JSON RivetError payloads before returning.
   - Useful context: The new regression coverage lives in `rivetkit-core/tests/modules/registry.rs` and proves inspector routes beat `on_request`, auth failures stay JSON, and the state/action/queue/summary endpoints return the expected HTTP shapes.
+---
+## 2026-04-17 18:22:04 PDT - US-053
+- What was implemented: Added lazy workflow inspector plumbing for the native path by threading optional workflow-history and replay callbacks through `rivetkit-core`, the N-API callback bindings, and the TypeScript native registry/workflow runtime. Added HTTP handling for `GET /inspector/workflow-history` and `POST /inspector/workflow/replay`, and hydrated inspector summary from the same lazy callbacks.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/callbacks.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/inspector/mod.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/lib.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/registry.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/tests/modules/registry.rs`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit-napi/src/actor_factory.rs`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/src/actor/config.ts`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/src/registry/native.ts`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/src/workflow/mod.ts`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/src/workflow/inspector.ts`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Native workflow inspector support should be exposed through run-function inspector config and resolved per actor id, so Rust only asks for opaque bytes when an inspector endpoint actually needs them.
+  - Gotchas encountered: The old workflow inspector helper paths (`@/inspector/transport`, `@/schemas/...`) are dead in this repo; the live imports are under `src/common/`.
+  - Useful context: The new lazy-path coverage lives in `rivetkit-core/tests/modules/registry.rs`, and the validation run for this story was `cargo check -p rivetkit-core`, `cargo check -p rivetkit-napi`, `pnpm check-types`, plus `cargo test -p rivetkit-core workflow -- --nocapture` captured to `/tmp/rivetkit-core-workflow-inspector.log`.
 ---

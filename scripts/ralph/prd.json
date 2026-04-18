@@ -989,7 +989,7 @@
         "cargo check passes, tsc type-check passes"
       ],
       "priority": 54,
-      "passes": false,
+      "passes": true,
       "notes": "Workflow internals stay in TS. rivetkit-core treats workflow data as opaque bytes. The NAPI callback pattern is identical to existing lifecycle hooks \u2014 just two more entries in the callbacks object. Reference commit (pre-deletion): 959ab9bba. Use `git show 959ab9bba:<path>` to read the original TS implementation. Original: rivetkit-typescript/packages/rivetkit/src/workflow/inspector.ts at commit 959ab9bba."
     },
     {

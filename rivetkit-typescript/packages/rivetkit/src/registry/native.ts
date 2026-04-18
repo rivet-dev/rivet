@@ -14,7 +14,7 @@ import {
 	HttpResponseErrorSchema,
 } from "@/common/client-protocol-zod";
 import type * as protocol from "@/common/client-protocol";
-import { getRunFunction } from "@/actor/config";
+import { getRunFunction, getRunInspectorConfig } from "@/actor/config";
 import type { AnyActorDefinition } from "@/actor/definition";
 import {
 	decodeBridgeRivetError,
@@ -1074,6 +1074,9 @@ function buildNativeFactory(
 			),
 			{ encoding: "bare" },
 		);
+	const getNativeWorkflowInspector = (ctx: NativeActorContext) =>
+		getRunInspectorConfig(config.run, callNativeSync(() => ctx.actorId()))
+			?.workflow;
 	const callbacks = {
 		onInit: wrapNativeCallback(async (
 			error: unknown,
@@ -1418,6 +1421,37 @@ function buildNativeFactory(
 						} finally {
 							await actorCtx.dispose();
 						}
+					})
+				: undefined,
+		getWorkflowHistory:
+			getRunInspectorConfig(config.run) !== undefined
+				? wrapNativeCallback(async (
+						error: unknown,
+						payload: { ctx: NativeActorContext },
+					) => {
+						const { ctx } = unwrapTsfnPayload(error, payload);
+						const history = getNativeWorkflowInspector(ctx)?.getHistory();
+						return history == null ? undefined : encodeValue(history);
+					})
+				: undefined,
+		replayWorkflow:
+			getRunInspectorConfig(config.run) !== undefined
+				? wrapNativeCallback(async (
+						error: unknown,
+						payload: {
+							ctx: NativeActorContext;
+							entryId?: string;
+						},
+					) => {
+						const { ctx, entryId } = unwrapTsfnPayload(error, payload);
+						const workflowInspector = getNativeWorkflowInspector(ctx);
+						if (!workflowInspector?.replayFromStep) {
+							return undefined;
+						}
+
+						const history =
+							(await workflowInspector.replayFromStep(entryId)) ?? null;
+						return history == null ? undefined : encodeValue(history);
 					})
 				: undefined,
 		run: (() => {

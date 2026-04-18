@@ -31,11 +31,13 @@ use uuid::Uuid;
 
 use crate::actor::action::{ActionDispatchError, ActionInvoker};
 use crate::actor::callbacks::{ActionRequest, OnRequestRequest, OnWebSocketRequest, Request, Response};
+use crate::actor::callbacks::{GetWorkflowHistoryRequest, ReplayWorkflowRequest};
 use crate::actor::config::CanHibernateWebSocket;
 use crate::actor::context::ActorContext;
 use crate::actor::factory::ActorFactory;
 use crate::actor::lifecycle::{ActorLifecycle, StartupOptions};
 use crate::actor::state::{PERSIST_DATA_KEY, PersistedActor, decode_persisted_actor};
+use crate::inspector::Inspector;
 use crate::kv::Kv;
 use crate::sqlite::SqliteDb;
 use crate::types::{ActorKey, ActorKeySegment, SaveStateOpts};
@@ -53,6 +55,7 @@ struct ActiveActorInstance {
 	ctx: ActorContext,
 	factory: Arc<ActorFactory>,
 	callbacks: Arc<crate::actor::callbacks::ActorInstanceCallbacks>,
+	inspector: Inspector,
 }
 
 struct RegistryDispatcher {
@@ -128,6 +131,12 @@ struct InspectorDatabaseExecuteBody {
 	sql: String,
 	args: Vec<JsonValue>,
 	properties: Option<JsonValue>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct InspectorWorkflowReplayBody {
+	entry_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -262,6 +271,9 @@ impl RegistryDispatcher {
 			.await
 			.map_err(|error| error.into_source())
 			.with_context(|| format!("start actor `{}`", request.actor_id))?;
+		let inspector =
+			build_actor_inspector(request.ctx.clone(), outcome.callbacks.clone());
+		request.ctx.configure_inspector(Some(inspector.clone()));
 
 		let instance = ActiveActorInstance {
 			actor_name: request.actor_name,
@@ -269,6 +281,7 @@ impl RegistryDispatcher {
 			ctx: request.ctx,
 			factory,
 			callbacks: outcome.callbacks,
+			inspector,
 		};
 		let _ = self
 			.active_instances
@@ -482,6 +495,36 @@ impl RegistryDispatcher {
 				};
 				json_http_response(StatusCode::OK, &payload)
 			}
+			(http::Method::GET, "/inspector/workflow-history") => self
+				.inspector_workflow_history(instance)
+				.await
+				.and_then(|(is_workflow_enabled, history)| {
+					json_http_response(
+						StatusCode::OK,
+						&json!({
+							"history": history,
+							"isWorkflowEnabled": is_workflow_enabled,
+						}),
+					)
+				}),
+			(http::Method::POST, "/inspector/workflow/replay") => {
+				let body: InspectorWorkflowReplayBody = match parse_json_body(request) {
+					Ok(body) => body,
+					Err(response) => return Ok(Some(response)),
+				};
+				self
+					.inspector_replay_workflow(instance, body.entry_id)
+					.await
+					.and_then(|(is_workflow_enabled, history)| {
+						json_http_response(
+							StatusCode::OK,
+							&json!({
+								"history": history,
+								"isWorkflowEnabled": is_workflow_enabled,
+							}),
+						)
+					})
+			}
 			(http::Method::GET, "/inspector/traces") => json_http_response(
 				StatusCode::OK,
 				&json!({
@@ -594,6 +637,10 @@ impl RegistryDispatcher {
 			.inspect_messages()
 			.await
 			.context("list queue messages for inspector summary")?;
+		let (is_workflow_enabled, workflow_history) = self
+			.inspector_workflow_history(instance)
+			.await
+			.context("load inspector workflow summary")?;
 		Ok(InspectorSummaryJson {
 			state: decode_cbor_json_or_null(&instance.ctx.state()),
 			is_state_enabled: true,
@@ -601,9 +648,50 @@ impl RegistryDispatcher {
 			rpcs: inspector_rpcs(instance),
 			queue_size: queue_messages.len().try_into().unwrap_or(u32::MAX),
 			is_database_enabled: instance.ctx.sql().runtime_config().is_ok(),
-			is_workflow_enabled: false,
-			workflow_history: None,
+			is_workflow_enabled,
+			workflow_history,
 		})
+	}
+
+	async fn inspector_workflow_history(
+		&self,
+		instance: &ActiveActorInstance,
+	) -> Result<(bool, Option<JsonValue>)> {
+		let is_workflow_enabled = instance.inspector.is_workflow_enabled();
+		if !is_workflow_enabled {
+			return Ok((false, None));
+		}
+
+		let history = instance
+			.inspector
+			.get_workflow_history()
+			.await
+			.context("load inspector workflow history")?
+			.map(|payload| decode_cbor_json_or_null(&payload))
+			.filter(|value| !value.is_null());
+
+		Ok((true, history))
+	}
+
+	async fn inspector_replay_workflow(
+		&self,
+		instance: &ActiveActorInstance,
+		entry_id: Option<String>,
+	) -> Result<(bool, Option<JsonValue>)> {
+		let is_workflow_enabled = instance.inspector.is_workflow_enabled();
+		if !is_workflow_enabled {
+			return Ok((false, None));
+		}
+
+		let history = instance
+			.inspector
+			.replay_workflow(entry_id)
+			.await
+			.context("replay inspector workflow history")?
+			.map(|payload| decode_cbor_json_or_null(&payload))
+			.filter(|value| !value.is_null());
+
+		Ok((true, history))
 	}
 
 	async fn inspector_database_schema(&self, ctx: &ActorContext) -> Result<JsonValue> {
@@ -1255,6 +1343,57 @@ fn inspector_connections(ctx: &ActorContext) -> Vec<InspectorConnectionJson> {
 			is_hibernatable: conn.is_hibernatable(),
 		})
 		.collect()
+}
+
+fn build_actor_inspector(
+	ctx: ActorContext,
+	callbacks: Arc<crate::actor::callbacks::ActorInstanceCallbacks>,
+) -> Inspector {
+	let get_workflow_history = callbacks.get_workflow_history.as_ref().map(|_| {
+		let callbacks = callbacks.clone();
+		let ctx = ctx.clone();
+		Arc::new(move || -> futures::future::BoxFuture<'static, Result<Option<Vec<u8>>>> {
+			let callbacks = callbacks.clone();
+			let ctx = ctx.clone();
+			Box::pin(async move {
+				let Some(callback) = callbacks.get_workflow_history.as_ref() else {
+					return Ok(None);
+				};
+				callback(GetWorkflowHistoryRequest { ctx }).await
+			})
+		}) as Arc<
+			dyn Fn() -> futures::future::BoxFuture<'static, Result<Option<Vec<u8>>>>
+				+ Send
+				+ Sync,
+		>
+	});
+	let replay_workflow = callbacks.replay_workflow.as_ref().map(|_| {
+		let callbacks = callbacks.clone();
+		let ctx = ctx.clone();
+		Arc::new(
+			move |entry_id: Option<String>| -> futures::future::BoxFuture<
+				'static,
+				Result<Option<Vec<u8>>>,
+			> {
+			let callbacks = callbacks.clone();
+			let ctx = ctx.clone();
+			Box::pin(async move {
+				let Some(callback) = callbacks.replay_workflow.as_ref() else {
+					return Ok(None);
+				};
+				callback(ReplayWorkflowRequest { ctx, entry_id }).await
+			})
+		},
+		) as Arc<
+			dyn Fn(
+					Option<String>,
+				) -> futures::future::BoxFuture<'static, Result<Option<Vec<u8>>>>
+				+ Send
+				+ Sync,
+		>
+	});
+
+	Inspector::with_workflow_callbacks(get_workflow_history, replay_workflow)
 }
 
 fn inspector_rpcs(instance: &ActiveActorInstance) -> Vec<String> {

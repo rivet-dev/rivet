@@ -12,10 +12,12 @@ use rivetkit_core::actor::callbacks::{
 };
 use rivetkit_core::{
 	ActionRequest, ActorConfig, ActorFactory as CoreActorFactory, ActorInstanceCallbacks,
-	FactoryRequest, FlatActorConfig, OnBeforeActionResponseRequest,
+	FactoryRequest, FlatActorConfig, GetWorkflowHistoryRequest,
+	OnBeforeActionResponseRequest,
 	OnBeforeConnectRequest, OnConnectRequest, OnDestroyRequest, OnDisconnectRequest,
 	OnMigrateRequest, OnRequestRequest, OnSleepRequest, OnStateChangeRequest,
-	OnWakeRequest, OnWebSocketRequest, Request, Response, RunRequest,
+	OnWakeRequest, OnWebSocketRequest, ReplayWorkflowRequest, Request, Response,
+	RunRequest,
 };
 
 use crate::actor_context::ActorContext;
@@ -152,6 +154,17 @@ struct BeforeActionResponsePayload {
 	output: Vec<u8>,
 }
 
+#[derive(Clone)]
+struct WorkflowHistoryPayload {
+	ctx: rivetkit_core::ActorContext,
+}
+
+#[derive(Clone)]
+struct WorkflowReplayPayload {
+	ctx: rivetkit_core::ActorContext,
+	entry_id: Option<String>,
+}
+
 struct CallbackBindings {
 	on_init: Option<CallbackTsfn<FactoryInitPayload>>,
 	on_migrate: Option<CallbackTsfn<MigratePayload>>,
@@ -167,6 +180,8 @@ struct CallbackBindings {
 	actions: HashMap<String, CallbackTsfn<ActionPayload>>,
 	on_before_action_response: Option<CallbackTsfn<BeforeActionResponsePayload>>,
 	run: Option<CallbackTsfn<LifecyclePayload>>,
+	get_workflow_history: Option<CallbackTsfn<WorkflowHistoryPayload>>,
+	replay_workflow: Option<CallbackTsfn<WorkflowReplayPayload>>,
 }
 
 #[derive(serde::Deserialize)]
@@ -263,6 +278,16 @@ impl CallbackBindings {
 				build_before_action_response_payload,
 			)?,
 			run: optional_tsfn(&callbacks, "run", build_lifecycle_payload)?,
+			get_workflow_history: optional_tsfn(
+				&callbacks,
+				"getWorkflowHistory",
+				build_workflow_history_payload,
+			)?,
+			replay_workflow: optional_tsfn(
+				&callbacks,
+				"replayWorkflow",
+				build_workflow_replay_payload,
+			)?,
 		})
 	}
 
@@ -401,6 +426,21 @@ impl CallbackBindings {
 			&self.run,
 			|request: RunRequest| LifecyclePayload { ctx: request.ctx },
 		);
+		callbacks.get_workflow_history = wrap_optional_buffer_callback(
+			"getWorkflowHistory",
+			&self.get_workflow_history,
+			|request: GetWorkflowHistoryRequest| WorkflowHistoryPayload {
+				ctx: request.ctx,
+			},
+		);
+		callbacks.replay_workflow = wrap_optional_buffer_callback(
+			"replayWorkflow",
+			&self.replay_workflow,
+			|request: ReplayWorkflowRequest| WorkflowReplayPayload {
+				ctx: request.ctx,
+				entry_id: request.entry_id,
+			},
+		);
 		callbacks
 	}
 }
@@ -515,6 +555,38 @@ where
 	}))
 }
 
+fn wrap_optional_buffer_callback<Req, Payload, Map>(
+	callback_name: &'static str,
+	callback: &Option<CallbackTsfn<Payload>>,
+	map: Map,
+) -> Option<
+	Box<
+		dyn Fn(
+				Req,
+			) -> std::pin::Pin<
+				Box<
+					dyn std::future::Future<Output = Result<Option<Vec<u8>>>> + Send + 'static,
+				>,
+			> + Send
+			+ Sync,
+	>,
+>
+where
+	Req: Send + 'static,
+	Payload: Send + 'static,
+	Map: Fn(Req) -> Payload + Send + Sync + 'static,
+{
+	let callback = callback.clone()?;
+	let map = Arc::new(map);
+	Some(Box::new(move |request| {
+		let callback = callback.clone();
+		let map = Arc::clone(&map);
+		Box::pin(async move {
+			call_optional_buffer(callback_name, &callback, (map.as_ref())(request)).await
+		})
+	}))
+}
+
 async fn call_void<T>(
 	callback_name: &str,
 	callback: &CallbackTsfn<T>,
@@ -548,6 +620,24 @@ where
 		.await
 		.map_err(|error| callback_error(callback_name, error))?;
 	Ok(buffer.to_vec())
+}
+
+async fn call_optional_buffer<T>(
+	callback_name: &str,
+	callback: &CallbackTsfn<T>,
+	payload: T,
+) -> Result<Option<Vec<u8>>>
+where
+	T: Send + 'static,
+{
+	let promise = callback
+		.call_async::<Promise<Option<Buffer>>>(Ok(payload))
+		.await
+		.map_err(|error| callback_error(callback_name, error))?;
+	let buffer = promise
+		.await
+		.map_err(|error| callback_error(callback_name, error))?;
+	Ok(buffer.map(|buffer| buffer.to_vec()))
 }
 
 async fn call_request(
@@ -676,6 +766,25 @@ fn build_before_action_response_payload(
 	object.set("name", payload.name)?;
 	object.set("args", Buffer::from(payload.args))?;
 	object.set("output", Buffer::from(payload.output))?;
+	Ok(vec![object.into_unknown()])
+}
+
+fn build_workflow_history_payload(
+	env: &Env,
+	payload: WorkflowHistoryPayload,
+) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	Ok(vec![object.into_unknown()])
+}
+
+fn build_workflow_replay_payload(
+	env: &Env,
+	payload: WorkflowReplayPayload,
+) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("entryId", payload.entry_id)?;
 	Ok(vec![object.into_unknown()])
 }
 
