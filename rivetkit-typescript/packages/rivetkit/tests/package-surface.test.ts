@@ -13,6 +13,7 @@ describe("package surface", () => {
 	});
 
 	test("does not keep obviously dead package metadata", () => {
+		expect(packageJson.files).toContain("schemas");
 		expect(packageJson.files).not.toContain("deno.json");
 		expect(packageJson.files).not.toContain("bun.json");
 

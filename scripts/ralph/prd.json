@@ -921,7 +921,7 @@
         "cargo check -p rivetkit-core passes"
       ],
       "priority": 50,
-      "passes": false,
+      "passes": true,
       "notes": "Reference: schemas/actor-inspector/v1.bare through v4.bare at commit 959ab9bba. Path: rivetkit-typescript/packages/rivetkit/src/schemas/actor-inspector/. Also see other protocol packages for vbare pattern (e.g., engine/packages/runner-protocol/). Reference commit (pre-deletion): 959ab9bba. Use `git show 959ab9bba:<path>` to read the original TS implementation."
     },
     {

@@ -2,6 +2,7 @@
 Started: Thu Apr 16 10:02:08 PM PDT 2026
 
 ## Codebase Patterns
+- Inspector wire-protocol downgrades should turn unsupported responses into explicit `Error` payloads with `inspector.*_dropped` messages, and only throw on request downgrades that cannot be represented.
 - When trimming `rivetkit` entrypoints, update `package.json` `exports`, `files`, and `scripts.build` together. `tsup` can still pass while stale export targets point at missing dist files.
 - `rivetkit-core` per-actor Prometheus metrics should hang off `ActorContext`, with queue/connection/action/lifecycle call sites updating shared metric handles directly and the registry serving `/metrics` before user `on_request` callbacks.
 - When moving Rust unit tests out of `src/`, keep a tiny source-owned `#[cfg(test)] #[path = "..."] mod tests;` shim and put the test bodies under `tests/modules/` so the moved tests keep private-module access without widening runtime visibility.
@@ -443,4 +444,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: For typed convenience methods on re-exported core surfaces, use an extension trait and prelude export so method syntax works without replacing the underlying core type.
   - Gotchas encountered: `ActorContext::new()` keeps KV unconfigured, so queue tests that actually enqueue messages need an in-memory KV-backed context instead of the default constructor.
   - Useful context: `cargo test -p rivetkit` now covers the queue stream adapter; the only recurring warning in this area is the unrelated missing `@bare-ts/tools` CLI noted by `rivet-envoy-protocol`.
+---
+## 2026-04-17 17:31:38 PDT - US-049
+- What was implemented: Restored the inspector wire protocol source into `src/common/bare/inspector/v1-v4.ts`, added the new `src/common/inspector-versioned.ts` and `src/common/inspector-transport.ts` helpers, checked in matching `schemas/actor-inspector/v1-v4.bare` files, and added focused regression coverage for v1-v4 request/response compatibility plus workflow-history transport round-trips.
+- Files changed: `/home/nathan/r5/AGENTS.md`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/package.json`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/schemas/actor-inspector/{v1.bare,v2.bare,v3.bare,v4.bare}`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/src/common/bare/inspector/{v1.ts,v2.ts,v3.ts,v4.ts}`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/src/common/{inspector-transport.ts,inspector-versioned.ts}`, `/home/nathan/r5/rivetkit-typescript/packages/rivetkit/tests/{inspector-versioned.test.ts,package-surface.test.ts}`, `/home/nathan/r5/scripts/ralph/{prd.json,progress.txt}`
+- **Learnings for future iterations:**
+  - Patterns discovered: Inspector protocol downgrades should map unsupported response payloads to explicit `Error` messages like `inspector.events_dropped` instead of silently dropping fields, while unsupported request downgrades should throw.
+  - Gotchas encountered: The preserved browser inspector bundle still carries the deleted schema sources in `dist/browser/inspector/client.js.map`, which is the safest way to recover the exact generated v1-v4 codecs when source files disappear.
+  - Useful context: Verification passed with `pnpm check-types` and `pnpm test tests/inspector-versioned.test.ts tests/package-surface.test.ts` in `rivetkit-typescript/packages/rivetkit`.
 ---
