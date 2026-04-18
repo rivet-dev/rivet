@@ -955,7 +955,7 @@
         "cargo check -p rivetkit-core passes"
       ],
       "priority": 52,
-      "passes": false,
+      "passes": true,
       "notes": "Integration points in rivetkit-core: actor/state.rs (state saves), actor/connection.rs (connect/disconnect/restore/cleanup), actor/queue.rs (enqueue/dequeue/ack), actor/lifecycle.rs (startup timing). Reference commit (pre-deletion): 959ab9bba. Use `git show 959ab9bba:<path>` to read the original TS implementation. Original integration: grep 'inspector' in actor/instance/mod.ts, state-manager.ts, connection-manager.ts, queue-manager.ts at commit 959ab9bba."
     },
     {

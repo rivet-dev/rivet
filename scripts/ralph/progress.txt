@@ -38,6 +38,7 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
 - `rivetkit-core` hibernatable websocket connections should persist per-connection BARE payloads under KV keys `[2] + conn_id`, matching the TypeScript v4 connection field order for restore compatibility.
 - `rivetkit-core` queue persistence should mirror the TypeScript key layout with metadata at `[5, 1, 1]` and message entries at `[5, 1, 2] + u64be(message_id)` so lexicographic scans preserve FIFO order.
 - `rivetkit-core` persisted actor, connection, and queue payloads should include the vbare 2-byte little-endian embedded version prefix before the BARE body so Rust matches TypeScript `serializeWithEmbeddedVersion(...)` bytes.
+- `rivetkit-core` cross-cutting inspector hooks should stay anchored on `ActorContext`, with queue-specific callbacks carrying the current size and connection updates reading the manager count so unconfigured inspectors stay cheap no-ops.
 - `rivetkit-core` action/lifecycle surfaces should collapse `anyhow::Error` into serializable `group/code/message` payloads via `rivet_error::RivetError::extract` before returning them across runtime boundaries.
 - `rivetkit-core` schedule mutations should go through one `ActorState` helper so insert/remove stays sorted, then trigger an immediate state flush and envoy alarm resync from the earliest remaining event.
 - `rivetkit-core` transport-edge helpers should translate `on_request` failures into HTTP 500 responses and `on_websocket` failures into logged 1011 closes, while wrapper types keep internal `try_*` methods for explicit misconfiguration errors.
@@ -461,4 +462,12 @@ Started: Thu Apr 16 10:02:08 PM PDT 2026
   - Patterns discovered: Inspector helpers should return the shared inspector schema objects directly and keep opaque payloads as `ArrayBuffer`s, with CBOR only at the module boundary.
   - Gotchas encountered: `pnpm lint` in `packages/rivetkit` expands to `biome check .`, so verifying a focused change needs `pnpm exec biome check <files>` when the package already has unrelated lint debt.
   - Useful context: `tests/actor-inspector.test.ts` now covers token storage at `KEYS.INSPECTOR_TOKEN`, queue snapshot ordering/truncation, state patching, action execution through the synthetic inspector connection, and SQLite schema/row serialization.
+---
+## 2026-04-17 17:51:57 PDT - US-051
+- What was implemented: Added a minimal Rust `Inspector` state object in `rivetkit-core`, wired `ActorContext` to publish state updates into it, and threaded queue/connection lifecycle hooks so connect, disconnect, restore, cleanup, enqueue, completable dequeue, ack, and queue metadata rebuilds all bump the stored inspector snapshot state without doing extra work when no inspector is configured.
+- Files changed: `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/lib.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/inspector/mod.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/connection.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/src/actor/queue.rs`, `/home/nathan/r5/rivetkit-rust/packages/rivetkit-core/tests/modules/inspector.rs`, `/home/nathan/r5/scripts/ralph/prd.json`, `/home/nathan/r5/scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Patterns discovered: Cross-cutting inspector wiring is easiest to keep honest when `ActorContext` owns the inspector handle and subsystems only expose tiny update hooks instead of growing direct inspector dependencies.
+  - Gotchas encountered: Completable queue receives need their own inspector bump even before `complete()`, because the queue metadata size does not change on receive but the inspector still needs to reflect the in-flight dequeue transition.
+  - Useful context: Coverage for this story lives in `rivetkit-core/tests/modules/inspector.rs`, and the meaningful checks that passed were `cargo test -p rivetkit-core inspector` and `cargo check -p rivetkit-core`; the only remaining warning was the existing `rivet-envoy-protocol` note about missing `@bare-ts/tools`.
 ---

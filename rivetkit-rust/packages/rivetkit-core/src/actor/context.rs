@@ -24,6 +24,7 @@ use crate::actor::sleep::{CanSleep, SleepController};
 use crate::actor::state::{ActorState, OnStateChangeCallback, PersistedActor};
 use crate::actor::vars::ActorVars;
 use crate::ActorConfig;
+use crate::inspector::Inspector;
 use crate::kv::Kv;
 use crate::sqlite::SqliteDb;
 use crate::types::{ActorKey, ListOpts, SaveStateOpts};
@@ -53,6 +54,7 @@ pub(crate) struct ActorContextInner {
 	prevent_sleep: AtomicBool,
 	sleep_requested: AtomicBool,
 	destroy_requested: AtomicBool,
+	inspector: std::sync::RwLock<Option<Inspector>>,
 	metrics: ActorMetrics,
 	actor_id: String,
 	name: String,
@@ -157,6 +159,7 @@ impl ActorContext {
 			prevent_sleep: AtomicBool::new(false),
 			sleep_requested: AtomicBool::new(false),
 			destroy_requested: AtomicBool::new(false),
+			inspector: std::sync::RwLock::new(None),
 			metrics,
 			actor_id,
 			name,
@@ -173,11 +176,14 @@ impl ActorContext {
 
 	pub fn set_state(&self, state: Vec<u8>) {
 		self.0.state.set_state(state);
+		self.record_state_updated();
 		self.reset_sleep_timer();
 	}
 
 	pub async fn save_state(&self, opts: SaveStateOpts) -> Result<()> {
-		self.0.state.save_state(opts).await
+		self.0.state.save_state(opts).await?;
+		self.record_state_updated();
+		Ok(())
 	}
 
 	pub fn vars(&self) -> Vec<u8> {
@@ -421,6 +427,7 @@ impl ActorContext {
 	#[allow(dead_code)]
 	pub(crate) fn add_conn(&self, conn: ConnHandle) {
 		self.0.connections.insert_existing(conn);
+		self.record_connections_updated();
 		self.reset_sleep_timer();
 	}
 
@@ -428,6 +435,7 @@ impl ActorContext {
 	pub(crate) fn remove_conn(&self, conn_id: &str) -> Option<ConnHandle> {
 		let removed = self.0.connections.remove_existing(conn_id);
 		if removed.is_some() {
+			self.record_connections_updated();
 			self.reset_sleep_timer();
 		}
 		removed
@@ -472,7 +480,8 @@ impl ActorContext {
 	where
 		F: Future<Output = Result<Vec<u8>>> + Send,
 	{
-		self.0
+		let conn = self
+			.0
 			.connections
 			.connect_with_state(
 				self,
@@ -481,7 +490,9 @@ impl ActorContext {
 				hibernation,
 				create_state,
 			)
-			.await
+			.await?;
+		self.record_connections_updated();
+		Ok(conn)
 	}
 
 	#[allow(dead_code)]
@@ -493,7 +504,28 @@ impl ActorContext {
 	pub(crate) async fn restore_hibernatable_connections(
 		&self,
 	) -> Result<Vec<ConnHandle>> {
-		self.0.connections.restore_persisted(self).await
+		let restored = self.0.connections.restore_persisted(self).await?;
+		if !restored.is_empty() {
+			self.record_connections_updated();
+		}
+		Ok(restored)
+	}
+
+	#[allow(dead_code)]
+	pub(crate) fn configure_inspector(&self, inspector: Option<Inspector>) {
+		*self
+			.0
+			.inspector
+			.write()
+			.expect("actor inspector lock poisoned") = inspector;
+	}
+
+	pub(crate) fn inspector(&self) -> Option<Inspector> {
+		self.0
+			.inspector
+			.read()
+			.expect("actor inspector lock poisoned")
+			.clone()
 	}
 
 	pub(crate) fn downgrade(&self) -> Weak<ActorContextInner> {
@@ -645,6 +677,33 @@ impl ActorContext {
 		self.0.queue.set_wait_activity_callback(Some(Arc::new(move || {
 			queue_ctx.reset_sleep_timer();
 		})));
+
+		let queue_ctx = self.clone();
+		self.0.queue.set_inspector_update_callback(Some(Arc::new(
+			move |queue_size| {
+				queue_ctx.record_queue_updated(queue_size);
+			},
+		)));
+	}
+
+	fn record_state_updated(&self) {
+		if let Some(inspector) = self.inspector() {
+			inspector.record_state_updated();
+		}
+	}
+
+	pub(crate) fn record_connections_updated(&self) {
+		let Some(inspector) = self.inspector() else {
+			return;
+		};
+		let active_connections = self.0.connections.active_count();
+		inspector.record_connections_updated(active_connections);
+	}
+
+	fn record_queue_updated(&self, queue_size: u32) {
+		if let Some(inspector) = self.inspector() {
+			inspector.record_queue_updated(queue_size);
+		}
 	}
 }
 

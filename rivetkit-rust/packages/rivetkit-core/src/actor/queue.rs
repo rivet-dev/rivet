@@ -107,6 +107,7 @@ struct QueueInner {
 	notify: Notify,
 	active_queue_wait_count: AtomicU32,
 	wait_activity_callback: StdMutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+	inspector_update_callback: StdMutex<Option<Arc<dyn Fn(u32) + Send + Sync>>>,
 	metrics: ActorMetrics,
 }
 
@@ -262,6 +263,7 @@ impl Queue {
 			notify: Notify::new(),
 			active_queue_wait_count: AtomicU32::new(0),
 			wait_activity_callback: StdMutex::new(None),
+			inspector_update_callback: StdMutex::new(None),
 			metrics,
 		}))
 	}
@@ -351,12 +353,14 @@ impl Queue {
 			self.0.completion_waiters.lock().await.insert(id, waiter);
 		}
 
+		let queue_size = metadata.size;
 		drop(metadata);
 		self.0.metrics.add_queue_messages_sent(1);
 		self
 			.0
 			.metrics
 			.set_queue_depth(self.0.metadata.lock().await.size);
+		self.notify_inspector_update(queue_size);
 		self.0.notify.notify_waiters();
 
 		Ok(QueueMessage {
@@ -511,6 +515,17 @@ impl Queue {
 			.expect("queue wait activity callback lock poisoned") = callback;
 	}
 
+	pub(crate) fn set_inspector_update_callback(
+		&self,
+		callback: Option<Arc<dyn Fn(u32) + Send + Sync>>,
+	) {
+		*self
+			.0
+			.inspector_update_callback
+			.lock()
+			.expect("queue inspector update callback lock poisoned") = callback;
+	}
+
 	async fn ensure_initialized(&self) -> Result<()> {
 		self.0
 			.initialize
@@ -574,7 +589,9 @@ impl Queue {
 			.kv
 			.put(&QUEUE_METADATA_KEY, &encoded)
 			.await
-			.context("persist queue metadata")
+			.context("persist queue metadata")?;
+		self.notify_inspector_update(metadata.size);
+		Ok(())
 	}
 
 	async fn try_receive_batch(
@@ -615,12 +632,15 @@ impl Queue {
 		}
 
 		if completable {
+			let queue_size = self.0.metadata.lock().await.size;
 			let mut pending = self.0.pending_completable_message_ids.lock().await;
 			pending.extend(selected.iter().map(|message| message.id));
+			drop(pending);
 			self
 				.0
 				.metrics
 				.add_queue_messages_received(selected.len().try_into().unwrap_or(u64::MAX));
+			self.notify_inspector_update(queue_size);
 			return Ok(selected
 				.into_iter()
 				.map(|message| self.attach_completion(message))
@@ -718,9 +738,12 @@ impl Queue {
 		let encoded_metadata = {
 			let mut metadata = self.0.metadata.lock().await;
 			metadata.size = metadata.size.saturating_sub(key_refs.len() as u32);
+			let queue_size = metadata.size;
 			encode_queue_metadata(&metadata)
-				.context("encode queue metadata after delete")?
+				.context("encode queue metadata after delete")
+				.map(|encoded| (encoded, queue_size))?
 		};
+		let (encoded_metadata, queue_size) = encoded_metadata;
 
 		self.0
 			.kv
@@ -731,6 +754,7 @@ impl Queue {
 			.0
 			.metrics
 			.set_queue_depth(self.0.metadata.lock().await.size);
+		self.notify_inspector_update(queue_size);
 		Ok(())
 	}
 
@@ -907,6 +931,18 @@ impl Queue {
 			.clone()
 		{
 			callback();
+		}
+	}
+
+	fn notify_inspector_update(&self, queue_size: u32) {
+		if let Some(callback) = self
+			.0
+			.inspector_update_callback
+			.lock()
+			.expect("queue inspector update callback lock poisoned")
+			.clone()
+		{
+			callback(queue_size);
 		}
 	}
 }

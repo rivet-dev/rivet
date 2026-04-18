@@ -393,6 +393,17 @@ impl ConnectionManager {
 			.collect()
 	}
 
+	pub(crate) fn active_count(&self) -> u32 {
+		self
+			.0
+			.connections
+			.read()
+			.expect("connection manager connections lock poisoned")
+			.len()
+			.try_into()
+			.unwrap_or(u32::MAX)
+	}
+
 	pub(crate) fn insert_existing(&self, conn: ConnHandle) {
 		let active_count = {
 			let mut connections = self
@@ -652,6 +663,7 @@ impl ConnectionManager {
 			result?;
 		}
 
+		ctx.record_connections_updated();
 		ctx.reset_sleep_timer();
 		Ok(())
 	}
