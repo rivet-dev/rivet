@@ -634,3 +634,30 @@ For each candidate found, classify as:
 
 - CLAUDE.md already has the rule. Add a supplementary rule: "For every shared counter that has an awaiter, the decrement-to-zero site must ping a paired `Notify` / `watch` / release-permit. Waiters must arm the permit before re-checking the counter (to avoid lost wakeups)."
 - Add a clippy-style lint or review checklist item so this gets caught in review rather than re-emerging.
+## 21. WebSocket close callbacks should be async to match prior TS behavior
+
+`rivetkit-rust/packages/rivetkit-core/src/websocket.rs:10-17` defines all four WebSocket callbacks as sync closures returning `Result<()>`:
+
+- `WebSocketSendCallback = Arc<dyn Fn(WsMessage) -> Result<()> + Send + Sync>`
+- `WebSocketCloseCallback = Arc<dyn Fn(Option<u16>, Option<String>) -> Result<()> + Send + Sync>`
+- `WebSocketMessageEventCallback = Arc<dyn Fn(WsMessage, Option<u16>) -> Result<()> + Send + Sync>`
+- `WebSocketCloseEventCallback = Arc<dyn Fn(u16, String, bool) -> Result<()> + Send + Sync>`
+
+This breaks parity with the TypeScript implementation, which allowed async work in WebSocket cleanup so cleanup gated sleep — the actor would not be allowed to sleep while close handlers were still running.
+
+Inconsistency in the current Rust code itself: `rivetkit-rust/packages/rivetkit-core/src/actor/connection.rs:29-30` defines `DisconnectCallback` as `BoxFuture<'static, Result<()>>` — async — for the connection-level disconnect path. So at the connection layer, async cleanup is supported. At the WebSocket layer it's not. There's no architectural reason for the asymmetry.
+
+Also relevant: CLAUDE.md guidance "rivetkit-core sleep readiness should stay centralized in `SleepController`, with queue waits, scheduled internal work, disconnect callbacks, and websocket callbacks reporting activity through `ActorContext` hooks so the idle timer stays accurate." That requirement is hard to meet with sync close callbacks — there's no future to await against, no point at which the close handler's work has "completed" from the sleep controller's perspective.
+
+Fix: change the close callbacks to async (`BoxFuture<'static, Result<()>>`), consistent with `DisconnectCallback` and the broader CLAUDE.md guidance "rivetkit-core boxed callback APIs should use `futures::future::BoxFuture<'static, ...>`":
+
+```rust
+pub(crate) type WebSocketCloseCallback =
+    Arc<dyn Fn(Option<u16>, Option<String>) -> BoxFuture<'static, Result<()>> + Send + Sync>;
+pub(crate) type WebSocketCloseEventCallback =
+    Arc<dyn Fn(u16, String, bool) -> BoxFuture<'static, Result<()>> + Send + Sync>;
+```
+
+Wire each invocation through a `WebSocketCallbackGuard` (already exists at `actor/context.rs`) so the in-flight close work counts toward sleep readiness — the actor stays awake until cleanup completes, matching the prior TS contract.
+
+Send and message-event callbacks could stay sync if they're truly fire-and-forget on the network path, but if they ever need async cleanup (e.g., persist hibernation state on send), they should also become async for consistency.
