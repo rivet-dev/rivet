@@ -54,8 +54,15 @@ export type { CompletionContext } from "@codemirror/autocomplete";
 export { defaultKeymap } from "@codemirror/commands";
 export { javascript, javascriptLanguage } from "@codemirror/lang-javascript";
 export { json, jsonParseLinter } from "@codemirror/lang-json";
+export { Prec } from "@codemirror/state";
 export { EditorView, type KeyBinding, keymap } from "@codemirror/view";
 export type {
 	ReactCodeMirrorProps as CodeMirrorProps,
 	ReactCodeMirrorRef as CodeMirrorRef,
 } from "@uiw/react-codemirror";
+export {
+	sql,
+	keywordCompletionSource,
+	schemaCompletionSource,
+	type SQLConfig,
+} from "@codemirror/lang-sql";

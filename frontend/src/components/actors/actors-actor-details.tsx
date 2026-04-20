@@ -105,6 +105,16 @@ const TAB_PRIORITY = [
 
 type TabId = (typeof TAB_PRIORITY)[number];
 
+function useManagedPool() {
+	if (__APP_TYPE__ !== "cloud") return false;
+	const provider = useCloudNamespaceDataProvider();
+	const { data: hasManagedPool } = useSuspenseQuery(
+		provider.currentNamespaceHasManagedPoolQueryOptions(),
+	);
+
+	return hasManagedPool;
+}
+
 function useActorTabVisibility(actorId: ActorId) {
 	const inspector = useActorInspector();
 
@@ -120,19 +130,14 @@ function useActorTabVisibility(actorId: ActorId) {
 
 	const isStateEnabled = stateData?.isEnabled ?? false;
 	const isQueueEnabled = inspector.features.queue.supported;
-
-	const provider = useCloudNamespaceDataProvider();
-	const { data: hasManagedPool } = useSuspenseQuery(
-		provider.currentNamespaceHasManagedPoolQueryOptions(),
-	);
+	const hasManagedPool = useManagedPool();
 
 	const hiddenTabs = new Set<TabId>();
 	if (!isWorkflowEnabled) hiddenTabs.add("workflow");
 	if (!isDatabaseEnabled) hiddenTabs.add("database");
 	if (!isStateEnabled) hiddenTabs.add("state");
 	if (!isQueueEnabled) hiddenTabs.add("queue");
-	if (__APP_TYPE__ !== "cloud" || !hasManagedPool)
-		hiddenTabs.add("deployment-logs");
+	if (!hasManagedPool) hiddenTabs.add("deployment-logs");
 
 	const firstAvailableTab =
 		TAB_PRIORITY.find((tab) => !hiddenTabs.has(tab)) ?? "connections";
@@ -437,6 +442,7 @@ function ActorTabsShell({
 											Metadata
 										</span>
 										<QueriedActorStatusIndicator
+											showOnlyFatal
 											className="absolute top-0.5 right-0"
 											actorId={actorId}
 										/>

@@ -33,6 +33,7 @@
 		"@codemirror/commands": "^6.8.1",
 		"@codemirror/lang-javascript": "^6.2.4",
 		"@codemirror/lang-json": "^6.0.2",
+		"@codemirror/lang-sql": "^6.8.0",
 		"@codemirror/lint": "^6.8.5",
 		"@codemirror/merge": "^6.10.2",
 		"@codemirror/state": "^6.5.2",

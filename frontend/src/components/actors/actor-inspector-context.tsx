@@ -492,6 +492,7 @@ const replayWorkflowFromStepHttp = async ({
 				Authorization: `Bearer ${credentials.inspectorToken}`,
 				"Content-Type": "application/json",
 			},
+			signal: AbortSignal.timeout(10_000),
 			body: JSON.stringify(entryId ? { entryId } : {}),
 		},
 	);
@@ -528,6 +529,7 @@ export const actorWakeUpMutationOptions = () =>
 					`${computeActorUrl({ ...credentials, actorId })}/health`,
 				).href,
 				{
+					signal: AbortSignal.timeout(10_000),
 					headers: {
 						"X-Rivet-Target": "actor",
 						"X-Rivet-Actor": actorId,
@@ -573,6 +575,7 @@ const getActorMetadata = async ({
 				"X-Rivet-Actor": actorId,
 				"x-rivet-token": credentials.token,
 			},
+			signal: AbortSignal.timeout(10_000),
 		},
 	);
 
@@ -963,6 +966,7 @@ export const ActorInspectorProvider = ({
 							args,
 							properties,
 						}),
+						signal: AbortSignal.timeout(10_000),
 					},
 				);
 
