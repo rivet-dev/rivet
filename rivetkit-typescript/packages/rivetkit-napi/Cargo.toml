@@ -22,6 +22,7 @@ serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+scc.workspace = true
 uuid.workspace = true
 base64.workspace = true
 hex.workspace = true
@@ -31,3 +32,6 @@ rivetkit-core = { workspace = true, features = ["sqlite"] }
 
 [build-dependencies]
 napi-build = "2"
+
+[dev-dependencies]
+serde_bare.workspace = true

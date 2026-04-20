@@ -1,5 +1,4 @@
 import * as cbor from "cbor-x";
-import { createNanoEvents } from "nanoevents";
 import type {
 	BranchStatus,
 	BranchStatusType,
@@ -10,14 +9,34 @@ import type {
 	WorkflowHistoryEntry,
 	WorkflowHistorySnapshot,
 	WorkflowEntryMetadataSnapshot,
+	WorkflowState,
 } from "@rivetkit/workflow-engine";
 import { encodeWorkflowHistoryTransport } from "@/common/inspector-transport";
 import type * as inspectorSchema from "@/common/bare/inspector/v4";
 import * as transport from "@/common/bare/transport/v1";
 import { assertUnreachable, bufferToArrayBuffer } from "@/utils";
 
+type HistoryListener = (history: inspectorSchema.WorkflowHistory) => void;
+
+function createHistoryEmitter() {
+	const listeners = new Set<HistoryListener>();
+
+	return {
+		on: (listener: HistoryListener) => {
+			listeners.add(listener);
+			return () => listeners.delete(listener);
+		},
+		emit: (history: inspectorSchema.WorkflowHistory) => {
+			for (const listener of listeners) {
+				listener(history);
+			}
+		},
+	};
+}
+
 export interface WorkflowInspectorAdapter {
 	getHistory: () => inspectorSchema.WorkflowHistory | null;
+	getState: () => Promise<WorkflowState | null>;
 	onHistoryUpdated: (
 		listener: (history: inspectorSchema.WorkflowHistory) => void,
 	) => () => void;
@@ -29,16 +48,16 @@ export interface WorkflowInspectorAdapter {
 export function createWorkflowInspectorAdapter(): {
 	adapter: WorkflowInspectorAdapter;
 	update: (snapshot: WorkflowHistorySnapshot) => void;
+	setGetState: (fn: () => Promise<WorkflowState | null>) => void;
 	setReplayFromStep: (
 		fn: (
 			entryId?: string,
 		) => Promise<inspectorSchema.WorkflowHistory | null>,
 	) => void;
 } {
-	const emitter = createNanoEvents<{
-		updated: (history: inspectorSchema.WorkflowHistory) => void;
-	}>();
+	const emitter = createHistoryEmitter();
 	let history: inspectorSchema.WorkflowHistory | null = null;
+	let getState: () => Promise<WorkflowState | null> = async () => null;
 	let replayFromStep: (
 		entryId?: string,
 	) => Promise<inspectorSchema.WorkflowHistory | null> = async () => {
@@ -47,7 +66,8 @@ export function createWorkflowInspectorAdapter(): {
 
 	const adapter: WorkflowInspectorAdapter = {
 		getHistory: () => history,
-		onHistoryUpdated: (listener) => emitter.on("updated", listener),
+		getState: async () => await getState(),
+		onHistoryUpdated: (listener) => emitter.on(listener),
 		replayFromStep: async (entryId) => await replayFromStep(entryId),
 	};
 
@@ -55,12 +75,15 @@ export function createWorkflowInspectorAdapter(): {
 		const transportHistory = toWorkflowHistory(snapshot);
 		const next = encodeWorkflowHistoryTransport(transportHistory);
 		history = next;
-		emitter.emit("updated", next);
+		emitter.emit(next);
 	};
 
 	return {
 		adapter,
 		update,
+		setGetState: (fn) => {
+			getState = fn;
+		},
 		setReplayFromStep: (fn) => {
 			replayFromStep = fn;
 		},

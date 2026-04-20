@@ -1,0 +1,515 @@
+{
+  "project": "rivetkit-core Receive-Loop Actor API",
+  "branchName": "ralph/rivetkit-core-receive-loop-api",
+  "description": "Rewrite the public actor-authoring API of rivetkit-core from a 15-field callback table (ActorInstanceCallbacks) to a single receive-loop entry function pulling ActorEvents from a mailbox. Actor owns its own state as local variables; state/action/connection/lifecycle events are translated from DispatchCommand into ActorEvent variants and pushed into a bounded mpsc channel. Persistence becomes bidirectional and lazy: ctx.request_save(immediate) flips a dirty flag, runtime fires SaveTick when debounce elapses, actor replies with Vec<StateDelta>, runtime writes all entries atomically in one UniversalDB transaction. Sleep and Destroy reuse the same delta-reply mechanism. Per-conn hibernation bytes flow through StateDelta::ConnHibernation so crashes no longer lose per-conn mutations. Scope is rivetkit-rust/packages/rivetkit-core only. Do not touch rivetkit-napi or the TypeScript rivetkit package. Keep ActorInstanceCallbacks working through an ActorFactory::from_callbacks adapter until in-tree consumers migrate, then delete it in the final stories. TS driver suite at rivetkit-typescript/packages/rivetkit is the behavior oracle; all parity tests must stay green throughout. Full spec: .agent/specs/rivetkit-core-receive-loop-api.md.\n\nInvariants:\n- Runtime owns zero user-level tasks. Actor entry future is the only user task; actor spawns and manages its own concurrency.\n- All flushes (periodic SaveTick, immediate, Sleep, Destroy, save_state) write every StateDelta entry in one UniversalDB transaction.\n- Reply<T> Drop guard always sends Err(ActorLifecycle::DroppedReply); no silent drops, no escape hatch.\n- Single bounded mpsc::Receiver<ActorEvent> mailbox; try_reserve failure returns actor/overloaded.\n- Hibernated conns handed over exactly once in ActorStart.hibernated; they do NOT refire ConnectionOpen.\n- Workflow events fire only on upstream request; actors ignoring them pay nothing.\n- ctx.abort_signal() / ctx.aborted() are removed; actors needing cancellation use their own CancellationToken.\n- Do not modify rivetkit-napi or the TypeScript rivetkit package; adapter-layer concerns (on_state_change proxy, on_before_action_response, run-as-spawned-task) live in TS adapter, not core.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add Reply<T> type with Drop guard",
+      "description": "As a framework author, I need a typed one-shot reply channel with a Drop guard so actors that forget to reply surface ActorLifecycle::DroppedReply instead of silent hangs.",
+      "acceptanceCriteria": [
+        "Add `Reply<T>` thin wrapper over `tokio::sync::oneshot::Sender<Result<T>>` in rivetkit-core",
+        "`Reply<T>::send(self, result: Result<T>)` consumes self and forwards to the oneshot",
+        "Drop implementation sends `Err(ActorLifecycle::DroppedReply.build())` if send has not already been called",
+        "Add `ActorLifecycle::DroppedReply` error code (group: actor, code: dropped_reply) with generated JSON artifact under rivetkit-rust/engine/artifacts/errors/",
+        "Unit tests cover explicit send and drop-without-send paths",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Add StateDelta enum",
+      "description": "As a framework author, I need a persistence delta type so actors can describe which KV keys change in a single atomic flush.",
+      "acceptanceCriteria": [
+        "Add `StateDelta` enum with variants: `ActorState(Vec<u8>)`, `ConnHibernation { conn: ConnId, bytes: Vec<u8> }`, `ConnHibernationRemoved(ConnId)`",
+        "Document KV key targets in rustdoc: ActorState -> [1], ConnHibernation upserts [2] + conn_id, ConnHibernationRemoved deletes [2] + conn_id",
+        "Export from rivetkit-core's public module path alongside ActorFactory",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Add ActorEvent enum with all variants",
+      "description": "As a framework author, I need the full ActorEvent enum so the mailbox has one typed message surface covering every runtime-driven interaction.",
+      "acceptanceCriteria": [
+        "Add `ActorEvent` enum with variants: `Action { name, args, conn, reply: Reply<Vec<u8>> }`, `HttpRequest { request, reply: Reply<Response> }`, `WebSocketOpen { ws, request: Option<Request>, reply: Reply<()> }`, `ConnectionOpen { conn, params, request: Option<Request>, reply: Reply<()> }`, `ConnectionClosed { conn }`, `SubscribeRequest { conn, event_name, reply: Reply<()> }`, `SaveTick { reply: Reply<Vec<StateDelta>> }`, `Sleep { reply: Reply<Vec<StateDelta>> }`, `Destroy { reply: Reply<Vec<StateDelta>> }`, `WorkflowHistoryRequested { reply: Reply<Option<Vec<u8>>> }`, `WorkflowReplayRequested { entry_id: Option<String>, reply: Reply<Option<Vec<u8>>> }`",
+        "All field types resolve (Request, Response, WebSocket, ConnHandle, ConnId already exist in rivetkit-core)",
+        "Export from rivetkit-core public surface",
+        "Types are inert (no runtime wiring yet); subsequent stories populate the mailbox",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add ActorEvents mailbox wrapper and ActorStart struct",
+      "description": "As a framework author, I need ActorEvents and ActorStart so actor entry functions receive a clean mailbox plus per-instance startup bundle.",
+      "acceptanceCriteria": [
+        "Add `ActorEvents` struct as thin wrapper over `mpsc::Receiver<ActorEvent>` with `async fn recv(&mut self) -> Option<ActorEvent>` and `fn try_recv(&mut self) -> Option<ActorEvent>`",
+        "Add `ActorStart` struct with fields: `ctx: ActorContext`, `input: Option<Vec<u8>>`, `snapshot: Option<Vec<u8>>`, `hibernated: Vec<(ConnHandle, Vec<u8>)>`, `events: ActorEvents`",
+        "Rustdoc documents that hibernated connections do NOT also fire ActorEvent::ConnectionOpen",
+        "Both types exported from rivetkit-core public surface",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Add ActorEntryFn type alias and ActorFactory::with_entry constructor",
+      "description": "As an actor author, I need a factory constructor that accepts an entry fn so I can register a receive-loop actor.",
+      "acceptanceCriteria": [
+        "Add `pub type ActorEntryFn = dyn Fn(ActorStart) -> BoxFuture<'static, Result<()>> + Send + Sync`",
+        "Add `ActorFactory::with_entry<F>(config: ActorConfig, entry: F) -> Self` where F: Fn(ActorStart) -> BoxFuture<'static, Result<()>> + Send + Sync + 'static",
+        "Internally ActorFactory stores either legacy callback factory or boxed Arc<ActorEntryFn>; pick the representation that keeps ActorFactory::new (callback path) unchanged",
+        "Existing `ActorFactory::new` for callbacks still compiles and all existing tests pass",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Implement ActorFactory::from_callbacks adapter",
+      "description": "As a framework author, I need an adapter that runs a default entry fn forwarding ActorEvents to legacy callbacks so in-tree consumers keep working while the internal runtime flips to event-based dispatch.",
+      "acceptanceCriteria": [
+        "Add `ActorFactory::from_callbacks(config: ActorConfig, callbacks_factory)` that internally builds an ActorEntryFn",
+        "Default entry fn loops on events.recv() and dispatches each ActorEvent to the matching legacy callback from the returned ActorInstanceCallbacks",
+        "Adapter routes: Action -> callbacks.actions.get(name), HttpRequest -> on_request, WebSocketOpen -> on_websocket, ConnectionOpen -> on_before_connect then on_connect, ConnectionClosed -> on_disconnect, SubscribeRequest -> on_before_subscribe, Sleep -> on_sleep then reply Ok(vec![]), Destroy -> on_destroy then reply Ok(vec![]), SaveTick -> reply Ok(vec![]), WorkflowHistoryRequested -> get_workflow_history, WorkflowReplayRequested -> replay_workflow",
+        "Legacy `run` callback is spawned as a `tokio::spawn` inside the entry fn and its join handle is awaited before the entry fn returns",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Wire ActorTask to spawn entry fn with mailbox sender",
+      "description": "As a framework author, I need ActorTask to instantiate the entry fn with a bounded mpsc channel so the runtime has a single push target for all actor events.",
+      "acceptanceCriteria": [
+        "ActorTask creates `mpsc::channel::<ActorEvent>(lifecycle_event_inbox_capacity)` at startup",
+        "Entry fn is spawned via `tokio::spawn` with ActorStart { events: ActorEvents(rx), .. }",
+        "ActorTask owns the `mpsc::Sender<ActorEvent>` and the JoinHandle<Result<()>> for the spawned entry future",
+        "Existing DispatchCommand path still delivers to legacy callbacks; this story only stands up the new channel without translation yet",
+        "`ActorFactory::new(..)` (callbacks) gets wrapped through `from_callbacks` so the same entry-fn path is used internally",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Translate DispatchCommand::Action to ActorEvent::Action",
+      "description": "As a framework author, I need action dispatches to arrive through the mailbox so actor entry functions can match on name.",
+      "acceptanceCriteria": [
+        "ActorTask translates incoming DispatchCommand::Action { name, args, conn, reply } into ActorEvent::Action { name, args, conn, reply: Reply::from(reply) }",
+        "Bounded sender uses try_reserve; on failure returns actor/overloaded to the dispatch reply",
+        "Legacy callback path is now driven exclusively through the from_callbacks adapter receiving the Action event",
+        "Existing action driver tests pass via the adapter path",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Translate DispatchCommand::Http to ActorEvent::HttpRequest",
+      "description": "As a framework author, I need HTTP fetch dispatches to arrive through the mailbox so actors observe a single ordered event stream.",
+      "acceptanceCriteria": [
+        "ActorTask translates DispatchCommand::Http { request, reply } into ActorEvent::HttpRequest { request, reply: Reply::from(reply) }",
+        "Legacy on_request callback is now driven via adapter receiving the HttpRequest event",
+        "Translation uses try_reserve with actor/overloaded fallback",
+        "Existing HTTP request driver tests pass via the adapter path",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Translate DispatchCommand::OpenWebSocket to ActorEvent::WebSocketOpen",
+      "description": "As a framework author, I need raw WebSocket opens to arrive through the mailbox so actors own the WebSocket lifetime end-to-end.",
+      "acceptanceCriteria": [
+        "ActorTask translates DispatchCommand::OpenWebSocket { ws, request, reply } into ActorEvent::WebSocketOpen { ws, request, reply: Reply::from(reply) }",
+        "Message/close callbacks still run inline under the WebSocket callback guard (unchanged)",
+        "Legacy on_websocket callback is now driven via adapter receiving the WebSocketOpen event",
+        "Translation uses try_reserve with actor/overloaded fallback",
+        "Raw WebSocket driver tests pass via the adapter path",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Translate connection open to ActorEvent::ConnectionOpen",
+      "description": "As an actor author, I need a single merged ConnectionOpen event so I can accept or reject a connection without the historical on_before_connect + on_connect split.",
+      "acceptanceCriteria": [
+        "ActorTask emits ActorEvent::ConnectionOpen { conn, params, request, reply: Reply<()> } on new connection attempts",
+        "reply.send(Err(..)) rejects the connection; reply.send(Ok(())) accepts it",
+        "Adapter path calls legacy on_before_connect first (reply.send(Err) on non-Ok) then on_connect before replying Ok",
+        "Translation uses try_reserve with actor/overloaded fallback",
+        "Existing connection-lifecycle driver tests pass via the adapter path",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Translate connection close to ActorEvent::ConnectionClosed",
+      "description": "As an actor author, I need a ConnectionClosed event so I can release per-conn resources on disconnect without a reply round trip.",
+      "acceptanceCriteria": [
+        "ActorTask emits ActorEvent::ConnectionClosed { conn } when a connection terminates",
+        "No Reply carried; event is fire-and-forget",
+        "Adapter path calls legacy on_disconnect on the ConnectionClosed event",
+        "Translation uses try_reserve; on failure log a warning and drop (disconnect cannot block)",
+        "Disconnect driver tests pass via the adapter path",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Translate subscribe access-control to ActorEvent::SubscribeRequest",
+      "description": "As an actor author, I need a SubscribeRequest event so I can enforce per-event canSubscribe gates before a client subscribes to a broadcast.",
+      "acceptanceCriteria": [
+        "ActorTask emits ActorEvent::SubscribeRequest { conn, event_name, reply: Reply<()> } on subscribe attempts",
+        "reply.send(Err(..)) rejects the subscription; reply.send(Ok(())) allows it",
+        "Adapter path calls legacy on_before_subscribe on the SubscribeRequest event",
+        "Translation uses try_reserve with actor/overloaded fallback",
+        "Broadcast access-control driver tests pass via the adapter path",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Add ctx.request_save(immediate: bool) with dirty flag and debounce",
+      "description": "As an actor author, I need a cheap ctx.request_save call so I can mark state dirty without serializing bytes until the runtime asks.",
+      "acceptanceCriteria": [
+        "Add `pub fn request_save(&self, immediate: bool)` on ActorContext",
+        "Call flips an internal AtomicBool dirty flag; if immediate is true also sets an AtomicBool immediate flag",
+        "Subsequent calls coalesce - multiple request_save calls before the next SaveTick produce exactly one SaveTick",
+        "ActorTask reads the dirty flag on a debounce timer (state_save_interval) and on event-pump ticks for the immediate flag",
+        "Call is non-blocking, never allocates, never touches KV",
+        "Unit test covers coalescing and immediate bypass",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Fire ActorEvent::SaveTick when dirty flag set",
+      "description": "As a framework author, I need ActorTask to fire SaveTick so actors reply with deltas on a predictable schedule.",
+      "acceptanceCriteria": [
+        "ActorTask event-pump fires ActorEvent::SaveTick { reply: Reply<Vec<StateDelta>> } when dirty flag set AND (immediate flag true OR debounce interval elapsed)",
+        "Reply receipt clears dirty and immediate flags; debounce timer resets",
+        "If actor replies Err(..), error is logged and flags are cleared (no retry loop; next mutation re-arms)",
+        "Adapter path replies Ok(vec![]) since legacy callbacks never produced deltas",
+        "SaveTick uses try_reserve on the mailbox with actor/overloaded fallback (save pressure never silently drops)",
+        "Unit test verifies SaveTick fires on debounce elapse and on immediate flag",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Write Vec<StateDelta> atomically in one UniversalDB transaction",
+      "description": "As a framework author, I need SaveTick replies to land atomically so partial snapshots never reach KV.",
+      "acceptanceCriteria": [
+        "ActorTask writes all StateDelta entries in the reply through a single UniversalDB transaction",
+        "StateDelta::ActorState(bytes) writes KV [1]; StateDelta::ConnHibernation upserts KV [2] + conn_id; StateDelta::ConnHibernationRemoved deletes KV [2] + conn_id",
+        "Empty delta vec results in no-op (no transaction)",
+        "Transaction respects existing BARE vbare-compatible version prefix for actor state and conn hibernation payloads",
+        "Unit test verifies that partial failures leave KV unchanged",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Add ctx.save_state(deltas).await synchronous durability bypass",
+      "description": "As an actor author, I need a synchronous save_state call so the TS adapter's saveState({ immediate: true }) Promise can resolve only after durability.",
+      "acceptanceCriteria": [
+        "Add `pub async fn save_state(&self, deltas: Vec<StateDelta>) -> Result<()>` on ActorContext",
+        "Internally routes to the same atomic transaction path as SaveTick (single UniversalDB transaction for all entries)",
+        "Future resolves only after the transaction commits",
+        "Call resets request_save's dirty flag and debounce timer so a redundant SaveTick does not fire immediately after",
+        "Does not go through the mailbox (would deadlock - actor is already inside an event handler)",
+        "Unit test verifies durability (state readable from KV after save_state resolves)",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Route sleep shutdown via ActorEvent::Sleep with reply deltas",
+      "description": "As a framework author, I need sleep shutdown to go through ActorEvent::Sleep so the actor contributes final deltas atomically before hibernation.",
+      "acceptanceCriteria": [
+        "ActorTask shutdown_for_sleep emits ActorEvent::Sleep { reply: Reply<Vec<StateDelta>> } instead of invoking on_sleep callback directly",
+        "Await Reply<Vec<StateDelta>>; on Ok(deltas) write atomically through same transaction path; on Err log and proceed",
+        "After reply is received and deltas written, existing hibernatable-conn persistence and non-hibernatable disconnect flow runs unchanged",
+        "Await the entry future's JoinHandle within sleep_grace_period before declaring shutdown complete",
+        "Adapter path calls legacy on_sleep in the Sleep match arm and replies Ok(vec![]) (deltas already persisted by legacy paths)",
+        "Sleep driver tests pass via the adapter path",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Route destroy shutdown via ActorEvent::Destroy with reply deltas",
+      "description": "As a framework author, I need destroy shutdown to go through ActorEvent::Destroy so the actor contributes final deltas atomically before teardown.",
+      "acceptanceCriteria": [
+        "ActorTask shutdown_for_destroy emits ActorEvent::Destroy { reply: Reply<Vec<StateDelta>> } instead of invoking on_destroy callback directly",
+        "Await Reply<Vec<StateDelta>>; on Ok(deltas) write atomically; on Err log and proceed",
+        "After reply, existing disconnect-all and SQLite cleanup runs unchanged; on_destroy_timeout is still respected separately from sleep_grace_period",
+        "Destroy skips the idle-sleep-window wait (unchanged behavior)",
+        "Adapter path calls legacy on_destroy in the Destroy match arm and replies Ok(vec![])",
+        "Destroy driver tests pass via the adapter path",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Persist connection hibernation continuously via StateDelta::ConnHibernation",
+      "description": "As a framework author, I need hibernation bytes to persist on every SaveTick so process crashes no longer leave stale [2]+conn_id keys from the last sleep.",
+      "acceptanceCriteria": [
+        "ConnHibernation StateDelta entries in SaveTick/Sleep/Destroy replies upsert KV [2] + conn_id atomically with ActorState",
+        "ConnHibernationRemoved entries delete KV [2] + conn_id atomically",
+        "Sleep-only hibernation persistence path (the old pre-sleep write) is removed; all hibernation bytes now flow through StateDelta",
+        "Hibernation bytes still use the existing v4 BARE field order with embedded version prefix so TypeScript actors restore identical payloads",
+        "Unit test verifies a simulated mid-session crash recovers per-conn hibernation state written in the last SaveTick",
+        "Full hibernation driver test slice (pnpm test tests/driver -t \"hibern\" from rivetkit-typescript/packages/rivetkit) stays green",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Populate ActorStart.hibernated on wake and skip ConnectionOpen",
+      "description": "As an actor author, I need hibernated conns handed to me once in ActorStart.hibernated instead of as replayed ConnectionOpen events so I do not have to deduplicate.",
+      "acceptanceCriteria": [
+        "On wake, runtime loads KV [2] + conn_id entries, filters to live connections from the engine, and populates ActorStart.hibernated: Vec<(ConnHandle, Vec<u8>)>",
+        "Dead (engine-side closed) hibernated conns are filtered out before the actor is started; their KV entries are reaped",
+        "Runtime does NOT fire ActorEvent::ConnectionOpen for hibernated conns",
+        "Subsequent events (Action, HttpRequest, SubscribeRequest, ConnectionClosed) still fire for these conns",
+        "Adapter path iterates hibernated before entering the receive loop and fires legacy on_connect for each so legacy callback consumers see the same event sequence as today",
+        "Hibernation-wake driver tests pass via the adapter path",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Add WorkflowHistoryRequested and WorkflowReplayRequested events",
+      "description": "As a workflow integration author, I need workflow history and replay events routed through the same mailbox so the actor stream stays uniform.",
+      "acceptanceCriteria": [
+        "ActorTask translates workflow history requests into ActorEvent::WorkflowHistoryRequested { reply: Reply<Option<Vec<u8>>> }",
+        "ActorTask translates workflow replay requests into ActorEvent::WorkflowReplayRequested { entry_id: Option<String>, reply: Reply<Option<Vec<u8>>> }",
+        "Events fire only when an upstream consumer (inspector endpoint, workflow-engine replay request) asks; never on routine operation",
+        "entry_id matches workflow-engine entry.id format stored at KV [4, entry_id]",
+        "Adapter path calls legacy get_workflow_history / replay_workflow callbacks on these events",
+        "Actors ignoring these events via `_ => {}` pay nothing",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Remove ctx.abort_signal() and ctx.aborted()",
+      "description": "As a framework author, I need the legacy abort-signal API removed so runtime no longer broadcasts cancellation to user-spawned tasks it no longer owns.",
+      "acceptanceCriteria": [
+        "Remove `ActorContext::abort_signal()` and `ActorContext::aborted()` public methods",
+        "Remove internal abort_signal().cancel() calls from ActorTask shutdown paths",
+        "In-tree callers of abort_signal migrate to their own tokio_util::sync::CancellationToken",
+        "Queue `enqueue_and_wait` completion waits continue to ignore actor abort (unchanged), queue receive waits use actor-task-local cancellation",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Remove runtime-tracked user children",
+      "description": "As a framework author, I need ActorTask.children, pending_replies, and abort_remaining_children removed so the runtime stops supervising user-spawned work.",
+      "acceptanceCriteria": [
+        "Delete `ActorTask.children` JoinSet / Vec field and all pushes into it",
+        "Delete `ActorTask.pending_replies` tracking vector (Reply<T> Drop guard covers the forgot-to-reply case)",
+        "Delete `abort_remaining_children` shutdown helper and all call sites",
+        "Delete UserTaskKind metric labels tied to runtime-tracked children (they no longer apply)",
+        "Action, HTTP, and WebSocket dispatch paths no longer spawn runtime-tracked children; they push ActorEvents and the entry fn (or adapter) owns any spawning",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Remove run callback supervision",
+      "description": "As a framework author, I need all run-callback supervision machinery removed so the entry fn is the only user task.",
+      "acceptanceCriteria": [
+        "Delete `run_handler_abort`, `restart_run_handler`, `wait_for_run_handler`, `set_run_handler_active` from ActorContext and ActorTask",
+        "Delete LifecycleEvent::RestartRunHandler enum variant and its dispatch",
+        "Legacy callbacks.run (if present) is spawned inside the adapter's entry fn as a tokio::spawn; its JoinHandle is awaited before the adapter entry returns",
+        "No separate runtime path for run supervision survives in rivetkit-core",
+        "Run-supervision driver tests pass via the adapter's internal spawn path",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Remove on_state_change callback dispatch from core",
+      "description": "As a framework author, I need the on_state_change callback path removed from core since actors own state in the new model.",
+      "acceptanceCriteria": [
+        "Remove on_state_change callback field from ActorInstanceCallbacks and all core dispatch of it",
+        "Core no longer fires an implicit state-change notification on set_state; mutations are observed by the actor directly",
+        "Remove coalesced on_state_change runner from core",
+        "Keep ActorError::StateMutationReentrant error code (actor/state_mutation_reentrant) for explicit re-entrant mutate_state attempts (semantics unchanged)",
+        "In-tree callback fixtures that relied on on_state_change either migrate to entry-fn or handle state-change tracking themselves",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Remove on_before_action_response callback path",
+      "description": "As a framework author, I need on_before_action_response removed since the entry fn's match arm is the action handler and there is no intercept point.",
+      "acceptanceCriteria": [
+        "Remove on_before_action_response callback field from ActorInstanceCallbacks and all core dispatch of it",
+        "Core action dispatch path no longer wraps response bytes with a post-processor",
+        "In-tree callback fixtures that used on_before_action_response migrate to post-process inline in their action match arm",
+        "Action driver tests pass",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Migrate in-tree rivetkit-core fixtures and examples to entry-fn API",
+      "description": "As a framework author, I need all in-tree rivetkit-core consumers using the new entry-fn API so we can drop the legacy adapter cleanly.",
+      "acceptanceCriteria": [
+        "Rewrite rivetkit-rust/packages/rivetkit-core/examples/counter.rs to use ActorFactory::with_entry + ActorStart receive loop",
+        "Migrate every rivetkit-core integration test fixture under `tests/` from ActorInstanceCallbacks to entry fn",
+        "Migrate `rivetkit-rust/packages/rivetkit` (the typed wrapper) bridge code to build against the new entry-fn API; its CBOR serde and ConnCtx semantics stay unchanged",
+        "Leave ActorFactory::new (the callback constructor) and ActorFactory::from_callbacks in place for this story; they are removed in US-030",
+        "TypeScript rivetkit-typescript/packages/rivetkit-napi and rivetkit-typescript/packages/rivetkit/ are NOT touched; they continue to use ActorInstanceCallbacks via from_callbacks",
+        "Full TS driver suite (`cd rivetkit-typescript/packages/rivetkit && pnpm test tests/driver`) stays green (reference: 39 passed files, 1079 passed / 51 skipped)",
+        "cargo build passes for the full workspace",
+        "cargo test passes for rivetkit-core and rivetkit crates"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Collapse on_before_connect and on_connect in the adapter",
+      "description": "As a framework author, I need the adapter's ConnectionOpen path to stay the single place where the legacy two-phase connect split lives so core never sees it.",
+      "acceptanceCriteria": [
+        "ActorFactory::from_callbacks adapter is the only caller of on_before_connect and on_connect",
+        "Adapter calls on_before_connect first; if it returns Err, reply.send(Err(..)) rejects the connection; otherwise calls on_connect then reply.send(Ok(()))",
+        "Core event translation emits only ActorEvent::ConnectionOpen (unchanged from US-011); no two-phase split survives in the runtime",
+        "Connection-lifecycle driver tests stay green via the adapter path",
+        "cargo build -p rivetkit-core passes",
+        "cargo test -p rivetkit-core passes"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Delete ActorInstanceCallbacks and ActorFactory::from_callbacks adapter",
+      "description": "As a framework author, I need the legacy callback surface deleted once all in-tree consumers use the entry-fn API so ActorFactory has a single public constructor.",
+      "acceptanceCriteria": [
+        "Delete `ActorInstanceCallbacks` struct and all its Option<Callback> fields",
+        "Delete `ActorFactory::new` (the callback constructor) and `ActorFactory::from_callbacks` adapter",
+        "Rename `ActorFactory::with_entry` to `ActorFactory::new` as the sole public constructor",
+        "Delete adapter-specific helper types, internal conversion closures, and `on_before_connect`/`on_connect` helper functions",
+        "rivetkit-typescript/packages/rivetkit-napi is NOT touched here; if NAPI bindings still reference the deleted types this story is blocked and must be re-sequenced (explicit check: grep the napi crate before declaring done)",
+        "Full workspace `cargo build` passes",
+        "Full TS driver suite (`cd rivetkit-typescript/packages/rivetkit && pnpm --filter @rivetkit/rivetkit-napi build:force && pnpm test tests/driver`) stays green at 39 passed files / 1079 passed / 51 skipped reference numbers"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

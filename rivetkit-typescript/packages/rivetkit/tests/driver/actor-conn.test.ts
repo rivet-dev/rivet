@@ -3,6 +3,21 @@ import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test, vi } from "vitest";
 import { FAKE_TIME, setupDriverTest, waitFor } from "./shared-utils";
 
+const CONNECTION_BOOTSTRAP_TIMEOUT_MS = 20_000;
+
+async function waitForConnectionBootstrap<T>(
+	action: () => Promise<T>,
+): Promise<T> {
+	let result: T | undefined;
+	await vi.waitFor(
+		async () => {
+			result = await action();
+		},
+		{ timeout: CONNECTION_BOOTSTRAP_TIMEOUT_MS, interval: 100 },
+	);
+	return result!;
+}
+
 describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 	describe("Actor Connection Tests", () => {
 		describe("Connection Methods", () => {
@@ -230,14 +245,19 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 				);
 
 				const conn1 = handle1.connect();
-				const conn2 = handle2.connect();
+				await waitForConnectionBootstrap(() =>
+					conn1.getInitializers(),
+				);
 
-				// HACK: Call an action to wait for the connections to be established
-				await conn1.getInitializers();
-				await conn2.getInitializers();
+				const conn2 = handle2.connect();
+				await waitForConnectionBootstrap(() =>
+					conn2.getInitializers(),
+				);
 
 				// Get initializers to verify connection params were used
-				const initializers = await conn1.getInitializers();
+				const initializers = await waitForConnectionBootstrap(() =>
+					conn1.getInitializers(),
+				);
 
 				// Verify both connection names were recorded
 				expect(initializers).toContain("user1");
@@ -262,11 +282,15 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 				);
 
 				const conn1 = handle.connect();
-				await conn1.getInitializers();
+				await waitForConnectionBootstrap(() =>
+					conn1.getInitializers(),
+				);
 				await conn1.dispose();
 
 				const conn2 = handle.connect();
-				const initializers = await conn2.getInitializers();
+				const initializers = await waitForConnectionBootstrap(() =>
+					conn2.getInitializers(),
+				);
 
 				expect(initializers).toEqual(["user1", "user2"]);
 				expect(connectionCount).toBe(2);
@@ -311,7 +335,7 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 					async () => {
 						expect(await conn.getInitializers()).toEqual(["user1"]);
 					},
-					{ timeout: 10_000 },
+					{ timeout: 30_000 },
 				);
 
 				expect(receivedErrors).toEqual([

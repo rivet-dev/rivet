@@ -2,7 +2,7 @@ use rivet_envoy_protocol as protocol;
 
 use crate::actor::create_actor;
 use crate::connection::ws_send;
-use crate::envoy::{ActorEntry, EnvoyContext};
+use crate::envoy::EnvoyContext;
 
 pub const ACK_COMMANDS_INTERVAL_MS: u64 = 5 * 60 * 1000;
 
@@ -25,20 +25,13 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 					val.sqlite_startup_data,
 				);
 
-				let generations = ctx
-					.actors
-					.entry(checkpoint.actor_id.clone())
-					.or_insert_with(std::collections::HashMap::new);
-				generations.insert(
+				ctx.insert_actor(
+					checkpoint.actor_id.clone(),
 					checkpoint.generation,
-					ActorEntry {
-						handle,
-						active_http_request_count,
-						name: actor_name,
-						event_history: Vec::new(),
-						last_command_idx: checkpoint.index,
-						received_stop: false,
-					},
+					handle,
+					active_http_request_count,
+					actor_name,
+					checkpoint.index,
 				);
 			}
 			protocol::Command::CommandStopActor(val) => {

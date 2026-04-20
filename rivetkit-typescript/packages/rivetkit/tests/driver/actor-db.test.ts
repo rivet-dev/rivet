@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { describeDriverMatrix } from "./shared-matrix";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
 type DbVariant = "raw";
@@ -14,6 +14,7 @@ const LIFECYCLE_POLL_ATTEMPTS = 40;
 const REAL_TIMER_HARD_CRASH_POLL_INTERVAL_MS = 50;
 const REAL_TIMER_HARD_CRASH_POLL_ATTEMPTS = 600;
 const REAL_TIMER_DB_TIMEOUT_MS = 180_000;
+const RESET_READY_TIMEOUT_MS = 5_000;
 const CHUNK_BOUNDARY_SIZES = [
 	CHUNK_SIZE - 1,
 	CHUNK_SIZE,
@@ -89,7 +90,15 @@ describeDriverMatrix("Actor Db", (driverTestConfig) => {
 						`db-${variant}-crud-${crypto.randomUUID()}`,
 					]);
 
-					await actor.reset();
+					await vi.waitFor(
+						async () => {
+							await actor.reset();
+						},
+						{
+							timeout: RESET_READY_TIMEOUT_MS,
+							interval: 100,
+						},
+					);
 
 					const first = await actor.insertValue("alpha");
 					const second = await actor.insertValue("beta");

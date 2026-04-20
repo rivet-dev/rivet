@@ -3,41 +3,26 @@ use std::fmt;
 use anyhow::Result;
 use futures::future::BoxFuture;
 
+use crate::actor::callbacks::ActorStart;
 use crate::ActorConfig;
-use crate::actor::callbacks::ActorInstanceCallbacks;
-use crate::actor::context::ActorContext;
 
-pub type ActorFactoryCreateFn =
-	dyn Fn(FactoryRequest) -> BoxFuture<'static, Result<ActorInstanceCallbacks>> + Send + Sync;
+pub type ActorEntryFn =
+	dyn Fn(ActorStart) -> BoxFuture<'static, Result<()>> + Send + Sync;
 
-/// Runtime extension point for building actor callback tables.
-///
-/// Native Rust, NAPI-backed TypeScript, and future V8 runtimes all plug into
-/// `rivetkit-core` by translating their actor model into an `ActorFactory`
-/// create closure that returns `ActorInstanceCallbacks`.
+/// Runtime extension point for building actor receive loops.
 pub struct ActorFactory {
 	config: ActorConfig,
-	create: Box<ActorFactoryCreateFn>,
-}
-
-#[derive(Clone, Debug)]
-pub struct FactoryRequest {
-	pub ctx: ActorContext,
-	pub input: Option<Vec<u8>>,
-	pub is_new: bool,
+	entry: Box<ActorEntryFn>,
 }
 
 impl ActorFactory {
-	pub fn new<F>(config: ActorConfig, create: F) -> Self
+	pub fn new<F>(config: ActorConfig, entry: F) -> Self
 	where
-		F: Fn(FactoryRequest) -> BoxFuture<'static, Result<ActorInstanceCallbacks>>
-			+ Send
-			+ Sync
-			+ 'static,
+		F: Fn(ActorStart) -> BoxFuture<'static, Result<()>> + Send + Sync + 'static,
 	{
 		Self {
 			config,
-			create: Box::new(create),
+			entry: Box::new(entry),
 		}
 	}
 
@@ -45,8 +30,8 @@ impl ActorFactory {
 		&self.config
 	}
 
-	pub async fn create(&self, request: FactoryRequest) -> Result<ActorInstanceCallbacks> {
-		(self.create)(request).await
+	pub async fn start(&self, start: ActorStart) -> Result<()> {
+		(self.entry)(start).await
 	}
 }
 
@@ -54,7 +39,7 @@ impl fmt::Debug for ActorFactory {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("ActorFactory")
 			.field("config", &self.config)
-			.field("create", &"<boxed callback>")
+			.field("entry", &"<boxed entry>")
 			.finish()
 	}
 }

@@ -1,0 +1,5 @@
+{
+  "code": "invalid_http_request",
+  "group": "protocol",
+  "message": "Invalid HTTP request."
+}

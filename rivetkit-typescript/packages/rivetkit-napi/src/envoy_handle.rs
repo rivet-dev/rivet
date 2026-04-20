@@ -59,17 +59,18 @@ impl JsEnvoyHandle {
 
 	pub async fn clone_sqlite_schema_version(&self, actor_id: &str) -> Option<u32> {
 		self.sqlite_schema_version_map
-			.lock()
+			.read_async(actor_id, |_, version| *version)
 			.await
-			.get(actor_id)
-			.copied()
 	}
 
 	pub async fn clone_sqlite_startup_data(
 		&self,
 		actor_id: &str,
 	) -> Option<protocol::SqliteStartupData> {
-		self.sqlite_startup_map.lock().await.get(actor_id).cloned()
+		self
+			.sqlite_startup_map
+			.read_async(actor_id, |_, startup| startup.clone())
+			.await
 	}
 }
 
@@ -350,9 +351,8 @@ impl JsEnvoyHandle {
 		binary: bool,
 	) -> napi::Result<()> {
 		let key = make_ws_key(&gateway_id, &request_id);
-		let map = self.ws_sender_map.lock().await;
-		if let Some(sender) = map.get(&key) {
-			sender.send(data.to_vec(), binary);
+		if let Some(sender) = self.ws_sender_map.get_async(&key).await {
+			sender.get().send(data.to_vec(), binary);
 		} else {
 			// The sender can disappear during shutdown after the JavaScript
 			// side has already observed the socket as closed. Treat this like
@@ -372,8 +372,7 @@ impl JsEnvoyHandle {
 		reason: Option<String>,
 	) {
 		let key = make_ws_key(&gateway_id, &request_id);
-		let mut map = self.ws_sender_map.lock().await;
-		if let Some(sender) = map.remove(&key) {
+		if let Some((_, sender)) = self.ws_sender_map.remove_async(&key).await {
 			sender.close(code.map(|c| c as u16), reason);
 		}
 	}
@@ -414,8 +413,7 @@ impl JsEnvoyHandle {
 		response_id: String,
 		data: serde_json::Value,
 	) -> napi::Result<()> {
-		let mut map = self.response_map.lock().await;
-		if let Some(tx) = map.remove(&response_id) {
+		if let Some((_, tx)) = self.response_map.remove_async(&response_id).await {
 			let _ = tx.send(data);
 		}
 		Ok(())

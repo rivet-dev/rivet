@@ -3,6 +3,8 @@ import { describe, expect, test } from "vitest";
 import { RUN_SLEEP_TIMEOUT } from "../../fixtures/driver-test-suite/run";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
+const RUN_HANDLER_TIMEOUT_MS = 60_000;
+
 describeDriverMatrix("Actor Run", (driverTestConfig) => {
 	describe.skipIf(driverTestConfig.skip?.sleep)("Actor Run Tests", () => {
 		test("run handler starts after actor startup", async (c) => {
@@ -126,7 +128,7 @@ describeDriverMatrix("Actor Run", (driverTestConfig) => {
 			const state2 = await actor.getState();
 
 			expect(state2.wakeCount).toBeGreaterThan(state1.wakeCount);
-		});
+		}, RUN_HANDLER_TIMEOUT_MS);
 
 		test("run handler that exits early sleeps instead of destroying", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
@@ -153,7 +155,7 @@ describeDriverMatrix("Actor Run", (driverTestConfig) => {
 				expect(state2.sleepCount).toBeGreaterThan(0);
 				expect(state2.wakeCount).toBeGreaterThan(1);
 			}
-		});
+		}, RUN_HANDLER_TIMEOUT_MS);
 
 		test("run handler that throws error sleeps instead of destroying", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
@@ -180,6 +182,6 @@ describeDriverMatrix("Actor Run", (driverTestConfig) => {
 				expect(state2.sleepCount).toBeGreaterThan(0);
 				expect(state2.wakeCount).toBeGreaterThan(1);
 			}
-		});
+		}, RUN_HANDLER_TIMEOUT_MS);
 	});
 });

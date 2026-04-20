@@ -41,6 +41,7 @@ import {
 	beforeConnectRejectActor,
 	beforeConnectGenericErrorActor,
 	stateChangeRecursionActor,
+	stateChangeReentrantMutationActor,
 } from "./lifecycle-hooks";
 import { kvActor } from "./kv";
 import { largePayloadActor, largePayloadConnActor } from "./large-payloads";
@@ -312,6 +313,7 @@ export const registry = setup({
 		beforeConnectRejectActor,
 		beforeConnectGenericErrorActor,
 		stateChangeRecursionActor,
+		stateChangeReentrantMutationActor,
 		...(agentOsTestActor
 			? {
 					// From agent-os.ts

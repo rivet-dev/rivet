@@ -597,6 +597,8 @@ For workflow-enabled actors, `history` is a JSON object with `nameRegistry`, `en
 
 Reset a workflow to a specific step and restart execution immediately. Omitting `entryId` replays the workflow from the beginning.
 
+If the workflow is still running when you call replay, the endpoint rejects the request with `409 Conflict` and an `actor/workflow_in_flight` error instead of cancelling the live run for you.
+
 ```bash
 curl -X POST http://localhost:6420/gateway/{actor_id}/inspector/workflow/replay \
   -H 'Content-Type: application/json' \
@@ -613,6 +615,17 @@ Returns the same JSON shape as `/inspector/workflow-history`:
     "entryMetadata": {}
   },
   "isWorkflowEnabled": true
+}
+```
+
+While a workflow is in flight, the response shape is:
+
+```json
+{
+  "group": "actor",
+  "code": "workflow_in_flight",
+  "message": "Workflow replay is unavailable while the workflow is currently in flight.",
+  "metadata": null
 }
 ```
 

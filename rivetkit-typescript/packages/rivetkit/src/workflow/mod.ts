@@ -6,6 +6,7 @@ import {
 import type { RunContext } from "@/actor/config";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import type { AnyStaticActorInstance } from "@/actor/definition";
+import { RivetError } from "@/actor/errors";
 import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
 import { stringifyError } from "@/utils";
 import {
@@ -67,6 +68,26 @@ function shouldRethrowWorkflowError(error: unknown): boolean {
 	}
 
 	return true;
+}
+
+function workflowReplayInFlightError(): RivetError {
+	return new RivetError(
+		"actor",
+		"workflow_in_flight",
+		"Workflow replay is unavailable while the workflow is currently in flight.",
+		{
+			public: true,
+			statusCode: 409,
+		},
+	);
+}
+
+function isWorkflowReplayBlockedByRunningEntry(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		error.message ===
+			"Cannot replay a workflow while a step is currently running"
+	);
 }
 
 export interface WorkflowOptions<
@@ -174,19 +195,31 @@ export function workflow<
 		const workflowInspector = getWorkflowInspector(actor.id);
 
 		const driver = new ActorWorkflowDriver(actor, runCtx);
+		const controlDriver = new ActorWorkflowControlDriver(actor);
 		workflowInspector.setReplayFromStep(async (entryId) => {
-			if (actor.isRunHandlerActive()) {
-				throw new Error(
-					"Cannot replay a workflow while it is currently in flight",
-				);
+			const workflowState = await workflowInspector.adapter.getState();
+			if (
+				actor.isRunHandlerActive() ||
+				workflowState === "pending" ||
+				workflowState === "running"
+			) {
+				throw workflowReplayInFlightError();
 			}
 
-			const snapshot = await replayWorkflowFromStep(
-				actor.id,
-				new ActorWorkflowControlDriver(actor),
-				entryId,
-				{ scheduleAlarm: false },
-			);
+			let snapshot;
+			try {
+				snapshot = await replayWorkflowFromStep(
+					actor.id,
+					controlDriver,
+					entryId,
+					{ scheduleAlarm: false },
+				);
+			} catch (error) {
+				if (isWorkflowReplayBlockedByRunningEntry(error)) {
+					throw workflowReplayInFlightError();
+				}
+				throw error;
+			}
 			workflowInspector.update(snapshot);
 			await actor.restartRunHandler();
 			return workflowInspector.adapter.getHistory();
@@ -206,6 +239,7 @@ export function workflow<
 					: undefined,
 			},
 		);
+		workflowInspector.setGetState(async () => await handle.getState());
 
 		const onAbort = () => {
 			handle.evict();

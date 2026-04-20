@@ -105,7 +105,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     CODEX_LAST_MSG=$(mktemp)
     STEP_STREAM_FILE="$CODEX_STREAM_DIR/step-$i.log"
     echo "Codex stream: $STEP_STREAM_FILE"
-    codex exec --profile ralph --dangerously-bypass-approvals-and-sandbox -C "$SCRIPT_DIR" -o "$CODEX_LAST_MSG" - < "$SCRIPT_DIR/CODEX.md" 2>&1 | tee "$STEP_STREAM_FILE" >/dev/null || true
+    codex exec --profile ralph --dangerously-bypass-approvals-and-sandbox -C "$SCRIPT_DIR" -o "$CODEX_LAST_MSG" - < "$SCRIPT_DIR/CODEX.md" 2>&1 | ts '[%Y-%m-%d %H:%M:%S]' | tee "$STEP_STREAM_FILE" >/dev/null || true
     OUTPUT=$(cat "$CODEX_LAST_MSG")
     rm -f "$CODEX_LAST_MSG"
   fi

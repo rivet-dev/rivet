@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 
 use rivet_envoy_protocol as protocol;
+use rivet_util::async_counter::AsyncCounter;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
@@ -25,8 +26,7 @@ use crate::sqlite::{
 	handle_sqlite_get_pages_response, handle_sqlite_request, process_unsent_sqlite_requests,
 };
 use crate::tunnel::{
-	HibernatingWebSocketMetadata, handle_tunnel_message, resend_buffered_tunnel_messages,
-	send_hibernatable_ws_message_ack,
+	handle_tunnel_message, resend_buffered_tunnel_messages, send_hibernatable_ws_message_ack,
 };
 use crate::utils::{BufferMap, EnvoyShutdownError};
 
@@ -36,6 +36,7 @@ pub struct EnvoyContext {
 	pub shared: Arc<SharedContext>,
 	pub shutting_down: bool,
 	pub actors: HashMap<String, HashMap<u32, ActorEntry>>,
+	pub buffered_actor_messages: HashMap<String, Vec<BufferedActorMessage>>,
 	pub kv_requests: HashMap<u32, KvRequestEntry>,
 	pub next_kv_request_id: u32,
 	pub sqlite_requests: HashMap<u32, SqliteRequestEntry>,
@@ -46,11 +47,22 @@ pub struct EnvoyContext {
 
 pub struct ActorEntry {
 	pub handle: mpsc::UnboundedSender<ToActor>,
-	pub active_http_request_count: Arc<AtomicUsize>,
+	pub active_http_request_count: Arc<AsyncCounter>,
 	pub name: String,
 	pub event_history: Vec<protocol::EventWrapper>,
 	pub last_command_idx: i64,
 	pub received_stop: bool,
+}
+
+pub enum BufferedActorMessage {
+	WsMsg {
+		message_id: protocol::MessageId,
+		msg: protocol::ToEnvoyWebSocketMessage,
+	},
+	WsClose {
+		message_id: protocol::MessageId,
+		close: protocol::ToEnvoyWebSocketClose,
+	},
 }
 
 pub enum ToEnvoyMessage {
@@ -86,10 +98,6 @@ pub enum ToEnvoyMessage {
 		generation: Option<u32>,
 		alarm_ts: Option<i64>,
 	},
-	HwsRestore {
-		actor_id: String,
-		meta_entries: Vec<HibernatingWebSocketMetadata>,
-	},
 	HwsAck {
 		gateway_id: protocol::GatewayId,
 		request_id: protocol::RequestId,
@@ -105,14 +113,90 @@ pub enum ToEnvoyMessage {
 }
 
 /// Information about an actor, returned by `EnvoyHandle::get_actor`.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ActorInfo {
 	pub name: String,
 	pub generation: u32,
-	pub active_http_request_count: usize,
+	pub active_http_request_count: Arc<AsyncCounter>,
 }
 
 impl EnvoyContext {
+	pub fn insert_actor(
+		&mut self,
+		actor_id: String,
+		generation: u32,
+		handle: mpsc::UnboundedSender<ToActor>,
+		active_http_request_count: Arc<AsyncCounter>,
+		name: String,
+		last_command_idx: i64,
+	) {
+		let buffered_actor_id = actor_id.clone();
+		let buffered_handle = handle.clone();
+		self
+			.actors
+			.entry(actor_id.clone())
+			.or_insert_with(HashMap::new)
+			.insert(
+				generation,
+				ActorEntry {
+					handle: handle.clone(),
+					active_http_request_count: active_http_request_count.clone(),
+					name,
+					event_history: Vec::new(),
+					last_command_idx,
+					received_stop: false,
+				},
+			);
+		self
+			.shared
+			.actors
+			.lock()
+			.expect("shared actor registry poisoned")
+			.entry(actor_id)
+			.or_insert_with(HashMap::new)
+			.insert(
+				generation,
+				crate::context::SharedActorEntry {
+					handle,
+					active_http_request_count,
+				},
+			);
+
+		if let Some(messages) = self.buffered_actor_messages.remove(&buffered_actor_id) {
+			for message in messages {
+				match message {
+					BufferedActorMessage::WsMsg { message_id, msg } => {
+						let _ = buffered_handle.send(ToActor::WsMsg { message_id, msg });
+					}
+					BufferedActorMessage::WsClose { message_id, close } => {
+						let _ = buffered_handle.send(ToActor::WsClose { message_id, close });
+					}
+				}
+			}
+		}
+	}
+
+	pub fn remove_actor(&mut self, actor_id: &str, generation: u32) {
+		if let Some(generations) = self.actors.get_mut(actor_id) {
+			generations.remove(&generation);
+			if generations.is_empty() {
+				self.actors.remove(actor_id);
+			}
+		}
+
+		let mut shared = self
+			.shared
+			.actors
+			.lock()
+			.expect("shared actor registry poisoned");
+		if let Some(generations) = shared.get_mut(actor_id) {
+			generations.remove(&generation);
+			if generations.is_empty() {
+				shared.remove(actor_id);
+			}
+		}
+	}
+
 	pub fn get_actor(&self, actor_id: &str, generation: Option<u32>) -> Option<&ActorEntry> {
 		let gens = self.actors.get(actor_id)?;
 		if gens.is_empty() {
@@ -175,6 +259,9 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		config,
 		envoy_key,
 		envoy_tx: envoy_tx.clone(),
+		actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+		live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
+		pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
 		ws_tx: Arc::new(tokio::sync::Mutex::new(None)),
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
@@ -198,6 +285,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		shared: shared.clone(),
 		shutting_down: false,
 		actors: HashMap::new(),
+		buffered_actor_messages: HashMap::new(),
 		kv_requests: HashMap::new(),
 		next_kv_request_id: 0,
 		sqlite_requests: HashMap::new(),
@@ -260,11 +348,6 @@ async fn envoy_loop(
 							let _ = entry.handle.send(ToActor::SetAlarm { alarm_ts });
 						}
 					}
-					ToEnvoyMessage::HwsRestore { actor_id, meta_entries } => {
-						if let Some(entry) = ctx.get_actor(&actor_id, None) {
-							let _ = entry.handle.send(ToActor::HwsRestore { meta_entries });
-						}
-					}
 					ToEnvoyMessage::HwsAck { gateway_id, request_id, envoy_message_index } => {
 						send_hibernatable_ws_message_ack(&mut ctx, gateway_id, request_id, envoy_message_index);
 					}
@@ -286,7 +369,7 @@ async fn envoy_loop(
 								generation: actor_gen,
 								active_http_request_count: entry
 									.active_http_request_count
-									.load(Ordering::Acquire),
+									.clone(),
 							}
 						});
 						let _ = response_tx.send(info);
@@ -330,6 +413,11 @@ async fn envoy_loop(
 						}
 					}
 					ctx.actors.clear();
+					ctx.shared
+						.actors
+						.lock()
+						.expect("shared actor registry poisoned")
+						.clear();
 				}
 
 				lost_timeout = None;
@@ -357,6 +445,11 @@ async fn envoy_loop(
 	}
 
 	ctx.actors.clear();
+	ctx.shared
+		.actors
+		.lock()
+		.expect("shared actor registry poisoned")
+		.clear();
 
 	tracing::info!("envoy stopped");
 

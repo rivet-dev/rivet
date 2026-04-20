@@ -33,6 +33,7 @@ jobs:
               - '**/*.bare'
               - '**/Cargo.toml'
               - '**/Cargo.lock'
+              - 'rivetkit-rust/packages/rivetkit-core/scripts/**/*.sh'
               - '.github/workflows/rust.yml'
 
   fmt:
@@ -84,6 +85,9 @@ jobs:
         with:
           shared-key: "rust-ci"
           cache-on-failure: true
+
+      - name: Check event-driven drain invariants
+        run: rivetkit-rust/packages/rivetkit-core/scripts/check-event-driven-drains.sh
 
       - name: Check
         run: cargo check --all-targets --all-features

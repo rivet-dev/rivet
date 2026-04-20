@@ -10,15 +10,19 @@ import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	HTTP_ACTION_REQUEST_VERSIONED,
 	HTTP_ACTION_RESPONSE_VERSIONED,
+	HTTP_RESPONSE_ERROR_VERSIONED,
 } from "@/common/client-protocol-versioned";
 import {
 	type HttpActionRequest as HttpActionRequestJson,
 	HttpActionRequestSchema,
 	type HttpActionResponse as HttpActionResponseJson,
 	HttpActionResponseSchema,
+	type HttpResponseError as HttpResponseErrorJson,
+	HttpResponseErrorSchema,
 } from "@/common/client-protocol-zod";
 import { deconstructError } from "@/common/utils";
 import type { EngineControlClient } from "@/engine-client/driver";
+import { deserializeWithEncoding } from "@/serde";
 import { bufferToArrayBuffer } from "@/utils";
 import type {
 	ActorDefinitionActions,
@@ -28,6 +32,7 @@ import { type ActorConn, ActorConnRaw } from "./actor-conn";
 import {
 	type ActorResolutionState,
 	checkForSchedulingError,
+	getActorNameFromQuery,
 	getGatewayTarget,
 	isDynamicActorQuery,
 	isStaleResolvedActorError,
@@ -59,7 +64,6 @@ export class ActorHandleRaw {
 	#actorResolutionState: ActorResolutionState;
 	#params: unknown;
 	#getParams?: () => Promise<unknown>;
-	#queueSender: ReturnType<typeof createQueueSender>;
 	#resolvedActorId?: string;
 	#resolvingActorId?: Promise<string>;
 
@@ -84,18 +88,6 @@ export class ActorHandleRaw {
 		this.#actorResolutionState = actorResolutionState;
 		this.#params = params;
 		this.#getParams = getParams;
-		// Resolve the actor ID for each queue send so key-based handles do not
-		// pin themselves to an earlier resolution.
-		this.#queueSender = createQueueSender({
-			encoding: this.#encoding,
-			params: this.#params,
-			customFetch: async (request: Request) => {
-				return await this.#driver.sendRequest(
-					getGatewayTarget(this.#actorResolutionState),
-					request,
-				);
-			},
-		});
 	}
 
 	async #resolveConnectionParams(): Promise<unknown> {
@@ -129,7 +121,73 @@ export class ActorHandleRaw {
 		body: unknown,
 		options?: QueueSendOptions,
 	): Promise<QueueSendResult | void> {
-		return await this.#queueSender.send(name, body, options as any);
+		const maxAttempts = this.#getDynamicQueryMaxAttempts();
+		let useQueryTarget = false;
+
+		for (let attempt = 0; attempt < maxAttempts; attempt++) {
+			let actorId: string | undefined;
+			try {
+				const target = await this.#resolveActionTarget(useQueryTarget);
+				actorId = "directId" in target ? target.directId : undefined;
+
+				return await createQueueSender({
+					encoding: this.#encoding,
+					params: this.#params,
+					customFetch: async (request: Request) => {
+						return await this.#driver.sendRequest(target, request);
+					},
+				}).send(name, body, options as any);
+			} catch (err) {
+				const { group, code, message, metadata } = deconstructError(
+					err,
+					logger(),
+					{},
+					true,
+				);
+
+				if (
+					await this.#shouldRetrySchedulingError(
+						group,
+						code,
+						actorId,
+						attempt,
+						maxAttempts,
+					)
+				) {
+					useQueryTarget = true;
+					await this.#waitForRetryWindow();
+					continue;
+				}
+
+				if (
+					this.#shouldRetryDynamicLifecycleError(
+						group,
+						code,
+						attempt,
+						maxAttempts,
+					)
+				) {
+					this.#clearResolvedActorId();
+					useQueryTarget = true;
+					await this.#waitForRetryWindow();
+					continue;
+				}
+
+				const invalidated = this.#invalidateResolvedActorId(group, code);
+				if (invalidated && attempt < maxAttempts - 1) {
+					useQueryTarget =
+						code === "stopping" || code.startsWith("destroyed_");
+					if (useQueryTarget) {
+						await this.#waitForRetryWindow();
+					}
+					continue;
+				}
+
+				throw new ActorError(group, code, message, metadata);
+			}
+		}
+
+		throw new Error("unreachable queue retry state");
 	}
 
 	/**
@@ -165,12 +223,13 @@ export class ActorHandleRaw {
 		args: unknown[];
 		signal?: AbortSignal;
 	}): Promise<unknown> {
-		const maxAttempts = isDynamicActorQuery(this.#actorResolutionState) ? 2 : 1;
+		const maxAttempts = this.#getDynamicQueryMaxAttempts();
+		let useQueryTarget = false;
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
 			let actorId: string | undefined;
 			try {
-				const target = await this.#resolveActionTarget();
+				const target = await this.#resolveActionTarget(useQueryTarget);
 				actorId = "directId" in target ? target.directId : undefined;
 
 				logger().debug(
@@ -187,7 +246,7 @@ export class ActorHandleRaw {
 					name: opts.name,
 					encoding: this.#encoding,
 				});
-				return await sendHttpRequest<
+				const output = await sendHttpRequest<
 					protocol.HttpActionRequest,
 					protocol.HttpActionResponse,
 					HttpActionRequestJson,
@@ -230,6 +289,10 @@ export class ActorHandleRaw {
 					responseFromBare: (bare): Response =>
 						cbor.decode(new Uint8Array(bare.output)) as Response,
 				});
+				if (opts.name === "destroy" && actorId) {
+					await this.#waitForDestroyActionToSettle(actorId);
+				}
+				return output;
 			} catch (err) {
 				const { group, code, message, metadata } = deconstructError(
 					err,
@@ -238,17 +301,33 @@ export class ActorHandleRaw {
 					true,
 				);
 
-				if (actorId && isSchedulingError(group, code)) {
-					const schedulingError = await checkForSchedulingError(
+				if (
+					await this.#shouldRetrySchedulingError(
 						group,
 						code,
 						actorId,
-						this.#actorResolutionState,
-						this.#driver,
-					);
-					if (schedulingError) {
-						throw schedulingError;
-					}
+						attempt,
+						maxAttempts,
+					)
+				) {
+					useQueryTarget = true;
+					await this.#waitForRetryWindow();
+					continue;
+				}
+
+				if (
+					opts.name !== "destroy" &&
+					this.#shouldRetryDynamicLifecycleError(
+						group,
+						code,
+						attempt,
+						maxAttempts,
+					)
+				) {
+					this.#clearResolvedActorId();
+					useQueryTarget = true;
+					await this.#waitForRetryWindow();
+					continue;
 				}
 
 				if (
@@ -266,6 +345,10 @@ export class ActorHandleRaw {
 
 				const invalidated = this.#invalidateResolvedActorId(group, code);
 				if (invalidated && attempt < maxAttempts - 1) {
+					if (group === "actor" && code === "stopping") {
+						useQueryTarget = true;
+						await new Promise((resolve) => setTimeout(resolve, 100));
+					}
 					continue;
 				}
 
@@ -276,9 +359,87 @@ export class ActorHandleRaw {
 		throw new Error("unreachable action retry state");
 	}
 
+	async #waitForDestroyActionToSettle(actorId: string): Promise<void> {
+		const name = getActorNameFromQuery(this.#actorResolutionState);
+		const deadline = Date.now() + 1_000;
+		while (Date.now() < deadline) {
+			const actor = await this.#driver.getForId({ name, actorId });
+			if (!actor) {
+				return;
+			}
+			await new Promise((resolve) => setTimeout(resolve, 25));
+		}
+	}
+
+	async #waitForRetryWindow(): Promise<void> {
+		await new Promise((resolve) => setTimeout(resolve, 100));
+	}
+
+	#getDynamicQueryMaxAttempts(): number {
+		if (!isDynamicActorQuery(this.#actorResolutionState)) {
+			return 1;
+		}
+
+		return "getOrCreateForKey" in this.#actorResolutionState ? 60 : 24;
+	}
+
+	#shouldRetryDynamicLifecycleError(
+		group: string,
+		code: string,
+		attempt: number,
+		maxAttempts: number,
+	): boolean {
+		if (
+			!isDynamicActorQuery(this.#actorResolutionState) ||
+			attempt >= maxAttempts - 1 ||
+			group !== "actor"
+		) {
+			return false;
+		}
+
+		return (
+			code === "not_found" ||
+			code === "stopping" ||
+			code === "destroying" ||
+			code.startsWith("destroyed_")
+		);
+	}
+
 	#clearResolvedActorId(): void {
 		this.#resolvedActorId = undefined;
 		this.#resolvingActorId = undefined;
+	}
+
+	async #shouldRetrySchedulingError(
+		group: string,
+		code: string,
+		actorId: string | undefined,
+		attempt: number,
+		maxAttempts: number,
+	): Promise<boolean> {
+		if (
+			!isDynamicActorQuery(this.#actorResolutionState) ||
+			!isSchedulingError(group, code) ||
+			attempt >= maxAttempts - 1
+		) {
+			return false;
+		}
+
+		if (actorId) {
+			const schedulingError = await checkForSchedulingError(
+				group,
+				code,
+				actorId,
+				this.#actorResolutionState,
+				this.#driver,
+			);
+			if (schedulingError) {
+				throw schedulingError;
+			}
+		}
+
+		this.#clearResolvedActorId();
+		return true;
 	}
 
 	#invalidateResolvedActorId(group: string, code: string): boolean {
@@ -293,8 +454,12 @@ export class ActorHandleRaw {
 		return true;
 	}
 
-	async #resolveActionTarget() {
+	async #resolveActionTarget(useQueryTarget: boolean) {
 		if ("getForId" in this.#actorResolutionState) {
+			return getGatewayTarget(this.#actorResolutionState);
+		}
+
+		if (useQueryTarget) {
 			return getGatewayTarget(this.#actorResolutionState);
 		}
 
@@ -360,13 +525,197 @@ export class ActorHandleRaw {
 		input: string | URL | Request,
 		init?: RequestInit,
 	) {
-		return await rawHttpFetch(
-			this.#driver,
-			getGatewayTarget(this.#actorResolutionState),
-			this.#params,
-			input,
-			init,
-		);
+		const maxAttempts = this.#getDynamicQueryMaxAttempts();
+		let useQueryTarget = false;
+
+		for (let attempt = 0; attempt < maxAttempts; attempt++) {
+			let actorId: string | undefined;
+			try {
+				const target = await this.#resolveActionTarget(useQueryTarget);
+				actorId = "directId" in target ? target.directId : undefined;
+				const response = await rawHttpFetch(
+					this.#driver,
+					target,
+					this.#params,
+					input,
+					init,
+				);
+				const retry = await this.#shouldRetryRawFetchResponse(
+					response,
+					actorId,
+					attempt,
+					maxAttempts,
+				);
+				if (retry) {
+					useQueryTarget = retry.useQueryTarget;
+					if (retry.waitForRetryWindow) {
+						await this.#waitForRetryWindow();
+					}
+					continue;
+				}
+				return response;
+			} catch (err) {
+				const { group, code, message, metadata } = deconstructError(
+					err,
+					logger(),
+					{},
+					true,
+				);
+
+				if (
+					await this.#shouldRetrySchedulingError(
+						group,
+						code,
+						actorId,
+						attempt,
+						maxAttempts,
+					)
+				) {
+					useQueryTarget = true;
+					await this.#waitForRetryWindow();
+					continue;
+				}
+
+				if (
+					this.#shouldRetryDynamicLifecycleError(
+						group,
+						code,
+						attempt,
+						maxAttempts,
+					)
+				) {
+					this.#clearResolvedActorId();
+					useQueryTarget = true;
+					await this.#waitForRetryWindow();
+					continue;
+				}
+
+				const invalidated = this.#invalidateResolvedActorId(group, code);
+				if (invalidated && attempt < maxAttempts - 1) {
+					useQueryTarget =
+						code === "stopping" || code.startsWith("destroyed_");
+					if (useQueryTarget) {
+						await this.#waitForRetryWindow();
+					}
+					continue;
+				}
+
+				throw new ActorError(group, code, message, metadata);
+			}
+		}
+
+		throw new Error("unreachable fetch retry state");
+	}
+
+	async #shouldRetryRawFetchResponse(
+		response: Response,
+		actorId: string | undefined,
+		attempt: number,
+		maxAttempts: number,
+	): Promise<
+		| {
+				useQueryTarget: boolean;
+				waitForRetryWindow: boolean;
+		  }
+		| null
+	> {
+		if (response.ok || !isDynamicActorQuery(this.#actorResolutionState)) {
+			return null;
+		}
+
+		const error = await this.#parseRawFetchErrorResponse(response);
+		if (!error) {
+			return null;
+		}
+
+		const { group, code } = error;
+
+		if (
+			await this.#shouldRetrySchedulingError(
+				group,
+				code,
+				actorId,
+				attempt,
+				maxAttempts,
+			)
+		) {
+			return {
+				useQueryTarget: true,
+				waitForRetryWindow: true,
+			};
+		}
+
+		if (
+			this.#shouldRetryDynamicLifecycleError(
+				group,
+				code,
+				attempt,
+				maxAttempts,
+			)
+		) {
+			this.#clearResolvedActorId();
+			return {
+				useQueryTarget: true,
+				waitForRetryWindow: true,
+			};
+		}
+
+		const invalidated = this.#invalidateResolvedActorId(group, code);
+		if (invalidated && attempt < maxAttempts - 1) {
+			const useQueryTarget =
+				code === "stopping" || code.startsWith("destroyed_");
+			return {
+				useQueryTarget,
+				waitForRetryWindow: useQueryTarget,
+			};
+		}
+
+		return null;
+	}
+
+	async #parseRawFetchErrorResponse(response: Response): Promise<{
+		group: string;
+		code: string;
+		message: string;
+		metadata?: unknown;
+	} | null> {
+		if (response.ok) {
+			return null;
+		}
+
+		const contentType = response.headers.get("content-type");
+		const encoding: Encoding = contentType?.includes("application/json")
+			? "json"
+			: this.#encoding;
+
+		try {
+			return deserializeWithEncoding<
+				protocol.HttpResponseError,
+				HttpResponseErrorJson,
+				{
+					group: string;
+					code: string;
+					message: string;
+					metadata?: unknown;
+				}
+			>(
+				encoding,
+				new Uint8Array(await response.clone().arrayBuffer()),
+				HTTP_RESPONSE_ERROR_VERSIONED,
+				HttpResponseErrorSchema,
+				(json) => json as HttpResponseErrorJson,
+				(bare) => ({
+					group: bare.group,
+					code: bare.code,
+					message: bare.message,
+					metadata: bare.metadata
+						? cbor.decode(new Uint8Array(bare.metadata))
+						: undefined,
+				}),
+			);
+		} catch {
+			return null;
+		}
 	}
 
 	/**
@@ -391,7 +740,7 @@ export class ActorHandleRaw {
 			return this.#actorResolutionState.getForId.actorId;
 		}
 
-		const target = await this.#resolveActionTarget();
+		const target = await this.#resolveActionTarget(false);
 		if ("directId" in target) {
 			return target.directId;
 		}

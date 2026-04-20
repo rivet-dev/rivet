@@ -2,7 +2,7 @@
 
 Tracking issues and complaints about the rivetkit Rust implementation for production readiness.
 
-Verified 2026-04-19. Fixed items removed.
+Re-verified 2026-04-21 against HEAD `7764a15fd`. Fixed items removed.
 
 ---
 
@@ -14,7 +14,7 @@ Verified 2026-04-19. Fixed items removed.
 
 10. **Action timeout/size enforcement lives in TS instead of Rust** — `native.ts` enforces `withTimeout()` and `maxIncomingMessageSize`/`maxOutgoingMessageSize` for HTTP actions. Rust `handle_fetch` in `registry.rs` bypasses these checks entirely. WebSocket path enforces them in Rust. Consolidate into Rust.
 
-27. **Action execution should not be serialized** — Rust core serializes actions with `tokio::sync::Mutex<()>` (`action.rs:60`, `context.rs:770-772`). The TS NAPI bridge added a matching `AsyncMutex` per actor (`native.ts`, commit `00920501a`). The original TS runtime had NO serialization — `invokeActionByName` called the handler directly, allowing concurrent actions per actor via the JS event loop. This is a behavioral regression: read-heavy actors that relied on concurrent action execution now serialize unnecessarily. Remove the action lock from core and the `AsyncMutex` from the native bridge.
+27. **Remove `AsyncMutex` action serialization from TS native bridge** — Rust core action lock was REMOVED (verified 2026-04-21: `action.rs` is now 23 lines with no mutex, `context.rs` has zero `action_lock`). TS side still serializes via `AsyncMutex actionMutex` at `rivetkit-typescript/packages/rivetkit/src/registry/native.ts:130,224,3055`. The original TS runtime had NO serialization. Fix: remove the `AsyncMutex` from the native bridge to restore concurrent action dispatch per actor.
 
 13. **Delete `openDatabaseFromEnvoy` and its supporting caches** — `rivetkit-typescript/packages/rivetkit-napi/src/database.rs:189-221` plus the `sqlite_startup_map` and `sqlite_schema_version_map` on `JsEnvoyHandle` (`src/envoy_handle.rs:32-33, 55-68`) and the matching insert/remove sites in `src/bridge_actor.rs:27-30, 44-45, 84-99, 143-148`. Verified: zero callers in `rivetkit-typescript/packages/rivetkit/`. The production path goes through `ActorContext::sql()` which already has the schema version + startup data via `RegistryCallbacks::on_actor_start`.
 
@@ -25,8 +25,6 @@ Verified 2026-04-19. Fixed items removed.
 16. **Delete `JsEnvoyHandle::start_serverless` method** — `rivetkit-typescript/packages/rivetkit-napi/src/envoy_handle.rs:378-387`. Verified dead: serverless support was removed from the TypeScript routing stack and `Runtime.startServerless()` in `rivetkit/runtime/index.ts:117` already throws `removedLegacyRoutingError`. The NAPI method is unreachable.
 
 17. **Drop the `wrapper.js` adapter layer once items 13-14 land** — `rivetkit-typescript/packages/rivetkit-napi/wrapper.js` exists to translate JSON envelopes back into `EnvoyConfig` callbacks for the dead BridgeCallbacks path. After deletion, rivetkit can import `index.js` directly and the wrapper module disappears.
-
-24. **Fix `Box::leak` in NAPI error handling** — `actor_factory.rs:890,897` leaks strings and the `RivetErrorSchema` struct itself via `Box::leak`. Fix: change `RivetErrorSchema` fields from `&'static str` to `Cow<'static, str>` in the `rivet_error` crate, then use `Cow::Owned(...)` instead of `leak_str(...)`. Only 2 call sites, both in `parse_bridge_rivet_error`.
 
 ---
 

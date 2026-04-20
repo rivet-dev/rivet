@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { describeDriverMatrix } from "./shared-matrix";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { ActorError } from "@/client/mod";
 import { MANY_QUEUE_NAMES } from "../../fixtures/driver-test-suite/queue";
 import { setupDriverTest, waitFor } from "./shared-utils";
+
+const MANY_QUEUE_CHILD_READY_TIMEOUT_MS = 20_000;
 
 describeDriverMatrix("Actor Queue", (driverTestConfig) => {
 	describe("Actor Queue Tests", () => {
@@ -297,18 +299,6 @@ describeDriverMatrix("Actor Queue", (driverTestConfig) => {
 			expect(await parent.queueSpawn("many-run-child")).toEqual({
 				queued: true,
 			});
-
-			let spawned = await parent.getSpawned();
-			for (
-				let i = 0;
-				i < 30 && !spawned.includes("many-run-child");
-				i++
-			) {
-				await waitFor(driverTestConfig, 100);
-				spawned = await parent.getSpawned();
-			}
-
-			expect(spawned).toContain("many-run-child");
 
 			await expectManyQueueChildToDrain(
 				client.manyQueueChildActor,

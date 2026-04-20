@@ -71,7 +71,7 @@ const v2ToServerV1 = (v2Data: v2.ToServer): v1.ToServer => {
 	return v2Data as unknown as v1.ToServer;
 };
 
-export const TO_SERVER_VERSIONED = createVersionedDataHandler<v3.ToServer>({
+export const CLIENT_PROTOCOL_TO_SERVER = createVersionedDataHandler<v3.ToServer>({
 	deserializeVersion: (bytes, version) => {
 		switch (version) {
 			case 1:
@@ -100,7 +100,7 @@ export const TO_SERVER_VERSIONED = createVersionedDataHandler<v3.ToServer>({
 	serializeConverters: () => [v3ToServerV2, v2ToServerV1],
 });
 
-export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v3.ToClient>({
+export const CLIENT_PROTOCOL_TO_CLIENT = createVersionedDataHandler<v3.ToClient>({
 	deserializeVersion: (bytes, version) => {
 		switch (version) {
 			case 1:

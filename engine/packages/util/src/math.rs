@@ -13,6 +13,8 @@ macro_rules! div_up {
 ///
 /// # Examples
 /// ```
+/// use rivet_util::math::div_ceil_i64;
+///
 /// assert_eq!(div_ceil_i64(10, 3), 4);  // 10/3 = 3.33.. -> 4
 /// assert_eq!(div_ceil_i64(9, 3), 3);   // 9/3 = 3 -> 3
 /// assert_eq!(div_ceil_i64(-10, 3), -3); // -10/3 = -3.33.. -> -3

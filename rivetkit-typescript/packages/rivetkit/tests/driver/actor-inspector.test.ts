@@ -2,6 +2,86 @@ import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test, vi } from "vitest";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
+const WORKFLOW_READY_TIMEOUT_MS = 30_000;
+const ACTIVE_WORKFLOW_INSPECTOR_TIMEOUT_MS = 45_000;
+
+type WorkflowRunningStepState = {
+	finishedAt: number | null;
+};
+
+type WorkflowHistoryResponse = {
+	history: {
+		nameRegistry: string[];
+		entries: unknown[];
+		entryMetadata: Record<
+			string,
+			{
+				status: string;
+				error: string | null;
+				attempts: number;
+				lastAttemptAt: number;
+				createdAt: number;
+				completedAt: number | null;
+				rollbackCompletedAt: number | null;
+				rollbackError: string | null;
+			}
+		>;
+	} | null;
+	workflowState: string | null;
+	isWorkflowEnabled: boolean;
+};
+
+async function fetchWorkflowHistory(
+	gatewayUrl: string,
+): Promise<WorkflowHistoryResponse> {
+	const response = await fetch(
+		buildInspectorUrl(gatewayUrl, "/inspector/workflow-history"),
+		{
+			headers: { Authorization: "Bearer token" },
+		},
+	);
+	expect(response.status).toBe(200);
+	return (await response.json()) as WorkflowHistoryResponse;
+}
+
+async function waitForInspectorJson<T>(
+	gatewayUrl: string,
+	path: string,
+	assertReady: (data: T) => void,
+	timeoutMs = WORKFLOW_READY_TIMEOUT_MS,
+): Promise<T> {
+	let ready!: T;
+
+	await vi.waitFor(
+		async () => {
+			const response = await fetch(buildInspectorUrl(gatewayUrl, path), {
+				headers: { Authorization: "Bearer token" },
+			});
+			const body = (await response.json()) as
+				| T
+				| {
+						group?: string;
+						code?: string;
+				  };
+
+			if (
+				response.status === 503 &&
+				body?.group === "guard" &&
+				body?.code === "actor_ready_timeout"
+			) {
+				throw new Error("actor inspector endpoint is still warming up");
+			}
+
+			expect(response.status).toBe(200);
+			ready = body as T;
+			assertReady(ready);
+		},
+		{ timeout: timeoutMs, interval: 100 },
+	);
+
+	return ready;
+}
+
 function buildInspectorUrl(
 	gatewayUrl: string,
 	path: string,
@@ -94,7 +174,7 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 				},
 			);
 			expect(response.status).toBe(200);
-			const data = (await response.json()) as {
+			const data = (await response!.json()) as {
 				connections: unknown[];
 			};
 			expect(data).toHaveProperty("connections");
@@ -152,10 +232,9 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 
 		test("GET /inspector/queue returns queue status", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.counter.getOrCreate(["inspector-queue"]);
+			const handle = client.queueActor.getOrCreate(["inspector-queue"]);
 
-			// Ensure actor exists
-			await handle.increment(0);
+			await handle.send("greeting", { hello: "queue-size" });
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			const response = await fetch(
@@ -181,6 +260,19 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			expect(typeof data.maxSize).toBe("number");
 			expect(typeof data.truncated).toBe("boolean");
 			expect(Array.isArray(data.messages)).toBe(true);
+			expect(data.size).toBeGreaterThan(0);
+
+			const summaryResponse = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/summary"),
+				{
+					headers: { Authorization: "Bearer token" },
+				},
+			);
+			expect(summaryResponse.status).toBe(200);
+			const summary = (await summaryResponse.json()) as {
+				queueSize: number;
+			};
+			expect(summary.queueSize).toBeGreaterThan(0);
 		});
 
 		test("GET /inspector/traces returns trace data", async (c) => {
@@ -279,73 +371,83 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 
 		test("GET /inspector/workflow-history returns populated history for active workflows", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.workflowCounterActor.getOrCreate([
+			const handle = client.workflowRunningStepActor.getOrCreate([
 				"inspector-workflow-active",
+				crypto.randomUUID(),
 			]);
-
-			let state = await handle.getState();
-			for (
-				let i = 0;
-				i < 40 && (state.runCount === 0 || state.history.length === 0);
-				i++
-			) {
-				await waitFor(driverTestConfig, 50);
-				state = await handle.getState();
-			}
-
-			expect(state.runCount).toBeGreaterThan(0);
-			expect(state.history.length).toBeGreaterThan(0);
-
 			const gatewayUrl = await handle.getGatewayUrl();
-			const response = await fetch(
-				buildInspectorUrl(gatewayUrl, "/inspector/workflow-history"),
-				{
-					headers: { Authorization: "Bearer token" },
+			const data = await waitForInspectorJson<WorkflowHistoryResponse>(
+				gatewayUrl,
+				"/inspector/workflow-history",
+				(history) => {
+					expect(history.isWorkflowEnabled).toBe(true);
+					expect(["pending", "running"]).toContain(
+						history.workflowState,
+					);
+					expect(history.history).not.toBeNull();
+					expect(history.history?.nameRegistry.length).toBeGreaterThan(
+						0,
+					);
+					expect(history.history?.entries.length).toBeGreaterThan(0);
+					expect(
+						Object.keys(history.history?.entryMetadata ?? {}).length,
+					).toBeGreaterThan(0);
 				},
+				ACTIVE_WORKFLOW_INSPECTOR_TIMEOUT_MS,
 			);
-			expect(response.status).toBe(200);
-			const data = (await response.json()) as {
-				history: {
-					nameRegistry: string[];
-					entries: unknown[];
-					entryMetadata: Record<string, unknown>;
-				} | null;
-				isWorkflowEnabled: boolean;
-			};
 			expect(data.isWorkflowEnabled).toBe(true);
+			expect(["pending", "running"]).toContain(data.workflowState);
 			expect(data.history).not.toBeNull();
 			expect(data.history?.nameRegistry.length).toBeGreaterThan(0);
 			expect(data.history?.entries.length).toBeGreaterThan(0);
 			expect(
 				Object.keys(data.history?.entryMetadata ?? {}).length,
 			).toBeGreaterThan(0);
+
+			await handle.release();
+			await vi.waitFor(
+				async () => {
+					expect((await handle.getState()).finishedAt).not.toBeNull();
+				},
+				{ timeout: WORKFLOW_READY_TIMEOUT_MS, interval: 100 },
+			);
 		});
 
-		test("POST /inspector/workflow/replay replays a workflow from the beginning", async (c) => {
+		test("POST /inspector/workflow/replay replays a completed workflow from the beginning", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.workflowReplayActor.getOrCreate([
 				"inspector-workflow-replay",
 				crypto.randomUUID(),
 			]);
 
-			await vi.waitFor(async () => {
-				expect(await handle.getTimeline()).toEqual(["one", "two"]);
-			});
-
-			const gatewayUrl = await handle.getGatewayUrl();
-			const response = await fetch(
-				buildInspectorUrl(gatewayUrl, "/inspector/workflow/replay"),
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: "Bearer token",
-					},
-					body: JSON.stringify({}),
+			await vi.waitFor(
+				async () => {
+					expect(await handle.getTimeline()).toEqual(["one", "two"]);
 				},
+				{ timeout: WORKFLOW_READY_TIMEOUT_MS, interval: 100 },
 			);
 
-			expect(response.status).toBe(200);
+			const gatewayUrl = await handle.getGatewayUrl();
+			let response: Response | undefined;
+			await vi.waitFor(
+				async () => {
+					const replayResponse = await fetch(
+						buildInspectorUrl(gatewayUrl, "/inspector/workflow/replay"),
+						{
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
+								Authorization: "Bearer token",
+							},
+							body: JSON.stringify({}),
+						},
+					);
+					expect(replayResponse.status).toBe(200);
+					response = replayResponse;
+				},
+				{ timeout: WORKFLOW_READY_TIMEOUT_MS, interval: 100 },
+			);
+
 			const data = (await response.json()) as {
 				history: {
 					nameRegistry: string[];
@@ -357,14 +459,17 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			expect(data.isWorkflowEnabled).toBe(true);
 			expect(data.history).not.toBeNull();
 
-			await vi.waitFor(async () => {
-				expect(await handle.getTimeline()).toEqual([
-					"one",
-					"two",
-					"one",
-					"two",
-				]);
-			});
+			await vi.waitFor(
+				async () => {
+					expect(await handle.getTimeline()).toEqual([
+						"one",
+						"two",
+						"one",
+						"two",
+					]);
+				},
+				{ timeout: WORKFLOW_READY_TIMEOUT_MS, interval: 100 },
+			);
 		});
 
 		test("POST /inspector/database/execute runs read-only queries", async (c) => {
@@ -480,33 +585,66 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			expect(data.rows).toEqual([{ value: "beta" }]);
 		});
 
-		test("POST /inspector/workflow/replay rejects workflows that are already in flight", async (c) => {
+		test("POST /inspector/workflow/replay rejects workflows that are currently in flight", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.workflowRunningStepActor.getOrCreate([
 				"inspector-workflow-replay-in-flight",
 				crypto.randomUUID(),
 			]);
+			const gatewayUrl = await handle.getGatewayUrl();
 
-			await vi.waitFor(async () => {
-				const state = await handle.getState();
-				expect(state.startedAt).not.toBeNull();
+			await vi.waitFor(
+				async () => {
+					const history = await fetchWorkflowHistory(gatewayUrl);
+					expect(history.isWorkflowEnabled).toBe(true);
+					expect(["pending", "running"]).toContain(
+						history.workflowState,
+					);
+				},
+				{ timeout: WORKFLOW_READY_TIMEOUT_MS, interval: 100 },
+			);
+
+			let response!: Response;
+			await vi.waitFor(
+				async () => {
+					const replayResponse = await fetch(
+						buildInspectorUrl(gatewayUrl, "/inspector/workflow/replay"),
+						{
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
+								Authorization: "Bearer token",
+							},
+							body: JSON.stringify({}),
+						},
+					);
+					expect(replayResponse.status).toBe(409);
+					response = replayResponse;
+				},
+				{ timeout: WORKFLOW_READY_TIMEOUT_MS, interval: 100 },
+			);
+			expect(response.status).toBe(409);
+			const data = (await response.json()) as {
+				group: string;
+				code: string;
+				message: string;
+				metadata: unknown;
+			};
+			expect(data).toEqual({
+				group: "actor",
+				code: "workflow_in_flight",
+				message:
+					"Workflow replay is unavailable while the workflow is currently in flight.",
+				metadata: null,
 			});
 
-			const gatewayUrl = await handle.getGatewayUrl();
-			const response = await fetch(
-				buildInspectorUrl(gatewayUrl, "/inspector/workflow/replay"),
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: "Bearer token",
-					},
-					body: JSON.stringify({}),
+			await handle.release();
+			await vi.waitFor(
+				async () => {
+					expect((await handle.getState()).finishedAt).not.toBeNull();
 				},
+				{ timeout: WORKFLOW_READY_TIMEOUT_MS, interval: 100 },
 			);
-			expect(response.status).toBe(500);
-			const data = (await response.json()) as { code: string };
-			expect(data.code).toBe("internal_error");
 		});
 
 		test("POST /inspector/database/execute runs mutations", async (c) => {
@@ -578,37 +716,43 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 
 		test("GET /inspector/summary returns populated workflow history for active workflows", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.workflowCounterActor.getOrCreate([
+			const handle = client.workflowRunningStepActor.getOrCreate([
 				"inspector-summary-workflow",
+				crypto.randomUUID(),
 			]);
-
-			let state = await handle.getState();
-			for (
-				let i = 0;
-				i < 40 && (state.runCount === 0 || state.history.length === 0);
-				i++
-			) {
-				await waitFor(driverTestConfig, 50);
-				state = await handle.getState();
-			}
-
 			const gatewayUrl = await handle.getGatewayUrl();
-			const response = await fetch(
-				buildInspectorUrl(gatewayUrl, "/inspector/summary"),
-				{
-					headers: { Authorization: "Bearer token" },
-				},
-			);
-			expect(response.status).toBe(200);
-			const data = (await response.json()) as {
+			const data = await waitForInspectorJson<{
 				isWorkflowEnabled: boolean;
+				workflowState: string | null;
 				workflowHistory: {
 					nameRegistry: string[];
 					entries: unknown[];
 					entryMetadata: Record<string, unknown>;
 				} | null;
-			};
+			}>(
+				gatewayUrl,
+				"/inspector/summary",
+				(summary) => {
+					expect(summary.isWorkflowEnabled).toBe(true);
+					expect(["pending", "running"]).toContain(
+						summary.workflowState,
+					);
+					expect(summary.workflowHistory).not.toBeNull();
+					expect(
+						summary.workflowHistory?.nameRegistry.length,
+					).toBeGreaterThan(0);
+					expect(summary.workflowHistory?.entries.length).toBeGreaterThan(
+						0,
+					);
+					expect(
+						Object.keys(summary.workflowHistory?.entryMetadata ?? {})
+							.length,
+					).toBeGreaterThan(0);
+				},
+				ACTIVE_WORKFLOW_INSPECTOR_TIMEOUT_MS,
+			);
 			expect(data.isWorkflowEnabled).toBe(true);
+			expect(["pending", "running"]).toContain(data.workflowState);
 			expect(data.workflowHistory).not.toBeNull();
 			expect(data.workflowHistory?.nameRegistry.length).toBeGreaterThan(
 				0,
@@ -617,6 +761,14 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			expect(
 				Object.keys(data.workflowHistory?.entryMetadata ?? {}).length,
 			).toBeGreaterThan(0);
+
+			await handle.release();
+			await vi.waitFor(
+				async () => {
+					expect((await handle.getState()).finishedAt).not.toBeNull();
+				},
+				{ timeout: WORKFLOW_READY_TIMEOUT_MS, interval: 100 },
+			);
 		});
 
 		test("inspector endpoints require auth in non-dev mode", async (c) => {

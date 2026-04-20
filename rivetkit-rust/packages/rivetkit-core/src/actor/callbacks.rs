@@ -1,12 +1,13 @@
 use std::collections::HashMap;
-use std::fmt;
 use std::ops::{Deref, DerefMut};
 
 use anyhow::{Result, anyhow};
-use futures::future::BoxFuture;
+use serde::{Deserialize, Serialize};
+use tokio::sync::{mpsc, oneshot};
 
 use crate::actor::connection::ConnHandle;
 use crate::actor::context::ActorContext;
+use crate::types::ConnId;
 use crate::websocket::WebSocket;
 
 #[derive(Clone, Debug)]
@@ -51,7 +52,8 @@ impl Request {
 		(
 			self.method().to_string(),
 			self.uri().to_string(),
-			self.headers()
+			self
+				.headers()
 				.iter()
 				.map(|(name, value)| {
 					(
@@ -139,7 +141,8 @@ impl Response {
 	pub fn to_parts(&self) -> (u16, HashMap<String, String>, Vec<u8>) {
 		(
 			self.status().as_u16(),
-			self.headers()
+			self
+				.headers()
 				.iter()
 				.map(|(name, value)| {
 					(
@@ -193,163 +196,138 @@ impl From<Response> for http::Response<Vec<u8>> {
 	}
 }
 
-pub type LifecycleCallback<T> = Box<dyn Fn(T) -> BoxFuture<'static, Result<()>> + Send + Sync>;
-pub type RequestCallback =
-	Box<dyn Fn(OnRequestRequest) -> BoxFuture<'static, Result<Response>> + Send + Sync>;
-pub type ActionHandler =
-	Box<dyn Fn(ActionRequest) -> BoxFuture<'static, Result<Vec<u8>>> + Send + Sync>;
-pub type BeforeActionResponseCallback =
-	Box<dyn Fn(OnBeforeActionResponseRequest) -> BoxFuture<'static, Result<Vec<u8>>> + Send + Sync>;
-pub type GetWorkflowHistoryCallback = Box<
-	dyn Fn(GetWorkflowHistoryRequest) -> BoxFuture<'static, Result<Option<Vec<u8>>>> + Send + Sync,
->;
-pub type ReplayWorkflowCallback =
-	Box<dyn Fn(ReplayWorkflowRequest) -> BoxFuture<'static, Result<Option<Vec<u8>>>> + Send + Sync>;
-
-#[derive(Clone, Debug)]
-pub struct OnWakeRequest {
-	pub ctx: ActorContext,
+pub struct Reply<T> {
+	tx: Option<oneshot::Sender<Result<T>>>,
 }
 
-#[derive(Clone, Debug)]
-pub struct OnMigrateRequest {
-	pub ctx: ActorContext,
-	pub is_new: bool,
+impl<T> Reply<T> {
+	pub fn send(mut self, result: Result<T>) {
+		if let Some(tx) = self.tx.take() {
+			let _ = tx.send(result);
+		}
+	}
 }
 
-#[derive(Clone, Debug)]
-pub struct OnSleepRequest {
-	pub ctx: ActorContext,
+impl<T> Drop for Reply<T> {
+	fn drop(&mut self) {
+		if let Some(tx) = self.tx.take() {
+			let _ = tx.send(Err(crate::error::ActorLifecycle::DroppedReply.build()));
+		}
+	}
 }
 
-#[derive(Clone, Debug)]
-pub struct OnDestroyRequest {
-	pub ctx: ActorContext,
-}
-
-#[derive(Clone, Debug)]
-pub struct OnStateChangeRequest {
-	pub ctx: ActorContext,
-	pub new_state: Vec<u8>,
-}
-
-#[derive(Clone, Debug)]
-pub struct OnRequestRequest {
-	pub ctx: ActorContext,
-	pub request: Request,
-}
-
-#[derive(Clone, Debug)]
-pub struct OnWebSocketRequest {
-	pub ctx: ActorContext,
-	pub conn: Option<ConnHandle>,
-	pub ws: WebSocket,
-	pub request: Option<Request>,
-}
-
-#[derive(Clone, Debug)]
-pub struct OnBeforeSubscribeRequest {
-	pub ctx: ActorContext,
-	pub conn: ConnHandle,
-	pub event_name: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct OnBeforeConnectRequest {
-	pub ctx: ActorContext,
-	pub params: Vec<u8>,
-	pub request: Option<Request>,
-}
-
-#[derive(Clone, Debug)]
-pub struct OnConnectRequest {
-	pub ctx: ActorContext,
-	pub conn: ConnHandle,
-	pub request: Option<Request>,
-}
-
-#[derive(Clone, Debug)]
-pub struct OnDisconnectRequest {
-	pub ctx: ActorContext,
-	pub conn: ConnHandle,
-}
-
-#[derive(Clone, Debug)]
-pub struct ActionRequest {
-	pub ctx: ActorContext,
-	pub conn: ConnHandle,
-	pub name: String,
-	pub args: Vec<u8>,
-}
-
-#[derive(Clone, Debug)]
-pub struct OnBeforeActionResponseRequest {
-	pub ctx: ActorContext,
-	pub name: String,
-	pub args: Vec<u8>,
-	pub output: Vec<u8>,
-}
-
-#[derive(Clone, Debug)]
-pub struct RunRequest {
-	pub ctx: ActorContext,
-}
-
-#[derive(Clone, Debug)]
-pub struct GetWorkflowHistoryRequest {
-	pub ctx: ActorContext,
-}
-
-#[derive(Clone, Debug)]
-pub struct ReplayWorkflowRequest {
-	pub ctx: ActorContext,
-	pub entry_id: Option<String>,
-}
-
-#[derive(Default)]
-pub struct ActorInstanceCallbacks {
-	pub on_migrate: Option<LifecycleCallback<OnMigrateRequest>>,
-	pub on_wake: Option<LifecycleCallback<OnWakeRequest>>,
-	pub on_sleep: Option<LifecycleCallback<OnSleepRequest>>,
-	pub on_destroy: Option<LifecycleCallback<OnDestroyRequest>>,
-	pub on_state_change: Option<LifecycleCallback<OnStateChangeRequest>>,
-	pub on_request: Option<RequestCallback>,
-	pub on_websocket: Option<LifecycleCallback<OnWebSocketRequest>>,
-	pub on_before_subscribe: Option<LifecycleCallback<OnBeforeSubscribeRequest>>,
-	pub on_before_connect: Option<LifecycleCallback<OnBeforeConnectRequest>>,
-	pub on_connect: Option<LifecycleCallback<OnConnectRequest>>,
-	pub on_disconnect: Option<LifecycleCallback<OnDisconnectRequest>>,
-	pub actions: HashMap<String, ActionHandler>,
-	pub on_before_action_response: Option<BeforeActionResponseCallback>,
-	pub run: Option<LifecycleCallback<RunRequest>>,
-	pub get_workflow_history: Option<GetWorkflowHistoryCallback>,
-	pub replay_workflow: Option<ReplayWorkflowCallback>,
-}
-
-impl fmt::Debug for ActorInstanceCallbacks {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("ActorInstanceCallbacks")
-			.field("on_migrate", &self.on_migrate.is_some())
-			.field("on_wake", &self.on_wake.is_some())
-			.field("on_sleep", &self.on_sleep.is_some())
-			.field("on_destroy", &self.on_destroy.is_some())
-			.field("on_state_change", &self.on_state_change.is_some())
-			.field("on_request", &self.on_request.is_some())
-			.field("on_websocket", &self.on_websocket.is_some())
-			.field("on_before_subscribe", &self.on_before_subscribe.is_some())
-			.field("on_before_connect", &self.on_before_connect.is_some())
-			.field("on_connect", &self.on_connect.is_some())
-			.field("on_disconnect", &self.on_disconnect.is_some())
-			.field("actions", &self.actions.keys().collect::<Vec<_>>())
-			.field(
-				"on_before_action_response",
-				&self.on_before_action_response.is_some(),
-			)
-			.field("run", &self.run.is_some())
-			.field("get_workflow_history", &self.get_workflow_history.is_some())
-			.field("replay_workflow", &self.replay_workflow.is_some())
+impl<T> std::fmt::Debug for Reply<T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Reply")
+			.field("pending", &self.tx.is_some())
 			.finish()
 	}
+}
+
+impl<T> From<oneshot::Sender<Result<T>>> for Reply<T> {
+	fn from(tx: oneshot::Sender<Result<T>>) -> Self {
+		Self { tx: Some(tx) }
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StateDelta {
+	ActorState(Vec<u8>),
+	ConnHibernation {
+		conn: ConnId,
+		bytes: Vec<u8>,
+	},
+	ConnHibernationRemoved(ConnId),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SerializeStateReason {
+	Save,
+	Inspector,
+}
+
+#[derive(Debug)]
+pub enum ActorEvent {
+	Action {
+		name: String,
+		args: Vec<u8>,
+		conn: Option<ConnHandle>,
+		reply: Reply<Vec<u8>>,
+	},
+	HttpRequest {
+		request: Request,
+		reply: Reply<Response>,
+	},
+	WebSocketOpen {
+		ws: WebSocket,
+		request: Option<Request>,
+		reply: Reply<()>,
+	},
+	ConnectionOpen {
+		conn: ConnHandle,
+		params: Vec<u8>,
+		request: Option<Request>,
+		reply: Reply<()>,
+	},
+	ConnectionClosed {
+		conn: ConnHandle,
+	},
+	SubscribeRequest {
+		conn: ConnHandle,
+		event_name: String,
+		reply: Reply<()>,
+	},
+	SerializeState {
+		reason: SerializeStateReason,
+		reply: Reply<Vec<StateDelta>>,
+	},
+	BeginSleep,
+	FinalizeSleep {
+		reply: Reply<()>,
+	},
+	Destroy {
+		reply: Reply<()>,
+	},
+	WorkflowHistoryRequested {
+		reply: Reply<Option<Vec<u8>>>,
+	},
+	WorkflowReplayRequested {
+		entry_id: Option<String>,
+		reply: Reply<Option<Vec<u8>>>,
+	},
+}
+
+pub struct ActorEvents(mpsc::Receiver<ActorEvent>);
+
+impl ActorEvents {
+	pub async fn recv(&mut self) -> Option<ActorEvent> {
+		self.0.recv().await
+	}
+
+	pub fn try_recv(&mut self) -> Option<ActorEvent> {
+		self.0.try_recv().ok()
+	}
+}
+
+impl std::fmt::Debug for ActorEvents {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("ActorEvents(..)")
+	}
+}
+
+impl From<mpsc::Receiver<ActorEvent>> for ActorEvents {
+	fn from(value: mpsc::Receiver<ActorEvent>) -> Self {
+		Self(value)
+	}
+}
+
+#[derive(Debug)]
+pub struct ActorStart {
+	pub ctx: ActorContext,
+	pub input: Option<Vec<u8>>,
+	pub snapshot: Option<Vec<u8>>,
+	pub hibernated: Vec<(ConnHandle, Vec<u8>)>,
+	pub events: ActorEvents,
 }
 
 #[cfg(test)]

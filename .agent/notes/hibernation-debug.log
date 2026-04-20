@@ -1,0 +1,206 @@
+
+> rivetkit@2.3.0-rc.4 test /home/nathan/r6/rivetkit-typescript/packages/rivetkit
+> vitest run tests/driver/actor-conn-hibernation.test.ts -t 'basic conn hibernation'
+
+
+ RUN  v3.2.4 /home/nathan/r6/rivetkit-typescript/packages/rivetkit
+
+[driver-runtime stderr] (node:3147487) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:09.379Z level=DEBUG target=actor-client msg="get or create handle to actor" name=hibernationActor key=[] parameters= createInRegion=
+ts=2026-04-22T03:45:09.379Z level=DEBUG target=actor-client msg="establishing connection from handle" query="{\"getOrCreateForKey\":{\"name\":\"hibernationActor\",\"key\":[]}}"
+ts=2026-04-22T03:45:09.380Z level=DEBUG target=actor-client msg=action name=ping args=[]
+ts=2026-04-22T03:45:09.380Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=0 actionName=ping inFlightCount=1
+ts=2026-04-22T03:45:09.380Z level=DEBUG target=actor-client msg="no websocket, queueing message"
+ts=2026-04-22T03:45:09.380Z level=DEBUG target=actor-client msg="queued connection message" queueLength=1 connId= messageType=ActionRequest actionName=ping
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:09.381Z level=DEBUG target=engine-client msg="opening websocket to actor via guard" gatewayUrl="http://127.0.0.1:45189/gateway/hibernationActor/connect?rvt-namespace=driver-a49614b8-b605-496f-bb2e-e318d61e2aa6&rvt-method=getOrCreate&rvt-runner=driver-suite-c4189ea0-a255-43b5-8860-0d3e724ae244&rvt-crash-policy=sleep"
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:09.382Z level=DEBUG target=actor-client msg="opened websocket" connId= readyState=0 messageQueueLength=1
+
+[driver-runtime stderr] [rivetkit-core-debug] restore_hibernatable_connections actor=1om93u98gusg28wet2u5ouzapycl00 restored=0
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:09.434Z level=DEBUG target=actor-client msg="client websocket open" connId=
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:09.490Z level=DEBUG target=actor-client msg="socket open" messageQueueLength=1 connId=0d710a22-c4ac-4b32-ab0b-6eb5e3519372
+ts=2026-04-22T03:45:09.490Z level=DEBUG target=actor-client msg="flushing message queue" queueLength=1
+ts=2026-04-22T03:45:09.490Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=0d710a22-c4ac-4b32-ab0b-6eb5e3519372 messageType=ActionRequest actionName=ping
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:09.544Z level=DEBUG target=actor-client msg="received action response" actionId=0 inFlightCount=1 inFlightIds=[0]
+ts=2026-04-22T03:45:09.544Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=0 actionName=ping inFlightCount=0
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:09.545Z level=DEBUG target=actor-client msg=action name=triggerSleep args=[]
+ts=2026-04-22T03:45:09.545Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=1 actionName=triggerSleep inFlightCount=1
+ts=2026-04-22T03:45:09.545Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=0d710a22-c4ac-4b32-ab0b-6eb5e3519372 messageType=ActionRequest actionName=triggerSleep
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:09.592Z level=DEBUG target=actor-client msg="received action response" actionId=1 inFlightCount=1 inFlightIds=[1]
+ts=2026-04-22T03:45:09.592Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=1 actionName=triggerSleep inFlightCount=0
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:10.192Z level=DEBUG target=actor-client msg=action name=ping args=[]
+ts=2026-04-22T03:45:10.192Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=2 actionName=ping inFlightCount=1
+ts=2026-04-22T03:45:10.192Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=0d710a22-c4ac-4b32-ab0b-6eb5e3519372 messageType=ActionRequest actionName=ping
+
+[driver-runtime stderr] [rivetkit-core-debug] restore_hibernatable_connections actor=1om93u98gusg28wet2u5ouzapycl00 restored=1
+[driver-runtime stderr] [rivetkit-core-debug] restore_hibernatable_connections actor=1om93u98gusg28wet2u5ouzapycl00 meta_entries=1
+[envoy-client-debug] restore actor=1om93u98gusg28wet2u5ouzapycl00 hibernating_requests=1 meta_entries=1
+[driver-runtime stderr] [envoy-client-debug] restore ok actor=1om93u98gusg28wet2u5ouzapycl00 request_id=8c6c0a6c envoy_index=0 rivet_index=2
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:10.311Z level=DEBUG target=actor-client msg="received action response" actionId=2 inFlightCount=1 inFlightIds=[2]
+ts=2026-04-22T03:45:10.311Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=2 actionName=ping inFlightCount=0
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:10.312Z level=DEBUG target=actor-client msg="disposing actor conn"
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:10.363Z level=INFO target=actor-client msg="socket closed" code=1000 reason=Disposed wasClean=true disposed=true connId=0d710a22-c4ac-4b32-ab0b-6eb5e3519372
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:10.363Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:10.363Z level=INFO target=test-suite msg="cleaning up test"
+
+[driver-runtime stderr] (node:3147624) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:10.912Z level=DEBUG target=actor-client msg="get or create handle to actor" name=hibernationActor key=[] parameters= createInRegion=
+ts=2026-04-22T03:45:10.912Z level=DEBUG target=actor-client msg="establishing connection from handle" query="{\"getOrCreateForKey\":{\"name\":\"hibernationActor\",\"key\":[]}}"
+ts=2026-04-22T03:45:10.912Z level=DEBUG target=actor-client msg=action name=ping args=[]
+ts=2026-04-22T03:45:10.912Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=0 actionName=ping inFlightCount=1
+ts=2026-04-22T03:45:10.912Z level=DEBUG target=actor-client msg="no websocket, queueing message"
+ts=2026-04-22T03:45:10.912Z level=DEBUG target=actor-client msg="queued connection message" queueLength=1 connId= messageType=ActionRequest actionName=ping
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:10.912Z level=DEBUG target=engine-client msg="opening websocket to actor via guard" gatewayUrl="http://127.0.0.1:45189/gateway/hibernationActor/connect?rvt-namespace=driver-001924a8-fe8f-480e-a366-03bc5fbfd426&rvt-method=getOrCreate&rvt-runner=driver-suite-0fcc5176-358c-483e-864f-011696c5cbbe&rvt-crash-policy=sleep"
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:10.913Z level=DEBUG target=actor-client msg="opened websocket" connId= readyState=0 messageQueueLength=1
+
+[driver-runtime stderr] [rivetkit-core-debug] restore_hibernatable_connections actor=5jxp7flgmrh3p8l7ljha67b0abdl00 restored=0
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:10.980Z level=DEBUG target=actor-client msg="client websocket open" connId=
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:11.028Z level=DEBUG target=actor-client msg="socket open" messageQueueLength=1 connId=cf898b92-c169-4d85-8a77-182213e01caf
+ts=2026-04-22T03:45:11.028Z level=DEBUG target=actor-client msg="flushing message queue" queueLength=1
+ts=2026-04-22T03:45:11.028Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=cf898b92-c169-4d85-8a77-182213e01caf messageType=ActionRequest actionName=ping
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:11.077Z level=DEBUG target=actor-client msg="received action response" actionId=0 inFlightCount=1 inFlightIds=[0]
+ts=2026-04-22T03:45:11.077Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=0 actionName=ping inFlightCount=0
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:11.077Z level=DEBUG target=actor-client msg=action name=triggerSleep args=[]
+ts=2026-04-22T03:45:11.078Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=1 actionName=triggerSleep inFlightCount=1
+ts=2026-04-22T03:45:11.078Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=cf898b92-c169-4d85-8a77-182213e01caf messageType=ActionRequest actionName=triggerSleep
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:11.130Z level=DEBUG target=actor-client msg="received action response" actionId=1 inFlightCount=1 inFlightIds=[1]
+ts=2026-04-22T03:45:11.130Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=1 actionName=triggerSleep inFlightCount=0
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:11.730Z level=DEBUG target=actor-client msg=action name=ping args=[]
+ts=2026-04-22T03:45:11.731Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=2 actionName=ping inFlightCount=1
+ts=2026-04-22T03:45:11.731Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=cf898b92-c169-4d85-8a77-182213e01caf messageType=ActionRequest actionName=ping
+
+[driver-runtime stderr] [rivetkit-core-debug] restore_hibernatable_connections actor=5jxp7flgmrh3p8l7ljha67b0abdl00 restored=1
+[driver-runtime stderr] [rivetkit-core-debug] restore_hibernatable_connections actor=5jxp7flgmrh3p8l7ljha67b0abdl00 meta_entries=1
+[driver-runtime stderr] [envoy-client-debug] restore actor=5jxp7flgmrh3p8l7ljha67b0abdl00 hibernating_requests=1 meta_entries=1
+[driver-runtime stderr] [envoy-client-debug] restore ok actor=5jxp7flgmrh3p8l7ljha67b0abdl00 request_id=e2f46861 envoy_index=0 rivet_index=2
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:11.910Z level=DEBUG target=actor-client msg="received action response" actionId=2 inFlightCount=1 inFlightIds=[2]
+ts=2026-04-22T03:45:11.910Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=2 actionName=ping inFlightCount=0
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:11.911Z level=DEBUG target=actor-client msg="disposing actor conn"
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:12.009Z level=INFO target=actor-client msg="socket closed" code=1000 reason=Disposed wasClean=true disposed=true connId=cf898b92-c169-4d85-8a77-182213e01caf
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:12.010Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:12.010Z level=INFO target=test-suite msg="cleaning up test"
+
+[driver-runtime stderr] (node:3147732) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:12.615Z level=DEBUG target=actor-client msg="get or create handle to actor" name=hibernationActor key=[] parameters= createInRegion=
+ts=2026-04-22T03:45:12.615Z level=DEBUG target=actor-client msg="establishing connection from handle" query="{\"getOrCreateForKey\":{\"name\":\"hibernationActor\",\"key\":[]}}"
+ts=2026-04-22T03:45:12.616Z level=DEBUG target=actor-client msg=action name=ping args=[]
+ts=2026-04-22T03:45:12.616Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=0 actionName=ping inFlightCount=1
+ts=2026-04-22T03:45:12.616Z level=DEBUG target=actor-client msg="no websocket, queueing message"
+ts=2026-04-22T03:45:12.616Z level=DEBUG target=actor-client msg="queued connection message" queueLength=1 connId= messageType=ActionRequest actionName=ping
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:12.616Z level=DEBUG target=engine-client msg="opening websocket to actor via guard" gatewayUrl="http://127.0.0.1:45189/gateway/hibernationActor/connect?rvt-namespace=driver-5a63fe98-55eb-4f79-9060-d93b8dd1012a&rvt-method=getOrCreate&rvt-runner=driver-suite-cc3c4df6-450d-44c3-89e0-30c2cc073586&rvt-crash-policy=sleep"
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:12.617Z level=DEBUG target=actor-client msg="opened websocket" connId= readyState=0 messageQueueLength=1
+
+[driver-runtime stderr] [rivetkit-core-debug] restore_hibernatable_connections actor=18uk3aixsbnbjx37vkvj58wvcadl00 restored=0
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:12.683Z level=DEBUG target=actor-client msg="client websocket open" connId=
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:12.736Z level=DEBUG target=actor-client msg="socket open" messageQueueLength=1 connId=e42cdb30-0449-4e90-b3b9-2f62106fe6cc
+ts=2026-04-22T03:45:12.736Z level=DEBUG target=actor-client msg="flushing message queue" queueLength=1
+ts=2026-04-22T03:45:12.736Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=e42cdb30-0449-4e90-b3b9-2f62106fe6cc messageType=ActionRequest actionName=ping
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:12.784Z level=DEBUG target=actor-client msg="received action response" actionId=0 inFlightCount=1 inFlightIds=[0]
+ts=2026-04-22T03:45:12.784Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=0 actionName=ping inFlightCount=0
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:12.784Z level=DEBUG target=actor-client msg=action name=triggerSleep args=[]
+ts=2026-04-22T03:45:12.784Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=1 actionName=triggerSleep inFlightCount=1
+ts=2026-04-22T03:45:12.784Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=e42cdb30-0449-4e90-b3b9-2f62106fe6cc messageType=ActionRequest actionName=triggerSleep
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:12.828Z level=DEBUG target=actor-client msg="received action response" actionId=1 inFlightCount=1 inFlightIds=[1]
+ts=2026-04-22T03:45:12.828Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=1 actionName=triggerSleep inFlightCount=0
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:13.428Z level=DEBUG target=actor-client msg=action name=ping args=[]
+ts=2026-04-22T03:45:13.428Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=2 actionName=ping inFlightCount=1
+ts=2026-04-22T03:45:13.428Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=e42cdb30-0449-4e90-b3b9-2f62106fe6cc messageType=ActionRequest actionName=ping
+
+[driver-runtime stderr] [rivetkit-core-debug] restore_hibernatable_connections actor=18uk3aixsbnbjx37vkvj58wvcadl00 restored=1
+[rivetkit-core-debug] restore_hibernatable_connections actor=18uk3aixsbnbjx37vkvj58wvcadl00 meta_entries=1
+[driver-runtime stderr] [envoy-client-debug] restore actor=18uk3aixsbnbjx37vkvj58wvcadl00 hibernating_requests=1 meta_entries=1
+[driver-runtime stderr] [envoy-client-debug] restore ok actor=18uk3aixsbnbjx37vkvj58wvcadl00 request_id=17e17b58 envoy_index=0 rivet_index=2
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:13.567Z level=DEBUG target=actor-client msg="received action response" actionId=2 inFlightCount=1 inFlightIds=[2]
+ts=2026-04-22T03:45:13.567Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=2 actionName=ping inFlightCount=0
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:13.567Z level=DEBUG target=actor-client msg="disposing actor conn"
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:13.575Z level=INFO target=actor-client msg="socket closed" code=1000 reason=Disposed wasClean=true disposed=true connId=e42cdb30-0449-4e90-b3b9-2f62106fe6cc
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:13.575Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-conn-hibernation.test.ts > Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation
+ts=2026-04-22T03:45:13.575Z level=INFO target=test-suite msg="cleaning up test"
+
+ ✓ tests/driver/actor-conn-hibernation.test.ts (15 tests | 12 skipped) 4763ms
+   ✓ Actor Conn Hibernation > static registry > encoding (bare) > Connection Hibernation > basic conn hibernation  1550ms
+   ✓ Actor Conn Hibernation > static registry > encoding (cbor) > Connection Hibernation > basic conn hibernation  1660ms
+   ✓ Actor Conn Hibernation > static registry > encoding (json) > Connection Hibernation > basic conn hibernation  1551ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 12 skipped (15)
+   Start at  20:45:08
+   Duration  5.30s (transform 281ms, setup 0ms, collect 422ms, tests 4.76s, environment 0ms, prepare 35ms)
+

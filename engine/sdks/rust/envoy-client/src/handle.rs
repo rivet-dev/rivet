@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use rivet_envoy_protocol as protocol;
+use rivet_util::async_counter::AsyncCounter;
 
 use crate::context::SharedContext;
 use crate::envoy::{ActorInfo, ToEnvoyMessage};
@@ -16,6 +17,14 @@ pub struct EnvoyHandle {
 }
 
 impl EnvoyHandle {
+	#[doc(hidden)]
+	pub fn from_shared(shared: Arc<SharedContext>) -> Self {
+		Self {
+			shared,
+			started_rx: tokio::sync::watch::channel(()).1,
+		}
+	}
+
 	pub fn shutdown(&self, immediate: bool) {
 		self.shared.shutting_down.store(true, Ordering::Release);
 
@@ -99,14 +108,70 @@ impl EnvoyHandle {
 		rx.await.ok().flatten()
 	}
 
+	pub fn http_request_counter(
+		&self,
+		actor_id: &str,
+		generation: Option<u32>,
+	) -> Option<Arc<AsyncCounter>> {
+		let guard = self
+			.shared
+			.actors
+			.lock()
+			.expect("shared actor registry poisoned");
+		let generations = guard.get(actor_id)?;
+
+		if let Some(generation) = generation {
+			return generations
+				.get(&generation)
+				.map(|actor| actor.active_http_request_count.clone());
+		}
+
+		generations
+			.iter()
+			.filter(|(_, actor)| !actor.handle.is_closed())
+			.max_by_key(|(generation, _)| *generation)
+			.map(|(_, actor)| actor.active_http_request_count.clone())
+	}
+
 	pub async fn get_active_http_request_count(
 		&self,
 		actor_id: &str,
 		generation: Option<u32>,
 	) -> Option<usize> {
-		self.get_actor(actor_id, generation)
-			.await
-			.map(|actor| actor.active_http_request_count)
+		self.http_request_counter(actor_id, generation)
+			.map(|counter| counter.load())
+	}
+
+	pub fn hibernatable_connection_is_live(
+		&self,
+		actor_id: &str,
+		_generation: Option<u32>,
+		gateway_id: protocol::GatewayId,
+		request_id: protocol::RequestId,
+	) -> bool {
+		let key = make_ws_key(&gateway_id, &request_id);
+		if self
+			.shared
+			.live_tunnel_requests
+			.lock()
+			.expect("shared live tunnel request registry poisoned")
+			.get(&key)
+			.is_some_and(|live_actor_id| live_actor_id == actor_id)
+		{
+			return true;
+		}
+
+		self
+			.shared
+			.pending_hibernation_restores
+			.lock()
+			.expect("shared pending hibernation restore registry poisoned")
+			.get(actor_id)
+			.is_some_and(|entries| {
+				entries.iter().any(|entry| {
+					entry.gateway_id == gateway_id && entry.request_id == request_id
+				})
+			})
 	}
 
 	pub fn set_alarm(&self, actor_id: String, alarm_ts: Option<i64>, generation: Option<u32>) {
@@ -374,10 +439,24 @@ impl EnvoyHandle {
 		actor_id: String,
 		meta_entries: Vec<HibernatingWebSocketMetadata>,
 	) {
-		let _ = self.shared.envoy_tx.send(ToEnvoyMessage::HwsRestore {
-			actor_id,
-			meta_entries,
-		});
+		self
+			.shared
+			.pending_hibernation_restores
+			.lock()
+			.expect("shared pending hibernation restore registry poisoned")
+			.insert(actor_id, meta_entries);
+	}
+
+	pub(crate) fn take_pending_hibernation_restore(
+		&self,
+		actor_id: &str,
+	) -> Option<Vec<HibernatingWebSocketMetadata>> {
+		self
+			.shared
+			.pending_hibernation_restores
+			.lock()
+			.expect("shared pending hibernation restore registry poisoned")
+			.remove(actor_id)
 	}
 
 	pub fn send_hibernatable_ws_message_ack(
@@ -481,6 +560,17 @@ impl EnvoyHandle {
 		rx.await
 			.map_err(|_| anyhow::anyhow!("sqlite response channel closed"))?
 	}
+
+}
+
+fn make_ws_key(
+	gateway_id: &protocol::GatewayId,
+	request_id: &protocol::RequestId,
+) -> [u8; 8] {
+	let mut key = [0u8; 8];
+	key[..4].copy_from_slice(gateway_id);
+	key[4..].copy_from_slice(request_id);
+	key
 }
 
 fn parse_list_response(
