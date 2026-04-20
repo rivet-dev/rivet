@@ -1,0 +1,5 @@
+{
+  "code": "state_mutation_reentrant",
+  "group": "actor",
+  "message": "Actor state mutation is re-entrant."
+}

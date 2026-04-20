@@ -20,7 +20,8 @@ mod moved_tests {
 		assert_eq!(config.name.as_deref(), Some("demo"));
 		assert_eq!(config.on_migrate_timeout, Duration::from_secs(30));
 		assert_eq!(config.on_sleep_timeout, Duration::from_secs(9));
-		assert_eq!(config.sleep_grace_period, Some(Duration::from_secs(12)));
+		assert_eq!(config.sleep_grace_period, Duration::from_secs(12));
+		assert!(config.sleep_grace_period_overridden);
 		assert_eq!(config.max_queue_size, 42);
 		assert_eq!(config.preload_max_workflow_bytes, Some(1024));
 	}
@@ -47,10 +48,15 @@ mod moved_tests {
 		assert_eq!(config.on_sleep_timeout, default.on_sleep_timeout);
 		assert_eq!(config.on_destroy_timeout, default.on_destroy_timeout);
 		assert_eq!(config.action_timeout, default.action_timeout);
+		assert_eq!(config.wait_until_timeout, default.wait_until_timeout);
 		assert_eq!(config.run_stop_timeout, default.run_stop_timeout);
 		assert_eq!(config.sleep_timeout, default.sleep_timeout);
 		assert_eq!(config.no_sleep, default.no_sleep);
 		assert_eq!(config.sleep_grace_period, default.sleep_grace_period);
+		assert_eq!(
+			config.sleep_grace_period_overridden,
+			default.sleep_grace_period_overridden,
+		);
 		assert_eq!(
 			config.connection_liveness_timeout,
 			default.connection_liveness_timeout,
@@ -73,6 +79,18 @@ mod moved_tests {
 			default.max_outgoing_message_size,
 		);
 		assert_eq!(
+			config.lifecycle_command_inbox_capacity,
+			default.lifecycle_command_inbox_capacity,
+		);
+		assert_eq!(
+			config.dispatch_command_inbox_capacity,
+			default.dispatch_command_inbox_capacity,
+		);
+		assert_eq!(
+			config.lifecycle_event_inbox_capacity,
+			default.lifecycle_event_inbox_capacity,
+		);
+		assert_eq!(
 			config.preload_max_workflow_bytes,
 			default.preload_max_workflow_bytes,
 		);
@@ -85,5 +103,45 @@ mod moved_tests {
 			super::CanHibernateWebSocket::Bool(false),
 		));
 		assert!(config.overrides.is_none());
+	}
+
+	#[test]
+	fn actor_config_effective_sleep_grace_period_uses_default() {
+		let config = ActorConfig::default();
+
+		assert_eq!(
+			config.effective_sleep_grace_period(),
+			Duration::from_secs(15),
+		);
+	}
+
+	#[test]
+	fn actor_config_effective_sleep_grace_period_uses_explicit_value() {
+		let config = ActorConfig {
+			on_sleep_timeout: Duration::from_secs(7),
+			wait_until_timeout: Duration::from_secs(8),
+			sleep_grace_period: Duration::from_secs(20),
+			sleep_grace_period_overridden: true,
+			..ActorConfig::default()
+		};
+
+		assert_eq!(
+			config.effective_sleep_grace_period(),
+			Duration::from_secs(20),
+		);
+	}
+
+	#[test]
+	fn actor_config_effective_sleep_grace_period_uses_legacy_timeouts() {
+		let config = ActorConfig {
+			on_sleep_timeout: Duration::from_secs(9),
+			wait_until_timeout: Duration::from_secs(8),
+			..ActorConfig::default()
+		};
+
+		assert_eq!(
+			config.effective_sleep_grace_period(),
+			Duration::from_secs(17),
+		);
 	}
 }

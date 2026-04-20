@@ -1,5 +1,7 @@
 pub mod actor_context;
 pub mod actor_factory;
+pub mod cancel_token;
+pub mod napi_actor_events;
 pub mod bridge_actor;
 pub mod cancellation_token;
 pub mod connection;
@@ -88,11 +90,10 @@ pub fn start_envoy_sync_js(
 		.map_err(|e| napi::Error::from_reason(format!("failed to create tokio runtime: {}", e)))?;
 	let runtime = Arc::new(runtime);
 
-	let response_map: ResponseMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
-	let ws_sender_map: WsSenderMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
-	let sqlite_startup_map: SqliteStartupMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
-	let sqlite_schema_version_map: SqliteSchemaVersionMap =
-		Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+	let response_map: ResponseMap = Arc::new(scc::HashMap::new());
+	let ws_sender_map: WsSenderMap = Arc::new(scc::HashMap::new());
+	let sqlite_startup_map: SqliteStartupMap = Arc::new(scc::HashMap::new());
+	let sqlite_schema_version_map: SqliteSchemaVersionMap = Arc::new(scc::HashMap::new());
 
 	// Create threadsafe callback for bridging events to JS
 	let tsfn: bridge_actor::EventCallback = event_callback.create_threadsafe_function(

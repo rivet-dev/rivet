@@ -12,6 +12,21 @@ Actors follow a well-defined lifecycle with hooks at each stage. Understanding t
 
 Actors transition through several states during their lifetime. Each transition triggers specific hooks that let you initialize resources, manage connections, and clean up state.
 
+```
+Loading ──Start──▶ Ready ──spawn driver──▶ Started
+                                              │
+     ┌────────────────────────────────────────┤
+     │                                        │
+     │ idle timer + can_sleep                 │ Destroy command
+     ▼                                        ▼
+  SleepGrace ─── grace window closes ──▶ Destroying
+     │                                        │
+     ▼                                        │
+  SleepFinalize ──── stop sequence ───────────┤
+                                              ▼
+                                          Terminated
+```
+
 **On Create** (runs once per actor)
 
 1. `createState`
@@ -359,6 +374,8 @@ async function processJob(): Promise<void> {}
 [API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 Called whenever the actor's state changes. Cannot be async. This is often used to broadcast state updates.
+
+Do not mutate `c.state` inside `onStateChange`; re-entrant state mutation is rejected.
 
 ```typescript
 import { actor } from "rivetkit";

@@ -53,18 +53,20 @@ export const beforeConnectGenericErrorActor = actor({
 
 /**
  * Actor that tests onStateChange recursion prevention.
- * Mutating state inside onStateChange should NOT trigger another onStateChange call.
+ * Callback counters and derived values live in vars so onStateChange stays read-only.
  */
 export const stateChangeRecursionActor = actor({
 	state: {
 		value: 0,
 		derivedValue: 0,
+	},
+	vars: {
 		onStateChangeCallCount: 0,
+		derivedValue: 0,
 	},
 	onStateChange: (c) => {
-		// This mutation should NOT trigger another onStateChange
-		c.state.derivedValue = c.state.value * 2;
-		c.state.onStateChangeCallCount++;
+		c.vars.derivedValue = c.state.value * 2;
+		c.vars.onStateChangeCallCount++;
 	},
 	actions: {
 		setValue: (c, newValue: number) => {
@@ -72,16 +74,55 @@ export const stateChangeRecursionActor = actor({
 			return c.state.value;
 		},
 		getDerivedValue: (c) => {
-			return c.state.derivedValue;
+			return c.vars.derivedValue;
 		},
 		getOnStateChangeCallCount: (c) => {
-			return c.state.onStateChangeCallCount;
+			return c.vars.onStateChangeCallCount;
 		},
 		getAll: (c) => {
 			return {
 				value: c.state.value,
+				derivedValue: c.vars.derivedValue,
+				callCount: c.vars.onStateChangeCallCount,
+			};
+		},
+	},
+});
+
+export const stateChangeReentrantMutationActor = actor({
+	state: {
+		value: 0,
+		derivedValue: 0,
+	},
+	vars: {
+		callCount: 0,
+		errorGroup: "",
+		errorCode: "",
+	},
+	onStateChange: (c) => {
+		c.vars.callCount++;
+
+		try {
+			const state = c.state as { value: number; derivedValue: number };
+			// Deliberately exercise re-entrant state mutation rejection.
+			state.derivedValue = state.value * 2;
+		} catch (error) {
+			c.vars.errorGroup = (error as { group?: string }).group ?? "";
+			c.vars.errorCode = (error as { code?: string }).code ?? "";
+		}
+	},
+	actions: {
+		setValue: (c, newValue: number) => {
+			c.state.value = newValue;
+			return c.state.value;
+		},
+		getResult: (c) => {
+			return {
+				value: c.state.value,
 				derivedValue: c.state.derivedValue,
-				callCount: c.state.onStateChangeCallCount,
+				callCount: c.vars.callCount,
+				errorGroup: c.vars.errorGroup,
+				errorCode: c.vars.errorCode,
 			};
 		},
 	},

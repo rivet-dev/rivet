@@ -295,7 +295,8 @@ export interface ActorContext<
 	readonly aborted: boolean;
 	readonly preventSleep: boolean;
 	broadcast(name: string, ...args: any[]): void;
-	saveState(opts?: { immediate?: boolean }): Promise<void>;
+	saveState(opts?: { immediate?: boolean; maxWait?: number }): Promise<void>;
+	keepAwake<T>(promise: Promise<T>): Promise<T>;
 	waitUntil(promise: Promise<unknown>): void;
 	setPreventSleep(preventSleep: boolean): void;
 	sleep(): void;

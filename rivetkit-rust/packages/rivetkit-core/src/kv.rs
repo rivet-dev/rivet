@@ -1,6 +1,11 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
+#[cfg(test)]
+use std::sync::Mutex;
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use anyhow::{Result, anyhow};
 use rivet_envoy_client::handle::EnvoyHandle;
 
@@ -17,7 +22,28 @@ enum KvBackend {
 	Unconfigured,
 	Envoy(EnvoyHandle),
 	#[cfg_attr(not(test), allow(dead_code))]
-	InMemory(Arc<RwLock<BTreeMap<Vec<u8>, Vec<u8>>>>),
+	InMemory(Arc<InMemoryKv>),
+}
+
+struct InMemoryKv {
+	store: RwLock<BTreeMap<Vec<u8>, Vec<u8>>>,
+	#[cfg(test)]
+	stats: InMemoryKvStats,
+}
+
+#[cfg(test)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct KvApplyBatchSnapshot {
+	pub puts: Vec<(Vec<u8>, Vec<u8>)>,
+	pub deletes: Vec<Vec<u8>>,
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct InMemoryKvStats {
+	apply_batch_calls: AtomicUsize,
+	batch_delete_calls: AtomicUsize,
+	last_apply_batch: Mutex<Option<KvApplyBatchSnapshot>>,
 }
 
 impl Kv {
@@ -31,7 +57,11 @@ impl Kv {
 
 	pub fn new_in_memory() -> Self {
 		Self {
-			backend: KvBackend::InMemory(Arc::new(RwLock::new(BTreeMap::new()))),
+			backend: KvBackend::InMemory(Arc::new(InMemoryKv {
+				store: RwLock::new(BTreeMap::new()),
+				#[cfg(test)]
+				stats: InMemoryKvStats::default(),
+			})),
 			actor_id: String::new(),
 		}
 	}
@@ -62,13 +92,14 @@ impl Kv {
 			}
 			KvBackend::InMemory(entries) => {
 				let keys: Vec<Vec<u8>> = entries
+					.store
 					.read()
 					.expect("in-memory kv lock poisoned")
 					.range(start.to_vec()..end.to_vec())
 					.map(|(key, _)| key.clone())
 					.collect();
 
-				let mut entries = entries.write().expect("in-memory kv lock poisoned");
+				let mut entries = entries.store.write().expect("in-memory kv lock poisoned");
 				for key in keys {
 					entries.remove(&key);
 				}
@@ -93,6 +124,7 @@ impl Kv {
 			}
 			KvBackend::InMemory(entries) => {
 				let mut listed: Vec<_> = entries
+					.store
 					.read()
 					.expect("in-memory kv lock poisoned")
 					.iter()
@@ -127,6 +159,7 @@ impl Kv {
 			}
 			KvBackend::InMemory(entries) => {
 				let mut listed: Vec<_> = entries
+					.store
 					.read()
 					.expect("in-memory kv lock poisoned")
 					.range(start.to_vec()..end.to_vec())
@@ -150,7 +183,7 @@ impl Kv {
 					.await
 			}
 			KvBackend::InMemory(entries) => {
-				let entries = entries.read().expect("in-memory kv lock poisoned");
+				let entries = entries.store.read().expect("in-memory kv lock poisoned");
 				Ok(keys
 					.iter()
 					.map(|key| entries.get(*key).cloned())
@@ -174,9 +207,63 @@ impl Kv {
 					.await
 			}
 			KvBackend::InMemory(store) => {
-				let mut store = store.write().expect("in-memory kv lock poisoned");
+				let mut store = store.store.write().expect("in-memory kv lock poisoned");
 				for (key, value) in entries {
 					store.insert(key.to_vec(), value.to_vec());
+				}
+				Ok(())
+			}
+			KvBackend::Unconfigured => Err(anyhow!("kv handle is not configured")),
+		}
+	}
+
+	pub async fn apply_batch(
+		&self,
+		puts: &[(Vec<u8>, Vec<u8>)],
+		deletes: &[Vec<u8>],
+	) -> Result<()> {
+		match &self.backend {
+			KvBackend::Envoy(_) => {
+				if !puts.is_empty() {
+					let put_refs: Vec<(&[u8], &[u8])> = puts
+						.iter()
+						.map(|(key, value)| (key.as_slice(), value.as_slice()))
+						.collect();
+					self.batch_put(&put_refs).await?;
+				}
+
+				if !deletes.is_empty() {
+					let delete_refs: Vec<&[u8]> =
+						deletes.iter().map(Vec::as_slice).collect();
+					self.batch_delete(&delete_refs).await?;
+				}
+
+				Ok(())
+			}
+			KvBackend::InMemory(store) => {
+				#[cfg(test)]
+				{
+					store
+						.stats
+						.apply_batch_calls
+						.fetch_add(1, Ordering::SeqCst);
+					*store
+						.stats
+						.last_apply_batch
+						.lock()
+						.expect("in-memory kv stats lock poisoned") = Some(
+						KvApplyBatchSnapshot {
+							puts: puts.to_vec(),
+							deletes: deletes.to_vec(),
+						},
+					);
+				}
+				let mut store = store.store.write().expect("in-memory kv lock poisoned");
+				for key in deletes {
+					store.remove(key);
+				}
+				for (key, value) in puts {
+					store.insert(key.clone(), value.clone());
 				}
 				Ok(())
 			}
@@ -195,7 +282,12 @@ impl Kv {
 					.await
 			}
 			KvBackend::InMemory(entries) => {
-				let mut entries = entries.write().expect("in-memory kv lock poisoned");
+				#[cfg(test)]
+				entries
+					.stats
+					.batch_delete_calls
+					.fetch_add(1, Ordering::SeqCst);
+				let mut entries = entries.store.write().expect("in-memory kv lock poisoned");
 				for key in keys {
 					entries.remove(*key);
 				}
@@ -224,6 +316,39 @@ impl Default for Kv {
 		Self {
 			backend: KvBackend::Unconfigured,
 			actor_id: String::new(),
+		}
+	}
+}
+
+#[cfg(test)]
+impl Kv {
+	pub(crate) fn test_apply_batch_call_count(&self) -> usize {
+		match &self.backend {
+			KvBackend::InMemory(store) => {
+				store.stats.apply_batch_calls.load(Ordering::SeqCst)
+			}
+			_ => 0,
+		}
+	}
+
+	pub(crate) fn test_batch_delete_call_count(&self) -> usize {
+		match &self.backend {
+			KvBackend::InMemory(store) => {
+				store.stats.batch_delete_calls.load(Ordering::SeqCst)
+			}
+			_ => 0,
+		}
+	}
+
+	pub(crate) fn test_last_apply_batch(&self) -> Option<KvApplyBatchSnapshot> {
+		match &self.backend {
+			KvBackend::InMemory(store) => store
+				.stats
+				.last_apply_batch
+				.lock()
+				.expect("in-memory kv stats lock poisoned")
+				.clone(),
+			_ => None,
 		}
 	}
 }

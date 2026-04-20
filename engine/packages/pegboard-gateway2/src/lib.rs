@@ -320,9 +320,30 @@ impl PegboardGateway2 {
 			"should not be creating a new in flight entry after hibernation"
 		);
 
-		// If we are reconnecting after hibernation, don't send an open message
+		// If we are reconnecting after hibernation, the actor restore path
+		// re-sends the websocket-open ack once the connection is attached. Wait
+		// for that ack before replaying buffered client messages.
 		let can_hibernate = if after_hibernation {
-			true
+			tracing::debug!("gateway waiting for restored websocket open from tunnel");
+			let open_msg = wait_for_envoy_websocket_open(
+				&mut msg_rx,
+				&mut drop_rx,
+				&mut stopped_sub,
+				request_id,
+				Duration::from_millis(
+					self.ctx
+						.config()
+						.pegboard()
+						.gateway_websocket_open_timeout_ms(),
+				),
+			)
+			.await?;
+
+			self.shared_state
+				.toggle_hibernation(request_id, open_msg.can_hibernate)
+				.await?;
+
+			open_msg.can_hibernate
 		} else {
 			// Send WebSocket open message
 			let open_message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(
@@ -339,61 +360,19 @@ impl PegboardGateway2 {
 
 			tracing::debug!("gateway waiting for websocket open from tunnel");
 
-			// Wait for WebSocket open acknowledgment
-			let fut = async {
-				loop {
-					tokio::select! {
-						res = msg_rx.recv() => {
-							if let Some(msg) = res {
-								match msg {
-									protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(msg) => {
-										return anyhow::Ok(msg);
-									}
-									protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
-										tracing::warn!(?close, "websocket closed before opening");
-										return Err(WebSocketServiceUnavailable.build());
-									}
-									_ => {
-										tracing::warn!(
-											"received unexpected message while waiting for websocket open"
-										);
-									}
-								}
-							} else {
-								tracing::warn!(
-									request_id=%protocol::util::id_to_string(&request_id),
-									"received no message response during ws init",
-								);
-								break;
-							}
-						}
-						_ = stopped_sub.next() => {
-							tracing::debug!("actor stopped while waiting for websocket open");
-							return Err(WebSocketServiceUnavailable.build());
-						}
-						_ = drop_rx.changed() => {
-							tracing::warn!(reason=?drop_rx.borrow(), "websocket open timeout");
-							return Err(WebSocketServiceUnavailable.build());
-						}
-					}
-				}
-
-				Err(WebSocketServiceUnavailable.build())
-			};
-
-			let websocket_open_timeout = Duration::from_millis(
-				self.ctx
-					.config()
-					.pegboard()
-					.gateway_websocket_open_timeout_ms(),
-			);
-			let open_msg = tokio::time::timeout(websocket_open_timeout, fut)
-				.await
-				.map_err(|_| {
-					tracing::warn!("timed out waiting for websocket open from envoy");
-
-					WebSocketServiceUnavailable.build()
-				})??;
+			let open_msg = wait_for_envoy_websocket_open(
+				&mut msg_rx,
+				&mut drop_rx,
+				&mut stopped_sub,
+				request_id,
+				Duration::from_millis(
+					self.ctx
+						.config()
+						.pegboard()
+						.gateway_websocket_open_timeout_ms(),
+				),
+			)
+			.await?;
 
 			self.shared_state
 				.toggle_hibernation(request_id, open_msg.can_hibernate)
@@ -888,6 +867,63 @@ async fn hibernate_ws(ws_rx: Arc<Mutex<WebSocketReceiver>>) -> Result<Hibernatio
 			return Ok(HibernationResult::Close);
 		}
 	}
+}
+
+async fn wait_for_envoy_websocket_open(
+	msg_rx: &mut tokio::sync::mpsc::Receiver<protocol::ToRivetTunnelMessageKind>,
+	drop_rx: &mut watch::Receiver<Option<crate::shared_state::MsgGcReason>>,
+	stopped_sub: &mut message::SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
+	request_id: protocol::RequestId,
+	websocket_open_timeout: Duration,
+) -> Result<protocol::ToRivetWebSocketOpen> {
+	let fut = async {
+		loop {
+			tokio::select! {
+				res = msg_rx.recv() => {
+					if let Some(msg) = res {
+						match msg {
+							protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(msg) => {
+								return anyhow::Ok(msg);
+							}
+							protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
+								tracing::warn!(?close, "websocket closed before opening");
+								return Err(WebSocketServiceUnavailable.build());
+							}
+							_ => {
+								tracing::warn!(
+									"received unexpected message while waiting for websocket open"
+								);
+							}
+						}
+					} else {
+						tracing::warn!(
+							request_id=%protocol::util::id_to_string(&request_id),
+							"received no message response during ws init",
+						);
+						break;
+					}
+				}
+				_ = stopped_sub.next() => {
+					tracing::debug!("actor stopped while waiting for websocket open");
+					return Err(WebSocketServiceUnavailable.build());
+				}
+				_ = drop_rx.changed() => {
+					tracing::warn!(reason=?drop_rx.borrow(), "websocket open timeout");
+					return Err(WebSocketServiceUnavailable.build());
+				}
+			}
+		}
+
+		Err(WebSocketServiceUnavailable.build())
+	};
+
+	tokio::time::timeout(websocket_open_timeout, fut)
+		.await
+		.map_err(|_| {
+			tracing::warn!("timed out waiting for websocket open from envoy");
+
+			WebSocketServiceUnavailable.build()
+		})?
 }
 
 #[derive(Debug)]

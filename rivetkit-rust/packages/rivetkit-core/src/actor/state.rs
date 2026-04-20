@@ -1,5 +1,3 @@
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
@@ -9,23 +7,28 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Handle;
-use tokio::sync::Notify;
+use tokio::sync::mpsc;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::task::JoinHandle;
 
+use crate::actor::callbacks::StateDelta;
+use crate::actor::connection::make_connection_key;
 use crate::actor::config::ActorConfig;
+use crate::actor::metrics::ActorMetrics;
 use crate::actor::persist::{
 	decode_with_embedded_version, encode_with_embedded_version,
 };
+use crate::actor::task::{
+	LIFECYCLE_EVENT_INBOX_CHANNEL, LifecycleEvent, actor_channel_overloaded_error,
+};
+use crate::actor::task_types::StateMutationReason;
+use crate::error::ActorLifecycle as ActorLifecycleError;
 use crate::kv::Kv;
 use crate::types::SaveStateOpts;
 
 pub const PERSIST_DATA_KEY: &[u8] = &[1];
 const ACTOR_PERSIST_VERSION: u16 = 4;
 const ACTOR_PERSIST_COMPATIBLE_VERSIONS: &[u16] = &[3, 4];
-
-pub type StateCallbackFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
-pub type OnStateChangeCallback = Arc<dyn Fn() -> StateCallbackFuture + Send + Sync>;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersistedScheduleEvent {
@@ -65,12 +68,19 @@ struct ActorStateInner {
 	save_interval: Duration,
 	dirty: AtomicBool,
 	revision: AtomicU64,
+	save_request_revision: AtomicU64,
+	in_on_state_change: Arc<AtomicBool>,
+	save_requested: AtomicBool,
+	save_requested_immediate: AtomicBool,
+	save_requested_within_deadline: Mutex<Option<Instant>>,
 	last_save_at: Mutex<Option<Instant>>,
 	pending_save: Mutex<Option<PendingSave>>,
+	tracked_persist: Mutex<Option<JoinHandle<()>>>,
 	save_guard: AsyncMutex<()>,
-	on_state_change: RwLock<Option<OnStateChangeCallback>>,
-	on_state_change_control: Mutex<OnStateChangeControl>,
-	on_state_change_notify: Notify,
+	lifecycle_events: RwLock<Option<mpsc::Sender<LifecycleEvent>>>,
+	request_save_hooks: RwLock<Vec<Arc<dyn Fn(bool) + Send + Sync>>>,
+	lifecycle_event_inbox_capacity: usize,
+	metrics: ActorMetrics,
 }
 
 struct PendingSave {
@@ -78,15 +88,16 @@ struct PendingSave {
 	handle: JoinHandle<()>,
 }
 
-#[derive(Default)]
-struct OnStateChangeControl {
-	pending: u64,
-	running: bool,
-	in_callback: bool,
-}
-
 impl ActorState {
 	pub fn new(kv: Kv, config: ActorConfig) -> Self {
+		Self::new_with_metrics(kv, config, ActorMetrics::default())
+	}
+
+	pub(crate) fn new_with_metrics(
+		kv: Kv,
+		config: ActorConfig,
+		metrics: ActorMetrics,
+	) -> Self {
 		Self(Arc::new(ActorStateInner {
 			current_state: RwLock::new(Vec::new()),
 			persisted: RwLock::new(PersistedActor::default()),
@@ -94,12 +105,19 @@ impl ActorState {
 			save_interval: config.state_save_interval,
 			dirty: AtomicBool::new(false),
 			revision: AtomicU64::new(0),
+			save_request_revision: AtomicU64::new(0),
+			in_on_state_change: Arc::new(AtomicBool::new(false)),
+			save_requested: AtomicBool::new(false),
+			save_requested_immediate: AtomicBool::new(false),
+			save_requested_within_deadline: Mutex::new(None),
 			last_save_at: Mutex::new(None),
 			pending_save: Mutex::new(None),
+			tracked_persist: Mutex::new(None),
 			save_guard: AsyncMutex::new(()),
-			on_state_change: RwLock::new(None),
-			on_state_change_control: Mutex::new(OnStateChangeControl::default()),
-			on_state_change_notify: Notify::new(),
+			lifecycle_events: RwLock::new(None),
+			request_save_hooks: RwLock::new(Vec::new()),
+			lifecycle_event_inbox_capacity: config.lifecycle_event_inbox_capacity,
+			metrics,
 		}))
 	}
 
@@ -111,25 +129,51 @@ impl ActorState {
 			.clone()
 	}
 
-	pub fn set_state(&self, state: Vec<u8>) {
-		*self
-			.0
-			.current_state
-			.write()
-			.expect("actor state lock poisoned") = state.clone();
-		self
-			.0
-			.persisted
-			.write()
-			.expect("actor persisted state lock poisoned")
-			.state = state;
-
-		self.mark_dirty();
-		self.schedule_save(None);
-		self.trigger_on_state_change();
+	pub fn set_state(&self, state: Vec<u8>) -> Result<()> {
+		self.mutate_state(StateMutationReason::UserSetState, |current| {
+			*current = state;
+			Ok(())
+		})
 	}
 
-	pub async fn save_state(&self, opts: SaveStateOpts) -> Result<()> {
+	pub fn mutate_state<F>(
+		&self,
+		reason: StateMutationReason,
+		mutate: F,
+	) -> Result<()>
+	where
+		F: FnOnce(&mut Vec<u8>) -> Result<()>,
+	{
+		if self.in_on_state_change_callback() {
+			return Err(ActorLifecycleError::StateMutationReentrant.build());
+		}
+
+		let sender = self.lifecycle_event_sender();
+		if let Some(sender) = sender {
+			let permit = sender.try_reserve().map_err(|_| {
+				self.0.metrics.inc_state_mutation_overload(reason);
+				actor_channel_overloaded_error(
+					LIFECYCLE_EVENT_INBOX_CHANNEL,
+					self.0.lifecycle_event_inbox_capacity,
+					"state_mutated",
+					Some(&self.0.metrics),
+				)
+			})?;
+
+			self.replace_state(mutate)?;
+			self.mark_dirty();
+			self.0.metrics.inc_state_mutation(reason);
+			permit.send(LifecycleEvent::StateMutated { reason });
+			Ok(())
+		} else {
+			self.replace_state(mutate)?;
+			self.mark_dirty();
+			self.0.metrics.inc_state_mutation(reason);
+			Ok(())
+		}
+	}
+
+	pub(crate) async fn persist_state(&self, opts: SaveStateOpts) -> Result<()> {
 		if !self.is_dirty() {
 			return Ok(());
 		}
@@ -143,6 +187,200 @@ impl ActorState {
 				tokio::time::sleep(delay).await;
 			}
 			self.persist_if_dirty().await
+		}
+	}
+
+	pub fn request_save(&self, immediate: bool) {
+		self.0.save_request_revision.fetch_add(1, Ordering::SeqCst);
+		self.notify_request_save_hooks(immediate);
+		let already_requested = self.0.save_requested.swap(true, Ordering::SeqCst);
+		let immediate_already_requested = if immediate {
+			self
+				.0
+				.save_requested_immediate
+				.swap(true, Ordering::SeqCst)
+		} else {
+			self.0.save_requested_immediate.load(Ordering::SeqCst)
+		};
+
+		let Some(sender) = self.lifecycle_event_sender() else {
+			return;
+		};
+
+		if already_requested && (!immediate || immediate_already_requested) {
+			return;
+		}
+
+		match sender.try_reserve() {
+			Ok(permit) => {
+				permit.send(LifecycleEvent::SaveRequested { immediate });
+			}
+			Err(_) => {
+				let _ = actor_channel_overloaded_error(
+					LIFECYCLE_EVENT_INBOX_CHANNEL,
+					self.0.lifecycle_event_inbox_capacity,
+					"save_requested",
+					Some(&self.0.metrics),
+				);
+			}
+		}
+	}
+
+	pub fn request_save_within(&self, ms: u32) {
+		self.0.save_request_revision.fetch_add(1, Ordering::SeqCst);
+		self.notify_request_save_hooks(false);
+		self.0.save_requested.store(true, Ordering::SeqCst);
+
+		let deadline = Instant::now() + Duration::from_millis(u64::from(ms));
+		let mut requested_deadline = self
+			.0
+			.save_requested_within_deadline
+			.lock()
+			.expect("actor state save-within deadline lock poisoned");
+		*requested_deadline = Some(match *requested_deadline {
+			Some(existing) => existing.min(deadline),
+			None => deadline,
+		});
+		drop(requested_deadline);
+
+		let Some(sender) = self.lifecycle_event_sender() else {
+			return;
+		};
+
+		match sender.try_reserve() {
+			Ok(permit) => {
+				permit.send(LifecycleEvent::SaveRequested { immediate: false });
+			}
+			Err(_) => {
+				let _ = actor_channel_overloaded_error(
+					LIFECYCLE_EVENT_INBOX_CHANNEL,
+					self.0.lifecycle_event_inbox_capacity,
+					"save_requested",
+					Some(&self.0.metrics),
+				);
+			}
+		}
+	}
+
+	pub(crate) fn save_requested(&self) -> bool {
+		self.0.save_requested.load(Ordering::SeqCst)
+	}
+
+	pub(crate) fn save_requested_immediate(&self) -> bool {
+		self
+			.0
+			.save_requested_immediate
+			.load(Ordering::SeqCst)
+	}
+
+	pub(crate) fn compute_save_deadline(&self, immediate: bool) -> Instant {
+		if immediate || self.save_requested_immediate() {
+			return Instant::now();
+		}
+
+		let throttled_deadline = Instant::now() + self.compute_save_delay(None);
+		let requested_deadline = *self
+			.0
+			.save_requested_within_deadline
+			.lock()
+			.expect("actor state save-within deadline lock poisoned");
+
+		match requested_deadline {
+			Some(requested_deadline) => throttled_deadline.min(requested_deadline),
+			None => throttled_deadline,
+		}
+	}
+
+	pub(crate) fn save_request_revision(&self) -> u64 {
+		self.0.save_request_revision.load(Ordering::SeqCst)
+	}
+
+	pub(crate) async fn apply_state_deltas(
+		&self,
+		deltas: Vec<StateDelta>,
+		save_request_revision: u64,
+	) -> Result<()> {
+		self.clear_pending_save();
+
+		if deltas.is_empty() {
+			self.finish_save_request(save_request_revision);
+			return Ok(());
+		}
+
+		let _save_guard = self.0.save_guard.lock().await;
+		let revision = self.0.revision.load(Ordering::SeqCst);
+		let mut persisted = self.persisted();
+		let mut next_state = None;
+		let mut puts = Vec::new();
+		let mut deletes = Vec::new();
+
+		for delta in deltas {
+			match delta {
+				StateDelta::ActorState(bytes) => {
+					next_state = Some(bytes.clone());
+					persisted.state = bytes;
+				}
+				StateDelta::ConnHibernation { conn, bytes } => {
+					puts.push((make_connection_key(&conn), bytes));
+				}
+				StateDelta::ConnHibernationRemoved(conn) => {
+					deletes.push(make_connection_key(&conn));
+				}
+			}
+		}
+
+		if next_state.is_some() {
+			let encoded = encode_persisted_actor(&persisted)
+				.context("encode persisted actor state")?;
+			puts.push((PERSIST_DATA_KEY.to_vec(), encoded));
+			*self
+				.0
+				.persisted
+				.write()
+				.expect("actor persisted state lock poisoned") = persisted;
+		}
+
+		self.0
+			.kv
+			.apply_batch(&puts, &deletes)
+			.await
+			.context("persist actor state deltas to kv")?;
+
+		if let Some(state) = next_state {
+			*self
+				.0
+				.current_state
+				.write()
+				.expect("actor state lock poisoned") = state;
+		}
+
+		*self
+			.0
+			.last_save_at
+			.lock()
+			.expect("actor state save timestamp lock poisoned") = Some(Instant::now());
+
+		if self.0.revision.load(Ordering::SeqCst) == revision {
+			self.0.dirty.store(false, Ordering::SeqCst);
+		}
+
+		self.finish_save_request(save_request_revision);
+		Ok(())
+	}
+
+	pub(crate) async fn wait_for_pending_writes(&self) {
+		loop {
+			if let Some(handle) = self.take_tracked_persist() {
+				let _ = handle.await;
+				continue;
+			}
+
+			let _save_guard = self.0.save_guard.lock().await;
+			if self.has_tracked_persist() {
+				continue;
+			}
+
+			return;
 		}
 	}
 
@@ -167,6 +405,11 @@ impl ActorState {
 			.write()
 			.expect("actor state lock poisoned") = state;
 		self.0.dirty.store(false, Ordering::SeqCst);
+		self.finish_save_request(self.save_request_revision());
+		self
+			.0
+			.metrics
+			.inc_state_mutation(StateMutationReason::InternalReplace);
 	}
 
 	pub fn scheduled_events(&self) -> Vec<PersistedScheduleEvent> {
@@ -185,6 +428,10 @@ impl ActorState {
 			.write()
 			.expect("actor persisted state lock poisoned")
 			.scheduled_events = scheduled_events;
+		self
+			.0
+			.metrics
+			.inc_state_mutation(StateMutationReason::ScheduledEventsUpdate);
 		self.mark_dirty();
 		self.schedule_save(None);
 	}
@@ -202,6 +449,10 @@ impl ActorState {
 			update(&mut persisted.scheduled_events)
 		};
 
+		self
+			.0
+			.metrics
+			.inc_state_mutation(StateMutationReason::ScheduledEventsUpdate);
 		self.mark_dirty();
 		self.schedule_save(None);
 		result
@@ -214,6 +465,10 @@ impl ActorState {
 			.write()
 			.expect("actor persisted state lock poisoned")
 			.input = input;
+		self
+			.0
+			.metrics
+			.inc_state_mutation(StateMutationReason::InputSet);
 		self.mark_dirty();
 		self.schedule_save(None);
 	}
@@ -234,6 +489,10 @@ impl ActorState {
 			.write()
 			.expect("actor persisted state lock poisoned")
 			.has_initialized = has_initialized;
+		self
+			.0
+			.metrics
+			.inc_state_mutation(StateMutationReason::HasInitialized);
 		self.mark_dirty();
 		self.schedule_save(None);
 	}
@@ -247,68 +506,53 @@ impl ActorState {
 	}
 
 	pub fn flush_on_shutdown(&self) {
-		self.clear_pending_save();
-
-		if let Ok(runtime) = Handle::try_current() {
-			let state = self.clone();
-			runtime.spawn(async move {
-				if let Err(error) = state
-					.save_state(SaveStateOpts { immediate: true })
-					.await
-				{
-					tracing::error!(?error, "failed to flush actor state on shutdown");
-				}
-			});
-		}
+		self.persist_now_tracked("shutdown_flush");
 	}
 
-	pub(crate) fn trigger_throttled_save(&self) {
-		self.schedule_save(None);
-	}
-
-	#[allow(dead_code)]
-	pub(crate) fn set_on_state_change_callback(
+	pub(crate) fn configure_lifecycle_events(
 		&self,
-		callback: Option<OnStateChangeCallback>,
+		sender: Option<mpsc::Sender<LifecycleEvent>>,
 	) {
 		*self
 			.0
-			.on_state_change
+			.lifecycle_events
 			.write()
-			.expect("actor on_state_change lock poisoned") = callback;
+			.expect("actor state lifecycle events lock poisoned") = sender;
+	}
+
+	pub(crate) fn on_request_save(
+		&self,
+		hook: Box<dyn Fn(bool) + Send + Sync>,
+	) {
+		self
+			.0
+			.request_save_hooks
+			.write()
+			.expect("actor state request-save hooks lock poisoned")
+			.push(Arc::from(hook));
+	}
+
+	pub(crate) fn lifecycle_events_configured(&self) -> bool {
+		self
+			.0
+			.lifecycle_events
+			.read()
+			.expect("actor state lifecycle events lock poisoned")
+			.is_some()
+	}
+
+	pub(crate) fn in_on_state_change_callback(&self) -> bool {
+		self.0.in_on_state_change.load(Ordering::SeqCst)
+	}
+
+	pub(crate) fn in_on_state_change_flag(&self) -> Arc<AtomicBool> {
+		self.0.in_on_state_change.clone()
 	}
 
 	pub(crate) fn set_in_on_state_change_callback(&self, in_callback: bool) {
-		let notify = {
-			let mut control = self
-				.0
-				.on_state_change_control
-				.lock()
-				.expect("actor on_state_change control lock poisoned");
-			control.in_callback = in_callback;
-			!in_callback && !control.running && control.pending == 0
-		};
-		if notify {
-			self.0.on_state_change_notify.notify_waiters();
-		}
-	}
-
-	pub(crate) async fn wait_for_on_state_change_idle(&self) {
-		loop {
-			let notified = self.0.on_state_change_notify.notified();
-			let is_idle = {
-				let control = self
-					.0
-					.on_state_change_control
-					.lock()
-					.expect("actor on_state_change control lock poisoned");
-				!control.running && control.pending == 0 && !control.in_callback
-			};
-			if is_idle {
-				return;
-			}
-			notified.await;
-		}
+		self.0
+			.in_on_state_change
+			.store(in_callback, Ordering::SeqCst);
 	}
 
 	fn is_dirty(&self) -> bool {
@@ -320,6 +564,40 @@ impl ActorState {
 		self.0.revision.fetch_add(1, Ordering::SeqCst);
 	}
 
+	fn lifecycle_event_sender(&self) -> Option<mpsc::Sender<LifecycleEvent>> {
+		self
+			.0
+			.lifecycle_events
+			.read()
+			.expect("actor state lifecycle events lock poisoned")
+			.clone()
+	}
+
+	fn replace_state<F>(&self, mutate: F) -> Result<()>
+	where
+		F: FnOnce(&mut Vec<u8>) -> Result<()>,
+	{
+		let next_state = {
+			let mut current = self
+				.0
+				.current_state
+				.write()
+				.expect("actor state lock poisoned");
+			let mut next = current.clone();
+			mutate(&mut next)?;
+			*current = next.clone();
+			next
+		};
+
+		self
+			.0
+			.persisted
+			.write()
+			.expect("actor persisted state lock poisoned")
+			.state = next_state;
+		Ok(())
+	}
+
 	fn compute_save_delay(&self, max_wait: Option<Duration>) -> Duration {
 		let elapsed = self
 			.0
@@ -327,7 +605,7 @@ impl ActorState {
 			.lock()
 			.expect("actor state save timestamp lock poisoned")
 			.map(|instant| instant.elapsed())
-			.unwrap_or(self.0.save_interval);
+			.unwrap_or_default();
 
 		throttled_save_delay(self.0.save_interval, elapsed, max_wait)
 	}
@@ -337,7 +615,7 @@ impl ActorState {
 			return;
 		}
 
-		let Ok(runtime) = Handle::try_current() else {
+		let Ok(tokio_handle) = Handle::try_current() else {
 			return;
 		};
 
@@ -359,7 +637,10 @@ impl ActorState {
 		}
 
 		let state = self.clone();
-		let handle = runtime.spawn(async move {
+		// Intentionally detached but abortable: pending delayed saves are
+		// retained in `pending_save`, replaced by newer saves, and awaited at
+		// shutdown through the state save guard.
+		let handle = tokio_handle.spawn(async move {
 			if !delay.is_zero() {
 				tokio::time::sleep(delay).await;
 			}
@@ -383,6 +664,39 @@ impl ActorState {
 		}
 	}
 
+	pub(crate) fn persist_now_tracked(&self, description: &'static str) {
+		self.clear_pending_save();
+
+		let Ok(tokio_handle) = Handle::try_current() else {
+			tracing::warn!(
+				description,
+				"skipping tracked actor state persistence without runtime"
+			);
+			return;
+		};
+
+		let state = self.clone();
+		let mut tracked_persist = self
+			.0
+			.tracked_persist
+			.lock()
+			.expect("actor tracked persist lock poisoned");
+		let previous = tracked_persist.take();
+		let handle = tokio_handle.spawn(async move {
+			if let Some(previous) = previous {
+				let _ = previous.await;
+			}
+
+			if let Err(error) = state
+				.persist_state(SaveStateOpts { immediate: true })
+				.await
+			{
+				tracing::error!(?error, description, "failed to persist actor state");
+			}
+		});
+		*tracked_persist = Some(handle);
+	}
+
 	fn take_pending_save(&self) -> Option<PendingSave> {
 		self.0
 			.pending_save
@@ -391,72 +705,25 @@ impl ActorState {
 			.take()
 	}
 
-	fn trigger_on_state_change(&self) {
-		let Some(callback) = self
-			.0
-			.on_state_change
-			.read()
-			.expect("actor on_state_change lock poisoned")
-			.clone()
-		else {
-			return;
-		};
+	fn take_tracked_persist(&self) -> Option<JoinHandle<()>> {
+		self.0
+			.tracked_persist
+			.lock()
+			.expect("actor tracked persist lock poisoned")
+			.take()
+	}
 
-		let should_spawn = {
-			let mut control = self
-				.0
-				.on_state_change_control
-				.lock()
-				.expect("actor on_state_change control lock poisoned");
-			if control.in_callback {
-				return;
-			}
+	fn has_tracked_persist(&self) -> bool {
+		self.0
+			.tracked_persist
+			.lock()
+			.expect("actor tracked persist lock poisoned")
+			.is_some()
+	}
 
-			control.pending += 1;
-			if control.running {
-				false
-			} else {
-				control.running = true;
-				true
-			}
-		};
-
-		if !should_spawn {
-			return;
-		}
-
-		let Ok(runtime) = Handle::try_current() else {
-			self
-				.0
-				.on_state_change_control
-				.lock()
-				.expect("actor on_state_change control lock poisoned")
-				.running = false;
-			return;
-		};
-
-		let state = self.clone();
-		runtime.spawn(async move {
-			loop {
-				{
-					let mut control = state
-						.0
-						.on_state_change_control
-						.lock()
-						.expect("actor on_state_change control lock poisoned");
-					if control.pending == 0 {
-						control.running = false;
-						state.0.on_state_change_notify.notify_waiters();
-						break;
-					}
-					control.pending -= 1;
-				}
-
-				if let Err(error) = callback().await {
-					tracing::error!(?error, "error in on_state_change callback");
-				}
-			}
-		});
+	#[cfg(test)]
+	pub(crate) fn tracked_persist_pending(&self) -> bool {
+		self.has_tracked_persist()
 	}
 
 	async fn persist_if_dirty(&self) -> Result<()> {
@@ -491,6 +758,33 @@ impl ActorState {
 		}
 
 		Ok(())
+	}
+
+	fn finish_save_request(&self, save_request_revision: u64) {
+		if self.0.save_request_revision.load(Ordering::SeqCst) == save_request_revision {
+			self.0.save_requested.store(false, Ordering::SeqCst);
+			self
+				.0
+				.save_requested_immediate
+				.store(false, Ordering::SeqCst);
+			*self
+				.0
+				.save_requested_within_deadline
+				.lock()
+				.expect("actor state save-within deadline lock poisoned") = None;
+		}
+	}
+
+	fn notify_request_save_hooks(&self, immediate: bool) {
+		let hooks = self
+			.0
+			.request_save_hooks
+			.read()
+			.expect("actor state request-save hooks lock poisoned")
+			.clone();
+		for hook in hooks {
+			hook(immediate);
+		}
 	}
 }
 

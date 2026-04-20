@@ -1,0 +1,10 @@
+# Ralph Progress Log
+Started: Mon Apr 20 2026
+
+## Codebase Patterns
+- RivetError derives in `rivetkit-core` generate JSON artifacts under `rivetkit-rust/engine/artifacts/errors/`; commit new generated files with new error codes.
+- Moved `rivetkit-core` tests in `tests/modules/` are compiled through `#[path = ...]` shims, so they must track private API signature changes.
+- After native `rivetkit-core` changes, force-rebuild `@rivetkit/rivetkit-napi` with `pnpm --filter @rivetkit/rivetkit-napi build:force` before TS driver tests; the normal N-API build skips when a prebuilt `.node` artifact exists.
+- Full `pnpm test tests/driver` from `rivetkit-typescript/packages/rivetkit` is the green broad gate; the reference clean run is 39 passed files, 1079 passed / 51 skipped tests.
+- Actor-owned bounded inbox producers should use `try_send_*` helpers or `try_reserve`, returning `actor/overloaded` instead of awaiting `mpsc::Sender::send`.
+- Prefer `cargo clippy -p rivetkit-core --no-deps -- -W warnings` to isolate core warnings from workspace-dep deny blockers.

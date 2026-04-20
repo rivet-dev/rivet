@@ -5,6 +5,18 @@ import defaultConfig from "../../../vitest.base.ts";
 
 export default defineConfig({
 	...defaultConfig,
+	test: {
+		...defaultConfig.test,
+		fileParallelism: false,
+		testTimeout: 30_000,
+		hookTimeout: 30_000,
+		minWorkers: 1,
+		maxWorkers: 1,
+		sequence: {
+			...defaultConfig.test.sequence,
+			concurrent: false,
+		},
+	},
 	// Used to resolve "rivetkit" to "src/mod.ts" in the test fixtures
 	plugins: [tsconfigPaths()],
 	resolve: {

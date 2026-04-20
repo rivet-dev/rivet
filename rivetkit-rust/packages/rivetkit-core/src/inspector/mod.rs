@@ -1,16 +1,12 @@
-use anyhow::Result;
-use futures::future::BoxFuture;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
 
+pub mod auth;
 pub(crate) mod protocol;
 
-type WorkflowHistoryCallback =
-	Arc<dyn Fn() -> BoxFuture<'static, Result<Option<Vec<u8>>>> + Send + Sync>;
-type WorkflowReplayCallback = Arc<
-	dyn Fn(Option<String>) -> BoxFuture<'static, Result<Option<Vec<u8>>>> + Send + Sync,
->;
+pub use auth::InspectorAuth;
+
 type InspectorListener = Arc<dyn Fn(InspectorSignal) + Send + Sync>;
 
 #[derive(Clone, Debug, Default)]
@@ -25,10 +21,9 @@ struct InspectorInner {
 	connected_clients: AtomicUsize,
 	next_listener_id: AtomicU64,
 	listeners: std::sync::RwLock<Vec<(u64, InspectorListener)>>,
-	get_workflow_history: Option<WorkflowHistoryCallback>,
-	replay_workflow: Option<WorkflowReplayCallback>,
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum InspectorSignal {
 	StateUpdated,
@@ -60,8 +55,6 @@ impl std::fmt::Debug for InspectorInner {
 				"connected_clients",
 				&self.connected_clients.load(Ordering::SeqCst),
 			)
-			.field("get_workflow_history", &self.get_workflow_history.is_some())
-			.field("replay_workflow", &self.replay_workflow.is_some())
 			.finish()
 	}
 }
@@ -77,8 +70,6 @@ impl Default for InspectorInner {
 			connected_clients: AtomicUsize::new(0),
 			next_listener_id: AtomicU64::new(1),
 			listeners: std::sync::RwLock::new(Vec::new()),
-			get_workflow_history: None,
-			replay_workflow: None,
 		}
 	}
 }
@@ -117,17 +108,6 @@ impl Inspector {
 		Self::default()
 	}
 
-	pub fn with_workflow_callbacks(
-		get_workflow_history: Option<WorkflowHistoryCallback>,
-		replay_workflow: Option<WorkflowReplayCallback>,
-	) -> Self {
-		Self(Arc::new(InspectorInner {
-			get_workflow_history,
-			replay_workflow,
-			..InspectorInner::default()
-		}))
-	}
-
 	pub fn snapshot(&self) -> InspectorSnapshot {
 		InspectorSnapshot {
 			state_revision: self.0.state_revision.load(Ordering::SeqCst),
@@ -137,24 +117,6 @@ impl Inspector {
 			queue_size: self.0.queue_size.load(Ordering::SeqCst),
 			connected_clients: self.0.connected_clients.load(Ordering::SeqCst),
 		}
-	}
-
-	pub fn is_workflow_enabled(&self) -> bool {
-		self.0.get_workflow_history.is_some()
-	}
-
-	pub async fn get_workflow_history(&self) -> Result<Option<Vec<u8>>> {
-		let Some(callback) = &self.0.get_workflow_history else {
-			return Ok(None);
-		};
-		callback().await
-	}
-
-	pub async fn replay_workflow(&self, entry_id: Option<String>) -> Result<Option<Vec<u8>>> {
-		let Some(callback) = &self.0.replay_workflow else {
-			return Ok(None);
-		};
-		callback(entry_id).await
 	}
 
 	pub(crate) fn subscribe(&self, listener: InspectorListener) -> InspectorSubscription {
@@ -230,6 +192,22 @@ impl Inspector {
 			listener(signal);
 		}
 	}
+}
+
+pub fn decode_request_payload(
+	payload: &[u8],
+	advertised_version: u16,
+) -> anyhow::Result<Vec<u8>> {
+	let message = protocol::decode_client_payload(payload, advertised_version)?;
+	protocol::encode_client_payload_current(&message)
+}
+
+pub fn encode_response_payload(
+	payload: &[u8],
+	target_version: u16,
+) -> anyhow::Result<Vec<u8>> {
+	let message = protocol::decode_current_server_payload(payload)?;
+	protocol::encode_server_payload(&message, target_version)
 }
 
 #[cfg(test)]

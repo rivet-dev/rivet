@@ -173,11 +173,11 @@ impl TransactionTask {
 		match (or_equal, offset) {
 			(false, 1) => {
 				// first_greater_or_equal: find first key >= search_key
-				let iter = txn.iterator_opt(
+				let mut iter = txn.iterator_opt(
 					rocksdb::IteratorMode::From(key, rocksdb::Direction::Forward),
 					read_opts,
 				);
-				for item in iter {
+				if let Some(item) = iter.next() {
 					let (k, _v) =
 						item.context("failed to iterate rocksdb for first_greater_or_equal")?;
 					return Ok(Some(k.to_vec().into()));
@@ -476,11 +476,11 @@ impl TransactionTask {
 		match (or_equal, offset) {
 			(false, 1) => {
 				// first_greater_or_equal: find first key >= search_key
-				let iter = txn.iterator_opt(
+				let mut iter = txn.iterator_opt(
 					rocksdb::IteratorMode::From(key, rocksdb::Direction::Forward),
 					read_opts,
 				);
-				for item in iter {
+				if let Some(item) = iter.next() {
 					let (k, _v) = item.context(
 						"failed to iterate rocksdb for range selector first_greater_or_equal",
 					)?;

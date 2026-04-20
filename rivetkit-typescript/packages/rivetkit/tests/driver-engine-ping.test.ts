@@ -1,120 +1,62 @@
-/**
- * Simple smoke test that verifies the native envoy client can connect,
- * create an actor, handle an HTTP request, and handle a WebSocket echo.
- *
- * Requires a running engine at RIVET_ENDPOINT (default http://localhost:6420)
- * and a test-envoy with pool name "test-envoy" in the "default" namespace.
- */
-import { describe, it, expect } from "vitest";
+import { expect, test } from "vitest";
+import { describeDriverMatrix } from "./driver/shared-matrix";
+import { setupDriverTest } from "./driver/shared-utils";
 
-const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://localhost:6420";
-const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "dev";
-const RIVET_NAMESPACE = process.env.RIVET_NAMESPACE ?? "default";
-const RUNNER_NAME = "test-envoy";
+describeDriverMatrix(
+	"engine driver smoke test",
+	(driverTestConfig) => {
+		test("HTTP ping returns JSON response", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.rawHttpActor.getOrCreate(["engine-smoke-http"]);
 
-async function createActor(): Promise<{ actor_id: string }> {
-	const response = await fetch(
-		`${RIVET_ENDPOINT}/actors?namespace=${RIVET_NAMESPACE}`,
-		{
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${RIVET_TOKEN}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				name: "thingy",
-				key: crypto.randomUUID(),
-				input: btoa("hello"),
-				runner_name_selector: RUNNER_NAME,
-				crash_policy: "sleep",
-			}),
-		},
-	);
-
-	if (!response.ok) {
-		const text = await response.text();
-		throw new Error(`Create actor failed: ${response.status} ${text}`);
-	}
-
-	const body = await response.json();
-	return { actor_id: body.actor.actor_id };
-}
-
-async function destroyActor(actorId: string): Promise<void> {
-	await fetch(
-		`${RIVET_ENDPOINT}/actors/${actorId}?namespace=${RIVET_NAMESPACE}`,
-		{
-			method: "DELETE",
-			headers: { Authorization: `Bearer ${RIVET_TOKEN}` },
-		},
-	);
-}
-
-describe("engine driver smoke test", () => {
-	it("HTTP ping returns JSON response", async () => {
-		const { actor_id } = await createActor();
-		try {
-			const response = await fetch(`${RIVET_ENDPOINT}/ping`, {
-				method: "GET",
-				headers: {
-					"X-Rivet-Token": RIVET_TOKEN,
-					"X-Rivet-Target": "actor",
-					"X-Rivet-Actor": actor_id,
-				},
-			});
+			const response = await actor.fetch("api/hello");
 
 			expect(response.ok).toBe(true);
-			const body = await response.json();
-			expect(body.actorId).toBe(actor_id);
-			expect(body.status).toBe("ok");
-		} finally {
-			await destroyActor(actor_id);
-		}
-	}, 30_000);
+			await expect(response.json()).resolves.toEqual({
+				message: "Hello from actor!",
+			});
+		});
 
-	it("WebSocket echo works", async () => {
-		const { actor_id } = await createActor();
-		try {
-			const wsEndpoint = RIVET_ENDPOINT.replace(
-				"http://",
-				"ws://",
-			).replace("https://", "wss://");
-			const ws = new WebSocket(`${wsEndpoint}/ws`, [
-				"rivet",
-				"rivet_target.actor",
-				`rivet_actor.${actor_id}`,
-				`rivet_token.${RIVET_TOKEN}`,
+		test("WebSocket echo works", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.rawWebSocketActor.getOrCreate([
+				"engine-smoke-ws",
 			]);
+			const ws = await actor.webSocket();
 
-			const result = await new Promise<string>((resolve, reject) => {
-				const timeout = setTimeout(
-					() => reject(new Error("WebSocket timeout")),
-					10_000,
-				);
-
-				ws.addEventListener("open", () => {
-					ws.send("ping");
+			if (ws.readyState !== WebSocket.OPEN) {
+				await new Promise<void>((resolve, reject) => {
+					ws.addEventListener("open", () => resolve(), {
+						once: true,
+					});
+					ws.addEventListener("close", reject, { once: true });
 				});
+			}
 
-				ws.addEventListener("message", (event) => {
-					clearTimeout(timeout);
-					ws.close();
-					resolve(event.data as string);
-				});
-
-				ws.addEventListener("error", (e) => {
-					clearTimeout(timeout);
-					reject(
-						new Error(
-							`WebSocket error: ${(e as any)?.message ?? "unknown"}`,
-						),
-					);
-				});
+			await new Promise<void>((resolve, reject) => {
+				ws.addEventListener("message", () => resolve(), { once: true });
+				ws.addEventListener("close", reject, { once: true });
 			});
 
-			expect(result).toBe("Echo: ping");
-		} finally {
-			await destroyActor(actor_id);
-		}
-	}, 30_000);
-});
+			ws.send(JSON.stringify({ type: "ping" }));
+
+			const result = await new Promise<Record<string, unknown>>(
+				(resolve, reject) => {
+					ws.addEventListener(
+						"message",
+						(event: MessageEvent<string>) => {
+							resolve(JSON.parse(event.data));
+						},
+						{ once: true },
+					);
+					ws.addEventListener("close", reject, { once: true });
+				},
+			);
+
+			expect(result.type).toBe("pong");
+			expect(result.timestamp).toEqual(expect.any(Number));
+			ws.close();
+		});
+	},
+	{ encodings: ["json"] },
+);

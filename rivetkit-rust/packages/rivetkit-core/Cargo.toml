@@ -19,6 +19,7 @@ nix.workspace = true
 prometheus.workspace = true
 reqwest.workspace = true
 rivet-pools.workspace = true
+rivet-util.workspace = true
 rivet-error.workspace = true
 rivet-envoy-client.workspace = true
 rivetkit-sqlite = { workspace = true, optional = true }
@@ -31,3 +32,6 @@ tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true

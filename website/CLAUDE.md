@@ -40,6 +40,7 @@ Import from `@rivet-gg/icons`. The full Font Awesome Pro library is available. C
 ## Code Blocks
 
 - Type-check all TypeScript code blocks in `website/src/content/docs/**/*.mdx` before release, because any failing snippet fails the website build.
+- Document `onStateChange` as read-only against `c.state`; use `vars` for callback counters or derived runtime-only values.
 
 ### Required for every TypeScript snippet
 

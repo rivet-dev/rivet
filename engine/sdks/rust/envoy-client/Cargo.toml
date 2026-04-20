@@ -11,6 +11,7 @@ futures-util.workspace = true
 hex.workspace = true
 rand.workspace = true
 rivet-envoy-protocol.workspace = true
+rivet-util.workspace = true
 rivet-util-serde.workspace = true
 rustls.workspace = true
 scc.workspace = true

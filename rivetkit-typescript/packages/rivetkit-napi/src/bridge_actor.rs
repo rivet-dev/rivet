@@ -8,7 +8,8 @@ use rivet_envoy_client::config::{
 };
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_protocol as protocol;
-use tokio::sync::{Mutex, oneshot};
+use scc::HashMap as SccHashMap;
+use tokio::sync::oneshot;
 
 use crate::types;
 
@@ -19,15 +20,15 @@ pub type EventCallback = napi::threadsafe_function::ThreadsafeFunction<
 >;
 
 /// Map of pending callback response channels, keyed by response ID.
-pub type ResponseMap = Arc<Mutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>;
+pub type ResponseMap = Arc<SccHashMap<String, oneshot::Sender<serde_json::Value>>>;
 
 /// Map of open WebSocket senders, keyed by concatenated gateway_id + request_id (8 bytes).
-pub type WsSenderMap = Arc<Mutex<HashMap<[u8; 8], WebSocketSender>>>;
+pub type WsSenderMap = Arc<SccHashMap<[u8; 8], WebSocketSender>>;
 
 /// Map of sqlite startup payloads keyed by actor ID.
-pub type SqliteStartupMap = Arc<Mutex<HashMap<String, protocol::SqliteStartupData>>>;
+pub type SqliteStartupMap = Arc<SccHashMap<String, protocol::SqliteStartupData>>;
 /// Map of sqlite schema versions keyed by actor ID.
-pub type SqliteSchemaVersionMap = Arc<Mutex<HashMap<String, u32>>>;
+pub type SqliteSchemaVersionMap = Arc<SccHashMap<String, u32>>;
 
 fn make_ws_key(gateway_id: &protocol::GatewayId, request_id: &protocol::RequestId) -> [u8; 8] {
 	let mut key = [0u8; 8];
@@ -85,17 +86,25 @@ impl EnvoyCallbacks for BridgeCallbacks {
 		let sqlite_schema_version_map = self.sqlite_schema_version_map.clone();
 
 		Box::pin(async move {
-			{
-				sqlite_schema_version_map
-					.lock()
-					.await
-					.insert(actor_id.clone(), sqlite_schema_version);
-				let mut map = sqlite_startup_map.lock().await;
-				if let Some(startup) = sqlite_startup_data.clone() {
-					map.insert(actor_id.clone(), startup);
-				} else {
-					map.remove(&actor_id);
+			match sqlite_schema_version_map.entry_async(actor_id.clone()).await {
+				scc::hash_map::Entry::Occupied(mut entry) => {
+					*entry.get_mut() = sqlite_schema_version;
 				}
+				scc::hash_map::Entry::Vacant(entry) => {
+					entry.insert_entry(sqlite_schema_version);
+				}
+			}
+			if let Some(startup) = sqlite_startup_data.clone() {
+				match sqlite_startup_map.entry_async(actor_id.clone()).await {
+					scc::hash_map::Entry::Occupied(mut entry) => {
+						*entry.get_mut() = startup;
+					}
+					scc::hash_map::Entry::Vacant(entry) => {
+						entry.insert_entry(startup);
+					}
+				}
+			} else {
+				let _ = sqlite_startup_map.remove_async(&actor_id).await;
 			}
 
 			let response_id = uuid::Uuid::new_v4().to_string();
@@ -114,10 +123,10 @@ impl EnvoyCallbacks for BridgeCallbacks {
 			});
 
 			let (tx, rx) = oneshot::channel();
-			{
-				let mut map = response_map.lock().await;
-				map.insert(response_id, tx);
-			}
+			response_map
+				.insert_async(response_id, tx)
+				.await
+				.map_err(|_| anyhow::anyhow!("duplicate callback response id"))?;
 
 			tracing::info!(%actor_id, "calling JS actor_start callback via TSFN");
 			let status = event_cb.call(envelope, ThreadsafeFunctionCallMode::NonBlocking);
@@ -144,8 +153,8 @@ impl EnvoyCallbacks for BridgeCallbacks {
 		let sqlite_schema_version_map = self.sqlite_schema_version_map.clone();
 
 		Box::pin(async move {
-			sqlite_schema_version_map.lock().await.remove(&actor_id);
-			sqlite_startup_map.lock().await.remove(&actor_id);
+			let _ = sqlite_schema_version_map.remove_async(&actor_id).await;
+			let _ = sqlite_startup_map.remove_async(&actor_id).await;
 
 			let response_id = uuid::Uuid::new_v4().to_string();
 			let envelope = serde_json::json!({
@@ -157,10 +166,10 @@ impl EnvoyCallbacks for BridgeCallbacks {
 			});
 
 			let (tx, rx) = oneshot::channel();
-			{
-				let mut map = response_map.lock().await;
-				map.insert(response_id, tx);
-			}
+			response_map
+				.insert_async(response_id, tx)
+				.await
+				.map_err(|_| anyhow::anyhow!("duplicate callback response id"))?;
 
 			event_cb.call(envelope, ThreadsafeFunctionCallMode::NonBlocking);
 
@@ -211,10 +220,10 @@ impl EnvoyCallbacks for BridgeCallbacks {
 			});
 
 			let (tx, rx) = oneshot::channel();
-			{
-				let mut map = response_map.lock().await;
-				map.insert(response_id, tx);
-			}
+			response_map
+				.insert_async(response_id, tx)
+				.await
+				.map_err(|_| anyhow::anyhow!("duplicate callback response id"))?;
 
 			event_cb.call(envelope, ThreadsafeFunctionCallMode::NonBlocking);
 
@@ -309,8 +318,7 @@ impl EnvoyCallbacks for BridgeCallbacks {
 
 					let ws_sender_map_close = ws_sender_map_close.clone();
 					Box::pin(async move {
-						let mut senders = ws_sender_map_close.lock().await;
-						senders.remove(&ws_key);
+						let _ = ws_sender_map_close.remove_async(&ws_key).await;
 					})
 				}),
 				// on_open fires the websocket_open event only after the sender is stored,
@@ -326,8 +334,14 @@ impl EnvoyCallbacks for BridgeCallbacks {
 					event_cb_open.call(envelope, ThreadsafeFunctionCallMode::NonBlocking);
 
 					Box::pin(async move {
-						let mut senders = ws_sender_map_open.lock().await;
-						senders.insert(ws_key, sender);
+						match ws_sender_map_open.entry_async(ws_key).await {
+							scc::hash_map::Entry::Occupied(mut entry) => {
+								let _ = entry.insert(sender);
+							}
+							scc::hash_map::Entry::Vacant(entry) => {
+								entry.insert_entry(sender);
+							}
+						}
 					})
 				})),
 			})

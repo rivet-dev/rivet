@@ -63,12 +63,14 @@ describeDriverMatrix("Actor Conn State", (driverTestConfig) => {
 						params: { username: "user1" },
 					})
 					.connect();
+				await conn1.getConnectionState();
 
 				const conn2 = client.connStateActor
 					.getOrCreate([], {
 						params: { username: "user2" },
 					})
 					.connect();
+				await conn2.getConnectionState();
 
 				// Update connection state for each connection
 				await conn1.incrementConnCounter(5);
@@ -95,10 +97,9 @@ describeDriverMatrix("Actor Conn State", (driverTestConfig) => {
 				// Create two connections
 				const handle = client.connStateActor.getOrCreate();
 				const conn1 = handle.connect();
-				const conn2 = handle.connect();
-
-				// HACK: Wait for both connections to successfully connect by waiting for a round trip RPC
 				await conn1.getConnectionState();
+
+				const conn2 = handle.connect();
 				await conn2.getConnectionState();
 
 				// Get state1 for reference
@@ -124,10 +125,9 @@ describeDriverMatrix("Actor Conn State", (driverTestConfig) => {
 				// Create two connections to the same actor
 				const handle = client.connStateActor.getOrCreate();
 				const conn1 = handle.connect();
-				const conn2 = handle.connect();
-
-				// HACK: Wait for both connections to successfully connect by waiting for a round trip RPC
 				await conn1.getConnectionState();
+
+				const conn2 = handle.connect();
 				await conn2.getConnectionState();
 
 				// Get all connection states
@@ -263,10 +263,11 @@ describeDriverMatrix("Actor Conn State", (driverTestConfig) => {
 				// Create two connections
 				const handle = client.connStateActor.getOrCreate();
 				const conn1 = handle.connect();
-				const conn2 = handle.connect();
 
 				// Get connection states
 				const state1 = await conn1.getConnectionState();
+
+				const conn2 = handle.connect();
 				const state2 = await conn2.getConnectionState();
 
 				// Set up event listener on second connection
@@ -275,15 +276,15 @@ describeDriverMatrix("Actor Conn State", (driverTestConfig) => {
 					receivedMessages.push(data);
 				});
 
-				// TODO: SSE has race condition between subscrib eand publish message
-				await vi.waitFor(async () => {
-					// Send message from first connection to second
-					const success = await conn1.sendToConnection(
-						state2.id,
-						"Hello from conn1",
-					);
-					expect(success).toBe(true);
+				await conn2.getConnectionState();
 
+				const success = await conn1.sendToConnection(
+					state2.id,
+					"Hello from conn1",
+				);
+				expect(success).toBe(true);
+
+				await vi.waitFor(async () => {
 					// Verify message was received
 					expect(receivedMessages.length).toBe(1);
 					expect(receivedMessages[0].from).toBe(state1.id);

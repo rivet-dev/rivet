@@ -1,0 +1,5 @@
+{
+  "code": "timed_out",
+  "group": "queue",
+  "message": "Queue wait timed out"
+}

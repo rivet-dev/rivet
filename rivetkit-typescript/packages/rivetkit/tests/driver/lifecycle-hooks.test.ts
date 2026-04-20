@@ -53,11 +53,10 @@ describeDriverMatrix("Lifecycle Hooks", (driverTestConfig) => {
 		});
 
 		describe("onStateChange recursion prevention", () => {
-			test("mutations in onStateChange do not trigger recursive calls", async (c) => {
+			test("vars writes in onStateChange do not trigger recursive calls", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 				const actor = client.stateChangeRecursionActor.getOrCreate();
 
-				// Set a value, which triggers onStateChange, which sets derivedValue
 				await actor.setValue(5);
 
 				const all = await actor.getAll();
@@ -65,7 +64,6 @@ describeDriverMatrix("Lifecycle Hooks", (driverTestConfig) => {
 				// onStateChange should have been called exactly once for the setValue call
 				expect(all.callCount).toBe(1);
 
-				// derivedValue should have been set by onStateChange
 				expect(all.derivedValue).toBe(10);
 			});
 
@@ -98,6 +96,21 @@ describeDriverMatrix("Lifecycle Hooks", (driverTestConfig) => {
 				const callCount = await actor.getOnStateChangeCallCount();
 				// Only the one setValue should have triggered onStateChange
 				expect(callCount).toBe(1);
+			});
+
+			test("state mutation in onStateChange returns state_mutation_reentrant", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor =
+					client.stateChangeReentrantMutationActor.getOrCreate();
+
+				await actor.setValue(5);
+
+				const result = await actor.getResult();
+				expect(result.callCount).toBe(1);
+				expect(result.value).toBe(5);
+				expect(result.derivedValue).toBe(0);
+				expect(result.errorGroup).toBe("actor");
+				expect(result.errorCode).toBe("state_mutation_reentrant");
 			});
 		});
 	});

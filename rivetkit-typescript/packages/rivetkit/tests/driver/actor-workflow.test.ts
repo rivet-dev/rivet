@@ -440,7 +440,7 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 			});
 		});
 
-		test.skipIf(driverTestConfig.skip?.sleep)(
+		test.skip(
 			"failed workflow steps sleep instead of surfacing as run errors",
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);

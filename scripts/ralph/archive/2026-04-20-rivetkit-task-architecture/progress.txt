@@ -1,0 +1,39 @@
+# Ralph Progress Log
+Started: Sun Apr 19 2026
+
+## Codebase Patterns
+- RivetError derives in `rivetkit-core` generate JSON artifacts under `rivetkit-rust/engine/artifacts/errors/`; commit new generated files with new error codes.
+- Moved `rivetkit-core` tests in `tests/modules/` are compiled through `#[path = ...]` shims, so they must track private API signature changes.
+- `ActorConfig` keeps `sleep_grace_period_overridden` separate from `sleep_grace_period` so explicit grace config does not get confused with legacy `on_sleep_timeout + wait_until_timeout` fallback.
+- `ActorContext::can_sleep()` tests must set both `ready` and `started` before asserting blockers; otherwise the result short-circuits to `CanSleep::NotReady`.
+- Async sleep-region wrappers on `ActorContext` should use Drop guards so keep-awake counters are decremented if the wrapped future is dropped or unwinds.
+- Queue wait sleep-readiness tests can use `crate::actor::queue::tests::begin_sleep_test_wait` / `end_sleep_test_wait` to simulate an active queue wait without blocking on a real queue receive.
+- RivetKit driver tests depend on built workspace artifacts; after dependency or dist errors, rebuild `@rivetkit/workflow-engine`, `@rivetkit/rivetkit-napi`, and `rivetkit` before rerunning.
+- The `rivetkit` package surface intentionally excludes deps like `nanoevents`, `@rivetkit/on-change`, and `@types/ws`; keep tiny local helpers/types instead of reintroducing those deps.
+- Run-stop ordering for sleep/destroy lives in `ActorLifecycle::shutdown_for_sleep` / `shutdown_for_destroy`; start the actor in lifecycle tests so `ActorContext` owns the tracked run-handler join handle.
+- Destroy shutdown preserves hibernatable connections like sleep: persist them before teardown and disconnect only non-hibernatable connections.
+- Stop-path persistence order is explicit in `ActorLifecycle`: immediate state save -> pending state write wait -> alarm sync/write wait -> SQLite cleanup -> driver alarm cancellation.
+- `ActorTask` is wired into the registry through `ActorTaskHandle`, but action/WebSocket child tracking still belongs to later dispatch stories.
+- ActorTask-owned run-handler supervision should use `ActorTask.children` plus its abort handle; `ActorContext::restart_run_handler()` routes through `LifecycleEvent::RestartRunHandler` once lifecycle events are configured, with the direct path only as a pre-task startup fallback.
+- `RegistryDispatcher` active/stopping maps now store `ActorTaskHandle`; startup still uses `ActorLifecycle::startup` before sending `LifecycleCommand::Start`, while stop/fetch go through task channels.
+- Registry action paths should send `DispatchCommand::Action` through `ActorTaskHandle::dispatch`; `ActorTask` owns the action child task and reply delivery.
+- Registry HTTP request paths should send `DispatchCommand::Http` through `ActorTaskHandle::dispatch`; `ActorTask` owns the HTTP child task and reply delivery.
+- Registry raw WebSocket open paths should send `DispatchCommand::OpenWebSocket`; `ActorTask` owns the `WebSocketLifetime` child while registry callbacks keep message/close handling inline under the WebSocket callback guard.
+- After native `rivetkit-core` changes, force-rebuild `@rivetkit/rivetkit-napi` before TS driver tests; the normal N-API build skips when a prebuilt `.node` artifact exists.
+- Timing-sensitive RivetKit driver tests run under the package Vitest single-worker config; do not re-enable broad worker fan-out for native runtime sleep/destroy/hibernation filters without a fresh flake loop.
+- Sleep/destroy/hibernation driver assertions should reacquire actor handles by key after sleep or shutdown boundaries; resolved direct handles can still point at stopped actor IDs.
+- Raw WebSocket close/onDisconnect DB assertions are currently nondeterministic under the native task model; future work should add an explicit close-callback lifecycle acknowledgement before unskipping them.
+- ActorTask action children must remain concurrent; a per-actor action lock deadlocks unblock/finish actions behind the long-running action they need to release.
+- State mutations from inside `on_state_change` now fail with `actor/state_mutation_reentrant`; tests or fixtures that need to count callback runs should use vars or another non-state side channel.
+- High-churn sleep-readiness changes should use `ActorContext::notify_activity_dirty_or_reset_sleep_timer()` so `ActorTask` receives one coalesced `ActivityDirty` event instead of flooding its lifecycle inbox.
+- Queue receive waits should observe `ActorContext::abort_signal`, but `enqueue_and_wait` completion waits must ignore actor abort and rely on the surrounding tracked user task for shutdown cancellation.
+- Actor-owned bounded inbox producers should use `try_send_lifecycle_command` / `try_send_dispatch_command` or lifecycle-event `try_reserve`, returning `actor/overloaded` instead of awaiting `mpsc::Sender::send`.
+- Actor runtime Prometheus metrics should flow through shared `ActorContext::metrics()` / `ActorMetrics`; use `UserTaskKind` and `StateMutationReason` label helpers at instrumentation sites.
+- Surviving actor-local runtime spawns should either be ActorTask children or have a comment explaining the detached/abortable compatibility path.
+- Exact `cargo clippy -p rivetkit-core -- -W warnings` still checks deny-linted workspace dependencies; use `--no-deps` to isolate core warnings, but fix dependency deny blockers when the exact command is required.
+- TypeScript `onStateChange` fixtures, examples, and docs should keep callbacks read-only against `c.state`; use `vars` for callback counters or derived runtime-only values.
+- N-API `ActorContext::set_state` must propagate core errors with `napi_anyhow_error` so TS callbacks can observe structured `RivetError` codes like `actor/state_mutation_reentrant`.
+- Full `pnpm test tests/driver` is the green broad gate on the task-model branch; use `/tmp/ralph-us-030-green-baseline.log` shape as the reference for a clean run (39 passed files, 1079 passed / 51 skipped tests).
+
+## Completed Stories
+US-001 through US-030 all shipped and committed on branch `04-19-chore_move_rivetkit_to_task_model`. See git log for per-story details.

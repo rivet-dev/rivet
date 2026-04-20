@@ -1,147 +1,38 @@
-use std::fmt;
 use std::future::Future;
+use std::io::Cursor;
 use std::marker::PhantomData;
-use std::sync::{Arc, Mutex, OnceLock};
 
-use serde::Serialize;
-use serde::de::DeserializeOwned;
-use tokio_util::sync::CancellationToken;
-
-use crate::actor::Actor;
-use crate::validation::{decode_cbor, encode_cbor, panic_with_error};
+use anyhow::{Context, Result};
 use rivetkit_client::{Client, ClientConfig, EncodingKind, TransportKind};
 use rivetkit_core::{
-	ActorContext, ActorKey, ConnHandle, EnqueueAndWaitOpts, Kv, Queue,
-	Schedule, SqliteDb,
+	ActorContext, ActorKey, ConnHandle, ConnId, Kv, Queue, Schedule, SqliteDb, StateDelta,
+	actor::connection::ConnHandles,
 };
+use serde::{Serialize, de::DeserializeOwned};
 
+use crate::actor::Actor;
+
+#[derive(Debug)]
 pub struct Ctx<A: Actor> {
 	inner: ActorContext,
-	state_cache: Arc<Mutex<Option<Arc<A::State>>>>,
-	vars: Arc<OnceLock<Arc<A::Vars>>>,
+	_p: PhantomData<fn() -> A>,
+}
+
+impl<A: Actor> Clone for Ctx<A> {
+	fn clone(&self) -> Self {
+		Self {
+			inner: self.inner.clone(),
+			_p: PhantomData,
+		}
+	}
 }
 
 impl<A: Actor> Ctx<A> {
-	pub fn new(inner: ActorContext, vars: Arc<A::Vars>) -> Self {
-		let vars_slot = OnceLock::new();
-		let _ = vars_slot.set(vars);
-
+	pub fn new(inner: ActorContext) -> Self {
 		Self {
 			inner,
-			state_cache: Arc::new(Mutex::new(None)),
-			vars: Arc::new(vars_slot),
+			_p: PhantomData,
 		}
-	}
-
-	pub(crate) fn new_bootstrap(inner: ActorContext) -> Self {
-		Self {
-			inner,
-			state_cache: Arc::new(Mutex::new(None)),
-			vars: Arc::new(OnceLock::new()),
-		}
-	}
-
-	pub fn inner(&self) -> &ActorContext {
-		&self.inner
-	}
-
-	pub fn into_inner(self) -> ActorContext {
-		self.inner
-	}
-
-	pub fn state(&self) -> Arc<A::State> {
-		match self.try_state() {
-			Ok(state) => state,
-			Err(error) => panic_with_error(error),
-		}
-	}
-
-	pub(crate) fn try_state(&self) -> anyhow::Result<Arc<A::State>> {
-		let mut state_cache = self
-			.state_cache
-			.lock()
-			.expect("typed actor state cache lock poisoned");
-		if let Some(state) = state_cache.as_ref() {
-			return Ok(Arc::clone(state));
-		}
-
-		let state_bytes = self.inner.state();
-		let state = Arc::new(decode_cbor(&state_bytes, "actor state")?);
-		*state_cache = Some(Arc::clone(&state));
-		Ok(state)
-	}
-
-	pub fn set_state(&self, state: &A::State) {
-		if let Err(error) = self.try_set_state(state) {
-			panic_with_error(error);
-		}
-	}
-
-	pub(crate) fn try_set_state(&self, state: &A::State) -> anyhow::Result<()> {
-		let state_bytes = encode_cbor(state, "actor state")?;
-		self.inner.set_state(state_bytes);
-		self.invalidate_state_cache();
-		Ok(())
-	}
-
-	pub fn vars(&self) -> &A::Vars {
-		self
-			.vars
-			.get()
-			.expect("typed actor vars accessed before initialization")
-			.as_ref()
-	}
-
-	pub fn kv(&self) -> &Kv {
-		self.inner.kv()
-	}
-
-	pub fn sql(&self) -> &SqliteDb {
-		self.inner.sql()
-	}
-
-	pub fn schedule(&self) -> &Schedule {
-		self.inner.schedule()
-	}
-
-	pub fn queue(&self) -> &Queue {
-		self.inner.queue()
-	}
-
-	pub fn client(&self) -> anyhow::Result<Client> {
-		Ok(Client::from_config(
-			ClientConfig::new(self.inner.client_endpoint()?)
-				.token_opt(self.inner.client_token()?)
-				.namespace(self.inner.client_namespace()?)
-				.pool_name(self.inner.client_pool_name()?)
-				.encoding(EncodingKind::Bare)
-				.transport(TransportKind::WebSocket)
-				.disable_metadata_lookup(true),
-		))
-	}
-
-	pub async fn enqueue_and_wait<Req, Res>(
-		&self,
-		name: &str,
-		body: &Req,
-		opts: EnqueueAndWaitOpts,
-	) -> anyhow::Result<Option<Res>>
-	where
-		Req: Serialize,
-		Res: DeserializeOwned,
-	{
-		let request_bytes = encode_cbor(body, "queue message body")?;
-		let response_bytes = self
-			.inner
-			.queue()
-			.enqueue_and_wait(name, &request_bytes, opts)
-			.await?;
-
-		response_bytes
-			.map(|response_bytes| {
-				decode_cbor(&response_bytes, "queue completion response")
-			})
-			.transpose()
 	}
 
 	pub fn actor_id(&self) -> &str {
@@ -160,12 +51,32 @@ impl<A: Actor> Ctx<A> {
 		self.inner.region()
 	}
 
-	pub fn abort_signal(&self) -> &CancellationToken {
-		self.inner.abort_signal()
+	pub fn kv(&self) -> &Kv {
+		self.inner.kv()
 	}
 
-	pub fn aborted(&self) -> bool {
-		self.inner.aborted()
+	pub fn sql(&self) -> &SqliteDb {
+		self.inner.sql()
+	}
+
+	pub fn queue(&self) -> &Queue {
+		self.inner.queue()
+	}
+
+	pub fn schedule(&self) -> &Schedule {
+		self.inner.schedule()
+	}
+
+	pub fn request_save(&self, immediate: bool) {
+		self.inner.request_save(immediate);
+	}
+
+	pub fn request_save_within(&self, ms: u32) {
+		self.inner.request_save_within(ms);
+	}
+
+	pub async fn save_state(&self, deltas: Vec<StateDelta>) -> Result<()> {
+		self.inner.save_state(deltas).await
 	}
 
 	pub fn sleep(&self) {
@@ -176,8 +87,8 @@ impl<A: Actor> Ctx<A> {
 		self.inner.destroy();
 	}
 
-	pub fn set_prevent_sleep(&self, prevent: bool) {
-		self.inner.set_prevent_sleep(prevent);
+	pub fn set_prevent_sleep(&self, enabled: bool) {
+		self.inner.set_prevent_sleep(enabled);
 	}
 
 	pub fn prevent_sleep(&self) -> bool {
@@ -188,60 +99,137 @@ impl<A: Actor> Ctx<A> {
 		self.inner.wait_until(future);
 	}
 
-	pub fn broadcast<E: Serialize>(&self, name: &str, event: &E) {
-		let event_bytes = serialize_cbor(event)
-			.expect("failed to serialize broadcast event to CBOR");
+	pub fn broadcast<E: Serialize>(&self, name: &str, event: &E) -> Result<()> {
+		let event_bytes = encode_cbor(event, "broadcast event")?;
 		self.inner.broadcast(name, &event_bytes);
+		Ok(())
 	}
 
-	pub fn conns(&self) -> Vec<ConnCtx<A>> {
-		self
-			.inner
-			.conns()
-			.into_iter()
-			.map(ConnCtx::new)
-			.collect()
+	pub fn conns(&self) -> ConnIter<'_, A> {
+		ConnIter {
+			inner: self.inner.conns(),
+			_p: PhantomData,
+		}
 	}
 
-	pub(crate) fn initialize_vars(&self, vars: Arc<A::Vars>) {
-		let _ = self.vars.set(vars);
+	pub fn conns_vec(&self) -> Vec<ConnCtx<A>> {
+		self.conns().collect()
 	}
 
-	pub(crate) fn invalidate_state_cache(&self) {
-		*self
-			.state_cache
-			.lock()
-			.expect("typed actor state cache lock poisoned") = None;
+	pub async fn disconnect_conn(&self, id: &ConnId) -> Result<()> {
+		self.inner.disconnect_conn(id.clone()).await
+	}
+
+	pub async fn disconnect_conns<F>(&self, pred: F) -> Result<()>
+	where
+		F: Fn(&ConnCtx<A>) -> bool,
+	{
+		self.inner
+			.disconnect_conns(|conn| pred(&ConnCtx::new(conn.clone())))
+			.await
+	}
+
+	pub fn set_alarm(&self, timestamp_ms: Option<i64>) -> Result<()> {
+		self.inner.set_alarm(timestamp_ms)
+	}
+
+	pub fn client(&self) -> Result<Client> {
+		Ok(Client::from_config(
+			ClientConfig::new(self.inner.client_endpoint()?)
+				.token_opt(self.inner.client_token()?)
+				.namespace(self.inner.client_namespace()?)
+				.pool_name(self.inner.client_pool_name()?)
+				.encoding(EncodingKind::Bare)
+				.transport(TransportKind::WebSocket)
+				.disable_metadata_lookup(true),
+		))
+	}
+
+	pub fn inner(&self) -> &ActorContext {
+		&self.inner
+	}
+
+	pub fn into_inner(self) -> ActorContext {
+		self.inner
 	}
 }
 
-impl<A: Actor> fmt::Debug for Ctx<A> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let state_cached = self
-			.state_cache
-			.lock()
-			.expect("typed actor state cache lock poisoned")
-			.is_some();
-		let vars_initialized = self.vars.get().is_some();
-		f.debug_struct("Ctx")
-			.field("inner", &self.inner)
-			.field("state_cached", &state_cached)
-			.field("vars_initialized", &vars_initialized)
-			.finish()
+pub struct ConnIter<'a, A: Actor> {
+	inner: ConnHandles<'a>,
+	_p: PhantomData<fn() -> A>,
+}
+
+impl<A: Actor> ConnIter<'_, A> {
+	pub fn len(&self) -> usize {
+		self.inner.len()
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.inner.is_empty()
 	}
 }
 
+impl<A: Actor> Iterator for ConnIter<'_, A> {
+	type Item = ConnCtx<A>;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.inner.next().map(ConnCtx::new)
+	}
+}
+
+#[derive(Debug)]
 pub struct ConnCtx<A: Actor> {
 	inner: ConnHandle,
-	_phantom: PhantomData<fn() -> A>,
+	_p: PhantomData<fn() -> A>,
+}
+
+impl<A: Actor> Clone for ConnCtx<A> {
+	fn clone(&self) -> Self {
+		Self {
+			inner: self.inner.clone(),
+			_p: PhantomData,
+		}
+	}
 }
 
 impl<A: Actor> ConnCtx<A> {
-	pub fn new(inner: ConnHandle) -> Self {
+	pub(crate) fn new(inner: ConnHandle) -> Self {
 		Self {
 			inner,
-			_phantom: PhantomData,
+			_p: PhantomData,
 		}
+	}
+
+	pub fn id(&self) -> &str {
+		self.inner.id()
+	}
+
+	pub fn is_hibernatable(&self) -> bool {
+		self.inner.is_hibernatable()
+	}
+
+	pub fn params(&self) -> Result<A::ConnParams> {
+		decode_cbor(&self.inner.params(), "connection params")
+	}
+
+	pub fn state(&self) -> Result<A::ConnState> {
+		decode_cbor(&self.inner.state(), "connection state")
+	}
+
+	pub fn set_state(&self, state: &A::ConnState) -> Result<()> {
+		self.inner
+			.set_state(encode_cbor(state, "connection state")?);
+		Ok(())
+	}
+
+	pub fn send<E: Serialize>(&self, name: &str, event: &E) -> Result<()> {
+		let event_bytes = encode_cbor(event, "connection event")?;
+		self.inner.send(name, &event_bytes);
+		Ok(())
+	}
+
+	pub async fn disconnect(&self, reason: Option<&str>) -> Result<()> {
+		self.inner.disconnect(reason).await
 	}
 
 	pub fn inner(&self) -> &ConnHandle {
@@ -251,60 +239,6 @@ impl<A: Actor> ConnCtx<A> {
 	pub fn into_inner(self) -> ConnHandle {
 		self.inner
 	}
-
-	pub fn id(&self) -> &str {
-		self.inner.id()
-	}
-
-	pub fn params(&self) -> A::ConnParams {
-		match self.try_params() {
-			Ok(params) => params,
-			Err(error) => panic_with_error(error),
-		}
-	}
-
-	pub fn state(&self) -> A::ConnState {
-		match self.try_state() {
-			Ok(state) => state,
-			Err(error) => panic_with_error(error),
-		}
-	}
-
-	pub fn set_state(&self, state: &A::ConnState) {
-		if let Err(error) = self.try_set_state(state) {
-			panic_with_error(error);
-		}
-	}
-
-	pub fn is_hibernatable(&self) -> bool {
-		self.inner.is_hibernatable()
-	}
-
-	pub fn send<E: Serialize>(&self, name: &str, event: &E) {
-		let event_bytes = serialize_cbor(event)
-			.expect("failed to serialize connection event to CBOR");
-		self.inner.send(name, &event_bytes);
-	}
-
-	pub async fn disconnect(&self, reason: Option<&str>) -> anyhow::Result<()> {
-		self.inner.disconnect(reason).await
-	}
-
-	pub(crate) fn try_params(&self) -> anyhow::Result<A::ConnParams> {
-		let params = self.inner.params();
-		decode_cbor(&params, "connection params")
-	}
-
-	pub(crate) fn try_state(&self) -> anyhow::Result<A::ConnState> {
-		let state = self.inner.state();
-		decode_cbor(&state, "connection state")
-	}
-
-	pub(crate) fn try_set_state(&self, state: &A::ConnState) -> anyhow::Result<()> {
-		let state_bytes = encode_cbor(state, "connection state")?;
-		self.inner.set_state(state_bytes);
-		Ok(())
-	}
 }
 
 impl<A: Actor> From<ConnHandle> for ConnCtx<A> {
@@ -313,33 +247,15 @@ impl<A: Actor> From<ConnHandle> for ConnCtx<A> {
 	}
 }
 
-impl<A: Actor> fmt::Debug for ConnCtx<A> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("ConnCtx").field("inner", &self.inner).finish()
-	}
+fn encode_cbor<T: Serialize>(value: &T, label: &str) -> Result<Vec<u8>> {
+	let mut encoded = Vec::new();
+	ciborium::into_writer(value, &mut encoded)
+		.with_context(|| format!("encode {label} as cbor"))?;
+	Ok(encoded)
 }
 
-impl<A: Actor> Clone for Ctx<A> {
-	fn clone(&self) -> Self {
-		Self {
-			inner: self.inner.clone(),
-			state_cache: Arc::clone(&self.state_cache),
-			vars: Arc::clone(&self.vars),
-		}
-	}
-}
-
-impl<A: Actor> Clone for ConnCtx<A> {
-	fn clone(&self) -> Self {
-		Self {
-			inner: self.inner.clone(),
-			_phantom: PhantomData,
-		}
-	}
-}
-
-fn serialize_cbor<T: Serialize>(value: &T) -> anyhow::Result<Vec<u8>> {
-	encode_cbor(value, "CBOR value")
+fn decode_cbor<T: DeserializeOwned>(bytes: &[u8], label: &str) -> Result<T> {
+	ciborium::from_reader(Cursor::new(bytes)).with_context(|| format!("decode {label} from cbor"))
 }
 
 #[cfg(test)]

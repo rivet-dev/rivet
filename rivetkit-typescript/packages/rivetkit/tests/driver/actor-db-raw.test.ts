@@ -1,6 +1,8 @@
 import { describeDriverMatrix } from "./shared-matrix";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { setupDriverTest } from "./shared-utils";
+
+const DB_READY_TIMEOUT_MS = 10_000;
 
 describeDriverMatrix("Actor Db Raw", (driverTestConfig) => {
 	describe("Actor Database (Raw) Tests", () => {
@@ -41,21 +43,29 @@ describeDriverMatrix("Actor Db Raw", (driverTestConfig) => {
 
 			test("maintains separate databases for different actors", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor1Key = ["actor-1"];
+				const actor2Key = ["actor-2"];
+				const getActor1 = () => client.dbActorRaw.getOrCreate(actor1Key);
+				const getActor2 = () => client.dbActorRaw.getOrCreate(actor2Key);
 
 				// First actor
-				const actor1 = client.dbActorRaw.getOrCreate(["actor-1"]);
-				await actor1.insertValue("A");
-				await actor1.insertValue("B");
+				await getActor1().insertValue("A");
+				await getActor1().insertValue("B");
 
 				// Second actor
-				const actor2 = client.dbActorRaw.getOrCreate(["actor-2"]);
-				await actor2.insertValue("X");
+				await getActor2().insertValue("X");
 
-				// Verify separate data
-				const count1 = await actor1.getCount();
-				const count2 = await actor2.getCount();
-				expect(count1).toBe(2);
-				expect(count2).toBe(1);
+				// Reacquire keyed handles after the writes; fast sleep can leave
+				// older direct targets pointing at a stopping actor instance.
+				await vi.waitFor(
+						async () => {
+							const count1 = await getActor1().getCount();
+							const count2 = await getActor2().getCount();
+							expect(count1).toBe(2);
+							expect(count2).toBe(1);
+						},
+					{ timeout: DB_READY_TIMEOUT_MS, interval: 100 },
+				);
 			});
 		});
 

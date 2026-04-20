@@ -3,14 +3,20 @@ use super::*;
 mod moved_tests {
 	use super::{Inspector, InspectorSignal, InspectorSnapshot};
 	use crate::actor::connection::{
-		PersistedConnection, PersistedSubscription, encode_persisted_connection,
-		make_connection_key,
+		ConnHandle, PersistedConnection, PersistedSubscription,
+		encode_persisted_connection, make_connection_key,
 	};
 	use crate::actor::context::tests::new_with_kv;
-	use crate::{QueueNextOpts, SaveStateOpts};
+	use crate::actor::callbacks::StateDelta;
+	use crate::inspector::InspectorAuth;
+	use crate::QueueNextOpts;
+	use rivet_error::RivetError;
 	use std::collections::BTreeMap;
 	use std::sync::Arc;
+	use std::sync::Mutex;
 	use std::sync::atomic::{AtomicUsize, Ordering};
+
+	static INSPECTOR_ENV_LOCK: Mutex<()> = Mutex::new(());
 
 	#[tokio::test]
 	async fn state_updates_increment_inspector_revisions() {
@@ -24,8 +30,9 @@ mod moved_tests {
 		let inspector = Inspector::new();
 
 		ctx.configure_inspector(Some(inspector.clone()));
-		ctx.set_state(vec![1, 2, 3]);
-		ctx.save_state(SaveStateOpts { immediate: true })
+		ctx.set_state(vec![1, 2, 3])
+			.expect("test state should update");
+		ctx.save_state(vec![StateDelta::ActorState(vec![1, 2, 3])])
 			.await
 			.expect("state save should succeed");
 
@@ -52,10 +59,8 @@ mod moved_tests {
 
 		ctx.configure_inspector(Some(inspector.clone()));
 
-		let conn = ctx
-			.connect_conn(vec![1], false, None, async { Ok(vec![2]) })
-			.await
-			.expect("connect should succeed");
+		let conn = ConnHandle::new("conn-1", vec![1], vec![2], false);
+		ctx.add_conn(conn.clone());
 		assert_eq!(
 			inspector.snapshot(),
 			InspectorSnapshot {
@@ -65,9 +70,7 @@ mod moved_tests {
 			},
 		);
 
-		conn.disconnect(Some("bye"))
-			.await
-			.expect("disconnect should succeed");
+		ctx.remove_conn(conn.id());
 		assert_eq!(
 			inspector.snapshot(),
 			InspectorSnapshot {
@@ -244,5 +247,99 @@ mod moved_tests {
 
 		inspector.record_state_updated();
 		assert_eq!(state_updates.load(Ordering::SeqCst), 1);
+	}
+
+	#[tokio::test]
+	async fn inspector_auth_uses_env_token_before_kv_fallback() {
+		let _env_guard = INSPECTOR_ENV_LOCK.lock().expect("env lock poisoned");
+		unsafe {
+			std::env::set_var("RIVET_INSPECTOR_TOKEN", "env-token");
+		}
+
+		let kv = crate::kv::tests::new_in_memory();
+		let ctx = new_with_kv(
+			"actor-1",
+			"inspector-auth-env",
+			Vec::new(),
+			"local",
+			kv.clone(),
+		);
+		kv.put(&[3], b"kv-token")
+			.await
+			.expect("kv token should persist");
+
+		InspectorAuth::new()
+			.verify(&ctx, Some("env-token"))
+			.await
+			.expect("env token should authorize");
+
+		let error = InspectorAuth::new()
+			.verify(&ctx, Some("kv-token"))
+			.await
+			.expect_err("kv token should not bypass configured env token");
+		let error = RivetError::extract(&error);
+		assert_eq!(error.group(), "inspector");
+		assert_eq!(error.code(), "unauthorized");
+
+		unsafe {
+			std::env::remove_var("RIVET_INSPECTOR_TOKEN");
+		}
+	}
+
+	#[tokio::test]
+	async fn inspector_auth_falls_back_to_actor_kv_token() {
+		let _env_guard = INSPECTOR_ENV_LOCK.lock().expect("env lock poisoned");
+		unsafe {
+			std::env::remove_var("RIVET_INSPECTOR_TOKEN");
+		}
+
+		let kv = crate::kv::tests::new_in_memory();
+		let ctx = new_with_kv(
+			"actor-1",
+			"inspector-auth-kv",
+			Vec::new(),
+			"local",
+			kv.clone(),
+		);
+		kv.put(&[3], b"kv-token")
+			.await
+			.expect("kv token should persist");
+
+		InspectorAuth::new()
+			.verify(&ctx, Some("kv-token"))
+			.await
+			.expect("kv token should authorize");
+
+		let error = InspectorAuth::new()
+			.verify(&ctx, Some("nope"))
+			.await
+			.expect_err("wrong token should fail");
+		let error = RivetError::extract(&error);
+		assert_eq!(error.group(), "inspector");
+		assert_eq!(error.code(), "unauthorized");
+	}
+
+	#[tokio::test]
+	async fn inspector_auth_rejects_missing_token() {
+		let _env_guard = INSPECTOR_ENV_LOCK.lock().expect("env lock poisoned");
+		unsafe {
+			std::env::remove_var("RIVET_INSPECTOR_TOKEN");
+		}
+
+		let ctx = new_with_kv(
+			"actor-1",
+			"inspector-auth-missing",
+			Vec::new(),
+			"local",
+			crate::kv::tests::new_in_memory(),
+		);
+
+		let error = InspectorAuth::new()
+			.verify(&ctx, None)
+			.await
+			.expect_err("missing token should fail");
+		let error = RivetError::extract(&error);
+		assert_eq!(error.group(), "inspector");
+		assert_eq!(error.code(), "unauthorized");
 	}
 }

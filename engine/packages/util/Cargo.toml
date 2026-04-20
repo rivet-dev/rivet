@@ -37,3 +37,6 @@ utoipa.workspace = true
 anyhow.workspace = true
 vergen.workspace = true
 vergen-gitcl.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

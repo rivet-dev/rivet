@@ -1,32 +1,31 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::LazyLock;
+use std::time::Duration;
 
 use anyhow::Result;
 use napi::bindgen_prelude::{Buffer, Promise};
-use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
+use napi::threadsafe_function::{
+	ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction,
+};
 use napi::{Env, JsFunction, JsObject};
 use napi_derive::napi;
 use rivet_error::{MacroMarker, RivetError, RivetErrorSchema};
-use rivetkit_core::actor::callbacks::{
-	ActionHandler, BeforeActionResponseCallback, LifecycleCallback, RequestCallback,
-};
 use rivetkit_core::{
-	ActionRequest, ActorConfig, ActorFactory as CoreActorFactory, ActorInstanceCallbacks,
-	FactoryRequest, FlatActorConfig, GetWorkflowHistoryRequest,
-	OnBeforeActionResponseRequest,
-	OnBeforeConnectRequest, OnConnectRequest, OnDestroyRequest, OnDisconnectRequest,
-	OnMigrateRequest, OnRequestRequest, OnSleepRequest, OnStateChangeRequest,
-	OnWakeRequest, OnWebSocketRequest, ReplayWorkflowRequest, Request, Response,
-	RunRequest,
+	ActorConfig, ActorContext as CoreActorContext, ActorFactory as CoreActorFactory,
+	ConnHandle as CoreConnHandle, FlatActorConfig, Request, Response,
+	WebSocket as CoreWebSocket,
 };
-use rivetkit_core::actor::callbacks::OnBeforeSubscribeRequest;
+use scc::HashMap as SccHashMap;
 
-use crate::actor_context::ActorContext;
+use crate::actor_context::{ActorContext, StateDeltaPayload};
+use crate::napi_actor_events::run_adapter_loop;
 use crate::connection::ConnHandle;
 use crate::BRIDGE_RIVET_ERROR_PREFIX;
 use crate::websocket::WebSocket;
 
-type CallbackTsfn<T> = ThreadsafeFunction<T, ErrorStrategy::CalleeHandled>;
+pub(crate) type CallbackTsfn<T> =
+	ThreadsafeFunction<T, ErrorStrategy::CalleeHandled>;
 
 #[derive(RivetError, serde::Serialize, serde::Deserialize)]
 #[error(
@@ -60,20 +59,25 @@ pub struct JsHttpResponse {
 }
 
 #[napi(object)]
+#[derive(Clone, Default)]
 pub struct JsActorConfig {
 	pub name: Option<String>,
 	pub icon: Option<String>,
 	pub can_hibernate_websocket: Option<bool>,
 	pub state_save_interval_ms: Option<u32>,
+	pub create_state_timeout_ms: Option<u32>,
+	pub on_create_timeout_ms: Option<u32>,
 	pub create_vars_timeout_ms: Option<u32>,
 	pub create_conn_state_timeout_ms: Option<u32>,
 	pub on_before_connect_timeout_ms: Option<u32>,
 	pub on_connect_timeout_ms: Option<u32>,
 	pub on_migrate_timeout_ms: Option<u32>,
+	pub on_wake_timeout_ms: Option<u32>,
+	pub on_before_actor_start_timeout_ms: Option<u32>,
 	pub on_sleep_timeout_ms: Option<u32>,
 	pub on_destroy_timeout_ms: Option<u32>,
 	pub action_timeout_ms: Option<u32>,
-	pub run_stop_timeout_ms: Option<u32>,
+	pub on_request_timeout_ms: Option<u32>,
 	pub sleep_timeout_ms: Option<u32>,
 	pub no_sleep: Option<bool>,
 	pub sleep_grace_period_ms: Option<u32>,
@@ -87,116 +91,140 @@ pub struct JsActorConfig {
 	pub preload_max_connections_bytes: Option<f64>,
 }
 
-#[napi(object)]
-pub struct JsFactoryInitResult {
-	pub state: Option<Buffer>,
-	pub vars: Option<Buffer>,
+#[derive(Clone)]
+pub(crate) struct LifecyclePayload {
+	pub(crate) ctx: CoreActorContext,
 }
 
 #[derive(Clone)]
-struct LifecyclePayload {
-	ctx: rivetkit_core::ActorContext,
+pub(crate) struct CreateStatePayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) input: Option<Vec<u8>>,
 }
 
 #[derive(Clone)]
-struct MigratePayload {
-	ctx: rivetkit_core::ActorContext,
-	is_new: bool,
+pub(crate) struct CreateConnStatePayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) conn: CoreConnHandle,
+	pub(crate) params: Vec<u8>,
+	pub(crate) request: Option<Request>,
 }
 
 #[derive(Clone)]
-struct FactoryInitPayload {
-	ctx: rivetkit_core::ActorContext,
-	input: Option<Vec<u8>>,
-	is_new: bool,
+pub(crate) struct MigratePayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) is_new: bool,
 }
 
 #[derive(Clone)]
-struct StateChangePayload {
-	ctx: rivetkit_core::ActorContext,
-	new_state: Vec<u8>,
+pub(crate) struct HttpRequestPayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) request: Request,
+	pub(crate) cancel_token_id: Option<u64>,
 }
 
 #[derive(Clone)]
-struct HttpRequestPayload {
-	ctx: rivetkit_core::ActorContext,
-	request: Request,
+pub(crate) struct WebSocketPayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) ws: CoreWebSocket,
+	pub(crate) request: Option<Request>,
 }
 
 #[derive(Clone)]
-struct WebSocketPayload {
-	ctx: rivetkit_core::ActorContext,
-	conn: Option<rivetkit_core::ConnHandle>,
-	ws: rivetkit_core::WebSocket,
-	request: Option<Request>,
+pub(crate) struct BeforeSubscribePayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) conn: CoreConnHandle,
+	pub(crate) event_name: String,
 }
 
 #[derive(Clone)]
-struct BeforeSubscribePayload {
-	ctx: rivetkit_core::ActorContext,
-	conn: rivetkit_core::ConnHandle,
-	event_name: String,
+pub(crate) struct BeforeConnectPayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) params: Vec<u8>,
+	pub(crate) request: Option<Request>,
 }
 
 #[derive(Clone)]
-struct BeforeConnectPayload {
-	ctx: rivetkit_core::ActorContext,
-	params: Vec<u8>,
-	request: Option<Request>,
+pub(crate) struct ConnectionPayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) conn: CoreConnHandle,
+	pub(crate) request: Option<Request>,
 }
 
 #[derive(Clone)]
-struct ConnectionPayload {
-	ctx: rivetkit_core::ActorContext,
-	conn: rivetkit_core::ConnHandle,
-	request: Option<Request>,
+pub(crate) struct ActionPayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) conn: Option<CoreConnHandle>,
+	pub(crate) name: String,
+	pub(crate) args: Vec<u8>,
+	pub(crate) cancel_token_id: Option<u64>,
 }
 
 #[derive(Clone)]
-struct ActionPayload {
-	ctx: rivetkit_core::ActorContext,
-	conn: rivetkit_core::ConnHandle,
-	name: String,
-	args: Vec<u8>,
+pub(crate) struct BeforeActionResponsePayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) name: String,
+	pub(crate) args: Vec<u8>,
+	pub(crate) output: Vec<u8>,
 }
 
 #[derive(Clone)]
-struct BeforeActionResponsePayload {
-	ctx: rivetkit_core::ActorContext,
-	name: String,
-	args: Vec<u8>,
-	output: Vec<u8>,
+pub(crate) struct WorkflowHistoryPayload {
+	pub(crate) ctx: CoreActorContext,
 }
 
 #[derive(Clone)]
-struct WorkflowHistoryPayload {
-	ctx: rivetkit_core::ActorContext,
+pub(crate) struct WorkflowReplayPayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) entry_id: Option<String>,
 }
 
 #[derive(Clone)]
-struct WorkflowReplayPayload {
-	ctx: rivetkit_core::ActorContext,
-	entry_id: Option<String>,
+pub(crate) struct SerializeStatePayload {
+	pub(crate) reason: String,
 }
 
-struct CallbackBindings {
-	on_init: Option<CallbackTsfn<FactoryInitPayload>>,
-	on_migrate: Option<CallbackTsfn<MigratePayload>>,
-	on_wake: Option<CallbackTsfn<LifecyclePayload>>,
-	on_sleep: Option<CallbackTsfn<LifecyclePayload>>,
-	on_destroy: Option<CallbackTsfn<LifecyclePayload>>,
-	on_state_change: Option<CallbackTsfn<StateChangePayload>>,
-	on_request: Option<CallbackTsfn<HttpRequestPayload>>,
-	on_websocket: Option<CallbackTsfn<WebSocketPayload>>,
-	on_before_subscribe: Option<CallbackTsfn<BeforeSubscribePayload>>,
-	on_before_connect: Option<CallbackTsfn<BeforeConnectPayload>>,
-	on_connect: Option<CallbackTsfn<ConnectionPayload>>,
-	on_disconnect: Option<CallbackTsfn<ConnectionPayload>>,
-	actions: HashMap<String, CallbackTsfn<ActionPayload>>,
-	on_before_action_response: Option<CallbackTsfn<BeforeActionResponsePayload>>,
-	run: Option<CallbackTsfn<LifecyclePayload>>,
-	get_workflow_history: Option<CallbackTsfn<WorkflowHistoryPayload>>,
-	replay_workflow: Option<CallbackTsfn<WorkflowReplayPayload>>,
+#[derive(Clone, Debug)]
+pub(crate) struct AdapterConfig {
+	pub(crate) create_state_timeout: Duration,
+	pub(crate) on_create_timeout: Duration,
+	pub(crate) create_vars_timeout: Duration,
+	pub(crate) on_migrate_timeout: Duration,
+	pub(crate) on_wake_timeout: Duration,
+	pub(crate) on_before_actor_start_timeout: Duration,
+	pub(crate) create_conn_state_timeout: Duration,
+	pub(crate) on_before_connect_timeout: Duration,
+	pub(crate) on_connect_timeout: Duration,
+	pub(crate) on_sleep_timeout: Duration,
+	pub(crate) on_destroy_timeout: Duration,
+	pub(crate) action_timeout: Duration,
+	pub(crate) on_request_timeout: Duration,
+}
+
+#[allow(dead_code)]
+pub(crate) struct CallbackBindings {
+	pub(crate) create_state: Option<CallbackTsfn<CreateStatePayload>>,
+	pub(crate) on_create: Option<CallbackTsfn<CreateStatePayload>>,
+	pub(crate) create_conn_state: Option<CallbackTsfn<CreateConnStatePayload>>,
+	pub(crate) create_vars: Option<CallbackTsfn<LifecyclePayload>>,
+	pub(crate) on_migrate: Option<CallbackTsfn<MigratePayload>>,
+	pub(crate) on_wake: Option<CallbackTsfn<LifecyclePayload>>,
+	pub(crate) on_before_actor_start: Option<CallbackTsfn<LifecyclePayload>>,
+	pub(crate) on_sleep: Option<CallbackTsfn<LifecyclePayload>>,
+	pub(crate) on_destroy: Option<CallbackTsfn<LifecyclePayload>>,
+	pub(crate) on_before_connect: Option<CallbackTsfn<BeforeConnectPayload>>,
+	pub(crate) on_connect: Option<CallbackTsfn<ConnectionPayload>>,
+	pub(crate) on_disconnect_final: Option<CallbackTsfn<ConnectionPayload>>,
+	pub(crate) on_before_subscribe: Option<CallbackTsfn<BeforeSubscribePayload>>,
+	pub(crate) actions: HashMap<String, CallbackTsfn<ActionPayload>>,
+	pub(crate) on_before_action_response:
+		Option<CallbackTsfn<BeforeActionResponsePayload>>,
+	pub(crate) on_request: Option<CallbackTsfn<HttpRequestPayload>>,
+	pub(crate) on_websocket: Option<CallbackTsfn<WebSocketPayload>>,
+	pub(crate) run: Option<CallbackTsfn<LifecyclePayload>>,
+	pub(crate) get_workflow_history: Option<CallbackTsfn<WorkflowHistoryPayload>>,
+	pub(crate) replay_workflow: Option<CallbackTsfn<WorkflowReplayPayload>>,
+	pub(crate) serialize_state: Option<CallbackTsfn<SerializeStatePayload>>,
 }
 
 #[derive(serde::Deserialize)]
@@ -217,6 +245,10 @@ pub(crate) struct BridgeRivetErrorContext {
 	pub status_code: Option<u16>,
 }
 
+static BRIDGE_RIVET_ERROR_SCHEMAS: LazyLock<
+	SccHashMap<(String, String), &'static RivetErrorSchema>,
+> = LazyLock::new(SccHashMap::new);
+
 impl std::fmt::Display for BridgeRivetErrorContext {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(
@@ -232,6 +264,8 @@ impl std::error::Error for BridgeRivetErrorContext {}
 
 #[napi]
 pub struct NapiActorFactory {
+	#[allow(dead_code)]
+	_bindings: Arc<CallbackBindings>,
 	#[allow(dead_code)]
 	inner: Arc<CoreActorFactory>,
 }
@@ -251,18 +285,55 @@ impl NapiActorFactory {
 		config: Option<JsActorConfig>,
 	) -> napi::Result<Self> {
 		let bindings = Arc::new(CallbackBindings::from_js(callbacks)?);
+		let js_config = config.unwrap_or_default();
+		let adapter_config = Arc::new(AdapterConfig::from_js_config(&js_config));
+		let adapter_bindings = Arc::clone(&bindings);
+		let loop_config = Arc::clone(&adapter_config);
 		let inner = Arc::new(CoreActorFactory::new(
-			ActorConfig::from_flat(config.map(FlatActorConfig::from).unwrap_or_default()),
-			move |request: FactoryRequest| {
-				let bindings = Arc::clone(&bindings);
-				Box::pin(async move {
-					bindings.initialize(&request).await?;
-					Ok(bindings.create_callbacks())
-				})
+			ActorConfig::from_flat(FlatActorConfig::from(js_config)),
+			move |start| {
+				let bindings = Arc::clone(&adapter_bindings);
+				let config = Arc::clone(&loop_config);
+				Box::pin(async move { run_adapter_loop(bindings, config, start).await })
 			},
 		));
 
-		Ok(Self { inner })
+		Ok(Self {
+			_bindings: bindings,
+			inner,
+		})
+	}
+}
+
+impl AdapterConfig {
+	fn from_js_config(config: &JsActorConfig) -> Self {
+		Self {
+			create_state_timeout: duration_ms_or(config.create_state_timeout_ms, 5_000),
+			on_create_timeout: duration_ms_or(config.on_create_timeout_ms, 5_000),
+			create_vars_timeout: duration_ms_or(config.create_vars_timeout_ms, 5_000),
+			on_migrate_timeout: duration_ms_or(config.on_migrate_timeout_ms, 30_000),
+			on_wake_timeout: duration_ms_or(config.on_wake_timeout_ms, 30_000),
+			on_before_actor_start_timeout: duration_ms_or(
+				config.on_before_actor_start_timeout_ms,
+				5_000,
+			),
+			create_conn_state_timeout: duration_ms_or(
+				config.create_conn_state_timeout_ms,
+				5_000,
+			),
+			on_before_connect_timeout: duration_ms_or(
+				config.on_before_connect_timeout_ms,
+				5_000,
+			),
+			on_connect_timeout: duration_ms_or(config.on_connect_timeout_ms, 5_000),
+			on_sleep_timeout: duration_ms_or(config.on_sleep_timeout_ms, 5_000),
+			on_destroy_timeout: duration_ms_or(config.on_destroy_timeout_ms, 5_000),
+			action_timeout: duration_ms_or(config.action_timeout_ms, 60_000),
+			on_request_timeout: duration_ms_or(
+				config.on_request_timeout_ms.or(config.action_timeout_ms),
+				60_000,
+			),
+		}
 	}
 }
 
@@ -271,9 +342,11 @@ impl CallbackBindings {
 		let actions = if let Some(actions) = callbacks.get::<_, JsObject>("actions")? {
 			let mut mapped = HashMap::new();
 			for name in JsObject::keys(&actions)? {
-				let callback = actions
-					.get::<_, JsFunction>(&name)?
-					.ok_or_else(|| napi::Error::from_reason(format!("action `{name}` must be a function")))?;
+				let callback = actions.get::<_, JsFunction>(&name)?.ok_or_else(|| {
+					napi::Error::from_reason(format!(
+						"action `{name}` must be a function"
+					))
+				})?;
 				mapped.insert(name, create_tsfn(callback, build_action_payload)?);
 			}
 			mapped
@@ -282,43 +355,59 @@ impl CallbackBindings {
 		};
 
 		Ok(Self {
-			on_init: optional_tsfn(&callbacks, "onInit", build_factory_init_payload)?,
+			create_state: optional_tsfn(
+				&callbacks,
+				"createState",
+				build_create_state_payload,
+			)?,
+			on_create: optional_tsfn(&callbacks, "onCreate", build_create_state_payload)?,
+			create_conn_state: optional_tsfn(
+				&callbacks,
+				"createConnState",
+				build_create_conn_state_payload,
+			)?,
+			create_vars: optional_tsfn(&callbacks, "createVars", build_lifecycle_payload)?,
 			on_migrate: optional_tsfn(&callbacks, "onMigrate", build_migrate_payload)?,
 			on_wake: optional_tsfn(&callbacks, "onWake", build_lifecycle_payload)?,
+			on_before_actor_start: optional_tsfn(
+				&callbacks,
+				"onBeforeActorStart",
+				build_lifecycle_payload,
+			)?,
 			on_sleep: optional_tsfn(&callbacks, "onSleep", build_lifecycle_payload)?,
 			on_destroy: optional_tsfn(&callbacks, "onDestroy", build_lifecycle_payload)?,
-			on_state_change: optional_tsfn(
-				&callbacks,
-				"onStateChange",
-				build_state_change_payload,
-			)?,
-			on_request: optional_tsfn(&callbacks, "onRequest", build_http_request_payload)?,
-			on_websocket: optional_tsfn(
-				&callbacks,
-				"onWebSocket",
-				build_websocket_payload,
-			)?,
-			on_before_subscribe: optional_tsfn(
-				&callbacks,
-				"onBeforeSubscribe",
-				build_before_subscribe_payload,
-			)?,
 			on_before_connect: optional_tsfn(
 				&callbacks,
 				"onBeforeConnect",
 				build_before_connect_payload,
 			)?,
 			on_connect: optional_tsfn(&callbacks, "onConnect", build_connection_payload)?,
-			on_disconnect: optional_tsfn(
+			on_disconnect_final: optional_tsfn(
+				&callbacks,
+				"onDisconnectFinal",
+				build_connection_payload,
+			)?
+			.or(optional_tsfn(
 				&callbacks,
 				"onDisconnect",
 				build_connection_payload,
+			)?),
+			on_before_subscribe: optional_tsfn(
+				&callbacks,
+				"onBeforeSubscribe",
+				build_before_subscribe_payload,
 			)?,
 			actions,
 			on_before_action_response: optional_tsfn(
 				&callbacks,
 				"onBeforeActionResponse",
 				build_before_action_response_payload,
+			)?,
+			on_request: optional_tsfn(&callbacks, "onRequest", build_http_request_payload)?,
+			on_websocket: optional_tsfn(
+				&callbacks,
+				"onWebSocket",
+				build_websocket_payload,
 			)?,
 			run: optional_tsfn(&callbacks, "run", build_lifecycle_payload)?,
 			get_workflow_history: optional_tsfn(
@@ -331,174 +420,12 @@ impl CallbackBindings {
 				"replayWorkflow",
 				build_workflow_replay_payload,
 			)?,
+			serialize_state: optional_tsfn(
+				&callbacks,
+				"serializeState",
+				build_serialize_state_payload,
+			)?,
 		})
-	}
-
-	async fn initialize(&self, request: &FactoryRequest) -> Result<()> {
-		let Some(callback) = &self.on_init else {
-			return Ok(());
-		};
-
-		let promise = callback
-			.call_async::<Promise<JsFactoryInitResult>>(Ok(FactoryInitPayload {
-				ctx: request.ctx.clone(),
-				input: request.input.clone(),
-				is_new: request.is_new,
-			}))
-			.await
-			.map_err(|error| callback_error("onInit", error))?;
-		let result = promise
-			.await
-			.map_err(|error| callback_error("onInit", error))?;
-
-		if let Some(state) = result.state {
-			request.ctx.set_state(state.to_vec());
-		}
-
-		if let Some(vars) = result.vars {
-			request.ctx.set_vars(vars.to_vec());
-		}
-
-		Ok(())
-	}
-
-	fn create_callbacks(&self) -> ActorInstanceCallbacks {
-		let mut callbacks = ActorInstanceCallbacks::default();
-		callbacks.on_migrate = wrap_void_callback(
-			"onMigrate",
-			&self.on_migrate,
-			|request: OnMigrateRequest| MigratePayload {
-				ctx: request.ctx,
-				is_new: request.is_new,
-			},
-		);
-		callbacks.on_wake = wrap_void_callback(
-			"onWake",
-			&self.on_wake,
-			|request: OnWakeRequest| LifecyclePayload { ctx: request.ctx },
-		);
-		callbacks.on_sleep =
-			wrap_void_callback("onSleep", &self.on_sleep, |request: OnSleepRequest| {
-				LifecyclePayload { ctx: request.ctx }
-			});
-		callbacks.on_destroy =
-			wrap_void_callback(
-				"onDestroy",
-				&self.on_destroy,
-				|request: OnDestroyRequest| LifecyclePayload { ctx: request.ctx },
-			);
-		callbacks.on_state_change = wrap_void_callback(
-			"onStateChange",
-			&self.on_state_change,
-			|request: OnStateChangeRequest| StateChangePayload {
-				ctx: request.ctx,
-				new_state: request.new_state,
-			},
-		);
-		callbacks.on_request = wrap_request_callback(
-			"onRequest",
-			&self.on_request,
-			|request: OnRequestRequest| HttpRequestPayload {
-				ctx: request.ctx,
-				request: request.request,
-			},
-		);
-			callbacks.on_websocket = wrap_void_callback(
-				"onWebSocket",
-				&self.on_websocket,
-			|request: OnWebSocketRequest| WebSocketPayload {
-				ctx: request.ctx,
-				conn: request.conn,
-				ws: request.ws,
-				request: request.request,
-			},
-		);
-		callbacks.on_before_subscribe = wrap_void_callback(
-			"onBeforeSubscribe",
-			&self.on_before_subscribe,
-			|request: OnBeforeSubscribeRequest| BeforeSubscribePayload {
-				ctx: request.ctx,
-				conn: request.conn,
-				event_name: request.event_name,
-			},
-		);
-		callbacks.on_before_connect = wrap_void_callback(
-			"onBeforeConnect",
-			&self.on_before_connect,
-			|request: OnBeforeConnectRequest| BeforeConnectPayload {
-				ctx: request.ctx,
-				params: request.params,
-				request: request.request,
-			},
-		);
-		callbacks.on_connect = wrap_void_callback(
-			"onConnect",
-			&self.on_connect,
-			|request: OnConnectRequest| ConnectionPayload {
-				ctx: request.ctx,
-				conn: request.conn,
-				request: request.request,
-			},
-		);
-			callbacks.on_disconnect = wrap_void_callback(
-				"onDisconnect",
-				&self.on_disconnect,
-				|request: OnDisconnectRequest| ConnectionPayload {
-					ctx: request.ctx,
-					conn: request.conn,
-					request: None,
-				},
-			);
-		callbacks.actions = self
-			.actions
-			.iter()
-			.map(|(name, callback)| {
-				(
-					name.clone(),
-					wrap_action_callback(
-						format!("action `{name}`"),
-						callback,
-						|request: ActionRequest| ActionPayload {
-							ctx: request.ctx,
-							conn: request.conn,
-							name: request.name,
-							args: request.args,
-						},
-					),
-				)
-			})
-			.collect();
-		callbacks.on_before_action_response = wrap_buffer_callback(
-			"onBeforeActionResponse",
-			&self.on_before_action_response,
-			|request: OnBeforeActionResponseRequest| BeforeActionResponsePayload {
-				ctx: request.ctx,
-				name: request.name,
-				args: request.args,
-				output: request.output,
-			},
-		);
-		callbacks.run = wrap_void_callback(
-			"run",
-			&self.run,
-			|request: RunRequest| LifecyclePayload { ctx: request.ctx },
-		);
-		callbacks.get_workflow_history = wrap_optional_buffer_callback(
-			"getWorkflowHistory",
-			&self.get_workflow_history,
-			|request: GetWorkflowHistoryRequest| WorkflowHistoryPayload {
-				ctx: request.ctx,
-			},
-		);
-		callbacks.replay_workflow = wrap_optional_buffer_callback(
-			"replayWorkflow",
-			&self.replay_workflow,
-			|request: ReplayWorkflowRequest| WorkflowReplayPayload {
-				ctx: request.ctx,
-				entry_id: request.entry_id,
-			},
-		);
-		callbacks
 	}
 }
 
@@ -532,119 +459,8 @@ where
 	)
 }
 
-fn wrap_void_callback<Req, Payload, Map>(
-	callback_name: &'static str,
-	callback: &Option<CallbackTsfn<Payload>>,
-	map: Map,
-) -> Option<LifecycleCallback<Req>>
-where
-	Req: Send + 'static,
-	Payload: Send + 'static,
-	Map: Fn(Req) -> Payload + Send + Sync + 'static,
-{
-	let callback = callback.clone()?;
-	let map = Arc::new(map);
-	Some(Box::new(move |request| {
-		let callback = callback.clone();
-		let map = Arc::clone(&map);
-		Box::pin(async move {
-			call_void(callback_name, &callback, (map.as_ref())(request)).await
-		})
-	}))
-}
-
-fn wrap_request_callback<Map>(
-	callback_name: &'static str,
-	callback: &Option<CallbackTsfn<HttpRequestPayload>>,
-	map: Map,
-) -> Option<RequestCallback>
-where
-	Map: Fn(OnRequestRequest) -> HttpRequestPayload + Send + Sync + 'static,
-{
-	let callback = callback.clone()?;
-	let map = Arc::new(map);
-	Some(Box::new(move |request| {
-		let callback = callback.clone();
-		let map = Arc::clone(&map);
-		Box::pin(async move {
-			call_request(callback_name, &callback, (map.as_ref())(request)).await
-		})
-	}))
-}
-
-fn wrap_action_callback<Map>(
-	callback_name: String,
-	callback: &CallbackTsfn<ActionPayload>,
-	map: Map,
-) -> ActionHandler
-where
-	Map: Fn(ActionRequest) -> ActionPayload + Send + Sync + 'static,
-{
-	let callback = callback.clone();
-	let map = Arc::new(map);
-	Box::new(move |request| {
-		let callback = callback.clone();
-		let map = Arc::clone(&map);
-		let callback_name = callback_name.clone();
-		Box::pin(async move {
-			call_buffer(&callback_name, &callback, (map.as_ref())(request)).await
-		})
-	})
-}
-
-fn wrap_buffer_callback<Payload, Map>(
-	callback_name: &'static str,
-	callback: &Option<CallbackTsfn<Payload>>,
-	map: Map,
-) -> Option<BeforeActionResponseCallback>
-where
-	Payload: Send + 'static,
-	Map: Fn(OnBeforeActionResponseRequest) -> Payload + Send + Sync + 'static,
-{
-	let callback = callback.clone()?;
-	let map = Arc::new(map);
-	Some(Box::new(move |request| {
-		let callback = callback.clone();
-		let map = Arc::clone(&map);
-		Box::pin(async move {
-			call_buffer(callback_name, &callback, (map.as_ref())(request)).await
-		})
-	}))
-}
-
-fn wrap_optional_buffer_callback<Req, Payload, Map>(
-	callback_name: &'static str,
-	callback: &Option<CallbackTsfn<Payload>>,
-	map: Map,
-) -> Option<
-	Box<
-		dyn Fn(
-				Req,
-			) -> std::pin::Pin<
-				Box<
-					dyn std::future::Future<Output = Result<Option<Vec<u8>>>> + Send + 'static,
-				>,
-			> + Send
-			+ Sync,
-	>,
->
-where
-	Req: Send + 'static,
-	Payload: Send + 'static,
-	Map: Fn(Req) -> Payload + Send + Sync + 'static,
-{
-	let callback = callback.clone()?;
-	let map = Arc::new(map);
-	Some(Box::new(move |request| {
-		let callback = callback.clone();
-		let map = Arc::clone(&map);
-		Box::pin(async move {
-			call_optional_buffer(callback_name, &callback, (map.as_ref())(request)).await
-		})
-	}))
-}
-
-async fn call_void<T>(
+#[allow(dead_code)]
+pub(crate) async fn call_void<T>(
 	callback_name: &str,
 	callback: &CallbackTsfn<T>,
 	payload: T,
@@ -661,7 +477,8 @@ where
 		.map_err(|error| callback_error(callback_name, error))
 }
 
-async fn call_buffer<T>(
+#[allow(dead_code)]
+pub(crate) async fn call_buffer<T>(
 	callback_name: &str,
 	callback: &CallbackTsfn<T>,
 	payload: T,
@@ -679,7 +496,8 @@ where
 	Ok(buffer.to_vec())
 }
 
-async fn call_optional_buffer<T>(
+#[allow(dead_code)]
+pub(crate) async fn call_optional_buffer<T>(
 	callback_name: &str,
 	callback: &CallbackTsfn<T>,
 	payload: T,
@@ -697,7 +515,8 @@ where
 	Ok(buffer.map(|buffer| buffer.to_vec()))
 }
 
-async fn call_request(
+#[allow(dead_code)]
+pub(crate) async fn call_request(
 	callback_name: &str,
 	callback: &CallbackTsfn<HttpRequestPayload>,
 	payload: HttpRequestPayload,
@@ -716,12 +535,51 @@ async fn call_request(
 	)
 }
 
+#[allow(dead_code)]
+pub(crate) async fn call_state_delta_payload(
+	callback_name: &str,
+	callback: &CallbackTsfn<SerializeStatePayload>,
+	payload: SerializeStatePayload,
+) -> Result<StateDeltaPayload> {
+	let promise = callback
+		.call_async::<Promise<StateDeltaPayload>>(Ok(payload))
+		.await
+		.map_err(|error| callback_error(callback_name, error))?;
+	promise
+		.await
+		.map_err(|error| callback_error(callback_name, error))
+}
+
 fn build_lifecycle_payload(
 	env: &Env,
 	payload: LifecyclePayload,
 ) -> napi::Result<Vec<napi::JsUnknown>> {
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
+	Ok(vec![object.into_unknown()])
+}
+
+fn build_create_state_payload(
+	env: &Env,
+	payload: CreateStatePayload,
+) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("input", payload.input.map(Buffer::from))?;
+	Ok(vec![object.into_unknown()])
+}
+
+fn build_create_conn_state_payload(
+	env: &Env,
+	payload: CreateConnStatePayload,
+) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("conn", ConnHandle::new(payload.conn))?;
+	object.set("params", Buffer::from(payload.params))?;
+	if let Some(request) = payload.request {
+		object.set("request", build_request_object(env, request)?)?;
+	}
 	Ok(vec![object.into_unknown()])
 }
 
@@ -735,40 +593,14 @@ fn build_migrate_payload(
 	Ok(vec![object.into_unknown()])
 }
 
-fn build_factory_init_payload(
-	env: &Env,
-	payload: FactoryInitPayload,
-) -> napi::Result<Vec<napi::JsUnknown>> {
-	let mut object = env.create_object()?;
-	object.set("ctx", ActorContext::new(payload.ctx))?;
-	object.set("input", payload.input.map(Buffer::from))?;
-	object.set("isNew", payload.is_new)?;
-	Ok(vec![object.into_unknown()])
-}
-
-fn build_state_change_payload(
-	env: &Env,
-	payload: StateChangePayload,
-) -> napi::Result<Vec<napi::JsUnknown>> {
-	let mut object = env.create_object()?;
-	object.set("ctx", ActorContext::new(payload.ctx))?;
-	object.set("newState", Buffer::from(payload.new_state))?;
-	Ok(vec![object.into_unknown()])
-}
-
 fn build_http_request_payload(
 	env: &Env,
 	payload: HttpRequestPayload,
 ) -> napi::Result<Vec<napi::JsUnknown>> {
-	let (method, uri, headers, body) = payload.request.to_parts();
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
-	let mut request = env.create_object()?;
-	request.set("method", method)?;
-	request.set("uri", uri)?;
-	request.set("headers", headers)?;
-	request.set("body", Buffer::from(body))?;
-	object.set("request", request)?;
+	object.set("request", build_request_object(env, payload.request)?)?;
+	object.set("cancelTokenId", payload.cancel_token_id)?;
 	Ok(vec![object.into_unknown()])
 }
 
@@ -778,18 +610,9 @@ fn build_websocket_payload(
 ) -> napi::Result<Vec<napi::JsUnknown>> {
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
-	if let Some(conn) = payload.conn {
-		object.set("conn", ConnHandle::new(conn))?;
-	}
 	object.set("ws", WebSocket::new(payload.ws))?;
 	if let Some(request) = payload.request {
-		let (method, uri, headers, body) = request.to_parts();
-		let mut request_object = env.create_object()?;
-		request_object.set("method", method)?;
-		request_object.set("uri", uri)?;
-		request_object.set("headers", headers)?;
-		request_object.set("body", Buffer::from(body))?;
-		object.set("request", request_object)?;
+		object.set("request", build_request_object(env, request)?)?;
 	}
 	Ok(vec![object.into_unknown()])
 }
@@ -813,13 +636,7 @@ fn build_before_connect_payload(
 	object.set("ctx", ActorContext::new(payload.ctx))?;
 	object.set("params", Buffer::from(payload.params))?;
 	if let Some(request) = payload.request {
-		let (method, uri, headers, body) = request.to_parts();
-		let mut request_object = env.create_object()?;
-		request_object.set("method", method)?;
-		request_object.set("uri", uri)?;
-		request_object.set("headers", headers)?;
-		request_object.set("body", Buffer::from(body))?;
-		object.set("request", request_object)?;
+		object.set("request", build_request_object(env, request)?)?;
 	}
 	Ok(vec![object.into_unknown()])
 }
@@ -832,13 +649,7 @@ fn build_connection_payload(
 	object.set("ctx", ActorContext::new(payload.ctx))?;
 	object.set("conn", ConnHandle::new(payload.conn))?;
 	if let Some(request) = payload.request {
-		let (method, uri, headers, body) = request.to_parts();
-		let mut request_object = env.create_object()?;
-		request_object.set("method", method)?;
-		request_object.set("uri", uri)?;
-		request_object.set("headers", headers)?;
-		request_object.set("body", Buffer::from(body))?;
-		object.set("request", request_object)?;
+		object.set("request", build_request_object(env, request)?)?;
 	}
 	Ok(vec![object.into_unknown()])
 }
@@ -849,9 +660,13 @@ fn build_action_payload(
 ) -> napi::Result<Vec<napi::JsUnknown>> {
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
-	object.set("conn", ConnHandle::new(payload.conn))?;
+	match payload.conn {
+		Some(conn) => object.set("conn", ConnHandle::new(conn))?,
+		None => object.set("conn", env.get_null()?)?,
+	}
 	object.set("name", payload.name)?;
 	object.set("args", Buffer::from(payload.args))?;
+	object.set("cancelTokenId", payload.cancel_token_id)?;
 	Ok(vec![object.into_unknown()])
 }
 
@@ -886,21 +701,59 @@ fn build_workflow_replay_payload(
 	Ok(vec![object.into_unknown()])
 }
 
+fn build_serialize_state_payload(
+	env: &Env,
+	payload: SerializeStatePayload,
+) -> napi::Result<Vec<napi::JsUnknown>> {
+	Ok(vec![env.create_string_from_std(payload.reason)?.into_unknown()])
+}
+
+fn build_request_object(env: &Env, request: Request) -> napi::Result<JsObject> {
+	let (method, uri, headers, body) = request.to_parts();
+	let mut request_object = env.create_object()?;
+	request_object.set("method", method)?;
+	request_object.set("uri", uri)?;
+	request_object.set("headers", headers)?;
+	request_object.set("body", Buffer::from(body))?;
+	Ok(request_object)
+}
+
 fn leak_str(value: String) -> &'static str {
 	Box::leak(value.into_boxed_str())
+}
+
+fn intern_bridge_rivet_error_schema(
+	payload: &BridgeRivetErrorPayload,
+) -> &'static RivetErrorSchema {
+	match BRIDGE_RIVET_ERROR_SCHEMAS
+		.entry_sync((payload.group.clone(), payload.code.clone()))
+	{
+		scc::hash_map::Entry::Occupied(entry) => *entry.get(),
+		scc::hash_map::Entry::Vacant(entry) => {
+			let schema = Box::leak(Box::new(RivetErrorSchema {
+				group: leak_str(payload.group.clone()),
+				code: leak_str(payload.code.clone()),
+				default_message: leak_str(payload.message.clone()),
+				meta_type: None,
+				_macro_marker: MacroMarker { _private: () },
+			}));
+			entry.insert_entry(schema);
+			schema
+		}
+	}
 }
 
 fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 	let prefix_index = reason.find(BRIDGE_RIVET_ERROR_PREFIX)?;
 	let payload = &reason[prefix_index + BRIDGE_RIVET_ERROR_PREFIX.len()..];
-	let payload: BridgeRivetErrorPayload = serde_json::from_str(payload).ok()?;
-	let schema = Box::leak(Box::new(RivetErrorSchema {
-		group: leak_str(payload.group),
-		code: leak_str(payload.code),
-		default_message: leak_str(payload.message.clone()),
-		meta_type: None,
-		_macro_marker: MacroMarker { _private: () },
-	}));
+	let payload: BridgeRivetErrorPayload = match serde_json::from_str(payload) {
+		Ok(payload) => payload,
+		Err(parse_err) => {
+			tracing::warn!(%reason, ?parse_err, "malformed BridgeRivetErrorPayload");
+			return None;
+		}
+	};
+	let schema = intern_bridge_rivet_error_schema(&payload);
 	let meta = payload
 		.metadata
 		.as_ref()
@@ -916,7 +769,10 @@ fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 	}))
 }
 
-fn callback_error(callback_name: &str, error: napi::Error) -> anyhow::Error {
+pub(crate) fn callback_error(
+	callback_name: &str,
+	error: napi::Error,
+) -> anyhow::Error {
 	let reason = error.reason;
 	if let Some(error) = parse_bridge_rivet_error(&reason) {
 		return error;
@@ -951,7 +807,7 @@ impl From<JsActorConfig> for FlatActorConfig {
 			on_sleep_timeout_ms: value.on_sleep_timeout_ms,
 			on_destroy_timeout_ms: value.on_destroy_timeout_ms,
 			action_timeout_ms: value.action_timeout_ms,
-			run_stop_timeout_ms: value.run_stop_timeout_ms,
+			run_stop_timeout_ms: None,
 			sleep_timeout_ms: value.sleep_timeout_ms,
 			no_sleep: value.no_sleep,
 			sleep_grace_period_ms: value.sleep_grace_period_ms,
@@ -965,4 +821,102 @@ impl From<JsActorConfig> for FlatActorConfig {
 			preload_max_connections_bytes: value.preload_max_connections_bytes,
 		}
 	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::io;
+	use std::io::Write;
+	use std::sync::{Arc, Mutex};
+
+	use rivet_error::{RivetError, RivetErrorSchema};
+	use tracing::Level;
+	use tracing_subscriber::fmt::MakeWriter;
+
+	use super::{parse_bridge_rivet_error, BRIDGE_RIVET_ERROR_PREFIX};
+
+	#[derive(Clone, Default)]
+	struct LogCapture(Arc<Mutex<Vec<u8>>>);
+
+	struct LogCaptureWriter(Arc<Mutex<Vec<u8>>>);
+
+	impl LogCapture {
+		fn output(&self) -> String {
+			String::from_utf8(self.0.lock().expect("log capture poisoned").clone())
+				.expect("log capture should stay utf-8")
+		}
+	}
+
+	impl<'a> MakeWriter<'a> for LogCapture {
+		type Writer = LogCaptureWriter;
+
+		fn make_writer(&'a self) -> Self::Writer {
+			LogCaptureWriter(Arc::clone(&self.0))
+		}
+	}
+
+	impl Write for LogCaptureWriter {
+		fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+			self
+				.0
+				.lock()
+				.expect("log capture poisoned")
+				.extend_from_slice(buf);
+			Ok(buf.len())
+		}
+
+		fn flush(&mut self) -> io::Result<()> {
+			Ok(())
+		}
+	}
+
+	fn schema_ptr(error: &anyhow::Error) -> *const RivetErrorSchema {
+		error
+			.chain()
+			.find_map(|cause| cause.downcast_ref::<RivetError>())
+			.map(|error| error.schema as *const RivetErrorSchema)
+			.expect("expected bridged rivet error")
+	}
+
+	#[test]
+	fn parse_bridge_rivet_error_reuses_interned_schema() {
+		let reason = format!(
+			"{BRIDGE_RIVET_ERROR_PREFIX}{}",
+			serde_json::json!({
+				"group": "actor",
+				"code": "same_code",
+				"message": "same message",
+				"metadata": { "count": 1 },
+			})
+		);
+
+		let first = parse_bridge_rivet_error(&reason).expect("first parse should succeed");
+		let second = parse_bridge_rivet_error(&reason).expect("second parse should succeed");
+
+		assert_eq!(schema_ptr(&first), schema_ptr(&second));
+	}
+
+	#[test]
+	fn parse_bridge_rivet_error_warns_for_malformed_payload() {
+		let capture = LogCapture::default();
+		let subscriber = tracing_subscriber::fmt()
+			.with_writer(capture.clone())
+			.with_max_level(Level::WARN)
+			.with_ansi(false)
+			.with_target(false)
+			.without_time()
+			.finish();
+		let _guard = tracing::subscriber::set_default(subscriber);
+
+		let malformed = format!("{BRIDGE_RIVET_ERROR_PREFIX}{{not-json");
+		assert!(parse_bridge_rivet_error(&malformed).is_none());
+
+		let logs = capture.output();
+		assert!(logs.contains("malformed BridgeRivetErrorPayload"));
+		assert!(logs.contains("parse_err"));
+	}
+}
+
+fn duration_ms_or(value: Option<u32>, default_ms: u64) -> Duration {
+	Duration::from_millis(value.map(u64::from).unwrap_or(default_ms))
 }

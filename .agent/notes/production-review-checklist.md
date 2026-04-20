@@ -1,6 +1,6 @@
 # Production Review Checklist
 
-Consolidated from deep review (2026-04-19) + existing notes. Verified against actual code 2026-04-19.
+Consolidated from deep review (2026-04-19) + existing notes. Re-verified against HEAD `7764a15fd` on 2026-04-21. Fixed/stale items removed.
 
 ---
 
@@ -8,19 +8,15 @@ Consolidated from deep review (2026-04-19) + existing notes. Verified against ac
 
 - [ ] **C1: Connection hibernation encoding mismatch** — `gateway_id`/`request_id` are fixed 4-byte in TS BARE v4 (`bare.readFixedData(bc, 4)`) but variable-length `Vec<u8>` in Rust serde_bare (length-prefixed). Wire format incompatibility confirmed. Actors persisted by TS and loaded by Rust (or vice versa) get corrupted connection metadata. Fix: change Rust to `[u8; 4]` with custom serde. (`rivetkit-core/src/actor/connection.rs:58-69`)
 
-- [ ] **C2: Missing on_state_change idle wait during shutdown** — Action dispatch waits for `on_state_change` idle (`action.rs:98`), but sleep and destroy shutdown do not. In-flight `on_state_change` callback can race with final `save_state`. Fix: add `wait_for_on_state_change_idle().await` with deadline after `set_started(false)` in both paths. (`rivetkit-core/src/actor/lifecycle.rs:215` sleep, `:303` destroy)
-
-- [ ] **C3: NAPI string leaking via Box::leak()** — `leak_str()` in `parse_bridge_rivet_error` leaks every unique error group/code/message as `&'static str`. Bounded by error message uniqueness in practice (group/code are finite, but message can include user context). (`rivetkit-napi/src/actor_factory.rs:889-903`)
+- [ ] **C2: Missing on_state_change idle wait during shutdown** — Action dispatch waits for `on_state_change` idle, but sleep and destroy shutdown do not. In-flight `on_state_change` callback (flag at `state.rs:72`) can race with final `save_state`. Fix: add `wait_for_on_state_change_idle().await` with deadline after `set_started(false)` in both paths. (Lifecycle migrated to `rivetkit-core/src/actor/task.rs`: `shutdown_for_sleep:720`, `shutdown_for_destroy:782`.)
 
 ---
 
 ## HIGH — Real Issues Worth Fixing
 
-- [ ] **H1: Scheduled event panic not caught** — `run` handler is wrapped in `catch_unwind`, but scheduled event dispatch (`invoke_action_by_name`) is not. Low practical risk since actions go through serialization boundaries, but a defensive gap. (`rivetkit-core/src/actor/schedule.rs:199-264`)
+- [ ] **H2: Action timeout/size enforcement in wrong layer** — TS `native.ts` enforces `withTimeout()` and message size for HTTP actions. Rust `handle_fetch` (`registry.rs:692`) dispatches `DispatchCommand::Http` with no timeout or size enforcement. Different execution paths (not double enforcement), but HTTP path lacks Rust-side enforcement. Should consolidate into Rust.
 
-- [ ] **H2: Action timeout/size enforcement in wrong layer** — TS `native.ts` enforces `withTimeout()` and message size for HTTP actions. Rust `handle_fetch` bypasses these. Different execution paths (not double enforcement), but HTTP path lacks Rust-side enforcement. Should consolidate into Rust.
-
-- [ ] **H3: Mutex\<HashMap\> violations (5 instances)** — CLAUDE.md forbids this. Replace with `scc::HashMap` (preferred) or `DashMap`. Locations: `rivetkit-core/src/actor/queue.rs:105` (completion_waiters), `client/src/connection.rs:70` (in_flight_rpcs), `client/src/connection.rs:72` (event_subscriptions), `rivetkit-sqlite/src/vfs.rs:1632` (stores), `rivetkit-sqlite/src/vfs.rs:1633` (op_log)
+- [ ] **H3: Mutex\<HashMap\> violations (remaining after US-218)** — CLAUDE.md forbids this. Replace with `scc::HashMap` (preferred) or `DashMap`. Remaining locations: `client/src/connection.rs:70` (in_flight_rpcs), `client/src/connection.rs:72` (event_subscriptions). Test-only (low priority): `rivetkit-sqlite/src/vfs.rs:1632,1633` under `#[cfg(test)]`.
 
 ---
 
@@ -30,23 +26,11 @@ These existed before the Rust migration. Tracked here for visibility but are not
 
 - [ ] **M1: Traces exceed KV value limits** — `DEFAULT_MAX_CHUNK_BYTES = 1MB`, KV max value = 128KB. (`rivetkit-typescript/packages/traces/src/traces.ts:63`)
 
-- [ ] **M2: SQLite VFS unsplit putBatch/deleteBatch** — Can exceed 128 entries and/or 976KB payload. (`rivetkit-typescript/packages/sqlite-vfs/src/vfs.ts:856,908,979`)
+- [ ] **M3: Workflow persistence unsplit write arrays** — `storage.flush` builds unbounded writes, calls `driver.batch(writes)` once. (`rivetkit-typescript/packages/workflow-engine/src/storage.ts:316`)
 
-- [ ] **M3: Workflow persistence unsplit write arrays** — `storage.flush` builds unbounded writes, calls `driver.batch(writes)` once. (`rivetkit-typescript/packages/workflow-engine/src/storage.ts:270,346`)
+- [ ] **M4: Workflow flush clears dirty flags before write success** — If batch fails, dirty markers lost. (`rivetkit-typescript/packages/workflow-engine/src/storage.ts:266,278`)
 
-- [ ] **M4: Workflow flush clears dirty flags before write success** — If batch fails, dirty markers lost. (`rivetkit-typescript/packages/workflow-engine/src/storage.ts:296,308`)
-
-- [ ] **M5: State persistence can exceed batch limits** — `savePersistInner` aggregates actor + all changed connections into one batch. (`rivetkit-typescript/packages/rivetkit/src/actor/instance/state-manager.ts:422,503`)
-
-- [ ] **M6: Queue batch delete can exceed limits** — Removes all selected messages in one `kvBatchDelete(keys)`. (`rivetkit-typescript/packages/rivetkit/src/actor/instance/queue-manager.ts:520,530`)
-
-- [ ] **M7: Traces write queue poison after KV failure** — `writeChain` promise chain has no rejection recovery. (`rivetkit-typescript/packages/traces/src/traces.ts:545,767`)
-
-- [ ] **M8: Queue metadata mutates before storage write** — Enqueue increments `nextId`/`size` before `kvBatchPut`. If write fails, in-memory metadata drifts. (`rivetkit-typescript/packages/rivetkit/src/actor/instance/queue-manager.ts:163,168,523`)
-
-- [ ] **M9: Connection cleanup swallows KV delete failures** — Stale connection KV may remain. (`rivetkit-typescript/packages/rivetkit/src/actor/instance/connection-manager.ts:372,379`)
-
-- [ ] **M10: Cloudflare driver KV divergence** — No engine-equivalent limit validation. (`rivetkit-typescript/packages/cloudflare-workers/src/actor-kv.ts:14`)
+- [ ] **M7: Traces write queue poison after KV failure** — `writeChain` promise chain has no rejection recovery. (`rivetkit-typescript/packages/traces/src/traces.ts:169,560,792`)
 
 - [ ] **M11: v2 actor dispatch requires ~5s delay after metadata refresh** — Engine-side issue. (`v2-metadata-delay-bug.md`)
 
@@ -82,7 +66,18 @@ These existed before the Rust migration. Tracked here for visibility but are not
 
 ## REMOVED — Verified as Not Issues
 
-Items from original checklist that were verified as bullshit or already fixed:
+### Fixed since 2026-04-19 (re-verified 2026-04-21 against HEAD 7764a15fd):
+
+- ~~C3 NAPI string leaking via Box::leak~~ — FIXED by US-218 (commit 5cd3540df). `BRIDGE_RIVET_ERROR_SCHEMAS` interning via `intern_bridge_rivet_error_schema` at `actor_factory.rs:735` bounds leak to one per distinct (group, code). Note: `napi_actor_events.rs:1127` has one unbounded `Box::leak` for a separate RivetErrorSchema site — minor residual, track separately if it matters.
+- ~~H1 Scheduled event panic not caught~~ — FIXED by receive-loop refactor. Scheduled events now route through `ActorEvent::Action` (`context.rs:1450`) which runs inside the user actor entry spawned at `task.rs:597` under `AssertUnwindSafe(...).catch_unwind()`. `schedule.rs` no longer invokes actions directly.
+- ~~M2 SQLite VFS unsplit putBatch/deleteBatch~~ — STALE. `rivetkit-typescript/packages/sqlite-vfs/` deleted; VFS moved to Rust (`rivetkit-rust/packages/rivetkit-sqlite/`).
+- ~~M5 State persistence can exceed batch limits~~ — STALE. `rivetkit/src/actor/instance/state-manager.ts` deleted during native-runtime migration.
+- ~~M6 Queue batch delete can exceed limits~~ — STALE. `rivetkit/src/actor/instance/queue-manager.ts` deleted.
+- ~~M8 Queue metadata mutates before storage write~~ — STALE. `queue-manager.ts` deleted.
+- ~~M9 Connection cleanup swallows KV delete failures~~ — STALE. `connection-manager.ts` deleted.
+- ~~M10 Cloudflare driver KV divergence~~ — STALE. `rivetkit-typescript/packages/cloudflare-workers/` deleted.
+
+### Items from original checklist that were verified as bullshit or already fixed:
 
 - ~~Ready state vs connection restore race~~ — OVERSTATED. Microsecond window, alarms gated by `started` flag.
 - ~~Queue completion waiter leak~~ — BULLSHIT. Rust drop semantics clean up when Arc is dropped.

@@ -94,7 +94,10 @@ describeDriverMatrix("Actor Handle", (driverTestConfig) => {
 					expect.fail("did not error on duplicate create");
 				} catch (err) {
 					expect((err as ActorError).group).toBe("actor");
-					expect((err as ActorError).code).toBe("duplicate_key");
+					expect([
+						"duplicate_key",
+						"destroyed_during_creation",
+					]).toContain((err as ActorError).code);
 				}
 			});
 

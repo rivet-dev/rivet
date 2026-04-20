@@ -1,7 +1,6 @@
 import * as cbor from "cbor-x";
 import invariant from "invariant";
 import pRetry from "p-retry";
-import type { CloseEvent } from "ws";
 import type { AnyActorDefinition } from "@/actor/definition";
 import {
 	type Encoding,
@@ -15,8 +14,8 @@ import type { EngineControlClient } from "@/engine-client/driver";
 import type * as protocol from "@/common/client-protocol";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
-	TO_CLIENT_VERSIONED,
-	TO_SERVER_VERSIONED,
+	CLIENT_PROTOCOL_TO_CLIENT,
+	CLIENT_PROTOCOL_TO_SERVER,
 } from "@/common/client-protocol-versioned";
 import {
 	type ToClient as ToClientJson,
@@ -54,6 +53,12 @@ import {
 	messageLength,
 	parseWebSocketCloseReason,
 } from "./utils";
+
+interface CloseEventLike {
+	code?: number;
+	reason?: string;
+	wasClean?: boolean;
+}
 
 /**
  * Connection status for an actor connection.
@@ -528,7 +533,7 @@ export class ActorConnRaw {
 				});
 			}
 		});
-		ws.addEventListener("close", async (ev: Event | CloseEvent) => {
+		ws.addEventListener("close", async (ev: Event | CloseEventLike) => {
 			try {
 				await this.#handleOnClose(ev);
 			} catch (err) {
@@ -752,9 +757,9 @@ export class ActorConnRaw {
 	}
 
 	/** Called by the onclose event from drivers. */
-	async #handleOnClose(event: Event | CloseEvent) {
+	async #handleOnClose(event: Event | CloseEventLike) {
 		// We can't use `event instanceof CloseEvent` because it's not defined in NodeJS
-		const closeEvent = event as CloseEvent;
+		const closeEvent = event as CloseEventLike;
 		const wasClean = closeEvent.wasClean;
 		const wasConnected = this.#connStatus === "connected";
 
@@ -1153,7 +1158,7 @@ export class ActorConnRaw {
 					const messageSerialized = serializeWithEncoding(
 						this.#encoding,
 						message,
-						TO_SERVER_VERSIONED,
+						CLIENT_PROTOCOL_TO_SERVER,
 						CLIENT_PROTOCOL_CURRENT_VERSION,
 						ToServerSchema,
 						// JSON: args is the raw value
@@ -1241,7 +1246,7 @@ export class ActorConnRaw {
 		return deserializeWithEncoding(
 			this.#encoding,
 			buffer,
-			TO_CLIENT_VERSIONED,
+			CLIENT_PROTOCOL_TO_CLIENT,
 			ToClientSchema,
 			// JSON: values are already the correct type
 			(msg): ToClientJson => msg as ToClientJson,

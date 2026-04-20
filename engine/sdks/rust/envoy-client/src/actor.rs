@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::anyhow;
 use rivet_envoy_protocol as protocol;
+use rivet_util::async_counter::AsyncCounter;
 use rivet_util_serde::HashableMap;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
@@ -55,9 +55,6 @@ pub enum ToActor {
 		message_id: protocol::MessageId,
 		close: protocol::ToEnvoyWebSocketClose,
 	},
-	HwsRestore {
-		meta_entries: Vec<crate::tunnel::HibernatingWebSocketMetadata>,
-	},
 	HwsAck {
 		gateway_id: protocol::GatewayId,
 		request_id: protocol::RequestId,
@@ -87,14 +84,11 @@ struct ActorContext {
 	pending_requests: BufferMap<PendingRequest>,
 	ws_entries: BufferMap<WsEntry>,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
-	active_http_request_count: Arc<AtomicUsize>,
+	active_http_request_count: Arc<AsyncCounter>,
 }
 
-/// `can_sleep()` reads this counter from another task. The `Release` decrement
-/// pairs with `Acquire` loads so seeing zero also observes prior writes from
-/// the completed HTTP request task.
 struct ActiveHttpRequestGuard {
-	active_http_request_count: Arc<AtomicUsize>,
+	active_http_request_count: Arc<AsyncCounter>,
 }
 
 struct PendingStop {
@@ -109,8 +103,8 @@ enum StopProgress {
 }
 
 impl ActiveHttpRequestGuard {
-	fn new(active_http_request_count: Arc<AtomicUsize>) -> Self {
-		active_http_request_count.fetch_add(1, Ordering::Relaxed);
+	fn new(active_http_request_count: Arc<AsyncCounter>) -> Self {
+		active_http_request_count.increment();
 		Self {
 			active_http_request_count,
 		}
@@ -119,10 +113,7 @@ impl ActiveHttpRequestGuard {
 
 impl Drop for ActiveHttpRequestGuard {
 	fn drop(&mut self) {
-		let previous = self
-			.active_http_request_count
-			.fetch_sub(1, Ordering::Release);
-		debug_assert!(previous > 0, "active HTTP request count underflow");
+		self.active_http_request_count.decrement();
 	}
 }
 
@@ -135,9 +126,9 @@ pub fn create_actor(
 	preloaded_kv: Option<protocol::PreloadedKv>,
 	sqlite_schema_version: u32,
 	sqlite_startup_data: Option<protocol::SqliteStartupData>,
-) -> (mpsc::UnboundedSender<ToActor>, Arc<AtomicUsize>) {
+) -> (mpsc::UnboundedSender<ToActor>, Arc<AsyncCounter>) {
 	let (tx, rx) = mpsc::unbounded_channel();
-	let active_http_request_count = Arc::new(AtomicUsize::new(0));
+	let active_http_request_count = Arc::new(AsyncCounter::new());
 	tokio::spawn(actor_inner(
 		shared,
 		actor_id,
@@ -163,7 +154,7 @@ async fn actor_inner(
 	sqlite_schema_version: u32,
 	sqlite_startup_data: Option<protocol::SqliteStartupData>,
 	mut rx: mpsc::UnboundedReceiver<ToActor>,
-	active_http_request_count: Arc<AtomicUsize>,
+	active_http_request_count: Arc<AsyncCounter>,
 ) {
 	let handle = EnvoyHandle {
 		shared: shared.clone(),
@@ -214,6 +205,22 @@ async fn actor_inner(
 			}),
 		);
 		return;
+	}
+
+	if let Some(meta_entries) = handle.take_pending_hibernation_restore(&actor_id) {
+		if let Err(error) = handle_hws_restore(&mut ctx, &handle, meta_entries).await {
+			tracing::error!(actor_id = %ctx.actor_id, ?error, "actor hibernation restore failed");
+			send_event(
+				&mut ctx,
+				protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
+					state: protocol::ActorState::ActorStateStopped(protocol::ActorStateStopped {
+						code: protocol::StopCode::Error,
+						message: Some(format!("{error:#}")),
+					}),
+				}),
+			);
+			return;
+		}
 	}
 
 	// Send running state
@@ -332,9 +339,6 @@ async fn actor_inner(
 					ToActor::WsClose { message_id, close } => {
 						handle_ws_close(&mut ctx, message_id, close).await;
 					}
-					ToActor::HwsRestore { meta_entries } => {
-						handle_hws_restore(&mut ctx, &handle, meta_entries).await;
-					}
 					ToActor::HwsAck {
 						gateway_id,
 						request_id,
@@ -377,7 +381,7 @@ fn send_event(ctx: &mut ActorContext, inner: protocol::Event) {
 async fn begin_stop(
 	ctx: &mut ActorContext,
 	handle: &EnvoyHandle,
-	http_request_tasks: &mut JoinSet<()>,
+	_http_request_tasks: &mut JoinSet<()>,
 	reason: protocol::StopActorReason,
 ) -> StopProgress {
 	let mut stop_code = if ctx.error.is_some() {
@@ -571,7 +575,7 @@ async fn abort_and_join_http_request_tasks(
 		return;
 	}
 
-	let active_http_request_count = ctx.active_http_request_count.load(Ordering::Acquire);
+	let active_http_request_count = ctx.active_http_request_count.load();
 	tracing::debug!(
 		actor_id = %ctx.actor_id,
 		active_http_request_count,
@@ -717,7 +721,7 @@ async fn handle_ws_open(
 	};
 
 	// Create outgoing channel BEFORE calling websocket() so the sender is available immediately
-	let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded_channel::<crate::config::WsOutgoing>();
+	let (outgoing_tx, outgoing_rx) = mpsc::unbounded_channel::<crate::config::WsOutgoing>();
 	let sender = crate::config::WebSocketSender {
 		tx: outgoing_tx.clone(),
 	};
@@ -768,20 +772,20 @@ async fn handle_ws_open(
 				outgoing_rx,
 			);
 
-			if !is_restoring_hibernatable {
-				// Restored hibernatable sockets were already opened before sleep.
-				send_actor_message(
-					ctx,
-					message_id.gateway_id,
-					message_id.request_id,
-					protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(
-						protocol::ToRivetWebSocketOpen {
-							can_hibernate: is_hibernatable,
-						},
-					),
-				)
-				.await;
-			}
+			// Gateway wake flows still wait for a websocket-open ack before they
+			// resume forwarding buffered client messages, even when the request is
+			// being restored after actor hibernation.
+			send_actor_message(
+				ctx,
+				message_id.gateway_id,
+				message_id.request_id,
+				protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(
+					protocol::ToRivetWebSocketOpen {
+						can_hibernate: is_hibernatable,
+					},
+				),
+			)
+			.await;
 
 			// Call on_open if provided
 			if let Some(ws) = ctx
@@ -926,7 +930,7 @@ async fn handle_hws_restore(
 	ctx: &mut ActorContext,
 	handle: &EnvoyHandle,
 	meta_entries: Vec<crate::tunnel::HibernatingWebSocketMetadata>,
-) {
+) -> anyhow::Result<()> {
 	tracing::debug!(
 		requests = ctx.hibernating_requests.len(),
 		"restoring hibernating requests"
@@ -1000,6 +1004,19 @@ async fn handle_hws_restore(
 							outgoing_tx: hws_outgoing_tx,
 						},
 					);
+					// Gateway wake flows wait for the websocket-open ack before
+					// they resume forwarding buffered client messages.
+					send_actor_message(
+						ctx,
+						hib_req.gateway_id,
+						hib_req.request_id,
+						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(
+							protocol::ToRivetWebSocketOpen {
+								can_hibernate: true,
+							},
+						),
+					)
+					.await;
 					tracing::info!(
 						request_id = id_to_str(&hib_req.request_id),
 						"connection successfully restored"
@@ -1102,6 +1119,7 @@ async fn handle_hws_restore(
 
 	ctx.hibernating_requests = hibernating_requests;
 	tracing::info!("restored hibernatable websockets");
+	Ok(())
 }
 
 async fn handle_hws_ack(
@@ -1263,15 +1281,17 @@ mod tests {
 	use std::collections::HashMap;
 	use std::future::pending;
 	use std::sync::Mutex;
-	use std::sync::atomic::AtomicBool;
+	use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 	use std::time::Duration;
 
 	use tokio::sync::Notify;
 	use tokio::sync::oneshot;
+	use tokio::task::yield_now;
+	use tokio::time::Instant;
 
 	use super::*;
 	use crate::config::{BoxFuture, EnvoyCallbacks, WebSocketHandler, WebSocketSender};
-	use crate::context::WsTxMessage;
+	use crate::context::{SharedActorEntry, WsTxMessage};
 	use crate::envoy::ToEnvoyMessage;
 
 	struct DropSignal(Option<oneshot::Sender<()>>);
@@ -1292,6 +1312,15 @@ mod tests {
 	}
 
 	impl TestCallbacks {
+		fn idle() -> Self {
+			Self {
+				fetch_started_tx: Mutex::new(None),
+				fetch_dropped_tx: Mutex::new(None),
+				release_fetch: Arc::new(Notify::new()),
+				complete_fetch: AtomicBool::new(true),
+			}
+		}
+
 		fn completing(
 			fetch_started_tx: oneshot::Sender<()>,
 			release_fetch: Arc<Notify>,
@@ -1521,6 +1550,9 @@ mod tests {
 			},
 			envoy_key: "test-envoy".to_string(),
 			envoy_tx,
+			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
 			ws_tx: Arc::new(tokio::sync::Mutex::new(None::<mpsc::UnboundedSender<WsTxMessage>>)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
@@ -1556,18 +1588,13 @@ mod tests {
 		}
 	}
 
-	async fn wait_for_count(active_http_request_count: &Arc<AtomicUsize>, expected: usize) {
-		tokio::time::timeout(Duration::from_secs(2), async {
-			loop {
-				if active_http_request_count.load(Ordering::Acquire) == expected {
-					return;
-				}
-
-				tokio::time::sleep(Duration::from_millis(10)).await;
-			}
-		})
-		.await
-		.expect("timed out waiting for active HTTP request count");
+	async fn wait_for_zero(active_http_request_count: &Arc<AsyncCounter>) {
+		assert!(
+			active_http_request_count
+				.wait_zero(Instant::now() + Duration::from_secs(2))
+				.await,
+			"timed out waiting for active HTTP request count to reach zero"
+		);
 	}
 
 	async fn wait_for_stopped_event(envoy_rx: &mut mpsc::UnboundedReceiver<ToEnvoyMessage>) {
@@ -1652,10 +1679,10 @@ mod tests {
 			.await
 			.expect("timed out waiting for fetch start")
 			.expect("fetch start sender dropped");
-		assert_eq!(active_http_request_count.load(Ordering::Acquire), 1);
+		assert_eq!(active_http_request_count.load(), 1);
 
 		release_fetch.notify_waiters();
-		wait_for_count(&active_http_request_count, 0).await;
+		wait_for_zero(&active_http_request_count).await;
 
 		actor_tx
 			.send(ToActor::Stop {
@@ -1694,7 +1721,7 @@ mod tests {
 			.await
 			.expect("timed out waiting for fetch start")
 			.expect("fetch start sender dropped");
-		assert_eq!(active_http_request_count.load(Ordering::Acquire), 1);
+		assert_eq!(active_http_request_count.load(), 1);
 
 		actor_tx
 			.send(ToActor::Stop {
@@ -1708,7 +1735,7 @@ mod tests {
 			.expect("timed out waiting for fetch abort")
 			.expect("fetch drop sender dropped");
 		wait_for_stopped_event(&mut envoy_rx).await;
-		assert_eq!(active_http_request_count.load(Ordering::Acquire), 0);
+		assert_eq!(active_http_request_count.load(), 0);
 	}
 
 	#[tokio::test]
@@ -1744,5 +1771,77 @@ mod tests {
 
 		assert!(stop_handle.complete(), "stop handle should complete once");
 		wait_for_stopped_event(&mut envoy_rx).await;
+	}
+
+	#[tokio::test]
+	async fn http_request_guard_counter_is_visible_through_envoy_handle() {
+		let (shared, _envoy_rx) = build_shared_context(Arc::new(TestCallbacks::idle()));
+		let handle = EnvoyHandle {
+			shared: shared.clone(),
+			started_rx: tokio::sync::watch::channel(()).1,
+		};
+		let counter = Arc::new(AsyncCounter::new());
+		shared
+			.actors
+			.lock()
+			.expect("shared actor registry poisoned")
+			.entry("actor-4".to_string())
+			.or_insert_with(HashMap::new)
+			.insert(
+				4,
+				SharedActorEntry {
+					handle: mpsc::unbounded_channel().0,
+					active_http_request_count: counter.clone(),
+				},
+			);
+
+		let request_guard = ActiveHttpRequestGuard::new(counter);
+		let handle_counter = handle
+			.http_request_counter("actor-4", Some(4))
+			.expect("counter should be returned");
+		assert_eq!(handle_counter.load(), 1);
+
+		drop(request_guard);
+		assert_eq!(handle_counter.load(), 0);
+		assert!(
+			handle_counter
+				.wait_zero(Instant::now() + Duration::from_secs(2))
+				.await
+		);
+	}
+
+	#[tokio::test]
+	async fn active_http_request_counter_waiter_wakes_only_after_final_drop() {
+		let counter = Arc::new(AsyncCounter::new());
+		let guard_a = ActiveHttpRequestGuard::new(counter.clone());
+		let guard_b = ActiveHttpRequestGuard::new(counter.clone());
+		let wake_count = Arc::new(AtomicUsize::new(0));
+
+		let waiter = tokio::spawn({
+			let counter = counter.clone();
+			let wake_count = wake_count.clone();
+			async move {
+				let woke = counter
+					.wait_zero(Instant::now() + Duration::from_secs(2))
+					.await;
+				if woke {
+					wake_count.fetch_add(1, Ordering::SeqCst);
+				}
+				woke
+			}
+		});
+
+		yield_now().await;
+		drop(guard_a);
+		yield_now().await;
+		assert_eq!(wake_count.load(Ordering::SeqCst), 0);
+		assert!(
+			!waiter.is_finished(),
+			"waiter should stay pending until the final in-flight request completes"
+		);
+
+		drop(guard_b);
+		assert!(waiter.await.expect("waiter should join"));
+		assert_eq!(wake_count.load(Ordering::SeqCst), 1);
 	}
 }
