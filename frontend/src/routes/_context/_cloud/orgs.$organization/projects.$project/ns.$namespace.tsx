@@ -5,7 +5,6 @@ import {
 	useNavigate,
 	useSearch,
 } from "@tanstack/react-router";
-import { posthog } from "@/lib/posthog";
 import { GettingStarted } from "@/app/getting-started";
 import { SidebarlessHeader } from "@/app/layout";
 import { NotFoundCard } from "@/app/not-found-card";
@@ -14,6 +13,7 @@ import { useDialog } from "@/app/use-dialog";
 import { FullscreenLoading, ls } from "@/components";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { isRivetApiError } from "@/lib/errors";
+import { posthog } from "@/lib/posthog";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",

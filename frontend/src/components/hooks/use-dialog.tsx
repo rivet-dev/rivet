@@ -253,10 +253,6 @@ export const createDataDialogHook = <
 
 export function useDialog() {}
 
-useDialog.GoToActor = createDialogHook(
-	() => import("../actors/dialogs/go-to-actor-dialog"),
-);
-
 useDialog.Feedback = createDialogHook(
 	() => import("../dialogs/feedback-dialog"),
 );

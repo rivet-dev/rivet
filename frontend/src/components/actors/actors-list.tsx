@@ -39,6 +39,7 @@ import { ActorsListRow, ActorsListRowSkeleton } from "./actors-list-row";
 import { useActorsView } from "./actors-view-context-provider";
 import { CreateActorButton } from "./create-actor-button";
 import { useDataProvider } from "./data-provider";
+import { GoToActorButton } from "./go-to-actor-button";
 import { NoProvidersAlert } from "./no-providers-alert";
 import { useRootLayout } from "./root-layout-context";
 
@@ -375,7 +376,7 @@ function useFiltersChangeCallback(): OnFiltersChange {
 					},
 				});
 
-				setLs(fnOrValue(value));
+				setLs(pick(fnOrValue(value), { onlyEphemeral: true }));
 			} else {
 				navigate({
 					to: ".",
@@ -388,7 +389,7 @@ function useFiltersChangeCallback(): OnFiltersChange {
 						),
 					}),
 				});
-				setLs(fnOrValue || {});
+				setLs(pick(fnOrValue || {}, { onlyEphemeral: true }));
 			}
 		},
 		[navigate, pick, remove, setLs, value],
@@ -396,19 +397,7 @@ function useFiltersChangeCallback(): OnFiltersChange {
 }
 
 function Filters() {
-	const { definitions } = useActorsFilters();
-	const filters = useFiltersValue();
-	const onFiltersChange = useFiltersChangeCallback();
-
-	return (
-		<FilterCreator
-			text="Go to Actor"
-			value={filters}
-			onChange={onFiltersChange}
-			definitions={definitions}
-			icon={<Icon icon={faMagnifyingGlass} />}
-		/>
-	);
+	return <GoToActorButton />;
 }
 
 function Display() {
