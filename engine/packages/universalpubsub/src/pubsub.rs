@@ -288,23 +288,18 @@ impl PubSub {
 		let inner = self.0.clone();
 		let reply_subject_clone = reply_subject.clone();
 		tokio::spawn(async move {
-			loop {
-				match reply_subscriber.next().await {
-					std::result::Result::Ok(NextOutput::Message(msg)) => {
-						// Already decoded; forward payload
-						if let Some((_, tx)) = inner
-							.reply_subscribers
-							.remove_async(&reply_subject_clone)
-							.await
-						{
-							let _ = tx.send(msg.payload);
-						}
-						metrics::REPLY_SUBSCRIBER_COUNT.set(inner.reply_subscribers.len() as i64);
-						break;
-					}
-					std::result::Result::Ok(NextOutput::Unsubscribed)
-					| std::result::Result::Err(_) => break,
+			if let std::result::Result::Ok(NextOutput::Message(msg)) =
+				reply_subscriber.next().await
+			{
+				// Already decoded; forward payload
+				if let Some((_, tx)) = inner
+					.reply_subscribers
+					.remove_async(&reply_subject_clone)
+					.await
+				{
+					let _ = tx.send(msg.payload);
 				}
+				metrics::REPLY_SUBSCRIBER_COUNT.set(inner.reply_subscribers.len() as i64);
 			}
 		});
 

@@ -1,0 +1,5 @@
+{
+  "code": "invalid_state",
+  "group": "napi",
+  "message": "Invalid native state"
+}

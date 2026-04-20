@@ -1,11 +1,9 @@
 import * as cbor from "cbor-x";
 import { CONN_DRIVER_SYMBOL, CONN_STATE_MANAGER_SYMBOL } from "@/actor/config";
 import { RivetError } from "@/actor/errors";
-import { KEYS } from "@/actor/keys";
-import { generateSecureToken, Lock } from "@/actor/utils";
+import { Lock } from "@/actor/utils";
 import type * as schema from "@/common/bare/inspector/v4";
 import { bufferToArrayBuffer, toUint8Array } from "@/utils";
-import { timingSafeEqual } from "@/utils/crypto";
 
 export interface ActorInspectorWorkflowAdapter {
 	getHistory: () => schema.WorkflowHistory | null;
@@ -141,7 +139,6 @@ function toInspectorU64(value: number | bigint): bigint {
 }
 
 export class ActorInspector {
-	#lastQueueSize = 0;
 	#databaseLock = new Lock<void>(undefined);
 	#workflow?: ActorInspectorWorkflowAdapter;
 
@@ -151,43 +148,7 @@ export class ActorInspector {
 			workflow?: ActorInspectorWorkflowAdapter;
 		},
 	) {
-		this.#lastQueueSize = actor.queueManager.size ?? 0;
 		this.#workflow = options?.workflow;
-	}
-
-	async loadToken(): Promise<string | null> {
-		const raw = await this.actor.kv.get(KEYS.INSPECTOR_TOKEN);
-		if (!raw) {
-			return null;
-		}
-
-		return new TextDecoder().decode(raw);
-	}
-
-	async generateToken(): Promise<string> {
-		const token = generateSecureToken();
-		await this.actor.kv.put(
-			KEYS.INSPECTOR_TOKEN,
-			new TextEncoder().encode(token),
-		);
-		return token;
-	}
-
-	async verifyToken(token: string): Promise<boolean> {
-		const current = await this.loadToken();
-		if (!current) {
-			return false;
-		}
-
-		return timingSafeEqual(token, current);
-	}
-
-	getQueueSize(): number {
-		return this.#lastQueueSize;
-	}
-
-	updateQueueSize(size: number): void {
-		this.#lastQueueSize = size;
 	}
 
 	isWorkflowEnabled(): boolean {
@@ -295,13 +256,17 @@ export class ActorInspector {
 		const maxSize = this.actor.config.options?.maxQueueSize ?? 0;
 		const safeLimit = Math.max(0, Math.floor(limit));
 		const messages = await this.actor.queueManager.getMessages();
+		const queueSize = Math.max(
+			0,
+			Math.floor(this.actor.queueManager.size ?? messages.length),
+		);
 		const sorted = [...messages].sort((a, b) =>
 			Number(toInspectorU64(a.createdAt) - toInspectorU64(b.createdAt)),
 		);
 		const limited = safeLimit > 0 ? sorted.slice(0, safeLimit) : [];
 
 		return {
-			size: BigInt(this.#lastQueueSize),
+			size: BigInt(queueSize),
 			maxSize: BigInt(maxSize),
 			truncated: sorted.length > limited.length,
 			messages: limited.map((message) => ({
@@ -396,7 +361,9 @@ export class ActorInspector {
 			isStateEnabled: this.actor.stateEnabled,
 			rpcs: this.getRpcs(),
 			isDatabaseEnabled: this.isDatabaseEnabled(),
-			queueSize: BigInt(this.#lastQueueSize),
+			queueSize: BigInt(
+				Math.max(0, Math.floor(this.actor.queueManager.size ?? 0)),
+			),
 			workflowHistory: this.getWorkflowHistory(),
 			isWorkflowEnabled: this.isWorkflowEnabled(),
 		};

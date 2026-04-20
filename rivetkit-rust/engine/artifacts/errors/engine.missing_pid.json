@@ -1,0 +1,5 @@
+{
+  "code": "missing_pid",
+  "group": "engine",
+  "message": "Engine process is missing a pid."
+}

@@ -1,0 +1,5 @@
+{
+  "code": "shutdown_timeout",
+  "group": "actor",
+  "message": "Actor shutdown timed out."
+}

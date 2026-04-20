@@ -1,7 +1,6 @@
 import * as cbor from "cbor-x";
 import { describe, expect, test } from "vitest";
 import { CONN_DRIVER_SYMBOL, CONN_STATE_MANAGER_SYMBOL } from "@/actor/config";
-import { KEYS } from "@/actor/keys";
 import {
 	ActorInspector,
 	type ActorInspectorActor,
@@ -171,21 +170,6 @@ function buildActor(): {
 }
 
 describe("actor inspector", () => {
-	test("stores, loads, and verifies inspector tokens at the inspector key", async () => {
-		const { actor, kv } = buildActor();
-		const inspector = new ActorInspector(actor);
-
-		const token = await inspector.generateToken();
-
-		expect(token.length).toBeGreaterThan(10);
-		expect(Array.from(kv.lastPutKey ?? [])).toEqual(
-			Array.from(KEYS.INSPECTOR_TOKEN),
-		);
-		expect(await inspector.loadToken()).toBe(token);
-		expect(await inspector.verifyToken(token)).toBe(true);
-		expect(await inspector.verifyToken(`${token}-nope`)).toBe(false);
-	});
-
 	test("builds init snapshots, queue responses, and workflow responses from actor state", async () => {
 		const { actor } = buildActor();
 		const history = encode({ steps: ["wake", "run"] });
@@ -196,6 +180,7 @@ describe("actor inspector", () => {
 					encode({ replayedFrom: entryId ?? null }),
 			},
 		});
+		actor.queueManager.size = 5;
 
 		const init = await inspector.getInit();
 		const queue = await inspector.getQueueResponse(9n, 2);
@@ -209,7 +194,7 @@ describe("actor inspector", () => {
 		expect(init.isDatabaseEnabled).toBe(true);
 		expect(init.rpcs).toEqual(["increment", "getCount"]);
 		expect(decode(init.state as ArrayBuffer)).toEqual({ count: 2 });
-		expect(init.queueSize).toBe(3n);
+		expect(init.queueSize).toBe(5n);
 		expect(init.workflowHistory).toBe(history);
 		expect(init.connections).toHaveLength(1);
 		expect(decode(init.connections[0].details)).toEqual({
@@ -224,7 +209,7 @@ describe("actor inspector", () => {
 		expect(queue).toEqual({
 			rid: 9n,
 			status: {
-				size: 3n,
+				size: 5n,
 				maxSize: 1000n,
 				truncated: true,
 				messages: [

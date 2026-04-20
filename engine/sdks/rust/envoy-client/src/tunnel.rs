@@ -1,7 +1,17 @@
 use rivet_envoy_protocol as protocol;
 
 use crate::connection::ws_send;
-use crate::envoy::EnvoyContext;
+use crate::envoy::{BufferedActorMessage, EnvoyContext};
+
+fn make_ws_key(
+	gateway_id: &protocol::GatewayId,
+	request_id: &protocol::RequestId,
+) -> [u8; 8] {
+	let mut key = [0u8; 8];
+	key[..4].copy_from_slice(gateway_id);
+	key[4..].copy_from_slice(request_id);
+	key
+}
 
 pub struct HibernatingWebSocketMetadata {
 	pub gateway_id: protocol::GatewayId,
@@ -137,6 +147,15 @@ async fn handle_ws_open(
 		&[&message_id.gateway_id, &message_id.request_id],
 		actor_id.clone(),
 	);
+	ctx
+		.shared
+		.live_tunnel_requests
+		.lock()
+		.expect("shared live tunnel request registry poisoned")
+		.insert(
+			make_ws_key(&message_id.gateway_id, &message_id.request_id),
+			actor_id.clone(),
+		);
 
 	// Convert HashableMap headers to BTreeMap for the actor message
 	let headers = open
@@ -167,6 +186,12 @@ fn handle_ws_message(
 			let _ = actor
 				.handle
 				.send(crate::actor::ToActor::WsMsg { message_id, msg });
+		} else {
+			ctx
+				.buffered_actor_messages
+				.entry(actor_id.clone())
+				.or_default()
+				.push(BufferedActorMessage::WsMsg { message_id, msg });
 		}
 	}
 }
@@ -186,11 +211,26 @@ fn handle_ws_close(
 				message_id: message_id.clone(),
 				close,
 			});
+		} else {
+			ctx
+				.buffered_actor_messages
+				.entry(actor_id.clone())
+				.or_default()
+				.push(BufferedActorMessage::WsClose {
+					message_id: message_id.clone(),
+					close,
+				});
 		}
 	}
 
 	ctx.request_to_actor
 		.remove(&[&message_id.gateway_id, &message_id.request_id]);
+	ctx
+		.shared
+		.live_tunnel_requests
+		.lock()
+		.expect("shared live tunnel request registry poisoned")
+		.remove(&make_ws_key(&message_id.gateway_id, &message_id.request_id));
 }
 
 pub fn send_hibernatable_ws_message_ack(

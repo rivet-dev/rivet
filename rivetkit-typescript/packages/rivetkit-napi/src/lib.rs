@@ -1,5 +1,7 @@
 pub mod actor_context;
 pub mod actor_factory;
+pub mod cancel_token;
+pub mod napi_actor_events;
 pub mod bridge_actor;
 pub mod cancellation_token;
 pub mod connection;
@@ -18,9 +20,9 @@ use std::sync::Arc;
 use std::sync::Once;
 
 use napi_derive::napi;
-use rivet_envoy_client::config::{ActorName, EnvoyConfig};
-use rivet_envoy_client::envoy::start_envoy_sync;
 use rivet_error::RivetError as RivetTransportError;
+use rivet_envoy_client::config::EnvoyConfig;
+use rivet_envoy_client::envoy::start_envoy_sync;
 use tokio::runtime::Runtime;
 
 static INIT_TRACING: Once = Once::new();
@@ -43,7 +45,10 @@ pub(crate) fn napi_anyhow_error(error: anyhow::Error) -> napi::Error {
 		"public": bridge_context.and_then(|context| context.public_),
 		"statusCode": bridge_context.and_then(|context| context.status_code),
 	});
-	napi::Error::from_reason(format!("{BRIDGE_RIVET_ERROR_PREFIX}{}", payload))
+	napi::Error::from_reason(format!(
+		"{BRIDGE_RIVET_ERROR_PREFIX}{}",
+		payload
+	))
 }
 
 fn init_tracing(log_level: Option<&str>) {
@@ -65,8 +70,8 @@ fn init_tracing(log_level: Option<&str>) {
 }
 
 use crate::bridge_actor::{
-	BridgeCallbacks, CanHibernateResponseMap, ResponseMap, SqliteSchemaVersionMap, SqliteStartupMap,
-	WsSenderMap,
+	BridgeCallbacks, CanHibernateResponseMap, ResponseMap, SqliteSchemaVersionMap,
+	SqliteStartupMap, WsSenderMap,
 };
 use crate::envoy_handle::JsEnvoyHandle;
 use crate::types::JsEnvoyConfig;
@@ -86,13 +91,12 @@ pub fn start_envoy_sync_js(
 		.map_err(|e| napi::Error::from_reason(format!("failed to create tokio runtime: {}", e)))?;
 	let runtime = Arc::new(runtime);
 
-	let response_map: ResponseMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
-	let ws_sender_map: WsSenderMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+	let response_map: ResponseMap = Arc::new(scc::HashMap::new());
+	let ws_sender_map: WsSenderMap = Arc::new(scc::HashMap::new());
 	let can_hibernate_response_map: CanHibernateResponseMap =
 		Arc::new(tokio::sync::Mutex::new(HashMap::new()));
-	let sqlite_startup_map: SqliteStartupMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
-	let sqlite_schema_version_map: SqliteSchemaVersionMap =
-		Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+	let sqlite_startup_map: SqliteStartupMap = Arc::new(scc::HashMap::new());
+	let sqlite_schema_version_map: SqliteSchemaVersionMap = Arc::new(scc::HashMap::new());
 
 	// Create threadsafe callback for bridging events to JS
 	let tsfn: bridge_actor::EventCallback = event_callback.create_threadsafe_function(
@@ -119,18 +123,7 @@ pub fn start_envoy_sync_js(
 		token: Some(config.token),
 		namespace: config.namespace,
 		pool_name: config.pool_name,
-		prepopulate_actor_names: config
-			.prepopulate_actor_names
-			.into_iter()
-			.map(|(name, data)| {
-				(
-					name,
-					ActorName {
-						metadata: data.metadata,
-					},
-				)
-			})
-			.collect(),
+		prepopulate_actor_names: HashMap::new(),
 		metadata: config.metadata,
 		not_global: config.not_global,
 		debug_latency_ms: None,

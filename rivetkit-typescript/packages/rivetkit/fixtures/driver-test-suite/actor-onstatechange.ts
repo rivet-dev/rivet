@@ -3,6 +3,8 @@ import { actor } from "rivetkit";
 export const onStateChangeActor = actor({
 	state: {
 		value: 0,
+	},
+	vars: {
 		changeCount: 0,
 	},
 	actions: {
@@ -29,15 +31,15 @@ export const onStateChangeActor = actor({
 		},
 		// Get the count of how many times onStateChange was called
 		getChangeCount: (c) => {
-			return c.state.changeCount;
+			return c.vars.changeCount;
 		},
 		// Reset change counter for testing
 		resetChangeCount: (c) => {
-			c.state.changeCount = 0;
+			c.vars.changeCount = 0;
 		},
 	},
 	// Track onStateChange calls
 	onStateChange: (c) => {
-		c.state.changeCount++;
+		c.vars.changeCount++;
 	},
 });

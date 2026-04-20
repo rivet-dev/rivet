@@ -197,6 +197,24 @@ export interface DeconstructedError {
 	metadata?: unknown;
 }
 
+function isCanonicalStructuredRivetError(
+	error: unknown,
+): error is errors.RivetErrorLike {
+	return (
+		error instanceof errors.RivetError ||
+		(typeof error === "object" &&
+			error !== null &&
+			"__type" in error &&
+			error.__type === "RivetError" &&
+			"group" in error &&
+			typeof error.group === "string" &&
+			"code" in error &&
+			typeof error.code === "string" &&
+			"message" in error &&
+			typeof error.message === "string")
+	);
+}
+
 /** Deconstructs error in to components that are used to build responses. */
 export function deconstructError(
 	error: unknown,
@@ -213,7 +231,31 @@ export function deconstructError(
 	let code: string;
 	let message: string;
 	let metadata: unknown;
-	if (errors.ActorError.isActorError(error) && error.public) {
+	// Structured errors from core or from pre-built `RivetError` instances are canonical.
+	// Only unstructured errors go through the classifier below.
+	if (isCanonicalStructuredRivetError(error)) {
+		statusCode = (
+			typeof error.statusCode === "number"
+				? error.statusCode
+				: error.public
+					? 400
+					: 500
+		) as ContentfulStatusCode;
+		public_ = error.public ?? false;
+		group = error.group;
+		code = error.code;
+		message = error.message;
+		metadata = error.metadata;
+
+		logger.info({
+			msg: "structured error passthrough",
+			group,
+			code,
+			message,
+			...EXTRA_ERROR_LOG,
+			...extraLog,
+		});
+	} else if (errors.ActorError.isActorError(error) && error.public) {
 		// Check if error has statusCode (could be ActorError instance or DeconstructedError)
 		statusCode = (
 			"statusCode" in error && error.statusCode ? error.statusCode : 400

@@ -4,6 +4,8 @@ import { describe, expect, test, vi } from "vitest";
 import { HIBERNATION_SLEEP_TIMEOUT } from "../../fixtures/driver-test-suite/hibernation";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
+const CONNECTION_READY_TIMEOUT_MS = 15_000;
+
 describeDriverMatrix("Actor Conn Hibernation", (driverTestConfig) => {
 	describe.skipIf(driverTestConfig.skip?.hibernation)(
 		"Connection Hibernation",
@@ -106,10 +108,16 @@ describeDriverMatrix("Actor Conn Hibernation", (driverTestConfig) => {
 					openCount += 1;
 				});
 
-				await vi.waitFor(() => {
-					expect(hibernatingActor.isConnected).toBe(true);
-					expect(openCount).toBe(1);
-				});
+				await vi.waitFor(
+					() => {
+						expect(hibernatingActor.isConnected).toBe(true);
+						expect(openCount).toBe(1);
+					},
+					{
+						timeout: CONNECTION_READY_TIMEOUT_MS,
+						interval: 100,
+					},
+				);
 
 				for (let i = 0; i < 2; i++) {
 					await hibernatingActor.triggerSleep();
@@ -191,9 +199,15 @@ describeDriverMatrix("Actor Conn Hibernation", (driverTestConfig) => {
 						.getOrCreate([`sleep-window-${delayMs}`])
 						.connect();
 
-					await vi.waitFor(async () => {
-						expect(connection.isConnected).toBe(true);
-					});
+					await vi.waitFor(
+						async () => {
+							expect(connection.isConnected).toBe(true);
+						},
+						{
+							timeout: CONNECTION_READY_TIMEOUT_MS,
+							interval: 100,
+						},
+					);
 
 					const sleepingPromise = new Promise<void>((resolve) => {
 						connection.once("sleeping", () => {

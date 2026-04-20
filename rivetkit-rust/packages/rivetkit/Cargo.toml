@@ -9,6 +9,11 @@ workspace = "../../../"
 [features]
 default = ["sqlite"]
 sqlite = ["rivetkit-core/sqlite"]
+typed-event-loop-example = []
+
+[[example]]
+name = "counter"
+required-features = ["typed-event-loop-example"]
 
 [dependencies]
 anyhow.workspace = true
@@ -23,3 +28,6 @@ serde.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true

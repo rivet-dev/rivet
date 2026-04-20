@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 use std::fmt;
 use std::future::pending;
 use std::sync::Arc;
@@ -8,6 +8,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow};
 use rivet_error::RivetError;
+use scc::HashMap as SccHashMap;
 use serde::{Deserialize, Serialize};
 use tokio::runtime::{Builder, Handle};
 use tokio::sync::{Mutex, Notify, OnceCell, oneshot};
@@ -15,7 +16,10 @@ use tokio_util::sync::CancellationToken;
 
 use crate::actor::config::ActorConfig;
 use crate::actor::metrics::ActorMetrics;
-use crate::actor::persist::{decode_with_embedded_version, encode_with_embedded_version};
+use crate::actor::persist::{
+	decode_with_embedded_version, encode_with_embedded_version,
+};
+use crate::actor::task_types::UserTaskKind;
 use crate::kv::Kv;
 use crate::types::ListOpts;
 
@@ -93,6 +97,9 @@ impl Default for QueueTryNextBatchOpts {
 #[derive(Clone)]
 pub struct Queue(Arc<QueueInner>);
 
+type WaitActivityCallback = Arc<dyn Fn() + Send + Sync>;
+type InspectorUpdateCallback = Arc<dyn Fn(u32) + Send + Sync>;
+
 struct QueueInner {
 	kv: Kv,
 	config: StdMutex<ActorConfig>,
@@ -100,11 +107,11 @@ struct QueueInner {
 	initialize: OnceCell<()>,
 	metadata: Mutex<QueueMetadata>,
 	receive_lock: Mutex<()>,
-	completion_waiters: Mutex<HashMap<u64, oneshot::Sender<Option<Vec<u8>>>>>,
+	completion_waiters: SccHashMap<u64, oneshot::Sender<Option<Vec<u8>>>>,
 	notify: Notify,
 	active_queue_wait_count: AtomicU32,
-	wait_activity_callback: StdMutex<Option<Arc<dyn Fn() + Send + Sync>>>,
-	inspector_update_callback: StdMutex<Option<Arc<dyn Fn(u32) + Send + Sync>>>,
+	wait_activity_callback: StdMutex<Option<WaitActivityCallback>>,
+	inspector_update_callback: StdMutex<Option<InspectorUpdateCallback>>,
 	metrics: ActorMetrics,
 }
 
@@ -157,7 +164,11 @@ fn encode_queue_metadata(metadata: &QueueMetadata) -> Result<Vec<u8>> {
 }
 
 fn decode_queue_metadata(payload: &[u8]) -> Result<QueueMetadata> {
-	decode_with_embedded_version(payload, QUEUE_PAYLOAD_COMPATIBLE_VERSIONS, "queue metadata")
+	decode_with_embedded_version(
+		payload,
+		QUEUE_PAYLOAD_COMPATIBLE_VERSIONS,
+		"queue metadata",
+	)
 }
 
 fn encode_queue_message(message: &PersistedQueueMessage) -> Result<Vec<u8>> {
@@ -165,7 +176,11 @@ fn encode_queue_message(message: &PersistedQueueMessage) -> Result<Vec<u8>> {
 }
 
 fn decode_queue_message(payload: &[u8]) -> Result<PersistedQueueMessage> {
-	decode_with_embedded_version(payload, QUEUE_PAYLOAD_COMPATIBLE_VERSIONS, "queue message")
+	decode_with_embedded_version(
+		payload,
+		QUEUE_PAYLOAD_COMPATIBLE_VERSIONS,
+		"queue message",
+	)
 }
 
 #[derive(RivetError, Serialize, Deserialize)]
@@ -192,7 +207,11 @@ struct QueueMessageTooLarge {
 }
 
 #[derive(RivetError)]
-#[error("queue", "already_completed", "Queue message was already completed")]
+#[error(
+	"queue",
+	"already_completed",
+	"Queue message was already completed"
+)]
 struct QueueAlreadyCompleted;
 
 #[derive(RivetError, Serialize, Deserialize)]
@@ -235,7 +254,7 @@ impl Queue {
 			initialize: OnceCell::new(),
 			metadata: Mutex::new(QueueMetadata::default()),
 			receive_lock: Mutex::new(()),
-			completion_waiters: Mutex::new(HashMap::new()),
+			completion_waiters: SccHashMap::new(),
 			notify: Notify::new(),
 			active_queue_wait_count: AtomicU32::new(0),
 			wait_activity_callback: StdMutex::new(None),
@@ -255,7 +274,9 @@ impl Queue {
 		opts: EnqueueAndWaitOpts,
 	) -> Result<Option<Vec<u8>>> {
 		let (sender, receiver) = oneshot::channel();
-		let message = self.enqueue_message(name, body, Some(sender)).await?;
+		let message = self
+			.enqueue_message(name, body, Some(sender))
+			.await?;
 		let result = self
 			.wait_for_completion_response(message.id, receiver, opts.timeout, opts.signal.as_ref())
 			.await;
@@ -281,7 +302,8 @@ impl Queue {
 			in_flight: None,
 			in_flight_at: None,
 		};
-		let encoded_message = encode_queue_message(&persisted).context("encode queue message")?;
+		let encoded_message =
+			encode_queue_message(&persisted).context("encode queue message")?;
 
 		let config = self.config();
 		if encoded_message.len() > config.max_queue_message_size as usize {
@@ -289,8 +311,7 @@ impl Queue {
 				size: encoded_message.len(),
 				limit: config.max_queue_message_size,
 			}
-			.build()
-			.into());
+			.build());
 		}
 
 		let mut metadata = self.0.metadata.lock().await;
@@ -298,27 +319,20 @@ impl Queue {
 			return Err(QueueFull {
 				limit: config.max_queue_size,
 			}
-			.build()
-			.into());
+			.build());
 		}
 
-		let id = if metadata.next_id == 0 {
-			1
-		} else {
-			metadata.next_id
-		};
+		let id = if metadata.next_id == 0 { 1 } else { metadata.next_id };
 		metadata.next_id = id.saturating_add(1);
 		metadata.size = metadata.size.saturating_add(1);
-		let encoded_metadata = encode_queue_metadata(&metadata).context("encode queue metadata")?;
+		let encoded_metadata =
+			encode_queue_metadata(&metadata).context("encode queue metadata")?;
 
 		if let Err(error) = self
 			.0
 			.kv
 			.batch_put(&[
-				(
-					make_queue_message_key(id).as_slice(),
-					encoded_message.as_slice(),
-				),
+				(make_queue_message_key(id).as_slice(), encoded_message.as_slice()),
 				(QUEUE_METADATA_KEY.as_slice(), encoded_metadata.as_slice()),
 			])
 			.await
@@ -329,13 +343,19 @@ impl Queue {
 		}
 
 		if let Some(waiter) = completion_waiter {
-			self.0.completion_waiters.lock().await.insert(id, waiter);
+			self
+				.0
+				.completion_waiters
+				.insert_async(id, waiter)
+				.await
+				.map_err(|_| anyhow!("queue completion waiter already registered for message {id}"))?;
 		}
 
 		let queue_size = metadata.size;
 		drop(metadata);
 		self.0.metrics.add_queue_messages_sent(1);
-		self.0
+		self
+			.0
 			.metrics
 			.set_queue_depth(self.0.metadata.lock().await.size);
 		self.notify_inspector_update(queue_size);
@@ -378,8 +398,9 @@ impl Queue {
 				return Ok(messages);
 			}
 
-			let remaining_timeout =
-				deadline.map(|deadline| deadline.saturating_duration_since(Instant::now()));
+			let remaining_timeout = deadline.map(|deadline| {
+				deadline.saturating_duration_since(Instant::now())
+			});
 			if matches!(remaining_timeout, Some(timeout) if timeout.is_zero()) {
 				return Ok(Vec::new());
 			}
@@ -393,7 +414,7 @@ impl Queue {
 			match result {
 				WaitOutcome::Notified => continue,
 				WaitOutcome::TimedOut => return Ok(Vec::new()),
-				WaitOutcome::Aborted => return Err(QueueActorAborted.build().into()),
+				WaitOutcome::Aborted => return Err(QueueActorAborted.build()),
 			}
 		}
 	}
@@ -418,16 +439,16 @@ impl Queue {
 				return Ok(message);
 			}
 
-			let remaining_timeout =
-				deadline.map(|deadline| deadline.saturating_duration_since(Instant::now()));
-			if let Some(timeout) = remaining_timeout {
-				if timeout.is_zero() {
-					return Err(QueueWaitTimedOut {
-						timeout_ms: opts.timeout.map(duration_ms).unwrap_or(0),
-					}
-					.build()
-					.into());
+			let remaining_timeout = deadline.map(|deadline| {
+				deadline.saturating_duration_since(Instant::now())
+			});
+			if let Some(timeout) = remaining_timeout
+				&& timeout.is_zero()
+			{
+				return Err(QueueWaitTimedOut {
+					timeout_ms: opts.timeout.map(duration_ms).unwrap_or(0),
 				}
+				.build());
 			}
 
 			let wait_guard = ActiveQueueWaitGuard::new(self);
@@ -442,10 +463,9 @@ impl Queue {
 					return Err(QueueWaitTimedOut {
 						timeout_ms: opts.timeout.map(duration_ms).unwrap_or(0),
 					}
-					.build()
-					.into());
+					.build());
 				}
-				WaitOutcome::Aborted => return Err(QueueActorAborted.build().into()),
+				WaitOutcome::Aborted => return Err(QueueActorAborted.build()),
 			}
 		}
 	}
@@ -463,9 +483,7 @@ impl Queue {
 		loop {
 			let messages = self.list_messages().await?;
 			let has_match = if let Some(names) = names.as_ref() {
-				messages
-					.into_iter()
-					.any(|message| names.contains(&message.name))
+				messages.into_iter().any(|message| names.contains(&message.name))
 			} else {
 				!messages.is_empty()
 			};
@@ -473,16 +491,16 @@ impl Queue {
 				return Ok(());
 			}
 
-			let remaining_timeout =
-				deadline.map(|deadline| deadline.saturating_duration_since(Instant::now()));
-			if let Some(timeout) = remaining_timeout {
-				if timeout.is_zero() {
-					return Err(QueueWaitTimedOut {
-						timeout_ms: opts.timeout.map(duration_ms).unwrap_or(0),
-					}
-					.build()
-					.into());
+			let remaining_timeout = deadline.map(|deadline| {
+				deadline.saturating_duration_since(Instant::now())
+			});
+			if let Some(timeout) = remaining_timeout
+				&& timeout.is_zero()
+			{
+				return Err(QueueWaitTimedOut {
+					timeout_ms: opts.timeout.map(duration_ms).unwrap_or(0),
 				}
+				.build());
 			}
 
 			let wait_guard = ActiveQueueWaitGuard::new(self);
@@ -497,10 +515,9 @@ impl Queue {
 					return Err(QueueWaitTimedOut {
 						timeout_ms: opts.timeout.map(duration_ms).unwrap_or(0),
 					}
-					.build()
-					.into());
+					.build());
 				}
-				WaitOutcome::Aborted => return Err(QueueActorAborted.build().into()),
+				WaitOutcome::Aborted => return Err(QueueActorAborted.build()),
 			}
 		}
 	}
@@ -544,7 +561,10 @@ impl Queue {
 		*self.0.config.lock().expect("queue config lock poisoned") = config;
 	}
 
-	pub(crate) fn set_wait_activity_callback(&self, callback: Option<Arc<dyn Fn() + Send + Sync>>) {
+	pub(crate) fn set_wait_activity_callback(
+		&self,
+		callback: Option<Arc<dyn Fn() + Send + Sync>>,
+	) {
 		*self
 			.0
 			.wait_activity_callback
@@ -587,7 +607,8 @@ impl Queue {
 				.kv
 				.put(
 					&QUEUE_METADATA_KEY,
-					&encode_queue_metadata(&metadata).context("encode default queue metadata")?,
+					&encode_queue_metadata(&metadata)
+						.context("encode default queue metadata")?,
 				)
 				.await
 				.context("persist default queue metadata")?;
@@ -641,10 +662,10 @@ impl Queue {
 		let messages = self.list_messages().await?;
 		let mut selected = Vec::new();
 		for message in messages {
-			if let Some(names) = names {
-				if !names.contains(&message.name) {
-					continue;
-				}
+			if let Some(names) = names
+				&& !names.contains(&message.name)
+			{
+				continue;
 			}
 
 			selected.push(message);
@@ -659,7 +680,8 @@ impl Queue {
 
 		if completable {
 			let queue_size = self.0.metadata.lock().await.size;
-			self.0
+			self
+				.0
 				.metrics
 				.add_queue_messages_received(selected.len().try_into().unwrap_or(u64::MAX));
 			self.notify_inspector_update(queue_size);
@@ -669,9 +691,11 @@ impl Queue {
 				.collect());
 		}
 
-		self.remove_messages(selected.iter().map(|message| message.id).collect())
+		self
+			.remove_messages(selected.iter().map(|message| message.id).collect())
 			.await?;
-		self.0
+		self
+			.0
 			.metrics
 			.add_queue_messages_received(selected.len().try_into().unwrap_or(u64::MAX));
 
@@ -711,11 +735,7 @@ impl Queue {
 					completion: None,
 				}),
 				Err(error) => {
-					tracing::warn!(
-						?error,
-						queue_message_id = id,
-						"failed to decode queue message"
-					);
+					tracing::warn!(?error, queue_message_id = id, "failed to decode queue message");
 				}
 			}
 		}
@@ -774,7 +794,8 @@ impl Queue {
 			.put(&QUEUE_METADATA_KEY, &encoded_metadata)
 			.await
 			.context("persist queue metadata after delete")?;
-		self.0
+		self
+			.0
 			.metrics
 			.set_queue_depth(self.0.metadata.lock().await.size);
 		self.notify_inspector_update(queue_size);
@@ -797,7 +818,12 @@ impl Queue {
 		&self,
 		message_id: u64,
 	) -> Option<oneshot::Sender<Option<Vec<u8>>>> {
-		self.0.completion_waiters.lock().await.remove(&message_id)
+		self
+			.0
+			.completion_waiters
+			.remove_async(&message_id)
+			.await
+			.map(|(_, waiter)| waiter)
 	}
 
 	async fn wait_for_message(
@@ -852,6 +878,9 @@ impl Queue {
 		}
 	}
 
+	/// TS parity: queue-manager.ts keeps `enqueueAndWait` completion waits
+	/// alive across actor aborts; the surrounding tracked user task owns
+	/// shutdown cancellation.
 	async fn wait_for_completion_response(
 		&self,
 		message_id: u64,
@@ -860,24 +889,9 @@ impl Queue {
 		signal: Option<&CancellationToken>,
 	) -> Result<Option<Vec<u8>>> {
 		if signal.is_some_and(CancellationToken::is_cancelled) {
-			return Err(QueueActorAborted.build().into());
-		}
-		if self
-			.0
-			.abort_signal
-			.as_ref()
-			.is_some_and(CancellationToken::is_cancelled)
-		{
-			return Err(QueueActorAborted.build().into());
+			return Err(QueueActorAborted.build());
 		}
 
-		let actor_aborted = async {
-			if let Some(signal) = &self.0.abort_signal {
-				signal.cancelled().await;
-			} else {
-				pending::<()>().await;
-			}
-		};
 		let external_aborted = async {
 			if let Some(signal) = signal {
 				signal.cancelled().await;
@@ -890,7 +904,6 @@ impl Queue {
 			Some(timeout) => {
 				tokio::select! {
 					response = &mut receiver => CompletionWaitOutcome::Response(response),
-					_ = actor_aborted => CompletionWaitOutcome::Aborted,
 					_ = external_aborted => CompletionWaitOutcome::Aborted,
 					_ = tokio::time::sleep(timeout) => CompletionWaitOutcome::TimedOut,
 				}
@@ -898,7 +911,6 @@ impl Queue {
 			None => {
 				tokio::select! {
 					response = &mut receiver => CompletionWaitOutcome::Response(response),
-					_ = actor_aborted => CompletionWaitOutcome::Aborted,
 					_ = external_aborted => CompletionWaitOutcome::Aborted,
 				}
 			}
@@ -913,9 +925,8 @@ impl Queue {
 			CompletionWaitOutcome::TimedOut => Err(QueueWaitTimedOut {
 				timeout_ms: timeout.map(duration_ms).unwrap_or(0),
 			}
-			.build()
-			.into()),
-			CompletionWaitOutcome::Aborted => Err(QueueActorAborted.build().into()),
+			.build()),
+			CompletionWaitOutcome::Aborted => Err(QueueActorAborted.build()),
 		}
 	}
 
@@ -991,12 +1002,13 @@ impl QueueMessage {
 	}
 
 	pub fn into_completable(self) -> Result<CompletableQueueMessage> {
-		let completion = self.completion.clone().ok_or_else(|| {
-			QueueCompleteNotConfigured {
+		let completion = self
+			.completion
+			.clone()
+			.ok_or_else(|| QueueCompleteNotConfigured {
 				name: self.name.clone(),
 			}
-			.build()
-		})?;
+			.build())?;
 
 		Ok(CompletableQueueMessage {
 			id: self.id,
@@ -1039,7 +1051,7 @@ impl CompletionHandle {
 
 	async fn complete(&self, response: Option<Vec<u8>>) -> Result<()> {
 		if self.0.completed.swap(true, Ordering::SeqCst) {
-			return Err(QueueAlreadyCompleted.build().into());
+			return Err(QueueAlreadyCompleted.build());
 		}
 
 		if let Err(error) = self
@@ -1067,6 +1079,7 @@ impl fmt::Debug for CompletionHandle {
 
 struct ActiveQueueWaitGuard<'a> {
 	queue: &'a Queue,
+	started_at: Instant,
 }
 
 impl<'a> ActiveQueueWaitGuard<'a> {
@@ -1075,23 +1088,28 @@ impl<'a> ActiveQueueWaitGuard<'a> {
 			.0
 			.active_queue_wait_count
 			.fetch_add(1, Ordering::SeqCst);
+		queue.0.metrics.begin_user_task(UserTaskKind::QueueWait);
 		queue.notify_wait_activity();
-		Self { queue }
+		Self {
+			queue,
+			started_at: Instant::now(),
+		}
 	}
 }
 
 impl Drop for ActiveQueueWaitGuard<'_> {
 	fn drop(&mut self) {
+		self.queue.0.metrics.end_user_task(
+			UserTaskKind::QueueWait,
+			self.started_at.elapsed(),
+		);
 		let previous = self
 			.queue
 			.0
 			.active_queue_wait_count
 			.fetch_sub(1, Ordering::SeqCst);
 		if previous == 0 {
-			self.queue
-				.0
-				.active_queue_wait_count
-				.store(0, Ordering::SeqCst);
+			self.queue.0.active_queue_wait_count.store(0, Ordering::SeqCst);
 		}
 		self.queue.notify_wait_activity();
 	}
@@ -1153,5 +1171,113 @@ fn duration_ms(duration: Duration) -> u64 {
 }
 
 #[cfg(test)]
-#[path = "../../tests/modules/queue.rs"]
-pub(crate) mod tests;
+mod tests {
+	use super::{Queue, QueueNextOpts, QueueWaitOpts};
+
+	use std::time::Duration;
+	use crate::actor::config::ActorConfig;
+	use crate::actor::metrics::ActorMetrics;
+	use crate::kv::Kv;
+	use tokio::task::yield_now;
+	use tokio_util::sync::CancellationToken;
+
+	fn test_queue() -> Queue {
+		Queue::new(
+			Kv::new_in_memory(),
+			ActorConfig::default(),
+			None,
+			ActorMetrics::default(),
+		)
+	}
+
+	fn assert_actor_aborted(error: anyhow::Error) {
+		let error = rivet_error::RivetError::extract(&error);
+		assert_eq!(error.group(), "actor");
+		assert_eq!(error.code(), "aborted");
+	}
+
+	#[tokio::test]
+	async fn wait_for_names_returns_aborted_when_signal_is_already_cancelled() {
+		let queue = test_queue();
+		let signal = CancellationToken::new();
+		signal.cancel();
+
+		let error = queue
+			.wait_for_names(
+				vec!["missing".to_owned()],
+				QueueWaitOpts {
+					signal: Some(signal),
+					..Default::default()
+				},
+			)
+			.await
+			.expect_err("already-cancelled waits should abort immediately");
+
+		assert_actor_aborted(error);
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn wait_for_names_returns_aborted_when_signal_cancels_during_wait() {
+		let queue = test_queue();
+		let signal = CancellationToken::new();
+		let wait_signal = signal.clone();
+		let wait_queue = queue.clone();
+
+		let wait = tokio::spawn(async move {
+			wait_queue
+				.wait_for_names(
+					vec!["missing".to_owned()],
+					QueueWaitOpts {
+						timeout: Some(Duration::from_secs(60)),
+						signal: Some(wait_signal),
+						..Default::default()
+					},
+				)
+				.await
+		});
+
+		yield_now().await;
+		signal.cancel();
+
+		let error = wait
+			.await
+			.expect("wait task should join")
+			.expect_err("cancelled waits should abort");
+
+		assert_actor_aborted(error);
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn next_returns_aborted_when_actor_signal_cancels_during_wait() {
+		let actor_signal = CancellationToken::new();
+		let queue = Queue::new(
+			Kv::new_in_memory(),
+			ActorConfig::default(),
+			Some(actor_signal.clone()),
+			ActorMetrics::default(),
+		);
+
+		let wait = tokio::spawn({
+			let queue = queue.clone();
+			async move {
+				queue
+					.next(QueueNextOpts {
+						names: Some(vec!["missing".to_owned()]),
+						timeout: Some(Duration::from_secs(60)),
+						..Default::default()
+					})
+					.await
+			}
+		});
+
+		yield_now().await;
+		actor_signal.cancel();
+
+		let error = wait
+			.await
+			.expect("wait task should join")
+			.expect_err("cancelled actor waits should abort");
+
+		assert_actor_aborted(error);
+	}
+}

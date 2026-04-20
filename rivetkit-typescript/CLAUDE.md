@@ -70,6 +70,18 @@ DEBUG perf user: dbMigrateMs              durationMs=...
 
 The log name matches the key in `ActorMetrics.startup`. Internal phases use `perf internal:`, user-code callbacks use `perf user:`. This convention keeps startup logs greppable and makes it easy to separate framework overhead from user-code time. When adding a new startup phase, always add a corresponding log with the appropriate prefix and update the `#userStartupKeys` set in `ActorInstance` if the phase runs user code.
 
+## NAPI Receive Loop
+
+- Keep adapter-owned long-lived task handles (for example the NAPI `run` handler) in `packages/rivetkit-napi/src/napi_actor_events.rs` and expose only sync restart hooks through shared `ActorContext` state; JS-facing restart methods must not depend on async locks.
+- Graceful adapter drains in `packages/rivetkit-napi/src/napi_actor_events.rs` should use `while let Some(...) = tasks.join_next().await`; `JoinSet::shutdown()` aborts in-flight work and breaks Sleep/Destroy ordering.
+- `Sleep` and `Destroy` must set the shared adapter `end_reason` on both success and error replies; otherwise the outer receive loop keeps consuming queued events after shutdown has already failed.
+- On this branch, the native TS actor/conn persistence glue still lives in `packages/rivetkit/src/registry/native.ts`; PRD references to split `state-manager.ts` or `connection-manager.ts` files may be stale, so land equivalent behavior in `registry/native.ts` unless those modules reappear first.
+- Public TS actor `onWake` still belongs on the adapter's `onBeforeActorStart` callback in `packages/rivetkit/src/registry/native.ts`; the raw NAPI `onWake` hook is wake-only preamble plumbing, so wiring the public hook there skips first-boot startup work.
+- Static actor `state` values in `packages/rivetkit/src/registry/native.ts` must be `structuredClone(...)`d per actor instance; reusing the literal leaks mutations across different keyed actors.
+- Every `NativeConnAdapter` construction path in `packages/rivetkit/src/registry/native.ts` must keep both the `CONN_STATE_MANAGER_SYMBOL` hookup and a `ctx.requestSave(false)` callback so hibernatable conn mutations/removals still reach persistence.
+- Durable native actor saves in `packages/rivetkit/src/registry/native.ts` must go through `ctx.saveState(StateDeltaPayload)` plus the `serializeState` callback wiring; the legacy boolean `ctx.saveState(true)` path only flips `request_save` and returns before the KV commit lands.
+- Reply-bearing TSF dispatches in `packages/rivetkit-napi/src/napi_actor_events.rs` must wrap the callback future in `with_timeout(...)` via a shared timed-spawn helper; raw `spawn_reply(...)` on HTTP or workflow callbacks can leak stuck JS promises until shutdown.
+
 ## Sleep Shutdown
 
 - Sleep shutdown should wait for in-flight HTTP action work and pending disconnect callbacks before `onSleep`, but should not block on open hibernatable connections alone because existing connection actions may still complete during the graceful shutdown window.

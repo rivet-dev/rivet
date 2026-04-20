@@ -1,25 +1,54 @@
 import { describe, expect, test } from "vitest";
+import { ActorContext } from "@rivetkit/rivetkit-napi";
 import type { WorkflowHistory } from "@/common/bare/transport/v1";
-import { CURRENT_VERSION } from "@/common/inspector-versioned";
-import {
-	TO_CLIENT_VERSIONED,
-	TO_SERVER_VERSIONED,
-} from "@/common/inspector-versioned";
+import * as v1 from "@/common/bare/inspector/v1";
+import * as v2 from "@/common/bare/inspector/v2";
+import * as v3 from "@/common/bare/inspector/v3";
+import * as v4 from "@/common/bare/inspector/v4";
 import {
 	decodeWorkflowHistoryTransport,
 	encodeWorkflowHistoryTransport,
 } from "@/common/inspector-transport";
 
+const INSPECTOR_CURRENT_VERSION = 4;
+const ctx = new ActorContext("actor-1", "inspector", "local");
+
 function buffer(text: string): ArrayBuffer {
 	return new TextEncoder().encode(text).buffer;
 }
 
+function toBuffer(value: ArrayBuffer | Uint8Array): Buffer {
+	return Buffer.from(
+		value instanceof Uint8Array ? value : new Uint8Array(value),
+	);
+}
+
+function decodeRequest(bytes: Uint8Array, version: number): v4.ToServer {
+	return v4.decodeToServer(
+		new Uint8Array(
+			ctx.decodeInspectorRequest(toBuffer(bytes), version),
+		),
+	);
+}
+
+function encodeResponse(
+	message: v4.ToClient,
+	version: 1 | 2 | 3 | 4,
+): Uint8Array {
+	return new Uint8Array(
+		ctx.encodeInspectorResponse(
+			toBuffer(v4.encodeToClient(message)),
+			version,
+		),
+	);
+}
+
 describe("inspector versioned protocol", () => {
 	test("tracks v4 as the current inspector wire version", () => {
-		expect(CURRENT_VERSION).toBe(4);
+		expect(INSPECTOR_CURRENT_VERSION).toBe(4);
 	});
 
-	test("round-trips a shared request shape across versions 1-4", () => {
+	test("decodes a shared request shape from versions 1-4 into the current schema", () => {
 		const request = {
 			body: {
 				tag: "ActionRequest" as const,
@@ -32,18 +61,21 @@ describe("inspector versioned protocol", () => {
 		};
 
 		for (const version of [1, 2, 3, 4]) {
-			const bytes = TO_SERVER_VERSIONED.serializeWithEmbeddedVersion(
-				request,
-				version,
-			);
-			const decoded =
-				TO_SERVER_VERSIONED.deserializeWithEmbeddedVersion(bytes);
+			const bytes =
+				version === 1
+					? v1.encodeToServer(request as unknown as v1.ToServer)
+					: version === 2
+						? v2.encodeToServer(request as unknown as v2.ToServer)
+						: version === 3
+							? v3.encodeToServer(request as unknown as v3.ToServer)
+							: v4.encodeToServer(request);
+			const decoded = decodeRequest(bytes, version);
 
 			expect(decoded).toEqual(request);
 		}
 	});
 
-	test("backfills v1 init messages into the current snapshot shape", () => {
+	test("downgrades init snapshots into the v1 wire shape", () => {
 		const snapshot = {
 			body: {
 				tag: "Init" as const,
@@ -60,82 +92,73 @@ describe("inspector versioned protocol", () => {
 			},
 		};
 
-		const bytes = TO_CLIENT_VERSIONED.serializeWithEmbeddedVersion(
-			snapshot,
-			1,
-		);
-		const decoded =
-			TO_CLIENT_VERSIONED.deserializeWithEmbeddedVersion(bytes);
+		const decoded = v1.decodeToClient(encodeResponse(snapshot, 1));
 
 		expect(decoded).toEqual({
 			body: {
 				tag: "Init",
 				val: {
 					connections: [{ id: "conn-1", details: buffer("conn") }],
+					events: [],
 					state: buffer("state"),
 					isStateEnabled: true,
 					rpcs: ["increment", "getCount"],
 					isDatabaseEnabled: true,
-					queueSize: 0n,
-					workflowHistory: null,
-					isWorkflowEnabled: false,
 				},
 			},
 		});
 	});
 
-	test("downgrades dropped v1 event streams into explicit errors", () => {
-		const v1EventBytes = TO_CLIENT_VERSIONED.serializeWithEmbeddedVersion(
-			{
-				body: {
-					tag: "EventsUpdated" as const,
-					val: {
-						events: [
-							{
-								id: "event-1",
-								timestamp: 123n,
-								body: {
-									tag: "BroadcastEvent" as const,
-									val: {
-										eventName: "counter.updated",
-										args: buffer("payload"),
-									},
-								},
-							},
-						],
-					},
-				},
-			},
-			1,
-		);
-		const decoded =
-			TO_CLIENT_VERSIONED.deserializeWithEmbeddedVersion(v1EventBytes);
-
-		expect(decoded).toEqual({
-			body: {
-				tag: "Error",
-				val: {
-					message: "inspector.events_dropped",
-				},
-			},
-		});
-	});
-
-	test("rejects workflow replay requests before v4", () => {
-		expect(() =>
-			TO_SERVER_VERSIONED.serializeWithEmbeddedVersion(
+	test("downgrades dropped v1 queue updates into explicit errors", () => {
+		const decoded = v1.decodeToClient(
+			encodeResponse(
 				{
 					body: {
-						tag: "WorkflowReplayRequest" as const,
+						tag: "QueueUpdated" as const,
 						val: {
-							id: 99n,
-							entryId: "entry-1",
+							queueSize: 5n,
 						},
 					},
 				},
 				1,
 			),
-		).toThrow("Cannot convert v4-only workflow replay requests to v3");
+		);
+
+		expect(decoded).toEqual({
+			body: {
+				tag: "Error",
+				val: {
+					message: "inspector.queue_dropped",
+				},
+			},
+		});
+	});
+
+	test("downgrades workflow replay responses into explicit errors before v4", () => {
+		const decoded = v3.decodeToClient(
+			encodeResponse(
+				{
+					body: {
+						tag: "WorkflowReplayResponse" as const,
+						val: {
+							rid: 11n,
+							history: buffer("workflow"),
+							isWorkflowEnabled: true,
+						},
+					},
+				},
+				3,
+			),
+		);
+
+		expect(decoded).toEqual({
+			body: {
+				tag: "Error",
+				val: {
+					message: "inspector.workflow_history_dropped",
+				},
+			},
+		});
 	});
 });
 

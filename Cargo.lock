@@ -4726,6 +4726,7 @@ dependencies = [
  "hex",
  "rand 0.8.5",
  "rivet-envoy-protocol",
+ "rivet-util",
  "rivet-util-serde",
  "rustls",
  "scc",
@@ -5225,6 +5226,7 @@ dependencies = [
  "rivet-envoy-client",
  "rivet-error",
  "rivet-pools",
+ "rivet-util",
  "rivetkit-sqlite",
  "scc",
  "serde",
@@ -5234,6 +5236,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
@@ -5254,7 +5257,9 @@ dependencies = [
  "rivet-error",
  "rivetkit-core",
  "rivetkit-sqlite",
+ "scc",
  "serde",
+ "serde_bare",
  "serde_json",
  "tokio",
  "tokio-util",

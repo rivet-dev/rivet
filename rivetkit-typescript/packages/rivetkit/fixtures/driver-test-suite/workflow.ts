@@ -12,6 +12,21 @@ import type { registry } from "./registry-static";
 
 const WORKFLOW_QUEUE_NAME = "workflow-default";
 const WORKFLOW_NESTED_QUEUE_NAME = "workflow-nested";
+const workflowRunningStepDeferreds = new Map<
+	string,
+	{ promise: Promise<void>; resolve: () => void }
+>();
+
+function createWorkflowRunningStepDeferred(): {
+	promise: Promise<void>;
+	resolve: () => void;
+} {
+	let resolve!: () => void;
+	const promise = new Promise<void>((resolvePromise) => {
+		resolve = resolvePromise;
+	});
+	return { promise, resolve };
+}
 
 export const workflowCounterActor = actor({
 	state: {
@@ -747,24 +762,28 @@ export const workflowReplayActor = actor({
 
 export const workflowRunningStepActor = actor({
 	state: {
-		preparedAt: null as number | null,
-		startedAt: null as number | null,
+		finishedAt: null as number | null,
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("prepare", async () => {
-			ctx.state.preparedAt = Date.now();
+		await ctx.step("prepare", async () => {});
+		await ctx.step("block", async () => {
+			const deferred = createWorkflowRunningStepDeferred();
+			workflowRunningStepDeferreds.set(ctx.actorId, deferred);
+			try {
+				await deferred.promise;
+			} finally {
+				workflowRunningStepDeferreds.delete(ctx.actorId);
+			}
 		});
-		await ctx.step({
-			name: "block",
-			timeout: 0,
-			run: async () => {
-				ctx.state.startedAt = Date.now();
-				await new Promise((resolve) => setTimeout(resolve, 250));
-			},
+		await ctx.step("finish", async () => {
+			ctx.state.finishedAt = Date.now();
 		});
 	}),
 	actions: {
 		getState: (c) => ({ ...c.state }),
+		release: (c) => {
+			workflowRunningStepDeferreds.get(c.actorId)?.resolve();
+		},
 	},
 	options: {
 		sleepTimeout: 50,

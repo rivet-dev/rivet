@@ -1,8 +1,9 @@
 import { describeDriverMatrix } from "./shared-matrix";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { setupDriverTest } from "./shared-utils";
 
 const STRESS_TEST_TIMEOUT_MS = 60_000;
+const ACTOR_READY_TIMEOUT_MS = 15_000;
 
 /**
  * Stress and resilience tests for the SQLite database subsystem.
@@ -69,19 +70,34 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 				// This exercises the close_database path racing with
 				// any pending DB operations from the insert.
 				for (let i = 0; i < 10; i++) {
-					const actor = client.dbStressActor.getOrCreate([
+					const actorKey = [
 						`stress-cycle-${i}-${crypto.randomUUID()}`,
-					]);
+					];
+					const getActor = () => client.dbStressActor.getOrCreate(actorKey);
 
 					// Insert some data.
-					await actor.insertBatch(10);
+					await vi.waitFor(
+						async () => {
+							await getActor().insertBatch(10);
+						},
+						{ timeout: ACTOR_READY_TIMEOUT_MS, interval: 100 },
+					);
 
-					// Verify data was written.
-					const count = await actor.getCount();
-					expect(count).toBeGreaterThanOrEqual(10);
+					// Reacquire the keyed handle before verifying the write.
+					// The direct target from the insert can already be moving
+					// through sleep teardown under the task model.
+					await vi.waitFor(
+						async () => {
+							const count = await client.dbStressActor
+								.getOrCreate(actorKey)
+								.getCount();
+							expect(count).toBeGreaterThanOrEqual(10);
+						},
+						{ timeout: ACTOR_READY_TIMEOUT_MS, interval: 100 },
+					);
 
 					// Destroy the actor (triggers close_database).
-					await actor.destroy();
+					await getActor().destroy();
 				}
 			},
 			STRESS_TEST_TIMEOUT_MS,
@@ -92,16 +108,20 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 
-				const actor = client.dbStressActor.getOrCreate([
-					`stress-health-${crypto.randomUUID()}`,
-				]);
+				const actorKey = [`stress-health-${crypto.randomUUID()}`];
 
 				// Measure wall-clock time for 100 sequential DB inserts.
 				// Each insert is an async round-trip through the VFS.
 				// If lifecycle operations (open_database, close_database)
 				// block the event loop, this will take much longer than
 				// expected because the action itself runs on that loop.
-				const health = await actor.measureEventLoopHealth(100);
+				const health = await vi.waitFor(
+					async () =>
+						client.dbStressActor
+							.getOrCreate(actorKey)
+							.measureEventLoopHealth(100),
+					{ timeout: ACTOR_READY_TIMEOUT_MS, interval: 100 },
+				);
 
 				// 100 sequential inserts should complete in well under
 				// 30 seconds. A blocked event loop (e.g., 30s WebSocket
@@ -110,7 +130,13 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 				expect(health.insertCount).toBe(100);
 
 				// Verify the actor is still healthy after the test.
-				const integrity = await actor.integrityCheck();
+				const integrity = await vi.waitFor(
+					async () =>
+						client.dbStressActor
+							.getOrCreate(actorKey)
+							.integrityCheck(),
+					{ timeout: ACTOR_READY_TIMEOUT_MS, interval: 100 },
+				);
 				expect(integrity.toLowerCase()).toBe("ok");
 			},
 			STRESS_TEST_TIMEOUT_MS,

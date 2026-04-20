@@ -3,8 +3,8 @@ use std::env;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
@@ -15,8 +15,8 @@ use nix::sys::signal::{self, Signal};
 use nix::unistd::Pid;
 use reqwest::Url;
 use rivet_envoy_client::config::{
-	ActorStopHandle, BoxFuture as EnvoyBoxFuture, EnvoyCallbacks, HttpRequest, HttpResponse,
-	WebSocketHandler, WebSocketMessage, WebSocketSender,
+	ActorStopHandle, BoxFuture as EnvoyBoxFuture, EnvoyCallbacks, HttpRequest,
+	HttpResponse, WebSocketHandler, WebSocketMessage, WebSocketSender,
 };
 use rivet_envoy_client::envoy::start_envoy;
 use rivet_envoy_client::handle::EnvoyHandle;
@@ -28,30 +28,30 @@ use serde_bytes::ByteBuf;
 use serde_json::{Value as JsonValue, json};
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::{Child, Command};
-use tokio::sync::Notify;
+use tokio::sync::{Mutex as TokioMutex, Notify, broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use uuid::Uuid;
 
-use crate::actor::action::{ActionDispatchError, ActionInvoker};
+use crate::actor::action::ActionDispatchError;
 use crate::actor::callbacks::{
-	ActionRequest, OnBeforeSubscribeRequest, OnRequestRequest, OnWebSocketRequest, Request,
-	Response,
+	ActorEvent, Reply, Request, Response, StateDelta,
 };
-use crate::actor::callbacks::{GetWorkflowHistoryRequest, ReplayWorkflowRequest};
-use crate::actor::config::CanHibernateWebSocket;
 use crate::actor::connection::{ConnHandle, HibernatableConnectionMetadata};
+use crate::actor::config::CanHibernateWebSocket;
 use crate::actor::context::ActorContext;
 use crate::actor::factory::ActorFactory;
-use crate::actor::lifecycle::{ActorLifecycle, StartupOptions};
 use crate::actor::state::{PERSIST_DATA_KEY, PersistedActor, decode_persisted_actor};
-use crate::inspector::protocol::{
-	self as inspector_protocol, ServerMessage as InspectorServerMessage,
+use crate::actor::task::{
+	ActorTask, DispatchCommand, LifecycleCommand,
+	try_send_dispatch_command, try_send_lifecycle_command,
 };
-use crate::inspector::{Inspector, InspectorSignal, InspectorSubscription};
+use crate::actor::task_types::StopReason;
+use crate::inspector::protocol::{self as inspector_protocol, ServerMessage as InspectorServerMessage};
+use crate::inspector::{Inspector, InspectorAuth, InspectorSignal, InspectorSubscription};
 use crate::kv::Kv;
 use crate::sqlite::SqliteDb;
-use crate::types::{ActorKey, ActorKeySegment, SaveStateOpts, WsMessage};
+use crate::types::{ActorKey, ActorKeySegment, WsMessage};
 use crate::websocket::WebSocket;
 
 #[derive(Debug, Default)]
@@ -60,13 +60,16 @@ pub struct CoreRegistry {
 }
 
 #[derive(Clone)]
-struct ActiveActorInstance {
+struct ActorTaskHandle {
+	actor_id: String,
 	actor_name: String,
 	generation: u32,
 	ctx: ActorContext,
 	factory: Arc<ActorFactory>,
-	callbacks: Arc<crate::actor::callbacks::ActorInstanceCallbacks>,
 	inspector: Inspector,
+	lifecycle: mpsc::Sender<LifecycleCommand>,
+	dispatch: mpsc::Sender<DispatchCommand>,
+	join: Arc<TokioMutex<Option<JoinHandle<Result<()>>>>>,
 }
 
 #[derive(Clone)]
@@ -77,8 +80,8 @@ struct PendingStop {
 
 struct RegistryDispatcher {
 	factories: HashMap<String, Arc<ActorFactory>>,
-	active_instances: SccHashMap<String, ActiveActorInstance>,
-	stopping_instances: SccHashMap<String, ActiveActorInstance>,
+	active_instances: SccHashMap<String, Arc<ActorTaskHandle>>,
+	stopping_instances: SccHashMap<String, Arc<ActorTaskHandle>>,
 	starting_instances: SccHashMap<String, Arc<Notify>>,
 	pending_stops: SccHashMap<String, PendingStop>,
 	region: String,
@@ -200,7 +203,8 @@ struct InspectorSummaryJson {
 	rpcs: Vec<String>,
 	queue_size: u32,
 	is_database_enabled: bool,
-	is_workflow_enabled: bool,
+	#[serde(rename = "isWorkflowEnabled")]
+	workflow_supported: bool,
 	workflow_history: Option<JsonValue>,
 }
 
@@ -278,43 +282,6 @@ struct ActorConnectSubscriptionRequest {
 enum ActorConnectToServer {
 	ActionRequest(ActorConnectActionRequest),
 	SubscriptionRequest(ActorConnectSubscriptionRequest),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ActorConnectErrorJson {
-	group: String,
-	code: String,
-	message: String,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	metadata: Option<JsonValue>,
-	#[serde(rename = "actionId", skip_serializing_if = "Option::is_none")]
-	action_id: Option<u64>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ActorConnectActionResponseJson {
-	id: u64,
-	output: JsonValue,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ActorConnectEventJson {
-	name: String,
-	args: JsonValue,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "tag", content = "val")]
-enum ActorConnectToClientJsonBody {
-	Init(ActorConnectInit),
-	Error(ActorConnectErrorJson),
-	ActionResponse(ActorConnectActionResponseJson),
-	Event(ActorConnectEventJson),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ActorConnectToClientJsonEnvelope {
-	body: ActorConnectToClientJsonBody,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -421,39 +388,86 @@ impl RegistryDispatcher {
 			.get(&request.actor_name)
 			.cloned()
 			.ok_or_else(|| anyhow!("actor factory `{}` is not registered", request.actor_name))?;
-		let lifecycle = ActorLifecycle;
-		let startup_result = lifecycle
-			.startup(
-				request.ctx.clone(),
-				factory.as_ref(),
-				StartupOptions {
-					preload_persisted_actor: request.preload_persisted_actor,
-					input: request.input,
-					..StartupOptions::default()
-				},
+		let config = factory.config().clone();
+		let (lifecycle_tx, lifecycle_rx) =
+			mpsc::channel(config.lifecycle_command_inbox_capacity);
+		let (dispatch_tx, dispatch_rx) =
+			mpsc::channel(config.dispatch_command_inbox_capacity);
+		let (lifecycle_events_tx, lifecycle_events_rx) =
+			mpsc::channel(config.lifecycle_event_inbox_capacity);
+		request
+			.ctx
+			.configure_lifecycle_events(Some(lifecycle_events_tx));
+		request.ctx.cancel_sleep_timer();
+		request
+			.ctx
+			.schedule()
+			.set_local_alarm_callback(Some(Arc::new({
+				let lifecycle_tx = lifecycle_tx.clone();
+				let metrics = request.ctx.metrics().clone();
+				let capacity = config.lifecycle_command_inbox_capacity;
+				move || {
+					let lifecycle_tx = lifecycle_tx.clone();
+					let metrics = metrics.clone();
+					Box::pin(async move {
+						let (reply_tx, reply_rx) = oneshot::channel();
+						if let Err(error) = try_send_lifecycle_command(
+							&lifecycle_tx,
+							capacity,
+							"fire_alarm",
+							LifecycleCommand::FireAlarm { reply: reply_tx },
+							Some(&metrics),
+						) {
+							tracing::warn!(?error, "failed to enqueue actor alarm");
+							return;
+						}
+						let _ = reply_rx.await;
+					})
+				}
+			})));
+		let task = ActorTask::new(
+			request.actor_id.clone(),
+			request.generation,
+			lifecycle_rx,
+			dispatch_rx,
+			lifecycle_events_rx,
+			factory.clone(),
+			request.ctx.clone(),
+			request.input,
+			request.preload_persisted_actor,
+		);
+		let join = tokio::spawn(task.run());
+
+		let (start_tx, start_rx) = oneshot::channel();
+		let result: Result<Arc<ActorTaskHandle>> = async {
+			try_send_lifecycle_command(
+				&lifecycle_tx,
+				config.lifecycle_command_inbox_capacity,
+				"start_actor",
+				LifecycleCommand::Start { reply: start_tx },
+				Some(request.ctx.metrics()),
 			)
-			.await
-			.map_err(|error| error.into_source())
-			.with_context(|| format!("start actor `{}`", request.actor_id));
-
-		let result = match startup_result {
-			Ok(outcome) => {
-				let inspector =
-					build_actor_inspector(request.ctx.clone(), outcome.callbacks.clone());
-				request.ctx.configure_inspector(Some(inspector.clone()));
-
-				let instance = ActiveActorInstance {
-					actor_name: request.actor_name,
-					generation: request.generation,
-					ctx: request.ctx,
-					factory,
-					callbacks: outcome.callbacks,
-					inspector,
-				};
-				Ok(instance)
-			}
-			Err(error) => Err(error),
-		};
+			.context("send actor task start command")?;
+			start_rx
+				.await
+				.context("receive actor task start reply")?
+				.context("actor task start")?;
+			let inspector = build_actor_inspector();
+			request.ctx.configure_inspector(Some(inspector.clone()));
+			Ok::<Arc<ActorTaskHandle>, anyhow::Error>(Arc::new(ActorTaskHandle {
+				actor_id: request.actor_id.clone(),
+				actor_name: request.actor_name.clone(),
+				generation: request.generation,
+				ctx: request.ctx.clone(),
+				factory,
+				inspector,
+				lifecycle: lifecycle_tx,
+				dispatch: dispatch_tx,
+				join: Arc::new(TokioMutex::new(Some(join))),
+			}))
+		}
+		.await
+		.with_context(|| format!("start actor `{}`", request.actor_id));
 
 		match result {
 			Ok(instance) => {
@@ -487,11 +501,7 @@ impl RegistryDispatcher {
 							)
 							.await
 						{
-							tracing::error!(
-								actor_id,
-								?error,
-								"failed to stop actor queued during startup"
-							);
+							tracing::error!(actor_id, ?error, "failed to stop actor queued during startup");
 						}
 						let _ = dispatcher.stopping_instances.remove_async(&actor_id).await;
 					});
@@ -522,17 +532,15 @@ impl RegistryDispatcher {
 		}
 	}
 
-	async fn active_actor(&self, actor_id: &str) -> Result<ActiveActorInstance> {
+	async fn active_actor(&self, actor_id: &str) -> Result<Arc<ActorTaskHandle>> {
 		if let Some(instance) = self.active_instances.get_async(&actor_id.to_owned()).await {
 			return Ok(instance.get().clone());
 		}
 
-		if let Some(instance) = self
-			.stopping_instances
-			.get_async(&actor_id.to_owned())
-			.await
-		{
-			return Ok(instance.get().clone());
+		if let Some(instance) = self.stopping_instances.get_async(&actor_id.to_owned()).await {
+			let instance = instance.get().clone();
+			instance.ctx.warn_work_sent_to_stopping_instance("active_actor");
+			return Ok(instance);
 		}
 
 		tracing::warn!(actor_id, "actor instance not found");
@@ -580,10 +588,7 @@ impl RegistryDispatcher {
 				return Ok(());
 			}
 		};
-		let _ = self
-			.active_instances
-			.remove_async(&actor_id.to_owned())
-			.await;
+		let _ = self.active_instances.remove_async(&actor_id.to_owned()).await;
 		let _ = self
 			.stopping_instances
 			.insert_async(actor_id.to_owned(), instance.clone())
@@ -591,17 +596,14 @@ impl RegistryDispatcher {
 		let result = self
 			.shutdown_started_instance(actor_id, instance, reason, stop_handle)
 			.await;
-		let _ = self
-			.stopping_instances
-			.remove_async(&actor_id.to_owned())
-			.await;
+		let _ = self.stopping_instances.remove_async(&actor_id.to_owned()).await;
 		result
 	}
 
 	async fn shutdown_started_instance(
 		&self,
 		actor_id: &str,
-		instance: ActiveActorInstance,
+		instance: Arc<ActorTaskHandle>,
 		reason: protocol::StopActorReason,
 		stop_handle: ActorStopHandle,
 	) -> Result<()> {
@@ -611,35 +613,36 @@ impl RegistryDispatcher {
 
 		tracing::debug!(
 			actor_id,
+			handle_actor_id = %instance.actor_id,
 			actor_name = %instance.actor_name,
 			generation = instance.generation,
 			?reason,
 			"stopping actor instance"
 		);
 
-		let lifecycle = ActorLifecycle;
-		let shutdown_result = match reason {
-			protocol::StopActorReason::SleepIntent => {
-				lifecycle
-					.shutdown_for_sleep(
-						instance.ctx.clone(),
-						instance.factory.as_ref(),
-						instance.callbacks.clone(),
-					)
-					.await
-			}
-			_ => {
-				lifecycle
-					.shutdown_for_destroy(
-						instance.ctx.clone(),
-						instance.factory.as_ref(),
-						instance.callbacks.clone(),
-					)
-					.await
-			}
+		let task_stop_reason = match reason {
+			protocol::StopActorReason::SleepIntent => StopReason::Sleep,
+			_ => StopReason::Destroy,
 		};
+		let (reply_tx, reply_rx) = oneshot::channel();
+		let shutdown_result = match try_send_lifecycle_command(
+			&instance.lifecycle,
+			instance.factory.config().lifecycle_command_inbox_capacity,
+			"stop_actor",
+			LifecycleCommand::Stop {
+				reason: task_stop_reason,
+				reply: reply_tx,
+			},
+			Some(instance.ctx.metrics()),
+		) {
+			Ok(()) => reply_rx
+				.await
+				.context("receive actor task stop reply")
+				.and_then(|result| result),
+			Err(error) => Err(error),
+		};
+
 		if !matches!(reason, protocol::StopActorReason::SleepIntent) {
-			instance.ctx.mark_destroy_completed();
 			let shutdown_deadline =
 				Instant::now() + instance.factory.config().effective_sleep_grace_period();
 			if !instance
@@ -647,22 +650,32 @@ impl RegistryDispatcher {
 				.wait_for_internal_keep_awake_idle(shutdown_deadline.into())
 				.await
 			{
-				tracing::warn!(
-					actor_id,
-					"destroy shutdown timed out waiting for in-flight actions"
+				instance.ctx.record_direct_subsystem_shutdown_warning(
+					"internal_keep_awake",
+					"destroy_drain",
 				);
+				tracing::warn!(actor_id, "destroy shutdown timed out waiting for in-flight actions");
 			}
 			if !instance
 				.ctx
 				.wait_for_http_requests_drained(shutdown_deadline.into())
 				.await
 			{
-				tracing::warn!(
-					actor_id,
-					"destroy shutdown timed out waiting for in-flight http requests"
+				instance.ctx.record_direct_subsystem_shutdown_warning(
+					"http_requests",
+					"destroy_drain",
 				);
+				tracing::warn!(actor_id, "destroy shutdown timed out waiting for in-flight http requests");
 			}
 		}
+
+		let mut join_guard = instance.join.lock().await;
+		if let Some(join) = join_guard.take() {
+			join.await
+				.context("join actor task")?
+				.context("actor task failed")?;
+		}
+		instance.ctx.configure_lifecycle_events(None);
 
 		match shutdown_result {
 			Ok(_) => {
@@ -676,7 +689,11 @@ impl RegistryDispatcher {
 		}
 	}
 
-	async fn handle_fetch(&self, actor_id: &str, request: HttpRequest) -> Result<HttpResponse> {
+	async fn handle_fetch(
+		&self,
+		actor_id: &str,
+		request: HttpRequest,
+	) -> Result<HttpResponse> {
 		let instance = self.active_actor(actor_id).await?;
 		if request.path == "/metrics" {
 			return self.handle_metrics_fetch(&instance, &request);
@@ -685,29 +702,35 @@ impl RegistryDispatcher {
 		if let Some(response) = self.handle_inspector_fetch(&instance, &request).await? {
 			return Ok(response);
 		}
-		let Some(callback) = instance.callbacks.on_request.as_ref() else {
-			return Ok(not_found_response());
-		};
 
 		instance.ctx.cancel_sleep_timer();
 
 		let rearm_sleep_after_request = |ctx: ActorContext| {
 			let sleep_ctx = ctx.clone();
 			ctx.wait_until(async move {
-				while sleep_ctx.can_sleep().await
-					== crate::actor::sleep::CanSleep::ActiveHttpRequests
-				{
+				while sleep_ctx.can_sleep().await == crate::actor::sleep::CanSleep::ActiveHttpRequests {
 					sleep(Duration::from_millis(10)).await;
 				}
 				sleep_ctx.reset_sleep_timer();
 			});
 		};
 
-		match callback(OnRequestRequest {
-			ctx: instance.ctx.clone(),
-			request,
-		})
-		.await
+		let (reply_tx, reply_rx) = oneshot::channel();
+		try_send_dispatch_command(
+			&instance.dispatch,
+			instance.factory.config().dispatch_command_inbox_capacity,
+			"dispatch_http",
+			DispatchCommand::Http {
+				request,
+				reply: reply_tx,
+			},
+			Some(instance.ctx.metrics()),
+		)
+		.context("send actor task HTTP dispatch command")?;
+
+		match reply_rx
+			.await
+			.context("receive actor task HTTP dispatch reply")?
 		{
 			Ok(response) => {
 				rearm_sleep_after_request(instance.ctx.clone());
@@ -716,14 +739,14 @@ impl RegistryDispatcher {
 			Err(error) => {
 				tracing::error!(actor_id, ?error, "actor request callback failed");
 				rearm_sleep_after_request(instance.ctx.clone());
-				Ok(internal_server_error_response())
+				Ok(inspector_anyhow_response(error))
 			}
 		}
 	}
 
 	async fn handle_inspector_fetch(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 		request: &Request,
 	) -> Result<Option<HttpResponse>> {
 		let url = inspector_request_url(request)?;
@@ -733,7 +756,11 @@ impl RegistryDispatcher {
 		if self.handle_inspector_http_in_runtime {
 			return Ok(None);
 		}
-		if !request_has_inspector_access(request, self.inspector_token.as_deref()) {
+		if InspectorAuth::new()
+			.verify(&instance.ctx, authorization_bearer_token(request.headers()))
+			.await
+			.is_err()
+		{
 			return Ok(Some(inspector_unauthorized_response()));
 		}
 
@@ -752,10 +779,10 @@ impl RegistryDispatcher {
 					Ok(body) => body,
 					Err(response) => return Ok(Some(response)),
 				};
-				instance.ctx.set_state(encode_json_as_cbor(&body.state)?);
+				instance.ctx.set_state(encode_json_as_cbor(&body.state)?)?;
 				match instance
 					.ctx
-					.save_state(SaveStateOpts { immediate: true })
+					.save_state(vec![StateDelta::ActorState(instance.ctx.state())])
 					.await
 				{
 					Ok(_) => json_http_response(StatusCode::OK, &json!({ "ok": true })),
@@ -800,7 +827,12 @@ impl RegistryDispatcher {
 					Ok(limit) => limit,
 					Err(response) => return Ok(Some(response)),
 				};
-				let messages = match instance.ctx.queue().inspect_messages().await {
+				let messages = match instance
+					.ctx
+					.queue()
+					.inspect_messages()
+					.await
+				{
 					Ok(messages) => messages,
 					Err(error) => {
 						return Ok(Some(inspector_anyhow_response(
@@ -830,12 +862,12 @@ impl RegistryDispatcher {
 			(http::Method::GET, "/inspector/workflow-history") => self
 				.inspector_workflow_history(instance)
 				.await
-				.and_then(|(is_workflow_enabled, history)| {
+				.and_then(|(workflow_supported, history)| {
 					json_http_response(
 						StatusCode::OK,
 						&json!({
 							"history": history,
-							"isWorkflowEnabled": is_workflow_enabled,
+							"isWorkflowEnabled": workflow_supported,
 						}),
 					)
 				}),
@@ -844,14 +876,15 @@ impl RegistryDispatcher {
 					Ok(body) => body,
 					Err(response) => return Ok(Some(response)),
 				};
-				self.inspector_replay_workflow(instance, body.entry_id)
+				self
+					.inspector_workflow_replay(instance, body.entry_id)
 					.await
-					.and_then(|(is_workflow_enabled, history)| {
+					.and_then(|(workflow_supported, history)| {
 						json_http_response(
 							StatusCode::OK,
 							&json!({
 								"history": history,
-								"isWorkflowEnabled": is_workflow_enabled,
+								"isWorkflowEnabled": workflow_supported,
 							}),
 						)
 					})
@@ -863,13 +896,15 @@ impl RegistryDispatcher {
 					"clamped": false,
 				}),
 			),
-			(http::Method::GET, "/inspector/database/schema") => self
-				.inspector_database_schema(&instance.ctx)
-				.await
-				.context("load inspector database schema")
-				.and_then(|payload| {
-					json_http_response(StatusCode::OK, &json!({ "schema": payload }))
-				}),
+			(http::Method::GET, "/inspector/database/schema") => {
+				self
+					.inspector_database_schema(&instance.ctx)
+					.await
+					.context("load inspector database schema")
+					.and_then(|payload| {
+						json_http_response(StatusCode::OK, &json!({ "schema": payload }))
+					})
+			}
 			(http::Method::GET, "/inspector/database/rows") => {
 				let table = match required_query_param(&url, "table") {
 					Ok(table) => table,
@@ -883,25 +918,33 @@ impl RegistryDispatcher {
 					Ok(offset) => offset,
 					Err(response) => return Ok(Some(response)),
 				};
-				self.inspector_database_rows(&instance.ctx, &table, limit, offset)
+				self
+					.inspector_database_rows(&instance.ctx, &table, limit, offset)
 					.await
 					.context("load inspector database rows")
-					.and_then(|rows| json_http_response(StatusCode::OK, &json!({ "rows": rows })))
+					.and_then(|rows| {
+						json_http_response(StatusCode::OK, &json!({ "rows": rows }))
+					})
 			}
 			(http::Method::POST, "/inspector/database/execute") => {
 				let body: InspectorDatabaseExecuteBody = match parse_json_body(request) {
 					Ok(body) => body,
 					Err(response) => return Ok(Some(response)),
 				};
-				self.inspector_database_execute(&instance.ctx, body)
+				self
+					.inspector_database_execute(&instance.ctx, body)
 					.await
 					.context("execute inspector database query")
-					.and_then(|rows| json_http_response(StatusCode::OK, &json!({ "rows": rows })))
+					.and_then(|rows| {
+						json_http_response(StatusCode::OK, &json!({ "rows": rows }))
+					})
 			}
-			(http::Method::GET, "/inspector/summary") => self
-				.inspector_summary(instance)
-				.await
-				.and_then(|summary| json_http_response(StatusCode::OK, &summary)),
+			(http::Method::GET, "/inspector/summary") => {
+				self
+					.inspector_summary(instance)
+					.await
+					.and_then(|summary| json_http_response(StatusCode::OK, &summary))
+			}
 			_ => Ok(inspector_error_response(
 				StatusCode::NOT_FOUND,
 				"actor",
@@ -918,22 +961,23 @@ impl RegistryDispatcher {
 
 	async fn execute_inspector_action(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 		action_name: &str,
 		args: Vec<JsonValue>,
 	) -> std::result::Result<JsonValue, ActionDispatchError> {
-		self.execute_inspector_action_bytes(
-			instance,
-			action_name,
-			encode_json_as_cbor(&args).map_err(ActionDispatchError::from_anyhow)?,
-		)
-		.await
-		.map(|payload| decode_cbor_json_or_null(&payload))
+		self
+			.execute_inspector_action_bytes(
+				instance,
+				action_name,
+				encode_json_as_cbor(&args).map_err(ActionDispatchError::from_anyhow)?,
+			)
+			.await
+			.map(|payload| decode_cbor_json_or_null(&payload))
 	}
 
 	async fn execute_inspector_action_bytes(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 		action_name: &str,
 		args: Vec<u8>,
 	) -> std::result::Result<Vec<u8>, ActionDispatchError> {
@@ -945,31 +989,23 @@ impl RegistryDispatcher {
 			Ok(conn) => conn,
 			Err(error) => return Err(ActionDispatchError::from_anyhow(error)),
 		};
-		let invoker = ActionInvoker::with_shared_callbacks(
-			instance.factory.config().clone(),
-			instance.callbacks.clone(),
-		);
-		let output = invoker
-			.dispatch(ActionRequest {
-				ctx: instance.ctx.clone(),
-				conn: conn.clone(),
-				name: action_name.to_owned(),
-				args,
-			})
-			.await;
+		let output = dispatch_action_through_task(
+			&instance.dispatch,
+			instance.factory.config().dispatch_command_inbox_capacity,
+			conn.clone(),
+			action_name.to_owned(),
+			args,
+		)
+		.await;
 		if let Err(error) = conn.disconnect(None).await {
-			tracing::warn!(
-				?error,
-				action_name,
-				"failed to disconnect inspector action connection"
-			);
+			tracing::warn!(?error, action_name, "failed to disconnect inspector action connection");
 		}
 		output
 	}
 
 	async fn inspector_summary(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 	) -> Result<InspectorSummaryJson> {
 		let queue_messages = instance
 			.ctx
@@ -977,7 +1013,7 @@ impl RegistryDispatcher {
 			.inspect_messages()
 			.await
 			.context("list queue messages for inspector summary")?;
-		let (is_workflow_enabled, workflow_history) = self
+		let (workflow_supported, workflow_history) = self
 			.inspector_workflow_history(instance)
 			.await
 			.context("load inspector workflow summary")?;
@@ -988,37 +1024,39 @@ impl RegistryDispatcher {
 			rpcs: inspector_rpcs(instance),
 			queue_size: queue_messages.len().try_into().unwrap_or(u32::MAX),
 			is_database_enabled: instance.ctx.sql().runtime_config().is_ok(),
-			is_workflow_enabled,
+			workflow_supported,
 			workflow_history,
 		})
 	}
 
 	async fn inspector_workflow_history(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 	) -> Result<(bool, Option<JsonValue>)> {
-		self.inspector_workflow_history_bytes(instance).await.map(
-			|(is_workflow_enabled, history)| {
+		self
+			.inspector_workflow_history_bytes(instance)
+			.await
+			.map(|(workflow_supported, history)| {
 				(
-					is_workflow_enabled,
+					workflow_supported,
 					history
 						.map(|payload| decode_cbor_json_or_null(&payload))
 						.filter(|value| !value.is_null()),
 				)
-			},
-		)
+			})
 	}
 
-	async fn inspector_replay_workflow(
+	async fn inspector_workflow_replay(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 		entry_id: Option<String>,
 	) -> Result<(bool, Option<JsonValue>)> {
-		self.inspector_replay_workflow_bytes(instance, entry_id)
+		self
+			.inspector_workflow_replay_bytes(instance, entry_id)
 			.await
-			.map(|(is_workflow_enabled, history)| {
+			.map(|(workflow_supported, history)| {
 				(
-					is_workflow_enabled,
+					workflow_supported,
 					history
 						.map(|payload| decode_cbor_json_or_null(&payload))
 						.filter(|value| !value.is_null()),
@@ -1028,44 +1066,45 @@ impl RegistryDispatcher {
 
 	async fn inspector_workflow_history_bytes(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 	) -> Result<(bool, Option<Vec<u8>>)> {
-		let is_workflow_enabled = instance.inspector.is_workflow_enabled();
-		if !is_workflow_enabled {
-			return Ok((false, None));
-		}
-
-		let history = instance
-			.inspector
-			.get_workflow_history()
+		let result = instance
+			.ctx
+			.internal_keep_awake(dispatch_workflow_history_through_task(
+				&instance.dispatch,
+				instance.factory.config().dispatch_command_inbox_capacity,
+			))
 			.await
-			.context("load inspector workflow history")?;
+			.context("load inspector workflow history");
 
-		Ok((true, history))
+		workflow_dispatch_result(result)
 	}
 
-	async fn inspector_replay_workflow_bytes(
+	async fn inspector_workflow_replay_bytes(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 		entry_id: Option<String>,
 	) -> Result<(bool, Option<Vec<u8>>)> {
-		let is_workflow_enabled = instance.inspector.is_workflow_enabled();
-		if !is_workflow_enabled {
-			return Ok((false, None));
+		let result = instance
+			.ctx
+			.internal_keep_awake(dispatch_workflow_replay_request_through_task(
+				&instance.dispatch,
+				instance.factory.config().dispatch_command_inbox_capacity,
+				entry_id,
+			))
+			.await
+			.context("replay inspector workflow history");
+		let (workflow_supported, history) = workflow_dispatch_result(result)?;
+		if workflow_supported {
+			instance.inspector.record_workflow_history_updated();
 		}
 
-		let history = instance
-			.inspector
-			.replay_workflow(entry_id)
-			.await
-			.context("replay inspector workflow history")?;
-		instance.inspector.record_workflow_history_updated();
-
-		Ok((true, history))
+		Ok((workflow_supported, history))
 	}
 
 	async fn inspector_database_schema(&self, ctx: &ActorContext) -> Result<JsonValue> {
-		self.inspector_database_schema_bytes(ctx)
+		self
+			.inspector_database_schema_bytes(ctx)
 			.await
 			.map(|payload| decode_cbor_json_or_null(&payload))
 	}
@@ -1097,17 +1136,23 @@ impl RegistryDispatcher {
 			let quoted = quote_sql_identifier(name);
 
 			let columns = decode_cbor_json_or_null(
-				&ctx.db_query(&format!("PRAGMA table_info({quoted})"), None)
+				&ctx
+					.db_query(&format!("PRAGMA table_info({quoted})"), None)
 					.await
 					.with_context(|| format!("query pragma table_info for `{name}`"))?,
 			);
 			let foreign_keys = decode_cbor_json_or_null(
-				&ctx.db_query(&format!("PRAGMA foreign_key_list({quoted})"), None)
+				&ctx
+					.db_query(&format!("PRAGMA foreign_key_list({quoted})"), None)
 					.await
 					.with_context(|| format!("query pragma foreign_key_list for `{name}`"))?,
 			);
 			let count_rows = decode_cbor_json_or_null(
-				&ctx.db_query(&format!("SELECT COUNT(*) as count FROM {quoted}"), None)
+				&ctx
+					.db_query(
+						&format!("SELECT COUNT(*) as count FROM {quoted}"),
+						None,
+					)
 					.await
 					.with_context(|| format!("count rows for `{name}`"))?,
 			);
@@ -1140,7 +1185,8 @@ impl RegistryDispatcher {
 		limit: u32,
 		offset: u32,
 	) -> Result<JsonValue> {
-		self.inspector_database_rows_bytes(ctx, table, limit, offset)
+		self
+			.inspector_database_rows_bytes(ctx, table, limit, offset)
 			.await
 			.map(|payload| decode_cbor_json_or_null(&payload))
 	}
@@ -1153,15 +1199,16 @@ impl RegistryDispatcher {
 		offset: u32,
 	) -> Result<Vec<u8>> {
 		let params = encode_json_as_cbor(&vec![json!(limit.min(500)), json!(offset)])?;
-		ctx.db_query(
-			&format!(
-				"SELECT * FROM {} LIMIT ? OFFSET ?",
-				quote_sql_identifier(table)
-			),
-			Some(&params),
-		)
-		.await
-		.with_context(|| format!("query rows for `{table}`"))
+		ctx
+			.db_query(
+				&format!(
+					"SELECT * FROM {} LIMIT ? OFFSET ?",
+					quote_sql_identifier(table)
+				),
+				Some(&params),
+			)
+			.await
+			.with_context(|| format!("query rows for `{table}`"))
 	}
 
 	async fn inspector_database_execute(
@@ -1197,7 +1244,7 @@ impl RegistryDispatcher {
 
 	fn handle_metrics_fetch(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 		request: &HttpRequest,
 	) -> Result<HttpResponse> {
 		if !request_has_bearer_token(request, self.inspector_token.as_deref()) {
@@ -1224,6 +1271,7 @@ impl RegistryDispatcher {
 		})
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	async fn handle_websocket(
 		self: &Arc<Self>,
 		actor_id: &str,
@@ -1258,10 +1306,6 @@ impl RegistryDispatcher {
 				)
 				.await;
 		}
-		if instance.callbacks.on_websocket.is_none() {
-			return Ok(default_websocket_handler());
-		}
-
 		match self
 			.handle_raw_websocket(actor_id, instance, request, path, headers, sender)
 			.await
@@ -1284,10 +1328,11 @@ impl RegistryDispatcher {
 		}
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	async fn handle_actor_connect_websocket(
 		self: &Arc<Self>,
 		actor_id: &str,
-		instance: ActiveActorInstance,
+		instance: Arc<ActorTaskHandle>,
 		_request: &HttpRequest,
 		path: &str,
 		headers: &HashMap<String, String>,
@@ -1300,11 +1345,7 @@ impl RegistryDispatcher {
 		let encoding = match websocket_encoding(headers) {
 			Ok(encoding) => encoding,
 			Err(error) => {
-				tracing::warn!(
-					actor_id,
-					?error,
-					"rejecting unsupported actor connect encoding"
-				);
+				tracing::warn!(actor_id, ?error, "rejecting unsupported actor connect encoding");
 				return Ok(closing_websocket_handler(
 					1003,
 					"actor.unsupported_websocket_encoding",
@@ -1313,8 +1354,9 @@ impl RegistryDispatcher {
 		};
 
 		let conn_params = websocket_conn_params(headers)?;
-		let connect_request = Request::from_parts("GET", path, headers.clone(), Vec::new())
-			.context("build actor connect request")?;
+		let connect_request =
+			Request::from_parts("GET", path, headers.clone(), Vec::new())
+				.context("build actor connect request")?;
 		let conn = if is_restoring_hibernatable {
 			match instance
 				.ctx
@@ -1383,26 +1425,24 @@ impl RegistryDispatcher {
 			.context("get actor websocket disconnect handler")?;
 		let transport_closed = Arc::new(AtomicBool::new(false));
 		let transport_disconnect_sender = sender.clone();
-		conn.configure_disconnect_handler(Some(Arc::new(move |reason| {
-			let managed_disconnect = managed_disconnect.clone();
+		conn.configure_transport_disconnect_handler(Some(Arc::new(move |reason| {
 			let transport_closed = transport_closed.clone();
 			let transport_disconnect_sender = transport_disconnect_sender.clone();
 			Box::pin(async move {
 				if !transport_closed.swap(true, Ordering::SeqCst) {
-					transport_disconnect_sender.close(Some(1000), reason.clone());
+					transport_disconnect_sender.close(Some(1000), reason);
 				}
-				managed_disconnect(reason).await
+				Ok(())
 			})
 		})));
+		conn.configure_disconnect_handler(Some(managed_disconnect));
 
-		let max_incoming_message_size =
-			instance.factory.config().max_incoming_message_size as usize;
-		let max_outgoing_message_size =
-			instance.factory.config().max_outgoing_message_size as usize;
+		let max_incoming_message_size = instance.factory.config().max_incoming_message_size as usize;
+		let max_outgoing_message_size = instance.factory.config().max_outgoing_message_size as usize;
 
 		let event_sender = sender.clone();
-		conn.configure_event_sender(Some(Arc::new(
-			move |event| match send_actor_connect_message(
+		conn.configure_event_sender(Some(Arc::new(move |event| {
+			match send_actor_connect_message(
 				&event_sender,
 				encoding,
 				&ActorConnectToClient::Event(ActorConnectEvent {
@@ -1413,23 +1453,26 @@ impl RegistryDispatcher {
 			) {
 				Ok(()) => Ok(()),
 				Err(ActorConnectSendError::OutgoingTooLong) => {
-					event_sender.close(Some(1011), Some("message.outgoing_too_long".to_owned()));
+					event_sender.close(
+						Some(1011),
+						Some("message.outgoing_too_long".to_owned()),
+					);
 					Ok(())
 				}
 				Err(ActorConnectSendError::Encode(error)) => Err(error),
-			},
-		)));
+			}
+		})));
 
 		let init_actor_id = instance.ctx.actor_id().to_owned();
 		let init_conn_id = conn.id().to_owned();
 		let on_message_conn = conn.clone();
 		let on_message_ctx = instance.ctx.clone();
-		let on_message_factory = instance.factory.clone();
-		let on_message_callbacks = instance.callbacks.clone();
+		let on_message_dispatch = instance.dispatch.clone();
+		let on_message_dispatch_capacity =
+			instance.factory.config().dispatch_command_inbox_capacity;
 
-		let on_open: Option<
-			Box<dyn FnOnce(WebSocketSender) -> futures::future::BoxFuture<'static, ()> + Send>,
-		> = if is_restoring_hibernatable {
+		let on_open: Option<Box<dyn FnOnce(WebSocketSender) -> futures::future::BoxFuture<'static, ()> + Send>> =
+			if is_restoring_hibernatable {
 			None
 		} else {
 			Some(Box::new(move |sender| {
@@ -1453,10 +1496,7 @@ impl RegistryDispatcher {
 								);
 							}
 							ActorConnectSendError::Encode(error) => {
-								tracing::error!(
-									?error,
-									"failed to send actor websocket init message"
-								);
+								tracing::error!(?error, "failed to send actor websocket init message");
 								sender.close(Some(1011), Some("actor.init_error".to_owned()));
 							}
 						}
@@ -1469,20 +1509,23 @@ impl RegistryDispatcher {
 			on_message: Box::new(move |message: WebSocketMessage| {
 				let conn = on_message_conn.clone();
 				let ctx = on_message_ctx.clone();
-				let factory = on_message_factory.clone();
-				let callbacks = on_message_callbacks.clone();
+				let dispatch = on_message_dispatch.clone();
 				Box::pin(async move {
 					if message.data.len() > max_incoming_message_size {
-						message
-							.sender
-							.close(Some(1011), Some("message.incoming_too_long".to_owned()));
+						message.sender.close(
+							Some(1011),
+							Some("message.incoming_too_long".to_owned()),
+						);
 						return;
 					}
 
 					let parsed = match decode_actor_connect_message(&message.data, encoding) {
 						Ok(parsed) => parsed,
 						Err(error) => {
-							tracing::warn!(?error, "failed to decode actor websocket message");
+							tracing::warn!(
+								?error,
+								"failed to decode actor websocket message"
+							);
 							message
 								.sender
 								.close(Some(1011), Some("actor.invalid_request".to_owned()));
@@ -1490,50 +1533,42 @@ impl RegistryDispatcher {
 						}
 					};
 
-					if conn.is_hibernatable() {
-						if let Err(error) = persist_and_ack_hibernatable_actor_message(
+					if conn.is_hibernatable()
+						&& let Err(error) = persist_and_ack_hibernatable_actor_message(
 							&ctx,
 							&conn,
 							message.message_index,
 						)
 						.await
-						{
-							tracing::warn!(
-								?error,
-								conn_id = conn.id(),
-								"failed to persist and ack hibernatable actor websocket message"
-							);
-							message.sender.close(
-								Some(1011),
-								Some("actor.hibernation_persist_failed".to_owned()),
-							);
-							return;
-						}
+					{
+						tracing::warn!(
+							?error,
+							conn_id = conn.id(),
+							"failed to persist and ack hibernatable actor websocket message"
+						);
+						message.sender.close(
+							Some(1011),
+							Some("actor.hibernation_persist_failed".to_owned()),
+						);
+						return;
 					}
 
 					match parsed {
 						ActorConnectToServer::SubscriptionRequest(request) => {
 							if request.subscribe {
-								if let Some(callback) = callbacks.on_before_subscribe.as_ref() {
-									let event_name = request.event_name.clone();
-									let result = ctx
-										.with_websocket_callback(|| async {
-											callback(OnBeforeSubscribeRequest {
-												ctx: ctx.clone(),
-												conn: conn.clone(),
-												event_name,
-											})
-											.await
-										})
-										.await;
-									if let Err(error) = result {
-										let error = RivetError::extract(&error);
-										message.sender.close(
-											Some(1011),
-											Some(format!("{}.{}", error.group(), error.code())),
-										);
-										return;
-									}
+								if let Err(error) = dispatch_subscribe_request(
+									&ctx,
+									conn.clone(),
+									request.event_name.clone(),
+								)
+								.await
+								{
+									let error = RivetError::extract(&error);
+									message.sender.close(
+										Some(1011),
+										Some(format!("{}.{}", error.group(), error.code())),
+									);
+									return;
 								}
 								conn.subscribe(request.event_name);
 							} else {
@@ -1543,20 +1578,15 @@ impl RegistryDispatcher {
 						ActorConnectToServer::ActionRequest(request) => {
 							let sender = message.sender.clone();
 							let conn = conn.clone();
-							let ctx = ctx.clone();
-							let invoker = ActionInvoker::with_shared_callbacks(
-								factory.config().clone(),
-								callbacks.clone(),
-							);
 							tokio::spawn(async move {
-								let response = match invoker
-									.dispatch(ActionRequest {
-										ctx,
-										conn,
-										name: request.name,
-										args: request.args.into_vec(),
-									})
-									.await
+								let response = match dispatch_action_through_task(
+									&dispatch,
+									on_message_dispatch_capacity,
+									conn,
+									request.name,
+									request.args.into_vec(),
+								)
+								.await
 								{
 									Ok(output) => ActorConnectToClient::ActionResponse(
 										ActorConnectActionResponse {
@@ -1583,10 +1613,7 @@ impl RegistryDispatcher {
 										);
 									}
 									Err(ActorConnectSendError::Encode(error)) => {
-										tracing::error!(
-											?error,
-											"failed to send actor websocket response"
-										);
+										tracing::error!(?error, "failed to send actor websocket response");
 										sender.close(
 											Some(1011),
 											Some("actor.send_failed".to_owned()),
@@ -1602,11 +1629,7 @@ impl RegistryDispatcher {
 				let conn = conn.clone();
 				Box::pin(async move {
 					if let Err(error) = conn.disconnect(Some(reason.as_str())).await {
-						tracing::warn!(
-							?error,
-							conn_id = conn.id(),
-							"failed to disconnect actor websocket connection"
-						);
+						tracing::warn!(?error, conn_id = conn.id(), "failed to disconnect actor websocket connection");
 					}
 				})
 			}),
@@ -1617,7 +1640,7 @@ impl RegistryDispatcher {
 	async fn handle_raw_websocket(
 		self: &Arc<Self>,
 		actor_id: &str,
-		instance: ActiveActorInstance,
+		instance: Arc<ActorTaskHandle>,
 		request: &HttpRequest,
 		path: &str,
 		headers: &HashMap<String, String>,
@@ -1633,15 +1656,18 @@ impl RegistryDispatcher {
 		.context("build actor websocket request")?;
 		let conn = instance
 			.ctx
-			.connect_conn_with_request(conn_params, Some(websocket_request.clone()), async {
-				Ok(Vec::new())
-			})
+			.connect_conn_with_request(
+				conn_params,
+				Some(websocket_request.clone()),
+				async { Ok(Vec::new()) },
+			)
 			.await?;
-		let callbacks = instance.callbacks.clone();
 		let ctx = instance.ctx.clone();
-		let conn_for_open = conn.clone();
+		let dispatch = instance.dispatch.clone();
+		let dispatch_capacity = instance.factory.config().dispatch_command_inbox_capacity;
 		let conn_for_close = conn.clone();
 		let ctx_for_message = ctx.clone();
+		let ctx_for_close = ctx.clone();
 		let ws = WebSocket::new();
 		let ws_for_open = ws.clone();
 		let ws_for_message = ws.clone();
@@ -1650,6 +1676,8 @@ impl RegistryDispatcher {
 		let actor_id = actor_id.to_owned();
 		let actor_id_for_close = actor_id.clone();
 		let actor_id_for_open = actor_id.clone();
+		let (closed_tx, _closed_rx) = oneshot::channel();
+		let closed_tx = Arc::new(std::sync::Mutex::new(Some(closed_tx)));
 
 		Ok(WebSocketHandler {
 			on_message: Box::new(move |message: WebSocketMessage| {
@@ -1663,10 +1691,7 @@ impl RegistryDispatcher {
 							match String::from_utf8(message.data) {
 								Ok(text) => WsMessage::Text(text),
 								Err(error) => {
-									tracing::warn!(
-										?error,
-										"raw websocket message was not valid utf-8"
-									);
+									tracing::warn!(?error, "raw websocket message was not valid utf-8");
 									ws.close(Some(1007), Some("message.invalid_utf8".to_owned()));
 									return;
 								}
@@ -1681,45 +1706,41 @@ impl RegistryDispatcher {
 				let conn = conn_for_close.clone();
 				let ws = ws_for_close.clone();
 				let actor_id = actor_id_for_close.clone();
+				let ctx = ctx_for_close.clone();
+				let closed_tx = closed_tx.clone();
 				Box::pin(async move {
 					ws.close(Some(1000), Some("hack_force_close".to_owned()));
-					tokio::spawn(async move {
+					ctx.with_websocket_callback(|| async move {
 						ws.dispatch_close_event(code, reason.clone(), code == 1000);
 						if let Err(error) = conn.disconnect(Some(reason.as_str())).await {
-							tracing::warn!(
-								actor_id,
-								?error,
-								conn_id = conn.id(),
-								"failed to disconnect raw websocket connection"
-							);
+							tracing::warn!(actor_id, ?error, conn_id = conn.id(), "failed to disconnect raw websocket connection");
 						}
-					});
+					})
+					.await;
+					if let Some(closed_tx) = closed_tx
+						.lock()
+						.expect("websocket close sender lock poisoned")
+						.take()
+					{
+						let _ = closed_tx.send(());
+					}
 				})
 			}),
 			on_open: Some(Box::new(move |sender| {
-				let callbacks = callbacks.clone();
-				let ctx = ctx.clone();
-				let conn = conn_for_open.clone();
 				let request = request_for_open.clone();
 				let ws = ws_for_open.clone();
 				let actor_id = actor_id_for_open.clone();
+				let dispatch = dispatch.clone();
 				Box::pin(async move {
-					let Some(callback) = callbacks.on_websocket.as_ref() else {
-						return;
-					};
 					let close_sender = sender.clone();
 					ws.configure_sender(sender);
-					let result = ctx
-						.with_websocket_callback(|| async {
-							callback(OnWebSocketRequest {
-								ctx: ctx.clone(),
-								conn: Some(conn.clone()),
-								ws: ws.clone(),
-								request: Some(request),
-							})
-							.await
-						})
-						.await;
+					let result = dispatch_websocket_open_through_task(
+						&dispatch,
+						dispatch_capacity,
+						ws.clone(),
+						Some(request),
+					)
+					.await;
 					if let Err(error) = result {
 						let error = RivetError::extract(&error);
 						tracing::error!(actor_id, ?error, "actor raw websocket callback failed");
@@ -1736,25 +1757,35 @@ impl RegistryDispatcher {
 	async fn handle_inspector_websocket(
 		self: &Arc<Self>,
 		actor_id: &str,
-		instance: ActiveActorInstance,
+		instance: Arc<ActorTaskHandle>,
 		_request: &HttpRequest,
 		headers: &HashMap<String, String>,
 	) -> Result<WebSocketHandler> {
-		if !request_has_inspector_websocket_access(headers, self.inspector_token.as_deref()) {
-			tracing::warn!(
-				actor_id,
-				"rejecting inspector websocket without a valid token"
-			);
+		if InspectorAuth::new()
+			.verify(
+				&instance.ctx,
+				websocket_inspector_token(headers)
+					.or_else(|| authorization_bearer_token_map(headers)),
+			)
+			.await
+			.is_err()
+		{
+			tracing::warn!(actor_id, "rejecting inspector websocket without a valid token");
 			return Ok(closing_websocket_handler(1008, "inspector.unauthorized"));
 		}
 
 		let dispatcher = self.clone();
-		let subscription_slot = Arc::new(std::sync::Mutex::new(None::<InspectorSubscription>));
+		let subscription_slot =
+			Arc::new(std::sync::Mutex::new(None::<InspectorSubscription>));
+		let overlay_task_slot =
+			Arc::new(std::sync::Mutex::new(None::<JoinHandle<()>>));
 		let on_open_instance = instance.clone();
 		let on_open_dispatcher = dispatcher.clone();
 		let on_open_slot = subscription_slot.clone();
+		let on_open_overlay_slot = overlay_task_slot.clone();
 		let on_message_instance = instance.clone();
 		let on_message_dispatcher = dispatcher.clone();
+		let on_close_instance = instance.clone();
 
 		Ok(WebSocketHandler {
 			on_message: Box::new(move |message: WebSocketMessage| {
@@ -1762,35 +1793,37 @@ impl RegistryDispatcher {
 				let instance = on_message_instance.clone();
 				Box::pin(async move {
 					dispatcher
-						.handle_inspector_websocket_message(
-							&instance,
-							&message.sender,
-							&message.data,
-						)
+						.handle_inspector_websocket_message(&instance, &message.sender, &message.data)
 						.await;
 				})
 			}),
 			on_close: Box::new(move |_code, _reason| {
 				let slot = subscription_slot.clone();
+				let overlay_slot = overlay_task_slot.clone();
+				let instance = on_close_instance.clone();
 				Box::pin(async move {
 					let mut guard = match slot.lock() {
 						Ok(guard) => guard,
 						Err(poisoned) => poisoned.into_inner(),
 					};
 					guard.take();
+					let mut overlay_guard = match overlay_slot.lock() {
+						Ok(guard) => guard,
+						Err(poisoned) => poisoned.into_inner(),
+					};
+					if let Some(task) = overlay_guard.take() {
+						task.abort();
+					}
+					instance.ctx.inspector_detach();
 				})
 			}),
 			on_open: Some(Box::new(move |open_sender| {
 				Box::pin(async move {
-					match on_open_dispatcher
-						.inspector_init_message(&on_open_instance)
-						.await
-					{
+					match on_open_dispatcher.inspector_init_message(&on_open_instance).await {
 						Ok(message) => {
 							if let Err(error) = send_inspector_message(&open_sender, &message) {
 								tracing::error!(?error, "failed to send inspector init message");
-								open_sender
-									.close(Some(1011), Some("inspector.init_error".to_owned()));
+								open_sender.close(Some(1011), Some("inspector.init_error".to_owned()));
 								return;
 							}
 						}
@@ -1801,43 +1834,90 @@ impl RegistryDispatcher {
 						}
 					}
 
+					on_open_instance.ctx.inspector_attach();
+					let mut overlay_rx = on_open_instance.ctx.subscribe_inspector();
+					let overlay_sender = open_sender.clone();
+					let overlay_task = tokio::spawn(async move {
+						loop {
+							match overlay_rx.recv().await {
+								Ok(payload) => match decode_inspector_overlay_state(&payload) {
+									Ok(Some(state)) => {
+										if let Err(error) = send_inspector_message(
+											&overlay_sender,
+											&InspectorServerMessage::StateUpdated(
+												inspector_protocol::StateUpdated { state },
+											),
+										) {
+											tracing::error!(
+												?error,
+												"failed to push inspector overlay update"
+											);
+											break;
+										}
+									}
+									Ok(None) => {}
+									Err(error) => {
+										tracing::error!(
+											?error,
+											"failed to decode inspector overlay update"
+										);
+									}
+								},
+								Err(broadcast::error::RecvError::Lagged(skipped)) => {
+									tracing::warn!(
+										skipped,
+										"inspector overlay subscriber lagged; waiting for next sync"
+									);
+								}
+								Err(broadcast::error::RecvError::Closed) => break,
+							}
+						}
+					});
+					let mut overlay_guard = match on_open_overlay_slot.lock() {
+						Ok(guard) => guard,
+						Err(poisoned) => poisoned.into_inner(),
+					};
+					*overlay_guard = Some(overlay_task);
+
 					let listener_dispatcher = on_open_dispatcher.clone();
 					let listener_instance = on_open_instance.clone();
 					let listener_sender = open_sender.clone();
-					let subscription =
-						on_open_instance
-							.inspector
-							.subscribe(Arc::new(move |signal| {
-								let dispatcher = listener_dispatcher.clone();
-								let instance = listener_instance.clone();
-								let sender = listener_sender.clone();
-								tokio::spawn(async move {
-									match dispatcher
-										.inspector_push_message_for_signal(&instance, signal)
-										.await
-									{
-										Ok(Some(message)) => {
-											if let Err(error) =
-												send_inspector_message(&sender, &message)
-											{
-												tracing::error!(
-													?error,
-													?signal,
-													"failed to push inspector websocket update"
-												);
-											}
-										}
-										Ok(None) => {}
-										Err(error) => {
+					let subscription = on_open_instance.inspector.subscribe(Arc::new(
+						move |signal| {
+							if signal == InspectorSignal::StateUpdated {
+								return;
+							}
+							let dispatcher = listener_dispatcher.clone();
+							let instance = listener_instance.clone();
+							let sender = listener_sender.clone();
+							tokio::spawn(async move {
+								match dispatcher
+									.inspector_push_message_for_signal(&instance, signal)
+									.await
+								{
+									Ok(Some(message)) => {
+										if let Err(error) =
+											send_inspector_message(&sender, &message)
+										{
 											tracing::error!(
 												?error,
 												?signal,
-												"failed to build inspector websocket update"
+												"failed to push inspector websocket update"
 											);
 										}
 									}
-								});
-							}));
+									Ok(None) => {}
+									Err(error) => {
+										tracing::error!(
+											?error,
+											?signal,
+											"failed to build inspector websocket update"
+										);
+									}
+								}
+							});
+						},
+					));
 					let mut guard = match on_open_slot.lock() {
 						Ok(guard) => guard,
 						Err(poisoned) => poisoned.into_inner(),
@@ -1850,15 +1930,12 @@ impl RegistryDispatcher {
 
 	async fn handle_inspector_websocket_message(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 		sender: &WebSocketSender,
 		payload: &[u8],
 	) {
 		let response = match inspector_protocol::decode_client_message(payload) {
-			Ok(message) => match self
-				.process_inspector_websocket_message(instance, message)
-				.await
-			{
+			Ok(message) => match self.process_inspector_websocket_message(instance, message).await {
 				Ok(response) => response,
 				Err(error) => Some(InspectorServerMessage::Error(
 					inspector_protocol::ErrorMessage {
@@ -1873,24 +1950,24 @@ impl RegistryDispatcher {
 			)),
 		};
 
-		if let Some(response) = response {
-			if let Err(error) = send_inspector_message(sender, &response) {
-				tracing::error!(?error, "failed to send inspector websocket response");
-			}
+		if let Some(response) = response
+			&& let Err(error) = send_inspector_message(sender, &response)
+		{
+			tracing::error!(?error, "failed to send inspector websocket response");
 		}
 	}
 
 	async fn process_inspector_websocket_message(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 		message: inspector_protocol::ClientMessage,
 	) -> Result<Option<InspectorServerMessage>> {
 		match message {
 			inspector_protocol::ClientMessage::PatchState(request) => {
-				instance.ctx.set_state(request.state);
+				instance.ctx.set_state(request.state)?;
 				instance
 					.ctx
-					.save_state(SaveStateOpts { immediate: true })
+					.save_state(vec![StateDelta::ActorState(instance.ctx.state())])
 					.await
 					.context("save inspector websocket state patch")?;
 				Ok(None)
@@ -1920,12 +1997,14 @@ impl RegistryDispatcher {
 					},
 				)))
 			}
-			inspector_protocol::ClientMessage::RpcsListRequest(request) => Ok(Some(
-				InspectorServerMessage::RpcsListResponse(inspector_protocol::RpcsListResponse {
-					rid: request.id,
-					rpcs: inspector_rpcs(instance),
-				}),
-			)),
+			inspector_protocol::ClientMessage::RpcsListRequest(request) => {
+				Ok(Some(InspectorServerMessage::RpcsListResponse(
+					inspector_protocol::RpcsListResponse {
+						rid: request.id,
+						rpcs: inspector_rpcs(instance),
+					},
+				)))
+			}
 			inspector_protocol::ClientMessage::TraceQueryRequest(request) => {
 				Ok(Some(InspectorServerMessage::TraceQueryResponse(
 					inspector_protocol::TraceQueryResponse {
@@ -1949,25 +2028,25 @@ impl RegistryDispatcher {
 				)))
 			}
 			inspector_protocol::ClientMessage::WorkflowHistoryRequest(request) => {
-				let (is_workflow_enabled, history) =
+				let (workflow_supported, history) =
 					self.inspector_workflow_history_bytes(instance).await?;
 				Ok(Some(InspectorServerMessage::WorkflowHistoryResponse(
 					inspector_protocol::WorkflowHistoryResponse {
 						rid: request.id,
 						history,
-						is_workflow_enabled,
+						workflow_supported,
 					},
 				)))
 			}
 			inspector_protocol::ClientMessage::WorkflowReplayRequest(request) => {
-				let (is_workflow_enabled, history) = self
-					.inspector_replay_workflow_bytes(instance, request.entry_id)
+				let (workflow_supported, history) = self
+					.inspector_workflow_replay_bytes(instance, request.entry_id)
 					.await?;
 				Ok(Some(InspectorServerMessage::WorkflowReplayResponse(
 					inspector_protocol::WorkflowReplayResponse {
 						rid: request.id,
 						history,
-						is_workflow_enabled,
+						workflow_supported,
 					},
 				)))
 			}
@@ -2001,9 +2080,9 @@ impl RegistryDispatcher {
 
 	async fn inspector_init_message(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 	) -> Result<InspectorServerMessage> {
-		let (is_workflow_enabled, workflow_history) =
+		let (workflow_supported, workflow_history) =
 			self.inspector_workflow_history_bytes(instance).await?;
 		let queue_size = self.inspector_current_queue_size(instance).await?;
 		Ok(InspectorServerMessage::Init(
@@ -2015,14 +2094,14 @@ impl RegistryDispatcher {
 				is_database_enabled: instance.ctx.sql().runtime_config().is_ok(),
 				queue_size,
 				workflow_history,
-				is_workflow_enabled,
+				workflow_supported,
 			},
 		))
 	}
 
 	fn inspector_state_response(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 		rid: u64,
 	) -> inspector_protocol::StateResponse {
 		inspector_protocol::StateResponse {
@@ -2034,7 +2113,7 @@ impl RegistryDispatcher {
 
 	async fn inspector_queue_status(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 		limit: u32,
 	) -> Result<inspector_protocol::QueueStatus> {
 		let messages = instance
@@ -2063,21 +2142,23 @@ impl RegistryDispatcher {
 		})
 	}
 
-	async fn inspector_current_queue_size(&self, instance: &ActiveActorInstance) -> Result<u64> {
-		Ok(instance
-			.ctx
-			.queue()
-			.inspect_messages()
-			.await
-			.context("list inspector queue messages for queue size")?
-			.len()
-			.try_into()
-			.unwrap_or(u64::MAX))
+	async fn inspector_current_queue_size(&self, instance: &ActorTaskHandle) -> Result<u64> {
+		Ok(
+			instance
+				.ctx
+				.queue()
+				.inspect_messages()
+				.await
+				.context("list inspector queue messages for queue size")?
+				.len()
+				.try_into()
+				.unwrap_or(u64::MAX),
+		)
 	}
 
 	async fn inspector_push_message_for_signal(
 		&self,
-		instance: &ActiveActorInstance,
+		instance: &ActorTaskHandle,
 		signal: InspectorSignal,
 	) -> Result<Option<InspectorServerMessage>> {
 		match signal {
@@ -2086,13 +2167,13 @@ impl RegistryDispatcher {
 					state: instance.ctx.state(),
 				},
 			))),
-			InspectorSignal::ConnectionsUpdated => {
-				Ok(Some(InspectorServerMessage::ConnectionsUpdated(
+			InspectorSignal::ConnectionsUpdated => Ok(Some(
+				InspectorServerMessage::ConnectionsUpdated(
 					inspector_protocol::ConnectionsUpdated {
 						connections: inspector_wire_connections(&instance.ctx),
 					},
-				)))
-			}
+				),
+			)),
 			InspectorSignal::QueueUpdated => Ok(Some(InspectorServerMessage::QueueUpdated(
 				inspector_protocol::QueueUpdated {
 					queue_size: self.inspector_current_queue_size(instance).await?,
@@ -2127,6 +2208,7 @@ impl RegistryDispatcher {
 		}
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	fn build_actor_context(
 		&self,
 		handle: EnvoyHandle,
@@ -2155,6 +2237,7 @@ impl RegistryDispatcher {
 		ctx.configure_envoy(handle, Some(generation));
 		ctx
 	}
+
 }
 
 impl EnvoyCallbacks for RegistryCallbacks {
@@ -2176,8 +2259,8 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		let factory = dispatcher.factories.get(&actor_name).cloned();
 
 		Box::pin(async move {
-			let factory =
-				factory.ok_or_else(|| anyhow!("actor factory `{actor_name}` is not registered"))?;
+			let factory = factory
+				.ok_or_else(|| anyhow!("actor factory `{actor_name}` is not registered"))?;
 			let ctx = dispatcher.build_actor_context(
 				handle,
 				&actor_id,
@@ -2216,7 +2299,8 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		Box::pin(async move { dispatcher.stop_actor(&actor_id, reason, stop_handle).await })
 	}
 
-	fn on_shutdown(&self) {}
+	fn on_shutdown(&self) {
+	}
 
 	fn fetch(
 		&self,
@@ -2267,8 +2351,9 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		_gateway_id: &protocol::GatewayId,
 		_request_id: &protocol::RequestId,
 		request: &HttpRequest,
-	) -> bool {
-		self.dispatcher.can_hibernate(actor_id, request)
+	) -> EnvoyBoxFuture<anyhow::Result<bool>> {
+		let is_hibernatable = self.dispatcher.can_hibernate(actor_id, request);
+		Box::pin(async move { Ok(is_hibernatable) })
 	}
 }
 
@@ -2283,7 +2368,8 @@ impl ServeSettings {
 				.unwrap_or_else(|_| "http://127.0.0.1:6420".to_owned()),
 			token: Some(env::var("RIVET_TOKEN").unwrap_or_else(|_| "dev".to_owned())),
 			namespace: env::var("RIVET_NAMESPACE").unwrap_or_else(|_| "default".to_owned()),
-			pool_name: env::var("RIVET_POOL_NAME").unwrap_or_else(|_| "rivetkit-rust".to_owned()),
+			pool_name: env::var("RIVET_POOL_NAME")
+				.unwrap_or_else(|_| "rivetkit-rust".to_owned()),
 			engine_binary_path: env::var_os("RIVET_ENGINE_BINARY_PATH").map(PathBuf::from),
 			handle_inspector_http_in_runtime: false,
 		}
@@ -2314,11 +2400,14 @@ impl ServeConfig {
 impl EngineProcessManager {
 	async fn start(binary_path: &Path, endpoint: &str) -> Result<Self> {
 		if !binary_path.exists() {
-			anyhow::bail!("engine binary not found at `{}`", binary_path.display());
+			anyhow::bail!(
+				"engine binary not found at `{}`",
+				binary_path.display()
+			);
 		}
 
-		let endpoint_url =
-			Url::parse(endpoint).with_context(|| format!("parse engine endpoint `{endpoint}`"))?;
+		let endpoint_url = Url::parse(endpoint)
+			.with_context(|| format!("parse engine endpoint `{endpoint}`"))?;
 		let guard_host = endpoint_url
 			.host_str()
 			.ok_or_else(|| anyhow!("engine endpoint `{endpoint}` is missing a host"))?
@@ -2349,9 +2438,12 @@ impl EngineProcessManager {
 			.stdout(Stdio::piped())
 			.stderr(Stdio::piped());
 
-		let mut child = command
-			.spawn()
-			.with_context(|| format!("spawn engine binary `{}`", binary_path.display()))?;
+		let mut child = command.spawn().with_context(|| {
+			format!(
+				"spawn engine binary `{}`",
+				binary_path.display()
+			)
+		})?;
 		let pid = child
 			.id()
 			.ok_or_else(|| anyhow!("engine process missing pid after spawn"))?;
@@ -2421,7 +2513,10 @@ fn engine_health_url(endpoint: &str) -> String {
 	format!("{}/health", endpoint.trim_end_matches('/'))
 }
 
-fn spawn_engine_log_task<R>(reader: Option<R>, stream: &'static str) -> Option<JoinHandle<()>>
+fn spawn_engine_log_task<R>(
+	reader: Option<R>,
+	stream: &'static str,
+) -> Option<JoinHandle<()>>
 where
 	R: AsyncRead + Unpin + Send + 'static,
 {
@@ -2481,7 +2576,9 @@ async fn wait_for_engine_health(health_url: &str) -> Result<EngineHealthResponse
 		};
 
 		if Instant::now() >= deadline {
-			anyhow::bail!("engine health check failed after {attempt} attempts: {last_error}");
+			anyhow::bail!(
+				"engine health check failed after {attempt} attempts: {last_error}"
+			);
 		}
 
 		tokio::time::sleep(backoff).await;
@@ -2608,10 +2705,7 @@ fn decode_preloaded_persisted_actor(
 	let Some(preloaded_kv) = preloaded_kv else {
 		return Ok(None);
 	};
-	let Some(entry) = preloaded_kv
-		.entries
-		.iter()
-		.find(|entry| entry.key == PERSIST_DATA_KEY)
+	let Some(entry) = preloaded_kv.entries.iter().find(|entry| entry.key == PERSIST_DATA_KEY)
 	else {
 		return Ok(None);
 	};
@@ -2622,8 +2716,8 @@ fn decode_preloaded_persisted_actor(
 }
 
 fn inspector_connections(ctx: &ActorContext) -> Vec<InspectorConnectionJson> {
-	ctx.conns()
-		.into_iter()
+	ctx
+		.conns()
 		.map(|conn| InspectorConnectionJson {
 			connection_type: None,
 			id: conn.id().to_owned(),
@@ -2635,9 +2729,18 @@ fn inspector_connections(ctx: &ActorContext) -> Vec<InspectorConnectionJson> {
 		.collect()
 }
 
+fn decode_inspector_overlay_state(payload: &[u8]) -> Result<Option<Vec<u8>>> {
+	let deltas: Vec<StateDelta> = ciborium::from_reader(Cursor::new(payload))
+		.context("decode inspector overlay deltas")?;
+	Ok(deltas.into_iter().find_map(|delta| match delta {
+		StateDelta::ActorState(bytes) => Some(bytes),
+		StateDelta::ConnHibernation { .. } | StateDelta::ConnHibernationRemoved(_) => None,
+	}))
+}
+
 fn inspector_wire_connections(ctx: &ActorContext) -> Vec<inspector_protocol::ConnectionDetails> {
-	ctx.conns()
-		.into_iter()
+	ctx
+		.conns()
 		.map(|conn| {
 			let details = json!({
 				"type": JsonValue::Null,
@@ -2656,68 +2759,18 @@ fn inspector_wire_connections(ctx: &ActorContext) -> Vec<inspector_protocol::Con
 		.collect()
 }
 
-fn build_actor_inspector(
-	ctx: ActorContext,
-	callbacks: Arc<crate::actor::callbacks::ActorInstanceCallbacks>,
-) -> Inspector {
-	let get_workflow_history = callbacks.get_workflow_history.as_ref().map(|_| {
-		let callbacks = callbacks.clone();
-		let ctx = ctx.clone();
-		Arc::new(
-			move || -> futures::future::BoxFuture<'static, Result<Option<Vec<u8>>>> {
-				let callbacks = callbacks.clone();
-				let ctx = ctx.clone();
-				Box::pin(async move {
-					let Some(callback) = callbacks.get_workflow_history.as_ref() else {
-						return Ok(None);
-					};
-					callback(GetWorkflowHistoryRequest { ctx }).await
-				})
-			},
-		)
-			as Arc<
-				dyn Fn() -> futures::future::BoxFuture<'static, Result<Option<Vec<u8>>>>
-					+ Send
-					+ Sync,
-			>
-	});
-	let replay_workflow = callbacks.replay_workflow.as_ref().map(|_| {
-		let callbacks = callbacks.clone();
-		let ctx = ctx.clone();
-		Arc::new(
-			move |entry_id: Option<String>| -> futures::future::BoxFuture<
-				'static,
-				Result<Option<Vec<u8>>>,
-			> {
-			let callbacks = callbacks.clone();
-			let ctx = ctx.clone();
-			Box::pin(async move {
-				let Some(callback) = callbacks.replay_workflow.as_ref() else {
-					return Ok(None);
-				};
-				callback(ReplayWorkflowRequest { ctx, entry_id }).await
-			})
-		},
-		) as Arc<
-			dyn Fn(
-					Option<String>,
-				) -> futures::future::BoxFuture<'static, Result<Option<Vec<u8>>>>
-				+ Send
-				+ Sync,
-		>
-	});
-
-	Inspector::with_workflow_callbacks(get_workflow_history, replay_workflow)
+fn build_actor_inspector() -> Inspector {
+	Inspector::new()
 }
 
-fn inspector_rpcs(instance: &ActiveActorInstance) -> Vec<String> {
-	let mut rpcs: Vec<String> = instance.callbacks.actions.keys().cloned().collect();
-	rpcs.sort();
-	rpcs
+fn inspector_rpcs(instance: &ActorTaskHandle) -> Vec<String> {
+	let _ = instance;
+	Vec::new()
 }
 
 fn inspector_request_url(request: &Request) -> Result<Url> {
-	Url::parse(&format!("http://inspector{}", request.uri())).context("parse inspector request url")
+	Url::parse(&format!("http://inspector{}", request.uri()))
+		.context("parse inspector request url")
 }
 
 fn decode_cbor_json_or_null(payload: &[u8]) -> JsonValue {
@@ -2760,7 +2813,9 @@ fn json_http_response(status: StatusCode, payload: &impl Serialize) -> Result<Ht
 	Ok(HttpResponse {
 		status: status.as_u16(),
 		headers,
-		body: Some(serde_json::to_vec(payload).context("serialize inspector json response")?),
+		body: Some(
+			serde_json::to_vec(payload).context("serialize inspector json response")?,
+		),
 		body_stream: None,
 	})
 }
@@ -2773,7 +2828,7 @@ async fn persist_and_ack_hibernatable_actor_message(
 	let Some(hibernation) = conn.set_server_message_index(message_index) else {
 		return Ok(());
 	};
-	ctx.persist_hibernatable_connections().await?;
+	ctx.request_hibernation_transport_save(conn.id());
 	ctx.ack_hibernatable_websocket_message(
 		&hibernation.gateway_id,
 		&hibernation.request_id,
@@ -2782,19 +2837,10 @@ async fn persist_and_ack_hibernatable_actor_message(
 	Ok(())
 }
 
-fn not_found_response() -> HttpResponse {
-	HttpResponse {
-		status: StatusCode::NOT_FOUND.as_u16(),
-		headers: HashMap::new(),
-		body: Some(Vec::new()),
-		body_stream: None,
-	}
-}
-
 fn inspector_unauthorized_response() -> HttpResponse {
 	inspector_error_response(
 		StatusCode::UNAUTHORIZED,
-		"auth",
+		"inspector",
 		"unauthorized",
 		"Inspector request requires a valid bearer token",
 	)
@@ -2809,10 +2855,276 @@ fn action_error_response(error: ActionDispatchError) -> HttpResponse {
 	inspector_error_response(status, &error.group, &error.code, &error.message)
 }
 
+async fn dispatch_action_through_task(
+	dispatch: &mpsc::Sender<DispatchCommand>,
+	capacity: usize,
+	conn: ConnHandle,
+	name: String,
+	args: Vec<u8>,
+) -> std::result::Result<Vec<u8>, ActionDispatchError> {
+	let (reply_tx, reply_rx) = oneshot::channel();
+	try_send_dispatch_command(
+		dispatch,
+		capacity,
+		"dispatch_action",
+		DispatchCommand::Action {
+			name,
+			args,
+			conn,
+			reply: reply_tx,
+		},
+		None,
+	)
+	.map_err(ActionDispatchError::from_anyhow)?;
+
+	reply_rx
+		.await
+		.map_err(|_| {
+		ActionDispatchError::from_anyhow(anyhow!(
+			"actor task stopped before action dispatch reply was sent"
+		))
+	})?
+	.map_err(ActionDispatchError::from_anyhow)
+}
+
+async fn dispatch_websocket_open_through_task(
+	dispatch: &mpsc::Sender<DispatchCommand>,
+	capacity: usize,
+	ws: WebSocket,
+	request: Option<Request>,
+) -> Result<()> {
+	let (reply_tx, reply_rx) = oneshot::channel();
+	try_send_dispatch_command(
+		dispatch,
+		capacity,
+		"dispatch_websocket_open",
+		DispatchCommand::OpenWebSocket {
+			ws,
+			request,
+			reply: reply_tx,
+		},
+		None,
+	)
+	.context("actor task stopped before websocket dispatch command could be sent")?;
+
+	reply_rx
+		.await
+		.context("actor task stopped before websocket dispatch reply was sent")?
+}
+
+async fn dispatch_workflow_history_through_task(
+	dispatch: &mpsc::Sender<DispatchCommand>,
+	capacity: usize,
+) -> Result<Option<Vec<u8>>> {
+	let (reply_tx, reply_rx) = oneshot::channel();
+	try_send_dispatch_command(
+		dispatch,
+		capacity,
+		"dispatch_workflow_history",
+		DispatchCommand::WorkflowHistory { reply: reply_tx },
+		None,
+	)
+	.context("actor task stopped before workflow history dispatch command could be sent")?;
+
+	reply_rx
+		.await
+		.context("actor task stopped before workflow history dispatch reply was sent")?
+}
+
+async fn dispatch_workflow_replay_request_through_task(
+	dispatch: &mpsc::Sender<DispatchCommand>,
+	capacity: usize,
+	entry_id: Option<String>,
+) -> Result<Option<Vec<u8>>> {
+	let (reply_tx, reply_rx) = oneshot::channel();
+	try_send_dispatch_command(
+		dispatch,
+		capacity,
+		"dispatch_workflow_replay",
+		DispatchCommand::WorkflowReplay {
+			entry_id,
+			reply: reply_tx,
+		},
+		None,
+	)
+	.context("actor task stopped before workflow replay dispatch command could be sent")?;
+
+	reply_rx
+		.await
+		.context("actor task stopped before workflow replay dispatch reply was sent")?
+}
+
+fn workflow_dispatch_result(
+	result: Result<Option<Vec<u8>>>,
+) -> Result<(bool, Option<Vec<u8>>)> {
+	match result {
+		Ok(history) => Ok((true, history)),
+		Err(error) if is_dropped_reply_error(&error) => Ok((false, None)),
+		Err(error) => Err(error),
+	}
+}
+
+fn is_dropped_reply_error(error: &anyhow::Error) -> bool {
+	let error = RivetError::extract(error);
+	error.group() == "actor" && error.code() == "dropped_reply"
+}
+
+async fn dispatch_subscribe_request(
+	ctx: &ActorContext,
+	conn: ConnHandle,
+	event_name: String,
+) -> Result<()> {
+	let (reply_tx, reply_rx) = oneshot::channel();
+	ctx.try_send_actor_event(
+		ActorEvent::SubscribeRequest {
+			conn,
+			event_name,
+			reply: Reply::from(reply_tx),
+		},
+		"subscribe_request",
+	)?;
+	reply_rx
+		.await
+		.context("actor task stopped before subscribe dispatch reply was sent")?
+}
+
 fn inspector_anyhow_response(error: anyhow::Error) -> HttpResponse {
 	let error = RivetError::extract(&error);
 	let status = inspector_error_status(error.group(), error.code());
 	inspector_error_response(status, error.group(), error.code(), error.message())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{HttpResponseEncoding, message_boundary_error_response, workflow_dispatch_result};
+	use crate::error::ActorLifecycle as ActorLifecycleError;
+	use http::StatusCode;
+	use rivet_error::RivetError;
+	use serde_json::{Value as JsonValue, json};
+
+	#[derive(RivetError)]
+	#[error("message", "incoming_too_long", "Incoming message too long")]
+	struct IncomingMessageTooLong;
+
+	#[derive(RivetError)]
+	#[error("message", "outgoing_too_long", "Outgoing message too long")]
+	struct OutgoingMessageTooLong;
+
+	#[test]
+	fn workflow_dispatch_result_marks_handled_workflow_as_enabled() {
+		assert_eq!(
+			workflow_dispatch_result(Ok(Some(vec![1, 2, 3]))).expect("workflow dispatch should succeed"),
+			(true, Some(vec![1, 2, 3])),
+		);
+		assert_eq!(
+			workflow_dispatch_result(Ok(None)).expect("workflow dispatch should succeed"),
+			(true, None),
+		);
+	}
+
+	#[test]
+	fn workflow_dispatch_result_treats_dropped_reply_as_disabled() {
+		assert_eq!(
+			workflow_dispatch_result(Err(ActorLifecycleError::DroppedReply.build()))
+				.expect("dropped reply should map to workflow disabled"),
+			(false, None),
+		);
+	}
+
+	#[test]
+	fn workflow_dispatch_result_preserves_non_dropped_reply_errors() {
+		let error = workflow_dispatch_result(Err(ActorLifecycleError::Destroying.build()))
+			.expect_err("non-dropped reply errors should be preserved");
+		let error = rivet_error::RivetError::extract(&error);
+		assert_eq!(error.group(), "actor");
+		assert_eq!(error.code(), "destroying");
+	}
+
+	#[test]
+	fn inspector_error_status_maps_action_timeout_to_408() {
+		assert_eq!(
+			super::inspector_error_status("actor", "action_timed_out"),
+			StatusCode::REQUEST_TIMEOUT,
+		);
+	}
+
+	#[test]
+	fn message_boundary_error_response_defaults_to_json() {
+		let response = message_boundary_error_response(
+			HttpResponseEncoding::Json,
+			StatusCode::BAD_REQUEST,
+			IncomingMessageTooLong.build(),
+		)
+		.expect("json response should serialize");
+
+		assert_eq!(response.status, StatusCode::BAD_REQUEST.as_u16());
+		assert_eq!(
+			response.headers.get(http::header::CONTENT_TYPE.as_str()),
+			Some(&"application/json".to_owned())
+		);
+		assert_eq!(
+			response.body,
+			Some(
+				serde_json::to_vec(&json!({
+					"group": "message",
+					"code": "incoming_too_long",
+					"message": "Incoming message too long",
+					"metadata": JsonValue::Null,
+				}))
+				.expect("json body should encode")
+			)
+		);
+	}
+
+	#[test]
+	fn message_boundary_error_response_serializes_bare_v3() {
+		let response = message_boundary_error_response(
+			HttpResponseEncoding::Bare,
+			StatusCode::BAD_REQUEST,
+			OutgoingMessageTooLong.build(),
+		)
+		.expect("bare response should serialize");
+
+		assert_eq!(
+			response.headers.get(http::header::CONTENT_TYPE.as_str()),
+			Some(&"application/octet-stream".to_owned())
+		);
+
+		let body = response.body.expect("bare response should include body");
+		assert_eq!(&body[..2], 3u16.to_le_bytes().as_slice());
+
+		let mut cursor = &body[2..];
+		assert_eq!(read_bare_string(&mut cursor), "message");
+		assert_eq!(read_bare_string(&mut cursor), "outgoing_too_long");
+		assert_eq!(read_bare_string(&mut cursor), "Outgoing message too long");
+		assert_eq!(cursor.first().copied(), Some(0));
+		assert_eq!(cursor.len(), 1);
+	}
+
+	fn read_bare_string(cursor: &mut &[u8]) -> String {
+		let len = read_bare_uint(cursor) as usize;
+		let (value, rest) = cursor.split_at(len);
+		*cursor = rest;
+		String::from_utf8(value.to_vec()).expect("bare string should decode")
+	}
+
+	fn read_bare_uint(cursor: &mut &[u8]) -> u64 {
+		let mut shift = 0;
+		let mut value = 0u64;
+
+		loop {
+			let byte = cursor
+				.first()
+				.copied()
+				.expect("bare uint should have another byte");
+			*cursor = &cursor[1..];
+			value |= u64::from(byte & 0x7f) << shift;
+			if byte & 0x80 == 0 {
+				return value;
+			}
+			shift += 7;
+		}
+	}
 }
 
 fn inspector_error_response(
@@ -2835,7 +3147,10 @@ fn inspector_error_response(
 
 fn inspector_error_status(group: &str, code: &str) -> StatusCode {
 	match (group, code) {
-		("auth", "unauthorized") => StatusCode::UNAUTHORIZED,
+		("auth", "unauthorized") | ("inspector", "unauthorized") => {
+			StatusCode::UNAUTHORIZED
+		}
+		("actor", "action_timed_out") => StatusCode::REQUEST_TIMEOUT,
 		(_, "action_not_found") => StatusCode::NOT_FOUND,
 		(_, "invalid_request") | (_, "state_not_enabled") | ("database", "not_enabled") => {
 			StatusCode::BAD_REQUEST
@@ -2859,7 +3174,8 @@ where
 }
 
 fn required_query_param(url: &Url, key: &str) -> std::result::Result<String, HttpResponse> {
-	url.query_pairs()
+	url
+		.query_pairs()
 		.find(|(name, _)| name == key)
 		.map(|(_, value)| value.into_owned())
 		.ok_or_else(|| {
@@ -2877,10 +3193,7 @@ fn parse_u32_query_param(
 	key: &str,
 	default: u32,
 ) -> std::result::Result<u32, HttpResponse> {
-	let Some(value) = url
-		.query_pairs()
-		.find(|(name, _)| name == key)
-		.map(|(_, value)| value)
+	let Some(value) = url.query_pairs().find(|(name, _)| name == key).map(|(_, value)| value)
 	else {
 		return Ok(default);
 	};
@@ -2894,45 +3207,6 @@ fn parse_u32_query_param(
 	})
 }
 
-fn request_has_inspector_access(request: &Request, configured_token: Option<&str>) -> bool {
-	match configured_token {
-		Some(configured_token) => {
-			authorization_bearer_token(request.headers()) == Some(configured_token)
-		}
-		None if inspector_dev_mode_enabled() => {
-			tracing::warn!(
-				path = %request.uri(),
-				"allowing inspector request without configured token in development mode"
-			);
-			true
-		}
-		None => false,
-	}
-}
-
-fn request_has_inspector_websocket_access(
-	headers: &HashMap<String, String>,
-	configured_token: Option<&str>,
-) -> bool {
-	match configured_token {
-		Some(configured_token) => {
-			websocket_inspector_token(headers).or_else(|| authorization_bearer_token_map(headers))
-				== Some(configured_token)
-		}
-		None if inspector_dev_mode_enabled() => {
-			tracing::warn!(
-				"allowing inspector websocket without configured token in development mode"
-			);
-			true
-		}
-		None => false,
-	}
-}
-
-fn inspector_dev_mode_enabled() -> bool {
-	env::var("NODE_ENV").unwrap_or_else(|_| "development".to_owned()) != "production"
-}
-
 fn authorization_bearer_token(headers: &http::HeaderMap) -> Option<&str> {
 	headers
 		.get(http::header::AUTHORIZATION)
@@ -2940,14 +3214,14 @@ fn authorization_bearer_token(headers: &http::HeaderMap) -> Option<&str> {
 		.and_then(|value| value.strip_prefix("Bearer "))
 }
 
-fn authorization_bearer_token_map<'a>(headers: &'a HashMap<String, String>) -> Option<&'a str> {
+fn authorization_bearer_token_map(headers: &HashMap<String, String>) -> Option<&str> {
 	headers
 		.iter()
 		.find(|(name, _)| name.eq_ignore_ascii_case(http::header::AUTHORIZATION.as_str()))
 		.and_then(|(_, value)| value.strip_prefix("Bearer "))
 }
 
-fn websocket_inspector_token<'a>(headers: &'a HashMap<String, String>) -> Option<&'a str> {
+fn websocket_inspector_token(headers: &HashMap<String, String>) -> Option<&str> {
 	headers
 		.iter()
 		.find(|(name, _)| name.eq_ignore_ascii_case("sec-websocket-protocol"))
@@ -2998,13 +3272,139 @@ fn build_envoy_response(response: Response) -> Result<HttpResponse> {
 	})
 }
 
-fn internal_server_error_response() -> HttpResponse {
-	HttpResponse {
-		status: http::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-		headers: HashMap::new(),
-		body: Some(Vec::new()),
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HttpResponseEncoding {
+	Json,
+	Cbor,
+	Bare,
+}
+
+#[cfg(test)]
+fn request_encoding(headers: &http::HeaderMap) -> HttpResponseEncoding {
+	headers
+		.get("x-rivet-encoding")
+		.and_then(|value| value.to_str().ok())
+		.map(|value| match value {
+			"cbor" => HttpResponseEncoding::Cbor,
+			"bare" => HttpResponseEncoding::Bare,
+			_ => HttpResponseEncoding::Json,
+		})
+		.unwrap_or(HttpResponseEncoding::Json)
+}
+
+#[cfg(test)]
+fn message_boundary_error_response(
+	encoding: HttpResponseEncoding,
+	status: StatusCode,
+	error: anyhow::Error,
+) -> Result<HttpResponse> {
+	let error = RivetError::extract(&error);
+	let body = serialize_http_response_error(
+		encoding,
+		error.group(),
+		error.code(),
+		error.message(),
+		None,
+	)?;
+
+	Ok(HttpResponse {
+		status: status.as_u16(),
+		headers: HashMap::from([(
+			http::header::CONTENT_TYPE.to_string(),
+			content_type_for_encoding(encoding).to_owned(),
+		)]),
+		body: Some(body),
 		body_stream: None,
+	})
+}
+
+#[cfg(test)]
+fn content_type_for_encoding(encoding: HttpResponseEncoding) -> &'static str {
+	match encoding {
+		HttpResponseEncoding::Json => "application/json",
+		HttpResponseEncoding::Cbor | HttpResponseEncoding::Bare => "application/octet-stream",
 	}
+}
+
+#[cfg(test)]
+fn serialize_http_response_error(
+	encoding: HttpResponseEncoding,
+	group: &str,
+	code: &str,
+	message: &str,
+	metadata: Option<&JsonValue>,
+) -> Result<Vec<u8>> {
+	match encoding {
+		HttpResponseEncoding::Json => Ok(serde_json::to_vec(&json!({
+			"group": group,
+			"code": code,
+			"message": message,
+			"metadata": metadata.cloned().unwrap_or(JsonValue::Null),
+		}))?),
+		HttpResponseEncoding::Cbor => {
+			let mut out = Vec::new();
+			ciborium::into_writer(
+				&json!({
+					"group": group,
+					"code": code,
+					"message": message,
+					"metadata": metadata.cloned().unwrap_or(JsonValue::Null),
+				}),
+				&mut out,
+			)?;
+			Ok(out)
+		}
+		HttpResponseEncoding::Bare => {
+			const CLIENT_PROTOCOL_CURRENT_VERSION: u16 = 3;
+
+			let mut out = Vec::new();
+			out.extend_from_slice(&CLIENT_PROTOCOL_CURRENT_VERSION.to_le_bytes());
+			write_bare_string(&mut out, group);
+			write_bare_string(&mut out, code);
+			write_bare_string(&mut out, message);
+			let metadata = metadata
+				.map(|value| {
+					let mut out = Vec::new();
+					ciborium::into_writer(value, &mut out)?;
+					Ok::<Vec<u8>, anyhow::Error>(out)
+				})
+				.transpose()?;
+			write_bare_optional_data(
+				&mut out,
+				metadata.as_deref(),
+			);
+			Ok(out)
+		}
+	}
+}
+
+#[cfg(test)]
+fn write_bare_string(out: &mut Vec<u8>, value: &str) {
+	write_bare_data(out, value.as_bytes());
+}
+
+#[cfg(test)]
+fn write_bare_data(out: &mut Vec<u8>, value: &[u8]) {
+	write_bare_uint(out, value.len() as u64);
+	out.extend_from_slice(value);
+}
+
+#[cfg(test)]
+fn write_bare_optional_data(out: &mut Vec<u8>, value: Option<&[u8]>) {
+	out.push(u8::from(value.is_some()));
+	if let Some(value) = value {
+		write_bare_data(out, value);
+	}
+}
+
+#[cfg(test)]
+fn write_bare_uint(out: &mut Vec<u8>, mut value: u64) {
+	while value >= 0x80 {
+		out.push((value as u8 & 0x7f) | 0x80);
+		value >>= 7;
+	}
+	out.push(value as u8);
 }
 
 fn unauthorized_response() -> HttpResponse {
@@ -3046,7 +3446,7 @@ fn send_actor_connect_message(
 		ActorConnectEncoding::Json => {
 			let payload = encode_actor_connect_message_json(message)
 				.map_err(ActorConnectSendError::Encode)?;
-			if payload.as_bytes().len() > max_outgoing_message_size {
+			if payload.len() > max_outgoing_message_size {
 				return Err(ActorConnectSendError::OutgoingTooLong);
 			}
 			sender.send_text(&payload);
@@ -3060,8 +3460,8 @@ fn send_actor_connect_message(
 			sender.send(payload, true);
 		}
 		ActorConnectEncoding::Bare => {
-			let payload =
-				encode_actor_connect_message(message).map_err(ActorConnectSendError::Encode)?;
+			let payload = encode_actor_connect_message(message)
+				.map_err(ActorConnectSendError::Encode)?;
 			if payload.len() > max_outgoing_message_size {
 				return Err(ActorConnectSendError::OutgoingTooLong);
 			}
@@ -3072,17 +3472,21 @@ fn send_actor_connect_message(
 }
 
 fn is_inspector_connect_path(path: &str) -> Result<bool> {
-	Ok(Url::parse(&format!("http://inspector{path}"))
-		.context("parse inspector websocket path")?
-		.path()
-		== "/inspector/connect")
+	Ok(
+		Url::parse(&format!("http://inspector{path}"))
+			.context("parse inspector websocket path")?
+			.path()
+			== "/inspector/connect",
+	)
 }
 
 fn is_actor_connect_path(path: &str) -> Result<bool> {
-	Ok(Url::parse(&format!("http://actor{path}"))
-		.context("parse actor websocket path")?
-		.path()
-		== "/connect")
+	Ok(
+		Url::parse(&format!("http://actor{path}"))
+			.context("parse actor websocket path")?
+			.path()
+			== "/connect",
+	)
 }
 
 fn websocket_protocols(headers: &HashMap<String, String>) -> impl Iterator<Item = &str> {
@@ -3118,8 +3522,8 @@ fn websocket_conn_params(headers: &HashMap<String, String>) -> Result<Vec<u8>> {
 		.query_pairs()
 		.find_map(|(name, value)| (name == "value").then_some(value.into_owned()))
 		.ok_or_else(|| anyhow!("missing decoded websocket connection parameters"))?;
-	let parsed: JsonValue =
-		serde_json::from_str(&decoded).context("parse websocket connection parameters")?;
+	let parsed: JsonValue = serde_json::from_str(&decoded)
+		.context("parse websocket connection parameters")?;
 	encode_json_as_cbor(&parsed)
 }
 
@@ -3179,13 +3583,13 @@ fn actor_connect_message_json_value(message: &ActorConnectToClient) -> Result<Js
 			let mut value = serde_json::Map::from_iter([
 				("group".to_owned(), JsonValue::String(payload.group.clone())),
 				("code".to_owned(), JsonValue::String(payload.code.clone())),
-				(
-					"message".to_owned(),
-					JsonValue::String(payload.message.clone()),
-				),
+				("message".to_owned(), JsonValue::String(payload.message.clone())),
 			]);
 			if let Some(metadata) = payload.metadata.as_ref() {
-				value.insert("metadata".to_owned(), decode_cbor_json(metadata.as_ref())?);
+				value.insert(
+					"metadata".to_owned(),
+					decode_cbor_json(metadata.as_ref())?,
+				);
 			}
 			if let Some(action_id) = payload.action_id {
 				value.insert("actionId".to_owned(), json_compat_bigint(action_id));
@@ -3219,8 +3623,8 @@ fn decode_actor_connect_message(
 ) -> Result<ActorConnectToServer> {
 	match encoding {
 		ActorConnectEncoding::Json => {
-			let envelope: JsonValue =
-				serde_json::from_slice(payload).context("decode actor websocket json request")?;
+			let envelope: JsonValue = serde_json::from_slice(payload)
+				.context("decode actor websocket json request")?;
 			actor_connect_request_from_json_value(&envelope)
 		}
 		ActorConnectEncoding::Cbor => {
@@ -3237,16 +3641,16 @@ fn actor_connect_request_from_json(
 	envelope: ActorConnectToServerJsonEnvelope,
 ) -> Result<ActorConnectToServer> {
 	match envelope.body {
-		ActorConnectToServerJsonBody::ActionRequest(request) => Ok(
-			ActorConnectToServer::ActionRequest(ActorConnectActionRequest {
+		ActorConnectToServerJsonBody::ActionRequest(request) => {
+			Ok(ActorConnectToServer::ActionRequest(ActorConnectActionRequest {
 				id: request.id,
 				name: request.name,
 				args: ByteBuf::from(
 					encode_json_as_cbor(&request.args)
 						.context("encode actor websocket action request args")?,
 				),
-			}),
-		),
+			}))
+		}
 		ActorConnectToServerJsonBody::SubscriptionRequest(request) => {
 			Ok(ActorConnectToServer::SubscriptionRequest(request))
 		}
@@ -3300,9 +3704,7 @@ fn actor_connect_request_from_json_value(envelope: &JsonValue) -> Result<ActorCo
 					.ok_or_else(|| anyhow!("actor websocket json request missing subscribe"))?,
 			},
 		)),
-		other => Err(anyhow!(
-			"unknown actor websocket json request tag `{other}`"
-		)),
+		other => Err(anyhow!("unknown actor websocket json request tag `{other}`")),
 	}
 }
 
@@ -3326,9 +3728,7 @@ fn parse_json_compat_u64(value: &JsonValue) -> Result<u64> {
 				.as_str()
 				.ok_or_else(|| anyhow!("actor websocket json bigint value is not a string"))?;
 			if tag != "$BigInt" {
-				return Err(anyhow!(
-					"unsupported actor websocket json compat tag `{tag}`"
-				));
+				return Err(anyhow!("unsupported actor websocket json compat tag `{tag}`"));
 			}
 			raw.parse::<u64>()
 				.context("parse actor websocket json bigint")
@@ -3337,7 +3737,9 @@ fn parse_json_compat_u64(value: &JsonValue) -> Result<u64> {
 	}
 }
 
-fn encode_actor_connect_message_cbor_manual(message: &ActorConnectToClient) -> Result<Vec<u8>> {
+fn encode_actor_connect_message_cbor_manual(
+	message: &ActorConnectToClient,
+) -> Result<Vec<u8>> {
 	let mut encoded = Vec::new();
 	cbor_write_map_len(&mut encoded, 1);
 	cbor_write_string(&mut encoded, "body");
@@ -3411,9 +3813,7 @@ fn encode_actor_connect_message_cbor_manual(message: &ActorConnectToClient) -> R
 
 fn decode_actor_connect_message_bare(payload: &[u8]) -> Result<ActorConnectToServer> {
 	if payload.len() < 3 {
-		return Err(anyhow!(
-			"actor websocket payload too short for embedded version"
-		));
+		return Err(anyhow!("actor websocket payload too short for embedded version"));
 	}
 
 	let version = u16::from_le_bytes([payload[0], payload[1]]);
@@ -3429,9 +3829,7 @@ fn decode_actor_connect_message_bare(payload: &[u8]) -> Result<ActorConnectToSer
 	match tag {
 		0 => {
 			let request = ActorConnectActionRequest {
-				id: cursor
-					.read_uint()
-					.context("decode actor websocket action request id")?,
+				id: cursor.read_uint().context("decode actor websocket action request id")?,
 				name: cursor
 					.read_string()
 					.context("decode actor websocket action request name")?,
@@ -3441,9 +3839,7 @@ fn decode_actor_connect_message_bare(payload: &[u8]) -> Result<ActorConnectToSer
 						.context("decode actor websocket action request args")?,
 				),
 			};
-			cursor
-				.finish()
-				.context("decode actor websocket action request")?;
+			cursor.finish().context("decode actor websocket action request")?;
 			Ok(ActorConnectToServer::ActionRequest(request))
 		}
 		1 => {
@@ -3619,11 +4015,6 @@ fn cbor_write_map_len(buffer: &mut Vec<u8>, len: usize) {
 	cbor_write_type_and_len(buffer, 5, len);
 }
 
-fn cbor_write_bytes(buffer: &mut Vec<u8>, value: &[u8]) {
-	cbor_write_type_and_len(buffer, 2, value.len());
-	buffer.extend_from_slice(value);
-}
-
 fn cbor_write_string(buffer: &mut Vec<u8>, value: &str) {
 	cbor_write_type_and_len(buffer, 3, value.len());
 	buffer.extend_from_slice(value.as_bytes());
@@ -3634,7 +4025,10 @@ fn cbor_write_u64_force_64(buffer: &mut Vec<u8>, value: u64) {
 	buffer.extend_from_slice(&value.to_be_bytes());
 }
 
-fn action_dispatch_error_response(error: ActionDispatchError, action_id: u64) -> ActorConnectError {
+fn action_dispatch_error_response(
+	error: ActionDispatchError,
+	action_id: u64,
+) -> ActorConnectError {
 	let metadata = error
 		.metadata
 		.as_ref()
@@ -3661,15 +4055,3 @@ fn closing_websocket_handler(code: u16, reason: &str) -> WebSocketHandler {
 		})),
 	}
 }
-
-fn default_websocket_handler() -> WebSocketHandler {
-	WebSocketHandler {
-		on_message: Box::new(|_message: WebSocketMessage| Box::pin(async {})),
-		on_close: Box::new(|_code, _reason| Box::pin(async {})),
-		on_open: None,
-	}
-}
-
-#[cfg(test)]
-#[path = "../tests/modules/registry.rs"]
-mod tests;

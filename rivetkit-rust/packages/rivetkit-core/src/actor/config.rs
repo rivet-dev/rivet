@@ -13,6 +13,7 @@ const DEFAULT_ON_MIGRATE_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_ON_SLEEP_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_ON_DESTROY_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_ACTION_TIMEOUT: Duration = Duration::from_secs(60);
+const DEFAULT_WAIT_UNTIL_TIMEOUT: Duration = Duration::from_secs(15);
 const DEFAULT_RUN_STOP_TIMEOUT: Duration = Duration::from_secs(15);
 const DEFAULT_SLEEP_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_SLEEP_GRACE_PERIOD: Duration = Duration::from_secs(15);
@@ -22,6 +23,9 @@ const DEFAULT_MAX_QUEUE_SIZE: u32 = 1000;
 const DEFAULT_MAX_QUEUE_MESSAGE_SIZE: u32 = 65_536;
 const DEFAULT_MAX_INCOMING_MESSAGE_SIZE: u32 = 65_536;
 const DEFAULT_MAX_OUTGOING_MESSAGE_SIZE: u32 = 1_048_576;
+const DEFAULT_LIFECYCLE_COMMAND_INBOX_CAPACITY: usize = 64;
+const DEFAULT_DISPATCH_COMMAND_INBOX_CAPACITY: usize = 1024;
+const DEFAULT_LIFECYCLE_EVENT_INBOX_CAPACITY: usize = 4096;
 
 #[derive(Clone)]
 pub enum CanHibernateWebSocket {
@@ -49,6 +53,7 @@ pub struct ActorConfigOverrides {
 	pub sleep_grace_period: Option<Duration>,
 	pub on_sleep_timeout: Option<Duration>,
 	pub on_destroy_timeout: Option<Duration>,
+	pub wait_until_timeout: Option<Duration>,
 	pub run_stop_timeout: Option<Duration>,
 }
 
@@ -66,16 +71,21 @@ pub struct ActorConfig {
 	pub on_sleep_timeout: Duration,
 	pub on_destroy_timeout: Duration,
 	pub action_timeout: Duration,
+	pub wait_until_timeout: Duration,
 	pub run_stop_timeout: Duration,
 	pub sleep_timeout: Duration,
 	pub no_sleep: bool,
-	pub sleep_grace_period: Option<Duration>,
+	pub sleep_grace_period: Duration,
+	pub sleep_grace_period_overridden: bool,
 	pub connection_liveness_timeout: Duration,
 	pub connection_liveness_interval: Duration,
 	pub max_queue_size: u32,
 	pub max_queue_message_size: u32,
 	pub max_incoming_message_size: u32,
 	pub max_outgoing_message_size: u32,
+	pub lifecycle_command_inbox_capacity: usize,
+	pub dispatch_command_inbox_capacity: usize,
+	pub lifecycle_event_inbox_capacity: usize,
 	pub preload_max_workflow_bytes: Option<u64>,
 	pub preload_max_connections_bytes: Option<u64>,
 	pub overrides: Option<ActorConfigOverrides>,
@@ -111,10 +121,11 @@ pub struct FlatActorConfig {
 
 impl ActorConfig {
 	pub fn from_flat(config: FlatActorConfig) -> Self {
-		let mut actor_config = Self::default();
-
-		actor_config.name = config.name;
-		actor_config.icon = config.icon;
+		let mut actor_config = Self {
+			name: config.name,
+			icon: config.icon,
+			..Self::default()
+		};
 		if let Some(can_hibernate_websocket) = config.can_hibernate_websocket {
 			actor_config.can_hibernate_websocket =
 				CanHibernateWebSocket::Bool(can_hibernate_websocket);
@@ -156,7 +167,8 @@ impl ActorConfig {
 			actor_config.no_sleep = value;
 		}
 		if let Some(value) = config.sleep_grace_period_ms {
-			actor_config.sleep_grace_period = Some(duration_ms(value));
+			actor_config.sleep_grace_period = duration_ms(value);
+			actor_config.sleep_grace_period_overridden = true;
 		}
 		if let Some(value) = config.connection_liveness_timeout_ms {
 			actor_config.connection_liveness_timeout = duration_ms(value);
@@ -212,13 +224,33 @@ impl ActorConfig {
 		)
 	}
 
+	pub fn effective_wait_until_timeout(&self) -> Duration {
+		cap_duration(
+			self.wait_until_timeout,
+			self.overrides
+				.as_ref()
+				.and_then(|overrides| overrides.wait_until_timeout),
+		)
+	}
+
 	pub fn effective_sleep_grace_period(&self) -> Duration {
-		let configured = if let Some(sleep_grace_period) = self.sleep_grace_period {
-			sleep_grace_period
-		} else if self.on_sleep_timeout != DEFAULT_ON_SLEEP_TIMEOUT {
-			self.effective_on_sleep_timeout() + DEFAULT_SLEEP_GRACE_PERIOD
+		let legacy_timeout_overridden = self
+			.overrides
+			.as_ref()
+			.map(|overrides| {
+				overrides.on_sleep_timeout.is_some()
+					|| overrides.wait_until_timeout.is_some()
+			})
+			.unwrap_or(false);
+		let configured = if self.sleep_grace_period_overridden {
+			self.sleep_grace_period
+		} else if self.on_sleep_timeout != DEFAULT_ON_SLEEP_TIMEOUT
+			|| self.wait_until_timeout != DEFAULT_WAIT_UNTIL_TIMEOUT
+			|| legacy_timeout_overridden
+		{
+			self.effective_on_sleep_timeout() + self.effective_wait_until_timeout()
 		} else {
-			DEFAULT_SLEEP_GRACE_PERIOD
+			self.sleep_grace_period
 		};
 
 		cap_duration(
@@ -245,16 +277,21 @@ impl Default for ActorConfig {
 			on_sleep_timeout: DEFAULT_ON_SLEEP_TIMEOUT,
 			on_destroy_timeout: DEFAULT_ON_DESTROY_TIMEOUT,
 			action_timeout: DEFAULT_ACTION_TIMEOUT,
+			wait_until_timeout: DEFAULT_WAIT_UNTIL_TIMEOUT,
 			run_stop_timeout: DEFAULT_RUN_STOP_TIMEOUT,
 			sleep_timeout: DEFAULT_SLEEP_TIMEOUT,
 			no_sleep: false,
-			sleep_grace_period: None,
+			sleep_grace_period: DEFAULT_SLEEP_GRACE_PERIOD,
+			sleep_grace_period_overridden: false,
 			connection_liveness_timeout: DEFAULT_CONNECTION_LIVENESS_TIMEOUT,
 			connection_liveness_interval: DEFAULT_CONNECTION_LIVENESS_INTERVAL,
 			max_queue_size: DEFAULT_MAX_QUEUE_SIZE,
 			max_queue_message_size: DEFAULT_MAX_QUEUE_MESSAGE_SIZE,
 			max_incoming_message_size: DEFAULT_MAX_INCOMING_MESSAGE_SIZE,
 			max_outgoing_message_size: DEFAULT_MAX_OUTGOING_MESSAGE_SIZE,
+			lifecycle_command_inbox_capacity: DEFAULT_LIFECYCLE_COMMAND_INBOX_CAPACITY,
+			dispatch_command_inbox_capacity: DEFAULT_DISPATCH_COMMAND_INBOX_CAPACITY,
+			lifecycle_event_inbox_capacity: DEFAULT_LIFECYCLE_EVENT_INBOX_CAPACITY,
 			preload_max_workflow_bytes: None,
 			preload_max_connections_bytes: None,
 			overrides: None,

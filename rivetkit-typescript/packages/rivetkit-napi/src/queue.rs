@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 use std::time::Duration;
 
-use napi::bindgen_prelude::Buffer;
+use napi::bindgen_prelude::{BigInt, Buffer};
 use napi_derive::napi;
 use rivetkit_core::{
 	EnqueueAndWaitOpts, Queue as CoreQueue, QueueMessage as CoreQueueMessage, QueueNextBatchOpts,
@@ -126,9 +126,12 @@ impl Queue {
 		&self,
 		names: Vec<String>,
 		options: Option<JsQueueWaitOptions>,
+		cancel_token_id: Option<BigInt>,
 	) -> napi::Result<QueueMessage> {
+		let mut wait_opts = queue_wait_opts(options)?;
+		wait_opts.signal = registered_cancel_token(cancel_token_id)?;
 		self.inner
-			.wait_for_names(names, queue_wait_opts(options)?)
+			.wait_for_names(names, wait_opts)
 			.await
 			.map(QueueMessage::from_core)
 			.map_err(napi_anyhow_error)
@@ -293,6 +296,23 @@ fn queue_wait_opts(options: Option<JsQueueWaitOptions>) -> napi::Result<QueueWai
 		signal: None,
 		completable: options.completable.unwrap_or(false),
 	})
+}
+
+fn registered_cancel_token(
+	cancel_token_id: Option<BigInt>,
+) -> napi::Result<Option<tokio_util::sync::CancellationToken>> {
+	let Some(cancel_token_id) = cancel_token_id else {
+		return Ok(None);
+	};
+
+	let (negative, token_id, lossless) = cancel_token_id.get_u64();
+	if negative || !lossless {
+		return Err(napi::Error::from_reason("invalid cancel token id"));
+	}
+
+	crate::cancel_token::lookup_token(token_id)
+		.map(Some)
+		.ok_or_else(|| napi::Error::from_reason("unknown cancel token id"))
 }
 
 fn enqueue_and_wait_opts(
