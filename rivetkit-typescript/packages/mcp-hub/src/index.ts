@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -51,26 +52,30 @@ type ResolvedResource = {
 let sharedWebTransport: WebStandardStreamableHTTPServerTransport | null = null;
 
 function loadDocsMetadata(): DocsMetadata {
-	// Check for a custom metadata path (for Docker/production deployments)
+	const metadataPath = resolveDocsMetadataPath();
+	const content = fs.readFileSync(metadataPath, "utf-8");
+	return JSON.parse(content) as DocsMetadata;
+}
+
+function resolveDocsMetadataPath(): string {
 	const customPath = process.env.DOCS_METADATA_PATH;
 	if (customPath) {
-		const absolutePath = path.isAbsolute(customPath)
+		return path.isAbsolute(customPath)
 			? customPath
 			: path.resolve(process.cwd(), customPath);
-		const content = fs.readFileSync(absolutePath, "utf-8");
-		return JSON.parse(content) as DocsMetadata;
 	}
 
-	// Fallback to dynamic import for workspace development
-	try {
-		// eslint-disable-next-line @typescript-eslint/no-require-imports
-		return require("rivet-website/dist/metadata/docs.json") as DocsMetadata;
-	} catch {
-		throw new Error(
-			"Could not load docs metadata. Either set DOCS_METADATA_PATH environment variable " +
-				"to point to a docs.json file, or ensure rivet-website is built (run 'pnpm build' in website directory).",
-		);
+	const workspacePath = fileURLToPath(
+		new URL("../../../../website/dist/metadata/docs.json", import.meta.url),
+	);
+	if (fs.existsSync(workspacePath)) {
+		return workspacePath;
 	}
+
+	throw new Error(
+		"Could not load docs metadata. Set DOCS_METADATA_PATH or build the website so " +
+			"`website/dist/metadata/docs.json` exists.",
+	);
 }
 
 let cachedDocsMetadata: DocsMetadata | null = null;
@@ -93,7 +98,6 @@ const searchToolSchema = z.object({
 	filters: searchFiltersSchema.optional(),
 	limit: z.number().int().min(1).max(20).optional(),
 	cursor: z.string().optional(),
-	mode: z.enum(["keyword", "semantic", "hybrid"]).default("hybrid"),
 });
 
 const getToolSchema = z.object({
@@ -171,7 +175,6 @@ function registerSearchTool(server: McpServer, searchEngine: SearchEngine) {
 			const results = searchEngine.search(parsed.query, {
 				filters: parsed.filters,
 				limit,
-				mode: parsed.mode,
 				offset,
 			});
 
@@ -193,13 +196,12 @@ function registerSearchTool(server: McpServer, searchEngine: SearchEngine) {
 						text,
 					},
 				],
-				structuredContent: {
-					query: parsed.query,
-					results: results.results,
-					next_cursor: nextCursor,
-					mode_used: results.modeUsed,
-					total_matches: results.total,
-				},
+					structuredContent: {
+						query: parsed.query,
+						results: results.results,
+						next_cursor: nextCursor,
+						total_matches: results.total,
+					},
 			};
 		},
 	);

@@ -87,12 +87,11 @@ describe("SearchEngine.search", () => {
 				},
 			],
 		);
-		const engine = createSearchEngine(metadata);
-		const results = engine.search("", {
-			limit: 10,
-			mode: "hybrid",
-			offset: 0,
-		});
+			const engine = createSearchEngine(metadata);
+			const results = engine.search("", {
+				limit: 10,
+				offset: 0,
+			});
 		expect(results.results).toHaveLength(0);
 		expect(results.total).toBe(0);
 	});
@@ -108,12 +107,11 @@ describe("SearchEngine.search", () => {
 				},
 			],
 		);
-		const engine = createSearchEngine(metadata);
-		const results = engine.search("   ", {
-			limit: 10,
-			mode: "hybrid",
-			offset: 0,
-		});
+			const engine = createSearchEngine(metadata);
+			const results = engine.search("   ", {
+				limit: 10,
+				offset: 0,
+			});
 		expect(results.results).toHaveLength(0);
 	});
 
@@ -135,12 +133,11 @@ describe("SearchEngine.search", () => {
 				},
 			],
 		);
-		const engine = createSearchEngine(metadata);
-		const results = engine.search("lifecycle", {
-			limit: 10,
-			mode: "hybrid",
-			offset: 0,
-		});
+			const engine = createSearchEngine(metadata);
+			const results = engine.search("lifecycle", {
+				limit: 10,
+				offset: 0,
+			});
 		expect(results.results.length).toBeGreaterThan(0);
 		expect(results.results[0]?.section_title).toBe("Actor Lifecycle");
 	});
@@ -162,12 +159,11 @@ describe("SearchEngine.search", () => {
 				},
 			],
 		);
-		const engine = createSearchEngine(metadata);
-		const results = engine.search("realtime", {
-			limit: 10,
-			mode: "hybrid",
-			offset: 0,
-		});
+			const engine = createSearchEngine(metadata);
+			const results = engine.search("realtime", {
+				limit: 10,
+				offset: 0,
+			});
 		expect(results.results.length).toBeGreaterThan(0);
 	});
 
@@ -197,12 +193,11 @@ describe("SearchEngine.search", () => {
 				},
 			],
 		);
-		const engine = createSearchEngine(metadata);
-		const results = engine.search("actor", {
-			limit: 10,
-			mode: "hybrid",
-			offset: 0,
-		});
+			const engine = createSearchEngine(metadata);
+			const results = engine.search("actor", {
+				limit: 10,
+				offset: 0,
+			});
 		expect(results.results.length).toBe(2);
 		expect(results.results[0]?.section_title).toBe("Actor Guide");
 	});
@@ -234,12 +229,11 @@ describe("SearchEngine.search", () => {
 				},
 			],
 		);
-		const engine = createSearchEngine(metadata);
-		const results = engine.search("actor", {
-			limit: 2,
-			mode: "hybrid",
-			offset: 0,
-		});
+			const engine = createSearchEngine(metadata);
+			const results = engine.search("actor", {
+				limit: 2,
+				offset: 0,
+			});
 		expect(results.results).toHaveLength(2);
 		expect(results.total).toBe(3);
 	});
@@ -277,17 +271,15 @@ describe("SearchEngine.search", () => {
 				},
 			],
 		);
-		const engine = createSearchEngine(metadata);
-		const fullResults = engine.search("actor", {
-			limit: 10,
-			mode: "hybrid",
-			offset: 0,
-		});
-		const offsetResults = engine.search("actor", {
-			limit: 10,
-			mode: "hybrid",
-			offset: 1,
-		});
+			const engine = createSearchEngine(metadata);
+			const fullResults = engine.search("actor", {
+				limit: 10,
+				offset: 0,
+			});
+			const offsetResults = engine.search("actor", {
+				limit: 10,
+				offset: 1,
+			});
 		expect(offsetResults.results.length).toBe(
 			fullResults.results.length - 1,
 		);
@@ -322,13 +314,12 @@ describe("SearchEngine.search", () => {
 				},
 			],
 		);
-		const engine = createSearchEngine(metadata);
-		const results = engine.search("data", {
-			limit: 10,
-			mode: "hybrid",
-			offset: 0,
-			filters: { product_area: "actors" },
-		});
+			const engine = createSearchEngine(metadata);
+			const results = engine.search("data", {
+				limit: 10,
+				offset: 0,
+				filters: { product_area: "actors" },
+			});
 		expect(results.results.length).toBe(1);
 		expect(results.results[0]?.title).toBe("Actors");
 	});
@@ -362,13 +353,12 @@ describe("SearchEngine.search", () => {
 				},
 			],
 		);
-		const engine = createSearchEngine(metadata);
-		const results = engine.search("feature", {
-			limit: 10,
-			mode: "hybrid",
-			offset: 0,
-			filters: { version: "v2" },
-		});
+			const engine = createSearchEngine(metadata);
+			const results = engine.search("feature", {
+				limit: 10,
+				offset: 0,
+				filters: { version: "v2" },
+			});
 		expect(results.results.length).toBe(1);
 		expect(results.results[0]?.title).toBe("V2 Docs");
 	});
@@ -402,36 +392,15 @@ describe("SearchEngine.search", () => {
 				},
 			],
 		);
-		const engine = createSearchEngine(metadata);
-		const results = engine.search("docs", {
-			limit: 10,
-			mode: "hybrid",
-			offset: 0,
-			filters: { tags: ["tutorial"] },
+			const engine = createSearchEngine(metadata);
+			const results = engine.search("docs", {
+				limit: 10,
+				offset: 0,
+				filters: { tags: ["tutorial"] },
+			});
+			expect(results.results.length).toBe(1);
+			expect(results.results[0]?.title).toBe("Guide");
 		});
-		expect(results.results.length).toBe(1);
-		expect(results.results[0]?.title).toBe("Guide");
-	});
-
-	test("normalizes semantic mode to hybrid", () => {
-		const metadata = createMockMetadata(
-			[{ resource_uri: "docs://page/test", title: "Test" }],
-			[
-				{
-					parent_uri: "docs://page/test",
-					title: "Section",
-					content: "test",
-				},
-			],
-		);
-		const engine = createSearchEngine(metadata);
-		const results = engine.search("test", {
-			limit: 10,
-			mode: "semantic",
-			offset: 0,
-		});
-		expect(results.modeUsed).toBe("hybrid");
-	});
 
 	test("provides why_matched explanation", () => {
 		const metadata = createMockMetadata(
@@ -450,12 +419,11 @@ describe("SearchEngine.search", () => {
 				},
 			],
 		);
-		const engine = createSearchEngine(metadata);
-		const results = engine.search("actor", {
-			limit: 10,
-			mode: "hybrid",
-			offset: 0,
-		});
+			const engine = createSearchEngine(metadata);
+			const results = engine.search("actor", {
+				limit: 10,
+				offset: 0,
+			});
 		expect(results.results[0]?.why_matched).toBeDefined();
 		expect(results.results[0]?.why_matched.length).toBeGreaterThan(0);
 	});

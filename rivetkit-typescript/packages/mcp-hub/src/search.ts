@@ -3,7 +3,6 @@ import type {
 	PageRecord,
 	RankedSection,
 	SearchFilters,
-	SearchMode,
 	SectionRecord,
 } from "./types";
 import { estimateTokens, stripMarkdown } from "./utils";
@@ -20,7 +19,6 @@ type SectionEntry = {
 type SearchOptions = {
 	filters?: SearchFilters;
 	limit: number;
-	mode: SearchMode;
 	offset: number;
 };
 
@@ -30,7 +28,6 @@ export type SearchEngine = {
 		options: SearchOptions,
 	): {
 		results: RankedSection[];
-		modeUsed: SearchMode;
 		total: number;
 	};
 	getSectionsForPage(resourceUri: string): SectionRecord[];
@@ -71,7 +68,7 @@ export function createSearchEngine(metadata: Metadata): SearchEngine {
 		search(query: string, options: SearchOptions) {
 			const normalizedQuery = query.trim();
 			if (!normalizedQuery) {
-				return { results: [], modeUsed: options.mode, total: 0 };
+				return { results: [], total: 0 };
 			}
 
 			const tokens = normalizedQuery
@@ -125,16 +122,15 @@ export function createSearchEngine(metadata: Metadata): SearchEngine {
 					);
 				});
 
-			const paged = scored.slice(
-				options.offset,
-				options.offset + options.limit,
-			);
-			return {
-				results: paged,
-				modeUsed: normalizeMode(options.mode),
-				total: scored.length,
-			};
-		},
+				const paged = scored.slice(
+					options.offset,
+					options.offset + options.limit,
+				);
+				return {
+					results: paged,
+					total: scored.length,
+				};
+			},
 		getSectionsForPage(resourceUri: string) {
 			const list = sectionsByPage.get(resourceUri);
 			return list ? [...list] : [];
@@ -143,14 +139,6 @@ export function createSearchEngine(metadata: Metadata): SearchEngine {
 
 	return api;
 }
-
-function normalizeMode(mode: SearchMode): SearchMode {
-	if (mode === "semantic") {
-		return "hybrid";
-	}
-	return mode;
-}
-
 function matchesFilters(page: PageRecord, filters: SearchFilters): boolean {
 	if (filters.product_area && page.product_area !== filters.product_area) {
 		return false;
