@@ -26,6 +26,8 @@ done
 docker build -f "${DOCKERFILE}" --target "${TARGET}" \
   --platform linux/x86_64 \
   --build-arg BUILD_FRONTEND=true \
+  --build-arg VITE_FEATURE_FLAGS="${VITE_FEATURE_FLAGS:-}" \
+  --build-arg VITE_APP_TURNSTILE_SITE_KEY="${VITE_APP_TURNSTILE_SITE_KEY:-}" \
   # --build-arg CARGO_BUILD_MODE=release \
   "${BUILD_TAG_ARGS[@]}" \
   "${CONTEXT}"
