@@ -57,7 +57,8 @@ members = [
   "engine/sdks/rust/envoy-protocol",
   "engine/sdks/rust/epoxy-protocol",
   "engine/sdks/rust/test-envoy",
-  "engine/sdks/rust/ups-protocol"
+  "engine/sdks/rust/ups-protocol",
+  "rivetkit-typescript/packages/rivetkit-native"
 ]
 
   [workspace.package]
@@ -527,8 +528,14 @@ members = [
     [workspace.dependencies.rivet-ups-protocol]
     path = "engine/sdks/rust/ups-protocol"
 
+    [workspace.dependencies.rivetkit-sqlite-native]
+    path = "rivetkit-typescript/packages/sqlite-native"
+
 [profile.dev]
 overflow-checks = false
+# "line-tables-only" produces just the line-number DWARF needed for stack
+# traces, skipping variable/type info. Meaningfully faster debug builds
+# (~2 min per engine cross-compile) with no runtime cost.
 debug = "line-tables-only"
 lto = "off"
 
