@@ -16,11 +16,14 @@ mod ws_health;
 
 pub(crate) const X_RIVET_TARGET: HeaderName = HeaderName::from_static("x-rivet-target");
 pub(crate) const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
+pub(crate) const X_RIVET_BYPASS_CONNECTABLE: HeaderName =
+	HeaderName::from_static("x-rivet-bypass-connectable");
 pub(crate) const SEC_WEBSOCKET_PROTOCOL: HeaderName =
 	HeaderName::from_static("sec-websocket-protocol");
 pub(crate) const WS_PROTOCOL_TARGET: &str = "rivet_target.";
 pub(crate) const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
 pub(crate) const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
+pub(crate) const WS_PROTOCOL_BYPASS_CONNECTABLE: &str = "rivet_bypass_connectable";
 
 /// Creates the main routing function that handles all incoming requests
 #[tracing::instrument(skip_all)]

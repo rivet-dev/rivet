@@ -30,6 +30,7 @@ pub enum QueryActorQuery {
 		namespace: String,
 		name: String,
 		key: Vec<String>,
+		bypass_connectable: bool,
 	},
 	GetOrCreate {
 		namespace: String,
@@ -39,7 +40,21 @@ pub enum QueryActorQuery {
 		input: Option<Vec<u8>>,
 		region: Option<String>,
 		crash_policy: Option<CrashPolicy>,
+		bypass_connectable: bool,
 	},
+}
+
+impl QueryActorQuery {
+	pub fn bypass_connectable(&self) -> bool {
+		match self {
+			QueryActorQuery::Get {
+				bypass_connectable, ..
+			}
+			| QueryActorQuery::GetOrCreate {
+				bypass_connectable, ..
+			} => *bypass_connectable,
+		}
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +83,8 @@ struct RvtParams {
 	crash_policy: Option<String>,
 	#[serde(default)]
 	token: Option<String>,
+	#[serde(default)]
+	bypass_connectable: bool,
 }
 
 /// Parse actor routing information from path.
@@ -252,6 +269,7 @@ fn build_actor_query(name: &str, rvt: RvtParams) -> Result<QueryActorQuery> {
 				namespace: rvt.namespace,
 				name: name.to_string(),
 				key,
+				bypass_connectable: rvt.bypass_connectable,
 			})
 		}
 		"getOrCreate" => {
@@ -276,6 +294,7 @@ fn build_actor_query(name: &str, rvt: RvtParams) -> Result<QueryActorQuery> {
 				input,
 				region: rvt.region,
 				crash_policy,
+				bypass_connectable: rvt.bypass_connectable,
 			})
 		}
 		other => Err(errors::QueryInvalidParams {

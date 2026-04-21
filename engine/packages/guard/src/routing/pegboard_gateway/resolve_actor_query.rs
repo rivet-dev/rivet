@@ -30,6 +30,7 @@ pub async fn resolve_query(
 			namespace,
 			name,
 			key,
+			..
 		} => resolve_query_get(ctx, namespace, name, key).await,
 		QueryActorQuery::GetOrCreate {
 			namespace,
@@ -39,6 +40,7 @@ pub async fn resolve_query(
 			input,
 			region,
 			crash_policy,
+			..
 		} => {
 			resolve_query_get_or_create(
 				ctx,

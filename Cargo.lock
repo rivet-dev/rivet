@@ -3,47 +3,6 @@
 version = 4
 
 [[package]]
-name = "acl"
-version = "2.3.0-rc.4"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "chrono",
- "epoxy",
- "epoxy-protocol",
- "futures-util",
- "gasoline",
- "indexmap 2.10.0",
- "namespace",
- "portpicker",
- "rand 0.8.5",
- "rivet-api-peer",
- "rivet-api-public",
- "rivet-api-util",
- "rivet-bootstrap",
- "rivet-config",
- "rivet-data",
- "rivet-error",
- "rivet-guard",
- "rivet-pools",
- "rivet-service-manager",
- "rivet-test-deps",
- "rivet-util",
- "rivet-workflow-worker",
- "serde",
- "serde_json",
- "sha2",
- "strum",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "universaldb",
- "utoipa",
- "uuid",
- "vbare",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4477,7 +4436,6 @@ dependencies = [
 name = "rivet-bootstrap"
 version = "2.3.0-rc.4"
 dependencies = [
- "acl",
  "datacenter",
  "epoxy",
  "gasoline",
