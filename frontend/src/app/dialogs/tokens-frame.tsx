@@ -2,7 +2,6 @@ import { faQuestionCircle, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { match } from "ts-pattern";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
 import {
@@ -17,6 +16,7 @@ import {
 } from "@/components";
 import { RegionSelect } from "@/components/actors/region-select";
 import { cloudEnv } from "@/lib/env";
+import { features } from "@/lib/features";
 
 interface TokensFrameContentProps extends DialogContentProps {}
 
@@ -55,7 +55,7 @@ export default function TokensFrameContent({
 
 function SecretToken() {
 	const dataProvider = useRouteContext({
-		from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
+		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
 		select: (c) => c.dataProvider,
 	});
 	const { data: token, isLoading: isTokenLoading } = useQuery(
@@ -77,15 +77,9 @@ function SecretToken() {
 
 	const namespace = dataProvider.engineNamespace;
 
-	const endpoint = match(__APP_TYPE__)
-		.with("cloud", () => {
-			const region = regions.find((r) => r.name === selectedDatacenter);
-			return region?.url || cloudEnv().VITE_APP_API_URL;
-		})
-		.with("engine", () => getConfig().apiUrl)
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
+	const endpoint = features.multitenancy
+		? regions.find((r) => r.name === selectedDatacenter)?.url || cloudEnv().VITE_APP_API_URL
+		: getConfig().apiUrl;
 
 	const envVars = `RIVET_ENDPOINT=${endpoint}
 RIVET_NAMESPACE=${namespace}
@@ -131,7 +125,7 @@ registry.start();`;
 
 function PublishableToken() {
 	const dataProvider = useRouteContext({
-		from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
+		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
 		select: (c) => c.dataProvider,
 	});
 	const { data: token, isLoading } = useQuery(
@@ -140,12 +134,9 @@ function PublishableToken() {
 
 	const namespace = dataProvider.engineNamespace;
 
-	const endpoint = match(__APP_TYPE__)
-		.with("cloud", () => cloudEnv().VITE_APP_API_URL)
-		.with("engine", () => getConfig().apiUrl)
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
+	const endpoint = features.multitenancy
+		? cloudEnv().VITE_APP_API_URL
+		: getConfig().apiUrl;
 
 	return (
 		<div className="space-y-4">

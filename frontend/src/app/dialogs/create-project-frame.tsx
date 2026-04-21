@@ -5,15 +5,14 @@ import * as CreateProjectForm from "@/app/forms/create-project-form";
 import { Flex, Frame } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
 import { authClient } from "@/lib/auth";
+import { features } from "@/lib/features";
 
 const useDefaultOrg = () => {
-	if (__APP_TYPE__ === "cloud") {
-		// biome-ignore lint/correctness/useHookAtTopLevel: secured by build condition
+	if (features.multitenancy) {
+		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 		const org = authClient.useActiveOrganization();
-
 		return org.data?.id;
 	}
-
 	return undefined;
 };
 

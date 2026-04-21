@@ -2,6 +2,7 @@ import { faExclamationTriangle, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { cn, WithTooltip } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
+import { features } from "@/lib/features";
 import { useHighestUsagePercent } from "./hooks";
 
 const progressColors = {
@@ -26,6 +27,11 @@ const radius = 9;
 const circumference = 2 * Math.PI * radius;
 
 export function BillingUsageGauge() {
+	if (!features.billing) return null;
+	return <BillingUsageGaugeInner />;
+}
+
+function BillingUsageGaugeInner() {
 	const progress = useHighestUsagePercent();
 
 	const dataProvider = useCloudProjectDataProvider();

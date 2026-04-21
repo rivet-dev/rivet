@@ -1,9 +1,9 @@
 import { useId } from "react";
-import { match } from "ts-pattern";
 import { Button, CopyTrigger, DiscreteInput, getConfig } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { Label } from "@/components/ui/label";
 import { cloudEnv } from "@/lib/env";
+import { features } from "@/lib/features";
 import { useAdminToken, usePublishableToken } from "@/queries/accessors";
 
 export function EnvVariables({
@@ -98,10 +98,9 @@ export const useRivetDsn = ({
 	endpoint?: string;
 	kind: "publishable" | "secret";
 }) => {
-	const globalEndpoint = match(__APP_TYPE__)
-		.with("cloud", () => cloudEnv().VITE_APP_API_URL)
-		.with("engine", () => getConfig().apiUrl)
-		.otherwise(() => getConfig().apiUrl);
+	const globalEndpoint = features.multitenancy
+		? cloudEnv().VITE_APP_API_URL
+		: getConfig().apiUrl;
 
 	// Publishable (RIVET_PUBLIC_ENDPOINT) always uses global endpoint.
 	// Secret (RIVET_ENDPOINT) uses regional endpoint if provided.
@@ -116,7 +115,7 @@ export const useRivetDsn = ({
 	const auth =
 		kind === "secret"
 			? `${namespace}:${adminToken}`
-			: __APP_TYPE__ === "engine"
+			: !features.multitenancy
 				? namespace
 				: `${namespace}:${publishableToken}`;
 

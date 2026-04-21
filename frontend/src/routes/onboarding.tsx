@@ -1,10 +1,11 @@
 import { createFileRoute, notFound, Outlet, redirect } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth";
+import { features } from "@/lib/features";
 
 export const Route = createFileRoute("/onboarding")({
 	component: RouteComponent,
 	beforeLoad: async () => {
-		if (__APP_TYPE__ !== "cloud") {
+		if (!features.auth) {
 			throw notFound();
 		}
 
@@ -16,5 +17,5 @@ export const Route = createFileRoute("/onboarding")({
 });
 
 function RouteComponent() {
-	return __APP_TYPE__ === "cloud" ? <Outlet /> : null;
+	return features.auth ? <Outlet /> : null;
 }

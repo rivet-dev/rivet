@@ -3,6 +3,7 @@ import { useSearch } from "@tanstack/react-router";
 import { createContext, useContext } from "react";
 import { useReadLocalStorage } from "usehooks-ts";
 import { ls } from "../lib/utils";
+import { features } from "@/lib/features";
 import {
 	createFiltersPicker,
 	createFiltersRemover,
@@ -28,7 +29,7 @@ export const ACTORS_FILTERS_DEFINITIONS = {
 		operators: [FilterOp.EQUAL],
 		excludes: ["id"],
 	},
-	...(__APP_TYPE__ === "engine" || __APP_TYPE__ === "cloud"
+	...(features.datacenter
 		? {
 				showDestroyed: {
 					type: "boolean",
@@ -43,7 +44,7 @@ export const ACTORS_FILTERS_DEFINITIONS = {
 		category: "display",
 		ephemeral: true,
 	},
-	...(__APP_TYPE__ === "engine" || __APP_TYPE__ === "cloud"
+	...(features.datacenter
 		? {
 				showDatacenter: {
 					type: "boolean",

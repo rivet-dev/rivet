@@ -2,6 +2,7 @@ import { faBook, faExclamationTriangle, faPlus, Icon } from "@rivet-gg/icons";
 import { Link } from "@tanstack/react-router";
 import { ProviderDropdown } from "@/app/provider-dropdown";
 import { docsLinks } from "@/content/data";
+import { features } from "@/lib/features";
 import { Button } from "../ui/button";
 import { H4 } from "../ui/typography";
 
@@ -28,7 +29,7 @@ export function NoProvidersAlert({
 			<div className="flex flex-col items-center justify-center gap-2">
 				{variant === "default" ? (
 					<>
-						{__APP_TYPE__ === "cloud" ? (
+						{features.multitenancy ? (
 							<Button size="sm" asChild className="w-full">
 								<Link
 									to="/orgs/$organization/projects/$project/ns/$namespace/settings"
@@ -38,7 +39,7 @@ export function NoProvidersAlert({
 								</Link>
 							</Button>
 						) : null}
-						{__APP_TYPE__ === "engine" ? (
+						{!features.multitenancy ? (
 							<Button asChild size="sm" className="w-full">
 								<Link
 									to="/ns/$namespace"

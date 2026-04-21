@@ -1,39 +1,55 @@
-import { redirect } from "@tanstack/react-router";
+import { notFound, redirect } from "@tanstack/react-router";
 import { organizationClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { cloudEnv } from "./env";
+import { features } from "./features";
 
 const createClient = () =>
 	createAuthClient({
 		baseURL: cloudEnv().VITE_APP_CLOUD_API_URL,
+		fetchOptions: { credentials: "include" },
 		plugins: [organizationClient()],
 	});
 
 type AuthClient = ReturnType<typeof createClient>;
 
 export const authClient: AuthClient =
-	__APP_TYPE__ === "cloud" ? createClient() : (null as unknown as AuthClient);
+	features.auth ? createClient() : (null as unknown as AuthClient);
 
 export const redirectToOrganization = async (
-	search: Record<string, string>,
+	{ from }: { from?: string } = {},
 ) => {
 	const session = await authClient.getSession();
 	if (session.data) {
-		const orgs = await authClient.organization.list();
 
-		if (orgs.data && orgs.data.length > 0) {
-			await authClient.organization.setActive({
-				organizationId: orgs.data[0].id,
+		if (session.data.session.activeOrganizationId) {
+			const org = await authClient.organization.getFullOrganization({
+				query: { organizationId: session.data.session.activeOrganizationId },
 			});
+
+			if (org.error) {
+				throw notFound();
+			}
+
 			throw redirect({
 				to: "/orgs/$organization",
-				search: true,
-				params: { organization: orgs.data[0].id },
+				search: from ? { from } : undefined,
+				params: { organization: org.data.slug },
 			});
 		}
+		const orgs = await authClient.organization.list();
+
+		if (!orgs.data?.[0]) {
+			return false;
+		}
+
+		await authClient.organization.setActive({
+			organizationId: orgs.data[0].id,
+		});
 		throw redirect({
-			to: "/onboarding/choose-organization",
-			search: true,
+			to: "/orgs/$organization",
+			search: from ? { from } : undefined,
+			params: { organization: orgs.data[0].slug },
 		});
 	}
 

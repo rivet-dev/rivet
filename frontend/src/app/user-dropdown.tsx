@@ -54,31 +54,51 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
 				{isMatchingProjectRoute ? (
-					<DropdownMenuItem
-						onSelect={() => {
-							return navigate({
-								to: ".",
-								search: (old) => ({ ...old, modal: "billing" }),
-							});
-						}}
-					>
-						Billing
-					</DropdownMenuItem>
+					<>
+						<DropdownMenuItem
+							onSelect={() => {
+								return navigate({
+									to: ".",
+									search: (old) => ({
+										...old,
+										modal: "billing",
+									}),
+								});
+							}}
+						>
+							Billing
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+					</>
 				) : null}
-				<DropdownMenuSeparator />
 				{params.organization ? (
-					<DropdownMenuSub>
-						<DropdownMenuSubTrigger>
-							Switch Organization
-						</DropdownMenuSubTrigger>
-						<DropdownMenuPortal>
-							<DropdownMenuSubContent>
-								<OrganizationSwitcher
-									value={params.organization}
-								/>
-							</DropdownMenuSubContent>
-						</DropdownMenuPortal>
-					</DropdownMenuSub>
+					<>
+						<DropdownMenuSub>
+							<DropdownMenuSubTrigger>
+								Switch Organization
+							</DropdownMenuSubTrigger>
+							<DropdownMenuPortal>
+								<DropdownMenuSubContent>
+									<OrganizationSwitcher
+										value={params.organization}
+									/>
+								</DropdownMenuSubContent>
+							</DropdownMenuPortal>
+						</DropdownMenuSub>
+						<DropdownMenuItem
+							onSelect={() => {
+								return navigate({
+									to: ".",
+									search: (old) => ({
+										...old,
+										modal: "org-members",
+									}),
+								});
+							}}
+						>
+							Manage Members
+						</DropdownMenuItem>
+					</>
 				) : null}
 				<DropdownMenuItem
 					onSelect={() => {

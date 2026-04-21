@@ -10,7 +10,6 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { match } from "ts-pattern";
 import { assertNonNullable } from "../../lib/utils";
 import { useActorInspector } from "../actor-inspector-context";
 import { useDataProvider, useEngineCompatDataProvider } from "../data-provider";
@@ -29,18 +28,11 @@ export const useActorWorker = () => {
 };
 
 const useConnectionDetails = () => {
-	return match(__APP_TYPE__)
-		.with("inspector", () => {
-			return { namespace: "", engineToken: "" };
-		})
-		.otherwise(() => {
-			// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
-			const provider = useEngineCompatDataProvider();
-			return {
-				namespace: provider.engineNamespace,
-				engineToken: provider.engineToken,
-			};
-		});
+	const provider = useEngineCompatDataProvider();
+	return {
+		namespace: provider.engineNamespace,
+		engineToken: provider.engineToken,
+	};
 };
 
 interface ActorWorkerContextProviderProps {

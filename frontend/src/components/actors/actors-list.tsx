@@ -32,6 +32,7 @@ import {
 	WithTooltip,
 } from "@/components";
 import { docsLinks } from "@/content/data";
+import { features } from "@/lib/features";
 import { VisibilitySensor } from "../visibility-sensor";
 import { useActorsFilters, useFiltersValue } from "./actor-filters-context";
 import { useActorsLayout } from "./actors-layout-context";
@@ -78,7 +79,7 @@ function TopBar() {
 				/>
 			) : null}
 			<div className="justify-between flex flex-1 flex-wrap gap-2 w-full">
-				{["engine", "cloud"].includes(__APP_TYPE__) ? (
+				{features.datacenter ? (
 					<Filters />
 				) : (
 					<div />
@@ -187,9 +188,6 @@ export function ListSkeleton() {
 }
 
 const useRunnerConfigs = () => {
-	if (__APP_TYPE__ === "inspector") {
-		return 1;
-	}
 	const dataProvider = useDataProvider();
 	const { data: runnerNamesCount = 0 } = useInfiniteQuery({
 		...dataProvider.runnerNamesQueryOptions(),

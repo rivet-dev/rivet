@@ -1,56 +1,47 @@
 import { createFileRoute, isRedirect, redirect } from "@tanstack/react-router";
-import { match } from "ts-pattern";
 import CreateNamespacesFrameContent from "@/app/dialogs/create-namespace-frame";
 import { Logo } from "@/app/logo";
 import { Card } from "@/components";
 import { redirectToOrganization } from "@/lib/auth";
+import { features } from "@/lib/features";
 
 export const Route = createFileRoute("/_context/")({
-	component: () =>
-		match(__APP_TYPE__)
-			.with("cloud", () => <CloudRoute />)
-			.with("engine", () => <EngineRoute />)
-			.otherwise(() => {
-				throw new Error(
-					"Inspector routes are not supported in the dashboard build",
-				);
-			}),
+	component: () => (features.multitenancy ? <CloudRoute /> : <EngineRoute />),
 	beforeLoad: async ({ context, search }) => {
-		return await match(context)
-			.with({ __type: "cloud" }, async () => {
-				if (!(await redirectToOrganization(search))) {
-					throw redirect({ to: "/login", search: true });
-				}
-			})
-			.with({ __type: "engine" }, async (ctx) => {
-				try {
-					const result = await ctx.queryClient.fetchInfiniteQuery(
-						ctx.dataProvider.namespacesQueryOptions(),
-					);
+		if (features.multitenancy) {
+			if (!(await redirectToOrganization(search))) {
+				throw redirect({ to: "/login", search: true });
+			}
+			return;
+		}
 
-					const firstNamespace = result.pages[0]?.namespaces[0];
-					if (!firstNamespace) {
-						throw redirect({
-							to: "/ns/$namespace",
-							params: { namespace: "default" },
-							search: true,
-						});
-					}
-					throw redirect({
-						to: "/ns/$namespace",
-						params: { namespace: firstNamespace.name },
-						search: true,
-					});
-				} catch (e) {
-					if (isRedirect(e)) {
-						throw e;
-					}
+		const ctx = context as Extract<typeof context, { __type: "engine" }>;
+		try {
+			const result = await ctx.queryClient.fetchInfiniteQuery(
+				ctx.dataProvider.namespacesQueryOptions(),
+			);
 
-					// Ignore errors here, they will be handled in the UI
-					return;
-				}
-			})
-			.exhaustive();
+			const firstNamespace = result.pages[0]?.namespaces[0];
+			if (!firstNamespace) {
+				throw redirect({
+					to: "/ns/$namespace",
+					params: { namespace: "default" },
+					search: true,
+				});
+			}
+			throw redirect({
+				to: "/ns/$namespace",
+				params: { namespace: firstNamespace.name },
+				search: true,
+			});
+		} catch (e) {
+			if (isRedirect(e)) {
+				throw e;
+			}
+
+			// Ignore errors here, they will be handled in the UI
+			return;
+		}
 	},
 });
 

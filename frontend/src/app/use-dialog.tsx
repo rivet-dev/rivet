@@ -62,4 +62,7 @@ export const useDialog = {
 	UpsertDeployment: createDialogHook(
 		() => import("@/app/dialogs/upsert-deployment-frame"),
 	),
+	OrgMembers: createDialogHook(
+		() => import("@/app/dialogs/org-members-frame"),
+	),
 };

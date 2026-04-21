@@ -7,31 +7,22 @@ import {
 import { match } from "ts-pattern";
 import * as CreateNamespaceForm from "@/app/forms/create-namespace-form";
 import { Flex, Frame } from "@/components";
+import { features } from "@/lib/features";
 import { convertStringToId } from "@/lib/utils";
 
 const useDataProvider = () => {
-	return match(__APP_TYPE__)
-		.with("cloud", () => {
-			// biome-ignore lint/correctness/useHookAtTopLevel: match will only run once per app load
-			return useRouteContext({
-				from: "/_context/_cloud/orgs/$organization/projects/$project",
-				select: (ctx) => ctx.dataProvider,
-			});
-		})
-		.with("engine", () => {
-			return match(
-				// biome-ignore lint/correctness/useHookAtTopLevel: match will only run once per app load
-				useRouteContext({
-					from: "/_context",
-				}),
-			)
-				.with({ __type: "engine" }, (ctx) => ctx.dataProvider)
-				.otherwise(() => {
-					throw new Error("Invalid context");
-				});
-		})
+	if (features.multitenancy) {
+		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
+		return useRouteContext({
+			from: "/_context/orgs/$organization/projects/$project",
+			select: (ctx) => ctx.dataProvider,
+		});
+	}
+	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
+	return match(useRouteContext({ from: "/_context" }))
+		.with({ __type: "engine" }, (ctx) => ctx.dataProvider)
 		.otherwise(() => {
-			throw new Error("Invalid app type");
+			throw new Error("Invalid context");
 		});
 };
 
@@ -51,7 +42,7 @@ const useCreateNamespace = () => {
 					dataProivder.namespacesQueryOptions(),
 				);
 
-				if (__APP_TYPE__ === "cloud") {
+				if (features.namespaceManagement) {
 					if (!params.project || !params.organization) {
 						throw new Error("Missing required parameters");
 					}

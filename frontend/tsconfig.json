@@ -18,7 +18,6 @@
 	"include": [
 		"src",
 		"./vite-env.d.ts",
-		"./vite.inspector.config.ts",
-		"./vite.engine.config.ts"
+		"./vite.config.ts"
 	]
 }

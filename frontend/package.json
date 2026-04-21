@@ -4,22 +4,12 @@
 	"version": "2.0.21",
 	"type": "module",
 	"scripts": {
-		"dev": "pnpm run '/^dev:.*/'",
-		"dev:inspector": "vite --config vite.inspector.config.ts",
-		"dev:engine": "vite --config vite.engine.config.ts",
-		"dev:cloud": "vite --config vite.cloud.config.ts",
+		"dev": "vite",
 		"check-types": "tsc --noEmit",
-		"build:inspector": "NODE_OPTIONS='--max-old-space-size=8192' vite build --mode=production --base=/ui/ --config vite.inspector.config.ts",
-		"build:engine": "NODE_OPTIONS='--max-old-space-size=8192' vite build --mode=production --config vite.engine.config.ts",
-		"build:cloud": "NODE_OPTIONS='--max-old-space-size=8192' vite build --mode=production --config vite.cloud.config.ts",
-		"preview:inspector": "vite preview --config vite.inspector.config.ts",
-		"preview:engine": "vite preview --config vite.engine.config.ts",
-		"preview:cloud": "vite preview --config vite.cloud.config.ts",
-		"test:e2e": "playwright test",
-		"test:e2e:ui": "playwright test --ui",
+		"build": "NODE_OPTIONS='--max-old-space-size=8192' vite build --mode=production",
+		"preview": "vite preview",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"test:e2e:update-snapshots": "playwright test --update-snapshots",
 		"dev:ladle": "ladle dev",
 		"build:ladle": "ladle build"
 	},
@@ -40,6 +30,7 @@
 		"@fortawesome/react-fontawesome": "^0.2.6",
 		"@hookform/resolvers": "^5.2",
 		"@ladle/react": "^5.1.1",
+		"@marsidev/react-turnstile": "^1.5.0",
 		"@microsoft/fetch-event-source": "^2.0.1",
 		"@radix-ui/react-accordion": "^1.2.12",
 		"@radix-ui/react-avatar": "^1.1.10",
@@ -126,6 +117,7 @@
 		"cmdk": "^1.1.1",
 		"d3-array": "^3.2.4",
 		"date-fns": "^4.1.0",
+		"es-toolkit": "^1.45.1",
 		"esast-util-from-js": "^2.0.1",
 		"escape-html": "^1.0.3",
 		"estree-util-to-js": "^2.0.0",
@@ -165,8 +157,6 @@
 		"zod": "^3.25.76"
 	},
 	"devDependencies": {
-		"@playwright/test": "^1.57.0",
-		"dotenv": "^17.2.3",
 		"vitest": "^4.0.18"
 	}
 }

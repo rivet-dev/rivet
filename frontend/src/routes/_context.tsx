@@ -1,15 +1,20 @@
+import * as Sentry from "@sentry/react";
 import {
 	createFileRoute,
 	Outlet,
 	redirect,
 	useNavigate,
+	useSearch,
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
-import { match } from "ts-pattern";
+import posthog from "posthog-js";
+import { useEffect } from "react";
 import z from "zod";
-import { getConfig, ls, useDialog } from "@/components";
+import { getConfig, ls } from "@/components";
+import { useDialog } from "@/app/use-dialog";
 import { ModalRenderer } from "@/components/modal-renderer";
 import { authClient } from "@/lib/auth";
+import { features } from "@/lib/features";
 
 const searchSchema = z
 	.object({
@@ -19,6 +24,7 @@ const searchSchema = z
 				"create-ns",
 				"create-project",
 				"billing",
+				"org-members",
 			])
 			.or(z.string())
 			.optional(),
@@ -35,48 +41,64 @@ export const Route = createFileRoute("/_context")({
 	component: RouteComponent,
 	validateSearch: zodValidator(searchSchema),
 	context: ({ context }) => {
-		return match(__APP_TYPE__)
-			.with("engine", () => ({
-				dataProvider: context.getOrCreateEngineContext(
-					() => ls.engineCredentials.get(getConfig().apiUrl) || "",
-				),
-				__type: "engine" as const,
-			}))
-			.with("cloud", () => ({
+		if (features.multitenancy) {
+			return {
 				dataProvider: context.getOrCreateCloudContext(),
 				__type: "cloud" as const,
-			}))
-			.otherwise(() => {
-				throw new Error(
-					"Inspector routes are not supported in the dashboard build",
-				);
-			});
+			};
+		}
+		return {
+			dataProvider: context.getOrCreateEngineContext(
+				() => ls.engineCredentials.get(getConfig().apiUrl) || "",
+			),
+			__type: "engine" as const,
+		};
 	},
 	beforeLoad: async (route) => {
-		return await match(route.context)
-			.with({ __type: "cloud" }, () => async () => {
-				const session = await authClient.getSession();
+		if (features.multitenancy) {
+			const session = await authClient.getSession();
 
-				if (!session.data) {
-					throw redirect({
-						to: "/login",
-						search: (old) => ({
-							...old,
-							from: route.location.pathname,
-						}),
-					});
-				}
-			})
-			.otherwise(() => () => {})();
+			if (!session.data) {
+				throw redirect({
+					to: "/login",
+					search: (old) => ({
+						...old,
+						from: route.location.pathname,
+					}),
+				});
+			}
+
+			if (!session.data.user.emailVerified) {
+				throw redirect({ to: "/verify-email-pending" });
+			}
+
+		}
 	},
 });
+
+function IdentifyUser() {
+	const { data: session } = authClient.useSession();
+
+	useEffect(() => {
+		const user = session?.user;
+		if (!user) return;
+
+		Sentry.setUser({ id: user.id, email: user.email });
+		posthog.setPersonProperties({ id: user.id, email: user.email });
+	}, [session?.user]);
+
+	return null;
+}
 
 function RouteComponent() {
 	return (
 		<>
+			{features.auth && <IdentifyUser />}
 			<Outlet />
 			<ModalRenderer />
 			<Modals />
+			{!features.multitenancy && <EngineModals />}
+			{features.multitenancy && <CloudModals />}
 		</>
 	);
 }
@@ -104,5 +126,80 @@ function Modals() {
 				},
 			}}
 		/>
+	);
+}
+
+function EngineModals() {
+	const navigate = useNavigate();
+	const search = Route.useSearch();
+	const CreateNamespaceDialog = useDialog.CreateNamespace.Dialog;
+	return (
+		<CreateNamespaceDialog
+			dialogProps={{
+				open: search.modal === "create-ns",
+				onOpenChange: (value) => {
+					if (!value) {
+						return navigate({
+							to: ".",
+							search: (old) => ({ ...old, modal: undefined }),
+						});
+					}
+				},
+			}}
+		/>
+	);
+}
+
+function CloudModals() {
+	const navigate = useNavigate();
+	const search = useSearch({ strict: false });
+
+	const CreateProjectDialog = useDialog.CreateProject.Dialog;
+	const CreateOrganizationDialog = useDialog.CreateOrganization.Dialog;
+	const OrgMembersDialog = useDialog.OrgMembers.Dialog;
+
+	return (
+		<>
+			<CreateProjectDialog
+				organization={search?.organization}
+				dialogProps={{
+					open: search?.modal === "create-project",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({ ...old, modal: undefined }),
+							});
+						}
+					},
+				}}
+			/>
+			<CreateOrganizationDialog
+				dialogProps={{
+					open: search?.modal === "create-organization",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({ ...old, modal: undefined }),
+							});
+						}
+					},
+				}}
+			/>
+			<OrgMembersDialog
+				dialogProps={{
+					open: search?.modal === "org-members",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({ ...old, modal: undefined }),
+							});
+						}
+					},
+				}}
+			/>
+		</>
 	);
 }

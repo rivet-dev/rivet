@@ -45,3 +45,13 @@ export const Name = ({ className }: { className?: string }) => {
 		/>
 	);
 };
+
+export const RootError = () => {
+	const { formState } = useFormContext<FormValues>();
+	if (!formState.errors.root) return null;
+	return (
+		<p className="text-sm text-destructive mt-2">
+			{formState.errors.root.message}
+		</p>
+	);
+};
