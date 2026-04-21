@@ -663,21 +663,26 @@ impl CustomServeTrait for PegboardGateway2 {
 		if let Err(err) = metrics_res {
 			tracing::error!(?err, "http req ingress metrics failed");
 		} else {
-			if let Err(err) = record_req_metrics(
-				&ctx,
-				self.actor_id,
-				self.namespace_id,
-				Metric::HttpEgress(response_size as usize),
-			)
-			.await
-			{
-				tracing::error!(
-					?err,
-					namespace_id=?self.namespace_id,
-					envoy_key=%self.envoy_key,
-					"http req egress metrics failed, likely corrupt now",
-				);
-			}
+			let actor_id = self.actor_id;
+			let namespace_id = self.namespace_id;
+			let envoy_key = self.envoy_key.clone();
+			tokio::spawn(async move {
+				if let Err(err) = record_req_metrics(
+					&ctx,
+					actor_id,
+					namespace_id,
+					Metric::HttpEgress(response_size as usize),
+				)
+				.await
+				{
+					tracing::error!(
+						?err,
+						?namespace_id,
+						%envoy_key,
+						"http req egress metrics failed, likely corrupt now",
+					);
+				}
+			});
 		}
 
 		res
@@ -704,21 +709,21 @@ impl CustomServeTrait for PegboardGateway2 {
 		if let Err(err) = metrics_res {
 			tracing::error!(?err, "ws open metrics failed");
 		} else {
-			if let Err(err) = record_req_metrics(
-				&ctx,
-				self.actor_id,
-				self.namespace_id,
-				Metric::WebsocketClose,
-			)
-			.await
-			{
-				tracing::error!(
-					?err,
-					namespace_id=?self.namespace_id,
-					envoy_key=%self.envoy_key,
-					"ws close metrics failed, likely corrupt now",
-				);
-			}
+			let actor_id = self.actor_id;
+			let namespace_id = self.namespace_id;
+			let envoy_key = self.envoy_key.clone();
+			tokio::spawn(async move {
+				if let Err(err) =
+					record_req_metrics(&ctx, actor_id, namespace_id, Metric::WebsocketClose).await
+				{
+					tracing::error!(
+						?err,
+						?namespace_id,
+						%envoy_key,
+						"ws close metrics failed, likely corrupt now",
+					);
+				}
+			});
 		}
 
 		res

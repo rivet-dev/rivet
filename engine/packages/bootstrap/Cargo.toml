@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+datacenter.workspace = true
 epoxy.workspace = true
 gas.workspace = true
 gasoline-runtime.workspace = true

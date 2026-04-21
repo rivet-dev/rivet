@@ -11,8 +11,15 @@ use super::{
 	SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_ACTOR, WS_PROTOCOL_TOKEN, X_RIVET_TOKEN,
 	actor_path::ParsedActorPath,
 };
-use crate::{errors, routing::actor_path::parse_actor_path, shared_state::SharedState};
-use resolve_actor_query::resolve_query_actor_id;
+use crate::{
+	errors,
+	routing::{
+		actor_path::parse_actor_path,
+		pegboard_gateway::resolve_actor_query::ResolveQueryActorResult,
+	},
+	shared_state::SharedState,
+};
+use resolve_actor_query::resolve_query;
 
 const ACTOR_FORCE_WAKE_PENDING_TIMEOUT: i64 = util::duration::seconds(60);
 const ACTOR_READY_TIMEOUT: Duration = Duration::from_secs(10);
@@ -37,15 +44,48 @@ pub async fn route_request_path_based(
 
 	tracing::debug!(?actor_path, "routing using path-based actor routing");
 
-	let resolved_route = resolve_path_based_route(ctx, req_ctx, &actor_path).await?;
+	let (actor_id, token, stripped_path) = match actor_path {
+		ParsedActorPath::Direct(path) => (
+			Id::parse(&path.actor_id).context("invalid actor id in path")?,
+			read_gateway_token_from_request(req_ctx, path.token.as_deref())?.map(ToOwned::to_owned),
+			path.stripped_path.clone(),
+		),
+		ParsedActorPath::Query(path) => match resolve_query(ctx, &path.query).await? {
+			ResolveQueryActorResult::Found { actor_id } => (
+				actor_id,
+				read_gateway_token_from_request(req_ctx, path.token.as_deref())?
+					.map(ToOwned::to_owned),
+				path.stripped_path.clone(),
+			),
+			ResolveQueryActorResult::Forward { dc_label } => {
+				let peer_dc = ctx
+					.config()
+					.dc_for_label(dc_label)
+					.ok_or_else(|| rivet_api_util::errors::Datacenter::NotFound.build())?;
+
+				return Ok(Some(RoutingOutput::Route(RouteConfig {
+					targets: vec![RouteTarget {
+						host: peer_dc
+							.proxy_url_host()
+							.context("bad peer dc proxy url host")?
+							.to_string(),
+						port: peer_dc
+							.proxy_url_port()
+							.context("bad peer dc proxy url port")?,
+						path: req_ctx.path().to_owned(),
+					}],
+				})));
+			}
+		},
+	};
 
 	route_request_inner(
 		ctx,
 		shared_state,
 		req_ctx,
-		resolved_route.actor_id,
-		&resolved_route.stripped_path,
-		resolved_route.token.as_deref(),
+		actor_id,
+		&stripped_path,
+		token.as_deref(),
 	)
 	.await
 	.map(Some)
@@ -132,34 +172,6 @@ pub async fn route_request(
 		.map(Some)
 }
 
-#[derive(Debug)]
-struct ResolvedPathBasedRoute {
-	actor_id: Id,
-	token: Option<String>,
-	stripped_path: String,
-}
-
-async fn resolve_path_based_route(
-	ctx: &StandaloneCtx,
-	req_ctx: &RequestContext,
-	actor_path: &ParsedActorPath,
-) -> Result<ResolvedPathBasedRoute> {
-	match actor_path {
-		ParsedActorPath::Direct(path) => Ok(ResolvedPathBasedRoute {
-			actor_id: Id::parse(&path.actor_id).context("invalid actor id in path")?,
-			token: read_gateway_token_from_request(req_ctx, path.token.as_deref())?
-				.map(ToOwned::to_owned),
-			stripped_path: path.stripped_path.clone(),
-		}),
-		ParsedActorPath::Query(path) => Ok(ResolvedPathBasedRoute {
-			actor_id: resolve_query_actor_id(ctx, &path.query).await?,
-			token: read_gateway_token_from_request(req_ctx, path.token.as_deref())?
-				.map(ToOwned::to_owned),
-			stripped_path: path.stripped_path.clone(),
-		}),
-	}
-}
-
 fn read_gateway_token_from_request<'a>(
 	req_ctx: &'a RequestContext,
 	token_from_path: Option<&'a str>,
@@ -215,7 +227,7 @@ async fn route_request_inner(
 		let peer_dc = ctx
 			.config()
 			.dc_for_label(actor_id.label())
-			.context("dc with the given label not found")?;
+			.ok_or_else(|| rivet_api_util::errors::Datacenter::NotFound.build())?;
 
 		return Ok(RoutingOutput::Route(RouteConfig {
 			targets: vec![RouteTarget {

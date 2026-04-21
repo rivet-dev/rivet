@@ -53,7 +53,7 @@ pub struct WrongAddrProtocol {
 #[error(
 	"guard",
 	"actor_ready_timeout",
-	"Timed out waiting for actor to become ready. Ensure that the runner name selector is accurate and there are runners available in the namespace you created this actor."
+	"Timed out waiting for actor to become ready. Ensure that the pool selector is accurate and there are envoys available in the namespace you created this actor."
 )]
 pub struct ActorReadyTimeout {
 	pub actor_id: Id,
@@ -105,17 +105,17 @@ pub struct QueryPathTokenSyntax;
 #[error(
 	"guard",
 	"query_get_disallowed_params",
-	"query gateway method=get does not allow rvt-input, rvt-region, rvt-crash-policy, or rvt-runner params"
+	"query gateway method=get does not allow rvt-input, rvt-region, rvt-crash-policy, or rvt-pool params"
 )]
 pub struct QueryGetDisallowedParams;
 
 #[derive(RivetError)]
 #[error(
 	"guard",
-	"query_missing_runner_name",
-	"query gateway method=getOrCreate requires rvt-runner param"
+	"query_missing_pool",
+	"query gateway method=getOrCreate requires rvt-pool param"
 )]
-pub struct QueryMissingRunnerName;
+pub struct QueryMissingPool;
 
 #[derive(RivetError)]
 #[error(

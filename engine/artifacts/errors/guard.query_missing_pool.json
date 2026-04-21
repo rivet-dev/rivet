@@ -1,0 +1,5 @@
+{
+  "code": "query_missing_pool",
+  "group": "guard",
+  "message": "query gateway method=getOrCreate requires rvt-pool param"
+}

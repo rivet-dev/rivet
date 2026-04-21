@@ -49,6 +49,7 @@ pub async fn task(
 	}
 }
 
+/// Records the diff in ingress and egress bytes since last metrics tick.
 pub async fn record_ws_transfer(
 	ctx: &StandaloneCtx,
 	actor_id: Id,

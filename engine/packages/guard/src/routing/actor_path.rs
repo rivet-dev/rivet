@@ -34,7 +34,7 @@ pub enum QueryActorQuery {
 	GetOrCreate {
 		namespace: String,
 		name: String,
-		runner_name: String,
+		pool_name: String,
 		key: Vec<String>,
 		input: Option<Vec<u8>>,
 		region: Option<String>,
@@ -56,6 +56,8 @@ struct RvtParams {
 	method: String,
 	#[serde(default)]
 	runner: Option<String>,
+	#[serde(default)]
+	pool: Option<String>,
 	#[serde(default)]
 	key: Option<String>,
 	#[serde(default)]
@@ -253,9 +255,10 @@ fn build_actor_query(name: &str, rvt: RvtParams) -> Result<QueryActorQuery> {
 			})
 		}
 		"getOrCreate" => {
-			let runner_name = rvt
-				.runner
-				.ok_or_else(|| errors::QueryMissingRunnerName.build())?;
+			let pool_name = rvt
+				.pool
+				.or(rvt.runner)
+				.ok_or_else(|| errors::QueryMissingPool.build())?;
 
 			let input = rvt.input.as_deref().map(decode_query_input).transpose()?;
 
@@ -268,7 +271,7 @@ fn build_actor_query(name: &str, rvt: RvtParams) -> Result<QueryActorQuery> {
 			Ok(QueryActorQuery::GetOrCreate {
 				namespace: rvt.namespace,
 				name: name.to_string(),
-				runner_name,
+				pool_name,
 				key,
 				input,
 				region: rvt.region,

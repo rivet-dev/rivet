@@ -1,5 +1,5 @@
 [package]
-name = "rivet-workflow-worker"
+name = "datacenter"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -7,11 +7,11 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-datacenter.workspace = true
-epoxy.workspace = true
+futures-util.workspace = true
 gas.workspace = true
-gasoline-runtime.workspace = true
-namespace.workspace = true
-pegboard.workspace = true
+reqwest.workspace = true
 rivet-config.workspace = true
+rivet-metrics.workspace = true
+serde.workspace = true
 tracing.workspace = true
+universaldb.workspace = true

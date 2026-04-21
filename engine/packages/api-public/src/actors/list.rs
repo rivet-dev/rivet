@@ -1,3 +1,4 @@
+use acl::types::*;
 use anyhow::{Context, Result};
 use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
@@ -132,9 +133,8 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 			actors,
 			pagination: Pagination { cursor },
 		})
-	} else if let Some(key) = &query.key
+	} else if let (Some(key), Some(name)) = (&query.key, &query.name)
 		&& !include_destroyed
-		&& query.name.is_some()
 	{
 		// Existing path: fetch actors by key (when name is provided and not include_destroyed)
 		// Resolve namespace once
@@ -145,42 +145,41 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 			.await?
 			.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
-		let name = query.name.as_ref().context("unreachable")?;
-		let actor_id = ctx
+		let res = ctx
 			.op(pegboard::ops::actor::get_for_key::Input {
 				namespace_id: namespace.namespace_id,
 				name: name.clone(),
 				key: key.clone(),
+				pool_name: None,
 				fetch_error: true,
 			})
-			.await?
-			.actor
-			.map(|x| x.actor_id);
+			.await?;
+		match res {
+			pegboard::ops::actor::get_for_key::Output::Found { actor } => {
+				let cursor = Some(actor.create_ts.to_string());
 
-		// If no actors found, return empty result
-		let Some(actor_id) = actor_id else {
-			return Ok(ListResponse {
+				Ok(ListResponse {
+					actors: vec![actor],
+					pagination: Pagination { cursor },
+				})
+			}
+			pegboard::ops::actor::get_for_key::Output::NotFound => Ok(ListResponse {
 				actors: Vec::new(),
 				pagination: Pagination { cursor: None },
-			});
-		};
-
-		// Fetch actors
-		let actors = fetch_actors_by_ids(
-			&ctx,
-			vec![actor_id],
-			query.namespace.clone(),
-			query.include_destroyed,
-			query.limit,
-		)
-		.await?;
-
-		let cursor = actors.last().map(|x| x.create_ts.to_string());
-
-		Ok(ListResponse {
-			actors,
-			pagination: Pagination { cursor },
-		})
+			}),
+			pegboard::ops::actor::get_for_key::Output::Forward { dc_label } => {
+				// Make request to remote datacenter
+				rivet_api_util::request_remote_datacenter(
+					ctx.config(),
+					dc_label,
+					"/actors",
+					rivet_api_util::Method::GET,
+					Some(&query),
+					Option::<&()>::None,
+				)
+				.await
+			}
+		}
 	} else {
 		// Fanout path: used when include_destroyed is true or when no key is provided
 		// Require name for fanout operations
