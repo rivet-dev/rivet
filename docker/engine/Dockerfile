@@ -7,9 +7,10 @@ FROM rust:1.91.0-trixie AS builder
 # Docker automatically provides TARGETARCH
 ARG TARGETARCH
 
-ARG BUILD_FRONTEND=false
+ARG VITE_FEATURE_FLAGS=
 ARG CARGO_BUILD_MODE=debug
 ARG VITE_APP_API_URL=__SAME__
+ARG VITE_APP_TURNSTILE_SITE_KEY=
 ARG OVERRIDE_GIT_SHA
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -53,15 +54,11 @@ COPY . .
 # place inside the Docker build. SKIP_NAPI_BUILD=1 tells
 # @rivetkit/rivetkit-native to skip its napi build — the frontend only
 # consumes the TypeScript surface, not the runtime .node binary.
-RUN if [ "$BUILD_FRONTEND" = "true" ]; then \
+RUN if [ -n "$VITE_FEATURE_FLAGS" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \
         export SKIP_NAPI_BUILD=1 && \
         pnpm install --ignore-scripts && \
-        if [ -n "$VITE_APP_API_URL" ]; then \
-            VITE_APP_API_URL="${VITE_APP_API_URL}" npx turbo build:engine -F @rivetkit/engine-frontend; \
-        else \
-            npx turbo build:engine -F @rivetkit/engine-frontend; \
-        fi; \
+        VITE_APP_API_URL="${VITE_APP_API_URL}" VITE_FEATURE_FLAGS="${VITE_FEATURE_FLAGS}" VITE_APP_TURNSTILE_SITE_KEY="${VITE_APP_TURNSTILE_SITE_KEY}" npx turbo build -F @rivetkit/engine-frontend; \
     fi
 
 # Build and copy all binaries from target directory into an empty image (it is not
