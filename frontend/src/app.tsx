@@ -64,17 +64,19 @@ export const router = createRouter({
 	),
 });
 
+type Router = typeof router;
+
 declare module "@tanstack/react-router" {
 	interface Register {
 		router: typeof router;
 	}
 }
 
-function InnerApp({ router }: { router: typeof router }) {
+function InnerApp({ router }: { router: Router }) {
 	return <RouterProvider router={router} />;
 }
 
-export function App({ router }: { router: typeof router }) {
+export function App({ router }: { router: Router }) {
 	return (
 		<QueryClientProvider client={queryClient}>
 			<ConfigProvider value={getConfig()}>

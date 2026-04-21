@@ -1,4 +1,3 @@
-import { useAuth, useOrganization, useUser } from "@clerk/clerk-react";
 import * as Sentry from "@sentry/react";
 import {
 	formatForDisplay,
@@ -10,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { usePostHog } from "posthog-js/react";
 import { useEffect, useState } from "react";
 import { Kbd, ls } from "@/components";
+import { authClient } from "@/lib/auth";
 
 export const DevToolbar = () => {
 	if (__APP_TYPE__ !== "cloud") return null;
@@ -33,9 +33,10 @@ const clearCacheSequence: Hotkey[] = [debugSequence, "C"];
 const reportIssueSequence: Hotkey[] = [debugSequence, "I"];
 
 const Content = () => {
-	const { userId, actor } = useAuth();
-	const { user } = useUser();
-	const { organization: org } = useOrganization();
+	const { data: authSession } = authClient.useSession();
+
+	const user = authSession?.user;
+	const session = authSession?.session;
 
 	const [, setState] = useState({}); // used just to trigger re-render every second
 
@@ -79,17 +80,10 @@ const Content = () => {
 				</div>
 				<Sep />
 				<div>
-					{actor ? (
-						<span className="bg-warning/20 p-0.5 rounded-md">
-							{actor?.sub || "Unknown"} is signed in as{" "}
-							{userId || "Unknown"}
-						</span>
-					) : null}
+					<span>{user?.email || "Unknown"}</span>
 					<span>
-						{user?.primaryEmailAddress?.emailAddress || "Unknown"}
-					</span>
-					<span>
-						{user?.id || "Unknown"} {org?.id || "Unknown"}
+						{user?.id || "Unknown"}{" "}
+						{session?.activeOrganizationId || "Unknown"}
 					</span>
 				</div>
 
