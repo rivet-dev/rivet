@@ -15,7 +15,6 @@ const searchSchema = z
 	.object({
 		modal: z
 			.enum([
-				"go-to-actor",
 				"feedback",
 				"create-ns",
 				"create-project",

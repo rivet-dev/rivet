@@ -272,9 +272,7 @@ export const createNamespaceContext = ({
 									"1",
 								)),
 						limit: opts?.limit ?? RECORDS_PER_PAGE,
-						name: opts?.filters?.id?.value
-							? undefined
-							: opts?.n?.join(","),
+						name: opts?.n?.join(","),
 					});
 
 					return data;

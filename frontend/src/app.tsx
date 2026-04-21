@@ -41,7 +41,9 @@ export function createAppRouter(clerk: Clerk) {
 		routeTree,
 		context: {
 			clerk:
-				__APP_TYPE__ === "cloud" ? clerk : (undefined as unknown as Clerk),
+				__APP_TYPE__ === "cloud"
+					? clerk
+					: (undefined as unknown as Clerk),
 			queryClient: queryClient,
 			getOrCreateCloudContext,
 			getOrCreateEngineContext,
@@ -79,7 +81,11 @@ function InnerApp({ router }: { router: ReturnType<typeof createAppRouter> }) {
 	return <RouterProvider router={router} />;
 }
 
-export function App({ router }: { router: ReturnType<typeof createAppRouter> }) {
+export function App({
+	router,
+}: {
+	router: ReturnType<typeof createAppRouter>;
+}) {
 	return (
 		<QueryClientProvider client={queryClient}>
 			<ConfigProvider value={getConfig()}>

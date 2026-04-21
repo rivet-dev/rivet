@@ -84,11 +84,5 @@ export const Route = createFileRoute(
 export function RouteComponent() {
 	const { actorId, actorKey } = Route.useSearch();
 
-	return (
-		<CatchBoundary
-			getResetKey={() => actorKey ?? actorId ?? "no-actor-key"}
-		>
-			<Actors actorId={actorKey ?? actorId} />
-		</CatchBoundary>
-	);
+	return <Actors actorId={actorKey ?? actorId} />;
 }
