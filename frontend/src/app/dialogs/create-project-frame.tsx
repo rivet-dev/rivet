@@ -1,17 +1,17 @@
-import { useOrganization } from "@clerk/clerk-react";
 import type { Rivet } from "@rivet-gg/cloud";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import * as CreateProjectForm from "@/app/forms/create-project-form";
 import { Flex, Frame } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
+import { authClient } from "@/lib/auth";
 
 const useDefaultOrg = () => {
 	if (__APP_TYPE__ === "cloud") {
 		// biome-ignore lint/correctness/useHookAtTopLevel: secured by build condition
-		const user = useOrganization();
+		const org = authClient.useActiveOrganization();
 
-		return user.organization?.id;
+		return org.data?.id;
 	}
 
 	return undefined;

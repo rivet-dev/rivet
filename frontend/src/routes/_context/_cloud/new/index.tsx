@@ -1,12 +1,15 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { authClient } from "@/lib/auth";
 
 export const Route = createFileRoute("/_context/_cloud/new/")({
 	component: RouteComponent,
-	beforeLoad: async ({ context, params }) => {
+	beforeLoad: async ({ params }) => {
+		const session = await authClient.getSession();
+		const orgId = session.data?.session?.activeOrganizationId ?? "";
 		throw redirect({
 			to: "/orgs/$organization/new",
 			params: {
-				organization: context.clerk.organization?.id ?? "",
+				organization: orgId,
 				...params,
 			},
 			search: true,

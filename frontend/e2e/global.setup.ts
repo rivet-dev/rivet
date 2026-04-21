@@ -1,5 +1,4 @@
-import { clerkSetup } from "@clerk/testing/playwright";
-
 export default async function globalSetup() {
-	await clerkSetup();
+	// No global setup required for Better Auth
+	// Clerk's clerkSetup() is no longer needed
 }

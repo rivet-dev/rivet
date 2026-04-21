@@ -1,12 +1,8 @@
 "use client";
-import { useClerk, useUser } from "@clerk/clerk-react";
-import * as Clerk from "@clerk/elements/common";
-import * as SignIn from "@clerk/elements/sign-in";
 import { faGoogle, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { useEffect } from "react";
-import { Badge } from "@/components";
+import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -18,22 +14,71 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { authClient, redirectToOrganization } from "@/lib/auth";
 
 export function Login() {
-	const clerk = useClerk();
-	const { user } = useUser();
 	const navigate = useNavigate();
 	const from = useSearch({ strict: false, select: (s) => s?.from as string });
 
-	// HACK: redirect if user is already logged in, race condition with clerk
-	// biome-ignore lint/correctness/useExhaustiveDependencies: from is stable
-	useEffect(() => {
-		if (user) {
-			// biome-ignore lint/nursery/noFloatingPromises: ignore
-			navigate({ to: from ?? "/", search: true });
-			return;
+	const [email, setEmail] = useState("");
+	const [password, setPassword] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	const [isLoading, setIsLoading] = useState(false);
+	const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+	const handleSubmit = async (e: FormEvent) => {
+		e.preventDefault();
+		setError(null);
+		setIsLoading(true);
+
+		try {
+			const result = await authClient.signIn.email({
+				email,
+				password,
+			});
+
+			if (result.error) {
+				setError(result.error.message ?? "Invalid credentials");
+				setIsLoading(false);
+				return;
+			}
+
+			// Redirect to org page
+			try {
+				await redirectToOrganization(
+					from ? { from } : {},
+				);
+			} catch (e) {
+				// redirectToOrganization throws a redirect
+				throw e;
+			}
+
+			// Fallback navigation if no redirect thrown
+			await navigate({ to: from ?? "/", search: true });
+		} catch (e) {
+			// Re-throw redirect errors from TanStack Router
+			if (e && typeof e === "object" && "to" in e) {
+				throw e;
+			}
+			setError("An unexpected error occurred");
+			setIsLoading(false);
 		}
-	}, [user, navigate]);
+	};
+
+	const handleGoogleSignIn = async () => {
+		setError(null);
+		setIsGoogleLoading(true);
+
+		try {
+			await authClient.signIn.social({
+				provider: "google",
+				callbackURL: from ?? "/",
+			});
+		} catch {
+			setError("Failed to initiate Google sign-in");
+			setIsGoogleLoading(false);
+		}
+	};
 
 	return (
 		<motion.div
@@ -42,433 +87,99 @@ export function Login() {
 			animate={{ opacity: 1, y: 0 }}
 			exit={{ opacity: 0, y: 10 }}
 		>
-			<SignIn.Root routing="virtual" path="/login">
-				<Clerk.Loading>
-					{(isGlobalLoading) => (
-						<>
-							<SignIn.Step name="start">
-								<Card className="w-full sm:w-96">
-									<CardHeader>
-										<CardTitle>Welcome!</CardTitle>
-										<CardDescription>
-											Enter your email below to login to
-											your account.
-										</CardDescription>
-									</CardHeader>
-									<CardContent className="grid gap-y-4">
-										<div className="grid grid-cols-1 gap-x-4">
-											{/* <Clerk.Connection
-												name="github"
-												asChild
-											>
-												<Button
-													variant="outline"
-													type="button"
-													disabled={isGlobalLoading}
-												>
-													<Clerk.Loading scope="provider:github">
-														{(isLoading) =>
-															isLoading ? (
-																<Icon
-																	icon={
-																		faSpinnerThird
-																	}
-																	className="size-4 animate-spin"
-																/>
-															) : (
-																<>
-																	<Icon
-																		icon={
-																			faGithub
-																		}
-																		className="mr-2 size-4"
-																	/>
-																	GitHub
-																</>
-															)
-														}
-													</Clerk.Loading>
-													{clerk.client
-														.lastAuthenticationStrategy ===
-													"oauth_github" ? (
-														<Badge className="ml-2 absolute -top-1/2 -right-4 text-xs">
-															Last used
-														</Badge>
-													) : null}
-												</Button>
-											</Clerk.Connection> */}
-											<Clerk.Connection
-												name="google"
-												asChild
-											>
-												<Button
-													variant="outline"
-													type="button"
-													disabled={isGlobalLoading}
-												>
-													<Clerk.Loading scope="provider:google">
-														{(isLoading) =>
-															isLoading ? (
-																<Icon
-																	icon={
-																		faSpinnerThird
-																	}
-																	className="size-4 animate-spin"
-																/>
-															) : (
-																<>
-																	<Icon
-																		icon={
-																			faGoogle
-																		}
-																		className="mr-2 size-4"
-																	/>
-																	Google
-																</>
-															)
-														}
-													</Clerk.Loading>
-													{clerk.client
-														.lastAuthenticationStrategy ===
-													"oauth_google" ? (
-														<Badge className="ml-2 absolute -top-1/2 -right-4 text-xs">
-															Last used
-														</Badge>
-													) : null}
-												</Button>
-											</Clerk.Connection>
-										</div>
-										<p className="flex items-center gap-x-3 text-sm text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
-											or
-										</p>
-										<Clerk.Field
-											name="identifier"
-											className="space-y-2"
-										>
-											<Clerk.Label asChild>
-												<Label>Email address</Label>
-											</Clerk.Label>
-											<Clerk.Input
-												type="email"
-												required
-												asChild
-												placeholder="you@company.com"
-											>
-												<Input />
-											</Clerk.Input>
-											<Clerk.FieldError className="block text-sm text-destructive" />
-										</Clerk.Field>
-									</CardContent>
-									<CardFooter>
-										<div className="grid w-full gap-y-4">
-											<SignIn.Action submit asChild>
-												<Button
-													disabled={isGlobalLoading}
-												>
-													<Clerk.Loading>
-														{(isLoading) => {
-															return isLoading ? (
-																<Icon
-																	icon={
-																		faSpinnerThird
-																	}
-																	className="size-4 animate-spin"
-																/>
-															) : (
-																"Continue"
-															);
-														}}
-													</Clerk.Loading>
-												</Button>
-											</SignIn.Action>
-
-											<Button
-												variant="link"
-												className="text-primary-foreground"
-												size="sm"
-												asChild
-											>
-												<Link to="/join">
-													Don&apos;t have an account?
-													Sign up
-												</Link>
-											</Button>
-										</div>
-									</CardFooter>
-								</Card>
-							</SignIn.Step>
-
-							<SignIn.Step name="choose-strategy">
-								<Card className="w-full sm:w-96">
-									<CardHeader>
-										<CardTitle>
-											Use another method
-										</CardTitle>
-										<CardDescription>
-											Facing issues? You can use any of
-											these methods to sign in.
-										</CardDescription>
-									</CardHeader>
-									<CardContent className="grid gap-y-4">
-										<SignIn.SupportedStrategy
-											name="email_code"
-											asChild
-										>
-											<Button
-												type="button"
-												variant="link"
-												className="text-primary-foreground"
-												disabled={isGlobalLoading}
-											>
-												Email code
-											</Button>
-										</SignIn.SupportedStrategy>
-										<SignIn.SupportedStrategy
-											name="password"
-											asChild
-										>
-											<Button
-												type="button"
-												variant="link"
-												className="text-primary-foreground"
-												disabled={isGlobalLoading}
-											>
-												Password
-											</Button>
-										</SignIn.SupportedStrategy>
-									</CardContent>
-									<CardFooter>
-										<div className="grid w-full gap-y-4">
-											<SignIn.Action
-												navigate="previous"
-												asChild
-											>
-												<Button
-													disabled={isGlobalLoading}
-												>
-													<Clerk.Loading>
-														{(isLoading) => {
-															return isLoading ? (
-																<Icon
-																	icon={
-																		faSpinnerThird
-																	}
-																	className="size-4 animate-spin"
-																/>
-															) : (
-																"Go back"
-															);
-														}}
-													</Clerk.Loading>
-												</Button>
-											</SignIn.Action>
-										</div>
-									</CardFooter>
-								</Card>
-							</SignIn.Step>
-
-							<SignIn.Step name="verifications">
-								<SignIn.Strategy name="password">
-									<Card className="w-full sm:w-96">
-										<CardHeader>
-											<CardTitle>
-												Enter your password
-											</CardTitle>
-											<p className="text-sm text-muted-foreground">
-												Welcome back{" "}
-												<SignIn.SafeIdentifier />
-											</p>
-										</CardHeader>
-										<CardContent className="grid gap-y-4">
-											<Clerk.Field
-												name="password"
-												className="space-y-2"
-											>
-												<Clerk.Label asChild>
-													<Label>Password</Label>
-												</Clerk.Label>
-												<Clerk.Input
-													type="password"
-													asChild
-													placeholder="Your password"
-												>
-													<Input
-														type="password"
-														name="password"
-														autoComplete="current-password"
-													/>
-												</Clerk.Input>
-												<Clerk.FieldError className="block text-sm text-destructive" />
-											</Clerk.Field>
-										</CardContent>
-										<CardFooter>
-											<div className="grid w-full gap-y-4">
-												<SignIn.Action submit asChild>
-													<Button
-														disabled={
-															isGlobalLoading
-														}
-													>
-														<Clerk.Loading>
-															{(isLoading) => {
-																return isLoading ? (
-																	<Icon
-																		icon={
-																			faSpinnerThird
-																		}
-																		className="size-4 animate-spin"
-																	/>
-																) : (
-																	"Continue"
-																);
-															}}
-														</Clerk.Loading>
-													</Button>
-												</SignIn.Action>
-												<SignIn.Action
-													navigate="choose-strategy"
-													asChild
-												>
-													<Button
-														type="button"
-														size="sm"
-														variant="link"
-														className="text-primary-foreground"
-													>
-														Use another method
-													</Button>
-												</SignIn.Action>
-											</div>
-										</CardFooter>
-									</Card>
-								</SignIn.Strategy>
-
-								<SignIn.Strategy name="email_code">
-									<Card className="w-full sm:w-96">
-										<CardHeader>
-											<CardTitle>
-												Check your email
-											</CardTitle>
-											<CardDescription>
-												Enter the verification code sent
-												to your email
-											</CardDescription>
-											<p className="text-sm text-muted-foreground">
-												Welcome back{" "}
-												<SignIn.SafeIdentifier />
-											</p>
-										</CardHeader>
-										<CardContent className="grid gap-y-4">
-											<Clerk.Field name="code">
-												<Clerk.Label className="sr-only">
-													Email verification code
-												</Clerk.Label>
-												<div className="grid gap-y-2 items-center justify-center">
-													<div className="flex justify-center text-center">
-														<Clerk.Input
-															type="otp"
-															autoSubmit
-															className="flex justify-center has-[:disabled]:opacity-50"
-															render={({
-																value,
-																status,
-															}) => {
-																return (
-																	<div
-																		data-status={
-																			status
-																		}
-																		className="relative flex h-9 w-9 items-center justify-center border-y border-r border-input text-sm shadow-sm transition-all first:rounded-l-md first:border-l last:rounded-r-md data-[status=selected]:ring-1 data-[status=selected]:ring-ring data-[status=cursor]:ring-1 data-[status=cursor]:ring-ring"
-																	>
-																		{value}
-																	</div>
-																);
-															}}
-														/>
-													</div>
-													<Clerk.FieldError className="block text-sm text-destructive text-center" />
-													<SignIn.Action
-														asChild
-														resend
-														className="text-muted-foreground"
-														fallback={({
-															resendableAfter,
-														}) => (
-															<Button
-																variant="link"
-																size="sm"
-																disabled
-																className="text-muted-foreground"
-															>
-																Didn&apos;t
-																receive a code?
-																Resend (
-																<span className="tabular-nums">
-																	{
-																		resendableAfter
-																	}
-																</span>
-																)
-															</Button>
-														)}
-													>
-														<Button
-															variant="link"
-															size="sm"
-															className="text-primary-foreground"
-														>
-															Didn&apos;t receive
-															a code? Resend
-														</Button>
-													</SignIn.Action>
-												</div>
-											</Clerk.Field>
-										</CardContent>
-										<CardFooter>
-											<div className="grid w-full gap-y-4">
-												<SignIn.Action submit asChild>
-													<Button
-														disabled={
-															isGlobalLoading
-														}
-													>
-														<Clerk.Loading>
-															{(isLoading) => {
-																return isLoading ? (
-																	<Icon
-																		icon={
-																			faSpinnerThird
-																		}
-																		className="size-4 animate-spin"
-																	/>
-																) : (
-																	"Continue"
-																);
-															}}
-														</Clerk.Loading>
-													</Button>
-												</SignIn.Action>
-												<SignIn.Action
-													navigate="choose-strategy"
-													asChild
-												>
-													<Button
-														size="sm"
-														variant="link"
-														className="text-primary-foreground"
-													>
-														Use another method
-													</Button>
-												</SignIn.Action>
-											</div>
-										</CardFooter>
-									</Card>
-								</SignIn.Strategy>
-							</SignIn.Step>
-						</>
-					)}
-				</Clerk.Loading>
-			</SignIn.Root>
+			<Card className="w-full sm:w-96">
+				<CardHeader>
+					<CardTitle>Welcome!</CardTitle>
+					<CardDescription>
+						Enter your email below to login to your account.
+					</CardDescription>
+				</CardHeader>
+				<form onSubmit={handleSubmit}>
+					<CardContent className="grid gap-y-4">
+						<div className="grid grid-cols-1 gap-x-4">
+							<Button
+								variant="outline"
+								type="button"
+								disabled={isGoogleLoading || isLoading}
+								onClick={handleGoogleSignIn}
+							>
+								{isGoogleLoading ? (
+									<Icon
+										icon={faSpinnerThird}
+										className="size-4 animate-spin"
+									/>
+								) : (
+									<>
+										<Icon
+											icon={faGoogle}
+											className="mr-2 size-4"
+										/>
+										Google
+									</>
+								)}
+							</Button>
+						</div>
+						<p className="flex items-center gap-x-3 text-sm text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
+							or
+						</p>
+						<div className="space-y-2">
+							<Label htmlFor="email">Email address</Label>
+							<Input
+								id="email"
+								type="email"
+								required
+								placeholder="you@company.com"
+								value={email}
+								onChange={(e) => setEmail(e.target.value)}
+								disabled={isLoading}
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="password">Password</Label>
+							<Input
+								id="password"
+								type="password"
+								required
+								placeholder="Your password"
+								autoComplete="current-password"
+								value={password}
+								onChange={(e) => setPassword(e.target.value)}
+								disabled={isLoading}
+							/>
+						</div>
+						{error ? (
+							<p className="text-sm text-destructive">{error}</p>
+						) : null}
+					</CardContent>
+					<CardFooter>
+						<div className="grid w-full gap-y-4">
+							<Button
+								type="submit"
+								disabled={isLoading || isGoogleLoading}
+							>
+								{isLoading ? (
+									<Icon
+										icon={faSpinnerThird}
+										className="size-4 animate-spin"
+									/>
+								) : (
+									"Sign in"
+								)}
+							</Button>
+							<Button
+								variant="link"
+								className="text-primary-foreground"
+								size="sm"
+								asChild
+							>
+								<Link to="/join">
+									Don&apos;t have an account? Sign up
+								</Link>
+							</Button>
+						</div>
+					</CardFooter>
+				</form>
+			</Card>
 		</motion.div>
 	);
 }

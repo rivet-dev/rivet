@@ -1,14 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Login } from "@/app/login";
 import { Logo } from "@/app/logo";
-import { redirectToOrganization } from "@/lib/auth";
-import { waitForClerk } from "@/lib/waitForClerk";
+import { authClient, redirectToOrganization } from "@/lib/auth";
 
 export const Route = createFileRoute("/login")({
 	component: RouteComponent,
-	beforeLoad: async ({ context, search }) => {
-		await waitForClerk(context.clerk);
-		await redirectToOrganization(context.clerk, search);
+	beforeLoad: async ({ search }) => {
+		const session = await authClient.getSession();
+		if (session.data) {
+			await redirectToOrganization(search as Record<string, string>);
+		}
 	},
 });
 

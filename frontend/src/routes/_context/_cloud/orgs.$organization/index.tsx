@@ -8,9 +8,6 @@ export const Route = createFileRoute("/_context/_cloud/orgs/$organization/")({
 	loader: async ({ context, params }) => {
 		return match(context)
 			.with({ __type: "cloud" }, async () => {
-				if (!context.clerk?.organization) {
-					return;
-				}
 				const result = await context.queryClient.fetchInfiniteQuery(
 					context.dataProvider.currentOrgProjectsQueryOptions(),
 				);

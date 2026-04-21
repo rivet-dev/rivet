@@ -10,9 +10,6 @@ export const Route = createFileRoute(
 	beforeLoad: ({ context, params, search }) => {
 		return match(__APP_TYPE__)
 			.with("cloud", async () => {
-				if (!context.clerk?.organization) {
-					throw notFound();
-				}
 				const result = await context.queryClient.fetchInfiniteQuery(
 					context.dataProvider.currentProjectNamespacesQueryOptions(),
 				);

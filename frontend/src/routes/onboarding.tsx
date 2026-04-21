@@ -1,14 +1,17 @@
-import { createFileRoute, notFound, Outlet } from "@tanstack/react-router";
-import { waitForClerk } from "@/lib/waitForClerk";
+import { createFileRoute, notFound, Outlet, redirect } from "@tanstack/react-router";
+import { authClient } from "@/lib/auth";
 
 export const Route = createFileRoute("/onboarding")({
 	component: RouteComponent,
-	beforeLoad: async (route) => {
+	beforeLoad: async () => {
 		if (__APP_TYPE__ !== "cloud") {
 			throw notFound();
 		}
 
-		await waitForClerk(route.context.clerk);
+		const session = await authClient.getSession();
+		if (!session.data) {
+			throw redirect({ to: "/login" });
+		}
 	},
 });
 

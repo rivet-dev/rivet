@@ -27,7 +27,6 @@ export const cloudEnvSchema = commonEnvSchema.merge(
 	z.object({
 		// Cloud API endpoint - direct URL without transformation, used for cloud-specific operations
 		VITE_APP_CLOUD_API_URL: z.string().url(),
-		VITE_APP_CLERK_PUBLISHABLE_KEY: z.string(),
 		VITE_APP_SENTRY_TUNNEL: z.string().optional(),
 	}),
 );

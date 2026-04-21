@@ -1,4 +1,3 @@
-import type { Clerk } from "@clerk/clerk-js";
 import { type Rivet, RivetClient } from "@rivet-gg/cloud";
 import { fetcher } from "@rivetkit/engine-api-full/core";
 import {
@@ -8,7 +7,7 @@ import {
 	queryOptions,
 	type UseQueryOptions,
 } from "@tanstack/react-query";
-import { clerk } from "@/lib/auth";
+import { authClient } from "@/lib/auth";
 import { cloudEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 import { RECORDS_PER_PAGE } from "./default-data-provider";
@@ -20,13 +19,11 @@ import {
 } from "./engine-data-provider";
 import { no404Retry } from "./utilities";
 
-function createClient({ clerk }: { clerk: Clerk }) {
+function createClient() {
 	return new RivetClient({
 		baseUrl: () => cloudEnv().VITE_APP_CLOUD_API_URL,
 		environment: "",
-		token: async () => {
-			return (await clerk.session?.getToken()) || "";
-		},
+		token: async () => "",
 		// @ts-expect-error
 		fetcher: async (args) => {
 			Object.keys(args.headers || {}).forEach((key) => {
@@ -39,21 +36,26 @@ function createClient({ clerk }: { clerk: Clerk }) {
 				{
 					...args,
 					maxRetries: 1,
+					withCredentials: true,
 				},
 			);
 		},
 	});
 }
 
-export const createGlobalContext = ({ clerk }: { clerk: Clerk }) => {
-	const client = createClient({ clerk });
+export const createGlobalContext = () => {
+	const client = createClient();
 	return {
 		client,
 		organizationQueryOptions(opts: { org: string }) {
 			return queryOptions({
 				queryKey: ["organization", opts.org],
 				queryFn: async () => {
-					return clerk.getOrganization(opts.org);
+					const result =
+						await authClient.organization.getFullOrganization({
+							query: { organizationId: opts.org },
+						});
+					return result.data;
 				},
 			});
 		},
@@ -358,28 +360,15 @@ export const createOrganizationContext = ({
 	};
 
 	const organizationsQueryOptions = () =>
-		infiniteQueryOptions({
+		queryOptions({
 			queryKey: ["organizations"],
-			initialPageParam: undefined as number | undefined,
-			queryFn: async ({ pageParam }) => {
-				if (!clerk.user) {
-					throw new Error("No user logged in");
+			queryFn: async () => {
+				const result = await authClient.organization.list();
+				if (!result.data) {
+					throw new Error("Failed to list organizations");
 				}
-				return clerk.user.getOrganizationMemberships({
-					initialPage: pageParam,
-					pageSize: RECORDS_PER_PAGE,
-				});
+				return result.data;
 			},
-			getNextPageParam: (lastPage, allPages) => {
-				if (lastPage.data.length < RECORDS_PER_PAGE) {
-					return undefined;
-				}
-				return allPages.reduce(
-					(prev, cur) => prev + cur.data.length,
-					0,
-				);
-			},
-			select: (data) => data.pages.flatMap((page) => page.data),
 		});
 
 	const createProjectMutationOptions = () =>

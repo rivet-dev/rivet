@@ -1,64 +1,49 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Content } from "@/app/layout";
 import { RouteLayout } from "@/app/route-layout";
+import { authClient } from "@/lib/auth";
 
 export const Route = createFileRoute("/onboarding/choose-organization")({
 	component: RouteComponent,
-	beforeLoad: async ({ context }) => {
-		const RELOAD_KEY = "clerk-session-reload-count";
-
-		// After SSO, there's a race condition where Clerk redirects here before
-		// the session is fully established. If we detect this (user exists from
-		// API perspective but no local session), reload to let Clerk sync state.
-		if (!context.clerk.session) {
-			const MAX_RELOADS = 3;
-			const reloadCount = Number(
-				sessionStorage.getItem(RELOAD_KEY) || "0",
-			);
-
-			if (reloadCount < MAX_RELOADS) {
-				console.log(
-					`[choose-organization] No session yet, reloading page to sync Clerk state (attempt ${reloadCount + 1}/${MAX_RELOADS})`,
-				);
-				sessionStorage.setItem(RELOAD_KEY, String(reloadCount + 1));
-				window.location.reload();
-				// Return a never-resolving promise to prevent further execution
-				return new Promise(() => {});
-			}
-
-			// Max reloads reached, clear counter and show error
-			sessionStorage.removeItem(RELOAD_KEY);
-			console.error(
-				"[choose-organization] No session after max reload attempts",
-			);
-			throw new Error(
-				"Unable to establish session. Please try signing in again.",
-			);
+	beforeLoad: async () => {
+		const session = await authClient.getSession();
+		if (!session.data) {
+			throw redirect({ to: "/login" });
 		}
 
-		// Clear reload counter on success
-		sessionStorage.removeItem(RELOAD_KEY);
+		const orgs = await authClient.organization.list();
 
-		if (context.clerk.organization) {
+		if (orgs.data && orgs.data.length > 0) {
+			await authClient.organization.setActive({
+				organizationId: orgs.data[0].id,
+			});
 			throw redirect({
 				to: "/orgs/$organization",
-				params: { organization: context.clerk.organization.id },
+				params: { organization: orgs.data[0].id },
 				search: true,
 			});
 		}
 
-		const org = await context.clerk.createOrganization({
-			name: `${context.clerk.user?.firstName || context.clerk.user?.primaryEmailAddress?.emailAddress.split("@")[0] || "Anonymous"}'s Organization`,
-		});
+		// No orgs — auto-create a default org
+		const user = session.data.user;
+		const name = `${user.name || user.email.split("@")[0] || "Anonymous"}'s Organization`;
+		const slug = `${name.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")}-${Math.random().toString(36).substring(2, 6)}`;
 
-		await context.clerk.setActive({ organization: org.id });
-		await context.clerk.session?.reload();
+		const newOrg = await authClient.organization.create({ name, slug });
 
-		throw redirect({
-			to: "/orgs/$organization",
-			params: { organization: org.id },
-			search: true,
-		});
+		if (newOrg.data) {
+			await authClient.organization.setActive({
+				organizationId: newOrg.data.id,
+			});
+			throw redirect({
+				to: "/orgs/$organization",
+				params: { organization: newOrg.data.id },
+				search: true,
+			});
+		}
+
+		// Fallback — should not happen
+		throw redirect({ to: "/login" });
 	},
 });
 

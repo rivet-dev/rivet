@@ -1,6 +1,5 @@
 import type { RivetSse } from "@rivet-gg/cloud";
 import { startTransition, useEffect, useRef, useState } from "react";
-import { clerk } from "@/lib/auth";
 import { cloudEnv } from "@/lib/env";
 
 // Lazy-load RivetSse at runtime. The @rivet-gg/cloud package may not export
@@ -38,6 +37,89 @@ async function sleep(ms: number, signal: AbortSignal) {
 	});
 }
 
+function parseSseEvent(raw: string): RivetSse.LogStreamEvent | null {
+	let eventType = "message";
+	let data = "";
+	for (const line of raw.split("\n")) {
+		if (line.startsWith("event:")) eventType = line.slice(6).trim();
+		else if (line.startsWith("data:")) data = line.slice(5).trim();
+	}
+	if (!data) return null;
+	try {
+		const parsed = JSON.parse(data);
+		if (eventType === "log") return { event: "log", data: parsed };
+		if (eventType === "error") return { event: "error", data: parsed };
+		if (eventType === "end") return { event: "end", data: parsed };
+		if (eventType === "connected")
+			return { event: "connected", data: parsed };
+	} catch {
+		// ignore malformed events
+	}
+	return null;
+}
+
+async function* streamLogsWithCredentials(
+	baseUrl: string,
+	project: string,
+	namespace: string,
+	pool: string,
+	request: {
+		region?: string;
+		contains?: string;
+		abortSignal?: AbortSignal;
+	},
+): AsyncGenerator<RivetSse.LogStreamEvent> {
+	const params = new URLSearchParams();
+	if (request.region) params.set("region", request.region);
+	if (request.contains) params.set("contains", request.contains);
+	const qs = params.toString();
+	const url = `${baseUrl}/projects/${encodeURIComponent(project)}/namespaces/${encodeURIComponent(namespace)}/managed-pools/${encodeURIComponent(pool)}/logs${qs ? `?${qs}` : ""}`;
+
+	const response = await fetch(url, {
+		method: "GET",
+		headers: {
+			Accept: "text/event-stream",
+			"Cache-Control": "no-cache",
+		},
+		credentials: "include",
+		signal: request.abortSignal,
+	});
+
+	if (!response.ok) {
+		const body = await response.text();
+		throw new Error(
+			`streamLogs request failed with status ${response.status}: ${body}`,
+		);
+	}
+	if (!response.body) throw new Error("streamLogs: response body is null");
+
+	const reader = response.body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = "";
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true });
+			const parts = buffer.split("\n\n");
+			buffer = parts.pop() ?? "";
+			for (const part of parts) {
+				const event = parseSseEvent(part);
+				if (event != null) {
+					yield event;
+					if (event.event === "end") return;
+				}
+			}
+		}
+		if (buffer.trim()) {
+			const event = parseSseEvent(buffer);
+			if (event != null) yield event;
+		}
+	} finally {
+		reader.releaseLock();
+	}
+}
+
 async function streamWithRetry(
 	project: string,
 	namespace: string,
@@ -48,12 +130,6 @@ async function streamWithRetry(
 	onConnected: () => void,
 	onEntry: (entry: RivetSse.LogStreamEvent.Log) => void,
 ): Promise<"exhausted" | "ended" | "aborted" | { error: string }> {
-	const options = {
-		baseUrl: cloudEnv().VITE_APP_CLOUD_API_URL,
-		environment: "",
-		token: async () => (await clerk.session?.getToken()) || "",
-	};
-
 	for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
 		if (signal.aborted) return "aborted";
 
