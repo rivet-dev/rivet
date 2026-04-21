@@ -51,7 +51,7 @@ async fn list_names_inner(ctx: ApiCtx, query: ListNamesQuery) -> Result<ListName
 	// Fanout to all datacenters
 	let mut all_names =
 		fanout_to_datacenters::<ListNamesResponse, _, _, _, _, IndexMap<String, ActorName>>(
-			ctx.into(),
+			&ctx,
 			"/actors/names",
 			peer_query,
 			|ctx, query| async move {

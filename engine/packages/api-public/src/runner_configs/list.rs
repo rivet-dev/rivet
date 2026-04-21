@@ -66,7 +66,7 @@ async fn list_inner(ctx: ApiCtx, path: ListPath, query: ListQuery) -> Result<Lis
 		_,
 		HashMap<String, RunnerConfigDatacenters>,
 	>(
-		ctx.clone().into(),
+		&ctx,
 		"/runner-configs",
 		query.clone(),
 		move |ctx, query| {
