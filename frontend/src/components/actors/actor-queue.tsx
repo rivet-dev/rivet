@@ -23,7 +23,7 @@ export function ActorQueue({ actorId }: { actorId: ActorId }) {
 
 	if (queueStatusQuery.isLoading) {
 		return (
-			<div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+			<div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-4">
 				<Icon icon={faSpinnerThird} className="animate-spin mr-2" />
 				Loading queue...
 			</div>
@@ -32,7 +32,7 @@ export function ActorQueue({ actorId }: { actorId: ActorId }) {
 
 	if (queueStatusQuery.isError || !queueStatusQuery.data) {
 		return (
-			<div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+			<div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-4">
 				Queue data is currently unavailable.
 			</div>
 		);

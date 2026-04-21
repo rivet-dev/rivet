@@ -148,6 +148,7 @@ function UnavailableInfo({
 
 					<HelpDropdown>
 						<Button
+							size="sm"
 							variant="outline"
 							startIcon={<Icon icon={faQuestionCircle} />}
 						>
@@ -218,6 +219,7 @@ function CrashLoopActor({ actorId }: { actorId: ActorId }) {
 				{!rescheduleInFuture && <WakeUpActorButton actorId={actorId} />}
 				<HelpDropdown>
 					<Button
+						size="sm"
 						variant="outline"
 						startIcon={<Icon icon={faQuestionCircle} />}
 					>

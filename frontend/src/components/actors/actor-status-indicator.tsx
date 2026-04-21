@@ -9,6 +9,7 @@ export const QueriedActorStatusIndicator = ({
 	actorId,
 	...props
 }: {
+	showOnlyFatal?: boolean;
 	actorId: ActorId;
 } & ComponentPropsWithRef<"span">) => {
 	const { data: status = "unknown", isError } = useQuery(
