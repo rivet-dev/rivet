@@ -206,6 +206,7 @@ async fn main() -> Result<()> {
 					txid: stage.txid,
 					new_db_size_pages: total_pages,
 					now_ms: 300,
+					origin_override: None,
 				},
 			)
 			.await

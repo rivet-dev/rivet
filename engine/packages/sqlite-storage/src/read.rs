@@ -14,7 +14,7 @@ use crate::keys::{
 };
 use crate::ltx::{DecodedLtx, decode_ltx_v3};
 use crate::page_index::DeltaPageIndex;
-use crate::types::{DBHead, FetchedPage};
+use crate::types::{DBHead, FetchedPage, decode_db_head};
 use crate::udb;
 
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
@@ -346,10 +346,6 @@ struct GetPagesTxResult {
 	stale_pidx_pgnos: BTreeSet<u32>,
 }
 
-fn decode_db_head(bytes: &[u8]) -> Result<DBHead> {
-	serde_bare::from_slice(bytes).context("decode sqlite db head")
-}
-
 async fn load_delta_history_blobs(
 	engine: &SqliteEngine,
 	actor_id: &str,
@@ -466,7 +462,7 @@ mod tests {
 	use crate::test_utils::{assert_op_count, clear_op_count, read_value, test_db};
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE,
-		SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION,
+		SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin,
 	};
 	use crate::udb::{WriteOp, apply_write_ops};
 
@@ -485,6 +481,7 @@ mod tests {
 			creation_ts_ms: 123,
 			sqlite_storage_used: 0,
 			sqlite_max_storage: SQLITE_DEFAULT_MAX_STORAGE_BYTES,
+			origin: SqliteOrigin::Native,
 		}
 	}
 

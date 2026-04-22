@@ -1,6 +1,7 @@
 //! Key builders for sqlite-storage blobs and indexes.
 
 use anyhow::{Context, Result, ensure};
+use universaldb::utils::end_of_key_range;
 
 pub const SQLITE_SUBSPACE_PREFIX: u8 = 0x02;
 
@@ -16,6 +17,12 @@ pub(crate) fn actor_prefix(actor_id: &str) -> Vec<u8> {
 	key.push(SQLITE_SUBSPACE_PREFIX);
 	key.extend_from_slice(actor_bytes);
 	key
+}
+
+pub fn actor_range(actor_id: &str) -> (Vec<u8>, Vec<u8>) {
+	let start = actor_prefix(actor_id);
+	let end = end_of_key_range(&start);
+	(start, end)
 }
 
 pub fn meta_key(actor_id: &str) -> Vec<u8> {

@@ -1,5 +1,6 @@
 //! Core storage types for the SQLite VFS v2 engine implementation.
 
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 pub const SQLITE_VFS_V2_SCHEMA_VERSION: u32 = 2;
@@ -21,6 +22,13 @@ pub const SQLITE_DEFAULT_MAX_STORAGE_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 /// - `generation` is bumped by takeover. Every commit and compaction writes a fence check on
 ///   `generation` so a takeover cleanly invalidates an in-flight commit from the previous owner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SqliteOrigin {
+	Native,
+	MigratedFromV1,
+	MigratingFromV1,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DBHead {
 	pub schema_version: u32,
 	pub generation: u64,
@@ -33,6 +41,7 @@ pub struct DBHead {
 	pub creation_ts_ms: i64,
 	pub sqlite_storage_used: u64,
 	pub sqlite_max_storage: u64,
+	pub origin: SqliteOrigin,
 }
 
 impl DBHead {
@@ -49,6 +58,7 @@ impl DBHead {
 			creation_ts_ms,
 			sqlite_storage_used: 0,
 			sqlite_max_storage: SQLITE_DEFAULT_MAX_STORAGE_BYTES,
+			origin: SqliteOrigin::Native,
 		}
 	}
 }
@@ -77,6 +87,8 @@ pub struct SqliteMeta {
 	pub max_delta_bytes: u64,
 	pub sqlite_storage_used: u64,
 	pub sqlite_max_storage: u64,
+	pub migrated_from_v1: bool,
+	pub origin: SqliteOrigin,
 }
 
 impl From<(DBHead, u64)> for SqliteMeta {
@@ -92,6 +104,48 @@ impl From<(DBHead, u64)> for SqliteMeta {
 			max_delta_bytes,
 			sqlite_storage_used: head.sqlite_storage_used,
 			sqlite_max_storage: head.sqlite_max_storage,
+			migrated_from_v1: matches!(head.origin, SqliteOrigin::MigratedFromV1),
+			origin: head.origin,
+		}
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct LegacyDBHead {
+	schema_version: u32,
+	generation: u64,
+	head_txid: u64,
+	next_txid: u64,
+	materialized_txid: u64,
+	db_size_pages: u32,
+	page_size: u32,
+	shard_size: u32,
+	creation_ts_ms: i64,
+	sqlite_storage_used: u64,
+	sqlite_max_storage: u64,
+}
+
+pub fn decode_db_head(bytes: &[u8]) -> Result<DBHead> {
+	match serde_bare::from_slice(bytes) {
+		Ok(head) => Ok(head),
+		Err(err) => {
+			let legacy: LegacyDBHead =
+				serde_bare::from_slice(bytes).context("decode sqlite db head")?;
+			tracing::debug!(?err, "decoded legacy sqlite db head without origin field");
+			Ok(DBHead {
+				schema_version: legacy.schema_version,
+				generation: legacy.generation,
+				head_txid: legacy.head_txid,
+				next_txid: legacy.next_txid,
+				materialized_txid: legacy.materialized_txid,
+				db_size_pages: legacy.db_size_pages,
+				page_size: legacy.page_size,
+				shard_size: legacy.shard_size,
+				creation_ts_ms: legacy.creation_ts_ms,
+				sqlite_storage_used: legacy.sqlite_storage_used,
+				sqlite_max_storage: legacy.sqlite_max_storage,
+				origin: SqliteOrigin::Native,
+			})
 		}
 	}
 }
@@ -101,6 +155,7 @@ mod tests {
 	use super::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_MAX_DELTA_BYTES,
 		SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteMeta,
+		SqliteOrigin, decode_db_head,
 	};
 
 	#[test]
@@ -118,6 +173,7 @@ mod tests {
 		assert_eq!(head.creation_ts_ms, 1_713_456_789_000);
 		assert_eq!(head.sqlite_storage_used, 0);
 		assert_eq!(head.sqlite_max_storage, SQLITE_DEFAULT_MAX_STORAGE_BYTES);
+		assert_eq!(head.origin, SqliteOrigin::Native);
 	}
 
 	#[test]
@@ -134,6 +190,7 @@ mod tests {
 			creation_ts_ms: 1_713_456_789_000,
 			sqlite_storage_used: 8_192,
 			sqlite_max_storage: SQLITE_DEFAULT_MAX_STORAGE_BYTES,
+			origin: SqliteOrigin::MigratedFromV1,
 		};
 
 		let encoded = serde_bare::to_vec(&head).expect("db head should serialize");
@@ -157,6 +214,7 @@ mod tests {
 				creation_ts_ms: 456,
 				sqlite_storage_used: 16_384,
 				sqlite_max_storage: SQLITE_DEFAULT_MAX_STORAGE_BYTES / 2,
+				origin: SqliteOrigin::MigratedFromV1,
 			},
 			SQLITE_MAX_DELTA_BYTES,
 		));
@@ -174,8 +232,33 @@ mod tests {
 				max_delta_bytes: SQLITE_MAX_DELTA_BYTES,
 				sqlite_storage_used: 16_384,
 				sqlite_max_storage: SQLITE_DEFAULT_MAX_STORAGE_BYTES / 2,
+				migrated_from_v1: true,
+				origin: SqliteOrigin::MigratedFromV1,
 			}
 		);
+	}
+
+	#[test]
+	fn decode_db_head_defaults_legacy_rows_to_native_origin() {
+		let legacy = (
+			SQLITE_VFS_V2_SCHEMA_VERSION,
+			7_u64,
+			9_u64,
+			10_u64,
+			5_u64,
+			321_u32,
+			SQLITE_PAGE_SIZE,
+			SQLITE_SHARD_SIZE,
+			1_713_456_789_000_i64,
+			8_192_u64,
+			SQLITE_DEFAULT_MAX_STORAGE_BYTES,
+		);
+		let encoded = serde_bare::to_vec(&legacy).expect("legacy head should serialize");
+		let decoded = decode_db_head(&encoded).expect("legacy head should decode");
+
+		assert_eq!(decoded.origin, SqliteOrigin::Native);
+		assert_eq!(decoded.generation, 7);
+		assert_eq!(decoded.db_size_pages, 321);
 	}
 
 	#[test]

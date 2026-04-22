@@ -30,8 +30,6 @@ pub type CanHibernateResponseMap = Arc<Mutex<HashMap<uuid::Uuid, oneshot::Sender
 
 /// Map of sqlite startup payloads keyed by actor ID.
 pub type SqliteStartupMap = Arc<SccHashMap<String, protocol::SqliteStartupData>>;
-/// Map of sqlite schema versions keyed by actor ID.
-pub type SqliteSchemaVersionMap = Arc<SccHashMap<String, u32>>;
 
 fn make_ws_key(gateway_id: &protocol::GatewayId, request_id: &protocol::RequestId) -> [u8; 8] {
 	let mut key = [0u8; 8];
@@ -47,7 +45,6 @@ pub struct BridgeCallbacks {
 	ws_sender_map: WsSenderMap,
 	can_hibernate_response_map: CanHibernateResponseMap,
 	sqlite_startup_map: SqliteStartupMap,
-	sqlite_schema_version_map: SqliteSchemaVersionMap,
 }
 
 impl BridgeCallbacks {
@@ -57,7 +54,6 @@ impl BridgeCallbacks {
 		ws_sender_map: WsSenderMap,
 		can_hibernate_response_map: CanHibernateResponseMap,
 		sqlite_startup_map: SqliteStartupMap,
-		sqlite_schema_version_map: SqliteSchemaVersionMap,
 	) -> Self {
 		Self {
 			event_cb,
@@ -65,7 +61,6 @@ impl BridgeCallbacks {
 			ws_sender_map,
 			can_hibernate_response_map,
 			sqlite_startup_map,
-			sqlite_schema_version_map,
 		}
 	}
 
@@ -89,17 +84,8 @@ impl EnvoyCallbacks for BridgeCallbacks {
 		let response_map = self.response_map.clone();
 		let event_cb = self.event_cb.clone();
 		let sqlite_startup_map = self.sqlite_startup_map.clone();
-		let sqlite_schema_version_map = self.sqlite_schema_version_map.clone();
 
 		Box::pin(async move {
-			match sqlite_schema_version_map.entry_async(actor_id.clone()).await {
-				scc::hash_map::Entry::Occupied(mut entry) => {
-					*entry.get_mut() = sqlite_schema_version;
-				}
-				scc::hash_map::Entry::Vacant(entry) => {
-					entry.insert_entry(sqlite_schema_version);
-				}
-			}
 			if let Some(startup) = sqlite_startup_data.clone() {
 				match sqlite_startup_map.entry_async(actor_id.clone()).await {
 					scc::hash_map::Entry::Occupied(mut entry) => {
@@ -156,10 +142,8 @@ impl EnvoyCallbacks for BridgeCallbacks {
 		let response_map = self.response_map.clone();
 		let event_cb = self.event_cb.clone();
 		let sqlite_startup_map = self.sqlite_startup_map.clone();
-		let sqlite_schema_version_map = self.sqlite_schema_version_map.clone();
 
 		Box::pin(async move {
-			let _ = sqlite_schema_version_map.remove_async(&actor_id).await;
 			let _ = sqlite_startup_map.remove_async(&actor_id).await;
 
 			let response_id = uuid::Uuid::new_v4().to_string();

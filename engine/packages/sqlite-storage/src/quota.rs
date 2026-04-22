@@ -63,6 +63,7 @@ mod tests {
 	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, shard_key};
 	use crate::types::{
 		DBHead, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE,
+		SqliteOrigin,
 	};
 
 	const TEST_ACTOR: &str = "test-actor";
@@ -97,6 +98,7 @@ mod tests {
 			creation_ts_ms: 123,
 			sqlite_storage_used: 0,
 			sqlite_max_storage: SQLITE_DEFAULT_MAX_STORAGE_BYTES,
+			origin: SqliteOrigin::Native,
 		};
 
 		let (encoded_head, encoded_bytes) = encode_db_head_with_usage(TEST_ACTOR, &head, 1_024)?;
