@@ -8,8 +8,7 @@
  * - Named streams keyed by stream name
  *
  * All mutations go through `createEvent` so the event log remains the source
- * of truth. This is the Postgres-World reference pattern, mapped onto Rivet
- * actor state.
+ * of truth.
  */
 
 import { actor, event } from "rivetkit";
@@ -20,10 +19,11 @@ import type {
 	EventResult,
 	EventType,
 	Hook,
-	HookStatus,
 	RunCreatedEventRequest,
 	Step,
 	StepStatus,
+	Wait,
+	WaitStatus,
 	WorkflowRun,
 	WorkflowRunStatus,
 } from "../types";
@@ -34,27 +34,26 @@ import { encodeBinary, nowMs } from "./shared";
 // ---------------------------------------------------------------------------
 
 interface PersistedRun {
-	id: string;
+	runId: string;
 	workflowName: string;
 	status: WorkflowRunStatus;
+	deploymentId: string;
 	input?: unknown;
 	output?: unknown;
 	error?: unknown;
+	executionContext?: Record<string, unknown>;
+	specVersion?: number;
 	createdAt: number;
 	updatedAt: number;
 	startedAt?: number;
-	finishedAt?: number;
-	deploymentId?: string;
-	parentRunId?: string;
-	parentStepId?: string;
-	traceCarrier?: Record<string, string>;
-	metadata?: Record<string, unknown>;
+	completedAt?: number;
+	expiredAt?: number;
 }
 
 interface PersistedStep {
-	id: string;
+	stepId: string;
 	runId: string;
-	name: string;
+	stepName: string;
 	status: StepStatus;
 	input?: unknown;
 	output?: unknown;
@@ -62,33 +61,44 @@ interface PersistedStep {
 	createdAt: number;
 	updatedAt: number;
 	startedAt?: number;
-	finishedAt?: number;
+	completedAt?: number;
+	retryAfter?: number;
 	attempt: number;
-	parentStepId?: string;
+	specVersion?: number;
 }
 
 interface PersistedHook {
-	id: string;
+	hookId: string;
 	runId: string;
 	token: string;
-	name: string;
-	status: HookStatus;
+	ownerId: string;
+	projectId: string;
+	environment: string;
+	metadata?: unknown;
+	createdAt: number;
+	specVersion?: number;
+	isWebhook?: boolean;
+}
+
+interface PersistedWait {
+	waitId: string;
+	runId: string;
+	status: WaitStatus;
+	resumeAt?: number;
+	completedAt?: number;
 	createdAt: number;
 	updatedAt: number;
-	disposedAt?: number;
-	triggeredAt?: number;
-	metadata?: Record<string, unknown>;
+	specVersion?: number;
 }
 
 interface PersistedEvent {
-	id: string;
-	type: EventType;
+	eventId: string;
+	eventType: EventType;
 	runId: string;
-	stepId?: string;
-	hookId?: string;
 	correlationId?: string;
-	data?: unknown;
+	eventData?: unknown;
 	createdAt: number;
+	specVersion?: number;
 }
 
 interface PersistedStreamChunk {
@@ -108,6 +118,7 @@ interface WorkflowRunState {
 	run?: PersistedRun;
 	steps: Record<string, PersistedStep>;
 	hooks: Record<string, PersistedHook>;
+	waits: Record<string, PersistedWait>;
 	events: PersistedEvent[];
 	idempotencyKeys: Record<string, string>;
 	streams: Record<string, PersistedStream>;
@@ -133,29 +144,28 @@ function isTerminalRunStatus(status: WorkflowRunStatus): boolean {
 
 function runToPublic(run: PersistedRun): WorkflowRun {
 	return {
-		id: run.id,
+		runId: run.runId,
 		workflowName: run.workflowName,
 		status: run.status,
+		deploymentId: run.deploymentId,
 		input: run.input,
 		output: run.output,
 		error: run.error as WorkflowRun["error"],
+		executionContext: run.executionContext,
+		specVersion: run.specVersion,
 		createdAt: new Date(run.createdAt),
 		updatedAt: new Date(run.updatedAt),
 		startedAt: run.startedAt ? new Date(run.startedAt) : undefined,
-		finishedAt: run.finishedAt ? new Date(run.finishedAt) : undefined,
-		deploymentId: run.deploymentId,
-		parentRunId: run.parentRunId,
-		parentStepId: run.parentStepId,
-		traceCarrier: run.traceCarrier,
-		metadata: run.metadata,
+		completedAt: run.completedAt ? new Date(run.completedAt) : undefined,
+		expiredAt: run.expiredAt ? new Date(run.expiredAt) : undefined,
 	};
 }
 
 function stepToPublic(step: PersistedStep): Step {
 	return {
-		id: step.id,
+		stepId: step.stepId,
 		runId: step.runId,
-		name: step.name,
+		stepName: step.stepName,
 		status: step.status,
 		input: step.input,
 		output: step.output,
@@ -163,37 +173,54 @@ function stepToPublic(step: PersistedStep): Step {
 		createdAt: new Date(step.createdAt),
 		updatedAt: new Date(step.updatedAt),
 		startedAt: step.startedAt ? new Date(step.startedAt) : undefined,
-		finishedAt: step.finishedAt ? new Date(step.finishedAt) : undefined,
+		completedAt: step.completedAt
+			? new Date(step.completedAt)
+			: undefined,
+		retryAfter: step.retryAfter ? new Date(step.retryAfter) : undefined,
 		attempt: step.attempt,
-		parentStepId: step.parentStepId,
+		specVersion: step.specVersion,
 	};
 }
 
 function hookToPublic(hook: PersistedHook): Hook {
 	return {
-		id: hook.id,
+		hookId: hook.hookId,
 		runId: hook.runId,
 		token: hook.token,
-		name: hook.name,
-		status: hook.status,
-		createdAt: new Date(hook.createdAt),
-		updatedAt: new Date(hook.updatedAt),
-		disposedAt: hook.disposedAt ? new Date(hook.disposedAt) : undefined,
-		triggeredAt: hook.triggeredAt ? new Date(hook.triggeredAt) : undefined,
+		ownerId: hook.ownerId,
+		projectId: hook.projectId,
+		environment: hook.environment,
 		metadata: hook.metadata,
+		createdAt: new Date(hook.createdAt),
+		specVersion: hook.specVersion,
+		isWebhook: hook.isWebhook,
+	};
+}
+
+function waitToPublic(wait: PersistedWait): Wait {
+	return {
+		waitId: wait.waitId,
+		runId: wait.runId,
+		status: wait.status,
+		resumeAt: wait.resumeAt ? new Date(wait.resumeAt) : undefined,
+		completedAt: wait.completedAt
+			? new Date(wait.completedAt)
+			: undefined,
+		createdAt: new Date(wait.createdAt),
+		updatedAt: new Date(wait.updatedAt),
+		specVersion: wait.specVersion,
 	};
 }
 
 function eventToPublic(e: PersistedEvent): WorldEvent {
 	return {
-		id: e.id,
-		type: e.type,
+		eventId: e.eventId,
+		eventType: e.eventType,
 		runId: e.runId,
-		stepId: e.stepId,
-		hookId: e.hookId,
 		correlationId: e.correlationId,
-		data: e.data,
+		eventData: e.eventData,
 		createdAt: new Date(e.createdAt),
+		specVersion: e.specVersion,
 	};
 }
 
@@ -211,172 +238,207 @@ function materializeEvent(args: MaterializeArgs): void {
 	const { state, event: ev, data } = args;
 	const now = ev.createdAt;
 
-	if (data.type === "run_created") {
-		if (state.run) {
-			// Idempotency: treat as no-op so replays do not clobber state.
-			return;
-		}
+	if (data.eventType === "run_created") {
+		if (state.run) return;
+		const ed = data.eventData as {
+			deploymentId: string;
+			workflowName: string;
+			input?: unknown;
+			executionContext?: Record<string, unknown>;
+		};
 		state.run = {
-			id: ev.runId,
-			workflowName: data.workflowName,
+			runId: ev.runId,
+			workflowName: ed.workflowName,
+			deploymentId: ed.deploymentId,
 			status: "pending",
-			input: data.input,
+			input: ed.input,
+			executionContext: ed.executionContext,
+			specVersion: ev.specVersion,
 			createdAt: now,
 			updatedAt: now,
-			deploymentId: data.deploymentId,
-			parentRunId: data.parentRunId,
-			parentStepId: data.parentStepId,
-			traceCarrier: data.traceCarrier,
-			metadata: data.metadata,
 		};
 		return;
 	}
 
-	if (!state.run) {
-		// Ignore events that arrive before run_created. This keeps the actor
-		// defensive; the coordinator should prevent this in practice.
-		return;
-	}
+	if (!state.run) return;
 
-	switch (data.type) {
-		case "run_started":
+	switch (data.eventType) {
+		case "run_started": {
 			state.run.status = "running";
 			state.run.startedAt ??= now;
 			state.run.updatedAt = now;
+			if (data.eventData) {
+				const ed = data.eventData as {
+					deploymentId?: string;
+					input?: unknown;
+					executionContext?: Record<string, unknown>;
+				};
+				if (ed.deploymentId) state.run.deploymentId = ed.deploymentId;
+				if (ed.input !== undefined) state.run.input = ed.input;
+				if (ed.executionContext)
+					state.run.executionContext = ed.executionContext;
+			}
 			break;
+		}
 		case "run_completed":
 			state.run.status = "completed";
-			state.run.finishedAt = now;
+			state.run.completedAt = now;
 			state.run.updatedAt = now;
-			if (data.data !== undefined) {
-				state.run.output = data.data;
+			if (data.eventData) {
+				const ed = data.eventData as { output?: unknown };
+				if (ed.output !== undefined) state.run.output = ed.output;
 			}
 			break;
 		case "run_failed":
 			state.run.status = "failed";
-			state.run.finishedAt = now;
+			state.run.completedAt = now;
 			state.run.updatedAt = now;
-			state.run.error = data.data;
+			if (data.eventData) {
+				state.run.error = data.eventData;
+			}
 			break;
 		case "run_cancelled":
 			state.run.status = "cancelled";
-			state.run.finishedAt = now;
+			state.run.completedAt = now;
 			state.run.updatedAt = now;
-			break;
-		case "run_updated":
-			state.run.updatedAt = now;
-			if (typeof data.data === "object" && data.data !== null) {
-				Object.assign(state.run, data.data);
-			}
 			break;
 		case "step_created": {
-			const stepId = data.stepId;
-			if (!stepId) break;
-			const stepData = (data.data ?? {}) as Partial<PersistedStep>;
-			state.steps[stepId] = {
-				id: stepId,
+			const corrId = data.correlationId;
+			if (!corrId) break;
+			const ed = (data.eventData ?? {}) as {
+				stepName?: string;
+				input?: unknown;
+			};
+			state.steps[corrId] = {
+				stepId: corrId,
 				runId: ev.runId,
-				name: stepData.name ?? "step",
+				stepName: ed.stepName ?? "step",
 				status: "pending",
-				input: stepData.input,
+				input: ed.input,
 				createdAt: now,
 				updatedAt: now,
 				attempt: 0,
-				parentStepId: stepData.parentStepId,
+				specVersion: ev.specVersion,
 			};
 			break;
 		}
 		case "step_started": {
-			const step = data.stepId ? state.steps[data.stepId] : undefined;
+			const step = data.correlationId
+				? state.steps[data.correlationId]
+				: undefined;
 			if (!step) break;
 			step.status = "running";
 			step.startedAt ??= now;
 			step.updatedAt = now;
-			step.attempt += 1;
+			if (data.eventData) {
+				const ed = data.eventData as { attempt?: number };
+				if (ed.attempt !== undefined) step.attempt = ed.attempt;
+			} else {
+				step.attempt += 1;
+			}
 			break;
 		}
 		case "step_completed": {
-			const step = data.stepId ? state.steps[data.stepId] : undefined;
+			const step = data.correlationId
+				? state.steps[data.correlationId]
+				: undefined;
 			if (!step) break;
 			step.status = "completed";
-			step.finishedAt = now;
+			step.completedAt = now;
 			step.updatedAt = now;
-			step.output = data.data;
+			if (data.eventData) {
+				const ed = data.eventData as { result?: unknown };
+				step.output = ed.result;
+			}
 			break;
 		}
 		case "step_failed": {
-			const step = data.stepId ? state.steps[data.stepId] : undefined;
+			const step = data.correlationId
+				? state.steps[data.correlationId]
+				: undefined;
 			if (!step) break;
 			step.status = "failed";
-			step.finishedAt = now;
+			step.completedAt = now;
 			step.updatedAt = now;
-			step.error = data.data;
-			break;
-		}
-		case "step_cancelled": {
-			const step = data.stepId ? state.steps[data.stepId] : undefined;
-			if (!step) break;
-			step.status = "cancelled";
-			step.finishedAt = now;
-			step.updatedAt = now;
+			step.error = data.eventData;
 			break;
 		}
 		case "step_retrying": {
-			const step = data.stepId ? state.steps[data.stepId] : undefined;
+			const step = data.correlationId
+				? state.steps[data.correlationId]
+				: undefined;
 			if (!step) break;
 			step.status = "pending";
 			step.updatedAt = now;
+			step.error = data.eventData;
+			if (data.eventData) {
+				const ed = data.eventData as { retryAfter?: string | number };
+				if (ed.retryAfter)
+					step.retryAfter = new Date(ed.retryAfter).getTime();
+			}
 			break;
 		}
 		case "hook_created": {
-			const hookId = data.hookId;
-			if (!hookId) break;
-			const hookData = (data.data ?? {}) as Partial<PersistedHook>;
-			state.hooks[hookId] = {
-				id: hookId,
+			const corrId = data.correlationId;
+			if (!corrId) break;
+			const ed = (data.eventData ?? {}) as {
+				token?: string;
+				metadata?: unknown;
+				isWebhook?: boolean;
+			};
+			state.hooks[corrId] = {
+				hookId: corrId,
 				runId: ev.runId,
-				token: hookData.token ?? hookId,
-				name: hookData.name ?? "hook",
-				status: "pending",
+				token: ed.token ?? corrId,
+				ownerId: "",
+				projectId: "",
+				environment: "",
+				metadata: ed.metadata,
 				createdAt: now,
-				updatedAt: now,
-				metadata: hookData.metadata,
+				specVersion: ev.specVersion,
+				isWebhook: ed.isWebhook,
 			};
 			break;
 		}
-		case "hook_triggered": {
-			const hook = data.hookId ? state.hooks[data.hookId] : undefined;
-			if (!hook) break;
-			hook.status = "triggered";
-			hook.triggeredAt = now;
-			hook.updatedAt = now;
-			break;
-		}
-		case "hook_disposed": {
-			const hook = data.hookId ? state.hooks[data.hookId] : undefined;
-			if (!hook) break;
-			hook.status = "disposed";
-			hook.disposedAt = now;
-			hook.updatedAt = now;
-			break;
-		}
+		case "hook_received":
+		case "hook_disposed":
 		case "hook_conflict":
-		case "stream_chunk":
-		case "stream_closed":
-			// No materialization needed. Streams are mutated directly; hook
-			// conflicts are surfaced through the event itself.
 			break;
+		case "wait_created": {
+			const corrId = data.correlationId;
+			if (!corrId) break;
+			const ed = (data.eventData ?? {}) as {
+				resumeAt?: string | number;
+			};
+			state.waits[corrId] = {
+				waitId: corrId,
+				runId: ev.runId,
+				status: "waiting",
+				resumeAt: ed.resumeAt
+					? new Date(ed.resumeAt).getTime()
+					: undefined,
+				createdAt: now,
+				updatedAt: now,
+				specVersion: ev.specVersion,
+			};
+			break;
+		}
+		case "wait_completed": {
+			const wait = data.correlationId
+				? state.waits[data.correlationId]
+				: undefined;
+			if (!wait) break;
+			wait.status = "completed";
+			wait.completedAt = now;
+			wait.updatedAt = now;
+			break;
+		}
 	}
 
 	// Auto-dispose hooks when the run enters a terminal status.
 	if (state.run && isTerminalRunStatus(state.run.status)) {
-		for (const hook of Object.values(state.hooks)) {
-			if (hook.status === "pending") {
-				hook.status = "disposed";
-				hook.disposedAt = now;
-				hook.updatedAt = now;
-			}
-		}
+		// Hook disposal is tracked via hook_disposed events; we do not
+		// delete them from state here so they remain queryable.
 	}
 }
 
@@ -389,6 +451,7 @@ export const workflowRunActor = actor({
 		initialized: false,
 		steps: {},
 		hooks: {},
+		waits: {},
 		events: [],
 		idempotencyKeys: {},
 		streams: {},
@@ -401,7 +464,6 @@ export const workflowRunActor = actor({
 		}>(),
 	},
 	actions: {
-		/** Initialize the run identity. Called implicitly by `createEvent`. */
 		ensureRun: (c, runId: string) => {
 			if (!c.state.initialized) {
 				c.state.initialized = true;
@@ -409,18 +471,17 @@ export const workflowRunActor = actor({
 			return runId;
 		},
 
-		/** Append an event. Atomically updates materialized state. */
 		createEvent: (
 			c,
 			runId: string,
 			data: RunCreatedEventRequest | CreateEventRequest,
-			opts?: { idempotencyKey?: string },
+			opts?: { requestId?: string },
 		): EventResult => {
-			if (opts?.idempotencyKey) {
-				const existingId = c.state.idempotencyKeys[opts.idempotencyKey];
+			if (opts?.requestId) {
+				const existingId = c.state.idempotencyKeys[opts.requestId];
 				if (existingId) {
 					const existing = c.state.events.find(
-						(e) => e.id === existingId,
+						(e) => e.eventId === existingId,
 					);
 					if (existing) {
 						return {
@@ -434,28 +495,43 @@ export const workflowRunActor = actor({
 			}
 
 			const ev: PersistedEvent = {
-				id: uuidv4(),
-				type: data.type,
+				eventId: uuidv4(),
+				eventType: data.eventType,
 				runId,
-				stepId: "stepId" in data ? data.stepId : undefined,
-				hookId: "hookId" in data ? data.hookId : undefined,
 				correlationId:
 					"correlationId" in data ? data.correlationId : undefined,
-				data: "data" in data ? data.data : undefined,
+				eventData: data.eventData,
 				createdAt: nowMs(),
 			};
 
 			materializeEvent({ state: c.state, event: ev, data });
 			c.state.events.push(ev);
 
-			if (opts?.idempotencyKey) {
-				c.state.idempotencyKeys[opts.idempotencyKey] = ev.id;
+			if (opts?.requestId) {
+				c.state.idempotencyKeys[opts.requestId] = ev.eventId;
 			}
+
+			const corrId =
+				"correlationId" in data ? data.correlationId : undefined;
 
 			return {
 				event: eventToPublic(ev),
 				run: c.state.run ? runToPublic(c.state.run) : undefined,
+				step: corrId && c.state.steps[corrId]
+					? stepToPublic(c.state.steps[corrId])
+					: undefined,
+				hook: corrId && c.state.hooks[corrId]
+					? hookToPublic(c.state.hooks[corrId])
+					: undefined,
+				wait: corrId && c.state.waits[corrId]
+					? waitToPublic(c.state.waits[corrId])
+					: undefined,
 			};
+		},
+
+		getEvent: (c, eventId: string): WorldEvent | null => {
+			const ev = c.state.events.find((e) => e.eventId === eventId);
+			return ev ? eventToPublic(ev) : null;
 		},
 
 		getRun: (c): WorkflowRun | null => {
@@ -469,16 +545,22 @@ export const workflowRunActor = actor({
 
 		listSteps: (
 			c,
-			opts?: { status?: StepStatus; cursor?: string; limit?: number },
+			opts?: {
+				cursor?: string;
+				limit?: number;
+				sortOrder?: "asc" | "desc";
+			},
 		) => {
 			const limit = opts?.limit ?? 50;
 			let items = Object.values(c.state.steps);
-			if (opts?.status) {
-				items = items.filter((s) => s.status === opts.status);
-			}
-			items.sort((a, b) => a.createdAt - b.createdAt);
+			const desc = opts?.sortOrder !== "asc";
+			items.sort((a, b) =>
+				desc ? b.createdAt - a.createdAt : a.createdAt - b.createdAt,
+			);
 
-			const startIdx = opts?.cursor ? Number.parseInt(opts.cursor, 10) : 0;
+			const startIdx = opts?.cursor
+				? Number.parseInt(opts.cursor, 10)
+				: 0;
 			const slice = items.slice(startIdx, startIdx + limit);
 			const nextIdx = startIdx + slice.length;
 			return {
@@ -491,27 +573,20 @@ export const workflowRunActor = actor({
 		listEvents: (
 			c,
 			opts?: {
-				types?: EventType[];
-				stepId?: string;
-				hookId?: string;
 				cursor?: string;
 				limit?: number;
+				sortOrder?: "asc" | "desc";
 			},
 		) => {
 			const limit = opts?.limit ?? 100;
-			let items = c.state.events;
-			if (opts?.types && opts.types.length > 0) {
-				const set = new Set(opts.types);
-				items = items.filter((e) => set.has(e.type));
-			}
-			if (opts?.stepId) {
-				items = items.filter((e) => e.stepId === opts.stepId);
-			}
-			if (opts?.hookId) {
-				items = items.filter((e) => e.hookId === opts.hookId);
+			let items = [...c.state.events];
+			if (opts?.sortOrder === "desc") {
+				items.reverse();
 			}
 
-			const startIdx = opts?.cursor ? Number.parseInt(opts.cursor, 10) : 0;
+			const startIdx = opts?.cursor
+				? Number.parseInt(opts.cursor, 10)
+				: 0;
 			const slice = items.slice(startIdx, startIdx + limit);
 			const nextIdx = startIdx + slice.length;
 			return {
@@ -524,13 +599,22 @@ export const workflowRunActor = actor({
 		listEventsByCorrelationId: (
 			c,
 			correlationId: string,
-			opts?: { cursor?: string; limit?: number },
+			opts?: {
+				cursor?: string;
+				limit?: number;
+				sortOrder?: "asc" | "desc";
+			},
 		) => {
 			const limit = opts?.limit ?? 100;
-			const items = c.state.events.filter(
+			let items = c.state.events.filter(
 				(e) => e.correlationId === correlationId,
 			);
-			const startIdx = opts?.cursor ? Number.parseInt(opts.cursor, 10) : 0;
+			if (opts?.sortOrder === "desc") {
+				items = [...items].reverse();
+			}
+			const startIdx = opts?.cursor
+				? Number.parseInt(opts.cursor, 10)
+				: 0;
 			const slice = items.slice(startIdx, startIdx + limit);
 			const nextIdx = startIdx + slice.length;
 			return {
@@ -547,15 +631,21 @@ export const workflowRunActor = actor({
 
 		listHooks: (
 			c,
-			opts?: { status?: HookStatus; cursor?: string; limit?: number },
+			opts?: {
+				cursor?: string;
+				limit?: number;
+				sortOrder?: "asc" | "desc";
+			},
 		) => {
 			const limit = opts?.limit ?? 50;
 			let items = Object.values(c.state.hooks);
-			if (opts?.status) {
-				items = items.filter((h) => h.status === opts.status);
-			}
-			items.sort((a, b) => a.createdAt - b.createdAt);
-			const startIdx = opts?.cursor ? Number.parseInt(opts.cursor, 10) : 0;
+			const desc = opts?.sortOrder !== "asc";
+			items.sort((a, b) =>
+				desc ? b.createdAt - a.createdAt : a.createdAt - b.createdAt,
+			);
+			const startIdx = opts?.cursor
+				? Number.parseInt(opts.cursor, 10)
+				: 0;
 			const slice = items.slice(startIdx, startIdx + limit);
 			const nextIdx = startIdx + slice.length;
 			return {

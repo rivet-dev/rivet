@@ -4,10 +4,6 @@
  * Wires the three Rivet actors into a single `World` instance that
  * implements the Vercel Workflow SDK's `Storage`, `Queue`, and `Streamer`
  * interfaces.
- *
- * A note on actor sharding: the coordinator and queue actors are singletons
- * per name. The `workflowRun` actor is keyed by `runId`, so each run lives
- * on its own actor and can be materialized independently.
  */
 
 import { createClient } from "rivetkit/client";
@@ -19,11 +15,13 @@ import {
 	type CreateEventRequest,
 	type Event as WorldEvent,
 	type EventResult,
-	HookConflictError,
+	type GetChunksOptions,
+	type GetEventParams,
 	type GetHookParams,
 	type GetStepParams,
 	type GetWorkflowRunParams,
 	type Hook,
+	HookConflictError,
 	type ListEventsByCorrelationIdParams,
 	type ListEventsParams,
 	type ListHooksParams,
@@ -36,37 +34,23 @@ import {
 	type QueuePayload,
 	type QueuePrefix,
 	type RunCreatedEventRequest,
+	SPEC_VERSION_CURRENT,
 	type Step,
-	type StreamChunk,
-	type StreamChunksResult,
-	type StreamInfo,
+	type StepWithoutData,
+	type StreamChunksResponse,
+	type StreamInfoResponse,
 	type ValidQueueName,
 	type WorkflowRun,
+	type WorkflowRunWithoutData,
 	type World,
 } from "./types";
 
 export interface RivetWorldConfig {
-	/**
-	 * RivetKit client endpoint or full config. Passed through to
-	 * `rivetkit/client` `createClient`.
-	 */
 	endpoint?: string;
-
-	/**
-	 * Stable deployment id returned by `Queue.getDeploymentId()`. If omitted
-	 * we derive one from `process.env.VERCEL_DEPLOYMENT_ID` or generate a
-	 * random id per process.
-	 */
 	deploymentId?: string;
-
-	/**
-	 * Optional key resolver for per-run encryption.
-	 */
 	getEncryptionKeyForRun?: (
 		run: WorkflowRun,
 	) => Promise<Uint8Array | undefined>;
-
-	/** Pre-built rivetkit client. Overrides `endpoint` when provided. */
 	client?: ReturnType<typeof createClient<WorldRegistry>>;
 }
 
@@ -110,7 +94,7 @@ function revivePaginated<T>(result: {
 
 function reviveChunks(
 	raw: { index: number; data: string }[],
-): StreamChunk[] {
+): { index: number; data: Uint8Array }[] {
 	return raw.map((c) => ({ index: c.index, data: decodeBinary(c.data) }));
 }
 
@@ -119,13 +103,59 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 		cfg.client ?? createClient<WorldRegistry>(cfg.endpoint);
 	const deploymentId = resolveDeploymentId(cfg);
 
+	const queueHandlers = new Map<QueuePrefix, QueueHandler>();
+
+	async function dispatchMessage(
+		queueName: ValidQueueName,
+	): Promise<void> {
+		const prefix = (
+			queueName.startsWith("__wkf_workflow_")
+				? "__wkf_workflow_"
+				: "__wkf_step_"
+		) as QueuePrefix;
+		const handler = queueHandlers.get(prefix);
+		if (!handler) return;
+
+		const q = queueHandle(client, queueName);
+		const msg = (await q.claimNext()) as {
+			id: string;
+			queueName: ValidQueueName;
+			payload: unknown;
+			attempt: number;
+		} | null;
+		if (!msg) return;
+
+		try {
+			await handler(msg.payload, {
+				attempt: msg.attempt,
+				queueName: msg.queueName,
+				messageId: msg.id,
+			});
+			await q.ack(msg.id);
+		} catch (err) {
+			await q.nack(
+				msg.id,
+				err instanceof Error ? err.message : String(err),
+			);
+		}
+	}
+
 	// -----------------------------------------------------------------
-	// Storage
+	// Build world
 	// -----------------------------------------------------------------
 
 	const world: World = {
+		specVersion: SPEC_VERSION_CURRENT,
+
+		// =============================================================
+		// Storage
+		// =============================================================
+
 		runs: {
-			async get(id, _params?: GetWorkflowRunParams): Promise<WorkflowRun> {
+			async get(
+				id: string,
+				_params?: GetWorkflowRunParams,
+			): Promise<WorkflowRun | WorkflowRunWithoutData> {
 				const run = (await runHandle(client, id).getRun()) as
 					| WorkflowRun
 					| null;
@@ -134,16 +164,15 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 			},
 			async list(
 				params: ListWorkflowRunsParams = {},
-			): Promise<PaginatedResponse<WorkflowRun>> {
+			): Promise<
+				PaginatedResponse<WorkflowRun | WorkflowRunWithoutData>
+			> {
+				const pagination = params.pagination ?? {};
 				const res = (await coordinatorHandle(client).listRuns({
-					cursor: params.cursor,
-					limit: params.limit,
+					cursor: pagination.cursor,
+					limit: pagination.limit,
 					workflowName: params.workflowName,
 					status: params.status,
-					deploymentId: params.deploymentId,
-					parentRunId: params.parentRunId,
-					createdAfter: params.createdAfter?.getTime(),
-					createdBefore: params.createdBefore?.getTime(),
 				})) as {
 					data: Array<{
 						id: string;
@@ -152,15 +181,11 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 						createdAt: number;
 						updatedAt: number;
 						deploymentId?: string;
-						parentRunId?: string;
 					}>;
 					cursor: string | null;
 					hasMore: boolean;
 				};
 
-				// The coordinator only stores an index row. Materialize full
-				// runs by hitting each run actor. In practice callers will
-				// paginate, so this fan-out is bounded by `limit`.
 				const data = await Promise.all(
 					res.data.map(async (row) => {
 						const run = (await runHandle(
@@ -168,16 +193,16 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 							row.id,
 						).getRun()) as WorkflowRun | null;
 						if (run) return run;
-						// Fall back to the index row if the run actor is gone.
 						return {
-							id: row.id,
+							runId: row.id,
 							workflowName: row.workflowName,
 							status: row.status,
+							deploymentId: row.deploymentId ?? deploymentId,
+							input: undefined,
+							output: undefined,
 							createdAt: new Date(row.createdAt),
 							updatedAt: new Date(row.updatedAt),
-							deploymentId: row.deploymentId,
-							parentRunId: row.parentRunId,
-						} satisfies WorkflowRun;
+						} satisfies WorkflowRunWithoutData;
 					}),
 				);
 
@@ -190,13 +215,10 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 		},
 		steps: {
 			async get(
-				runId: string | undefined,
+				runId: string,
 				stepId: string,
 				_params?: GetStepParams,
-			): Promise<Step> {
-				if (!runId) {
-					throw new NotFoundError("step", stepId);
-				}
+			): Promise<Step | StepWithoutData> {
 				const step = (await runHandle(client, runId).getStep(
 					stepId,
 				)) as Step | null;
@@ -205,11 +227,15 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 			},
 			async list(
 				params: ListWorkflowRunStepsParams,
-			): Promise<PaginatedResponse<Step>> {
-				const res = (await runHandle(client, params.runId).listSteps({
-					status: params.status,
-					cursor: params.cursor,
-					limit: params.limit,
+			): Promise<PaginatedResponse<Step | StepWithoutData>> {
+				const pagination = params.pagination ?? {};
+				const res = (await runHandle(
+					client,
+					params.runId,
+				).listSteps({
+					cursor: pagination.cursor,
+					limit: pagination.limit,
+					sortOrder: pagination.sortOrder,
 				})) as unknown as {
 					data: Step[];
 					cursor: string | null;
@@ -224,19 +250,19 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 				data: CreateEventRequest | RunCreatedEventRequest,
 				params?: CreateEventParams,
 			): Promise<EventResult> => {
-				if (data.type === "run_created") {
+				if (data.eventType === "run_created") {
 					const id = runId ?? uuidv4();
 					const runActor = runHandle(client, id);
 					const result = (await runActor.createEvent(
 						id,
 						data,
-						params,
+						params ? { requestId: params.requestId } : undefined,
 					)) as EventResult;
 
 					if (result.run) {
 						const run = result.run;
 						await coordinatorHandle(client).registerRun({
-							id: run.id,
+							id: run.runId,
 							workflowName: run.workflowName,
 							status: run.status,
 							createdAt:
@@ -252,7 +278,6 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 											run.updatedAt as unknown as string,
 										),
 							deploymentId: run.deploymentId ?? deploymentId,
-							parentRunId: run.parentRunId,
 						});
 					}
 					return result;
@@ -260,38 +285,40 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 
 				if (!runId) {
 					throw new Error(
-						`events.create requires runId for event type ${data.type}`,
+						`events.create requires runId for event type ${data.eventType}`,
 					);
 				}
 
 				const runActor = runHandle(client, runId);
 
-				// Special-case hook creation so the coordinator can enforce
-				// global token uniqueness before we commit the event.
-				if (data.type === "hook_created") {
-					const hookData = (data.data ?? {}) as {
+				if (data.eventType === "hook_created") {
+					const hookData = (data.eventData ?? {}) as {
 						token?: string;
-						name?: string;
 					};
 					if (hookData.token) {
+						const hookId =
+							data.correlationId ?? uuidv4();
 						const coord = coordinatorHandle(client);
 						const reg = (await coord.registerHookToken({
-							hookId: data.hookId ?? uuidv4(),
+							hookId,
 							runId,
 							token: hookData.token,
 							status: "pending",
 							createdAt: Date.now(),
-						})) as { ok: true } | { ok: false; reason: string };
+						})) as
+							| { ok: true }
+							| { ok: false; reason: string };
 						if (!reg.ok) {
-							// Materialize a hook_conflict event on the run so
-							// the event log reflects the rejection, then throw.
 							await runActor.createEvent(
 								runId,
 								{
-									type: "hook_conflict",
-									data: { token: hookData.token },
+									eventType: "hook_conflict",
+									correlationId: data.correlationId,
+									eventData: { token: hookData.token },
 								},
-								params,
+								params
+									? { requestId: params.requestId }
+									: undefined,
 							);
 							throw new HookConflictError(hookData.token);
 						}
@@ -301,18 +328,19 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 				const result = (await runActor.createEvent(
 					runId,
 					data,
-					params,
+					params ? { requestId: params.requestId } : undefined,
 				)) as EventResult;
 
-				// Mirror status into coordinator when the run status moved.
 				if (result.run) {
 					const run = result.run;
 					await coordinatorHandle(client).updateRunStatus(
-						run.id,
+						run.runId,
 						run.status,
 						run.updatedAt instanceof Date
 							? run.updatedAt.getTime()
-							: Date.parse(run.updatedAt as unknown as string),
+							: Date.parse(
+									run.updatedAt as unknown as string,
+								),
 					);
 					if (
 						run.status === "completed" ||
@@ -321,21 +349,37 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 					) {
 						await coordinatorHandle(
 							client,
-						).disposeHookTokensForRun(run.id);
+						).disposeHookTokensForRun(run.runId);
 					}
 				}
 
 				return result;
 			}) as World["events"]["create"],
+
+			async get(
+				runId: string,
+				eventId: string,
+				_params?: GetEventParams,
+			): Promise<WorldEvent> {
+				const ev = (await runHandle(
+					client,
+					runId,
+				).getEvent(eventId)) as WorldEvent | null;
+				if (!ev) throw new NotFoundError("event", eventId);
+				return ev;
+			},
+
 			async list(
 				params: ListEventsParams,
 			): Promise<PaginatedResponse<WorldEvent>> {
-				const res = (await runHandle(client, params.runId).listEvents({
-					types: params.types,
-					stepId: params.stepId,
-					hookId: params.hookId,
-					cursor: params.cursor,
-					limit: params.limit,
+				const pagination = params.pagination ?? {};
+				const res = (await runHandle(
+					client,
+					params.runId,
+				).listEvents({
+					cursor: pagination.cursor,
+					limit: pagination.limit,
+					sortOrder: pagination.sortOrder,
 				})) as unknown as {
 					data: WorldEvent[];
 					cursor: string | null;
@@ -343,13 +387,14 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 				};
 				return revivePaginated<WorldEvent>(res);
 			},
+
 			async listByCorrelationId(
 				params: ListEventsByCorrelationIdParams,
 			): Promise<PaginatedResponse<WorldEvent>> {
-				// Correlation ids are not indexed globally. We delegate to the
-				// caller-provided run scope in practice; if unknown, the
-				// Workflow SDK passes a correlation id that matches a single
-				// run. We fall back to returning an empty result.
+				// Correlation ids are scoped to a single run. Without a
+				// global correlation index we cannot resolve the runId.
+				// Callers that need this must use events.list on the known
+				// run. Return empty for now.
 				return {
 					data: [],
 					cursor: null,
@@ -359,24 +404,30 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 		},
 		hooks: {
 			async get(hookId: string, _params?: GetHookParams): Promise<Hook> {
-				// Hooks are keyed by runId; we need to resolve via the
-				// coordinator. For direct lookups by hook id, the Workflow
-				// SDK normally knows the runId already, but we support it by
-				// scanning hooks on the run if supplied via metadata prefix.
-				throw new NotFoundError("hook", hookId);
+				const lookup = (await coordinatorHandle(
+					client,
+				).lookupHookId(hookId)) as {
+					runId: string;
+					token: string;
+				} | null;
+				if (!lookup) throw new NotFoundError("hook", hookId);
+				const hook = (await runHandle(
+					client,
+					lookup.runId,
+				).getHook(hookId)) as Hook | null;
+				if (!hook) throw new NotFoundError("hook", hookId);
+				return hook;
 			},
 			async getByToken(
 				token: string,
 				_params?: GetHookParams,
 			): Promise<Hook> {
-				const row = (await coordinatorHandle(client).lookupHookToken(
-					token,
-				)) as {
+				const row = (await coordinatorHandle(
+					client,
+				).lookupHookToken(token)) as {
 					hookId: string;
 					runId: string;
 					token: string;
-					status: Hook["status"];
-					createdAt: number;
 				} | null;
 				if (!row) throw new NotFoundError("hook", token);
 				const hook = (await runHandle(client, row.runId).getHook(
@@ -388,10 +439,17 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 			async list(
 				params: ListHooksParams,
 			): Promise<PaginatedResponse<Hook>> {
-				const res = (await runHandle(client, params.runId).listHooks({
-					status: params.status,
-					cursor: params.cursor,
-					limit: params.limit,
+				if (!params.runId) {
+					return { data: [], cursor: null, hasMore: false };
+				}
+				const pagination = params.pagination ?? {};
+				const res = (await runHandle(
+					client,
+					params.runId,
+				).listHooks({
+					cursor: pagination.cursor,
+					limit: pagination.limit,
+					sortOrder: pagination.sortOrder,
 				})) as unknown as {
 					data: Hook[];
 					cursor: string | null;
@@ -401,9 +459,9 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 			},
 		},
 
-		// -----------------------------------------------------------------
+		// =============================================================
 		// Queue
-		// -----------------------------------------------------------------
+		// =============================================================
 
 		async getDeploymentId(): Promise<string> {
 			return deploymentId;
@@ -417,8 +475,27 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 			const res = (await queueHandle(client, queueName).enqueue(
 				queueName,
 				message,
-				opts,
+				opts
+					? {
+							idempotencyKey: opts.idempotencyKey,
+							delay: opts.delaySeconds
+								? opts.delaySeconds * 1000
+								: undefined,
+						}
+					: undefined,
 			)) as { messageId: string };
+
+			const delayMs = opts?.delaySeconds
+				? opts.delaySeconds * 1000
+				: 0;
+			if (delayMs > 0) {
+				setTimeout(() => {
+					dispatchMessage(queueName).catch(() => {});
+				}, delayMs);
+			} else {
+				dispatchMessage(queueName).catch(() => {});
+			}
+
 			return { messageId: res.messageId };
 		},
 
@@ -426,63 +503,41 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 			queueNamePrefix: QueuePrefix,
 			handler: QueueHandler,
 		): (req: Request) => Promise<Response> {
+			queueHandlers.set(queueNamePrefix, handler);
+
 			return async (req: Request): Promise<Response> => {
-				let body: {
-					queueName?: ValidQueueName;
-					messageId?: string;
-				};
+				let body: { queueName?: ValidQueueName };
 				try {
-					body = await req.json();
+					body = (await req.json()) as typeof body;
 				} catch {
 					return new Response("invalid body", { status: 400 });
 				}
 
 				const queueName = body.queueName;
-				if (!queueName || !queueName.startsWith(queueNamePrefix)) {
-					return new Response("queue name mismatch", { status: 400 });
-				}
-
-				const q = queueHandle(client, queueName);
-				const msg = (await q.claimNext()) as {
-					id: string;
-					queueName: ValidQueueName;
-					payload: unknown;
-					attempt: number;
-				} | null;
-				if (!msg) {
-					return new Response(null, { status: 204 });
+				if (
+					!queueName ||
+					!queueName.startsWith(queueNamePrefix)
+				) {
+					return new Response("queue name mismatch", {
+						status: 400,
+					});
 				}
 
 				try {
-					const result = await handler(msg.payload, {
-						attempt: msg.attempt,
-						queueName: msg.queueName,
-						messageId: msg.id,
-					});
-					await q.ack(msg.id);
+					await dispatchMessage(queueName);
 					return new Response(
-						JSON.stringify({
-							ok: true,
-							messageId: msg.id,
-							timeoutSeconds:
-								result && "timeoutSeconds" in result
-									? result.timeoutSeconds
-									: undefined,
-						}),
+						JSON.stringify({ ok: true }),
 						{
 							status: 200,
-							headers: { "content-type": "application/json" },
+							headers: {
+								"content-type": "application/json",
+							},
 						},
 					);
 				} catch (err) {
-					await q.nack(
-						msg.id,
-						err instanceof Error ? err.message : String(err),
-					);
 					return new Response(
 						JSON.stringify({
 							ok: false,
-							messageId: msg.id,
 							error:
 								err instanceof Error
 									? err.message
@@ -490,87 +545,157 @@ export function createRivetWorld(cfg: RivetWorldConfig = {}): World {
 						}),
 						{
 							status: 500,
-							headers: { "content-type": "application/json" },
+							headers: {
+								"content-type": "application/json",
+							},
 						},
 					);
 				}
 			};
 		},
 
-		// -----------------------------------------------------------------
+		// =============================================================
 		// Streamer
-		// -----------------------------------------------------------------
+		// =============================================================
 
-		async writeToStream(
-			name: string,
-			runId: string,
-			chunk: string | Uint8Array,
-		): Promise<void> {
-			await runHandle(client, runId).writeStream(name, [chunk]);
-		},
-		async writeToStreamMulti(
-			name: string,
-			runId: string,
-			chunks: (string | Uint8Array)[],
-		): Promise<void> {
-			await runHandle(client, runId).writeStream(name, chunks);
-		},
-		async closeStream(name: string, runId: string): Promise<void> {
-			await runHandle(client, runId).closeStream(name);
-		},
-		async getStreamChunks(
-			name: string,
-			runId: string,
-			options?: { limit?: number; cursor?: string },
-		): Promise<StreamChunksResult> {
-			const res = (await runHandle(client, runId).getStreamChunks(
-				name,
-				options,
-			)) as {
-				data: { index: number; data: string }[];
-				cursor: string | null;
-				hasMore: boolean;
-				done: boolean;
-			};
-			return {
-				data: reviveChunks(res.data),
-				cursor: res.cursor,
-				hasMore: res.hasMore,
-				done: res.done,
-			};
-		},
-		async getStreamInfo(name: string, runId: string): Promise<StreamInfo> {
-			return (await runHandle(client, runId).getStreamInfo(
-				name,
-			)) as StreamInfo;
-		},
-		async listStreamsByRunId(runId: string): Promise<string[]> {
-			return (await runHandle(client, runId).listStreams()) as string[];
-		},
-		async readFromStream(
-			_name: string,
-			_startIndex = 0,
-		): Promise<ReadableStream<Uint8Array>> {
-			// Live streaming support requires subscribing to the
-			// `streamAppended` actor event over WebSocket. Until that is
-			// wired up, callers must use `getStreamChunks` to drain the
-			// stream manually.
-			throw new Error(
-				"readFromStream is not yet implemented; use getStreamChunks",
-			);
+		streams: {
+			async write(
+				runId: string,
+				name: string,
+				chunk: string | Uint8Array,
+			): Promise<void> {
+				await runHandle(client, runId).writeStream(name, [chunk]);
+			},
+			async writeMulti(
+				runId: string,
+				name: string,
+				chunks: (string | Uint8Array)[],
+			): Promise<void> {
+				await runHandle(client, runId).writeStream(name, chunks);
+			},
+			async close(runId: string, name: string): Promise<void> {
+				await runHandle(client, runId).closeStream(name);
+			},
+			async getChunks(
+				runId: string,
+				name: string,
+				options?: GetChunksOptions,
+			): Promise<StreamChunksResponse> {
+				const res = (await runHandle(
+					client,
+					runId,
+				).getStreamChunks(name, options)) as {
+					data: { index: number; data: string }[];
+					cursor: string | null;
+					hasMore: boolean;
+					done: boolean;
+				};
+				return {
+					data: reviveChunks(res.data),
+					cursor: res.cursor,
+					hasMore: res.hasMore,
+					done: res.done,
+				};
+			},
+			async getInfo(
+				runId: string,
+				name: string,
+			): Promise<StreamInfoResponse> {
+				return (await runHandle(client, runId).getStreamInfo(
+					name,
+				)) as StreamInfoResponse;
+			},
+			async list(runId: string): Promise<string[]> {
+				return (await runHandle(
+					client,
+					runId,
+				).listStreams()) as string[];
+			},
+			async get(
+				runId: string,
+				name: string,
+				startIndex = 0,
+			): Promise<ReadableStream<Uint8Array>> {
+				return new ReadableStream<Uint8Array>({
+					async start(controller) {
+						let cursor: string | undefined;
+						while (true) {
+							const res = (await runHandle(
+								client,
+								runId,
+							).getStreamChunks(name, {
+								cursor,
+							})) as {
+								data: {
+									index: number;
+									data: string;
+								}[];
+								cursor: string | null;
+								hasMore: boolean;
+								done: boolean;
+							};
+
+							for (const chunk of res.data) {
+								if (chunk.index >= startIndex) {
+									controller.enqueue(
+										decodeBinary(chunk.data),
+									);
+								}
+							}
+
+							if (!res.hasMore) {
+								if (res.done) {
+									controller.close();
+									return;
+								}
+								break;
+							}
+							cursor = res.cursor ?? undefined;
+						}
+
+						// Subscribe to live updates.
+						const handle = runHandle(client, runId);
+						const conn = handle.connect();
+						conn.on(
+							"streamAppended",
+							(
+								payload: {
+									streamName: string;
+									chunks: {
+										index: number;
+										data: string;
+									}[];
+									done: boolean;
+								},
+							) => {
+								if (payload.streamName !== name) return;
+								for (const chunk of payload.chunks) {
+									if (chunk.index >= startIndex) {
+										controller.enqueue(
+											decodeBinary(chunk.data),
+										);
+									}
+								}
+								if (payload.done) {
+									controller.close();
+									conn.dispose();
+								}
+							},
+						);
+					},
+				});
+			},
 		},
 
-		// -----------------------------------------------------------------
+		// =============================================================
 		// Lifecycle
-		// -----------------------------------------------------------------
+		// =============================================================
 
-		async start(): Promise<void> {
-			// No-op: the RivetKit client lazily connects on first use.
-		},
-		async close(): Promise<void> {
-			// No-op: RivetKit client does not require explicit shutdown.
-		},
-		getEncryptionKeyForRun: cfg.getEncryptionKeyForRun,
+		async start(): Promise<void> {},
+		async close(): Promise<void> {},
+		getEncryptionKeyForRun: cfg.getEncryptionKeyForRun as
+			| World["getEncryptionKeyForRun"]
+			| undefined,
 	};
 
 	return world;

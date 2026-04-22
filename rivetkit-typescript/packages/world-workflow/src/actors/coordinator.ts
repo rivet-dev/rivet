@@ -12,7 +12,9 @@
  */
 
 import { actor } from "rivetkit";
-import type { HookStatus, WorkflowRunStatus } from "../types";
+import type { WorkflowRunStatus } from "../types";
+
+type HookStatus = "pending" | "disposed";
 
 interface CoordinatorRunRow {
 	id: string;
@@ -35,12 +37,14 @@ interface CoordinatorHookRow {
 interface CoordinatorState {
 	runs: Record<string, CoordinatorRunRow>;
 	hookTokens: Record<string, CoordinatorHookRow>;
+	hookIds: Record<string, { runId: string; token: string }>;
 }
 
 export const coordinatorActor = actor({
 	state: {
 		runs: {},
 		hookTokens: {},
+		hookIds: {},
 	} as CoordinatorState,
 	actions: {
 		registerRun: (c, row: CoordinatorRunRow) => {
@@ -127,11 +131,22 @@ export const coordinatorActor = actor({
 				return { ok: false, reason: "conflict" };
 			}
 			c.state.hookTokens[row.token] = row;
+			c.state.hookIds[row.hookId] = {
+				runId: row.runId,
+				token: row.token,
+			};
 			return { ok: true };
 		},
 
 		lookupHookToken: (c, token: string) => {
 			return c.state.hookTokens[token] ?? null;
+		},
+
+		lookupHookId: (
+			c,
+			hookId: string,
+		): { runId: string; token: string } | null => {
+			return c.state.hookIds[hookId] ?? null;
 		},
 
 		updateHookStatus: (

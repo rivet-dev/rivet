@@ -1,25 +1,25 @@
 /**
  * Vercel Workflow SDK `World` types.
  *
- * These mirror the public contract from `@workflow/world`. We redeclare them
- * locally so this package does not hard-depend on the SDK. The shapes are
- * derived from https://useworkflow.dev/docs/deploying/building-a-world and
- * the Postgres and Local reference worlds.
- *
+ * These mirror the public contract from `@workflow/world` (packages/world/src/).
  * When the upstream types drift, update this file to keep parity.
+ *
+ * Source: https://github.com/vercel/workflow/tree/main/packages/world/src
  */
 
 // ---------------------------------------------------------------------------
-// Primitive types
+// Shared primitives
 // ---------------------------------------------------------------------------
 
-export type MessageId = string;
+export type SerializedData = Uint8Array | unknown;
 
-/** Queue name, always prefixed with `__wkf_workflow_` or `__wkf_step_`. */
-export type ValidQueueName = `__wkf_workflow_${string}` | `__wkf_step_${string}`;
+export type ResolveData = "none" | "all";
 
-/** Queue prefix used when registering a handler. */
-export type QueuePrefix = "__wkf_workflow_" | "__wkf_step_";
+export interface PaginationOptions {
+	limit?: number;
+	cursor?: string;
+	sortOrder?: "asc" | "desc";
+}
 
 export interface PaginatedResponse<T> {
 	data: T[];
@@ -27,8 +27,24 @@ export interface PaginatedResponse<T> {
 	hasMore: boolean;
 }
 
+export interface StructuredError {
+	message: string;
+	stack?: string;
+	code?: string;
+}
+
+export type MessageId = string;
+
+export type ValidQueueName =
+	| `__wkf_workflow_${string}`
+	| `__wkf_step_${string}`;
+
+export type QueuePrefix = "__wkf_workflow_" | "__wkf_step_";
+
+export type TraceCarrier = Record<string, string>;
+
 // ---------------------------------------------------------------------------
-// Run / Step / Hook state
+// WorkflowRun
 // ---------------------------------------------------------------------------
 
 export type WorkflowRunStatus =
@@ -38,6 +54,32 @@ export type WorkflowRunStatus =
 	| "failed"
 	| "cancelled";
 
+export interface WorkflowRun {
+	runId: string;
+	status: WorkflowRunStatus;
+	deploymentId: string;
+	workflowName: string;
+	specVersion?: number;
+	executionContext?: Record<string, unknown>;
+	input: SerializedData;
+	output?: SerializedData;
+	error?: StructuredError;
+	expiredAt?: Date;
+	startedAt?: Date;
+	completedAt?: Date;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+export type WorkflowRunWithoutData = Omit<WorkflowRun, "input" | "output"> & {
+	input: undefined;
+	output: undefined;
+};
+
+// ---------------------------------------------------------------------------
+// Step
+// ---------------------------------------------------------------------------
+
 export type StepStatus =
 	| "pending"
 	| "running"
@@ -45,64 +87,64 @@ export type StepStatus =
 	| "failed"
 	| "cancelled";
 
-export type HookStatus = "pending" | "triggered" | "disposed";
-
-export interface WorkflowRun {
-	id: string;
-	workflowName: string;
-	status: WorkflowRunStatus;
-	input?: unknown;
-	output?: unknown;
-	error?: WorkflowRunError;
-	createdAt: Date;
-	updatedAt: Date;
-	startedAt?: Date;
-	finishedAt?: Date;
-	deploymentId?: string;
-	parentRunId?: string;
-	parentStepId?: string;
-	traceCarrier?: Record<string, string>;
-	metadata?: Record<string, unknown>;
-}
-
-export interface WorkflowRunError {
-	message: string;
-	stack?: string;
-	name?: string;
-	cause?: unknown;
-}
-
 export interface Step {
-	id: string;
 	runId: string;
-	name: string;
+	stepId: string;
+	stepName: string;
 	status: StepStatus;
-	input?: unknown;
-	output?: unknown;
-	error?: WorkflowRunError;
+	input: SerializedData;
+	output?: SerializedData;
+	error?: StructuredError;
+	attempt: number;
+	startedAt?: Date;
+	completedAt?: Date;
 	createdAt: Date;
 	updatedAt: Date;
-	startedAt?: Date;
-	finishedAt?: Date;
-	attempt: number;
-	parentStepId?: string;
+	retryAfter?: Date;
+	specVersion?: number;
 }
+
+export type StepWithoutData = Omit<Step, "input" | "output"> & {
+	input: undefined;
+	output: undefined;
+};
+
+// ---------------------------------------------------------------------------
+// Hook
+// ---------------------------------------------------------------------------
 
 export interface Hook {
-	id: string;
 	runId: string;
+	hookId: string;
 	token: string;
-	name: string;
-	status: HookStatus;
+	ownerId: string;
+	projectId: string;
+	environment: string;
+	metadata?: SerializedData;
 	createdAt: Date;
-	updatedAt: Date;
-	disposedAt?: Date;
-	triggeredAt?: Date;
-	metadata?: Record<string, unknown>;
+	specVersion?: number;
+	isWebhook?: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// Events (append-only log)
+// Wait
+// ---------------------------------------------------------------------------
+
+export type WaitStatus = "waiting" | "completed";
+
+export interface Wait {
+	waitId: string;
+	runId: string;
+	status: WaitStatus;
+	resumeAt?: Date;
+	completedAt?: Date;
+	createdAt: Date;
+	updatedAt: Date;
+	specVersion?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Events
 // ---------------------------------------------------------------------------
 
 export type EventType =
@@ -111,54 +153,55 @@ export type EventType =
 	| "run_completed"
 	| "run_failed"
 	| "run_cancelled"
-	| "run_updated"
 	| "step_created"
 	| "step_started"
 	| "step_completed"
 	| "step_failed"
-	| "step_cancelled"
 	| "step_retrying"
 	| "hook_created"
-	| "hook_triggered"
+	| "hook_received"
 	| "hook_disposed"
 	| "hook_conflict"
-	| "stream_chunk"
-	| "stream_closed";
+	| "wait_created"
+	| "wait_completed";
 
 export interface Event {
-	id: string;
-	type: EventType;
 	runId: string;
-	stepId?: string;
-	hookId?: string;
+	eventId: string;
+	eventType: EventType;
 	correlationId?: string;
-	data: unknown;
+	eventData?: unknown;
 	createdAt: Date;
+	specVersion?: number;
 }
 
 export interface EventResult {
-	event: Event;
-	/** Present when an event results in a newly created run. */
+	event?: Event;
 	run?: WorkflowRun;
+	step?: Step;
+	hook?: Hook;
+	wait?: Wait;
+	events?: Event[];
 }
 
+// ---------------------------------------------------------------------------
+// Event request types
+// ---------------------------------------------------------------------------
+
 export interface RunCreatedEventRequest {
-	type: "run_created";
-	workflowName: string;
-	input?: unknown;
-	deploymentId?: string;
-	parentRunId?: string;
-	parentStepId?: string;
-	traceCarrier?: Record<string, string>;
-	metadata?: Record<string, unknown>;
+	eventType: "run_created";
+	eventData: {
+		deploymentId: string;
+		workflowName: string;
+		input: SerializedData;
+		executionContext?: Record<string, unknown>;
+	};
 }
 
 export interface CreateEventRequest {
-	type: Exclude<EventType, "run_created">;
-	stepId?: string;
-	hookId?: string;
+	eventType: Exclude<EventType, "run_created">;
 	correlationId?: string;
-	data?: unknown;
+	eventData?: unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -166,69 +209,84 @@ export interface CreateEventRequest {
 // ---------------------------------------------------------------------------
 
 export interface GetWorkflowRunParams {
-	includeEvents?: boolean;
+	resolveData?: ResolveData;
 }
 
 export interface ListWorkflowRunsParams {
-	cursor?: string;
-	limit?: number;
 	workflowName?: string;
 	status?: WorkflowRunStatus;
-	deploymentId?: string;
-	parentRunId?: string;
-	createdAfter?: Date;
-	createdBefore?: Date;
+	pagination?: PaginationOptions;
+	resolveData?: ResolveData;
+}
+
+export interface CreateWorkflowRunRequest {
+	deploymentId: string;
+	workflowName: string;
+	input: SerializedData;
+	executionContext?: SerializedData;
+	specVersion?: number;
 }
 
 export interface GetStepParams {
-	includeEvents?: boolean;
+	resolveData?: ResolveData;
 }
 
 export interface ListWorkflowRunStepsParams {
 	runId: string;
-	cursor?: string;
-	limit?: number;
-	status?: StepStatus;
+	pagination?: PaginationOptions;
+	resolveData?: ResolveData;
+}
+
+export interface CreateEventParams {
+	v1Compat?: boolean;
+	resolveData?: ResolveData;
+	requestId?: string;
+}
+
+export interface GetEventParams {
+	resolveData?: ResolveData;
 }
 
 export interface ListEventsParams {
 	runId: string;
-	cursor?: string;
-	limit?: number;
-	types?: EventType[];
-	stepId?: string;
-	hookId?: string;
+	pagination?: PaginationOptions;
+	resolveData?: ResolveData;
 }
 
 export interface ListEventsByCorrelationIdParams {
 	correlationId: string;
-	cursor?: string;
-	limit?: number;
-}
-
-export interface CreateEventParams {
-	idempotencyKey?: string;
+	pagination?: PaginationOptions;
+	resolveData?: ResolveData;
 }
 
 export interface GetHookParams {
-	includeEvents?: boolean;
+	resolveData?: ResolveData;
 }
 
 export interface ListHooksParams {
-	runId: string;
-	cursor?: string;
-	limit?: number;
-	status?: HookStatus;
+	runId?: string;
+	pagination?: PaginationOptions;
+	resolveData?: ResolveData;
 }
 
 // ---------------------------------------------------------------------------
 // Queue payloads
 // ---------------------------------------------------------------------------
 
+export interface RunInput {
+	input: unknown;
+	deploymentId: string;
+	workflowName: string;
+	specVersion: number;
+	executionContext?: Record<string, unknown>;
+}
+
 export interface WorkflowInvokePayload {
 	runId: string;
-	traceCarrier?: Record<string, string>;
+	traceCarrier?: TraceCarrier;
 	requestedAt?: Date;
+	serverErrorRetryCount?: number;
+	runInput?: RunInput;
 }
 
 export interface StepInvokePayload {
@@ -236,29 +294,33 @@ export interface StepInvokePayload {
 	workflowRunId: string;
 	workflowStartedAt: number;
 	stepId: string;
-	traceCarrier?: Record<string, string>;
+	traceCarrier?: TraceCarrier;
 	requestedAt?: Date;
 }
 
-export type QueuePayload = WorkflowInvokePayload | StepInvokePayload;
-
-export interface QueueRetryPolicy {
-	maxAttempts?: number;
-	initialBackoffMs?: number;
-	maxBackoffMs?: number;
-	backoffMultiplier?: number;
+export interface HealthCheckPayload {
+	__healthCheck: true;
+	correlationId: string;
 }
 
+export type QueuePayload =
+	| WorkflowInvokePayload
+	| StepInvokePayload
+	| HealthCheckPayload;
+
 export interface QueueOptions {
+	deploymentId?: string;
 	idempotencyKey?: string;
-	delay?: number;
-	retryPolicy?: QueueRetryPolicy;
+	headers?: Record<string, string>;
+	delaySeconds?: number;
+	specVersion?: number;
 }
 
 export interface QueueMessageMeta {
 	attempt: number;
 	queueName: ValidQueueName;
 	messageId: MessageId;
+	requestId?: string;
 }
 
 export type QueueHandler = (
@@ -267,25 +329,54 @@ export type QueueHandler = (
 ) => Promise<void | { timeoutSeconds: number }>;
 
 // ---------------------------------------------------------------------------
+// Stream types
+// ---------------------------------------------------------------------------
+
+export interface StreamChunk {
+	index: number;
+	data: Uint8Array;
+}
+
+export interface GetChunksOptions {
+	limit?: number;
+	cursor?: string;
+}
+
+export interface StreamInfoResponse {
+	tailIndex: number;
+	done: boolean;
+}
+
+export interface StreamChunksResponse {
+	data: StreamChunk[];
+	cursor: string | null;
+	hasMore: boolean;
+	done: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // World interface
 // ---------------------------------------------------------------------------
 
 export interface Storage {
 	runs: {
-		get(id: string, params?: GetWorkflowRunParams): Promise<WorkflowRun>;
+		get(
+			id: string,
+			params?: GetWorkflowRunParams,
+		): Promise<WorkflowRun | WorkflowRunWithoutData>;
 		list(
 			params?: ListWorkflowRunsParams,
-		): Promise<PaginatedResponse<WorkflowRun>>;
+		): Promise<PaginatedResponse<WorkflowRun | WorkflowRunWithoutData>>;
 	};
 	steps: {
 		get(
-			runId: string | undefined,
+			runId: string,
 			stepId: string,
 			params?: GetStepParams,
-		): Promise<Step>;
+		): Promise<Step | StepWithoutData>;
 		list(
 			params: ListWorkflowRunStepsParams,
-		): Promise<PaginatedResponse<Step>>;
+		): Promise<PaginatedResponse<Step | StepWithoutData>>;
 	};
 	events: {
 		create(
@@ -298,6 +389,11 @@ export interface Storage {
 			data: CreateEventRequest,
 			params?: CreateEventParams,
 		): Promise<EventResult>;
+		get(
+			runId: string,
+			eventId: string,
+			params?: GetEventParams,
+		): Promise<Event>;
 		list(params: ListEventsParams): Promise<PaginatedResponse<Event>>;
 		listByCorrelationId(
 			params: ListEventsByCorrelationIdParams,
@@ -316,60 +412,67 @@ export interface Queue {
 		queueName: ValidQueueName,
 		message: QueuePayload,
 		opts?: QueueOptions,
-	): Promise<{ messageId: MessageId }>;
+	): Promise<{ messageId: MessageId | null }>;
 	createQueueHandler(
 		queueNamePrefix: QueuePrefix,
 		handler: QueueHandler,
 	): (req: Request) => Promise<Response>;
 }
 
-export interface StreamChunk {
-	index: number;
-	data: Uint8Array;
-}
-
-export interface StreamInfo {
-	tailIndex: number;
-	done: boolean;
-}
-
-export interface StreamChunksResult {
-	data: StreamChunk[];
-	cursor: string | null;
-	hasMore: boolean;
-	done: boolean;
-}
-
 export interface Streamer {
-	writeToStream(
-		name: string,
-		runId: string,
-		chunk: string | Uint8Array,
-	): Promise<void>;
-	writeToStreamMulti?(
-		name: string,
-		runId: string,
-		chunks: (string | Uint8Array)[],
-	): Promise<void>;
-	closeStream(name: string, runId: string): Promise<void>;
-	readFromStream(
-		name: string,
-		startIndex?: number,
-	): Promise<ReadableStream<Uint8Array>>;
-	listStreamsByRunId(runId: string): Promise<string[]>;
-	getStreamChunks(
-		name: string,
-		runId: string,
-		options?: { limit?: number; cursor?: string },
-	): Promise<StreamChunksResult>;
-	getStreamInfo(name: string, runId: string): Promise<StreamInfo>;
+	streamFlushIntervalMs?: number;
+	streams: {
+		write(
+			runId: string,
+			name: string,
+			chunk: string | Uint8Array,
+		): Promise<void>;
+		writeMulti?(
+			runId: string,
+			name: string,
+			chunks: (string | Uint8Array)[],
+		): Promise<void>;
+		close(runId: string, name: string): Promise<void>;
+		get(
+			runId: string,
+			name: string,
+			startIndex?: number,
+		): Promise<ReadableStream<Uint8Array>>;
+		list(runId: string): Promise<string[]>;
+		getChunks(
+			runId: string,
+			name: string,
+			options?: GetChunksOptions,
+		): Promise<StreamChunksResponse>;
+		getInfo(
+			runId: string,
+			name: string,
+		): Promise<StreamInfoResponse>;
+	};
 }
 
 export interface World extends Storage, Queue, Streamer {
+	specVersion?: number;
 	start?(): Promise<void>;
 	close?(): Promise<void>;
-	getEncryptionKeyForRun?(run: WorkflowRun): Promise<Uint8Array | undefined>;
+	resolveLatestDeploymentId?(): Promise<string>;
+	getEncryptionKeyForRun?(
+		run: WorkflowRun,
+	): Promise<Uint8Array | undefined>;
+	getEncryptionKeyForRun?(
+		runId: string,
+		context?: Record<string, unknown>,
+	): Promise<Uint8Array | undefined>;
 }
+
+// ---------------------------------------------------------------------------
+// Spec versions
+// ---------------------------------------------------------------------------
+
+export const SPEC_VERSION_LEGACY = 1;
+export const SPEC_VERSION_SUPPORTS_EVENT_SOURCING = 2;
+export const SPEC_VERSION_SUPPORTS_CBOR_QUEUE_TRANSPORT = 3;
+export const SPEC_VERSION_CURRENT = SPEC_VERSION_SUPPORTS_CBOR_QUEUE_TRANSPORT;
 
 // ---------------------------------------------------------------------------
 // Error shapes

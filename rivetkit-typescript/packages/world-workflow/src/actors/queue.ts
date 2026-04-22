@@ -21,7 +21,14 @@
 
 import { actor } from "rivetkit";
 import { v4 as uuidv4 } from "uuid";
-import type { QueueRetryPolicy, ValidQueueName } from "../types";
+import type { ValidQueueName } from "../types";
+
+interface QueueRetryPolicy {
+	maxAttempts?: number;
+	initialBackoffMs?: number;
+	maxBackoffMs?: number;
+	backoffMultiplier?: number;
+}
 
 interface PendingMessage {
 	id: string;
