@@ -1,6 +1,7 @@
-import { Turnstile } from "@marsidev/react-turnstile";
+import { Turnstile, TurnstileInstance } from "@marsidev/react-turnstile";
 
 interface TurnstileWidgetProps {
+	ref?: React.Ref<TurnstileInstance>;
 	siteKey: string;
 	onSuccess: (token: string) => void;
 	onExpire: () => void;
@@ -9,6 +10,7 @@ interface TurnstileWidgetProps {
 }
 
 export function TurnstileWidget({
+	ref,
 	siteKey,
 	onSuccess,
 	onExpire,
@@ -17,6 +19,7 @@ export function TurnstileWidget({
 }: TurnstileWidgetProps) {
 	return (
 		<Turnstile
+			ref={ref}
 			siteKey={siteKey}
 			onSuccess={onSuccess}
 			onExpire={onExpire}

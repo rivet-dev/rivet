@@ -72,8 +72,8 @@ type StagedCellEdit = {
 	draft: string;
 };
 
-function buildSelectSql(tableName: string): string {
-	return `SELECT *\nFROM "${quoteSqlIdentifier(tableName)}"\nLIMIT 100;`;
+function buildSelectSql(tableName: string, offset = 0): string {
+	return `SELECT *\nFROM "${quoteSqlIdentifier(tableName)}"\nLIMIT ${PAGE_SIZE} OFFSET ${offset};`;
 }
 
 export function ActorDatabase({ actorId }: ActorDatabaseProps) {
@@ -87,6 +87,7 @@ export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 	const [sql_text, setSqlText] = useState(() => "");
 	const [editableTable, setEditableTable] = useState<string | null>(null);
 	const [page, setPage] = useState(0);
+	const [isAutoMode, setIsAutoMode] = useState(false);
 	const [propertyDrafts, setPropertyDrafts] = useState<
 		Record<string, string>
 	>({});
@@ -282,6 +283,22 @@ export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 
 	handleRunRef.current = handleRun;
 
+	const totalRows = currentTableInfo?.records ?? 0;
+	const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+
+	const handlePageChange = useCallback(
+		(nextPage: number) => {
+			if (!editableTable) return;
+			setPage(nextPage);
+			const nextSql = buildSelectSql(editableTable, nextPage * PAGE_SIZE);
+			setSqlText(nextSql);
+			mutateAsync({ sql: nextSql })
+				.then((r) => setResult(r))
+				.catch(() => {});
+		},
+		[editableTable, mutateAsync],
+	);
+
 	useEffect(() => {
 		if (
 			bindingChangeToken === 0 ||
@@ -309,16 +326,16 @@ export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 	const selectTable = useCallback(
 		(tableName: string) => {
 			setEditableTable(tableName);
-			setSqlText(buildSelectSql(tableName));
+			const initialSql = buildSelectSql(tableName, 0);
+			setSqlText(initialSql);
 			setResult(null);
 			setEditingCell(null);
 			setEditingValue("");
 			setStagedEdits({});
 			setTableEditError(null);
 			setPage(0);
-			const request: DatabaseExecuteRequest = {
-				sql: buildSelectSql(tableName),
-			};
+			setIsAutoMode(true);
+			const request: DatabaseExecuteRequest = { sql: initialSql };
 			mutateAsync(request)
 				.then((r) => setResult(r))
 				.catch(() => {});
@@ -338,6 +355,7 @@ export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 		(value: string) => {
 			setSqlText(value);
 			setTableEditError(null);
+			setIsAutoMode(false);
 			if (stagedEditCount > 0) {
 				setPendingRunConfirm(true);
 			} else {
@@ -741,6 +759,29 @@ export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 								</Badge>
 							}
 						/>
+					</div>
+				) : null}
+				{isAutoMode && totalPages > 1 ? (
+					<div className="flex items-center justify-center gap-2 border-b px-3 py-1.5">
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							disabled={page === 0 || isPending}
+							onClick={() => handlePageChange(page - 1)}
+						>
+							<Icon icon={faChevronLeft} />
+						</Button>
+						<span className="text-xs text-muted-foreground">
+							{page + 1} / {totalPages}
+						</span>
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							disabled={page >= totalPages - 1 || isPending}
+							onClick={() => handlePageChange(page + 1)}
+						>
+							<Icon icon={faChevronRight} />
+						</Button>
 					</div>
 				) : null}
 				<ScrollArea className="w-full flex-1 min-h-0">

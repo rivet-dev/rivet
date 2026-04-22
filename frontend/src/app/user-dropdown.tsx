@@ -1,6 +1,6 @@
 import { faChevronDown, faPlus, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
-import { useMatchRoute, useNavigate, useParams } from "@tanstack/react-router";
+import { useMatchRoute, useNavigate, useParams, useRouter } from "@tanstack/react-router";
 import {
 	Avatar,
 	AvatarFallback,
@@ -20,11 +20,13 @@ import {
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
 import { authClient } from "@/lib/auth";
+import { queryClient } from "@/queries/global";
 
 export function UserDropdown({ children }: { children?: React.ReactNode }) {
 	const params = useParams({
 		strict: false,
 	});
+	const router = useRouter();
 
 	const { data: session } = authClient.useSession();
 	const navigate = useNavigate();
@@ -103,6 +105,9 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 				<DropdownMenuItem
 					onSelect={() => {
 						authClient.signOut();
+						router.invalidate();
+						queryClient.clear();
+						return navigate({ to: "/login" });
 					}}
 				>
 					Logout
